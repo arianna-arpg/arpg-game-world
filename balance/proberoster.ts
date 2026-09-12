@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_shimmy.ts', status: 'green', tier: 'fast', why: 'THE SHIMMY LAW: a spent station dwell stays spent through stillness and unwilled displacement, re-arms on a willed step in range, and out-and-back still re-arms' },
   { probe: 'probe_classopeners.ts', status: 'green', tier: 'fast', why: 'All 36 base-kit requirements and costs; four opening rotation budgets; real Guardian ward/rally/hammer and Warlord retaliation source lifecycle' },
   { probe: 'probe_classdeeds.ts', status: 'green', tier: 'fast', why: 'Persistent combat deeds, encounter streaks, recovery hysteresis, real block/hit/heal/companion attribution and mastery separation' },
   { probe: 'probe_containerloot.ts', status: 'green', tier: 'fast', why: 'Contextual container lists, measured cache economy, mixed nested mints, one-shot payouts, persistence and co-op' },

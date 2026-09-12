@@ -272,3 +272,21 @@ whole, and the search box's focus + caret ride through every rebuild.
   crossing the smithy's open apron no longer rings the till — while an
   open-air counter (the delver's camp) degrades to 'sight' by the mode's
   own law. Un-list a role to restore plain sight-reach.
+
+## THE SHIMMY LAW (every station dwell, 2026-09-11)
+
+A station dwell fires ONCE per approach: the `Dwell` latch (engine/world.ts)
+is spent when it fires and re-arms when the seat steps out of range. Her
+ask: closing a dialog by mistake should not cost a walk out and back when the
+range is abstract and unshown. So a spent latch now also re-arms on a
+**willed step** taken in range — `Dwell.rearmIfWilled(seats)` compares
+`Seat.lastMovedAt` against the latch's own `consumedAt`, and `lastMovedAt` is
+stamped in ONE place, `moveActor`'s willed path (`World.markSeatMoved`), so a
+shove, a gale's drift or a carried ride never counts: the body moved, the
+player did not. The linger itself is unchanged — the step must END
+(`seatIdle`) before the clock builds — so a shimmy re-opens the dialog on the
+next still moment, and standing there closed re-opens nothing. The station
+latches (`stationArmed`, the arrival guard) re-add their key on a re-arm;
+the vendor, sail, harbor and hold gates re-arm the same way. Probe:
+`probe_shimmy` (fires, stays spent still, ignores an unwilled displacement,
+re-arms on a step, out-and-back unchanged).

@@ -1850,6 +1850,10 @@ export interface Seat {
   couchDeaths?: DeathRecord[];
   /** World time of this seat's last deliberate action — its private dwell clock. */
   lastActedAt: number;
+  /** THE SHIMMY LAW's clock: world seconds of this seat's last WILLED step
+   *  (moveActor's own path — shoves, gales and rides never stamp it). The
+   *  dwell latches re-arm against it. */
+  lastMovedAt: number;
   /** Revive progress while this seat is DOWNED: ally seat id → seconds dwelt. */
   reviveDwellBy: Map<string, number>;
   /** THE WORN-GRAFT LEDGER (slotgraft_* stats → recalcSeat): every worn
@@ -2539,18 +2543,37 @@ interface DescentRun {
 class Dwell {
   private t = 0;
   private consumed = false;
+  /** World seconds when the latch last fired (or was consumed) — THE SHIMMY
+   *  LAW's reference: a willed step taken AFTER this re-arms it. */
+  private consumedAt = -Infinity;
+  constructor(private readonly clock: () => number) {}
   fire(building: boolean, engaged: boolean, dt: number, threshold: number): boolean {
     if (!engaged) { this.t = 0; this.consumed = false; return false; }
     if (this.consumed || !building) { this.t = 0; return false; }
     this.t += dt;
     if (this.t < threshold) return false;
     this.consumed = true;
+    this.consumedAt = this.clock();
     return true;
   }
   /** Force the latch CONSUMED (as if it just fired): the caller placed the
    *  player INSIDE the dwell radius (a sail landing drops you at the dock) and
-   *  the gate must not re-fire until they break the dwell by stepping away. */
-  consume(): void { this.consumed = true; }
+   *  the gate must not re-fire until they break the dwell by stepping away —
+   *  or, THE SHIMMY LAW, take a willed step where they stand. */
+  consume(): void { this.consumed = true; this.consumedAt = this.clock(); }
+  /** THE SHIMMY LAW (2026-09-11, her ask): a GENUINE step — Seat.lastMovedAt,
+   *  stamped only by moveActor's willed movement, never a shove, a gale or a
+   *  ride — taken AFTER the latch fired re-arms it while the seat still
+   *  stands in range, so a dialog closed by mistake re-opens on the next
+   *  still linger without walking out of range and back. The linger itself
+   *  is unchanged: the step must END (seatIdle) before the clock builds.
+   *  True when it re-armed (the station latches re-add their key on it). */
+  rearmIfWilled(seats: readonly Seat[]): boolean {
+    if (!this.consumed || !seats.some(s => s.lastMovedAt > this.consumedAt)) return false;
+    this.consumed = false;
+    this.t = 0;
+    return true;
+  }
 }
 
 /** A dash's conjure-trail, RESOLVED at cast (grants folded with the cast's
@@ -3278,12 +3301,12 @@ export class World {
   private campfireCd = 0;
   /** Caravan: the linger-to-act gate — a consumed latch so the menu fires once per
    *  approach (the player must move away to trigger it again). */
-  private caravanGate = new Dwell();
+  private caravanGate = new Dwell(() => this.time);
   /** The port dock's linger-to-sail gate (same consumed-latch discipline). */
-  private sailGate = new Dwell();
+  private sailGate = new Dwell(() => this.time);
   /** THE HARBOR BOARD's linger-to-read gate (data/ports.ts — hearsay +
    *  passage + charts; the dock itself still CASTS OFF directly). */
-  private harborGate = new Dwell();
+  private harborGate = new Dwell(() => this.time);
   /** Seas already counted toward the `seas_found` ledger THIS SESSION —
    *  transient (a resumed run may recount a sea once; the ledger is unlock
    *  fodder, not bookkeeping). */
@@ -3300,7 +3323,7 @@ export class World {
    *  main loop polls it and opens the salvage/craft menu (same flag
    *  indirection as the Caravanner — World can't import the UI). */
   salvageDwellRequested = false;
-  private salvageGate = new Dwell();
+  private salvageGate = new Dwell(() => this.time);
   /** THE BOUNTY BOARD (docs/design/bounty-board.md M0): the beat's slate of
    *  generated postings — persisted state, never a derivation (the pool is
    *  the LIVE world; see WorldStateSave.bountyBoard). */
@@ -3319,7 +3342,7 @@ export class World {
    *  forced deal is as foreordained as a beat's). Board ids ARE home zone
    *  ids ('lastlight', a quay's port zone id). */
   private bountyBoardState: Record<string, { armedBeat: number; refreshSeq: number }> = {};
-  private bountyGate = new Dwell();
+  private bountyGate = new Dwell(() => this.time);
   /** ONE-SHOT: the bounty board's dwell — the main loop opens the postings
    *  panel (the salvage bench's flag idiom verbatim). */
   bountyDwellRequested = false;
@@ -3335,7 +3358,7 @@ export class World {
   /** ONE-SHOT: the Sacrificial Font dwell — the main loop opens the Font
    *  screen (Merge / Convert / Reset; docs/design/skill-modes.md §7). */
   fontDwellRequested = false;
-  private fontGate = new Dwell();
+  private fontGate = new Dwell(() => this.time);
   /** THE MILESTONE POPUP QUEUE (skill-mode trees, M1): band completions
    *  bank a pip per (seat, skill); the sweep offers ONE popup at the next
    *  DISCIPLINED CALM (the swapRefusal predicate — never mid-combat) and
@@ -3348,10 +3371,10 @@ export class World {
   private pendingTreePips = new Map<string, string[]>();
   /** ONE-SHOT: the Oracle-stone dwell (same idiom). */
   oracleDwellRequested = false;
-  private oracleGate = new Dwell();
+  private oracleGate = new Dwell(() => this.time);
   /** ONE-SHOT: the Tracker's-fire dwell — opens the BESTIARY (same idiom). */
   trackerDwellRequested = false;
-  private trackerGate = new Dwell();
+  private trackerGate = new Dwell(() => this.time);
   /** WHO dwelt (the couch fabric): the personal-economy stations — vendor,
    *  bench, stone, fire — record the LOCAL seat whose linger fired the ask,
    *  so the screen opens that seat's panel on that seat's flank. Always 'p0'
@@ -3373,7 +3396,7 @@ export class World {
   /** ONE-SHOT: lingering at any REGISTERED vendor counter with stock (the
    *  data/vendors.ts registry) asks the main loop to open the Vendor screen. */
   vendorDwellRequested = false;
-  private vendorGate = new Dwell();
+  private vendorGate = new Dwell(() => this.time);
   /** GEAR pickup style, mirrored from Settings each frame by main.ts (the
    *  World can't import UI/settings): true = walk-over hoover like gems;
    *  false = the deliberate pickup keybind only. */
@@ -4082,7 +4105,7 @@ export class World {
       }
     }
     p.skills = padBar(bar.map(sid => (sid ? meta.knownSkills.get(sid) ?? null : null)));
-    const seat: Seat = { id, actor: p, meta, input, lastActedAt: -999, reviveDwellBy: new Map() };
+    const seat: Seat = { id, actor: p, meta, input, lastActedAt: -999, lastMovedAt: -999, reviveDwellBy: new Map() };
     this.recalcSeat(seat);
     p.fillResources();
     return seat;
@@ -4381,6 +4404,15 @@ export class World {
   private markSeatActed(actor: Actor): void {
     const s = this.seatByActor.get(actor);
     if (s) s.lastActedAt = this.time;
+  }
+
+  /** THE SHIMMY LAW's stamp: a WILLED step (moveActor — the input's own
+   *  path; pushActor's shoves, the gale's drift and every carried ride
+   *  never pass here) marks the seat's lastMovedAt, the clock the dwell
+   *  latches (Dwell.rearmIfWilled) re-arm against. */
+  private markSeatMoved(actor: Actor): void {
+    const s = this.seatByActor.get(actor);
+    if (s) s.lastMovedAt = this.time;
   }
 
   // ----------------------------------------------- the possession seam ----
@@ -23219,6 +23251,7 @@ export class World {
     // (local hero checked first — solo is order-identical, see localHumanSeats).
     const near = this.localHumanSeats().filter(s =>
       !s.actor.dead && !s.actor.downed && this.nearSalvage(s));
+    if (this.salvageGate.rearmIfWilled(near)) this.stationArmed.add('salvage'); // THE SHIMMY LAW
     const armed = this.stationDwellArmed('salvage', near.length > 0);
     const ready = near.find(s => this.seatIdle(s));
     if (!this.salvageGate.fire(!!ready && armed, near.length > 0 && armed, dt, SALVAGE_CFG.stationDwell)) return;
@@ -24255,6 +24288,7 @@ export class World {
     // The arrival latch matters here: the GROWN town's waypoint stands
     // inside the board's dwell disc — coming home must never auto-open
     // the postings under the arriving feet.
+    if (this.bountyGate.rearmIfWilled(near)) this.stationArmed.add('bounty'); // THE SHIMMY LAW
     const armed = this.stationDwellArmed('bounty', near.length > 0);
     const ready = near.find(s => this.seatIdle(s));
     if (!this.bountyGate.fire(!!ready && armed, near.length > 0 && armed, dt, BOUNTY_BOARD_CFG.dwell.sec)) return;
@@ -24291,6 +24325,7 @@ export class World {
   private updateFont(dt: number): void {
     const near = this.localHumanSeats().filter(s =>
       !s.actor.dead && !s.actor.downed && this.nearFont(s));
+    if (this.fontGate.rearmIfWilled(near)) this.stationArmed.add('font'); // THE SHIMMY LAW
     const armed = this.stationDwellArmed('font', near.length > 0);
     const ready = near.find(s => this.seatIdle(s));
     if (!this.fontGate.fire(!!ready && armed, near.length > 0 && armed, dt, SALVAGE_CFG.stationDwell)) return;
@@ -24340,6 +24375,7 @@ export class World {
   private updateTracker(dt: number): void {
     const near = this.localHumanSeats().filter(s =>
       !s.actor.dead && !s.actor.downed && this.nearTracker(s));
+    if (this.trackerGate.rearmIfWilled(near)) this.stationArmed.add('tracker'); // THE SHIMMY LAW
     const armed = this.stationDwellArmed('tracker', near.length > 0);
     const ready = near.find(s => this.seatIdle(s));
     if (!this.trackerGate.fire(!!ready && armed, near.length > 0 && armed, dt, SALVAGE_CFG.stationDwell)) return;
@@ -24372,6 +24408,7 @@ export class World {
   private updateOracle(dt: number): void {
     const near = this.localHumanSeats().filter(s =>
       !s.actor.dead && !s.actor.downed && this.nearOracle(s));
+    if (this.oracleGate.rearmIfWilled(near)) this.stationArmed.add('oracle'); // THE SHIMMY LAW
     const armed = this.stationDwellArmed('oracle', near.length > 0);
     const ready = near.find(s => this.seatIdle(s));
     if (!this.oracleGate.fire(!!ready && armed, near.length > 0 && armed, dt, SALVAGE_CFG.stationDwell)) return;
@@ -24440,8 +24477,9 @@ export class World {
    *  ONE ask per approach: being AT the counter (any near vendor, stocked or
    *  not) holds the latch, so a hero camped by the smith is never re-prompted
    *  by closing the screen, swinging a sword, or the restock timer minting
-   *  fresh shelves — only stepping out of range re-arms the ask. Stock still
-   *  gates the BUILD: an empty counter never opens a bare screen. */
+   *  fresh shelves — stepping out of range re-arms the ask, and so does a
+   *  WILLED step where they stand (THE SHIMMY LAW, Dwell.rearmIfWilled).
+   *  Stock still gates the BUILD: an empty counter never opens a bare screen. */
   private updateVendors(dt: number): void {
     let engaged = false;
     let ready: Seat | null = null;
@@ -24454,6 +24492,7 @@ export class World {
       }
       if (ready) break;
     }
+    this.vendorGate.rearmIfWilled(this.localHumanSeats()); // THE SHIMMY LAW
     if (!this.vendorGate.fire(!!ready, engaged, dt, SALVAGE_CFG.stationDwell)) return;
     this.vendorDwellRequested = true;
     this.vendorDwellSeatId = ready!.id;
@@ -24703,6 +24742,7 @@ export class World {
     const dock = this.portDock();
     const engaged = !!dock && dist(this.player.pos, dock.pos) <= 110
       && this.dwellReachable(this.player.pos, dock.pos, DWELL_CFG.reach, this.storyPair(this.player, dock));
+    this.sailGate.rearmIfWilled([this.localSeat]); // THE SHIMMY LAW
     if (!this.sailGate.fire(engaged && this.canSail() && this.playerIdle(), engaged, dt, CARAVAN_DWELL)) return;
     this.enterSailing();
   }
@@ -24722,6 +24762,7 @@ export class World {
 
   private updateHarborBoard(dt: number): void {
     const engaged = this.nearHarborBoard();
+    this.harborGate.rearmIfWilled([this.localSeat]); // THE SHIMMY LAW
     if (!this.harborGate.fire(engaged && this.playerIdle(), !!engaged, dt, CARAVAN_DWELL)) return;
     this.harborDwellRequested = true;
   }
@@ -24801,7 +24842,7 @@ export class World {
     phaseAt: number; wardId: number | null; alive: Set<number>;
     toSpawn: number; spawnAt: number; pulseAt: number;
   } | null = null;
-  private holdGate = new Dwell();
+  private holdGate = new Dwell(() => this.time);
   /** ONE-SHOT: the muster-horn dwell completed — main.ts opens the hold panel. */
   holdDwellRequested = false;
   private holdSweepAt = 0;
@@ -25133,6 +25174,7 @@ export class World {
     if (!this.doodads.some(d => d.kind === 'muster_horn')) return; // nearMusterHorn reads the horn itself
     const M = HARBORHOLD_CFG.muster;
     const engaged = this.nearMusterHorn();
+    this.holdGate.rearmIfWilled([this.localSeat]); // THE SHIMMY LAW
     if (!this.holdGate.fire(engaged && this.playerIdle(), engaged, dt, M.dwellSec)) return;
     this.holdDwellRequested = true;
   }
@@ -26130,10 +26172,12 @@ export class World {
     // (local hero checked first — solo is order-identical, see localHumanSeats).
     const near = this.localHumanSeats().filter(s =>
       !s.actor.dead && !s.actor.downed && this.nearCaravan(s));
+    if (this.caravanGate.rearmIfWilled(near)) this.stationArmed.add('caravan'); // THE SHIMMY LAW
     const armed = this.stationDwellArmed('caravan', near.length > 0);
     const ready = near.find(s => this.seatIdle(s));
-    // Fires ONCE per approach (consumed until every hand steps OUT of range)
-    // — so closing the menu while still standing here won't re-open it.
+    // Fires ONCE per approach (consumed until every hand steps OUT of range
+    // — or, THE SHIMMY LAW, takes a willed step where it stands) — so
+    // closing the menu while still standing here won't re-open it by itself.
     if (!this.caravanGate.fire(!!ready && armed, near.length > 0 && armed, dt, CARAVAN_DWELL)) return;
     this.caravanDwellSeatId = ready!.id; // WHO asked — the menu + the band pick follow
     if (this.zone.id === START_ZONE) {
@@ -60468,6 +60512,7 @@ export class World {
     // consumed by Actor.updateCharges on its own meters.
     a.moveAcc += speed * dt;
     this.markSeatActed(a); // movement interrupts THAT seat's dwell
+    this.markSeatMoved(a); // …and, THE SHIMMY LAW, a willed step re-arms a spent one
     // DEV noclip: the local hero phases through walls/rocks/void (bounds still
     // hold). TRUE FLIERS ride the same displacement policy — the wing cares
     // nothing for rocks, walls or the gap beneath. A LEVITATOR (base flag or
