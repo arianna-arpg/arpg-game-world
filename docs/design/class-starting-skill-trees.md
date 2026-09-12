@@ -91,5 +91,7 @@ order: starting-skill coverage, mastery swap coverage, alternate-skill trees.
 
 Alongside these batches, audit underrepresented playstyles and their support
 options. Prefer additions that fill a demonstrated gap; record larger candidates
-for the mastery pass. The control batch's playstyle audit and first device-support
-addition are in `docs/design/control-starting-skill-trees.md`.
+for the mastery pass. The [central skill-and-support backlog](skill-support-candidates.md)
+tracks proposed skills, paired supports, audit evidence and shipped additions.
+The [impact batch](impact-starting-skill-trees.md) adds complete Breaker, Vanguard
+and Lancer starting bars.

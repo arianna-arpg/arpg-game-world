@@ -72,7 +72,7 @@ import { SUPPORTS } from '../src/data/supports';
 import { START_ZONE } from '../src/data/zones';
 import { STAT_DEFS } from '../src/engine/stats';
 import {
-  bandPointsAt, instanceAim, instanceChannel, instanceDelivery, instanceMods,
+  bandPointsAt, instanceAim, instanceChannel, instanceDelivery, impactTreeOverrideErrors, instanceMods,
   instanceTreeMods, makeSkillInstance, MAX_SKILL_LEVEL,
   skillContextTags, SKILL_LEVEL_BANDS, treeNodeOf, treeNodeRefusal,
   treePickOpen, treePointsSpent, treeSpentBranch, validTreeNodes,
@@ -128,7 +128,7 @@ check('A: the deepening rungs RE-PIN their identity (the re-pin law)',
 // takes every wearer, ids unique, every node root-reachable, THE COVER LAW
 // (each limb's terminal walk + the lock-free ground absorbs the cap
 // budget), and the payload whitelist on every graph node.
-const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags', 'chargeCost', 'ground', 'castCycle', 'construct', 'reduceCooldowns']);
+const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags', 'chargeCost', 'ground', 'castCycle', 'construct', 'reduceCooldowns', 'recallImpales']);
 const SUMMON_KEYS = new Set(['count', 'maxActive', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell', 'crewRules', 'crewInherit', 'crewOnDeath', 'devour', 'placeAt']);
 const OVER_CHANNEL_KEYS = new Set(['ramp', 'rampMove']);
 let censusBad = '';
@@ -162,7 +162,8 @@ for (const def of Object.values(SKILLS)) {
       if (!OVER_CHANNEL_KEYS.has(k)) censusBad += ` ${def.id}/${n.id}:over.channel.${k}-off-whitelist`;
     }
     if (n.over?.ground && (def.delivery.type !== 'ground' || (n.over.ground.follow !== undefined && n.over.ground.follow !== true)
-      || Object.keys(n.over.ground).some(k => !['follow', 'domain'].includes(k)))) censusBad += ` ${def.id}/${n.id}:over.ground-invalid`;
+      || Object.keys(n.over.ground).some(k => !['follow', 'domain', 'pulse'].includes(k)))) censusBad += ` ${def.id}/${n.id}:over.ground-invalid`;
+    for (const error of impactTreeOverrideErrors(def, n)) censusBad += ` ${def.id}/${n.id}:${error}`;
     const constructOver = n.over?.construct;
     if (constructOver && (def.delivery.type !== 'construct'
       || Object.entries(constructOver).some(([k, v]) => !['castSkillId', 'range', 'duration', 'maxActive', 'life', 'placeRange', 'domeRadius', 'domeSlow'].includes(k)

@@ -1,3 +1,4 @@
+import { IMPACT_STARTER_TREES } from './impactStarterTrees';
 import { CONTROL_STARTER_TREES } from './controlStarterTrees';
 import { PRECISION_STARTER_TREES } from './precisionStarterTrees';
 import { PACT_STEEL_STARTER_TREES } from './pactSteelStarterTrees';
@@ -2913,6 +2914,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   charge: {
+    tree: IMPACT_STARTER_TREES.charge,
     id: 'charge', name: 'Charge',
     description: 'Lower your shoulder and barrel toward the target point; once committed, you'
       + ' cannot stop until you arrive. Everything in your path takes physical damage, is'
@@ -4168,6 +4170,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   marching_bulwark: {
+    tree: IMPACT_STARTER_TREES.marching_bulwark,
     id: 'marching_bulwark', name: 'Marching Bulwark',
     description: 'Advance behind a narrow tower guard: you keep three-quarters of your movement'
       + ' speed while it holds, behind thinner protection than a planted wall. Release to bash,'
@@ -4234,6 +4237,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // with the same verbs.)
 
   sunder_maul: {
+    tree: IMPACT_STARTER_TREES.sunder_maul,
     id: 'sunder_maul', name: 'Sunder Maul',
     description: 'A slow overhead blow built to break stances rather than bodies: it deals 150%'
       + ' more poise damage, and the SUNDERED it inflicts lasts 50% longer. Pairs with The'
@@ -4250,6 +4254,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   verdict: {
+    tree: IMPACT_STARTER_TREES.verdict,
     id: 'verdict', name: 'The Verdict',
     description: 'An execute, usable only on a SUNDERED target: the blow adds 150% of the'
       + ' victim\'s maximum poise as flat damage and knocks them back. Break the stance first,'
@@ -4407,6 +4412,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   shockfront: {
+    tree: IMPACT_STARTER_TREES.shockfront,
     id: 'shockfront', name: 'Shockfront',
     description: 'Launch a flat wall of force down a broad lane: the front punches through up'
       + ' to 3 enemies and knocks whatever it strikes backward.',
@@ -5003,6 +5009,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   earthquake: {
+    tree: IMPACT_STARTER_TREES.earthquake,
     id: 'earthquake', name: 'Earthquake',
     description: 'Drive the blow into the ground at your feet: the first crack is only the'
       + ' warning, a shove with a 12% chance to stun. One second later the broken earth erupts'
@@ -5272,6 +5279,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // wrenches every lodged spear home — pops and all.
 
   skewer: {
+    tree: IMPACT_STARTER_TREES.skewer,
     id: 'skewer', name: 'Skewer',
     description: 'A driving melee thrust that leaves steel behind: 35% of the blow\'s physical'
       + ' damage lodges in the wound as a spearhead, and your next hit drives it through as its'
@@ -5288,6 +5296,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   spear_recall: {
+    tree: IMPACT_STARTER_TREES.spear_recall,
     id: 'spear_recall', name: 'Extraction',
     description: 'Wrench every lodged spear free at once: each impalement in reach detonates'
       + ' into its host for 120% of its stored damage, and the freed steel flies home to your'
@@ -5318,6 +5327,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   pinning_spear: {
+    tree: IMPACT_STARTER_TREES.pinning_spear,
     id: 'pinning_spear', name: 'Pinning Spear',
     description: 'Hurl a spear that punches through one rank and plants where it lands, a'
       + ' standing shaft that holds for 10 seconds for the rest of your kit to use; Tripwire'

@@ -62,29 +62,10 @@ without earning the class again or seeing a duplicate class-unlock notice.
 
 ## Playstyle candidates alongside the roadmap
 
-The focused catalog audit found one authored `reduceCooldowns` skill,
-Time Dilation, and its engine effect targets the caster. That makes **ally-targeted
-cooldown assistance** a concrete candidate for the later mastery-skill pass.
-A proposed *Borrowed Second* could restore a bounded amount of an ally's running
-cooldown; a corresponding *Shared Seconds* support could distribute a fixed
-budget between nearby allies. Keep a shared budget, exclude the triggering
-skill, and define minion, downed, cross-story and multiplayer ownership rules
-before implementation. This is a proposal, not shipped content.
-
-**Device relocation and salvage** is another candidate for further audit.
-Current Trapper skills establish static ground; the new support creates a
-reason to rebuild frequently. A proposed *Field Recovery* could retire an owned
-device and refund a bounded portion of its remaining deployment cost; a
-corresponding *Packed Workshop* support could trade device capacity for easier
-redeployment. Check existing recall, impale-extraction, construct-motion and
-detonation mechanics first. Refunds must use actual payment and must not also
-trigger expiry/death rewards. This remains a candidate, not a claim that every
-adjacent mechanic is absent.
-
-Continue complete starting bars first, audit alternate mastery openings next,
-then give those alternate skills equivalent trees. Add new playstyle skills
-where that audit finds a concrete gap; do not add duplicates merely to fill a
-slot. The shared roadmap is `docs/design/class-starting-skill-trees.md`.
+The proposals discovered here now live in the [central skill-and-support
+backlog](skill-support-candidates.md): ally cooldown assistance (PS-01), device
+salvage and relocation (PS-02), and shipped Overwound Mechanism (PS-04).
+Follow that document for current evidence, status and later discoveries.
 
 ## Verification
 

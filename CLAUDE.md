@@ -48,6 +48,12 @@ The Trapper/Skald/Chronomancer opening trees live in `src/data/controlStarterTre
 `docs/design/control-starting-skill-trees.md` covers construct payloads, additive
 domains, rewind contracts, device retirement and the Overwound Mechanism support.
 
+Future skill and support proposals are tracked centrally in
+`docs/design/skill-support-candidates.md`, with evidence, status and paired ideas.
+The Breaker/Vanguard/Lancer starting trees live in `src/data/impactStarterTrees.ts`;
+`docs/design/impact-starting-skill-trees.md` covers native pulse overrides,
+Extraction bank shares, returning-flight ownership and the complete bars.
+
 Chest and gem-cache lists live in `src/data/containerloot.ts` and the existing
 `loottables.ts`; `docs/design/container-loot.md` documents the context rules,
 Memory Essence economy, visual grammar and regression probe.

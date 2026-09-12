@@ -9,7 +9,7 @@
 // ---------------------------------------------------------------------------
 
 import { DeedTracker, type DeedEvent } from './deeds';
-import { instanceCastCycle, instanceTreeMods } from './skills';
+import { instanceCastCycle, instanceTreeMods, instanceTreeOver } from './skills';
 import { finishAIRecovery, monsterTurnSpeed } from './handling';
 import { COMBAT_DEEDS, DEED_CFG } from '../data/classdeeds';
 import { selectContainerLoot } from '../data/containerloot';
@@ -35839,13 +35839,15 @@ export class World {
               this.text(e.pos, Math.round(taken).toString(), STATUS_DEFS[s.id]?.color ?? '#c8ccd8', 12);
               if (e.life <= 0 && !e.dead) this.kill(e, false, caster);
             }
-            // The spear itself, homeward: minted once per caster, re-aimed
-            // per wrench, its flat payload the bank's share.
+            // The spear itself carries the bank share homeward. Native recalls
+            // share a cached payload; tree recalls track their exact source.
             if (SKILLS.impale_spear) {
-              let spear = caster.metaInsts.get('__impale_spear');
+              const recallImpalesTree = instanceTreeOver(inst)?.recallImpales;
+              let spear = recallImpalesTree ? undefined : caster.metaInsts.get('__impale_spear');
               if (!spear || spear.level !== effectiveSkillLevel(inst)) {
                 spear = makeSkillInstance(SKILLS.impale_spear, effectiveSkillLevel(inst));
-                caster.metaInsts.set('__impale_spear', spear);
+                if (recallImpalesTree) this.recallTreeSpears.set(spear, inst);
+                else caster.metaInsts.set('__impale_spear', spear);
               }
               this.spawnProjectile(caster, spear, vec(e.pos.x, e.pos.y),
                 angleTo(e.pos, caster.pos),
@@ -54379,6 +54381,8 @@ export class World {
 
   private replenishment = new ReplenishmentClocks();
   private treeBuffSources = new WeakMap<BuffEffect, { caster: Actor; inst: SkillInstance }>();
+  /** Derived extraction flights retain the exact investing instance for respec. */
+  private recallTreeSpears = new WeakMap<SkillInstance, SkillInstance>();
 
   /** Per-application identity lets respec retire only this caster's blessing,
    * including allied recipients, without stripping another caster's refresh. */
@@ -54408,7 +54412,7 @@ export class World {
     // Scheduled repeats capture the old tree just as delayed fields do.
     this.pendingRepeats = this.pendingRepeats.filter(r => r.caster !== caster || r.inst !== inst);
     // Flights and their carried ground can outlive the allocation too.
-    this.projectiles = this.projectiles.filter(p => p.caster !== caster || p.inst !== inst);
+    this.projectiles = this.projectiles.filter(p => p.caster !== caster || (p.inst !== inst && this.recallTreeSpears.get(p.inst) !== inst));
     for (const p of this.projectiles) if (p.caster === caster && p.suffuse?.inst === inst) delete p.suffuse;
     // Held casts can snapshot guard pools and derived grafts. Changing the
     // allocation retires that stance without paying a release attack.

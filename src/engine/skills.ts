@@ -978,7 +978,8 @@ export interface PulsePlan {
   appended: GroundPulseSpec[];
 }
 export function instancePulsePlan(inst: SkillInstance): PulsePlan {
-  const innate = inst.def.delivery.type === 'ground' ? inst.def.delivery.pulse : undefined;
+  const delivery = instanceDelivery(inst);
+  const innate = delivery.type === 'ground' ? delivery.pulse : undefined;
   const plan: PulsePlan = { native: innate ? { ...innate } : undefined, appended: [] };
   for (const s of hostSockets(inst)) {
     const g = s.def.pulse;
@@ -4741,6 +4742,10 @@ export const DEFAULT_LEVELING: Modifier[] = [
 //     (the M0 find; a MonsterDef tree pin now draws what it tests).
 //   · the channel HUD bar          — renderer.ts same view.
 //   · aim resolution               — instanceAim (M0), the only def.aim read.
+//   · native pulse timing          — instancePulsePlan reads instanceDelivery;
+//     minting, pulse queues and previews keep tree timing plus appended supports.
+//   · extraction effects           — instanceEffects supplies both bank shares;
+//     derived homeward flights retain their investing instance for respec.
 //   · tooltips/previews            — skillPreview.ts + panels read the views
 //     (display honesty; picked numbers never lie).
 //   EXEMPT (reason at the class grain; individual sites carry no boilerplate):
@@ -4751,7 +4756,7 @@ export const DEFAULT_LEVELING: Modifier[] = [
 //     castMode joins the whitelist only with its own audited adoption (the
 //     heavy_strike Flurry wave).
 //   · non-whitelisted FIELD reads (summon pool/crew identity, dash width/phase, aura
-//     spec, pierce/forks/fire, ground pulse/cascade, delivery.range) — each
+//     spec, pierce/forks/fire, ground cascade, delivery.range) — each
 //     is a named M2 road; its adopting wave moves its read sites behind the
 //     sibling views (instanceSummon/instanceCascadePlan/… already seam most).
 //   · def-only contexts (drop rolling, boot validation, bestiary/book) —
@@ -4767,7 +4772,19 @@ export type TreeBuffPatch = { id: string } & Partial<Pick<BuffEffect,
   'mods' | 'duration' | 'affects' | 'radius' | 'clearOnHit' | 'consumeOn' | 'nextHit'>>;
 
 export const CONSTRUCT_TREE_KEYS = ['castSkillId', 'range', 'duration', 'maxActive', 'life', 'placeRange', 'domeRadius', 'domeSlow'] as const;
-export const GROUND_TREE_KEYS = ['follow', 'domain'] as const;
+export const GROUND_TREE_KEYS = ['follow', 'domain', 'pulse'] as const;
+/** Shared boot/probe validation for native pulse and extraction identities. */
+export function impactTreeOverrideErrors(def: SkillDef, node: SkillTreeNode): string[] {
+  const errors: string[] = [], pulse = node.over?.ground?.pulse, recallImpales = node.over?.recallImpales;
+  if (pulse && (def.delivery.type !== 'ground' || !def.delivery.pulse
+    || !Number.isFinite(pulse.delay) || pulse.delay <= 0
+    || Object.entries(pulse).some(([k, v]) => !['delay', 'count', 'interval', 'intervalStep', 'dmgMult', 'dmgStep', 'radiusMult', 'radiusStep'].includes(k) || !Number.isFinite(v) || v <= 0)
+    || (pulse.count !== undefined && !Number.isInteger(pulse.count)))) errors.push('invalid native pulse override');
+  if (recallImpales && (!def.effects.some(fx => fx.type === 'recallImpales')
+    || !['radius', 'damageScale', 'spearShare'].every(k => Number.isFinite(recallImpales[k as keyof typeof recallImpales]) && recallImpales[k as keyof typeof recallImpales] > 0)
+    || Object.keys(recallImpales).some(k => !['radius', 'damageScale', 'spearShare'].includes(k)))) errors.push('invalid recallImpales override');
+  return errors;
+}
 /** Domain modifiers add across native fields and sibling investments. */
 function mergeTreeDomain(a: GroundDelivery['domain'], b: GroundDelivery['domain']): GroundDelivery['domain'] {
   if (!a) return b;
@@ -4817,6 +4834,9 @@ export interface SkillTreeNode {
    *  field of its branch identity — including values equal to today's
    *  base — so the branch survives a rescale moving the base row. */
   over?: {
+    /** Full extraction identity. instanceEffects supplies both the victim pop
+     * and returning spear bank shares; the native impale consumption stays intact. */
+    recallImpales?: Required<Omit<RecallImpalesEffect, 'type'>>;
     /** Complete rewind payload for a skill with native reduceCooldowns effects. */
     reduceCooldowns?: { seconds: number; fraction: number };
     /** Completed-use cycle identity. World's single cycle grant reads
@@ -4827,7 +4847,7 @@ export interface SkillTreeNode {
     chargeCost?: NonNullable<SkillDef['chargeCost']>;
     /** Ground minting reads instanceDelivery; follow tracks the caster's center
      * after activation, retaining the original ring geometry and lifetime. */
-    ground?: { follow?: true; domain?: GroundDelivery['domain'] };
+    ground?: { follow?: true; domain?: GroundDelivery['domain']; pulse?: GroundPulseSpec };
     /** Construct minting and payload selection use the resolved delivery.
      * Kind, invulnerability and ownership remain the native contract. */
     construct?: Partial<Pick<ConstructDelivery, typeof CONSTRUCT_TREE_KEYS[number]>>;
@@ -5038,6 +5058,8 @@ export function instanceEffects(inst: SkillInstance): SkillEffect[] {
   let out: SkillEffect[] | undefined;
   const reduceCooldowns = instanceTreeOver(inst)?.reduceCooldowns;
   if (reduceCooldowns) out = inst.def.effects.map(fx => fx.type === 'reduceCooldowns' ? { ...fx, ...reduceCooldowns } : fx);
+  const recallImpales = instanceTreeOver(inst)?.recallImpales;
+  if (recallImpales) out = (out ?? inst.def.effects).map(fx => fx.type === 'recallImpales' ? { ...fx, ...recallImpales } : fx);
   for (const id of inst.treeNodes) {
     for (const patch of treeNodeOf(inst.def, id)?.buffs ?? []) {
       out ??= [...inst.def.effects];

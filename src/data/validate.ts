@@ -12,7 +12,7 @@ import { SKILLS } from './skills';
 import { SUPPORTS } from './supports';
 import { spawnVeinOf } from '../engine/supportbase';
 import {
-  CREW_CFG, DEFAULT_RELOAD_SKILL, crewSkillsServed, makeSkillInstance, summonCrewOf, instanceDelivery, CONSTRUCT_TREE_KEYS, GROUND_TREE_KEYS,
+  CREW_CFG, DEFAULT_RELOAD_SKILL, crewSkillsServed, makeSkillInstance, summonCrewOf, instanceDelivery, impactTreeOverrideErrors, CONSTRUCT_TREE_KEYS, GROUND_TREE_KEYS,
   supportFits, supportFitsInst, treeNodeOf, validTreeNodes, bandPointsAt, MAX_SKILL_LEVEL,
   type Delivery, type SkillDef, type SkillInstance, type SupportDef, type ConduitSpec, AOE_SHAPE } from '../engine/skills';
 import { treeGraph, TREE_LAYOUT_CFG } from '../engine/skilltree'; // THE SKILL-TREE GRAPH — the fold the tree laws read
@@ -2937,7 +2937,7 @@ export function validateContent(): void {
   // validatePassiveChoices warn-degrade idiom). Monster tree PINS resolve
   // against the kit's own defs.
   {
-    const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags', 'chargeCost', 'ground', 'castCycle', 'construct', 'reduceCooldowns']);
+    const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags', 'chargeCost', 'ground', 'castCycle', 'construct', 'reduceCooldowns', 'recallImpales']);
     const SUMMON_KEYS = new Set(['count', 'maxActive', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell', 'crewRules', 'crewInherit', 'crewOnDeath', 'devour', 'placeAt']);
     const OVER_CHANNEL_KEYS = new Set(['ramp', 'rampMove']);
     const KINDS = new Set(['minor', 'major', 'keystone']);
@@ -3035,6 +3035,7 @@ export function validateContent(): void {
             for (const m of mods) if (!STAT_DEFS[m.stat] || !Number.isFinite(m.value)) warn(`${at}/${n.id}: invalid ground.domain modifier`);
           }
         }
+        for (const error of impactTreeOverrideErrors(def, n)) warn(`${at}/${n.id}: ${error}`);
         const constructOver = n.over?.construct;
         if (constructOver) {
           if (def.delivery.type !== 'construct') warn(`${at}/${n.id}: construct override requires construct delivery`);
