@@ -3699,10 +3699,6 @@ export class UI {
     const stock = v.stock(world);
     const e = stock[Number(idxs)];
     if (!e || e.kind === 'item') return null;
-    const price = v.priceOf(world, e);
-    const priceHtml = (price.essences ?? []).map(c => this.essCostText(c)).join(' + ');
-    const heldRow = v.holds?.locks ? world.vendorEntryHold(world.vendorHoldKey(v), e) : undefined;
-    const entryLock = v.entryLock?.(world, e) ?? null;
     const lines: string[] = [];
     if (e.kind === 'skill') {
       const r = SKILL_RARITIES[e.inst.rarity ?? 'common'];
