@@ -51,6 +51,7 @@ import {
 } from '../src/engine/menu';
 import { MENU_ICONS } from '../src/ui/icons';
 import { MENU_ANCHORS, MENU_CFG } from '../src/ui/menuConfig';
+import { ESCAPE_CFG, ESCAPE_MODES, escapeModeOf } from '../src/ui/escapeConfig';
 import {
   ACTION_IDS, ACTION_LABELS, DEFAULT_KEYBINDS, DEFAULT_PAD_BINDS, PAD_ACTION_IDS,
   deserializeSettings, makeSettings, serializeSettings,
@@ -225,6 +226,28 @@ console.log('D. SETTINGS');
   delete older.menuBar;
   const grand = deserializeSettings(older);
   check('D5 an older save without the block reads the defaults', !!grand && grand.menuBar.anchor === MENU_CFG.anchorDefault);
+  // THE ESCAPE POLICY (ui/escapeConfig.ts, 2026-09-11): a registry the
+  // Options row cycles and the cascade reads at the press — ids unique, the
+  // default a real row, every `keep` id a registered page (the sweep names
+  // hero pages the way the tray does), unknown ids fall back, and the
+  // choice round-trips through the save like every option.
+  check('D6 ESCAPE_MODES: unique ids, a real default, keep lists name registered pages, unknown ids fall back',
+    new Set(ESCAPE_MODES.map(m => m.id)).size === ESCAPE_MODES.length
+    && ESCAPE_MODES.some(m => m.id === ESCAPE_CFG.default)
+    && ESCAPE_MODES.every(m => m.keep.every(id => MENU_ENTRIES.some(e => e.id === id)))
+    && escapeModeOf('nope').id === ESCAPE_CFG.default);
+  const e = makeSettings();
+  check('D7 escapeCloses defaults from the dial', e.escapeCloses === ESCAPE_CFG.default);
+  e.escapeCloses = 'step';
+  const eBack = deserializeSettings(serializeSettings(e));
+  const eBad = serializeSettings(e);
+  eBad.escapeCloses = 'sideways' as unknown as typeof eBad.escapeCloses;
+  const eOld = serializeSettings(e);
+  delete eOld.escapeCloses;
+  check('D8 escapeCloses round-trips; garbage and older saves read the default',
+    eBack?.escapeCloses === 'step'
+    && deserializeSettings(eBad)?.escapeCloses === ESCAPE_CFG.default
+    && deserializeSettings(eOld)?.escapeCloses === ESCAPE_CFG.default);
 }
 
 // --- E. THE CENSUS ---------------------------------------------------------------

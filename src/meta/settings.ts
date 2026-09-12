@@ -25,6 +25,7 @@ import { RENDER_SCALE_CFG } from '../render/renderScale';
 import { CAMERA_CFG, CAMERA_MODES, type CameraModeId } from '../render/camera';
 import { WORLDSTATE_CFG, type ResumeSpawn } from './worldstate';
 import { MENU_ANCHORS, MENU_CFG, type MenuAnchorId } from '../ui/menuConfig';
+import { ESCAPE_CFG, ESCAPE_MODES, type EscapeCloseMode } from '../ui/escapeConfig';
 
 export const SETTINGS_SCHEMA_VERSION = 1;
 
@@ -168,6 +169,11 @@ export interface Settings {
   tooltipDetail: 'compact' | 'full';
   /** Specific travel names reveal near the mouse/controller aim by default. */
   destinationLabels: 'near' | 'always';
+  /** THE ESCAPE POLICY (ui/escapeConfig.ts ESCAPE_MODES): what one Esc
+   *  press clears past the modal steps — the sweep (everything at once),
+   *  the sweep that spares the bag until last, or the classic
+   *  one-at-a-time cascade. */
+  escapeCloses: EscapeCloseMode;
   /** THE CAMERA MODE (render/camera.ts registry): 'hero' locks the view to
    *  your hero everywhere — zone edges simply reveal the void frame — while
    *  'zone' is the classic frame that never leaves the zone. A ZoneDef.camera
@@ -265,6 +271,7 @@ export interface SettingsSave {
   uiScale?: number;
   tooltipDetail?: 'compact' | 'full';
   destinationLabels?: 'near' | 'always';
+  escapeCloses?: EscapeCloseMode;
   cameraMode?: CameraModeId;
   renderScale?: number | 'auto';
   veilDarkness?: number;
@@ -413,6 +420,7 @@ export const makeSettings = (): Settings => ({
   uiScale: UI_SCALE_CFG.default,
   tooltipDetail: 'compact',
   destinationLabels: 'near',
+  escapeCloses: ESCAPE_CFG.default,
   cameraMode: CAMERA_CFG.default,
   renderScale: 'auto',
   veilDarkness: 1,
@@ -449,6 +457,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   uiScale: s.uiScale,
   tooltipDetail: s.tooltipDetail,
   destinationLabels: s.destinationLabels,
+  escapeCloses: s.escapeCloses,
   cameraMode: s.cameraMode,
   renderScale: s.renderScale,
   veilDarkness: s.veilDarkness,
@@ -552,6 +561,8 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     uiScale: clamp(s.uiScale ?? UI_SCALE_CFG.default, UI_SCALE_CFG.min, UI_SCALE_CFG.max),
     tooltipDetail: s.tooltipDetail === 'full' ? 'full' : 'compact',
     destinationLabels: s.destinationLabels === 'always' ? 'always' : 'near',
+    // Unknown values (a renamed mode, a pre-dial save) fall back to the registry default.
+    escapeCloses: ESCAPE_MODES.some(m => m.id === s.escapeCloses) ? s.escapeCloses! : ESCAPE_CFG.default,
     // Unknown values (a renamed mode, a pre-dial save) fall back to the
     // registry default — currently the hero-locked frame.
     cameraMode: CAMERA_MODES.some(m => m.id === s.cameraMode) ? s.cameraMode! : CAMERA_CFG.default,

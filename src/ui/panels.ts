@@ -153,6 +153,7 @@ import { treeGraph, treeLimbOfNode, treeLimbs, treeNodeRanks, treeSealedSet, tre
 import { attachPanZoom, clampZoom, PANZOOM_DEFAULTS } from './panzoom';
 import { attachPanelMove, configurePanelLayout, panelLayoutRefresh, panelLayoutSync, panelMoved, panelMoveReset, panelMoveTo, panelSeatOf, persistPanelSeat, resetPanelLayout } from './panelmove'; // THE PANEL MOVE — ribbons drag their panels; THE LAYOUT remembers
 import { ATLAS_LAYER_CHIPS, MAP_CFG, MAP_CHART_MODES, MAP_LABEL_MODES } from './mapConfig';
+import { ESCAPE_MODES, escapeModeOf } from './escapeConfig';
 import { mapViewport, mapZoomLimits, mapZoomLabel } from './mapViewport';
 import { atlasChart, atlasKeep, atlasRaster, atlasRevision, type AtlasChartInput, type AtlasRaster } from './atlasPaint';
 import { AtlasInputCache } from './atlasInputCache';
@@ -1481,11 +1482,66 @@ export class UI {
     this.folio.sync();
   }
 
+  /** THE SWEEP (ui/escapeConfig.ts, 2026-09-11 — her ask): one Esc clears
+   *  everything this seat has up — every book it owns through its leaves'
+   *  own close paths (the calling still declines, the counter still sheds
+   *  its verbs), the fixed dialog rows as the belt for anything not
+   *  enrolled, then the ordinary panels — sparing the mode's `keep` pages
+   *  (menu-entry ids) until nothing else stands, so the bag is THE LAST TO
+   *  GO. Host-global dialogs belong to the local hero, as in the cascade.
+   *  True = something closed (the press is consumed); false = a clear
+   *  screen, the caller's cue to pause. */
+  escapeSweep(seatId: string, keep: readonly string[]): boolean {
+    const w = this.getWorld();
+    const mine = (el: HTMLElement): boolean =>
+      (this.panelSeatIds.get(el) ?? w.localSeat.id) === seatId;
+    const hostOwned = seatId === w.localSeat.id;
+    let closed = 0;
+    for (const v of this.folio.views()) if (v.owner === seatId) closed += this.folio.closeAll(v.key);
+    const belt: Array<[boolean, () => void]> = [
+      [this.caravanOpen && mine(this.caravanMenu), () => this.closeCaravan()],
+      [this.vendorOpen && mine(this.vendorMenu), () => this.closeVendor()],
+      [this.salvageOpen && mine(this.salvageMenu), () => this.closeSalvage()],
+      [this.fontOpen && mine(this.fontMenu), () => this.closeFont()],
+      [this.recallOpen && mine(this.recallMenu), () => this.closeRecall()],
+      [this.oracleOpen && mine(this.oracleMenu), () => this.closeOracle()],
+      [this.bestiaryOpen && mine(this.bestiaryMenu), () => this.closeBestiary()],
+      [hostOwned && this.sailOpen, () => this.closeSail()],
+      [hostOwned && this.holdOpen, () => this.closeHold()],
+      [hostOwned && this.bountiesOpen, () => this.closeBounties()],
+      [hostOwned && this.mercOpen, () => this.closeMercMenu()],
+      [hostOwned && this.boroughOpen, () => this.closeBorough()],
+      [hostOwned && this.vocationOpen, () => this.closeVocationMenu()],
+    ];
+    for (const [open, close] of belt) if (open) { close(); closed++; }
+    for (const p of this.openSkillTreePanes()) if (mine(p.el)) { this.closeSkillTree(p.skillId); closed++; }
+    // The hero pages, keyed by their menu ids (data/menu.ts) so a mode's
+    // `keep` list names them the way the tray does.
+    const pages: Array<[string, boolean, () => void]> = [
+      ['character', this.charSheetOpen && mine(this.charSheet), () => this.toggleCharSheet(seatId)],
+      ['passives', this.treeOpen && mine(this.passiveTree), () => this.closeTree()],
+      ['map', this.mapOpen && mine(this.worldMap), () => this.toggleMap()],
+      ['inventory', this.inventoryOpen && mine(this.inventory), () => this.toggleInventory(seatId)],
+    ];
+    for (const [id, open, close] of pages) if (open && !keep.includes(id)) { close(); closed++; }
+    // THE LAST TO GO: a kept page closes only when it stood alone.
+    if (closed === 0) for (const [id, open, close] of pages) if (open && keep.includes(id)) { close(); closed++; }
+    this.closeChoicePopup();
+    this.closeTreePopup();
+    this.folio.sync();
+    this.folioStrip.update();
+    return closed > 0;
+  }
+
   /** The couch escape cascade for ONE seat: dismiss its topmost surface —
    *  an owned station dialog first (a close carries semantics), then all of
    *  its ordinary panels. Host-global dialogs (caravan, sail, hold, merc,
    *  borough, vocation) belong to the local hero. True = press consumed. */
   escCascadeFor(seatId: string): boolean {
+    // THE ESCAPE POLICY (ui/escapeConfig.ts): a sweep mode clears the seat's
+    // whole screen in one press; 'step' walks the classic cascade below.
+    const mode = escapeModeOf(this.getSettings().escapeCloses);
+    if (mode.id !== 'step') return this.escapeSweep(seatId, mode.keep);
     const w = this.getWorld();
     const mine = (el: HTMLElement): boolean =>
       (this.panelSeatIds.get(el) ?? w.localSeat.id) === seatId;
@@ -9490,6 +9546,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         <button id="opt-tooltipDetail" title="Compact keeps the short card. Full includes skill breakdowns and equipment comparisons from the moment a card opens. Neither expands while you read.">${s.tooltipDetail === 'full' ? 'FULL' : 'COMPACT'}</button>
       </div>
       <div class="rebind-row">
+        <span>Escape closes</span>
+        <button id="opt-escapecloses" title="What one Esc press clears, once the pause menu and the menu tray are down:
+${ESCAPE_MODES.map(m => `${m.name}: ${m.blurb}`).join('\n')}">${escapeModeOf(s.escapeCloses).name}</button>
+      </div>
+      <div class="rebind-row">
         <span>UI Scale</span>
         <span class="pad-opt"><input type="range" id="opt-uiscale" min="${Math.round(UI_SCALE_CFG.min * 100)}" max="${Math.round(UI_SCALE_CFG.max * 100)}" step="${Math.round(UI_SCALE_CFG.step * 100)}"
           value="${Math.round(s.uiScale * 100)}"
@@ -9960,6 +10021,15 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     root.querySelector<HTMLElement>('#opt-tooltipDetail')?.addEventListener('click', () => {
       const st = this.getSettings();
       st.tooltipDetail = st.tooltipDetail === 'full' ? 'compact' : 'full';
+      this.saveSettings();
+      this.renderOptions(root, onBack);
+    });
+    // THE ESCAPE POLICY (ui/escapeConfig.ts): cycle the registry's rows —
+    // the cascade reads the mode at the press; nothing else changes.
+    root.querySelector<HTMLElement>('#opt-escapecloses')?.addEventListener('click', () => {
+      const st = this.getSettings();
+      const i = ESCAPE_MODES.findIndex(m => m.id === st.escapeCloses);
+      st.escapeCloses = ESCAPE_MODES[(i + 1) % ESCAPE_MODES.length]!.id;
       this.saveSettings();
       this.renderOptions(root, onBack);
     });

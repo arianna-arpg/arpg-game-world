@@ -213,6 +213,25 @@ supplies only a show path per station (`enrollSuite` in `panels.ts`). A new
 suite is one row; a new member station is one id plus its `has*`/`near*`
 reads in `world.ts`.
 
+## THE ESCAPE POLICY (`ui/escapeConfig.ts`, 2026-09-11)
+
+`Settings.escapeCloses` (Options → Interface → Escape closes) picks a row of
+`ESCAPE_MODES`, and the cascade reads it at the press. The modal steps — a
+running minigame, the forge trace, the pause menu, the couch join overlay,
+the menu tray — always go one at a time; the mode governs what comes after:
+
+| mode | one Esc press… |
+| --- | --- |
+| `sweep` (default) | clears every book the seat owns through its leaves' own closes, the fixed dialog rows as the belt, then the ordinary panels; a clear screen pauses |
+| `sweepKeepBag` | the sweep, sparing the pages in its `keep` list (the bag) until nothing else stands — THE LAST TO GO: the next press closes the bag, the one after pauses |
+| `step` | the classic cascade above: the front dialog, then every ordinary panel, then a clear screen pauses |
+
+`UI.escapeSweep(seatId, keep)` is the one sweep both the solo cascade
+(`main.ts`) and the couch `escCascadeFor` call; `keep` names hero pages by
+their menu-entry ids (`data/menu.ts`), so a mode that spares the map or the
+sheet is one row, no code. Probe: `probe_menubar` D6–D8 (registry sanity,
+the settings round-trip).
+
 ## Dials (`FOLIO_CFG`)
 
 | dial | default | meaning |

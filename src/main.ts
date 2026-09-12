@@ -19,6 +19,7 @@ import { assistAim, AIM_ASSIST } from './engine/aimassist';
 import { PadPointer } from './ui/padpointer';
 import { applyUiScale, installUiScaleStyles } from './ui/uiScale';
 import { installUiStack } from './ui/zorder';
+import { escapeModeOf } from './ui/escapeConfig';
 import { rollSeed } from './core/rng';
 import { validateContent } from './data/validate';
 import './data/clusters'; // side-effect: registers the data-driven cluster stamps
@@ -1041,6 +1042,8 @@ function handleLocalPanels(): void {
   //   3. any ordinary panels (sheet/book/tree/map/inventory) all clear —
   //      Esc here means "give me my screen back", NEVER "pause on top",
   //   4. a clear screen: NOW Esc is the pause menu.
+  // THE ESCAPE POLICY (ui/escapeConfig.ts, Settings.escapeCloses) may fold
+  // steps 2–3 into ONE sweep; the modal steps above them never change.
   if (input.justPressed('escape')) {
     if (ui.minigameRunning()) return;
     // THE FORGE's step-away (the steady hand): a tracing hand's Esc cancels
@@ -1056,6 +1059,17 @@ function handleLocalPanels(): void {
     if (ui.menuTrayClose()) return;
     if (couchActive()) {
       if (!ui.escCascadeFor(world.localSeat.id)) ui.showEscapeMenu();
+      return;
+    }
+    // THE ESCAPE POLICY (ui/escapeConfig.ts): a sweep mode clears the whole
+    // screen in one press — every book through its leaves' own closes, the
+    // dialog belt, the ordinary panels (a kept page last) — and pauses only
+    // a clear screen; 'step' walks the classic cascade below.
+    const escMode = escapeModeOf(settings.escapeCloses);
+    if (escMode.id !== 'step') {
+      if (ui.escapeSweep(world.localSeat.id, escMode.keep)) return;
+      ui.hideAll();
+      ui.showEscapeMenu();
       return;
     }
     // THE FOLIO (ui/folio.ts): a book closes its FRONT leaf first — the one
