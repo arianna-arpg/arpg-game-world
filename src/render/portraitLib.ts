@@ -13,6 +13,10 @@
 // the data on the page IS the input, exactly as the site's design demands.
 // ---------------------------------------------------------------------------
 
+// This entry runs without main.ts: register shipped Part Forge glyphs here
+// as well, or looks silently omit their data-defined anatomy on the website.
+import '../data/glyphParts';
+
 import {
   drawPortraitInto, paintPortrait, portraitSubjectOf, portraitTile,
   type PortraitDefLike, type PortraitOpts, type PortraitSubject,
