@@ -1,3 +1,4 @@
+import { DEVOTED_STARTER_TREES } from './devotedStarterTrees';
 import { FRONTIER_STARTER_TREES } from './frontierStarterTrees';
 import { STARTER_SKILL_TREES } from './starterSkillTrees';
 import { NECROMANCER_SACRAMENTS } from './necromancerSacraments';
@@ -141,6 +142,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   heavy_strike: {
+    tree: DEVOTED_STARTER_TREES.heavy_strike,
     id: 'heavy_strike', name: 'Heavy Strike',
     description: 'A crushing melee blow: 35% chance to stun, and the victim is knocked back.',
     tags: ['attack', 'melee', 'physical'], color: '#e09040',
@@ -284,6 +286,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   whirlwind: {
+    tree: DEVOTED_STARTER_TREES.whirlwind,
     id: 'whirlwind', name: 'Whirlwind',
     description: 'CHANNELED: spin with blades out for as long as the button is held, dealing'
       + ' physical damage to everything around you while you keep moving at 30% reduced speed.',
@@ -1161,6 +1164,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   storm_call: {
+    tree: DEVOTED_STARTER_TREES.storm_call,
     id: 'storm_call', name: 'Storm Call',
     description: 'Calls a bolt of lightning down on the target point after a short delay, with'
       + ' a 60% chance to SHOCK everything caught in the strike.',
@@ -2620,6 +2624,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   infernal_ray: {
+    tree: DEVOTED_STARTER_TREES.infernal_ray,
     id: 'infernal_ray', name: 'Infernal Ray',
     description: 'CHANNELED (immobile, ponderous turning): a thin ray of fire that compounds'
       + ' the longer it is held, feeble at first and climbing ever faster, up to +200% damage'
@@ -2883,6 +2888,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // decoys, pads, gates, and the stateful Mark/Recall pair.
 
   dash: {
+    tree: DEVOTED_STARTER_TREES.dash,
     id: 'dash', name: 'Dash',
     description: 'A quick burst of motion toward the cursor.',
     tags: ['movement', 'instant'], color: '#8ac8d8',
@@ -6140,6 +6146,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // MINIONS mend through the same skills via the AI's mender pre-pass.
 
   mend: {
+    tree: DEVOTED_STARTER_TREES.mend,
     id: 'mend', name: 'Mend',
     description: 'Instantly mend the ally under your cursor, or the most wounded in reach, or'
       + ' yourself when alone: a quick heal plus 5% of the target\'s maximum life.',
@@ -6212,6 +6219,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   consecration: {
+    tree: DEVOTED_STARTER_TREES.consecration,
     id: 'consecration', name: 'Consecration',
     description: 'Sanctify a circle of ground for 5 seconds: every half-second it deals fire'
       + ' damage to enemies within and a small mend to allies on the same ground. One circle,'
@@ -6267,6 +6275,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   sanctified_strike: {
+    tree: DEVOTED_STARTER_TREES.sanctified_strike,
     id: 'sanctified_strike', name: 'Sanctified Strike',
     description: 'Sweep a wide melee arc: enemies in it take physical and fire damage, and'
       + ' allies standing among them are mended for a small amount plus 2% of their maximum'
@@ -8876,6 +8885,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   ice_shield: {
+    tree: DEVOTED_STARTER_TREES.ice_shield,
     id: 'ice_shield', name: 'Ice Shield',
     description: 'GUARD: encase yourself in a shell of ice that blocks from every side. You'
       + ' cannot move, and nothing gets through until the shell breaks or you release it;'

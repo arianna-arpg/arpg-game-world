@@ -580,6 +580,7 @@ export function instanceChargeGain(inst: SkillInstance): ChargeGainSpec[] {
 export function instanceConduits(inst: SkillInstance): ConduitSpec[] {
   const out = [...(inst.def.conduits ?? [])];
   for (const s of hostSockets(inst)) if (s.def.conduit) out.push(s.def.conduit);
+  for (const id of inst.treeNodes ?? []) out.push(...(treeNodeOf(inst.def, id)?.conduits ?? []));
   return out;
 }
 
@@ -4788,6 +4789,9 @@ export interface SkillTreeNode {
   kind?: SkillTreeKind;
   /** Temporary buff payloads; modifiers append per rank, scalars replace. */
   buffs?: TreeBuffPatch[];
+  /** Additional resource pumps while this instance is held/toggled. They use
+   * the ordinary conduit floors, destination limits and attribution context. */
+  conduits?: ConduitSpec[];
   /** TYPED WHITELISTED spec overrides — grown ONLY alongside the audit
    *  table above; never add a field here without adopting its cast-path
    *  read sites. THE RE-PIN LAW (authoring): every rung re-pins EVERY

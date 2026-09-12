@@ -40177,9 +40177,9 @@ export class World {
 
   private applyHeal(
     caster: Actor, inst: SkillInstance, target: Actor,
-    fx: { amount?: number; pctMax?: number }, mult = 1, quiet = false,
+    fx: { amount?: number; pctMax?: number; excludeCaster?: boolean }, mult = 1, quiet = false,
   ): number {
-    if (target.dead) return 0;
+    if (target.dead || target.downed || (fx.excludeCaster && target === caster)) return 0;
     const tags = skillContextTags(inst, grantedTags(inst));
     const extra = instanceMods(inst);
     const raw = ((fx.amount ?? 0) + (fx.pctMax ?? 0) * target.maxLife())
@@ -40234,7 +40234,7 @@ export class World {
    *  IS a chain-heal). Draws a brief mending arc per hop. */
   private applyHealChained(
     caster: Actor, inst: SkillInstance, target: Actor,
-    fx: { amount?: number; pctMax?: number; chain?: number }, mult = 1, quiet = false,
+    fx: { amount?: number; pctMax?: number; chain?: number; excludeCaster?: boolean }, mult = 1, quiet = false,
   ): void {
     this.applyHeal(caster, inst, target, fx, mult, quiet);
     const tags = skillContextTags(inst, grantedTags(inst));
@@ -40246,7 +40246,9 @@ export class World {
     while (hops-- > 0) {
       let next: Actor | null = null; let worst = 0.999;
       for (const a of this.actors) {
-        if (a.dead || a.untargetable || a.construct || visited.has(a)) continue;
+        if (a.dead || a.downed || a.untargetable || a.construct || visited.has(a)) continue;
+        // Every hop carries the original heal's recipient exclusions.
+        if (fx.excludeCaster && a === caster) continue;
         if (a.team !== caster.team || !sameStory(a, from)) continue; // (the sovereignty gate: the chain hops its own story)
         if (dist(from.pos, a.pos) > 220) continue;
         const frac = a.life / Math.max(1, a.maxLife());
@@ -40337,7 +40339,7 @@ export class World {
     const fxs = inst.def.effects.filter(fx => fx.type === 'heal' || fx.type === 'cleanse');
     if (!fxs.length) return;
     for (const a of this.actors) {
-      if (a.dead || a.untargetable || a.construct || a.team !== caster.team || !sameStory(a, caster)) continue; // (the sovereignty gate)
+      if (a.dead || a.downed || a.untargetable || a.construct || a.team !== caster.team || !sameStory(a, caster)) continue; // (the sovereignty gate)
       if (once?.has(a.id)) continue;
       if (!accepts(a)) continue;
       let touched = false;
@@ -54263,6 +54265,8 @@ export class World {
       if (source?.caster === caster && source.inst === inst) actor.removeBuff(id);
     }
     this.pendingFuses = this.pendingFuses.filter(f => f.caster !== caster || f.inst !== inst);
+    // Scheduled repeats capture the old tree just as delayed fields do.
+    this.pendingRepeats = this.pendingRepeats.filter(r => r.caster !== caster || r.inst !== inst);
     // Held casts can snapshot guard pools and derived grafts. Changing the
     // allocation retires that stance without paying a release attack.
     if (caster.casting?.inst === inst) caster.casting = null;

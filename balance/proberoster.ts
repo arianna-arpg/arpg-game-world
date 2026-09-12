@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_devotedstartertrees.ts', status: 'green', tier: 'fast', why: 'Berserker/Sorcerer/Cleric opening trees: all 72 routes, unchanged base skills, four-rank passives, mixed forks, combat/healing/channel/guard behavior, conduit floors, exclusion and repeat-respec regressions, saves and network rebuilds' },
   { probe: 'probe_extraction.ts', status: 'green', tier: 'fast', why: 'EXTRACTION tempers + the pot: the temper roll and its player-first default, hero-vs-node threat seeding per temper, the classic fallback, and a pot that beats a harvest node and grows with the stand' },
   { probe: 'probe_shimmy.ts', status: 'green', tier: 'fast', why: 'THE SHIMMY LAW: a spent station dwell stays spent through stillness and unwilled displacement, re-arms on a willed step in range, and out-and-back still re-arms; THE DWELL TELL: every station/NPC target with its fill off the gate\'s own clock, on the one ring feed, its own transit row' },
   { probe: 'probe_classopeners.ts', status: 'green', tier: 'fast', why: 'All 36 base-kit requirements and costs; four opening rotation budgets; real Guardian ward/rally/hammer and Warlord retaliation source lifecycle' },

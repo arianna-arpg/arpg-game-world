@@ -23,6 +23,9 @@ covers the complete opening bars.
 The Hivecaller/Ranger/Guardian batch is in `src/data/frontierStarterTrees.ts`,
 with its contract and shared absorb scaling in
 `docs/design/frontier-starting-skill-trees.md`.
+The Berserker/Sorcerer/Cleric opening trees are in `src/data/devotedStarterTrees.ts`;
+`docs/design/devoted-starting-skill-trees.md` covers their identities, tree-granted
+resource conduits, healing exclusions and cancellation of repeats on respec.
 
 Chest and gem-cache lists live in `src/data/containerloot.ts` and the existing
 `loottables.ts`; `docs/design/container-loot.md` documents the context rules,
