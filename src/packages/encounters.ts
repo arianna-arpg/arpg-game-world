@@ -259,6 +259,39 @@ export interface ExtractSwarmSpec {
   decay: number;
   /** Grafted lock loyalty (>1 = a challenger must beat the hold by margin). */
   stickiness: number;
+  /** THE SWARM'S TEMPERS (her ask, 2026-09-11): one row is ROLLED per seam
+   *  at placement (weight = rarity) and colors the whole stand — who the
+   *  swarm comes for first. `focus` scales every point of threat seeded
+   *  toward the NODE (seedThreat, pulseThreat): 1 = the fixated sapper of
+   *  old, below 1 the node is the fallback behind the defender, above 1
+   *  the node outranks the defender. `heroThreat` is stamped toward the
+   *  nearest local hero at spawn, so a player-first swarm truly comes for
+   *  the player. `yieldMul` prices the stand — a harder temper pays more.
+   *  ABSENT (the borough's assault pour, which points this spec at folk and
+   *  never rolls) = CLASSIC_EXTRACT_TEMPER, the fixation of old, byte for
+   *  byte; the extraction def itself validates a non-empty list. */
+  tempers?: ExtractTemperSpec[];
+}
+
+/** The temper a swarm wears when its spec rolls none: the classic node
+ *  fixation — focus 1, no hero threat, the plain pot. */
+export const CLASSIC_EXTRACT_TEMPER: ExtractTemperSpec = {
+  id: 'fixated', label: 'a fixated swarm', weight: 1, focus: 1, heroThreat: 0, yieldMul: 1,
+};
+
+/** One rolled temper of the extraction swarm (ExtractSwarmSpec.tempers). */
+export interface ExtractTemperSpec {
+  id: string;
+  /** Spoken in the armed line ("Deep Seam, a wary swarm — …"). */
+  label: string;
+  /** Roll weight — rarity. */
+  weight: number;
+  /** Node-threat multiplier (1 = the classic fixation). */
+  focus: number;
+  /** Threat stamped toward the nearest local hero at each spawn. */
+  heroThreat: number;
+  /** Pot + XP multiplier for stands under this temper. */
+  yieldMul: number;
 }
 
 /** THE YIELD — paid as essence PACKETS on the ground (dropEssenceAt →
@@ -269,10 +302,14 @@ export interface ExtractSwarmSpec {
 export interface ExtractYieldSpec {
   /** Base grade every packet starts at ('coarse'). */
   essence: string;
-  /** Full-completion packet budget: (potBase + zoneLevel × potPerLevel) ×
-   *  scale.rewardMul, then × frac^partialPower for a broken stand. */
+  /** Full-completion packet budget: (potBase + zoneLevel × potPerLevel +
+   *  potPerSec × seconds stood) × scale.rewardMul × temper.yieldMul, then ×
+   *  frac^partialPower for a broken stand (her ruling 2026-09-11: the pot
+   *  must beat a single harvest node and grow with how long the seam held). */
   potBase: number;
   potPerLevel: number;
+  /** Pot per second the stand held — the persistence term. */
+  potPerSec: number;
   /** Ground packets the pot is scattered across (each rolls its own grade). */
   packets: number;
   /** Early-shatter penalty exponent (>1 = breaking early pays LESS than

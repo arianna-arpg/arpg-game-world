@@ -101,24 +101,38 @@ const EXTRACTION_ENCOUNTER: EncounterDef = {
       fieldCap: 14,
       levelBonus: 1,
       entryRadius: [300, 420],
-      seedThreat: 55,         // the disturbance, stamped at spawn (× aggro.fixation)
-      pulseThreat: 26,        // the standing pull, re-seeded each beat
+      seedThreat: 55,         // the disturbance, stamped at spawn (× aggro.fixation × temper.focus)
+      pulseThreat: 26,        // the standing pull, re-seeded each beat (× the same)
       beaconSec: 2.2,
       decay: 0.10,            // player grudges melt a touch faster than the chart default…
       stickiness: 1.15,       // …and locks hold with a little loyalty (no ping-pong)
+      // THE TEMPERS (her ruling 2026-09-11): most seams draw a swarm that
+      // comes for the DEFENDER first and falls back on the node only when the
+      // defender is gone — the player is the wall between the seam and its
+      // end. A minority keep the old sapper fixation; a rarer few outrank the
+      // defender entirely and pay for it.
+      tempers: [
+        { id: 'wary', label: 'a wary swarm', weight: 60, focus: 0.4, heroThreat: 70, yieldMul: 1 },
+        { id: 'fixated', label: 'a fixated swarm', weight: 25, focus: 1, heroThreat: 0, yieldMul: 1.2 },
+        { id: 'ravenous', label: 'a ravenous swarm', weight: 15, focus: 2.2, heroThreat: 0, yieldMul: 1.6 },
+      ],
     },
     yield: {
       essence: 'coarse',
-      potBase: 2.6, potPerLevel: 0.09,   // small on purpose — a faucet, not a fortune
-      packets: 3,
-      partialPower: 1.35, minFrac: 0.12,
+      // THE POT (her ruling 2026-09-11): a seam is rarer than a harvest node
+      // and asks a whole defense of you, so a shallow seam drained at L10
+      // pays ~1.5 nodes' worth, a primeval one many times that — and every
+      // second held adds to it.
+      potBase: 9, potPerLevel: 0.6, potPerSec: 0.08,
+      packets: 5,
+      partialPower: 1.15, minFrac: 0.10,
       rungs: [                            // the essences.ts tierRungs idiom
-        { atLevel: 8, chance: 0.15 },     // coarse → glimmering
-        { atLevel: 16, chance: 0.10 },    // glimmering → brilliant
-        { atLevel: 26, chance: 0.06 },    // brilliant → pristine
+        { atLevel: 8, chance: 0.18 },     // coarse → glimmering
+        { atLevel: 16, chance: 0.12 },    // glimmering → brilliant
+        { atLevel: 26, chance: 0.07 },    // brilliant → pristine
       ],
-      fullDefenseRungBonus: 0.06,
-      xpBase: 26, xpPerLevel: 9,
+      fullDefenseRungBonus: 0.08,
+      xpBase: 40, xpPerLevel: 12,
     },
     disperse: { lingerSec: [14, 26], arriveDist: 56 },
     ledgerLost: 'extractions_lost',
@@ -180,6 +194,17 @@ export const EXTRACTION: ContentPackage = {
     if (!(ex.yield.minFrac >= 0 && ex.yield.minFrac < 1)) bad.push('extraction yield.minFrac out of [0,1)');
     if (!(ex.swarm.mixChance >= 0 && ex.swarm.mixChance <= 1)) bad.push('extraction swarm.mixChance out of [0,1]');
     if (ex.yield.packets < 1) bad.push('extraction yield.packets must be >= 1');
+    if (!(ex.yield.potPerSec >= 0)) bad.push('extraction yield.potPerSec must be >= 0');
+    // THE TEMPERS: at least one row, positive weights, every dial sane.
+    const tempers = ex.swarm.tempers ?? [];
+    if (!tempers.length) bad.push('extraction swarm.tempers must name at least one temper');
+    for (const t of tempers) {
+      if (!(t.weight > 0)) bad.push(`extraction temper '${t.id}' needs weight > 0`);
+      if (!(t.focus > 0)) bad.push(`extraction temper '${t.id}' needs focus > 0`);
+      if (!(t.heroThreat >= 0)) bad.push(`extraction temper '${t.id}' needs heroThreat >= 0`);
+      if (!(t.yieldMul > 0)) bad.push(`extraction temper '${t.id}' needs yieldMul > 0`);
+    }
+    if (new Set(tempers.map(t => t.id)).size !== tempers.length) bad.push('extraction temper ids must be unique');
     if (ex.arm.dwellSec <= 0) bad.push('extraction arm.dwellSec must be > 0');
     if (ex.swarm.entryRadius[0] > ex.swarm.entryRadius[1]) bad.push('extraction swarm.entryRadius inverted');
     for (const s of EXTRACTION_ENCOUNTER.scales) {

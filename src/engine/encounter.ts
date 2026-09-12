@@ -69,6 +69,9 @@ export interface ExtractRuntime {
   settled?: 'depleted' | 'shattered';
   /** The discovery line spoke once (first attentive approach). */
   spoke?: boolean;
+  /** THE TEMPER ROLL (ExtractSwarmSpec.tempers): the row id rolled at
+   *  placement — who this seam's swarm comes for first. */
+  temper?: string;
 }
 
 /** BOROUGH-ONLY runtime riding an ActiveEncounter (def.borough set). Zone-

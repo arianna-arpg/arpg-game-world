@@ -368,8 +368,8 @@ import { holdfastTollCost, holdfastTollLabel, type GuardianSpec, type PocketSpec
 import { pocketFormOf, DEFAULT_POCKET_FORM, type PocketFormDef } from '../data/pocketForms';
 import { lordDef } from '../packages/lords';
 import { allEncounterSpecs, allFurnishSpecs, packageSeed } from '../packages/registry';
-import { ENCOUNTER_CFG } from '../packages/encounters';
-import type { BoroughSpec, ExtractDisperseSpec } from '../packages/encounters';
+import { CLASSIC_EXTRACT_TEMPER, ENCOUNTER_CFG } from '../packages/encounters';
+import type { BoroughSpec, ExtractDisperseSpec, ExtractSpec, ExtractTemperSpec } from '../packages/encounters';
 import { gateOf } from '../packages/weighting';
 import { courtLord, courtLordForZone } from '../packages/courts';
 import type { ActiveEncounter, BoroughRuntime, VeilKnot } from './encounter';
@@ -8149,7 +8149,10 @@ export class World {
     this.actors.push(node);
     const well: Doodad = { pos: vec(e.pos.x, e.pos.y + 6), radius: 26, kind: look.well ?? 'marrow_well' };
     this.doodads.push(well);
-    e.ex = { nodeId: node.id, well, dwellStart: 0, stood: 0, reseedAt: 0, entries: new Map() };
+    // THE TEMPER ROLL (ExtractSwarmSpec.tempers, her ask 2026-09-11): one row
+    // per seam on the encounter stream — who the swarm comes for first.
+    const temper = this.rollExtractTemper(spec);
+    e.ex = { nodeId: node.id, well, dwellStart: 0, stood: 0, reseedAt: 0, entries: new Map(), temper: temper.id };
     // Per-biome dressing on radial bands (the runtime ring-scatter idiom).
     for (const row of look.dressing ?? []) {
       const n = this.encRng.int(row.count[0], row.count[1]);
@@ -8206,11 +8209,12 @@ export class World {
     // back to the work (× each body's own fixation).
     if (this.time >= ex.reseedAt) {
       ex.reseedAt = this.time + spec.swarm.beaconSec;
+      const focus = this.extractTemperOf(e).focus; // THE TEMPER scales the standing pull too
       for (const id of e.spawned) {
         const a = this.actorById(id);
         if (!a || a.dead) continue;
         const fix = (a.defId ? MONSTERS[a.defId]?.aggro?.fixation : undefined) ?? 1;
-        a.addThreat(ex.nodeId, spec.swarm.pulseThreat * fix);
+        a.addThreat(ex.nodeId, spec.swarm.pulseThreat * fix * focus);
       }
     }
     if (e.timer <= 0) this.settleExtraction(e, 'depleted');
@@ -8230,7 +8234,9 @@ export class World {
     node.invulnerable = false;
     bumpLedger(this.ledger, e.def.ledger.onEncounter); // DISCOVERY — the Vault card surfaces
     const look = extractionLookFor(this.zone.biome);
-    this.text(vec(e.pos.x, e.pos.y - 30), `${e.scale.label} — ${spec.text.armed}`, look.accent, 16);
+    // The armed line names the roll ("Deep Seam, a wary swarm — …"): the
+    // swarm's conduct is the rest of the tell.
+    this.text(vec(e.pos.x, e.pos.y - 30), `${e.scale.label}, ${this.extractTemperOf(e).label} — ${spec.text.armed}`, look.accent, 16);
     this.flashes.push({ pos: vec(e.pos.x, e.pos.y), radius: 90, color: look.accent, life: 0.6, maxLife: 0.6 });
   }
 
@@ -8301,12 +8307,50 @@ export class World {
           threat: { damage: ag?.fury ?? 1, decay: spec.swarm.decay * (ag?.waver ?? 1) },
         },
       };
-      m.addThreat(ex.nodeId, spec.swarm.seedThreat * (ag?.fixation ?? 1));
+      // THE TEMPER (her ask 2026-09-11): the node's seed × the roll's focus,
+      // and a player-first temper stamps its hero threat at the nearest local
+      // hand — the swarm comes for the defender, the seam is its fallback.
+      const temper = this.extractTemperOf(e);
+      m.addThreat(ex.nodeId, spec.swarm.seedThreat * (ag?.fixation ?? 1) * temper.focus);
+      if (temper.heroThreat > 0) {
+        // SOVEREIGNTY: targeting — a threat seed toward the nearest defender
+        // is aim, never a touch; the chase itself rides the AI's own story law.
+        let hero: Actor | null = null, hd = Infinity;
+        for (const s of this.localHumanSeats()) {
+          if (s.actor.dead || s.actor.downed) continue;
+          const d = dist(s.actor.pos, m.pos);
+          if (d < hd) { hd = d; hero = s.actor; }
+        }
+        if (hero) m.addThreat(hero.id, temper.heroThreat);
+      }
       m.aiTargetId = ex.nodeId;
       m.aggroed = true;
       e.spawned.add(m.id);
       this.actors.push(m);
     }
+  }
+
+  /** The seam's rolled temper row (ExtractSwarmSpec.tempers) — the first row
+   *  when the runtime carries none (a seam stood up before the roll existed). */
+  private extractTemperOf(e: ActiveEncounter): ExtractTemperSpec {
+    const rows = e.def.extract!.swarm.tempers;
+    if (!rows?.length) return CLASSIC_EXTRACT_TEMPER;
+    return rows.find(t => t.id === e.ex?.temper) ?? rows[0];
+  }
+
+  /** Roll one temper by weight on the encounter stream (deterministic per
+   *  placement — a reload re-rolls the same seam); a spec without rows
+   *  wears the classic fixation and draws nothing from the stream. */
+  private rollExtractTemper(spec: ExtractSpec): ExtractTemperSpec {
+    const rows = spec.swarm.tempers;
+    if (!rows?.length) return CLASSIC_EXTRACT_TEMPER;
+    const total = rows.reduce((s, t) => s + Math.max(0, t.weight), 0);
+    let roll = this.encRng.range(0, total);
+    for (const t of rows) {
+      roll -= Math.max(0, t.weight);
+      if (roll <= 0) return t;
+    }
+    return rows[rows.length - 1];
   }
 
   /** The end, either way: pay by how long the stand held, mark the ground
@@ -8375,7 +8419,12 @@ export class World {
     const y = e.def.extract!.yield;
     if (frac < y.minFrac) return;
     const lvl = Math.max(1, this.zone.level);
-    const pot = Math.round((y.potBase + lvl * y.potPerLevel) * e.scale.rewardMul
+    // THE POT (her ruling 2026-09-11): level + the seconds the stand held,
+    // × the rolled clock's pot, × the temper's price; a broken stand keeps
+    // its held fraction's power. Must beat a single harvest node.
+    const stood = e.ex?.stood ?? 0;
+    const temper = this.extractTemperOf(e);
+    const pot = Math.round((y.potBase + lvl * y.potPerLevel + y.potPerSec * stood) * e.scale.rewardMul * temper.yieldMul
       * (full ? 1 : Math.pow(frac, y.partialPower)));
     if (pot <= 0) return;
     const packets = Math.min(y.packets, pot);
@@ -8395,7 +8444,7 @@ export class World {
       this.dropEssenceAt(vec(e.pos.x + rand(-34, 34), e.pos.y + rand(-30, 30)),
         { essence: ESSENCE_IDS[tier], count });
     }
-    const xp = Math.round((y.xpBase + lvl * y.xpPerLevel) * e.scale.rewardMul * frac);
+    const xp = Math.round((y.xpBase + lvl * y.xpPerLevel) * e.scale.rewardMul * temper.yieldMul * frac);
     if (xp > 0) this.grantXp(xp);
   }
 
