@@ -1020,7 +1020,7 @@ we verify changes.
   probe `balance/probe_speechgrammar.ts`), THE COUNTER LAWS on the board itself
   (`BOUNTY_BOARD_CFG.counter`: THE TEAR-OFF closes the panel on a take,
   THE RETURN turns a resolved hand in at the linger before the slate
-  re-opens, THE RECEIPT prints the pay — probe_bountyboard rig S), THE
+  re-opens, THE RECEIPT prints the pay — probe_bountyboard rig S), and THE READINESS LAW (2026-09-12: `World.handState` → `questStanding` — ONE fold of a held posting's standing off its kind's own done()/failed() predicates, read by the journal, the map pins, the board card, the prompt, the withhold notice and the turn-in alike; the zone objective is never a posting's deed — rig T, docs/design/bounty-board.md §8), THE
   BROOK (the random `river` retired for an authored
   `course` stamp per rung — StampSpec `path`/`lay`/`spans`; the same row
   with `lay: 'paved_way'` is a lane, and the town's TRAVELED WAYS are

@@ -210,7 +210,7 @@ import { caravanBand, CARAVAN_BANDS, caravanBandLabel } from '../data/caravan';
 import { TILESETS, CAVE_FACE_IDS, pickTilesetForBiome } from '../data/tilesets';
 import { QUEST_GIVER_IDS, QUESTS } from '../quests/defs';
 import type { QuestDef, QuestGateCtx } from '../quests/types';
-import { QUEST_CATEGORY_CAPS, DEFAULT_QUEST_CATEGORY, type QuestCategory } from '../quests/types';
+import { QUEST_CATEGORY_CAPS, DEFAULT_QUEST_CATEGORY, questStandingLine, type QuestCategory, type QuestStanding } from '../quests/types';
 import { Rng, rollSeed, withSeededRandom } from '../core/rng';
 import { ALTARS, INTERACT_PLACE_CFG, SHRINES, type AltarDef, type ShrineDef } from '../data/shrines';
 import { WorldSim } from '../world/sim';
@@ -3712,16 +3712,15 @@ export class World {
   /** CLIENT half (co-op): the host's `lt` draw list, applied by snapshot —
    *  null on the host (the renderer reads the live pool instead). */
   liteWire: { k: string[]; b: number[] } | null = null;
-  /** The quest accepted this run (single-slot): its target zone + id, and whether
-   *  its field objective is done (awaiting the return-to-giver turn-in). `fieldDone`
-   *  lives HERE, not on the per-zone-load objectiveDone latch, so walking home (a
-   *  zone load that re-arms objectiveDone) never resets the quest. Cleared on
-   *  completion so the giver offers the next link. Not serialized — resume drops
-   *  you in town and the chain re-offers from the (per-account) ledger. */
   /** Quests CONCURRENTLY in progress (the journal). Each dwell by a giver turns in a
    *  finished one (low→high level) or accepts the next available (low→high, random
-   *  ties), respecting per-category caps. Per-run (not serialized — resume re-offers
-   *  from the per-account ledger). */
+   *  ties), respecting per-category caps. Saved with the world state (quests.active).
+   *  `fieldDone` lives HERE, not on the per-zone-load objectiveDone latch, so
+   *  walking home (a zone load that re-arms objectiveDone) never resets an authored
+   *  quest's field leg. THE READINESS LAW (questStanding): for an AUTHORED quest the
+   *  flag IS the field leg's truth; for a GENERATED posting it is only the ANNOUNCE
+   *  latch of the withhold notice (noteBountyReady) — the row's standing is its
+   *  kind's own predicates (handState), never this flag, never the zone objective. */
   activeQuests: { questId: string; zoneId: string; fieldDone: boolean }[] = [];
   /** Quests finished THIS run (chain gating + re-offer suppression). Per-run. */
   completedQuests = new Set<string>();
@@ -17502,13 +17501,14 @@ export class World {
         && typeof q.zoneId === 'string' && healed[q.zoneId])
       .map(q => ({ questId: q.questId, zoneId: q.zoneId, fieldDone: !!q.fieldDone }));
     // A hand whose quest row a stale save dropped re-seats it (the row is
-    // derivable from the posting — fieldDone re-reads off the kind's own
-    // done() so the withhold notice never replays a finished ask).
+    // derivable from the posting — the announce latch re-reads off the
+    // kind's own standing so the withhold notice never replays a resolved
+    // ask; THE READINESS LAW: the standing itself is never stored).
     for (const h of this.bountyHands) {
       if (!this.activeQuests.some(e => e.questId === h.id)) {
         this.activeQuests.push({
           questId: h.id, zoneId: h.zoneId,
-          fieldDone: BOUNTY_KINDS[h.kind]?.done(this, h) ?? false,
+          fieldDone: this.handState(h) !== 'afield',
         });
       }
     }
@@ -23407,12 +23407,49 @@ export class World {
     const out: { id: string; state: 'ready' | 'failed' }[] = [];
     for (const p of this.bountyHands) {
       if (p.boardId !== boardId) continue;
-      const row = BOUNTY_KINDS[p.kind];
-      if (!row) continue;
-      if (p.failed === true || (row.failed?.(this, p) ?? false)) out.push({ id: p.id, state: 'failed' });
-      else if (row.done(this, p)) out.push({ id: p.id, state: 'ready' });
+      const state = this.handState(p);
+      if (state !== 'afield') out.push({ id: p.id, state });
     }
     return out;
+  }
+
+  /** THE READINESS LAW — the ONE fold of a held posting's standing: the
+   *  kind's own failed()/done() predicates, pure reads over the live world.
+   *  The turn-in, THE RETURN's dwell, the board's hand card, the prompt,
+   *  the journal, the map pins and the withhold notice ALL read this —
+   *  never the zone objective (a cull's ground clears while its marks
+   *  still stand; a decree's zone empties while the decree stands), never
+   *  a stored latch (a save re-derives it; a standing-state read may even
+   *  step back). Drawn == turned-in, by construction. */
+  handState(p: BountyPosting): QuestStanding {
+    const row = BOUNTY_KINDS[p.kind];
+    if (!row) return 'afield';
+    if (p.failed === true || (row.failed?.(this, p) ?? false)) return 'failed';
+    return row.done(this, p) ? 'ready' : 'afield';
+  }
+
+  /** THE WITHHOLD NOTICE — the one site that speaks a posting's resolution
+   *  ("the ask is met — return to the board" / "the ask has failed"): once
+   *  per rising edge of its standing, the row's fieldDone serving as the
+   *  ANNOUNCE latch (it FOLLOWS the read — a standing that steps back
+   *  re-arms it — and is never a readiness of its own). Called wherever a
+   *  deed may have landed: the cull's claim, the gather's rite, the
+   *  arrival note, the zone's own clear, and the field watch's sweep. */
+  private noteBountyReady(p: BountyPosting): void {
+    const aq = this.activeQuests.find(e => e.questId === p.id);
+    if (!aq) return;
+    const standing = this.handState(p);
+    if (standing === 'afield') {
+      if (aq.fieldDone) { aq.fieldDone = false; this.charDirty = true; }
+      return;
+    }
+    if (aq.fieldDone) return;
+    aq.fieldDone = true;
+    this.notice(standing === 'ready'
+      ? (this.questDefOf(p.id)?.turnIn?.prompt ?? 'The ask is met — return to the bounty board to claim the pay.')
+      : 'The ask has failed — return to the bounty board to hand the posting back.',
+    BOUNTY_BOARD_CFG.accent, 16, 'civic');
+    this.charDirty = true;
   }
 
   /** THE BEAT's quantum — the board's OWN clock (never the vendor restock
@@ -24040,8 +24077,10 @@ export class World {
     if (!this.nearBountyBoard(seat, p.boardId)) return false;
     const row = BOUNTY_KINDS[p.kind];
     if (!row) return false;
-    const failed = p.failed === true || (row.failed?.(this, p) ?? false);
-    if (failed) {
+    // THE READINESS LAW: the counter turns in what the ONE fold reads —
+    // the same standing the journal, the map and the prompt spoke.
+    const standing = this.handState(p);
+    if (standing === 'failed') {
       this.bountyHands = this.bountyHands.filter(h => h.id !== id);
       const ai = this.activeQuests.findIndex(e => e.questId === id);
       if (ai >= 0) this.activeQuests.splice(ai, 1);
@@ -24054,7 +24093,7 @@ export class World {
       this.refreshBountySlate(p.boardId);
       return true;
     }
-    if (!row.done(this, p)) {
+    if (standing !== 'ready') { // THE READINESS LAW's refusal: the same fold every tell spoke
       this.notice('The work stands unfinished — the ask is printed on the card.', BOUNTY_BOARD_CFG.accent, 14, 'civic');
       return false;
     }
@@ -24209,13 +24248,8 @@ export class World {
       ...(writs ? { coastWrits: writs } : {}),
       ...(receipt ? { receipt } : {}),
       offers: this.bountyOffers.filter(o => o.boardId === boardId).map(face),
-      hands: this.bountyHands.filter(h => h.boardId === boardId).map(p => {
-        const row = BOUNTY_KINDS[p.kind];
-        const state: 'afield' | 'ready' | 'failed' =
-          (p.failed === true || (row?.failed?.(this, p) ?? false)) ? 'failed'
-            : (row?.done(this, p) ?? false) ? 'ready' : 'afield';
-        return { ...face(p), state };
-      }),
+      // THE READINESS LAW: the card's state is the one fold (handState).
+      hands: this.bountyHands.filter(h => h.boardId === boardId).map(p => ({ ...face(p), state: this.handState(p) })),
     };
   }
 
@@ -24293,19 +24327,14 @@ export class World {
     }
   }
 
-  /** The errand's arrival note (loadZone): entry IS the deed — the hand
-   *  flips ready and the withhold prompt speaks (the field-clear hook's
-   *  twin for a kind whose predicate is the walk itself). */
+  /** The arrival note (loadZone): a held posting on this ground asks THE
+   *  READINESS LAW's one fold at the door — the errand's entry IS its deed
+   *  (the field-clear hook's twin for a kind whose predicate is the walk
+   *  itself); any other kind simply reads afield until its own ask lands. */
   private noteBountyArrivals(def: ZoneDef): void {
     for (const p of this.bountyHands) {
-      if (p.kind !== 'errand' || p.zoneId !== def.id) continue;
-      const aq = this.activeQuests.find(e => e.questId === p.id);
-      if (aq && !aq.fieldDone) {
-        aq.fieldDone = true;
-        this.notice(this.questDefOf(p.id)?.turnIn?.prompt
-          ?? 'The ask is met — return to the bounty board to claim the pay.', BOUNTY_BOARD_CFG.accent, 16, 'civic');
-        this.charDirty = true;
-      }
+      if (p.zoneId !== def.id) continue;
+      this.noteBountyReady(p);
     }
   }
 
@@ -24325,17 +24354,7 @@ export class World {
     this.bountyWatchAccum += dt;
     if (this.bountyWatchAccum < 2) return;
     this.bountyWatchAccum = 0;
-    for (const p of this.bountyHands) {
-      const row = BOUNTY_KINDS[p.kind];
-      const aq = this.activeQuests.find(e => e.questId === p.id);
-      if (!row || !aq || aq.fieldDone) continue;
-      if (p.failed || row.failed?.(this, p)) continue;
-      if (!row.done(this, p)) continue;
-      aq.fieldDone = true;
-      this.notice(this.questDefOf(p.id)?.turnIn?.prompt
-        ?? 'The ask is met — return to the bounty board to claim the pay.', BOUNTY_BOARD_CFG.accent, 16, 'civic');
-      this.charDirty = true;
-    }
+    for (const p of this.bountyHands) this.noteBountyReady(p);
     this.reconcileBounties();
   }
 
@@ -27214,7 +27233,7 @@ export class World {
     return this.activeQuests
       .filter(e => {
         const q = this.questDefOf(e.questId);
-        return e.fieldDone && q?.turnIn && this.giverPresent(q.turnIn.giver) !== null;
+        return this.questStanding(e) === 'ready' && q?.turnIn && this.giverPresent(q.turnIn.giver) !== null;
       })
       .sort((a, b) => (this.questDefOf(a.questId)?.offerAtLevel ?? 0) - (this.questDefOf(b.questId)?.offerAtLevel ?? 0));
   }
@@ -27495,19 +27514,68 @@ export class World {
       vec(this.player.pos.x + 140, this.player.pos.y), rng);
   }
 
-  /** The quest journal for the map's Quests tab: active (in-progress / ready-to-claim)
-   *  + completed this run. Read-only view; labels/categories from the QuestDefs. */
+  /** THE READINESS LAW's row read: a held quest row's standing — the fold
+   *  the journal, the map pins and the giver's queue all speak. A generated
+   *  posting answers through handState (its kind's own predicates); an
+   *  authored quest through its field latch + return leg (a pay-on-clear
+   *  quest leaves the list the moment it clears, so it never reads ready). */
+  questStanding(e: { questId: string; fieldDone: boolean }): QuestStanding {
+    const p = this.bountyHands.find(h => h.id === e.questId);
+    if (p) return this.handState(p);
+    return e.fieldDone && !!QUESTS[e.questId]?.turnIn ? 'ready' : 'afield';
+  }
+
+  /** Where a held quest row TURNS IN — the counter its "!" pin and its
+   *  journal line walk home to: a posting's ISSUING board (THE KINSHIP —
+   *  the writ walks home to where it was posted; a board's id is its home
+   *  zone, Lastlight's the town), an authored quest's giver in town. */
+  questHome(e: { questId: string }): { zoneId: string; counter: string } {
+    const p = this.bountyHands.find(h => h.id === e.questId);
+    if (p) {
+      const home = this.bountyBoardRoster().find(b => b.id === p.boardId)?.homeZoneId
+        ?? (p.boardId === BOUNTY_BOARD_CFG.boardId ? START_ZONE : p.boardId);
+      return { zoneId: home, counter: 'the bounty board' };
+    }
+    const q = QUESTS[e.questId];
+    const g = q?.turnIn ? (Array.isArray(q.turnIn.giver) ? q.turnIn.giver[0] : q.turnIn.giver) : undefined;
+    return { zoneId: START_ZONE, counter: (g && MONSTERS[g]?.name) || 'the giver' };
+  }
+
+  /** The quest journal for the map's Quests tab: active (afield / ready /
+   *  failed — THE READINESS LAW's one fold, the words the map pin and the
+   *  board's card agree with) + completed this run. Read-only view;
+   *  labels/categories from the QuestDefs, a posting's ASK from its card. */
   questLog(): {
-    active: { id: string; label: string; category: QuestCategory; ready: boolean; target?: string }[];
+    active: {
+      id: string; label: string; category: QuestCategory;
+      /** The one fold (questStanding); `ready` is its 'ready' face, kept for readers. */
+      standing: QuestStanding; ready: boolean;
+      /** THE STANDING'S WORDS for this row — where to walk and why. */
+      line: string;
+      /** A posting's card ask, progress included ("2 still stand"). */
+      ask?: string;
+      target?: string;
+    }[];
     completed: { id: string; label: string; category: QuestCategory }[];
   } {
     const active = this.activeQuests.map(e => {
       const q = this.questDefOf(e.questId); // generated postings resolve too
+      const p = this.bountyHands.find(h => h.id === e.questId);
       const z = this.zoneMap[e.zoneId];
+      const standing = this.questStanding(e);
+      const home = this.questHome(e);
+      const homeName = this.zoneMap[home.zoneId]?.name;
+      const ask = p ? BOUNTY_KINDS[p.kind]?.copy(this, p).ask : undefined;
       return {
         id: e.questId, label: q?.offerLabel ?? e.questId,
-        category: q?.category ?? DEFAULT_QUEST_CATEGORY, ready: e.fieldDone,
-        target: z ? (this.visited.has(z.id) ? z.name : 'uncharted — seek it out') : undefined,
+        category: q?.category ?? DEFAULT_QUEST_CATEGORY,
+        standing, ready: standing === 'ready',
+        line: questStandingLine(standing, p && homeName ? `${home.counter} at ${homeName}` : home.counter),
+        ...(ask ? { ask } : {}),
+        // The journal names ground by the map's own fog seam (World.visible):
+        // a lifted charge reads its name here as on the chart; an omen-face
+        // errand's veiled seat stays the ask.
+        target: z ? (this.visible(z) ? z.name : 'uncharted — seek it out') : undefined,
       };
     });
     const completed = [...this.completedQuests].map(id => ({
@@ -27627,17 +27695,27 @@ export class World {
    *  otherwise pay out now (today's behavior). Turn-in quests NEVER pay in the
    *  zone — even on a re-clear — so the giver is always the payout point. */
   private onQuestZoneFieldCleared(zoneId: string): void {
-    const aq = this.activeQuests.find(e => e.zoneId === zoneId);
-    if (!aq) return;
-    const q = this.questDefOf(aq.questId);
-    if (q?.turnIn) {
-      if (!aq.fieldDone) {
-        aq.fieldDone = true;
-        this.notice(q.turnIn.prompt ?? 'Objective complete — return to the quartermaster to claim your reward.', '#ffd700', 16, 'civic');
+    // Every row on this ground (THE JUICING LEAN stacks boards' postings on
+    // one zone beside an authored quest's own arena).
+    for (const aq of this.activeQuests.filter(e => e.zoneId === zoneId)) {
+      // THE READINESS LAW: a GENERATED posting's deed is its kind's own
+      // predicate — the zone objective is never a posting's deed (a cull's
+      // ground clears while its marks still stand; a gather's while its
+      // nodes stand unspent; a decree's zone empties while the decree
+      // stands), so the clear only ASKS the one fold whether the hand
+      // resolved (a charge's did — its predicate IS the objective).
+      const p = this.bountyHands.find(h => h.id === aq.questId);
+      if (p) { this.noteBountyReady(p); continue; }
+      const q = this.questDefOf(aq.questId);
+      if (q?.turnIn) {
+        if (!aq.fieldDone) {
+          aq.fieldDone = true;
+          this.notice(q.turnIn.prompt ?? 'Objective complete — return to the quartermaster to claim your reward.', '#ffd700', 16, 'civic');
+        }
+        continue;
       }
-      return;
+      this.onQuestZoneCleared(aq);
     }
-    this.onQuestZoneCleared(aq);
   }
 
   /** Pay out a quest + advance the chain (called on clear, or at the giver for a
@@ -43535,12 +43613,7 @@ export class World {
           h.kind === 'cull' && h.zoneId === this.zone.id && !!h.cull && h.cull.claimed < h.cull.count)!;
         p.cull!.claimed++;
         this.charDirty = true;
-        if (p.cull!.claimed >= p.cull!.count) {
-          const aq = this.activeQuests.find(e => e.questId === p.id);
-          if (aq && !aq.fieldDone) aq.fieldDone = true;
-          this.notice(this.questDefOf(p.id)?.turnIn?.prompt
-            ?? 'The ask is met — return to the bounty board to claim the pay.', BOUNTY_BOARD_CFG.accent, 16, 'civic');
-        }
+        this.noteBountyReady(p); // THE READINESS LAW's one announce site
       },
     },
     // DESCENT — THE DEEP LEDGER: a slain brood-member banks essence UNITS
@@ -56997,12 +57070,7 @@ export class World {
     if (gp) {
       gp.gather!.claimed++;
       this.charDirty = true;
-      if (gp.gather!.claimed >= gp.gather!.count) {
-        const aq = this.activeQuests.find(e => e.questId === gp.id);
-        if (aq && !aq.fieldDone) aq.fieldDone = true;
-        this.notice(this.questDefOf(gp.id)?.turnIn?.prompt
-          ?? 'The ask is met — return to the bounty board to claim the pay.', BOUNTY_BOARD_CFG.accent, 16, 'civic');
-      }
+      this.noteBountyReady(gp); // THE READINESS LAW's one announce site
     }
   }
 

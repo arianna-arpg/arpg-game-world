@@ -527,6 +527,30 @@ strike-through instead of a lie.
   `activeQuests` row — the Quests tab, the "?" target marker, the "!"
   return marker, and the giver bubble all already speak quest categories
   (the reserved `'bounty'` badge color included).
+- **THE READINESS LAW (2026-09-12, the parity pass — probe rig T).** A
+  held posting's standing is ONE fold — `World.handState(p)`: the kind's
+  own `failed()`/`done()` predicates, pure reads over the live world,
+  'afield' | 'ready' | 'failed' (`QuestStanding`, quests/types.ts) —
+  and EVERY tell speaks it: the turn-in and THE RETURN's dwell
+  (`resolvedHandsAt`), the board's hand card (`bountyBoardView`), the
+  board prompt, the Quests tab (`questLog` rows carry `standing` + the
+  card's own `ask`, progress included, + THE STANDING'S WORDS
+  `questStandingLine`), the map (the "?" keeps the ask as its pane line;
+  the home pin sits on the row's OWN turn-in through `questHome` — the
+  ISSUING board, so a quay writ walks home to the quay; a home owed only a
+  hand-back wears the failed ink), and the withhold notice
+  (`noteBountyReady`, the ONE announce site — the cull's claim, the
+  gather's rite, the arrival note, the zone's clear and the field watch
+  all route through it; the row's `fieldDone` is only the ANNOUNCE
+  latch for a posting, following the read). THE ZONE OBJECTIVE IS NEVER A
+  POSTING'S DEED: the field-clear hook (`onQuestZoneFieldCleared`) no
+  longer stamps a posting's row — a cull's ground clearing with marks
+  standing, a gather's with nodes unspent, a decree's zone emptying while
+  the decree stands, or a vacuous entry-completion, all leave the hand
+  AFIELD everywhere; before this pass each of those read "✓ done — return
+  to claim" in the journal and moved the "!" home while the counter
+  refused ("the work stands unfinished"). Authored quests keep their
+  field-leg latch as the truth (`questStanding` folds both shapes).
 - **The chevron patron** (#356's coupling): one new
   `registerAttentionSource` row — in the TARGET zone, the active bounty's
   fixture/quarry/event points through the standing `collectAttention`
@@ -894,6 +918,17 @@ consumer) + THE SMITH'S WRIT (R5 reborn: a craft credit redeemed at
 Brandt by tracing the piece; the deviation band IS the tier). Seven
 cards open; the walk artifact carries a PLAYABLE band demo:
 https://claude.ai/code/artifact/a6b799b6-da67-45e1-897a-a046052d6b7f
+
+**THE READINESS LAW LANDED (2026-09-12 — the Quests-tab parity pass, her
+ask: "the quest tab will show a quest as being complete even though it's
+something closer to the player having navigated into the zone"):** the
+zone-objective hook stamped every posting row on cleared ground, so
+cull/gather/answer hands read READY in the journal + map while the board
+refused. Now ONE fold (`handState` → `questStanding`) serves every tell —
+turn-in, dwell, card, prompt, journal, pins, notice (§8, the law's own
+bullet); the journal prints the card's ask with progress; the home pin
+sits on the issuing board; a failed hand reads failed everywhere and is
+announced once. Probe grown by rig T (24 checks).
 
 ---
 

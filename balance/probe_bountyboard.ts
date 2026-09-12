@@ -81,6 +81,14 @@
 //      hand per board, the writ walking home to its own counter, the
 //      scoped turn-in refresh, one shared lattice, the regional save
 //      bookkeeping, and the starter band governing Lastlight alone.
+//   T (THE READINESS LAW, 2026-09-12): a held posting's standing is ONE
+//      fold — its kind's own done()/failed() read (World.handState) — and
+//      EVERY tell speaks it (the journal row + its ask, the map's "?" and
+//      home pin, the board's card, the return prompt, the withhold notice,
+//      the counter itself). The zone objective is never a posting's deed:
+//      the field-clear hook fired on a cull's ground with marks standing
+//      leaves the hand AFIELD everywhere; the claim flips every tell
+//      together and announces once; a fallen hold reads FAILED everywhere.
 // Run: npx tsx balance/probe_bountyboard.ts
 // ---------------------------------------------------------------------------
 
@@ -108,6 +116,7 @@ import { QUEST_CATEGORY_CAPS } from '../src/quests/types';
 import { START_ZONE, ZONES } from '../src/data/zones';
 import { allUnlockables } from '../src/meta/unlocks';
 import { sanitizeBountyBoard } from '../src/meta/worldstate';
+import { collectMarkers } from '../src/world/mapMarkers';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -1251,6 +1260,112 @@ seedGlobalRandom(0x5ea7);
     /!v\.offers\.some\(o => o\.id === id\)[\s\S]{0,80}bountyPendingTake = null/.test(panels));
   check('S: a fresh open owes no earlier reach', /showBounties[\s\S]{0,400}bountyPendingTake = null/.test(panels));
   check('S: the receipt is drawn at the head of the board', panels.includes('v.receipt') && panels.includes('bounty-receipt'));
+}
+
+// ------------- T. THE READINESS LAW (2026-09-12 — a held posting's
+// standing is ONE fold, its kind's own done()/failed() read
+// (World.handState), and EVERY tell speaks it. BEFORE: the field-clear hook
+// stamped fieldDone on every activeQuests row in the zone, so a cull /
+// gather / answer hand read READY in the journal + map ("return to claim")
+// the moment its ground cleared while the board refused the turn-in.)
+seedGlobalRandom(0x4ead);
+{
+  interface TInt { onQuestZoneFieldCleared(zoneId: string): void }
+  const wT = mkWorld();
+  const WT = wT as unknown as TInt;
+  let cullT: BountyPosting | undefined;
+  for (let b = 0; b < 12 && !cullT; b++) {
+    wT.time = b * wT.bountyBeatSeconds();
+    wT.armBountyBoard();
+    cullT = wT.bountyOffers.find(p => p.kind === 'cull');
+  }
+  if (!cullT) throw new Error('no cull dealt in 12 beats');
+  check('T: a cull in hand', wT.acceptBounty(cullT.id) === true);
+  const row = (): { questId: string; zoneId: string; fieldDone: boolean } | undefined =>
+    wT.activeQuests.find(e => e.questId === cullT!.id);
+  const journal = (): ReturnType<World['questLog']>['active'][number] | undefined =>
+    wT.questLog().active.find(e => e.id === cullT!.id);
+  const pins = (): ReturnType<typeof collectMarkers> => collectMarkers(wT).filter(m => m.id.startsWith('quest-turnin'));
+  const target = (): ReturnType<typeof collectMarkers>[number] | undefined =>
+    collectMarkers(wT).find(m => m.id === `quest-target-${cullT!.id}`);
+  const metNotices = (): number => wT.notices.filter(n => n.text.startsWith('The ask is met')).length;
+  const marks = (): typeof wT.actors => wT.actors.filter(a => !a.dead && a.tag === 'bounty_mark');
+  wT.loadZone(cullT.zoneId);
+  check('T: the marks stand on arrival', marks().length === cullT.cull!.count, `${marks().length}/${cullT.cull!.count}`);
+  // THE GROUND CLEARS WITH MARKS STANDING — the zone's own field-clear
+  // hook (completeObjective + the escape seam both route through it) fires
+  // for the posting's zone while the ask stands.
+  const n0 = metNotices();
+  WT.onQuestZoneFieldCleared(cullT.zoneId);
+  check('T: the zone hook never stamps a posting ready (the kind\'s predicate is the law)',
+    row()?.fieldDone === false && wT.handState(cullT) === 'afield' && wT.questStanding(row()!) === 'afield');
+  check('T: the journal row reads AFIELD, its ask printed (never "done")',
+    journal()?.standing === 'afield' && journal()?.ready === false
+    && !!journal()?.ask && journal()!.ask!.includes('marked quarry'),
+    journal()?.ask ?? 'no row');
+  check('T: the map keeps the "?" on the target (its ask as the pane line) and raises no home pin',
+    !!target() && pins().length === 0 && (target()?.detail ?? '').includes('marked quarry'));
+  check('T: no withhold notice spoke', metNotices() === n0);
+  check('T: the board card agrees (afield)', wT.bountyBoardView().hands.find(h => h.id === cullT!.id)?.state === 'afield');
+  wT.loadZone(START_ZONE);
+  parkAtBoard(wT);
+  check('T: the counter refuses what the journal never promised', wT.turnInBounty(cullT.id) === false && wT.bountyHands.length === 1);
+  check('T: the prompt invites the read, not the return', wT.bountyBoardHint()?.text === 'Linger to read the postings.');
+  // THE DEED: claim the marks — every tell flips together, announced once.
+  wT.loadZone(cullT.zoneId);
+  for (const m of marks()) wT.kill(m, false, wT.player);
+  check('T: the claim flips the ONE fold (the row\'s flag is only the announce latch)',
+    wT.handState(cullT) === 'ready' && row()?.fieldDone === true);
+  check('T: the withhold notice spoke exactly once', metNotices() === n0 + 1);
+  WT.onQuestZoneFieldCleared(cullT.zoneId);
+  for (let i = 0; i < 25; i++) wT.update(0.1); // the field watch's own sweep
+  check('T: repeated asks never re-announce (the announce latch)', metNotices() === n0 + 1);
+  check('T: the journal row reads READY with the standing\'s words',
+    journal()?.standing === 'ready' && journal()?.ready === true && (journal()?.line ?? '').startsWith('the work is done'),
+    journal()?.line ?? 'no row');
+  const homeT = wT.questHome(row()!);
+  check('T: the home pin sits on the ISSUING board\'s home (the kinship), the "?" gone',
+    homeT.zoneId === START_ZONE && pins().length === 1 && pins()[0].zoneId === START_ZONE
+    && pins()[0].title.startsWith('Return to claim') && !target());
+  wT.loadZone(START_ZONE);
+  parkAtBoard(wT);
+  check('T: the board card + prompt agree (ready)',
+    wT.bountyBoardView().hands.find(h => h.id === cullT!.id)?.state === 'ready'
+    && wT.bountyBoardHint()?.text === 'Linger to turn in the writ.');
+  check('T: the counter pays what every tell promised', wT.turnInBounty(cullT.id) === true && wT.bountyHands.length === 0);
+  // THE FAILED FACE: an answer hand whose hold FELL reads failed everywhere,
+  // announced once by the field watch.
+  const zF = Object.values(wT.zoneMap).find(z => z.id !== START_ZONE && !z.boundless)!;
+  zF.harborhold = mintHoldState(Object.values(HOLD_CLASSES)[0]);
+  zF.veiled = false;
+  const pF: BountyPosting = {
+    id: 'bounty_test_fallen', kind: 'answer', boardId: 'lastlight',
+    zoneId: zF.id, beat: 0, pay: { essence: [{ essence: 'coarse', count: 4 }] },
+    answer: { source: 'harborhold', key: `hold:${zF.id}`, name: zF.name, ask: 'Break the siege.', base: 0 },
+  };
+  wT.bountyHands.push(pF);
+  wT.activeQuests.push({ questId: pF.id, zoneId: pF.zoneId, fieldDone: false });
+  zF.harborhold.state = 'fallen';
+  const jF = (): ReturnType<World['questLog']>['active'][number] | undefined => wT.questLog().active.find(e => e.id === pF.id);
+  check('T: a fallen hold reads FAILED through the one fold — journal, pin and card alike',
+    wT.questStanding({ questId: pF.id, fieldDone: false }) === 'failed'
+    && jF()?.standing === 'failed' && (jF()?.line ?? '').startsWith('the ask failed')
+    && pins().some(m => m.title.startsWith('Hand back the failed posting'))
+    && wT.bountyBoardView().hands.find(h => h.id === pF.id)?.state === 'failed');
+  const failN = wT.notices.filter(n => n.text.startsWith('The ask has failed')).length;
+  wT.player.pos.x += 900; // off the board's disc — THE RETURN must not turn it in under the sweep
+  for (let i = 0; i < 25; i++) wT.update(0.1);
+  check('T: the field watch announces the failure once',
+    wT.notices.filter(n => n.text.startsWith('The ask has failed')).length === failN + 1
+    && wT.activeQuests.find(e => e.questId === pF.id)?.fieldDone === true);
+  // THE PANEL + THE PINS speak the fold at their source (the folio probe's idiom).
+  const panelsT = readFileSync(resolve('src/ui/panels.ts'), 'utf8');
+  const markersT = readFileSync(resolve('src/world/mapMarkers.ts'), 'utf8');
+  check('T: the Quests tab renders the standing + THE STANDING\'S WORDS, never a ready flag of its own',
+    panelsT.includes("e.standing === 'failed'") && panelsT.includes('esc(e.line)')
+    && !/e\.ready \?/.test(panelsT.slice(panelsT.indexOf('renderQuestsTab'))));
+  check('T: the map source reads questStanding + questHome (no fieldDone read)',
+    markersT.includes('world.questStanding(aq)') && markersT.includes('world.questHome(aq)') && !markersT.includes('fieldDone'));
 }
 
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILED`);

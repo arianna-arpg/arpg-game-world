@@ -8911,11 +8911,18 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       : '';
     const activeHtml = log.active.length
       ? log.active.map(e => {
-        const color = e.ready ? '#7ec46a' : '#8a6ad0';
-        const sub = e.ready ? '✓ objective done: return to the giver to claim' : (e.target ? `target: ${esc(e.target)}` : 'in progress');
+        // THE READINESS LAW: the row wears the ONE standing every tell reads
+        // (afield / ready / failed) and speaks THE STANDING'S WORDS — the
+        // same fold the map pin and the board's card resolve through, so
+        // the journal can never call a hand done that the counter refuses.
+        const color = e.standing === 'ready' ? '#7ec46a' : e.standing === 'failed' ? '#d05050' : '#8a6ad0';
+        const ink = e.standing === 'ready' ? '#9ed88a' : e.standing === 'failed' ? '#e8a0a0' : '#8a8678';
+        const sub = e.standing === 'ready' ? `✓ ${esc(e.line)}`
+          : e.standing === 'failed' ? `✗ ${esc(e.line)}`
+            : e.ask ? esc(e.ask) : (e.target ? `target: ${esc(e.target)}` : 'in progress');
         return `<div style="padding:7px 9px;margin:0 0 5px 0;background:#16161e;border-left:3px solid ${color};border-radius:4px">
           <div style="font-size:12px;color:#d8d4c8">${esc(e.label)}${badge(e.category)}</div>
-          <div style="font-size:10px;color:${e.ready ? '#9ed88a' : '#8a8678'};margin-top:2px">${sub}</div></div>`;
+          <div style="font-size:10px;color:${ink};margin-top:2px">${sub}</div></div>`;
       }).join('')
       : '<div style="color:#8a8678;font-size:11px;padding:6px 2px">No active quests. Linger by the quartermaster for work.</div>';
     const doneHtml = log.completed.length

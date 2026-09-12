@@ -176,3 +176,27 @@ export interface QuestDef {
   /** Forward pointer to the next quest in the chain (informational). */
   next?: string;
 }
+
+/** THE READINESS LAW (docs/design/bounty-board.md §8): what a held quest
+ *  row READS right now — ONE fold every tell speaks (the journal row, the
+ *  map's pins, the giver's queue, the board's hand card, the return
+ *  prompt, the withhold notice). A generated posting's standing is its
+ *  kind's own done()/failed() predicates — the turn-in's law, never the
+ *  zone objective (a cull's ground clears while its marks still stand),
+ *  never a stored latch; an authored quest's is its field latch + return
+ *  leg. 'afield' = the ask stands; 'ready' = turn it in; 'failed' = hand
+ *  it back (walk-1's fail ruling: resolved at the counter, no pay). */
+export type QuestStanding = 'afield' | 'ready' | 'failed';
+
+/** THE STANDING'S WORDS — the one line every away-from-the-counter tell
+ *  speaks for a standing (the journal row, the map pin's detail): where to
+ *  walk and why. `counter` names the turn-in ("the bounty board at
+ *  Lastlight", "the Quartermaster"). AT the counter the board's own card
+ *  speaks its verbs (turn it in / hand it back) off the same standing. */
+export function questStandingLine(s: QuestStanding, counter: string): string {
+  switch (s) {
+    case 'ready': return `the work is done — return to ${counter} to claim the reward`;
+    case 'failed': return `the ask failed — return to ${counter} to hand the posting back`;
+    default: return 'afield — the ask stands';
+  }
+}

@@ -19,7 +19,7 @@
 // 'charted' only once the anchor zone is visited (no spoilers — the corpse).
 // ---------------------------------------------------------------------------
 
-import { START_ZONE } from '../data/zones';
+import { BOUNTY_KINDS } from '../data/bountyboard';
 import type { World } from '../engine/world';
 
 export interface MapMarker {
@@ -68,34 +68,61 @@ export function collectMarkers(world: World): MapMarker[] {
 
 // --- built-in sources (registered on import) --------------------------------
 
-/** EACH active quest's target: a "?" on the objective zone while it's unmet, which
- *  MOVES to the town node as a "!" once the field objective is done (go home /
- *  claim). fog:'always' so the target is visible before a road exists. One marker per
- *  concurrent quest (ids suffixed by quest id so they don't collide). */
+/** EACH active quest's target: a "?" on the objective zone while the ask stands,
+ *  which MOVES home as a "!" once the row reads READY — or FAILED (hand it back)
+ *  — through THE READINESS LAW's one fold (World.questStanding: a posting's
+ *  kind predicates, an authored quest's field leg), so the pin can never
+ *  outrun the counter. Home is the row's own turn-in (World.questHome: the
+ *  ISSUING board, the giver's town). fog:'always' so the target is visible
+ *  before a road exists. One marker per concurrent quest (ids suffixed). */
 registerMarkerSource((world): MapMarker[] => {
   const out: MapMarker[] = [];
-  const ready: string[] = []; // labels of field-done turn-in quests (one shared town pin)
+  // Resolved rows grouped by their HOME node (a quay board's writ walks home
+  // to the quay, Lastlight's to town) — one pin per counter, never a stack.
+  const homes = new Map<string, { counter: string; claim: string[]; back: string[] }>();
   for (const aq of world.activeQuests) {
     // questDefOf: generated bounty postings mark their claimed ground too
     // (the resolver seam — the board's "?" and the shared "!" ride free).
     const q = world.questDefOf(aq.questId);
-    if (aq.fieldDone && q?.turnIn) { ready.push(q.offerLabel); continue; }
+    const standing = world.questStanding(aq);
+    if (standing !== 'afield' && q?.turnIn) {
+      const h = world.questHome(aq);
+      const g = homes.get(h.zoneId) ?? { counter: h.counter, claim: [], back: [] };
+      (standing === 'ready' ? g.claim : g.back).push(q.offerLabel);
+      homes.set(h.zoneId, g);
+      continue;
+    }
     const node = world.zoneMap[aq.zoneId];
     if (!node) continue;
+    // A posting's pane line is its card's ASK, progress included — the same
+    // words the board prints, so the chart never reads as a lie.
+    const posting = world.bountyHands.find(h => h.id === aq.questId);
+    const ask = posting ? BOUNTY_KINDS[posting.kind]?.copy(world, posting).ask : undefined;
     out.push({
       id: `quest-target-${aq.questId}`, zoneId: node.id, coord: { x: node.map.x, y: node.map.y },
       glyph: '?', fill: '#2a1a3a', stroke: '#c8a8e8', text: '#e0c0ff', r: 9,
       title: `Quest: ${q?.offerLabel ?? aq.questId}`, fog: 'always', z: 20,
+      ...(ask ? { detail: ask } : {}),
     });
   }
-  // ONE aggregate turn-in marker on the town (multiple ready quests would otherwise
-  // stack invisibly on the same node) — the count + labels ride its title.
-  if (ready.length) {
-    const town = world.zoneMap[START_ZONE];
-    if (town) out.push({
-      id: 'quest-turnin', zoneId: town.id, glyph: ready.length > 1 ? String(ready.length) : '!',
-      fill: '#3a2a0a', stroke: '#ffd700', text: '#ffe9a0', r: 9,
-      title: ready.length > 1 ? `Return to claim ${ready.length} bounties: ${ready.join('; ')}` : `Return to claim: ${ready[0]}`,
+  // ONE aggregate pin per home (multiple resolved quests would otherwise
+  // stack invisibly on the same node) — the count + labels ride its title;
+  // a home owed only a hand-back wears the failed ink.
+  for (const [zoneId, g] of homes) {
+    const node = world.zoneMap[zoneId];
+    if (!node) continue;
+    const n = g.claim.length + g.back.length;
+    const allBack = g.claim.length === 0;
+    out.push({
+      id: `quest-turnin-${zoneId}`, zoneId: node.id, glyph: n > 1 ? String(n) : '!',
+      fill: allBack ? '#2a1414' : '#3a2a0a', stroke: allBack ? '#d05050' : '#ffd700',
+      text: allBack ? '#e8a0a0' : '#ffe9a0', r: 9,
+      title: g.claim.length
+        ? `Return to claim${g.claim.length > 1 ? ` ${g.claim.length} bounties` : ''}: ${g.claim.join('; ')}`
+        : `Hand back the failed posting: ${g.back.join('; ')}`,
+      detail: g.claim.length && g.back.length
+        ? `and hand back the failed: ${g.back.join('; ')}`
+        : `at ${g.counter}`,
       fog: 'always', z: 20,
     });
   }
