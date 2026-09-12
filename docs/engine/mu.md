@@ -103,13 +103,21 @@ stage plays (the scene's own channels — hero bar, prompt, card — stay live).
 
 **THE PANEL SEAL** (her lever, 2026-09-11): `MU_CFG.sealPanels` lists the
 hero pages (menu-entry ids from `data/menu.ts`) the hub keeps shut while the
-wisp stands — the bag today, because the provisional class beneath the wisp
-is no build to read or unlearn — with the refusal line a press hears at the
-hero's feet. The mu stage copies it onto `SceneRuntime.panelSeal` (cleared on
-advance like the veil); `World.panelSealed(id)` is the one read the keyed
-toggles, the pad, the menu tray's greyed tile and its hint all share. An
-empty list opens every page as in a run; any other scene may seal the same
-way. Probe: `probe_mu` B6.
+wisp stands — all five today (bag, sheet, passives, map, journal: a spirit
+carries nothing, and the provisional class beneath the wisp is no build to
+read or unlearn) — with the refusal line a press hears at the hero's feet.
+The mu stage copies it onto `SceneRuntime.panelSeal` (cleared on advance like
+the veil); `World.panelSealed(id)` is the one read the keyed toggles, the
+pad, the menu tray's greyed tile and its hint all share. An empty list opens
+every page as in a run; any other scene may seal the same way. Probe:
+`probe_mu` B6.
+
+**THE MENU STANDS** (same day, her consistency ask): the HUD veil hides the
+run HUD cluster, never the Menu button — it is the shell's door and stands
+whenever the game runs (`main.ts menuBarSync`). In Mu the tray shows every
+hero page greyed with the seal's line, the town pages sealed as away from any
+station, the portal sealed by its own refusal, and the pause page OPEN — so
+the main menu is always one click away, never only a remembered keybind.
 
 ## THE AGENCY RECKONING (the rewritten tutorial fall)
 

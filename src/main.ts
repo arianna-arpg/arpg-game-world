@@ -1694,7 +1694,12 @@ function tick(now: number): void {
   ui.folioSync();
   // THE MENU BAR (ui/menubar.ts): shown for a live run — never over the
   // flow screens, never under the Mu hub's HUD veil.
-  ui.menuBarSync(dt, running && !world.scene?.hudVeil);
+  // THE MENU BUTTON IS THE SHELL'S DOOR (2026-09-11, her ask): it stands
+  // whenever the game runs, HUD veil or not — in Mu the pages read SEALED
+  // (THE PANEL SEAL) and the pause page stays one click away, so the main
+  // menu never depends on a remembered keybind. The veil hides the run HUD
+  // cluster; this button was never part of it.
+  ui.menuBarSync(dt, running);
   padPointer.update(dt,
     (couchActive() ? ui.blockingFor(world.localSeat.id) : ui.uiBlocking()) || !running, nowSec);
   couchTick(dt, nowSec);

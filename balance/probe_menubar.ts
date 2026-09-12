@@ -275,9 +275,12 @@ console.log('E. THE CENSUS');
     panels.includes('this.menuBar = new MenuBar({') && panels.includes('this.vocationMenu, this.menuBar.root];'));
   check('E3 the tray blocks the hero\'s hands and folds under hideAll',
     panels.includes('|| this.menuBar.isTrayOpen()') && panels.includes('hideAll(): void {\n    this.menuBar.closeTray();'));
-  check('E4 main.ts binds the toggle behind the folio\'s Tab walk and syncs the bar per frame',
+  // THE MENU STANDS (2026-09-11, her ask): the bar syncs whenever the game
+  // runs — HUD veil or not (Mu keeps the Menu; its pages read sealed) — so
+  // the main menu never depends on a remembered keybind.
+  check('E4 main.ts binds the toggle behind the folio\'s Tab walk and syncs the bar per frame, veil or not',
     main.includes('pad.justPressed(pb.panelMenu)) && !ui.folioWalkArmed()) ui.toggleMenu();')
-    && main.includes('ui.menuBarSync(dt, running && !world.scene?.hudVeil);'));
+    && main.includes('ui.menuBarSync(dt, running);') && !main.includes('menuBarSync(dt, running && !world.scene?.hudVeil)'));
   check('E5 Esc folds the tray first', main.indexOf('if (ui.menuTrayClose()) return;') < main.indexOf('if (ui.folioCloseFront()) return;')
     && main.indexOf('if (ui.menuTrayClose()) return;') > 0);
   check('E6 the hero\'s passive-point nudge is retired (guests keep theirs) and the cluster rect is published',

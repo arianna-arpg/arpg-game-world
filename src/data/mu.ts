@@ -92,13 +92,15 @@ export const MU_CFG = {
   /** A faint cowl's non-answer. */
   faintLine: 'A shape not yet earned.',
   /** THE PANEL SEAL (her lever, 2026-09-11): hero pages (menu-entry ids,
-   *  data/menu.ts — 'inventory', 'character', 'passives', 'map', 'journal')
-   *  the hub keeps SHUT while the wisp stands. A spirit carries no pack, and
-   *  the provisional class beneath the wisp is not a build to be read or
-   *  unlearned. `line` is the refusal the press hears (floated at the hero's
+   *  data/menu.ts) the hub keeps SHUT while the wisp stands — every one of
+   *  them: a spirit carries no pack, reads no sheet, spends no points, and
+   *  charts no ground, and the provisional class beneath the wisp is not a
+   *  build to be read or unlearned. The Menu button still stands (the
+   *  shell's door — the pages read greyed, the pause page stays one click
+   *  away). `line` is the refusal the press hears (floated at the hero's
    *  feet in `ink`) and the tray's sealed hint. An empty list opens every
    *  page as in a run. */
-  sealPanels: { ids: ['inventory'], line: 'A spirit carries nothing between lives.', ink: WISP_INK },
+  sealPanels: { ids: ['inventory', 'character', 'passives', 'map', 'journal'], line: 'A spirit carries nothing between lives.', ink: WISP_INK },
 } as const;
 
 /** The standalone hub scene — the veteran lane (New Run, run's end). The
