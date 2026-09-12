@@ -347,12 +347,18 @@ const SCRAP_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(salvageGlyphS
  *  data-URI idiom as SCRAP_CURSOR (never themed), crosshair fallback. */
 const BREAK_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(salvageGlyphSvg('⚒'))}") 14 14, crosshair`;
 
-/** THE AUTO-ARM CHOICE — one seam, every salvage view: true (shipped) means
- *  arriving at the bench OR an open scrap counter ARMS its salvage mode and
- *  opens the bag beside it (arm-on-open, exactly as the bench debuted);
- *  false makes every view wait for its toggle press instead (arm-on-toggle).
- *  One word here settles all surfaces at once. */
-const SALVAGE_AUTO_ARM = true;
+/** THE ARRIVAL CHOICE — one seam, every salvage view (her ruling 2026-09-11:
+ *  gear sold by the equip gesture, because the bag stood open beside a
+ *  counter whose wheel had armed itself). Two dials:
+ *    autoArm — does arriving at the bench OR an open scrap counter ARM its
+ *              salvage mode (arm-on-open, as the bench debuted)? OFF: every
+ *              view waits for its toggle press (arm-on-toggle), and a click
+ *              in the bag equips, moves or reads — never sells or breaks —
+ *              until the player flips the wheel or takes up the hammer.
+ *    openBag — does arriving open the bag beside the station (the inventory
+ *              IS the salvage menu, armed or not)?
+ *  One row here settles all surfaces at once. */
+const SALVAGE_STATION: { autoArm: boolean; openBag: boolean } = { autoArm: false, openBag: true };
 
 /** THE HELD RIGHT-CLICK (her ruling 2026-09-05 — the skill-items charter's
  *  pitfall 3 answered): button 2 on a bag tile / worn chip is a TAP or a
@@ -624,7 +630,7 @@ export class UI {
    *  and this is armed, the BAG is the salvage menu — the break cursor rides
    *  the inventory and clicks there salvage. Re-armed on every bench visit;
    *  the panel's toggle stands it down. */
-  private benchBreakMode = true;
+  private benchBreakMode = SALVAGE_STATION.autoArm;
   /** Station view state: which tab, and the craft tab's chosen piece. */
   private salvageTab: 'salvage' | 'craft' = 'salvage';
   private craftTargetUid: number | null = null;
@@ -657,8 +663,9 @@ export class UI {
   /** The scrap wheel (the SELL lane's armed flag): while ON, the BAG is the
    *  sell menu — the ⚙ cursor rides the counter and the (same-seat)
    *  inventory, and clicks there SELL for Coarse Essence (the Breaker's Eye
-   *  baseline on the sell lane). Auto-armed on arrival at an open scrap
-   *  counter (SALVAGE_AUTO_ARM); reset on close — never sticky. */
+   *  baseline on the sell lane). Armed on arrival at an open scrap counter
+   *  only if SALVAGE_STATION.autoArm says so (OFF: the toggle arms it);
+   *  reset on close — never sticky. */
   private scrapMode = false;
   /** THE STANDING ORDER picker: which counter's pane is open + its filter. */
   private vendorCommOpen: string | null = null;
@@ -4360,15 +4367,14 @@ export class UI {
   showSalvage(seatId?: string): void {
     this.ownPanel(this.salvageMenu, this.couchSeatFor(seatId));
     this.salvageOpen = true;
-    // THE BREAKER'S EYE: arriving at the bench ARMS the hammer and opens the
-    // bag beside it — the inventory IS the salvage menu now (click things to
-    // break them; the station panel holds the sweeps and the craft bench).
+    // THE BREAKER'S EYE: arriving at the bench opens the bag beside it — the
+    // inventory IS the salvage menu (click things to break them once the
+    // hammer is up; the station panel holds the sweeps and the craft bench)
+    // — and ARMS the hammer only by THE ARRIVAL CHOICE (SALVAGE_STATION).
     // Never steal a bag another couch seat is browsing — the seat-match gate
     // (salvageLaneFor) keeps the hammer off a borrowed panel anyway.
-    if (SALVAGE_AUTO_ARM) {
-      this.benchBreakMode = true;
-      if (!this.inventoryOpen) this.toggleInventory(seatId);
-    }
+    if (SALVAGE_STATION.autoArm) this.benchBreakMode = true;
+    if (SALVAGE_STATION.openBag && !this.inventoryOpen) this.toggleInventory(seatId);
     this.salvageMenu.classList.remove('hidden');
     this.refreshSalvage();
     this.refreshInventory(); // re-render the bag with benchBreakMode's verbs armed
@@ -4379,9 +4385,9 @@ export class UI {
     this.salvageOpen = false;
     this.salvageMenu.classList.add('hidden');
     this.craftTargetUid = null;
-    // Next bench visit re-arms fresh — or waits for the toggle, by the one
-    // auto-arm choice.
-    this.benchBreakMode = SALVAGE_AUTO_ARM;
+    // Next bench visit re-arms fresh — or waits for the toggle, by THE
+    // ARRIVAL CHOICE.
+    this.benchBreakMode = SALVAGE_STATION.autoArm;
     this.applyBreakChrome();
     if (this.inventoryOpen) this.refreshInventory(); // shed the break verbs
     hideTooltip();
@@ -5488,14 +5494,13 @@ export class UI {
     this.ownPanel(this.vendorMenu, this.couchSeatFor(seatId));
     this.vendorOpen = true;
     // THE BREAKER'S EYE, abroad (the salvage baseline): arriving at a
-    // counter whose scrap gate is open ARMS the wheel and opens the bag
-    // beside it — the inventory IS the sell menu, exactly as the bench
-    // arms its hammer (SALVAGE_AUTO_ARM is the one seam for that choice;
-    // the host's own nearScrapVendor read keeps the arm honest).
-    if (SALVAGE_AUTO_ARM && this.getWorld().nearScrapVendor(this.panelSeat(this.vendorMenu))) {
-      this.scrapMode = true;
-      if (!this.inventoryOpen) this.toggleInventory(seatId);
-    }
+    // counter whose scrap gate is open opens the bag beside it — the
+    // inventory IS the sell menu — and ARMS the wheel only by THE ARRIVAL
+    // CHOICE (SALVAGE_STATION, the one seam the bench reads too; the
+    // host's own nearScrapVendor read keeps both honest).
+    const scrapHere = this.getWorld().nearScrapVendor(this.panelSeat(this.vendorMenu));
+    if (SALVAGE_STATION.autoArm && scrapHere) this.scrapMode = true;
+    if (SALVAGE_STATION.openBag && scrapHere && !this.inventoryOpen) this.toggleInventory(seatId);
     this.vendorMenu.classList.remove('hidden');
     this.refreshVendor();
     this.refreshInventory(); // re-render the bag with the wheel's verbs armed
