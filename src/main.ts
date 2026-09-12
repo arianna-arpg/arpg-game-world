@@ -9,6 +9,8 @@
 // ---------------------------------------------------------------------------
 
 import { saveResetNotice } from './meta/saveCompatibility';
+import { DEATH_PRESENTATION } from './data/deathPresentation';
+import { deathPresentationPose } from './engine/deathPresentation';
 import { Input } from './core/input';
 import { PAD_CFG, PadState, connectedPadIndices, padIdAt, synthEscape, type FakePad, type PadTuning } from './core/gamepad';
 import { COUCH_CFG } from './data/couch';
@@ -404,15 +406,11 @@ let deathShown = false;
 let uiRefreshTimer = 0;
 let autosaveTimer = 0;
 
-/** THE RUN-END FADE (her word, 2026-08-30): dying never PAUSES the game —
- *  the epilogue books instantly (durable, tab-close-safe), but the world
- *  keeps breathing while the screen sinks to black, and the death screen
- *  opens over full dark. A deliberate forfeit (a menu act) and a live co-op
- *  session (a shared clock) stay immediate; the covenant's scene falls never
- *  reach here at all. The fade-IN is the next stage's own (Mu's drift-in). */
+/** Legacy crossing for non-death conclusions; actual deaths use the shared
+ *  deathPresentation timeline. Co-op and deliberate forfeits stay immediate. */
 const RUN_END_FADE = { outSec: 1.15 };
-/** The booked death screen waiting on the dark (null = no fade in flight). */
-let pendingDeathScreen: { open: () => void } | null = null;
+/** The booked epilogue; revealing it never re-books the death. */
+let pendingDeathScreen: { open: (revealSec?: number) => void; opened?: boolean } | null = null;
 
 function startGame(
   classDef: ClassDef, manifest?: ExpeditionManifest, modeId?: string, name?: string,
@@ -1736,7 +1734,9 @@ function tick(now: number): void {
       //      drops/orbs pass and re-replicates in the same broadcast.
       drainMetaActions();
 
-      for (const a of world.actors) updateAI(a, world, dt);
+      // The deathPresentation keeps ambience alive, but the settled run must
+      // never gain a late AI kill, cast, or reward behind its epilogue.
+      if (!world.gameOver) for (const a of world.actors) updateAI(a, world, dt);
       // Mirror the gear-pickup feel preference onto the sim (Settings is a
       // UI concern the World can't import; a boolean crosses the seam).
       world.gearVacuum = settings.gearPickup !== 'key';
@@ -1931,12 +1931,20 @@ function idleAutosave(): void {
 /** Host-only end-of-frame work: live panels, autosave, and the permadeath/death
  *  screen flow. NONE of this runs on a client (no character to save/wipe). */
 function hostTail(dt: number): void {
-  // THE RUN-END FADE, phase two: the epilogue is booked; the dark owns the
-  // tail. The world keeps simulating and rendering above — this just ramps
-  // the cover, then opens the death screen over full black and stops the
-  // loop. (Guarded on THIS world's gameOver so a stale pending from a torn-
-  // down run can never fire over a fresh one — the starters also clear it.)
+  // The pendingDeathScreen owns presentation after the epilogue is booked.
+  // The body timeline reveals it over the dispersing shards; other endings
+  // retain their dark crossing. Starters also clear this pending callback.
   if (pendingDeathScreen && world.gameOver) {
+    if (world.deathPresentation) {
+      const pose = deathPresentationPose(world.deathPresentation.elapsed);
+      world.screenFade = pose.fade;
+      if (pose.reveal && !pendingDeathScreen.opened) {
+        pendingDeathScreen.opened = true;
+        pendingDeathScreen.open(DEATH_PRESENTATION.revealSec);
+      }
+      if (pose.complete) { pendingDeathScreen = null; running = false; }
+      return;
+    }
     world.screenFade = Math.min(1, world.screenFade + dt / RUN_END_FADE.outSec);
     if (world.screenFade >= 1) {
       const open = pendingDeathScreen.open;
@@ -2074,11 +2082,11 @@ function hostTail(dt: number): void {
     // the seal there is what finally lands on the main menu. Co-op host
     // KEEPS the live session (onDeathDismiss re-seats clients in the next
     // run); single-player resets the transport back to local.
-    const openDeath = (): void => ui.showDeath({
+    const openDeath = (revealSec = 0): void => ui.showDeath({
       rows: reck.rows, carried: reck.carried, mult: reck.mult, minted: reck.minted,
       renown, standing: record ? runStanding(account, record) : null,
       ...(fell ? { zoneName: world.fallReckoning!.zoneName } : {}),
-    }, onDeathDismiss);
+    }, onDeathDismiss, revealSec);
     if (coopActive() || world.runEndReason === 'forfeit') {
       // Immediate lanes: a menu act owes no theater, and a shared session's
       // clients are already being re-seated.
@@ -2087,11 +2095,15 @@ function hostTail(dt: number): void {
       // broadcasting the dead world. startGame / startAsClient re-enable it.
       running = false;
     } else {
-      // THE RUN-END FADE: everything above is already booked durable — now
-      // the world just keeps breathing under the sinking dark (the fade
-      // ramp lives at hostTail's head), and the screen opens at full black.
-      world.screenFade = Math.max(world.screenFade, 0.001);
-      pendingDeathScreen = { open: openDeath };
+      // The pendingDeathScreen is presentation only: everything above is
+      // already durable before the body performance or legacy dark crossing.
+      if (world.runEndReason === 'death' && !world.deathPresentation) {
+        openDeath(); // deathPresentation's disabled switch
+        running = false;
+      } else {
+        world.screenFade = world.deathPresentation ? 0 : Math.max(world.screenFade, 0.001);
+        pendingDeathScreen = { open: openDeath };
+      }
     }
   }
 }

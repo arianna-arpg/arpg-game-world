@@ -1367,10 +1367,13 @@ we verify changes.
   worn) and the bar SURGES to its last breaths, a truly-finished Father
   just fades the stage forward (the dead-commander lane — never a lock),
   and interrupts RE-ARM the muster) → the blast fells through the
-  covenant → THE HOLLOW WAKE card → MU. THE RUN-END FADE (main.ts
-  RUN_END_FADE): a real death never pauses the world — the epilogue books
-  instantly but the sim keeps breathing under a sinking screenFade and the
-  death screen opens over full dark (forfeit + co-op stay immediate). The bottom keybind strip is retired
+  covenant → THE HOLLOW WAKE card → MU. THE PLAYER DEATH PRESENTATION
+  (`DEATH_PRESENTATION`, data/deathPresentation.ts): a run-ending death books
+  instantly, then the body rises, cracks, and shatters as its epilogue fades
+  in. Ambient rendering continues while combat/rewards stay settled; the
+  corpse never moves. Forfeit + network co-op stay immediate. Dials and
+  contract: `docs/render/player-death.md`; probe `balance/probe_playerdeath.ts`.
+  The bottom keybind strip is retired
   behind `HINT_BAR_ENABLED` (ui/panels.ts). Docs `docs/engine/scenes.md`;
   probe `balance/probe_scenes.ts`.
   THE MU HUB (data/mu.ts + the 'mu' core stage — docs/engine/mu.md; probe
