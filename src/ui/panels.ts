@@ -1483,20 +1483,37 @@ export class UI {
   }
 
   /** THE SWEEP (ui/escapeConfig.ts, 2026-09-11 — her ask): one Esc clears
-   *  everything this seat has up — every book it owns through its leaves'
-   *  own close paths (the calling still declines, the counter still sheds
-   *  its verbs), the fixed dialog rows as the belt for anything not
-   *  enrolled, then the ordinary panels — sparing the mode's `keep` pages
-   *  (menu-entry ids) until nothing else stands, so the bag is THE LAST TO
-   *  GO. Host-global dialogs belong to the local hero, as in the cascade.
-   *  True = something closed (the press is consumed); false = a clear
-   *  screen, the caller's cue to pause. */
+   *  everything this seat has up — an unkept bag first (THE BAG GOES FIRST
+   *  below), every book it owns through its leaves' own close paths (the
+   *  calling still declines, the counter still sheds its verbs), the fixed
+   *  dialog rows as the belt for anything not enrolled, then the ordinary
+   *  panels — sparing the mode's `keep` pages (menu-entry ids) until
+   *  nothing else stands, so a kept bag is THE LAST TO GO. Host-global
+   *  dialogs belong to the local hero, as in the cascade. True = something
+   *  closed (the press is consumed); false = a clear screen, the caller's
+   *  cue to pause. */
   escapeSweep(seatId: string, keep: readonly string[]): boolean {
     const w = this.getWorld();
     const mine = (el: HTMLElement): boolean =>
       (this.panelSeatIds.get(el) ?? w.localSeat.id) === seatId;
     const hostOwned = seatId === w.localSeat.id;
     let closed = 0;
+    // THE BAG GOES FIRST (2026-09-11, her report): a mode that does not
+    // keep the inventory takes it AHEAD of the books, through its own
+    // toggle — the close the bag key and hideAllFor walk — so the Skills
+    // drawer leaves the way the bag's close takes it: hidden, its memory
+    // kept (buildFlapOpen stands; reopening the bag brings Skills back).
+    // The sync then drops the 'skills' leaf as already closed, and the book
+    // sweep below never reaches closeBuildPanel, which FORGETS. A kept bag
+    // ('sweepKeepBag' with other things up) closes its drawer by the book:
+    // that press is "all but the bag", and Skills goes with the rest by
+    // intent. On the last-to-go press the bag stands alone — no drawer up
+    // to remember — so the kept lane needs no second seam.
+    if (this.inventoryOpen && mine(this.inventory) && !keep.includes('inventory')) {
+      this.toggleInventory(seatId);
+      this.folio.sync();
+      closed++;
+    }
     for (const v of this.folio.views()) if (v.owner === seatId) closed += this.folio.closeAll(v.key);
     const belt: Array<[boolean, () => void]> = [
       [this.caravanOpen && mine(this.caravanMenu), () => this.closeCaravan()],

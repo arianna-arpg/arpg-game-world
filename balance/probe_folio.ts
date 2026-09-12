@@ -447,6 +447,23 @@ console.log('O. THE ENROLLMENT CENSUS');
     passivesRow.includes('this.closeTree()') && !passivesRow.includes('toggleTree'));
   check('O9b hideAllFor and the close glyph take the tree down through closeTree',
     /hideAllFor\([\s\S]{0,700}?this\.closeTree\(\)/.test(panels) && panels.includes('[this.passiveTree, () => this.closeTree()]'));
+  // THE BAG GOES FIRST (2026-09-11, her report): the sweep's close-all
+  // reached the Skills drawer through closeBuildPanel, which FORGETS it
+  // (buildFlapOpen = false) — a bag swept shut by Esc reopened without
+  // Skills, while the bag key's own close (toggleInventory → syncBuildPanels)
+  // hides the drawer and keeps its memory. The sweep now takes an unkept
+  // bag through toggleInventory and syncs the folio BEFORE any book closes,
+  // so the 'skills' leaf drops as already closed; a KEPT bag still closes
+  // its drawer by the book on that press (the player's "all but the bag").
+  const sweepBody = showBody('escapeSweep');
+  const sweepAt = (s: string): number => sweepBody.indexOf(s);
+  const bagAt = sweepAt("!keep.includes('inventory')"), toggleAt = sweepAt('this.toggleInventory(seatId)');
+  const syncAt = sweepAt('this.folio.sync()'), booksAt = sweepAt('this.folio.closeAll(');
+  check('O10 the sweep takes an unkept bag through its own toggle and syncs before any book closes',
+    bagAt >= 0 && toggleAt > bagAt && syncAt > toggleAt && booksAt > syncAt,
+    `bag@${bagAt} toggle@${toggleAt} sync@${syncAt} books@${booksAt}`);
+  check('O10b the sweep never forgets the drawer itself (no closeBuildPanel in its body)',
+    sweepBody.length > 0 && !sweepBody.includes('closeBuildPanel()'));
 }
 
 // --- P. THE SUITE (core) ----------------------------------------------------

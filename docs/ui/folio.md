@@ -131,8 +131,10 @@ byte-identical to before, no strip.
 The inventory's Skills and Passives ribbons open adjacent player pages. Skills
 is a stable `skills-panel` root and a `skills` folio leaf, so it joins Passives
 and individual skill trees in the same top-tab book. Closing the inventory also
-hides Skills; reopening remembers whether that drawer was open. Closing a
-shelved page through the book closes that page without promoting it instead.
+hides Skills; reopening remembers whether that drawer was open, however the bag
+shut (the key, the couch clear, the Esc sweep — see THE ESCAPE POLICY below).
+Closing a shelved page through the book closes that page without promoting it
+instead.
 
 `ui/buildPanels.ts` owns ribbon width, page widths, screen margins and the
 unlearn target size. The default page seats follow the inventory's measured
@@ -231,6 +233,20 @@ the menu tray — always go one at a time; the mode governs what comes after:
 their menu-entry ids (`data/menu.ts`), so a mode that spares the map or the
 sheet is one row, no code. Probe: `probe_menubar` D6–D8 (registry sanity,
 the settings round-trip).
+
+**The bag goes first, and its drawer keeps its memory** (2026-09-11). The
+inventory's Skills page is the `skills` folio leaf, and the folio's
+close-all took it down through `closeBuildPanel`, which forgets the drawer:
+a bag swept shut by Esc reopened without Skills, while the bag key's own
+close hides the drawer and remembers it (the build-pages rule above). The
+sweep now takes an unkept bag through `toggleInventory` and syncs the folio
+BEFORE any book closes, so the `skills` leaf drops as already closed and
+reopening the bag brings Skills back where it stood: one close for the bag
+however it shuts (the key, the couch clear `hideAllFor`, the sweep). A KEPT
+bag (`sweepKeepBag` with other things up) still closes its drawer by the
+book on that press: "all but the bag" is the player's word, and Skills goes
+with the rest by intent; on the last-to-go press the bag stands alone, so
+there is no drawer to remember. Probe: `probe_folio` O10.
 
 ## Dials (`FOLIO_CFG`)
 
