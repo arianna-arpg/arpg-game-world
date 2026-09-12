@@ -2574,6 +2574,11 @@ class Dwell {
     this.t = 0;
     return true;
   }
+  /** THE DWELL TELL's read: how far the linger has built toward `threshold`
+   *  (0..1) — 0 while spent, so a fired latch's ring empties at once. */
+  frac(threshold: number): number {
+    return this.consumed ? 0 : clamp(this.t / Math.max(0.01, threshold), 0, 1);
+  }
 }
 
 /** A dash's conjure-trail, RESOLVED at cast (grants folded with the cast's
@@ -47619,6 +47624,63 @@ export class World {
     };
   }
 
+  /** THE DWELL TELL (2026-09-11, her ask): every station and interactable
+   *  NPC a local hand stands in dwell range of, with how far its linger has
+   *  built — ONE read for the renderer's base-ring pass (the pulsing
+   *  "linger" ring the town hints drew, now on every dwell target) and, via
+   *  dwellRingsView, the fill that rides the same ring. Positions are the
+   *  objects' own (the anchored slab, the Font, the board, the dock, the
+   *  horn) or the body's (the smith at his counter, the innkeeper, the
+   *  quartermaster, the caravanner, the captain, the Bonewright); kinds are
+   *  transit rows ('station:<id>' / 'npc:<role>', data/transit.ts), so a
+   *  ring's radius and color are data. Fractions read the SAME accumulators
+   *  the gates fire on (drawn == dwelt); a spent latch reads 0. */
+  dwellTargetsView(): { pos: Vec2; frac: number; kind: string }[] {
+    const out: { pos: Vec2; frac: number; kind: string }[] = [];
+    const seats = this.localHumanSeats().filter(s => !s.actor.dead && !s.actor.downed);
+    if (!seats.length) return out;
+    const anySeat = (near: (s: Seat) => boolean): boolean => seats.some(near);
+    const put = (pos: Vec2 | undefined | null, frac: number, kind: string): void => {
+      if (pos) out.push({ pos: vec(pos.x, pos.y), frac: clamp(frac, 0, 1), kind });
+    };
+    // Anchored stations (the Vault's furniture): the gate's own clock.
+    if (anySeat(s => this.nearSalvage(s))) put(this.stationAnchor('salvage')?.pos, this.salvageGate.frac(SALVAGE_CFG.stationDwell), 'station:salvage');
+    if (anySeat(s => this.nearOracle(s))) put(this.stationAnchor('oracle')?.pos, this.oracleGate.frac(SALVAGE_CFG.stationDwell), 'station:oracle');
+    if (anySeat(s => this.nearTracker(s))) put(this.stationAnchor('tracker')?.pos, this.trackerGate.frac(SALVAGE_CFG.stationDwell), 'station:tracker');
+    if (this.nearCampfire()) put(this.stationAnchor('campfire')?.pos, this.campfireDwell / CAMPFIRE_DWELL, 'station:campfire');
+    const font = this.fonts.find(f => anySeat(s => dist(f.pos, s.actor.pos) <= 150
+      && this.dwellReachable(s.actor.pos, f.pos, DWELL_CFG.reach, { from: s.actor.tier ?? 0, to: f.tier ?? 0 })));
+    if (font) put(font.pos, this.fontGate.frac(SALVAGE_CFG.stationDwell), 'station:font');
+    const board = this.bountyBoardsHere().find(b => anySeat(s => this.nearBountyBoard(s, b.id)));
+    if (board) put(board.pos, this.bountyGate.frac(BOUNTY_BOARD_CFG.dwell.sec), 'station:bounty');
+    // The sea's furniture: the dock, the harbor board, the muster horn.
+    const dock = this.portDock();
+    if (dock && dist(this.player.pos, dock.pos) <= 110
+      && this.dwellReachable(this.player.pos, dock.pos, DWELL_CFG.reach, this.storyPair(this.player, dock))) {
+      put(dock.pos, this.sailGate.frac(CARAVAN_DWELL), 'station:dock');
+    }
+    if (this.nearHarborBoard()) put(this.doodads.find(d => d.kind === 'harbor_board')?.pos, this.harborGate.frac(CARAVAN_DWELL), 'station:harbor_board');
+    if (this.nearMusterHorn()) put(this.doodads.find(d => d.kind === 'muster_horn')?.pos, this.holdGate.frac(HARBORHOLD_CFG.muster.dwellSec), 'station:muster_horn');
+    // Bodies: the counters (each VendorDef names its keeper's role), the
+    // caravanner, the innkeeper, the quartermaster, the Bonewright, the
+    // captain — each ring seats on the body the dwell reads.
+    for (const v of VENDORS) {
+      if (!anySeat(s => v.near(this, s))) continue;
+      put(this.actors.find(a => this.hasNpcRole(a, v.npcRole))?.pos, this.vendorGate.frac(SALVAGE_CFG.stationDwell), `npc:${v.npcRole}`);
+    }
+    if (anySeat(s => this.nearCaravan(s))) put(this.actors.find(a => this.hasNpcRole(a, 'caravanner'))?.pos, this.caravanGate.frac(CARAVAN_DWELL), 'npc:caravanner');
+    put(this.getMireille()?.pos, this.mireilleDwell / MIREILLE_DWELL, 'npc:innkeep');
+    put(this.getQuestGiver()?.pos, this.questGiverDwell / QUESTGIVER_DWELL, 'npc:questgiver');
+    const necro = this.amalgamSite ? this.actorById(this.amalgamSite.necroId) : null;
+    if (necro && !necro.dead && dist(necro.pos, this.player.pos) <= AMALGAM_RADIUS
+      && this.dwellReachable(this.player.pos, necro.pos, npcDwellReach('bonewright'), this.storyPair(this.player, necro))) {
+      put(necro.pos, this.amalgamNecroDwell / AMALGAM_DWELL, 'npc:bonewright');
+    }
+    const post = this.mercOutpost;
+    if (post && !post.captain.dead && this.mercParley().near) put(post.captain.pos, this.mercDwell / MERC_CFG.outpost.dwellSec, 'npc:captain');
+    return out;
+  }
+
   /** Every dwell progress ring live this frame — ONE feed for the renderer's
    *  single ring pass. Each entry names its transit KIND, so the ring's style
    *  (radius/width/color) is a data row in data/transit.ts, never a renderer
@@ -47628,6 +47690,8 @@ export class World {
     const add = (v: { pos: Vec2; frac: number; kind: string } | null): void => {
       if (v && v.frac > 0.02) out.push(v);
     };
+    // THE DWELL TELL's fills: the stations and NPCs the seat lingers at.
+    for (const t of this.dwellTargetsView()) add(t);
     add(this.exitDwellView());
     add(this.caveDwellView());
     add(this.realmDwellView());

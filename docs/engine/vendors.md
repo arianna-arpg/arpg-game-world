@@ -290,3 +290,21 @@ latches (`stationArmed`, the arrival guard) re-add their key on a re-arm;
 the vendor, sail, harbor and hold gates re-arm the same way. Probe:
 `probe_shimmy` (fires, stays spent still, ignores an unwilled displacement,
 re-arms on a step, out-and-back unchanged).
+
+## THE DWELL TELL (every station and interactable NPC, 2026-09-11)
+
+The town hints drew a pulsing "linger" ring on a few stations; the exits and
+cave mouths filled theirs as the dwell built. Her ask joined the two: every
+station and interactable NPC a local hand stands in dwell range of wears the
+base ring, and the ring FILLS as the linger builds, exactly as the exits'
+do. `World.dwellTargetsView()` is the one read — the anchored slab, the
+Font, the board, the fire, the dock, the horn, and the bodies behind the
+counters (each `VendorDef.npcRole` names its keeper), the caravanner, the
+innkeeper, the quartermaster, the Bonewright, the captain — each with the
+fraction off the SAME accumulator its gate fires on (drawn == dwelt; a
+spent latch reads 0, so the fill empties the moment the dialog opens).
+Kinds are transit rows (`data/transit.ts`: `station:<id>` / `npc:<role>`,
+family rows `station` / `npc` as the fallback), so a ring's radius and
+color are data; the renderer's `drawDwellTells` paints the base ring from
+the row and `dwellRingsView` feeds the fill through the ordinary ring pass.
+The hint pass keeps only its words. Probe: `probe_shimmy` B1–B8.

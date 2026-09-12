@@ -180,6 +180,10 @@ export interface VendorDef {
   bg: string;
   /** Is this counter at hand for the seat? */
   near(w: World, seat: Seat): boolean;
+  /** THE KEEPER — the npcRole of the body behind this counter: THE DWELL
+   *  TELL seats the counter's linger ring on that body (World.dwellTargetsView),
+   *  and its 'npc:<role>' transit row tints it. */
+  npcRole: string;
   stock(w: World): VendorEntry[];
   priceOf(w: World, entry: VendorEntry): VendorPrice;
   /** Which META intent buys stock index N. */
@@ -229,6 +233,7 @@ export const VENDORS: VendorDef[] = [
   {
     id: 'brandt', label: "BRANDT'S WARES", accent: '#e8c87a', bg: 'rgba(232,200,122,0.05)',
     near: (w, seat) => w.nearSmith(seat),
+    npcRole: 'vendor',
     stock: w => w.vendorStock,
     priceOf: (w, e) => ({ essences: w.vendorPrice(e) }),
     buyT: 'buyVendor',
@@ -245,6 +250,7 @@ export const VENDORS: VendorDef[] = [
     // like Brandt's. Stands only in an OPEN town at prosperity ≥ its rung.
     id: 'chandler', label: "CORMAC'S CHANDLERY", accent: '#c8b06e', bg: 'rgba(200,176,110,0.05)',
     near: (w, seat) => w.nearChandler(seat),
+    npcRole: 'chandler',
     stock: w => w.chandlerStock,
     priceOf: (w, e) => ({ essences: w.vendorPrice(e) }),
     buyT: 'buyChandler',
@@ -262,6 +268,7 @@ export const VENDORS: VendorDef[] = [
     // essence prices — the DEPTH LOCKS (entryLock) are the delver's own
     // layer on top.
     near: (w, seat) => w.delverShopOpen(seat),
+    npcRole: 'delver',
     stock: w => w.descentStock,
     priceOf: (w, e) => ({ essences: w.vendorPrice(e) }),
     buyT: 'buyDelver',

@@ -226,3 +226,36 @@ registerTransit({ kind: 'ward_seal', dwell: 0.9, radius: 30, ring: { radius: 34,
 registerTransit({ kind: 'choice_pick', dwell: 1.0, ring: { radius: 22, width: 3, color: '#e8ffe0', alpha: 0.9 } });
 // …and the timed-chest lockpick.
 registerTransit({ kind: 'lockpick', dwell: 1.0, ring: { radius: 22, width: 3, color: '#e8c87a', alpha: 1 } });
+
+// --- THE DWELL TELL (2026-09-11, her ask) ------------------------------------
+// Every station and interactable NPC the seat can dwell at wears ONE ring
+// while the seat stands in its dwell range (the renderer's base ring — the
+// pulsing "linger" invitation the town hints already drew) and FILLS that
+// same ring as the dwell builds (World.dwellTargetsView → dwellRingsView),
+// exactly as the exits and cave mouths fill theirs. Two families, chained:
+// 'station:<id>' for anchored objects (the bench slab, the Font, the board,
+// the fire, the dock, the horn) and 'npc:<role>' for bodies (the smith, the
+// innkeeper, the quartermaster, the caravanner, the captain, the
+// Bonewright); a sub-row tints the ring in the station's own color, the
+// family row is the fallback for any new one. The radius is the town hint
+// ring's classic 26 (bodies a touch tighter), so the fill lands ON the ring
+// the player already knows.
+registerTransit({ kind: 'station', dwell: 0.8, ring: { radius: 26, width: 3, color: '#d8c8a8' } });
+registerTransit({ kind: 'station:campfire', dwell: 1.1, ring: { radius: 26, width: 3, color: '#ff9a3a' } });
+registerTransit({ kind: 'station:salvage', dwell: 0.8, ring: { radius: 26, width: 3, color: '#7a9ae8' } });
+registerTransit({ kind: 'station:bounty', dwell: 0.8, ring: { radius: 26, width: 3, color: '#e0b060' } });
+registerTransit({ kind: 'station:oracle', dwell: 0.8, ring: { radius: 26, width: 3, color: '#b06bd4' } });
+registerTransit({ kind: 'station:tracker', dwell: 0.8, ring: { radius: 26, width: 3, color: '#a8c87a' } });
+registerTransit({ kind: 'station:font', dwell: 0.8, ring: { radius: 26, width: 3, color: '#c88ad8' } });
+registerTransit({ kind: 'station:dock', dwell: 0.9, ring: { radius: 26, width: 3, color: '#9ad0e8' } });
+registerTransit({ kind: 'station:harbor_board', dwell: 0.9, ring: { radius: 26, width: 3, color: '#9ad0e8' } });
+registerTransit({ kind: 'station:muster_horn', dwell: 0.9, ring: { radius: 26, width: 3, color: '#e0b060' } });
+registerTransit({ kind: 'npc', dwell: 0.8, ring: { radius: 24, width: 3, color: '#d8c8a8' } });
+registerTransit({ kind: 'npc:vendor', dwell: 0.8, ring: { radius: 24, width: 3, color: '#e8c87a' } });
+registerTransit({ kind: 'npc:chandler', dwell: 0.8, ring: { radius: 24, width: 3, color: '#c8b06e' } });
+registerTransit({ kind: 'npc:delver', dwell: 0.8, ring: { radius: 24, width: 3, color: '#7fe0d8' } });
+registerTransit({ kind: 'npc:innkeep', dwell: 0.8, ring: { radius: 24, width: 3, color: '#d8b87a' } });
+registerTransit({ kind: 'npc:questgiver', dwell: 0.9, ring: { radius: 24, width: 3, color: '#c8a8e8' } });
+registerTransit({ kind: 'npc:caravanner', dwell: 0.9, ring: { radius: 24, width: 3, color: '#d8b87a' } });
+registerTransit({ kind: 'npc:bonewright', dwell: 1.0, ring: { radius: 24, width: 3, color: '#b8a2e8' } });
+registerTransit({ kind: 'npc:captain', dwell: 0.8, ring: { radius: 24, width: 3, color: '#c8b048' } });

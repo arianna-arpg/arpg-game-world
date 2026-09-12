@@ -663,6 +663,7 @@ export class Renderer {
     this.drawWaypoint(world);
     this.drawHuntFootprint(world); // beast tracks to dwell on (the Hunt)
     this.drawAmalgamPicks(world);  // the Bonewright's body-part choice spots
+    this.drawDwellTells(world);    // THE DWELL TELL: the base ring on every station/NPC in dwell range
     this.drawCampfireHint(world);  // "linger to refresh" prompt by the town campfire
     this.drawExits(world);
     // THE LIVING FOG, body pass (vis/fogLayer.ts): under actors and combat
@@ -4241,30 +4242,48 @@ export class Renderer {
   /** Zone portals: a pulsing ring with the destination written below. */
   /** The town campfire's "linger to refresh" prompt + a warm inviting ring while
    *  the player rests near it (the fire itself is a campfire doodad). */
-  private drawCampfireHint(world: World): void {
-    // Both town linger-prompts share one draw: the campfire (warm) and the
-    // salvage bench (steel) — a pulsing ring + a named invitation.
-    const hints: { h: { pos: Vec2; text: string } | null; ring: string; ink: string }[] = [
-      { h: world.campfireHint(), ring: '#ff9a3a', ink: '#ffc878' },
-      { h: world.salvageHint(), ring: '#7a9ae8', ink: '#aac0f0' },
-      { h: world.bountyBoardHint(), ring: '#e0b060', ink: '#f0d8a0' },
-      { h: world.oracleHint(), ring: '#b06bd4', ink: '#d0a8e8' },
-      { h: world.trackerHint(), ring: '#a8c87a', ink: '#c8e0a8' },
-      { h: world.extractionHint(), ring: '#a5e3b4', ink: '#c8f0d4' },
-      { h: world.boroughHint(), ring: '#e8c87a', ink: '#f0dfae' },
-    ];
+  /** THE DWELL TELL's base ring (2026-09-11, her ask): every station and
+   *  interactable NPC a local hand stands in dwell range of wears the
+   *  pulsing "linger" ring the town hints used to draw for a few — radius
+   *  and color from its transit row (data/transit.ts 'station:<id>' /
+   *  'npc:<role>'), so the FILL the ring pass draws (drawProgressRing, the
+   *  same row) lands exactly on it as the dwell builds. Drawn == dwelt: the
+   *  world's dwellTargetsView reads the very gates that fire. */
+  private drawDwellTells(world: World): void {
     const { ctx } = this;
     const t = world.time;
-    for (const { h, ring, ink } of hints) {
-      if (!h) continue;
+    const pulse = Math.sin(t * 3);
+    for (const d of world.dwellTargetsView()) {
+      const s = transitRing(d.kind);
       ctx.save();
-      ctx.globalAlpha = 0.25 + 0.1 * Math.sin(t * 3);
-      ctx.strokeStyle = ring;
+      ctx.globalAlpha = 0.25 + 0.1 * pulse;
+      ctx.strokeStyle = s.color ?? world.zone.theme.accent;
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(h.pos.x, h.pos.y, 26 + 2 * Math.sin(t * 3), 0, Math.PI * 2);
+      ctx.arc(d.pos.x, d.pos.y, s.radius + 2 * pulse, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+  }
+
+  private drawCampfireHint(world: World): void {
+    // The town's linger-prompts share one draw: a named invitation over the
+    // station. (The pulsing ring beneath moved to drawDwellTells — every
+    // dwell target wears it now, stations and NPCs alike, from its transit
+    // row; this pass keeps the words.)
+    const hints: { h: { pos: Vec2; text: string } | null; ink: string }[] = [
+      { h: world.campfireHint(), ink: '#ffc878' },
+      { h: world.salvageHint(), ink: '#aac0f0' },
+      { h: world.bountyBoardHint(), ink: '#f0d8a0' },
+      { h: world.oracleHint(), ink: '#d0a8e8' },
+      { h: world.trackerHint(), ink: '#c8e0a8' },
+      { h: world.extractionHint(), ink: '#c8f0d4' },
+      { h: world.boroughHint(), ink: '#f0dfae' },
+    ];
+    const { ctx } = this;
+    for (const { h, ink } of hints) {
+      if (!h) continue;
+      ctx.save();
       ctx.textAlign = 'center';
       ctx.font = 'bold 11px Verdana';
       ctx.strokeStyle = 'rgba(0,0,0,0.85)';
