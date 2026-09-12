@@ -19,7 +19,21 @@
 const TIP_TARGET = '[data-tip], [data-ui-hint]';
 const tooltipRoots = new WeakSet<HTMLElement>();
 let activeTooltipOwner: object | null = null;
+/** THE STANDING CARD's anchor + the bind's own hide, for the per-frame
+ *  sweep below (a closure per bind; one card at a time by construction). */
+let activeAnchor: HTMLElement | null = null;
+let activeHide: (() => void) | null = null;
 let tooltipDetail: () => 'compact' | 'full' = () => 'compact';
+
+/** THE STALE CARD (2026-09-11, her report: "Step away" outlived the glyph it
+ *  hinted). Once per frame (panels' folioSync): a card whose anchor left the
+ *  page or the screen — torn out by a re-render, hidden by the very click it
+ *  explained, closed by a key while the cursor rested on it — comes down.
+ *  Cheap: one rect read while a card stands, nothing otherwise. */
+export function tooltipSweep(): void {
+  if (!activeAnchor) return;
+  if (!activeAnchor.isConnected || activeAnchor.getClientRects().length === 0) activeHide?.();
+}
 /** Read the preference only when a new card opens, so a displayed card stays steady. */
 export function configureTooltipDetail(read: typeof tooltipDetail): void { tooltipDetail = read; }
 const hintEscape = (s: string): string => s.replace(/[&<>"']/g, c =>
@@ -159,6 +173,7 @@ export function bindTooltips(
     disarmIntent();
     if (!cur) return;
     cur.classList.remove(TIP_ANCHOR_CLASS);
+    if (activeAnchor === cur) { activeAnchor = null; activeHide = null; }
     cur = null;
     if (activeTooltipOwner === owner) { tip.classList.add('hidden'); activeTooltipOwner = null; }
   };
@@ -170,6 +185,8 @@ export function bindTooltips(
       cur?.classList.remove(TIP_ANCHOR_CLASS);
       cur = el;
       el.classList.add(TIP_ANCHOR_CLASS);
+      activeAnchor = el;
+      activeHide = hide;
     }
     place(e);
   };
@@ -236,6 +253,15 @@ export function bindTooltips(
   }
 
   // ---- CLASSIC MODE: delegated hover, exactly as every panel expects ------
+  // A HINT card (a translated native title — the close glyph's "Step away")
+  // comes down on the click it explained, as a native tooltip would: the
+  // click usually takes its button off the screen, and no mouseout ever
+  // fires for a hidden node. Rich data-tip cards keep standing through a
+  // click — a bag tile's card should survive the level-up press inside it.
+  container.addEventListener('click', (e) => {
+    if (!ownsEvent(e) || !cur) return;
+    if (cur.dataset.uiHint !== undefined && cur.contains(e.target as Node)) hide();
+  });
   container.addEventListener('mouseover', (e) => {
     if (!ownsEvent(e)) return;
     const el = (e.target as HTMLElement).closest<HTMLElement>(TIP_TARGET);

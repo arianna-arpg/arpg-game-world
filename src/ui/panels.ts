@@ -142,7 +142,7 @@ import { objectiveRead, objectiveSeals, type ZoneDef } from '../data/zones';
 import { underSpanPolicyOf } from '../data/underspans';
 import { zoneKindOf } from '../data/zoneKinds';
 import { esc } from './dom';
-import { bindTooltips, configureTooltipDetail, installTooltipHints, hideTooltip, TIP_ANCHOR_CLASS, TIP_CFG, type TooltipContent } from './tooltip';
+import { bindTooltips, configureTooltipDetail, installTooltipHints, hideTooltip, tooltipSweep, TIP_ANCHOR_CLASS, TIP_CFG, type TooltipContent } from './tooltip';
 import { runRuneMinigame, runSmithMinigame } from './minigames';
 import { VENDORS, VENDOR_CFG, fmtRestock, type VendorDef } from '../data/vendors';
 import { BOUNTY_BOARD_CFG } from '../data/bountyboard';
@@ -1368,6 +1368,7 @@ export class UI {
   /** Once per frame (main.ts): reconcile every book against its leaves' own
    *  open flags — whatever path opened or closed them — and seat the strips. */
   folioSync(): void {
+    tooltipSweep(); // THE STALE CARD: a card whose anchor left the screen comes down (ui/tooltip.ts)
     this.syncBuildPanels();
     this.folio.sync();
     panelLayoutSync(this.layoutRoots()); // THE LAYOUT's per-frame sync (seats freshly-shown panels, keeps the lock glyphs honest)
