@@ -356,7 +356,7 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     blurb: 'The battlefield as a workshop: snares, mines, sentries, and the patience to let the ground do the arguing.',
     skillIds: ['caltrops', 'aftershock_snare', 'ballista_sentry',
       'cinderwhirl_trap', 'frost_trap', 'fire_mine', 'detonate_mines', 'lodestone'],
-    supportIds: ['tripwire', 'enduring_snares'],
+    supportIds: ['tripwire', 'enduring_snares', 'overwound_mechanism'],
     // Learn-by-getting-wrecked, the field-craft edition: spring any
     // trapwork with your own feet (world.ts springTrapwork stamps it) —
     // the sunken ruins' toothed halls and the highland's boulder plates
@@ -1156,6 +1156,15 @@ export function settleClassUnlocks(a: Account, view?: Readonly<Record<string, nu
     }
   }
   return out;
+}
+
+/** Reconcile authored additions once after account loading, before any gem
+ * rolls. Never change the pool in the middle of a seeded recall or reward. */
+export function reconcileClassBundleGems(a: Account): void {
+  for (const b of CLASS_BUNDLES) if (a.unlockedClasses.has(b.classId)) {
+    for (const id of b.skillIds) a.unlockedSkills.add(id);
+    for (const id of b.supportIds ?? []) a.unlockedSupports.add(id);
+  }
 }
 
 /** Every ledger key any class objective names, as key → the LARGEST count

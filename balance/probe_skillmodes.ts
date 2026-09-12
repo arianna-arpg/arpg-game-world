@@ -128,7 +128,7 @@ check('A: the deepening rungs RE-PIN their identity (the re-pin law)',
 // takes every wearer, ids unique, every node root-reachable, THE COVER LAW
 // (each limb's terminal walk + the lock-free ground absorbs the cap
 // budget), and the payload whitelist on every graph node.
-const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags', 'chargeCost', 'ground', 'castCycle']);
+const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags', 'chargeCost', 'ground', 'castCycle', 'construct', 'reduceCooldowns']);
 const SUMMON_KEYS = new Set(['count', 'maxActive', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell', 'crewRules', 'crewInherit', 'crewOnDeath', 'devour', 'placeAt']);
 const OVER_CHANNEL_KEYS = new Set(['ramp', 'rampMove']);
 let censusBad = '';
@@ -161,9 +161,18 @@ for (const def of Object.values(SKILLS)) {
     for (const k of Object.keys(n.over?.channel ?? {})) {
       if (!OVER_CHANNEL_KEYS.has(k)) censusBad += ` ${def.id}/${n.id}:over.channel.${k}-off-whitelist`;
     }
-    if (n.over?.ground && (def.delivery.type !== 'ground' || n.over.ground.follow !== true
-      || Object.keys(n.over.ground).some(k => k !== 'follow'))) censusBad += ` ${def.id}/${n.id}:over.ground-invalid`;
+    if (n.over?.ground && (def.delivery.type !== 'ground' || (n.over.ground.follow !== undefined && n.over.ground.follow !== true)
+      || Object.keys(n.over.ground).some(k => !['follow', 'domain'].includes(k)))) censusBad += ` ${def.id}/${n.id}:over.ground-invalid`;
+    const constructOver = n.over?.construct;
+    if (constructOver && (def.delivery.type !== 'construct'
+      || Object.entries(constructOver).some(([k, v]) => !['castSkillId', 'range', 'duration', 'maxActive', 'life', 'placeRange', 'domeRadius', 'domeSlow'].includes(k)
+        || (k === 'castSkillId' ? !SKILLS[String(v)] : !Number.isFinite(v) || Number(v) <= 0)))) censusBad += ` ${def.id}/${n.id}:over.construct-invalid`;
     const treeChargeCost = n.over?.chargeCost;
+    const reduceCooldowns = n.over?.reduceCooldowns;
+    if (reduceCooldowns && (!def.effects.some(fx => fx.type === 'reduceCooldowns')
+      || !Number.isFinite(reduceCooldowns.seconds) || reduceCooldowns.seconds < 0
+      || !Number.isFinite(reduceCooldowns.fraction) || reduceCooldowns.fraction < 0 || reduceCooldowns.fraction > 1
+      || Object.keys(reduceCooldowns).some(k => !['seconds', 'fraction'].includes(k)))) censusBad += ` ${def.id}/${n.id}:over.reduceCooldowns-invalid`;
     const castCycle = n.over?.castCycle;
     if (castCycle && (!def.castCycle || !Number.isInteger(castCycle.count) || castCycle.count < 1
       || !castCycle.buff.id || !(castCycle.buff.duration > 0)

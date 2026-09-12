@@ -12,7 +12,7 @@ import { SKILLS } from './skills';
 import { SUPPORTS } from './supports';
 import { spawnVeinOf } from '../engine/supportbase';
 import {
-  CREW_CFG, DEFAULT_RELOAD_SKILL, crewSkillsServed, makeSkillInstance, summonCrewOf, instanceDelivery,
+  CREW_CFG, DEFAULT_RELOAD_SKILL, crewSkillsServed, makeSkillInstance, summonCrewOf, instanceDelivery, CONSTRUCT_TREE_KEYS, GROUND_TREE_KEYS,
   supportFits, supportFitsInst, treeNodeOf, validTreeNodes, bandPointsAt, MAX_SKILL_LEVEL,
   type Delivery, type SkillDef, type SkillInstance, type SupportDef, type ConduitSpec, AOE_SHAPE } from '../engine/skills';
 import { treeGraph, TREE_LAYOUT_CFG } from '../engine/skilltree'; // THE SKILL-TREE GRAPH — the fold the tree laws read
@@ -2937,7 +2937,7 @@ export function validateContent(): void {
   // validatePassiveChoices warn-degrade idiom). Monster tree PINS resolve
   // against the kit's own defs.
   {
-    const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags', 'chargeCost', 'ground', 'castCycle']);
+    const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags', 'chargeCost', 'ground', 'castCycle', 'construct', 'reduceCooldowns']);
     const SUMMON_KEYS = new Set(['count', 'maxActive', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell', 'crewRules', 'crewInherit', 'crewOnDeath', 'devour', 'placeAt']);
     const OVER_CHANNEL_KEYS = new Set(['ramp', 'rampMove']);
     const KINDS = new Set(['minor', 'major', 'keystone']);
@@ -3002,6 +3002,11 @@ export function validateContent(): void {
           if (!OVER_CHANNEL_KEYS.has(k)) warn(`${at}/${n.id}: over.channel.${k} is off the audited whitelist`);
         }
         const treeChargeCost = n.over?.chargeCost;
+        const reduceCooldowns = n.over?.reduceCooldowns;
+        if (reduceCooldowns && (!def.effects.some(fx => fx.type === 'reduceCooldowns')
+          || !Number.isFinite(reduceCooldowns.seconds) || reduceCooldowns.seconds < 0
+          || !Number.isFinite(reduceCooldowns.fraction) || reduceCooldowns.fraction < 0 || reduceCooldowns.fraction > 1
+          || Object.keys(reduceCooldowns).some(k => !['seconds', 'fraction'].includes(k)))) warn(`${at}/${n.id}: invalid reduceCooldowns override`);
         const castCycle = n.over?.castCycle;
         if (castCycle) {
           if (!def.castCycle) warn(`${at}/${n.id}: castCycle overrides require a native cycle`);
@@ -3023,8 +3028,21 @@ export function validateContent(): void {
         }
         if (n.over?.ground) {
           if (def.delivery.type !== 'ground') warn(`${at}/${n.id}: ground override requires ground delivery`);
-          for (const k of Object.keys(n.over.ground)) if (k !== 'follow') warn(`${at}/${n.id}: unknown ground.${k}`);
-          if (n.over.ground.follow !== true) warn(`${at}/${n.id}: ground.follow must be true`);
+          for (const k of Object.keys(n.over.ground)) if (!(GROUND_TREE_KEYS as readonly string[]).includes(k)) warn(`${at}/${n.id}: unknown ground.${k}`);
+          if (n.over.ground.follow !== undefined && n.over.ground.follow !== true) warn(`${at}/${n.id}: ground.follow must be true`);
+          for (const [key, mods] of Object.entries(n.over.ground.domain ?? {})) {
+            if (!['allyMods', 'enemyMods', 'minionMods'].includes(key)) warn(`${at}/${n.id}: unknown ground.domain.${key}`);
+            for (const m of mods) if (!STAT_DEFS[m.stat] || !Number.isFinite(m.value)) warn(`${at}/${n.id}: invalid ground.domain modifier`);
+          }
+        }
+        const constructOver = n.over?.construct;
+        if (constructOver) {
+          if (def.delivery.type !== 'construct') warn(`${at}/${n.id}: construct override requires construct delivery`);
+          for (const [key, value] of Object.entries(constructOver)) {
+            if (!(CONSTRUCT_TREE_KEYS as readonly string[]).includes(key)) warn(`${at}/${n.id}: unknown construct.${key}`);
+            if (key === 'castSkillId' ? !SKILLS[String(value)] : !Number.isFinite(value) || Number(value) <= 0) warn(`${at}/${n.id}: invalid construct.${key}`);
+          }
+          if (constructOver.domeSlow !== undefined && constructOver.domeSlow > 1) warn(`${at}/${n.id}: domeSlow cannot exceed 1`);
         }
         if (n.over?.tags?.add?.some(t => n.over?.tags?.remove?.includes(t))) warn(`${at}/${n.id}: the same host tag is both added and removed`);
         const summonTree = n.over?.summon;

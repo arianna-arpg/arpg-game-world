@@ -38104,6 +38104,13 @@ export class World {
       mod('damage', 'more', caster.sheet.get('minionDamage', tags, extra) - 1),
       mod('life', 'more', caster.sheet.get('minionLife', tags, extra) - 1),
     ]);
+    // Aimed constructs run through ordinary cast/attack/cooldown clocks.
+    // Adopt the same constructCastRate lever as interval-driven devices.
+    if (d.kind === 'totem' || d.kind === 'sentry') {
+      const rate = caster.sheet.get('constructCastRate', tags, extra);
+      c.sheet.setSource('constructCastRate', [mod('attackSpeed', 'more', rate - 1),
+        mod('castSpeed', 'more', rate - 1), mod('cooldownRecovery', 'more', rate - 1)]);
+    }
     // Charge-released constructs (Volcano): a long hold means a longer,
     // angrier construct — duration scales up, the cast interval scales DOWN.
     c.lifespan = d.duration * scale * caster.sheet.get('effectDuration', tags, extra);
@@ -54387,6 +54394,7 @@ export class World {
 
   /** Retire fields that captured the previous allocation. */
   private clearTreeFields(caster: Actor, inst: SkillInstance): void {
+    this.clearTreeConstructs(caster, inst);
     caster.castCycles.delete(inst.def.id);
     for (const [key, step] of caster.metaInsts) if (step.chainOf === inst.def.id) {
       this.clearTreeFields(caster, step);
@@ -54413,6 +54421,19 @@ export class World {
       if (z.caster !== caster || z.inst !== inst) continue;
       this.expireZone(z);
       this.zones.splice(i, 1);
+    }
+  }
+
+  /** Allocation changes retire devices and their captured payloads without
+   * invoking death rewards, explosions or healing bursts. Dead traps can
+   * still own in-flight payloads, so they also participate in cleanup. */
+  private clearTreeConstructs(caster: Actor, inst: SkillInstance): void {
+    const bodies = new Set([...this.actors, ...this.projectiles.map(p => p.caster),
+      ...this.zones.map(z => z.caster), ...this.pendingFuses.map(f => f.caster), ...this.pendingRepeats.map(r => r.caster)]);
+    for (const body of bodies) if (body.construct && body.owner === caster && body.summonInst === inst) {
+      this.clearTreeFields(body, inst);
+      if (body.construct.castInst && body.construct.castInst !== inst) this.clearTreeFields(body, body.construct.castInst);
+      body.casting = null; body.dead = true; body.life = 0;
     }
   }
 
@@ -56873,7 +56894,7 @@ export class World {
     const set = (z.domainAffected ??= new Set());
     const inside = new Set<Actor>();
     for (const a of this.actors) {
-      if (a.dead || a.untargetable || a.construct) continue;
+      if (a.dead || a.downed || a.untargetable || a.construct) continue;
       if (a.tier !== (z.tier ?? z.caster.tier)) continue; // the field's story (the sovereignty gate)
       // Allies wear allyMods; the CASTER'S minions layer minionMods on top
       // (Oblation of Flesh blesses the horde, not the bystanders).

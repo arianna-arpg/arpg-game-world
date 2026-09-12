@@ -412,6 +412,15 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('aoeRadius', 'increased', 0.04)],
     weight: 5,
   },
+  overwound_mechanism: {
+    id: 'overwound_mechanism', name: 'Overwound Mechanism',
+    description: 'Aimed totems and sentries act 35% faster, including their attack, cast and cooldown clocks, but last 25% less time. Rebuild often to hold a lane.',
+    color: '#d0ae70', requiresMechanisms: ['periodicConstruct'],
+    dropTags: ['totem'],
+    mods: [mod('constructCastRate', 'more', 0.35), mod('effectDuration', 'more', -0.25)],
+    perLevel: [mod('constructCastRate', 'increased', 0.04)],
+    minDropLevel: 8, weight: 5,
+  },
   hair_trigger: {
     id: 'hair_trigger', name: 'Hair Trigger',
     description: 'Devices from this skill are set nervous: laid with 20% increased cast speed'

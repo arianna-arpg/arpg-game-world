@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_controlstartertrees.ts', status: 'green', tier: 'fast', why: 'Trapper/Skald/Chronomancer starting trees: 72 routes, construct payloads and retirement, additive domains, rewind contracts, resource banks and autonomous-device support' },
   { probe: 'probe_precisionstartertrees.ts', status: 'green', tier: 'fast', why: 'Assassin/Blademaster/Brawler: 72 starting-tree routes, passive identity, bleed executions, cast-cycle investment, combo inheritance, counter timing, cooldowns, save/wire and respec cleanup' },
   { probe: 'probe_bashcontact.ts', status: 'green', tier: 'fast', why: 'Shield bash damage, control effects and attribution share guard/immunity and deferred-fuse resolution' },
   { probe: 'probe_pactsteelstartertrees.ts', status: 'green', tier: 'fast', why: 'Summoner/Juggernaut/Pyromancer opening trees: all 72 routes, passive identity, composable branches, Fury spenders, companion AI, moving and carried fields, expiry bursts, saves and network rebuilds' },

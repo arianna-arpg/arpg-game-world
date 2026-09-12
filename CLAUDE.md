@@ -44,6 +44,9 @@ familiar arts, moving rings, expiry-radius investment and respec cleanup.
 The Assassin/Blademaster/Brawler opening trees live in `src/data/precisionStarterTrees.ts`;
 `docs/design/precision-starting-skill-trees.md` covers completed-cut preparation,
 combo-finisher investment, timed counters, concealment and measured Fury spending.
+The Trapper/Skald/Chronomancer opening trees live in `src/data/controlStarterTrees.ts`;
+`docs/design/control-starting-skill-trees.md` covers construct payloads, additive
+domains, rewind contracts, device retirement and the Overwound Mechanism support.
 
 Chest and gem-cache lists live in `src/data/containerloot.ts` and the existing
 `loottables.ts`; `docs/design/container-loot.md` documents the context rules,

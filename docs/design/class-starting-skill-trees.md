@@ -88,3 +88,8 @@ After all starting bars have complete trees, audit class mastery rewards so
 every class has alternate skills available to swap into its opening bar.
 Then implement equivalent trees for those mastery alternatives. Preserve this
 order: starting-skill coverage, mastery swap coverage, alternate-skill trees.
+
+Alongside these batches, audit underrepresented playstyles and their support
+options. Prefer additions that fill a demonstrated gap; record larger candidates
+for the mastery pass. The control batch's playstyle audit and first device-support
+addition are in `docs/design/control-starting-skill-trees.md`.

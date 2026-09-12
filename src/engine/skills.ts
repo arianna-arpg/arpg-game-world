@@ -452,7 +452,9 @@ export function instanceDelivery(inst: SkillInstance): SkillDef['delivery'] {
   if (over?.arcDeg !== undefined && (d.type === 'cone' || d.type === 'melee')) {
     return { ...d, arcDeg: over.arcDeg };
   }
-  if (d.type === 'ground' && over?.ground) return { ...d, ...over.ground };
+  if (d.type === 'ground' && over?.ground) return { ...d, ...over.ground,
+    ...(over.ground.domain ? { domain: mergeTreeDomain(d.domain, over.ground.domain) } : {}) };
+  if (d.type === 'construct' && over?.construct) return { ...d, ...over.construct };
   return d;
 }
 
@@ -4764,6 +4766,18 @@ export type SkillTreeKind = 'minor' | 'major' | 'keystone';
 export type TreeBuffPatch = { id: string } & Partial<Pick<BuffEffect,
   'mods' | 'duration' | 'affects' | 'radius' | 'clearOnHit' | 'consumeOn' | 'nextHit'>>;
 
+export const CONSTRUCT_TREE_KEYS = ['castSkillId', 'range', 'duration', 'maxActive', 'life', 'placeRange', 'domeRadius', 'domeSlow'] as const;
+export const GROUND_TREE_KEYS = ['follow', 'domain'] as const;
+/** Domain modifiers add across native fields and sibling investments. */
+function mergeTreeDomain(a: GroundDelivery['domain'], b: GroundDelivery['domain']): GroundDelivery['domain'] {
+  if (!a) return b;
+  if (!b) return a;
+  return Object.fromEntries(['allyMods', 'enemyMods', 'minionMods'].map(key => {
+    const k = key as keyof NonNullable<GroundDelivery['domain']>;
+    return [k, [...(a[k] ?? []), ...(b[k] ?? [])]];
+  }));
+}
+
 export interface SkillTreeNode {
   /** Node id — persisted on the instance (SkillInstance.treeNodes), so
    *  renaming an id orphans saved picks (they drop with a console note —
@@ -4803,6 +4817,8 @@ export interface SkillTreeNode {
    *  field of its branch identity — including values equal to today's
    *  base — so the branch survives a rescale moving the base row. */
   over?: {
+    /** Complete rewind payload for a skill with native reduceCooldowns effects. */
+    reduceCooldowns?: { seconds: number; fraction: number };
     /** Completed-use cycle identity. World's single cycle grant reads
      * instanceCastCycle; repeated echoes do not advance the counter. */
     castCycle?: NonNullable<SkillDef['castCycle']>;
@@ -4811,7 +4827,10 @@ export interface SkillTreeNode {
     chargeCost?: NonNullable<SkillDef['chargeCost']>;
     /** Ground minting reads instanceDelivery; follow tracks the caster's center
      * after activation, retaining the original ring geometry and lifetime. */
-    ground?: { follow: true };
+    ground?: { follow?: true; domain?: GroundDelivery['domain'] };
+    /** Construct minting and payload selection use the resolved delivery.
+     * Kind, invulnerability and ownership remain the native contract. */
+    construct?: Partial<Pick<ConstructDelivery, typeof CONSTRUCT_TREE_KEYS[number]>>;
     /** Summon-tree adoption: execute/spawn, pending summons, previews and
      *  replenishment and crew fit read instanceDelivery. Kits and selections union.
      *  duration: 0 explicitly removes the birth's expiry clock. */
@@ -4986,6 +5005,10 @@ export function instanceTreeOver(inst: SkillInstance): SkillTreeNode['over'] | u
     out = out
       ? {
         ...out, ...over,
+        ...(out.construct || over.construct ? { construct: { ...out.construct, ...over.construct } } : {}),
+        ...(out.ground || over.ground ? { ground: { ...out.ground, ...over.ground,
+          ...(out.ground?.domain || over.ground?.domain
+            ? { domain: mergeTreeDomain(out.ground?.domain, over.ground?.domain) } : {}) } } : {}),
         ...(out.channel || over.channel
           ? { channel: { ...out.channel, ...over.channel } } : {}),
         ...(out.summon || over.summon
@@ -5013,6 +5036,8 @@ export function instanceTreeOver(inst: SkillInstance): SkillTreeNode['over'] | u
 export function instanceEffects(inst: SkillInstance): SkillEffect[] {
   if (!inst.treeNodes?.length) return inst.def.effects;
   let out: SkillEffect[] | undefined;
+  const reduceCooldowns = instanceTreeOver(inst)?.reduceCooldowns;
+  if (reduceCooldowns) out = inst.def.effects.map(fx => fx.type === 'reduceCooldowns' ? { ...fx, ...reduceCooldowns } : fx);
   for (const id of inst.treeNodes) {
     for (const patch of treeNodeOf(inst.def, id)?.buffs ?? []) {
       out ??= [...inst.def.effects];
@@ -5930,6 +5955,12 @@ export const CHILD_GRANTING_FLIGHT_STATS: readonly string[] = [
 ];
 
 export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance, param?: string) => boolean> = {
+  /** Autonomous aimed casters whose action clocks inherit constructCastRate.
+   * Single-use traps, event-driven relics and passive domes cannot benefit. */
+  periodicConstruct: inst => {
+    const d = instanceDelivery(inst);
+    return d.type === 'construct' && ['totem', 'sentry'].includes(d.kind) && !!d.castSkillId;
+  },
   /** A COOLDOWN from any source: the def's own clock, a socketed levy
    *  (addedCooldown mods — Austerity / Apotheosis / Measured Blows), or a
    *  granted magazine (useChargeGraft on a cooldown host reloads on that

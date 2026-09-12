@@ -1,3 +1,4 @@
+import { CONTROL_STARTER_TREES } from './controlStarterTrees';
 import { PRECISION_STARTER_TREES } from './precisionStarterTrees';
 import { PACT_STEEL_STARTER_TREES } from './pactSteelStarterTrees';
 import { PACT_SKILLS } from './pactSkills';
@@ -3623,6 +3624,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   ballista_sentry: {
+    tree: CONTROL_STARTER_TREES.ballista_sentry,
     id: 'ballista_sentry', name: 'Ballista Sentry',
     description: 'Raise an indestructible ballista that fires Piercing Arrows for 12 seconds,'
       + ' but only straight down the lane it was placed facing: it cannot rotate. Up to 2 may'
@@ -5520,6 +5522,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   time_dilation: {
+    tree: CONTROL_STARTER_TREES.time_dilation,
     id: 'time_dilation', name: 'Time Dilation',
     description: 'Pinch the clockwork: every other skill\'s running cooldown sheds 2 seconds'
       + ' plus a quarter of what remains. Its own clock is untouched; the winder cannot wind'
@@ -6137,6 +6140,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   stasis_lock: {
+    tree: CONTROL_STARTER_TREES.stasis_lock,
     id: 'stasis_lock', name: 'Stasis Lock',
     description: 'Loose a needle of unraveled time: every hit inflicts temporal drag, slowing'
       + ' the victim to half time, and 80% of the time the needle locks them in STASIS,'
@@ -11737,6 +11741,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   aftershock_snare: {
+    tree: CONTROL_STARTER_TREES.aftershock_snare,
     id: 'aftershock_snare', name: 'Aftershock Snare',
     description: 'Bury a tripplate that waits up to 20 seconds: the spring\'s physical blast'
       + ' scatters into 2 aftershocks rippling out around the victim, with a 30% chance to'
@@ -11828,6 +11833,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // The Trapper's strewn argument: not a device, a CONDITION OF THE GROUND.
   // Cheap area denial that hobbles the rhythm (reeling) rather than the feet.
   caltrops: {
+    tree: CONTROL_STARTER_TREES.caltrops,
     id: 'caltrops', name: 'Caltrops',
     description: 'Strew forged spikes across the target ground for 8 seconds: whatever crosses'
       + ' the field takes repeated small physical cuts, with a 50% chance to bleed and a 40%'
@@ -11983,6 +11989,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // singer — and every sung verse BANKS one Verse charge ('use' tap). The
   // Coda empties the bank. Two songs, one spender: the meter is the build.
   war_chant: {
+    tree: CONTROL_STARTER_TREES.war_chant,
     id: 'war_chant', name: 'War Chant',
     description: 'Raise the marching verse: a ring of battle-music follows you for 6 seconds,'
       + ' granting allies inside 10% increased damage and 6% increased attack and cast speed.'
@@ -12010,6 +12017,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   dissonance: {
+    tree: CONTROL_STARTER_TREES.dissonance,
     id: 'dissonance', name: 'Dissonance',
     description: 'Sing the wrong note on purpose: a ring of grinding discord follows you for 6'
       + ' seconds, dealing chaos damage to whoever stands in it with a 15% chance per hit to'
@@ -12033,6 +12041,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   coda: {
+    tree: CONTROL_STARTER_TREES.coda,
     id: 'coda', name: 'Coda',
     description: 'End the song on everyone at once: a crashing physical nova that spends every'
       + ' banked Verse, each one adding 30% damage, and knocks the crowd back with a 25% chance'
@@ -13972,6 +13981,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // --- Fields, storms & pods -------------------------------------------------
 
   torpor_field: {
+    tree: CONTROL_STARTER_TREES.torpor_field,
     id: 'torpor_field', name: 'Torpor Field',
     description: 'Project a destructible dome of thickened time for 7 seconds: enemy shots'
       + ' inside it crawl at 30% of their speed. Only one dome may stand at a time.',
