@@ -1165,8 +1165,18 @@ export function placeZoneAt(
       if (existing) {
         if (anchor && !spec.noBackEdge && !escarpmentConnection(anchor, existing)) return anchor;
         if (anchor && anchor.id !== id && (anchor.dimension ?? 'surface') === 'surface' && !spec.noBackEdge) {
+          // THE ROAD BUDGET on the reconnect (roadBudgetOf — the one read
+          // every road-former honors): a charted destination already at its
+          // biome budget takes no further approach. The frontier consolidates
+          // onto its source (the occupancy-law idiom — chartNeighborsOf drops
+          // a frontier that resolves to its own zone), so a five-door pond
+          // never grows a sixth notarized door: dense landform seats (ponds,
+          // tarns) caught every approach in reach and stood at 7/5. An anchor
+          // already linked is a plain resolve, budget or no budget.
+          const linked = existing.exits.some(e => e.to === anchor.id);
+          if (!linked && countRoads(existing) >= roadBudgetOf(existing)) return anchor;
           const side = sideToward(existing.map, anchor.map);
-          if (!existing.exits.some(e => e.to === anchor.id)) existing.exits.push({ to: anchor.id, side,
+          if (!linked) existing.exits.push({ to: anchor.id, side,
             at: spacedExitAt(existing, side), notarized: true });
           if (spec.linkBack && !isRoadlessGateHub(anchor) && !anchor.exits.some(e => e.to === id)) {
             const back = OPP_DIR[side];

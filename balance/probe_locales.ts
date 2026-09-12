@@ -7,7 +7,7 @@ import { Rng } from '../src/core/rng';
 import { regionKind } from '../src/world/regions';
 import { featuresAt, featuresInRect, mapFeatureKind, registerMapFeature } from '../src/world/atlas';
 import { riverPathsInRect } from '../src/world/relief';
-import { placeZoneAt, settleWeb, type ZoneSpec } from '../src/engine/worldgen';
+import { countRoads, placeZoneAt, roadBudgetOf, settleWeb, type ZoneSpec } from '../src/engine/worldgen';
 import { serializeZone, applyZone } from '../src/net/snapshot';
 import { sanitizeWorldZones } from '../src/meta/worldstate';
 import type { ZoneDef } from '../src/data/zones';
@@ -172,6 +172,34 @@ assert.equal(placeZoneAt(site.seat, a, structuredClone(map), 95, { ...spec, link
 assert.equal(placeZoneAt(site.seat, a, structuredClone(map), 96, { ...spec, linkBack: false, layoutType: 'plains' }).destination, undefined);
 assert.equal(placeZoneAt(site.seat, a, structuredClone(map), 97, { ...spec, linkBack: false, dimension: 'hell' }).destination, undefined);
 console.log('PASS real atlas rivers create stable destinations, distinct approaches reconnect, directed mints stay explicit');
+
+// THE ROAD BUDGET on the reconnect: fresh approaches link the destination
+// only while it stands under its biome budget; at budget an approach
+// consolidates onto its own anchor (returns it — no road cut either way),
+// while an anchor already linked still resolves to the destination.
+{
+  const budget = roadBudgetOf(def);
+  const seats = [[-350, 0], [0, 350]] as const;
+  let n = 0;
+  while (countRoads(def) < budget) {
+    const [dx, dy] = seats[n % 2];
+    const c = anchor(`qa_approach_c${n++}`, dx, dy);
+    map[c.id] = c;
+    assert.equal(placeZoneAt({ x: site.seat.x + 15, y: site.seat.y }, c, map, 200 + n, spec), def, 'an under-budget destination takes the approach');
+    assert.ok(def.exits.some(e => e.to === c.id) && c.exits.some(e => e.to === def.id), 'the approach links both ways');
+    assert.ok(n <= budget, 'the fill terminates at the budget');
+  }
+  assert.equal(countRoads(def), budget, 'the destination stands exactly at its budget');
+  const over = anchor('qa_approach_over', -350, 0);
+  map[over.id] = over;
+  const doors = def.exits.length;
+  assert.equal(placeZoneAt({ x: site.seat.x + 15, y: site.seat.y }, over, map, 300, spec), over, 'at budget the approach consolidates onto its anchor');
+  assert.equal(def.exits.length, doors, 'the refusal cuts no door on the destination');
+  assert.equal(over.exits.length, 0, 'nor on the anchor');
+  assert.equal(placeZoneAt({ x: site.seat.x + 15, y: site.seat.y }, a, map, 301, spec), def, 'an already-linked anchor still resolves to the destination at budget');
+  assert.equal(def.exits.length, doors, 'a plain resolve adds nothing');
+}
+console.log('PASS the atlas reconnect honors the road budget: approaches link under budget and consolidate at it');
 
 // The real exploration chokepoint must honor a destination before ordinary
 // nearest-node/expanse consolidation, and must not re-chart an existing site.

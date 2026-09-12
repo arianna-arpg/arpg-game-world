@@ -24,6 +24,13 @@ A zone's total charted-road allowance is its biome's `maxRoads`
   consolidates instead of linking once the hub is at budget,
 - the **frontier-resolution gate** (`chartNeighborsOf`): once a zone's charted
   roads reach budget, its remaining unlocked `'?'` frontiers consolidate.
+- the **atlas reconnect** (`placeZoneAt`'s charted-destination branch): a
+  later approach to a standing landform node (pond, tarn, lake, valley…)
+  links it to the new anchor only while it stands under budget — at budget
+  the approach consolidates onto its source exactly as the resolution gate
+  does, so a dense feature seat never collects one door per approach (the
+  tarns stood at 7/5 the night the landforms landed; `probe_locales` pins
+  the fill-then-refuse sequence on the fast lane).
 
 The gate is the load-bearing half: `'?'` frontiers never counted toward
 degree, so the weave filled a node to cap and the forechart halo then *cashed
