@@ -1995,7 +1995,7 @@ export class Actor {
   }
 
   /** Optional runtime observer of actual landed healing, including silent
-   * regeneration. Used for ordered wound attribution; never serialized. */
+   * regeneration and full refills. Used for ordered wound attribution; never serialized. */
   onLifeHealed?: (amount: number, silent: boolean) => void;
 
   /** THE one gate every life heal flows through: scaled by the healTaken
@@ -2048,8 +2048,16 @@ export class Actor {
     s.perSec = s.amount / this.sheet.get('staggerWindow');
   }
 
-  fillResources(): void {
+  /** Full restoration bypasses healing modifiers, as it always has; observers
+   * still consume old wound credit so a refill cannot be healed a second time. */
+  refillLife(): void {
+    const before = this.life;
     this.life = this.maxLife();
+    if (this.life > before) this.onLifeHealed?.(this.life - before, true);
+  }
+
+  fillResources(): void {
+    this.refillLife();
     this.mana = this.maxMana();
     this.es = this.maxEs();
     this.poise = this.maxPoise();

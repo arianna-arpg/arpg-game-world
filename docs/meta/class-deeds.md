@@ -58,8 +58,9 @@ membership lives in namespaced ledger keys and survives reloads. Counters
 continue past current unlock thresholds so later recipes can reuse them.
 
 The local hero earns personal actions; owned summons and bound companions
-earn companion kills, including pooled swarms. Unowned allies do not count.
-Poise breaks may be delivered by the hero or owned actors. Invulnerable,
+earn companion kills, including pooled swarms. A foe that revives through
+Undying Loyalty counts only upon its final death. Unowned allies do not count.
+Poise breaks may be delivered by the hero or owned actors. Immortal, invulnerable,
 passive and no-bounty targets cannot feed combat deeds. Sealed progression
 stages earn none. Ambient pooled creatures retain their existing no-objective
 policy. Co-op guest progress is not written into the host account.
@@ -74,7 +75,7 @@ fuse resumes.
 
 Survived wounds and healing use actual life lost to hostile hits, excluding
 fatal hits, defensive pools and self costs. The healing observer consumes the
-eligible wound budget immediately, including silent regeneration; only active
+eligible wound budget immediately, including silent regeneration and full refills; only active
 healing earns progress. Thus regeneration cannot leave credit to recycle with
 a later self-inflicted wound. A crisis must cross the entry threshold from
 above, then reach the separate recovery threshold. Reducing maximum life
@@ -84,7 +85,8 @@ Encounter state (wounds, pending crisis and per-enemy streak) is runtime-only.
 Travel, death, reload, or changing the controlled body ends an attempt. The
 account retains its best poise streak, but a new enemy/encounter starts at zero;
 two breaks on one enemy plus one on another do not earn Breaker. Three breaks
-must leave the victim alive. The hint describes this deliberate requirement.
+must leave the victim alive. Killing breaks still feed the separate lifetime
+poise-break total. The hint describes this deliberate requirement.
 
 ## Opening kits
 

@@ -26,12 +26,12 @@ tracker.record(ledger, { kind: 'hit', tags: ['projectile'], distance: 159 });
 tracker.record(ledger, { kind: 'hit', tags: ['projectile'], distance: 160 });
 check('range boundary and independent projectile total', get(ledger, 'distant_projectile_hits') === 1 && get(ledger, 'projectile_hits') === 2);
 const first = {}, second = {};
-tracker.record(ledger, { kind: 'poise', subject: first });
-tracker.record(ledger, { kind: 'poise', subject: first });
-tracker.record(ledger, { kind: 'poise', subject: second });
+tracker.record(ledger, { kind: 'poise', subject: first, flags: ['surviving'] });
+tracker.record(ledger, { kind: 'poise', subject: first, flags: ['surviving'] });
+tracker.record(ledger, { kind: 'poise', subject: second, flags: ['surviving'] });
 check('different enemies cannot add up to the deliberate Breaker deed', get(ledger, 'same_enemy_poise_breaks') === 2);
 tracker.reset();
-tracker.record(ledger, { kind: 'poise', subject: first });
+tracker.record(ledger, { kind: 'poise', subject: first, flags: ['surviving'] });
 check('travel/death resets the encounter but preserves its lifetime best', get(ledger, 'same_enemy_poise_breaks') === 2);
 tracker.hurt(100, 29, 100, DEED_CFG.crisisEnter);
 check('low-life oscillation cannot award an unfinished crisis', !tracker.recovered(31, 100, DEED_CFG.crisisRecover));
@@ -69,6 +69,8 @@ p.life -= 50; p.healBy(50);
 check('silent regeneration consumes wound budget; later self-healing cannot recycle it', n('mended_wounds') === 0);
 hit(e, p); p.healBy(1000);
 check('real healing records the enemy wound once and excludes overheal', Math.abs(n('mended_wounds') - lost) < 0.001);
+hit(e, p); p.fillResources(); p.life -= 50; p.healBy(50);
+check('a full refill clears old wound credit before subsequent self-healing', Math.abs(n('mended_wounds') - lost) < 0.001);
 const hurtBefore = n('survived_hit_damage');
 hit(p, p);
 check('self-inflicted hits grant no survived damage', n('survived_hit_damage') === hurtBefore);
@@ -81,7 +83,9 @@ p.sheet.removeSource('immune-probe');
 p.sheet.setSource('block-probe', [mod('blockChance', 'override', 1), mod('blockValue', 'override', 0), mod('blockPower', 'override', 0.5)]);
 hit(e, p);
 check('real passive block records stopped damage', n('blocks') === 1 && n('blocked_damage') > 0);
+const restoreBlockRandom = seedGlobalRandom(7); // first roll .0117, below the .6 block cap.
 const passive = applyHit(e, p, { amounts: { physical: 1000 }, tags: new Set(['spell']), crit: false, sourceName: 'block probe' });
+restoreBlockRandom();
 check('passive block result separates prevented damage from seep', (passive.blockedAmount ?? 0) > 0 && passive.total > 0 && passive.blockedAmount! < 1000);
 p.sheet.removeSource('block-probe'); p.fillResources();
 const guard = makeSkillInstance(SKILLS.shield_up, 1);
@@ -98,12 +102,32 @@ check('unowned allies do not earn the local companion deed', n('companion_kills'
 const swarmVictim = foe(); swarmVictim.life = 1;
 live.litePooledHit(swarmVictim, { physical: 100 }, p);
 check('pooled companion kills carry the keeper attribution exactly once', n('companion_kills') === 2);
+const immortal = w.createMonster('target_dummy', 1, 'enemy');
+immortal.passive = false; // immortality alone must exclude it, independent of passivity.
+immortal.noBounty = false; w.actors.push(immortal);
+const fireBefore = n('fire_hits'); hit(p, immortal, makeSkillInstance(SKILLS.firebolt, 1));
+w.kill(immortal, false, minion);
+check('immortal targets grant neither hit practice nor companion kills', n('fire_hits') === fireBefore && n('companion_kills') === 2 && !immortal.dead);
+const undying = foe(); undying.owner = e; undying.undyingTime = 3;
+w.kill(undying, false, minion);
+check('a foe that revives through Undying Loyalty is not yet a companion kill', !undying.dead && n('companion_kills') === 2);
+w.kill(undying, false, minion);
+check('its actual final death earns exactly one companion kill', undying.dead && n('companion_kills') === 3);
+const pooledUndying = foe(); pooledUndying.owner = e; pooledUndying.undyingTime = 3; pooledUndying.life = 1;
+live.litePooledHit(pooledUndying, { physical: 100 }, p);
+check('pooled companion bites also wait for a final death', !pooledUndying.dead && n('companion_kills') === 3);
+
 const target = foe(); target.poise = 1;
 target.sheet.setSource('poise-probe', [mod('poise', 'override', 10)]);
 for (let i = 0; i < 3; i++) { target.poise = 1; target.poiseBroken = false; hit(p, target); }
 check('three real poise breaks against one survivor complete Breaker', n('same_enemy_poise_breaks') === 3);
 w.account.unlockedClasses.delete('breaker');
 check('the real deed settles into a class claim', settleClassUnlocks(w.account).some(u => u.id === classUnlockFor('breaker')!.id));
+const breaksBefore = n('poise_breaks'), streakBefore = n('same_enemy_poise_breaks');
+target.life = 1; target.poise = 1; target.poiseBroken = false; hit(p, target);
+check('a killing poise break still counts toward lifetime breaks', n('poise_breaks') === breaksBefore + 1);
+check('a killing poise break cannot extend the surviving-enemy streak', n('same_enemy_poise_breaks') === streakBefore);
+
 p.fillResources();
 const crisisStart = n('crises_recovered');
 const crisisBlow = makeSkillInstance({ ...blow.def, baseDamage: { physical: [1, 1] } }, 1);
@@ -118,7 +142,7 @@ w.executeSkill(p, makeSkillInstance(SKILLS.war_cry, 1), e.pos, { noRepeat: true 
 check('one deliberate warcry counts; its scheduled repeat does not', n('battle_cries') === beforeCast + 1);
 const before = n('fire_hits');
 live.metaProgressionActive = () => false;
-hit(p, target, makeSkillInstance(SKILLS.firebolt, 1));
+hit(p, e, makeSkillInstance(SKILLS.firebolt, 1));
 check('sealed mode stages grant no combat deeds', n('fire_hits') === before);
 
 console.log(`\nClass deeds: ${failed ? `${failed} FAILED` : 'all passed'}`);

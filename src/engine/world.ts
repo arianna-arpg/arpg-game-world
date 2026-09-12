@@ -5009,18 +5009,11 @@ export class World {
     if (this.metaProgressionActive() && this.combatDeeds.record(this.account.ledger, event)) this.accountDirty = true;
   }
   private deedEnemy(a: Actor): boolean {
-    return a.team === 'enemy' && !a.passive && !a.noBounty && !a.invulnerable;
+    return a.team === 'enemy' && !a.passive && !a.noBounty && !a.invulnerable
+      && !(a.defId && MONSTERS[a.defId]?.immortal);
   }
   private deedOwned(a: Actor): boolean {
-    if (a === this.player) return true;
-    const seen = new Set<Actor>();
-    while (!seen.has(a)) {
-      if (a === this.player) return true;
-      seen.add(a);
-      if (!a.owner) return false;
-      a = a.owner;
-    }
-    return false;
+    return a === this.player || a.ownedBy(this.player);
   }
   private updateDeedRecovery(): void {
     this.bindCombatDeeds();
@@ -22848,7 +22841,7 @@ export class World {
       }
     }
     if (featureEnabled(this.account, FEATURE.MIREILLE_HEAL_LIFE) && p.life < p.maxLife()) {
-      p.life = p.maxLife(); did = true; parts.push('life');
+      p.refillLife(); did = true; parts.push('life');
     }
     if (featureEnabled(this.account, FEATURE.MIREILLE_HEAL_MANA) && p.mana < p.maxMana()) {
       p.mana = p.maxMana(); did = true; parts.push('mana');
@@ -30642,8 +30635,8 @@ export class World {
     if (taken > 0.5) this.text(v.pos, Math.round(taken).toString(), DAMAGE_COLOR[domType], 11);
     if (v.life <= 0 && !v.dead) {
       // Pooled companions carry their keeper as kill credit, not an Actor body.
-      if (credit === this.player && this.deedEnemy(v)) this.recordDeed({ kind: 'kill', flags: ['companion'] });
       this.kill(v, false, credit);
+      if (v.dead && credit === this.player && this.deedEnemy(v)) this.recordDeed({ kind: 'kill', flags: ['companion'] });
     }
   }
 
@@ -40927,8 +40920,10 @@ export class World {
           if (lost > 0) this.recordDeed({ kind: 'hurt', value: lost });
         }
         if (deedLifeBefore > 0 && this.deedEnemy(target) && this.deedOwned(caster)) {
-          // A living target can recover its poise; a killing break ends the attempt.
-          if (result.poiseBroke && target.life > 0) this.recordDeed({ kind: 'poise', subject: target });
+          // Every break feeds lifetime totals; only surviving targets can
+          // advance a same-enemy streak. The rule owns that distinction.
+          if (result.poiseBroke) this.recordDeed({ kind: 'poise', subject: target,
+            flags: target.life > 0 ? ['surviving'] : [] });
           if (caster === this.player && result.total > 0 && !result.blocked && !result.immune && !result.evaded) {
             const elements = ['fire', 'cold', 'lightning'].filter(t => (result.receivedAmounts ?? packet.amounts)[t as DamageType]! > 0);
             this.recordDeed({ kind: 'hit', tags: [...packet.tags], distance: dist(caster.pos, target.pos), keys: elements,
@@ -43780,9 +43775,6 @@ export class World {
     // re-enter the death path (which would fire onPlayerDown twice).
     if (actor.downed) return;
     if (actor === this.player) this.combatDeeds.reset();
-    if (!silent && this.deedEnemy(actor) && killer && killer !== this.player && this.deedOwned(killer)) {
-      this.recordDeed({ kind: 'kill', flags: ['companion'] });
-    }
     // THE ANSWERING WALL BREAKS (guardBash beyond the stance, 2026-07-22):
     // a construct minted by a bash-carrying working answers when it DIES —
     // and a broken wall answers HARDEST: violent deaths pay the whole
@@ -43987,6 +43979,9 @@ export class World {
     }
 
     actor.dead = true;
+    if (!silent && this.deedEnemy(actor) && killer && killer !== this.player && this.deedOwned(killer)) {
+      this.recordDeed({ kind: 'kill', flags: ['companion'] });
+    }
     if (actor.summonShell) actor.owner?.summonShells?.delete(actor);
     SIM_TAP.current?.onDeath?.(actor, killer);
     // A dying bearer's auras vanish (and release their reservations).

@@ -9,7 +9,7 @@ export const COMBAT_DEEDS: readonly DeedRule[] = [
   { id: 'mended_wounds', event: 'heal', mode: 'sum' },
   { id: 'crises_recovered', event: 'crisis' },
   { id: 'poise_breaks', event: 'poise' },
-  { id: 'same_enemy_poise_breaks', event: 'poise', mode: 'subjectMax' },
+  { id: 'same_enemy_poise_breaks', event: 'poise', mode: 'subjectMax', flagsAll: ['surviving'] },
   { id: 'elements_landed', event: 'hit', mode: 'distinct' },
   { id: 'distant_projectile_hits', event: 'hit', tagsAny: ['projectile'], minDistance: 160 },
   { id: 'projectile_hits', event: 'hit', tagsAny: ['projectile'] },
