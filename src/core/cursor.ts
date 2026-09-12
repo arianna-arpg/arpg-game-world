@@ -37,12 +37,19 @@
 // articulation; styles without one keep the derived lit/tilted read.
 // ---------------------------------------------------------------------------
 
+import { wispRole, WISP_CFG } from './cursorWisp';
+import { startCursorMotion } from './cursorMotion';
+import { glimmerForm } from './cursorGlimmer';
+
 /** The player-facing cursor choice, persisted in Settings.cursor. */
 export interface CursorOptions {
   /** A CURSOR_STYLES id ('system' = native OS arrow). */
   style: string;
   /** Any CSS color; the palette below feeds the options swatches. */
   color: string;
+  /** Decorative motion only; styles without idle art remain static. */
+  idleMotion?: boolean;
+  idleDelaySec?: number;
 }
 
 export interface CursorStyleDef {
@@ -55,6 +62,10 @@ export interface CursorStyleDef {
   hotspot: [number, number];
   /** Paint the cursor into a size×size canvas in the given tint. */
   paint: (ctx: CanvasRenderingContext2D, size: number, color: string) => void;
+  /** Optional complete role family, including a decorative idle phase. */
+  rolePaint?: (ctx: CanvasRenderingContext2D, size: number, color: string, role: CursorRole, phase: number) => void;
+  /** Optional native-frame motion; oscillation pivots around the true hotspot. */
+  idle?: { kind: 'filaments' } | { kind: 'oscillate'; degrees: number };
   /** THE GRIP READ — optional gesture forms for the point/press roles: the
    *  style's own art articulated 'ready' (hover — poised open) and 'closed'
    *  (press — clamped shut), painted in the SAME coordinate space + hotspot
@@ -78,9 +89,23 @@ export const CURSOR_COLORS: ReadonlyArray<{ label: string; css: string }> = [
   { label: 'Verdigris', css: '#54d8a4' },
   { label: 'Arcane', css: '#b06bd4' },
   { label: 'Ice', css: '#6ab8e8' },
+  { label: 'Glimmer Blue', css: '#00adf5' },
 ];
 
-export const DEFAULT_CURSOR_OPTIONS: CursorOptions = { style: 'wake', color: '#c8a84b' };
+export const DEFAULT_CURSOR_OPTIONS: CursorOptions = { style: 'wisp', color: '#c8a84b' };
+
+export const CURSOR_MOTION_CFG = { enabled: true, delaySec: 2.5, minDelaySec: 0.5, maxDelaySec: 10, periodSec: 3.2, frames: 24 };
+
+/** One validation path for disk settings, live controls, and preview data. */
+export function normalizeCursorOptions(opts?: Partial<CursorOptions>): CursorOptions {
+  return {
+    style: Object.hasOwn(CURSOR_STYLES, opts?.style ?? '') ? opts!.style! : DEFAULT_CURSOR_OPTIONS.style,
+    color: /^#[0-9a-f]{6}$/i.test(opts?.color ?? '') ? opts!.color! : DEFAULT_CURSOR_OPTIONS.color,
+    idleMotion: typeof opts?.idleMotion === 'boolean' ? opts.idleMotion : CURSOR_MOTION_CFG.enabled,
+    idleDelaySec: typeof opts?.idleDelaySec === 'number' && Number.isFinite(opts.idleDelaySec)
+      ? Math.max(CURSOR_MOTION_CFG.minDelaySec, Math.min(CURSOR_MOTION_CFG.maxDelaySec, opts.idleDelaySec)) : CURSOR_MOTION_CFG.delaySec,
+  };
+}
 
 /** Shared stroke discipline: every style is dark-rimmed then tinted, so it
  *  reads against both a snowfield and an ink-black cave. */
@@ -215,11 +240,23 @@ const talonForm = (part: number) =>
   };
 
 export const CURSOR_STYLES: Record<string, CursorStyleDef> = {
+  wisp: {
+    id: 'wisp', label: 'Wisp Vessel', size: WISP_CFG.size, hotspot: WISP_CFG.hotspot,
+    paint: (ctx, size, color) => wispRole(ctx, size, color, 'default', 0),
+    rolePaint: wispRole, idle: { kind: 'filaments' },
+  },
+  glimmer: {
+    id: 'glimmer', label: 'Glimmer', size: 26, hotspot: [3, 3],
+    paint: glimmerForm(0),
+    gesture: { ready: glimmerForm(1), closed: glimmerForm(-1) },
+    idle: { kind: 'oscillate', degrees: 3 },
+  },
   /** The signature: a swallowtail arrow with a hollow "wake" eye. Its grip
    *  arc articulates the swallowtail itself: the tail fans open, then folds
    *  shut under the body. */
   wake: {
     id: 'wake', label: 'Wake', size: 26, hotspot: [2, 2],
+    idle: { kind: 'oscillate', degrees: 3 },
     gesture: { ready: wakeForm(-0.42), closed: wakeForm(-0.72, 7.5, 15.5) },
     paint: (ctx, _s, color) => {
       const arrow = (): void => {
@@ -255,6 +292,7 @@ export const CURSOR_STYLES: Record<string, CursorStyleDef> = {
    *  construction. */
   sigil: {
     id: 'sigil', label: 'Sigil', size: 26, hotspot: [13, 13],
+    idle: { kind: 'oscillate', degrees: 5 },
     paint: sigilForm(7.5, 9.5, 12.5, 1.8),
     gesture: {
       ready: sigilForm(6.6, 8.2, 11.2, 2.0, true),
@@ -266,6 +304,7 @@ export const CURSOR_STYLES: Record<string, CursorStyleDef> = {
    *  it. */
   talon: {
     id: 'talon', label: 'Talon', size: 26, hotspot: [2, 2],
+    idle: { kind: 'oscillate', degrees: 3 },
     gesture: { ready: talonForm(0.11), closed: talonForm(-0.045) },
     paint: (ctx, _s, color) => {
       const claw = (): void => {
@@ -440,9 +479,17 @@ function paintBadge(ctx: CanvasRenderingContext2D, glyph: '?' | '+', color: stri
  *  (hotspot-anchored transforms keep the click point EXACTLY where the base
  *  art put it — the tip never drifts between states). */
 function roleArt(
-  def: CursorStyleDef, color: string, role: CursorRole,
+  def: CursorStyleDef, color: string, role: CursorRole, phase = 0,
 ): { canvas: HTMLCanvasElement; hotspot: [number, number] } | null {
   const [hx, hy] = def.hotspot;
+  if (def.rolePaint) {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = def.size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    def.rolePaint(ctx, def.size, color, role, phase);
+    return { canvas, hotspot: [hx, hy] };
+  }
   // Derived-from-the-arrow roles ------------------------------------------
   if (role === 'default' || role === 'help' || role === 'copy') {
     const base = paintStyleArt(def, color);
@@ -542,16 +589,34 @@ function roleArt(
 /** Data-URL CSS for one role of a style+color ('' = stock). Cached like
  *  cursorCss — a costume re-paints once per (style, color) change. */
 const roleCssCache = new Map<string, string>();
-export function cursorRoleCss(styleId: string, color: string, role: CursorRole): string {
-  if (role === 'default') return cursorCss(styleId, color);
+export function cursorRoleCss(styleId: string, color: string, role: CursorRole, frame = 0): string {
   const def = CURSOR_STYLES[styleId];
   if (!def || def.id === 'system' || typeof document === 'undefined') return '';
-  const key = `${def.id}|${color}|${role}`;
+  frame = def.idle && role !== 'press' && role !== 'grabbing' ? Math.abs(Math.round(frame)) % CURSOR_MOTION_CFG.frames : 0;
+  if (role === 'default' && !def.rolePaint && frame === 0) return cursorCss(styleId, color);
+  const key = `${def.id}|${color}|${role}|${frame}`;
   const hit = roleCssCache.get(key);
   if (hit !== undefined) return hit;
-  const art = roleArt(def, color, role);
+  const phase = frame / CURSOR_MOTION_CFG.frames * Math.PI * 2;
+  let art = roleArt(def, color, role, phase);
   if (!art) return '';
+  if (def.idle?.kind === 'oscillate' && frame !== 0) {
+    // Pad both sides for the rotated corners. Translate the CSS hotspot by
+    // exactly that padding; rotation itself is ABOUT the hotspot, never the
+    // canvas center. Movement/press restores the original image immediately.
+    const angle = Math.sin(phase) * def.idle.degrees * Math.PI / 180;
+    const pad = Math.ceil(art.canvas.width * Math.sin(def.idle.degrees * Math.PI / 180)) + 1;
+    const canvas = document.createElement('canvas');
+    canvas.width = art.canvas.width + 2 * pad; canvas.height = art.canvas.height + 2 * pad;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+    const [hx, hy] = art.hotspot;
+    ctx.translate(hx + pad, hy + pad); ctx.rotate(angle); ctx.translate(-hx, -hy);
+    ctx.drawImage(art.canvas, 0, 0);
+    art = { canvas, hotspot: [hx + pad, hy + pad] };
+  }
   const css = `url(${art.canvas.toDataURL('image/png')}) ${art.hotspot[0]} ${art.hotspot[1]}, ${ROLE_FALLBACK[role]}`;
+  if (roleCssCache.size >= 512) roleCssCache.clear();
   roleCssCache.set(key, css);
   return css;
 }
@@ -594,7 +659,10 @@ function ensureCursorSheet(): void {
  *  published as a root `--cursor-<role>` property under html.cursor-themed,
  *  which panels' `var(--cursor-*, keyword)` declarations and the structural
  *  sheet resolve. 'system' strips properties + class: stock, byte-clean. */
+let stopMotion: (() => void) | undefined;
 export function applyCursor(opts: CursorOptions): void {
+  stopMotion?.();
+  opts = normalizeCursorOptions(opts);
   const base = cursorCss(opts.style, opts.color);
   document.body.style.cursor = base;
   ensureCursorSheet();
@@ -606,6 +674,12 @@ export function applyCursor(opts: CursorOptions): void {
     if (css !== '') root.style.setProperty(`--cursor-${role}`, css);
     else root.style.removeProperty(`--cursor-${role}`);
   }
+  if (themed && CURSOR_STYLES[opts.style].idle && opts.idleMotion) {
+    stopMotion = startCursorMotion({ ...CURSOR_MOTION_CFG, delaySec: opts.idleDelaySec! }, frame => {
+      for (const role of CURSOR_ROLE_LIST) root.style.setProperty(`--cursor-${role}`, cursorRoleCss(opts.style, opts.color, role, frame));
+      document.body.style.cursor = cursorRoleCss(opts.style, opts.color, 'default', frame);
+    });
+  } else stopMotion = undefined;
 }
 
 // ------------------------------------------------------------- pad reticle --

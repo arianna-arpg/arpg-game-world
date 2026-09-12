@@ -2184,8 +2184,9 @@ export function validateContent(): void {
         || s.delivery.type === 'aura'
         || (s.delivery.type === 'summon' && !!s.delivery.persistent?.toggle));
     for (const s of Object.values(SKILLS)) {
-      if (!s.conduits?.length) continue;
-      for (const sp of s.conduits) {
+      const conduits = [...(s.conduits ?? []), ...[...(treeGraph(s)?.nodes.values() ?? [])].flatMap(n => n.node.conduits ?? [])];
+      if (!conduits.length) continue;
+      for (const sp of conduits) {
         for (const p of specProblems(sp)) warn(`skill ${s.id}: conduit ${p}`);
         // Spec + matching castMode, or the stance never actually raises.
         if ((sp.from === 'guard' || sp.to === 'guard') && !(s.guard && s.castMode === 'guard')) {
