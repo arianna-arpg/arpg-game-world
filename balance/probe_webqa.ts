@@ -33,7 +33,7 @@
 // Run: npx tsx balance/probe_webqa.ts [--seeds N] [--rounds N] [--report]
 // ---------------------------------------------------------------------------
 
-import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
+import { SIM_ARENA_ID, bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import type { World } from '../src/engine/world';
 import type { ZoneDef, ZoneExitDef } from '../src/data/zones';
@@ -712,7 +712,10 @@ console.log(`  (info) jungle nodes pressing past the world cap by their own budg
 // balance/probe_ugspan.ts — this section pins the ambient web's honesty:
 // symmetric rows, policy-bound biomes, no budget spend, exit-less rootheld
 // ground sealed on the surface yet BFS-reachable the moment under-roads
-// join the walk, and heals that never touch a row.
+// join the walk (exactly as far as its span kin — a span planted in a hold
+// anchor's roadless-charted hinterland is as unreached as that pocket, no
+// worse), every pocket the walk cannot reach a DESIGNED seed's, and heals
+// that never touch a row.
 {
   let rows = 0, oneWay = 0, offPolicy = 0, spannedOver = 0, veiledPartners = 0;
   // THE HELD KINDS come from the policy rows themselves (batch 24 — the
@@ -762,8 +765,54 @@ console.log(`  (info) jungle nodes pressing past the world cap by their own budg
       if (!cache.has(w)) cache.set(w, { with: reach(w, true), without: reach(w, false) });
       return cache.get(w)!;
     };
-    check('K: held nodes are connected citizens THROUGH the web (and only through it)',
-      heldAll.every(({ w, z }) => setsOf(w).with.has(z.id) && !setsOf(w).without.has(z.id)));
+    // THE HELD NODE'S OWN LAW: a held node is exactly as reachable as the
+    // span it hangs from — through the web WITH under-roads whenever any
+    // span kin is (never stranded by a missing row), and never WITHOUT them
+    // (the surface seal holds). Reachability is read from town, but a span
+    // planted in ground the walk has not reached yet (a hold anchor's
+    // hinterland, grown roadless-charted; a sounding's floating cluster) is
+    // as far as its kin and no farther — that pocket is the next law's.
+    const stranded = heldAll.filter(({ w, z }) => {
+      const s = setsOf(w);
+      const kin = surfaceZones(w).filter(p => p.underways?.some(u => u.to === z.id));
+      return s.with.has(z.id) !== kin.some(k => s.with.has(k.id)) || s.without.has(z.id);
+    });
+    check('K: held nodes are connected citizens THROUGH the web (and only through it) — exactly as far as their span kin',
+      stranded.length === 0, stranded.length ? stranded.map(({ z }) => z.id).join(', ') : `${heldAll.length} held`);
+    // THE SEEDED POCKET: every surface zone the walk cannot reach from town
+    // (under-roads included) stands in a pocket a DESIGNED seed grew — a sea
+    // pair's port or hold anchor (minted roadless-charted; the land web
+    // weaves in as it grows), a sounding's floating anchor — never an
+    // accidental orphan of a refused link or a healed-away road. The sim
+    // arena is the harness's own shim, and every qa_ id is this probe's own
+    // hand-planted fixture (the settle stubs, the heal seats above — placed
+    // straight into zoneMap, never through a mint): neither is the engine's
+    // ground, both exempt by id.
+    const orphans: string[] = [];
+    for (const { w } of worlds) {
+      const s = setsOf(w);
+      const unreached = surfaceZones(w).filter(z => z.id !== SIM_ARENA_ID && !z.id.startsWith('qa_') && !s.with.has(z.id));
+      const byId = new Map(unreached.map(z => [z.id, z] as const));
+      const seen = new Set<string>();
+      for (const z of unreached) {
+        if (seen.has(z.id)) continue;
+        const pocket: ZoneDef[] = [];
+        const queue = [z.id];
+        seen.add(z.id);
+        while (queue.length) {
+          const q = byId.get(queue.pop()!);
+          if (!q) continue;
+          pocket.push(q);
+          const step = (to: string): void => { if (byId.has(to) && !seen.has(to)) { seen.add(to); queue.push(to); } };
+          for (const e of q.exits) if (e.to !== '?' && !e.crossDim) step(e.to);
+          for (const u of q.underways ?? []) step(u.to);
+          for (const o of unreached) if (!seen.has(o.id) && (o.exits.some(e => e.to === q.id) || o.underways?.some(u => u.to === q.id))) step(o.id);
+        }
+        if (!pocket.some(c => c.floating || c.port || !!c.holdAnchor || !!c.harborhold)) orphans.push(pocket.map(c => c.id).join('+'));
+      }
+    }
+    check('K: ground the walk has not reached hangs off a designed seed (a sea pair, a sounding) — never an accidental orphan',
+      orphans.length === 0, orphans.length ? orphans.slice(0, 3).join(' ; ') : 'every unreached pocket is seeded');
   }
   // The heals leave the under-web alone (reconcileWebLaws ran in F/G above on
   // two of these worlds already — this is the explicit whole-sweep pin).
