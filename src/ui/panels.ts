@@ -6784,20 +6784,30 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const realmTabs = realms.length > 1 ? `<div class="realm-tabs">${realms.map(r => `
       <button class="realm-tab ${r.id === this.treeRealm ? 'active' : ''}" data-realm="${r.id}"
         style="--realm-color:${r.color ?? '#c8a84b'}" title="${r.blurb ?? ''}">${r.label}</button>`).join('')}</div>` : '';
+    // THE HEADER PARITY (2026-09-11, her ask): the same shape the Skills
+    // page wears — the close glyph FIRST (so the ✕ seats identically when
+    // the two tabs flip), one ribbon line "✧ Passive Tree" over the divider,
+    // and everything else (the realm's name, the pool, the vocation chips,
+    // search, zoom, the tips) in a tools row beneath it.
+    const realmChip = activeRealm && this.treeRealm !== MAIN_REALM
+      ? `<b style="color:${activeRealm.color ?? '#c8a84b'}">${activeRealm.label}</b> · ` : '';
     this.passiveTree.innerHTML = `
+      ${this.closeGlyphHtml()}<h2>✧ Passive Tree</h2>
       ${realmTabs}
-      ${this.closeGlyphHtml()}<h2>${activeRealm && this.treeRealm !== MAIN_REALM ? activeRealm.label : 'Passive Tree'} — ${poolChip}${vocChips}
-        <span class="build-tree-tools">
-          <input id="tree-search" class="tree-search" type="text" placeholder="search nodes…"
-            value="${esc(this.treeSearch)}" title="Matches node names, descriptions, and granted lines — hits glow, the rest dims.">
-          <span id="tree-search-n" class="tree-search-n"></span>
-          <span class="tree-zoom-grp">
-            <button class="tree-zoom" data-tz="out" title="zoom out">−</button>
-            <button class="tree-zoom" data-tz="reset" title="reset zoom">${zPct}%</button>
-            <button class="tree-zoom" data-tz="in" title="zoom in">＋</button>
-          </span> &nbsp;${DEV.passiveTreeEditor
-            ? 'EDITOR · scroll to zoom · drag empty space to pan'
-            : `${m.allocated.size} allocated · click to allocate · scroll to zoom, drag to pan`}</span></h2>
+      <div class="build-tree-tools tree-tools">
+        <span>${realmChip}${poolChip}${vocChips}</span>
+        <input id="tree-search" class="tree-search" type="text" placeholder="search nodes…"
+          value="${esc(this.treeSearch)}" title="Matches node names, descriptions, and granted lines — hits glow, the rest dims.">
+        <span id="tree-search-n" class="tree-search-n"></span>
+        <span class="tree-zoom-grp">
+          <button class="tree-zoom" data-tz="out" title="zoom out">−</button>
+          <button class="tree-zoom" data-tz="reset" title="reset zoom">${zPct}%</button>
+          <button class="tree-zoom" data-tz="in" title="zoom in">＋</button>
+        </span>
+        <span>${DEV.passiveTreeEditor
+          ? 'EDITOR · scroll to zoom · drag empty space to pan'
+          : `${m.allocated.size} allocated · click to allocate · scroll to zoom, drag to pan`}</span>
+      </div>
       <svg viewBox="${viewBox}" id="tree-svg" style="cursor:var(--cursor-grab, grab);touch-action:none">${edges}${circles}</svg>`;
 
     // THE TREE LENS: typing filters LIVE via class toggles on the standing
