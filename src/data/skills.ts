@@ -26,11 +26,13 @@ import { LIVING_SKILLS } from './livingSkills';
 import { REACTIVE_SKILLS } from './reactiveSkills';
 import { NECROMANCER_TREES } from './necromancerTrees';
 import { NECROMANCER_SKILLS } from './necromancerSkills';
+import { ROOTWILD_SKILLS } from './rootwildSkills';
 
 export const SKILLS: Record<string, SkillDef> = {
   town_portal: TOWN_PORTAL_SKILL,
   ...NECROMANCER_SKILLS,
   ...PACT_SKILLS,
+  ...ROOTWILD_SKILLS,
 
   // ======================= Mimicry (the blue-mage lane) ====================
   // THE SLOT and its cycle payload (engine/mimic.ts — capture is the

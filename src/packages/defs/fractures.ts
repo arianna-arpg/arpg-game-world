@@ -38,6 +38,7 @@ const ABYSSAL_FACTION: FactionSpec = {
     // agrees with the ground.
     { id: 'abyssal_horologist', weight: 2 },
     { id: 'rift_ascetic', weight: 2 },
+    { id: 'abyssal_foldwright', weight: 1 },
     { id: 'abyssal_horror', weight: 1 },
   ],
   warlord: 'abyssal_horror',

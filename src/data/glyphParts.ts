@@ -14,11 +14,17 @@ import { registerShippedGlyph, type GlyphDef } from '../render/vis/parts';
 import { CASTER_GLYPHS } from './casterGlyphs';
 import { DEMON_GLYPHS } from './demonGlyphs';
 import { COURT_GLYPHS } from './courtGlyphs';
+import { ABYSS_GLYPHS } from './abyssGlyphs';
+import { KINSHIP_GLYPHS } from './kinshipGlyphs';
+import { ROOTWILD_GLYPHS } from './rootwildGlyphs';
 
 export const GLYPH_PARTS: Record<string, GlyphDef> = {
   ...CASTER_GLYPHS,
   ...DEMON_GLYPHS,
   ...COURT_GLYPHS,
+  ...ABYSS_GLYPHS,
+  ...KINSHIP_GLYPHS,
+  ...ROOTWILD_GLYPHS,
   // --- The Seraph City set (aether_gloria / aether_seraphal kin) ------------
   // LAUREL CROWN — the victor's leaf ring, open at the back: an arc band
   // with leaf pairs pacing the front (mirror covers both sides). Reads

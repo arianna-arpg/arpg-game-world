@@ -15,11 +15,17 @@ import type { LookDef } from '../render/vis/parts';
 import { CASTER_LOOKS } from './casterLooks';
 import { DEMON_LOOKS } from './demonLooks';
 import { COURT_LOOKS } from './courtLooks';
+import { ABYSS_LOOKS } from './abyssLooks';
+import { KINSHIP_LOOKS } from './kinshipLooks';
+import { ROOTWILD_LOOKS } from './rootwildLooks';
 
 export const LOOKS: Record<string, LookDef> = {
   ...CASTER_LOOKS,
   ...DEMON_LOOKS,
   ...COURT_LOOKS,
+  ...ABYSS_LOOKS,
+  ...KINSHIP_LOOKS,
+  ...ROOTWILD_LOOKS,
 
   // ============================================== THE DEAD (the flagship set)
   /** Bare bones and a blade: ribs radiating off a spine, skull forward. */
@@ -271,14 +277,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'horns' },
       { kind: 'axe' },
       { kind: 'tusks', x: 0.35 },
-    ],
-  },
-  troll: {
-    parts: [
-      { kind: 'blob', params: { irr: 0.15, seed: 6 } },
-      { kind: 'spikes' },
-      { kind: 'claws', params: { len: 0.55, talons: 3 } },
-      { kind: 'maw', scale: 0.5, x: 0.42, params: { arc: 0.5 } },
     ],
   },
   gnoll: {
@@ -621,13 +619,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'daggers', params: { len: 0.5 } },
     ],
   },
-  bandit_bruiser: {
-    parts: [
-      { kind: 'torso' },
-      { kind: 'mace' },
-      { kind: 'pauldrons', role: 'wood' },
-    ],
-  },
   // The powder kin — bandits who took up guns (the munitions family's
   // monster face). Quiver = the bolt drum; keg = the grenado satchel.
   bandit_fusilier: {
@@ -857,41 +848,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', params: { n: 2, spread: 0.45, dist: 0.6, size: 0.07 } },
     ],
   },
-  /** The verminkin: a hunched rat walking like an apology — snout, knives,
-   *  and a tail it never learned to hide. */
-  verminkin: {
-    parts: [
-      { kind: 'torso', scale: 0.8 },
-      { kind: 'snout', scale: 0.95 },
-      { kind: 'ears', scale: 0.75 },
-      { kind: 'tail', params: { len: 1.1 } },
-      { kind: 'daggers', params: { len: 0.45 } },
-      { kind: 'eyes', color: '#e88a8a', params: { spread: 0.38, dist: 0.5, size: 0.08 } },
-    ],
-  },
-  /** The broodpriest: robed rot-clergy — a snout under a bent staff. */
-  broodpriest: {
-    parts: [
-      { kind: 'robe', scale: 0.9, role: 'dark' },
-      { kind: 'snout', scale: 0.9 },
-      { kind: 'ears', scale: 0.7 },
-      { kind: 'tail', params: { len: 1.0 } },
-      { kind: 'staff', y: -0.08, params: { skullTip: true } },
-    ],
-  },
-  /** The Rat King: the warren's one idea, crowned — ruff, fangs, and a tail
-   *  the length of his reign. */
-  rat_king: {
-    parts: [
-      { kind: 'furRuff', scale: 1.05 },
-      { kind: 'torso', scale: 0.9 },
-      { kind: 'snout', scale: 1.0 },
-      { kind: 'fangs', scale: 0.85 },
-      { kind: 'tail', params: { len: 1.35, tuft: true } },
-      { kind: 'crown', x: 0.28, scale: 0.7, role: 'glow' },
-      { kind: 'eyes', color: '#ffb04a', params: { spread: 0.4, dist: 0.5, size: 0.09 } },
-    ],
-  },
   /** The warren nest: a chewed mound of twigs and worse, eyes in the holes. */
   warren_nest: {
     parts: [
@@ -936,17 +892,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'skull', scale: 0.4, x: 0.42, y: 0.05, alpha: 0.85 },
       { kind: 'writheMass', params: { n: 9, spread: 0.7, rise: -0.2 } },
       { kind: 'carrionFlies', params: { n: 5 } },
-    ],
-  },
-  /** The warren's shepherd: hooded, horn slung, a naked tail under the
-   *  coat hem — the showman the rats answer. */
-  vermin_piper: {
-    parts: [
-      { kind: 'robe', role: 'dark' },
-      { kind: 'hood' },
-      { kind: 'warhorn', scale: 0.85 },
-      { kind: 'tail', color: '#c8a090', params: { len: 0.9, taper: 0.5 } },
-      { kind: 'eyes', color: '#e8b06a', params: { n: 2, spread: 0.4, dist: 0.5, size: 0.09 } },
     ],
   },
 
@@ -1834,20 +1779,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'quiver', scale: 0.8 },
     ],
   },
-  pit_champion: {
-    parts: [
-      { kind: 'torso', scale: 1.05 },
-      { kind: 'mane', scale: 0.7 },
-      { kind: 'chains' },
-    ],
-  },
-  warband_skald: {
-    parts: [
-      { kind: 'torso' },
-      { kind: 'cape', role: 'accent' },
-      { kind: 'runes', color: '#d8a8e0', params: { n: 3 } },
-    ],
-  },
   camp_bannerman: {
     parts: [
       { kind: 'torso' },
@@ -1862,20 +1793,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'cape', role: 'dark' },
       { kind: 'sword', params: { len: 1.2, w: 0.06 } },
       { kind: 'skull', x: 0.5 },
-    ],
-  },
-  abyssal_horologist: {
-    parts: [
-      { kind: 'robe' },
-      { kind: 'halo', scale: 1.05, alpha: 0.5 },
-      { kind: 'runes', color: '#8ae0e0', params: { n: 3 } },
-    ],
-  },
-  rift_ascetic: {
-    parts: [
-      { kind: 'robe', role: 'cloth' },
-      { kind: 'staff' },
-      { kind: 'halo', scale: 0.7, alpha: 0.45 },
     ],
   },
 
@@ -3163,58 +3080,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'barkPlates', scale: 0.6, params: { n: 3 } },
     ],
   },
-
-  // --- The beastkin (the Horned Tribes) -------------------------------------
-  /** The gorer: down-slung head, ram horns, a hide of war-paint. */
-  beastkin_gorer: {
-    parts: [
-      { kind: 'torso', scale: 0.95 },
-      { kind: 'ramHorns', scale: 1.05 },
-      { kind: 'snout', scale: 0.9 },
-      { kind: 'warpaint', params: { n: 3 } },
-    ],
-  },
-  /** The impaler: a lighter frame behind a long spear and quiver. */
-  beastkin_impaler: {
-    parts: [
-      { kind: 'disc', scale: 0.8 },
-      { kind: 'ramHorns', scale: 0.8 },
-      { kind: 'snout', scale: 0.8 },
-      { kind: 'staff', y: 0.55, params: { len: 1.2 } },
-      { kind: 'quiver', x: -0.3, scale: 0.7 },
-    ],
-  },
-  /** The ritualist: horns through a cowl, a censer of burnt herbs. */
-  beastkin_ritualist: {
-    parts: [
-      { kind: 'robe', scale: 0.9 },
-      { kind: 'ramHorns', scale: 0.9 },
-      { kind: 'censer', y: 0.5, scale: 0.85 },
-      { kind: 'runes', scale: 0.9, params: { n: 3 } },
-      { kind: 'eyes', color: '#ffce7a', params: { spread: 0.35, dist: 0.55, size: 0.09 } },
-    ],
-  },
-  /** The flayer: twin knives, trophy-hung, quick. */
-  beastkin_flayer: {
-    parts: [
-      { kind: 'disc', scale: 0.85 },
-      { kind: 'ramHorns', scale: 0.75 },
-      { kind: 'snout', scale: 0.75 },
-      { kind: 'daggers', params: { len: 0.6 } },
-      { kind: 'bandolier' },
-    ],
-  },
-  /** The horncaller: the great curled WARHORN across the body is the whole
-   *  read — robe, rack, and the horn it lives to sound (the khan wears his
-   *  at the hip; the caller IS the horn). */
-  beastkin_horncaller: {
-    parts: [
-      { kind: 'robe', scale: 0.9 },
-      { kind: 'ramHorns', scale: 1.0 },
-      { kind: 'warhorn', scale: 1.25 },
-      { kind: 'eyes', color: '#ffce7a', params: { spread: 0.35, dist: 0.55, size: 0.09 } },
-    ],
-  },
   /** The crag condor: WINGS FIRST at any distance — a broad earth-brown fan,
    *  bare head, a ruff plume; the pass's patient sky (the shrike's grammar,
    *  carrion-toned). */
@@ -3238,17 +3103,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'spikes', scale: 0.7 },
       { kind: 'snout', scale: 0.55 },
       { kind: 'eyes', color: '#d8cc9a', params: { spread: 0.3, dist: 0.6, size: 0.08 } },
-    ],
-  },
-  /** The khan: the great rack, a mane, the warhorn at his hip. */
-  beastlord_khan: {
-    parts: [
-      { kind: 'torso', scale: 1.05 },
-      { kind: 'mane', scale: 1.0 },
-      { kind: 'ramHorns', scale: 1.25 },
-      { kind: 'snout', scale: 0.95 },
-      { kind: 'warhorn', x: -0.2, scale: 0.9 },
-      { kind: 'axe', params: { len: 0.9 } },
     ],
   },
 
@@ -4151,25 +4005,6 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'slimeTrail', color: '#8a8468', params: { n: 5 } }],
   },
-  /** A formic worker: carapace, feelers, always carrying something. */
-  formic_worker: {
-    parts: [
-      { kind: 'carapace', scale: 0.85 },
-      { kind: 'legs', scale: 0.85, params: { n: 6 } },
-      { kind: 'antennae', scale: 0.9 },
-      { kind: 'mandibles', scale: 0.6 },
-    ],
-  },
-  /** A formic soldier: the same body forged bigger — shear-jaws, plated. */
-  formic_soldier: {
-    parts: [
-      { kind: 'carapace', scale: 0.95 },
-      { kind: 'armorPlates', scale: 0.7 },
-      { kind: 'legs', scale: 0.9, params: { n: 6 } },
-      { kind: 'antennae', scale: 0.85 },
-      { kind: 'mandibles', scale: 1.0 },
-    ],
-  },
   /** The emerald mantis: raptor arms held in prayer over a leaf-blade body. */
   emerald_mantis: {
     parts: [
@@ -4287,53 +4122,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'egg', x: 0.02, y: -0.2, scale: 0.4 },
     ],
     shadowScale: 0.6,
-  },
-
-  // --- THE GARDEN (the colony's working castes, the bloomkin, the soft) -----
-  /** The forager: a worker with the harvest ON it — the carried bundle is
-   *  the read (this one has your gem in its jaws). */
-  formic_forager: {
-    parts: [
-      { kind: 'carapace', scale: 0.85 },
-      { kind: 'legs', scale: 0.85, params: { n: 6 } },
-      { kind: 'antennae', scale: 0.9 },
-      { kind: 'mandibles', scale: 0.55 },
-      { kind: 'egg', x: 0.68, y: 0, scale: 0.42, role: 'wood' },
-    ],
-  },
-  /** The tender: long feelers, saddle-marked — the herd-keeper's silhouette
-   *  (feelers for the herd, barely any jaw at all). */
-  formic_tender: {
-    parts: [
-      { kind: 'carapace', scale: 0.9 },
-      { kind: 'legs', scale: 0.85, params: { n: 6 } },
-      { kind: 'antennae', scale: 1.15 },
-      { kind: 'mandibles', scale: 0.4 },
-      { kind: 'spots', scale: 0.8, params: { n: 2 } },
-    ],
-  },
-  /** The alate: the colony's wing — membrane pairs folded over the worker
-   *  body. Wings-first at a glance (the drone never has them). */
-  formic_alate: {
-    parts: [
-      { kind: 'carapace', scale: 0.9 },
-      { kind: 'wings', scale: 1.05, alpha: 0.85 },
-      { kind: 'legs', scale: 0.85, params: { n: 6 } },
-      { kind: 'antennae', scale: 0.85 },
-      { kind: 'mandibles', scale: 0.7 },
-    ],
-  },
-  /** The Matriarch: plated bulk crowned and crested, feelers back, the
-   *  brood-swollen abdomen riding behind as the worm tail. */
-  formic_matriarch: {
-    parts: [
-      { kind: 'carapace', scale: 1.0 },
-      { kind: 'armorPlates', scale: 0.8 },
-      { kind: 'crest', scale: 0.9, role: 'accent' },
-      { kind: 'antennae', scale: 0.9 },
-      { kind: 'mandibles', scale: 1.1 },
-      { kind: 'legs', scale: 0.9, params: { n: 6 } },
-    ],
   },
   /** The burrow: a worked mouth of earth and root — eggs at the lip where
    *  the tenders stage them. */
@@ -5050,16 +4838,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', color: '#c8c890', params: { spread: 0.4, dist: 0.6, size: 0.07 } },
     ],
     live: [{ kind: 'slimeTrail', color: '#5a4e38', params: { n: 3 } }],
-  },
-  /** The gnoll trapper: the pack's quiet one — bow, satchel, iron jaws. */
-  gnoll_trapper: {
-    parts: [
-      { kind: 'disc', scale: 0.85 },
-      { kind: 'ears', scale: 0.9 },
-      { kind: 'bow' },
-      { kind: 'pack', x: -0.3, scale: 0.8 },
-      { kind: 'bandolier' },
-    ],
   },
   /** The jaw snare: nothing but teeth on a plate, waiting. */
   jaw_snare: {
@@ -6576,17 +6354,6 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     shadowScale: 1.15,
   },
-  /** The howdah archer: small, hooded, all bow — a rider silhouette that
-   *  reads as "shoot me first" from the pit floor. */
-  howdah_archer: {
-    parts: [
-      { kind: 'torso', scale: 0.85, role: 'cloth' },
-      { kind: 'hood', x: 0.24, scale: 0.8 },
-      { kind: 'bow', scale: 0.95 },
-      { kind: 'quiver', scale: 0.85 },
-    ],
-    shadowScale: 0.5,
-  },
   /** The mortar whelk: the snail under the gun — soft glisten, feeler eyes,
    *  gill frill; the shell it lost its quiet life to is the whelk_mortar. */
   mortar_whelk: {
@@ -6867,18 +6634,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', color: '#f0c060', params: { spread: 0.38, dist: 0.52, size: 0.08 } },
     ],
   },
-  /** A bridge's worth of troll: mossed shoulders, tusked underbite, and a
-   *  maul that used to be someone's gatepost. */
-  troll_bridgewarden: {
-    parts: [
-      { kind: 'blob', params: { irr: 0.16, seed: 77 } },
-      { kind: 'mossPatch', x: -0.25, scale: 0.8, alpha: 0.85 },
-      { kind: 'barkPlates', x: -0.1, scale: 0.6, alpha: 0.5 },
-      { kind: 'tusks', scale: 1.1 },
-      { kind: 'hammer', y: 0.55, scale: 1.05 },
-      { kind: 'eyes', params: { spread: 0.3, dist: 0.55, size: 0.07 } },
-    ],
-  },
 
   /** Rag-draped scavenger hauling a rib-trophy — the litter of the last
    *  fight, worn and thrown. */
@@ -6993,16 +6748,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', color: '#9ad4e8', params: { n: 1, spread: 0, dist: 0.1, size: 0.08 } },
     ],
   },
-  /** A couched lance flying its own colors — the knight rusted away and
-   *  the tourney didn't notice. */
-  bannered_lance: {
-    parts: [
-      { kind: 'trident', y: 0, scale: 1.1, params: { len: 1.2 } },
-      { kind: 'banner', x: -0.35, y: 0.2, scale: 0.8 },
-      { kind: 'pauldrons', x: -0.2, scale: 0.7, alpha: 0.9 },
-      { kind: 'eyes', color: '#9ad4e8', params: { n: 1, spread: 0, dist: 0.2, size: 0.07 } },
-    ],
-  },
   /** The saint at prayer: breastplate and cape, empty and upright. Its
    *  crown and hands are PARTS — the composite draws them as bodies. */
   panoply_saint: {
@@ -7083,37 +6828,6 @@ export const LOOKS: Record<string, LookDef> = {
     live: [{ kind: 'wisps', x: -0.25, scale: 0.5, params: { n: 2 } }],
   },
 
-  /** The major: the soldier body forged bigger — plate over shear-jaws. */
-  formic_major: {
-    parts: [
-      { kind: 'carapace', scale: 0.95 },
-      { kind: 'armorPlates', scale: 0.8, alpha: 0.85 },
-      { kind: 'legs', scale: 0.95, params: { n: 6 } },
-      { kind: 'mandibles', scale: 0.95 },
-      { kind: 'antennae', scale: 0.85 },
-    ],
-  },
-  /** The engineer caste: resin bulbs slung under the thorax. */
-  formic_gluewright: {
-    parts: [
-      { kind: 'carapace', scale: 0.85 },
-      { kind: 'legs', scale: 0.85, params: { n: 6 } },
-      { kind: 'bloatSacs', x: -0.25, scale: 0.7, params: { n: 3 } },
-      { kind: 'antennae', scale: 0.9 },
-      { kind: 'mandibles', scale: 0.5 },
-    ],
-  },
-  /** The porter: the clutch rides her back — dropping her delivers it. */
-  formic_porter: {
-    parts: [
-      { kind: 'carapace', scale: 0.9 },
-      { kind: 'legs', scale: 0.88, params: { n: 6 } },
-      { kind: 'egg', x: -0.3, scale: 0.62 },
-      { kind: 'egg', x: -0.55, y: 0.3, scale: 0.45, alpha: 0.95 },
-      { kind: 'antennae', scale: 0.85 },
-    ],
-  },
-
   /** The ushabti file: a baked servant-soldier — lid-faced, shield up,
    *  built to march in step forever. */
   ushabti_file: {
@@ -7135,27 +6849,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'runes', scale: 0.65, alpha: 0.7, params: { n: 3 } },
       { kind: 'sword', y: 0.38, scale: 0.85, params: { len: 0.95 } },
       { kind: 'mask', x: 0.42, scale: 0.8, role: 'metal' },
-    ],
-  },
-
-  /** The ground-priest: horned bulk over a maul, painted for the rite. */
-  beastkin_earthshaker: {
-    parts: [
-      { kind: 'torso', scale: 0.95 },
-      { kind: 'warpaint', alpha: 0.75 },
-      { kind: 'horns', scale: 1.05 },
-      { kind: 'hammer', y: 0.5, scale: 0.95 },
-      { kind: 'runes', scale: 0.7, alpha: 0.7, params: { n: 3 } },
-    ],
-  },
-  /** The chaser: light-footed, quivered, spears already in the air. */
-  beastkin_chaser: {
-    parts: [
-      { kind: 'disc', scale: 0.85 },
-      { kind: 'furRuff', scale: 0.9, alpha: 0.85 },
-      { kind: 'horns', scale: 0.9 },
-      { kind: 'quiver', x: -0.3, scale: 0.85 },
-      { kind: 'trident', y: 0.35, scale: 0.8, params: { len: 0.95 } },
     ],
   },
 
@@ -7930,18 +7623,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'skull', x: 0.45, scale: 1.1 },
       { kind: 'skull', x: -0.2, y: 0.5, scale: 0.6, alpha: 0.9 },
       { kind: 'bell', x: -0.3, y: -0.4, scale: 0.55 },
-    ],
-  },
-  /** The warbringer: horns forward, horn slung, the front leg already
-   *  committed. */
-  beastkin_warbringer: {
-    parts: [
-      { kind: 'torso', scale: 1.05 },
-      { kind: 'furRuff', scale: 1.0, alpha: 0.9 },
-      { kind: 'horns', scale: 1.25 },
-      { kind: 'warpaint', alpha: 0.8 },
-      { kind: 'hammer', y: 0.55, scale: 1.05 },
-      { kind: 'warhorn', x: -0.35, y: -0.4, scale: 0.7 },
     ],
   },
   /** The gutwall: a door of meat with the gullet worn in front (live —
@@ -9242,20 +8923,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', params: { n: 2, spread: 0.36, dist: 0.34, size: 0.12 } },
     ],
     shadowScale: 0.55,
-  },
-  /** THE REPLETE FOLDMOTHER: the colony's living cask — an ant's fore-body
-   *  in front of the amber crop she drags (the worm tail draws the cask's
-   *  chambers), ringed like the vessel she is. */
-  replete_foldmother: {
-    parts: [
-      { kind: 'carapace', scale: 1.0 },
-      { kind: 'armorPlates', scale: 0.75 },
-      { kind: 'segmentRings', params: { n: 4 } },
-      { kind: 'antennae', scale: 0.9 },
-      { kind: 'mandibles', scale: 1.0 },
-      { kind: 'legs', scale: 0.9, params: { n: 6 } },
-      { kind: 'gem', x: -0.35, scale: 0.55, role: 'glow', color: '#e8b860' },
-    ],
   },
 
   // ======================= THE BUTTELAND WARDROBE (data/monsters.ts) ========

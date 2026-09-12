@@ -19,6 +19,9 @@ import { ULTIMATE_FORMS } from './ultimates';
 import { NECROMANCER_MINIONS } from './necromancerMinions';
 import { CASTER_MONSTERS } from './casterMonsters';
 import { COURT_MONSTERS } from './courtMonsters';
+import { ABYSS_MONSTERS } from './abyssMonsters';
+import { KINSHIP_MONSTERS } from './kinshipMonsters';
+import { ROOTWILD_MONSTERS } from './rootwildMonsters';
 import { registerAIAction } from '../engine/aiActions';
 import { FluxPhase } from '../engine/flux';
 import type { TuneSpec } from '../engine/tuning';
@@ -2155,6 +2158,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
   ...NECROMANCER_MINIONS,
   ...CASTER_MONSTERS,
   ...COURT_MONSTERS,
+  ...ABYSS_MONSTERS,
+  ...KINSHIP_MONSTERS,
+  ...ROOTWILD_MONSTERS,
 
   zombie: {
     id: 'zombie', name: 'Shambling Zombie',
@@ -3145,7 +3151,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   depthkin_seer: {
     id: 'depthkin_seer', name: 'Depth Seer',
-    color: '#7f9ad8', shape: 'star', radius: 13, look: 'hexer',
+    color: '#7f9ad8', shape: 'star', radius: 13, look: 'depthkin_seer',
     base: { life: 36, moveSpeed: 120, accuracy: 110, mana: 120, manaRegen: 8 },
     mods: [mod('coldRes', 'flat', 0.4)],
     skills: ['frostbolt'],
@@ -4227,7 +4233,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // the other side). Poise-pole texture: crack the stance, then the man.
   bulwark_thane: {
     id: 'bulwark_thane', name: 'Bulwark Thane',
-    color: '#8a7a52', shape: 'octagon', radius: 16, look: 'bandit_bruiser',
+    color: '#8a7a52', shape: 'octagon', radius: 16, look: 'bulwark_thane',
     base: { life: 110, moveSpeed: 108, accuracy: 102, armor: 40, poise: 70, mana: 60, manaRegen: 6 },
     mods: [mod('life', 'more', 0.5)],
     skills: ['marching_bulwark', 'bastion_thrust', 'challenging_shout', 'cleave'],
@@ -4512,7 +4518,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // gear is its only door into the world (so leveled lists never move).
   abyssal_broodling: {
     id: 'abyssal_broodling', name: 'Abyssal Broodling',
-    color: '#7ac8d8', shape: 'diamond', radius: 9, material: 'void',
+    color: '#7ac8d8', shape: 'diamond', radius: 9, material: 'void', look: 'abyssal_broodling',
     base: { life: 26, moveSpeed: 150, accuracy: 100, mana: 0 },
     skills: ['claw'],
     xp: 6, faction: 'abyssal',
@@ -7958,14 +7964,14 @@ export const MONSTERS: Record<string, MonsterDef> = {
   //     faction's own roster — only the Abyssal needs new bodies.)
   abyssal_crawler: {
     id: 'abyssal_crawler', name: 'Abyssal Crawler',
-    color: '#8a4ae0', shape: 'triangle', radius: 10, material: 'chitin', look: 'swarm_bug',
+    color: '#8a4ae0', shape: 'triangle', radius: 10, material: 'chitin', look: 'abyssal_crawler',
     base: { life: 34, moveSpeed: 200, accuracy: 90, mana: 15, manaRegen: 2 },
     skills: ['claw', 'umbral_lance'], xp: 12, faction: 'abyssal',
     detection: 1.35, brain: { type: 'swarm' },
   },
   abyssal_wretch: {
     id: 'abyssal_wretch', name: 'Abyssal Wretch',
-    color: '#6a3ad0', shape: 'pentagon', radius: 13, look: 'wraith',
+    color: '#6a3ad0', shape: 'pentagon', radius: 13, look: 'abyssal_wretch',
     base: { life: 86, moveSpeed: 118, accuracy: 100, armor: 30 , mana: 35, manaRegen: 3},
     mods: [mod('coldRes', 'flat', 0.25)],
     skills: ['claw', 'word_of_doom'], xp: 17, faction: 'abyssal',
@@ -7974,7 +7980,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // a swarmer (a periodic archetype impulse), the user's "strafe, then charge".
   abyssal_seer: {
     id: 'abyssal_seer', name: 'Abyssal Seer',
-    color: '#a86adf', shape: 'diamond', radius: 12, material: 'void', look: 'hexer',
+    color: '#a86adf', shape: 'diamond', radius: 12, material: 'void', look: 'abyssal_seer',
     base: { life: 52, moveSpeed: 135, mana: 110, manaRegen: 9 },
     mods: [mod('coldRes', 'flat', 0.3)],
     // The ENEMY CHRONOMANCER (engine/timeflow.ts): its Stasis Lock hangs a
@@ -7993,7 +7999,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // kiting strafer — not a flee; it keeps fighting, just from afar).
   abyssal_vanguard: {
     id: 'abyssal_vanguard', name: 'Abyssal Vanguard',
-    color: '#7038b8', shape: 'trapezoid', radius: 18, material: 'void', look: 'crusader',
+    color: '#7038b8', shape: 'trapezoid', radius: 18, material: 'void', look: 'abyssal_vanguard',
     base: { life: 178, moveSpeed: 112, accuracy: 112, armor: 64, mana: 70, manaRegen: 7, poise: 65 },
     mods: [mod('coldRes', 'flat', 0.35)],
     skills: ['ground_slam', 'frostbolt'], xp: 32, faction: 'abyssal',
@@ -8008,7 +8014,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   abyssal_render: {
     id: 'abyssal_render', name: 'Abyssal Render',
-    color: '#9a4ad0', shape: 'hexagon', radius: 15, material: 'void', look: 'stalker',
+    color: '#9a4ad0', shape: 'hexagon', radius: 15, material: 'void', look: 'abyssal_render',
     base: { life: 132, moveSpeed: 132, accuracy: 110, armor: 40, poise: 45 , mana: 25, manaRegen: 2},
     mods: [mod('coldRes', 'flat', 0.25)],
     skills: ['cleave', 'reap'], xp: 26, faction: 'abyssal',
@@ -10021,7 +10027,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // juking, tires) that squeezes away under the brush when truly pressed.
   gutter_rat: {
     id: 'gutter_rat', name: 'Gutter Rat',
-    color: '#8a7f72', shape: 'oval', radius: 6, material: 'fur', look: 'rat',
+    color: '#8a7f72', shape: 'oval', radius: 6, material: 'fur', look: 'vermin_rat',
     base: { life: 6, moveSpeed: 205, evasion: 70, mana: 0 },
     mods: [mod('detectability', 'more', -0.7)],
     skills: [],
@@ -10047,7 +10053,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // (a grabbed rat stands up as this body, claw and all).
   vermin_tide: {
     id: 'vermin_tide', name: 'Vermin Tide',
-    color: '#7a6a56', shape: 'oval', radius: 5, material: 'fur', look: 'rat',
+    color: '#7a6a56', shape: 'oval', radius: 5, material: 'fur', look: 'vermin_rat',
     base: { life: 6, moveSpeed: 168, accuracy: 60, evasion: 40, mana: 0 },
     skills: ['claw'],
     xp: 1,
@@ -10194,7 +10200,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // THE WARREN RAT: the tide. Alone it is nothing; the warren never sends one.
   warren_rat: {
     id: 'warren_rat', name: 'Warren Rat',
-    color: '#7a6a58', shape: 'oval', radius: 9, material: 'fur', look: 'rat',
+    color: '#7a6a58', shape: 'oval', radius: 9, material: 'fur', look: 'vermin_rat',
     base: { life: 18, moveSpeed: 178, accuracy: 88, evasion: 45, mana: 0 },
     skills: ['claw'],
     xp: 5,
@@ -10211,7 +10217,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // every corpse-raising art for the same bodies, and its bite leaves rot.
   fester_rat: {
     id: 'fester_rat', name: 'Fester Rat',
-    color: '#8aa050', shape: 'oval', radius: 10, material: 'fur', look: 'rat',
+    color: '#8aa050', shape: 'oval', radius: 10, material: 'fur', look: 'vermin_fester_rat',
     base: { life: 26, moveSpeed: 168, accuracy: 92, mana: 15, manaRegen: 3 },
     mods: [mod('chaosRes', 'flat', 0.4)],
     skills: ['festering_bite'],
@@ -23249,6 +23255,22 @@ export const FACTIONS: Record<string, {
    *  a faction-id compare in draw code. */
   nubHorns?: boolean;
 }> = {
+  // Carnivorous flora: a crownless wild family with no marching warlord.
+  rootwild: {
+    name: 'the Rootwild',
+    table: [
+      {id:'rootwild_burrling',weight:3},
+      {id:'rootwild_hingejaw',weight:2},
+      {id:'rootwild_pitcher',weight:2},
+      {id:'rootwild_sundew',weight:1},
+      {id:'rootwild_coppice',weight:1},
+      {id:'rootwild_thornfan',weight:2},
+      {id:'rootwild_nectar_bell',weight:1},
+      {id:'rootwild_brambleback',weight:1},
+      {id:'rootwild_windseed',weight:2},
+      {id:'rootwild_hookvine',weight:1},
+    ],
+  },
   // Each roster now BREATHES with level (presence envelopes): fodder rows
   // fade as the world deepens, veterans arrive on ramps, and the champion
   // tier musters only where the ground is dangerous enough to deserve it.
@@ -23269,6 +23291,7 @@ export const FACTIONS: Record<string, {
       { id: 'goblin_wolfrider', weight: 2, presence: { from: 6, fadeIn: 3 } },
       { id: 'hobgoblin_taskmaster', weight: 1, presence: { from: 8, fadeIn: 4 } },
       { id: 'troll_bridgewarden', weight: 1, presence: { from: 10, fadeIn: 5 } },
+      { id: 'troll_cairncaller', weight: 1 },
       // THE CLUTCH: the thrown vanguard — crates of whelps over the line.
       { id: 'goblin_whelpsling', weight: 1, presence: { from: 5, fadeIn: 3 } },
       // The champion (high court pass): the marquee bar without the boss

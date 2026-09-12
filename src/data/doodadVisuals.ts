@@ -27,6 +27,11 @@ const WATER_LOOK = {
 };
 
 export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
+  rootwild_seedbed_gate: {
+    painter:'caveMouth',order:55,
+    params:{color:'#394727',edge:'#839354',material:'wood',glow:'#d7c78c',throat:'#10170c',vines:{color:'#6d8b45'}},
+    light:{radius:-2,color:'#d7c78c',intensity:0.25,flicker:1.1},
+  },
 
   // --- Sailing layer (under everything) -----------------------------------
   landmass: { painter: 'landmass', order: 4 },

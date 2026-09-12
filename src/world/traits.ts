@@ -143,6 +143,8 @@ export const FACTION_TRAITS: Record<string, FactionTraits> = {
   // The Bloomkin — the beds' own kin: the most rooted green in the game
   // (a flower defends exactly where it grows), crownless likewise.
   bloomkin: { roaming: 0.2, aggression: 0.85, warlordHome: 'origin', homeBiome: 'garden', eventRange: 140, contexts: ['baseline'], temper: 'territorial' },
+  // Mobile carnivorous plants: patches defend their feeding ground.
+  rootwild: { roaming: 0.15, aggression: 0.6, warlordHome: 'origin', homeBiome: 'forest', eventRange: 100, contexts: ['baseline'], temper: 'territorial' },
   // The Emberkin — the cinder country's tribe: rooted vent-tenders who barely
   // march but never, ever cede the calderas (the volcanic biome finally has a
   // native banner; its long war is with the Legion treating the fires as a door).

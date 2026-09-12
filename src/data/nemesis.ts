@@ -520,6 +520,7 @@ export const NEMESIS_NAMES = {
     sirocco: WINDS_KIN,
     sylvan: VERDANT_KIN,
     bloomkin: VERDANT_KIN,
+    rootwild: VERDANT_KIN,
     junglekin: VERDANT_KIN,
     fungal: BLIGHT_KIN,
     plague: BLIGHT_KIN,

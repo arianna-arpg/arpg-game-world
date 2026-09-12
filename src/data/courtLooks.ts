@@ -3,6 +3,17 @@ import type { LookDef } from '../render/vis/parts';
 /** Baked silhouettes do the identity work; live layers stay sparse. These
  * ornaments never imply new hit surfaces, auras or ability timers. */
 export const COURT_LOOKS: Record<string, LookDef> = {
+  bannered_lance: {
+    parts: [
+      { kind: 'vacantCuirass', x: -0.14, scale: 0.76 },
+      { kind: 'pauldrons', x: 0.12, scale: 0.64 },
+      { kind: 'helm', x: 0.55, scale: 0.4 },
+      { kind: 'banner', x: -0.38, y: -0.3, color: '#7799b2', scale: 0.95 },
+      { kind: 'heraldLance', x: 0.05, y: 0.66, scale: 0.95 },
+      { kind: 'gauntlets', x: 0, y: 0.66, scale: 0.43, params: { n: 1 } },
+    ],
+    live: [{ kind: 'wisps', x: -0.3, color: '#b6dce8', scale: 0.35, alpha: 0.3, params: { n: 2 } }],
+  },
   hollow_vanguard: {
     parts: [
       { kind: 'vacantCuirass', scale: 1.03 },

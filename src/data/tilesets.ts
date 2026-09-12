@@ -1533,6 +1533,13 @@ export const TILESETS: Record<string, TilesetDef> = {
       // in the young fringe; wardens, wolves and the Horned Tribes in the
       // middle depths; elders and the werewolf dark where the roof seals.
       table: [
+        { id: 'rootwild_burrling', weight: 2 },
+        { id: 'rootwild_hingejaw', weight: 1 },
+        { id: 'rootwild_coppice', weight: 1 },
+        { id: 'rootwild_thornfan', weight: 2 },
+        { id: 'rootwild_brambleback', weight: 1 },
+        { id: 'rootwild_windseed', weight: 1 },
+        { id: 'rootwild_nectar_bell', weight: 1 },
         { id: 'sylvan_sapling', weight: 3, presence: { to: 12, fadeOut: 5 } },
         { id: 'twig_snarl', weight: 3, presence: { from: 3, fadeIn: 2, to: 24, fadeOut: 9 } },
         { id: 'thorn_sprite', weight: 2, presence: { to: 20, fadeOut: 10 } },
@@ -2347,6 +2354,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'fen_hound', weight: 2, presence: { to: 14, fadeOut: 7 } },
         { id: 'alpha_stalker', weight: 1, presence: { from: 10, fadeIn: 5 } },
         { id: 'troll_mauler', weight: 1, presence: { from: 9, fadeIn: 5 } },
+        { id: 'troll_cairncaller', weight: 1 },
         // The Winter Court walks its high seat: hound outriders early, the
         // court's true tiers on ramps, and the giant behind a HARD 12 gate
         // (no fadeIn — the shield-wall is a mid-game fact, never a level-3
@@ -3735,6 +3743,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       table: [
         // THE JUNGLEKIN first — the green's own tribes hold their ground.
         { id: 'fern_stalker', weight: 4, presence: { to: 18, fadeOut: 8 } },
+        { id: 'rootwild_hingejaw', weight: 1 },
+        { id: 'rootwild_hookvine', weight: 1 },
+        { id: 'rootwild_pitcher', weight: 1 },
+        { id: 'rootwild_windseed', weight: 1 },
         { id: 'blowgun_wretch', weight: 3, presence: { to: 20, fadeOut: 9 } },
         { id: 'spore_caller', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'strangler_maw', weight: 2, presence: { from: 8, fadeIn: 4 } },
@@ -4067,6 +4079,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'gaff_wrangler', weight: 2, presence: { from: 4, fadeIn: 2 } },
         { id: 'gorge_gulper', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'maw_bloom', weight: 1, presence: { from: 5, fadeIn: 3 } },
+        { id: 'rootwild_pitcher', weight: 1 },
+        { id: 'rootwild_sundew', weight: 1 },
+        { id: 'rootwild_hookvine', weight: 1 },
+        { id: 'rootwild_nectar_bell', weight: 1 },
         { id: 'frost_witch', weight: 1, presence: { from: 8, fadeIn: 4 } },
         // Grave-lights and the drowned court's wailers haunt the mire.
         { id: 'gloomling', weight: 2, presence: { to: 16, fadeOut: 8 } },
@@ -6187,6 +6203,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       count: [5, 7], size: [2, 4],
       table: [
         { id: 'skep_bee', weight: 2, presence: { to: 14, fadeOut: 7 } },
+        { id: 'rootwild_windseed', weight: 1 },
+        { id: 'rootwild_nectar_bell', weight: 1 },
         { id: 'petal_dancer', weight: 3 },
         // The muster pass: the beds' own answer, staged — nettles early,
         // casings downrange, the matron and the lie where the garden ages.
@@ -6748,6 +6766,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       count: [6, 8], size: [3, 5],
       table: [
         { id: 'rockgrub', weight: 3, presence: { to: 16, fadeOut: 8 } },
+        { id: 'rootwild_burrling', weight: 2 },
+        { id: 'rootwild_hingejaw', weight: 1 },
+        { id: 'rootwild_coppice', weight: 1 },
         { id: 'giant_maggot', weight: 2, presence: { to: 14, fadeOut: 7 } },
         { id: 'formic_worker', weight: 2 },
         { id: 'formic_soldier', weight: 1 },
@@ -8470,6 +8491,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         // rim — the Chronomancer's and Ascetic's kits on the other side.
         { id: 'abyssal_horologist', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'rift_ascetic', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'abyssal_foldwright', weight: 1 },
       ],
     },
     spawnerId: 'bone_altar',

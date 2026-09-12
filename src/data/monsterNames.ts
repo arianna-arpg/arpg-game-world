@@ -499,6 +499,7 @@ export const MONSTER_NAMES = {
     sirocco: WINDS_TONGUE,
     sylvan: VERDANT_TONGUE,
     bloomkin: VERDANT_TONGUE,
+    rootwild: VERDANT_TONGUE,
     junglekin: VERDANT_TONGUE,
     fungal: BLIGHT_TONGUE,
     plague: BLIGHT_TONGUE,
