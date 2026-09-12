@@ -37,6 +37,8 @@
 // Run: npx tsx balance/probe_vendorlocker.ts
 // ---------------------------------------------------------------------------
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import {
@@ -506,6 +508,29 @@ check('A: the purchase stamps the market ledger',
     wE.buildVendorStock({ gear: false }).every(e => e.kind !== 'item' || !!e.item.mem));
   check('E: a gear-only build rolls neither gems nor pouches',
     wE.buildVendorStock({ gems: false }).every(e => e.kind === 'item' && !e.item.mem));
+
+  // --- THE PRICE ON THE GLASS (2026-09-11, her report: "I see the cost for
+  // the skills, but I don't see any mention of a cost on most of the other
+  // items — I'm not sure whether I can go shopping"): gear and pouch tiles
+  // wore the plain item card and a priceless title while only the gem card
+  // spoke "click to buy — price". Now EVERY ware tile wears its price tag
+  // (VENDOR_CFG.glass.priceTag) and names its ware (data-vware) so the item
+  // card ends on the ONE counter footer the gem card also speaks.
+  const panelsSrc = readFileSync(resolve(process.cwd(), 'src/ui/panels.ts'), 'utf8');
+  const wareTags = panelsSrc.split('data-vware="').length - 1;
+  check('E: every counter item tile names its ware for the card (the tile + the overflow row)',
+    wareTags >= 2, `data-vware×${wareTags}`);
+  check('E: the item card at the counter ends on THE COUNTER FOOTER',
+    panelsSrc.includes('this.vendorWareTooltip(Number(el.dataset.itemUid), ext, el.dataset.vware)')
+    && panelsSrc.includes('this.vendorWareFooter(wareKey)'));
+  check('E: the gem card speaks the SAME footer (one helper, one set of words)',
+    panelsSrc.includes('lines.push(...this.vendorWareFooter(key));'));
+  check('E: the price tag rides the glass dial, worn by gem and item tiles alike',
+    (['always', 'hover'] as readonly string[]).includes(VENDOR_CFG.glass.priceTag)
+    && panelsSrc.includes("VENDOR_CFG.glass.priceTag === 'always'")
+    && panelsSrc.split('${priceTag}').length - 1 >= 2);
+  check('E: the tile title carries the price in plain words (the native hint fallback)',
+    panelsSrc.includes('Buy: ${esc(i.name)} — ${esc(pricePlain)}'));
 }
 
 // ------------------------------------------------ F. THE GATEWORK AVENUES

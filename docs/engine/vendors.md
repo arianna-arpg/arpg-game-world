@@ -198,6 +198,20 @@ VENDOR_CFG.tabs.default`, a `VendorTabSpec[]`):
   the strip AND the seal — the delver's echo shelf (`tabs: [{id:'gems'}]`,
   gems-only by its arm site: `buildVendorStock({ gear: false })`).
 
+**THE PRICE ON THE GLASS** (`VENDOR_CFG.glass.priceTag`, 2026-09-11 — her
+report: "I see click to buy — X essence for the skills, but I don't see any
+mention of a cost on most of the other items, so I'm not sure whether I can
+go shopping"). Gear and pouch tiles wore the plain item card and a priceless
+title; only the gem card ended on a price. Now every ware tile — gear, pouch
+and gem alike — wears its price as a corner tag (the count in gold, red when
+the seat at the counter cannot pay; the essence glyph in the essence's own
+ink; the tag's hint is the price in words), the native title carries the
+price too, and every ware's hover card ends on THE COUNTER FOOTER
+(`UI.vendorWareFooter` — the reserve state, the entry lock, "click to buy —
+price", red-noted when short): the gem card and the item card speak the one
+helper's words. `'hover'` stands the tag down and keeps the card alone.
+Probe: `probe_vendorlocker` E (the glass census).
+
 **THE TRADE GATE** (`VENDOR_CFG.trade`): until every gate row holds (all-of;
 the default asks one thing — `FEATURE.SALVAGE_STATION` owned), no counter
 SELLS anything: browsing stays free, the panel shows the hint strip and

@@ -854,7 +854,7 @@ export class UI {
     bindTooltips(this.salvageMenu, (el, ext) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext, this.panelSeat(this.salvageMenu)) : null, { extend: true });
     bindTooltips(this.oracleMenu, (el, ext) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext, this.panelSeat(this.oracleMenu)) : null, { extend: true });
     bindTooltips(this.vendorMenu, (el, ext) =>
-      el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext, this.panelSeat(this.vendorMenu))
+      el.dataset.tip === 'item' ? this.vendorWareTooltip(Number(el.dataset.itemUid), ext, el.dataset.vware)
         : el.dataset.tip === 'vgem' ? this.vendorGemTooltip(el.dataset.vgem!) : null,
     { extend: true });
     bindTooltips(this.classSelect, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!) : null);
@@ -2054,6 +2054,19 @@ export class UI {
   private essCostText(cost: EssenceCost): string {
     const e = ESSENCES[cost.essence];
     return `<span style="color:${e.color}" title="${e.label}">${cost.count}${e.glyph}</span>`;
+  }
+
+  /** The same cost in plain words for a native hint ("12 Mortal Essence"). */
+  private essCostPlain(cost: EssenceCost): string {
+    return `${cost.count} ${ESSENCES[cost.essence].label}`;
+  }
+
+  /** THE PRICE TAG's ink (VENDOR_CFG.glass.priceTag): the count in gold —
+   *  red when the seat cannot pay — and the glyph in the essence's own
+   *  color; no nested hint, the tag speaks once through its own title. */
+  private essTagText(cost: EssenceCost, ok: boolean): string {
+    const e = ESSENCES[cost.essence];
+    return `<span style="color:${ok ? '#e8c87a' : '#d05050'}">${cost.count}</span><span style="color:${e.color}">${e.glyph}</span>`;
   }
 
   /** 'N◈' cost chip for an Ability-Essence price, colored + titled by tier. */
@@ -3636,6 +3649,43 @@ export class UI {
     };
   }
 
+  /** THE COUNTER FOOTER (2026-09-11, her report — gear and pouches spoke no
+   *  cost, only the gem card did): the tail EVERY ware's card ends on, gem
+   *  card and item card alike — the reserve state, the entry lock, then
+   *  "click to buy — price" (red-noted when the seat at the counter cannot
+   *  pay). One helper, so a price reads the same words on every tile of
+   *  the glass. Keyed "<vendorId>:<stockIdx>", resolved off the LIVE stock. */
+  private vendorWareFooter(key: string): string[] {
+    const [vid, idxs] = key.split(':');
+    const v = VENDORS.find(x => x.id === vid);
+    if (!v) return [];
+    const world = this.getWorld();
+    const e = v.stock(world)[Number(idxs)];
+    if (!e) return [];
+    const price = v.priceOf(world, e);
+    const seat = this.panelSeat(this.vendorMenu);
+    const priceHtml = (price.essences ?? []).map(c => this.essCostText(c)).join(' + ');
+    const afford = (price.essences ?? []).every(c => world.canAffordEssence(seat, c));
+    const heldRow = v.holds?.locks ? world.vendorEntryHold(world.vendorHoldKey(v), e) : undefined;
+    const entryLock = v.entryLock?.(world, e) ?? null;
+    const lines: string[] = [];
+    if (heldRow) {
+      lines.push(`<div style="color:#7fe0d8;font-size:10px">${heldRow.commission ? "the standing order's find — reserved for you" : 'reserved — rides every restock until bought or released'}</div>`);
+    }
+    if (entryLock) lines.push(`<div style="color:#8a8678;font-size:10px">🔒 ${esc(entryLock)}</div>`);
+    lines.push(`<div style="color:#e8c87a;font-size:10px;margin-top:3px">click to buy — ${priceHtml}${afford ? '' : '<span style="color:#d05050"> · not enough essence</span>'}</div>`);
+    return lines;
+  }
+
+  /** THE COUNTER'S ITEM CARD: the ordinary item card (the steel, or the
+   *  pouch's composition) ending on THE COUNTER FOOTER when the tile names
+   *  its ware (data-vware); a card for anything else is the plain card. */
+  private vendorWareTooltip(uid: number, extended: boolean | undefined, wareKey: string | undefined): TooltipContent | null {
+    const tip = this.itemTooltip(uid, extended, this.panelSeat(this.vendorMenu));
+    if (!tip || !wareKey) return tip;
+    return { ...tip, description: tip.description + this.vendorWareFooter(wareKey).join('') };
+  }
+
   /** THE COUNTER GEM CARD (skill-items M3 — the one shelf's 1×1 gem tiles):
    *  the LIVE stock entry's card, resolved by "<vendorId>:<idx>" at hover
    *  time — kind label per walk-1, rarity/level/tags, the price, and the
@@ -3670,11 +3720,7 @@ export class UI {
     } else {
       lines.push(`<div style="color:#9a94a8;font-size:10px">Support Memory · Lv ${e.gem.level}</div>`);
     }
-    if (heldRow) {
-      lines.push(`<div style="color:#7fe0d8;font-size:10px">${heldRow.commission ? 'the standing order\'s find — reserved for you' : 'reserved — rides every restock until bought or released'}</div>`);
-    }
-    if (entryLock) lines.push(`<div style="color:#8a8678;font-size:10px">🔒 ${esc(entryLock)}</div>`);
-    lines.push(`<div style="color:#e8c87a;font-size:10px;margin-top:3px">click to buy — ${priceHtml}</div>`);
+    lines.push(...this.vendorWareFooter(key));
     const name = e.kind === 'skill' ? e.inst.def.name : e.gem.def.name;
     const col = e.kind === 'skill' ? SKILL_RARITIES[e.inst.rarity ?? 'common'].color : e.gem.def.color;
     return {
@@ -5846,11 +5892,13 @@ export class UI {
       // gone). THE ENTRY LOCK lane (VendorDef.entryLock — the delver's depth
       // locks) disables per entry through the same predicate the engine
       // refuses with.
-      const priceBits = (e: VendorEntry): { afford: boolean; priceHtml: string } => {
+      const priceBits = (e: VendorEntry): { afford: boolean; priceHtml: string; pricePlain: string; tagHtml: string } => {
         const price = v.priceOf(world, e);
         const afford = (price.essences ?? []).every(c => world.canAffordEssence(seat, c));
         const priceHtml = (price.essences ?? []).map(c => this.essCostText(c)).join(' + ');
-        return { afford, priceHtml };
+        const pricePlain = (price.essences ?? []).map(c => this.essCostPlain(c)).join(' + ');
+        const tagHtml = (price.essences ?? []).map(c => this.essTagText(c, afford)).join('+');
+        return { afford, priceHtml, pricePlain, tagHtml };
       };
       const entryLockOf = (e: VendorEntry): string | null => v.entryLock?.(world, e) ?? null;
       const lockTitleFor = (heldRow: VendorHoldRow | undefined, atCap: boolean): string => heldRow
@@ -5880,7 +5928,18 @@ export class UI {
         let tiles = '';
         let overflowRows = '';
         stock.forEach((e, idx) => {
-          const { afford, priceHtml } = priceBits(e);
+          const { afford, priceHtml, pricePlain, tagHtml } = priceBits(e);
+          // THE PRICE ON THE GLASS (VENDOR_CFG.glass.priceTag, 2026-09-11 —
+          // her report: gear and pouches spoke no cost, "I'm not sure whether
+          // I can go shopping"): every ware wears its price as a corner tag —
+          // the count in gold (red when this seat cannot pay), the essence
+          // glyph in its own ink — so the shelf reads at a glance, no hover.
+          // Top-left: the lock pip keeps the top-right, the badges the foot.
+          const priceTag = VENDOR_CFG.glass.priceTag === 'always' && tagHtml
+            ? `<span data-vprice title="${esc(pricePlain)}${afford ? '' : ' — not enough essence'}"
+                style="position:absolute;top:-1px;left:-1px;z-index:2;font-size:8px;line-height:1;padding:1px 2px;white-space:nowrap;
+                background:#141019cc;border:1px solid ${afford ? '#3a3644' : '#7a2e2e'};border-radius:3px 0 3px 0">${tagHtml}</span>`
+            : '';
           const entryLock = entryLockOf(e);
           const heldRow = canLock ? world.vendorEntryHold(holdKey, e) : undefined;
           const atCap = !heldRow && lockedCount >= lockCap;
@@ -5930,7 +5989,7 @@ export class UI {
               ${e.kind === 'skill' && e.inst.rarity === 'legendary' ? `box-shadow:0 0 10px ${col};` : ''}${canBuy ? '' : 'opacity:0.55;'}">
               <span style="width:22px;height:22px;border-radius:4px;background:${col}33;border:1px solid ${col};
                 display:flex;align-items:center;justify-content:center;font-size:8px;color:${col}">${gemInitials(name)}</span>
-              ${lockPip}${badge}</div>`;
+              ${priceTag}${lockPip}${badge}</div>`;
             return;
           }
           const i = e.item;
@@ -5939,7 +5998,7 @@ export class UI {
             // The glass genuinely overflowed (the probe should have caught
             // content outgrowing it) — list the piece honestly below.
             overflowRows += `
-              <div ${holdAttr} class="skill-entry" style="position:relative;border-left:3px solid ${ITEM_RARITIES[i.rarity].color}" data-tip="item" data-item-uid="${i.uid}">
+              <div ${holdAttr} class="skill-entry" style="position:relative;border-left:3px solid ${ITEM_RARITIES[i.rarity].color}" data-tip="item" data-item-uid="${i.uid}" data-vware="${v.id}:${idx}">
                 <div class="name" style="color:${ITEM_RARITIES[i.rarity].color}">${i.name} <span style="color:#9a94a8;font-size:10px">ilvl ${i.ilvl}</span></div>
                 <div class="bind-btns"><button data-vbuy="${v.id}:${idx}" ${canBuy ? '' : 'disabled'}>Buy (${priceHtml})</button></div>
               </div>`;
@@ -5958,13 +6017,13 @@ export class UI {
               <span style="position:absolute;bottom:1px;right:1px;font-size:9px;line-height:10px;padding:0 2px;
                 background:#241d2e;border:1px solid ${mk.color};border-radius:3px;color:#e8e0f8">${i.mem!.length}</span>`
             : (CATEGORY_GLYPHS[cat] ?? '?');
-          tiles += `<div ${holdAttr} data-tip="item" data-item-uid="${i.uid}" ${canBuy ? `data-vbuy="${v.id}:${idx}"` : ''}
-            title="${entryLock ? esc(entryLock) : tradeRefusal ? esc(tradeRefusal) : afford ? `Buy: ${esc(i.name)}` : 'Not enough essence'}"
+          tiles += `<div ${holdAttr} data-tip="item" data-item-uid="${i.uid}" data-vware="${v.id}:${idx}" ${canBuy ? `data-vbuy="${v.id}:${idx}"` : ''}
+            title="${entryLock ? esc(entryLock) : tradeRefusal ? esc(tradeRefusal) : afford ? `Buy: ${esc(i.name)} — ${esc(pricePlain)}` : `Not enough essence — ${esc(pricePlain)}`}"
             style="position:absolute;left:${at.x * CELL}px;top:${at.y * CELL}px;
             width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:${mk ? '#1c1626' : '#221e2c'};
             border:2px solid ${heldRow ? v.accent : (mk ? mk.color : r.color)};border-radius:3px;cursor:${canBuy ? 'var(--cursor-point, pointer)' : 'var(--cursor-default, default)'};box-sizing:border-box;
             display:flex;align-items:center;justify-content:center;font-size:${Math.min(s.w, s.h) > 1 ? 16 : 12}px;
-            ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}${canBuy ? '' : 'opacity:0.55;'}">${face}${lockPip}${badge}</div>`;
+            ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}${canBuy ? '' : 'opacity:0.55;'}">${face}${priceTag}${lockPip}${badge}</div>`;
         });
         const empty = stock.length === 0
           ? '<div style="color:#8a8678;font-size:11px;margin-top:4px">The shelf stands empty; come back after the restock.</div>' : '';

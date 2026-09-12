@@ -113,6 +113,15 @@ export const VENDOR_CFG = {
    *  derives the worst case from the catalog and fails the build if
    *  content outgrows the glass. */
   gearGrid: { w: 12, h: 7 },
+  /** THE PRICE ON THE GLASS (2026-09-11, her report: "I see the cost for the
+   *  skills, but I don't see any mention of a cost on most of the other
+   *  items — I'm not sure whether I can go shopping"): every ware tile —
+   *  gear, pouch and gem alike — wears its price as a corner tag (the count
+   *  in gold, red when the seat at the counter cannot pay; the essence glyph
+   *  in the essence's own ink), and every ware's hover card ends on the ONE
+   *  counter footer ("click to buy — price") the gem card always spoke.
+   *  'always' = the tag on every tile; 'hover' = the card alone. */
+  glass: { priceTag: 'always' as 'always' | 'hover' },
   /** THE MEMORY POUCHES on the shelf (skill-items M3, §6 — her "standard
    *  shop" ask): units per restock stack, one stack per kind, stocked from
    *  the FIRST day (no rung gates the pouches; the true-gem slots are what
