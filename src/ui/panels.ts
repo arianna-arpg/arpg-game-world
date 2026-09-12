@@ -956,7 +956,7 @@ export class UI {
       [this.charSheet, () => this.toggleCharSheet(this.panelSeatIds.get(this.charSheet))],
       [this.inventory, () => this.toggleInventory(this.panelSeatIds.get(this.inventory))],
       [this.buildPanel, () => this.closeBuildPanel()],
-      [this.passiveTree, () => this.toggleTree(this.panelSeatIds.get(this.passiveTree))],
+      [this.passiveTree, () => this.closeTree()],
       [this.worldMap, () => this.toggleMap()],
       [this.vendorMenu, () => this.closeVendor()],
       [this.salvageMenu, () => this.closeSalvage()],
@@ -1256,8 +1256,12 @@ export class UI {
     enroll(this.folioLeaf('skills', this.buildPanel, () => 'Skills',
       () => this.inventoryOpen && this.buildFlapOpen, () => this.closeBuildPanel(), {
         arrive: 'front', bay: () => this.buildPanelBay(this.buildPanel), refresh: () => this.refreshInventory() }));
+    // THE TRUE CLOSE (2026-09-11): the leaf's close is closeTree, never the
+    // key's toggle — toggleTree FRONTS a shelved tree (the D-pad law), so a
+    // close-all routed through it fronted Passives instead of closing it
+    // and left the book standing on that one tab.
     enroll(this.folioLeaf('passives', this.passiveTree, () => 'Passives', () => this.treeOpen,
-      () => { if (this.treeOpen) this.toggleTree(this.panelSeatIds.get(this.passiveTree)); }, {
+      () => this.closeTree(), {
         arrive: 'front', bay: () => this.buildPanelBay(this.passiveTree), refresh: () => { hideTooltip(); this.refreshTree(); } }));
 
     // THE SUITE (data/suites.ts): a counter's dialog SUMMONS the station
@@ -1458,7 +1462,7 @@ export class UI {
       (this.panelSeatIds.get(el) ?? this.getWorld().localSeat.id) === seatId;
     if (this.charSheetOpen && owned(this.charSheet)) this.toggleCharSheet(seatId);
     if (this.inventoryOpen && owned(this.inventory)) this.toggleInventory(seatId);
-    if (this.treeOpen && owned(this.passiveTree)) this.toggleTree(seatId);
+    if (this.treeOpen && owned(this.passiveTree)) this.closeTree();
     for (const p of this.openSkillTreePanes()) if (owned(p.el)) this.closeSkillTree(p.skillId);
     if (this.mapOpen && owned(this.worldMap)) this.toggleMap();
     if (this.vendorOpen && owned(this.vendorMenu)) this.closeVendor();
@@ -6421,6 +6425,22 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       this.folio.adopt('passives');
       this.folioStrip.update();
     }
+  }
+
+  /** THE TRUE CLOSE (2026-09-11): the passive tree comes DOWN wherever it
+   *  stands in a book. toggleTree is the key's grammar — a shelved tree
+   *  comes forward on a press, never closes — so every close path (the
+   *  leaf's own, the strip's ✕, the seat-scoped clears, the close glyph)
+   *  must land here: routed through the toggle, a close-all fronted
+   *  Passives instead of closing it and left the book standing on that tab. */
+  closeTree(): void {
+    if (!this.treeOpen) return;
+    this.treeOpen = false;
+    this.closeChoicePopup(); // a popup never outlives its panel
+    this.closeTreePopup();
+    this.passiveTree.classList.add('hidden');
+    this.syncBuildPanels();
+    hideTooltip();
   }
 
   /** Fit box over the ACTIVE REALM's nodes (+padding) — the zoom/pan

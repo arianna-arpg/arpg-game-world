@@ -362,6 +362,17 @@ console.log('M. THE CLOSE-ALL');
     core.closeAll(key) === 3 && a.closes === 1 && b.closes === 1 && c.closes === 1);
   check('M2 the book is gone and every leaf stands alone', core.views().length === 0 && [a, b, c].every(f => f.drawn === true));
   check('M3 closeAll of an unknown key is 0', core.closeAll('nope') === 0);
+  // M4 the law's limit, pinned: closeAll can only ASK. A leaf whose close
+  // path leaves it open (a key toggle that FRONTS a shelved leaf) stays
+  // bound and the count says so — which is why the panels' leaves must
+  // close for real (O9 pins the passive tree's).
+  const rig4 = rig();
+  const d = fake(rig4.core, 'd'), e = fake(rig4.core, 'e', { arrive: 'front' });
+  show(rig4.core, d); show(rig4.core, e); // e in front, d shelved
+  d.spec.close = () => { d.closes++; if (rig4.core.bookFor('d')?.front !== 'd') rig4.core.front('d'); else d.open = false; };
+  const key4 = rig4.core.bookKeyOf('d')!;
+  check('M4 a close that fronts instead of closing leaves that leaf bound — the shape of the bug',
+    rig4.core.closeAll(key4) === 1 && d.open && !e.open && ids(rig4.core, 'd') === 'd');
 }
 
 // --- N. THE DIALS -----------------------------------------------------------
@@ -422,6 +433,20 @@ console.log('O. THE ENROLLMENT CENSUS');
   check('O7 the couch cascade closes the seat\'s front leaf first',
     /escCascadeFor\([\s\S]{0,900}?folio\.closeFront/.test(panels));
   check('O8 hideAll and hideAllFor settle the books at once', (panels.match(/this\.folio\.sync\(\)/g) ?? []).length >= 2);
+  // THE TRUE CLOSE (2026-09-11, her report): a leaf whose close FRONTS
+  // instead of closing (toggleTree's shelved press — the D-pad law) broke
+  // close-all: Passives shelved behind Skills came forward, Skills closed,
+  // and the book stood on Passives. The leaf's close and every seat-scoped
+  // clear go through closeTree; only the key/menu toggle and the couch
+  // contention path may call toggleTree.
+  const passivesRow = (() => {
+    const i = panels.indexOf("this.folioLeaf('passives'");
+    return i < 0 ? '' : panels.slice(i, panels.indexOf('}));', i));
+  })();
+  check('O9 the passives leaf closes through closeTree, never the fronting toggle',
+    passivesRow.includes('this.closeTree()') && !passivesRow.includes('toggleTree'));
+  check('O9b hideAllFor and the close glyph take the tree down through closeTree',
+    /hideAllFor\([\s\S]{0,700}?this\.closeTree\(\)/.test(panels) && panels.includes('[this.passiveTree, () => this.closeTree()]'));
 }
 
 // --- P. THE SUITE (core) ----------------------------------------------------

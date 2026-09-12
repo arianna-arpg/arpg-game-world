@@ -87,6 +87,13 @@ strip; a book of none dissolves.
   leaves stands (`bindFolioKeys`); the default focus walk is suppressed
   only then. Clicking a tab fronts it; the strip's ✕ closes every leaf
   through its own close path. The pad pointer clicks tabs like any button.
+- **A leaf's close must close** (2026-09-11). The passive tree's key,
+  `toggleTree`, FRONTS a shelved tree rather than closing it (the D-pad
+  law), so a close routed through the toggle — the strip's ✕, the couch
+  clear — fronted Passives instead of closing it and left the book standing
+  on that tab. The leaf, the close glyph and `hideAllFor` now go through
+  `closeTree()`; the probe's census (`O9`) pins it, and `M4` pins the law's
+  limit: close-all only asks.
 
 ## Enrolling a new surface
 
