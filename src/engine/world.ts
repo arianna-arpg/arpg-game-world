@@ -3976,7 +3976,7 @@ export class World {
     due: number; caster: Actor; inst: SkillInstance;
   } & (
     | { kind: 'hit'; targetId: number; mult: number; depth: number;
-        flat?: Partial<Record<DamageType, number>>; force: boolean }
+        flat?: Partial<Record<DamageType, number>>; force: boolean; hitEffects?: SkillEffect[] }
     | { kind: 'buff'; fx: BuffEffect; durScale: number; mult: number }
   ))[] = [];
 
@@ -39347,16 +39347,17 @@ export class World {
       skillContextTags(inst, grantedTags(inst)), instanceMods(inst));
     const flat: Partial<Record<DamageType, number>> =
       { [elem ?? 'physical']: payloadShield * bash.mult * power };
+    // The bash contact is one hit: a shield/dodge refuses its control as
+    // well as its damage, and a fuse carries the whole payload together.
+    const hitEffects: SkillEffect[] = [];
+    if (bash.knockback) hitEffects.push({ type: 'knockback', strength: bash.knockback });
+    if (bash.stunChance) hitEffects.push({ type: 'status', status: 'stun', chance: bash.stunChance });
     for (const e of this.enemiesOf(a)) {
       if (!sameStory(a, e)) continue; // a bash is a touch (the sovereignty gate)
       if (dist(a.pos, e.pos) - e.radius > reach) continue;
       if (!fullCircle
         && Math.abs(angleDiff(a.facing, angleTo(a.pos, e.pos))) > arcRad / 2) continue;
-      this.resolveHit(a, inst, e, 1, 0, flat, true);
-      if (bash.knockback) this.pushActor(e, angleTo(a.pos, e.pos), bash.knockback);
-      if (bash.stunChance && chance(bash.stunChance)) {
-        e.applyStatus('stun', 0, 1, inst.def.name);
-      }
+      this.resolveHit(a, inst, e, 1, 0, flat, true, false, hitEffects);
     }
     this.flashes.push({
       pos: vec(a.pos.x, a.pos.y), radius: reach, color: inst.def.color,
@@ -40755,6 +40756,7 @@ export class World {
     flatBonus?: Partial<Record<DamageType, number>>,
     forceDamage = false,
     fromFuse = false,
+    hitEffects?: SkillEffect[],
   ): void {
     depth = Math.max(depth, inst.procChainDepth ?? 0);
     const def = inst.def;
@@ -40772,7 +40774,7 @@ export class World {
           due: this.time + fuse.delay
             * caster.sheet.get('fuseDelay', fTags, instanceMods(inst)),
           caster, inst, targetId: target.id,
-          mult: dmgMult, depth, flat: flatBonus, force: forceDamage,
+          mult: dmgMult, depth, flat: flatBonus, force: forceDamage, hitEffects,
         });
         this.text(vec(target.pos.x, target.pos.y - target.radius - 8),
           fuse.tell ?? '…', def.color, 11);
@@ -41652,7 +41654,10 @@ export class World {
         });
       }
     }
-    for (const fx of instanceEffects(inst)) {
+    // Delivery-specific hitEffects share every refusal, scaling and
+    // attribution rule with authored effects, including delayed fuses.
+    const effects = instanceEffects(inst);
+    for (const fx of hitEffects?.length ? [...effects, ...hitEffects] : effects) {
       if (fx.type === 'heal') {
         // Ally-resolving deliveries (blessing novas, curseAllies edges)
         // carry their mend here; hostile targets are never healed. The
@@ -54091,7 +54096,7 @@ export class World {
           color: pf.inst.def.color, life: 0.3, maxLife: 0.3,
         });
         this.resolveHit(pf.caster, pf.inst, target,
-          pf.mult * fPow, pf.depth, pf.flat, pf.force, true);
+          pf.mult * fPow, pf.depth, pf.flat, pf.force, true, pf.hitEffects);
       } else {
         this.flashes.push({
           pos: vec(pf.caster.pos.x, pf.caster.pos.y), radius: pf.caster.radius + 12,
