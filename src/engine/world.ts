@@ -22323,6 +22323,7 @@ export class World {
     if (why) { this.failNote(p, skillId + ':fontreset', why); return false; }
     const cost: AbilityCost = { tier: essenceTierForLevel(inst.level), count: FONT_CFG.reset.count };
     if (!this.spendAbilityEssence(seat, cost, 'fontreset:' + skillId)) return false;
+    this.dismissSummonToggle(p, inst.def.id);
     this.clearSummonTreeBodies(p, inst);
     this.clearTreeFields(p, inst);
     inst.treeNodes = undefined;
@@ -41768,6 +41769,7 @@ export class World {
             // old always-spreads flag).
             propagates: chance(caster.sheet.get('dotPropagates', tags, extra)) || undefined,
             rupture, ruptureType,
+            ruptureRadius: rupture !== undefined ? 90 * caster.sheet.get('aoeRadius', tags, extra) : undefined,
             stacksBonus: stacksBonusFor(fx.status),
             casterId: fx.status === 'taunted' && caster.summonShell && caster.owner ? caster.owner.id : caster.id,
             brood: instanceBrood(inst),
@@ -42001,6 +42003,7 @@ export class World {
           brood: instanceBrood(inst),
           leech: caster.sheet.get('dotLeech_' + sid, tags, extra) || undefined,
           rupture: armed, ruptureType: armedType,
+          ruptureRadius: armed !== undefined ? 90 * caster.sheet.get('aoeRadius', tags, extra) : undefined,
           popBonus: caster.sheet.get('popPower_' + sid, tags, extra) || undefined,
         });
         // Stat-granted applications trigger statusApply procs too.
@@ -42423,7 +42426,7 @@ export class World {
     const n = Math.max(1, s.stacks);
     for (let i = 0; i < n; i++) {
       to.applyStatus(s.id, s.dps * (o?.strengthScale ?? 1), durScale, sourceName,
-        { casterId: s.casterId, rupture: s.rupture, ruptureType: s.ruptureType });
+        { casterId: s.casterId, rupture: s.rupture, ruptureType: s.ruptureType, ruptureRadius: s.ruptureRadius });
     }
   }
 
@@ -43469,7 +43472,7 @@ export class World {
 
   private ruptureStatus(victim: Actor, s: ActiveStatus): void {
     const type: DamageType = s.ruptureType ?? 'chaos';
-    const radius = 90;
+    const radius = s.ruptureRadius ?? 90;
     this.flashes.push({ pos: vec(victim.pos.x, victim.pos.y), radius, color: '#b06bd4', life: 0.3, maxLife: 0.3 });
     for (const e of this.actors) {
       if (e.dead || e.team !== victim.team || e.untargetable || !sameStory(e, victim)) continue; // (the sovereignty gate)
@@ -54382,6 +54385,9 @@ export class World {
     this.pendingFuses = this.pendingFuses.filter(f => f.caster !== caster || f.inst !== inst);
     // Scheduled repeats capture the old tree just as delayed fields do.
     this.pendingRepeats = this.pendingRepeats.filter(r => r.caster !== caster || r.inst !== inst);
+    // Flights and their carried ground can outlive the allocation too.
+    this.projectiles = this.projectiles.filter(p => p.caster !== caster || p.inst !== inst);
+    for (const p of this.projectiles) if (p.caster === caster && p.suffuse?.inst === inst) delete p.suffuse;
     // Held casts can snapshot guard pools and derived grafts. Changing the
     // allocation retires that stance without paying a release attack.
     if (caster.casting?.inst === inst) caster.casting = null;

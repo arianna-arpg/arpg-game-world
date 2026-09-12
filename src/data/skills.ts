@@ -1,3 +1,5 @@
+import { PACT_STEEL_STARTER_TREES } from './pactSteelStarterTrees';
+import { PACT_SKILLS } from './pactSkills';
 import { DEVOTED_STARTER_TREES } from './devotedStarterTrees';
 import { FRONTIER_STARTER_TREES } from './frontierStarterTrees';
 import { STARTER_SKILL_TREES } from './starterSkillTrees';
@@ -26,6 +28,7 @@ import { NECROMANCER_SKILLS } from './necromancerSkills';
 export const SKILLS: Record<string, SkillDef> = {
   town_portal: TOWN_PORTAL_SKILL,
   ...NECROMANCER_SKILLS,
+  ...PACT_SKILLS,
 
   // ======================= Mimicry (the blue-mage lane) ====================
   // THE SLOT and its cycle payload (engine/mimic.ts — capture is the
@@ -1840,6 +1843,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // The bond-feeder: modest chaos bolt, TRIPLE bond feed — "Ruin heals the
   // bonded far more when it hits" (SkillDef.bondFeed).
   ruin: {
+    tree: PACT_STEEL_STARTER_TREES.ruin,
     id: 'ruin', name: 'Ruin',
     description: 'A bolt of consuming twilight: a chaos projectile that feeds your Guardian'
       + ' Bond at triple the usual share. Ruin for them, renewal for yours.',
@@ -2189,6 +2193,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // familiar re-forms, ONE at a time on its own pool (a found golem may
   // still stand beside it — the choice is the starter's, not a law).
   bind_familiar: {
+    tree: PACT_STEEL_STARTER_TREES.bind_familiar,
     id: 'bind_familiar', name: 'Bind Familiar',
     description: 'TOGGLE a binding: an arcane familiar takes shape at your side and STAYS —'
       + ' mana is reserved while the bond holds, and if the familiar is unmade it re-forms'
@@ -2389,6 +2394,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // ======================= DoT, curses & blessings =========================
 
   essence_drain: {
+    tree: PACT_STEEL_STARTER_TREES.essence_drain,
     id: 'essence_drain', name: 'Essence Drain',
     description: 'A sluggish bolt of withering chaos: a feeble hit, but it always applies decay'
       + ' at 1.6 times normal strength, rotting its victim long after the impact.',
@@ -3239,6 +3245,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   reckoning: {
+    tree: PACT_STEEL_STARTER_TREES.reckoning,
     id: 'reckoning', name: 'Reckoning',
     description: 'A heavy melee blow that consumes ALL Fury charges (built by Frenzy): 25% more'
       + ' damage per charge consumed, plus a 30% chance to stun. It swings without charges too,'
@@ -3903,6 +3910,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   stone_skin: {
+    tree: PACT_STEEL_STARTER_TREES.stone_skin,
     id: 'stone_skin', name: 'Stone Skin',
     description: 'Harden your flesh for 6 seconds, gaining +80 armor and taking 15% less damage'
       + ' from every source.',
@@ -8356,6 +8364,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   flame_arrow: {
+    tree: PACT_STEEL_STARTER_TREES.flame_arrow,
     id: 'flame_arrow', name: 'Flame Arrow',
     description: 'A quick dart of flame that pierces up to 2 enemies, with a 7% chance to'
       + ' ignite each one it passes through.',
@@ -8489,6 +8498,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   ignite: {
+    tree: PACT_STEEL_STARTER_TREES.ignite,
     id: 'ignite', name: 'Ignite',
     description: 'Instantly sets the target ON FIRE with an exceptionally strong burn. Prime'
       + ' fuel for Combustion and Powderkeg alike.',
@@ -8541,6 +8551,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   pillar_of_flame: {
+    tree: PACT_STEEL_STARTER_TREES.pillar_of_flame,
     id: 'pillar_of_flame', name: 'Pillar of Flame',
     description: 'Raises a burning ring at the mark that sears its rim at once, then closes'
       + ' inward over 2.6 seconds, cooking everything still inside; each tick carries a 14%'
@@ -11762,6 +11773,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // the speed, twice the banking — the slow style feeding the same Fury
   // court Reckoning empties. Mix-and-match with any fury verb you find.
   piledriver: {
+    tree: PACT_STEEL_STARTER_TREES.piledriver,
     id: 'piledriver', name: 'Piledriver',
     description: 'One blow, placed like a foundation: a slow crushing melee strike that banks 2'
       + ' Fury (to a cap of 5), deals 50% more poise damage, and has a 15% chance to stun. Bank'
