@@ -4775,7 +4775,7 @@ export class UI {
         ${tabBtn('merge', 'Merge')}${tabBtn('convert', 'Convert')}${tabBtn('reset', 'Reset')}
       </div>
       ${body}
-      <div style="margin-top:8px"><button data-fontclose>Leave the font</button></div>`;
+      <div class="bind-btns panel-foot"><button data-fontclose>Leave the font</button></div>`;
 
     const q = <T extends HTMLElement>(sel: string): T[] => [...this.fontMenu.querySelectorAll<T>(sel)];
     q<HTMLButtonElement>('button[data-fonttab]').forEach(btn => btn.addEventListener('click', () => {
@@ -5106,7 +5106,7 @@ export class UI {
     }
 
     this.salvageMenu.innerHTML = `${this.closeGlyphHtml()}<h2>Salvage Station</h2>${tabs}${body}
-      <div class="bind-btns" style="margin-top:8px"><button data-salv-close>Step away</button></div>`;
+      <div class="bind-btns panel-foot"><button data-salv-close>Step away</button></div>`;
 
     const q = <T extends HTMLElement>(sel: string): T[] => [...this.salvageMenu.querySelectorAll<T>(sel)];
     q<HTMLButtonElement>('button[data-stab]').forEach(btn => btn.addEventListener('click', () => {
@@ -5468,7 +5468,7 @@ export class UI {
       </div>
       ${detail}
       ${release}
-      <div class="bind-btns" style="margin-top:8px"><button data-bst-close>Close the book</button></div>`;
+      <div class="bind-btns panel-foot"><button data-bst-close>Close the book</button></div>`;
 
     const q = <T extends HTMLElement>(sel: string): T[] => [...this.bestiaryMenu.querySelectorAll<T>(sel)];
     q<HTMLElement>('[data-bst]').forEach(el => el.addEventListener('click', () => {
@@ -6032,7 +6032,7 @@ export class UI {
       <div style="margin-bottom:6px">${this.essWallet()}</div>
       ${sections}
       ${forgeHtml}
-      <div class="bind-btns" style="margin-top:8px"><button data-vendor-close>Step away</button></div>`;
+      <div class="bind-btns panel-foot"><button data-vendor-close>Step away</button></div>`;
 
     const q = <T extends HTMLElement>(sel: string): T[] => [...this.vendorMenu.querySelectorAll<T>(sel)];
     for (const btn of [...this.vendorMenu.querySelectorAll<HTMLButtonElement>('button[data-forge-begin]')]) {
@@ -7557,7 +7557,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       + `<div class="desc">Sail blind for the far shore of this water.</div>`
       + `<div class="bind-btns"><button data-sail-chart>Set sail</button></div></div>`
       + hearsayRows
-      + `<div class="bind-btns" style="margin-top:10px"><button data-sail-close>Close</button></div>`;
+      + `<div class="bind-btns panel-foot"><button data-sail-close>Close</button></div>`;
     this.sailMenu.querySelectorAll<HTMLButtonElement>('button[data-sail-port]').forEach(btn => {
       btn.addEventListener('click', () => {
         world.sailTo(btn.dataset.sailPort!);
@@ -7692,7 +7692,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       // button — the board posts named marks on the coast's living foes,
       // then rests (the standing postHoldWrits grammar + cooldown).
       + (v.coastWrits ? `<div class="bind-btns" style="margin-top:8px"><button data-bounty-writs${v.coastWrits.restSec > 0 ? ` disabled title="the board rests — fresh writs in ${Math.ceil(v.coastWrits.restSec / 60)}m"` : ' title="Post writs on the coast\'s living foes — named marks, paid per claim."'}>Post coast writs${v.coastWrits.restSec > 0 ? ` · rests ${Math.ceil(v.coastWrits.restSec / 60)}m` : ''}</button></div>` : '')
-      + `<div class="bind-btns" style="margin-top:10px"><button data-bounty-close>Close</button></div>`;
+      + `<div class="bind-btns panel-foot"><button data-bounty-close>Close</button></div>`;
     // Seat routing rides THE COUCH ACTION LATCH (a press inside a
     // guest-owned panel stamps uiActionSeatId) — no per-call seat plumbing.
     this.bountyMenu.querySelectorAll<HTMLButtonElement>('button[data-bounty-accept]').forEach(btn => {
@@ -7792,7 +7792,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       + ` <span class="tags">· ${h.defenses} defended · ${h.falls} lost</span></div>`
       + services
       + action
-      + `<div class="bind-btns" style="margin-top:10px"><button data-hold-close>Close</button></div>`;
+      + `<div class="bind-btns panel-foot"><button data-hold-close>Close</button></div>`;
     this.holdMenu.querySelector<HTMLButtonElement>('button[data-hold-muster]')?.addEventListener('click', () => {
       world.requestMeta({ t: 'holdMuster' });
       this.closeHold(); // the horn sounds — the fight is outside, not in a menu
@@ -7825,7 +7825,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     this.caravanMenu.innerHTML = `${this.closeGlyphHtml()}<h2>The Caravan</h2>`
       + `<div class="desc" style="margin:-4px 0 10px 0;font-style:italic">"I know the safe roads, friend. Name where you're bound and my wagons will see you there, and back again."</div>`
       + rows
-      + `<div class="bind-btns" style="margin-top:10px"><button data-caravan-close>Close</button></div>`;
+      + `<div class="bind-btns panel-foot"><button data-caravan-close>Close</button></div>`;
     this.caravanMenu.querySelectorAll<HTMLButtonElement>('button[data-band]').forEach(btn => {
       btn.addEventListener('click', () => {
         world.requestMeta({ t: 'caravanTo', band: Number(btn.dataset.band) });
@@ -7935,7 +7935,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     this.mercMenu.innerHTML = `${this.closeGlyphHtml()}<h2>${esc(title)}</h2>`
       + `<div class="desc" style="margin:-4px 0 10px 0;font-style:italic">${esc(pitch)}</div>`
       + contract + rows + retire
-      + `<div class="bind-btns" style="margin-top:10px"><button data-merc-close>Close</button></div>`;
+      + `<div class="bind-btns panel-foot"><button data-merc-close>Close</button></div>`;
     this.mercMenu.querySelectorAll<HTMLButtonElement>('button[data-merc-hire]').forEach(btn => {
       btn.addEventListener('click', () => {
         world.hireMercenary(Number(btn.dataset.mercHire));

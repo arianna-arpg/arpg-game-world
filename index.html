@@ -143,6 +143,27 @@
     .panel-x:hover { color: #fff; border-color: var(--gold); background: #3a3a55; }
     .hidden { display: none !important; }
 
+    /* THE BUTTON PARITY (2026-09-11, her ask: a station's "Step away" read
+       as a Windows button, not a Hollow Wake one): every button inside a
+       panel wears the house look by default. :where() carries ZERO
+       specificity, so every class rule below (tabs, chips, the rack's
+       unlearn corner, the option rows) still wins untouched — this reaches
+       only the buttons no rule ever dressed. */
+    :where(.panel) button {
+      background: #2a2a3e; color: var(--text); border: 1px solid var(--panel-border);
+      border-radius: 3px; padding: 3px 9px; font: inherit; font-size: 11px; line-height: 1.3;
+      cursor: var(--cursor-point, pointer);
+    }
+    :where(.panel) button:hover:not(:disabled) { background: #3a3a55; color: #fff; border-color: var(--gold); }
+    :where(.panel) button:disabled { opacity: 0.35; cursor: var(--cursor-default, default); }
+    :where(.panel) button.bound { background: #4a3c14; color: var(--gold); border-color: var(--gold); }
+    /* THE FOOT ROW (class panel-foot): a panel's leaving action — Step
+       away, Leave the font, Close the book — wears the cohesive gold
+       graphic every menu's main action wears (the rule block at the
+       sheet's end); only the sizing lives here. */
+    .panel-foot { display: flex; gap: 8px; margin-top: 10px; }
+    .panel-foot button { padding: 7px 20px; }
+
     /* Character sheet */
     #char-sheet {
       top: 60px; left: 16px; width: 320px; max-height: calc((100vh - 220px) / var(--ui-scale));
@@ -925,7 +946,7 @@
     #start-menu .esc-btns button, #escape-menu .esc-btns button,
     #account-screen .acct-btns button, #expedition-setup .acct-btns button,
     #class-select .acct-btns button, #death-screen button, #story-card button,
-    #mu-card .esc-btns button, #mu-card #mu-name-clear {
+    #mu-card .esc-btns button, #mu-card #mu-name-clear, .panel-foot button {
       background: linear-gradient(180deg, #30304a, #232338);
       color: var(--gold); border: 1px solid var(--gold); border-radius: 5px;
       font-size: 14px; font-family: inherit; cursor: var(--cursor-point, pointer);
@@ -935,19 +956,20 @@
     #start-menu .esc-btns button:hover:not(:disabled), #escape-menu .esc-btns button:hover:not(:disabled),
     #account-screen .acct-btns button:hover:not(:disabled), #expedition-setup .acct-btns button:hover:not(:disabled),
     #class-select .acct-btns button:hover:not(:disabled), #death-screen button:hover:not(:disabled),
-    #story-card button:hover:not(:disabled), #mu-card .esc-btns button:hover:not(:disabled) {
+    #story-card button:hover:not(:disabled), #mu-card .esc-btns button:hover:not(:disabled),
+    .panel-foot button:hover:not(:disabled) {
       background: linear-gradient(180deg, #3d3d5c, #2b2b46);
       box-shadow: 0 0 9px rgba(200,168,75,0.4);
     }
     #start-menu .esc-btns button:active:not(:disabled), #escape-menu .esc-btns button:active:not(:disabled),
     #account-screen .acct-btns button:active:not(:disabled), #expedition-setup .acct-btns button:active:not(:disabled),
     #class-select .acct-btns button:active:not(:disabled), #death-screen button:active:not(:disabled),
-    #story-card button:active:not(:disabled) {
+    #story-card button:active:not(:disabled), .panel-foot button:active:not(:disabled) {
       transform: translateY(1px);
     }
     #start-menu .esc-btns button:disabled, #escape-menu .esc-btns button:disabled,
     #account-screen .acct-btns button:disabled, #expedition-setup .acct-btns button:disabled,
-    #class-select .acct-btns button:disabled, #mu-card .esc-btns button:disabled {
+    #class-select .acct-btns button:disabled, #mu-card .esc-btns button:disabled, .panel-foot button:disabled {
       opacity: 0.4; cursor: var(--cursor-default, default); border-color: var(--panel-border); color: var(--text-dim); box-shadow: none;
     }
 
