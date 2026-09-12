@@ -3570,6 +3570,15 @@ export class UI {
       const r = SKILL_RARITIES[e.inst.rarity ?? 'common'];
       lines.push(`<div style="color:#9a94a8;font-size:10px">Skill Memory · <span style="color:${r.color}">${r.label}</span> · Lv ${e.inst.level} · ${'◆'.repeat(r.sockets)}</div>`);
       lines.push(`<div style="color:#8a8678;font-size:10px">${e.inst.def.tags.join(' · ')}</div>`);
+      // THE BUYER'S READ (2026-09-11, her ask): the attribute gates the
+      // counter glass kept quiet — judged against the seat AT the counter
+      // (the couch lens), in the bag card's own colours, with the engine's
+      // one shortfall line when the build falls short. A player knows
+      // whether the gem will cast BEFORE the essence changes hands.
+      const buyer = this.panelSeat(this.vendorMenu);
+      lines.push(this.requirementsLine(e.inst.def, buyer));
+      const short = world.reqShortfall(e.inst.def.id, buyer);
+      if (short) lines.push(`<div style="color:#d05050;font-size:10px">You cannot use this yet — ${esc(short)}. It can still be bought and kept.</div>`);
     } else {
       lines.push(`<div style="color:#9a94a8;font-size:10px">Support Memory · Lv ${e.gem.level}</div>`);
     }
@@ -3585,6 +3594,23 @@ export class UI {
       description: lines.join(''),
       meta: e.kind === 'skill' ? 'skill' : 'support',
     };
+  }
+
+  /** "Requires: STR 10, INT 8" — each attribute gate coloured by whether
+   *  THIS seat's build clears it (green met, red short; 'none' when the
+   *  skill asks nothing). The ONE requirements line the bag card and the
+   *  counter glass share, so a gem reads the same before and after it is
+   *  bought. The verdict itself is the engine's (World.reqShortfall); this
+   *  only colours the gates. */
+  private requirementsLine(def: SkillDef, seat: Seat): string {
+    const m = seat.meta;
+    const reqText = def.requirements
+      ? Object.entries(def.requirements).map(([a, n]) => {
+          const met = (m.attrs[a as AttributeId] ?? 0) >= (n ?? 0);
+          return `<span style="color:${met ? '#6fc06f' : '#d05050'}">${ATTRIBUTES[a as AttributeId].short} ${n}</span>`;
+        }).join(', ')
+      : 'none';
+    return `<div style="color:#9a94a8;font-size:10px">Requires: ${reqText}</div>`;
   }
 
   /** THE MEMORY CARD (skill-items M1): the gem wrapper's tooltip — kind
@@ -3619,13 +3645,7 @@ export class UI {
         lines.push(`<div style="color:#b8a2e8;font-size:10px">Socketed: ${socketed
           .map(s => `${SUPPORTS[s.supportId]?.name ?? s.supportId} L${s.level}`).join(' · ')}</div>`);
       }
-      const reqText = def.requirements
-        ? Object.entries(def.requirements).map(([a, n]) => {
-            const met = (m.attrs[a as AttributeId] ?? 0) >= (n ?? 0);
-            return `<span style="color:${met ? '#6fc06f' : '#d05050'}">${ATTRIBUTES[a as AttributeId].short} ${n}</span>`;
-          }).join(', ')
-        : 'none';
-      lines.push(`<div style="color:#9a94a8;font-size:10px">Requires: ${reqText}</div>`);
+      lines.push(this.requirementsLine(def, seat));
       if (inBag && !salv) {
         const dupe = m.knownSkills.has(sp.skillId);
         lines.push(`<div style="color:#c8a84b;font-size:10px;margin-top:3px">${dupe
@@ -5758,11 +5778,19 @@ export class UI {
                 style="position:absolute;top:-1px;right:-1px;z-index:2;font-size:9px;line-height:1;padding:1px 2px;
                 background:#141019cc;border:1px solid ${heldRow ? v.accent : '#3a3644'};border-radius:0 3px 0 3px;cursor:var(--cursor-point, pointer)">${heldRow ? '🔒' : '🔓'}</span>`
             : '';
+          // THE BUYER'S MARK (2026-09-11): a skill this seat's build cannot
+          // cast yet wears its first short gate on the glass, red — the
+          // hover story carries the whole requirements line. Reserve and
+          // lock marks keep precedence (they say whether it can be bought at
+          // all; this only says whether it will cast).
+          const short = e.kind === 'skill' ? world.reqShortfall(e.inst.def.id, seat) : undefined;
           const badge = heldRow
             ? `<div style="position:absolute;bottom:1px;left:0;right:0;text-align:center;font-size:8px;color:${heldRow.commission ? '#7fe0d8' : v.accent}">${heldRow.commission ? 'ORDER' : 'RESERVED'}</div>`
             : entryLock
               ? `<div style="position:absolute;bottom:1px;left:0;right:0;text-align:center;font-size:8px;color:#8a8678">🔒${e.depthReq ? ` D${e.depthReq}` : ''}</div>`
-              : '';
+              : short
+                ? `<div style="position:absolute;bottom:1px;left:0;right:0;text-align:center;font-size:8px;color:#d05050;white-space:nowrap;overflow:hidden">${esc(short.replace(/^needs /, '').split(',')[0]!.trim())}</div>`
+                : '';
           if (e.kind !== 'item') {
             // A GEM find: a 1×1 tile wearing the gem's own color + initials
             // (THE ICON LAW's counter face); the rich card rides the vgem
