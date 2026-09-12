@@ -3522,7 +3522,7 @@ export class UI {
     const d = describeItem(item);
     const lines: string[] = [`<div style="color:#9a94a8;font-size:10px">${d.baseLine}</div>`];
     if (item.locked) {
-      lines.unshift('<div style="color:#c8a84b">🔒 Locked — it stays: no salvage, no drop, no sort (hold right-click to unlock)</div>');
+      lines.unshift(`<div style="color:#c8a84b">🔒 Locked — it stays: no salvage, no drop, no sort (${this.lockGestureText()} to unlock)</div>`);
     } else if (salv) {
       const breakLine = seat.meta.items.some(i => i.uid === item.uid)
         ? `<div style="color:#e8c87a;font-weight:bold">${salv === 'sell'
@@ -3594,7 +3594,7 @@ export class UI {
       MONSTERS[d]?.name ?? (d === MEMORY_TRADED_PROVENANCE ? MEMORY_CFG.strings.tradedName : MEMORY_FOUND_SOURCES[d] ?? d);
     const lines: string[] = [];
     if (item.locked) {
-      lines.push('<div style="color:#c8a84b">🔒 Locked — it stays: no salvage, no drop, no sort (hold right-click to unlock)</div>');
+      lines.push(`<div style="color:#c8a84b">🔒 Locked — it stays: no salvage, no drop, no sort (${this.lockGestureText()} to unlock)</div>`);
     }
     lines.push(`<div style="color:#9a94a8;font-size:10px">${k.name} · <span style="color:${k.color}">×${units.length} held</span></div>`);
     if (k.facets) {
@@ -3609,7 +3609,7 @@ export class UI {
       lines.push(`<div style="color:#5a5668;font-size:10px">…and ${rest} other ${rest === 1 ? 'kind' : 'kinds'}</div>`);
     }
     lines.push(`<div style="color:#8a8678;font-size:10px">newest: ${dropperName(units[units.length - 1].d)}</div>`);
-    lines.push('<div style="color:#c8a84b;font-size:10px;margin-top:3px">right-click (or double-click) opens the Recall · hold right-click locks it · shift-click drops the stack whole</div>');
+    lines.push(`<div style="color:#c8a84b;font-size:10px;margin-top:3px">right-click (or double-click) opens the Recall · ${this.lockGestureText()} locks it · shift-click drops the stack whole</div>`);
     return {
       title: `<span style="color:${k.color}">${k.name}</span>`,
       description: lines.join(''),
@@ -3692,7 +3692,7 @@ export class UI {
     const lines: string[] = [];
     const inBag = m.items.some(i => i.uid === item.uid);
     if (item.locked) {
-      lines.push('<div style="color:#c8a84b">🔒 Locked — it stays: no salvage, no drop, no sort (hold right-click to unlock)</div>');
+      lines.push(`<div style="color:#c8a84b">🔒 Locked — it stays: no salvage, no drop, no sort (${this.lockGestureText()} to unlock)</div>`);
     }
     const sp = skillGemPayloadOf(item);
     if (sp) {
@@ -3805,7 +3805,7 @@ export class UI {
     // THE KEEPER'S MARK: the 🔒 pip every locked thing wears, both modes.
     const lockPip = (locked: boolean | undefined): string => locked
       ? `<span style="position:absolute;top:0;right:1px;font-size:9px;line-height:10px;text-shadow:0 0 3px #000"
-          title="Locked: it stays — no salvage, no drop, no sort (hold right-click to unlock)">🔒</span>`
+          title="Locked: it stays — no salvage, no drop, no sort (${esc(this.lockGestureText())} to unlock)">🔒</span>`
       : '';
 
     // --- THE DOLL: the equipped figure as a BODY (the true-RPG read) -------
@@ -4078,10 +4078,10 @@ export class UI {
           <div data-bag-grid="1" style="position:relative;width:${W * CELL}px;height:${H * CELL}px">${cells}${tiles}</div>
           <div style="margin-top:8px;color:#8a8678;font-size:10px">
             ${salv === 'break'
-              ? `⚒ <b style="color:#e8c87a">BREAKING</b>: click a piece to break it for essence · <b>hold right-click</b>: lock 🔒`
+              ? `⚒ <b style="color:#e8c87a">BREAKING</b>: click a piece to break it for essence · ${this.lockHintHtml()}`
               : salv === 'sell'
-              ? `⚙ <b style="color:#e8c87a">SELLING</b>: click a piece to sell it · <b>hold right-click</b>: lock 🔒`
-              : `<b>hold right-click</b>: lock 🔒`}
+              ? `⚙ <b style="color:#e8c87a">SELLING</b>: click a piece to sell it · ${this.lockHintHtml()}`
+              : this.lockHintHtml()}
           </div>
         </div>
       </div>`;
@@ -4343,6 +4343,27 @@ export class UI {
   }
   private endLockHold(): void { this.itemHold.end(); }
   private paintLockHold(): void { this.itemHold.paint(); }
+
+  /** THE LOCK GESTURE, spoken once (2026-09-11, her ask: the bag, the
+   *  bench, the counter and every tooltip name it the same way, and never
+   *  stale). The held right-click is the mouse's fixed gesture (button 2 in
+   *  the hold's own wiring); the keyboard bind (itemLock, rebindable) and —
+   *  with a pad connected — its pad bind read LIVE off Settings, so a
+   *  rebinding rewrites every line that names it. Plain text; lockHintHtml
+   *  is the bag's bolded form. */
+  lockGestureText(): string {
+    const s = this.getSettings();
+    const alts: string[] = [];
+    if (s.keybinds.itemLock) alts.push(keyDisplay(s.keybinds.itemLock));
+    if (connectedPadIndices().length > 0 && s.padBinds.itemLock) alts.push(padDisplay(s.padBinds.itemLock));
+    return `hold right-click${alts.length ? ` / ${alts.join(' / ')}` : ''}`;
+  }
+
+  /** "hold right-click / L: lock 🔒" — the bag's wording, worn by the bench
+   *  and the counter too (a reserve IS a lock on the shelf's slot). */
+  lockHintHtml(): string {
+    return `<b>${esc(this.lockGestureText())}</b>: lock 🔒`;
+  }
 
   /** Bindable held key/button, sharing the right-click timer. CSS pixels. */
   itemLockInput(down: boolean, point = this.itemHoldPointer): void {
@@ -4975,7 +4996,7 @@ export class UI {
             ${toggle}</button>
         </div>
         <div class="desc" style="color:#8a8678;font-size:10px;margin-bottom:6px">
-          ${teaches} <b>Hold right-click</b> on anything carried to lock 🔒 it:
+          ${teaches} <b>${this.lockGestureText()}</b> on anything carried locks 🔒 it:
           locked things refuse ${tool}, and every sweep below skips them. Granted sparks sit out of sweeps.
         </div>
         <h3>Gear${keptNote(gearLocked)}</h3>
@@ -5846,7 +5867,10 @@ export class UI {
           const atCap = !heldRow && lockedCount >= lockCap;
           const canBuy = afford && !tradeRefusal && !entryLock;
           const holdAttr = canLock && (heldRow || !atCap) ? `data-vhold="${v.id}:${idx}"` : "";
-          const lockPip = canLock && (lockCap > 0 || heldRow)
+          // THE QUIET GLASS (2026-09-11, her ask): only a HELD ware wears the
+          // lock pip — an open padlock on every tile was noise. The gesture
+          // still lands on any tile (holdAttr); the foot line names it.
+          const lockPip = canLock && heldRow
             ? `<span title="${lockTitleFor(heldRow, atCap)}"
                 style="position:absolute;top:-1px;right:-1px;z-index:2;font-size:9px;line-height:1;padding:1px 2px;
                 background:#141019cc;border:1px solid ${heldRow ? v.accent : '#3a3644'};border-radius:0 3px 0 3px;cursor:var(--cursor-point, pointer)">${heldRow ? '🔒' : '🔓'}</span>`
@@ -5928,7 +5952,7 @@ export class UI {
         return `
           <div style="position:relative;width:${b.w * CELL}px;height:${b.h * CELL}px;margin-top:2px">${cells}${tiles}</div>
           ${overflowRows}${empty}
-          <div style="margin-top:4px;color:#8a8678;font-size:10px">hover a ware for its full story · click it to buy${canLock && lockCap > 0 ? ' · hold right-click (or your Lock binding) to reserve / release' : ''}</div>`;
+          <div style="margin-top:4px;color:#8a8678;font-size:10px">hover a ware for its full story · click it to buy${canLock && lockCap > 0 ? ` · ${this.lockHintHtml()}` : ''}</div>`;
       })();
 
       // THE STANDING ORDER strip (feature-gated; the Vault sells discovery,
