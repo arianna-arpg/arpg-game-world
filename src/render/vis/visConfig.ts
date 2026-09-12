@@ -540,7 +540,7 @@ export const VIS_CFG = {
   },
 
   /** Canopy crowns (the occlude/veil pass). fadeRate = how fast a crown's
-   *  alpha chases its target per second (patch reveals and the per-tree
+   *  alpha chases its target per second (local presence and the per-tree
    *  near-fade share it — one speed, coherent motion). */
   canopy: {
     fadeRate: 10,
@@ -575,7 +575,7 @@ export const VIS_CFG = {
      *  composite when its own fade strays past divergeIn from the group's
      *  (the eave peek — near-fade under a covered patch edge) and rejoins
      *  under divergeOut. The gap keeps boundary grazes from flapping
-     *  bake-drop-bake (the snow-bucket lesson). */
+     *  between cached slices and the local clipped draw path. */
     divergeIn: 0.05,
     divergeOut: 0.015,
   },

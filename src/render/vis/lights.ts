@@ -12,7 +12,7 @@
 // ---------------------------------------------------------------------------
 
 import type { World } from '../../engine/world';
-import { dayCycle } from '../../world/daynight';
+import { dayCycle, sceneSkyTime } from '../../world/daynight';
 import type { Doodad } from '../../engine/levelgen';
 import { lightReach, wellDimScale } from '../../engine/lightwells';
 import { GridWalkField } from '../../world/gridWalk';
@@ -424,7 +424,7 @@ export class LightLayer {
    *  own ambient floor (caves are dark at noon), tempered where another
    *  system owns the dark (the Descent's survival vignette). */
   private ambientDark(world: World): number {
-    const night = 1 - dayCycle(world.time).light;
+    const night = 1 - dayCycle(sceneSkyTime(world)).light;
     // Ease the curve so dusk arrives gently and deep night lands hard.
     // Per-biome depth: a canopied forest's night is not a steppe's
     // (ZoneTheme.nightDark overrides the global lever).

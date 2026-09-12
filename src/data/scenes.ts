@@ -110,6 +110,10 @@ export interface SceneWaveRow {
  *  fabric (never serialized, torn down at 'home'), sealed and silent:
  *  spoils 'none', packDensity 0, cohort 'authored', no exits, no events. */
 export interface SceneZoneSpec {
+  /** Continuous cardinal traveled way, centered on the staging ground. */
+  road?: SceneRoadSpec;
+  /** Authored sky position (0..1 on the day wheel); never changes World.time. */
+  skyCycle?: number;
   /** Tileset registry id (the dress — e.g. 'meadow'). */
   tileset: string;
   /** Force a layout recipe (absent = the tileset's own roll). */
@@ -131,7 +135,28 @@ export interface SceneZoneSpec {
 }
 
 // --- stage specs (the open union: core kinds typed, the registry may grow) --
-export interface SceneStageBase { kind: string; }
+export interface SceneRoadSpec {
+  direction: 'north' | 'east' | 'south' | 'west';
+  radius: number;
+  /** Distance between overlapping road discs (must be <= radius). */
+  spacing: number;
+}
+
+/** Narrative goals are interrupted, never completed. Their units and the
+ *  director's deadline are separate: standing still cannot finish a road. */
+export interface SceneObjectiveSpec {
+  label: string;
+  prompt: string;
+  progress: { kind: 'elapsed'; amount: number } | { kind: 'road'; amount: number };
+  /** Commander arrives at this fraction, strictly below 1. */
+  interruptAt: number;
+}
+
+export interface SceneStageBase {
+  kind: string;
+  /** Ease the scene's own sky to this day-wheel position on stage entry. */
+  sky?: { cycle: number; transitionSec: number };
+}
 export interface SceneCardStage extends SceneStageBase {
   kind: 'card';
   card: SceneCardSpec;
@@ -172,9 +197,10 @@ export interface SceneAssaultStage extends SceneStageBase {
   /** After the scripted rows exhaust, the LAST row repours on this cadence
    *  (seconds) — the tide that never ebbs. 0/absent = no repeat. */
   repeatLastEvery?: number;
-  /** The survival clock: the stage completes (into the reckoning) after
-   *  this many seconds, whether the hero stands or not. */
+  /** Director deadline: advances to the reckoning even if the narrative
+   *  goal has made no progress. Independent of the objective's units. */
   surviveSec: number;
+  objective?: SceneObjectiveSpec;
   /** Bar label; the bar runs the survival clock. */
   label?: string;
   /** HUD seat (default 'top' — the dawn clock hangs over the whole field). */
@@ -334,9 +360,11 @@ export const PROLOGUE_SCENE: SceneDef = {
     tileset: 'meadow',
     name: 'The Last Mile',
     level: 1,
-    objectiveLabel: 'Reach Lastlight by dawn',
+    objectiveLabel: 'Continue to Lastlight',
     seed: 0x1a57,
     boundless: true, // the last mile has no edge — the road is longer than you
+    road: { direction: 'east', radius: 76, spacing: 64 },
+    skyCycle: 0.44,
   },
   stages: [
     {
@@ -369,7 +397,11 @@ export const PROLOGUE_SCENE: SceneDef = {
     },
     {
       kind: 'assault',
-      label: 'Hold the road',
+      label: 'Continue to Lastlight',
+      objective: {
+        label: 'Continue to Lastlight', prompt: 'Follow the road east. Lastlight lies ahead.',
+        progress: { kind: 'road', amount: 6000 }, interruptAt: 0.82,
+      },
       rows: [
         { at: 0, spawns: [{ def: 'goblin_skirmisher', count: 4 }], announce: 'more of them, hold the road!', announceColor: '#9fdc6a' },
         { at: 13, spawns: [{ def: 'goblin_skirmisher', count: 4 }, { def: 'goblin_brute', count: 1 }] },

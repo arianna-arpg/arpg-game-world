@@ -40,6 +40,7 @@ import { PROLOGUE_SCENE, type SceneDef, type SceneStage, type SceneWaveRow } fro
 import { bumpLedger } from '../packages/ledger';
 import { Rng } from '../core/rng';
 import type { World } from '../engine/world';
+import { TUTORIAL_JOURNEYS, type TutorialJourney } from './tutorialObjectives';
 
 // --- THE LEDGER CONTRACT -----------------------------------------------------
 // One roll per account, the id in the KEY (Record<string, number> law).
@@ -410,6 +411,7 @@ father('gnoll_colossus', 'Rrakhan, the Packfather', '#b0783e', 'gnoll', 'gnoll_c
 // --- THE TABLE -----------------------------------------------------------------
 
 export interface TutorialFactionRow {
+  journey: TutorialJourney;
   id: string;
   /** The legion as spoken (the revenge quests' offer copy). */
   banner: string;
@@ -426,6 +428,7 @@ export interface TutorialFactionRow {
 
 export const TUTORIAL_FACTIONS: TutorialFactionRow[] = [
   {
+    journey: TUTORIAL_JOURNEYS.goblin,
     id: 'goblin', banner: 'the goblinkin', color: '#9fdc6a',
     commander: 'goblin_colossus', verb: 'hordefathers_reckoning',
     clash: { def: 'goblin_skirmisher', announce: 'a goblin skulks out of the grass…' },
@@ -439,6 +442,7 @@ export const TUTORIAL_FACTIONS: TutorialFactionRow[] = [
     arrive: 'the Hordefather himself comes to end the road.',
   },
   {
+    journey: TUTORIAL_JOURNEYS.undead,
     id: 'undead', banner: 'the unnumbered dead', color: '#b8a8e8',
     commander: 'grave_colossus', verb: 'gravefathers_lament',
     clash: { def: 'zombie', announce: 'something risen drags itself from the ditch…' },
@@ -452,6 +456,7 @@ export const TUTORIAL_FACTIONS: TutorialFactionRow[] = [
     arrive: 'the Gravefather himself comes to bury the road.',
   },
   {
+    journey: TUTORIAL_JOURNEYS.beastkin,
     id: 'beastkin', banner: 'the Horned Tribes', color: '#d8a05a',
     commander: 'herd_colossus', verb: 'herdfathers_stampede',
     clash: { def: 'beastkin_chaser', announce: 'a horned shape breaks from the treeline…' },
@@ -465,6 +470,7 @@ export const TUTORIAL_FACTIONS: TutorialFactionRow[] = [
     arrive: 'the Herdfather himself comes to trample the road.',
   },
   {
+    journey: TUTORIAL_JOURNEYS.demon,
     id: 'demon', banner: 'the pit legions', color: '#ff7a4a',
     commander: 'pyre_colossus', verb: 'pyrefathers_immolation',
     clash: { def: 'imp', announce: 'something small and burning claws out of the dark…' },
@@ -481,6 +487,7 @@ export const TUTORIAL_FACTIONS: TutorialFactionRow[] = [
   // player can really have a broad experience even within the tutorial") —
   // the folk-horror harvest, the insect tide, the laughing packs.
   {
+    journey: TUTORIAL_JOURNEYS.carven,
     id: 'carven', banner: 'the Carven Court', color: '#d8b84a',
     commander: 'carven_colossus', verb: 'harvestfathers_gleaning',
     clash: { def: 'gourdling', announce: 'something grins in the field-rows…' },
@@ -494,6 +501,7 @@ export const TUTORIAL_FACTIONS: TutorialFactionRow[] = [
     arrive: 'the Harvestfather himself comes to glean the road.',
   },
   {
+    journey: TUTORIAL_JOURNEYS.chitin,
     id: 'chitin', banner: 'the Seethe', color: '#a8c84a',
     commander: 'chitin_colossus', verb: 'swarmfathers_seethe',
     clash: { def: 'chitin_skimmer', announce: 'something clicks low in the grass…' },
@@ -507,6 +515,7 @@ export const TUTORIAL_FACTIONS: TutorialFactionRow[] = [
     arrive: 'the Swarmfather himself comes to strip the road.',
   },
   {
+    journey: TUTORIAL_JOURNEYS.gnoll,
     id: 'gnoll', banner: 'the laughing packs', color: '#c88f4a',
     commander: 'gnoll_colossus', verb: 'packfathers_frenzy',
     clash: { def: 'gnoll_prowler', announce: 'laughter, low and wrong, out in the dark…' },
@@ -542,22 +551,34 @@ export function rollTutorialFaction(w: World): TutorialFactionRow {
   return row;
 }
 
-/** The prologue re-dressed in one legion's colors: clash/assault/reckoning
- *  rows swap; the cards, the drill and the Mu tail stay the base def's. */
+/** The account's legion authors the journey, its war and its remembered end.
+ *  The mechanical lessons and Mu tail remain shared. */
 export function prologueForFaction(row: TutorialFactionRow): SceneDef {
+  const journey = row.journey;
   const stages: SceneStage[] = PROLOGUE_SCENE.stages.map(s => {
+    if (s.kind === 'card') {
+      const card = s as import('./scenes').SceneCardStage;
+      if (!card.fallCard) return { ...card, card: journey.intro };
+      return {
+        ...card,
+        card: { ...card.card, lines: [journey.wake, ...card.card.lines.slice(1)] },
+        fallCard: { ...card.fallCard, lines: [journey.earlyWake, ...card.fallCard.lines.slice(1)] },
+      };
+    }
     if (s.kind === 'clash') {
       return { ...s, spawns: [{ def: row.clash.def, count: 1 }], announce: row.clash.announce, announceColor: row.color };
     }
     if (s.kind === 'assault') {
-      return { ...s, rows: row.waves };
+      return { ...s, rows: row.waves, label: journey.objective.label,
+        objective: journey.objective, sky: journey.assaultSky };
     }
     if (s.kind === 'reckoning') {
       return { ...s, def: row.commander, verb: row.verb, announce: row.arrive, announceColor: row.color };
     }
     return s;
   });
-  return { ...PROLOGUE_SCENE, stages };
+  return { ...PROLOGUE_SCENE, stages, zone: { ...PROLOGUE_SCENE.zone,
+    road: journey.road, skyCycle: journey.skyCycle, objectiveLabel: journey.objective.label } };
 }
 
 // THE SEAM: assigned onto the base def (the open-record idiom) — sceneBegin

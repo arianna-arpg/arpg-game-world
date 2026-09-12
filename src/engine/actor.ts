@@ -117,6 +117,13 @@ export interface CastingState {
   presses?: number;
   /** AI: how long a monster holds a channel/charge before letting go. */
   aiHold?: number;
+  /** Rolled autonomous recovery, paid only when this cast completes. */
+  aiRecovery?: number;
+  /** Authored AI bash warning; copied from the resolved behavior at press. */
+  aiGuardWindup?: number;
+  /** Absolute release deadline and committed facing; absent before warning. */
+  aiGuardReleaseAt?: number;
+  aiGuardFacing?: number;
   /** AI: seconds this channel's firing line has been WALLED (occlusion) —
    *  past LOS_CFG.channelGrace the grip releases and the caster repositions
    *  instead of gnawing stone. */

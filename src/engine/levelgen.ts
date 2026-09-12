@@ -2203,8 +2203,9 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // The whole walk-under tree family VEILS (veil: {}): crowns knit into
   // contiguous patches that seal over whatever stands beneath — a lone tree
   // is a one-crown patch (aim assist already can't hold what waits under it),
-  // a grove cluster opens as one, a forest is a roof. Cover/reveal/status all
-  // ride VEIL_DEFAULTS unless a kind says otherwise.
+  // a forest is a roof. veilPresenceAlpha opens only nearby crowns; patch
+  // connections batch the backdrop, never extend sight. Cover/reveal/status
+  // and the presence radius ride VEIL_DEFAULTS unless a kind says otherwise.
   tree:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 18, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.3, veil: {}, mutable: true, fuel: 'timber' },
   palm:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 18, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.26, veil: {}, mutable: true },
   /** Evergreen spire — tundra/deepwood conifer (pineCrown canopy). */

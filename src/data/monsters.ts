@@ -12,10 +12,13 @@ import type { BuffEffect } from '../engine/skills';
 import type { ActorAdorn, ActorShape, AmbushSpec, BrainDef, MonsterPartDef, PostSpec } from '../engine/actor';
 import type { EmergeSpec } from '../engine/emerge'; // THE EMERGENCE GRAMMAR — MonsterDef.emerge / AmbushSpec.emerge
 import type { BrainTuning, PhaseDef } from '../engine/brain';
+import { TURNING_CFG } from '../engine/handling';
 import type { CurveKind } from '../engine/curves';
 import { registerPresenceBand, type PresenceSpec } from '../engine/presence';
 import { ULTIMATE_FORMS } from './ultimates';
 import { NECROMANCER_MINIONS } from './necromancerMinions';
+import { CASTER_MONSTERS } from './casterMonsters';
+import { COURT_MONSTERS } from './courtMonsters';
 import { registerAIAction } from '../engine/aiActions';
 import { FluxPhase } from '../engine/flux';
 import type { TuneSpec } from '../engine/tuning';
@@ -54,10 +57,10 @@ registerPresenceBand('host_vigil', { from: 10, fadeIn: 5 });
 // briefly added here and REVERTED — two mechanisms for one concept is how
 // copies diverge. Divide a body by giving its brain a death rattle.
 
-/** The bestiary's default TURN SPEED (rad/s) — fast enough to read as
- *  natural, no longer instant (smooths the one-frame snap-flips). Defs
- *  override with `turnSpeed`; low values (2-4) make big bodies LUMBER. */
-export const MONSTER_TURN_DEFAULT = 10;
+/** Shared body-handling tuning; individual definitions can override turnSpeed. */
+export { TURNING_CFG };
+/** Reference rate only; actual omitted rates derive from body morphology. */
+export const MONSTER_TURN_DEFAULT = TURNING_CFG.baseRate;
 
 /** THE HUNGER LEAN (engine/tells.ts): the shared predator tell — the body
  *  hunkers into the stalk as its hunger drive crosses the SAME band the
@@ -420,6 +423,8 @@ export interface MonsterBoon {
   pick?: number;
   /** Per-spawn chance the boon rolls at all (absent = always). */
   chance?: number;
+  /** Earliest monster level eligible for this doctrine; omission is level 1. */
+  minLevel?: number;
 }
 
 /** The AGGRO PERSONALITY axes (MonsterDef.aggro) — pure multipliers, all
@@ -1069,8 +1074,8 @@ export interface MonsterDef {
     breathe?: { period: number; minFrac?: number; curve?: CurveKind };
   };
   /** TURN SPEED (radians/sec) — how fast this body can swing its facing.
-   *  Omitted = the bestiary default (fast enough to read as natural but no
-   *  longer instant). Low values (2-4) make big and shelled bodies LUMBER:
+   *  Omitted = size/pace/heft-derived handling (TURNING_CFG). Explicit zero
+   *  is instant. Low values (2-4) make big and shelled bodies LUMBER:
    *  their facing — and so their shell arc and their aim — lags the fight,
    *  and circling them becomes real play. Player seats always turn free. */
   turnSpeed?: number;
@@ -2148,10 +2153,13 @@ const wingCycle = (opts: {
 // ===========================================================================
 export const MONSTERS: Record<string, MonsterDef> = {
   ...NECROMANCER_MINIONS,
+  ...CASTER_MONSTERS,
+  ...COURT_MONSTERS,
 
   zombie: {
     id: 'zombie', name: 'Shambling Zombie',
     color: '#6a8858', shape: 'circle', radius: 14, look: 'zombie',
+    turnSpeed: 2.6,
     base: { life: 36, moveSpeed: 95, accuracy: 60, mana: 0 },
     mods: [mod('chaosRes', 'flat', 0.3)],
     skills: ['claw'],
@@ -2168,7 +2176,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
       perception: { arcDeg: 110, rearMul: 0.2, attentionSpan: [4, 7], alertMul: 0.15 },
       // And slow to REACT (BehaviorSpec.reaction): a long dead-eyed beat
       // between noticing you and remembering what teeth are for.
-      behavior: { reaction: [0.6, 1.3] },
+      behavior: { reaction: [0.6, 1.3], castArc: 0.6 },
       // MINDLESS FEET (pathing 'none'): it walks AT you, wall or no wall —
       // shamblers smear along masonry while the living route around it.
       // And HEEDLESS (the wayfaring lever): the dead wade the bog and the
@@ -2208,6 +2216,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   zombie_crawler: {
     id: 'zombie_crawler', name: 'Crawling Zombie',
     color: '#71824e', shape: 'circle', radius: 12, look: 'zombie_crawler',
+    turnSpeed: 1.8,
     base: { life: 26, moveSpeed: 68, accuracy: 60, mana: 0 },
     mods: [mod('chaosRes', 'flat', 0.3)],
     skills: ['claw'],
@@ -2218,7 +2227,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
       type: 'basic',
       perception: { arcDeg: 100, rearMul: 0.2, attentionSpan: [3, 6], alertMul: 0.15 },
       // Slower to remember violence than even the walking dead.
-      behavior: { reaction: [0.9, 1.6] },
+      behavior: { reaction: [0.9, 1.6], castArc: 0.7 },
       // Mindless feet: it drags itself straight at you (pathing 'none'),
       // through whatever ground is in the way (heedless — the dead don't
       // price pain; the fall veto still holds).
@@ -2229,6 +2238,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   skeleton_warrior: {
     id: 'skeleton_warrior', name: 'Skeleton Warrior',
     color: '#cfc8b8', shape: 'ribcage', radius: 13, material: 'bone', look: 'skeleton_warrior',
+    turnSpeed: 4.8,
     // Monsters PAY for their skills like everyone else — they need the mana.
     base: { life: 30, moveSpeed: 150, accuracy: 85, evasion: 40, mana: 30, manaRegen: 4 },
     skills: ['cleave'],
@@ -2237,7 +2247,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 0.85,
     // Dead men idle like dead men (SquadSpec.idle 'mixed'): a stable split —
     // half stand vacant where they stopped, half drift aimlessly.
-    brain: { type: 'basic', squad: { idle: { style: 'mixed' } } },
+    brain: { type: 'basic', squad: { idle: { style: 'mixed' } },
+      behavior: { castArc: 0.7 } },
   },
 
   // The healer archetype's bone-and-wing staff: both carry an ally-targeted
@@ -3186,7 +3197,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   deep_tidecaller: {
     id: 'deep_tidecaller', name: 'Tidecaller',
-    color: '#6ac8e8', shape: 'star', radius: 14, look: 'frost_caster',
+    color: '#6ac8e8', shape: 'star', radius: 14, look: 'deep_tidecaller',
     base: { life: 40, moveSpeed: 120, accuracy: 110, mana: 140, manaRegen: 8 },
     mods: [mod('coldRes', 'flat', 0.6)],
     skills: ['frostbolt', 'frost_nova'],
@@ -3362,9 +3373,13 @@ export const MONSTERS: Record<string, MonsterDef> = {
   brute: {
     id: 'brute', name: 'Pit Brute',
     color: '#a85848', shape: 'circle', radius: 20, look: 'brute',
+    turnSpeed: 2.2,
     base: { life: 90, moveSpeed: 105, accuracy: 90, armor: 30, mana: 60, manaRegen: 6 },
     skills: ['heavy_strike', 'cleave'],
     xp: 26,
+    brain: { type: 'basic', behavior: {
+      castArc: 0.55, reaction: [0.25, 0.5], recovery: [0.45, 0.65],
+    } },
   },
 
   // --- Boss: a full multi-skill kit, same system as everything else --------
@@ -3573,11 +3588,13 @@ export const MONSTERS: Record<string, MonsterDef> = {
   crypt_warden: {
     id: 'crypt_warden', name: 'Crypt Warden',
     color: '#8ab8d8', shape: 'square', radius: 18, material: 'bone', look: 'crypt_warden',
+    turnSpeed: 2.4,
     base: { life: 160, moveSpeed: 95, accuracy: 100, armor: 50, mana: 60, manaRegen: 6 },
     mods: [mod('blockChance', 'flat', 0.15)],
     skills: ['shield_up', 'heavy_strike', 'cleave'],
     xp: 35,
     faction: 'undead',
+    brain: { type: 'basic', behavior: { castArc: 0.65, recovery: [0.35, 0.55] } },
   },
 
   bone_serpent: {
@@ -5021,12 +5038,13 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // ANY life total, where enrage waits for the bar. Two angers, two clocks.
     brain: {
       type: 'juggernaut', enrage: 0.4,
-      behavior: { castArc: 0.65, reaction: [0.4, 0.9] },
+      behavior: { castArc: 0.65, reaction: [0.4, 0.9], recovery: [0.6, 0.85] },
       drives: { wrath: { rise: -0.05, onHurt: 0.09 } },
       rules: [{
         when: { drive: { id: 'wrath', above: 0.6 } },
         announce: 'the troll seethes!',
-        use: { skillUse: { cadence: [0.1, 0.25] }, move: { style: 'direct', pace: 1.25 }, behavior: { reaction: [0, 0] } },
+        use: { skillUse: { cadence: [0.1, 0.25] }, move: { style: 'direct', pace: 1.25 },
+          behavior: { reaction: [0, 0], recovery: [0.25, 0.4] } },
       }],
     },
     faction: 'goblin',
@@ -5509,13 +5527,13 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // (spectral_finger's weak cursor guide + wobble) from a held line.
   finger_mage: {
     id: 'finger_mage', name: 'Finger Mage',
-    color: '#b8d0a0', shape: 'cross', radius: 12, look: 'ritual_mage',
+    color: '#b8d0a0', shape: 'cross', radius: 12, look: 'demon_finger_mage',
     base: { life: 44, moveSpeed: 120, mana: 200, manaRegen: 14 },
     mods: [mod('chaosRes', 'flat', 0.5)],
     skills: ['spectral_finger'],
     xp: 24,
     faction: 'demon',
-    adorn: 'tentacles',
+    // The composed grasping hands replace the legacy tentacle adornment.
     detection: 1.2,
     brain: {
       type: 'artillery',
@@ -5863,6 +5881,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
   stone_sentinel: {
     id: 'stone_sentinel', name: 'Stone Sentinel',
     color: '#9a988a', shape: 'rectangle', radius: 19, look: 'sentinel',
+    turnSpeed: 1.7,
+    tells: [{ source: 'guardRelease', portrait: 0, channel: { kind: 'lean', amp: -0.8 } }],
     base: { life: 180, moveSpeed: 90, accuracy: 95, armor: 70, mana: 60, manaRegen: 6, poise: 70 },
     mods: [mod('blockChance', 'flat', 0.2)],
     skills: ['shield_up', 'heavy_strike', 'cleave'],
@@ -5870,7 +5890,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // A GUARDIAN guards (TargetSpec.leash): drag it past its tether and it
     // gives up the chase, turns, and grinds back to its post, mending —
     // bait it out or fight it on its ground; it won't marathon after you.
-    brain: { type: 'protector', target: { leash: { radius: 520, heal: true } } },
+    brain: { type: 'protector', target: { leash: { radius: 520, heal: true } },
+      behavior: { castArc: 0.55, recovery: [0.7, 1], guardRelease: { windup: 0.65 } } },
     // HALF the sentinels drill the LANCE (MonsterGrant.chance): those roll
     // Phalanx Thrust and POKE from behind the raised shield — the exact
     // guard-combo the player runs; the rest hold the classic wall.
@@ -5971,15 +5992,20 @@ export const MONSTERS: Record<string, MonsterDef> = {
   sylvan_warden: {
     id: 'sylvan_warden', name: 'Sylvan Warden',
     color: '#68b878', shape: 'rectangle', radius: 17, look: 'sylvan_warden',
-    base: { life: 140, moveSpeed: 105, accuracy: 100, armor: 45, mana: 80, manaRegen: 7, poise: 45 },
-    mods: [mod('blockChance', 'flat', 0.15)],
+    turnSpeed: 2.1,
+    tells: [
+      { source: 'guardRelease', portrait: 0, channel: { kind: 'lean', amp: -0.8 } },
+      { source: 'guardRelease', portrait: 0, channel: { kind: 'glow', color: '#c8e898', max: 0.6 } },
+    ],
+    base: { life: 140, moveSpeed: 105, accuracy: 100, armor: 32, mana: 80, manaRegen: 7, poise: 45 },
+    mods: [mod('blockChance', 'flat', 0.08), mod('bashPower', 'more', -0.35)],
     // A third of the wardens drill the lance: shield up, then the poke
     // AROUND the guard (phalanx_thrust's guard-combo — rolled per spawn).
     grants: [{ atLevel: 1, chance: 0.35, skill: 'phalanx_thrust' }],
-    // Half carry a WARD-SWORN BOON: one bulwark doctrine rolled from the
+    // From level eight, half carry a WARD-SWORN BOON: one doctrine from the
     // PLAYER'S OWN choice pool (MonsterBoon — shared vocabulary, per-spawn
     // texture: this warden took Stone, that one Salve).
-    boons: [{ group: 'bulwark_doctrines', chance: 0.5 }],
+    boons: [{ group: 'bulwark_doctrines', chance: 0.5, minLevel: 8 }],
     skills: ['shield_up', 'cleave'],
     xp: 32,
     // CAST SLACK debut (the metronome complaint): the guard used to come
@@ -5990,6 +6016,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: {
       type: 'protector',
       skillUse: { slack: { shield_up: [0.7, 2.2], cleave: [0.2, 0.9] } },
+      behavior: { castArc: 0.6, reaction: [0.3, 0.55], recovery: [0.65, 0.9],
+        guardRelease: { windup: 0.55 } },
     },
     faction: 'sylvan',
   },
@@ -7482,7 +7510,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   searing_spawn: {
     id: 'searing_spawn', name: 'Searing Spawn',
-    color: '#ff4040', shape: 'diamond', radius: 11, material: 'ember', look: 'flame_elemental',
+    color: '#ff4040', shape: 'diamond', radius: 11, material: 'ember', look: 'demon_searing_spawn',
     base: { life: 24, moveSpeed: 195, accuracy: 60, mana: 0 },
     mods: [mod('fireRes', 'flat', 0.5)],
     skills: [], xp: 12, faction: 'demon', adorn: 'horns',
@@ -8569,10 +8597,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
   beastkin_gorer: {
     id: 'beastkin_gorer', name: 'Beastkin Gorer',
     color: '#b07a4a', shape: 'hexagon', radius: 14, material: 'fur', look: 'beastkin_gorer',
+    turnSpeed: 3.6,
     base: { life: 85, moveSpeed: 170, accuracy: 105, armor: 20, mana: 25, manaRegen: 4, poise: 35 },
     // THE CHARGE CARRY debut (gore_charge — the charge grammar with the
     // grab fabric's drag lever armed; data/skills.ts): the horns that
-    // CONNECT hook the catch and drag it the rest of the run. Kit-only
+    // CONNECT hook the catch for a bounded 90-unit carry. Kit-only
     // swap — the brain's charge posture and the pack tempo's bands row
     // (re-keyed to the new id; the curve mirrors the same ai hint) are
     // the BRAIN's seat and ride unchanged.
@@ -8591,6 +8620,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: {
       type: 'juggernaut', enrage: 0.5,
       move: { style: 'charge', commitRange: 320, chargeSpeed: 2.4 },
+      behavior: { castArc: 0.55 },
       squad: { idle: { style: 'siege' } },
       skillUse: {
         strike: { stagger: [0.35, 1.5], inFlight: 2, stunWeight: 0.25 },
@@ -9297,18 +9327,17 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#5a6a7a', shape: 'pentagon', radius: 9, material: 'ethereal', look: 'gloomling',
     base: { life: 18, moveSpeed: 175, evasion: 70, mana: 40, manaRegen: 5 },
     mods: [mod('chaosRes', 'flat', 0.4)],
-    skills: ['claw', 'gravewisp'], xp: 8, faction: 'undead',
-    detection: 1.1,
-    brain: {
-      type: 'swarm',
-      rules: [{
-        when: {}, every: [4, 7], hold: [0.1, 0.2],
-        actions: [
-          { do: 'buff', buff: { type: 'buff', id: 'gloom_fade', duration: 0.9, mods: [mod('invisible', 'flat', 1)] } },
-          { do: 'teleport', to: 'nearTarget', range: 300 },
-        ],
-      }],
+    skills: ['gloom_nip'], xp: 8, faction: 'undead',
+    // Darkness clings: motion wears out the grip; sharp turns fling it
+    // loose. Existing seat limits bound the attached damage from a crowd.
+    cling: {
+      pad: 10, shakeSec: [3, 4],
+      gnaw: { dps: 3, type: 'chaos', every: 0.5 },
+      motionShake: { distance: 240, turnRadians: Math.PI, minTurnSpeed: 2.5 },
+      flop: { grace: 2.5, toss: 70 },
     },
+    detection: 1.1,
+    brain: { type: 'swarm' },
   },
   // The poltergeist: no body — a knot of orbiting debris that THROWS things
   // and is never where the last stone came from.
@@ -23315,6 +23344,7 @@ export const FACTIONS: Record<string, {
       { id: 'soul_mote', weight: 2, presence: { to: 10, fadeOut: 5 } },
       { id: 'drowned_hauler', weight: 2, presence: { from: 5, fadeIn: 3 } },
       { id: 'soul_wellspring', weight: 1 },
+      { id: 'river_obol_cantor', weight: 1 }, // def presence gates the chime-bearer
       { id: 'banshee', weight: 1, presence: { from: 8, fadeIn: 4 } },
       { id: 'farshore_warden', weight: 1, presence: { from: 16, fadeIn: 5 } },
     ],
@@ -23333,6 +23363,7 @@ export const FACTIONS: Record<string, {
       { id: 'gauntlet_swarm', weight: 2, presence: { to: 14, fadeOut: 6 } },
       { id: 'bannered_lance', weight: 2, presence: { from: 5, fadeIn: 3 } },
       { id: 'helm_choir', weight: 1, presence: { from: 6, fadeIn: 3 } },
+      { id: 'hollow_scripture_harness', weight: 1 },
       { id: 'panoply_saint', weight: 1, presence: { from: 10, fadeIn: 5 } },
       { id: 'the_unworn', weight: 1, presence: { from: 9, fadeIn: 4 } },
     ],
@@ -23394,6 +23425,7 @@ export const FACTIONS: Record<string, {
       { id: 'sepal_warden', weight: 2, presence: { from: 6, fadeIn: 3 } },
       { id: 'pollen_sylph', weight: 2, presence: { from: 5, fadeIn: 3 } },
       { id: 'foxglove_chorister', weight: 1, presence: { from: 7, fadeIn: 4 } },
+      { id: 'bloom_scentweaver', weight: 1 }, // def presence gates the perfume rite
       // The muster pass: the beds grow artillery, a whirl of nettles, the
       // warden-mother, and the loveliest lie in the garden.
       { id: 'nettle_dervish', weight: 2, presence: { to: 16, fadeOut: 7 } },
@@ -23416,6 +23448,7 @@ export const FACTIONS: Record<string, {
       { id: 'duskveil_dancer', weight: 2, presence: { from: 5, fadeIn: 3 } },
       { id: 'glowworm_grub', weight: 2 },
       { id: 'lampwright', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      { id: 'glimmer_lantern_weaver', weight: 1 },
       // The muster pass: the court gets its lance, its cupbearer, and the
       // gardener who plants the standing glass.
       { id: 'prism_lancer', weight: 2, presence: { from: 5, fadeIn: 3 } },
@@ -23502,6 +23535,7 @@ export const FACTIONS: Record<string, {
     table: [
       { id: 'starfall_shardling', weight: 4 },
       { id: 'starfall_prism', weight: 2, presence: { from: 5, fadeIn: 3 } },
+      { id: 'starfall_ephemerist', weight: 1 }, // def presence gates the orbital instrument
       { id: 'gravity_warden', weight: 1, presence: { from: 8, fadeIn: 4 } },
       // The muster pass: the herald who calls the next one down, the
       // hound that hunts at perigee, the watcher from the far cold.
@@ -23814,6 +23848,7 @@ export const FACTIONS: Record<string, {
       // The muster pass: the wind that dances and the glass that sings.
       { id: 'khamsin_dervish', weight: 1, presence: { from: 6, fadeIn: 3 } },
       { id: 'glasschanter', weight: 1, presence: { from: 9, fadeIn: 4 } },
+      { id: 'sirocco_hourglass_diviner', weight: 1 },
     ],
   },
   // The Seethe: drones are the coin, sources are the fight — the roster

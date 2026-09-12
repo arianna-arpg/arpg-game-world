@@ -682,7 +682,7 @@ const tick = (w: ReturnType<typeof makeSimWorld>, sec: number): void => {
         boundToRun = left <= (m.dash?.remaining ?? -1) + DT + 1e-3 && left < 1.1;
       }
       markerSeen = markerSeen || p.statuses.some(s => s.id === 'seized');
-      if (!seatChecked && seizedAt >= 0 && t > seizedAt + 0.3) {
+      if (!seatChecked && seizedAt >= 0 && t > seizedAt + 0.1) {
         seatChecked = true;
         grabSeatPos(m, p, m.gripping, seat);
         const cs = w.clampPos(vec(seat.x, seat.y), p.radius);
@@ -701,8 +701,8 @@ const tick = (w: ReturnType<typeof makeSimWorld>, sec: number): void => {
   check('carry: drawn == held mid-drag (the slave step rides the one resolver)', seatTight);
   check('carry: the hero was DRAGGED a real distance down the run',
     p.pos.x > startX + 120, `dragged ${(p.pos.x - startX).toFixed(0)}px east`);
-  check('carry: the run\'s end released ON TIME (the whole remainder, nothing after)',
-    relAt >= 0.85 && relAt <= 1.25 && !m.gripping && p.heldBy === undefined && m.dash == null,
+  check('carry: the bounded run releases within a quarter-second of contact',
+    relAt > seizedAt && relAt - seizedAt <= 0.25 && !m.gripping && p.heldBy === undefined && m.dash == null,
     `released at t=${relAt.toFixed(2)}s`);
   check('carry: the shed is the AUTHORED forward hand-off (charger credit rides the flight)',
     shedAuthored && shedForward);
@@ -820,7 +820,16 @@ const tick = (w: ReturnType<typeof makeSimWorld>, sec: number): void => {
   const stopX = seatX - (m.radius + p.radius) * 0.9;  // the charger's stop center
   m.pos = vec(stopX - 430, cy);                       // the full run ends at the seat
   p.pos = vec(stopX - 270, cy);                       // the hero stands mid-path
-  w.useSkill(m, makeSkillInstance(SKILLS.gore_charge, 1), vec(stopX + 100, cy));
+  // Exercise the uncapped carry grammar at a distant wall. The Gorer's
+  // new short carry must stop before this wall; long carries remain
+  // available to other authored skills and keep their impact contract.
+  const longCarry = { ...SKILLS.gore_charge, delivery: {
+    ...SKILLS.gore_charge.delivery,
+    ...(SKILLS.gore_charge.delivery.type === 'dash' ? {
+      onContact: { ...SKILLS.gore_charge.delivery.onContact!, maxCarryDistance: undefined },
+    } : {}),
+  } };
+  w.useSkill(m, makeSkillInstance(longCarry, 1), vec(stopX + 100, cy));
   let caught = false, lifeAtRelease = -1, wounded = false, flightAuthored = false;
   let peakShed = 0;
   for (let t = 0; t < 1.8; t += DT) {

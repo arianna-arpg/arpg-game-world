@@ -2,13 +2,12 @@
 // VEILS — contiguous canopy masses as first-class cover, data-driven per kind.
 //
 // The walk-under crown (DoodadRule.occlude) hides whatever stands beneath ONE
-// tree until the hero steps under it. A VEIL generalizes that to the PATCH:
-// crowns of veil-bearing kinds whose discs overlap merge into one canopy mass,
-// and the whole mass behaves as a unit — near-opaque over everything beneath
-// it (monsters, loot, ground) until the local hero walks in under the leaves,
-// when the entire patch opens. Concealment is exported to GAMEPLAY, not just
-// pixels: aim assist can't magnetize onto a foe swallowed by a patch the
-// viewer isn't inside, and standing under cover wears the veil's standStatus
+// tree until the hero approaches. Veil crowns fade by LOCAL PRESENCE: nearby
+// foliage opens with a soft distance falloff and closes behind the walker.
+// Connected crowns still form patches for static render batching, but patch
+// membership never grants vision. Concealment is exported to GAMEPLAY too:
+// aim assist can't magnetize onto a foe under distant closed crowns, and
+// standing under cover wears the veil's standStatus
 // (detectability play — the graphics ARE the stealth, now mechanically true).
 //
 // Everything is one optional DoodadRule.veil row per kind: dense-forest oaks
@@ -33,8 +32,12 @@ export interface VeilSpec {
   /** Crown alpha while the patch is UNREVEALED (≈1 = the mass hides
    *  everything beneath it). */
   cover?: number;
-  /** Crown alpha while the local hero stands under the patch. */
+  /** Crown alpha at full local presence. */
   reveal?: number;
+  /** Presence reach beyond the crown's edge, in world units. */
+  presenceRadius?: number;
+  /** Soft outer band of that reach, in world units (clamped to radius). */
+  presenceFeather?: number;
   /** Status applied per tick to any actor standing under a member crown
    *  (the fogveiled pattern — detectability mods live on the status, data). */
   standStatus?: string;
@@ -45,9 +48,29 @@ export const VEIL_DEFAULTS = {
   mergeScale: 1.08,
   cover: 0.985,
   reveal: 0.26,
+  presenceRadius: 160,
+  presenceFeather: 100,
+  /** Aim assist refuses crowns at/above this opacity. */
+  concealAlpha: 0.55,
   /** Default per-tick status under cover ('' on a spec disables). */
   standStatus: 'canopied',
 } as const;
+
+/** The shared target opacity for one crown. Its footprint matters, so even
+ *  a large crown opens overhead; another crown connected a mile away does
+ *  not. No patch query, allocation, or persistent discovery state. */
+export function veilPresenceAlpha(spec: VeilSpec, viewer: { x: number; y: number },
+  crown: Doodad): number {
+  const cover = spec.cover ?? VEIL_DEFAULTS.cover;
+  const reveal = spec.reveal ?? VEIL_DEFAULTS.reveal;
+  const radius = Math.max(0, spec.presenceRadius ?? VEIL_DEFAULTS.presenceRadius);
+  const feather = Math.min(radius, Math.max(0, spec.presenceFeather ?? VEIL_DEFAULTS.presenceFeather));
+  const edge = Math.max(0, Math.hypot(viewer.x - crown.pos.x, viewer.y - crown.pos.y) - crown.radius);
+  if (edge <= radius - feather) return reveal;
+  if (edge >= radius) return cover;
+  const t = (edge - (radius - feather)) / feather;
+  return reveal + (cover - reveal) * t * t * (3 - 2 * t);
+}
 
 /** One contiguous canopy mass: the merged crowns of a veil group. */
 export interface VeilPatch {
@@ -176,5 +199,18 @@ export class VeilIndex {
   /** The patch covering a point, or null in the open. */
   patchAt(x: number, y: number): VeilPatch | null {
     return this.coverAt(x, y)?.patch ?? null;
+  }
+
+  /** All overlapping crowns must have opened enough to see the target.
+   * Mirrors the label pass's most-opaque-cover rule, without render state. */
+  concealedFrom(viewer: { x: number; y: number }, target: { x: number; y: number }): boolean {
+    for (const d of this.disc.at(target.x, target.y)) {
+      if (d.gone || d.felled) continue;
+      const dx = target.x - d.pos.x, dy = target.y - d.pos.y;
+      if (dx * dx + dy * dy > d.radius * d.radius) continue;
+      const m = this.byDoodad.get(d);
+      if (m && veilPresenceAlpha(m.spec, viewer, d) >= VEIL_DEFAULTS.concealAlpha) return true;
+    }
+    return false;
   }
 }

@@ -9,6 +9,7 @@
 // ---------------------------------------------------------------------------
 
 import { DeedTracker, type DeedEvent } from './deeds';
+import { finishAIRecovery, monsterTurnSpeed } from './handling';
 import { COMBAT_DEEDS, DEED_CFG } from '../data/classdeeds';
 import { selectContainerLoot } from '../data/containerloot';
 import { rollMemoryEssenceTier } from '../data/essences';
@@ -94,7 +95,7 @@ import { VENDORS, VENDOR_CFG, type VendorDef } from '../data/vendors';
 import { ITEM_BASES } from '../data/itembases';
 import { treeNodeRanks, treeSpentCount } from './skilltree'; // THE SKILL-TREE GRAPH — ranked spends (pickTreeNode)
 import { SKILL_LIST, SKILLS } from '../data/skills';
-import { AMBIENT_TAGS, CAVE_POOLS, CAVE_POOL_CFG, FACTIONS, FIXTURE_IDS, MONSTERS, WAVE_TABLE, WILDLIFE, MONSTER_TURN_DEFAULT, factionStance, temperOf, defBreathes, defDensity, defLeavesRemains, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
+import { AMBIENT_TAGS, CAVE_POOLS, CAVE_POOL_CFG, FACTIONS, FIXTURE_IDS, MONSTERS, WAVE_TABLE, WILDLIFE, factionStance, temperOf, defBreathes, defDensity, defLeavesRemains, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
 import { presenceMul, presenceTable } from './presence';
 import { killRuleMatches, killRules, type KillCtx, type KillRule } from './killHandlers';
 import { updateScene, sceneInterceptFall, sceneNoteCast, type SceneRuntime } from './scenes';
@@ -258,7 +259,7 @@ import {
   type ThrongSourceRow, type ThrongSpec,
 } from './throng';
 import {
-  CLING_CFG, clingBurrowed, clingEligible, clingSeatPos, clingSeatsOf, gnawTags,
+  CLING_CFG, clingBurrowed, clingEligible, clingMotionShaken, clingSeatPos, clingSeatsOf, gnawTags,
 } from './cling';
 import { syncAttributeBequests } from './bequests';
 import { STATUS_RELAYS, STATUS_RELAY_IDS, relayStatusStat } from './reception';
@@ -28640,9 +28641,10 @@ export class World {
         breathe: sg.breathe, // the tidal shell's opening rides along
       };
     }
-    // TURN SPEED: the bestiary default smooths every pivot; big and shelled
-    // bodies author their own lumber. Player seats never pass through here.
-    a.turnSpeed = def.turnSpeed ?? MONSTER_TURN_DEFAULT;
+    // TURN SPEED: derive innate handling from anatomy unless explicitly
+    // authored. Seat control bypasses this innate rate at the steering seam.
+    a.turnSpeed = monsterTurnSpeed(def);
+    a.facingPrev = a.facing; // the first acquired target also pays the turn
     if (def.flier) { a.flying = true; a.flyingBase = true; }
     a.spawnedAt = this.time;
     // Monsters' skills level up with them — same leveling system as the player.
@@ -28683,6 +28685,7 @@ export class World {
     // (the player's mutator seam, verbatim). Attributes are player-pipeline
     // payloads and deliberately skip the bestiary.
     for (const b of def.boons ?? []) {
+      if (level < (b.minLevel ?? 1)) continue;
       const group = CHOICE_GROUPS[b.group];
       if (!group) continue;
       if (b.chance !== undefined && Math.random() >= b.chance) continue;
@@ -31314,7 +31317,10 @@ export class World {
         // THE SHAKE: the ride ends on its own rolled clock — the victim's
         // earned answer. A burrow-tempered rider pops out SCATTERED into
         // its vulnerability window (clingRelease knows the cause).
-        if (this.time >= ride.until) {
+        if (this.time >= ride.until || clingMotionShaken(a, v, this.time)) {
+          // Seat at the host's current pose before the fling; a dash or
+          // teleport must not leave the released rider at yesterday's seat.
+          clingSeatPos(v, a, ride.ang, a.pos);
           this.clingRelease(a, 'shake');
           continue;
         }
@@ -31344,6 +31350,7 @@ export class World {
             const type = g.type ?? 'physical';
             const amt = g.dps * every * a.sheet.get('damage', gnawTags(type));
             const taken = mitigateTyped(v, { [type]: amt });
+            SIM_TAP.current?.onDot?.(v, taken, type); // gnaw participates in balance telemetry
             if (taken > 0) {
               v.life -= taken;
               v.hitFlash = 0.12;
@@ -31358,6 +31365,7 @@ export class World {
         continue;
       }
       if (!a.cling || a.passive || this.time < a.clingThinkAt) continue;
+      if (a.isStunned() || a.heldBy !== undefined || a.gripping) continue;
       a.clingThinkAt = this.time + CLING_CFG.thinkEvery;
       if (this.time < a.clingCooldownUntil || isDormant(a)) continue;
       const v = a.aiTargetId !== undefined ? this.actorById(a.aiTargetId) : undefined;
@@ -31384,6 +31392,11 @@ export class World {
         // spikes (the lite pool's stagger doctrine).
         gnawAt: this.time + (a.cling.gnaw?.every ?? CLING_CFG.gnaw.every),
       };
+      clingMotionShaken(a, v, this.time); // seed motion at contact, before the next step
+      if (a.cling.gnaw && !this.seatOf(a)) a.casting = null;
+      if (a.cling.motionShake && used === 0 && this.seatOf(v)) {
+        this.text(v.pos, 'Move or turn to shake free!', a.color, 13);
+      }
       a.aiTargetId = v.id;
     }
   }
@@ -31593,7 +31606,8 @@ export class World {
         v.sheet.removeSource('status:' + id);
       }
     }
-    v.grabProofUntil = this.time + GRAB_CFG.break.graceSec;
+    v.grabProofUntil = Math.max(v.grabProofUntil,
+      this.time + (hold.spec.releaseGrace ?? GRAB_CFG.break.graceSec));
   }
 
   /** The spit direction for a monster's own throw-release: 'foe' aims the
@@ -46744,8 +46758,13 @@ export class World {
       // sheet (the aim knobs' law), so curses, auras and ground can bend the
       // pivot; a body with nothing folded — every player seat — resolves 0
       // and keeps its instant facing.
-      if (a.facingPrev !== undefined && !a.dead) {
-        const rate = a.sheet.get(BEHAVIOR_STATS.turnSpeed, undefined, undefined, a.turnSpeed);
+      const steeredCast = a.casting?.mode === 'channel' || a.casting?.mode === 'guard';
+      if (steeredCast && a.facingPrev !== undefined) {
+        // These casts spend their ONE pivot budget inside updateCasting.
+        // AI's desired facing must not turn them once here and once there.
+        a.facing = a.facingPrev;
+      } else if (a.facingPrev !== undefined && !a.dead) {
+        const rate = this.actorTurnRate(a);
         if (rate > 0) {
           const want = angleDiff(a.facingPrev, a.facing);
           const cap = rate * dt;
@@ -46887,7 +46906,20 @@ export class World {
           a.sheet.removeSource('weakspot');
         }
       }
-      if (a.casting) this.updateCasting(a, dt);
+      if (a.casting) {
+        const cast = a.casting;
+        const castFacing = a.facing;
+        this.updateCasting(a, dt);
+        // Completing a stamped cast can write facing in executeSkill.
+        // Its payload keeps the committed aim, but the body has already
+        // spent its turn budget; resolution is not a free snap-turn.
+        if (!steeredCast && this.actorTurnRate(a) > 0) a.facing = castFacing;
+        if (steeredCast) a.facingPrev = a.facing;
+        if (a.casting !== cast && cast.aiRecovery !== undefined
+          && !a.dead && !a.isStunned() && !this.seatOf(a)) {
+          finishAIRecovery(a, this.time, cast.aiRecovery);
+        }
+      }
       // THE FRAME LOCK re-derive (StatusDef.frameLock — the fourth wall):
       // stamped once at the rising edge from the frame that governs the
       // bearer THAT instant (copied — the live published rect mutates),
@@ -46905,7 +46937,7 @@ export class World {
       if (a.dash) {
         const inst = (a as Actor & { dashSkill?: SkillInstance }).dashSkill;
         const hits = (a as Actor & { dashHits?: Set<number> }).dashHits;
-        const step = a.dash.speed * dt;
+        const step = a.dash.speed * Math.min(dt, Math.max(0, a.dash.remaining));
         this.steppedClamp(a, vec(
           a.pos.x + Math.cos(a.dash.dir) * step,
           a.pos.y + Math.sin(a.dash.dir) * step,
@@ -46934,6 +46966,12 @@ export class World {
               // however the run ends.
               const carry = inst.def.delivery.onContact;
               if (carry && this.grabSeize(a, inst, enemy, carry.grab)) {
+                if (carry.maxCarryDistance !== undefined) {
+                  // This beat already moved; the end-of-beat decrement
+                  // must leave exactly the authored post-contact budget.
+                  a.dash.remaining = Math.min(a.dash.remaining,
+                    dt + Math.max(0, carry.maxCarryDistance) / Math.max(1, a.dash.speed));
+                }
                 const hold = a.gripping;
                 if (hold && hold.id === enemy.id) {
                   hold.until = Math.min(hold.until, this.time + a.dash.remaining);
@@ -47026,6 +47064,15 @@ export class World {
             }
           }
           a.dash = null;
+          // A later AI-only rush must not inherit this skill's corridor,
+          // grab or trail payload. Clear before arrival effects, which may
+          // themselves launch a fresh dash with its own metadata.
+          Object.assign(a, {
+            dashSkill: undefined, dashHits: undefined,
+            dashConjureSpec: undefined, conjTrailDist: undefined,
+            dashVentSpec: undefined, ventTrailDist: undefined,
+            dashTrailSpec: undefined, trailDist: undefined,
+          });
           // Dive Bomb: the arrival erupts; No Man's Land fields drop here.
           if (inst) {
             this.moveBlast(a, inst, a.pos);
@@ -53145,6 +53192,20 @@ export class World {
     }
   }
 
+  /** Physical facing rate; possession and co-op seats keep free innate
+   *  aim, while explicit stat modifiers can still bend their pivot. */
+  private actorTurnRate(a: Actor): number {
+    return a.sheet.get(BEHAVIOR_STATS.turnSpeed, undefined, undefined,
+      this.seatOf(a) ? 0 : a.turnSpeed);
+  }
+
+  /** A stance/channel's authored steering can be slower than the body,
+   *  but never faster. Zero innate rate means unrestricted player aim. */
+  private castTurnRate(a: Actor, authored: number): number {
+    const body = this.actorTurnRate(a);
+    return body > 0 ? Math.min(body, authored) : authored;
+  }
+
   /** Advance an actor's cast bar / channel / charge-up. */
   private updateCasting(a: Actor, dt: number): void {
     const cs = a.casting;
@@ -53250,6 +53311,7 @@ export class World {
           && dist(cs.aim, quarry.pos) <= quarry.radius + slack;
         cs.focusBroken = !focused;
         const end = (fire: boolean, mult = 1): void => {
+          if (!fire) cs.aiRecovery = undefined; // abandoned focus earns no completed-cast recovery
           a.casting = null;
           a.useLock = 0.15;
           if (fire) {
@@ -53295,12 +53357,18 @@ export class World {
       }
       case 'guard': {
         const spec = def.guard!;
+        // A player taking the seat owns the hand immediately.
+        if (this.seatOf(a)) {
+          cs.aiGuardReleaseAt = undefined;
+          cs.aiGuardFacing = undefined;
+        }
         cs.channelTime = (cs.channelTime ?? 0) + dt;
         // Facing tracks the aim, but slowly — the shield is heavy.
         const want = angleTo(a.pos, cs.aim);
         const diff = angleDiff(a.facing, want);
-        const turn = Math.min(Math.abs(diff), (spec.turnRate ?? 2.5) * dt);
-        a.facing += Math.sign(diff) * turn;
+        const turn = Math.min(Math.abs(diff), this.castTurnRate(a, spec.turnRate ?? 2.5) * dt);
+        if (cs.aiGuardFacing === undefined) a.facing += Math.sign(diff) * turn;
+        else a.facing = cs.aiGuardFacing;
         // The bash tic tracks LIVE stats (a buff landing mid-stance moves
         // the arming line the same frame — and the release check below
         // reads exactly what the bar showed).
@@ -53332,6 +53400,23 @@ export class World {
         // Timed stances (Riposte) drop themselves.
         if (spec.maxDuration && (cs.channelTime ?? 0) >= spec.maxDuration) {
           cs.held = false;
+        }
+        // An authored AI release becomes a readable, committed warning.
+        // The guard stays damageable: de-arming it during this beat denies
+        // the bash, and breaking/stunning it clears this state with the cast.
+        if (!this.seatOf(a) && !a.dead && (cs.aiGuardWindup ?? 0) > 0) {
+          const holdLeft = Math.min(cs.aiHold ?? Infinity, spec.maxDuration ?? Infinity) - (cs.channelTime ?? 0);
+          if ((!cs.held || holdLeft <= cs.aiGuardWindup!)
+            && cs.aiGuardReleaseAt === undefined && cs.bashAt !== undefined) {
+            const frac = (cs.shield ?? 0) / (cs.maxShield || 1);
+            if (cs.bashLow ? frac <= cs.bashAt : frac >= cs.bashAt) {
+              cs.aiGuardReleaseAt = this.time + cs.aiGuardWindup!;
+              cs.aiGuardFacing = a.facing;
+              a.aiPlantUntil = Math.max(a.aiPlantUntil, cs.aiGuardReleaseAt);
+              this.text(a.pos, 'Bash incoming!', def.color, 12);
+            }
+          }
+          if (cs.aiGuardReleaseAt !== undefined) cs.held = this.time + 1e-9 < cs.aiGuardReleaseAt;
         }
         if (!cs.held || a.dead) {
           // SHIELD BASH: releasing at/past the arming line converts the
@@ -53444,9 +53529,10 @@ export class World {
         // the limit itself is investable (channelTurnRate; Weathervane).
         if (autoSpin <= 0 && track) {
           const want = angleTo(a.pos, cs.aim);
-          if (ch.turnRate) {
-            const rate = ch.turnRate
-              * a.sheet.get('channelTurnRate', skillContextTags(def), instanceMods(cs.inst));
+          const rate = this.castTurnRate(a, ch.turnRate
+            ? ch.turnRate * a.sheet.get('channelTurnRate', skillContextTags(def), instanceMods(cs.inst))
+            : Infinity);
+          if (Number.isFinite(rate)) {
             const diff = angleDiff(a.facing, want);
             const turn = Math.min(Math.abs(diff), rate * dt);
             a.facing += Math.sign(diff) * turn;
@@ -59781,14 +59867,10 @@ export class World {
     }
   }
 
-  /** Is `target` swallowed by a veil patch the viewer isn't inside? THE one
-   *  concealment predicate — aim assist, hover naming, and future vision
-   *  consumers share it. Patch semantics: step under the same leaves (or
-   *  flush the target out) to see it. */
+  /** Is the target under crowns outside the viewer's local presence?
+   *  Connected canopy membership grants no distant vision. */
   isConcealedFrom(viewer: Actor, target: Actor): boolean {
-    const tp = this.veilPatchAt(target.pos);
-    if (!tp) return false;
-    return this.veilPatchAt(viewer.pos) !== tp;
+    return this.veilIndex().concealedFrom(viewer.pos, target.pos);
   }
 
   /** The blocking doodad whose SURFACE (± margin) covers this point, if any —

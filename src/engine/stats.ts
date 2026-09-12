@@ -1968,11 +1968,14 @@ export class StatSheet {
     stat: string, contextTags?: ReadonlySet<SkillTag>,
     extra?: readonly Modifier[], baseValue?: number, noLinks = false,
   ): number {
-    const key = (noLinks ? '§' : '') + (contextTags && contextTags.size
-      ? stat + '|' + [...contextTags].sort().join(',')
-      : stat);
     const cacheable = (!extra || !extra.length) && baseValue === undefined;
+    // Skill-local modifiers and base overrides bypass the value cache.
+    // Do not allocate/sort their tag sets for a key that is never read.
+    let key = '';
     if (cacheable) {
+      key = (noLinks ? '§' : '') + (contextTags && contextTags.size
+        ? stat + '|' + [...contextTags].sort().join(',')
+        : stat);
       const cached = this.cache.get(key);
       if (cached !== undefined) return cached;
     }

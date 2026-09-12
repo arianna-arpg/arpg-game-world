@@ -1116,6 +1116,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'gauntlet_swarm', weight: 1.5, presence: { to: 14, fadeOut: 6 } },
         { id: 'bannered_lance', weight: 1, presence: { from: 5, fadeIn: 3 } },
         { id: 'helm_choir', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'hollow_scripture_harness', weight: 1 },
         { id: 'panoply_saint', weight: 0.5, presence: { from: 10, fadeIn: 5 } },
         { id: 'the_unworn', weight: 0.5, presence: { from: 12, fadeIn: 5 } },
       ],
@@ -2740,6 +2741,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         // The muster pass: the wind that dances, the glass that sings.
         { id: 'khamsin_dervish', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'glasschanter', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        { id: 'sirocco_hourglass_diviner', weight: 1 },
         { id: 'dust_djinn', weight: 1, presence: { from: 9, fadeIn: 4 } },
         { id: 'sun_priest', weight: 1, presence: { from: 10, fadeIn: 4 } },
         { id: 'sandmaw_burrower', weight: 1, presence: { from: 8, fadeIn: 4 } },
@@ -5003,6 +5005,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       table: [
         // The river's own dead first; the graveyard's guests fill the banks.
         { id: 'lorn_shade', weight: 4 },
+        { id: 'river_obol_cantor', weight: 1 },
         { id: 'drowned_hauler', weight: 2, presence: { from: 5, fadeIn: 3 } },
         { id: 'soul_wellspring', weight: 1 },
         { id: 'gloomling', weight: 2 },
@@ -5813,6 +5816,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'duskveil_dancer', weight: 2, presence: { from: 5, fadeIn: 3 } },
         { id: 'glowworm_grub', weight: 2 },
         { id: 'lampwright', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'glimmer_lantern_weaver', weight: 1 },
         { id: 'thorn_sprite', weight: 2, presence: { to: 18, fadeOut: 8 } },
         { id: 'sylvan_warden', weight: 1 },
         { id: 'sylvan_sapling', weight: 1, presence: { to: 12, fadeOut: 5 } },
@@ -6519,6 +6523,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'petal_dancer', weight: 2 },
         { id: 'sepal_warden', weight: 1.5, presence: { from: 6, fadeIn: 3 } },
         { id: 'foxglove_chorister', weight: 1, presence: { from: 7, fadeIn: 4 } },
+        { id: 'bloom_scentweaver', weight: 1 },
         { id: 'bronze_scarab', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'skep_bee', weight: 1, presence: { to: 16, fadeOut: 8 } },
         { id: 'garden_snail', weight: 1 },

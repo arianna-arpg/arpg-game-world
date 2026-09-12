@@ -61,6 +61,11 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_wardenbalance.ts', status: 'green', tier: 'fast', why: 'AI bash warning timing, committed facing, shield-pressure and interruption counterplay, player exemption, Warden damage and doctrine level gates' },
+  { probe: 'probe_canopypresence.ts', status: 'green', tier: 'fast', why: 'Local canopy reveal, smooth distance falloff, disconnected proximity, composite isolation and aim-assist concealment' },
+  { probe: 'probe_projectilecull.ts', status: 'green', tier: 'fast', why: 'Projectile painter culls offscreen work while preserving edge effects, scales, large forms, tuning and tethers' },
+  { probe: 'probe_handling.ts', status: 'green', tier: 'fast', why: 'Morphology-derived turning, stat and seat overrides, frame-rate bounds, cast/guard/channel pivot integrity, body-aimed attacks and post-cast recovery' },
+  { probe: 'probe_clingbalance.ts', status: 'green', tier: 'fast', why: 'Gloomling motion/turn escape, steady gnaw, live AI, seat cap and lifecycle; bounded Gorer carry and cross-holder grace at 30/60/120 Hz' },
   { probe: 'probe_extraction.ts', status: 'green', tier: 'fast', why: 'EXTRACTION tempers + the pot: the temper roll and its player-first default, hero-vs-node threat seeding per temper, the classic fallback, and a pot that beats a harvest node and grows with the stand' },
   { probe: 'probe_shimmy.ts', status: 'green', tier: 'fast', why: 'THE SHIMMY LAW: a spent station dwell stays spent through stillness and unwilled displacement, re-arms on a willed step in range, and out-and-back still re-arms; THE DWELL TELL: every station/NPC target with its fill off the gate\'s own clock, on the one ring feed, its own transit row' },
   { probe: 'probe_classopeners.ts', status: 'green', tier: 'fast', why: 'All 36 base-kit requirements and costs; four opening rotation budgets; real Guardian ward/rally/hammer and Warlord retaliation source lifecycle' },

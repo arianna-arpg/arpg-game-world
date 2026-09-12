@@ -12,8 +12,14 @@
 // ---------------------------------------------------------------------------
 
 import type { LookDef } from '../render/vis/parts';
+import { CASTER_LOOKS } from './casterLooks';
+import { DEMON_LOOKS } from './demonLooks';
+import { COURT_LOOKS } from './courtLooks';
 
 export const LOOKS: Record<string, LookDef> = {
+  ...CASTER_LOOKS,
+  ...DEMON_LOOKS,
+  ...COURT_LOOKS,
 
   // ============================================== THE DEAD (the flagship set)
   /** Bare bones and a blade: ribs radiating off a spine, skull forward. */
@@ -391,14 +397,6 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'flames', x: -0.2, scale: 0.75, params: { n: 3 } }],
   },
-  cinder_fiend: {
-    parts: [
-      { kind: 'blob', params: { irr: 0.16, seed: 21 } },
-      { kind: 'horns', scale: 0.8 },
-      { kind: 'eyes', color: '#ffd24a', params: { spread: 0.5, dist: 0.6, size: 0.09 } },
-    ],
-    live: [{ kind: 'flames', params: { n: 3 } }],
-  },
   /** A scrap of living cinder: stub horns, hot little eyes, shedding sparks. */
   ash_whelp: {
     parts: [
@@ -448,27 +446,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'brand', x: 0.3, scale: 0.8 },
       { kind: 'wings', scale: 0.6, alpha: 0.85 },
       { kind: 'hood', x: 0.3, params: { eyes: true } },
-    ],
-  },
-  /** The skinner: a lean dart of a body, paired flensing knives, barbed. */
-  abyssal_flayer: {
-    parts: [
-      { kind: 'disc', scale: 0.8 },
-      { kind: 'tail', params: { len: 0.9 } },
-      { kind: 'daggers', params: { len: 0.6 } },
-      { kind: 'barbs', scale: 0.85, params: { n: 4 } },
-      { kind: 'eyes', color: '#ff5a8a', params: { spread: 0.42, dist: 0.6, size: 0.09 } },
-    ],
-  },
-  /** The gatekeeper: robes over a tentacle-fringe, an orb-staff, horned. */
-  hellgate_caller: {
-    parts: [
-      { kind: 'tentacleRing', scale: 0.85, params: { n: 6 } },
-      { kind: 'robe', scale: 0.92 },
-      { kind: 'staff', params: { orb: 'glow' } },
-      { kind: 'horns', scale: 0.7 },
-      { kind: 'runes', params: { n: 4 } },
-      { kind: 'eyes', params: { spread: 0.35, dist: 0.55, size: 0.09 } },
     ],
   },
   /** The planted gate: a ring of teeth around a molten throat — ground
@@ -1091,17 +1068,6 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'wisps', x: -0.4, scale: 0.9, params: { n: 3 } }],
   },
-
-  // ========================================================= THE HOLLOWBORN
-  /** The hollow vanguard: plate with nobody home — the visor glows anyway. */
-  hollow_vanguard: {
-    parts: [
-      { kind: 'torso', scale: 0.9, role: 'dark' },
-      { kind: 'pauldrons', scale: 1.0 },
-      { kind: 'sword', y: 0.06, params: { len: 0.85 } },
-      { kind: 'eyes', color: '#9ad4e8', params: { spread: 0.3, dist: 0.42, size: 0.08 } },
-    ],
-  },
   /** Living blades: the sheath rusted away first. */
   blade_swarm: {
     parts: [
@@ -1116,17 +1082,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'carapace', scale: 0.95, params: { segs: 1 } },
       { kind: 'pauldrons', scale: 0.85 },
       { kind: 'eyes', color: '#9ad4e8', params: { spread: 0.35, dist: 0.4, size: 0.07 } },
-    ],
-  },
-  /** The Unworn: crowned in nobody, carrying something worth the fight. */
-  the_unworn: {
-    parts: [
-      { kind: 'cape', scale: 1.0, role: 'dark' },
-      { kind: 'torso', scale: 0.95, role: 'dark' },
-      { kind: 'pauldrons', scale: 1.05 },
-      { kind: 'crown', x: 0.28, scale: 0.7 },
-      { kind: 'sword', y: 0.06, params: { len: 0.95 } },
-      { kind: 'eyes', color: '#bfe4f0', params: { spread: 0.3, dist: 0.42, size: 0.08 } },
     ],
   },
 
@@ -1198,11 +1153,13 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'flames', scale: 0.5, role: 'glow' }],
   },
-  /** The ash wretch: what didn't finish burning, still deciding. */
+  /** The ash wretch: a hollow kiln of charcoal, casting through its vents. */
   ash_wretch: {
     parts: [
       { kind: 'tatters', params: { n: 4 } },
       { kind: 'blob', scale: 0.8, role: 'dark', params: { irr: 0.18, seed: 41 } },
+      { kind: 'kilnMantle', scale: 0.92 },
+      { kind: 'lavaCracks', scale: 0.55, color: '#ec894b' },
       { kind: 'eyes', color: '#ffb45e', params: { spread: 0.35, dist: 0.45, size: 0.09 } },
     ],
     live: [{ kind: 'flames', scale: 0.45, role: 'glow' }],
@@ -2057,7 +2014,7 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', params: { n: 2, spread: 0.25, dist: 0.55, size: 0.07 } },
     ],
   },
-  /** Finger mage / ritualists: a tome, orbiting script, unsettling calm. */
+  /** Ritualists: a tome, orbiting script, unsettling calm. */
   ritual_mage: {
     parts: [
       { kind: 'robe' },
@@ -2065,17 +2022,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'runes', params: { n: 5 } },
       { kind: 'hood', x: 0.3, params: { eyes: true } },
     ],
-  },
-  /** Siege hulk: armored mass swinging a maul, core burning in its chest. */
-  siege_hulk: {
-    parts: [
-      { kind: 'torso', scale: 1.05 },
-      { kind: 'armorPlates', params: { n: 4 } },
-      { kind: 'pauldrons', scale: 1.2 },
-      { kind: 'hammer' },
-      { kind: 'gem', x: -0.1 },
-    ],
-    shadowScale: 1.1,
   },
   glacial_horror: {
     parts: [
@@ -2352,17 +2298,20 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'skull', x: 0.42, scale: 0.8 },
     ],
   },
-  /** The glacier shaman: antler-crowned iceworker — robe, an ice-orb staff,
-   *  cold runes, breath pluming in the endless winter. */
+  /** The glacier shaman: fur and antlers over a rack of frost-bone chimes;
+   *  the winter's ritualist keeps the cold in hanging teeth. */
   glacier_shaman: {
     parts: [
       { kind: 'robe' },
-      { kind: 'staff', params: { orb: '#bfe8ff' } },
+      { kind: 'furRuff', color: '#bac8ce', scale: 0.82 },
       { kind: 'runes', color: '#9fd8ff', params: { n: 3 } },
       { kind: 'hood', x: 0.28, scale: 0.9, params: { eyes: true, eyeColor: '#dff4ff' } },
       { kind: 'antlers', scale: 1.1, role: 'bone' },
     ],
-    live: [{ kind: 'breathPuff', scale: 0.8, color: '#dff4ff' }],
+    live: [
+      { kind: 'prayerChimes', x: 0.12, scale: 0.88 },
+      { kind: 'breathPuff', scale: 0.8, color: '#dff4ff' },
+    ],
   },
   /** The rime skater: the Court's lake-dancer — a TALL THIN glide of a body,
    *  short frost-tatters, a swept glow crest, twin long shin-blades worn low.
@@ -2661,12 +2610,13 @@ export const LOOKS: Record<string, LookDef> = {
   },
 
   // ================================================== THE LORDS BELOW
-  // The Underworld War's officer tiers, composed ENTIRELY from the existing
+  // Retained officer designs; refreshed host anatomy lives in demonLooks.ts.
+  // The Underworld War's officer tiers, composed from the shared
   // painter library. The family grammar, readable at a glance: every MARSHAL
   // wears its lord's WAR-BANNER on its back (the one silhouette element all
   // eight share — "an officer of the war") while the motif parts name the
   // banner (flame, chain, gore, door, doom, hush, siege, tithe); every LORD
-  // is the same motif at throne scale under a horn-crown. No new painters.
+  // is the same motif at throne scale under a horn-crown.
   chain_warden: {
     parts: [
       { kind: 'torso', scale: 0.95 },
@@ -2724,24 +2674,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', x: 0.3, scale: 0.6 },
     ],
   },
-  /** The quiet made flesh: a veiled bell-bearer — the bell IS the threat. */
-  hushmaiden: {
-    parts: [
-      { kind: 'robe', scale: 0.9, alpha: 0.9 },
-      { kind: 'hood', x: 0.28, params: { eyes: true } },
-      { kind: 'bell', y: 0.5, scale: 0.8 },
-    ],
-    live: [{ kind: 'veilSashes', scale: 0.85, alpha: 0.7, params: { sashes: 3 } }],
-  },
-  veil_stalker: {
-    parts: [
-      { kind: 'disc', scale: 0.82, alpha: 0.85 },
-      { kind: 'daggers', params: { len: 0.65 } },
-      { kind: 'tail', params: { len: 0.85 } },
-      { kind: 'hood', x: 0.26, scale: 0.85, params: { eyes: true } },
-    ],
-    live: [{ kind: 'wisps', scale: 0.5, color: '#5aa0a0', alpha: 0.4 }],
-  },
   /** The collector: hooked scythe, the strongbox chained to its back. */
   tithe_reaper: {
     parts: [
@@ -2766,18 +2698,6 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'flames', x: -0.2, scale: 0.7, params: { n: 3 } }],
   },
-  marshal_vormaul: {
-    parts: [
-      { kind: 'banner', x: -0.2 },
-      { kind: 'torso', scale: 1.02 },
-      { kind: 'armorPlates', scale: 0.95 },
-      { kind: 'pauldrons', role: 'metal', scale: 0.95 },
-      { kind: 'chains', rot: 0.4, params: { n: 3 } },
-      { kind: 'mace', params: { len: 1.1 } },
-      { kind: 'helm', scale: 0.8, role: 'metal' },
-    ],
-    shadowScale: 1.1,
-  },
   marshal_morgrath: {
     parts: [
       { kind: 'banner', x: -0.22 },
@@ -2790,38 +2710,6 @@ export const LOOKS: Record<string, LookDef> = {
     live: [{ kind: 'carrionFlies', scale: 0.9, params: { flies: 5 } }],
     shadowScale: 1.1,
   },
-  marshal_vethriss: {
-    parts: [
-      { kind: 'banner', x: -0.2 },
-      { kind: 'robe', scale: 0.95 },
-      { kind: 'tentacleRing', scale: 0.8, params: { n: 5 } },
-      { kind: 'staff', params: { orb: 'glow' } },
-      { kind: 'runes', params: { n: 4 } },
-      { kind: 'eyes', color: '#c8a8ff', params: { spread: 0.32, dist: 0.58, size: 0.1 } },
-    ],
-    live: [{ kind: 'floatingShards', scale: 0.8, params: { n: 4 } }],
-  },
-  marshal_ozrimoth: {
-    parts: [
-      { kind: 'banner', x: -0.2 },
-      { kind: 'robe' },
-      { kind: 'hood', x: 0.3, params: { eyes: true } },
-      { kind: 'censer', y: 0.55, scale: 0.9 },
-      { kind: 'brand', x: 0.3, scale: 0.85 },
-      { kind: 'wings', scale: 0.65, alpha: 0.8 },
-      { kind: 'runes', scale: 0.9, params: { n: 3 } },
-    ],
-  },
-  marshal_nyxara: {
-    parts: [
-      { kind: 'banner', x: -0.2, alpha: 0.85 },
-      { kind: 'torso', scale: 0.92, alpha: 0.9 },
-      { kind: 'hood', x: 0.28, params: { eyes: true } },
-      { kind: 'bell', y: 0.52, scale: 0.85 },
-      { kind: 'daggers', params: { len: 0.6 } },
-    ],
-    live: [{ kind: 'veilSashes', scale: 0.95, alpha: 0.75, params: { sashes: 4 } }],
-  },
   marshal_bhorog: {
     parts: [
       { kind: 'banner', x: -0.2 },
@@ -2833,17 +2721,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'warhorn', x: -0.3, scale: 0.7 },
     ],
     shadowScale: 1.15,
-  },
-  marshal_molochai: {
-    parts: [
-      { kind: 'banner', x: -0.2 },
-      { kind: 'robe', scale: 0.95 },
-      { kind: 'chest', x: -0.32, scale: 0.75, role: 'metal' },
-      { kind: 'scythe', params: { len: 1.05 } },
-      { kind: 'crown', x: 0.35, scale: 0.55, role: 'metal' },
-      { kind: 'gem', y: 0.45, scale: 0.5, role: 'glow' },
-      { kind: 'eyes', color: '#e8e870', params: { spread: 0.34, dist: 0.58, size: 0.09 } },
-    ],
   },
 
   // --- the eight LORDS (throne bodies — the motif at full scale) --------------
@@ -2887,44 +2764,6 @@ export const LOOKS: Record<string, LookDef> = {
     live: [{ kind: 'carrionFlies', scale: 1.1, params: { flies: 7 } }],
     shadowScale: 1.25,
   },
-  lord_vethriss: {
-    parts: [
-      { kind: 'tentacleRing', scale: 0.95, params: { n: 7 } },
-      { kind: 'robe', scale: 1.05, alpha: 0.95 },
-      { kind: 'staff', params: { orb: 'glow', len: 1.15 } },
-      { kind: 'runes', scale: 1.05, params: { n: 5 } },
-      { kind: 'crownOfHorns', x: 0.28, scale: 0.75 },
-      { kind: 'eyes', color: '#c8a8ff', params: { spread: 0.3, dist: 0.6, size: 0.1 } },
-    ],
-    live: [{ kind: 'floatingShards', scale: 1.05, params: { n: 6 } }],
-    shadowScale: 1.15,
-  },
-  lord_ozrimoth: {
-    parts: [
-      { kind: 'robe', scale: 1.08 },
-      { kind: 'hood', x: 0.3, scale: 1.05, params: { eyes: true } },
-      { kind: 'wings', scale: 0.9, alpha: 0.85 },
-      { kind: 'censer', y: 0.6, scale: 1 },
-      { kind: 'brand', x: 0.32, scale: 0.95 },
-      { kind: 'runes', scale: 1.1, params: { n: 5 } },
-      { kind: 'halo', scale: 0.9, alpha: 0.6 },
-    ],
-    shadowScale: 1.15,
-  },
-  lord_nyxara: {
-    parts: [
-      { kind: 'torso', scale: 1.02, alpha: 0.88 },
-      { kind: 'hood', x: 0.3, scale: 1, params: { eyes: true } },
-      { kind: 'bell', y: 0.55, scale: 1 },
-      { kind: 'daggers', params: { len: 0.7 } },
-      { kind: 'crown', x: 0.4, scale: 0.55, role: 'dark' },
-    ],
-    live: [
-      { kind: 'veilSashes', scale: 1.1, alpha: 0.8, params: { sashes: 5 } },
-      { kind: 'wisps', scale: 0.7, color: '#5aa0a0', alpha: 0.45 },
-    ],
-    shadowScale: 1.1,
-  },
   lord_bhorog: {
     parts: [
       { kind: 'torso', scale: 1.15 },
@@ -2936,19 +2775,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'crownOfHorns', x: 0.3, scale: 0.75 },
     ],
     shadowScale: 1.3,
-  },
-  lord_molochai: {
-    parts: [
-      { kind: 'robe', scale: 1.05 },
-      { kind: 'chest', x: -0.35, scale: 0.9, role: 'metal' },
-      { kind: 'chains', rot: 0.4, params: { n: 2 } },
-      { kind: 'scythe', params: { len: 1.2 } },
-      { kind: 'crown', x: 0.38, scale: 0.65, role: 'metal' },
-      { kind: 'gem', y: 0.5, scale: 0.6, role: 'glow' },
-      { kind: 'eyes', color: '#e8e870', params: { spread: 0.32, dist: 0.6, size: 0.09 } },
-    ],
-    live: [{ kind: 'wisps', scale: 0.6, color: '#8ab04a', alpha: 0.5 }],
-    shadowScale: 1.15,
   },
 
   // ===================================================== DEPLOYED CONSTRUCTS
@@ -3060,18 +2886,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'orb', scale: 0.55 },
     ],
     shadowScale: 0.5,
-  },
-  /** THE UNMAKER ACOLYTE: the war's quiet clerisy — a robed adept under a
-   *  deep hood, a rune-brand burning where a holy symbol would hang, and
-   *  the fragments of whatever it last unmade still orbiting it (the
-   *  floatingShards live painter's debut). */
-  unmaker_acolyte: {
-    parts: [
-      { kind: 'robe' },
-      { kind: 'hood', x: 0.3, params: { eyes: true, eyeColor: '#9fffc0' } },
-      { kind: 'brand', y: 0.15, scale: 0.5, role: 'glow' },
-    ],
-    live: [{ kind: 'floatingShards', params: { n: 5 } }],
   },
   /** THE HATEBOUND HULK: the Legion's plunder-mule — a chained bulk under
    *  harness and pack, branded with its owner's mark. What it hauls, it
@@ -3871,17 +3685,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'disc', scale: 0.4, x: -0.35, role: 'glow' },
       { kind: 'eyes', color: '#d8f078', params: { spread: 0.4, dist: 0.55, size: 0.09 } },
     ],
-  },
-  /** The lampwright: the synchronist — a courtier grown ceremonial, sign-
-   *  marks orbiting the lamp and beat pips keeping the chorus's time. */
-  lampwright: {
-    parts: [
-      { kind: 'featherWings', scale: 0.9, alpha: 0.75 },
-      { kind: 'disc', scale: 0.55, role: 'glow' },
-      { kind: 'runes', scale: 0.8, params: { n: 3 } },
-      { kind: 'antennae', scale: 0.9 },
-    ],
-    live: [{ kind: 'beatPips', x: -0.6, color: '#d8f078', params: { n: 3 } }],
   },
   /** THE FALSE SOVEREIGN: a darkness wearing a stolen lamp — the void
    *  angler's grammar in the grove's own colors. The light is bait; the
@@ -5488,28 +5291,6 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     shadowScale: 0.55,
   },
-  /** A wind that learned appetite — mostly sash, barely body. */
-  dust_djinn: {
-    parts: [
-      { kind: 'robe', color: '#d8b878', scale: 1.05 },
-      { kind: 'maw', color: '#4a3a1e', scale: 0.6 },
-    ],
-    live: [
-      { kind: 'veilSashes', color: '#c9a86a', scale: 1.15, params: { sashes: 4 } },
-      { kind: 'wisps', color: '#e8d0a0', role: 'glow', alpha: 0.7 },
-    ],
-    shadowScale: 0.5,
-  },
-  /** The chaplain of noon: sunburst, censer, and no doubts whatsoever. */
-  sun_priest: {
-    parts: [
-      { kind: 'robe', color: '#c8963a', scale: 1.0 },
-      { kind: 'sunburst', color: '#ffd870', scale: 0.8 },
-      { kind: 'censer', color: '#8a6e34', role: 'metal', scale: 0.9 },
-      { kind: 'halo', color: '#ffe8a0', scale: 1.1 },
-    ],
-    shadowScale: 0.95,
-  },
   /** The reason caravans walk the hardpan. */
   sandmaw_burrower: {
     parts: [
@@ -5724,7 +5505,7 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'robe', color: '#2e4658', scale: 1.05, alpha: 0.95 },
       { kind: 'shroudWrap', color: '#43655e', scale: 0.9, alpha: 0.8, params: { bands: 3 } },
       { kind: 'censer', color: '#7ad8c8', y: 0.55, scale: 0.9, role: 'metal' },
-      { kind: 'staff', color: '#4a6a62', scale: 0.95, params: { orb: 'glow' } },
+      { kind: 'conchFocus', x: 0.5, y: -0.64, rot: 0.3, scale: 0.65 },
       { kind: 'hood', color: '#243a48', scale: 0.95, params: { eyes: true } },
       { kind: 'crown', color: '#5a8a72', x: 0.28, scale: 0.55 },
     ],
@@ -6857,17 +6638,6 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     shadowScale: 0.9,
   },
-  /** The Grind Bannerman: the column's spine — the standard IS the look. */
-  grind_bannerman: {
-    parts: [
-      { kind: 'banner', x: -0.25, scale: 1.35 },
-      { kind: 'torso', scale: 0.98 },
-      { kind: 'armorPlates', params: { n: 3 } },
-      { kind: 'helm', scale: 0.9 },
-      { kind: 'sword', scale: 0.8 },
-    ],
-    shadowScale: 1.0,
-  },
   /** The Master of Ordnance: a shoulder-slung bombard fed from the shot
    *  rack on his back (the rack is his PART body — starve the gun). */
   ordnance_master: {
@@ -7223,15 +6993,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', color: '#9ad4e8', params: { n: 1, spread: 0, dist: 0.1, size: 0.08 } },
     ],
   },
-  /** Three helms in loose procession; the hymn hangs between them. */
-  helm_choir: {
-    parts: [
-      { kind: 'helm', x: 0.25, scale: 0.6 },
-      { kind: 'helm', x: -0.3, y: 0.45, scale: 0.45, alpha: 0.95 },
-      { kind: 'helm', x: -0.3, y: -0.45, scale: 0.45, alpha: 0.95 },
-    ],
-    live: [{ kind: 'soulGauze', color: '#9ad4e8', scale: 0.9, params: { n: 3 } }],
-  },
   /** A couched lance flying its own colors — the knight rusted away and
    *  the tourney didn't notice. */
   bannered_lance: {
@@ -7320,26 +7081,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'antennae', scale: 0.8 },
     ],
     live: [{ kind: 'wisps', x: -0.25, scale: 0.5, params: { n: 2 } }],
-  },
-  /** The cupbearer: a lantern-yoke and a body made of carried morning. */
-  dew_porter: {
-    parts: [
-      { kind: 'disc', scale: 0.6, role: 'glow' },
-      { kind: 'yoke', x: -0.05, params: { span: 1.1 } },
-      { kind: 'lantern', y: 0.62, scale: 0.55 },
-      { kind: 'lantern', y: -0.62, scale: 0.55 },
-      { kind: 'antennae', scale: 0.75 },
-    ],
-    live: [{ kind: 'wisps', scale: 0.55, params: { n: 3 } }],
-  },
-  /** The gardener kneeling in its own crop: crystal rows and root-toes. */
-  shard_gardener: {
-    parts: [
-      { kind: 'roots', scale: 0.8 },
-      { kind: 'disc', scale: 0.62, role: 'glow' },
-      { kind: 'crystalGrowths', scale: 0.95 },
-      { kind: 'gem', x: 0.45, scale: 0.5 },
-    ],
   },
 
   /** The major: the soldier body forged bigger — plate over shear-jaws. */
@@ -7522,15 +7263,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'glassFins', scale: 0.8, alpha: 0.85 },
     ],
     live: [{ kind: 'veilSashes', scale: 1.0, alpha: 0.75, params: { n: 4 } }],
-  },
-  /** The glass that sings back: robed chanter crowned in fused sand. */
-  glasschanter: {
-    parts: [
-      { kind: 'robe', color: '#9a8a5e', scale: 1.0 },
-      { kind: 'crystalGrowths', scale: 0.8, alpha: 0.95 },
-      { kind: 'gem', x: 0.4, scale: 0.5 },
-      { kind: 'halo', scale: 1.05, alpha: 0.4 },
-    ],
   },
 
   /** The membrane's own mender: aproned, shroud-wrapped, watched by the

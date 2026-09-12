@@ -106,6 +106,17 @@ export interface ClingSpec {
   /** Seconds a victim carries this rider before shaking it off (roll per
    *  ride; default CLING_CFG.shakeSec). Longer = stickier flavor. */
   shakeSec?: [number, number];
+  /** Optional active escape: traveled distance and sharp facing/movement
+   *  turns add together to wear out one grip. No input-device dependency;
+   *  actual body motion drives players, monsters and possessed bodies. */
+  motionShake?: {
+    /** World units of travel needed to shed a fresh grip on their own. */
+    distance: number;
+    /** Radians of sharp turning needed to shed a fresh grip alone. */
+    turnRadians: number;
+    /** Turns slower than this rate do not loosen the grip (rad/s). */
+    minTurnSpeed: number;
+  };
   /** Attach reach beyond touching rims (default CLING_CFG.attachPad). */
   pad?: number;
   /** Status the VICTIM wears while ridden (refreshed on the ride clock;
@@ -147,6 +158,40 @@ export interface ClingRide {
   /** Next gnaw bite (internal clock; armed one beat past the attach so a
    *  brush-past latch never spikes — the lite pool's stagger doctrine). */
   gnawAt: number;
+  /** Motion samples exist only for riders opting into active escape. */
+  motion?: { x: number; y: number; facing: number; at: number; wear: number; heading?: number };
+}
+
+/** Accumulate motion once per world beat. Wrapped angles avoid false
+ *  full spins across -PI/PI; facing and travel turns use the larger signal
+ *  so turning the body and its feet together never earns double credit.
+ *  Blocked movement earns nothing, and small aim jitter stays below the
+ *  authored angular speed floor. Omitted specs leave classic riders alone. */
+export function clingMotionShaken(rider: Actor, victim: Actor, now: number): boolean {
+  const spec = rider.cling?.motionShake, ride = rider.clingTo;
+  if (!spec || !ride) return false;
+  const prev = ride.motion;
+  if (!prev) {
+    ride.motion = { x: victim.pos.x, y: victim.pos.y, facing: victim.facing, at: now, wear: 0 };
+    return false;
+  }
+  const dt = now - prev.at;
+  if (dt <= 0) return prev.wear >= 1;
+  const dx = victim.pos.x - prev.x, dy = victim.pos.y - prev.y;
+  const distance = Math.hypot(dx, dy);
+  const angle = (a: number, b: number): number => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+  let turn = angle(victim.facing, prev.facing);
+  if (distance > 0.01) {
+    const heading = Math.atan2(dy, dx);
+    if (prev.heading !== undefined) turn = Math.max(turn, angle(heading, prev.heading));
+    prev.heading = heading;
+  } else {
+    prev.heading = undefined; // stopping and later starting is not a sharp turn
+  }
+  if (spec.distance > 0) prev.wear += distance / spec.distance;
+  if (spec.turnRadians > 0 && turn / dt >= spec.minTurnSpeed) prev.wear += turn / spec.turnRadians;
+  prev.x = victim.pos.x; prev.y = victim.pos.y; prev.facing = victim.facing; prev.at = now;
+  return prev.wear >= 1 - 1e-9;
 }
 
 /** THE LATCH FABRIC's modular thresholds — tune HERE, never inline. */

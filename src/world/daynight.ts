@@ -15,6 +15,16 @@ export type DayPhase = 'dawn' | 'day' | 'dusk' | 'night';
 /** Seconds for one full dawn→day→dusk→night→dawn turn. */
 export const DAY_LENGTH = 240;
 
+/** Scripted ground may author its own sky without moving the simulation
+ *  clock (cooldowns, weather and saved world history keep their own time).
+ *  Leaving the staging zone automatically releases the override. */
+export function sceneSkyTime(world: {
+  time: number; zone: { id: string };
+  scene?: { zoneId: string; skyTime?: number } | null;
+}): number {
+  return world.scene?.zoneId === world.zone.id ? world.scene.skyTime ?? world.time : world.time;
+}
+
 export interface DayCycle {
   phase: DayPhase;
   /** Position through the cycle, 0..1 (dawn at the wrap). */

@@ -62,6 +62,8 @@ import { bumpLedger } from '../packages/ledger';
 import { registerAttentionSource } from '../world/attention';
 import { Rng } from '../core/rng';
 import { vec, dist, rand, angleDiff, type Vec2 } from '../core/math';
+import { DAY_LENGTH } from '../world/daynight';
+import { beginSceneRoad, streamSceneRoad, sceneRoadShoulder, sceneRoadCoordinates, onSceneRoad, type SceneRoad } from './sceneRoad';
 
 // ------------------------------------------------------------- the runtime --
 
@@ -69,6 +71,11 @@ import { vec, dist, rand, angleDiff, type Vec2 } from '../core/math';
  *  (bar/prompt/focus/card) are read by the renderer + DOM layer each frame —
  *  drawn state IS director state, nothing forked. */
 export interface SceneRuntime {
+  road?: SceneRoad;
+  /** Scene-local day wheel, used only while standing on the staging ground. */
+  skyTime?: number;
+  /** Retained unfinished narrative goal during the commander's interruption. */
+  interruptedObjective?: { label: string; frac: number };
   def: SceneDef;
   zoneId: string;
   stageIx: number;
@@ -242,6 +249,8 @@ export function sceneBegin(w: World, id: string): boolean {
   // THE FAR-FIELD DRESS: a boundless stage learns its own heart's palette
   // so the streamer can keep the country coming past the minted rim.
   if (eff.zone.boundless) w.scene.dress = buildSceneDress(w, z);
+  if (eff.zone.road) w.scene.road = beginSceneRoad(w, eff.zone.road);
+  if (eff.zone.skyCycle !== undefined) w.scene.skyTime = eff.zone.skyCycle * DAY_LENGTH;
   return true;
 }
 
@@ -319,6 +328,7 @@ function seedDressChunk(sc: SceneRuntime, cx: number, cy: number): Doodad[] {
       const gap = (doodadRuleOf(row.kind).spacing ?? 0) + radius;
       if (pieces.some(q => Math.hypot(q.pos.x - pos.x, q.pos.y - pos.y) < gap + q.radius)) continue;
       const d: Doodad = { pos, radius, kind: row.kind };
+      if (sc.road && !sceneRoadShoulder(sc.road, d)) continue;
       if (row.rot) d.rot = rng.range(-0.4, 0.4);
       pieces.push(d);
     }
@@ -397,7 +407,10 @@ export function updateScene(w: World, dt: number): void {
     : Math.max(sc.fadeTarget, w.screenFade - SCENE_CFG.fade.down * dt)));
   // The far-field dress rides every director tick while the party stands
   // on the stage (cheap: a handful of map lookups once the ring is seeded).
-  if (w.zone.id === sc.zoneId) streamSceneDress(w, sc);
+  if (w.zone.id === sc.zoneId) {
+    streamSceneDress(w, sc);
+    if (sc.road) streamSceneRoad(w, sc.road);
+  }
   const spec = sc.def.stages[sc.stageIx];
   if (!spec) { endScene(w, sc); return; }
   const h = STAGES[spec.kind];
@@ -411,13 +424,20 @@ export function updateScene(w: World, dt: number): void {
     sc.begun = true;
     sc.stageT = 0;
     sc.state = {};
+    sc.state.skyFrom = sc.skyTime ?? w.time;
     h.begin?.(w, sc, spec);
   }
   sc.stageT += dt;
+  if (spec.sky && w.zone.id === sc.zoneId) {
+    const t = Math.min(1, sc.stageT / Math.max(0.001, spec.sky.transitionSec));
+    const k = t * t * (3 - 2 * t);
+    const from = sc.state.skyFrom as number;
+    sc.skyTime = from + (spec.sky.cycle * DAY_LENGTH - from) * k;
+  }
   if (h.update(w, sc, spec, dt)) {
     sc.stageIx++;
     sc.begun = false;
-    sc.bar = null;
+    sc.bar = sc.def.stages[sc.stageIx]?.kind === 'reckoning' ? sc.interruptedObjective ?? null : null;
     sc.prompt = null;
     sc.mark = null;
     sc.hudVeil = false;
@@ -667,15 +687,20 @@ registerSceneStage('clash', {
 
 registerSceneStage('assault', {
   onFell: 'skip',
-  begin(_w, sc, spec) {
+  begin(w, sc, spec) {
     sc.barAt = (spec as SceneAssaultStage).hud ?? 'top';
     sc.state.next = 0;
     sc.state.lastPour = 0;
     sc.state.ids = [];
+    sc.state.distance = 0;
+    sc.state.last = vec(w.player.pos.x, w.player.pos.y);
+    sc.state.farthest = sc.road ? sceneRoadCoordinates(sc.road, w.player.pos).along : 0;
+    sc.interruptedObjective = undefined;
   },
   update(w, sc, spec) {
     const s = spec as SceneAssaultStage;
-    const st = sc.state as { next: number; lastPour: number; ids: number[] };
+    const st = sc.state as { next: number; lastPour: number; ids: number[];
+      distance: number; farthest: number; last: Vec2 };
     while (st.next < s.rows.length && sc.stageT >= s.rows[st.next].at) {
       const row = s.rows[st.next];
       pourRows(w, sc, row.spawns, st.ids);
@@ -688,9 +713,34 @@ registerSceneStage('assault', {
     // Past the script's tail, the last row REPOURS on its cadence — the
     // tide that never ebbs (the whole point of this road).
     const every = s.repeatLastEvery ?? 0;
-    if (every > 0 && st.next >= s.rows.length && sc.stageT - st.lastPour >= every) {
+    if (every > 0 && s.rows.length > 0 && st.next >= s.rows.length && sc.stageT - st.lastPour >= every) {
       pourRows(w, sc, s.rows[s.rows.length - 1].spawns, st.ids);
       st.lastPour = sc.stageT;
+    }
+    if (s.objective) {
+      const goal = s.objective;
+      if (goal.progress.kind === 'road' && sc.road) {
+        const p = w.player;
+        const along = sceneRoadCoordinates(sc.road, p.pos).along;
+        // Credit only new forward ground traversed ON the way by this hero.
+        // Backtracking and off-road shortcuts cannot be farmed by re-entry.
+        if (!p.dead && !p.downed && !p.push && onSceneRoad(sc.road, st.last) && onSceneRoad(sc.road, p.pos)) {
+          st.distance += Math.max(0, along - st.farthest);
+        }
+        st.farthest = Math.max(st.farthest, along);
+        st.last = vec(p.pos.x, p.pos.y);
+      }
+      const amount = goal.progress.kind === 'road' ? st.distance : sc.stageT;
+      // The cap also guards giant dt/displacements and misconfigured data.
+      const interruptAt = Math.max(0.01, Math.min(0.99, goal.interruptAt));
+      const frac = Math.min(interruptAt, amount / Math.max(1, goal.progress.amount));
+      sc.bar = { label: goal.label, frac };
+      sc.prompt = goal.prompt;
+      if (frac >= interruptAt || sc.stageT >= s.surviveSec) {
+        sc.interruptedObjective = { ...sc.bar };
+        return true;
+      }
+      return false;
     }
     if (s.label) sc.bar = { label: s.label, frac: Math.min(1, sc.stageT / s.surviveSec) };
     return sc.stageT >= s.surviveSec;
@@ -728,7 +778,8 @@ registerSceneStage('reckoning', {
     sc.state.colId = col.id;
     sc.state.cast = false;
     sc.state.blastAt = null;
-    sc.bar = null;
+    sc.bar = sc.interruptedObjective ?? null;
+    sc.barAt = 'top';
     sc.prompt = null;
   },
   update(w, sc, spec, dt) {
@@ -742,7 +793,13 @@ registerSceneStage('reckoning', {
     // THE DEAD-COMMANDER LANE (the mechanics-breaker's net): a Father who is
     // somehow truly finished just fades the stage forward — the wake and Mu
     // follow as ever. Never an immunity, never a lock, never a refusal print.
-    if (!col || col.dead) { sc.mark = null; sc.focus = null; sc.fadeTarget = 1; return w.screenFade >= 0.995; }
+    if (!col || col.dead) {
+      // Even a mechanics-breaker cannot turn the unfinished journey into a
+      // living exit. Keep the existing mortal commander and Mu safety net.
+      fellSeats(w, sc);
+      sc.mark = null; sc.focus = null; sc.fadeTarget = 1;
+      return w.screenFade >= 0.995;
+    }
     // THE FIELD-FALL SURGE (her ruling 2026-09-01): the tide may fell the
     // whole party while the Father still musters — the covenant lays them
     // bodily down in place (this stage PLAYS the fall) and he has nothing

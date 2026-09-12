@@ -35,7 +35,7 @@ import { ATTENTION_CFG, collectAttention } from '../world/attention';
 import {
   floatKindOn, noticeChannelOn, NOTICE_CFG, PICKUP_FEED_CFG, type NoticeEntry,
 } from '../world/bulletins';
-import { dayCycle } from '../world/daynight';
+import { dayCycle, sceneSkyTime } from '../world/daynight';
 import { GridWalkField } from '../world/gridWalk';
 import { regionKind, SURVIVAL_RESOURCES } from '../world/regions';
 import { tierLinkOf } from '../engine/tiers';
@@ -46,11 +46,12 @@ import { blocksMovement, blocksProjectiles, doodadRuleOf, hitSurfaceOf, pitRegio
 import { fellFace } from '../engine/rampage';
 import type { HitShape } from '../engine/shapes';
 import { PROJ_FORM_GEO } from '../engine/projForms';
+import { projectileDrawScale } from './vis/projectileBounds';
 import { transitRing } from '../data/transit';
 import { EVENT_COLOR, gateLookOf } from '../data/gateVisuals';
 import { courtLord } from '../packages/courts';
 import { boundaryGateOf } from '../data/boundaryGates';
-import { VEIL_DEFAULTS } from '../engine/veil';
+import { VEIL_DEFAULTS, veilPresenceAlpha } from '../engine/veil';
 import { DEFENSE_CFG } from '../engine/defense';
 import { QUEST_GIVER_IDS } from '../quests/defs';
 
@@ -2313,7 +2314,7 @@ export class Renderer {
     // THE SUN-LIFT: high day brightens the whole scene with a warm additive
     // breath — days finally feel like days. Scaled by the biome's own
     // dayLight (a desert SWELTERS at 1.6; a canopied wood barely lifts).
-    const sunUp = dayCycle(world.time).light;
+    const sunUp = dayCycle(sceneSkyTime(world)).light;
     if (sunUp > 0.55) {
       const lift = 0.055 * ((sunUp - 0.55) / 0.45) * (world.zone.theme.dayLight ?? 1);
       if (lift > 0.004) {
@@ -2326,7 +2327,7 @@ export class Renderer {
     }
     // The LIGHT LAYER carries the darkness now; this wash is only the cold
     // blue COLOR GRADE of night, not its blackness.
-    const night = 1 - dayCycle(world.time).light; // 0 at noon, 1 at deep night
+    const night = 1 - dayCycle(sceneSkyTime(world)).light; // 0 at noon, 1 at deep night
     if (night > 0.04) {
       ctx.fillStyle = `rgba(16,22,52,${(0.12 * night).toFixed(3)})`;
       ctx.fillRect(0, 0, w, h);
@@ -3862,14 +3863,9 @@ export class Renderer {
   // without a real z-axis). Fade is smoothed per doodad; enemies lurking under
   // an unfaded canopy stay hidden, which is the ambush half of the feature.
   //
-  // VEIL kinds (DoodadRule.veil, engine/veil.ts) escalate this to the PATCH:
-  // their crowns merge into contiguous canopy masses, and the PATCH drives the
-  // crown's target alpha — sealed near-opaque cover until the LOCAL hero
-  // stands under the same mass, when the whole patch opens together. The
-  // per-crown near-fade still composes in (min), so the tree directly overhead
-  // always opens a little further and an eave can be peeked under from just
-  // outside. Every crown smooths individually toward the shared target, so a
-  // patch fades as one body with no extra state.
+  // Veil crowns use the shared local-presence law (engine/veil.ts). Patches
+  // only batch the sealed backdrop; nearby crowns fade independently, with
+  // the same smoothed opacity feeding labels and overhead text.
   private canopyFade = new WeakMap<object, number>();
   /** This frame's occluders with their smoothed fades — collected by
    *  drawCanopies for the label pass (one loop, two customers). */
@@ -3922,7 +3918,6 @@ export class Renderer {
     const env: PaintEnv = { ctx: this.ctx, theme: world.zone.theme, time: world.time, world };
     this.frameOccluders.length = 0;
     const veils = world.veilIndex();
-    const heroPatch = veils.patches.length ? veils.patchAt(hero.pos.x, hero.pos.y) : null;
     const composite = VIS_CFG.canopy.composite && VIS_CFG.canopy.bakeCrowns
       && !VIS_ABLATE.has('canopyslices');
     this.canopySlices.begin(dt, world);
@@ -3936,10 +3931,8 @@ export class Renderer {
       const patch = veil ? veils.patchOf(o) : null;
       let patchTarget = 1;
       if (veil && patch) {
-        patchTarget = patch === heroPatch
-          ? (veil.reveal ?? VEIL_DEFAULTS.reveal)
-          : (veil.cover ?? VEIL_DEFAULTS.cover);
-        target = Math.min(target, patchTarget);
+        patchTarget = veil.cover ?? VEIL_DEFAULTS.cover;
+        target = veilPresenceAlpha(veil, hero.pos, o);
       }
       const cur = this.canopyFade.get(o) ?? 1;
       let fade = cur + (target - cur) * Math.min(1, dt * VIS_CFG.canopy.fadeRate);
@@ -3956,7 +3949,10 @@ export class Renderer {
       // adopts the group's shared alpha (drawn in one blit below) unless the
       // hero's near-fade legitimately pulls it away — then it draws itself.
       if (composite && bakeable && veil && patch) {
-        const adopted = this.canopySlices.claim(patch, veil, o, fade, patchTarget, near);
+        // Keep departed crowns independent until their closing fade finishes.
+        // Rejoining immediately when presence ends would visibly snap shut.
+        const local = target < patchTarget || fade < patchTarget - VIS_CFG.canopy.divergeOut;
+        const adopted = this.canopySlices.claim(patch, veil, o, fade, patchTarget, local);
         if (adopted !== null) { fade = adopted; handled = true; }
       }
       this.canopyFade.set(o, fade);
@@ -6799,7 +6795,17 @@ export class Renderer {
   private drawProjectiles(world: World): void {
     const { ctx } = this;
     this.drawTethers(world);
+    if (!world.projectiles.length) return;
+    const x0 = this.cam.x, y0 = this.cam.y;
+    const x1 = x0 + this.canvas.width / this.zoom;
+    const y1 = y0 + this.canvas.height / this.zoom;
+    const reachScale = projectileDrawScale();
+    // Cover any jitter the world transform can apply this frame as well.
+    const edgePad = 1 + 2 / this.zoom + Math.max(0, world.shake);
     for (const p of world.projectiles) {
+      const reach = p.radius * reachScale + edgePad;
+      if (p.pos.x + reach < x0 || p.pos.x - reach > x1
+        || p.pos.y + reach < y0 || p.pos.y - reach > y1) continue;
       // Every projectile is ENERGY IN FLIGHT now: an additive glow underlay
       // in its own color + a motion streak trailing the heading. The shape
       // language on top is unchanged — behavior stays readable, it just
