@@ -103,6 +103,59 @@ build axis, never ambience. Shipped consumers:
   `params.fill` as a meter), never a free-running clock face: three lit,
   and the next strike is the big one. `docs/engine/tells.md`.
 
+## The chain lane (`SkillDef.comboChain`)
+
+The EXECUTING vocabulary: consecutive presses of ONE key within `window`
+seconds walk `skills[]` — the base press is beat one, the next press casts
+`skills[0]`, the next `skills[1]`, … then the chain resets. Each step is an
+ordinary catalog skill (`noDrop`, the Bisect idiom). Laws, pinned by
+`balance/probe_crossjab.ts` (2026-09-11):
+
+- **THE REPEATED STEP** — a chain may name its own host as a step
+  (`one_two: ['one_two', 'cross_jab']` = jab, jab, CROSS). That beat plays
+  the host's OWN press — the same instance, sockets, tree and level by
+  construction, nothing minted — and the redirect hands the cursor to the
+  commit site (`state.comboSelf`), which walks it on instead of re-arming
+  step one. A chain that repeats itself on EVERY step is refused at boot
+  (that is a `castCycle` wearing a chain's coat).
+- **ONE RESOLVER** — `World.comboStepOf(caster, inst, idx)` mints the step
+  once per host slot and is what the press (`useSkill`), the face
+  (`slotFaceOf`) and the judgment (`pressUsable`) all read;
+  `comboQueuedStep` is the same read gated on the live window.
+- **THE SHARED SOCKETS** — a step wears the host's sockets and grafts BY
+  REFERENCE (the convert lane's law: the slot's gems ride every face it
+  presses, tag-admitted per face by `hostSockets`). The step is minted at
+  the host's BASE level so a +levels gem counts ONCE — the step's own
+  `effectiveSkillLevel` adds it through the shared sockets. `hostSkillId`
+  names the slot (the cast bar feeds it, the addled hand spares it).
+- **THE HONEST CHAIN FACE** — while the window holds, the bar slot IS the
+  step the next press will cast: color, initials, the cooldown clock a press
+  would answer to (Trisect shows Bisect, then Trisect; One-Two shows the
+  Cross Jab). The sliver under the slot counts the window down. A lapsed
+  window, or a repeated step, reads as the host itself. `pressUsable`
+  judges the queued step by ITS cost, so the AI and the greyed slot agree
+  with the press.
+- **THE BEAT LAW** — a completed chain step joins the recent-cast ring as
+  its HOST's beat (`SkillInstance.chainOf` → `recordCast(caster, def,
+  asId)`: sid = the host, tags = the step's own). One key walked it, so a
+  repeat grammar (Ostinato's `comboRepeated`, Drumbeat) reads jab, jab,
+  CROSS as three casts of One-Two — and Trisect's figure now drums too —
+  while element/lane keys still read what actually fired. Converts and
+  metas never wear the mark: a Whistle is honestly another art.
+- **THE HAND'S CURSOR** — the cursor lives with the hand that presses
+  (`World.comboCursorOf`): an instance on the caster's own bar keeps it on
+  `inst.state` (the sliver reads that); a borrowed instance — an echo
+  ghost casting its owner's gem, sockets and all — keeps its own, so a
+  ghost's presses never walk or reset its owner's rhythm.
+- **THE SAME DOOR** — monsters walk chains through the identical redirect
+  (the pit champion's third `one_two` press is the Cross Jab); the step's
+  strike geometry is the step's own (`docs/engine/aoe-shapes.md` — the
+  cross is a BAND, not a wedge).
+
+Not on the wire: the cursor lives on the host's `SkillInstance.state`; a
+co-op mirror's bar keeps its own local state (a known MVP-fidelity gap,
+shared with the pre-existing sliver).
+
 ## The starter conditions
 
 `comboVaried` / `comboRepeated` are ordinary `ConditionId`s: the last

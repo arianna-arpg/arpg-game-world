@@ -46,7 +46,7 @@ import { alertScale, BEHAVIOR_CFG, BEHAVIOR_STATS, normalizeBrain, type ArenaRad
 import { aiKitInstance, runAIActions } from './aiActions';
 import {
   convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceBirth, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, treeNodeOf, treeNodeRefusal, treePointsSpent, validTreeNodes, instanceChannel, bandPointsAt, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
-  CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
+  CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE, AOE_BAND_DEPTH, bandSwingGeo,
   skillContextTags, skillCooldownSeconds, skillMaxLevel, SKILL_RARITIES, essenceTierForLevel, summonCrewOf, supportFitsInst,
   type SkillRarity,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
@@ -580,6 +580,18 @@ export function zoneHoleSpares(
 }
 
 export function inAoe(center: Vec2, radius: number, shape: AoeShape, facing: number, target: Vec2, targetRadius: number, arcRad?: number): boolean {
+  if (shape === AOE_SHAPE.band) {
+    // THE BAND (the crossing strip): the target read in the facing frame —
+    // `radius` is the half-width ACROSS the facing, radius × AOE_BAND_DEPTH
+    // the half-thickness ALONG it. The target's own radius grows both
+    // (negated by zoneHoleSpares = "fully inside" — the same grace math).
+    const dx = target.x - center.x, dy = target.y - center.y;
+    const fx = Math.cos(facing), fy = Math.sin(facing);
+    const along = dx * fx + dy * fy;
+    const across = dy * fx - dx * fy;
+    return Math.abs(across) <= radius + targetRadius
+      && Math.abs(along) <= radius * AOE_BAND_DEPTH + targetRadius;
+  }
   if (shape >= 3) {
     // Crescent: an annular SECTOR aimed along facing — the band between
     // inner and outer radius, clipped to the arc, with angular grace so
@@ -1391,6 +1403,11 @@ export interface EmergeRecord {
   /** The hold was taken (untargetable + unthinking) — released at expiry. */
   held: boolean;
 }
+
+/** A combo chain's cursor (World.comboCursorOf): the step the NEXT press
+ *  casts, the window clock, and THE REPEATED STEP's hand-off. The same
+ *  shape SkillInstance.state carries for an instance on its own bar. */
+type ComboCursor = { comboIdx?: number; comboAt?: number; comboSelf?: number };
 
 interface Flash {
   departure?: RefugeDeparture;
@@ -28988,6 +29005,64 @@ export class World {
       || m.sourceSkillId === throngMarkerOf(skillId);
   }
 
+  /** THE HAND'S CURSOR (2026-09-11): a combo chain's cursor lives with the
+   *  HAND that presses. An instance on the caster's own bar keeps it on
+   *  `inst.state` (the bar's sliver reads exactly that); a BORROWED
+   *  instance — an echo ghost casting its owner's gem, sockets and all —
+   *  keeps its own cursor here, so a ghost's presses never walk or reset
+   *  its owner's rhythm and the owner's never walk the ghost's. Keyed per
+   *  actor × host skill id; the map is combat-transient and never saved. */
+  private comboCursors = new WeakMap<Actor, Map<string, ComboCursor>>();
+  comboCursorOf(caster: Actor, inst: SkillInstance): ComboCursor {
+    if (!caster.construct || caster.skills.includes(inst)) return (inst.state ??= {});
+    let m = this.comboCursors.get(caster);
+    if (!m) { m = new Map(); this.comboCursors.set(caster, m); }
+    let c = m.get(inst.def.id);
+    if (!c) { c = {}; m.set(inst.def.id, c); }
+    return c;
+  }
+
+  /** THE CHAIN STEP a press at cursor `idx` (1-based) would cast — minted
+   *  once per host slot at the host's BASE level with the host's sockets
+   *  and grafts SHARED (the convert lane's law: the slot's gems ride every
+   *  face it presses, tag-admitted per face by hostSockets; a +levels gem
+   *  counts ONCE — the step's own effectiveSkillLevel adds it through the
+   *  shared sockets, so the mint seats the un-bonused level). hostSkillId
+   *  names the slot (the cast bar feeds it, the scramble spares it). Null
+   *  for the base beat, for THE REPEATED STEP (the host itself plays that
+   *  beat) and for an unknown id. ONE resolver for the press (useSkill),
+   *  the face (slotFaceOf) and the judgment (pressUsable). */
+  comboStepOf(caster: Actor, inst: SkillInstance, idx: number): SkillInstance | null {
+    const chain = inst.def.comboChain;
+    if (!chain || idx <= 0 || idx > chain.skills.length) return null;
+    const sid = chain.skills[idx - 1];
+    if (sid === inst.def.id || !SKILLS[sid]) return null;
+    const key = inst.def.id + ':combo' + idx;
+    const level = inst.level + Math.floor(inst.bonusLevels ?? 0);
+    let step = caster.metaInsts.get(key);
+    if (!step || step.def.id !== sid || step.level !== level) {
+      step = makeSkillInstance(SKILLS[sid], level);
+      step.hostSkillId = inst.def.id;
+      step.chainOf = inst.def.id; // THE BEAT MARK — the ring records the host's beat
+      caster.metaInsts.set(key, step);
+    }
+    step.sockets = inst.sockets; // live references — re-socketing propagates
+    step.grafts = inst.grafts;
+    return step;
+  }
+
+  /** The chain step the NEXT press of this slot would cast while the
+   *  window still holds — null for the base beat, a repeated step, a
+   *  lapsed window, or no chain at all. */
+  comboQueuedStep(caster: Actor, inst: SkillInstance): SkillInstance | null {
+    const chain = inst.def.comboChain;
+    if (!chain?.skills.length) return null;
+    const st = this.comboCursorOf(caster, inst);
+    if (st.comboAt === undefined) return null;
+    if (this.time - st.comboAt > chain.window) return null;
+    return this.comboStepOf(caster, inst, st.comboIdx ?? 0);
+  }
+
   /** The face a bar slot PRESENTS: while a skill's conversion rule holds,
    *  the slot IS the converted skill — color, initials, cooldown sweep (a
    *  full Tame presents the Whistle) — else the skill itself. The renderer
@@ -28999,6 +29074,12 @@ export class World {
       const sel = mimicSelected(caster, this.time);
       if (sel && SKILLS[sel.sid]) return SKILLS[sel.sid];
     }
+    // THE HONEST CHAIN FACE (2026-09-11): while a combo chain's window
+    // holds, the slot IS the step the next press will cast — Trisect
+    // shows Bisect, One-Two shows the Cross Jab — the convert face's own
+    // law. A lapsed window or a repeated step reads as the host itself.
+    const step = this.comboQueuedStep(caster, inst);
+    if (step) return step.def;
     const conv = instanceConvert(inst); // innate OR a munition graft's reload
     return conv && SKILLS[conv.skillId] && convertRuleHolds(conv.when, caster, inst, this)
       ? SKILLS[conv.skillId]
@@ -29020,6 +29101,10 @@ export class World {
       minted.extraMods = mimicPowerMods(inst.def.mimic);
       return caster.canUse(minted);
     }
+    // A queued chain step is judged as the step it would cast (the face
+    // the bar shows) — an unaffordable finisher greys the slot honestly.
+    const step = this.comboQueuedStep(caster, inst);
+    if (step) return caster.canUse(step);
     const conv = instanceConvert(inst);
     if (conv && SKILLS[conv.skillId]
       && convertRuleHolds(conv.when, caster, inst, this)) {
@@ -32063,26 +32148,32 @@ export class World {
     // advances on a successful press and resets past the end or the window.
     if (inst.def.comboChain?.skills.length) {
       const chain = inst.def.comboChain;
-      const st = (inst.state ??= {});
+      const st = this.comboCursorOf(caster, inst); // THE HAND'S CURSOR
       const fresh = st.comboAt !== undefined && this.time - st.comboAt <= chain.window;
       const idx = fresh ? (st.comboIdx ?? 0) : 0;
-      if (idx > 0 && SKILLS[chain.skills[idx - 1]]) {
-        const key = inst.def.id + ':combo' + idx;
-        let step = caster.metaInsts.get(key);
-        if (!step || step.level !== effectiveSkillLevel(inst)) {
-          step = makeSkillInstance(SKILLS[chain.skills[idx - 1]], effectiveSkillLevel(inst));
-          caster.metaInsts.set(key, step);
-        }
+      if (idx > 0 && chain.skills[idx - 1] === inst.def.id) {
+        // THE REPEATED STEP (jab, jab, CROSS — 2026-09-11): a chain naming
+        // its own host plays the host's OWN press for this beat — the
+        // same instance, sockets, tree and level by construction — and
+        // hands the cursor to the commit site below (comboSelf), which
+        // walks it on instead of re-arming step one. Fall through.
+        st.comboSelf = idx;
+      } else if (idx > 0 && SKILLS[chain.skills[idx - 1]]) {
+        // The step is ONE resolver's mint (comboStepOf — the face the bar
+        // showed and the judgment the AI made press the same instance).
+        const step = this.comboStepOf(caster, inst, idx)!;
         const ok = this.useSkill(caster, step, aim);
         if (ok) {
           st.comboAt = this.time;
           st.comboIdx = idx + 1 > chain.skills.length ? 0 : idx + 1;
         }
         return ok;
+      } else {
+        // The base press arms step one (advanced below only on success —
+        // fall through to the ordinary pipeline).
+        st.comboIdx = 0;
+        st.comboSelf = undefined;
       }
-      // The base press arms step one (advanced below only on success —
-      // fall through to the ordinary pipeline).
-      st.comboIdx = 0;
     }
     // Monsters/minions refresh their aim point per cast (player seats refresh
     // per frame in applyInputs) — guided projectiles steer toward it.
@@ -32355,11 +32446,15 @@ export class World {
     // salvos) never pass through this press site, so one press resets once.
     if (useCharges) caster.skillChargeBank(inst).timer = 0;
 
-    // A committed BASE press arms the combo chain's first step.
+    // A committed BASE press arms the combo chain's first step — and a
+    // committed REPEATED STEP (comboSelf, the redirect's hand-off) walks
+    // the cursor on from the beat it just played.
     if (def.comboChain?.skills.length) {
-      const st = (inst.state ??= {});
+      const st = this.comboCursorOf(caster, inst); // THE HAND'S CURSOR
       st.comboAt = this.time;
-      st.comboIdx = 1;
+      const next = (st.comboSelf ?? 0) + 1;
+      st.comboIdx = next > def.comboChain.skills.length ? 0 : next;
+      st.comboSelf = undefined;
     }
 
     // THE RESOLVED CHANNEL (skill-mode audit, M1): ONE binding for the
@@ -33467,7 +33562,22 @@ export class World {
         // slam that covers the corners, a triangle into the pointed wedge
         // along the facing (inAoe's own geometry; the crescent/sector kinds
         // keep the classic arc test — shape 0 is byte-identical bare).
-        const swingShape = caster.sheet.get('aoeShape', tags, extra);
+        // The delivery's innate figure is the stat query's BASE (the ground
+        // delivery's pattern) — a socketed sigil's override still wins.
+        const swingShape = caster.sheet.get('aoeShape', tags, extra,
+          AOE_SHAPE[d.shape ?? 'circle']);
+        // THE CROSSING STRIP (AOE_SHAPE.band — the Cross Jab's figure): the
+        // swing lands as a strip ACROSS the front, seated by bandSwingGeo
+        // off the same reach/arc every lever folds into (the far edge at
+        // reach, the width the arc's chord). ONE figure (bandC + bandGeo)
+        // feeds the victim test, the flash, the mend, the mallet and the
+        // aftermath minter — drawn == tested through one mapping.
+        const banded = swingShape === AOE_SHAPE.band;
+        const bandGeo = banded ? bandSwingGeo(reach, arcRad) : null;
+        const bandC = bandGeo
+          ? vec(caster.pos.x + Math.cos(caster.facing) * bandGeo.standoff,
+                caster.pos.y + Math.sin(caster.facing) * bandGeo.standoff)
+          : caster.pos;
         // ONE struck ledger for the whole cast: the swing's hits, the
         // reverb's picks and — sweeping — the wave's crossings all mark it.
         const struck = new Set<number>();
@@ -33504,7 +33614,9 @@ export class World {
             // body — the coil beside you, not only the head across the room.
             // Plain monsters: nearest body IS the head, byte-identical.
             const nb = nearestBody(enemy, caster.pos);
-            if (swingShape >= 1 && swingShape <= 2) {
+            if (banded) {
+              if (!inAoe(bandC, bandGeo!.halfWidth, AOE_SHAPE.band, caster.facing, nb.pos, nb.r)) continue;
+            } else if (swingShape >= 1 && swingShape <= 2) {
               if (!inAoe(caster.pos, reach, swingShape, caster.facing, nb.pos, nb.r)) continue;
             } else {
               if (dist(caster.pos, nb.pos) - nb.r > reach) continue;
@@ -33543,19 +33655,28 @@ export class World {
           // Drawn == tested: a sigil-shaped swing flashes its SHAPE; the
           // classic swing keeps its arc sweep. (The sweep pushed its own
           // crescent flash above.)
-          this.flashes.push(swingShape >= 1 && swingShape <= 2
+          // A banded swing flashes its STRIP at the strip's own seat; every
+          // melee flash may speak a registered voice (MeleeDelivery.fx —
+          // the crossjab knuckle streak), unset = the classic costume.
+          this.flashes.push(banded
+            ? {
+              pos: vec(bandC.x, bandC.y), radius: bandGeo!.halfWidth, color: def.color,
+              life: 0.18, maxLife: 0.18, shape: AOE_SHAPE.band, facing: caster.facing, fx: d.fx,
+            }
+            : swingShape >= 1 && swingShape <= 2
             ? {
               pos: vec(caster.pos.x, caster.pos.y), radius: reach, color: def.color,
-              life: 0.18, maxLife: 0.18, shape: swingShape, facing: caster.facing,
+              life: 0.18, maxLife: 0.18, shape: swingShape, facing: caster.facing, fx: d.fx,
             }
             : {
               pos: vec(caster.pos.x, caster.pos.y), radius: reach, color: def.color,
-              life: 0.18, maxLife: 0.18, arc: { facing: caster.facing, arcRad },
+              life: 0.18, maxLife: 0.18, arc: { facing: caster.facing, arcRad }, fx: d.fx,
             });
           // Melee 'aoe' swings have an area too (Cleave + No Man's Land
           // scorches where the blade passed) — the arc's centroid; a
           // surround slam centers on the caster.
-          fieldAt = swingShape === 1
+          fieldAt = banded ? vec(bandC.x, bandC.y)
+            : swingShape === 1
             ? vec(caster.pos.x, caster.pos.y)
             : vec(caster.pos.x + Math.cos(caster.facing) * reach * 0.6,
                   caster.pos.y + Math.sin(caster.facing) * reach * 0.6);
@@ -33566,21 +33687,27 @@ export class World {
         // the classic swing re-strikes as its own SECTOR, and a SWEEPING
         // cast re-strikes as the CRESCENT it actually drew — the wave's
         // anchor, facing and arc, never the swing's sector).
-        this.mintAftermath(caster, inst, vec(caster.pos.x, caster.pos.y),
-          sweeping ? sweepR : reach,
+        // (A banded swing's sequels mint off its strip — Seismic March walks
+        // a band of the same width; the kindred rule reads the true figure.)
+        this.mintAftermath(caster, inst,
+          banded && !sweeping ? vec(bandC.x, bandC.y) : vec(caster.pos.x, caster.pos.y),
+          sweeping ? sweepR : banded ? bandGeo!.halfWidth : reach,
           sweeping ? AOE_SHAPE.crescent
+            : banded ? AOE_SHAPE.band
             : swingShape >= 1 && swingShape <= 2 ? swingShape : AOE_SHAPE.sector,
           caster.facing, useMult, tags, extra,
           sweeping ? sweepArc
-            : swingShape >= 1 && swingShape <= 2 ? undefined : arcRad);
+            : banded || (swingShape >= 1 && swingShape <= 2) ? undefined : arcRad);
         if (!sweeping) {
           // Heal-and-harm swings (Sanctified Strike): the same arc MENDS the
           // allies standing in it — one swing, both congregations. (A
           // sweeping cast skips the cast-time mend and mallet: the wave
           // zone replays both per crossing through its own tick.)
           this.healAlliesInArea(caster, inst, a =>
-            dist(caster.pos, a.pos) - a.radius <= reach
-            && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, a.pos))) <= arcRad / 2,
+            banded
+              ? inAoe(bandC, bandGeo!.halfWidth, AOE_SHAPE.band, caster.facing, a.pos, a.radius)
+              : dist(caster.pos, a.pos) - a.radius <= reach
+                && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, a.pos))) <= arcRad / 2,
             useMult);
           // THE MALLET: the swing's own arc rings castOnStruck constructs
           // and pops brittle 'hit' scenery through the shared strike-surface
@@ -33588,9 +33715,11 @@ export class World {
           // smash the pots on the follow-through. Team-wide by design:
           // minions and co-op allies swing mallets too.
           this.frontSplash(caster, inst, caster.pos, reach);
-          this.strikeSurfaces(caster, caster.pos, reach, (p, r) =>
-            dist(caster.pos, p) - r <= reach
-            && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, p))) <= arcRad / 2,
+          this.strikeSurfaces(caster, banded ? bandC : caster.pos, banded ? bandGeo!.halfWidth : reach, (p, r) =>
+            banded
+              ? inAoe(bandC, bandGeo!.halfWidth, AOE_SHAPE.band, caster.facing, p, r)
+              : dist(caster.pos, p) - r <= reach
+                && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, p))) <= arcRad / 2,
             undefined, undefined, skillContextTags(inst).has('aoe')); // minionCombat area classification
         }
         break;
@@ -35927,7 +36056,8 @@ export class World {
     // the runes' real-use gate, minus the invoke exemption (an invoke IS
     // a cast the grammar may read; only what it BURNED never re-banks).
     if (!opts.noRepeat && !opts.noCooldown && !caster.construct) {
-      this.recordCast(caster, def);
+      // THE BEAT LAW: a chain step joins the ring as its HOST's beat.
+      this.recordCast(caster, def, inst.chainOf);
     }
     // THE WITNESS LANE (engine/mimic.ts mimicWitness): a completed enemy
     // art may teach watching seats WITHOUT the blow — reach is each seat's
@@ -36024,7 +36154,7 @@ export class World {
    *  few cached stat reads; everything past it runs only for actors
    *  something has opted in — non-combo builds keep a null ring, an
    *  unchurned condition mask, and byte-identical sim baselines. */
-  private recordCast(caster: Actor, def: SkillDef): void {
+  private recordCast(caster: Actor, def: SkillDef, asId?: string): void {
     // "Does anything here read casts?" — re-asked at most once per
     // watchRefresh: an equipped grammar (combo_<id>, sheet-granted by
     // passives / vocation nodes / equipMods / affixes / MonsterDef mods),
@@ -36062,7 +36192,9 @@ export class World {
     }
     if (!caster.comboWatch) return;
     const ring = (caster.castRing ??= []);
-    ring.push({ sid: def.id, tags: def.tags, at: this.time, seq: ++caster.castSeq });
+    // THE BEAT LAW (`asId` — SkillInstance.chainOf): a comboChain step is
+    // recorded as its host's own beat (sid), wearing the step's own tags.
+    ring.push({ sid: asId ?? def.id, tags: def.tags, at: this.time, seq: ++caster.castSeq });
     if (ring.length > COMBO_CFG.ringCap) ring.shift();
     // The starter conditions: stamped now from the fresh tail, decayed by
     // the actor's own clock (Actor.comboCondLeft in updateTimers).

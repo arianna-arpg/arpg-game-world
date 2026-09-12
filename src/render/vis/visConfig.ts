@@ -1387,6 +1387,21 @@ export const VIS_CFG = {
       /** Droplets thrown up by the entry. */
       drops: 5,
     },
+    /** 'crossjab' — THE KNUCKLE STREAK (the Cross Jab's band, 2026-09-11):
+     *  the strip the swing tested, under a fist-line CROSSING it end to
+     *  end over the flash's life, glinting at the fist. Dials unblessed. */
+    crossjab: {
+      /** Fill and rim alpha of the tested strip (× the flash's life). */
+      figureAlpha: 0.42,
+      rimAlpha: 0.75,
+      /** Trail length behind the fist, as a fraction of the strip's width. */
+      trail: 0.45,
+      /** Stroke widths (px): the tinted streak and its bright core. */
+      streakWidth: 7,
+      coreWidth: 2.5,
+      /** The fist's impact glint radius (px). */
+      glint: 4.5,
+    },
   },
 
   /** THE WORLD'S OWN VOICES (vis/worldVoices.ts — M-TOLL/M-SPILL): the toll

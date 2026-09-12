@@ -113,6 +113,9 @@ import { drawLakeBroil } from './vis/lakeLayer';
 import { boilRamp, drawBoilCells, groundedCellsIn } from './vis/boilLayer'; // THE GROUNDED STRIKE's telegraph (the crone's boil)
 import { drawTrapworkTells } from './vis/trapLayer';
 import { drawEffectVoice } from './vis/effectVoice';
+import { traceAoePath } from './vis/aoeTrace'; // THE AOE TRACER — one path builder per registered figure (drawn == tested with world.ts inAoe)
+import { AOE_SHAPE, bandSwingGeo } from '../engine/skills';
+
 import { riderSurface as trackRiderSurface, trackPose } from '../engine/tracks';
 import { UnderstoryLayer } from './vis/understory';
 import { cameraModeOf, couchConfineRect, couchFit, placeCamera } from './camera';
@@ -4434,35 +4437,11 @@ export class Renderer {
 
   /** Trace a circle / square / triangle / crescent / sector area outline
    *  (aoeShape values). */
+  /** Append a registered area figure to the current path — delegates to
+   *  THE AOE TRACER (vis/aoeTrace.ts), the one path builder every painter
+   *  and voice shares with the engine's inAoe. */
   private traceAoe(x: number, y: number, radius: number, shape?: number, facing = 0, arcRad?: number): void {
-    const { ctx } = this;
-    if (shape && shape >= 4) {
-      // Sector: a full PIE wedge — the crescent without its hollow heart
-      // (Scythe Arc's no-deadzone harvest).
-      const half = (arcRad ?? 110 * Math.PI / 180) / 2;
-      ctx.moveTo(x, y);
-      ctx.arc(x, y, radius, facing - half, facing + half);
-      ctx.closePath();
-    } else if (shape && shape >= 3) {
-      // Crescent: an annular sector aimed along facing (inner rim 0.55R —
-      // must match the inAoe hit test's CRESCENT_INNER).
-      const half = (arcRad ?? 110 * Math.PI / 180) / 2;
-      ctx.arc(x, y, radius, facing - half, facing + half);
-      ctx.arc(x, y, radius * 0.55, facing + half, facing - half, true);
-      ctx.closePath();
-    } else if (shape && shape >= 2) {
-      const R = radius * 1.25;
-      ctx.moveTo(x + Math.cos(facing) * R, y + Math.sin(facing) * R);
-      for (let i = 1; i < 3; i++) {
-        const a = facing + i * (Math.PI * 2 / 3);
-        ctx.lineTo(x + Math.cos(a) * R, y + Math.sin(a) * R);
-      }
-      ctx.closePath();
-    } else if (shape && shape >= 1) {
-      ctx.rect(x - radius, y - radius, radius * 2, radius * 2);
-    } else {
-      ctx.arc(x, y, radius, 0, Math.PI * 2);
-    }
+    traceAoePath(this.ctx, x, y, radius, shape, facing, arcRad);
   }
 
   private drawZones(world: World): void {
@@ -4628,7 +4607,7 @@ export class Renderer {
         ctx.strokeStyle = z.color;
         ctx.lineWidth = Math.max(3, z.radius * (1 - z.edge));
         ctx.beginPath();
-        if (z.shape >= 3) {
+        if (z.shape === AOE_SHAPE.crescent || z.shape === AOE_SHAPE.sector) {
           const half = (z.arcRad ?? 110 * Math.PI / 180) / 2;
           ctx.arc(z.pos.x, z.pos.y, mid, z.facing - half, z.facing + half);
         } else {
@@ -5985,13 +5964,33 @@ export class Renderer {
         ctx.globalAlpha = 0.18 + 0.3 * prog;
         ctx.lineWidth = 1.5 + prog * 1.5;
         ctx.setLineDash([6, 6]);
-        wedge(inner, reach);
+        // THE CROSSING STRIP's foresight: a banded swing (MeleeDelivery.shape
+        // 'band' as the aoeShape query's base — a sigil override still wins,
+        // exactly as the resolve reads it) foreshadows its STRIP through the
+        // same bandSwingGeo the strike seats, so the pit champion's third
+        // beat reads as a sweep across your face, never as a wedge into it.
+        const swingShape = del.type === 'melee'
+          ? a.sheet.get('aoeShape', tags, extra, AOE_SHAPE[del.shape ?? 'circle']) : 0;
+        const bandGeo = swingShape === AOE_SHAPE.band ? bandSwingGeo(reach, arcRad) : null;
+        const bandC = bandGeo
+          ? { x: x + Math.cos(ang) * bandGeo.standoff, y: y + Math.sin(ang) * bandGeo.standoff }
+          : null;
+        const figure = (r1: number): void => {
+          if (bandGeo && bandC) {
+            ctx.beginPath();
+            traceAoePath(ctx, bandC.x, bandC.y, bandGeo.halfWidth * (r1 / reach), AOE_SHAPE.band, ang);
+          } else {
+            wedge(inner, r1);
+          }
+        };
+        figure(reach);
         ctx.stroke();
         ctx.setLineDash([]);
-        // The fill sweeps out from the body as the swing commits.
+        // The fill sweeps out from the body as the swing commits (a strip
+        // firms from its centre outward).
         ctx.globalAlpha = 0.05 + 0.09 * prog;
         ctx.fillStyle = fc.inst.def.color;
-        wedge(inner, Math.max(inner + 2, reach * (0.35 + 0.65 * prog)));
+        figure(Math.max(inner + 2, reach * (0.35 + 0.65 * prog)));
         ctx.fill();
         ctx.restore();
         ctx.globalAlpha = baseAlpha;

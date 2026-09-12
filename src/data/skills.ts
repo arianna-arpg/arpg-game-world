@@ -11818,23 +11818,24 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   // The Brawler's meter: jab, jab, CROSS. The fast half of the pit grammar —
-  // fury banked a knuckle at a time, the third beat swinging heavier.
+  // fury banked a knuckle at a time, the third beat swinging heavier. ONE
+  // KEY WALKS IT (comboChain — the Trisect figure's own lane, 2026-09-11):
+  // the first two presses are the jab itself (THE REPEATED STEP names the
+  // host), the third within the window is the CROSS JAB — the bar's face
+  // turns to it while the window holds (THE HONEST CHAIN FACE) and the
+  // sliver counts the window down. Retired with it: the castCycle-armed
+  // next-hit stun buff (one_two_cross) — the cross is a real step now, with
+  // its own figure, damage and stun. The window is a dial for her word.
   one_two: {
     id: 'one_two', name: 'One-Two',
     description: 'Work the jab: a fast melee strike that banks 1 Fury per hit (to a cap of 5).'
-      + ' Every third cast arms the cross, and your next melee blow within 6 seconds lands'
-      + ' stunning. The pit\'s arithmetic: one, two, three.',
+      + ' Jab twice in rhythm and the third press within 2 seconds throws the CROSS JAB: a'
+      + ' heavier sweep across the front of you that lands stunning. The pit\'s arithmetic:'
+      + ' one, two, three.',
     tags: ['attack', 'melee', 'physical'], color: '#d8a878',
     manaCost: 2, cooldown: 0, useTime: 0.35,
     baseDamage: { physical: [6, 10] },
-    castCycle: {
-      count: 3,
-      buff: {
-        type: 'buff', id: 'one_two_cross', duration: 6, maxStacks: 1,
-        mods: [],
-        nextHit: { tags: ['melee'], status: 'stun', statusScale: 1.5 },
-      },
-    },
+    comboChain: { skills: ['one_two', 'cross_jab'], window: 2 },
     delivery: { type: 'melee', range: 46, arcDeg: 50 },
     effects: [
       { type: 'damage' },
@@ -11843,6 +11844,31 @@ export const SKILLS: Record<string, SkillDef> = {
     requirements: { prowess: 10 },
     ai: { range: 50, weight: 2 },
     leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('attackSpeed', 'increased', 0.02)] },
+  },
+
+  // THE CROSS JAB — One-Two's third beat (noDrop: the chain's own step, the
+  // Bisect idiom). THE CROSSING STRIP: a 'band' swing (MeleeDelivery.shape —
+  // engine/skills.ts bandSwingGeo) sweeps ACROSS the front as a strip — the
+  // far edge at reach, the width the arc's chord — so a body beside your
+  // lead shoulder is struck where a jab's wedge would have missed it, and
+  // it lands STUNNING. Banks Fury like the jabs; the 'crossjab' voice draws
+  // the knuckle streak over the tested strip. Reach / arc / damage / stun
+  // duration are dials for her word.
+  cross_jab: {
+    id: 'cross_jab', name: 'Cross Jab', noDrop: true,
+    description: 'The third beat of the One-Two: a heavier rear-hand punch that sweeps across'
+      + ' the front of you as a strip rather than a wedge, striking everything in its path and'
+      + ' stunning whatever it lands on. Banks 1 Fury per hit.',
+    tags: ['attack', 'melee', 'physical'], color: '#f0c088',
+    manaCost: 3, cooldown: 0, useTime: 0.4,
+    baseDamage: { physical: [11, 17] },
+    delivery: { type: 'melee', range: 52, arcDeg: 110, shape: 'band', fx: 'crossjab' },
+    effects: [
+      { type: 'damage' },
+      { type: 'gainCharge', charge: 'fury', amount: 1, max: 5 },
+      { type: 'status', status: 'stun', chance: 1 },
+    ],
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
   },
 
   // The Brawler's answer to Reckoning — same Fury court, different verdict:

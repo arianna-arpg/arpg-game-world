@@ -37,6 +37,7 @@ import { VIS_CFG } from './visConfig';
 import { shade, withAlpha } from './color';
 import type { RefugeDeparture } from '../../engine/refugeDeparture';
 import { drawRefugeDeparture } from './refugeDeparture';
+import { traceFlashFigure } from './aoeTrace';
 
 /** The narrow read surface a voice painter gets — structurally satisfied by
  *  the engine's Flash rows (world.ts) without importing the engine. */
@@ -48,6 +49,11 @@ export interface EffectVoiceFlash {
   life: number;
   maxLife: number;
   facing?: number;
+  /** The figure the flash tested (a registered AOE_SHAPE value, or the
+   *  classic swing arc) — a voice that paints OVER its surface (the
+   *  crossjab streak) traces exactly this through traceFlashFigure. */
+  shape?: number;
+  arc?: { facing: number; arcRad: number };
 }
 
 /** A voice painter: `t` is the remaining-life fraction (1 at birth → 0 at
@@ -434,4 +440,50 @@ registerEffectVoice('plunge', (ctx, f, t) => {
     ctx.arc(f.pos.x + dx, f.pos.y + dy, 1.1 + 1.1 * sv(seed, i, 29), 0, Math.PI * 2);
     ctx.fill();
   }
+});
+
+/** 'crossjab' — THE KNUCKLE STREAK (the Cross Jab's band, 2026-09-11): the
+ *  strip the swing actually tested (traced from the flash's OWN figure, so
+ *  a sigil-re-geometried cross still speaks the truth) under a bright
+ *  fist-line that CROSSES it from the lead side to the far side over the
+ *  flash's life — fast out of the hip, settling at the far end — with a
+ *  short trail behind the fist and an impact glint at it. A boxer's cross:
+ *  across the face, never into it. */
+registerEffectVoice('crossjab', (ctx, f, t) => {
+  const cfg = VIS_CFG.effectVoice.crossjab;
+  const k = 1 - t;
+  // The tested figure: fill + hot rim (the classic body's own weights).
+  ctx.globalAlpha = t * cfg.figureAlpha;
+  ctx.fillStyle = f.color;
+  ctx.beginPath();
+  traceFlashFigure(ctx, f);
+  ctx.fill();
+  ctx.globalAlpha = t * cfg.rimAlpha;
+  ctx.strokeStyle = shade(f.color, 0.5);
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // The fist crosses the figure's WIDTH along its centre line: the across
+  // axis is the facing's right-hand perpendicular (inAoe's own frame).
+  const facing = f.facing ?? f.arc?.facing ?? 0;
+  const rx = -Math.sin(facing), ry = Math.cos(facing);
+  const hw = Math.max(1, f.radius);
+  const ease = 1 - (1 - k) * (1 - k);
+  const head = -hw + 2 * hw * ease;
+  const tail = Math.max(-hw, head - 2 * hw * cfg.trail * ease);
+  const hx = f.pos.x + rx * head, hy = f.pos.y + ry * head;
+  const tx = f.pos.x + rx * tail, ty = f.pos.y + ry * tail;
+  ctx.lineCap = 'round';
+  ctx.globalAlpha = Math.min(1, t * 1.3);
+  ctx.strokeStyle = withAlpha(shade(f.color, 0.3), 0.85);
+  ctx.lineWidth = cfg.streakWidth;
+  ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx, hy); ctx.stroke();
+  ctx.strokeStyle = withAlpha('#ffffff', 0.9);
+  ctx.lineWidth = cfg.coreWidth;
+  ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx, hy); ctx.stroke();
+  ctx.lineCap = 'butt';
+  // The glint at the fist — brightest as the cross lands, gone with it.
+  ctx.fillStyle = withAlpha('#fff4dc', t);
+  ctx.beginPath();
+  ctx.arc(hx, hy, cfg.glint * (0.6 + 0.4 * t), 0, Math.PI * 2);
+  ctx.fill();
 });

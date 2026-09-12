@@ -14,8 +14,7 @@ import { spawnVeinOf } from '../engine/supportbase';
 import {
   CREW_CFG, DEFAULT_RELOAD_SKILL, crewSkillsServed, makeSkillInstance, summonCrewOf, instanceDelivery,
   supportFits, supportFitsInst, treeNodeOf, validTreeNodes, bandPointsAt, MAX_SKILL_LEVEL,
-  type Delivery, type SkillDef, type SkillInstance, type SupportDef, type ConduitSpec,
-} from '../engine/skills';
+  type Delivery, type SkillDef, type SkillInstance, type SupportDef, type ConduitSpec, AOE_SHAPE } from '../engine/skills';
 import { treeGraph, TREE_LAYOUT_CFG } from '../engine/skilltree'; // THE SKILL-TREE GRAPH — the fold the tree laws read
 import { GRAFT_READ_SITES, rowUnreadBy, supportCarriesRow, type GraftReadRow } from './graftReadSites';
 import { PROCS } from './procs';
@@ -2352,6 +2351,20 @@ export function validateContent(): void {
     }
     for (const cid of s.comboChain?.skills ?? []) {
       if (!SKILLS[cid]) warn(`skill ${s.id}: combo step '${cid}' is not a catalog skill`);
+    }
+    // THE REPEATED STEP (jab, jab, CROSS): a chain naming its own host
+    // repeats the host's press for that beat — legal anywhere but as EVERY
+    // step (a chain of pure repeats never reaches a finisher: that is a
+    // castCycle wearing a chain's coat).
+    if (s.comboChain?.skills.length && s.comboChain.skills.every(id => id === s.id)) {
+      warn(`skill ${s.id}: comboChain repeats itself on every step — no finisher; count with castCycle instead`);
+    }
+    // THE SWING'S NATIVE FIGURE (MeleeDelivery.shape — the aoeShape query's
+    // base): must name a registered AOE_SHAPE, the ground delivery's own
+    // law — a data-loaded row cannot invent a figure no tracer draws.
+    if (s.delivery.type === 'melee' && s.delivery.shape !== undefined) {
+      const swingShapeKnown = Object.prototype.hasOwnProperty.call(AOE_SHAPE, s.delivery.shape);
+      if (!swingShapeKnown) warn(`skill ${s.id}: melee shape '${String(s.delivery.shape)}' is not a registered AOE_SHAPE`);
     }
     // FOUNT ECONOMY honesty: perCharge multiplies by charges CONSUMED, so
     // an innate numeric spend of at most 1 makes it a silent ×1 — the sip

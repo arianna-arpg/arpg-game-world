@@ -184,6 +184,21 @@ we verify changes.
   `shapes.ts` + `projForms.ts` (the HIT-SURFACE fabric: doodad collision
   shapes as data via `hitSurfaceOf`, projectile drawn-form hit tests via
   `PROJ_FORM_GEO` — docs in `docs/engine/hit-surfaces.md`),
+  THE AOE SHAPE REGISTRY (`AOE_SHAPE` in skills.ts — circle / square /
+  triangle / crescent / sector / band; `inAoe` in world.ts is THE test,
+  `render/vis/aoeTrace.ts` THE tracer, one branch each per shape; a
+  delivery's innate figure is the `aoeShape` query's BASE —
+  `GroundDelivery.shape` / `MeleeDelivery.shape` — and sigils override;
+  the `band` = THE CROSSING STRIP seated by `bandSwingGeo` (far edge at
+  reach, width = the arc's chord) is the Cross Jab's figure, its
+  `MeleeDelivery.fx` 'crossjab' voice the knuckle streak; THE CHAIN LANE
+  (`comboChain`: THE REPEATED STEP names the host, `World.comboStepOf` ONE
+  resolver for press/face/judgment, steps wear the host's sockets
+  once-counted, THE HONEST CHAIN FACE on the bar, THE BEAT LAW — a step
+  joins the cast ring as its host's beat — and THE HAND'S CURSOR —
+  `World.comboCursorOf`, a borrowed instance walks its own cursor) — docs
+  `docs/engine/aoe-shapes.md` + `docs/engine/combo.md`; probe
+  `balance/probe_crossjab.ts`),
   `presence.ts` (leveled-list
   spawn envelopes: weight-vs-level curves on any monster-table entry or
   MonsterDef, folded at `World.weightedPick(table, atLevel)`),

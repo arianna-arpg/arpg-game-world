@@ -1131,8 +1131,33 @@ export interface ChargeGainSpec {
  *  sector: the same wedge WITHOUT the hollow heart — a full pie slice from
  *  the caster's feet out (Scythe Arc's no-deadzone harvest; the crescent
  *  keeps its deadzone ON PURPOSE — both belong in the vocabulary).
+ *  band: a STRIP ACROSS the facing (THE CROSSING STRIP, 2026-09-11 — the
+ *  boxer's cross that sweeps across the face instead of into it): a
+ *  rectangle centred on the zone's pos, turned to its facing — `radius`
+ *  is its half-WIDTH across the facing, its thickness along the facing
+ *  is radius × AOE_BAND_DEPTH each way. inAoe tests it, traceAoePath
+ *  draws it, bandSwingGeo seats a melee swing's strip so `range` stays
+ *  the far edge and `arcDeg` the width (the arc's chord, straightened).
  *  The registry keeps proving it's a REGISTRY, not an enum. */
-export const AOE_SHAPE = { circle: 0, square: 1, triangle: 2, crescent: 3, sector: 4 } as const;
+export const AOE_SHAPE = { circle: 0, square: 1, triangle: 2, crescent: 3, sector: 4, band: 5 } as const;
+/** THE BAND's proportions: half-thickness along the facing as a fraction
+ *  of its half-width — fixed like the crescent's inner rim, so `radius`
+ *  stays the one meaningful knob everywhere a band is tested or drawn
+ *  (inAoe, traceAoePath, the crossjab voice all read THIS). */
+export const AOE_BAND_DEPTH = 0.4;
+/** A melee swing's BAND figure from the swing's own reach + arc (pure —
+ *  the world's strike and the renderer's cast-telegraph both read it, so
+ *  drawn == tested by construction): the strip is as wide as the arc's
+ *  chord at reach (halfWidth = reach·sin(arc/2), arcs past 180° saturate
+ *  at the full reach), its FAR edge sits exactly at reach (nothing beyond
+ *  the swing's range is touched), its centre `standoff` ahead of the
+ *  caster — a strip across the front, never a wedge into it. */
+export interface BandSwingGeo { halfWidth: number; halfDepth: number; standoff: number }
+export function bandSwingGeo(reach: number, arcRad: number): BandSwingGeo {
+  const halfWidth = Math.max(1, reach * Math.sin(Math.min(Math.PI, Math.max(0, arcRad)) / 2));
+  const halfDepth = halfWidth * AOE_BAND_DEPTH;
+  return { halfWidth, halfDepth, standoff: reach - halfDepth };
+}
 /** Named values of the projReturn stat. */
 export const PROJ_RETURN = { none: 0, origin: 1, caster: 2 } as const;
 
@@ -1522,6 +1547,17 @@ export interface MeleeDelivery {
   type: 'melee';
   range: number;          // reach from the attacker's edge
   arcDeg: number;         // swing arc centered on facing
+  /** THE SWING'S NATIVE FIGURE — the BASE of the aoeShape stat query
+   *  (the ground delivery's innate-value-as-query-base pattern; a socketed
+   *  sigil's override still wins, as it re-geometries any area). Unset =
+   *  'circle' = the classic sector. 'band' = THE CROSSING STRIP: a strip
+   *  across the front seated by bandSwingGeo — range is still the far
+   *  edge, arcDeg still the width, every reach/arc lever still folds. */
+  shape?: keyof typeof AOE_SHAPE;
+  /** THE EFFECT VOICE (render/vis/effectVoice.ts) the swing's flash
+   *  speaks in — 'crossjab' is the knuckle streak across a band. Render-
+   *  only; unset keeps the classic arc/sigil flash (absent == identical). */
+  fx?: string;
 }
 
 export interface NovaDelivery {
@@ -5549,6 +5585,14 @@ export interface SkillInstance {
   /** The HOST skill this instance was minted to serve (meta payloads,
    *  combo steps) — minionCast orders scope to the host's minions. */
   hostSkillId?: string;
+  /** THE BEAT MARK (2026-09-11): the comboChain host this instance is a
+   *  STEP of. The cast ring records a completed step as the HOST's own
+   *  beat (its sid) wearing the step's own tags — one key walked it, so
+   *  a repeat grammar (Ostinato) reads jab, jab, CROSS as three of one
+   *  skill, while element/lane keys still read what actually fired.
+   *  Stamped only by World.comboStepOf; converts and metas never wear it
+   *  (a Whistle is honestly another art). */
+  chainOf?: string;
   /** THE GRIMOIRE: the bestiary form this instance is attuned to (a monster
    *  def id; only read on `delivery.grimoire` summons). Set through
    *  World.attuneSpectre — mastery-gated — and serialized with the
@@ -5603,9 +5647,14 @@ export interface SkillInstance {
     gaugeLock?: number;
     gaugePower?: number;
     /** COMBO CHAIN cursor: the step the NEXT press casts (0 = base) and
-     *  when the last press landed (the window clock). */
+     *  when the last press landed (the window clock). `comboSelf` is THE
+     *  REPEATED STEP's hand-off: a chain naming its own host as a step
+     *  (jab, jab, CROSS) plays the host's own press for that beat, and
+     *  the commit site walks the cursor on from here instead of re-arming
+     *  step one. Transient. */
     comboIdx?: number;
     comboAt?: number;
+    comboSelf?: number;
     /** CAROMS: anchors collected so far + the last press's time (window). */
     anchors?: { x: number; y: number }[];
     anchorsAt?: number;
