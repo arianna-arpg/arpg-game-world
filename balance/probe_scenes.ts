@@ -41,6 +41,7 @@ import { bootSimEngine, makeSimWorld, SIM_ARENA_ID } from '../src/sim/arena';
 import {
   sceneDue, sceneBegin, sceneBegunKey, sceneCardAck, sceneNoteCast,
   muStageLive, muTakeClassRequest,
+  updateScene,
 } from '../src/engine/scenes';
 import {
   PROLOGUE_SCENE, type SceneAssaultStage, type SceneCardStage, type SceneReckoningStage,
@@ -52,6 +53,9 @@ import { vec } from '../src/core/math';
 import type { PlayerInput } from '../src/net/intent';
 import type { World } from '../src/engine/world';
 import type { Actor } from '../src/engine/actor';
+import { TUTORIAL_FACTIONS } from '../src/data/commanders';
+import { dayCycle, sceneSkyTime } from '../src/world/daynight';
+import { beginSceneRoad, streamSceneRoad, onSceneRoad, sceneRoadShoulder } from '../src/engine/sceneRoad';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -80,7 +84,8 @@ const stageKind = (w: World): string =>
 /** The prologue's wake card stage (the fall's landing) — its page objects
  *  are shared by reference into the resolved def, so identity pins which
  *  page the landing chose. */
-const wakeStage = PROLOGUE_SCENE.stages.find(s => s.kind === 'card' && (s as SceneCardStage).fallCard) as SceneCardStage | undefined;
+const wakeStage = (w: World): SceneCardStage | undefined =>
+  w.scene?.def.stages.find(s => s.kind === 'card' && (s as SceneCardStage).fallCard) as SceneCardStage | undefined;
 const castLeft = (a: Actor | undefined): number =>
   a?.casting ? a.casting.total - a.casting.elapsed : Infinity;
 /** THE SLAIN LOCK rides standing law: applyInputs refuses a downed seat, so
@@ -237,7 +242,9 @@ check('E1: the first wave pours on its clock (4 skirmishers)',
   wave1.length >= 4 && wave1.every(a => a.defId === 'goblin_skirmisher'),
   `alive=${wave1.length}`);
 check('E2: the whole tide is rewardless', wave1.every(a => a.noBounty));
-check('E3: the survival bar climbs', (w.scene?.bar?.frac ?? 0) > 0);
+check('E3: standing still does not advance the road objective', w.scene?.bar?.frac === 0);
+for (let i = 0; i < 30; i++) { w.moveActor(p, 1, 0, DT); w.update(DT); }
+check('E3a: forward road travel advances the objective', (w.scene?.bar?.frac ?? 0) > 0);
 check('E3b: the dawn clock hangs over the field (the assault takes the top seat)',
   w.scene?.barAt === 'top');
 
@@ -266,7 +273,7 @@ check('F3c: the fallen seat\'s inputs are refused whole', inputsRefused(w, p));
 check('F4: past the beat the dark rises and the wake card waits',
   until(w, () => w.scene?.card != null && w.screenFade >= 0.995, 6));
 check('F5: the landing shows THE EARLY FALL\'s page — no horn was ever heard',
-  !!wakeStage && w.scene?.card === wakeStage.fallCard,
+  !!wakeStage(w) && w.scene?.card === wakeStage(w)?.fallCard,
   `line0="${w.scene?.card?.lines[0]?.slice(0, 28)}"`);
 
 // === H) THE HOLLOW WAKE: Mu, the wisp, the vessels, the pick ================
@@ -393,7 +400,7 @@ check('H7: no enemy followed the spirit into Mu',
   check('G6: the fall card follows under black',
     until(w2, () => stageKind(w2) === 'card' && w2.scene?.card != null && w2.screenFade >= 0.995, 6));
   check('G6b: the AUTHORED page — the horn was heard, so the wake says so',
-    !!wakeStage && w2.scene?.card === wakeStage.card);
+    !!wakeStage(w2) && w2.scene?.card === wakeStage(w2)?.card);
 }
 
 // === I) THE RUNNER'S END: the nova has a rim, the reckoning does not ========
@@ -453,7 +460,119 @@ check('H7: no enemy followed the spirit into Mu',
     fired && sawEye4);
   check('J5: the authored wake follows — the horn WAS heard',
     until(w4, () => stageKind(w4) === 'card' && w4.scene?.card != null && w4.screenFade >= 0.995, 8)
-    && !!wakeStage && w4.scene?.card === wakeStage.card);
+    && !!wakeStage(w4) && w4.scene?.card === wakeStage(w4)?.card);
+}
+
+// === K) FACTION JOURNEYS: measurement and interruption are separate =========
+// Exercise the real director directly so combat cannot obscure measurement.
+for (const [ix, faction] of TUTORIAL_FACTIONS.entries()) {
+  const v = makeSimWorld('warrior', 31900 + ix);
+  v.account.ledger[`tutorial_faction:${faction.id}`] = 1;
+  const worldTime = v.time;
+  sceneBegin(v, 'prologue');
+  const sc = v.scene!;
+  check(`K ${faction.id}: opening has its own fiction and objective`,
+    (sc.def.stages[0] as SceneCardStage).card === faction.journey.intro
+    && v.zone.objective.kind === 'none'
+    && v.zone.objective.label === faction.journey.objective.label);
+  check(`K ${faction.id}: starts at dusk without rewriting world time`,
+    dayCycle(sceneSkyTime(v)).phase === 'dusk' && v.time === worldTime);
+  sc.stageIx = sc.def.stages.findIndex(s => s.kind === 'assault');
+  sc.begun = false;
+  const spec = sc.def.stages[sc.stageIx] as SceneAssaultStage;
+  const goal = spec.objective!;
+  updateScene(v, DT);
+  const before = sc.bar!.frac;
+  updateScene(v, 1);
+  check(`K ${faction.id}: progress uses ${goal.progress.kind} units`,
+    goal.progress.kind === 'elapsed' ? sc.bar!.frac > before : sc.bar!.frac === before);
+  if (goal.progress.kind === 'road') {
+    const road = sc.road!;
+    const p = v.player;
+    p.pos = vec(road.origin.x + 120, road.origin.y);
+    updateScene(v, DT);
+    const forward = sc.bar!.frac;
+    check(`K ${faction.id}: forward movement earns road progress`, forward > 0);
+    p.pos.x -= 60; updateScene(v, DT);
+    p.pos.x += 60; updateScene(v, DT);
+    check(`K ${faction.id}: retracing the same road cannot farm progress`, sc.bar!.frac === forward);
+    p.pos.y += road.spec.radius * 3; updateScene(v, DT);
+    p.pos.x += 500; updateScene(v, DT);
+    p.pos.y = road.origin.y; updateScene(v, DT);
+    check(`K ${faction.id}: off-road travel and re-entry earn nothing`, sc.bar!.frac === forward);
+    p.pos.x += 100; updateScene(v, DT);
+    check(`K ${faction.id}: new road beyond re-entry earns progress`, sc.bar!.frac > forward);
+    // Extreme displacement still cannot produce even a single full frame.
+    p.pos.x += goal.progress.amount * 10;
+    updateScene(v, DT);
+  } else {
+    const frac = sc.bar!.frac, sky = sceneSkyTime(v), stageTime = sc.stageT;
+    v.timeflow.hold({ id: 'menu', kind: 'menu', scale: 0 });
+    updateScene(v, 1000);
+    check(`K ${faction.id}: menu pause freezes objective and sky`,
+      sc.bar!.frac === frac && sceneSkyTime(v) === sky && sc.stageT === stageTime);
+    v.timeflow.release('menu');
+    if (faction.id === 'undead') {
+      updateScene(v, 5);
+      check('K undead: the assault eases into night while survival remains unfinished',
+        dayCycle(sceneSkyTime(v)).phase === 'night' && sc.bar!.frac < 1 && v.time === worldTime);
+    }
+    updateScene(v, 1000);
+  }
+  check(`K ${faction.id}: interruption advances with an unfinished visible goal`,
+    stageKind(v) === 'reckoning' && sc.bar !== null && sc.bar.frac > 0 && sc.bar.frac < 1);
+  const interrupted = sc.bar!.frac;
+  updateScene(v, DT);
+  check(`K ${faction.id}: its commander appears before success; bar remains unfinished`,
+    v.actors.some(a => a.defId === faction.commander && !a.dead)
+    && sc.bar?.frac === interrupted && sc.bar.label === goal.label);
+  v.player.pos.x += 100000;
+  updateScene(v, DT);
+  check(`K ${faction.id}: running during the reckoning cannot finish the goal`, sc.bar?.frac === interrupted);
+  sc.stageIx = sc.def.stages.findIndex(s => s.kind === 'mu');
+  sc.begun = false;
+  updateScene(v, DT);
+  check(`K ${faction.id}: Mu releases the scenic sky`, sceneSkyTime(v) === v.time);
+}
+
+// A walker who refuses the goal still meets the commander on the deadline.
+{
+  const v = makeSimWorld('warrior', 31920);
+  v.account.ledger['tutorial_faction:goblin'] = 1;
+  sceneBegin(v, 'prologue');
+  const sc = v.scene!;
+  sc.stageIx = sc.def.stages.findIndex(s => s.kind === 'assault');
+  updateScene(v, DT);
+  updateScene(v, (sc.def.stages[sc.stageIx] as SceneAssaultStage).surviveSec);
+  check('K idle: the deadline interrupts even zero road progress',
+    stageKind(v) === 'reckoning' && sc.bar?.frac === 0);
+  updateScene(v, DT);
+  check('K idle: the commander arrives for the stationary player', !!sc.mark);
+}
+
+// === L) PERPETUAL ROAD: every cardinal, both ends, bounded and repeatable ===
+for (const direction of ['north', 'east', 'south', 'west'] as const) {
+  const v = makeSimWorld('warrior', 31930);
+  sceneBegin(v, 'prologue');
+  const road = beginSceneRoad(v, { direction, radius: 76, spacing: 64 });
+  const go = (along: number): void => {
+    v.player.pos = vec(road.origin.x + road.axis.x * along, road.origin.y + road.axis.y * along);
+    streamSceneRoad(v, road);
+  };
+  const at = 64000;
+  go(at);
+  const first = JSON.stringify(road.pieces.get(at / road.spec.spacing));
+  check(`L ${direction}: far beyond the mint, the drawn way covers the walker`,
+    onSceneRoad(road, v.player.pos)
+    && [...road.pieces.values()].some(d => Math.hypot(d.pos.x - v.player.pos.x, d.pos.y - v.player.pos.y) <= d.radius));
+  go(-at);
+  check(`L ${direction}: the other end also streams; old road is culled`,
+    road.pieces.has(-at / road.spec.spacing) && !road.pieces.has(at / road.spec.spacing) && road.pieces.size < 100);
+  go(at);
+  check(`L ${direction}: returning restores identical road geometry`,
+    JSON.stringify(road.pieces.get(at / road.spec.spacing)) === first);
+  check(`L ${direction}: the heart's road has clear shoulders`,
+    v.doodads.every(d => d.kind === 'road' || d.keep || d.door || d.well || d.hollow || d.hitbox || sceneRoadShoulder(road, d)));
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL CHECKS PASS');

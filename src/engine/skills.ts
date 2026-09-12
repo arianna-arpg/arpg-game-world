@@ -2076,6 +2076,10 @@ export interface DashDelivery {
   onContact?: {
     /** The seizing temper — 'drag' is the charge's natural verb. */
     grab: GrabSpec;
+    /** Maximum remaining charge travel after a successful catch (world
+     *  units). Shortens the run itself, so release cannot tow a victim
+     *  through the original overshoot. Omit to carry the full remainder. */
+    maxCarryDistance?: number;
     /** Fraction of the run's own speed handed forward at the run's-end
      *  release (default GRAB_CFG.runCarry.shoveFrac). */
     shove?: number;

@@ -109,6 +109,9 @@ export interface GrabSpec {
   holdSec?: [number, number];
   /** Struggle-speed multiplier on this hold (>1 = easier escape). */
   breakMult?: number;
+  /** Victim-wide immunity to fresh grabs after this hold ends, seconds.
+   *  Omit for GRAB_CFG.break.graceSec. Shared across all holders. */
+  releaseGrace?: number;
   /** Fraction of the HOLDER's max life allies must tear off (in hits,
    *  while it holds) to sever the hold (default GRAB_CFG.break.severFrac). */
   severFrac?: number;

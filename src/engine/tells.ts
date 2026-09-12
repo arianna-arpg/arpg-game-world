@@ -153,6 +153,7 @@ export interface TellBody {
   casting?: {
     inst: { def: { id: string } };
     mode: string; elapsed: number; total: number; held: boolean;
+    aiGuardWindup?: number; aiGuardReleaseAt?: number;
   } | null;
   /** THE FEINT clock (Actor.aiFeintAt): nonzero while a bluffed bar is in
    *  flight — the 'feinting' source, and the 'casting' source's exclusion
@@ -321,6 +322,12 @@ export const TELL_SOURCES: Record<string, TellSource> = {
    *  disagree). Unbounded (seconds) — a band is required; [0, 0.35] reads
    *  full while a bar has ≥0.35s left and eases off as it closes. */
   foecast: a => a.aiFoeCastSec ?? 0,
+  /** Actual committed guard-release progress; vanishes on break/interrupt. */
+  guardRelease: (a, w) => {
+    const cs = a.casting;
+    if (cs?.aiGuardReleaseAt === undefined || !cs.aiGuardWindup) return 0;
+    return Math.max(0, Math.min(1, 1 - (cs.aiGuardReleaseAt - w.time) / cs.aiGuardWindup));
+  },
   /** A live QUARRY stands (the same lock its reserves and rules test —
    *  Actor.aiTargetId): the engaged-read for bodies whose whole kit WAITS.
    *  A fully-reserved coil never aggroes (aggro rides taunts, wounds,

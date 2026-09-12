@@ -82,15 +82,13 @@ export function assistAim(
   // /downed and applies diplomacy. The player's own breakable conjurations
   // join that pool (so their skills can demolish them), but magnetizing the
   // reticle onto your own furniture would be a betrayal — skip them. Foes
-  // swallowed by a canopy VEIL patch the aimer isn't inside are skipped too —
+  // swallowed by crowns outside the aimer's local presence are skipped too —
   // the reticle can't hold what the eye can't see, and a held lock BREAKS the
   // moment its target slips under unbroken leaves (positioning keeps targets
-  // in sight; step under the same canopy to re-acquire).
-  const selfPatch = world.veilPatchAt(self.pos);
+  // in sight; approach the target's cover to re-acquire).
   const pool = world.enemiesOf(self).filter(a => {
     if (a.construct?.breakable !== undefined && a.owner === self) return false;
-    const p = world.veilPatchAt(a.pos);
-    if (p !== null && p !== selfPatch) return false;
+    if (world.isConcealedFrom(self, a)) return false;
     return true;
   });
   // The veil rule, extended to STONE (LOS_CFG.aimAssist): the reticle can't

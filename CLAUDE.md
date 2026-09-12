@@ -20,6 +20,18 @@ shared temporary buff mutations (`SkillTreeNode.buffs` / `instanceEffects`),
 three-class scope and next batches are documented in
 `docs/design/class-starting-skill-trees.md`; `balance/probe_startertrees.ts`
 covers the complete opening bars.
+
+Gorer carry bounds and Gloomling motion-based shake-off tuning live in
+`docs/design/gorer-gloomling-balance.md`; `balance/probe_clingbalance.ts`
+covers the reusable `maxCarryDistance`, `releaseGrace` and `motionShake` levers.
+
+Enemy turn-rate derivation, body-aimed combat and completed-cast recovery are
+documented in `docs/design/enemy-handling.md`; `balance/probe_handling.ts`
+checks the shared handling resolver, pivot budgets and attack openings.
+
+Sylvan Warden and Stone Sentinel guard commitment, bash warnings and doctrine
+level gates are documented in `docs/design/shield-defender-balance.md`;
+`balance/probe_wardenbalance.ts` checks those counterplay and progression seams.
 The Hivecaller/Ranger/Guardian batch is in `src/data/frontierStarterTrees.ts`,
 with its contract and shared absorb scaling in
 `docs/design/frontier-starting-skill-trees.md`.

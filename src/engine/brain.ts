@@ -224,6 +224,14 @@ export interface BehaviorSpec {
   /** Seconds (rolled per FRESH engagement) between sighting and the first
    *  cast — movement is unaffected; the blade hesitates, not the feet. */
   reaction?: [number, number];
+  /** Seconds of action and foot recovery AFTER a successful AI cast.
+   *  Rolled at press, carried by the cast bar, paid at completion; instant
+   *  skills pay immediately. Omit for the existing cadence alone. */
+  recovery?: [number, number];
+  /** Seconds of visible, planted commitment before an armed AI guard
+   *  releases its bash. Facing locks when the warning begins; pressure
+   *  can still de-arm or break the shield. Omit for immediate release. */
+  guardRelease?: { windup: number };
   /** ENGAGEMENT RING: melee slot discipline around one victim.
    *  `front` = how many claim their own approach bearing before later
    *  arrivals wrap to the emptiest arc (default 2); `ring` = bite distance

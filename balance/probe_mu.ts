@@ -285,6 +285,9 @@ check('C6: the unknown cowls are NAMELESS (no npcRole — no nameplate to leak)'
   const kc = k.actors.find(a => a.defId === spec2.def)!;
   kc.life = 0;
   k.kill(kc);
+  step(k, 0.1);
+  check('F11b: a dead commander still leaves a fallen hero, never a living victory',
+    k.player.downed && k.player.life === 0 && sck.fell);
   check('F12: a truly dead Father fades forward — the wake follows, never a lock',
     until(k, () => k.scene?.card != null, 8));
   sceneCardAck(k);
@@ -382,7 +385,7 @@ check('C6: the unknown cowls are NAMELESS (no npcRole — no nameplate to leak)'
     && reck.def === row.commander && reck.verb === row.verb
     && (reck.floorFrac ?? 0) > 0);
   check('G9: the untouched stages are the base rows THEMSELVES (no silent forks)',
-    eff.stages[0] === PROLOGUE_SCENE.stages[0]
+    eff.stages[1] === PROLOGUE_SCENE.stages[1]
     && eff.stages[eff.stages.length - 1] === PROLOGUE_SCENE.stages[PROLOGUE_SCENE.stages.length - 1]);
   // G10: a live sceneBegin resolves — the runtime walks the ROLLED legion
   // (the seam is armed everywhere via the arena's census imports;

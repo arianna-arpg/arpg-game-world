@@ -2930,26 +2930,28 @@ export const SKILLS: Record<string, SkillDef> = {
   // THE GORER'S OWN CHARGE (noDrop — the beastkin gorer's horns, never a
   // gem): the player's charge grammar with THE CHARGE CARRY armed
   // (DashDelivery.onContact — the grab fabric's 'drag' verb): the first
-  // body the run CONNECTS with is hooked and dragged the remainder of the
-  // run, shed forward at the stop. holdSec outlasts any possible remainder
+  // body the run CONNECTS with is hooked for a short, bounded carry,
+  // shed forward at the stop. holdSec outlasts any possible remainder
   // (the run is ≤ ~1.02s), so the run's own clock — never the roll —
   // decides the release; mass law, policy tiers and the re-seize grace
   // all gate inside the fabric.
   gore_charge: {
     id: 'gore_charge', name: 'Goring Charge', noDrop: true,
     description: 'Lowered horns and a committed run: the first body the charge connects with'
-      + ' is hooked and dragged along the rest of the run, flung loose where it ends.',
+      + ' is hooked for a short drag, then flung loose. Escaping grants a breathing space before another grab.',
     tags: ['attack', 'melee', 'movement', 'physical'], color: '#d89858',
-    manaCost: 7, cooldown: 4, useTime: 0,
+    manaCost: 7, cooldown: 5.5, useTime: 0,
     baseDamage: { physical: [9, 14] },
     delivery: {
-      type: 'dash', distance: 430, speed: 420, width: 85,
-      onContact: { grab: { verb: 'drag', holdSec: [1.2, 1.5] } },
+      type: 'dash', distance: 430, speed: 420, width: 56,
+      onContact: {
+        grab: { verb: 'drag', holdSec: [1.2, 1.5], breakMult: 1.5, releaseGrace: 3 },
+        maxCarryDistance: 90,
+      },
     },
     effects: [
       { type: 'damage' },
       { type: 'knockback', strength: 70 },
-      { type: 'status', status: 'stun', chance: 0.25 },
     ],
     ai: { range: 380, weight: 2, minRange: 140 },
     leveling: { perLevel: [mod('damage', 'increased', 0.12)] },
@@ -14311,6 +14313,18 @@ export const SKILLS: Record<string, SkillDef> = {
     delivery: { type: 'melee', range: 42, arcDeg: 80 },
     effects: [{ type: 'damage' }],
     ai: { range: 48, weight: 2 },
+  },
+
+  gloom_nip: {
+    id: 'gloom_nip', name: 'Clinging Dark', noDrop: true,
+    description: 'A small nip of darkness. Gloomlings cling at close range, draining life until'
+      + ' movement or sharp turns fling them off. They remain exposed to attacks while attached.',
+    tags: ['attack', 'melee', 'chaos'], color: '#74809e',
+    manaCost: 0, cooldown: 0.4, useTime: 0.9,
+    baseDamage: { chaos: [1, 2] },
+    delivery: { type: 'melee', range: 28, arcDeg: 80 },
+    effects: [{ type: 'damage' }],
+    ai: { range: 32, weight: 2 },
   },
 
   // --- THE SCALD BASIN's kit verbs (data/scald.ts; charter §8) ---------------

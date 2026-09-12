@@ -162,7 +162,7 @@ import { MAP_LENS } from './mapLens';
 import { ATLAS_CFG, climateWords, featuresAt, featuresInRect } from '../world/atlas';
 import { climateAt } from '../world/climate';
 import { elevationAt, riverPathsInRect } from '../world/relief';
-import { applyCursor, CURSOR_COLORS, CURSOR_STYLES } from '../core/cursor';
+import { applyCursor, CURSOR_COLORS, CURSOR_STYLES, CURSOR_MOTION_CFG } from '../core/cursor';
 import { AIM_TICK_STYLES } from '../render/vis/aimtick';
 
 /** Neutral accent for packages that declare no colour of their own. */
@@ -9768,6 +9768,14 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
             style="margin-left:5px;width:26px;height:20px;vertical-align:middle;background:${c.css};
             border:2px solid ${c.css === s.cursor.color ? '#fff' : 'rgba(255,255,255,0.25)'};border-radius:3px"></button>`).join('')}</span>
       </div>
+      <div class="rebind-row"><label for="cursor-custom">Custom tint</label>
+        <input id="cursor-custom" type="color" value="${s.cursor.color}" aria-label="Custom cursor tint"></div>
+      <div class="rebind-row"><label for="cursor-idle">Cursor idle motion</label>
+        <input id="cursor-idle" type="checkbox" ${s.cursor.idleMotion ?? CURSOR_MOTION_CFG.enabled ? 'checked' : ''}></div>
+      <div class="rebind-row"><label for="cursor-idle-delay">Idle delay (seconds)</label>
+        <input id="cursor-idle-delay" type="number" min="${CURSOR_MOTION_CFG.minDelaySec}" max="${CURSOR_MOTION_CFG.maxDelaySec}" step="0.5"
+          value="${s.cursor.idleDelaySec ?? CURSOR_MOTION_CFG.delaySec}"></div>
+      <div class="acct-head">Cursors gently oscillate when the mouse rests; Wisp filaments drift. The aiming point stays fixed. Reduced-motion preferences are honored.</div>
       <h1>Information Stream</h1>
       <div class="acct-head">Compose your own stream of information: what announces, where it stacks,
         and how long it stands. Gold = shown; dimmed = muted. Every switch takes effect on the next frame.</div>
@@ -10242,6 +10250,17 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         this.renderOptions(root, onBack);
       });
     });
+    for (const id of ['cursor-custom', 'cursor-idle', 'cursor-idle-delay']) {
+      root.querySelector<HTMLInputElement>(`#${id}`)?.addEventListener('change', event => {
+        const input = event.currentTarget as HTMLInputElement;
+        const st = this.getSettings();
+        if (id === 'cursor-custom') st.cursor.color = input.value;
+        else if (id === 'cursor-idle') st.cursor.idleMotion = input.checked;
+        else st.cursor.idleDelaySec = Number.isFinite(input.valueAsNumber)
+          ? Math.max(CURSOR_MOTION_CFG.minDelaySec, Math.min(CURSOR_MOTION_CFG.maxDelaySec, input.valueAsNumber)) : CURSOR_MOTION_CFG.delaySec;
+        this.saveSettings(); applyCursor(st.cursor); this.renderOptions(root, onBack);
+      });
+    }
     root.querySelector<HTMLElement>('#opt-swapsticks')?.addEventListener('click', () => {
       const st = this.getSettings();
       st.pad.swapSticks = !st.pad.swapSticks;

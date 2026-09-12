@@ -262,17 +262,19 @@ keep the full canopy radius. Crowns come from the canopy registry —
 the `conifer` + `ancient_tree` kinds anchor dense forests. Anyone beneath an
 unfaded crown is unseen until the hero steps under too.
 
-VEILS (`DoodadRule.veil`, `engine/veil.ts`): the crown escalated to the
-PATCH. Veil-bearing kinds' crowns MERGE into contiguous canopy masses
-(union-find over overlapping discs, per `group`), and the patch behaves as a
-unit: sealed near-opaque `cover` alpha over everything beneath — monsters,
-loot, ground — until the LOCAL hero stands under the same mass, when the
-whole patch fades to `reveal` together (per-crown smoothing toward the
-shared target; the per-tree `occlude` near-fade composes via min so the
-crown overhead always opens a little further). Concealment is GAMEPLAY, not
-just pixels: `World.veilPatchAt`/`isConcealedFrom` gate aim assist (a held
-lock BREAKS when its target slips under unbroken leaves), labels ride the
-same `frameOccluders` fade, and standing under cover wears the veil's
+VEILS (`DoodadRule.veil`, `engine/veil.ts`) reveal by LOCAL PRESENCE.
+`veilPresenceAlpha` fades each crown from near-opaque `cover` to `reveal`
+as the local hero approaches its footprint. `VEIL_DEFAULTS.presenceRadius`
+defaults to 160 world units beyond the crown's edge, with a 100-unit
+`presenceFeather` smoothstep band. Both can be overridden per veil kind.
+The footprint keeps a large overhead crown from hiding the player; the
+result is a clearing made of nearby fading crowns, not a hard circular cutout.
+It follows the player and closes behind them, without storing discovery.
+Patches still merge overlapping crowns for render batching, but sharing a
+patch no longer reveals its distant members. Nearby disconnected crowns open
+too. Concealment is GAMEPLAY: `World.isConcealedFrom` and aim assist read
+the same presence targets over every crown covering an enemy; labels use
+the actual smoothed `frameOccluders` fades. Standing under cover wears the veil's
 `standStatus` (default `canopied`, detectability −35% — fogveiled's
 pattern). The whole walk-under family veils (tree/conifer/palm/briarwood/
 ancient_tree/forest_oak/giant_mushroom/fruiting_tower/giant_kelp); one rule
@@ -283,17 +285,20 @@ The FOREST biome is built on this — its layout recipe plants crowns closer
 than they span so whole stands read as single sealed roofs, coverage scaling
 with `geo.biomeDepth` (see `docs/worldgen/climate.md`).
 
-THE CANOPY COMPOSITE (`vis/canopy.ts`, `VIS_CFG.canopy.composite`): a patch
-fades as ONE BODY, so in steady state a sealed roof was hundreds of per-crown
-sprite blits a frame expressing one number. The STATIC (`CANOPY_STATIC`,
+THE CANOPY COMPOSITE (`vis/canopy.ts`, `VIS_CFG.canopy.composite`) batches
+the distant sealed backdrop. The STATIC (`CANOPY_STATIC`,
 non-`live`) crowns of each veil patch now flatten into world-space chunk
 SLICES — one baked canvas per chunk per patch alpha-group — and the roof
-draws as a dozen `drawImage` calls at the patch's smoothed alpha (same-mint
+draws as a dozen `drawImage` calls at its cover alpha (historical same-mint
 A/B: forest 20.8 → 12.6ms gapP50, jungle tail 25 → 20.9 gapP99; the palm
 crown joining `CANOPY_STATIC` had already halved the jungle's p50). The
-per-crown near-fade still dissents: a crown pulled away from its patch's
-alpha (peeking under a covered eave) LEAVES the composite (hysteresis-
-guarded) and draws itself until it converges back; live crowns (the cut
+local presence fade switches affected chunks to individual crown draws,
+clipped through one combined region per group until the closing fade
+converges back to cover. Sealed bitmaps stay warm and immutable; moving
+presence never invalidates them. The same combined clip handles pending
+chunks without double-painting across cached neighbors. A nearby first
+claimant cannot seed the whole patch's alpha.
+Live crowns (the cut
 contract), non-veil occluders, dynamic painters, and patches under
 `minPatchMembers` never enter. Slices bake under a frame budget with the
 per-crown path as a pixel-identical stand-in, recycle through a canvas pool
@@ -302,6 +307,27 @@ and LRU-cap globally. Invalidation is free: patch identity is the object and
 the veil index rebuilds off doodad revs, so pops/pushes/zone swaps mint new
 patches and the WeakMap-keyed cache follows. Forensics: `npm run perf --
 --ablate=canopyslices` measures the old per-crown path.
+
+`npm run probe -- canopypresence` pins local versus connected visibility,
+soft falloff, custom radii, large/felled crowns, composite isolation, and
+aim-assist acquire/release. The September 12 browser fixture moves left →
+right → left beneath one 18-crown patch: only the nearby crowns open, the
+departed side returns to cover, and settled frames cause zero slice rebakes.
+The warmed back-and-forth walking check also causes zero slice rebakes.
+Run `npm run build` then `npx electron balance/canopy-visual.cjs` to repeat
+the isolated browser check. Screenshots and measurements live in
+`balance/reports/canopy-presence/`.
+
+The September 12 gameplay sweep (`perf_20260912191552`, 2560 × 1377,
+eight seconds per environment) measured median / p95 gaps of 25.1 / 33.4 ms
+in forest, 29.2 / 37.5 ms in jungle, and 12.5 / 16.7 ms in mycelia.
+This is not an all-green performance result: forest and jungle entry bursts
+were 291.8 and 429.3 ms against the 250 ms limit, and jungle had seven
+frames above 40 ms. Keep those startup/pacing issues visible; do not relax
+the budgets. Local presence is functionally verified, and movement no
+longer rebuilds the warm canopy bitmaps, but these remaining costs need
+separate profiling. The shared checkout includes concurrent content changes,
+so the sweep is a local diagnostic rather than an isolated release A/B.
 
 THE SIGHT VEIL (`vis/sightVeil.ts`, `VIS_CFG.sightVeil`): positional
 occlusion shadows — the LoS ray's drawn half. From the local hero's eye,

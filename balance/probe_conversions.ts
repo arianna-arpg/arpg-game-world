@@ -217,5 +217,28 @@ seedGlobalRandom(0xc0de);
     unrelatedReads === 0, `${unrelatedReads} unrelated reads for 100 queries`);
 }
 
+// Uncacheable reads need membership tests, never tag enumeration. This also
+// pins the recursive link lane and guards mutable tag sets from stale keys.
+{
+  const sheet = new StatSheet();
+  let enumerations = 0;
+  class CountedTags extends Set<SkillTag> {
+    override [Symbol.iterator](): SetIterator<SkillTag> {
+      enumerations++;
+      return super[Symbol.iterator]();
+    }
+  }
+  const tags = new CountedTags(['fire']);
+  sheet.setSource('scope', [mod('armor', 'flat', 10, ['fire']), mod('damage', 'flat', 10, ['fire']),
+    linkMod('thorns', 'armor', 0.5)]);
+  const extra = [mod('armor', 'flat', 2)];
+  check('uncached skill-local link keeps the scoped baseline', sheet.get('thorns', tags, extra) === 6);
+  check('base override keeps scoped modifiers', sheet.get('damage', tags, undefined, 5) === 15);
+  check('uncacheable reads never enumerate tags', enumerations === 0);
+  check('cached scoped read is correct', sheet.get('armor', tags) === 10);
+  tags.clear(); tags.add('cold');
+  check('same-size tag mutation cannot reuse stale cached value', sheet.get('armor', tags) === 0);
+}
+
 console.log(failed ? `\n${failed} FAILURE(S)` : '\nALL PASS');
 process.exit(failed ? 2 : 0);

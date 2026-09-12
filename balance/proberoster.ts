@@ -62,6 +62,11 @@ export type ProbeRow =
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_pactsteelstartertrees.ts', status: 'green', tier: 'fast', why: 'Summoner/Juggernaut/Pyromancer opening trees: all 72 routes, passive identity, composable branches, Fury spenders, companion AI, moving and carried fields, expiry bursts, saves and network rebuilds' },
+  { probe: 'probe_wardenbalance.ts', status: 'green', tier: 'fast', why: 'AI bash warning timing, committed facing, shield-pressure and interruption counterplay, player exemption, Warden damage and doctrine level gates' },
+  { probe: 'probe_canopypresence.ts', status: 'green', tier: 'fast', why: 'Local canopy reveal, smooth distance falloff, disconnected proximity, composite isolation and aim-assist concealment' },
+  { probe: 'probe_projectilecull.ts', status: 'green', tier: 'fast', why: 'Projectile painter culls offscreen work while preserving edge effects, scales, large forms, tuning and tethers' },
+  { probe: 'probe_handling.ts', status: 'green', tier: 'fast', why: 'Morphology-derived turning, stat and seat overrides, frame-rate bounds, cast/guard/channel pivot integrity, body-aimed attacks and post-cast recovery' },
+  { probe: 'probe_clingbalance.ts', status: 'green', tier: 'fast', why: 'Gloomling motion/turn escape, steady gnaw, live AI, seat cap and lifecycle; bounded Gorer carry and cross-holder grace at 30/60/120 Hz' },
   { probe: 'probe_devotedstartertrees.ts', status: 'green', tier: 'fast', why: 'Berserker/Sorcerer/Cleric opening trees: all 72 routes, unchanged base skills, four-rank passives, mixed forks, combat/healing/channel/guard behavior, conduit floors, exclusion and repeat-respec regressions, saves and network rebuilds' },
   { probe: 'probe_extraction.ts', status: 'green', tier: 'fast', why: 'EXTRACTION tempers + the pot: the temper roll and its player-first default, hero-vs-node threat seeding per temper, the classic fallback, and a pot that beats a harvest node and grows with the stand' },
   { probe: 'probe_shimmy.ts', status: 'green', tier: 'fast', why: 'THE SHIMMY LAW: a spent station dwell stays spent through stillness and unwilled displacement, re-arms on a willed step in range, and out-and-back still re-arms; THE DWELL TELL: every station/NPC target with its fill off the gate\'s own clock, on the one ring feed, its own transit row' },

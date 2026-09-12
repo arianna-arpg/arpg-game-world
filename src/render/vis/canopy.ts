@@ -1,29 +1,25 @@
 // ---------------------------------------------------------------------------
 // CANOPY COMPOSITING — the sealed roof as baked chunk SLICES.
 //
-// A veil patch fades AS ONE BODY (engine/veil.ts): every member crown chases
-// the same shared target, so in steady state a sealed forest pays hundreds of
-// per-crown sprite blits a frame to express what is ONE number — the patch's
-// alpha over one static picture. This module bakes that picture: the STATIC
+// Distant veil crowns share their sealed cover alpha. Nearby crowns open by
+// local presence (engine/veil.ts), independently of canopy connectivity.
+// The sealed backdrop need not pay hundreds of sprite blits for one static
+// picture. This module bakes that picture: the STATIC
 // (CANOPY_STATIC, non-live) crowns of each veil patch flatten into world-
 // space chunk canvases ("slices"), and the whole roof draws as a dozen
-// drawImage calls at the patch's smoothed alpha. Live crowns (the cut
+// drawImage calls at the sealed alpha. Live crowns (the cut
 // contract's breathing growth), non-veil occluders, and dynamic painters
 // (mushroom breath, kelp sway, liana strands, fog) never enter — they keep
 // the per-crown path untouched.
 //
-// WHAT CHANGES VISUALLY: within a slice, overlapping crowns flatten — at
-// reveal alpha the roof reads as ONE translucent sheet instead of stacked
-// discs darkening where crowns overlap. That is the authored intent ("a
-// patch fades as one body"); the lobed texture inside each sprite survives.
+// Within a slice, overlapping sealed crowns flatten. Local fading crowns
+// leave that picture and retain their own lobed texture and opacity.
 //
-// DIVERGENCE (the eave peek): the per-crown near-fade can pull one crown
-// below its patch's alpha — peeking under a COVERED patch's edge from just
-// outside it. Such a crown LEAVES the composite (slices touching it rebake
-// without it, hysteresis-guarded so boundary grazes don't flap) and draws
-// individually at its own fade until it converges back. A crown re-entering
-// the cull set with a stale smoothed fade instead ADOPTS the group's alpha —
-// the group speaks for the patch; only hero proximity may dissent.
+// DIVERGENCE: local presence pulls a crown below the sealed backdrop's
+// alpha. Chunks touching that crown draw individually through ONE union
+// clip per group until it closes again. Sealed slices stay immutable and
+// warm: walking never invalidates/reuploads them. The union clip also keeps
+// fallback crowns from drawing twice across neighboring cached chunks.
 //
 // INVALIDATION IS FREE: patch identity is the OBJECT and the veil index
 // rebuilds off the same doodad revs as World.doodadsAt — any pop/push/zone
@@ -118,6 +114,7 @@ interface PatchGroup {
   byChunk: Map<number, Doodad[]>;
   slices: Map<number, HTMLCanvasElement>;
   diverged: Set<Doodad>;
+  fades: Map<Doodad, number>;
 }
 
 export class CanopySlices {
@@ -130,9 +127,8 @@ export class CanopySlices {
    *  release beats GC (releaseCanvas only past the pool cap). */
   private pool: HTMLCanvasElement[] = [];
   private active: PatchGroup[] = [];
-  /** Crowns already stood in for THIS frame — a pending crown spanning two
-   *  pending chunks draws once, unclipped (a per-chunk clip is a raster
-   *  state flush; ~70 of them a frame was the jungle GPU stall). */
+  /** Crowns already drawn through a group's combined clip this frame.
+   *  One crown spanning several local/pending chunks is submitted once. */
   private standInDrawn = new Set<Doodad>();
   private zoneRef: object | null = null;
   private arenaRef: { w: number; h: number; boundless?: boolean } | null = null;
@@ -165,10 +161,8 @@ export class CanopySlices {
     else releaseCanvas(c);
   }
 
-  /** Offer a static veil crown to the composite. Returns the alpha the crown
-   *  ADOPTED (slice will draw it — caller records the fade and skips its own
-   *  draw), or null when the crown must draw itself (diverged near-fade, or
-   *  not a member of any composite group). */
+  /** Offer a static veil crown to the composite. Returns its drawn alpha
+   *  (cached slice or local clipped draw), or null for an ineligible crown. */
   claim(patch: VeilPatch, spec: VeilSpec, o: Doodad, crownFade: number,
     patchTarget: number, near: boolean): number | null {
     let groups = this.groups.get(patch);
@@ -177,8 +171,10 @@ export class CanopySlices {
     if (!g || !g.memberSet.has(o)) return null;
     if (g.frame !== this.frameNo) {
       g.frame = this.frameNo;
+      g.fades.clear();
       g.target = patchTarget;
-      if (g.fade < 0) g.fade = crownFade;
+      // A near crown must never seed the entire connected roof's opacity.
+      if (g.fade < 0) g.fade = patchTarget;
       g.fade += (g.target - g.fade) * Math.min(1, this.frameDt * VIS_CFG.canopy.fadeRate);
       this.active.push(g);
     }
@@ -186,22 +182,27 @@ export class CanopySlices {
     if (!near) {
       // Away from the hero there is no legitimate per-crown dissent: adopt
       // the group's alpha (heals stale fades from culled-out frames), rejoin.
-      if (wasDiverged) { g.diverged.delete(o); this.dropSlicesOf(g, o); }
+      if (wasDiverged) g.diverged.delete(o);
+      g.fades.set(o, g.fade);
       return g.fade;
     }
     const d = Math.abs(crownFade - g.fade);
     if (wasDiverged) {
       if (d < VIS_CFG.canopy.divergeOut) {
-        g.diverged.delete(o); this.dropSlicesOf(g, o);
+        g.diverged.delete(o);
+        g.fades.set(o, g.fade);
         return g.fade;
       }
-      return null;
+      g.fades.set(o, crownFade);
+      return crownFade;
     }
     if (d > VIS_CFG.canopy.divergeIn) {
-      g.diverged.add(o); this.dropSlicesOf(g, o);
-      return null;
+      g.diverged.add(o);
+      g.fades.set(o, crownFade);
+      return crownFade;
     }
-    return crownFade;
+    g.fades.set(o, g.fade);
+    return g.fade;
   }
 
   /** Blit every active group's visible slices at its shared alpha; bake
@@ -224,29 +225,26 @@ export class CanopySlices {
     }
     for (const g of this.active) {
       const a = g.fade;
+      const local: { cx: number; cy: number; members: Doodad[] }[] = [];
       for (let cy = y0; cy <= y1; cy++) {
         for (let cx = x0; cx <= x1; cx++) {
           const ck = chunkKey(cx, cy);
           const members = g.byChunk.get(ck);
           if (!members) continue;
+          // Keep the sealed bitmap immutable as presence moves. Only chunks
+          // containing a locally fading crown need individual draws, clipped
+          // together ONCE below. Returning to cover reuses the warm slice.
+          if (members.some(o => g.diverged.has(o) && g.fades.has(o))) {
+            local.push({ cx, cy, members });
+            continue;
+          }
           let c = g.slices.get(ck);
           if (!c) {
             if (bakes < cfg.maxBakesPerFrame && performance.now() - t0 < cfg.bakeBudgetMs) {
               c = this.bake(g, ck, cx, cy, theme, members);
               bakes++;
             } else {
-              // PENDING STAND-IN: this chunk's members draw per-crown exactly
-              // as the old path did, ONCE per frame (standInDrawn) and
-              // unclipped — a crown straddling a baked neighbor may double
-              // for the frame or two before its chunk bakes, which beats a
-              // per-chunk clip (each clip is a raster state flush; dozens a
-              // frame WAS the strangler-court GPU stall).
-              for (const o of members) {
-                if (o.gone || o.felled || g.diverged.has(o) || this.standInDrawn.has(o)) continue;
-                this.standInDrawn.add(o);
-                const meta = metaOf(o.kind);
-                blitCrown(ctx, theme, o, meta.name, meta.params, a);
-              }
+              local.push({ cx, cy, members });
               continue;
             }
           } else {
@@ -255,6 +253,19 @@ export class CanopySlices {
           ctx.globalAlpha = a;
           ctx.drawImage(c, cx * chunk, cy * chunk);
         }
+      }
+      if (local.length) {
+        ctx.save();
+        ctx.beginPath();
+        for (const tile of local) ctx.rect(tile.cx * chunk, tile.cy * chunk, chunk, chunk);
+        ctx.clip();
+        for (const tile of local) for (const o of tile.members) {
+          if (o.gone || o.felled || this.standInDrawn.has(o)) continue;
+          this.standInDrawn.add(o);
+          const meta = metaOf(o.kind);
+          blitCrown(ctx, theme, o, meta.name, meta.params, g.fades.get(o) ?? a);
+        }
+        ctx.restore();
       }
     }
     ctx.globalAlpha = 1;
@@ -279,7 +290,7 @@ export class CanopySlices {
       if (!g) {
         g = {
           id: this.nextGroupId++, fade: -1, target: 1, frame: -1,
-          memberSet: new Set(), byChunk: new Map(), slices: new Map(), diverged: new Set(),
+          memberSet: new Set(), byChunk: new Map(), slices: new Map(), diverged: new Set(), fades: new Map(),
         };
         byKey.set(key, g);
       }
@@ -309,7 +320,7 @@ export class CanopySlices {
       for (const o of members) {
         // A crushed crown leaves the composite (the rampage fabric — the
         // rebuilt veil index drops it; this guards the same-frame window).
-        if (o.gone || o.felled || g.diverged.has(o)) continue;
+        if (o.gone || o.felled) continue;
         const meta = metaOf(o.kind);
         blitCrown(bctx, theme, o, meta.name, meta.params, 1);
       }
@@ -332,23 +343,4 @@ export class CanopySlices {
     if (ent) { this.lru.delete(tok); this.lru.set(tok, ent); }
   }
 
-  /** Drop every slice a crown's draw rect touches (divergence flips, both
-   *  directions) — they rebake without/with it under the frame budget. */
-  private dropSlicesOf(g: PatchGroup, o: Doodad): void {
-    const chunk = VIS_CFG.canopy.compositeChunk;
-    const r = o.radius * CROWN_REACH;
-    const cx0 = Math.floor((o.pos.x - r) / chunk), cx1 = Math.floor((o.pos.x + r) / chunk);
-    const cy0 = Math.floor((o.pos.y - r) / chunk), cy1 = Math.floor((o.pos.y + r) / chunk);
-    for (let cy = cy0; cy <= cy1; cy++) {
-      for (let cx = cx0; cx <= cx1; cx++) {
-        const ck = chunkKey(cx, cy);
-        const c = g.slices.get(ck);
-        if (c) {
-          g.slices.delete(ck);
-          this.lru.delete(`${g.id}|${ck}`);
-          this.recycle(c);
-        }
-      }
-    }
-  }
 }

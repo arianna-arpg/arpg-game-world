@@ -21,6 +21,7 @@
 import { angleDiff, angleTo, dist, rand, vec, type Vec2 } from '../core/math';
 import { MONSTERS } from '../data/monsters';
 import { mod } from './stats';
+import { finishAIRecovery } from './handling';
 import type { Actor } from './actor';
 import {
   alertScale, ARCHETYPES, BEHAVIOR_CFG, BEHAVIOR_STATS, castRemaining, evalCondition, FLOCK_CFG, mergeTuning,
@@ -2030,6 +2031,8 @@ function pickSkill(
   target?: Actor,
 ): SkillInstance | null {
   if (actor.aiCooldown > 0) return null;
+  // The shield hand has committed: no autonomous poke inside its bash tell.
+  if (actor.casting?.aiGuardReleaseAt !== undefined && !world.seatOf(actor)) return null;
   // GUARD COMBOS: a raised shield is not "busy" for the skills drilled to
   // work around it (usableWhileGuarding / requiresGuard — Bastion and
   // Phalanx Thrust). The pick narrows to exactly those while guarding;
@@ -2199,6 +2202,15 @@ function useOn(
   const cad = tuning?.skillUse?.cadence ?? [0.15, 0.4];
   actor.aiCooldown = rand(cad[0], cad[1]);
   actor.aiLastSkill = { id: inst.def.id, at: world.time };
+  const recovery = tuning?.behavior?.recovery;
+  if (cast && actor.casting?.mode === 'guard' && actor.casting.inst === inst && !world.seatOf(actor)) {
+    actor.casting.aiGuardWindup = tuning?.behavior?.guardRelease?.windup;
+  }
+  if (cast && recovery && !world.seatOf(actor)) {
+    const seconds = rand(recovery[0], recovery[1]);
+    if (actor.casting) actor.casting.aiRecovery = seconds;
+    else finishAIRecovery(actor, world.time, seconds);
+  }
 }
 
 /** Where the cast actually POINTS (BehaviorSpec, the aim knobs): the classic
@@ -3537,6 +3549,11 @@ function chargeKernel(ctx: KernelCtx): void {
       }
     }
     // LOCK AND GO: overshoot a touch past the prey's position.
+    // A body-aimed beast pays its pivot even for an AI-only rush. The
+    // skill picker already honors castArc; the fallback motor must too.
+    const castArc = ctx.tuning.behavior?.castArc;
+    if (castArc !== undefined && Math.abs(angleDiff(
+      a.facingPrev ?? a.facing, angleTo(a.pos, target.pos))) > castArc) return;
     const speed = a.sheet.get('moveSpeed') * (spec.chargeSpeed ?? 2.4);
     a.dash = {
       dir: angleTo(a.pos, target.pos),

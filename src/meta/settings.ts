@@ -17,7 +17,7 @@
 
 import { PAD_CFG, AIM_ASSIST_MODES, padDisplay, type AimAssistMode } from '../core/gamepad';
 import { NOTICE_CFG, NOTICE_ANCHORS, PICKUP_FEED_CFG, type NoticeAnchorId } from '../world/bulletins';
-import { CURSOR_STYLES, DEFAULT_CURSOR_OPTIONS, type CursorOptions } from '../core/cursor';
+import { normalizeCursorOptions, DEFAULT_CURSOR_OPTIONS, type CursorOptions } from '../core/cursor';
 import { AIM_TICK_STYLES, DEFAULT_AIM_TICK, type AimTickOptions } from '../render/vis/aimtick';
 import { MAP_CFG, MAP_LABEL_MODES, type MapLabelMode, MAP_CHART_MODES, type MapChartMode } from '../ui/mapConfig';
 import { UI_SCALE_CFG } from '../ui/uiScale';
@@ -550,10 +550,7 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     },
     // Cursor identity: unknown styles (a removed mod entry) fall back to the
     // default; the color takes any CSS-safe #rrggbb, else the default tint.
-    cursor: {
-      style: CURSOR_STYLES[s.cursor?.style ?? ''] ? s.cursor!.style! : DEFAULT_CURSOR_OPTIONS.style,
-      color: /^#[0-9a-f]{6}$/i.test(s.cursor?.color ?? '') ? s.cursor!.color! : DEFAULT_CURSOR_OPTIONS.color,
-    },
+    cursor: normalizeCursorOptions(s.cursor),
     lowLifePulse: s.lowLifePulse ?? true,
     statusFalter: s.statusFalter ?? true,
     invertMove: s.invertMove ?? false,
