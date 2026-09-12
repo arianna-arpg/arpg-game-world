@@ -2708,9 +2708,22 @@ export class UI {
                 free ? 'Claim · free' : inv > 0 ? `${buyVerb(u)} · ${rem} more` : `${buyVerb(u)} · ${u.cost}`}</button>
             </div>`;
       };
+      // THE EARNED ROWS (2026-09-11, her ask): a claimed class keeps the deed
+      // that earned it ON its owned card — the objective rows the shrouded
+      // card carried, met ones checked, so the trophy case still says how
+      // each class was won. A class claimed by an older road (before its
+      // deed was written) shows the deed unchecked: owned is owned, and the
+      // row still names the class's road. Non-class kinds print nothing.
+      const earnedRowsHtml = (u: Unlockable): string => {
+        if (u.kind !== 'class' || !(u.reqAnyOf?.length)) return '';
+        const read = classUnlockProgress(acc, u);
+        return `<div class="uobjs">${read.rows.map(r =>
+          `<div class="uobj${r.met ? ' met' : ''}" title="${esc(r.label)}"><span>${r.met ? '✓' : '·'} ${esc(r.label)}</span><i style="width:${Math.round(r.frac * 100)}%"></i></div>`).join('')}</div>`;
+      };
       const ownedCardHtml = (u: Unlockable): string => `
             <div class="unlock-card uowned" data-tip="unlock" data-unlock-id="${u.id}">
               <div class="uname">${u.label}</div>
+              ${earnedRowsHtml(u)}
               <button disabled>✓ Owned</button>
             </div>`;
       // A sealed card wears the name and the price openly (the chain is
@@ -3084,10 +3097,25 @@ export class UI {
       : `${u.cost} ${META_CURRENCY_LABEL}`;
     return {
       title: u.label,
-      description: u.description,
+      description: `${u.description}${this.classRoadsHtml(u)}`,
       meta: `${VAULT_KIND_LABELS[u.kind]}${req} · ${price}`,
       wide: true,
     };
+  }
+
+  /** THE ROADS of a class card, spoken plain (the owned card's hover story,
+   *  2026-09-11): the hint and every deed that claims the class, met ones
+   *  checked with their count — the rumor tooltip's read without the
+   *  runes, because a claimed class has no secret left to keep. Empty for
+   *  every other kind. */
+  private classRoadsHtml(u: Unlockable): string {
+    if (u.kind !== 'class' || !(u.reqAnyOf?.length)) return '';
+    const acc = this.getAccount();
+    const read = classUnlockProgress(acc, u);
+    const line = (r: { label: string; frac: number; met: boolean }): string =>
+      `<div style="color:${r.met ? 'var(--good, #7fd88f)' : 'var(--text-dim)'}">${r.met ? '✓' : '·'} ${esc(r.label)}${r.met ? '' : ` <span style="opacity:.7">(${Math.round(r.frac * 100)}%)</span>`}</div>`;
+    return `${u.payload.hint ? `<div style="margin-top:6px"><i>“${esc(u.payload.hint)}”</i></div>` : ''}`
+      + `<div style="margin-top:6px"><b>Claimed by ANY of:</b>${read.rows.map(line).join('')}</div>`;
   }
 
   /** A SEALED card's hover story: the description plus THE ROADS — every

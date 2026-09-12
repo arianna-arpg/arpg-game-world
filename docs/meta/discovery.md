@@ -70,8 +70,13 @@ A shrouded card's objectives are runes too — until ANY one of them stands
 `gateRowProgress` 0..1 — counted forms held/n, the level sugars the highest
 stamped milestone over the ask, binary forms 0 or 1). Then the objectives —
 and only the objectives — read plain, each with a hairline progress fill; the
-name stays runes until the class is claimed, and then the card is simply
-Owned. Hard lessons at n = 1 never reveal: they simply land.
+name stays runes until the class is claimed, and then the card is Owned —
+and KEEPS ITS ROWS (2026-09-11, her ask): the owned card prints the same
+objective rows, met ones checked, so the trophy case still says how each
+class was won, and its hover story speaks the hint plus every road with its
+count (`classRoadsHtml`). A class claimed by an older road (before its deed
+was written) shows its deed unchecked: owned is owned, and the row still
+names the class's road. Hard lessons at n = 1 never reveal: they simply land.
 
 ### THE RUNESCRIPT (data/runescript.ts)
 
