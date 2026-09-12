@@ -10163,7 +10163,18 @@ export function wholeKindSprite(def: DoodadVisualDef, theme: ZoneTheme,
   radius: number, variant: number): HTMLCanvasElement {
   const painter = PAINTERS[def.painter] ?? PAINTERS.fallback;
   const rq = Math.max(6, Math.round(radius / 4) * 4);
-  const size = rq * 2 * (def.bakeScope ?? 1.7); // fern fronds arc past the disc
+  const original = Math.ceil(rq * 2 * (def.bakeScope ?? 1.7));
+  let size = original; // fern fronds arc past the disc
+  if (def.painter === 'trunk' && def.bakeScope === undefined) {
+    // Trunks occupy a fraction of their crown's radius. Include the ground
+    // shadow, round root caps and bark stroke, plus one antialiasing pixel.
+    const r = rq * ((def.params?.scale as number | undefined) ?? 0.3);
+    const reach = Math.max(rq * 0.5, r * 1.5 + Math.max(2.5, r * 0.4) / 2, r + 0.75) + 1;
+    let tight = Math.ceil(reach * 2);
+    // Preserve the old center's integer/half-pixel alignment exactly.
+    if ((tight & 1) !== (original & 1)) tight++;
+    size = Math.min(original, tight);
+  }
   const key = `wk|${def.painter}|${paramsIdOf(def)}|${variant}|${rq}|${themeTokenOf(theme)}`;
   return baked(key, size, size, (ctx) => {
     const fake = {

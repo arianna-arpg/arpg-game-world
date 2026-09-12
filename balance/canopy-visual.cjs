@@ -59,13 +59,21 @@ app.whenReady().then(async () => {
         w.player.pos.x = 180 + (1 - Math.cos(i / 239 * Math.PI * 2)) * 525;
         frames(1);
       }
-      return { patches: w.veilIndex().patches.length, measures, images, walkingBakes: bakes - beforeWalk };
+      const walkingBakes = bakes - beforeWalk;
+      const beforeChurn = bakes;
+      for (let i = 0; i < 60; i++) {
+        w.doodads.push({ kind: 'rock', pos: { x: 20, y: 20 }, radius: 5 });
+        w.markDoodadsChanged(); frames(1);
+        w.doodads.pop(); frames(1);
+      }
+      return { patches: w.veilIndex().patches.length, measures, images, walkingBakes, churnBakes: bakes - beforeChurn };
     }.toString()})()`);
     for (const im of result.images) fs.writeFileSync(path.join(out, `${im.name}.png`), Buffer.from(im.png, 'base64'));
     delete result.images;
     fs.writeFileSync(path.join(out, 'results.json'), JSON.stringify(result, null, 2));
     assert.equal(result.patches, 1);
     assert.equal(result.walkingBakes, 0, 'moving presence reuses sealed slices');
+    assert.equal(result.churnBakes, 0, 'unrelated scenery churn retains sealed slices');
     for (const row of result.measures) {
       assert.ok(row.name === 'right' ? row.right < .3 && row.left > .95 : row.left < .3 && row.right > .95);
       assert.equal(row.idleBakes, 0, 'standing still does not churn canopy slices');

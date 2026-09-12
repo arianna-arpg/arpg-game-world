@@ -102,6 +102,28 @@ export class VeilIndex {
   readonly patches: VeilPatch[] = [];
   private readonly byDoodad = new Map<Doodad, VeilMember>();
   private readonly disc = new DiscIndex<Doodad>();
+  private readonly source: { d: Doodad; kind: Doodad['kind']; spec: VeilSpec;
+    x: number; y: number; radius: number; rot: number | undefined }[] = [];
+
+  /** Check ordered crown inputs only when the world's dirty keys change.
+   * Unrelated scenery edits retain patch identity and the cached roof. */
+  matches(doodads: readonly Doodad[]): boolean {
+    let i = 0;
+    for (const d of doodads) {
+      if (d.gone || d.felled) continue;
+      const spec = veilSpecOf(d.kind);
+      if (!spec) continue;
+      const old = this.source[i++];
+      if (!old || old.d !== d || old.kind !== d.kind
+        || old.spec.group !== spec.group || old.spec.mergeScale !== spec.mergeScale
+        || old.spec.cover !== spec.cover || old.spec.reveal !== spec.reveal
+        || old.spec.presenceRadius !== spec.presenceRadius || old.spec.presenceFeather !== spec.presenceFeather
+        || old.spec.standStatus !== spec.standStatus
+        || old.x !== d.pos.x || old.y !== d.pos.y || old.radius !== d.radius
+        || old.rot !== d.rot) return false;
+    }
+    return i === this.source.length;
+  }
 
   constructor(doodads: readonly Doodad[]) {
     // Gather the veil-bearing crowns (a popped brittle stays out, and so
@@ -115,6 +137,7 @@ export class VeilIndex {
       const spec = veilSpecOf(d.kind);
       if (!spec) continue;
       members.push({ d, spec });
+      this.source.push({ d, kind: d.kind, spec: { ...spec }, x: d.pos.x, y: d.pos.y, radius: d.radius, rot: d.rot });
       maxRadius = Math.max(maxRadius, d.radius);
       maxScale = Math.max(maxScale, spec.mergeScale ?? VEIL_DEFAULTS.mergeScale);
     }
