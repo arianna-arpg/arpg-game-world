@@ -9173,7 +9173,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
    *  in the chronicle. One road out — the Reckoning (the Vault as the
    *  run's closing prompt); its seal is what finally lands on `onDone`
    *  (the main menu). */
-  showDeath(reck: RunReckoning, onDone: () => void): void {
+  showDeath(reck: RunReckoning, onDone: () => void, revealSec = 0): void {
     this.hideAll();
     const world = this.getWorld();
     const acc = this.getAccount();
@@ -9231,6 +9231,16 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         What you assign at the Reckoning is kept forever; what you leave does not cross to the next run.</div>
       <button id="reckon-btn">${reck.minted > 0 ? `The Reckoning — assign your ${META_CURRENCY_LABEL}` : retired || fell ? 'Onward' : 'Rise Again'}</button>`;
     this.deathScreen.classList.remove('hidden');
+    // The deathPresentation's epilogue fades in over the dispersing body.
+    // Lock the action through the reveal so a held attack cannot skip it.
+    this.deathScreen.getAnimations().forEach(a => a.cancel());
+    if (revealSec > 0) {
+      const button = this.deathScreen.querySelector('button')!;
+      button.disabled = true;
+      const reveal = this.deathScreen.animate([{ opacity: 0 }, { opacity: 1 }],
+        { duration: revealSec * 1000, easing: 'ease-in-out' });
+      void reveal.finished.then(() => { if (button.isConnected) button.disabled = false; }, () => {});
+    }
 
     // A short count-up on the minted total — the appraisal landing. The
     // interval self-heals: it dies the moment its span leaves the DOM.

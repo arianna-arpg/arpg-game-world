@@ -145,6 +145,8 @@ import {
   type EmergeGroundId, type EmergeSpec, type ResolvedEmerge,
 } from './emerge'; // THE EMERGENCE GRAMMAR — the arrival's pure leaf (World.emergeBody)
 import { deathVoiceOf, dominantTypeOf, hitVoiceOf, skillBaseTypeOf } from './bodyVoices'; // THE BODY'S VOICES — a death by material, an impact by type (M-HIT/DEATH)
+import { DEATH_PRESENTATION } from '../data/deathPresentation';
+import { deathPresentationPose } from './deathPresentation';
 import { fellableDoodad, fellJitter, fellProgress, RAMPAGE_CFG, rampageSpecOf, type RampageSpec } from './rampage';
 import { canSquish, SQUISH_CFG, squishSpecOf } from './squish';
 import { anyPitNear, PIT_CFG, pitAt, pitIdentityKey, pitSupportedAt, type PitSurface } from './pitfall';
@@ -3814,6 +3816,8 @@ export class World {
    *  a stalled source fades on its own. Zone-local, cleared on load. */
   private lures = new Map<string, { pos: Vec2; radius: number; pace: number; standoff: number; until: number; tier?: number }>();
   gameOver = false;
+  /** Visual aftermath only; the death and its attribution are already final. */
+  deathPresentation: import('./deathPresentation').DeathPresentation | null = null;
   /** Why the run ended — 'death' (records a corpse) or 'forfeit' (does not).
    *  An overridable seam: a future 'retire' reason or co-op rules slot in here. */
   runEndReason = 'death';
@@ -5256,6 +5260,7 @@ export class World {
   protected onRunEnded(reason: string): void {
     this.runEndReason = reason;
     this.gameOver = true;
+    if (reason === 'death' && DEATH_PRESENTATION.enabled) this.deathPresentation = { elapsed: 0 };
   }
 
   /** Snapshot WHERE the character fell + WHAT it carried — the corpse-run
@@ -45876,7 +45881,26 @@ export class World {
   // --------------------------------------------------------------- update ---
 
   update(dt: number): void {
-    if (this.gameOver) return;
+    if (this.gameOver) {
+      // Continue the visual aftermath on raw seconds, even under a stale menu
+      // hold. Never re-enter combat, AI, rewards, respawns, or input handling.
+      if (this.deathPresentation && !deathPresentationPose(this.deathPresentation.elapsed).complete) {
+        const step = Math.max(0, dt);
+        this.deathPresentation.elapsed += step;
+        this.screenFade = deathPresentationPose(this.deathPresentation.elapsed).fade;
+        this.time += step; // ambient painters keep breathing behind the epilogue
+        for (let i = this.flashes.length - 1; i >= 0; i--) {
+          this.flashes[i].life -= step;
+          if (this.flashes[i].life <= 0) this.flashes.splice(i, 1);
+        }
+        for (let i = this.texts.length - 1; i >= 0; i--) {
+          this.texts[i].life -= step;
+          this.texts[i].pos.y -= 28 * step;
+          if (this.texts[i].life <= 0) this.texts.splice(i, 1);
+        }
+      }
+      return;
+    }
     // THE TIMEFLOW GATE (engine/timeflow.ts): holds age on RAW seconds
     // first (a freeze must be able to expire out of the very clock it
     // stops), then the folded WORLD scale bends this whole frame — 0 holds

@@ -4,6 +4,7 @@
 // ---------------------------------------------------------------------------
 
 import { drawTreasureChest } from './vis/containers';
+import { drawPlayerDeath } from './vis/playerDeath';
 import { destinationLabelVisible } from './vis/destinationLabels';
 import { replenishmentActive } from '../engine/replenishment';
 import { clamp, dist, mixHex, type Vec2 } from '../core/math';
@@ -730,6 +731,7 @@ export class Renderer {
       this.drawLite(world, vw, vh);
       for (const a of world.actors) if (!a.dead && a.worm) this.drawWormTail(a, world.time);
       for (const a of world.actors) if (!a.dead) this.drawActor(a, world);
+      if (world.deathPresentation) drawPlayerDeath(this.ctx, world.player, world.deathPresentation, world.time);
       // THE STATUS VOICE (vis/statusVoiceLayer.ts): what just LANDED on a
       // body is drawn ON it — the frame-diff of each body's statuses plays
       // the family voice over the body; off-screen landings stay silent.
