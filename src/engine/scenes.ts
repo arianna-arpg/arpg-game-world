@@ -267,6 +267,7 @@ function sealStageZone(z: ZoneDef, zone: SceneZoneSpec): void {
   z.packs = { count: [0, 0], size: [0, 0], table: [] };
   z.exits = [];
   if (zone.boundless) z.boundless = true;
+  if (zone.theme) z.theme = { ...z.theme, ...zone.theme };
   delete z.hollows;
   delete z.puzzles;
   delete z.scenery;

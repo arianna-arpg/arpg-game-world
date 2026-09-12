@@ -12,6 +12,71 @@ account, ever** — the flask-lesson graduation pattern applied to narrative.
 Everything is data: the stages, the cards' prose, the waves, the executioner
 and its verb, every timing dial (`SCENE_CFG`).
 
+## Faction journeys and unfinished objectives
+
+`src/data/tutorialObjectives.ts` authors the seven journeys. Each
+`TutorialFactionRow.journey` chooses its objective, opening, remembered death,
+road and scenic sky. `prologueForFaction` resolves these alongside the faction's
+existing monsters and commander; the movement/casting lessons, faction ledger
+and Mu gate stay shared.
+
+| Faction | Stated goal | Measurement |
+| --- | --- | --- |
+| Goblins | Continue to Lastlight | Forward road travel |
+| Undead | Survive the night | Elapsed time |
+| Beastkin | Escape the hunting grounds | Forward road travel |
+| Demons | Outlast the cinder rain | Elapsed time |
+| Carven Court | Leave the harvest fields | Forward road travel |
+| Seethe | Weather the Seethe | Elapsed time |
+| Gnolls | Get beyond the laughing packs | Forward road travel |
+
+`SceneAssaultStage.objective` separates the narrative measurement from the
+director's clock. `progress.amount` is pixels for `road`, seconds for `elapsed`;
+`interruptAt` is the unfinished fraction that summons the commander (authored
+at 0.82). `surviveSec` remains the director's independent deadline (78 seconds),
+so standing still or leaving the road cannot strand the tutorial. Either
+threshold advances to the reckoning. The bar is clamped below 1 even across a
+large frame or displacement, then retained **frozen and unfinished** while the
+commander stands. It is never a successful zone objective and pays no rewards.
+Assaults without `objective` retain their existing survival-clock behavior.
+
+Road credit belongs to the local hero and begins at assault entry. Both ends
+of each measured step must lie on the road; only new forward ground earns
+credit. Standing still, moving sideways, backtracking, being pushed and taking
+an off-road shortcut grant no distance. Returning to already reached ground
+does not grant it again. Dashes along new road remain valid travel.
+
+`SceneZoneSpec.road` creates a genuine continuous way in any cardinal direction,
+centered on the staging ground. `engine/sceneRoad.ts` streams the existing
+`road` doodads on an integer lattice in bounded windows around party seats,
+culls them behind, and restores identical geometry on return. Radius and
+spacing are authored (positive, spacing <= radius). Road membership uses the
+same overlapping discs the renderer draws. The original ground and streamed
+scenery reserve its shoulders. This is intended for open, ungridded scene
+ground such as the boundless Last Mile, not a substitute for carving grid
+corridors. The road has no destination, end marker or reachable boundary.
+
+`SceneZoneSpec.skyCycle` pins a **scenic** day-wheel position; a stage's `sky`
+eases it toward another position over `transitionSec`. The Undead opening
+holds dusk throughout the lessons and enters deep night over the assault's
+first five seconds. `sceneSkyTime` supplies the atmosphere and light layer
+without moving `World.time`, changing cooldowns or exposing this off-graph
+scene to weather. The ordinary simulation clock remains untouched, menu pause
+freezes the transition, and leaving the staging zone releases the override.
+The scene HUD reads that same scenic hour and omits the staging mint's cave
+depth. `SceneZoneSpec.theme` can override the minted dress; the Last Mile sets
+`ambientDark: 0` so its outdoor light is not pinned to an underground floor.
+
+The early-fall covenant still leads directly to the faction's early-death
+card and Mu. A rare commander kill also fells the hero before the wake; it
+cannot become a living exit or a completed journey. Completion is still
+stamped only when Mu opens.
+
+`balance/probe_scenes.ts` covers all faction measurements, the incomplete bar
+through arrival, idle deadline, pause, dusk/night transition, Mu release,
+backtracking and off-road rejection, plus perpetual road geometry in all four
+directions. `balance/probe_mu.ts` covers the mortal commander's fallen exit.
+
 ## The gate (`sceneDue`) — a scene only counts once LIVED
 
 A scene is **not a run**. The completion key (`SceneDef.ledger`) stamps at
@@ -132,7 +197,8 @@ to stop. Interrupts delay, never deny (the muster re-arms); THE ENRAGE
 answers a commander bled below `floorFrac`: honestly mortal throughout, he
 furies (rally worn, the ground kicks) and the bar SURGES to its last
 breaths (`enrageLeftSec`). A truly-finished Father just fades the stage
-forward (the dead-commander lane — never a lock).
+forward after felling the hero (the dead-commander lane — never a living
+victory or a lock).
 
 **THE FIELD-FALL SURGE** (her ruling 2026-09-01): the reckoning PLAYS a
 fall in place (`onFell: 'play'`) — nobody ever arrives here felled (an

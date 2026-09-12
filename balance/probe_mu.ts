@@ -369,8 +369,8 @@ check('C6: the unknown cowls are NAMELESS (no npcRole — no nameplate to leak)'
   c.account.ledger[tutorialFactionKey(other.id)] = 1;
   check('G6: a standing stamp is RECALLED, never re-rolled',
     rollTutorialFaction(c).id === other.id);
-  // G7: the resolve swaps exactly the war stages — cards, drill and the Mu
-  // tail stay the base def's rows byte-identically.
+  // G7: the resolve swaps fiction and war; mechanical lessons and Mu stay
+  // the base def's rows byte-identically.
   const row = TUTORIAL_FACTIONS.find(r => r.id === 'demon')!;
   const eff = prologueForFaction(row);
   const kinds = eff.stages.map(s => s.kind);

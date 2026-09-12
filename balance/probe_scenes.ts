@@ -81,9 +81,7 @@ const sceneBodies = (w: World): Actor[] =>
   w.actors.filter(a => a.eventKey === `scene:${PROLOGUE_SCENE.id}`);
 const stageKind = (w: World): string =>
   w.scene ? String(w.scene.def.stages[w.scene.stageIx]?.kind) : '(no scene)';
-/** The prologue's wake card stage (the fall's landing) — its page objects
- *  are shared by reference into the resolved def, so identity pins which
- *  page the landing chose. */
+/** The resolved faction's wake card: identity pins which page was chosen. */
 const wakeStage = (w: World): SceneCardStage | undefined =>
   w.scene?.def.stages.find(s => s.kind === 'card' && (s as SceneCardStage).fallCard) as SceneCardStage | undefined;
 const castLeft = (a: Actor | undefined): number =>
@@ -476,7 +474,8 @@ for (const [ix, faction] of TUTORIAL_FACTIONS.entries()) {
     && v.zone.objective.kind === 'none'
     && v.zone.objective.label === faction.journey.objective.label);
   check(`K ${faction.id}: starts at dusk without rewriting world time`,
-    dayCycle(sceneSkyTime(v)).phase === 'dusk' && v.time === worldTime);
+    dayCycle(sceneSkyTime(v)).phase === 'dusk' && v.time === worldTime
+    && v.zone.theme.ambientDark === 0);
   sc.stageIx = sc.def.stages.findIndex(s => s.kind === 'assault');
   sc.begun = false;
   const spec = sc.def.stages[sc.stageIx] as SceneAssaultStage;

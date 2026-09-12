@@ -232,7 +232,7 @@ import { eventLevel as resolveEventLevel } from '../world/levelField';
 import { factionAllowed } from '../world/zonePolicy';
 import type { WalkField, PathProfile } from '../world/walk';
 import { GridWalkField, WALK_CFG } from '../world/gridWalk';
-import { regionKind, survivalResource, survivalEaseStat, survivalBandMeter, SURVIVAL_EASE_CAP, doodadGroundIds, LIQUID_CFG, regionPathCost, DOUSE_CFG, type DouseSpec, type SurvivalResourceDef } from '../world/regions';
+import { regionKind, survivalResource, survivalEaseStat, survivalBandMeter, SURVIVAL_EASE_CAP, isDoodadGround, LIQUID_CFG, regionPathCost, DOUSE_CFG, type DouseSpec, type SurvivalResourceDef } from '../world/regions';
 import { continentAt, continentSeedFrom, type ContinentInfo } from '../world/continents';
 import { zoneFeatureHarvest } from '../world/atlas';
 import { climateAt } from '../world/climate';
@@ -1624,11 +1624,11 @@ const DROP_PICKUP_GRACE = 0.8;
 
 /** Doodad kinds that count as special GROUND (traction / depth effects) — shared by
  *  loadZone (host) and rebuildClientTerrain (client) so the lists match. DERIVED
- *  from the RegionKind registry (regions.ts doodadGroundIds), never a literal
+ *  from the RegionKind registry (regions.ts isDoodadGround), never a literal
  *  list: a new ground kind registered by a package/legend/fx layer auto-joins
  *  the ground sensing. Resolved lazily so late registrations count. */
 const GROUND_KINDS = {
-  includes: (kind: string): boolean => doodadGroundIds().includes(kind),
+  includes: (kind: string): boolean => isDoodadGround(kind),
 };
 // (Doodad mutability — which kinds an Incursion's doodad_mutation may graft
 // onto — is a DoodadRule.mutable flag now, read at the use site: the derived-
@@ -59491,7 +59491,9 @@ export class World {
     const rev = this.doodadFamilyRev('veil');
     if (!this.veilIdx || this.veilIdxArr !== this.doodads
       || this.veilIdxLen !== this.doodads.length || this.veilIdxRev !== rev) {
-      this.veilIdx = new VeilIndex(this.doodads);
+      // Unrelated dress can change list length or the broad revision.
+      // Preserve baked roofs unless the actual crown inputs changed.
+      if (!this.veilIdx?.matches(this.doodads)) this.veilIdx = new VeilIndex(this.doodads);
       this.veilIdxArr = this.doodads;
       this.veilIdxLen = this.doodads.length;
       this.veilIdxRev = rev;

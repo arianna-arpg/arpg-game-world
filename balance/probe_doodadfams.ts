@@ -12,8 +12,8 @@
 //     a no-arg report bumps all (the safe default).
 //   THE CONSUMER LAW — pathField/veilIndex keep their derived objects
 //     across foreign churn, re-derive on their own.
-//   THE SAFETY NET — an UNREPORTED push/splice still invalidates everything
-//     (the length key): the registry can never make a cache stale.
+//   THE SAFETY NET — an UNREPORTED push/splice still rechecks cached inputs
+//     (the length key): canopy keeps unchanged crowns, but never stale cover.
 //   THE EVAP ATTRIBUTION — the evaporation sweep's per-step report leaves
 //     the nav grid + veil index untouched while the pool's own families move.
 //
@@ -92,14 +92,23 @@ check('A: rock wears nav-block, never light', (bitsRock & (1 << doodadFamilyInde
 {
   const nav0 = w.pathField();
   const veil0 = w.veilIndex();
-  const clusters0 = w.doodadFamilyRev('light');
   // A raw, UNREPORTED push (no markDoodadsChanged at all): the length key
-  // must still re-derive every consumer.
+  // must recheck every consumer; unchanged canopy should keep its cache.
   w.doodads.push({ pos: { x: 400, y: 300 }, radius: 18, kind: 'rock' });
-  check('D: an unreported push still re-derives (length key)',
-    w.pathField() !== nav0 && w.veilIndex() !== veil0, undefined);
-  void clusters0;
+  check('D: an unreported rock push rebuilds navigation and preserves unchanged canopy',
+    w.pathField() !== nav0 && w.veilIndex() === veil0);
   w.doodads.pop();
+  const unreportedCrown: Doodad = { pos: { x: 400, y: 300 }, radius: 30, kind: 'tree' };
+  // Read the removal before the next push: the length key catches each edit.
+  w.veilIndex();
+  w.doodads.push(unreportedCrown);
+  const withCrown = w.veilIndex();
+  check('D: an unreported canopy push rebuilds and indexes its crown',
+    withCrown !== veil0 && withCrown.patchOf(unreportedCrown) !== null);
+  w.doodads.pop();
+  const withoutCrown = w.veilIndex();
+  check('D: an unreported canopy removal retires its coverage',
+    withoutCrown !== withCrown && withoutCrown.patchOf(unreportedCrown) === null);
   w.markDoodadsChanged(); // leave the fixture honest
 }
 

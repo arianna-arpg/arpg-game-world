@@ -557,3 +557,6 @@ Three small fabrics keep long sessions smooth on every engine:
   alters a body's look, add it to `bodyKey`.
 - Balance sim (`src/sim/`) never touches the renderer; render changes need
   no re-baseline.
+
+The follow-up [forest/jungle performance pass](forest-performance.md) documents
+trunk texture bounds, canopy cache retention, and the profiling/pixel checks.

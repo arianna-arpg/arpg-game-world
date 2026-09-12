@@ -8104,14 +8104,16 @@ export class Renderer {
       // standing on it: where you are on the world's vertical ladder, and how
       // far down that is. Both read the ONE caveDepth datum — the number IS the
       // depth stratumOf was asked about — so band and rung can never disagree.
-      const caveD = world.zone.caveDepth;
+      const sceneGround = world.scene?.zoneId === world.zone.id;
+      const caveD = sceneGround ? undefined : world.zone.caveDepth;
       const stratText = caveD != null
         ? ` · ${stratumOf(caveD).name} · Depth ${caveD}` : '';
       ctx.fillText(`${world.zone.name}${lvText}${stratText}`, x, 46);
       // Living-world status: time of day · weather · who holds this ground.
       ctx.font = '11px Verdana';
       ctx.fillStyle = '#9ab0c8';
-      ctx.fillText(world.sim.hudLine(world.zone, world.time), x, 64);
+      ctx.fillText(sceneGround ? dayCycle(sceneSkyTime(world)).label
+        : world.sim.hudLine(world.zone, world.time), x, 64);
       ctx.font = '12px Verdana';
       ctx.fillStyle = world.objectiveDone ? '#ffd700' : '#9a96b8';
       ctx.fillText(world.objectiveText(), x, 82);

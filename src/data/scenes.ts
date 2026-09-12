@@ -67,6 +67,8 @@
 // Pure data leaf: no engine imports. Every number is a knob.
 // ---------------------------------------------------------------------------
 
+import { TUTORIAL_JOURNEYS } from './tutorialObjectives';
+
 /** A full-screen story card: fade to black, read, continue. `{bind:…}`
  *  tokens in lines resolve against the LIVE keybinds at display time. */
 export interface SceneCardSpec {
@@ -114,6 +116,9 @@ export interface SceneZoneSpec {
   road?: SceneRoadSpec;
   /** Authored sky position (0..1 on the day wheel); never changes World.time. */
   skyCycle?: number;
+  /** Scene-specific dress overrides (e.g. an outdoor scene must not inherit
+   *  the off-graph cave mint's underground darkness floor). */
+  theme?: Partial<import('./zones').ZoneTheme>;
   /** Tileset registry id (the dress — e.g. 'meadow'). */
   tileset: string;
   /** Force a layout recipe (absent = the tileset's own roll). */
@@ -360,24 +365,17 @@ export const PROLOGUE_SCENE: SceneDef = {
     tileset: 'meadow',
     name: 'The Last Mile',
     level: 1,
-    objectiveLabel: 'Continue to Lastlight',
+    objectiveLabel: TUTORIAL_JOURNEYS.goblin.objective.label,
     seed: 0x1a57,
     boundless: true, // the last mile has no edge — the road is longer than you
-    road: { direction: 'east', radius: 76, spacing: 64 },
-    skyCycle: 0.44,
+    road: TUTORIAL_JOURNEYS.goblin.road,
+    skyCycle: TUTORIAL_JOURNEYS.goblin.skyCycle,
+    theme: { ambientDark: 0 },
   },
   stages: [
     {
       kind: 'card',
-      card: {
-        title: 'HOLLOW WAKE',
-        lines: [
-          'The old roads run longer than they used to. The towns grow few, and the lights grow far between.',
-          'You have walked for days on the promise of one: LASTLIGHT, where the candles are said never to gutter.',
-          'One more mile. The dark does not feel empty tonight.',
-        ],
-        button: 'Walk on',
-      },
+      card: TUTORIAL_JOURNEYS.goblin.intro,
     },
     {
       kind: 'drill',
@@ -397,11 +395,8 @@ export const PROLOGUE_SCENE: SceneDef = {
     },
     {
       kind: 'assault',
-      label: 'Continue to Lastlight',
-      objective: {
-        label: 'Continue to Lastlight', prompt: 'Follow the road east. Lastlight lies ahead.',
-        progress: { kind: 'road', amount: 6000 }, interruptAt: 0.82,
-      },
+      label: TUTORIAL_JOURNEYS.goblin.objective.label,
+      objective: TUTORIAL_JOURNEYS.goblin.objective,
       rows: [
         { at: 0, spawns: [{ def: 'goblin_skirmisher', count: 4 }], announce: 'more of them, hold the road!', announceColor: '#9fdc6a' },
         { at: 13, spawns: [{ def: 'goblin_skirmisher', count: 4 }, { def: 'goblin_brute', count: 1 }] },

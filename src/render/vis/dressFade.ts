@@ -19,7 +19,7 @@
 //     Doodad.weatherDress — never kind-string guessing) whose KIND carries
 //     no registered DoodadRule collision (blocksMove/blocksShot/blocksSight),
 //     no rule-borne gameplay (effect/contact/brittle/warms) and no ground
-//     region (doodadGroundIds — wading/traction/path truth). Drawn == tested
+//     region (isDoodadGround — wading/traction/path truth). Drawn == tested
 //     holds at this seam BY CONSTRUCTION: an admitted piece has no tested
 //     surface at all, so the eased pixels have nothing to disagree with. A
 //     drying pool or a solid hell fin refuses here and keeps the engine's
@@ -43,7 +43,7 @@
 // ---------------------------------------------------------------------------
 
 import { doodadRuleOf, type Doodad, type DoodadKind } from '../../engine/levelgen';
-import { doodadGroundIds } from '../../world/regions';
+import { isDoodadGround } from '../../world/regions';
 import { World } from '../../engine/world';
 import { VIS_CFG } from './visConfig';
 
@@ -58,7 +58,7 @@ function cosmeticKind(kind: string): boolean {
     const r = doodadRuleOf(kind as DoodadKind);
     v = !r.blocksMove && !r.blocksShot && !(r.blocksSight ?? !!r.blocksShot)
       && !r.effect && !r.contact && !r.brittle && !r.warms
-      && !doodadGroundIds().includes(kind);
+      && !isDoodadGround(kind);
     kindVerdict.set(kind, v);
   }
   return v;

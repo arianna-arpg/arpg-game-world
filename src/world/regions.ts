@@ -583,9 +583,16 @@ export function regionIds(): string[] { return Object.keys(REGION_KINDS); }
  *  (moveScale counts: the road's speed boost is an effect too — a new legend/fx
  *  ground kind registered with any effect auto-joins the ground sensing). */
 export function doodadGroundIds(): string[] {
-  return Object.keys(REGION_KINDS).filter(id => REGION_KINDS[id].walkable && !REGION_KINDS[id].visualOnly
-    && (REGION_KINDS[id].standStatus || REGION_KINDS[id].enterStatus || REGION_KINDS[id].survival
-      || REGION_KINDS[id].moveScale !== undefined));
+  return Object.keys(REGION_KINDS).filter(isDoodadGround);
+}
+
+/** Membership is a direct live registry read. Dense scenery loads must not
+ * enumerate every region for each doodad; late registration and edits still
+ * take effect immediately without a derived-list cache to invalidate. */
+export function isDoodadGround(id: string): boolean {
+  const r = REGION_KINDS[id];
+  return !!(r?.walkable && !r.visualOnly
+    && (r.standStatus || r.enterStatus || r.survival || r.moveScale !== undefined));
 }
 
 /** LIQUID DEPTH tuning for doodad-disc water (groundAt). `deepInset` is how far
