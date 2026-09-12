@@ -61,7 +61,7 @@ import {
 import { bumpLedger } from '../packages/ledger';
 import { registerAttentionSource } from '../world/attention';
 import { Rng } from '../core/rng';
-import { vec, dist, rand, type Vec2 } from '../core/math';
+import { vec, dist, rand, angleDiff, type Vec2 } from '../core/math';
 
 // ------------------------------------------------------------- the runtime --
 
@@ -950,6 +950,9 @@ function muSpawnApparitions(w: World, sc: SceneRuntime): MuApp[] {
     const th = n <= 1 ? MU_CFG.arc.from + span / 2 : MU_CFG.arc.from + span * (i / (n - 1));
     const m = w.createMonster(defId, 1, 'player');
     m.pos = w.clampPos(vec(cx + Math.cos(th) * r, cy + Math.sin(th) * r), m.radius);
+    // THE GAZE: born looking at its mark (the wisp) — never a snap later.
+    m.facing = muGazeAngle(w, m);
+    m.facingPrev = m.facing;
     m.noBounty = true;
     m.eventKey = sc.eventKey;
     if (rank === 'veiled') m.applyStatus('mu_veiled', 0, 1, 'Mu');
@@ -963,6 +966,22 @@ function muSpawnApparitions(w: World, sc: SceneRuntime): MuApp[] {
     seat(APPARITION_UNKNOWN_ID, null, 'faint', i, faintN, MU_CFG.ranks.faint);
   }
   return apps;
+}
+
+/** THE GAZE (MU_CFG.gaze): the bearing a vessel's eyes hold — toward the
+ *  live wisp, the wake point, or due south (screen y grows downward). */
+function muGazeAngle(w: World, a: { pos: Vec2 }): number {
+  const g = MU_CFG.gaze;
+  if (g.at === 'south') return Math.PI / 2;
+  const t = g.at === 'wisp' ? w.player.pos : vec(w.arena.w / 2, w.arena.h / 2);
+  return Math.atan2(t.y - a.pos.y, t.x - a.pos.x);
+}
+
+/** Swing `from` toward `to` by at most `cap` radians (cap <= 0 = instant). */
+function muTurnToward(from: number, to: number, cap: number): number {
+  if (cap <= 0) return to;
+  const d = angleDiff(from, to);
+  return Math.abs(d) <= cap ? to : from + Math.sign(d) * cap;
 }
 
 registerSceneStage('mu', {
@@ -1067,6 +1086,11 @@ registerSceneStage('mu', {
     for (const row of apps) {
       const a = w.actors.find(x => x.id === row.id);
       if (!a) continue;
+      // THE GAZE (MU_CFG.gaze): the vessel's eyes follow their mark — the
+      // drifting wisp by default — swinging at turnRate so the turn reads
+      // as attention, never a snap. aims:false bodies wear no tick and no
+      // mind turns them, so this is the one hand on an apparition's facing.
+      a.facing = muTurnToward(a.facing, muGazeAngle(w, a), MU_CFG.gaze.turnRate * dt);
       const engaged = dist(p.pos, a.pos) <= MU_CFG.dwell.radius + a.radius;
       if (!engaged) {
         row.t = 0;

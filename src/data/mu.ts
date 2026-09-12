@@ -66,6 +66,14 @@ export const MU_CFG = {
   ranks: { awake: 250, veiled: 430, faint: 610 },
   /** The arc the ranks stand on (radians; -PI/2 = due north of the wake). */
   arc: { from: -Math.PI * 0.82, to: -Math.PI * 0.18 },
+  /** THE GAZE (2026-09-11, her word: the vessels stood facing east — "they
+   *  should be looking AT the wisp that's going to inhabit them"): where
+   *  every apparition's eyes point. 'wisp' = the live spirit, followed as
+   *  it drifts (the roster watches you); 'wake' = the wake point, inward,
+   *  held; 'south' = a fixed bearing down the screen. `turnRate` (rad/s)
+   *  is the swing toward the mark — slow enough to read as attention,
+   *  never a snap; 0 = instant. A vessel is BORN looking at its mark. */
+  gaze: { at: 'wisp' as 'wisp' | 'wake' | 'south', turnRate: 2.4 },
   /** How many unknown cowls at most (the locked remainder can be large —
    *  a crowd of mist shapes reads as fog, not as a roster). */
   faintCap: 12,

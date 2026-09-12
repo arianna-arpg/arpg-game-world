@@ -93,6 +93,17 @@ own `look`/`color`/`name`, `passive + invulnerable + untargetable`,
 the untargetable ladder's 0.55 alpha; the rank markers floor it lower
 (`StatusDef.ghostAlpha` rows in `engine/status.ts`).
 
+**THE GAZE** (`MU_CFG.gaze`, 2026-09-11 — her word: the vessels stood facing
+east, "they should be looking AT the wisp that's going to inhabit them").
+Every apparition is born looking at its mark and its eyes FOLLOW it:
+`at: 'wisp'` (the default) tracks the live spirit as it drifts — the roster
+watches you — `'wake'` holds the wake point (inward), `'south'` a fixed
+bearing down the screen; `turnRate` (rad/s) is the swing toward the mark,
+slow enough to read as attention and never a snap (0 = instant). The stage's
+own update is the one hand on an apparition's facing (`aims: false` bodies
+wear no tick and no mind turns them). Probe C7–C9: born on the mark, one
+frame swings at most `turnRate × dt`, then settles on the wisp's new seat.
+
 ## The wisp
 
 `MU_CFG.wisp` — the raw `spirit` look, pale ether ink, radius 10, kit
@@ -184,7 +195,7 @@ absence, the mark, the ten-breath bar, the mercy floor, the threshold stamp.
 
 ## Dials
 
-Everything in `MU_CFG` (`data/mu.ts`): wisp face, arc radii/span, faint cap,
-dwell radius/seconds, the three spoken lines. The reckoning's beat lives on
+Everything in `MU_CFG` (`data/mu.ts`): wisp face, arc radii/span, the gaze
+(mark + turn rate), faint cap, dwell radius/seconds, the three spoken lines. The reckoning's beat lives on
 the prologue's stage row (`spawnDist`/`graceSec`/`floorFrac`/`blastWaitSec`).
 All numbers are first-pass and unblessed.

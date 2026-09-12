@@ -41,6 +41,7 @@ import { selectableSlotCount } from '../src/meta/account';
 import { collectAttention } from '../src/world/attention';
 import type { World } from '../src/engine/world';
 import type { Actor } from '../src/engine/actor';
+import { angleDiff } from '../src/core/math';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -131,6 +132,30 @@ check('C5: awake + veiled wear their CLASS\'s own face (def per class)',
   [...awake, ...veiled].every(a => pool.some(c => apparitionDefId(c.id) === a.defId)));
 check('C6: the unknown cowls are NAMELESS (no npcRole — no nameplate to leak)',
   faint.every(a => a.defId === APPARITION_UNKNOWN_ID));
+// THE GAZE (2026-09-11, her word: the vessels stood facing east — they
+// should look AT the wisp that will inhabit them): every apparition is born
+// facing its mark (the live wisp by default) and FOLLOWS a drifting wisp at
+// MU_CFG.gaze.turnRate — a swing per frame, never a snap — until it settles.
+{
+  const bearing = (a: Actor): number => Math.atan2(p.pos.y - a.pos.y, p.pos.x - a.pos.x);
+  const off = (a: number, b: number): number => Math.abs(angleDiff(a, b));
+  const worst = (): number => Math.max(...apps.map(a => off(a.facing, bearing(a))));
+  check('C7: every vessel is BORN looking at the wisp (MU_CFG.gaze.at = wisp)',
+    MU_CFG.gaze.at === 'wisp' && apps.length > 0 && worst() < 0.02, `worst off=${worst().toFixed(3)}`);
+  const hx = p.pos.x, hy = p.pos.y;
+  const before = apps.map(a => a.facing);
+  p.pos.x = hx + 320; p.pos.y = hy + 260; // a drift well inside the wrap
+  w.update(DT);
+  const perFrame = apps.map((a, i) => off(before[i]!, a.facing));
+  check('C8: THE GAZE SWINGS — one frame turns a vessel by at most turnRate × dt, never a snap',
+    perFrame.every(d => d <= MU_CFG.gaze.turnRate * DT + 1e-6) && perFrame.some(d => d > 1e-4),
+    `max/frame=${Math.max(...perFrame).toFixed(4)} cap=${(MU_CFG.gaze.turnRate * DT).toFixed(4)}`);
+  step(w, 3);
+  check('C9: …and SETTLES on the wisp where it now stands (every vessel, within a hair)',
+    worst() < 0.02, `worst off=${worst().toFixed(3)}`);
+  p.pos.x = hx; p.pos.y = hy;
+  step(w, 3);
+}
 
 // === D) THE DWELL LATCH ======================================================
 {
