@@ -4803,6 +4803,9 @@ export interface SkillTreeNode {
    *  field of its branch identity — including values equal to today's
    *  base — so the branch survives a rescale moving the base row. */
   over?: {
+    /** Completed-use cycle identity. World's single cycle grant reads
+     * instanceCastCycle; repeated echoes do not advance the counter. */
+    castCycle?: NonNullable<SkillDef['castCycle']>;
     /** One complete tree spender contract, below socket spender precedence.
      * Gate, payment, damage, repeats, projectile counts and UI use instanceChargeCost. */
     chargeCost?: NonNullable<SkillDef['chargeCost']>;
@@ -5052,6 +5055,11 @@ export function instanceTreeMods(inst: SkillInstance): Modifier[] | undefined {
     if (mods?.length) (out ??= []).push(...mods);
   }
   return out;
+}
+
+/** A tree may change a native completed-use cycle without editing its def. */
+export function instanceCastCycle(inst: SkillInstance): SkillDef['castCycle'] {
+  return instanceTreeOver(inst)?.castCycle ?? inst.def.castCycle;
 }
 
 /** THE RESOLVED CHANNEL (the M1 audit's channel lane): a spent node's
@@ -5590,6 +5598,9 @@ export interface SkillInstance {
    *  Invocation's last-rune conversion, future item affixes) — merged into
    *  instanceMods for this instance's whole life, zones and all. */
   extraMods?: Modifier[];
+  /** Derived host-tree investment for a combo finisher; rebuilt on every
+   * comboStepOf read, separate from its own level and socket modifiers. */
+  comboTreeMods?: Modifier[];
   /** GRAFTS — the skill-mutator lane: support-gem payloads attached WITHOUT
    *  occupying a socket. hostSockets appends them after the real sockets
    *  (same fixpoint tag admission), so mods/riders/cast-on-X/forwarding all
@@ -6337,6 +6348,7 @@ export function instanceInnateMods(inst: SkillInstance): Modifier[] {
   const out: Modifier[] = [];
   if (inst.def.innateMods) out.push(...inst.def.innateMods);
   if (inst.extraMods) out.push(...inst.extraMods);
+  if (inst.comboTreeMods) out.push(...inst.comboTreeMods);
   // THE SKILL-MODE TREES (M1): spent nodes' skill-local mods join the
   // instance's own lane — one fold, every stat read covered. Unpicked
   // instances pay one null check (the transparency law).

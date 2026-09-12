@@ -1085,6 +1085,10 @@ export const STAT_DEFS: Record<string, StatDef> = {
   guardParry:     { label: 'Parry Window', base: 0 },
   /** Riposte multiplier on parried damage. */
   guardParryPower:{ label: 'Parry Power', base: 1.5 },
+  /** Added incoming-damage multiple, including guards with a native counter. */
+  parryCounterBonus: { label: 'Additional Counter Power', base: 0, min: 0 },
+  /** Added seconds for guards with an authored maximum duration. */
+  guardHoldTime: { label: 'Timed Guard Duration', base: 0 },
 
   // Aura-channelled energy shield tuning (Capacitor / Insulation supports
   // socketed into aura skills inject these into the aura's ally modifiers)

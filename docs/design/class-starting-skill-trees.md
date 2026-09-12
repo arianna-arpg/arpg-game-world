@@ -83,3 +83,8 @@ Continue with the starting bars of unlockable classes in thematic batches.
 Keep a complete three-skill bar as the unit of initial parity. Necromancer's
 broader progression remains a separate ongoing batch. Tune numerical power
 with comparable early-game encounters after the mutator foundations stand.
+
+After all starting bars have complete trees, audit class mastery rewards so
+every class has alternate skills available to swap into its opening bar.
+Then implement equivalent trees for those mastery alternatives. Preserve this
+order: starting-skill coverage, mastery swap coverage, alternate-skill trees.

@@ -2937,7 +2937,7 @@ export function validateContent(): void {
   // validatePassiveChoices warn-degrade idiom). Monster tree PINS resolve
   // against the kit's own defs.
   {
-    const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags', 'chargeCost', 'ground']);
+    const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags', 'chargeCost', 'ground', 'castCycle']);
     const SUMMON_KEYS = new Set(['count', 'maxActive', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell', 'crewRules', 'crewInherit', 'crewOnDeath', 'devour', 'placeAt']);
     const OVER_CHANNEL_KEYS = new Set(['ramp', 'rampMove']);
     const KINDS = new Set(['minor', 'major', 'keystone']);
@@ -3002,6 +3002,14 @@ export function validateContent(): void {
           if (!OVER_CHANNEL_KEYS.has(k)) warn(`${at}/${n.id}: over.channel.${k} is off the audited whitelist`);
         }
         const treeChargeCost = n.over?.chargeCost;
+        const castCycle = n.over?.castCycle;
+        if (castCycle) {
+          if (!def.castCycle) warn(`${at}/${n.id}: castCycle overrides require a native cycle`);
+          if (!Number.isInteger(castCycle.count) || castCycle.count < 1) warn(`${at}/${n.id}: invalid castCycle count`);
+          if (!castCycle.buff.id || castCycle.buff.duration <= 0) warn(`${at}/${n.id}: invalid castCycle buff`);
+          for (const key of Object.keys(castCycle)) if (!['count', 'buff'].includes(key)) warn(`${at}/${n.id}: unknown castCycle.${key}`);
+          for (const m of castCycle.buff.mods) if (!STAT_DEFS[m.stat] || !Number.isFinite(m.value)) warn(`${at}/${n.id}: invalid castCycle modifier`);
+        }
         if (treeChargeCost) {
           const keys = ['charge', 'amount', 'minimum', 'damagePerCharge', 'projectilesPerCharge', 'repeatsPerCharge', 'optional'];
           for (const k of Object.keys(treeChargeCost)) if (!keys.includes(k)) warn(`${at}/${n.id}: unknown chargeCost.${k}`);

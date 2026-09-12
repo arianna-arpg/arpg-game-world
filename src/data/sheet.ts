@@ -82,6 +82,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       'damageTaken', 'critAvoid', 'ailmentResist', 'afflictionExpiry', 'lowLifeLine', 'strideReach',
       // Block & guard
       'blockPower', 'blockValue', 'guardStrength', 'guardParry', 'guardParryPower',
+      'parryCounterBonus', 'guardHoldTime',
       'guardAegis', 'domeDeflects',
       // Energy shield
       'energyShield', 'esRechargeRate', 'esRechargeDelay', 'esRechargeSteadfast',
@@ -471,6 +472,8 @@ const STAT_BLURBS: Record<string, string> = {
   guardStrength: 'Scales every guard you raise: the held stance\'s pool and the passive block\'s guard alike.',
   guardParry: 'Guard skills without a parry of their own gain a parry window this long.',
   guardParryPower: 'The riposte multiplier on damage you parry.',
+  parryCounterBonus: 'Adds this multiple of incoming damage to successful parry counters, including a skill\'s own counter.',
+  guardHoldTime: 'Adds this many seconds to timed guard stances. The resulting stance lasts at least 0.05 seconds.',
   guardAegis: 'Your raised guard also absorbs hits against nearby minions.',
   domeDeflects: 'Your protection domes DEFLECT projectiles back out instead of dissolving them.',
   energyShield: 'A second life pool that soaks damage first and recharges after a quiet moment, but a wound mid-recharge interrupts the flow and the wait starts over.',

@@ -9,6 +9,7 @@
 // ---------------------------------------------------------------------------
 
 import { DeedTracker, type DeedEvent } from './deeds';
+import { instanceCastCycle, instanceTreeMods } from './skills';
 import { finishAIRecovery, monsterTurnSpeed } from './handling';
 import { COMBAT_DEEDS, DEED_CFG } from '../data/classdeeds';
 import { selectContainerLoot } from '../data/containerloot';
@@ -29128,6 +29129,7 @@ export class World {
     }
     step.sockets = inst.sockets; // live references — re-socketing propagates
     step.grafts = inst.grafts;
+    step.comboTreeMods = instanceTreeMods(inst);
     return step;
   }
 
@@ -36091,13 +36093,16 @@ export class World {
     }
     // CAST CYCLE (SkillDef.castCycle): every Nth completed REAL use grants
     // the cycle's buff, then the count resets — "the third cast imbues".
-    if (!opts.noRepeat && !opts.noCooldown && def.castCycle) {
+    const castCycle = instanceCastCycle(inst);
+    if (!opts.noRepeat && !opts.noCooldown && castCycle) {
       const n = (caster.castCycles.get(def.id) ?? 0) + 1;
-      if (n >= def.castCycle.count) {
+      if (n >= castCycle.count) {
         caster.castCycles.set(def.id, 0);
-        caster.addBuff(def.castCycle.buff, caster.sheet.get('effectDuration', tags, extra));
+        const cycleBuff = { ...castCycle.buff };
+        this.treeBuffSources.set(cycleBuff, { caster, inst });
+        caster.addBuff(cycleBuff, caster.sheet.get('effectDuration', tags, extra));
         this.text(vec(caster.pos.x, caster.pos.y - 18),
-          def.castCycle.buff.id.replace(/_/g, ' ') + '!', def.color, 12);
+          castCycle.buff.id.replace(/_/g, ' ') + '!', def.color, 12);
       } else {
         caster.castCycles.set(def.id, n);
       }
@@ -39239,8 +39244,9 @@ export class World {
     const gextra = instanceMods(cs.inst);
     const window = spec.parry?.window
       ?? guardian.sheet.get('guardParry', gtags, gextra);
-    const counterMult = spec.parry?.counterMult
-      ?? guardian.sheet.get('guardParryPower', gtags, gextra);
+    const counterMult = (spec.parry?.counterMult
+      ?? guardian.sheet.get('guardParryPower', gtags, gextra))
+      + guardian.sheet.get('parryCounterBonus', gtags, gextra);
     if (window > 0 && (cs.channelTime ?? 99) <= window
       && !attacker.dead && !attacker.invulnerable) {
       // Riposte snaps the guardian's face toward the parried blow.
@@ -39266,7 +39272,7 @@ export class World {
         guardian.casting = null;
         guardian.useLock = 0.15;
         if (cs.inst.def.cooldown > 0) {
-          guardian.cooldowns.set(cs.inst.def.id, cs.inst.def.cooldown);
+          this.stampSkillCooldown(guardian, cs.inst, cs.inst.def.cooldown);
         }
       }
       return true;
@@ -39287,7 +39293,7 @@ export class World {
     if ((cs.shield ?? 0) <= 0) {
       guardian.casting = null;
       guardian.useLock = 0.3;
-      if (cs.inst.def.cooldown > 0) guardian.cooldowns.set(cs.inst.def.id, cs.inst.def.cooldown);
+      if (cs.inst.def.cooldown > 0) this.stampSkillCooldown(guardian, cs.inst, cs.inst.def.cooldown);
       this.cry(guardian.pos, 'guard broken!', '#d05050', 14, 'shatter', guardian.radius + 8);
       // Ice Shield's dying burst: a broken shield spends its FULL absorbed
       // capacity as the payload — with the stance's EFFECTIVE bash, innate
@@ -42017,7 +42023,8 @@ export class World {
 
     // Splash: the hit detonates into a small area around its target.
     if (dealt > 0 && depth === 0) {
-      const splash = caster.sheet.get('splashRadius', tags, extra);
+      const splash = caster.sheet.get('splashRadius', tags, extra)
+        * caster.sheet.get('aoeRadius', tags, extra);
       if (splash > 0) {
         for (const e of this.enemiesOf(caster)) {
           if (!sameStory(e, target)) continue; // (the sovereignty gate)
@@ -53367,6 +53374,8 @@ export class World {
       }
       case 'guard': {
         const spec = def.guard!;
+        const guardHoldTime = spec.maxDuration === undefined ? undefined
+          : Math.max(0.05, spec.maxDuration + a.sheet.get('guardHoldTime', skillContextTags(cs.inst), instanceMods(cs.inst)));
         // A player taking the seat owns the hand immediately.
         if (this.seatOf(a)) {
           cs.aiGuardReleaseAt = undefined;
@@ -53408,14 +53417,14 @@ export class World {
           }
         }
         // Timed stances (Riposte) drop themselves.
-        if (spec.maxDuration && (cs.channelTime ?? 0) >= spec.maxDuration) {
+        if (guardHoldTime && (cs.channelTime ?? 0) >= guardHoldTime) {
           cs.held = false;
         }
         // An authored AI release becomes a readable, committed warning.
         // The guard stays damageable: de-arming it during this beat denies
         // the bash, and breaking/stunning it clears this state with the cast.
         if (!this.seatOf(a) && !a.dead && (cs.aiGuardWindup ?? 0) > 0) {
-          const holdLeft = Math.min(cs.aiHold ?? Infinity, spec.maxDuration ?? Infinity) - (cs.channelTime ?? 0);
+          const holdLeft = Math.min(cs.aiHold ?? Infinity, guardHoldTime ?? Infinity) - (cs.channelTime ?? 0);
           if ((!cs.held || holdLeft <= cs.aiGuardWindup!)
             && cs.aiGuardReleaseAt === undefined && cs.bashAt !== undefined) {
             const frac = (cs.shield ?? 0) / (cs.maxShield || 1);
@@ -53441,7 +53450,7 @@ export class World {
           a.useLock = 0.2;
           // The grafted carapace drops with the stance (fromAura rule).
           if (a.shellGuard?.fromAura === def.id) a.shellGuard = undefined;
-          if (def.cooldown > 0) a.cooldowns.set(def.id, def.cooldown);
+          if (def.cooldown > 0) this.stampSkillCooldown(a, cs.inst, def.cooldown);
           if (bash && !a.dead && cs.bashAt !== undefined) {
             const frac = shieldLeft / maxShield;
             const armed = cs.bashLow ? frac <= cs.bashAt : frac >= cs.bashAt;
@@ -54378,6 +54387,11 @@ export class World {
 
   /** Retire fields that captured the previous allocation. */
   private clearTreeFields(caster: Actor, inst: SkillInstance): void {
+    caster.castCycles.delete(inst.def.id);
+    for (const [key, step] of caster.metaInsts) if (step.chainOf === inst.def.id) {
+      this.clearTreeFields(caster, step);
+      caster.metaInsts.delete(key);
+    }
     for (const actor of this.actors) for (const [id, buff] of actor.buffs) {
       const source = this.treeBuffSources.get(buff.def);
       if (source?.caster === caster && source.inst === inst) actor.removeBuff(id);

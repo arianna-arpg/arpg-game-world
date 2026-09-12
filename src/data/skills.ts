@@ -1,3 +1,4 @@
+import { PRECISION_STARTER_TREES } from './precisionStarterTrees';
 import { PACT_STEEL_STARTER_TREES } from './pactSteelStarterTrees';
 import { PACT_SKILLS } from './pactSkills';
 import { DEVOTED_STARTER_TREES } from './devotedStarterTrees';
@@ -1880,6 +1881,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // THE CAST CYCLE exhibit: every third cut ARMS the next with a
   // guaranteed deep bleed (castCycle + a next-hit rider).
   zanshin_cut: {
+    tree: PRECISION_STARTER_TREES.zanshin_cut,
     id: 'zanshin_cut', name: 'Zanshin Cut',
     description: 'A disciplined melee slash. Every third cut settles the mind: your next melee'
       + ' blow within 8 seconds opens a guaranteed bleed at 2.5 times normal strength.',
@@ -1908,6 +1910,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // the phasing status for the flight (through the crowd, mass and poise
   // be damned); the corridor cuts and DISARMS everything it passes.
   iai_strike: {
+    tree: PRECISION_STARTER_TREES.iai_strike,
     id: 'iai_strike', name: 'Iai Strike',
     description: 'A timed draw: press the button as the indicator peaks and the stroke lands'
       + ' 150% harder. The cut is a phasing dash through everything in its corridor, dealing'
@@ -3055,6 +3058,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   invisibility: {
+    tree: PRECISION_STARTER_TREES.invisibility,
     id: 'invisibility', name: 'Invisibility',
     description: 'Vanish entirely for 2.5 seconds: enemies cannot see or target you, though'
       + ' stray blasts still hurt, and your next offensive act SPENDS the invisibility'
@@ -3199,6 +3203,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   
   rend: {
+    tree: PRECISION_STARTER_TREES.rend,
     id: 'rend', name: 'Rend',
     description: 'Slash in a melee arc in front of you, dealing physical damage: 70% chance to'
       + ' leave the wound bleeding.',
@@ -3231,6 +3236,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   eviscerate: {
+    tree: PRECISION_STARTER_TREES.eviscerate,
     id: 'eviscerate', name: 'Eviscerate',
     description: 'Usable only on a BLEEDING enemy: rip the wound open, consuming the bleed to deal ALL its remaining damage at once, plus a vicious strike.',
     tags: ['attack', 'melee', 'physical'], color: '#d04050',
@@ -4019,6 +4025,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   riposte: {
+    tree: PRECISION_STARTER_TREES.riposte,
     id: 'riposte', name: 'Riposte',
     description: 'For 0.6 seconds you hold a parrying stance: any frontal blow inside the'
       + ' window is negated entirely and answered at 220% of its damage. The stance spends'
@@ -4841,6 +4848,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   chain_pull: {
+    tree: PRECISION_STARTER_TREES.chain_pull,
     id: 'chain_pull', name: 'Chain Pull',
     description: 'Fling a barbed chain that deals physical damage, stuns the enemy it hooks,'
       + ' and yanks them to your feet, holding them dazed for 1.4 seconds through the landing.',
@@ -11851,6 +11859,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // next-hit stun buff (one_two_cross) — the cross is a real step now, with
   // its own figure, damage and stun. The window is a dial for her word.
   one_two: {
+    tree: PRECISION_STARTER_TREES.one_two,
     id: 'one_two', name: 'One-Two',
     description: 'Work the jab: a fast melee strike that banks 1 Fury per hit (to a cap of 5).'
       + ' Jab twice in rhythm and the third press within 2 seconds throws the CROSS JAB: a'
@@ -11899,6 +11908,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // Reckoning buys damage, the haymaker buys DISPLACEMENT. Spend where the
   // wall is.
   haymaker: {
+    tree: PRECISION_STARTER_TREES.haymaker,
     id: 'haymaker', name: 'Haymaker',
     description: 'Load the hips and swing: a wound-up melee hook that spends every banked Fury,'
       + ' each charge spent adding 15% damage, and knocks the victim flying back across the'

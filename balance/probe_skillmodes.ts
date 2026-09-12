@@ -128,7 +128,7 @@ check('A: the deepening rungs RE-PIN their identity (the re-pin law)',
 // takes every wearer, ids unique, every node root-reachable, THE COVER LAW
 // (each limb's terminal walk + the lock-free ground absorbs the cap
 // budget), and the payload whitelist on every graph node.
-const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags', 'chargeCost', 'ground']);
+const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags', 'chargeCost', 'ground', 'castCycle']);
 const SUMMON_KEYS = new Set(['count', 'maxActive', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell', 'crewRules', 'crewInherit', 'crewOnDeath', 'devour', 'placeAt']);
 const OVER_CHANNEL_KEYS = new Set(['ramp', 'rampMove']);
 let censusBad = '';
@@ -164,6 +164,10 @@ for (const def of Object.values(SKILLS)) {
     if (n.over?.ground && (def.delivery.type !== 'ground' || n.over.ground.follow !== true
       || Object.keys(n.over.ground).some(k => k !== 'follow'))) censusBad += ` ${def.id}/${n.id}:over.ground-invalid`;
     const treeChargeCost = n.over?.chargeCost;
+    const castCycle = n.over?.castCycle;
+    if (castCycle && (!def.castCycle || !Number.isInteger(castCycle.count) || castCycle.count < 1
+      || !castCycle.buff.id || !(castCycle.buff.duration > 0)
+      || Object.keys(castCycle).some(k => !['count', 'buff'].includes(k)))) censusBad += ` ${def.id}/${n.id}:over.castCycle-invalid`;
     if (treeChargeCost && (!treeChargeCost.charge
       || (treeChargeCost.amount !== 'all' && (!Number.isInteger(treeChargeCost.amount) || treeChargeCost.amount < 1))
       || Object.keys(treeChargeCost).some(k => !['charge', 'amount', 'minimum', 'damagePerCharge', 'projectilesPerCharge', 'repeatsPerCharge', 'optional'].includes(k)))) {
