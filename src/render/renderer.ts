@@ -4,7 +4,7 @@
 // ---------------------------------------------------------------------------
 
 import { drawTreasureChest } from './vis/containers';
-import { drawPlayerDeath } from './vis/playerDeath';
+import { drawPlayerDeath, drawPlayerDeathScreenFlash } from './vis/playerDeath';
 import { destinationLabelVisible } from './vis/destinationLabels';
 import { replenishmentActive } from '../engine/replenishment';
 import { clamp, dist, mixHex, type Vec2 } from '../core/math';
@@ -886,6 +886,7 @@ export class Renderer {
     this.onCrest(crest, () => {
       this.drawTraversalFx(world);  // a vertical crossing's wind streaks + whiteout veil (covers the HUD)
       this.drawModeFade(world);     // a survived death's crossing — DEAD LAST (covers the HUD too)
+      if (world.deathPresentation) drawPlayerDeathScreenFlash(this.ctx, this.canvas.width, this.canvas.height, world.deathPresentation);
     });
   }
 

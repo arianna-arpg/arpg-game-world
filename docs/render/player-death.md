@@ -5,6 +5,17 @@ then breaks into fragments of the character's own rendered silhouette.
 The epilogue starts fading in 0.2 seconds after the break and reaches full
 opacity over 1.15 seconds. The complete sequence lasts 2.95 seconds.
 
+A local light pulse gathers in the final 0.07 seconds before fragmentation,
+peaks at the break, and disperses over 0.28 seconds. `flashLeadSec`,
+`flashSec`, `flashAlpha`, `flashRadiusScale`, and `flashColor` control it;
+zero duration or intensity disables it. Its approved radius is 5.5 times the
+body radius, at 0.9 intensity. The pulse follows the raised body
+and uses the shared glow painter, with no gameplay light or damage effect.
+The same pulse also washes the whole game view, above its veil and canvas
+HUD, at `screenFlashAlpha` strength (0.42 by default). Zero keeps the local
+body burst alone. Both flashes share their timing and color, so their peaks
+and decay stay synchronized.
+
 `src/data/deathPresentation.ts` owns the timings, lift, fragment count,
 velocity, gravity, spin, crack color/width, and initial scene dimming.
 `enabled: false` restores an immediate epilogue. Zero-length phases are

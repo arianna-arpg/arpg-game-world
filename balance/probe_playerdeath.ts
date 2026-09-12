@@ -33,7 +33,18 @@ assert.ok(crack.cracks > 0 && !crack.broken && !crack.reveal);
 const shatter = deathPresentationPose(CFG.riseSec + CFG.crackSec + 0.1);
 assert.ok(shatter.broken && shatter.shardAlpha > 0 && !shatter.reveal);
 assert.ok(deathPresentationPose(end).complete);
-const instant = deathPresentationPose(0, { ...CFG, riseSec: 0, crackSec: 0, shatterSec: 0, revealDelaySec: 0, revealSec: 0 });
+const breakAt = CFG.riseSec + CFG.crackSec;
+assert.equal(deathPresentationPose(breakAt - CFG.flashLeadSec - 0.01).flash, 0, 'flash waits for the final cracking beat');
+assert.equal(deathPresentationPose(breakAt).flash, 1, 'flash peaks exactly as fragments separate');
+assert.ok(deathPresentationPose(breakAt + CFG.flashSec / 2).flash < 1, 'flash disperses while shards fly');
+assert.equal(deathPresentationPose(breakAt + CFG.flashSec + 0.01).flash, 0, 'flash ends cleanly');
+assert.equal(deathPresentationPose(breakAt, { ...CFG, flashSec: 0 }).flash, 0, 'zero duration disables the flash');
+assert.equal(deathPresentationPose(breakAt).screenFlash, CFG.screenFlashAlpha, 'screen pulse peaks with the body');
+assert.equal(deathPresentationPose(breakAt + CFG.flashSec / 2).screenFlash,
+  deathPresentationPose(breakAt + CFG.flashSec / 2).flash * CFG.screenFlashAlpha, 'screen and body share one envelope');
+assert.equal(deathPresentationPose(breakAt, { ...CFG, screenFlashAlpha: 0 }).screenFlash, 0, 'screen flash can be disabled independently');
+assert.equal(deathPresentationPose(breakAt + CFG.flashSec + 0.01).screenFlash, 0, 'screen clears when the body flash ends');
+const instant = deathPresentationPose(0, { ...CFG, riseSec: 0, crackSec: 0, shatterSec: 0, revealDelaySec: 0, revealSec: 0, flashSec: 0 });
 assert.ok(instant.complete && instant.reveal && Number.isFinite(instant.fade), 'zero-duration phases are safe');
 
 const forfeit = makeSimWorld('warrior', 9143);

@@ -2,7 +2,7 @@ import type { Actor } from '../../engine/actor';
 import { deathPresentationPose, type DeathPresentation } from '../../engine/deathPresentation';
 import { DEATH_PRESENTATION as CFG } from '../../data/deathPresentation';
 import { bodySprite, adornSprite, spriteHalf, lookOf, shapeIsOriented, drawLiveParts, type BodyLook } from './body';
-import { drawShadow } from './sprites';
+import { drawGlow, drawShadow } from './sprites';
 
 // One snapshot per performance; reused for every shard, released with the world.
 const portraits = new WeakMap<DeathPresentation, HTMLCanvasElement>();
@@ -96,6 +96,32 @@ export function drawPlayerDeath(ctx: CanvasRenderingContext2D, actor: Actor, sta
       ctx.restore();
     }
   }
+  // A single local light pulse follows the raised body. Its peak meets the
+  // split, then quickly disperses so the flying fragments remain legible.
+  if (pose.flash > 0 && CFG.flashAlpha > 0) {
+    ctx.save();
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'lighter';
+    const alpha = Math.min(1, CFG.flashAlpha) * pose.flash;
+    const reach = actor.radius * Math.max(0, CFG.flashRadiusScale) * (0.75 + pose.flashSpread * 0.5);
+    drawGlow(ctx, 0, 0, reach, CFG.flashColor, alpha, false);
+    drawGlow(ctx, 0, 0, actor.radius * 1.1, '#ffffff', alpha, false);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+/** Same pulse, screen-space: composite above the world veil and canvas HUD.
+ * Keeping one envelope prevents the local burst and screen flash drifting. */
+export function drawPlayerDeathScreenFlash(ctx: CanvasRenderingContext2D, width: number, height: number, state: DeathPresentation): void {
+  const { screenFlash } = deathPresentationPose(state.elapsed);
+  if (screenFlash <= 0) return;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = screenFlash;
+  ctx.fillStyle = CFG.flashColor;
+  ctx.fillRect(0, 0, width, height);
   ctx.restore();
 }
 

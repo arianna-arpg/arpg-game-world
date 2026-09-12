@@ -14,5 +14,11 @@ export const DEATH_PRESENTATION = {
   spin: 1.8,
   crackColor: '#f0d9ff',
   crackWidth: 1.1,
+  flashLeadSec: 0.07, // gather just before the break; peak at fragmentation
+  flashSec: 0.28, // decay after the break; zero disables the flash
+  flashAlpha: 0.9,
+  flashRadiusScale: 5.5, // multiples of the body's radius
+  flashColor: '#f4eaff',
+  screenFlashAlpha: 0.42, // same pulse across the whole view; zero keeps it body-only
   dimBeforeBreak: 0.2,
 };
