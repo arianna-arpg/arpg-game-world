@@ -13,9 +13,9 @@ verified gap can ship alongside a starting-bar batch. See the
 
 | ID | Playstyle | Possible skill | Possible support | Status |
 |---|---|---|---|---|
-| PS-01 | Ally cooldown assistance | Borrowed Second | Shared Seconds | Confirmed narrow catalog gap; design pending |
+| PS-01 | Ally cooldown assistance | Borrowed Second | Shared Seconds | Confirmed gap; bounded proposal and verification plan ready for implementation review |
 | PS-02 | Device salvage and relocation | Field Recovery | Packed Workshop | Relocation shipped; payment-ledger salvage deferred |
-| PS-03 | Deliberately preserve lodged steel between hits | Set the Barbs | Patient Steel | Needs bank-growth and multiplayer design |
+| PS-03 | Deliberately preserve lodged steel between hits | Set the Barbs | Patient Steel | Narrow preservation gap confirmed; frozen-bank proposal, growth deferred |
 | PS-04 | Faster, shorter-lived deployed attackers | Existing totems and sentries | Overwound Mechanism | Shipped in the control batch |
 
 ## PS-01 — Ally cooldown assistance
@@ -24,15 +24,24 @@ The control pass found one authored `reduceCooldowns` skill, Time Dilation.
 Its effect operates on the caster. This establishes a specific missing option:
 spending your action to help another actor recover an ability sooner.
 
-**Borrowed Second** could restore a bounded amount of one ally's running
-cooldown. **Shared Seconds** could divide a fixed recovery budget among nearby
-allies, trading concentrated help for party coverage.
+The [detailed audit](ally-cooldown-and-impale-candidates.md#ps-01-borrowed-second--shared-seconds)
+proposes **Borrowed Second**: spend a cast to advance one other ally's longest
+eligible running cooldown by up to two seconds at its current recovery rate.
+**Shared Seconds** divides that same budget among up to three nearby allies;
+unused shares are lost. Eligible recipients include party seats and their
+mobile crews, excluding constructs, downed/passive actors and other stories.
 
-Before implementation, define target selection, a shared recovery budget,
-eligible cooldowns, self and reciprocal-loop exclusions, and treatment of
-minions, downed actors, other stories and multiplayer ownership. A party must
-not multiply a fixed recovery budget by adding recipients. Candidate for the
-mastery swap audit; not implemented.
+The proposal caps aid at 25% of each stamped cooldown cycle, leaves a minimum
+0.25-second wait, and applies independent issuer/recipient locks. Charge,
+reload, ultimate and cooldown-manipulating skills are excluded initially.
+Effective-mechanism eligibility, a single cast-family budget and host-side
+resolution prevent repeated/free executions and reciprocal resets from
+minting additional assistance. Current ally targeting and network snapshots
+need extensions; ordinary `reduceCooldowns` remains unchanged.
+
+These are proposed tuning and implementation contracts, not shipped behavior.
+The audit supplies executable probe cases, support-matrix fixtures and co-op
+acceptance checks. Candidate for the mastery swap audit; not implemented.
 
 ## PS-02 — Device salvage and relocation
 
@@ -108,6 +117,14 @@ evidence of actual mana paid for a refund.
    frame, full resource pools, cross-player/cross-instance access and
    repeated requests. Ship Field Recovery only with this ledger proven.
 
+The [follow-up audit](ally-cooldown-and-impale-candidates.md#ps-02-concrete-additions-to-the-deferred-salvage-requirements)
+identifies the existing `paySkillCost`/`costWard` actual-debit read as the
+receipt starting point. It also requires body-specific quiet retirement:
+the current respec helper retires an entire host-instance roster. Salvaging
+one device must preserve its siblings' payloads. A full mana pool still
+consumes the receipt share, Overdrive debt/ES never becomes refundable mana,
+and the original lifetime remains immutable with its refund ratio clamped.
+
 The refund work is deliberately deferred to keep this pass centered on
 complete starting bars. Packed Workshop fills the smaller verified movement
 gap now, without introducing refundable value or refreshing device lifetime.
@@ -121,16 +138,27 @@ The Lancer trees now expand bank size, spreading and the returning-shot route.
 Those are covered playstyles; another ordinary impaling attack would duplicate
 them.
 
-The narrower candidate is an intentional **leave-the-steel-in** route.
-**Set the Barbs** might prepare a bounded number of hits that preserve an
-existing bank. **Patient Steel** might trade immediate discharge for a capped
-manual Extraction payoff. First audit status retention and discharge-related
-supports. Do not call this a confirmed catalog gap yet.
+The [detailed audit](ally-cooldown-and-impale-candidates.md#ps-03-set-the-barbs--patient-steel)
+confirms the narrower intentional **leave-the-steel-in** gap. Proposed **Set
+the Barbs** prepares one exclusively direct, caster-owned bank for two of
+that caster's qualifying hits, for up to three seconds within its original
+fuse. Protected hits neither discharge nor grow the bank. Allies and minions
+still discharge it normally; a bank cannot be prepared twice.
 
-Resolve bank capacity and expiry, whether preservation permits additional
-bank growth, mixed sources, party hits, and who may spend whose investment.
-Avoid indefinite accumulation, damage duplication, and changing other players'
-hit behavior without a clear rule. Not implemented.
+Proposed **Patient Steel** fits Extraction's native recall mechanism, grants
+Set the Barbs as a Shift action, and raises Extraction's mana cost by 25%.
+After at least one protected hit, a manual Extraction from the exact host
+that prepared the bank uses 125% of its frozen principal in the existing pop
+and return-shot formulas. Foreign Extraction retains its shipped ordinary
+shared-spend behavior and receives no bonus.
+
+Expiry/death already cause an area rupture, and status transplantation can
+copy rupture payloads. Neither may inherit the new manual bonus. First-applier
+`casterId` is not a contribution ledger: provenance-unknown, transplanted and
+mixed banks cannot be prepared. The design requires shared bank consumption,
+exact-instance cleanup and host-authoritative visual state before shipping.
+Additive bank growth, separate per-player banks and changing foreign
+Extraction remain explicitly deferred. Not implemented.
 
 ## PS-04 — Shipped: Overwound Mechanism
 
