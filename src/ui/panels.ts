@@ -1191,6 +1191,26 @@ export class UI {
       el.style.setProperty('--build-top', `${at.top}px`);
       el.style.setProperty('--build-width', `${at.width}px`);
     }
+    this.fitBuildRail();
+  }
+
+  /** THE RAIL FIT LAW: the ribbon rail (SKILLS · PASSIVES · every owned
+   *  container) never runs past the inventory pane's foot. Measured, never
+   *  assumed — after every render and every dock sync: a rail that would
+   *  overhang sheds the container COUNT badge first (her word), then the
+   *  Skills wallet chips (the drawer's own header repeats them); the
+   *  stylesheet's tight classes are the whole vocabulary. */
+  private fitBuildRail(): void {
+    const rail = this.inventory.querySelector<HTMLElement>('.build-ribbons');
+    if (!rail || !this.inventoryOpen) return;
+    rail.classList.remove('build-rail-tight', 'build-rail-tighter');
+    const overhang = (): boolean => {
+      const pane = this.inventory.getBoundingClientRect();
+      const r = rail.getBoundingClientRect();
+      return pane.height > 0 && r.height > 0 && r.bottom > pane.bottom + 0.5;
+    };
+    if (overhang()) rail.classList.add('build-rail-tight');
+    if (overhang()) rail.classList.add('build-rail-tighter');
   }
 
   // --- THE FOLIO (ui/folio.ts) -----------------------------------------------
@@ -4260,6 +4280,7 @@ export class UI {
     const buildEl = this.buildPanel.querySelector<HTMLElement>('.build-scroll');
     if (buildEl) buildEl.scrollTop = prevBuildScroll;
     this.wireInventory();
+    this.fitBuildRail(); // THE RAIL FIT LAW reads the rail just rendered above
     this.paintLockHold(); // a re-render mid-hold resumes the ring where the clock stands
     this.paintPortraitsIn(this.buildPanel); // the build flap's Spectre chip
     this.applyBreakChrome();

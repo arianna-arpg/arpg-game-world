@@ -186,16 +186,25 @@
     #inventory {
       top: 56px; right: 16px; width: 660px; max-width: calc(94vw / var(--ui-scale)); font-size: 12px;
     }
-    .build-ribbons { position:absolute; top:56px; right:100%; width:var(--build-rail);
-      display:flex; flex-direction:column; gap:4px; }
+    /* THE RIBBON RAIL (SKILLS · PASSIVES · every owned container): seated at
+       the pane's content line and packed to fit INSIDE the pane's height —
+       one column, one rhythm. THE RAIL FIT LAW (ui/panels.ts fitBuildRail)
+       measures after every render: a rail that would run past the pane's
+       foot sheds the container COUNT badge first (her word), the Skills
+       wallet chips second (the drawer's own header repeats them). */
+    .build-ribbons { position:absolute; top:52px; right:100%; width:var(--build-rail);
+      display:flex; flex-direction:column; gap:3px; }
     .build-ribbons-right { right:auto; left:100%; }
-    .build-ribbon { width:100%; padding:10px 3px; background:#241d2e; color:#c8a8ff;
+    .build-ribbon { width:100%; padding:8px 3px; background:#241d2e; color:#c8a8ff;
       border:1px solid #4a3a5a; border-radius:6px 0 0 6px; cursor:var(--cursor-point, pointer);
-      display:flex; flex-direction:column; align-items:center; gap:8px; font-size:11px; }
+      display:flex; flex-direction:column; align-items:center; gap:6px; font-size:10px; }
     .build-ribbons-right .build-ribbon { border-radius:0 6px 6px 0; }
     .build-ribbon:hover, .build-ribbon[aria-expanded="true"] { border-color:var(--gold); }
-    .build-ribbon-label { writing-mode:vertical-rl; letter-spacing:1px; }
-    .build-wallet { display:flex; flex-direction:column; gap:4px; font-size:10px; }
+    .build-ribbon-label { writing-mode:vertical-rl; letter-spacing:.7px; }
+    .build-wallet { display:flex; flex-direction:column; gap:3px; font-size:9px; }
+    .build-ribbon-count { font-size:9px; color:#9a96b0; font-variant-numeric:tabular-nums; }
+    .build-ribbons.build-rail-tight .build-ribbon-count { display:none; }
+    .build-ribbons.build-rail-tighter .build-wallet { display:none; }
     .build-essence { white-space:nowrap; font-variant-numeric:tabular-nums; }
     .build-wallet-header { display:flex; flex-wrap:wrap; gap:8px; font-size:11px; margin-bottom:8px; }
     #skills-panel { width:360px; display:flex; flex-direction:column;

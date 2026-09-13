@@ -153,7 +153,7 @@ export class ContainerPane {
       return `<button data-containerflap="${esc(c.id)}" class="build-ribbon" aria-expanded="${this.isOpen(c.id)}"
           aria-controls="${containerPanelId(c.id)}" title="${esc(c.blurb)}">
           <span class="build-ribbon-label">${c.glyph} ${esc(c.label.toUpperCase())}</span>
-          <span style="font-variant-numeric:tabular-nums">${n}/${board.cells}</span>
+          <span class="build-ribbon-count" title="${n} seated of ${board.cells} open seats">${n}/${board.cells}</span>
         </button>`;
     }).join('');
   }

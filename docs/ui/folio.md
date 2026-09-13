@@ -138,7 +138,11 @@ instead.
 
 THE CONTAINER DRAWERS (2026-09-12, `ui/containerPane.ts`): every side board
 the account owns (`engine/containers.ts` — the Reliquary first) wears a third
-ribbon on the same rail, after PASSIVES, with its seated count. Its press pops
+ribbon on the same rail, after PASSIVES, with its seated count. THE RAIL FIT
+LAW (`fitBuildRail`, run after every render and dock sync) keeps the whole
+rail inside the pane's height: measured, a rail that would overhang sheds the
+container count badge first (`build-rail-tight`), then the Skills wallet
+chips (`build-rail-tighter`; the drawer's header repeats them). Its press pops
 a DRAWER beside the bag: a minted `container-panel` root (the skill-tree pane
 idiom, one per container on first open) that docks through the same seat law
 (`BUILD_PANEL_CFG.containerWidth`) and enrolls as a `container:<id>` leaf of
