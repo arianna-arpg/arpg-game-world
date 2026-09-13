@@ -50,6 +50,7 @@ import {
   MU_CFG, MU_SCENE_ID, MU_ZONE, apparitionDefId, APPARITION_UNKNOWN_ID,
 } from '../data/mu';
 import { muDeal } from './muDeal';
+import { muRings } from './muRing';
 import { MODE_BY_ID } from '../meta/modes';
 import { WAVE_CFG } from '../data/waves';
 import { mintCave } from './worldgen';
@@ -979,7 +980,15 @@ interface MuApp {
   noted: boolean;
 }
 
-interface MuState { apps?: MuApp[]; classReq?: string | null }
+interface MuState {
+  apps?: MuApp[];
+  classReq?: string | null;
+  /** THE NEAREST LAW: the one vessel engaged this frame (actor id), or null. */
+  engagedId?: number | null;
+  /** THE GLOBE, derived by THE RING LAW (engine/muRing.ts) at the seating —
+   *  the wrap keeps its void beyond the outermost ring at any count. */
+  wrap?: { radius: number; reentry: number };
+}
 
 const muZoneId = (): string => `scene_${MU_SCENE_ID}`;
 
@@ -988,14 +997,18 @@ const muZoneId = (): string => `scene_${MU_SCENE_ID}`;
  *  re-entered Mu keeps its hand and its offers within a sitting); this only
  *  SEATS what it returns: three arcs of bodies, the rank markers, and the
  *  offered vessel's contract status (the drawn tell). */
-function muSpawnApparitions(w: World, sc: SceneRuntime): MuApp[] {
+function muSpawnApparitions(w: World, sc: SceneRuntime, st: MuState): MuApp[] {
   const deal = muDeal(w.account);
+  // THE RING LAW (engine/muRing.ts): where each rank STANDS is derived from
+  // how many stand — a readable seat gap widens the crescent, closes it into
+  // a ring, then grows it; ranks stack outward; the globe's wrap keeps its
+  // void beyond the outermost seat.
+  const rings = muRings({ awake: deal.awake.length, veiled: deal.veiled.length, faint: deal.faintN });
+  st.wrap = rings.wrap;
   const cx = w.arena.w / 2, cy = w.arena.h / 2;
   const apps: MuApp[] = [];
   const seat = (defId: string, classId: string | null, rank: MuApp['rank'],
-    i: number, n: number, r: number): void => {
-    const span = MU_CFG.arc.to - MU_CFG.arc.from;
-    const th = n <= 1 ? MU_CFG.arc.from + span / 2 : MU_CFG.arc.from + span * (i / (n - 1));
+    th: number, r: number): void => {
     const m = w.createMonster(defId, 1, 'player');
     m.pos = w.clampPos(vec(cx + Math.cos(th) * r, cy + Math.sin(th) * r), m.radius);
     // THE GAZE: born looking at its mark (the wisp) — never a snap later.
@@ -1014,11 +1027,12 @@ function muSpawnApparitions(w: World, sc: SceneRuntime): MuApp[] {
     w.actors.push(m);
     apps.push({ id: m.id, classId, rank, offer, t: 0, noted: false }); // offer = the muDeal roll
   };
-  // THE DEAL's three arcs (engine/muDeal.ts): the hand, the veiled pool, the cowls.
-  deal.awake.forEach((c, i) => seat(apparitionDefId(c.id), c.id, 'awake', i, deal.awake.length, MU_CFG.ranks.awake));
-  deal.veiled.forEach((c, i) => seat(apparitionDefId(c.id), c.id, 'veiled', i, deal.veiled.length, MU_CFG.ranks.veiled));
+  // THE DEAL's three arcs (engine/muDeal.ts) on THE RING LAW's seats: the
+  // hand, the veiled pool, the cowls — seat order = deal order.
+  deal.awake.forEach((c, i) => seat(apparitionDefId(c.id), c.id, 'awake', rings.awake.angles[i], rings.awake.radius));
+  deal.veiled.forEach((c, i) => seat(apparitionDefId(c.id), c.id, 'veiled', rings.veiled.angles[i], rings.veiled.radius));
   for (let i = 0; i < deal.faintN; i++) {
-    seat(APPARITION_UNKNOWN_ID, null, 'faint', i, deal.faintN, MU_CFG.ranks.faint);
+    seat(APPARITION_UNKNOWN_ID, null, 'faint', rings.faint.angles[i], rings.faint.radius);
   }
   return apps;
 }
@@ -1096,8 +1110,9 @@ registerSceneStage('mu', {
     p.radius = MU_CFG.wisp.radius;
     for (let i = 0; i < p.skills.length; i++) p.skills[i] = null;
     const st = sc.state as MuState;
-    st.apps = muSpawnApparitions(w, sc);
+    st.apps = muSpawnApparitions(w, sc, st);
     st.classReq = null;
+    st.engagedId = null;
     sc.fadeTarget = 0;
     // The standing instruction is a YOUNG account's line only (her word:
     // veterans know the drift — keep the stillness for them).
@@ -1118,9 +1133,12 @@ registerSceneStage('mu', {
       const cx = w.arena.w / 2, cy = w.arena.h / 2;
       const dxw = p.pos.x - cx, dyw = p.pos.y - cy;
       const dw = Math.hypot(dxw, dyw);
-      if (dw > MU_CFG.wrap.radius) {
+      // THE RING LAW derives the globe: the wrap stands `wrap.clear` past the
+      // outermost seat (muRings), the authored dials its floor.
+      const wrap = st.wrap ?? { radius: MU_CFG.wrap.radius, reentry: MU_CFG.wrap.reentry };
+      if (dw > wrap.radius) {
         const fromX = p.pos.x, fromY = p.pos.y;
-        const k = MU_CFG.wrap.reentry / dw;
+        const k = wrap.reentry / dw;
         p.pos.x = cx - dxw * k;
         p.pos.y = cy - dyw * k;
         p.push = null;
@@ -1136,8 +1154,15 @@ registerSceneStage('mu', {
     // account is still learning the drift (few completed runs) — a veteran's
     // Mu keeps its stillness, and the vessels speak through approach alone.
     const young = w.account.runRecords.length < MU_CFG.promptRuns;
-    let barSet = false;
-    let engagedAny = false;
+    // THE NEAREST LAW (2026-09-13, her word — "standing adjacent to a class
+    // might read as the ADJACENT class"): ONE vessel engages at a time — the
+    // nearest by SURFACE distance within the dwell reach, seat order breaking
+    // an exact tie — and every other row stands un-engaged (timer zeroed,
+    // latch re-armed: a step from one vessel toward the next re-arms the
+    // one left behind). THE RING LAW's disjoint reach means the nearest is
+    // normally the ONLY one in reach; this is the belt for a patched gap.
+    // The gaze still turns every vessel, engaged or not.
+    let nearest: { row: MuApp; a: Actor; d: number } | null = null;
     for (const row of apps) {
       const a = w.actors.find(x => x.id === row.id);
       if (!a) continue;
@@ -1146,45 +1171,48 @@ registerSceneStage('mu', {
       // as attention, never a snap. aims:false bodies wear no tick and no
       // mind turns them, so this is the one hand on an apparition's facing.
       a.facing = muTurnToward(a.facing, muGazeAngle(w, a), MU_CFG.gaze.turnRate * dt);
-      const engaged = dist(p.pos, a.pos) <= MU_CFG.dwell.radius + a.radius;
-      if (!engaged) {
-        row.t = 0;
-        row.noted = false; // step-out re-arms the latch (the Dwell law)
-        continue;
-      }
-      engagedAny = true;
-      if (row.rank === 'faint') {
-        if (young) sc.prompt = MU_CFG.faintLine;
-        continue;
-      }
-      if (row.rank === 'veiled') {
-        if (!row.noted) {
-          row.noted = true;
-          w.text(vec(a.pos.x, a.pos.y - a.radius - 18), MU_CFG.veiledLine, '#8a86a0', 12);
-        }
-        if (young) sc.prompt = MU_CFG.veiledLine;
-        continue;
-      }
-      // AWAKE: the still linger fills the bar, then posts the class request
-      // (consumed until step-out, so a closed card never re-pops in place).
-      sc.prompt = null;
-      if (row.noted) continue;
-      if (!w.playerIdle()) {
-        row.t = 0;
-        continue;
-      }
-      row.t += dt;
-      sc.bar = { label: a.name, frac: Math.min(1, row.t / MU_CFG.dwell.sec) };
-      barSet = true;
-      if (row.t >= MU_CFG.dwell.sec) {
-        row.noted = true;
-        st.classReq = row.classId;
-        sc.bar = null;
-        barSet = false;
-      }
+      const d = dist(p.pos, a.pos) - a.radius; // surface distance
+      if (d <= MU_CFG.dwell.radius && (!nearest || d < nearest.d)) nearest = { row, a, d };
     }
-    if (!barSet) sc.bar = null;
-    if (!engagedAny) sc.prompt = young ? MU_CFG.prompt : null;
+    st.engagedId = nearest?.row.id ?? null;
+    for (const row of apps) {
+      if (row === nearest?.row) continue;
+      row.t = 0;
+      row.noted = false; // step-out re-arms the latch (the Dwell law)
+    }
+    sc.bar = null;
+    if (!nearest) {
+      sc.prompt = young ? MU_CFG.prompt : null;
+      return false; // Mu never completes — the pick rebuilds the world outside.
+    }
+    const { row, a } = nearest;
+    if (row.rank === 'faint') {
+      if (young) sc.prompt = MU_CFG.faintLine;
+      return false;
+    }
+    if (row.rank === 'veiled') {
+      if (!row.noted) {
+        row.noted = true;
+        w.text(vec(a.pos.x, a.pos.y - a.radius - 18), MU_CFG.veiledLine, '#8a86a0', 12);
+      }
+      if (young) sc.prompt = MU_CFG.veiledLine;
+      return false;
+    }
+    // AWAKE: the still linger fills the bar, then posts the class request
+    // (consumed until step-out, so a closed card never re-pops in place).
+    sc.prompt = null;
+    if (row.noted) return false;
+    if (!w.playerIdle()) {
+      row.t = 0;
+      return false;
+    }
+    row.t += dt;
+    sc.bar = { label: a.name, frac: Math.min(1, row.t / MU_CFG.dwell.sec) };
+    if (row.t >= MU_CFG.dwell.sec) {
+      row.noted = true;
+      st.classReq = row.classId;
+      sc.bar = null;
+    }
     return false; // Mu never completes — the pick rebuilds the world outside.
   },
 });
@@ -1216,6 +1244,17 @@ export function muOfferOf(w: World, classId: string): string | null {
   if (!sc || !muStageLive(w)) return null;
   const st = sc.state as MuState;
   return st.apps?.find(r => r.rank === 'awake' && r.classId === classId)?.offer ?? null;
+}
+
+/** THE NEAREST LAW's read: the ONE vessel the wisp engages this frame (the
+ *  nearest surface within the dwell reach), or null — the same row whose
+ *  linger fills the bar; HUD, dev lanes and the probe read it here. */
+export function muEngagedVessel(w: World): { id: number; classId: string | null; rank: MuApp['rank']; offer: string | null } | null {
+  const sc = w.scene;
+  if (!sc || !muStageLive(w)) return null;
+  const st = sc.state as MuState;
+  const row = st.engagedId == null ? undefined : st.apps?.find(r => r.id === st.engagedId);
+  return row ? { id: row.id, classId: row.classId, rank: row.rank, offer: row.offer } : null;
 }
 
 // THE MARK — the attention fabric's chevron on whatever body the running

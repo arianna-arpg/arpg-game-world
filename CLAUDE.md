@@ -1467,7 +1467,18 @@ we verify changes.
   row through THE ONE PREDICATE `modesSwearableFrom` (an `only` contract
   lists solely on the vessel carrying its offer — the Immortal is met,
   never picked; `release` lets it step back to Mortal, never the reverse);
-  Wake enters the ordinary loop.
+  Wake enters the ordinary loop. THE NEAREST LAW + THE RING LAW
+  (2026-09-13, her finding — a fixed crescent packed twelve vessels under
+  one dwell reach and the seat-order-last one took the request; probe
+  `balance/probe_mudwell.ts`): ONE vessel engages at a time — the nearest
+  surface within reach, seat order on a tie, every other row re-armed
+  (`muEngagedVessel` the read) — and seats are DERIVED by
+  `engine/muRing.ts` from `MU_CFG.ring.seatGap` (the authored crescent
+  when it fits — legacy angles exact — else widened about its centre, else
+  a closed ring grown to the gap; ranks stack by `rankGap`; the globe's
+  wrap keeps `wrap.clear` past the outermost seat); THE DISJOINT REACH
+  (awake gap ≥ 2× the dwell reach, validate-warned) means no point in Mu
+  reaches two vessels.
   THE TUTORIAL FACTIONS (data/commanders.ts): the onslaught rolls ONE
   LEGION per account — SEVEN `TUTORIAL_FACTIONS` rows (goblin/undead/
   beastkin/demon + the obscure courts carven/chitin/gnoll), each fielding

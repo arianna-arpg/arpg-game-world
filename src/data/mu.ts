@@ -61,11 +61,26 @@ export const MU_CFG = {
    *  wisp strips the kit; also the auto-class a virgin account's first Begin
    *  walks the tutorial as). */
   provisionalClass: 'warrior',
-  /** Apparition ranks: arc radii off the wake point (px) — the dealt hand
-   *  nearest, the veiled pool behind it, the unknown cowls deepest. */
+  /** Apparition ranks: BASE radii off the wake point (px) — the floors THE
+   *  RING LAW (engine/muRing.ts) grows from: the dealt hand nearest, the
+   *  veiled pool behind it, the unknown cowls deepest. */
   ranks: { awake: 250, veiled: 430, faint: 610 },
-  /** The arc the ranks stand on (radians; -PI/2 = due north of the wake). */
+  /** The DEFAULT crescent the ranks stand on (radians; -PI/2 = due north of
+   *  the wake) — THE RING LAW widens it symmetrically about its centre as a
+   *  rank fills, up to a closed ring around the wisp. */
   arc: { from: -Math.PI * 0.82, to: -Math.PI * 0.18 },
+  /** THE RING LAW (2026-09-13, her word — "given enough class and slot
+   *  unlocks the dwell ring might be too large"): seats are DERIVED from a
+   *  readable gap, never a fixed arc. `seatGap` = the least centre-to-centre
+   *  distance between neighbours per rank (px): a rank whose crescent would
+   *  pack tighter WIDENS about its centre up to a closed ring, and a closed
+   *  ring still too tight GROWS in radius; ranks stack outward by at least
+   *  `rankGap`. THE DISJOINT REACH: the awake gap stands at least twice the
+   *  dwell reach (dwell.radius + APPARITION_RADIUS = 93), so no point in Mu
+   *  lies within reach of two awake vessels — THE NEAREST LAW (the stage's
+   *  selection: one engaged vessel, the nearest surface, seat order on a tie)
+   *  is then only the belt. validate.ts warns when a dial breaks it. */
+  ring: { seatGap: { awake: 190, veiled: 64, faint: 64 }, rankGap: 180 },
   /** THE GAZE (2026-09-11, her word: the vessels stood facing east — "they
    *  should be looking AT the wisp that's going to inhabit them"): where
    *  every apparition's eyes point. 'wisp' = the live spirit, followed as
@@ -84,7 +99,10 @@ export const MU_CFG = {
    *  still walking the same bearing, so every long walk leads right back to
    *  the vessels. The rim is pure void (the arcs end at ranks.faint, the
    *  motes are screen-space), so the seam is invisible by construction. */
-  wrap: { radius: 920, reentry: 880 },
+  wrap: { radius: 920, reentry: 880, clear: 310 },
+  // ↑ `clear` (THE RING LAW): the pure void kept beyond the OUTERMOST seat —
+  //   the live wrap radius is max(radius, outer + clear) and the reentry keeps
+  //   the authored radius→reentry step, so a grown ring never meets the seam.
   /** The nameplates' hover — a slow per-vessel bob (px + Hz), phase-split by
    *  actor id so the names breathe independently. */
   bob: { px: 3, hz: 0.45 },
@@ -150,9 +168,13 @@ export const APPARITION_UNKNOWN_ID = 'apparition_unknown';
 /** The nameplate/dwell role every class apparition wears. */
 export const APPARITION_ROLE = 'class_apparition';
 
+/** Every apparition's body radius (px) — THE RING LAW's disjoint-reach dial
+ *  (data/validate.ts) and the dwell reach read it beside MU_CFG.dwell. */
+export const APPARITION_RADIUS = 15;
+
 const apparitionDef = (id: string, name: string, color: string, look: string, role?: string): MonsterDef => ({
   id, name, color,
-  shape: 'circle', radius: 15, material: 'ethereal', look,
+  shape: 'circle', radius: APPARITION_RADIUS, material: 'ethereal', look,
   // Deliberately FACTIONLESS (the shrine-spirit precedent): a faction tag
   // would enrol a menu fixture in territory censuses and ally-fx scans.
   base: { life: 100, moveSpeed: 0, mana: 0 },

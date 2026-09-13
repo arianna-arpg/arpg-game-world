@@ -167,6 +167,52 @@ Probe: `balance/probe_muoffer.ts` (the registry, the gate, the roll's
 analytic rate over a thousand sittings, the stream law, the seated tell,
 the one predicate).
 
+## THE NEAREST LAW + THE RING LAW (the dwell's selection and the seats)
+
+Her finding (2026-09-13): "given enough class and slot unlocks the dwell
+ring might be too large — standing adjacent to a class might read as the
+ADJACENT class." Measured, it was worse: the awake arc was a fixed 250 px
+crescent, so twelve vessels stood 46 px apart under a 93 px dwell reach
+(78 + the 15 px body), every vessel within reach ticked its own linger,
+and the seat-order-LAST one wrote both the bar and the request — the
+midpoint linger picked the wrong class from a hand of four, and a THIRD
+class from a hand of ten.
+
+**THE NEAREST LAW** (the `mu` stage's selection): ONE vessel engages at a
+time — the nearest by surface distance within the dwell reach, seat order
+breaking an exact tie — and every other row stands un-engaged (timer
+zeroed, latch re-armed, so a step from one vessel toward the next re-arms
+the one left behind). The bar names the engaged vessel and nothing else; a
+veiled vessel engages as one refusal. `muEngagedVessel(world)` is the read
+(HUD, dev lanes, the probe). The gaze still turns every vessel.
+
+**THE RING LAW** (`engine/muRing.ts`, pure): where each rank stands is
+derived from how many stand, never from a fixed arc. `MU_CFG.ring.seatGap`
+is the least centre-to-centre distance between neighbours per rank; a rank
+whose authored crescent (`MU_CFG.arc` at the rank's base radius in
+`MU_CFG.ranks`) already keeps the gap lands on the EXACT legacy angles;
+else the crescent WIDENS symmetrically about its centre, up to a closed
+ring around the wisp (the roster watching you); else the closed ring GROWS
+in radius to the gap. Ranks stack outward by at least `MU_CFG.ring.rankGap`,
+and THE GLOBE derives: the wrap radius keeps `MU_CFG.wrap.clear` of pure
+void past the outermost seat (the authored radius is its floor; the reentry
+keeps the authored step), so the antipode seam stays invisible at any
+count. Twelve awake vessels at the 190 px gap close into a ring of radius
+367 px; thirty-three veiled vessels stand on a 256° crescent at 430 px
+instead of a 27 px wall.
+
+**THE DISJOINT REACH** (the dial law, `validate.ts` warns when broken): the
+awake seat gap is at least twice the dwell reach, so no point in Mu lies
+within reach of two awake vessels — the midpoint between neighbours engages
+nobody, standing by any vessel selects exactly that vessel, and the nearest
+law is only the belt (a patched gap, a hand-placed seat).
+
+Probe: `balance/probe_mudwell.ts` (legacy parity, the gap at every count up
+to the whole roster, the three regimes, rank stacking, the derived globe,
+the disjoint reach in the world at hands 3..12 with every seat selecting its
+own class, the nearest law under a packed gap incl. ties and re-arm, the
+wrap at the derived radius).
+
 ## The wisp
 
 `MU_CFG.wisp` — the raw `spirit` look, pale ether ink, radius 10, kit
@@ -268,4 +314,8 @@ THE OFFERED CONTRACT's dials: `IMMORTAL_CFG.offerChance` / `offerMax` and
 the Immortal's `muOffer` row (`release`, `only`) in `meta/modes.ts`, the
 `mu_sworn` marker's colors and alphas in `engine/status.ts` (glow scale
 2.3 / alpha 0.34, rim 1.5px / alpha 0.6), and the card's header words in
-`MU_CFG.offer`. All numbers are first-pass and unblessed.
+`MU_CFG.offer`. THE RING LAW's dials: `MU_CFG.ring.seatGap` (awake 190 —
+never under twice the reach — veiled 64, faint 64), `MU_CFG.ring.rankGap`
+(180), the base radii `MU_CFG.ranks`, the default crescent `MU_CFG.arc`,
+and `MU_CFG.wrap.clear` (310, the void past the outermost seat). All
+numbers are first-pass and unblessed.

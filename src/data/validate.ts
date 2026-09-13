@@ -34,6 +34,7 @@ import type { AIAction, BrainDef, BrainTuning, FlockSpec } from '../engine/brain
 import { regionKind, PATH_CFG, SURVIVAL_RESOURCES } from '../world/regions';
 import { CHARGE_DEFS } from '../engine/charges';
 import { STATUS_DEFS } from '../engine/status';
+import { MU_CFG, APPARITION_RADIUS } from '../data/mu'; // THE RING LAW's disjoint-reach dial law (muRing)
 import { ZONES, OBJECTIVE_SEALS, type StampSpec, type StructureRoll } from './zones';
 import { POCKET_FORMS, DEFAULT_POCKET_FORM } from './pocketForms';
 import { TILESETS, pickTilesetForBiome, type BlendRoll } from './tilesets';
@@ -2933,6 +2934,21 @@ export function validateContent(): void {
     }
   }
   if (!MODE_BY_ID[DEFAULT_MODE_ID]) warn(`modes: default '${DEFAULT_MODE_ID}' missing from the registry`);
+
+  // MU — THE RING LAW's disjoint reach (engine/muRing.ts, her ruling
+  // 2026-09-13): the awake seat gap must be at least TWICE the dwell reach
+  // (dwell.radius + the apparition radius), so no point in Mu lies within
+  // reach of two vessels and a linger can never read as the adjacent class;
+  // THE NEAREST LAW in the stage is the belt, never the law. Ranks must
+  // stack outward, and the globe must keep void beyond the outermost seat.
+  {
+    const reach = MU_CFG.dwell.radius + APPARITION_RADIUS;
+    if (MU_CFG.ring.seatGap.awake < 2 * reach) {
+      warn(`mu: ring.seatGap.awake ${MU_CFG.ring.seatGap.awake} is under twice the dwell reach (${2 * reach}) — two vessels can share a linger point (THE DISJOINT REACH)`);
+    }
+    if (MU_CFG.ring.rankGap <= 2 * APPARITION_RADIUS) warn(`mu: ring.rankGap ${MU_CFG.ring.rankGap} lets ranks touch`);
+    if (MU_CFG.wrap.clear <= 0 || MU_CFG.wrap.reentry >= MU_CFG.wrap.radius) warn('mu: the globe must keep void beyond the rings (wrap.clear > 0, reentry < radius)');
+  }
 
   // THE SKILL-MODE TREES (docs/design/skill-modes.md §3/§8 — THE GRAPH
   // GRAMMAR): every tree-wearing def folds through engine/skilltree.ts and
