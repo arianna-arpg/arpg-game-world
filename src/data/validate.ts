@@ -12,7 +12,7 @@ import { SKILLS } from './skills';
 import { SUPPORTS } from './supports';
 import { spawnVeinOf } from '../engine/supportbase';
 import {
-  CREW_CFG, DEFAULT_RELOAD_SKILL, crewSkillsServed, makeSkillInstance, summonCrewOf, instanceDelivery, impactTreeOverrideErrors, CONSTRUCT_TREE_KEYS, GROUND_TREE_KEYS,
+  CREW_CFG, DEFAULT_RELOAD_SKILL, crewSkillsServed, makeSkillInstance, summonCrewOf, instanceDelivery, impactTreeOverrideErrors, treeAuraOverrideErrors, CONSTRUCT_TREE_KEYS, GROUND_TREE_KEYS,
   supportFits, supportFitsInst, treeNodeOf, validTreeNodes, bandPointsAt, MAX_SKILL_LEVEL,
   type Delivery, type SkillDef, type SkillInstance, type SupportDef, type ConduitSpec, AOE_SHAPE } from '../engine/skills';
 import { treeGraph, TREE_LAYOUT_CFG } from '../engine/skilltree'; // THE SKILL-TREE GRAPH — the fold the tree laws read
@@ -3036,6 +3036,7 @@ export function validateContent(): void {
           }
         }
         for (const error of impactTreeOverrideErrors(def, n)) warn(`${at}/${n.id}: ${error}`);
+        for (const error of treeAuraOverrideErrors(def, n)) warn(`${at}/${n.id}: ${error}`);
         const constructOver = n.over?.construct;
         if (constructOver) {
           if (def.delivery.type !== 'construct') warn(`${at}/${n.id}: construct override requires construct delivery`);

@@ -1,3 +1,4 @@
+import { BASTION_STARTER_TREES } from './bastionStarterTrees';
 import { DUELIST_STARTER_TREES } from './duelistStarterTrees';
 import { WORKSHOP_SKILLS } from './workshopSkills';
 import { IMPACT_STARTER_TREES } from './impactStarterTrees';
@@ -1521,6 +1522,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // ======================= The Guard hall ===================================
   // SHIELD CHARGE: the wall moves — a shield-first dash that bowls through.
   shield_charge: {
+    tree: BASTION_STARTER_TREES.shield_charge,
     id: 'shield_charge', name: 'Shield Charge',
     description: 'Raises the shield and charges: everything in your corridor is battered aside,'
       + ' with a 35% chance to stun each body struck.',
@@ -3901,6 +3903,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   spiked_bulwark: {
+    tree: BASTION_STARTER_TREES.spiked_bulwark,
     id: 'spiked_bulwark', name: 'Spiked Bulwark',
     description: 'Set a broad, spiked guard. While it holds you gain +12 thorns: every blow'
       + ' taken pays damage back to the striker. The wall has no release blow of its own; an'
@@ -3923,6 +3926,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   reprisal: {
+    tree: BASTION_STARTER_TREES.reprisal,
     id: 'reprisal', name: 'Reprisal',
     description: 'Usable only within 3 seconds of taking damage: a heavy answering arc in front'
       + ' of you with a 35% chance to stun, knocking the victims back.',
@@ -3984,6 +3988,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // below is plain data riding the ordinary apply fabric.)
 
   challenging_shout: {
+    tree: BASTION_STARTER_TREES.challenging_shout,
     id: 'challenging_shout', name: 'Challenging Shout',
     description: 'Bellow a challenge: every enemy around you is TAUNTED, turning their blades'
       + ' to you, and whatever still swings at your allies lands softer. Instant, and usable'
@@ -4453,6 +4458,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   stone_rampart: {
+    tree: BASTION_STARTER_TREES.stone_rampart,
     id: 'stone_rampart', name: 'Stone Rampart',
     description: 'Raise a wall of three stone segments across your facing, each standing for 12'
       + ' seconds until its life is battered down. Up to 6 segments can stand at once; enemies'
@@ -5606,6 +5612,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   bristleback: {
+    tree: BASTION_STARTER_TREES.bristleback,
     id: 'bristleback', name: 'Bristleback',
     description: 'TOGGLE AURA (reserves 30 mana): you and allies inside grow iron quills,'
       + ' dealing flat physical thorns damage to anything whose blow lands, plus a tenth of'
@@ -5815,6 +5822,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   // --- THE WALLWRIGHT: the wall is a weapon that hasn't fallen yet ---------
   toppling_stroke: {
+    tree: BASTION_STARTER_TREES.toppling_stroke,
     id: 'toppling_stroke', name: 'Toppling Stroke',
     description: 'Swing a wide, deliberate demolition arc that hits like falling masonry: 30%'
       + ' chance to leave survivors staggering SUNDERED. Best delivered beside your own'
@@ -11883,6 +11891,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // The Warlord's planted word: a BANNER, not a shout — the rally that
   // stays where you put it and holds the line around itself.
   battle_standard: {
+    tree: BASTION_STARTER_TREES.battle_standard,
     id: 'battle_standard', name: 'Battle Standard',
     description: 'Plant the colors: a standing banner grants allies fighting beneath it 12%'
       + ' increased damage, 5% increased movement speed, and 8 retaliation damage against each'
@@ -11910,6 +11919,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // The Warlord's pointed finger: the CHALLENGE fabric aimed at ONE body —
   // peel it, open it, and let everyone see where to hit it.
   single_out: {
+    tree: BASTION_STARTER_TREES.single_out,
     id: 'single_out', name: 'Single Out',
     description: 'Call out a single enemy: it is taunted, forced to answer you, and stands'
       + ' exposed, its health readable by the whole warband. The call is loud by design,'

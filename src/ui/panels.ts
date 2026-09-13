@@ -7597,6 +7597,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (over?.channel?.ramp) lines.push(`held damage ramps +${pct(over.channel.ramp.per)}/s to +${pct(over.channel.ramp.max)}`);
     if (over?.channel?.rampMove) lines.push(`held stride frees +${pct(over.channel.rampMove.per)}/s to +${pct(over.channel.rampMove.max)}`);
     for (const mo of node.mods ?? []) lines.push(formatModLine(mo, mo.value));
+    // TreeAuraPatch affects recipients inside the field, not the casting stat sheet.
+    for (const mo of over?.aura?.allyMods ?? []) lines.push('Allies in aura: ' + formatModLine(mo, mo.value));
+    for (const mo of over?.aura?.enemyMods ?? []) lines.push('Enemies in aura: ' + formatModLine(mo, mo.value));
     for (const patch of node.buffs ?? []) {
       for (const mo of patch.mods ?? []) lines.push('While blessed: ' + formatModLine(mo, mo.value));
     }

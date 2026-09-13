@@ -38560,7 +38560,7 @@ export class World {
     }
   }
 
-  deactivateAura(bearer: Actor, skillId: string): void {
+  deactivateAura(bearer: Actor, skillId: string, quietTreeRelease = false): void {
     const aura = bearer.activeAuras.get(skillId);
     if (!aura) return;
     // A toggle-installed rear-guard shell drops with its toggle (a shell
@@ -38607,7 +38607,7 @@ export class World {
           bearer.sheet.removeSource('seal:' + skillId);
         }
         const od = dv0.onDeactivate;
-        if (od && !bearer.dead && SKILLS[od.skillId]) {
+        if (od && !quietTreeRelease && !bearer.dead && SKILLS[od.skillId]) {
           const held = this.time - (aura.since ?? this.time);
           const missing = 1 - bearer.life / Math.max(1, bearer.maxLife());
           const mult = Math.min(od.maxScale ?? 5,
@@ -54680,6 +54680,9 @@ export class World {
 
   /** Retire fields that captured the previous allocation. */
   private clearTreeFields(caster: Actor, inst: SkillInstance): void {
+    // quietTreeRelease retires captured aura bonuses and reservations without
+    // paying a release attack. Existing resource debts still settle normally.
+    if (caster.activeAuras.get(inst.def.id)?.inst === inst) this.deactivateAura(caster, inst.def.id, true);
     this.clearTreeConstructs(caster, inst);
     caster.castCycles.delete(inst.def.id);
     for (const [key, step] of caster.metaInsts) if (step.chainOf === inst.def.id) {
@@ -54719,6 +54722,8 @@ export class World {
     for (const body of bodies) if (body.construct && body.owner === caster && body.summonInst === inst) {
       this.clearTreeFields(body, inst);
       if (body.construct.castInst && body.construct.castInst !== inst) this.clearTreeFields(body, body.construct.castInst);
+      // quietTreeRelease also strips the aura sources worn by nearby recipients.
+      for (const id of [...body.activeAuras.keys()]) this.deactivateAura(body, id, true);
       body.casting = null; body.dead = true; body.life = 0;
     }
   }

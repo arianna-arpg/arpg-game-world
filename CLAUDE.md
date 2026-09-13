@@ -53,6 +53,9 @@ Future skill and support proposals are tracked centrally in
 The Breaker/Vanguard/Lancer starting trees live in `src/data/impactStarterTrees.ts`;
 `docs/design/impact-starting-skill-trees.md` covers native pulse overrides,
 Extraction bank shares, returning-flight ownership and the complete bars.
+The Sentinel/Warlord/Wallwright starting trees live in `src/data/bastionStarterTrees.ts`;
+`docs/design/bastion-starting-skill-trees.md` covers additive native-aura
+modifiers, retaliation, banner cleanup, command blessings and guard releases.
 
 Chest and gem-cache lists live in `src/data/containerloot.ts` and the existing
 `loottables.ts`; `docs/design/container-loot.md` documents the context rules,

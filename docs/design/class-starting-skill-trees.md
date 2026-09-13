@@ -98,12 +98,16 @@ and Lancer starting bars.
 The [duelist batch](duelist-starting-skill-trees.md) completes Swashbuckler,
 Matador and Sharper, expands Wild Strike's legacy tree, and ships PS-02's
 focused Packed Workshop relocation support after its overlap audit.
+The [bastion batch](bastion-starting-skill-trees.md) completes Sentinel, Warlord
+and Wallwright, adds recipient modifiers to native auras, and makes tree
+retirement clear active aura sources and reservations immediately.
 
 Completed starting bars: Warrior, Magician, Rogue, Berserker, Sorcerer,
 Ranger, Guardian, Summoner, Juggernaut, Pyromancer, Assassin, Necromancer,
 Cleric, Blademaster, Brawler, Trapper, Skald, Chronomancer, Hivecaller,
-Breaker, Vanguard, Lancer, Swashbuckler, Matador and Sharper.
+Breaker, Vanguard, Lancer, Swashbuckler, Matador, Sharper, Sentinel, Warlord
+and Wallwright.
 
-Remaining: Tamer, Sentinel, Warlord, Beguiler, Ascetic, Wallwright,
-Flagellant, Falconer, Firebrand, Runeweaver and Resonator. Keep completing
+Remaining: Tamer, Beguiler, Ascetic, Flagellant, Falconer, Firebrand,
+Runeweaver and Resonator. Keep completing
 these whole starting bars before the mastery swap audit and alternate trees.

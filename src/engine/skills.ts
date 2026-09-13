@@ -16,6 +16,7 @@
 
 import type { AIAction } from './brain';
 import type { AttributeId, DamageType, Modifier, SkillTag } from './stats';
+import { STAT_DEFS } from './stats'; // treeAuraOverrideErrors validates recipient modifiers
 import { STATUS_DEFS, tuneAilmentChance } from './status';
 import type { CurveKind } from './curves';
 import type { ConjureGrant } from './flux';
@@ -454,7 +455,9 @@ export function instanceDelivery(inst: SkillInstance): SkillDef['delivery'] {
   }
   if (d.type === 'ground' && over?.ground) return { ...d, ...over.ground,
     ...(over.ground.domain ? { domain: mergeTreeDomain(d.domain, over.ground.domain) } : {}) };
-  if (d.type === 'construct' && over?.construct) return { ...d, ...over.construct };
+  if (d.type === 'construct' && (over?.construct || (over?.aura && d.aura))) return { ...d, ...over?.construct,
+    ...(over?.aura && d.aura ? { aura: { ...d.aura, ...mergeTreeAura(d.aura, over.aura) } } : {}) };
+  if (d.type === 'aura' && over?.aura) return { ...d, aura: { ...d.aura, ...mergeTreeAura(d.aura, over.aura) } };
   return d;
 }
 
@@ -4752,6 +4755,9 @@ export const DEFAULT_LEVELING: Modifier[] = [
 //     minting, pulse queues and previews keep tree timing plus appended supports.
 //   · extraction effects           — instanceEffects supplies both bank shares;
 //     derived homeward flights retain their investing instance for respec.
+//   · native aura recipient mods   — TreeAuraPatch composes in instanceDelivery;
+//     executeSkill passes it to activateAura / spawnConstruct; updateAuras
+//     reads the captured spec. Tree retirement strips captured sources first.
 //   · tooltips/previews            — skillPreview.ts + panels read the views
 //     (display honesty; picked numbers never lie).
 //   EXEMPT (reason at the class grain; individual sites carry no boilerplate):
@@ -4761,8 +4767,8 @@ export const DEFAULT_LEVELING: Modifier[] = [
 //     modify fields WITHIN a delivery, never the kind of thing a skill is.
 //     castMode joins the whitelist only with its own audited adoption (the
 //     heavy_strike Flurry wave).
-//   · non-whitelisted FIELD reads (summon pool/crew identity, dash width/phase, aura
-//     spec, pierce/forks/fire, ground cascade, delivery.range) — each
+//   · non-whitelisted FIELD reads (summon pool/crew identity, dash width/phase,
+//     aura upkeep/pulses/lifecycle outside TreeAuraPatch, pierce/forks/fire, ground cascade, delivery.range) — each
 //     is a named M2 road; its adopting wave moves its read sites behind the
 //     sibling views (instanceSummon/instanceCascadePlan/… already seam most).
 //   · def-only contexts (drop rolling, boot validation, bestiary/book) —
@@ -4776,6 +4782,25 @@ export type SkillTreeKind = 'minor' | 'major' | 'keystone';
  * duration is provided. Scalar identity fields belong on exclusive trunks. */
 export type TreeBuffPatch = { id: string } & Partial<Pick<BuffEffect,
   'mods' | 'duration' | 'affects' | 'radius' | 'clearOnHit' | 'consumeOn' | 'nextHit'>>;
+
+/** Additive recipient modifiers on a native aura or aura-bearing construct.
+ * Radius, upkeep, pulses and delivery identity remain native. */
+export type TreeAuraPatch = Pick<AuraSpec, 'allyMods' | 'enemyMods'>;
+function mergeTreeAura(a: TreeAuraPatch | undefined, b: TreeAuraPatch | undefined): TreeAuraPatch {
+  return { allyMods: [...(a?.allyMods ?? []), ...(b?.allyMods ?? [])],
+    enemyMods: [...(a?.enemyMods ?? []), ...(b?.enemyMods ?? [])] };
+}
+export function treeAuraOverrideErrors(def: SkillDef, node: SkillTreeNode): string[] {
+  const patch = node.over?.aura;
+  if (!patch) return [];
+  const errors: string[] = [];
+  if (def.delivery.type !== 'aura' && !(def.delivery.type === 'construct' && def.delivery.aura)) errors.push('aura patch requires a native aura');
+  for (const [key, mods] of Object.entries(patch)) {
+    if (!['allyMods', 'enemyMods'].includes(key)) errors.push('unknown aura.' + key);
+    if (!Array.isArray(mods) || mods.some(m => !STAT_DEFS[m.stat] || !Number.isFinite(m.value))) errors.push('invalid aura modifiers');
+  }
+  return errors;
+}
 
 export const CONSTRUCT_TREE_KEYS = ['castSkillId', 'range', 'duration', 'maxActive', 'life', 'placeRange', 'domeRadius', 'domeSlow'] as const;
 export const GROUND_TREE_KEYS = ['follow', 'domain', 'pulse'] as const;
@@ -4840,6 +4865,8 @@ export interface SkillTreeNode {
    *  field of its branch identity — including values equal to today's
    *  base — so the branch survives a rescale moving the base row. */
   over?: {
+    /** TreeAuraPatch arrays append across sibling nodes and to the native aura. */
+    aura?: TreeAuraPatch;
     /** Full extraction identity. instanceEffects supplies both the victim pop
      * and returning spear bank shares; the native impale consumption stays intact. */
     recallImpales?: Required<Omit<RecallImpalesEffect, 'type'>>;
@@ -5031,6 +5058,7 @@ export function instanceTreeOver(inst: SkillInstance): SkillTreeNode['over'] | u
     out = out
       ? {
         ...out, ...over,
+        ...(out.aura || over.aura ? { aura: mergeTreeAura(out.aura, over.aura) } : {}),
         ...(out.construct || over.construct ? { construct: { ...out.construct, ...over.construct } } : {}),
         ...(out.ground || over.ground ? { ground: { ...out.ground, ...over.ground,
           ...(out.ground?.domain || over.ground?.domain
