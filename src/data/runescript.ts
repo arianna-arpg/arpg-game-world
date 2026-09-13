@@ -21,6 +21,8 @@
 // vestige teaching it = one `letter` on its row. Nothing else knows runes.
 // ---------------------------------------------------------------------------
 
+import { Rng } from '../core/rng';
+
 /** One letter of the script: the plain LETTER (or digraph — 'th', 'ng'),
  *  the RUNE it is written as, and the rune's own name (for the Rosetta
  *  tooltip's flavor and for probes' error prints). */
@@ -126,14 +128,27 @@ export function decipher(runes: string): string {
   return out;
 }
 
-/** Reveal a stable prefix of rune tokens as deed progress grows. No item or
- *  account alphabet is consulted. Digraphs stay whole; any credit reveals at
- *  least one token, and incomplete progress always leaves some script. */
+/** Reveal scattered rune occurrences in a stable, phrase-seeded order.
+ *  Repeated letters reveal independently, leaving partial words throughout
+ *  the sentence for the player to recognize. The order never uses gameplay
+ *  randomness or changes with progress, so revealed letters stay revealed.
+ *  Digraphs stay whole; any credit reveals at least one token, and incomplete
+ *  progress always leaves some script. No item or account alphabet is consulted. */
 export function revealScript(text: string, fraction: number): string {
   if (fraction >= 1) return text;
   const runes = [...encipher(text)];
-  const count = runes.filter(isRune).length;
+  const order = runes.flatMap((ch, i) => isRune(ch) ? [i] : []);
+  const count = order.length;
   const clear = fraction > 0 ? Math.min(count - 1, Math.max(1, Math.floor(count * fraction))) : 0;
-  let seen = 0;
-  return runes.map(ch => isRune(ch) && ++seen <= clear ? runeLetterOf(ch)! : ch).join('');
+  if (clear <= 0) return runes.join('');
+  // FNV-1a seeds the existing local RNG from the inscription itself.
+  let seed = 0x811c9dc5;
+  for (const ch of runes) seed = Math.imul(seed ^ ch.codePointAt(0)!, 0x01000193);
+  const rng = new Rng(seed);
+  for (let i = count - 1; i > 0; i--) {
+    const j = rng.int(0, i);
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  for (const i of order.slice(0, clear)) runes[i] = runeLetterOf(runes[i])!;
+  return runes.join('');
 }

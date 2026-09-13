@@ -503,6 +503,33 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
   check('mystery: tiny credit reveals something; almost complete retains script; complete reads fully',
     plainCount(revealScript(b.rumor, 0.001)) > 0 && [...revealScript(b.rumor, 0.999)].some(isRune)
     && revealScript(b.rumor, 1) === b.rumor);
+  // Single-letter tokens make positions directly comparable, including
+  // repeated occurrences of the same letter on either side of each space.
+  const inscription = 'eeeeeeee eeeeeeee eeeeeeee';
+  const half = revealScript(inscription, 0.5);
+  check('mystery: scattered letters leave partial words throughout the inscription',
+    half.split(' ').every(word => word.includes('e') && [...word].some(isRune))
+    && half.indexOf('ᛖ') < half.lastIndexOf('e'));
+  let prior = revealScript(inscription, 0);
+  let monotone = true, exactBudget = true;
+  for (let n = 1; n <= 24; n++) {
+    const next = revealScript(inscription, n / 24);
+    monotone &&= [...prior].every((ch, i) => isRune(ch) || next[i] === ch);
+    exactBudget &&= plainCount(next) === n;
+    prior = next;
+  }
+  check('mystery: every progress step preserves known letters and reveals exactly its budget', monotone && exactBudget);
+  const randomBefore = Math.random;
+  let stableWithoutRandom = false;
+  try {
+    Math.random = () => { throw new Error('Prose must not consume gameplay randomness'); };
+    revealScript('A different inscription.', 0.75);
+    stableWithoutRandom = revealScript(inscription, 0.5) === half;
+  } finally { Math.random = randomBefore; }
+  check('mystery: reveal order is stable across reads and independent of gameplay randomness', stableWithoutRandom);
+  check('mystery: scattering preserves the cipher, spaces and punctuation for every class',
+    CLASS_BUNDLES.every(b => [0, 0.01, 0.25, 0.5, 0.75, 0.99, 1].every(frac =>
+      encipher(revealScript(b.rumor, frac)) === encipher(b.rumor))));
   const necro = classUnlockFor('necromancer')!;
   a.ledger[LEDGER_CORPSES_RECLAIMED] = 5;
   const split = classRumorRead(a, necro);
