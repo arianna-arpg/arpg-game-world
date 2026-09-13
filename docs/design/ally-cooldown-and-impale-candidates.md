@@ -148,6 +148,15 @@ eligibility/allocation helper, then use it for target preview, pre-payment
 gate and final resolution. A resolver callback/filter can extend existing
 ally targeting; the generic ally pool alone is insufficient.
 
+These exclusions belong to **instant cooldown assistance**, not to a global
+definition of an ally. Preserve continuous auras' existing recipient law:
+their ally modifier sweep (`src/engine/world.ts:49852`) excludes dead,
+opposing-team and off-story actors, but permits downed allies and constructs.
+The snapshot ally blessing used by `TreeBuffPatch` (`applyBuffEffect`'s ally branch)
+instead excludes downed actors and constructs. Keep those two contracts
+distinct when adding aura tree modifiers or quiet cleanup. Neither existing
+recipient policy should be changed to implement PS-01.
+
 The committed implementation would need generic cooldown-generation stamps
 and spent-budget tracking. Audit direct `cooldowns.set` writers as well as
 `stampSkillCooldown`: legacy ordinary clocks must either obtain generation
