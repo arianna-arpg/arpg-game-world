@@ -6,6 +6,8 @@ import { MEMORY_KINDS } from '../engine/memories';
 export const CATEGORY_GLYPHS: Record<string, string> = {
   helmet: '⛑', chest: '🛡', gloves: '🧤', boots: '👢', legs: '👖', belt: '➰',
   ring: '💍', amulet: '📿', weapon: '⚔', offhand: '🛡', quiver: '🏹', gem: '◇',
+  /** THE RELIQUARY's pieces (data/containers.ts): the warding eye. */
+  relic: '🧿',
 };
 
 /** Only base identity is needed, including on lightweight co-op drop shells. */

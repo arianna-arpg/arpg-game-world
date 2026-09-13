@@ -32,6 +32,7 @@ import { bandPointsAt, treePointsSpent } from '../engine/skills';
 import { FEATURE } from '../meta/account';
 import { LEDGER_MERC_OUTPOST_FOUND } from '../meta/mercs';
 import { VENDORS } from './vendors';
+import { CONTAINER_DEFS } from './containers';
 
 registerMenuGroup({ id: 'hero', label: 'Character', order: 0 });
 registerMenuGroup({ id: 'town', label: 'Stations', order: 1 });
@@ -52,6 +53,20 @@ registerMenuEntry({
   blurb: 'Your pack, your worn gear, the SKILLS rack and the essence satchel.',
   ...sealed('inventory'),
 });
+// THE CONTAINER FABRIC (engine/containers.ts): one page per registered side
+// board, seated right after the pack — it EXISTS once the board's first rung
+// is owned (the existence law: an unowned Reliquary is absent, never
+// greyed), opens the inventory on that board's face (the 'container:<id>'
+// verb — ui/panels.ts menuVerbs derives one host row per container), and
+// seals exactly when the inventory does. A second container is one
+// ContainerDef; its page arrives here by construction.
+CONTAINER_DEFS.forEach((c, i) => registerMenuEntry({
+  id: `container_${c.id}`, label: c.label, icon: c.icon, group: 'hero', verb: `container:${c.id}`,
+  order: 0.1 + i * 0.01,
+  gate: { any: [{ feature: c.ladder[0].feature, label: `own the ${c.label}` }] },
+  blurb: c.blurb,
+  ...sealed('inventory'),
+}));
 registerMenuEntry({
   id: 'character', label: 'Character', icon: 'sheet', group: 'hero', verb: 'character', bind: 'panelChar', order: 1,
   blurb: 'Attributes, defenses, offense — the sheet every modifier folds into.',

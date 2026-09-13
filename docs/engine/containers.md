@@ -1,0 +1,143 @@
+# The Container Fabric — side inventories as data (and the Reliquary)
+
+`src/engine/containers.ts` (the fabric) · `src/data/containers.ts` (the
+Reliquary and every board after it) · `src/engine/inventory.ts` (`BoardDims.open`
+— THE MASK on the one cell law) · `src/engine/items.ts` (`'relic'`,
+`CONTAINER_CATEGORIES`, `minRarity` / `affixCap` / `affixPool`) ·
+`src/data/itembases.ts` (the relic families) · `src/data/itemaffixes.ts` (THE
+RELIC REGISTER) · `src/engine/world.ts` (`containerPlace` / `containerTake` /
+`containerMove` / `reconcileContainers`, THE CONTAINER FOLD in `recalcSeat`,
+the discovery stamp in `dropGearAt`) · `src/ui/containerPane.ts` (the face) ·
+`src/meta/unlocks.ts` (the derived Vault rows) · `src/data/menu.ts` (the page)
+· probe `balance/probe_reliquary.ts`.
+
+## What it is
+
+A **container** is a second tetris board beside the one bag. A registered
+`ContainerDef` says what it **accepts** (item categories / base tags), whether
+what sits in it is **active** (its compiled mods fold into the seat's sheet
+through one attributable source, `container:<id>`, exactly the way a doll
+slot's gear folds through `gear:<slot>`), and the **shape** of its board as a
+**ladder** of account features: every rung is a char-grid frame of the cells it
+opens, and the live board is the union of the frames the account owns. The
+bag stays the implicit container; a pouch, a quiver, a spellbook, a second bag
+is one `ContainerDef` and one feature flag per rung — the Vault rows, the menu
+page, the inventory tab, the sheet fold, the save, the corpse and the co-op wire
+all derive from the definition.
+
+The **Reliquary** is the first container: a case for **relics** — the new
+`'relic'` item category (charms 1×1, talismans 2×1, idols 1×2, effigies 2×2).
+A relic is inert in the pack and speaks only from a seat in the case. It is the
+Last Epoch idol grid, the D2 charm inventory and the PoE jewel socket folded into
+one mechanism the engine already had: a grid, an item, a stat source.
+
+## The laws
+
+- **Existence.** Rung 0's feature *is* the container. Unowned, the container
+  has no board (`containerBoard(def) === null`), no inventory tab, no menu
+  page and no fold — the menu bar's existence law, not a greyed tile.
+- **The mask.** A footprint lands only on **open** cells. `BoardDims.open` is
+  an optional per-cell read every placement helper honours (`canPlaceAt`,
+  `swapBlockerFits`, `placeAt`, `autoPlace` through `footprintOpen`); absent, a
+  board is the plain bounds test and the bag is byte-identical to before. A
+  hollow-centred case is data, not a special grid.
+- **Active means seated.** Only a piece on an open cell of a board the account
+  owns *today* folds (`containerMisfits` is the fold's read as well as the
+  adoption law's) — a retuned frame can never leave a ghost line folding.
+- **Slotless carry.** `registerContainer` adds the accepted categories to
+  `items.ts CONTAINER_CATEGORIES`; the drop roller's droppable census
+  (`isCarriableCategory`) carries them without a doll slot, and the bag sort's
+  kind ladder seats them after the doll's kinds. The schema leaf owns the set,
+  so `itemgen` never imports the fabric and nothing cycles.
+- **Discovery.** `ContainerDef.foundLedger` is stamped on the account by the
+  first **genuine world mint** of an accepted piece (`World.dropGearAt` — never
+  a discard, a reclaim or an owed pay; the gem index's doctrine). The Vault's
+  rung-0 card surfaces only after the world has shown one.
+- **The one read.** `containerBoard(def)` resolves through an installed source:
+  the World folds its account's rungs; a co-op client reads the host's shipped
+  boards (`SnapshotW.containerBoards`, absent id = no board). Engine, panel and
+  landing preview all test one set of cells.
+- **Drawn == tested.** `containerLanding` is the one verdict: the panel's
+  preview paints it and `containerPlace` / `containerMove` act on it. The
+  bag→board landing over exactly one blocker **swaps** — the blocker takes the
+  cell the mover vacated in the bag — the bag's own tetris shuffle across
+  boards.
+- **Nothing lost.** `reconcileContainers(seat)` runs at adoption (save, wire):
+  a board the registry no longer knows, a rung the account lacks, a footprint
+  over a closed cell, two pieces overlapping — each misfit leaves for the bag
+  (first fit) or the floor at the hero's feet as owed property.
+
+## The ladder (data/containers.ts)
+
+Frames are authored on a 5×5 canvas; `#` opens a cell; the union of every
+rung's frame is the full case the face always draws (sealed cells dim, with the
+rung that opens them on hover — `containerRungAt`).
+
+| Rung | Feature | Opens | Board | Vault gate |
+| --- | --- | --- | --- | --- |
+| 0 The Reliquary | `reliquary` | the hollow ring | 8 seats, centre sealed | `relic_found` ledger |
+| 1 Wider Shelves | `reliquary_shelves` | the outer walls | 20 | rung 0 owned + reach level 12 (teased) |
+| 2 The Heart | `reliquary_heart` | the centre | 21 | rung 1 + level 25 (teased) |
+| 3 The Full Case | `reliquary_case` | the corners | 25 | rung 2 + level 40 (teased) |
+
+The ring seats charms, talismans along a wall and idols up a wall; no effigy
+seats until the heart opens — the tetris is the design. Costs and level roads
+are dials on the rung rows; the level roads register their milestones through
+the catalog's own derivation.
+
+## Relics (the pieces)
+
+- `ItemBaseDef.minRarity: 'magic'` — a relic never drops common (the roller
+  promotes; the `withFamily` common→magic shape, authored per base).
+- `ItemBaseDef.affixCap` — the family's own ceiling under the rarity's caps
+  (`affixCapsFor` — one read for the organic roll, the forced family and the
+  forge): charm 1/1, talisman and idol 2/2, effigy 3/3. Footprint prices power.
+- `ItemBaseDef.affixPool: 'explicit'` — the base admits only families that
+  **name** one of its tags; the untagged catch-all families (attributes,
+  resists) that roll on every open base never reach it. THE RELIC REGISTER
+  (`RELIC_PREFIXES` / `RELIC_SUFFIXES`, tag `relic`) is therefore the whole
+  relic gamut: life/mana/ES, global armour/evasion, damage and the damage
+  lanes (the same `DAMAGE_LANES` words gear speaks), minion damage/life, area,
+  projectile speed, duration; attack/cast/move speed, crit chance/multi, life
+  and mana regen, the four resists and all-res, cooldown recovery, leech, luck,
+  accuracy — at a third to a half of the wardrobe's tops, because a case seats
+  many.
+- Drops: the four families carry world-pool weights (about 1% of gear at a
+  find's share) and the `relic_cache` table pays one deliberately (seeded into
+  `jewelry_cache`). Any cache, chest or boss table names `relic_cache`.
+- Everywhere else a relic is plain gear: rarity ladder, salvage (from the bag
+  only — a seated piece is out of the hammer's reach like worn gear), the
+  keeper's lock, the corpse (`DeathLootPolicy.containers`, on by default —
+  seated = worn), the ground painter (`groundItems.ts relic`), the bag glyph
+  (`itemIcons.ts relic`), the dev Items tab (categories derive from the bases).
+
+## The face (ui/containerPane.ts)
+
+The bag column wears a **face strip** once any container is owned: Bag, then
+one tab per board with its `seated/seats` count. A board's face draws the full
+shape (live seats as drop cells, sealed seats dim with the rung's name) and
+beneath it **the tray** — every accepted piece the bag carries, as tiles — so
+seating is one drag with both ends on screen. Gestures ride the standing drag
+fabric: tray tile → open seat seats (`containerPlace`), seated tile → tray or a
+bag cell unseats (`containerTake` — the bag's landing law routes a `c:<id>`
+origin), seated tile → another seat re-places (`containerMove`), and the
+right-click tap (the bag's use verb) seats / unseats first-fit. The item
+tooltip says where a relic stands and whether it speaks. The menu's
+`container:<id>` page opens the inventory on that face (`openInventoryFace`).
+
+## Adding a container
+
+1. One `ContainerDef` in `data/containers.ts` (accepts, active, ladder frames,
+   an icon row in `ui/icons.ts` if the glyph is new) and one `FEATURE` flag per
+   rung in `meta/account.ts`. Add it to `CONTAINER_DEFS`.
+2. Nothing else: the Vault rows, the menu page, the tab, the fold, the save,
+   the wire, the corpse, the drop census and the probe's ladder checks all
+   derive. A container that accepts an existing category (a quiver taking
+   `'quiver'`, a pouch taking `'gem'`) needs no new bases at all.
+
+## Vocabulary note
+
+`relic` is also a construct kind in the skill data (Warden Relic, Holy Relic
+— planted or shoulder-borne constructs). The two live in different namespaces
+(construct kinds vs item categories); the player-facing collision is noted
+here so a later naming pass can choose.

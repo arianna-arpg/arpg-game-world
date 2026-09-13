@@ -23,6 +23,7 @@ import { Actor, type ActorAdorn, type ActorShape, type Team,
 import type { CourseJourney } from '../world/courseStages';
 import type { AnnexSpec, Doodad, DoodadDoor, HollowSpec, PlacedStructure } from '../engine/levelgen';
 import { bagBoard } from '../engine/inventory';
+import { containerBoard, containerList, packContainerBoard, type ContainerBoardW } from '../engine/containers';
 import type { HitShape } from '../engine/shapes';
 import type { TrackSpec } from '../engine/tracks';
 import type { TrapworkSpec } from '../engine/trapworks';
@@ -259,7 +260,13 @@ export interface SeatMetaW {
    *  never def bodies), so the instance IS the wire shape; rebuildItem
    *  re-validates against the client's registries on apply. Optional →
    *  tolerant of a host one wire-version behind. */
-  gear?: { items: ItemInstance[]; equipped: Record<string, ItemInstance> };
+  gear?: {
+    items: ItemInstance[]; equipped: Record<string, ItemInstance>;
+    /** THE CONTAINER FABRIC (engine/containers.ts): seated pieces by board
+     *  id, seat cells included. Optional → a host one wire-version behind
+     *  ships bare boards. */
+    containers?: Record<string, ItemInstance[]>;
+  };
   /** Essence wallet (salvage currency), per essence id. */
   ess?: Record<string, number>;
   /** Ability Essence wallet (skill food), per tier id. */
@@ -304,6 +311,9 @@ export function serializeSeatMeta(seat: Seat): SeatMetaW {
       items: m.items.map(i => ({ ...i })),
       equipped: Object.fromEntries(
         Object.entries(m.equipped).flatMap(([k, v]) => (v ? [[k, { ...v }] as const] : [])),
+      ),
+      containers: Object.fromEntries(
+        Object.entries(m.containers).map(([id, held]) => [id, held.map(i => ({ ...i }))]),
       ),
     },
     ess: { ...m.essences },
@@ -396,6 +406,13 @@ export function applySeatMeta(world: World, seat: Seat, w: SeatMetaW): void {
     const item = rebuildItem(it);
     if (item) m.equipped[slot] = item;
   }
+  // THE CONTAINER FABRIC: every board's seated pieces, re-validated like
+  // the doll's (a client whose registry lacks a board keeps the rows — the
+  // host is the authority on what sits where).
+  m.containers = {};
+  for (const [cid, held] of Object.entries(w.gear?.containers ?? {})) {
+    m.containers[cid] = (held ?? []).map(rebuildItem).filter((x): x is ItemInstance => !!x);
+  }
   m.essences = { ...emptyEssences(), ...(w.ess ?? {}) };
   m.abilityEssences = { ...emptyAbilityEssences(), ...(w.abil ?? {}) };
   m.vestiges = { ...(w.vest ?? {}) };
@@ -437,6 +454,10 @@ export interface StateSnapshot {
    *  bagBoard — base + the host account's expansions), so a client draws
    *  and tests the board the host places on. Absent (older host) = base. */
   bagBoard?: { w: number; h: number };
+  /** THE CONTAINER BOARDS, shipped (engine/containers.ts packContainerBoard):
+   *  the keeper's live fold per owned side board — a board absent here does
+   *  not exist for the run. Absent whole (older host) = no containers. */
+  containerBoards?: Record<string, ContainerBoardW>;
   actors: ActorW[];
   projectiles: ProjW[];
   tethers: TetherW[];
@@ -740,6 +761,10 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     vendorTradeOpen: world.vendorTradeRefusal() === null,
     vendorGemsOpen: world.vendorGemsOpen(),
     bagBoard: bagBoard(),
+    containerBoards: Object.fromEntries(containerList().flatMap(c => {
+      const b = containerBoard(c);
+      return b ? [[c.id, packContainerBoard(b)] as const] : [];
+    })),
     actors: world.actors.filter(a => !a.dead || a.isPlayerKind()).map(actorToW),
     projectiles: world.projectiles.map(p => ({ p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age })),
     tethers: world.tethers.map(t => ({
@@ -1328,6 +1353,8 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     world.netVendorTradeOpen = snap.vendorTradeOpen;
     world.netVendorGemsOpen = snap.vendorGemsOpen;
     world.netBagBoard = snap.bagBoard;
+    // Absent whole = an older host with no side boards: none exist here.
+    world.netContainerBoards = snap.containerBoards ?? {};
   }
 
   // The client's OWN hero arrives as a POOLED actor (in world.actors). Make

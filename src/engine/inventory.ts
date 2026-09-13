@@ -70,10 +70,29 @@ export function bagHeight(): number { return bagBoard().h; }
  *  absent = the player bag (ITEM_CFG.inventory), so a vendor's counter
  *  glass, a future stash page, any grid at all rides the SAME pure cell
  *  law: one collision test, one first-fit, drawn == held everywhere. */
-export interface BoardDims { w: number; h: number }
+export interface BoardDims {
+  w: number;
+  h: number;
+  /** THE MASK (THE CONTAINER FABRIC — engine/containers.ts): an optional
+   *  per-cell OPEN read. A footprint lands only where every cell it covers
+   *  is open — so a hollow-centred case, a ring of shelves, a board still
+   *  growing rung by rung all ride the SAME cell law as the plain bag
+   *  (absent = every in-bounds cell is open, byte-identical to before). */
+  open?: (x: number, y: number) => boolean;
+}
 
 function placed(i: ItemInstance): boolean {
   return i.x !== undefined && i.y !== undefined;
+}
+
+/** Is every cell of a footprint at (x,y) inside the board AND open? */
+export function footprintOpen(board: BoardDims, x: number, y: number, w: number, h: number): boolean {
+  if (x < 0 || y < 0 || x + w > board.w || y + h > board.h) return false;
+  if (!board.open) return true;
+  for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) {
+    if (!board.open(x + dx, y + dy)) return false;
+  }
+  return true;
 }
 
 function overlapsRect(i: ItemInstance, x: number, y: number, w: number, h: number): boolean {
@@ -99,8 +118,7 @@ export function canPlaceAt(
   bag: readonly ItemInstance[], item: ItemInstance, x: number, y: number, board?: BoardDims,
 ): boolean {
   const s = itemGridSize(item);
-  const bw = board?.w ?? bagWidth(), bh = board?.h ?? bagHeight();
-  if (x < 0 || y < 0 || x + s.w > bw || y + s.h > bh) return false;
+  if (!footprintOpen(board ?? bagBoard(), x, y, s.w, s.h)) return false;
   return overlappingItems(bag, item, x, y).length === 0;
 }
 
@@ -114,8 +132,7 @@ export function swapBlockerFits(
   bag: readonly ItemInstance[], item: ItemInstance, x: number, y: number, board?: BoardDims,
 ): ItemInstance | null {
   const s = itemGridSize(item);
-  const bw = board?.w ?? bagWidth(), bh = board?.h ?? bagHeight();
-  if (x < 0 || y < 0 || x + s.w > bw || y + s.h > bh || !placed(item)) return null;
+  if (!footprintOpen(board ?? bagBoard(), x, y, s.w, s.h) || !placed(item)) return null;
   const blockers = overlappingItems(bag, item, x, y);
   if (blockers.length !== 1) return null;
   const other = blockers[0];

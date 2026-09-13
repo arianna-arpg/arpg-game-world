@@ -22,6 +22,8 @@ export const GROUND_ITEM_SYMBOLS: Record<string, GroundSymbol> = {
   offhand: { polygons: [[[-.8,-.8],[.8,-.8],[.65,.35],[0,.95],[-.65,.35]]] },
   quiver: { polygons: [[[-.5,-.3],[.5,-.3],[.35,.9],[-.35,.9]],[[-.35,-.95],[-.15,-.95],[-.15,-.3],[-.35,-.3]],[[.1,-.8],[.3,-.8],[.3,-.3],[.1,-.3]]] },
   gem: { polygons: [[[0,-1],[.8,0],[0,1],[-.8,0]]] },
+  /** THE RELIQUARY's pieces: a chamfered tablet with a warding eye. */
+  relic: { polygons: [[[-.65,-.9],[.65,-.9],[.9,-.6],[.9,.6],[.65,.9],[-.65,.9],[-.9,.6],[-.9,-.6]]], rings: [[0,0,.34]] },
 };
 
 /** Symbol only: rarity tints the silhouette; no inventory tile or badge. */

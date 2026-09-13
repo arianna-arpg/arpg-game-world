@@ -33,6 +33,12 @@ import {
 } from '../engine/memories';
 import { GEM_DROP_CFG } from '../engine/loot';
 import { bagBoard, canPlaceAt, overlappingItems, swapBlockerFits } from '../engine/inventory';
+// THE CONTAINER FABRIC (engine/containers.ts): the side boards' face lives in
+// ui/containerPane.ts; the panel only seats it, routes its gestures and
+// resolves carried pieces through the one lookup (findCarried).
+import { ContainerPane } from './containerPane';
+import { containerOriginOf, findCarried, originContainerId } from '../engine/containers';
+import { CONTAINER_DEFS } from '../data/containers';
 import { BAG_SORT_MODES, type BagSortDir } from '../engine/bagsort';
 import { CATEGORY_GLYPHS, SUPPORT_BADGE } from '../render/itemIcons';
 import { PortalButton } from './portalbutton';
@@ -585,6 +591,18 @@ export class UI {
   /** The essence SATCHEL flap on the inventory panel (persists across
    *  re-renders — a satchel stays however you left it). */
   private satchelOpen = false;
+  /** THE CONTAINER FABRIC's face (ui/containerPane.ts): the bag column's
+   *  tab strip and every side board's face — the Reliquary first. Reads the
+   *  panel live through this host; keeps only which face is showing. */
+  private readonly containerPane = new ContainerPane({
+    world: () => this.getWorld(),
+    seat: () => this.panelSeat(this.inventory),
+    refresh: () => { this.refreshInventory(); this.refreshCharSheet(); },
+    cellPx: BAG_CELL_PX,
+    breaking: () => this.salvageLaneFor(this.inventory) !== null,
+    lockGestureText: () => this.lockGestureText(),
+    lockHintHtml: () => this.lockHintHtml(),
+  });
   /** The BUILD flap on the gear tab: the learned-skills list riding the
    *  left edge of the inventory — the whole build in one glance. Remembers
    *  its state across panel closes, satchel-style. */
@@ -1307,6 +1325,12 @@ export class UI {
     const w = (): World => this.getWorld();
     return {
       inventory: { open: id => this.toggleInventory(id), isOpen: () => this.inventoryOpen },
+      // THE CONTAINER FABRIC: one host row per registered side board — the
+      // menu's 'container:<id>' verb opens the inventory on that face.
+      ...Object.fromEntries(CONTAINER_DEFS.map(c => [`container:${c.id}`, {
+        open: (id?: string) => this.openInventoryFace(c.id, id),
+        isOpen: () => this.inventoryOpen && this.containerPane.activeFace() === c.id,
+      } satisfies MenuVerb])),
       townPortal: { open: id => {
         const world = w(), previous = world.uiActionSeatId; world.uiActionSeatId = id ?? null;
         try { world.requestMeta({ t: 'townPortal' }); } finally { world.uiActionSeatId = previous; }
@@ -1609,9 +1633,8 @@ export class UI {
    *  Reads the INVENTORY PANEL's owner — gear gestures lift from that bag. */
   private payloadGear(p: { arg: string }): ItemInstance | undefined {
     const m = this.panelSeat(this.inventory).meta;
-    const uid = Number(p.arg);
-    return m.items.find(i => i.uid === uid)
-      ?? Object.values(m.equipped).find(i => i?.uid === uid);
+    // ONE address space: bag, doll and every side board (findCarried).
+    return findCarried(m, Number(p.arg))?.item;
   }
 
   /** The forgiving vestige landing (whole tile / worn chip): first EMPTY
@@ -1642,7 +1665,9 @@ export class UI {
         const item = this.payloadGear({ arg });
         if (!item) return null;
         const m = this.panelSeat(this.inventory).meta;
-        const from = Object.keys(m.equipped).find(s => m.equipped[s]?.uid === item.uid) ?? 'bag';
+        // 'bag', a doll slot id, or 'c:<container>' for a piece lifted off a
+        // side board (THE CONTAINER FABRIC — one origin word, every target).
+        const from = containerOriginOf(m, item.uid);
         // THE FOOTPRINT GHOST (her ask 2026-09-05): the WHOLE piece rides the
         // hand, hanging from the cell it was taken hold of — a bag lift
         // CLONES its own tile (drawn == the tile: gem face, sockets, count,
@@ -1710,7 +1735,13 @@ export class UI {
         const l = this.bagLanding(p, arg);
         const uid = Number(p.arg);
         if (l.verdict === 'place' || l.verdict === 'swap') world().requestMeta({ t: 'moveItem', uid, x: l.x, y: l.y });
-        else if (l.verdict === 'unequip') world().requestMeta({ t: 'unequipItem', slot: l.from, x: l.x, y: l.y });
+        else if (l.verdict === 'unequip') {
+          // THE CONTAINER FABRIC: a piece lifted off a side board lands in
+          // the bag through containerTake (the aimed cell, the unequip law).
+          const cid = originContainerId(l.from);
+          if (cid) world().requestMeta({ t: 'containerTake', container: cid, uid, x: l.x, y: l.y });
+          else world().requestMeta({ t: 'unequipItem', slot: l.from, x: l.x, y: l.y });
+        }
         else if (l.verdict === 'swapEquip' && l.with) world().requestMeta({ t: 'equipItem', uid: l.with.uid, slot: l.from });
         else return;
         gearRefresh();
@@ -1805,9 +1836,16 @@ export class UI {
       const cell = e.target instanceof Element ? e.target.closest<HTMLElement>('[data-cell]') : null;
       const grid = cell?.closest<HTMLElement>('[data-bag-grid]');
       if (!cell || !grid) { this.clearBagLanding(); return; }
-      this.paintBagLanding(grid, this.bagLanding(p, cell.dataset.cell!));
+      // A side board's grid names itself (data-container-grid): its cells
+      // paint the CONTAINER landing law; the bag's cells paint the bag's.
+      const cid = grid.dataset.containerGrid;
+      this.paintBagLanding(grid, cid
+        ? this.containerPane.landing(p, cid, cell.dataset.cell!)
+        : this.bagLanding(p, cell.dataset.cell!));
     }, true);
     document.addEventListener('dndend', () => this.clearBagLanding());
+    // THE CONTAINER FABRIC's own targets (a board's cells, its tray).
+    this.containerPane.registerDnd();
   }
 
   /** THE RACK's drag fabric (skill-items charter M0 — the Build drawer's
@@ -3456,6 +3494,16 @@ export class UI {
     if (!this.inventoryOpen) { dndCancel(); hideTooltip(); } // a ghost never outlives its surface
   }
 
+  /** THE CONTAINER FABRIC: open the inventory ON a side board's face (the
+   *  menu's container pages — ui/containerPane.ts). Showing that face
+   *  already, close the inventory (the menu's toggle grammar); open on
+   *  another face, switch; closed, open there. */
+  openInventoryFace(face: string, seatId?: string): void {
+    if (this.inventoryOpen && this.containerPane.activeFace() === face) { this.toggleInventory(seatId); return; }
+    if (!this.containerPane.show(face)) return; // a board the run does not own — nothing to show
+    if (this.inventoryOpen) this.refreshInventory(); else this.toggleInventory(seatId);
+  }
+
   /** THE OBSTRUCTION CENSUS — the CSS-pixel rects of every open DOM pane
    *  standing over the canvas, read live each frame by the speech fabric's
    *  PLACEMENT LAW (renderer.uiObstructions → vis/speech.ts dodgeSpeechBox)
@@ -3489,8 +3537,8 @@ export class UI {
   private findItem(uid: number, seat: Seat = this.getWorld().localSeat): ItemInstance | undefined {
     const w = this.getWorld();
     const m = seat.meta;
-    return m.items.find(i => i.uid === uid)
-      ?? Object.values(m.equipped).find(i => i?.uid === uid)
+    // ONE address space: bag, doll and every side board (findCarried) …
+    return findCarried(m, uid)?.item
       // The counters' shelves: shelf gear (Memory pouches included) carries
       // the same rich tooltip (and the on-swap comparison against what you
       // wear) BEFORE you buy it — every counter's stock, one law.
@@ -3558,6 +3606,10 @@ export class UI {
     if (item.mem) return this.memTooltip(item);
     const d = describeItem(item);
     const lines: string[] = [`<div style="color:#9a94a8;font-size:10px">${d.baseLine}</div>`];
+    // THE CONTAINER FABRIC: a piece some side board takes says where it
+    // stands and whether it speaks (seated = live; in the pack = silent).
+    const seatNote = this.containerPane.tooltipNote(item);
+    if (seatNote) lines.push(`<div style="color:${seatNote.color};font-size:10px">${seatNote.text}</div>`);
     if (item.locked) {
       lines.unshift(`<div style="color:#c8a84b">🔒 Locked — it stays: no salvage, no drop, no sort (${this.lockGestureText()} to unlock)</div>`);
     } else if (salv) {
@@ -4137,6 +4189,8 @@ export class UI {
           ${doll}
         </div>
         <div>
+          ${this.containerPane.tabsHtml()}
+          ${this.containerPane.activeFace() === 'bag' ? `
           <div style="display:flex;align-items:center;gap:8px;width:${W * CELL}px">
             <h3>Bag <span style="color:#8a8678;font-weight:normal">(${m.items.length} item${m.items.length === 1 ? '' : 's'})</span></h3>
             ${sortStrip}
@@ -4148,7 +4202,10 @@ export class UI {
               : salv === 'sell'
               ? `⚙ <b style="color:#e8c87a">SELLING</b>: click a piece to sell it · ${this.lockHintHtml()}`
               : this.lockHintHtml()}
-          </div>
+          </div>`
+          // THE CONTAINER FABRIC: a side board's face takes the bag
+          // column (the doll stands; the face strip above swaps them).
+          : this.containerPane.bodyHtml()}
         </div>
       </div>`;
 
@@ -4198,6 +4255,8 @@ export class UI {
       this.satchelOpen = !this.satchelOpen;
       this.refreshInventory();
     });
+    // THE CONTAINER FABRIC: the face strip's tabs (ui/containerPane.ts).
+    this.containerPane.wire(this.inventory);
     // THE BAG SORT: one press = one re-pack through the intent (the couch
     // latch stamps the owner during this dispatch, so a guest sorts the
     // GUEST's bag); a carry in flight rides along — it lifts by uid.
@@ -4249,8 +4308,7 @@ export class UI {
         && this.getSettings().padBinds.itemLock === PAD_CFG.pointer.confirm;
       if ((ev.button !== 2 && !pad) || dndCarried()) return;
       const uid = Number(el.dataset.lockUid);
-      const it = seatMeta.items.find(i => i.uid === uid)
-        ?? Object.values(seatMeta.equipped).find(i => i?.uid === uid);
+      const it = findCarried(seatMeta, uid)?.item; // bag, doll, or a side board
       if (!it) return;
       if (!pad) { ev.preventDefault(); ev.stopPropagation(); }
       this.beginLockHold(ev, uid, this.panelSeatIds.get(this.inventory), pad);
@@ -4346,6 +4404,11 @@ export class UI {
       if (item.gem.kind !== 'skill') return null;
       return { label: 'learn', run: () => { world.requestMeta({ t: 'learn', uid: item.uid }); both(); } };
     }
+    // THE CONTAINER FABRIC: a piece some side board takes SEATS from the bag
+    // (first open fit) and UNSEATS from its board by the same tap
+    // (ui/containerPane.ts useVerb); ordinary gear falls through below.
+    const seatVerb = this.containerPane.useVerb(item, seatId);
+    if (seatVerb) return seatVerb;
     // GEAR (her ask 2026-09-05): a bag piece EQUIPS (auto slot); a worn piece
     // UNEQUIPS (first fit) — the double-click's one symmetry, now the tap's.
     const wornSlot = Object.keys(seat.meta.equipped).find(s => seat.meta.equipped[s]?.uid === item.uid);
@@ -4356,7 +4419,7 @@ export class UI {
   /** A carried thing by uid — bag OR doll — off the bag panel's own seat. */
   private carriedByUid(uid: number): ItemInstance | undefined {
     const m = this.panelSeat(this.inventory).meta;
-    return m.items.find(i => i.uid === uid) ?? Object.values(m.equipped).find(i => i?.uid === uid) ?? undefined;
+    return findCarried(m, uid)?.item; // bag, doll, or a side board — one address space
   }
 
   /** Arm the held right-click on a tile: the TIMER is the lock, the release

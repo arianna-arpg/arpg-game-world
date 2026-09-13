@@ -157,6 +157,15 @@ export const FEATURE = {
    *  in Lastlight — dwell to read the beat's slate of generated bounties,
    *  take ONE in hand, and turn it in back at the board for its printed pay. */
   BOUNTY_BOARD: 'bounty_board',
+  /** THE RELIQUARY (engine/containers.ts + data/containers.ts — the first
+   *  registered CONTAINER): a case for relics beside the bag. Rung 0 IS the
+   *  case (existence — the inventory tab, the menu page, the fold); each
+   *  later rung OPENS more cells of its frame (data/containers.ts is the
+   *  ladder; meta/unlocks.ts DERIVES the Vault rows from it). */
+  RELIQUARY: 'reliquary',
+  RELIQUARY_SHELVES: 'reliquary_shelves',
+  RELIQUARY_HEART: 'reliquary_heart',
+  RELIQUARY_CASE: 'reliquary_case',
 } as const;
 
 /** Account-ledger key: lifetime deaths across every character (bumped by the
@@ -194,6 +203,12 @@ export const LEDGER_CRAFTS_UNLOCKED = 'crafts_unlocked';
  *  chart, so they never count; stamped at World.loadZone). Gates the
  *  Campfire. */
 export const LEDGER_ZONES_EXPLORED = 'zones_explored';
+/** A RELIC genuinely minted into the world (World.dropGearAt's world-mint
+ *  lane — never a discard, a reclaim or an owed pay; the drop index's own
+ *  doctrine). Flag semantics. Gates THE RELIQUARY's first rung: you can only
+ *  buy a case for what the world has shown you (data/containers.ts
+ *  foundLedger). */
+export const LEDGER_RELIC_FOUND = 'relic_found';
 
 /** THE DROP INDEX (the bestiary's sibling, same ledger, same doctrine): one
  *  lifetime counter per gem id, bumped ONLY where a gem is genuinely MINTED

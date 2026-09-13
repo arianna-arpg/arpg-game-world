@@ -58,6 +58,21 @@ Chest and gem-cache lists live in `src/data/containerloot.ts` and the existing
 `loottables.ts`; `docs/design/container-loot.md` documents the context rules,
 Memory Essence economy, visual grammar and regression probe.
 
+THE CONTAINER FABRIC (`src/engine/containers.ts` + `src/data/containers.ts`):
+side inventories as data — a `ContainerDef` names what it accepts, whether
+seated pieces are ACTIVE (one `container:<id>` sheet source in `recalcSeat`,
+the doll's shape) and its board as a LADDER of account-feature rungs, each a
+char-grid frame of the cells it opens (the live board is the union of owned
+frames; `BoardDims.open` puts THE MASK on the one cell law in
+`engine/inventory.ts`). THE RELIQUARY is the debut: a hollow-ring case for
+RELICS — the slotless `'relic'` category (charm 1×1 / talisman 2×1 / idol 1×2
+/ effigy 2×2 in `itembases.ts`, magic-floored, footprint-capped, rolling THE
+RELIC REGISTER alone via `affixPool: 'explicit'` in `itemaffixes.ts`) — inert
+in the pack, live only when seated; the Vault rows, menu page, inventory face
+strip (`ui/containerPane.ts`), save, corpse and co-op wire all derive from
+the def; rung 0 surfaces on the `relic_found` discovery ledger. Contract:
+`docs/engine/containers.md`; probe `balance/probe_reliquary.ts`.
+
 Class discovery combat recipes live in `src/data/classdeeds.ts`, with reusable
 ledger aggregation in `src/engine/deeds.ts`. `docs/meta/class-deeds.md` covers
 account attribution, encounter streaks, hints, and the starting-kit cost pass.

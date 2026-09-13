@@ -64,8 +64,14 @@ import { birthCount, CLUTCH_CFG, ORPHAN_FRENZY, type BirthEffect } from './clutc
 import { mintSupportInstance, spawnVeinOf, SUPPORTBASE_CFG } from './supportbase';
 import { BOMBARD_CFG, type BombardSpec } from './bombard';
 import { evalCurve, type CurveKind } from './curves';
-import { autoPlace, bagBoardFor, placeAt, removeFromBag, setBagBoardSource, swapBlockerFits, type BoardDims } from './inventory';
+import { autoPlace, bagBoard, bagBoardFor, placeAt, removeFromBag, setBagBoardSource, swapBlockerFits, type BoardDims } from './inventory';
 import { bagSortMode, sortBagItems, type BagSortDir } from './bagsort';
+import {
+  CONTAINERS, boardDims, containerAccepts, containerBoard, containerBoardFor, containerLanding,
+  containerMisfits, containerSeatRefusal, findCarried, setContainerBoardSource, unpackContainerBoard,
+  type ContainerBoardW,
+} from './containers';
+import { CONTAINER_DEFS } from '../data/containers';
 import {
   bagGemItems, findBagGem, freeCellCount, makeSkillGemItem, makeSupportGemItem,
   packGrantState, restoreGrantState,
@@ -1727,6 +1733,13 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'dropItem': return isIdx(a.uid);
     case 'salvageItem': return isIdx(a.uid) && isLane(a.lane);
     case 'pickupItem': return true;
+    // THE CONTAINER FABRIC: the board is a registry id (re-resolved at
+    // apply), the piece a uid, the cell an untrusted pair — both or neither.
+    case 'containerPlace':
+    case 'containerTake':
+      return isStr(a.container) && isIdx(a.uid)
+        && ((a.x === undefined && a.y === undefined) || (isIdx(a.x) && isIdx(a.y)));
+    case 'containerMove': return isStr(a.container) && isIdx(a.uid) && isIdx(a.x) && isIdx(a.y);
     // THE SWEEP + THE KEEPER'S MARK (salvageBulk / salvageLock): categories
     // and rarities are closed vocabularies; the lock rides item uids alone
     // now (gem wrappers are bag items — one address space, M1).
@@ -1804,6 +1817,13 @@ export interface PlayerMeta {
   /** GEAR worn on the doll, by EQUIP_SLOTS id. Each slot syncs one
    *  attributable StatSheet source ('gear:<slot>') in recalcSeat. */
   equipped: Partial<Record<string, ItemInstance>>;
+  /** THE CONTAINER FABRIC (engine/containers.ts): the SIDE BOARDS — every
+   *  registered container's seated pieces by container id, each carrying
+   *  its seat cell x/y on THAT board. An ACTIVE container (the Reliquary)
+   *  syncs one attributable source ('container:<id>') in recalcSeat, the
+   *  doll's exact shape; a piece anywhere else is inert. Missing ids read
+   *  as empty boards (containerHeld). */
+  containers: Record<string, ItemInstance[]>;
   /** SALVAGE currency, per essence tint. Carried, spendable, and — like the
    *  rest of the bag — lost to death (knowledge persists on the account as
    *  craftLore; the raw material does not). */
@@ -4016,6 +4036,11 @@ export class World {
   /** THE BAG BOARD, mirrored: the host's shipped bag dims (a render-shell
    *  client draws and tests the KEEPER's board, never its own account's). */
   netBagBoard?: BoardDims;
+  /** THE CONTAINER BOARDS, mirrored (engine/containers.ts): the host's
+   *  shipped side boards by id — a board absent here does not exist for
+   *  the run. Set (possibly empty) on every client snapshot; undefined on
+   *  the host, whose boards fold from its own account. */
+  netContainerBoards?: Record<string, ContainerBoardW>;
   /** Seconds the player has lingered in Mireille's radius (proximity heal). */
   private mireilleDwell = 0;
   /** Cooldown before Mireille will heal again (persists across zones). */
@@ -4036,6 +4061,14 @@ export class World {
     // dims (netBagBoard), everyone else folds the account's expansions —
     // so every placement helper, the sort and the panel share one board.
     setBagBoardSource(() => this.netBagBoard ?? bagBoardFor(this.account.features));
+    // THE CONTAINER BOARDS (engine/containers.ts): the same one lazy read
+    // for every side board — a client mirrors the host's shipped boards
+    // (netContainerBoards: absent id = the board does not exist for the
+    // run), everyone else folds the account's owned rungs — so the fold,
+    // the intents, the face and the landing preview test one set of cells.
+    setContainerBoardSource(def => this.netContainerBoards
+      ? (this.netContainerBoards[def.id] ? unpackContainerBoard(this.netContainerBoards[def.id]) : null)
+      : containerBoardFor(def, this.account.features));
     this.manifest = manifest;
     this.sim = new WorldSim(manifest);
     // TOWN-BUILDING: swap the per-run town for its expanded form (account-gated
@@ -4111,6 +4144,7 @@ export class World {
       knownSkills: new Map(),
       items: [],
       equipped: {},
+      containers: {},
       essences: emptyEssences(),
       abilityEssences: emptyAbilityEssences(),
       vestiges: {},
@@ -4221,9 +4255,41 @@ export class World {
     seat.grantedInsts = undefined;
     seat.grantedSkills = undefined;
     hero.skills = padBar(bar.map(id => (id ? this.seatSkillById(seat, id) : null)));
+    // THE CONTAINER FABRIC: a saved board is settled against the LIVE fold
+    // before it folds — a retuned frame, a lost rung, an unknown container
+    // all evict to the bag (or the floor), never silently.
+    this.reconcileContainers(seat);
     this.recalcSeat(seat);
     hero.fillResources();
     this.markMetaDirty(seat);
+  }
+
+  /** THE CONTAINER FABRIC's adoption law: every piece a seat's side boards
+   *  hold must sit on OPEN cells of the board the account owns TODAY. A
+   *  board the registry no longer knows, a rung the account does not own,
+   *  a footprint over a cell a retuned frame closed, two pieces overlapping
+   *  — each misfit leaves its seat for the bag (first fit), else the floor
+   *  at the hero's feet as OWED property. Nothing is ever lost to a data
+   *  patch; the fold below reads only what stands. */
+  reconcileContainers(seat: Seat): void {
+    const m = seat.meta;
+    for (const cid of Object.keys(m.containers)) {
+      const def = CONTAINERS[cid];
+      const held = m.containers[cid];
+      const misfits = def ? containerMisfits(containerBoard(def), held) : [...held];
+      if (!misfits.length) continue;
+      m.containers[cid] = held.filter(i => !misfits.includes(i));
+      for (const it of misfits) {
+        delete it.x; delete it.y;
+        if (!autoPlace(m.items, it)) this.dropGearAt(seat.actor.pos, it, seat.id, true);
+      }
+      if (!def || !m.containers[cid].length) delete m.containers[cid];
+    }
+  }
+
+  /** The pieces a seat's side board holds (an absent id reads empty). */
+  containerHeld(seat: Seat, containerId: string): ItemInstance[] {
+    return seat.meta.containers[containerId] ?? (seat.meta.containers[containerId] = []);
   }
 
   // --------------------------------------------------------------- seats ----
@@ -5200,6 +5266,7 @@ export class World {
     const m = seat.meta;
     m.items = []; // gem wrappers ride the bag — one wipe covers them (M1)
     m.equipped = {};
+    m.containers = {}; // the side boards go with the doll (death.ts: seated = worn)
     m.essences = emptyEssences();
     m.abilityEssences = emptyAbilityEssences();
     m.vestiges = {};
@@ -21582,6 +21649,35 @@ export class World {
       }
       gearSheetMods.set(slot.id, sheetMods);
     }
+    // THE CONTAINER FOLD (engine/containers.ts): every ACTIVE side board's
+    // seated pieces compile exactly like worn gear — attribute lines join
+    // the one attrs artery, everything else becomes the board's own sheet
+    // source ('container:<id>', set below). Only pieces standing on OPEN
+    // cells of the board the account owns TODAY count (containerMisfits —
+    // the adoption law's read, so a retuned frame can never leave a ghost
+    // line folding); an inactive board, an unowned board, an absent board
+    // contribute nothing. A relic in the bag is never here — inert.
+    const containerSheetMods = new Map<string, Modifier[]>();
+    for (const def of CONTAINER_DEFS) {
+      const held = m.containers[def.id];
+      if (!def.active || !held?.length) continue;
+      const board = containerBoard(def);
+      if (!board) continue;
+      const misfit = new Set(containerMisfits(board, held));
+      const sheetMods: Modifier[] = [];
+      for (const seated of held) {
+        if (misfit.has(seated)) continue;
+        for (const gm of compileItemMods(seated)) {
+          if (isAttributeId(gm.stat)) {
+            if (gm.kind === 'flat') attrs[gm.stat] += gm.value;
+            else if (gm.kind === 'increased') attrsPct[gm.stat] += gm.value;
+          } else {
+            sheetMods.push(gm);
+          }
+        }
+      }
+      containerSheetMods.set(def.id, sheetMods);
+    }
     // THE PERCENT PHASE: attributesPct scales the fully-summed flat pool
     // (class base + tree + choices + gear), floored at 0 and rounded so every
     // consumer (skill gates, per-point mods, the char sheet) sees whole points.
@@ -21599,6 +21695,13 @@ export class World {
       const mods = gearSheetMods.get(slot.id);
       if (mods) p.sheet.setSource('gear:' + slot.id, mods);
       else p.sheet.removeSource('gear:' + slot.id);
+    }
+    // One attributable source per side board (THE CONTAINER FOLD above) —
+    // seat/unseat/retune all converge here like the doll's slots.
+    for (const def of CONTAINER_DEFS) {
+      const mods = containerSheetMods.get(def.id);
+      if (mods) p.sheet.setSource('container:' + def.id, mods);
+      else p.sheet.removeSource('container:' + def.id);
     }
     // THE GRANTED SKILL (skillgrant_<id> — engine/skills.ts; THE LEGEND
     // FABRIC, docs/engine/legends.md): modifier sources GRANT whole skills.
@@ -26650,7 +26753,7 @@ export class World {
       vocations: [...(snapshot.vocations ?? [])],
       vocationPoints: 0,
       knownSkills,
-      items: [], equipped,
+      items: [], equipped, containers: {},
       essences: emptyEssences(), abilityEssences: emptyAbilityEssences(), vestiges: {},
       modeId: DEFAULT_MODE_ID, modeStage: 0, charId: '',
     };
@@ -28388,6 +28491,9 @@ export class World {
       case 'moveItem': this.moveBagItem(seat, action.uid, action.x, action.y); break;
       case 'sortBag': this.sortBag(seat, action.mode, action.dir); break;
       case 'dropItem': this.dropGearFromBag(seat, action.uid); break;
+      case 'containerPlace': this.containerPlace(seat, action.container, action.uid, action.x, action.y); break;
+      case 'containerTake': this.containerTake(seat, action.container, action.uid, action.x, action.y); break;
+      case 'containerMove': this.containerMove(seat, action.container, action.uid, action.x, action.y); break;
       case 'pickupItem':
         // THE HARVEST CONSENT (engine/harvest.ts): the interact verb is
         // contextual — mid-rite the press is the rite's silence (the input
@@ -44757,6 +44863,108 @@ export class World {
     return Object.keys(seat.meta.equipped).find(sid => seat.meta.equipped[sid]?.uid === uid);
   }
 
+  // --- THE CONTAINER FABRIC (engine/containers.ts) --------------------------
+  // Seat / unseat / re-place on a side board. Every verdict is the fabric's
+  // own (containerLanding — the same read the panel's preview paints), so a
+  // landing the face lit is a landing the engine takes; refusals speak in
+  // the fabric's words (containerSeatRefusal) through the ordinary failNote.
+
+  /** Seat a BAG piece on a side board — at an exact cell (fails blocked;
+   *  swaps ONE blocker back into the cell the mover vacates in the bag), or
+   *  first open fit when no cell is named. The board must exist for the
+   *  account, accept the piece, and the hero must meet its level. */
+  containerPlace(seat: Seat, containerId: string, uid: number, x?: number, y?: number): void {
+    const m = seat.meta;
+    const def = CONTAINERS[containerId];
+    if (!def) return;
+    const item = this.bagItem(seat, uid);
+    if (!item) return;
+    const board = containerBoard(def);
+    const level = this.seatHero(seat).level;
+    const refusal = containerSeatRefusal(def, board, item, level);
+    if (refusal || !board) { this.failNote(seat.actor, 'seat:' + uid, refusal ?? 'refused'); return; }
+    const held = this.containerHeld(seat, def.id);
+    const dims = boardDims(board);
+    const from = { x: item.x, y: item.y };
+    const restore = (): void => {
+      if (!(from.x !== undefined && from.y !== undefined && placeAt(m.items, item, from.x, from.y))) autoPlace(m.items, item);
+    };
+    if (x !== undefined && y !== undefined) {
+      const l = containerLanding(def, board, held, item, 'bag', x, y, level, m.items, bagBoard());
+      if (l.verdict === 'blocked') { this.failNote(seat.actor, 'seat:' + uid, l.why ?? 'no room there'); return; }
+      removeFromBag(m.items, uid);
+      if (l.verdict === 'swap' && l.with) {
+        // The displaced piece takes the cell the mover vacated (the landing
+        // law proved it fits); a stale verdict falls to first fit, then the
+        // floor — never the void.
+        held.splice(held.indexOf(l.with), 1);
+        delete l.with.x; delete l.with.y;
+        if (!(from.x !== undefined && from.y !== undefined && placeAt(m.items, l.with, from.x, from.y))
+          && !autoPlace(m.items, l.with)) {
+          this.dropGearAt(seat.actor.pos, l.with, seat.id);
+        }
+      }
+      if (!placeAt(held, item, x, y, dims)) { restore(); return; }
+    } else {
+      removeFromBag(m.items, uid);
+      if (!autoPlace(held, item, dims)) {
+        restore();
+        this.failNote(seat.actor, 'seat:' + uid, `no open seat in the ${def.label}`);
+        return;
+      }
+    }
+    this.recalcSeat(seat);
+    this.text(seat.actor.pos, `${def.glyph} ${item.name}`, ITEM_RARITIES[item.rarity].color, 13);
+    this.markMetaDirty(seat);
+  }
+
+  /** Take a seated piece back to the bag — an EXACT bag cell when given
+   *  (fails blocked), else first fit (fails full). The seat is kept until
+   *  the bag has taken the piece — a refusal changes nothing. */
+  containerTake(seat: Seat, containerId: string, uid: number, x?: number, y?: number): void {
+    const m = seat.meta;
+    const held = m.containers[containerId];
+    const item = held?.find(i => i.uid === uid);
+    if (!held || !item) return;
+    const cell = { x: item.x, y: item.y };
+    held.splice(held.indexOf(item), 1);
+    delete item.x; delete item.y;
+    const landed = x !== undefined && y !== undefined ? placeAt(m.items, item, x, y) : autoPlace(m.items, item);
+    if (!landed) {
+      held.push(item);
+      item.x = cell.x; item.y = cell.y;
+      this.failNote(seat.actor, 'unseat:' + uid, x !== undefined ? 'no room there' : 'no room in the bag');
+      return;
+    }
+    if (!held.length) delete m.containers[containerId];
+    this.recalcSeat(seat);
+    this.markMetaDirty(seat);
+  }
+
+  /** Re-place a seated piece on its own board; a single blocker swaps into
+   *  the vacated seat when it fits — the bag's tetris shuffle, masked. */
+  containerMove(seat: Seat, containerId: string, uid: number, x: number, y: number): void {
+    const def = CONTAINERS[containerId];
+    const held = seat.meta.containers[containerId];
+    const item = held?.find(i => i.uid === uid);
+    if (!def || !held || !item) return;
+    const board = containerBoard(def);
+    if (!board) return;
+    const dims = boardDims(board);
+    if (placeAt(held, item, x, y, dims)) { this.markMetaDirty(seat); return; }
+    const other = swapBlockerFits(held, item, x, y, dims);
+    if (!other || item.x === undefined || item.y === undefined) return;
+    const from = { x: item.x, y: item.y };
+    const otherFrom = { x: other.x, y: other.y };
+    delete other.x; delete other.y;
+    if (placeAt(held, item, x, y, dims) && placeAt(held, other, from.x, from.y, dims)) {
+      this.markMetaDirty(seat);
+      return;
+    }
+    item.x = from.x; item.y = from.y;
+    other.x = otherFrom.x; other.y = otherFrom.y;
+  }
+
   /** Wear an item — from the bag OR from another doll slot (a worn ring
    *  dragged to the other hand). Slot omitted → first enabled compatible
    *  slot, favoring an empty one (the two-ring rule falls out of the
@@ -44869,17 +45077,24 @@ export class World {
     // THE KEEPER'S MARK HOLDS (her ruling 2026-09-05: a lock LOCKS — no
     // salvage, no drop, no sort; equip and unequip alone pass): a locked
     // thing never leaves the hand, bag or worn, gem or gear.
-    const held = this.bagItem(seat, uid) ?? Object.values(m.equipped).find(i => i?.uid === uid);
-    if (held?.locked) { this.failNote(seat.actor, 'drop:' + uid, 'locked — hold right-click to unlock'); return; }
-    if (this.bagItem(seat, uid)?.gem) { this.dropGemFromBag(seat, uid); return; }
-    const fromSlot = this.wornSlotOf(seat, uid);
+    const found = findCarried(m, uid);
+    if (!found) return;
+    if (found.item.locked) { this.failNote(seat.actor, 'drop:' + uid, 'locked — hold right-click to unlock'); return; }
+    if (found.where.kind === 'bag' && found.item.gem) { this.dropGemFromBag(seat, uid); return; }
     let item: ItemInstance | undefined;
-    if (fromSlot) {
-      item = m.equipped[fromSlot];
-      delete m.equipped[fromSlot];
+    if (found.where.kind === 'worn') {
+      item = m.equipped[found.where.slot];
+      delete m.equipped[found.where.slot];
+      this.recalcSeat(seat);
+    } else if (found.where.kind === 'container') {
+      // THE CONTAINER FABRIC: a seated piece dragged onto the world sheds
+      // its lines as it falls, exactly as a worn piece does.
+      const held = m.containers[found.where.container];
+      held.splice(held.indexOf(found.item), 1);
+      if (!held.length) delete m.containers[found.where.container];
+      item = found.item;
       this.recalcSeat(seat);
     } else {
-      if (!this.bagItem(seat, uid)) return;
       item = removeFromBag(m.items, uid);
     }
     if (!item) return;
@@ -44909,6 +45124,25 @@ export class World {
     if (!droppedBy) {
       this.text(at, `${item.name}!`, ITEM_RARITIES[item.rarity].color,
         item.rarity === 'unique' ? 17 : 14, 'drop', FLOAT_CFG.dropNameSec);
+      // THE DISCOVERY LEDGER (engine/containers.ts ContainerDef.foundLedger):
+      // a GENUINE world mint of a piece some side board accepts stamps the
+      // account once — the Vault's case for it surfaces only after the
+      // world has shown one (never a discard, a reclaim or an owed pay —
+      // the gem index's own doctrine).
+      if (!owed) this.noteContainerFind(item);
+    }
+  }
+
+  /** Stamp every side board's discovery key the first time the world mints
+   *  a piece it accepts (meta-gated; persisted at once — a Vault row hangs
+   *  on it, the flask lesson's quit-proof precedent). */
+  private noteContainerFind(item: ItemInstance): void {
+    if (!this.metaProgressionActive()) return;
+    for (const def of CONTAINER_DEFS) {
+      if (!def.foundLedger || !containerAccepts(def, item)) continue;
+      if ((this.account.ledger[def.foundLedger] ?? 0) >= 1) continue;
+      this.account.ledger[def.foundLedger] = 1;
+      this.accountDirty = true;
     }
   }
 
@@ -45203,8 +45437,8 @@ export class World {
    *  refuses the hammer on both lanes and every salvageBulk sweep skips it. */
   salvageLockSet(seat: Seat, uid: number, on: boolean): void {
     const m = seat.meta;
-    const thing = m.items.find(i => i.uid === uid)
-      ?? Object.values(m.equipped).find(i => i?.uid === uid);
+    // ONE address space: bag, doll, and every side board (findCarried).
+    const thing = findCarried(m, uid)?.item;
     if (!thing) return;
     if (on) thing.locked = true;
     else delete thing.locked;

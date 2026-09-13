@@ -111,8 +111,15 @@ export type MetaAction =
   | { t: 'unequipItem'; slot: string; x?: number; y?: number } // doll slot → bag (x/y: exact cell, fails blocked; omitted: first fit, fails full)
   | { t: 'moveItem'; uid: number; x: number; y: number }       // bag re-place (swap when exactly one blocker)
   | { t: 'sortBag'; mode: string; dir?: 'asc' | 'desc' }       // re-pack the bag by a registered sort mode (engine/bagsort.ts); dir mirrors the order
-  | { t: 'dropItem'; uid: number }                             // bag OR worn item → ground
+  | { t: 'dropItem'; uid: number }                             // bag OR worn OR container item → ground
   | { t: 'pickupItem' }                                        // nearest ground gear within reach → bag
+  // THE CONTAINER FABRIC (engine/containers.ts — the Reliquary and every
+  // side board after it): a container is addressed by its registry id, the
+  // piece by uid; cells are the container's own grid. The host re-resolves
+  // existence (the account's rungs), acceptance and level at apply.
+  | { t: 'containerPlace'; container: string; uid: number; x?: number; y?: number } // bag item → container cell (aimed: fails blocked / swaps ONE blocker back to the vacated bag cell; omitted: first open fit)
+  | { t: 'containerTake'; container: string; uid: number; x?: number; y?: number }  // container item → bag (x/y: exact cell, fails blocked; omitted: first fit, fails full)
+  | { t: 'containerMove'; container: string; uid: number; x: number; y: number }    // re-place inside the container (swap when exactly one blocker fits the vacated seat)
   // SALVAGE (dwell-gated, TWO LANES): 'break' at the bench pays the rarity's
   // essence + craft lore; 'sell' at a scrap counter pays coarse volume only.
   // Absent lane = legacy pick (bench when near, else counter).

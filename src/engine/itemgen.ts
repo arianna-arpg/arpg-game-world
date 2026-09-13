@@ -26,7 +26,7 @@ import { epitaphFor, VESTIGES, type VestigeLine } from '../data/vestiges';
 import {
   DEFENSE_KINDS, DEFENSE_LABEL_BY_STAT, ITEM_CFG, ITEM_RARITIES, ITEM_RARITY_IDS,
   baseBonusFor, defenseBudget, formatModLine, formatStatValue, lerpRange,
-  levelReqForTier, roundStatValue, slotsForCategory, socketCap, speakLineText, statLabel,
+  isCarriableCategory, levelReqForTier, roundStatValue, socketCap, speakLineText, statLabel,
   tierForIlvl, tieredBaseName,
   type AffixDef, type AffixKind, type AffixRollState, type AffixTierDef,
   type ItemBaseDef, type ItemCategory, type ItemInstance, type ItemRarity,
@@ -64,11 +64,13 @@ function pickWeighted<T extends { weight: number }>(arr: readonly T[], rng: RngF
   return arr[arr.length - 1] ?? null;
 }
 
-/** Droppable bases: weight > 0 AND the category has an ENABLED slot — a
- *  future category's bases stay dormant until its slot flips on. */
+/** Droppable bases: weight > 0 AND the category is CARRIABLE — an enabled
+ *  doll slot takes it, or a registered container does (items.ts
+ *  isCarriableCategory: the relic's slotless carry). A future category's
+ *  bases stay dormant until its slot flips on or a container claims it. */
 function droppableBases(): ItemBaseDef[] {
   return Object.values(ITEM_BASES).filter(
-    b => b.dropWeight > 0 && slotsForCategory(b.category).length > 0,
+    b => b.dropWeight > 0 && isCarriableCategory(b.category),
   );
 }
 
@@ -85,7 +87,7 @@ export function pickThemedBase(theme: string, ilvl: number, rng: () => number = 
   const tag = `mi_${theme}`;
   const pool = Object.values(ITEM_BASES).filter(b =>
     b.tags.includes(tag) && (b.minIlvl === undefined || ilvl >= b.minIlvl)
-    && slotsForCategory(b.category).length > 0);
+    && isCarriableCategory(b.category));
   if (pool.length === 0) return null;
   return pool[Math.floor(rng() * pool.length)].id;
 }
@@ -97,8 +99,12 @@ export function affixPoolsFor(base: ItemBaseDef): { prefix: AffixDef[]; suffix: 
   let pools = affixPoolCache.get(base.id);
   if (pools) return pools;
   const baseTags = new Set([...base.tags, base.category]);
+  // THE POOL LAW (ItemBaseDef.affixPool): an UNTAGGED family is a catch-all
+  // that rolls everywhere on an 'open' base; an 'explicit' base admits only
+  // families that NAME one of its tags — its own register and nothing else.
+  const openPool = base.affixPool !== 'explicit';
   const fits = (a: AffixDef): boolean =>
-    (!a.tags || a.tags.some(t => baseTags.has(t))) &&
+    (a.tags ? a.tags.some(t => baseTags.has(t)) : openPool) &&
     (!a.excludeTags || !a.excludeTags.some(t => baseTags.has(t)));
   pools = {
     prefix: ITEM_AFFIX_LIST.filter(a => a.kind === 'prefix' && fits(a)),
@@ -193,8 +199,23 @@ function rollOneAffix(
   return { id: def.id, tier, rolls };
 }
 
+/** THE AFFIX CAPS a roll honors: the rarity's ceilings (ITEM_CFG.affixSlots)
+ *  lowered by the base family's OWN cap (ItemBaseDef.affixCap — footprint
+ *  prices power: a 1×1 charm carries one line each way however rare). ONE
+ *  read for the organic roll, the forced family and the forge, so no lane
+ *  can mint a line count another would refuse. */
+export function affixCapsFor(base: ItemBaseDef, rarity: ItemRarity): { prefixes: number; suffixes: number } {
+  const r = ITEM_CFG.affixSlots[rarity];
+  const own = base.affixCap;
+  if (!own) return r;
+  return {
+    prefixes: Math.min(r.prefixes, own.prefix ?? r.prefixes),
+    suffixes: Math.min(r.suffixes, own.suffix ?? r.suffixes),
+  };
+}
+
 function rollAffixSet(base: ItemBaseDef, ilvl: number, rarity: ItemRarity, rng: RngFn): AffixRollState[] {
-  const caps = ITEM_CFG.affixSlots[rarity];
+  const caps = affixCapsFor(base, rarity);
   if (caps.prefixes + caps.suffixes === 0) return [];
   let nPre = 0;
   let nSuf = 0;
@@ -247,7 +268,7 @@ function forceFamilyAffix(
   if (!def) return;
   const tier = pickTier(def, ilvl, rarity, rng);
   if (tier === null) return;
-  const caps = ITEM_CFG.affixSlots[rarity];
+  const caps = affixCapsFor(base, rarity);
   const cap = def.kind === 'prefix' ? caps.prefixes : caps.suffixes;
   const sameKind = affixes.filter(a => ITEM_AFFIXES[a.id]?.kind === def.kind);
   if (cap > 0 && sameKind.length >= cap) {
@@ -371,6 +392,13 @@ export function rollItem(opts: RollItemOpts): ItemInstance | null {
       ? ITEM_BASES[opts.baseId]
       : pickWeighted(openPool.map(b => ({ b, weight: b.dropWeight })), rng)?.b;
   if (!base) return null;
+  // THE RARITY FLOOR (ItemBaseDef.minRarity): a family that never drops
+  // below a rarity PROMOTES a lower roll — the withFamily common→magic
+  // shape, authored per base (a relic with no lines is nothing). Uniques
+  // stand outside the ladder; an explicit lower ask is lifted the same way.
+  if (base.minRarity && !unique && ITEM_RARITY_IDS.indexOf(rarity) < ITEM_RARITY_IDS.indexOf(base.minRarity)) {
+    rarity = base.minRarity;
+  }
 
   const tier = tierForIlvl(ilvl);
   const superior = rarity === 'common' && rng() < ITEM_CFG.superior.chance;
@@ -468,7 +496,7 @@ export function forgeItem(opts: ForgeItemOpts): ItemInstance | null {
   const base = ITEM_BASES[unique?.baseId ?? opts.baseId ?? ''];
   if (!base) return null;
 
-  const caps = ITEM_CFG.affixSlots[rarity];
+  const caps = affixCapsFor(base, rarity);
   const pools = affixPoolsFor(base);
   const used = new Set<string>();
   const counts: Record<AffixKind, number> = { prefix: 0, suffix: 0 };

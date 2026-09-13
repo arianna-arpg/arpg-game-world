@@ -22,6 +22,8 @@ export const MENU_ICONS: Record<string, string> = {
   menu: `<g ${S}><path d="M4 7h16M4 12h16M4 17h16"/></g>`,
   /** A pack with a flap and a buckle strap. */
   bag: `<g ${S}><path d="M6 9h12l1 11H5z"/><path d="M9 9V7a3 3 0 0 1 6 0v2"/><path d="M9 13h6"/></g>`,
+  /** THE RELIQUARY (data/containers.ts): a chamfered case with a warding eye. */
+  relic: `<g ${S}><path d="M8 4h8l3 3v10l-3 3H8l-3-3V7z"/><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="0.9" fill="currentColor"/></g>`,
   /** A hero silhouette: head + shoulders. */
   sheet: `<g ${S}><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></g>`,
   /** A constellation: linked nodes (the passive tree). */

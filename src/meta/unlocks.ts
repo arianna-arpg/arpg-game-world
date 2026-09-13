@@ -41,6 +41,9 @@ import { BOUNTY_BOARD_CFG } from '../data/bountyboard';
 import { VENDOR_CFG } from '../data/vendors';
 import { LEDGER_ESSENCE_TOUCHED } from '../data/essences';
 import { SCALD_KIT_UNLOCK_LEDGERS } from '../data/scaldkit';
+// THE CONTAINER FABRIC (engine/containers.ts): the side boards' ladders —
+// every rung's Vault row is DERIVED below (containerUnlocks), never listed.
+import { CONTAINER_DEFS } from '../data/containers';
 // Pure fabric leaves (no engine cycle): the HARD-LESSON ledger keys the
 // discovery web reads — seized by a grip, sprung a trap with your own feet.
 import { LEDGER_SEIZED } from '../engine/grab';
@@ -1115,6 +1118,30 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     label: 'Skill Grafting',
     description: 'Buy a SKILL GRAFT charge: at your next run\'s start, choose any skill your account has unlocked, and its Memory, at its plainest cut (level 1, common), rides in beside your class\'s own kit, learned where your young hands can hold it, packed where they cannot. The charge arms and spends only when a run begins with a chosen skill; decline the pick and it simply carries on to a later run. Return here for another once it\'s spent. The shelf never empties: this is where a full Vault keeps growing.',
     payload: {} },
+
+  // --- THE CONTAINER FABRIC (engine/containers.ts + data/containers.ts):
+  //     one Vault row per RUNG of every registered side board, DERIVED from
+  //     the container's own ladder — never listed here. Rung 0 is the
+  //     board's existence (the Reliquary itself), gated on the board's
+  //     DISCOVERY LEDGER when it names one (you can only buy a case for
+  //     what the world has shown you); every later rung requires the rung
+  //     before it owned (requiresFeature — the Mireille chain's shape) and
+  //     hangs its own gatework avenues (a level road, a deed) with the
+  //     tease law, so the player SEES the next shelf and the road to it.
+  //     A second container is one ContainerDef; its rows arrive here by
+  //     construction. -------------------------------------------------------
+  ...CONTAINER_DEFS.flatMap(c => c.ladder.map((rung, i): Unlockable => ({
+    id: `feat_${rung.feature}`, kind: 'feature', cost: rung.cost, reqLevel: 0,
+    ...(i === 0
+      ? (c.foundLedger ? { reqLedger: c.foundLedger } : {})
+      : { requiresFeature: c.ladder[i - 1].feature }),
+    ...(rung.reqAnyOf ? { reqAnyOf: rung.reqAnyOf } : {}),
+    ...(rung.reqLedger ? { reqLedger: rung.reqLedger } : {}),
+    ...(rung.tease ? { tease: true } : {}),
+    label: rung.label,
+    description: rung.description,
+    payload: { flag: rung.feature },
+  }))),
 ];
 
 /** Static catalog by id — the resolution table for `requiresUnlock` ladders. */

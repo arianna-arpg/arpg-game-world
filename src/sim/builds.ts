@@ -257,6 +257,7 @@ export function applyBuild(world: World, spec: BuildSpec, fallbackGearSeed: numb
     knownSkills,
     items: [],
     equipped,
+    containers: {},
     essences: emptyEssences(),
     abilityEssences: emptyAbilityEssences(),
     vestiges: {},

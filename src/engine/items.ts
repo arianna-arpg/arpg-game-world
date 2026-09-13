@@ -88,7 +88,12 @@ export type ItemCategory =
   // THE RESIDENCE (skill-items charter M1): loose skill/support gems live in
   // the one bag as 1×1 wrapper items. No doll slot accepts 'gem' — a memory
   // is learned (rack seat) or socketed, never worn.
-  | 'gem';
+  | 'gem'
+  // THE RELIQUARY (engine/containers.ts + data/containers.ts): relics —
+  // charms, talismans, idols, effigies — are SLOTLESS gear: no doll slot
+  // takes one; a relic speaks only from a seat in its container, and is
+  // inert everywhere else. Carried through CONTAINER_CATEGORIES below.
+  | 'relic';
 
 /** One wearable slot on the doll. Two ring slots are two SLOTS accepting one
  *  CATEGORY — the registry, not code, decides how many of anything you wear.
@@ -122,6 +127,20 @@ export const SLOT_BY_ID: Record<string, EquipSlotDef> =
 /** The slots an item of this category can sit in (enabled ones first). */
 export function slotsForCategory(cat: ItemCategory): EquipSlotDef[] {
   return EQUIP_SLOTS.filter(s => s.accepts.includes(cat) && s.enabled);
+}
+
+/** SLOTLESS CARRY (THE CONTAINER FABRIC — engine/containers.ts): the
+ *  categories a registered CONTAINER accepts. A base whose category sits
+ *  here is DROPPABLE and carriable with no doll slot at all — the relic's
+ *  whole body is a seat in its case. Filled by registerContainer; read by
+ *  the drop roller's droppable census and the bag sort's kind ladder. The
+ *  schema leaf owns the set so itemgen never imports the container fabric
+ *  (data registers into it; nothing cycles). */
+export const CONTAINER_CATEGORIES = new Set<ItemCategory>();
+
+/** Carriable at all — a doll slot takes the category, or a container does. */
+export function isCarriableCategory(cat: ItemCategory): boolean {
+  return slotsForCategory(cat).length > 0 || CONTAINER_CATEGORIES.has(cat);
 }
 
 // -------------------------------------------------------- defense kinds ----
@@ -227,6 +246,23 @@ export interface ItemBaseDef {
   dropWeight: number;
   /** The family doesn't exist below this item level (deep-world exclusives). */
   minIlvl?: number;
+  /** THE RARITY FLOOR: a family that never drops BELOW this rarity — the
+   *  drop roller PROMOTES a lower roll (a relic with no lines is nothing,
+   *  so relics floor at magic; the withFamily common→magic promotion is
+   *  the same shape). Uniques stand outside the ladder as ever. */
+  minRarity?: ItemRarity;
+  /** THE AFFIX CAP: this family's OWN ceiling on rolled prefixes/suffixes,
+   *  applied UNDER the rarity's caps (ITEM_CFG.affixSlots) — footprint
+   *  prices power: a 1×1 charm carries one line each way however rare, an
+   *  effigy the rarity's full six. Absent = the rarity's caps alone. */
+  affixCap?: Partial<Record<AffixKind, number>>;
+  /** THE POOL LAW: 'open' (default) lets every family whose tag gate
+   *  passes roll here — INCLUDING untagged catch-all families (attributes,
+   *  resists); 'explicit' admits only families that NAME one of this base's
+   *  tags, so a base with its own register (relics) rolls its register and
+   *  nothing else. The gate itself is never bent — this only decides what
+   *  an absent gate means for this base. */
+  affixPool?: 'open' | 'explicit';
 }
 
 // --------------------------------------------------------------- affixes ---

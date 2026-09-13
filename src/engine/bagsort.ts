@@ -22,7 +22,7 @@
 
 import { autoPlace, bagBoard, canPlaceAt, placeAt, type BoardDims } from './inventory';
 import { itemGridSize } from './itemgen';
-import { EQUIP_SLOTS, ITEM_RARITY_IDS, type ItemInstance } from './items';
+import { CONTAINER_CATEGORIES, EQUIP_SLOTS, ITEM_RARITY_IDS, type ItemInstance } from './items';
 import { SKILL_RARITIES } from './skills';
 import { ITEM_BASES } from '../data/itembases';
 
@@ -53,13 +53,21 @@ export interface BagSortMode {
 const GEAR_KIND_ORDER: string[] = [];
 for (const slot of EQUIP_SLOTS) for (const cat of slot.accepts) if (!GEAR_KIND_ORDER.includes(cat)) GEAR_KIND_ORDER.push(cat);
 
+/** The doll's kinds, then every CONTAINER-carried category (items.ts
+ *  CONTAINER_CATEGORIES — relics after the rings, by registration order).
+ *  Read live: containers register after this module loads. */
+function kindOrder(): string[] {
+  return [...GEAR_KIND_ORDER, ...[...CONTAINER_CATEGORIES].filter(c => !GEAR_KIND_ORDER.includes(c))];
+}
+
 export function bagKindRank(i: ItemInstance): number {
-  if (i.gem) return GEAR_KIND_ORDER.length + (i.gem.kind === 'skill' ? 0 : 1);
-  if (i.mem) return GEAR_KIND_ORDER.length + 2;
-  if (i.writ) return GEAR_KIND_ORDER.length + 3;
+  const order = kindOrder();
+  if (i.gem) return order.length + (i.gem.kind === 'skill' ? 0 : 1);
+  if (i.mem) return order.length + 2;
+  if (i.writ) return order.length + 3;
   const cat = ITEM_BASES[i.baseId]?.category;
-  const k = cat ? GEAR_KIND_ORDER.indexOf(cat) : -1;
-  return k >= 0 ? k : GEAR_KIND_ORDER.length + 4;
+  const k = cat ? order.indexOf(cat) : -1;
+  return k >= 0 ? k : order.length + 4;
 }
 
 /** A human word for the kind rank's bucket — the filter framework's label seam. */

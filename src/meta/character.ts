@@ -105,6 +105,12 @@ export interface CharacterSave {
    *  affix → line dropped). Optional → pre-item saves still load. */
   items?: ItemInstance[];
   equipped?: Record<string, ItemInstance>;
+  /** THE CONTAINER FABRIC (engine/containers.ts): every side board's seated
+   *  pieces by container id, each carrying its seat cell. Pure JSON like the
+   *  bag; rebuilt registry-tolerantly (an unknown container's pieces fall
+   *  to the bag at adoption — World.reconcileContainers). Optional → every
+   *  earlier save loads with empty boards. */
+  containers?: Record<string, ItemInstance[]>;
   /** Salvage-currency wallet (per essence id). Optional → pre-essence saves. */
   essences?: Record<string, number>;
   /** Ability Essence wallet (skill food, per tier id). Optional → pre-M-ECON
@@ -227,6 +233,10 @@ export function serializeCharacter(world: World): CharacterSave {
     items: m.items.map(i => ({ ...i })),
     equipped: Object.fromEntries(
       Object.entries(m.equipped).flatMap(([k, v]) => (v ? [[k, { ...v }] as const] : [])),
+    ),
+    // THE CONTAINER FABRIC: seated pieces by board, seat cells included.
+    containers: Object.fromEntries(
+      Object.entries(m.containers).map(([id, held]) => [id, held.map(i => ({ ...i }))]),
     ),
     essences: { ...m.essences },
     abilityEssences: { ...m.abilityEssences },
@@ -381,6 +391,14 @@ export function rebuildSavedMeta(save: CharacterSave): { meta: PlayerMeta; death
     const item = rebuildItem(it);
     if (item) equipped[slot] = item;
   }
+  // THE CONTAINER FABRIC: every board's pieces rebuild like the doll's
+  // (an unknown base drops the piece); a board the live registry no longer
+  // knows, or a seat a retuned frame closed, is settled at adoption
+  // (World.reconcileContainers) — nothing decided here, nothing lost.
+  const containers: Record<string, ItemInstance[]> = {};
+  for (const [cid, held] of Object.entries(save.containers ?? {})) {
+    containers[cid] = (held ?? []).map(rebuildItem).filter((x): x is ItemInstance => x !== null);
+  }
 
   // Tree state rebuilds registry-tolerantly, in dependency order: the
   // allocation seeds choice sanitizing, both seed graft-binding sanitizing
@@ -401,7 +419,7 @@ export function rebuildSavedMeta(save: CharacterSave): { meta: PlayerMeta; death
     vocations: [...(save.vocations ?? [])],
     vocationPoints: save.vocationPoints ?? 0,
     knownSkills,
-    items, equipped,
+    items, equipped, containers,
     essences: { ...emptyEssences(), ...(save.essences ?? {}) },
     abilityEssences: { ...emptyAbilityEssences(), ...(save.abilityEssences ?? {}) },
     vestiges: { ...(save.vestiges ?? {}) },
@@ -698,6 +716,10 @@ export function serializeCouchGuest(
     items: m.items.map(i => ({ ...i })),
     equipped: Object.fromEntries(
       Object.entries(m.equipped).flatMap(([k, v]) => (v ? [[k, { ...v }] as const] : [])),
+    ),
+    // THE CONTAINER FABRIC: seated pieces by board, seat cells included.
+    containers: Object.fromEntries(
+      Object.entries(m.containers).map(([id, held]) => [id, held.map(i => ({ ...i }))]),
     ),
     essences: { ...m.essences },
     abilityEssences: { ...m.abilityEssences },

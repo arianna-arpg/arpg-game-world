@@ -32,6 +32,9 @@ export const CATEGORY_SIZE: Record<ItemCategory, { w: number; h: number }> = {
   offhand:{ w: 2, h: 3 },
   quiver: { w: 2, h: 3 },
   gem:    { w: 1, h: 1 },
+  /** THE RELIQUARY's pieces default to the charm's cell; each relic family
+   *  authors its own footprint below (the footprint IS the power ladder). */
+  relic:  { w: 1, h: 1 },
 };
 
 // ----------------------------------------------- armour family generation --
@@ -298,7 +301,37 @@ export const BASE_LIST: ItemBaseDef[] = [
     id: 'preformed_memory', name: 'Preformed Memory', category: 'gem',
     w: 1, h: 1, tags: ['gem', 'memory'], dropWeight: 0,
   },
+
+  // THE RELIQUARY's pieces (engine/containers.ts + data/containers.ts —
+  // docs/engine/containers.md): SLOTLESS gear that speaks only from a seat
+  // in its case. Four families, priced by FOOTPRINT (the D2 charm ladder,
+  // Last Epoch's idol shapes): the 1×1 charm carries one line each way
+  // however rare, the 2×1 talisman and 1×2 idol two, the 2×2 effigy the
+  // rarity's full six — affixCap under the rarity's own caps. Every relic
+  // floors at MAGIC (a relic with no lines is nothing) and rolls the RELIC
+  // REGISTER alone (affixPool 'explicit' — data/itemaffixes.ts RELIC_*):
+  // its own words, never the armour wardrobe's. The generic tier prefixes
+  // read as the D2 ladder by accident of language: Charm → Fine Charm →
+  // Grand Charm. Drop weights are the world pool's share (a relic is a
+  // find, not a floor); the relic_cache table pours them deliberately.
+  relic('relic_charm', 'Charm', 'charm', 1, 1, 30, { prefix: 1, suffix: 1 }),
+  relic('relic_talisman', 'Talisman', 'talisman', 2, 1, 14, { prefix: 2, suffix: 2 }),
+  relic('relic_idol', 'Idol', 'idol', 1, 2, 14, { prefix: 2, suffix: 2 }),
+  relic('relic_effigy', 'Effigy', 'effigy', 2, 2, 7, { prefix: 3, suffix: 3 }),
 ];
+
+/** One relic family: category 'relic', tagged by its family word, magic-
+ *  floored, register-exclusive, footprint-capped. */
+function relic(
+  id: string, name: string, family: string, w: number, h: number, dropWeight: number,
+  affixCap: NonNullable<ItemBaseDef['affixCap']>,
+): ItemBaseDef {
+  return {
+    id, name, category: 'relic', w, h,
+    tags: ['relic', family],
+    dropWeight, minRarity: 'magic', affixPool: 'explicit', affixCap,
+  };
+}
 
 export const ITEM_BASES: Record<string, ItemBaseDef> =
   Object.fromEntries(BASE_LIST.map(b => [b.id, b]));

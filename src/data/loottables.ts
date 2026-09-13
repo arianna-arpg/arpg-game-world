@@ -63,7 +63,25 @@ const TABLE_LIST: LootTableDef[] = [
         { weight: 45, kind: 'item', category: 'ring' },
         { weight: 25, kind: 'item', category: 'amulet' },
         { weight: 20, kind: 'item', category: 'belt' },
+        // THE RELIQUARY's pieces ride the jewel caches — small things of
+        // worth, found beside rings (data/containers.ts).
+        { weight: 12, kind: 'table', table: 'relic_cache' },
         { weight: 10, kind: 'nothing' },
+      ],
+    }],
+  },
+
+  // THE RELIC CACHE (engine/containers.ts, data/containers.ts): one relic,
+  // usually magic (the category's own rarity floor), sometimes rare — the
+  // deliberate pour beside the world pool's share. Any cache, chest or
+  // boss table that should pay a relic names THIS table.
+  {
+    id: 'relic_cache',
+    rolls: [{
+      count: 1,
+      entries: [
+        { weight: 72, kind: 'item', category: 'relic' },
+        { weight: 28, kind: 'item', category: 'relic', rarity: 'rare' },
       ],
     }],
   },

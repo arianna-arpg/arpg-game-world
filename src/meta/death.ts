@@ -64,15 +64,21 @@ export interface DeathLootPolicy {
   bagItems: boolean;
   /** EQUIPPED gear (the doll — never the carried bag). */
   equipment: boolean;
-  // FUTURE: bagItems?: boolean; currency?: boolean; relics?: boolean; …
+  /** THE CONTAINER FABRIC (engine/containers.ts): pieces SEATED in a side
+   *  board (the Reliquary's relics) — worn in every sense but the doll's,
+   *  so they ride the corpse with the equipment by default. */
+  containers: boolean;
+  // FUTURE: currency?: boolean; …
 }
 
-/** THE GEAR ERA: the corpse carries only what was WORN. Skills, supports, and
- *  the carried bag are lost to the death. Tune freely; this is the single knob. */
+/** THE GEAR ERA: the corpse carries only what was WORN — doll and seated
+ *  containers alike. Skills, supports, and the carried bag are lost to the
+ *  death. Tune freely; this is the single knob. */
 export const DEFAULT_LOOT_POLICY: DeathLootPolicy = {
   knownSkills: false,
   bagItems: false,
   equipment: true,
+  containers: true,
 };
 
 /** The persistent, attributable death spot carried on the account across the
@@ -129,6 +135,17 @@ export function captureLoot(meta: PlayerMeta, policy: DeathLootPolicy = DEFAULT_
       if (!worn) continue;
       const { x: _x, y: _y, ...item } = worn; // a corpse item has no bag cell
       items.push({ kind: 'gear', item });
+    }
+  }
+  // THE CONTAINER FABRIC: every seated piece of every side board rides the
+  // same 'gear' arm (a relic is plain gear; its seat cell is stripped like
+  // a bag cell — the reclaim re-seats it in the BAG, honestly inert).
+  if (policy.containers) {
+    for (const held of Object.values(meta.containers ?? {})) {
+      for (const seated of held) {
+        const { x: _cx, y: _cy, ...item } = seated;
+        items.push({ kind: 'gear', item });
+      }
     }
   }
   return { items };
