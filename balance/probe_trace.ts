@@ -18,6 +18,10 @@
 //      accuracy fold prices the rarity, writs_forged stamps; the high-tier
 //      fail keeps the writ and RESTS it (forgeBegin refuses while warm);
 //      the cancel and the zone-change abort keep the writ (atomic).
+//   C. THE COMPLEXITY LAW (walk 2): the derived base classes and the bench.
+//   D. THE SPENT PRESS (net/intent.ts SPENT_PRESS_CFG): the drawing bind's
+//      hold never swings the primary attack when the outline settles under
+//      it; a release + fresh press does.
 // Run: npx tsx balance/probe_trace.ts
 // ---------------------------------------------------------------------------
 
@@ -285,6 +289,45 @@ w.player.level = 8;
   check('C: a pre-walk-2 tier payload folds in as the class (tolerance)',
     wC.forgeWrits().some(x => x.uid === 999903 && x.complexity === 1)
     && wC.forgeBases(999903).every(x => baseComplexityOf(ITEM_BASES[x.id]) === 1));
+}
+
+// ------------------------------------- D. THE SPENT PRESS (docs/engine/input.md)
+// The drawing bind is still DOWN on the frame after the outline settles, and
+// the cast lane fires slot 0 on the hold — the hand that finished the trace
+// swung the primary attack. What the gate swallowed it SPENDS: the bind's
+// hold is masked until it comes up (or goes down afresh).
+{
+  seedGlobalRandom(0xd1a1);
+  const wD = makeSimWorld('warrior', 0x5e17);
+  wD.account.features.add(FEATURE.BOUNTY_BOARD);
+  wD.loadZone(START_ZONE);
+  const writD: ItemInstance = {
+    uid: 999904, baseId: 'smith_writ', ilvl: 8, tier: 1, rarity: 'common',
+    name: "Smith's Writ: ring", baseRoll: 0, implicitRolls: [], affixes: [],
+    writ: { category: 'ring', complexity: 1 },
+  };
+  wD.localSeat.meta.items.push(writD);
+  const basesD = wD.forgeBases(writD.uid);
+  check('D: the bench raises for the spent-press rig',
+    basesD.length > 0 && wD.forgeBegin(writD.uid, basesD[0].id, false) === true);
+  const frameD = (x: number, y: number, held: boolean, edge = false): void => {
+    const h = Array(8).fill(false) as boolean[]; h[0] = held;
+    const e = Array(8).fill(false) as boolean[]; e[0] = edge;
+    wD.applyInputs(new Map([[wD.localSeat.id, { dx: 0, dy: 0, aim: { x, y }, held: h, edge: e }]]), 1 / 30);
+  };
+  const ptsD = wD.traceView()!.pts;
+  frameD(ptsD[0].x, ptsD[0].y, true, true);             // the pen goes down
+  for (const p of ptsD) frameD(p.x, p.y, true);
+  check('D: the outline settles with the bind still down',
+    !wD.traceActive() && wD.timeflow.worldScale() > 0);
+  const tip = ptsD[ptsD.length - 1];
+  frameD(tip.x, tip.y, true);                            // the leak's frame: held, no edge
+  check('D: THE SPENT PRESS — the drawing hand does not swing when the trace lifts',
+    wD.player.casting == null);
+  frameD(tip.x, tip.y, false);                           // the bind comes up
+  frameD(tip.x, tip.y, true, true);                      // a fresh press
+  check('D: THE CONTROL — released and pressed again, the primary attack answers',
+    wD.player.casting != null);
 }
 
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILED`);

@@ -35,7 +35,7 @@ import { baselineStatusDps, bankFracOf, STATUS_DEFS, tuneAilmentChance, type Act
 import { Actor, shellArcFactor, type AmbushSpec, type BrainPhase, type CastingState, type GainEvent, type MonsterPartDef, type Team } from './actor';
 import { EventBus } from './eventbus';
 import { Party } from './party';
-import { NullInput, type PlayerInput, type PlayerInputSource, type MetaAction } from '../net/intent';
+import { NullInput, SPENT_PRESS_CFG, type PlayerInput, type PlayerInputSource, type MetaAction } from '../net/intent';
 import { ZONE_MEMORY_CFG, captureZoneContents, restoreZoneContents, savedZoneContents, type ZoneContents } from './zonecontents';
 import { TOWN_PORTAL_CFG } from '../data/townportals';
 import { readTownPortals, type TownPortal, type TownPortalView } from './townportal';
@@ -4222,6 +4222,7 @@ export class World {
     if (i === -1 || this.seats[i] === this.localSeat) return;
     const seat = this.seats[i];
     this.seats.splice(i, 1);
+    this.spentPresses.delete(id); // THE SPENT PRESS leaves with the hand
     this.actors = this.actors.filter(a => a !== seat.actor && a.owner !== seat.actor);
     this.indexSeats();
     this.events.emit('party/leave', { actor: seat.actor, seat: id });
@@ -4798,18 +4799,28 @@ export class World {
       // client's prediction history stays trimmed and never replays stale inputs.
       if (inp?.seq !== undefined) this.lastInputSeq.set(seat.id, inp.seq);
       if (a.dead || a.downed) continue;
+      // THE SPENT PRESS (net/intent.ts SPENT_PRESS_CFG, docs/engine/
+      // input.md): this seat's held[] with every slot an interaction gate
+      // SPENT still masked — lifted here, BEFORE any gate, the frame its
+      // button is seen UP or goes down afresh, so a release under a freeze
+      // still counts. A seat with nothing spent reads its own array.
+      const held = inp ? this.unspentHeld(seat, inp) : this.noHeld;
       // THE HARVEST RITE (engine/harvest.ts, THE INPUT LAW): a seat
       // mid-sequence speaks to the rite alone — its slot presses land as
       // SYMBOLS through harvestFeed and its whole gameplay intent
       // (movement, casts, aim) is swallowed here, BEFORE the timeflow
       // bend, so the couch/co-op branch (world unfrozen) is exactly as
       // deaf as the solo freeze. A bound skill can never fire off a
-      // sequence key.
-      if (this.harvestFeed(seat, inp)) continue;
-      // THE TRACE (engine/trace.ts, the same input law): a forging seat's
-      // aim is the pen and its intent belongs to the line — swallowed here
-      // for the identical reason, before the timeflow bend.
-      if (this.traceFeed(seat, inp)) continue;
+      // sequence key. THE TRACE (engine/trace.ts, the same input law): a
+      // forging seat's aim is the pen and its intent belongs to the line —
+      // swallowed for the identical reason. And what a gate swallows it
+      // SPENDS (spendPresses): the closing symbol's hold, a held miss, the
+      // drawing bind — none of them reach the cast lane below when the
+      // gate lifts. A new gate joins this one `||` and inherits the law.
+      if (this.harvestFeed(seat, inp) || this.traceFeed(seat, inp)) {
+        this.spendPresses(seat, inp);
+        continue;
+      }
       // THE TIMEFLOW BEND (engine/timeflow.ts): a held seat's intent is
       // inert — a stasis'd (or menu-paused) hero neither moves nor casts;
       // the DOM menus above stay live, and the seq ack above already kept
@@ -4832,7 +4843,7 @@ export class World {
         if (ci < 0 && a.casting.inst.hostSkillId !== undefined) {
           ci = a.skills.findIndex(s => s?.def.id === a.casting!.inst.hostSkillId);
         }
-        a.casting.held = ci >= 0 ? !!inp.held[ci] : false;
+        a.casting.held = ci >= 0 ? !!held[ci] : false;
         if (ci >= 0 && inp.edge[ci]) this.castPress(a);
         if (a.casting.mode === 'channel' || a.casting.mode === 'charge'
           || a.casting.mode === 'guard' || a.casting.mode === 'overcharge'
@@ -4854,7 +4865,7 @@ export class World {
           // opt-out is LOCAL: Settings.improvisedStrike zeroes empty-slot
           // intent at the client (main.ts), so a declined floor never even
           // arrives here.
-          if (inp.held[i] && this.useSkill(a, this.improvisedFor(a), aim, true)) {
+          if (held[i] && this.useSkill(a, this.improvisedFor(a), aim, true)) {
             if (a === this.player) sceneNoteCast(this);
             if (!this.improvisedHinted.has(a)) {
               // Found, not taught: the first swing names itself once.
@@ -4878,7 +4889,7 @@ export class World {
         // "busy" — metas only worked while the host was on cooldown.
         if (inp.metaEdge?.[i] && instanceMeta(inst)) {
           this.useMetaSkill(a, inst, aim);
-        } else if (toggle ? inp.edge[i] : inp.held[i]) {
+        } else if (toggle ? inp.edge[i] : held[i]) {
           // The drill's count (engine/scenes.ts): the local hero's own
           // seat-pressed casts, at the one artery they all flow through.
           if (this.useSkill(a, inst, aim, true) && a === this.player) sceneNoteCast(this);
@@ -4886,6 +4897,52 @@ export class World {
       }
       // Face the cursor/target while able, so swings read right.
       if (a.canAct()) a.facing = Math.atan2(aim.y - a.pos.y, aim.x - a.pos.x);
+    }
+  }
+
+  /** THE SPENT PRESS's ledger (net/intent.ts SPENT_PRESS_CFG — docs/engine/
+   *  input.md): per seat, the bar slots an interaction gate took mid-press.
+   *  Keyed by SEAT (the hand, never the body — a possessed seat's spent
+   *  press stays spent across the ride); transient — never saved, never
+   *  wired (the host runs the artery); an entry lives only while a slot is
+   *  spent, and leaves with the seat (removeSeat). */
+  private spentPresses = new Map<string, Set<number>>();
+  /** The held[] of a seat with no intent this frame (nothing to read). */
+  private readonly noHeld: readonly boolean[] = [];
+
+  /** THE SPENT PRESS's read: this frame's held[] with every spent slot
+   *  masked — lifting a spent slot the frame its button is UP or went down
+   *  AFRESH (edge / metaEdge: a new press proves a release the sim may
+   *  never have seen, so a freeze can never strand a press). Pure over the
+   *  frame: a seat with nothing spent gets its own array back untouched
+   *  (the no-interaction invariant). */
+  private unspentHeld(seat: Seat, inp: PlayerInput): readonly boolean[] {
+    const spent = this.spentPresses.get(seat.id);
+    if (!spent) return inp.held;
+    const held = inp.held.slice();
+    for (const i of spent) {
+      if (!inp.held[i] || inp.edge[i] || inp.metaEdge?.[i]) spent.delete(i);
+      else held[i] = false;
+    }
+    if (spent.size === 0) this.spentPresses.delete(seat.id);
+    return held;
+  }
+
+  /** THE SPENT PRESS's write, at the artery's swallow: what the gate took
+   *  this frame is SPENT — per SPENT_PRESS_CFG.spend every slot down in the
+   *  frame ('hold'), or only its fresh edges ('edge') — and stays masked
+   *  from the cast lane until unspentHeld sees the release. 'off' spends
+   *  nothing (the old lane, kept as a dial so the probe can reproduce the
+   *  leak it closes). */
+  private spendPresses(seat: Seat, inp: PlayerInput | null | undefined): void {
+    const mode = SPENT_PRESS_CFG.spend;
+    if (!inp || mode === 'off') return;
+    let spent = this.spentPresses.get(seat.id);
+    for (let i = 0; i < inp.held.length; i++) {
+      const took = mode === 'hold' ? inp.held[i] : (inp.edge[i] || !!inp.metaEdge?.[i]);
+      if (!took) continue;
+      if (!spent) this.spentPresses.set(seat.id, spent = new Set());
+      spent.add(i);
     }
   }
 

@@ -1458,6 +1458,19 @@ we verify changes.
   user's own casts/dashes/recovery without disturbing them; the THIRST
   gate (`GateSpec.missing`, waived by `thirstless`) refuses moot drinks
   before any cost — docs in `docs/engine/reflex.md`.
+  THE INPUT LAWS (`docs/engine/input.md`): `World.applyInputs` is the ONE
+  artery every player-kind body acts through; interactions that take the
+  hands (the harvest rite, the steady hand's trace) are GATES that swallow
+  a seat's frame, and THE SPENT PRESS (`net/intent.ts SPENT_PRESS_CFG`,
+  `World.spendPresses`/`unspentHeld`) makes what a gate took stay taken —
+  a swallowed slot's hold never reaches the cast lane until its button is
+  seen UP or goes down afresh (the closing symbol no longer drinks the
+  flask bound to it; every future gate spends through the same seam;
+  `spend` 'hold' | 'edge' | 'off'); THE TYPING GUARD (`core/input.ts
+  TYPING_GUARD_CFG` + `isTypingTarget`) keeps a key typed into a text
+  field out of the hero's hands at the one key source (Esc passes, keyups
+  always release). Probes `probe_harvest` K, `probe_trace` D,
+  `probe_typingguard`.
   THE SYMPATHY FABRIC (gains echo to kin): flask pours, orbs, charges,
   buffs and heals REPLAY on related actors as data (`engine/sympathy.ts`
   link registry + `data/sympathies.ts`, the `sympathy_<id>` stat family,

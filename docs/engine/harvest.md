@@ -31,7 +31,12 @@ spent, stamped into zone memory.
 - **THE PAUSE LAW**: arming engages the `harvest` TimeHold surface outside
   menu mode under the pause menu's own solo-only policy; co-op runs unpaused.
 - **THE INPUT LAW**: a seat mid-rite speaks to the rite alone — movement
-  swallowed, slot presses become symbols.
+  swallowed, slot presses become symbols. And what the rite took stays
+  taken — **THE SPENT PRESS** (`docs/engine/input.md`, `SPENT_PRESS_CFG`):
+  the closing symbol's still-held key, a held miss, a hold that predates the
+  rite — none reach the cast lane when the rite lifts; the button must come
+  up, or go down afresh (the press that finished the rite no longer drinks
+  the flask bound to it).
 - **THE ANTI-MEMORIZE LAW**: the pause toggle refuses while the hold stands,
   every node's sequence is a pure function of (world seed × zone × spot), and
   the window burns on raw frame seconds.

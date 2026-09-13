@@ -36,6 +36,27 @@ export interface PlayerInput {
   seq?: number;
 }
 
+/** THE SPENT PRESS (World.applyInputs — docs/engine/input.md): what an
+ *  INTERACTION GATE spends when it swallows a seat's frame. The harvest
+ *  rite's closing symbol, a miss, the steady hand's drawing bind — the
+ *  button is still DOWN on the frame after the interaction settles, and
+ *  the standard lane casts most skills (flasks included) on the HOLD, so
+ *  the press that finished the rite drank the flask bound to it. The law:
+ *  a press an interaction took belongs to that interaction for its whole
+ *  physical hold — the standard lane sees the slot again only at the
+ *  button's release, or at its next fresh edge (a new press proves a
+ *  release happened, even one the sim never saw). Structural at the
+ *  artery: EVERY gate that swallows a frame spends through the one seam,
+ *  so a future interaction cannot forget to. */
+export const SPENT_PRESS_CFG = {
+  /** 'hold' — every slot DOWN in a swallowed frame is spent (the whole
+   *  hand the interaction took; the default); 'edge' — only the slots
+   *  that went down IN that frame (a hold that predates the interaction
+   *  resumes after it); 'off' — nothing is spent (the pre-2026-09-12
+   *  lane: a settled rite's still-held key fired its skill next frame). */
+  spend: 'hold' as 'hold' | 'edge' | 'off',
+};
+
 /** Produces a seat's intent each frame, or null when the seat is idle. The
  *  controlling actor + the world are enough for any source (OS read, follow-AI,
  *  network drain) — no Seat coupling, so this stays a clean leaf interface. */

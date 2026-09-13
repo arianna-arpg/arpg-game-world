@@ -29,6 +29,10 @@
 //      the linger alone never arms; the offer stands and the press begins it.
 //   J. THE RITE'S OWN FOE REACH (her ruling 2026-09-11): a foe a field away
 //      no longer holds a node shut; one genuinely near still does.
+//   K. THE SPENT PRESS (net/intent.ts SPENT_PRESS_CFG): the closing symbol's
+//      still-held key (and a held miss, and a hold that predates the rite)
+//      casts nothing when the rite lifts; a release + fresh press casts;
+//      'edge' spends only fresh presses; 'off' reproduces the leak.
 // Run: npx tsx balance/probe_harvest.ts
 // ---------------------------------------------------------------------------
 
@@ -44,6 +48,7 @@ import { HARVEST_HUSK_KIND, HARVEST_NODES } from '../src/data/harvest';
 import { walletMortalValue, type EssenceId } from '../src/data/essences';
 import { CLASSES } from '../src/data/classes';
 import { SWAP_DISCIPLINE_CFG } from '../src/engine/skills';
+import { SPENT_PRESS_CFG } from '../src/net/intent';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -410,6 +415,110 @@ check('H2: sanctuaries stand NO nodes (rest is rest)',
   standAt2(nodes2[1]);
   dwell2(12);
   check('J2: a foe genuinely near still holds the node shut', W2.harvestSessions.length === 0);
+}
+
+// ======================================================= K. the spent press
+// THE SPENT PRESS (net/intent.ts SPENT_PRESS_CFG; docs/engine/input.md): the
+// closing symbol's button is still DOWN on the frame after the rite settles,
+// and the cast lane fires most skills on the HOLD — the press that finished
+// the rite drank the flask bound to it (found live, 2026-09-12). Pinned in
+// the solo lane (the freeze lifts at completion, so the very next frame is
+// live), one fresh world per dial so no earlier cast's cooldown can confound
+// a control: 'hold' spends the whole hand the rite took, 'edge' only the
+// frame's fresh presses, 'off' reproduces the leak — the dial is the proof
+// of the mechanism.
+{
+  type Rig = { w: World; W: WInternals; nodes: { x: number; y: number }[] };
+  const rig = (spend: 'hold' | 'edge' | 'off'): Rig => {
+    (SPENT_PRESS_CFG as { spend: string }).spend = spend;
+    const w5 = makeSimWorld(CLASSES[0].id, SEED) as World;
+    const W5 = w5 as unknown as WInternals;
+    w5.loadZone('cave_probeharvest_a');
+    return { w: w5, W: W5, nodes: W5.harvestNodes.map(n => ({ x: n.pos.x, y: n.pos.y })) };
+  };
+  /** One artery frame: `held` slots down, `edge` slots freshly down. */
+  const frame = (r: Rig, held: number[], edge: number[]): void => {
+    const h = Array(8).fill(false) as boolean[];
+    const e = Array(8).fill(false) as boolean[];
+    for (const s of held) h[s] = true;
+    for (const s of edge) e[s] = true;
+    r.w.applyInputs(new Map([['p0', {
+      dx: 0, dy: 0, aim: { x: r.w.player.pos.x + 40, y: r.w.player.pos.y }, held: h, edge: e,
+    }]]), 0.05);
+  };
+  /** Let any cast finish, stand at node ix until the linger arms it; the dealt sequence. */
+  const arm = (r: Rig, ix: number): number[] => {
+    for (let i = 0; i < 20; i++) r.w.update(0.1);
+    banishFoes(r.w);
+    r.w.player.pos.x = r.nodes[ix].x + 20; r.w.player.pos.y = r.nodes[ix].y;
+    for (let i = 0; i < 80 && r.W.harvestSessions.length === 0; i++) r.w.update(0.1);
+    return r.W.harvestSessions[0]?.seq.slice() ?? [];
+  };
+  /** Enter a sequence press-and-release, the closing symbol pressed and KEPT
+   *  DOWN; `extra` slots ride every frame (a hold that predates the rite). */
+  const close = (r: Rig, seq: number[], extra: number[] = []): number => {
+    for (let i = 0; i < seq.length - 1; i++) { frame(r, [seq[i], ...extra], [seq[i]]); frame(r, extra, []); }
+    const last = seq[seq.length - 1];
+    frame(r, [last, ...extra], [last]);
+    return last;
+  };
+
+  // --- 'hold': the default lane. ---
+  const H = rig('hold');
+  const seqH = arm(H, 0);
+  check('K0: the fresh world arms node 0', seqH.length > 0 && H.W.harvestSessions.length === 1);
+  const lastH = close(H, seqH);
+  check('K1: the closing symbol settled the rite and released the hold',
+    H.W.harvestSessions.length === 0 && H.w.timeflow.worldScale() === 1);
+  frame(H, [lastH], []);                                 // still down, no edge — the leak's frame
+  check('K2: THE SPENT PRESS — the still-held closing key casts NOTHING the frame after',
+    H.w.player.casting == null);
+  frame(H, [lastH], []);
+  check('K3: …nor on any later frame of the same hold', H.w.player.casting == null);
+  frame(H, [], []);                                      // the release
+  frame(H, [lastH], [lastH]);                            // a fresh press
+  check('K4: THE CONTROL — released and pressed again, the same key casts', H.w.player.casting != null);
+  // A wrong slot pressed mid-rite (a miss) and HELD through the close is spent too.
+  const seqM = arm(H, 1);
+  const wrong = HARVEST_CFG.alphabet.find(s => s !== seqM[0])!;
+  check('K5: node 1 arms for the miss lane', seqM.length > 0 && H.W.harvestSessions.length === 1);
+  frame(H, [wrong], [wrong]);                            // the miss, held from here on
+  const lastM = close(H, seqM, [wrong]);
+  check('K6: the rite settles around the held miss', H.W.harvestSessions.length === 0);
+  frame(H, [wrong, lastM], []);
+  check('K7: neither the held miss nor the closing key casts after the settle', H.w.player.casting == null);
+  frame(H, [], []);
+  // A hold that PREDATES the rite (an empty slot — the unarmed floor answers
+  // it on the hold) is the whole hand under 'hold': spent with the rest.
+  const seqP = arm(H, 2);
+  check('K8: node 2 arms for the predating-hold lane', seqP.length > 0 && H.W.harvestSessions.length === 1);
+  const lastP = close(H, seqP, [6]);
+  frame(H, [6, lastP], []);
+  check('K9: under \'hold\' a hold that predates the rite is spent with the closing key (no floor swing)',
+    H.W.harvestSessions.length === 0 && H.w.player.casting == null);
+
+  // --- 'edge': only the frame's fresh presses are spent. ---
+  const E = rig('edge');
+  const seqE = arm(E, 0);
+  const lastE = close(E, seqE);
+  frame(E, [lastE], []);
+  check('K10: under \'edge\' the closing press (a fresh edge on its frame) is spent too',
+    E.W.harvestSessions.length === 0 && E.w.player.casting == null);
+  frame(E, [], []);
+  const seqE2 = arm(E, 1);
+  close(E, seqE2, [6]);
+  frame(E, [6], []);                                     // the closing key up; slot 6 never lifted
+  check('K11: …but a hold that predates the rite RESUMES when the gate lifts (the dial\'s distinction)',
+    E.W.harvestSessions.length === 0 && E.w.player.casting != null);
+
+  // --- 'off': the old lane reproduces the leak — the dial is the proof. ---
+  const O = rig('off');
+  const seqO = arm(O, 0);
+  const lastO = close(O, seqO);
+  frame(O, [lastO], []);
+  check('K12: with the law off, the still-held closing key fires its skill next frame (the leak, reproduced)',
+    O.W.harvestSessions.length === 0 && O.w.player.casting != null);
+  (SPENT_PRESS_CFG as { spend: string }).spend = 'hold';
 }
 
 console.log(failed ? `\n${failed} FAILURE(S)` : '\nALL PASS');

@@ -1,5 +1,35 @@
 // Keyboard + mouse state. RMB context menu is suppressed so it can be a skill.
 
+/** THE TYPING GUARD (docs/engine/input.md): a key pressed INTO a text-entry
+ *  element belongs to that element — its letters are never the hero's hands
+ *  (typing "1" into a search box must not drink the flask bound to 1; "w"
+ *  must not walk). Only the keyDOWN is guarded: a keyup ALWAYS releases (a
+ *  key held before the field took focus must still come up), and the keys
+ *  a field never types (`pass`) reach the game, so Esc still walks the
+ *  cascade that closes the panel around the field. */
+export const TYPING_GUARD_CFG = {
+  /** Keys that pass the guard even while a field holds the pen. */
+  pass: new Set<string>(['escape']),
+  /** <input type=…> kinds that TAKE text; every other input (checkbox,
+   *  range, color, button…) is a control, not a pen. */
+  textInputTypes: new Set<string>(['text', 'search', 'password', 'email', 'number', 'url', 'tel']),
+};
+
+/** True when a keyboard event's target takes typed text. Duck-typed on
+ *  tagName / type / contenteditable (no DOM classes), so a headless probe
+ *  speaks it with plain objects; no target (a synthetic event) = not typing;
+ *  a read-only field shows text and never takes it. */
+export function isTypingTarget(t: unknown): boolean {
+  if (!t || typeof t !== 'object') return false;
+  const el = t as { tagName?: string; type?: string; isContentEditable?: boolean; readOnly?: boolean };
+  if (el.isContentEditable) return true;
+  if (el.readOnly) return false;
+  const tag = (el.tagName ?? '').toUpperCase();
+  if (tag === 'TEXTAREA') return true;
+  if (tag === 'INPUT') return TYPING_GUARD_CFG.textInputTypes.has((el.type ?? 'text').toLowerCase());
+  return false;
+}
+
 export class Input {
   keys = new Set<string>();
   pressed = new Set<string>();   // keys pressed this frame (consumed by reader)
@@ -20,6 +50,8 @@ export class Input {
   constructor(target: HTMLElement) {
     window.addEventListener('keydown', e => {
       const k = e.key.toLowerCase();
+      // THE TYPING GUARD: the field owns the press (Esc and its kin pass).
+      if (isTypingTarget(e.target) && !TYPING_GUARD_CFG.pass.has(k)) return;
       const code = e.code || k;
       const held = this.physicalKeys.get(code) ?? [...new Set([k,
         ...(e.shiftKey && /^Digit[0-9]$/.test(e.code) ? [e.code.slice(5)] : [])])];

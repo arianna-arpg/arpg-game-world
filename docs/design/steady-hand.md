@@ -73,7 +73,10 @@ TraceSession {
   shared worlds never stop, the rite's own policy verbatim); THE INPUT
   LAW (the tracing seat's whole intent belongs to the trace — casts
   and movement swallowed at the artery; releasing the bind lifts the
-  pen, never fires a skill); THE PROMPT SPEAKS THE LIVE BINDS ("hold
+  pen, never fires a skill — and THE SPENT PRESS, docs/engine/input.md,
+  keeps the bind's hold masked when the outline settles UNDER it: the
+  hand that finished the trace never swings); THE PROMPT SPEAKS THE
+  LIVE BINDS ("hold
   {bind:…} and trace" resolves per device, per seat).
 - **The devices**: mouse = the pointer is the pen. Pad = the left stick
   drives a stylus at `cursorSpeed` (a dial; card 5 rules whether the
