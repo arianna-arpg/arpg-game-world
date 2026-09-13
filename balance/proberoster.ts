@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_runeweaverstartertrees.ts', status: 'green', tier: 'fast', why: 'Runeweaver complete starting bar, level-one fuel loop, host-invested Invocation snapshots, alphabets, native recipes, delayed-field cleanup and persistence' },
   { probe: 'probe_tacticprogression.ts', status: 'green', tier: 'fast', why: 'Live novice/veteran tactic boundaries, shared brain isolation, body-level rather than target/area scaling, and summon condition composition' },
   { probe: 'probe_tacticalai.ts', status: 'green', tier: 'fast', why: 'Ranged pursuit and lateral movement openings at 30/60/120 Hz, explicit opt-outs, retarget commitment, planted artillery, fixed crossfire destinations and tactical spell sequencing' },
   { probe: 'probe_harassment.ts', status: 'green', tier: 'fast', why: 'Crow/Gnasher/bat contact at 30/60/120 Hz, replenishable summon targetability, intermittent wild escapes and flee-loop A/B' },

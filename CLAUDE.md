@@ -68,6 +68,9 @@ Extraction bank shares, returning-flight ownership and the complete bars.
 The Sentinel/Warlord/Wallwright starting trees live in `src/data/bastionStarterTrees.ts`;
 `docs/design/bastion-starting-skill-trees.md` covers additive native-aura
 modifiers, retaliation, banner cleanup, command blessings and guard releases.
+Runeweaver's usable level-one fuel loop and complete starting trees live in
+`src/data/runeweaverStarterTrees.ts`; `docs/design/runeweaver-starting-skill-trees.md`
+covers Glyph fuel, Invocation payload inheritance, preview and respec ownership.
 
 Chest and gem-cache lists live in `src/data/containerloot.ts` and the existing
 `loottables.ts`; `docs/design/container-loot.md` documents the context rules,

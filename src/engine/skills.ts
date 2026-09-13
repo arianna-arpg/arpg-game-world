@@ -15,6 +15,7 @@
 // ---------------------------------------------------------------------------
 
 import type { AIAction } from './brain';
+import type { RuneId } from '../data/invocations'; // InvocationTreeSpec uses the shared rune alphabet
 import type { AttributeId, DamageType, Modifier, SkillTag } from './stats';
 import { STAT_DEFS } from './stats'; // treeAuraOverrideErrors validates recipient modifiers
 import { STATUS_DEFS, tuneAilmentChance } from './status';
@@ -4560,7 +4561,8 @@ export interface SkillDef {
   bondFeed?: number;
 
   /** INVOCATION (the rune-weaver): while this skill sits on the bar, every
-   *  real elemental cast banks a RUNE of its school (channels bank one per
+   *  real elemental cast banks a RUNE of its school; schoolless spells bank
+   *  a Glyph of physical force (channels bank one per
    *  held second; capacity rides the runeCap stat). Using it CONSUMES the
    *  whole sequence: the combination-and-order picks the payload from the
    *  INVOCATIONS registry, the LAST rune sets the damage type, and every
@@ -4783,6 +4785,13 @@ export type SkillTreeKind = 'minor' | 'major' | 'keystone';
 export type TreeBuffPatch = { id: string } & Partial<Pick<BuffEffect,
   'mods' | 'duration' | 'affects' | 'radius' | 'clearOnHit' | 'consumeOn' | 'nextHit'>>;
 
+/** One complete InvocationTreeSpec belongs on an exclusive identity root. */
+export interface InvocationTreeSpec {
+  untypedRunes: RuneId[];
+  /** Per-rune multiplier replaces the selected recipe's native coefficient. */
+  damagePerRune: number;
+}
+
 /** Additive recipient modifiers on a native aura or aura-bearing construct.
  * Radius, upkeep, pulses and delivery identity remain native. */
 export type TreeAuraPatch = Pick<AuraSpec, 'allyMods' | 'enemyMods'>;
@@ -4865,6 +4874,7 @@ export interface SkillTreeNode {
    *  field of its branch identity — including values equal to today's
    *  base — so the branch survives a rescale moving the base row. */
   over?: {
+    invocation?: InvocationTreeSpec;
     /** TreeAuraPatch arrays append across sibling nodes and to the native aura. */
     aura?: TreeAuraPatch;
     /** Full extraction identity. instanceEffects supplies both the victim pop
@@ -5694,6 +5704,8 @@ export function skillRarityFloor(weights: Partial<Record<SkillRarity, number>>):
 
 /** A skill as OWNED by an actor: definition + level + socketed supports. */
 export interface SkillInstance {
+  /** Transient invocationHost provenance; released fields retire with this exact host. */
+  invocationHost?: SkillInstance;
   /** Transient payload provenance: deferred/non-projectile proc hits keep their depth. */
   procChainDepth?: number;
   def: SkillDef;
