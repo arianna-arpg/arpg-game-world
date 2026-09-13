@@ -468,7 +468,18 @@ never consult the spoils seal at all.
   wants one.
 - **R4 · THE MEMORY** — a KNOWN gem by id (the mint stamps `noteGemDrop` —
   THE MINT LAW, so the Standing Order keeps feeding) or Memory pouch units
-  by count (`makeMemoryItem` merge, TRADED-provenance precedent).
+  by count (`makeMemoryItem` merge, TRADED-provenance precedent). **THE
+  OFFERED GRADE (2026-09-12, her ruling):** the board "deliberately states
+  what the reward is", so under THE MEMORY LAW (skill-items §4 lane 3 — a
+  gem that DROPS is a Memory; a gem OFFERED arrives named) the board keeps
+  naming the true gem, and that gem cuts richer than a wild find: it rolls
+  the board's own ladder `BOUNTY_BOARD_CFG.lanes.gem.rarityWeights` (the
+  lot lane's `rarityWeights` idiom, through `rollSkillRarityWeighted`) —
+  never below MAGIC (common weight 0), a real chance at RARE, a fairly low
+  chance at LEGENDARY (0/55/38/7, DIALS, unblessed; the drop ladder reads
+  54/30/14/2) — and the card PRINTS the floor ("the skill Memory: Chain
+  Lightning (Magic or finer)" — `skillRarityFloor`, the visible price law).
+  Probe: `probe_memories` rig V.
 - **R5 · THE COMPONENT** — **THE FORK** (card 7). No component type exists;
   the honest shape is a NEW stackable family whose consumers live in the
   crafting fabric (bench catalysts naming an affix family/tier — the

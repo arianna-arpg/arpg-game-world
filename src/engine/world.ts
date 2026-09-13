@@ -47,7 +47,7 @@ import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, ob
 import { alertScale, BEHAVIOR_CFG, BEHAVIOR_STATS, normalizeBrain, type ArenaRadius, type CommandState } from './brain';
 import { aiKitInstance, runAIActions } from './aiActions';
 import {
-  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceBirth, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, treeNodeOf, treeNodeRefusal, treePointsSpent, validTreeNodes, instanceChannel, bandPointsAt, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
+  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceBirth, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, rollSkillRarityWeighted, socketSpec, treeNodeOf, treeNodeRefusal, treePointsSpent, validTreeNodes, instanceChannel, bandPointsAt, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
   CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE, AOE_BAND_DEPTH, bandSwingGeo,
   skillContextTags, skillCooldownSeconds, skillMaxLevel, SKILL_RARITIES, essenceTierForLevel, summonCrewOf, supportFitsInst,
   type SkillRarity,
@@ -80,9 +80,11 @@ import {
 } from './gemitems';
 import {
   MEMORY_FOUND_SOURCES, MEMORY_CFG, MEMORY_KIND_IDS, MEMORY_KINDS, MEMORY_TRADED_PROVENANCE,
-  facetRng, findMemoryItem, makeMemoryItem, memoryFacetAttrs, memoryGroups,
-  memoryKindOf, memoryUnitsOf, mergeMemory, pickSeeded, rollSeededRarity,
-  type MemoryKind, type MemoryRecallResult, type MemoryRecallViewData,
+  facetRng, findMemoryItem, makeMemoryItem, memoryFacetAttrs, memoryFormOf, memoryGroupKey, memoryGroups,
+  memoryKindForSeed, memoryKindOf, memoryRarityLean, memoryUnitsOf, mergeMemory, pickSeeded, rollSeededRarity,
+  seedLaneFrac,
+  type MemoryKind, type MemoryPin, type MemoryProvenance, type MemoryRecallGroup, type MemoryRecallResult,
+  type MemoryRecallViewData,
 } from './memories';
 import { nextItemUid, compileItemMods, itemLevelReq, rebuildItem, rollItem } from './itemgen';
 import {
@@ -213,7 +215,7 @@ import { oracleRerollCost, SALVAGE_CFG } from '../data/essences';
 import {
   CRAFT_CFG, craftableAffixesFor, craftedCount, expertiseRank, rollCraftedAffix,
   rollRerolledAffix, salvageItemYield, salvageSkillYield, salvageSupportYield,
-  sellItemYield, sellSkillYield, sellSupportYield, studySalvage, vendorItemPrice,
+  sellItemYield, sellMemoryYield, sellSkillYield, sellSupportYield, studySalvage, vendorItemPrice,
 } from './crafting';
 import { DESCENT_AFFIX_FAMILIES, ITEM_AFFIXES } from '../data/itemaffixes';
 import { caravanBand, CARAVAN_BANDS, caravanBandLabel } from '../data/caravan';
@@ -13519,7 +13521,7 @@ export class World {
    *  The Hunt beast extends this to hand its flee off for cross-zone migration. */
   onBrainPhaseEnter(actor: Actor, phase: BrainPhase): void {
     if (phase.announce) this.text(vec(actor.pos.x, actor.pos.y - 26), phase.announce, '#ffd700', 16);
-    if (phase.rewardGems) for (let i = 0; i < phase.rewardGems; i++) this.dropGemAt(actor.pos);
+    if (phase.rewardGems) for (let i = 0; i < phase.rewardGems; i++) this.dropGemAt(actor.pos, undefined, false, this.provenanceOf(actor));
     if (phase.flee) {
       const exit = this.nearestExit(actor.pos);
       actor.aiFleeing = true;
@@ -15074,26 +15076,24 @@ export class World {
   }
 
   /** Drop a chosen part's guaranteed, themed spoil (an exact gem) at a point, plus
-   *  its extra random gems — the loot the player BUILT by choosing the part. */
-  private dropAmalgamPart(af: NonNullable<World['sim']['amalgamationField']>, partId: string, at: Vec2): void {
+   *  its extra random gems — the loot the player BUILT by choosing the part.
+   *  THE MEMORY LAW: the exact spoil is a PINNED PROMISE through dropGemAt —
+   *  it falls as a Memory sealed to that very gem (the built rare grade and
+   *  the zone-scaled level ride the pin; the recall mints them verbatim), or
+   *  as the bare gem where the dial says so. `from` is the fallen boss, so
+   *  its extra gems lean toward its kit and cut at its boss grade. */
+  private dropAmalgamPart(af: NonNullable<World['sim']['amalgamationField']>, partId: string, at: Vec2, from?: MemoryProvenance): void {
     if (this.spoilsSealed()) return; // THE SPOILS LAW — a part's built spoil is a mint too
     const part = af.partById(partId);
     if (!part) return;
     const lvl = Math.max(1, 1 + Math.floor(this.zone.level / 4));
     if (part.drop.skill && SKILLS[part.drop.skill]) {
-      const inst = makeSkillGem(SKILLS[part.drop.skill], lvl, 'rare');
-      const pos = this.clampPos(vec(at.x + rand(-22, 22), at.y + rand(-22, 22)), 10, undefined, this.spoilClamp());
-      this.noteGemDrop(inst.def.id, inst.rarity); // a BUILT spoil is a genuine mint too — the drop index sees it
-      this.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2), tier: this.spoilStory });
-      this.text(at, `${inst.def.name}!`, SKILL_RARITIES.rare.color, 15);
+      this.dropGemAt(at, undefined, false, from, undefined, { k: 'skill', id: part.drop.skill, r: 'rare', l: lvl });
     }
     if (part.drop.support && SUPPORTS[part.drop.support]) {
-      const pos = this.clampPos(vec(at.x + rand(-22, 22), at.y + rand(-22, 22)), 10, undefined, this.spoilClamp());
-      this.noteGemDrop(part.drop.support);
-      this.drops.push({ pos, item: { kind: 'support', gem: mintSupportInstance(SUPPORTS[part.drop.support], 1) }, bob: rand(0, Math.PI * 2), tier: this.spoilStory });
-      this.text(at, `${SUPPORTS[part.drop.support].name}!`, SUPPORTS[part.drop.support].color, 14);
+      this.dropGemAt(at, undefined, false, from, undefined, { k: 'support', id: part.drop.support, l: 1 });
     }
-    for (let i = 0; i < (part.drop.gems ?? 0); i++) this.dropGemAt(at);
+    for (let i = 0; i < (part.drop.gems ?? 0); i++) this.dropGemAt(at, undefined, false, from);
   }
 
   /** The Bonewright's prompt above its head while the player is near (renderer). */
@@ -20465,7 +20465,7 @@ export class World {
       wf.noteHostSlain(sc.id, h.slot);
       bumpLedger(this.ledger, 'wisplight_hosts_slain');
       this.grantXp(cfg.reward.xpBase + cfg.reward.xpPerLevel * lvl);
-      for (let g = 0; g < cfg.reward.gems; g++) this.dropGemAt(vec(h.a.pos.x, h.a.pos.y));
+      for (let g = 0; g < cfg.reward.gems; g++) this.dropGemAt(vec(h.a.pos.x, h.a.pos.y), undefined, false, this.provenanceOf(h.a));
       this.flashes.push({ pos: vec(h.a.pos.x, h.a.pos.y), radius: 90, color: col, life: 0.6, maxLife: 0.6 });
       this.text(vec(h.a.pos.x, h.a.pos.y - 24), 'the light spills out…', col, 14);
     }
@@ -24343,7 +24343,11 @@ export class World {
     if (pay.gem) {
       const def = SKILLS[pay.gem.id];
       if (!def) { fallback(); return; }
-      const inst = makeSkillGem(def, 1, rollSkillRarity(rng.next()));
+      // THE OFFERED GRADE (2026-09-12): a board-named Memory is a STATED
+      // reward, so it rolls the board's own ladder (never below its floor —
+      // BOUNTY_BOARD_CFG.lanes.gem.rarityWeights), seeded per posting like
+      // the rest of the pay. The card printed the floor; the pay honors it.
+      const inst = makeSkillGem(def, 1, rollSkillRarityWeighted(rng.next(), BOUNTY_BOARD_CFG.lanes.gem.rarityWeights));
       this.dropGearAt(at, makeSkillGemItem(inst), undefined, true);
       // THE MINT LAW: a board-paid Memory is a genuine mint site — the
       // drop index feeds, the Standing Order keeps its food.
@@ -27156,7 +27160,7 @@ export class World {
       this.events.emit('nemesis/slain', { saga: tag.sagaKey, nemesis: victim.name, cheated: true });
     } else if (fate === 'slain') {
       const rank = NEMESIS_RANKS[Math.max(0, Math.min(rec?.rank ?? 0, NEMESIS_RANKS.length - 1))];
-      for (let i = 0; i < rank.gemDrops; i++) this.dropGemAt(victim.pos);
+      for (let i = 0; i < rank.gemDrops; i++) this.dropGemAt(victim.pos, undefined, false, this.provenanceOf(victim));
       this.text(vec(victim.pos.x, victim.pos.y - 30), `The grudge dies with ${victim.name}.`, '#ffd700', 16);
       this.events.emit('nemesis/slain', { saga: tag.sagaKey, nemesis: victim.name, cheated: false });
     }
@@ -27892,7 +27896,10 @@ export class World {
       if (q.reward.xp) this.grantXp(q.reward.xp);
       // OWED pay: a quest's gems are earned of the writ, not of the ground
       // underfoot — they land even where THE SPOILS LAW seals local mints.
-      for (let i = 0; i < (q.reward.gems ?? 0); i++) this.dropGemAt(this.player.pos, undefined, true);
+      // THE MEMORY LAW: unnamed gem pay falls as Memories of the writ (the
+      // 'quest' provenance word); a quest that NAMES its gem is an offered
+      // reward and would mint it whole — none does today.
+      for (let i = 0; i < (q.reward.gems ?? 0); i++) this.dropGemAt(this.player.pos, undefined, true, 'quest');
       // R1 ESSENCE (bounty board M0; any authored quest may pay it too):
       // ground packets at the payout site. Turn-in quests pay at the giver
       // — town for the board — so the spoils seal never bites; a future
@@ -43721,7 +43728,8 @@ export class World {
     return {
       actor, killer, credit, zone: this.zone, sim: this.sim, time: this.time,
       grantXp: n => this.grantXp(n),
-      dropGemAt: at => this.dropGemAt(at),
+      // THE MEMORY LAW: a row's gem drop wears the SLAIN BODY's provenance.
+      dropGemAt: at => this.dropGemAt(at, undefined, false, this.provenanceOf(actor)),
       // THE SPOILS VERB (see KillCtx.dropLootTable): the kill path's own
       // three-kind dispatch, reachable by any bounty row. It mints NOTHING
       // itself — every result goes out through the same primitives rollDrops
@@ -43732,8 +43740,10 @@ export class World {
       dropLootTable: (tableId, at) => {
         const kdef = actor.defId ? MONSTERS[actor.defId] : undefined;
         const miTheme = kdef?.infrequentTheme ?? (actor.defId ? MONSTER_THEMES[actor.defId] : undefined);
-        for (const res of resolveLootTable(tableId, { ilvl: this.zone.level, miTheme })) {
-          this.mintLootResult(at, res);
+        // THE MEMORY LAW: the table's gems (and its authored pouches) wear the
+        // SLAIN BODY's provenance — a row's payout leans toward what fell.
+        for (const res of resolveLootTable(tableId, { ilvl: this.zone.level, miTheme, sourceId: actor.defId })) {
+          this.mintLootResult(at, res, false, this.provenanceOf(actor));
         }
       },
       text: (at, msg, color, size) => this.text(at, msg, color, size),
@@ -44008,7 +44018,7 @@ export class World {
         if (cfg) {
           ctx.grantXp(Math.round(cfg.bossReward.xpBase + ctx.zone.level * cfg.bossReward.xpPerLevel));
           for (let i = 0; i < cfg.bossReward.gems; i++) ctx.dropGemAt(ctx.actor.pos);
-          if (af && info) for (const pid of info.chosenParts) this.dropAmalgamPart(af, pid, ctx.actor.pos);
+          if (af && info) for (const pid of info.chosenParts) this.dropAmalgamPart(af, pid, ctx.actor.pos, this.provenanceOf(ctx.actor));
         }
         af?.endAmalgamation();
         // The Bonewright was untargetable (it never died in the fight) — despawn it
@@ -44395,7 +44405,9 @@ export class World {
           // Elites spill extra gems on top of the base roll (bias rides along).
           if (actor.rarity) {
             const bias = actor.defId ? MONSTERS[actor.defId]?.gemBias : undefined;
-            for (let i = 0; i < RARITY_DEFS[actor.rarity].drops; i++) this.dropGemAt(actor.pos, bias);
+            // THE MEMORY LAW: the spill lands as Memories of THIS body — its
+            // rolled tier rides the unit (the tier lean at the recall).
+            for (let i = 0; i < RARITY_DEFS[actor.rarity].drops; i++) this.dropGemAt(actor.pos, bias, false, this.provenanceOf(actor));
           }
           // Breakables can spill something drinkable.
           const mdef = actor.defId ? MONSTERS[actor.defId] : undefined;
@@ -44623,18 +44635,44 @@ export class World {
     }
   }
 
-  /** Drop one random gem (skill or support) at a point — gated by account
-   *  unlocks; `bias` is the killer's gemBias (the shaman-drops-caster rule).
+  /** THE PROVENANCE a body's spoils seal into their Memories: its def id
+   *  (the kit/bias lean at the recall) plus its rolled ELITE tier (an event
+   *  fact the def cannot recover — the tier lean); undefined for a def-less
+   *  body, so the found word applies. */
+  private provenanceOf(actor: Actor | null | undefined): MemoryProvenance | undefined {
+    if (!actor?.defId) return undefined;
+    return actor.rarity ? { d: actor.defId, e: actor.rarity } : { d: actor.defId };
+  }
+
+  /** Drop one gem (skill or support) at a point — gated by account unlocks;
+   *  `bias` is the killer's gemBias (the shaman-drops-caster rule). THE ONE
+   *  DROP CHOKEPOINT: every lane that lets a gem FALL rides this method (the
+   *  kill trickle, per-def counts, boss guarantees, elite spills, loot-table
+   *  'gem' payouts, event/objective/breakable payouts, quest pay, the
+   *  Bonewright's built spoils); the OFFERED lanes (the counter's shelf, the
+   *  board's card, the class kit, the recall itself) never do.
    *
-   *  THE STONE (skill-items M2): `memoryFrom` converts the droplet into a
-   *  ROUGH MEMORY unit of that dropper instead — same spoils seal, same
-   *  ground. THE STREAM LAW: the memory lane consumes EXACTLY the draws
-   *  the gem lane consumes (the gem still rolls, its identity discarded;
-   *  the unit's foreordained seed is derived from the bob draw's own
-   *  float, already spent at HEAD count) — so the global Math.random
-   *  stream is byte-identical whatever GEM_DROP_CFG.memoryShare says, and
-   *  the seeded sim can never notice the dial (probe-pinned). */
-  dropGemAt(at: Vec2, bias?: SkillTag[], owed = false, memoryFrom?: string, memoryKind: MemoryKind = 'rough'): void {
+   *  THE MEMORY LAW (2026-09-12, her ruling): the droplet arrives as a
+   *  MEMORY unit of `from` — a dropper def id or a registered provenance
+   *  word (the found word when no body forged it); a MemoryProvenance may
+   *  carry the body's rolled elite tier — at GEM_DROP_CFG.memoryShare, else
+   *  as the pre-law bare gem. THE STREAM LAW: the memory form consumes
+   *  EXACTLY the draws the gem lane consumes (the gem still rolls, its
+   *  identity discarded; the unit's foreordained seed is the bob draw's own
+   *  float, already spent at HEAD count), and the form/kind decisions are
+   *  READ OFF THAT SEED (memoryFormOf / memoryKindForSeed — no draw of their
+   *  own), so the global Math.random stream is byte-identical whatever
+   *  either dial says, at every lane (probe-pinned). An explicit
+   *  `memoryKind` names an AUTHORED pouch lane (always a memory, that kind);
+   *  `pin` is THE PROMISE — the exact gem a fixed spoil would have dropped:
+   *  the memory form seals it into the unit (rough by law), the bare form
+   *  mints it verbatim. THE GROUND: where this country floors gems
+   *  (GEM_FLOORS) the unit remembers the tileset, so the recall may still
+   *  cut the country's own gems — found in the scald before it is owned. */
+  dropGemAt(
+    at: Vec2, bias?: SkillTag[], owed = false, from?: string | MemoryProvenance,
+    memoryKind?: MemoryKind, pin?: MemoryPin,
+  ): void {
     // THE SPOILS LAW: sealed ground refuses the mint — except OWED pay
     // (a quest's payout is earned of the writ, not of this ground).
     if (!owed && this.spoilsSealed()) return;
@@ -44642,34 +44680,91 @@ export class World {
     // THE GEM FLOOR (charter §4): this ground's country may floor its own
     // gems into the mint — found in the scald before the account owns them.
     const floor = this.zoneGemFloor();
+    const prov: MemoryProvenance = typeof from === 'string' ? { d: from } : from ?? { d: MEMORY_CFG.foundProvenance };
+    // THE FORM: one read off the sealed seed decides memory vs bare gem,
+    // then that lane lands it. `direct` is the bare gem's OWN mint (the
+    // identity the roll produced), never a second roll.
+    const land = (bobF: number, direct: () => void): void => {
+      const seed = (bobF * 4294967296) >>> 0;
+      const asMemory = memoryKind !== undefined || memoryFormOf(seed, GEM_DROP_CFG.memoryShare);
+      if (!asMemory) { direct(); return; }
+      const kind: MemoryKind = pin ? 'rough' : memoryKind ?? memoryKindForSeed(seed, GEM_DROP_CFG.preformedShare);
+      const floored = !!floor && (floor.skills.size > 0 || floor.supports.size > 0);
+      this.dropMemoryUnit(pos, at, prov, seed, kind, bobF, pin, floored ? this.zone.tileset : undefined);
+    };
+    if (pin) {
+      // THE PROMISE spends the plain lane's own draw count (jitter + bob) —
+      // no pool roll: the identity IS the promise.
+      const bobF = Math.random();
+      land(bobF, () => this.dropPinnedGem(pos, at, pin, bobF));
+      return;
+    }
     const dropSkill = (): void => {
       const inst = this.rollSkillGem(bias, this.zone.level, floor);
       const bobF = Math.random(); // rand(0, 2π)'s own draw, raw — the seed site
-      if (memoryFrom) { this.dropMemoryUnit(pos, at, memoryFrom, bobF, memoryKind); return; }
-      this.noteGemDrop(inst.def.id, inst.rarity);
-      this.drops.push({ pos, item: { kind: 'skill', inst }, bob: bobF * Math.PI * 2, tier: this.spoilStory });
-      this.text(at, `${inst.def.name}!`, SKILL_RARITIES[inst.rarity ?? 'common'].color, 15,
-        'drop', FLOAT_CFG.dropNameSec);
+      land(bobF, () => {
+        this.noteGemDrop(inst.def.id, inst.rarity);
+        this.drops.push({ pos, item: { kind: 'skill', inst }, bob: bobF * Math.PI * 2, tier: this.spoilStory });
+        this.text(at, `${inst.def.name}!`, SKILL_RARITIES[inst.rarity ?? 'common'].color, 15,
+          'drop', FLOAT_CFG.dropNameSec);
+      });
     };
     if (chance(GEM_DROP_CFG.skillShare)) { dropSkill(); return; }
     const gemDef = this.rollSupportDropGated(bias, this.zone.level, floor);
     if (!gemDef) { dropSkill(); return; } // no supports unlocked → a skill gem instead
     const bobF = Math.random();
-    if (memoryFrom) { this.dropMemoryUnit(pos, at, memoryFrom, bobF, memoryKind); return; }
-    this.noteGemDrop(gemDef.id);
-    this.drops.push({ pos, item: { kind: 'support', gem: { def: gemDef, level: 1 } }, bob: bobF * Math.PI * 2, tier: this.spoilStory });
-    this.text(at, `${gemDef.name}!`, gemDef.color, 14, 'drop', FLOAT_CFG.dropNameSec);
+    land(bobF, () => {
+      this.noteGemDrop(gemDef.id);
+      this.drops.push({ pos, item: { kind: 'support', gem: { def: gemDef, level: 1 } }, bob: bobF * Math.PI * 2, tier: this.spoilStory });
+      this.text(at, `${gemDef.name}!`, gemDef.color, 14, 'drop', FLOAT_CFG.dropNameSec);
+    });
+  }
+
+  /** THE PROMISE's bare form (memoryShare below 1 — the pre-law spoil): the
+   *  exact gem a fixed spoil named, minted verbatim at the pinned level
+   *  (else 1) and rarity (else the standing ladder read off the seed float,
+   *  so this form spends no draw the memory form doesn't; a chassis support
+   *  cuts its vein off the same seed). A vanished id mints nothing here and
+   *  says so once — the memory form's recall falls to the wild cut instead. */
+  private dropPinnedGem(pos: Vec2, at: Vec2, pin: MemoryPin, bobF: number): void {
+    const seed = (bobF * 4294967296) >>> 0;
+    if (pin.k === 'skill') {
+      const def = SKILLS[pin.id];
+      if (!def) { console.warn(`dropGemAt: pinned skill '${pin.id}' is not in the registry`); return; }
+      const inst = makeSkillGem(def, pin.l ?? 1, pin.r ?? rollSkillRarity(seedLaneFrac(seed, 'rarity')));
+      this.noteGemDrop(inst.def.id, inst.rarity); // a BUILT spoil is a genuine mint too — the drop index sees it
+      this.drops.push({ pos, item: { kind: 'skill', inst }, bob: bobF * Math.PI * 2, tier: this.spoilStory });
+      this.text(at, `${inst.def.name}!`, SKILL_RARITIES[inst.rarity ?? 'common'].color, 15, 'drop', FLOAT_CFG.dropNameSec);
+      return;
+    }
+    const def = SUPPORTS[pin.id];
+    if (!def) { console.warn(`dropGemAt: pinned support '${pin.id}' is not in the registry`); return; }
+    const cutRng = new Rng((seed ^ 0x9e3779b9) >>> 0);
+    this.noteGemDrop(def.id);
+    this.drops.push({ pos, item: { kind: 'support', gem: mintSupportInstance(def, pin.l ?? 1, () => cutRng.next()) }, bob: bobF * Math.PI * 2, tier: this.spoilStory });
+    this.text(at, `${def.name}!`, def.color, 14, 'drop', FLOAT_CFG.dropNameSec);
   }
 
   /** THE STONE's ground mint: one Memory unit sealed around its foreordained
-   *  seed, riding the GEAR drop lane whole (the pouch item IS the drop —
-   *  pickup auto-merges it onto the standing tile of its KIND). NOT a gem
-   *  mint: THE MINT LAW stamps at the RECALL, where the gem actually
-   *  enters the world. One text call, like the gem it replaced (the float
-   *  fabric draws jitter per call — parity is the law here). */
-  private dropMemoryUnit(pos: Vec2, at: Vec2, dropperId: string, seedF: number, kind: MemoryKind): void {
-    const unit: RoughMemoryUnit = { d: dropperId, s: (seedF * 4294967296) >>> 0 };
-    this.drops.push({ pos, item: { kind: 'gear', item: makeMemoryItem(kind, [unit]) }, bob: seedF * Math.PI * 2, tier: this.spoilStory });
+   *  seed and THE EVENT FACTS (items.ts RoughMemoryUnit — the provenance's
+   *  elite tier, the flooring tileset it fell on, the pinned promise; each
+   *  written only when it says something), riding the GEAR drop lane whole
+   *  (the pouch item IS the drop — pickup auto-merges it onto the standing
+   *  tile of its KIND). NOT a gem mint: THE MINT LAW stamps at the RECALL,
+   *  where the gem actually enters the world. One text call, like the gem
+   *  it replaced (the float fabric draws jitter per call — parity is the law
+   *  here). */
+  private dropMemoryUnit(
+    pos: Vec2, at: Vec2, prov: MemoryProvenance, seed: number, kind: MemoryKind, bobF: number,
+    pin?: MemoryPin, tileset?: string,
+  ): void {
+    const unit: RoughMemoryUnit = {
+      d: prov.d, s: seed,
+      ...(prov.e && prov.e !== 'normal' ? { e: prov.e } : {}),
+      ...(tileset ? { t: tileset } : {}),
+      ...(pin ? { g: { ...pin } } : {}),
+    };
+    this.drops.push({ pos, item: { kind: 'gear', item: makeMemoryItem(kind, [unit]) }, bob: bobF * Math.PI * 2, tier: this.spoilStory });
     this.text(at, `${MEMORY_KINDS[kind].name}!`, MEMORY_KINDS[kind].color, 14, 'drop', FLOAT_CFG.dropNameSec);
   }
 
@@ -44728,48 +44823,74 @@ export class World {
    *  (THE UNLOCKED-POOL LAW's own fallback, her rule). Rarity keeps the
    *  boss-provenance lean — the stone still remembers WHO. */
   private resolveMemoryCut(seat: Seat, unit: RoughMemoryUnit, facet?: AttributeId):
-      { kind: 'skill'; def: SkillDef; rarity: SkillRarity } | { kind: 'support'; def: SupportDef } {
+      | { kind: 'skill'; def: SkillDef; rarity: SkillRarity; level: number }
+      | { kind: 'support'; def: SupportDef; level: number; rand: () => number } {
     const mdef = MONSTERS[unit.d];
     const lvl = Math.max(this.zone.level, seat.actor.level);
+    // THE PROVENANCE LEAN: the boss lean (a def truth) × the tier lean (the
+    // unit's sealed `e` event fact) — one fold, memories.ts owns it.
+    const lean = memoryRarityLean(!!mdef?.boss, unit.e) ?? undefined;
+    // THE GROUND: a unit that fell where the country floors gems recalls
+    // over THAT floor — the pool widened by the country's own gems, leaned
+    // ×floorMult — so "found in the scald before it is owned" survives the
+    // memory form. Units with no `t` (most) read the account pool alone.
+    const floor = unit.t ? gemFloorFor(unit.t) : undefined;
+    const floored = floor && (floor.skills.size > 0 || floor.supports.size > 0) ? floor : undefined;
+    const skillW = (s: SkillDef): number => (s.dropWeight ?? 100) * (floored?.skills.has(s.id) ? GEM_DROP_CFG.floorMult : 1);
+    const supportW = (d: SupportDef): number => d.weight * (floored?.supports.has(d.id) ? GEM_DROP_CFG.floorMult : 1);
+    // THE PROMISE: a pinned unit recalls to its sealed gem VERBATIM while the
+    // registry knows it — the pinned rarity and level, else the seeded cut's
+    // own rarity roll at level 1. A vanished id falls through to the wild
+    // cut below (never a silent nothing).
+    if (unit.g) {
+      const rng = new Rng(unit.s);
+      if (unit.g.k === 'skill' && SKILLS[unit.g.id]) {
+        return { kind: 'skill', def: SKILLS[unit.g.id], rarity: unit.g.r ?? rollSeededRarity(rng, lean), level: unit.g.l ?? 1 };
+      }
+      if (unit.g.k === 'support' && SUPPORTS[unit.g.id]) {
+        return { kind: 'support', def: SUPPORTS[unit.g.id], level: unit.g.l ?? 1, rand: () => rng.next() };
+      }
+    }
     if (facet !== undefined) {
       const rng = facetRng(unit.s, facet);
       const attrs = memoryFacetAttrs(facet) ?? [];
-      const pool = this.skillDropPool(lvl);
+      const pool = this.skillDropPool(lvl, floored);
       const banner = pool.filter(s => attrs.some(a => (s.requirements?.[a] ?? 0) > 0));
       const lane = banner.length > 0 ? banner : pool;
-      const w = this.gemWeights(lane, s => s.tags, s => s.dropWeight ?? 100);
+      const w = this.gemWeights(lane, s => s.tags, skillW);
       const def = pickSeeded(lane, w, rng)!;
-      const rarity = rollSeededRarity(rng, mdef?.boss ? MEMORY_CFG.bossRarityLean : undefined);
-      return { kind: 'skill', def, rarity };
+      const rarity = rollSeededRarity(rng, lean);
+      return { kind: 'skill', def, rarity, level: 1 };
     }
     const rng = new Rng(unit.s);
     const wantSkill = rng.next() < GEM_DROP_CFG.skillShare;
     if (!wantSkill) {
-      const spool = this.supportDropPool(lvl);
+      const spool = this.supportDropPool(lvl, floored);
       if (spool.length > 0) {
         // Supports never ride the kit rung (kits are skills) — they lean by
         // the def's gemBias where one is authored, the dropGemAt shape.
-        const w = this.gemWeights(spool, d => d.dropTags ?? d.requiresTags ?? [], d => d.weight, mdef?.gemBias);
-        return { kind: 'support', def: pickSeeded(spool, w, rng)! };
+        const w = this.gemWeights(spool, d => d.dropTags ?? d.requiresTags ?? [], supportW, mdef?.gemBias);
+        return { kind: 'support', def: pickSeeded(spool, w, rng)!, level: 1, rand: () => rng.next() };
       }
       // no supports unlocked → a skill grant instead (the dropGemAt precedent)
     }
-    const pool = this.skillDropPool(lvl);
-    const lean = this.memoryLeanOf(mdef, pool);
-    const kitIds = new Set(lean.kit.map(s => s.id));
-    const w = lean.rung === 'kit'
-      ? this.gemWeights(pool, s => s.tags, s => (s.dropWeight ?? 100) * (kitIds.has(s.id) ? MEMORY_CFG.kitMult : 1))
-      : this.gemWeights(pool, s => s.tags, s => s.dropWeight ?? 100, lean.rung === 'bias' ? mdef?.gemBias : undefined);
+    const pool = this.skillDropPool(lvl, floored);
+    const rung = this.memoryLeanOf(mdef, pool);
+    const kitIds = new Set(rung.kit.map(s => s.id));
+    const w = rung.rung === 'kit'
+      ? this.gemWeights(pool, s => s.tags, s => skillW(s) * (kitIds.has(s.id) ? MEMORY_CFG.kitMult : 1))
+      : this.gemWeights(pool, s => s.tags, skillW, rung.rung === 'bias' ? mdef?.gemBias : undefined);
     const def = pickSeeded(pool, w, rng)!;
-    // Rarity at the cut: the standing table, seeded; boss provenance leans
-    // it (DEF-grain by law — the unit stores only { d, s }, and an actor's
-    // rolled elite tier is not derivable from its def).
-    const rarity = rollSeededRarity(rng, mdef?.boss ? MEMORY_CFG.bossRarityLean : undefined);
-    return { kind: 'skill', def, rarity };
+    // Rarity at the cut: the standing table, seeded, leaned by PROVENANCE
+    // (the boss lean is DEF-grain; the tier lean reads the sealed `e`).
+    const rarity = rollSeededRarity(rng, lean);
+    return { kind: 'skill', def, rarity, level: 1 };
   }
 
-  /** THE RECALL (skill-items M2/M3, §3b): consume ONE unit of `dropperId`
-   *  from the pouch `uid` — oldest first (FIFO within the group;
+  /** THE RECALL (skill-items M2/M3, §3b): consume ONE unit of the GROUP
+   *  `dropperId` names (memoryGroupKey — the bare dropper id for wild units,
+   *  a pinned promise's own key beside it; every pre-law caller's spelling
+   *  still lands) from the pouch `uid` — oldest first (FIFO within the group;
    *  scum-neutral, every unit's grant is its own sealed seed) — and mint
    *  its foreordained gem straight into the bag. A PREFORMED pouch demands
    *  the FACET first (three triad cards, walk-2 ruled) — no facet, no
@@ -44784,7 +44905,7 @@ export class World {
     const units = pouch ? memoryUnitsOf(pouch) : null;
     const memKind = pouch ? memoryKindOf(pouch) : null;
     if (!pouch || !units || !memKind) return null;
-    const idx = units.findIndex(u => u.d === dropperId);
+    const idx = units.findIndex(u => memoryGroupKey(u) === dropperId);
     if (idx < 0) return null;
     // THE FACET gate (the banner lane): a preformed recall names its triad
     // by the LEAD attribute id, validated against the live registry — a
@@ -44816,13 +44937,15 @@ export class World {
     let item: ItemInstance;
     let color: string;
     if (cut.kind === 'skill') {
-      const inst = makeSkillGem(cut.def, 1, cut.rarity);
+      const inst = makeSkillGem(cut.def, cut.level, cut.rarity);
       this.noteGemDrop(inst.def.id, inst.rarity); // THE MINT LAW
       item = makeSkillGemItem(inst);
       color = SKILL_RARITIES[cut.rarity].color;
     } else {
       this.noteGemDrop(cut.def.id); // THE MINT LAW
-      item = makeSupportGemItem({ def: cut.def, level: 1 });
+      // THE ONE MINT (supportbase.ts): a chassis gem cuts its vein off the
+      // unit's own foreordained stream — a recalled chassis is a CUT one.
+      item = makeSupportGemItem(mintSupportInstance(cut.def, cut.level, cut.rand));
       color = cut.def.color;
     }
     autoPlace(seat.meta.items, item); // guaranteed: 1×1 + the room check above
@@ -44859,15 +44982,25 @@ export class World {
     const refusal = this.spoilsSealed() ? MEMORY_CFG.strings.sealed
       : freeCellCount(seat.meta.items) + (units.length === 1 ? 1 : 0) < 1 ? MEMORY_CFG.strings.noRoom
       : null;
-    const groups = memoryGroups(units).map(g => {
+    const groups = memoryGroups(units).map((g): MemoryRecallGroup => {
       const def = MONSTERS[g.d];
+      const name = def?.name
+        ?? (g.d === MEMORY_TRADED_PROVENANCE ? MEMORY_CFG.strings.tradedName : MEMORY_FOUND_SOURCES[g.d] ?? g.d);
+      // THE PROMISE's row wears no lean chips — the sealed gem IS its odds
+      // face (a vanished id degrades to the wild rung, exactly as the cut
+      // falls: drawn == rolled).
+      const pinDef = g.pin ? (g.pin.k === 'skill' ? SKILLS[g.pin.id] : SUPPORTS[g.pin.id]) : undefined;
+      if (g.pin && pinDef) {
+        return {
+          key: g.key, d: g.d, name, count: g.count, rung: 'pinned', kit: [], tags: [],
+          pin: { kind: g.pin.k, id: g.pin.id, name: pinDef.name, color: pinDef.color, ...(g.pin.r ? { rarity: g.pin.r } : {}) },
+        };
+      }
       // The banner lane never reads the dropper's leans — its rows stand
       // wide and the facet decides (drawn == rolled, both ways).
       const lean = facets ? { rung: 'wide' as const, kit: [] } : this.memoryLeanOf(def, pool);
-      const name = def?.name
-        ?? (g.d === MEMORY_TRADED_PROVENANCE ? MEMORY_CFG.strings.tradedName : MEMORY_FOUND_SOURCES[g.d] ?? g.d);
       return {
-        d: g.d, name, count: g.count, rung: lean.rung,
+        key: g.key, d: g.d, name, count: g.count, rung: lean.rung,
         kit: lean.kit.map(s => ({ id: s.id, name: s.name, color: s.color, mult: MEMORY_CFG.kitMult })),
         tags: lean.rung === 'bias' ? [...(def?.gemBias ?? [])] : [],
       };
@@ -45404,10 +45537,23 @@ export class World {
     const item = this.bagItem(seat, uid);
     if (!item) return;
     if (item.locked) { this.lockedRefusal(seat); return; }
-    // THE STONE (M2): the pouch never salvages — its units are potential,
-    // not steel (recall them, or shift-click drops the stack whole).
+    // THE STONE (M2) + THE COUNTER'S BUY-BACK (2026-09-12): the BENCH never
+    // salvages a pouch — its units are potential, not steel to study — but
+    // the scrap COUNTER buys the whole stack back at the per-unit rate
+    // (SELL_CFG.memoryUnit × count; the panel's sale prompt guards a stack,
+    // the keeper's mark above refuses a locked one, the sweeps never touch
+    // pouches). One tile, one blow — the receipt names the count.
     if (item.mem) {
-      this.text(seat.actor.pos, MEMORY_CFG.strings.noSalvage, '#c08a68', 12);
+      if (mode !== 'sell') {
+        this.text(seat.actor.pos, MEMORY_CFG.strings.noSalvage, '#c08a68', 12);
+        return;
+      }
+      const kind = memoryKindOf(item) ?? 'rough';
+      const count = item.mem.length;
+      removeFromBag(seat.meta.items, item.uid);
+      this.grantEssence(seat, sellMemoryYield(kind, count));
+      this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 26), `${count} ${MEMORY_CFG.strings.sold}`, MEMORY_KINDS[kind].color, 12);
+      this.markMetaDirty(seat);
       return;
     }
     if (item.gem) {
@@ -46168,9 +46314,11 @@ export class World {
   }
 
   /** Every loot-table consumer shares currency, gem and item delivery. */
-  private mintLootResult(at: Vec2, result: LootResult, owed = false): void {
+  private mintLootResult(at: Vec2, result: LootResult, owed = false, from?: string | MemoryProvenance): void {
     switch (result.kind) {
-      case 'gem': this.dropGemAt(at, undefined, owed); break;
+      // THE MEMORY LAW: a table's gem rides the drop chokepoint whole — its
+      // Memory wears the PAYING body's provenance (or the caller's word).
+      case 'gem': this.dropGemAt(at, undefined, owed, from); break;
       case 'item': this.dropGearAt(at, result.item, undefined, owed); break;
       case 'vestige': this.dropVestigeAt(at, result.id, result.count); break;
       case 'essence': this.dropEssenceAt(at, result.gain); break;
@@ -46187,7 +46335,7 @@ export class World {
     if (def?.containerLoot) {
       const table = def.loot ?? selectContainerLoot(def.containerLoot, this.zone);
       for (const result of resolveLootTable(table, { ilvl: this.zone.level, sourceId: actor.defId })) {
-        this.mintLootResult(actor.pos, result);
+        this.mintLootResult(actor.pos, result, false, this.provenanceOf(actor));
       }
       return; // the declared container recipe replaces all ordinary kill trickles
     }
@@ -46200,33 +46348,20 @@ export class World {
     // untouched underneath.
     const bounty = (this.zone.bounty ?? 1)
       * (this.sim.overlayFor<QuickeningField>('quickening', this.zone.dimension)?.bountyMulAt(this.zone.id) ?? 1);
-    // THE STONE (skill-items M2/M3): a DIAL share of the kill-path TRICKLE
-    // mints a Memory instead of a direct gem (GEM_DROP_CFG.memoryShare —
-    // direct drops persist rarer, lane 3 of the four), and a DIAL share of
-    // THAT mints the PREFORMED banner pouch (preformedShare — the trued
-    // cut's find). Only the chance trickle converts: per-def drops, bosses,
-    // elite bonus rolls and every table payout stay direct by construction.
-    // ONE draw decides hit AND lane AND kind — nested intervals
-    // (r < p·share·preShare ⊂ r < p·share ⊂ r < p: given a hit, P(memory)
-    // = share; given a memory, P(preformed) = preShare, exactly) — and
-    // dropGemAt's memory lane spends the gem lane's exact draws, so the
-    // stream is byte-identical whatever either dial says (the seeded sim's
-    // determinism is construction, not luck; probe-pinned).
-    let memoryOf: string | undefined;
-    let memoryKind: MemoryKind = 'rough';
+    // THE MEMORY LAW (2026-09-12): every gem this kill lets FALL — the chance
+    // trickle, a per-def count, a boss's guarantee — rides dropGemAt whole,
+    // which decides memory-vs-bare off the sealed seed at
+    // GEM_DROP_CFG.memoryShare and the pouch kind at preformedShare (no draw
+    // of its own — the stream is byte-identical whatever either dial says;
+    // the seeded sim's determinism is construction, not luck; probe-pinned).
+    // The provenance is THIS body: its def id (the kit lean at the recall —
+    // kill what you want to learn) and its rolled elite tier (the tier lean).
     let count: number;
     if (def?.drops !== undefined) count = def.drops;
     else if (def?.boss) count = DROP_CFG.bossGemDrops;
-    else {
-      const p = DROP_CFG.killGemChance * bounty;
-      const r = Math.random();
-      count = r < p ? 1 : 0;
-      if (count && actor.defId && r < p * GEM_DROP_CFG.memoryShare) {
-        memoryOf = actor.defId;
-        if (r < p * GEM_DROP_CFG.memoryShare * GEM_DROP_CFG.preformedShare) memoryKind = 'preformed';
-      }
-    }
-    for (let i = 0; i < count; i++) this.dropGemAt(actor.pos, def?.gemBias, false, memoryOf, memoryKind);
+    else count = Math.random() < DROP_CFG.killGemChance * bounty ? 1 : 0;
+    const prov = this.provenanceOf(actor);
+    for (let i = 0; i < count; i++) this.dropGemAt(actor.pos, def?.gemBias, false, prov);
     // GEAR: loot tables. Per-monster hoard > boss table > chance-gated world
     // table; elite leaders add bonus rolls (crowned promote to the apex table).
     // CARRIED GEAR (the Hollowborn) REPLACES the base branch outright: the
@@ -46245,7 +46380,7 @@ export class World {
     const miTheme = def?.infrequentTheme ?? (actor.defId ? MONSTER_THEMES[actor.defId] : undefined);
     for (const t of tables) {
       for (const res of resolveLootTable(t, { ilvl: this.zone.level, miTheme })) {
-        this.mintLootResult(actor.pos, res);
+        this.mintLootResult(actor.pos, res, false, this.provenanceOf(actor));
       }
     }
     // VESTIGES shed on their own low chance — the socket economy's trickle.
@@ -53364,7 +53499,7 @@ export class World {
     c.openedAt = this.time; // M-SPILL: the lid swings (the renderer's own clock read)
     if (!this.spoilsSealed()) {
       for (const result of resolveLootTable(selectContainerLoot('chest', this.zone), { ilvl: this.zone.level, sourceId: 'chest' })) {
-        this.mintLootResult(c.pos, result);
+        this.mintLootResult(c.pos, result, false, 'chest'); // THE MEMORY LAW: the chest is the provenance
       }
     }
     // THE THEMED CACHE (Chest.rarity — a tinted toll's promise): one rolled

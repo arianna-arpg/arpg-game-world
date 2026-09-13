@@ -236,6 +236,14 @@ export interface Settings {
   /** THE TOWN PORTAL BUTTON (ui/portalbutton.ts + ui/portalConfig.ts): its
    *  seat — over the Menu button (the default) or the classic corner. */
   portalButton: PortalButtonOptions;
+  /** THE SALE PROMPT (the Memory QoL pass, 2026-09-12): ON (the default)
+   *  interposes a confirm popup before the scrap counter buys a STACKED
+   *  Memory pouch (MEMORY_CFG.sell.confirmFrom units and up) — the whole
+   *  stack sells in one blow, so a stray click under the armed wheel should
+   *  never quietly liquidate a hoard; the popup's own "don't ask again"
+   *  writes this OFF. Settings persist beside the account (disk slot +
+   *  portage), so the choice survives every run. */
+  confirmMemorySale: boolean;
 }
 
 /** THE MENU BAR options (ui/menuConfig.ts owns the dials + anchors). */
@@ -303,6 +311,8 @@ export interface SettingsSave {
   menuBar?: { anchor?: string; dock?: boolean };
   /** THE TOWN PORTAL BUTTON (additive). */
   portalButton?: { anchor?: string };
+  /** THE SALE PROMPT (additive — a pre-dial save reads ON). */
+  confirmMemorySale?: boolean;
 }
 
 export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
@@ -452,6 +462,7 @@ export const makeSettings = (): Settings => ({
   layout: { ...DEFAULT_UI_LAYOUT, seats: {}, locked: {} },
   menuBar: { anchor: MENU_CFG.anchorDefault, dock: MENU_CFG.dockDefault },
   portalButton: { anchor: PORTAL_BUTTON_CFG.anchorDefault },
+  confirmMemorySale: true,
 });
 
 export const serializeSettings = (s: Settings): SettingsSave => ({
@@ -491,6 +502,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   layout: { movable: s.layout.movable, seats: { ...s.layout.seats }, locked: { ...s.layout.locked } },
   menuBar: { ...s.menuBar },
   portalButton: { ...s.portalButton },
+  confirmMemorySale: s.confirmMemorySale,
 });
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
@@ -619,6 +631,9 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
       anchor: MENU_ANCHORS.some(a => a.id === s.menuBar?.anchor) ? s.menuBar!.anchor as MenuAnchorId : MENU_CFG.anchorDefault,
       dock: typeof s.menuBar?.dock === 'boolean' ? s.menuBar.dock : MENU_CFG.dockDefault,
     },
+    // THE SALE PROMPT (additive): a pre-dial save reads ON — the guard is
+    // the default, the opt-out is the player's own click.
+    confirmMemorySale: s.confirmMemorySale ?? true,
     // THE TOWN PORTAL BUTTON (additive): an unknown anchor (a renamed row,
     // a pre-dial save) falls back to the registry default.
     portalButton: {

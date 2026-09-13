@@ -26,6 +26,7 @@ import {
 } from '../data/essences';
 import { UNIQUES } from '../data/uniques';
 import type { SkillInstance, SupportInstance } from './skills';
+import type { MemoryKind } from './memories';
 import {
   type AffixDef, type AffixRollState, type ItemBaseDef, type ItemInstance,
 } from './items';
@@ -176,6 +177,17 @@ export function sellSupportYield(gem: SupportInstance): EssenceCost {
   return {
     essence: 'coarse',
     count: Math.max(1, Math.round(gemQuality(gem.level) * SELL_CFG.supportMul * SELL_CFG.mul)),
+  };
+}
+
+/** THE COUNTER'S BUY-BACK (2026-09-12): coarse yield for selling a whole
+ *  Memory pouch — per-unit rate by KIND (SELL_CFG.memoryUnit) × the stack's
+ *  unit count × the global crank. The stack sells as one blow (a pouch is
+ *  one tile); the panel's sale prompt prints exactly this number. */
+export function sellMemoryYield(kind: MemoryKind, count: number): EssenceCost {
+  return {
+    essence: 'coarse',
+    count: Math.max(1, Math.round(Math.max(0, count) * SELL_CFG.memoryUnit[kind] * SELL_CFG.mul)),
   };
 }
 

@@ -56,7 +56,11 @@ LOOT_TABLES.qa_container_inner = { id: 'qa_container_inner', rolls: [
 w.zone.containerLoot = { chest: 'qa_container', gemCache: 'qa_container' };
 w.drops=[];const c=chest();w.chests=[c];open(c);
 assert(w.drops.some(d=>d.item.kind==='gear' && d.item.item.mem));
-for(const kind of ['gear','skill','abilityEssence','essence','vestige']) assert(w.drops.some(d=>d.item.kind===kind),kind);
+// THE MEMORY LAW (2026-09-12): the table's 'gem' result lands as a Memory
+// POUCH of the chest (a 'gear' drop wearing the 'chest' provenance — the
+// line below pins it), never a bare 'skill'/'support' drop.
+for(const kind of ['gear','abilityEssence','essence','vestige']) assert(w.drops.some(d=>d.item.kind===kind),kind);
+assert(!w.drops.some(d=>d.item.kind==='skill' || d.item.kind==='support'), 'no bare gem falls from a chest');
 assert(w.drops.some(d=>d.item.kind==='gear' && d.item.item.mem?.[0]?.d==='chest'));
 const n=w.drops.length;open(c);assert.equal(w.drops.length,n);
 const cache=w.createMonster('gem_cache',1,'enemy');cache.fromZoneGen=true;cache.pos={x:400,y:300};w.actors.push(cache);w.kill(cache,false,w.player);

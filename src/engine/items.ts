@@ -52,6 +52,7 @@
 // ---------------------------------------------------------------------------
 
 import { SKILL_RARITIES, SKILLGRANT_PREFIX, type SkillRarity } from './skills';
+import type { MonsterRarity } from './rarity';
 import { ATTRIBUTES, STAT_DEFS, type AttributeId, type ConditionId, type ModKind, type SkillTag } from './stats';
 import { RECENT_CONDITION_LABELS } from './recency';
 import { DERIVED_GAUGES } from './gauges';
@@ -385,12 +386,40 @@ export interface SupportGemPayload {
 
 export type GemPayload = SkillGemPayload | SupportGemPayload;
 
-/** THE STONE (skill-items M2): one Rough Memory unit — the dropper's def id
- *  and the foreordained seed, NOTHING else (THE LIVE-REGISTRY MANDATE:
- *  everything else re-derives at recall time from the standing registries,
- *  so an unlock-package edit flows through with zero data churn). Compact
- *  keys on purpose — a pouch may hold hundreds and rides saves/wire whole. */
-export interface RoughMemoryUnit { d: string; s: number }
+/** THE PROMISE (THE MEMORY LAW, 2026-09-12): a Memory unit sealed around the
+ *  EXACT gem a fixed spoil would have dropped — the Bonewright's built part,
+ *  any boss's named spoil. The recall mints it verbatim (the pinned level and
+ *  rarity, else level 1 and the seeded rarity) while the registry still knows
+ *  the id; a vanished id falls to the wild cut, never a silent nothing. */
+export interface MemoryPin {
+  k: 'skill' | 'support';
+  id: string;
+  /** The promised rarity (skills only) — absent = the seeded cut's own roll. */
+  r?: SkillRarity;
+  /** The promised level — absent = 1 (DROP-AT-1). */
+  l?: number;
+}
+
+/** THE STONE (skill-items M2): one Memory unit — THE EVENT FACTS and NOTHING
+ *  else (THE LIVE-REGISTRY MANDATE: everything derivable re-derives at recall
+ *  time from the standing registries, so an unlock-package edit flows through
+ *  with zero data churn). A unit stores only what the DROP EVENT alone knew:
+ *  `d` the dropper's def id (or a registered provenance word — 'found',
+ *  'chest', 'quest', the vendor's 'traded'), `s` the foreordained seed, and
+ *  — under THE MEMORY LAW — three optional event facts no registry could
+ *  recover later: `e` the dropper's rolled ELITE tier (the def can't say
+ *  what the body rolled; MEMORY_CFG.tierRarityLean reads it), `t` the
+ *  TILESET the unit fell on where that country FLOORS gems (THE GROUND: the
+ *  recall reads that floor, so "found in the scald" survives the memory
+ *  form), `g` THE PROMISE (a pinned exact grant). Compact keys on purpose —
+ *  a pouch may hold hundreds and rides saves/wire whole. */
+export interface RoughMemoryUnit {
+  d: string;
+  s: number;
+  e?: MonsterRarity;
+  t?: string;
+  g?: MemoryPin;
+}
 
 /** A live item — PURE JSON (ids + numbers only), which makes it the save
  *  shape, the corpse shape, and the wire shape all at once. */

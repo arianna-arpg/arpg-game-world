@@ -47,6 +47,8 @@ import {
   questDoneKey, reachedLevelKey, vocationUnlockKey,
 } from '../src/meta/account';
 import { VENDOR_CFG } from '../src/data/vendors';
+import { GEM_DROP_CFG } from '../src/engine/loot';
+import { autoPlace } from '../src/engine/inventory';
 import { sanitizeVendorHolds } from '../src/meta/worldstate';
 import {
   allUnlockables, catalogLevelMilestones, isUnlockVisible, sealedUnlocks,
@@ -251,12 +253,34 @@ check('A: the purchase stamps the market ledger',
   const snapshot = (): string => JSON.stringify(
     Object.entries(wC.account.ledger).filter(([k]) => k.startsWith('gemdrop')).sort());
   const before = snapshot();
+  // THE MEMORY LAW (2026-09-12): a DROP is a Memory now and stamps NOTHING —
+  // the index feeds at the RECALL, where the gem truly enters the world.
+  wC.dropGemAt(wC.player.pos, undefined, false, 'zombie');
+  const pouchDrop = wC.drops[wC.drops.length - 1];
+  check('C: a Memory DROP stamps nothing (the stone is not yet a gem)',
+    pouchDrop.item.kind === 'gear' && !!pouchDrop.item.item.mem && snapshot() === before);
+  wC.drops.pop();
+  const pouch = pouchDrop.item.kind === 'gear' ? pouchDrop.item.item : null;
+  if (pouch && autoPlace(wC.localSeat.meta.items, pouch)) {
+    const recalled = wC.recallMemory(wC.localSeat, pouch.uid, 'zombie');
+    check('C: the RECALL is the genuine mint — it stamps the index + the total',
+      !!recalled && snapshot() !== before
+      && (wC.account.ledger[gemDropKey(recalled.id)] ?? 0) >= 1
+      && (wC.account.ledger[LEDGER_GEMDROP_TOTAL] ?? 0) >= 1, recalled?.id ?? 'no grant');
+    const at = wC.localSeat.meta.items.findIndex(i => i.uid === recalled?.itemUid);
+    if (at >= 0) wC.localSeat.meta.items.splice(at, 1);
+  } else check('C: (setup) the pouch lands in the bag', false);
+  // The pre-law BARE lane (memoryShare 0) stamps at the drop itself, as ever.
+  const origShare = GEM_DROP_CFG.memoryShare;
+  GEM_DROP_CFG.memoryShare = 0;
+  const beforeBare = snapshot();
   wC.dropGemAt(wC.player.pos);
+  GEM_DROP_CFG.memoryShare = origShare;
   const minted = wC.drops[wC.drops.length - 1];
   const mintedId = minted.item.kind === 'skill' ? minted.item.inst.def.id
     : minted.item.kind === 'support' ? minted.item.gem.def.id : '';
-  check('C: a genuine mint stamps the index + the total',
-    snapshot() !== before
+  check('C: a genuine BARE mint (memoryShare 0) stamps the index + the total',
+    snapshot() !== beforeBare
     && (wC.account.ledger[gemDropKey(mintedId)] ?? 0) >= 1
     && (wC.account.ledger[LEDGER_GEMDROP_TOTAL] ?? 0) >= 1, mintedId);
 

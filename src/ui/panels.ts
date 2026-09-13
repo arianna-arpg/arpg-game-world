@@ -54,7 +54,7 @@ import {
 import {
   CRAFT_CFG, craftableAffixesFor, craftedCount, expertiseProgress, expertiseRank,
   salvageItemYield, salvageSkillYield, salvageSupportYield,
-  sellItemYield, sellSkillYield, sellSupportYield,
+  sellItemYield, sellMemoryYield, sellSkillYield, sellSupportYield,
 } from '../engine/crafting';
 import { SKILLS, SKILL_LIST } from '../data/skills';
 import { mimicEntries } from '../engine/mimic';
@@ -1623,6 +1623,7 @@ export class UI {
     if (closed === 0) for (const [id, open, close] of pages) if (open && keep.includes(id)) { close(); closed++; }
     this.closeChoicePopup();
     this.closeTreePopup();
+    this.closeMemorySellPrompt(); // a stray sale prompt never outlives the sweep
     this.folio.sync();
     this.folioStrip.update();
     return closed > 0;
@@ -3649,7 +3650,7 @@ export class UI {
     // THE RESIDENCE (M1): a gem wrapper's card speaks the gem, not the steel.
     if (item.gem) return this.gemItemTooltip(item, seat, salv);
     // THE STONE (M2): the pouch's card speaks the composition.
-    if (item.mem) return this.memTooltip(item);
+    if (item.mem) return this.memTooltip(item, salv);
     const d = describeItem(item);
     const lines: string[] = [`<div style="color:#9a94a8;font-size:10px">${d.baseLine}</div>`];
     // THE CONTAINER FABRIC: a piece some side board takes says where it
@@ -3720,7 +3721,7 @@ export class UI {
    *  the composition's top groups, newest marked; the gesture hints. Serves
    *  both pouch kinds off MEMORY_KINDS (the Preformed card names its facet
    *  law — skills only, the choice interposes at the recall). */
-  private memTooltip(item: ItemInstance): TooltipContent | null {
+  private memTooltip(item: ItemInstance, salv: 'break' | 'sell' | null = null): TooltipContent | null {
     const units = item.mem!;
     const kind = memoryKindOf(item) ?? 'rough';
     const k = MEMORY_KINDS[kind];
@@ -3737,13 +3738,29 @@ export class UI {
     }
     const top = groups.slice(0, MEMORY_CFG.tooltipGroups);
     for (const g of top) {
-      lines.push(`<div style="color:#c8bce0;font-size:10px">×${g.count} — ${dropperName(g.d)}</div>`);
+      // THE PROMISE reads on the card: a pinned group names the gem it is
+      // sealed to (the boss's specific spoil, arriving as a stone).
+      const pinDef = g.pin ? (g.pin.k === 'skill' ? SKILLS[g.pin.id] : SUPPORTS[g.pin.id]) : undefined;
+      const pinNote = g.pin
+        ? ` <span style="color:${pinDef?.color ?? '#c8a84b'}">— ${MEMORY_CFG.strings.pinned} ${esc(pinDef?.name ?? g.pin.id)}</span>`
+        : '';
+      lines.push(`<div style="color:#c8bce0;font-size:10px">×${g.count} — ${dropperName(g.d)}${pinNote}</div>`);
     }
     if (groups.length > top.length) {
       const rest = groups.length - top.length;
       lines.push(`<div style="color:#5a5668;font-size:10px">…and ${rest} other ${rest === 1 ? 'kind' : 'kinds'}</div>`);
     }
     lines.push(`<div style="color:#8a8678;font-size:10px">newest: ${dropperName(units[units.length - 1].d)}</div>`);
+    // THE COUNTER'S BUY-BACK: under the armed wheel the card prices the
+    // WHOLE stack (the engine's own sellMemoryYield) and says whether the
+    // sale prompt stands between the click and the sale; the bench's hammer
+    // says plainly that it has no use for potential.
+    if (!item.locked && salv === 'sell') {
+      const pay = sellMemoryYield(kind, units.length);
+      lines.unshift(`<div style="color:#e8c87a;font-weight:bold">⚙ Click to sell the whole stack (×${units.length}) for ${this.essCostText(pay)}${this.memorySalePromptDue(item) ? ' — a prompt confirms first' : ''}</div>`);
+    } else if (!item.locked && salv === 'break') {
+      lines.unshift('<div style="color:#8a8678">⚒ The bench has no use for memories — recall them, or sell the stack at a scrap counter</div>');
+    }
     lines.push(`<div style="color:#c8a84b;font-size:10px;margin-top:3px">right-click (or double-click) opens the Recall · ${this.lockGestureText()} locks it · shift-click drops the stack whole</div>`);
     return {
       title: `<span style="color:${k.color}">${k.name}</span>`,
@@ -4078,12 +4095,14 @@ export class UI {
       // THE STONE (M2/M3, §3b): the pouch tile — one fixed face in its
       // KIND's color and glyph (no rarity border: units carry no rarity
       // until recalled), the count badge wearing the total. Double-click
-      // opens THE RECALL; the salvage lane never touches it (the engine
-      // refuses too).
+      // opens THE RECALL. THE COUNTER'S BUY-BACK (2026-09-12): under the
+      // armed scrap WHEEL the tile takes the sell click (the whole stack —
+      // the sale prompt guards a stack); the bench's hammer never touches
+      // it (the engine refuses too), and a locked tile keeps still.
       if (i.mem) {
         const mk = MEMORY_KINDS[memoryKindOf(i) ?? 'rough'];
         return `<div data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
-          ${breaking ? '' : `data-drag="gearItem:${i.uid}"`} data-drop="gearTile:${i.uid}"
+          ${breaking ? (salv === 'sell' && !i.locked ? `data-salv-uid="${i.uid}"` : '') : `data-drag="gearItem:${i.uid}"`} data-drop="gearTile:${i.uid}"
           style="position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
           width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#1c1626;
           border:2px solid ${mk.color};border-radius:3px;cursor:var(--cursor-point, pointer);box-sizing:border-box;
@@ -4376,6 +4395,12 @@ export class UI {
         const uid = Number(el.dataset.salvUid);
         const item = seatMeta.items.find(i => i.uid === uid);
         if (!item || item.locked) return; // pip + tooltip explain the refusal
+        // THE SALE PROMPT: a STACKED pouch under the wheel asks first (the
+        // whole stack sells in one blow); the prompt dispatches the intent.
+        if (item.mem && salv === 'sell' && this.memorySalePromptDue(item)) {
+          this.showMemorySellPrompt(uid, this.panelSeatIds.get(this.inventory));
+          return;
+        }
         world.requestMeta({ t: 'salvageItem', uid, lane: salv });
         hideTooltip();
         this.refreshInventory();
@@ -4775,13 +4800,20 @@ export class UI {
       : '<span style="width:30px;text-align:center;color:#5a5668">?</span>';
     const rows = groups.map(g => {
       const def = MONSTERS[g.d];
-      const reveal = this.recallReveals.get(g.d);
+      const reveal = this.recallReveals.get(g.key);
       // THE LEAN CHIPS — the row's honest odds face (§3b): the kit skills
       // as their own icon chips × the kit mult; a kit that teaches nothing
       // shows its gemBias tag chips at the standing ×2.5; neither → the
       // wide pool, plain. The engine derived these from the same fold the
       // cut rolls.
-      const chips = needsFacet
+      const chips = g.rung === 'pinned' && g.pin
+        // THE PROMISE's row: the sealed gem IS the odds face — one chip, the
+        // grant itself (and its pinned grade where the spoil named one).
+        ? `<span style="${chipStyle}" title="${esc(g.pin.name)} — ${MEMORY_CFG.strings.pinned} this very memory">
+            <span style="width:12px;height:12px;border-radius:2px;background:${g.pin.color}33;border:1px solid ${g.pin.color};
+              display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:${g.pin.color}">${gemInitials(g.pin.name)}</span>
+            <span style="color:${g.pin.rarity ? SKILL_RARITIES[g.pin.rarity].color : '#c8bce0'}">${esc(g.pin.name)}${g.pin.rarity ? ` · ${SKILL_RARITIES[g.pin.rarity].label}` : ''}</span></span>`
+        : needsFacet
         ? `<span style="color:#5a5668;font-size:9px">the committed facet decides</span>`
         : g.rung === 'kit'
           ? g.kit.map(c => `<span style="${chipStyle}" title="${c.name} — ×${c.mult} lean">
@@ -4802,7 +4834,7 @@ export class UI {
           <div style="font-size:11px;color:#e0d8c8">${g.name} <span style="color:#9a94a8">×${g.count}</span></div>
           <div>${chips}</div>${revealLine}
         </div>
-        <button data-mem-recall="${g.d}" ${canRecall ? '' : 'disabled'}
+        <button data-mem-recall="${esc(g.key)}" ${canRecall ? '' : 'disabled'}
           ${canRecall || refusal ? '' : `title="${esc(MEMORY_CFG.strings.noFacet)}"`}
           style="padding:4px 10px;font-size:10px;background:${canRecall ? '#2a2138' : '#1a1722'};
           border:1px solid ${canRecall ? mk.color : '#3a3644'};border-radius:4px;
@@ -5003,6 +5035,77 @@ export class UI {
   // Chips speak THE ONE SPEND PREDICATE; "Later" dismisses — the drawer's
   // waiting-pip keeps the truth either way. DIAL: Settings.treePrompt
   // (Options → Interface → Ability point prompt), OFF by default.
+
+  // --- THE SALE PROMPT (the Memory QoL pass, 2026-09-12) --------------------
+  // A STACKED pouch under the armed scrap wheel asks before it sells: the
+  // whole stack goes in one blow (one tile, one click), so a stray click must
+  // never quietly liquidate a hoard. The popup prints the exact pay
+  // (sellMemoryYield — the engine's own number), carries its own "don't ask
+  // again" (Settings.confirmMemorySale — the Options row's twin, persisted
+  // beside the account), and the sale itself is the ordinary salvageItem
+  // intent down the sell lane. A single unit sells on the plain click.
+
+  private memorySellPopup: HTMLDivElement | null = null;
+
+  /** Does THIS pouch's sale want the prompt? From MEMORY_CFG.sell.confirmFrom
+   *  units up, while the setting stands ON. */
+  private memorySalePromptDue(item: ItemInstance): boolean {
+    return !!item.mem && item.mem.length >= MEMORY_CFG.sell.confirmFrom && this.getSettings().confirmMemorySale;
+  }
+
+  closeMemorySellPrompt(): void {
+    this.memorySellPopup?.remove();
+    this.memorySellPopup = null;
+  }
+
+  showMemorySellPrompt(uid: number, seatId?: string): void {
+    this.closeMemorySellPrompt();
+    const world = this.getWorld();
+    const seat = this.couchSeatFor(seatId);
+    const item = seat.meta.items.find(i => i.uid === uid);
+    if (!item?.mem) return;
+    const kind = memoryKindOf(item) ?? 'rough';
+    const mk = MEMORY_KINDS[kind];
+    const count = item.mem.length;
+    const pay = sellMemoryYield(kind, count);
+    const pop = document.createElement('div');
+    pop.className = 'panel';
+    pop.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);'
+      + 'width:340px;max-width:92vw;z-index:60;font-size:12px';
+    pop.innerHTML = `
+      ${this.closeGlyphHtml('Keep them')}<h2 style="color:${mk.color}">Sell the whole stack?</h2>
+      <div style="font-size:11px;color:#a8a494;margin-bottom:6px">
+        <b style="color:${mk.color}">${esc(mk.name)} ×${count}</b> — every memory in the stack sells at once
+        for <b style="color:#e8c87a">${this.essCostText(pay)}</b>. Recalled instead, each could become a skill or support.</div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#8a8678;margin:6px 0 8px;cursor:var(--cursor-point, pointer)">
+        <input type="checkbox" data-memsell-quiet> Don't ask again (Options → Gameplay → Confirm Memory Sales)</label>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button data-memsell-go>⚙ Sell ×${count}</button>
+        <button data-memsell-keep>Keep them</button>
+      </div>`;
+    document.body.appendChild(pop);
+    this.memorySellPopup = pop;
+    const quiet = pop.querySelector<HTMLInputElement>('[data-memsell-quiet]');
+    // The checkbox is a preference, not a verdict: ticked, it stands the
+    // prompt down whichever button follows (the Options row shows it OFF).
+    const applyQuiet = (): void => {
+      if (!quiet?.checked) return;
+      this.getSettings().confirmMemorySale = false;
+      this.saveSettings();
+    };
+    pop.querySelector<HTMLButtonElement>('[data-memsell-go]')?.addEventListener('click', () => {
+      applyQuiet();
+      this.closeMemorySellPrompt();
+      world.requestMeta({ t: 'salvageItem', uid, lane: 'sell' });
+      hideTooltip();
+      this.refreshInventory();
+      this.refreshSalvage();
+      this.refreshVendor();
+    });
+    const keep = (): void => { applyQuiet(); this.closeMemorySellPrompt(); };
+    pop.querySelector<HTMLButtonElement>('[data-memsell-keep]')?.addEventListener('click', keep);
+    pop.querySelector<HTMLButtonElement>('[data-panel-x]')?.addEventListener('click', keep);
+  }
 
   private treePopup: HTMLDivElement | null = null;
 
@@ -9743,6 +9846,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         <span>Gear Pickup</span>
         <button id="opt-gearpickup">${s.gearPickup === 'key'
           ? `PRESS ${keyDisplay(s.keybinds.pickup)}` : 'WALK OVER'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Confirm Memory Sales</span>
+        <button id="opt-memsell" title="With a scrap counter's wheel armed, clicking a STACKED Memory pouch (${MEMORY_CFG.sell.confirmFrom} or more memories) sells the whole stack at once. ON: a prompt confirms first and prints the pay. OFF: the plain click sells. The prompt's own 'don't ask again' turns this OFF; single memories never ask.">${s.confirmMemorySale ? 'ON' : 'OFF'}</button>
       </div>`;
     const controllerTab = `
       <h1>Controller</h1>
@@ -10046,6 +10153,14 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       st.gearPickup = st.gearPickup === 'key' ? 'vacuum' : 'key';
       this.saveSettings();
       this.updateHintBar();
+      this.renderOptions(root, onBack);
+    });
+    // THE SALE PROMPT (the Memory QoL pass): the popup's "don't ask again"
+    // writes this same setting — the row is where it comes back ON.
+    root.querySelector<HTMLElement>('#opt-memsell')?.addEventListener('click', () => {
+      const st = this.getSettings();
+      st.confirmMemorySale = !st.confirmMemorySale;
+      this.saveSettings();
       this.renderOptions(root, onBack);
     });
     // FORESIGHT: enemy ground-casts mark their landing during the wind-up.
@@ -10892,6 +11007,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     this.treeOpen = false;
     this.closeChoicePopup();
     this.closeTreePopup();
+    this.closeMemorySellPrompt();
     this.mapOpen = false;
     this.caravanOpen = false;
     this.mercOpen = false;

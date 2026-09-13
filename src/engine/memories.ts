@@ -53,18 +53,48 @@
 // a mint-path lean for the ground the player STANDS on; the recall answers
 // to the account alone).
 //
+// THE MEMORY LAW (2026-09-12, her ruling — "skill and support drops happen
+// as the memories rather than the explicit skill and support drops"): a gem
+// that DROPS arrives as a Memory; a gem arrives NAMED only where it is
+// OFFERED — the counter's shelf, the bounty board's card, the class kit, a
+// recall. World.dropGemAt is the ONE chokepoint every drop lane already
+// rides (the kill trickle, per-def counts, boss guarantees, elite spills,
+// loot-table 'gem' payouts, event/objective/breakable payouts, quest pay,
+// the Bonewright's built spoils), so the law is one policy read there —
+// GEM_DROP_CFG.memoryShare (1 = the law whole; the remainder falls as the
+// pre-law bare gem) — decided per mint OFF THE SEALED SEED (memoryFormOf:
+// a hash-derived uniform, ZERO extra draws — THE STREAM LAW now holds at
+// every lane, not only the trickle; the preformed split rides the same
+// seed through memoryKindForSeed). THE EVENT FACTS a unit may carry beside
+// { d, s } (items.ts RoughMemoryUnit): `e` the dropper's rolled elite tier
+// (tierRarityLean composes with the boss lean — provenance pays), `t` the
+// tileset it fell on where that country floors gems (THE GROUND — the
+// recall reads GEM_FLOORS for the ground the unit was FOUND on, so the
+// scald's "found here before it is owned" survives the memory form), `g`
+// THE PROMISE (a pinned exact grant: the recall mints that very gem — a
+// boss's specific spoil stays specific, it just arrives as a stone; pins
+// always ride ROUGH pouches, the banner's facet law never applies to a
+// promise). Pinned units group APART from their dropper's wild units
+// (memoryGroupKey — the recall intent addresses a GROUP KEY, which for an
+// unpinned unit is the bare dropper id, so every old caller still speaks).
+//
 // World.recallMemory is the consumer (the pools, the spoils seal, THE
 // MINT LAW's noteGemDrop stamp, THE ROOM LAW's refuse-before-consuming all
 // live there beside the standing gem lanes); this file is the pure half:
 // the unit/item shapes, the KIND registry, MEMORY_CFG, the facet
-// derivation, the seeded draw, and the rarity lean.
+// derivation, the seeded draw, the seed lanes, and the rarity lean.
 // ---------------------------------------------------------------------------
 
 import { Rng } from '../core/rng';
 import { SKILL_RARITIES, type SkillRarity } from './skills';
 import { ATTRIBUTES, ATTRIBUTE_TRIADS, type AttributeId } from './stats';
-import type { ItemInstance, RoughMemoryUnit } from './items';
+import type { ItemInstance, MemoryPin, RoughMemoryUnit } from './items';
+import type { MonsterRarity } from './rarity';
 import { nextItemUid } from './itemgen';
+
+/** THE PROMISE's shape lives with the unit (items.ts); the fabric's
+ *  consumers read it from here. */
+export type { MemoryPin } from './items';
 
 /** The pouch kinds — the gacha ladder's two stacking items (§3, walk-1
  *  ruled names). 'rough' = the wild lane; 'preformed' = the banner lane. */
@@ -111,8 +141,20 @@ export const ROUGH_MEMORY_BASE = MEMORY_KINDS.rough.base;
  *  banner lane's facet choice is untouched (the facet never read the
  *  dropper). */
 export const MEMORY_TRADED_PROVENANCE = 'traded';
-/** Non-creature provenance remains explicit without forging a monster identity. */
-export const MEMORY_FOUND_SOURCES: Record<string, string> = { chest: 'Chest', found: 'Found in the world' };
+/** Non-creature provenance remains explicit without forging a monster
+ *  identity — the registered PROVENANCE WORDS a drop lane may seal into a
+ *  unit in place of a dropper def id (the recall panel names them through
+ *  this table; an unregistered word prints raw). 'found' is the default
+ *  every unforged drop wears (MEMORY_CFG.foundProvenance); 'chest' rides
+ *  the container lane's LootCtx.sourceId; 'quest' is a writ's owed pay. */
+export const MEMORY_FOUND_SOURCES: Record<string, string> = {
+  chest: 'Chest', found: 'Found in the world', quest: 'Quest pay',
+};
+
+/** THE PROVENANCE a drop lane hands dropGemAt: WHO forged the drop (a def
+ *  id or a registered word) and — an event fact the def cannot recover —
+ *  the body's rolled ELITE tier. A bare string reads as { d }. */
+export interface MemoryProvenance { d: string; e?: MonsterRarity }
 
 /** Every dial of the Memory economy. ALL NUMBERS ARE DIALS (unblessed —
  *  her standing word: numbers bless through playthroughs). Strings are
@@ -130,6 +172,30 @@ export const MEMORY_CFG = {
    *  (boss) may lean, exactly what THE LIVE-REGISTRY MANDATE predicts.
    *  Both kinds read it (the banner's provenance pays the same). */
   bossRarityLean: { common: 1, magic: 1.6, rare: 2.2, legendary: 3 } as Record<SkillRarity, number>,
+  /** THE TIER LEAN (THE MEMORY LAW — "rarity-lean per provenance tier", the
+   *  charter's §12 open dial, now a row): weight multipliers over the
+   *  standing rarity table by the dropper's rolled ELITE tier (the unit's
+   *  `e` event fact — DEF-grain can't say what the body rolled, so the
+   *  drop seals it). Composes MULTIPLICATIVELY with bossRarityLean (a
+   *  crowned boss's stone cuts richest). Missing tiers read neutral; magic
+   *  and rare stand neutral here on purpose (their spill count already pays
+   *  — RARITY_DEFS.drops), the leader tiers lean. DIALS, unblessed. */
+  tierRarityLean: {
+    champion: { common: 1, magic: 1.25, rare: 1.5, legendary: 1.75 },
+    crowned:  { common: 1, magic: 1.5,  rare: 2,   legendary: 2.5 },
+  } as Partial<Record<MonsterRarity, Record<SkillRarity, number>>>,
+  /** THE FOUND WORD: the provenance every drop lane no body forged wears
+   *  (events, breakables, puzzles, encounter chests without a source) — a
+   *  MEMORY_FOUND_SOURCES key, so the panel names it. */
+  foundProvenance: 'found',
+  /** THE COUNTER'S BUY-BACK (the QoL pass, 2026-09-12): a pouch SELLS at
+   *  the scrap counter — the whole stack in one blow, per-unit coarse
+   *  (data/essences.ts SELL_CFG.memoryUnit) — while the bench still refuses
+   *  it (potential is not steel to study). `confirmFrom` = the stack size
+   *  from which the panel interposes THE SALE PROMPT (Settings.
+   *  confirmMemorySale stands it down; the prompt's own checkbox writes
+   *  that setting). Single units sell on the plain click. */
+  sell: { confirmFrom: 2 },
   /** THE POUCH CARD's composition depth: dropper groups named before the
    *  tooltip folds to "…and N others" (§12's open dial). */
   tooltipGroups: 4,
@@ -141,6 +207,10 @@ export const MEMORY_CFG = {
     noFacet: 'commit to a facet first',
     /** The recall panel's display name for MEMORY_TRADED_PROVENANCE rows. */
     tradedName: 'Traded stock',
+    /** THE PROMISE's row words: the chip that names the sealed grant. */
+    pinned: 'sealed to',
+    /** The counter's receipt on a pouch sale ("{n} memories sold"). */
+    sold: 'memories sold',
   },
 } as const;
 
@@ -199,16 +269,84 @@ export function mergeMemory(pouch: ItemInstance, units: readonly RoughMemoryUnit
   pouch.mem = [...(pouch.mem ?? []), ...units];
 }
 
-/** The pouch's composition grouped by dropper, FIRST-APPEARANCE order —
+/** THE GROUP KEY: the address a recall names — the bare dropper id for a
+ *  wild unit (every pre-law caller's own spelling), the dropper id plus the
+ *  promised gem for a PINNED one, so a boss's sealed spoil stands as its own
+ *  row beside that boss's wild stones and the player chooses which to
+ *  recall. FIFO runs WITHIN the key. */
+export function memoryGroupKey(u: RoughMemoryUnit): string {
+  return u.g ? `${u.d}|${u.g.k}:${u.g.id}` : u.d;
+}
+
+export interface MemoryGroup {
+  /** The recall address (memoryGroupKey). */
+  key: string;
+  /** The dropper def id / provenance word (portraits, names, the lean). */
+  d: string;
+  count: number;
+  /** THE PROMISE the group's units carry (all units of a key share it). */
+  pin?: MemoryPin;
+}
+
+/** The pouch's composition grouped by GROUP KEY, FIRST-APPEARANCE order —
  *  the same order the panel lists and FIFO consumes, derived from the one
  *  append-ordered array (no second bookkeeping to drift). */
-export function memoryGroups(units: readonly RoughMemoryUnit[]): { d: string; count: number }[] {
-  const out: { d: string; count: number }[] = [];
+export function memoryGroups(units: readonly RoughMemoryUnit[]): MemoryGroup[] {
+  const out: MemoryGroup[] = [];
   const at = new Map<string, number>();
   for (const u of units) {
-    const i = at.get(u.d);
-    if (i === undefined) { at.set(u.d, out.length); out.push({ d: u.d, count: 1 }); }
-    else out[i].count++;
+    const key = memoryGroupKey(u);
+    const i = at.get(key);
+    if (i === undefined) {
+      at.set(key, out.length);
+      out.push({ key, d: u.d, count: 1, ...(u.g ? { pin: u.g } : {}) });
+    } else out[i].count++;
+  }
+  return out;
+}
+
+// -------------------------------------------------------- the seed lanes ---
+// THE STREAM LAW at every lane: the drop's FORM (memory or bare gem) and a
+// memory's KIND (rough or preformed) are pure functions of the sealed seed
+// — a salted mulberry step off it, decorrelated from the recall's own Rng
+// (which starts from the raw seed) — so no lane spends a global draw on
+// either decision, and the seeded sim is byte-identical whatever the dials
+// say (probe_memories rig I, extended to fractional shares).
+
+/** A uniform in [0,1) derived from (seed, lane word) — the ONE mixing step
+ *  both lane reads share. */
+export function seedLaneFrac(seed: number, lane: string): number {
+  return new Rng((seed ^ hashStr(`lane:${lane}`)) >>> 0).next();
+}
+
+/** THE MEMORY LAW's form read: does a drop sealed around `seed` arrive as a
+ *  Memory (true) or as the pre-law bare gem (false), at `share` (GEM_DROP_CFG
+ *  .memoryShare — 1 = every drop, 0 = the pre-law world, fractions split
+ *  deterministically per seed)? */
+export function memoryFormOf(seed: number, share: number): boolean {
+  if (share >= 1) return true;
+  if (share <= 0) return false;
+  return seedLaneFrac(seed, 'form') < share;
+}
+
+/** THE TRUED CUT's split read: the pouch KIND a memory sealed around `seed`
+ *  takes at `preformedShare` (GEM_DROP_CFG.preformedShare). */
+export function memoryKindForSeed(seed: number, preformedShare: number): MemoryKind {
+  if (preformedShare >= 1) return 'preformed';
+  if (preformedShare <= 0) return 'rough';
+  return seedLaneFrac(seed, 'kind') < preformedShare ? 'preformed' : 'rough';
+}
+
+/** THE PROVENANCE LEAN over the standing rarity table for one unit: the
+ *  boss lean (a DEF truth) × the tier lean (the unit's sealed `e` event
+ *  fact), multiplied per rarity; null when neither applies (the plain
+ *  table). ONE fold — the cut rolls it, the probe reads it. */
+export function memoryRarityLean(boss: boolean, tier?: MonsterRarity): Partial<Record<SkillRarity, number>> | null {
+  const tierLean = tier ? MEMORY_CFG.tierRarityLean[tier] : undefined;
+  if (!boss && !tierLean) return null;
+  const out: Partial<Record<SkillRarity, number>> = {};
+  for (const id of Object.keys(SKILL_RARITIES) as SkillRarity[]) {
+    out[id] = (boss ? MEMORY_CFG.bossRarityLean[id] : 1) * (tierLean?.[id] ?? 1);
   }
   return out;
 }
@@ -272,15 +410,20 @@ function hashStr(s: string): number {
 export interface MemoryLeanChip { id: string; name: string; color: string; mult: number }
 
 export interface MemoryRecallGroup {
+  /** The recall ADDRESS (memoryGroupKey) — what the intent names. */
+  key: string;
   /** Dropper def id (may have left the registry — the row degrades wide). */
   d: string;
   name: string;
   count: number;
-  rung: 'kit' | 'bias' | 'wide';
+  /** 'pinned' = THE PROMISE: the row's units all recall to ONE sealed gem. */
+  rung: 'kit' | 'bias' | 'wide' | 'pinned';
   /** kit rung: the dropper's droppable-and-unlocked kit skills as chips. */
   kit: MemoryLeanChip[];
   /** bias rung: the def's gemBias tags (at the standing biasMult). */
   tags: string[];
+  /** pinned rung: the sealed grant's face (name/color/rarity where pinned). */
+  pin?: { kind: 'skill' | 'support'; id: string; name: string; color: string; rarity?: SkillRarity };
 }
 
 export interface MemoryRecallViewData {

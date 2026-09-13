@@ -5666,6 +5666,32 @@ export function rollSkillRarity(roll: number): SkillRarity {
   return 'common';
 }
 
+/** Roll a rarity from a uniform [0,1) sample over an AUTHORED weight table
+ *  (an OFFERED gem's own ladder — the bounty board's card, a future named
+ *  reward): a missing or zero weight EXCLUDES the tier (weight 0 on common
+ *  is "never below Magic"); an all-zero table falls back to the standing
+ *  drop ladder so no row can hand out nothing. Ladder order is
+ *  SKILL_RARITIES' own. */
+export function rollSkillRarityWeighted(roll: number, weights: Partial<Record<SkillRarity, number>>): SkillRarity {
+  const ids = Object.keys(SKILL_RARITIES) as SkillRarity[];
+  let total = 0;
+  for (const id of ids) total += Math.max(0, weights[id] ?? 0);
+  if (total <= 0) return rollSkillRarity(roll);
+  let r = roll * total;
+  for (const id of ids) {
+    r -= Math.max(0, weights[id] ?? 0);
+    if (r <= 0) return id;
+  }
+  return ids[ids.length - 1];
+}
+
+/** The LOWEST rarity an authored weight table can hand out (its floor) —
+ *  the card's honest words ("Magic or finer"); null for an all-zero table. */
+export function skillRarityFloor(weights: Partial<Record<SkillRarity, number>>): SkillRarity | null {
+  for (const id of Object.keys(SKILL_RARITIES) as SkillRarity[]) if ((weights[id] ?? 0) > 0) return id;
+  return null;
+}
+
 /** A skill as OWNED by an actor: definition + level + socketed supports. */
 export interface SkillInstance {
   /** Transient payload provenance: deferred/non-projectile proc hits keep their depth. */

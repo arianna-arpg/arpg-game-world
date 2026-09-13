@@ -27,6 +27,11 @@ import type { SkillTag } from './stats';
 export type LootEntry =
   | { weight: number; kind: 'nothing' }
   /** Delegate to the existing skill/support gem droplet (world.dropGemAt). */
+  /** A gem DROP through World.dropGemAt's whole policy (skill/support split,
+   *  the killer's bias, the country's floor — and THE MEMORY LAW: it lands as
+   *  a Memory of the table's provenance, LootCtx.sourceId, at
+   *  GEM_DROP_CFG.memoryShare). A 'memory' entry below is the AUTHORED
+   *  pouch instead — its own count/kind/source, no gem lane consulted. */
   | { weight: number; kind: 'gem' }
   | {
       weight: number; kind: 'item';
@@ -113,21 +118,27 @@ export const GEM_DROP_CFG = {
   /** Skill-vs-support split of the generic gem droplet (world.dropGemAt):
    *  this fraction lands as a SKILL gem, the rest as a support. */
   skillShare: 0.4,
-  /** THE STONE (skill-items M2): the share of the kill-path gem TRICKLE
-   *  (the killGemChance lane alone) that mints a ROUGH MEMORY unit instead
-   *  of a direct gem — direct drops persist rarer (lane 3 of the four).
-   *  The guaranteed paths never convert: bosses, per-def drops, elite
-   *  bonus rolls, loot-table 'gem' payouts, Bonewright fixed spoils,
-   *  GEM_FLOORS ground, quest pay and the class kit all stay direct by
-   *  construction. */
-  memoryShare: 0.65,
+  /** THE MEMORY LAW (2026-09-12, her ruling; skill-items §4 lane 3 re-ruled):
+   *  the share of EVERY gem DROP — every World.dropGemAt mint: the kill
+   *  trickle, per-def counts, boss guarantees, elite spills, loot-table
+   *  'gem' payouts, event/objective/breakable payouts, quest pay, the
+   *  Bonewright's built spoils — that arrives as a MEMORY unit of its
+   *  provenance instead of the bare gem. 1 = the law whole (a gem DROPS as
+   *  a stone; it arrives NAMED only where it is OFFERED — the counter, the
+   *  board, the class kit, the recall itself). 0 = the pre-law world. The
+   *  form is read OFF THE SEALED SEED (engine/memories.ts memoryFormOf — a
+   *  hash-derived uniform, zero global draws), so the seeded sim is
+   *  byte-identical whatever this says, at every lane (THE STREAM LAW,
+   *  probe-pinned). A PINNED drop (a fixed exact spoil) obeys the same
+   *  dial: memory → the promise rides the unit; bare → the exact gem. */
+  memoryShare: 1,
   /** THE TRUED CUT's drop split (skill-items M3, §4 lane 2): the share of
-   *  the MEMORY lane (the memoryShare slice above) that mints a PREFORMED
-   *  Memory instead of a Rough one — the banner pouch should read as a
-   *  FIND, so it rides well below half. Nested inside the one kill-trickle
-   *  draw exactly as memoryShare is (r < p·share·preformedShare ⊂
-   *  r < p·share ⊂ r < p): given a memory, P(preformed) = this dial, and
-   *  the global stream stays byte-identical whatever it says. */
+   *  the MEMORY form that mints a PREFORMED Memory instead of a Rough one —
+   *  the banner pouch should read as a FIND, so it rides well below half.
+   *  Read off the sealed seed too (memoryKindForSeed): given a memory,
+   *  P(preformed) = this dial, and the global stream never moves. An
+   *  explicit kind at the call site (an authored pouch lane) wins; a pinned
+   *  promise always rides ROUGH (the facet law never binds a promise). */
   preformedShare: 0.16,
   /** THE FRESH-FIND LEAN — the catalog-agency lever. A gem the party
    *  already CARRIES (any seat: bag, bar, or socketed) rolls at this

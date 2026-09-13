@@ -389,10 +389,33 @@ banners); the fine grain (nine attributes) remains one dial away. Supports
 have no attributes — the trued cut is skills-only; a tag-keyed support
 banner is a recorded open seat, not built.
 
-**Lane 3 — TRUE GEMS** (direct). The genuine gem still drops — rarer
-(**DIAL**: what fraction of today's `killGemChance` 4.5% converts to stones
-vs stays direct). Bonewright fixed spoils, country gem-floors, quest payouts,
-and the class kit stay direct by construction.
+**Lane 3 — TRUE GEMS** (direct) — **RE-RULED 2026-09-12: THE MEMORY LAW.**
+Her ruling: *"skill and support drops happen as the memories rather than the
+explicit skill and support drops."* A gem that DROPS arrives as a Memory; a
+gem arrives NAMED only where it is OFFERED — the counter's shelf, the bounty
+board's card (which "deliberately states what the reward is"), the class
+kit, the recall itself. `World.dropGemAt` is the one chokepoint every drop
+lane already rides — the kill trickle, per-def counts, boss guarantees,
+elite spills, loot-table `'gem'` payouts, event/objective/breakable payouts,
+quest pay, the Bonewright's built spoils — so the law is one policy read
+there: `GEM_DROP_CFG.memoryShare` (**1** = the law whole; the remainder falls
+as the pre-law bare gem; **0** is the pre-law world), decided per mint OFF THE
+SEALED SEED (`memoryFormOf` — no draw of its own, so THE STREAM LAW now holds
+at every lane; `preformedShare` rides the same seed through
+`memoryKindForSeed`). THE EVENT FACTS a unit may carry beside `{d, s}`
+(`RoughMemoryUnit`): `e` the dropper's rolled elite tier (`MEMORY_CFG.
+tierRarityLean` composes with the boss lean — provenance pays, the §12
+"rarity-lean per provenance tier" dial made a row), `t` the tileset it fell
+on where that country floors gems (THE GROUND: the recall reads `GEM_FLOORS`
+for the ground the unit was FOUND on — "found in the scald before it is
+owned" survives the memory form), `g` THE PROMISE (a pinned exact grant: the
+Bonewright's built part, any boss's named spoil — *"a memory that then rolls
+that very specific skill or support"*; pins ride ROUGH pouches and group
+APART from the dropper's wild units via `memoryGroupKey`, the recall intent's
+`dropper` field being the group key). A drop no body forged wears the
+`found` word; a chest its `chest`; a writ's unnamed gem pay `quest`
+(`MEMORY_FOUND_SOURCES`). THE MINT LAW's stamp moves with the gem: a drop
+stamps nothing, the recall stamps (probe_vendorlocker C). Probe rigs R–T/U.
 
 **Lane 4 — THE STANDING ORDER** (already built). The vendor commission IS
 the gacha's pity system: a KNOWN gem, aimed deliberately, at true seeded
@@ -722,9 +745,15 @@ look, the "+" pip, her rewritten talk lines).
 
 ## 12. OPEN DIALS (build-time levers — no rulings pending)
 
-Kit-lean multiplier · stone drop share of `killGemChance` (and the elite/
-boss stone conversion, `bossGemDrops`/`RARITY_DEFS.drops`) · trued-cut drop
-rate relative to rough · rarity-lean per provenance tier · `skillShare`
+Kit-lean multiplier · `memoryShare` (THE MEMORY LAW's one dial — 1 whole,
+every lane; the elite/boss conversion landed 2026-09-12 as the same dial) ·
+trued-cut drop rate relative to rough (`preformedShare`) · the tier lean rows
+(`MEMORY_CFG.tierRarityLean` — champion/crowned lean, magic/rare neutral;
+unblessed) · the board's OFFERED GRADE ladder (`BOUNTY_BOARD_CFG.lanes.gem.
+rarityWeights` 0/55/38/7 — her ask: never below Magic, a real chance at
+Rare, Legendary fairly low; unblessed) · the counter's pouch buy-back rate
+(`SELL_CFG.memoryUnit` coarse per unit, rough 1 / preformed 2) · the sale
+prompt's stack threshold (`MEMORY_CFG.sell.confirmFrom` 2) · `skillShare`
 inside the cut · stone price rows · the use gesture · pouch count cap (if
 any) · bag growth (`ITEM_CFG.inventory`) if playtests read tight ·
 `MonsterDef.teaches` authoring (optional lever, empty at launch) · the

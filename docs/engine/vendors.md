@@ -127,8 +127,13 @@ every restock that *would have happened* while you were away.
 
 `account.ledger['gemdrop:<id>']` (+ `gemdrops_total`) — the bestiary's
 sibling, same ledger, same doctrine. Bumped ONLY where a gem is genuinely
-MINTED into the world: `World.dropGemAt` (every kill trickle, boss table,
-chest, event payout, breakable) and the Bonewright's fixed spoils. Discards
+MINTED into the world: THE RECALL (`World.recallMemory` — under THE MEMORY
+LAW, 2026-09-12, every drop lane through `World.dropGemAt` lays a Memory
+POUCH, which stamps nothing until it is recalled into a gem; the kill
+trickle, boss tables, chests, event payouts, breakables and the
+Bonewright's built spoils all arrive this way), the board's NAMED gem
+(`payBountyLanes`), and the pre-law BARE lane (`memoryShare` below 1, or a
+pinned promise falling bare). Discards
 (`dropFromInventory`), corpse reclaims (`dropSavedLoot`), looter-sack
 movement and counter purchases move OWNED goods and never route through a
 mint — the index is abuse-proof at the source and accrues through play,
@@ -138,6 +143,25 @@ on them verbatim (`reqLedgerCounts: { [gemDropKey('x')]: n }`) — the
 commission card itself gates on a GATEWORK prefix avenue
 (`{ ledgerPrefix: 'gemdrop:', n: need }`): it sells exactly when at least
 ONE gem is orderable, never on a bare total.
+
+## The counter's buy-back (Memory pouches on the sell lane)
+
+THE COUNTER'S BUY-BACK (2026-09-12, her QoL ask on "inadvertently vendoring
+memories"): a Memory pouch SELLS at any scrap counter — the whole stack in
+one blow (a pouch is one tile) at `SELL_CFG.memoryUnit[kind] × count` coarse
+(`sellMemoryYield`, engine/crafting.ts; rough 1 / preformed 2 per unit,
+under the counter's own per-unit ask so the pouch is liquidity, never an
+exchange) — while the BENCH still refuses it (`MEMORY_CFG.strings.noSalvage`:
+potential is not steel to study), the keeper's mark refuses a locked one,
+and every category SWEEP spares pouches (no blow ever liquidates a hoard by
+accident). THE SALE PROMPT (`UI.showMemorySellPrompt`): a STACKED pouch
+(`MEMORY_CFG.sell.confirmFrom` units and up) under the armed wheel asks
+first — the popup prints the exact pay and carries its own "don't ask again",
+which writes `Settings.confirmMemorySale` OFF (the Options → Gameplay →
+"Confirm Memory Sales" row is the same setting; ON by default; Settings
+persist beside the account in the disk slot and the portage export, so the
+choice survives every run). The pouch's hover card under the wheel prices the
+whole stack and says whether the prompt stands. Probe: `probe_memories` rig W.
 
 ## Persistence + tolerance
 

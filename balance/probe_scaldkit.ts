@@ -72,6 +72,8 @@ import { FOG_BANKS, FOG_CFG, validateFog } from '../src/engine/fog';
 import { castRay } from '../src/engine/los';
 import { resolveTell, validateTells, type TellSpec } from '../src/engine/tells';
 import { GEM_FLOORS, gemFloorFor } from '../src/engine/loot';
+import { autoPlace } from '../src/engine/inventory';
+import { memoryGroupKey } from '../src/engine/memories';
 import { STAT_DEFS } from '../src/engine/stats';
 import type { Doodad } from '../src/engine/levelgen';
 import { WEATHER_DEFS, WET_SKY } from '../src/world/weather';
@@ -1039,7 +1041,7 @@ const K2_SUPPORTS = SCALD_KIT_PLAYER_SUPPORTS.map(s => s.support);
     SCALD_KIT_FLOOR_TILESETS.every(t => !!TILESETS[t]) && !TILESETS.cistern,
     SCALD_KIT_FLOOR_TILESETS.filter(t => !TILESETS[t]).join(',') || 'all real');
   // LIVE: on scald ground a fresh account finds the kit; off it, never.
-  const floorFinds = (tileset: string): { kit: number; total: number } => {
+  const floorFinds = (tileset: string): { kit: number; total: number; stamped: number } => {
     seedGlobalRandom(0x5cc0);
     const wx = makeSimWorld('warrior', 0x5cc0);
     const from = wx.zone.id;
@@ -1047,25 +1049,40 @@ const K2_SUPPORTS = SCALD_KIT_PLAYER_SUPPORTS.map(s => s.support);
     withSeededRandom(0x5cc1, () => { zid = wx.devMintTileset(tileset, 0.5, 12, { seed: 4242 }) ?? ''; });
     if (zid) withSeededRandom(0x5cc1, () => wx.loadZone(zid, from));
     const kitIds = new Set<string>([...K2_SKILLS, ...K2_SUPPORTS]);
-    let kit = 0, total = 0;
+    const seat = wx.localSeat;
+    let kit = 0, total = 0, stamped = 0;
     for (let i = 0; i < 400; i++) {
       wx.drops.length = 0;
       wx.dropGemAt(vec(wx.player.pos.x, wx.player.pos.y));
       for (const d of wx.drops) {
-        const id = d.item.kind === 'skill' ? d.item.inst.def.id
+        // THE MEMORY LAW: the mint is a POUCH now; THE GROUND stamps the
+        // flooring tileset on its unit and the RECALL reads that floor — so
+        // the grant is where the country's own gems surface. (A bare gem,
+        // memoryShare below 1, still reads straight off the ground.)
+        let id = d.item.kind === 'skill' ? d.item.inst.def.id
           : d.item.kind === 'support' ? d.item.gem.def.id : '';
+        if (d.item.kind === 'gear' && d.item.item.mem) {
+          const unit = d.item.item.mem[0];
+          if (unit.t === tileset) stamped++;
+          if (!autoPlace(seat.meta.items, d.item.item)) continue;
+          const r = wx.recallMemory(seat, d.item.item.uid, memoryGroupKey(unit));
+          if (!r) continue;
+          id = r.id;
+          const at = seat.meta.items.findIndex(it => it.uid === r.itemUid);
+          if (at >= 0) seat.meta.items.splice(at, 1);
+        }
         if (!id) continue;
         total++;
         if (kitIds.has(id)) kit++;
       }
     }
-    return { kit, total };
+    return { kit, total, stamped };
   };
   const onScald = floorFinds('geyser_fields');
   const offScald = floorFinds('meadow');
-  check('P3 live: THE GEM FLOOR — on SCALD ground a fresh account (no unlock) finds the kit in the real drop mint; on ordinary ground it never does',
-    onScald.kit > 0 && offScald.kit === 0,
-    `scald ${onScald.kit}/${onScald.total} · meadow ${offScald.kit}/${offScald.total}`);
+  check('P3 live: THE GEM FLOOR — on SCALD ground a fresh account (no unlock) finds the kit through the real drop mint (a Memory stamped with the ground, recalled over its floor); on ordinary ground it never does',
+    onScald.kit > 0 && offScald.kit === 0 && onScald.stamped > 0 && offScald.stamped === 0,
+    `scald ${onScald.kit}/${onScald.total} (stamped ${onScald.stamped}) · meadow ${offScald.kit}/${offScald.total} (stamped ${offScald.stamped})`);
   // (b) THE LEDGER OPENS THE POOL.
   const row = UNLOCK_CATALOG.find(u => u.id === 'gem_skills_scald');
   const supRow = UNLOCK_CATALOG.find(u => u.id === 'sup_scald');

@@ -243,6 +243,12 @@ export const SELL_CFG = {
   gemRarityMul: { common: 1, magic: 2, rare: 3.5, legendary: 6 } as Record<SkillRarity, number>,
   /** Support gems (no rarity of their own — priced as magic). */
   supportMul: 2,
+  /** Memory pouches (THE COUNTER'S BUY-BACK, 2026-09-12): coarse PER UNIT
+   *  by pouch kind — the whole stack sells in one blow at unit × count
+   *  (engine/crafting.ts sellMemoryYield). Priced under the counter's own
+   *  per-unit ask (VENDOR_MEMORY_PRICE — buy 3, sell 1: the gear shelf's
+   *  spread) so the pouch is liquidity, never an exchange. DIALS. */
+  memoryUnit: { rough: 1, preformed: 2 } as Record<MemoryKind, number>,
 };
 
 // ---------------------------------------------------------------------------

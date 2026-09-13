@@ -26,6 +26,7 @@
 import type { Rng } from '../core/rng';
 import { baseComplexityOf, type ItemCategory } from '../engine/items';
 import type { MemoryKind } from '../engine/memories';
+import { SKILL_RARITIES, skillRarityFloor, type SkillRarity } from '../engine/skills';
 import type { World } from '../engine/world';
 import type { QuestDef } from '../quests/types';
 import { QUEST_CATEGORY_COLORS } from '../quests/types';
@@ -135,6 +136,14 @@ export const BOUNTY_BOARD_CFG = {
      *  rolls names a TRUE skill Memory from the account's own drop pool at
      *  the target's level (THE MINT LAW stamps it at pay). */
     gemShare: 0.35,
+    /** THE OFFERED GRADE (2026-09-12, her ruling): a board-named skill
+     *  Memory is a stated reward, so it cuts richer than a wild find —
+     *  never below MAGIC (weight 0 on common), a real chance at RARE, and a
+     *  fairly low chance at LEGENDARY (the lot lane's rarityWeights idiom,
+     *  rolled through rollSkillRarityWeighted at pay; the card prints the
+     *  floor — the visible price law). Compare the drop ladder 54/30/14/2.
+     *  DIALS, unblessed. */
+    gem: { rarityWeights: { common: 0, magic: 55, rare: 38, legendary: 7 } as Partial<Record<SkillRarity, number>> },
     /** R5 THE SMITH'S WRIT (the steady hand): the craft credit's tier
      *  ladder — the target zone's level buys the tier (the pay fold's own
      *  tierAt idiom); the tier buys the trace's band (TRACE_CFG). The
@@ -704,7 +713,13 @@ export function describeBountyPay(pay: BountyPay): string {
     return `a unique ${pay.unique.category}`;
   }
   if (pay.lot) return `${pay.lot.count} rare-grade ${pay.lot.category} pieces`;
-  if (pay.gem) return `the skill Memory: ${SKILLS[pay.gem.id]?.name ?? pay.gem.id}`;
+  if (pay.gem) {
+    // THE OFFERED GRADE's words: the card prints the floor its ladder can
+    // never fall beneath ("Magic or finer") — the visible price law.
+    const floor = skillRarityFloor(BOUNTY_BOARD_CFG.lanes.gem.rarityWeights);
+    const grade = floor && floor !== 'common' ? ` (${SKILL_RARITIES[floor].label} or finer)` : '';
+    return `the skill Memory: ${SKILLS[pay.gem.id]?.name ?? pay.gem.id}${grade}`;
+  }
   if (pay.pouch) return `${pay.pouch.count} Rough Memory units`;
   return (pay.essence ?? []).map(c => `${c.count} ${ESSENCES[c.essence].label}`).join(' · ') || 'nothing';
 }

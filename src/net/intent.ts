@@ -113,7 +113,7 @@ export type MetaAction =
   | { t: 'bindGraft'; key: string; skillId: string | null } // graft key → carrier skill (null unbinds)
   | { t: 'bindSkill'; slot: number; skillId: string | null }   // action-bar slot (internal re-seat; unlearn is the unseat)
   | { t: 'swapSkillSlots'; a: number; b: number }              // THE RACK's reorder: exchange two bar seats atomically
-  | { t: 'recallMemory'; uid: number; dropper: string; facet?: string } // THE STONE: recall ONE unit of a dropper group from the pouch item (FIFO); facet = the Preformed pouch's chosen triad (its lead attribute id)
+  | { t: 'recallMemory'; uid: number; dropper: string; facet?: string } // THE STONE: recall ONE unit of a GROUP from the pouch item (FIFO) — `dropper` is the group KEY (engine/memories.ts memoryGroupKey: the bare dropper id, or dropper|kind:id for a PINNED promise); facet = the Preformed pouch's chosen triad (its lead attribute id)
   | { t: 'caravanTo'; band: number }                           // Caravan: escort to band N (0 = home)
   | { t: 'harborChart'; omen: string }                         // Harbor board: buy the chart of a rumored seat (carried essence at the exchange → survey pulse)
   | { t: 'bountyAccept'; id: string }                          // Bounty board: take a posting off the slate (THE ONE-HAND LAW, folded per board)

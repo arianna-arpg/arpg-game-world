@@ -1169,11 +1169,15 @@ const probeSlideProof = (w: number, h: number, rocks: number[], sockets: number[
     for (const n of run.nodes) guts.puzzleStruck(n, p, true);
     world.update(1 / 60);
     if (!run.done) return { gems: -2, gear: -2, vest: -2 };
-    const landed = guts.drops.slice(before).map(d => d.item.kind);
+    // THE MEMORY LAW (2026-09-12): a gem pour lands as Memory POUCHES — gear
+    // drops carrying units — the gem's own lane in its new form; steel
+    // stays steel, so a pouch counts as its gem and never as gear.
+    const landed = guts.drops.slice(before).map(d => d.item as { kind: string; item?: { mem?: unknown[] } });
+    const isPouch = (it: { kind: string; item?: { mem?: unknown[] } }): boolean => it.kind === 'gear' && !!it.item?.mem;
     return {
-      gems: landed.filter(k => gemKinds.has(k)).length,
-      gear: landed.filter(k => k === 'gear').length,
-      vest: landed.filter(k => k === 'vestige').length,
+      gems: landed.filter(it => gemKinds.has(it.kind) || isPouch(it)).length,
+      gear: landed.filter(it => it.kind === 'gear' && !isPouch(it)).length,
+      vest: landed.filter(it => it.kind === 'vestige').length,
     };
   };
   PUZZLES['probe_legacy_pay'] = { kind: 'ember', reward: { gems: 2, washFor: 20 } };

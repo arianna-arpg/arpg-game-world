@@ -27,7 +27,7 @@ per-caller sweep:
 
 | primitive | covers |
 | --- | --- |
-| `dropGemAt` | kill trickle, elite/rarity gem spill, boss guarantees, wave + objective + event payouts, breakables, cart wrecks |
+| `dropGemAt` | kill trickle, elite/rarity gem spill, boss guarantees, wave + objective + event payouts, breakables, cart wrecks — under THE MEMORY LAW (2026-09-12) the mint is a Memory POUCH of the drop's provenance (a `gear` drop); the seal reads the same, and the pouch's later RECALL re-checks it (`MEMORY_CFG.strings.sealed`) |
 | `dropGearAt` | loot tables (world/boss/crowned), per-monster hoards, carried gear (the Hollowborn) |
 | `dropVestigeAt` | the socket-economy trickle + table results |
 | `dropEssenceAt` | the wounded purse trail, the death burst, encounter yields |

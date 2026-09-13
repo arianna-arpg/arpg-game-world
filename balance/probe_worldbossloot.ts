@@ -263,7 +263,7 @@ const mkField = (tables: string[]): WorldBossField => {
 
 const w = makeSimWorld(CLASSES[0].id, 0x9c11) as World;
 const W = w as unknown as {
-  drops: { item: { kind: string; id?: string; count?: number; item?: { rarity: string } } }[];
+  drops: { item: { kind: string; id?: string; count?: number; item?: { rarity: string; mem?: { d: string }[] } } }[];
   createMonster(defId: string, level: number, team: string): Actor;
   actors: Actor[];
   sim: { worldBossFieldsAll(): WorldBossField[] };
@@ -311,10 +311,15 @@ const slaySovereign = (field: WorldBossField): number => {
   const fresh = W.drops.slice(-Math.max(0, laid));
 
   check('D2 the fall lays the table on the ground', laid > 0, `${laid} drop(s)`);
-  const gems = fresh.filter(d => d.item.kind === 'skill' || d.item.kind === 'support');
-  const gear = fresh.filter(d => d.item.kind === 'gear');
+  // THE MEMORY LAW (2026-09-12): a table's 'gem' result rides dropGemAt and
+  // lands as a Memory POUCH of the sovereign (its def id on the unit) — the
+  // gem's own lane, in its new form; the bare gem stays the pre-law dial.
+  const gems = fresh.filter(d => d.item.kind === 'skill' || d.item.kind === 'support'
+    || (d.item.kind === 'gear' && !!d.item.item?.mem));
+  const gear = fresh.filter(d => d.item.kind === 'gear' && !d.item.item?.mem);
   const vests = fresh.filter(d => d.item.kind === 'vestige');
-  check('D3 THE THREE-KIND DISPATCH: a gem landed AS a gem', gems.length === 1, `${gems.length}`);
+  check('D3 THE THREE-KIND DISPATCH: a gem landed AS a gem (a Memory pouch under THE MEMORY LAW, sealed to the slain body)',
+    gems.length === 1 && (gems[0].item.kind !== 'gear' || gems[0].item.item?.mem?.[0]?.d === FODDER), `${gems.length}`);
   check('D4 …gear landed AS gear, at the rarity the table forced',
     gear.length === 1 && gear[0].item.item?.rarity === 'rare', `${gear.length} / ${gear[0]?.item.item?.rarity}`);
   check('D5 …and the vestige landed AS itself, id and COUNT intact',

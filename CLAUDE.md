@@ -1636,6 +1636,37 @@ we verify changes.
   `WorldStateSave.vendorHolds` (keep-what-stands sanitizer; empty is NOT
   load-bearing) — docs in `docs/engine/vendors.md`, probe
   `balance/probe_vendorlocker.ts`.
+  THE MEMORY LAW (2026-09-12, her ruling — "skill and support drops happen
+  as the memories rather than the explicit skill and support drops"): a gem
+  that DROPS arrives as a MEMORY pouch; a gem arrives NAMED only where it is
+  OFFERED (the counter's shelf, the bounty board's card, the class kit, the
+  recall). `World.dropGemAt` is the one drop chokepoint every lane rides
+  (kill trickle, per-def counts, boss guarantees, elite spills, loot-table
+  'gem' payouts through `mintLootResult`, event/objective/breakable payouts,
+  quest pay, the Bonewright's built spoils), so the law is ONE policy read:
+  `GEM_DROP_CFG.memoryShare` (1 = whole; 0 = the pre-law bare gem) decided
+  per mint OFF THE SEALED SEED (`memoryFormOf`/`memoryKindForSeed` in
+  engine/memories.ts — zero extra draws, THE STREAM LAW at every lane).
+  THE EVENT FACTS a unit may carry beside `{d, s}` (`RoughMemoryUnit`): `e`
+  the dropper's rolled elite tier (`MEMORY_CFG.tierRarityLean` × the boss
+  lean — `memoryRarityLean`), `t` the flooring tileset it fell on (THE
+  GROUND — the recall reads `GEM_FLOORS` for where it was FOUND), `g` THE
+  PROMISE (`MemoryPin` — a pinned exact grant recalled verbatim; pins ride
+  rough pouches and group APART via `memoryGroupKey`, the recall intent's
+  `dropper` = the group key). Provenance: a def id + tier through
+  `World.provenanceOf(actor)`, else the registered words in
+  `MEMORY_FOUND_SOURCES` ('found' default, 'chest', 'quest'). THE MINT LAW
+  stamps at the recall. THE OFFERED GRADE: the board's named gem rolls
+  `BOUNTY_BOARD_CFG.lanes.gem.rarityWeights` (never below Magic, the card
+  prints the floor; `rollSkillRarityWeighted`/`skillRarityFloor`). THE
+  COUNTER'S BUY-BACK: a pouch SELLS whole at the scrap counter
+  (`sellMemoryYield` × `SELL_CFG.memoryUnit`), the bench still refuses,
+  sweeps spare it, and a STACK asks first through THE SALE PROMPT
+  (`Settings.confirmMemorySale`, Options → Gameplay; `MEMORY_CFG.sell.
+  confirmFrom`). Docs: docs/design/skill-items.md §4 lane 3,
+  docs/design/bounty-board.md §6 R4, docs/engine/vendors.md; probe
+  `balance/probe_memories.ts` rigs R–W (+ probe_vendorlocker C,
+  probe_scaldkit P3, probe_worldbossloot D3 re-aimed).
   THE COUNTER GLASS + THE MARKET CHAIN (2026-07-22; ONE-SHELF fold
   2026-08-23, skill-items M3): every counter renders ONE FACE — the whole
   shelf packed D2-style by `World.vendorGridPack` through the player bag's

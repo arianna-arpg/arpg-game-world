@@ -44,6 +44,11 @@ export interface KillCtx {
   readonly sim: WorldSim;
   readonly time: number;
   grantXp(amount: number): void;
+  /** One gem DROP at `at` through World.dropGemAt's whole policy — under
+   *  THE MEMORY LAW it lands as a Memory whose provenance the facade binds
+   *  to the SLAIN BODY (its def id + rolled elite tier), so a row's payout
+   *  leans toward the kit of the thing that fell; a body without a def
+   *  wears the found word. Rows name no provenance of their own. */
   dropGemAt(at: Vec2): void;
   /** Resolve a LOOT TABLE (a data/loottables.ts id) and lay every result on
    *  the ground at `at` — THE spoils verb. A named payout is a table id on the

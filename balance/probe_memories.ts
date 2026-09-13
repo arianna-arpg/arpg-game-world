@@ -38,6 +38,30 @@
 //     (the rung re-aimed from face-seal to stock share), bought stacks
 //     merge onto the standing bag pouch, commissionOdds stays live, and
 //     the re-aimed gate rows resolve (Memory Counter copy, lock chain).
+// THE MEMORY LAW (2026-09-12 — her ruling; docs/design/skill-items.md §4
+// lane 3 re-ruled: a gem that DROPS is a Memory, a gem OFFERED arrives named):
+//   - R. EVERY drop lane mints a pouch at memoryShare 1 — a def-less 'found'
+//     drop, owed quest pay, a body's spill, a boss's guarantee, a crowned
+//     spill (each sealed with the body's rolled tier); share 0 is the
+//     pre-law bare gem at the same lanes; the form/kind read off the sealed
+//     seed, so THE STREAM LAW holds at ANY share (1 / 0 / 0.5 identical).
+//   - S. THE PROMISE: a pinned drop seals the exact gem (kind, id, grade,
+//     level) into a ROUGH pouch; the recall mints it verbatim, twin worlds
+//     agree, the promise groups APART from the dropper's wild units
+//     (memoryGroupKey), the view wears the pin, a vanished id falls to the
+//     wild cut, a support promise recalls to that support.
+//   - T. THE GROUND: a unit stamped with a flooring tileset recalls over
+//     that country's GEM_FLOORS (found in the scald before it is owned);
+//     the same seeds unstamped stay inside the account pool.
+//   - U. THE TIER: memoryRarityLean folds boss × tier per rarity (neutral
+//     reads null) and the crowned stamp cuts richer live over the same seeds.
+//   - V. THE OFFERED GRADE: the board's named Memory rolls its own ladder —
+//     never a zero-weight tier, every weighted tier reachable, the floor
+//     reads Magic and the card prints it.
+//   - W. THE COUNTER'S BUY-BACK: the scrap wheel sells a whole pouch at the
+//     per-unit rate × count (each kind its own rate); the bench still
+//     refuses; a locked pouch refuses; the sell sweep spares it; the
+//     confirmMemorySale setting defaults ON and round-trips.
 // Run: npx tsx balance/probe_memories.ts
 // ---------------------------------------------------------------------------
 
@@ -46,19 +70,24 @@ import { seedGlobalRandom } from '../src/sim/rng';
 import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
 import { START_ZONE } from '../src/data/zones';
+import { BOUNTY_BOARD_CFG, describeBountyPay } from '../src/data/bountyboard';
 import { FEATURE, LEDGER_GEMDROP_TOTAL, gemDropKey, isSkillUnlockedForDrop, isSupportUnlockedForDrop } from '../src/meta/account';
-import { DROP_CFG, GEM_DROP_CFG } from '../src/engine/loot';
+import { deserializeSettings, makeSettings, serializeSettings } from '../src/meta/settings';
+import { DROP_CFG, GEM_DROP_CFG, registerGemFloor } from '../src/engine/loot';
 import {
-  MEMORY_CFG, MEMORY_KINDS, MEMORY_TRADED_PROVENANCE, makeMemoryItem,
-  makeRoughMemoryItem, memoryFacets, memoryGroups, type MemoryKind,
+  MEMORY_CFG, MEMORY_FOUND_SOURCES, MEMORY_KINDS, MEMORY_TRADED_PROVENANCE, makeMemoryItem,
+  makeRoughMemoryItem, memoryFacets, memoryFormOf, memoryGroupKey, memoryGroups, memoryKindForSeed,
+  memoryRarityLean, type MemoryKind,
 } from '../src/engine/memories';
+import { SKILL_RARITIES, rollSkillRarityWeighted, skillRarityFloor, type SkillRarity } from '../src/engine/skills';
+import { sellMemoryYield } from '../src/engine/crafting';
 import { ATTRIBUTES, ATTRIBUTE_IDS, ATTRIBUTE_TRIADS } from '../src/engine/stats';
 import { autoPlace } from '../src/engine/inventory';
-import { freeCellCount, makeSupportGemItem } from '../src/engine/gemitems';
+import { freeCellCount, makeSupportGemItem, skillGemPayloadOf } from '../src/engine/gemitems';
 import { serializeCharacter, rebuildSavedMeta } from '../src/meta/character';
 import { allUnlockables } from '../src/meta/unlocks';
 import { VENDOR_CFG } from '../src/data/vendors';
-import { ESSENCE_IDS, VENDOR_ITEM_CFG, VENDOR_MEMORY_PRICE } from '../src/data/essences';
+import { ESSENCE_IDS, SELL_CFG, VENDOR_ITEM_CFG, VENDOR_MEMORY_PRICE } from '../src/data/essences';
 import { MONSTERS } from '../src/data/monsters';
 import { vec } from '../src/core/math';
 import type { VendorEntry, World } from '../src/engine/world';
@@ -98,16 +127,21 @@ const resolveTwin = (unit: RoughMemoryUnit, facet?: string): { kind: string; id:
     ? makeRoughMemoryItem([{ ...unit }])
     : makeMemoryItem('preformed', [{ ...unit }]);
   if (!autoPlace(w2.localSeat.meta.items, p)) return null;
-  const r = w2.recallMemory(w2.localSeat, p.uid, unit.d, facet);
+  // The recall names the GROUP KEY (a pinned promise's own key, else the
+  // bare dropper id — memoryGroupKey, the intent's law).
+  const r = w2.recallMemory(w2.localSeat, p.uid, memoryGroupKey(unit), facet);
   return r ? { kind: r.kind, id: r.id, rarity: r.rarity } : null;
 };
 
 // ------------------------------------------ A. THE DROP + THE POUCH MERGE
 {
   const dropsBefore = w.drops.length;
-  w.dropGemAt(hero.pos, undefined, false, 'crypt_lich');
-  w.dropGemAt(hero.pos, undefined, false, 'crypt_lich');
-  w.dropGemAt(hero.pos, undefined, false, 'zombie');
+  // The kind is named here (an authored ROUGH lane): under THE MEMORY LAW an
+  // unnamed kind splits off the sealed seed at preformedShare (rig O), and
+  // this rig tests the ONE-TILE-PER-KIND merge, not the split.
+  w.dropGemAt(hero.pos, undefined, false, 'crypt_lich', 'rough');
+  w.dropGemAt(hero.pos, undefined, false, 'crypt_lich', 'rough');
+  w.dropGemAt(hero.pos, undefined, false, 'zombie', 'rough');
   const minted = w.drops.slice(dropsBefore);
   check('A: the memory lane mints GEAR drops carrying one unit each',
     minted.length === 3 && minted.every(d => d.item.kind === 'gear' && d.item.item.mem?.length === 1));
@@ -667,6 +701,243 @@ const resolveTwin = (unit: RoughMemoryUnit, facet?: string): { kind: string; id:
     !!supRow && supRow.requiresUnlock === 'feat_vendor_gems'
     && (supRow.payload as { flag?: string } | undefined)?.flag === FEATURE.BRANDT_SELL_SUPPORTS);
   w.account.features.delete(FEATURE.VENDOR_GEMS); // leave the account as this rig found it
+}
+
+// ------------------------------- R. THE MEMORY LAW (2026-09-12, her ruling)
+{
+  // A FRESH world (the arena — open ground, no counter frame to disturb):
+  // every lane below rides dropGemAt, the one chokepoint, so one dial
+  // governs them all.
+  const isPouch = (d: World['drops'][number]): boolean => d.item.kind === 'gear' && !!d.item.item.mem;
+  const isBare = (d: World['drops'][number]): boolean => d.item.kind === 'skill' || d.item.kind === 'support';
+  const unitOf = (d: World['drops'][number]): RoughMemoryUnit => (d.item as { kind: 'gear'; item: ItemInstance }).item.mem![0];
+  const origShare = GEM_DROP_CFG.memoryShare;
+  try {
+    seedGlobalRandom(0x1a3e);
+    const wr = makeSimWorld('warrior', 0x1a3e);
+    GEM_DROP_CFG.memoryShare = 1;
+    wr.drops.length = 0;
+    wr.dropGemAt(wr.player.pos);                                             // a def-less drop (an event, a breakable)
+    wr.dropGemAt(wr.player.pos, undefined, true, 'quest');                   // owed writ pay
+    wr.dropGemAt(wr.player.pos, undefined, false, { d: 'zombie', e: 'crowned' }); // a body's spill
+    check('R: at memoryShare 1 EVERY dropGemAt lane mints a pouch (found / owed quest / a body) — no bare gem falls',
+      wr.drops.length === 3 && wr.drops.every(isPouch));
+    const units = wr.drops.map(unitOf);
+    check('R: a def-less drop wears the FOUND word; owed pay the quest word; a body its def id + rolled tier',
+      units[0].d === MEMORY_CFG.foundProvenance && units[0].e === undefined && units[0].t === undefined
+      && units[1].d === 'quest'
+      && units[2].d === 'zombie' && units[2].e === 'crowned');
+    check('R: the found + quest words are REGISTERED provenance (the panel can name them)',
+      !!MEMORY_FOUND_SOURCES[MEMORY_CFG.foundProvenance] && !!MEMORY_FOUND_SOURCES.quest);
+    // The kill path: a BOSS's guarantee and a CROWNED spill fall as pouches
+    // of THAT body (rig J pins the chance trickle).
+    const bossId = Object.keys(MONSTERS).find(id => MONSTERS[id].boss && !MONSTERS[id].containerLoot && !MONSTERS[id].parts)!;
+    wr.drops.length = 0;
+    const mb = wr.createMonster(bossId, 1, 'enemy');
+    mb.pos = vec(wr.player.pos.x + 400, wr.player.pos.y);
+    wr.actors.push(mb);
+    wr.kill(mb, false, wr.player);
+    const bossPouches = wr.drops.filter(isPouch).filter(d => unitOf(d).d === bossId);
+    check('R: a BOSS kill lays its guaranteed gems as pouches of the boss (no bare gem falls)',
+      bossPouches.length >= Math.min(1, MONSTERS[bossId].drops ?? DROP_CFG.bossGemDrops) && !wr.drops.some(isBare),
+      `${bossPouches.length} pouch(es) of ${bossId}`);
+    wr.drops.length = 0;
+    const me = wr.createMonster('zombie', 1, 'enemy');
+    me.rarity = 'crowned';
+    me.pos = vec(wr.player.pos.x + 400, wr.player.pos.y);
+    wr.actors.push(me);
+    wr.kill(me, false, wr.player);
+    const spill = wr.drops.filter(isPouch).map(unitOf);
+    check('R: a CROWNED kill spills its RARITY_DEFS.drops pouches, each sealed with the rolled tier',
+      spill.length >= 2 && spill.every(u => u.d === 'zombie' && u.e === 'crowned') && !wr.drops.some(isBare), `${spill.length}`);
+    // The dial: 0 is the pre-law world at every lane.
+    GEM_DROP_CFG.memoryShare = 0;
+    wr.drops.length = 0;
+    wr.dropGemAt(wr.player.pos);
+    wr.dropGemAt(wr.player.pos, undefined, false, 'zombie');
+    check('R: at memoryShare 0 the same lanes fall as BARE gems (the pre-law world, one dial)',
+      wr.drops.length === 2 && wr.drops.every(isBare));
+    // THE STREAM LAW at a FRACTIONAL share: the form is read off the seed —
+    // no lane spends a draw on it, so the tail is byte-identical.
+    const streamTail = (share: number): number => {
+      GEM_DROP_CFG.memoryShare = share;
+      seedGlobalRandom(0xa11ce);
+      const ws = makeSimWorld('warrior', 0xa11ce);
+      for (let i = 0; i < 12; i++) ws.dropGemAt(ws.player.pos, undefined, false, i % 2 ? 'zombie' : undefined);
+      return Math.random();
+    };
+    const t1 = streamTail(1), t0 = streamTail(0), th = streamTail(0.5);
+    check('R: THE STREAM LAW holds at every share (1 / 0 / 0.5 spend the identical global draws)', t1 === t0 && t0 === th);
+    check('R: the seed lanes are pure (same seed, same verdict; the kind lane splits at its share)',
+      memoryFormOf(12345, 0.5) === memoryFormOf(12345, 0.5) && memoryFormOf(7, 1) && !memoryFormOf(7, 0)
+      && memoryKindForSeed(99, 1) === 'preformed' && memoryKindForSeed(99, 0) === 'rough');
+  } finally {
+    GEM_DROP_CFG.memoryShare = origShare;
+  }
+}
+
+// -------------------------------------------- S. THE PROMISE (the pinned cut)
+{
+  const isPouch = (d: World['drops'][number]): boolean => d.item.kind === 'gear' && !!d.item.item.mem;
+  const skillId = Object.keys(SKILLS).find(id => !SKILLS[id].noDrop)!;
+  const supId = Object.keys(SUPPORTS)[0];
+  w.drops.length = 0;
+  w.dropGemAt(hero.pos, undefined, false, 'crypt_lich', undefined, { k: 'skill', id: skillId, r: 'rare', l: 3 });
+  w.dropGemAt(hero.pos, undefined, false, 'crypt_lich', undefined, { k: 'support', id: supId, l: 1 });
+  const pinned = w.drops.filter(isPouch).map(d => (d.item as { kind: 'gear'; item: ItemInstance }).item);
+  check('S: a PINNED drop falls as a ROUGH pouch whose unit seals the promise (kind, id, grade, level)',
+    pinned.length === 2 && pinned.every(p => p.baseId === MEMORY_KINDS.rough.base)
+    && pinned[0].mem![0].g?.k === 'skill' && pinned[0].mem![0].g?.id === skillId
+    && pinned[0].mem![0].g?.r === 'rare' && pinned[0].mem![0].g?.l === 3
+    && pinned[1].mem![0].g?.k === 'support' && pinned[1].mem![0].g?.id === supId);
+  w.drops.length = 0;
+  // Planted beside the same dropper's wild unit: the promise is its OWN
+  // group (memoryGroupKey) — FIFO never crosses, the view wears the pin.
+  const wild: RoughMemoryUnit = { d: 'crypt_lich', s: 5151 };
+  const promise: RoughMemoryUnit = { d: 'crypt_lich', s: 5152, g: { k: 'skill', id: skillId, r: 'rare', l: 3 } };
+  const p = plantPouch([wild, promise]);
+  const view = w.memoryRecallView(seat, p.uid)!;
+  const pinRow = view.groups.find(g => g.rung === 'pinned');
+  check('S: the view stands the promise as its own PINNED row beside the wild row, wearing the sealed gem',
+    view.groups.length === 2 && !!pinRow && pinRow.key === memoryGroupKey(promise) && pinRow.key !== 'crypt_lich'
+    && pinRow.pin?.id === skillId && pinRow.pin?.rarity === 'rare' && pinRow.d === 'crypt_lich'
+    && view.groups.some(g => g.key === 'crypt_lich' && g.rung !== 'pinned'));
+  const r = w.recallMemory(seat, p.uid, memoryGroupKey(promise));
+  const granted = r ? m.items.find(i => i.uid === r.itemUid) : undefined;
+  check('S: recalling the promise mints THAT gem verbatim — the pinned grade and level',
+    !!r && r.kind === 'skill' && r.id === skillId && r.rarity === 'rare'
+    && !!granted && skillGemPayloadOf(granted)?.level === 3);
+  check('S: the wild unit stayed (the promise consumed only its own group)', p.mem!.length === 1 && p.mem![0].s === 5151);
+  if (r) removeItem(r.itemUid);
+  removeItem(p.uid);
+  const twinA = resolveTwin(promise), twinB = resolveTwin(promise);
+  check('S: twin worlds replay the promise identically',
+    !!twinA && !!twinB && twinA.id === skillId && twinB.id === skillId && twinA.rarity === 'rare' && twinB.rarity === 'rare');
+  const ps = plantPouch([{ d: 'zombie', s: 77, g: { k: 'support', id: supId, l: 1 } }]);
+  const rs = w.recallMemory(seat, ps.uid, memoryGroupKey(ps.mem![0]));
+  check('S: a support promise recalls to that support', !!rs && rs.kind === 'support' && rs.id === supId);
+  if (rs) removeItem(rs.itemUid);
+  const pv = plantPouch([{ d: 'zombie', s: 78, g: { k: 'skill', id: 'no_such_skill_qa' } }]);
+  const rv = w.recallMemory(seat, pv.uid, memoryGroupKey(pv.mem![0]));
+  check('S: a promise whose gem left the registry falls to the WILD cut (a grant still lands, never a silent nothing)',
+    !!rv && rv.id !== 'no_such_skill_qa');
+  if (rv) removeItem(rv.itemUid);
+}
+
+// ---------------------------------------------- T. THE GROUND (the floor stamp)
+{
+  const lvl = Math.max(w.zone.level, hero.level);
+  const locked = Object.keys(SKILLS).find(id =>
+    !SKILLS[id].noDrop && !isSkillUnlockedForDrop(w.account, id) && (SKILLS[id].minDropLevel ?? 0) <= lvl)!;
+  registerGemFloor({ id: 'qa_memory_floor', tilesets: ['qa_memory_tileset'], skills: [locked] });
+  const origMult = GEM_DROP_CFG.floorMult;
+  try {
+    GEM_DROP_CFG.floorMult = 1e6; // the country's lean, cranked so the floor dominates the skill lane
+    const seeds = Array.from({ length: 16 }, (_, i) => 80_000 + i * 7919);
+    const grants = (units: RoughMemoryUnit[]): string[] => {
+      const pp = plantPouch(units);
+      const got: string[] = [];
+      for (let i = 0; i < units.length; i++) {
+        const r = w.recallMemory(seat, pp.uid, 'zombie');
+        if (!r) break;
+        got.push(r.id);
+        removeItem(r.itemUid);
+      }
+      removeItem(pp.uid);
+      return got;
+    };
+    const stamped = grants(seeds.map(s => ({ d: 'zombie', s, t: 'qa_memory_tileset' })));
+    check('T: a unit that FELL on flooring ground recalls the country\'s own floored skill — before the account owns it',
+      stamped.includes(locked), `${stamped.filter(id => id === locked).length}/${stamped.length} → ${locked}`);
+    const bare = grants(seeds.map(s => ({ d: 'zombie', s })));
+    check('T: the SAME seeds without the ground stamp stay inside the account pool (the floor is a place, not a leak)',
+      bare.length === seeds.length && !bare.includes(locked));
+  } finally {
+    GEM_DROP_CFG.floorMult = origMult;
+  }
+}
+
+// --------------------------------------------- U. THE TIER (provenance pays)
+{
+  const ids = Object.keys(SKILL_RARITIES) as SkillRarity[];
+  const cfg = MEMORY_CFG.tierRarityLean.crowned!;
+  const tierOnly = memoryRarityLean(false, 'crowned');
+  check('U: memoryRarityLean folds the tier table per rarity (no boss: the tier alone)',
+    !!tierOnly && ids.every(r => tierOnly[r] === cfg[r]));
+  const both = memoryRarityLean(true, 'crowned');
+  check('U: boss × tier compose MULTIPLICATIVELY',
+    !!both && ids.every(r => Math.abs(both[r]! - MEMORY_CFG.bossRarityLean[r] * cfg[r]) < 1e-9));
+  check('U: a plain body (no boss, no tier) reads the plain table; a boss alone reads its own lean',
+    memoryRarityLean(false) === null && memoryRarityLean(false, 'normal') === null
+    && ids.every(r => memoryRarityLean(true)?.[r] === MEMORY_CFG.bossRarityLean[r]));
+  // LIVE: over the same seeds the crowned stamp cuts richer in aggregate —
+  // the lean bites the rarity roll, the pick untouched.
+  const rank: Record<string, number> = { common: 0, magic: 1, rare: 2, legendary: 3 };
+  let plainScore = 0, tierScore = 0, pairs = 0;
+  for (let i = 0; i < 60; i++) {
+    const s = 91_000 + i * 104_729;
+    const a = resolveTwin({ d: 'zombie', s });
+    const b = resolveTwin({ d: 'zombie', s, e: 'crowned' });
+    if (a?.kind === 'skill' && b?.kind === 'skill') {
+      pairs++;
+      plainScore += rank[a.rarity ?? 'common'];
+      tierScore += rank[b.rarity ?? 'common'];
+    }
+  }
+  check('U: live — the crowned stamp cuts richer over the same seeds', pairs > 0 && tierScore > plainScore, `${tierScore} vs ${plainScore} over ${pairs}`);
+}
+
+// --------------------------------- V. THE OFFERED GRADE (the board's ladder)
+{
+  const wts = BOUNTY_BOARD_CFG.lanes.gem.rarityWeights;
+  check('V: the board\'s gem ladder stands — never common; rare present; legendary low but present',
+    (wts.common ?? 0) === 0 && (wts.magic ?? 0) > 0 && (wts.rare ?? 0) > 0
+    && (wts.legendary ?? 0) > 0 && (wts.legendary ?? 0) < (wts.rare ?? 0));
+  const rolled = new Set<string>();
+  for (let i = 0; i < 400; i++) rolled.add(rollSkillRarityWeighted((i + 0.5) / 400, wts));
+  check('V: rollSkillRarityWeighted never hands out a zero-weight tier and reaches every weighted one',
+    !rolled.has('common') && rolled.has('magic') && rolled.has('rare') && rolled.has('legendary'));
+  check('V: the floor reads MAGIC; an all-zero table falls back to the standing ladder',
+    skillRarityFloor(wts) === 'magic' && skillRarityFloor({}) === null && rollSkillRarityWeighted(0.01, {}) === 'common');
+  const line = describeBountyPay({ gem: { id: Object.keys(SKILLS)[0] } });
+  check('V: the card prints the floor (the visible price law)', line.includes(`${SKILL_RARITIES.magic.label} or finer`), line);
+}
+
+// ------------------------------- W. THE COUNTER'S BUY-BACK (the sale lane)
+{
+  // Rig Q's frame: town, Brandt at the elbow, the Salvage Station owned.
+  check('W: (setup) the scrap counter answers', w.nearScrapVendor(seat));
+  const p = plantPouch([{ d: 'zombie', s: 3_000 }, { d: 'zombie', s: 3_001 }, { d: 'crypt_lich', s: 3_002 }]);
+  const before = m.essences.coarse ?? 0;
+  w.salvageItem(seat, p.uid, 'break');
+  check('W: the BENCH lane still refuses the pouch (potential is not steel)',
+    m.items.some(i => i.uid === p.uid) && p.mem!.length === 3);
+  w.salvageItem(seat, p.uid, 'sell');
+  const want = sellMemoryYield('rough', 3);
+  check('W: the SELL lane buys the WHOLE stack at the per-unit rate × count (one tile, one blow)',
+    !m.items.some(i => i.uid === p.uid) && (m.essences.coarse ?? 0) === before + want.count
+    && want.essence === 'coarse' && want.count === Math.round(3 * SELL_CFG.memoryUnit.rough * SELL_CFG.mul));
+  const pp = plantPouch([{ d: 'zombie', s: 4_000 }], 'preformed');
+  const b2 = m.essences.coarse ?? 0;
+  w.salvageItem(seat, pp.uid, 'sell');
+  check('W: a preformed pouch sells at its OWN unit rate',
+    !m.items.some(i => i.uid === pp.uid) && (m.essences.coarse ?? 0) === b2 + sellMemoryYield('preformed', 1).count);
+  const pl = plantPouch([{ d: 'zombie', s: 4_001 }]);
+  pl.locked = true;
+  w.salvageItem(seat, pl.uid, 'sell');
+  check('W: a LOCKED pouch refuses the sale (the keeper\'s mark)', m.items.some(i => i.uid === pl.uid));
+  pl.locked = false;
+  w.salvageBulk(seat, 'item', undefined, 'sell');
+  check('W: the SELL sweep spares the pouch (never an inadvertent liquidation)', m.items.some(i => i.uid === pl.uid));
+  removeItem(pl.uid);
+  const s0 = makeSettings();
+  const back = deserializeSettings(serializeSettings(s0))!;
+  const legacy = deserializeSettings({ schemaVersion: s0.schemaVersion, keybinds: {} })!;
+  s0.confirmMemorySale = false;
+  const off = deserializeSettings(serializeSettings(s0))!;
+  check('W: Settings.confirmMemorySale defaults ON, round-trips both ways, and a pre-dial save reads ON',
+    back.confirmMemorySale === true && legacy.confirmMemorySale === true && off.confirmMemorySale === false);
+  check('W: the prompt\'s stack threshold is a dial at 2+ (single memories never ask)', MEMORY_CFG.sell.confirmFrom >= 2);
 }
 
 console.log(failed ? `\n${failed} FAILURE(S)` : '\nALL PASS');
