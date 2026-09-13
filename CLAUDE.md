@@ -37,6 +37,10 @@ Ranged repositioning budgets, fixed crossfire positions and intelligent enemy
 tactics are documented in `docs/design/tactical-ai.md`; the pursuit, movement
 commitment and live tactic checks are in `balance/probe_tacticalai.ts`.
 
+Enemy-level tactic unlocks and the level-5 survivability investigation are in
+`docs/design/tactic-progression.md`; `balance/probe_tacticprogression.ts` checks
+debut boundaries and `balance/audit_tacticprogression.ts` compares combat pressure.
+
 Sylvan Warden and Stone Sentinel guard commitment, bash warnings and doctrine
 level gates are documented in `docs/design/shield-defender-balance.md`;
 `balance/probe_wardenbalance.ts` checks those counterplay and progression seams.

@@ -872,6 +872,9 @@ export interface DriveSpec {
 /** One condition bundle — every present field must hold (AND). Rules, phase
  *  gotos, and skill reserves all speak this. */
 export interface AICondition {
+  /** Minimum acting body's level, inclusive. Never follows the target's level:
+   *  revisiting an early area does not teach its residents new tactics. */
+  minLevel?: number;
   /** Replenishable combat spawn (Actor.noBounty), including rule summons,
    *  births and splits. Lets nuisance-sensitive tactics stay on wild bodies. */
   conjured?: boolean;
@@ -1485,6 +1488,7 @@ export function evalCondition(
   c: AICondition, actor: Actor, target: Actor | null, ctx: AICtx,
 ): boolean {
   const lifeFrac = actor.life / Math.max(1, actor.maxLife());
+  if (c.minLevel !== undefined && actor.level < c.minLevel) return false;
   if (c.conjured !== undefined && actor.noBounty !== c.conjured) return false;
   if (c.lifeBelow !== undefined && !(lifeFrac <= c.lifeBelow)) return false;
   if (c.lifeAbove !== undefined && !(lifeFrac >= c.lifeAbove)) return false;

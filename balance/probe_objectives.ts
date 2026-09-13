@@ -964,6 +964,13 @@ withSeededRandom(0x0bec7a, () => {
     {
       const zid = stage(767676, 31, { kind: 'clear', adopt: true });
       check('U7a the fail-arm guest seats', ff.devIgnite(w.devOverlayView(), zid) === true);
+      // This rig tests the adopted package's fail arm. A random resident
+      // lair legitimately wins adoption first; resolve the standing package
+      // against bare ground, as U8 does for the death arm. U13 covers lair
+      // precedence independently, and the actual load/trigger/end still run.
+      const failArmStamp = maybeAdoptObjective(w.zoneMap[zid], bare, world);
+      check('U7a the fail-arm fixture adopts the standing package', failArmStamp?.kind === 'package');
+      if (failArmStamp) w.zoneMap[zid].objective = failArmStamp;
       w.loadZone(zid);
       killAllEnemies(); // the drain drive needs no ambient AI bill (wall-clock)
       const run = w.fractureView();

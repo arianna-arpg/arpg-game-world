@@ -39,6 +39,10 @@ the tick on a move that never happened.
 
 ## Distinct combatants
 
+Advanced conduct now unlocks by body level; see `tactic-progression.md` for
+the 6/8/10 ladder. The descriptions below describe the earned repertoire.
+Movement budgets, reloads and recovery openings apply from the first level.
+
 | Enemy | Conduct and counterplay |
 |---|---|
 | Skeleton Archer | A predictable firing drill: 0.4–0.7 s initial reaction and 0.25–0.4 s completed-cast recovery. The undead body still has finite defensive movement. |

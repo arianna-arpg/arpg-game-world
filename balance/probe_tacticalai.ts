@@ -13,10 +13,10 @@ function check(name: string, ok: boolean, detail = '') {
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail ? ' — ' + detail : ''}`);
   if (!ok) failed++;
 }
-function fixture(id = 'skeleton_archer', brain?: BrainDef) {
+function fixture(id = 'skeleton_archer', brain?: BrainDef, level = 1) {
   seedGlobalRandom(0x71AC);
   const w = makeSimWorld('warrior', 0x71AC), p = w.player;
-  const a = w.createMonster(id, 1, 'enemy');
+  const a = w.createMonster(id, level, 'enemy');
   a.pos = vec(p.pos.x + 180, p.pos.y);
   a.facing = a.facingPrev = Math.PI;
   if (brain) a.brain = brain;
@@ -98,7 +98,7 @@ for (const style of ['slideCast', 'holdRange', 'hitAndRun']) {
 }
 
 {
-  const { w, p, a } = fixture('bandit_matchlock');
+  const { w, p, a } = fixture('bandit_matchlock', undefined, 8);
   a.brain = { ...a.brain!, skillUse: { mode: 'priority', order: [] } };
   a.pos = vec(p.pos.x + 280, p.pos.y);
   const ally = w.createMonster('bandit_matchlock', 1, 'enemy');
@@ -134,7 +134,7 @@ for (const style of ['slideCast', 'holdRange', 'hitAndRun']) {
   check('stationary ranged combat allocates no repositioning state', !a.aiReposition);
 }
 {
-  const { w, p, a } = fixture('bandit_matchlock');
+  const { w, p, a } = fixture('bandit_matchlock', undefined, 8);
   p.invulnerable = true;
   const start = vec(a.pos.x, a.pos.y);
   let casts = 0, lastAt = -1;
@@ -147,7 +147,7 @@ for (const style of ['slideCast', 'holdRange', 'hitAndRun']) {
     dist(start, a.pos) > 15 && casts >= 2, `${casts} weapon presses`);
 }
 {
-  const { w, p, a } = fixture('hex_weaver');
+  const { w, p, a } = fixture('hex_weaver', undefined, 6);
   a.pos = vec(p.pos.x + 200, p.pos.y);
   const casts: string[] = []; let lastAt = -1;
   for (let i = 0; i < 480 && casts.length < 2; i++) {
@@ -162,7 +162,7 @@ for (const style of ['slideCast', 'holdRange', 'hitAndRun']) {
 }
 
 {
-  const { w, p, a } = fixture('bandit_cutthroat');
+  const { w, p, a } = fixture('bandit_cutthroat', undefined, 6);
   a.pos = vec(p.pos.x + 60, p.pos.y);
   a.aiTargetId = p.id; a.aiTargetRef = p; a.aiEngagedAt = 0; w.time = 4;
   const windup = makeSkillInstance({ ...SKILLS.claw, useTime: 2, manaCost: 0 }, 1);

@@ -2964,7 +2964,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
       // Answer long wind-ups with a committed ranged cast of her own;
       // closing during that exchange earns a punish window.
       behavior: { recovery: [0.3, 0.5] },
-      rules: [{ when: { targetCasting: 0.5, distOver: 140, sinceEngaged: 2 },
+      rules: [{ when: { minLevel: 8, targetCasting: 0.5, distOver: 140, sinceEngaged: 2 },
         every: [7, 10], hold: [1.4, 1.8],
         use: { move: { style: 'hold' },
           skillUse: { mode: 'priority', order: ['ice_spear', 'frostbolt'] } } }],
@@ -3495,8 +3495,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 16,
     brain: {
       type: 'caster',
-      skillUse: { opener: 'despair', combos: [{ after: 'despair', then: 'spark', window: 3 }] },
       behavior: { recovery: [0.25, 0.45] },
+      rules: [{ when: { minLevel: 6 }, use: {
+        skillUse: { opener: 'despair', combos: [{ after: 'despair', then: 'spark', window: 3 }] },
+      } }],
     },
   },
 
@@ -4195,7 +4197,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
       behavior: { encircle: { front: 1 }, reaction: [0.2, 0.4] },
       // Read a committed cast, take a short flank, then resume attacking.
       // The knife is holstered during the maneuver; it is not a free dodge.
-      rules: [{ when: { targetCasting: 0.35, distUnder: 180, sinceEngaged: 2 },
+      rules: [{ when: { minLevel: 6, targetCasting: 0.35, distUnder: 180, sinceEngaged: 2 },
         every: [6, 9], hold: [0.65, 0.9],
         use: { move: { style: 'orbit', ring: 46 },
           skillUse: { mode: 'priority', order: [] } } }],
@@ -4248,8 +4250,13 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 28, faction: 'bandit',
     brain: {
       type: 'caster',
-      move: { style: 'crossfire', flankStep: 110, relocateFor: [0.7, 1.0], fireFor: [2.0, 3.0] },
-      behavior: { aimLead: 0.35, aimLeadChance: 0.5, reaction: [0.35, 0.6] },
+      behavior: { reaction: [0.35, 0.6] },
+      rules: [
+        { when: { minLevel: 8 }, use: {
+          move: { style: 'crossfire', flankStep: 110, relocateFor: [0.7, 1.0], fireFor: [2.0, 3.0] },
+        } },
+        { when: { minLevel: 10 }, use: { behavior: { aimLead: 0.35, aimLeadChance: 0.5 } } },
+      ],
     }, // choose an allied firing angle, commit, then the long open ram
     detection: 1.3,
   },
@@ -6071,11 +6078,12 @@ export const MONSTERS: Record<string, MonsterDef> = {
     grants: [{ atLevel: 10, support: 'puppet_strings', on: 'venom_bolt' }],
     brain: {
       type: 'strafer',
-      behavior: {
-        aimLead: 0.8, aimLeadChance: 0.75,
-        dodge: { chance: 0.7, reaction: [0.15, 0.35] },
-        steerAim: { lead: 0.4 }, plantChance: 0.2,
-      },
+      behavior: { plantChance: 0.2 },
+      rules: [
+        { when: { minLevel: 6 }, use: { behavior: { aimLead: 0.8, aimLeadChance: 0.75 } } },
+        { when: { minLevel: 8 }, use: { behavior: { dodge: { chance: 0.7, reaction: [0.15, 0.35] } } } },
+        { when: { minLevel: 10 }, use: { behavior: { steerAim: { lead: 0.4 } } } },
+      ],
       // Nimble repositioning in short bursts, with dependable firing stops.
       tempo: { reposition: { moveFor: [0.7, 1.1], holdFor: [1.2, 1.7] } },
     },
@@ -6092,11 +6100,14 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // out of wind-ups mid-verse — sylvan cunning at commander tier.
     brain: {
       type: 'commander',
-      behavior: { aimLead: 0.7, aimLeadChance: 0.7, dodge: { chance: 0.55, reaction: [0.2, 0.4] } },
       tempo: { reposition: { moveFor: [1.2, 1.8], holdFor: [1.3, 1.8] } },
       skillUse: { reserve: [{ skill: 'rallying_howl', when: { alliesWithin: { count: 2, radius: 240 } } }] },
-      rules: [{ when: { alliesWithin: { count: 2, radius: 240 }, sinceEngaged: 2 },
-        every: [9, 13], hold: [2, 3], use: { move: { style: 'hold' } } }],
+      rules: [
+        { when: { alliesWithin: { count: 2, radius: 240 }, sinceEngaged: 2 },
+          every: [9, 13], hold: [2, 3], use: { move: { style: 'hold' } } },
+        { when: { minLevel: 8 }, use: { behavior: { aimLead: 0.7, aimLeadChance: 0.7 } } },
+        { when: { minLevel: 10 }, use: { behavior: { dodge: { chance: 0.55, reaction: [0.2, 0.4] } } } },
+      ],
     },
     faction: 'sylvan',
   },
