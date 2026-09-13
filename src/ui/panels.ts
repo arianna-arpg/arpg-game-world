@@ -124,7 +124,8 @@ import '../data/menu';
 // in the vestiges' runes; THE OPENING CHOOSER (meta/classkit.ts): the class
 // card's mastery alternates.
 import { encipher } from '../data/runescript';
-import { MU_ZONE } from '../data/mu';
+import { MU_CFG, MU_ZONE } from '../data/mu'; // MU_CFG.offer = the offered contract's card words (muOffer)
+import { STATUS_DEFS } from '../engine/status'; // the muOffer marker's own ink lights the card header
 import { kitChoicesFor, kitRungOf } from '../meta/classkit';
 import { MERC_CFG } from '../meta/mercs';
 import {
@@ -138,7 +139,7 @@ import {
   type SaveImportPlan,
 } from '../meta/portage';
 import {
-  availableModes, DEFAULT_MODE_ID, modeById, rosterCapacity, rosterOf, stageOf,
+  DEFAULT_MODE_ID, modeById, modesSwearableFrom, rosterCapacity, rosterOf, stageOf,
   type RosterEntry,
 } from '../meta/modes';
 import { bound, defaultEnabledFor } from '../packages/manifest';
@@ -507,6 +508,11 @@ export class UI {
   /** The LIFE-CONTRACT selected on the class screen (meta/modes.ts). Sticky
    *  across menu navigation like the class hand; reset with it each new offer. */
   private pendingModeId: string = DEFAULT_MODE_ID;
+  /** THE OFFERED CONTRACT the open Mu card's vessel stands under (the mode
+   *  id engine/scenes.ts muOfferOf read off the seated deal), null for an
+   *  ordinary waking. Seeds pendingModeId at the fresh open, gates the
+   *  card's contract row through modesSwearableFrom, and lights the header. */
+  private muOffer: string | null = null;
   /** THE OPENING CHOOSER's picks this offer (classId → base starter →
    *  chosen skill), seeded from the account's remembered picks per class;
    *  reset with the hand each new offer. Resolved against what the account
@@ -2405,7 +2411,20 @@ export class UI {
     hideTooltip();
   }
 
-  showMuClassCard(classId: string, onPick: (def: ClassDef, modeId?: string, name?: string, kitPicks?: Record<string, string>) => void): void {
+  /** THE MU CARD's door (main.ts polls the class request beside it): one
+   *  vessel's card. `offered` = THE OFFERED CONTRACT the waking rolled onto
+   *  this vessel (engine/scenes.ts muOfferOf — the mode id whose marker
+   *  status the body wears), null for an ordinary mortal waking. A fresh
+   *  open PRE-SWEARS the offered contract; re-renders (a mode click, a kit
+   *  chip) go through renderMuClassCard and keep the player's standing pick. */
+  showMuClassCard(classId: string, onPick: (def: ClassDef, modeId?: string, name?: string, kitPicks?: Record<string, string>) => void,
+    offered: string | null = null): void {
+    this.muOffer = offered;
+    if (offered) this.pendingModeId = offered;
+    this.renderMuClassCard(classId, onPick);
+  }
+
+  private renderMuClassCard(classId: string, onPick: (def: ClassDef, modeId?: string, name?: string, kitPicks?: Record<string, string>) => void): void {
     const def = CLASSES.find(c => c.id === classId);
     if (!def) return;
     const acc = this.getAccount();
@@ -2414,11 +2433,34 @@ export class UI {
     // THE OPENING CHOOSER: the chosen opening per seat, a swap badge where
     // the account owns alternates (meta/classkit.ts) — the card's one new choice.
     const chips = this.kitRowHtml(def);
-    // The life-contract row (meta/modes.ts), compact: rendered only once a
-    // second mode is unlocked — same registry, same full-roster refusal.
-    const modes = availableModes(acc);
-    if (!modes.some(md => md.id === this.pendingModeId)) this.pendingModeId = DEFAULT_MODE_ID;
+    // The life-contract row (meta/modes.ts) through THE ONE PREDICATE
+    // (modesSwearableFrom): what THIS vessel may be sworn into given what
+    // the waking offered it — an `only` contract lists solely on the vessel
+    // carrying its offer (the deliberation law: met, never picked), a
+    // no-release offer is the whole row. Rendered only once two contracts
+    // stand; the same full-roster refusal as ever.
+    const modes = modesSwearableFrom(acc, this.muOffer);
+    if (!modes.some(md => md.id === this.pendingModeId)) {
+      this.pendingModeId = modes.some(md => md.id === DEFAULT_MODE_ID)
+        ? DEFAULT_MODE_ID : (modes[0]?.id ?? DEFAULT_MODE_ID);
+    }
     const picked = modeById(this.pendingModeId);
+    // THE OFFERED CONTRACT's header (MU_CFG.offer): the contract NAMED where
+    // the vessel's ember already showed it — lit in the marker status's own
+    // ink while the offer stands selected, dimmed to its declined line once
+    // stepped back to a mortal waking; the card's chrome wears the same ink.
+    const offerMode = this.muOffer ? modeById(this.muOffer) : null;
+    const sworn = !!offerMode && this.pendingModeId === offerMode.id;
+    const offerCol = offerMode ? (STATUS_DEFS[offerMode.muOffer?.status ?? '']?.color ?? offerMode.color) : '';
+    const fillMode = (s: string): string => s.replace('{mode}', (sworn ? offerMode! : picked).name);
+    const offerHead = offerMode
+      ? `<div id="mu-offer" style="margin-bottom:8px">
+          <div style="font-size:12px;letter-spacing:3px;font-weight:bold;color:${sworn ? offerCol : 'var(--text-dim)'};${sworn ? `text-shadow:0 0 12px ${offerCol}99;` : ''}">${esc(fillMode(sworn ? MU_CFG.offer.sworn : MU_CFG.offer.declined))}</div>
+          ${sworn ? `<div style="font-size:10px;color:var(--text-dim);margin-top:2px">${esc(MU_CFG.offer.swornSub)}</div>` : ''}
+        </div>`
+      : '';
+    this.muCard.style.borderColor = sworn ? offerCol : '';
+    this.muCard.style.boxShadow = sworn ? `0 0 32px ${offerCol}55` : '';
     const pickedFull = picked.save === 'roster'
       && rosterOf(acc, picked.id).length >= rosterCapacity(acc, picked);
     const modeRow = modes.length > 1
@@ -2441,6 +2483,7 @@ export class UI {
     const nameValue = this.pendingCharName ?? acc.namePref ?? '';
     this.muCard.innerHTML = `
       ${this.closeGlyphHtml('Step away')}
+      ${offerHead}
       <div class="cname" style="color:${def.color};font-size:22px;letter-spacing:1px">${def.name}</div>
       <div class="cdesc" style="margin:6px 0 8px 0">${def.description}</div>
       <div class="cattrs">${ATTRIBUTE_IDS.filter(a => (def.attributes[a] ?? 0) > 0).map(a =>
@@ -2473,11 +2516,11 @@ export class UI {
     this.muCard.querySelectorAll<HTMLElement>('.mode-card').forEach(el => {
       el.addEventListener('click', () => {
         if (el.dataset.full !== 'true') this.pendingModeId = el.dataset.mode!;
-        this.showMuClassCard(classId, onPick); // re-render keeps the typed name
+        this.renderMuClassCard(classId, onPick); // re-render keeps the typed name + the offer
       });
     });
     // THE OPENING CHOOSER's chips re-render the card the same way.
-    this.bindKitChips(this.muCard, def, () => this.showMuClassCard(classId, onPick));
+    this.bindKitChips(this.muCard, def, () => this.renderMuClassCard(classId, onPick));
     const confirm = (): void => {
       // Belt to the disabled button: a full roster mode can't be sworn into.
       const md = modeById(this.pendingModeId);
@@ -2506,6 +2549,9 @@ export class UI {
   closeMuClassCard(): void {
     this.closeKitPopover();
     this.muCardOpen = false;
+    this.muOffer = null; // the offer belongs to the vessel; the next open re-reads it
+    this.muCard.style.borderColor = '';
+    this.muCard.style.boxShadow = '';
     this.muCard.classList.add('hidden');
     this.muCard.innerHTML = '';
   }
@@ -2649,7 +2695,10 @@ export class UI {
     // is unlocked, dealt straight from the registry — a new mode is one data
     // entry there, zero edits here. Roster modes show their vessel occupancy
     // and grey out when full (click → the Vault, where more slots are sold).
-    const modes = availableModes(acc);
+    // THE ONE PREDICATE (modesSwearableFrom): this legacy screen offers no
+    // vessel, so an `only` contract (the Immortal covenant — met in Mu,
+    // never picked off a list) is structurally absent here.
+    const modes = modesSwearableFrom(acc, null);
     if (!modes.some(md => md.id === this.pendingModeId)) this.pendingModeId = DEFAULT_MODE_ID;
     const modeCard = (md: (typeof modes)[number]): string => {
       const roster = md.save === 'roster';
@@ -11028,8 +11077,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     this.escapeMenu.classList.add('hidden');
     this.startMenu.classList.add('hidden');
     this.expeditionSetup.classList.add('hidden');
-    this.muCardOpen = false;
-    this.muCard.classList.add('hidden');
+    this.closeMuClassCard(); // the offered contract's chrome + muOffer clear with the card
     this.escapeMenuOpen = false;
     // Every menu-kind timeflow hold dies with its surface — hideAll is the
     // belt under every "all panels clear" path (run start, death, resets).

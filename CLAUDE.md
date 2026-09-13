@@ -1453,6 +1453,21 @@ we verify changes.
   tutorial), a solo run's end drifts back there, the tutorial's death wakes
   there with completion stamped AT THE THRESHOLD, and `SceneDef.transient`
   keeps the standalone hub outside every scene stamp/gate structurally.
+  THE OFFERED CONTRACT (2026-09-13, her ruling — Mu × the Immortal
+  covenant; `engine/muDeal.ts` = THE DEAL as one pure function of the
+  account, probe `balance/probe_muoffer.ts`): a life-contract wearing
+  `CharacterModeDef.muOffer` (a `ModeOfferSpec` — chance / max / marker
+  `status` / `release` / `only`) is ROLLED onto the dealt hand once its
+  unlock is owned and a vessel slot stands free (`muOfferableModes`,
+  derived per deal, never stored) — AFTER the deal on the same stream (the
+  hand is byte-identical either way; a sitting holds its offer); the
+  offered vessel wears the marker (`mu_sworn` = a red ember + the new
+  generic `bodyFx.rim` outline — shown, never told); the card opens
+  PRE-SWORN off `muOfferOf` with the contract named in its header and its
+  row through THE ONE PREDICATE `modesSwearableFrom` (an `only` contract
+  lists solely on the vessel carrying its offer — the Immortal is met,
+  never picked; `release` lets it step back to Mortal, never the reverse);
+  Wake enters the ordinary loop.
   THE TUTORIAL FACTIONS (data/commanders.ts): the onslaught rolls ONE
   LEGION per account — SEVEN `TUTORIAL_FACTIONS` rows (goblin/undead/
   beastkin/demon + the obscure courts carven/chitin/gnoll), each fielding

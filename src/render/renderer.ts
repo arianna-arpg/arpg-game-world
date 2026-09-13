@@ -5458,6 +5458,22 @@ export class Renderer {
         drawGlow(ctx, 0, a.radius * 0.25, a.radius * (bodyFx.glowScale ?? 1.9),
           bodyFx.glow, Math.min(baseAlpha, (bodyFx.glowAlpha ?? 0.22) * breathe * bodyFxBank));
       }
+      // THE RIM (StatusDef.bodyFx.rim — the offered contract's tell): a thin
+      // ring at the body's edge in the status's color, the elite ring's
+      // grammar worn as a state; breathes with the glow, scales by the bank.
+      if (bodyFx.rim) {
+        const breathe = 0.85 + 0.15 * Math.sin(t * 2.4 + seed);
+        ctx.save();
+        ctx.globalAlpha = Math.min(baseAlpha, (bodyFx.rimAlpha ?? 0.6) * breathe * bodyFxBank);
+        ctx.strokeStyle = bodyFx.rim;
+        ctx.lineWidth = bodyFx.rimWidth ?? 1.5;
+        ctx.shadowColor = bodyFx.rim;
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(0, 0, a.radius + 3, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
       if (bodyFx.motes) {
         ctx.fillStyle = bodyFx.moteColor ?? bodyFx.glow ?? '#8fd24a';
         if (bodyFx.motes === 'fume') {

@@ -1039,7 +1039,11 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     reqLedgerCounts: { [LEDGER_ACCOUNT_DEATHS]: IMMORTAL_CFG.unlockDeaths },
     label: 'The Immortal Covenant',
     description: `Death has seen you ${IMMORTAL_CFG.unlockDeaths} times, and blinked. `
-      + 'Unlocks the IMMORTAL mode at character select: a sworn character plays the wake as any '
+      // THE OFFERED CONTRACT (meta/modes.ts muOffer): the covenant is MET in
+      // Mu, never picked off a list — the Vault card says so in the player's terms.
+      + 'Opens the IMMORTAL covenant: while a vessel slot stands free, the nothing between lives '
+      + 'may offer one waking vessel under it — you will know it by the ember it wears. Take it, '
+      + 'or wake mortal. A sworn character plays the wake as any '
       + 'other, until its first death, which pays a reduced essence tithe and seals it OUTSIDE '
       + 'the mortal ledger. It wakes in town, build intact, carry lost; it persists across '
       + 'sessions in an account vessel; its corpses are visible only to itself, and its deeds '

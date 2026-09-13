@@ -109,6 +109,18 @@ export const MU_CFG = {
    *  feet in `ink`) and the tray's sealed hint. An empty list opens every
    *  page as in a run. */
   sealPanels: { ids: ['inventory', 'character', 'passives', 'map', 'journal'], line: 'A spirit carries nothing between lives.', ink: WISP_INK },
+  /** THE OFFERED CONTRACT's card words (her ruling 2026-09-13; the roll
+   *  itself is data on the mode row — meta/modes.ts `muOffer`, dealt by
+   *  engine/muDeal.ts; the vessel's own tell is its marker status's body
+   *  fx, drawn and never told). These are the card HEADER's lines: `sworn`
+   *  while the offered contract stands selected, `declined` once the player
+   *  steps it back to the default waking (`{mode}` = the selected
+   *  contract's name), and the sub-line beneath the sworn badge. */
+  offer: {
+    sworn: '◈ {mode}',
+    swornSub: 'offered this waking — take it, or wake mortal',
+    declined: '{mode} · the offer declined',
+  },
 } as const;
 
 /** The standalone hub scene — the veteran lane (New Run, run's end). The

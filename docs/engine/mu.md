@@ -1,11 +1,15 @@
 # MU — the hub between lives
 
 **Files:** `src/data/mu.ts` (the ground, the config, the apparitions, the
-standalone scene) · `src/engine/scenes.ts` (the `mu` stage handler — the
-seventh core kind — plus the agency `reckoning`) · `src/ui/panels.ts`
+standalone scene) · `src/engine/muDeal.ts` (THE DEAL — the hand law and the
+offered contract as one pure function of the account) · `src/engine/scenes.ts`
+(the `mu` stage handler — the seventh core kind — plus the agency
+`reckoning`) · `src/meta/modes.ts` (`ModeOfferSpec` / `muOffer`,
+`muOfferableModes`, `modesSwearableFrom`) · `src/ui/panels.ts`
 (`showMuClassCard`, `onBeginRun`) · `src/main.ts` (`startMu`, `beginPressed`,
-the class-request poll, the death reroute) · probe `balance/probe_mu.ts`
-(+ the rewritten tail of `balance/probe_scenes.ts`).
+the class-request poll, the death reroute) · probes `balance/probe_mu.ts`
+(+ the rewritten tail of `balance/probe_scenes.ts`) and
+`balance/probe_muoffer.ts` (the offered contract).
 
 ## What it is
 
@@ -104,6 +108,65 @@ own update is the one hand on an apparition's facing (`aims: false` bodies
 wear no tick and no mind turns them). Probe C7–C9: born on the mark, one
 frame swings at most `turnRate × dt`, then settles on the wisp's new seat.
 
+## THE OFFERED CONTRACT (Mu × the Immortal covenant)
+
+Her ruling (2026-09-13): the Immortal is never a toggle on a card — it is
+**met**. Once the covenant is unlocked and a vessel slot stands free, the
+waking itself may offer it: one awake vessel of the dealt hand stands
+offered **under** the contract, shown and never told.
+
+**The data seat** is the mode row itself — `CharacterModeDef.muOffer`, a
+`ModeOfferSpec` in `meta/modes.ts`:
+
+| dial | meaning | Immortal |
+|---|---|---|
+| `chance` | per-vessel chance along the dealt hand, seat order | `IMMORTAL_CFG.offerChance` (0.1) |
+| `max` | at most this many offered vessels per waking | `IMMORTAL_CFG.offerMax` (1) |
+| `status` | the marker status the offered vessel wears — THE DRAWN TELL | `mu_sworn` |
+| `release` | may the card step the offered vessel back to Mortal? | true |
+| `only` | is the roll the only door? (an un-offered card never lists it) | true |
+
+A contract with no row is never rolled and lists freely when unlocked (the
+legacy class-screen law). Eligibility is **derived at every deal, never
+stored** — `muOfferableModes(account)`: the unlock owned, and for a roster
+contract a FREE vessel slot (`freeRosterSlot`; a fallen vessel still holds
+its slot, so nothing is offered until it is raised or released).
+
+**THE DEAL** (`engine/muDeal.ts`) is one pure function of the account:
+the hand law, then the offers — rolled **after** the deal on the same
+seeded stream, so the hand is byte-identical whether or not a contract is
+offerable (THE STREAM LAW), and the roll holds for the sitting exactly as
+the hand does (`muDealSeed` — the account's own runs + deaths). The stage
+only SEATS what it returns.
+
+**THE DRAWN TELL**: the offered vessel wears the contract's marker status.
+`mu_sworn` (`engine/status.ts`) is a low red ember beneath the body and a
+thin red rim at its edge — `StatusDef.bodyFx.glow` plus the new generic
+`bodyFx.rim` lever (`rim` / `rimWidth` / `rimAlpha`, the elite ring's
+grammar worn as a state; any status may wear one). The nameplate keeps the
+hand's gold; nothing prints. `validate.ts` refuses an offer whose marker
+does not exist or draws no `bodyFx` — an offer nobody can see is a broken
+law — and refuses one on the default contract.
+
+**THE CARD**: the dwell posts the class as ever; the shell reads
+`muOfferOf(world, classId)` beside it and `showMuClassCard(classId, onPick,
+offered)` opens **pre-sworn** — the contract named in the header
+(`MU_CFG.offer.sworn` in the marker's own ink, the card's chrome wearing
+the same) and its row through THE ONE PREDICATE `modesSwearableFrom(account,
+offered)`: an `only` contract lists solely on the vessel carrying its
+offer (so an ordinary vessel's card shows no covenant at all — the
+deliberation law), a `release: false` offer is the whole row, a lost
+unlock voids the offer. Stepping the offered vessel back to Mortal dims the
+header to `MU_CFG.offer.declined`; re-renders keep the pick, a fresh open
+re-swears. Wake calls the same `startGame` with the chosen mode — an
+Immortal vessel enters the ordinary loop (roster slot, sworn stage, the
+covenant's every law) by construction. The legacy class screen reads the
+same predicate with no offer, so the covenant is structurally absent there.
+
+Probe: `balance/probe_muoffer.ts` (the registry, the gate, the roll's
+analytic rate over a thousand sittings, the stream law, the seated tell,
+the one predicate).
+
 ## The wisp
 
 `MU_CFG.wisp` — the raw `spirit` look, pale ether ink, radius 10, kit
@@ -192,10 +255,17 @@ latch (fire-once, step-out re-arm, veiled/faint refusals), and the whole
 agency reckoning incl. interrupt re-arm and the fall into Mu.
 `probe_scenes.ts`: the prologue walked end to end into Mu — the hold's
 absence, the mark, the ten-breath bar, the mercy floor, the threshold stamp.
+`probe_muoffer.ts`: THE OFFERED CONTRACT — a drawn marker, the gate (no
+unlock / a full roster = no offer), the roll's analytic rate and cap, the
+stream law, the seated tell beside the dwell request, the one predicate.
 
 ## Dials
 
 Everything in `MU_CFG` (`data/mu.ts`): wisp face, arc radii/span, the gaze
 (mark + turn rate), faint cap, dwell radius/seconds, the three spoken lines. The reckoning's beat lives on
 the prologue's stage row (`spawnDist`/`graceSec`/`floorFrac`/`blastWaitSec`).
-All numbers are first-pass and unblessed.
+THE OFFERED CONTRACT's dials: `IMMORTAL_CFG.offerChance` / `offerMax` and
+the Immortal's `muOffer` row (`release`, `only`) in `meta/modes.ts`, the
+`mu_sworn` marker's colors and alphas in `engine/status.ts` (glow scale
+2.3 / alpha 0.34, rim 1.5px / alpha 0.6), and the card's header words in
+`MU_CFG.offer`. All numbers are first-pass and unblessed.

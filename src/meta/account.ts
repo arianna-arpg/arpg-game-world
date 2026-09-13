@@ -113,9 +113,11 @@ export const FEATURE = {
   /** THE ORACLE STONE: standing stones in Lastlight — commune (a rune
    *  minigame) to REROLL one affix on an item, which seals it forever. */
   ORACLE_STONE: 'oracle_stone',
-  /** THE IMMORTAL COVENANT (meta/modes.ts): unlocks the Immortal character
-   *  mode at character select — earned by dying, not by spending (its Vault
-   *  entry gates on the lifetime death counter). Slots 2/3 add roster vessels. */
+  /** THE IMMORTAL COVENANT (meta/modes.ts): opens the Immortal character
+   *  mode — earned by dying, not by spending (its Vault entry gates on the
+   *  lifetime death counter). Never a pick off a list: THE OFFERED CONTRACT
+   *  (the mode's muOffer row, engine/muDeal.ts) rolls it onto one waking
+   *  vessel in Mu while a slot stands free. Slots 2/3 add roster vessels. */
   IMMORTAL: 'immortal_mode',
   IMMORTAL_SLOT_2: 'immortal_slot_2',
   IMMORTAL_SLOT_3: 'immortal_slot_3',

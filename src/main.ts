@@ -59,7 +59,7 @@ import './data/bountyExpeditions'; // side-effect: the bounty board's 'expeditio
 import { updateAI } from './engine/ai';
 import { World, type Seat } from './engine/world';
 import { applyLab, ULT_QA } from './engine/ultimates'; // THE LAB LEVER — the dev panel's Lab tab; __game.ultqa is its console twin
-import { sceneBegin, sceneCardAck, sceneDue, muTakeClassRequest } from './engine/scenes';
+import { sceneBegin, sceneCardAck, sceneDue, muTakeClassRequest, muOfferOf } from './engine/scenes';
 import { MU_CFG, MU_SCENE_ID } from './data/mu';
 import { buildManifest, reconcileManifest, type ExpeditionManifest } from './packages/manifest';
 import { bumpLedger, mergeLedger } from './packages/ledger';
@@ -1835,7 +1835,10 @@ function tick(now: number): void {
       // pause menu's hold law), and let the pick start the run proper.
       if (!ui.escapeMenuOpen && !ui.muCardOpen) {
         const muReq = muTakeClassRequest(world);
-        if (muReq) ui.showMuClassCard(muReq, startPicked);
+        // THE OFFERED CONTRACT (engine/muDeal.ts): the card opens pre-sworn
+        // to whatever contract the waking rolled onto this vessel (muOfferOf
+        // — the same seated row whose red ember the body wears), or plain.
+        if (muReq) ui.showMuClassCard(muReq, startPicked, muOfferOf(world, muReq));
       }
       // Dwelling by the return-Caravanner IN THE WILDS ports straight home — no menu.
       pollCaravanReturn();

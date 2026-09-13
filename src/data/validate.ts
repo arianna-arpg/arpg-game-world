@@ -2919,6 +2919,18 @@ export function validateContent(): void {
         warn(`mode ${m.id}/${st.id}: metaProgression off but corpses write the ACCOUNT ring (economy leak)`);
       }
     }
+    // THE OFFERED CONTRACT (ModeOfferSpec — muOffer, engine/muDeal.ts): the
+    // marker status must exist AND draw (bodyFx) — an offer nobody can SEE
+    // breaks the shown-never-told law; the roll's dials must be sane; the
+    // default contract can never be the one rolled (it is the release).
+    if (m.muOffer) {
+      const sd = STATUS_DEFS[m.muOffer.status];
+      if (!sd) warn(`mode ${m.id}: muOffer names unknown status '${m.muOffer.status}'`);
+      else if (!sd.bodyFx) warn(`mode ${m.id}: muOffer status '${m.muOffer.status}' draws no bodyFx (an offer must be SEEN)`);
+      if (!(m.muOffer.chance >= 0 && m.muOffer.chance <= 1)) warn(`mode ${m.id}: muOffer chance ${m.muOffer.chance} outside [0,1]`);
+      if (!(m.muOffer.max >= 1)) warn(`mode ${m.id}: muOffer max ${m.muOffer.max} < 1 (an offer that can never land)`);
+      if (m.id === DEFAULT_MODE_ID) warn(`mode ${m.id}: the default contract cannot wear a muOffer (it is what an offer releases to)`);
+    }
   }
   if (!MODE_BY_ID[DEFAULT_MODE_ID]) warn(`modes: default '${DEFAULT_MODE_ID}' missing from the registry`);
 

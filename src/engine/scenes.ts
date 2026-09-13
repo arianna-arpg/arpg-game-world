@@ -49,15 +49,14 @@ import {
 import {
   MU_CFG, MU_SCENE_ID, MU_ZONE, apparitionDefId, APPARITION_UNKNOWN_ID,
 } from '../data/mu';
-import { CLASSES } from '../data/classes';
+import { muDeal } from './muDeal';
+import { MODE_BY_ID } from '../meta/modes';
 import { WAVE_CFG } from '../data/waves';
 import { mintCave } from './worldgen';
 import { makeSkillInstance } from './skills';
 import { SKILLS } from '../data/skills';
 import { doodadRuleOf, type Doodad } from './levelgen';
-import {
-  LEDGER_FLASK_LESSON, isClassUnlocked, selectableSlotCount, type Account,
-} from '../meta/account';
+import { LEDGER_FLASK_LESSON, type Account } from '../meta/account'; // the hand's reads moved to muDeal.ts
 import { bumpLedger } from '../packages/ledger';
 import { registerAttentionSource } from '../world/attention';
 import { Rng } from '../core/rng';
@@ -970,6 +969,10 @@ interface MuApp {
   id: number;
   classId: string | null;
   rank: 'awake' | 'veiled' | 'faint';
+  /** THE OFFERED CONTRACT (engine/muDeal.ts): the mode id this awake vessel
+   *  stands offered under (null = an ordinary mortal waking). The body wears
+   *  the contract's marker status — the drawn tell; the card reads this. */
+  offer: string | null;
   /** The commune linger (seconds engaged + still). */
   t: number;
   /** Latch: fired (awake) or refused (veiled) — re-arms on step-out. */
@@ -980,26 +983,13 @@ interface MuState { apps?: MuApp[]; classReq?: string | null }
 
 const muZoneId = (): string => `scene_${MU_SCENE_ID}`;
 
-/** THE HAND LAW — the class screen's exact deal, engine-side and seeded:
- *  hand size = selectableSlotCount, dealt from the account-unlocked pool.
- *  Seeded off the account's own history (runs + deaths), so a re-entered Mu
- *  keeps its hand within a sitting and re-deals as the account moves on. */
+/** THE HAND LAW + THE OFFERED CONTRACT — the deal is engine/muDeal.ts's ONE
+ *  pure function of the account (seeded off its own history, so a
+ *  re-entered Mu keeps its hand and its offers within a sitting); this only
+ *  SEATS what it returns: three arcs of bodies, the rank markers, and the
+ *  offered vessel's contract status (the drawn tell). */
 function muSpawnApparitions(w: World, sc: SceneRuntime): MuApp[] {
-  const acc = w.account;
-  const pool = CLASSES.filter(c => isClassUnlocked(acc, c.id));
-  const handN = Math.min(selectableSlotCount(acc), pool.length);
-  const seed = (MU_ZONE.seed
-    ^ Math.imul(acc.runRecords.length + 1, 0x9e3779b1)
-    ^ Math.imul(acc.deaths.length + 1, 0x85ebca6b)) >>> 0;
-  const rng = new Rng(seed);
-  const shuffled = [...pool];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(rng.next() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  const awake = shuffled.slice(0, handN);
-  const veiled = shuffled.slice(handN);
-  const faintN = Math.min(MU_CFG.faintCap, CLASSES.length - pool.length);
+  const deal = muDeal(w.account);
   const cx = w.arena.w / 2, cy = w.arena.h / 2;
   const apps: MuApp[] = [];
   const seat = (defId: string, classId: string | null, rank: MuApp['rank'],
@@ -1015,13 +1005,20 @@ function muSpawnApparitions(w: World, sc: SceneRuntime): MuApp[] {
     m.eventKey = sc.eventKey;
     if (rank === 'veiled') m.applyStatus('mu_veiled', 0, 1, 'Mu');
     if (rank === 'faint') m.applyStatus('mu_faint', 0, 1, 'Mu');
+    // THE OFFERED CONTRACT: an awake vessel the deal offered under a
+    // contract wears that contract's marker (ModeOfferSpec.status) — the
+    // red ember the player reads before a word is said.
+    const offer = rank === 'awake' && classId ? deal.offers.get(classId) ?? null : null;
+    const offerStatus = offer ? MODE_BY_ID[offer]?.muOffer?.status : undefined;
+    if (offerStatus) m.applyStatus(offerStatus, 0, 1, 'Mu');
     w.actors.push(m);
-    apps.push({ id: m.id, classId, rank, t: 0, noted: false });
+    apps.push({ id: m.id, classId, rank, offer, t: 0, noted: false }); // offer = the muDeal roll
   };
-  awake.forEach((c, i) => seat(apparitionDefId(c.id), c.id, 'awake', i, awake.length, MU_CFG.ranks.awake));
-  veiled.forEach((c, i) => seat(apparitionDefId(c.id), c.id, 'veiled', i, veiled.length, MU_CFG.ranks.veiled));
-  for (let i = 0; i < faintN; i++) {
-    seat(APPARITION_UNKNOWN_ID, null, 'faint', i, faintN, MU_CFG.ranks.faint);
+  // THE DEAL's three arcs (engine/muDeal.ts): the hand, the veiled pool, the cowls.
+  deal.awake.forEach((c, i) => seat(apparitionDefId(c.id), c.id, 'awake', i, deal.awake.length, MU_CFG.ranks.awake));
+  deal.veiled.forEach((c, i) => seat(apparitionDefId(c.id), c.id, 'veiled', i, deal.veiled.length, MU_CFG.ranks.veiled));
+  for (let i = 0; i < deal.faintN; i++) {
+    seat(APPARITION_UNKNOWN_ID, null, 'faint', i, deal.faintN, MU_CFG.ranks.faint);
   }
   return apps;
 }
@@ -1207,6 +1204,18 @@ export function muTakeClassRequest(w: World): string | null {
   const r = st.classReq ?? null;
   if (r) st.classReq = null;
   return r;
+}
+
+/** THE OFFERED CONTRACT's read (engine/muDeal.ts): the mode id the AWAKE
+ *  vessel of `classId` stands offered under this waking, or null for an
+ *  ordinary mortal waking. The shell hands it to the card beside the class
+ *  request so the card opens pre-sworn; a pure read of the stage's seated
+ *  deal — the same row whose marker status the body wears. */
+export function muOfferOf(w: World, classId: string): string | null {
+  const sc = w.scene;
+  if (!sc || !muStageLive(w)) return null;
+  const st = sc.state as MuState;
+  return st.apps?.find(r => r.rank === 'awake' && r.classId === classId)?.offer ?? null;
 }
 
 // THE MARK — the attention fabric's chevron on whatever body the running

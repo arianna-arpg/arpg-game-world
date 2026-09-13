@@ -232,6 +232,14 @@ export interface StatusDef {
     glowAlpha?: number;
     motes?: 'fume' | 'bubbles';
     moteColor?: string;
+    /** THE RIM (the offered contract's tell, 2026-09-13): a thin ring
+     *  stroked at the body's edge in this color — the elite ring's grammar
+     *  as a WORN STATE, an outline that reads at a glance where the soft
+     *  under-glow alone would not. `rimWidth` px (default 1.5), `rimAlpha`
+     *  peak (default 0.6); breathes with the glow, scaled by the bank. */
+    rim?: string;
+    rimWidth?: number;
+    rimAlpha?: number;
     /** THE BANK READ (StatusDef.bank — the scald kit): scale the glow's
      *  alpha and the mote skin by the worn instance's bank fraction
      *  (ActiveStatus.bankFrac), so a banked wound READS on the body — a
@@ -1485,6 +1493,19 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     label: 'Faint', color: '#5a5a72', duration: 3600,
     beneficial: true, powerInert: true,
     ghostAlpha: 0.16,
+  },
+  // THE OFFERED CONTRACT's marker (meta/modes.ts ModeOfferSpec.status —
+  // the Immortal covenant's muOffer roll, engine/muDeal.ts): worn by the
+  // one awake vessel a waking offers under the covenant. THE DRAWN TELL,
+  // never a word: a low red ember beneath the body and a thin red rim at
+  // its edge (bodyFx — the visible-state law; the nameplate keeps the
+  // hand's gold, the card names the contract). Beneficial + inert like its
+  // rank kin; scene-only, discarded with the provisional world. Every
+  // color and alpha here is a dial.
+  mu_sworn: {
+    label: 'Sworn', color: '#c83a3a', duration: 3600,
+    beneficial: true, powerInert: true,
+    bodyFx: { glow: '#c83a3a', glowScale: 2.3, glowAlpha: 0.34, rim: '#e04848', rimWidth: 1.5, rimAlpha: 0.6 },
   },
   // THE VENT DWELLER's two worn states (engine/ventDweller.ts — the Scald
   // Basin's Geysermaw): SUBMERGED = the body hangs INSIDE its vent, outside

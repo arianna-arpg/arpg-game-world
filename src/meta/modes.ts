@@ -45,6 +45,20 @@
 //              perpetual Mortal Essence dump: an Undying line is fed
 //              forever by its keeper's mortal runs.
 //
+//              THE OFFERED CONTRACT (2026-09-13, her ruling — Mu × the
+//              covenant): the Immortal is never a toggle on a card. Once
+//              the covenant is unlocked and a vessel slot stands free, the
+//              dealt hand in Mu (data/mu.ts, engine/muDeal.ts) ROLLS the
+//              contract onto at most one awake vessel per waking — SHOWN,
+//              never told: the offered vessel wears `mu_sworn`, a low red
+//              ember beneath the body and a red rim at its edge. Its card
+//              opens pre-sworn (the contract named in the header); the
+//              player may decline it back to a Mortal waking, and never the
+//              reverse — an un-offered vessel's card lists no covenant at
+//              all (`muOffer.only`). Every dial is data on the mode row
+//              (`CharacterModeDef.muOffer`, a ModeOfferSpec): the chance,
+//              the cap, the marker status, the release and the one-way law.
+//
 // The INTERACTION-SCOPE rule the Immortal design turns on: an Undying
 // character exchanges nothing with the mortal economy — its corpses live in
 // its OWN save (structurally invisible to every other character, not merely
@@ -110,6 +124,30 @@ export interface ModeStageDef {
   wakeText?: string;
 }
 
+/** THE OFFERED CONTRACT's row (CharacterModeDef.muOffer): the roll that
+ *  puts a contract on a vessel in Mu, and the card laws it wakes with. */
+export interface ModeOfferSpec {
+  /** Per-vessel chance (0..1) that an AWAKE apparition stands offered under
+   *  this contract — rolled in seat order along the dealt hand, AFTER the
+   *  deal on the same seeded stream (the hand is byte-identical with or
+   *  without an offerable contract, and the roll holds for a sitting). */
+  chance: number;
+  /** At most this many vessels per hand wear the offer (1 = one at a time). */
+  max: number;
+  /** The marker status the offered vessel wears (engine/status.ts) — THE
+   *  DRAWN TELL: its bodyFx is the glow/rim the player reads; the probe and
+   *  the card read the same worn state. */
+  status: string;
+  /** May the card step an offered vessel BACK to the default contract?
+   *  (true = the offer is a choice: take it, or wake mortal.) */
+  release: boolean;
+  /** Is the roll the ONLY door? true = an un-offered vessel's card never
+   *  lists this contract (the deliberation law — the covenant is met, not
+   *  chosen); false = the card offers it freely as before, and the roll
+   *  merely pre-swears it. */
+  only: boolean;
+}
+
 export interface CharacterModeDef {
   id: string;
   name: string;
@@ -133,6 +171,15 @@ export interface CharacterModeDef {
   /** Roster capacity = base + one per owned extraFlag (Vault slot unlocks).
    *  Required when save === 'roster'. */
   rosterPool?: { base: number; extraFlags: string[] };
+  /** THE OFFERED CONTRACT (data/mu.ts + engine/muDeal.ts — the hub between
+   *  lives): how this contract reaches a waking. A mode wearing this row is
+   *  ROLLED onto the dealt hand in Mu: an awake vessel may stand offered
+   *  UNDER it — drawn as such by its marker status's body fx (shown, never
+   *  told), its card opening pre-sworn. Absent = the contract is never
+   *  rolled; the card lists it freely whenever it is unlocked (the legacy
+   *  class-screen law). Eligibility is derived, never stored: the unlock
+   *  must be owned, and a roster contract needs a FREE vessel slot. */
+  muOffer?: ModeOfferSpec;
   /** Fade-respawn pacing (seconds); FADE_DEFAULTS when omitted. */
   respawnFx?: { fadeOutSec: number; holdSec: number; fadeInSec: number };
   /** A line shown centered on the black screen mid-crossing. */
@@ -149,6 +196,12 @@ export const IMMORTAL_CFG = {
   firstDeathPayoutMult: 0.25,
   /** Roster vessels: one sworn by default; each slot unlock adds one. */
   baseSlots: 1,
+  /** THE OFFERED CONTRACT (the muOffer roll in Mu): per-vessel chance that
+   *  an awake vessel of the dealt hand stands offered as an Immortal, and
+   *  the cap per waking. Low by design — the covenant is a deliberation,
+   *  met when the nothing offers it, never picked off a list. */
+  offerChance: 0.1,
+  offerMax: 1,
   /** Fade pacing — the slow dark, a beat of nothing, the waking. */
   fadeOutSec: 2.4,
   holdSec: 1.1,
@@ -223,6 +276,17 @@ export const MODES: CharacterModeDef[] = [
       base: IMMORTAL_CFG.baseSlots,
       extraFlags: [FEATURE.IMMORTAL_SLOT_2, FEATURE.IMMORTAL_SLOT_3],
     },
+    // THE OFFERED CONTRACT (her ruling 2026-09-13): the covenant is MET in
+    // Mu, never picked — one awake vessel per waking may stand offered
+    // under it (IMMORTAL_CFG.offerChance per vessel), wearing the red
+    // ember (`mu_sworn`); declinable to a mortal waking, never the reverse.
+    muOffer: {
+      chance: IMMORTAL_CFG.offerChance,
+      max: IMMORTAL_CFG.offerMax,
+      status: 'mu_sworn',
+      release: true,
+      only: true,
+    },
     crossingText: 'Death cannot keep you.',
     stages: [
       {
@@ -280,6 +344,29 @@ export function stageOf(modeId: string | undefined, stageIdx: number): ModeStage
 /** Modes this account may swear a NEW character into (unlock owned). */
 export function availableModes(a: Account): CharacterModeDef[] {
   return MODES.filter(m => !m.unlockFlag || a.features.has(m.unlockFlag));
+}
+
+/** THE OFFERED CONTRACT's eligibility, derived at every deal (never stored):
+ *  the modes Mu may ROLL onto this account's hand right now — a muOffer
+ *  row, the unlock owned, and (for a roster contract) a FREE vessel slot.
+ *  Registry order, so a multi-contract roll is deterministic. */
+export function muOfferableModes(a: Account): CharacterModeDef[] {
+  return availableModes(a).filter(m => !!m.muOffer
+    && (m.save !== 'roster' || freeRosterSlot(a, m) !== null));
+}
+
+/** THE ONE PREDICATE for a card's life-contract row: the modes a vessel may
+ *  be sworn into, given what the waking OFFERED it (`offered` = the mode id
+ *  its apparition stood under, null = nothing). An `only` contract is
+ *  listed solely when this vessel carries its offer (the deliberation law);
+ *  an offered contract with `release: false` is the vessel's whole row
+ *  (take it or step away); everything else lists as availableModes does.
+ *  An offer the account cannot actually swear into (unlock gone) is void. */
+export function modesSwearableFrom(a: Account, offered: string | null): CharacterModeDef[] {
+  const avail = availableModes(a);
+  const off = offered ? avail.find(m => m.id === offered) : undefined;
+  if (off?.muOffer && !off.muOffer.release) return [off];
+  return avail.filter(m => !m.muOffer?.only || m.id === off?.id);
 }
 
 // --- the ROSTER: owned character slots ---------------------------------------
