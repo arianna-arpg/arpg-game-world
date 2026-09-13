@@ -142,6 +142,10 @@ export interface CharacterSave {
    *  entry whose skill left the bar dissolves at release anyway. */
   primedPours?: { skillId: string; chargesSpent: number }[];
   bar: (string | null)[];   // bar bindings as skill ids (any length; padded to BAR_SLOTS on load)
+  /** THE STAMPED OPENING (PlayerMeta.opening): the resolved kit bar the hero
+   *  woke with — the re-kindle hatch's roster. Optional → a pre-stamp save
+   *  reads the class's base bar. */
+  opening?: (string | null)[];
   level: number;            // Actor level (display + xp continuity)
   // Content-package run state (optional → old saves still load). The expedition
   // manifest is the run-LOCKED config (frozen at run start); the ledger is the
@@ -255,6 +259,7 @@ export function serializeCharacter(world: World): CharacterSave {
       ...world.stashedCompanions.map(s => ({ ...s, downed: true as const })),
     ],
     bar: hero.skills.map(s => s ? s.def.id : null),
+    opening: [...m.opening],
     level: hero.level,
     expedition: world.manifest,
     ledger: { ...world.ledger },
@@ -407,6 +412,8 @@ export function rebuildSavedMeta(save: CharacterSave): { meta: PlayerMeta; death
   const choices = sanitizeChoices(save.choices, PASSIVE_NODES);
   const meta: PlayerMeta = {
     classDef,
+    // THE STAMPED OPENING: the save's own; a pre-stamp save reads the base bar.
+    opening: [...(save.opening ?? classDef.bar)],
     name: save.name?.trim() || classDef.name,
     baseAttrs: { ...save.baseAttrs },
     attrs: { ...save.baseAttrs }, // recomputed by recalcSeat inside the adopt
@@ -726,6 +733,7 @@ export function serializeCouchGuest(
     vestiges: { ...m.vestiges },
     companions: [...(dormant.companions ?? [])],
     bar: hero.skills.map(s => s ? s.def.id : null),
+    opening: [...m.opening],
     level: hero.level,
     expedition: world.manifest,
     // The shared run's trigger counters are this vessel's lived experience

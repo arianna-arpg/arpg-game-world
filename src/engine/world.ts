@@ -1770,6 +1770,17 @@ function isValidMetaAction(a: MetaAction): boolean {
 
 export interface PlayerMeta {
   classDef: ClassDef;
+  /** THE STAMPED OPENING (meta/classkit.ts resolveClassKit): the resolved
+   *  kit bar this hero WOKE with — the class's base bar with each chosen
+   *  alternate standing in for its base and every owned Master grant
+   *  seated — stamped ONCE at makePlayerSeat, saved with the character,
+   *  shipped on the wire, and never re-derived from the account (a later
+   *  waking may pick differently; this run's opening is its own truth).
+   *  The re-kindle hatch's roster (reacquireSkill) and the sheet's starter
+   *  strip read THIS, never ClassDef.bar: a Warrior who woke with Carve
+   *  re-kindles Carve and never Cleave. Absent in older saves → the class's
+   *  base bar (the pre-stamp reading, byte for byte). */
+  opening: (string | null)[];
   /** THE NAME (Naming, meta/nemesis.ts): the player-given name — or the class
    *  name when unnamed — that threads this character into the world's memory
    *  (sagas key off its normalized form) and labels it everywhere a person
@@ -4130,8 +4141,13 @@ export class World {
     p.radius = 15;
     p.kind = 'player';
     p.look = classDef.look;
+    // THE STAMPED OPENING: the resolved kit when one is handed in (an owned
+    // mastery alternate standing in for its base, a Master's grant seated),
+    // else the class's base bar — recorded on the seat as this run's own truth.
+    const bar = kit ?? classDef.bar;
     const meta: PlayerMeta = {
       classDef,
+      opening: [...bar],
       name: classDef.name,
       baseAttrs: { ...classDef.attributes },
       attrs: { ...classDef.attributes },
@@ -4159,10 +4175,7 @@ export class World {
     };
     // Class bar skills come pre-learned at the KIT tier — the ladder's floor
     // (1 socket), so the wild economy outdrops the cradle from the first find.
-    // THE OPENING: the resolved kit when one is handed in (an owned mastery
-    // alternate standing in for its base, a Master's grant seated), else
-    // the class's base bar — an unknown id in either is skipped, never a crash.
-    const bar = kit ?? classDef.bar;
+    // An unknown id in the opening is skipped, never a crash.
     for (const sid of bar) {
       if (sid && SKILLS[sid] && !meta.knownSkills.has(sid)) {
         meta.knownSkills.set(sid, makeSkillGem(SKILLS[sid], 1, CLASS_KIT_RARITY));
@@ -22128,19 +22141,24 @@ export class World {
    *     so possession bars stay ungated; only gems the seat itself has
    *     learned answer to its attributes, and a convert/mimic/combo mint is
    *     judged only when its resolved face is itself a learned gem.
-   *   - GRANTED sparks are exempt (SkillInstance.granted — the class-kit
-   *     re-kindle, the dev grant): the game's own gifts never passed the
-   *     learn gate, so the gate binds exactly the population the learn gate
-   *     admitted. Structurally safe: the kit census (probe_castreq D) pins
-   *     every class kit under its class BASE attributes, so a granted
-   *     starter never asks more than any build's floor carries.
+   *   - THE HATCH'S SPARK IS BOUND: a re-kindled starter (SkillInstance
+   *     .granted — worthless, never licensed) reaches the book through the
+   *     learn gate like any bag gem, so the gate binds it exactly as the
+   *     wake's copy — THE CAPSTONE LAW holds for a re-kindled Master's gift
+   *     (learn-gated in the pack until the build grows, refused again after
+   *     a respec below). Base starters and alternates never notice: the kit
+   *     census (probe_castreq D) pins them under the class BASE attributes.
+   *   - DEV GIFTS are exempt (SkillInstance.devGift — devThrongGrant /
+   *     devGrabGrant seat a spark straight into the book, past the learn
+   *     gate): the one population the learn gate never admitted. Transient
+   *     by construction (never saved or wired).
    *   - A LIVE TOGGLE is exempt (aura up, strobe held): the gate refuses
    *     ignition, never release — a working you no longer qualify for can
    *     always be shut off; re-lighting it is what the gate refuses.
    *  Returns the refusal, spoken; undefined = cast freely. */
   castReqRefusal(caster: Actor, inst: SkillInstance): string | undefined {
     const seat = this.seatOf(caster);
-    if (!seat || inst.granted || !seat.meta.knownSkills.has(inst.def.id)) return undefined;
+    if (!seat || inst.devGift || !seat.meta.knownSkills.has(inst.def.id)) return undefined;
     if (caster.activeAuras.has(inst.def.id) || caster.strobes.has(inst.def.id)) return undefined;
     return this.reqShortfall(inst.def.id, seat);
   }
@@ -26822,6 +26840,9 @@ export class World {
     const allocated = this.trimAllocated(snapshot, scale.passiveBudget(targetLevel));
     return {
       classDef,
+      // THE STAMPED OPENING: a blade's opening is the loadout it was fielded
+      // with (the template's or the veteran's own bar) — its own truth.
+      opening: [...snapshot.bar],
       name: classDef.name, // the seat's DISPLAY name is stamped by the spawner
       baseAttrs: { ...snapshot.baseAttrs },
       attrs: { ...snapshot.baseAttrs },
@@ -28182,13 +28203,17 @@ export class World {
     return true;
   }
 
-  /** REACQUIRE a class starting skill — the softlock rescue hatch. Mints a
-   *  fresh level-1 copy of a bar skill the seat no longer carries anywhere,
+  /** REACQUIRE a starting skill — the softlock rescue hatch. Mints a fresh
+   *  level-1 copy of an OPENING skill the seat no longer carries anywhere,
    *  marked GRANTED (zero salvage essence, zero font offerings, no refunds).
-   *  Dynamic against the class's LIVE bar — re-bar a class and this follows. */
+   *  THE STAMPED OPENING is the roster (PlayerMeta.opening — the resolved
+   *  kit this hero woke with, never ClassDef.bar): a Warrior who took Carve
+   *  over Cleave re-kindles Carve, and Cleave is a stranger to the hatch; a
+   *  Master's gift on the fourth seat re-kindles too — learn-gated in the
+   *  pack until the build carries it, cast-bound after (castReqRefusal). */
   reacquireSkill(skillId: string, seat: Seat = this.localSeat): boolean {
     const m = seat.meta;
-    if (!m.classDef.bar.includes(skillId)) return false;
+    if (!m.opening.includes(skillId)) return false;
     if (m.knownSkills.has(skillId)) return false;
     if (findBagGem(m.items, 'skill', skillId)) return false;
     const def = SKILLS[skillId];
@@ -30388,15 +30413,18 @@ export class World {
     const def = SKILLS[skillId];
     if (!def?.throng) return false;
     const p = this.player;
-    if (p.skills.some(s => s?.def.id === skillId)) return true;
+    const seated = p.skills.find(s => s?.def.id === skillId);
+    if (seated) { seated.devGift = true; return true; } // a reload dropped the transient mark: re-stamp it
     const slot = p.skills.findIndex(s => !s);
     if (slot < 0) return false;
     const inst = makeSkillInstance(def, 1);
-    // The game's own gift (the class-kit re-kindle idiom): a dev grant never
-    // passed the learn gate, so the cast-time requirement gate passes it by
-    // (castReqRefusal's granted exemption) — grant it, cast it, whatever the
-    // rig's build happens to carry.
+    // THE DEV GIFT: seated straight into the book, past the learn gate — the
+    // cast-time requirement gate passes it by (castReqRefusal reads
+    // SkillInstance.devGift; the mark is transient, never saved or wired),
+    // and it is worthless like any granted spark: grant it, cast it,
+    // whatever the rig's build happens to carry.
     inst.granted = true;
+    inst.devGift = true;
     this.localSeat.meta.knownSkills.set(skillId, inst);
     p.skills[slot] = inst;
     this.charDirty = true;
@@ -32008,15 +32036,18 @@ export class World {
     const def = SKILLS[skillId];
     if (!def?.effects.some(fx => fx.type === 'grabSeize' || fx.type === 'grabThrow')) return false;
     const p = this.player;
-    if (p.skills.some(s => s?.def.id === skillId)) return true;
+    const seated = p.skills.find(s => s?.def.id === skillId);
+    if (seated) { seated.devGift = true; return true; } // a reload dropped the transient mark: re-stamp it
     const slot = p.skills.findIndex(s => !s);
     if (slot < 0) return false;
     const inst = makeSkillInstance(def, 1);
-    // The game's own gift (the class-kit re-kindle idiom): a dev grant never
-    // passed the learn gate, so the cast-time requirement gate passes it by
-    // (castReqRefusal's granted exemption) — grant it, cast it, whatever the
-    // rig's build happens to carry.
+    // THE DEV GIFT: seated straight into the book, past the learn gate — the
+    // cast-time requirement gate passes it by (castReqRefusal reads
+    // SkillInstance.devGift; the mark is transient, never saved or wired),
+    // and it is worthless like any granted spark: grant it, cast it,
+    // whatever the rig's build happens to carry.
     inst.granted = true;
+    inst.devGift = true;
     this.localSeat.meta.knownSkills.set(skillId, inst);
     p.skills[slot] = inst;
     this.charDirty = true;

@@ -5740,8 +5740,16 @@ export interface SkillInstance {
   replenishmentPaused?: true;
   /** GRANTED: a reacquired class-starter spark. Worth NOTHING everywhere
    *  value is minted — zero salvage essence, zero font offerings — so the
-   *  softlock rescue hatch can never become a currency loop. */
+   *  softlock rescue hatch can never become a currency loop. Worthless is
+   *  not LICENSED: the spark is learn-gated and cast-bound like the wake's
+   *  own copy (World.castReqRefusal). */
   granted?: boolean;
+  /** THE DEV GIFT (World.devThrongGrant / devGrabGrant): seated straight
+   *  into the book past the learn gate — castReqRefusal passes it by.
+   *  TRANSIENT: never saved or wired (a reload rebuilds an ordinary granted
+   *  gem; the lever re-stamps it on the next grant). The hatch's re-kindled
+   *  spark never wears it. */
+  devGift?: true;
   /** THE GRANTED SKILL (skillgrant_<id> — THE LEGEND FABRIC): DERIVED,
    *  never saved. Set on an instance World.recalcSeat minted from a worn
    *  grant; the value names its source for the panels ("granted by The

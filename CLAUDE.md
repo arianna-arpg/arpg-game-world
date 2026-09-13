@@ -1798,6 +1798,19 @@ we verify changes.
   Explosion / Bone Golem (`summon_bone_golem` + `bone_golem`) / Grave
   Tide). Docs `docs/meta/discovery.md` + `docs/meta/class-mastery.md`;
   probes `balance/probe_unlocks.ts` + `balance/probe_classmastery.ts`.
+  THE STAMPED OPENING (2026-09-13 — the re-kindle hatch follows the actual
+  selection): the wake stamps the resolved kit on the seat as
+  `PlayerMeta.opening` (saved as `CharacterSave.opening`, wired as
+  `SeatMetaW.op`, never re-derived from the account; absent → the class
+  bar); `World.reacquireSkill` and the sheet's starter strip read THE STAMP,
+  never `ClassDef.bar` — a Warrior who took Carve over Cleave re-kindles
+  Carve and Cleave is a stranger; the Master's gift re-kindles too. WORTHLESS
+  IS NOT LICENSED: the hatch's `granted` spark passes the learn gate like any
+  bag gem, so `castReqRefusal` binds it (THE CAPSTONE LAW holds after a
+  respec below); only THE DEV GIFT (`SkillInstance.devGift` — the throng/grab
+  dev levers' straight-to-book seat, transient) is exempt. Docs
+  `docs/meta/class-mastery.md` §The hatch; probes `probe_classmastery` G +
+  `probe_castreq` F.
   THE LEGEND FABRIC (2026-09-08, her ruling: a unique is a BUILD, never a
   stat pool — docs/engine/legends.md, probe `balance/probe_legends.ts`):
   THE GRANTED SKILL — the `skillgrant_<skillId>` stat family

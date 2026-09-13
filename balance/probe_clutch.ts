@@ -55,7 +55,8 @@ const spawn = (w: World, id: string, lv: number, x: number, y: number): Actor =>
 };
 const step = (w: World, n = 1): void => { for (let i = 0; i < n; i++) w.update(1 / 60); };
 const kitInst = (a: Actor, id: string) => a.skills.find(s => s?.def.id === id)!;
-// Seat a granted instance on the player's BAR (the throng-grant idiom):
+// Seat a DEV GIFT on the player's BAR (the throng-grant idiom — granted AND
+// devGift, so the cast-time requirement gate passes it by like the levers'):
 // births are minions, and THE UNLEARN SWEEP dismisses any minion whose
 // anchor skill is not on its owner's bar — the probe must hold the seat
 // exactly as a learned skill would.
@@ -184,7 +185,8 @@ const bornOfMother = (w: World, mother: Actor): Actor[] =>
   w.player.pos = vec(600, 500);
   const dummy = spawn(w, 'zombie', 1, 760, 500);
   const inst = makeSkillInstance(SKILLS.cinderwisp, 1);
-  inst.granted = true; // the class-kit re-kindle idiom: the game's own gift
+  inst.granted = true; // the game's own gift: worthless everywhere value mints
+  inst.devGift = true; // THE DEV GIFT: seated straight onto the bar past the learn gate — castReqRefusal passes it by
   seatInst(w, inst);   // learned = seated — the unlearn sweep must see the anchor
   check('hit gate: the cast fires', w.useSkill(w.player, inst, vec(760, 500)) === true);
   step(w, 150);
@@ -202,6 +204,7 @@ const bornOfMother = (w: World, mother: Actor): Actor[] =>
   w2.player.pos = vec(600, 500);
   const inst2 = makeSkillInstance(SKILLS.cinderwisp, 1);
   inst2.granted = true;
+  inst2.devGift = true;
   seatInst(w2, inst2);
   w2.useSkill(w2.player, inst2, vec(1000, 500));
   step(w2, 200);
@@ -219,6 +222,7 @@ const bornOfMother = (w: World, mother: Actor): Actor[] =>
   tough.life = tough.maxLife(); // the raise fills the pool (three embers must all LAND)
   const inst = makeSkillInstance(SKILLS.cinderwisp, 1);
   inst.granted = true;
+  inst.devGift = true;
   seatInst(w, inst); // ONE seated instance pressed thrice — the real shape
   for (let c = 0; c < 3; c++) {
     w.player.mana = w.player.maxMana(); // the rig pays attention to caps, not costs
@@ -237,6 +241,7 @@ const bornOfMother = (w: World, mother: Actor): Actor[] =>
   w.player.pos = vec(600, 500);
   const inst = makeSkillInstance(SKILLS.firebolt, 1);
   inst.granted = true;
+  inst.devGift = true;
   inst.sockets[0] = { def: SUPPORTS.broodbearer, level: 1 };
   seatInst(w, inst); // the graft's brood answers to the HOST's bar seat
   w.useSkill(w.player, inst, vec(1000, 500)); // empty air — no victim anywhere

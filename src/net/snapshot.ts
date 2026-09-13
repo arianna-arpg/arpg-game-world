@@ -256,6 +256,10 @@ export interface SeatMetaW {
   // 1×1 wrapper items (pure JSON, payload included) — the old inv/skillInv
   // arms retired with the side arrays they mirrored.
   bar: (string | null)[];          // bar slot → learned skill id
+  /** THE STAMPED OPENING (PlayerMeta.opening) — the client's starter strip
+   *  reads it; the hatch itself is host-judged. Optional → a host one
+   *  wire-version behind ships the class's base bar. */
+  op?: (string | null)[];
   /** GEAR: bag + doll. ItemInstances are already pure JSON (ids + rolls —
    *  never def bodies), so the instance IS the wire shape; rebuildItem
    *  re-validates against the client's registries on apply. Optional →
@@ -307,6 +311,7 @@ export function serializeSeatMeta(seat: Seat): SeatMetaW {
     grafts: { ...m.grafts },
     known: Object.fromEntries([...m.knownSkills].map(([id, inst]) => [id, skillInstW(inst)])),
     bar: hero.skills.map(s => (s ? s.def.id : null)),
+    op: [...m.opening],
     gear: {
       items: m.items.map(i => ({ ...i })),
       equipped: Object.fromEntries(
@@ -421,6 +426,9 @@ export function applySeatMeta(world: World, seat: Seat, w: SeatMetaW): void {
   // demand off the rehydrated gear — THE LEGEND FABRIC), so the client's
   // bar seats a granted skill exactly where the host's does.
   seat.actor.skills = w.bar.map(id => (id ? world.seatSkillById(seat, id) : null));
+  // THE STAMPED OPENING: the host's stamp verbatim (an older host ships none —
+  // the class's base bar stands in, the pre-stamp reading).
+  m.opening = [...(w.op ?? m.classDef.bar)];
   world.recalcSeat(seat);            // derive attrs + the full stat sheet from the build
 }
 

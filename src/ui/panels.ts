@@ -3501,7 +3501,10 @@ export class UI {
     // The ANCHORED header: class identity + the (deliberately tiny) starter
     // safety net stay visible however far the sheet scrolls. Negative margins
     // eat the panel padding so the sticky band hugs the panel's top edge.
-    const starterChips = m.classDef.bar.filter((s): s is string => !!s).map(sid => {
+    // THE STAMPED OPENING (PlayerMeta.opening): the strip names the kit this
+    // hero actually WOKE with — a chosen alternate, a Master's gift — never
+    // ClassDef.bar, so the ↺ re-kindle offers exactly what reacquireSkill grants.
+    const starterChips = m.opening.filter((s): s is string => !!s).map(sid => {
       const def = SKILLS[sid];
       if (!def) return '';
       const carried = m.knownSkills.has(sid) || !!findBagGem(m.items, 'skill', sid);

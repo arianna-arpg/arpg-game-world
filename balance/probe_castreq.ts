@@ -21,6 +21,11 @@
 //     seat never LEARNED (a borrowed husk's kit, a mimic capture, an
 //     improvised swing) is exempt — the gate binds exactly the learn-gated
 //     population, read off seat.meta (the HOME build).
+//   - WORTHLESS IS NOT LICENSED: a granted spark (the re-kindle hatch's
+//     copy of an OPENING skill) reached the book through the learn gate and
+//     gates like any learned gem — THE CAPSTONE LAW holds for a re-kindled
+//     Master's gift; only THE DEV GIFT (SkillInstance.devGift — the dev
+//     levers' straight-to-book seat, transient) is exempt.
 //   - RELEASE ALWAYS LANDS: a live toggle (aura up / strobe held) is exempt
 //     so the OFF-press works below the gates; RE-ignition is what refuses.
 //   - THE TRIGGER ARTERY: an armed trigger gem cannot fire an unmet host by
@@ -162,17 +167,39 @@ check('F: a seat-owned caster firing an UNLEARNED instance is exempt',
   !seat.meta.knownSkills.has('tide_lash') && w.castReqRefusal(hero, tide) === undefined);
 check('F: …and the borrowed-kit shape casts through the pipeline',
   w.useSkill(hero, tide, aim()) === true);
-// A GRANTED spark (class-kit re-kindle, dev grant) is the game's own gift —
-// exempt: the gate binds exactly the learn-gated population.
+// A GRANTED spark (the hatch's re-kindled starter) is WORTHLESS, never
+// LICENSED: it reached the book through the learn gate like any bag gem, so
+// the gate binds it exactly as the wake's copy (THE CAPSTONE LAW holds for a
+// re-kindled Master's gift after a respec below). THE DEV GIFT
+// (SkillInstance.devGift — devThrongGrant / devGrabGrant seat a spark
+// straight into the book, past the learn gate) is the one exemption.
 const gift = makeSkillInstance(SKILLS['heavy_strike'], 1, 1);
 gift.granted = true;
 seat.meta.knownSkills.set('heavy_strike', gift);
-check('F: a granted spark is exempt below its gates',
+check('F: a granted (worthless) spark GATES below its gates — worthlessness is not a license',
+  w.castReqRefusal(hero, gift) !== undefined);
+gift.devGift = true;
+check('F: a dev gift is exempt below its gates',
   w.castReqRefusal(hero, gift) === undefined);
+delete gift.devGift;
 gift.granted = false;
 check('F: …and the same instance gates once it is an ordinary learned gem',
   w.castReqRefusal(hero, gift) !== undefined);
 seat.meta.knownSkills.delete('heavy_strike');
+// The dev lever wears the mark end to end: a grab gem seated by devGrabGrant
+// (STR 12 over the rig's zeroed spread) is a dev gift the gate passes by.
+{
+  const seated = w.devGrabGrant('seize') ? hero.skills.find(s => s?.def.id === 'seize') : undefined;
+  check('F: devGrabGrant seats a granted DEV GIFT that castReqRefusal passes by',
+    !!seated && seated.granted === true && seated.devGift === true && w.castReqRefusal(hero, seated) === undefined);
+  delete seated?.devGift;
+  check('F: …the same seat, mark dropped (a reload), gates like any granted gem',
+    !!seated && w.castReqRefusal(hero, seated) !== undefined);
+  check('F: …and the lever re-stamps the mark on the next grant',
+    w.devGrabGrant('seize') && seated?.devGift === true && w.castReqRefusal(hero, seated) === undefined);
+  seat.meta.knownSkills.delete('seize');
+  for (let i = 0; i < hero.skills.length; i++) if (hero.skills[i]?.def.id === 'seize') hero.skills[i] = null;
+}
 settle();
 
 // ------------------------------------------- G. RELEASE ALWAYS LANDS

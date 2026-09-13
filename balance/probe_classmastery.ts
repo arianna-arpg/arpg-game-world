@@ -17,7 +17,13 @@ import { deedKey } from '../src/engine/deeds';
 // LIVE: the corpse reclaim + the boss kill stamp the account directly, the
 // claim sweep yields a class mid-run (notice included), the derivation
 // stamps class milestones beyond the standing list, and the wake seats the
-// resolved kit. Run: npx tsx balance/probe_classmastery.ts
+// resolved kit. THE HATCH FOLLOWS THE STAMPED OPENING (rig G): the wake
+// stamps PlayerMeta.opening from the resolved kit; the re-kindle hatch
+// (World.reacquireSkill) refuses the displaced base, re-kindles the chosen
+// alternate and the Master's gift as worthless sparks, the gift stays
+// learn-gated and cast-BOUND (worthless is not licensed), and the stamp
+// rides the save + the wire with the class bar as the pre-stamp fallback.
+// Run: npx tsx balance/probe_classmastery.ts
 // ---------------------------------------------------------------------------
 
 import { bootSimEngine, classById, makeSimWorld, SIM_ARENA_ID, SIM_CFG } from '../src/sim/arena';
@@ -48,6 +54,12 @@ import {
 import {
   classTierOwned, kitChoicesFor, kitHasOptions, kitRungOf, rememberKitPicks, resolveClassKit,
 } from '../src/meta/classkit';
+import { NullInput } from '../src/net/intent';
+import { applySavedCharacter, serializeCharacter } from '../src/meta/character';
+import { applySeatMeta, serializeSeatMeta } from '../src/net/snapshot';
+import { findBagGem, skillGemPayloadOf } from '../src/engine/gemitems';
+import { removeFromBag } from '../src/engine/inventory';
+import { CLASS_KIT_RARITY } from '../src/engine/skills';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -395,6 +407,86 @@ const priv = (w: World): WorldPriv => w as unknown as WorldPriv;
   }
   check('live: the shambler is raised, lurches to its mark and bursts within seconds; the mark is wounded',
     !!sham && sham.dead && (enemy.dead || enemy.life < enemyLife), `enemy ${Math.round(enemy.life)}/${Math.round(enemyLife)}, shambler ${sham ? (sham.dead ? 'spent' : 'alive') : 'never raised'}`);
+}
+
+// --- G) THE HATCH FOLLOWS THE STAMPED OPENING -----------------------------------
+// The softlock rescue (World.reacquireSkill) re-kindles what this hero actually
+// WOKE with — PlayerMeta.opening, stamped from the resolved kit — never
+// ClassDef.bar: a Warrior who took Carve over Cleave re-kindles Carve, and
+// Cleave is a stranger; the Master's gift on the fourth seat re-kindles too,
+// learn-gated in the pack until the build carries it and cast-BOUND after
+// (worthless is not licensed). The stamp rides the save and the wire; a
+// pre-stamp save or an older host reads the class's base bar.
+{
+  const WAR = classById('warrior');
+  const acc = makeAccount();
+  acc.unlockedClassTiers.add(classTierId('warrior', 'novice'));
+  acc.unlockedClassTiers.add(classTierId('warrior', 'master'));
+  const kit = resolveClassKit(acc, WAR, { cleave: 'carve' });
+  const w = worldOn(acc, 'warrior', 0x2c6, kit);
+  const seat = w.localSeat;
+  const m = w.meta;
+  const hero = w.player;
+  check('hatch: the wake STAMPS the resolved opening on the seat (never the class bar)',
+    m.opening.join() === kit.join() && m.opening[0] === 'carve' && m.opening[3] === 'red_hour'
+    && m.opening.join() !== WAR.bar.join(), m.opening.join());
+  // Lose Carve through the real unlearn (the arena is sanctuary — the field
+  // discipline waives), then discard the gem: nothing carried anywhere.
+  check('hatch: Carve unlearns into the bag', w.unlearnSkill('carve', seat));
+  const carveGem = findBagGem(m.items, 'skill', 'carve');
+  check('hatch: …and leaves it as a bag gem', !!carveGem);
+  if (carveGem) removeFromBag(m.items, carveGem.uid);
+  check('hatch: a carried starter is refused (Shield Up is still learned)', !w.reacquireSkill('shield_up', seat));
+  check('hatch: the DISPLACED base is a stranger — Cleave cannot be re-kindled',
+    !w.reacquireSkill('cleave', seat) && !findBagGem(m.items, 'skill', 'cleave'));
+  check('hatch: a foreign skill is refused', !w.reacquireSkill('firebolt', seat));
+  check('hatch: the chosen alternate re-kindles — Carve returns as a GRANTED spark at the kit tier',
+    w.reacquireSkill('carve', seat) && (() => {
+      const g = findBagGem(m.items, 'skill', 'carve');
+      const p = g ? skillGemPayloadOf(g) : null;
+      return !!p && p.granted === true && p.level === 1 && p.rarity === CLASS_KIT_RARITY;
+    })());
+  check('hatch: a second press is refused while the spark is carried', !w.reacquireSkill('carve', seat));
+  // THE MASTER'S GIFT: re-kindled like any seat of the opening — but the spark
+  // is learn-gated (STR 26 over the Warrior's 16) until the build grows, and
+  // cast-BOUND after a respec below: worthless, never licensed.
+  check('hatch: Red Hour unlearns into the bag', w.unlearnSkill('red_hour', seat));
+  { const g = findBagGem(m.items, 'skill', 'red_hour'); if (g) removeFromBag(m.items, g.uid); }
+  check('hatch: the Master\'s gift re-kindles (the fourth seat of the opening)', w.reacquireSkill('red_hour', seat));
+  const rhGem = findBagGem(m.items, 'skill', 'red_hour');
+  check('capstone: the spark refuses to LEARN below its gates (the pack holds the promise)',
+    !!rhGem && !w.learnSkill(rhGem.uid, seat) && !m.knownSkills.has('red_hour'));
+  m.baseAttrs.strength = SKILLS.red_hour.requirements?.strength ?? 26;
+  priv(w).recalcSeat(seat);
+  check('capstone: …and learns once the build carries it, still a granted spark',
+    !!rhGem && w.learnSkill(rhGem.uid, seat) && m.knownSkills.get('red_hour')?.granted === true);
+  m.baseAttrs.strength = WAR.attributes.strength;
+  priv(w).recalcSeat(seat);
+  const rh = m.knownSkills.get('red_hour');
+  check('capstone: a respec below the gates BINDS the re-kindled gift (worthless is not a license)',
+    !!rh && !rh.devGift && w.castReqRefusal(hero, rh) !== undefined);
+  // THE STAMP RIDES THE SAVE: a round trip keeps the opening; a pre-stamp
+  // save (no field) reads the class's base bar — the old reading, byte for byte.
+  const save = serializeCharacter(w);
+  check('save: the character save carries the stamped opening', (save.opening ?? []).join() === kit.join());
+  const w2 = makeSimWorld('warrior', 0x2c7);
+  check('save: the save adopts and the opening stands', applySavedCharacter(w2, save) && w2.meta.opening.join() === kit.join());
+  delete save.opening;
+  const w3 = makeSimWorld('warrior', 0x2c8);
+  check('save: a pre-stamp save reads the class\'s base bar', applySavedCharacter(w3, save) && w3.meta.opening.join() === WAR.bar.join());
+  // THE STAMP RIDES THE WIRE: the client's seat wears the host's stamp
+  // verbatim; an older host (no field) leaves the base bar standing.
+  const wire = serializeSeatMeta(seat);
+  check('wire: the seat meta ships the opening', (wire.op ?? []).join() === kit.join());
+  const w4 = makeSimWorld('warrior', 0x2c9);
+  applySeatMeta(w4, w4.localSeat, wire);
+  check('wire: the client seat wears the host\'s stamp', w4.meta.opening.join() === kit.join());
+  delete wire.op;
+  applySeatMeta(w4, w4.localSeat, wire);
+  check('wire: an older host leaves the base bar standing', w4.meta.opening.join() === WAR.bar.join());
+  // A seat that wakes on the base kit (a co-op ally today) stamps the class bar.
+  const ally = w.addSeat('p1', WAR, new NullInput());
+  check('hatch: a base-kit seat stamps the class bar as its opening', ally.meta.opening.join() === WAR.bar.join());
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL CHECKS PASSED');

@@ -131,6 +131,38 @@ bar at the kit tier. The engine never trusts a pick it did not resolve —
 couch guests and co-op clients (base kit today) can never smuggle an
 unearned opening past it.
 
+## The hatch (World.reacquireSkill) — THE STAMPED OPENING
+
+The wake stamps the resolved kit on the seat as **`PlayerMeta.opening`** —
+the class's base bar with each chosen alternate standing in for its base
+and every owned Master grant seated — recorded ONCE at `makePlayerSeat`,
+saved with the character (`CharacterSave.opening`), shipped on the wire
+(`SeatMetaW.op`), and never re-derived from the account: a later waking may
+pick differently, and THIS run's opening is its own truth. A pre-stamp save
+or an older host reads the class's base bar (the old reading, byte for
+byte). Every seam that once read `ClassDef.bar` for "what did this hero
+start with" reads the stamp instead:
+
+- **The re-kindle hatch** (`World.reacquireSkill`, the ↺ on the sheet's
+  starter strip): a Warrior who took Carve over Cleave re-kindles Carve;
+  Cleave is a stranger to the hatch, exactly as Firebolt is. The Master's
+  gift on the fourth seat re-kindles too.
+- **The starter strip** (`ui/panels.ts` `refreshCharSheet`) names the kit
+  the hero actually woke with, so the ↺ offers exactly what the hatch grants.
+- Seats that wake on the base kit (co-op allies, mercenaries — the blade's
+  own loadout bar, the sim's reference builds) stamp that bar.
+
+**Worthless is not licensed.** The hatch's spark is `granted` (zero salvage
+essence, zero font offerings) and reaches the book through the learn gate
+like any bag gem — so `castReqRefusal` binds it exactly as the wake's copy.
+THE CAPSTONE LAW holds for a re-kindled Master's gift: refused at LEARN
+while the build is short (the pack holds the promise), cast-bound again
+after a respec below. The one exemption is **THE DEV GIFT**
+(`SkillInstance.devGift` — `devThrongGrant` / `devGrabGrant` seat a spark
+straight into the book, past the learn gate): transient, never saved or
+wired; a reload rebuilds an ordinary granted gem and the lever re-stamps it
+on the next grant. Probes: `probe_classmastery` G, `probe_castreq` F.
+
 ## Dials & levers
 
 `CLASS_TIERS` (levels, costs, labels, count — add a rung and every kitted
@@ -150,4 +182,7 @@ grant seats itself; a full bar takes no gift; memory keeps only valid picks
 and survives the account round trip), and the live wake (the alternate in
 the first seat, the grant in the fourth, the displaced base unknown, "+2 to
 Necromancer skills" reaching the alternate, the shambler bursting on its
-mark through the real cast).
+mark through the real cast); THE HATCH (rig G): the wake stamps the resolved opening, the displaced base
+is refused, the chosen alternate and the Master's gift re-kindle as worthless
+sparks at the kit tier, the gift stays learn-gated and cast-bound, and the
+stamp survives the character save and the wire (base bar when absent)..
