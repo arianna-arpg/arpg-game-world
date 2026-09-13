@@ -1,4 +1,5 @@
 import { RUNEWEAVER_STARTER_TREES } from './runeweaverStarterTrees';
+import { RESONATOR_STARTER_TREES } from './resonatorStarterTrees';
 import { BASTION_STARTER_TREES } from './bastionStarterTrees';
 import { DUELIST_STARTER_TREES } from './duelistStarterTrees';
 import { WORKSHOP_SKILLS } from './workshopSkills';
@@ -5982,6 +5983,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   // --- THE RESONATOR: everything rings if struck sincerely ----------------
   tuning_strike: {
+    tree: RESONATOR_STARTER_TREES.tuning_strike,
     id: 'tuning_strike', name: 'Tuning Strike',
     description: 'Strike the body like a bell: the blow leaves its victim ATTUNED to fire, cold'
       + ' or lightning, one of the three at roughly even odds. An attuned body reads as kin to'
@@ -6002,6 +6004,7 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('statusMagnitude', 'increased', 0.05)] },
   },
   shatterchord: {
+    tree: RESONATOR_STARTER_TREES.shatterchord,
     id: 'shatterchord', name: 'Shatterchord',
     description: 'Play every tone at once: a nova of fire, cold and lightning damage around'
       + ' you, and the circle widens with your area of effect. ATTUNED enemies take the worst'
@@ -6391,6 +6394,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   // --- The Purity auras (#9): resistance + ailment-shrug as toggles --------
   purity_of_elements: {
+    tree: RESONATOR_STARTER_TREES.purity_of_elements,
     id: 'purity_of_elements', name: 'Purity of Elements',
     description: 'TOGGLE AURA (reserves 35 mana): you and allies inside gain +20% to fire,'
       + ' cold, lightning and chaos resistance, and shrug off one incoming ailment in four.',
