@@ -1197,9 +1197,10 @@ export function classUnlockProgress(a: Account, u: Unlockable, view?: Readonly<R
  *  avenue because the objective group is ANY-of. */
 export function classRumorRead(a: Account, u: Unlockable) {
   const read = classUnlockProgress(a, u);
+  const proseFrac = CLASS_WEB_CFG.proseRevealFrac > 0 ? read.frac / CLASS_WEB_CFG.proseRevealFrac : 1;
   return {
     title: encipher('unknown calling'),
-    body: revealScript(u.kind === 'class' ? u.payload.rumor ?? CLASS_WEB_CFG.unknownRumor : CLASS_WEB_CFG.unknownRumor, read.frac),
+    body: revealScript(u.kind === 'class' ? u.payload.rumor ?? CLASS_WEB_CFG.unknownRumor : CLASS_WEB_CFG.unknownRumor, proseFrac),
     rows: read.rows.map(r => ({ ...r, label: r.revealed ? r.label : encipher(r.label) })),
     detail: u.kind === 'class' && read.rows.length > 0 && read.rows.every(r => r.revealed)
       ? u.payload.hint ?? '' : '',

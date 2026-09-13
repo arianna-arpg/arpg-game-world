@@ -500,7 +500,7 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
     && partial.rows[0].label === CLASS_DEEDS.sorcerer.objectives[0].label && partial.title === fresh.title);
   a.ledger[deedKey('elements_landed')] = 2;
   check('mystery: more progress reveals more prose', plainCount(classRumorRead(a, u).body) > plainCount(partial.body));
-  check('mystery: tiny credit reveals something; almost complete retains script; complete reads fully',
+  check('cipher: tiny reveal fraction shows something; just below full retains runes; full reads plainly',
     plainCount(revealScript(b.rumor, 0.001)) > 0 && [...revealScript(b.rumor, 0.999)].some(isRune)
     && revealScript(b.rumor, 1) === b.rumor);
   // Single-letter tokens make positions directly comparable, including
@@ -530,6 +530,26 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
   check('mystery: scattering preserves the cipher, spaces and punctuation for every class',
     CLASS_BUNDLES.every(b => [0, 0.01, 0.25, 0.5, 0.75, 0.99, 1].every(frac =>
       encipher(revealScript(b.rumor, frac)) === encipher(b.rumor))));
+  const proseAccount = makeAccount(), fire = classUnlockFor('pyromancer')!;
+  const fireProse = CLASS_BUNDLES.find(b => b.classId === 'pyromancer')!.rumor;
+  proseAccount.ledger[deedKey('fire_hits')] = 63;
+  check('mystery: prose still contains runes just below 80% objective progress',
+    [...classRumorRead(proseAccount, fire).body].some(isRune));
+  for (const hits of [64, 79]) {
+    proseAccount.ledger[deedKey('fire_hits')] = hits;
+    const legible = classRumorRead(proseAccount, fire);
+    check(`mystery: ${hits}/80 hits leave readable prose but a hidden, unearned class`,
+      legible.body === fireProse && legible.title === encipher('unknown calling')
+      && !classUnlockProgress(proseAccount, fire).met && settleClassUnlocks(proseAccount).length === 0
+      && !proseAccount.unlockedClasses.has('pyromancer') && proseAccount.pendingClassUnlocks.size === 0);
+  }
+  const proseThreshold = CLASS_WEB_CFG.proseRevealFrac;
+  try {
+    CLASS_WEB_CFG.proseRevealFrac = 0.75;
+    proseAccount.ledger[deedKey('fire_hits')] = 60;
+    check('mystery: full prose threshold is configurable independently of objective readability',
+      classRumorRead(proseAccount, fire).body === fireProse && CLASS_WEB_CFG.revealFrac === 0.25);
+  } finally { CLASS_WEB_CFG.proseRevealFrac = proseThreshold; }
   const necro = classUnlockFor('necromancer')!;
   a.ledger[LEDGER_CORPSES_RECLAIMED] = 5;
   const split = classRumorRead(a, necro);

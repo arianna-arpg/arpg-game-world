@@ -12,12 +12,15 @@ of that card's objective rows are readable, so hovering cannot bypass the veil.
 Each `ClassBundleDef.rumor` describes a playstyle without naming a class, skill,
 or unlock recipe. Its runes reveal gradually from the first credited progress,
 following the best objective fraction because any one avenue earns the class.
+The prose is fully readable at 80% objective progress, controlled by
+`CLASS_WEB_CFG.proseRevealFrac`; letter reveals scale proportionally up to that
+point. This gives time to read the inscription before the class is earned.
 Letter occurrences reveal in a scattered, phrase-seeded order across the whole
 inscription, leaving partially readable words for pattern recognition. Repeated
 letters reveal independently; digraph runes stay whole. Increasing progress only
 adds visible letters, and the same phrase/progress always gives the same result
 across cards, tooltips and reloads without consuming gameplay randomness.
-Incomplete progress always leaves some script. The title uses a generic runic
+Progress below that prose threshold leaves some script. The title uses a generic runic
 placeholder until earned; the actual name is not encoded into the shrouded card.
 Class-select teasers use the same safe prose. Vestiges share the alphabet as lore;
 finding them never translates the card, and the UI makes no such claim.

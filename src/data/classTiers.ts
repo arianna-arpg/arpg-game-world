@@ -53,6 +53,9 @@ export const CLASS_WEB_CFG = {
    *  until that objective stands at least this far along (0..1). Identity
    *  prose reveals gradually with the best avenue; the name waits for completion. */
   revealFrac: 0.25,
+  /** Best objective fraction at which discovery prose reads fully (0..1).
+   *  Names and rewards still wait for objective completion; 0 reveals prose immediately. */
+  proseRevealFrac: 0.8,
   /** Fallback for a modded class with no authored discovery prose. */
   unknownRumor: 'An unfamiliar calling stirs beyond the veil.',
   /** THE SWEEP: how often (world seconds) a live run re-reads the objective
