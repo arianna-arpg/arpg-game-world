@@ -3,7 +3,7 @@
 //
 // Every socketable vestige wears a rune (the D2 rune tradition — the Elder
 // Futhark's letters), and the Vault's SHROUDED class cards are WRITTEN in
-// those runes: the class name, the blurb, the objectives — one rune per
+// those runes: discovery prose and objectives — one rune per
 // letter of the plain text (Harbinger-speak: a fixed, crackable cipher —
 // community-solvable by construction, never re-dealt per account). The
 // vestiges are the ROSETTA STONE: each teaches ONE letter (data/vestiges.ts
@@ -12,7 +12,8 @@
 // a player who has found none can still crack it the old way (frequency,
 // pattern, the hint beside it). Letters no vestige teaches are simply
 // unwritten in any item — the alphabet is whole regardless, so every word
-// renders and every card stays honest.
+// renders and every card stays honest. This is a lore relationship, never
+// a collection mechanic: revealScript follows deed progress, not found items.
 //
 // ONE table, three readers: `encipher` (the Vault's shroud), `runeOf` (the
 // vestige registry's glyph derivation), `decipher` (probes + any future
@@ -123,4 +124,16 @@ export function decipher(runes: string): string {
   let out = '';
   for (const ch of runes) out += BY_RUNE.get(ch)?.letter ?? ch;
   return out;
+}
+
+/** Reveal a stable prefix of rune tokens as deed progress grows. No item or
+ *  account alphabet is consulted. Digraphs stay whole; any credit reveals at
+ *  least one token, and incomplete progress always leaves some script. */
+export function revealScript(text: string, fraction: number): string {
+  if (fraction >= 1) return text;
+  const runes = [...encipher(text)];
+  const count = runes.filter(isRune).length;
+  const clear = fraction > 0 ? Math.min(count - 1, Math.max(1, Math.floor(count * fraction))) : 0;
+  let seen = 0;
+  return runes.map(ch => isRune(ch) && ++seen <= clear ? runeLetterOf(ch)! : ch).join('');
 }

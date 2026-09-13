@@ -1663,20 +1663,19 @@ we verify changes.
   `docs/meta/gatework.md`, probes `balance/probe_vendorlocker.ts` E/F.
   THE OBJECTIVE WEB + THE MASTERY LADDER + THE RUNESCRIPT (her ruling
   2026-09-05 — a class is EARNED, never bought): every non-starter class
-  hangs in the Vault SHROUDED from day one, its name/blurb written in the
-  vestiges' runes (`data/runescript.ts` — a fixed Elder-Futhark cipher,
-  26 letters + th/ng, lossless; THE ROSETTA LAW: each vestige carries the
-  `letter` it teaches and its glyph DERIVES from it) with its `hint` the
-  one plain line and its OBJECTIVES beneath — `ClassBundleDef.unlock`
-  (`ClassUnlockSpec`): an ANY-OF group of gatework avenues (`classLevel`
-  play thresholds — the new `GateRow` sugar; counted deeds `ledger`+`n`:
-  `LEDGER_CORPSES_RECLAIMED` ×20 or `bossSlainKey('undead')` ×5 → the
-  Necromancer, both ACCOUNT-DIRECT stamps; hard lessons; a `chain` = the
-  parent owned as the structural door + played to
-  `CLASS_WEB_CFG.chainPlayLevel`), compiled onto `reqAnyOf`/`requiresUnlock`
-  under THE EARNED LAW (`UnlockBase.earned`: cost 0, the pour refuses,
-  never stock). THE REVEAL: objectives read plain with progress once any
-  one stands `revealFrac` along (`gateRowProgress` → `classUnlockProgress`);
+  hangs in the Vault SHROUDED once its parent ownership chain opens.
+  `ClassBundleDef.rumor` supplies identity prose without class names or
+  recipes; `classRumorRead` shares its progress-based runic reveal across
+  cards, hover, and deal teasers. Each objective reads plain at its own
+  `CLASS_WEB_CFG.revealFrac` (25%); detailed hints wait until every row is
+  readable. The title stays a generic runic placeholder until earned.
+  Vestiges share `data/runescript.ts` as lore, never translation progress.
+  `ClassUnlockSpec` compiles ANY-of gameplay deeds and optional ownership
+  chains onto `reqAnyOf`/`requiresUnlock`; levels remain mastery-only.
+  Earned entries cost zero and refuse investment. `pendingClassUnlocks`
+  persists newly earned cards on Classes with a free Unlock acknowledgement
+  before shelving them under Owned. See `docs/meta/class-deeds.md` and
+  `balance/vault-discovery-ui.cjs` for the reveal and acknowledgement contract.
   THE CLAIM: `settleClassUnlocks` (the live sweep every `sweepSec` against
   `World.ledgerView()` — the merged account+run fold — plus the Vault, the
   deal, the run's end) hands the class over, gems dropping from the next

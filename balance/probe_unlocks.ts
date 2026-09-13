@@ -25,17 +25,19 @@ import { seedGlobalRandom } from '../src/sim/rng';
 import {
   CLASS_BUNDLES, SLOT_TIERS, UNLOCK_CATALOG, VAULT_SHELF_CFG, VAULT_TABS, allUnlockables,
   applyUnlock, availableUnlocks, catalogClassLevelMilestones, classBundleId, classObjectiveKeys,
-  classUnlockFor, classUnlockProgress, investUnlock, isUnlockOwned, isUnlockVisible,
+  acknowledgeClassUnlock, classRumorRead, classUnlockFor, classUnlockProgress, investUnlock, isUnlockOwned, isUnlockVisible,
+  pendingClassUnlocks,
   settleClassUnlocks, shroudedClassUnlocks, vaultKindOrder, vaultSeatOf, vaultShelfCensus,
   vaultStripVisible,
 } from '../src/meta/unlocks';
 import {
   CLASS_LEVEL_MILESTONES, FEATURE, LEDGER_BOSS_SLAIN_PREFIX, LEDGER_CORPSES_RECLAIMED,
   LEDGER_CRAFTS_UNLOCKED, LEDGER_FLASK_LESSON, LEDGER_LEGENDARY_SKILL_DROP, LEDGER_ZONES_EXPLORED,
-  STARTER_CLASSES, bossSlainKey, classLevelLedgerKey, makeAccount,
+  STARTER_CLASSES, bossSlainKey, classLevelLedgerKey, makeAccount, serializeAccount, deserializeAccount,
 } from '../src/meta/account';
 import { CLASS_WEB_CFG } from '../src/data/classTiers';
 import { CLASSES } from '../src/data/classes';
+import { encipher, isRune, revealScript } from '../src/data/runescript';
 import { LEDGER_SEIZED } from '../src/engine/grab';
 import { LEDGER_TRAP_SPRUNG, type PlacedTrapwork } from '../src/engine/trapworks';
 import { vec } from '../src/core/math';
@@ -183,8 +185,9 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
     !classUnlockProgress(a, necro).revealed && classUnlockProgress(a, necro).rows[0].frac > 0);
   a.ledger[LEDGER_CORPSES_RECLAIMED] = quarter;
   const read = classUnlockProgress(a, necro);
-  check('reveal: a quarter of ONE deed reveals every objective, plain, with progress',
-    read.revealed && read.rows.length === 2 && !read.met && read.rows[0].frac === quarter / 20 && read.rows[1].frac === 0);
+  check('reveal: a quarter of one deed reveals only that objective, with progress',
+    read.revealed && read.rows.length === 2 && !read.met && read.rows[0].frac === quarter / 20
+    && read.rows[0].revealed && !read.rows[1].revealed && read.rows[1].frac === 0);
   check('reveal: the spoken lines are hers', read.rows.map(r => r.label).join(' | ')
     === 'reclaim twenty of your own corpses | slay five bosses of the undead');
   // Levels stay mastery-only; discovery reads attributable deeds instead.
@@ -476,6 +479,66 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
   const doubleSold = [...flagSellers.entries()].filter(([, n]) => n > 1);
   check('parity: no feature flag is sold by two rows',
     doubleSold.length === 0, doubleSold.map(([f]) => f).join(','));
+}
+
+// Discovery presentation and the persistent, free acknowledgement.
+{
+  const a = makeAccount(), u = classUnlockFor('sorcerer')!;
+  const b = CLASS_BUNDLES.find(b => b.classId === 'sorcerer')!;
+  const fresh = classRumorRead(a, u);
+  check('mystery: fresh body is entirely script; identity and instructions are absent',
+    fresh.body === encipher(b.rumor) && fresh.title === encipher('unknown calling')
+    && !JSON.stringify(fresh).includes('fire') && !JSON.stringify(fresh).includes('Sorcerer'));
+  check('mystery: every authored rumor omits all class names and numbered requirements',
+    CLASS_BUNDLES.every(b => !/\d/.test(b.rumor)
+      && CLASSES.every(c => !new RegExp(`\\b${c.name}\\b`, 'i').test(b.rumor))));
+  const plainCount = (s: string): number => [...s].filter(ch => /[a-z]/i.test(ch)).length;
+  a.ledger[deedKey('elements_landed')] = 1;
+  const partial = classRumorRead(a, u);
+  check('mystery: first credit reveals prose and the now-qualified deed, never the name',
+    plainCount(partial.body) > 0 && [...partial.body].some(isRune)
+    && partial.rows[0].label === CLASS_DEEDS.sorcerer.objectives[0].label && partial.title === fresh.title);
+  a.ledger[deedKey('elements_landed')] = 2;
+  check('mystery: more progress reveals more prose', plainCount(classRumorRead(a, u).body) > plainCount(partial.body));
+  check('mystery: tiny credit reveals something; almost complete retains script; complete reads fully',
+    plainCount(revealScript(b.rumor, 0.001)) > 0 && [...revealScript(b.rumor, 0.999)].some(isRune)
+    && revealScript(b.rumor, 1) === b.rumor);
+  const necro = classUnlockFor('necromancer')!;
+  a.ledger[LEDGER_CORPSES_RECLAIMED] = 5;
+  const split = classRumorRead(a, necro);
+  check('mystery: progress on one avenue does not spoil another',
+    split.rows[0].revealed && !split.rows[1].revealed && !split.rows[1].label.includes('undead'));
+  const before = classRumorRead(a, u).body;
+  a.unlockedSupports.add('some_vestige');
+  a.ledger['gemdrop:some_vestige'] = 99;
+  check('mystery: vestige discoveries never translate the prose', classRumorRead(a, u).body === before);
+  a.ledger[deedKey('elements_landed')] = 3;
+  check('acknowledgement: refuses an unearned class', !acknowledgeClassUnlock(a, u));
+  settleClassUnlocks(a);
+  const shelf = vaultShelfCensus(a).find(c => c.tab.id === 'classes')!;
+  check('acknowledgement: earned reward works immediately and stays on Classes, outside priced stock',
+    a.unlockedClasses.has('sorcerer') && a.unlockedSkills.has('infernal_ray')
+    && shelf.visible && shelf.pending.some(p => p.id === u.id) && !shelf.stock.some(p => p.id === u.id)
+    && !vaultShelfCensus(a).find(c => c.tab.owned)!.owned.some(p => p.id === u.id));
+  const loaded = deserializeAccount(serializeAccount(a))!;
+  check('acknowledgement: pending reward survives saving and repeated settles',
+    loaded.pendingClassUnlocks.has('sorcerer') && settleClassUnlocks(loaded).length === 0
+    && pendingClassUnlocks(loaded).some(p => p.id === u.id));
+  loaded.credits = 0;
+  check('acknowledgement: free click moves the card to Owned without touching the reward',
+    acknowledgeClassUnlock(loaded, u) && loaded.credits === 0 && loaded.unlockedClasses.has('sorcerer')
+    && loaded.unlockedSkills.has('infernal_ray') && !pendingClassUnlocks(loaded).some(p => p.id === u.id)
+    && vaultShelfCensus(loaded).find(c => c.tab.owned)!.owned.some(p => p.id === u.id));
+  check('acknowledgement: repeat clicks and subsequent loads cannot re-arm it',
+    !acknowledgeClassUnlock(loaded, u) && !deserializeAccount(serializeAccount(loaded))!.pendingClassUnlocks.has('sorcerer')
+    && settleClassUnlocks(loaded).length === 0);
+  const legacy = serializeAccount(a);
+  delete legacy.pendingClassUnlocks;
+  check('acknowledgement: existing saves retain owned classes without manufacturing notices',
+    deserializeAccount(legacy)!.unlockedClasses.has('sorcerer') && deserializeAccount(legacy)!.pendingClassUnlocks.size === 0);
+  legacy.pendingClassUnlocks = ['warrior', 'missing_class', 'necromancer', 'sorcerer'];
+  check('acknowledgement: load rejects starters, missing classes and unearned entries',
+    [...deserializeAccount(legacy)!.pendingClassUnlocks].join(',') === 'sorcerer');
 }
 
 // --- 4) LIVE: the engine stamps land (local hero only) ----------------------

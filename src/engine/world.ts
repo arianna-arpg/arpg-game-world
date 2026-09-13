@@ -5038,7 +5038,7 @@ export class World {
     for (const u of got) {
       if (u.kind !== 'class') continue;
       const name = CLASSES.find(c => c.id === u.payload.classId)?.name ?? u.payload.classId;
-      this.notice(`The world yields the ${name} — a new vessel answers at the next waking, and its arts may drop from here on.`, '#8fa8d8', 18, 'world');
+      this.notice(`The ${name} is ready in the Vault. Its arts can now be found, and a new vessel awaits your next waking.`, '#8fa8d8', 18, 'world');
     }
   }
 

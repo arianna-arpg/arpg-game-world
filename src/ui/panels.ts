@@ -102,7 +102,7 @@ import {
   allUnlockables, applyUnlock, availableUnlocks, classUnlockFor, INVEST_CFG, investedToward,
   investUnlock, isUnlockOwned, maxSlotCount, remainingCost,
   resurrectUnlockId, sealedUnlocks, settleClassUnlocks, shroudedClassUnlocks, unlockCompleted,
-  classUnlockProgress,
+  acknowledgeClassUnlock, classRumorRead, classUnlockProgress,
   VAULT_KIND_LABELS, vaultKindOrder, vaultSeatOf, vaultShelfCensus, vaultStripVisible,
   ownedUnlockById,
   type Unlockable,
@@ -2506,7 +2506,7 @@ export class UI {
         .slice(0, TEASER_COUNT);
       const rumors = shuffle([...shrouded])
         .slice(0, Math.max(0, TEASER_COUNT - teasers.length))
-        .map(u => (u.kind === 'class' ? u.payload.hint : undefined) ?? 'Something out there has not introduced itself yet.');
+        .map(u => classRumorRead(acc, u).body);
       this.classRoster = { picks, teasers, rumors, dealtFor };
     }
     const { picks, teasers, rumors } = this.classRoster;
@@ -2530,15 +2530,12 @@ export class UI {
       return u ? `🔒 Earned, never bought: its card hangs shrouded in the Vault`
         : '🔒 Unlocked in the Vault';
     };
-    // A RUMOR card: a shrouded class. The hint is a compass toward the DEED;
-    // the identity stays the world's secret until earned (the objective web,
-    // meta/unlocks.ts). Clicks route to the Vault like any locked card — its
-    // shrouded wall carries the objectives, written in the vestiges' runes.
+    // Deal teasers share the Vault's progress-based prose, never raw deed hints.
     const rumorCard = (hint: string): string => `
       <div class="class-card locked" data-locked="true" style="opacity:.45">
         <div class="cname runescript" style="letter-spacing:3px">${encipher('unclaimed')}</div>
-        <div class="cdesc" style="font-style:italic">“${hint}”</div>
-        <div class="class-lock">🔒 Unclaimed: the world teaches what the Vault cannot sell.</div>
+        <div class="cdesc runescript" style="font-style:italic">${esc(hint)}</div>
+        <div class="class-lock">🔒 An undiscovered calling. Visit the Vault.</div>
       </div>`;
     // A dealt card wears THE OPENING CHOOSER (the chosen opening per seat,
     // a swap badge where alternates are owned); a teaser keeps the plain
@@ -2735,13 +2732,8 @@ export class UI {
       if (b) this.vaultScroll[this.vaultTab || '_flat'] = b.scrollTop;
     };
     const render = (): void => {
-      // THE SETTLE (meta/unlocks.ts): any class whose deed completed since
-      // the last look is CLAIMED here — the Vault is where the world hands
-      // it over (a toast each), and the render below reads it Owned.
-      for (const u of settleClassUnlocks(acc)) {
-        this.saveAccount();
-        this.vaultToast(`The world yields ${u.label.replace(/^Class: /, 'the ')}: it joins the pool your hand is dealt from.`);
-      }
+      // Record earned rewards without acknowledging them on the player's behalf.
+      if (settleClassUnlocks(acc).length) this.saveAccount();
       // THE CENSUS (vaultShelfCensus): every shelf's stock/owned/rumors and
       // its mystery-law verdict in one read the strip, faces and floor share.
       const census = vaultShelfCensus(acc);
@@ -2819,6 +2811,13 @@ export class UI {
               ${earnedRowsHtml(u)}
               <button disabled>✓ Owned</button>
             </div>`;
+      const pendingCardHtml = (u: Unlockable): string => `
+            <div class="unlock-card" data-tip="unlock" data-unlock-id="${u.id}">
+              <div class="uname">${esc(u.label)}</div>
+              <div class="ushroud-body" style="font-size:12px;line-height:1.5">${esc(u.description)}</div>
+              ${earnedRowsHtml(u)}
+              <button data-class-unlock="${u.id}">Unlock</button>
+            </div>`;
       // A sealed card wears the name and the price openly (the chain is
       // walked — this IS the next link) with the lock on the button; the
       // avenues that open it live in the hover story, met roads checked.
@@ -2846,13 +2845,9 @@ export class UI {
       // the next links of walked chains, roads printed on hover.
       const sealedRack = (rows: Unlockable[]): string => rows.length
         ? subHead('Sealed: earn the road, then buy') + grid(rows.map(sealedCardHtml).join('')) : '';
-      // THE SHROUDED WALL (the objective web, meta/unlocks.ts): every class
-      // the world has not yet yielded hangs here WRITTEN IN THE VESTIGES'
-      // RUNES (data/runescript.ts) — its name, its blurb, and its
-      // OBJECTIVES, which read plain (with progress) only once any one of
-      // them stands a quarter along (CLASS_WEB_CFG.revealFrac); the hint
-      // rides the hover story in plain words, the compass. The name stays
-      // runes until the class is claimed — then the card is simply Owned.
+      // Discovery prose and each objective use the same safe read as hover.
+      // The actual name is absent until earned; pending cards remain above
+      // this fold until the player acknowledges them.
       // The whole wall COLLAPSES to its one header line on a click (the
       // satchel idiom — vaultRumorsOpen), count kept on the face so a
       // closed fold still says how many wait. Hover-addressed by INDEX, not
@@ -2861,29 +2856,29 @@ export class UI {
       // census hands over whole).
       const shroudCard = (u: Unlockable, i: number): string => {
         if (u.kind !== 'class') return '';
-        const cls = CLASSES.find(c => c.id === u.payload.classId);
-        const read = classUnlockProgress(acc, u);
-        const blurb = (cls?.description ?? '').split(/(?<=[.!?])\s/)[0] ?? '';
-        const rows = read.rows.map(r => read.revealed
-          ? `<div class="uobj${r.met ? ' met' : ''}" title="${esc(r.label)}"><span>${r.met ? '✓' : '·'} ${esc(r.label)}</span><i style="width:${Math.round(r.frac * 100)}%"></i></div>`
-          : `<div class="uobj runescript">· ${encipher(r.label)}</div>`).join('');
+        const read = classRumorRead(acc, u);
+        const rows = read.rows.map(r =>
+          `<div class="uobj${r.revealed ? '' : ' runescript'}${r.met ? ' met' : ''}"><span>${r.met ? '✓' : '·'} ${esc(r.label)}</span><i style="width:${Math.round(r.frac * 100)}%"></i></div>`).join('');
         return `
             <div class="unlock-card ushroud" data-tip="rumor" data-rumor-i="${i}">
-              <div class="uname runescript" style="letter-spacing:2px">${encipher(cls?.name ?? u.payload.classId)}</div>
-              <div class="ushroud-body runescript">${encipher(blurb)}</div>
+              <div class="uname runescript" style="letter-spacing:2px">${esc(read.title)}</div>
+              <div class="ushroud-body runescript">${esc(read.body)}</div>
               <div class="uobjs">${rows}</div>
-              <button disabled>${read.revealed ? 'Earn it in the world' : 'Unclaimed'}</button>
+              <button disabled>Undiscovered</button>
             </div>`;
       };
       const rumorSection = (rows: Unlockable[]): string => {
         if (!rows.length) return '';
         const open = this.vaultRumorsOpen;
         return `<h3 class="vault-sub vault-fold" data-fold="rumors" title="${open
-            ? 'Fold the shrouded wall away' : 'Hang the shrouded wall back up'}"><span class="arr">${open ? '▾' : '▸'}</span>Shrouded: classes the world has not yet yielded (${rows.length})</h3>`
+            ? 'Hide undiscovered classes' : 'Show undiscovered classes'}"><span class="arr">${open ? '▾' : '▸'}</span>Undiscovered classes (${rows.length})</h3>`
           + (open ? grid(rows.map(shroudCard).join('')) : '');
       };
 
       let tabStrip = '', body = '';
+      const pendingSection = (rows: Unlockable[]): string => rows.length
+        ? subHead(`Ready to unlock (${rows.length})`)
+          + `<div class="unlock-grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))">${rows.map(pendingCardHtml).join('')}</div>` : '';
       if (!strip) {
         // THE YOUNG STORE: no shelving earned yet — one wall of everything
         // visible, its kinds as section headers in shelf order (the same
@@ -2895,6 +2890,7 @@ export class UI {
         const ownedAll = census.find(c => c.tab.owned)?.owned ?? [];
         body = stock.length ? kindSections(stock, cardHtml)
           : `<div class="vault-empty">Nothing for sale right now; earn ${META_CURRENCY_LABEL} and milestones by playing.</div>`;
+        body = pendingSection(census.flatMap(c => c.pending)) + body;
         body += sealedRack(sealed.map(s => s.u));
         body += rumorSection(census.flatMap(c => c.rumors));
         if (ownedAll.length) body += subHead(`Owned (${ownedAll.length})`) + grid(ownedAll.map(ownedCardHtml).join(''));
@@ -2902,7 +2898,7 @@ export class UI {
         // Land on the remembered shelf if it still stands; else the first
         // shelf with something to BUY, else the first standing shelf.
         if (!visible.some(c => c.tab.id === this.vaultTab)) {
-          this.vaultTab = (visible.find(c => c.stock.length > 0) ?? visible[0]).tab.id;
+          this.vaultTab = (visible.find(c => c.pending.length > 0) ?? visible.find(c => c.stock.length > 0) ?? visible[0]).tab.id;
         }
         const row = visible.find(c => c.tab.id === this.vaultTab)!;
         const tab = row.tab;
@@ -2917,13 +2913,13 @@ export class UI {
           const stockN = c.stock.length, rumorN = c.rumors.length;
           const sealedN = t.owned ? 0 : (sealedBy.get(t.id)?.length ?? 0);
           const canBuy = c.stock.filter(u => acc.credits >= u.cost).length;
-          const shown = t.owned ? c.owned.length : stockN;
+          const shown = t.owned ? c.owned.length : stockN + c.pending.length;
           const detail = t.owned
             ? `: ${c.owned.length} claimed`
-            : `: ${stockN} available${canBuy ? `, ${canBuy} affordable now` : ''}${sealedN ? `; ${sealedN} sealed` : ''}${rumorN ? `; ${rumorN} shrouded` : ''}`;
+            : `: ${stockN} available${c.pending.length ? `; ${c.pending.length} ready to unlock` : ''}${canBuy ? `, ${canBuy} affordable now` : ''}${sealedN ? `; ${sealedN} sealed` : ''}${rumorN ? `; ${rumorN} shrouded` : ''}`;
           return `<button class="book-tab${t.id === this.vaultTab ? ' active' : ''}"
             data-vtab="${t.id}" title="${esc(t.blurb + detail)}">${t.label}${shown > 0
-              ? `<span class="cnt${canBuy > 0 ? ' now' : ''}">${shown}</span>` : ''}</button>`;
+              ? `<span class="cnt${canBuy > 0 || c.pending.length > 0 ? ' now' : ''}">${shown}</span>` : ''}</button>`;
         }).join('')}</div>`;
 
         // The active shelf's floor. Multi-kind shelves group under kind
@@ -2937,7 +2933,7 @@ export class UI {
         } else {
           const rows = row.stock;
           const sealedRows = sealedBy.get(tab.id) ?? [];
-          if (rows.length === 0 && sealedRows.length === 0) {
+          if (rows.length === 0 && sealedRows.length === 0 && row.pending.length === 0) {
             body = `<div class="vault-empty">${esc(tab.emptyNote
               ?? `Nothing here right now; earn more ${META_CURRENCY_LABEL} and milestones by playing.`)}</div>`;
           } else if ((tab.kinds?.length ?? 0) > 1) {
@@ -2945,6 +2941,7 @@ export class UI {
           } else {
             body = rows.length ? grid(rows.map(cardHtml).join('')) : '';
           }
+          body = pendingSection(row.pending) + body;
           body += sealedRack(sealedRows);
           body += rumorSection(row.rumors);
         }
@@ -2978,6 +2975,16 @@ export class UI {
           saveShelfScroll();
           this.vaultTab = btn.dataset.vtab!;
           render();
+        });
+      });
+      this.accountScreen.querySelectorAll<HTMLButtonElement>('[data-class-unlock]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const u = allUnlockables(acc).find(u => u.id === btn.dataset.classUnlock);
+          if (!u || !acknowledgeClassUnlock(acc, u)) return;
+          saveShelfScroll();
+          this.saveAccount();
+          render();
+          this.vaultToast(`${u.label} unlocked`);
         });
       });
       // The rumor fold's latch — one state, both store shapes.
@@ -3185,7 +3192,8 @@ export class UI {
     const owned = isUnlockOwned(acc, u);
     const inv = investedToward(acc, u);
     const req = u.reqLevel ? ` · req account level ${u.reqLevel}` : '';
-    const price = owned ? '✓ owned'
+    const price = u.kind === 'class' && acc.pendingClassUnlocks.has(u.payload.classId) ? 'Ready to unlock'
+      : owned ? '✓ owned'
       : inv > 0 ? `${inv}/${u.cost} ${META_CURRENCY_LABEL} invested · ${remainingCost(acc, u)} to go`
       : `${u.cost} ${META_CURRENCY_LABEL}`;
     return {
@@ -3208,7 +3216,7 @@ export class UI {
     const line = (r: { label: string; frac: number; met: boolean }): string =>
       `<div style="color:${r.met ? 'var(--good, #7fd88f)' : 'var(--text-dim)'}">${r.met ? '✓' : '·'} ${esc(r.label)}${r.met ? '' : ` <span style="opacity:.7">(${Math.round(r.frac * 100)}%)</span>`}</div>`;
     return `${u.payload.hint ? `<div style="margin-top:6px"><i>“${esc(u.payload.hint)}”</i></div>` : ''}`
-      + `<div style="margin-top:6px"><b>Claimed by ANY of:</b>${read.rows.map(line).join('')}</div>`;
+      + `<div style="margin-top:6px"><b>${read.rows.length > 1 ? 'Complete any one deed:' : 'Discovery deed:'}</b>${read.rows.map(line).join('')}</div>`;
   }
 
   /** A SEALED card's hover story: the description plus THE ROADS — every
@@ -3233,25 +3241,22 @@ export class UI {
     };
   }
 
-  /** A shrouded card's hover story — the hint in plain words (the one
-   *  compass), the objectives as the card shows them (runes until the
-   *  reveal, then plain with the count), and the runescript's own law.
+  /** A shrouded card's hover story shares the card's disclosure rules.
    *  Indexed off the live shrouded list so the DOM never carries the name. */
   private rumorTooltip(index: number): TooltipContent | null {
     const acc = this.getAccount();
     const u = shroudedClassUnlocks(acc)[index];
     if (!u || u.kind !== 'class') return null;
-    const cls = CLASSES.find(c => c.id === u.payload.classId);
-    const read = classUnlockProgress(acc, u);
-    const line = (r: { label: string; frac: number; met: boolean }): string => read.revealed
+    const read = classRumorRead(acc, u);
+    const line = (r: { label: string; frac: number; met: boolean; revealed: boolean }): string => r.revealed
       ? `<div style="color:${r.met ? 'var(--good, #7fd88f)' : 'var(--text-dim)'}">${r.met ? '✓' : '·'} ${esc(r.label)}${r.met ? '' : ` <span style="opacity:.7">(${Math.round(r.frac * 100)}%)</span>`}</div>`
-      : `<div class="runescript">· ${encipher(r.label)}</div>`;
+      : `<div class="runescript">· ${esc(r.label)}</div>`;
     return {
-      title: `<span class="runescript">${encipher(cls?.name ?? u.payload.classId)}</span>`,
-      description: `<i>“${esc(u.payload.hint ?? 'The world has not introduced this one yet.')}”</i>`
-        + `<div style="margin-top:6px"><b>Claimed by ANY of:</b>${read.rows.map(line).join('')}</div>`
-        + `<div style="margin-top:6px;font-size:10px;color:var(--text-dim)">Written in the vestiges' runes: every vestige you find teaches one letter of the script${read.revealed ? '' : ', and the deeds read plain once any one of them is a quarter done'}.</div>`,
-      meta: `${VAULT_KIND_LABELS.class} · unclaimed: the world teaches what the Vault cannot sell`,
+      title: `<span class="runescript">${esc(read.title)}</span>`,
+      description: `<div class="runescript">${esc(read.body)}</div>`
+        + (read.detail ? `<div style="margin-top:6px">${esc(read.detail)}</div>` : '')
+        + `<div style="margin-top:6px"><b>${read.rows.length > 1 ? 'Complete any one deed:' : 'Discovery deed:'}</b>${read.rows.map(line).join('')}</div>`,
+      meta: `${VAULT_KIND_LABELS.class} · undiscovered`,
       wide: true,
     };
   }

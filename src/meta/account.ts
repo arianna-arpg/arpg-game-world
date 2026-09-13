@@ -410,6 +410,8 @@ export interface Account {
    *  (starters + every class the world has CLAIMED for the account through
    *  its objectives — meta/unlocks.ts). Also gates the co-op lobby. */
   unlockedClasses: Set<string>;
+  /** Earned classes awaiting the Vault's deliberate, free Unlock acknowledgement. */
+  pendingClassUnlocks: Set<string>;
   /** THE MASTERY LADDER (data/classTiers.ts): owned rung ids (classTierId)
    *  — each opens an alternate opening for its class at the wake. */
   unlockedClassTiers: Set<string>;
@@ -472,6 +474,7 @@ export interface AccountSave {
   runRecords?: RunRecord[];
   skillGraft?: boolean;
   unlockedClasses: string[];
+  pendingClassUnlocks?: string[];
   unlockedSkills: string[];
   unlockedSupports: string[];
   features: string[];
@@ -500,6 +503,7 @@ export function makeAccount(): Account {
     runRecords: [],
     skillGraft: false,
     unlockedClasses: new Set(STARTER_CLASSES),
+    pendingClassUnlocks: new Set<string>(),
     unlockedClassTiers: new Set<string>(),
     kitPicks: {},
     unlockedSkills: new Set(STARTER_SKILLS),
@@ -528,6 +532,7 @@ export function serializeAccount(a: Account): AccountSave {
     runRecords: a.runRecords,
     skillGraft: a.skillGraft,
     unlockedClasses: [...a.unlockedClasses],
+    pendingClassUnlocks: [...a.pendingClassUnlocks],
     unlockedClassTiers: [...a.unlockedClassTiers],
     kitPicks: a.kitPicks,
     unlockedSkills: [...a.unlockedSkills],
@@ -573,6 +578,9 @@ export function deserializeAccount(s: AccountSave): Account | null {
       .slice(-MAX_RUN_RECORDS),
     skillGraft: s.skillGraft === true,
     unlockedClasses: new Set([...STARTER_CLASSES, ...(s.unlockedClasses ?? [])]),
+    pendingClassUnlocks: new Set((s.pendingClassUnlocks ?? []).filter(id =>
+      typeof id === 'string' && !STARTER_CLASSES.includes(id)
+      && CLASSES.some(c => c.id === id) && (s.unlockedClasses ?? []).includes(id))),
     unlockedClassTiers: new Set<string>((s.unlockedClassTiers ?? []).filter(t => typeof t === 'string')),
     // Strings only, per class per base — a malformed pick is dropped, never
     // a wipe (the resolver falls back to the base kit regardless).

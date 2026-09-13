@@ -4,10 +4,30 @@ Class discovery reads gameplay facts. Levels remain the 10/30/60/100 mastery
 ladder, including its skill swaps and costs. Previously owned classes remain
 owned. Old level milestones do not manufacture retrospective deed progress.
 
-The Vault keeps its existing discovery presentation: a plain hint from the
-start, objectives revealed at 25% progress, and class names in runes until
-earned. Hints now state the method and target explicitly. Ownership of a parent
-reveals deeper branches; deeds accumulated before that reveal still count.
+The Vault card and its hover share `classRumorRead`. Each objective becomes
+readable at its own 25% progress (`CLASS_WEB_CFG.revealFrac`); untouched
+alternatives remain obscured. Detailed deed instructions appear only when all
+of that card's objective rows are readable, so hovering cannot bypass the veil.
+
+Each `ClassBundleDef.rumor` describes a playstyle without naming a class, skill,
+or unlock recipe. Its runes reveal gradually from the first credited progress,
+following the best objective fraction because any one avenue earns the class.
+Incomplete progress always leaves some script. The title uses a generic runic
+placeholder until earned; the actual name is not encoded into the shrouded card.
+Class-select teasers use the same safe prose. Vestiges share the alphabet as lore;
+finding them never translates the card, and the UI makes no such claim.
+
+Earning still grants the class and its drop pools immediately. It also adds the
+class to `Account.pendingClassUnlocks`, persisted through normal account saves.
+The Classes shelf keeps the fully revealed card above the collapsible mystery
+section, with an enabled **Unlock** button and no essence price. Clicking it
+acknowledges the reward for free and moves the card to Owned; browsing, reloads,
+and repeated settle sweeps never clear or re-arm it. The Classes tab includes
+pending rewards in its highlighted count. Older saves keep existing ownership
+and begin with no retrospective pending notices; no compatibility reset is needed.
+
+Ownership of a parent reveals deeper branches; deeds accumulated before that
+reveal still count. Acknowledgement never delays gameplay rewards or parent chains.
 
 ## Current recipes
 
@@ -86,7 +106,7 @@ Travel, death, reload, or changing the controlled body ends an attempt. The
 account retains its best poise streak, but a new enemy/encounter starts at zero;
 two breaks on one enemy plus one on another do not earn Breaker. Three breaks
 must leave the victim alive. Killing breaks still feed the separate lifetime
-poise-break total. The hint describes this deliberate requirement.
+poise-break total. The revealed deed detail describes this deliberate requirement.
 
 ## Opening kits
 
@@ -115,8 +135,9 @@ claim that all classes have equal power throughout progression.
 
 Add an event producer only when an existing semantic fact cannot express the
 deed. State the attribution and persistence scope first, author a rule, then
-reference its key in any ordinary objective. Keep thresholds and plain hints
-together in `CLASS_DEEDS`. Parent ownership is optional; implicit class-level
+reference its key in any ordinary objective. Keep thresholds and detailed hints
+together in `CLASS_DEEDS`, and author spoiler-free discovery prose on the bundle.
+Parent ownership is optional; implicit class-level
 discovery gates are deliberately absent.
 
 `probe_classdeeds` exercises aggregation, save/load, real hit/block/heal/kill
@@ -125,3 +146,8 @@ requirements and costs, selected full-rotation budgets, Guardian's real opening
 and the Warlord banner's damage and teardown. `probe_unlocks` walks all 36
 classes for reachability; `probe_classmastery` preserves the mastery ladder.
 Run these alongside `npm run check`, the full probe gate and sim smoke.
+
+`balance/vault-discovery-ui.cjs` checks the rendered card and tooltip at zero,
+partial and complete progress, then verifies a free click, shelf movement,
+and persistence through browser reloads in an isolated save directory. Run with
+`npx electron balance/vault-discovery-ui.cjs` after `npm run build`.

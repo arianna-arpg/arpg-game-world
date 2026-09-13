@@ -50,10 +50,11 @@ export const classTierId = (classId: string, tierId: string): string => `tier_${
 /** THE OBJECTIVE WEB's dials (meta/unlocks.ts reads them). */
 export const CLASS_WEB_CFG = {
   /** THE REVEAL: a shrouded class card's objectives stay written in runes
-   *  until ANY one of them stands at least this far along (0..1); then the
-   *  objectives — and only the objectives — read plain, with progress. The
-   *  name stays runes until the class is claimed. */
+   *  until that objective stands at least this far along (0..1). Identity
+   *  prose reveals gradually with the best avenue; the name waits for completion. */
   revealFrac: 0.25,
+  /** Fallback for a modded class with no authored discovery prose. */
+  unknownRumor: 'An unfamiliar calling stirs beyond the veil.',
   /** THE SWEEP: how often (world seconds) a live run re-reads the objective
    *  web against the merged ledger view, so a class claimed mid-run lands
    *  the moment its deed completes (its gems drop from the next kill). */
