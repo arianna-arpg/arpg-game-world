@@ -45,6 +45,7 @@ import { procPowerStat, procStat, registerProc, type ProcDef } from './procs';
 import { EMERGENT_PROCS, EMERGENT_UNIQUES } from './uniques/emergent';
 import { borrowedRefugeLine, GLEANER_CHOICES, LIVING_UNIQUES } from './uniques/living';
 import { ROTE_CHOICES, CUP_MINION_LINES, LATTICE_LINES, GALEWRIGHT_LINES, REACTIVE_PROCS, REACTIVE_UNIQUES } from './uniques/reactive';
+import { RELIC_UNIQUES } from './uniques/relics';
 
 // ---------------------------------------------------------------------------
 // THE LEGEND PROCS — triggers authored beside the legends that wear them,
@@ -604,6 +605,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
 UNIQUE_LIST.push(...EMERGENT_UNIQUES);
 UNIQUE_LIST.push(...LIVING_UNIQUES);
 UNIQUE_LIST.push(...REACTIVE_UNIQUES);
+UNIQUE_LIST.push(...RELIC_UNIQUES); // THE RELIC LEGENDS (the Reliquary's chase pieces)
 
 export const UNIQUES: Record<string, UniqueDef> =
   Object.fromEntries(UNIQUE_LIST.map(u => [u.id, u]));

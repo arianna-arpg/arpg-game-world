@@ -154,3 +154,70 @@ shelved drawer; closes an open one (`openFromMenu`).
 — planted or shoulder-borne constructs). The two live in different namespaces
 (construct kinds vs item categories); the player-facing collision is noted
 here so a later naming pass can choose.
+
+## THE SEAT LAW — power that reads the board (engine/seatlaw.ts)
+
+A container is a tetris board, so **where** a piece sits can be part of what
+it does. `engine/seatlaw.ts` registers three amplifier stats — ordinary
+registered stats any piece's lines may carry (a unique line today, an affix or
+a vestige word tomorrow) — that THE CONTAINER FOLD consumes as **one factor
+per seated piece**:
+
+| mode | stat | reads |
+| --- | --- | --- |
+| outward | `seatPower_outward` | every piece TOUCHING this one has its lines scaled by the value |
+| solitude | `seatPower_solitude` | this piece's own lines scale by the value per open seat touching it that stands EMPTY |
+| communion | `seatPower_communion` | this piece's own lines scale by the value per piece touching it |
+
+`factor = 1 + Σ outward worn by the touching pieces + solitude × empty seats +
+communion × touching pieces`, floored at zero (a cursed piece may weaken its
+neighbours, never invert them). The laws:
+
+- **Touching** is orthogonal adjacency of footprint cells over OPEN cells of
+  the live board (`seatNeighbourhood` in containers.ts). A sealed or
+  out-of-bounds cell is not a seat: it is neither empty nor occupied, so the
+  ring's hollow centre counts for nothing until THE HEART opens it.
+- **The single hop.** Amplifier lines are read raw and then consumed: never
+  scaled, never emitted to the sheet. A crown beside a crown amplifies the
+  other's damage, not its crown; chains are impossible by construction (the
+  conversion fabric's golden rule, worn by the board). Only FLAT amplifier
+  lines count.
+- **Everything else scales.** Every other line of the piece — flat, increased,
+  more, links, gauge lines, attribute lines — multiplies its value by the
+  factor before it joins the fold (`amplifySeatMods`). Author relic lines so
+  that bigger is better; the register already is.
+- **The sheet never sees the amplifiers.** They seat on the sheet's `misc` tab
+  as the `seatPower_` family only so the registry stays honest; a sheet total
+  of "outward power" would mean nothing.
+
+**THE CASE GAUGE.** `registerContainer` publishes one derived gauge per
+container, `seated:<id>` — the count of pieces seated on its live board — so
+any line anywhere may read "per relic seated in your Reliquary" through the
+ordinary gauge axis (`Modifier.gauge`). The World serves it through
+`GaugeWorld.carryOf` (the seat's meta); a body with no seat reads zero.
+
+**A relic that grants.** The container fold feeds the granted-skill scan and
+the host search, so a seated piece carrying `skillgrant_<id>` grants exactly
+as a worn piece does — the instance on the bar, its stones resident on the
+relic (`ItemInstance.grantState`), gone when it leaves the case.
+
+## The relic legends (data/uniques/relics.ts — probe `balance/probe_relicuniques.ts`)
+
+Six chase pieces, one per lever, all of them BUILDS under THE DEFINING LAW
+(docs/engine/legends.md); every number is a dial.
+
+| legend | base | signature |
+| --- | --- | --- |
+| The Hermit's Bead | charm 1×1 | SOLITUDE: 25–35% stronger lines per empty seat touching it — give it the corner and the room |
+| Sunderstone | charm 1×1 | a rolled ELEMENT (fire/cold/lightning/chaos, one identity forever): its penetration and tagged damage, paid in your own resistance to it |
+| The Lodestone | talisman 2×1 | COMMUNION: 6–9% stronger lines per relic touching it — crowd it |
+| The Unquarried Idol | idol 1×2 | GRANTS Summon Stone Golem (level deepens with tier); the golem's stones live on the idol |
+| The Tally Idol | idol 1×2 | THE CASE GAUGE: 1.5–2.5% increased damage per relic seated in the Reliquary, itself among them |
+| The Reliquary Crown | effigy 2×2 | OUTWARD: relics touching it have 15–22% stronger lines — seats only once the heart opens, and touches eight from there |
+
+Drops: the legends share the world unique pool by weight (about 8% of it,
+`minIlvl` walking the case's own ladder) and the `relic_cache` table pours one
+at a small share (`rarity: 'unique'` rows degrade to rare below every legend's
+floor). The lodestone, the hermit and the crown are the seat law's three
+textures; the idols are the standing levers seated; the sunderstone is the
+living uniques' choice group on a charm.

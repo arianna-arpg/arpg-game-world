@@ -67,11 +67,12 @@ import { evalCurve, type CurveKind } from './curves';
 import { autoPlace, bagBoard, bagBoardFor, placeAt, removeFromBag, setBagBoardSource, swapBlockerFits, type BoardDims } from './inventory';
 import { bagSortMode, sortBagItems, type BagSortDir } from './bagsort';
 import {
-  CONTAINERS, boardDims, containerAccepts, containerBoard, containerBoardFor, containerLanding,
+  CONTAINERS, boardDims, containerAccepts, containerBoard, containerBoardFor, containerLanding, seatAmplification,
   containerMisfits, containerSeatRefusal, findCarried, setContainerBoardSource, unpackContainerBoard,
   type ContainerBoardW,
 } from './containers';
 import { CONTAINER_DEFS } from '../data/containers';
+import { amplifySeatMods } from './seatlaw'; // THE SEAT LAW
 import {
   bagGemItems, findBagGem, freeCellCount, makeSkillGemItem, makeSupportGemItem,
   packGrantState, restoreGrantState,
@@ -4305,6 +4306,9 @@ export class World {
 
   /** The seat that owns this actor, if it's a player seat (O(1)). */
   seatOf(actor: Actor): Seat | undefined { return this.seatByActor.get(actor); }
+  /** THE CASE GAUGE's carry read (engine/gauges.ts GaugeWorld.carryOf —
+   *  'seated:<container>'): the meta a body's seat holds, or undefined. */
+  carryOf(actor: Actor): PlayerMeta | undefined { return this.seatOf(actor)?.meta; }
 
   /** Live player count — seats not (permanently) dead. A DOWNED seat still
    *  counts (it's in the run, awaiting revival), so enemy scaling stays stable
@@ -21714,17 +21718,30 @@ export class World {
     // the adoption law's read, so a retuned frame can never leave a ghost
     // line folding); an inactive board, an unowned board, an absent board
     // contribute nothing. A relic in the bag is never here — inert.
+    // THE SEAT LAW (engine/seatlaw.ts): a seated piece's compiled lines
+    // scale by ONE factor its neighbourhood on the board earns — outward
+    // power worn by the pieces touching it, solitude per empty open seat
+    // against it, communion per piece against it (containers.ts
+    // seatAmplification). Amplifier lines are consumed here — never scaled,
+    // never emitted — so the law is single-hop by construction. The
+    // per-piece rows are kept for the granted-skill host scan below.
     const containerSheetMods = new Map<string, Modifier[]>();
+    const containerPieceMods = new Map<ItemInstance, Modifier[]>();
     for (const def of CONTAINER_DEFS) {
       const held = m.containers[def.id];
       if (!def.active || !held?.length) continue;
       const board = containerBoard(def);
       if (!board) continue;
       const misfit = new Set(containerMisfits(board, held));
+      const seatedPieces = held.filter(it => !misfit.has(it));
+      const compiled = new Map<ItemInstance, Modifier[]>();
+      for (const seated of seatedPieces) compiled.set(seated, compileItemMods(seated));
+      const amps = seatAmplification(board, seatedPieces, it => compiled.get(it) ?? []);
       const sheetMods: Modifier[] = [];
-      for (const seated of held) {
-        if (misfit.has(seated)) continue;
-        for (const gm of compileItemMods(seated)) {
+      for (const seated of seatedPieces) {
+        const mods = amplifySeatMods(compiled.get(seated) ?? [], amps.get(seated) ?? 1);
+        containerPieceMods.set(seated, mods);
+        for (const gm of mods) {
           if (isAttributeId(gm.stat)) {
             if (gm.kind === 'flat') attrs[gm.stat] += gm.value;
             else if (gm.kind === 'increased') attrsPct[gm.stat] += gm.value;
@@ -21784,6 +21801,7 @@ export class World {
       scanGrants(m.classDef.innate);
       scanGrants(passiveMods);
       for (const mods of gearSheetMods.values()) scanGrants(mods);
+      for (const mods of containerSheetMods.values()) scanGrants(mods); // a seated relic may grant (THE CONTAINER FOLD)
       const prevInsts = seat.grantedInsts;
       const keep = new Map<string, SkillInstance>();
       const rows: GrantedSkillRow[] = [];
@@ -21798,6 +21816,13 @@ export class World {
         for (const slot of EQUIP_SLOTS) {
           const worn = m.equipped[slot.id];
           if (worn && gearSheetMods.get(slot.id)?.some(gm => gm.stat === stat)) { host = worn; break; }
+        }
+        // …then the first SEATED container piece carrying it (a relic that
+        // grants — its stones live on the relic, THE RESIDENCE ON THE ITEM).
+        if (!host) {
+          for (const [seated, mods] of containerPieceMods) {
+            if (mods.some(gm => gm.stat === stat)) { host = seated; break; }
+          }
         }
         let inst = prevInsts?.get(skillId);
         if (inst) {

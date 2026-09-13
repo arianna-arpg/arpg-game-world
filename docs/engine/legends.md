@@ -164,7 +164,26 @@ stat a known one.
 | Titan's Grasp | melee MORE, hands slower — the heavy trade |
 | Halo of the Ninth Choir | lightning damage per enemy near you (the count) |
 | The Cindervigil | the flagship: two granted skills, a spell-cast trigger firing the granted copy, the extra lane |
+| The Hermit's Bead (relic) | THE SEAT LAW, solitude: the bead's lines grow per empty seat touching it in the Reliquary |
+| The Lodestone (relic) | THE SEAT LAW, communion: the talisman's lines grow per relic touching it |
+| The Reliquary Crown (relic) | THE SEAT LAW, outward: every relic touching the effigy has stronger lines |
+| The Tally Idol (relic) | THE CASE GAUGE: damage per relic seated in the Reliquary |
+| The Unquarried Idol (relic) | Grants Summon Stone Golem from the case (the container fold hosts the stones) |
+| Sunderstone (relic) | a rolled element's penetration and tagged damage, paid in your own resistance |
 | the build-around wave | slot grafts, combos, conversions, sympathy, the low-life line, reflex, throng finds, the din — unchanged |
+
+## 6. The board as a surface — THE SEAT LAW (engine/seatlaw.ts)
+
+THE RELIC LEGENDS (`data/uniques/relics.ts`, probe
+`balance/probe_relicuniques.ts`) are the Reliquary's chase pieces, and their
+grammar is the board itself: three amplifier stats (`seatPower_outward` /
+`seatPower_solitude` / `seatPower_communion`) that THE CONTAINER FOLD reads
+off a seated piece's neighbourhood — pieces touching it, empty open seats
+against it — as one factor per piece, single-hop by construction; a derived
+gauge per container (`seated:<id>`) for "per relic seated" lines; and the
+granted-skill lane reaching a seated piece (the fold feeds the grant scan and
+hosts the stones on the relic). Contract and laws: `docs/engine/containers.md`
+— THE SEAT LAW.
 
 ## Boundaries
 

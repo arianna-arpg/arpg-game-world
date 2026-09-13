@@ -263,6 +263,7 @@ export const SHEET_FAMILY_SEATS: SheetFamilySeat[] = [
   { prefix: 'classSkill_', cat: 'skills', blurb: 'Levels added to every skill gem of this class\'s school.' },
   { prefix: 'slotgraft_', cat: 'skills', blurb: 'A support granted by what you wear, riding whichever skill you bind to that bar slot; dormant when the gem does not fit the skill seated there.' },
   { prefix: 'skillgrant_', cat: 'skills', blurb: 'A skill granted by what you wear, at this level: bind it to a bar seat and cast it like any learned skill; its sockets live on the granting item.' },
+  { prefix: 'seatPower_', cat: 'misc', blurb: 'THE SEAT LAW (engine/seatlaw.ts): read from a container seat only. Scales the lines of the pieces touching this one, or its own lines per empty or occupied seat against it, before they reach you.' },
   { prefix: 'procPower_', cat: 'skills', blurb: 'Scales how HARD this triggered effect lands (its chance is the proc line beside it).' },
   { prefix: 'trailGrant_', cat: 'skills', blurb: 'Moving leaves a registered short-lived ground effect. Its power scales through your ordinary skill stats.' },
   { prefix: 'pocketGrant_', cat: 'defense', blurb: 'Reveals temporary terrain refuges while granted, with different benefits inside and outside.' },

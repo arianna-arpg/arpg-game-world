@@ -1802,7 +1802,14 @@ we verify changes.
   (the whisper), Titan's Grasp (melee MORE, slower), the Halo (the count),
   The Hollow Sovereign (less taken while the shield holds) and THE
   CINDERVIGIL — the flagship (two granted skills, the spell-cast trigger
-  firing the granted copy, the extra lane).
+  firing the granted copy, the extra lane). THE RELIC LEGENDS (`data/uniques/relics.ts`, probe
+  `balance/probe_relicuniques.ts`): six chase pieces for THE RELIQUARY
+  riding THE SEAT LAW (`engine/seatlaw.ts` — `seatPower_outward` /
+  `_solitude` / `_communion` amplifier stats THE CONTAINER FOLD reads off
+  board GEOMETRY as one single-hop factor per seated piece; the
+  `seated:<container>` derived gauge), a case-granted skill (the fold feeds
+  the grant scan and hosts the stones on the seated relic) and a rolled
+  sunder element.
   THE WORN GRAFT (slot grafts — supports granted BY POSITION): the
   `slotgraft_<slot>_<gemId>` stat family (engine/skills.ts `slotGraftStat`,
   slot 1-based "Skill Slot N"; value = granted gem LEVEL, grantors SUM,

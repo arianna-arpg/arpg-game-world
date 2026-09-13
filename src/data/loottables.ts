@@ -81,7 +81,10 @@ const TABLE_LIST: LootTableDef[] = [
       count: 1,
       entries: [
         { weight: 72, kind: 'item', category: 'relic' },
-        { weight: 28, kind: 'item', category: 'relic', rarity: 'rare' },
+        { weight: 24, kind: 'item', category: 'relic', rarity: 'rare' },
+        // THE RELIC LEGENDS (data/uniques/relics.ts): a chase piece, rarely
+        // — below every legend's minIlvl the roller degrades to rare.
+        { weight: 4, kind: 'item', category: 'relic', rarity: 'unique' },
       ],
     }],
   },

@@ -43,6 +43,9 @@ import { itemGridSize, itemLevelReq } from './itemgen';
 import { CONTAINER_CATEGORIES, type ItemCategory, type ItemInstance } from './items';
 import { ITEM_BASES } from '../data/itembases';
 import type { GateRow } from '../meta/gates';
+import { DERIVED_GAUGES, registerDerivedGauge } from './gauges';
+import type { Modifier } from './stats';
+import { seatPowerOf, seatedGaugeId } from './seatlaw';
 
 // ------------------------------------------------------------------- defs ---
 
@@ -133,6 +136,21 @@ export function registerContainer(def: ContainerDef): ContainerDef {
   if (!CONTAINERS[def.id]) ORDER.push(def.id);
   CONTAINERS[def.id] = def;
   for (const c of def.accepts.categories ?? []) CONTAINER_CATEGORIES.add(c);
+  // THE CASE GAUGE (seatlaw.ts): 'seated:<id>' — the pieces seated on the
+  // live board, published like every derived gauge (sampled only for a
+  // body whose sheet reads it; GaugeWorld.carryOf is the World's read).
+  const gaugeId = seatedGaugeId(def.id);
+  if (!DERIVED_GAUGES[gaugeId]) {
+    registerDerivedGauge(gaugeId, {
+      label: `per piece seated in your ${def.label}`,
+      sample: (a, w) => {
+        const held = w.carryOf?.(a)?.containers[def.id];
+        if (!held?.length) return 0;
+        const board = containerBoard(CONTAINERS[def.id] ?? def);
+        return board ? Math.min(board.cells, held.length - containerMisfits(board, held).length) : 0;
+      },
+    });
+  }
   return def;
 }
 
@@ -407,6 +425,67 @@ export function containerMisfits(board: ContainerBoard | null, held: readonly It
       }
     }
     if (ok) placed.push(it); else out.push(it);
+  }
+  return out;
+}
+// ------------------------------------------------------------ THE SEAT LAW --
+// engine/seatlaw.ts owns the vocabulary (the seatPower_ amplifier stats and
+// the single-hop law); this is the BOARD's half — who touches whom.
+
+const SEAT_DIRS: readonly (readonly [number, number])[] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+/** A seated piece's neighbourhood: the distinct pieces TOUCHING its
+ *  footprint (orthogonal adjacency over OPEN cells) and the open seats
+ *  against it that stand EMPTY. A sealed or out-of-bounds cell is not a
+ *  seat — neither empty nor occupied. Pure. */
+export interface SeatNeighbourhood { pieces: ItemInstance[]; empty: number }
+
+export function seatNeighbourhood(board: ContainerBoard, seated: readonly ItemInstance[]): Map<ItemInstance, SeatNeighbourhood> {
+  const occ = new Array<ItemInstance | null>(board.w * board.h).fill(null);
+  const cellsOf = (it: ItemInstance): { x: number; y: number }[] => {
+    const out: { x: number; y: number }[] = [];
+    if (it.x === undefined || it.y === undefined) return out;
+    const s = itemGridSize(it);
+    for (let dy = 0; dy < s.h; dy++) for (let dx = 0; dx < s.w; dx++) out.push({ x: it.x + dx, y: it.y + dy });
+    return out;
+  };
+  for (const it of seated) for (const c of cellsOf(it)) if (boardOpenAt(board, c.x, c.y)) occ[c.y * board.w + c.x] = it;
+  const out = new Map<ItemInstance, SeatNeighbourhood>();
+  for (const it of seated) {
+    const touching = new Set<ItemInstance>();
+    let empty = 0;
+    for (const c of cellsOf(it)) {
+      for (const [dx, dy] of SEAT_DIRS) {
+        const x = c.x + dx, y = c.y + dy;
+        if (!boardOpenAt(board, x, y)) continue;
+        const o = occ[y * board.w + x];
+        if (o === it) continue;
+        if (o) touching.add(o); else empty++;
+      }
+    }
+    out.set(it, { pieces: [...touching], empty });
+  }
+  return out;
+}
+
+/** THE SEAT LAW's factor per seated piece (seatlaw.ts): 1 + the outward
+ *  power worn by every piece touching it + its own solitude × the empty
+ *  seats against it + its own communion × the pieces against it, floored at
+ *  0. `modsOf` is a piece's compiled lines; amplifier lines are read RAW
+ *  (never scaled — single hop by construction). */
+export function seatAmplification(
+  board: ContainerBoard, seated: readonly ItemInstance[], modsOf: (it: ItemInstance) => readonly Modifier[],
+): Map<ItemInstance, number> {
+  const hood = seatNeighbourhood(board, seated);
+  const out = new Map<ItemInstance, number>();
+  for (const it of seated) {
+    const n = hood.get(it)!;
+    const own = modsOf(it);
+    let f = 1;
+    for (const o of n.pieces) f += seatPowerOf(modsOf(o), 'outward');
+    f += seatPowerOf(own, 'solitude') * n.empty;
+    f += seatPowerOf(own, 'communion') * n.pieces.length;
+    out.set(it, Math.max(0, f));
   }
   return out;
 }

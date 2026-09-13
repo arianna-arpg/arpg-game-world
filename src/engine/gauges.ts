@@ -25,6 +25,7 @@
 // ---------------------------------------------------------------------------
 
 import type { Actor } from './actor';
+import type { ItemInstance } from './items';
 import { STATUS_DEFS } from './status';
 
 export const GAUGE_CFG = {
@@ -46,6 +47,10 @@ export const GAUGE_CFG = {
 export interface GaugeWorld {
   actors: readonly Actor[];
   time: number;
+  /** THE CASE GAUGE's read (engine/seatlaw.ts — 'seated:<container>'): the
+   *  carry a body's seat holds, its side boards among it; undefined for a
+   *  body that holds no seat (a minion, a monster). */
+  carryOf?(actor: Actor): { containers: Record<string, readonly ItemInstance[]> } | undefined;
 }
 
 export interface DerivedGaugeDef {
