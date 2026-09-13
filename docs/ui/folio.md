@@ -136,6 +136,20 @@ shut (the key, the couch clear, the Esc sweep — see THE ESCAPE POLICY below).
 Closing a shelved page through the book closes that page without promoting it
 instead.
 
+THE CONTAINER DRAWERS (2026-09-12, `ui/containerPane.ts`): every side board
+the account owns (`engine/containers.ts` — the Reliquary first) wears a third
+ribbon on the same rail, after PASSIVES, with its seated count. Its press pops
+a DRAWER beside the bag: a minted `container-panel` root (the skill-tree pane
+idiom, one per container on first open) that docks through the same seat law
+(`BUILD_PANEL_CFG.containerWidth`) and enrolls as a `container:<id>` leaf of
+the inventory-side book — an explicit ask that arrives in front and closes
+through its own close — so a drawer up beside Skills or a tree tabs into the
+one book. The bag stays on screen: relics drag from their bag cells onto the
+drawer's seats and back; the drawer follows the bag exactly as Skills does
+(hidden with it, memory kept; the Esc sweep's unkept-bag lane hides it the
+same way). The menu's `container:<id>` page opens the bag if it is shut,
+then the drawer; fronts a shelved drawer; closes an open one.
+
 `ui/buildPanels.ts` owns ribbon width, page widths, screen margins and the
 unlearn target size. The default page seats follow the inventory's measured
 edge beyond the ribbon, flip for a left couch seat, and clamp into small

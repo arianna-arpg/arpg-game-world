@@ -412,8 +412,14 @@ console.log('O. THE ENROLLMENT CENSUS');
     ALL.every(id => adopted.includes(id)), `adopted: ${adopted.join(',')}`);
   check('O2c every skill-tree pane enrolls + adopts per skill at its minting (one leaf per open tree)',
     panels.includes('this.folioLeaf(`skilltree:${skillId}`') && panels.includes('this.folio.adopt(`skilltree:${skillId}`)'));
-  check('O2b the trees arrive IN FRONT (explicit asks) with no station reads',
-    ["'passives'", '`skilltree:${skillId}`'].every(id => {
+  // THE CONTAINER DRAWERS (ui/containerPane.ts): every registered side
+  // board's drawer enrolls + adopts per container at its minting through the
+  // panel's host seams — the ribbon beside SKILLS / PASSIVES joins the same
+  // inventory-side book (the skill-tree pane's shape, derived per def).
+  check('O2d every container drawer enrolls + adopts per container at its minting (one leaf per open drawer)',
+    panels.includes('this.folioLeaf(`container:${id}`') && panels.includes('this.folio.adopt(`container:${id}`)'));
+  check('O2b the trees and the drawers arrive IN FRONT (explicit asks) with no station reads',
+    ["'passives'", '`skilltree:${skillId}`', '`container:${id}`'].every(id => {
       const i = panels.indexOf(`this.folioLeaf(${id}`);
       const row = i < 0 ? '' : panels.slice(i, panels.indexOf('}));', i));
       return row.includes("arrive: 'front'") && !row.includes('engaged:') && !row.includes('range:');

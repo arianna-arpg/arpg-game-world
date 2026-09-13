@@ -597,11 +597,38 @@ export class UI {
   private readonly containerPane = new ContainerPane({
     world: () => this.getWorld(),
     seat: () => this.panelSeat(this.inventory),
+    inventoryOpen: () => this.inventoryOpen,
+    openInventory: (seatId) => { if (!this.inventoryOpen) this.toggleInventory(seatId); },
     refresh: () => { this.refreshInventory(); this.refreshCharSheet(); },
+    sync: () => this.syncBuildPanels(),
     cellPx: BAG_CELL_PX,
     breaking: () => this.salvageLaneFor(this.inventory) !== null,
     lockGestureText: () => this.lockGestureText(),
     lockHintHtml: () => this.lockHintHtml(),
+    closeGlyphHtml: () => this.closeGlyphHtml(),
+    ownDocked: (el) => this.panelSeatIds.set(el, this.panelSeat(this.inventory).id),
+    attachMove: (el) => attachPanelMove(el, { onMove: () => this.folioStrip.update() }),
+    bindItemTooltips: (el) => bindTooltips(el, (t, ext) =>
+      t.dataset.tip === 'item' ? this.itemTooltip(Number(t.dataset.itemUid), ext, this.panelSeat(this.inventory), null) : null,
+    { extend: true }),
+    // THE FOLIO: a drawer is a leaf of the inventory-side book — an explicit
+    // ask that arrives in front (the trees' shape), closing through its own
+    // close, never a fronting toggle.
+    enrollLeaf: (id, el, title, isOpen, close, refresh) => {
+      this.folio.enroll(this.folioLeaf(`container:${id}`, el, title, isOpen, close, {
+        arrive: 'front', bay: () => this.buildPanelBay(el), refresh }));
+    },
+    folioAdopt: (id) => { this.folio.adopt(`container:${id}`); },
+    folioFront: (id) => this.folio.front(`container:${id}`),
+    folioFrontOf: (id) => {
+      const book = this.folio.bookFor(`container:${id}`);
+      if (!book) return null;
+      return book.front.startsWith('container:') ? book.front.slice('container:'.length) : book.front;
+    },
+    folioStripUpdate: () => this.folioStrip.update(),
+    padLock: (ev) => ev.button === 0 && ev.pointerId === PAD_POINTER_ID
+      && this.getSettings().padBinds.itemLock === PAD_CFG.pointer.confirm,
+    beginLockHold: (ev, uid, pad) => this.beginLockHold(ev, uid, this.panelSeatIds.get(this.inventory), pad),
   });
   /** The BUILD flap on the gear tab: the learned-skills list riding the
    *  left edge of the inventory — the whole build in one glance. Remembers
@@ -1144,16 +1171,22 @@ export class UI {
   /** Default seats follow the measured inventory edge. Saved custom positions win. */
   private syncBuildPanels(): void {
     this.buildPanel.classList.toggle('hidden', !this.inventoryOpen || !this.buildFlapOpen);
+    // THE CONTAINER DRAWERS follow the bag exactly as the Skills drawer does:
+    // hidden while the bag is shut, memory kept (ui/containerPane.ts).
+    this.containerPane.syncHidden();
     this.inventory.querySelector('[data-passiveflap]')?.setAttribute('aria-expanded', String(this.treeOpen));
     const inv = this.inventory.getBoundingClientRect();
     const scale = uiScaleNow();
-    for (const el of [this.buildPanel, this.passiveTree, ...[...this.skillTreePanes.values()].map(p => p.el)]) {
+    for (const el of [this.buildPanel, this.passiveTree, ...[...this.skillTreePanes.values()].map(p => p.el),
+      ...this.containerPane.dockedEls()]) {
       const dock = this.inventoryOpen && this.panelSeat(el).id === this.panelSeat(this.inventory).id;
       el.classList.toggle('build-docked', dock);
       if (!dock) continue;
       if (!this.getSettings().layout.movable && panelMoved(el)) panelMoveReset(el);
       const at = buildPanelSeat(inv, window.innerWidth, scale, this.inventory.classList.contains('couch-left'),
-        el === this.buildPanel ? BUILD_PANEL_CFG.skillsWidth : BUILD_PANEL_CFG.passivesWidth);
+        el === this.buildPanel ? BUILD_PANEL_CFG.skillsWidth
+          : this.containerPane.isPanel(el) ? BUILD_PANEL_CFG.containerWidth
+          : BUILD_PANEL_CFG.passivesWidth);
       el.style.setProperty('--build-left', `${at.left}px`);
       el.style.setProperty('--build-top', `${at.top}px`);
       el.style.setProperty('--build-width', `${at.width}px`);
@@ -1328,8 +1361,8 @@ export class UI {
       // THE CONTAINER FABRIC: one host row per registered side board — the
       // menu's 'container:<id>' verb opens the inventory on that face.
       ...Object.fromEntries(CONTAINER_DEFS.map(c => [`container:${c.id}`, {
-        open: (id?: string) => this.openInventoryFace(c.id, id),
-        isOpen: () => this.inventoryOpen && this.containerPane.activeFace() === c.id,
+        open: (id?: string) => this.containerPane.openFromMenu(c.id, id),
+        isOpen: () => this.inventoryOpen && this.containerPane.isOpen(c.id),
       } satisfies MenuVerb])),
       townPortal: { open: id => {
         const world = w(), previous = world.uiActionSeatId; world.uiActionSeatId = id ?? null;
@@ -1487,6 +1520,7 @@ export class UI {
       || owned(this.inventory, this.inventoryOpen)
       || owned(this.passiveTree, this.treeOpen)
       || this.openSkillTreePanes().some(p => owned(p.el, true))
+      || (this.inventoryOpen && this.containerPane.dockedEls().some(el => owned(el, true))) // THE CONTAINER DRAWERS
       || owned(this.worldMap, this.mapOpen);
   }
   hideAllFor(seatId: string): void {
@@ -3494,15 +3528,6 @@ export class UI {
     if (!this.inventoryOpen) { dndCancel(); hideTooltip(); } // a ghost never outlives its surface
   }
 
-  /** THE CONTAINER FABRIC: open the inventory ON a side board's face (the
-   *  menu's container pages — ui/containerPane.ts). Showing that face
-   *  already, close the inventory (the menu's toggle grammar); open on
-   *  another face, switch; closed, open there. */
-  openInventoryFace(face: string, seatId?: string): void {
-    if (this.inventoryOpen && this.containerPane.activeFace() === face) { this.toggleInventory(seatId); return; }
-    if (!this.containerPane.show(face)) return; // a board the run does not own — nothing to show
-    if (this.inventoryOpen) this.refreshInventory(); else this.toggleInventory(seatId);
-  }
 
   /** THE OBSTRUCTION CENSUS — the CSS-pixel rects of every open DOM pane
    *  standing over the canvas, read live each frame by the speech fabric's
@@ -3523,6 +3548,7 @@ export class UI {
     };
     { const tray = this.menuBar.trayRect(); if (tray) out.push(tray); } // THE MENU BAR's tray while up (ui/menubar.ts)
     for (const el of [this.charSheet, this.inventory, this.buildPanel, this.passiveTree, ...[...this.skillTreePanes.values()].map(p => p.el),
+      ...this.containerPane.dockedEls(), // THE CONTAINER DRAWERS stand over the canvas too
       this.worldMap, this.vendorMenu, this.salvageMenu, this.fontMenu,
       this.recallMenu, this.oracleMenu, this.bestiaryMenu, this.boroughMenu,
       this.bountyMenu, this.caravanMenu, this.sailMenu, this.holdMenu, this.mercMenu,
@@ -4152,6 +4178,7 @@ export class UI {
           <span class="build-ribbon-label">✧ PASSIVES</span>
           ${m.passivePoints > 0 ? `<span>${m.passivePoints}</span>` : ''}
         </button>
+        ${this.containerPane.ribbonsHtml()}
       </div>`;
     const drawer = this.buildFlapOpen ? `
         ${this.closeGlyphHtml()}<h2>📖 Skills</h2>
@@ -4189,8 +4216,6 @@ export class UI {
           ${doll}
         </div>
         <div>
-          ${this.containerPane.tabsHtml()}
-          ${this.containerPane.activeFace() === 'bag' ? `
           <div style="display:flex;align-items:center;gap:8px;width:${W * CELL}px">
             <h3>Bag <span style="color:#8a8678;font-weight:normal">(${m.items.length} item${m.items.length === 1 ? '' : 's'})</span></h3>
             ${sortStrip}
@@ -4202,10 +4227,7 @@ export class UI {
               : salv === 'sell'
               ? `⚙ <b style="color:#e8c87a">SELLING</b>: click a piece to sell it · ${this.lockHintHtml()}`
               : this.lockHintHtml()}
-          </div>`
-          // THE CONTAINER FABRIC: a side board's face takes the bag
-          // column (the doll stands; the face strip above swaps them).
-          : this.containerPane.bodyHtml()}
+          </div>
         </div>
       </div>`;
 
@@ -4229,6 +4251,7 @@ export class UI {
     const frameMin = Math.ceil(dollRowsFor(EQUIP_SLOTS.filter(s => s.enabled && DOLL_SEATS[s.id])) * 34) + 48;
     this.buildPanel.innerHTML = drawer;
     this.panelSeatIds.set(this.buildPanel, this.panelSeat(this.inventory).id);
+    this.containerPane.renderAll(); // THE CONTAINER DRAWERS follow the bag's beat (ui/containerPane.ts)
     this.syncBuildPanels();
     this.inventory.innerHTML = `${drawerHandle}${satchel}${this.closeGlyphHtml()}<h2>Inventory</h2>
       <div class="inv-scroll" style="min-height:min(${frameMin}px, calc(100vh - 240px));max-height:calc(100vh - 240px);overflow-y:auto;overflow-x:hidden">${body}</div>`;
@@ -4255,8 +4278,8 @@ export class UI {
       this.satchelOpen = !this.satchelOpen;
       this.refreshInventory();
     });
-    // THE CONTAINER FABRIC: the face strip's tabs (ui/containerPane.ts).
-    this.containerPane.wire(this.inventory);
+    // THE CONTAINER DRAWERS: the ribbons beside SKILLS / PASSIVES (ui/containerPane.ts).
+    this.containerPane.wireRibbons(this.inventory);
     // THE BAG SORT: one press = one re-pack through the intent (the couch
     // latch stamps the owner during this dispatch, so a guest sorts the
     // GUEST's bag); a carry in flight rides along — it lifts by uid.
@@ -4430,7 +4453,8 @@ export class UI {
    *  runs through here). */
   private lockTarget(uid: number, seatId: string | undefined): ItemHoldTarget {
     return {
-      element: () => this.inventory.querySelector<HTMLElement>('[data-lock-uid="' + uid + '"]'),
+      element: () => this.inventory.querySelector<HTMLElement>('[data-lock-uid="' + uid + '"]')
+        ?? this.containerPane.tileElement(uid), // a seated piece's tile lives in its drawer
       toggle: () => {
         const it = this.carriedByUid(uid); if (!it) return;
         const world = this.getWorld(), previous = world.uiActionSeatId;
@@ -10822,6 +10846,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     dndCancel(); // never strand a carried ghost on a closed panel
     this.inventory.classList.add('hidden');
     this.buildPanel.classList.add('hidden');
+    this.containerPane.hideAll(); // the drawers go with the bag, memory kept (the Skills rule)
     this.closeSkillTree();
     this.salvageOpen = false;
     this.craftTargetUid = null;

@@ -200,8 +200,13 @@
     .build-wallet-header { display:flex; flex-wrap:wrap; gap:8px; font-size:11px; margin-bottom:8px; }
     #skills-panel { width:360px; display:flex; flex-direction:column;
       max-height:calc((100vh - 140px) / var(--ui-scale)); padding:10px 12px; }
-    :is(#skills-panel, #passive-tree, .skill-tree).build-docked { left:var(--build-left); right:auto; top:var(--build-top);
+    :is(#skills-panel, #passive-tree, .skill-tree, .container-panel).build-docked { left:var(--build-left); right:auto; top:var(--build-top);
       width:var(--build-width); transform:none; }
+    /* THE CONTAINER DRAWERS (ui/containerPane.ts — one minted root per side
+       board, the Reliquary first): the Skills drawer's shape, docked beside
+       the bag by the same seat law; centred when it stands alone. */
+    .container-panel { top:50%; left:50%; transform:translate(-50%, -50%); width:300px; display:flex; flex-direction:column;
+      max-height:calc((100vh - 140px) / var(--ui-scale)); max-width:calc(95vw / var(--ui-scale)); overflow-y:auto; padding:10px 12px; }
     .panel.build-docked.couch-left, .panel.build-docked.couch-right { left:var(--build-left) !important;
       right:auto !important; max-width:calc((100vw - 16px) / var(--ui-scale)) !important; }
     .rack-unlearn { position:absolute; right:0; top:0; width:var(--unlearn-size); height:var(--unlearn-size);

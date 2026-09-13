@@ -111,19 +111,32 @@ the catalog's own derivation.
   seated = worn), the ground painter (`groundItems.ts relic`), the bag glyph
   (`itemIcons.ts relic`), the dev Items tab (categories derive from the bases).
 
-## The face (ui/containerPane.ts)
+## The drawer (ui/containerPane.ts)
 
-The bag column wears a **face strip** once any container is owned: Bag, then
-one tab per board with its `seated/seats` count. A board's face draws the full
-shape (live seats as drop cells, sealed seats dim with the rung's name) and
-beneath it **the tray** — every accepted piece the bag carries, as tiles — so
-seating is one drag with both ends on screen. Gestures ride the standing drag
-fabric: tray tile → open seat seats (`containerPlace`), seated tile → tray or a
-bag cell unseats (`containerTake` — the bag's landing law routes a `c:<id>`
-origin), seated tile → another seat re-places (`containerMove`), and the
-right-click tap (the bag's use verb) seats / unseats first-fit. The item
+Every owned container wears a **ribbon** on the inventory's rail beside
+SKILLS and PASSIVES (glyph, name, `seated/seats`). Its press pops a **drawer**
+beside the bag: a minted `container-panel` root (the skill-tree pane idiom,
+one per container on first open) that **docks** through the Skills drawer's
+own seat law (`syncBuildPanels` + `buildPanelSeat`, width
+`BUILD_PANEL_CFG.containerWidth`) and **enrolls in THE FOLIO** as a
+`container:<id>` leaf of the inventory-side book — an explicit ask that
+arrives in front and closes through its own close — so a drawer up beside
+Skills or a tree tabs into one book instead of painting over it; the master
+law, the front swap, the true close and the Esc sweep all arrive from the
+folio (docs/ui/folio.md). The drawer follows the bag as Skills does: hidden
+with it, memory kept.
+
+The drawer draws the board's full shape (live seats as drop cells, sealed
+seats dim with the rung's name), a **return strip**, and the hints. The bag
+stays on screen, so gestures ride the standing drag fabric across the two
+panels: bag tile → open seat seats (`containerPlace`), seated tile → a bag
+cell or the return strip unseats (`containerTake` — the bag's landing law
+routes a `c:<id>` origin), seated tile → another seat re-places
+(`containerMove`), and the right-click tap (the bag's use verb) seats /
+unseats first-fit; the keeper's lock hold works on a seated tile. The item
 tooltip says where a relic stands and whether it speaks. The menu's
-`container:<id>` page opens the inventory on that face (`openInventoryFace`).
+`container:<id>` page opens the bag if it is shut, then the drawer; fronts a
+shelved drawer; closes an open one (`openFromMenu`).
 
 ## Adding a container
 

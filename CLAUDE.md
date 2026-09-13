@@ -71,9 +71,11 @@ frames; `BoardDims.open` puts THE MASK on the one cell law in
 RELICS — the slotless `'relic'` category (charm 1×1 / talisman 2×1 / idol 1×2
 / effigy 2×2 in `itembases.ts`, magic-floored, footprint-capped, rolling THE
 RELIC REGISTER alone via `affixPool: 'explicit'` in `itemaffixes.ts`) — inert
-in the pack, live only when seated; the Vault rows, menu page, inventory face
-strip (`ui/containerPane.ts`), save, corpse and co-op wire all derive from
-the def; rung 0 surfaces on the `relic_found` discovery ledger. Contract:
+in the pack, live only when seated; the Vault rows, menu page, the inventory's
+RIBBON DRAWER beside SKILLS / PASSIVES (`ui/containerPane.ts` — a minted
+docked root that enrolls in THE FOLIO's inventory-side book, so it tabs with
+Skills and the trees), save, corpse and co-op wire all derive from the def;
+rung 0 surfaces on the `relic_found` discovery ledger. Contract:
 `docs/engine/containers.md`; probe `balance/probe_reliquary.ts`.
 
 Class discovery combat recipes live in `src/data/classdeeds.ts`, with reusable
