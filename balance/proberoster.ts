@@ -62,6 +62,9 @@ export type ProbeRow =
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_websiteportraits.ts', status: 'green', tier: 'fast', why: 'Standalone website portrait entry initializes every static and animated part used by shipped looks without the game bootstrap' },
+  { probe: 'probe_deviceworkshop.ts', status: 'green', tier: 'fast', why: 'Packed Workshop actual deployments and relocation: payment, ownership, clocks, eligibility, persistence and cleanup' },
+  { probe: 'probe_metaslotinput.ts', status: 'green', tier: 'fast', why: 'Shift-number meta slots retain their numeric edge, typed layout binding, key-up cleanup and overlapping modifier keys' },
+  { probe: 'probe_dueliststartertrees.ts', status: 'green', tier: 'fast', why: 'Complete Swashbuckler, Matador and Sharper starting bars: terminal casts, allocation, persistence, blessings, flight and cleanup' },
   { probe: 'probe_impactstartertrees.ts', status: 'green', tier: 'fast', why: 'Breaker/Vanguard/Lancer starting trees: 72 routes, pulse timing, stance gates, impale payoffs, planting, guard counters and respec ownership' },
   { probe: 'probe_controlstartertrees.ts', status: 'green', tier: 'fast', why: 'Trapper/Skald/Chronomancer starting trees: 72 routes, construct payloads and retirement, additive domains, rewind contracts, resource banks and autonomous-device support' },
   { probe: 'probe_precisionstartertrees.ts', status: 'green', tier: 'fast', why: 'Assassin/Blademaster/Brawler: 72 starting-tree routes, passive identity, bleed executions, cast-cycle investment, combo inheritance, counter timing, cooldowns, save/wire and respec cleanup' },

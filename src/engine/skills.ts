@@ -3492,6 +3492,12 @@ export interface NextHitRider {
   procId?: string;
 }
 
+/** Move one living device of the exact meta host; never remint or refund it. */
+export interface RelocateConstructEffect {
+  type: 'relocateConstruct';
+  radius: number;
+}
+
 /** Teleport every MOBILE minion to an even ring at the caster (Convocation).
  *  Anchored things stay put: constructs, totems, the anchored, the mid-leap. */
 export interface RecallMinionsEffect {
@@ -4149,7 +4155,7 @@ export type SkillEffect =
   | PullEffect | SpawnZoneEffect | GainChargeEffect | AbsorbEffect
   | RestoreEffect | TerrainEffect | RecallMinionsEffect | DrainChargeEffect
   | HealEffect | CleanseEffect | ShedEffect | CommandMinionsEffect
-  | IronWardEffect | GuardSurgeEffect | ReduceCooldownsEffect
+  | IronWardEffect | GuardSurgeEffect | ReduceCooldownsEffect | RelocateConstructEffect
   | RestoreOverTimeEffect | WardEffect | SiphonOrbEffect
   | DetonateMinionsEffect | SpawnCorpseEffect | DragCorpsesEffect | ShatterConstructsEffect
   | MinionCastEffect | PayLedgerEffect

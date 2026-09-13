@@ -14,7 +14,7 @@ verified gap can ship alongside a starting-bar batch. See the
 | ID | Playstyle | Possible skill | Possible support | Status |
 |---|---|---|---|---|
 | PS-01 | Ally cooldown assistance | Borrowed Second | Shared Seconds | Confirmed narrow catalog gap; design pending |
-| PS-02 | Device salvage and relocation | Field Recovery | Packed Workshop | Needs overlap and ownership audit |
+| PS-02 | Device salvage and relocation | Field Recovery | Packed Workshop | Relocation shipped; payment-ledger salvage deferred |
 | PS-03 | Deliberately preserve lodged steel between hits | Set the Barbs | Patient Steel | Needs bank-growth and multiplayer design |
 | PS-04 | Faster, shorter-lived deployed attackers | Existing totems and sentries | Overwound Mechanism | Shipped in the control batch |
 
@@ -36,22 +36,81 @@ mastery swap audit; not implemented.
 
 ## PS-02 — Device salvage and relocation
 
-**Field Recovery** could retire an owned device and refund part of its unused
-deployment investment. **Packed Workshop** could trade active device capacity
-for easier redeployment. Overwound Mechanism already encourages rebuilding,
-but does not itself relocate devices or refund their cost.
+**User preference:** prioritize active device management as a source of new
+build routes. The comparison to Forge mastery was inspiration for this
+preference, not a request to reproduce another game's mechanics.
 
-Audit existing recalls, construct movement, detonations, planted objects and
-Extraction before choosing a new verb. The impact pass confirmed that Pinning
-Spear's planted shafts and Extraction's lodged impales are distinct resources:
-Extraction consumes wounds, not the planted device roster. This distinction
-is evidence for further investigation, not proof that every relocation tool
-is absent.
+**Shipped in the [duelist batch](duelist-starting-skill-trees.md): Packed
+Workshop** grants a paid Shift action that repositions one native aimed totem
+or sentry. It keeps the same actor, health, remaining lifetime, payload and
+action clocks; it cancels the current cast and turns the device to face its
+new lane. Supported devices last 15% less time. Available in the Trapper
+bundle. Exact caster/host-instance ownership, a 600-unit search radius, normal
+placement reach and same-story eligibility constrain the move. No refund,
+replacement, arrival effect or death/expiry reward occurs. See the batch
+contract and `balance/probe_deviceworkshop.ts` for the tested boundaries.
 
-Any refund must use actual payment, have a bounded lifetime-based share, and
-exclude unpaid, inherited or already retired devices. Retirement must not
-also award a death burst or expiry reward. Decide whether relocation preserves
-remaining life and duration, and which objects qualify. Not implemented.
+### Overlap and ownership audit
+
+- **Unmoored** already permits construct movement through weight, shoves and
+  collisions (`massGraft`, `World.spawnConstruct`, the mass/push pipeline).
+  It remains the physical displacement route; Packed Workshop offers a
+  deliberate paid placement action with a new facing.
+- **Holy Relic / follows** continuously moves a follower toward its owner in
+  `updateConstructs`. That is not a general commanded reposition of a sentry.
+- **Convocation / recallMinions** explicitly excludes constructs and recalls
+  mobile minions to a ring. **Command: Recall / commandMinions** also excludes
+  constructs. Tame's whistle belongs to its persistent companion contract.
+- **Detonate Mines** spends mines; **Self-Destruct / detonateMinions** spends
+  eligible minions and excludes constructs. Neither is recovery. Recasting
+  at capacity calls `kill(oldest, true)`; that is not quiet retirement, since
+  breakable-object death bursts can fire even on replacement/expiry.
+- **EmbedSpec** already supplies collect/run-over, detonation, timed emission
+  and sibling beams. Its fixed collection payouts are not deployment-cost
+  refunds. Pinning Spear really plants devices; Planted Banderilla despite
+  its name only applies wounds/taunt. **Extraction / recallImpales** spends
+  lodged wounds, not the device roster. None needs a duplicate collection or
+  detonation verb.
+- Construct bodies carry `owner`, `sourceSkillId` and `summonInst`. The latter
+  is essential: skill ID alone conflates two copies held by the same caster.
+  Existing respec cleanup uses instance identity and quiet retirement.
+
+### Field Recovery: concrete deferred implementation
+
+The narrow remaining gap is **recovering paid deployment investment**. It
+requires payment provenance rather than a new name for existing pickup
+rewards. `paidCost` follows cast execution today, but bodies do not carry an
+allocation ledger. Moreover, the cast record starts from the nominal cost
+object: payment may draw from different resource lanes. It is not sufficient
+evidence of actual mana paid for a refund.
+
+1. Have the payment seam return actual resource debits, after substitutions,
+   with a cast receipt ID. Exclude ceremonial construct payments and unpaid
+   executions. Never infer a receipt from current skill cost.
+2. Carry the receipt through delayed casts and planting flights. Assign a
+   bounded share of that one receipt to each successfully created device;
+   repeats, multiple wall segments and projectile descendants cannot each
+   claim the full payment. Prefer beginning with single native aimed-device
+   casts; explicitly reject unsupported receipt shapes.
+3. A first salvage rule could refund at most **40% of actual mana paid ×
+   remaining-life fraction**, additionally capped by that device's receipt
+   share and the receipt's unpaid balance. Life/energy-shield/other lanes do
+   not become mana refunds. Track original lifetime as well as remaining
+   lifetime; relocation preserves both. Values remain proposed tuning.
+4. Consume the receipt share atomically, then retire through a dedicated
+   quiet device-retirement helper. Cancel its pending payloads and exclude
+   all death, expiry, hatch, healing, collection and replacement rewards.
+   Unpaid, inherited, dead, expired, respec-retired or previously salvaged
+   devices have no salvage entitlement. Preserve exact caster/instance,
+   active story and multiplayer authority checks.
+5. Verify actual payments with substitution/discounts, repeated and delayed
+   casts, multi-object deployments, competing death/expiry/respec in one
+   frame, full resource pools, cross-player/cross-instance access and
+   repeated requests. Ship Field Recovery only with this ledger proven.
+
+The refund work is deliberately deferred to keep this pass centered on
+complete starting bars. Packed Workshop fills the smaller verified movement
+gap now, without introducing refundable value or refreshing device lifetime.
 
 ## PS-03 — Preserve lodged steel between hits
 

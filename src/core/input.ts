@@ -3,6 +3,9 @@
 export class Input {
   keys = new Set<string>();
   pressed = new Set<string>();   // keys pressed this frame (consumed by reader)
+  /** Remember the keys a physical press supplied: releasing Shift before a
+   * number must release both its typed symbol and its numeric slot alias. */
+  private physicalKeys = new Map<string, string[]>();
   mouse = { x: 0, y: 0 };
   /** THE RENDER SCALE's pointer seam (render/renderScale.ts): CSS-pixel
    *  events map into BUFFER pixels through this (main.ts keeps it synced to
@@ -17,11 +20,22 @@ export class Input {
   constructor(target: HTMLElement) {
     window.addEventListener('keydown', e => {
       const k = e.key.toLowerCase();
-      if (!this.keys.has(k)) this.pressed.add(k);
-      this.keys.add(k);
+      const code = e.code || k;
+      const held = this.physicalKeys.get(code) ?? [...new Set([k,
+        ...(e.shiftKey && /^Digit[0-9]$/.test(e.code) ? [e.code.slice(5)] : [])])];
+      this.physicalKeys.set(code, held);
+      for (const key of held) {
+        if (!this.keys.has(key)) this.pressed.add(key);
+        this.keys.add(key);
+      }
     });
-    window.addEventListener('keyup', e => this.keys.delete(e.key.toLowerCase()));
-    window.addEventListener('blur', () => { this.keys.clear(); this.lmb = false; this.rmb = false; });
+    window.addEventListener('keyup', e => {
+      const k = e.key.toLowerCase(), code = e.code || k;
+      const held = this.physicalKeys.get(code) ?? [k];
+      this.physicalKeys.delete(code);
+      for (const key of held) if (![...this.physicalKeys.values()].some(keys => keys.includes(key))) this.keys.delete(key);
+    });
+    window.addEventListener('blur', () => { this.physicalKeys.clear(); this.keys.clear(); this.lmb = false; this.rmb = false; });
 
     target.addEventListener('mousemove', e => {
       this.mouse.x = e.clientX * this.pointerScale;

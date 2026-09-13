@@ -1,3 +1,5 @@
+import { DUELIST_STARTER_TREES } from './duelistStarterTrees';
+import { WORKSHOP_SKILLS } from './workshopSkills';
 import { IMPACT_STARTER_TREES } from './impactStarterTrees';
 import { CONTROL_STARTER_TREES } from './controlStarterTrees';
 import { PRECISION_STARTER_TREES } from './precisionStarterTrees';
@@ -34,6 +36,7 @@ export const SKILLS: Record<string, SkillDef> = {
   ...NECROMANCER_SKILLS,
   ...PACT_SKILLS,
   ...ROOTWILD_SKILLS,
+  ...WORKSHOP_SKILLS,
 
   // ======================= Mimicry (the blue-mage lane) ====================
   // THE SLOT and its cycle payload (engine/mimic.ts — capture is the
@@ -2271,6 +2274,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   wild_strike: {
+    tree: DUELIST_STARTER_TREES.wild_strike,
     id: 'wild_strike', name: 'Wild Strike',
     description: 'CHANNELED: rapier slivers lash out at random bearings across a wide arc for'
       + ' as long as the button is held, each with a 20% chance to nick a bleed, while you keep'
@@ -2295,86 +2299,6 @@ export const SKILLS: Record<string, SkillDef> = {
     aim: { random: { offsetDeg: 0, spreadDeg: 90 } },
     baseDamage: { physical: [8, 13] },
     delivery: { type: 'cone', range: 150, arcDeg: 30 },
-    // THE SKILL-MODE TREE, M1's full exemplar (docs/design/skill-modes.md
-    // §3-§4 pair 1, 2026-08-20): rungs 1-3 per branch + the neutral — the
-    // exact-cover grammar (4 points at cap = one walked branch + the
-    // neutral). Rung 1 is the MEASURED identity commitment (M0's payloads,
-    // untouched); rungs 2-3 deepen it in its own character, each an A/B
-    // row at the wildstrike rig grain (balance/scratch_skillmodes_ab.ts).
-    // THE RE-PIN LAW: every rung re-pins arcDeg + spreadDeg — the branch
-    // identity must not drift if a rescale moves the base row. ⚠ All
-    // numbers directional, unblessed — she blesses at landing. Names are
-    // data; renames are one-line edits.
-    tree: {
-      level: 5,
-      branches: [
-        {
-          id: 'sprinkler', name: 'The Sprinkler',
-          description: 'The whirl unchained: slivers wander a 130° fan — '
-            + 'the whole pack feels the rain, one throat rarely does.',
-          rungs: [
-            {
-              id: 'ws_sprinkler', name: 'The Sprinkler',
-              description: 'Slivers wander a 130° fan.',
-              over: { arcDeg: 30, spreadDeg: 130 },
-            },
-            {
-              id: 'ws_cloudburst', name: 'The Cloudburst',
-              description: 'The drumbeat quickens — 12% faster slivers: '
-                + 'more rain on every throat in the fan.',
-              over: { arcDeg: 30, spreadDeg: 130 },
-              mods: [{ stat: 'attackSpeed', kind: 'increased', value: 0.12 }],
-            },
-            {
-              id: 'ws_monsoon', name: 'The Monsoon',
-              description: 'The dance unchained: the longer the whirl '
-                + 'holds, the freer the stride — rain that RUNS.',
-              over: {
-                arcDeg: 30, spreadDeg: 130,
-                channel: { rampMove: { per: 0.08, max: 0.5 } },
-              },
-            },
-          ],
-        },
-        {
-          id: 'duelist', name: 'The Duelist',
-          description: 'The point finds one throat: a 16° sliver held to a '
-            + '24° line — dead-ahead sustain, the crowd goes untouched.',
-          rungs: [
-            {
-              id: 'ws_duelist', name: 'The Duelist',
-              description: 'A 16° sliver held to a 24° line.',
-              over: { arcDeg: 16, spreadDeg: 24 },
-            },
-            {
-              id: 'ws_firm_wrist', name: 'The Firm Wrist',
-              description: 'The point drives deeper — 18% harder, and one '
-                + 'sliver in twelve finds the artery.',
-              over: { arcDeg: 16, spreadDeg: 24 },
-              mods: [
-                { stat: 'damage', kind: 'increased', value: 0.18 },
-                { stat: 'critChance', kind: 'flat', value: 0.07 },
-              ],
-            },
-            {
-              id: 'ws_long_point', name: 'The Long Point',
-              description: 'Commitment compounds: the held line bites 6% '
-                + 'deeper each second, to nearly half again.',
-              over: {
-                arcDeg: 16, spreadDeg: 24,
-                channel: { ramp: { per: 0.06, max: 0.45 } },
-              },
-            },
-          ],
-        },
-      ],
-      neutral: {
-        id: 'ws_economy', name: 'Economy of Motion',
-        description: 'Footwork either way: the channel drags the stride '
-          + 'less (70% → 85% of full speed).',
-        mods: [{ stat: 'channelMobility', kind: 'flat', value: 0.15 }],
-      },
-    },
     effects: [
       { type: 'damage' },
       { type: 'status', status: 'bleed', chance: 0.2, magnitude: 0.25 },
@@ -2384,6 +2308,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   buckler_strike: {
+    tree: DUELIST_STARTER_TREES.buckler_strike,
     id: 'buckler_strike', name: 'Buckler Strike',
     description: 'The swashbuckler\'s double cut: a sweeping strike to one flank, a beat, then the answering cut to the other. Multistrike repeats the whole figure.',
     tags: ['attack', 'melee', 'physical'], color: '#7ac8d8',
@@ -2851,6 +2776,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   perfect_strike: {
+    tree: DUELIST_STARTER_TREES.perfect_strike,
     id: 'perfect_strike', name: 'Perfect Strike',
     description: 'A slow, heavy melee blow with a golden window at the end of its cast bar:'
       + ' press again inside the window for 70% more damage. The blow also has a 30% chance to'
@@ -3887,6 +3813,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // ======================= Swashbuckler / mobility =========================
 
   dash_strike: {
+    tree: DUELIST_STARTER_TREES.dash_strike,
     id: 'dash_strike', name: 'Dash Strike',
     description: 'Lunge toward your cursor at speed, slashing everything caught in the lane of'
       + ' the dash for physical damage.',
@@ -4151,6 +4078,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   quiet_step: {
+    tree: DUELIST_STARTER_TREES.quiet_step,
     id: 'quiet_step', name: 'Quiet Step',
     description: 'Soften your presence for 5 seconds: your blows generate 75% less threat, and'
       + ' 30% reduced detectability makes you harder to pick out of the fight.',
@@ -5906,6 +5834,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   // --- THE MATADOR: the fight is a performance with exactly one critic ----
   cape_feint: {
+    tree: DUELIST_STARTER_TREES.cape_feint,
     id: 'cape_feint', name: 'Cape Feint',
     description: 'Step soundlessly through the blow: a dash that phases past bodies and leaves'
       + ' an afterimage holding the cape where you stood for 1.2 seconds. The crowd gasps; the'
@@ -5921,6 +5850,7 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('effectDuration', 'increased', 0.08), mod('cooldownRecovery', 'increased', 0.06)] },
   },
   planted_banderilla: {
+    tree: DUELIST_STARTER_TREES.planted_banderilla,
     id: 'planted_banderilla', name: 'Planted Banderilla',
     description: 'A ribboned barb thrown to sting and insult: the struck beast is TAUNTED onto'
       + ' you, forgetting every other quarrel, with a 60% chance to be left VULNERABLE where'
@@ -5990,6 +5920,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   // --- THE SHARPER: probability owes money and pays in cards --------------
   thrown_ace: {
+    tree: DUELIST_STARTER_TREES.thrown_ace,
     id: 'thrown_ace', name: 'Thrown Ace',
     description: 'Flick a card flat and spinning: a single projectile that deals physical,'
       + ' fire, cold and lightning damage all in one hit. Whatever turns up, the Sharper dealt'
@@ -6004,6 +5935,7 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
   },
   stack_the_deck: {
+    tree: DUELIST_STARTER_TREES.stack_the_deck,
     id: 'stack_the_deck', name: 'Stack the Deck',
     description: 'Palm the odds: for 8 seconds you gain +25% luck and 15% increased cooldown'
       + ' recovery, so chance rolls land in your favor and your tricks reset sooner. Nobody can'

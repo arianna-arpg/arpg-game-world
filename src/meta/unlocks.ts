@@ -376,7 +376,7 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     blurb: 'The battlefield as a workshop: snares, mines, sentries, and the patience to let the ground do the arguing.',
     skillIds: ['caltrops', 'aftershock_snare', 'ballista_sentry',
       'cinderwhirl_trap', 'frost_trap', 'fire_mine', 'detonate_mines', 'lodestone'],
-    supportIds: ['tripwire', 'enduring_snares', 'overwound_mechanism'],
+    supportIds: ['tripwire', 'enduring_snares', 'overwound_mechanism', 'packed_workshop'],
     // Learn-by-getting-wrecked, the field-craft edition: spring any
     // trapwork with your own feet (world.ts springTrapwork stamps it) —
     // the sunken ruins' toothed halls and the highland's boulder plates

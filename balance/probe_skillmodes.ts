@@ -74,7 +74,7 @@ import { STAT_DEFS } from '../src/engine/stats';
 import {
   bandPointsAt, instanceAim, instanceChannel, instanceDelivery, impactTreeOverrideErrors, instanceMods,
   instanceTreeMods, makeSkillInstance, MAX_SKILL_LEVEL,
-  skillContextTags, SKILL_LEVEL_BANDS, treeNodeOf, treeNodeRefusal,
+  skillContextTags, treeNodeOf, treeNodeRefusal,
   treePickOpen, treePointsSpent, treeSpentBranch, validTreeNodes,
   type SkillDef, type SkillTreeSpec,
 } from '../src/engine/skills';
@@ -110,18 +110,20 @@ const WS = SKILLS.wild_strike;
 const tree = WS.tree as SkillTreeSpec | undefined;
 check('A: wild_strike carries the M1 exemplar tree', !!tree);
 check('A: the pick opens at level 5 (the settled milestone)', tree?.level === 5);
-check('A: two branches × three rungs + the neutral (the exact cover)',
-  tree?.branches?.length === 2
-  && tree?.branches?.every(b => b.rungs.length === SKILL_LEVEL_BANDS.length - 1)
-  && tree?.neutral?.id === NEUTRAL);
+check('A: duelist batch expands Wild Strike to 15 nodes and a four-rank neutral',
+  tree?.nodes?.length === 15 && treeLimbs(WS).length === 2
+  && treeNodeOf(WS, NEUTRAL)?.ranks === 4);
 const sprinkler = treeNodeOf(WS, 'ws_sprinkler');
 const duelist = treeNodeOf(WS, 'ws_duelist');
 check('A: rung 1 keeps the MEASURED identity payloads (30/130 vs 16/24)',
   sprinkler?.over?.arcDeg === 30 && sprinkler?.over?.spreadDeg === 130
   && duelist?.over?.arcDeg === 16 && duelist?.over?.spreadDeg === 24);
-check('A: the deepening rungs RE-PIN their identity (the re-pin law)',
-  DUELIST.every(id => treeNodeOf(WS, id)?.over?.arcDeg === 16)
-  && SPRINKLER.every(id => treeNodeOf(WS, id)?.over?.arcDeg === 30));
+check('A: deepening routes inherit their complete identity from the exclusive trunk',
+  [DUELIST, SPRINKLER].every((route, i) => {
+    const inst = makeSkillInstance(WS, 20); inst.treeNodes = route;
+    return (instanceDelivery(inst) as { arcDeg?: number }).arcDeg === [16, 30][i]
+      && instanceAim(inst)?.random?.spreadDeg === [24, 130][i];
+  }));
 
 // The grammar census: every tree-wearing def, hard-pinned (boot validation
 // warns; this gate FAILS) — THE GRAPH LAWS (engine/skilltree.ts): the fold
@@ -220,7 +222,7 @@ check('B: the bar instance IS the book instance (the spend reaches the cast path
   seat.actor.skills.some(s => s === inst));
 
 // ------------------------ C. THE HARD LOCK + THE SPEND LAW ----------------
-check('C: the branch is DERIVED from spent nodes', treeSpentBranch(inst)?.id === 'duelist');
+check('C: the branch is DERIVED from spent nodes', treeSpentBranch(inst)?.id === 'ws_duelist');
 pick('ws_sprinkler');
 check('C: THE HARD LOCK — the rival branch refuses, state untouched',
   inst.treeNodes?.length === 1 && inst.treeNodes[0] === 'ws_duelist');
@@ -240,7 +242,7 @@ inst.level = 10;
 pick(NEUTRAL);
 check('C: at level 10 the neutral lands beside the committed branch (2/2 spent)',
   inst.treeNodes?.length === 2 && inst.treeNodes[1] === NEUTRAL
-  && treeSpentBranch(inst)?.id === 'duelist');
+  && treeSpentBranch(inst)?.id === 'ws_duelist');
 inst.level = 20;
 pick('ws_firm_wrist');
 pick('ws_long_point');
@@ -315,8 +317,8 @@ check('D: the Firm Wrist\'s critChance mod reaches the sheet (+7% flat)',
   Math.abs(sheetOf('critChance') - baseCrit - 0.07) < 0.001,
   `${baseCrit.toFixed(3)} → ${sheetOf('critChance').toFixed(3)}`);
 inst.treeNodes = [NEUTRAL];
-check('D: the neutral\'s channelMobility mod reaches the sheet (+0.15 flat)',
-  Math.abs(sheetOf('channelMobility') - baseMob - 0.15) < 0.001);
+check('D: the neutral\'s channelMobility mod reaches the sheet (+0.05 flat per rank)',
+  Math.abs(sheetOf('channelMobility') - baseMob - 0.05) < 0.001);
 inst.treeNodes = undefined;
 
 // The cast path itself: rolled bearings + victims through the REAL engine
@@ -648,7 +650,7 @@ inst.level = 10;
 // ------------------------------- J. THE GRAFT LANE ------------------------
 {
   const inst3 = seat.meta.knownSkills.get('wild_strike')!;
-  const neutral = WS.tree!.neutral!;
+  const neutral = treeNodeOf(WS, NEUTRAL)!;
   const savedGraft = neutral.graft;
   const anySupport = Object.keys(SUPPORTS)[0];
   neutral.graft = { support: anySupport, level: 2 };
@@ -703,13 +705,13 @@ inst.level = 10;
   const census = compatCensus('wild_strike', 'brutality');
   const hosts = new Set(census.rows.map(r => r.skillId));
   check('L: the census enumerates the bare host AND both branch terminals',
-    hosts.has('wild_strike') && hosts.has('wild_strike@sprinkler') && hosts.has('wild_strike@duelist'),
+    hosts.has('wild_strike') && hosts.has('wild_strike@ws_sprinkler') && hosts.has('wild_strike@ws_duelist'),
     [...hosts].join(', '));
   check('L: exactly two extra hosts per moded skill (the exact-cover determinism)',
     hosts.size === 3);
-  check('L: hostTreeNodes answers the terminal allocation (walked branch + neutral)',
-    JSON.stringify(hostTreeNodes('wild_strike@duelist')) === JSON.stringify([...DUELIST, NEUTRAL])
-    && JSON.stringify(hostTreeNodes('wild_strike@sprinkler')) === JSON.stringify([...SPRINKLER, NEUTRAL])
+  check('L: graph census spends the four-point budget in deterministic breadth-first order',
+    JSON.stringify(hostTreeNodes('wild_strike@ws_duelist')) === JSON.stringify(['ws_duelist', 'ws_firm_wrist', 'ws_certain_point', 'ws_long_point'])
+    && JSON.stringify(hostTreeNodes('wild_strike@ws_sprinkler')) === JSON.stringify(['ws_sprinkler', 'ws_cloudburst', 'ws_long_rain', 'ws_monsoon'])
     && hostTreeNodes('wild_strike') === undefined);
   check('L: parseHostId round-trips the convention',
     JSON.stringify(parseHostId(hostIdOf('wild_strike', 'duelist'))) === JSON.stringify({ skillId: 'wild_strike', branchId: 'duelist' })
@@ -722,17 +724,17 @@ inst.level = 10;
   // raw SKILLS keys would delete every `skill@branch` row as a dead id.
   const ids = ledgerSkillIds();
   check('L: ledgerSkillIds carries the branch hosts beside the registry',
-    ids.has('wild_strike') && ids.has('wild_strike@sprinkler') && ids.has('wild_strike@duelist')
+    ids.has('wild_strike') && ids.has('wild_strike@ws_sprinkler') && ids.has('wild_strike@ws_duelist')
     && !ids.has('wild_strike@no_such_branch'));
   const guardLedger = emptyLedger();
   guardLedger.pairs.push(
-    { skill: 'wild_strike@sprinkler', support: 'brutality', kind: 'inert', status: 'open', since: '2026-08-20' },
+    { skill: 'wild_strike@ws_sprinkler', support: 'brutality', kind: 'inert', status: 'open', since: '2026-08-20' },
     { skill: 'retired_skill_xyz', support: 'brutality', kind: 'inert', status: 'open', since: '2026-08-20' },
   );
   const rec = reconcileLedger(guardLedger, { probed: [], census }, '2026-08-20',
     { skills: ids, supports: new Set(Object.keys(SUPPORTS)) });
   check('L: a reconcile KEEPS the branch row and retires only the truly-dead id',
-    rec.ledger.pairs.some(r => r.skill === 'wild_strike@sprinkler')
+    rec.ledger.pairs.some(r => r.skill === 'wild_strike@ws_sprinkler')
     && !rec.ledger.pairs.some(r => r.skill === 'retired_skill_xyz')
     && rec.removed.length === 1);
 }
@@ -856,7 +858,7 @@ inst.level = 10;
     && DUELIST.every(id => treeNodeRefusal(fresh(['ws_sprinkler']), id) === "The Duelist's path is sealed"));
   check('N: the neutral stays lock-free beside a committed limb; treeSealedSet = the rival limb, nothing else',
     treeNodeRefusal(fresh(['ws_duelist']), NEUTRAL) === null
-    && JSON.stringify([...treeSealedSet(WS, ['ws_duelist'])].sort()) === JSON.stringify([...SPRINKLER].sort())
+    && JSON.stringify([...treeSealedSet(WS, ['ws_duelist'])].sort()) === JSON.stringify(treeLimbs(WS).find(b => b.id === 'ws_sprinkler')!.rungs.map(n => n.id).sort())
     && treeSealedSet(WS, []).size === 0 && treeSealedSet(WS, [NEUTRAL]).size === 0);
   check('N: the refusal order holds — seal before budget, budget words unchanged',
     treeNodeRefusal(fresh([...DUELIST, NEUTRAL]), 'ws_sprinkler') === "The Sprinkler's path is sealed"

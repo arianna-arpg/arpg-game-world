@@ -95,3 +95,15 @@ for the mastery pass. The [central skill-and-support backlog](skill-support-cand
 tracks proposed skills, paired supports, audit evidence and shipped additions.
 The [impact batch](impact-starting-skill-trees.md) adds complete Breaker, Vanguard
 and Lancer starting bars.
+The [duelist batch](duelist-starting-skill-trees.md) completes Swashbuckler,
+Matador and Sharper, expands Wild Strike's legacy tree, and ships PS-02's
+focused Packed Workshop relocation support after its overlap audit.
+
+Completed starting bars: Warrior, Magician, Rogue, Berserker, Sorcerer,
+Ranger, Guardian, Summoner, Juggernaut, Pyromancer, Assassin, Necromancer,
+Cleric, Blademaster, Brawler, Trapper, Skald, Chronomancer, Hivecaller,
+Breaker, Vanguard, Lancer, Swashbuckler, Matador and Sharper.
+
+Remaining: Tamer, Sentinel, Warlord, Beguiler, Ascetic, Wallwright,
+Flagellant, Falconer, Firebrand, Runeweaver and Resonator. Keep completing
+these whole starting bars before the mastery swap audit and alternate trees.

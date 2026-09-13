@@ -412,6 +412,15 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('aoeRadius', 'increased', 0.04)],
     weight: 5,
   },
+  packed_workshop: {
+    id: 'packed_workshop', name: 'Packed Workshop',
+    description: 'Shift-press to reposition the nearest living totem or sentry from this skill within 600 units. Placement uses its normal reach; health, remaining life and action clocks are preserved. Cancels its current cast. Reposition costs 6 mana with a 4-second cooldown. Devices last 15% less time.',
+    color: '#c6ad80', requiresMechanisms: ['periodicConstruct'],
+    dropTags: ['totem'],
+    meta: { skillId: 'relocate_workshop', label: 'Reposition' },
+    mods: [mod('effectDuration', 'more', -0.15)],
+    minDropLevel: 8, weight: 5,
+  },
   overwound_mechanism: {
     id: 'overwound_mechanism', name: 'Overwound Mechanism',
     description: 'Aimed totems and sentries act 35% faster, including their attack, cast and cooldown clocks, but last 25% less time. Rebuild often to hold a lane.',

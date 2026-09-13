@@ -31995,15 +31995,39 @@ export class World {
   private mintMetaInstance(caster: Actor, host: SkillInstance, skillId: string): SkillInstance {
     const key = host.def.id + ':' + skillId;
     let inst = caster.metaInsts.get(key);
-    if (!inst || inst.level !== effectiveSkillLevel(host)) {
+    const relocateConstruct = SKILLS[skillId].effects.some(fx => fx.type === 'relocateConstruct');
+    if (!inst || inst.level !== effectiveSkillLevel(host)
+      || (relocateConstruct && this.relocationHosts.get(inst) !== host)) {
       inst = makeSkillInstance(SKILLS[skillId], effectiveSkillLevel(host));
       // minionCombat: a command's meta inherits its whole-court scope.
       // Summon-hosted meta payloads still name their own roster anchor.
       inst.hostSkillId = host.def.effects.some(e => e.type === 'commandMinions')
         ? undefined : host.def.id;
       caster.metaInsts.set(key, inst);
+      if (relocateConstruct) this.relocationHosts.set(inst, host);
     }
     return inst;
+  }
+
+  private relocationHosts = new WeakMap<SkillInstance, SkillInstance>();
+
+  /** The same eligibility read gates payment and execution. Instance identity
+   * prevents a second copy or another caster from moving this roster. */
+  private relocationTarget(caster: Actor, inst: SkillInstance, radius: number): Actor | undefined {
+    const host = this.relocationHosts.get(inst);
+    if (!host || !caster.skills.includes(host) || caster.dead || caster.downed
+      || !instanceMetas(host).some(m => m.skillId === inst.def.id)) return;
+    const d = instanceDelivery(host);
+    if (d.type !== 'construct' || !['totem', 'sentry'].includes(d.kind) || !d.castSkillId) return;
+    let best: Actor | undefined, bestD = radius;
+    for (const c of this.actors) {
+      if (c.dead || c.downed || c.owner !== caster || c.summonInst !== host
+        || !c.construct || !['totem', 'sentry'].includes(c.construct.kind)
+        || !sameStory(c, caster) || c.team !== caster.team || !(c.lifespan! > 0)) continue;
+      const dd = dist(caster.pos, c.pos);
+      if (dd <= bestD && (!best || dd < bestD)) { best = c; bestD = dd; }
+    }
+    return best;
   }
 
   useMetaSkill(caster: Actor, host: SkillInstance, aim: Vec2): boolean {
@@ -32193,6 +32217,12 @@ export class World {
       const unmet = caster.unmetGate(inst);
       if (unmet) {
         this.failNote(caster, inst.def.id + ':gate', unmet.note ?? 'not ready');
+        return false;
+      }
+    }
+    for (const fx of instanceEffects(inst)) {
+      if (fx.type === 'relocateConstruct' && !this.relocationTarget(caster, inst, fx.radius)) {
+        this.failNote(caster, inst.def.id + ':device', 'no device from this skill in reach');
         return false;
       }
     }
@@ -34968,6 +34998,8 @@ export class World {
           const mirage = new Actor(`${caster.name}?`, caster.team, vec(caster.pos.x, caster.pos.y));
           mirage.owner = caster;
           mirage.sourceSkillId = def.id;
+          mirage.summonInst = inst;
+          mirage.tier = caster.tier;
           // A convincing double wears the full silhouette, not just the tint.
           mirage.shape = caster.shape;
           mirage.color = caster.color;
@@ -35657,6 +35689,22 @@ export class World {
           }
         } else if (banks.length) {
           this.refundCooldown(caster, def.id); // nothing to load — never a wasted rack
+        }
+      }
+      if (fx.type === 'relocateConstruct') {
+        const c = this.relocationTarget(caster, inst, fx.radius);
+        const host = this.relocationHosts.get(inst);
+        const deployed = host && instanceDelivery(host);
+        if (c && deployed?.type === 'construct') {
+          const ang = angleTo(caster.pos, aim);
+          const reach = Math.min(dist(caster.pos, aim), deployed.placeRange ?? 100);
+          c.pos = this.clampPos(vec(caster.pos.x + Math.cos(ang) * reach,
+            caster.pos.y + Math.sin(ang) * reach), c.radius, undefined, { mover: c });
+          c.facing = ang;
+          c.casting = null; c.push = null;
+          this.flashes.push({ pos: { ...c.pos }, radius: 28, color: def.color, life: 0.25, maxLife: 0.25 });
+          // Keep the same actor, payload, health, lifespan, timers, useLock and
+          // cooldowns. No arrival effect, death event, refund or replacement.
         }
       }
       if (fx.type === 'recallMinions') {
