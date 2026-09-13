@@ -723,6 +723,12 @@ export class Actor {
   /** Skill-policy state: the rotation cursor + last cast (combo windows). */
   aiRotIdx = 0;
   aiLastSkill?: { id: string; at: number };
+  /** Defensive repositioning budget survives casts and target switches.
+   *  Transient AI state; unrelated to biological kite stamina. */
+  aiReposition?: { left: number; until: number };
+  /** A crossfire destination is a fixed place, with bounded travel and a
+   *  firing hold even if a wall prevents reaching it. */
+  aiCrossfire?: { point: Vec2; targetId: number; travelUntil: number; holdUntil: number };
   /** MORALE: routing (broken) until this world time — retreats, never casts. */
   aiMoraleUntil = 0;
   /** One rout per wound-crossing: latched when breakAtLife trips, re-armed

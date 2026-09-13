@@ -59,6 +59,7 @@ export type MoveStyleId =
   | 'weave'       // zigzag approach (bomber's drunken sprint)
   | 'hitAndRun'   // strike once, withdraw, come back around (skirmish)
   | 'slideCast'   // cast → sidestep → cast (strafer's fire-and-slide)
+  | 'crossfire'   // choose a fixed firing angle away from an ally, then plant
   | 'holdRange'   // stay in a band; HOLD FIRE and run when crowded (artillery)
   | 'backstab'    // stalk to the target's rear arc (assassin)
   | 'interpose'   // stand between the threat and a ward (protector)
@@ -97,6 +98,12 @@ export interface MoveSpec {
   withdraw?: [number, number];
   /** slideCast: seconds of sliding between casts (default [0.5, 1.0]). */
   slide?: [number, number];
+  /** crossfire: lateral step in world pixels; the destination is committed
+   *  once, never rotated around a moving target (default 110). */
+  flankStep?: number;
+  /** crossfire: maximum travel time and subsequent firing hold. */
+  relocateFor?: [number, number];
+  fireFor?: [number, number];
   /** orbit: seconds between direction-reroll windows (default [1.2, 2.8]);
    *  chance the reroll actually flips (default 0.4). */
   flipEvery?: [number, number];
@@ -169,6 +176,12 @@ export interface MoveSpec {
  *  exercise in futility, and a monster genuinely FASTER than its pursuer is
  *  finally justified: its legs give out on a rhythm you can learn. */
 export interface TempoSpec {
+  /** Defensive combat movement, including lateral circling, has finite
+   *  bouts followed by planted firing windows. Defaults on enemy ranged kits and
+   *  orbit/slide/skirmish movement, regardless of physiology. Only actual
+   *  non-closing movement spends the clock; shots never refill it. False
+   *  (or tempo:null) explicitly opts out. */
+  reposition?: { moveFor: [number, number]; holdFor: [number, number] } | false;
   /** Seconds of movement per burst (rolled; absent = moves freely). */
   moveFor?: [number, number];
   /** Seconds of dead stop between bursts (rolled; requires moveFor). */
@@ -492,6 +505,7 @@ export const BEHAVIOR_CFG = {
    *  pauses, never winds") suppresses it; bone, stone, ember and
    *  ghost-stuff never tire unless their def opts in (breathes: true). */
   defaultKite: { kite: 3.2, windedFor: [0.9, 1.5] as [number, number] },
+  reposition: { moveFor: [1.3, 2.1] as [number, number], holdFor: [1.1, 1.6] as [number, number] },
   /** CHARGE DISCIPLINE (the gorer's manners): the soft levers that stop
    *  point-blank charging being the STANDARD tactic while never banning it
    *  — "not necessarily an absolute". `nearDiscount` is the default pick-
@@ -858,6 +872,9 @@ export interface DriveSpec {
 /** One condition bundle — every present field must hold (AND). Rules, phase
  *  gotos, and skill reserves all speak this. */
 export interface AICondition {
+  /** Replenishable combat spawn (Actor.noBounty), including rule summons,
+   *  births and splits. Lets nuisance-sensitive tactics stay on wild bodies. */
+  conjured?: boolean;
   /** Own life fraction bounds. */
   lifeBelow?: number;
   lifeAbove?: number;
@@ -1468,6 +1485,7 @@ export function evalCondition(
   c: AICondition, actor: Actor, target: Actor | null, ctx: AICtx,
 ): boolean {
   const lifeFrac = actor.life / Math.max(1, actor.maxLife());
+  if (c.conjured !== undefined && actor.noBounty !== c.conjured) return false;
   if (c.lifeBelow !== undefined && !(lifeFrac <= c.lifeBelow)) return false;
   if (c.lifeAbove !== undefined && !(lifeFrac >= c.lifeAbove)) return false;
   if (c.targetLifeBelow !== undefined || c.targetLifeAbove !== undefined

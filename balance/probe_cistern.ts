@@ -504,13 +504,24 @@ withSeededRandom(0x3c15e7, () => {
       // cast from the pool, hold the zone against the drawn seats, then let
       // it land on a walker IN the water and on a walker on the SHORE.
       const heal = (): void => { p.statuses.length = 0; p.life = 1e9; w.update(1 / 30); };
+      // This wait tests no damage. Pending attacks from the preceding live
+      // fight must not kill the fixture while its cooldown drains: assigning
+      // life afterwards cannot resurrect a dead player. Restore vulnerability
+      // before every measured cast so the pool/shore assertions stay real.
+      const waitForBoil = (): void => {
+        const invulnerable = p.invulnerable;
+        p.invulnerable = true;
+        tick(10);
+        p.invulnerable = invulnerable;
+        heal();
+      };
       // Brains frozen from here: the real fight used her boil — wait out its
       // cooldown and her cast, then force the verb and tick THROUGH the cast
       // (a monster's useSkill BEGINS the cast; the strike zone is pushed at
       // its completion).
       heal();
-      tick(10);
-      heal(); // the fight's own pending boil may have landed while we waited
+      waitForBoil();
+      check('D6b the cooldown wait preserves the live damage fixture', !p.dead && !crone.dead);
       crone.pos = vec(W.x, W.y); crone.tier = 1; crone.mana = 999;
       p.pos = vec(W.x, W.y); p.tier = 1;
       const inst = makeSkillInstance(SKILLS.cistern_boil, 1);
@@ -549,7 +560,7 @@ withSeededRandom(0x3c15e7, () => {
         // THE WALKER ON THE SHORE inside the ring is spared (the grounded strike).
         if (S) {
           heal();
-          tick(10); // the crone's cooldown
+          waitForBoil();
           crone.mana = 999; crone.pos = vec(W.x, W.y); crone.tier = 1;
           p.pos = vec(S.x, S.y); p.tier = 1;
           const lifeS = p.life;

@@ -2654,6 +2654,8 @@ function moveToward(actor: Actor, world: World, to: { x: number; y: number; tier
  *  is what turns kiters from an exercise in futility into a rhythm: chase,
  *  wind them, capitalize. Returns true when movement actually happened. */
 function retreatMove(actor: Actor, world: World, dx: number, dy: number, dt: number): boolean {
+  // A planted artillery body must fall through to its firing lane.
+  if (dt <= 0) return false;
   // THE ROOTED TRUTH: a body with no legs cannot retreat AT ALL — rooted
   // guns (moveSpeed 0), anchored bodies, and mounted composite parts live
   // permanently at whatever range their carrier or planter picked. Refuse
@@ -3128,6 +3130,7 @@ function makeCtx(
 export const SEVERED_BAND_EXEMPT = new Set<string>([
   'hold', 'turtle', 'garrison', 'interpose', 'hoverAllies', 'retreat', 'lurk',
 ]);
+const REPOSITION_STYLES = new Set(['orbit', 'slideCast', 'hitAndRun', 'crossfire']);
 
 /** THE SEVERED BAND (the tier fabric's kernel law, TIER_CFG.severedBandReach):
  *  flat distance LIES across stories — a band kernel holding ring distance on
@@ -3160,6 +3163,7 @@ export function severedBandGoal(ctx: KernelCtx, style: string): Vec2 | null {
 }
 
 function runKernel(style: string, ctx: KernelCtx): void {
+  const clockDt = ctx.dt;
   const pace = ctx.spec.pace;
   if (pace !== undefined && pace !== 1) {
     // Paced locomotion rides a scaled dt for MOVEMENT only (casting reads
@@ -3182,7 +3186,97 @@ function runKernel(style: string, ctx: KernelCtx): void {
     moveToward(ctx.a, ctx.world, sg, ctx.dt);
     return;
   }
+  // Circling is defensive movement too. Count actual steps around/away
+  // from the prey, independent of movement pace, material and target swaps.
+  // Closing and tier traversal remain available; casting cannot refund the
+  // budget. A spent bout gives a real planted window with hands still free.
+  const { a, world } = ctx;
+  const tp = ctx.tuning.tempo;
+  const eligible = a.team === 'enemy' && !ctx.noCast && !SEVERED_BAND_EXEMPT.has(style)
+    && (REPOSITION_STYLES.has(style) || standoff(a).keep > 0);
+  const reposition = tp === null || tp?.reposition === false ? undefined
+    : tp?.reposition ?? (eligible ? BEHAVIOR_CFG.reposition : undefined);
+  if (!reposition) {
+    (MOVE_KERNELS[style] ?? MOVE_KERNELS.approach)(ctx);
+    return;
+  }
+  let state = a.aiReposition;
+  if (state && world.time < state.until) ctx = { ...ctx, dt: 0 };
+  const x = a.pos.x, y = a.pos.y;
+  const before = dist(a.pos, ctx.target.pos);
   (MOVE_KERNELS[style] ?? MOVE_KERNELS.approach)(ctx);
+  if (ctx.dt > 0 && !a.leap && !a.dash) {
+    const moved = Math.hypot(a.pos.x - x, a.pos.y - y);
+    if (moved > 0.001 && dist(a.pos, ctx.target.pos) >= before - moved * 0.5) {
+      // Lazy even about the roll: stationary casters and blocked feet must
+      // not change their decision stream merely by carrying a ranged kit.
+      if (!state || (state.left <= 0 && world.time >= state.until)) {
+        state = a.aiReposition = { left: rand(...reposition.moveFor), until: 0 };
+      }
+      state.left = Math.max(0, state.left - clockDt);
+      if (state.left <= 0) state.until = world.time + clockDt + rand(...reposition.holdFor);
+    }
+  }
+}
+
+/** Crossfire uses a committed world-space point. It widens the angle from
+ *  a nearby allied shooter, then fires from that position instead of
+ *  continually orbiting a moving target. Failed travel also ends in a hold. */
+function crossfireKernel(ctx: KernelCtx): void {
+  const { a, world, target, d, dt, spec } = ctx;
+  const { keep, desired } = standoff(a);
+  if (losStrafe(ctx)) return;
+  if (a.casting || a.useLock > 0) return;
+  if (dt <= 0) {
+    const chosen = ctx.pick();
+    if (chosen) ctx.cast(chosen);
+    return;
+  }
+  if (d > Math.max(keep, desired) * 1.35) {
+    const chosen = ctx.pick();
+    if (chosen) ctx.cast(chosen);
+    moveToward(a, world, ctx.goal, dt);
+    return;
+  }
+  let state = a.aiCrossfire;
+  if (state && state.targetId !== target.id) {
+    // A changed quarry cancels the old flank, not the firing commitment.
+    state.point = vec(a.pos.x, a.pos.y);
+    state.targetId = target.id;
+    state.travelUntil = world.time;
+  }
+  if (state && world.time < state.holdUntil) {
+    if (world.time < state.travelUntil && dist(a.pos, state.point) > 12) {
+      moveToward(a, world, state.point, dt);
+    } else {
+      state.travelUntil = world.time; // reached/blocked/timed out: hold here
+      const chosen = ctx.pick();
+      if (chosen) ctx.cast(chosen);
+    }
+    return;
+  }
+  const bearing = angleTo(target.pos, a.pos);
+  const step = spec.flankStep ?? 110;
+  const side = vec(-Math.sin(bearing) * step, Math.cos(bearing) * step);
+  const candidates = [
+    world.clampPos(vec(a.pos.x + side.x, a.pos.y + side.y), a.radius),
+    world.clampPos(vec(a.pos.x - side.x, a.pos.y - side.y), a.radius),
+  ];
+  let ally: Actor | undefined, nearest = 520;
+  for (const mate of world.actors) {
+    if (mate === a || mate === target || mate.dead || mate.downed || mate.passive || mate.team !== a.team
+      || mate.aiTargetId !== target.id
+      || mate.tier !== a.tier || mate.faction !== a.faction || standoff(mate).keep <= 0) continue;
+    const distance = dist(mate.pos, a.pos);
+    if (distance < nearest) { nearest = distance; ally = mate; }
+  }
+  const allyBearing = ally ? angleTo(target.pos, ally.pos) : undefined;
+  const score = (p: Vec2) => allyBearing === undefined ? 0
+    : Math.abs(angleDiff(angleTo(target.pos, p), allyBearing));
+  const first = ally ? score(candidates[0]) >= score(candidates[1]) : Math.random() < 0.5;
+  const travelUntil = world.time + rand(...(spec.relocateFor ?? [0.65, 1.0]));
+  a.aiCrossfire = { point: candidates[first ? 0 : 1], targetId: target.id,
+    travelUntil, holdUntil: travelUntil + rand(...(spec.fireFor ?? [1.8, 2.8])) };
 }
 
 /** approach — the original generic conduct: close to the kit's standoff,
@@ -3654,6 +3748,7 @@ export const MOVE_KERNELS: Record<string, MoveKernel> = {
   weave: weaveKernel,
   hitAndRun: hitAndRunKernel,
   slideCast: slideCastKernel,
+  crossfire: crossfireKernel,
   holdRange: holdRangeKernel,
   backstab: backstabKernel,
   interpose: interposeKernel,

@@ -29,6 +29,14 @@ Enemy turn-rate derivation, body-aimed combat and completed-cast recovery are
 documented in `docs/design/enemy-handling.md`; `balance/probe_handling.ts`
 checks the shared handling resolver, pivot budgets and attack openings.
 
+Crow/Gnasher harassment pacing and replenishable-spawn AI restrictions are in
+`docs/design/harassment-balance.md`; `balance/probe_harassment.ts` checks melee
+contact, retained wild escapes and summon targetability across update rates.
+
+Ranged repositioning budgets, fixed crossfire positions and intelligent enemy
+tactics are documented in `docs/design/tactical-ai.md`; the pursuit, movement
+commitment and live tactic checks are in `balance/probe_tacticalai.ts`.
+
 Sylvan Warden and Stone Sentinel guard commitment, bash warnings and doctrine
 level gates are documented in `docs/design/shield-defender-balance.md`;
 `balance/probe_wardenbalance.ts` checks those counterplay and progression seams.

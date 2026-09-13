@@ -61,6 +61,8 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_tacticalai.ts', status: 'green', tier: 'fast', why: 'Ranged pursuit and lateral movement openings at 30/60/120 Hz, explicit opt-outs, retarget commitment, planted artillery, fixed crossfire destinations and tactical spell sequencing' },
+  { probe: 'probe_harassment.ts', status: 'green', tier: 'fast', why: 'Crow/Gnasher/bat contact at 30/60/120 Hz, replenishable summon targetability, intermittent wild escapes and flee-loop A/B' },
   { probe: 'probe_websiteportraits.ts', status: 'green', tier: 'fast', why: 'Standalone website portrait entry initializes every static and animated part used by shipped looks without the game bootstrap' },
   { probe: 'probe_deviceworkshop.ts', status: 'green', tier: 'fast', why: 'Packed Workshop actual deployments and relocation: payment, ownership, clocks, eligibility, persistence and cleanup' },
   { probe: 'probe_metaslotinput.ts', status: 'green', tier: 'fast', why: 'Shift-number meta slots retain their numeric edge, typed layout binding, key-up cleanup and overlapping modifier keys' },

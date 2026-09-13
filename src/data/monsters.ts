@@ -2643,6 +2643,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: {
       type: 'basic',
       perception: { arcDeg: 120, rearMul: 0.25, alertShout: 380, memory: 5 },
+      // An undead sentry follows its firing drill; it does not duel in circles.
+      behavior: { reaction: [0.4, 0.7], recovery: [0.25, 0.4] },
     },
   },
 
@@ -2959,6 +2961,13 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: {
       type: 'caster',
       skillUse: { mode: 'priority', order: ['frost_nova', 'ice_spear', 'frostbolt'] },
+      // Answer long wind-ups with a committed ranged cast of her own;
+      // closing during that exchange earns a punish window.
+      behavior: { recovery: [0.3, 0.5] },
+      rules: [{ when: { targetCasting: 0.5, distOver: 140, sinceEngaged: 2 },
+        every: [7, 10], hold: [1.4, 1.8],
+        use: { move: { style: 'hold' },
+          skillUse: { mode: 'priority', order: ['ice_spear', 'frostbolt'] } } }],
     },
   },
 
@@ -3484,7 +3493,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('lightningRes', 'flat', 0.4)],
     skills: ['spark', 'despair'],
     xp: 16,
-    brain: { type: 'caster' },
+    brain: {
+      type: 'caster',
+      skillUse: { opener: 'despair', combos: [{ after: 'despair', then: 'spark', window: 3 }] },
+      behavior: { recovery: [0.25, 0.45] },
+    },
   },
 
   pyroclast_magus: {
@@ -4177,7 +4190,16 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('life', 'more', 0.5)],
     skills: ['claw', 'execution'],
     xp: 15, faction: 'bandit',
-    brain: { type: 'skirmish', withdraw: 1.3 }, // darts in and out, a knife-fighter
+    brain: {
+      type: 'basic', move: { style: 'direct' },
+      behavior: { encircle: { front: 1 }, reaction: [0.2, 0.4] },
+      // Read a committed cast, take a short flank, then resume attacking.
+      // The knife is holstered during the maneuver; it is not a free dodge.
+      rules: [{ when: { targetCasting: 0.35, distUnder: 180, sinceEngaged: 2 },
+        every: [6, 9], hold: [0.65, 0.9],
+        use: { move: { style: 'orbit', ring: 46 },
+          skillUse: { mode: 'priority', order: [] } } }],
+    },
     detection: 1.0,
   },
   bandit_bruiser: {
@@ -4224,7 +4246,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('life', 'more', 0.5)],
     skills: ['arquebus'],
     xp: 28, faction: 'bandit',
-    brain: { type: 'strafer' }, // one thunderclap, then the long open ram
+    brain: {
+      type: 'caster',
+      move: { style: 'crossfire', flankStep: 110, relocateFor: [0.7, 1.0], fireFor: [2.0, 3.0] },
+      behavior: { aimLead: 0.35, aimLeadChance: 0.5, reaction: [0.35, 0.6] },
+    }, // choose an allied firing angle, commit, then the long open ram
     detection: 1.3,
   },
   // The SHIELD-WALL of the warband: a thane who ADVANCES behind a marching
@@ -6050,6 +6076,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
         dodge: { chance: 0.7, reaction: [0.15, 0.35] },
         steerAim: { lead: 0.4 }, plantChance: 0.2,
       },
+      // Nimble repositioning in short bursts, with dependable firing stops.
+      tempo: { reposition: { moveFor: [0.7, 1.1], holdFor: [1.2, 1.7] } },
     },
     faction: 'sylvan',
   },
@@ -6065,6 +6093,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: {
       type: 'commander',
       behavior: { aimLead: 0.7, aimLeadChance: 0.7, dodge: { chance: 0.55, reaction: [0.2, 0.4] } },
+      tempo: { reposition: { moveFor: [1.2, 1.8], holdFor: [1.3, 1.8] } },
+      skillUse: { reserve: [{ skill: 'rallying_howl', when: { alliesWithin: { count: 2, radius: 240 } } }] },
+      rules: [{ when: { alliesWithin: { count: 2, radius: 240 }, sinceEngaged: 2 },
+        every: [9, 13], hold: [2, 3], use: { move: { style: 'hold' } } }],
     },
     faction: 'sylvan',
   },
@@ -8429,7 +8461,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
 
   // --- THE CAVERN DWELLERS (unaffiliated — the dark keeps its own) ----------
-  // The bat: a wing-scrap that dives, rakes, and wheels away winded. Roost-
+  // The bat: a wing-scrap that closes, rakes, and pauses in reach. Roost-
   // poured, so it swarms rather than vanishes (the rookery precision-tax
   // law: no take_wing on perpetually-summoned bodies).
   cave_bat: {
@@ -8445,7 +8477,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     lite: { contact: { damage: 2 }, aggro: 340, weave: 1.5, erratic: 1.4 },
     brain: {
       type: 'swarm',
-      move: { style: 'juke', hookEvery: [0.35, 0.7], hookArc: 1.2 },
+      // Replenishable divers close on their prey; juke is a FLEE kernel.
+      move: { style: 'direct' },
+      behavior: { encircle: { front: 2 }, plantChance: 0.35, plantFor: [0.35, 0.6] },
       tempo: { kite: 2.0, windedFor: [0.7, 1.2] },
     },
   },
@@ -9144,7 +9178,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // (numbers, not evasion); the wing lives on free-standing fliers instead
   // (gore_hawk, dune_vulture, carrion_shrike) and on fleeing prey birds.
   // The bloodwing: the D2 blood hawk's own tide — small wing-scraps the nest
-  // keeps pouring. Dives, rakes, wheels off winded; dies to a stiff look.
+  // keeps pouring. Closes, rakes, briefly wheels in reach; dies to a stiff look.
   bloodwing: {
     id: 'bloodwing', name: 'Bloodwing',
     color: '#b04a3a', shape: 'triangle', radius: 8, material: 'fur', look: 'bloodwing',
@@ -9156,7 +9190,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: {
       type: 'swarm',
       target: { prey: ['critter'] },
-      move: { style: 'juke', hookEvery: [0.4, 0.8], hookArc: 1.1 },
+      move: { style: 'direct' },
+      behavior: { encircle: { front: 2 } },
+      rules: [{ when: { sinceEngaged: 4, distUnder: 100 }, every: [8, 12], hold: [0.6, 0.9],
+        use: { move: { style: 'orbit', ring: 45 } } }],
       tempo: { kite: 2.2, windedFor: [0.8, 1.4] },
     },
   },
@@ -9733,15 +9770,18 @@ export const MONSTERS: Record<string, MonsterDef> = {
     carrion: { radius: 400, rate: 0.08, time: 2 },
     brain: {
       type: 'swarm',
-      morale: { skittish: { radius: 90, duration: [0.6, 1.2] } },
-      move: { style: 'juke', hookEvery: [0.4, 0.8], hookArc: 1.1 },
+      move: { style: 'direct' },
+      behavior: { encircle: { front: 2 } },
+      // Wing is a deliberate escape beat, never a normal on-cooldown dive.
+      skillUse: { mode: 'priority', order: ['talon_rake'], cadence: [1.0, 1.4] },
       rules: [
-        // FLUSHED: hurt the murder and it LIFTS — prey-on-the-wing tech
-        // (take_wing at 'away' = escape flight, never the vanish-harass;
-        // the free-flier law lets fleeing birds wear the wing).
-        { when: { lifeBelow: 0.7 }, every: [5, 8], hold: [2, 3],
-          actions: [{ do: 'cast', skill: 'take_wing', at: 'awayFromTarget', force: true }],
-          use: { move: { style: 'holdRange', hold: 380 } } },
+        { when: { sinceEngaged: 4, distUnder: 100 }, every: [8, 12], hold: [0.6, 0.9],
+          use: { move: { style: 'orbit', ring: 45 } } },
+        // A wounded wild crow can flush after committing to the fight.
+        // Piper replacements never buy another untargetable escape window.
+        { when: { conjured: false, sinceEngaged: 6, lifeBelow: 0.5, distUnder: 85 },
+          every: [14, 18], hold: [0.5, 0.75],
+          actions: [{ do: 'cast', skill: 'take_wing', at: 'awayFromTarget' }] },
       ],
     },
   },
@@ -18759,9 +18799,19 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
     brain: {
       type: 'swarm',
-      // The BOUNCE is the whole gait: random hooks and dead-stop gathers
-      // between leaps — a ball of appetite, never a straight line.
-      move: { style: 'juke', hookEvery: [0.4, 0.8], hookArc: 1.1, freezeChance: 0.15, freeze: [0.2, 0.4] },
+      // Bounce TOWARD the fight, with catchable gathers between darts.
+      move: { style: 'skitter', dart: [0.3, 0.5], pause: [0.25, 0.45] },
+      behavior: { encircle: { front: 2 } },
+      skillUse: {
+        cadence: [0.8, 1.2],
+        slack: { crushing_leap: [3, 5] },
+        bands: { crushing_leap: [{ to: 95, mul: 0.1 }, { mul: 1 }] },
+        strike: { stagger: [0.4, 1.0], inFlight: 1 },
+      },
+      // The prodder's endlessly replaced mouths fight on foot. Wild ones
+      // retain occasional, staggered leaps without backing up to reset them.
+      rules: [{ when: { conjured: true },
+        use: { skillUse: { mode: 'priority', order: ['claw'] } } }],
     },
   },
   // The hopper: the goblin who decided the herd is TRANSPORT (the mount
@@ -18852,7 +18902,15 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
     brain: {
       type: 'juggernaut',
-      move: { style: 'juke', hookEvery: [0.6, 1.1], hookArc: 0.9, freezeChance: 0.12, freeze: [0.25, 0.45] },
+      move: { style: 'direct' },
+      behavior: { recovery: [0.45, 0.65] },
+      skillUse: {
+        slack: { crushing_leap: [4, 7] },
+        bands: { crushing_leap: [{ to: 110, mul: 0.1 }, { mul: 1 }] },
+        strike: { stagger: [0.6, 1.2], inFlight: 1 },
+      },
+      rules: [{ when: { conjured: true },
+        use: { skillUse: { mode: 'priority', order: ['heavy_strike'] } } }],
     },
   },
   // The prodder: the goblin whose job is the herd — the prod keeps the

@@ -21,9 +21,9 @@
 //     prey reads stun-capable casts at a fraction of their weight — rare,
 //     never refused. Rig F (collapse, the grace window, the undialed
 //     control at full weight).
-//   THE CENSUS (rig A): config shapes sane, the three debut wearers dialed
-//     as authored, and NO other def in the registry carries a tempo dial —
-//     the flat-zones law (absent == identical) at data grain.
+//   THE CENSUS (rig A): config shapes sane, the debut wearers dialed as
+//     authored, and the Gnasher nuisance pass explicitly enrolled alongside
+//     them; unrelated definitions remain outside this balance batch.
 // AI is CALLER-DRIVEN (updateAI per subject + w.update per frame — the
 // chargegate idiom); subjects fight player-team POSTS with the hero parked
 // out of acquisition range.
@@ -64,8 +64,8 @@ const DT = 1 / 60;
       return !!(su?.strike || su?.bands || su?.slack);
     })
     .map(m => m.id).sort();
-  check('census: EXACTLY the three debut wearers carry tempo dials (flat zones stay byte-identical)',
-    wearers.join(',') === 'beastkin_gorer,gale_elemental,sylvan_warden',
+  check('census: tempo dials stay scoped to the debut and Gnasher balance batches',
+    wearers.join(',') === 'beastkin_gorer,cave_gnasher,gale_elemental,great_gnasher,sylvan_warden',
     wearers.join(','));
 
   const gorer = MONSTERS.beastkin_gorer.brain?.skillUse;
