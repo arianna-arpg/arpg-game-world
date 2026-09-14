@@ -1061,6 +1061,7 @@ function handleLocalPanels(): void {
       if (!ui.escCascadeFor(world.localSeat.id)) ui.showEscapeMenu();
       return;
     }
+    if (ui.cancelSalvageMode(world.localSeat.id)) return;
     // THE ESCAPE POLICY (ui/escapeConfig.ts): a sweep mode clears the whole
     // screen in one press — every book through its leaves' own closes, the
     // dialog belt, the ordinary panels (a kept page last) — and pauses only

@@ -150,6 +150,88 @@ app.whenReady().then(async () => {
       await beat();
       check('reopening catches changes made while closed', ui.inventoryOpen
         && !root.classList.contains('hidden') && root.textContent.includes('7656'));
+
+      // Quick-cancel uses the actual shared toggle and input routes. Cancelling
+      // must never send a destructive intent or fall through to an item hold.
+      const request = w.requestMeta.bind(w), intents = [];
+      w.requestMeta = action => { intents.push(action); return request(action); };
+      const vendor = document.getElementById('vendor-menu');
+      const bench = document.getElementById('salvage-menu');
+      const rightClick = target => {
+        const e = new PointerEvent('pointerdown', { bubbles: true, cancelable: true,
+          pointerId: 92, button: 2, buttons: 2 });
+        target.dispatchEvent(e);
+        window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 92, button: 2 }));
+        return e.defaultPrevented;
+      };
+      const escape = () => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape', bubbles: true }));
+        __game.step(1);
+      };
+      w.player.pos = { ...smith.pos };
+      const prepare = lane => {
+        ui.hideAll();
+        if (lane === 'sell') ui.showVendor(); else ui.showSalvage();
+        if (!ui.inventoryOpen) ui.toggleInventory();
+        const panel = lane === 'sell' ? vendor : bench;
+        const toggle = panel.querySelector('[data-breaker]');
+        check(lane + ' has the shared arm toggle', !!toggle);
+        toggle.click();
+        check(lane + ' arms bag item actions', !!tile(first.uid).getAttribute('data-salv-uid'));
+        return panel;
+      };
+      for (const lane of ['sell', 'break']) {
+        const panel = prepare(lane);
+        const before = intents.length;
+        check(lane + ' right-click is consumed', rightClick(tile(first.uid)));
+        check(lane + ' cancels without closing or mutating items', ui.inventoryOpen
+          && !panel.classList.contains('hidden') && !tile(first.uid).hasAttribute('data-salv-uid')
+          && root.style.cursor === '' && intents.length === before && !document.querySelector('.lock-hold'));
+        panel.querySelector('[data-breaker]').click();
+        check(lane + ' can be explicitly re-armed', !!tile(first.uid).getAttribute('data-salv-uid'));
+        check(lane + ' right-click on the station cancels too', rightClick(panel)
+          && !tile(first.uid).hasAttribute('data-salv-uid'));
+      }
+      for (const policy of ['step', 'sweep', 'sweepKeepBag']) {
+        __game.settings().escapeCloses = policy;
+        prepare('sell'); escape();
+        check('Escape disarms before ' + policy + ' closes panels', ui.inventoryOpen && ui.vendorOpen
+          && !ui.escapeMenuOpen && !tile(first.uid).hasAttribute('data-salv-uid'));
+      }
+      // Real controller polling: B drives PadPointer.onCancel -> the same Escape path.
+      prepare('sell');
+      __game.fakePad({ axes: [0, 0, 0, 0], buttons: Array(17).fill(0) });
+      __game.step(2);
+      const buttons = Array(17).fill(0); buttons[1] = 1;
+      __game.fakePad({ axes: [0, 0, 0, 0], buttons }); __game.step(2);
+      check('controller Cancel disarms and leaves inventory open', ui.inventoryOpen && ui.vendorOpen
+        && !tile(first.uid).hasAttribute('data-salv-uid'));
+      __game.fakePad(null);
+      __game.settings().escapeCloses = 'sweep'; escape();
+      check('the next Escape resumes normal panel closing', !ui.inventoryOpen && !ui.vendorOpen);
+
+      prepare('sell');
+      ui.showSalvage(); bench.querySelector('[data-breaker]').click();
+      check('one cancel also disarms shelved sibling modes', ui.cancelSalvageMode(w.localSeat.id)
+        && !ui.cancelSalvageMode(w.localSeat.id) && ui.vendorOpen && ui.salvageOpen && ui.inventoryOpen);
+
+      prepare('sell');
+      ui.showMemorySellPrompt(pouch.uid);
+      check('sale confirmation exists for cancellation', !!document.querySelector('[data-memsell-go]'));
+      rightClick(document.querySelector('[data-memsell-go]'));
+      check('quick-cancel dismisses the pending stack sale', !document.querySelector('[data-memsell-go]')
+        && m.items.includes(pouch) && !tile(pouch.uid).hasAttribute('data-salv-uid'));
+
+      prepare('sell');
+      guest.actor.pos = { ...smith.pos };
+      ui.showVendor(guest.id); // same armed mode, now owned by the guest
+      ui.toggleInventory(guest.id);
+      check('another seat cannot cancel the guest mode', !ui.cancelSalvageMode(w.localSeat.id));
+      check('guest Cancel consumes its own armed mode', ui.escCascadeFor(guest.id)
+        && ui.inventoryOpen && ui.vendorOpen && !ui.cancelSalvageMode(guest.id));
+      ui.hideAll();
+      w.requestMeta = request;
       return checks;
     }.toString()})()`);
     fs.writeFileSync(path.join(dir, 'inventory-ui.json'), JSON.stringify(results, null, 2));

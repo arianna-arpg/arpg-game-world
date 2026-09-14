@@ -368,6 +368,14 @@ const BREAK_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(salvageGlyphS
  *  One row here settles all surfaces at once. */
 const SALVAGE_STATION: { autoArm: boolean; openBag: boolean } = { autoArm: false, openBag: true };
 
+/** Every composed salvage control supplies its mode's lifecycle and repaint. */
+interface SalvageModeView {
+  open: () => boolean;
+  armed: () => boolean;
+  setArmed: (on: boolean) => void;
+  refresh: () => void;
+}
+
 /** THE HELD RIGHT-CLICK (her ruling 2026-09-05 — the skill-items charter's
  *  pitfall 3 answered): button 2 on a bag tile / worn chip is a TAP or a
  *  HOLD, split at one seam. A tap USES the thing when it carries a use verb
@@ -722,6 +730,7 @@ export class UI {
    *  only if SALVAGE_STATION.autoArm says so (OFF: the toggle arms it);
    *  reset on close — never sticky. */
   private scrapMode = false;
+  private salvageModes = new Map<HTMLElement, SalvageModeView>();
   /** THE STANDING ORDER picker: which counter's pane is open + its filter. */
   private vendorCommOpen: string | null = null;
   private vendorCommQuery = '';
@@ -1096,7 +1105,7 @@ export class UI {
       if (!(t instanceof Node)) return null;
       for (const el of [this.charSheet, this.inventory, this.buildPanel, this.passiveTree, ...[...this.skillTreePanes.values()].map(p => p.el), this.vendorMenu,
         this.salvageMenu, this.oracleMenu, this.bestiaryMenu, this.caravanMenu, this.recallMenu,
-        this.bountyMenu]) {
+        this.bountyMenu, ...(this.memorySellPopup ? [this.memorySellPopup] : [])]) {
         if (el.contains(t)) {
           const id = this.panelSeatIds.get(el);
           return id && id !== this.getWorld().localSeat.id ? id : null;
@@ -1125,6 +1134,17 @@ export class UI {
     }, { capture: true });
     window.addEventListener('click', (e) => stamp(couchOwnerOf(e.target) ?? gestureSeat), { capture: true });
     window.addEventListener('change', (e) => stamp(couchOwnerOf(e.target)), { capture: true });
+    // After the drag fabric's capture listener: a carried item's cancel wins.
+    // Consume the press before item holds, reservation holds or gameplay see it.
+    document.addEventListener('pointerdown', e => {
+      if (e.button !== 2 || e.defaultPrevented || dndCarried()
+        || this.escapeMenuOpen || this.minigameActive || this.couchJoinOpen) return;
+      const owner = this.containerPane.dockedEls().find(el => e.target instanceof Node && el.contains(e.target));
+      const seatId = owner ? this.panelSeat(owner).id : couchOwnerOf(e.target) ?? this.getWorld().localSeat.id;
+      if (!this.cancelSalvageMode(seatId)) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }, { capture: true });
   }
 
   /** Write a live-refreshed panel's markup only when it CHANGED since the
@@ -1649,6 +1669,7 @@ export class UI {
    *  its ordinary panels. Host-global dialogs (caravan, sail, hold, merc,
    *  borough, vocation) belong to the local hero. True = press consumed. */
   escCascadeFor(seatId: string): boolean {
+    if (this.cancelSalvageMode(seatId)) return true;
     // THE ESCAPE POLICY (ui/escapeConfig.ts): a sweep mode clears the seat's
     // whole screen in one press; 'step' walks the classic cascade below.
     const mode = escapeModeOf(this.getSettings().escapeCloses);
@@ -4327,9 +4348,9 @@ export class UI {
           <div data-bag-grid="1" style="position:relative;width:${W * CELL}px;height:${H * CELL}px">${cells}${tiles}</div>
           <div style="margin-top:8px;color:#8a8678;font-size:10px">
             ${salv === 'break'
-              ? `⚒ <b style="color:#e8c87a">BREAKING</b>: click a piece to break it for essence · ${this.lockHintHtml()}`
+              ? `⚒ <b style="color:#e8c87a">BREAKING</b>: click a piece to break it for essence · ${this.salvageCancelHint()}`
               : salv === 'sell'
-              ? `⚙ <b style="color:#e8c87a">SELLING</b>: click a piece to sell it · ${this.lockHintHtml()}`
+              ? `⚙ <b style="color:#e8c87a">SELLING</b>: click a piece to sell it · ${this.salvageCancelHint()}`
               : this.lockHintHtml()}
           </div>
         </div>
@@ -5123,6 +5144,7 @@ export class UI {
   }
 
   closeMemorySellPrompt(): void {
+    if (this.memorySellPopup) this.panelSeatIds.delete(this.memorySellPopup);
     this.memorySellPopup?.remove();
     this.memorySellPopup = null;
   }
@@ -5154,6 +5176,7 @@ export class UI {
       </div>`;
     document.body.appendChild(pop);
     this.memorySellPopup = pop;
+    this.panelSeatIds.set(pop, seat.id);
     const quiet = pop.querySelector<HTMLInputElement>('[data-memsell-quiet]');
     // The checkbox is a preference, not a verdict: ticked, it stands the
     // prompt down whichever button follows (the Options row shows it OFF).
@@ -5261,6 +5284,28 @@ export class UI {
     return null;
   }
 
+  /** Cancel the seat's armed inventory verbs, including shelved siblings, so
+   *  switching folio tabs cannot silently re-arm a destructive mode. No intent
+   *  is sent and no panels close; each mode still re-arms through its toggle. */
+  cancelSalvageMode(seatId: string): boolean {
+    const armed = [...this.salvageModes].filter(([root, view]) =>
+      view.open() && view.armed() && this.panelSeat(root).id === seatId);
+    if (!armed.length) return false;
+    for (const [, view] of armed) view.setArmed(false);
+    if (this.memorySellPopup && this.panelSeat(this.memorySellPopup).id === seatId) this.closeMemorySellPrompt();
+    this.endLockHold();
+    dndCancel();
+    hideTooltip();
+    for (const [, view] of armed) view.refresh();
+    this.refreshInventory();
+    this.applyBreakChrome();
+    return true;
+  }
+
+  private salvageCancelHint(): string {
+    return `Right-click, Esc or ${esc(padDisplay(PAD_CFG.pointer.cancel))} to stop selling/breaking`;
+  }
+
   /** One seam for the salvage-mode cursor dress: the ⚒ rides the bench and
    *  the ⚙ a counter's armed wheel, each spilling onto the (same-seat)
    *  inventory while armed — and every face comes back clean the moment
@@ -5342,7 +5387,8 @@ export class UI {
             ${toggle}</button>
         </div>
         <div class="desc" style="color:#8a8678;font-size:10px;margin-bottom:6px">
-          ${teaches} <b>${this.lockGestureText()}</b> on anything carried locks 🔒 it:
+          ${armed ? `<div>${this.salvageCancelHint()}.</div>` : ''}
+          ${teaches} ${armed ? 'With the mode off, ' : ''}<b>${this.lockGestureText()}</b> on anything carried locks 🔒 it:
           locked things refuse ${tool}, and every sweep below skips them. Granted sparks sit out of sweeps.
         </div>
         <h3>Gear${keptNote(gearLocked)}</h3>
@@ -5371,9 +5417,8 @@ export class UI {
    *  its own repaint — and the bag repaints alongside because both verbs
    *  move it. Arming (re)opens the bag beside the counter: the inventory
    *  IS the salvage menu, whichever roof it stands under. */
-  private bindSalvageCluster(root: HTMLElement, lane: 'break' | 'sell', view: {
-    armed: () => boolean; setArmed: (on: boolean) => void; refresh: () => void;
-  }): void {
+  private bindSalvageCluster(root: HTMLElement, lane: 'break' | 'sell', view: SalvageModeView): void {
+    this.salvageModes.set(root, view);
     const world = this.getWorld();
     root.querySelector<HTMLButtonElement>('button[data-breaker]')?.addEventListener('click', () => {
       view.setArmed(!view.armed());
@@ -5483,6 +5528,7 @@ export class UI {
     // THE BREAKER'S HAMMER toggle + THE SWEEPS: the shared cluster's verbs,
     // bound on the BREAK lane (bindSalvageCluster).
     this.bindSalvageCluster(this.salvageMenu, 'break', {
+      open: () => this.salvageOpen,
       armed: () => this.benchBreakMode,
       setArmed: on => { this.benchBreakMode = on; },
       refresh: () => this.refreshSalvage(),
@@ -6494,6 +6540,7 @@ export class UI {
     // THE BREAKER'S EYE, abroad: the shared cluster's verbs, bound on the
     // SELL lane (bindSalvageCluster — the wheel toggle + the sell sweeps).
     this.bindSalvageCluster(this.vendorMenu, 'sell', {
+      open: () => this.vendorOpen,
       armed: () => this.scrapMode,
       setArmed: on => { this.scrapMode = on; },
       refresh: () => this.refreshVendor(),
