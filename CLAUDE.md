@@ -218,6 +218,12 @@ checks, the balance harness's smoke suite, and the generation QA sweep are how
 we verify changes.
 
 ## Layout
+- Account cosmetics: `data/cosmetics.ts` defines the Wardrobe's skins, effects,
+  footprints, avatars and acquisition rules; `meta/cosmetics.ts` owns durable
+  grants, per-skill choices and the future verified-entitlement adapter seam.
+  Paint never modifies combat. UI, co-op, extension contract and verification:
+  `docs/design/cosmetics.md`; `npm run probe -- cosmetics` and the isolated
+  `balance/cosmetics-ui.cjs` harness after a build.
 - Odyssey: `data/odyssey.ts` owns roster content and pressure tuning;
   `world/odyssey.ts` owns frozen world selection, ordered leader receipts and
   save validation; `engine/odyssey.ts` connects quest objectives to progression,

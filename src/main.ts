@@ -1,3 +1,4 @@
+import { sanitizeCosmeticLoadout } from './meta/cosmetics';
 // ---------------------------------------------------------------------------
 // Entry point: boots the world, runs the loop, and routes player input into
 // the same skill pipeline the AI uses.
@@ -378,6 +379,9 @@ renderer.getPadActive = padActiveNow;
 ui.getPadActive = padActiveNow;
 // THE MENU BAR's 'bar' anchor seats off the hero's DRAWN HUD cluster — the
 // rect the renderer published this frame (drawn == seated).
+ui.onCosmeticsChanged = () => {
+  if (!net.isHost) net.sendSession({ t: 'cosmetics', loadout: account.cosmetics.loadout });
+};
 ui.hudCluster = () => renderer.hudClusterRects.find(c => c.seatId === world.localSeat.id) ?? null;
 // Tab is the menu's default bind: keep the browser's focus walk from riding
 // the same press (a text field keeps its own Tab).
@@ -2236,7 +2240,8 @@ function onRemoteJoin(peer: PeerInfo): void {
   // co-op; this sweeps one already standing when the session became live).
   world.timeflow.releaseKind('menu');
   const cls = CLASSES.find(c => c.id === peer.classId) ?? CLASSES[0];
-  world.addSeat(peer.id, cls, new RemoteInput(peer.id));
+  const cosmeticSeat = world.addSeat(peer.id, cls, new RemoteInput(peer.id));
+  cosmeticSeat.actor.cosmeticLoadout = sanitizeCosmeticLoadout(peer.cosmeticLoadout);
   // The joiner needs the current terrain immediately (not just on the next zone
   // change); re-broadcast it (harmless re-apply for existing peers).
   net.sendZone(serializeZone(world));
@@ -2268,6 +2273,12 @@ function onSessionMsg(msg: SessionMsg, from: string): void {
       // mid-run, else queue until our new run begins (flushRejoins).
       if (running && !world.gameOver) reseatPeer(from, msg.classId);
       else pendingRejoins.set(from, msg.classId);
+    } else if (msg.t === 'cosmetics') {
+      const cosmeticLoadout = sanitizeCosmeticLoadout(msg.loadout);
+      const peer = net.peers().find(p => p.id === from);
+      if (peer) peer.cosmeticLoadout = cosmeticLoadout;
+      const seat = world.seats.find(s => s.id === from);
+      if (seat) (seat.home ?? seat.actor).cosmeticLoadout = cosmeticLoadout;
     } else if (msg.t === 'action') {
       // A client's meta intent for its OWN seat — queue for this frame's drain
       // (applyAction runs host-side with the channel-bound `from` seat, so a
@@ -2304,7 +2315,10 @@ function drainMetaActions(): void {
  *  spin up their render shell for it (`newRun`) + ship the terrain. */
 function reseatPeer(peerId: string, classId: string): void {
   const cls = CLASSES.find(c => c.id === classId) ?? CLASSES[0];
-  if (!world.seats.some(s => s.id === peerId)) world.addSeat(peerId, cls, new RemoteInput(peerId));
+  if (!world.seats.some(s => s.id === peerId)) {
+    const cosmeticSeat = world.addSeat(peerId, cls, new RemoteInput(peerId));
+    cosmeticSeat.actor.cosmeticLoadout = sanitizeCosmeticLoadout(net.peers().find(p => p.id === peerId)?.cosmeticLoadout);
+  }
   // THE SEED THREAD: newRun carries the seed of the run we are seating them
   // INTO — deliberately not the one their welcome carried. This is our NEXT run
   // with a freshly rolled manifest, so a client re-using the join-time seed
@@ -2391,7 +2405,7 @@ function openLobby(): void {
         net = rtc;
         subscribeToHost();
         wireSession();                             // run-lifecycle channel (runEnd/newRun)
-        const { answer, joined } = await rtc.createAnswer(offer, { name: 'Joiner', classId });
+        const { answer, joined } = await rtc.createAnswer(offer, { name: 'Joiner', classId, cosmeticLoadout: account.cosmetics.loadout });
         const connected = joined.then(({ self, seed }) => startAsClient(cls, self, seed));
         return { answer, connected };
       } catch (e) { resetToLocal(); throw e; }     // a bad paste must revert net to LocalTransport

@@ -1,3 +1,4 @@
+import { sanitizeCosmeticLoadout } from '../meta/cosmetics';
 // ---------------------------------------------------------------------------
 // WebRtcTransport — host-authoritative co-op over WebRTC, with NO signaling
 // server. Manual COPY-PASTE signaling: the host generates an "invite" blob (its
@@ -25,7 +26,7 @@ const RTC_CONFIG: RTCConfiguration = {
 };
 
 type NetMsg =
-  | { t: 'join'; classId: string; name: string }
+  | { t: 'join'; classId: string; name: string; cosmeticLoadout?: import('../engine/cosmetics').CosmeticLoadout }
   | { t: 'welcome'; self: PlayerId; peers: PeerInfo[]; seed: number }
   | { t: 'input'; seat: PlayerId; input: PlayerInput }
   | { t: 'snap'; snap: StateSnapshot }
@@ -141,7 +142,7 @@ export class WebRtcTransport implements NetTransport {
       if (m.t === 'join' && !seatId) {
         seatId = 'p' + (this.nextSeat++);
         this.conns.set(seatId, ch);
-        const peer: PeerInfo = { id: seatId, name: m.name, classId: m.classId, isHost: false };
+        const peer: PeerInfo = { id: seatId, name: m.name, classId: m.classId, isHost: false, cosmeticLoadout: sanitizeCosmeticLoadout(m.cosmeticLoadout) };
         this.peerList.push(peer);
         // THE SEED THREAD: the joiner builds its World from OUR run seed, read
         // live (seedSource) so it is the seed of the run we are seating it in.
@@ -198,7 +199,7 @@ export class WebRtcTransport implements NetTransport {
 
   private setupClientChannel(ch: RTCDataChannel): void {
     this.hostCh = ch;
-    ch.onopen = (): void => ch.send(JSON.stringify({ t: 'join', classId: this.myInfo.classId, name: this.myInfo.name } satisfies NetMsg));
+    ch.onopen = (): void => ch.send(JSON.stringify({ t: 'join', classId: this.myInfo.classId, name: this.myInfo.name, cosmeticLoadout: this.myInfo.cosmeticLoadout } satisfies NetMsg));
     // A channel that closes under a SEATED client is a host that vanished — the
     // same ending as an explicit `hostLeft`, minus the goodbye.
     ch.onclose = (): void => this.signalHostLost();

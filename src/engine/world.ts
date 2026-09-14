@@ -1,3 +1,5 @@
+import { cosmeticSkillPaint, settleCosmetics } from '../meta/cosmetics';
+import { COSMETIC_CFG } from '../data/cosmetics';
 // ---------------------------------------------------------------------------
 // World — owns every entity and runs the unified skill pipeline.
 //
@@ -951,6 +953,7 @@ const HAUNT_TAGS = new Set([
 ]);
 
 interface Projectile {
+  cosmeticMotif?: import('./cosmetics').CosmeticMotif;
   /** PULSATION (projPulse): breathe the hit radius ±this fraction of
    *  radius0 on a fixed rhythm. */
   pulse?: number;
@@ -1428,6 +1431,7 @@ export interface EmergeRecord {
 type ComboCursor = { comboIdx?: number; comboAt?: number; comboSelf?: number };
 
 interface Flash {
+  cosmeticMotif?: import('./cosmetics').CosmeticMotif;
   departure?: RefugeDeparture;
   pos: Vec2; radius: number; color: string; life: number; maxLife: number;
   arc?: { facing: number; arcRad: number };
@@ -5219,6 +5223,11 @@ export class World {
     if (this.time < this.classClaimNextAt) return;
     this.classClaimNextAt = this.time + CLASS_WEB_CFG.sweepSec;
     if (!this.metaProgressionActive()) return;
+    const cosmeticRewards = settleCosmetics(this.account, this.ledgerView());
+    if (cosmeticRewards.length) {
+      this.accountDirty = true;
+      this.notice('New cosmetics unlocked in your Wardrobe.', '#c4b2f2', 16, 'world');
+    }
     const got = settleClassUnlocks(this.account, this.ledgerView());
     if (!got.length) return;
     this.accountDirty = true;
@@ -33376,6 +33385,8 @@ export class World {
     // Replenishment is a birth clock, never an echo/trigger/proc cast.
     if (replenishingDelivery(inst)) return false;
     const def = inst.def;
+    const cosmeticPaint = cosmeticSkillPaint(this, caster, def.id);
+    const cosmeticColor = cosmeticPaint.color ?? def.color;
     const extra = instanceMods(inst);
     SIM_TAP.current?.onCast?.(caster, inst, !!opts.noRepeat);
     // THE TOLL (SkillDef.selfCleanse): firing rings a portion of the
@@ -33845,7 +33856,7 @@ export class World {
           caster.mana = Math.min(caster.mana, caster.availableMaxMana());
           this.zones.push({
             pos: vec(caster.pos.x, caster.pos.y), radius: cfRadius,
-            caster, inst, color: def.color,
+            caster, inst, color: cosmeticColor,
             delay: 0, exploded: true,
             linger: 1, tickInterval: cfTick, tickTimer: 0,
             shape: 0, facing: caster.facing,
@@ -33869,7 +33880,7 @@ export class World {
             caster.pos.y + Math.sin(caster.facing) * dd), 10);
           this.zones.push({
             pos: at, radius: cfRadius,
-            caster, inst, color: def.color,
+            caster, inst, color: cosmeticColor,
             delay: 0, exploded: true,
             linger: (cf.duration ?? 10) * caster.sheet.get('effectDuration', tags, extra),
             tickInterval: cfTick, tickTimer: 0,
@@ -33883,6 +33894,10 @@ export class World {
       }
     }
 
+    if (cosmeticPaint.motif) this.flashes.push({
+      pos: { ...caster.pos }, radius: caster.radius * COSMETIC_CFG.cast.radiusScale, color: cosmeticColor,
+      life: COSMETIC_CFG.cast.lifetime, maxLife: COSMETIC_CFG.cast.lifetime, cosmeticMotif: cosmeticPaint.motif,
+    });
     switch (d.type) {
       case 'projectile': {
         let count = rollCount(d.count, Math.round(caster.sheet.get('projectileCount', tags, extra)))
@@ -33954,7 +33969,7 @@ export class World {
           st.anchorsAt = this.time;
           const anchorAt = this.clampPos(vec(aim.x, aim.y), 10);
           st.anchors.push({ x: anchorAt.x, y: anchorAt.y });
-          this.flashes.push({ pos: vec(anchorAt.x, anchorAt.y), radius: 16, color: def.color, life: 0.35, maxLife: 0.35 });
+          this.flashes.push({ pos: vec(anchorAt.x, anchorAt.y), radius: 16, color: cosmeticColor, life: 0.35, maxLife: 0.35 });
           if (st.anchors.length < caromCap) {
             this.text(anchorAt, `anchor ${st.anchors.length}/${caromCap}`, def.color, 11);
             break;
@@ -34108,7 +34123,7 @@ export class World {
             * Math.min(2, caster.sheet.get('effectDuration', tags, extra));
           this.zones.push({
             pos: vec(caster.pos.x, caster.pos.y), radius: sweepR,
-            caster, inst, color: def.color,
+            caster, inst, color: cosmeticColor,
             delay: 0, exploded: true,
             linger: travel / speed,
             tickInterval: 0, tickTimer: 0,
@@ -34119,7 +34134,7 @@ export class World {
             flatBonus,
           });
           this.flashes.push({
-            pos: vec(caster.pos.x, caster.pos.y), radius: sweepR * 0.6, color: def.color,
+            pos: vec(caster.pos.x, caster.pos.y), radius: sweepR * 0.6, color: cosmeticColor,
             life: 0.2, maxLife: 0.2, arc: { facing: caster.facing, arcRad: sweepArc },
           });
           // The wave's launch point is the sweep's area anchor.
@@ -34166,7 +34181,7 @@ export class World {
           if (!next) break;
           struck.add(next.id);
           this.resolveHit(caster, inst, next, useMult, 0, flatBonus);
-          this.flashes.push({ pos: vec(next.pos.x, next.pos.y), radius: 18, color: def.color, life: 0.15, maxLife: 0.15 });
+          this.flashes.push({ pos: vec(next.pos.x, next.pos.y), radius: 18, color: cosmeticColor, life: 0.15, maxLife: 0.15 });
         }
         if (!sweeping) {
           // Drawn == tested: a sigil-shaped swing flashes its SHAPE; the
@@ -34177,16 +34192,16 @@ export class World {
           // the crossjab knuckle streak), unset = the classic costume.
           this.flashes.push(banded
             ? {
-              pos: vec(bandC.x, bandC.y), radius: bandGeo!.halfWidth, color: def.color,
+              pos: vec(bandC.x, bandC.y), radius: bandGeo!.halfWidth, color: cosmeticColor,
               life: 0.18, maxLife: 0.18, shape: AOE_SHAPE.band, facing: caster.facing, fx: d.fx,
             }
             : swingShape >= 1 && swingShape <= 2
             ? {
-              pos: vec(caster.pos.x, caster.pos.y), radius: reach, color: def.color,
+              pos: vec(caster.pos.x, caster.pos.y), radius: reach, color: cosmeticColor,
               life: 0.18, maxLife: 0.18, shape: swingShape, facing: caster.facing, fx: d.fx,
             }
             : {
-              pos: vec(caster.pos.x, caster.pos.y), radius: reach, color: def.color,
+              pos: vec(caster.pos.x, caster.pos.y), radius: reach, color: cosmeticColor,
               life: 0.18, maxLife: 0.18, arc: { facing: caster.facing, arcRad }, fx: d.fx,
             });
           // Melee 'aoe' swings have an area too (Cleave + No Man's Land
@@ -34293,13 +34308,13 @@ export class World {
             this.flashes.push({
               pos: vec(origin.x, origin.y),
               radius: dist(origin, nb.pos) + nb.r,
-              color: def.color, life: 0.22, maxLife: 0.22,
+              color: cosmeticColor, life: 0.22, maxLife: 0.22,
               beam: true, facing: angleTo(origin, nb.pos),
             });
           }
         }
         this.flashes.push({
-          pos: vec(origin.x, origin.y), radius, color: def.color,
+          pos: vec(origin.x, origin.y), radius, color: cosmeticColor,
           life: 0.3, maxLife: 0.3, shape, facing: caster.facing,
           edgeFrac: d.edgeOnly,
         });
@@ -34359,7 +34374,7 @@ export class World {
           }
           this.flashes.push({
             pos: vec(friendly.pos.x, friendly.pos.y), radius: friendly.radius + 10,
-            color: def.color, life: 0.25, maxLife: 0.25,
+            color: cosmeticColor, life: 0.25, maxLife: 0.25,
           });
           break;
         }
@@ -34404,7 +34419,7 @@ export class World {
         }
         this.flashes.push({
           pos: vec(origin.x, origin.y), radius: d.splash ? d.splash * aoeScale : 26,
-          color: def.color, life: 0.25, maxLife: 0.25,
+          color: cosmeticColor, life: 0.25, maxLife: 0.25,
         });
         fieldAt = vec(origin.x, origin.y);
         break;
@@ -34470,18 +34485,18 @@ export class World {
             vec(caster.pos.x + Math.cos(caster.facing) * range,
                 caster.pos.y + Math.sin(caster.facing) * range), caster.tier));
           this.flashes.push({
-            pos: vec(caster.pos.x, caster.pos.y), radius: beamLen, color: def.color,
+            pos: vec(caster.pos.x, caster.pos.y), radius: beamLen, color: cosmeticColor,
             life: 0.22, maxLife: 0.22, beam: true, facing: caster.facing,
           });
         } else if (sigiled) {
           // The sigil's figure IS the flash (drawn == tested).
           this.flashes.push({
-            pos: vec(sigilC.x, sigilC.y), radius: sigilR, color: def.color,
+            pos: vec(sigilC.x, sigilC.y), radius: sigilR, color: cosmeticColor,
             life: 0.25, maxLife: 0.25, shape: coneSigil, facing: sigilF,
           });
         } else {
           this.flashes.push({
-            pos: vec(caster.pos.x, caster.pos.y), radius: range, color: def.color,
+            pos: vec(caster.pos.x, caster.pos.y), radius: range, color: cosmeticColor,
             life: 0.25, maxLife: 0.25, arc: { facing: caster.facing, arcRad },
             edgeFrac: d.edgeOnly,
           });
@@ -34745,7 +34760,7 @@ export class World {
           for (const pt of pts) {
             this.zones.push({
               pos: this.clampPos(pt, 10), radius: d.radius * aoeScale * (sizeOver?.from ?? 1),
-              caster, inst, color: def.color,
+              caster, inst, color: cosmeticColor,
               delay: d.delay ?? 0, exploded: (d.delay ?? 0) <= 0,
               impactDress: d.impactDress,
               linger: pulseLinger((d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra)),
@@ -34787,7 +34802,7 @@ export class World {
         const fillTime = d.fillTime ?? (d.lingerDuration ?? 1);
         this.zones.push({
           pos: at, radius: d.radius * aoeScale * (sizeOver?.from ?? 1),
-          caster, inst, color: def.color,
+          caster, inst, color: cosmeticColor,
           marker: d.marker ? true : undefined,
           // noImpact (Scythe Arc): the zone begins LIVE — no opening hit,
           // no telegraph pop; the linger does all the cutting.
@@ -34973,7 +34988,7 @@ export class World {
               this.zones.push({
                 pos: vec(p.x, p.y),
                 radius: d.radius * aoeScale * Math.pow(scaleStep, p.k) * (sizeOver?.from ?? 1),
-                caster, inst, color: def.color,
+                caster, inst, color: cosmeticColor,
                 delay: delayBase + p.beatAt, exploded: false,
                 linger: pulseLinger((d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra)),
                 linger0: pulseLinger((d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra)),
@@ -35105,7 +35120,7 @@ export class World {
               cs2.amalgamFed = (cs2.amalgamFed ?? 0) + 1;
               this.flashes.push({
                 pos: vec(meal.pos.x, meal.pos.y), radius: meal.radius + 10,
-                color: def.color, life: 0.25, maxLife: 0.25,
+                color: cosmeticColor, life: 0.25, maxLife: 0.25,
               });
               this.kill(meal, true);
               this.text(caster.pos, `fed ${cs2.amalgamFed}/${def.amalgam.cap}`, def.color, 11);
@@ -35279,7 +35294,7 @@ export class World {
         if (fuse > 0) {
           this.flashes.push({
             pos: vec(at.x, at.y), radius: d.areaRadius * aoeScale,
-            color: def.color, life: fuse, maxLife: fuse, edgeFrac: 0.94,
+            color: cosmeticColor, life: fuse, maxLife: fuse, edgeFrac: 0.94,
           });
         }
         // SPARKFIELD (atEnemies): strikes plant UNDER the enemies standing
@@ -35339,7 +35354,7 @@ export class World {
               ? vec(under[i].x, under[i].y)
               : vec(at.x + Math.cos(ang) * r, at.y + Math.sin(ang) * r), 10),
             radius: d.hitRadius * aoeScale,
-            caster, inst, color: def.color,
+            caster, inst, color: cosmeticColor,
             delay: zDelay,
             // SKY-BORNE (StormDelivery.sky): the strikes are weather — they
             // hit EVERY side (the caster's own ranks included), pass over
@@ -35548,8 +35563,8 @@ export class World {
         // Afterspray support — pays at this end alone).
         this.moveBlast(caster, inst, caster.pos, 'depart');
         if (d.delay && d.delay > 0) {
-          this.pendingBlinks.push({ actor: caster, dest, timer: d.delay, color: def.color, inst });
-          this.flashes.push({ pos: vec(dest.x, dest.y), radius: caster.radius * 1.6, color: def.color, life: d.delay, maxLife: d.delay });
+          this.pendingBlinks.push({ actor: caster, dest, timer: d.delay, color: cosmeticColor, inst });
+          this.flashes.push({ pos: vec(dest.x, dest.y), radius: caster.radius * 1.6, color: cosmeticColor, life: d.delay, maxLife: d.delay });
         } else {
           this.teleportActor(caster, dest, def.color, undefined, caster.tier);
           if (d.behindTarget && targetInfo?.actor) {
@@ -35577,7 +35592,7 @@ export class World {
           this.strikeSurfaces(caster, caster.pos, radius);
           this.flashes.push({
             pos: vec(caster.pos.x, caster.pos.y), radius,
-            color: def.color, life: 0.3, maxLife: 0.3,
+            color: cosmeticColor, life: 0.3, maxLife: 0.3,
           });
           break;
         }
@@ -35670,7 +35685,7 @@ export class World {
             caster.pos.x + Math.cos(caster.facing) * dd,
             caster.pos.y + Math.sin(caster.facing) * dd), 10);
           st.markPos = { x: at.x, y: at.y };
-          this.flashes.push({ pos: vec(at.x, at.y), radius: 20, color: def.color, life: 0.4, maxLife: 0.4 });
+          this.flashes.push({ pos: vec(at.x, at.y), radius: 20, color: cosmeticColor, life: 0.4, maxLife: 0.4 });
           this.text(at, 'marked', def.color, 11, 'combat');
         }
         break;
@@ -35776,7 +35791,7 @@ export class World {
         this.strikeSurfaces(caster, at, radius, (p, r) =>
           inAoe(at, radius, shape, caster.facing, p, r));
         this.flashes.push({
-          pos: at, radius, color: def.color,
+          pos: at, radius, color: cosmeticColor,
           life: 0.35, maxLife: 0.35, shape, facing: caster.facing,
         });
         this.spawnAftershocks(caster, inst, at, radius, shape);
@@ -35997,7 +36012,7 @@ export class World {
           }
           if (sent > 0) {
             this.flashes.push({
-              pos: vec(mark.x, mark.y), radius: 40, color: def.color,
+              pos: vec(mark.x, mark.y), radius: 40, color: cosmeticColor,
               life: 0.3, maxLife: 0.3,
             });
           } else if (balked > 0) {
@@ -36096,7 +36111,7 @@ export class World {
             caster.pos.y + Math.sin(ang) * reach), c.radius, undefined, { mover: c });
           c.facing = ang;
           c.casting = null; c.push = null;
-          this.flashes.push({ pos: { ...c.pos }, radius: 28, color: def.color, life: 0.25, maxLife: 0.25 });
+          this.flashes.push({ pos: { ...c.pos }, radius: 28, color: cosmeticColor, life: 0.25, maxLife: 0.25 });
           // Keep the same actor, payload, health, lifespan, timers, useLock and
           // cooldowns. No arrival effect, death event, refund or replacement.
         }
@@ -36248,7 +36263,7 @@ export class World {
           this.text(vec(caster.pos.x, caster.pos.y - 22), drawn + ' drawn', def.color, 13);
           this.flashes.push({
             pos: vec(caster.pos.x, caster.pos.y), radius,
-            color: def.color, life: 0.3, maxLife: 0.3,
+            color: cosmeticColor, life: 0.3, maxLife: 0.3,
           });
         } else {
           this.failNote(caster, def.id + ':nothing', 'nothing to draw');
@@ -36362,7 +36377,7 @@ export class World {
             remaining: CORPSE_CFG.duration,
           });
         }
-        this.flashes.push({ pos: vec(aim.x, aim.y), radius: 44, color: def.color, life: 0.3, maxLife: 0.3 });
+        this.flashes.push({ pos: vec(aim.x, aim.y), radius: 44, color: cosmeticColor, life: 0.3, maxLife: 0.3 });
       }
       // GATHER THE DEAD (dragCorpses): the graveyard walks — every corpse in
       // reach steps to the mark and piles TIGHT (inside one corpse-find's
@@ -36381,7 +36396,7 @@ export class World {
           c.pos = this.clampPos(vec(aim.x + Math.cos(k * 2.1) * r, aim.y + Math.sin(k * 2.1) * r), 8);
         }
         if (gathered) {
-          this.flashes.push({ pos: vec(aim.x, aim.y), radius: 40, color: def.color, life: 0.3, maxLife: 0.3 });
+          this.flashes.push({ pos: vec(aim.x, aim.y), radius: 40, color: cosmeticColor, life: 0.3, maxLife: 0.3 });
         } else {
           this.failNote(caster, def.id + ':nobodies', 'no dead to gather');
         }
@@ -36434,7 +36449,7 @@ export class World {
         this.zones.push({
           pos: vec(origin.x, origin.y),
           radius: fx.radius * aoeScale,
-          caster, inst, color: def.color,
+          caster, inst, color: cosmeticColor,
           delay: 0, exploded: true,
           linger: fx.duration * durScale,
           tickInterval: fx.tickInterval ?? 0.5, tickTimer: 0,
@@ -36780,6 +36795,7 @@ export class World {
       patrol?: Vec2[];
     }): void {
     const def = inst.def;
+    const cosmeticPaint = cosmeticSkillPaint(this, caster, def.id);
     // (Skill-mode audit: projectile-family fields — pierce/forks/fire —
     // are off the M1 whitelist; the piercing_arrow/fireball waves adopt
     // this read behind the view when they land.)
@@ -36845,7 +36861,8 @@ export class World {
       pierce: (d.pierce ?? 0) + Math.round(caster.sheet.get('pierceCount', tags, extra)),
       chains: Math.round(caster.sheet.get('chainCount', tags, extra)),
       hits: new Map(),
-      caster, inst, color: def.color,
+      caster, inst, color: cosmeticPaint.color ?? def.color,
+      cosmeticMotif: cosmeticPaint.motif,
       shape: d.shape ?? 'circle',
       mult: opts?.mult ?? 1,
       flat: opts?.flat,

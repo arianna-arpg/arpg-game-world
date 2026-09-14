@@ -18,6 +18,8 @@
 // ---------------------------------------------------------------------------
 
 import { SAVE_COMPATIBILITY } from './saveCompatibility';
+import { emptyCosmetics, type CosmeticState } from '../engine/cosmetics';
+import { sanitizeCosmetics } from './cosmetics';
 import type { CraftLore } from '../engine/crafting';
 import { CLASSES } from '../data/classes';
 import { COMBAT_DEEDS } from '../data/classdeeds';
@@ -408,6 +410,7 @@ export interface PackagePref {
 
 /** Runtime account (Sets for O(1) membership). Survives death + World recreation. */
 export interface Account {
+  cosmetics: CosmeticState;
   credits: number;
   lifetimeCredits: number;
   level: number;
@@ -483,6 +486,7 @@ export interface Account {
 
 /** Serializable form (Sets → arrays) written to localStorage. */
 export interface AccountSave {
+  cosmetics?: CosmeticState;
   schemaVersion: number;
   runVersion?: number;
   credits: number;
@@ -517,6 +521,7 @@ export interface AccountSave {
 
 export function makeAccount(): Account {
   return {
+    cosmetics: emptyCosmetics(),
     credits: 0, lifetimeCredits: 0, level: 0,
     invested: {},
     runRecords: [],
@@ -544,6 +549,7 @@ export function makeAccount(): Account {
 
 export function serializeAccount(a: Account): AccountSave {
   return {
+    cosmetics: sanitizeCosmetics(a.cosmetics),
     schemaVersion: SCHEMA_VERSION,
     runVersion: SAVE_COMPATIBILITY.run,
     credits: a.credits, lifetimeCredits: a.lifetimeCredits, level: a.level,
@@ -585,6 +591,7 @@ export function deserializeAccount(s: AccountSave): Account | null {
   }
   return {
     credits: s.credits ?? 0,
+    cosmetics: sanitizeCosmetics(s.cosmetics),
     lifetimeCredits: s.lifetimeCredits ?? 0,
     level: s.level ?? 0,
     // Positive whole numbers only — a malformed entry is dropped, never a wipe.

@@ -94,6 +94,12 @@ registerMenuEntry({
   blurb: 'Open a passage to town. Linger at it to travel, and use its other end to return.',
 });
 
+registerMenuEntry({
+  id: 'wardrobe', label: 'Wardrobe', icon: 'sheet', group: 'hero', verb: 'wardrobe', order: 6,
+  blurb: 'Your account’s skins, skill colors, companions, footprints and avatars.',
+  ...sealed('character'),
+});
+
 // --- the stations (exist by unlock, open at the station) ---------------------
 
 const at = (where: string): string => `Stand ${where} to open this.`;

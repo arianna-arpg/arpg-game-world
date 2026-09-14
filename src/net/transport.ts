@@ -33,6 +33,7 @@ export type { StateSnapshot, ZoneMsg };
 
 /** A peer in the session (a hero seat's owner). */
 export interface PeerInfo {
+  cosmeticLoadout?: import('../engine/cosmetics').CosmeticLoadout;
   id: PlayerId;
   name: string;
   classId: string;
@@ -53,6 +54,7 @@ export interface PeerInfo {
 export type SessionMsg =
   | { t: 'runEnd' }
   | { t: 'rejoin'; classId: string }
+  | { t: 'cosmetics'; loadout: import('../engine/cosmetics').CosmeticLoadout }
   | { t: 'newRun'; seat: PlayerId; seed: number }
   | { t: 'hostLeft' }
   | { t: 'action'; action: MetaAction };
