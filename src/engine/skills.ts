@@ -576,6 +576,7 @@ export function guardBashSpec(inst: SkillInstance): GuardBashSpec | undefined {
 /** Every charge tap riding an instance: the skill's own + socket grafts. */
 export function instanceChargeGain(inst: SkillInstance): ChargeGainSpec[] {
   const out = [...(inst.def.chargeGain ?? [])];
+  for (const id of inst.treeNodes ?? []) out.push(...(treeNodeOf(inst.def, id)?.chargeGain ?? []));
   for (const s of hostSockets(inst)) if (s.def.chargeGain) out.push(...s.def.chargeGain);
   return out;
 }
@@ -1012,11 +1013,14 @@ export interface FollowUpSpec {
   chance?: number;
   /** Seconds after the host resolves (default 0.35 — a follow-through beat). */
   delay?: number;
+  /** Flask-tree payload damage scales with the charges actually paid. */
+  perCharge?: boolean;
 }
 
 /** Every follow-up riding an instance: the skill's own plus socketed gems'. */
 export function instanceFollowUps(inst: SkillInstance): FollowUpSpec[] {
   const out: FollowUpSpec[] = [];
+  for (const id of inst.treeNodes ?? []) out.push(...(treeNodeOf(inst.def, id)?.followUps ?? []));
   if (inst.def.followUp) out.push(inst.def.followUp);
   for (const s of hostSockets(inst)) if (s.def.followUp) out.push(s.def.followUp);
   return out;
@@ -4787,6 +4791,9 @@ export type SkillTreeKind = 'minor' | 'major' | 'keystone';
 export type TreeBuffPatch = { id: string } & Partial<Pick<BuffEffect,
   'mods' | 'duration' | 'affects' | 'radius' | 'clearOnHit' | 'consumeOn' | 'nextHit'>>;
 
+/** Utility payloads resolve through the ordinary self/ally effect lanes. */
+export type TreeUtilityEffect = RestoreOverTimeEffect | RestoreEffect | CleanseEffect | HealEffect | AbsorbEffect | WardEffect;
+
 /** One complete InvocationTreeSpec belongs on an exclusive identity root. */
 export interface InvocationTreeSpec {
   untypedRunes: RuneId[];
@@ -4873,6 +4880,10 @@ export interface SkillTreeNode {
   kind?: SkillTreeKind;
   /** Temporary buff payloads; modifiers append per rank, scalars replace. */
   buffs?: TreeBuffPatch[];
+  /** Additive flask-tree utility cargo and owner-local charge clocks. */
+  utilityEffects?: TreeUtilityEffect[];
+  chargeGain?: ChargeGainSpec[];
+  followUps?: FollowUpSpec[];
   /** Additional resource pumps while this instance is held/toggled. They use
    * the ordinary conduit floors, destination limits and attribution context. */
   conduits?: ConduitSpec[];
@@ -5114,6 +5125,8 @@ export function instanceEffects(inst: SkillInstance): SkillEffect[] {
   const recallImpales = instanceTreeOver(inst)?.recallImpales;
   if (recallImpales) out = (out ?? inst.def.effects).map(fx => fx.type === 'recallImpales' ? { ...fx, ...recallImpales } : fx);
   for (const id of inst.treeNodes) {
+    const utility = treeNodeOf(inst.def, id)?.utilityEffects;
+    if (utility?.length) (out ??= [...inst.def.effects]).push(...utility);
     for (const patch of treeNodeOf(inst.def, id)?.buffs ?? []) {
       out ??= [...inst.def.effects];
       const index = out.findIndex(fx => fx.type === 'buff' && fx.id === patch.id);
@@ -5713,6 +5726,8 @@ export function skillRarityFloor(weights: Partial<Record<SkillRarity, number>>):
 
 /** A skill as OWNED by an actor: definition + level + socketed supports. */
 export interface SkillInstance {
+  /** Flask follow-up provenance; transient and never serialized. */
+  followUpHost?: SkillInstance;
   /** Transient invocationHost provenance; released fields retire with this exact host. */
   invocationHost?: SkillInstance;
   /** Transient payload provenance: deferred/non-projectile proc hits keep their depth. */

@@ -1277,7 +1277,7 @@ export class Actor {
    *  cost paid, the self-payload deferred — released whole by the first
    *  life-damage event (World.releasePrimedPours). One entry per banked
    *  press; an entry whose skill leaves the bar dissolves at release. */
-  primedPours: { skillId: string; chargesSpent: number }[] = [];
+  primedPours: { skillId: string; chargesSpent: number; aim?: Vec2 }[] = [];
   /** USE-CHARGE banks per skill id (SkillDef.useCharges): the count and
    *  the running recovery timer. Lazily seeded FULL on first query.
    *  `reloading` marks a magazine mid-cycle (the emptying press stamped
@@ -1843,6 +1843,9 @@ export class Actor {
    *  fractional decay/drain accumulator, the per-second tap accumulator,
    *  and an active drain rate (Bloodlust's one-way burn). */
   private chargeState = new Map<string, { idle: number; acc: number; tick: number; drain?: number }>();
+  clearTreeChargeClocks(inst: SkillInstance): void {
+    for (const key of this.chargeState.keys()) if (key.startsWith('treeTap:' + inst.def.id + ':')) this.chargeState.delete(key);
+  }
   /** Last charge count synced into the sheet, per charge (skip no-op syncs
    *  — setSource clears the stat cache, so sync only on real change). */
   private chargeModCount = new Map<string, number>();
@@ -2451,6 +2454,7 @@ export class Actor {
     // distance (moveAcc, fed by World.moveActor), each on its own meter;
     // channelSecond clocks only advance while a channel/guard is HELD.
     const walked = this.moveAcc;
+    const treeTapKeys = new Set<string>();
     for (const inst of this.skills) {
       if (!inst) continue;
       const specs = instanceChargeGain(inst);
@@ -2460,7 +2464,11 @@ export class Actor {
           && !this.summonToggles.has(inst.def.id)) continue;
         // Distinct meters per (skill, charge, tap): a 'second' clock and a
         // 'move' odometer on the same charge must never share an accumulator.
-        const key = spec.charge + ':' + spec.on + ':' + inst.def.id;
+        const isTreeTap = !(inst.def.chargeGain ?? []).includes(spec)
+          && !hostSockets(inst).some(s => s.def.chargeGain?.includes(spec));
+        const key = isTreeTap ? 'treeTap:' + inst.def.id + ':' + JSON.stringify(spec)
+          : spec.charge + ':' + spec.on + ':' + inst.def.id;
+        if (isTreeTap) treeTapKeys.add(key);
         const st = this.chargeState.get(key) ?? { idle: 0, acc: 0, tick: 0 };
         this.chargeState.set(key, st);
         if (spec.on === 'channelSecond') {
@@ -2479,6 +2487,9 @@ export class Actor {
           this.gainCharge(spec.charge, spec.amount, spec.max, inst);
         }
       }
+    }
+    for (const key of this.chargeState.keys()) {
+      if (key.startsWith('treeTap:') && !treeTapKeys.has(key)) this.chargeState.delete(key);
     }
     this.moveAcc = 0;
   }

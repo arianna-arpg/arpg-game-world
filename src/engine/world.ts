@@ -2758,7 +2758,7 @@ export class World {
   pendingRespawns: PendingRespawn[] = [];
   pendingDetonations: { mine: Actor; timer: number }[] = [];
   /** Scheduled follow-through casts (FollowUpSpec) counting down to fire. */
-  pendingFollowUps: { caster: Actor; inst: SkillInstance; aim: Vec2; timer: number }[] = [];
+  pendingFollowUps: { caster: Actor; inst: SkillInstance; aim: Vec2; timer: number; dmgMult?: number }[] = [];
   /** Telegraphed enemy death-bursts mid-coalesce / mid-flight (the implode + tracking orb). */
   deathBursts: DeathBurst[] = [];
   pendingBlinks: PendingBlink[] = [];
@@ -22434,6 +22434,7 @@ export class World {
         x !== undefined ? 'no room there' : 'no room in the bag');
       return false;
     }
+    if (inst.def.tags.includes('flask')) this.clearTreeFields(p, inst);
     m.knownSkills.delete(skillId);
     for (let i = 0; i < p.skills.length; i++) {
       if (p.skills[i]?.def.id === skillId) p.skills[i] = null;
@@ -28596,6 +28597,7 @@ export class World {
     for (const inst of touched) {
       if (!inst || seen.has(inst)) continue;
       seen.add(inst);
+      if (inst.def.tags.includes('flask') && !seat.actor.skills.includes(inst)) this.clearTreeFields(seat.actor, inst);
       this.resyncMinionSupports(inst);
     }
   }
@@ -33153,6 +33155,7 @@ export class World {
       const primed = caster.primedPourOpen(inst);
       // Instant: resolves on press. A stepsFromBank flicker resolves once
       // per BANKED round (movement deliveries stagger into the train).
+      const reflexFacing = caster.facing;
       this.executeSkill(caster, inst, aim, {
         targetInfo: targetInfo ?? undefined, dmgMult: baseMult, paidCost: paid,
         chargesSpent: cc.consumed,
@@ -33160,6 +33163,7 @@ export class World {
         ventRounds,
         primed: primed || undefined,
       });
+      if (pierced) caster.facing = reflexFacing;
       // A REFLEX that pierced paces on its own clock and stamps NO recovery
       // — it must never lengthen the action it slipped through. Hold combos
       // and idle presses keep the classic instant-use lock.
@@ -33718,7 +33722,7 @@ export class World {
     // thirstless at true full by her ruling — the press that could bank
     // banks, it never spills.
     if (opts.primed) {
-      caster.primedPours.push({ skillId: def.id, chargesSpent: opts.chargesSpent ?? 0 });
+      caster.primedPours.push({ skillId: def.id, chargesSpent: opts.chargesSpent ?? 0, aim: vec(aim.x, aim.y) });
       // Copy FLAGGED for Arianna's word (the smallest honest float).
       this.text(caster.pos, 'primed', def.color, 11, 'combat');
       return true;
@@ -36592,14 +36596,7 @@ export class World {
     // never follow through (the standard real-use gate), and a follow-up
     // never chains follow-ups of its own (noFollowUp rides the fire).
     if (!opts.noRepeat && !opts.noCooldown && !opts.noFollowUp && !caster.construct) {
-      for (const fu of instanceFollowUps(inst)) {
-        if (!SKILLS[fu.skillId]) continue;
-        if (fu.chance !== undefined && !chance(fu.chance)) continue;
-        this.pendingFollowUps.push({
-          caster, inst: this.mintMetaInstance(caster, inst, fu.skillId),
-          aim: vec(aim.x, aim.y), timer: fu.delay ?? 0.35,
-        });
-      }
+      this.queueFollowUps(caster, inst, aim, opts.chargesSpent ?? 0);
     }
     // SHADOW MIMIC: living clones replay this use from where they stand.
     // Channel pulses ARE eligible — the per-clone throttle samples a beam
@@ -40569,8 +40566,19 @@ export class World {
           this.startRestoreStream(a, a, inst, fx, b.chargesSpent, pourCrit);
         } else if (fx.type === 'buff') {
           this.applyBuffEffect(a, inst, fx, durScale, 1);
+        } else if (fx.type === 'cleanse') {
+          this.cleanseActor(a, fx.count ?? 2);
+        } else if (fx.type === 'restore') {
+          this.applyRestore(a, fx, { tags: inst.def.tags });
+        } else if (fx.type === 'heal') {
+          this.applyHealChained(a, inst, a, fx, 1);
+        } else if (fx.type === 'absorb') {
+          this.grantAbsorb(a, skillAbsorbAmount(a, inst, fx.amount), fx.duration * durScale);
+        } else if (fx.type === 'ward') {
+          a.gainWard(fx.amount * (fx.perCharge ? Math.max(1, b.chargesSpent) : 1));
         }
       }
+      this.queueFollowUps(a, inst, b.aim ?? a.pos, b.chargesSpent);
     }
   }
 
@@ -53824,6 +53832,20 @@ export class World {
   /** Follow-through casts (FollowUpSpec) firing a beat after their swing —
    *  free executions at the stored aim; a dead swinger's follow-through
    *  dies with them (the blade drops mid-arc). */
+  private queueFollowUps(caster: Actor, host: SkillInstance, aim: Vec2, chargesSpent: number): void {
+    for (const fu of instanceFollowUps(host)) {
+      if (!SKILLS[fu.skillId] || (fu.chance !== undefined && !chance(fu.chance))) continue;
+      let payload = this.mintMetaInstance(caster, host, fu.skillId);
+      if (host.def.tags.includes('flask')) {
+        // Snapshot this drink's investment, once. No sockets/clock/trigger cargo
+        // boards the child. Generated hits cannot shed orbs or retap hit fuel.
+        payload = { ...payload, extraMods: instanceMods(host), followUpHost: host, procChainDepth: 1 };
+      }
+      this.pendingFollowUps.push({ caster, inst: payload, aim: vec(aim.x, aim.y),
+        timer: fu.delay ?? 0.35, dmgMult: fu.perCharge ? Math.max(1, chargesSpent) : 1 });
+    }
+  }
+
   private updateFollowUps(dt: number): void {
     for (let i = this.pendingFollowUps.length - 1; i >= 0; i--) {
       const p = this.pendingFollowUps[i];
@@ -53831,8 +53853,11 @@ export class World {
       if (p.timer > 0) continue;
       this.pendingFollowUps.splice(i, 1);
       if (p.caster.dead) continue;
+      if (p.inst.followUpHost && !p.caster.skills.includes(p.inst.followUpHost)) continue;
+      const followUpFacing = p.caster.facing;
       this.executeSkill(p.caster, p.inst, p.aim,
-        { noCooldown: true, noRepeat: true, noFollowUp: true });
+        { noCooldown: true, noRepeat: true, noFollowUp: true, dmgMult: p.dmgMult });
+      if (p.inst.followUpHost) p.caster.facing = followUpFacing;
     }
   }
 
@@ -55048,7 +55073,9 @@ export class World {
   /** Per-application identity lets respec retire only this caster's blessing,
    * including allied recipients, without stripping another caster's refresh. */
   private grantTreeBuff(caster: Actor, target: Actor, inst: SkillInstance, fx: BuffEffect, durScale: number): void {
-    if (!inst.treeNodes?.some(id => treeNodeOf(inst.def, id)?.buffs?.length)) {
+    const followUpHost = inst.followUpHost;
+    inst = inst.followUpHost ?? inst;
+    if (!followUpHost && !inst.treeNodes?.some(id => treeNodeOf(inst.def, id)?.buffs?.length)) {
       target.addBuff(fx, durScale, 0, inst.def.tags);
       return;
     }
@@ -55059,7 +55086,10 @@ export class World {
 
   /** Retire fields that captured the previous allocation. */
   private clearTreeFields(caster: Actor, inst: SkillInstance): void {
-    const ownsTreePayload = (candidate: SkillInstance) => candidate === inst || candidate.invocationHost === inst;
+    const ownsTreePayload = (candidate: SkillInstance) => candidate === inst || candidate.invocationHost === inst || candidate.followUpHost === inst;
+    this.pendingFollowUps = this.pendingFollowUps.filter(p => p.caster !== caster || !ownsTreePayload(p.inst));
+    caster.primedPours = caster.primedPours.filter(p => p.skillId !== inst.def.id);
+    caster.clearTreeChargeClocks(inst);
     if (inst.def.invokes) caster.runes = []; // invocationHost cannot carry old alphabet fuel through a respec
     // quietTreeRelease retires captured aura bonuses and reservations without
     // paying a release attack. Existing resource debts still settle normally.

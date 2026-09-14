@@ -1,3 +1,4 @@
+import { flaskChargeBanks, restoreFlaskChargeBanks } from '../engine/flaskState';
 // ---------------------------------------------------------------------------
 // SNAPSHOT — the host→client render-state wire format + (de)serialization.
 //
@@ -122,6 +123,8 @@ export interface ActorW {
    *  only (the runes idiom: one derived label per hotbar glint;
    *  chargesSpent and the release live host-side, host-authoritative). */
   pp?: string[];
+  /** Host-owned flask ammunition for the remote hotbar. */
+  fq?: Record<string, number>;
   /** COMBO GRAMMAR chips, host-computed like the boss bar (clients hold no
    *  ring): per equipped rule [id, lit, len, glow]. Players only. */
   cb?: [string, number, number, number][];
@@ -645,6 +648,7 @@ function actorToW(a: Actor): ActorW {
     if (a.runes.length) w.rn = a.runes.slice();
     // THE PRIMED POUR's glints (pourPrime) — ids only, the runes idiom.
     if (a.primedPours.length) w.pp = a.primedPours.map(e => e.skillId);
+    w.fq = flaskChargeBanks(a);
     const cb = COMBO_HUD_OF(a);
     if (cb?.length) w.cb = cb;
     if (a.mimicBank?.length) {
@@ -1153,6 +1157,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     // glints; chargesSpent never crosses — the release is host law.
     if (aw.pp?.length) a.primedPours = aw.pp.map(id => ({ skillId: id, chargesSpent: 0 }));
     else if (a.primedPours.length) a.primedPours = [];
+    if (aw.seat) restoreFlaskChargeBanks(a, aw.fq, true);
     a.comboHud = aw.cb?.map(([id, lit, len, glow]) => ({ id, lit, len, glow }));
     // Mimic bank mirror (render/UI only — capture clocks stay host-side,
     // so mirrored entries carry at:0 and the client never prunes them).

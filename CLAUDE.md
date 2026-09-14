@@ -21,6 +21,13 @@ three-class scope and next batches are documented in
 `docs/design/class-starting-skill-trees.md`; `balance/probe_startertrees.ts`
 covers the complete opening bars.
 
+The six flask trees live in `src/data/flaskTrees.ts`, with owned drink payloads
+in `flaskSkills.ts` and durable ammunition in `engine/flaskState.ts`.
+`docs/design/flask-skill-trees.md` records all nodes, empty-bank economies,
+support inheritance, primed cargo and balance evidence. Verification is
+`balance/probe_flasktrees.ts`, `balance/audit_flasktrees.ts`, and the isolated
+hidden `balance/flask-ui.cjs` harness (run the probe and build first).
+
 Gorer carry bounds and Gloomling motion-based shake-off tuning live in
 `docs/design/gorer-gloomling-balance.md`; `balance/probe_clingbalance.ts`
 covers the reusable `maxCarryDistance`, `releaseGrace` and `motionShake` levers.

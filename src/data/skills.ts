@@ -1,3 +1,5 @@
+import { FLASK_TREES } from './flaskTrees';
+import { FLASK_SKILLS } from './flaskSkills';
 import { DISCIPLINE_STARTER_TREES } from './disciplineStarterTrees';
 import { BOND_STARTER_TREES } from './bondStarterTrees';
 import { RUNEWEAVER_STARTER_TREES } from './runeweaverStarterTrees';
@@ -42,6 +44,7 @@ export const SKILLS: Record<string, SkillDef> = {
   ...PACT_SKILLS,
   ...ROOTWILD_SKILLS,
   ...WORKSHOP_SKILLS,
+  ...FLASK_SKILLS,
 
   // ======================= Mimicry (the blue-mage lane) ====================
   // THE SLOT and its cycle payload (engine/mimic.ts — capture is the
@@ -9976,6 +9979,7 @@ export const SKILLS: Record<string, SkillDef> = {
   //    or hang passive mods off it.
 
   life_flask: {
+    tree: FLASK_TREES.life_flask,
     id: 'life_flask', name: 'Life Flask',
     // Copy FLAGGED for Arianna's word (the two-stream rewrite, 2026-08-08).
     description: 'Holds up to 3 charges; every life orb you pick up banks one. Drinking spends'
@@ -10013,6 +10017,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   mana_flask: {
+    tree: FLASK_TREES.mana_flask,
     id: 'mana_flask', name: 'Mana Flask',
     description: 'Banks one charge per mana orb you pick up, holding up to 3. Drinking spends a'
       + ' charge to restore mana over 3 seconds, deeper as the skill levels; a REFLEX press'
@@ -10039,6 +10044,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   catalyst_flask: {
+    tree: FLASK_TREES.catalyst_flask,
     id: 'catalyst_flask', name: 'Catalyst Flask',
     description: 'Any orb you pick up feeds this flask, banking up to 6 charges. Drinking'
       + ' consumes the whole bank (at least 2): every charge adds to a pour of life and mana'
@@ -10077,6 +10083,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // REFLEXES: the whole family answers mid-anything, by contract.
 
   quicksilver_flask: {
+    tree: FLASK_TREES.quicksilver_flask,
     id: 'quicksilver_flask', name: 'Quicksilver Flask',
     description: 'Drinking spends one of up to 3 charges, banked from any orb you pick up, and'
       + ' grants 30% increased move speed for 4 seconds. A REFLEX with no fullness gate: usable'
@@ -10102,6 +10109,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   stoneskin_flask: {
+    tree: FLASK_TREES.stoneskin_flask,
     id: 'stoneskin_flask', name: 'Stoneskin Flask',
     description: 'Spend one of up to 3 charges, banked from any orb you pick up, to gain 45%'
       + ' increased armor for 4.5 seconds. A REFLEX: drinkable even mid-cast, so you can harden'
@@ -10127,6 +10135,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   antidote_flask: {
+    tree: FLASK_TREES.antidote_flask,
     id: 'antidote_flask', name: 'Antidote Flask',
     description: 'Stores up to 2 charges; any orb you pick up banks one. Drinking cleanses up'
       + ' to 3 harmful ailments and grants +50% ailment resistance for 5 seconds; a REFLEX,'
