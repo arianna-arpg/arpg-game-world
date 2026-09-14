@@ -7,7 +7,7 @@
 //     nine-point attribute star and merges the nodes into PASSIVE_NODES /
 //     PASSIVE_ADJACENCY. Only the vocations a character has EARNED render.
 //   • Nodes spend VOCATION POINTS (PlayerMeta.vocationPoints, a separate
-//     currency earned from the vocation's quest steps), never normal points.
+//     currency earned from Odyssey leaders), never normal points.
 //   • Each VocationDef carries a QUEST CHAIN (class-thematic steps built on
 //     the ordinary QuestDef machinery — src/quests/vocations.ts generates the
 //     entries). Completing the FINAL step grants the vocation to the character
@@ -44,7 +44,7 @@ export const VOCATION_CFG = {
   /** Character level the quartermaster starts offering vocation chains at. */
   offerAtLevel: 30,
   /** Vocation points a quest step pays when the step doesn't override it. */
-  pointsPerStep: 2,
+  pointsPerStep: 0, // Odyssey leaders own point income; chains unlock the Vocation.
   /** Spending gate: vocation points require the vocation's home-class START
    *  NODE allocated. Flip false to let a granted vocation spend immediately
    *  (the simpler-to-intuit variant — playtest both). Read LIVE on every
@@ -1586,8 +1586,7 @@ const SWORDSAINT: VocationDef = {
     { id: 'k1', name: 'One Perfect Stroke', description: '15% more melee damage; 30% increased damage against Vulnerable enemies; 10% increased attack speed', kind: 'keystone', ...SWORDSAINT_LAYOUT.k1, mods: [mod('damage', 'more', 0.15, ['melee']), mod('damageVs_vulnerable', 'flat', 0.3), mod('attackSpeed', 'increased', 0.1)], links: ['n2', 'n3'] },
   ],
   quest: {
-    // The DUEL chain: two steps, heavier point payouts (3+3 = the same six
-    // every three-step chain pays — the texture differs, the economy doesn't).
+    // The DUEL discovery has two steps; Odyssey owns its point income.
     steps: [
       { offerLabel: 'Silence the blade-wraiths rehearsing in the ossuary',
         zone: { tileset: 'ossuary', direction: 's', distance: 1, level: 'character',
@@ -1595,13 +1594,13 @@ const SWORDSAINT: VocationDef = {
           packsOverride: { count: [5, 7], size: [2, 4], table: [
             { id: 'blade_wraith', weight: 3 }, { id: 'blade_swarm', weight: 2 }, { id: 'mirror_husk', weight: 1 } ] },
           forceWaypoint: true },
-        xp: 1000, gems: 4, vocationPoints: 3,
+        xp: 1000, gems: 4,
         turnInPrompt: 'The rehearsal is over. The barrow door waits.' },
       { offerLabel: 'Answer the Barrow Swordsaint\'s draw',
         zone: { tileset: 'sepulcher_sands', direction: 's', distance: 2, level: 'character',
           objective: { kind: 'boss', id: 'barrow_swordsaint', levelBonus: 2 },
           forceWaypoint: true, floating: true, wpExclusionRadius: 1 },
-        xp: 2400, gems: 6, vocationPoints: 3,
+        xp: 2400, gems: 6,
         turnInPrompt: 'The old master bows. Return, Swordsaint.' },
     ],
   },

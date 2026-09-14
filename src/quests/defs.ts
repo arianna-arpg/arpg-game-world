@@ -7,6 +7,7 @@
 import type { QuestDef } from './types';
 import { vocationQuestDefs } from './vocations';
 import { revengeQuestDefs } from './revenge';
+import { odysseyQuestDefs } from './odyssey';
 import { registerGenPin } from '../engine/genPins';
 
 /** The Hollow Vault's arena recipe — a quest zone spec is the ONLY thing that
@@ -118,6 +119,7 @@ export const Q_UNMADE: QuestDef = {
 };
 
 export const QUESTS: Record<string, QuestDef> = {
+  ...Object.fromEntries(odysseyQuestDefs().map(q => [q.id, q])),
   [Q_UNDEAD_SOUTH.id]: Q_UNDEAD_SOUTH,
   [Q_RELIC_EAST.id]: Q_RELIC_EAST,
   [Q_RELIC_DEPTHS.id]: Q_RELIC_DEPTHS,

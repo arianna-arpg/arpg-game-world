@@ -9199,11 +9199,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const html = `
       ${this.closeGlyphHtml()}<h2>Quest Journal</h2>
       ${this.mapTabsHtml()}
+      <div style="color:#6ad8c0;font-size:12px;padding:8px">${esc(world.odyssey.status())}</div>
       <div id="quest-scroll" style="overflow-y:auto;max-height:64vh;padding:2px 4px 8px 2px">
         <h3 style="font-size:12px;color:#c8a8e8;margin:4px 0 6px 0">Active (${log.active.length})</h3>
         ${activeHtml}
         <h3 style="font-size:12px;color:#8a8678;margin:14px 0 6px 0">Completed (${log.completed.length})</h3>
         ${doneHtml}
+        ${world.odyssey.clues().map(line => `<p style="color:#9ebdb5;font-size:11px">${esc(line)}</p>`).join('')}
       </div>`;
     // Same skip-if-unchanged discipline as the map view (setPanelHtml).
     if (!this.setPanelHtml(this.worldMap, html)) return;

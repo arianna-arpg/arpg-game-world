@@ -736,6 +736,8 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // either way it overrides everything until the actor escapes, then it
   // FIGHTS in the next zone.
   if (actor.aiFleeing || tuning.type === 'flee') return fleeStep(actor, world, dt);
+  // Odyssey scouts hold the watch/warning until real sight arms the flee path.
+  if (actor.tag === 'odyssey_scout') return;
 
   // MORALE: a broken actor routs — no casts, no schemes, just distance.
   if (updateMorale(actor, world, tuning, dt)) return;

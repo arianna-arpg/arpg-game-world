@@ -196,6 +196,14 @@ checks, the balance harness's smoke suite, and the generation QA sweep are how
 we verify changes.
 
 ## Layout
+- Odyssey: `data/odyssey.ts` owns roster content and pressure tuning;
+  `world/odyssey.ts` owns frozen world selection, ordered leader receipts and
+  save validation; `engine/odyssey.ts` connects quest objectives to progression,
+  Bandit messenger reports and Goblin assaults on Lastlight. Prototype campaign
+  quests are in `quests/odyssey.ts`; Vocation point income now comes from leaders.
+  Design decisions, scope and remaining story work: `docs/design/odyssey.md`.
+  Regression: `npm run probe -- odyssey` (real objectives, save/reload,
+  perception/escape/interception, and town defense/trade recovery).
 - Town portals: `data/townportals.ts` configures the scroll-free utility skill,
   destination and HUD button; `engine/townportal.ts` carries saved round trips.
   `engine/zonecontents.ts` extends run-long zone memory to spent containers and
