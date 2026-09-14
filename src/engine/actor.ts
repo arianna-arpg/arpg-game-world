@@ -2560,7 +2560,7 @@ export class Actor {
   applyStatus(
     id: string, dps: number, durationScale: number, sourceName: string,
     opts?: {
-      propagates?: boolean; rupture?: number; ruptureType?: ActiveStatus['ruptureType'];
+      propagates?: boolean; rupture?: number; ruptureType?: ActiveStatus['ruptureType']; ruptureRadius?: number;
       /** A relayed application cannot bounce between reflectors. */
       relayed?: boolean;
       /** Applier-side bonus to the stacking cap (the ailmentStacks stat). */
@@ -2677,6 +2677,7 @@ export class Actor {
         propagates: opts?.propagates || def.propagateOnDeath,
         rupture: opts?.rupture,
         ruptureType: opts?.ruptureType,
+        ruptureRadius: opts?.ruptureRadius,
         casterId: opts?.casterId,
         brood: opts?.brood,
         leech: opts?.leech,
@@ -2702,6 +2703,8 @@ export class Actor {
       existing.propagates = existing.propagates || opts.propagates || def.propagateOnDeath;
       // Rupture payloads ADD (pumping the keg on its fixed fuse) rather than
       // max — hitting harder and hitting often both matter.
+      if (opts.rupture !== undefined) existing.ruptureRadius = existing.rupture !== undefined
+        ? Math.max(existing.ruptureRadius ?? 90, opts.ruptureRadius ?? 90) : opts.ruptureRadius;
       existing.rupture = ((existing.rupture ?? 0) + (opts.rupture ?? 0)) || undefined;
       existing.ruptureType = existing.ruptureType ?? opts.ruptureType;
       // FIRST APPLIER holds the credit by default (DoT attribution never

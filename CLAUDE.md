@@ -47,9 +47,30 @@ level gates are documented in `docs/design/shield-defender-balance.md`;
 The Hivecaller/Ranger/Guardian batch is in `src/data/frontierStarterTrees.ts`,
 with its contract and shared absorb scaling in
 `docs/design/frontier-starting-skill-trees.md`.
+The Berserker/Sorcerer/Cleric opening trees are in `src/data/devotedStarterTrees.ts`;
+`docs/design/devoted-starting-skill-trees.md` covers their identities, tree-granted
+resource conduits, healing exclusions and cancellation of repeats on respec.
+The Summoner/Juggernaut/Pyromancer opening trees live in `src/data/pactSteelStarterTrees.ts`;
+`docs/design/pact-steel-starting-skill-trees.md` covers Fury spender overrides,
+familiar arts, moving rings, expiry-radius investment and respec cleanup.
+The Assassin/Blademaster/Brawler opening trees live in `src/data/precisionStarterTrees.ts`;
+`docs/design/precision-starting-skill-trees.md` covers completed-cut preparation,
+combo-finisher investment, timed counters, concealment and measured Fury spending.
+The Trapper/Skald/Chronomancer opening trees live in `src/data/controlStarterTrees.ts`;
+`docs/design/control-starting-skill-trees.md` covers construct payloads, additive
+domains, rewind contracts, device retirement and the Overwound Mechanism support.
+
+Future skill and support proposals are tracked centrally in
+`docs/design/skill-support-candidates.md`, with evidence, status and paired ideas.
+The Breaker/Vanguard/Lancer starting trees live in `src/data/impactStarterTrees.ts`;
+`docs/design/impact-starting-skill-trees.md` covers native pulse overrides,
+Extraction bank shares, returning-flight ownership and the complete bars.
 The Resonator opening trees live in `src/data/resonatorStarterTrees.ts`;
 `docs/design/resonator-starting-skill-trees.md` records native independent tones,
 victim-scoped chord payoffs and additive Purity auras.
+The Sentinel/Warlord/Wallwright starting trees live in `src/data/bastionStarterTrees.ts`;
+`docs/design/bastion-starting-skill-trees.md` covers additive native-aura
+modifiers, retaliation, banner cleanup, command blessings and guard releases.
 Runeweaver's usable level-one fuel loop and complete starting trees live in
 `src/data/runeweaverStarterTrees.ts`; `docs/design/runeweaver-starting-skill-trees.md`
 covers Glyph fuel, Invocation payload inheritance, preview and respec ownership.

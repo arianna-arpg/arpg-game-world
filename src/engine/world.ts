@@ -9,6 +9,7 @@
 // ---------------------------------------------------------------------------
 
 import { DeedTracker, type DeedEvent } from './deeds';
+import { instanceCastCycle, instanceTreeMods, instanceTreeOver } from './skills';
 import { finishAIRecovery, monsterTurnSpeed } from './handling';
 import { COMBAT_DEEDS, DEED_CFG } from '../data/classdeeds';
 import { selectContainerLoot } from '../data/containerloot';
@@ -22567,6 +22568,7 @@ export class World {
     if (why) { this.failNote(p, skillId + ':fontreset', why); return false; }
     const cost: AbilityCost = { tier: essenceTierForLevel(inst.level), count: FONT_CFG.reset.count };
     if (!this.spendAbilityEssence(seat, cost, 'fontreset:' + skillId)) return false;
+    this.dismissSummonToggle(p, inst.def.id);
     this.clearSummonTreeBodies(p, inst);
     this.clearTreeFields(p, inst);
     inst.treeNodes = undefined;
@@ -29466,6 +29468,7 @@ export class World {
     }
     step.sockets = inst.sockets; // live references — re-socketing propagates
     step.grafts = inst.grafts;
+    step.comboTreeMods = instanceTreeMods(inst);
     return step;
   }
 
@@ -32343,15 +32346,39 @@ export class World {
   private mintMetaInstance(caster: Actor, host: SkillInstance, skillId: string): SkillInstance {
     const key = host.def.id + ':' + skillId;
     let inst = caster.metaInsts.get(key);
-    if (!inst || inst.level !== effectiveSkillLevel(host)) {
+    const relocateConstruct = SKILLS[skillId].effects.some(fx => fx.type === 'relocateConstruct');
+    if (!inst || inst.level !== effectiveSkillLevel(host)
+      || (relocateConstruct && this.relocationHosts.get(inst) !== host)) {
       inst = makeSkillInstance(SKILLS[skillId], effectiveSkillLevel(host));
       // minionCombat: a command's meta inherits its whole-court scope.
       // Summon-hosted meta payloads still name their own roster anchor.
       inst.hostSkillId = host.def.effects.some(e => e.type === 'commandMinions')
         ? undefined : host.def.id;
       caster.metaInsts.set(key, inst);
+      if (relocateConstruct) this.relocationHosts.set(inst, host);
     }
     return inst;
+  }
+
+  private relocationHosts = new WeakMap<SkillInstance, SkillInstance>();
+
+  /** The same eligibility read gates payment and execution. Instance identity
+   * prevents a second copy or another caster from moving this roster. */
+  private relocationTarget(caster: Actor, inst: SkillInstance, radius: number): Actor | undefined {
+    const host = this.relocationHosts.get(inst);
+    if (!host || !caster.skills.includes(host) || caster.dead || caster.downed
+      || !instanceMetas(host).some(m => m.skillId === inst.def.id)) return;
+    const d = instanceDelivery(host);
+    if (d.type !== 'construct' || !['totem', 'sentry'].includes(d.kind) || !d.castSkillId) return;
+    let best: Actor | undefined, bestD = radius;
+    for (const c of this.actors) {
+      if (c.dead || c.downed || c.owner !== caster || c.summonInst !== host
+        || !c.construct || !['totem', 'sentry'].includes(c.construct.kind)
+        || !sameStory(c, caster) || c.team !== caster.team || !(c.lifespan! > 0)) continue;
+      const dd = dist(caster.pos, c.pos);
+      if (dd <= bestD && (!best || dd < bestD)) { best = c; bestD = dd; }
+    }
+    return best;
   }
 
   useMetaSkill(caster: Actor, host: SkillInstance, aim: Vec2): boolean {
@@ -32541,6 +32568,12 @@ export class World {
       const unmet = caster.unmetGate(inst);
       if (unmet) {
         this.failNote(caster, inst.def.id + ':gate', unmet.note ?? 'not ready');
+        return false;
+      }
+    }
+    for (const fx of instanceEffects(inst)) {
+      if (fx.type === 'relocateConstruct' && !this.relocationTarget(caster, inst, fx.radius)) {
+        this.failNote(caster, inst.def.id + ':device', 'no device from this skill in reach');
         return false;
       }
     }
@@ -35310,6 +35343,8 @@ export class World {
           const mirage = new Actor(`${caster.name}?`, caster.team, vec(caster.pos.x, caster.pos.y));
           mirage.owner = caster;
           mirage.sourceSkillId = def.id;
+          mirage.summonInst = inst;
+          mirage.tier = caster.tier;
           // A convincing double wears the full silhouette, not just the tint.
           mirage.shape = caster.shape;
           mirage.color = caster.color;
@@ -36001,6 +36036,22 @@ export class World {
           this.refundCooldown(caster, def.id); // nothing to load — never a wasted rack
         }
       }
+      if (fx.type === 'relocateConstruct') {
+        const c = this.relocationTarget(caster, inst, fx.radius);
+        const host = this.relocationHosts.get(inst);
+        const deployed = host && instanceDelivery(host);
+        if (c && deployed?.type === 'construct') {
+          const ang = angleTo(caster.pos, aim);
+          const reach = Math.min(dist(caster.pos, aim), deployed.placeRange ?? 100);
+          c.pos = this.clampPos(vec(caster.pos.x + Math.cos(ang) * reach,
+            caster.pos.y + Math.sin(ang) * reach), c.radius, undefined, { mover: c });
+          c.facing = ang;
+          c.casting = null; c.push = null;
+          this.flashes.push({ pos: { ...c.pos }, radius: 28, color: def.color, life: 0.25, maxLife: 0.25 });
+          // Keep the same actor, payload, health, lifespan, timers, useLock and
+          // cooldowns. No arrival effect, death event, refund or replacement.
+        }
+      }
       if (fx.type === 'recallMinions') {
         // Convocation: every MOBILE minion blinks to an even ring at the
         // caster. Anchored things stay: constructs, totems, the mid-leap.
@@ -36181,13 +36232,15 @@ export class World {
               this.text(e.pos, Math.round(taken).toString(), STATUS_DEFS[s.id]?.color ?? '#c8ccd8', 12);
               if (e.life <= 0 && !e.dead) this.kill(e, false, caster);
             }
-            // The spear itself, homeward: minted once per caster, re-aimed
-            // per wrench, its flat payload the bank's share.
+            // The spear itself carries the bank share homeward. Native recalls
+            // share a cached payload; tree recalls track their exact source.
             if (SKILLS.impale_spear) {
-              let spear = caster.metaInsts.get('__impale_spear');
+              const recallImpalesTree = instanceTreeOver(inst)?.recallImpales;
+              let spear = recallImpalesTree ? undefined : caster.metaInsts.get('__impale_spear');
               if (!spear || spear.level !== effectiveSkillLevel(inst)) {
                 spear = makeSkillInstance(SKILLS.impale_spear, effectiveSkillLevel(inst));
-                caster.metaInsts.set('__impale_spear', spear);
+                if (recallImpalesTree) this.recallTreeSpears.set(spear, inst);
+                else caster.metaInsts.set('__impale_spear', spear);
               }
               this.spawnProjectile(caster, spear, vec(e.pos.x, e.pos.y),
                 angleTo(e.pos, caster.pos),
@@ -36435,13 +36488,16 @@ export class World {
     }
     // CAST CYCLE (SkillDef.castCycle): every Nth completed REAL use grants
     // the cycle's buff, then the count resets — "the third cast imbues".
-    if (!opts.noRepeat && !opts.noCooldown && def.castCycle) {
+    const castCycle = instanceCastCycle(inst);
+    if (!opts.noRepeat && !opts.noCooldown && castCycle) {
       const n = (caster.castCycles.get(def.id) ?? 0) + 1;
-      if (n >= def.castCycle.count) {
+      if (n >= castCycle.count) {
         caster.castCycles.set(def.id, 0);
-        caster.addBuff(def.castCycle.buff, caster.sheet.get('effectDuration', tags, extra));
+        const cycleBuff = { ...castCycle.buff };
+        this.treeBuffSources.set(cycleBuff, { caster, inst });
+        caster.addBuff(cycleBuff, caster.sheet.get('effectDuration', tags, extra));
         this.text(vec(caster.pos.x, caster.pos.y - 18),
-          def.castCycle.buff.id.replace(/_/g, ' ') + '!', def.color, 12);
+          castCycle.buff.id.replace(/_/g, ' ') + '!', def.color, 12);
       } else {
         caster.castCycles.set(def.id, n);
       }
@@ -38442,6 +38498,13 @@ export class World {
       mod('damage', 'more', caster.sheet.get('minionDamage', tags, extra) - 1),
       mod('life', 'more', caster.sheet.get('minionLife', tags, extra) - 1),
     ]);
+    // Aimed constructs run through ordinary cast/attack/cooldown clocks.
+    // Adopt the same constructCastRate lever as interval-driven devices.
+    if (d.kind === 'totem' || d.kind === 'sentry') {
+      const rate = caster.sheet.get('constructCastRate', tags, extra);
+      c.sheet.setSource('constructCastRate', [mod('attackSpeed', 'more', rate - 1),
+        mod('castSpeed', 'more', rate - 1), mod('cooldownRecovery', 'more', rate - 1)]);
+    }
     // Charge-released constructs (Volcano): a long hold means a longer,
     // angrier construct — duration scales up, the cast interval scales DOWN.
     c.lifespan = d.duration * scale * caster.sheet.get('effectDuration', tags, extra);
@@ -39582,8 +39645,9 @@ export class World {
     const gextra = instanceMods(cs.inst);
     const window = spec.parry?.window
       ?? guardian.sheet.get('guardParry', gtags, gextra);
-    const counterMult = spec.parry?.counterMult
-      ?? guardian.sheet.get('guardParryPower', gtags, gextra);
+    const counterMult = (spec.parry?.counterMult
+      ?? guardian.sheet.get('guardParryPower', gtags, gextra))
+      + guardian.sheet.get('parryCounterBonus', gtags, gextra);
     if (window > 0 && (cs.channelTime ?? 99) <= window
       && !attacker.dead && !attacker.invulnerable) {
       // Riposte snaps the guardian's face toward the parried blow.
@@ -39609,7 +39673,7 @@ export class World {
         guardian.casting = null;
         guardian.useLock = 0.15;
         if (cs.inst.def.cooldown > 0) {
-          guardian.cooldowns.set(cs.inst.def.id, cs.inst.def.cooldown);
+          this.stampSkillCooldown(guardian, cs.inst, cs.inst.def.cooldown);
         }
       }
       return true;
@@ -39630,7 +39694,7 @@ export class World {
     if ((cs.shield ?? 0) <= 0) {
       guardian.casting = null;
       guardian.useLock = 0.3;
-      if (cs.inst.def.cooldown > 0) guardian.cooldowns.set(cs.inst.def.id, cs.inst.def.cooldown);
+      if (cs.inst.def.cooldown > 0) this.stampSkillCooldown(guardian, cs.inst, cs.inst.def.cooldown);
       this.cry(guardian.pos, 'guard broken!', '#d05050', 14, 'shatter', guardian.radius + 8);
       // Ice Shield's dying burst: a broken shield spends its FULL absorbed
       // capacity as the payload — with the stance's EFFECTIVE bash, innate
@@ -40541,9 +40605,9 @@ export class World {
 
   private applyHeal(
     caster: Actor, inst: SkillInstance, target: Actor,
-    fx: { amount?: number; pctMax?: number }, mult = 1, quiet = false,
+    fx: { amount?: number; pctMax?: number; excludeCaster?: boolean }, mult = 1, quiet = false,
   ): number {
-    if (target.dead) return 0;
+    if (target.dead || target.downed || (fx.excludeCaster && target === caster)) return 0;
     const tags = skillContextTags(inst, grantedTags(inst));
     const extra = instanceMods(inst);
     const raw = ((fx.amount ?? 0) + (fx.pctMax ?? 0) * target.maxLife())
@@ -40598,7 +40662,7 @@ export class World {
    *  IS a chain-heal). Draws a brief mending arc per hop. */
   private applyHealChained(
     caster: Actor, inst: SkillInstance, target: Actor,
-    fx: { amount?: number; pctMax?: number; chain?: number }, mult = 1, quiet = false,
+    fx: { amount?: number; pctMax?: number; chain?: number; excludeCaster?: boolean }, mult = 1, quiet = false,
   ): void {
     this.applyHeal(caster, inst, target, fx, mult, quiet);
     const tags = skillContextTags(inst, grantedTags(inst));
@@ -40610,7 +40674,9 @@ export class World {
     while (hops-- > 0) {
       let next: Actor | null = null; let worst = 0.999;
       for (const a of this.actors) {
-        if (a.dead || a.untargetable || a.construct || visited.has(a)) continue;
+        if (a.dead || a.downed || a.untargetable || a.construct || visited.has(a)) continue;
+        // Every hop carries the original heal's recipient exclusions.
+        if (fx.excludeCaster && a === caster) continue;
         if (a.team !== caster.team || !sameStory(a, from)) continue; // (the sovereignty gate: the chain hops its own story)
         if (dist(from.pos, a.pos) > 220) continue;
         const frac = a.life / Math.max(1, a.maxLife());
@@ -40701,7 +40767,7 @@ export class World {
     const fxs = inst.def.effects.filter(fx => fx.type === 'heal' || fx.type === 'cleanse');
     if (!fxs.length) return;
     for (const a of this.actors) {
-      if (a.dead || a.untargetable || a.construct || a.team !== caster.team || !sameStory(a, caster)) continue; // (the sovereignty gate)
+      if (a.dead || a.downed || a.untargetable || a.construct || a.team !== caster.team || !sameStory(a, caster)) continue; // (the sovereignty gate)
       if (once?.has(a.id)) continue;
       if (!accepts(a)) continue;
       let touched = false;
@@ -42117,6 +42183,7 @@ export class World {
             // old always-spreads flag).
             propagates: chance(caster.sheet.get('dotPropagates', tags, extra)) || undefined,
             rupture, ruptureType,
+            ruptureRadius: rupture !== undefined ? 90 * caster.sheet.get('aoeRadius', tags, extra) : undefined,
             stacksBonus: stacksBonusFor(fx.status),
             casterId: fx.status === 'taunted' && caster.summonShell && caster.owner ? caster.owner.id : caster.id,
             brood: instanceBrood(inst),
@@ -42350,6 +42417,7 @@ export class World {
           brood: instanceBrood(inst),
           leech: caster.sheet.get('dotLeech_' + sid, tags, extra) || undefined,
           rupture: armed, ruptureType: armedType,
+          ruptureRadius: armed !== undefined ? 90 * caster.sheet.get('aoeRadius', tags, extra) : undefined,
           popBonus: caster.sheet.get('popPower_' + sid, tags, extra) || undefined,
         });
         // Stat-granted applications trigger statusApply procs too.
@@ -42363,7 +42431,8 @@ export class World {
 
     // Splash: the hit detonates into a small area around its target.
     if (dealt > 0 && depth === 0) {
-      const splash = caster.sheet.get('splashRadius', tags, extra);
+      const splash = caster.sheet.get('splashRadius', tags, extra)
+        * caster.sheet.get('aoeRadius', tags, extra);
       if (splash > 0) {
         for (const e of this.enemiesOf(caster)) {
           if (!sameStory(e, target)) continue; // (the sovereignty gate)
@@ -42772,7 +42841,7 @@ export class World {
     const n = Math.max(1, s.stacks);
     for (let i = 0; i < n; i++) {
       to.applyStatus(s.id, s.dps * (o?.strengthScale ?? 1), durScale, sourceName,
-        { casterId: s.casterId, rupture: s.rupture, ruptureType: s.ruptureType });
+        { casterId: s.casterId, rupture: s.rupture, ruptureType: s.ruptureType, ruptureRadius: s.ruptureRadius });
     }
   }
 
@@ -43818,7 +43887,7 @@ export class World {
 
   private ruptureStatus(victim: Actor, s: ActiveStatus): void {
     const type: DamageType = s.ruptureType ?? 'chaos';
-    const radius = 90;
+    const radius = s.ruptureRadius ?? 90;
     this.flashes.push({ pos: vec(victim.pos.x, victim.pos.y), radius, color: '#b06bd4', life: 0.3, maxLife: 0.3 });
     for (const e of this.actors) {
       if (e.dead || e.team !== victim.team || e.untargetable || !sameStory(e, victim)) continue; // (the sovereignty gate)
@@ -53984,6 +54053,8 @@ export class World {
       }
       case 'guard': {
         const spec = def.guard!;
+        const guardHoldTime = spec.maxDuration === undefined ? undefined
+          : Math.max(0.05, spec.maxDuration + a.sheet.get('guardHoldTime', skillContextTags(cs.inst), instanceMods(cs.inst)));
         // A player taking the seat owns the hand immediately.
         if (this.seatOf(a)) {
           cs.aiGuardReleaseAt = undefined;
@@ -54025,14 +54096,14 @@ export class World {
           }
         }
         // Timed stances (Riposte) drop themselves.
-        if (spec.maxDuration && (cs.channelTime ?? 0) >= spec.maxDuration) {
+        if (guardHoldTime && (cs.channelTime ?? 0) >= guardHoldTime) {
           cs.held = false;
         }
         // An authored AI release becomes a readable, committed warning.
         // The guard stays damageable: de-arming it during this beat denies
         // the bash, and breaking/stunning it clears this state with the cast.
         if (!this.seatOf(a) && !a.dead && (cs.aiGuardWindup ?? 0) > 0) {
-          const holdLeft = Math.min(cs.aiHold ?? Infinity, spec.maxDuration ?? Infinity) - (cs.channelTime ?? 0);
+          const holdLeft = Math.min(cs.aiHold ?? Infinity, guardHoldTime ?? Infinity) - (cs.channelTime ?? 0);
           if ((!cs.held || holdLeft <= cs.aiGuardWindup!)
             && cs.aiGuardReleaseAt === undefined && cs.bashAt !== undefined) {
             const frac = (cs.shield ?? 0) / (cs.maxShield || 1);
@@ -54058,7 +54129,7 @@ export class World {
           a.useLock = 0.2;
           // The grafted carapace drops with the stance (fromAura rule).
           if (a.shellGuard?.fromAura === def.id) a.shellGuard = undefined;
-          if (def.cooldown > 0) a.cooldowns.set(def.id, def.cooldown);
+          if (def.cooldown > 0) this.stampSkillCooldown(a, cs.inst, def.cooldown);
           if (bash && !a.dead && cs.bashAt !== undefined) {
             const frac = shieldLeft / maxShield;
             const armed = cs.bashLow ? frac <= cs.bashAt : frac >= cs.bashAt;
@@ -54980,6 +55051,8 @@ export class World {
 
   private replenishment = new ReplenishmentClocks();
   private treeBuffSources = new WeakMap<BuffEffect, { caster: Actor; inst: SkillInstance }>();
+  /** Derived extraction flights retain the exact investing instance for respec. */
+  private recallTreeSpears = new WeakMap<SkillInstance, SkillInstance>();
 
   /** Per-application identity lets respec retire only this caster's blessing,
    * including allied recipients, without stripping another caster's refresh. */
@@ -54997,17 +55070,26 @@ export class World {
   private clearTreeFields(caster: Actor, inst: SkillInstance): void {
     const ownsTreePayload = (candidate: SkillInstance) => candidate === inst || candidate.invocationHost === inst;
     if (inst.def.invokes) caster.runes = []; // invocationHost cannot carry old alphabet fuel through a respec
-    // Retire the invested aura and its reservation without paying a release attack.
+    // quietTreeRelease retires captured aura bonuses and reservations without
+    // paying a release attack. Existing resource debts still settle normally.
     if (caster.activeAuras.get(inst.def.id)?.inst === inst) this.deactivateAura(caster, inst.def.id, true);
+    this.clearTreeConstructs(caster, inst);
+    caster.castCycles.delete(inst.def.id);
+    for (const [key, step] of caster.metaInsts) if (step.chainOf === inst.def.id) {
+      this.clearTreeFields(caster, step);
+      caster.metaInsts.delete(key);
+    }
     for (const actor of this.actors) for (const [id, buff] of actor.buffs) {
       const source = this.treeBuffSources.get(buff.def);
       if (source?.caster === caster && source.inst === inst) actor.removeBuff(id);
     }
     this.pendingFuses = this.pendingFuses.filter(f => f.caster !== caster || !ownsTreePayload(f.inst));
     this.pendingBlinks = this.pendingBlinks.filter(b => b.actor !== caster || !b.inst || !ownsTreePayload(b.inst));
-    // Invocation payloads must not outlive their host allocation.
+    // Scheduled repeats capture the old tree just as delayed fields do.
     this.pendingRepeats = this.pendingRepeats.filter(r => r.caster !== caster || !ownsTreePayload(r.inst));
-    this.projectiles = this.projectiles.filter(p => p.caster !== caster || !ownsTreePayload(p.inst));
+    // Flights and their carried ground can outlive the allocation too.
+    this.projectiles = this.projectiles.filter(p => p.caster !== caster || (!ownsTreePayload(p.inst) && this.recallTreeSpears.get(p.inst) !== inst));
+    for (const p of this.projectiles) if (p.caster === caster && p.suffuse?.inst === inst) delete p.suffuse;
     // Held casts can snapshot guard pools and derived grafts. Changing the
     // allocation retires that stance without paying a release attack.
     if (caster.casting?.inst === inst) caster.casting = null;
@@ -55019,6 +55101,21 @@ export class World {
       if (z.caster !== caster || !ownsTreePayload(z.inst)) continue;
       this.expireZone(z);
       this.zones.splice(i, 1);
+    }
+  }
+
+  /** Allocation changes retire devices and their captured payloads without
+   * invoking death rewards, explosions or healing bursts. Dead traps can
+   * still own in-flight payloads, so they also participate in cleanup. */
+  private clearTreeConstructs(caster: Actor, inst: SkillInstance): void {
+    const bodies = new Set([...this.actors, ...this.projectiles.map(p => p.caster),
+      ...this.zones.map(z => z.caster), ...this.pendingFuses.map(f => f.caster), ...this.pendingRepeats.map(r => r.caster)]);
+    for (const body of bodies) if (body.construct && body.owner === caster && body.summonInst === inst) {
+      this.clearTreeFields(body, inst);
+      if (body.construct.castInst && body.construct.castInst !== inst) this.clearTreeFields(body, body.construct.castInst);
+      // quietTreeRelease also strips the aura sources worn by nearby recipients.
+      for (const id of [...body.activeAuras.keys()]) this.deactivateAura(body, id, true);
+      body.casting = null; body.dead = true; body.life = 0;
     }
   }
 
@@ -57479,7 +57576,7 @@ export class World {
     const set = (z.domainAffected ??= new Set());
     const inside = new Set<Actor>();
     for (const a of this.actors) {
-      if (a.dead || a.untargetable || a.construct) continue;
+      if (a.dead || a.downed || a.untargetable || a.construct) continue;
       if (a.tier !== (z.tier ?? z.caster.tier)) continue; // the field's story (the sovereignty gate)
       // Allies wear allyMods; the CASTER'S minions layer minionMods on top
       // (Oblation of Flesh blesses the horde, not the bystanders).

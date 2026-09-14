@@ -95,7 +95,7 @@ import {
 // THE OBJECTIVE WEB (meta/unlocks.ts): the run's end settles any class a
 // merged deed now claims; THE OPENING (meta/classkit.ts): the class card's
 // kit picks resolve against the account HERE, never trusted from the card.
-import { settleClassUnlocks } from './meta/unlocks';
+import { settleClassUnlocks, reconcileClassBundleGems } from './meta/unlocks';
 import { rememberKitPicks, resolveClassKit } from './meta/classkit';
 import {
   loadAccount, loadAccountAsync, loadSettings, loadSettingsAsync,
@@ -159,6 +159,7 @@ window.onunhandledrejection = (ev): void => { reportFatal(ev.reason, 'unhandled 
 // scope — they outlive every character death and World recreation. World, UI,
 // and the renderer hold the SAME references; they are never re-loaded mid-run.
 const account: Account = loadAccount();
+reconcileClassBundleGems(account);
 const settings: Settings = loadSettings();
 
 // THE UI SCALE DIAL (ui/uiScale.ts): install the fabric stylesheet once, then
@@ -822,6 +823,7 @@ ui.setContinueSave(loadCharacter());          // instant: localStorage cache
 void (async (): Promise<void> => {
   const [a, s, c] = await Promise.all([loadAccountAsync(), loadSettingsAsync(), loadCharacterAsync()]);
   Object.assign(account, a);                  // mutate-in-place: shared refs stay valid
+  reconcileClassBundleGems(account);
   Object.assign(settings, s);
   applyUiScale(settings.uiScale);             // the disk save may carry a different dial
   ui.setContinueSave(c);                       // disk save wins (re-renders the menu)
