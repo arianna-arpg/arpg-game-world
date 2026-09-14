@@ -10,6 +10,7 @@
 // ---------------------------------------------------------------------------
 
 import { replenishingDelivery } from '../engine/replenishment';
+import { flaskChargeBanks, restoreFlaskChargeBanks } from '../engine/flaskState';
 import { SAVE_COMPATIBILITY, isCurrentCharacterSave, noteSaveReset } from './saveCompatibility';
 import { CLASSES } from '../data/classes';
 import { PASSIVE_NODES } from '../data/passives';
@@ -140,7 +141,9 @@ export interface CharacterSave {
    *  releasing wound — paid for at press, so they ride the save (the
    *  throng rows' idiom). Optional → older saves load unchanged; an
    *  entry whose skill left the bar dissolves at release anyway. */
-  primedPours?: { skillId: string; chargesSpent: number }[];
+  primedPours?: { skillId: string; chargesSpent: number; aim?: { x: number; y: number } }[];
+  /** Spent and unspent flask ammunition survives resume; clocks restart. */
+  flaskCharges?: Record<string, number>;
   bar: (string | null)[];   // bar bindings as skill ids (any length; padded to BAR_SLOTS on load)
   /** THE STAMPED OPENING (PlayerMeta.opening): the resolved kit bar the hero
    *  woke with — the re-kindle hatch's roster. Optional → a pre-stamp save
@@ -305,6 +308,7 @@ export function serializeCharacter(world: World): CharacterSave {
     // THE PRIMED POUR: paid, unreleased sips ride the save whole.
     ...(hero.primedPours.length
       ? { primedPours: hero.primedPours.map(e => ({ ...e })) } : {}),
+    flaskCharges: flaskChargeBanks(hero),
     modeId: m.modeId,
     modeStage: m.modeStage,
     charId: m.charId,
@@ -464,6 +468,7 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
     if (free >= 0) bar[free] = id;
   }
   world.adoptSavedMeta(built.meta, bar, save.level);
+  restoreFlaskChargeBanks(world.seatHero(world.localSeat), save.flaskCharges);
   // Re-field the saved COMPANY (already paid + pool-marked). The legacy
   // single-contract field folds in as a one-blade company (old saves).
   for (const m of save.mercenaries ?? (save.mercenary?.snapshot ? [save.mercenary] : [])) {
@@ -483,7 +488,8 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
   // dissolve at release, so the law lives where it always lives.
   world.seatHero(world.localSeat).primedPours = (save.primedPours ?? [])
     .filter(e => e && typeof e.skillId === 'string')
-    .map(e => ({ skillId: e.skillId, chargesSpent: Math.max(0, Math.floor(e.chargesSpent ?? 0)) }));
+    .map(e => ({ skillId: e.skillId, chargesSpent: Math.max(0, Math.floor(e.chargesSpent ?? 0)),
+      ...(e.aim && Number.isFinite(e.aim.x) && Number.isFinite(e.aim.y) ? { aim: { ...e.aim } } : {}) }));
   return true;
 }
 

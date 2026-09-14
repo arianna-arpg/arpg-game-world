@@ -2985,6 +2985,19 @@ export function validateContent(): void {
         ...(t.nodes ?? []),
       ];
       for (const n of raw) {
+        // Flask-tree additions use the same registries and self-effect lanes.
+        for (const fu of n.followUps ?? []) {
+          if (!SKILLS[fu.skillId] || (fu.delay !== undefined && (!Number.isFinite(fu.delay) || fu.delay < 0))) warn(`${at}/${n.id}: invalid flaskTree follow-up`);
+        }
+        for (const cg of n.chargeGain ?? []) {
+          if (!STAT_DEFS['chargeCap_' + cg.charge] || !(cg.max > 0) || !(cg.amount > 0)
+            || (cg.on === 'second' && !(cg.everySeconds! > 0))
+            || (cg.on === 'move' && !(cg.perDistance! > 0))) warn(`${at}/${n.id}: invalid flaskTree charge tap`);
+        }
+        for (const fx of n.utilityEffects ?? []) {
+          if (def.delivery.type !== 'self') warn(`${at}/${n.id}: flaskTree utility requires self delivery`);
+          if ('amount' in fx && (!Number.isFinite(fx.amount) || fx.amount! < 0)) warn(`${at}/${n.id}: invalid flaskTree utility amount`);
+        }
         for (const l of n.links ?? []) {
           if (l === n.id) warn(`${at}/${n.id}: links to itself`);
           else if (!g.nodes.has(l)) warn(`${at}/${n.id}: links to unknown node '${l}'`);
