@@ -17,7 +17,7 @@ import type { ObjectiveSpec, PackSpec } from '../data/zones';
  *  hands out a category while it's under its cap). Extensible: add a kind + a cap row.
  *   • campaign — the authored main/side chains (no cap by default).
  *   • bounty   — repeatable board work (future Bounty Boards): a small cap.
- *   • odyssey  — a grand questline (future): only ONE may run at a time.
+ *   • odyssey  — overlapping world campaigns and their optional operations.
  *   • vocation — a specialization chain (data/vocations.ts). A FRESH chain is
  *     never auto-accepted — the giver opens the CHOICE menu instead; engaged
  *     chains auto-continue like any quest. One active vocation step at a time. */
@@ -33,7 +33,7 @@ export const QUEST_CATEGORY_CAPS: Record<QuestCategory, number | null> = {
    *  board collapses to this global 1 and regional boards (the writ
    *  kinship) become a dial's turn — never hardcode the singular. */
   bounty: 1,
-  odyssey: 1,     // one grand questline at a time
+  odyssey: null,  // all four pursuits and their preparations remain available
   vocation: 1,    // one vocation step in flight at a time (the chain is sequential anyway)
 };
 

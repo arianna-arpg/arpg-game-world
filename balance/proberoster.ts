@@ -63,6 +63,7 @@ export type ProbeRow =
 export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_disciplinestartertrees.ts', status: 'green', tier: 'fast', why: 'Ascetic Flagellant Firebrand complete bars, standalone paid Transgression wards, ranked self auras, real charge/poise/debt/control and persistence' },
   { probe: 'probe_runeweaverstartertrees.ts', status: 'green', tier: 'fast', why: 'Runeweaver complete starting bar, level-one fuel loop, host-invested Invocation snapshots, alphabets, native recipes, delayed-field cleanup and persistence' },
+  { probe: 'probe_odyssey.ts', status: 'green', tier: 'fast', why: 'Odyssey frozen roster, tutorial release, real objectives and banked rewards, saved preparations, messenger perception/escape/interception, and Lastlight defense/trade recovery' },
   { probe: 'probe_tacticprogression.ts', status: 'green', tier: 'fast', why: 'Live novice/veteran tactic boundaries, shared brain isolation, body-level rather than target/area scaling, and summon condition composition' },
   { probe: 'probe_tacticalai.ts', status: 'green', tier: 'fast', why: 'Ranged pursuit and lateral movement openings at 30/60/120 Hz, explicit opt-outs, retarget commitment, planted artillery, fixed crossfire destinations and tactical spell sequencing' },
   { probe: 'probe_harassment.ts', status: 'green', tier: 'fast', why: 'Crow/Gnasher/bat contact at 30/60/120 Hz, replenishable summon targetability, intermittent wild escapes and flee-loop A/B' },

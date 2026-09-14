@@ -18,7 +18,7 @@
 //   vocation (root crest allocated, account unlock key written) — from then on
 //   EVERY future character may take this chain, whatever their class.
 //
-// Steps pay vocation points (reward.vocationPoints); the shared caps/colors of
+// Odyssey leaders supply points; chains discover vocations. The caps/colors of
 // category 'vocation' route fresh chains through the giver's CHOICE MENU
 // instead of dwell auto-accept (see world.updateQuestGiver).
 // ---------------------------------------------------------------------------

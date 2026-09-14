@@ -1,9 +1,10 @@
 // ---------------------------------------------------------------------------
 // THE REVENGE CHAIN — generated per tutorial faction (data/commanders.ts).
 //
-// The tutorial's death is a debt, and at level 15 the quartermaster starts
-// speaking about collecting it: first CULL the legion that ended you on the
-// last mile, then run its LEGION COMMANDER — the very Father whose reckoning
+// The tutorial's death is a debt: Odyssey gives the personal lead immediately,
+// with a level-10 cull and a commander ready around level 14. The old-road cull
+// reveals the camp, which can also be found independently. Its LEGION COMMANDER
+// is the very Father whose reckoning
 // killed you — to ground in his own war-camp. A young account's target is
 // never random: the gate reads the `tutorial_faction:` stamp the prologue's
 // roll left on the account, so the revenge aims at the legion that earned
@@ -26,6 +27,7 @@
 import type { QuestDef } from './types';
 import { TUTORIAL_FACTIONS, tutorialFactionOf, type TutorialFactionRow } from '../data/commanders';
 import { FACTIONS } from '../data/monsters';
+import { ODYSSEY_TUTORIAL_RELEASE } from '../data/odyssey';
 
 /** Where each legion's war-camp country lies (tileset + compass off town). */
 const REVENGE_GROUND: Record<string, { tileset: string; direction: 'n' | 'e' | 's' | 'w' }> = {
@@ -55,12 +57,12 @@ const cullQuest = (row: TutorialFactionRow): QuestDef => {
     id: revengeCullId(row.id),
     giver: 'townsfolk_questgiver',
     offerLabel: `Cull ${row.banner} on the old road`,
-    offerAtLevel: 15,
+    offerAtLevel: 2, // Odyssey's personal lead arrives before the readiness band.
     // Exactly ONE legion's chain is live per account — the stamp decides.
-    gate: (ctx) => revengeFactionOf(ctx.accountLedger) === row.id,
+    gate: (ctx) => !ctx.accountLedger[ODYSSEY_TUTORIAL_RELEASE] && revengeFactionOf(ctx.accountLedger) === row.id,
     zone: {
-      tileset: ground.tileset, direction: ground.direction, level: 15,
-      bandPlacement: true, // land where the world READS 15 — the trek ramps to match
+      tileset: ground.tileset, direction: ground.direction, level: 10,
+      bandPlacement: true, // revenge ground sits in its own readiness band
       objective: { kind: 'clear', frac: 0.75 },
       packsOverride: { count: [7, 9], size: [3, 5], table: packs },
       forceWaypoint: true,
@@ -79,11 +81,11 @@ const commanderQuest = (row: TutorialFactionRow): QuestDef => {
     id: revengeCommanderId(row.id),
     giver: 'townsfolk_questgiver',
     offerLabel: `Run the legion commander to ground`,
-    offerAtLevel: 15,
-    requiresLedger: revengeTrailKey(row.id), // the cull found the trail
-    gate: (ctx) => revengeFactionOf(ctx.accountLedger) === row.id,
+    offerAtLevel: 2, // the revenge trail opens the pursuit
+    requiresLedger: revengeTrailKey(row.id), // giver fallback; Odyssey already seats the discoverable camp
+    gate: (ctx) => !ctx.accountLedger[ODYSSEY_TUTORIAL_RELEASE] && revengeFactionOf(ctx.accountLedger) === row.id,
     zone: {
-      tileset: ground.tileset, direction: ground.direction, level: 16,
+      tileset: ground.tileset, direction: ground.direction, level: 13,
       bandPlacement: true,
       objective: { kind: 'boss', id: row.commander, levelBonus: 1 },
       packsOverride: { count: [6, 8], size: [3, 5], table: packs },

@@ -282,6 +282,7 @@ export interface SavedPlayerSpot {
 }
 
 export interface WorldStateSave {
+  odyssey?: import('../world/odyssey').OdysseyState;
   townPortals?: import('../engine/townportal').TownPortal[];
   townPortalDestination?: string;
   schemaVersion: number;

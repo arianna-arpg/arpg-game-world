@@ -414,7 +414,8 @@ check('C6: the unknown cowls are NAMELESS (no npcRole — no nameplate to leak)'
     if (!TILESETS[cull.zone.tileset ?? ''] || !TILESETS[cmd.zone.tileset ?? '']) wired = false;
     if (cmd.zone.objective.kind !== 'boss' || cmd.zone.objective.id !== row.commander) wired = false;
     if (!(cull.zone.packsOverride?.table.length ?? 0)) wired = false;
-    if (cull.offerAtLevel !== 15 || cmd.offerAtLevel !== 15) wired = false;
+    // Odyssey gives the vendetta early; commander readiness stays in 12–15.
+    if (cull.offerAtLevel !== 2 || cmd.offerAtLevel !== 2 || cmd.zone.level !== 13) wired = false;
     // THE CHAIN: the cull's field payout is the commander hunt's door.
     const trail = revengeTrailKey(row.id);
     if ((cull.reward.ledger?.[trail] ?? 0) < 1 || cmd.requiresLedger !== trail) chained = false;

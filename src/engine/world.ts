@@ -9,6 +9,8 @@
 // ---------------------------------------------------------------------------
 
 import { DeedTracker, type DeedEvent } from './deeds';
+import { OdysseyRuntime } from './odyssey';
+import { ODYSSEY_CFG, odysseyFaction, odysseyQuestId } from '../data/odyssey';
 import { instanceCastCycle, instanceTreeMods, instanceTreeOver } from './skills';
 import { finishAIRecovery, monsterTurnSpeed } from './handling';
 import { COMBAT_DEEDS, DEED_CFG } from '../data/classdeeds';
@@ -3767,6 +3769,7 @@ export class World {
    *  latch of the withhold notice (noteBountyReady) — the row's standing is its
    *  kind's own predicates (handState), never this flag, never the zone objective. */
   activeQuests: { questId: string; zoneId: string; fieldDone: boolean }[] = [];
+  readonly odyssey = new OdysseyRuntime(this);
   /** Quests finished THIS run (chain gating + re-offer suppression). Per-run. */
   completedQuests = new Set<string>();
   private questGiverDwell = 0;
@@ -5539,6 +5542,7 @@ export class World {
    * visit (constructs, drops, and corpses stay behind).
    */
   loadZone(zoneId: string, from?: string): void {
+    this.odyssey.leaveZone();
     this.combatDeeds.reset();
     // THE POSSESSION SEAM: transit unwinds every embodiment FIRST — a
     // borrowed body belongs to its zone (it stays, staggered, with its
@@ -13593,6 +13597,7 @@ export class World {
   /** A fleeing actor reached its exit and LEAVES the zone. Generic monsters just
    *  vanish ("got away"); the Hunt beast migrates with its health preserved. */
   onFleeArrive(actor: Actor): void {
+    if (this.odyssey.escaped(actor)) return;
     actor.aiFleeing = false;
     if (this.onBeastEscape(actor)) return; // the Hunt handled it (migrated + despawned)
     this.slipAway(actor, `${actor.name} slips away!`);
@@ -17461,6 +17466,7 @@ export class World {
     const vfrac = (cur: number, max: number): number => max > 0 ? clamp(cur / max, 0, 1) : 1;
     return {
       schemaVersion: WORLD_SCHEMA_VERSION,
+      odyssey: this.odyssey.snapshot(),
       zones,
       nextGenId: this.nextGenId,
       time: this.time,
@@ -17679,6 +17685,7 @@ export class World {
     // Quests: active entries whose def AND zone both still stand; the
     // completed set rides verbatim (stale ids gate nothing — questDefOf
     // lookups simply miss them).
+    this.odyssey.restore(ws.odyssey);
     this.activeQuests = (ws.quests?.active ?? [])
       .filter(q => q && typeof q.questId === 'string' && this.questDefOf(q.questId)
         && typeof q.zoneId === 'string' && healed[q.zoneId])
@@ -27468,6 +27475,7 @@ export class World {
     if (!this.nearAnyQuestGiver()) return null;
     if (this.questRewardOffers().length) return 'Your keepsake awaits — choose a reward in the Quest Journal.';
     if (this.reliquaryLesson()) return 'A keepsake needs a home. Open your inventory and seat your charm in the Reliquary.';
+    if (this.nearQuestGiver() && this.odyssey.hasLocalLeads()) return 'Linger — I can mark the Odyssey leaders and their supply operations.';
     if (this.pendingTurnIns().length) return 'Linger — a bounty is yours to claim.';
     if (this.nextAcceptableQuest()) return this.heroKnown()
       ? 'Linger, {name} — I have work for you…'
@@ -27585,13 +27593,15 @@ export class World {
     const next = turnIns.length ? null : this.nextAcceptableQuest();
     const choices = (!turnIns.length && !next && !this.vocationOfferDeclined)
       ? this.vocationChoiceOffers() : [];
-    if (!turnIns.length && !next && !choices.length) { this.questGiverDwell = 0; return; }
+    const odysseyLeads = this.odyssey.hasLocalLeads() && this.nearQuestGiver();
+    if (!turnIns.length && !next && !choices.length && !odysseyLeads) { this.questGiverDwell = 0; return; }
     this.questGiverDwell += dt;
     if (this.questGiverDwell < QUESTGIVER_DWELL) return;
     this.questGiverDwell = 0;
+    if (odysseyLeads) this.odyssey.localLeads();
     if (turnIns.length) this.onQuestZoneCleared(turnIns[0]);
     else if (next) this.acceptQuest(next);
-    else this.vocationOfferRequested = true; // main loop opens the menu (once per dwell)
+    else if (choices.length) this.vocationOfferRequested = true; // main loop opens the menu (once per dwell)
   }
 
   /** Menu-accept a vocation chain step (routed through requestMeta like every
@@ -27843,6 +27853,27 @@ export class World {
   /** Accept a quest: GENERATE its directional zone (once) and wire it into the
    *  explored graph via placeZoneAt; the player then travels there. */
   private acceptQuest(q: QuestDef): void {
+    this.acceptOdysseyCompatibleQuest(q, true);
+  }
+
+  /** Enroll an existing Odyssey opportunity through the normal quest mint. */
+  enrollOdysseyQuest(q: QuestDef, reveal: boolean): void {
+    if (this.completedQuests.has(q.id) || this.activeQuests.some(a => a.questId === q.id)) return;
+    this.acceptOdysseyCompatibleQuest(q, reveal);
+  }
+
+  prepareOdysseyGround(faction: string, level: number, prepared: boolean, act: number): void {
+    const z = this.zoneMap[`quest_${odysseyQuestId(faction, 'leader')}`];
+    if (!z) return;
+    const count = prepared ? 0 : ODYSSEY_CFG.escortPerAct[Math.min(3, act)];
+    if (z.level === level && z.packs?.count[0] === count && z.packs?.size[0] === 1) return;
+    z.level = level;
+    z.packs = { count: [count, count], size: [1, 1], table: [{ id: odysseyFaction(faction).escort, weight: 1 }] };
+    this.zoneMemory.delete(z.id);
+    this.invalidateZonesSaveMemo();
+  }
+
+  private acceptOdysseyCompatibleQuest(q: QuestDef, reveal: boolean): void {
     const questSeed = (this.manifest.seed ^ hashStr(q.id)) >>> 0;
     q = { ...q, zone: resolveQuestZone(q, questSeed) };
     const town = this.zoneMap[START_ZONE];
@@ -27909,14 +27940,14 @@ export class World {
         this.notarizeRoad(anchor, def);
         // THE KNOWLEDGE LAW: an accepted quest's ground is TOLD ground — named
         // on the chart the way its anchor is (born veiled like every mint).
-        def.veiled = false;
+        def.veiled = !reveal;
         // The quest TELLS you the way ("head south") — the anchor it wired
         // to is named knowledge now. A veiled halo anchor would swallow the
         // drawn road (both ends must be visible), leaving the quest node
         // floating on the chart with no way marked; the accept lifts it —
         // and any standing portal onto the anchor re-speaks from live state
         // (the entry law's refresh).
-        if (anchor.veiled) {
+        if (reveal && anchor.veiled) {
           anchor.veiled = false;
           this.refreshExitLabels();
         }
@@ -27927,7 +27958,7 @@ export class World {
     // Name the bearing from the actual placement (band placement has no fixed compass).
     const ddx = target.x - from.map.x, ddy = target.y - from.map.y;
     const dirName = Math.abs(ddx) > Math.abs(ddy) ? (ddx > 0 ? 'east' : 'west') : (ddy > 0 ? 'south' : 'north');
-    this.notice(`Quest: ${q.offerLabel} — head ${dirName}.`, '#c8a8e8', 16, 'civic');
+    if (reveal) this.notice(`Quest: ${q.offerLabel} — head ${dirName}.`, '#c8a8e8', 16, 'civic');
   }
 
   /** Find a map coord where the radial LEVEL field reaches `targetLevel`, stepping
@@ -27980,6 +28011,7 @@ export class World {
   private onQuestZoneCleared(aq: { questId: string; zoneId: string; fieldDone: boolean }, questRewardChoice?: string): void {
     const idx = this.activeQuests.indexOf(aq);
     if (idx < 0) return;
+    this.odyssey.questCompleted(aq.questId);
     const q = this.questDefOf(aq.questId);
     if (q?.reward.choices?.length) {
       // No XP, chain stamp or case until a real choice fits in the bag.
@@ -44552,6 +44584,7 @@ export class World {
       }
     }
     if (!silent && actor.team === 'enemy') {
+      this.odyssey.killed(actor, credit);
       // THE SPOILS STORY: everything minted below wears this body's story —
       // the helpers clamp on it and stamp it (spoilStory, restored at the
       // block's end), and the marks catch any literal push (stampSpoils):
@@ -45915,6 +45948,8 @@ export class World {
    *  account (host/solo/couch — the keeper's progression shapes the keeper's
    *  market, exactly as stock size and the support share already do). */
   vendorTradeRefusal(v?: VendorDef): string | null {
+    const odysseyRefusal = this.odyssey.tradeRefusal();
+    if (odysseyRefusal) return odysseyRefusal;
     if (v && v.tradeGate === false) return null;
     // No catalog in scope here — trade gates speak feature/ledger avenues.
     if (gateMet(this.account, VENDOR_CFG.trade.gate, 'all', () => false)) return null;
@@ -46727,6 +46762,7 @@ export class World {
     this.feedMyceliaActivity();
     // Advance the living world (day/night, weather drift, faction territory).
     this.sim.update(dt, this.simView());
+    this.odyssey.update();
     // THE FORECHART: keep the veiled halo minted ahead of the walker, and grow
     // any far soundings the overlays have requested (world/forechart.ts).
     this.updateForechart();
@@ -61298,6 +61334,8 @@ export class World {
 
   /** The HUD's one-line description of what this zone wants from you. */
   objectiveText(): string {
+    const odysseyPressure = this.odyssey.pressureText();
+    if (odysseyPressure) return odysseyPressure;
     const o = this.zone.objective;
     if (o.kind === 'safe') return 'Sanctuary';
     // THE RESOLUTION LATCH (her ruling, 2026-08-07): a resolved venture's
