@@ -1806,6 +1806,10 @@ function tick(now: number): void {
         world.vocationOfferRequested = false;
         if (!ui.vocationOpen) ui.showVocationMenu();
       }
+      if (world.questRewardRequested && !ui.escapeMenuOpen) {
+        world.questRewardRequested = false;
+        ui.showQuestReward();
+      }
       // The mercenary outpost's calm parley asks to open the hire/retire menu.
       if (world.mercOutpostRequested && !ui.escapeMenuOpen) {
         world.mercOutpostRequested = false;

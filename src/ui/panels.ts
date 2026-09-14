@@ -37,6 +37,7 @@ import { bagBoard, canPlaceAt, overlappingItems, swapBlockerFits } from '../engi
 // ui/containerPane.ts; the panel only seats it, routes its gestures and
 // resolves carried pieces through the one lookup (findCarried).
 import { ContainerPane } from './containerPane';
+import { questRewardHtml } from './questRewards';
 import { containerOriginOf, findCarried, originContainerId } from '../engine/containers';
 import { CONTAINER_DEFS } from '../data/containers';
 import { BAG_SORT_MODES, type BagSortDir } from '../engine/bagsort';
@@ -169,7 +170,7 @@ import { MAP_LENS } from './mapLens';
 import { ATLAS_CFG, climateWords, featuresAt, featuresInRect } from '../world/atlas';
 import { climateAt } from '../world/climate';
 import { elevationAt, riverPathsInRect } from '../world/relief';
-import { applyCursor, CURSOR_COLORS, CURSOR_STYLES, CURSOR_MOTION_CFG } from '../core/cursor';
+import { applyCursor, CURSOR_COLORS, CURSOR_STYLES } from '../core/cursor';
 import { AIM_TICK_STYLES } from '../render/vis/aimtick';
 
 /** Neutral accent for packages that declare no colour of their own. */
@@ -1425,6 +1426,11 @@ export class UI {
   openMapTab(tab: 'map' | 'quests'): void {
     if (this.mapOpen && this.mapTab === tab) { this.toggleMap(); return; }
     this.mapTab = tab;
+    if (this.mapOpen) this.refreshMap(); else this.toggleMap();
+  }
+
+  showQuestReward(): void {
+    this.mapTab = 'quests';
     if (this.mapOpen) this.refreshMap(); else this.toggleMap();
   }
 
@@ -4897,8 +4903,11 @@ export class UI {
     // the last unit's answer must outlive the group it emptied, or the
     // reveal event eats itself.
     const spent = [...this.recallReveals.entries()]
-      .filter(([d]) => !groups.some(g => g.d === d))
-      .map(([d, reveal]) => {
+      .filter(([key]) => !groups.some(g => g.key === key))
+      .map(([key, reveal]) => {
+        // A reveal is keyed by GROUP KEY; the dropper id is its head (a
+        // pinned promise's key carries the gem after the bar).
+        const d = key.split('|')[0];
         const def = MONSTERS[d];
         return `<div style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid #2a2634;opacity:0.8">
           ${portraitOf(def)}
@@ -9204,6 +9213,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       ${this.closeGlyphHtml()}<h2>Quest Journal</h2>
       ${this.mapTabsHtml()}
       <div id="quest-scroll" style="overflow-y:auto;max-height:64vh;padding:2px 4px 8px 2px">
+        ${questRewardHtml(world)}
         <h3 style="font-size:12px;color:#c8a8e8;margin:4px 0 6px 0">Active (${log.active.length})</h3>
         ${activeHtml}
         <h3 style="font-size:12px;color:#8a8678;margin:14px 0 6px 0">Completed (${log.completed.length})</h3>
@@ -9213,6 +9223,15 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (!this.setPanelHtml(this.worldMap, html)) return;
     const qs = this.worldMap.querySelector<HTMLElement>('#quest-scroll');
     if (qs) qs.scrollTop = prevScroll;
+    this.worldMap.querySelectorAll<HTMLButtonElement>('[data-quest-reward]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        world.requestMeta({ t: 'questReward', questId: btn.dataset.questReward!, choiceId: btn.dataset.rewardChoice! });
+        if (world.completedQuests.has(btn.dataset.questReward!) && world.reliquaryLesson()) {
+          if (this.mapOpen) this.toggleMap();
+          this.containerPane.openFromMenu('reliquary');
+        } else this.refreshMap();
+      });
+    });
     this.wireMapTabs();
   }
 
@@ -10044,14 +10063,6 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
             style="margin-left:5px;width:26px;height:20px;vertical-align:middle;background:${c.css};
             border:2px solid ${c.css === s.cursor.color ? '#fff' : 'rgba(255,255,255,0.25)'};border-radius:3px"></button>`).join('')}</span>
       </div>
-      <div class="rebind-row"><label for="cursor-custom">Custom tint</label>
-        <input id="cursor-custom" type="color" value="${s.cursor.color}" aria-label="Custom cursor tint"></div>
-      <div class="rebind-row"><label for="cursor-idle">Cursor idle motion</label>
-        <input id="cursor-idle" type="checkbox" ${s.cursor.idleMotion ?? CURSOR_MOTION_CFG.enabled ? 'checked' : ''}></div>
-      <div class="rebind-row"><label for="cursor-idle-delay">Idle delay (seconds)</label>
-        <input id="cursor-idle-delay" type="number" min="${CURSOR_MOTION_CFG.minDelaySec}" max="${CURSOR_MOTION_CFG.maxDelaySec}" step="0.5"
-          value="${s.cursor.idleDelaySec ?? CURSOR_MOTION_CFG.delaySec}"></div>
-      <div class="acct-head">Cursors gently oscillate when the mouse rests; Wisp filaments drift. The aiming point stays fixed. Reduced-motion preferences are honored.</div>
       <h1>Information Stream</h1>
       <div class="acct-head">Compose your own stream of information: what announces, where it stacks,
         and how long it stands. Gold = shown; dimmed = muted. Every switch takes effect on the next frame.</div>
@@ -10534,17 +10545,6 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         this.renderOptions(root, onBack);
       });
     });
-    for (const id of ['cursor-custom', 'cursor-idle', 'cursor-idle-delay']) {
-      root.querySelector<HTMLInputElement>(`#${id}`)?.addEventListener('change', event => {
-        const input = event.currentTarget as HTMLInputElement;
-        const st = this.getSettings();
-        if (id === 'cursor-custom') st.cursor.color = input.value;
-        else if (id === 'cursor-idle') st.cursor.idleMotion = input.checked;
-        else st.cursor.idleDelaySec = Number.isFinite(input.valueAsNumber)
-          ? Math.max(CURSOR_MOTION_CFG.minDelaySec, Math.min(CURSOR_MOTION_CFG.maxDelaySec, input.valueAsNumber)) : CURSOR_MOTION_CFG.delaySec;
-        this.saveSettings(); applyCursor(st.cursor); this.renderOptions(root, onBack);
-      });
-    }
     root.querySelector<HTMLElement>('#opt-swapsticks')?.addEventListener('click', () => {
       const st = this.getSettings();
       st.pad.swapSticks = !st.pad.swapSticks;

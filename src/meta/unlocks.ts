@@ -24,7 +24,7 @@
 //   honest; balance/probe_classmastery.ts the ladder, the kit, the runes.
 // ---------------------------------------------------------------------------
 
-import { CLASS_DEEDS } from '../data/classdeeds';
+import { CLASS_DEEDS, discoveryCount } from '../data/classdeeds';
 import { encipher, revealScript } from '../data/runescript';
 import {
   FEATURE, LEDGER_ACCOUNT_DEATHS, LEDGER_CORPSES_RECLAIMED, LEDGER_CRAFTS_UNLOCKED,
@@ -175,7 +175,7 @@ export function maxSlotCount(): number {
  *
  *  "If someone doesn't know what they're looking for, they have to find
  *  what they're looking for first." Every non-starter class hangs in the
- *  Vault from the first day as a SHROUDED card: its name and body written
+ *  Vault once its structural prerequisites stand as a SHROUDED card: its name and body written
  *  in the vestiges' runes (data/runescript.ts — a shared lore alphabet), and beneath them its
  *  OBJECTIVES — an ANY-OF group of gatework avenues (meta/gates.ts), the
  *  counted forms welcome. Each objective is runes until it
@@ -186,6 +186,8 @@ export function maxSlotCount(): number {
  *    objectives — GateRow[] of gameplay deeds. Any one earns the class.
  *    chain      — parent ownership opens this branch of the rumor wall.
  *                 No implicit level requirement: each branch authors deeds.
+ *    town       — town introductions can precede an early discovery wave;
+ *                 progress earned before the introduction is retained.
  *    hint       — detailed instructions, gated behind objective readability.
  *
  *  The spec COMPILES onto the same generic gates every unlock rides
@@ -199,6 +201,10 @@ export interface ClassUnlockSpec {
   objectives?: readonly GateRow[];
   /** THE CHAIN — parent class id(s): ownership opens the branch; explicit deeds earn it. */
   chain?: string | string[];
+  /** Town introductions preceding this discovery wave; catalog ids, ANDed.
+   * Deeds still accumulate beforehand. Existing field discoveries keep their
+   * rare early surprises; these natural habits wait until town is established. */
+  town?: readonly string[];
   /** Detailed instructions, withheld until all objective rows are readable. */
   hint: string;
 }
@@ -216,6 +222,26 @@ export interface ClassBundleDef {
 }
 
 export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
+  // First natural discoveries: the board and quartermaster arrive before
+  // these habits become new starting choices. No death-count or run wall.
+  { classId: 'spellblade',
+    rumor: 'A familiar blade begins to carry a stranger kind of light.',
+    blurb: 'Steel carries the storm: strike, lash with fire, then slip through a mirage.',
+    skillIds: ['static_strike', 'hellfire_lash', 'mirage_step'],
+    supportIds: ['static_charge', 'slow_burn'],
+    unlock: { town: ['feat_bounty_board', 'feat_quest_giver'], ...CLASS_DEEDS.spellblade } },
+  { classId: 'cryomancer',
+    rumor: 'The cold lingers where you pass, patient enough to hold the world still.',
+    blurb: 'Winter as control: piercing frost prepares a freeze, and ice covers the retreat.',
+    skillIds: ['frost_pulse', 'flash_freeze', 'shatterstep'],
+    supportIds: ['biting_cold', 'chill_chance'],
+    unlock: { town: ['feat_bounty_board', 'feat_quest_giver'], ...CLASS_DEEDS.cryomancer } },
+  { classId: 'apothecary',
+    rumor: 'Hands that have learned to mend begin to understand the other use of a dose.',
+    blurb: 'Poison and remedy: stack venom, seed spores, and cleanse wounds while the dose works.',
+    skillIds: ['venom_bolt', 'spore_bloom', 'cleansing_light'],
+    supportIds: ['envenomed_tips', 'poison_chance'],
+    unlock: { town: ['feat_bounty_board', 'feat_quest_giver'], ...CLASS_DEEDS.apothecary } },
   // --- THE BLOOD LINE: the Warrior is the Strength branch — its road opens
   // the STR kin first, then the Prowess and Fortitude anchors; each anchor,
   // owned and lived in, opens its own deeper kin.
@@ -304,8 +330,8 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     // enough of what death took from you, OR put enough of the risen back
     // down. Both counted, both ACCOUNT-DIRECT stamps (account.ts).
     unlock: { objectives: [
-      { ledger: LEDGER_CORPSES_RECLAIMED, n: 20, label: 'reclaim twenty of your own corpses' },
-      { ledger: bossSlainKey('undead'), n: 5, label: 'slay five bosses of the undead' },
+      { ledger: LEDGER_CORPSES_RECLAIMED, n: discoveryCount(20), label: `reclaim ${discoveryCount(20)} of your own corpses` },
+      { ledger: bossSlainKey('undead'), n: discoveryCount(5), label: `slay ${discoveryCount(5)} bosses of the undead` },
     ],
       hint: 'Every corpse you leave on the field is a lesson someone can read. Read enough of your own, or put enough of the risen back down, and the lesson turns.' } },
   { classId: 'tamer',
@@ -463,7 +489,7 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     skillIds: ['ashen_vow', 'transgression', 'blood_mortgage'],
     // THE COUNTED DISCOVERY (ledgerCounts debut): the account's own deaths
     // are the syllabus — the same lifetime counter the Immortal reads.
-    unlock: { objectives: [{ ledger: LEDGER_ACCOUNT_DEATHS, n: 8, label: 'die eight times' }],
+    unlock: { objectives: [{ ledger: LEDGER_ACCOUNT_DEATHS, n: discoveryCount(8), label: `die ${discoveryCount(8)} times` }],
       hint: 'You have died enough times to notice: something in you keeps the receipts. An order exists that balances them.' } },
   { classId: 'falconer',
     rumor: 'A circling shape folds its wings, guided by the hand below.',
@@ -510,15 +536,16 @@ function classBundleEntry(b: ClassBundleDef): Unlockable {
   // class-level requirements are reserved for the mastery ladder below.
   const spec = b.unlock;
   const chain = spec.chain === undefined ? [] : Array.isArray(spec.chain) ? spec.chain : [spec.chain];
+  const doors = [...chain.map(classBundleId), ...(spec.town ?? [])];
   const objectives: GateRow[] = [
     ...(spec.objectives ?? []),
   ];
   return {
     id: classBundleId(b.classId), kind: 'class', cost: 0, earned: true,
     reqAnyOf: objectives,
-    ...(chain.length ? { requiresUnlock: chain.map(classBundleId) } : {}),
+    ...(doors.length ? { requiresUnlock: doors } : {}),
     label: `Class: ${name}`,
-    description: `${b.blurb} Available at character creation. Begin a run as the ${name} to open its Vocation quests.`
+    description: `${b.blurb} Available at character creation.`
       + ` Added to the drop pool: ${gemNames(b.skillIds, SKILLS)}`
       + (sups.length ? ` · supports: ${gemNames(sups, SUPPORTS)}` : '') + '.',
     payload: { classId: b.classId, skillIds: [...b.skillIds], supportIds: [...sups], hint: spec.hint, rumor: b.rumor },
@@ -1134,7 +1161,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   //     tease law, so the player SEES the next shelf and the road to it.
   //     A second container is one ContainerDef; its rows arrive here by
   //     construction. -------------------------------------------------------
-  ...CONTAINER_DEFS.flatMap(c => c.ladder.map((rung, i): Unlockable => ({
+  ...CONTAINER_DEFS.flatMap(c => c.ladder.flatMap((rung, i): Unlockable[] => rung.rewardOnly ? [] : [{
     id: `feat_${rung.feature}`, kind: 'feature', cost: rung.cost, reqLevel: 0,
     ...(i === 0
       ? (c.foundLedger ? { reqLedger: c.foundLedger } : {})
@@ -1145,7 +1172,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     label: rung.label,
     description: rung.description,
     payload: { flag: rung.feature },
-  }))),
+  }])),
 ];
 
 /** Static catalog by id — the resolution table for `requiresUnlock` ladders. */

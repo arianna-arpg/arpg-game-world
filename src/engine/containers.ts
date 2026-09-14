@@ -27,9 +27,9 @@
 //    items.ts CONTAINER_CATEGORIES, so the drop roller carries them without
 //    a doll slot (the relic has no body seat and needs none).
 //  · DISCOVERY: `foundLedger` stamps the account at the first GENUINE world
-//    mint of an accepted item (World.dropGearAt) — the Vault card appears
-//    once the player has SEEN one; buying nothing before the world has
-//    taught it (the gem index's own doctrine).
+//    mint of an accepted item (World.dropGearAt). A purchasable first rung
+//    can gate on it; rewardOnly rungs come from quests. dropLedger can keep
+//    ambient mints sealed until the container's lesson is lived.
 //  · THE ONE READ: containerBoard(def) resolves through an installed source
 //    (the World's account fold; a co-op client's shipped boards), so the
 //    engine, the panel, and the landing preview all test the same cells.
@@ -59,6 +59,8 @@ export interface ContainerRung {
   label: string;
   description: string;
   cost: number;
+  /** Earned through a quest; has no purchasable Vault row. */
+  rewardOnly?: boolean;
   /** The cells this rung OPENS, as a char grid ('#' = open). Rows may be
    *  ragged/short — the canvas is the union of every rung's extent. */
   cells: readonly string[];
@@ -93,6 +95,8 @@ export interface ContainerDef {
   /** THE DISCOVERY LEDGER: account key stamped when a genuine world mint of
    *  an accepted piece lands (World.dropGearAt) — the Vault card's gate. */
   foundLedger?: string;
+  /** Ambient mints of accepted pieces wait until this account lesson is lived. */
+  dropLedger?: string;
   ladder: readonly ContainerRung[];
 }
 
@@ -428,6 +432,7 @@ export function containerMisfits(board: ContainerBoard | null, held: readonly It
   }
   return out;
 }
+
 // ------------------------------------------------------------ THE SEAT LAW --
 // engine/seatlaw.ts owns the vocabulary (the seatPower_ amplifier stats and
 // the single-hop law); this is the BOARD's half — who touches whom.

@@ -1762,6 +1762,27 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'staff', params: { orb: 'glow' } },
     ],
   },
+  class_spellblade: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'sword', params: { len: 1.15 } },
+      { kind: 'runes', color: '#efc868', params: { n: 3 } },
+    ],
+  },
+  class_cryomancer: {
+    parts: [
+      { kind: 'robe', color: '#9cc6de' },
+      { kind: 'staff', params: { orb: 'glow' } },
+      { kind: 'halo', color: '#c8f0ff', scale: 0.85, alpha: 0.4 },
+    ],
+  },
+  class_apothecary: {
+    parts: [
+      { kind: 'robe', color: '#7d9c60' },
+      { kind: 'hood', x: 0.3, role: 'cloth' },
+      { kind: 'staff', color: '#b3d981', params: { orb: 'glow' } },
+    ],
+  },
   class_resonator: {
     parts: [
       { kind: 'robe' },

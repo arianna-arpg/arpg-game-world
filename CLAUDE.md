@@ -96,7 +96,9 @@ in the pack, live only when seated; the Vault rows, menu page, the inventory's
 RIBBON DRAWER beside SKILLS / PASSIVES (`ui/containerPane.ts` — a minted
 docked root that enrolls in THE FOLIO's inventory-side book, so it tabs with
 Skills and the trees), save, corpse and co-op wire all derive from the def;
-rung 0 surfaces on the `relic_found` discovery ledger. Contract:
+rung 0 is a one-cell reward from the seeded lost-relic quest
+(`quests/reliquary.ts`); first seating completes `reliquary_lesson` and opens
+ambient relic drops, then the Vault grows the ring. Contract:
 `docs/engine/containers.md`; probe `balance/probe_reliquary.ts`.
 
 Class discovery combat recipes live in `src/data/classdeeds.ts`, with reusable

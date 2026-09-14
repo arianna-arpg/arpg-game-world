@@ -20,6 +20,8 @@
 import { SAVE_COMPATIBILITY } from './saveCompatibility';
 import type { CraftLore } from '../engine/crafting';
 import { CLASSES } from '../data/classes';
+import { COMBAT_DEEDS } from '../data/classdeeds';
+import { reconcileDeedProgress } from '../engine/deeds';
 import { DEATH_SCHEMA, MAX_DEATH_RECORDS, type DeathRecord } from './death';
 import { clampFrequency, DEFAULT_FREQUENCY, type FrequencyProfile } from '../packages/frequency';
 // Type-only — modes.ts value-imports from this file; a runtime import back
@@ -165,6 +167,7 @@ export const FEATURE = {
    *  later rung OPENS more cells of its frame (data/containers.ts is the
    *  ladder; meta/unlocks.ts DERIVES the Vault rows from it). */
   RELIQUARY: 'reliquary',
+  RELIQUARY_RING: 'reliquary_ring',
   RELIQUARY_SHELVES: 'reliquary_shelves',
   RELIQUARY_HEART: 'reliquary_heart',
   RELIQUARY_CASE: 'reliquary_case',
@@ -207,9 +210,8 @@ export const LEDGER_CRAFTS_UNLOCKED = 'crafts_unlocked';
 export const LEDGER_ZONES_EXPLORED = 'zones_explored';
 /** A RELIC genuinely minted into the world (World.dropGearAt's world-mint
  *  lane — never a discard, a reclaim or an owed pay; the drop index's own
- *  doctrine). Flag semantics. Gates THE RELIQUARY's first rung: you can only
- *  buy a case for what the world has shown you (data/containers.ts
- *  foundLedger). */
+ *  doctrine). Flag semantics. Records a world find; the Reliquary itself is
+ *  now earned from its quest, and its lesson gates ambient relic mints. */
 export const LEDGER_RELIC_FOUND = 'relic_found';
 
 /** THE DROP INDEX (the bestiary's sibling, same ledger, same doctrine): one
@@ -574,6 +576,7 @@ export function serializeAccount(a: Account): AccountSave {
 export function deserializeAccount(s: AccountSave): Account | null {
   if (!s || s.schemaVersion !== SCHEMA_VERSION) return null;
   const ledger = s.ledger ?? {};
+  reconcileDeedProgress(ledger, COMBAT_DEEDS);
   // MIGRATION SEED: accounts predating the death counter get credited what the
   // corpse ring still remembers (a floor, not the truth — the ring holds only
   // MAX_DEATH_RECORDS). New accounts count every death from zero.

@@ -7,6 +7,7 @@
 import type { QuestDef } from './types';
 import { vocationQuestDefs } from './vocations';
 import { revengeQuestDefs } from './revenge';
+import { Q_RELIQUARY } from './reliquary';
 import { registerGenPin } from '../engine/genPins';
 
 /** The Hollow Vault's arena recipe — a quest zone spec is the ONLY thing that
@@ -45,27 +46,8 @@ export const Q_UNDEAD_SOUTH: QuestDef = {
   // next: 'rift_east_l10', // (a future chain link, gated on requiresLedger: 'undead_south_cleared')
 };
 
-/** A FLOATING find-it: the relic's resting place mints UNCHARTED + DISCONNECTED
- *  to the east — you must EXPLORE toward the "?" on the map until a road forms on
- *  approach. Clear it, then return. Its reward opens the chained follow-up below. */
-export const Q_RELIC_EAST: QuestDef = {
-  id: 'relic_east_l8',
-  giver: 'townsfolk_questgiver',
-  offerLabel: 'Find the lost relic, somewhere to the east',
-  offerAtLevel: 8,
-  zone: {
-    tileset: 'crypt', direction: 'e', distance: 2, level: 'character',
-    objective: { kind: 'clear' },
-    forceWaypoint: true,
-    floating: true, // fog-of-war: no road until you explore near it
-  },
-  reward: { xp: 500, gems: 4, ledger: { quests_completed: 1, relic_recovered: 1 } },
-  turnIn: {
-    giver: 'townsfolk_questgiver',
-    prompt: 'The relic is in hand — return to the quartermaster.',
-  },
-  next: 'relic_depths_l8',
-};
+/** Stable id for the lost-relic chain; its introduction now lives with the case. */
+export const Q_RELIC_EAST: QuestDef = Q_RELIQUARY;
 
 /** The chained follow-up: gated behind relic_recovered (the prior reward's key).
  *  Force-connected (a known path now), boss-capped, and likewise turn-in. */
@@ -119,7 +101,7 @@ export const Q_UNMADE: QuestDef = {
 
 export const QUESTS: Record<string, QuestDef> = {
   [Q_UNDEAD_SOUTH.id]: Q_UNDEAD_SOUTH,
-  [Q_RELIC_EAST.id]: Q_RELIC_EAST,
+  [Q_RELIQUARY.id]: Q_RELIQUARY,
   [Q_RELIC_DEPTHS.id]: Q_RELIC_DEPTHS,
   [Q_UNMADE.id]: Q_UNMADE,
   // VOCATION CHAINS — generated from data/vocations.ts (one sequential chain

@@ -4,8 +4,8 @@ import { deedKey } from '../src/engine/deeds';
 // ONE-OFF PROBE — THE OBJECTIVE WEB + THE MOOT LAW (meta/unlocks.ts):
 // a class is never BOUGHT — every non-starter hangs SHROUDED (written in the
 // vestiges' runes) carrying its OBJECTIVES: play thresholds (a class played
-// to a level), counted deeds (twenty own corpses reclaimed, five bosses of
-// the undead, eight deaths), hard lessons (seized by a grip, a trap sprung
+// to a level), counted deeds (own corpses reclaimed, undead bosses slain,
+// account deaths), hard lessons (seized by a grip, a trap sprung
 // underfoot, a crown/warlord/the Unmade put down), or a CHAIN (the parent
 // owned = the structural door, the parent played = the objective). The
 // authored spec COMPILES onto the same generic gates every unlock rides
@@ -37,6 +37,7 @@ import {
 } from '../src/meta/account';
 import { CLASS_WEB_CFG } from '../src/data/classTiers';
 import { CLASSES } from '../src/data/classes';
+import { QUESTS } from '../src/quests/defs';
 import { encipher, isRune, revealScript } from '../src/data/runescript';
 import { LEDGER_SEIZED } from '../src/engine/grab';
 import { LEDGER_TRAP_SPRUNG, type PlacedTrapwork } from '../src/engine/trapworks';
@@ -104,14 +105,15 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
       const chain = chainOf(b);
       const gotDoor = u.requiresUnlock === undefined ? []
         : Array.isArray(u.requiresUnlock) ? u.requiresUnlock : [u.requiresUnlock];
-      const doorOk = chain.length === gotDoor.length && chain.every(id => gotDoor.includes(classBundleId(id)));
+      const doors = [...chain.map(classBundleId), ...(b.unlock.town ?? [])];
+      const doorOk = doors.length === gotDoor.length && doors.every(id => gotDoor.includes(id));
       const rows = u.reqAnyOf ?? [];
       const rowsOk = JSON.stringify(rows) === JSON.stringify(b.unlock.objectives ?? []);
       return doorOk && rowsOk && rows.every(r => !r.classLevel) && u.payload.hint === b.unlock.hint;
     }));
-  check('weave: the Necromancer asks her two deeds — twenty own corpses OR five undead bosses',
+  check('weave: the Necromancer asks fifteen own corpses OR four undead bosses after tuning',
     JSON.stringify((classUnlockFor('necromancer')!.reqAnyOf ?? []).map(r => [r.ledger, r.n]))
-      === JSON.stringify([[LEDGER_CORPSES_RECLAIMED, 20], [bossSlainKey('undead'), 5]]));
+      === JSON.stringify([[LEDGER_CORPSES_RECLAIMED, 15], [bossSlainKey('undead'), 4]]));
   check('weave: slot tiers each carry the MOOT LAW at their own count',
     SLOT_TIERS.every(t => {
       const u = UNLOCK_CATALOG.find(x => x.id === t.id);
@@ -134,7 +136,8 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
       if (reachable.has(b.classId)) continue;
       const u = classUnlockFor(b.classId)!;
       // The structural door: every chain parent claimed.
-      const doorOk = chainOf(b).every(id => reachable.has(id));
+      const doorOk = chainOf(b).every(id => reachable.has(id))
+        && (b.unlock.town ?? []).every(id => UNLOCK_CATALOG.some(u => u.id === id && u.kind === 'feature'));
       // ANY ONE objective satisfiable: a played class that is reachable, or a fact earnable in the wild.
       const anyOk = (u.reqAnyOf ?? []).some(r => {
         if (r.classLevel) return reachable.has(r.classLevel.classId);
@@ -163,7 +166,7 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
   const visibleSlotIds = (): string[] => availableUnlocks(a)
     .filter(u => u.kind === 'slot').map(u => u.id);
   const shroudedIds = (): string[] => shroudedClassUnlocks(a).map(u => (u.kind === 'class' ? u.payload.classId : '')).sort();
-  const unchained = CLASS_BUNDLES.filter(b => chainOf(b).length === 0).map(b => b.classId).sort();
+  const unchained = CLASS_BUNDLES.filter(b => chainOf(b).length === 0 && !b.unlock.town?.length).map(b => b.classId).sort();
 
   check('fresh: no class is ever STOCK (earned entries never stand for sale)', visibleClassIds().length === 0);
   check('fresh: every unchained class hangs shrouded; chained cards wait behind their parent',
@@ -179,25 +182,26 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
 
   // THE REVEAL: objectives read runes until one stands a quarter along.
   const necro = classUnlockFor('necromancer')!;
-  const quarter = Math.ceil(20 * CLASS_WEB_CFG.revealFrac);
+  const corpseGoal = necro.reqAnyOf![0].n!;
+  const quarter = Math.ceil(corpseGoal * CLASS_WEB_CFG.revealFrac);
   a.ledger[LEDGER_CORPSES_RECLAIMED] = quarter - 1;
   check('reveal: just short of a quarter, the objectives stay shrouded (the progress still reads)',
     !classUnlockProgress(a, necro).revealed && classUnlockProgress(a, necro).rows[0].frac > 0);
   a.ledger[LEDGER_CORPSES_RECLAIMED] = quarter;
   const read = classUnlockProgress(a, necro);
   check('reveal: a quarter of one deed reveals only that objective, with progress',
-    read.revealed && read.rows.length === 2 && !read.met && read.rows[0].frac === quarter / 20
+    read.revealed && read.rows.length === 2 && !read.met && read.rows[0].frac === quarter / corpseGoal
     && read.rows[0].revealed && !read.rows[1].revealed && read.rows[1].frac === 0);
   check('reveal: the spoken lines are hers', read.rows.map(r => r.label).join(' | ')
-    === 'reclaim twenty of your own corpses | slay five bosses of the undead');
+    === 'reclaim 15 of your own corpses | slay 4 bosses of the undead');
   // Levels stay mastery-only; discovery reads attributable deeds instead.
   a.ledger[classLevelLedgerKey('magician', 10)] = 1;
   check('discovery: level milestones alone claim no new classes', settleClassUnlocks(a).length === 0);
-  a.ledger[deedKey('elements_landed')] = 1;
+  a.ledger[deedKey('elements_rehearsed')] = 1;
   check('reveal: one of three elements reveals the Sorcerer objective',
     classUnlockProgress(a, classUnlockFor('sorcerer')!).rows[0].frac === 1 / 3 && classUnlockProgress(a, classUnlockFor('sorcerer')!).revealed);
-  a.ledger[deedKey('elements_landed')] = 3;
-  a.ledger[deedKey('fire_hits')] = 80;
+  a.ledger[deedKey('elements_rehearsed')] = 3;
+  a.ledger[deedKey('fire_hits')] = CLASS_DEEDS.pyromancer.objectives[0].n;
   const got = settleClassUnlocks(a).map(u => (u.kind === 'class' ? u.payload.classId : '')).sort();
   check('claim: elemental practice yields Sorcerer and Pyromancer', got.join(',') === 'pyromancer,sorcerer', got.join(','));
   check('claim: the claimed class is owned, its gems in the pool, its card off the wall',
@@ -212,25 +216,25 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
 
   // THE CHAIN: the Necromancer's deed claims it; the Summoner's card APPEARS
   // (the door) but claims only once the companion deed is met.
-  a.ledger[LEDGER_CORPSES_RECLAIMED] = 20;
-  check('claim: twenty corpses yield the Necromancer', settleClassUnlocks(a).some(u => u.id === necro.id) && a.unlockedClasses.has('necromancer'));
+  a.ledger[LEDGER_CORPSES_RECLAIMED] = corpseGoal;
+  check('claim: the tuned corpse goal yields the Necromancer', settleClassUnlocks(a).some(u => u.id === necro.id) && a.unlockedClasses.has('necromancer'));
   check('chain: the Summoner hangs shrouded now (the door opened), unclaimed',
     shroudedIds().includes('summoner') && !a.unlockedClasses.has('summoner'));
   check('chain: its objective is companion kills, never a parent level',
     classUnlockProgress(a, classUnlockFor('summoner')!).rows[0].label === CLASS_DEEDS.summoner.objectives[0].label);
-  a.ledger[deedKey('companion_kills')] = 30;
-  check('chain: thirty companion kills claim the Summoner', settleClassUnlocks(a).some(u => u.id === classUnlockFor('summoner')!.id));
+  a.ledger[deedKey('companion_kills')] = CLASS_DEEDS.summoner.objectives[0].n;
+  check('chain: the companion threshold claims the Summoner', settleClassUnlocks(a).some(u => u.id === classUnlockFor('summoner')!.id));
 
   // The hard lesson and the counted deed, claimed the same way.
   a.ledger[LEDGER_SEIZED] = 1;
   check('hard lesson: seized_by_grip claims the Brawler', settleClassUnlocks(a).some(u => u.id === classUnlockFor('brawler')!.id));
-  a.ledger['account_deaths'] = 7;
-  check('counted: seven deaths keep the Flagellant shrouded', settleClassUnlocks(a).length === 0 && shroudedIds().includes('flagellant'));
-  a.ledger['account_deaths'] = 8;
-  check('counted: the eighth death claims the Flagellant', settleClassUnlocks(a).some(u => u.id === classUnlockFor('flagellant')!.id));
+  a.ledger['account_deaths'] = 5;
+  check('counted: five deaths keep the Flagellant shrouded', settleClassUnlocks(a).length === 0 && shroudedIds().includes('flagellant'));
+  a.ledger['account_deaths'] = 6;
+  check('counted: the sixth death claims the Flagellant', settleClassUnlocks(a).some(u => u.id === classUnlockFor('flagellant')!.id));
 
   // THE MERGED VIEW: a run-ledger deed claims through the view, the account ledger untouched.
-  const view = { ...a.ledger, [deedKey('distant_projectile_hits')]: 60, [deedKey('evades')]: 25 };
+  const view = { ...a.ledger, [deedKey('distant_projectile_hits')]: CLASS_DEEDS.ranger.objectives[0].n, [deedKey('evades')]: CLASS_DEEDS.swashbuckler.objectives[0].n };
   const viaView = settleClassUnlocks(a, view).map(u => (u.kind === 'class' ? u.payload.classId : '')).sort();
   check('view: a merged ledger claims deeds without rewriting the account ledger',
     viaView.join(',') === 'ranger,swashbuckler' && a.ledger[deedKey('evades')] === undefined, viaView.join(','));
@@ -466,10 +470,13 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
     .some(id => !ids.has(id)));
   check('parity: every requiresUnlock id resolves (a typo is a forever-invisible row)',
     badReq.length === 0, badReq.map(u => u.id).join(','));
-  const grantedFlags = new Set(all.filter(u => u.kind === 'feature').map(u => (u as { payload: { flag: string } }).payload.flag));
+  const grantedFlags = new Set([
+    ...all.filter(u => u.kind === 'feature').map(u => (u as { payload: { flag: string } }).payload.flag),
+    ...Object.values(QUESTS).flatMap(quest => quest.reward.features ?? []),
+  ]);
   const orphanChains = all.filter(u => u.kind === 'feature' && u.requiresFeature !== undefined
     && !grantedFlags.has(u.requiresFeature));
-  check('parity: every requiresFeature flag is granted by some row (no unreachable chains)',
+  check('parity: every requiresFeature flag has an authored unlock or quest grant (no unreachable chains)',
     orphanChains.length === 0, orphanChains.map(u => u.id).join(','));
   const flagSellers = new Map<string, number>();
   for (const u of all) if (u.kind === 'feature') {
@@ -493,12 +500,12 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
     CLASS_BUNDLES.every(b => !/\d/.test(b.rumor)
       && CLASSES.every(c => !new RegExp(`\\b${c.name}\\b`, 'i').test(b.rumor))));
   const plainCount = (s: string): number => [...s].filter(ch => /[a-z]/i.test(ch)).length;
-  a.ledger[deedKey('elements_landed')] = 1;
+  a.ledger[deedKey('elements_rehearsed')] = 1;
   const partial = classRumorRead(a, u);
   check('mystery: first credit reveals prose and the now-qualified deed, never the name',
     plainCount(partial.body) > 0 && [...partial.body].some(isRune)
     && partial.rows[0].label === CLASS_DEEDS.sorcerer.objectives[0].label && partial.title === fresh.title);
-  a.ledger[deedKey('elements_landed')] = 2;
+  a.ledger[deedKey('elements_rehearsed')] = 2;
   check('mystery: more progress reveals more prose', plainCount(classRumorRead(a, u).body) > plainCount(partial.body));
   check('cipher: tiny reveal fraction shows something; just below full retains runes; full reads plainly',
     plainCount(revealScript(b.rumor, 0.001)) > 0 && [...revealScript(b.rumor, 0.999)].some(isRune)
@@ -532,13 +539,15 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
       encipher(revealScript(b.rumor, frac)) === encipher(b.rumor))));
   const proseAccount = makeAccount(), fire = classUnlockFor('pyromancer')!;
   const fireProse = CLASS_BUNDLES.find(b => b.classId === 'pyromancer')!.rumor;
-  proseAccount.ledger[deedKey('fire_hits')] = 63;
+  const fireGoal = CLASS_DEEDS.pyromancer.objectives[0].n;
+  const readableAt = Math.ceil(fireGoal * CLASS_WEB_CFG.proseRevealFrac);
+  proseAccount.ledger[deedKey('fire_hits')] = readableAt - 1;
   check('mystery: prose still contains runes just below 80% objective progress',
     [...classRumorRead(proseAccount, fire).body].some(isRune));
-  for (const hits of [64, 79]) {
+  for (const hits of [readableAt, fireGoal - 1]) {
     proseAccount.ledger[deedKey('fire_hits')] = hits;
     const legible = classRumorRead(proseAccount, fire);
-    check(`mystery: ${hits}/80 hits leave readable prose but a hidden, unearned class`,
+    check(`mystery: ${hits}/${fireGoal} hits leave readable prose but a hidden, unearned class`,
       legible.body === fireProse && legible.title === encipher('unknown calling')
       && !classUnlockProgress(proseAccount, fire).met && settleClassUnlocks(proseAccount).length === 0
       && !proseAccount.unlockedClasses.has('pyromancer') && proseAccount.pendingClassUnlocks.size === 0);
@@ -546,7 +555,7 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
   const proseThreshold = CLASS_WEB_CFG.proseRevealFrac;
   try {
     CLASS_WEB_CFG.proseRevealFrac = 0.75;
-    proseAccount.ledger[deedKey('fire_hits')] = 60;
+    proseAccount.ledger[deedKey('fire_hits')] = Math.ceil(fireGoal * CLASS_WEB_CFG.proseRevealFrac);
     check('mystery: full prose threshold is configurable independently of objective readability',
       classRumorRead(proseAccount, fire).body === fireProse && CLASS_WEB_CFG.revealFrac === 0.25);
   } finally { CLASS_WEB_CFG.proseRevealFrac = proseThreshold; }
@@ -559,7 +568,7 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
   a.unlockedSupports.add('some_vestige');
   a.ledger['gemdrop:some_vestige'] = 99;
   check('mystery: vestige discoveries never translate the prose', classRumorRead(a, u).body === before);
-  a.ledger[deedKey('elements_landed')] = 3;
+  a.ledger[deedKey('elements_rehearsed')] = 3;
   check('acknowledgement: refuses an unearned class', !acknowledgeClassUnlock(a, u));
   settleClassUnlocks(a);
   const shelf = vaultShelfCensus(a).find(c => c.tab.id === 'classes')!;

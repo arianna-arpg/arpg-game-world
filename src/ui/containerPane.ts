@@ -150,9 +150,10 @@ export class ContainerPane {
     return this.owned().map(c => {
       const board = containerBoard(c)!;
       const n = this.held(c.id).length;
+      const reliquaryLesson = c.id === 'reliquary' && this.host.world().reliquaryLesson();
       return `<button data-containerflap="${esc(c.id)}" class="build-ribbon" aria-expanded="${this.isOpen(c.id)}"
           aria-controls="${containerPanelId(c.id)}" title="${esc(c.blurb)}">
-          <span class="build-ribbon-label">${c.glyph} ${esc(c.label.toUpperCase())}</span>
+          <span class="build-ribbon-label">${c.glyph} ${esc(c.label.toUpperCase())}${reliquaryLesson ? ' · LESSON' : ''}</span>
           <span class="build-ribbon-count" title="${n} seated of ${board.cells} open seats">${n}/${board.cells}</span>
         </button>`;
     }).join('');
@@ -260,6 +261,9 @@ export class ContainerPane {
     const CELL = this.host.cellPx;
     const full = containerFullBoard(def);
     const held = this.held(id);
+    const reliquaryLesson = id === 'reliquary' && this.host.world().reliquaryLesson();
+    const lessonCharm = reliquaryLesson ? this.host.seat().meta.items.find(i =>
+      ITEM_BASES[i.baseId]?.category === 'relic' && itemGridSize(i).w === 1 && itemGridSize(i).h === 1) : undefined;
     const boardW = Math.max(1, full.w) * CELL, boardH = Math.max(1, full.h) * CELL;
 
     // THE BOARD: live seats are drop cells (the landing law lights them);
@@ -270,7 +274,7 @@ export class ContainerPane {
         const px = `position:absolute;left:${x * CELL}px;top:${y * CELL}px;width:${CELL - 2}px;height:${CELL - 2}px;box-sizing:border-box;`;
         if (boardOpenAt(board, x, y)) {
           cells += `<div data-cell="${x}:${y}" data-drop="containerCell:${esc(id)}:${x}:${y}"
-            style="${px}background:#16131d;border:1px solid #2a2634"></div>`;
+            style="${px}background:#16131d;border:1px solid ${reliquaryLesson ? '#e4cb97;box-shadow:inset 0 0 12px #9b805566' : '#2a2634'}"></div>`;
         } else if (boardOpenAt(full, x, y)) {
           const rung = containerRungAt(def, x, y);
           cells += `<div title="${esc(rung ? `Sealed: opens with ${rung.label} (the Vault)` : 'Sealed')}"
@@ -282,6 +286,14 @@ export class ContainerPane {
     const sealed = full.cells - board.cells;
 
     el.innerHTML = `${this.host.closeGlyphHtml()}<h2>${def.glyph} ${esc(def.label)}</h2>
+      ${reliquaryLesson ? `<div style="padding:10px;margin-bottom:10px;border:1px solid #9b8055;border-radius:5px;color:#e4cb97;font-size:12px;line-height:1.6">
+        <strong>A place for the unremembered</strong><br>
+        A charm carried in your pack is silent. Drag your reward onto the glowing seat to wake its power,
+        or use the button below. Taking it out removes that power.<br>
+        Your first seating teaches you to recognize relics in the wilds. More seats await in the Vault.
+        ${lessonCharm ? `<button data-reliquary-lesson-seat="${lessonCharm.uid}" style="display:block;width:100%;margin-top:8px;white-space:normal">Seat ${esc(lessonCharm.name)}</button>`
+          : '<br>Bring your recovered charm from the pack. If it was dropped, retrieve it first.'}
+      </div>` : ''}
       <div style="color:#8a8678;font-size:11px;margin:-4px 0 8px">${held.length} seated · ${board.cells} seat${board.cells === 1 ? '' : 's'} open${sealed > 0 ? ` · ${sealed} sealed` : ''}</div>
       <div style="display:flex;justify-content:center">
         <div data-bag-grid="c:${esc(id)}" data-container-grid="${esc(id)}"
@@ -297,6 +309,11 @@ export class ContainerPane {
         Sealed seats open through the Vault.</span>
       </div>
       <div style="margin-top:6px;color:#8a8678;font-size:10px">${this.host.lockHintHtml()}</div>`;
+    el.querySelector<HTMLButtonElement>('[data-reliquary-lesson-seat]')?.addEventListener('click', ev => {
+      const uid = Number((ev.currentTarget as HTMLButtonElement).dataset.reliquaryLessonSeat);
+      this.host.world().requestMeta({ t: 'containerPlace', container: id, uid });
+      this.host.refresh();
+    });
 
     // THE KEEPER'S MARK, HELD, on the drawer's tiles — the bag's own hold
     // gesture (a tap unseats, a hold locks), through the panel's one seam.

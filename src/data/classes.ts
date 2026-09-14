@@ -704,7 +704,61 @@ export const CLASSES: ClassDef[] = [
     // the wards (Purity of Elements): the bell-founder's liturgy.
     bar: ['tuning_strike', 'shatterchord', 'purity_of_elements', null, null, null, null, null],
     startNode: 'wil_start',
-  }
+  },
+  {
+    id: 'spellblade', name: 'Spellblade', look: 'class_spellblade',
+    description: 'An elemental close fighter. Bank lightning in your blade, lash through a crowd with fire, and slip away through a mirage.',
+    color: '#e8bd78',
+    attributes: {
+      strength: 14, prowess: 0, fortitude: 4,
+      dexterity: 16, finesse: 0, charisma: 0,
+      intelligence: 12, wisdom: 0, willpower: 4, vitality: 10,
+    },
+    bar: ['static_strike', 'hellfire_lash', 'mirage_step', null, null, null, null, null],
+    startNode: 'dex_start',
+    kit: [
+      { tier: 'novice', replaces: 'static_strike', skill: 'tide_lash' },
+      { tier: 'adept', replaces: 'hellfire_lash', skill: 'ice_blade' },
+      { tier: 'expert', replaces: 'mirage_step', skill: 'moult' },
+      { tier: 'master', skill: 'stormcrown' },
+    ],
+  },
+  {
+    id: 'cryomancer', name: 'Cryomancer', look: 'class_cryomancer',
+    description: 'A keeper of winter. Chill a crowd with piercing frost, freeze the catch, and leave a sheet of ice behind your retreat.',
+    color: '#a6def0',
+    attributes: {
+      strength: 0, prowess: 0, fortitude: 0,
+      dexterity: 12, finesse: 0, charisma: 0,
+      intelligence: 22, wisdom: 6, willpower: 10, vitality: 10,
+    },
+    bar: ['frost_pulse', 'flash_freeze', 'shatterstep', null, null, null, null, null],
+    startNode: 'int_start',
+    kit: [
+      { tier: 'novice', replaces: 'frost_pulse', skill: 'ice_spear' },
+      { tier: 'adept', replaces: 'flash_freeze', skill: 'cold_snap' },
+      { tier: 'expert', replaces: 'shatterstep', skill: 'frostguard' },
+      { tier: 'master', skill: 'hailcrown' },
+    ],
+  },
+  {
+    id: 'apothecary', name: 'Apothecary', look: 'class_apothecary',
+    description: 'The dose makes the poison. Stack venom, seed a lingering spore cloud, and cleanse your own wounds while the toxins work.',
+    color: '#a6cd79',
+    attributes: {
+      strength: 0, prowess: 0, fortitude: 6,
+      dexterity: 6, finesse: 0, charisma: 0,
+      intelligence: 8, wisdom: 4, willpower: 20, vitality: 16,
+    },
+    bar: ['venom_bolt', 'spore_bloom', 'cleansing_light', null, null, null, null, null],
+    startNode: 'wil_start',
+    kit: [
+      { tier: 'novice', replaces: 'venom_bolt', skill: 'contagion' },
+      { tier: 'adept', replaces: 'spore_bloom', skill: 'expunge' },
+      { tier: 'expert', replaces: 'cleansing_light', skill: 'benediction' },
+      { tier: 'master', skill: 'reapers_toll' },
+    ],
+  },
 ];
 
 // --- The class-skill stat lane ----------------------------------------------

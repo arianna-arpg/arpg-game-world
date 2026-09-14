@@ -2010,6 +2010,8 @@ export class Actor {
   /** Optional runtime observer of actual landed healing, including silent
    * regeneration and full refills. Used for ordered wound attribution; never serialized. */
   onLifeHealed?: (amount: number, silent: boolean) => void;
+  /** Actual life spent by costs/conduits; reservations and borrowed debt are not wounds. */
+  onLifeSpent?: (amount: number) => void;
 
   /** THE one gate every life heal flows through: scaled by the healTaken
    *  stat (seared wounds halve it — a status is all it takes) and capped
@@ -2972,7 +2974,9 @@ export class Actor {
    *  duration on it, so a temporal drag lasts its authored seconds — never
    *  stretched by the very slow-motion it causes. Callers outside the
    *  timeflow bend omit it (defaults to dt). */
-  updateTimers(dt: number, chronoDt = dt): Partial<Record<DamageType | 'untyped', number>> | null {
+  updateTimers(dt: number, chronoDt = dt,
+    onDotTick?: (status: ActiveStatus, amount: number, type: DamageType | 'untyped') => void,
+  ): Partial<Record<DamageType | 'untyped', number>> | null {
     // THE STRIDE's spend (a landed blow read 'strided' last frame): the
     // reset lands here, BEFORE the mask refolds, so one swing's contacts
     // all saw the stride and the next frame starts the walk afresh.
@@ -3091,6 +3095,7 @@ export class Actor {
         const tick = s.dps * s.stacks * curve * dt;
         dot ??= {};
         dot[key] = (dot[key] ?? 0) + tick;
+        onDotTick?.(s, tick, key);
         // BROOD clauses bank the tick toward the world's hatch roll.
         if (s.brood) s.broodAcc = (s.broodAcc ?? 0) + tick;
         // DOT LEECH banks toward the applier's healing (world pays it).
@@ -3102,6 +3107,7 @@ export class Actor {
         const key = STATUS_DEFS[s.id]?.dotType ?? 'untyped';
         dot ??= {};
         dot[key] = (dot[key] ?? 0) + s.popAcc;
+        onDotTick?.(s, s.popAcc, key);
         if (s.leech) s.leechAcc = (s.leechAcc ?? 0) + s.popAcc * s.leech;
         s.popAcc = 0;
       }
@@ -3657,7 +3663,9 @@ export class Actor {
         this.life = Math.min(this.life, this.lifeCeiling());
         odL.idle = this.overdriveIdleDelay(odL);
       } else {
+        const spentLife = Math.max(0, Math.min(this.life, cost.life));
         this.life -= cost.life;
+        if (spentLife > 0) this.onLifeSpent?.(spentLife);
       }
     }
   }
@@ -4023,6 +4031,7 @@ const CONDUIT_POOLS: Record<ConduitPool, {
       const take = Math.min(amt,
         Math.max(0, a.life - a.maxLife() * CONDUIT_CFG.lifeFloor));
       a.life -= take;
+      if (take > 0) a.onLifeSpent?.(take);
       return take;
     },
     feed: (a, amt) => a.healBy(amt),
