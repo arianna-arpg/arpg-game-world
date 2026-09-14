@@ -50,6 +50,16 @@ saves/
 .claude/*.local.json
 .claude/*.local.js
 .claude/*.local.cjs
+# Diagnostic scripts, patches and notes use the same local-only suffix.
+.claude/*.local.*
+# Preserved verification snapshots, temporary worktrees and browser profiles.
+.claude/ai-verify/
+.claude/reliquary-qa/
+.claude/rootwild-integration/
+.claude/rootwild-staged/
+.claude/rootwild-staged-base.zip
+.claude/rootwild-sync-audit/
+.claude/vault-publish/
 
 # ── Generated editor backups ─────────────────────────────────
 # The dev passive-tree editor writes passives.ts.bak before each

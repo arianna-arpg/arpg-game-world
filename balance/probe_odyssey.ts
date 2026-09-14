@@ -46,9 +46,16 @@ const s = w.odyssey.state!;
 assert.equal(w.activeQuests.filter(q => q.questId.startsWith('odyssey_')).length, 8);
 assert(w.zoneMap[`quest_${revengeCommanderId('goblin')}`]);
 assert.equal(w.meta.vocations.length, 0);
+assert(w.surveyed.has(`quest_${revengeCullId('goblin')}`));
+assert(!w.surveyed.has(`quest_${revengeCommanderId('goblin')}`), 'the undiscovered commander remains unknown');
 w.odyssey.localLeads();
 assert.equal(s.leads.length, 4);
-for (const id of s.roster) assert.equal(w.zoneMap[`quest_${odysseyQuestId(id, 'leader')}`].veiled, false);
+for (const id of s.roster) {
+  const leaderZone = w.zoneMap[`quest_${odysseyQuestId(id, 'leader')}`];
+  assert.equal(leaderZone.veiled, false);
+  assert(w.surveyed.has(leaderZone.id), 'discovered leads register as map intelligence');
+  for (const exit of leaderZone.exits) if (w.zoneMap[exit.to]) assert(w.surveyed.has(exit.to));
+}
 pass('operations and all leaders exist independently, including the exploration-accessible tutorial commander');
 
 function clearQuest(world: World, id: string): void {

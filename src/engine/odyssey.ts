@@ -69,21 +69,14 @@ export class OdysseyRuntime {
     this.revealRevenge();
   }
   private revealRevenge(): void {
-    const commander = this.w.zoneMap[`quest_${revengeCommanderId(revengeFactionOf(this.w.account.ledger))}`];
-    if (!commander) return;
-    commander.veiled = false;
-    for (const e of commander.exits) if (this.w.zoneMap[e.to]) this.w.zoneMap[e.to].veiled = false;
+    this.w.revealQuestGround(`quest_${revengeCommanderId(revengeFactionOf(this.w.account.ledger))}`);
   }
   reveal(id: string): void {
     const s = this.state;
     if (!s || s.leads.includes(id) || !s.roster.includes(id)) return;
     s.leads.push(id);
     for (const step of ['operation', 'leader'] as const) {
-      const z = this.w.zoneMap[`quest_${odysseyQuestId(id, step)}`];
-      if (z) {
-        z.veiled = false;
-        for (const e of z.exits) if (this.w.zoneMap[e.to]) this.w.zoneMap[e.to].veiled = false;
-      }
+      this.w.revealQuestGround(`quest_${odysseyQuestId(id, step)}`);
     }
     const f = odysseyFaction(id);
     if (id === revengeFactionOf(this.w.account.ledger)) this.revealRevenge();

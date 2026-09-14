@@ -349,6 +349,12 @@ const mkField = (surge: WisplightSurge, seed = 0x5eed): WisplightField =>
     if (scene && scene.wisps.length) {
       // THE TOUCH: walk into the first light.
       const target = scene.wisps[0];
+      // Visible candidates: the bog dweller now ambushes underground and
+      // correctly refuses the blessing until its reveal has completed.
+      const weak = mint('fen_hound', 3, target.a.pos.x + 60, target.a.pos.y);
+      const strong = mint('hex_weaver', 18, target.a.pos.x + 200, target.a.pos.y + 120);
+      check('G6b: the blessing candidates are targetable', !weak.untargetable && !strong.untargetable,
+        `weak=${weak.untargetable}, strong=${strong.untargetable}`);
       w.player.pos.x = target.a.pos.x + 10; w.player.pos.y = target.a.pos.y;
       step(0.8);
       const i1 = info();
@@ -360,8 +366,6 @@ const mkField = (surge: WisplightSurge, seed = 0x5eed): WisplightField =>
       // THE FLOURISH: plant a weak victim beside the light's path and watch
       // the blessing land; plant a STRONG one further out for the seek (a
       // caster with no ambush veil — hidden kin are rightly ineligible).
-      const weak = mint('bog_dweller', 3, target.a.pos.x + 60, target.a.pos.y);
-      const strong = mint('hex_weaver', 18, target.a.pos.x + 200, target.a.pos.y + 120);
       step(3);
       check('G8: the walk pulses `emboldened` onto nearby bodies',
         weak.statuses.some(s => s.id === WISPLIGHT_SURGE.aura.status)

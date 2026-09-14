@@ -402,9 +402,19 @@ console.log(`  (info) jungle nodes pressing past the world cap by their own budg
     check('G: re-accept mints NO twin', Object.keys(w.zoneMap).length === before);
   }
 
-  // --- the floating find-it (relic) wires in as a deed
+  // The Reliquary now mints a connected shrine, with a waypoint home.
   cast.acceptQuest(QUESTS['relic_east_l8']);
-  const rz = w.zoneMap['quest_relic_east_l8'];
+  const shrine = w.zoneMap['quest_relic_east_l8'];
+  check('G: the Reliquary shrine mints connected with its waypoint',
+    !!shrine && !shrine.floating && shrine.waypoint === true && bfsFromTown().has(shrine.id));
+
+  // Preserve the generic floating-quest contract independently of that story.
+  const floatingQuest = {
+    ...QUESTS['relic_east_l8'], id: 'qa_floating_quest', zoneVariants: undefined,
+    zone: { ...QUESTS['relic_east_l8'].zone, floating: true },
+  };
+  cast.acceptQuest(floatingQuest);
+  const rz = w.zoneMap['quest_qa_floating_quest'];
   check('G: the floating quest MINTS disconnected', !!rz && rz.floating === true,
     rz ? `floating=${rz.floating}` : 'MISSING');
   if (rz) {

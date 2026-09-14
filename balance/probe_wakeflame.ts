@@ -6,6 +6,7 @@
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { applyBuild } from '../src/sim/builds';
+import { seedGlobalRandom } from '../src/sim/rng';
 import { mod } from '../src/engine/stats';
 import type { BuildSpec } from '../src/sim/types';
 
@@ -16,9 +17,12 @@ const check = (name: string, ok: boolean, detail = ''): void => {
 };
 
 bootSimEngine();
+const restoreRandom = seedGlobalRandom(0xface);
 const world = makeSimWorld('juggernaut', 12345);
 const spec: BuildSpec = {
   id: 'wakeflame_probe', classId: 'juggernaut', level: 9,
+  // Exercise the flame loop with a build that can legally cast its spells.
+  attributes: { strength: 40, willpower: 40 },
   skills: [
     { id: 'cindershell', level: 3 },
     { id: 'deathwatch', level: 3 },
@@ -30,6 +34,9 @@ const warnings = applyBuild(world, spec, 7);
 if (warnings.length) console.log('build warnings:', warnings.join(' | '));
 
 const p = world.player;
+// Manual bank assertions must not race Requiem's random ambient orb source.
+// Its standalone trickle is covered by probe_supportmatrix I2.
+p.sheet.setSource('probe_no_trickle', [mod('orbTrickle_wakeflame', 'flat', -p.sheet.get('orbTrickle_wakeflame'))]);
 const bank = (): number => p.charges.get('wakeflame') ?? 0;
 const step = (s: number): void => {
   const dt = 1 / 60;
@@ -62,7 +69,8 @@ while (bank() < 3) { world.shedOrb('wakeflame', { x: p.pos.x, y: p.pos.y }); ste
 const dw = p.skills.find(s => s?.def.id === 'deathwatch');
 check('build: deathwatch on the bar', !!dw);
 const preIgnite = bank();
-world.useSkill(p, dw!, { x: p.pos.x, y: p.pos.y });
+check('deathwatch cast accepted', world.useSkill(p, dw!, { x: p.pos.x, y: p.pos.y }),
+  world.castReqRefusal(p, dw!));
 step(0.6);
 check('vigil lit (aura active)', p.activeAuras.has('deathwatch'));
 check('ignition cost 1 wakeflame', bank() === preIgnite - 1, `${preIgnite} → ${bank()}`);
@@ -77,7 +85,8 @@ check('starved vigil guttered out', !p.activeAuras.has('deathwatch'), `bank=${ba
 while (bank() < 2) { world.shedOrb('wakeflame', { x: p.pos.x, y: p.pos.y }); step(0.3); }
 const req = p.skills.find(s => s?.def.id === 'requiem');
 check('build: requiem on the bar', !!req);
-world.useSkill(p, req!, { x: p.pos.x + 40, y: p.pos.y });
+check('requiem cast accepted', world.useSkill(p, req!, { x: p.pos.x + 40, y: p.pos.y }),
+  world.castReqRefusal(p, req!));
 step(0.9);
 check('requiem consumed the whole bank', bank() === 0, `bank=${bank()}`);
 
@@ -96,4 +105,5 @@ step(0.35);
 check('votive spark poured mana on scoop', p.mana >= 25, `mana=${p.mana.toFixed(1)}`);
 
 console.log(failed ? `\n${failed} FAILURE(S)` : '\nALL PASS');
+restoreRandom();
 process.exit(failed ? 1 : 0);

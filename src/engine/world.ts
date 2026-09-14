@@ -27862,6 +27862,21 @@ export class World {
     this.acceptOdysseyCompatibleQuest(q, reveal);
   }
 
+  /** Quest directions are durable map intelligence, including their approach.
+   *  Odyssey discovery and ordinary accepted quests use the same knowledge law. */
+  revealQuestGround(zoneId: string): void {
+    const zone = this.zoneMap[zoneId];
+    if (!zone) return;
+    for (const id of [zone.id, ...zone.exits.map(e => e.to)]) {
+      const known = this.zoneMap[id];
+      if (!known) continue;
+      known.veiled = false;
+      this.surveyed.add(id);
+    }
+    this.refreshExitLabels();
+    this.invalidateZonesSaveMemo();
+  }
+
   prepareOdysseyGround(faction: string, level: number, prepared: boolean, act: number): void {
     const z = this.zoneMap[`quest_${odysseyQuestId(faction, 'leader')}`];
     if (!z) return;
@@ -27947,10 +27962,7 @@ export class World {
         // floating on the chart with no way marked; the accept lifts it —
         // and any standing portal onto the anchor re-speaks from live state
         // (the entry law's refresh).
-        if (reveal && anchor.veiled) {
-          anchor.veiled = false;
-          this.refreshExitLabels();
-        }
+        if (reveal) this.revealQuestGround(def.id);
       }
     }
     this.activeQuests.push({ questId: q.id, zoneId, fieldDone: false });

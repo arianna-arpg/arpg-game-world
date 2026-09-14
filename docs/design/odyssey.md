@@ -131,5 +131,7 @@ Electron smoke process; these are verification environment choices, not game cha
 
 Integration also checks that settled accounts do not restart the vendetta and
 that surviving Bandit hunters retain their combat kits and wounds after casualties
-and zone re-entry. The current main branch's seeded quest alternatives, Reliquary
+and zone re-entry. Quest directions and discovered leads register their destinations
+and approaches as surveyed map intelligence, preserving the atlas knowledge law.
+The current main branch's seeded quest alternatives, Reliquary
 reward flow, and completed starting skill trees remain integrated.
