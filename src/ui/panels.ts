@@ -1415,7 +1415,9 @@ export class UI {
       save: () => { this.saveAccount(); this.onCosmeticsChanged?.(); },
       body: actor ? { shape: actor.shape, color: actor.color, radius: actor.radius, material: actor.material, look: actor.look, adorn: actor.adorn }
         : { shape: 'circle', radius: 16, color: CLASSES[0].color, look: CLASSES[0].look }, // the account Wardrobe also opens between lives
-      skills: [...new Set([...(actor?.skills ?? []).flatMap(s => s ? [s.def.id] : []), ...this.getAccount().unlockedSkills])]
+      skills: [...new Set([...(actor?.skills ?? []).flatMap(s => s ? [s.def.id] : []),
+        ...(actor ? this.getWorld().localSeat.meta.knownSkills.keys() : []),
+        ...(this.getAccount().cosmetics.applications ?? []).map(binding => binding.skill), ...this.getAccount().unlockedSkills])]
         .flatMap(id => SKILLS[id] ? [{ id, name: SKILLS[id].name }] : []).sort((a, b) => a.name.localeCompare(b.name)), // cosmetic overrides can be prepared between lives
     });
   }

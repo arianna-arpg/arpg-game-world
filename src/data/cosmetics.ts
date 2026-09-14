@@ -1,4 +1,6 @@
 import { registerCosmetic, type CosmeticDef, type CosmeticSlot, type CosmeticPaint } from '../engine/cosmetics';
+import { CLASSES } from './classes';
+import { COSMETIC_MODELS } from './cosmeticModels';
 
 export const COSMETIC_CFG = {
   footprints: { spacing: 15, lifetime: 2.4, maxPerActor: 24, teleportDistance: 110 },
@@ -10,6 +12,17 @@ export const COSMETIC_CFG = {
 const add = (id: string, name: string, slot: CosmeticSlot, paint: CosmeticPaint,
   description: string, acquire: CosmeticDef['acquire'] = { kind: 'starter' }, collection = 'First Light'): void =>
   registerCosmetic({ id, name, slot, paint, description, acquire, collection, author: 'Hollow Wake' });
+
+// Every class look participates automatically; wearing one grants no class progression.
+for (const c of CLASSES) if (c.look) add(`model_${c.id}`, c.name, 'playerModel', { look: c.look, color: c.color },
+  `Wear the ${c.name} model with any class. Your skills and attributes stay your own.`, { kind: 'starter' }, 'Class silhouettes');
+for (const m of COSMETIC_MODELS) add(`model_${m.id}`, m.name, 'playerModel', { look: `cosmetic_${m.id}`, color: m.color },
+  m.description, { kind: 'starter' }, 'Wanderers of the Wake');
+
+registerCosmetic({ id: 'prismatic_ink', name: 'Prismatic Ink', slot: 'skillRecolor',
+  paint: { color: '#c4b2f2' }, consume: { target: 'skillColor', starterCharges: 2 },
+  acquire: { kind: 'credits', cost: 20 }, collection: 'Your own palette', author: 'Hollow Wake',
+  description: 'Use one ink on a learned or account-unlocked skill to choose its color forever. Change that color as often as you like. Two inks are included with your account.' });
 
 add('cinder_cloak', 'Cinderweave', 'playerSkin', { color: '#d89160', material: 'cloth' }, 'A warm woven mantle for a new journey.');
 add('moon_glass', 'Moonglass', 'playerSkin', { color: '#8fd8e6', material: 'crystal', adorn: 'wings' }, 'Faceted moonlight with delicate crystalline wings.');

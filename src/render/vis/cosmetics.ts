@@ -2,7 +2,7 @@ import type { Actor } from '../../engine/actor';
 import type { World } from '../../engine/world';
 import type { CosmeticLoadout, CosmeticMotif, CosmeticPaint } from '../../engine/cosmetics';
 import { COSMETIC_CFG } from '../../data/cosmetics';
-import { cosmeticLoadoutFor, cosmeticPick } from '../../meta/cosmetics';
+import { cosmeticLoadoutFor, cosmeticPick, cosmeticSkillColor } from '../../meta/cosmetics';
 import { bodySprite, adornSprite, spriteHalf, type BodyLook } from './body';
 
 /** Shared visual vocabulary: the world, catalogue tiles and preview use the same painters. */
@@ -30,6 +30,8 @@ export function drawCosmeticMotif(ctx: CanvasRenderingContext2D, motif: Cosmetic
   ctx.restore();
 }
 export function cosmeticBody(look: BodyLook, loadout: CosmeticLoadout | undefined, summon = false): BodyLook {
+  const model = !summon ? cosmeticPick(loadout, 'playerModel')?.paint : undefined;
+  if (model?.look) look = { ...look, look: model.look, color: model.color ?? look.color, material: model.material ?? look.material };
   const p = cosmeticPick(loadout, summon ? 'summonSkin' : 'playerSkin')?.paint;
   return p ? { ...look, color: p.color ?? look.color, material: p.material ?? look.material, adorn: p.adorn ?? look.adorn } : look;
 }
@@ -80,7 +82,7 @@ export class CosmeticTrails {
   }
 }
 
-export function drawCosmeticPreview(canvas: HTMLCanvasElement, base: BodyLook, loadout: CosmeticLoadout, time: number): void {
+export function drawCosmeticPreview(canvas: HTMLCanvasElement, base: BodyLook, loadout: CosmeticLoadout, time: number, skill?: string): void {
   const ctx = canvas.getContext('2d'); if (!ctx) return;
   const { width, height } = canvas;
   ctx.clearRect(0, 0, width, height);
@@ -104,8 +106,8 @@ export function drawCosmeticPreview(canvas: HTMLCanvasElement, base: BodyLook, l
   ctx.restore();
   const kin = cosmeticBody({ shape: 'circle', color: '#a3a5bc', radius: 12, material: 'bone' }, loadout, true);
   const kh = spriteHalf(kin.radius); ctx.drawImage(bodySprite(kin), width * 0.73 - kh, height * 0.66 - kh);
-  const color = cosmeticPick(loadout, 'skillRecolor')?.paint.color ?? '#ebbd76';
-  const motif = cosmeticPick(loadout, 'skillSkin')?.paint.motif;
+  const color = cosmeticSkillColor(loadout, skill) ?? '#ebbd76';
+  const motif = cosmeticPick(loadout, 'skillSkin', skill)?.paint.motif;
   for (let i = 0; i < 3; i++) {
     const x = width * 0.32 + ((time * 30 + i * 28) % 135), y = height * 0.21;
     ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
@@ -113,6 +115,16 @@ export function drawCosmeticPreview(canvas: HTMLCanvasElement, base: BodyLook, l
   }
   const avatar = cosmeticPick(loadout, 'avatar')?.paint;
   if (avatar?.motif) drawCosmeticMotif(ctx, avatar.motif, avatar.color ?? '#c4b2f2', width - 26, 26, 12, 0);
+}
+
+/** Catalogue portraits use the very same resolved body and bake as the world. */
+export function drawCosmeticModelTile(canvas: HTMLCanvasElement, base: BodyLook, id: string): void {
+  const ctx = canvas.getContext('2d'); if (!ctx) return;
+  const look = cosmeticBody({ ...base, radius: 25 }, { slots: { playerModel: id }, skills: {} });
+  const half = spriteHalf(look.radius);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save(); ctx.translate(canvas.width / 2, canvas.height / 2); ctx.rotate(-Math.PI / 2);
+  ctx.drawImage(bodySprite(look), -half, -half); ctx.restore();
 }
 
 export { cosmeticLoadoutFor, cosmeticPick };

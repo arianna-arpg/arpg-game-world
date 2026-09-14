@@ -7,10 +7,10 @@ skins and colors have an account default plus optional choices per skill.
 An explicit Original appearance on a skill suppresses the account default;
 Use account default removes that override.
 
-The debut catalogue has 17 entries across character skins, character effects,
-footprints, avatars, skill skins, skill colors and summon skins. Ten are
-included at account creation, five are earned through exploration/quests,
-and two cost Mortal Essence. Purchases use the existing account credits at
+The catalogue covers character models, character skins, character effects,
+footprints, avatars, skill skins, skill colors and summon skins. The original
+17 choices are joined by every registered class silhouette, four exclusive
+models and Prismatic Ink. Purchases use the existing account credits at
 the Reckoning, before its normal seal discards unassigned essence. Opening
 the Wardrobe from that screen retains the original seal closure. Nothing
 introduces a second wallet, gameplay power, a payment provider or a checkout.
@@ -19,6 +19,9 @@ introduces a second wallet, gameplay power, a payment provider or a checkout.
 
 - `engine/cosmetics.ts` defines the presentation schema, slot vocabulary,
   registry and checked `registerCosmetic` entry point.
+- `data/cosmeticModels.ts` composes exclusive models from reusable parts;
+  `data/cosmeticGlyphs.ts` authors garments, hairstyles, heads and accessories
+  in the existing vector-op grammar. Models have no gameplay definitions.
 - `data/cosmetics.ts` authors the collection, creator attribution,
   acquisition rules and visual budgets. A new entry in an existing category
   uses the same UI and resolver. Optional `skills` restricts compatibility.
@@ -38,13 +41,67 @@ the cosmetics catalogue does not manufacture those progression events.
 Catalogue unlock references are not currently supported as cosmetic gates
 (the resolver intentionally refuses them).
 
-Appearance is not gameplay equipment. The paint schema contains color,
+Appearance is not gameplay equipment. The paint schema contains a model look, color,
 material, adornment and decorative motif. It has no modifiers, damage,
 collision, targeting, delivery overrides, charge or timing fields. The
 renderers derive a BodyLook copy and never mutate Actor or SkillDef combat
 properties. Summons follow their owner chain, including nested summons.
 Mercenaries and unowned enemies do not inherit the local account's choices;
 possession keeps the foreign body's identity.
+
+## Models and skins
+
+`playerModel` chooses a presentation-only `paint.look` and base palette.
+`playerSkin` then layers color, material and adornments on that result.
+For example a Warrior can wear `model_necromancer` and Moonglass together;
+the original actor's class, look, radius, anatomy, skills and stats stay intact.
+The renderer resolves both baked and live parts from the selected model.
+Summons retain their own bodies and use their separate summon-skin slot.
+Clearing the skin reveals the chosen model's palette; clearing the model
+restores the current character's silhouette. These slots persist across runs.
+
+Class models are registered from `CLASSES`, so adding a class automatically
+adds its model to the Wardrobe. Wearing it grants no class progression.
+The exclusive starter collection is Mooncourt Duelist (silver braid and split
+coat), Roseguard Valkyrie (copper braids and broad armor), Amethyst Veilweaver
+(flowing hair and gown), and Lantern Nomad (coat, pack and lantern). The first
+three are feminine presentations; there is no gender restriction on equipment.
+Their hair/complexion variants use explicit glyph colors while clothing
+responds to skins. Catalogue thumbnails and previews use the world body baker.
+
+## Permanent skill color pickers
+
+Prismatic Ink is a `skillRecolor` entry with
+`consume: { target: 'skillColor', starterCharges: 2 }`. Each account receives
+two implicit starter units. Further units cost 20 Mortal Essence each; the
+price and starter count are ordinary catalogue data. There is no real-money
+shop. The repeatable `grantCosmetic` API also accepts attributable quest,
+reward or provider receipts, so acquisition is independent of the picker.
+
+Select an individual learned or account-unlocked skill in Skill colors,
+preview a color, then choose **Use 1 ink · unlock this skill**. An application
+binds that unit's `(id, source, reference)` to the skill permanently. It cannot
+be spent again, including after saving, changing class or unequipping.
+**Save color & equip** subsequently changes the color without using ink.
+The picker also accepts a six-digit hex value; invalid input cannot save.
+The all-skills default cannot consume an ink. The skill list includes the
+current learned book, equipped skills, account unlocks and previous bindings,
+so a past life's unlocked picker remains accessible between runs.
+
+`applications` holds spent-unit provenance; `loadout.customColors` remembers
+each skill's RGB choice. Equipping a preset, original color or account default
+does not erase the binding or remembered RGB. Custom colors are active only
+when the corresponding consumable is equipped on that skill. Save validation
+checks active entitlement, slot, skill compatibility and strict `#rrggbb`
+syntax. Wire validation carries only model/equipment IDs and RGB, never spent
+units or ownership receipts. New fields are optional for older saves/peers.
+
+One verified product receipt grants one unit per consumable ID; bundle entries
+remain deduplicated. Refunds remove that unit's active binding and equipment,
+while preserving its spent-unit tombstone. Restoring the same receipt restores
+the binding without creating an extra charge. Independently earned units and
+their bindings remain intact. A replacement unit can rebind a refunded skill;
+the original spent receipt still cannot be reused elsewhere.
 
 ## Visual implementation
 
@@ -100,7 +157,10 @@ of payment. There are no configured paid products or connected providers.
 ownership and slot checks, per-skill native/default selection, permanent
 achievement claims, exactly-once currency debits, receipt replay/refunds,
 owner attribution, real seeded combat parity, wire round trips and bounded
-footprints. The probe is enrolled in the normal gate.
+footprints. It also covers permanent ink bindings, repeatable purchases,
+free color changes, invalid RGB, spent receipt deduplication/refunds,
+model-part references and class/model/skin independence. The probe is enrolled
+in the normal gate.
 
 After `npm run build`, `npx electron balance/cosmetics-ui.cjs` checks the
 real Wardrobe, preview/equip separation, purchases, disk reload, retained

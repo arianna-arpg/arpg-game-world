@@ -3,7 +3,8 @@ import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { makeAccount, serializeAccount, deserializeAccount } from '../src/meta/account';
 import { COSMETICS, COSMETIC_SLOTS, registerCosmetic, type CosmeticSlot } from '../src/engine/cosmetics';
-import { buyCosmetic, cosmeticLoadoutFor, cosmeticPick, cosmeticSkillPaint, equipCosmetic,
+import { applySkillColorCosmetic, cosmeticCharges, cosmeticSkillColor, grantCosmetic, setSkillCosmeticColor, skillColorUnlocked,
+  buyCosmetic, cosmeticLoadoutFor, cosmeticPick, cosmeticSkillPaint, equipCosmetic,
   ownsCosmetic, reconcileCosmeticEntitlements, sanitizeCosmetics, sanitizeCosmeticLoadout, settleCosmetics } from '../src/meta/cosmetics';
 import { SKILLS } from '../src/data/skills';
 import { MATERIALS } from '../src/render/vis/materials';
@@ -13,6 +14,10 @@ import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 import { NullInput } from '../src/net/intent';
 import { classById } from '../src/sim/arena';
 import { SIM_TAP } from '../src/engine/tap';
+import { CLASSES } from '../src/data/classes';
+import { COSMETIC_MODELS } from '../src/data/cosmeticModels';
+import { LOOKS } from '../src/data/looks';
+import { PART_PAINTERS } from '../src/render/vis/parts';
 
 let checks = 0;
 const test = (label: string, run: () => void): void => { run(); checks++; console.log(`PASS ${label}`); };
@@ -21,9 +26,108 @@ test('Every category has authored content; material and skill references resolve
   for (const slot of Object.keys(COSMETIC_SLOTS)) assert(Object.values(COSMETICS).some(d => d.slot === slot));
   for (const d of Object.values(COSMETICS)) {
     if (d.paint.material) assert(MATERIALS[d.paint.material], d.id);
+    if (d.paint.look) assert(LOOKS[d.paint.look], d.id);
     for (const id of d.skills ?? []) assert(SKILLS[id], `${d.id}: ${id}`);
   }
   assert.throws(() => registerCosmetic(COSMETICS.moon_tint));
+});
+
+test('Ink binds once to an eligible skill, repeats freely, and survives new lives', () => {
+  const a = makeAccount(); const ink = 'prismatic_ink';
+  assert.equal(cosmeticCharges(a.cosmetics, ink), 2);
+  assert.equal(applySkillColorCosmetic(a, ink, 'fireball'), false, 'locked skill cannot consume');
+  assert.equal(equipCosmetic(a, 'skillRecolor', ink), false, 'no account-wide consumable');
+  assert.equal(equipCosmetic(a, 'skillRecolor', ink, 'fireball'), false, 'cannot equip before binding');
+  a.unlockedSkills.add('fireball');
+  assert(applySkillColorCosmetic(a, ink, 'fireball'));
+  assert.equal(cosmeticCharges(a.cosmetics, ink), 1);
+  assert.equal(applySkillColorCosmetic(a, ink, 'fireball'), false, 'duplicate does not spend');
+  for (const color of ['#123ABC', '#ff0066', '#000000']) assert(setSkillCosmeticColor(a, ink, 'fireball', color));
+  assert.equal(cosmeticSkillColor(a.cosmetics.loadout, 'fireball'), '#000000');
+  assert.equal(cosmeticCharges(a.cosmetics, ink), 1);
+  assert.equal(setSkillCosmeticColor(a, ink, 'cleave', '#ffffff'), false);
+  assert(equipCosmetic(a, 'skillRecolor', 'rose_tint', 'fireball'));
+  assert.equal(cosmeticSkillColor(a.cosmetics.loadout, 'fireball'), '#e8a8ca');
+  let b = deserializeAccount(JSON.parse(JSON.stringify(serializeAccount(a))))!;
+  assert(skillColorUnlocked(b.cosmetics, ink, 'fireball'));
+  assert(equipCosmetic(b, 'skillRecolor', null, 'fireball'));
+  b = deserializeAccount(serializeAccount(b))!;
+  assert(equipCosmetic(b, 'skillRecolor', ink, 'fireball'));
+  assert.equal(cosmeticSkillColor(b.cosmetics.loadout, 'fireball'), '#000000', 'remember color while native/preset is equipped');
+  assert(applySkillColorCosmetic(b, ink, 'cleave', ['cleave']), 'current learned book qualifies');
+  assert.equal(cosmeticCharges(b.cosmetics, ink), 0);
+  assert.equal(applySkillColorCosmetic(b, ink, 'blink', ['blink']), false, 'no free third use');
+});
+
+test('Additional inks use repeatable attributed receipts with exactly-once consumption', () => {
+  const a = makeAccount(), ink = 'prismatic_ink', cost = COSMETICS[ink].acquire;
+  assert(cost.kind === 'credits'); a.credits = cost.cost * 2;
+  assert(buyCosmetic(a, ink)); assert(buyCosmetic(a, ink)); assert.equal(a.credits, 0);
+  assert.equal(buyCosmetic(a, ink), false); assert.equal(cosmeticCharges(a.cosmetics, ink), 4);
+  assert.equal(new Set(a.cosmetics.grants.map(g => g.reference)).size, 2);
+  assert(grantCosmetic(a.cosmetics, { id: ink, source: 'quest', reference: 'reward-1' }));
+  assert.equal(grantCosmetic(a.cosmetics, { id: ink, source: 'quest', reference: 'reward-1' }), false);
+  for (const skill of Object.keys(SKILLS).slice(0, 5)) assert(applySkillColorCosmetic(a, ink, skill, [skill]));
+  assert.equal(cosmeticCharges(a.cosmetics, ink), 0);
+  const b = deserializeAccount(serializeAccount(a))!;
+  assert.equal(cosmeticCharges(b.cosmetics, ink), 0);
+  assert.equal(b.cosmetics.applications!.length, 5);
+});
+
+test('Picker input and wire data reject malformed colors and duplicated spent units', () => {
+  const a = makeAccount(), ink = 'prismatic_ink';
+  applySkillColorCosmetic(a, ink, 'fireball', ['fireball']);
+  const before = JSON.stringify(a.cosmetics);
+  for (const color of ['red', '#fff', '#12345678', 'url(x)', '#12345g', '']) assert.equal(setSkillCosmeticColor(a, ink, 'fireball', color), false);
+  assert.equal(JSON.stringify(a.cosmetics), before);
+  const wire = sanitizeCosmeticLoadout(JSON.parse('{"slots":{"skillRecolor":"prismatic_ink"},"customColors":{"fireball":"#12AB34","cleave":"url(x)","__proto__":"#ffffff"}}'));
+  assert.equal(wire.slots.skillRecolor, undefined);
+  assert.deepEqual(wire.customColors, { fireball: '#12ab34' });
+  const application = a.cosmetics.applications![0];
+  a.cosmetics.applications!.push({ ...application, skill: 'cleave' });
+  const b = sanitizeCosmetics(a.cosmetics);
+  assert.equal(b.applications!.length, 1); assert.equal(cosmeticCharges(b, ink), 1);
+  assert.equal(skillColorUnlocked(b, ink, 'cleave'), false);
+  assert.equal(sanitizeCosmetics({ loadout: { skills: { fireball: { skillRecolor: ink } }, customColors: { fireball: '#123456' } } }).loadout.customColors, undefined);
+});
+
+test('Refunded ink loses its binding; replay cannot create a spare used charge', () => {
+  const a = makeAccount(), ink = 'prismatic_ink', products = [{ sku: 'ink', cosmetics: [ink] }];
+  const receipts = [{ transaction: 'ink-1', sku: 'ink' }];
+  applySkillColorCosmetic(a, ink, 'fireball', ['fireball']);
+  applySkillColorCosmetic(a, ink, 'cleave', ['cleave']);
+  assert(reconcileCosmeticEntitlements(a, 'test-ink', products, receipts));
+  assert(applySkillColorCosmetic(a, ink, 'blink', ['blink']));
+  assert(reconcileCosmeticEntitlements(a, 'test-ink', products, receipts));
+  assert.equal(cosmeticCharges(a.cosmetics, ink), 0);
+  assert(reconcileCosmeticEntitlements(a, 'test-ink', products, []));
+  assert(!skillColorUnlocked(a.cosmetics, ink, 'blink'));
+  assert(skillColorUnlocked(a.cosmetics, ink, 'fireball'));
+  assert.equal(a.cosmetics.loadout.skills.blink, undefined);
+  const b = deserializeAccount(serializeAccount(a))!;
+  assert(reconcileCosmeticEntitlements(b, 'test-ink', products, receipts));
+  assert(skillColorUnlocked(b.cosmetics, ink, 'blink'));
+  assert.equal(cosmeticCharges(b.cosmetics, ink), 0);
+});
+
+test('All class and cosmetic-only models compose with skins without replacing mechanics', () => {
+  const w = makeSimWorld('warrior', 18), a = w.player;
+  const base = { shape: a.shape, radius: a.radius, color: a.color, look: a.look, material: a.material };
+  const original = JSON.stringify(base), skills = a.skills.map(s => s?.def.id);
+  for (const c of CLASSES) if (c.look) assert.equal(COSMETICS[`model_${c.id}`].paint.look, c.look);
+  assert(COSMETIC_MODELS.length >= 4);
+  for (const m of COSMETIC_MODELS) for (const part of m.body.parts) assert(PART_PAINTERS[part.kind], `${m.id}: ${part.kind}`);
+  assert(equipCosmetic(w.account, 'playerModel', 'model_necromancer'));
+  const model = cosmeticBody(base, w.account.cosmetics.loadout);
+  assert.equal(model.look, 'class_necromancer'); assert.equal(model.radius, a.radius);
+  assert(equipCosmetic(w.account, 'playerSkin', 'moon_glass'));
+  const skinned = cosmeticBody(base, w.account.cosmetics.loadout);
+  assert.equal(skinned.look, 'class_necromancer'); assert.equal(skinned.color, '#8fd8e6');
+  assert.equal(skinned.adorn, 'wings'); assert.equal(JSON.stringify(base), original);
+  assert.equal(a.look, 'class_warrior'); assert.deepEqual(a.skills.map(s => s?.def.id), skills);
+  assert.equal(cosmeticBody(base, w.account.cosmetics.loadout, true).look, base.look, 'summons retain their own model');
+  assert(equipCosmetic(w.account, 'playerSkin', null));
+  assert.equal(cosmeticBody(base, w.account.cosmetics.loadout).color, classById('necromancer').color);
 });
 
 test('Legacy accounts retain progression; malformed ownership and wrong slots fail closed', () => {
@@ -37,6 +141,7 @@ test('Legacy accounts retain progression; malformed ownership and wrong slots fa
   assert.equal(malformed.grants.length, 1, 'retain absent mod receipt');
   assert.deepEqual(sanitizeCosmeticLoadout(JSON.parse('{"skills":{"__proto__":{"skillSkin":"starlit_skills"}}}')).skills, {});
   assert.equal(equipCosmetic(a, 'constructor' as CosmeticSlot, null), false);
+  assert.equal(equipCosmetic(a, 'skillRecolor', 'moon_tint', 'toString'), false);
 });
 
 test('Selections persist and per-skill overrides support native, default, and incompatible content', () => {
@@ -125,7 +230,9 @@ test('Real skill execution preserves combat, resource, collision and RNG results
     try {
       const w = makeSimWorld('magician', 129), p = w.player;
       if (dressed) {
-        equipCosmetic(w.account, 'skillRecolor', 'moon_tint');
+        applySkillColorCosmetic(w.account, 'prismatic_ink', 'fireball', ['fireball']);
+        setSkillCosmeticColor(w.account, 'prismatic_ink', 'fireball', '#12ff76');
+        equipCosmetic(w.account, 'playerModel', 'model_veilweaver');
         equipCosmetic(w.account, 'skillSkin', 'starlit_skills');
         equipCosmetic(w.account, 'playerSkin', 'moon_glass');
       }
@@ -154,15 +261,21 @@ test('Co-op snapshot carries appearances and VFX without ownership or account le
   equipCosmetic(host.account, 'playerSkin', 'moon_glass');
   equipCosmetic(host.account, 'skillSkin', 'starlit_skills');
   equipCosmetic(host.account, 'skillRecolor', 'rose_tint');
+  equipCosmetic(host.account, 'playerModel', 'model_moon_duelist');
+  applySkillColorCosmetic(host.account, 'prismatic_ink', 'fireball', ['fireball']);
+  setSkillCosmeticColor(host.account, 'prismatic_ink', 'fireball', '#34ef90');
   host.spawnProjectile(host.player, makeSkillInstance(SKILLS.fireball), host.player.pos, 0);
   const snapshot = serializeSnapshot(host, 1);
-  assert.equal(snapshot.projectiles[0].c, '#e8a8ca');
+  assert.equal(snapshot.projectiles[0].c, '#34ef90');
   assert.equal(snapshot.projectiles[0].cosmeticMotif, 'stars');
   assert(!JSON.stringify(snapshot.actors).includes('grants'));
+  assert(!JSON.stringify(snapshot.actors).includes('applications'));
   const client = makeSimWorld('magician', 9);
   applySnapshot(client, snapshot);
   assert.equal(cosmeticPick(cosmeticLoadoutFor(client, client.player), 'playerSkin')?.id, 'moon_glass');
   assert.equal(client.projectiles[0].cosmeticMotif, 'stars');
+  assert.equal(cosmeticSkillPaint(client, client.player, 'fireball').color, '#34ef90');
+  assert.equal(cosmeticPick(cosmeticLoadoutFor(client, client.player), 'playerModel')?.id, 'model_moon_duelist');
   assert.equal(client.account.cosmetics.loadout.slots.playerSkin, undefined);
 });
 

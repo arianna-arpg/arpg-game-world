@@ -3,12 +3,15 @@ import type { ActorAdorn } from './actor';
 import type { GateRow } from '../meta/gates';
 
 export const COSMETIC_SLOTS = {
+  playerModel: 'Character models',
   playerSkin: 'Character skins', playerEffect: 'Character effects', footprints: 'Footprints',
   avatar: 'Avatars', skillSkin: 'Skill skins', skillRecolor: 'Skill colors', summonSkin: 'Summon skins',
 } as const;
 export type CosmeticSlot = keyof typeof COSMETIC_SLOTS;
 export type CosmeticMotif = 'stars' | 'petals' | 'embers';
 export interface CosmeticPaint {
+  /** Presentation look id; never replaces class, anatomy or collision data. */
+  look?: string;
   color?: string;
   material?: string;
   adorn?: ActorAdorn;
@@ -19,6 +22,8 @@ export interface CosmeticDef {
   collection: string; author: string; paint: CosmeticPaint;
   /** Omit for all skills; otherwise the skin is compatible only with these ids. */
   skills?: readonly string[];
+  /** Each receipt is one permanent skill binding, with freely editable color afterward. */
+  consume?: { target: 'skillColor'; starterCharges: number };
   acquire: { kind: 'starter' } | { kind: 'achievement'; rows: readonly GateRow[]; mode: 'any' | 'all' }
     | { kind: 'credits'; cost: number } | { kind: 'external' };
 }
@@ -26,9 +31,11 @@ export interface CosmeticLoadout {
   slots: Partial<Record<CosmeticSlot, string>>;
   /** Explicit null restores native visuals for this skill instead of inheriting. */
   skills: Record<string, Partial<Record<'skillSkin' | 'skillRecolor', string | null>>>;
+  customColors?: Record<string, string>;
 }
 export interface CosmeticGrant { id: string; source: string; reference: string }
-export interface CosmeticState { grants: CosmeticGrant[]; loadout: CosmeticLoadout }
+export interface CosmeticApplication extends CosmeticGrant { skill: string }
+export interface CosmeticState { grants: CosmeticGrant[]; loadout: CosmeticLoadout; applications?: CosmeticApplication[] }
 export const emptyCosmeticLoadout = (): CosmeticLoadout => ({ slots: {}, skills: {} });
 export const emptyCosmetics = (): CosmeticState => ({ grants: [], loadout: emptyCosmeticLoadout() });
 
@@ -38,6 +45,9 @@ export function registerCosmetic(def: CosmeticDef): void {
   if (!/^[a-z][a-z0-9_.:-]*$/.test(def.id) || COSMETICS[def.id]) throw new Error(`Duplicate/invalid cosmetic: ${def.id}`);
   if (!(def.slot in COSMETIC_SLOTS) || !def.name || !def.author) throw new Error(`Invalid cosmetic metadata: ${def.id}`);
   if (def.paint.color && !/^#[0-9a-f]{6}$/i.test(def.paint.color)) throw new Error(`Invalid cosmetic color: ${def.id}`);
+  if (def.paint.look && def.slot !== 'playerModel') throw new Error(`Model look requires playerModel: ${def.id}`);
+  if (def.consume && (def.slot !== 'skillRecolor' || def.consume.target !== 'skillColor'
+    || !Number.isSafeInteger(def.consume.starterCharges) || def.consume.starterCharges < 0 || def.consume.starterCharges > 100)) throw new Error(`Invalid cosmetic consumable: ${def.id}`);
   if (def.acquire.kind === 'credits' && (!Number.isSafeInteger(def.acquire.cost) || def.acquire.cost <= 0)) throw new Error(`Invalid cosmetic cost: ${def.id}`);
   if (def.acquire.kind === 'achievement' && !def.acquire.rows.length) throw new Error(`Empty cosmetic achievement: ${def.id}`);
   COSMETICS[def.id] = def;

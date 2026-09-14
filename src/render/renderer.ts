@@ -5321,7 +5321,7 @@ export class Renderer {
     // THE HIT FLASH (vis/hitFlash.ts): the landed blow's composed overlay,
     // resolved ONCE per body per frame — a silent body pays one field read.
     const flashA = hitFlashAlphaOf(a);
-    const lookDef = lookOf(a.look);
+    const lookDef = lookOf(look.look); // cosmetic model owns its live parts as well as its baked body
     // THE COLOR DRIFT (vis/colorDrift.ts): a look whose color is weather —
     // the base morphs through its registered palette on the world clock
     // (quantized, so the bake cache meets a bounded set) and every derived
