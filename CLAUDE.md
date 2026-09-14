@@ -74,6 +74,9 @@ modifiers, retaliation, banner cleanup, command blessings and guard releases.
 Runeweaver's usable level-one fuel loop and complete starting trees live in
 `src/data/runeweaverStarterTrees.ts`; `docs/design/runeweaver-starting-skill-trees.md`
 covers Glyph fuel, Invocation payload inheritance, preview and respec ownership.
+Ascetic/Flagellant/Firebrand starting trees live in `src/data/disciplineStarterTrees.ts`;
+`docs/design/discipline-starting-skill-trees.md` covers ranked self aura modifiers,
+standalone Transgression wards, charge timing, debt recovery and control payoffs.
 
 Chest and gem-cache lists live in `src/data/containerloot.ts` and the existing
 `loottables.ts`; `docs/design/container-loot.md` documents the context rules,

@@ -3956,6 +3956,8 @@ export interface GuardSurgeEffect {
   manaFraction: number;
   /** Shield points per point of mana spent. */
   ratio: number;
+  /** Optional standalone ward; the life cap is applied before absorb power. */
+  unguarded?: { duration: number; capLife: number };
 }
 
 /** Restores a resource OVER TIME — the flask drink. Two spend PHILOSOPHIES
@@ -4794,10 +4796,16 @@ export interface InvocationTreeSpec {
 
 /** Additive recipient modifiers on a native aura or aura-bearing construct.
  * Radius, upkeep, pulses and delivery identity remain native. */
-export type TreeAuraPatch = Pick<AuraSpec, 'allyMods' | 'enemyMods'>;
+export type TreeAuraPatch = Pick<AuraSpec, 'selfMods' | 'allyMods' | 'enemyMods'>;
 function mergeTreeAura(a: TreeAuraPatch | undefined, b: TreeAuraPatch | undefined): TreeAuraPatch {
-  return { allyMods: [...(a?.allyMods ?? []), ...(b?.allyMods ?? [])],
+  return { selfMods: [...(a?.selfMods ?? []), ...(b?.selfMods ?? [])],
+    allyMods: [...(a?.allyMods ?? []), ...(b?.allyMods ?? [])],
     enemyMods: [...(a?.enemyMods ?? []), ...(b?.enemyMods ?? [])] };
+}
+/** Additive TreeAuraPatch investments apply once per purchased rank. */
+function rankTreeAura(patch: TreeAuraPatch, ranks: number): TreeAuraPatch {
+  return Object.fromEntries(Object.entries(patch).map(([key, mods]) =>
+    [key, Array.from({ length: ranks }, () => mods).flat()]));
 }
 export function treeAuraOverrideErrors(def: SkillDef, node: SkillTreeNode): string[] {
   const patch = node.over?.aura;
@@ -4805,7 +4813,7 @@ export function treeAuraOverrideErrors(def: SkillDef, node: SkillTreeNode): stri
   const errors: string[] = [];
   if (def.delivery.type !== 'aura' && !(def.delivery.type === 'construct' && def.delivery.aura)) errors.push('aura patch requires a native aura');
   for (const [key, mods] of Object.entries(patch)) {
-    if (!['allyMods', 'enemyMods'].includes(key)) errors.push('unknown aura.' + key);
+    if (!['selfMods', 'allyMods', 'enemyMods'].includes(key)) errors.push('unknown aura.' + key);
     if (!Array.isArray(mods) || mods.some(m => !STAT_DEFS[m.stat] || !Number.isFinite(m.value))) errors.push('invalid aura modifiers');
   }
   return errors;
@@ -4853,7 +4861,7 @@ export interface SkillTreeNode {
    *  rung-1 nodes exclude each other; a graph-form tree may fork anywhere. */
   excludes?: string[];
   /** Points this node can take (default 1). Each rank re-applies the
-   *  payload (mods stack per rank; `over` fields are idempotent); a rank
+   *  payload (mods and TreeAuraPatch arrays stack per rank; scalar `over` fields are idempotent); a rank
    *  persists as a repeated id in treeNodes. */
   ranks?: number;
   /** Layout pins in tree units (root at 0,0, y down) — absent = the derived
@@ -5056,14 +5064,15 @@ export function validTreeNodes(
 /** The folded spec overrides of every spent node (later spends win field
  *  by field; the channel sub-object merges likewise — rungs re-pin their
  *  identity, so order is authored moot; a repeated rank re-applies the
- *  same fields, idempotent). An unpicked instance answers undefined at
+ *  same scalar fields, idempotent; TreeAuraPatch arrays append per rank). An unpicked instance answers undefined at
  *  the cost of one null check. */
 export function instanceTreeOver(inst: SkillInstance): SkillTreeNode['over'] | undefined {
   const ids = inst.treeNodes;
   if (!ids || ids.length === 0) return undefined;
   let out: SkillTreeNode['over'] | undefined;
   for (const id of [...new Set(ids)]) {
-    const over = treeNodeOf(inst.def, id)?.over;
+    const baseOver = treeNodeOf(inst.def, id)?.over;
+    const over = baseOver?.aura ? { ...baseOver, aura: rankTreeAura(baseOver.aura, ids.filter(pick => pick === id).length) } : baseOver;
     if (!over) continue;
     out = out
       ? {

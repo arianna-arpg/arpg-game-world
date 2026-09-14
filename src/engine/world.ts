@@ -123,6 +123,7 @@ import { VICTIM_CONDITIONS, VICTIM_HOOKS, victimScopeArmed, victimTags } from '.
 import { DERIVED_GAUGES, GAUGE_CFG } from './gauges'; // DERIVED GAUGES
 import { resolveInvocation, RUNE_INFO, type RuneId } from '../data/invocations';
 import { instanceInvocation, runeForCast, makeInvocationPayload } from './invocation';
+import { applyGuardSurge } from './guardSurge';
 import { COMBO_CFG, comboRepeatedNow, comboStat, comboVariedNow, matchComboRule, type ComboRuleDef } from './sequence';
 import { mimicCapture, mimicPowerMods, mimicRefreshWatch, mimicSelect, mimicSelected } from './mimic';
 import { COMBO_LIST, COMBO_RULES } from '../data/combos';
@@ -36247,20 +36248,10 @@ export class World {
         }
         if (wound > 0) this.text(caster.pos, 'time slips', '#8ae0e8', 12, 'combat');
       }
-      // TRANSGRESSION: mid-guard, the blue bar becomes shield — past max.
-      if (fx.type === 'guardSurge' && caster.casting?.mode === 'guard') {
-        const spend = caster.mana * fx.manaFraction;
-        if (spend > 0) {
-          caster.mana -= spend;
-          const cs2 = caster.casting;
-          cs2.shield = (cs2.shield ?? 0) + spend * fx.ratio;
-          cs2.maxShield = Math.max(cs2.maxShield ?? 1, cs2.shield);
-          this.text(caster.pos, 'TRANSGRESSION!', '#8ab8d8', 14, 'combat');
-          this.flashes.push({
-            pos: vec(caster.pos.x, caster.pos.y), radius: caster.radius + 16,
-            color: '#8ab8d8', life: 0.3, maxLife: 0.3,
-          });
-        }
+      if (fx.type === 'guardSurge' && applyGuardSurge(caster, inst, fx)) {
+        this.text(caster.pos, 'TRANSGRESSION!', '#8ab8d8', 14, 'combat');
+        this.flashes.push({ pos: vec(caster.pos.x, caster.pos.y), radius: caster.radius + 16,
+          color: '#8ab8d8', life: 0.3, maxLife: 0.3 });
       }
       // LINGERING GROUND: the pool stands at the resolved point — for a
       // BLINK, where the caster STOOD (origin binds pre-step on purpose:
@@ -38709,7 +38700,7 @@ export class World {
     {
       const dv0 = aura.inst.def.delivery;
       if (dv0.type === 'aura') {
-        if (dv0.aura.selfMods) bearer.sheet.removeSource('auraself:' + skillId);
+        bearer.sheet.removeSource('auraself:' + skillId); // TreeAuraPatch can add selfMods to a natively empty aura
         if (dv0.seal) {
           // The lock only lifts when the LAST standing seal releases —
           // dropping one of two stacked seals must not free the pool.

@@ -1,3 +1,4 @@
+import { DISCIPLINE_STARTER_TREES } from './disciplineStarterTrees';
 import { RUNEWEAVER_STARTER_TREES } from './runeweaverStarterTrees';
 import { RESONATOR_STARTER_TREES } from './resonatorStarterTrees';
 import { BASTION_STARTER_TREES } from './bastionStarterTrees';
@@ -3745,6 +3746,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   wellspring_stance: {
+    tree: DISCIPLINE_STARTER_TREES.wellspring_stance,
     id: 'wellspring_stance', name: 'Wellspring Stance',
     description: 'TOGGLE: while held, +30 maximum poise and 25% increased poise regeneration.'
       + ' Spare mana drains steadily into poise so it refills mid-fight; the pump idles while'
@@ -5585,16 +5587,17 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   transgression: {
+    tree: DISCIPLINE_STARTER_TREES.transgression,
     id: 'transgression', name: 'Transgression',
-    description: 'Usable only mid-guard, fired around the raised shield: half your remaining'
-      + ' mana crystallizes into shield health, stacking past the shield\'s maximum. Combos'
-      + ' with Shield Up, Riposte, and Ice Shield.',
+    description: 'Spend half your remaining mana on protection. During a held guard it becomes'
+      + ' shield health, stacking past the maximum. Otherwise gain a 3-second ward, up to 30%'
+      + ' of maximum life before absorb power. Each mana spent grants 1.4 protection; the'
+      + ' standalone ward keeps the stronger pool instead of stacking.',
     tags: ['spell', 'buff', 'instant'], color: '#8ab8d8',
     manaCost: 0, cooldown: 10, useTime: 0,
-    requiresGuard: true,
     usableWhileGuarding: true,
     delivery: { type: 'self' },
-    effects: [{ type: 'guardSurge', manaFraction: 0.5, ratio: 1.4 }],
+    effects: [{ type: 'guardSurge', manaFraction: 0.5, ratio: 1.4, unguarded: { duration: 3, capLife: 0.3 } }],
     requirements: { strength: 12, intelligence: 12 },
     leveling: { perLevel: [mod('cooldownRecovery', 'increased', 0.06)] },
   },
@@ -5883,9 +5886,10 @@ export const SKILLS: Record<string, SkillDef> = {
 
   // --- THE FLAGELLANT: pain, notarized ------------------------------------
   ashen_vow: {
+    tree: DISCIPLINE_STARTER_TREES.ashen_vow,
     id: 'ashen_vow', name: 'Ashen Vow',
     description: 'TOGGLE a covenant that feeds on you, burning 1.2% of your life per second for'
-      + ' 10% increased damage. Below half life the bargain turns generous: 25% more damage,'
+      + ' 10% increased damage. At low life the bargain turns generous: 25% more damage,'
       + ' 35% increased armor, and 2% of damage leeched as life. Whole men owe; the broken are'
       + ' owed.',
     tags: ['spell', 'aura', 'buff', 'physical'], color: '#c05838',
@@ -5965,6 +5969,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   // --- THE FIREBRAND: the riot, delivered as a speech ----------------------
   incite: {
+    tree: DISCIPLINE_STARTER_TREES.incite,
     id: 'incite', name: 'Incite',
     description: 'Speak the wrong truth at the wrong volume: every enemy around you has a 45%'
       + ' chance to go MADDENED, blades turning on the nearest creature, friend first, and a'
@@ -7983,6 +7988,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   blood_mortgage: {
+    tree: DISCIPLINE_STARTER_TREES.blood_mortgage,
     id: 'blood_mortgage', name: 'Blood Mortgage',
     description: 'TOGGLE: a blood price your life cannot pay borrows from the top of your pool'
       + ' instead, lowering your maximum life until repaid, up to 40% of it. After 3 seconds'
@@ -9465,6 +9471,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   harrowing_wail: {
+    tree: DISCIPLINE_STARTER_TREES.harrowing_wail,
     id: 'harrowing_wail', name: 'Harrowing Wail',
     description: 'Scream a cone of physical damage in front of you: 85% chance to build'
       + ' HARROWING on everything caught, and when the stacks run deep the nerve BREAKS into'
@@ -12047,6 +12054,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // The palm ramps ITSELF (self-stack, the kata grammar); the exhale is a
   // held breath (charge cast). Both read willpower, neither reads rage.
   mantra_strike: {
+    tree: DISCIPLINE_STARTER_TREES.mantra_strike,
     id: 'mantra_strike', name: 'Mantra Strike',
     description: 'An open-palm melee strike that settles deeper with repetition: each hit'
       + ' stacks 6% increased damage and 8% increased poise damage for this skill alone, up to'
@@ -12089,6 +12097,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   long_exhale: {
+    tree: DISCIPLINE_STARTER_TREES.long_exhale,
     id: 'long_exhale', name: 'Long Exhale',
     description: 'Hold the button to gather breath, then release a rolling cone of forced air:'
       + ' damage scales with the hold, from 0.7x on a quick release to 2.4x at a full'
@@ -15689,6 +15698,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   trumpet_peal: {
+    tree: DISCIPLINE_STARTER_TREES.trumpet_peal,
     id: 'trumpet_peal', name: 'Trumpet Peal',
     description: 'One note, aimed at the line: a wedge of sound dealing lightning damage in a'
       + ' cone, throwing enemies back, with a 35% chance to bewilder them into striking at'

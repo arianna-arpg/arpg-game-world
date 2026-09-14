@@ -29,6 +29,7 @@
 // ---------------------------------------------------------------------------
 
 import { skillAbsorbAmount } from './absorb';
+import { guardSurgePreview } from './guardSurge';
 import { instanceInvocation, makeInvocationPayload } from './invocation';
 import { resolveInvocation, RUNE_INFO, type RuneId } from '../data/invocations';
 import { instanceEffects } from './skills';
@@ -211,6 +212,13 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   const durScale = get('effectDuration');
   const seen = new Set<string>();
   for (const fx of instanceEffects(inst)) {
+    if (fx.type === 'guardSurge') {
+      const surge = guardSurgePreview(caster, inst, fx);
+      push('guardSurge_payment', 'Current mana payment', String(Math.round(surge.mana)), 'headline');
+      push('guardSurge_protection', surge.guarded ? 'Held shield overfill' : 'Standalone ward',
+        String(Math.round(surge.amount)) + (surge.guarded ? '' : ' for ' + secs(surge.duration)), 'headline',
+        surge.guarded ? 'adds beyond the held shield maximum' : 'keeps the stronger absorb pool');
+    }
     if (fx.type !== 'status') continue;
     seen.add(fx.status);
     const sdef = STATUS_DEFS[fx.status];
