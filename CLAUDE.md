@@ -78,6 +78,10 @@ Ascetic/Flagellant/Firebrand starting trees live in `src/data/disciplineStarterT
 `docs/design/discipline-starting-skill-trees.md` covers ranked self aura modifiers,
 standalone Transgression wards, charge timing, debt recovery and control payoffs.
 
+The Tamer/Beguiler/Falconer starting trees live in `src/data/bondStarterTrees.ts`;
+`docs/design/bond-starting-skill-trees.md` covers claims, sympathy, native doubles,
+madness, falcon contracts and owner-scoped cleanup.
+
 Chest and gem-cache lists live in `src/data/containerloot.ts` and the existing
 `loottables.ts`; `docs/design/container-loot.md` documents the context rules,
 Memory Essence economy, visual grammar and regression probe.

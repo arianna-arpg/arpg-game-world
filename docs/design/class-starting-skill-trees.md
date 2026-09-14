@@ -105,12 +105,20 @@ The [Runeweaver batch](runeweaver-starting-skill-trees.md) repairs its level-one
 fuel loop and completes Invocation, Rune of Power and Warp.
 The [Resonator batch](resonator-starting-skill-trees.md) completes Tuning Strike,
 Shatterchord and Purity of Elements with explicit tone and aura investments.
+The [discipline batch](discipline-starting-skill-trees.md) completes Ascetic,
+Flagellant and Firebrand, adds ranked self aura investments and makes
+Transgression usable without a separate guard skill.
+The [bond batch](bond-starting-skill-trees.md) completes Tamer, Beguiler and
+Falconer with claim, sympathy, clone, control and falcon investments.
 
 Completed starting bars: Warrior, Magician, Rogue, Berserker, Sorcerer,
 Ranger, Guardian, Summoner, Juggernaut, Pyromancer, Assassin, Necromancer,
 Cleric, Blademaster, Brawler, Trapper, Skald, Chronomancer, Hivecaller,
 Breaker, Vanguard, Lancer, Swashbuckler, Matador, Sharper, Sentinel, Warlord,
-Wallwright, Runeweaver and Resonator.
+Wallwright, Runeweaver, Resonator, Ascetic, Flagellant, Firebrand, Tamer,
+Beguiler and Falconer.
 
-Remaining: Tamer, Beguiler, Ascetic, Flagellant, Falconer and Firebrand. Keep completing
-these whole starting bars before the mastery swap audit and alternate trees.
+All 36 classes from the original roster now have complete starting trees.
+The class-discovery update added Spellblade, Cryomancer and Apothecary,
+bringing the roster to 39. Those three starting bars are the next batch;
+then proceed to the mastery swap audit and alternate-skill trees.
