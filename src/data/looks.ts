@@ -18,6 +18,7 @@ import { COURT_LOOKS } from './courtLooks';
 import { ABYSS_LOOKS } from './abyssLooks';
 import { KINSHIP_LOOKS } from './kinshipLooks';
 import { ROOTWILD_LOOKS } from './rootwildLooks';
+import { ARENA_BOSS_LOOKS } from './arenaBosses';
 import { COSMETIC_LOOKS } from './cosmeticModels';
 
 export const LOOKS: Record<string, LookDef> = {
@@ -28,6 +29,7 @@ export const LOOKS: Record<string, LookDef> = {
   ...ABYSS_LOOKS,
   ...KINSHIP_LOOKS,
   ...ROOTWILD_LOOKS,
+  ...ARENA_BOSS_LOOKS,
 
   // ============================================== THE DEAD (the flagship set)
   /** Bare bones and a blade: ribs radiating off a spine, skull forward. */

@@ -16,6 +16,7 @@ import { makeSkillInstance, type SkillInstance } from './skills';
 import type { Actor } from './actor';
 import { alertScale, type AIAction } from './brain';
 import { MOUNT_CFG, mountAccepts, seatPos } from './mounts';
+import { attackPatternPoints } from './attackPatterns';
 import type { World } from './world';
 
 /** Mint (and cache) a skill instance for scripted casts — leveled like the
@@ -104,6 +105,26 @@ export function registerAIAction(id: `x_${string}`, handler: Handler): void {
 const warnedUnknown = new Set<string>();
 
 const HANDLERS: Record<Exclude<AIAction['do'], `x_${string}`>, Handler> = {
+
+  attackPattern: (world, actor, act, target) => {
+    if (act.do !== 'attackPattern' || actor.dead) return;
+    const inst = mintInst(actor, act.skill);
+    if (!inst) return;
+    const center = resolvePoint(actor, target, act.at ?? 'anchor');
+    const bearing = typeof act.bearing === 'number' ? act.bearing
+      : act.bearing === 'target' && target ? angleTo(center, target.pos) : actor.facing;
+    for (const { pos, delay } of attackPatternPoints(act.pattern, center, bearing)) {
+      // Reject off-floor marks instead of piling snapped blasts into a gap.
+      if (pos.x < 0 || pos.y < 0 || pos.x > world.arena.w || pos.y > world.arena.h
+        || (world.walk && !world.walk.isWalkable(pos.x, pos.y))) continue;
+      world.zones.push({
+        pos, radius: act.pattern.radius, caster: actor, inst, color: inst.def.color,
+        delay, exploded: false, linger: act.pattern.linger ?? 0,
+        tickInterval: act.pattern.tickInterval ?? 1, tickTimer: 0,
+        shape: 0, facing: 0, dmgMult: 1, depth: 1, attackPattern: true,
+      });
+    }
+  },
 
   announce: (world, actor, act) => {
     if (act.do !== 'announce') return;

@@ -117,6 +117,14 @@ ledger aggregation in `src/engine/deeds.ts`. `docs/meta/class-deeds.md` covers
 account attribution, encounter streaks, hints, and the starting-kit cost pass.
 Class levels remain the mastery/skill-swap ladder.
 
+Stationary arena bosses live in `data/arenaBosses.ts`, with regional doors in
+`data/arenaBossHabitats.ts` and courts in `data/arenaBossTilesets.ts`.
+`engine/attackPatterns.ts` owns fixed-at-warning geometry; the existing skill
+and zone pipelines own damage and attribution. Retry policy, tuning and
+extension notes: `docs/design/arena-bosses.md`. Checks:
+`npm run probe -- arenabosses`, genqa, and the isolated hidden
+`balance/arena-bosses-ui.cjs` client harness after a build.
+
 ## Commands
 - `npm install` — first-time setup (also run automatically by the .bat launchers).
 - `npm run dev` — Vite dev server at http://localhost:5173 (browser dev mode, `Play Game.bat`).

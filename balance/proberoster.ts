@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_arenabosses.ts', status: 'green', tier: 'fast', why: 'Stationary arena bosses: regional doors, live phases, part breaks, warning geometry and victory cleanup.' },
   { probe: 'probe_cosmetics.ts', status: 'green', tier: 'fast', why: 'Cosmetic ownership, save validation, per-skill overrides, atomic purchases, entitlement replay/refund, owner attribution and combat/wire isolation' },
   { probe: 'probe_disciplinestartertrees.ts', status: 'green', tier: 'fast', why: 'Ascetic Flagellant Firebrand complete bars, standalone paid Transgression wards, ranked self auras, real charge/poise/debt/control and persistence' },
   { probe: 'probe_runeweaverstartertrees.ts', status: 'green', tier: 'fast', why: 'Runeweaver complete starting bar, level-one fuel loop, host-invested Invocation snapshots, alphabets, native recipes, delayed-field cleanup and persistence' },

@@ -1539,7 +1539,18 @@ export function validateContent(): void {
     if (!b) return;
     const fromActs = (acts?: readonly AIAction[]): void => {
       for (const a of acts ?? []) {
-        if ((a.do === 'cast' || a.do === 'ring' || a.do === 'nova') && typeof a.skill === 'string') push(a.skill);
+        if ((a.do === 'cast' || a.do === 'ring' || a.do === 'nova' || a.do === 'attackPattern') && typeof a.skill === 'string') push(a.skill);
+        if (a.do === 'attackPattern') {
+          const p = a.pattern;
+          if (!p.points.length || !Number.isFinite(p.radius) || p.radius <= 0
+            || !Number.isFinite(p.delay) || p.delay < 0
+            || !Number.isFinite(p.linger ?? 0) || (p.linger ?? 0) < 0
+            || !Number.isFinite(p.tickInterval ?? 1) || (p.tickInterval ?? 1) <= 0
+            || p.points.some(q => !Number.isFinite(q.x) || !Number.isFinite(q.y)
+              || !Number.isFinite(q.after ?? 0) || (q.after ?? 0) < 0)) {
+            warn(`attackPattern '${a.skill}': invalid geometry or timing`);
+          }
+        }
       }
     };
     for (const ph of b.phases ?? []) { fromActs(ph.onEnter); for (const c of ph.cadences ?? []) fromActs(c.actions); }

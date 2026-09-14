@@ -965,6 +965,11 @@ export function registerAICondition(id: string, fn: AIConditionFn): void {
 export type ArenaRadius = number | { frac: number; min: number };
 
 export type AIAction =
+  /** Authored ground geometry. Bearing is sampled at placement (radians,
+   * or actor/target facing); warnings and pools end when the source dies
+   * or its skill is disabled by a part break. */
+  | { do: 'attackPattern'; skill: string; pattern: import('./attackPatterns').AttackPattern;
+      at?: 'self' | 'anchor' | 'target'; bearing?: number | 'actor' | 'target' }
   | { do: 'announce'; text: string; color?: string; size?: number }
   /** Cast a skill by id THROUGH the normal pipeline (the actor's level, its
    *  stats, its costs — full player parity). `force` skips cost + cast bar

@@ -12,6 +12,7 @@
 // ---------------------------------------------------------------------------
 
 import type { DoodadVisualDef } from '../render/vis/painters';
+import { ARENA_BOSS_DOORS } from './arenaBossTilesets';
 
 // THE WATER LOOK — one shared params object (the reskin doctrine: hovel/
 // goblin_hut for plans, this for liquids). The mirage oasis draws with these
@@ -27,6 +28,7 @@ const WATER_LOOK = {
 };
 
 export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
+  ...ARENA_BOSS_DOORS,
   rootwild_seedbed_gate: {
     painter:'caveMouth',order:55,
     params:{color:'#394727',edge:'#839354',material:'wood',glow:'#d7c78c',throat:'#10170c',vines:{color:'#6d8b45'}},

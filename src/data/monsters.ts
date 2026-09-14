@@ -22,6 +22,7 @@ import { COURT_MONSTERS } from './courtMonsters';
 import { ABYSS_MONSTERS } from './abyssMonsters';
 import { KINSHIP_MONSTERS } from './kinshipMonsters';
 import { ROOTWILD_MONSTERS } from './rootwildMonsters';
+import { ARENA_BOSS_MONSTERS } from './arenaBosses';
 import { registerAIAction } from '../engine/aiActions';
 import { FluxPhase } from '../engine/flux';
 import type { TuneSpec } from '../engine/tuning';
@@ -602,6 +603,9 @@ export interface MonsterDef {
    *  tick): bodies whose pose never tracks a target. Constructs default
    *  by kind (CONSTRUCT_KIND_AIMS); this is the bestiary-side lever. */
   aims?: boolean;
+  /** Initial heading in radians. Pair with turnSpeed: 0 for fixed machinery
+   * whose geometry keeps its orientation while its skills aim freely. */
+  spawnFacing?: number;
   /** Movement/behavior is DRIVEN externally (an event tick wheels it); the
    *  AI brain skips it entirely (the caravan cart). */
   driven?: true;
@@ -2161,6 +2165,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   ...ABYSS_MONSTERS,
   ...KINSHIP_MONSTERS,
   ...ROOTWILD_MONSTERS,
+  ...ARENA_BOSS_MONSTERS,
 
   zombie: {
     id: 'zombie', name: 'Shambling Zombie',

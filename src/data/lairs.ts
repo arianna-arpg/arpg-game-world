@@ -27,6 +27,7 @@
 
 import { LAIR_CFG, lairOf, registerLair } from '../engine/lairs';
 import './rootwildHabitats';
+import './arenaBossHabitats';
 import {
   landmarkDefs, layTraveledWay, registerCluster, registerComposition,
   registerDoodadRule, registerLandmark, registerLandmarkBuilder,

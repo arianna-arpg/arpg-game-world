@@ -14,6 +14,7 @@ import type { AnnexRollSpec } from './annexes';
 import type { Rng } from '../core/rng';
 import { presenceMul, type LevelEnvelope } from '../engine/presence';
 import { climateAffinity, type ClimateSpec } from '../world/climate';
+import { ARENA_BOSS_TILESETS } from './arenaBossTilesets';
 
 /** A tileset-declared BLEND (the blend fabric, engine/blend.ts): zones minted
  *  from this tileset interleave the named partner's theme + kit + packs by
@@ -278,6 +279,7 @@ export interface TilesetDef {
 }
 
 export const TILESETS: Record<string, TilesetDef> = {
+  ...ARENA_BOSS_TILESETS,
 
   deepwood: {
     id: 'deepwood',

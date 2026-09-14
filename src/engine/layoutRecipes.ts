@@ -26,6 +26,7 @@
 
 import './lake'; // side-effect: registers the 'lake' recipe (its own leaf — the massif/settled idiom)
 import './ventcauldron'; // side-effect: registers the 'ventcauldron' den recipe (the great geyser's cauldron — its own leaf)
+import './arenaCourt';
 import { vec, type Vec2 } from '../core/math';
 import { Rng } from '../core/rng';
 import type { ExitRoadSpec, ZoneDef } from '../data/zones';

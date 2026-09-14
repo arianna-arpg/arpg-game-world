@@ -136,7 +136,9 @@ export type ObjectiveSpec = (
   | { kind: 'escape'; interval: [number, number] }
   /** Destructible spawner objects seed the zone; destroy them all. */
   | { kind: 'spawners'; spawnerId: string; count: [number, number] }
-  | { kind: 'boss'; id: string; levelBonus?: number; uber?: UberPolicy; promote?: BossPromote }
+  | { kind: 'boss'; id: string; levelBonus?: number; uber?: UberPolicy; promote?: BossPromote;
+      /** Restart an unfinished body/phase/part encounter on re-entry. */
+      arenaBossRetry?: 'restart' }
   /** Dormant SURVEY SPIRES stand at POIs: hold your ground beside one and it
    *  charges (seconds PER STONE: chargeSec → the 'beacon' transit row →
    *  BEACON_CFG); banked charge LURES idle wanderers toward the glow (the

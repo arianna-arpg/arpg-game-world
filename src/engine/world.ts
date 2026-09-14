@@ -1176,6 +1176,9 @@ const PUSH_MAX_SPEED = 1500;
 export type AoeShape = number;
 
 interface Zone {
+  /** Source-maintained choreography: breaking its skill or killing its
+   * caster clears both pending warnings and lingering ground. */
+  attackPattern?: boolean;
   pos: Vec2; radius: number;
   caster: Actor; inst: SkillInstance; color: string;
   /** THE FIELD'S STORY (the sovereignty gate): the story the ground lies on
@@ -6434,6 +6437,9 @@ export class World {
       // zone becomes an empty cleared arena). Absent uber = a normal repeatable boss.
       if (!this.uberDefeated(o, def.id)) {
         const boss = this.createMonster(o.id, def.level + (o.levelBonus ?? 0), 'enemy');
+        // Partial HP memory cannot restore broken parts or phase clocks.
+        // Completed attempts still use ordinary cleared-zone memory.
+        if (o.arenaBossRetry === 'restart' && !this.objectiveDone) boss.fromZoneGen = false;
         // The Unmade arena: spawn on the dais (pois[0]) instead of a random far point,
         // and init the in-zone choreography (no longer Crowned by default — see promote).
         if (def.layoutType === 'unmade_vault') {
@@ -28918,6 +28924,7 @@ export class World {
 
     // aims:false — facing-is-noise bodies (data lever): no aim tick.
     if (def.aims === false) a.aims = false;
+    if (def.spawnFacing !== undefined) a.facing = def.spawnFacing;
     // SCALE VARIANCE: a herd reads as a mix of big adults and small young. Roll a
     // per-spawn body-scale (sizing the body + — with scaleStats — its life/damage),
     // and below the juvenile cut SWAP to the juvenile brain (the young flee, never
@@ -57187,6 +57194,9 @@ export class World {
     }
     for (let i = this.zones.length - 1; i >= 0; i--) {
       const z = this.zones[i];
+      if (z.attackPattern && (z.caster.dead || z.caster.aiSkillBans?.has(z.inst.def.id))) {
+        this.expireZone(z); this.zones.splice(i, 1); continue;
+      }
       if (!z.exploded) {
         z.delay -= dt;
         if (z.delay <= 0) {

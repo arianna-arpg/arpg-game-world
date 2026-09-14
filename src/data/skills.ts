@@ -37,12 +37,14 @@ import { REACTIVE_SKILLS } from './reactiveSkills';
 import { NECROMANCER_TREES } from './necromancerTrees';
 import { NECROMANCER_SKILLS } from './necromancerSkills';
 import { ROOTWILD_SKILLS } from './rootwildSkills';
+import { ARENA_BOSS_SKILLS } from './arenaBosses';
 
 export const SKILLS: Record<string, SkillDef> = {
   town_portal: TOWN_PORTAL_SKILL,
   ...NECROMANCER_SKILLS,
   ...PACT_SKILLS,
   ...ROOTWILD_SKILLS,
+  ...ARENA_BOSS_SKILLS,
   ...WORKSHOP_SKILLS,
   ...FLASK_SKILLS,
 
