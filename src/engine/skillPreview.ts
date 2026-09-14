@@ -29,6 +29,8 @@
 // ---------------------------------------------------------------------------
 
 import { skillAbsorbAmount } from './absorb';
+import { instanceInvocation, makeInvocationPayload } from './invocation';
+import { resolveInvocation, RUNE_INFO, type RuneId } from '../data/invocations';
 import { instanceEffects } from './skills';
 import { costWard } from './costward';
 import { summonKitIds } from './skills';
@@ -108,6 +110,20 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
     key: string, label: string, value: string,
     group: PreviewGroup = 'headline', note?: string,
   ): void => { rows.push({ key, label, value, note, group }); };
+
+  if (def.invokes) {
+    const alphabet = instanceInvocation(inst)?.untypedRunes ?? ['glyph'];
+    push('invocation_fuel', 'Schoolless spell fuel', alphabet.map(r => RUNE_INFO[r as RuneId].label).join(' → '));
+    push('invocation_bank', 'Woven runes', `${caster.runes.length} / ${Math.max(1, Math.round(get('runeCap')))}`);
+    const rule = resolveInvocation(caster.runes);
+    if (rule && SKILLS[rule.skillId]) {
+      const payload = makeInvocationPayload(inst, SKILLS[rule.skillId], caster.runes[caster.runes.length - 1]);
+      const damage = skillDamageBands(caster, payload).total;
+      const mult = 1 + (instanceInvocation(inst)?.damagePerRune ?? rule.dmgPerRune ?? 0.15) * caster.runes.length;
+      push('invocation_release', 'Ready working', rule.label);
+      push('invocation_damage', 'Working damage per hit', band(damage.lo * mult, damage.hi * mult), 'headline', 'before defenses; repeated hits depend on the working');
+    } else push('invocation_empty', 'Weave first', 'Cast a schoolless or elemental spell');
+  }
 
   // ---- damage -------------------------------------------------------------
   const dmgPreview = skillDamageBands(caster, inst);

@@ -3,7 +3,8 @@
 //
 // While an invoking skill (SkillDef.invokes) sits on the bar, every real
 // elemental cast banks a RUNE of its school — Ember (fire), Arc (lightning),
-// Rime (cold); channels bank one per held second. The invoke consumes the
+// Rime (cold); a schoolless spell banks a Glyph of physical force.
+// Channels bank one per held second. The invoke consumes the
 // WHOLE sequence: rules below are matched against it — most-specific first
 // (exact tail sequences beat count requirements beat the fallback) — the
 // matched payload is cast at the aim, every rune burned is MORE damage, and
@@ -16,16 +17,17 @@
 
 import { matchSeqRule, type SeqRule } from '../engine/sequence';
 
-export type RuneId = 'ember' | 'arc' | 'rime';
+export type RuneId = 'ember' | 'arc' | 'rime' | 'glyph';
 
-export const RUNE_INFO: Record<RuneId, { label: string; color: string; element: 'fire' | 'lightning' | 'cold' }> = {
+export const RUNE_INFO: Record<RuneId, { label: string; color: string; element: 'fire' | 'lightning' | 'cold' | 'physical' }> = {
   ember: { label: 'Ember', color: '#ff8a4a', element: 'fire' },
   arc:   { label: 'Arc',   color: '#ffe14a', element: 'lightning' },
   rime:  { label: 'Rime',  color: '#9ad8f8', element: 'cold' },
+  glyph: { label: 'Glyph', color: '#c8a8e8', element: 'physical' },
 };
 
-/** The rune an elemental school banks (chaos/physical bank nothing — the
- *  weave is an ELEMENTAL grammar by design). */
+/** The elemental map stays explicit. Schoolless Glyph fuel is selected
+ * separately by runeForCast; typed chaos/physical spells do not opt in. */
 export const RUNE_OF_ELEMENT: Record<string, RuneId> = {
   fire: 'ember', lightning: 'arc', cold: 'rime',
 };

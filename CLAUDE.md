@@ -47,6 +47,12 @@ level gates are documented in `docs/design/shield-defender-balance.md`;
 The Hivecaller/Ranger/Guardian batch is in `src/data/frontierStarterTrees.ts`,
 with its contract and shared absorb scaling in
 `docs/design/frontier-starting-skill-trees.md`.
+The Resonator opening trees live in `src/data/resonatorStarterTrees.ts`;
+`docs/design/resonator-starting-skill-trees.md` records native independent tones,
+victim-scoped chord payoffs and additive Purity auras.
+Runeweaver's usable level-one fuel loop and complete starting trees live in
+`src/data/runeweaverStarterTrees.ts`; `docs/design/runeweaver-starting-skill-trees.md`
+covers Glyph fuel, Invocation payload inheritance, preview and respec ownership.
 
 Chest and gem-cache lists live in `src/data/containerloot.ts` and the existing
 `loottables.ts`; `docs/design/container-loot.md` documents the context rules,
