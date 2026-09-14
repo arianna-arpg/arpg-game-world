@@ -127,6 +127,7 @@ export type MetaAction =
   | { t: 'holdRestore' }                                       // Harborhold: pay the carried-Essence restoration at a fallen hold's wreckage
   | { t: 'payToll'; index: number }                            // Holdfast: pay the keeper's toll (essence/gem per the guardian's UnlockSpec; index = legacy wire shape)
   | { t: 'vocationQuest'; questId: string }                    // Vocation menu: undertake a chain step
+  | { t: 'questReward'; questId: string; choiceId: string }     // claim one reward at the quest giver
   // GEAR (items are addressed by uid — stable across bag re-sorts and the wire).
   | { t: 'equipItem'; uid: number; slot?: string }             // bag OR worn item → doll slot (auto-picks when omitted; worn→worn swaps through the vacated slot)
   | { t: 'unequipItem'; slot: string; x?: number; y?: number } // doll slot → bag (x/y: exact cell, fails blocked; omitted: first fit, fails full)

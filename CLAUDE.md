@@ -47,27 +47,6 @@ level gates are documented in `docs/design/shield-defender-balance.md`;
 The Hivecaller/Ranger/Guardian batch is in `src/data/frontierStarterTrees.ts`,
 with its contract and shared absorb scaling in
 `docs/design/frontier-starting-skill-trees.md`.
-The Berserker/Sorcerer/Cleric opening trees are in `src/data/devotedStarterTrees.ts`;
-`docs/design/devoted-starting-skill-trees.md` covers their identities, tree-granted
-resource conduits, healing exclusions and cancellation of repeats on respec.
-The Summoner/Juggernaut/Pyromancer opening trees live in `src/data/pactSteelStarterTrees.ts`;
-`docs/design/pact-steel-starting-skill-trees.md` covers Fury spender overrides,
-familiar arts, moving rings, expiry-radius investment and respec cleanup.
-The Assassin/Blademaster/Brawler opening trees live in `src/data/precisionStarterTrees.ts`;
-`docs/design/precision-starting-skill-trees.md` covers completed-cut preparation,
-combo-finisher investment, timed counters, concealment and measured Fury spending.
-The Trapper/Skald/Chronomancer opening trees live in `src/data/controlStarterTrees.ts`;
-`docs/design/control-starting-skill-trees.md` covers construct payloads, additive
-domains, rewind contracts, device retirement and the Overwound Mechanism support.
-
-Future skill and support proposals are tracked centrally in
-`docs/design/skill-support-candidates.md`, with evidence, status and paired ideas.
-The Breaker/Vanguard/Lancer starting trees live in `src/data/impactStarterTrees.ts`;
-`docs/design/impact-starting-skill-trees.md` covers native pulse overrides,
-Extraction bank shares, returning-flight ownership and the complete bars.
-The Sentinel/Warlord/Wallwright starting trees live in `src/data/bastionStarterTrees.ts`;
-`docs/design/bastion-starting-skill-trees.md` covers additive native-aura
-modifiers, retaliation, banner cleanup, command blessings and guard releases.
 
 Chest and gem-cache lists live in `src/data/containerloot.ts` and the existing
 `loottables.ts`; `docs/design/container-loot.md` documents the context rules,
@@ -87,7 +66,9 @@ in the pack, live only when seated; the Vault rows, menu page, the inventory's
 RIBBON DRAWER beside SKILLS / PASSIVES (`ui/containerPane.ts` — a minted
 docked root that enrolls in THE FOLIO's inventory-side book, so it tabs with
 Skills and the trees), save, corpse and co-op wire all derive from the def;
-rung 0 surfaces on the `relic_found` discovery ledger. Contract:
+rung 0 is a one-cell reward from the seeded lost-relic quest
+(`quests/reliquary.ts`); first seating completes `reliquary_lesson` and opens
+ambient relic drops, then the Vault grows the ring. Contract:
 `docs/engine/containers.md`; probe `balance/probe_reliquary.ts`.
 
 Class discovery combat recipes live in `src/data/classdeeds.ts`, with reusable

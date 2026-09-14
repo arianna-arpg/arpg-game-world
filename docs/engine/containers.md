@@ -51,8 +51,9 @@ one mechanism the engine already had: a grid, an item, a stat source.
   so `itemgen` never imports the fabric and nothing cycles.
 - **Discovery.** `ContainerDef.foundLedger` is stamped on the account by the
   first **genuine world mint** of an accepted piece (`World.dropGearAt` — never
-  a discard, a reclaim or an owed pay; the gem index's doctrine). The Vault's
-  rung-0 card surfaces only after the world has shown one.
+  a discard, a reclaim or an owed pay). A purchasable first rung can gate on
+  this key. The Reliquary instead has a quest-earned `rewardOnly` first rung;
+  `dropLedger: 'reliquary_lesson'` seals ambient relic mints until first seating.
 - **The one read.** `containerBoard(def)` resolves through an installed source:
   the World folds its account's rungs; a co-op client reads the host's shipped
   boards (`SnapshotW.containerBoards`, absent id = no board). Engine, panel and
@@ -75,15 +76,48 @@ rung that opens them on hover — `containerRungAt`).
 
 | Rung | Feature | Opens | Board | Vault gate |
 | --- | --- | --- | --- | --- |
-| 0 The Reliquary | `reliquary` | the hollow ring | 8 seats, centre sealed | `relic_found` ledger |
-| 1 Wider Shelves | `reliquary_shelves` | the outer walls | 20 | rung 0 owned + reach level 12 (teased) |
-| 2 The Heart | `reliquary_heart` | the centre | 21 | rung 1 + level 25 (teased) |
-| 3 The Full Case | `reliquary_case` | the corners | 25 | rung 2 + level 40 (teased) |
+| 0 The Reliquary | `reliquary` | one charm cell at (1,1) | 1 | Quest reward; no purchase |
+| 1 The First Ring | `reliquary_ring` | the hollow ring | 8, centre sealed | Case owned; 60 essence |
+| 2 Wider Shelves | `reliquary_shelves` | the outer walls | 20 | Ring owned + reach level 12 (teased) |
+| 3 The Heart | `reliquary_heart` | the centre | 21 | Shelves + level 25 (teased) |
+| 4 The Full Case | `reliquary_case` | the corners | 25 | Heart + level 40 (teased) |
 
 The ring seats charms, talismans along a wall and idols up a wall; no effigy
 seats until the heart opens — the tetris is the design. Costs and level roads
 are dials on the rung rows; the level roads register their milestones through
 the catalog's own derivation.
+
+## Introduction: A Place for the Unremembered
+
+`src/quests/reliquary.ts` refines the existing `relic_east_l8` chain entry.
+At level 8 the Quartermaster sends the player to one of three named burial
+sites: the Unremembered Chapel, the Bonekeeper’s Vigil, or the Silent Keeping.
+The run seed and quest id select the site and its keeper-fight/clear objective
+on an isolated RNG stream. Placement uses the level-8 band and a seeded bearing,
+connects a charted road, and provides a waypoint home. The generated zone and
+active quest persist through the existing world save.
+
+Field completion only readies the return leg. At the Quartermaster the journal
+offers three fixed magic 1×1 charms: life, mana, or energy shield. `QuestReward.choices`
+holds the entire payout until a valid selection fits in the pack; a full bag,
+invalid selection, remote claim, guest claim, or repeat claim pays nothing.
+The successful claim grants the chosen item, 500 XP, the chain stamp and
+`FEATURE.RELIQUARY`, then saves. There is no first-drop reservation.
+
+The inventory and case open on the lesson. Its persistent instructions explain
+that carried relics are inert, highlight the open cell, and offer ordinary drag
+placement or an explicit **Seat** button. Only successful placement stamps the
+account's `reliquary_lesson` key and enables ambient relics, including cache and
+boss payouts through `dropGearAt`. Unseating removes the stats but never relocks
+drops. Owned discards and owed property bypass the mint gate. The inventory's
+LESSON attention remains until seating, including after a reload. The quest
+can be completed on later characters for another starter charm; account cells
+and completed lesson are retained.
+
+Reusable seams: `QuestDef.zoneVariants`, `QuestZoneSpec.name`,
+`QuestReward.choices/choicePrompt/features`, `ContainerRung.rewardOnly`, and
+`ContainerDef.dropLedger`. The journal owns choice presentation; `questReward`
+is a validated host action that rechecks readiness and giver proximity.
 
 ## Relics (the pieces)
 

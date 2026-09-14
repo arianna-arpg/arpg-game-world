@@ -9,7 +9,6 @@
 // ---------------------------------------------------------------------------
 
 import { DeedTracker, type DeedEvent } from './deeds';
-import { instanceCastCycle, instanceTreeMods, instanceTreeOver } from './skills';
 import { finishAIRecovery, monsterTurnSpeed } from './handling';
 import { COMBAT_DEEDS, DEED_CFG } from '../data/classdeeds';
 import { selectContainerLoot } from '../data/containerloot';
@@ -87,7 +86,7 @@ import {
   type MemoryKind, type MemoryPin, type MemoryProvenance, type MemoryRecallGroup, type MemoryRecallResult,
   type MemoryRecallViewData,
 } from './memories';
-import { nextItemUid, compileItemMods, itemLevelReq, rebuildItem, rollItem } from './itemgen';
+import { nextItemUid, compileItemMods, itemLevelReq, rebuildItem, rollItem, forgeItem, describeItem, itemGridSize } from './itemgen';
 import {
   ABILITY_ESSENCE_CFG, ABILITY_ESSENCES, abilityEssenceOfTier,
   ESSENCES, ESSENCE_IDS, ESSENCE_SPILL_CFG, essenceUnitsForValue, FONT_CFG,
@@ -222,6 +221,7 @@ import { DESCENT_AFFIX_FAMILIES, ITEM_AFFIXES } from '../data/itemaffixes';
 import { caravanBand, CARAVAN_BANDS, caravanBandLabel } from '../data/caravan';
 import { TILESETS, CAVE_FACE_IDS, pickTilesetForBiome } from '../data/tilesets';
 import { QUEST_GIVER_IDS, QUESTS } from '../quests/defs';
+import { RELIQUARY_LESSON, resolveQuestZone } from '../quests/reliquary';
 import type { QuestDef, QuestGateCtx } from '../quests/types';
 import { QUEST_CATEGORY_CAPS, DEFAULT_QUEST_CATEGORY, questStandingLine, type QuestCategory, type QuestStanding } from '../quests/types';
 import { Rng, rollSeed, withSeededRandom } from '../core/rng';
@@ -1701,6 +1701,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'allocate': return isStr(a.nodeId) && (a.optionId === undefined || isStr(a.optionId));
     case 'bindGraft': return isStr(a.key) && (a.skillId === null || isStr(a.skillId));
     case 'vocationQuest': return isStr(a.questId); // menu-accept a vocation chain step
+    case 'questReward': return isStr(a.questId) && isStr(a.choiceId);
     case 'bindSkill': return isIdx(a.slot) && (a.skillId === null || isStr(a.skillId));
     case 'swapSkillSlots': return isIdx(a.a) && isIdx(a.b);
     // THE STONE (skill-items M2): the pouch wrapper by uid + the dropper
@@ -3465,6 +3466,9 @@ export class World {
    *  asks the main loop to open the CHOICE menu (same flag indirection as the
    *  Caravanner — a subclass pick must never dwell-auto-accept at random). */
   vocationOfferRequested = false;
+  questRewardRequested = false;
+  private questRewardShown: string | null = null;
+  private readonly questRewardItems = new Map<string, ItemInstance>();
   /** ONE-SHOT: the run wrote something ACCOUNT-scoped mid-run (a vocation
    *  unlock's ledger key) — the main loop persists the account when it sees
    *  this, so quitting without dying can't lose the unlock. World stays
@@ -5142,9 +5146,13 @@ export class World {
   private deedActor: Actor | null = null;
   private bindCombatDeeds(): void {
     if (this.deedActor === this.player) return;
-    if (this.deedActor) this.deedActor.onLifeHealed = undefined;
+    if (this.deedActor) {
+      this.deedActor.onLifeHealed = undefined;
+      this.deedActor.onLifeSpent = undefined;
+    }
     this.combatDeeds.reset();
     const hero = this.deedActor = this.player;
+    hero.onLifeSpent = amount => this.recordSelfDamage(hero, amount);
     // Observe immediately, before another hit can change the wound budget.
     hero.onLifeHealed = (amount, silent) => {
       if (hero !== this.player || !this.metaProgressionActive()) return;
@@ -5154,7 +5162,7 @@ export class World {
     };
   }
   private recordDeed(event: DeedEvent): void {
-    if (this.metaProgressionActive() && this.combatDeeds.record(this.account.ledger, event)) this.accountDirty = true;
+    if (this.metaProgressionActive() && this.combatDeeds.record(this.account.ledger, event, this.time)) this.accountDirty = true;
   }
   private deedEnemy(a: Actor): boolean {
     return a.team === 'enemy' && !a.passive && !a.noBounty && !a.invulnerable
@@ -5162,6 +5170,37 @@ export class World {
   }
   private deedOwned(a: Actor): boolean {
     return a === this.player || a.ownedBy(this.player);
+  }
+  private hasDeedEnemyNearby(): boolean {
+    return this.actors.some(a => !a.dead && a.life > 0 && this.deedEnemy(a)
+      && sameStory(a, this.player) && dist(a.pos, this.player.pos) <= DEED_CFG.combatRadius);
+  }
+  /** Count real life removed, never nominal damage, shield loss or overkill. */
+  private recordIndirectDamage(target: Actor, source: Actor | undefined, before: number): void {
+    if (!source || !this.deedOwned(source) || !this.deedEnemy(target)) return;
+    const value = Math.max(0, before - Math.max(0, target.life));
+    if (value > 0) this.recordDeed({ kind: 'indirect', value });
+  }
+  private recordSelfDamage(hero: Actor, amount: number): void {
+    if (hero !== this.player || hero.dead || !this.metaProgressionActive()
+      || !this.hasDeedEnemyNearby() || amount <= 0) return;
+    this.recordDeed({ kind: 'indirect', value: amount });
+  }
+  // Observe each contributing affliction BEFORE timers remove its last tick.
+  // Pool mitigation stays unchanged; account credit gets only its source's share.
+  private deedDotAmounts: Partial<Record<DamageType | 'untyped', number>> | undefined;
+  private collectDeedDot = (status: ActiveStatus, amount: number, type: DamageType | 'untyped'): void => {
+    const source = status.casterId === undefined ? undefined : this.actorById(status.casterId);
+    if (!source || !this.deedOwned(source)) return;
+    this.deedDotAmounts ??= {};
+    this.deedDotAmounts[type] = (this.deedDotAmounts[type] ?? 0) + amount;
+  };
+  private applyDeedDot(target: Actor, amount: number, type: DamageType | 'untyped'): void {
+    const before = target.life;
+    applyDot(target, amount, type === 'untyped' ? undefined : type);
+    const share = Math.min(1, (this.deedDotAmounts?.[type] ?? 0) / amount);
+    const value = Math.max(0, before - Math.max(0, target.life)) * share;
+    if (value > 0) this.recordDeed({ kind: 'indirect', value });
   }
   private updateDeedRecovery(): void {
     this.bindCombatDeeds();
@@ -22527,7 +22566,6 @@ export class World {
     if (why) { this.failNote(p, skillId + ':fontreset', why); return false; }
     const cost: AbilityCost = { tier: essenceTierForLevel(inst.level), count: FONT_CFG.reset.count };
     if (!this.spendAbilityEssence(seat, cost, 'fontreset:' + skillId)) return false;
-    this.dismissSummonToggle(p, inst.def.id);
     this.clearSummonTreeBodies(p, inst);
     this.clearTreeFields(p, inst);
     inst.treeNodes = undefined;
@@ -27424,6 +27462,8 @@ export class World {
    *  the world learns who you are.) */
   questGiverPrompt(): string | null {
     if (!this.nearAnyQuestGiver()) return null;
+    if (this.questRewardOffers().length) return 'Your keepsake awaits — choose a reward in the Quest Journal.';
+    if (this.reliquaryLesson()) return 'A keepsake needs a home. Open your inventory and seat your charm in the Reliquary.';
     if (this.pendingTurnIns().length) return 'Linger — a bounty is yours to claim.';
     if (this.nextAcceptableQuest()) return this.heroKnown()
       ? 'Linger, {name} — I have work for you…'
@@ -27530,6 +27570,7 @@ export class World {
    *  ELSE — with fresh vocation chains on offer — ask the main loop to open the
    *  CHOICE menu. ONE action per dwell, so a stack resolves a step at a time. */
   private updateQuestGiver(dt: number): void {
+    if (!this.nearAnyQuestGiver()) this.questRewardShown = null;
     if (this.player.dead || this.player.downed || !this.playerIdle()) {
       this.questGiverDwell = 0;
       // Stepping away re-arms the choice menu (a decline lasts one visit).
@@ -27798,11 +27839,12 @@ export class World {
   /** Accept a quest: GENERATE its directional zone (once) and wire it into the
    *  explored graph via placeZoneAt; the player then travels there. */
   private acceptQuest(q: QuestDef): void {
+    const questSeed = (this.manifest.seed ^ hashStr(q.id)) >>> 0;
+    q = { ...q, zone: resolveQuestZone(q, questSeed) };
     const town = this.zoneMap[START_ZONE];
     // ANCHOR 'accept': the projection starts from the zone the player STOOD IN
     // when accepting (a field-given chain unfolds around its site), else town.
     const from = q.zone.anchor === 'accept' ? (this.zoneMap[this.zone.id] ?? town) : town;
-    const questSeed = (this.manifest.seed ^ hashStr(q.id)) >>> 0;
     // BAND PLACEMENT: the location is dictated by the LEVEL field — the zone lands where
     // the radial difficulty ≈ its level, so it sits in its proper band surrounded by
     // same-level zones (not a fixed cardinal distance that could put a lvl-20 arena one
@@ -27832,7 +27874,7 @@ export class World {
     if (q.zone.map && !amap) console.warn(`[quests] '${q.id}' names unregistered authored map '${q.zone.map}' — minting the tileset's own ground`);
     if (!this.zoneMap[zoneId]) {
       const over: ZoneSpec = {
-        id: zoneId, tileset: q.zone.tileset ?? amap?.tileset ?? 'field', level: lvl,
+        id: zoneId, name: q.zone.name, tileset: q.zone.tileset ?? amap?.tileset ?? 'field', level: lvl,
         objective: q.zone.objective, packsOverride: q.zone.packsOverride,
         // Quests carry a waypoint home by default; an arena can opt out (forceWaypoint:false).
         // An authored map keeps the doors it drew (its exits), else the classic one frontier.
@@ -27931,14 +27973,34 @@ export class World {
 
   /** Pay out a quest + advance the chain (called on clear, or at the giver for a
    *  turn-in quest). Idempotent: removes the entry from activeQuests so it fires once. */
-  private onQuestZoneCleared(aq: { questId: string; zoneId: string; fieldDone: boolean }): void {
+  private onQuestZoneCleared(aq: { questId: string; zoneId: string; fieldDone: boolean }, questRewardChoice?: string): void {
     const idx = this.activeQuests.indexOf(aq);
     if (idx < 0) return;
     const q = this.questDefOf(aq.questId);
+    if (q?.reward.choices?.length) {
+      // No XP, chain stamp or case until a real choice fits in the bag.
+      if (questRewardChoice === undefined) {
+        if (this.questRewardShown !== q.id) {
+          this.questRewardShown = q.id;
+          this.questRewardRequested = true;
+        }
+        return;
+      }
+      const choice = q.reward.choices.find(c => c.id === questRewardChoice);
+      if (!choice) return;
+      const questReward = this.questRewardItem(q, choice.id);
+      if (!questReward) return;
+      if (!autoPlace(this.meta.items, questReward)) {
+        this.failNote(this.player, 'questReward', 'Make room in your pack, then choose your reward again.');
+        return;
+      }
+    }
     // A GENERATED posting's payout (the taken hand still seated — turnInBounty
     // removes it after this returns): the shared-stamp branch below.
     const posting = this.bountyHands.find(h => h.id === aq.questId) ?? null;
     if (q) {
+      for (const feature of q.reward.features ?? []) this.account.features.add(feature);
+      if (q.reward.features?.length) this.accountDirty = true;
       if (q.reward.xp) this.grantXp(q.reward.xp);
       // OWED pay: a quest's gems are earned of the writ, not of the ground
       // underfoot — they land even where THE SPOILS LAW seals local mints.
@@ -28005,6 +28067,59 @@ export class World {
     // — the bounty_done counters are the record (the shared-stamp law).
     if (!posting) this.completedQuests.add(aq.questId);
     this.activeQuests.splice(idx, 1);
+    this.markMetaDirty(this.localSeat);
+    if (q?.reward.choices?.length && !this.clientActionHook) {
+      saveAccount(this.account);
+      saveCharacter(this);
+    }
+  }
+
+  /** The journal shows choices only at the giver, from live ready quests. */
+  questRewardOffers(): { questId: string; label: string; prompt: string; xp: number;
+    choices: (NonNullable<QuestDef['reward']['choices']>[number] & { lines: string[]; footprint: string })[] }[] {
+    return this.pendingTurnIns().flatMap(aq => {
+      const q = this.questDefOf(aq.questId);
+      return q?.reward.choices?.length ? [{ questId: q.id, label: q.offerLabel,
+        prompt: q.reward.choicePrompt ?? 'Choose one item as your quest reward.', xp: q.reward.xp ?? 0,
+        choices: q.reward.choices.map(c => {
+          const item = this.questRewardItem(q, c.id);
+          const size = item ? itemGridSize(item) : { w: 1, h: 1 };
+          return { ...c, lines: item ? describeItem(item).affix.map(l => l.text) : [],
+            footprint: `${size.w} × ${size.h}` };
+        }) }] : [];
+    });
+  }
+
+  /** One fixed item per card: preview and payout share exactly the same lines.
+   * Reopening or reloading never rerolls it; only the runtime uid is transient. */
+  private questRewardItem(q: QuestDef, choiceId: string): ItemInstance | null {
+    const key = `${q.id}:${choiceId}`;
+    const cached = this.questRewardItems.get(key);
+    if (cached) return cached;
+    const c = q.reward.choices?.find(c => c.id === choiceId);
+    if (!c) return null;
+    const item = forgeItem({ ilvl: 1, baseId: c.baseId, rarity: 'magic',
+      affixes: c.affixes.map(id => ({ id })), quality: 1, sockets: 0, rng: () => 0.5 });
+    if (!item) return null;
+    item.name = c.name;
+    this.questRewardItems.set(key, item);
+    return item;
+  }
+
+  claimQuestReward(questId: string, choiceId: string, seat: Seat = this.localSeat): boolean {
+    // Authored quests belong to the host's journey; a guest cannot claim its pay.
+    if (seat !== this.localSeat || this.clientActionHook || this.player.dead || this.player.downed) return false;
+    const aq = this.pendingTurnIns().find(e => e.questId === questId);
+    const q = aq && this.questDefOf(aq.questId);
+    if (!aq || !q?.reward.choices?.some(c => c.id === choiceId)) return false;
+    this.onQuestZoneCleared(aq, choiceId);
+    return !this.activeQuests.includes(aq);
+  }
+
+  /** Quit-proof account lesson: until a charm is actually seated, keep teaching. */
+  reliquaryLesson(): boolean {
+    return this.account.features.has(FEATURE.RELIQUARY)
+      && (this.account.ledger[RELIQUARY_LESSON] ?? 0) < 1;
   }
 
   // -------------------------------------------------------- corpse run -------
@@ -28517,7 +28632,7 @@ export class World {
       // The bounty intents likewise: accepting lifts veils + redraws exit
       // labels, and the slate is host-armed — forward only; the snapshot
       // moves the client.
-      if (action.t !== 'caravanTo' && action.t !== 'vocationQuest' && action.t !== 'harborChart'
+      if (action.t !== 'caravanTo' && action.t !== 'vocationQuest' && action.t !== 'questReward' && action.t !== 'harborChart'
         && action.t !== 'holdMuster' && action.t !== 'holdRestore'
         && action.t !== 'bountyAccept' && action.t !== 'bountyAbandon' && action.t !== 'bountyTurnIn'
         && action.t !== 'bountyLock' && action.t !== 'bountyCoastWrits'
@@ -28600,6 +28715,7 @@ export class World {
       case 'holdRestore': this.buyHoldRestore(seat); break;
       case 'payToll': this.payHoldfastToll(action.index, seat); break;
       case 'vocationQuest': this.acceptVocationQuest(action.questId, seat); break;
+      case 'questReward': this.claimQuestReward(action.questId, action.choiceId, seat); break;
       case 'equipItem': this.equipItem(seat, action.uid, action.slot); break;
       case 'unequipItem': this.unequipItem(seat, action.slot, action.x, action.y); break;
       case 'moveItem': this.moveBagItem(seat, action.uid, action.x, action.y); break;
@@ -29349,7 +29465,6 @@ export class World {
     }
     step.sockets = inst.sockets; // live references — re-socketing propagates
     step.grafts = inst.grafts;
-    step.comboTreeMods = instanceTreeMods(inst);
     return step;
   }
 
@@ -31578,7 +31693,9 @@ export class World {
             const taken = mitigateTyped(v, { [type]: amt });
             SIM_TAP.current?.onDot?.(v, taken, type); // gnaw participates in balance telemetry
             if (taken > 0) {
+              const deedLifeBefore = v.life;
               v.life -= taken;
+              this.recordIndirectDamage(v, a, deedLifeBefore);
               v.hitFlash = 0.12;
               v.hitFlashType = type;
               if (taken >= 1) {
@@ -31770,7 +31887,9 @@ export class World {
       if (dot && !v.invulnerable) {
         const taken = mitigateTyped(v, { [dot.type]: dot.frac * v.maxLife() * dt });
         if (taken > 0) {
+          const deedLifeBefore = v.life;
           v.life -= taken;
+          this.recordIndirectDamage(v, a, deedLifeBefore);
           hold.dotAcc += taken;
           SIM_TAP.current?.onDot?.(v, taken, dot.type);
           if (hold.spec.leech) a.healBy(taken * hold.spec.leech);
@@ -31797,7 +31916,9 @@ export class World {
         if (crush > 0) {
           const taken = mitigateTyped(v, { physical: crush * v.maxLife() * dt });
           if (taken > 0) {
+            const deedLifeBefore = v.life;
             v.life -= taken;
+            this.recordIndirectDamage(v, a, deedLifeBefore);
             SIM_TAP.current?.onDot?.(v, taken, 'physical');
             if (v.life <= 0 && !v.dead) {
               this.kill(v, false, a);
@@ -32221,39 +32342,15 @@ export class World {
   private mintMetaInstance(caster: Actor, host: SkillInstance, skillId: string): SkillInstance {
     const key = host.def.id + ':' + skillId;
     let inst = caster.metaInsts.get(key);
-    const relocateConstruct = SKILLS[skillId].effects.some(fx => fx.type === 'relocateConstruct');
-    if (!inst || inst.level !== effectiveSkillLevel(host)
-      || (relocateConstruct && this.relocationHosts.get(inst) !== host)) {
+    if (!inst || inst.level !== effectiveSkillLevel(host)) {
       inst = makeSkillInstance(SKILLS[skillId], effectiveSkillLevel(host));
       // minionCombat: a command's meta inherits its whole-court scope.
       // Summon-hosted meta payloads still name their own roster anchor.
       inst.hostSkillId = host.def.effects.some(e => e.type === 'commandMinions')
         ? undefined : host.def.id;
       caster.metaInsts.set(key, inst);
-      if (relocateConstruct) this.relocationHosts.set(inst, host);
     }
     return inst;
-  }
-
-  private relocationHosts = new WeakMap<SkillInstance, SkillInstance>();
-
-  /** The same eligibility read gates payment and execution. Instance identity
-   * prevents a second copy or another caster from moving this roster. */
-  private relocationTarget(caster: Actor, inst: SkillInstance, radius: number): Actor | undefined {
-    const host = this.relocationHosts.get(inst);
-    if (!host || !caster.skills.includes(host) || caster.dead || caster.downed
-      || !instanceMetas(host).some(m => m.skillId === inst.def.id)) return;
-    const d = instanceDelivery(host);
-    if (d.type !== 'construct' || !['totem', 'sentry'].includes(d.kind) || !d.castSkillId) return;
-    let best: Actor | undefined, bestD = radius;
-    for (const c of this.actors) {
-      if (c.dead || c.downed || c.owner !== caster || c.summonInst !== host
-        || !c.construct || !['totem', 'sentry'].includes(c.construct.kind)
-        || !sameStory(c, caster) || c.team !== caster.team || !(c.lifespan! > 0)) continue;
-      const dd = dist(caster.pos, c.pos);
-      if (dd <= bestD && (!best || dd < bestD)) { best = c; bestD = dd; }
-    }
-    return best;
   }
 
   useMetaSkill(caster: Actor, host: SkillInstance, aim: Vec2): boolean {
@@ -32443,12 +32540,6 @@ export class World {
       const unmet = caster.unmetGate(inst);
       if (unmet) {
         this.failNote(caster, inst.def.id + ':gate', unmet.note ?? 'not ready');
-        return false;
-      }
-    }
-    for (const fx of instanceEffects(inst)) {
-      if (fx.type === 'relocateConstruct' && !this.relocationTarget(caster, inst, fx.radius)) {
-        this.failNote(caster, inst.def.id + ':device', 'no device from this skill in reach');
         return false;
       }
     }
@@ -35224,8 +35315,6 @@ export class World {
           const mirage = new Actor(`${caster.name}?`, caster.team, vec(caster.pos.x, caster.pos.y));
           mirage.owner = caster;
           mirage.sourceSkillId = def.id;
-          mirage.summonInst = inst;
-          mirage.tier = caster.tier;
           // A convincing double wears the full silhouette, not just the tint.
           mirage.shape = caster.shape;
           mirage.color = caster.color;
@@ -35917,22 +36006,6 @@ export class World {
           this.refundCooldown(caster, def.id); // nothing to load — never a wasted rack
         }
       }
-      if (fx.type === 'relocateConstruct') {
-        const c = this.relocationTarget(caster, inst, fx.radius);
-        const host = this.relocationHosts.get(inst);
-        const deployed = host && instanceDelivery(host);
-        if (c && deployed?.type === 'construct') {
-          const ang = angleTo(caster.pos, aim);
-          const reach = Math.min(dist(caster.pos, aim), deployed.placeRange ?? 100);
-          c.pos = this.clampPos(vec(caster.pos.x + Math.cos(ang) * reach,
-            caster.pos.y + Math.sin(ang) * reach), c.radius, undefined, { mover: c });
-          c.facing = ang;
-          c.casting = null; c.push = null;
-          this.flashes.push({ pos: { ...c.pos }, radius: 28, color: def.color, life: 0.25, maxLife: 0.25 });
-          // Keep the same actor, payload, health, lifespan, timers, useLock and
-          // cooldowns. No arrival effect, death event, refund or replacement.
-        }
-      }
       if (fx.type === 'recallMinions') {
         // Convocation: every MOBILE minion blinks to an even ring at the
         // caster. Anchored things stay: constructs, totems, the mid-leap.
@@ -36113,15 +36186,13 @@ export class World {
               this.text(e.pos, Math.round(taken).toString(), STATUS_DEFS[s.id]?.color ?? '#c8ccd8', 12);
               if (e.life <= 0 && !e.dead) this.kill(e, false, caster);
             }
-            // The spear itself carries the bank share homeward. Native recalls
-            // share a cached payload; tree recalls track their exact source.
+            // The spear itself, homeward: minted once per caster, re-aimed
+            // per wrench, its flat payload the bank's share.
             if (SKILLS.impale_spear) {
-              const recallImpalesTree = instanceTreeOver(inst)?.recallImpales;
-              let spear = recallImpalesTree ? undefined : caster.metaInsts.get('__impale_spear');
+              let spear = caster.metaInsts.get('__impale_spear');
               if (!spear || spear.level !== effectiveSkillLevel(inst)) {
                 spear = makeSkillInstance(SKILLS.impale_spear, effectiveSkillLevel(inst));
-                if (recallImpalesTree) this.recallTreeSpears.set(spear, inst);
-                else caster.metaInsts.set('__impale_spear', spear);
+                caster.metaInsts.set('__impale_spear', spear);
               }
               this.spawnProjectile(caster, spear, vec(e.pos.x, e.pos.y),
                 angleTo(e.pos, caster.pos),
@@ -36369,16 +36440,13 @@ export class World {
     }
     // CAST CYCLE (SkillDef.castCycle): every Nth completed REAL use grants
     // the cycle's buff, then the count resets — "the third cast imbues".
-    const castCycle = instanceCastCycle(inst);
-    if (!opts.noRepeat && !opts.noCooldown && castCycle) {
+    if (!opts.noRepeat && !opts.noCooldown && def.castCycle) {
       const n = (caster.castCycles.get(def.id) ?? 0) + 1;
-      if (n >= castCycle.count) {
+      if (n >= def.castCycle.count) {
         caster.castCycles.set(def.id, 0);
-        const cycleBuff = { ...castCycle.buff };
-        this.treeBuffSources.set(cycleBuff, { caster, inst });
-        caster.addBuff(cycleBuff, caster.sheet.get('effectDuration', tags, extra));
+        caster.addBuff(def.castCycle.buff, caster.sheet.get('effectDuration', tags, extra));
         this.text(vec(caster.pos.x, caster.pos.y - 18),
-          castCycle.buff.id.replace(/_/g, ' ') + '!', def.color, 12);
+          def.castCycle.buff.id.replace(/_/g, ' ') + '!', def.color, 12);
       } else {
         caster.castCycles.set(def.id, n);
       }
@@ -38380,13 +38448,6 @@ export class World {
       mod('damage', 'more', caster.sheet.get('minionDamage', tags, extra) - 1),
       mod('life', 'more', caster.sheet.get('minionLife', tags, extra) - 1),
     ]);
-    // Aimed constructs run through ordinary cast/attack/cooldown clocks.
-    // Adopt the same constructCastRate lever as interval-driven devices.
-    if (d.kind === 'totem' || d.kind === 'sentry') {
-      const rate = caster.sheet.get('constructCastRate', tags, extra);
-      c.sheet.setSource('constructCastRate', [mod('attackSpeed', 'more', rate - 1),
-        mod('castSpeed', 'more', rate - 1), mod('cooldownRecovery', 'more', rate - 1)]);
-    }
     // Charge-released constructs (Volcano): a long hold means a longer,
     // angrier construct — duration scales up, the cast interval scales DOWN.
     c.lifespan = d.duration * scale * caster.sheet.get('effectDuration', tags, extra);
@@ -38680,7 +38741,7 @@ export class World {
     }
   }
 
-  deactivateAura(bearer: Actor, skillId: string, quietTreeRelease = false): void {
+  deactivateAura(bearer: Actor, skillId: string): void {
     const aura = bearer.activeAuras.get(skillId);
     if (!aura) return;
     // A toggle-installed rear-guard shell drops with its toggle (a shell
@@ -38727,7 +38788,7 @@ export class World {
           bearer.sheet.removeSource('seal:' + skillId);
         }
         const od = dv0.onDeactivate;
-        if (od && !quietTreeRelease && !bearer.dead && SKILLS[od.skillId]) {
+        if (od && !bearer.dead && SKILLS[od.skillId]) {
           const held = this.time - (aura.since ?? this.time);
           const missing = 1 - bearer.life / Math.max(1, bearer.maxLife());
           const mult = Math.min(od.maxScale ?? 5,
@@ -39527,9 +39588,8 @@ export class World {
     const gextra = instanceMods(cs.inst);
     const window = spec.parry?.window
       ?? guardian.sheet.get('guardParry', gtags, gextra);
-    const counterMult = (spec.parry?.counterMult
-      ?? guardian.sheet.get('guardParryPower', gtags, gextra))
-      + guardian.sheet.get('parryCounterBonus', gtags, gextra);
+    const counterMult = spec.parry?.counterMult
+      ?? guardian.sheet.get('guardParryPower', gtags, gextra);
     if (window > 0 && (cs.channelTime ?? 99) <= window
       && !attacker.dead && !attacker.invulnerable) {
       // Riposte snaps the guardian's face toward the parried blow.
@@ -39555,7 +39615,7 @@ export class World {
         guardian.casting = null;
         guardian.useLock = 0.15;
         if (cs.inst.def.cooldown > 0) {
-          this.stampSkillCooldown(guardian, cs.inst, cs.inst.def.cooldown);
+          guardian.cooldowns.set(cs.inst.def.id, cs.inst.def.cooldown);
         }
       }
       return true;
@@ -39576,7 +39636,7 @@ export class World {
     if ((cs.shield ?? 0) <= 0) {
       guardian.casting = null;
       guardian.useLock = 0.3;
-      if (cs.inst.def.cooldown > 0) this.stampSkillCooldown(guardian, cs.inst, cs.inst.def.cooldown);
+      if (cs.inst.def.cooldown > 0) guardian.cooldowns.set(cs.inst.def.id, cs.inst.def.cooldown);
       this.cry(guardian.pos, 'guard broken!', '#d05050', 14, 'shatter', guardian.radius + 8);
       // Ice Shield's dying burst: a broken shield spends its FULL absorbed
       // capacity as the payload — with the stance's EFFECTIVE bash, innate
@@ -40487,9 +40547,9 @@ export class World {
 
   private applyHeal(
     caster: Actor, inst: SkillInstance, target: Actor,
-    fx: { amount?: number; pctMax?: number; excludeCaster?: boolean }, mult = 1, quiet = false,
+    fx: { amount?: number; pctMax?: number }, mult = 1, quiet = false,
   ): number {
-    if (target.dead || target.downed || (fx.excludeCaster && target === caster)) return 0;
+    if (target.dead) return 0;
     const tags = skillContextTags(inst, grantedTags(inst));
     const extra = instanceMods(inst);
     const raw = ((fx.amount ?? 0) + (fx.pctMax ?? 0) * target.maxLife())
@@ -40544,7 +40604,7 @@ export class World {
    *  IS a chain-heal). Draws a brief mending arc per hop. */
   private applyHealChained(
     caster: Actor, inst: SkillInstance, target: Actor,
-    fx: { amount?: number; pctMax?: number; chain?: number; excludeCaster?: boolean }, mult = 1, quiet = false,
+    fx: { amount?: number; pctMax?: number; chain?: number }, mult = 1, quiet = false,
   ): void {
     this.applyHeal(caster, inst, target, fx, mult, quiet);
     const tags = skillContextTags(inst, grantedTags(inst));
@@ -40556,9 +40616,7 @@ export class World {
     while (hops-- > 0) {
       let next: Actor | null = null; let worst = 0.999;
       for (const a of this.actors) {
-        if (a.dead || a.downed || a.untargetable || a.construct || visited.has(a)) continue;
-        // Every hop carries the original heal's recipient exclusions.
-        if (fx.excludeCaster && a === caster) continue;
+        if (a.dead || a.untargetable || a.construct || visited.has(a)) continue;
         if (a.team !== caster.team || !sameStory(a, from)) continue; // (the sovereignty gate: the chain hops its own story)
         if (dist(from.pos, a.pos) > 220) continue;
         const frac = a.life / Math.max(1, a.maxLife());
@@ -40649,7 +40707,7 @@ export class World {
     const fxs = inst.def.effects.filter(fx => fx.type === 'heal' || fx.type === 'cleanse');
     if (!fxs.length) return;
     for (const a of this.actors) {
-      if (a.dead || a.downed || a.untargetable || a.construct || a.team !== caster.team || !sameStory(a, caster)) continue; // (the sovereignty gate)
+      if (a.dead || a.untargetable || a.construct || a.team !== caster.team || !sameStory(a, caster)) continue; // (the sovereignty gate)
       if (once?.has(a.id)) continue;
       if (!accepts(a)) continue;
       let touched = false;
@@ -40677,7 +40735,9 @@ export class World {
     if (sc) total += victim.sheet.get('channelThorns', sc.tags, sc.extra);
     if (total <= 0) return;
     const dealt = total * attacker.sheet.get('damageTaken');
+    const deedLifeBefore = attacker.life;
     attacker.life -= dealt;
+    this.recordIndirectDamage(attacker, victim, deedLifeBefore);
     attacker.hitFlash = 0.1;
     attacker.hitFlashType = undefined; // raw thorns — the flash reads white
     this.text(attacker.pos, Math.round(dealt).toString(), '#d88a50', 11);
@@ -40712,7 +40772,9 @@ export class World {
       const packet: DamagePacket = { amounts: { [type]: dmg }, crit: false,
         tags: new Set<SkillTag>(['aoe', type]), sourceName: sourceActor?.summonInst?.def.name ?? sourceActor?.name ?? 'Explosion' };
       if (sourceActor) applyConversion(sourceActor, packet.amounts, packet.tags);
+      const deedLifeBefore = e.life;
       const result = sourceActor ? applyHit(sourceActor, e, packet) : undefined;
+      this.recordIndirectDamage(e, sourceActor, deedLifeBefore);
       const taken = result ? result.total : mitigateTyped(e, packet.amounts, { out });
       if (!sourceActor) {
         e.life -= taken;
@@ -41224,6 +41286,9 @@ export class World {
       const deedHidden = caster === this.player && (caster.sheet.get('invisible') > 0 || caster.sheet.get('detectability') < 1);
       const deedPanicked = caster === this.player && target.isPanicked();
       const result = applyHit(caster, target, packet);
+      if (caster === this.player && target === caster) {
+        this.recordSelfDamage(caster, Math.max(0, deedLifeBefore - Math.max(0, target.life)));
+      }
       wasCrit = result.crit;
       if (this.metaProgressionActive()) {
         if (target === this.player && this.deedEnemy(caster)) {
@@ -42058,7 +42123,6 @@ export class World {
             // old always-spreads flag).
             propagates: chance(caster.sheet.get('dotPropagates', tags, extra)) || undefined,
             rupture, ruptureType,
-            ruptureRadius: rupture !== undefined ? 90 * caster.sheet.get('aoeRadius', tags, extra) : undefined,
             stacksBonus: stacksBonusFor(fx.status),
             casterId: fx.status === 'taunted' && caster.summonShell && caster.owner ? caster.owner.id : caster.id,
             brood: instanceBrood(inst),
@@ -42292,7 +42356,6 @@ export class World {
           brood: instanceBrood(inst),
           leech: caster.sheet.get('dotLeech_' + sid, tags, extra) || undefined,
           rupture: armed, ruptureType: armedType,
-          ruptureRadius: armed !== undefined ? 90 * caster.sheet.get('aoeRadius', tags, extra) : undefined,
           popBonus: caster.sheet.get('popPower_' + sid, tags, extra) || undefined,
         });
         // Stat-granted applications trigger statusApply procs too.
@@ -42306,8 +42369,7 @@ export class World {
 
     // Splash: the hit detonates into a small area around its target.
     if (dealt > 0 && depth === 0) {
-      const splash = caster.sheet.get('splashRadius', tags, extra)
-        * caster.sheet.get('aoeRadius', tags, extra);
+      const splash = caster.sheet.get('splashRadius', tags, extra);
       if (splash > 0) {
         for (const e of this.enemiesOf(caster)) {
           if (!sameStory(e, target)) continue; // (the sovereignty gate)
@@ -42716,7 +42778,7 @@ export class World {
     const n = Math.max(1, s.stacks);
     for (let i = 0; i < n; i++) {
       to.applyStatus(s.id, s.dps * (o?.strengthScale ?? 1), durScale, sourceName,
-        { casterId: s.casterId, rupture: s.rupture, ruptureType: s.ruptureType, ruptureRadius: s.ruptureRadius });
+        { casterId: s.casterId, rupture: s.rupture, ruptureType: s.ruptureType });
     }
   }
 
@@ -43762,7 +43824,7 @@ export class World {
 
   private ruptureStatus(victim: Actor, s: ActiveStatus): void {
     const type: DamageType = s.ruptureType ?? 'chaos';
-    const radius = s.ruptureRadius ?? 90;
+    const radius = 90;
     this.flashes.push({ pos: vec(victim.pos.x, victim.pos.y), radius, color: '#b06bd4', life: 0.3, maxLife: 0.3 });
     for (const e of this.actors) {
       if (e.dead || e.team !== victim.team || e.untargetable || !sameStory(e, victim)) continue; // (the sovereignty gate)
@@ -43770,7 +43832,9 @@ export class World {
       let amount = s.rupture! * e.sheet.get('damageTaken');
       amount *= 1 - resistValue(e, type);
       if (e.invulnerable || amount <= 0) continue;
+      const deedLifeBefore = e.life;
       e.life -= amount;
+      this.recordIndirectDamage(e, s.casterId === undefined ? undefined : this.actorById(s.casterId), deedLifeBefore);
       e.hitFlash = 0.15;
       e.hitFlashType = type;
       this.text(e.pos, Math.round(amount).toString(), '#b06bd4', 12);
@@ -45159,6 +45223,12 @@ export class World {
         return;
       }
     }
+    if (containerId === 'reliquary' && this.reliquaryLesson() && !this.clientActionHook) {
+      this.account.ledger[RELIQUARY_LESSON] = 1;
+      this.accountDirty = true;
+      saveAccount(this.account);
+      this.notice('The charm wakes. Its power is yours while seated. Relics can now be found in the wilds; expand your case in the Vault.', '#d8c28a', 18, 'civic');
+    }
     this.recalcSeat(seat);
     this.text(seat.actor.pos, `${def.glyph} ${item.name}`, ITEM_RARITIES[item.rarity].color, 13);
     this.markMetaDirty(seat);
@@ -45353,6 +45423,10 @@ export class World {
    *  gear the player is OWED (a corpse reclaim, a dev conjure) — owned
    *  property, exempt from the spoils law like any discard. */
   dropGearAt(at: Vec2, item: ItemInstance, droppedBy?: string, owed = false): void {
+    // Lessons gate ambient relics at the shared mint seam, including caches.
+    // Earned rewards and owned property always retain their ordinary delivery.
+    if (!droppedBy && !owed && CONTAINER_DEFS.some(c => c.dropLedger
+      && (this.account.ledger[c.dropLedger] ?? 0) < 1 && containerAccepts(c, item))) return;
     // THE SPOILS LAW: minted gear refuses on sealed ground; a player's own
     // discards (droppedBy) and owed returns are movement and always land.
     if (!droppedBy && !owed && this.spoilsSealed()) return;
@@ -47051,7 +47125,10 @@ export class World {
           }
         }
       }
-      const dot = a.updateTimers(dt, rawDt);
+      this.deedDotAmounts = undefined;
+      const trackDeedDot = this.metaProgressionActive() && !a.dead && a.life > 0
+        && (this.deedEnemy(a) || (a === this.player && this.hasDeedEnemyNearby()));
+      const dot = a.updateTimers(dt, rawDt, trackDeedDot ? this.collectDeedDot : undefined);
       // THE LANDING RE-SEAT (engine/tiers.ts landingTier): wings folded —
       // the story re-derives from the floor under the body, so a
       // bench-spawned condor that settles over the valley is the valley's
@@ -47076,7 +47153,7 @@ export class World {
         for (const [ty, amt] of Object.entries(dot)) {
           if (!amt || amt <= 0) continue;
           raw += amt;
-          applyDot(a, amt, ty === 'untyped' ? undefined : ty as DamageType);
+          this.applyDeedDot(a, amt, ty as DamageType | 'untyped');
         }
         if (raw > 0) this.accumulateDotText(a, raw, dt);
         // A DoT emptied the shield — the esBreak proc seam fires here too.
@@ -53913,8 +53990,6 @@ export class World {
       }
       case 'guard': {
         const spec = def.guard!;
-        const guardHoldTime = spec.maxDuration === undefined ? undefined
-          : Math.max(0.05, spec.maxDuration + a.sheet.get('guardHoldTime', skillContextTags(cs.inst), instanceMods(cs.inst)));
         // A player taking the seat owns the hand immediately.
         if (this.seatOf(a)) {
           cs.aiGuardReleaseAt = undefined;
@@ -53956,14 +54031,14 @@ export class World {
           }
         }
         // Timed stances (Riposte) drop themselves.
-        if (guardHoldTime && (cs.channelTime ?? 0) >= guardHoldTime) {
+        if (spec.maxDuration && (cs.channelTime ?? 0) >= spec.maxDuration) {
           cs.held = false;
         }
         // An authored AI release becomes a readable, committed warning.
         // The guard stays damageable: de-arming it during this beat denies
         // the bash, and breaking/stunning it clears this state with the cast.
         if (!this.seatOf(a) && !a.dead && (cs.aiGuardWindup ?? 0) > 0) {
-          const holdLeft = Math.min(cs.aiHold ?? Infinity, guardHoldTime ?? Infinity) - (cs.channelTime ?? 0);
+          const holdLeft = Math.min(cs.aiHold ?? Infinity, spec.maxDuration ?? Infinity) - (cs.channelTime ?? 0);
           if ((!cs.held || holdLeft <= cs.aiGuardWindup!)
             && cs.aiGuardReleaseAt === undefined && cs.bashAt !== undefined) {
             const frac = (cs.shield ?? 0) / (cs.maxShield || 1);
@@ -53989,7 +54064,7 @@ export class World {
           a.useLock = 0.2;
           // The grafted carapace drops with the stance (fromAura rule).
           if (a.shellGuard?.fromAura === def.id) a.shellGuard = undefined;
-          if (def.cooldown > 0) this.stampSkillCooldown(a, cs.inst, def.cooldown);
+          if (def.cooldown > 0) a.cooldowns.set(def.id, def.cooldown);
           if (bash && !a.dead && cs.bashAt !== undefined) {
             const frac = shieldLeft / maxShield;
             const armed = cs.bashLow ? frac <= cs.bashAt : frac >= cs.bashAt;
@@ -54911,8 +54986,6 @@ export class World {
 
   private replenishment = new ReplenishmentClocks();
   private treeBuffSources = new WeakMap<BuffEffect, { caster: Actor; inst: SkillInstance }>();
-  /** Derived extraction flights retain the exact investing instance for respec. */
-  private recallTreeSpears = new WeakMap<SkillInstance, SkillInstance>();
 
   /** Per-application identity lets respec retire only this caster's blessing,
    * including allied recipients, without stripping another caster's refresh. */
@@ -54928,25 +55001,11 @@ export class World {
 
   /** Retire fields that captured the previous allocation. */
   private clearTreeFields(caster: Actor, inst: SkillInstance): void {
-    // quietTreeRelease retires captured aura bonuses and reservations without
-    // paying a release attack. Existing resource debts still settle normally.
-    if (caster.activeAuras.get(inst.def.id)?.inst === inst) this.deactivateAura(caster, inst.def.id, true);
-    this.clearTreeConstructs(caster, inst);
-    caster.castCycles.delete(inst.def.id);
-    for (const [key, step] of caster.metaInsts) if (step.chainOf === inst.def.id) {
-      this.clearTreeFields(caster, step);
-      caster.metaInsts.delete(key);
-    }
     for (const actor of this.actors) for (const [id, buff] of actor.buffs) {
       const source = this.treeBuffSources.get(buff.def);
       if (source?.caster === caster && source.inst === inst) actor.removeBuff(id);
     }
     this.pendingFuses = this.pendingFuses.filter(f => f.caster !== caster || f.inst !== inst);
-    // Scheduled repeats capture the old tree just as delayed fields do.
-    this.pendingRepeats = this.pendingRepeats.filter(r => r.caster !== caster || r.inst !== inst);
-    // Flights and their carried ground can outlive the allocation too.
-    this.projectiles = this.projectiles.filter(p => p.caster !== caster || (p.inst !== inst && this.recallTreeSpears.get(p.inst) !== inst));
-    for (const p of this.projectiles) if (p.caster === caster && p.suffuse?.inst === inst) delete p.suffuse;
     // Held casts can snapshot guard pools and derived grafts. Changing the
     // allocation retires that stance without paying a release attack.
     if (caster.casting?.inst === inst) caster.casting = null;
@@ -54958,21 +55017,6 @@ export class World {
       if (z.caster !== caster || z.inst !== inst) continue;
       this.expireZone(z);
       this.zones.splice(i, 1);
-    }
-  }
-
-  /** Allocation changes retire devices and their captured payloads without
-   * invoking death rewards, explosions or healing bursts. Dead traps can
-   * still own in-flight payloads, so they also participate in cleanup. */
-  private clearTreeConstructs(caster: Actor, inst: SkillInstance): void {
-    const bodies = new Set([...this.actors, ...this.projectiles.map(p => p.caster),
-      ...this.zones.map(z => z.caster), ...this.pendingFuses.map(f => f.caster), ...this.pendingRepeats.map(r => r.caster)]);
-    for (const body of bodies) if (body.construct && body.owner === caster && body.summonInst === inst) {
-      this.clearTreeFields(body, inst);
-      if (body.construct.castInst && body.construct.castInst !== inst) this.clearTreeFields(body, body.construct.castInst);
-      // quietTreeRelease also strips the aura sources worn by nearby recipients.
-      for (const id of [...body.activeAuras.keys()]) this.deactivateAura(body, id, true);
-      body.casting = null; body.dead = true; body.life = 0;
     }
   }
 
@@ -57433,7 +57477,7 @@ export class World {
     const set = (z.domainAffected ??= new Set());
     const inside = new Set<Actor>();
     for (const a of this.actors) {
-      if (a.dead || a.downed || a.untargetable || a.construct) continue;
+      if (a.dead || a.untargetable || a.construct) continue;
       if (a.tier !== (z.tier ?? z.caster.tier)) continue; // the field's story (the sovereignty gate)
       // Allies wear allyMods; the CASTER'S minions layer minionMods on top
       // (Oblation of Flesh blesses the horde, not the bystanders).

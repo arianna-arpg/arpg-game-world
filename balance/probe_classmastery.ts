@@ -341,7 +341,7 @@ const priv = (w: World): WorldPriv => w as unknown as WorldPriv;
   check('live: the claim speaks on the notice feed', w.notices.some(n => n.text.includes('Necromancer')));
   check('live: the sweep booked the account save', w.accountDirty);
   // The merged view: a deed supplied in THIS run (run ledger only) claims through the view.
-  w.ledger[deedKey('companion_kills')] = 30;
+  w.ledger[deedKey('companion_kills')] = classUnlockFor('summoner')!.reqAnyOf![0].n!;
   w.update(CLASS_WEB_CFG.sweepSec + 0.5);
   check('live: a run-ledger deed claims the chained Summoner through the merged view (account ledger untouched)',
     acc.unlockedClasses.has('summoner') && acc.ledger[deedKey('companion_kills')] === undefined);

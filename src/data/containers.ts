@@ -13,7 +13,7 @@
 // effigies (data/itembases.ts relic families; data/itemaffixes.ts the RELIC
 // REGISTER). A relic is inert in the pack and speaks only from a seat here.
 // The ladder is the D2-charm / Last-Epoch-idol tetris made explicit: a
-// HOLLOW ring first (eight cells — pairs fit along the walls, no 2×2 can
+// single quest-earned cell first, then a HOLLOW ring (eight cells — pairs fit along the walls, no 2×2 can
 // seat until THE HEART opens the centre), then the shelves widen, the heart
 // opens, the corners close the case. Sealed cells draw dim with the rung
 // that opens them, so the ladder teaches itself on the face.
@@ -24,6 +24,7 @@
 
 import { registerContainer, type ContainerDef } from '../engine/containers';
 import { FEATURE, LEDGER_RELIC_FOUND } from '../meta/account';
+import { RELIQUARY_LESSON } from '../quests/reliquary';
 
 export const RELIQUARY_ID = 'reliquary';
 
@@ -36,10 +37,16 @@ export const RELIQUARY: ContainerDef = registerContainer({
   accepts: { categories: ['relic'] },
   active: true,
   foundLedger: LEDGER_RELIC_FOUND,
+  dropLedger: RELIQUARY_LESSON,
   ladder: [
     {
-      feature: FEATURE.RELIQUARY, label: 'The Reliquary', cost: 60,
-      description: 'A relic has fallen before you. Raise a CASE for such things: a hollow ring of eight seats beside your pack. Seat a relic and its lines wake — only there; in the pack every relic is silent. Pairs fit along the walls; nothing large seats until the heart of the case opens.',
+      feature: FEATURE.RELIQUARY, label: 'The Reliquary', cost: 0, rewardOnly: true,
+      description: 'Earned by returning a forgotten shrine’s keepsakes to the Quartermaster. One seat opens for your chosen charm. A relic wakes only when seated here.',
+      cells: ['.....', '.#...', '.....', '.....', '.....'],
+    },
+    {
+      feature: FEATURE.RELIQUARY_RING, label: 'Reliquary: The First Ring', cost: 60,
+      description: 'Seven more seats open around the sealed heart, eight in all. Talismans fit along the walls and idols stand beside them.',
       cells: [
         '.....',
         '.###.',

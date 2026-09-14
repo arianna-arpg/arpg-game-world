@@ -21,10 +21,10 @@ app.whenReady().then(async () => {
     assert(fresh.length > 0, 'fresh account shows mysteries');
     assert(fresh.every(c => !/Strike living enemies|fire, cold|Sorcerer|every vestige|quarter done/i.test(c.html + JSON.stringify(c.tip))), 'no initial recipe or script-mechanics leak');
     assert(fresh.every(c => !/[a-z]/i.test(c.body)), 'fresh discovery prose is entirely runic');
-    await js(`__game.account().ledger['deed:elements_landed']=1; void 0`);
+    await js(`__game.account().ledger['deed:elements_rehearsed']=1; void 0`);
     await open();
     const partial = await js(`(() => {
-      const c = [...document.querySelectorAll('[data-tip="rumor"]')].find(c => c.textContent.includes('land fire, cold and lightning hits'));
+      const c = [...document.querySelectorAll('[data-tip="rumor"]')].find(c => c.textContent.includes('practice 3 elements:'));
       if (!c) return null;
       return {body:c.querySelector('.ushroud-body').textContent, title:c.querySelector('.uname').textContent,
         tip:__game.ui.rumorTooltip(Number(c.dataset.rumorI)), html:c.outerHTML};
@@ -34,7 +34,7 @@ app.whenReady().then(async () => {
     assert(partial.tip.description.includes(partial.body), 'card and hover share the same prose');
     fs.writeFileSync(path.join(dir, 'vault-partial.png'), (await win.webContents.capturePage()).toPNG());
     // Raise shelves through the account's normal available-stock census.
-    await js(`__game.account().level=20; __game.account().ledger['deed:elements_landed']=3; void 0`);
+    await js(`__game.account().level=20; __game.account().ledger['deed:elements_rehearsed']=3; void 0`);
     await open();
     const ready = await js(`(() => {
       const a=__game.account(), c=document.querySelector('[data-class-unlock="class_sorcerer"]');
@@ -60,6 +60,22 @@ app.whenReady().then(async () => {
     assert(await js(`document.querySelector('[data-unlock-id="class_sorcerer"]')?.textContent.includes('Owned')`), 'acknowledged card moves to Owned');
     await reload();
     assert(await js(`!__game.account().pendingClassUnlocks.has('sorcerer') && __game.account().unlockedClasses.has('sorcerer')`), 'acknowledgement survives reload');
-    console.log('PASS vault discovery UI: hidden / partial / ready / free click / Owned / reload');
+    // Ordinary early habits stay banked until both town introductions stand.
+    await js(`Object.assign(__game.account().ledger, {'deed:melee_finishes':300, 'deed:cold_hits':90, 'deed:mended_wounds':1200}); void 0`);
+    await open();
+    assert(await js(`['spellblade','cryomancer','apothecary'].every(id=>!__game.account().unlockedClasses.has(id))`), 'early rewards wait for town');
+    await js(`__game.account().features.add('bounty_board'); __game.account().features.add('quest_giver'); void 0`);
+    await open();
+    const early = await js(`['spellblade','cryomancer','apothecary'].map(id => {
+      const c=document.querySelector('[data-class-unlock="class_'+id+'"]');
+      return {id, ready:__game.account().pendingClassUnlocks.has(id), button:c?.textContent, disabled:c?.disabled, card:c?.parentElement.textContent};
+    })`);
+    assert(early.every(c=>c.ready && c.button==='Unlock' && !c.disabled), 'all three town-ready discoveries offer free acknowledgement');
+    assert(early.every(c=>!c.card.includes('Mortal Essence')), 'new class cards show no essence price');
+    await js(`document.querySelector('[data-class-unlock="class_spellblade"]').scrollIntoView({block:'start'}); void 0`);
+    fs.writeFileSync(path.join(dir, 'vault-early-classes.png'), (await win.webContents.capturePage()).toPNG());
+    await reload();
+    assert(await js(`['spellblade','cryomancer','apothecary'].every(id=>__game.account().unlockedClasses.has(id)&&__game.account().pendingClassUnlocks.has(id))`), 'new classes and pending rewards survive reload');
+    console.log('PASS vault discovery UI: hidden / partial / ready / free click / Owned / reload / town-gated early classes');
   } finally { win.destroy(); server.server.close(); app.quit(); }
 }).catch(error => { console.error(error?.stack ?? String(error)); app.exit(1); });

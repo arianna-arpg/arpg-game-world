@@ -2330,7 +2330,7 @@ function mostWoundedAlly(
   let sick: Actor | null = null;
   let worst = below;
   for (const a of world.actors) {
-    if (a.dead || a.downed || a.tier !== actor.tier || a === actor || a.team !== actor.team
+    if (a.dead || a === actor || a.team !== actor.team
       || a.construct || a.untargetable) continue;
     if (dist(actor.pos, a.pos) > reach) continue;
     const frac = a.life / Math.max(1, a.maxLife());

@@ -1,12 +1,3 @@
-import { BASTION_STARTER_TREES } from './bastionStarterTrees';
-import { DUELIST_STARTER_TREES } from './duelistStarterTrees';
-import { WORKSHOP_SKILLS } from './workshopSkills';
-import { IMPACT_STARTER_TREES } from './impactStarterTrees';
-import { CONTROL_STARTER_TREES } from './controlStarterTrees';
-import { PRECISION_STARTER_TREES } from './precisionStarterTrees';
-import { PACT_STEEL_STARTER_TREES } from './pactSteelStarterTrees';
-import { PACT_SKILLS } from './pactSkills';
-import { DEVOTED_STARTER_TREES } from './devotedStarterTrees';
 import { FRONTIER_STARTER_TREES } from './frontierStarterTrees';
 import { STARTER_SKILL_TREES } from './starterSkillTrees';
 import { NECROMANCER_SACRAMENTS } from './necromancerSacraments';
@@ -35,9 +26,7 @@ import { ROOTWILD_SKILLS } from './rootwildSkills';
 export const SKILLS: Record<string, SkillDef> = {
   town_portal: TOWN_PORTAL_SKILL,
   ...NECROMANCER_SKILLS,
-  ...PACT_SKILLS,
   ...ROOTWILD_SKILLS,
-  ...WORKSHOP_SKILLS,
 
   // ======================= Mimicry (the blue-mage lane) ====================
   // THE SLOT and its cycle payload (engine/mimic.ts — capture is the
@@ -154,7 +143,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   heavy_strike: {
-    tree: DEVOTED_STARTER_TREES.heavy_strike,
     id: 'heavy_strike', name: 'Heavy Strike',
     description: 'A crushing melee blow: 35% chance to stun, and the victim is knocked back.',
     tags: ['attack', 'melee', 'physical'], color: '#e09040',
@@ -298,7 +286,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   whirlwind: {
-    tree: DEVOTED_STARTER_TREES.whirlwind,
     id: 'whirlwind', name: 'Whirlwind',
     description: 'CHANNELED: spin with blades out for as long as the button is held, dealing'
       + ' physical damage to everything around you while you keep moving at 30% reduced speed.',
@@ -1176,7 +1163,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   storm_call: {
-    tree: DEVOTED_STARTER_TREES.storm_call,
     id: 'storm_call', name: 'Storm Call',
     description: 'Calls a bolt of lightning down on the target point after a short delay, with'
       + ' a 60% chance to SHOCK everything caught in the strike.',
@@ -1522,7 +1508,6 @@ export const SKILLS: Record<string, SkillDef> = {
   // ======================= The Guard hall ===================================
   // SHIELD CHARGE: the wall moves — a shield-first dash that bowls through.
   shield_charge: {
-    tree: BASTION_STARTER_TREES.shield_charge,
     id: 'shield_charge', name: 'Shield Charge',
     description: 'Raises the shield and charges: everything in your corridor is battered aside,'
       + ' with a 35% chance to stun each body struck.',
@@ -1853,7 +1838,6 @@ export const SKILLS: Record<string, SkillDef> = {
   // The bond-feeder: modest chaos bolt, TRIPLE bond feed — "Ruin heals the
   // bonded far more when it hits" (SkillDef.bondFeed).
   ruin: {
-    tree: PACT_STEEL_STARTER_TREES.ruin,
     id: 'ruin', name: 'Ruin',
     description: 'A bolt of consuming twilight: a chaos projectile that feeds your Guardian'
       + ' Bond at triple the usual share. Ruin for them, renewal for yours.',
@@ -1890,7 +1874,6 @@ export const SKILLS: Record<string, SkillDef> = {
   // THE CAST CYCLE exhibit: every third cut ARMS the next with a
   // guaranteed deep bleed (castCycle + a next-hit rider).
   zanshin_cut: {
-    tree: PRECISION_STARTER_TREES.zanshin_cut,
     id: 'zanshin_cut', name: 'Zanshin Cut',
     description: 'A disciplined melee slash. Every third cut settles the mind: your next melee'
       + ' blow within 8 seconds opens a guaranteed bleed at 2.5 times normal strength.',
@@ -1919,7 +1902,6 @@ export const SKILLS: Record<string, SkillDef> = {
   // the phasing status for the flight (through the crowd, mass and poise
   // be damned); the corridor cuts and DISARMS everything it passes.
   iai_strike: {
-    tree: PRECISION_STARTER_TREES.iai_strike,
     id: 'iai_strike', name: 'Iai Strike',
     description: 'A timed draw: press the button as the indicator peaks and the stroke lands'
       + ' 150% harder. The cut is a phasing dash through everything in its corridor, dealing'
@@ -2205,7 +2187,6 @@ export const SKILLS: Record<string, SkillDef> = {
   // familiar re-forms, ONE at a time on its own pool (a found golem may
   // still stand beside it — the choice is the starter's, not a law).
   bind_familiar: {
-    tree: PACT_STEEL_STARTER_TREES.bind_familiar,
     id: 'bind_familiar', name: 'Bind Familiar',
     description: 'TOGGLE a binding: an arcane familiar takes shape at your side and STAYS —'
       + ' mana is reserved while the bond holds, and if the familiar is unmade it re-forms'
@@ -2276,7 +2257,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   wild_strike: {
-    tree: DUELIST_STARTER_TREES.wild_strike,
     id: 'wild_strike', name: 'Wild Strike',
     description: 'CHANNELED: rapier slivers lash out at random bearings across a wide arc for'
       + ' as long as the button is held, each with a 20% chance to nick a bleed, while you keep'
@@ -2301,6 +2281,86 @@ export const SKILLS: Record<string, SkillDef> = {
     aim: { random: { offsetDeg: 0, spreadDeg: 90 } },
     baseDamage: { physical: [8, 13] },
     delivery: { type: 'cone', range: 150, arcDeg: 30 },
+    // THE SKILL-MODE TREE, M1's full exemplar (docs/design/skill-modes.md
+    // §3-§4 pair 1, 2026-08-20): rungs 1-3 per branch + the neutral — the
+    // exact-cover grammar (4 points at cap = one walked branch + the
+    // neutral). Rung 1 is the MEASURED identity commitment (M0's payloads,
+    // untouched); rungs 2-3 deepen it in its own character, each an A/B
+    // row at the wildstrike rig grain (balance/scratch_skillmodes_ab.ts).
+    // THE RE-PIN LAW: every rung re-pins arcDeg + spreadDeg — the branch
+    // identity must not drift if a rescale moves the base row. ⚠ All
+    // numbers directional, unblessed — she blesses at landing. Names are
+    // data; renames are one-line edits.
+    tree: {
+      level: 5,
+      branches: [
+        {
+          id: 'sprinkler', name: 'The Sprinkler',
+          description: 'The whirl unchained: slivers wander a 130° fan — '
+            + 'the whole pack feels the rain, one throat rarely does.',
+          rungs: [
+            {
+              id: 'ws_sprinkler', name: 'The Sprinkler',
+              description: 'Slivers wander a 130° fan.',
+              over: { arcDeg: 30, spreadDeg: 130 },
+            },
+            {
+              id: 'ws_cloudburst', name: 'The Cloudburst',
+              description: 'The drumbeat quickens — 12% faster slivers: '
+                + 'more rain on every throat in the fan.',
+              over: { arcDeg: 30, spreadDeg: 130 },
+              mods: [{ stat: 'attackSpeed', kind: 'increased', value: 0.12 }],
+            },
+            {
+              id: 'ws_monsoon', name: 'The Monsoon',
+              description: 'The dance unchained: the longer the whirl '
+                + 'holds, the freer the stride — rain that RUNS.',
+              over: {
+                arcDeg: 30, spreadDeg: 130,
+                channel: { rampMove: { per: 0.08, max: 0.5 } },
+              },
+            },
+          ],
+        },
+        {
+          id: 'duelist', name: 'The Duelist',
+          description: 'The point finds one throat: a 16° sliver held to a '
+            + '24° line — dead-ahead sustain, the crowd goes untouched.',
+          rungs: [
+            {
+              id: 'ws_duelist', name: 'The Duelist',
+              description: 'A 16° sliver held to a 24° line.',
+              over: { arcDeg: 16, spreadDeg: 24 },
+            },
+            {
+              id: 'ws_firm_wrist', name: 'The Firm Wrist',
+              description: 'The point drives deeper — 18% harder, and one '
+                + 'sliver in twelve finds the artery.',
+              over: { arcDeg: 16, spreadDeg: 24 },
+              mods: [
+                { stat: 'damage', kind: 'increased', value: 0.18 },
+                { stat: 'critChance', kind: 'flat', value: 0.07 },
+              ],
+            },
+            {
+              id: 'ws_long_point', name: 'The Long Point',
+              description: 'Commitment compounds: the held line bites 6% '
+                + 'deeper each second, to nearly half again.',
+              over: {
+                arcDeg: 16, spreadDeg: 24,
+                channel: { ramp: { per: 0.06, max: 0.45 } },
+              },
+            },
+          ],
+        },
+      ],
+      neutral: {
+        id: 'ws_economy', name: 'Economy of Motion',
+        description: 'Footwork either way: the channel drags the stride '
+          + 'less (70% → 85% of full speed).',
+        mods: [{ stat: 'channelMobility', kind: 'flat', value: 0.15 }],
+      },
+    },
     effects: [
       { type: 'damage' },
       { type: 'status', status: 'bleed', chance: 0.2, magnitude: 0.25 },
@@ -2310,7 +2370,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   buckler_strike: {
-    tree: DUELIST_STARTER_TREES.buckler_strike,
     id: 'buckler_strike', name: 'Buckler Strike',
     description: 'The swashbuckler\'s double cut: a sweeping strike to one flank, a beat, then the answering cut to the other. Multistrike repeats the whole figure.',
     tags: ['attack', 'melee', 'physical'], color: '#7ac8d8',
@@ -2328,7 +2387,6 @@ export const SKILLS: Record<string, SkillDef> = {
   // ======================= DoT, curses & blessings =========================
 
   essence_drain: {
-    tree: PACT_STEEL_STARTER_TREES.essence_drain,
     id: 'essence_drain', name: 'Essence Drain',
     description: 'A sluggish bolt of withering chaos: a feeble hit, but it always applies decay'
       + ' at 1.6 times normal strength, rotting its victim long after the impact.',
@@ -2564,7 +2622,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   infernal_ray: {
-    tree: DEVOTED_STARTER_TREES.infernal_ray,
     id: 'infernal_ray', name: 'Infernal Ray',
     description: 'CHANNELED (immobile, ponderous turning): a thin ray of fire that compounds'
       + ' the longer it is held, feeble at first and climbing ever faster, up to +200% damage'
@@ -2778,7 +2835,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   perfect_strike: {
-    tree: DUELIST_STARTER_TREES.perfect_strike,
     id: 'perfect_strike', name: 'Perfect Strike',
     description: 'A slow, heavy melee blow with a golden window at the end of its cast bar:'
       + ' press again inside the window for 70% more damage. The blow also has a 30% chance to'
@@ -2829,7 +2885,6 @@ export const SKILLS: Record<string, SkillDef> = {
   // decoys, pads, gates, and the stateful Mark/Recall pair.
 
   dash: {
-    tree: DEVOTED_STARTER_TREES.dash,
     id: 'dash', name: 'Dash',
     description: 'A quick burst of motion toward the cursor.',
     tags: ['movement', 'instant'], color: '#8ac8d8',
@@ -2842,7 +2897,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   charge: {
-    tree: IMPACT_STARTER_TREES.charge,
     id: 'charge', name: 'Charge',
     description: 'Lower your shoulder and barrel toward the target point; once committed, you'
       + ' cannot stop until you arrive. Everything in your path takes physical damage, is'
@@ -2991,7 +3045,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   invisibility: {
-    tree: PRECISION_STARTER_TREES.invisibility,
     id: 'invisibility', name: 'Invisibility',
     description: 'Vanish entirely for 2.5 seconds: enemies cannot see or target you, though'
       + ' stray blasts still hurt, and your next offensive act SPENDS the invisibility'
@@ -3136,7 +3189,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   
   rend: {
-    tree: PRECISION_STARTER_TREES.rend,
     id: 'rend', name: 'Rend',
     description: 'Slash in a melee arc in front of you, dealing physical damage: 70% chance to'
       + ' leave the wound bleeding.',
@@ -3169,7 +3221,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   eviscerate: {
-    tree: PRECISION_STARTER_TREES.eviscerate,
     id: 'eviscerate', name: 'Eviscerate',
     description: 'Usable only on a BLEEDING enemy: rip the wound open, consuming the bleed to deal ALL its remaining damage at once, plus a vicious strike.',
     tags: ['attack', 'melee', 'physical'], color: '#d04050',
@@ -3184,7 +3235,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   reckoning: {
-    tree: PACT_STEEL_STARTER_TREES.reckoning,
     id: 'reckoning', name: 'Reckoning',
     description: 'A heavy melee blow that consumes ALL Fury charges (built by Frenzy): 25% more'
       + ' damage per charge consumed, plus a 30% chance to stun. It swings without charges too,'
@@ -3556,7 +3606,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   ballista_sentry: {
-    tree: CONTROL_STARTER_TREES.ballista_sentry,
     id: 'ballista_sentry', name: 'Ballista Sentry',
     description: 'Raise an indestructible ballista that fires Piercing Arrows for 12 seconds,'
       + ' but only straight down the lane it was placed facing: it cannot rotate. Up to 2 may'
@@ -3815,7 +3864,6 @@ export const SKILLS: Record<string, SkillDef> = {
   // ======================= Swashbuckler / mobility =========================
 
   dash_strike: {
-    tree: DUELIST_STARTER_TREES.dash_strike,
     id: 'dash_strike', name: 'Dash Strike',
     description: 'Lunge toward your cursor at speed, slashing everything caught in the lane of'
       + ' the dash for physical damage.',
@@ -3851,7 +3899,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   stone_skin: {
-    tree: PACT_STEEL_STARTER_TREES.stone_skin,
     id: 'stone_skin', name: 'Stone Skin',
     description: 'Harden your flesh for 6 seconds, gaining +80 armor and taking 15% less damage'
       + ' from every source.',
@@ -3903,7 +3950,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   spiked_bulwark: {
-    tree: BASTION_STARTER_TREES.spiked_bulwark,
     id: 'spiked_bulwark', name: 'Spiked Bulwark',
     description: 'Set a broad, spiked guard. While it holds you gain +12 thorns: every blow'
       + ' taken pays damage back to the striker. The wall has no release blow of its own; an'
@@ -3926,7 +3972,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   reprisal: {
-    tree: BASTION_STARTER_TREES.reprisal,
     id: 'reprisal', name: 'Reprisal',
     description: 'Usable only within 3 seconds of taking damage: a heavy answering arc in front'
       + ' of you with a 35% chance to stun, knocking the victims back.',
@@ -3962,7 +4007,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   riposte: {
-    tree: PRECISION_STARTER_TREES.riposte,
     id: 'riposte', name: 'Riposte',
     description: 'For 0.6 seconds you hold a parrying stance: any frontal blow inside the'
       + ' window is negated entirely and answered at 220% of its damage. The stance spends'
@@ -3988,7 +4032,6 @@ export const SKILLS: Record<string, SkillDef> = {
   // below is plain data riding the ordinary apply fabric.)
 
   challenging_shout: {
-    tree: BASTION_STARTER_TREES.challenging_shout,
     id: 'challenging_shout', name: 'Challenging Shout',
     description: 'Bellow a challenge: every enemy around you is TAUNTED, turning their blades'
       + ' to you, and whatever still swings at your allies lands softer. Instant, and usable'
@@ -4083,7 +4126,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   quiet_step: {
-    tree: DUELIST_STARTER_TREES.quiet_step,
     id: 'quiet_step', name: 'Quiet Step',
     description: 'Soften your presence for 5 seconds: your blows generate 75% less threat, and'
       + ' 30% reduced detectability makes you harder to pick out of the fight.',
@@ -4103,7 +4145,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   marching_bulwark: {
-    tree: IMPACT_STARTER_TREES.marching_bulwark,
     id: 'marching_bulwark', name: 'Marching Bulwark',
     description: 'Advance behind a narrow tower guard: you keep three-quarters of your movement'
       + ' speed while it holds, behind thinner protection than a planted wall. Release to bash,'
@@ -4170,7 +4211,6 @@ export const SKILLS: Record<string, SkillDef> = {
   // with the same verbs.)
 
   sunder_maul: {
-    tree: IMPACT_STARTER_TREES.sunder_maul,
     id: 'sunder_maul', name: 'Sunder Maul',
     description: 'A slow overhead blow built to break stances rather than bodies: it deals 150%'
       + ' more poise damage, and the SUNDERED it inflicts lasts 50% longer. Pairs with The'
@@ -4187,7 +4227,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   verdict: {
-    tree: IMPACT_STARTER_TREES.verdict,
     id: 'verdict', name: 'The Verdict',
     description: 'An execute, usable only on a SUNDERED target: the blow adds 150% of the'
       + ' victim\'s maximum poise as flat damage and knocks them back. Break the stance first,'
@@ -4345,7 +4384,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   shockfront: {
-    tree: IMPACT_STARTER_TREES.shockfront,
     id: 'shockfront', name: 'Shockfront',
     description: 'Launch a flat wall of force down a broad lane: the front punches through up'
       + ' to 3 enemies and knocks whatever it strikes backward.',
@@ -4458,7 +4496,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   stone_rampart: {
-    tree: BASTION_STARTER_TREES.stone_rampart,
     id: 'stone_rampart', name: 'Stone Rampart',
     description: 'Raise a wall of three stone segments across your facing, each standing for 12'
       + ' seconds until its life is battered down. Up to 6 segments can stand at once; enemies'
@@ -4792,7 +4829,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   chain_pull: {
-    tree: PRECISION_STARTER_TREES.chain_pull,
     id: 'chain_pull', name: 'Chain Pull',
     description: 'Fling a barbed chain that deals physical damage, stuns the enemy it hooks,'
       + ' and yanks them to your feet, holding them dazed for 1.4 seconds through the landing.',
@@ -4943,7 +4979,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   earthquake: {
-    tree: IMPACT_STARTER_TREES.earthquake,
     id: 'earthquake', name: 'Earthquake',
     description: 'Drive the blow into the ground at your feet: the first crack is only the'
       + ' warning, a shove with a 12% chance to stun. One second later the broken earth erupts'
@@ -5213,7 +5248,6 @@ export const SKILLS: Record<string, SkillDef> = {
   // wrenches every lodged spear home — pops and all.
 
   skewer: {
-    tree: IMPACT_STARTER_TREES.skewer,
     id: 'skewer', name: 'Skewer',
     description: 'A driving melee thrust that leaves steel behind: 35% of the blow\'s physical'
       + ' damage lodges in the wound as a spearhead, and your next hit drives it through as its'
@@ -5230,7 +5264,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   spear_recall: {
-    tree: IMPACT_STARTER_TREES.spear_recall,
     id: 'spear_recall', name: 'Extraction',
     description: 'Wrench every lodged spear free at once: each impalement in reach detonates'
       + ' into its host for 120% of its stored damage, and the freed steel flies home to your'
@@ -5261,7 +5294,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   pinning_spear: {
-    tree: IMPACT_STARTER_TREES.pinning_spear,
     id: 'pinning_spear', name: 'Pinning Spear',
     description: 'Hurl a spear that punches through one rank and plants where it lands, a'
       + ' standing shaft that holds for 10 seconds for the rest of your kit to use; Tripwire'
@@ -5468,7 +5500,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   time_dilation: {
-    tree: CONTROL_STARTER_TREES.time_dilation,
     id: 'time_dilation', name: 'Time Dilation',
     description: 'Pinch the clockwork: every other skill\'s running cooldown sheds 2 seconds'
       + ' plus a quarter of what remains. Its own clock is untouched; the winder cannot wind'
@@ -5612,7 +5643,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   bristleback: {
-    tree: BASTION_STARTER_TREES.bristleback,
     id: 'bristleback', name: 'Bristleback',
     description: 'TOGGLE AURA (reserves 30 mana): you and allies inside grow iron quills,'
       + ' dealing flat physical thorns damage to anything whose blow lands, plus a tenth of'
@@ -5822,7 +5852,6 @@ export const SKILLS: Record<string, SkillDef> = {
 
   // --- THE WALLWRIGHT: the wall is a weapon that hasn't fallen yet ---------
   toppling_stroke: {
-    tree: BASTION_STARTER_TREES.toppling_stroke,
     id: 'toppling_stroke', name: 'Toppling Stroke',
     description: 'Swing a wide, deliberate demolition arc that hits like falling masonry: 30%'
       + ' chance to leave survivors staggering SUNDERED. Best delivered beside your own'
@@ -5842,7 +5871,6 @@ export const SKILLS: Record<string, SkillDef> = {
 
   // --- THE MATADOR: the fight is a performance with exactly one critic ----
   cape_feint: {
-    tree: DUELIST_STARTER_TREES.cape_feint,
     id: 'cape_feint', name: 'Cape Feint',
     description: 'Step soundlessly through the blow: a dash that phases past bodies and leaves'
       + ' an afterimage holding the cape where you stood for 1.2 seconds. The crowd gasps; the'
@@ -5858,7 +5886,6 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('effectDuration', 'increased', 0.08), mod('cooldownRecovery', 'increased', 0.06)] },
   },
   planted_banderilla: {
-    tree: DUELIST_STARTER_TREES.planted_banderilla,
     id: 'planted_banderilla', name: 'Planted Banderilla',
     description: 'A ribboned barb thrown to sting and insult: the struck beast is TAUNTED onto'
       + ' you, forgetting every other quarrel, with a 60% chance to be left VULNERABLE where'
@@ -5928,7 +5955,6 @@ export const SKILLS: Record<string, SkillDef> = {
 
   // --- THE SHARPER: probability owes money and pays in cards --------------
   thrown_ace: {
-    tree: DUELIST_STARTER_TREES.thrown_ace,
     id: 'thrown_ace', name: 'Thrown Ace',
     description: 'Flick a card flat and spinning: a single projectile that deals physical,'
       + ' fire, cold and lightning damage all in one hit. Whatever turns up, the Sharper dealt'
@@ -5943,7 +5969,6 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
   },
   stack_the_deck: {
-    tree: DUELIST_STARTER_TREES.stack_the_deck,
     id: 'stack_the_deck', name: 'Stack the Deck',
     description: 'Palm the odds: for 8 seconds you gain +25% luck and 15% increased cooldown'
       + ' recovery, so chance rolls land in your favor and your tricks reset sooner. Nobody can'
@@ -6092,7 +6117,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   stasis_lock: {
-    tree: CONTROL_STARTER_TREES.stasis_lock,
     id: 'stasis_lock', name: 'Stasis Lock',
     description: 'Loose a needle of unraveled time: every hit inflicts temporal drag, slowing'
       + ' the victim to half time, and 80% of the time the needle locks them in STASIS,'
@@ -6120,7 +6144,6 @@ export const SKILLS: Record<string, SkillDef> = {
   // MINIONS mend through the same skills via the AI's mender pre-pass.
 
   mend: {
-    tree: DEVOTED_STARTER_TREES.mend,
     id: 'mend', name: 'Mend',
     description: 'Instantly mend the ally under your cursor, or the most wounded in reach, or'
       + ' yourself when alone: a quick heal plus 5% of the target\'s maximum life.',
@@ -6193,7 +6216,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   consecration: {
-    tree: DEVOTED_STARTER_TREES.consecration,
     id: 'consecration', name: 'Consecration',
     description: 'Sanctify a circle of ground for 5 seconds: every half-second it deals fire'
       + ' damage to enemies within and a small mend to allies on the same ground. One circle,'
@@ -6249,7 +6271,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   sanctified_strike: {
-    tree: DEVOTED_STARTER_TREES.sanctified_strike,
     id: 'sanctified_strike', name: 'Sanctified Strike',
     description: 'Sweep a wide melee arc: enemies in it take physical and fire damage, and'
       + ' allies standing among them are mended for a small amount plus 2% of their maximum'
@@ -8328,7 +8349,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   flame_arrow: {
-    tree: PACT_STEEL_STARTER_TREES.flame_arrow,
     id: 'flame_arrow', name: 'Flame Arrow',
     description: 'A quick dart of flame that pierces up to 2 enemies, with a 7% chance to'
       + ' ignite each one it passes through.',
@@ -8462,7 +8482,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   ignite: {
-    tree: PACT_STEEL_STARTER_TREES.ignite,
     id: 'ignite', name: 'Ignite',
     description: 'Instantly sets the target ON FIRE with an exceptionally strong burn. Prime'
       + ' fuel for Combustion and Powderkeg alike.',
@@ -8515,7 +8534,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   pillar_of_flame: {
-    tree: PACT_STEEL_STARTER_TREES.pillar_of_flame,
     id: 'pillar_of_flame', name: 'Pillar of Flame',
     description: 'Raises a burning ring at the mark that sears its rim at once, then closes'
       + ' inward over 2.6 seconds, cooking everything still inside; each tick carries a 14%'
@@ -8862,7 +8880,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   ice_shield: {
-    tree: DEVOTED_STARTER_TREES.ice_shield,
     id: 'ice_shield', name: 'Ice Shield',
     description: 'GUARD: encase yourself in a shell of ice that blocks from every side. You'
       + ' cannot move, and nothing gets through until the shell breaks or you release it;'
@@ -11693,7 +11710,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   aftershock_snare: {
-    tree: CONTROL_STARTER_TREES.aftershock_snare,
     id: 'aftershock_snare', name: 'Aftershock Snare',
     description: 'Bury a tripplate that waits up to 20 seconds: the spring\'s physical blast'
       + ' scatters into 2 aftershocks rippling out around the victim, with a 30% chance to'
@@ -11738,7 +11754,6 @@ export const SKILLS: Record<string, SkillDef> = {
   // the speed, twice the banking — the slow style feeding the same Fury
   // court Reckoning empties. Mix-and-match with any fury verb you find.
   piledriver: {
-    tree: PACT_STEEL_STARTER_TREES.piledriver,
     id: 'piledriver', name: 'Piledriver',
     description: 'One blow, placed like a foundation: a slow crushing melee strike that banks 2'
       + ' Fury (to a cap of 5), deals 50% more poise damage, and has a 15% chance to stun. Bank'
@@ -11785,7 +11800,6 @@ export const SKILLS: Record<string, SkillDef> = {
   // The Trapper's strewn argument: not a device, a CONDITION OF THE GROUND.
   // Cheap area denial that hobbles the rhythm (reeling) rather than the feet.
   caltrops: {
-    tree: CONTROL_STARTER_TREES.caltrops,
     id: 'caltrops', name: 'Caltrops',
     description: 'Strew forged spikes across the target ground for 8 seconds: whatever crosses'
       + ' the field takes repeated small physical cuts, with a 50% chance to bleed and a 40%'
@@ -11817,7 +11831,6 @@ export const SKILLS: Record<string, SkillDef> = {
   // next-hit stun buff (one_two_cross) — the cross is a real step now, with
   // its own figure, damage and stun. The window is a dial for her word.
   one_two: {
-    tree: PRECISION_STARTER_TREES.one_two,
     id: 'one_two', name: 'One-Two',
     description: 'Work the jab: a fast melee strike that banks 1 Fury per hit (to a cap of 5).'
       + ' Jab twice in rhythm and the third press within 2 seconds throws the CROSS JAB: a'
@@ -11866,7 +11879,6 @@ export const SKILLS: Record<string, SkillDef> = {
   // Reckoning buys damage, the haymaker buys DISPLACEMENT. Spend where the
   // wall is.
   haymaker: {
-    tree: PRECISION_STARTER_TREES.haymaker,
     id: 'haymaker', name: 'Haymaker',
     description: 'Load the hips and swing: a wound-up melee hook that spends every banked Fury,'
       + ' each charge spent adding 15% damage, and knocks the victim flying back across the'
@@ -11891,7 +11903,6 @@ export const SKILLS: Record<string, SkillDef> = {
   // The Warlord's planted word: a BANNER, not a shout — the rally that
   // stays where you put it and holds the line around itself.
   battle_standard: {
-    tree: BASTION_STARTER_TREES.battle_standard,
     id: 'battle_standard', name: 'Battle Standard',
     description: 'Plant the colors: a standing banner grants allies fighting beneath it 12%'
       + ' increased damage, 5% increased movement speed, and 8 retaliation damage against each'
@@ -11919,7 +11930,6 @@ export const SKILLS: Record<string, SkillDef> = {
   // The Warlord's pointed finger: the CHALLENGE fabric aimed at ONE body —
   // peel it, open it, and let everyone see where to hit it.
   single_out: {
-    tree: BASTION_STARTER_TREES.single_out,
     id: 'single_out', name: 'Single Out',
     description: 'Call out a single enemy: it is taunted, forced to answer you, and stands'
       + ' exposed, its health readable by the whole warband. The call is loud by design,'
@@ -11943,7 +11953,6 @@ export const SKILLS: Record<string, SkillDef> = {
   // singer — and every sung verse BANKS one Verse charge ('use' tap). The
   // Coda empties the bank. Two songs, one spender: the meter is the build.
   war_chant: {
-    tree: CONTROL_STARTER_TREES.war_chant,
     id: 'war_chant', name: 'War Chant',
     description: 'Raise the marching verse: a ring of battle-music follows you for 6 seconds,'
       + ' granting allies inside 10% increased damage and 6% increased attack and cast speed.'
@@ -11971,7 +11980,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   dissonance: {
-    tree: CONTROL_STARTER_TREES.dissonance,
     id: 'dissonance', name: 'Dissonance',
     description: 'Sing the wrong note on purpose: a ring of grinding discord follows you for 6'
       + ' seconds, dealing chaos damage to whoever stands in it with a 15% chance per hit to'
@@ -11995,7 +12003,6 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   coda: {
-    tree: CONTROL_STARTER_TREES.coda,
     id: 'coda', name: 'Coda',
     description: 'End the song on everyone at once: a crashing physical nova that spends every'
       + ' banked Verse, each one adding 30% damage, and knocks the crowd back with a 25% chance'
@@ -13935,7 +13942,6 @@ export const SKILLS: Record<string, SkillDef> = {
   // --- Fields, storms & pods -------------------------------------------------
 
   torpor_field: {
-    tree: CONTROL_STARTER_TREES.torpor_field,
     id: 'torpor_field', name: 'Torpor Field',
     description: 'Project a destructible dome of thickened time for 7 seconds: enemy shots'
       + ' inside it crawl at 30% of their speed. Only one dome may stand at a time.',

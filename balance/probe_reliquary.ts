@@ -5,7 +5,8 @@
 // containerTake / containerMove / reconcileContainers, meta/unlocks.ts the
 // derived rows, meta/character.ts + net/snapshot.ts + meta/death.ts the
 // carry). Pins:
-//   - THE MASK FOLD: no rung 0 = no board; rung 0 = the hollow ring (8 seats,
+//   - THE MASK FOLD: no rung 0 = no board; quest rung 0 = one cell;
+//     the first paid expansion = the hollow ring (8 seats,
 //     centre sealed); the ladder grows monotonically to the full 5×5; the
 //     centre opens with THE HEART and a corner with THE FULL CASE
 //     (containerRungAt — the sealed cell's own tell); pack/unpack round-trips.
@@ -26,8 +27,8 @@
 //     holds; a misfit reconciles to the bag; an unowned board folds nothing.
 //   - PERSISTENCE: save/rebuild, wire/adopt, and the corpse all carry the
 //     seated pieces (seat cells stripped on the corpse).
-//   - THE VAULT: one derived row per rung; rung 0 hides until the discovery
-//     ledger; each rung requires the last; the board grows with the buy;
+//   - THE VAULT: one derived row per purchasable rung; the case comes from
+//     its quest; each expansion requires the last; the board grows with the buy;
 //     the level roads register their milestones.
 //   - DISCOVERY: a genuine world mint stamps the account; a discard never.
 //   - THE KIND LADDER + THE LOOKUPS: relics sort after the doll's kinds and
@@ -44,7 +45,7 @@ import {
   findCarried, packContainerBoard, unpackContainerBoard,
 } from '../src/engine/containers';
 import { autoPlace, bagBoard, canPlaceAt, footprintOpen, placeAt } from '../src/engine/inventory';
-import { affixCapsFor, affixPoolsFor, compileItemMods, describeItem, forgeItem, isKnownItemStat, rollItem } from '../src/engine/itemgen';
+import { affixCapsFor, affixPoolsFor, compileItemMods, describeItem, forgeItem, isKnownItemStat, itemLevelReq, rollItem } from '../src/engine/itemgen';
 import { ITEM_BASES } from '../src/data/itembases';
 import { ITEM_AFFIXES, RELIC_AFFIXES } from '../src/data/itemaffixes';
 import { CONTAINER_CATEGORIES, isCarriableCategory, type ItemInstance } from '../src/engine/items';
@@ -56,6 +57,10 @@ import { captureLoot } from '../src/meta/death';
 import { bagKindRank } from '../src/engine/bagsort';
 import { resolveLootTable } from '../src/engine/loot';
 import { CLASSES } from '../src/data/classes';
+import { Q_RELIQUARY, RELIQUARY_LESSON, resolveQuestZone } from '../src/quests/reliquary';
+import { TILESETS } from '../src/data/tilesets';
+import { MONSTERS } from '../src/data/monsters';
+import type { QuestDef } from '../src/quests/types';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -73,8 +78,8 @@ const lcg = (seed: number): (() => number) => {
 };
 
 const R = RELIQUARY;
-const rungs = R.ladder;
-const feats = (n: number): Set<string> => new Set(rungs.slice(0, n).map(r => r.feature));
+const rungs = R.ladder.slice(1); // purchasable expansions, after the quest's one cell
+const feats = (n: number): Set<string> => new Set([FEATURE.RELIQUARY, ...rungs.slice(0, n).map(r => r.feature)]);
 let uidSeq = 900000;
 const mk = (baseId: string, x?: number, y?: number): ItemInstance =>
   ({ uid: uidSeq++, baseId, ilvl: 1, tier: 1, rarity: 'magic', name: baseId, baseRoll: 0, implicitRolls: [], affixes: [], x, y } as ItemInstance);
@@ -83,9 +88,12 @@ const mk = (baseId: string, x?: number, y?: number): ItemInstance =>
 check('A1 no rung 0 → no board', containerBoardFor(R, new Set()) === null);
 check('A1b a later rung alone (rung 0 unowned) → no board', containerBoardFor(R, new Set([rungs[1].feature])) === null);
 const b1 = containerBoardFor(R, feats(1))!;
-check('A2 rung 0 opens the hollow ring: 8 seats, centre sealed',
+check('A2 the first expansion opens the hollow ring: 8 seats, centre sealed',
   !!b1 && b1.cells === 8 && !boardOpenAt(b1, 2, 2) && boardOpenAt(b1, 1, 1) && boardOpenAt(b1, 3, 3) && !boardOpenAt(b1, 0, 0));
 const counts = [1, 2, 3, 4].map(n => containerBoardFor(R, feats(n))!.cells);
+check('A2b the quest starts with exactly one usable charm cell', containerBoardFor(R, feats(0))?.cells === 1
+  && canPlaceAt([], mk('relic_charm'), 1, 1, boardDims(containerBoardFor(R, feats(0))!))
+  && !canPlaceAt([], mk('relic_talisman'), 1, 1, boardDims(containerBoardFor(R, feats(0))!)));
 check('A3 the ladder grows monotonically', counts.every((c, i) => i === 0 || c > counts[i - 1]), counts.join(' → '));
 const full = containerFullBoard(R);
 check('A4 the full case is the union of every rung (5×5 = 25)', full.cells === 25 && full.cells === counts[3]);
@@ -181,6 +189,7 @@ const world = makeSimWorld(CLASSES[0].id, 11);
 const seat = world.localSeat;
 const hero = world.player;
 world.account.features.add(FEATURE.RELIQUARY);
+world.account.features.add(FEATURE.RELIQUARY_RING);
 check('D1 the board exists once rung 0 is owned', containerBoard(R)?.cells === 8);
 const charm = forgeItem({ ilvl: 1, baseId: 'relic_charm', rarity: 'magic', affixes: [{ id: 'relic_life' }], quality: 1 })!;
 const lifeLine = compileItemMods(charm).find(m => m.stat === 'life')!.value;
@@ -300,11 +309,13 @@ check('D8 containerMove refuses the sealed centre', charm.x === 3 && charm.y ===
   check('F1 one derived Vault row per rung', rows.every(Boolean) && rows.every(u => u.kind === 'feature'));
   const acct = makeAccount();
   acct.credits = 100000;
-  check('F2 rung 0 hides until the world has shown a relic', !isUnlockVisible(acct, rows[0]));
+  check('F2 the case itself has no Vault purchase', !UNLOCK_CATALOG.some(u => u.id === `feat_${FEATURE.RELIQUARY}`));
   acct.ledger[LEDGER_RELIC_FOUND] = 1;
-  check('F2b …and surfaces once the discovery ledger stands', isUnlockVisible(acct, rows[0]));
+  check('F2b finding a relic cannot bypass the quest', !isUnlockVisible(acct, rows[0]));
   check('F3 rung 1 hides until rung 0 is owned', !isUnlockVisible(acct, rows[1]));
   check('F4 no board before the buy', containerBoardFor(R, acct.features) === null);
+  acct.features.add(FEATURE.RELIQUARY);
+  check('F4a the quest grant opens one cell and exposes the ring upgrade', containerBoardFor(R, acct.features)?.cells === 1 && isUnlockVisible(acct, rows[0]));
   applyUnlock(acct, rows[0]);
   check('F4b the buy raises the ring', acct.features.has(FEATURE.RELIQUARY) && containerBoardFor(R, acct.features)?.cells === 8);
   check('F5 rung 1 still waits on its level road', !isUnlockVisible(acct, rows[1]));
@@ -324,6 +335,9 @@ check('D8 containerMove refuses the sealed centre', charm.x === 3 && charm.y ===
   w2.dropGearAt(w2.player.pos, { ...relic, uid: relic.uid + 1 }, w2.localSeat.id); // a DISCARD
   check('G1 a discard never stamps the discovery ledger', !(w2.account.ledger[LEDGER_RELIC_FOUND] ?? 0));
   w2.dropGearAt(w2.player.pos, relic); // a genuine world mint
+  check('G1b ambient relics wait for the seating lesson', w2.drops.length === 1);
+  w2.account.ledger[RELIQUARY_LESSON] = 1;
+  w2.dropGearAt(w2.player.pos, relic);
   if (meta) check('G2 a genuine world mint stamps it once', (w2.account.ledger[LEDGER_RELIC_FOUND] ?? 0) === 1);
   else check('G2 (meta sealed in this stage) the ledger stays honest', !(w2.account.ledger[LEDGER_RELIC_FOUND] ?? 0));
   const ring = rollItem({ ilvl: 1, category: 'ring', rng: lcg(3) })!;
@@ -355,6 +369,90 @@ check('D8 containerMove refuses the sealed centre', charm.x === 3 && charm.y ===
   const l2 = containerLanding(R, b1, held, bagOnly, 'bag', 2, 2, 1, [bagOnly], { w: 4, h: 4 });
   check('H6 a landing over the sealed centre is blocked', l2.verdict === 'blocked');
   check('H7 placeAt honors the mask', !placeAt([], mk('relic_charm'), 2, 2, dims1) && placeAt([], mk('relic_charm'), 1, 1, dims1));
+}
+
+// ------------------------------------------- I. QUEST → CHOICE → LESSON
+{
+  const variants = new Set<string>();
+  for (let seed = 1; seed <= 40; seed++) {
+    const z = resolveQuestZone(Q_RELIQUARY, seed);
+    variants.add(z.name!);
+    check(`I1.${seed} seeded site repeats and references real content`,
+      JSON.stringify(z) === JSON.stringify(resolveQuestZone(Q_RELIQUARY, seed))
+      && !!TILESETS[z.tileset!] && (z.objective.kind !== 'boss' || !!MONSTERS[z.objective.id])
+      && z.packsOverride!.table.every(p => !!MONSTERS[p.id]));
+  }
+  check('I2 seeds span all authored burial sites', variants.size === Q_RELIQUARY.zoneVariants!.length);
+  const w = makeSimWorld(CLASSES[0].id, 9001);
+  const hooks = w as unknown as {
+    acceptQuest(q: QuestDef): void;
+    onQuestZoneFieldCleared(zoneId: string): void;
+    onQuestZoneCleared(aq: { questId: string; zoneId: string; fieldDone: boolean }): void;
+  };
+  hooks.acceptQuest(Q_RELIQUARY);
+  const aq = w.activeQuests.find(q => q.questId === Q_RELIQUARY.id)!;
+  const zone = w.zoneMap[aq.zoneId];
+  check('I3 the introduction mints a named, connected level-8 destination',
+    variants.has(zone.name) && zone.level === 8 && !zone.floating && !zone.veiled
+    && zone.exits.some(e => e.to !== '?'));
+  const fieldSave = w.serializeWorldState();
+  check('I4 the generated site and active quest ride the world save',
+    fieldSave.quests?.active.some(q => q.questId === aq.questId) === true);
+  check('I5 no claim before completing the field objective', !w.claimQuestReward(Q_RELIQUARY.id, 'hearth'));
+  hooks.onQuestZoneFieldCleared(aq.zoneId);
+  check('I6 field completion grants neither relic nor case', aq.fieldDone && !w.account.features.has(FEATURE.RELIQUARY)
+    && !w.meta.items.some(i => ITEM_BASES[i.baseId]?.category === 'relic'));
+  check('I7 no remote claim away from the giver', !w.claimQuestReward(Q_RELIQUARY.id, 'hearth'));
+  const giver = w.createMonster('townsfolk_questgiver', 1, 'player');
+  giver.pos = { ...w.player.pos };
+  w.actors.push(giver);
+  hooks.onQuestZoneCleared(aq);
+  check('I8 turn-in requests a choice; no automatic payout', w.questRewardRequested
+    && w.questRewardOffers()[0]?.choices.length === 3 && !w.completedQuests.has(Q_RELIQUARY.id));
+  const previewLines = w.questRewardOffers()[0].choices.find(c => c.id === 'hearth')!.lines;
+  check('I8b reward previews show stable exact stats and footprint', previewLines.length > 0
+    && w.questRewardOffers()[0].choices.every(c => c.footprint === '1 × 1')
+    && JSON.stringify(previewLines) === JSON.stringify(w.questRewardOffers()[0].choices[0].lines));
+  check('I9 unknown choice refuses without completing', !w.claimQuestReward(Q_RELIQUARY.id, 'forged-choice')
+    && !w.completedQuests.has(Q_RELIQUARY.id));
+  const bag = w.meta.items;
+  while (autoPlace(bag, mk('relic_charm'))) { /* occupy every bag cell */ }
+  const beforeFull = bag.length;
+  check('I10 full pack defers the ENTIRE reward and unlock', !w.claimQuestReward(Q_RELIQUARY.id, 'hearth')
+    && bag.length === beforeFull && !w.account.features.has(FEATURE.RELIQUARY)
+    && !(w.ledger.relic_recovered ?? 0) && w.activeQuests.includes(aq));
+  bag.length = 0;
+  const awaitingChoice = w.serializeWorldState();
+  check('I11 ready-to-choose state persists across world adoption', w.adoptWorldState(awaitingChoice)
+    && w.activeQuests.some(q => q.questId === Q_RELIQUARY.id && q.fieldDone));
+  // Adoption restores the graph; the local test giver still stands in the arena.
+  check('I12 chosen reward pays once and grants one open seat', w.claimQuestReward(Q_RELIQUARY.id, 'hearth')
+    && w.meta.items.length === 1 && w.meta.items[0].name === 'Hearthkeeper’s Charm'
+    && containerBoardFor(R, w.account.features)?.cells === 1 && w.ledger.relic_recovered === 1);
+  const reward = w.meta.items[0];
+  check('I12b the awarded item matches its preview exactly',
+    JSON.stringify(describeItem(reward).affix.map(l => l.text)) === JSON.stringify(previewLines));
+  check('I13 duplicate and guest claims cannot award another item', !w.claimQuestReward(Q_RELIQUARY.id, 'well')
+    && !w.claimQuestReward(Q_RELIQUARY.id, 'veil', { ...w.localSeat, id: 'guest' }) && w.meta.items.length === 1);
+  check('I14 chosen relic is immediately usable but inert in the pack', itemLevelReq(reward) <= w.player.level
+    && w.reliquaryLesson() && !w.meta.containers[RELIQUARY_ID]?.length);
+  const nDrops = w.drops.length;
+  w.dropGearAt(w.player.pos, mk('relic_charm'));
+  check('I15 claiming the case alone does not enable ambient drops', w.drops.length === nDrops);
+  w.containerPlace(w.localSeat, RELIQUARY_ID, reward.uid, 2, 2);
+  check('I16 a refused seating does not complete the lesson', w.reliquaryLesson());
+  const lifeBefore = w.player.sheet.get('life');
+  w.containerPlace(w.localSeat, RELIQUARY_ID, reward.uid);
+  check('I17 actual seating completes the lesson and adds the relic stats', !w.reliquaryLesson()
+    && w.account.ledger[RELIQUARY_LESSON] === 1 && w.player.sheet.get('life') > lifeBefore);
+  w.dropGearAt(w.player.pos, mk('relic_charm'));
+  check('I18 ambient relics now land', w.drops.length === nDrops + 1);
+  w.containerTake(w.localSeat, RELIQUARY_ID, reward.uid);
+  check('I19 unseating removes power without relocking discovery', !w.reliquaryLesson()
+    && Math.abs(w.player.sheet.get('life') - lifeBefore) < 0.01);
+  const doneSave = w.serializeWorldState();
+  check('I20 claim completion survives reload and cannot pay twice', w.adoptWorldState(doneSave)
+    && w.completedQuests.has(Q_RELIQUARY.id) && !w.claimQuestReward(Q_RELIQUARY.id, 'hearth'));
 }
 
 console.log(failed ? `\nFAIL — ${failed} check(s) failed` : '\nPASS — THE RELIQUARY');

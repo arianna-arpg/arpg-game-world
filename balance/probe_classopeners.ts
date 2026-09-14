@@ -15,7 +15,7 @@ for (const c of CLASSES) {
     Object.entries(s.def.requirements ?? {}).every(([a, n]) => p.attributeValues![a as keyof NonNullable<typeof p.attributeValues>] >= n)
     && p.skillCost(s).mana <= p.maxMana() && p.skillCost(s).life < p.maxLife())));
 }
-for (const id of ['guardian', 'breaker', 'warlord', 'tamer']) {
+for (const id of ['guardian', 'breaker', 'warlord', 'tamer', 'spellblade', 'cryomancer', 'apothecary']) {
   const w = makeSimWorld(id, 0x0be), p = w.player;
   const bar = p.skills.filter(s => s !== null);
   const cost = bar.reduce((n, s) => n + p.skillCost(s).mana, 0);
@@ -50,6 +50,32 @@ const step = (w: World, seconds: number) => { for (let t = 0; t < seconds; t += 
   check('Guardian can rally after warding', w.useSkill(p, get('rallying_howl'), p.pos)); step(w, 0.7);
   check('Guardian can attack after the two protective casts', w.useSkill(p, get('hammer_of_judgment'), { x: p.pos.x + 60, y: p.pos.y })); step(w, 1);
   check('the base hammer launches its visible projectile', w.projectiles.some(pr => pr.caster === p));
+}
+// The new early kits have complete combat loops at level one, without
+// borrowed skills, refill cheats, equipment or mastery swaps.
+for (const id of ['spellblade', 'cryomancer', 'apothecary']) {
+  const w = makeSimWorld(id, 0x0be), p = w.player;
+  const e = w.createMonster('plains_wolf', 1, 'enemy');
+  e.aiCooldown = 9999; e.life = 1000;
+  e.sheet.setSource('opening-target', [mod('life', 'override', 1000), mod('evasion', 'override', 0), mod('blockChance', 'override', 0)]);
+  e.pos = { x: p.pos.x + (id === 'spellblade' ? 40 : 120), y: p.pos.y }; w.actors.push(e);
+  p.sheet.setSource('opening-ailments', [mod('apply_chill', 'override', 1), mod('apply_poison', 'override', 1)]);
+  const hp = e.life;
+  check(`${id}: the primary can open against a living foe`, w.useSkill(p, p.skills[0]!, e.pos)); step(w, 1.5);
+  check(`${id}: the primary actually damages its target`, e.life < hp);
+  check(`${id}: the secondary works from that opening`, w.useSkill(p, p.skills[1]!, e.pos)); step(w, 1);
+  if (id === 'cryomancer') check('Cryomancer converts its opening chill into a real freeze', e.statuses.some(s => s.id === 'frozen'));
+  if (id === 'apothecary') {
+    check('Apothecary seeds lingering poison pressure', e.statuses.some(s => s.id === 'poison'));
+    p.life -= 15;
+    const wounded = p.life;
+    check('Apothecary can cleanse and mend itself after both offensive casts', w.useSkill(p, p.skills[2]!, p.pos)); step(w, 0.1);
+    check('Apothecary self-target fallback supplies real healing', p.life > wounded);
+  } else {
+    const before = { ...p.pos };
+    check(`${id}: its escape remains affordable after both offensive casts`, w.useSkill(p, p.skills[2]!, { x: p.pos.x - 100, y: p.pos.y })); step(w, 0.1);
+    check(`${id}: its escape actually relocates the hero`, Math.hypot(p.pos.x - before.x, p.pos.y - before.y) > 50);
+  }
 }
 console.log(`\nClass openers: ${failed ? `${failed} FAILED` : 'all passed'}`);
 process.exitCode = failed ? 1 : 0;

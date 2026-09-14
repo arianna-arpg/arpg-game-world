@@ -207,3 +207,7 @@ registerMenuAttention({
   id: 'mireille_lesson', entry: 'inventory', kind: 'lesson',
   read: r => r.seat === r.world.localSeat && r.world.mireilleGiftLesson() === 'learn',
 });
+registerMenuAttention({
+  id: 'reliquary_lesson', entry: 'inventory', kind: 'lesson',
+  read: r => r.seat === r.world.localSeat && r.world.reliquaryLesson(),
+});

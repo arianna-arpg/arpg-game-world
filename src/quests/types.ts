@@ -51,6 +51,8 @@ export const DEFAULT_QUEST_CATEGORY: QuestCategory = 'campaign';
 
 /** Describes the zone a quest spawns — a directional, biome-forced objective. */
 export interface QuestZoneSpec {
+  /** Story name for this destination, overriding the tileset's name roll. */
+  name?: string;
   /** Tileset id → biome/theme/name pools (e.g. 'crypt' → grave biome).
    *  Required unless `map` names an authored map (whose dress tileset is
    *  then the default). */
@@ -98,6 +100,12 @@ export interface QuestZoneSpec {
 }
 
 export interface QuestReward {
+  /** Choose exactly one item at the giver before ANY part of the payout lands. */
+  choices?: readonly QuestRewardChoice[];
+  /** Giver's introduction to the choice, shown with the reward cards. */
+  choicePrompt?: string;
+  /** Account features earned with this reward, without a Vault purchase. */
+  features?: readonly string[];
   xp?: number;
   gems?: number;
   /** Essence tints paid on completion (ground packets at the payout site —
@@ -117,6 +125,14 @@ export interface QuestReward {
   /** Counters bumped on completion (per-run → per-account on death). Drives the
    *  chain: a later quest's requiresLedger points at one of these keys. */
   ledger?: Record<string, number>;
+}
+
+export interface QuestRewardChoice {
+  id: string;
+  name: string;
+  description: string;
+  baseId: string;
+  affixes: readonly string[];
 }
 
 /** Everything a QuestDef.gate predicate may consult — a read-only slice of the
@@ -169,6 +185,8 @@ export interface QuestDef {
    *  the vocation menu, an ENGAGED chain's next step auto-accepts. */
   vocation?: string;
   zone: QuestZoneSpec;
+  /** Seeded alternatives, selected once from the run seed + quest id. */
+  zoneVariants?: readonly QuestZoneSpec[];
   reward: QuestReward;
   /** Optional return-to-giver leg: the reward is held until the player comes home
    *  and dwells by the giver (showcasing town as a hub). Absent = pay on clear. */
