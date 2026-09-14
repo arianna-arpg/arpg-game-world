@@ -54967,6 +54967,11 @@ export class World {
     for (const body of bodies) if (body.construct && body.owner === caster && body.summonInst === inst) {
       this.clearTreeFields(body, inst);
       if (body.construct.castInst && body.construct.castInst !== inst) this.clearTreeFields(body, body.construct.castInst);
+      // Mimics borrow the owner's attack instance; their captured payloads
+      // need retirement even when they differ from the summoning instance.
+      const capturedTreePayloads = new Set([...this.projectiles, ...this.zones, ...this.pendingFuses, ...this.pendingRepeats]
+        .filter(payload => payload.caster === body).map(payload => payload.inst));
+      for (const payload of capturedTreePayloads) this.clearTreeFields(body, payload);
       // quietTreeRelease also strips the aura sources worn by nearby recipients.
       for (const id of [...body.activeAuras.keys()]) this.deactivateAura(body, id, true);
       body.casting = null; body.dead = true; body.life = 0;

@@ -75,6 +75,10 @@ Runeweaver's usable level-one fuel loop and complete starting trees live in
 `src/data/runeweaverStarterTrees.ts`; `docs/design/runeweaver-starting-skill-trees.md`
 covers Glyph fuel, Invocation payload inheritance, preview and respec ownership.
 
+The Tamer/Beguiler/Falconer starting trees live in `src/data/bondStarterTrees.ts`;
+`docs/design/bond-starting-skill-trees.md` covers claims, sympathy, native doubles,
+madness, falcon contracts and owner-scoped cleanup.
+
 Chest and gem-cache lists live in `src/data/containerloot.ts` and the existing
 `loottables.ts`; `docs/design/container-loot.md` documents the context rules,
 Memory Essence economy, visual grammar and regression probe.

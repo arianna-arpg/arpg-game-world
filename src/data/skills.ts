@@ -1,3 +1,4 @@
+import { BOND_STARTER_TREES } from './bondStarterTrees';
 import { RUNEWEAVER_STARTER_TREES } from './runeweaverStarterTrees';
 import { RESONATOR_STARTER_TREES } from './resonatorStarterTrees';
 import { BASTION_STARTER_TREES } from './bastionStarterTrees';
@@ -3013,6 +3014,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   decoy: {
+    tree: BOND_STARTER_TREES.decoy,
     id: 'decoy', name: 'Decoy',
     description: 'Dash away, leaving a taunting mirage of yourself behind for 6 seconds.'
       + ' Enemies prefer attacking the mirage over anything else.',
@@ -3231,6 +3233,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // bar fills only while your cursor RIDES the beast — look away and the
   // claim bleeds back out ('drain'); hold the gaze to the end and it's yours.
   tame_beast: {
+    tree: BOND_STARTER_TREES.tame_beast,
     id: 'tame_beast', name: 'Tame Beast',
     description: 'HOLD your aim on a living beast to fill the 2.4 second claim: sure below half'
       + ' life, a 35% chance on a hale one. A tamed companion falls DOWNED, never dead. With'
@@ -4067,6 +4070,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   goad: {
+    tree: BOND_STARTER_TREES.goad,
     id: 'goad', name: 'Goad',
     description: 'Hurl a stone that TAUNTS the one enemy it strikes into answering you, peeling'
       + ' it from its pack without waking the rest. The hit generates double threat.',
@@ -5489,6 +5493,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // and Expose Weakness's health-bar windows (#12).
 
   expose_weakness: {
+    tree: BOND_STARTER_TREES.expose_weakness,
     id: 'expose_weakness', name: 'Expose Weakness',
     description: 'Curse the target EXPOSED: a weak spot is painted on their health bar just'
       + ' below the current wound. While their life sits inside that window, every blow lands'
@@ -5911,6 +5916,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   // --- THE FALCONER: the mark has wings and an opinion --------------------
   cast_falcon: {
+    tree: BOND_STARTER_TREES.cast_falcon,
     id: 'cast_falcon', name: 'Cast the Falcon',
     description: 'Summon a hunting falcon that latches onto prey and rides it, holding the'
       + ' victim VULNERABLE until it dies or shakes her off, then picking again. The bond is a'
@@ -7731,6 +7737,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   shadow_clone: {
+    tree: BOND_STARTER_TREES.shadow_clone,
     id: 'shadow_clone', name: 'Shadow Clone',
     description: 'Step back in smoke, leaving a shadow of yourself where you stood. For 8'
       + ' seconds it mirrors your strikes from its own position at 35% of your damage, on a'
@@ -11769,6 +11776,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // Long, walking-pace quiet that keeps the threat chart soft, so the claim
   // (or the first blow) happens on YOUR terms.
   stalk: {
+    tree: BOND_STARTER_TREES.stalk,
     id: 'stalk', name: 'Stalk',
     description: 'Drop into the hunter\'s hush for 10 seconds: you are 45% less detectable,'
       + ' your acts generate 35% less threat, and you move at 8% reduced speed. The wild'
@@ -12025,6 +12033,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // The Beguiler's whisper: no new fabric — the MADDENED status (the
   // miasma's madness) delivered as a single pointed suggestion.
   beguile: {
+    tree: BOND_STARTER_TREES.beguile,
     id: 'beguile', name: 'Beguile',
     description: 'Hurl a whispered suggestion as a chaos projectile: the struck mind turns'
       + ' maddened, swinging at whatever stands nearest, friend first, with a 40% chance to'
@@ -15647,6 +15656,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   cloudstep: {
+    tree: BOND_STARTER_TREES.cloudstep,
     id: 'cloudstep', name: 'Cloudstep',
     description: 'Glide to the target point as soundless cloud, phasing through whatever stands'
       + ' between, and leave a decoy image of yourself behind for 1.4 seconds to be struck in'
