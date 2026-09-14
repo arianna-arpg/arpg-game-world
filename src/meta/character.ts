@@ -123,7 +123,7 @@ export interface CharacterSave {
   /** TAMED COMPANIONS (the Hunter's bond): re-fielded beside the keeper on
    *  resume, downed state included. Optional → older saves load unchanged;
    *  a removed def simply releases that bond. */
-  companions?: { defId: string; level: number; skillId: string; downed?: boolean }[];
+  companions?: import('../engine/companionSpec').CompanionSaved[];
   /** THE THRONG (engine/throng.ts): the gathered rosters, one row per
    *  anchor skill — re-fielded beside the keeper on resume. Optional →
    *  older saves load unchanged; an unslotted anchor's row just drops
@@ -251,11 +251,7 @@ export function serializeCharacter(world: World): CharacterSave {
     companions: [
       ...world.actors
         .filter(a => a.companion && !a.dead && a.owner === hero && a.defId)
-        .map(a => ({
-          defId: a.defId!, level: a.level,
-          skillId: (a.sourceSkillId ?? '').replace('__companion:', ''),
-          ...(a.downed ? { downed: true } : {}),
-        })),
+        .map(a => world.companionBonds.saved(a)),
       // STASHED bonds (skill unlearned, pet slain-and-remembered) ride the
       // same list marked downed; restoreCompanions routes them back to the
       // stash on load since their skill isn't known.

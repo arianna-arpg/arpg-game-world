@@ -88,6 +88,9 @@ standalone Transgression wards, charge timing, debt recovery and control payoffs
 The Tamer/Beguiler/Falconer starting trees live in `src/data/bondStarterTrees.ts`;
 `docs/design/bond-starting-skill-trees.md` covers claims, sympathy, native doubles,
 madness, falcon contracts and owner-scoped cleanup.
+Tame Beast's expanded companion mechanics are in `src/data/tameBeastTree.ts`
+and `engine/companionBonds.ts`; `docs/design/tame-beast.md` covers capture,
+family arts, innate sympathy, cooperative combat, litter revival and persistence.
 
 Chest and gem-cache lists live in `src/data/containerloot.ts` and the existing
 `loottables.ts`; `docs/design/container-loot.md` documents the context rules,

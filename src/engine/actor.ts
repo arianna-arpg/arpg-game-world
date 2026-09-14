@@ -1819,6 +1819,9 @@ export class Actor {
   /** Revive dwell accrued beside this downed companion (any standing, idle
    *  ally seat feeds it — the seat-revive idiom, one accumulator). */
   companionReviveDwell = 0;
+  /** Tree-owned kennel slots survive respec without fielding excess pets. */
+  companionDormant = false;
+  companionReviveRemaining?: number;
   /** THE LIFELINE (borrowed unlife): while set, this actor stands only as
    *  long as the named actor does — World's lifeline sweep UNMAKES it
    *  (quietly: no bounty, drops, bursts, or rattles) the moment its keeper

@@ -1,3 +1,4 @@
+import { companionBondOf, type CompanionBondSpec } from './companionSpec';
 // ---------------------------------------------------------------------------
 // Skill definition schema.
 //
@@ -604,6 +605,7 @@ export function instanceTameMod(inst: SkillInstance): Required<TameModSpec> {
     slotsAdd += tm.slotsAdd ?? 0;
     allowRares = allowRares || !!tm.allowRares;
   }
+  slotsAdd += companionBondOf(inst).slotsAdd ?? 0;
   return { sureBelowAdd, wildChanceAdd, slotsAdd, allowRares };
 }
 
@@ -3294,7 +3296,11 @@ export function instanceUseCharges(inst: SkillInstance): SkillDef['useCharges'] 
  *  munition graft converts the EMPTY bank into its reload skill. One face
  *  per slot — first source wins (mirrors instanceChargeCost). */
 export function instanceConvert(inst: SkillInstance): ConvertSpec | undefined {
-  if (inst.def.convert) return inst.def.convert;
+  if (inst.def.convert) {
+    const companionBond = companionBondOf(inst);
+    return inst.def.convert.when === 'companionsFull' && companionBond.whistle
+      ? { ...inst.def.convert, skillId: companionBond.whistle.skillId } : inst.def.convert;
+  }
   for (const s of hostSockets(inst)) {
     if (s.def.munition) {
       return { when: 'chargesEmpty', skillId: s.def.munition.reloadSkillId ?? DEFAULT_RELOAD_SKILL };
@@ -3416,6 +3422,8 @@ export interface StatusEffect {
 
 /** Grants the caster a temporary named bundle of modifiers. */
 export interface BuffEffect {
+  /** Player-facing name for dynamically scoped buffs such as companion bonds. */
+  label?: string;
   type: 'buff';
   id: string;             // buffs with the same id refresh instead of stacking...
   duration: number;
@@ -4851,6 +4859,8 @@ function mergeTreeDomain(a: GroundDelivery['domain'], b: GroundDelivery['domain'
 }
 
 export interface SkillTreeNode {
+  /** Persistent beast-bond abilities; resolved additively and rebuilt on allocation changes. */
+  companionBond?: CompanionBondSpec;
   /** Node id — persisted on the instance (SkillInstance.treeNodes), so
    *  renaming an id orphans saved picks (they drop with a console note —
    *  the attunedForm idiom). */

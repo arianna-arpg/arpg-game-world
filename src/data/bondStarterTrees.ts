@@ -1,9 +1,9 @@
+import { TAME_BEAST_TREE } from './tameBeastTree';
 import type { SkillTreeSpec, TreeBuffPatch } from '../engine/skills';
 import { mod } from '../engine/stats';
 import { tree, n, body, type Node } from './skillTreeBuilder';
 
 const buff = (node: Node, id: string, patch: Omit<TreeBuffPatch, 'id'>): Node => ({ ...node, buffs: [{ id, ...patch }] });
-const graft = (node: Node, support: string): Node => ({ ...node, graft: { support, level: 1 } });
 
 /** Native bonds, hostile suggestions and owner-driven doubles. No claim is a
  * summon, no maddened enemy becomes an ally, and echoes still require a use. */
@@ -26,23 +26,7 @@ export const BOND_STARTER_TREES: Record<string, SkillTreeSpec> = {
       n('lasting_challenge', 'Lasting Challenge', '40% increased taunt duration.', [mod('effectDuration', 'increased', 0.4)])],
   ], n('goad_practice', 'Practiced Goad', '15% increased damage.', [mod('damage', 'increased', 0.15)])),
 
-  tame_beast: tree([
-    graft(n('gentle_claim', 'Gentle Claim', 'Gain Gentling Hand: claims are certain at 65% life, full-life chance rises to 55%, and rare beasts become eligible. Bosses remain forbidden.'), 'gentling_hand'),
-    [n('focused_claim', 'Focused Claim', '30% increased cast speed shortens the held claim.', [mod('castSpeed', 'increased', 0.3)]),
-      n('frugal_claim', 'Frugal Claim', '35% reduced mana cost for the claim.', [mod('manaCost', 'increased', -0.35)]),
-      n('returning_claim', 'Returning Claim', '40% increased claim cooldown recovery.', [mod('cooldownRecovery', 'increased', 0.4)])],
-    [graft(n('gentle_pour', 'Gentle Pour', 'Gain Alpha\'s Bond: flask and orb sympathy to bonded beasts gains 50% potency while this skill is seated.'), 'alphas_bond'),
-      graft(n('gentle_instinct', 'Gentle Instinct', 'Gain Pack Instinct: your charges echo to your bonded beasts, subject to their own caps.'), 'pack_instinct'),
-      graft(n('gentle_return', 'Gentle Return', 'Gain Reciprocal Bond: 40% of a bonded beast\'s mending returns to you through the sympathy rules.'), 'reciprocal_bond')],
-  ], [
-    n('swift_claim', 'Swift Claim', '70% more cast speed shortens the held claim. Pay 40% more mana. Keep the native eligibility and chance curve.', [mod('castSpeed', 'more', 0.7), mod('manaCost', 'more', 0.4)]),
-    [n('repeat_claim', 'Repeat Claim', '50% increased claim cooldown recovery.', [mod('cooldownRecovery', 'increased', 0.5)]),
-      n('light_claim', 'Light Claim', '35% reduced claim mana cost.', [mod('manaCost', 'increased', -0.35)]),
-      n('steady_claim', 'Steady Claim', '30% increased cast speed shortens the held claim further.', [mod('castSpeed', 'increased', 0.3)])],
-    [graft(n('swift_instinct', 'Swift Instinct', 'Gain Pack Instinct: your charges echo to your bonded beasts, subject to their own caps.'), 'pack_instinct'),
-      graft(n('swift_pour', 'Swift Pour', 'Gain Alpha\'s Bond: flask and orb sympathy to bonded beasts gains 50% potency while seated.'), 'alphas_bond'),
-      graft(n('swift_return', 'Swift Return', 'Gain Reciprocal Bond: 40% of a bonded beast\'s mending returns to you through the sympathy rules.'), 'reciprocal_bond')],
-  ], n('claim_practice', 'Practiced Claim', '12% increased cast speed for the held claim.', [mod('castSpeed', 'increased', 0.12)])),
+  tame_beast: TAME_BEAST_TREE,
 
   stalk: tree([
     buff(n('sheltered_stalk', 'Sheltered Stalk', 'Keep the native hush. While stalking, take 20% less damage and regenerate 3 life per second.'), 'stalk', { mods: [mod('damageTaken', 'more', -0.2), mod('lifeRegen', 'flat', 3)] }),
