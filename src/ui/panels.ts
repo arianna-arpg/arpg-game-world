@@ -919,7 +919,8 @@ export class UI {
     bindTooltips(this.oracleMenu, (el, ext) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext, this.panelSeat(this.oracleMenu)) : null, { extend: true });
     bindTooltips(this.vendorMenu, (el, ext) =>
       el.dataset.tip === 'item' ? this.vendorWareTooltip(Number(el.dataset.itemUid), ext, el.dataset.vware)
-        : el.dataset.tip === 'vgem' ? this.vendorGemTooltip(el.dataset.vgem!) : null,
+        : el.dataset.tip === 'vgem' ? this.vendorGemTooltip(el.dataset.vgem!, ext)
+        : el.dataset.tip === 'gem-overview' ? this.gemOverviewTooltip(el.dataset.gemKind, el.dataset.gemId, this.panelSeat(this.vendorMenu)) : null,
     { extend: true });
     bindTooltips(this.classSelect, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!) : null);
     // THE MU CARD (data/mu.ts) speaks the same chip tongue: its skill chips
@@ -3893,7 +3894,7 @@ export class UI {
    *  time — kind label per walk-1, rarity/level/tags, the price, and the
    *  reserve/lock state. The glass tile is too small to speak; this card
    *  is its voice (the old gem-tab list rows retired with the fold). */
-  private vendorGemTooltip(key: string): TooltipContent | null {
+  private vendorGemTooltip(key: string, extended = false): TooltipContent | null {
     const [vid, idxs] = key.split(':');
     const v = VENDORS.find(x => x.id === vid);
     if (!v) return null;
@@ -3901,22 +3902,33 @@ export class UI {
     const stock = v.stock(world);
     const e = stock[Number(idxs)];
     if (!e || e.kind === 'item') return null;
+    const buyer = this.panelSeat(this.vendorMenu);
+    const overview = this.gemOverviewTooltip(e.kind, e.kind === 'skill' ? e.inst.def.id : e.gem.def.id, buyer);
+    if (!overview) return null;
     const lines: string[] = [];
+    let wide = false;
     if (e.kind === 'skill') {
       const r = SKILL_RARITIES[e.inst.rarity ?? 'common'];
-      lines.push(`<div style="color:#9a94a8;font-size:10px">Skill Memory · <span style="color:${r.color}">${r.label}</span> · Lv ${e.inst.level} · ${'◆'.repeat(r.sockets)}</div>`);
-      lines.push(`<div style="color:#8a8678;font-size:10px">${e.inst.def.tags.join(' · ')}</div>`);
+      lines.push(`<div style="color:#9a94a8;font-size:10px">Skill Memory · <span style="color:${r.color}">${r.label}</span> · Lv ${e.inst.level} · ${e.inst.sockets.length} socket${e.inst.sockets.length === 1 ? '' : 's'}</div>`);
+      lines.push(overview.description);
+      const preview = previewSkill(buyer.actor, e.inst);
+      lines.push(this.previewRowsHtml(preview.rows, extended));
+      wide = extended && preview.hasDetail;
+      const socketed = e.inst.sockets.filter(s => s !== null);
+      if (socketed.length) lines.push(`<div style="color:#b8a2e8;font-size:10px">Socketed: ${socketed.map(s => `${s.def.name} L${s.level}`).join(' · ')}</div>`);
       // THE BUYER'S READ (2026-09-11, her ask): the attribute gates the
       // counter glass kept quiet — judged against the seat AT the counter
       // (the couch lens), in the bag card's own colours, with the engine's
       // one shortfall line when the build falls short. A player knows
       // whether the gem will cast BEFORE the essence changes hands.
-      const buyer = this.panelSeat(this.vendorMenu);
-      lines.push(this.requirementsLine(e.inst.def, buyer));
       const short = world.reqShortfall(e.inst.def.id, buyer);
       if (short) lines.push(`<div style="color:#d05050;font-size:10px">You cannot use this yet — ${esc(short)}. It can still be bought and kept.</div>`);
     } else {
       lines.push(`<div style="color:#9a94a8;font-size:10px">Support Memory · Lv ${e.gem.level}</div>`);
+      lines.push(overview.description);
+      if (e.gem.def.rollBase) {
+        lines.push(...veinLines(e.gem.def.rollBase, e.gem.rolled).map(line => `<div style="color:#c8b06a">◈ ${line}</div>`));
+      }
     }
     lines.push(...this.vendorWareFooter(key));
     const name = e.kind === 'skill' ? e.inst.def.name : e.gem.def.name;
@@ -3925,6 +3937,23 @@ export class UI {
       title: `<span style="color:${col}">${name}</span>`,
       description: lines.join(''),
       meta: e.kind === 'skill' ? 'skill' : 'support',
+      wide,
+    };
+  }
+
+  /** Definition-level card shared by shelf gems and commission choices. Reads
+   *  the catalog directly: browsing never requires owning/learning the gem,
+   *  and an unfilled order never pretends to have a rolled level or sockets. */
+  private gemOverviewTooltip(kind: string | undefined, id: string | undefined, seat: Seat): TooltipContent | null {
+    if (!id) return null;
+    const skill = kind === 'skill' ? SKILLS[id] : undefined;
+    const def = skill ?? (kind === 'support' ? SUPPORTS[id] : undefined);
+    if (!def) return null;
+    return {
+      title: `<span style="color:${def.color}">${def.name}</span>`,
+      description: `<div>${def.description}</div>` + (skill
+        ? `<div style="color:#8a8678;font-size:10px">${skill.tags.join(' · ')}</div>${this.requirementsLine(skill, seat)}` : ''),
+      meta: skill ? 'Skill Memory' : 'Support Memory',
     };
   }
 
@@ -6160,7 +6189,8 @@ export class UI {
       const why = r.count < need ? `${r.count}/${need} found`
         : r.odds <= 0 ? 'not rollable here yet'
         : `${oddsText(r.odds)} each restock`;
-      return `<div style="display:flex;align-items:center;gap:6px;margin:1px 0;${ready ? '' : 'opacity:0.55'}">
+      return `<div data-tip="gem-overview" data-gem-kind="${r.kind}" data-gem-id="${esc(r.id)}"
+        style="display:flex;align-items:center;gap:6px;margin:1px 0;${ready ? '' : 'opacity:0.55'}">
         <span style="color:${r.color};flex:1">${esc(r.name)}</span>
         <span style="font-size:10px;color:#8a8678">${r.kind === 'skill' ? 'skill' : 'support'} · ${why}</span>
         <button data-vcomm-pick="${v.id}:${r.kind}:${r.id}" ${ready ? '' : 'disabled'}>Commission</button>
@@ -6378,7 +6408,7 @@ export class UI {
           })()} each restock)`;
         return `
           <div style="margin-top:8px;border-top:1px dashed ${v.accent}55;padding-top:6px;font-size:11px">
-            ✒ Standing order: ${status}
+            ✒ Standing order: ${c ? `<span data-tip="gem-overview" data-gem-kind="${c.kind}" data-gem-id="${esc(c.id)}">${status}</span>` : status}
             ${c ? `<button data-vcomm-cancel="${v.id}" style="margin-left:6px">Withdraw</button>` : ''}
             <button data-vcomm-open="${v.id}" style="margin-left:6px">${c ? 'Change…' : 'Place an order…'}</button>
             ${this.vendorCommOpen === v.id ? this.commissionPickerHtml(world, v) : ''}

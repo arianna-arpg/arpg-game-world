@@ -41,6 +41,26 @@ inventory. Another player's modes are untouched. Any pending stack-sale prompt
 owned by the cancelled seat is dismissed without selling. New salvage hosts join
 through the same control binding; cancellation needs no additional host branch.
 
+## Vendor and commission hover cards
+
+Shelf skill/support cards include the catalog's effect description in both
+compact and full tooltip modes. Skill cards use the actual sale instance for
+level, socket count, socketed supports and the shared skill preview. Support
+cards include their fixed rolled lines through `veinLines`. Prices, reservations
+and requirements retain their existing live reads against the vendor's owner.
+
+Commission picker rows and standing-order names share `gemOverviewTooltip` with
+the shelf. These definition-level cards require neither owning nor learning the
+gem, work on ineligible choices and after search rebuilds, and make no claims
+about the eventual roll. Their `data-tip` attributes use the existing delegated
+hover system, including the controller pointer's mouse events.
+
+Run `npx electron balance/vendor-tooltips-ui.cjs` after building to verify real
+hover events, both detail preferences, actual support rolls, commission search
+and eligibility, standing orders, restocked wares, guest requirements and no
+purchase/order mutations from browsing. Reports and screenshots use the same
+isolated `balance/reports/` convention as the inventory regression.
+
 Verification: `npm run check`, `npm run build`, `npm run smoke`, then
 `npx electron balance/inventory-ui.cjs`. The latter runs the real game in a hidden
 Electron window with isolated saves and profile under `balance/reports/`. It
