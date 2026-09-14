@@ -1968,6 +1968,7 @@ function hostTail(dt: number): void {
   if (uiRefreshTimer <= 0) {
     uiRefreshTimer = 0.5;
     ui.refreshCharSheet();
+    ui.refreshInventory(true);
     ui.refreshMap();
   }
 
@@ -2147,12 +2148,12 @@ function clientApplyAndRender(dt: number): void {
   // no-op when their panel is closed, so this is cheap.
   if (clientMetaDirty) {
     clientMetaDirty = false;
-    ui.refreshCharSheet(); ui.refreshInventory(); ui.refreshTree();
+    ui.refreshCharSheet(); ui.refreshInventory(true); ui.refreshSkillTree(); ui.refreshTree();
   }
   // Resource/stat values on the char sheet + map drift every frame even with no
   // meta change — keep them live on the same 0.5s throttle the host uses.
   uiRefreshTimer -= dt;
-  if (uiRefreshTimer <= 0) { uiRefreshTimer = 0.5; ui.refreshCharSheet(); ui.refreshMap(); }
+  if (uiRefreshTimer <= 0) { uiRefreshTimer = 0.5; ui.refreshCharSheet(); ui.refreshInventory(true); ui.refreshMap(); }
   // THE CLIENT'S CARAVANNER: a render shell runs no sim, so the engine's dwell
   // gates never tick here — drive the ONE whose answer is a pure INTENT the host
   // performs (the escort is a client's only road between level bands, and the

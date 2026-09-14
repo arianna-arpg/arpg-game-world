@@ -614,7 +614,10 @@ export class UI {
     lockHintHtml: () => this.lockHintHtml(),
     closeGlyphHtml: () => this.closeGlyphHtml(),
     ownDocked: (el) => this.panelSeatIds.set(el, this.panelSeat(this.inventory).id),
-    attachMove: (el) => attachPanelMove(el, { onMove: () => this.folioStrip.update() }),
+    attachMove: (el) => {
+      attachPanelMove(el, { onMove: () => this.folioStrip.update() });
+      el.addEventListener('pointerdown', () => this.pressHeld.add(el), { capture: true });
+    },
     bindItemTooltips: (el) => bindTooltips(el, (t, ext) =>
       t.dataset.tip === 'item' ? this.itemTooltip(Number(t.dataset.itemUid), ext, this.panelSeat(this.inventory), null) : null,
     { extend: true }),
@@ -1055,7 +1058,7 @@ export class UI {
     // auto-refresh rebuilds, capture-phase so no child handler can hide a
     // press from it. Release listens on the WINDOW — pointer captures retarget
     // events but every path still runs through here — so the hold always ends.
-    for (const el of [this.charSheet, this.worldMap]) {
+    for (const el of [this.charSheet, this.worldMap, this.inventory, this.buildPanel]) {
       el.addEventListener('pointerdown', () => { this.pressHeld.add(el); }, { capture: true });
     }
     const releasePress = (): void => { this.pressHeld.clear(); };
@@ -1131,7 +1134,7 @@ export class UI {
    *  of tearing it out under the cursor. Returns whether the DOM was
    *  (re)built, so callers re-wire handlers exactly when new nodes exist. */
   private setPanelHtml(el: Element, html: string): boolean {
-    if (this.panelHtml.get(el) === html && el.childElementCount > 0) return false;
+    if (this.panelHtml.get(el) === html && (el.childElementCount > 0 || html === '')) return false;
     this.panelHtml.set(el, html);
     el.innerHTML = html;
     return true;
@@ -4019,12 +4022,16 @@ export class UI {
     };
   }
 
-  refreshInventory(): void {
-    this.refreshSkillTree(); // THE PULL-OUT follows the drawer's beat (a no-op when closed)
+  /** Automatic reads share the live-panel cadence. Compare each surface's
+   *  markup separately, and defer while a press could lose its click target.
+   *  Explicit actions retain their immediate refresh (including skill trees). */
+  refreshInventory(live = false): void {
+    if (!live) this.refreshSkillTree();
     if (!this.inventoryOpen) return;
-    // (No mid-drag freeze: the fabric's gestures ride data attributes that
-    // survive innerHTML rebuilds — a re-render mid-carry re-earns its marks
-    // on the next beat. The old native drag needed the world to hold still.)
+    if (live && [this.inventory, this.buildPanel, ...this.containerPane.dockedEls()]
+      .some(el => this.pressHeld.has(el))) return;
+    // Explicit refreshes and click-lift carries still ride the drag fabric:
+    // its data attributes survive rebuilds and re-earn marks on the next beat.
     const world = this.getWorld();
     const invSeat = this.panelSeat(this.inventory);
     const m = invSeat.meta;
@@ -4219,17 +4226,17 @@ export class UI {
           border:1px solid #4a3a5a;border-radius:6px 2px 6px 6px;padding:8px 12px;box-shadow:0 3px 14px rgba(0,0,0,0.6)">
           ${ESSENCE_IDS.map(id => {
             const e = ESSENCES[id];
-            const n = this.getWorld().meta.essences[id] ?? 0;
+            const n = m.essences[id] ?? 0;
             return `<div style="font-size:11px;color:${e.color};margin:2px 0" title="${e.label}">${e.glyph} ${n} <span style="color:#6a6478;font-size:9px">${e.label.replace(' Essence', '')}</span></div>`;
           }).join('')}
           ${(() => {
             // VESTIGES ride the satchel too — stackable socket material.
             // Drag one onto a socket pip to inlay it (consumed on use).
-            const owned = VESTIGE_LIST.filter(v => (this.getWorld().meta.vestiges[v.id] ?? 0) > 0);
+            const owned = VESTIGE_LIST.filter(v => (m.vestiges[v.id] ?? 0) > 0);
             if (!owned.length) return '';
             return `<div style="border-top:1px dashed #4a3a5a;margin-top:6px;padding-top:5px">
               ${owned.map(v => {
-                const n = this.getWorld().meta.vestiges[v.id];
+                const n = m.vestiges[v.id];
                 return `<div data-drag="vestige:${v.id}" data-tip="vestige" data-vestige-id="${v.id}"
                   style="font-size:11px;color:${v.color};margin:2px 0;cursor:var(--cursor-grab, grab)">${v.glyph} ${n}
                   <span style="color:#6a6478;font-size:9px">${v.name.split(',')[0]}</span></div>`;
@@ -4346,20 +4353,25 @@ export class UI {
     // overflow-y would otherwise compute overflow-x to auto and grow a
     // phantom horizontal bar under the fold.
     const frameMin = Math.ceil(dollRowsFor(EQUIP_SLOTS.filter(s => s.enabled && DOLL_SEATS[s.id])) * 34) + 48;
-    this.buildPanel.innerHTML = drawer;
+    if (!live) {
+      this.panelHtml.delete(this.inventory);
+      this.panelHtml.delete(this.buildPanel);
+    }
+    const buildChanged = this.setPanelHtml(this.buildPanel, drawer);
     this.panelSeatIds.set(this.buildPanel, this.panelSeat(this.inventory).id);
-    this.containerPane.renderAll(); // THE CONTAINER DRAWERS follow the bag's beat (ui/containerPane.ts)
+    this.containerPane.renderAll(live);
     this.syncBuildPanels();
-    this.inventory.innerHTML = `${drawerHandle}${satchel}${this.closeGlyphHtml()}<h2>Inventory</h2>
-      <div class="inv-scroll" style="min-height:min(${frameMin}px, calc(100vh - 240px));max-height:calc(100vh - 240px);overflow-y:auto;overflow-x:hidden">${body}</div>`;
+    const inventoryChanged = this.setPanelHtml(this.inventory, `${drawerHandle}${satchel}${this.closeGlyphHtml()}<h2>Inventory</h2>
+      <div class="inv-scroll" style="min-height:min(${frameMin}px, calc(100vh - 240px));max-height:calc(100vh - 240px);overflow-y:auto;overflow-x:hidden">${body}</div>`);
     const scrollEl = this.inventory.querySelector<HTMLElement>('.inv-scroll');
     if (scrollEl) scrollEl.scrollTop = prevScroll;
     const buildEl = this.buildPanel.querySelector<HTMLElement>('.build-scroll');
     if (buildEl) buildEl.scrollTop = prevBuildScroll;
-    this.wireInventory();
-    this.fitBuildRail(); // THE RAIL FIT LAW reads the rail just rendered above
+    if (inventoryChanged) this.wireInventory();
+    if (buildChanged && this.buildFlapOpen) this.wireLearnedList(this.buildPanel, () => this.refreshInventory());
+    if (inventoryChanged) this.fitBuildRail();
     this.paintLockHold(); // a re-render mid-hold resumes the ring where the clock stands
-    this.paintPortraitsIn(this.buildPanel); // the build flap's Spectre chip
+    if (buildChanged) this.paintPortraitsIn(this.buildPanel); // the build flap's Spectre chip
     this.applyBreakChrome();
   }
 
@@ -4397,12 +4409,8 @@ export class UI {
       this.toggleTree(this.panelSeat(this.inventory).id);
       this.refreshInventory();
     });
-    if (this.buildFlapOpen) {
-      this.wireLearnedList(this.buildPanel, () => this.refreshInventory());
-    }
-
     const salv = this.salvageLaneFor(this.inventory);
-    const seatMeta = this.panelSeat(this.inventory).meta;
+    const seatMeta = () => this.panelSeat(this.inventory).meta;
     // THE KEEPER'S MARK, HELD (her ruling 2026-09-05): button 2 on anything
     // carried — bag tiles (gear AND gem wrappers), worn chips; hammer up or
     // down — is TWO verbs on one button, split by time (LOCK_HOLD_CFG):
@@ -4429,7 +4437,7 @@ export class UI {
         && this.getSettings().padBinds.itemLock === PAD_CFG.pointer.confirm;
       if ((ev.button !== 2 && !pad) || dndCarried()) return;
       const uid = Number(el.dataset.lockUid);
-      const it = findCarried(seatMeta, uid)?.item; // bag, doll, or a side board
+      const it = findCarried(seatMeta(), uid)?.item; // bag, doll, or a side board
       if (!it) return;
       if (!pad) { ev.preventDefault(); ev.stopPropagation(); }
       this.beginLockHold(ev, uid, this.panelSeatIds.get(this.inventory), pad);
@@ -4451,7 +4459,7 @@ export class UI {
       q<HTMLElement>('[data-salv-uid]').forEach(el => el.addEventListener('click', e => {
         if (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey || dndCarried()) return;
         const uid = Number(el.dataset.salvUid);
-        const item = seatMeta.items.find(i => i.uid === uid);
+        const item = seatMeta().items.find(i => i.uid === uid);
         if (!item || item.locked) return; // pip + tooltip explain the refusal
         // THE SALE PROMPT: a STACKED pouch under the wheel asks first (the
         // whole stack sells in one blow); the prompt dispatches the intent.
@@ -4477,13 +4485,13 @@ export class UI {
       const uid = Number(el.dataset.itemUid);
       el.addEventListener('click', (e) => {
         if (!e.shiftKey) return; // plain clicks belong to the fabric's lift
-        if (seatMeta.items.find(i => i.uid === uid)?.locked) return; // the mark holds (the engine refuses too)
+        if (seatMeta().items.find(i => i.uid === uid)?.locked) return; // the mark holds (the engine refuses too)
         world.requestMeta({ t: 'dropItem', uid });
         this.refreshInventory();
       });
       el.addEventListener('dblclick', () => {
         if (salv) return; // one verb under an armed lane — the click salvaged it
-        const item = seatMeta.items.find(i => i.uid === uid);
+        const item = seatMeta().items.find(i => i.uid === uid);
         // ONE USE TABLE (bagUseVerb): equip / learn / open the Recall — the
         // right-TAP's twin, so the two gestures can never disagree on what a
         // use does (the seat carries through: the couch lens).
@@ -4495,7 +4503,7 @@ export class UI {
       const slot = el.dataset.doll!;
       el.addEventListener('click', (e) => {
         if (!e.shiftKey) return; // plain click = the fabric's lift (or a drop)
-        const worn = this.getWorld().meta.equipped[slot];
+        const worn = seatMeta().equipped[slot];
         if (!worn || worn.locked) return; // the mark holds a worn piece too
         world.requestMeta({ t: 'dropItem', uid: worn.uid });
         this.refreshInventory();

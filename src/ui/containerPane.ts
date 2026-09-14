@@ -101,6 +101,7 @@ export class ContainerPane {
   private readonly open = new Set<string>();
   /** The minted roots, by container id. */
   private readonly panels = new Map<string, HTMLElement>();
+  private readonly rendered = new WeakMap<HTMLElement, string>();
 
   constructor(private readonly host: ContainerPaneHost) {}
 
@@ -223,8 +224,8 @@ export class ContainerPane {
   }
 
   /** Re-render every open drawer (the inventory's beat). */
-  renderAll(): void {
-    for (const id of this.open) if (this.isOpen(id)) this.render(id);
+  renderAll(live = false): void {
+    for (const id of this.open) if (this.isOpen(id)) this.render(id, live);
   }
 
   /** Mint a drawer's root on first open: the skill-tree pane idiom — a
@@ -253,7 +254,7 @@ export class ContainerPane {
   }
 
   /** One drawer's face: the header, the board, the return strip, the hints. */
-  private render(id: string): void {
+  private render(id: string, live = false): void {
     const def = CONTAINERS[id];
     const board = def ? containerBoard(def) : null;
     if (!def || !board) return;
@@ -285,7 +286,7 @@ export class ContainerPane {
     const tiles = held.map(i => (i.x !== undefined && i.y !== undefined) ? this.tileHtml(i, i.x, i.y) : '').join('');
     const sealed = full.cells - board.cells;
 
-    el.innerHTML = `${this.host.closeGlyphHtml()}<h2>${def.glyph} ${esc(def.label)}</h2>
+    const html = `${this.host.closeGlyphHtml()}<h2>${def.glyph} ${esc(def.label)}</h2>
       ${reliquaryLesson ? `<div style="padding:10px;margin-bottom:10px;border:1px solid #9b8055;border-radius:5px;color:#e4cb97;font-size:12px;line-height:1.6">
         <strong>A place for the unremembered</strong><br>
         A charm carried in your pack is silent. Drag your reward onto the glowing seat to wake its power,
@@ -309,6 +310,11 @@ export class ContainerPane {
         Sealed seats open through the Vault.</span>
       </div>
       <div style="margin-top:6px;color:#8a8678;font-size:10px">${this.host.lockHintHtml()}</div>`;
+    if (live && this.rendered.get(el) === html && el.childElementCount > 0) return;
+    this.rendered.set(el, html);
+    const scroll = el.scrollTop;
+    el.innerHTML = html;
+    el.scrollTop = scroll;
     el.querySelector<HTMLButtonElement>('[data-reliquary-lesson-seat]')?.addEventListener('click', ev => {
       const uid = Number((ev.currentTarget as HTMLButtonElement).dataset.reliquaryLessonSeat);
       this.host.world().requestMeta({ t: 'containerPlace', container: id, uid });
