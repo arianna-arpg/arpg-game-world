@@ -44,9 +44,10 @@ import { unreadPayloadRows } from '../data/graftReadSites';
 import {
   SUPPORT_PAYLOAD_FIELDS, crewSkillsServed, effectiveSkillLevel, mechanismHolds,
   makeSkillInstance, minionSeatBoundFields, summonCrewOf, supportFitsInst,
-  supportRidesMinions,
+  supportRidesMinions, instanceBaseTags, grantedTags,
   type SkillDef, type SupportDef,
 } from '../engine/skills';
+import { veinMechanisms } from '../engine/supportbase';
 import type { Modifier, SkillTag } from '../engine/stats';
 import { CLASSES } from '../data/classes';
 import { gemLevelAt } from './data/builds';
@@ -2153,11 +2154,13 @@ export function explainFit(def: SkillDef, sup: SupportDef, treeNodes?: string[])
   const inst = makeSkillInstance(def, 1, 3);
   if (treeNodes?.length) inst.treeNodes = treeNodes; // @branch hosts explain allocated
   const host = supportFitsInst(sup, inst);
-  const tags = def.tags as readonly string[];
+  const tags: readonly string[] = [...instanceBaseTags(inst), ...grantedTags(inst)];
   const requires = (sup.requiresTags ?? []).map(t => ({ tag: t as string, present: tags.includes(t) }));
   const excluded = (sup.excludeTags ?? []).filter(t => tags.includes(t)).map(t => t as string);
   const openGate = !(sup.requiresTags?.length);
-  const mechanisms = (sup.requiresMechanisms ?? []).map(m => ({
+  const mechanisms = [...new Set([
+    ...(sup.requiresMechanisms ?? []), ...(sup.rollBase ? veinMechanisms(sup.rollBase) : []),
+  ])].map(m => ({
     mechanism: m,
     // The parameterized resolver ('affliction:bleed', 'status:power') —
     // the same truth the socket gate runs.

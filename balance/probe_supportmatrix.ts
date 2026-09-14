@@ -33,6 +33,7 @@ import { SUPPORTS } from '../src/data/supports';
 import { MONSTERS } from '../src/data/monsters';
 import { unreadPayloadRows } from '../src/data/graftReadSites';
 import { mod } from '../src/engine/stats';
+import { skillDamageBands } from '../src/engine/damage';
 import {
   SUPPORT_PAYLOAD_FIELDS, instanceMods, makeSkillInstance, mechanismHolds,
   skillContextTags, supportFitsInst,
@@ -41,7 +42,7 @@ import type { SkillDef, SupportDef } from '../src/engine/skills';
 import {
   RESIST_DUMMY_BY_TYPE, ablationUnits, classifyExpression, compatCensus, costFunctionSupport,
   deepProbePair, explainFit, explainPair, fieldReferenceId, hostExpressionCensus,
-  makeProbeSession, pairKey, pairShapeFor, maskSupportUnit, probeKindFor, probeOrder,
+  hostDefOf, hostTreeNodes, makeProbeSession, pairKey, pairShapeFor, maskSupportUnit, probeKindFor, probeOrder,
   probePair, probePolicyFor, probeScenario, rackDummyFor, rangeRigFor, runCompatMatrix, shapeKey,
   soloSupportUnit,
   type CensusResult, type CensusRow, type HostExpressionBaseline, type PairDeepResult,
@@ -67,7 +68,7 @@ bootSimEngine();
   const census = compatCensus();
   let fitMismatch = 0, disagrees = 0;
   for (const row of census.rows) {
-    const x = explainFit(SKILLS[row.skillId], SUPPORTS[row.supportId]);
+    const x = explainFit(hostDefOf(row.skillId)!, SUPPORTS[row.supportId], hostTreeNodes(row.skillId));
     if (x.fit !== row.fit) fitMismatch++;
     if (!x.agrees) disagrees++;
   }
@@ -817,9 +818,11 @@ check('E14 synthetic fixtures cleaned out of the registry',
   // wakeflames nearby on its own clock; the magnet scoops them into the
   // bank — the rite mourns alone. (Seeded: deterministic per seed.)
   {
+    seedGlobalRandom(0x1a02);
     const w = makeSimWorld('juggernaut', 0x1a02);
     applyBuild(w, {
       id: 'rig_i2', classId: 'juggernaut', level: 12,
+      attributes: { strength: 40, willpower: 40 },
       skills: [{ id: 'requiem', level: 3 }],
     } as BuildSpec, 7);
     step(w, 60);
@@ -894,6 +897,7 @@ check('E14 synthetic fixtures cleaned out of the registry',
       const w = makeSimWorld('juggernaut', 0x1a06);
       applyBuild(w, {
         id: 'rig_i6', classId: 'juggernaut', level: 12,
+        attributes: { dexterity: 40 },
         skills: [{
           id: 'dash', level: 3,
           ...(withGem ? { supports: [{ id: 'closing_instinct', level: 1 }] } : {}),
@@ -923,6 +927,7 @@ check('E14 synthetic fixtures cleaned out of the registry',
       const w = makeSimWorld('sorcerer', 0x1a07);
       applyBuild(w, {
         id: 'rig_i7', classId: 'sorcerer', level: 12,
+        attributes: { intelligence: 40, willpower: 40 },
         skills: [{
           id: 'frost_wall', level: 3,
           ...(withGem ? { supports: [{ id: 'unmoored', level: 1 }] } : {}),
@@ -976,7 +981,7 @@ check('E14 synthetic fixtures cleaned out of the registry',
     requiresTags: ['spell'], mods: [mod('damage', 'more', 1.0)], weight: 0,
   } as (typeof SUPPORTS)[string];
   try {
-    const raise = (withGem: boolean): { dealt: number; scale?: number; leak: boolean } => {
+    const raise = (withGem: boolean): { dealt: number; damage: number; scale?: number; leak: boolean } => {
       // SELF-CONTAINED STREAM (the reseed-per-world trap): the A/B fold read
       // below aggregates ~6s of rolled totem hits — upstream rigs' RNG
       // consumption (which shifts whenever CONTENT grows, e.g. new affix
@@ -985,6 +990,7 @@ check('E14 synthetic fixtures cleaned out of the registry',
       const w = makeSimWorld('sorcerer', 0x1b01);
       applyBuild(w, {
         id: 'rig_j', classId: 'sorcerer', level: 12,
+        attributes: { intelligence: 40, willpower: 40 },
         skills: [{
           id: 'flame_totem', level: 3,
           ...(withGem ? { supports: [{ id: GEM_ID, level: 1 }] } : {}),
@@ -1003,9 +1009,14 @@ check('E14 synthetic fixtures cleaned out of the registry',
       const fwd = totem?.construct?.castInst?.sockets.find(s => s?.def.id === GEM_ID);
       const parentMods = totem?.sheet.getSourceMods('parentSkill') ?? [];
       const leak = parentMods.some(m => m.stat === 'damage' && m.kind === 'more');
+      // Compare the actual minted child's damage fold, independent of
+      // crit/burn timing during the live window. A second forwarded copy
+      // would inflate this ratio just as it inflates a dealt packet.
+      const damage = totem?.construct?.castInst
+        ? skillDamageBands(totem, totem.construct.castInst).total.lo : 0;
       const l0 = z.life;
       step(w, 6);
-      return { dealt: l0 - z.life, scale: fwd?.forwardScale, leak };
+      return { dealt: l0 - z.life, damage, scale: fwd?.forwardScale, leak };
     };
     const bare = raise(false);
     const gem = raise(true);
@@ -1013,9 +1024,13 @@ check('E14 synthetic fixtures cleaned out of the registry',
       gem.scale !== undefined && Math.abs(gem.scale - 0.7) < 1e-9, `scale=${gem.scale}`);
     check('J2 the parentSkill leak is dead (no second unpriced damage copy on the sheet)',
       !gem.leak);
-    const ratio = gem.dealt / Math.max(1, bare.dealt);
-    check('J3 the priced forward folds ONCE: +100% more lands as ~×1.7, never the old double-fold',
-      ratio > 1.45 && ratio < 1.95, `bare=${bare.dealt.toFixed(0)}, gem=${gem.dealt.toFixed(0)}, ×${ratio.toFixed(2)}`);
+    const ratio = gem.damage / Math.max(1, bare.damage);
+    check('J3 the priced forward folds ONCE: +100% more scales the damage band by exactly ×1.7',
+      bare.damage > 0 && Math.abs(ratio - 1.7) < 1e-9,
+      `bare=${bare.damage.toFixed(2)}, gem=${gem.damage.toFixed(2)}, ×${ratio.toFixed(2)}`);
+    check('J3b both totems deliver live damage and the supported totem deals more',
+      bare.dealt > 0 && gem.dealt > bare.dealt,
+      `bare=${bare.dealt.toFixed(0)}, gem=${gem.dealt.toFixed(0)}`);
   } finally {
     delete SUPPORTS[GEM_ID];
   }
