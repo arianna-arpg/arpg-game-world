@@ -84,6 +84,31 @@ its ultimate explanation. No final boss or endgame completion is claimed here.
 
 ## Verification and extension
 
+### Playing the foundation
+
+Start or continue a character and open the Quest Journal in Lastlight. Worlds
+without Odyssey state receive their roster on the first active world update;
+resuming a world with Odyssey state retains its existing roster and progress.
+The Quartermaster reveals campaign leads. Faction kills and visiting an operation
+also reveal routes. The introductory commander is ready around level 14; it does
+not count as one of the four leaders. Leader readiness advances through 23, 45,
+60 and 75 as leaders fall, with two Vocation points per victory.
+
+To encounter Bandit pressure, Bandits must be selected and survive at least one
+leader victory. Explore their territory and watch for the messenger warning.
+To encounter Goblin sieges, Goblins must be selected and survive two victories.
+The first siege then takes about twelve minutes of active world time to muster,
+followed by a ninety-second warning and a four-minute defense window. Completing
+the Goblin operation weakens attacks; defeating their leader ends them.
+
+For the first playthrough, note whether the next objective is clear, how long
+travel and preparation take relative to leveling, whether scouts can be noticed
+and intercepted fairly, and whether siege interruptions leave enough expedition
+time. Record character level, selected factions, defeated order and any completed
+operations with feedback. These conditions explain the pressure being tested.
+
+### Automated coverage
+
 The Odyssey probe exercises deterministic frozen selection, account release,
 run-only acts, real objective payouts, banked points, preparation persistence,
 save/reload, scout sight/escape/interception, report response, and town defense.
