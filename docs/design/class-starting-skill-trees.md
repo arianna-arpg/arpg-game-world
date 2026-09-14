@@ -101,13 +101,16 @@ focused Packed Workshop relocation support after its overlap audit.
 The [bastion batch](bastion-starting-skill-trees.md) completes Sentinel, Warlord
 and Wallwright, adds recipient modifiers to native auras, and makes tree
 retirement clear active aura sources and reservations immediately.
+The [Runeweaver batch](runeweaver-starting-skill-trees.md) repairs its level-one
+fuel loop and completes Invocation, Rune of Power and Warp.
+The [Resonator batch](resonator-starting-skill-trees.md) completes Tuning Strike,
+Shatterchord and Purity of Elements with explicit tone and aura investments.
 
 Completed starting bars: Warrior, Magician, Rogue, Berserker, Sorcerer,
 Ranger, Guardian, Summoner, Juggernaut, Pyromancer, Assassin, Necromancer,
 Cleric, Blademaster, Brawler, Trapper, Skald, Chronomancer, Hivecaller,
-Breaker, Vanguard, Lancer, Swashbuckler, Matador, Sharper, Sentinel, Warlord
-and Wallwright.
+Breaker, Vanguard, Lancer, Swashbuckler, Matador, Sharper, Sentinel, Warlord,
+Wallwright, Runeweaver and Resonator.
 
-Remaining: Tamer, Beguiler, Ascetic, Flagellant, Falconer, Firebrand,
-Runeweaver and Resonator. Keep completing
+Remaining: Tamer, Beguiler, Ascetic, Flagellant, Falconer and Firebrand. Keep completing
 these whole starting bars before the mastery swap audit and alternate trees.

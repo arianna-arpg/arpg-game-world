@@ -1,3 +1,5 @@
+import { RUNEWEAVER_STARTER_TREES } from './runeweaverStarterTrees';
+import { RESONATOR_STARTER_TREES } from './resonatorStarterTrees';
 import { BASTION_STARTER_TREES } from './bastionStarterTrees';
 import { DUELIST_STARTER_TREES } from './duelistStarterTrees';
 import { WORKSHOP_SKILLS } from './workshopSkills';
@@ -2918,6 +2920,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   warp: {
+    tree: RUNEWEAVER_STARTER_TREES.warp,
     id: 'warp', name: 'Warp',
     description: 'Fold space toward the target point: after a 0.9-second delay, you are simply'
       + ' there.',
@@ -5980,6 +5983,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   // --- THE RESONATOR: everything rings if struck sincerely ----------------
   tuning_strike: {
+    tree: RESONATOR_STARTER_TREES.tuning_strike,
     id: 'tuning_strike', name: 'Tuning Strike',
     description: 'Strike the body like a bell: the blow leaves its victim ATTUNED to fire, cold'
       + ' or lightning, one of the three at roughly even odds. An attuned body reads as kin to'
@@ -6000,6 +6004,7 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('statusMagnitude', 'increased', 0.05)] },
   },
   shatterchord: {
+    tree: RESONATOR_STARTER_TREES.shatterchord,
     id: 'shatterchord', name: 'Shatterchord',
     description: 'Play every tone at once: a nova of fire, cold and lightning damage around'
       + ' you, and the circle widens with your area of effect. ATTUNED enemies take the worst'
@@ -6389,6 +6394,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   // --- The Purity auras (#9): resistance + ailment-shrug as toggles --------
   purity_of_elements: {
+    tree: RESONATOR_STARTER_TREES.purity_of_elements,
     id: 'purity_of_elements', name: 'Purity of Elements',
     description: 'TOGGLE AURA (reserves 35 mana): you and allies inside gain +20% to fire,'
       + ' cold, lightning and chaos resistance, and shrug off one incoming ailment in four.',
@@ -7467,6 +7473,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   rune_of_power: {
+    tree: RUNEWEAVER_STARTER_TREES.rune_of_power,
     id: 'rune_of_power', name: 'Rune of Power',
     description: 'Inscribe a circle of standing power at your feet: allies inside it gain 25%'
       + ' increased spell damage and 15% increased cast speed for the 8 seconds it stands. The'
@@ -12760,13 +12767,15 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   invocation: {
+    tree: RUNEWEAVER_STARTER_TREES.invocation,
     id: 'invocation', name: 'Invocation',
-    description: 'Carried on your bar, every fire, cold, or lightning cast banks its rune'
-      + ' (Ember, Rime, or Arc), and channels weave one rune per held second. Casting consumes'
+    description: 'Carried on your bar, fire, cold, or lightning casts bank Ember, Rime, or Arc.'
+      + ' Schoolless spells such as Warp and Rune of Power bank a Glyph of raw force;'
+      + ' channels weave one rune per held second. Casting consumes'
       + ' the whole sequence: the combination and its order choose the working, the closing'
-      + ' rune sets the element, and every rune spent makes the release stronger.',
+      + ' rune sets the element (Glyph releases physical spell damage), and every rune spent makes the release stronger.',
     tags: ['spell', 'aoe'], color: '#c8a8e8',
-    manaCost: 9, cooldown: 2, useTime: 0.5,
+    manaCost: 6, cooldown: 2, useTime: 0.5, // Glyph fuel already costs a separate spell
     invokes: true,
     delivery: { type: 'self' },
     effects: [],
@@ -12871,7 +12880,7 @@ export const SKILLS: Record<string, SkillDef> = {
       + ' burst at the marked ground. Runes never go to waste.',
     tags: ['spell', 'aoe'], color: '#c8b8e0',
     manaCost: 0, cooldown: 0, useTime: 0,
-    baseDamage: { physical: [12, 18] },
+    baseDamage: { physical: [20, 30] }, // Glyph's baseline release pays for a two-cast loop
     delivery: { type: 'ground', radius: 110, castRange: 480, delay: 0.15 },
     effects: [{ type: 'damage' }],
   },

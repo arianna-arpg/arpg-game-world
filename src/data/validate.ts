@@ -9,6 +9,7 @@ import { AMBIENT_TAGS, FACTIONS, FIXTURE_IDS, MATERIAL_NATURE, MONSTERS, RESERVE
 import { FACTION_TRAITS } from '../world/traits';
 import { PRESENCE_BANDS, presenceMul, type PresenceSpec } from '../engine/presence';
 import { SKILLS } from './skills';
+import { invocationTreeErrors } from '../engine/invocation';
 import { SUPPORTS } from './supports';
 import { spawnVeinOf } from '../engine/supportbase';
 import {
@@ -2965,7 +2966,7 @@ export function validateContent(): void {
   // validatePassiveChoices warn-degrade idiom). Monster tree PINS resolve
   // against the kit's own defs.
   {
-    const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags', 'chargeCost', 'ground', 'castCycle', 'construct', 'reduceCooldowns', 'recallImpales']);
+    const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags', 'chargeCost', 'ground', 'castCycle', 'construct', 'reduceCooldowns', 'recallImpales', 'aura', 'invocation']);
     const SUMMON_KEYS = new Set(['count', 'maxActive', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell', 'crewRules', 'crewInherit', 'crewOnDeath', 'devour', 'placeAt']);
     const OVER_CHANNEL_KEYS = new Set(['ramp', 'rampMove']);
     const KINDS = new Set(['minor', 'major', 'keystone']);
@@ -3065,6 +3066,7 @@ export function validateContent(): void {
         }
         for (const error of impactTreeOverrideErrors(def, n)) warn(`${at}/${n.id}: ${error}`);
         for (const error of treeAuraOverrideErrors(def, n)) warn(`${at}/${n.id}: ${error}`);
+        for (const error of invocationTreeErrors(def, n)) warn(`${at}/${n.id}: ${error}`);
         const constructOver = n.over?.construct;
         if (constructOver) {
           if (def.delivery.type !== 'construct') warn(`${at}/${n.id}: construct override requires construct delivery`);

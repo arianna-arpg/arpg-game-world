@@ -61,12 +61,14 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_runeweaverstartertrees.ts', status: 'green', tier: 'fast', why: 'Runeweaver complete starting bar, level-one fuel loop, host-invested Invocation snapshots, alphabets, native recipes, delayed-field cleanup and persistence' },
   { probe: 'probe_tacticprogression.ts', status: 'green', tier: 'fast', why: 'Live novice/veteran tactic boundaries, shared brain isolation, body-level rather than target/area scaling, and summon condition composition' },
   { probe: 'probe_tacticalai.ts', status: 'green', tier: 'fast', why: 'Ranged pursuit and lateral movement openings at 30/60/120 Hz, explicit opt-outs, retarget commitment, planted artillery, fixed crossfire destinations and tactical spell sequencing' },
   { probe: 'probe_harassment.ts', status: 'green', tier: 'fast', why: 'Crow/Gnasher/bat contact at 30/60/120 Hz, replenishable summon targetability, intermittent wild escapes and flee-loop A/B' },
   { probe: 'probe_websiteportraits.ts', status: 'green', tier: 'fast', why: 'Standalone website portrait entry initializes every static and animated part used by shipped looks without the game bootstrap' },
   { probe: 'probe_deviceworkshop.ts', status: 'green', tier: 'fast', why: 'Packed Workshop actual deployments and relocation: payment, ownership, clocks, eligibility, persistence and cleanup' },
   { probe: 'probe_metaslotinput.ts', status: 'green', tier: 'fast', why: 'Shift-number meta slots retain their numeric edge, typed layout binding, key-up cleanup and overlapping modifier keys' },
+  { probe: 'probe_resonatorstartertrees.ts', status: 'green', tier: 'fast', why: 'Resonator: 24 terminal routes, independent tones, victim-scoped payoff, native aura composition, allocation, save/wire and cleanup' },
   { probe: 'probe_bastionstartertrees.ts', status: 'green', tier: 'fast', why: 'Sentinel/Warlord/Wallwright: all starting-tree routes, aura composition, retaliation, banner teardown, guard releases, command blessings and persistence' },
   { probe: 'probe_dueliststartertrees.ts', status: 'green', tier: 'fast', why: 'Complete Swashbuckler, Matador and Sharper starting bars: terminal casts, allocation, persistence, blessings, flight and cleanup' },
   { probe: 'probe_impactstartertrees.ts', status: 'green', tier: 'fast', why: 'Breaker/Vanguard/Lancer starting trees: 72 routes, pulse timing, stance gates, impale payoffs, planting, guard counters and respec ownership' },

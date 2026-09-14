@@ -121,11 +121,12 @@ import { ATTUNEMENT_LIST, TERRAFORM_LIST, attuneStat, terraformFxStat, terraform
 import { PROC_LIST, PROCS, procStat, procPowerStat, scaleProcEffect, PROC_RIDER_LIST, procRiderStat, type ProcCastSpec, type ProcDef } from '../data/procs';
 import { VICTIM_CONDITIONS, VICTIM_HOOKS, victimScopeArmed, victimTags } from './victim'; // THE VICTIM SCOPE
 import { DERIVED_GAUGES, GAUGE_CFG } from './gauges'; // DERIVED GAUGES
-import { resolveInvocation, RUNE_INFO, RUNE_OF_ELEMENT, type RuneId } from '../data/invocations';
+import { resolveInvocation, RUNE_INFO, type RuneId } from '../data/invocations';
+import { instanceInvocation, runeForCast, makeInvocationPayload } from './invocation';
 import { COMBO_CFG, comboRepeatedNow, comboStat, comboVariedNow, matchComboRule, type ComboRuleDef } from './sequence';
 import { mimicCapture, mimicPowerMods, mimicRefreshWatch, mimicSelect, mimicSelected } from './mimic';
 import { COMBO_LIST, COMBO_RULES } from '../data/combos';
-import { ATTRIBUTE_IDS, ATTRIBUTES, ELEMENTAL_TYPES, STAT_DEFS, DAMAGE_COLOR, conversionStat, isAttributeId } from './stats';
+import { ATTRIBUTE_IDS, ATTRIBUTES, ELEMENTAL_TYPES, STAT_DEFS, DAMAGE_COLOR, isAttributeId } from './stats';
 import { skyOf, START_ZONE, ZONES, objectiveEarnsChest, objectiveSeals, type ExitRoadSpec, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
 import { SUITES, type SuiteDef, type SuiteStation } from '../data/suites';
 import { BEACON_CFG } from '../data/beacons';
@@ -33383,17 +33384,11 @@ export class World {
       const count = runes.length;
       const last = runes[runes.length - 1] as RuneId;
       caster.runes = [];
-      const payload = makeSkillInstance(SKILLS[rule.skillId], effectiveSkillLevel(inst));
-      // The closing rune's element seizes the whole payload (physical-typed
-      // payload defs + an override conversion = one data path, no variants).
-      const elem = RUNE_INFO[last]?.element;
-      if (elem) {
-        payload.extraMods = [mod(conversionStat('physical', elem), 'override', 1)];
-      }
+      const payload = makeInvocationPayload(inst, SKILLS[rule.skillId], last);
       this.text(vec(caster.pos.x, caster.pos.y - 18), rule.label + '!',
         RUNE_INFO[last]?.color ?? def.color, 14);
       this.executeSkill(caster, payload, aim, {
-        dmgMult: (1 + (rule.dmgPerRune ?? 0.15) * count) * useMult,
+        dmgMult: (1 + (instanceInvocation(inst)?.damagePerRune ?? rule.dmgPerRune ?? 0.15) * count) * useMult,
         noCooldown: true, noRepeat: true,
       });
       return true;
@@ -36416,7 +36411,7 @@ export class World {
     // invisibility — movement and utility keep you hidden (breaksStealth
     // overrides either way; granting skills never self-consume).
     if (!opts.noRepeat && !opts.noCooldown) this.consumeStealth(caster, def);
-    // INVOCATION RUNES: a real ELEMENTAL cast banks its rune while an
+    // INVOCATION RUNES: runeForCast selects elemental or schoolless spell fuel while an
     // invoking skill sits on the bar. Channels bank on their own 1/s tick
     // instead (their pulses arrive here noCooldown and stay silent), and
     // invoke payloads never re-bank what they burned.
@@ -36501,21 +36496,20 @@ export class World {
     return true;
   }
 
-  /** Bank an INVOCATION RUNE for an elemental cast — only while an
+  /** bankRune uses runeForCast for school or schoolless spell fuel — only while an
    *  invoking skill sits on the caster's bar. At capacity (the runeCap
    *  stat) the OLDEST rune is forgotten: the weave stays live, and the
    *  closing runes — the ones that pick the payload — are always yours
    *  to re-sequence. */
   private bankRune(caster: Actor, def: SkillDef): void {
+    if (caster.construct) return; // runeForCast never lets an autonomous device fuel its own invocation
     const invoker = caster.skills.find(s => s?.def.invokes);
     if (!invoker) return;
-    const el = (['fire', 'cold', 'lightning'] as const).find(e => def.tags.includes(e));
-    if (!el) return;
-    const rune = RUNE_OF_ELEMENT[el];
+    const rune = runeForCast(def, invoker, caster.runes);
     if (!rune) return;
     const cap = Math.max(1, Math.round(caster.sheet.get('runeCap',
       skillContextTags(invoker.def), instanceMods(invoker))));
-    if (caster.runes.length >= cap) caster.runes.shift();
+    while (caster.runes.length >= cap) caster.runes.shift(); // runeForCast still appends exactly once
     caster.runes.push(rune);
   }
 
@@ -54061,7 +54055,7 @@ export class World {
           this.rollTriggers(a, 'channelBeat',
             { aim: vec(cs.aim.x, cs.aim.y), sourceInst: cs.inst });
         }
-        // INVOCATION weave: a held ELEMENTAL channel banks one rune per
+        // INVOCATION weave: bankRune banks one eligible rune per held
         // second (its pulses stay silent — this tick is the channel's rate).
         cs.runeTick = (cs.runeTick ?? 0) + dt;
         if (cs.runeTick >= 1) {
@@ -54928,6 +54922,8 @@ export class World {
 
   /** Retire fields that captured the previous allocation. */
   private clearTreeFields(caster: Actor, inst: SkillInstance): void {
+    const ownsTreePayload = (candidate: SkillInstance) => candidate === inst || candidate.invocationHost === inst;
+    if (inst.def.invokes) caster.runes = []; // invocationHost cannot carry old alphabet fuel through a respec
     // quietTreeRelease retires captured aura bonuses and reservations without
     // paying a release attack. Existing resource debts still settle normally.
     if (caster.activeAuras.get(inst.def.id)?.inst === inst) this.deactivateAura(caster, inst.def.id, true);
@@ -54941,11 +54937,12 @@ export class World {
       const source = this.treeBuffSources.get(buff.def);
       if (source?.caster === caster && source.inst === inst) actor.removeBuff(id);
     }
-    this.pendingFuses = this.pendingFuses.filter(f => f.caster !== caster || f.inst !== inst);
+    this.pendingFuses = this.pendingFuses.filter(f => f.caster !== caster || !ownsTreePayload(f.inst));
+    this.pendingBlinks = this.pendingBlinks.filter(b => b.actor !== caster || !b.inst || !ownsTreePayload(b.inst));
     // Scheduled repeats capture the old tree just as delayed fields do.
-    this.pendingRepeats = this.pendingRepeats.filter(r => r.caster !== caster || r.inst !== inst);
+    this.pendingRepeats = this.pendingRepeats.filter(r => r.caster !== caster || !ownsTreePayload(r.inst));
     // Flights and their carried ground can outlive the allocation too.
-    this.projectiles = this.projectiles.filter(p => p.caster !== caster || (p.inst !== inst && this.recallTreeSpears.get(p.inst) !== inst));
+    this.projectiles = this.projectiles.filter(p => p.caster !== caster || (!ownsTreePayload(p.inst) && this.recallTreeSpears.get(p.inst) !== inst));
     for (const p of this.projectiles) if (p.caster === caster && p.suffuse?.inst === inst) delete p.suffuse;
     // Held casts can snapshot guard pools and derived grafts. Changing the
     // allocation retires that stance without paying a release attack.
@@ -54955,7 +54952,7 @@ export class World {
     // changing their instance so old powers cannot survive a new allocation.
     for (let i = this.zones.length - 1; i >= 0; i--) {
       const z = this.zones[i];
-      if (z.caster !== caster || z.inst !== inst) continue;
+      if (z.caster !== caster || !ownsTreePayload(z.inst)) continue;
       this.expireZone(z);
       this.zones.splice(i, 1);
     }
