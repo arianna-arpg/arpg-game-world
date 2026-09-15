@@ -141,11 +141,11 @@ try {
     const used = cast(s.w, s.inst, a.pos); return { ...s, a, used };
   };
   {
-    const gentle = claim(['gentle_claim'], 0.65, true), plain = claim([], 0.4, true), swift = claim(['swift_claim']);
-    check('Gentle Claim completes a real rare-beast claim at 65% life', gentle.used && gentle.a.companion);
+    const gentle = claim(['gentle_claim'], 0.5, true), plain = claim([], 0.4, true), swift = claim(['swift_claim']);
+    check('Sovereign Bond completes a real rare-beast claim at 50% life', gentle.used && gentle.a.companion);
     check('native claim refuses rare beasts without changing their team', !plain.a.companion && plain.a.team === 'enemy');
-    check('Swift Claim actually completes sooner and pays more mana', swift.a.companion && swift.w.time < claim([]).w.time && swift.p.skillCost(swift.inst).mana > claim([]).p.skillCost(plain.inst).mana);
-    check('Gentle Claim keeps its full-life chance and native bond capacity', near(instanceTameMod(gentle.inst).wildChanceAdd, 0.2) && gentle.w.companionCapOf(gentle.inst) === 1);
+    check('Growing Litter leaves Tame Beast available after its first claim', swift.a.companion && swift.w.companionCapOf(swift.inst) === 2 && swift.w.slotFaceOf(swift.p, swift.inst).id === 'tame_beast');
+    check('Gentle Claim keeps its full-life chance and native bond capacity', near(instanceTameMod(gentle.inst).wildChanceAdd, 0) && gentle.w.companionCapOf(gentle.inst) === 1);
     check('bonded slot presents Whistle', gentle.w.slotFaceOf(gentle.p, gentle.inst).id === 'companion_whistle');
     gentle.w.kill(gentle.a); check('bonded beast is downed rather than killed', gentle.a.downed && !gentle.a.dead);
     cast(gentle.w, gentle.inst, gentle.a.pos);
@@ -153,7 +153,7 @@ try {
     reset(gentle.w, gentle.inst);
     check('respec removes claim graft while preserving the existing native bond', !gentle.inst.grafts?.length && gentle.a.companion && !gentle.a.dead && gentle.w.slotFaceOf(gentle.p, gentle.inst).id === 'companion_whistle');
   }
-  for (const root of ['gentle_claim', 'swift_claim']) {
+  for (const root of ['gentle_claim']) {
     const nodes = root === 'gentle_claim' ? [root, 'gentle_pour', 'gentle_instinct', 'gentle_return'] : [root, 'swift_instinct', 'swift_pour', 'swift_return'];
     const s = claim(nodes); s.p.life *= 0.5; s.a.life *= 0.5;
     s.p.gainCharge('frenzy', 1, 3); step(s.w, 0.1);
@@ -161,7 +161,7 @@ try {
     const flask = makeSkillInstance(SKILLS.life_flask, 1); s.p.skills[1] = flask; s.p.gainCharge('flask_life', 1, 3);
     cast(s.w, flask); step(s.w, 0.1);
     const own = s.p.restoreStreams.find(x => x.resource === 'life'), pet = s.a.restoreStreams.find(x => x.resource === 'life');
-    check(root + ': invested Alpha\'s Bond transfers a 1.5-strength flask stream', !!own && !!pet && Math.abs(pet.remaining / own.remaining - 1.5) < 0.01);
+    check(root + ': invested Alpha\'s Bond transfers a double-strength flask stream', !!own && !!pet && Math.abs(pet.remaining / own.remaining - 2) < 0.01);
     s.p.restoreStreams.length = 0; s.a.restoreStreams.length = 0;
     const before = s.p.life, mend = makeSkillInstance(SKILLS.mend, 1);
     cast(s.w, mend, s.a.pos); step(s.w, 0.1);
@@ -183,10 +183,11 @@ try {
   {
     const s = suggestion(['barbed_challenge'], 'goad');
     check('Barbed Challenge delivers both native taunt and new bleed', ['taunted', 'bleed'].every(id => s.a.statuses.some(st => st.id === id)));
-    const duration = (nodes: string[]) => suggestion(nodes, 'goad').a.statuses.find(st => st.id === 'taunted')!.remaining;
-    check('Lasting Challenge lengthens actual taunt', duration(['pack_challenge', 'certain_challenge', 'lasting_challenge']) > duration(['pack_challenge', 'certain_challenge']));
+    const duration = (nodes: string[]) => suggestion(nodes, 'goad').w.actors.find(a => a.construct && a.sourceSkillId === 'goad')!.lifespan!;
+    check('Standing Provocation lengthens actual effigy duration', duration(['pack_challenge', 'certain_challenge', 'lasting_challenge']) > duration(['pack_challenge', 'certain_challenge']));
     const volley = setup('goad', ['pack_challenge']); cast(volley.w, volley.inst, { x: volley.p.pos.x + 400, y: volley.p.pos.y });
-    check('Pack Challenge launches three real stones', volley.w.projectiles.filter(p => p.caster === volley.p).length === 3);
+    step(volley.w, 0.8);
+    check('Goading Effigy lands a real device', volley.w.actors.some(a => a.construct && a.sourceSkillId === 'goad'));
   }
   {
     const s = suggestion(['crippling_mark'], 'expose_weakness'), plain = suggestion([], 'expose_weakness');

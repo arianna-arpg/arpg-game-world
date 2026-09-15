@@ -46,6 +46,15 @@ registerSympathyLink({
   to: ['companions'],
 });
 
+// Shared Instinct hears original gains only; echoed charges never bounce back.
+for (const [id, from, to] of [
+  ['companion_charges_out', 'self', 'companions'],
+  ['companion_charges_in', 'companions', 'self'],
+] as const) registerSympathyLink({
+  id, label: 'shared instinct', color: '#c8a06a', from,
+  channels: ['charge'], chargeIds: ['fury', 'frenzy', 'rage'], to: [to],
+});
+
 // Reciprocal Bond (the INVERSE lane): the keeper LISTENS to the beasts —
 // when a companion is mended, a share flows back to the keeper. Same
 // fabric, one def apart: from 'companions', to 'self'.

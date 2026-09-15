@@ -10,8 +10,8 @@ the fourth. No mastery, alternate opening, selection or rekindling rules change.
 
 | Class | Skill | First identity | Second identity | Neutral per rank |
 | --- | --- | --- | --- | --- |
-| Tamer | Goad | Barbed Challenge: guaranteed bleed, 20% less hit damage | Pack Challenge: three stones, 25% less damage each | 15% increased damage |
-| Tamer | Tame Beast | Gentle Claim: Gentling Hand's rare eligibility and gentler chance curve | Swift Claim: 70% more claim cast speed, 40% more mana | 12% increased claim cast speed |
+| Tamer | Goad | Barbed Challenge: full-damage bleed, resets, impales and inherited splinters | Goading Effigy: ground-placed taunting devices, thorns, wound fields, aftershocks and pursuers | 15% increased damage |
+| Tamer | Tame Beast | Sovereign Bond: guaranteed ordinary claims and powerful individual beasts | Growing Litter: two companions, passive revival and cooperative attacks | 15% increased companion life and damage |
 | Tamer | Stalk | Sheltered Stalk: mitigation and regeneration during the native hush | Hunter's Opening: next landed attack preparation alongside the hush | 12% increased cooldown recovery |
 | Beguiler | Decoy | Patient Double: 70% more mirage duration, 20% less cooldown recovery | Sheltered Departure: temporary mitigation alongside the native dash and mirage | 12% increased cooldown recovery |
 | Beguiler | Shadow Clone | Weighty Shadow: 60% more echo power, 25% less replay rate | Eager Shadow: 70% more replay rate, 20% less echo power | 15% increased mirage damage |
@@ -27,25 +27,18 @@ costs, concentrations, conversions and thresholds. Neutral ranks add only their
 listed scalar investment. The probe compares actual unallocated casts against
 tree-less definitions and exercises native casts with all four neutral ranks.
 
-Goad keeps its guaranteed taunt and doubled threat. Its spread identity can
-engage several enemies; it deliberately gives up the native single-target peel.
-Bleed strength, duration and bleed leech use the existing damage/status consumers.
+Goad's overhaul lives in `src/data/goadTree.ts` and is documented in
+[Goad](goad.md). Barbed stones retain native taunt and doubled threat while
+adding resets, wounds and inherited projectiles. Goading Effigy replaces the
+throw's direct hit with a destructible ground device, periodic taunts, thorns
+and optional fields or burrowing pursuers. Field wounds end on aura exit;
+ordinary bleeds remain independent.
 
-Tame Beast remains a held 2.4-base-second claim, contested above half life,
-followed by a persistent, downable companion and the converted Whistle. Gentle
-Claim grafts the existing level-one Gentling Hand: certainty at 65% life,
-55% chance at full life, rare beasts permitted, bosses still refused. Swift
-Claim changes the concentration speed through the ordinary cast-speed reader.
-The claim's economic nodes describe the claim, not its separately defined
-Whistle face. Both trees offer existing Alpha's Bond, Pack Instinct and
-Reciprocal Bond grafts. Their actual flask, charge and healing transfers are
-tested. A socketed duplicate wins under the existing no-second-copy rule.
-
-Tamed companions are **not ordinary summons**: the native claim changes team,
-ownership and the bond marker without baking a summon-stat source. This batch
-therefore grants no local minion-life/damage nodes to Tame Beast and does not
-use Beast Master's damage-tradeoff identity. It preserves the existing
-claim/Whistle/revival/bond lifecycle rather than broadening that engine seam.
+Tame Beast's overhaul lives in `src/data/tameBeastTree.ts` and is documented
+in [Tame Beast](tame-beast.md). Its ordinary held claim remains intact; invested
+routes add boss capture, innate stacking sympathy, family arts, cooperative
+combat and larger litters. Tamed bodies now receive their host skill's minion
+life/damage investment through an independently rebuilt companion stat source.
 
 Stalk preserves its native detectability, threat and movement modifiers.
 Buff patches append shelter or prepare a separately named attack blessing.
@@ -97,7 +90,7 @@ Existing source-scoped cleanup retires invested projectiles, decoys, clones,
 clone replay queues and falcon births on respec. Falcon reservations and
 pending returns are released. Temporary tree blessings disappear from their
 recipients without stripping another owner's source. Resetting a tame tree
-removes claim/sympathy grafts but preserves the already claimed native bond;
+removes tree-granted mechanics and preserves claimed bonds (excess slots become dormant);
 unlearning and release retain their existing separate behavior. Applied enemy
 statuses remain ordinary timed statuses.
 

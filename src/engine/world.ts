@@ -11,6 +11,10 @@ import { COSMETIC_CFG } from '../data/cosmetics';
 // ---------------------------------------------------------------------------
 
 import { DeedTracker, type DeedEvent } from './deeds';
+import { CompanionBonds } from './companionBonds';
+import { Challenges } from './challenges';
+import { challengeOf } from './challengeSpec';
+import { companionBondOf, type CompanionSaved } from './companionSpec';
 import { OdysseyRuntime } from './odyssey';
 import { ODYSSEY_CFG, odysseyFaction, odysseyQuestId } from '../data/odyssey';
 import { instanceCastCycle, instanceTreeMods, instanceTreeOver } from './skills';
@@ -953,6 +957,8 @@ const HAUNT_TAGS = new Set([
 ]);
 
 interface Projectile {
+  /** Optional victim anchor for a lodged orbit; the caster retains attribution. */
+  orbitAnchorId?: number;
   cosmeticMotif?: import('./cosmetics').CosmeticMotif;
   /** PULSATION (projPulse): breathe the hit radius ±this fraction of
    *  radius0 on a fixed rhythm. */
@@ -3465,7 +3471,9 @@ export class World {
    *  the bond — no slot-juggling exploit) — remembered here so RELEARNING
    *  the same skill returns them DOWNED, owed a revival. Serialized with
    *  the character (character.ts merges them into `companions`). */
-  stashedCompanions: { defId: string; level: number; skillId: string }[] = [];
+  stashedCompanions: CompanionSaved[] = [];
+  readonly companionBonds = new CompanionBonds(this);
+  readonly challenges = new Challenges(this);
   /** ONE-SHOT: lingering at any REGISTERED vendor counter with stock (the
    *  data/vendors.ts registry) asks the main loop to open the Vendor screen. */
   vendorDwellRequested = false;
@@ -4206,6 +4214,8 @@ export class World {
   }
 
   createPlayer(classDef: ClassDef, opts?: { modeId?: string; charId?: string; name?: string;
+    /** Resume shells and isolated test arenas suppress fresh-character gifts. */
+    startingCompanions?: boolean;
     /** THE OPENING (meta/classkit.ts): the resolved kit bar — see makePlayerSeat. */
     kit?: readonly (string | null)[] }): void {
     // The local seat is this client's own hero (camera + input anchor). Input is
@@ -4228,12 +4238,25 @@ export class World {
     // Roster lifecycle: the local hero joins the party (drives the party UI).
     this.events.emit('party/join', { actor: this.localSeat.actor, seat: 'p0' });
     this.loadZone(START_ZONE);
+    if (opts?.startingCompanions !== false) this.grantStartingCompanions();
+  }
+
+  grantStartingCompanions(seat: Seat = this.localSeat): void {
+    for (const gift of seat.meta.classDef.startingCompanions ?? []) {
+      const inst = seat.actor.skills.find(s => s?.def.id === gift.skillId);
+      if (!inst || !MONSTERS[gift.monsterId] || this.companionsOfSkill(seat.actor, gift.skillId).length) continue;
+      const companion = this.createMonster(gift.monsterId, 1, seat.actor.team, seat.actor);
+      companion.pos = this.clampPos(vec(seat.actor.pos.x + 36, seat.actor.pos.y + 24), companion.radius);
+      companion.tier = seat.actor.tier;
+      this.actors.push(companion);
+      this.tameCompanion(seat.actor, companion, gift.skillId);
+    }
   }
 
   /** Add a co-op seat beside the local hero — a player-kind actor with the given
    *  input source. Used for the local stand-in ally now (ScriptedInput); a remote
    *  join calls this with a RemoteInput. Emits party/join. */
-  addSeat(id: string, classDef: ClassDef, input: PlayerInputSource): Seat {
+  addSeat(id: string, classDef: ClassDef, input: PlayerInputSource, opts?: { startingCompanions?: boolean }): Seat {
     const pos = this.clampPos(vec(this.player.pos.x + 50, this.player.pos.y), 16);
     const seat = this.makePlayerSeat(id, classDef, input, pos);
     this.seats.push(seat);
@@ -4243,6 +4266,7 @@ export class World {
     // boots with nothing) — force-dirty so the next snapshot ships it whole.
     this.markMetaDirty(seat);
     this.events.emit('party/join', { actor: seat.actor, seat: id });
+    if (opts?.startingCompanions !== false) this.grantStartingCompanions(seat);
     return seat;
   }
 
@@ -5554,6 +5578,7 @@ export class World {
    * visit (constructs, drops, and corpses stay behind).
    */
   loadZone(zoneId: string, from?: string): void {
+    this.challenges.clearAll();
     this.odyssey.leaveZone();
     this.combatDeeds.reset();
     // THE POSSESSION SEAM: transit unwinds every embodiment FIRST — a
@@ -22054,6 +22079,7 @@ export class World {
     ]);
     p.life = Math.min(p.life, p.maxLife());
     p.mana = Math.min(p.mana, p.maxMana());
+    this.companionBonds.refresh();
   }
 
   /** CO-OP (Layer 2): flag a seat's META as changed so the host re-replicates its
@@ -22470,7 +22496,7 @@ export class World {
     // another gem. The bond is REMEMBERED (stash): relearn the same skill
     // and the companion returns DOWNED, owed its revival.
     for (const c of this.companionsOfSkill(p, skillId)) {
-      if (c.defId) this.stashedCompanions.push({ defId: c.defId, level: c.level, skillId });
+      if (c.defId) this.stashedCompanions.push(this.companionBonds.saved(c));
       this.text(vec(c.pos.x, c.pos.y - 22), 'the bond breaks', '#c08a68', 12);
       c.companion = false; // past the down-intercept: this death is real
       this.kill(c, true);
@@ -27042,7 +27068,7 @@ export class World {
     // unique across hires and mid-run dismissals.
     let mi = 0;
     while (this.seats.some(s => s.id === `m${mi}`)) mi++;
-    const seat = this.addSeat(`m${mi}`, classDef, new MercInput());
+    const seat = this.addSeat(`m${mi}`, classDef, new MercInput(), { startingCompanions: false });
     seat.merc = { name, ...ref };
     seat.actor.name = name;
     if (!this.applyMercNormalization(seat, snapshot, true)) {
@@ -29662,13 +29688,15 @@ export class World {
     // Socketed CLAIM grafts (tameMod): every term below reads the authored
     // effect PLUS the summed adjustments — the gem reshapes the bond's terms.
     const tm = instanceTameMod(inst);
+    const companionClaim = companionBondOf(inst);
     if (this.companionBondsOfSkill(caster, def.id) >= this.companionCapOf(inst)) {
       this.failNote(caster, def.id + ':bonded',
         this.companionCapOf(inst) > 1 ? 'every bond is held' : 'the bond holds one already');
       return;
     }
     if (!mdef || target.owner || target.companion || target.team === caster.team || !sameStory(target, caster)
-      || mdef.boss || (target.rarity && target.rarity !== 'normal' && !(fx.allowRares || tm.allowRares))
+      || (mdef.boss && companionClaim.bossSure === undefined)
+      || (!mdef.boss && target.rarity && target.rarity !== 'normal' && !(fx.allowRares || tm.allowRares || companionClaim.rareSure !== undefined))
       // Belt to targeting's taxonomy gate — future callers may not route
       // through resolveTargeting.
       || !(mdef.tags ?? []).some(tg => fx.tags.includes(tg))) {
@@ -29682,11 +29710,13 @@ export class World {
     // that clock IS the retry economy. wildChance 0/absent restores the
     // old hard weaken-it-first gate.
     const frac = target.life / Math.max(1, target.maxLife());
-    const sureBase = fx.sureBelow ?? fx.maxLifeFrac;
+    const sureBase = mdef.boss ? companionClaim.bossSure
+      : target.rarity && target.rarity !== 'normal' ? companionClaim.rareSure ?? fx.sureBelow ?? fx.maxLifeFrac
+      : companionClaim.normalSure ?? fx.sureBelow ?? fx.maxLifeFrac;
     const sure = sureBase === undefined ? undefined
       : clamp(sureBase + tm.sureBelowAdd, 0, 1);
     if (sure !== undefined && frac > sure) {
-      const wild = clamp((fx.wildChance ?? 0) + tm.wildChanceAdd, 0, 1);
+      const wild = mdef.boss ? 0 : clamp((fx.wildChance ?? 0) + tm.wildChanceAdd, 0, 1);
       if (wild <= 0) {
         this.failNote(caster, def.id + ':unbroken', 'weaken it first');
         return;
@@ -29698,6 +29728,12 @@ export class World {
         return;
       }
     }
+    // A successful claim defeats the encounter once, before the enemy's tags
+    // and team are cleared. Boss/hunt/cull ledgers cannot be stranded by taming.
+    // This intentionally omits death bursts, corpses and ordinary kill drops.
+    const companionClaimCtx = this.killCtx(target, caster, caster.team === 'player');
+    for (const r of killRules()) if (killRuleMatches(r, companionClaimCtx)) r.run(companionClaimCtx);
+    for (const r of this.worldKillRules) if (killRuleMatches(r, companionClaimCtx)) r.run(companionClaimCtx);
     this.tameCompanion(caster, target, def.id);
   }
 
@@ -29722,6 +29758,7 @@ export class World {
     beast.aggroed = false;
     beast.aiFleeing = false;
     beast.life = beast.maxLife();
+    this.companionBonds.adopt(beast);
     // THE KEPT MARK: runtime tack (TAME_CFG.claimParts — a collar by
     // default) stamps the claim visibly onto any body. Un-tame paths kill
     // or stash the body outright, so the mark never needs unstamping.
@@ -29742,8 +29779,9 @@ export class World {
   /** Bring a downed companion back on its feet (the dwell path and the
    *  whistle both land here). */
   reviveCompanion(a: Actor, frac = 0.5): void {
-    if (!a.companion || !a.downed) return;
+    if (!a.companion || !a.downed || a.companionDormant) return;
     a.downed = false;
+    a.companionReviveRemaining = undefined;
     a.life = Math.max(1, a.maxLife() * frac);
     a.companionReviveDwell = 0;
     this.text(vec(a.pos.x, a.pos.y - 22), `${a.name} rises!`, '#a8d8a0', 14);
@@ -29753,12 +29791,36 @@ export class World {
     });
   }
 
+  /** Narrow combat seams for the data-driven companion controller. */
+  companionPulseHit(beast: Actor, inst: SkillInstance, target: Actor, power: number): void {
+    this.resolveHit(beast, inst, target, power, 1);
+  }
+
+  challengeHit(caster: Actor, inst: SkillInstance, target: Actor, power: number): void {
+    this.resolveHit(caster, inst, target, power, 1);
+  }
+
+  challengeBurst(caster: Actor, target: Actor, amount: number): void {
+    const taken = mitigateTyped(target, { physical: amount });
+    if (taken <= 0 || target.dead) return;
+    target.life -= taken; target.hitFlash = 0.15;
+    this.text(target.pos, `REOPENED ${Math.round(taken)}`, '#d96962', 13, 'combat');
+    if (target.life <= 0) this.kill(target, false, caster);
+  }
+
+  retireOwnedZone(zone: Zone): void {
+    const index = this.zones.indexOf(zone);
+    if (index < 0) return;
+    this.expireZone(zone);
+    this.zones.splice(index, 1);
+  }
+
   /** Downed COMPANIONS revive like downed seats: any standing, IDLE ally
    *  seat lingering within the same radius accrues the same dwell (one
    *  accumulator — whoever tends the body, the bond mends). */
   private updateDownedCompanions(dt: number): void {
     for (const a of this.actors) {
-      if (!a.companion || a.dead || !a.downed) continue;
+      if (!a.companion || a.dead || !a.downed || a.companionDormant) continue;
       const tended = this.seats.some(s => !s.actor.dead && !s.actor.downed
         && s.actor.tier === a.tier && dist(s.actor.pos, a.pos) <= REVIVE_RADIUS && this.seatIdle(s));
       a.companionReviveDwell = tended ? a.companionReviveDwell + dt : 0;
@@ -29771,22 +29833,31 @@ export class World {
    *  A bond whose skill is NOT currently known (unlearned before the save)
    *  goes to the STASH instead — it returns downed when the skill does. */
   restoreCompanions(
-    list: { defId: string; level: number; skillId: string; downed?: boolean }[],
+    list: CompanionSaved[],
     keeper: Actor = this.player,
   ): void {
     for (const c of list) {
       if (!MONSTERS[c.defId]) continue; // a removed def releases the bond
       if (keeper === this.player && !this.meta.knownSkills.has(c.skillId)) {
-        this.stashedCompanions.push({ defId: c.defId, level: c.level, skillId: c.skillId });
+        this.stashedCompanions.push({ ...c });
         continue;
       }
       const beast = this.createMonster(c.defId, Math.max(1, c.level), keeper.team, keeper);
+      if (c.rarity) {
+        beast.rarity = c.rarity;
+        beast.radius = c.radius ?? beast.radius * RARITY_DEFS[c.rarity].sizeMul;
+        if (c.raritySources) for (const [name, mods] of c.raritySources) beast.sheet.setSource(name, mods);
+        else beast.sheet.setSource('rarity', rarityMods(c.rarity));
+        beast.name = c.name ?? beast.name;
+      }
       this.tameCompanion(keeper, beast, c.skillId);
+      beast.companionReviveRemaining = c.reviveRemaining;
       beast.pos = this.clampPos(vec(
         keeper.pos.x + rand(-60, 60), keeper.pos.y + rand(40, 80)), beast.radius);
       if (c.downed) { beast.downed = true; beast.life = 0; }
       this.actors.push(beast);
     }
+    this.companionBonds.refresh();
   }
 
   /** RELEASE the bond (the Tracker's un-tame counter): the companion walks
@@ -33391,6 +33462,7 @@ export class World {
   ): boolean {
     // Replenishment is a birth clock, never an echo/trigger/proc cast.
     if (replenishingDelivery(inst)) return false;
+    inst = this.challenges.prepare(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
     const def = inst.def;
     const cosmeticPaint = cosmeticSkillPaint(this, caster, def.id);
     const cosmeticColor = cosmeticPaint.color ?? def.color;
@@ -35699,6 +35771,10 @@ export class World {
       }
 
       case 'construct': {
+        if (challengeOf(inst)?.device) {
+          this.challenges.toss(caster, inst, aim, d, useMult);
+          break;
+        }
         // A SUMMON graft (Vessel of Shadow) converts the spawn outright:
         // the ghost becomes flesh — a real minion on minion scaling, and no
         // echo construct ever exists to mimic anything. Exclusive by build.
@@ -36045,6 +36121,7 @@ export class World {
           this.refundCooldown(caster, def.id);
         } else {
           bonded.forEach((comp, i) => {
+            if (comp.companionDormant) return;
             if (comp.downed) this.reviveCompanion(comp, 1);
             comp.life = comp.maxLife();
             const ang = caster.facing + Math.PI * 0.75 + i * 0.7;
@@ -36052,6 +36129,7 @@ export class World {
               caster.pos.x + Math.cos(ang) * 40,
               caster.pos.y + Math.sin(ang) * 40), '#a8d8a0');
           });
+          this.companionBonds.whistle(caster, inst, aim);
           this.text(vec(caster.pos.x, caster.pos.y - 24), 'the bond answers', '#a8d8a0', 12);
         }
       }
@@ -36668,6 +36746,8 @@ export class World {
     // Channel pulses ARE eligible — the per-clone throttle samples a beam
     // into a periodic shadow-lash; repeats and echo replays are not.
     if (!opts.noRepeat && !caster.construct) {
+      if (!opts.noCooldown) this.challenges.completed(caster, inst);
+      this.companionBonds.onCast(caster, inst, aim);
       this.echoToClones(caster, inst, aim, useMult,
         opts.targetInfo as ResolvedTarget | undefined);
     }
@@ -38453,7 +38533,7 @@ export class World {
     aim: Vec2, castInst?: SkillInstance, at?: Vec2, scale = 1,
   ): Actor | null {
     // SOVEREIGNTY: seat — seated on the caster's story (the derived census, probe_tiers RIG T).
-    const tags = skillContextTags(sourceInst.def);
+    const tags = skillContextTags(sourceInst); // Include tree-granted tags, such as Goad's device identity.
     const extra = instanceMods(sourceInst);
 
     // Echo riders cap through the mirageCount economy (spawnEchoRiders) —
@@ -42138,6 +42218,7 @@ export class World {
     }
     // Delivery-specific hitEffects share every refusal, scaling and
     // attribution rule with authored effects, including delayed fuses.
+    this.challenges.beforeEffects(caster, inst, target, dealt, depth);
     const effects = instanceEffects(inst);
     for (const fx of hitEffects?.length ? [...effects, ...hitEffects] : effects) {
       if (fx.type === 'heal') {
@@ -42720,7 +42801,9 @@ export class World {
     // THE CONSUMABLE BUFFS (BuffEffect.consumeOn) spend AFTER the whole
     // resolution — damage, ailments and procs have all read the buff that
     // empowered this blow — and the kill stamps the ledger.
+    this.challenges.afterHit(caster, inst, target, dealt, depth, dmgMult);
     if (dealt > 0) {
+      if (depth === 0) this.companionBonds.onHit(caster, inst, target);
       caster.spendBuffs('hit', def.tags, def.id);
       if (wasCrit) caster.spendBuffs('crit', def.tags, def.id);
       if (lethal) { caster.noteRecent('kill'); caster.spendBuffs('kill', def.tags, def.id); }
@@ -42899,6 +42982,7 @@ export class World {
     to: Actor, s: ActiveStatus, sourceName: string,
     o?: { strengthScale?: number; duration?: 'remaining' | 'refresh'; durationScale?: number },
   ): void {
+    if (s.challengeField !== undefined) return; // Field exposure cannot become a portable lasting wound.
     const sdef = STATUS_DEFS[s.id];
     if (!sdef || to.dead) return;
     const baseDur = sdef.duration || 1;
@@ -43201,7 +43285,7 @@ export class World {
     const stat = sympathyStat(linkId);
     let p = holder.sheet.get(stat);
     for (const inst of holder.skills) {
-      if (!inst || (inst.sockets.length === 0 && !inst.def.innateMods)) continue;
+      if (!inst || (inst.sockets.length === 0 && !inst.def.innateMods && !inst.treeNodes?.length && !inst.grafts?.length)) continue;
       p = Math.max(p, holder.sheet.get(stat,
         skillContextTags(inst, grantedTags(inst)), instanceMods(inst)));
     }
@@ -44334,6 +44418,7 @@ export class World {
       actor.casting = null;
       actor.aiCommand = undefined;
       actor.companionReviveDwell = 0;
+      this.companionBonds.down(actor);
       this.text(vec(actor.pos.x, actor.pos.y - 22), `${actor.name} is DOWN`, '#e8a860', 14);
       return;
     }
@@ -46783,6 +46868,8 @@ export class World {
     // Co-op: an ally lingering by a downed seat revives them.
     this.updateDownedSeats(dt);
     // The same tending mends a downed COMPANION (the Hunter's bond).
+    this.companionBonds.update(dt);
+    this.challenges.update(dt);
     this.updateDownedCompanions(dt);
     // ALL-DOWN terminator: once no seat is left standing, the wipe concludes
     // (per mode: resurface / respawn / run over). Guarded on !gameOver so
@@ -50412,8 +50499,8 @@ export class World {
           if (st.timer <= 0 && c.canUse(st.castInst)) {
             const targets = this.enemiesOf(c).filter(e => dist(c.pos, e.pos) <= st.range);
             if (targets.length) {
-              st.timer = c.summonInst?.def.delivery.type === 'construct'
-                ? (c.summonInst.def.delivery.interval ?? 1.5) : 1.5;
+              const challengeDelivery = c.summonInst && instanceDelivery(c.summonInst);
+              st.timer = challengeDelivery?.type === 'construct' ? (challengeDelivery.interval ?? 1.5) : 1.5;
               this.useSkill(c, st.castInst, pick(targets).pos);
             }
           }
@@ -55158,7 +55245,8 @@ export class World {
 
   /** Retire fields that captured the previous allocation. */
   private clearTreeFields(caster: Actor, inst: SkillInstance): void {
-    const ownsTreePayload = (candidate: SkillInstance) => candidate === inst || candidate.invocationHost === inst || candidate.followUpHost === inst;
+    this.challenges.clear(caster, inst);
+    const ownsTreePayload = (candidate: SkillInstance) => candidate === inst || candidate.invocationHost === inst || candidate.followUpHost === inst || candidate.challengeHost === inst;
     this.pendingFollowUps = this.pendingFollowUps.filter(p => p.caster !== caster || !ownsTreePayload(p.inst));
     caster.primedPours = caster.primedPours.filter(p => p.skillId !== inst.def.id);
     caster.clearTreeChargeClocks(inst);
@@ -56088,8 +56176,11 @@ export class World {
     let gx: number, gy: number;
     const polar = p.orbit > 0 || p.spiral > 0;
     if (polar) {
-      if (p.orbit > 0 && !p.caster.dead) {
-        p.anchor.x = p.caster.pos.x; p.anchor.y = p.caster.pos.y;
+      if (p.orbit > 0) {
+        const orbitAnchor = p.orbitAnchorId !== undefined ? this.actorById(p.orbitAnchorId) : p.caster;
+        if (orbitAnchor && !orbitAnchor.dead) {
+          p.anchor.x = orbitAnchor.pos.x; p.anchor.y = orbitAnchor.pos.y;
+        }
       } else {
         // An untethered spiral STALKS: homing drifts its anchor toward prey,
         // guide drags it after the caster's live aim point.

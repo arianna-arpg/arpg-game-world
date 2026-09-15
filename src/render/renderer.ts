@@ -7903,7 +7903,7 @@ export class Renderer {
       const mx = this.uiMouse.x, myv = this.uiMouse.y; // virtual-space, matching the scaled pip rects
       if (mx >= bpx - 2 && mx <= bpx + 12 && myv >= buffY - 2 && myv <= buffY + 12) {
         const rem = Math.max(...buff.expiries ?? [buff.remaining ?? 0]);
-        hoverLabel = { x: bpx + 5, text: `${id.replace(/_/g, ' ')} ${rem > 0 && rem < 900 ? Math.ceil(rem) + 's' : ''}`.trim() };
+        hoverLabel = { x: bpx + 5, text: `${buff.def.label ?? id.replace(/_/g, ' ')} ${rem > 0 && rem < 900 ? Math.ceil(rem) + 's' : ''}`.trim() };
       }
       bpx += 14;
     }

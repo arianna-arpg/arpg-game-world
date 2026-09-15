@@ -1,3 +1,5 @@
+import { GOAD_SKILLS } from './goadSkills';
+import { COMPANION_SKILLS } from './companionSkills';
 import { FLASK_TREES } from './flaskTrees';
 import { FLASK_SKILLS } from './flaskSkills';
 import { DISCIPLINE_STARTER_TREES } from './disciplineStarterTrees';
@@ -40,6 +42,8 @@ import { ROOTWILD_SKILLS } from './rootwildSkills';
 import { ARENA_BOSS_SKILLS } from './arenaBosses';
 
 export const SKILLS: Record<string, SkillDef> = {
+  ...COMPANION_SKILLS,
+  ...GOAD_SKILLS,
   town_portal: TOWN_PORTAL_SKILL,
   ...NECROMANCER_SKILLS,
   ...PACT_SKILLS,
@@ -3243,7 +3247,7 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'tame_beast', name: 'Tame Beast',
     description: 'HOLD your aim on a living beast to fill the 2.4 second claim: sure below half'
       + ' life, a 35% chance on a hale one. A tamed companion falls DOWNED, never dead. With'
-      + ' the bond held this slot becomes the Whistle (call it back, revived); shift-press'
+      + ' every bond slot filled this becomes Whistle (recall, revive and heal the pack); shift-press'
       + ' commands it to ATTACK. Unlearning breaks the bond (relearn and it returns downed,'
       + ' owed a revival); release it for good at the Tracker.',
     tags: ['spell', 'minion', 'duration', 'companion'], color: '#a8c87a',

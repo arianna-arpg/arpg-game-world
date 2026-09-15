@@ -1,3 +1,5 @@
+import { companionBondOf, type CompanionBondSpec } from './companionSpec';
+import { challengeDelivery, type ChallengeSpec } from './challengeSpec';
 // ---------------------------------------------------------------------------
 // Skill definition schema.
 //
@@ -433,6 +435,8 @@ export function instanceAim(inst: SkillInstance): AimSpec | undefined {
  *  untouched — byte-identical by construction, zero allocation. The cast
  *  path reads delivery through THIS view (executeSkill's one binding). */
 export function instanceDelivery(inst: SkillInstance): SkillDef['delivery'] {
+  const challenge = challengeDelivery(inst);
+  if (challenge) return challenge;
   const d = inst.def.delivery;
   const over = instanceTreeOver(inst);
   if (d.type === 'summon' && (over?.summon || d.selectPool?.length)) {
@@ -604,6 +608,7 @@ export function instanceTameMod(inst: SkillInstance): Required<TameModSpec> {
     slotsAdd += tm.slotsAdd ?? 0;
     allowRares = allowRares || !!tm.allowRares;
   }
+  slotsAdd += companionBondOf(inst).slotsAdd ?? 0;
   return { sureBelowAdd, wildChanceAdd, slotsAdd, allowRares };
 }
 
@@ -3294,7 +3299,11 @@ export function instanceUseCharges(inst: SkillInstance): SkillDef['useCharges'] 
  *  munition graft converts the EMPTY bank into its reload skill. One face
  *  per slot — first source wins (mirrors instanceChargeCost). */
 export function instanceConvert(inst: SkillInstance): ConvertSpec | undefined {
-  if (inst.def.convert) return inst.def.convert;
+  if (inst.def.convert) {
+    const companionBond = companionBondOf(inst);
+    return inst.def.convert.when === 'companionsFull' && companionBond.whistle
+      ? { ...inst.def.convert, skillId: companionBond.whistle.skillId } : inst.def.convert;
+  }
   for (const s of hostSockets(inst)) {
     if (s.def.munition) {
       return { when: 'chargesEmpty', skillId: s.def.munition.reloadSkillId ?? DEFAULT_RELOAD_SKILL };
@@ -3416,6 +3425,8 @@ export interface StatusEffect {
 
 /** Grants the caster a temporary named bundle of modifiers. */
 export interface BuffEffect {
+  /** Player-facing name for dynamically scoped buffs such as companion bonds. */
+  label?: string;
   type: 'buff';
   id: string;             // buffs with the same id refresh instead of stacking...
   duration: number;
@@ -4851,6 +4862,10 @@ function mergeTreeDomain(a: GroundDelivery['domain'], b: GroundDelivery['domain'
 }
 
 export interface SkillTreeNode {
+  /** Cast resets, inherited projectiles and ground-device challenge mechanics. */
+  challenge?: ChallengeSpec;
+  /** Persistent beast-bond abilities; resolved additively and rebuilt on allocation changes. */
+  companionBond?: CompanionBondSpec;
   /** Node id — persisted on the instance (SkillInstance.treeNodes), so
    *  renaming an id orphans saved picks (they drop with a console note —
    *  the attunedForm idiom). */
@@ -5118,6 +5133,7 @@ export function instanceTreeOver(inst: SkillInstance): SkillTreeNode['over'] | u
  * Buff modifiers accumulate per invested rank; identity fields replace only
  * their matching buff. No authored definition or modifier array is mutated. */
 export function instanceEffects(inst: SkillInstance): SkillEffect[] {
+  if (challengeDelivery(inst)) return [];
   if (!inst.treeNodes?.length) return inst.def.effects;
   let out: SkillEffect[] | undefined;
   const reduceCooldowns = instanceTreeOver(inst)?.reduceCooldowns;
@@ -5726,6 +5742,8 @@ export function skillRarityFloor(weights: Partial<Record<SkillRarity, number>>):
 
 /** A skill as OWNED by an actor: definition + level + socketed supports. */
 export interface SkillInstance {
+  /** Transient challenge payload ownership; never part of saved investment. */
+  challengeHost?: SkillInstance;
   /** Flask follow-up provenance; transient and never serialized. */
   followUpHost?: SkillInstance;
   /** Transient invocationHost provenance; released fields retire with this exact host. */

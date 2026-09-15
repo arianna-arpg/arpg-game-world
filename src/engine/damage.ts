@@ -884,7 +884,8 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   if (total > 0 && !attacker.dead) {
     const onHit = attacker.sheet.get('lifeOnHit', packet.tags, packet.extra);
     const leech = attacker.sheet.get('lifeLeech', packet.tags, packet.extra) * total;
-    attacker.healBy(onHit + leech);
+    const leechHealed = attacker.healBy(onHit + leech) * (leech / Math.max(0.000001, onHit + leech));
+    if (leechHealed > 0) attacker.gainEvents.push({ kind: 'heal', id: 'life', depth: 0, n: leechHealed, tags: [...packet.tags] });
     // WARD LEECH (Soulflay): a share of the hit crystallizes as the
     // decaying shell — gainWard is the one gate, so wardGain scales it.
     const wleech = attacker.sheet.get('wardLeech', packet.tags, packet.extra) * total;

@@ -1818,6 +1818,8 @@ for (const [id, def] of Object.entries(STATUS_DEFS)) {
 }
 
 export interface ActiveStatus {
+  /** Aura-bound wound: separate from lasting ailments and removed with its field. */
+  challengeField?: number;
   id: string;
   remaining: number;
   stacks: number;

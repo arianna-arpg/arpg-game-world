@@ -1,0 +1,22 @@
+import type { CompanionBondSpec } from '../engine/companionSpec';
+import { mod } from '../engine/stats';
+import { tree, n, type Node } from './skillTreeBuilder';
+const bond = (node: Node, companionBond: CompanionBondSpec): Node => ({ ...node, companionBond });
+
+export const TAME_BEAST_TREE = tree([
+  bond(n('gentle_claim', 'Sovereign Bond', 'Claim ordinary beasts with certainty at any life. Rare beasts are certain at 50% life or below; above that, the native chance curve applies. Keep one bond.'), { normalSure: 1, rareSure: 0.5 }),
+  [bond(n('focused_claim', 'Guardian Beast', 'Your beast generates 100% more threat and learns Defiant Roar: a nearby enemy taunt on an 18-second cooldown.'), { beastMods: [mod('threatGen', 'more', 1)], beastSkills: ['beast_defiant_roar'] }),
+    bond(n('frugal_claim', 'Bend the Apex', 'Boss beasts can now be claimed with certainty at 10% life or below. They refuse above that threshold.'), { bossSure: 0.1 }),
+    bond(n('returning_claim', 'Ancestral Art', 'Unlock your beast family’s special ability. Each family has its own art, cast by the beast through its normal combat AI.'), { familyArt: true })],
+  [bond(n('gentle_pour', 'Abundant Bond', 'Add 100% flask and orb sympathy potency to the native bond, stacking with a socketed Alpha’s Bond. Damaging beast attacks have a 15% chance to shed a life orb, at most once every 2 seconds.', [mod('sympathy_bond_flask', 'flat', 1), mod('sympathy_bond_orb', 'flat', 1)]), { attackOrb: { chance: 0.15, cooldown: 2, kind: 'life' } }),
+    bond(n('gentle_instinct', 'Shared Instinct', 'Share Fury, Frenzy and Rage charges in both directions. Beast attacks have a 20% chance to grant the beast a Frenzy charge, at most once per second. Shared charges cannot echo back.', [mod('sympathy_companion_charges_out', 'flat', 1), mod('sympathy_companion_charges_in', 'flat', 1)]), { attackCharge: { chance: 0.2, cooldown: 1, id: 'frenzy' } }),
+    bond(n('gentle_return', 'Living Lifeline', 'Your beast gains 5% life leech. Half of its actual leech healing and 50% of its other mending returns to you. This innate reciprocal bond stacks with socketed Reciprocal Bond.', [mod('sympathy_feral_reciprocity', 'flat', 1.25)]), { beastMods: [mod('lifeLeech', 'flat', 0.05)] })],
+], [
+  bond(n('swift_claim', 'Growing Litter', 'Hold two beast companions. Downed beasts passively revive at full life after 20 seconds while the bond is seated and you are alive. The skill becomes Whistle only when all bond slots are filled.'), { slotsAdd: 1, reviveSeconds: 20 }),
+  [bond(n('repeat_claim', 'Dread Pack', 'Each beast radiates dread within 110 units. Enemies inside take chaos pulses each second: 4 base damage, plus 25% per consecutive second, up to 5 stacks. Each beast tracks its own exposure; leaving resets it.'), { dread: { radius: 110, interval: 1, damage: 4, ramp: 0.25, maxStacks: 5 } }),
+    bond(n('light_claim', 'Third of the Litter', 'Hold one additional beast companion, for three bonds before other bonuses.'), { slotsAdd: 1 }),
+    bond(n('steady_claim', 'Rallying Whistle', 'At full bond capacity, Whistle becomes Rallying Whistle: still revive, heal and recall every beast, then command them toward your aim while they pulse physical damage every second for 5 seconds.'), { whistle: { skillId: 'beast_rallying_whistle', pulseSkill: 'beast_rally_pulse', duration: 5, interval: 1 } })],
+  [bond(n('swift_instinct', 'Hunting Partners', 'Damaging beast attacks grant you a stack of 10% increased attack damage for your next landed attack. Your damaging attacks grant each living companion the same preparation. Up to 3 stacks, lasting 8 seconds; a landed attack consumes all stacks.'), { rally: { maxStacks: 3, damagePerStack: 0.1, duration: 8 } }),
+    bond(n('swift_pour', 'Learned Blows', 'Each beast can copy your completed ordinary melee attack from its own position once every 6 seconds at 60% damage. It keeps your skill’s investment. Copies cannot teach copies or feed Hunting Partners.'), { mimicMelee: { cooldown: 6, power: 0.6 } }),
+    bond(n('swift_return', 'Pack Crescendo', 'Hunting Partners holds 2 more stacks. Consuming all 5 stacks grants the other side 35% increased attack speed for 5 seconds. Frenzied beasts also gain a free Pursuit bound toward the struck enemy.'), { rallyCapAdd: 2, frenzy: { duration: 5, attackSpeed: 0.35, gapCloser: 'beast_pursuit' } })],
+], n('claim_practice', 'Practiced Keeping', '15% increased companion maximum life and damage.', [mod('minionLife', 'increased', 0.15), mod('minionDamage', 'increased', 0.15)]));
