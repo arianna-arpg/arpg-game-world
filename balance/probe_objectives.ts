@@ -488,17 +488,8 @@ withSeededRandom(0x0bec7a, () => {
     step(1);
     check('H1 `contest: false` waives the law (an authored uncontested stand)',
       spire.charge > 0.8, spire.charge.toFixed(2));
-    mintWith({ kind: 'beacon', contest: { drainAt: 2 } }, 171717, 6);
-    const s2 = w.spires[0];
-    killAllEnemies();
-    w.spireReinforceAt = w.time + 9999;
-    s2.charge = 3;
-    w.player.pos = vec(s2.pos.x + 400, s2.pos.y);
-    plantFoe(s2.pos.x - 30, s2.pos.y);
-    plantFoe(s2.pos.x + 30, s2.pos.y);
-    step(1);
-    check('H2 a partial override re-dials the law (drainAt 2 drains at 2)',
-      s2.charge < 3 - 0.2, s2.charge.toFixed(2));
+    // H2's partial override is checked on fixed ground below. Arbitrary
+    // offsets in a generated zone can put a presser behind blocking scenery.
   }
 
   // --- RIG I: the confine clause (the soft-lock guard's instance half) -------
@@ -1867,6 +1858,28 @@ withSeededRandom(0xc017e57, () => {
   w.updateObjective(1);
   check('HR6 an authored radius-only contest deliberately retains through-wall pressure',
     spire.charge === 0 && w.spireView()?.contested);
+
+  // H2: change only the drain threshold; inherit both reach and drain rate.
+  // Keep the player away and actors fixed so charging and AI cannot mask it.
+  w.zone.objective = { kind: 'beacon', chargeSec: 22, reinforce: false };
+  w.player.pos = vec(90, 450);
+  spire.charge = 3;
+  foe.pos = vec(225, 255);
+  const second = w.createMonster('zombie', 3, 'enemy') as Actor;
+  second.pos = vec(195, 225);
+  w.actors = [w.player, foe, second];
+  check('H2a both pressers can reach the beacon on the same ground',
+    w.contestPressers(spire, CONTEST_CFG) === 2);
+  w.updateObjective(1);
+  check('H2b two pressers do not drain at the default threshold', spire.charge === 3);
+  w.zone.objective.contest = { drainAt: 2 };
+  second.pos = vec(315, 225);
+  w.updateObjective(1);
+  check('H2c a partial override keeps the wall-aware reach rule', spire.charge === 3);
+  second.pos = vec(195, 225);
+  w.updateObjective(1);
+  check('H2 a partial override re-dials the law (drainAt 2 drains at 2)',
+    Math.abs(spire.charge - (3 - CONTEST_CFG.drainPerSec)) < 1e-9, spire.charge.toFixed(2));
 
   // A remote banked fixture may drain, but the displayed local fixture is
   // building. Global OR-ed flags used to label this safe stand OVERRUN.
