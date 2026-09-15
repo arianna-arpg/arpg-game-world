@@ -1,4 +1,5 @@
 import { companionBondOf, type CompanionBondSpec } from './companionSpec';
+import { challengeDelivery, type ChallengeSpec } from './challengeSpec';
 // ---------------------------------------------------------------------------
 // Skill definition schema.
 //
@@ -434,6 +435,8 @@ export function instanceAim(inst: SkillInstance): AimSpec | undefined {
  *  untouched — byte-identical by construction, zero allocation. The cast
  *  path reads delivery through THIS view (executeSkill's one binding). */
 export function instanceDelivery(inst: SkillInstance): SkillDef['delivery'] {
+  const challenge = challengeDelivery(inst);
+  if (challenge) return challenge;
   const d = inst.def.delivery;
   const over = instanceTreeOver(inst);
   if (d.type === 'summon' && (over?.summon || d.selectPool?.length)) {
@@ -4859,6 +4862,8 @@ function mergeTreeDomain(a: GroundDelivery['domain'], b: GroundDelivery['domain'
 }
 
 export interface SkillTreeNode {
+  /** Cast resets, inherited projectiles and ground-device challenge mechanics. */
+  challenge?: ChallengeSpec;
   /** Persistent beast-bond abilities; resolved additively and rebuilt on allocation changes. */
   companionBond?: CompanionBondSpec;
   /** Node id — persisted on the instance (SkillInstance.treeNodes), so
@@ -5128,6 +5133,7 @@ export function instanceTreeOver(inst: SkillInstance): SkillTreeNode['over'] | u
  * Buff modifiers accumulate per invested rank; identity fields replace only
  * their matching buff. No authored definition or modifier array is mutated. */
 export function instanceEffects(inst: SkillInstance): SkillEffect[] {
+  if (challengeDelivery(inst)) return [];
   if (!inst.treeNodes?.length) return inst.def.effects;
   let out: SkillEffect[] | undefined;
   const reduceCooldowns = instanceTreeOver(inst)?.reduceCooldowns;
@@ -5736,6 +5742,8 @@ export function skillRarityFloor(weights: Partial<Record<SkillRarity, number>>):
 
 /** A skill as OWNED by an actor: definition + level + socketed supports. */
 export interface SkillInstance {
+  /** Transient challenge payload ownership; never part of saved investment. */
+  challengeHost?: SkillInstance;
   /** Flask follow-up provenance; transient and never serialized. */
   followUpHost?: SkillInstance;
   /** Transient invocationHost provenance; released fields retire with this exact host. */

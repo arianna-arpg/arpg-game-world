@@ -2581,6 +2581,8 @@ export class Actor {
       stacksBonus?: number;
       /** The applier's actor id (brood attribution and kin). */
       casterId?: number;
+      /** A field-bound ailment is a separate application from lasting wounds. */
+      challengeField?: number;
       /** BROOD clause from the applying skill's graft (BroodSpec). */
       brood?: ActiveStatus['brood'];
       /** DOT-LEECH fraction (the applier's dotLeech_<id> stat). */
@@ -2623,7 +2625,7 @@ export class Actor {
     if (banking && def.bank!.wetMul !== undefined && this.isWet()) dps *= def.bank!.wetMul;
     const baseDur = banking && def.bank!.duration !== undefined ? def.bank!.duration : def.duration;
     const duration = baseDur * durationScale / expiry;
-    const existing = this.statuses.find(s => s.id === id);
+    const existing = this.statuses.find(s => s.id === id && s.challengeField === opts?.challengeField);
     // ARMED (rupture-bearing) statuses run a FIXED FUSE: re-application never
     // postpones the blast — the timer set when the keg was armed runs down no
     // matter how often the victim is re-struck. Fresh rupture payloads PUMP
@@ -2686,7 +2688,7 @@ export class Actor {
       existing.dps = Math.max(existing.dps, dps);
     } else {
       this.statuses.push({
-        id, remaining: duration, stacks: 1, dps, sourceName,
+        id, remaining: duration, stacks: 1, dps, sourceName, challengeField: opts?.challengeField,
         power: power !== 1 ? power : undefined,
         propagates: opts?.propagates || def.propagateOnDeath,
         rupture: opts?.rupture,

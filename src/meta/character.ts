@@ -448,6 +448,10 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
   if (!isCurrentCharacterSave(save)) return false;
   const built = rebuildSavedMeta(save);
   if (!built) return false;
+  // Loading replaces the companion roster, including any fresh-character hound.
+  world.actors = world.actors.filter(a => !a.companion || a.owner !== world.player);
+  world.stashedCompanions = [];
+  world.companionBonds.refresh();
   world.ledger = { ...(save.ledger ?? {}) }; // restore per-run trigger counters
   world.completedObjectives = new Set(save.completedObjectives ?? []);
   world.charDeaths = built.deaths;

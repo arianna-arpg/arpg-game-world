@@ -183,10 +183,11 @@ try {
   {
     const s = suggestion(['barbed_challenge'], 'goad');
     check('Barbed Challenge delivers both native taunt and new bleed', ['taunted', 'bleed'].every(id => s.a.statuses.some(st => st.id === id)));
-    const duration = (nodes: string[]) => suggestion(nodes, 'goad').a.statuses.find(st => st.id === 'taunted')!.remaining;
-    check('Lasting Challenge lengthens actual taunt', duration(['pack_challenge', 'certain_challenge', 'lasting_challenge']) > duration(['pack_challenge', 'certain_challenge']));
+    const duration = (nodes: string[]) => suggestion(nodes, 'goad').w.actors.find(a => a.construct && a.sourceSkillId === 'goad')!.lifespan!;
+    check('Standing Provocation lengthens actual effigy duration', duration(['pack_challenge', 'certain_challenge', 'lasting_challenge']) > duration(['pack_challenge', 'certain_challenge']));
     const volley = setup('goad', ['pack_challenge']); cast(volley.w, volley.inst, { x: volley.p.pos.x + 400, y: volley.p.pos.y });
-    check('Pack Challenge launches three real stones', volley.w.projectiles.filter(p => p.caster === volley.p).length === 3);
+    step(volley.w, 0.8);
+    check('Goading Effigy lands a real device', volley.w.actors.some(a => a.construct && a.sourceSkillId === 'goad'));
   }
   {
     const s = suggestion(['crippling_mark'], 'expose_weakness'), plain = suggestion([], 'expose_weakness');

@@ -1,3 +1,4 @@
+import { GOAD_TREE } from './goadTree';
 import { TAME_BEAST_TREE } from './tameBeastTree';
 import type { SkillTreeSpec, TreeBuffPatch } from '../engine/skills';
 import { mod } from '../engine/stats';
@@ -8,23 +9,7 @@ const buff = (node: Node, id: string, patch: Omit<TreeBuffPatch, 'id'>): Node =>
 /** Native bonds, hostile suggestions and owner-driven doubles. No claim is a
  * summon, no maddened enemy becomes an ally, and echoes still require a use. */
 export const BOND_STARTER_TREES: Record<string, SkillTreeSpec> = {
-  goad: tree([
-    n('barbed_challenge', 'Barbed Challenge', 'The stone also guarantees a bleed before resistance. Deal 20% less hit damage; keep the native taunt and doubled threat.', [mod('apply_bleed', 'flat', 1), mod('damage', 'more', -0.2)]),
-    [n('deep_barb', 'Deep Barb', '50% increased physical ailment magnitude.', [mod('statusMagnitude', 'increased', 0.5, ['physical'])]),
-      n('patient_barb', 'Patient Barb', '40% increased bleed and taunt duration.', [mod('effectDuration', 'increased', 0.4)]),
-      n('feeding_barb', 'Feeding Barb', 'Recover 6% of this skill\'s bleed damage as life.', [mod('dotLeech_bleed', 'flat', 0.06)])],
-    [n('ready_challenge', 'Ready Challenge', '40% increased cooldown recovery.', [mod('cooldownRecovery', 'increased', 0.4)]),
-      n('cheap_challenge', 'Measured Challenge', '35% reduced mana cost.', [mod('manaCost', 'increased', -0.35)]),
-      n('swift_challenge', 'Swift Challenge', '40% increased projectile speed.', [mod('projectileSpeed', 'increased', 0.4)])],
-  ], [
-    n('pack_challenge', 'Pack Challenge', 'Throw two additional stones, taunting each enemy hit. Deal 25% less damage per stone; this spread can wake more of the pack.', [mod('projectileCount', 'flat', 2), mod('damage', 'more', -0.25)]),
-    [n('seeking_challenge', 'Seeking Challenge', 'Stones steer toward enemies at 1.2 radians per second.', [mod('homingPower', 'flat', 1.2)]),
-      n('large_challenge', 'Large Stones', '50% increased projectile size.', [mod('projectileSize', 'increased', 0.5)]),
-      n('piercing_challenge', 'Passing Challenge', 'Stones pierce one additional enemy.', [mod('pierceCount', 'flat', 1)])],
-    [n('certain_challenge', 'Certain Challenge', '50% increased accuracy.', [mod('accuracy', 'increased', 0.5)]),
-      n('paid_challenge', 'Living Challenge', 'Restore 4 life per landed hit.', [mod('lifeOnHit', 'flat', 4)]),
-      n('lasting_challenge', 'Lasting Challenge', '40% increased taunt duration.', [mod('effectDuration', 'increased', 0.4)])],
-  ], n('goad_practice', 'Practiced Goad', '15% increased damage.', [mod('damage', 'increased', 0.15)])),
+  goad: GOAD_TREE,
 
   tame_beast: TAME_BEAST_TREE,
 

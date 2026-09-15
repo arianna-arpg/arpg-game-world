@@ -6,7 +6,7 @@ import { mod } from './stats';
 import { instanceMods, makeSkillInstance, skillContextTags, type SkillInstance } from './skills';
 import { companionBondOf, type CompanionBondSpec, type CompanionSaved } from './companionSpec';
 import { SKILLS } from '../data/skills';
-import { BEAST_FAMILY_BY_ID } from '../data/beastFamilies';
+import { beastFamilyOf } from '../data/beastFamilies';
 
 interface BondState {
   inst: SkillInstance;
@@ -74,7 +74,7 @@ export class CompanionBonds {
     this.w.pendingFuses = this.w.pendingFuses.filter(p => !owns(p.caster, p.inst));
     for (let i = this.w.zones.length - 1; i >= 0; i--) {
       const z = this.w.zones[i];
-      if (owns(z.caster, z.inst)) this.w.retireCompanionZone(z);
+      if (owns(z.caster, z.inst)) this.w.retireOwnedZone(z);
     }
     if (beast.casting && (state.issued.has(beast.casting.inst) || [...state.granted.values()].includes(beast.casting.inst))) beast.casting = null;
     state.issued.clear(); state.exposure.clear(); state.pulseUntil = 0;
@@ -107,8 +107,7 @@ export class CompanionBonds {
     }
     const arts = new Set(dormant ? [] : (spec.beastSkills ?? []));
     if (!dormant && spec.familyArt) {
-      const family = BEAST_FAMILY_BY_ID.get(beast.defId ?? '');
-      if (family) arts.add(family.skillId);
+      arts.add(beastFamilyOf(beast.defId).skillId);
     }
     if (!dormant && beast.buffs.has(this.frenzyId(beast)) && spec.frenzy) arts.add(spec.frenzy.gapCloser);
     // Even a naturally peaceful animal needs an ordinary attack once bonded.

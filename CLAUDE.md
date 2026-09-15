@@ -91,6 +91,10 @@ madness, falcon contracts and owner-scoped cleanup.
 Tame Beast's expanded companion mechanics are in `src/data/tameBeastTree.ts`
 and `engine/companionBonds.ts`; `docs/design/tame-beast.md` covers capture,
 family arts, innate sympathy, cooperative combat, litter revival and persistence.
+Goad's barbed-projectile and taunting-effigy overhaul lives in `src/data/goadTree.ts`
+and `engine/challenges.ts`; `docs/design/goad.md` covers resets, inherited rocks,
+field wounds, impale propagation, aftershocks and burrowing pursuers.
+`balance/probe_goad.ts` also verifies Tamer's starting hound and fallback family art.
 
 Chest and gem-cache lists live in `src/data/containerloot.ts` and the existing
 `loottables.ts`; `docs/design/container-loot.md` documents the context rules,

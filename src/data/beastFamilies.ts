@@ -23,3 +23,8 @@ export const BEAST_FAMILIES: BeastFamily[] = [
   family('stalker', 'Longlimbs', 'migration_strider thicket_stalker lash_maiden veilstalker marsh_stalker pale_strider'),
 ];
 export const BEAST_FAMILY_BY_ID = new Map(BEAST_FAMILIES.flatMap(f => f.members.map(id => [id, f] as const)));
+/** Runtime safety net; explicit membership is still enforced by content QA. */
+export const FALLBACK_BEAST_FAMILY: BeastFamily = { id: 'unclassified', name: 'Untold Beasts', skillId: 'beast_fallback_art', members: [] };
+export function beastFamilyOf(id?: string): BeastFamily {
+  return BEAST_FAMILY_BY_ID.get(id ?? '') ?? FALLBACK_BEAST_FAMILY;
+}

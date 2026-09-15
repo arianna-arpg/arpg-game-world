@@ -142,7 +142,8 @@ export function makeSimWorld(classId: string, seed: number): World {
   const manifest = buildManifest(account, seed);
   for (const p of manifest.packages) p.enabled = false; // a QUIET expedition
   const world = new World(account, Object.freeze(manifest));
-  world.createPlayer(classById(classId));
+  // Isolated skill arenas field their own actors; production creation grants its class companions.
+  world.createPlayer(classById(classId), { startingCompanions: false });
   world.loadZone(SIM_ARENA_ID);
   // Center the hero — spawn points are an exits concern and the arena has none.
   world.player.pos.x = SIM_CFG.arena.w / 2;

@@ -10,7 +10,7 @@ the fourth. No mastery, alternate opening, selection or rekindling rules change.
 
 | Class | Skill | First identity | Second identity | Neutral per rank |
 | --- | --- | --- | --- | --- |
-| Tamer | Goad | Barbed Challenge: guaranteed bleed, 20% less hit damage | Pack Challenge: three stones, 25% less damage each | 15% increased damage |
+| Tamer | Goad | Barbed Challenge: full-damage bleed, resets, impales and inherited splinters | Goading Effigy: ground-placed taunting devices, thorns, wound fields, aftershocks and pursuers | 15% increased damage |
 | Tamer | Tame Beast | Sovereign Bond: guaranteed ordinary claims and powerful individual beasts | Growing Litter: two companions, passive revival and cooperative attacks | 15% increased companion life and damage |
 | Tamer | Stalk | Sheltered Stalk: mitigation and regeneration during the native hush | Hunter's Opening: next landed attack preparation alongside the hush | 12% increased cooldown recovery |
 | Beguiler | Decoy | Patient Double: 70% more mirage duration, 20% less cooldown recovery | Sheltered Departure: temporary mitigation alongside the native dash and mirage | 12% increased cooldown recovery |
@@ -27,9 +27,12 @@ costs, concentrations, conversions and thresholds. Neutral ranks add only their
 listed scalar investment. The probe compares actual unallocated casts against
 tree-less definitions and exercises native casts with all four neutral ranks.
 
-Goad keeps its guaranteed taunt and doubled threat. Its spread identity can
-engage several enemies; it deliberately gives up the native single-target peel.
-Bleed strength, duration and bleed leech use the existing damage/status consumers.
+Goad's overhaul lives in `src/data/goadTree.ts` and is documented in
+[Goad](goad.md). Barbed stones retain native taunt and doubled threat while
+adding resets, wounds and inherited projectiles. Goading Effigy replaces the
+throw's direct hit with a destructible ground device, periodic taunts, thorns
+and optional fields or burrowing pursuers. Field wounds end on aura exit;
+ordinary bleeds remain independent.
 
 Tame Beast's overhaul lives in `src/data/tameBeastTree.ts` and is documented
 in [Tame Beast](tame-beast.md). Its ordinary held claim remains intact; invested

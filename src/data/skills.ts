@@ -1,3 +1,4 @@
+import { GOAD_SKILLS } from './goadSkills';
 import { COMPANION_SKILLS } from './companionSkills';
 import { FLASK_TREES } from './flaskTrees';
 import { FLASK_SKILLS } from './flaskSkills';
@@ -41,6 +42,7 @@ import { ROOTWILD_SKILLS } from './rootwildSkills';
 
 export const SKILLS: Record<string, SkillDef> = {
   ...COMPANION_SKILLS,
+  ...GOAD_SKILLS,
   town_portal: TOWN_PORTAL_SKILL,
   ...NECROMANCER_SKILLS,
   ...PACT_SKILLS,

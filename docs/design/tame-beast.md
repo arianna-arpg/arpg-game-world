@@ -86,7 +86,14 @@ so one player's attacks or respec cannot consume another player's bond buffs.
 | Longlimbs | Lashing Reach: long vulnerable strike |
 
 New species must declare family membership; the coverage probe fails on
-missing or duplicate assignments. The companion retains native attacks, gains
+missing or duplicate assignments. New families (for example bears or a distinct
+boar family) should receive their own authored art rather than relying on the
+safety net. At runtime, `beastFamilyOf` always returns a family: an unlisted
+species receives **Worrying Strike**, a modest physical hit with a two-second
+Winded slow and a 12-second cooldown. Ancestral Art therefore never grants an
+empty family slot even if content coverage is missed.
+
+The companion retains native attacks, gains
 an ordinary claw if its peaceful wild kit lacked damage, and accepts combat
 orders instead of retaining a wild hunger/flee script. Family arts and taunts
 use the existing AI selection and cast pipeline. Removing their nodes removes
@@ -104,6 +111,17 @@ frenzy, pulses, fields and learned copies without deleting unrelated attacks.
 Family skills and stats rebuild rather than being serialized as permanent
 grants. Transient copy ownership is pruned once its payload finishes.
 
+## Starting hound
+
+Fresh Tamers begin with one ordinary level-one Shepherd's Hound, bound to
+Tame Beast. It counts toward companion capacity, exposes Whistle while that
+capacity is full, uses normal combat AI, and follows the same downing,
+revival, release and saving rules as a captured beast. Fresh co-op Tamers
+receive their own hound. Resume shells do not grant gifts, and loading a
+saved character replaces its roster rather than duplicating the hound or
+replacing an intentionally empty roster. Class definitions author these
+fresh-character gifts through `startingCompanions`.
+
 ## Verification
 
 `balance/probe_tamebeast.ts` covers certainty boundaries, boss eligibility,
@@ -113,3 +131,5 @@ damage, dread ramps/reset, command pulses, rare preservation, respec and owner
 isolation. Every family is exercised through real companion AI. The existing
 bond-tree probe continues to exercise all 72 opening-tree terminal routes.
 The probe roster, type checks and simulation smoke are the regression gates.
+`balance/probe_goad.ts` additionally verifies fallback-art AI, fresh solo and
+co-op gifts, Whistle, downing, saving and empty-roster loading.

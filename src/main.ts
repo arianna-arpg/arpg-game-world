@@ -521,7 +521,7 @@ function startMu(): void {
   couchReset();
   world = adoptWorld(new World(account, Object.freeze(buildManifest(account, rollSeed()))));
   const cls = CLASSES.find(c => c.id === MU_CFG.provisionalClass) ?? CLASSES[0];
-  world.createPlayer(cls, { modeId: DEFAULT_MODE_ID });
+  world.createPlayer(cls, { modeId: DEFAULT_MODE_ID, startingCompanions: false });
   lastSentZone = '';
   ui.resetRunView();
   deathShown = false;
@@ -596,7 +596,7 @@ function resumeRosterChar(entry: RosterEntry): void {
     }
     const manifest = reconcileManifest(save.expedition, account, rollSeed());
     world = adoptWorld(new World(account, Object.freeze(manifest)));
-    world.createPlayer(classDef, { modeId: entry.modeId, charId: entry.charId });
+    world.createPlayer(classDef, { modeId: entry.modeId, charId: entry.charId, startingCompanions: false });
     if (!applySavedCharacter(world, save)) {
       ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
       return;
@@ -631,7 +631,7 @@ function resumeGame(preloaded?: CharacterSave | null): void {
   // its stored seed makes the resumed world deterministic.
   const manifest = reconcileManifest(save.expedition, account, rollSeed());
   world = adoptWorld(new World(account, Object.freeze(manifest)));
-  world.createPlayer(classDef);          // builds a valid skeleton in town…
+  world.createPlayer(classDef, { startingCompanions: false });          // builds a valid skeleton in town…
   if (!applySavedCharacter(world, save)) { // …then the save overwrites the build
     clearCharacter();
     ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
@@ -1314,7 +1314,7 @@ function mintCouchSeat(padIdx: number, cls: ClassDef, vessel?: CouchGuestCtx['ve
     invertMove: () => settings.invertMove,
     suspended: () => couchGuestSuspended(id),
   });
-  const seat = world.addSeat(id, cls, source);
+  const seat = world.addSeat(id, cls, source, { startingCompanions: !vessel });
   const side = COUCH_CFG.join.sides[
     Math.min(COUCH_CFG.join.sides.length - 1, world.couchSeats().length + 1)] ?? 'right';
   seat.couch = { pad: padIdx, side };
@@ -2412,7 +2412,7 @@ function startAsClient(classDef: ClassDef, selfSeat: string, hostSeed: number): 
   // disagree with the authority we render). wireSeed normalizes the untrusted
   // wire value; ONE seam covers both seating roads (welcome and newRun).
   world = adoptWorld(new World(account, Object.freeze(buildManifest(account, wireSeed(hostSeed, rollSeed())))));
-  world.createPlayer(classDef);   // a local shell (getters/camera/HUD) — not the authority
+  world.createPlayer(classDef, { startingCompanions: false });   // a local shell (getters/camera/HUD) — not the authority
   world.clientSeatId = selfSeat;
   // META mutations on a client are INTENTS: ship them to the host (which owns every
   // mutation) instead of applying to the throwaway render shell. requestMeta routes

@@ -36,6 +36,8 @@ export interface ClassDef {
   bar: (string | null)[];
   /** The passive-tree node this class starts at (id in PASSIVE_NODES). */
   startNode: string;
+  /** Fresh-character companions; ordinary persistent bonds after creation. */
+  startingCompanions?: { monsterId: string; skillId: string }[];
   /** THE MASTERY LADDER's gifts (data/classTiers.ts CLASS_TIERS): per rung,
    *  the ALTERNATE OPENING it opens for this class — a `replaces` row lets
    *  `skill` stand in for that base starter when the class wakes (the
@@ -318,6 +320,7 @@ export const CLASSES: ClassDef[] = [
   },
   {
     id: 'tamer', name: 'Tamer',
+    startingCompanions: [{ monsterId: 'shepherds_hound', skillId: 'tame_beast' }],
     look: 'class_tamer',
     description: 'A quiet hand and a steady gaze. Slips past the wild unseen, claims a beast with held focus, and fights beside the bond: the pet at the front, the whistle in reserve.',
     color: '#a8c87a',

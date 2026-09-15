@@ -17,6 +17,7 @@ const leap = { type: 'leap', range: 300, airTime: 0.35, radius: 65 } as const;
 
 /** Free, cooldown-limited arts remain usable even by naturally mana-less beasts. */
 export const COMPANION_SKILLS: Record<string, SkillDef> = {
+  beast_fallback_art: { ...attack('beast_fallback_art', 'Worrying Strike', melee, [{ type: 'status', status: 'winded', chance: 1, durationOverride: 2 }], 'physical', 8), cooldown: 12 },
   beast_defiant_roar: {
     id: 'beast_defiant_roar', name: 'Defiant Roar', noDrop: true,
     description: 'Taunt nearby enemies into attacking the beast.',
