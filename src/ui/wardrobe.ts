@@ -1,9 +1,11 @@
 import { COSMETICS, COSMETIC_SLOTS, type CosmeticLoadout, type CosmeticSlot } from '../engine/cosmetics';
+import { SKILLS } from '../data/skills';
 import { COSMETIC_CFG } from '../data/cosmetics';
 import type { Account } from '../meta/account';
 import { applySkillColorCosmetic, buyCosmetic, cosmeticAcquisition, cosmeticCharges, cosmeticPick,
   equipCosmetic, ownsCosmetic, setSkillCosmeticColor, settleCosmetics, skillColorUnlocked } from '../meta/cosmetics';
 import { drawCosmeticModelTile, drawCosmeticPreview } from '../render/vis/cosmetics';
+import { drawCosmeticStyleTile } from '../render/vis/cosmeticEffects';
 import type { BodyLook } from '../render/vis/body';
 
 const esc = (s: string): string => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -39,6 +41,7 @@ function installStyles(): void {
   .wardrobe .wd-card b,.wardrobe .wd-card small { display:block; }
   .wardrobe .wd-swatch { width:28px; height:28px; border-radius:50%; margin-bottom:8px; background:radial-gradient(circle at 35% 25%,#ffffffa0,var(--swatch) 55%,#101820); box-shadow:0 0 18px color-mix(in srgb,var(--swatch) 25%,transparent); }
   .wardrobe canvas.wd-model-thumb { width:100%; height:95px; border:0; background:radial-gradient(ellipse,#31415280,transparent 70%); object-fit:contain; }
+  .wardrobe canvas.wd-effect-thumb { width:110px; height:40px; border:0; object-fit:contain; margin-bottom:5px; }
   .wardrobe .wd-color-controls { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:12px; }
   .wardrobe input[type=color] { width:52px; height:42px; padding:3px; flex:0 0 52px; min-width:0; cursor:pointer; }
   .wardrobe input[data-wd-hex] { width:115px; flex:0 0 115px; font-family:monospace; }
@@ -80,6 +83,7 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
       customColors: { ...account.cosmetics.loadout.customColors } };
     if (skill && (slot === 'skillSkin' || slot === 'skillRecolor')) (preview.skills[skill] ??= {})[slot] = selected;
     else if (selected) preview.slots[slot] = selected; else delete preview.slots[slot];
+    if (!skill && slot === 'skillSkin' && def?.skills?.[0]) (preview.skills[def.skills[0]] ??= {}).skillSkin = selected;
     let draftColor = account.cosmetics.loadout.customColors?.[skill] ?? def?.paint.color ?? '#c4b2f2';
     if (def?.consume && skill) preview.customColors![skill] = draftColor;
     root.innerHTML = `<section class="wardrobe" aria-label="Wardrobe">
@@ -87,10 +91,10 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
       <p class="wd-muted">A different life. An unmistakable you.</p></div><button data-wd-back>Back</button></header>
       <div class="wd-layout"><aside>
         <canvas width="${COSMETIC_CFG.preview.width}" height="${COSMETIC_CFG.preview.height}" aria-label="Appearance preview"></canvas>
-        <p class="wd-muted">Preview · character, companion &amp; skill effects</p>
+        <p class="wd-muted">Preview · ${slot === 'wispSkin' ? 'your Mu vessel' : slot === 'portalSkin' || slot === 'portalRecolor' ? 'your Town Portal' : slot === 'hotbarSkin' ? 'your skill bar' : 'character, companion &amp; skill effects'}</p>
         <div class="wd-outfit">${Object.values(account.cosmetics.loadout.slots).map(id => `<span>${esc(COSMETICS[id]?.name ?? id)}</span>`).join('') || '<span>Original appearance</span>'}</div>
         <p>Owned choices stay with your account through every run. Wear them freely, in any combination.</p>
-        <p class="wd-muted">Models change your silhouette; skins layer color and texture over it. Your class, skills and attributes remain your own.</p>
+        <p class="wd-muted">Models change your silhouette; skins layer color and texture over it. Mu wisps have their own silhouettes. Your class, skills and attributes remain your own.</p>
         <p><b>${account.credits}</b> Mortal Essence available</p>
         <small>Spend a run’s Mortal Essence here from the Reckoning, before sealing it.</small>
         <p class="wd-note" role="status">${esc(note)}</p>
@@ -102,9 +106,12 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
         <div class="wd-grid"><button class="wd-card" data-wd-id="" aria-pressed="${selected === null}"><div class="wd-swatch" style="--swatch:#8995a0"></div><b>Original appearance</b><small>Clear this cosmetic</small></button>
         ${candidates.map(d => `<button class="wd-card" data-wd-id="${esc(d.id)}" aria-pressed="${selected === d.id}">
           <span class="wd-state">${effectiveId() === d.id ? 'Equipped' : d.consume ? `${cosmeticCharges(account.cosmetics, d.id)} ink${cosmeticCharges(account.cosmetics, d.id) === 1 ? '' : 's'}` : ownsCosmetic(account.cosmetics, d.id) ? 'Owned' : 'Locked'}</span>
-          ${d.slot === 'playerModel' ? `<canvas class="wd-model-thumb" data-wd-model="${esc(d.id)}" width="170" height="110" aria-hidden="true"></canvas>` : `<div class="wd-swatch" style="--swatch:${d.paint.color ?? '#c4b2f2'}"></div>`}<b>${esc(d.name)}</b><small>${esc(d.collection)}</small></button>`).join('')}</div>
+          ${d.slot === 'playerModel' || d.slot === 'wispSkin' ? `<canvas class="wd-model-thumb" data-wd-model="${esc(d.id)}" width="170" height="110" aria-hidden="true"></canvas>`
+            : d.paint.projectile || d.paint.portal || d.paint.hotbar ? `<canvas class="wd-effect-thumb" data-wd-effect="${esc(d.id)}" width="160" height="60" aria-hidden="true"></canvas>`
+            : `<div class="wd-swatch" style="--swatch:${d.paint.color ?? '#c4b2f2'}"></div>`}<b>${esc(d.name)}</b><small>${esc(d.collection)}</small></button>`).join('')}</div>
         <div class="wd-detail"><div class="wd-eyebrow">${def ? esc(def.collection) : 'Your original look'}</div>
           <h2>${def ? esc(def.name) : 'Original appearance'}</h2><p>${def ? esc(def.description) : 'Use the character or skill’s own appearance in this slot.'}</p>
+          ${def?.skills ? `<p class="wd-muted">Only for ${def.skills.map(id => esc(SKILLS[id]?.name ?? id)).join(', ')}. Other skills keep their own appearance.</p>` : ''}
           <small>${def ? esc(cosmeticAcquisition(def.id)) + ' · By ' + esc(def.author) : 'Always available'}</small>
           ${def?.consume ? `<p><b>${charges}</b> ink${charges === 1 ? '' : 's'} remaining · ${bound ? 'Color picker permanently unlocked for this skill.' : skill ? 'One ink unlocks this skill permanently.' : 'Choose a specific skill above to use an ink.'}</p>
             ${skill ? `<div class="wd-color-controls"><label for="wd-color">Your color</label><input id="wd-color" data-wd-color type="color" value="${draftColor}"><input data-wd-hex aria-label="Hex color" maxlength="7" value="${draftColor}" spellcheck="false"><small>Preview freely before saving</small></div>` : ''}` : ''}
@@ -167,10 +174,14 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
       if (equipCosmetic(account, slot, undefined, skill)) { selected = effectiveId(); note = 'Using your account default.'; save(); draw(); }
     });
     const canvas = root.querySelector<HTMLCanvasElement>('canvas')!;
-    root.querySelectorAll<HTMLCanvasElement>('[data-wd-model]').forEach(tile => drawCosmeticModelTile(tile, opts.body, tile.dataset.wdModel!));
+    root.querySelectorAll<HTMLCanvasElement>('[data-wd-model]').forEach(tile => drawCosmeticModelTile(tile, opts.body, tile.dataset.wdModel!, slot === 'wispSkin'));
+    root.querySelectorAll<HTMLCanvasElement>('[data-wd-effect]').forEach(tile => {
+      const effect = COSMETICS[tile.dataset.wdEffect!];
+      drawCosmeticStyleTile(tile, effect, account.cosmetics.loadout, SKILLS[skill || effect.skills?.[0] || '']?.color ?? '#b8cee9');
+    });
     const animate = (ms: number): void => {
       if (!canvas.isConnected || !root.contains(canvas) || root.classList.contains('hidden')) return;
-      drawCosmeticPreview(canvas, opts.body, preview, ms / 1000, skill || undefined);
+      drawCosmeticPreview(canvas, opts.body, preview, ms / 1000, skill || def?.skills?.[0], slot);
       frame = requestAnimationFrame(animate);
     };
     frame = requestAnimationFrame(animate);

@@ -69,7 +69,20 @@ export function cosmeticLoadoutFor(world: World, actor: Actor): CosmeticLoadout 
 export function cosmeticSkillPaint(world: World, actor: Actor, skill: string) {
   const loadout = cosmeticLoadoutFor(world, actor);
   return { color: cosmeticSkillColor(loadout, skill),
-    motif: cosmeticPick(loadout, 'skillSkin', skill)?.paint.motif };
+    motif: cosmeticPick(loadout, 'skillSkin', skill)?.paint.motif,
+    projectile: cosmeticPick(loadout, 'skillSkin', skill)?.paint.projectile };
+}
+
+/** Portal presentation follows the caster's seat, including possession and peers.
+ *  Only portal choices cross this view: no inventory, skill bindings or receipts. */
+export function cosmeticPortalLoadout(world: World, owner: string): CosmeticLoadout {
+  const seat = world.seats.find(s => s.id === owner);
+  const loadout = seat ? cosmeticLoadoutFor(world, seat.home ?? seat.actor) : undefined;
+  const out = emptyCosmeticLoadout();
+  for (const slot of ['portalSkin', 'portalRecolor'] as const) {
+    const def = cosmeticPick(loadout, slot); if (def) out.slots[slot] = def.id;
+  }
+  return out;
 }
 
 /** Unknown content stays in ownership receipts so temporarily absent mods do not erase purchases.

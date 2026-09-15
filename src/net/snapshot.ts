@@ -1,3 +1,4 @@
+import { cosmeticStyle, COSMETIC_PROJECTILES } from '../data/cosmeticStyles';
 import { cosmeticLoadoutFor, sanitizeCosmeticLoadout } from '../meta/cosmetics';
 import type { CosmeticLoadout, CosmeticMotif } from '../engine/cosmetics';
 const EMPTY_COSMETIC_LOADOUT: CosmeticLoadout = { slots: {}, skills: {} };
@@ -60,6 +61,7 @@ export type Vec2W = [number, number];
 
 /** One renderer-visible actor on the wire. Short keys keep the JSON small. */
 export interface ActorW {
+  cosmeticKind?: 'wisp';
   cosmeticLoadout?: CosmeticLoadout;
   id: number;
   p: Vec2W; f: number; r: number; c: string; sh: ActorShape;
@@ -181,7 +183,7 @@ export interface CastW {
 /** `a` = flight age (sim seconds): the deterministic phase clock the form
  *  painters roll on (wave crest, square tumble) — client and host draw the
  *  same curve the host's hit test sampled. */
-export interface ProjW { cosmeticMotif?: CosmeticMotif; p: Vec2W; d: number; r: number; c: string; sh: string; a: number; }
+export interface ProjW { cosmeticProjectile?: string; cosmeticMotif?: CosmeticMotif; p: Vec2W; d: number; r: number; c: string; sh: string; a: number; }
 /** A tether band, RENDER-ONLY on the client (the host owns the damage ticks). */
 export interface TetherW { ax: number; ay: number; bx: number; by: number; c: string; w: number; }
 export interface DropW { p: Vec2W; bob: number; kind: 'skill' | 'support' | 'gear' | 'vestige' | 'essence' | 'abilityEssence'; color: string; rarity?: string; name?: string; baseId?: string; vid?: string; eid?: string; tid?: number; cnt?: number; }
@@ -793,8 +795,8 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
       const b = containerBoard(c);
       return b ? [[c.id, packContainerBoard(b)] as const] : [];
     })),
-    actors: world.actors.filter(a => !a.dead || a.isPlayerKind()).map(a => ({ ...actorToW(a, world), cosmeticLoadout: cosmeticLoadoutFor(world, a) })),
-    projectiles: world.projectiles.map(p => ({ p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age, cosmeticMotif: p.cosmeticMotif })),
+    actors: world.actors.filter(a => !a.dead || a.isPlayerKind()).map(a => ({ ...actorToW(a, world), cosmeticKind: a.cosmeticKind, cosmeticLoadout: cosmeticLoadoutFor(world, a) })),
+    projectiles: world.projectiles.map(p => ({ p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age, cosmeticMotif: p.cosmeticMotif, cosmeticProjectile: p.cosmeticProjectile })),
     tethers: world.tethers.map(t => ({
       ax: Math.round(t.ax), ay: Math.round(t.ay), bx: Math.round(t.bx), by: Math.round(t.by),
       c: t.color, w: t.width,
@@ -1159,6 +1161,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     }
     a.radius = aw.r; a.color = aw.c; a.shape = aw.sh;
     a.cosmeticLoadout = aw.cosmeticLoadout ? sanitizeCosmeticLoadout(aw.cosmeticLoadout) : EMPTY_COSMETIC_LOADOUT;
+    a.cosmeticKind = aw.cosmeticKind === 'wisp' ? 'wisp' : undefined;
     a.team = aw.team; a.name = aw.name;
     a.life = aw.life; a.es = aw.es; a.absorb = aw.ab ?? 0;
     a.hitFlash = aw.hf; a.downed = aw.downed; a.dead = aw.dead;
@@ -1320,11 +1323,13 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   // Lightweight entities — plain render structs the renderer reads positionally.
   world.projectiles = snap.projectiles.map(p => ({
     pos: { x: p.p[0], y: p.p[1] }, dir: p.d, radius: p.r, color: p.c, shape: p.sh, age: p.a ?? 0, cosmeticMotif: p.cosmeticMotif,
+    cosmeticProjectile: cosmeticStyle(COSMETIC_PROJECTILES, p.cosmeticProjectile) ? p.cosmeticProjectile : undefined,
   })) as unknown as World['projectiles'];
   world.tethers = (snap.tethers ?? []).map(t => ({
     ax: t.ax, ay: t.ay, bx: t.bx, by: t.by, color: t.c, width: t.w,
   })) as unknown as World['tethers'];
-  world.townPortalClientViews = snap.townPortalViews ?? [];
+  world.townPortalClientViews = (snap.townPortalViews ?? []).map(p => ({ ...p,
+    cosmeticLoadout: sanitizeCosmeticLoadout(p.cosmeticLoadout) }));
   world.drops = snap.drops.map(d => ({
     pos: { x: d.p[0], y: d.p[1] }, bob: d.bob,
     item: d.kind === 'support'

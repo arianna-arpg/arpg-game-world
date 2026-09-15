@@ -1,8 +1,10 @@
 import type { GlyphDef } from '../render/vis/parts';
+import { EXPANDED_COSMETIC_GLYPHS } from './cosmeticExpansionGlyphs';
 
 /** Reusable wardrobe parts in the same vector grammar as creatures and classes.
  *  +X faces forward. Hair/head/garment can be recomposed independently by mods. */
 export const COSMETIC_GLYPHS: Record<string, GlyphDef> = {
+  ...EXPANDED_COSMETIC_GLYPHS,
   wardrobeCoat: { ops: [
     { kind: 'poly', pts: [[.45,-.58],[.6,-.28],[.18,-.25],[-.45,-.34],[-1.25,-.75],[-1.1,-.05],[-.6,0],[-1.1,.05],[-1.25,.75],[-.45,.34],[.18,.25],[.6,.28],[.45,.58]], role: 'cloth', outline: true },
     { kind: 'path', pts: [[.3,-.48],[-.35,-.22],[-1.08,-.54]], role: 'accent', wR: .055, mirror: true },

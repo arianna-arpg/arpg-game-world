@@ -1,35 +1,18 @@
+import { drawCosmeticMotif, drawCosmeticPortal, drawCosmeticProjectile, drawCosmeticHotbar, cosmeticHotbar } from './cosmeticEffects';
+import { MU_CFG } from '../../data/mu';
 import type { Actor } from '../../engine/actor';
 import type { World } from '../../engine/world';
-import type { CosmeticLoadout, CosmeticMotif, CosmeticPaint } from '../../engine/cosmetics';
+import type { CosmeticLoadout, CosmeticPaint, CosmeticSlot } from '../../engine/cosmetics';
 import { COSMETIC_CFG } from '../../data/cosmetics';
 import { cosmeticLoadoutFor, cosmeticPick, cosmeticSkillColor } from '../../meta/cosmetics';
-import { bodySprite, adornSprite, spriteHalf, type BodyLook } from './body';
+import { bodySprite, adornSprite, spriteHalf, drawLiveParts, lookOf, type BodyLook } from './body';
 
-/** Shared visual vocabulary: the world, catalogue tiles and preview use the same painters. */
-export function drawCosmeticMotif(ctx: CanvasRenderingContext2D, motif: CosmeticMotif, color: string,
-  x: number, y: number, radius: number, phase = 0): void {
-  ctx.save(); ctx.translate(x, y); ctx.rotate(phase); ctx.fillStyle = color;
-  ctx.beginPath();
-  if (motif === 'stars') {
-    for (let i = 0; i < 8; i++) {
-      const angle = i * Math.PI / 4, r = i % 2 ? radius * 0.26 : radius;
-      if (!i) ctx.moveTo(Math.cos(angle) * r, Math.sin(angle) * r);
-      else ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
-    }
-    ctx.closePath(); ctx.fill();
-  } else if (motif === 'petals') {
-    for (let i = 0; i < 5; i++) {
-      ctx.rotate(Math.PI * 2 / 5); ctx.beginPath();
-      ctx.ellipse(radius * 0.48, 0, radius * 0.55, radius * 0.25, 0, 0, Math.PI * 2); ctx.fill();
-    }
-    ctx.fillStyle = '#fff2d2'; ctx.beginPath(); ctx.arc(0, 0, radius * 0.2, 0, Math.PI * 2); ctx.fill();
-  } else {
-    ctx.moveTo(0, -radius); ctx.quadraticCurveTo(radius, radius * 0.2, 0, radius);
-    ctx.quadraticCurveTo(-radius * 0.8, radius * 0.2, 0, -radius); ctx.fill();
+export function cosmeticBody(look: BodyLook, loadout: CosmeticLoadout | undefined, summon = false, wisp = false): BodyLook {
+  if (wisp) {
+    const paint = cosmeticPick(loadout, 'wispSkin')?.paint;
+    return paint ? { ...look, look: paint.look ?? look.look, color: paint.color ?? look.color,
+      material: paint.material ?? look.material, adorn: paint.adorn } : look;
   }
-  ctx.restore();
-}
-export function cosmeticBody(look: BodyLook, loadout: CosmeticLoadout | undefined, summon = false): BodyLook {
   const model = !summon ? cosmeticPick(loadout, 'playerModel')?.paint : undefined;
   if (model?.look) look = { ...look, look: model.look, color: model.color ?? look.color, material: model.material ?? look.material };
   const p = cosmeticPick(loadout, summon ? 'summonSkin' : 'playerSkin')?.paint;
@@ -56,7 +39,7 @@ export class CosmeticTrails {
   private trails = new WeakMap<Actor, Trail>();
   draw(ctx: CanvasRenderingContext2D, world: World, actor: Actor, loadout: CosmeticLoadout | undefined): void {
     const def = cosmeticPick(loadout, 'footprints'), cfg = COSMETIC_CFG.footprints;
-    if (!def || actor.owner || actor.dead || actor.downed || actor.flying || actor.leap || world.sailing) {
+    if (!def || actor.cosmeticKind === 'wisp' || actor.owner || actor.dead || actor.downed || actor.flying || actor.leap || world.sailing) {
       this.trails.delete(actor); return;
     }
     let tr = this.trails.get(actor);
@@ -82,9 +65,11 @@ export class CosmeticTrails {
   }
 }
 
-export function drawCosmeticPreview(canvas: HTMLCanvasElement, base: BodyLook, loadout: CosmeticLoadout, time: number, skill?: string): void {
+export function drawCosmeticPreview(canvas: HTMLCanvasElement, base: BodyLook, loadout: CosmeticLoadout, time: number, skill?: string, focus?: CosmeticSlot): void {
   const ctx = canvas.getContext('2d'); if (!ctx) return;
   const { width, height } = canvas;
+  const wisp = focus === 'wispSkin', portal = focus === 'portalSkin' || focus === 'portalRecolor';
+  const isolated = wisp || portal;
   ctx.clearRect(0, 0, width, height);
   const bg = ctx.createRadialGradient(width * 0.5, height * 0.48, 8, width * 0.5, height * 0.48, width * 0.65);
   bg.addColorStop(0, '#283542'); bg.addColorStop(1, '#0d141c'); ctx.fillStyle = bg; ctx.fillRect(0, 0, width, height);
@@ -92,39 +77,53 @@ export function drawCosmeticPreview(canvas: HTMLCanvasElement, base: BodyLook, l
   for (let r = 40; r <= 140; r += 40) { ctx.beginPath(); ctx.ellipse(width / 2, height * 0.63, r, r * 0.35, 0, 0, Math.PI * 2); ctx.stroke(); }
   ctx.globalAlpha = 1;
   const steps = cosmeticPick(loadout, 'footprints')?.paint;
-  if (steps?.motif) for (let i = 0; i < 6; i++) {
+  if (!isolated && steps?.motif) for (let i = 0; i < 6; i++) {
     ctx.globalAlpha = 0.12 + i * 0.1;
     drawCosmeticMotif(ctx, steps.motif, steps.color ?? '#d8b8d3', width * 0.25 + i * 15, height * 0.8 - i * 7, 4, i);
   }
   ctx.globalAlpha = 1; ctx.save(); ctx.translate(width * 0.48, height * 0.53);
-  const look = cosmeticBody({ ...base, radius: 24 }, loadout);
-  drawCosmeticOrbit(ctx, cosmeticPick(loadout, 'playerEffect')?.paint, 30, time);
+  const look = cosmeticBody(wisp ? { shape: 'circle', ...MU_CFG.wisp, radius: 22 } : { ...base, radius: 24 }, loadout, false, wisp);
+  if (portal) { ctx.save(); ctx.translate(0, 13); ctx.scale(1.35, 1.35); drawCosmeticPortal(ctx, loadout, time); ctx.restore(); }
+  if (!wisp && !portal) drawCosmeticOrbit(ctx, cosmeticPick(loadout, 'playerEffect')?.paint, 30, time);
   const half = spriteHalf(look.radius);
-  ctx.rotate(-Math.PI / 2); ctx.drawImage(bodySprite(look), -half, -half);
-  const cosmeticAdorn = cosmeticPick(loadout, 'playerSkin')?.paint.adorn;
-  const adorn = adornSprite(cosmeticAdorn ? { ...look, look: undefined } : look); if (adorn) ctx.drawImage(adorn, -half, -half);
+  ctx.rotate(-Math.PI / 2);
+  if (!portal) { ctx.drawImage(bodySprite(look), -half, -half); const live = lookOf(look.look); if (live) drawLiveParts(ctx, look, live, time); }
+  const cosmeticAdorn = !portal ? cosmeticPick(loadout, wisp ? 'wispSkin' : 'playerSkin')?.paint.adorn : undefined;
+  const adorn = adornSprite(cosmeticAdorn ? { ...look, look: undefined } : look); if (!portal && adorn) ctx.drawImage(adorn, -half, -half);
   ctx.restore();
   const kin = cosmeticBody({ shape: 'circle', color: '#a3a5bc', radius: 12, material: 'bone' }, loadout, true);
-  const kh = spriteHalf(kin.radius); ctx.drawImage(bodySprite(kin), width * 0.73 - kh, height * 0.66 - kh);
+  const kh = spriteHalf(kin.radius); if (!isolated) ctx.drawImage(bodySprite(kin), width * 0.73 - kh, height * 0.66 - kh);
   const color = cosmeticSkillColor(loadout, skill) ?? '#ebbd76';
   const motif = cosmeticPick(loadout, 'skillSkin', skill)?.paint.motif;
-  for (let i = 0; i < 3; i++) {
+  const projectile = cosmeticPick(loadout, 'skillSkin', skill)?.paint.projectile;
+  for (let i = 0; !isolated && i < 3; i++) {
     const x = width * 0.32 + ((time * 30 + i * 28) % 135), y = height * 0.21;
-    ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.save(); ctx.translate(x, y);
+    if (!drawCosmeticProjectile(ctx, projectile, color, 5, 0, time)) { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill(); }
+    ctx.restore();
     if (motif) drawCosmeticMotif(ctx, motif, color, x, y, 7, time);
   }
   const avatar = cosmeticPick(loadout, 'avatar')?.paint;
   if (avatar?.motif) drawCosmeticMotif(ctx, avatar.motif, avatar.color ?? '#c4b2f2', width - 26, 26, 12, 0);
+  if (focus === 'hotbarSkin') {
+    const style = cosmeticHotbar(loadout), x = width / 2 - 83, y = height - 42;
+    drawCosmeticHotbar(ctx, loadout, x, y, 166, 28);
+    for (let i = 0; i < 5; i++) {
+      ctx.fillStyle = style?.fill ?? '#101018'; ctx.strokeStyle = style?.border ?? '#3a3a52'; ctx.lineWidth = 1;
+      ctx.fillRect(x + i * 34, y, 28, 28); ctx.strokeRect(x + i * 34, y, 28, 28);
+      drawCosmeticMotif(ctx, 'stars', style?.trim ?? '#e2d4b2', x + i * 34 + 14, y + 14, 5);
+    }
+  }
 }
 
 /** Catalogue portraits use the very same resolved body and bake as the world. */
-export function drawCosmeticModelTile(canvas: HTMLCanvasElement, base: BodyLook, id: string): void {
+export function drawCosmeticModelTile(canvas: HTMLCanvasElement, base: BodyLook, id: string, wisp = false): void {
   const ctx = canvas.getContext('2d'); if (!ctx) return;
-  const look = cosmeticBody({ ...base, radius: 25 }, { slots: { playerModel: id }, skills: {} });
+  const look = cosmeticBody({ ...base, radius: 25 }, { slots: { [wisp ? 'wispSkin' : 'playerModel']: id }, skills: {} }, false, wisp);
   const half = spriteHalf(look.radius);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.save(); ctx.translate(canvas.width / 2, canvas.height / 2); ctx.rotate(-Math.PI / 2);
   ctx.drawImage(bodySprite(look), -half, -half); ctx.restore();
 }
 
-export { cosmeticLoadoutFor, cosmeticPick };
+export { cosmeticLoadoutFor, cosmeticPick, drawCosmeticMotif };

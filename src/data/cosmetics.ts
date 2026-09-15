@@ -1,6 +1,7 @@
 import { registerCosmetic, type CosmeticDef, type CosmeticSlot, type CosmeticPaint } from '../engine/cosmetics';
 import { CLASSES } from './classes';
 import { COSMETIC_MODELS } from './cosmeticModels';
+import { COSMETIC_WISPS } from './cosmeticExpansionModels';
 
 export const COSMETIC_CFG = {
   footprints: { spacing: 15, lifetime: 2.4, maxPerActor: 24, teleportDistance: 110 },
@@ -18,6 +19,25 @@ for (const c of CLASSES) if (c.look) add(`model_${c.id}`, c.name, 'playerModel',
   `Wear the ${c.name} model with any class. Your skills and attributes stay your own.`, { kind: 'starter' }, 'Class silhouettes');
 for (const m of COSMETIC_MODELS) add(`model_${m.id}`, m.name, 'playerModel', { look: `cosmetic_${m.id}`, color: m.color },
   m.description, { kind: 'starter' }, 'Wanderers of the Wake');
+for (const m of COSMETIC_WISPS) add(`wisp_${m.id}`, m.name, 'wispSkin', { look: `cosmetic_wisp_${m.id}`, color: m.color },
+  m.description, { kind: 'starter' }, 'Souls of Mu');
+
+add('portal_astral', 'Astral Iris', 'portalSkin', { portal: 'astral_iris' }, 'Counter-turning rings and five stars frame your passage.');
+add('portal_runic', 'Runic Gate', 'portalSkin', { portal: 'runic_gate' }, 'Rotating hexagonal seals hold a doorway between places.');
+add('portal_petals', 'Petal Door', 'portalSkin', { portal: 'petal_door' }, 'An unfurling wreath of blossoms encircles your passage.');
+add('portal_rose', 'Rose Passage', 'portalRecolor', { color: '#edaccf' }, 'Color your Town Portal with soft rose light.');
+add('portal_jade', 'Jade Passage', 'portalRecolor', { color: '#83e0b5' }, 'Color your Town Portal with living jade light.');
+add('portal_gold', 'Golden Passage', 'portalRecolor', { color: '#f1cc82' }, 'Color your Town Portal with warm gold light.');
+add('hotbar_moon', 'Moon Silver', 'hotbarSkin', { hotbar: 'moon_silver', color: '#c8e5f0' }, 'Silver-edged slots on a midnight rail, with star inlays.');
+add('hotbar_rose', 'Rose Vellum', 'hotbarSkin', { hotbar: 'rose_vellum', color: '#e5b2cd' }, 'Rose borders and floral corner ornaments for your skills.');
+add('hotbar_ember', 'Ember Forge', 'hotbarSkin', { hotbar: 'ember_forge', color: '#e9b575' }, 'Warm bronze frames and ember inlays for your skills.');
+for (const [id, name, projectile, skills, description] of [
+  ['flame_fletching', 'Flame Fletching', 'feathered_arrow', ['flame_arrow'], 'Flame Arrow becomes a feathered arrow with a blazing arrowhead.'],
+  ['flame_sunlance', 'Sunlance Arrow', 'sun_lance', ['flame_arrow'], 'Flame Arrow becomes a long, luminous sun-metal dart.'],
+  ['fireball_comet', 'Ember Comet', 'ember_comet', ['fireball'], 'Fireball becomes a bright comet wrapped in a flowing flame tail.'],
+  ['crystal_projectiles', 'Crystal Flight', 'crystal_bolt', undefined, 'Dress projectile skills in gently turning crystal shards.'],
+] as const) registerCosmetic({ id, name, slot: 'skillSkin', paint: { projectile }, skills,
+  description, acquire: { kind: 'starter' }, collection: 'Flights of Fancy', author: 'Hollow Wake' });
 
 registerCosmetic({ id: 'prismatic_ink', name: 'Prismatic Ink', slot: 'skillRecolor',
   paint: { color: '#c4b2f2' }, consume: { target: 'skillColor', starterCharges: 2 },

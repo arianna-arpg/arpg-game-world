@@ -18,6 +18,14 @@ import { CLASSES } from '../src/data/classes';
 import { COSMETIC_MODELS } from '../src/data/cosmeticModels';
 import { LOOKS } from '../src/data/looks';
 import { PART_PAINTERS } from '../src/render/vis/parts';
+import { COSMETIC_WISPS } from '../src/data/cosmeticExpansionModels';
+import { COSMETIC_PROJECTILES, COSMETIC_PORTALS, COSMETIC_HOTBARS, cosmeticStyle } from '../src/data/cosmeticStyles';
+import { cosmeticPortalColor, drawCosmeticPortal, drawCosmeticProjectile, cosmeticProjectileExtent, cosmeticHotbar, drawCosmeticHotbar } from '../src/render/vis/cosmeticEffects';
+import { MU_CFG } from '../src/data/mu';
+import { sceneBegin } from '../src/engine/scenes';
+import { menuFold } from '../src/engine/menu';
+import { TOWN_PORTAL_CFG } from '../src/data/townportals';
+import '../src/data/menu';
 
 let checks = 0;
 const test = (label: string, run: () => void): void => { run(); checks++; console.log(`PASS ${label}`); };
@@ -27,9 +35,118 @@ test('Every category has authored content; material and skill references resolve
   for (const d of Object.values(COSMETICS)) {
     if (d.paint.material) assert(MATERIALS[d.paint.material], d.id);
     if (d.paint.look) assert(LOOKS[d.paint.look], d.id);
+    if (d.paint.projectile) assert(cosmeticStyle(COSMETIC_PROJECTILES, d.paint.projectile), d.id);
+    if (d.paint.portal) assert(cosmeticStyle(COSMETIC_PORTALS, d.paint.portal), d.id);
+    if (d.paint.hotbar) assert(cosmeticStyle(COSMETIC_HOTBARS, d.paint.hotbar), d.id);
     for (const id of d.skills ?? []) assert(SKILLS[id], `${d.id}: ${id}`);
   }
   assert.throws(() => registerCosmetic(COSMETICS.moon_tint));
+});
+
+test('Exclusive projectile skins cannot be worn by incompatible skills, including defaults and saves', () => {
+  const a = makeAccount();
+  assert(equipCosmetic(a, 'skillSkin', 'flame_fletching'));
+  assert.equal(cosmeticPick(a.cosmetics.loadout, 'skillSkin', 'flame_arrow')?.paint.projectile, 'feathered_arrow');
+  assert.equal(cosmeticPick(a.cosmetics.loadout, 'skillSkin', 'fireball'), undefined);
+  assert.equal(equipCosmetic(a, 'skillSkin', 'flame_fletching', 'fireball'), false);
+  assert.equal(equipCosmetic(a, 'skillSkin', 'fireball_comet', 'flame_arrow'), false);
+  const raw = { slots: {}, skills: { fireball: { skillSkin: 'flame_fletching' }, flame_arrow: { skillSkin: 'flame_fletching' } } };
+  assert.deepEqual(sanitizeCosmeticLoadout(raw).skills, { flame_arrow: { skillSkin: 'flame_fletching' } });
+  assert(equipCosmetic(a, 'skillSkin', 'crystal_projectiles', 'fireball'));
+  assert.equal(cosmeticPick(deserializeAccount(serializeAccount(a))!.cosmetics.loadout, 'skillSkin', 'fireball')?.paint.projectile, 'crystal_bolt');
+});
+
+test('Mu spirits have independent silhouettes; character cosmetics and scene seals do not override them', () => {
+  const w = makeSimWorld('warrior', 47001);
+  equipCosmetic(w.account, 'playerModel', 'model_necromancer'); equipCosmetic(w.account, 'playerSkin', 'moon_glass');
+  assert(sceneBegin(w, 'mu'));
+  for (let i = 0; i < 18; i++) w.update(1 / 60);
+  assert.equal(w.player.cosmeticKind, 'wisp'); assert.equal(w.player.look, MU_CFG.wisp.look);
+  const native = { shape: w.player.shape, radius: w.player.radius, color: w.player.color, look: w.player.look };
+  assert.deepEqual(cosmeticBody(native, w.account.cosmetics.loadout, false, true), native);
+  assert(COSMETIC_MODELS.length >= 8); assert(COSMETIC_WISPS.length >= 3);
+  for (const wis of COSMETIC_WISPS) {
+    for (const part of [...wis.body.parts, ...(wis.body.live ?? [])]) assert(PART_PAINTERS[part.kind]);
+    assert(equipCosmetic(w.account, 'wispSkin', `wisp_${wis.id}`));
+    const body = cosmeticBody(native, w.account.cosmetics.loadout, false, true);
+    assert.equal(body.look, `cosmetic_wisp_${wis.id}`); assert.equal(body.color, wis.color);
+    assert.equal(body.radius, native.radius); assert.equal(body.adorn, undefined);
+    assert.equal(cosmeticBody(native, w.account.cosmetics.loadout).look, 'class_necromancer', 'hero resolution remains independent');
+  }
+  const menu = menuFold({ account: w.account, world: w, seat: w.localSeat, pageOpen: () => false, ownedUnlock: () => false });
+  assert.equal(menu.entries.find(e => e.def.id === 'wardrobe')?.state, 'open');
+  assert.equal(menu.entries.find(e => e.def.id === 'character')?.state, 'sealed');
+  const client = makeSimWorld('warrior', 47001); applySnapshot(client, serializeSnapshot(w, 2));
+  assert.equal(client.player.cosmeticKind, 'wisp');
+  assert.equal(cosmeticBody(native, cosmeticLoadoutFor(client, client.player), false, client.player.cosmeticKind === 'wisp').look, 'cosmetic_wisp_wandering_prism');
+  w.player.cosmeticKind = undefined; applySnapshot(client, serializeSnapshot(w, 3));
+  assert.equal(client.player.cosmeticKind, undefined, 'later snapshots clear wisp identity');
+});
+
+test('Portal choices follow their caster through both ends and snapshot synchronization', () => {
+  const w = makeSimWorld('warrior', 7721);
+  w.zone.objective = { kind: 'clear', all: true };
+  equipCosmetic(w.account, 'portalSkin', 'portal_petals'); equipCosmetic(w.account, 'portalRecolor', 'portal_rose');
+  assert(w.castTownPortal()); for (let i = 0; i < 90; i++) w.update(1 / 60);
+  const view = w.townPortalViews()[0]; assert(view);
+  assert.equal(cosmeticPortalColor(view.cosmeticLoadout), '#edaccf');
+  assert.equal(view.cosmeticLoadout?.slots.portalSkin, 'portal_petals');
+  assert.deepEqual(Object.keys(view.cosmeticLoadout!.slots).sort(), ['portalRecolor', 'portalSkin']);
+  const transit = w as unknown as { updateTownPortals(dt: number): boolean };
+  w.player.pos = { x: view.pos.x + 150, y: view.pos.y }; transit.updateTownPortals(0);
+  w.player.pos = { ...view.pos }; w.player.casting = null; w.player.push = null; w.localSeat.lastActedAt = -100;
+  assert(transit.updateTownPortals(TOWN_PORTAL_CFG.dwellSeconds + .1));
+  assert(w.townPortalViews()[0].label.startsWith('Return to'));
+  assert.equal(cosmeticPortalColor(w.townPortalViews()[0].cosmeticLoadout), '#edaccf');
+  const snap = serializeSnapshot(w, 1), client = makeSimWorld('warrior', 7721);
+  equipCosmetic(client.account, 'portalRecolor', 'portal_gold'); applySnapshot(client, snap);
+  assert.equal(cosmeticPortalColor(client.townPortalViews()[0].cosmeticLoadout), '#edaccf', 'viewer account does not paint someone else’s portal');
+  const saved = deserializeAccount(serializeAccount(w.account))!;
+  assert.equal(saved.cosmetics.loadout.slots.portalSkin, 'portal_petals');
+  const peer = w.addSeat('peer-portal', classById('warrior'), new NullInput());
+  peer.actor.cosmeticLoadout = { slots: { portalSkin: 'portal_runic', portalRecolor: 'portal_jade' }, skills: {} };
+  w.townPortals.push({ ...w.townPortals[0], owner: peer.id });
+  assert.equal(cosmeticPortalColor(w.townPortalViews().find(p => p.owner === peer.id)!.cosmeticLoadout), '#83e0b5');
+});
+
+test('Visual styles animate without RNG; unknown wire styles fall back to native art', () => {
+  const capture = (draw: (ctx: CanvasRenderingContext2D) => void): string => {
+    const calls: unknown[] = [];
+    const ctx = new Proxy({ globalAlpha: 1 }, { get: (o, key) => key in o ? o[key as keyof typeof o]
+      : (...args: unknown[]) => { calls.push([key, ...args]); }, set: (o, key, value) => { calls.push([key, value]); return Reflect.set(o, key, value); } });
+    const random = Math.random;
+    try { Math.random = () => { throw new Error('Cosmetic painter consumed gameplay RNG'); }; draw(ctx as unknown as CanvasRenderingContext2D); }
+    finally { Math.random = random; }
+    return JSON.stringify(calls);
+  };
+  for (const id of ['portal_astral', 'portal_runic', 'portal_petals']) {
+    const look = { slots: { portalSkin: id, portalRecolor: 'portal_jade' }, skills: {} };
+    const at = (t: number) => capture(ctx => drawCosmeticPortal(ctx, look, t));
+    assert.notEqual(at(0), at(1)); assert.equal(at(1), at(1));
+  }
+  assert.equal(capture(ctx => { assert(!drawCosmeticProjectile(ctx, '__proto__', '#123456', 5, 0, 0)); }), '[]');
+  for (const [id, style] of Object.entries(COSMETIC_PROJECTILES)) {
+    assert(capture(ctx => { assert(drawCosmeticProjectile(ctx, id, '#123456', 5, 0, 0)); }).length > 100);
+    assert.equal(cosmeticProjectileExtent(id), style.extent);
+  }
+  const host = makeSimWorld('pyromancer', 40);
+  equipCosmetic(host.account, 'skillSkin', 'flame_fletching', 'flame_arrow');
+  host.spawnProjectile(host.player, makeSkillInstance(SKILLS.flame_arrow), host.player.pos, 0);
+  const shot = host.projectiles[0]; assert.equal(shot.cosmeticProjectile, 'feathered_arrow'); assert.equal(shot.shape, 'circle');
+  const snap = serializeSnapshot(host, 1), client = makeSimWorld('pyromancer', 40); applySnapshot(client, snap);
+  assert.equal(client.projectiles[0].cosmeticProjectile, 'feathered_arrow'); assert.equal(client.projectiles[0].radius, shot.radius);
+  snap.projectiles[0].cosmeticProjectile = 'constructor'; applySnapshot(client, snap);
+  assert.equal(client.projectiles[0].cosmeticProjectile, undefined);
+});
+
+test('Hotbar palettes are account cosmetics with independent slots and safe fallbacks', () => {
+  const a = makeAccount(); assert(equipCosmetic(a, 'hotbarSkin', 'hotbar_rose'));
+  const style = cosmeticHotbar(a.cosmetics.loadout); assert.equal(style, COSMETIC_HOTBARS.rose_vellum);
+  assert.equal(cosmeticHotbar(deserializeAccount(serializeAccount(a))!.cosmetics.loadout), style);
+  assert.equal(equipCosmetic(a, 'playerSkin', 'hotbar_rose'), false);
+  assert.equal(cosmeticStyle(COSMETIC_HOTBARS, 'toString'), undefined);
+  const ctx = new Proxy({ globalAlpha: 1 }, { get: (o, key) => key in o ? o[key as keyof typeof o] : () => {} }) as unknown as CanvasRenderingContext2D;
+  drawCosmeticHotbar(ctx, a.cosmetics.loadout, 10, 10, 200, 54);
 });
 
 test('Ink binds once to an eligible skill, repeats freely, and survives new lives', () => {
@@ -233,7 +350,7 @@ test('Real skill execution preserves combat, resource, collision and RNG results
         applySkillColorCosmetic(w.account, 'prismatic_ink', 'fireball', ['fireball']);
         setSkillCosmeticColor(w.account, 'prismatic_ink', 'fireball', '#12ff76');
         equipCosmetic(w.account, 'playerModel', 'model_veilweaver');
-        equipCosmetic(w.account, 'skillSkin', 'starlit_skills');
+        equipCosmetic(w.account, 'skillSkin', 'fireball_comet');
         equipCosmetic(w.account, 'playerSkin', 'moon_glass');
       }
       const dummy = w.createMonster('target_dummy', 1, 'enemy');

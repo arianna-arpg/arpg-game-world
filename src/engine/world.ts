@@ -1,5 +1,5 @@
 import { throngEvolution, throngTravelProtected, throngClusterPlies, THRONG_EVOLUTION } from './throngEvolution';
-import { cosmeticSkillPaint, settleCosmetics } from '../meta/cosmetics';
+import { cosmeticPortalLoadout, cosmeticSkillPaint, settleCosmetics } from '../meta/cosmetics';
 import { COSMETIC_CFG } from '../data/cosmetics';
 // ---------------------------------------------------------------------------
 // World — owns every entity and runs the unified skill pipeline.
@@ -959,6 +959,7 @@ const HAUNT_TAGS = new Set([
 ]);
 
 interface Projectile {
+  cosmeticProjectile?: string;
   /** Optional victim anchor for a lodged orbit; the caster retains attribution. */
   orbitAnchorId?: number;
   cosmeticMotif?: import('./cosmetics').CosmeticMotif;
@@ -17126,6 +17127,7 @@ export class World {
       if (!visible || !pos) return [];
       const target = p.returning ? source : p.destination;
       return [{ pos, tier: p.returning ? 0 : p.originTier, owner: p.owner,
+        cosmeticLoadout: cosmeticPortalLoadout(this, p.owner),
         label: `${p.returning ? 'Return to' : 'Travel to'} ${(this.zoneMap[target] ?? this.caveMap[target])?.name ?? 'your expedition'}`,
         frac: Math.min(1, (this.townPortalDwell.get(p.owner) ?? 0) / TOWN_PORTAL_CFG.dwellSeconds) }];
     });
@@ -37411,6 +37413,7 @@ export class World {
       hits: new Map(),
       caster, inst, color: cosmeticPaint.color ?? def.color,
       cosmeticMotif: cosmeticPaint.motif,
+      cosmeticProjectile: cosmeticPaint.projectile,
       shape: d.shape ?? 'circle',
       mult: opts?.mult ?? 1,
       flat: opts?.flat,

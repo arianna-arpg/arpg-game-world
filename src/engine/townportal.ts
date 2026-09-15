@@ -14,7 +14,8 @@ export interface TownPortal {
   destinationPos?: Vec2;
   returning: boolean;
 }
-export interface TownPortalView { pos: Vec2; tier: number; label: string; owner: string; frac: number }
+export interface TownPortalView { pos: Vec2; tier: number; label: string; owner: string; frac: number;
+  cosmeticLoadout?: import('./cosmetics').CosmeticLoadout }
 
 export function readTownPortals(raw: unknown): TownPortal[] {
   if (!Array.isArray(raw)) return [];

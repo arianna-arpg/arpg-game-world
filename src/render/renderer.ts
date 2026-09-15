@@ -1,3 +1,4 @@
+import { cosmeticPortalColor, drawCosmeticPortal, cosmeticProjectileExtent, drawCosmeticProjectile, cosmeticHotbar, drawCosmeticHotbar } from './vis/cosmeticEffects';
 import { HIVECALL } from '../engine/hivecall';
 import { CosmeticTrails, cosmeticBody, cosmeticLoadoutFor, cosmeticPick, drawCosmeticMotif, drawCosmeticOrbit } from './vis/cosmetics';
 import { COSMETIC_CFG } from '../data/cosmetics';
@@ -5315,7 +5316,7 @@ export class Renderer {
     // always tracking it) are unchanged.
     const cosmeticLoadout = cosmeticLoadoutFor(world, a);
     this.cosmeticTrails.draw(ctx, world, a, cosmeticLoadout);
-    if (!a.owner) drawCosmeticOrbit(ctx, cosmeticPick(cosmeticLoadout, 'playerEffect')?.paint, a.radius, world.time);
+    if (!a.owner && a.cosmeticKind !== 'wisp') drawCosmeticOrbit(ctx, cosmeticPick(cosmeticLoadout, 'playerEffect')?.paint, a.radius, world.time);
     const look: BodyLook = cosmeticBody({
       shape: a.shape, radius: a.radius, color: a.color,
       // The tell dress's adorn channel swaps the silhouette accent at its
@@ -5324,7 +5325,7 @@ export class Renderer {
       outline: a.isMinion() ? '#b06bd4' : undefined,
       demonHorns: !!FACTIONS[a.faction ?? '']?.nubHorns,
       extraParts: a.extraParts,
-    }, cosmeticLoadout, a.isMinion());
+    }, cosmeticLoadout, a.isMinion(), a.cosmeticKind === 'wisp');
     const cosmeticAvatar = !a.owner ? cosmeticPick(cosmeticLoadout, 'avatar')?.paint : undefined;
     if (cosmeticAvatar?.motif) drawCosmeticMotif(ctx, cosmeticAvatar.motif, cosmeticAvatar.color ?? '#c4b2f2',
       a.radius + 8, -a.radius - 8, 5);
@@ -5440,7 +5441,7 @@ export class Renderer {
       drawPartSpecs(ctx, look, tdress.parts, world.time);
       ctx.rotate(-a.facing);
     }
-    const cosmeticAdorn = cosmeticPick(cosmeticLoadout, a.isMinion() ? 'summonSkin' : 'playerSkin')?.paint.adorn;
+    const cosmeticAdorn = cosmeticPick(cosmeticLoadout, a.cosmeticKind === 'wisp' ? 'wispSkin' : a.isMinion() ? 'summonSkin' : 'playerSkin')?.paint.adorn;
     const adornImg = adornSprite(cosmeticAdorn ? { ...look, look: undefined } : look);
     if (adornImg) {
       ctx.rotate(a.facing);
@@ -6484,21 +6485,11 @@ export class Renderer {
     for (const p of world.townPortalViews()) {
       ctx.save();
       ctx.translate(p.pos.x, p.pos.y);
-      ctx.strokeStyle = cfg.color;
-      ctx.lineWidth = v.lineWidth;
-      ctx.shadowColor = cfg.color;
-      ctx.shadowBlur = 14;
-      ctx.fillStyle = 'rgba(16,35,68,0.8)';
-      ctx.beginPath(); ctx.ellipse(0, -v.height / 2, v.radius, v.height, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-      ctx.shadowBlur = 0;
-      ctx.globalAlpha = 0.65;
-      for (let n = 0; n < 3; n++) {
-        const turn = world.time * 1.4 + n * Math.PI * 2 / 3;
-        ctx.beginPath(); ctx.ellipse(0, -v.height / 2, v.radius * 0.65, v.height * 0.8, 0, turn, turn + Math.PI / 2); ctx.stroke();
-      }
-      ctx.globalAlpha = 1;
+      const cosmeticColor = cosmeticPortalColor(p.cosmeticLoadout);
+      drawCosmeticPortal(ctx, p.cosmeticLoadout, world.time);
+      ctx.strokeStyle = cosmeticColor; ctx.lineWidth = v.lineWidth;
       this.queueDestinationLabel(p, p.pos, p.pos.x, p.pos.y - v.height / 2 - v.labelLift,
-        p.label, cfg.color, v.radius, 'bold 11px Verdana');
+        p.label, cosmeticColor, v.radius, 'bold 11px Verdana');
       if (p.frac > 0) {
         ctx.beginPath(); ctx.arc(0, 0, v.radius + 8, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p.frac); ctx.stroke();
       }
@@ -6855,7 +6846,7 @@ export class Renderer {
     // Cover any jitter the world transform can apply this frame as well.
     const edgePad = 1 + 2 / this.zoom + Math.max(0, world.shake);
     for (const p of world.projectiles) {
-      const reach = p.radius * reachScale + edgePad;
+      const reach = p.radius * Math.max(reachScale, cosmeticProjectileExtent(p.cosmeticProjectile)) + edgePad;
       if (p.pos.x + reach < x0 || p.pos.x - reach > x1
         || p.pos.y + reach < y0 || p.pos.y - reach > y1) continue;
       // Every projectile is ENERGY IN FLIGHT now: an additive glow underlay
@@ -6881,11 +6872,10 @@ export class Renderer {
       ctx.translate(p.pos.x, p.pos.y);
       const r = p.radius;
       if (p.cosmeticMotif) drawCosmeticMotif(ctx, p.cosmeticMotif, p.color, 0, 0, r, p.age);
-      // Form geometry rides PROJ_FORM_GEO — the SAME factors the sim's hit
-      // test uses (engine/projForms.ts), so the pixels and the hitbox can't
-      // drift. Animated forms clock on p.age (sim time, deterministic, on
-      // the co-op wire), never wall-clock.
-      switch (p.shape) {
+      // Native form geometry rides PROJ_FORM_GEO, the same factors as collision.
+      // A cosmetic body replaces the art only; the debug overlay keeps the true form.
+      // Both animate on p.age (simulation time), shared with co-op peers.
+      if (!drawCosmeticProjectile(ctx, p.cosmeticProjectile, p.color, r, p.dir, p.age)) switch (p.shape) {
         case 'vortex': {
           const g = PROJ_FORM_GEO.vortex;
           ctx.globalAlpha *= 0.3;
@@ -7321,6 +7311,10 @@ export class Renderer {
       : anchor === 'left' ? COUCH_CFG.hud.sideInset + orbR * 2 + orbGap
         : w - COUCH_CFG.hud.sideInset - totalW - orbGap - orbR * 2;
 
+    const cosmeticLoadout = cosmeticLoadoutFor(world, seat.home ?? p);
+    const cosmeticHotbarStyle = cosmeticHotbar(cosmeticLoadout);
+    drawCosmeticHotbar(ctx, cosmeticLoadout, bx, by, totalW, slot);
+
     // Resource orbs FLANK the centered bar (life just-left, mana just-right) so
     // life / mana / skills read as ONE central cluster — vital info isn't shoved
     // into the screen corners anymore. Arcs key off each orb's new center.
@@ -7486,8 +7480,8 @@ export class Renderer {
         || (inst.def.pool !== undefined && p.venting.has(inst.def.pool.id))
         || world.zones.some(z => z.caster === p && z.toggled && z.inst.def.id === inst.def.id)
       ) : false;
-      ctx.fillStyle = 'rgba(10,10,16,0.85)';
-      ctx.strokeStyle = runningOn ? '#c8a84b' : '#3a3a52';
+      ctx.fillStyle = cosmeticHotbarStyle?.fill ?? 'rgba(10,10,16,0.85)';
+      ctx.strokeStyle = runningOn ? '#c8a84b' : cosmeticHotbarStyle?.border ?? '#3a3a52';
       ctx.lineWidth = runningOn ? 2.5 : 1.5;
       ctx.fillRect(x, by, slot, slot);
       ctx.strokeRect(x, by, slot, slot);

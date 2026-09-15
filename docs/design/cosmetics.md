@@ -1,16 +1,24 @@
 # Account cosmetics and the Wardrobe
 
-The Wardrobe is available from Menu → Wardrobe, Escape → Wardrobe, and the
+The Wardrobe is available from the collapsible Menu → Wardrobe and the
 Vault/Reckoning footer. It previews locked and owned choices without equipping
 them. Equip saves immediately; Original appearance clears one slot. Skill
 skins and colors have an account default plus optional choices per skill.
 An explicit Original appearance on a skill suppresses the account default;
 Use account default removes that override.
 
+The Menu entry is never gated by character-panel seals, including Mu. The
+pause menu's duplicate Wardrobe button is removed. Back closes the in-world
+Wardrobe directly; the Vault keeps its original return/seal closure. Normal
+solo opening holds the existing pause surface. During a timed harvest it
+opens without adding a pause hold, so appearance access cannot freeze the rite.
+
 The catalogue covers character models, character skins, character effects,
 footprints, avatars, skill skins, skill colors and summon skins. The original
 17 choices are joined by every registered class silhouette, four exclusive
-models and Prismatic Ink. Purchases use the existing account credits at
+models and Prismatic Ink. The expansion adds four more female models, Mu wisp
+silhouettes, Town Portal animations/colors, hotbar frames and projectile skins.
+Purchases use the existing account credits at
 the Reckoning, before its normal seal discards unassigned essence. Opening
 the Wardrobe from that screen retains the original seal closure. Nothing
 introduces a second wallet, gameplay power, a payment provider or a checkout.
@@ -22,6 +30,11 @@ introduces a second wallet, gameplay power, a payment provider or a checkout.
 - `data/cosmeticModels.ts` composes exclusive models from reusable parts;
   `data/cosmeticGlyphs.ts` authors garments, hairstyles, heads and accessories
   in the existing vector-op grammar. Models have no gameplay definitions.
+- `data/cosmeticExpansionModels.ts` / `cosmeticExpansionGlyphs.ts` add the
+  next female models and separate Mu silhouettes through that same grammar.
+- `data/cosmeticStyles.ts` describes projectile glyphs, animated portal rings
+  and hotbar palettes. `render/vis/cosmeticEffects.ts` paints these in the
+  game and preview. New styles are data entries referenced by cosmetic IDs.
 - `data/cosmetics.ts` authors the collection, creator attribution,
   acquisition rules and visual budgets. A new entry in an existing category
   uses the same UI and resolver. Optional `skills` restricts compatibility.
@@ -68,6 +81,62 @@ coat), Roseguard Valkyrie (copper braids and broad armor), Amethyst Veilweaver
 three are feminine presentations; there is no gender restriction on equipment.
 Their hair/complexion variants use explicit glyph colors while clothing
 responds to skins. Catalogue thumbnails and previews use the world body baker.
+
+The second female collection adds Fernveil Huntress (feather-cut cape and bow),
+Tideglass Corsair (tricorn and copper hair), Sundancer Adept (ponytail and paired
+ring blades), and Winter Matriarch (gown and crystalline collar), bringing the
+exclusive hero roster to eight models, seven with feminine/female presentation.
+
+## Mu vessels
+
+Mu explicitly marks its player actor `cosmeticKind: 'wisp'`. This render-only
+identity travels with snapshots, independently of the provisional class and
+account loadout. `wispSkin` alone supplies the spirit's look and palette;
+character models, skins, their adornments, character orbits and footsteps do
+not dress the spirit. Class apparitions retain their actual class identity.
+Leaving Mu creates the ordinary new hero, and snapshots clear absent wisp
+markers so the spirit identity cannot stick to a later character.
+
+Lunar Moth, Guiding Lantern and Wandering Prism are starter wisp silhouettes.
+Equipping one does not alter the selected hero model. The Wardrobe's wisp
+preview uses the Mu body, while its character preview uses a class body even
+when opened between lives. Both bake and live parts share the world painter.
+
+## Portals, projectiles and hotbars
+
+`portalSkin` selects an animated ring arrangement through `paint.portal`;
+`portalRecolor` layers a separate palette over native or cosmetic portal art.
+Astral Iris, Runic Gate and Petal Door have distinct counter-rotating arcs,
+polygon seals and moving blossoms. Rose, jade and gold colors can be mixed
+with any portal. Radius factors, aspects, ring counts, phase, spin and pulse
+are data; none affect travel reach, cast timing, dwell or destination.
+Each endpoint resolves its caster's seat appearance. Only its two portal
+selections enter the portal view sent to peers, so other clients render the
+owner's passage. Saves preserve account choices separately from the run's
+portal state, and both ends read those choices live.
+
+Skill skins can now reference `paint.projectile`, a vector glyph with a
+declared visual extent and optional spin. The projectile's independent
+`cosmeticProjectile` reference is captured at spawn and carried by snapshots
+and normal spread-copied descendants. The renderer replaces its body art,
+while its actual `shape`, radius, sweep, hitbox debug overlay, speed, range,
+damage and RNG remain unchanged. Culling includes the cosmetic's visual
+extent. Unknown style IDs fall back to native art.
+
+Flame Fletching and Sunlance Arrow explicitly list `skills: ['flame_arrow']`;
+Ember Comet lists `['fireball']`. The existing compatibility rule governs
+UI filtering, equipment, save/wire validation, account defaults and runtime
+selection. An exclusive skin cannot be assigned to another skill, and a
+default only affects compatible skills. Crystal Flight is a universal
+projectile skin. Individual color pickers/presets layer over these glyphs.
+These skins retain the projectile's normal energy glow and trailing streak.
+
+`hotbarSkin` references a fill/border/trim/rail palette and a corner motif.
+Moon Silver, Rose Vellum and Ember Forge decorate the neutral frame and
+background. Active-toggle gold, hover, cooldowns, resource indicators, key
+labels and clickable bounds retain their functional meaning. Local/couch
+bars resolve the relevant seat's account appearance. Hotbar previews use
+the same rail painter as the real HUD.
 
 ## Permanent skill color pickers
 
@@ -161,6 +230,14 @@ footprints. It also covers permanent ink bindings, repeatable purchases,
 free color changes, invalid RGB, spent receipt deduplication/refunds,
 model-part references and class/model/skin independence. The probe is enrolled
 in the normal gate.
+
+The expansion additionally covers exclusive projectile rejection, real Mu
+entry and menu folds, wisp snapshot clearing, portal colors on both ends and
+across peers, hotbar ownership, animation determinism, no painter RNG use,
+unknown-style fallback and projectile body/physics separation. The UI harness
+walks every new category, captures portraits and effects, compares hotbar hit
+rectangles, opens the Wardrobe through the actual Mu menu, checks the removed
+pause button, and verifies save/reload and timed-rite access.
 
 After `npm run build`, `npx electron balance/cosmetics-ui.cjs` checks the
 real Wardrobe, preview/equip separation, purchases, disk reload, retained

@@ -96,8 +96,8 @@ registerMenuEntry({
 
 registerMenuEntry({
   id: 'wardrobe', label: 'Wardrobe', icon: 'sheet', group: 'hero', verb: 'wardrobe', order: 6,
-  blurb: 'Your account’s skins, skill colors, companions, footprints and avatars.',
-  ...sealed('character'),
+  blurb: 'Your account’s models, Mu wisps, portals, hotbars, skill skins, colors and companions.',
+  // Wardrobe stays available in Mu and while character panels are sealed.
 });
 
 // --- the stations (exist by unlock, open at the station) ---------------------

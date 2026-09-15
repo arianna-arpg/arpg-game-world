@@ -1397,6 +1397,8 @@ export class Actor {
   owner?: Actor;          // set for minions
   /** Render-only co-op appearance; never equipment, ownership or stat authority. */
   cosmeticLoadout?: CosmeticLoadout;
+  /** Presentation identity independent of the provisional class under a Mu spirit. */
+  cosmeticKind?: 'wisp';
   aiCooldown = 0;         // small delay between AI decisions
   hitFlash = 0;           // render feedback timer
   /** THE HIT TINT (engine/bodyVoices.ts): the dominant damage type of the last

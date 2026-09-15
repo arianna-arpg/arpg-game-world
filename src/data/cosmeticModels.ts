@@ -1,7 +1,9 @@
 import type { LookDef } from '../render/vis/parts';
+import { EXPANDED_COSMETIC_MODELS } from './cosmeticExpansionModels';
 
 /** Cosmetic-only identities: no class, stats, skills, sex flags or actor mutation. */
 export const COSMETIC_MODELS: { id: string; name: string; color: string; description: string; body: LookDef }[] = [
+  ...EXPANDED_COSMETIC_MODELS,
   { id: 'moon_duelist', name: 'Mooncourt Duelist', color: '#798ebf',
     description: 'A feminine duelist with a silver braid, a fitted split-tail coat and a slender blade.',
     body: { parts: [

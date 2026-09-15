@@ -6,12 +6,16 @@ export const COSMETIC_SLOTS = {
   playerModel: 'Character models',
   playerSkin: 'Character skins', playerEffect: 'Character effects', footprints: 'Footprints',
   avatar: 'Avatars', skillSkin: 'Skill skins', skillRecolor: 'Skill colors', summonSkin: 'Summon skins',
+  portalSkin: 'Town portals', portalRecolor: 'Portal colors', hotbarSkin: 'Hotbars', wispSkin: 'Mu wisps',
 } as const;
 export type CosmeticSlot = keyof typeof COSMETIC_SLOTS;
 export type CosmeticMotif = 'stars' | 'petals' | 'embers';
 export interface CosmeticPaint {
   /** Presentation look id; never replaces class, anatomy or collision data. */
   look?: string;
+  projectile?: string;
+  portal?: string;
+  hotbar?: string;
   color?: string;
   material?: string;
   adorn?: ActorAdorn;
@@ -45,7 +49,10 @@ export function registerCosmetic(def: CosmeticDef): void {
   if (!/^[a-z][a-z0-9_.:-]*$/.test(def.id) || COSMETICS[def.id]) throw new Error(`Duplicate/invalid cosmetic: ${def.id}`);
   if (!(def.slot in COSMETIC_SLOTS) || !def.name || !def.author) throw new Error(`Invalid cosmetic metadata: ${def.id}`);
   if (def.paint.color && !/^#[0-9a-f]{6}$/i.test(def.paint.color)) throw new Error(`Invalid cosmetic color: ${def.id}`);
-  if (def.paint.look && def.slot !== 'playerModel') throw new Error(`Model look requires playerModel: ${def.id}`);
+  if (def.paint.look && def.slot !== 'playerModel' && def.slot !== 'wispSkin') throw new Error(`Model look requires a model or wisp slot: ${def.id}`);
+  if (def.paint.projectile && def.slot !== 'skillSkin') throw new Error(`Projectile art requires a skill skin: ${def.id}`);
+  if (def.paint.portal && def.slot !== 'portalSkin') throw new Error(`Portal art requires a portal skin: ${def.id}`);
+  if (def.paint.hotbar && def.slot !== 'hotbarSkin') throw new Error(`Hotbar art requires a hotbar skin: ${def.id}`);
   if (def.consume && (def.slot !== 'skillRecolor' || def.consume.target !== 'skillColor'
     || !Number.isSafeInteger(def.consume.starterCharges) || def.consume.starterCharges < 0 || def.consume.starterCharges > 100)) throw new Error(`Invalid cosmetic consumable: ${def.id}`);
   if (def.acquire.kind === 'credits' && (!Number.isSafeInteger(def.acquire.cost) || def.acquire.cost <= 0)) throw new Error(`Invalid cosmetic cost: ${def.id}`);

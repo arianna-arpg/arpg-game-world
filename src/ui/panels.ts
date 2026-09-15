@@ -1413,7 +1413,7 @@ export class UI {
     const actor = this.getWorld().seats.length ? this.getWorld().player : undefined;
     renderWardrobe(root, { account: this.getAccount(), back,
       save: () => { this.saveAccount(); this.onCosmeticsChanged?.(); },
-      body: actor ? { shape: actor.shape, color: actor.color, radius: actor.radius, material: actor.material, look: actor.look, adorn: actor.adorn }
+      body: actor && actor.cosmeticKind !== 'wisp' ? { shape: actor.shape, color: actor.color, radius: actor.radius, material: actor.material, look: actor.look, adorn: actor.adorn }
         : { shape: 'circle', radius: 16, color: CLASSES[0].color, look: CLASSES[0].look }, // the account Wardrobe also opens between lives
       skills: [...new Set([...(actor?.skills ?? []).flatMap(s => s ? [s.def.id] : []),
         ...(actor ? this.getWorld().localSeat.meta.knownSkills.keys() : []),
@@ -1423,8 +1423,12 @@ export class UI {
   }
 
   showWardrobe(): void {
-    this.showEscapeMenu();
-    if (this.escapeMenuOpen) this.wardrobeView(this.escapeMenu, () => this.showEscapeMenu());
+    this.escapeMenuOpen = true;
+    // Account cosmetics are available even when scene character pages are sealed.
+    // A timed harvest still runs: opening appearance must not bypass its pause lock.
+    if (!this.getWorld().harvestPauseLocked()) this.getWorld().timeflow.holdSurface('menu:escape');
+    this.escapeMenu.classList.remove('hidden');
+    this.wardrobeView(this.escapeMenu, () => this.hideEscapeMenu());
   }
 
   private menuVerbs(): Record<string, MenuVerb> {
@@ -9920,7 +9924,6 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         <div class="esc-btns">
           <button id="esc-resume">Resume</button>
           ${couchRow}${couchLeaveRow}
-          <button id="esc-wardrobe">Wardrobe</button>
           <button id="esc-keys">Options</button>
           <button id="esc-end"${endTitle}>${this.isCoopClient() ? 'Leave Co-op' : sceneLive ? 'Main Menu' : rosterMode ? 'Save & Main Menu' : 'End Run'}</button>
           <button id="esc-close"${closeTitle}>${this.isCoopClient() || sceneLive ? 'Exit Game' : 'Save & Exit'}</button>
@@ -9934,7 +9937,6 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         this.hideEscapeMenu();
         this.onCouchLeave!();
       });
-      document.getElementById('esc-wardrobe')!.addEventListener('click', () => this.wardrobeView(root, showMain));
       document.getElementById('esc-keys')!.addEventListener('click', () => this.renderOptions(root, showMain));
       document.getElementById('esc-end')!.addEventListener('click', () => {
         // CLIENT: world is a render SHELL — never run host-authoritative endRun()

@@ -1106,6 +1106,7 @@ registerSceneStage('mu', {
     p.push = null;
     p.dash = null;
     p.look = MU_CFG.wisp.look;
+    p.cosmeticKind = 'wisp';
     p.color = MU_CFG.wisp.color;
     p.radius = MU_CFG.wisp.radius;
     for (let i = 0; i < p.skills.length; i++) p.skills[i] = null;
