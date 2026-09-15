@@ -640,7 +640,13 @@ export function sanitizeBountyBoard(
     const x = p as BountyPosting | null;
     if (!x || typeof x !== 'object') return null;
     if (typeof x.id !== 'string' || typeof x.kind !== 'string' || !BOUNTY_KINDS[x.kind]) return null;
-    if (typeof x.boardId !== 'string' || typeof x.zoneId !== 'string' || !zones[x.zoneId]) return null;
+    const expedition = x.expedition && typeof x.expedition.map === 'string'
+      && typeof x.expedition.anchor === 'string' && !!zones[x.expedition.anchor]
+      && isFiniteNum(x.expedition.seed) && isFiniteNum(x.expedition.level) && x.expedition.level >= 1
+      ? { ...x.expedition, level: Math.floor(x.expedition.level) } : undefined;
+    if (x.kind === 'expedition' && !expedition) return null;
+    if (typeof x.boardId !== 'string' || typeof x.zoneId !== 'string'
+      || (!zones[x.zoneId] && !(expedition && x.acceptAt === undefined))) return null;
     if (!isFiniteNum(x.beat)) return null;
     // ONE pay lane survives sanitation (the visible price law's save half);
     // a posting whose pay no longer stands drops whole (keep-what-stands).
@@ -678,6 +684,9 @@ export function sanitizeBountyBoard(
       }
     }
     if (!pay) return null;
+    // Compatible saves acquire a fixed budget from their existing target once.
+    pay.level = isFiniteNum(raw.level) && raw.level >= 1 ? Math.floor(raw.level)
+      : expedition?.level ?? zones[x.zoneId]?.level ?? 1;
     const cull = x.cull && typeof x.cull === 'object'
       && isFiniteNum(x.cull.count) && x.cull.count > 0 && isFiniteNum(x.cull.claimed)
       ? { count: Math.floor(x.cull.count), claimed: Math.max(0, Math.floor(x.cull.claimed)) }
@@ -711,6 +720,9 @@ export function sanitizeBountyBoard(
       ...(cull ? { cull } : {}),
       ...(gather ? { gather } : {}),
       ...(answer ? { answer } : {}),
+      ...(expedition ? { expedition } : {}),
+      ...(isFiniteNum(x.challengeLevel) && x.challengeLevel >= 1
+        ? { challengeLevel: Math.floor(x.challengeLevel) } : {}),
     };
   };
   const offers = Array.isArray(bb.offers)

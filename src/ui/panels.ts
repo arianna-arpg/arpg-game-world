@@ -8099,7 +8099,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       this.bountyTicker = window.setInterval(() => {
         if (!this.bountiesOpen) return;
         const v = this.getWorld().bountyBoardView(this.bountyBoardId);
-        const fp = v.offers.map(o => o.id + (o.locked ? 'L' : '')).join('|') + '#' + v.hands.map(h => h.id + h.state).join('|');
+        const fp = JSON.stringify([v.offers, v.hands, v.receipt]); // bounty approach locks and reward/level copy can change without new ids
         if (fp !== this.bountyFingerprint) { this.refreshBounties(); return; }
         const el = this.bountyMenu.querySelector<HTMLElement>('[data-bounty-countdown]');
         if (el) el.textContent = fmtRestock(v.countdown);
@@ -8118,7 +8118,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (!this.bountiesOpen) return;
     const world = this.getWorld();
     const v = world.bountyBoardView(this.bountyBoardId);
-    this.bountyFingerprint = v.offers.map(o => o.id + (o.locked ? 'L' : '')).join('|') + '#' + v.hands.map(h => h.id + h.state).join('|');
+    this.bountyFingerprint = JSON.stringify([v.offers, v.hands, v.receipt]); // bounty live-copy parity with the ticker
     // THE TEAR-OFF (BOUNTY_BOARD_CFG.counter.closeOnAccept): the reached-for
     // posting now rides IN HAND — the writ is off the slate, the board
     // closes, the reader turns for the road. A take the world refused

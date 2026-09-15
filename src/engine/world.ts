@@ -253,6 +253,8 @@ import { zoneKindOf } from '../data/zoneKinds';
 import { EAGER_WORLD_WEB } from '../config';
 import { eventLevel as resolveEventLevel } from '../world/levelField';
 import { HUB_ZONE, OPENING_PROGRESSION, tuneOpeningProgression } from '../world/openingProgression';
+import { bountyRoutes } from '../world/bountyRoutes';
+import type { TravelRoute } from '../world/travelRoutes';
 import { factionAllowed } from '../world/zonePolicy';
 import type { WalkField, PathProfile } from '../world/walk';
 import { GridWalkField, WALK_CFG } from '../world/gridWalk';
@@ -11142,7 +11144,7 @@ export class World {
    *  SAME sampler the weave guard has always used, so every road-former in
    *  the game answers to one rule. Surface-only by convention (callers gate
    *  on dimension; other planes grow unbroken landmass). */
-  private roadIsWet(a: MapCoord, b: MapCoord): boolean {
+  roadIsWet(a: MapCoord, b: MapCoord): boolean {
     if (!SEA_CFG.dryRoad.enabled) return false;
     return !this.landRoute(a, b);
   }
@@ -24076,8 +24078,17 @@ export class World {
     this.reconcileBounties();
     const beat = this.bountyBeat();
     const bs = this.boardStateOf(boardId);
-    if (bs.armedBeat === beat) return;
+    const standing = bs.armedBeat === beat;
     const home = this.bountyBoardRoster().find(b => b.id === boardId)?.homeZoneId ?? START_ZONE;
+    const approach = this.bountyApproaches(boardId, true);
+    const appropriate = (p: BountyPosting): boolean => this.bountyAppropriate(p, approach);
+    const current = this.bountyOffers.filter(p => p.boardId === boardId);
+    // A level-up or depleted pool may add a useful choice, never erase the
+    // standing rewards. A held hand is already chosen work and cannot re-deal.
+    if (standing && (current.some(appropriate) || this.bountyHands.some(p => p.boardId === boardId))) return;
+    // Same-beat repairs use a fixed level-keyed seed and essence fallback. They
+    // cannot reroll the reward shelf by repeatedly taking and abandoning work.
+    const harderApproach = this.bountyApproaches(boardId, false);
     // THE TURN-IN REFRESH's seed limb rides only once it has ever fired
     // (seq 0 keeps the M0-exact derivation — old saves and standing
     // probes meet unchanged slates until a resolution actually refreshes).
@@ -24153,16 +24164,23 @@ export class World {
     // already removed dead pinned offers (the pin holds a seat, never the
     // truth); the kept rows seed the diversity/zone bookkeeping so fresh
     // deals fill honestly around them.
-    const offers: BountyPosting[] = this.bountyOffers.filter(o => o.locked && o.boardId === boardId);
+    const offers: BountyPosting[] = this.bountyOffers.filter(o => (standing || o.locked) && o.boardId === boardId);
     const perKind: Record<string, number> = {};
     for (const o of offers) {
       perKind[o.kind] = (perKind[o.kind] ?? 0) + 1;
       taken.add(o.zoneId);
     }
-    const freshSeats = Math.max(0, offerCap - offers.length);
+    const freshSeats = standing ? 0 : Math.max(0, offerCap - offers.length);
     for (let i = 0; i < freshSeats && allRows.length; i++) {
       const pin = anchor && (young || i === 0) ? anchor.zoneId : undefined;
+      const manageable = i < BOUNTY_BOARD_CFG.routes.manageableSeats || standing;
+      const routes = manageable ? approach : harderApproach;
       const host: BountyRollHost = {
+        routeFits: id => routes.has(id) && (manageable
+          ? this.zoneMap[id].level >= Math.max(1, this.player.level - BOUNTY_BOARD_CFG.routes.appropriateBelow)
+            && !objectiveSeals(this.zoneMap[id].objective) && !this.zoneMap[id].special && !this.zoneMap[id].eventOwned
+            && !answers().some(a => a.ref.zoneId === id)
+          : this.zoneMap[id].level <= this.player.level + BOUNTY_BOARD_CFG.routes.challengeAbove),
         view, zoneMap: this.zoneMap, objectiveDone: id => this.objectiveDoneAt(id),
         visited: id => this.visited.has(id),
         pickGemId: (lvl, r) => this.pickBountyGemId(lvl, r),
@@ -24187,13 +24205,14 @@ export class World {
       // one-posting-per-zone law for one-KIND-per-zone (distinct faces on
       // the same ground are distinct asks — slate and hand both).
       const rows = allRows.filter(r => (perKind[r.id] ?? 0) < BOUNTY_BOARD_CFG.slate.maxPerKind
+        && (!manageable || BOUNTY_BOARD_CFG.routes.manageableKinds.includes(r.id))
         && weightOf(r) > 0
         && (r.available?.(host) ?? true)
         && (!pin || (!offers.some(o => o.kind === r.id && o.zoneId === pin)
           && !this.bountyHands.some(h => h.kind === r.id && h.zoneId === pin))));
       let p: BountyPosting | null = null;
       let rowId = '';
-      if (pin) {
+      {
         // THE ANCHOR RETRY: weighted draws without replacement — an unlucky
         // first kind (a cull with no packs to mark) must not waste the
         // anchor seat while another kind can honestly ask here.
@@ -24205,26 +24224,82 @@ export class World {
           p = r.roll(host, rng, taken);
           rowId = r.id;
         }
-      } else {
-        const row = draw(rows);
-        if (!row) break;
-        p = row.roll(host, rng, taken);
-        rowId = row.id;
+        // One intended stretch choice when such a target exists. If the local
+        // region cannot supply it, retain the normal honest candidate instead.
+        if (!manageable && i === BOUNTY_BOARD_CFG.routes.manageableSeats && !pin) {
+          const stretchHost = { ...host, routeFits: (id: string) => host.routeFits!(id)
+            && this.zoneMap[id].level > this.player.level };
+          for (const r of rows) {
+            const stretch = r.roll(stretchHost, rng, taken);
+            if (stretch) { p = stretch; rowId = r.id; break; }
+          }
+        }
       }
       if (!p) continue; // no honest target for this seat — the slate runs short
       // THE PAY LANE rolls at the arm, off the TARGET's level (the visible
       // price law: the card prints exactly what the turn-in will mint);
       // the band's lane override folds here (the starter's essence-only).
-      p.pay = rollBountyPay(host, rng, this.zoneMap[p.zoneId]?.level ?? this.player.level, band?.lanes);
+      const rewardLevel = p.expedition?.level ?? this.zoneMap[p.zoneId]?.level ?? 1;
+      const weights = { ...(band?.lanes ?? BOUNTY_BOARD_CFG.lanes.weights) };
+      if (!band) {
+        for (const lane of Object.keys(weights) as (keyof typeof weights)[]) {
+          if (offers.some(o => lane === 'pouch' ? o.pay.pouch || o.pay.gem : o.pay[lane])) weights[lane] = 0;
+        }
+      }
+      p.pay = { ...rollBountyPay(host, rng, rewardLevel, Object.values(weights).some(w => w > 0) ? weights : band?.lanes), level: rewardLevel };
       taken.add(p.zoneId);
       perKind[rowId] = (perKind[rowId] ?? 0) + 1;
       offers.push(p);
+    }
+    // Bounded additive fallback: commission new quarry on reachable existing
+    // ground using the normal cull spawn pipeline. Its advertised level is fixed
+    // now, not on arrival; no ambient zone level or road changes. Reuses cleared
+    // ground and cannot duplicate another board's cull or a held cull there.
+    if (!offers.some(appropriate) && !this.bountyHands.some(p => p.boardId === boardId)) {
+      const target = [...approach.entries()].filter(([id]) => {
+        const z = this.zoneMap[id];
+        return z.packs?.table?.length && z.objective.kind !== 'safe' && z.objective.kind !== 'bounty'
+          && !z.harborhold && !z.holdAnchor && !z.special && !z.eventOwned
+          && !answers().some(a => a.ref.zoneId === id)
+          && !this.bountyHands.some(p => p.kind === 'cull' && p.zoneId === id)
+          && !this.bountyOffers.some(p => p.boardId !== boardId && p.kind === 'cull' && p.zoneId === id);
+      }).sort((a,b) => a[1].distance - b[1].distance || a[0].localeCompare(b[0]))[0];
+      if (target) {
+        const level = Math.max(1, this.player.level - 1, this.zoneMap[target[0]].level);
+        const reliefRng = new Rng((this.manifest.seed ^ hashStr(`${seedKey}:relief:${level}`)) >>> 0);
+        for (let alternative = 0; alternative < (band ? 1 : BOUNTY_BOARD_CFG.routes.manageableSeats); alternative++) {
+          offers.push({ id: `bounty_${slateKey}_relief_${level}_${alternative}`, boardId, beat, zoneId: target[0],
+            kind: 'cull', challengeLevel: level,
+            cull: { count: BOUNTY_BOARD_CFG.routes.fallbackMarks, claimed: 0 },
+            pay: { ...(alternative === 0 ? { essence: bountyChargePay(level) }
+              : rollBountyPay({ pickGemId: () => null }, reliefRng, level,
+                { essence: 0, lot: 1, pouch: 0, unique: 0, craft: 0 })), level } });
+        }
+      }
     }
     // THE MERGE (the kinship): this board's fresh slate replaces only its
     // own postings — every other board's standing offers ride untouched.
     this.bountyOffers = [...this.bountyOffers.filter(o => o.boardId !== boardId), ...offers];
     bs.armedBeat = beat;
     this.charDirty = true;
+  }
+
+  /** Shared route policy: callers receive evidence, never map knowledge. */
+  bountyApproaches(boardId: string, manageable: boolean): Map<string, TravelRoute> {
+    const home = this.bountyBoardRoster().find(b => b.id === boardId)?.homeZoneId ?? START_ZONE;
+    const cfg = manageable ? BOUNTY_BOARD_CFG.routes.manageable : BOUNTY_BOARD_CFG.routes.demanding;
+    return bountyRoutes(this, home, { maxLevel: this.player.level + cfg.above,
+      maxSteps: cfg.steps, maxDistance: cfg.distance * this.bountyReach() });
+  }
+
+  bountyAppropriate(p: BountyPosting, routes = this.bountyApproaches(p.boardId, true)): boolean {
+    const z = this.zoneMap[p.zoneId];
+    const level = p.challengeLevel ?? p.expedition?.level ?? z?.level ?? Infinity;
+    return !!z && !objectiveSeals(z.objective) && !z.special && !z.eventOwned
+      && BOUNTY_BOARD_CFG.routes.manageableKinds.includes(p.kind)
+      && !bountySourceRows().some(row => row.census(this).some(ref => ref.zoneId === p.zoneId))
+      && level >= Math.max(1, this.player.level - BOUNTY_BOARD_CFG.routes.appropriateBelow)
+      && level <= this.player.level && routes.has(p.expedition?.anchor ?? p.zoneId);
   }
 
   /** Name a TRUE skill Memory from the account's own drop pool at this
@@ -24298,6 +24373,10 @@ export class World {
     // seal its accept with a world act, run BEFORE the hand seats; a
     // refusal (the room filled between the arm and the take) strikes the
     // posting with its courtesy — the stale-offer race law.
+    if (p.pay.level !== undefined && !this.bountyApproaches(p.boardId, false).has(p.expedition?.anchor ?? p.zoneId)) {
+      this.notice('The approach is blocked or beyond this board’s travel budget. The posting remains on the slate.', BOUNTY_BOARD_CFG.accent, 14, 'civic');
+      return false;
+    }
     const actRefusal = row.accept?.(this, p) ?? null;
     if (actRefusal) {
       this.bountyOffers.splice(i, 1);
@@ -24476,7 +24555,7 @@ export class World {
     if (!pay.unique && !pay.lot && !pay.pouch && !pay.gem && !pay.craft) return;
     const rng = new Rng((this.manifest.seed ^ hashStr(`bountypay:${p.id}`)) >>> 0);
     const rf = (): number => rng.next();
-    const ilvl = Math.max(1, this.zoneMap[p.zoneId]?.level ?? this.player.level);
+    const ilvl = Math.max(1, pay.level ?? p.expedition?.level ?? this.zoneMap[p.zoneId]?.level ?? 1);
     const at = seat.actor.pos;
     const fallback = (): void => {
       // A pool emptied between arm and pay (a registry edit mid-run):
@@ -24488,7 +24567,7 @@ export class World {
       const item = rollItem(pay.unique.id
         ? { ilvl, uniqueId: pay.unique.id, rng: rf }
         : { ilvl, rarity: 'unique', category: pay.unique.category, rng: rf });
-      if (item) this.dropGearAt(at, item, undefined, true);
+      if (item?.rarity === 'unique') this.dropGearAt(at, item, undefined, true);
       else fallback();
       return;
     }
@@ -24562,10 +24641,16 @@ export class World {
     const slip = this.bountyReceipt;
     const receipt = slip && slip.boardId === boardId && this.time - slip.at <= BOUNTY_BOARD_CFG.counter.receiptSec
       ? { title: slip.title, pay: slip.pay, failed: slip.failed } : undefined;
+    const easyRoutes = this.bountyApproaches(boardId, true), hardRoutes = this.bountyApproaches(boardId, false);
     const face = (p: BountyPosting): { id: string; title: string; ask: string; pay: string; locked?: boolean } => {
       const c = BOUNTY_KINDS[p.kind]?.copy(this, p) ?? { title: p.id, ask: '' };
+      const route = easyRoutes.get(p.expedition?.anchor ?? p.zoneId) ?? hardRoutes.get(p.expedition?.anchor ?? p.zoneId);
+      const approach = route ? ` Approach: ${route.path.length - 1}${p.expedition ? '+1' : ''} crossings, ground up to level ${route.peak}.`
+        : ' Approach: no open local land route within the board’s travel budget.';
+      const difficulty = this.bountyAppropriate(p, easyRoutes) ? 'At your level.' : 'Check target and approach levels.';
       return {
-        id: p.id, title: c.title, ask: c.ask, pay: describeBountyPay(p.pay),
+        id: p.id, title: c.title, ask: `${c.ask}${approach} ${difficulty}${p.kind === 'cull' ? ' Marked quarry are empowered.' : ''}`,
+        pay: describeBountyPay(p.pay),
         ...(p.locked ? { locked: true } : {}),
       };
     };
@@ -24601,8 +24686,8 @@ export class World {
       for (let i = 0; i < need; i++) {
         let m: Actor | null;
         if (eligible.length) {
-          const type = this.weightedPick(eligible, Math.max(1, def.level));
-          m = this.createMonster(type, Math.max(1, def.level), 'enemy');
+          const type = this.weightedPick(eligible, Math.max(1, p.challengeLevel ?? def.level));
+          m = this.createMonster(type, Math.max(1, p.challengeLevel ?? def.level), 'enemy');
           m.pos = this.spawnPoint(24);
           this.actors.push(m);
         } else {

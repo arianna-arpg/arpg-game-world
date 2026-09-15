@@ -52,7 +52,7 @@ registerKillHandler({
   id: 'bounty_writ_claim',
   tag: 'bounty_mark',
   run: ctx => {
-    const xp = Math.round(BOUNTY_CFG.perMarkXp.base + Math.max(1, ctx.zone.level) * BOUNTY_CFG.perMarkXp.perLevel);
+    const xp = Math.round(BOUNTY_CFG.perMarkXp.base + Math.max(1, ctx.actor.level) * BOUNTY_CFG.perMarkXp.perLevel);
     if (xp > 0) ctx.grantXp(xp);
     ctx.bumpLedger('bounty_writs_claimed');
     ctx.text(ctx.actor.pos, `the writ on ${ctx.actor.name} is claimed`, BOUNTY_CFG.accent, 14);

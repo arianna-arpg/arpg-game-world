@@ -1,5 +1,9 @@
 # THE FIRST WRIT — side charter to the Bounty Board (the board as the account's first door)
 
+September 15, 2026: [Approach and reward follow-up](bounty-routes-rewards.md)
+preserves the first-writ teaching band and adds an appropriate route guarantee
+after its expiry, with fixed quarry commissions when existing asks are depleted.
+
 A side commission to `docs/design/bounty-board.md` (her word, 2026-08-26,
 "fairly important — first, before M3"): restructure the board's UNLOCK into
 the account's very first Vault purchase at **zero Mortal Essence**, teach it

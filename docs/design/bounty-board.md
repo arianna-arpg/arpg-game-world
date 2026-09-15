@@ -1,5 +1,9 @@
 # THE BOUNTY BOARD — design charter v1 (postings on a beat, the directed world, pay you can aim at)
 
+Current implementation follow-up (September 15, 2026):
+[Bounty approaches and reward budgets](bounty-routes-rewards.md) supersedes the
+historical destination-only bands and mutable payout-level assumptions below.
+
 **Status: DESIGN ONLY — nothing under `src/` is touched by this charter.**
 Commissioned 2026-08-24 off her message opening the bounty-board
 collaboration. Her asks are §0 and are treated as settled DIRECTION;

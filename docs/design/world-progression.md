@@ -1,5 +1,9 @@
 # World progression foundation
 
+Follow-up: [Bounty approaches and reward budgets](bounty-routes-rewards.md) adds
+route-aware board selection over this connected opening without resampling the
+level field or adding Lastlight exits.
+
 ## Problem and diagnosis
 
 The September 15, 2026 pass starts from `8868863f`. Crossroads is the actual

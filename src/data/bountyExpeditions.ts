@@ -50,6 +50,7 @@ export function expeditionZoneId(host: Pick<BountyRollHost, 'slateKey' | 'seq'>)
 
 function anchorOk(z: ZoneDef, host: BountyRollHost, taken: Set<string>): boolean {
   return !z.floating && !z.concealed && z.caveDepth == null && !z.pocket && !isRoadlessGateHub(z)
+    && (host.routeFits?.(z.id) ?? true)
     && !taken.has(z.id)
     && z.level >= host.playerLevel - EXPEDITION_CFG.band.below
     && z.level <= host.playerLevel + EXPEDITION_CFG.band.above;

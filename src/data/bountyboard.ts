@@ -24,7 +24,7 @@
 // ---------------------------------------------------------------------------
 
 import type { Rng } from '../core/rng';
-import { baseComplexityOf, type ItemCategory } from '../engine/items';
+import { baseComplexityOf, levelReqForTier, tierForIlvl, type ItemCategory } from '../engine/items';
 import type { MemoryKind } from '../engine/memories';
 import { SKILL_RARITIES, skillRarityFloor, type SkillRarity } from '../engine/skills';
 import type { World } from '../engine/world';
@@ -53,6 +53,18 @@ export const BOUNTY_BOARD_CFG = {
    *  M0 fields one kind, so no per-kind diversity guarantee is enforced
    *  yet — that law arrives with the M1 spread. */
   offers: 5,
+  /** Approach budgets include every road from the issuing board. A manageable
+   * target is at most the hero's level and no more than two levels behind.
+   * Harder seats deliberately include targets up to +3; transit up to +4.
+   * Repair adds seats without replacing a held or pinned player choice. */
+  routes: {
+    appropriateBelow: 2, manageableSeats: 2,
+    manageableKinds: ['charge', 'errand', 'gather', 'cull'] as readonly string[],
+    manageable: { above: 0, steps: 6, distance: 650 },
+    demanding: { above: 4, steps: 12, distance: 1500 },
+    challengeAbove: 3,
+    fallbackMarks: 2,
+  },
   /** The board's dwell (the salvage-bench register). */
   dwell: { radius: 120, sec: 0.9 },
   /** THE COUNTER LAWS (her ruling 2026-09-05 — the board as a NOTICE BOARD,
@@ -124,11 +136,11 @@ export const BOUNTY_BOARD_CFG = {
        *  hold a unique at the target's level — never a hollow card). */
       categories: ['ring', 'amulet', 'belt', 'boots', 'gloves', 'helmet', 'chest', 'weapon', 'offhand'] as readonly ItemCategory[],
       /** Named pool reaches this many levels above the target zone. */
-      reachAbove: 2,
+      reachAbove: 0,
     },
     lot: {
       count: [2, 3] as [number, number],
-      rarityWeights: { common: 0, magic: 45, rare: 55 },
+      rarityWeights: { common: 0, magic: 45, rare: 55, unique: 0 },
       categories: ['weapon', 'chest', 'helmet', 'gloves', 'boots', 'belt', 'ring', 'amulet', 'offhand'] as readonly ItemCategory[],
     },
     pouch: { roughCount: [3, 5] as [number, number] },
@@ -283,6 +295,8 @@ export const BOUNTY_BOARD_CFG = {
  *  assortment); `pouch`/`gem` are R4's two faces (Memory units, or a named
  *  TRUE skill Memory under THE MINT LAW). Exactly one field is set. */
 export interface BountyPay {
+  /** Frozen reward budget; never reread the hero or a changing target at pay. */
+  level?: number;
   essence?: EssenceCost[];
   /** R5 — THE SMITH'S WRIT (the steady hand, walk 2): a craft credit,
    *  minted as a 1×1 writ item at the turn-in; redeemed at Brandt by
@@ -313,6 +327,9 @@ export interface BountyPosting {
   zoneId: string;
   beat: number;
   pay: BountyPay;
+  /** Explicit commissioned quarry level on already-existing ground. Ambient
+   * levels never follow the player. Fixed at offer, saved through turn-in. */
+  challengeLevel?: number;
   failed?: boolean;
   face?: 'omen' | 'lift';
   acceptAt?: number;
@@ -347,6 +364,7 @@ export function clonePosting(p: BountyPosting): BountyPosting {
   return {
     id: p.id, kind: p.kind, boardId: p.boardId, zoneId: p.zoneId, beat: p.beat,
     pay: {
+      ...(p.pay.level !== undefined ? { level: p.pay.level } : {}),
       ...(p.pay.essence ? { essence: p.pay.essence.map(c => ({ ...c })) } : {}),
       ...(p.pay.unique ? { unique: { ...p.pay.unique } } : {}),
       ...(p.pay.lot ? { lot: { ...p.pay.lot } } : {}),
@@ -361,6 +379,8 @@ export function clonePosting(p: BountyPosting): BountyPosting {
     ...(p.cull ? { cull: { ...p.cull } } : {}),
     ...(p.gather ? { gather: { ...p.gather } } : {}),
     ...(p.answer ? { answer: { ...p.answer } } : {}),
+    ...(p.expedition ? { expedition: { ...p.expedition } } : {}),
+    ...(p.challengeLevel !== undefined ? { challengeLevel: p.challengeLevel } : {}),
   };
 }
 
@@ -509,6 +529,8 @@ export function bountySourceRows(): BountySourceRow[] {
 /** What a kind's roll may read — a narrow host so rolls stay pure over the
  *  seeded rng (World assembles it at the arm; probes can too). */
 export interface BountyRollHost {
+  /** Actual usable approach, supplied by the board; optional for standalone rolls. */
+  routeFits?(zoneId: string): boolean;
   view: OverlayView;
   zoneMap: Record<string, ZoneDef>;
   /** Zone ids whose objective is already complete (a charge never posts
@@ -614,7 +636,7 @@ export function bountyChargePay(zoneLevel: number): EssenceCost[] {
  *  uniques POST — ruled). */
 export function bountyUniquePool(level: number): { id: string; name: string; weight: number }[] {
   const reach = level + BOUNTY_BOARD_CFG.lanes.unique.reachAbove;
-  return UNIQUE_LIST.filter(u => (u.minIlvl ?? 0) <= reach)
+  return UNIQUE_LIST.filter(u => (u.minIlvl ?? 0) <= reach && !!ITEM_BASES[u.baseId] && (u.weight ?? 100) > 0)
     .map(u => ({ id: u.id, name: u.name, weight: u.weight ?? 100 }));
 }
 
@@ -623,7 +645,7 @@ export function bountyUniquePool(level: number): { id: string; name: string; wei
 export function bountyUniqueCategories(level: number): ItemCategory[] {
   const reach = level + BOUNTY_BOARD_CFG.lanes.unique.reachAbove;
   return BOUNTY_BOARD_CFG.lanes.unique.categories.filter(cat =>
-    UNIQUE_LIST.some(u => (u.minIlvl ?? 0) <= reach
+    UNIQUE_LIST.some(u => (u.minIlvl ?? 0) <= reach && (u.weight ?? 100) > 0
       && ITEM_BASES[u.baseId]?.category === cat));
 }
 
@@ -633,7 +655,7 @@ export function bountyUniqueCategories(level: number): ItemCategory[] {
  *  `weights` overrides the standing lane weights (the band fold — the
  *  starter band's essence-only slate rides this one parameter). */
 export function rollBountyPay(
-  host: BountyRollHost, rng: Rng, level: number,
+  host: Pick<BountyRollHost, 'pickGemId'>, rng: Rng, level: number,
   weights?: { essence: number; pouch: number; lot: number; unique: number; craft: number },
 ): BountyPay {
   const L = BOUNTY_BOARD_CFG.lanes;
@@ -660,7 +682,7 @@ export function rollBountyPay(
     const pairs: { category: ItemCategory; complexity: number }[] = [];
     for (const c of C.categories) {
       for (let k = 1; k <= maxC; k++) {
-        if (Object.values(ITEM_BASES).some(b => b.category === c && baseComplexityOf(b) === k)) {
+        if (Object.values(ITEM_BASES).some(b => b.category === c && baseComplexityOf(b) === k && (b.minIlvl ?? 0) <= level)) {
           pairs.push({ category: c, complexity: k });
         }
       }
@@ -686,7 +708,9 @@ export function rollBountyPay(
     lane = 'lot'; // no unique stands at this level — fall down the ladder
   }
   if (lane === 'lot') {
-    const cats = L.lot.categories;
+    const cats = L.lot.categories.filter(cat => Object.values(ITEM_BASES)
+      .some(b => b.category === cat && b.dropWeight > 0 && (b.minIlvl ?? 0) <= level));
+    if (!cats.length) return { essence: bountyChargePay(level) };
     return {
       lot: {
         count: rng.int(L.lot.count[0], L.lot.count[1]),
@@ -707,12 +731,18 @@ export function rollBountyPay(
 /** One line describing a pay spec (card faces + notices — the visible
  *  price law: the exact pay, printed). */
 export function describeBountyPay(pay: BountyPay): string {
+  const budget = pay.level === undefined ? '' : ` · reward level ${pay.level}`
+    + (pay.unique || pay.lot ? ` · requires level ${levelReqForTier(tierForIlvl(pay.level))}` : '');
+  return describeBountyLane(pay) + budget;
+}
+
+function describeBountyLane(pay: BountyPay): string {
   if (pay.craft) return `a smith's writ: a ${['low', 'medium', 'high'][pay.craft.complexity - 1] ?? 'low'}-complexity ${pay.craft.category} piece`;
   if (pay.unique) {
     if (pay.unique.id) return `the unique: ${UNIQUE_LIST.find(u => u.id === pay.unique!.id)?.name ?? pay.unique.id}`;
     return `a unique ${pay.unique.category}`;
   }
-  if (pay.lot) return `${pay.lot.count} rare-grade ${pay.lot.category} pieces`;
+  if (pay.lot) return `${pay.lot.count} Magic or Rare ${pay.lot.category} pieces`;
   if (pay.gem) {
     // THE OFFERED GRADE's words: the card prints the floor its ladder can
     // never fall beneath ("Magic or finer") — the visible price law.
@@ -736,7 +766,7 @@ registerBountyKind({
       && !cfg.refuse.includes(zz.objective.kind)
       && !host.kindClaimed('charge', zz.id);
     const z = host.pin
-      ? (host.zoneMap[host.pin] && ok(host.zoneMap[host.pin]) ? host.zoneMap[host.pin] : null)
+      ? (host.zoneMap[host.pin] && ok(host.zoneMap[host.pin]) && (host.routeFits?.(host.pin) ?? true) ? host.zoneMap[host.pin] : null)
       : pickSeat(host.view, {
         event: 'bountyboard',
         ...cfg.seat,
@@ -748,7 +778,7 @@ registerBountyKind({
         // (different kinds ADD features to one zone; same kinds dedupe).
         from: host.boardZoneId,
         weigh: zz => host.lean(zz.id),
-        filter: zz => !taken.has(zz.id) && ok(zz)
+        filter: zz => !taken.has(zz.id) && ok(zz) && (host.routeFits?.(zz.id) ?? true)
           && zz.level >= host.playerLevel - cfg.band.below
           && zz.level <= host.playerLevel + cfg.band.above,
       }, rng);
@@ -784,7 +814,8 @@ registerBountyKind({
     // An errand's unwalked-ground ask is structural: a pinned errand on
     // walked ground honestly refuses (the pin passes to the next kind).
     const z = host.pin
-      ? (host.zoneMap[host.pin] && !host.visited(host.pin) && !host.kindClaimed('errand', host.pin) ? host.zoneMap[host.pin] : null)
+      ? (host.zoneMap[host.pin] && !host.visited(host.pin) && !host.kindClaimed('errand', host.pin)
+        && (host.routeFits?.(host.pin) ?? true) ? host.zoneMap[host.pin] : null)
       : pickSeat(host.view, {
         event: 'bountyboard',
         ...cfg.seat,
@@ -796,7 +827,7 @@ registerBountyKind({
         // (different kinds ADD features to one zone; same kinds dedupe).
         from: host.boardZoneId,
         weigh: zz => host.lean(zz.id),
-        filter: zz => !taken.has(zz.id)
+        filter: zz => !taken.has(zz.id) && (host.routeFits?.(zz.id) ?? true)
           && !host.visited(zz.id)
           && !host.kindClaimed('errand', zz.id)
           && zz.level >= host.playerLevel - cfg.band.below
@@ -833,13 +864,12 @@ registerBountyKind({
     // zone whose own objective posts writs, never harborhold ground — every
     // mark in a cull zone then belongs to the posting, and bountyView's
     // per-zone lane inference stays honest without a per-mark stamp.
-    const ok = (zz: ZoneDef): boolean => !host.objectiveDone(zz.id)
-      && zz.objective.kind !== 'bounty'
+    const ok = (zz: ZoneDef): boolean => zz.objective.kind !== 'bounty'
       && !zz.harborhold && !zz.holdAnchor
       && !!zz.packs?.table?.length
       && !host.kindClaimed('cull', zz.id);
     const z = host.pin
-      ? (host.zoneMap[host.pin] && ok(host.zoneMap[host.pin]) ? host.zoneMap[host.pin] : null)
+      ? (host.zoneMap[host.pin] && ok(host.zoneMap[host.pin]) && (host.routeFits?.(host.pin) ?? true) ? host.zoneMap[host.pin] : null)
       : pickSeat(host.view, {
         event: 'bountyboard',
         ...cfg.seat,
@@ -851,7 +881,7 @@ registerBountyKind({
         // (different kinds ADD features to one zone; same kinds dedupe).
         from: host.boardZoneId,
         weigh: zz => host.lean(zz.id),
-        filter: zz => !taken.has(zz.id) && ok(zz)
+        filter: zz => !taken.has(zz.id) && ok(zz) && (host.routeFits?.(zz.id) ?? true)
           && zz.level >= host.playerLevel - cfg.band.below
           && zz.level <= host.playerLevel + cfg.band.above,
       }, rng);
@@ -871,7 +901,7 @@ registerBountyKind({
     if (!z) return { title: 'The Cull', ask: 'the ground is gone' };
     return {
       title: `The Cull: ${z.name}`,
-      ask: `Put down ${n} marked quarry in ${z.name} (level ${z.level})`
+      ask: `Put down ${n} marked quarry in ${z.name} (level ${p.challengeLevel ?? z.level})`
         + (p.cull && p.cull.claimed > 0 ? ` — ${left} still stand.` : ' — the marks post at your arrival.'),
     };
   },
@@ -894,7 +924,7 @@ registerBountyKind({
       && harvestRowsFor(zz.biome, zz.tileset).length > 0
       && !host.kindClaimed('gather', zz.id);
     const z = host.pin
-      ? (host.zoneMap[host.pin] && ok(host.zoneMap[host.pin]) ? host.zoneMap[host.pin] : null)
+      ? (host.zoneMap[host.pin] && ok(host.zoneMap[host.pin]) && (host.routeFits?.(host.pin) ?? true) ? host.zoneMap[host.pin] : null)
       : pickSeat(host.view, {
         event: 'bountyboard',
         ...cfg.seat,
@@ -906,7 +936,7 @@ registerBountyKind({
         // (different kinds ADD features to one zone; same kinds dedupe).
         from: host.boardZoneId,
         weigh: zz => host.lean(zz.id),
-        filter: zz => !taken.has(zz.id) && ok(zz)
+        filter: zz => !taken.has(zz.id) && ok(zz) && (host.routeFits?.(zz.id) ?? true)
           && zz.level >= host.playerLevel - cfg.band.below
           && zz.level <= host.playerLevel + cfg.band.above,
       }, rng);
@@ -926,7 +956,7 @@ registerBountyKind({
     if (!z) return { title: 'The Gather', ask: 'the ground is gone' };
     return {
       title: `The Gather: ${z.name}`,
-      ask: `Bring in ${n} of the land's yield from ${z.name} (level ${z.level})`
+      ask: `Bring in ${n} of the land's yield from ${z.name} (level ${p.challengeLevel ?? z.level})`
         + (p.gather && p.gather.claimed > 0 ? ` — ${left} still stand.` : ' — the writ plants what the ground lacks.'),
     };
   },
@@ -950,7 +980,7 @@ registerBountyKind({
     if (!face) return null;
     const ok = (zz: ZoneDef): boolean => (face.fit?.(zz) ?? true) && !host.kindClaimed('summons', zz.id);
     const z = host.pin
-      ? (host.zoneMap[host.pin] && ok(host.zoneMap[host.pin]) ? host.zoneMap[host.pin] : null)
+      ? (host.zoneMap[host.pin] && ok(host.zoneMap[host.pin]) && (host.routeFits?.(host.pin) ?? true) ? host.zoneMap[host.pin] : null)
       : pickSeat(host.view, {
         event: 'bountyboard',
         ...cfg.seat,
@@ -962,7 +992,7 @@ registerBountyKind({
         // (different kinds ADD features to one zone; same kinds dedupe).
         from: host.boardZoneId,
         weigh: zz => host.lean(zz.id),
-        filter: zz => !taken.has(zz.id) && ok(zz)
+        filter: zz => !taken.has(zz.id) && ok(zz) && (host.routeFits?.(zz.id) ?? true)
           && zz.level >= host.playerLevel - cfg.band.below
           && zz.level <= host.playerLevel + cfg.band.above,
       }, rng);
@@ -1043,7 +1073,7 @@ registerBountyKind({
     // A pinned roll narrows to asks standing ON the pin, band bypassed.
     const pool = host.answers().filter(a => {
       const z = host.zoneMap[a.ref.zoneId];
-      if (!z) return false;
+      if (!z || !(host.routeFits?.(z.id) ?? true)) return false;
       if (host.kindClaimed('answer', a.ref.zoneId)) return false;
       if (host.pin) return a.ref.zoneId === host.pin;
       if (taken.has(a.ref.zoneId)) return false;
