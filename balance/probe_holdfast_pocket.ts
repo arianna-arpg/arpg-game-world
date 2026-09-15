@@ -433,6 +433,40 @@ registerEdgeBlockSource((_wld, from, to) =>
   }
 }
 
+// A one-cell corridor between the old 60px scan rows. The only distant
+// stands are along this strip; an outward shove above it snaps back near
+// the entrance and must use the fallback without jitter undoing its grace.
+{
+  const world = makeWorld(479633);
+  const w = world as any;
+  const grid = new GridWalkField(900, 600, 30);
+  grid.fillRect(90, 480, 809, 509, true);
+  grid.fillRect(450, 420, 479, 509, true);
+  w.arena = { ...w.arena, w: 900, h: 600 };
+  w.walk = grid;
+  w.doodads = [];
+  w.structures = [];
+  w.bridges = [];
+  w.markDoodadsChanged();
+  w.zoneEntry = { x: 450, y: 495 };
+  world.player.pos = { ...w.zoneEntry };
+  const foe = world.createMonster('ashling', 3, 'enemy');
+  w.actors = [world.player, foe];
+  const far = w.farthestStand(foe.radius, true);
+  check('arrival: fallback finds a reachable stand in a one-cell corridor',
+    !!far && grid.reachable(w.zoneEntry, far)
+    && Math.hypot(far.x - w.zoneEntry.x, far.y - w.zoneEntry.y) >= 300);
+  let safe = true;
+  for (let seed = 0; seed < 16; seed++) {
+    seedGlobalRandom(seed);
+    foe.pos = { x: 450, y: 465 };
+    w.enforceArrivalGrace();
+    safe &&= !foe.dead && grid.reachable(w.zoneEntry, foe.pos)
+      && Math.hypot(foe.pos.x - w.zoneEntry.x, foe.pos.y - w.zoneEntry.y) >= 300;
+  }
+  check('arrival: all scatter rolls preserve the safe fallback stand', safe);
+}
+
 // --- determinism: the same run re-asked mints the same forms -----------------------
 for (let s = 0; s < 3; s++) {
   const seed = 424200 + s * 7919;

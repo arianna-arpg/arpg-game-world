@@ -11736,7 +11736,14 @@ export class World {
       let to = this.clampPos(this.findFreeSpot(out, a.radius) ?? out, a.radius);
       if (dist(to, this.zoneEntry) < grace) {
         const far = this.farthestStand(a.radius, this.structures.length > 0);
-        if (far) to = this.clampPos(vec(far.x + rand(-60, 60), far.y + rand(-60, 60)), a.radius);
+        if (far) {
+          const jittered = this.clampPos(vec(far.x + rand(-60, 60), far.y + rand(-60, 60)), a.radius);
+          // Scatter must not undo the safe stand we just found. In a narrow
+          // carve clamping the jitter can pull a body back onto the portal.
+          to = dist(jittered, this.zoneEntry) >= grace
+            && (!this.structures.length || !this.walk?.reachable
+              || this.walk.reachable(this.zoneEntry, jittered)) ? jittered : far;
+        }
       }
       a.pos = vec(to.x, to.y);
     }
@@ -60876,27 +60883,32 @@ export class World {
   }
 
   /** LAST-RESORT placement: the valid stand FARTHEST from the player, scanned
-   *  on a coarse grid — walkable, clear of solids, and (when asked) reachable
+   *  on a grid — walkable, clear of solids, and (when asked) reachable
    *  from the entry. The shared floor under spawnPoint/farPoint when random
    *  sampling can't satisfy their distance contracts (cramped carves, tiny
    *  pockets): placements degrade toward "as far away as the ground allows"
    *  instead of collapsing onto the entry portal or the arena center.
    *  Load/spawn-time only — never per-frame. */
   private farthestStand(radius: number, needReachable: boolean): Vec2 | null {
-    const step = 60;
+    // Sample every walk cell's center: a fixed 60px stride can skip a whole
+    // 30px-wide corridor, including the only stand outside arrival grace.
+    const step = this.walk instanceof GridWalkField ? Math.min(60, this.walk.cell) : 60;
+    const start = this.walk instanceof GridWalkField ? Math.ceil(90 / step) * step + step / 2 : 90;
     let best: Vec2 | null = null;
     let bd = -1;
     let bestOpen: Vec2 | null = null; // the walkable-only understudy
     let bo = -1;
-    for (let y = 90; y < this.arena.h - 60; y += step) {
-      for (let x = 90; x < this.arena.w - 60; x += step) {
+    for (let y = start; y < this.arena.h - 60; y += step) {
+      for (let x = start; x < this.arena.w - 60; x += step) {
         if (this.walk && !this.walk.isWalkable(x, y)) continue;
         if (this.pointInSolid(x, y, radius * 0.5)) continue;
-        const d = dist(vec(x, y), this.player.pos);
-        if (d > bo) { bo = d; bestOpen = vec(x, y); }
+        // Score the full-radius landing, not a point clamping may move.
+        const stand = this.clampPos(vec(x, y), radius);
+        const d = dist(stand, this.player.pos);
+        if (d > bo) { bo = d; bestOpen = stand; }
         if (needReachable && this.walk?.reachable
-          && !this.walk.reachable(this.zoneEntry, vec(x, y))) continue;
-        if (d > bd) { bd = d; best = vec(x, y); }
+          && !this.walk.reachable(this.zoneEntry, stand)) continue;
+        if (d > bd) { bd = d; best = stand; }
       }
     }
     // Reachability that eliminated EVERY stand is a broken metric (an entry
