@@ -1,3 +1,4 @@
+import { throngTravelProtected } from './throngEvolution';
 // ---------------------------------------------------------------------------
 // The damage pipeline. One path for everyone — player, monsters, minions.
 //
@@ -395,6 +396,7 @@ export function resistValue(
 /** Attacker context threaded into mitigation so victim pools can honour
  *  attacker-side stats (poiseDamage) — absent for caster-less sources. */
 export interface MitigateOpts {
+  armorDamageFloor?: number;
   attacker?: Actor;
   tags?: Set<SkillTag>;
   extra?: Modifier[];
@@ -448,7 +450,8 @@ function mitigateWound(
       // attacker's armorPen shears a fraction of the plate off first.
       let armor = target.sheet.get('armor');
       if (pen) armor *= 1 - pen.attacker.sheet.get('armorPen', pen.tags, pen.extra);
-      dmg *= 1 - armor / (armor + DEFENSE_CFG.armor.k * dmg);
+      dmg *= Math.max(opts?.armorDamageFloor ?? 0, pen?.attacker.sheet.get('armorDamageFloor', pen.tags, pen.extra) ?? 0,
+        DEFENSE_CFG.armor.k * dmg / (Math.max(0, armor) + DEFENSE_CFG.armor.k * dmg));
     } else {
       dmg *= 1 - resistValue(target, type, pen);
     }
@@ -660,6 +663,7 @@ function plyEats(attacker: Actor, target: Actor, total: number, packet: DamagePa
  * Returns the life actually removed.
  */
 export function landLifeDamage(target: Actor, total: number): number {
+  for (const intercept of target.lifeDamageInterceptors?.values() ?? []) total = Math.max(0, intercept(total));
   if (total <= 0) return 0;
   if (total >= target.life && target.life > 0 && !target.dead && !target.invulnerable
     && target.lastGaspCd <= 0) {
@@ -693,7 +697,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   // the per-segment flash fire only where damage actually lands.
   const segHit = target.segHitPending;
   target.segHitPending = undefined;
-  if (target.invulnerable) return { evaded: false, immune: true, blocked: false, total: 0, crit: false };
+  if (target.invulnerable || throngTravelProtected(target)) return { evaded: false, immune: true, blocked: false, total: 0, crit: false };
   // HIT IMMUNITY (Cerement's shroud): every incoming HIT — attack, spell,
   // projectile — is dodged outright while the stat holds. DoTs still tick
   // (applyDot never comes through here); the shroud's own price bleeds on.
@@ -1044,7 +1048,7 @@ export function applyDot(target: Actor, amount: number, type?: DamageType): numb
 
 /** The actual DoT pipeline (applyDot is its thin observed wrapper). */
 function applyDotCore(target: Actor, amount: number, type?: DamageType): number {
-  if (target.invulnerable) return 0;
+  if (target.invulnerable || throngTravelProtected(target)) return 0;
   const tags = type ? new Set<SkillTag>([type]) : undefined;
   let total = amount * target.sheet.get('damageTaken', tags);
   if (total <= 0) return 0;

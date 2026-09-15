@@ -280,8 +280,8 @@ export function serializeCharacter(world: World): CharacterSave {
         const skillId = a.sourceSkillId.slice('__throng:'.length);
         const morphKey = `${skillId}:${a.defId}`;
         const row = rows.get(morphKey);
-        if (row) { row.count++; row.level = Math.max(row.level, a.level); }
-        else rows.set(morphKey, { skillId, defId: a.defId, level: a.level, count: 1 });
+        if (row) { row.count += a.throngUnits ?? 1; row.level = Math.max(row.level, a.level); }
+        else rows.set(morphKey, { skillId, defId: a.defId, level: a.level, count: a.throngUnits ?? 1 });
       }
       // THE LITE TIER (engine/lite.ts): a lite-tier anchor's pool rows join
       // its count — the roster resumes at full strength either way.

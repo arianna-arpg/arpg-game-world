@@ -51,6 +51,13 @@ debut boundaries and `balance/audit_tacticprogression.ts` compares combat pressu
 Sylvan Warden and Stone Sentinel guard commitment, bash warnings and doctrine
 level gates are documented in `docs/design/shield-defender-balance.md`;
 `balance/probe_wardenbalance.ts` checks those counterplay and progression seams.
+Raise the Gnatveil’s expanded tree lives in `src/data/gnatveilTree.ts`.
+`docs/design/gnatveil.md` records native accumulation, hatch bars, eggs,
+overflow decay, clustering, conducted contact and the throng armor floor.
+Verification: `npm run probe -- gnatveil` plus the throng and frontier probes.
+Hivecall’s army and Sovereign form live in `src/data/hivecall.ts`, with native
+contract/resource helpers in `src/engine/hivecall.ts`. See `docs/design/hivecall.md`;
+verify with `npm run probe -- hivecall` and the frontier/possession probes.
 The Hivecaller/Ranger/Guardian batch is in `src/data/frontierStarterTrees.ts`,
 with its contract and shared absorb scaling in
 `docs/design/frontier-starting-skill-trees.md`.

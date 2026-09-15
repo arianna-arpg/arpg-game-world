@@ -1,3 +1,4 @@
+import { HIVECALL_SKILLS } from './hivecall';
 import { GOAD_SKILLS } from './goadSkills';
 import { COMPANION_SKILLS } from './companionSkills';
 import { FLASK_TREES } from './flaskTrees';
@@ -42,6 +43,7 @@ import { ROOTWILD_SKILLS } from './rootwildSkills';
 import { ARENA_BOSS_SKILLS } from './arenaBosses';
 
 export const SKILLS: Record<string, SkillDef> = {
+  ...HIVECALL_SKILLS,
   ...COMPANION_SKILLS,
   ...GOAD_SKILLS,
   town_portal: TOWN_PORTAL_SKILL,
@@ -2069,12 +2071,12 @@ export const SKILLS: Record<string, SkillDef> = {
   summon_skeleton: {
     tree: NECROMANCER_TREES.summon_skeleton,
     id: 'summon_skeleton', name: 'Summon Skeleton Warrior',
-    description: 'Raise a skeletal warrior to fight beside you; up to 4 may serve at once, and'
+    description: 'Raise a skeletal warrior to fight beside you; up to 3 may serve at once, and'
       + ' their strength scales with your minion stats. The slot\'s meta-action, Attack!,'
       + ' orders an assault on your mark.',
     tags: ['spell', 'summon', 'minion'], color: '#cfc8b8',
     manaCost: 22, cooldown: 1.5, useTime: 0.9,
-    delivery: { type: 'summon', monsterId: 'skeleton_warrior', count: 1, maxActive: 4 },
+    delivery: { type: 'summon', monsterId: 'skeleton_warrior', count: 1, maxActive: 3 },
     meta: { skillId: 'command_assault', label: 'Attack!' },
     effects: [],
     requirements: { wisdom: 14, willpower: 10 },
@@ -5736,7 +5738,7 @@ export const SKILLS: Record<string, SkillDef> = {
   raise_gnatveil: {
     tree: FRONTIER_STARTER_TREES.raise_gnatveil,
     id: 'raise_gnatveil', name: 'Raise the Gnatveil',
-    description: 'Gnats condense out of the air every 6–10 seconds, sometimes at your heels,'
+    description: 'Gnats condense out of the air every 4–7 seconds, sometimes at your heels,'
       + ' sometimes a walk away, and evaporate if left unclaimed; gather up to 24. Each is'
       + ' nearly nothing: the cloud is the weapon, riders stacking HARRIED on whatever carries'
       + ' them to spoil aim and attention. HOLD to sweep the veil at the cursor.',
@@ -5748,7 +5750,7 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ type: 'throngDirect' }],
     throng: {
       monsterId: 'gnatling', cap: 24, batch: 8,
-      sources: [{ kind: 'motes', every: [6, 10], at: 'mixed', ttl: 40 }],
+      sources: [{ kind: 'motes', every: [4, 7], at: 'mixed', ttl: 40 }],
       // THE LITE TIER (engine/lite.ts): the veil rides the packed pool —
       // twenty-four bodies at effectively zero cost, promoting to real
       // latchers only where the sweep pins a quarry.
@@ -5792,9 +5794,9 @@ export const SKILLS: Record<string, SkillDef> = {
 
   summon_swarmlings: {
     tree: FRONTIER_STARTER_TREES.summon_swarmlings,
-    id: 'summon_swarmlings', name: 'Hivecall',
-    description: 'TOGGLE a hive contract: mana stays reserved while up to 5 swarmlings scurry'
-      + ' for you, and each reknits itself 4 seconds after it falls. SHIFT-press the slot to'
+    id: 'summon_swarmlings', hivecall: true, name: 'Hivecall',
+    description: 'TOGGLE a hive contract: mana stays reserved while up to 3 Swarmlings scurry'
+      + ' for you, and missing bodies reknit one at a time, every 4 seconds. SHIFT-press the slot to'
       + ' ENRAGE the horde into a pressed wave of speed and spite. Small bodies draw less'
       + ' attention, avoid 75% of area hits, and hurry under orders.',
     tags: ['spell', 'summon', 'minion', 'duration'], color: '#b8d060',
@@ -5802,7 +5804,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 12, cooldown: 3, useTime: 0.8,
     delivery: {
       type: 'summon', monsterId: 'swarmling',
-      count: 3, maxActive: 5,
+      count: 1, maxActive: 3,
       persistent: { reserve: 7, respawnTime: 4, toggle: true },
     },
     meta: { skillId: 'enrage_swarm', label: 'Enrage' },
@@ -15173,10 +15175,10 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   gnat_nip: {
     id: 'gnat_nip', name: 'Gnat Nip', noDrop: true,
-    description: 'The tiniest melee nip of physical damage: barely a bite. Barely.',
+    description: 'A small physical bite. The gathered cloud wears through armor.',
     tags: ['attack', 'melee', 'physical'], color: '#a8b860',
     manaCost: 0, cooldown: 0, useTime: 0.7,
-    baseDamage: { physical: [1, 2] },
+    baseDamage: { physical: [4, 5] },
     delivery: { type: 'melee', range: 34, arcDeg: 60 },
     effects: [{ type: 'damage' }],
     ai: { range: 40, weight: 2 },

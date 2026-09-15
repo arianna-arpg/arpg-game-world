@@ -1,45 +1,15 @@
+import { HIVECALL_TREE } from './hivecall';
+import { GNATVEIL_TREE } from './gnatveilTree';
 import type { SkillTreeSpec, TreeBuffPatch } from '../engine/skills';
 import { mod } from '../engine/stats';
-import { tree, n, body, type Node } from './skillTreeBuilder';
+import { tree, n, type Node } from './skillTreeBuilder';
 const graft = (node: Node, support: string): Node => ({ ...node, graft: { support, level: 1 } });
 const buff = (node: Node, id: string, patch: Omit<TreeBuffPatch, 'id'>): Node => ({ ...node, buffs: [{ id, ...patch }] });
 /** A complete second set of opening bars: the commander, archer and defender. */
 export const FRONTIER_STARTER_TREES: Record<string, SkillTreeSpec> = {
-  summon_swarmlings: tree([
-    n('teeming_contract', 'Teeming Contract', 'The hive fields up to 8 smaller swarmlings, summoning 5 at a time. 20% less minion life and 15% less size. Reservations and reknitting still apply per body.', [mod('minionLife', 'more', -0.2), mod('minionSize', 'more', -0.15)], { summon: { count: 5, maxActive: 8 } }),
-    [n('crowded_cells', 'Crowded Cells', 'Two additional maximum swarmlings.', [mod('minionMaxCount', 'flat', 2)]),
-      n('overflowing_cells', 'Overflowing Cells', 'Two additional maximum swarmlings and one additional summon per cast.', [mod('minionMaxCount', 'flat', 2), mod('summonCount', 'flat', 1)]),
-      n('sacrificial_chitin', 'Sacrificial Chitin', 'Each swarmling gains one additional protective ply.', [mod('minionPlies', 'flat', 1)])],
-    [n('scurrying_tide', 'Scurrying Tide', '25% increased minion movement speed and 15% increased minion action speed.', [mod('minionMoveSpeed', 'increased', 0.25), mod('minionHaste', 'increased', 0.15)]),
-      n('needle_mandibles', 'Needle Mandibles', 'Each body lodges 12% of its physical hit damage as impale.', undefined, body(mod('impalePower', 'flat', 0.12))),
-      n('brood_nourishment', 'Brood Nourishment', 'A swarmling death restores 4 life to its owner.', [mod('minionDeathHealFlat', 'flat', 4)])],
-  ], [
-    n('royal_guard', 'Royal Guard', 'Field two larger swarmlings at a time, with a base cap of 2. They gain 75% increased life, 50% increased damage and 40% increased size. The hive contract remains.', [mod('minionLife', 'increased', 0.75), mod('minionDamage', 'increased', 0.5), mod('minionSize', 'increased', 0.4)], { summon: { count: 2, maxActive: 2 } }),
-    [n('royal_carapace', 'Royal Carapace', '40% increased minion life and one protective ply.', [mod('minionLife', 'increased', 0.4), mod('minionPlies', 'flat', 1)]),
-      n('barbed_regents', 'Barbed Regents', 'Each royal body gains 20 thorns.', undefined, body(mod('thorns', 'flat', 20))),
-      n('knitted_regents', 'Knitted Regents', 'Bodies regenerate 2% of maximum life each second.', [mod('minionRegenPct', 'flat', 0.02)])],
-    [n('royal_ferocity', 'Royal Ferocity', '30% increased minion damage and 20% increased minion action speed.', [mod('minionDamage', 'increased', 0.3), mod('minionHaste', 'increased', 0.2)]),
-      n('crushing_mandibles', 'Crushing Mandibles', 'Royal bodies gain 30% chance to stun and 35 knockback strength.', undefined, body(mod('apply_stun', 'flat', 0.3), mod('knockback', 'flat', 35))),
-      n('regal_execution', 'Regal Execution', 'Royal bodies cull enemies below 8% life.', undefined, body(mod('cullThreshold', 'flat', 0.08)))],
-  ], n('hive_tending', 'Hive Tending', '15% increased minion life and damage.', [mod('minionLife', 'increased', 0.15), mod('minionDamage', 'increased', 0.15)])),
+  summon_swarmlings: HIVECALL_TREE,
 
-  raise_gnatveil: tree([
-    graft(n('patient_condensation', 'Patient Condensation', 'The veil keeps its wild motes and also condenses a claimable husk at your feet every 7 seconds while below cap. Gain 10% increased minion life investment.'), 'patient_brood'),
-    [n('room_in_the_air', 'Room in the Air', 'Eight additional maximum gnats.', [mod('minionMaxCount', 'flat', 8)]),
-      n('billowing_veil', 'Billowing Veil', 'Eight additional maximum gnats.', [mod('minionMaxCount', 'flat', 8)]),
-      n('heavy_motes', 'Heavy Motes', '60% increased minion life investment.', [mod('minionLife', 'increased', 0.6)])],
-    [n('layered_wings', 'Layered Wings', 'Gnats gain one additional protective ply. Plies are not divided among the cloud.', [mod('minionPlies', 'flat', 1)]),
-      n('double_membrane', 'Double Membrane', 'Gnats gain one further protective ply.', [mod('minionPlies', 'flat', 1)]),
-      n('quiet_flutter', 'Quiet Flutter', '40% increased minion movement speed investment.', [mod('minionMoveSpeed', 'increased', 0.4)])],
-  ], [
-    graft(n('battle_hatching', 'Battle Hatching', 'The veil keeps its wild motes and gains a battle gauge: your hits and minion hits each fill 3 of 100 points, then release 1–2 claimable husks. Gain 8% increased minion damage investment.'), 'hidden_reserves'),
-    [n('rich_hatch', 'Rich Hatch', '50% increased bodies per find, including battle-gauge births.', [mod('throngYield', 'increased', 0.5)]),
-      n('burst_hatch', 'Burst Hatch', '50% additional increased bodies per find.', [mod('throngYield', 'increased', 0.5)]),
-      n('ravenous_motes', 'Ravenous Motes', '60% increased minion damage investment.', [mod('minionDamage', 'increased', 0.6)])],
-    [n('walking_conductor', 'Walking Conductor', 'Add 15 percentage points of movement while conducting the veil, reaching ordinary walking pace.', [mod('channelMobility', 'flat', 0.15)]),
-      n('tireless_conductor', 'Tireless Conductor', '30% reduced channel mana cost.', [mod('manaCost', 'increased', -0.3)]),
-      n('frenzied_wings', 'Frenzied Wings', '50% increased minion action speed investment.', [mod('minionHaste', 'increased', 0.5)])],
-  ], n('veil_tending', 'Veil Tending', '20% increased minion life and damage investment, shared through the throng batch rules.', [mod('minionLife', 'increased', 0.2), mod('minionDamage', 'increased', 0.2)])),
+  raise_gnatveil: GNATVEIL_TREE,
 
   command_assault: tree([
     buff(n('killing_signal', 'Killing Signal', 'The assault also prepares each minion for 6 base seconds: its next landed attack hit deals 35% more damage, consuming only its own preparation.', undefined, { tags: { add: ['buff', 'duration'] } }), 'assault_preparation', { affects: 'minions', duration: 6, consumeOn: { on: 'hit', tags: ['attack'] }, mods: [mod('damage', 'more', 0.35, ['attack'])] }),

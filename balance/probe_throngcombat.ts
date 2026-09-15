@@ -34,7 +34,11 @@ function encounter(seed: number, enemyId: string, anchor: string, mode: string) 
   // Keep the observer alive without removing it from enemy target selection.
   p.sheet.setSource('probe:observer', [mod('life', 'flat', 10000)]);
   p.fillResources();
-  const inst = makeSkillInstance({ ...SKILLS[anchor], minionCombat: modes[mode] });
+  const def = SKILLS[anchor];
+  // Freeze this five-body historical A/B rig: it isolates the shared combat
+  // profile, not Hivecall's new three-slot economy or native armor floor.
+  const inst = makeSkillInstance({ ...def, hivecall: undefined, minionCombat: modes[mode],
+    delivery: def.delivery.type === 'summon' ? { ...def.delivery, maxActive: 5 } : def.delivery });
   p.skills = [inst];
   if (inst.def.throng) w.restoreThrong([{ skillId: anchor, defId: inst.def.throng.monsterId, level: 1, count: 10 }], p);
   else for (let i = 0; i < 5; i++) w['spawnMinion'](p, inst, { pos: { x: 685, y: 575 + i * 12 } });

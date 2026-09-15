@@ -1,3 +1,4 @@
+import { HIVECALL_MONSTERS } from './hivecall';
 ﻿// ---------------------------------------------------------------------------
 // THE BESTIARY.
 //
@@ -2159,6 +2160,7 @@ const wingCycle = (opts: {
 //   the_long_yoke, candelabrum_hulk, mireback_tusker.
 // ===========================================================================
 export const MONSTERS: Record<string, MonsterDef> = {
+  ...HIVECALL_MONSTERS,
   ...NECROMANCER_MINIONS,
   ...CASTER_MONSTERS,
   ...COURT_MONSTERS,
@@ -2502,7 +2504,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // (raise_gnatveil is tier 'lite') — near-nothing pooled nips; the
     // cloud's real teeth are the LATCH promotions (harried stacks) once
     // the direct sweep pins a quarry.
-    lite: { contact: { damage: 1 }, weave: 1.4, erratic: 1.3 },
+    lite: { contact: { damage: 4 }, weave: 1.4, erratic: 1.3 },
     brain: {
       type: 'swarm',
       // The murmuration lever: the veil swirls as one cloud in combat

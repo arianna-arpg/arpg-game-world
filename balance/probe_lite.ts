@@ -34,6 +34,7 @@ import { updateAI } from '../src/engine/ai';
 import { serializeSnapshot } from '../src/net/snapshot';
 import type { World } from '../src/engine/world';
 import { vec } from '../src/core/math';
+import { mod } from '../src/engine/stats';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -229,6 +230,10 @@ const bolt = {
   const zombie = w.createMonster('zombie', 3, 'enemy');
   zombie.pos = vec(p.pos.x + 190, p.pos.y);
   zombie.skills = []; // defanged: conservation is the law under test, not attrition
+  // Gnatveil's stronger bites can kill the ordinary zombie before this
+  // observation window ends. Keep the quarry alive to test the live latch.
+  zombie.sheet.setSource('probe:conservation', [mod('life', 'override', 10000)]);
+  zombie.fillResources();
   w.actors.push(zombie);
   const sweep = {
     id: 'probe_sweep', name: 'Probe Sweep', noDrop: true, description: '',
@@ -244,7 +249,7 @@ const bolt = {
   const promoted = w.throngBodiesOf(p, 'raise_gnatveil').length;
   check('LATCH: the marching cloud PROMOTES real clingers onto the quarry',
     promoted > 0 && riders.length > 0,
-    `promoted ${promoted}, riding ${riders.length}, rows ${w.lite.countOwned(p.id, gnatKind)}`);
+    `promoted ${promoted}, riding ${riders.length}, rows ${w.lite.countOwned(p.id, gnatKind)}, quarry life ${zombie.life}, dead ${zombie.dead}`);
   check('census: the roster is CONSERVED across the crossing',
     w.throngRosterCount(p, inst) === 5,
     `${w.throngRosterCount(p, inst)}`);

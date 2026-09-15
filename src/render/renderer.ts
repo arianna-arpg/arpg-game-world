@@ -1,3 +1,4 @@
+import { HIVECALL } from '../engine/hivecall';
 import { CosmeticTrails, cosmeticBody, cosmeticLoadoutFor, cosmeticPick, drawCosmeticMotif, drawCosmeticOrbit } from './vis/cosmetics';
 import { COSMETIC_CFG } from '../data/cosmetics';
 // ---------------------------------------------------------------------------
@@ -21,6 +22,7 @@ import { abilityEssenceOfTier, ESSENCES } from '../data/essences';
 import { STATUS_DEFS, type StatusDef } from '../engine/status';
 import { toneTint } from '../engine/tuning';
 import { STANCE_PLANT_TIME, shellArcFactor, type Actor } from '../engine/actor';
+import { throngEvolution } from '../engine/throngEvolution';
 import { throngSightSet, wornThrongKindsOf } from '../engine/throng';
 import { GRAB_VERB_LABEL } from '../engine/grab';
 import { PLY_CFG } from '../engine/plies';
@@ -5184,6 +5186,15 @@ export class Renderer {
     // own POV). Claimed bodies and everything else pass untouched.
     if (a.throngWild !== undefined && !this.throngSightOf(world).has(a.throngWild)) return;
 
+    if (a.throngEgg) {
+      ctx.save();
+      ctx.fillStyle = '#819347'; ctx.strokeStyle = '#dae5a6'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(x, y, a.radius * 0.8, a.radius, -0.2, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#e8efc8'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(String(a.throngEgg), x, y + 3);
+      ctx.restore();
+      return;
+    }
     // AT SEA the hero IS the boat: hull + sail + a trailing wake, rotated to
     // the facing. Zone-keyed (world.sailing), so co-op clients skin it too.
     if (world.sailing && world.seats.some(s => s.actor === a)) {
@@ -6231,7 +6242,13 @@ export class Renderer {
     const { ctx } = this;
     const t = world.time;
     for (const a of world.actors) {
-      if (a.dead || a.activeAuras.size === 0) continue;
+      if (a.dead) continue;
+      if (a.hivecallHud?.remaining !== undefined && a.skills.some(s => s?.def.hivecall && s.treeNodes?.includes('royal_carapace'))) {
+        ctx.globalAlpha = 0.08; ctx.fillStyle = '#b8d060';
+        ctx.beginPath(); ctx.arc(a.pos.x, a.pos.y, HIVECALL.auraRadius, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 0.4; ctx.strokeStyle = '#b8d060'; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
       for (const aura of a.activeAuras.values()) {
         const pulse = 0.06 + 0.02 * Math.sin(t * 3);
         ctx.globalAlpha = pulse;
@@ -7746,6 +7763,12 @@ export class Renderer {
             }
           }
         }
+        if (throngEvolution(inst).hitFill) {
+          ctx.fillStyle = '#334021';
+          ctx.fillRect(x + 4, by + slot - 7, slot - 8, 3);
+          ctx.fillStyle = '#c4d578';
+          ctx.fillRect(x + 4, by + slot - 7, (slot - 8) * Math.min(1, (inst.state?.throngEvolutionGauge ?? 0) / 100), 3);
+        }
         // BRIM strip (ChannelSpec.brim / a Gathered Casting conversion):
         // the persistent gauge lives on the slot's bottom edge — the
         // banked scream visible between presses, gold at the brim. Gated
@@ -7809,11 +7832,12 @@ export class Renderer {
             // roster's POOL ROWS count too (engine/lite.ts; a co-op client
             // shows only promoted bodies — its pool mirror carries no
             // owners, an accepted MVP-fidelity degradation).
-            count = world.throngBodiesOf(p, def.id).length;
+            count = world.throngBodiesOf(p, def.id).reduce((n, b) => n + (b.throngUnits ?? 1), 0);
             if (def.throng.tier === 'lite' && world.lite.liveCount) {
               const kindIdx = world.liteKindOf(def.throng.monsterId);
               if (kindIdx >= 0) count += world.lite.countOwned(p.id, kindIdx);
             }
+            count = p.throngRosterHud?.[def.id] ?? count;
           } else if (def.delivery.type === 'summon' || def.delivery.type === 'construct') {
             count = world.minionsOfSkill(p, def.id).length;
           } else if (def.delivery.type === 'ground' && def.delivery.follow) {
@@ -7872,6 +7896,19 @@ export class Renderer {
           ctx.fillStyle = metaCd ? '#6a6a7a' : '#e8d8a0';
           ctx.font = 'bold 8px Verdana';
           ctx.fillText(`⇧ ${meta.label}`, x + slot / 2, my + mh - 4);
+        }
+        if (def.hivecall && p.hivecallHud) {
+          const h = p.hivecallHud;
+          const transformed = h.remaining !== undefined;
+          const fraction = transformed ? h.remaining! / HIVECALL.duration : h.meter / HIVECALL.meterMax;
+          ctx.fillStyle = '#182117'; ctx.fillRect(x, by - 46, slot, 5);
+          ctx.fillStyle = '#b8d060'; ctx.fillRect(x, by - 46, slot * clamp(fraction, 0, 1), 5);
+          ctx.font = 'bold 9px Verdana'; ctx.textAlign = 'center';
+          ctx.fillStyle = '#d8ec9a';
+          const label = transformed ? h.remaining!.toFixed(1) + 's form'
+            : inst.treeNodes?.includes('royal_guard') ? Math.floor(h.meter) + ' / 100'
+            : h.rebirth !== undefined ? h.rebirth.toFixed(1) + 's hatch' : 'Hive ready';
+          ctx.fillText(label, x + slot / 2, by - 50);
         }
         // Socketed gem pips
         let gx = x + 6;

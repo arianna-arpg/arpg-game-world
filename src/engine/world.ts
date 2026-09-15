@@ -1,3 +1,4 @@
+import { throngEvolution, throngTravelProtected, throngClusterPlies, THRONG_EVOLUTION } from './throngEvolution';
 import { cosmeticSkillPaint, settleCosmetics } from '../meta/cosmetics';
 import { COSMETIC_CFG } from '../data/cosmetics';
 // ---------------------------------------------------------------------------
@@ -47,7 +48,8 @@ import { NullInput, SPENT_PRESS_CFG, type PlayerInput, type PlayerInputSource, t
 import { ZONE_MEMORY_CFG, captureZoneContents, restoreZoneContents, savedZoneContents, type ZoneContents } from './zonecontents';
 import { TOWN_PORTAL_CFG } from '../data/townportals';
 import { readTownPortals, type TownPortal, type TownPortalView } from './townportal';
-import { applyConversion, applyDot, applyHit, mitigateTyped, resistValue, rollSkillDamage, type DamagePacket } from './damage';
+import { applyConversion, applyDot, applyHit, landLifeDamage, mitigateTyped, resistValue, rollSkillDamage, type DamagePacket } from './damage';
+import { HIVECALL, hivecallNode, hivecallState, hivecallRescueFactor, hivecallFormDamage } from './hivecall';
 import { SEG_CFG, bodyWhere, nearestBody, noteBodyHit, reachTo, segR, segsHittable, stampSegFlash, tickSegFlash, woundCount, type SegBody } from './segments';
 import { DEFENSE_CFG } from './defense';
 import { MASS_CFG, impactFrac, impactScale, shoveAuthority } from './mass';
@@ -4639,6 +4641,7 @@ export class World {
     const hero = seat.home;
     if (!hero) return;
     const body = seat.actor;
+    const hiveForm = body.hiveForm;
     const ride = body.possession;
     seat.home = undefined;
     seat.actor = hero;
@@ -4708,6 +4711,7 @@ export class World {
               : 'you return to yourself', '#b8a8e8', 12);
     }
     this.markMetaDirty(seat);
+    if (hiveForm) this.hivecallReturn(body, reason);
     this.events.emit('possess/eject', { seat: seat.id, body, hero, reason });
   }
 
@@ -29314,6 +29318,7 @@ export class World {
 
   /** Are two actors on opposing sides — counting faction diplomacy? */
   hostileTo(a: Actor, b: Actor): boolean {
+    if (throngTravelProtected(b)) return false;
     // THE TIER LAW (engine/tiers.ts): layers share a screen, never a fight —
     // a deck body and a valley body cannot target, strike, or threaten each
     // other. Sitting in the ONE hostility gate, targeting, swings, threat
@@ -29996,6 +30001,411 @@ export class World {
   // as real minions at the claimer's level wearing the owner's minion
   // investment at the batch scale (bakeMinionOwnerStats' one divisor).
 
+  /** The recruitment ceiling differs from the ordinary cap for decaying overflow. */
+  private throngRecruitCap(keeper: Actor, inst: SkillInstance): number {
+    const evo = throngEvolution(inst);
+    return Math.max(evo.minimum ?? 0, evo.overflowCap ?? this.throngCapOf(keeper, inst));
+  }
+
+  private throngGain(keeper: Actor, inst: SkillInstance, count: number): Actor[] {
+    const result: Actor[] = [];
+    const room = this.throngRecruitCap(keeper, inst) - this.throngRosterCount(keeper, inst);
+    for (let i = 0; i < Math.min(count, room); i++) {
+      const b = this.mintThrongBody(keeper, inst, keeper.pos, keeper.level);
+      b.throngCarried = true;
+      result.push(b);
+    }
+    if (result.length) this.charDirty = true;
+    return result;
+  }
+
+  private throngKeepMinimum(keeper: Actor, inst: SkillInstance): void {
+    if (keeper.dead || keeper.downed || !keeper.skills.includes(inst)) return;
+    const minimum = throngEvolution(inst).minimum ?? 0;
+    if (minimum) this.throngGain(keeper, inst, minimum - this.throngRosterCount(keeper, inst));
+  }
+
+  /** Native contact and bursts still use the body's bite and the ordinary hit pipeline. */
+  private throngEvolutionBites = new WeakMap<SkillInstance, SkillInstance>();
+  private throngEvolutionHit(body: Actor, victim: Actor, scale: number): void {
+    const bite = body.skills.find(s => s?.def.baseDamage);
+    if (!bite || victim.dead || victim.passive || victim.untargetable
+      || victim.tier !== body.tier || !this.hostileTo(body, victim)) return;
+    let area = this.throngEvolutionBites.get(bite);
+    if (!area) {
+      area = makeSkillInstance({ ...bite.def, tags: [...bite.def.tags.filter(t => t !== 'attack'), 'aoe'] });
+      this.throngEvolutionBites.set(bite, area);
+    }
+    area.level = bite.level;
+    this.resolveHit(body, area, victim, scale, 0);
+  }
+
+  private throngEvolutionBurst(body: Actor, at: Vec2, radius: number, scale: number, except?: Actor): void {
+    for (const victim of this.enemiesOf(body)) {
+      if (victim.tier !== body.tier) continue;
+      if (victim !== except && dist(victim.pos, at) <= radius + victim.radius)
+        this.throngEvolutionHit(body, victim, scale);
+    }
+    this.flashes.push({ pos: { ...at }, radius, color: '#c4d578', life: 0.25, maxLife: 0.25 });
+  }
+
+  /** Native clocks and motion tick independently of the husk/source scan. */
+  private throngEvolutionActive = new WeakSet<SkillInstance>();
+  private hivecallHooks = new Set<Actor>();
+  private hivecallRedirecting = false;
+
+  private hivecallRoster(hero: Actor, inst: SkillInstance): Actor[] {
+    return this.minionsOfSkill(hero, inst.def.id).filter(a => !a.summonOffspring);
+  }
+
+  private hivecallCap(hero: Actor, inst: SkillInstance): number {
+    const d = instanceDelivery(inst);
+    if (d.type !== 'summon') return 0;
+    const raw = Math.max(1, Math.round(hero.sheet.get('minionMaxCount', skillContextTags(inst), instanceMods(inst), d.maxActive)));
+    const contract = hero.summonToggles.get(inst.def.id);
+    const unit = (d.persistent?.reserve ?? 0) * hero.sheet.get('manaCost', skillContextTags(inst), instanceMods(inst));
+    return contract && unit > 0 ? Math.min(raw, Math.round(contract.reserved / unit)) : raw;
+  }
+
+  private hivecallPayload(caster: Actor, host: SkillInstance, id: string): void {
+    const payload = makeSkillInstance(SKILLS[id], effectiveSkillLevel(host));
+    this.executeSkill(caster, payload, { ...caster.pos });
+  }
+
+  private hivecallDeath(body: Actor): void {
+    const hero = body.owner;
+    const host = body.summonOffspring ? hero?.skills.find(s => s?.def.hivecall && s.def.id === body.sourceSkillId) : body.summonInst;
+    if (!hero || hero.dead || !host || !hero.skills.includes(host)) return;
+    if (hivecallNode(host, 'teeming_contract')) {
+      for (const ally of this.minionsOfSkill(hero, host.def.id)) {
+        ally.life = ally.maxLife();
+        ally.hiveDeathPlies++;
+        ally.plySpec ??= { count: 0 };
+        ally.pliesMax++; ally.plies++;
+      }
+    }
+    if (hivecallNode(host, 'overflowing_cells')) this.hivecallPayload(body, host, 'hive_death_pool');
+    if (body.summonOffspring || !hivecallNode(host, 'royal_guard')) return;
+    const st = hivecallState(host);
+    const form = this.seats.find(s => s.home === hero)?.actor.hiveForm;
+    if (form) {
+      if (hivecallNode(host, 'regal_execution')) form.remaining = Math.min(HIVECALL.duration, form.remaining + HIVECALL.duration * HIVECALL.deathGain / HIVECALL.meterMax);
+    } else st.meter = Math.min(HIVECALL.meterMax, st.meter + HIVECALL.deathGain);
+  }
+
+  private hivecallTransform(hero: Actor, host: SkillInstance, automatic = false): boolean {
+    const seat = this.seatOf(hero), st = hivecallState(host);
+    if (!seat || seat.home || hero.dead || hero.downed || !hero.skills.includes(host)
+      || !hivecallNode(host, 'royal_guard') || st.meter <= 0) return false;
+    if (automatic ? st.meter <= 20 : this.time < (st.readyAt ?? 0)) return false;
+    let factor = 1;
+    if (automatic) {
+      const streak = this.time < (st.rescueUntil ?? 0) ? st.rescueStreak ?? 0 : 0;
+      factor = hivecallRescueFactor(streak);
+      st.rescueStreak = streak + 1;
+      st.rescueUntil = this.time + HIVECALL.rescueWindow;
+    }
+    const remaining = HIVECALL.duration * st.meter / HIVECALL.meterMax * factor;
+    this.shapeshiftPress(hero, host, { form: 'hive_sovereign' });
+    const form = seat.actor;
+    if (form === hero) return false;
+    st.meter = 0;
+    form.tier = hero.tier;
+    form.hiveForm = { hero, host, remaining, automatic, factor };
+    this.syncHivecallFormDamage(form, host);
+    form.sheet.setSource('hivecall:form', [mod('life', 'override', Math.max(1, hero.maxLife() * 1.5 * factor))]);
+    form.fillResources();
+    for (const skill of form.skills) if (skill && skill !== host) skill.level = effectiveSkillLevel(host);
+    if (hivecallNode(host, 'royal_ferocity')) {
+      form.sheet.setSource('hivecall:ferocity', [mod('damage', 'more', 0.3), mod('attackSpeed', 'more', 0.25), mod('castSpeed', 'more', 0.25)]);
+      // Insert before the guest Hivecall slot so it remains the return action.
+      form.skills.splice(form.skills.length - 1, 0, makeSkillInstance(SKILLS.hive_royal_cataclysm, effectiveSkillLevel(host)));
+      if (form.possession) form.possession.guestSlot = form.skills.length - 1;
+    }
+    if (hivecallNode(host, 'crushing_mandibles')) {
+      for (const skill of form.skills) if (skill && ['hive_venom_mandibles', 'hive_poison_spit'].includes(skill.def.id)) {
+        skill.def = { ...skill.def, innateMods: [...(skill.def.innateMods ?? []), mod('damage', 'more', 1), mod('aoeRadius', 'increased', 0.5), mod('projectileCount', 'flat', 2)] };
+      }
+    }
+    if (hivecallNode(host, 'barbed_regents')) this.hivecallPayload(form, host, 'hive_royal_nova');
+    if (hivecallNode(host, 'regal_execution') && hero.summonToggles.has(host.def.id)) {
+      const room = Math.max(0, this.hivecallCap(hero, host) - this.hivecallRoster(hero, host).length);
+      for (let n = 0; n < Math.min(2, room); n++) this.spawnMinion(hero, host);
+    }
+    return true;
+  }
+
+  private hivecallReturn(body: Actor, reason: EjectReason): void {
+    const form = body.hiveForm;
+    if (!form) return;
+    const { hero, host, automatic, factor } = form, st = hivecallState(host);
+    body.hiveForm = undefined;
+    st.meter = 0;
+    const cd = hivecallNode(host, 'barbed_regents') ? HIVECALL.novaCooldown : HIVECALL.cooldown;
+    st.readyAt = this.time + cd;
+    hero.cooldowns.set(host.def.id, cd);
+    hero.cooldownTotals.set(host.def.id, cd);
+    hero.cooldowns.set('enrage_swarm', cd);
+    hero.cooldownTotals.set('enrage_swarm', cd);
+    if (automatic && !hero.dead && reason !== 'travel') hero.life = Math.min(hero.maxLife(), hero.life + hero.maxLife() * 0.4 * factor);
+    if ((reason === 'press' || reason === 'duration') && hivecallNode(host, 'barbed_regents')) this.hivecallPayload(hero, host, 'hive_royal_nova');
+    hero.hivecallHud = { meter: st.meter, ready: cd };
+  }
+
+  private syncHivecallFormDamage(body: Actor, host: SkillInstance): void {
+    const damage = hivecallFormDamage(host);
+    if (body.sheet.getSourceMods('hivecall:tending')?.[0]?.value !== damage) {
+      body.sheet.setSource('hivecall:tending', [mod('damage', 'increased', damage)]);
+    }
+  }
+
+  /** Undefined delegates to ordinary Enrage, preserving support meta chains. */
+  private hivecallMeta(caster: Actor, host: SkillInstance): boolean | undefined {
+    if (!host.def.hivecall) return;
+    if (caster.dead || caster.downed) return false;
+    if (caster.hiveForm) {
+      const seat = this.seatOf(caster);
+      if (!seat) return false;
+      this.seatEject(seat, 'press'); return true;
+    }
+    if (!caster.skills.includes(host)) return false;
+    if (hivecallNode(host, 'royal_guard')) return this.hivecallTransform(caster, host);
+    if (!hivecallNode(host, 'sacrificial_chitin')) return;
+    const swarm = this.hivecallRoster(caster, host);
+    const meta = this.mintMetaInstance(caster, host, 'enrage_swarm');
+    const cost = meta.def.manaCost * caster.sheet.get('manaCost', skillContextTags(meta), instanceMods(meta));
+    if (!swarm.length || caster.cooldowns.has('enrage_swarm') || caster.mana < cost) return false;
+    caster.mana -= cost;
+    const cd = 8 / Math.max(0.01, caster.sheet.get('cooldownRecovery', skillContextTags(meta), instanceMods(meta)));
+    caster.cooldowns.set('enrage_swarm', cd); caster.cooldownTotals.set('enrage_swarm', cd);
+    for (const body of swarm) {
+      this.hivecallPayload(body, host, 'hive_detonation');
+      this.kill(body, false, caster);
+    }
+    for (const body of swarm) this.spawnMinion(caster, host, { pos: { ...body.pos } });
+    hivecallState(host).rebirthAt = undefined;
+    return true;
+  }
+
+  private updateHivecall(dt: number): void {
+    for (const a of this.hivecallHooks) for (const key of a.lifeDamageInterceptors?.keys() ?? []) {
+      if (key.startsWith('hivecall:')) a.lifeDamageInterceptors?.delete(key);
+    }
+    this.hivecallHooks.clear();
+    for (const seat of this.seats) {
+      const hero = seat.home ?? seat.actor;
+      const host = hero.skills.find(s => s?.def.hivecall);
+      if (!host || hero.dead) {
+        hero.hivecallHud = undefined;
+        if (seat.actor.hiveForm) this.seatEject(seat, 'released');
+        continue;
+      }
+      const st = hivecallState(host);
+      let form = seat.actor.hiveForm;
+      if (form) { hero.pos = { ...seat.actor.pos }; hero.tier = seat.actor.tier; }
+      if (form && (!hivecallNode(host, 'royal_guard') || form.host !== host)) {
+        this.seatEject(seat, 'released'); form = undefined;
+      }
+      if (!hivecallNode(host, 'royal_guard')) st.meter = 0;
+      if (form) {
+        this.syncHivecallFormDamage(seat.actor, host);
+        form.remaining -= dt;
+        if (form.remaining <= 0) { this.seatEject(seat, 'duration'); form = undefined; }
+      }
+      const roster = this.hivecallRoster(hero, host), cap = this.hivecallCap(hero, host);
+      if (hero.summonToggles.has(host.def.id) && roster.length < cap) {
+        const d = instanceDelivery(host);
+        const speed = hero.sheet.get('minionRespawnTime', skillContextTags(host), instanceMods(host));
+        const delay = (d.type === 'summon' ? d.persistent?.respawnTime ?? 4 : 4) * speed;
+        st.rebirthAt ??= this.time + delay;
+        if (this.time >= st.rebirthAt) {
+          this.spawnMinion(hero, host);
+          st.rebirthAt = this.hivecallRoster(hero, host).length >= cap ? undefined
+            : this.time + (hivecallNode(host, 'crowded_cells') ? HIVECALL.rapidInterval * speed : delay);
+        }
+      } else st.rebirthAt = undefined;
+      for (const guard of roster) {
+        if (!hivecallNode(host, 'brood_nourishment') || guard.defId !== 'hive_royal_guard') { guard.hiveBroodAt = undefined; continue; }
+        guard.hiveBroodAt ??= this.time + HIVECALL.broodDelay;
+        if (this.time < guard.hiveBroodAt) continue;
+        guard.hiveBroodAt = this.time + HIVECALL.broodDelay;
+        const child = { ...host, treeNodes: host.treeNodes?.filter(id => !['scurrying_tide', 'needle_mandibles', 'brood_nourishment'].includes(id)), state: {} };
+        const d = instanceDelivery(child);
+        if (d.type !== 'summon') continue;
+        for (let n = 0; n < 2; n++) this.spawnMinion(hero, child, {
+          monsterId: 'swarmling', pos: { x: guard.pos.x + (n ? 15 : -15), y: guard.pos.y },
+          delivery: { ...d, persistent: undefined, duration: HIVECALL.broodLife },
+          offspring: { maxActive: cap * 2, size: 1, life: 1, damage: 1 },
+        });
+      }
+      hero.hivecallHud = { meter: st.meter, remaining: form?.remaining, rebirth: st.rebirthAt === undefined ? undefined : Math.max(0, st.rebirthAt - this.time), ready: Math.max(0, (st.readyAt ?? 0) - this.time) };
+      seat.actor.hivecallHud = hero.hivecallHud;
+      const aura = !!form && hivecallNode(host, 'royal_carapace');
+      const recipients = aura ? this.actors.filter(a => !a.dead && a.team === seat.actor.team && sameStory(a, seat.actor) && dist(a.pos, seat.actor.pos) <= HIVECALL.auraRadius) : [hero];
+      for (const a of recipients) {
+        this.hivecallHooks.add(a);
+        (a.lifeDamageInterceptors ??= new Map()).set(`hivecall:${hero.id}`, (amount: number) => {
+          if (amount <= 0) return amount;
+          if (aura && seat.actor.hiveForm && sameStory(a, seat.actor) && dist(a.pos, seat.actor.pos) <= HIVECALL.auraRadius) {
+            a.addBuff({ type: 'buff', id: 'hivecall_fury', duration: 3, mods: [mod('damage', 'more', 0.3), mod('attackSpeed', 'increased', 0.4), mod('castSpeed', 'increased', 0.4)] });
+            if (this.hivecallRedirecting) return amount; // Shared wounds enrage, but never redirect recursively.
+            const shields = this.hivecallRoster(hero, host).filter(m => m !== a && sameStory(m, a) && dist(m.pos, seat.actor.pos) <= HIVECALL.auraRadius);
+            if (shields.length) {
+              const share = amount * HIVECALL.redirect / shields.length;
+              let absorbed = 0;
+              this.hivecallRedirecting = true;
+              try {
+                for (const m of shields) {
+                  const wound = Math.min(share, Math.max(0, m.life)); absorbed += wound;
+                  landLifeDamage(m, wound);
+                  if (m.life <= 0) this.kill(m, false, a);
+                }
+              } finally { this.hivecallRedirecting = false; }
+              amount -= absorbed;
+            }
+          }
+          if (a === hero && amount >= hero.life && hero.life > 0 && hivecallNode(host, 'knitted_regents') && this.hivecallTransform(hero, host, true)) return Math.max(0, hero.life - 1);
+          return amount;
+        });
+      }
+    }
+  }
+
+  private updateThrongEvolution(dt: number): void {
+    for (const seat of this.seats) {
+      const keeper = seat.actor;
+      if (keeper.dead || keeper.downed) continue;
+      for (const { inst, spec } of throngSpecsOn(keeper.skills)) {
+        const evo = throngEvolution(inst), st = inst.state ??= {};
+        const active = Object.keys(evo).length > 0;
+        if (!active && !this.throngEvolutionActive.has(inst)) continue;
+        if (active) this.throngEvolutionActive.add(inst);
+        else this.throngEvolutionActive.delete(inst);
+        if (active && spec.tier === 'lite') {
+          const kindIdx = this.liteKindOf(spec.monsterId);
+          if (kindIdx >= 0 && this.lite.countOwned(keeper.id, kindIdx))
+            this.litePromoteNearest(keeper.pos, { within: Infinity, max: this.lite.used, owner: keeper.id, kindIdx });
+        }
+        this.throngKeepMinimum(keeper, inst);
+        const cap = this.throngRecruitCap(keeper, inst);
+        if (evo.accumulateSec && this.throngRosterCount(keeper, inst) < cap) {
+          st.throngEvolutionClock = (st.throngEvolutionClock ?? 0) + dt;
+          while (st.throngEvolutionClock >= evo.accumulateSec && this.throngRosterCount(keeper, inst) < cap) {
+            st.throngEvolutionClock -= evo.accumulateSec;
+            this.throngGain(keeper, inst, 1);
+          }
+        } else st.throngEvolutionClock = 0;
+        if (evo.hitFill) st.throngEvolutionGauge ??= 0;
+        else st.throngEvolutionGauge = 0;
+        let bodies = this.throngBodiesOf(keeper, inst.def.id);
+        // A cluster is one actor with a counted cargo. Merging cannot repair damage.
+        if (evo.cluster && bodies.length > 1) {
+          const eligible = bodies.filter(b => !b.throngDive);
+          const lead = eligible[0];
+          if (lead && eligible.length > 1) {
+            const units = eligible.reduce((n, b) => n + (b.throngUnits ?? 1), 0);
+            const lifeFrac = eligible.reduce((n, b) => n + b.life / b.maxLife() * (b.throngUnits ?? 1), 0) / units;
+            const spent = eligible.reduce((n, b) => n + Math.max(0, b.pliesMax - b.plies), 0);
+            lead.throngUnits = units;
+            for (const b of eligible.slice(1)) this.kill(b, true);
+            this.bakeMinionOwnerStats(lead, keeper, inst, batchScaleOf(spec));
+            lead.life = lead.maxLife() * lifeFrac;
+            lead.plies = Math.max(0, lead.pliesMax - spent);
+            bodies = this.throngBodiesOf(keeper, inst.def.id);
+          }
+        } else if (!evo.cluster) {
+          for (const b of bodies) if ((b.throngUnits ?? 1) > 1) {
+            const count = b.throngUnits!, frac = b.life / b.maxLife(), plies = b.plies;
+            b.throngUnits = undefined;
+            this.bakeMinionOwnerStats(b, keeper, inst, batchScaleOf(spec));
+            b.life = b.maxLife() * frac;
+            b.plies = Math.min(b.pliesMax, plies);
+            let left = Math.max(0, plies - b.plies);
+            for (let i = 1; i < count; i++) {
+              const child = this.mintThrongBody(keeper, inst, b.pos, b.level);
+              child.life = child.maxLife() * frac;
+              child.plies = Math.min(child.pliesMax, left);
+              left -= child.plies;
+              child.throngCarried = b.throngCarried;
+            }
+          }
+          bodies = this.throngBodiesOf(keeper, inst.def.id);
+        }
+        const conducting = keeper.casting?.inst === inst;
+        let protectedUnits = this.throngCapOf(keeper, inst);
+        const foes = active && conducting ? [...this.enemiesOf(keeper)] : [];
+        for (let i = 0; i < bodies.length; i++) {
+          const b = bodies[i], units = b.throngUnits ?? 1;
+          const excess = Math.max(0, units - Math.max(0, protectedUnits));
+          protectedUnits -= units;
+          if (evo.overflowCap && excess > 0) {
+            b.decay ??= { t: 0, dps0: 0, growth: THRONG_EVOLUTION.decayGrowth };
+            const lifeInvestment = b.sheet.getSourceMods('owner')?.find(m => m.stat === 'life' && m.kind === 'more')?.value ?? 0;
+            b.decay.dps0 = b.maxLife() / Math.max(0.01, 1 + lifeInvestment) * excess / units * THRONG_EVOLUTION.decayFraction;
+          } else b.decay = undefined;
+          const enraged = !!(conducting && evo.conductFury);
+          if (enraged !== !!b.throngEnraged) b.sheet.setSource('throngEvolution:conduct', enraged ? [
+            mod('moveSpeed', 'more', THRONG_EVOLUTION.furyMove),
+            mod('attackSpeed', 'more', THRONG_EVOLUTION.furyHaste),
+            mod('castSpeed', 'more', THRONG_EVOLUTION.furyHaste),
+            mod('damage', 'more', THRONG_EVOLUTION.furyDamage),
+          ] : []);
+          b.throngEnraged = enraged;
+          if (!active) {
+            b.throngCarried = false;
+            b.throngDive = undefined;
+            this.bakeMinionOwnerStats(b, keeper, inst, batchScaleOf(spec));
+          }
+          const old = { ...b.pos };
+          b.throngDriven = !!b.throngDive || !!(conducting && evo.whirlwind);
+          if (b.throngDive) {
+            if (!evo.fullDive) { b.throngDive = undefined; b.throngDriven = false; }
+            else {
+              const d = dist(b.pos, b.throngDive), step = b.sheet.get('moveSpeed') * 2 * dt;
+              if (d <= Math.max(8, step)) {
+                b.pos = { ...b.throngDive };
+                b.throngDive = undefined;
+                b.throngDriven = false;
+                this.throngEvolutionBurst(b, b.pos, THRONG_EVOLUTION.diveRadius, THRONG_EVOLUTION.diveScale);
+                this.kill(b);
+                continue;
+              }
+              b.pos = this.clampPos(vec(b.pos.x + (b.throngDive.x - b.pos.x) / d * step,
+                b.pos.y + (b.throngDive.y - b.pos.y) / d * step), b.radius, undefined, { mover: b });
+            }
+          } else if (conducting && evo.whirlwind) {
+            if (b.clingTo) this.clingRelease(b);
+            b.throngCarried = false;
+            b.casting = null;
+            const angle = this.time * THRONG_EVOLUTION.orbitSpeed + i / bodies.length * Math.PI * 2;
+            const r = THRONG_EVOLUTION.orbitRadius + (i % 3 - 1) * 14;
+            b.pos = this.clampPos(vec(keeper.pos.x + Math.cos(angle) * r, keeper.pos.y + Math.sin(angle) * r),
+              b.radius, undefined, { mover: b });
+            b.tier = keeper.tier;
+          } else if (b.throngCarried && !conducting) {
+            const angle = this.time + i * 2.4;
+            b.pos = vec(keeper.pos.x + Math.cos(angle) * (keeper.radius + 7), keeper.pos.y + Math.sin(angle) * (keeper.radius + 7));
+            b.tier = keeper.tier;
+          } else if (conducting) b.throngCarried = false;
+          const scale = evo.whirlwind ? 1 : evo.contactScale ?? 0;
+          if (conducting && scale && !b.throngDive) {
+            const previous = b.throngContactPos ?? old;
+            for (const victim of foes) {
+              if ((b.throngContact?.get(victim.id) ?? 0) > this.time) continue;
+              const dx = b.pos.x - previous.x, dy = b.pos.y - previous.y;
+              const q = Math.max(0, Math.min(1, ((victim.pos.x - previous.x) * dx + (victim.pos.y - previous.y) * dy) / (dx * dx + dy * dy || 1)));
+              if (dist(victim.pos, vec(previous.x + dx * q, previous.y + dy * q)) > victim.radius + b.radius + 5) continue;
+              (b.throngContact ??= new Map()).set(victim.id, this.time + THRONG_EVOLUTION.contactInterval);
+              this.throngEvolutionHit(b, victim, scale);
+            }
+            for (const [id, until] of b.throngContact ?? []) if (until <= this.time) b.throngContact!.delete(id);
+          }
+          b.throngContactPos = { ...b.pos };
+        }
+      }
+    }
+  }
+
   /** Every living body of one throng skill's roster. */
   throngBodiesOf(keeper: Actor, skillId: string): Actor[] {
     const marker = throngMarkerOf(skillId);
@@ -30007,7 +30417,7 @@ export class World {
    *  anchor) the pool rows the keeper owns of the spec's kind. */
   throngRosterCount(keeper: Actor, inst: SkillInstance): number {
     const spec = inst.def.throng;
-    let n = this.throngBodiesOf(keeper, inst.def.id).length;
+    let n = this.throngBodiesOf(keeper, inst.def.id).reduce((n, b) => n + (b.throngUnits ?? 1), 0);
     if (spec?.tier === 'lite') {
       const kindIdx = this.liteKindOf(spec.monsterId);
       if (kindIdx >= 0) n += this.lite.countOwned(keeper.id, kindIdx);
@@ -30055,6 +30465,16 @@ export class World {
   private mintThrongFind(keeper: Actor, inst: SkillInstance, pos: Vec2,
     opts?: { pocketKey?: string; ttl?: number; tier?: number }, rng: () => number = Math.random): Actor | null {
     const original = inst.def.throng!.monsterId;
+    const eggs = throngEvolution(inst).eggs;
+    if (eggs) {
+      const enemy = [...this.enemiesOf(keeper)].filter(e => !e.dead && !e.passive && !e.untargetable
+        && e.tier === keeper.tier && dist(e.pos, keeper.pos) < 360)
+        .sort((a, b) => dist(a.pos, keeper.pos) - dist(b.pos, keeper.pos))[0];
+      const egg = this.mintThrongHusk(original, enemy ? this.throngStandNear(enemy.pos, keeper.tier) : pos,
+        { ...opts, affinity: original });
+      if (egg) { egg.throngEgg = eggs; egg.radius = 12; }
+      return egg;
+    }
     const kind = substituteThrongKind(original, keeper, inst, rng,
       stat => keeper.sheet.get(stat, skillContextTags(inst), instanceMods(inst)));
     return this.mintThrongHusk(kind, pos, { ...opts, affinity: original });
@@ -30082,6 +30502,17 @@ export class World {
    *  quietly, a REAL roster body stands in its place, and a pocket seat's
    *  key is remembered run-long so the world genuinely runs dry. */
   private claimThrongHusk(keeper: Actor, inst: SkillInstance, husk: Actor): void {
+    if (husk.throngEgg) {
+      const count = Math.min(husk.throngEgg, this.throngRecruitCap(keeper, inst) - this.throngRosterCount(keeper, inst));
+      if (count <= 0) return;
+      const at = { ...husk.pos };
+      const bodies = this.throngGain(keeper, inst, count);
+      if (bodies.length) this.throngEvolutionBurst(bodies[0], at, THRONG_EVOLUTION.eggRadius,
+        THRONG_EVOLUTION.eggScale * bodies.length);
+      if (husk.throngPocketKey) this.throngClaimed.add(husk.throngPocketKey);
+      this.kill(husk, true);
+      return;
+    }
     const bodyKind = husk.defId;
     if (husk.throngPocketKey) this.throngClaimed.add(husk.throngPocketKey);
     husk.throngWild = undefined;
@@ -30125,7 +30556,7 @@ export class World {
           ? this.wornThrongAnchorsOf(keeper).find(a => a.inst.def.id === row.skillId)?.inst
           : undefined);
       if (!inst || !MONSTERS[row.defId]) continue;
-      const n = Math.max(0, Math.min(row.count, this.throngCapOf(keeper, inst) - this.throngRosterCount(keeper, inst)));
+      const n = Math.max(0, Math.min(row.count, this.throngRecruitCap(keeper, inst) - this.throngRosterCount(keeper, inst)));
       // A lite-tier roster resumes as POOL ROWS (fresh plies — wear does
       // not persist across a save, matching a classic roster's full-life
       // re-field). Classic rosters mint real bodies exactly as before.
@@ -30412,7 +30843,7 @@ export class World {
         const defId = m.defId;
         const releasedSpec = m.summonInst?.def.throng;
         this.kill(m, true);
-        if (defId && releasedSpec?.release !== 'dismiss') this.mintThrongHusk(defId, m.pos,
+        if (defId && releasedSpec?.release !== 'dismiss') for (let i = 0; i < (m.throngUnits ?? 1); i++) this.mintThrongHusk(defId, m.pos,
           { ttl: THRONG_CFG.motes.ttl * 2, tier: m.tier, affinity: releasedSpec?.monsterId });
       }
     }
@@ -30446,7 +30877,7 @@ export class World {
         // A lite-tier roster counts its POOL rows beside any promoted
         // bodies (engine/lite.ts) — the cap is the cap either way.
         let roster = this.throngRosterCount(keeper, inst);
-        const cap = this.throngCapOf(keeper, inst);
+        const cap = this.throngRecruitCap(keeper, inst);
         if (roster < cap) {
           for (const a of [...this.actors]) {
             if (a.dead || a.throngWild !== spec.monsterId) continue;
@@ -30454,7 +30885,8 @@ export class World {
             const reach = THRONG_CFG.collect.reach + keeper.radius + a.radius;
             if (dist(keeper.pos, a.pos) > reach) continue;
             this.claimThrongHusk(keeper, inst, a);
-            if (++roster >= cap) break;
+            roster = this.throngRosterCount(keeper, inst);
+            if (roster >= cap) break;
           }
         }
         // MOTE SCHEDULING (one motes row per skill — the first wins; a
@@ -30540,6 +30972,15 @@ export class World {
     if (lethal) this.throngLastKill.set(lord.id, vec(target.pos.x, target.pos.y));
     for (const { inst, spec } of throngSpecsOn(lord.skills)) {
       const st = inst.state ??= {};
+      const evo = throngEvolution(inst);
+      if (evo.hitFill) {
+        st.throngEvolutionGauge = (st.throngEvolutionGauge ?? 0) + evo.hitFill;
+        if (st.throngEvolutionGauge >= 100) {
+          st.throngEvolutionGauge -= 100;
+          this.throngGain(lord, inst, Math.ceil(Math.max(0,
+            this.throngCapOf(lord, inst) - this.throngRosterCount(lord, inst)) / 2));
+        }
+      }
       for (const row of this.throngSources(inst, spec)) {
         if (row.kind === 'onCrit') {
           if (!wasCrit || caster !== lord) continue;
@@ -30601,7 +31042,23 @@ export class World {
   ): void {
     const spec = inst.def.throng;
     if (!spec) return;
+    const evo = throngEvolution(inst);
+    if (Object.keys(evo).length && spec.tier === 'lite') {
+      const kindIdx = this.liteKindOf(spec.monsterId);
+      if (kindIdx >= 0) this.litePromoteNearest(caster.pos, { within: Infinity, max: this.lite.used, owner: caster.id, kindIdx });
+    }
     const bodies = this.throngBodiesOf(caster, inst.def.id);
+    if (evo.fullDive && bodies.every(b => !b.throngDive) && this.throngRosterCount(caster, inst) >= this.throngCapOf(caster, inst)) {
+      for (const b of bodies) {
+        if (b.clingTo) this.clingRelease(b);
+        b.casting = null;
+        b.throngCarried = false;
+        b.throngDive = this.clampPos({ ...aim }, b.radius, undefined, { mover: b });
+      }
+      return;
+    }
+    if (evo.whirlwind) return;
+    for (const b of bodies) if (!b.throngDive) b.throngCarried = false;
     // A lite-tier anchor's roster may live ENTIRELY in the pool — the sweep
     // is live as long as ANY body (row or promoted) answers.
     const liteKindIdx = spec.tier === 'lite' ? this.liteKindOf(spec.monsterId) : -1;
@@ -30631,6 +31088,7 @@ export class World {
       this.liteOrders.set(caster.id * 256 + liteKindIdx, order);
     }
     for (const m of bodies) {
+      if (m.throngDive) continue;
       const cmd: CommandState = {
         kind: 'assault', pos: vec(mark.x, mark.y), until, radius, issuerId: caster.id,
       };
@@ -31104,7 +31562,7 @@ export class World {
     for (const ty of Object.keys(amounts) as DamageType[]) {
       if ((amounts[ty] ?? 0) > domAmt) { domAmt = amounts[ty]!; domType = ty; }
     }
-    const taken = mitigateTyped(v, amounts);
+    const taken = mitigateTyped(v, amounts, { armorDamageFloor: credit ? THRONG_EVOLUTION.armorFloor : 0 });
     if (v.plies > 0) {
       if (taken >= plyFloorOf(v)) {
         v.plies--;
@@ -31828,7 +32286,7 @@ export class World {
           if (!v.invulnerable) {
             const type = g.type ?? 'physical';
             const amt = g.dps * every * a.sheet.get('damage', gnawTags(type));
-            const taken = mitigateTyped(v, { [type]: amt });
+            const taken = mitigateTyped(v, { [type]: amt }, { attacker: a });
             SIM_TAP.current?.onDot?.(v, taken, type); // gnaw participates in balance telemetry
             if (taken > 0) {
               const deedLifeBefore = v.life;
@@ -31845,7 +32303,7 @@ export class World {
         }
         continue;
       }
-      if (!a.cling || a.passive || this.time < a.clingThinkAt) continue;
+      if (!a.cling || a.passive || a.throngCarried || a.throngDriven || a.throngDive || this.time < a.clingThinkAt) continue;
       if (a.isStunned() || a.heldBy !== undefined || a.gripping) continue;
       a.clingThinkAt = this.time + CLING_CFG.thinkEvery;
       if (this.time < a.clingCooldownUntil || isDormant(a)) continue;
@@ -32523,7 +32981,8 @@ export class World {
     // the bang). The first beat fires now; the rest queue.
     const metas = instanceMetas(host).filter(m => SKILLS[m.skillId]);
     if (!metas.length) return false;
-    const ok = this.useSkill(caster, this.mintMetaInstance(caster, host, metas[0].skillId), aim);
+    const native = metas[0].skillId === 'enrage_swarm' ? this.hivecallMeta(caster, host) : undefined;
+    const ok = native ?? this.useSkill(caster, this.mintMetaInstance(caster, host, metas[0].skillId), aim);
     for (let i = 1; i < metas.length; i++) {
       this.pendingMetas.push({
         caster, host, skillId: metas[i].skillId,
@@ -32570,6 +33029,8 @@ export class World {
    * answer only to seats, so AI re-presses can never thrash a toggle.
    */
   useSkill(caster: Actor, inst: SkillInstance, aim: Vec2, seatPress = false): boolean {
+    if (caster.hiveForm && inst.def.hivecall) return this.hivecallMeta(caster, inst) ?? false;
+    if (throngTravelProtected(caster) || caster.throngDriven || caster.throngCarried) return false;
     if (replenishingDelivery(inst)) {
       if (seatPress && replenishingDelivery(inst)?.replenish?.toggle
         && !caster.dead && !caster.downed && caster.skills.includes(inst)) {
@@ -35272,7 +35733,7 @@ export class World {
           caster.reservedMana += reserve;
           caster.mana = Math.min(caster.mana, caster.availableMaxMana());
           caster.summonToggles.set(def.id, { inst, reserved: reserve });
-          const first = Math.min(slots, Math.max(1, Math.round(
+          const first = def.hivecall ? 1 : Math.min(slots, Math.max(1, Math.round(
             (d.count + Math.round(caster.sheet.get('summonCount', tags, extra))) * gPow)));
           // A sequencing gem ("scattered in sequence") holds on toggled
           // contracts too: the ON-fill emerges through the SAME grammar
@@ -37744,7 +38205,7 @@ export class World {
       minion.manaReserved = 0;
     }
     const inst = minion.summonInst;
-    if (scheduleRespawn && !minion.summonOffspring && owner && !owner.dead && inst
+    if (scheduleRespawn && !inst?.def.hivecall && !minion.summonOffspring && owner && !owner.dead && inst
       && inst.def.delivery.type === 'summon' && inst.def.delivery.persistent) {
       const tags = skillContextTags(inst);
       const extra = instanceMods(inst);
@@ -37882,6 +38343,7 @@ export class World {
   /** minionCombat: reuse full actors whenever a grant needs their complete
    * durability model. The ordinary owner bake remains the sole ply fold. */
   private minionNeedsFullDurability(caster: Actor, inst: SkillInstance): boolean {
+    if (inst.def.hivecall || (inst.def.throng && inst.treeNodes?.length)) return true;
     const tags = skillContextTags(inst), extra = instanceMods(inst);
     return MINION_COMBAT.actorDurabilityStats.some(stat => caster.sheet.get(stat, tags, extra) > 0);
   }
@@ -37902,17 +38364,19 @@ export class World {
   bakeMinionOwnerStats(minion: Actor, caster: Actor, inst: SkillInstance, scale = 1): void {
     const tags = skillContextTags(inst);
     const extra = instanceMods(inst);
+    const throngSpentPlies = Math.max(0, minion.pliesMax - minion.plies);
     const minionCombat = minionCombatOf(inst.def);
     const minionThreat = Math.max(MINION_COMBAT.minThreat,
       (minionCombat.threat ?? 1) * caster.sheet.get('minionThreat', tags, extra));
     // Survival fractions are per body, like minionPlies; never batch-divided.
     minion.sheet.setSource('minionCombat', [
+      mod('armorDamageFloor', 'flat', (inst.def.throng || inst.def.hivecall) ? THRONG_EVOLUTION.armorFloor : 0),
       mod('threatGen', 'more', minionThreat - 1),
       mod('targetPriority', 'more', minionThreat - 1),
       mod('areaAvoidance', 'flat', this.minionAreaAvoidanceOf(caster, inst)),
     ]);
     const size = caster.sheet.get('minionSize', tags, extra);
-    minion.radius = Math.max(5, minion.radius * size);
+    minion.radius = Math.max(5, ((inst.def.throng || inst.def.hivecall) ? MONSTERS[minion.defId!]?.radius ?? minion.radius : minion.radius) * size);
     const haste = caster.sheet.get('minionHaste', tags, extra);
     const regenRate = caster.sheet.get('minionRegenRate', tags, extra);
     const s = scale;
@@ -37948,7 +38412,7 @@ export class World {
       ? Math.floor(lifeInc0 / echoAt + 1e-9) : 0;
     const ownerMods = [
       mod('damage', 'more', (caster.sheet.get('minionDamage', tags, extra) - 1) * s),
-      mod('life', 'more', lifeInc * s),
+      mod('life', 'more', lifeInc * (throngEvolution(inst).lifeScale ?? s)),
       mod('damageTaken', 'more', (caster.sheet.get('minionDamageTaken', tags, extra) - 1) * s),
       mod('moveSpeed', 'more', (caster.sheet.get('minionMoveSpeed', tags, extra) * haste - 1) * s),
       mod('attackSpeed', 'more', (haste - 1) * s),
@@ -38004,13 +38468,27 @@ export class World {
     // summon, never a birthright of the throng kinds). Re-derived from
     // the def each bake (idempotent under the live rebake); current
     // plies clamp, never refill.
-    const plyBonus = tradedPlies + echoPlies
+    const plyBonus = tradedPlies + echoPlies + minion.hiveDeathPlies
       + Math.max(0, Math.round(caster.sheet.get('minionPlies', tags, extra)));
     if (minion.plySpec || plyBonus > 0) {
       if (!minion.plySpec) minion.plySpec = { count: 0 };
       const spent = Math.max(0, minion.pliesMax - minion.plies);
       minion.pliesMax = plyCountOf(minion.plySpec, minion.level) + plyBonus;
       minion.plies = Math.max(0, minion.pliesMax - spent);
+    }
+    if (!inst.def.throng) return;
+    minion.summonInst = inst;
+    const evo = throngEvolution(inst), units = minion.throngUnits ?? 1;
+    minion.sheet.setSource('throngEvolution:body', [
+      mod('life', 'more', units - 1),
+      mod('damage', 'more', units - 1),
+      mod('damage', 'more', evo.damageMore ?? 0),
+    ]);
+    if (evo.cluster) {
+      const bonus = throngClusterPlies(units);
+      minion.pliesMax += bonus;
+      minion.plies = Math.max(0, minion.pliesMax - throngSpentPlies);
+      minion.radius *= Math.min(8, Math.sqrt(units));
     }
   }
 
@@ -42653,6 +43131,10 @@ export class World {
     // hit-fed gauge, and the lastKill mote anchor. Top-level landed hits
     // only — echoes and riders never double-feed the gauge.
     if (dealt > 0 && depth === 0) this.throngOnHit(caster, target, wasCrit, lethal);
+    if (dealt > 0 && depth === 0 && caster.summonInst?.def.throng) {
+      const splash = throngEvolution(caster.summonInst).splashScale;
+      if (splash && tags.has('attack')) this.throngEvolutionBurst(caster, target.pos, 36, splash, target);
+    }
     // THE SUPPORT BASE's spawn chassis (engine/supportbase.ts): rolled
     // veins on the host's sockets — every landed top-level blow FEEDS the
     // cut (steady / chance / gauge), and the clutch door bears the brood
@@ -44580,6 +45062,8 @@ export class World {
     }
 
     actor.dead = true;
+    if (!silent && actor.summonInst?.def.hivecall) this.hivecallDeath(actor);
+    if (!silent && actor.owner && actor.summonInst?.def.throng) this.throngKeepMinimum(actor.owner, actor.summonInst);
     if (!silent && this.deedEnemy(actor) && killer && killer !== this.player && this.deedOwned(killer)) {
       this.recordDeed({ kind: 'kill', flags: ['companion'] });
     }
@@ -47229,6 +47713,8 @@ export class World {
     this.updatePendingMetas(dt);
     this.updatePendingPersists(dt);
     this.updateMinionMeta(dt);
+    this.updateThrongEvolution(dt);
+    this.updateHivecall(dt);
     this.updateThrong(dt); // THE THRONG's source/collection sweep (engine/throng.ts)
     this.updateLite(dt);   // THE LITE TIER's batched sweep (engine/lite.ts)
     for (const id of this.grantedTrailMemory.keys()) {
@@ -55165,7 +55651,7 @@ export class World {
    * locked until the player toggles OFF.
    */
   private updateSummonContracts(): void {
-    for (const a of this.actors) {
+    for (const a of [...this.actors, ...this.seats.flatMap(s => s.home ? [s.home] : [])]) {
       if (a.dead || !a.summonToggles.size) continue;
       for (const [id, t] of a.summonToggles) {
         const d = instanceDelivery(t.inst); // summon-tree cap also prices contracts
@@ -55188,6 +55674,7 @@ export class World {
           a.mana = Math.min(a.mana, a.availableMaxMana());
           t.reserved = want;
         }
+        if (t.inst.def.hivecall) continue; // Hivecall owns one serial resurrection clock.
         const alive = (d.poolGroup
           ? this.minionsOfGroup(a, d.poolGroup)
           : this.minionsOfSkill(a, id)).filter(a => !a.summonOffspring).length;

@@ -1758,6 +1758,23 @@ export class Actor {
   plySpec?: PlySpec;
 
   // --- THE THRONG (engine/throng.ts) + THE LATCH (engine/cling.ts) ---------
+  /** Native throng cargo and motion. Undefined units means one ordinary body. */
+  throngUnits?: number;
+  throngCarried?: boolean;
+  throngDriven?: boolean;
+  throngEnraged?: boolean;
+  throngDive?: { x: number; y: number };
+  throngEgg?: number;
+  throngContact?: Map<number, number>;
+  throngContactPos?: { x: number; y: number };
+  /** Host-authored roster counts for a co-op client's skill badges. */
+  throngRosterHud?: Record<string, number>;
+  hivecallHud?: { meter: number; remaining?: number; rebirth?: number; ready?: number };
+  hiveForm?: { hero: Actor; host: SkillInstance; remaining: number; automatic: boolean; factor: number };
+  hiveDeathPlies = 0;
+  hiveBroodAt?: number;
+  /** World-owned, composable life-wound interceptors; never serialized. */
+  lifeDamageInterceptors?: Map<string, (amount: number) => number>;
   /** An UNCLAIMED THRONG HUSK: the monster kind it belongs to. Husks are
    *  passive/untargetable/invulnerable scenery-actors only an attuned bar
    *  can SEE (throngSightSet) — walking through one claims it into the

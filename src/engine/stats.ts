@@ -761,6 +761,7 @@ export const STAT_DEFS: Record<string, StatDef> = {
   lightningPen:   { label: 'Lightning Penetration', base: 0, min: 0, percent: true },
   chaosPen:       { label: 'Chaos Penetration', base: 0, min: 0, percent: true },
   /** Fraction of the victim's armor ignored by your physical hits. */
+  armorDamageFloor: { label: 'Physical Damage Retained Against Armor', base: 0, min: 0, max: 1, percent: true },
   armorPen:       { label: 'Armor Penetration', base: 0, min: 0, max: 1, percent: true },
   /** Fraction of the victim's INSIGHT slip your hits DENY (armorPen's
    *  rhythm-sibling, the anti-dodge lever): the blow lands too true to

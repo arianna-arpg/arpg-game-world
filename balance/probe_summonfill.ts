@@ -5,7 +5,7 @@
 // body now, the rest on the standing 0.35s beat), while bare toggles keep
 // the one-frame muster. The rigs pin the fill AND its three interaction
 // hazards:
-//   A  THE BARE MUSTER — Hivecall alone: count 3 in ONE frame, the
+//   A  THE BARE MUSTER — a generic contract fixture: count 3 in ONE frame, the
 //      reconciler tops the remaining slots on the 4s respawn clock, and no
 //      trickle entry ever exists.
 //   B  THE SEQUENCED FILL — + Cascading Call: exactly 1 at cast-complete,
@@ -71,6 +71,13 @@ function runLane(skill: string, gems: GemSpec[], seconds: number, offAt?: number
   const slot = p.skills.findIndex(s => s?.def.id === skill);
   if (slot < 0) throw new Error(`${skill} not on the bar`);
   const inst = p.skills[slot]!;
+  // Hivecall now deliberately owns a serial resurrection clock. Keep this
+  // generic sequencing regression independent of that native economy; the
+  // shipped Hivecall baseline and nodes are exercised in probe_hivecall.ts.
+  if (inst.def.hivecall && inst.def.delivery.type === 'summon') {
+    inst.def = { ...inst.def, hivecall: undefined, name: 'Generic contract fixture',
+      delivery: { ...inst.def.delivery, count: 3, maxActive: 5 } };
+  }
   const aim = vec(p.pos.x + 120, p.pos.y);
   world.useSkill(p, inst, aim, true);
 

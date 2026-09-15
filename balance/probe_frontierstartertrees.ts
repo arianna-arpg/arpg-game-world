@@ -70,21 +70,21 @@ try {
     }
   }
   {
-    const large = setup('summon_swarmlings', ['royal_guard', 'royal_carapace', 'barbed_regents']); cast(large.w, large.inst);
+    const large = setup('summon_swarmlings', ['teeming_contract', 'scurrying_tide', 'needle_mandibles']); cast(large.w, large.inst);
     const royals = large.w.minionsOfSkill(large.p, large.inst.def.id);
     const swarm = setup('summon_swarmlings', ['teeming_contract', 'crowded_cells', 'overflowing_cells']); cast(swarm.w, swarm.inst);
-    check('royal brood has two larger, thorned bodies', royals.length === 2 && royals.every(a => a.sheet.get('thorns') >= 20) && royals[0].radius > swarm.w.minionsOfSkill(swarm.p, swarm.inst.def.id)[0].radius);
-    check('teeming brood changes actual birth count', swarm.w.minionsOfSkill(swarm.p, swarm.inst.def.id).length === 6);
-    large.w.kill(royals[0]); step(large.w, 4.2); check('royal contract reknits its changed body', large.w.minionsOfSkill(large.p, large.inst.def.id).length === 2);
+    check('royal brood starts serially with a larger impaling guard', royals.length === 1 && royals.every(a => a.sheet.get('impalePower', new Set(['melee'])) >= 0.2) && royals[0].radius > swarm.w.minionsOfSkill(swarm.p, swarm.inst.def.id)[0].radius);
+    check('teeming brood starts with one body before rapid resurrection', swarm.w.minionsOfSkill(swarm.p, swarm.inst.def.id).length === 1);
+    large.w.kill(royals[0]); step(large.w, 4.2); check('royal contract reknits its changed body', large.w.minionsOfSkill(large.p, large.inst.def.id).length === 1);
     check('reset removes old contract bodies and their reservations', reset(large.w, large.inst) && large.w.minionsOfSkill(large.p, large.inst.def.id).length === 0);
   }
   {
     const { w, p, inst } = setup('raise_gnatveil', ['patient_condensation', 'room_in_the_air', 'billowing_veil']);
     (inst.state ??= {}).throngMoteAt = 999; step(w, 7.6);
     check('patient branch produces a real claimable or claimed gnat below cap', w.throngRosterCount(p, inst) > 0 || w.actors.some(a => !a.dead && a.throngWild === 'gnatling'));
-    check('gnat cap counts both branches of its capacity investment', w.throngCapOf(p, inst) === 40);
+    check('gnat cap counts both branches of its capacity investment', w.throngCapOf(p, inst) === 42);
     const before = instanceThrongSources(inst).length; reset(w, inst);
-    check('reset removes the grafted source but keeps native mote acquisition', before === 1 && instanceThrongSources(inst).length === 0 && inst.def.throng!.sources[0].kind === 'motes');
+    check('native accumulation never occupies a support source; reset keeps native motes', before === 0 && instanceThrongSources(inst).length === 0 && inst.def.throng!.sources[0].kind === 'motes');
   }
   {
     const { w, p, inst } = setup('command_assault', ['killing_signal', 'rapid_signals', 'patient_signal']);

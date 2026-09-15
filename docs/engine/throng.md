@@ -232,6 +232,14 @@ same `clingTo` state with force transferred along the slave step. Nothing
 in cling.ts assumes the victim outweighs the rider. Misdirection-by-carry
 (hauling drops/objects) is the other noted rider on this state.
 
+## Gnatveil native trees
+
+The Gnatveil overhaul adds independent attached-body accumulation and a hit-fed
+hatch bar, eggs, decaying overflow, clustering, dives and conducted contact.
+See [Raise the Gnatveil](../design/gnatveil.md) for tuning and the explicit
+exceptions to the batch rules below. Tree mechanics do not occupy support
+source rows. Owned throng physical damage retains 25% through armor.
+
 ## Balance doctrine
 
 Throng anchors now inherit the shared `SkillDef.minionCombat` small-army

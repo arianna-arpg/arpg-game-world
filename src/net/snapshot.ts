@@ -70,6 +70,11 @@ export interface ActorW {
   mn: boolean;                 // isMinion() (purple outline)
   passive: boolean;
   ut: boolean;                 // untargetable (ghostly alpha)
+  thu?: number; // throngUnits: constituent count in a cluster
+  the?: number; // throngEgg: batch held by a find
+  thg?: Record<string, number>; // native hatch gauges by equipped skill
+  hive?: Actor['hivecallHud'];
+  thr?: Record<string, number>; // host-authored full roster counts
   tw?: string;                 // throngWild husk kind (per-viewer sight gate)
   /** THE GRAB FABRIC's held-meter row, host-computed on the HELD body
    *  ([verb label, struggle 0..1] — the boss-bar idiom; clients hold no
@@ -583,7 +588,7 @@ export interface WellW { i: number; k: string; x: number; y: number; r: number; 
 
 const v2 = (p: { x: number; y: number }): Vec2W => [Math.round(p.x * 100) / 100, Math.round(p.y * 100) / 100];
 
-function actorToW(a: Actor): ActorW {
+function actorToW(a: Actor, world: World): ActorW {
   const inv = a.sheet.get('invisible');
   const det = a.sheet.get('detectability');
   const w: ActorW = {
@@ -599,6 +604,13 @@ function actorToW(a: Actor): ActorW {
   // THE THRONG's husk marker rides the wire so a co-op client's renderer
   // sight-gates against ITS OWN bar (engine/throng.ts).
   if (a.throngWild) w.tw = a.throngWild;
+  if (a.throngUnits) w.thu = a.throngUnits;
+  const throngAnchors = a.skills.filter(s => s?.def.throng);
+  if (throngAnchors.length) w.thr = Object.fromEntries(throngAnchors.map(s => [s!.def.id, world.throngRosterCount(a, s!)]));
+  if (a.throngEgg) w.the = a.throngEgg;
+  if (a.hivecallHud) w.hive = a.hivecallHud;
+  const throngEvolutionGauges = a.skills.filter(s => s?.state?.throngEvolutionGauge !== undefined);
+  if (throngEvolutionGauges.length) w.thg = Object.fromEntries(throngEvolutionGauges.map(s => [s!.def.id, s!.state!.throngEvolutionGauge!]));
   // THE GRAB FABRIC's held meter (engine/grab.ts): computed off the LIVE
   // pair on the holder, shipped on the held body's own row.
   const gbHold = GRAB_HUD_OF(a);
@@ -781,7 +793,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
       const b = containerBoard(c);
       return b ? [[c.id, packContainerBoard(b)] as const] : [];
     })),
-    actors: world.actors.filter(a => !a.dead || a.isPlayerKind()).map(a => ({ ...actorToW(a), cosmeticLoadout: cosmeticLoadoutFor(world, a) })),
+    actors: world.actors.filter(a => !a.dead || a.isPlayerKind()).map(a => ({ ...actorToW(a, world), cosmeticLoadout: cosmeticLoadoutFor(world, a) })),
     projectiles: world.projectiles.map(p => ({ p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age, cosmeticMotif: p.cosmeticMotif })),
     tethers: world.tethers.map(t => ({
       ax: Math.round(t.ax), ay: Math.round(t.ay), bx: Math.round(t.bx), by: Math.round(t.by),
@@ -1151,6 +1163,8 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.life = aw.life; a.es = aw.es; a.absorb = aw.ab ?? 0;
     a.hitFlash = aw.hf; a.downed = aw.downed; a.dead = aw.dead;
     a.passive = aw.passive; a.untargetable = aw.ut;
+    a.throngUnits = aw.thu; a.throngEgg = aw.the; a.throngRosterHud = aw.thr; a.hivecallHud = aw.hive;
+    for (const inst of a.skills) if (inst?.def.throng) (inst.state ??= {}).throngEvolutionGauge = aw.thg?.[inst.def.id] ?? 0;
     a.throngWild = aw.tw; // husk kind → the client's own sight gate reads it
     a.grabHud = aw.gb;    // held meter mirror (cleared when absent — freed)
     a.plies = aw.pl ?? 0; a.pliesMax = aw.plm ?? 0; // ply pips (render-only)

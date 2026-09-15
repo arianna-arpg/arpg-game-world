@@ -448,6 +448,7 @@ export function hasCommandKind(id: string): boolean { return !!COMMAND_KINDS[id]
  *  flight resolves on its own and the actor obeys from its next free tick.
  *  Obedience is the CALLER's to roll (obedienceOf + issuer discipline). */
 export function issueCommand(actor: Actor, cmd: CommandState): void {
+  actor.throngCarried = false;
   actor.aiCommand = cmd;
   actor.aiTargetId = undefined;
   actor.threat.clear();
@@ -545,7 +546,7 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // a seat's home body is seat-driven or nobody-driven, never brain-driven —
   // without this line the brainless hero body would fall through to the
   // DEFAULT_BRAIN approach-and-attack bundle the moment its seat left it.
-  if (actor.dead || actor.downed || world.seatOf(actor) || actor.vacated) return;
+  if (actor.dead || actor.downed || world.seatOf(actor) || actor.vacated || actor.throngDriven || actor.throngCarried || actor.throngDive) return;
   // THE TIMEFLOW GATE (engine/timeflow.ts): a held body doesn't scheme —
   // stasis and a paused world skip the brain outright; fractional time
   // thinks (and so paces its cadences and kernels) in slow motion. Gated

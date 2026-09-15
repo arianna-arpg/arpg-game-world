@@ -7,8 +7,8 @@ levels 5, 10, 15 and 20. Unallocated skills keep their original forms.
 
 | Class | Skill | First identity | Second identity |
 |---|---|---|---|
-| Hivecaller | Hivecall | A larger, smaller-bodied brood with cap, speed and attrition investments | Two larger royal guards with armor, regeneration and heavy attacks |
-| Hivecaller | Raise the Gnatveil | Patient gathering, extra capacity and protective plies | Battle-fed gathering, greater find yield and mobile conducting |
+| Hivecaller | Hivecall | A serial army with rapid hatching, detonation and Royal Guards | A resource-driven Swarm Sovereign transformation, aura and emergency rescue |
+| Hivecaller | Raise the Gnatveil | Passive accumulation, reserve floor, decaying overflow, cluster and dive | Native hit gauge, eggs, protected transit and furious whirlwind conducting |
 | Hivecaller | Command: Assault | Individual preparations consumed by each minion's next attack hit | Individual approach protection that breaks after a landed hit |
 | Ranger | Piercing Arrow | Armor-piercing impales and execution | Multiple piercing arrows, steering and returning volleys |
 | Ranger | Fan of Blades | A concentrated piercing fan | A returning fan with more blades and broader coverage |
@@ -17,11 +17,12 @@ levels 5, 10, 15 and 20. Unallocated skills keep their original forms.
 | Guardian | Aegis Ward | Retaliatory thorns alongside the shield | Sustained recovery alongside the shield |
 | Guardian | Rallying Howl | Fragile protection alongside the ordinary rally | Individual attack preparations alongside the ordinary rally |
 
-Hivecall remains a toggle contract: each body reserves mana and reknits after
-its normal delay. Capacity is not free reservation capacity. Gnatveil retains
-its native wandering motes; each trunk grafts a distinct additional source.
-Its increased life, damage and speed investments use the existing throng batch
-rules. Protective plies are discrete investments. The shared combat profile,
+Hivecall remains a toggle contract, now with three base slots and serial resurrection.
+Its army and Sovereign branches are detailed in [Hivecall](hivecall.md). Capacity is not free reservation capacity. Gnatveil retains
+its native wandering motes. Its expanded trees now use native mechanics instead
+of grafting supports; see [Raise the Gnatveil](gnatveil.md) for all nodes,
+independent source clocks, batch exceptions, overflow and clustering.
+Protective plies remain discrete investments. The shared combat profile,
 recall command, and lossless armor handling are documented in `throng-combat.md`. Baseline
 viability is independent of tree investment. Purchased plies use full actor
 state, with the processing cost described there.

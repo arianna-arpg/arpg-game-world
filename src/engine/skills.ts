@@ -4190,6 +4190,8 @@ export type SkillEffect =
 // --- The skill definition ---------------------------------------------------
 
 export interface SkillDef {
+  /** A serial resurrection contract with native Hivecall tree mechanics. */
+  hivecall?: boolean;
   id: string;
   name: string;
   description: string;
@@ -4862,6 +4864,9 @@ function mergeTreeDomain(a: GroundDelivery['domain'], b: GroundDelivery['domain'
 }
 
 export interface SkillTreeNode {
+  /** Increased damage per rank, applied only to this Hivecall's Sovereign body. */
+  hivecallFormDamage?: number;
+  throngEvolution?: import('./throngEvolution').ThrongEvolutionSpec;
   /** Cast resets, inherited projectiles and ground-device challenge mechanics. */
   challenge?: ChallengeSpec;
   /** Persistent beast-bond abilities; resolved additively and rebuilt on allocation changes. */
@@ -5823,6 +5828,7 @@ export interface SkillInstance {
   /** Per-instance state for stateful skills (Mark/Recall's stored point,
    *  Unleash's last-use timestamp, the combo chain's cursor). */
   state?: {
+    hivecall?: import('./hivecall').HivecallState;
     markPos?: { x: number; y: number } | null;
     lastUseAt?: number;
     /** The PRESS moment of the current/last use (stamped in useSkill's
@@ -5879,6 +5885,8 @@ export interface SkillInstance {
      *  rides the instance), never the session — a fresh boot starts
      *  cold, like every ramp. */
     throngGauge?: number;
+    throngEvolutionGauge?: number;
+    throngEvolutionClock?: number;
     throngMoteAt?: number;
     throngCritAt?: number;
     throngTrickleAt?: number;

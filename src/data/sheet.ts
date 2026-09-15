@@ -52,7 +52,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       // The damage lanes
       'damage', 'addedPhysical', 'addedFire', 'addedCold', 'addedLightning', 'addedChaos',
       // Penetration & shred
-      'armorPen', 'firePen', 'coldPen', 'lightningPen', 'chaosPen', 'insightPen', 'esShred',
+      'armorPen', 'armorDamageFloor', 'firePen', 'coldPen', 'lightningPen', 'chaosPen', 'insightPen', 'esShred',
       // Ailments & curses
       'statusChance', 'statusMagnitude', 'ailmentStacks', 'dotPropagates',
       'dotCrit', 'hitToAffliction', 'afflictionYield',
@@ -409,6 +409,7 @@ const STAT_BLURBS: Record<string, string> = {
   addedLightning: 'Flat lightning damage added to your hits.',
   addedChaos: 'Flat chaos damage added to your hits.',
   armorPen: 'Your physical hits ignore this fraction of the victim\'s armor.',
+  armorDamageFloor: 'Armor cannot reduce your physical damage below this fraction of its original amount. Other defenses still apply.',
   firePen: 'Your fire damage digs below the victim\'s resistance, even past their cap.',
   coldPen: 'Your cold damage digs below the victim\'s resistance, even past their cap.',
   lightningPen: 'Your lightning damage digs below the victim\'s resistance, even past their cap.',
