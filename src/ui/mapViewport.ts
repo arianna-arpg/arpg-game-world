@@ -19,3 +19,17 @@ export function mapViewport(bounds: MapBounds, zoom: number, pan: { x: number; y
   return { zoom: z, pan: { x, y }, side,
     cx: bounds.minX + bounds.w / 2 + x, cy: bounds.minY + bounds.h / 2 + y };
 }
+
+/** Generation is not exploration. Only footsteps or explicit cartography can
+ * enlarge the fitted chart; a newly visible neighbour or marker cannot. */
+export function explorationMapBounds(
+  zones: readonly { id: string; map: { x: number; y: number } }[],
+  visited: ReadonlySet<string>, surveyed: ReadonlySet<string>,
+  fallback: { x: number; y: number }, omniscient = false,
+): MapBounds {
+  const known = zones.filter(z => omniscient || visited.has(z.id) || surveyed.has(z.id));
+  const points = known.length ? known.map(z => z.map) : [fallback];
+  const xs = points.map(p => p.x), ys = points.map(p => p.y);
+  const minX = Math.min(...xs) - 95, minY = Math.min(...ys) - 80;
+  return { minX, minY, w: Math.max(...xs) + 95 - minX, h: Math.max(...ys) + 85 - minY };
+}

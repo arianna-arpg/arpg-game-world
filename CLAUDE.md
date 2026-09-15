@@ -1313,9 +1313,10 @@ we verify changes.
   alone): every graph mint is born VEILED (`ZoneSpec.veiled`, stamped at
   placeZoneAt) and lifts only by a knowledge act — entry, the STRUCTURAL
   one-ring preview in `World.visible` (a mint beside walked ground is seen
-  the moment it exists), a survey, an omen, an accepted quest, a won siege,
+  the moment it exists), a survey, an omen, explicit quest cartography, a won siege,
   a sighted port — so no distant event redraws the map; the chart, THE VEIL
-  CLIP on every overlay wash and the map's fit read KNOWN ground alone.
+  CLIP on every overlay wash read KNOWN ground alone. The fit reads only
+  visited/surveyed ground; direction markers never enlarge it.
   THE DEV LENS (`ui/mapLens.ts`, the `?dev` Atlas tab: omniscient chart +
   cursor read) is the render-only development view — never world state.
   THE STANDING CHART: the panel's html carries no transient state (viewBox,
@@ -1645,10 +1646,10 @@ we verify changes.
   webDisturbance()); byte-identical answers probe-pinned, the charting
   unit's old 50-95ms quadratic closed — probe `balance/probe_webperf.ts`
   D), and QUEST DEEDS
-  (acceptQuest anchors only CONNECTED sane ground, notarizes the quest road
-  both ways, and lifts the anchor's veil so the way DRAWS;
-  connectFloatingZone wire-ins likewise — directed story mints can never be
-  locked out, stranded, healed away, or left unreadable).
+  (acceptQuest anchors nearby sane ground, including veiled sounding clusters,
+  and notarizes the road both ways; directions never unveil it. QUEST GEOGRAPHY
+  separates earned bearings from terrain knowledge and locks the map's fit to
+  exploration. Docs `docs/design/quest-geography.md`; probe `balance/probe_questmap.ts`).
   THE COHERENCE FABRIC (generation composition stays intentional — docs in
   `docs/engine/coherence.md`): traveled ways hold right-of-way as data
   (`DoodadRule.clearway` + the one way-layer `layTraveledWay`/`wayRoller` —

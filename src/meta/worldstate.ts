@@ -216,7 +216,7 @@ export function sanitizeProcessionMemo(raw: unknown): SavedProcessionMemo | unde
   return Object.keys(out).length ? out : undefined;
 }
 
-export interface SavedQuestEntry { questId: string; zoneId: string; fieldDone: boolean; }
+export interface SavedQuestEntry { questId: string; zoneId: string; fieldDone: boolean; directionsKnown?: boolean; }
 
 /** One rung of the saved UNDERGROUND LADDER (mirrors the engine's caveReturn
  *  shape): the zone this rung climbs OUT to, the mouth's spot in it, and the

@@ -15,7 +15,7 @@
 // a native browser tooltip.
 //
 // `fog` is the visibility grant: 'always' shows even on un-charted ground (a
-// quest reveals its target before a path exists — the fog-of-war affordance),
+// quest grants a bearing before its terrain is found),
 // 'charted' only once the anchor zone is visited (no spoilers — the corpse).
 // ---------------------------------------------------------------------------
 
@@ -41,6 +41,8 @@ export interface MapMarker {
   /** 'always' = visible even on un-charted ground; 'charted' = only when the
    *  anchor zone is visited. */
   fog: 'always' | 'charted';
+  /** A raw coordinate whose exact position is known, such as your own ship. */
+  knownPosition?: boolean;
   /** Draw order among markers (higher = on top). */
   z?: number;
   /** The DIMENSION whose map tab this marker belongs on. Zone-anchored markers
@@ -93,6 +95,7 @@ registerMarkerSource((world): MapMarker[] => {
       continue;
     }
     const node = world.zoneMap[aq.zoneId];
+    if (aq.directionsKnown === false && (!node || !world.visited.has(node.id))) continue;
     if (!node) continue;
     // A posting's pane line is its card's ASK, progress included — the same
     // words the board prints, so the chart never reads as a lie.
@@ -136,7 +139,7 @@ registerMarkerSource((world): MapMarker[] => {
   const at = world.voyageBoatCoord();
   if (!at) return [];
   return [{
-    id: 'voyage-boat', coord: { x: at.x, y: at.y },
+    id: 'voyage-boat', knownPosition: true, coord: { x: at.x, y: at.y },
     glyph: '⛵', fill: '#0b2033', stroke: '#7fd0ff', text: '#bfe4f4', r: 10,
     title: 'Your ship — the voyage underway', fog: 'always', z: 30,
   }];
@@ -150,7 +153,7 @@ registerMarkerSource((world): MapMarker[] => {
  *  cradled, dissolved ship is honestly absent. */
 registerMarkerSource((world): MapMarker[] => {
   return world.soulriverShipCoords().map((s, i) => ({
-    id: `soulship-${i}`, coord: { x: s.x, y: s.y },
+    id: `soulship-${i}`, knownPosition: true, coord: { x: s.x, y: s.y },
     glyph: '⛴', fill: '#0b1c28', stroke: '#4a8ab0', text: '#9fd8ec', r: 9,
     title: s.paused ? 'The Soul-Ship — called at a pier' : 'The Soul-Ship — abroad on the pale water',
     detail: 'board from a pier apron; the ferryman calls at every shore',

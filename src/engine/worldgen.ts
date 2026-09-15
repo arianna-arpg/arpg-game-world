@@ -1802,18 +1802,33 @@ export function placeZoneAt(
  *  back-edge to the nearest node (unshift so exits[0] stays the back-edge — the
  *  weave invariant), a reciprocal road on that anchor, then opportunistic weave.
  *  Clears the floating flag. Mirrors placeZoneAt's linkBack + weave logic. */
-export function connectFloatingZone(fresh: ZoneDef, zoneMap: Record<string, ZoneDef>, rng: Rng): void {
+export function connectFloatingZone(fresh: ZoneDef, zoneMap: Record<string, ZoneDef>, rng: Rng, maxDistance = Infinity, reached?: ReadonlySet<string>): void {
   // Prefer the nearest anchor whose road stays DRY (the route guard) — a
   // floating zone across a strait must not bridge the water; fall back to the
   // plain nearest if no dry route exists (reachability still trumps). A
   // ROADLESS GATE HUB is never an anchor (its edge set is exactly its minted
   // frontiers): with no other node charted yet, the zone simply stays
   // floating until the realm web grows — the drain re-asks every approach.
-  const exclude = new Set([fresh.id]);
+  // A sounding can already own a local web. Never wire its root back into
+  // that same component and mistake the resulting cycle for an approach.
+  const component = new Set([fresh.id]);
+  const pending = [fresh.id];
+  for (let i = 0; i < pending.length; i++) for (const e of zoneMap[pending[i]]?.exits ?? []) {
+    if (e.to === '?' || component.has(e.to) || !zoneMap[e.to]) continue;
+    component.add(e.to); pending.push(e.to);
+  }
+  // Ambient weaving may already have joined this country to walked ground.
+  // Retire the root's pending state without inventing another entrance.
+  if (reached && pending.some(id => reached.has(id))) {
+    fresh.floating = false; fresh.concealed = false; fresh.veiled = false;
+    return;
+  }
+  const exclude = component;
   // A DISCONNECTED or HIDDEN node is never the wire-in anchor: float-to-float
   // would join two islands to nothing (a quest arena reachable only through
   // an unwired sounding cluster is a stranding, not a road).
-  const sane = (z: ZoneDef): boolean => !z.floating && !z.concealed && !isRoadlessGateHub(z);
+  const sane = (z: ZoneDef): boolean => !z.floating && !z.concealed && !isRoadlessGateHub(z)
+    && Math.hypot(z.map.x - fresh.map.x, z.map.y - fresh.map.y) <= maxDistance;
   const anchor = nearestNode(zoneMap, fresh.map, exclude, fresh.dimension,
     (z) => sane(z) && routeOk(fresh.map, z.map))
     ?? nearestNode(zoneMap, fresh.map, exclude, fresh.dimension, sane);

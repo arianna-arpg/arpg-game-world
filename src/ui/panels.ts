@@ -97,6 +97,7 @@ import {
 import { boundaryGateOf } from '../data/boundaryGates';
 import { dimensionDef } from '../world/dimensions';
 import { collectMarkers } from '../world/mapMarkers';
+import { mapBearingsSvg, type BearingTarget } from './mapBearings';
 import { zoneInfoFor, type ZoneInfoEntry } from '../world/zoneInfo';
 import type { Seat, VendorEntry, VendorHoldRow, World } from '../engine/world';
 import { COUCH_CFG, couchMinPads } from '../data/couch';
@@ -164,7 +165,7 @@ import { attachPanZoom, clampZoom, PANZOOM_DEFAULTS } from './panzoom';
 import { attachPanelMove, configurePanelLayout, panelLayoutRefresh, panelLayoutSync, panelMoved, panelMoveReset, panelMoveTo, panelSeatOf, persistPanelSeat, resetPanelLayout } from './panelmove'; // THE PANEL MOVE — ribbons drag their panels; THE LAYOUT remembers
 import { ATLAS_LAYER_CHIPS, MAP_CFG, MAP_CHART_MODES, MAP_LABEL_MODES } from './mapConfig';
 import { ESCAPE_MODES, escapeModeOf } from './escapeConfig';
-import { mapViewport, mapZoomLimits, mapZoomLabel } from './mapViewport';
+import { explorationMapBounds, mapViewport, mapZoomLimits, mapZoomLabel } from './mapViewport';
 import { atlasChart, atlasKeep, atlasRaster, atlasRevision, type AtlasChartInput, type AtlasRaster } from './atlasPaint';
 import { AtlasInputCache } from './atlasInputCache';
 import { MAP_LENS } from './mapLens';
@@ -8871,39 +8872,25 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // geometry beneath it, and its words (title/detail) reach the player
     // through the ZONE PANE's marker fold (world/zoneInfo.ts) — never a
     // native tooltip fighting the hover card.
-    let markers = '';
+    this.mapBearings = [];
     for (const m of collectMarkers(world)) {
       const node = m.zoneId ? world.zoneMap[m.zoneId] : undefined;
-      // Markers stay on THEIR dimension's tab — a zone-anchored marker derives
-      // its plane from the zone, a raw-coord marker declares it. Without this,
-      // a hell corpse skull or quest pin haunts the surface map (and vice versa).
-      const mDim = node ? (node.dimension ?? 'surface') : (m.dimension ?? 'surface');
-      if (mDim !== dim) continue;
+      if ((node?.dimension ?? m.dimension ?? 'surface') !== dim) continue;
       if (m.fog === 'charted' && (!node || !visited.has(node.id))) continue;
-      const cx = node ? node.map.x : (m.coord?.x ?? 0);
-      const cy = node ? node.map.y : (m.coord?.y ?? 0);
-      const r = m.r ?? 9;
-      markers += `<g><circle cx="${cx}" cy="${cy}" r="${r}" fill="${m.fill}" stroke="${m.stroke}" stroke-width="1.5"/>`
-        + `<text x="${cx}" y="${(cy + 4).toFixed(1)}" text-anchor="middle" font-size="11" fill="${m.text}">${m.glyph}</text></g>`;
+      const at = node?.map ?? m.coord;
+      if (!at) continue;
+      this.mapBearings.push({ marker: m, ...at, unknown: !lens.omniscient && (node ? !seen(node) : !m.knownPosition) });
     }
 
-    // The map grows as frontiers are charted — fit the view to the VISIBLE graph
-    // (the fog policy). Margins run a little wide so drifting fronts have room.
     const shown = zones.filter(z => seen(z));
-    const xs = (shown.length ? shown : zones).map(z => z.map.x);
-    const ys = (shown.length ? shown : zones).map(z => z.map.y);
-    // Overlay MAP EXTENTS: a layer painting past the charted rim (Deepwinter's
-    // territory marching in from the unknown cold) stretches the fit so the
-    // front is on screen from ignition day — the situational-awareness read.
-    // Rides `layers`, so toggling the layer chip off un-stretches the view too.
-    // THE KNOWLEDGE LAW: a front's far reach is not the player's knowledge —
-    // the stretch is a dev-lens read now.
-    if (lens.omniscient) for (const l of layers) for (const p of l.extent) { xs.push(p.x); ys.push(p.y); }
-    const minX = Math.min(...xs) - 95, maxX = Math.max(...xs) + 95;
-    const minY = Math.min(...ys) - 80, maxY = Math.max(...ys) + 85;
-    // Store the fitted box; the live zoom/pan are applied ON TOP (the map grows
-    // with the world, so zooming keeps the fixed-size labels legible).
-    const nextBox = { minX, minY, w: maxX - minX, h: maxY - minY };
+    const home = zones.find(z => visited.has(z.id))?.map ?? { x: 0, y: 0 };
+    const nextBox = explorationMapBounds(zones, visited, world.surveyed, home, lens.omniscient);
+    if (lens.omniscient) for (const l of layers) for (const p of l.extent) {
+      const maxX = Math.max(nextBox.minX + nextBox.w, p.x + 95);
+      const maxY = Math.max(nextBox.minY + nextBox.h, p.y + 85);
+      nextBox.minX = Math.min(nextBox.minX, p.x - 95); nextBox.minY = Math.min(nextBox.minY, p.y - 80);
+      nextBox.w = maxX - nextBox.minX; nextBox.h = maxY - nextBox.minY;
+    }
     if (this.mapBox.w > 1 && this.mapBoxDimension === dim) {
       this.mapPan.x += this.mapBox.minX + this.mapBox.w / 2 - (nextBox.minX + nextBox.w / 2);
       this.mapPan.y += this.mapBox.minY + this.mapBox.h / 2 - (nextBox.minY + nextBox.h / 2);
@@ -8946,7 +8933,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       <div id="map-chips"></div>
       <div id="map-here" style="font-size:10px;color:#8a8678;margin:-3px 0 5px 0;height:13px;line-height:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" hidden></div>
       <div class="map-body">
-        <svg id="world-map-svg" viewBox="0 0 100 100" style="cursor:var(--cursor-grab, grab);touch-action:none"><g id="atlas-layer" pointer-events="none"><image id="atlas-base" preserveAspectRatio="none" display="none"/><image id="atlas-window" preserveAspectRatio="none" display="none"/></g><defs><clipPath id="map-veil-clip"></clipPath></defs><g id="map-under" pointer-events="none"></g><g id="map-links" pointer-events="none"></g><g id="map-nodes"></g><g id="map-over" pointer-events="none"></g><g id="atlas-labels" pointer-events="none"></g><g id="map-cards" pointer-events="none"></g></svg>
+        <svg id="world-map-svg" viewBox="0 0 100 100" style="cursor:var(--cursor-grab, grab);touch-action:none"><g id="atlas-layer" pointer-events="none"><image id="atlas-base" preserveAspectRatio="none" display="none"/><image id="atlas-window" preserveAspectRatio="none" display="none"/></g><defs><clipPath id="map-veil-clip"></clipPath></defs><g id="map-under" pointer-events="none"></g><g id="map-links" pointer-events="none"></g><g id="map-nodes"></g><g id="map-over" pointer-events="none"></g><g id="atlas-labels" pointer-events="none"></g><g id="map-cards" pointer-events="none"></g><g id="map-bearings" pointer-events="none"></g></svg>
         <aside id="map-aside"></aside>
       </div>`;
     // Keep the shell, SVG, decoded terrain and controls mounted. Live weather,
@@ -8973,7 +8960,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     else under.removeAttribute('clip-path');
     section('map-under', ocean + simUnder);
     section('map-links', edges + stubs);
-    section('map-over', markers + simOver);
+    section('map-over', simOver);
     section('map-cards', cards);
     if (section('map-nodes', nodes)) {
       this.worldMap.querySelectorAll<SVGElement>('.wp-node').forEach(el => {
@@ -8996,6 +8983,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (!svg) return;
     this.resetAtlasContext(svg, world);
     svg.setAttribute('viewBox', this.mapViewBox());
+    this.syncMapBearings(svg);
     const lbl = this.worldMap.querySelector<HTMLElement>('[data-mz="reset"]');
     if (lbl) lbl.textContent = mapZoomLabel(this.mapZoom);
     this.showZoneCard(svg, this.hoveredZone, true);
@@ -9474,6 +9462,17 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     aside.innerHTML = html;
   }
 
+  private mapBearings: BearingTarget[] = [];
+  private syncMapBearings(svg: SVGSVGElement): void {
+    const layer = svg.querySelector('#map-bearings');
+    if (!layer) return;
+    const view = mapViewport(this.mapBox, this.mapZoom, this.mapPan);
+    const world = this.getWorld();
+    const origin = (world.zone.dimension ?? 'surface') === this.mapDimension
+      ? world.zone.map : { x: view.cx, y: view.cy };
+    this.setPanelHtml(layer, mapBearingsSvg(this.mapBearings, view, origin));
+  }
+
   /** Compute the world-map viewBox from the fitted box + the live zoom/pan,
    *  clamping the pan so the window can't slide off the charted graph. */
   private mapViewBox(): string {
@@ -9493,6 +9492,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (!svg) return;
     const apply = (): void => {
       svg.setAttribute('viewBox', this.mapViewBox());
+      this.syncMapBearings(svg);
       const lbl = this.worldMap.querySelector<HTMLElement>('[data-mz="reset"]');
       if (lbl) lbl.textContent = mapZoomLabel(this.mapZoom);
       // A zoom or pan re-aims the ATLAS LAYER in place (the zoom window) —

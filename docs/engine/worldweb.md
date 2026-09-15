@@ -206,16 +206,18 @@ mid-session):
 The story's mints (`acceptQuest` → `placeZoneAt`; the Odyssey rides these)
 are hardened four ways:
 
-- **anchor sanity**: the quest/caravan anchor must stand on the CONNECTED
-  graph — never floating, concealed, or a roadless hub (`nearestNode`
-  already refuses ports/pockets/caves); dry chords preferred;
+- **anchor sanity**: quests join nearby normal ground, preferring unvisited
+  dry approaches with spare road capacity. Missing country gets a veiled
+  sounding root instead of a long road to the starting graph. See
+  [quest geography](../design/quest-geography.md). Caravan anchoring is unchanged;
 - **the deed**: the quest road is notarized BOTH ways (`notarizeRoad`) — no
   ambient heal (dry-road strip, footprint sever, port reconcile) may ever
   cut the way to the arena; `connectFloatingZone` notarizes every wire-in
   the same way (a float's road is deliberate by definition);
-- **the reveal**: accepting a quest lifts its anchor's forechart veil (and a
-  float wire-in lifts its anchor's) — a road into a veiled node doesn't
-  draw, which left quest nodes floating wayless on the chart;
+- **the bearing**: accepting a quest supplies directions without lifting
+  terrain veils. Unknown destinations use edge chevrons; exploration or an
+  explicitly authored survey reveals ground. Floating wire-ins happen locally
+  on approach and exclude the root's existing component;
 - **the meadow refusal**: a directed target inside an expanse's core rect
   reads clearance ZERO (not distance-to-centre) and is walked out by the
   anti-crowd + settle.

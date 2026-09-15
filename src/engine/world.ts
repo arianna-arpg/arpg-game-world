@@ -3788,7 +3788,7 @@ export class World {
    *  flag IS the field leg's truth; for a GENERATED posting it is only the ANNOUNCE
    *  latch of the withhold notice (noteBountyReady) — the row's standing is its
    *  kind's own predicates (handState), never this flag, never the zone objective. */
-  activeQuests: { questId: string; zoneId: string; fieldDone: boolean }[] = [];
+  activeQuests: { questId: string; zoneId: string; fieldDone: boolean; directionsKnown?: boolean }[] = [];
   readonly odyssey = new OdysseyRuntime(this);
   /** Quests finished THIS run (chain gating + re-offer suppression). Per-run. */
   completedQuests = new Set<string>();
@@ -17738,7 +17738,7 @@ export class World {
     this.activeQuests = (ws.quests?.active ?? [])
       .filter(q => q && typeof q.questId === 'string' && this.questDefOf(q.questId)
         && typeof q.zoneId === 'string' && healed[q.zoneId])
-      .map(q => ({ questId: q.questId, zoneId: q.zoneId, fieldDone: !!q.fieldDone }));
+      .map(q => ({ questId: q.questId, zoneId: q.zoneId, fieldDone: !!q.fieldDone, directionsKnown: q.directionsKnown }));
     // A hand whose quest row a stale save dropped re-seats it (the row is
     // derivable from the posting — the announce latch re-reads off the
     // kind's own standing so the withhold notice never replays a resolved
@@ -27494,7 +27494,7 @@ export class World {
     // ZoneSpec.veiled) and lifts only by a knowledge act — entry, the one-ring
     // preview off WALKED ground (structural here, so a mint beside you is
     // seen the moment it exists; the forechart's invariant pass clears the
-    // flag for good), a survey pulse, an omen reveal, an accepted quest, a
+    // flag for good), a survey pulse, an omen reveal, explicit cartography, a
     // won siege, a sighted port. A distant event's mint stays unknown until
     // the world tells you of it.
     if (z.concealed) return false;
@@ -27892,7 +27892,9 @@ export class World {
         // The journal names ground by the map's own fog seam (World.visible):
         // a lifted charge reads its name here as on the chart; an omen-face
         // errand's veiled seat stays the ask.
-        target: z ? (this.visible(z) ? z.name : 'uncharted — seek it out') : undefined,
+        target: z ? (this.visible(z) ? z.name : e.directionsKnown === false
+          ? 'Lead undiscovered — explore or seek information'
+          : `${this.bearingOf(this.zone.map, z.map)} — unexplored country`) : undefined,
       };
     });
     const completed = [...this.completedQuests].map(id => ({
@@ -27902,7 +27904,7 @@ export class World {
   }
 
   /** Accept a quest: GENERATE its directional zone (once) and wire it into the
-   *  explored graph via placeZoneAt; the player then travels there. */
+   *  local world graph via placeZoneAt; discovery belongs to exploration. */
   private acceptQuest(q: QuestDef): void {
     this.acceptOdysseyCompatibleQuest(q, true);
   }
@@ -27913,19 +27915,42 @@ export class World {
     this.acceptOdysseyCompatibleQuest(q, reveal);
   }
 
-  /** Quest directions are durable map intelligence, including their approach.
-   *  Odyssey discovery and ordinary accepted quests use the same knowledge law. */
+  /** Learning a bearing does not survey its terrain or its approach. */
+  learnQuestDirections(zoneId: string): void {
+    for (const q of this.activeQuests) if (q.zoneId === zoneId) q.directionsKnown = true;
+  }
+
+  /** Only explicitly authored cartography grants terrain knowledge. */
   revealQuestGround(zoneId: string): void {
     const zone = this.zoneMap[zoneId];
     if (!zone) return;
-    for (const id of [zone.id, ...zone.exits.map(e => e.to)]) {
-      const known = this.zoneMap[id];
-      if (!known) continue;
-      known.veiled = false;
-      this.surveyed.add(id);
-    }
+    zone.veiled = false;
+    this.surveyed.add(zoneId);
     this.refreshExitLabels();
     this.invalidateZonesSaveMemo();
+  }
+
+  /** QUEST GEOGRAPHY: a destination belongs to its local country. If the
+   * forechart has not reached it, seed ordinary veiled ground there; its
+   * floating root joins the surrounding web when exploration reaches it. */
+  private questLocalAnchor(target: MapCoord): ZoneDef {
+    const suitable = (z: ZoneDef): boolean => !z.concealed && !z.eventOwned
+      && !z.id.startsWith('quest_') && !isRoadlessGateHub(z)
+      && countRoads(z) < roadBudgetOf(z) && coordDist(z.map, target) <= APPROACH_RADIUS
+      && !this.roadIsWet(target, z.map);
+    const local = nearestNode(this.zoneMap, target, undefined, 'surface',
+      z => suitable(z) && !this.visited.has(z.id))
+      ?? nearestNode(this.zoneMap, target, undefined, 'surface', suitable);
+    if (local) return local;
+    const anchor = placeZoneAt(target, null, this.zoneMap, this.nextGenId++, {
+      biomeFor: this.biomeFor, levelFor: this.levelFor, biomeDepthFor: this.biomeDepthFor,
+      climateFor: this.climateFor, fieldBiome: true, floating: true, veiled: true,
+      forceFrontiers: 3,
+    });
+    this.zoneMap[anchor.id] = anchor;
+    this.sim.onNodeCharted(anchor, this.simView());
+    this.forechartSounding(anchor.map);
+    return anchor;
   }
 
   prepareOdysseyGround(faction: string, level: number, prepared: boolean, act: number): void {
@@ -27953,20 +27978,13 @@ export class World {
     const target = (q.zone.bandPlacement && typeof q.zone.level === 'number')
       ? this.findBandCoord(q.zone.level, questSeed)
       : projectCoord(from.map, q.zone.direction, q.zone.distance ?? 1);
-    // THE QUEST ANCHOR must stand on the CONNECTED graph: a floating or
-    // concealed node is an island — a quest wired to one would mint
-    // unreachable-by-road (nearestNode already refuses ports/pockets/caves).
-    // Prefer dry chords so the road survives the sea heal without needing
-    // its deed; fall back in steps — a quest must always mint.
-    const saneAnchor = (z: ZoneDef): boolean => !z.floating && !z.concealed && !isRoadlessGateHub(z);
-    const anchor = nearestNode(this.zoneMap, target, undefined, undefined,
-      (z) => saneAnchor(z) && !this.roadIsWet(target, z.map))
-      ?? nearestNode(this.zoneMap, target, undefined, undefined, saneAnchor)
-      ?? this.surfaceAnchor();
+    const zoneId = `quest_${q.id}`;
+    // Existing enrollments never mint another approach. Explicit find-it arenas
+    // keep their floating lifecycle; ordinary quests connect to local country.
+    const anchor = (this.zoneMap[zoneId] || q.zone.floating) ? null : this.questLocalAnchor(target);
     // 'character' quests now obey the radial field at the quest's coord (the standard
     // ruleset) instead of flat-locking to the player's level; an authored number wins.
     const lvl = q.zone.level === 'character' ? this.eventLevel(target) : q.zone.level;
-    const zoneId = `quest_${q.id}`;
     // THE AUTHORED LANE (engine/authoredMaps.ts): a quest naming a hand-made
     // map spreads the map's own words FIRST — dress, exact size, recipe,
     // objective, pack/dress policies — and the quest's explicit fields win
@@ -27997,26 +28015,10 @@ export class World {
       // its territory to connectFloatingZone on approach (charting it now would corrupt
       // the off-graph territory sim). A connected mint seeds its territory immediately.
       if (!q.zone.floating) this.sim.onNodeCharted(def, this.simView());
-      // THE QUEST DEED: the quest's road is story ground — notarize BOTH
-      // edges so no ambient heal (the dry-road strip, the footprint sever,
-      // an expanse's mint-time sweep) may ever cut the way to the arena.
-      // (Floating quests earn theirs at connectFloatingZone, which
-      // notarizes every wire-in as a deed.)
-      if (!q.zone.floating) {
-        this.notarizeRoad(anchor, def);
-        // THE KNOWLEDGE LAW: an accepted quest's ground is TOLD ground — named
-        // on the chart the way its anchor is (born veiled like every mint).
-        def.veiled = !reveal;
-        // The quest TELLS you the way ("head south") — the anchor it wired
-        // to is named knowledge now. A veiled halo anchor would swallow the
-        // drawn road (both ends must be visible), leaving the quest node
-        // floating on the chart with no way marked; the accept lifts it —
-        // and any standing portal onto the anchor re-speaks from live state
-        // (the entry law's refresh).
-        if (reveal) this.revealQuestGround(def.id);
-      }
+      if (anchor && !q.zone.floating) this.notarizeRoad(anchor, def);
     }
-    this.activeQuests.push({ questId: q.id, zoneId, fieldDone: false });
+    this.activeQuests.push({ questId: q.id, zoneId, fieldDone: false, directionsKnown: reveal });
+    if (reveal && q.zone.mapReveal === 'survey') this.revealQuestGround(zoneId);
     bumpLedger(this.ledger, 'quests_accepted');
     // Name the bearing from the actual placement (band placement has no fixed compass).
     const ddx = target.x - from.map.x, ddy = target.y - from.map.y;
@@ -47709,7 +47711,8 @@ export class World {
       const nearPlayer = sameDim
         && Math.hypot(z.map.x - this.zone.map.x, z.map.y - this.zone.map.y) <= APPROACH_RADIUS;
       if (!nearPlayer) continue;
-      connectFloatingZone(z, this.zoneMap, new Rng((this.manifest.seed ^ hashStr(z.id)) >>> 0));
+      connectFloatingZone(z, this.zoneMap, new Rng((this.manifest.seed ^ hashStr(z.id)) >>> 0), APPROACH_RADIUS, this.visited);
+      if (z.floating) continue; // no local road yet; retry as exploration grows
       this.sim.onNodeCharted(z, this.simView()); // now on the graph — seed its territory
       this.notice(z.id.startsWith('demon_') ? 'A path opens toward the demon rift!'
           : 'A path opens toward your quest!', '#c8a8e8', 15, 'world');

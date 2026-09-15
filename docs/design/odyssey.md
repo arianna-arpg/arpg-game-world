@@ -131,7 +131,8 @@ Electron smoke process; these are verification environment choices, not game cha
 
 Integration also checks that settled accounts do not restart the vendetta and
 that surviving Bandit hunters retain their combat kits and wounds after casualties
-and zone re-entry. Quest directions and discovered leads register their destinations
-and approaches as surveyed map intelligence, preserving the atlas knowledge law.
+and zone re-entry. Quest directions and discovered leads now grant bearings without
+surveying destinations or approaches; [quest geography](quest-geography.md) defines
+local placement, exploration framing, and the explicit cartography exception.
 The current main branch's seeded quest alternatives, Reliquary
 reward flow, and completed starting skill trees remain integrated.

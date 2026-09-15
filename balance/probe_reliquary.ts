@@ -392,8 +392,8 @@ check('D8 containerMove refuses the sealed centre', charm.x === 3 && charm.y ===
   hooks.acceptQuest(Q_RELIQUARY);
   const aq = w.activeQuests.find(q => q.questId === Q_RELIQUARY.id)!;
   const zone = w.zoneMap[aq.zoneId];
-  check('I3 the introduction mints a named, connected level-8 destination',
-    variants.has(zone.name) && zone.level === 8 && !zone.floating && !zone.veiled
+  check('I3 the introduction mints a named, locally connected level-8 destination with directions',
+    variants.has(zone.name) && zone.level === 8 && !zone.floating && aq.directionsKnown === true
     && zone.exits.some(e => e.to !== '?'));
   const fieldSave = w.serializeWorldState();
   check('I4 the generated site and active quest ride the world save',

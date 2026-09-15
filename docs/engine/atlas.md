@@ -45,17 +45,18 @@ what the world grows. And the chart is **the player's knowledge alone**.
   lifts underfoot and its ring), the one-ring preview off WALKED ground
   (`World.visible` is STRUCTURAL about it — a mint beside you is seen the
   moment it exists; the forechart's invariant pass then clears the flag for
-  good), a survey pulse, an omen reveal (the world's rumor), an accepted
-  quest (its ground and its anchor are TOLD), a won siege, a sighted port, a
+  good), a survey pulse, an omen reveal, explicitly authored quest cartography,
+  a won siege, a sighted port, a
   floating zone met on approach. `World.visible(z)` is the ONE fog seam:
   `!concealed && (!veiled || beside walked ground)`.
 - **The chart reads known ground alone.** The painter's reveal set, the
-  node graph, the roads (both ends), the map's fit, and — through THE VEIL
+  node graph, the roads (both ends), and — through THE VEIL
   CLIP (`#map-veil-clip`, the same discs the painter's veil uses) — every
   overlay wash (weather, territory, the classic biome wash) draw only
   around known nodes. A front's far extent no longer stretches the fit.
-  Markers with `fog: 'always'` (a quest target the giver named) still
-  pierce, by their own design.
+  The fit is narrower: only visited or explicitly surveyed ground enlarges it.
+  Quest directions grant edge bearings without exposing terrain or exact target
+  positions. See [quest geography](../design/quest-geography.md).
 - **Probe pins:** D1–D7 — a directed mint is born veiled and unseen; beside
   walked ground it is seen at once; a knowledge act lifts it; `veiled:
   false` opts out; and over a lived sim world THE KNOWLEDGE INVARIANT holds

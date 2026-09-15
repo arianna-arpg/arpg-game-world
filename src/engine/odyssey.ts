@@ -69,18 +69,18 @@ export class OdysseyRuntime {
     this.revealRevenge();
   }
   private revealRevenge(): void {
-    this.w.revealQuestGround(`quest_${revengeCommanderId(revengeFactionOf(this.w.account.ledger))}`);
+    this.w.learnQuestDirections(`quest_${revengeCommanderId(revengeFactionOf(this.w.account.ledger))}`);
   }
   reveal(id: string): void {
     const s = this.state;
     if (!s || s.leads.includes(id) || !s.roster.includes(id)) return;
     s.leads.push(id);
     for (const step of ['operation', 'leader'] as const) {
-      this.w.revealQuestGround(`quest_${odysseyQuestId(id, step)}`);
+      this.w.learnQuestDirections(`quest_${odysseyQuestId(id, step)}`);
     }
     const f = odysseyFaction(id);
     if (id === revengeFactionOf(this.w.account.ledger)) this.revealRevenge();
-    this.tell(`${f.name}: ${f.operation} to remove the leader's escort, or pursue ${f.leaderName} directly. The routes are marked on your map.`);
+    this.tell(`${f.name}: ${f.operation} to remove the leader's escort, or pursue ${f.leaderName} directly. Bearings on your map point toward their country.`);
     this.dirty();
   }
 

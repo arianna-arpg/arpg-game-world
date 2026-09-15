@@ -3,7 +3,7 @@
 //
 // A QuestDef is offered by a town NPC and, when accepted, GENERATES a zone at an
 // approximate coordinate / direction (via worldgen.placeZoneAt), wired into the
-// explored graph. The player travels there and completes the zone's objective
+// local world graph. The player travels there and completes the zone's objective
 // to earn the reward; a quest's reward can flip a ledger key that GATES the next
 // quest in the chain (requiresLedger), so "go slay the undead south" → "…then
 // the rift east" is pure data. Bounty boards are the same primitive with a
@@ -97,6 +97,9 @@ export interface QuestZoneSpec {
    *  same-level zones), not a fixed cardinal distance from town. Overrides
    *  direction/distance for placement. Requires a numeric `level`. */
   bandPlacement?: boolean;
+  /** Default: directions only. Explicit cartography may reveal this destination
+   * and expand the map without a visit; never reveals its neighbours. */
+  mapReveal?: 'survey';
 }
 
 export interface QuestReward {
