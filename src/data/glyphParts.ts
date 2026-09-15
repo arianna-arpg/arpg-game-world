@@ -17,8 +17,10 @@ import { COURT_GLYPHS } from './courtGlyphs';
 import { ABYSS_GLYPHS } from './abyssGlyphs';
 import { KINSHIP_GLYPHS } from './kinshipGlyphs';
 import { ROOTWILD_GLYPHS } from './rootwildGlyphs';
+import { COSMETIC_GLYPHS } from './cosmeticGlyphs';
 
 export const GLYPH_PARTS: Record<string, GlyphDef> = {
+  ...COSMETIC_GLYPHS,
   ...CASTER_GLYPHS,
   ...DEMON_GLYPHS,
   ...COURT_GLYPHS,

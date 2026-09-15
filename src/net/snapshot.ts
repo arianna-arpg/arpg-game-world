@@ -1,3 +1,6 @@
+import { cosmeticLoadoutFor, sanitizeCosmeticLoadout } from '../meta/cosmetics';
+import type { CosmeticLoadout, CosmeticMotif } from '../engine/cosmetics';
+const EMPTY_COSMETIC_LOADOUT: CosmeticLoadout = { slots: {}, skills: {} };
 import { flaskChargeBanks, restoreFlaskChargeBanks } from '../engine/flaskState';
 // ---------------------------------------------------------------------------
 // SNAPSHOT — the host→client render-state wire format + (de)serialization.
@@ -57,6 +60,7 @@ export type Vec2W = [number, number];
 
 /** One renderer-visible actor on the wire. Short keys keep the JSON small. */
 export interface ActorW {
+  cosmeticLoadout?: CosmeticLoadout;
   id: number;
   p: Vec2W; f: number; r: number; c: string; sh: ActorShape;
   team: Team; name: string;
@@ -172,7 +176,7 @@ export interface CastW {
 /** `a` = flight age (sim seconds): the deterministic phase clock the form
  *  painters roll on (wave crest, square tumble) — client and host draw the
  *  same curve the host's hit test sampled. */
-export interface ProjW { p: Vec2W; d: number; r: number; c: string; sh: string; a: number; }
+export interface ProjW { cosmeticMotif?: CosmeticMotif; p: Vec2W; d: number; r: number; c: string; sh: string; a: number; }
 /** A tether band, RENDER-ONLY on the client (the host owns the damage ticks). */
 export interface TetherW { ax: number; ay: number; bx: number; by: number; c: string; w: number; }
 export interface DropW { p: Vec2W; bob: number; kind: 'skill' | 'support' | 'gear' | 'vestige' | 'essence' | 'abilityEssence'; color: string; rarity?: string; name?: string; baseId?: string; vid?: string; eid?: string; tid?: number; cnt?: number; }
@@ -195,7 +199,7 @@ export interface PickupW { s: string; l: string; c: string; n: number; born: num
  *  three absent (an old host, an unkeyed flash) = the classic ring, byte-
  *  identical to the pre-wire client. Other flash costumes (beam, haze, arc,
  *  shapes) remain deliberately unshipped — MVP fidelity, renderer-guarded. */
-export interface FlashW { p: Vec2W; radius: number; color: string; life: number; maxLife: number;
+export interface FlashW { cosmeticMotif?: CosmeticMotif; p: Vec2W; radius: number; color: string; life: number; maxLife: number;
   fx?: string; bolt?: boolean; meteor?: boolean; departure?: RefugeDeparture; }
 /** A death-burst telegraph (coalesce gather → tracking orb). RENDER-ONLY: the client
  *  never simulates these (homing is host-authoritative via nearestSeatPos over the seats);
@@ -777,8 +781,8 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
       const b = containerBoard(c);
       return b ? [[c.id, packContainerBoard(b)] as const] : [];
     })),
-    actors: world.actors.filter(a => !a.dead || a.isPlayerKind()).map(actorToW),
-    projectiles: world.projectiles.map(p => ({ p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age })),
+    actors: world.actors.filter(a => !a.dead || a.isPlayerKind()).map(a => ({ ...actorToW(a), cosmeticLoadout: cosmeticLoadoutFor(world, a) })),
+    projectiles: world.projectiles.map(p => ({ p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age, cosmeticMotif: p.cosmeticMotif })),
     tethers: world.tethers.map(t => ({
       ax: Math.round(t.ax), ay: Math.round(t.ay), bx: Math.round(t.bx), by: Math.round(t.by),
       c: t.color, w: t.width,
@@ -808,7 +812,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     no: world.notices.map(n => ({ text: n.text, color: n.color, size: n.size, ch: n.channel, born: n.bornAt })),
     pfd: world.pickupFeed.map(e => ({ s: e.seatId, l: e.label, c: e.color, n: e.count, born: e.bornAt })),
     flashes: world.flashes.map(f => ({ p: v2(f.pos), radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
-      fx: f.fx, departure: f.departure, bolt: f.bolt || undefined, meteor: f.meteor || undefined })),
+      fx: f.fx, cosmeticMotif: f.cosmeticMotif, departure: f.departure, bolt: f.bolt || undefined, meteor: f.meteor || undefined })),
     ec: world.eyecatch
       && eyecatchElapsed(world.eyecatch, world.timeflow.age) < world.eyecatch.paneSec
       ? {
@@ -1142,6 +1146,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
       a.pos.x = aw.p[0]; a.pos.y = aw.p[1]; a.facing = aw.f;
     }
     a.radius = aw.r; a.color = aw.c; a.shape = aw.sh;
+    a.cosmeticLoadout = aw.cosmeticLoadout ? sanitizeCosmeticLoadout(aw.cosmeticLoadout) : EMPTY_COSMETIC_LOADOUT;
     a.team = aw.team; a.name = aw.name;
     a.life = aw.life; a.es = aw.es; a.absorb = aw.ab ?? 0;
     a.hitFlash = aw.hf; a.downed = aw.downed; a.dead = aw.dead;
@@ -1300,7 +1305,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
 
   // Lightweight entities — plain render structs the renderer reads positionally.
   world.projectiles = snap.projectiles.map(p => ({
-    pos: { x: p.p[0], y: p.p[1] }, dir: p.d, radius: p.r, color: p.c, shape: p.sh, age: p.a ?? 0,
+    pos: { x: p.p[0], y: p.p[1] }, dir: p.d, radius: p.r, color: p.c, shape: p.sh, age: p.a ?? 0, cosmeticMotif: p.cosmeticMotif,
   })) as unknown as World['projectiles'];
   world.tethers = (snap.tethers ?? []).map(t => ({
     ax: t.ax, ay: t.ay, bx: t.bx, by: t.by, color: t.c, width: t.w,
@@ -1326,7 +1331,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   world.notices = (snap.no ?? []).map(n => ({ text: n.text, color: n.color, size: n.size, channel: n.ch, bornAt: n.born }));
   world.pickupFeed = (snap.pfd ?? []).map(e => ({ seatId: e.s, label: e.l, color: e.c, count: e.n, bornAt: e.born }));
   world.flashes = snap.flashes.map(f => ({ pos: { x: f.p[0], y: f.p[1] }, radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
-    fx: f.fx, departure: f.departure, bolt: f.bolt, meteor: f.meteor })) as unknown as World['flashes'];
+    fx: f.fx, cosmeticMotif: f.cosmeticMotif, departure: f.departure, bolt: f.bolt, meteor: f.meteor })) as unknown as World['flashes'];
   // THE EYECATCH — re-stamped against the CLIENT's own raw clock (elapsed →
   // local t0); an absent row clears the pane with the host's (engine/ultimates.ts).
   world.eyecatch = snap.ec ? {

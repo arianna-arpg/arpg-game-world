@@ -45,6 +45,7 @@ import type { TellDress, TellSpec } from './tells';
 import type { PackAggregate } from './pack';
 import { STATUS_RELAY_IDS } from './reception';
 import type { TrailPoint, WatchFanMode, WatchSpec } from './watch';
+import type { CosmeticLoadout } from './cosmetics';
 
 /** One entry of Actor.gainEvents — a gain that landed this frame. The proc
  *  triggers read kind/id/depth; the SYMPATHY FABRIC reads the payload tail
@@ -1394,6 +1395,8 @@ export class Actor {
   defId?: string;
   xpValue = 0;
   owner?: Actor;          // set for minions
+  /** Render-only co-op appearance; never equipment, ownership or stat authority. */
+  cosmeticLoadout?: CosmeticLoadout;
   aiCooldown = 0;         // small delay between AI decisions
   hitFlash = 0;           // render feedback timer
   /** THE HIT TINT (engine/bodyVoices.ts): the dominant damage type of the last

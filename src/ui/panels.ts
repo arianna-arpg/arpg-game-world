@@ -1,3 +1,4 @@
+import { renderWardrobe } from './wardrobe';
 import { BUILD_PANEL_CFG, buildPanelSeat } from './buildPanels';
 // ---------------------------------------------------------------------------
 // DOM panels: class selection, character sheet, skill book (unlock / level /
@@ -1405,9 +1406,31 @@ export class UI {
    *  press on an open page closes it — the keyed grammar), dwell dialogs open
    *  exactly as their dwell would. The probe's census pins every named verb
    *  has a row here. */
+  onCosmeticsChanged: (() => void) | null = null;
+
+  private wardrobeView(root: HTMLElement, back: () => void): void {
+    this.escRefresh = null;
+    const actor = this.getWorld().seats.length ? this.getWorld().player : undefined;
+    renderWardrobe(root, { account: this.getAccount(), back,
+      save: () => { this.saveAccount(); this.onCosmeticsChanged?.(); },
+      body: actor ? { shape: actor.shape, color: actor.color, radius: actor.radius, material: actor.material, look: actor.look, adorn: actor.adorn }
+        : { shape: 'circle', radius: 16, color: CLASSES[0].color, look: CLASSES[0].look }, // the account Wardrobe also opens between lives
+      skills: [...new Set([...(actor?.skills ?? []).flatMap(s => s ? [s.def.id] : []),
+        ...(actor ? this.getWorld().localSeat.meta.knownSkills.keys() : []),
+        ...(this.getAccount().cosmetics.applications ?? []).map(binding => binding.skill), ...this.getAccount().unlockedSkills])]
+        .flatMap(id => SKILLS[id] ? [{ id, name: SKILLS[id].name }] : []).sort((a, b) => a.name.localeCompare(b.name)), // cosmetic overrides can be prepared between lives
+    });
+  }
+
+  showWardrobe(): void {
+    this.showEscapeMenu();
+    if (this.escapeMenuOpen) this.wardrobeView(this.escapeMenu, () => this.showEscapeMenu());
+  }
+
   private menuVerbs(): Record<string, MenuVerb> {
     const w = (): World => this.getWorld();
     return {
+      wardrobe: { open: () => this.showWardrobe(), isOpen: () => this.escapeMenuOpen && !!this.escapeMenu.querySelector('.wardrobe') },
       inventory: { open: id => this.toggleInventory(id), isOpen: () => this.inventoryOpen },
       // THE CONTAINER FABRIC: one host row per registered side board — the
       // menu's 'container:<id>' verb opens the inventory on that face.
@@ -3139,7 +3162,8 @@ export class UI {
           ${tabStrip}
         </div>
         <div class="vault-body">${body}</div>
-        <div class="vault-foot acct-btns"><button id="acct-close">${reckoning ? 'Seal &amp; Continue' : 'Back'}</button></div>`;
+        <div class="vault-foot acct-btns"><button id="acct-wardrobe">Wardrobe</button><button id="acct-close">${reckoning ? 'Seal &amp; Continue' : 'Back'}</button></div>`;
+      this.accountScreen.querySelector('#acct-wardrobe')!.addEventListener('click', () => this.wardrobeView(this.accountScreen, render));
       const bodyEl = this.accountScreen.querySelector<HTMLElement>('.vault-body');
       if (bodyEl) bodyEl.scrollTop = this.vaultScroll[this.vaultTab || '_flat'] ?? 0;
       this.accountScreen.querySelectorAll<HTMLElement>('[data-vtab]').forEach(btn => {
@@ -9843,6 +9867,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const root = this.escapeMenu;
 
     const showMain = (): void => {
+      this.escRefresh = showMain; // returning from the Wardrobe restores the live couch census
       // A roster-saved character (an Immortal vessel) persists by design — its
       // "End Run" is Save & Main Menu (world.endRun reroutes there too). Only
       // run-saved mortals get the bank-and-permadeath forfeit.
@@ -9895,6 +9920,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         <div class="esc-btns">
           <button id="esc-resume">Resume</button>
           ${couchRow}${couchLeaveRow}
+          <button id="esc-wardrobe">Wardrobe</button>
           <button id="esc-keys">Options</button>
           <button id="esc-end"${endTitle}>${this.isCoopClient() ? 'Leave Co-op' : sceneLive ? 'Main Menu' : rosterMode ? 'Save & Main Menu' : 'End Run'}</button>
           <button id="esc-close"${closeTitle}>${this.isCoopClient() || sceneLive ? 'Exit Game' : 'Save & Exit'}</button>
@@ -9908,6 +9934,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         this.hideEscapeMenu();
         this.onCouchLeave!();
       });
+      document.getElementById('esc-wardrobe')!.addEventListener('click', () => this.wardrobeView(root, showMain));
       document.getElementById('esc-keys')!.addEventListener('click', () => this.renderOptions(root, showMain));
       document.getElementById('esc-end')!.addEventListener('click', () => {
         // CLIENT: world is a render SHELL — never run host-authoritative endRun()

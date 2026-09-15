@@ -18,8 +18,10 @@ import { COURT_LOOKS } from './courtLooks';
 import { ABYSS_LOOKS } from './abyssLooks';
 import { KINSHIP_LOOKS } from './kinshipLooks';
 import { ROOTWILD_LOOKS } from './rootwildLooks';
+import { COSMETIC_LOOKS } from './cosmeticModels';
 
 export const LOOKS: Record<string, LookDef> = {
+  ...COSMETIC_LOOKS,
   ...CASTER_LOOKS,
   ...DEMON_LOOKS,
   ...COURT_LOOKS,

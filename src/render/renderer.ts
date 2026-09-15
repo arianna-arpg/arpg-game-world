@@ -1,3 +1,5 @@
+import { CosmeticTrails, cosmeticBody, cosmeticLoadoutFor, cosmeticPick, drawCosmeticMotif, drawCosmeticOrbit } from './vis/cosmetics';
+import { COSMETIC_CFG } from '../data/cosmetics';
 // ---------------------------------------------------------------------------
 // Canvas renderer: world (camera-following) + HUD. Placeholder geometry art —
 // every visual reads its color/shape from the data definitions.
@@ -189,6 +191,7 @@ function blendRgb(from: string, to: string, k: number): string {
 }
 
 export class Renderer {
+  private cosmeticTrails = new CosmeticTrails();
   ctx: CanvasRenderingContext2D;
   cam = { x: 0, y: 0 };
   /** THE PACK LAYER's link scratch (engine/pack.ts): the derivation writes
@@ -4744,7 +4747,7 @@ export class Renderer {
     }
   }
 
-  private drawFlash(f: { pos: Vec2; radius: number; color: string; life: number; maxLife: number; arc?: { facing: number; arcRad: number }; shape?: number; facing?: number; edgeFrac?: number; bolt?: boolean; meteor?: boolean; beam?: boolean; haze?: number; fx?: string }): void {
+  private drawFlash(f: { pos: Vec2; radius: number; color: string; life: number; maxLife: number; arc?: { facing: number; arcRad: number }; shape?: number; facing?: number; edgeFrac?: number; bolt?: boolean; meteor?: boolean; beam?: boolean; haze?: number; fx?: string; cosmeticMotif?: import('../engine/cosmetics').CosmeticMotif }): void {
     const { ctx } = this;
     // A big synchronous sim step (headless probes, background-tab catch-up)
     // can overshoot a flash's life below zero before the prune sweeps it —
@@ -4758,6 +4761,15 @@ export class Renderer {
     if (!Number.isFinite(f.pos.x + f.pos.y + f.radius + f.life + f.maxLife)) return;
     const t = f.maxLife > 0 ? Math.max(0, Math.min(1, f.life / f.maxLife)) : 0;
     if (t <= 0 || f.radius <= 0) return;
+    if (f.cosmeticMotif) {
+      ctx.save(); ctx.globalAlpha *= t * COSMETIC_CFG.cast.opacity;
+      for (let i = 0; i < COSMETIC_CFG.cast.count; i++) {
+        const angle = i * Math.PI * 2 / COSMETIC_CFG.cast.count + (1 - t);
+        drawCosmeticMotif(ctx, f.cosmeticMotif, f.color, f.pos.x + Math.cos(angle) * f.radius * (1 - t),
+          f.pos.y + Math.sin(angle) * f.radius * (1 - t), COSMETIC_CFG.cast.glintRadius * t, angle);
+      }
+      ctx.restore(); return;
+    }
     // THE EFFECT VOICE (render/vis/effectVoice.ts): a keyed flash speaks in
     // its registered painter — the mortar's 'blast', the pod's 'sporeburst',
     // the climb's 'scramble' — and returns. An UNREGISTERED kind falls
@@ -5290,7 +5302,10 @@ export class Renderer {
     // surface texture, gloss, emissive halo and silhouette outline. Runtime
     // is a blit; identity semantics (which shapes rotate with facing, adorns
     // always tracking it) are unchanged.
-    const look: BodyLook = {
+    const cosmeticLoadout = cosmeticLoadoutFor(world, a);
+    this.cosmeticTrails.draw(ctx, world, a, cosmeticLoadout);
+    if (!a.owner) drawCosmeticOrbit(ctx, cosmeticPick(cosmeticLoadout, 'playerEffect')?.paint, a.radius, world.time);
+    const look: BodyLook = cosmeticBody({
       shape: a.shape, radius: a.radius, color: a.color,
       // The tell dress's adorn channel swaps the silhouette accent at its
       // threshold — a different cached sprite, bounded by construction.
@@ -5298,12 +5313,15 @@ export class Renderer {
       outline: a.isMinion() ? '#b06bd4' : undefined,
       demonHorns: !!FACTIONS[a.faction ?? '']?.nubHorns,
       extraParts: a.extraParts,
-    };
+    }, cosmeticLoadout, a.isMinion());
+    const cosmeticAvatar = !a.owner ? cosmeticPick(cosmeticLoadout, 'avatar')?.paint : undefined;
+    if (cosmeticAvatar?.motif) drawCosmeticMotif(ctx, cosmeticAvatar.motif, cosmeticAvatar.color ?? '#c4b2f2',
+      a.radius + 8, -a.radius - 8, 5);
     const half = spriteHalf(a.radius);
     // THE HIT FLASH (vis/hitFlash.ts): the landed blow's composed overlay,
     // resolved ONCE per body per frame — a silent body pays one field read.
     const flashA = hitFlashAlphaOf(a);
-    const lookDef = lookOf(a.look);
+    const lookDef = lookOf(look.look); // cosmetic model owns its live parts as well as its baked body
     // THE COLOR DRIFT (vis/colorDrift.ts): a look whose color is weather —
     // the base morphs through its registered palette on the world clock
     // (quantized, so the bake cache meets a bounded set) and every derived
@@ -5411,7 +5429,8 @@ export class Renderer {
       drawPartSpecs(ctx, look, tdress.parts, world.time);
       ctx.rotate(-a.facing);
     }
-    const adornImg = adornSprite(look);
+    const cosmeticAdorn = cosmeticPick(cosmeticLoadout, a.isMinion() ? 'summonSkin' : 'playerSkin')?.paint.adorn;
+    const adornImg = adornSprite(cosmeticAdorn ? { ...look, look: undefined } : look);
     if (adornImg) {
       ctx.rotate(a.facing);
       ctx.drawImage(adornImg, -half, -half);
@@ -6844,6 +6863,7 @@ export class Renderer {
       ctx.save();
       ctx.translate(p.pos.x, p.pos.y);
       const r = p.radius;
+      if (p.cosmeticMotif) drawCosmeticMotif(ctx, p.cosmeticMotif, p.color, 0, 0, r, p.age);
       // Form geometry rides PROJ_FORM_GEO — the SAME factors the sim's hit
       // test uses (engine/projForms.ts), so the pixels and the hitbox can't
       // drift. Animated forms clock on p.age (sim time, deterministic, on
