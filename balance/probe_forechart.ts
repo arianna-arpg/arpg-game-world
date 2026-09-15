@@ -88,6 +88,7 @@ const invariantBreaks = (w: World): number =>
 
 // ------------------------------------------------ A. the halo grows, veiled
 const w = makeSimWorld('warrior', 0xf03e01);
+w.odyssey.update = () => {}; // Isolate the walker halo; quest soundings have their own distant origins.
 w.loadZone(HUB_ZONE); // stand at the crossroads — the starter web's live heart
 const before = Object.keys(w.zoneMap).length;
 step(w, 0.25, 400); // ~100s of world time — dozens of sweeps

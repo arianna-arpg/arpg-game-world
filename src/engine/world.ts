@@ -252,6 +252,7 @@ import {
 import { zoneKindOf } from '../data/zoneKinds';
 import { EAGER_WORLD_WEB } from '../config';
 import { eventLevel as resolveEventLevel } from '../world/levelField';
+import { HUB_ZONE, OPENING_PROGRESSION, tuneOpeningProgression } from '../world/openingProgression';
 import { factionAllowed } from '../world/zonePolicy';
 import type { WalkField, PathProfile } from '../world/walk';
 import { GridWalkField, WALK_CFG } from '../world/gridWalk';
@@ -5756,6 +5757,14 @@ export class World {
       this.chartWithin(def.map, FORECHART_CFG.horizon, def.dimension ?? 'surface');
     }
 
+    // Birth-only openingProgression: the road graph is now real, but none of
+    // its field neighbours has been played. Existing saves retain their levels.
+    if (def.id === HUB_ZONE && firstVisit && Object.keys(this.zoneMap).some(id => id.startsWith('gen_opening_'))
+      && !Object.keys(this.zoneMap).some(id => id.startsWith('gen_') && this.visited.has(id))) {
+      tuneOpeningProgression(this.zoneMap, (a, b) => this.landRoute(a.map, b.map)
+        && escarpmentRoad(a.map, b.map, this.sim.biomeField.fieldSeed));
+    }
+
     // THE RING-1 UNVEIL (the forechart law): every direct neighbour of ground
     // you STAND ON is part of the classic one-ring map preview — if the
     // forechart minted it ahead (veiled), finding this zone finds them. The
@@ -9382,11 +9391,18 @@ export class World {
     // mint-once / eager-web LINK paths: the earned ground is genuinely new).
     // Same timing as every frontier; the LOCK gates travel, not the mint.
     if (exitDef.lock) return this.mintHoldfastPocket(source, exitDef);
+    // Two distinct local openingProgression approaches. Atlas catchments and
+    // huge Field footprints must not merge every starting road into one seat.
+    // The normal placement/biome/layout pipeline still builds these areas.
+    const openingProgression = (source.id === HUB_ZONE
+      && source.exits.filter(e => e.to !== '?' && e.to !== START_ZONE && !e.lock).length < OPENING_PROGRESSION.approaches)
+      || (source.id.startsWith('gen_opening_')
+        && Object.keys(this.zoneMap).filter(id => id.startsWith('gen_opening_')).length < OPENING_PROGRESSION.levels.length);
     const seed = this.sim.biomeField.fieldSeed;
     // A FIELD source spans a big region, so its frontiers project from the region BOUNDARY
     // (one step past the blob edge) — not the node point, which would land back INSIDE the
     // region and mint a duplicate Field zone. Non-Field sources project the usual node step.
-    const target = source.field
+    const target = openingProgression ? projectCoord(source.map, exitDef.side) : source.field
       ? this.fieldFrontierTarget(source.field, exitDef.side, exitDef.at ?? 0.5)
       : biomeFrontierTarget(source, exitDef.side, this.biomeFor);
     if ((source.dimension ?? 'surface') === 'surface' && (source.geo?.escarpment?.blockedSide === exitDef.side || !escarpmentRoad(source.map, target, seed))) return source;
@@ -9442,9 +9458,9 @@ export class World {
       return source;
     }
     // Field regions are a SURFACE feature — a dimensioned source never joins one.
-    const atlasDestination = (source.dimension ?? 'surface') === 'surface'
+    const atlasDestination = !openingProgression && (source.dimension ?? 'surface') === 'surface'
       ? atlasDestinationAt(target, source.destination?.feature, source.map) : undefined;
-    const ext = source.dimension || atlasDestination ? null : fieldRegionAt(target, seed);
+    const ext = openingProgression || source.dimension || atlasDestination ? null : fieldRegionAt(target, seed);
     if (ext) {
       // A frontier that still lands in our OWN region (a concave blob edge) is redundant —
       // return source so eagerChartNeighbors drops it (never mint a twin of our own region).
@@ -9494,7 +9510,7 @@ export class World {
         return river;
       }
     }
-    if (!atlasDestination && EAGER_WORLD_WEB) {
+    if (!openingProgression && !atlasDestination && EAGER_WORLD_WEB) {
       const near = this.nearestLinkable(target, source, exitDef.side);
       if (near) { this.linkBackTo(near, source); return near; }
     }
@@ -9523,7 +9539,12 @@ export class World {
     // budgeted inbound links (fieldifyZone), never a cluster at the
     // discovering corner. Everything else about the mint is the ordinary
     // frontier pipeline (same spec fields generateZone forwards).
-    const gen = ext
+    const gen = openingProgression
+      ? placeZoneAt(target, source, this.zoneMap, this.nextGenId++,
+        { id: `gen_opening_${this.nextGenId - 1}`, tileset: exitDef.tileset, biomeFor,
+          level: source.id === HUB_ZONE ? 1 : this.levelFor(target), biomeDepthFor: depthFor, climateFor: this.climateFor, fieldBiome: true,
+          noWeave: true, forceFrontiers: 3, noFactionWar: true, objective: { kind: 'clear', seal: false } })
+      : ext
       ? placeZoneAt(target, source, this.zoneMap, this.nextGenId++,
         { tileset: exitDef.tileset, biomeFor, levelFor: this.levelFor, biomeDepthFor: depthFor, climateFor: this.climateFor, fieldBiome: true, dimension: source.dimension, courseFor: this.courseMintFor(source.dimension), noWeave: true })
       : source.field
@@ -9532,7 +9553,7 @@ export class World {
         : generateZone(source, exitDef, this.zoneMap, this.nextGenId++, biomeFor, this.levelFor, depthFor, this.climateFor,
           this.courseMintFor(source.dimension));
     if (this.zoneMap[gen.id] === gen) return gen; // an atlas destination already charted by another approach
-    if (!gen.locale) this.fieldifyZone(gen, ext);
+    if (!openingProgression && !gen.locale) this.fieldifyZone(gen, ext);
     if (source.dimension) gen.level += dimensionDef(source.dimension).levelBonus ?? 0;
     if (this.mintVeil) gen.veiled = true; // a forechart sweep mints AHEAD of the walker
     this.zoneMap[gen.id] = gen;

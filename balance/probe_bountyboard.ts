@@ -1109,7 +1109,11 @@ seedGlobalRandom(0x4145);
     quayOffers().length > 0 && townOffers().length > 0,
   `quay ${quayOffers().length} · town ${townOffers().length}`);
   check('R: THE LOCALIZATION — every quay writ stands within the quay\'s own reach',
-    quayOffers().every(o => coordDist(wR.zoneMap[o.zoneId].map, portR.map) <= 720 * 1.01));
+    // Expeditions mint at acceptance: their existing approach is the offer's geography.
+    quayOffers().every(o => {
+      const z = wR.zoneMap[o.expedition?.anchor ?? o.zoneId];
+      return !!z && coordDist(z.map, portR.map) <= 720 * 1.01;
+    }));
   // ONE HAND PER BOARD (her ruling — the M0 fold turned live): a hand
   // from each board stands together; a second on the SAME board refuses.
   const tOff = townOffers()[0];

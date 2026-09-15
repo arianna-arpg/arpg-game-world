@@ -31,11 +31,14 @@ import { coordDist, type MapCoord } from './coords';
 
 /** Tunable difficulty-field shape. Pure data — change these to retune the world's
  *  danger geography without touching the engine. Distances are in node-units (a
- *  cardinal MAP_DIR step is ~78 N/S, ~86 E/W, so "one zone over" ≈ 78-86). */
+ *  cardinal MAP_DIR step is ~78 N/S, ~86 E/W, so "one zone over" ≈ 78-86).
+ *  See docs/design/world-progression.md for the graph-based opening contract. */
 export interface LevelFieldCfg {
   /** Node-units of distance per +1 to the difficulty FLOOR (the ring width). */
   ringSpan: number;
-  /** Distance treated as the safe level-1 core around town (≈ one zone step). */
+  /** Extra node-units per successive ring. The inverse uses the same integral. */
+  ringGrowth: number;
+  /** Distance treated as the level-1 core. The playable opening is graph-based. */
   innerRadius: number;
   /** The lowest level any ground can roll. */
   minLevel: number;
@@ -44,6 +47,12 @@ export interface LevelFieldCfg {
   /** Extra variance amplitude per ringSpan of distance — danger SWINGS widen the
    *  further you roam (tight near town, wild in the deep wilds). */
   ampGrowth: number;
+  /** Bound local variance so distant quest bands still describe their approaches. */
+  maxAmp: number;
+  /** Distance over which noise fades in outside the inner core. */
+  noiseFade: number;
+  /** Spikes start outside this radius, then fade in over noiseFade. */
+  spikeStart: number;
   /** Node-units per smooth-noise cell — the COHERENCE scale. Larger = wider regions
    *  of similar danger (a few zones share a mood). */
   noiseCell: number;
@@ -55,16 +64,21 @@ export interface LevelFieldCfg {
   spikeBonus: number;
 }
 
-/** The default difficulty geography. Fitted so the hand-authored core (Lastlight →
- *  Infernal Rift, levels 0–7 within ~470 units) blends into the generated wilds:
- *  level ~1 right outside town, overlapping 2-5 / 4-8 bands a bit further, wider
- *  swings beyond, and ~1-in-10 regions a +5 spike. All tunable. */
+/** Moderate widening supports branching exploration as XP costs outpace ordinary
+ *  kill rewards. Opening roads provide level-one ground around the actual hub;
+ *  town distance alone cannot guarantee it. Noise is signed and bounded; spikes
+ *  remain dangerous branches outside the opening. The quest inverse shares the
+ *  exact radial curve. Existing minted levels are never resampled. */
 export const LEVEL_FIELD_CFG: LevelFieldCfg = {
-  ringSpan: 58,
-  innerRadius: 78,
+  ringSpan: 65,
+  ringGrowth: 0.3,
+  innerRadius: 0,
   minLevel: 1,
-  baseAmp: 0.8,
-  ampGrowth: 0.5,
+  baseAmp: 0.6,
+  ampGrowth: 0.12,
+  maxAmp: 3,
+  noiseFade: 180,
+  spikeStart: 500,
   noiseCell: 200,
   spikeCell: 360,
   spikeChance: 0.1,
@@ -158,14 +172,23 @@ export function levelAt(
 ): number {
   const dist = coordDist(coord, origin);
   // Radial FLOOR: gentle escalation outward, level-1 within the core.
-  const base = cfg.minLevel + Math.max(0, dist - cfg.innerRadius) / cfg.ringSpan;
+  const rings = ringsAtDistance(dist, cfg);
+  const base = cfg.minLevel + rings;
   // Variance widens with distance — tight near town, wild in the deep.
-  const amp = cfg.baseAmp + cfg.ampGrowth * (dist / cfg.ringSpan);
+  const fade = Math.min(1, Math.max(0, dist - cfg.innerRadius) / cfg.noiseFade);
+  const amp = Math.min(cfg.maxAmp, cfg.baseAmp + cfg.ampGrowth * rings) * fade;
   const variance = valueNoise(coord.x / cfg.noiseCell, coord.y / cfg.noiseCell, seed);
   // Rare hard SPIKE region (a whole coarse cell jumps): the route-around surprise.
   const sx = Math.floor(coord.x / cfg.spikeCell), sy = Math.floor(coord.y / cfg.spikeCell);
-  const spike = hash01(sx, sy, (seed ^ SPIKE_SALT) >>> 0) < cfg.spikeChance ? cfg.spikeBonus : 0;
-  return Math.max(cfg.minLevel, Math.round(base + variance * amp + spike));
+  const spikeFade = Math.min(1, Math.max(0, dist - cfg.spikeStart) / cfg.noiseFade);
+  const spike = hash01(sx, sy, (seed ^ SPIKE_SALT) >>> 0) < cfg.spikeChance ? cfg.spikeBonus * spikeFade : 0;
+  return Math.max(cfg.minLevel, Math.round(base + (2 * variance - 1) * amp + spike));
+}
+
+/** Stable quadratic inverse; avoids cancellation near the core. */
+export function ringsAtDistance(distance: number, cfg: LevelFieldCfg = LEVEL_FIELD_CFG): number {
+  const d = Math.max(0, distance - cfg.innerRadius);
+  return 2 * d / (cfg.ringSpan + Math.sqrt(cfg.ringSpan ** 2 + 2 * cfg.ringGrowth * d));
 }
 
 /** Boot validator: the config must be sane (positive spans, ≥1 floor, sane spike
@@ -174,6 +197,10 @@ export function levelAt(
 export function validateLevelField(cfg: LevelFieldCfg = LEVEL_FIELD_CFG): string[] {
   const bad: string[] = [];
   if (!(cfg.ringSpan > 0)) bad.push(`ringSpan must be > 0 (is ${cfg.ringSpan})`);
+  if (!(cfg.ringGrowth >= 0)) bad.push('ringGrowth must be >= 0');
+  if (!(cfg.noiseFade > 0)) bad.push('noiseFade must be > 0');
+  if (!(cfg.maxAmp >= 0) || !(cfg.baseAmp >= 0) || !(cfg.ampGrowth >= 0)) bad.push('variance amplitudes must be >= 0');
+  if (!(cfg.spikeStart >= cfg.innerRadius)) bad.push('spikeStart must be outside the core');
   if (!(cfg.noiseCell > 0)) bad.push(`noiseCell must be > 0 (is ${cfg.noiseCell})`);
   if (!(cfg.spikeCell > 0)) bad.push(`spikeCell must be > 0 (is ${cfg.spikeCell})`);
   if (!(cfg.minLevel >= 1)) bad.push(`minLevel must be >= 1 (is ${cfg.minLevel})`);
@@ -216,7 +243,8 @@ export class LevelField {
    *  variance/spike noise. Used to place a directed mint (a quest boss arena) IN its
    *  proper level BAND rather than at the first noisy coord that happens to read high. */
   radiusForLevel(level: number): number {
-    return this.cfg.innerRadius + Math.max(0, level - this.cfg.minLevel) * this.cfg.ringSpan;
+    const rings = Math.max(0, level - this.cfg.minLevel);
+    return this.cfg.innerRadius + rings * this.cfg.ringSpan + 0.5 * this.cfg.ringGrowth * rings * rings;
   }
 
   /** FUTURE SEAM: a quest/world-event raises or lowers danger locally (a "source

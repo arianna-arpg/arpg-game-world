@@ -372,6 +372,9 @@ withSeededRandom(0x35a7e1, () => {
       w.update(1 / 30);
       p.pos = { x: W.x, y: W.y };
       p.tier = 0;
+      // Establish this surface's own brush/reed status before watching for a
+      // status from the dancer below. Geography can move reeds over the lid.
+      w.update(1 / 30);
       const d = w.createMonster('mere_dancer', 8, 'enemy');
       d.pos = vec(W.x + 50, W.y);
       d.tier = 1;

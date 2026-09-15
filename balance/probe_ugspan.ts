@@ -83,8 +83,11 @@ function grow(seed: number, rounds: number, geographyGrowth?: number[], coverage
   // 100-node floor; the caller still rejects ANY stalled expansion batch.
   for (let r = 0; r < (coverage ? Math.max(rounds, 32) : rounds); r++) {
     if (r >= rounds && surfaceZones(w).length >= coverage) break;
+    // Grow from travel-reachable ground, not every distant port minted by an
+    // atomic sea system. A port without a found sailing route is not a walk.
+    const reached = bfsFromTown(w, true);
     const batch = Object.values(w.zoneMap).filter(z =>
-      (z.dimension ?? 'surface') === 'surface' && z.caveDepth == null && !z.pocket
+      reached.has(z.id) && (z.dimension ?? 'surface') === 'surface' && z.caveDepth == null && !z.pocket
       && z.objective.kind !== 'safe' && !z.floating && !zoneKindOf(z)?.staticExits
       && z.exits.some(e => e.to === '?'));
     for (const z of batch) chart.chartNeighborsOf(z);
@@ -108,6 +111,9 @@ function bfsFromTown(w: World, withUnder: boolean): Set<string> {
       if (!seen.has(to) && byId[to]) { seen.add(to); queue.push(to); }
     };
     for (const e of z.exits) { if (e.to !== '?' && !e.crossDim) step(e.to); }
+    // Atomic sea systems include the far shore. Its underground citizens
+    // are reached by sailing first, then by the same tested under-road.
+    for (const to of z.searoutes ?? []) step(to);
     if (withUnder) for (const u of z.underways ?? []) step(u.to);
   }
   return seen;
