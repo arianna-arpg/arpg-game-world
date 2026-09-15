@@ -6050,7 +6050,8 @@ export const SKILLS: Record<string, SkillDef> = {
       + ' converge on your mark, and aiming at a single foe pins the whole court on that one.'
       + ' SHIFT-press to recall the court to your side.',
     tags: ['spell', 'minion', 'instant'], color: '#d0a858',
-    manaCost: 6, cooldown: 5, useTime: 0,
+    // Assault leaves room for hit-driven cooldown refunds and defensive formation.
+    manaCost: 6, cooldown: 8, useTime: 0,
     delivery: { type: 'self' },
     effects: [{ type: 'commandMinions', duration: 6 }],
     meta: { skillId: 'command_recall', label: 'Recall' },

@@ -1,3 +1,4 @@
+import { ASSAULT, assaultOrbitPositions } from '../engine/assault';
 import { cosmeticPortalColor, drawCosmeticPortal, cosmeticProjectileExtent, drawCosmeticProjectile, cosmeticHotbar, drawCosmeticHotbar } from './vis/cosmeticEffects';
 import { HIVECALL } from '../engine/hivecall';
 import { CosmeticTrails, cosmeticBody, cosmeticLoadoutFor, cosmeticPick, drawCosmeticMotif, drawCosmeticOrbit } from './vis/cosmetics';
@@ -5787,6 +5788,18 @@ export class Renderer {
       ctx.fillStyle = a.team === 'enemy' ? '#c03030' : '#40b050';
       ctx.fillRect(x - bw / 2, y - a.radius - 9, bw * frac, 4);
     }
+    if (a.assaultAura) {
+      ctx.save(); ctx.strokeStyle = 'rgba(216,198,124,0.28)'; ctx.fillStyle = 'rgba(216,198,124,0.025)';
+      ctx.beginPath(); ctx.arc(x, y, ASSAULT.radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore();
+    }
+    if (a.assaultOrbit) {
+      ctx.fillStyle = '#efda8a'; ctx.strokeStyle = '#98752e';
+      for (const point of assaultOrbitPositions(a, world.time)) {
+        const bx = x + point.x - a.pos.x, by = y + point.y - a.pos.y;
+        ctx.beginPath(); ctx.moveTo(bx, by - 6); ctx.lineTo(bx + 4, by);
+        ctx.lineTo(bx, by + 6); ctx.lineTo(bx - 4, by); ctx.closePath(); ctx.fill(); ctx.stroke();
+      }
+    }
     // THE PLY ROW (engine/plies.ts): a plied body wears PIPS, not a bar —
     // each dot one hit it can still eat. Same dent rule as every bar
     // (untorn stays clean); once the plies spend out, the ordinary life
@@ -7890,6 +7903,13 @@ export class Renderer {
           ctx.fillStyle = metaCd ? '#6a6a7a' : '#e8d8a0';
           ctx.font = 'bold 8px Verdana';
           ctx.fillText(`⇧ ${meta.label}`, x + slot / 2, my + mh - 4);
+        }
+        if (def.id === 'command_assault' && p.assaultHud) {
+          const h = p.assaultHud;
+          ctx.fillStyle = '#292516'; ctx.fillRect(x, by - 46, slot, 5);
+          ctx.fillStyle = '#efcc73'; ctx.fillRect(x, by - 46, slot * h.progress, 5);
+          ctx.font = 'bold 9px Verdana'; ctx.textAlign = 'center'; ctx.fillStyle = '#f2dda3';
+          ctx.fillText('Next: ' + h.hits + (h.hits === 1 ? ' hit' : ' hits'), x + slot / 2, by - 50);
         }
         if (def.hivecall && p.hivecallHud) {
           const h = p.hivecallHud;

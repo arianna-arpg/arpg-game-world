@@ -75,6 +75,9 @@ export interface ActorW {
   thu?: number; // throngUnits: constituent count in a cluster
   the?: number; // throngEgg: batch held by a find
   thg?: Record<string, number>; // native hatch gauges by equipped skill
+  assault?: Actor['assaultHud'];
+  assaultOrbit?: boolean;
+  assaultAura?: boolean;
   hive?: Actor['hivecallHud'];
   thr?: Record<string, number>; // host-authored full roster counts
   tw?: string;                 // throngWild husk kind (per-viewer sight gate)
@@ -611,6 +614,9 @@ function actorToW(a: Actor, world: World): ActorW {
   if (throngAnchors.length) w.thr = Object.fromEntries(throngAnchors.map(s => [s!.def.id, world.throngRosterCount(a, s!)]));
   if (a.throngEgg) w.the = a.throngEgg;
   if (a.hivecallHud) w.hive = a.hivecallHud;
+  if (a.assaultHud) w.assault = a.assaultHud;
+  if (a.assaultOrbit) w.assaultOrbit = true;
+  if (a.assaultAura) w.assaultAura = true;
   const throngEvolutionGauges = a.skills.filter(s => s?.state?.throngEvolutionGauge !== undefined);
   if (throngEvolutionGauges.length) w.thg = Object.fromEntries(throngEvolutionGauges.map(s => [s!.def.id, s!.state!.throngEvolutionGauge!]));
   // THE GRAB FABRIC's held meter (engine/grab.ts): computed off the LIVE
@@ -1166,7 +1172,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.life = aw.life; a.es = aw.es; a.absorb = aw.ab ?? 0;
     a.hitFlash = aw.hf; a.downed = aw.downed; a.dead = aw.dead;
     a.passive = aw.passive; a.untargetable = aw.ut;
-    a.throngUnits = aw.thu; a.throngEgg = aw.the; a.throngRosterHud = aw.thr; a.hivecallHud = aw.hive;
+    a.throngUnits = aw.thu; a.throngEgg = aw.the; a.throngRosterHud = aw.thr; a.hivecallHud = aw.hive; a.assaultHud = aw.assault; a.assaultOrbit = !!aw.assaultOrbit; a.assaultAura = !!aw.assaultAura;
     for (const inst of a.skills) if (inst?.def.throng) (inst.state ??= {}).throngEvolutionGauge = aw.thg?.[inst.def.id] ?? 0;
     a.throngWild = aw.tw; // husk kind → the client's own sight gate reads it
     a.grabHud = aw.gb;    // held meter mirror (cleared when absent — freed)

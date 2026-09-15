@@ -69,11 +69,14 @@ function foe(w: World) {
 }
 {
   const { w, p, inst, roster } = setup(['royal_guard', 'royal_carapace', 'barbed_regents', 'royal_ferocity', 'crushing_mandibles', 'regal_execution']);
-  step(w, 8.2); for (const a of roster()) w.kill(a);
-  check('base deaths accumulate Sovereignty', hivecallState(inst).meter === 60);
+  step(w, 8.2);
+  const passiveGain = hivecallState(inst).meter;
+  check('living base Swarmlings generate Sovereignty without deaths', Math.abs(passiveGain - 16.4) < 0.1);
+  for (const a of roster()) w.kill(a);
+  check('base deaths accumulate Sovereignty', Math.abs(hivecallState(inst).meter - passiveGain - 60) < 0.001);
   check('Enrage transforms with accumulated resource', w.useMetaSkill(p, inst, p.pos));
   const form = w.player;
-  check('form has independent health and consumed meter', form !== p && w.localSeat.home === p && form.maxLife() === 1500 && hivecallState(inst).meter === 0 && Math.abs(form.hiveForm!.remaining - 10.8) < 0.01);
+  check('form has independent health and consumed meter', form !== p && w.localSeat.home === p && form.maxLife() === 1500 && hivecallState(inst).meter === 0 && Math.abs(form.hiveForm!.remaining - (60 + passiveGain) * 0.18) < 0.01);
   check('form has three abilities plus return slot', form.skills.filter(Boolean).length === 4 && form.skills.some(s => s?.def.id === 'hive_royal_cataclysm'));
   check('Crushing Mandibles modifies only base skills', instanceMods(form.skills[0]!).some(m => m.stat === 'damage' && m.kind === 'more' && m.value === 1) && !instanceMods(form.skills[2]!).some(m => m.stat === 'damage' && m.value === 1));
   check('Perpetual Reign immediately hatches two missing bodies', roster().length === 2);

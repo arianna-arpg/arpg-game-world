@@ -48,6 +48,7 @@ export const SLAYER_CFG = {
 } as const;
 
 export interface DamagePacket {
+  assaultGuaranteed?: boolean;
   amounts: Partial<Record<DamageType, number>>;
   crit: boolean;
   /** Where the damage dice landed, 0..1 from range floor to ceiling —
@@ -643,6 +644,7 @@ function plyEats(attacker: Actor, target: Actor, total: number, packet: DamagePa
     const rend = Math.max(0, Math.floor(
       attacker.sheet.get('plyRend', packet.tags, packet.extra)));
     target.plies = Math.max(0, target.plies - 1 - rend);
+    target.assaultPlyBreak?.(attacker);
     if (target.plies === 0 && target.plySpec?.spentStatus) {
       target.applyStatus(target.plySpec.spentStatus, 0, 1, 'plies');
     }
@@ -701,14 +703,14 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   // HIT IMMUNITY (Cerement's shroud): every incoming HIT — attack, spell,
   // projectile — is dodged outright while the stat holds. DoTs still tick
   // (applyDot never comes through here); the shroud's own price bleeds on.
-  if (target.sheet.get('hitImmune') > 0) {
+  if (!packet.assaultGuaranteed && target.sheet.get('hitImmune') > 0) {
     return { evaded: true, immune: false, blocked: false, total: 0, crit: false };
   }
   // Area avoidance is bounded and resolves before plies/status payloads.
   // A connected area hit still lands in full; single-target hits and DoTs
   // never consult this lane. Zero avoids consuming a random draw.
   const areaAvoidance = packet.tags.has('aoe') ? target.sheet.get('areaAvoidance') : 0;
-  if (areaAvoidance > 0 && chance(areaAvoidance)) {
+  if (!packet.assaultGuaranteed && areaAvoidance > 0 && chance(areaAvoidance)) {
     return { evaded: true, immune: false, blocked: false, total: 0, crit: false };
   }
   // Attacks can be evaded; spells always connect. Evasion runs on ENTROPY,
@@ -719,7 +721,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   // near-certain hit can still be "dodged" once early, never forever.
   // The accumulator re-seeds randomly after windowReset unattacked seconds
   // (Actor.updateTimers ticks the freshness clock down).
-  if (packet.tags.has('attack')) {
+  if (!packet.assaultGuaranteed && packet.tags.has('attack')) {
     const acc = attacker.sheet.get('accuracy', packet.tags);
     const ev = target.sheet.get('evasion');
     const hitChance = clamp(acc / (acc + ev * DEFENSE_CFG.evasion.weight),

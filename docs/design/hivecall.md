@@ -71,3 +71,10 @@ Data: `src/data/hivecall.ts`. Economy helpers: `src/engine/hivecall.ts`.
 Runtime integration: World contract, death, possession, and life-wound seams.
 Verification: `npm run probe -- hivecall`, frontier trees, possession, tier
 sovereignty, minion contracts, Gnatveil regression, sim smoke and hidden UI checks.
+
+## Living Sovereignty
+
+Swarm Sovereign also gains 2 Sovereignty per second while at least one base
+Swarmling lives. Additional bodies do not accelerate this passive gain, and
+temporary offspring do not count. Perpetual Reign permits this gain while
+transformed, offsetting 0.36 seconds of form decay per second.

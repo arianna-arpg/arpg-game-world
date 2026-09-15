@@ -58,6 +58,9 @@ Verification: `npm run probe -- gnatveil` plus the throng and frontier probes.
 Hivecall’s army and Sovereign form live in `src/data/hivecall.ts`, with native
 contract/resource helpers in `src/engine/hivecall.ts`. See `docs/design/hivecall.md`;
 verify with `npm run probe -- hivecall` and the frontier/possession probes.
+Command: Assault’s native tree and command economy live in `src/data/assaultTree.ts`
+and `src/engine/assault.ts`. See `docs/design/command-assault.md`; verify with
+`npm run probe -- assault` and `balance/assault-ui.cjs` after a build.
 The Hivecaller/Ranger/Guardian batch is in `src/data/frontierStarterTrees.ts`,
 with its contract and shared absorb scaling in
 `docs/design/frontier-starting-skill-trees.md`.

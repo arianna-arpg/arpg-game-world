@@ -2,7 +2,7 @@ import { treeNodeOf, type SkillInstance } from './skills';
 
 /** Native Hivecall economy. Temporary guard offspring never pay Sovereignty. */
 export const HIVECALL = {
-  meterMax: 100, deathGain: 20, duration: 18, cooldown: 4, novaCooldown: 2,
+  meterMax: 100, deathGain: 20, passiveGain: 2, duration: 18, cooldown: 4, novaCooldown: 2,
   rapidInterval: 0.2, broodDelay: 10, broodLife: 8, auraRadius: 180,
   redirect: 0.6, rescueWindow: 20,
 } as const;

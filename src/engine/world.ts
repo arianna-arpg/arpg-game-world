@@ -13,6 +13,7 @@ import { COSMETIC_CFG } from '../data/cosmetics';
 
 import { DeedTracker, type DeedEvent } from './deeds';
 import { CompanionBonds } from './companionBonds';
+import { Assaults, assaultNode } from './assault';
 import { Challenges } from './challenges';
 import { challengeOf } from './challengeSpec';
 import { companionBondOf, type CompanionSaved } from './companionSpec';
@@ -3476,6 +3477,7 @@ export class World {
    *  the character (character.ts merges them into `companions`). */
   stashedCompanions: CompanionSaved[] = [];
   readonly companionBonds = new CompanionBonds(this);
+  readonly assaults = new Assaults(this);
   readonly challenges = new Challenges(this);
   /** ONE-SHOT: lingering at any REGISTERED vendor counter with stock (the
    *  data/vendors.ts registry) asks the main loop to open the Vendor screen. */
@@ -5583,6 +5585,7 @@ export class World {
    * visit (constructs, drops, and corpses stay behind).
    */
   loadZone(zoneId: string, from?: string): void {
+    this.assaults.clearAll();
     this.challenges.clearAll();
     this.odyssey.leaveZone();
     this.combatDeeds.reset();
@@ -30189,6 +30192,33 @@ export class World {
     return true;
   }
 
+  assaultDoomCull(target: Actor): void {
+    // DOOM CULL (#25): if the armed counter now covers what life remains,
+    // it goes off EARLY — no waiting out a fuse the target won't survive.
+    if (!target.dead && target.life > 0) {
+      let armed = 0;
+      for (const s of target.statuses) {
+        if (s.rupture && STATUS_DEFS[s.id]?.cullsAtLethal) armed += s.rupture;
+      }
+      if (armed > 0 && armed >= target.life) {
+        this.text(vec(target.pos.x, target.pos.y - 16), 'DOOM!', '#7a48c8', 16, 'combat');
+        for (let si = target.statuses.length - 1; si >= 0; si--) {
+          const s = target.statuses[si];
+          if (!s.rupture || !STATUS_DEFS[s.id]?.cullsAtLethal) continue;
+          target.statuses.splice(si, 1);
+          if (!target.statuses.some(o => o.id === s.id)) {
+            target.sheet.removeSource('status:' + s.id);
+          }
+          this.ruptureStatus(target, s);
+        }
+      }
+    }
+  }
+
+  assaultBladeHit(caster: Actor, inst: SkillInstance, target: Actor, power: number): void {
+    this.resolveHit(caster, inst, target, power, 1);
+  }
+
   private updateHivecall(dt: number): void {
     for (const a of this.hivecallHooks) for (const key of a.lifeDamageInterceptors?.keys() ?? []) {
       if (key.startsWith('hivecall:')) a.lifeDamageInterceptors?.delete(key);
@@ -30215,6 +30245,11 @@ export class World {
         if (form.remaining <= 0) { this.seatEject(seat, 'duration'); form = undefined; }
       }
       const roster = this.hivecallRoster(hero, host), cap = this.hivecallCap(hero, host);
+      if (roster.length && hivecallNode(host, 'royal_guard')) {
+        const passiveGain = HIVECALL.passiveGain * dt;
+        if (!form) st.meter = Math.min(HIVECALL.meterMax, st.meter + passiveGain);
+        else if (hivecallNode(host, 'regal_execution')) form.remaining = Math.min(HIVECALL.duration, form.remaining + passiveGain * HIVECALL.duration / HIVECALL.meterMax);
+      }
       if (hero.summonToggles.has(host.def.id) && roster.length < cap) {
         const d = instanceDelivery(host);
         const speed = hero.sheet.get('minionRespawnTime', skillContextTags(host), instanceMods(host));
@@ -31568,6 +31603,7 @@ export class World {
     if (v.plies > 0) {
       if (taken >= plyFloorOf(v)) {
         v.plies--;
+        v.assaultPlyBreak?.(credit); // Unowned pooled contact is an enemy bite.
         if (v.plies === 0 && v.plySpec?.spentStatus) {
           v.applyStatus(v.plySpec.spentStatus, 0, 1, 'plies');
         }
@@ -31576,7 +31612,8 @@ export class World {
       v.hitFlashType = domType;
       return;
     }
-    v.life -= taken;
+    landLifeDamage(v, taken);
+    if (credit) this.assaults.pooledHit(credit, v, taken, amounts);
     v.hitFlash = 0.15;
     v.hitFlashType = domType;
     if (taken > 0.5) this.text(v.pos, Math.round(taken).toString(), DAMAGE_COLOR[domType], 11);
@@ -31832,7 +31869,8 @@ export class World {
       // Invested/wounded bodies retain their full actor state instead of
       // losing bought armor or silently recovering it on a round trip.
       if (this.minionNeedsFullDurability(a.owner, inst)
-        || a.plies < a.pliesMax || a.life < a.maxLife()) continue;
+        || a.plies < a.pliesMax || a.life < a.maxLife() || a.assaultOrbit
+        || a.sheet.getSourceMods('assault:formation')?.length) continue;
       if (a.clingTo || a.heldBy !== undefined || a.gripping || a.casting) continue;
       if (a.aiCommand || a.aiTargetId !== undefined) continue;
       if (a.statuses.length > 0 || a.buffs.size > 0) continue;
@@ -33740,6 +33778,7 @@ export class World {
     const effMode = mode === 'cast' && timing && !pierced ? timing.kind : mode;
 
     const castTime = caster.skillUseTime(inst);
+    this.assaults.lock(caster, inst, aim);
     if (effMode === 'cast' && castTime <= 0.001) {
       // THE PRIMED POUR: a true-full pour press BANKS its sip instead of
       // pouring — decided HERE, after every cost is paid, so the press
@@ -34655,6 +34694,12 @@ export class World {
         // ONE struck ledger for the whole cast: the swing's hits, the
         // reverb's picks and — sweeping — the wave's crossings all mark it.
         const struck = new Set<number>();
+        const assaultLockedTarget = this.assaults.locked(caster, inst);
+        if (assaultLockedTarget) {
+          struck.add(assaultLockedTarget.id);
+          this.resolveHit(caster, inst, assaultLockedTarget, useMult, 0, flatBonus);
+          this.flashes.push({ pos: { ...assaultLockedTarget.pos }, radius: 18, color: cosmeticColor, life: 0.18, maxLife: 0.18 });
+        }
         // The crescent's geometry, hoisted for the shared tail below.
         let sweepR = 0, sweepArc = 0;
         if (sweeping) {
@@ -34687,6 +34732,7 @@ export class World {
             // SEGMENT FABRIC: the swing connects with the NEAREST hittable
             // body — the coil beside you, not only the head across the room.
             // Plain monsters: nearest body IS the head, byte-identical.
+            if (struck.has(enemy.id)) continue;
             const nb = nearestBody(enemy, caster.pos);
             if (banded) {
               if (!inAoe(bandC, bandGeo!.halfWidth, AOE_SHAPE.band, caster.facing, nb.pos, nb.r)) continue;
@@ -36528,6 +36574,7 @@ export class World {
           }
           const discipline = (fx.discipline ?? 0) + caster.sheet.get('commandDiscipline');
           let sent = 0, balked = 0;
+          const assaultRecipients: Actor[] = [];
           for (const m of this.actors) {
             if (m === caster || m.dead || m.construct) continue;
             // The whole ownership CHAIN answers the horn: a spectre'd
@@ -36554,8 +36601,10 @@ export class World {
               kind, pos: vec(mark.x, mark.y), until,
               radius: fx.markRadius, targetId: quarry?.id, issuerId: caster.id,
             });
+            assaultRecipients.push(m);
             sent++;
           }
+          this.assaults.command(caster, inst, assaultRecipients, kind === 'recall');
           if (sent > 0) {
             this.flashes.push({
               pos: vec(mark.x, mark.y), radius: 40, color: cosmeticColor,
@@ -38471,7 +38520,7 @@ export class World {
     // summon, never a birthright of the throng kinds). Re-derived from
     // the def each bake (idempotent under the live rebake); current
     // plies clamp, never refill.
-    const plyBonus = tradedPlies + echoPlies + minion.hiveDeathPlies
+    const plyBonus = tradedPlies + echoPlies + minion.hiveDeathPlies + minion.assaultWardCount
       + Math.max(0, Math.round(caster.sheet.get('minionPlies', tags, extra)));
     if (minion.plySpec || plyBonus > 0) {
       if (!minion.plySpec) minion.plySpec = { count: 0 };
@@ -41973,6 +42022,7 @@ export class World {
       const deedLifeBefore = target.life;
       const deedHidden = caster === this.player && (caster.sheet.get('invisible') > 0 || caster.sheet.get('detectability') < 1);
       const deedPanicked = caster === this.player && target.isPanicked();
+      this.assaults.packet(caster, packet, depth);
       const result = applyHit(caster, target, packet);
       if (caster === this.player && target === caster) {
         this.recordSelfDamage(caster, Math.max(0, deedLifeBefore - Math.max(0, target.life)));
@@ -42448,6 +42498,7 @@ export class World {
         for (let si = target.statuses.length - 1; si >= 0; si--) {
           const s = target.statuses[si];
           if (!STATUS_DEFS[s.id]?.dischargeOnHit || !s.rupture || s.rupture <= 0) continue;
+          if (STATUS_DEFS[s.id]?.dischargeMatchingType && (packet.amounts[s.ruptureType ?? 'physical'] ?? 0) <= 0) continue;
           target.statuses.splice(si, 1);
           target.sheet.removeSource('status:' + s.id);
           const burst: Partial<Record<DamageType, number>> = {
@@ -42455,7 +42506,7 @@ export class World {
           };
           const taken = mitigateTyped(target, burst);
           if (taken > 0) {
-            target.life -= taken;
+            landLifeDamage(target, taken);
             target.hitFlash = 0.12;
             target.hitFlashType = s.ruptureType ?? 'physical';
             this.text(vec(target.pos.x, target.pos.y - 26),
@@ -42464,6 +42515,7 @@ export class World {
           }
         }
       }
+      this.assaults.plant(caster, target, packet, depth, dealt);
       // IMPALE DRIVE-IN (the impalePower stat): a fraction of THIS hit's
       // rolled PHYSICAL damage lodges in the victim as the spear's bank —
       // banked AFTER any discharge above, so one blow pops the old spear
@@ -43262,26 +43314,9 @@ export class World {
       }
     }
 
-    // DOOM CULL (#25): if the armed counter now covers what life remains,
-    // it goes off EARLY — no waiting out a fuse the target won't survive.
-    if (!target.dead && target.life > 0) {
-      let armed = 0;
-      for (const s of target.statuses) {
-        if (s.rupture && STATUS_DEFS[s.id]?.cullsAtLethal) armed += s.rupture;
-      }
-      if (armed > 0 && armed >= target.life) {
-        this.text(vec(target.pos.x, target.pos.y - 16), 'DOOM!', '#7a48c8', 16, 'combat');
-        for (let si = target.statuses.length - 1; si >= 0; si--) {
-          const s = target.statuses[si];
-          if (!s.rupture || !STATUS_DEFS[s.id]?.cullsAtLethal) continue;
-          target.statuses.splice(si, 1);
-          if (!target.statuses.some(o => o.id === s.id)) {
-            target.sheet.removeSource('status:' + s.id);
-          }
-          this.ruptureStatus(target, s);
-        }
-      }
-    }
+    this.assaults.afterHit(caster, target, dealt, depth, hasDamage);
+
+    this.assaultDoomCull(target);
 
     // THE CONSUMABLE BUFFS (BuffEffect.consumeOn) spend AFTER the whole
     // resolution — damage, ailments and procs have all read the buff that
@@ -44988,7 +45023,7 @@ export class World {
         // that survives its own kill() path — a revived seat, a re-fielded
         // persistent — must not keep the blown keg's modifier source.
         if (!actor.statuses.some(o => o.id === s.id)) actor.sheet.removeSource('status:' + s.id);
-        this.ruptureStatus(actor, s);
+        if (!STATUS_DEFS[s.id]?.dischargeMatchingType) this.ruptureStatus(actor, s);
       }
     }
     // TREE OF LIFE: however the reservoir ends — expiry, the axe, a silent
@@ -47718,6 +47753,11 @@ export class World {
     this.updateMinionMeta(dt);
     this.updateThrongEvolution(dt);
     this.updateHivecall(dt);
+    for (const seat of this.seats) {
+      const host = seat.actor.skills.find(s => s?.def.id === 'command_assault');
+      if (host && assaultNode(host, 'renewed_advance')) this.promoteCommandThrong(seat.actor, host, 'minions', 200);
+    }
+    this.assaults.update(dt);
     this.updateThrong(dt); // THE THRONG's source/collection sweep (engine/throng.ts)
     this.updateLite(dt);   // THE LITE TIER's batched sweep (engine/lite.ts)
     for (const id of this.grantedTrailMemory.keys()) {
@@ -48141,7 +48181,7 @@ export class World {
       // Rupture supports: statuses that expired this frame may detonate.
       if (a.expiredStatuses.length) {
         for (const s of a.expiredStatuses) {
-          if (s.rupture && s.rupture > 0 && !a.dead) this.ruptureStatus(a, s);
+          if (s.rupture && s.rupture > 0 && !a.dead && !STATUS_DEFS[s.id]?.dischargeMatchingType) this.ruptureStatus(a, s);
         }
         a.expiredStatuses.length = 0;
       }

@@ -1,3 +1,4 @@
+import type { AssaultPreparation } from './assault';
 // ---------------------------------------------------------------------------
 // Actor — the ONE entity model shared by the player, monsters, and minions.
 // All of them carry a StatSheet, a skill bar, cooldowns, buffs and statuses,
@@ -1771,6 +1772,14 @@ export class Actor {
   throngContactPos?: { x: number; y: number };
   /** Host-authored roster counts for a co-op client's skill badges. */
   throngRosterHud?: Record<string, number>;
+  assaultPreparation?: AssaultPreparation;
+  assaultLockedTarget?: { inst: SkillInstance; targetId: number; until: number };
+  assaultHud?: { hits: number; progress: number };
+  assaultWardCount = 0;
+  assaultOrbit = false;
+  assaultAura = false;
+  assaultFormationStats?: string;
+  assaultPlyBreak?: (attacker?: Actor) => void;
   hivecallHud?: { meter: number; remaining?: number; rebirth?: number; ready?: number };
   hiveForm?: { hero: Actor; host: SkillInstance; remaining: number; automatic: boolean; factor: number };
   hiveDeathPlies = 0;

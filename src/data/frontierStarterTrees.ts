@@ -1,3 +1,4 @@
+import { ASSAULT_TREE } from './assaultTree';
 import { HIVECALL_TREE } from './hivecall';
 import { GNATVEIL_TREE } from './gnatveilTree';
 import type { SkillTreeSpec, TreeBuffPatch } from '../engine/skills';
@@ -11,23 +12,7 @@ export const FRONTIER_STARTER_TREES: Record<string, SkillTreeSpec> = {
 
   raise_gnatveil: GNATVEIL_TREE,
 
-  command_assault: tree([
-    buff(n('killing_signal', 'Killing Signal', 'The assault also prepares each minion for 6 base seconds: its next landed attack hit deals 35% more damage, consuming only its own preparation.', undefined, { tags: { add: ['buff', 'duration'] } }), 'assault_preparation', { affects: 'minions', duration: 6, consumeOn: { on: 'hit', tags: ['attack'] }, mods: [mod('damage', 'more', 0.35, ['attack'])] }),
-    [buff(n('sure_signal', 'Sure Signal', 'Prepared minions gain 40% increased accuracy and 10% attack critical chance.'), 'assault_preparation', { mods: [mod('accuracy', 'increased', 0.4), mod('critChance', 'flat', 0.1, ['attack'])] }),
-      buff(n('stunning_signal', 'Stunning Signal', 'Prepared attack hits gain 30% chance to stun.'), 'assault_preparation', { mods: [mod('apply_stun', 'flat', 0.3, ['attack'])] }),
-      buff(n('finishing_signal', 'Finishing Signal', 'Prepared attacks cull below 8% enemy life.'), 'assault_preparation', { mods: [mod('cullThreshold', 'flat', 0.08, ['attack'])] })],
-    [n('rapid_signals', 'Rapid Signals', '35% increased cooldown recovery.', [mod('cooldownRecovery', 'increased', 0.35)]),
-      n('patient_signal', 'Patient Signal', '50% increased preparation duration. The assault order itself still lasts 6 seconds.', [mod('effectDuration', 'increased', 0.5)]),
-      buff(n('rushing_signal', 'Rushing Signal', 'Prepared minions gain 30% increased movement speed until their hit lands.'), 'assault_preparation', { mods: [mod('moveSpeed', 'increased', 0.3)] })],
-  ], [
-    buff(n('sheltered_advance', 'Sheltered Advance', 'The assault also shields each minion with a 6-second blessing: 20% less damage taken and 20% increased movement speed. The blessing ends after a landed hit against that minion.', undefined, { tags: { add: ['buff', 'duration'] } }), 'assault_shelter', { affects: 'minions', duration: 6, clearOnHit: true, mods: [mod('damageTaken', 'more', -0.2), mod('moveSpeed', 'increased', 0.2)] }),
-    [buff(n('scattered_advance', 'Scattered Advance', 'While sheltered, minions gain 50% increased evasion.'), 'assault_shelter', { mods: [mod('evasion', 'increased', 0.5)] }),
-      buff(n('iron_advance', 'Iron Advance', 'While sheltered, minions gain 40 armor.'), 'assault_shelter', { mods: [mod('armor', 'flat', 40)] }),
-      buff(n('flowing_advance', 'Flowing Advance', 'While sheltered, minions gain 20% additional increased movement speed.'), 'assault_shelter', { mods: [mod('moveSpeed', 'increased', 0.2)] })],
-    [n('renewed_advance', 'Renewed Advance', '35% increased cooldown recovery and 20% reduced mana cost.', [mod('cooldownRecovery', 'increased', 0.35), mod('manaCost', 'increased', -0.2)]),
-      buff(n('mending_advance', 'Mending Advance', 'While sheltered, minions regenerate 3 life per second.'), 'assault_shelter', { mods: [mod('lifeRegen', 'flat', 3)] }),
-      n('lasting_advance', 'Lasting Advance', '50% increased shelter duration. The assault order itself still lasts 6 seconds.', [mod('effectDuration', 'increased', 0.5)])],
-  ], n('clear_orders', 'Clear Orders', '12% increased cooldown recovery.', [mod('cooldownRecovery', 'increased', 0.12)])),
+  command_assault: ASSAULT_TREE,
 
   piercing_arrow: tree([
     n('bodkin_arrow', 'Bodkin Arrow', 'Lodge 25% of physical hit damage as impale, discharged by a later hit. Ignore 10% of enemy armor.', [mod('impalePower', 'flat', 0.25), mod('armorPen', 'flat', 0.1)]),

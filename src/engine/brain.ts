@@ -1202,6 +1202,7 @@ export interface BrainTuning {
  *  overrides; a cast already in flight resolves first (moveActor gates the
  *  feet, canUse gates fresh casts). */
 export interface CommandState {
+  assaultFormation?: boolean;
   kind: string;
   /** minionCombat: self-hunting orders yield to an unexpired explicit command. */
   autonomous?: boolean;

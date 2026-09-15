@@ -140,6 +140,8 @@ export interface StatusDef {
    *  expiry or death. The pop is not a hit and can never bank, so the
    *  economy is structurally loop-free (the inverse Echoing Might). */
   dischargeOnHit?: true;
+  /** Typed impales release only when struck by their own damage type. */
+  dischargeMatchingType?: true;
   /** The NEWEST applier takes over the status's casterId on re-apply
    *  (taunt: the louder challenge wins the bearer's attention). Default:
    *  the FIRST applier keeps it — DoT credit never migrates mid-burn. */
@@ -432,6 +434,11 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // whole bank as a separate mitigated blow (dischargeOnHit). Death and
   // expiry still pop the keg through the ordinary rupture machinery —
   // a spear never rots in the corpse.
+  impaled_physical: { label: 'Physical Impale', color: '#c8ccd8', duration: 8, element: 'physical', dischargeOnHit: true, dischargeMatchingType: true },
+  impaled_fire: { label: 'Fire Impale', color: '#ef8858', duration: 8, element: 'fire', dischargeOnHit: true, dischargeMatchingType: true },
+  impaled_cold: { label: 'Cold Impale', color: '#83cde8', duration: 8, element: 'cold', dischargeOnHit: true, dischargeMatchingType: true },
+  impaled_lightning: { label: 'Lightning Impale', color: '#e1cd69', duration: 8, element: 'lightning', dischargeOnHit: true, dischargeMatchingType: true },
+  impaled_chaos: { label: 'Chaos Impale', color: '#b285d7', duration: 8, element: 'chaos', dischargeOnHit: true, dischargeMatchingType: true },
   impaled: {
     label: 'Impaled', color: '#c8ccd8', duration: 8,
     element: 'physical',
