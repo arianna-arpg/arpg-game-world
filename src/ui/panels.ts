@@ -4366,9 +4366,7 @@ export class UI {
     const drawer = this.buildFlapOpen ? `
         ${this.closeGlyphHtml()}<h2>📖 Skills</h2>
         <div class="build-wallet-header">${walletChips}</div>
-        <div class="build-scroll" style="flex:1 1 auto;overflow-y:auto;font-size:12px;padding-right:4px">
-          ${this.learnedListHtml()}
-        </div>` : '';
+        ${this.learnedListHtml()}` : '';
     // THE BAG SORT (her ask 2026-09-05): a strip of GLYPH buttons on the
     // bag's own header line — one per registered mode (engine/bagsort.ts
     // BAG_SORT_MODES: the buttons are DERIVED, a new mode is one data row),
@@ -6921,8 +6919,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           ${modeRow}
         </div>`;
     }).join('');
-    return rackHtml + graftBank + (rows
-      || '<div style="color:#8a8678;font-size:11px">Nothing seated. Skill Memories drop from monsters — press one from your pack into an empty seat above.</div>');
+    return `<div class="build-rack">${rackHtml}</div><div class="build-scroll">${graftBank}${rows
+      || '<div style="color:#8a8678;font-size:11px">Nothing seated. Skill Memories drop from monsters — press one from your pack into an empty seat above.</div>'}</div>`;
   }
 
   /** Wire the learned-list buttons in whichever container rendered it. */
@@ -10002,6 +10000,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
    *  menu). `onBack` returns to whichever menu opened it. */
   private renderOptions(root: HTMLElement, onBack: () => void): void {
     this.disarmRebind(); // drop any capture left armed by a prior render
+    const scrollTop = root.querySelector<HTMLElement>('.options-body')?.scrollTop ?? 0;
     const s = this.getSettings();
     const kb = s.keybinds;
     const rows = ACTION_IDS.map(a => `
@@ -10285,17 +10284,19 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         <button id="opt-hovernames" title="Which bodies show the cursor nameplate. NAMED: distinctly-named enemies only, the classic elite read. ALL: every creature, minion, townsfolk and critter names itself under the cursor (name over kind + tier), so you can identify the exact entity without recalling its look. One plate at a time either way, and hidden bodies never tell.">${s.hoverNameplates === 'all' ? 'ALL' : 'NAMED'}</button>
       </div>`;
     root.innerHTML = `
-      ${this.closeGlyphHtml('Resume (Esc)')}<h1>Options</h1>
+      <h1>Options</h1>
       ${tabStrip}
-      ${tab === 'controls' ? controlsTab
+      <div class="options-body">${tab === 'controls' ? controlsTab
         : tab === 'controller' ? controllerTab
         : tab === 'visuals' ? visualsTab
-        : interfaceTabHead}
-      <div class="esc-btns"><button id="esc-back">Back</button></div>`;
+        : interfaceTabHead}</div>
+      <div class="esc-btns options-footer"><button id="esc-back">Back</button></div>`;
+    root.querySelector<HTMLElement>('.options-body')!.scrollTop = scrollTop;
     // Tab strip: remember the shelf, drop any armed capture, re-render.
     root.querySelectorAll<HTMLElement>('[data-opttab]').forEach(btn => {
       btn.addEventListener('click', () => {
         this.optionsTab = btn.dataset.opttab as UI['optionsTab'];
+        root.querySelector<HTMLElement>('.options-body')!.scrollTop = 0;
         this.disarmRebind();
         this.renderOptions(root, onBack);
       });
@@ -10843,8 +10844,8 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     document.getElementById('sm-chronicle')!.addEventListener('click', () =>
       this.showChronicle(() => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster)));
     document.getElementById('sm-keys')!.addEventListener('click', () => {
-      // Arm the pane's ✕ glyph as the Options Back twin (disarm any pending
-      // rebind capture exactly as the Back button does).
+      // Mark Options as a subscreen so background roster updates cannot
+      // replace it. Returning also disarms any pending rebind capture.
       this.startMenuBack = () => {
         this.disarmRebind();
         this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster);

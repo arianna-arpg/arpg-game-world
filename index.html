@@ -208,7 +208,9 @@
     .build-essence { white-space:nowrap; font-variant-numeric:tabular-nums; }
     .build-wallet-header { display:flex; flex-wrap:wrap; gap:8px; font-size:11px; margin-bottom:8px; }
     #skills-panel { width:360px; display:flex; flex-direction:column;
-      max-height:calc((100vh - 140px) / var(--ui-scale)); padding:10px 12px; }
+      max-height:calc((100vh - 140px) / var(--ui-scale)); padding:10px 12px; overflow:hidden; }
+    #skills-panel > :not(.build-scroll) { flex-shrink:0; }
+    .build-scroll { flex:1 1 auto; min-height:0; overflow-y:auto; font-size:12px; padding-right:4px; }
     :is(#skills-panel, #passive-tree, .skill-tree, .container-panel).build-docked { left:var(--build-left); right:auto; top:var(--build-top);
       width:var(--build-width); transform:none; }
     /* THE CONTAINER DRAWERS (ui/containerPane.ts — one minted root per side
@@ -694,6 +696,10 @@
       text-align: center; padding: 34px;
     }
     #start-menu:has(#esc-back) { width: 460px; } /* Options pins the pre-Immortal-shelf measure */
+    :is(#start-menu, #escape-menu):has(.options-body) { display:flex; flex-direction:column; overflow:hidden; }
+    :is(#start-menu, #escape-menu):has(.options-body) > :not(.options-body) { flex-shrink:0; }
+    .options-body { flex:1 1 auto; min-height:0; overflow-y:auto; padding-right:4px; }
+    .options-footer { padding-top:10px; border-top:1px solid var(--panel-border); }
     #start-menu h1 { color: var(--gold); font-size: 26px; letter-spacing: 3px; margin: 0 0 8px 0; }
     #start-menu .acct-head { color: var(--text); font-size: 13px; margin-bottom: 14px; }
     #start-menu .acct-head b { color: var(--gold); }

@@ -118,6 +118,10 @@ export function installMenuBarStyles(): void {
     .menu-row .menu-pip { min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--gold); color: #07070d;
       font: bold 11px/18px Verdana, sans-serif; text-align: center; }
     .menu-row .menu-key + .menu-pip { margin-left: 4px; }
+    .menu-station-primary { display:flex; align-items:stretch; }
+    .menu-station-primary > .menu-row:first-child { flex:1; }
+    .menu-station-toggle { width:30px; flex:0 0 30px; justify-content:center; padding:5px; }
+    .menu-station-children { margin:3px 0 3px 16px; padding-left:5px; border-left:1px solid var(--panel-border); }
   `;
   document.head.appendChild(el);
 }
@@ -135,6 +139,7 @@ export class MenuBar {
   private readonly dock: HTMLElement;
   private readonly tray: HTMLElement;
   trayOpen = false;
+  private stationsExpanded = false;
   private fold: MenuFold | null = null;
   private signature = '';
   private clock: number = MENU_CFG.syncSec; // the first sync folds at once
@@ -175,6 +180,20 @@ export class MenuBar {
     root.addEventListener('click', (e) => {
       if (!(e.target instanceof Element)) return;
       if (e.target.closest('[data-menu-toggle]')) { this.toggleTray(); return; }
+      if (e.target.closest('[data-stations-toggle]')) {
+        this.stationsExpanded = !this.stationsExpanded;
+        hideTooltip();
+        this.paint();
+        this.tray.querySelector<HTMLButtonElement>('[data-stations-toggle]')?.focus({ preventScroll: true });
+        return;
+      }
+      if (e.target.closest('[data-nearby-station]')) {
+        // Recheck proximity and unlocks at the press, not the last UI beat.
+        this.refold();
+        const nearby = this.nearbyStation();
+        if (nearby) this.pick(nearby.def.id); else this.paint();
+        return;
+      }
       const row = e.target.closest<HTMLElement>('[data-menu-entry]');
       if (!row || row.classList.contains('sealed')) return;
       this.pick(row.dataset.menuEntry!);
@@ -185,7 +204,12 @@ export class MenuBar {
     window.addEventListener('pointerdown', (e) => {
       if (this.trayOpen && e.target instanceof Node && !root.contains(e.target)) this.closeTray();
     }, { capture: true });
-    bindTooltips(root, (el) => el.dataset.tip === 'menu' ? this.tipFor(el.dataset.entry ?? '') : null);
+    bindTooltips(root, (el) => el.dataset.tip === 'menu' ? this.tipFor(el.dataset.entry ?? '')
+      : el.dataset.tip === 'nearby-station' ? {
+        title: 'Interact with nearby',
+        description: this.nearbyStation() ? `Open ${this.nearbyStation()!.def.label}. Expand the arrow to choose an individual station.`
+          : 'Approach an available station to interact. Expand the arrow to browse your unlocked stations.',
+      } : null);
   }
 
   /** Is the tray up (a blocking surface for the pad pointer's sake)? */
@@ -293,7 +317,8 @@ export class MenuBar {
     if (!fold) return;
     const s = this.host.settings();
     const dock = s.menuBar.dock;
-    const sig = foldSignature(fold, v => this.bindLabel(v), dock) + (this.trayOpen ? '|open' : '|shut');
+    const sig = foldSignature(fold, v => this.bindLabel(v), dock) + (this.trayOpen ? '|open' : '|shut')
+      + (this.stationsExpanded ? '|stations' : '');
     // The button's roll-up: the badge always; the glow only while the tray
     // and the dock are not showing the tiles that carry their own.
     const tilesShown = this.trayOpen || dock;
@@ -312,8 +337,31 @@ export class MenuBar {
     this.tray.innerHTML = fold.groups.map(g => `
       <div class="menu-group">
         <div class="menu-group-h">${escapeHtml(g.group.label)}</div>
-        ${g.entries.map(v => this.rowHtml(v)).join('')}
+        ${g.group.id === 'town' ? this.stationsHtml(g.entries) : g.entries.map(v => this.rowHtml(v)).join('')}
       </div>`).join('');
+  }
+
+  /** The same gated station rows feed both the shortcut and its disclosure.
+   *  At a shared counter, registry order prefers the vendor's station suite. */
+  private nearbyStation(): MenuEntryView | undefined {
+    return this.fold?.groups.find(g => g.group.id === 'town')?.entries
+      .find(v => v.state === 'open' && !!this.host.verbs[v.def.verb]);
+  }
+
+  private stationsHtml(entries: MenuEntryView[]): string {
+    const nearby = this.nearbyStation();
+    return `<div class="menu-station-primary">
+      <button type="button" class="menu-row${nearby ? '' : ' sealed'}" role="menuitem"
+        data-nearby-station data-tip="nearby-station"${nearby ? '' : ' aria-disabled="true"'}>
+        ${iconSvg('anvil')}<span class="menu-label">Interact with nearby</span>
+      </button>
+      <button type="button" class="menu-row menu-station-toggle" data-stations-toggle role="menuitem"
+        aria-label="${this.stationsExpanded ? 'Collapse' : 'Expand'} stations" aria-expanded="${this.stationsExpanded}"
+        aria-controls="menu-station-children">${this.stationsExpanded ? '▾' : '▸'}</button>
+      </div>
+      <div id="menu-station-children" class="menu-station-children${this.stationsExpanded ? '' : ' hidden'}">
+        ${entries.map(v => this.rowHtml(v)).join('')}
+      </div>`;
   }
 
   private pipHtml(v: MenuEntryView, cls: string): string {
