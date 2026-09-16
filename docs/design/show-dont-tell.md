@@ -374,6 +374,16 @@ ART CAPTURED moved OFF the head onto the notice feed (a ledger note is news).
 Dials `VIS_CFG.cryVoice` (unblessed). OPEN after the ladder: THE ARROW'S END by
 FORM, THE CAST VOICE, the proc voices (§4) — and her walk's misses.
 
+**THE LATCHHINT (retired 2026-09-16, her word):** the Gloomling's first latch on
+a player body floated 'Move or turn to shake free!' — added with the
+`ClingSpec.motionShake` tuning of 2026-09-12, after this census. Retired under
+THE AXIS: a grip on the hero's body is the P column, and §3e's grips row already
+rules it — the rider seated on the rim IS the sentence (drawn == held), and the
+flop's scatter + ring shows the escape working the moment the body moves or
+turns. The latch sweep (`World.updateClings`) now carries a doctrine comment in
+the floater's seat; the imperative-floater survey over `src/` (a `World.text`
+literal opening on an instruction verb) returns nothing.
+
 ## 7. Cards for her word (no blocking fork — the ladder can start at M-EMERGE)
 
 1. **Combat cries** — stay text (player-curated, the genre's read) and gain drawn

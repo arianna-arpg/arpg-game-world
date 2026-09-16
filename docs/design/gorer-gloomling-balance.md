@@ -64,7 +64,8 @@ A stationary victim sheds the ride naturally after 3–4 seconds. Either shake
 uses the existing visible flop: **70-unit scatter and 2.5 seconds before the
 same rider can reattach**. Gloomlings stay targetable while attached. Shared
 size-based seat limits bound the attached crowd; overflow bodies use their weak
-nip. A first attachment on a player body displays the movement/turn escape hint.
+nip. No text announces an attachment (the show-don't-tell law): the rider seated on
+the body is the tell, and the flop's scatter shows the escape working.
 
 No new save or network schema is needed: rides and grip samples are transient
 host state; actor positions and existing grab markers provide the co-op view.

@@ -32488,9 +32488,10 @@ export class World {
       };
       clingMotionShaken(a, v, this.time); // seed motion at contact, before the next step
       if (a.cling.gnaw && !this.seatOf(a)) a.casting = null;
-      if (a.cling.motionShake && used === 0 && this.seatOf(v)) {
-        this.text(v.pos, 'Move or turn to shake free!', a.color, 13);
-      }
+      // THE LATCHHINT RETIRED (the show-don't-tell law, docs/design/show-dont-tell.md
+      // §2 — the P axis): no text announces a latch on the hero. The rider seated
+      // on the rim IS the sentence (drawn == held), and a motionShake escape is
+      // taught by the flop's scatter the moment the body moves or turns.
       a.aiTargetId = v.id;
     }
   }
