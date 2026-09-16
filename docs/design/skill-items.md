@@ -163,6 +163,31 @@ gates carry verbatim — cap is structural now, duplicate, attribute
 requirements). Unlearning = seat → bag (field discipline + overdrive-debt
 refusals carry verbatim). "Unbind to nowhere" retires as a concept.
 
+**THE ONE-COPY SWAP** (2026-09-16, her ask: "swapping out identical skills
+is a bit of a nuisance… finding a magic, rare, or legendary version of
+Cleave means that I have to first unequip the seated Cleave"). The duplicate
+gate is RETIRED as a refusal: a copy of a skill the book already knows LEARNS
+like any other tile, and the known copy (`knownCopy` in `World.learnSkill`)
+leaves for the bag as its wrapper, cargo intact. The newcomer takes the seat
+it is placed into — onto the seated copy = the in-place upgrade; onto an
+empty seat = the skill moves there (its old seat empties); onto another
+skill's seat = that sitter is replaced AND the copy retires (the replace and
+the one-copy law composed, each reading as itself; two cells). The slotless
+gestures (right-click / double-click) land it in the seat the copy holds
+(`knownSeat`), never the first free one. Every departing body pays the
+unlearn's own gates through ONE predicate (`World.unlearnRefusal` — debt,
+discipline; bag room counted for every wrapper) PRE-FLIGHTED before anything
+moves, so a swap refuses whole or lands whole; the cap never refuses a swap
+(a departing copy hands its count to the newcomer). Duplicates stay
+impossible by construction (the book keys by id; the copy departs first).
+NO WORDS: the rack seat lights under the drop like any landing and the old
+copy appears in the pack — shown, never told (the bag card's "already
+learned — fodder for the Font" line is gone; a known copy reads the same
+gesture hint as any tile, and the drop affordance no longer pre-dims). A
+companion skill's copy walks the remembered-bond lane (the old copy's pets
+stash on its unlearn; the newcomer's learn returns them downed — owed, never
+laundered). Probe: `balance/probe_skillitems.ts` rig B + rig J.
+
 **Reorder.** Drag a seated skill onto another seat: empty → move, occupied →
 SWAP (new intent or two `bindSkill` calls — today binding onto an occupied
 slot silently clears the duplicate's old seat rather than swapping).

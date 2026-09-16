@@ -2007,9 +2007,13 @@ export class UI {
     // atomic swapSkillSlots intent (occupied swaps, empty moves — same
     // verb); a bag SKILL tile LEARNS into the seat (learn = seat, card 8 —
     // an occupied seat is a REPLACE: the engine runs the sitter's full
-    // unlearn gates and refuses with its own words). A duplicate pre-dims
-    // the affordance; the engine stays the authority. Reordering is
-    // UNGATED — choosing a seat is play, not surgery (the skills.ts ruling).
+    // unlearn gates and refuses with its own words). A copy of a KNOWN
+    // skill lands like any other tile (THE ONE-COPY LAW, 2026-09-16: the
+    // engine swaps the knownCopy out to the bag and seats the newcomer
+    // where it was dropped — every seat lights, nothing pre-dims, and no
+    // words explain it; the landing itself is the lesson). The engine
+    // stays the authority. Reordering is UNGATED — choosing a seat is
+    // play, not surgery (the skills.ts ruling).
     // An UNSEATED granted skill (THE LEGEND FABRIC — the Granted strip's
     // chip) lifts as its own payload and binds onto an EMPTY seat only: a
     // grant never evicts a learned sitter (the rack law keeps the hand).
@@ -2030,9 +2034,7 @@ export class UI {
       accepts: (pl, arg) => {
         if (pl.kind === 'rackSeat') return pl.arg !== arg;
         if (pl.kind === 'rackGrant') return !heroOf().skills[Number(arg)];
-        const item = payloadSkillGem(pl);
-        if (!item || item.gem?.kind !== 'skill') return false;
-        return !this.panelSeat(this.inventory).meta.knownSkills.has(item.gem.skillId);
+        return !!payloadSkillGem(pl); // any bag SKILL tile — the engine gates the rest (knownCopy swaps)
       },
       drop: (pl, arg) => {
         if (pl.kind === 'rackSeat') {
@@ -4040,10 +4042,10 @@ export class UI {
       }
       lines.push(this.requirementsLine(def, seat));
       if (inBag && !salv) {
-        const dupe = m.knownSkills.has(sp.skillId);
-        lines.push(`<div style="color:#c8a84b;font-size:10px;margin-top:3px">${dupe
-          ? 'already learned — fodder for the Font, or a trade'
-          : 'drag onto a rack seat (SKILLS flap) to learn · right-click or double-click = first free seat'}</div>`);
+        // THE ONE-COPY LAW: a copy of a known skill reads the same gesture
+        // as any other tile — the drop swaps the knownCopy out to the bag
+        // (shown by the seat lighting and the landing, never told here).
+        lines.push('<div style="color:#c8a84b;font-size:10px;margin-top:3px">drag onto a rack seat (SKILLS flap) to learn · right-click or double-click = first free seat</div>');
       }
       return {
         title: `<span style="color:${r.color}">${def.name}</span> <span style="color:#ffd700;font-size:11px">Lv ${sp.level}</span>`,

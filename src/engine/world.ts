@@ -22346,51 +22346,88 @@ export class World {
    * RESIDENCE's learn gesture: drag the tile onto a rack seat). LEARNED =
    * SEATED (charter card 8): the instance leaves the bag and takes the given
    * seat — `slot` omitted picks the first free one. The gates carry
-   * verbatim: duplicate, attribute requirements, and the cap (structural
-   * now — no free seat, no learning). Dropping onto an OCCUPIED seat is a
-   * replace: the sitter unlearns into the just-freed cell first, through
-   * its own full gates (overdrive debt, field discipline, bag room).
+   * verbatim: attribute requirements and the cap (structural now — no free
+   * seat, no learning). Dropping onto an OCCUPIED seat is a replace: the
+   * sitter unlearns into the just-freed cell first, through its own full
+   * gates (overdrive debt, field discipline, bag room).
+   *
+   * THE ONE-COPY LAW (2026-09-16, her ask — the rare Cleave over the seated
+   * common one in ONE gesture): a copy of a skill the book already KNOWS is
+   * never refused, it is SWAPPED. The newcomer takes the seat it is placed
+   * into and the known copy (`knownCopy`) leaves for the bag as its wrapper,
+   * cargo intact — `slot` omitted lands the upgrade in the seat the known
+   * copy holds (`knownSeat`), never the first free one. Every DEPARTING
+   * body — the sitter under the drop, the known copy seated elsewhere, or
+   * both when a different skill sits there — pays the unlearn's own gates,
+   * PRE-FLIGHTED together before anything moves (`unlearnRefusal` + the
+   * bag's room for every wrapper): a swap refuses WHOLE (the tile stays in
+   * its cell, every seat stands) or lands whole. Duplicates stay impossible
+   * by construction: the book keys by id and the copy departs first. The
+   * only tell is the seat lighting under the drop — shown, never told.
    */
   learnSkill(uid: number, seat: Seat = this.localSeat, slot?: number): boolean {
     const m = seat.meta;
     const p = this.seatHero(seat);
     const item = this.bagItem(seat, uid);
     if (!item || item.gem?.kind !== 'skill') return false;
-    if (m.knownSkills.has(item.gem.skillId)) {
-      this.failNote(p, 'learn:' + uid, 'already learned');
-      return false;
-    }
+    const skillId = item.gem.skillId;
+    // THE ONE-COPY LAW: a known copy DEPARTS instead of refusing the learn.
+    const knownCopy = m.knownSkills.get(skillId) ?? null;
     const inst = skillOfGemItem(item);
     if (!inst) return false;
     if (!this.meetsRequirements(inst.def.id, seat)) {
       this.failNote(p, 'learn:' + uid, 'requirements unmet');
       return false;
     }
-    const at = slot ?? p.skills.findIndex(s => s === null);
+    // Unnamed seat: the upgrade lands where the skill LIVES; a fresh skill
+    // (or a known copy standing off the bar) takes the first free seat.
+    const knownSeat = knownCopy ? p.skills.findIndex(s => s?.def.id === skillId) : -1;
+    const at = slot ?? (knownSeat >= 0 ? knownSeat : p.skills.findIndex(s => s === null));
     if (at < 0 || at >= p.skills.length) {
       if (slot === undefined) { this.failNote(p, 'learn:' + uid, 'every seat is taken'); }
       return false;
     }
     const sitter = p.skills[at];
     // THE STRUCTURAL CAP: seats ARE the count — a REPLACE onto an occupied
-    // seat never grows it, so only a fresh seat meets the cap's belt.
-    if (!sitter && m.knownSkills.size >= MAX_LEARNED_SKILLS) {
+    // seat never grows it, and a departing known copy hands its count to
+    // the newcomer, so only a fresh seat for a fresh skill meets the belt.
+    if (!sitter && !knownCopy && m.knownSkills.size >= MAX_LEARNED_SKILLS) {
       this.failNote(p, 'learn:' + uid, 'every seat is taken');
       return false;
     }
-    if (sitter) {
-      // THE REPLACE: pull the incoming tile out first so the sitter's
-      // unlearn is guaranteed a cell (1×1 into the freed 1×1); a refused
-      // unlearn (debt, discipline) re-seats the tile exactly where it was.
-      const ox = item.x, oy = item.y;
-      removeFromBag(m.items, uid);
-      if (!this.unlearnSkill(sitter.def.id, seat)) {
-        if (ox !== undefined && oy !== undefined) placeAt(m.items, item, ox, oy);
-        else autoPlace(m.items, item);
-        return false;
-      }
-    } else {
-      removeFromBag(m.items, uid);
+    // THE DEPARTING: the sitter under the drop and the known copy — ONE body
+    // when the drop lands on the copy's own seat, TWO when another skill
+    // sits there (that sitter is replaced AND the copy retires: the replace
+    // and the one-copy law composed, each reading as itself).
+    const departing: SkillInstance[] = [];
+    if (sitter) departing.push(sitter);
+    if (knownCopy && knownCopy.def.id !== sitter?.def.id) departing.push(knownCopy);
+    // THE PRE-FLIGHT: every departing body's own refusal (debt, discipline)
+    // reads BEFORE anything moves — the refuse-before-mutating law at swap
+    // grain, in the unlearn's exact words.
+    for (const d of departing) {
+      const r = this.unlearnRefusal(d, seat);
+      if (r) { this.failNote(p, d.def.id + ':' + r.key, r.why); return false; }
+    }
+    // Pull the incoming tile out first so the first wrapper is guaranteed
+    // its cell (1×1 into the freed 1×1); a second body needs a second cell
+    // — counted before either unwinds, so a full bag refuses the WHOLE swap
+    // with the tile re-seated exactly where it was.
+    const ox = item.x, oy = item.y;
+    removeFromBag(m.items, uid);
+    const reseat = (): void => {
+      if (ox !== undefined && oy !== undefined) placeAt(m.items, item, ox, oy);
+      else autoPlace(m.items, item);
+    };
+    if (freeCellCount(m.items) < departing.length) {
+      reseat();
+      this.failNote(p, 'learn:' + uid, 'no room in the bag');
+      return false;
+    }
+    for (const d of departing) {
+      // Belt: the pre-flight read every gate the unlearn reads, so a refusal
+      // here cannot happen — a refused unlearn still re-seats the tile.
+      if (!this.unlearnSkill(d.def.id, seat)) { reseat(); return false; }
     }
     m.knownSkills.set(inst.def.id, inst);
     p.skills[at] = inst;
@@ -22471,6 +22508,28 @@ export class World {
     return null;
   }
 
+  /** THE UNLEARN'S OWN GATES as ONE read — the overdrive debt lock and the
+   *  field discipline (`swapRefusal`) — shared by `unlearnSkill` (refuses on
+   *  it before mutating) and `learnSkill`'s swap PRE-FLIGHT (reads it for
+   *  every departing body before anything moves), so a refused swap speaks
+   *  the unlearn's exact words. Bag room is the caller's: a wrapper must
+   *  land (`freeCellCount` / `autoPlace`). `key` names the failNote's lane. */
+  unlearnRefusal(inst: SkillInstance, seat: Seat): { key: 'debt' | 'discipline'; why: string } | null {
+    // The overdrive debt lock cannot be laundered through unlearning: a
+    // mortgaged toggle refuses to leave the bar until the pool is whole.
+    const dv = inst.def.delivery;
+    if (dv.type === 'aura' && dv.overdrive
+      && (seat.actor.overdrive[dv.overdrive.lane]?.debt ?? 0) > 0) {
+      return { key: 'debt', why: 'debt outstanding' };
+    }
+    // THE FIELD DISCIPLINE: unlearning is camp surgery, not battlefield
+    // triage — sanctuary waives, the field demands cold blades and a quiet
+    // clock (swapRefusal is the one law; the panel's disabled button
+    // speaks the identical words).
+    const why = this.swapRefusal(seat, 'unlearn', inst.def.id);
+    return why ? { key: 'discipline', why } : null;
+  }
+
   /**
    * Unlearn a skill back into the BAG (THE RESIDENCE: unseating mints the
    * gem's 1×1 wrapper item — level and socketed supports ride along, so
@@ -22490,23 +22549,11 @@ export class World {
       }
       return false;
     }
-    // The overdrive debt lock cannot be laundered through unlearning: a
-    // mortgaged toggle refuses to leave the bar until the pool is whole.
+    // THE GATES (unlearnRefusal — debt, then discipline): refuse before
+    // mutating, in the one voice the swap pre-flight reads too.
     {
-      const dv = inst.def.delivery;
-      if (dv.type === 'aura' && dv.overdrive
-        && (p.overdrive[dv.overdrive.lane]?.debt ?? 0) > 0) {
-        this.failNote(p, skillId + ':debt', 'debt outstanding');
-        return false;
-      }
-    }
-    // THE FIELD DISCIPLINE: unlearning is camp surgery, not battlefield
-    // triage — sanctuary waives, the field demands cold blades and a quiet
-    // clock (swapRefusal is the one law; the panel's disabled button
-    // speaks the identical words).
-    {
-      const why = this.swapRefusal(seat, 'unlearn', skillId);
-      if (why) { this.failNote(p, skillId + ':discipline', why); return false; }
+      const r = this.unlearnRefusal(inst, seat);
+      if (r) { this.failNote(p, skillId + ':' + r.key, r.why); return false; }
     }
     // THE ROOM LAW: the wrapper must land before anything unwinds — grafts
     // are stripped at PACK time below, so build the item from a graftless

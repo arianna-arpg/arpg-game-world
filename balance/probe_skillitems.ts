@@ -5,11 +5,18 @@
 //     (level, rarity, sockets + their levels/locks, granted, treeNodes);
 //     THE ONE LOCK (the wrapper's mark transfers to the instance at learn).
 //   - LEARNED = SEATED: learnSkill(uid) consumes the bag item and takes a
-//     rack seat in the one gesture; the gates carry verbatim (duplicate,
-//     attribute requirements, the structural cap of eight); unlearn mints
-//     the wrapper back and REFUSES BEFORE MUTATING on a full bag.
+//     rack seat in the one gesture; the gates carry verbatim (attribute
+//     requirements, the structural cap of eight — a knownCopy SWAPS, never
+//     refuses); unlearn mints the wrapper back and REFUSES BEFORE MUTATING
+//     on a full bag.
 //   - THE REPLACE: learning onto an occupied seat unlearns the sitter into
 //     the just-freed cell first — nothing is ever lost to the swap.
+//   - THE ONE-COPY SWAP (2026-09-16, rig J): a copy of a KNOWN skill is
+//     never refused — the knownCopy leaves for the bag and the newcomer
+//     takes the seat it is placed into (slotless = the copy's own seat);
+//     a different sitter under the drop departs too; every departing body
+//     is PRE-FLIGHTED (unlearnRefusal + room for every wrapper) so a
+//     refused swap moves nothing; the cap never refuses a swap.
 //   - THE SOCKET FLOWS: socketSupport consumes the wrapper; unsocket needs
 //     bag room and refuses whole (the socket keeps its gem).
 //   - THE BAGFULL REFUSALS: grants (rescue hatch included) refuse a full
@@ -96,10 +103,26 @@ w.recalcSeat(seat);
     && hero.skills.some(s => s?.def.id === 'fireball'));
   check('B: the learned instance wears the wrapper\'s cargo (level, rarity)',
     m.knownSkills.get('fireball')?.level === 2 && m.knownSkills.get('fireball')?.rarity === 'magic');
+  // THE ONE-COPY SWAP (2026-09-16): a copy of a KNOWN skill is never
+  // refused — slotless, the newcomer lands in the seat the knownCopy holds
+  // and the known copy leaves for the bag as its wrapper, cargo intact.
+  const fbSeat = hero.skills.findIndex(s => s?.def.id === 'fireball');
   const dupe = w.grantSkillGemItem(seat, makeSkillGem(SKILLS.fireball, 1, 'common'))!;
-  check('B: the duplicate gate refuses (item stays bagged)',
-    !w.learnSkill(dupe.uid, seat) && m.items.some(i => i.uid === dupe.uid));
-  w.dropGearFromBag(seat, dupe.uid); // shed it (unwraps to the ground)
+  const fbWrappers = () => m.items.filter(i => i.gem?.kind === 'skill' && i.gem.skillId === 'fireball');
+  check('B: a known skill\'s copy SWAPS in place — the newcomer takes the known seat, one copy on the bar',
+    w.learnSkill(dupe.uid, seat)
+    && hero.skills[fbSeat]?.def.id === 'fireball'
+    && m.knownSkills.get('fireball')?.level === 1 && m.knownSkills.get('fireball')?.rarity === 'common'
+    && hero.skills.filter(s => s?.def.id === 'fireball').length === 1
+    && !m.items.some(i => i.uid === dupe.uid));
+  check('B: the known copy left for the bag as its wrapper, cargo intact (level 2, magic)',
+    fbWrappers().length === 1
+    && skillGemPayloadOf(fbWrappers()[0])?.level === 2 && skillGemPayloadOf(fbWrappers()[0])?.rarity === 'magic');
+  check('B: swapping the upgrade back lands it in the same seat (one copy, ever)',
+    w.learnSkill(fbWrappers()[0].uid, seat)
+    && hero.skills[fbSeat]?.level === 2 && m.knownSkills.get('fireball')?.rarity === 'magic'
+    && fbWrappers().length === 1 && skillGemPayloadOf(fbWrappers()[0])?.rarity === 'common');
+  w.dropGearFromBag(seat, fbWrappers()[0].uid); // shed the common copy (unwraps to the ground)
   // The requirement gate — attrs zeroed, the learn refuses whole. (A refused
   // learn never recalcs, so the direct m.attrs write holds for the read.)
   const reqSkill = SKILL_LIST.find(s => s.id !== 'fireball' && !m.knownSkills.has(s.id)
@@ -279,6 +302,100 @@ w.recalcSeat(seat);
   check('I: applySavedCharacter stands', applySavedCharacter(w2, save));
   check('I: a known-but-unbarred skill HEALS into a free seat on resume (learned = seated)',
     w2.seatHero(w2.localSeat).skills.some(s => s?.def.id === victim), victim);
+}
+
+// ------------------------------------------ J. THE ONE-COPY SWAP (2026-09-16)
+// Her ask: an upgrade of a SEATED skill lands in ONE gesture. A copy of a
+// known skill is never refused — it SWAPS: the newcomer takes the seat it is
+// placed into, the knownCopy leaves for the bag as its wrapper (cargo
+// intact); a different sitter under the drop is replaced as ever (both
+// depart — two cells); every gate is PRE-FLIGHTED (unlearnRefusal + room)
+// so a refusal moves nothing. Duplicates stay impossible: one copy on the
+// bar, ever.
+{
+  const w3: World = makeSimWorld('warrior', 0x9e53);
+  const s3 = w3.localSeat;
+  const m3 = s3.meta;
+  const h3 = s3.actor;
+  for (const k of Object.keys(m3.baseAttrs)) (m3.baseAttrs as Record<string, number>)[k] = 999;
+  w3.recalcSeat(s3);
+  const cleaves = () => h3.skills.filter(s => s?.def.id === 'cleave').length;
+  const bagCleaves = () => m3.items.filter(i => i.gem?.kind === 'skill' && i.gem.skillId === 'cleave');
+  const cleaveSeat = h3.skills.findIndex(s => s?.def.id === 'cleave');
+  const starter = m3.knownSkills.get('cleave')!;
+  check('J: the warrior wakes with Cleave seated', cleaveSeat >= 0 && !!starter);
+  const starterCut = { level: starter.level, rarity: starter.rarity };
+  // J1: onto its OWN seat — the in-place upgrade.
+  const rare = w3.grantSkillGemItem(s3, makeSkillGem(SKILLS.cleave, 4, 'rare'))!;
+  check('J1: the rare copy dropped onto the seated Cleave SWAPS in place (no refusal, one copy on the bar)',
+    w3.learnSkill(rare.uid, s3, cleaveSeat)
+    && h3.skills[cleaveSeat]?.def.id === 'cleave' && h3.skills[cleaveSeat]?.rarity === 'rare'
+    && m3.knownSkills.get('cleave')?.level === 4 && cleaves() === 1
+    && !m3.items.some(i => i.uid === rare.uid));
+  check('J1: the known copy left for the bag as its wrapper, cargo intact (the starter cut)',
+    bagCleaves().length === 1
+    && skillGemPayloadOf(bagCleaves()[0])?.level === starterCut.level
+    && skillGemPayloadOf(bagCleaves()[0])?.rarity === starterCut.rarity);
+  // J2: slotless — the upgrade lands where the skill LIVES, not the first free seat.
+  const firstFree = h3.skills.findIndex(s => s === null);
+  check('J2: an empty seat stands beside it', firstFree >= 0 && firstFree !== cleaveSeat);
+  check('J2: slotless, a known copy lands in the seat the skill holds (never the first free seat)',
+    w3.learnSkill(bagCleaves()[0].uid, s3)
+    && h3.skills[cleaveSeat]?.def.id === 'cleave' && h3.skills[cleaveSeat]?.rarity === starterCut.rarity
+    && h3.skills[firstFree] === null && cleaves() === 1
+    && bagCleaves().length === 1 && skillGemPayloadOf(bagCleaves()[0])?.rarity === 'rare');
+  // J3: onto a DIFFERENT, EMPTY seat — the skill moves there with its copy.
+  check('J3: dropped onto an empty seat, the skill MOVES there — the old seat empties, still one copy',
+    w3.learnSkill(bagCleaves()[0].uid, s3, firstFree)
+    && h3.skills[firstFree]?.def.id === 'cleave' && h3.skills[firstFree]?.rarity === 'rare'
+    && h3.skills[cleaveSeat] === null && cleaves() === 1 && bagCleaves().length === 1);
+  // J4: onto a seat holding ANOTHER skill — that sitter is replaced AND the
+  // known copy retires (the replace + the one-copy law composed; two cells).
+  const otherDef = SKILL_LIST.find(s => !m3.knownSkills.has(s.id))!;
+  const otherItem = w3.grantSkillGemItem(s3, makeSkillGem(otherDef, 1, 'common'))!;
+  check('J4: a second skill seats in the vacated seat',
+    w3.learnSkill(otherItem.uid, s3, cleaveSeat) && h3.skills[cleaveSeat]?.def.id === otherDef.id, otherDef.id);
+  const knownBefore = m3.knownSkills.size;
+  check('J4: dropped onto another skill\'s seat, BOTH depart — sitter replaced, known copy retired, one copy on the bar',
+    w3.learnSkill(bagCleaves()[0].uid, s3, cleaveSeat)
+    && h3.skills[cleaveSeat]?.def.id === 'cleave' && h3.skills[cleaveSeat]?.rarity === starterCut.rarity
+    && h3.skills[firstFree] === null
+    && !m3.knownSkills.has(otherDef.id)
+    && m3.items.some(i => i.gem?.kind === 'skill' && i.gem.skillId === otherDef.id)
+    && bagCleaves().length === 1 && skillGemPayloadOf(bagCleaves()[0])?.rarity === 'rare'
+    && cleaves() === 1 && m3.knownSkills.size === knownBefore - 1);
+  // J5: ATOMICITY — a two-body swap with room for only ONE wrapper refuses WHOLE.
+  const otherBack = m3.items.find(i => i.gem?.kind === 'skill' && i.gem.skillId === otherDef.id)!;
+  check('J5: the other skill re-seats beside Cleave',
+    w3.learnSkill(otherBack.uid, s3, firstFree) && h3.skills[firstFree]?.def.id === otherDef.id);
+  const rareTile = bagCleaves()[0];
+  while (freeCellCount(m3.items) > 0) w3.grantSupportGemItem(s3, { def: SUPPORTS.multistrike, level: 1 });
+  const cell = { x: rareTile.x, y: rareTile.y };
+  const barFace = () => h3.skills.map(s => (s ? s.def.id + ':' + s.rarity : '-')).join(',');
+  const barBefore = barFace();
+  check('J5: with room for ONE wrapper, a TWO-body swap refuses whole — tile in its cell, every seat standing',
+    !w3.learnSkill(rareTile.uid, s3, firstFree)
+    && barFace() === barBefore
+    && m3.knownSkills.has(otherDef.id) && m3.knownSkills.get('cleave')?.rarity === starterCut.rarity
+    && m3.items.some(i => i.uid === rareTile.uid && i.x === cell.x && i.y === cell.y));
+  check('J5: the same tile onto the copy\'s OWN seat (one body) lands with that one cell',
+    w3.learnSkill(rareTile.uid, s3, cleaveSeat)
+    && h3.skills[cleaveSeat]?.rarity === 'rare' && cleaves() === 1
+    && bagCleaves().length === 1 && skillGemPayloadOf(bagCleaves()[0])?.rarity === starterCut.rarity);
+  m3.items = m3.items.filter(i => i.gem?.kind !== 'support'); // clear the packing
+  // J6: THE CAP never refuses a swap — a full rack still upgrades in place.
+  const fillers = SKILL_LIST.filter(s => !m3.knownSkills.has(s.id)).slice(0, 12);
+  let fi = 0;
+  while (h3.skills.some(s => s === null) && fi < fillers.length) {
+    const it = w3.grantSkillGemItem(s3, makeSkillGem(fillers[fi++], 1, 'common'))!;
+    w3.learnSkill(it.uid, s3);
+  }
+  check('J6: the rack stands full', h3.skills.every(s => s !== null) && m3.knownSkills.size === h3.skills.length);
+  const magic = w3.grantSkillGemItem(s3, makeSkillGem(SKILLS.cleave, 2, 'magic'))!;
+  check('J6: a full rack still swaps a known copy in place, slotless — eight seats, eight skills, one Cleave',
+    w3.learnSkill(magic.uid, s3)
+    && h3.skills[cleaveSeat]?.def.id === 'cleave' && h3.skills[cleaveSeat]?.rarity === 'magic'
+    && h3.skills.every(s => s !== null) && m3.knownSkills.size === h3.skills.length && cleaves() === 1);
 }
 
 console.log(failed ? `\n${failed} FAILURE(S)` : '\nALL PASS');
