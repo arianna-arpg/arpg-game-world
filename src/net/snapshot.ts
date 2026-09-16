@@ -47,6 +47,7 @@ import { sanitizeChoices, sanitizeGrafts } from '../data/passiveChoices';
 import { makeSkillInstance, validTreeNodes, type SkillInstance, type SupportInstance, type SkillRarity } from '../engine/skills';
 import { rebuildItem } from '../engine/itemgen';
 import { rebuildAnyItem } from '../engine/gemitems';
+import { sanitizeCompanionStances } from '../engine/companionStances';
 import { ITEM_RARITIES, type ItemInstance } from '../engine/items';
 import { VESTIGES } from '../data/vestiges';
 import { abilityEssenceOfTier, ESSENCES } from '../data/essences';
@@ -277,6 +278,10 @@ export interface SeatMetaW {
    *  reads it; the hatch itself is host-judged. Optional → a host one
    *  wire-version behind ships the class's base bar. */
   op?: (string | null)[];
+  /** THE COMPANION STANCES (PlayerMeta.stances) — the client's meta button
+   *  wears the current stance off it; the shift itself is host-judged.
+   *  Optional → a host one wire-version behind ships the default. */
+  st?: Record<string, string>;
   /** GEAR: bag + doll. ItemInstances are already pure JSON (ids + rolls —
    *  never def bodies), so the instance IS the wire shape; rebuildItem
    *  re-validates against the client's registries on apply. Optional →
@@ -329,6 +334,7 @@ export function serializeSeatMeta(seat: Seat): SeatMetaW {
     known: Object.fromEntries([...m.knownSkills].map(([id, inst]) => [id, skillInstW(inst)])),
     bar: hero.skills.map(s => (s ? s.def.id : null)),
     op: [...m.opening],
+    st: { ...m.stances },
     gear: {
       items: m.items.map(i => ({ ...i })),
       equipped: Object.fromEntries(
@@ -446,6 +452,9 @@ export function applySeatMeta(world: World, seat: Seat, w: SeatMetaW): void {
   // THE STAMPED OPENING: the host's stamp verbatim (an older host ships none —
   // the class's base bar stands in, the pre-stamp reading).
   m.opening = [...(w.op ?? m.classDef.bar)];
+  // THE COMPANION STANCES: the host's held choices, registry-sanitized (an
+  // older host ships none — every bond reads the default).
+  m.stances = sanitizeCompanionStances(w.st);
   world.recalcSeat(seat);            // derive attrs + the full stat sheet from the build
 }
 

@@ -15,7 +15,7 @@ import { replenishmentActive } from '../engine/replenishment';
 import { clamp, dist, mixHex, type Vec2 } from '../core/math';
 import { RENDER_SCALE_CFG } from './renderScale';
 import { DEFAULT_CURSOR_OPTIONS, drawAimReticle } from '../core/cursor';
-import { bandPointsAt, instanceChannel, instanceChargeCost, instanceDelivery, instanceMeta, instanceMods, instanceStrikeTiming, instanceTrigger, instanceUseCharges, poolReadOf, skillContextTags, SKILL_RARITIES, treePointsSpent, treeSpentBranch } from '../engine/skills';
+import { bandPointsAt, instanceChannel, instanceChargeCost, instanceDelivery, instanceMeta, instanceMods, metaFaceOf, instanceStrikeTiming, instanceTrigger, instanceUseCharges, poolReadOf, skillContextTags, SKILL_RARITIES, treePointsSpent, treeSpentBranch } from '../engine/skills';
 import { ITEM_RARITIES } from '../engine/items';
 import { drawGroundItem } from './groundItems';
 import { TOWN_PORTAL_CFG } from '../data/townportals';
@@ -219,6 +219,11 @@ export class Renderer {
    *  hand and the eye disagree. Rebuilt every drawHud; seatId names whose
    *  bar (the mouse serves only the local hero's). */
   hudSlotRects: { seatId: string; slot: number; x: number; y: number; w: number; h: number }[] = [];
+  /** THE PRESSABLE META (drawn == tested): every slot's META mini-button
+   *  rect as this frame drew it (CSS px) — main.ts hit-tests a plain click
+   *  against these and lands it as THAT slot's meta press (no modifier).
+   *  Rebuilt every drawHud beside the slot rects. */
+  hudMetaRects: { seatId: string; slot: number; x: number; y: number; w: number; h: number }[] = [];
   /** THE HUD CLUSTER's drawn box per seat (orbs + bar + XP strip, CSS px) —
    *  published each frame beside the slot rects so a DOM surface can seat
    *  itself off the cluster the renderer actually drew (THE MENU BAR's
@@ -7280,6 +7285,7 @@ export class Renderer {
 
   private drawHud(world: World): void {
     this.hudSlotRects.length = 0; // THE PRESSABLE BAR's ledger — this frame's rects only
+    this.hudMetaRects.length = 0; // THE PRESSABLE META's ledger — likewise
     this.hudClusterRects.length = 0;
     // THE COUCH DISPATCH (data/couch.ts): solo draws the one classic centered
     // cluster — byte-identical. With guests seated, each local seat's cluster
@@ -7895,14 +7901,26 @@ export class Renderer {
           const mh = 14;
           const my = by - mh - 8;
           const metaCd = p.cooldowns.has(meta.skillId);
+          // THE META FACE (engine/skills.ts metaFaceOf): a payload may wear a
+          // LIVE face — the stance shift shows the current stance in its ink.
+          const face = metaFaceOf(world, p, inst, meta);
+          // THE PRESSABLE META: publish the mini-button's rect (CSS px) so a
+          // plain click on it IS the meta press (main.ts hudMetaSlotAt), and
+          // rim it under the mouse so it reads as pressable before the hand
+          // commits — the slot's own hover law, one row up.
+          const mk = this.uiToCss;
+          this.hudMetaRects.push({ seatId: seat.id, slot: i, x: x * mk, y: my * mk, w: slot * mk, h: mh * mk });
+          const metaHover = seat === world.localSeat
+            && this.uiMouse.x >= x && this.uiMouse.x < x + slot
+            && this.uiMouse.y >= my && this.uiMouse.y < my + mh;
           ctx.fillStyle = 'rgba(10,10,16,0.85)';
-          ctx.strokeStyle = metaCd ? '#3a3a52' : '#c8a84b';
-          ctx.lineWidth = 1.2;
+          ctx.strokeStyle = metaCd ? '#3a3a52' : metaHover ? '#e8d08b' : '#c8a84b';
+          ctx.lineWidth = metaHover ? 2 : 1.2;
           ctx.fillRect(x, my, slot, mh);
           ctx.strokeRect(x, my, slot, mh);
-          ctx.fillStyle = metaCd ? '#6a6a7a' : '#e8d8a0';
+          ctx.fillStyle = metaCd ? '#6a6a7a' : (face.color ?? '#e8d8a0');
           ctx.font = 'bold 8px Verdana';
-          ctx.fillText(`⇧ ${meta.label}`, x + slot / 2, my + mh - 4);
+          ctx.fillText(`⇧ ${face.label}`, x + slot / 2, my + mh - 4);
         }
         if (def.id === 'command_assault' && p.assaultHud) {
           const h = p.assaultHud;

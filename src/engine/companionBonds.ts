@@ -1,10 +1,13 @@
 import type { Actor } from './actor';
 import type { World } from './world';
 import type { Vec2 } from '../core/math';
-import { dist } from '../core/math';
+import { dist, vec } from '../core/math';
 import { mod } from './stats';
 import { instanceMods, makeSkillInstance, skillContextTags, type SkillInstance } from './skills';
-import { companionBondOf, type CompanionBondSpec, type CompanionSaved } from './companionSpec';
+import { companionBondOf, companionLevelOf, type CompanionBondSpec, type CompanionSaved } from './companionSpec';
+// THE STANCES (engine/companionStances.ts): importing the module also seats
+// the stance command kinds and the meta face — the bond is their one door.
+import { companionStanceDef, companionStanceIdOf, standingOrderFor } from './companionStances';
 import { SKILLS } from '../data/skills';
 import { beastFamilyOf } from '../data/beastFamilies';
 
@@ -15,6 +18,11 @@ interface BondState {
   spec: CompanionBondSpec;
   policy: string;
   sheet: string;
+  /** The level the body was CLAIMED at — the floor the growing bond keeps
+   *  (companionLevelOf: a beast caught above its keeper stays wild-strong). */
+  claimedLevel: number;
+  /** The stance whose standing order the body currently wears ('' = none). */
+  stanceId: string;
   orbAt: number;
   chargeAt: number;
   echoAt: number;
@@ -54,6 +62,7 @@ export class CompanionBonds {
     const inst = this.host(beast);
     if (!inst || !beast.owner) return;
     this.states.set(beast, { inst, native: [...beast.skills], granted: new Map(), spec: {}, policy: '', sheet: '',
+      claimedLevel: Math.max(1, beast.level), stanceId: '',
       orbAt: 0, chargeAt: 0, echoAt: 0, dreadAt: 0, exposure: new Map(), pulseUntil: 0, pulseAt: 0, issued: new Set() });
     // Owned animals accept orders instead of retaining a wild hunger/flee script.
     beast.brain = {};
@@ -93,6 +102,20 @@ export class CompanionBonds {
     state.policy = policy; state.spec = spec; state.inst = inst;
     beast.companionDormant = dormant;
     if (dormant) { beast.downed = true; beast.life = 0; beast.companionReviveRemaining = undefined; }
+    // THE GROWING BOND (COMPANION_CFG.level): the body's level follows its
+    // keeper — re-stamped in place through the one monster level fold
+    // (World.relevelActor: life kept as a fraction, the native kit on the
+    // monster ladder; the granted arts re-mint at body level below).
+    const level = companionLevelOf(owner.level, state.claimedLevel);
+    if (beast.level !== level) this.w.relevelActor(beast, level);
+    // THE STANCE (engine/companionStances.ts): the keeper's held conduct for
+    // this bond becomes the beast's standing order — the order beneath every
+    // issued one; a dormant body wears none. Re-stamped only on change.
+    const stanceId = dormant ? '' : companionStanceIdOf(this.keeperSeat(owner)?.meta.stances, inst.def.id);
+    if (state.stanceId !== stanceId) {
+      state.stanceId = stanceId;
+      beast.standingOrder = stanceId ? standingOrderFor(stanceId) : undefined;
+    }
     const tags = skillContextTags(inst), extra = instanceMods(inst);
     const mods = dormant ? [] : [
       mod('life', 'more', owner.sheet.get('minionLife', tags, extra) - 1),
@@ -112,7 +135,17 @@ export class CompanionBonds {
     if (!dormant && beast.buffs.has(this.frenzyId(beast)) && spec.frenzy) arts.add(spec.frenzy.gapCloser);
     // Even a naturally peaceful animal needs an ordinary attack once bonded.
     if (!dormant && !state.native.some(s => s?.def.effects.some(f => f.type === 'damage'))) arts.add('claw');
-    for (const id of arts) if (!state.granted.has(id) && SKILLS[id]) state.granted.set(id, makeSkillInstance(SKILLS[id], Math.max(1, beast.level)));
+    // Granted arts mint at BODY level and re-mint when the bond grows (a
+    // stale instance would keep yesterday's damage ladder); a cast in flight
+    // on the old instance yields — the cooldown ledger is keyed by id and
+    // survives the swap.
+    const artLevel = Math.max(1, beast.level);
+    for (const id of arts) {
+      const held = state.granted.get(id);
+      if ((held && held.level === artLevel) || !SKILLS[id]) continue;
+      if (held && beast.casting?.inst === held) beast.casting = null;
+      state.granted.set(id, makeSkillInstance(SKILLS[id], artLevel));
+    }
     for (const [id, granted] of state.granted) if (!arts.has(id)) {
       if (beast.casting?.inst === granted) beast.casting = null;
       state.granted.delete(id); beast.cooldowns.delete(id);
@@ -123,6 +156,7 @@ export class CompanionBonds {
   refresh(): void {
     for (const [beast, state] of this.states) if (beast.dead || !beast.companion || !this.host(beast) || !this.w.actors.includes(beast)) {
       this.clearPayloads(beast, state); beast.sheet.removeSource('companionBond'); beast.skills = state.native;
+      beast.standingOrder = undefined;
       this.states.delete(beast);
     }
     const groups = new Map<SkillInstance, Actor[]>();
@@ -220,9 +254,14 @@ export class CompanionBonds {
         recipient.addBuff({ type: 'buff', id: this.frenzyId(beast), label: 'Pack Crescendo', duration: spec.frenzy.duration, mods: [mod('attackSpeed', 'increased', spec.frenzy.attackSpeed)] });
         if (recipient.companion) {
           this.refreshBeast(recipient, state.inst, false);
-          recipient.aiCommand = { kind: 'assault', targetId: target.id, pos: { ...target.pos }, until: this.w.time + spec.frenzy.duration };
-          const pursuit = recipient.skills.find(s => s?.def.id === spec.frenzy!.gapCloser);
-          if (pursuit) this.w.useSkill(recipient, pursuit, target.pos);
+          // THE LUNGE obeys the stance (CompanionStanceDef.lunges): a passive
+          // beast keeps the crescendo's haste and its heel — only a stance
+          // that lunges takes the bond-driven charge.
+          if (this.lunges(recipient)) {
+            recipient.aiCommand = { kind: 'assault', targetId: target.id, pos: { ...target.pos }, until: this.w.time + spec.frenzy.duration };
+            const pursuit = recipient.skills.find(s => s?.def.id === spec.frenzy!.gapCloser);
+            if (pursuit) this.w.useSkill(recipient, pursuit, target.pos);
+          }
         }
       }
     }
@@ -244,8 +283,45 @@ export class CompanionBonds {
     for (const [beast, state] of this.states) if (beast.owner === owner && (!inst.hostSkillId || state.inst.def.id === inst.hostSkillId) && !beast.downed && !beast.companionDormant && state.spec.whistle) {
       const spec = state.spec.whistle;
       state.pulseUntil = this.w.time + spec.duration; state.pulseAt = this.w.time;
-      beast.aiCommand = { kind: 'assault', pos: { ...aim }, until: state.pulseUntil };
+      // The rally's charge toward the aim is a bond-driven order: it obeys the
+      // stance's `lunges` — a passive pack is revived, healed and recalled
+      // and pulses at heel; it does not charge.
+      if (this.lunges(beast)) beast.aiCommand = { kind: 'assault', pos: { ...aim }, until: state.pulseUntil };
     }
+  }
+
+  /** The seat that KEEPS an owner body — by the live pointer, else by the
+   *  home body (a keeper riding another body through the possession seam
+   *  still holds its own stances). */
+  private keeperSeat(owner: Actor) {
+    return this.w.seatOf(owner) ?? this.w.seats.find(s => s.home === owner);
+  }
+
+  /** Does this beast's stance take bond-driven charges (CompanionStanceDef.lunges)? */
+  private lunges(beast: Actor): boolean {
+    return companionStanceDef(this.states.get(beast)?.stanceId ?? '').lunges;
+  }
+
+  /** THE SHIFT SHOWS: each living beast of the bond speaks the stance and
+   *  casts the tree's stance art (CompanionBondSpec.stanceArt) at its own
+   *  feet — the hook a tree node hangs on a behavioral change. Returns the
+   *  beasts reached. */
+  stanceShift(owner: Actor, skillId: string, stanceId: string): number {
+    const st = companionStanceDef(stanceId);
+    let reached = 0;
+    for (const [beast, state] of this.states) {
+      if (beast.owner !== owner || state.inst.def.id !== skillId
+        || beast.dead || beast.downed || beast.companionDormant) continue;
+      reached++;
+      this.w.text(vec(beast.pos.x, beast.pos.y - 22), st.label.toLowerCase(), st.color, 11);
+      const artId = state.spec.stanceArt;
+      if (artId && SKILLS[artId]) {
+        const art = makeSkillInstance(SKILLS[artId], Math.max(1, beast.level));
+        state.issued.add(art);
+        this.w.executeSkill(beast, art, beast.pos, { noRepeat: true });
+      }
+    }
+    return reached;
   }
 
   saved(beast: Actor): CompanionSaved {

@@ -122,7 +122,95 @@ saved character replaces its roster rather than duplicating the hound or
 replacing an intentionally empty roster. Class definitions author these
 fresh-character gifts through `startingCompanions`.
 
+## The growing bond (2026-09-16)
+
+A bonded body's level follows its keeper. `COMPANION_CFG.level` in
+`src/engine/companionSpec.ts` is the dial: `follow: 'keeper'` (the default)
+reads a bond's level as the greater of the level it was claimed at and the
+keeper's level plus `offset`; `follow: 'claimed'` is the previous reading,
+where a body stayed the level it was claimed at forever. The level-one
+Shepherd's Hound is therefore a level-twelve hound beside a level-twelve
+Tamer, while a beast claimed above its keeper keeps its wild level until the
+keeper catches up.
+
+`CompanionBonds.refreshBeast` compares each refresh and re-levels through
+`World.relevelActor`, which re-stamps the same three sources `createMonster`
+minted (`stampMonsterLevel`: the baseline growth source of 22% life, 10%
+damage and 6% accuracy/evasion per level, the def's opt-in per-stat scaling,
+hit-counted plies, and the boss poise pool). Life and plies are kept as
+fractions, so growing never heals or wounds. The native kit climbs the monster
+ladder (one skill level per four body levels); granted family arts, Defiant
+Roar and Pursuit re-mint at body level. Saves store the current level; because
+the fold is a maximum, a restored bond reads the same level it left with.
+
+Claiming now removes the mint-time `owner` stat source: a body minted with an
+owner (the starting hound, a restored bond) previously carried the keeper's
+untagged minion life/damage twice beside the bond's own `companionBond`
+source, while a wild claim carried it once. The bond's fold is the only fold,
+so a loaded companion and a fresh claim have the same life.
+
+## Stances (2026-09-16)
+
+`src/data/companionStances.ts` defines the pack's conduct between orders as
+data rows (`id`, `label`, `glyph`, `color`, cycle `order`, `conduct`,
+`lunges`). Three ship:
+
+| Stance | Conduct |
+| --- | --- |
+| Aggressive | The beast hunts on its own: nearest foe in sight, heel when none. This is the pre-stance behavior and the default (`COMPANION_STANCE_CFG.default`). |
+| Defensive | The beast heels and answers only the keeper's fights: whatever wounded the keeper, whatever the keeper wounded, or whatever bit the beast itself, nearest first, within a 520-unit leash of the keeper, read inside a four-second engage window. A quarry is held until it dies or leaves the leash. |
+| Passive | The beast heels and never strikes of its own accord. |
+
+`src/engine/companionStances.ts` registers each stance as a command kind
+(`stance:<id>`) whose conduct handler comes from the open `STANCE_CONDUCTS`
+registry. The bond stamps the keeper's choice onto each beast as
+`Actor.standingOrder`, the order beneath every issued one: `updateAI` reads it
+through the same kind registry as `aiCommand`, but only while no issued order
+stands. An Assault, a Recall, a Rallying Whistle charge or a Pack Crescendo
+lunge outranks the stance for its moment, and the stance resumes the instant
+the order lapses. `lunges` decides whether bond-driven charges (the crescendo,
+the rally's charge toward the aim) fire under a stance; explicit keeper orders
+always do. Passive beasts still take the rally's revival, healing and pulses.
+
+The defensive answer reads two ledgers. The existing victim-side
+`aiHitById`/`aiHitAt` says who last wounded the keeper (or the beast); the new
+caster-side `lastFoeId`/`lastFoeAt`, stamped in `resolveHit` on every landed
+hostile blow, says whom the keeper last wounded. Friendly-fire seams never
+stamp the foe ledger.
+
+The keeper's choice lives per bond skill on `PlayerMeta.stances`, saved as
+`CharacterSave.stances`, shipped as `SeatMetaW.st`, and sanitized against the
+registry on every load (an unknown id drops to the default). The shift has
+three doors, all landing on `World.cycleCompanionStance`:
+
+- Tame Beast's meta is now `companion_stance`, an honest instant cast scoped by
+  `hostSkillId`, so cast procs and the meta chain both see it. Whistle and
+  Rallying Whistle remain the converted base press.
+- The meta mini-button is clickable: the renderer publishes `hudMetaRects`
+  and a plain click there is that slot's meta press (every meta, not only the
+  shift). The button wears the current stance in its ink through the
+  `registerMetaFace` registry.
+- The rebindable `companionStance` action (keyboard `x`, pad unbound) cycles
+  every bond on the bar through the host-authoritative `companionStance`
+  intent, which also accepts a named stance.
+
+The Command gem now fits companion skills (`requiresTags: ['summon',
+'companion']`), so socketing it chains an Assault one beat after the shift:
+the pack charges the mark, then keeps the stance it was set to. The support
+matrix slice for the gem stays clean. `CompanionBondSpec.stanceArt` is the
+tree's hook on a behavioral change: every living beast of the bond casts the
+named art at its feet when the stance shifts. No shipped node uses it yet.
+
 ## Verification
+
+`balance/probe_companionstance.ts` covers keeper-level growth, the life
+fraction, the wild-level floor, the `follow: 'claimed'` reading, kit and art
+re-leveling, load parity without the owner source, every stance's conduct
+under live AI, the leash and engage window, the sticky quarry, the friendly
+fire exemption, the meta press and face, the action intent, save and wire
+round trips, explicit orders outranking a passive beast and the stance
+resuming, the Command gem chain, `lunges`, the stance-art hook through a
+probe-local tree copy, and dormant, released and respec cleanup.
 
 `balance/probe_tamebeast.ts` covers certainty boundaries, boss eligibility,
 two/three-pet conversion, revival and countdown persistence, zero-socket innate

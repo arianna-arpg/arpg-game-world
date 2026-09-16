@@ -491,6 +491,25 @@ export function instanceMeta(inst: SkillInstance): { skillId: string; label: str
   return instanceMetas(inst)[0];
 }
 
+/** THE META FACE — what the slot's mini-button SAYS: a payload skill may
+ *  register a live face (label + ink) read off the pressing seat's own state,
+ *  so the button never lies about what a press will do (the stance shift
+ *  wears the CURRENT stance, the convert face's law on the meta row). An
+ *  unregistered payload shows its authored label. Faces are pure reads. */
+export type MetaFace = { label: string; color?: string };
+export const META_FACES: Record<string, (
+  world: import('./world').World, caster: import('./actor').Actor, host: SkillInstance,
+) => MetaFace | undefined> = {};
+export function registerMetaFace(skillId: string, face: (typeof META_FACES)[string]): void {
+  META_FACES[skillId] = face;
+}
+export function metaFaceOf(
+  world: import('./world').World, caster: import('./actor').Actor, host: SkillInstance,
+  meta: { skillId: string; label: string },
+): MetaFace {
+  return META_FACES[meta.skillId]?.(world, caster, host) ?? { label: meta.label };
+}
+
 // === SKILL CONVERSION ==========================================================
 // The EXHAUSTED-SKILL two-for-one (SkillDef.convert): while a rule holds,
 // PRESSING this skill casts another catalog skill instead — a Tame whose
@@ -3615,6 +3634,18 @@ export interface WhistleCompanionEffect {
   type: 'whistleCompanion';
 }
 
+/** THE STANCE SHIFT (the tame skill's META payload — engine/companionStances.ts):
+ *  the keeper's standing conduct for the pressing skill's bond walks one step
+ *  along the stance cycle (or lands on `stance` when named). Scoped by
+ *  hostSkillId to the shifting skill's own bond; a bar-cast shift (no host)
+ *  shifts every bond the keeper holds. A seatless caster has no standing
+ *  conduct to keep — the press refunds itself (the whistle rule). */
+export interface CompanionStanceEffect {
+  type: 'companionStance';
+  /** Land on this stance id instead of cycling (a future fixed-stance art). */
+  stance?: string;
+}
+
 /** THE RELOAD (the ammunition economy's refill): pours rounds back into
  *  use-charge banks (SkillDef.useCharges). scope 'host' (default) reaches
  *  the skill this press was MINTED FOR (hostSkillId — the empty gun whose
@@ -4181,7 +4212,7 @@ export type SkillEffect =
   | DetonateMinionsEffect | SpawnCorpseEffect | DragCorpsesEffect | ShatterConstructsEffect
   | MinionCastEffect | PayLedgerEffect
   | SpreadStatusEffect | SiphonStatusEffect | TransfuseStatusEffect
-  | RecallImpalesEffect | TameEffect | WhistleCompanionEffect
+  | RecallImpalesEffect | TameEffect | WhistleCompanionEffect | CompanionStanceEffect
   | RestoreSkillChargesEffect | ConjureEffect | KindleEffect | TownPortalEffect | ThrongDirectEffect
   | GrabSeizeEffect | GrabThrowEffect | MimicSelectEffect
   | PossessEffect | PossessEndEffect | ShapeshiftEffect | LitePourEffect

@@ -5049,8 +5049,14 @@ export const SUPPORTS: Record<string, SupportDef> = {
     id: 'command_gem', name: 'Command',
     description: 'Grants the socketed summon an ASSAULT order, pressed with Shift plus its'
       + ' slot: every mobile minion of that skill marches to your mark and fights whatever'
-      + ' holds it.',
-    color: '#c8a84b', requiresTags: ['summon'],
+      + ' holds it. On a beast bond it chains after the stance shift: the pack charges'
+      + ' the mark, then keeps the stance it was set to.',
+    // THE BOND TAKES ORDERS too (2026-09-16): a companion skill's retinue
+    // answers the same commandMinions door (World.minionServes reads the
+    // '__companion:' marker), so the gem's gate names the tamed-bond family
+    // beside the summons — the meta CHAIN then plays the bond's own stance
+    // shift first and this order one beat later.
+    color: '#c8a84b', requiresTags: ['summon', 'companion'],
     mods: [],
     meta: { skillId: 'command_assault', label: 'Assault' },
     perLevel: [mod('minionMoveSpeed', 'increased', 0.08)],

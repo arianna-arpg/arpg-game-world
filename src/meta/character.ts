@@ -15,6 +15,7 @@ import { SAVE_COMPATIBILITY, isCurrentCharacterSave, noteSaveReset } from './sav
 import { CLASSES } from '../data/classes';
 import { PASSIVE_NODES } from '../data/passives';
 import { sanitizeChoices, sanitizeGrafts } from '../data/passiveChoices';
+import { sanitizeCompanionStances } from '../engine/companionStances';
 import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
 import { MONSTERS } from '../data/monsters';
@@ -149,6 +150,10 @@ export interface CharacterSave {
    *  woke with — the re-kindle hatch's roster. Optional → a pre-stamp save
    *  reads the class's base bar. */
   opening?: (string | null)[];
+  /** THE COMPANION STANCES (PlayerMeta.stances): the keeper's standing
+   *  conduct per bond skill. Optional → older saves read the default; an
+   *  unknown stance id drops on load. */
+  stances?: Record<string, string>;
   level: number;            // Actor level (display + xp continuity)
   // Content-package run state (optional → old saves still load). The expedition
   // manifest is the run-LOCKED config (frozen at run start); the ledger is the
@@ -259,6 +264,7 @@ export function serializeCharacter(world: World): CharacterSave {
     ],
     bar: hero.skills.map(s => s ? s.def.id : null),
     opening: [...m.opening],
+    stances: { ...m.stances },
     level: hero.level,
     expedition: world.manifest,
     ledger: { ...world.ledger },
@@ -414,6 +420,7 @@ export function rebuildSavedMeta(save: CharacterSave): { meta: PlayerMeta; death
     classDef,
     // THE STAMPED OPENING: the save's own; a pre-stamp save reads the base bar.
     opening: [...(save.opening ?? classDef.bar)],
+    stances: sanitizeCompanionStances(save.stances),
     name: save.name?.trim() || classDef.name,
     baseAttrs: { ...save.baseAttrs },
     attrs: { ...save.baseAttrs }, // recomputed by recalcSeat inside the adopt
@@ -740,6 +747,7 @@ export function serializeCouchGuest(
     companions: [...(dormant.companions ?? [])],
     bar: hero.skills.map(s => s ? s.def.id : null),
     opening: [...m.opening],
+    stances: { ...m.stances },
     level: hero.level,
     expedition: world.manifest,
     // The shared run's trigger counters are this vessel's lived experience

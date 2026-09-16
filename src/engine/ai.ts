@@ -780,6 +780,21 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
       else if (r) ordered = r;
     }
   }
+  // THE STANDING ORDER (engine/companionStances.ts): the order BENEATH every
+  // issued one — a command-shaped row the body wears permanently (a bonded
+  // beast's stance), read through the SAME kind registry, only while no
+  // issued order stands. An order outranks it for its moment; the instant
+  // that order lapses (above), the standing conduct resumes — nothing to
+  // re-issue, nothing to remember.
+  if (!ordered && !actor.aiCommand && actor.standingOrder) {
+    const kindDef = COMMAND_KINDS[actor.standingOrder.kind];
+    if (kindDef) {
+      actor.aiSpacing = tuning.behavior?.spacing;
+      const r = kindDef.step(actor, world, actor.standingOrder, dt);
+      if (r === 'consumed') return;
+      else if (r && r !== 'done') ordered = r;
+    }
+  }
 
   // ---- PERCEPTION → the threat chart → a target --------------------------
   let { target, d: best } = acquireTarget(actor, world, tuning);
@@ -3775,3 +3790,10 @@ export function registerMoveStyle(id: string, kernel: MoveKernel): void {
 
 // Re-export the vocabulary's preset table for tooling/dev inspection.
 export { ARCHETYPES };
+
+/** The mover and the stuck-recall, exported for command kinds registered
+ *  OUTSIDE this module (engine/companionStances.ts — the stance conducts
+ *  heel through the same steer and the same teleport-home every minion
+ *  heels through; no second mover). */
+export const aiMoveToward = moveToward;
+export const aiHeelRecall = updateRecall;

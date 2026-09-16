@@ -17,6 +17,17 @@ const leap = { type: 'leap', range: 300, airTime: 0.35, radius: 65 } as const;
 
 /** Free, cooldown-limited arts remain usable even by naturally mana-less beasts. */
 export const COMPANION_SKILLS: Record<string, SkillDef> = {
+  // THE STANCE SHIFT — Tame Beast's meta payload (engine/companionStances.ts):
+  // an honest, free, instant cast that walks the pressing bond's stance one
+  // step along the cycle. Cast procs and the meta chain both see it; the
+  // short clock only debounces a held key. hostSkillId scopes it (the meta
+  // mint stamps it); a seatless caster refunds.
+  companion_stance: {
+    id: 'companion_stance', name: 'Shift Stance', noDrop: true,
+    description: 'Shift your bonded beasts between Aggressive, Defensive and Passive. The stance is the conduct they keep between your orders.',
+    tags: ['spell', 'instant', 'companion'], color: '#a8c87a', manaCost: 0, cooldown: 0.4, useTime: 0,
+    delivery: { type: 'self' }, effects: [{ type: 'companionStance' }],
+  },
   beast_fallback_art: { ...attack('beast_fallback_art', 'Worrying Strike', melee, [{ type: 'status', status: 'winded', chance: 1, durationOverride: 2 }], 'physical', 8), cooldown: 12 },
   beast_defiant_roar: {
     id: 'beast_defiant_roar', name: 'Defiant Roar', noDrop: true,

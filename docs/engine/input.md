@@ -73,6 +73,16 @@ element belongs to that element.**
 - THE PRESSABLE BAR (`main.ts`): a mouse press on a HUD slot lands as that
   slot's held/edge — the same shape a key delivers — so every law above
   holds for it verbatim.
+- THE PRESSABLE META (`main.ts hudMetaSlotAt`, `renderer.hudMetaRects`): a
+  plain click on a slot's META mini-button lands as that slot's `metaEdge`
+  — the modifier lane's exact shape, no modifier held, the primary withheld
+  for the button's hold. The mini-button wears a LIVE face
+  (`engine/skills.ts registerMetaFace`) so it never lies about what the
+  click does; the companion stance shift is its debut.
+- THE COMPANION STANCE action (`Settings.keybinds.companionStance`, `x` by
+  default, pad unbound): a rebindable verb that cycles every bonded beast's
+  conduct on the bar through the host-authoritative `companionStance` intent
+  (`docs/design/tame-beast.md`).
 - THE PAD POINTER (`ui/padpointer.ts`): while the menu pointer owns the pad,
   its buttons are UI gestures and never gameplay intent.
 

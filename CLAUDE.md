@@ -101,6 +101,22 @@ madness, falcon contracts and owner-scoped cleanup.
 Tame Beast's expanded companion mechanics are in `src/data/tameBeastTree.ts`
 and `engine/companionBonds.ts`; `docs/design/tame-beast.md` covers capture,
 family arts, innate sympathy, cooperative combat, litter revival and persistence.
+THE GROWING BOND (2026-09-16): a bonded body levels with its keeper
+(`COMPANION_CFG.level` in `engine/companionSpec.ts`; `World.relevelActor`
+re-stamps a living body through the ONE monster level fold `stampMonsterLevel`
+that `createMonster` mints through; claiming drops the mint-time `owner`
+source so the bond's `companionBond` fold is the only fold). THE STANCES:
+`data/companionStances.ts` rows (aggressive / defensive / passive, `lunges`)
++ `engine/companionStances.ts` conducts (open `STANCE_CONDUCTS`, one command
+kind per stance) worn as `Actor.standingOrder` — the order BENEATH every
+issued one (`updateAI` reads it only while no `aiCommand` stands, so an
+Assault/Whistle/Crescendo outranks it and the stance resumes at expiry);
+the keeper's choice is `PlayerMeta.stances` (saved, wired as `st`); the tame
+skill's META is the shift (`companion_stance`, an honest cast), the meta
+mini-button is CLICKABLE (`hudMetaRects` + `metaFaceOf` live faces), the
+`companionStance` action (`x`) cycles the bar, and the Command gem fits
+companion bonds so its Assault CHAINS one beat after the shift. Probe
+`balance/probe_companionstance.ts`.
 Goad's barbed-projectile and taunting-effigy overhaul lives in `src/data/goadTree.ts`
 and `engine/challenges.ts`; `docs/design/goad.md` covers resets, inherited rocks,
 field wounds, impale propagation, aftershocks and burrowing pursuers.

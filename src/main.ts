@@ -221,10 +221,22 @@ let mouseHandoff: { x: number; y: number } | null = null;
 // aim law: the cursor is on the bar, not on the battlefield). A touch rides
 // the same seam — a tap is a press — so the bar is the first HUD surface a
 // thumb can work (docs/design/mobile-touch.md).
-let barPress: { slot: number; lock: number | null } | null = null;
+let barPress: { slot: number; lock: number | null; meta?: boolean } | null = null;
 /** The LOCAL hero's bar slot under a CSS-pixel point, or null. */
 function hudSlotAt(cssX: number, cssY: number): number | null {
   for (const r of renderer.hudSlotRects) {
+    if (r.seatId !== world.localSeat.id) continue;
+    if (cssX >= r.x && cssX < r.x + r.w && cssY >= r.y && cssY < r.y + r.h) return r.slot;
+  }
+  return null;
+}
+/** THE PRESSABLE META (renderer.hudMetaRects — drawn == tested): the LOCAL
+ *  hero's slot whose META mini-button sits under a CSS-pixel point, or
+ *  null. A plain click there IS that slot's meta press — no modifier, no
+ *  primary swing — the stance shift's clickable door and every other
+ *  meta's (Detonate, Recall, Thrust) alike. */
+function hudMetaSlotAt(cssX: number, cssY: number): number | null {
+  for (const r of renderer.hudMetaRects) {
     if (r.seatId !== world.localSeat.id) continue;
     if (cssX >= r.x && cssX < r.x + r.w && cssY >= r.y && cssY < r.y + r.h) return r.slot;
   }
@@ -867,8 +879,16 @@ function readLocalInput(dt: number): PlayerInput | null {
   // released with the button. (CSS px = buffer px ÷ the render-scale seam.)
   let barEdge = false;
   if (input.lmbPressed) {
-    const slotHit = hudSlotAt(input.mouse.x / input.pointerScale, input.mouse.y / input.pointerScale);
-    if (slotHit !== null) { barPress = { slot: slotHit, lock: null }; barEdge = true; }
+    const cx = input.mouse.x / input.pointerScale, cy = input.mouse.y / input.pointerScale;
+    // THE PRESSABLE META first: the mini-button rides ABOVE its slot, so the
+    // two rects never overlap; a click there is an EDGE on the meta for the
+    // button's hold (withheld from the primary exactly like a slot press).
+    const metaHit = hudMetaSlotAt(cx, cy);
+    if (metaHit !== null) { barPress = { slot: metaHit, lock: null, meta: true }; barEdge = true; }
+    else {
+      const slotHit = hudSlotAt(cx, cy);
+      if (slotHit !== null) { barPress = { slot: slotHit, lock: null }; barEdge = true; }
+    }
   }
   if (barPress && !input.lmb) barPress = null;
   let dx = 0, dy = 0;
@@ -985,9 +1005,15 @@ function readLocalInput(dt: number): PlayerInput | null {
   ];
   // THE PRESSABLE BAR lands on its slot: held for the button's whole hold,
   // an edge on the frame it went down (the same shape a key delivers).
+  let metaClick: number | null = null;
   if (barPress && barPress.slot < held.length) {
-    held[barPress.slot] = true;
-    if (barEdge) edge[barPress.slot] = true;
+    if (barPress.meta) {
+      // A meta click is an EDGE on the mini-button: no hold, no primary.
+      if (barEdge) metaClick = barPress.slot;
+    } else {
+      held[barPress.slot] = true;
+      if (barEdge) edge[barPress.slot] = true;
+    }
   }
   // THE UNARMED-FLOOR opt-out (Settings.improvisedStrike): declined, an
   // EMPTY slot's press never leaves this client — the world's floor rule
@@ -998,6 +1024,13 @@ function readLocalInput(dt: number): PlayerInput | null {
     for (let i = 0; i < held.length; i++) {
       if (!p.skills[i]) { held[i] = false; edge[i] = false; }
     }
+  }
+  // THE PRESSABLE META's landing: the clicked mini-button fires its slot's
+  // meta as an edge — the modifier lane's exact shape, no modifier needed.
+  if (metaClick !== null) {
+    const metaEdge = edge.map(() => false);
+    metaEdge[metaClick] = true;
+    return { dx, dy, aim, held, edge: edge.map(() => false), metaEdge };
   }
   // The META layer (rebindable; shift by default): modifier+slot fires the
   // slot skill's META-ACTION (Detonate / Enrage / Thrust!) INSTEAD of a new
@@ -1103,6 +1136,12 @@ function handleLocalPanels(): void {
   if (ui.escapeMenuOpen) return;
   if (!ui.blockingFor(world.localSeat.id) && (input.justPressed(kb.townPortal) || (!padPointer.active && pad.justPressed(settings.padBinds.townPortal)))) {
     world.requestMeta({ t: 'townPortal' });
+  }
+  // THE COMPANION STANCE (engine/companionStances.ts): one press walks every
+  // bonded beast's conduct on the bar — host-judged like every meta intent.
+  if (!ui.blockingFor(world.localSeat.id) && (input.justPressed(kb.companionStance)
+    || (!padPointer.active && pad.justPressed(settings.padBinds.companionStance)))) {
+    world.requestMeta({ t: 'companionStance' });
   }
   // Panel toggles answer to key OR pad bind — and the pad ones deliberately
   // stay live in pointer mode (the D-pad flips panels while browsing them).
@@ -1455,6 +1494,7 @@ function handleCouchPanels(): void {
     const seat = world.seats.find(s => s.id === g.seatId);
     if (!seat || seat.actor.dead || seat.actor.downed) continue;
     if (!g.pointer.active && g.gpad.justPressed(pb.townPortal)) world.applyAction(seat, { t: 'townPortal' });
+    if (!g.pointer.active && g.gpad.justPressed(pb.companionStance)) world.applyAction(seat, { t: 'companionStance' });
     if (g.gpad.justPressed(pb.panelChar)) ui.toggleCharSheet(g.seatId);
     if (g.gpad.justPressed(pb.panelTree)) ui.toggleTree(g.seatId);
     if (g.gpad.justPressed(pb.panelMap)) ui.toggleMap();

@@ -245,6 +245,7 @@ export function applyBuild(world: World, spec: BuildSpec, fallbackGearSeed: numb
     // THE STAMPED OPENING: a reference build wakes on the class's base bar
     // (the re-kindle hatch is no sim consumer; the stamp keeps the meta whole).
     opening: [...classDef.bar],
+    stances: {}, // every bond reads the default conduct (companionStances.ts)
     name: spec.label ?? spec.id,
     baseAttrs: { ...classDef.attributes, ...(spec.attributes ?? {}) } as PlayerMeta['baseAttrs'],
     attrs: { ...classDef.attributes, ...(spec.attributes ?? {}) } as PlayerMeta['attrs'], // recomputed by recalcPlayer

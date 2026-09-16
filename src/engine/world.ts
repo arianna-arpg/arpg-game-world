@@ -17,6 +17,8 @@ import { Assaults, assaultNode } from './assault';
 import { Challenges } from './challenges';
 import { challengeOf } from './challengeSpec';
 import { companionBondOf, type CompanionSaved } from './companionSpec';
+import { companionStanceIdOf, nextStanceId } from './companionStances';
+import { COMPANION_STANCES } from '../data/companionStances';
 import { OdysseyRuntime } from './odyssey';
 import { ODYSSEY_CFG, odysseyFaction, odysseyQuestId } from '../data/odyssey';
 import { instanceCastCycle, instanceTreeMods, instanceTreeOver } from './skills';
@@ -1714,6 +1716,10 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'mimicSelect': return isStr(a.sid);
     case 'pickTreeNode': return isStr(a.skillId) && isStr(a.nodeId);
     case 'untameCompanion': return isIdx(a.actorId);
+    // THE STANCE SHIFT: an optional bond skill id + an optional stance id —
+    // both untrusted strings the mutator re-resolves against the registries.
+    case 'companionStance':
+      return (a.skillId === undefined || isStr(a.skillId)) && (a.stance === undefined || isStr(a.stance));
     case 'levelSkill': return isStr(a.skillId);
     // THE SACRIFICIAL FONT's recipes (data/essences.ts FONT_CFG): rarities
     // are a closed vocabulary, tiers untrusted client integers (the
@@ -1808,6 +1814,12 @@ export interface PlayerMeta {
    *  re-kindles Carve and never Cleave. Absent in older saves → the class's
    *  base bar (the pre-stamp reading, byte for byte). */
   opening: (string | null)[];
+  /** THE COMPANION STANCES (engine/companionStances.ts): the keeper's
+   *  standing conduct per bond skill (skill id → stance id) — the pack's
+   *  own mind between orders. Absent = the fabric's default; saved with
+   *  the character, shipped on the wire, sanitized against the registry
+   *  on every load (a renamed stance drops to the default). */
+  stances: Record<string, string>;
   /** THE NAME (Naming, meta/nemesis.ts): the player-given name — or the class
    *  name when unnamed — that threads this character into the world's memory
    *  (sagas key off its normalized form) and labels it everywhere a person
@@ -2036,6 +2048,12 @@ const XP_SCALE = 0.8;
 const MONSTER_LEVEL_SCALE: Record<string, number> = {
   life: 0.22, damage: 0.1, accuracy: 0.06, evasion: 0.06,
 };
+/** A monster's KIT level from its body level (the same ladder the player's
+ *  gems climb): one skill level per four body levels. createMonster mints
+ *  through it and relevelActor re-levels a living body's kit through it. */
+export function monsterSkillLevelOf(level: number): number {
+  return 1 + Math.floor((level - 1) / 4);
+}
 const COUNT_SCALE = 1.25;        // ≈ 1/XP_SCALE: restores net XP at the reference area
 const REF_AREA = 1900 * 1300;    // the old deepwood footprint — the rebalance anchor
 /** PURCHASED-POCKET population knobs (the "never a death trap" contract —
@@ -4182,6 +4200,7 @@ export class World {
     const meta: PlayerMeta = {
       classDef,
       opening: [...bar],
+      stances: {},
       name: classDef.name,
       baseAttrs: { ...classDef.attributes },
       attrs: { ...classDef.attributes },
@@ -27117,6 +27136,7 @@ export class World {
       // THE STAMPED OPENING: a blade's opening is the loadout it was fielded
       // with (the template's or the veteran's own bar) — its own truth.
       opening: [...snapshot.bar],
+      stances: {},
       name: classDef.name, // the seat's DISPLAY name is stamped by the spawner
       baseAttrs: { ...snapshot.baseAttrs },
       attrs: { ...snapshot.baseAttrs },
@@ -28934,6 +28954,7 @@ export class World {
       case 'mimicSelect': this.mimicSelectFor(action.sid, seat); break;
       case 'pickTreeNode': this.pickTreeNode(action.skillId, action.nodeId, seat); break;
       case 'untameCompanion': this.releaseCompanion(action.actorId, seat); break;
+      case 'companionStance': this.cycleCompanionStance(seat, action.skillId, action.stance); break;
       case 'fontMerge': this.fontMergeSkill(action.skillId, action.rarity, seat); break;
       case 'fontConvert': this.fontConvertEssence(action.tier, action.dir, seat); break;
       case 'fontReset': this.fontResetTree(action.skillId, seat); break;
@@ -29026,6 +29047,62 @@ export class World {
   // ------------------------------------------------------------- monsters ---
 
   /** Build an actor from a bestiary entry — used for spawns AND summons. */
+  /** THE LEVEL STAMP — ONE fold for everything a body's LEVEL decides: the
+   *  baseline growth source (MONSTER_LEVEL_SCALE), the def's opt-in per-stat
+   *  scaling, hit-counted plies (pliesMax — the caller settles the live
+   *  count) and the boss poise pool. createMonster mints through it and
+   *  relevelActor re-stamps a LIVING body through it (the growing bond), so
+   *  a re-leveled body and a fresh mint at that level can never drift. */
+  private stampMonsterLevel(a: Actor, def: MonsterDef, level: number): void {
+    a.level = level;
+    const lv = level - 1;
+    // THE PLY FABRIC (engine/plies.ts): hit-counted durability stamped at
+    // mint — the life pool underneath stays authored and fully live.
+    if (def.plies) {
+      a.plySpec = def.plies;
+      a.pliesMax = plyCountOf(def.plies, level);
+    }
+    // Monsters grow with wave level through the same modifier system. The
+    // baseline (life/damage/accuracy/evasion) is a global lever; per-stat
+    // scaling is opt-in below.
+    a.sheet.setSource('level',
+      Object.entries(MONSTER_LEVEL_SCALE).map(([stat, c]) => mod(stat, 'increased', c * lv)));
+    // OPT-IN per-stat scaling (StatScale): flat/increased per-level (× lv^pow) +
+    // a geometric MORE term — layered on the baseline, applied ONLY where noted.
+    if (def.scaling) {
+      const scaleMods: Modifier[] = [];
+      for (const [stat, s] of Object.entries(def.scaling)) {
+        const lvp = Math.pow(lv, s.pow ?? 1); // 0 at level 1 ⇒ base is the lv-1 value
+        if (s.flatPerLevel) scaleMods.push(mod(stat, 'flat', s.flatPerLevel * lvp));
+        if (s.incPerLevel) scaleMods.push(mod(stat, 'increased', s.incPerLevel * lvp));
+        if (s.rate) scaleMods.push(mod(stat, 'more', Math.pow(1 + s.rate, lv) - 1));
+      }
+      if (scaleMods.length) a.sheet.setSource('scaling', scaleMods);
+    }
+    // Bosses hold their ground: a default poise pool (levels with them)
+    // unless the def declares one.
+    if (def.boss && def.base.poise === undefined) {
+      a.sheet.setBase('poise',
+        DEFENSE_CFG.poise.bossBase + DEFENSE_CFG.poise.bossPerLevel * lv);
+    }
+  }
+
+  /** Re-level a LIVING body in place (the growing bond's door —
+   *  engine/companionBonds.ts): the same stamp createMonster minted, life
+   *  and plies kept as FRACTIONS (growing never heals or wounds a body), the
+   *  kit re-leveled on the monster formula. A no-op at the same level. */
+  relevelActor(a: Actor, level: number): void {
+    const def = a.defId ? MONSTERS[a.defId] : undefined;
+    if (!def || a.level === level) return;
+    const lifeFrac = a.life / Math.max(1, a.maxLife());
+    const plyFrac = a.pliesMax > 0 ? a.plies / a.pliesMax : 1;
+    this.stampMonsterLevel(a, def, level);
+    a.life = Math.min(a.maxLife(), Math.max(a.life > 0 ? 1 : 0, a.maxLife() * lifeFrac));
+    a.plies = Math.min(a.pliesMax, Math.round(a.pliesMax * plyFrac));
+    const skillLevel = monsterSkillLevelOf(level);
+    for (const s of a.skills) if (s) s.level = skillLevel;
+  }
+
   createMonster(defId: string, level: number, team: Team, owner?: Actor): Actor {
     const def: MonsterDef = MONSTERS[defId];
     const a = new Actor(def.name, team, vec(0, 0));
@@ -29066,28 +29143,13 @@ export class World {
     if (def.base.moveSpeed === 0) a.stationary = true;
     // THE PLY FABRIC (engine/plies.ts): hit-counted durability stamped at
     // mint — the life pool underneath stays authored and fully live.
-    if (def.plies) {
-      a.plySpec = def.plies;
-      a.pliesMax = a.plies = plyCountOf(def.plies, level);
-    }
-    // Monsters grow with wave level through the same modifier system. The
-    // baseline (life/damage/accuracy/evasion) is a global lever; per-stat scaling
-    // is opt-in below.
+    // THE LEVEL STAMP (stampMonsterLevel — ONE fold): plies, the baseline
+    // growth source, opt-in per-stat scaling and the boss poise pool, shared
+    // with the in-place relevel a growing bond rides (relevelActor). A fresh
+    // mint stands at full plies.
     const lv = level - 1;
-    a.sheet.setSource('level',
-      Object.entries(MONSTER_LEVEL_SCALE).map(([stat, c]) => mod(stat, 'increased', c * lv)));
-    // OPT-IN per-stat scaling (StatScale): flat/increased per-level (× lv^pow) +
-    // a geometric MORE term — layered on the baseline, applied ONLY where noted.
-    if (def.scaling) {
-      const scaleMods: Modifier[] = [];
-      for (const [stat, s] of Object.entries(def.scaling)) {
-        const lvp = Math.pow(lv, s.pow ?? 1); // 0 at level 1 ⇒ base is the lv-1 value
-        if (s.flatPerLevel) scaleMods.push(mod(stat, 'flat', s.flatPerLevel * lvp));
-        if (s.incPerLevel) scaleMods.push(mod(stat, 'increased', s.incPerLevel * lvp));
-        if (s.rate) scaleMods.push(mod(stat, 'more', Math.pow(1 + s.rate, lv) - 1));
-      }
-      if (scaleMods.length) a.sheet.setSource('scaling', scaleMods);
-    }
+    this.stampMonsterLevel(a, def, level);
+    a.plies = a.pliesMax;
     // CO-OP: scale HOSTILE monsters (never player-side minions) by the live party
     // size. coopScale returns 0 at 1 player ⇒ the source is never set ⇒ single-
     // player identical. Lands in starting life via fillResources() below.
@@ -29164,14 +29226,10 @@ export class World {
         Math.pow(a.radius / DEFENSE_CFG.weight.refRadius, DEFENSE_CFG.weight.radiusPow)
         * defDensity(def) * (def.heft ?? 1));
     }
-    // Bosses hold their ground: a default poise pool (levels with them)
-    // unless the def declares one. Rank-and-file keep the registry base —
+    // (Bosses hold their ground: the default poise pool — levels with them —
+    // is part of THE LEVEL STAMP above; rank-and-file keep the registry base,
     // which ships EMPTY: poise is a defense TEXTURE a def authors, never
-    // ambience (a rabbit has none; a knight declares his).
-    if (def.boss && def.base.poise === undefined) {
-      a.sheet.setBase('poise',
-        DEFENSE_CFG.poise.bossBase + DEFENSE_CFG.poise.bossPerLevel * lv);
-    }
+    // ambience — a rabbit has none; a knight declares his.)
     // BREATH: does this body tire? The material's nature (MATERIAL_NATURE,
     // data/monsters.ts) with the def's own override — read once here so
     // the AI's default-kite gate is a field test, not a registry walk.
@@ -29263,7 +29321,7 @@ export class World {
     if (def.flier) { a.flying = true; a.flyingBase = true; }
     a.spawnedAt = this.time;
     // Monsters' skills level up with them — same leveling system as the player.
-    const skillLevel = 1 + Math.floor(lv / 4);
+    const skillLevel = monsterSkillLevelOf(level);
     a.skills = def.skills.map(id => makeSkillInstance(SKILLS[id], skillLevel));
     // LEVEL-GATED GRANTS (MonsterGrant): once the monster is high enough, its kit
     // evolves — gain a new skill, or socket a support into an existing one (riding
@@ -29691,6 +29749,44 @@ export class World {
     return Math.max(1, (fx?.slots ?? 1) + instanceTameMod(inst).slotsAdd);
   }
 
+  /** THE STANCE (engine/companionStances.ts): the keeper's standing conduct
+   *  for one bond skill — the held choice, or the fabric's default. */
+  companionStanceOf(seat: Seat, skillId: string): string {
+    return companionStanceIdOf(seat.meta.stances, skillId);
+  }
+
+  /** Set one bond's stance: the keeper's choice lands on the seat (saved,
+   *  wired), the bond rebuilds the beasts' standing orders on its next
+   *  refresh, and the shift SHOWS — each living beast speaks the stance
+   *  and casts the tree's stance art. False when nothing changed, the id
+   *  is unknown, or the seat holds no such skill. */
+  setCompanionStance(seat: Seat, skillId: string, stanceId: string): boolean {
+    if (!COMPANION_STANCES[stanceId]) return false;
+    const held = seat.meta.knownSkills.has(skillId) || seat.actor.skills.some(s => s?.def.id === skillId);
+    if (!held) return false;
+    const prev = this.companionStanceOf(seat, skillId);
+    seat.meta.stances[skillId] = stanceId;
+    this.companionBonds.refresh();
+    if (prev !== stanceId) this.companionBonds.stanceShift(this.seatHero(seat), skillId, stanceId);
+    this.markMetaDirty(seat);
+    this.charDirty = true;
+    return prev !== stanceId;
+  }
+
+  /** Walk one bond's stance a step along the cycle (or land on `stanceId`);
+   *  no skill named = every tame skill on the bar (the rebindable action's
+   *  read). True when any bond moved. */
+  cycleCompanionStance(seat: Seat, skillId?: string, stanceId?: string): boolean {
+    const ids = skillId ? [skillId]
+      : seat.actor.skills.filter(s => s && s.def.effects.some(f => f.type === 'tame')).map(s => s!.def.id);
+    let moved = false;
+    for (const id of new Set(ids)) {
+      const to = stanceId ?? nextStanceId(this.companionStanceOf(seat, id));
+      moved = this.setCompanionStance(seat, id, to) || moved;
+    }
+    return moved;
+  }
+
   /** Does a minion SERVE the named skill? True for its direct summons AND
    *  its bonded companions — retinue-scoped orders (meta commands,
    *  conducted casts) reach both without knowing the marker scheme. */
@@ -29937,6 +30033,15 @@ export class World {
     beast.bondGroup = String(beast.id);
     beast.noBounty = true;
     beast.lifelineId = undefined;      // a bond is not borrowed unlife
+    // ONE FOLD for the keeper's investment: a body minted WITH an owner (the
+    // starting hound, a restored bond) carries createMonster's untagged
+    // 'owner' minion source — the bond's own 'companionBond' source
+    // (engine/companionBonds.ts refreshBeast) reads the same minionLife /
+    // minionDamage through the host skill's tags, so the mint-time copy
+    // would count the keeper's passives twice on a loaded companion and
+    // never on a wild claim. The bond's fold is the only fold.
+    beast.sheet.removeSource('owner');
+    beast.standingOrder = undefined;   // the bond stamps the stance's order
     beast.squadId = undefined; beast.squadLeader = undefined;
     beast.tag = undefined;
     beast.aiCommand = undefined;
@@ -36836,6 +36941,16 @@ export class World {
           this.text(vec(caster.pos.x, caster.pos.y - 24), 'the bond answers', '#a8d8a0', 12);
         }
       }
+      // THE STANCE SHIFT (the tame skill's meta payload — engine/
+      // companionStances.ts): the pressing seat's standing conduct for the
+      // host bond walks the cycle (or lands on the named stance). Scoped by
+      // hostSkillId like the whistle; a bar-cast shift (no host) walks every
+      // bond on the bar; a seatless caster has no conduct to keep — refund.
+      if (fx.type === 'companionStance') {
+        const seat = this.seatOf(caster);
+        if (!seat) this.refundCooldown(caster, def.id);
+        else this.cycleCompanionStance(seat, inst.hostSkillId, fx.stance);
+      }
       // THE RELOAD (restoreSkillCharges): rounds pour back into use-charge
       // banks. hostSkillId scopes it to the skill this press was minted for
       // (the empty gun's own 'chargesEmpty' convert or meta rack); a skill
@@ -42379,6 +42494,13 @@ export class World {
       // acquireTarget.
       target.aiHitAt = this.time;
       target.aiHitById = caster.id;
+      // Caster-side twin: the last HOSTILE body this blow's author struck —
+      // a defensive companion answers "whatever the keeper wounds" off it
+      // (engine/companionStances.ts). Friendly-fire seams never stamp it.
+      if (target.team !== caster.team) {
+        caster.lastFoeAt = this.time;
+        caster.lastFoeId = target.id;
+      }
       // THE STING and THE TASTE (BrainDef.drives): a landed hit jumps both
       // sides' wants — chip damage stokes a troll's wrath long before its
       // life bar would (free early-outs for the driveless majority).

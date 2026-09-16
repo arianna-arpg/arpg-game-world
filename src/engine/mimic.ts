@@ -69,7 +69,7 @@ export const MIMIC_CFG = {
   denyDeliveries: ['summon'] as string[],
   /** Effect-shape refusals: arts that command a kit the thief lacks. */
   denyEffects: ['minionCast', 'commandMinions', 'recallMinions', 'tame',
-    'whistleCompanion', 'detonateMinions'] as string[],
+    'whistleCompanion', 'companionStance', 'detonateMinions'] as string[],
 };
 
 /** One captured art: the skill, the kind that taught it (its face — the

@@ -3248,9 +3248,11 @@ export const SKILLS: Record<string, SkillDef> = {
     tree: BOND_STARTER_TREES.tame_beast,
     id: 'tame_beast', name: 'Tame Beast',
     description: 'HOLD your aim on a living beast to fill the 2.4 second claim: sure below half'
-      + ' life, a 35% chance on a hale one. A tamed companion falls DOWNED, never dead. With'
-      + ' every bond slot filled this becomes Whistle (recall, revive and heal the pack); shift-press'
-      + ' commands it to ATTACK. Unlearning breaks the bond (relearn and it returns downed,'
+      + ' life, a 35% chance on a hale one. A tamed companion falls DOWNED, never dead, and'
+      + ' grows with you: the bond levels with its keeper. With every bond slot filled this'
+      + ' becomes Whistle (recall, revive and heal the pack); shift-press shifts the pack’s'
+      + ' STANCE (aggressive, defensive, passive), and a socketed order gem chains its order'
+      + ' after the shift. Unlearning breaks the bond (relearn and it returns downed,'
       + ' owed a revival); release it for good at the Tracker.',
     tags: ['spell', 'minion', 'duration', 'companion'], color: '#a8c87a',
     manaCost: 12, cooldown: 6, useTime: 0,
@@ -3271,7 +3273,12 @@ export const SKILLS: Record<string, SkillDef> = {
     // The exhausted-skill two-for-one: bond held → the base press IS the
     // Whistle (SkillDef.convert); the meta slot commands the companion.
     convert: { when: 'companionsFull', skillId: 'companion_whistle' },
-    meta: { skillId: 'command_assault', label: 'Attack!' },
+    // THE STANCE SHIFT (engine/companionStances.ts) is the bond's own meta:
+    // the shift-press walks the pack's conduct — aggressive → defensive →
+    // passive — and the mini-button wears the current stance. ORDERS ride
+    // in as socketed grants (the Command gem's Assault chains one beat
+    // after the shift): the beast charges the mark, then keeps its stance.
+    meta: { skillId: 'companion_stance', label: 'Stance' },
     leveling: { perLevel: [mod('minionLife', 'increased', 0.12), mod('minionDamage', 'increased', 0.08)] },
   },
 

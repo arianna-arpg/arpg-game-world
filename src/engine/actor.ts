@@ -710,6 +710,11 @@ export class Actor {
   aiLastScanAt = -1;
   aiHitAt = -1;
   aiHitById = -1;
+  /** Caster-side twin of the strike ledger above (world.ts resolveHit): the
+   *  last HOSTILE body this actor landed a blow on, and when. A defensive
+   *  companion reads its keeper's pair to answer "whatever you wound". */
+  lastFoeAt = -1;
+  lastFoeId = -1;
   /** Held-lock reference (transient — never wired, never saved): spares the
    *  cadence fast path an O(actors) id lookup; validated against
    *  aiTargetId and death on every use, so a stale ref self-heals into a
@@ -1748,6 +1753,12 @@ export class Actor {
    *  fulfilled or expired. Set via ai.ts issueCommand — never by hand, so
    *  receipt reliably drops the current agenda and the order OVERRIDES. */
   aiCommand?: CommandState;
+  /** THE STANDING ORDER (engine/companionStances.ts): the command-shaped
+   *  conduct this body wears BENEATH every issued order — a bonded beast's
+   *  stance. updateAI reads it through the same kind registry as aiCommand,
+   *  only while no issued order stands; never expires, never saved (the
+   *  keeper's choice is the saved truth — PlayerMeta.stances). */
+  standingOrder?: CommandState;
   // --- THE PLY FABRIC (engine/plies.ts) ------------------------------------
   /** Hit-counted durability: plies remaining / the resolved ceiling.
    *  While plies remain, landed hits TEAR ONE PLY and move no life —
