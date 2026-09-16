@@ -10,17 +10,22 @@ app.whenReady().then(async () => {
   const win = new BrowserWindow({ show: false, width: 1400, height: 1000, webPreferences: { offscreen: true, backgroundThrottling: false } });
   const js = source => win.webContents.executeJavaScript(source);
   const open = async () => { await js(`__game.ui.showAccountScreen(); void 0`); await wait(200); };
-  const reload = async () => { await win.loadURL(server.url); await wait(800); await open(); };
+  // Discovery cards are tested after the first real death reveals the Vault.
+  const reload = async () => { await win.loadURL(server.url); await wait(800); await js(`__game.account().ledger.account_deaths ||= 1; void 0`); await open(); };
   try {
     await reload();
     const fresh = await js(`(() => {
       const cards = [...document.querySelectorAll('[data-tip="rumor"]')];
       return cards.map(c => ({ html: c.outerHTML, body: c.querySelector('.ushroud-body').textContent,
+        progressed: [...c.querySelectorAll('.uobj i')].some(e => parseFloat(e.style.width) > 0),
         tip: __game.ui.rumorTooltip(Number(c.dataset.rumorI)) }));
     })()`);
     assert(fresh.length > 0, 'fresh account shows mysteries');
     assert(fresh.every(c => !/Strike living enemies|fire, cold|Sorcerer|every vestige|quarter done/i.test(c.html + JSON.stringify(c.tip))), 'no initial recipe or script-mechanics leak');
-    assert(fresh.every(c => !/[a-z]/i.test(c.body)), 'fresh discovery prose is entirely runic');
+    const deathRumors = fresh.filter(c => c.progressed);
+    assert.equal(deathRumors.length, 1, 'the first real death advances its own discovery');
+    assert(fresh.every(c => deathRumors.includes(c) || !/[a-z]/i.test(c.body)), 'untouched discovery prose remains entirely runic');
+    assert(deathRumors.every(c => /[\u16a0-\u16ff]/.test(c.body)), 'one death does not fully reveal its discovery');
     await js(`__game.account().ledger['deed:elements_rehearsed']=1; void 0`);
     await open();
     const partial = await js(`(() => {

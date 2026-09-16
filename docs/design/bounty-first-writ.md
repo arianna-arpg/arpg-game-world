@@ -20,6 +20,17 @@ parked behind it at her word.
 
 ## 0. Her commission (2026-08-26 — the asks, encoded as direction)
 
+September 16, 2026: the Vault itself is hidden until the account's first
+**actual gameplay death** (`isVaultAvailable`, reading `account_deaths`).
+The intended opening is Begin → tutorial → tutorial fall into Mu → class
+selection → first proper run → death → Reckoning. Tutorial completion and
+forfeiting do not reveal the Vault. Its shared UI entry point refuses early
+opens before changing screens or marking `bounty_lesson_prompted`; menu and
+class-selection links and first-run hints respect the same predicate. The
+first real death still introduces the free Bounty Board with zero essence.
+Verification: `balance/vault-progression-ui.cjs`, followed by the existing
+Vault discovery checks after a production build.
+
 1. **The board is the very first unlock**, and it costs **0 Mortal
    Essence**. The old gates (any quest seen through / level 10, teased)
    come OFF — the row stands available from the account's first Vault

@@ -435,7 +435,7 @@ import {
 import {
   featureEnabled, isSkillUnlockedForDrop, isSupportUnlockedForDrop, FEATURE,
   STARTER_SKILLS, applyCredits, META_CURRENCY_LABEL,
-  LEDGER_ACCOUNT_DEATHS, LEDGER_FLASK_LESSON, CLASS_LEVEL_MILESTONES,
+  LEDGER_ACCOUNT_DEATHS, LEDGER_FLASK_LESSON, CLASS_LEVEL_MILESTONES, isVaultAvailable,
   LEDGER_CORPSES_RECLAIMED,
   classLevelLedgerKey, gemDropKey, LEDGER_GEMDROP_TOTAL, LEDGER_VENDOR_BOUGHT,
   LEDGER_CRAFTS_UNLOCKED, LEDGER_LEGENDARY_SKILL_DROP, LEDGER_ZONES_EXPLORED,
@@ -5271,7 +5271,7 @@ export class World {
     for (const u of got) {
       if (u.kind !== 'class') continue;
       const name = CLASSES.find(c => c.id === u.payload.classId)?.name ?? u.payload.classId;
-      this.notice(`The ${name} is ready in the Vault. Its arts can now be found, and a new vessel awaits your next waking.`, '#8fa8d8', 18, 'world');
+      this.notice(`The ${name} ${isVaultAvailable(this.account) ? 'is ready in the Vault' : 'has been discovered'}. Its arts can now be found, and a new vessel awaits your next waking.`, '#8fa8d8', 18, 'world');
     }
   }
 
@@ -46719,7 +46719,7 @@ export class World {
     if (v && v.tradeGate === false) return null;
     // No catalog in scope here — trade gates speak feature/ledger avenues.
     if (gateMet(this.account, VENDOR_CFG.trade.gate, 'all', () => false)) return null;
-    return VENDOR_CFG.trade.hint;
+    return isVaultAvailable(this.account) ? VENDOR_CFG.trade.hint : 'You have no way to pay. This counter cannot trade with you yet.';
   }
 
   /** THE MEMORY COUNTER (skill-items M3 — the gem case's face-seal retired):

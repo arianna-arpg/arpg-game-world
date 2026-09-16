@@ -103,7 +103,7 @@ import type { Seat, VendorEntry, VendorHoldRow, World } from '../engine/world';
 import { COUCH_CFG, couchMinPads } from '../data/couch';
 import { HOLD_CLASSES } from '../data/harborholds';
 import {
-  accountLevelThreshold, featureEnabled, FEATURE, isClassUnlocked, isSkillUnlockedForDrop,
+  accountLevelThreshold, featureEnabled, FEATURE, isClassUnlocked, isSkillUnlockedForDrop, isVaultAvailable,
   isSupportUnlockedForDrop, gemDropKey, META_CURRENCY_LABEL, selectableSlotCount,
   sealReckoning, type Account, type RunRecord,
 } from '../meta/account';
@@ -2724,6 +2724,7 @@ export class UI {
     // A teaser card names its exact remedy: more Class Slots (hand size) or
     // the specific Class bundle in the Vault (pool depth) — never a dead lock.
     const lockNote = (t: { def: ClassDef; reason: 'slots' | 'class' }): string => {
+      if (!isVaultAvailable(acc)) return '🔒 A calling for another waking.';
       if (t.reason === 'slots') return '🔒 Unlock more Class Slots in the Vault';
       const u = classUnlockFor(t.def.id);
       return u ? `🔒 Earned, never bought: its card hangs shrouded in the Vault`
@@ -2734,7 +2735,7 @@ export class UI {
       <div class="class-card locked" data-locked="true" style="opacity:.45">
         <div class="cname runescript" style="letter-spacing:3px">${encipher('unclaimed')}</div>
         <div class="cdesc runescript" style="font-style:italic">${esc(hint)}</div>
-        <div class="class-lock">🔒 An undiscovered calling. Visit the Vault.</div>
+        <div class="class-lock">🔒 An undiscovered calling.${isVaultAvailable(acc) ? ' Visit the Vault.' : ''}</div>
       </div>`;
     // A dealt card wears THE OPENING CHOOSER (the chosen opening per seat,
     // a swap badge where alternates are owned); a teaser keeps the plain
@@ -2803,8 +2804,7 @@ export class UI {
           ? ` &nbsp;·&nbsp; ${shrouded.length} shrouded` : ''} &nbsp;(re-deals each new run)</div>
       <div class="subtitle">
         A random hand is dealt each run from the classes your account has earned.
-        Class Slots widen the hand; classes are EARNED through deeds — the Vault's shrouded
-        cards carry each one's objectives — and deepen the pool; Mastery rungs open a class's
+        ${isVaultAvailable(acc) ? "Class Slots widen the hand; classes are EARNED through deeds — the Vault's shrouded cards carry each one's objectives — and deepen the pool;" : 'Classes are earned through deeds and deepen the pool;'} Mastery rungs open a class's
         alternate openings; every class you realize opens its Vocation.
         Classes are only starting points; the tree and every skill stay open to any build.
         Pick a class to begin; tune the world mix under Event Weights first if you like.
@@ -2813,7 +2813,7 @@ export class UI {
       <div class="class-grid">${picks.map(c => classCard(c)).join('')}${teasers.map(t => classCard(t.def, lockNote(t))).join('')}${rumors.map(rumorCard).join('')}</div>
       <div class="acct-btns">
         <button id="event-weights-btn">⚙ Event Weights</button>
-        <button id="account-btn">Vault (Unlocks)</button>
+        ${isVaultAvailable(acc) ? '<button id="account-btn">Vault (Unlocks)</button>' : ''}
         ${onBack ? '<button id="class-back">Back</button>' : ''}
       </div>`;
     this.classSelect.classList.remove('hidden');
@@ -2876,7 +2876,7 @@ export class UI {
         onPick(picked, this.pendingModeId, typed || undefined, this.kitPicksFor(picked));
       });
     });
-    document.getElementById('account-btn')!.addEventListener('click',
+    document.getElementById('account-btn')?.addEventListener('click',
       () => this.showAccountScreen(() => this.showClassSelect(onPick, onBack)));
     document.getElementById('event-weights-btn')!.addEventListener('click',
       () => this.showExpeditionSetup(() => this.showClassSelect(onPick, onBack)));
@@ -2894,8 +2894,11 @@ export class UI {
    *  shelving, the whole Vault is one flat wall — its furniture rises with
    *  the player's own knowledge of the game. */
   showAccountScreen(onClose?: () => void): void {
-    this.hideAll(); // close whatever opened it (start menu / class select / …) so it never overlaps
     const acc = this.getAccount();
+    // Guard the shared entry point before changing screens or stamping the
+    // Bounty Board lesson. Hidden buttons alone cannot protect other callers.
+    if (!isVaultAvailable(acc)) return;
+    this.hideAll(); // close whatever opened it (start menu / class select / …) so it never overlaps
     // THE RECKONING VISIT: a Vault opened while ANY Mortal Essence stands is
     // the run's closing prompt — the seal law arms (leaving requires the
     // confirm, and sealing lets every unassigned point go: Mortal Essence
@@ -6267,7 +6270,7 @@ export class UI {
       // the stock is honestly buyable — FEATURE.VENDOR_GEMS gates the
       // true-gem share at the stock builder now.
       const tradeRefusal = isClient
-        ? (world.netVendorTradeOpen === false ? VENDOR_CFG.trade.hint : null)
+        ? (world.netVendorTradeOpen === false ? (isVaultAvailable(this.getAccount()) ? VENDOR_CFG.trade.hint : 'This counter cannot trade with you yet.') : null)
         : world.vendorTradeRefusal(v);
 
       // --- shared per-entry pieces (indices are STOCK indices — the buy and
@@ -6453,7 +6456,7 @@ export class UI {
           ${this.salvageClusterHtml(seat, 'sell', this.scrapMode)}
         </div>` : (v.salvage && v.salvageLocked ? `
         <div style="margin-top:8px;border-top:1px dashed ${v.accent}55;padding-top:6px;color:#8a8678;font-size:11px">
-          🔒 ${v.salvageLocked}</div>` : '');
+          🔒 ${isVaultAvailable(this.getAccount()) ? v.salvageLocked : 'This service is not available yet.'}</div>` : '');
 
       const reserveBadge = canLock && lockCap > 0
         ? ` <span style="opacity:0.8;font-size:10px;font-weight:normal">· 🔒 ${lockedCount}/${lockCap} reserved</span>`
@@ -9688,7 +9691,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       // (Legacy banked essence still reckons: credits > 0 arms the seal law.)
       const lessonDue = !featureEnabled(acc, FEATURE.BOUNTY_BOARD)
         && !(acc.ledger.bounty_lesson_prompted ?? 0);
-      if (acc.credits > 0 || lessonDue) this.showAccountScreen(onDone);
+      if (isVaultAvailable(acc) && (acc.credits > 0 || lessonDue)) this.showAccountScreen(onDone);
       else onDone();
     });
   }
@@ -10803,7 +10806,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     // A pending reckoning (essence standing on the account — a mid-reckoning
     // quit, or a pre-seal-law save) surfaces on the Vault button: the seal
     // law inside the Vault settles it the moment that visit closes.
-    const pending = acc.credits > 0;
+    const pending = isVaultAvailable(acc) && acc.credits > 0;
     this.startMenu.innerHTML = `
       <h1>${GAME_TITLE.toUpperCase()}</h1>
       <div class="acct-head">Account Level <b>${acc.level}</b>${pending
@@ -10815,8 +10818,8 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
           ? `title="Resume ${esc(contWho)} — exactly where the run left off"` : 'disabled'}>${canContinue
           ? 'Continue Run' : 'No Run to Continue'}</button>
         ${immortalsBtn}
-        <button id="sm-vault"${pending ? ' style="border-color:var(--gold)"' : ''}>${pending
-          ? `Vault — assign ${acc.credits} ${META_CURRENCY_LABEL}!` : 'Vault (Unlocks)'}</button>
+        ${isVaultAvailable(acc) ? `<button id="sm-vault"${pending ? ' style="border-color:var(--gold)"' : ''}>${pending
+          ? `Vault — assign ${acc.credits} ${META_CURRENCY_LABEL}!` : 'Vault (Unlocks)'}</button>` : ''}
         <button id="sm-chronicle">Chronicle of Runs${acc.runRecords.length ? ` (${acc.runRecords.length})` : ''}</button>
         <button id="sm-keys">Options</button>
         ${h.onCoop ? '<button id="sm-coop">Co-op (Beta)</button>' : ''}
@@ -10839,7 +10842,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       this.startMenu.classList.add('hidden'); h.onContinue(this.continueSave);
     });
     document.getElementById('sm-immortals')?.addEventListener('click', () => this.renderImmortalRoster());
-    document.getElementById('sm-vault')!.addEventListener('click', () =>
+    document.getElementById('sm-vault')?.addEventListener('click', () =>
       this.showAccountScreen(() => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster)));
     document.getElementById('sm-chronicle')!.addEventListener('click', () =>
       this.showChronicle(() => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster)));
@@ -10918,7 +10921,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       ${notice ? `<div class="acct-head" style="color:#e8b06a">${notice}</div>` : ''}
       <div class="esc-btns">
         <div class="sm-roster">${tiles}</div>
-        ${fallenN ? '<button id="sm-imm-vault">Vault — the Fallen shelf</button>' : ''}
+        ${fallenN && isVaultAvailable(acc) ? '<button id="sm-imm-vault">Vault — the Fallen shelf</button>' : ''}
         <button id="sm-imm-back">Back</button>
       </div>`;
     this.startMenu.querySelectorAll<HTMLElement>('.sm-roster-go').forEach(btn => {
@@ -11066,7 +11069,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
           <label class="exped-head"><input type="checkbox" data-en="${p.id}" ${c.enabled ? 'checked' : ''} ${dis}>
             <span class="exped-name" style="color:${p.color ?? 'var(--gold)'}">${p.label}</span></label>
           <div class="exped-blurb">${p.blurb}</div>
-          ${editable ? '' : `<div class="exped-lock">🔒 Buy this package in the Vault to tune it</div>`}
+          ${editable ? '' : `<div class="exped-lock">🔒 ${isVaultAvailable(acc) ? 'Buy this package in the Vault to tune it' : 'This configuration is not available yet'}</div>`}
           <div class="slider-row"><span>Begins</span><input type="range" min="${sB.min}" max="${sB.max}" step="${sStep}" value="${cs}" data-start="${p.id}" ${dis || startFixed ? 'disabled' : ''}><span class="sv" data-sv-start="${p.id}">${startTxt}</span></div>
           <div class="slider-row"><span>Frequency</span><input type="range" min="${wB.min}" max="${wB.max}" step="${wStep}" value="${cw}" data-weight="${p.id}" ${dis}><span class="sv" data-sv-weight="${p.id}">${cw}</span></div>
         </div>`;
@@ -11081,7 +11084,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       ? `<div class="mix-empty" style="padding:22px;line-height:1.7">
            No world packages unlocked yet. <b>Discover them in play</b>: e.g. reach <b>level 10</b> to find
            <b>Breaches</b>, slay a <b>Crowned</b> champion to command <b>Warbands</b>, or fell a <b>warlord</b>
-           for <b>Demon Invasions</b>. Then unlock their configuration in the <b>Vault</b>, and they'll appear
+           for <b>Demon Invasions</b>. ${isVaultAvailable(acc) ? 'Then unlock their configuration in the <b>Vault</b>,' : 'As their configurations become available,'} they'll appear
            here to tune. Until then the world runs on its sensible defaults.
          </div>`
       : `<div class="mix-label">World mix — relative frequency of your unlocked packages</div>

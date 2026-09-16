@@ -16,7 +16,7 @@ app.whenReady().then(async () => {
   const shot = async name => fs.writeFileSync(path.join(dir, name), (await win.webContents.capturePage()).toPNG());
   try {
     await win.loadURL(server.url); await wait(1200);
-    await js('__game.ui.showAccountScreen(); void 0');
+    await js('__game.account().ledger.account_deaths=1; __game.ui.showAccountScreen(); void 0');
     await click('#acct-wardrobe'); await wait(200);
     assert(await js("!!document.querySelector('.wardrobe canvas')"), 'Vault opens Wardrobe');
     assert.equal(await js("document.querySelectorAll('[data-wd-slot]').length"), 12);

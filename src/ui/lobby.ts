@@ -67,7 +67,7 @@ export function openCoopLobby(cb: LobbyCallbacks): void {
 
   // Class selection — real class CARDS restricted to the player's own unlocks.
   const classRow = h('div'); css(classRow, { marginBottom: '12px' });
-  classRow.append(h('div', 'Choose your class (from your Vault unlocks):'));
+  classRow.append(h('div', 'Choose from your unlocked classes:'));
   const cardWrap = h('div'); css(cardWrap, { display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '6px' });
   let selectedClassId = cb.classes[0]?.id ?? '';
   let classLocked = false;

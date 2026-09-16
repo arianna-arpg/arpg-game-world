@@ -180,6 +180,13 @@ export const FEATURE = {
  *  Immortal unlock; any future "die N times" content reads the same counter. */
 export const LEDGER_ACCOUNT_DEATHS = 'account_deaths';
 
+/** The Vault is first revealed by a real death's Reckoning. Tutorial falls
+ *  and forfeits never increment this ledger; finishing the prologue alone
+ *  must not expose account purchases before the first proper run. */
+export function isVaultAvailable(a: Account): boolean {
+  return (a.ledger[LEDGER_ACCOUNT_DEATHS] ?? 0) > 0;
+}
+
 /** Account-ledger key: an account that has LIVED Mireille's flask lesson —
  *  the gift loop closed once (gems learned and set to the bar, or traded
  *  away, or deliberately unlearned — world.ts MIREILLE_LESSON_LEDGER), or

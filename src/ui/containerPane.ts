@@ -44,6 +44,7 @@ import { ITEM_BASES } from '../data/itembases';
 import { ITEM_RARITIES, type ItemInstance } from '../engine/items';
 import { CATEGORY_GLYPHS } from '../render/itemIcons';
 import type { Seat, World } from '../engine/world';
+import { isVaultAvailable } from '../meta/account';
 
 /** What the drawers need from the panel that hosts them — read live, never
  *  held. The folio ids (`container:<id>`) and the docking law stay the
@@ -278,7 +279,7 @@ export class ContainerPane {
             style="${px}background:#16131d;border:1px solid ${reliquaryLesson ? '#e4cb97;box-shadow:inset 0 0 12px #9b805566' : '#2a2634'}"></div>`;
         } else if (boardOpenAt(full, x, y)) {
           const rung = containerRungAt(def, x, y);
-          cells += `<div title="${esc(rung ? `Sealed: opens with ${rung.label} (the Vault)` : 'Sealed')}"
+          cells += `<div title="${esc(rung ? `Sealed: opens with ${rung.label}${isVaultAvailable(this.host.world().account) ? ' (the Vault)' : ''}` : 'Sealed')}"
             style="${px}background:#0f0d14;border:1px dashed #2a2634;display:flex;align-items:center;justify-content:center;color:#3a3644;font-size:11px">🔒</div>`;
         }
       }
@@ -291,7 +292,7 @@ export class ContainerPane {
         <strong>A place for the unremembered</strong><br>
         A charm carried in your pack is silent. Drag your reward onto the glowing seat to wake its power,
         or use the button below. Taking it out removes that power.<br>
-        Your first seating teaches you to recognize relics in the wilds. More seats await in the Vault.
+        Your first seating teaches you to recognize relics in the wilds.${isVaultAvailable(this.host.world().account) ? ' More seats await in the Vault.' : ''}
         ${lessonCharm ? `<button data-reliquary-lesson-seat="${lessonCharm.uid}" style="display:block;width:100%;margin-top:8px;white-space:normal">Seat ${esc(lessonCharm.name)}</button>`
           : '<br>Bring your recovered charm from the pack. If it was dropped, retrieve it first.'}
       </div>` : ''}
@@ -307,7 +308,7 @@ export class ContainerPane {
       <div style="margin-top:8px;color:#8a8678;font-size:10px;line-height:1.5">
         ${esc(def.blurb)}<br>
         <span style="color:#6a6478">Drag a piece from your pack onto an open seat; drag it back to the pack (or the strip above) to unseat.
-        Sealed seats open through the Vault.</span>
+        ${isVaultAvailable(this.host.world().account) ? 'Sealed seats open through the Vault.' : ''}</span>
       </div>
       <div style="margin-top:6px;color:#8a8678;font-size:10px">${this.host.lockHintHtml()}</div>`;
     if (live && this.rendered.get(el) === html && el.childElementCount > 0) return;
@@ -391,7 +392,7 @@ export class ContainerPane {
       return { text: `${def.glyph} Seated in the ${def.label} — its lines are live.`, color: '#c8a84b' };
     }
     if (!containerBoard(def)) {
-      return { text: `${def.glyph} Silent in the pack — the ${def.label} that could seat it waits in the Vault.`, color: '#6a6478' };
+      return { text: `${def.glyph} Silent in the pack — ${isVaultAvailable(this.host.world().account) ? `the ${def.label} that could seat it waits in the Vault` : `find the ${def.label} to seat it`}.`, color: '#6a6478' };
     }
     return { text: `${def.glyph} Silent in the pack — seat it in the ${def.label} (the ${def.label.toUpperCase()} ribbon beside SKILLS; right-click tap, or drag) to wake its lines.`, color: '#8a8678' };
   }
