@@ -42,6 +42,8 @@ Keyboard/mouse defaults: **WASD** move · **LMB/RMB + 1–6** skill slots · **C
 
 Full native controller support (Xbox / DualSense / Steam Deck) works in the browser build and the desktop app alike — layout and feel tunables in [`STEAM.md`](STEAM.md).
 
+**Phones, tablets and Android handhelds (AYN Odin and kin):** the in-browser build carries a touch layout (a floating stick under the left thumb, the finger as the aim cursor on the right, the skill bar pressable under either) and a compact UI, chosen automatically from the device (Options → Touch overrides everything). The PLAY page installs from the browser menu as a landscape fullscreen app; a built-in or paired pad plays through the same controller support. Contract: [docs/engine/platform-touch.md](docs/engine/platform-touch.md).
+
 ---
 
 ## What's in it

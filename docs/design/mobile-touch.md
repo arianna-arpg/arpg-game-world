@@ -1,8 +1,18 @@
 # MOBILE & TOUCH — viability charter v1 (the phone in the hand: what the engine already gives, what it still owes)
 
 **Status: M0 BUILT (2026-08-21) — THE CLOSE GLYPH, THE PRESSABLE BAR and the
-borough seat landed with this charter (receipts in §6). Everything from M1 on
-is a PROPOSAL carded for her word; nothing under `src/` beyond M0 is touched.
+borough seat landed with this charter (receipts in §6). M1 THE TOUCH FABRIC,
+the first rules of M2 THE COMPACT LAYOUT and M3's platform hygiene + PWA
+manifest BUILT 2026-09-15 on the `mobile-touch` branch — the contract lives in
+`docs/engine/platform-touch.md` (THE PLATFORM FABRIC `core/platform.ts`, THE
+TOUCH LAWS `core/touch.ts`, the layouts `data/touch.ts`, THE TOUCH PAD
+`ui/touchpad.ts`, THE COMPACT LAYOUT `ui/compact.ts`; probe
+`balance/probe_touch.ts`). Cards 1–5 below were built on their RECOMMENDED
+readings (floating stick + auto-aim, landscape, the PLAY page as a PWA,
+width-triggered compact with touch forcing it) as engine defaults every one of
+which is a Settings dial or a data row — her word can move any of them without
+code. Still open: cards 6 (the Vault's Back) and 7 (flasks), the HUD bar as a
+thumb arc, the service worker, the wrapper.
 Her ask (2026-08-21): a small (x) that closes the inventory "or other UI
 screen" on everything applicable; then "the viability of also allowing for
 mobile compatibility — similar to Steam Deck — the overall UI to ensure

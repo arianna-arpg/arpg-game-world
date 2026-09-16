@@ -2126,6 +2126,46 @@ we verify changes.
   line is retired; anchors `MENU_ANCHORS` (`bar` seats off the renderer's
   published `hudClusterRects` — drawn == seated), THE DOCK opt-in, movable
   by its grip under THE LAYOUT; glyphs are `ui/icons.ts` rows.
+  THE PLATFORM FABRIC + THE TOUCH FABRIC (2026-09-15 — the game on a
+  phone, a tablet, a handheld's glass; docs `docs/engine/platform-touch.md`,
+  charter `docs/design/mobile-touch.md`, probe `balance/probe_touch.ts`):
+  `core/platform.ts` READS the machine (touch / coarse / hover / a pad /
+  the viewport / dpr / standalone / the shell / safe insets) and resolves it
+  through `PLATFORM_PRESETS` — rows in priority order (handheld = pad AND
+  touch, phone, tablet, the desktop catch-all last; `registerPlatformPreset`
+  seats a TV or a kiosk as one row), each a predicate + defaults (touch
+  controls, compact, a UI-scale floor) — into ONE `PlatformView` under the
+  player's three overrides (`Settings.platform` pin, `Settings.touch.controls`,
+  `Settings.compactUi`); `PlatformWatch` re-reads on every seam and main.ts
+  re-stamps only a CHANGED view (`ui/compact.ts stampPlatform` → `.ui-compact`
+  / `.ui-touch` / `data-platform` / `--safe-*` on :root; `COMPACT_RULES` = one
+  injected sheet of FLOORS, NOT LOOKS, `:where()`-scoped; the UI-scale FLOOR
+  `setUiScaleFloor` folded by DOM and HUD alike). `core/touch.ts` is the pure
+  half: `TOUCH_CFG`, the LAYOUT REGISTRY (widgets as rows — `stick` / `aim` /
+  `button` zones in viewport fractions, mirrored under a left hand, gated by
+  `when`, `data/touch.ts` registers the `thumbs` debut), the pad's own
+  `shapeStick` for the thumb (ONE stick law), and THE ROUTER — every finger
+  routed ONCE at its down (THE BAR WINS: a published `hudSlotRects` rect is
+  that slot's press before any zone — drawn == tested; one stick, one aim;
+  frame-scoped edges). `ui/touchpad.ts` is the DOM half: touch pointers on the
+  canvas (mouse pointers pass by — THE SOLO INVARIANT), the routed pointerdown
+  cancelled so no compat mouse twin fires, pointer-transparent widgets seated
+  by the router's own rects on the `touch` stack rung, verb tiles that speak
+  the player's OWN bind as a synthetic keystroke (the synthEscape idiom — one
+  cascade), THE HAND THAT SPEAKS (widgets show while touch's clock leads the
+  pad's; `ownsHand` gates the menu pointer off and blanks the bar's labels),
+  THE FIRST TOUCH ASKS ONCE (fullscreen + landscape, browsers only), haptics.
+  main.ts folds `touch.update` once per frame beside the pad's poll and
+  `readLocalInput` folds the frame beside keys + pad: the stick into `dx/dy`,
+  the aim finger as slot 0 and a slot rect as its slot, and THE FINGER IS THE
+  CURSOR (`aimSource === 'touch'`: the finger's world point as a hero-relative
+  sticky direction + its true reach, or the `stick` style's deflection, bent
+  by `Settings.touch.aimAssist` — default 1). Platform hygiene in index.html
+  (viewport-fit=cover, touch-action: none, 100dvh, overscroll) + the PWA
+  manifest `public/manifest.webmanifest` whose icons `npm run icon:pwa` paints
+  from the same art (`scripts/make-icon.mjs --size N --out PATH`). Options →
+  Touch carries every dial; `__game.touch()` / `__game.platform()` are the QA
+  doors. Open cards: the HUD bar as a thumb arc, a service worker, the wrapper.
 - `launcher/` — the Electron desktop shell (plain CJS, type-checked via
   `tsconfig.launcher.json`): `main.cjs` (windows, git update flow + the
   packaged DIRECT UPDATE (GitHub-Releases download → silent install →

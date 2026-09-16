@@ -20,7 +20,11 @@ import { CouchJoinOverlay, type CouchJoinChoice, type CouchJoinView } from './ui
 import { applyCursor } from './core/cursor';
 import { assistAim, AIM_ASSIST } from './engine/aimassist';
 import { PadPointer } from './ui/padpointer';
-import { applyUiScale, installUiScaleStyles } from './ui/uiScale';
+import { TouchPad } from './ui/touchpad';
+import { PlatformWatch, platformViewOf, platformViewSame, type PlatformView } from './core/platform';
+import { installCompactStyles, stampPlatform } from './ui/compact';
+import './data/touch'; // side-effect: registers the touch layouts (before the settings load validates a layout id)
+import { applyUiScale, installUiScaleStyles, setUiScaleFloor } from './ui/uiScale';
 import { installUiStack } from './ui/zorder';
 import { escapeModeOf } from './ui/escapeConfig';
 import { rollSeed } from './core/rng';
@@ -171,6 +175,9 @@ applyUiScale(settings.uiScale);
 // THE UI STACK LAW (ui/zorder.ts): seat every selector-delivered surface on
 // its rung before anything shows — activatable panels above every canvas.
 installUiStack();
+// THE COMPACT LAYOUT (ui/compact.ts): the rules sheet, dormant until THE
+// PLATFORM FABRIC stamps its verdict (below, once the touch pad stands).
+installCompactStyles();
 
 const renderer = new Renderer(canvas, () => settings);
 // The thematic cursor identity (style + tint) — applied at boot; the options
@@ -195,11 +202,51 @@ const padTuning = (): PadTuning => ({
 });
 const pad = new PadState(padTuning);
 const padPointer = new PadPointer(pad, padTuning);
+// THE TOUCH FABRIC (core/touch.ts + ui/touchpad.ts — docs/engine/platform-
+// touch.md): the finger's hand — a floating stick, the finger-as-cursor aim
+// field, the bar's own published rects, verb tiles that speak through
+// synthetic keys. Wanted only where THE PLATFORM FABRIC's view says so (a
+// phone, a handheld's glass, the player's own ON); a desktop never folds it
+// (touchNow stays null — the solo invariant).
+let platformView: PlatformView | null = null;
+const touch = new TouchPad(canvas, {
+  settings: () => settings,
+  wanted: () => platformView?.touchControls ?? false,
+  padLastActive: () => pad.lastActive,
+  slotRects: () => renderer.hudSlotRects.filter(r => r.seatId === world.localSeat.id),
+  // A tile speaks the player's OWN bind as a keystroke through the window,
+  // exactly as synthEscape does — one Input source, one cascade.
+  synthKey: (key, down) => window.dispatchEvent(new KeyboardEvent(down ? 'keydown' : 'keyup', { key, bubbles: true })),
+  webFullscreenAllowed: () => !!platformView && !platformView.caps.standalone && !platformView.caps.electron,
+  nowSec: () => performance.now() / 1000,
+});
+/** This frame's touch fold (null while the fabric is not wanted). */
+let touchNow: ReturnType<TouchPad['update']> = null;
+/** Touch's STICKY aim, hero-relative (the pad's own shape): the last aim
+ *  finger's direction + reach fraction; null until a finger has aimed. */
+let touchAim: { dir: { x: number; y: number }; mag: number } | null = null;
+let touchLock: number | null = null;
+// THE PLATFORM FABRIC (core/platform.ts): one capability read folded with
+// the player's dials into a VIEW; a changed view re-stamps :root (the
+// compact/touch classes, the preset attribute, the safe insets), lifts the
+// UI-scale floor and tells the touch pad whether it is wanted. Re-run from
+// the Options screen (ui.onPlatformSettings) after any of its dials move.
+const platformApply = (caps = platformWatch.caps()): void => {
+  const view = platformViewOf(caps, settings);
+  if (platformViewSame(platformView, view)) return;
+  platformView = view;
+  stampPlatform(view);
+  setUiScaleFloor(view.uiScaleFloor);
+  applyUiScale(settings.uiScale);
+  touch.refresh();
+};
+const platformWatch = new PlatformWatch(caps => platformApply(caps));
 // AIM ARBITRATION: the last device to speak owns the reticle. Any right-stick
-// deflection hands it to the pad instantly; the mouse must accumulate a
-// DELIBERATE bit of travel (PAD_CFG.mouseReclaimPx) to take it back, so an
-// idle arrow nudged by a desk bump can't yank targeting across the screen.
-let aimSource: 'mouse' | 'pad' = 'mouse';
+// deflection hands it to the pad instantly, a finger on the aim field to
+// touch; the mouse must accumulate a DELIBERATE bit of travel
+// (PAD_CFG.mouseReclaimPx) to take it back, so an idle arrow nudged by a
+// desk bump can't yank targeting across the screen.
+let aimSource: 'mouse' | 'pad' | 'touch' = 'mouse';
 const lastMouse = { x: -1, y: -1 };
 let mouseReclaim = 0;
 // The game's visible aim: the assisted reticle point + the soft-lock target,
@@ -251,7 +298,9 @@ function feedRendererAim(): void {
   // mode, death), its position is truth again — a hidden handoff offset
   // would mean clicking one place and aiming another. Drop it.
   if (mouseHandoff && !allowed) mouseHandoff = null;
-  const padOwns = aimSource === 'pad' && allowed;
+  // Touch draws the pad's reticle: the finger's point (assist and all) is
+  // the same hero-relative sticky aim, so one reticle serves both hands.
+  const padOwns = (aimSource === 'pad' || aimSource === 'touch') && allowed;
   const handoffOwns = aimSource === 'mouse' && mouseHandoff !== null && allowed;
   renderer.padAim = (padOwns || handoffOwns) ? padAimView : null;
   const wantCursor = (padOwns || handoffOwns) ? 'none' : '';
@@ -377,6 +426,13 @@ ui.disarmPadCapture = () => pad.disarmCapture();
 const padActiveNow = (): boolean => pad.activeRecently(performance.now() / 1000);
 renderer.getPadActive = padActiveNow;
 ui.getPadActive = padActiveNow;
+// THE HAND THAT SPEAKS: touch owns the labels (the bar prints no key names
+// under a thumb) while its clock leads the pad's.
+const touchActiveNow = (): boolean => touch.ownsHand(performance.now() / 1000);
+renderer.getTouchActive = touchActiveNow;
+ui.getTouchActive = touchActiveNow;
+ui.onPlatformSettings = () => { platformApply(); touch.refresh(); };
+platformWatch.start();
 // THE MENU BAR's 'bar' anchor seats off the hero's DRAWN HUD cluster — the
 // rect the renderer published this frame (drawn == seated).
 ui.onCosmeticsChanged = () => {
@@ -679,6 +735,10 @@ declare global {
       pad: () => PadState;
       padPointer: () => PadPointer;
       fakePad: (p: FakePad | null) => void;
+      /** THE TOUCH FABRIC's pad (its router takes synthetic fingers) + the
+       *  platform view of the moment (QA: `__game.platform()?.preset.id`). */
+      touch: () => TouchPad;
+      platform: () => PlatformView | null;
       step: (frames?: number, dtMs?: number) => void;
       devStartRun: (classId?: string) => string;
       perfFrames: (reset?: boolean) => {
@@ -729,6 +789,7 @@ window.__game = {
   // Controller state + the hardware stand-in (tests: __game.fakePad({axes,buttons})).
   pad: () => pad, padPointer: () => padPointer,
   fakePad: (p) => { window.__fakePad = p; },
+  touch: () => touch, platform: () => platformView,
   // Drive N frames synchronously — the antidote to rAF freezing in hidden
   // tabs; the ONLY way input polling (incl. the pad) runs under a harness.
   // NOT sim-only: while a run is live the tick also RENDERS. Don't call
@@ -879,6 +940,8 @@ function readLocalInput(dt: number): PlayerInput | null {
   // The move stick adds its ANALOG vector — deflection rides straight into
   // moveActor, so half-tilt is a slow stalk without any new movement path.
   if (padLive) { dx += pad.move.x; dy += pad.move.y; }
+  // THE TOUCH FABRIC's stick: the thumb's analog vector, the pad's own law.
+  if (touchNow) { dx += touchNow.move.x; dy += touchNow.move.y; }
   // INVERTED MOVEMENT (Settings.invertMove): the player's own standard,
   // applied at the DEVICE layer — one flip for keys and stick alike,
   // before intent enters the wire (southpaw swaps WHICH stick moves; this
@@ -949,10 +1012,47 @@ function readLocalInput(dt: number): PlayerInput | null {
     }
   }
 
+  // THE TOUCH FABRIC's aim (core/touch.ts — THE FINGER IS THE CURSOR): the
+  // aim finger's screen point becomes a hero-relative direction + reach
+  // (the pad's sticky shape, so the reticle rides the hero between taps —
+  // the reach is the finger's TRUE distance, floored at the pad's min
+  // reach, never capped: the finger is the cursor), or under the 'stick'
+  // style the floating right stick's deflection (the pad's law verbatim);
+  // bent by the assist at Settings.touch.aimAssist (a thumb has no
+  // precision — the default snaps). Before any finger has aimed, the
+  // bar-press law: where the hero faces, at mid reach.
+  if (aimSource === 'touch') {
+    const t = padTuning();
+    const tf = touchNow;
+    if (tf?.aim) {
+      if (settings.touch.aimStyle === 'stick') {
+        if (tf.aim.mag > 0) touchAim = { dir: { x: tf.aim.vx / tf.aim.mag, y: tf.aim.vy / tf.aim.mag }, mag: tf.aim.mag };
+      } else {
+        const wp = renderer.toWorld({ x: tf.aim.x * input.pointerScale, y: tf.aim.y * input.pointerScale });
+        const ax = wp.x - p.pos.x, ay = wp.y - p.pos.y;
+        const d = Math.hypot(ax, ay);
+        if (d > 1e-3) touchAim = { dir: { x: ax / d, y: ay / d }, mag: (d - t.aimMinRadius) / Math.max(1, t.aimMaxRadius - t.aimMinRadius) };
+      }
+    }
+    const reach = touchAim
+      ? t.aimMinRadius + (t.aimMaxRadius - t.aimMinRadius) * Math.max(0, touchAim.mag)
+      : pad.aimReach(0.5, t);
+    const dir = touchAim?.dir ?? { x: Math.cos(p.facing), y: Math.sin(p.facing) };
+    const raw = { x: p.pos.x + dir.x * reach, y: p.pos.y + dir.y * reach };
+    if (dt <= 0 && padAimView) {
+      aim = { x: padAimView.x, y: padAimView.y };
+    } else {
+      const assisted = assistAim(world, p, raw, touchLock, settings.touch.aimAssist);
+      touchLock = assisted.targetId;
+      aim = { x: assisted.x, y: assisted.y };
+      padAimView = { x: aim.x, y: aim.y, lockId: touchLock };
+    }
+  }
+
   // THE PRESSABLE BAR's aim: the cursor sits on the bar, so the press aims
   // where the hero FACES at the pad's mid reach, bent by the assist at full
   // strength (the held lock persists across the press, the pad's own law).
-  if (barPress && !(aimSource === 'pad' && padLive)) {
+  if (barPress && !((aimSource === 'pad' && padLive) || aimSource === 'touch')) {
     const t = padTuning();
     const reach = pad.aimReach(0.5, t);
     const raw = { x: p.pos.x + Math.cos(p.facing) * reach, y: p.pos.y + Math.sin(p.facing) * reach };
@@ -988,6 +1088,17 @@ function readLocalInput(dt: number): PlayerInput | null {
   if (barPress && barPress.slot < held.length) {
     held[barPress.slot] = true;
     if (barEdge) edge[barPress.slot] = true;
+  }
+  // THE TOUCH FABRIC's presses: the aim finger holds the primary (slot 0 —
+  // the LMB's shape), a finger on a published bar rect holds THAT slot;
+  // the same held/edge grammar, folded beside the keys and the pad.
+  if (touchNow) {
+    if (touchNow.primaryHeld) held[0] = true;
+    if (touchNow.primaryEdge) edge[0] = true;
+    for (let i = 0; i < held.length; i++) {
+      if (touchNow.slotsHeld[i]) held[i] = true;
+      if (touchNow.slotsEdge[i]) edge[i] = true;
+    }
   }
   // THE UNARMED-FLOOR opt-out (Settings.improvisedStrike): declined, an
   // EMPTY slot's press never leaves this client — the world's floor rule
@@ -1658,13 +1769,17 @@ function tick(now: number): void {
   // cascade stays single-sourced in handleLocalPanels.
   const nowSec = now / 1000;
   pad.poll(nowSec);
+  // THE TOUCH FABRIC folds once per frame beside the pad's poll: its verb
+  // tiles land as keystrokes NOW, so handleLocalPanels sees them this frame.
+  touchNow = touch.update(nowSec);
   if (input.mouse.x !== lastMouse.x || input.mouse.y !== lastMouse.y) {
     // The mouse reclaims aim only through DELIBERATE travel: motion
-    // accumulates while the pad holds the reticle, and only past the
-    // threshold does the arrow take over (then it owns aim on any motion).
+    // accumulates while the pad (or a finger) holds the reticle, and only
+    // past the threshold does the arrow take over (then it owns aim on any
+    // motion).
     const moved = Math.hypot(input.mouse.x - lastMouse.x, input.mouse.y - lastMouse.y);
     lastMouse.x = input.mouse.x; lastMouse.y = input.mouse.y;
-    if (aimSource === 'pad') {
+    if (aimSource !== 'mouse') {
       mouseReclaim += moved;
       if (mouseReclaim >= PAD_CFG.mouseReclaimPx) {
         aimSource = 'mouse'; mouseReclaim = 0;
@@ -1691,6 +1806,9 @@ function tick(now: number): void {
   // Any live aim-stick deflection reclaims the reticle for the pad (and ends
   // any mouse handoff — the pad's sticky cursor is absolute again).
   if (pad.aimMag > 0) { aimSource = 'pad'; mouseReclaim = 0; mouseHandoff = null; }
+  // A finger on the aim field reclaims the reticle for touch (and ends any
+  // mouse handoff); the pad's stick or the mouse's travel takes it back.
+  if (touchNow?.aimSpoke) { aimSource = 'touch'; mouseReclaim = 0; mouseHandoff = null; }
   // COUCH: the hero's pointer wakes only on surfaces that block THE HERO'S
   // hands (a guest's open bag must not flip P1 into menu mode); solo keeps
   // the classic any-surface gate byte-identically.
@@ -1705,8 +1823,11 @@ function tick(now: number): void {
   // menu never depends on a remembered keybind. The veil hides the run HUD
   // cluster; this button was never part of it.
   ui.menuBarSync(dt, running);
+  // THE HAND THAT SPEAKS: while touch leads the pad's clock the finger IS
+  // the pointer — the pad's ring cursor stays down (a tile bound to Ⓐ must
+  // never click the ring's stale seat under a panel).
   padPointer.update(dt,
-    (couchActive() ? ui.blockingFor(world.localSeat.id) : ui.uiBlocking()) || !running, nowSec);
+    ((couchActive() ? ui.blockingFor(world.localSeat.id) : ui.uiBlocking()) || !running) && !touch.ownsHand(nowSec), nowSec);
   couchTick(dt, nowSec);
   const lockPad = [...couchGuests.values()].find(g => g.pointer.active && g.gpad.isDown(settings.padBinds.itemLock));
   const boundLockPad = settings.padBinds.itemLock !== PAD_CFG.pointer.confirm;

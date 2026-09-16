@@ -275,10 +275,11 @@ const buttonValue = (b: number | { pressed?: boolean; value?: number } | undefin
   return b.pressed ? 1 : 0;
 };
 
-/** Radial deadzone + response curve: returns the shaped vector and magnitude,
+/** Radial deadzone + response curve (shared with THE TOUCH FABRIC, core/touch.ts —
+ *  a thumb on glass and a thumbstick obey ONE law): returns the shaped vector and magnitude,
  *  plus the RAW deflection (pre-deadzone) — the snapback filter reasons about
  *  the physical stick, not the shaped signal. */
-function shapeStick(x: number, y: number, deadzone: number, curve: number):
+export function shapeStick(x: number, y: number, deadzone: number, curve: number):
   { x: number; y: number; mag: number; raw: number } {
   const raw = Math.hypot(x, y);
   if (raw <= deadzone) return { x: 0, y: 0, mag: 0, raw };

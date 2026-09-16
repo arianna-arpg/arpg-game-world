@@ -83,6 +83,7 @@
 export const Z_LADDER = {
   world: 0,          // documentation-only: the #game canvas stays unpositioned
   crest: 10,         // renderer.ts — the crest overlay (word layer + HUD, scale < 1)
+  touch: 20,         // ui/touchpad.ts — THE TOUCH FABRIC's widgets (pointer-events none): over the HUD they steer, under every panel
   panel: 40,         // every activatable .panel root (via the injected sheet)
   folio: 50,         // ui/folio.ts — the thumb index (a TS-built root; reads the rung)
   menubar: 55,       // ui/menubar.ts — THE MENU BAR's button + tray (TS-built; reads the rung)

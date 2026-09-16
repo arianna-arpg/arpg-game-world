@@ -69,7 +69,7 @@ import { floorStyleOf, roofStyle } from '../data/structures';
 import { paintFloorRect } from './vis/floors';
 import { DEFAULT_KEYBINDS, keyDisplay, resolveBindTokens, type ActionId, type Settings } from '../meta/settings';
 import { HARVEST_SLOT_ACTIONS } from '../engine/harvest';
-import { UI_SCALE_CFG } from '../ui/uiScale';
+import { UI_SCALE_CFG, uiScaleFloorNow } from '../ui/uiScale';
 import { Z_LADDER } from '../ui/zorder';
 import { padDisplay } from '../core/gamepad';
 import { collectActiveFx, collectFalterK, type ActiveFx } from './screenFx';
@@ -311,6 +311,9 @@ export class Renderer {
    *  spoken recently? Drives which map — keyboard or pad — bind tokens and
    *  slot labels read, so every hint follows the device of the moment. */
   getPadActive?: () => boolean;
+  /** Wired by main.ts: TOUCH is the hand of the moment (ui/touchpad.ts
+   *  ownsHand) — the bar prints no key names under a thumb. */
+  getTouchActive?: () => boolean;
 
   /** Wired by main.ts (same altitude as getSettings): the LIVE hero's name,
    *  read by resolveText to expand '{name}' address tokens in world-authored
@@ -359,6 +362,8 @@ export class Renderer {
   private slotKeys(forcePad = false): string[] {
     const s = this.getSettings?.();
     if (!s) return SLOT_KEYS;
+    // A thumb reads no key names: the slots ARE the buttons (THE TOUCH FABRIC).
+    if (!forcePad && this.getTouchActive?.()) return SLOT_KEYS.map(() => '');
     if (forcePad || this.getPadActive?.()) {
       const pb = s.padBinds;
       return [pb.skillSlot0, pb.skillSlot1, pb.skillSlot2, pb.skillSlot3,
@@ -422,7 +427,9 @@ export class Renderer {
    *  rails so a hand-edited save can't fold the HUD inside-out mid-frame. */
   private uiScaleLive(): number {
     const v = this.getSettings?.().uiScale ?? UI_SCALE_CFG.default;
-    return clamp(v, UI_SCALE_CFG.min, UI_SCALE_CFG.max);
+    // THE PLATFORM FLOOR (ui/uiScale.ts): the DOM composes max(dial, floor);
+    // the HUD folds the same pair so the two layers can never drift.
+    return Math.max(uiScaleFloorNow(), clamp(v, UI_SCALE_CFG.min, UI_SCALE_CFG.max));
   }
 
   /** One scaled screen-space widget pass: everything `draw` paints in

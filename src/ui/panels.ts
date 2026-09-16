@@ -73,6 +73,8 @@ import type { TownSiteId } from '../data/townBuild';
 import type { SuiteStation } from '../data/suites';
 import { RENDER_SCALE_CFG } from '../render/renderScale';
 import { CAMERA_MODES, cameraModeOf } from '../render/camera';
+import { PLATFORM_CFG, PLATFORM_PRESETS, platformPresetOf, readPlatformCaps, resolvePlatform } from '../core/platform';
+import { TOUCH_CFG, TOUCH_LAYOUTS, touchLayoutOf } from '../core/touch';
 import { FACTIONS, MONSTERS, defDensity, type MonsterDef } from '../data/monsters';
 import { heftTierOf } from '../engine/mass';
 import { DEFENSE_CFG } from '../engine/defense';
@@ -569,6 +571,12 @@ export class UI {
    *  spoken recently? Slot labels and bind hints follow the device of the
    *  moment — pad glyphs while it drives, keyboard keys when the mouse does. */
   getPadActive: (() => boolean) | null = null;
+  /** Wired by main: TOUCH is the hand of the moment (ui/touchpad.ts
+   *  ownsHand) — the finger is the pointer, no key names under a thumb. */
+  getTouchActive: (() => boolean) | null = null;
+  /** Wired by main: a Touch & Platform dial moved — re-fold THE PLATFORM
+   *  FABRIC's view and refresh the touch pad at once (no reload). */
+  onPlatformSettings: (() => void) | null = null;
 
   charSheetOpen = false;
   /** The Statistics tab open on the character sheet (persists across
@@ -576,7 +584,7 @@ export class UI {
   private charTab = 'offense';
   /** The Options menu's active tab (the character sheet's book-tab idiom —
    *  the panel long outgrew "Customize Keybinds"). */
-  private optionsTab: 'controls' | 'controller' | 'interface' | 'visuals' = 'controls';
+  private optionsTab: 'controls' | 'controller' | 'touch' | 'interface' | 'visuals' = 'controls';
   /** SAVE PORTAGE (options → Interface, meta/portage.ts): the transient
    *  status line and the validated import awaiting its overwrite confirm.
    *  Session-local by design — an abandoned confirm simply lapses. */
@@ -10021,6 +10029,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const tabStrip = `<div class="book-tabs stat-tabs">${([
       ['controls', 'Controls', 'Keyboard binds and input feel'],
       ['controller', 'Controller', 'Pad binds and analog tuning'],
+      ['touch', 'Touch', 'Phones, tablets, handhelds and the compact layout'],
       ['interface', 'Interface', 'Scale, cursor, markers, readouts'],
       ['visuals', 'Visuals', 'Camera and battlefield presentation'],
     ] as const).map(([id, label, blurb]) =>
@@ -10284,11 +10293,76 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         <span>Hover Nameplates</span>
         <button id="opt-hovernames" title="Which bodies show the cursor nameplate. NAMED: distinctly-named enemies only, the classic elite read. ALL: every creature, minion, townsfolk and critter names itself under the cursor (name over kind + tier), so you can identify the exact entity without recalling its look. One plate at a time either way, and hidden bodies never tell.">${s.hoverNameplates === 'all' ? 'ALL' : 'NAMED'}</button>
       </div>`;
+    // THE TOUCH & PLATFORM tab (core/platform.ts + core/touch.ts +
+    // ui/touchpad.ts — docs/engine/platform-touch.md): the preset pin over
+    // the live detection, the three-word dials, the finger's feel.
+    const detected = resolvePlatform(readPlatformCaps());
+    const pinned = platformPresetOf(s.platform);
+    const threeWord = (v: string): string => v.toUpperCase();
+    const touchTab = `
+      <h1>Touch &amp; Platform</h1>
+      <div class="acct-head">Phones, tablets and handhelds with a touchscreen. Left thumb: a stick that spawns under it.
+        Right thumb: the finger is the cursor (hold to attack); the bar's slots press under either thumb.
+        Verb tiles hug the right edge; the Menu button opens every page. A connected pad hides the widgets until a finger speaks.</div>
+      <div class="rebind-row">
+        <span>Platform</span>
+        <button id="opt-platform" title="Which device profile the game folds its defaults from. AUTO reads the machine (touch, hover, a pad, the window) every time it changes; pinning a profile overrides the read.
+${PLATFORM_PRESETS.map(p => `${p.name}: ${p.blurb}`).join('\n')}">${pinned ? threeWord(pinned.name) : `AUTO (${threeWord(detected.name)})`}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Touch Controls</span>
+        <button id="opt-touchcontrols" title="The on-screen stick, aim field and verb tiles. AUTO: the platform profile decides (on for phones, tablets and handhelds; off on a desktop). ON/OFF: your word.">${threeWord(s.touch.controls)}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Compact Layout</span>
+        <button id="opt-compactui" title="Bigger tap targets, trimmed chrome, panels that climb on a short screen. AUTO: the profile's default, or any window under ${PLATFORM_CFG.compactMaxWidthPx}px wide. ON/OFF: your word.">${threeWord(s.compactUi)}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Touch Layout</span>
+        <button id="opt-touchlayout" title="${TOUCH_LAYOUTS.map(l => `${l.name}: ${l.blurb}`).join('\n')}">${threeWord(touchLayoutOf(s.touch.layout)?.name ?? s.touch.layout)}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Aiming Hand</span>
+        <button id="opt-touchhand" title="LEFT mirrors every zone and tile: the stick on the right, the aim field on the left. The skill bar stays where it is.">${s.touch.hand === 'left' ? 'LEFT (MIRRORED)' : 'RIGHT'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Move Stick</span>
+        <button id="opt-touchstick" title="FLOATING: the stick spawns wherever your thumb lands in its field and follows a long swipe. FIXED: it waits at its seat.">${s.touch.stick === 'fixed' ? 'FIXED' : 'FLOATING'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Aim Style</span>
+        <button id="opt-touchaim" title="FINGER IS THE CURSOR: aim exactly where the finger is; holding attacks. TWIN STICK: a right stick spawns under the thumb; its tilt is reach and firing past a tilt is the attack.">${s.touch.aimStyle === 'stick' ? 'TWIN STICK' : 'FINGER IS THE CURSOR'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Aim Assist (touch)</span>
+        <span class="pad-opt"><input type="range" id="opt-touchassist" min="0" max="100" step="5"
+          value="${Math.round(s.touch.aimAssist * 100)}"
+          title="Reticle magnetism while a finger aims. A thumb has no precision, so the default snaps fully; the pad keeps its own dial."> <b id="val-touchassist">${s.touch.aimAssist <= 0 ? 'OFF' : `${Math.round(s.touch.aimAssist * 100)}%`}</b></span>
+      </div>
+      <div class="rebind-row">
+        <span>Widget Size</span>
+        <span class="pad-opt"><input type="range" id="opt-touchscale" min="${Math.round(TOUCH_CFG.widget.scaleMin * 100)}" max="${Math.round(TOUCH_CFG.widget.scaleMax * 100)}" step="5"
+          value="${Math.round(s.touch.scale * 100)}"> <b id="val-touchscale">${Math.round(s.touch.scale * 100)}%</b></span>
+      </div>
+      <div class="rebind-row">
+        <span>Widget Opacity</span>
+        <span class="pad-opt"><input type="range" id="opt-touchopacity" min="${Math.round(TOUCH_CFG.widget.opacityMin * 100)}" max="${Math.round(TOUCH_CFG.widget.opacityMax * 100)}" step="5"
+          value="${Math.round(s.touch.opacity * 100)}"> <b id="val-touchopacity">${Math.round(s.touch.opacity * 100)}%</b></span>
+      </div>
+      <div class="rebind-row">
+        <span>Fullscreen on First Touch</span>
+        <button id="opt-touchfullscreen" title="In a browser, the first touch asks for fullscreen and a landscape lock (once per page). An installed home-screen app and the desktop app already stand full.">${s.touch.fullscreen ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Haptics</span>
+        <button id="opt-touchhaptics" title="A short buzz on a slot or tile press where the device offers one (Android).">${s.touch.haptics ? 'ON' : 'OFF'}</button>
+      </div>`;
     root.innerHTML = `
       ${this.closeGlyphHtml('Resume (Esc)')}<h1>Options</h1>
       ${tabStrip}
       ${tab === 'controls' ? controlsTab
         : tab === 'controller' ? controllerTab
+        : tab === 'touch' ? touchTab
         : tab === 'visuals' ? visualsTab
         : interfaceTabHead}
       <div class="esc-btns"><button id="esc-back">Back</button></div>`;
@@ -10490,6 +10564,37 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     slider('padspeed', v => { this.getSettings().pad.pointerSpeed = v; }, v => String(v));
     slider('aimsens', v => { this.getSettings().pad.aimSensitivity = v / 100; }, v => `${v}%`);
     slider('aimassist', v => { this.getSettings().pad.aimAssist = v / 100; }, v => v <= 0 ? 'OFF' : `${v}%`);
+    // THE TOUCH & PLATFORM dials: every one re-folds the platform view and
+    // refreshes the touch pad at once (ui.onPlatformSettings → main.ts), so
+    // a stamp, a floor, a mirrored hand or a tile size never waits on a
+    // reload. Three-word dials cycle AUTO → ON → OFF.
+    const touchDial = (id: string, mutate: (st: Settings) => void): void => {
+      root.querySelector<HTMLElement>('#opt-' + id)?.addEventListener('click', () => {
+        mutate(this.getSettings());
+        this.saveSettings();
+        this.onPlatformSettings?.();
+        this.renderOptions(root, onBack);
+      });
+    };
+    const cycle3 = (v: 'auto' | 'on' | 'off'): 'auto' | 'on' | 'off' => v === 'auto' ? 'on' : v === 'on' ? 'off' : 'auto';
+    touchDial('platform', st => {
+      const ids = [PLATFORM_CFG.autoId, ...PLATFORM_PRESETS.map(p => p.id)];
+      st.platform = ids[(ids.indexOf(st.platform) + 1) % ids.length];
+    });
+    touchDial('touchcontrols', st => { st.touch.controls = cycle3(st.touch.controls); });
+    touchDial('compactui', st => { st.compactUi = cycle3(st.compactUi); });
+    touchDial('touchlayout', st => {
+      const i = TOUCH_LAYOUTS.findIndex(l => l.id === st.touch.layout);
+      st.touch.layout = TOUCH_LAYOUTS[(i + 1) % Math.max(1, TOUCH_LAYOUTS.length)]?.id ?? st.touch.layout;
+    });
+    touchDial('touchhand', st => { st.touch.hand = st.touch.hand === 'left' ? 'right' : 'left'; });
+    touchDial('touchstick', st => { st.touch.stick = st.touch.stick === 'fixed' ? 'floating' : 'fixed'; });
+    touchDial('touchaim', st => { st.touch.aimStyle = st.touch.aimStyle === 'stick' ? 'cursor' : 'stick'; });
+    touchDial('touchfullscreen', st => { st.touch.fullscreen = !st.touch.fullscreen; });
+    touchDial('touchhaptics', st => { st.touch.haptics = !st.touch.haptics; });
+    slider('touchassist', v => { this.getSettings().touch.aimAssist = v / 100; }, v => v <= 0 ? 'OFF' : `${v}%`);
+    slider('touchscale', v => { this.getSettings().touch.scale = v / 100; this.onPlatformSettings?.(); }, v => `${v}%`);
+    slider('touchopacity', v => { this.getSettings().touch.opacity = v / 100; this.onPlatformSettings?.(); }, v => `${v}%`);
     // AIM ASSIST STYLE: cycle the delivery-mode registry (core/gamepad.ts) —
     // 'cursor' steers the aim itself (no snap-back on a broken lock), 'view'
     // keeps the legacy bend-the-shot-only mechanic selectable.

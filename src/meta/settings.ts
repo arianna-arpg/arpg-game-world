@@ -27,6 +27,8 @@ import { WORLDSTATE_CFG, type ResumeSpawn } from './worldstate';
 import { MENU_ANCHORS, MENU_CFG, type MenuAnchorId } from '../ui/menuConfig';
 import { ESCAPE_CFG, ESCAPE_MODES, type EscapeCloseMode } from '../ui/escapeConfig';
 import { PORTAL_ANCHORS, PORTAL_BUTTON_CFG, type PortalAnchorId } from '../ui/portalConfig';
+import { TOUCH_CFG, touchLayoutOf, type TouchHand } from '../core/touch';
+import { PLATFORM_CFG, platformPresetOf } from '../core/platform';
 
 export const SETTINGS_SCHEMA_VERSION = 1;
 
@@ -244,7 +246,57 @@ export interface Settings {
    *  writes this OFF. Settings persist beside the account (disk slot +
    *  portage), so the choice survives every run. */
   confirmMemorySale: boolean;
+  /** THE PLATFORM FABRIC (core/platform.ts): a pinned preset id, or
+   *  PLATFORM_CFG.autoId — let the capability read pick the row. */
+  platform: string;
+  /** THE COMPACT LAYOUT (ui/compact.ts): 'auto' folds the preset's default
+   *  with the width rule; 'on'/'off' are the player's word. */
+  compactUi: CompactUiMode;
+  /** THE TOUCH FABRIC (core/touch.ts + ui/touchpad.ts): the finger's dials. */
+  touch: TouchOptions;
 }
+
+export type CompactUiMode = 'auto' | 'on' | 'off';
+export type TouchControlsMode = 'auto' | 'on' | 'off';
+
+/** THE TOUCH FABRIC's player dials (TOUCH_CFG holds the engine defaults
+ *  these start from and the rails they clamp into). */
+export interface TouchOptions {
+  /** 'auto' = the platform preset's verdict; 'on'/'off' override it. */
+  controls: TouchControlsMode;
+  /** A registered layout id (core/touch.ts TOUCH_LAYOUTS). */
+  layout: string;
+  /** Which hand aims: 'left' mirrors every zone (the bar stays). */
+  hand: TouchHand;
+  /** The move stick spawns under the thumb, or stays at its seat. */
+  stick: 'floating' | 'fixed';
+  /** 'cursor': the aim finger IS the cursor (hold to attack). 'stick': a
+   *  floating right stick — deflection is reach and fires the primary. */
+  aimStyle: 'cursor' | 'stick';
+  /** Soft-assist strength while touch owns the reticle (0 = off, 1 = snap). */
+  aimAssist: number;
+  /** Drawn widget alpha. */
+  opacity: number;
+  /** Drawn widget size multiplier. */
+  scale: number;
+  /** Ask for fullscreen (+ landscape) on the first touch — web builds. */
+  fullscreen: boolean;
+  /** navigator.vibrate pulses on slot and tile presses. */
+  haptics: boolean;
+}
+
+export const DEFAULT_TOUCH_OPTIONS: TouchOptions = {
+  controls: 'auto',
+  layout: TOUCH_CFG.layout.defaultId,
+  hand: 'right',
+  stick: 'floating',
+  aimStyle: 'cursor',
+  aimAssist: TOUCH_CFG.aim.assist,
+  opacity: TOUCH_CFG.widget.opacity,
+  scale: TOUCH_CFG.widget.scale,
+  fullscreen: TOUCH_CFG.fullscreen.onFirstTouch,
+  haptics: true,
+};
 
 /** THE MENU BAR options (ui/menuConfig.ts owns the dials + anchors). */
 export interface MenuBarOptions {
@@ -313,6 +365,11 @@ export interface SettingsSave {
   portalButton?: { anchor?: string };
   /** THE SALE PROMPT (additive — a pre-dial save reads ON). */
   confirmMemorySale?: boolean;
+  /** THE PLATFORM + TOUCH FABRICS (additive — a pre-dial save reads 'auto'
+   *  everywhere and the engine's touch defaults). */
+  platform?: string;
+  compactUi?: string;
+  touch?: Partial<TouchOptions>;
 }
 
 export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
@@ -463,6 +520,9 @@ export const makeSettings = (): Settings => ({
   menuBar: { anchor: MENU_CFG.anchorDefault, dock: MENU_CFG.dockDefault },
   portalButton: { anchor: PORTAL_BUTTON_CFG.anchorDefault },
   confirmMemorySale: true,
+  platform: PLATFORM_CFG.autoId,
+  compactUi: 'auto',
+  touch: { ...DEFAULT_TOUCH_OPTIONS },
 });
 
 export const serializeSettings = (s: Settings): SettingsSave => ({
@@ -503,9 +563,32 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   menuBar: { ...s.menuBar },
   portalButton: { ...s.portalButton },
   confirmMemorySale: s.confirmMemorySale,
+  platform: s.platform,
+  compactUi: s.compactUi,
+  touch: { ...s.touch },
 });
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
+
+/** THE TOUCH FABRIC's options re-clamped into TOUCH_CFG's rails: an unknown
+ *  layout/hand/style (a renamed row, a hand-edited save) falls back to the
+ *  default; the numbers can never smuggle a 0 opacity or a 10× stick. */
+export const normalizeTouchOptions = (t: Partial<TouchOptions> | undefined): TouchOptions => {
+  const d = DEFAULT_TOUCH_OPTIONS;
+  const w = TOUCH_CFG.widget;
+  return {
+    controls: t?.controls === 'on' || t?.controls === 'off' ? t.controls : 'auto',
+    layout: touchLayoutOf(t?.layout)?.id ?? d.layout,
+    hand: t?.hand === 'left' ? 'left' : 'right',
+    stick: t?.stick === 'fixed' ? 'fixed' : 'floating',
+    aimStyle: t?.aimStyle === 'stick' ? 'stick' : 'cursor',
+    aimAssist: clamp(typeof t?.aimAssist === 'number' ? t.aimAssist : d.aimAssist, 0, 1),
+    opacity: clamp(typeof t?.opacity === 'number' ? t.opacity : d.opacity, w.opacityMin, w.opacityMax),
+    scale: clamp(typeof t?.scale === 'number' ? t.scale : d.scale, w.scaleMin, w.scaleMax),
+    fullscreen: typeof t?.fullscreen === 'boolean' ? t.fullscreen : d.fullscreen,
+    haptics: typeof t?.haptics === 'boolean' ? t.haptics : d.haptics,
+  };
+};
 
 /** Keep only honest boolean overrides — a hand-edited save can't smuggle
  *  functions or truthy junk into a sparse toggle record. */
@@ -639,5 +722,12 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     portalButton: {
       anchor: PORTAL_ANCHORS.some(a => a.id === s.portalButton?.anchor) ? s.portalButton!.anchor as PortalAnchorId : PORTAL_BUTTON_CFG.anchorDefault,
     },
+    // THE PLATFORM + TOUCH FABRICS (additive): an unknown preset pin (a
+    // renamed row) reads 'auto'; the compact dial keeps only its three
+    // words; the touch dials re-clamp into TOUCH_CFG's rails.
+    platform: typeof s.platform === 'string' && (s.platform === PLATFORM_CFG.autoId || platformPresetOf(s.platform))
+      ? s.platform : PLATFORM_CFG.autoId,
+    compactUi: s.compactUi === 'on' || s.compactUi === 'off' ? s.compactUi : 'auto',
+    touch: normalizeTouchOptions(s.touch),
   };
 }

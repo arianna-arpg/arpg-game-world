@@ -35,6 +35,7 @@ const MIME = /** @type {Record<string, string>} */ ({
   '.mjs': 'text/javascript',
   '.css': 'text/css',
   '.json': 'application/json',
+  '.webmanifest': 'application/manifest+json',
   '.map': 'application/json',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',

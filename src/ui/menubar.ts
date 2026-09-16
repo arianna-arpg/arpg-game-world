@@ -139,6 +139,9 @@ export class MenuBar {
   private signature = '';
   private clock: number = MENU_CFG.syncSec; // the first sync folds at once
   private force = true;
+  /** THE CLEARANCE's last measured geometry (corner anchors) — the lift is
+   *  re-derived only when the cluster, the bar's own box or the window moved. */
+  private clearSig = '';
 
   constructor(private host: MenuBarHost) {
     installMenuBarStyles();
@@ -249,6 +252,7 @@ export class MenuBar {
     root.classList.toggle('couch', this.host.couchActive());
     root.classList.toggle('movable-ui', panelLayoutMovable());
     if (anchor === 'bar') this.seatByBar();
+    else this.seatClear(anchor);
     this.clock += dt;
     if (this.force || this.clock >= MENU_CFG.syncSec) {
       this.clock = 0;
@@ -373,6 +377,33 @@ export class MenuBar {
   private clearInlineSeat(): void {
     const st = this.root.style;
     st.left = ''; st.top = ''; st.right = ''; st.bottom = ''; st.transform = '';
+    this.clearSig = '';
+  }
+
+  /** THE CLEARANCE (corner anchors): on a narrow screen (a phone — THE
+   *  PLATFORM FABRIC's compact layout grows the tiles too) the hero's drawn
+   *  cluster reaches the corner the bar seats in, and the button would paint
+   *  over the life orb. Drawn == seated: when the bar's DEFAULT seat overlaps
+   *  the renderer's published cluster rect, the bar lifts so its foot clears
+   *  the cluster's crown by the bar gap; otherwise the stylesheet's seat
+   *  stands (inset, the couch lift, the safe insets) untouched. A dragged
+   *  seat (Movable UI) wins. Re-measured only when the geometry moved. */
+  private seatClear(anchor: MenuAnchorId): void {
+    if (panelMoved(this.root)) return;
+    const c = this.host.hudCluster();
+    const own = this.root.getBoundingClientRect();
+    const sig = `${anchor}|${window.innerWidth}x${window.innerHeight}|${own.width}x${own.height}|`
+      + (c ? `${Math.round(c.x)},${Math.round(c.y)},${Math.round(c.w)},${Math.round(c.h)}` : 'none');
+    if (sig === this.clearSig) return;
+    this.clearSig = sig;
+    const st = this.root.style;
+    st.bottom = ''; // measure the DEFAULT seat, never the lifted one
+    if (!c) return;
+    const def = this.root.getBoundingClientRect();
+    const overlaps = def.left < c.x + c.w && def.left + def.width > c.x && def.top < c.y + c.h && def.top + def.height > c.y;
+    if (!overlaps) return;
+    const z = uiScaleNow() || 1;
+    st.bottom = `${Math.round((window.innerHeight - c.y + MENU_CFG.barGapPx) / z)}px`;
   }
 
   /** `bar` anchor: seat just right of the hero's drawn cluster — the

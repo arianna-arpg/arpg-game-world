@@ -2,7 +2,19 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- THE PLATFORM HYGIENE (docs/engine/platform-touch.md): the viewport
+       reaches under notches (viewport-fit=cover — the safe insets come back
+       through env() and THE PLATFORM FABRIC stamps them as CSS variables),
+       the manifest makes the web build installable as a landscape,
+       fullscreen PWA (public/manifest.webmanifest — the icons are
+       `npm run icon:pwa`), and the home-screen metas keep an installed
+       page chromeless. Inert for the desktop shell. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#07070d" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="./manifest.webmanifest" />
   <title>Hollow Wake</title>
   <!-- THE EARLY TRAP: a classic (non-module) script installed BEFORE the module
        graph loads, so a failure of the bundle itself — a 404'd chunk, a parse
@@ -88,12 +100,21 @@
       font-family: 'Segoe UI', Verdana, sans-serif;
       color: var(--text);
       user-select: none;
+      /* THE PLATFORM HYGIENE: no rubber-band / pull-to-refresh, no iOS
+         long-press callout, no tap flash — the page is a game surface. */
+      overscroll-behavior: none;
+      -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent;
     }
     /* Nothing in the game is ever a native drag source — a stray drag ghost
        "grabs the window" (input.ts suppresses dragstart too; this is the
        belt-and-suspenders layer for any future <img> content). */
     img, svg, canvas { -webkit-user-drag: none; }
-    #game { display: block; width: 100vw; height: 100vh; }
+    /* touch-action: none — the browser never scrolls/zooms a finger on the
+       world (THE TOUCH FABRIC routes it, ui/touchpad.ts); 100dvh keeps the
+       canvas honest under a phone browser's collapsing URL bar (100vh is the
+       fallback where dvh is unknown). */
+    #game { display: block; width: 100vw; height: 100vh; height: 100dvh; touch-action: none; }
 
     /* z-index arrives from THE UI STACK LAW's injected sheet (ui/zorder.ts):
        every activatable panel sits on the `panel` rung, above every canvas

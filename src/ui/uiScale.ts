@@ -95,12 +95,29 @@ const clampScale = (v: number): number =>
   Math.min(UI_SCALE_CFG.max, Math.max(UI_SCALE_CFG.min, v));
 
 let current: number = UI_SCALE_CFG.default;
+/** THE FLOOR (core/platform.ts — a preset's legibility floor, a phone's
+ *  say): the EFFECTIVE scale is max(the player's dial, the floor). 1 on a
+ *  desktop, so nothing moves until a preset asks. */
+let floor = 1;
+
+/** Set the platform's floor. Callers re-stamp with applyUiScale afterwards
+ *  (main.ts does, on every platform view change) — the floor alone writes
+ *  nothing, so the dial stays the one writer of :root. */
+export function setUiScaleFloor(v: number): void {
+  floor = clampScale(Number.isFinite(v) ? v : 1);
+}
+
+/** The platform floor the renderer folds beside the dial (render/renderer.ts
+ *  uiScaleLive) — one law, two delivery layers, zero drift. */
+export function uiScaleFloorNow(): number {
+  return floor;
+}
 
 /** Stamp the dial onto :root (every registered surface follows the same
  *  frame) and cache it for JS composers. Clamps to the rails — callers pass
- *  whatever the save or slider holds. */
+ *  whatever the save or slider holds; the platform floor lifts it. */
 export function applyUiScale(v: number): void {
-  current = clampScale(Number.isFinite(v) ? v : UI_SCALE_CFG.default);
+  current = clampScale(Math.max(floor, Number.isFinite(v) ? v : UI_SCALE_CFG.default));
   document.documentElement.style.setProperty(UI_SCALE_CFG.cssVar, String(current));
 }
 

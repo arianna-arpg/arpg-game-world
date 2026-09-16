@@ -1341,6 +1341,21 @@
       ],
       "port": 5141,
       "autoPort": false
+    },
+    {
+      "name": "arpg-dev-mobile",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "D:/Games/Claude/arpg-mobile",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5291",
+        "--strictPort"
+      ],
+      "port": 5291
     }
   ]
 }

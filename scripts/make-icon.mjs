@@ -14,7 +14,15 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const SIZE = 512;
+// THE PWA SIZES (npm run icon:pwa): --size N --out PATH paints the SAME
+// 512-space scene resampled at N px into another file — the manifest's
+// 192/512 icons under public/icons/ are this art, byte-deterministic too.
+// Without flags: the classic build/icon.png at 512, byte-identical.
+const argFlag = (name) => { const i = process.argv.indexOf(name); return i >= 0 ? process.argv[i + 1] : null; };
+const SIZE = Number(argFlag('--size')) || 512;
+const OUT_ARG = argFlag('--out');
+/** Sample scale: the scene is authored in 512-space; a smaller raster reads it at a stride. */
+const SAMPLE = 512 / SIZE;
 
 // ------------------------------------------------------------------- palette
 const PLATE_TOP = [0x14, 0x14, 0x1e];   // matches the game's panel palette
@@ -134,7 +142,7 @@ for (let y = 0; y < SIZE; y++) {
   const row = y * (SIZE * 4 + 1);
   raw[row] = 0; // filter: none
   for (let x = 0; x < SIZE; x++) {
-    const [r, g, b, a] = paint(x + 0.5, y + 0.5);
+    const [r, g, b, a] = paint((x + 0.5) * SAMPLE, (y + 0.5) * SAMPLE);
     const o = row + 1 + x * 4;
     raw[o] = Math.round(r); raw[o + 1] = Math.round(g);
     raw[o + 2] = Math.round(b); raw[o + 3] = Math.round(a * 255);
@@ -152,7 +160,7 @@ const png = Buffer.concat([
   chunk('IEND', Buffer.alloc(0)),
 ]);
 
-const out = join(dirname(fileURLToPath(import.meta.url)), '..', 'build', 'icon.png');
+const out = OUT_ARG ? join(process.cwd(), OUT_ARG) : join(dirname(fileURLToPath(import.meta.url)), '..', 'build', 'icon.png');
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, png);
 console.log(`icon: wrote ${out} (${png.length} bytes)`);
