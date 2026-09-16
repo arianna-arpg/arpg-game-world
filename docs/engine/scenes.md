@@ -112,7 +112,8 @@ written mid-scene resolves the player spot to the surface **return anchor**
 Sealing (`sealStageZone`): `spoils: 'none'`, `packDensity: 0`,
 `cohort: 'authored'`, empty packs, **`exits: []`** (entry falls back to zone
 center; the script alone decides when you leave), hollows/puzzles/scenery
-stripped. **THE EMPTY-FIELD LAW**: after the load, every non-player actor is
+stripped, and `castSeal` copied from the stage spec where authored (THE CAST
+SEAL, `docs/engine/castseal.md` — Mu's ground answers no button). **THE EMPTY-FIELD LAW**: after the load, every non-player actor is
 swept — whatever a tileset's dress rows mint (the lea's gem cache), the
 scene owns every body on its stage.
 

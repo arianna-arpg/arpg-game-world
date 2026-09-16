@@ -26,6 +26,7 @@ import type { FluxSpec } from '../engine/flux';
 import type { RecoveryPolicy } from '../world/regions';
 import type { SpanRowSpec } from '../engine/spans';
 import type { TrackSpec } from '../engine/tracks';
+import type { CastSealSpec } from '../engine/castseal'; // THE CAST SEAL — the ground's cast law
 import type { ZoneGeyserSpec } from '../engine/geysers';
 import type { TrapworkSpec } from '../engine/trapworks';
 import type { ZoneLiteSpec } from '../engine/lite';
@@ -1350,6 +1351,17 @@ export interface ZoneDef {
    *  'full'. Debut: The Pit (packages/defs/pit.ts) — a level-scaled XP arena
    *  must not also out-farm the charted world's gear from one cellar. */
   spoils?: 'full' | 'none';
+  /** THE CAST SEAL (engine/castseal.ts) — what this ground lets anyone
+   *  CAST. A whole seal (`{}` / `mode: 'shut'`) refuses every press at
+   *  useSkill's first word — the bar greys, the AI never presses, the
+   *  trigger artery and the replenishment sweep stand down — with `open`
+   *  rows (ids / tags / registered laws) as the carve-outs; `mode: 'open'`
+   *  inverts it (only `shut` rows seal). Silent unless `line` is authored.
+   *  Stamped by whoever mints the ground (a scene's SceneZoneSpec through
+   *  sealStageZone, a def literal, a future tileset roll); absent = every
+   *  cast open. Debut: Mu (data/mu.ts MU_ZONE) — a hub whose only act is
+   *  choosing a vessel answers no button. */
+  castSeal?: CastSealSpec;
   /** THE QUICKENING's stamp (packages/overlays/quickening.ts): while a surge
    *  holds this ground, `level` above is the SURGED level and this block
    *  remembers how to put it back. Written and reverted ONLY by the engine's

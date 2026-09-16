@@ -36,6 +36,8 @@ import { regionKind, PATH_CFG, SURVIVAL_RESOURCES } from '../world/regions';
 import { CHARGE_DEFS } from '../engine/charges';
 import { STATUS_DEFS } from '../engine/status';
 import { MU_CFG, APPARITION_RADIUS } from '../data/mu'; // THE RING LAW's disjoint-reach dial law (muRing)
+import { SCENES } from './scenes'; // THE CAST SEAL's lint (castSealIssues) over every scene ground
+import { castSealIssues } from '../engine/castseal';
 import { ZONES, OBJECTIVE_SEALS, type StampSpec, type StructureRoll } from './zones';
 import { POCKET_FORMS, DEFAULT_POCKET_FORM } from './pocketForms';
 import { TILESETS, pickTilesetForBiome, type BlendRoll } from './tilesets';
@@ -2960,6 +2962,15 @@ export function validateContent(): void {
     }
     if (MU_CFG.ring.rankGap <= 2 * APPARITION_RADIUS) warn(`mu: ring.rankGap ${MU_CFG.ring.rankGap} lets ranks touch`);
     if (MU_CFG.wrap.clear <= 0 || MU_CFG.wrap.reentry >= MU_CFG.wrap.radius) warn('mu: the globe must keep void beyond the rings (wrap.clear > 0, reentry < radius)');
+  }
+
+  // THE CAST SEAL (engine/castseal.ts): a scene ground's seal must name
+  // real skills and REGISTERED laws — a row naming nothing seals or opens
+  // nothing it meant to, silently.
+  for (const sc of Object.values(SCENES)) {
+    const seal = sc.zone.castSeal;
+    if (!seal) continue;
+    for (const issue of castSealIssues(seal, id => !!SKILLS[id])) warn(`scene '${sc.id}': castSeal ${issue}`);
   }
 
   // THE SKILL-MODE TREES (docs/design/skill-modes.md §3/§8 — THE GRAPH

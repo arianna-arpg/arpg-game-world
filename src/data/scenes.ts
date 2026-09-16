@@ -137,6 +137,10 @@ export interface SceneZoneSpec {
    *  stays near the heart; every scene spawn rings off the hero's LIVE
    *  position anyway, so the script follows wherever they run. */
   boundless?: boolean;
+  /** THE CAST SEAL (engine/castseal.ts): the ground's cast law, stamped
+   *  onto the minted zone by sealStageZone. Mu wears a whole, silent seal;
+   *  a stage that wants "certain casts eligible" authors `open` rows. */
+  castSeal?: import('../engine/castseal').CastSealSpec;
 }
 
 // --- stage specs (the open union: core kinds typed, the registry may grow) --

@@ -232,6 +232,19 @@ pad, the menu tray's greyed tile and its hint all share. An empty list opens
 every page as in a run; any other scene may seal the same way. Probe:
 `probe_mu` B6.
 
+**THE CAST SEAL** (her ask, 2026-09-16): the wisp's empty slots swung THE
+UNARMED FLOOR — a fine byproduct of the one cast pipeline, but a hub whose
+only act is choosing a vessel must not answer a button as if there were
+something else to do. `MU_ZONE.castSeal` (`data/mu.ts`) is a whole, SILENT
+seal — a row on the ground, never a Mu code path: `ZoneDef.castSeal`
+(`engine/castseal.ts`, stamped by `sealStageZone`) is read ONCE through
+`World.castSealed` by the press (useSkill's first word — before any cost,
+toggle or dwell interruption), the bar, the AI, the trigger artery and the
+replenishment sweep. The day Mu admits certain casts, that is an `open` row
+by skill id, tag or a registered live law (`open: { ids: [...], laws:
+['reflex'] }`); no `line` is authored, since a spoken refusal would itself
+imply an act. Docs `docs/engine/castseal.md`; probe `probe_mu` B7–B19.
+
 **THE MENU STANDS** (same day, her consistency ask): the HUD veil hides the
 run HUD cluster, never the Menu button — it is the shell's door and stands
 whenever the game runs (`main.ts menuBarSync`). In Mu the tray shows every
@@ -296,7 +309,9 @@ the voice part is the counterplay the tutorial taught.
 
 ## Laws pinned by the probes
 
-`probe_mu.ts`: the transient gate, the wisp, the three ranks, the dwell
+`probe_mu.ts`: the transient gate, the wisp, THE CAST SEAL (a sealed press
+casts nothing, speaks nothing, interrupts no dwell; carve-outs by id / tag /
+law, the hard lock, binds, the line, the lint), the three ranks, the dwell
 latch (fire-once, step-out re-arm, veiled/faint refusals), and the whole
 agency reckoning incl. interrupt re-arm and the fall into Mu.
 `probe_scenes.ts`: the prologue walked end to end into Mu — the hold's
@@ -307,7 +322,8 @@ stream law, the seated tell beside the dwell request, the one predicate.
 
 ## Dials
 
-Everything in `MU_CFG` (`data/mu.ts`): wisp face, arc radii/span, the gaze
+Everything in `MU_CFG` (`data/mu.ts`), plus `MU_ZONE.castSeal` (the ground's
+cast law — whole and silent today): wisp face, arc radii/span, the gaze
 (mark + turn rate), faint cap, dwell radius/seconds, the three spoken lines. The reckoning's beat lives on
 the prologue's stage row (`spawnDist`/`graceSec`/`floorFrac`/`blastWaitSec`).
 THE OFFERED CONTRACT's dials: `IMMORTAL_CFG.offerChance` / `offerMax` and

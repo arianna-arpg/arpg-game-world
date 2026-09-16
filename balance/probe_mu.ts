@@ -6,6 +6,9 @@
 //     off-graph, empty-field like every scene ground.
 //   • THE WISP — the hero stands guarded, kitless, small, and ethereal; the
 //     HUD veil is up; nothing is ever restored (the pick rebuilds the world).
+//   • THE CAST SEAL — the ground answers no button (ZoneDef.castSeal, the
+//     one read World.castSealed); carve-outs by id / tag / registered law
+//     are rows, the hard lock, binds, the spoken line, the lint.
 //   • THE HAND LAW — apparitions mirror the class screen's economy exactly:
 //     dealt hand AWAKE (selectableSlotCount from the unlocked pool), the
 //     unlocked remainder VEILED (named, refusing), the locked remainder as
@@ -34,6 +37,8 @@ import {
 import { CLASSES } from '../src/data/classes';
 import { MONSTERS } from '../src/data/monsters';
 import { SKILLS } from '../src/data/skills';
+import { BAR_SLOTS, makeSkillInstance } from '../src/engine/skills';
+import { registerCastLaw, castSealIssues } from '../src/engine/castseal'; // THE CAST SEAL (B7-B19)
 import { TILESETS } from '../src/data/tilesets';
 import { QUESTS } from '../src/quests/defs';
 import { revengeCullId, revengeCommanderId, revengeTrailKey } from '../src/quests/revenge';
@@ -110,6 +115,68 @@ check('B6: THE PANEL SEAL holds the listed pages shut with the hub\'s line, and 
   && w.panelSealed('zz_unlisted') === null
   && (sealIds.includes('character') || w.panelSealed('character') === null));
 check('B6b: the seal names the bag (the provisional class beneath the wisp is no build to unlearn)', sealIds.includes('inventory'));
+
+// THE CAST SEAL (her ask 2026-09-16 — the wisp swung THE UNARMED FLOOR in
+// Mu: a fine byproduct of the one pipeline that implies there is something
+// to DO here besides choose). ZoneDef.castSeal is the ground's law,
+// engine/castseal.ts its open vocabulary, World.castSealed the ONE read
+// the press, the bar, the AI, the trigger artery and the replenishment
+// sweep share. Every carve-out below is a ROW, never a code path.
+{
+  const seal0 = w.zone.castSeal;
+  const improvised = makeSkillInstance(SKILLS['improvised_strike']!, 1);
+  const spellDef = Object.values(SKILLS).find(s => (s.tags ?? []).includes('spell') && !(s.tags ?? []).includes('attack'))!;
+  const spell = makeSkillInstance(spellDef, 1);
+  const press = (slot = 0): boolean => {
+    const held = Array(BAR_SLOTS).fill(false) as boolean[];
+    const edge = Array(BAR_SLOTS).fill(false) as boolean[];
+    held[slot] = true; edge[slot] = true;
+    const before = w.scene!.casts;
+    w.applyInputs(new Map([['p0', { dx: 0, dy: 0, aim: { x: p.pos.x + 40, y: p.pos.y }, held, edge }]]), DT);
+    const cast = w.scene!.casts > before || !!p.casting;
+    p.casting = null; p.useLock = 0; // clear the swing so the next press judges fresh
+    return cast;
+  };
+  const acted0 = w.localSeat.lastActedAt, texts0 = w.texts.length;
+  check("B7: Mu's ground wears the seal WHOLE and SILENT (MU_ZONE.castSeal via sealStageZone)",
+    !!seal0 && (seal0.mode ?? 'shut') === 'shut' && !seal0.open && !seal0.shut && !seal0.line);
+  check('B8: an empty-slot press casts NOTHING — the unarmed floor is sealed at the door', !press());
+  check('B9: the sealed press is silent and interrupts no dwell (it sits before markSeatActed)',
+    w.texts.length === texts0 && w.localSeat.lastActedAt === acted0);
+  check('B10: World.castSealed is the ONE read — the floor reads sealed; the bar (skillUsable) and the AI (pressUsable) say no',
+    w.castSealed(p, improvised) === seal0 && !w.skillUsable(p, improvised) && !w.pressUsable(p, improvised));
+  w.zone.castSeal = { mode: 'shut', open: { ids: ['improvised_strike'] } };
+  check('B11: an OPEN row by skill id lets that cast through (the future "certain casts eligible" lever)',
+    w.castSealed(p, improvised) === null && press());
+  w.zone.castSeal = { mode: 'shut', open: { tags: ['attack'] } };
+  check('B12: an OPEN row by TAG opens the family and only the family',
+    w.castSealed(p, improvised) === null && w.castSealed(p, spell) !== null);
+  let armed = false;
+  registerCastLaw('probe:wisp', ctx => armed && ctx.caster === w.player);
+  w.zone.castSeal = { mode: 'shut', open: { laws: ['probe:wisp'] } };
+  const shutWhileDisarmed = w.castSealed(p, improvised) !== null;
+  armed = true;
+  check('B13: an OPEN row by a registered LAW opens on a LIVE predicate (dynamic by construction)',
+    shutWhileDisarmed && w.castSealed(p, improvised) === null);
+  w.zone.castSeal = { mode: 'open', shut: { tags: ['attack'] } };
+  check('B14: an OPEN ground seals only what its shut row names',
+    w.castSealed(p, improvised) !== null && w.castSealed(p, spell) === null);
+  w.zone.castSeal = { mode: 'shut', open: { ids: ['improvised_strike'] }, shut: { tags: ['attack'] } };
+  check('B15: THE HARD LOCK — a shut row beats an open row that also matches', w.castSealed(p, improvised) !== null);
+  w.zone.castSeal = { mode: 'shut', binds: 'seats' };
+  const vessel = apparitionsOf(w)[0]!;
+  check('B16: binds seats — a seatless body stands outside the seal, the wisp inside it',
+    w.castSealed(vessel, improvised) === null && w.castSealed(p, improvised) !== null);
+  w.zone.castSeal = { mode: 'shut', line: 'the void does not answer' };
+  press();
+  check('B17: an authored line speaks the refusal through the rate-limited failNote lane',
+    w.texts.some(t => t.text === 'the void does not answer'));
+  w.zone.castSeal = seal0;
+  check('B18: the authored seal restored — sealed again', !press() && w.castSealed(p, improvised) === seal0);
+  check('B19: castSealIssues names an unknown skill id and an unregistered law, and clears the authored seal',
+    castSealIssues({ open: { ids: ['zz_nope'], laws: ['zz_law'] } }, id => !!SKILLS[id]).length === 2
+    && castSealIssues(seal0!, id => !!SKILLS[id]).length === 0);
+}
 
 // === C) THE HAND LAW =========================================================
 const apps = apparitionsOf(w);

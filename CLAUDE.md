@@ -1540,7 +1540,17 @@ we verify changes.
   a closed ring grown to the gap; ranks stack by `rankGap`; the globe's
   wrap keeps `wrap.clear` past the outermost seat); THE DISJOINT REACH
   (awake gap ≥ 2× the dwell reach, validate-warned) means no point in Mu
-  reaches two vessels.
+  reaches two vessels. THE CAST SEAL (2026-09-16, her word — the wisp's
+  empty slots swung the unarmed floor in Mu: fine mechanics, wrong
+  implication): `ZoneDef.castSeal` (engine/castseal.ts — `mode` shut|open,
+  `open`/`shut` rows by ids / tags / REGISTERED LAWS (`registerCastLaw`,
+  live predicates; 'reflex' ships), `binds` all|seats, an optional spoken
+  `line`, THE HARD LOCK; `SceneZoneSpec.castSeal` stamped by sealStageZone)
+  is the ground's cast law and `World.castSealed` the ONE read — useSkill's
+  first word (before any cost, toggle or dwell interruption) + the bar +
+  the AI + the trigger artery + the replenishment sweep; MU_ZONE wears it
+  whole and silent, and "certain casts eligible" is a row, never code —
+  docs/engine/castseal.md; probe_mu B7–B19.
   THE TUTORIAL FACTIONS (data/commanders.ts): the onslaught rolls ONE
   LEGION per account — SEVEN `TUTORIAL_FACTIONS` rows (goblin/undead/
   beastkin/demon + the obscure courts carven/chitin/gnoll), each fielding

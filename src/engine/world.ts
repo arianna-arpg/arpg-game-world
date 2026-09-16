@@ -288,6 +288,7 @@ import {
 import {
   CLING_CFG, clingBurrowed, clingEligible, clingMotionShaken, clingSeatPos, clingSeatsOf, gnawTags,
 } from './cling';
+import { castSealShuts, type CastSealSpec } from './castseal';
 import { syncAttributeBequests } from './bequests';
 import { STATUS_RELAYS, STATUS_RELAY_IDS, relayStatusStat } from './reception';
 import { TRAIL_GRANTS, POCKET_GRANTS, pocketGrantStat, trailGrantStat, placeGrantedPockets,
@@ -22254,6 +22255,19 @@ export class World {
     return seal?.ids.has(id) ? seal.line : null;
   }
 
+  /** THE CAST SEAL (engine/castseal.ts — ZoneDef.castSeal, the ground's
+   *  cast law): the seal holding THIS cast shut on the current ground, or
+   *  null when it may fire. ONE read for the press (useSkill's first
+   *  word), the bar (skillUsable), the AI (pressUsable), the trigger
+   *  artery and the replenishment sweep — the button, the grey slot and
+   *  the brain can never disagree about what the ground allows. */
+  castSealed(caster: Actor, inst: SkillInstance): CastSealSpec | null {
+    const seal = this.zone.castSeal;
+    if (!seal) return null;
+    return castSealShuts(seal, { world: this, caster, inst, seated: this.seatOf(caster) !== undefined })
+      ? seal : null;
+  }
+
   /** THE CAST-TIME REQUIREMENT GATE (backlog #90): the learn gate's attribute
    *  law, held for as long as the build WIELDS the gem — respec the tree or
    *  shed the +attribute gear that carried a skill's requirements and the gem
@@ -29774,6 +29788,7 @@ export class World {
    *  canUse so an exhausted gun still gets pressed: the press is the
    *  reload, and the vulnerability window it opens is the design. */
   pressUsable(caster: Actor, inst: SkillInstance): boolean {
+    if (this.castSealed(caster, inst)) return false; // THE CAST SEAL — the brain never presses a sealed cast
     // A mimic slot presses as its selection — empty bank, dead button.
     if (inst.def.mimic) {
       const sel = mimicSelected(caster, this.time);
@@ -33232,6 +33247,19 @@ export class World {
    * answer only to seats, so AI re-presses can never thrash a toggle.
    */
   useSkill(caster: Actor, inst: SkillInstance, aim: Vec2, seatPress = false): boolean {
+    // THE CAST SEAL (engine/castseal.ts, ZoneDef.castSeal): the ground's
+    // first word at the door — a sealed cast pays nothing, toggles
+    // nothing and interrupts no dwell (it sits BEFORE markSeatActed), and
+    // is SILENT unless the seal authored a line (a reason, never a
+    // caption; seat presses only — the AI's refusals never speak). Mu
+    // wears it whole; carve-outs are the seal's own rows, never code.
+    {
+      const seal = this.castSealed(caster, inst);
+      if (seal) {
+        if (seal.line && seatPress) this.failNote(caster, 'castseal', seal.line);
+        return false;
+      }
+    }
     if (caster.hiveForm && inst.def.hivecall) return this.hivecallMeta(caster, inst) ?? false;
     if (throngTravelProtected(caster) || caster.throngDriven || caster.throngCarried) return false;
     if (replenishingDelivery(inst)) {
@@ -56027,7 +56055,8 @@ export class World {
         if (!d || !replenishmentActive(inst) || d.persistent || d.decay || d.waves || d.fromCorpse
           || !Number.isFinite(d.replenish!.interval) || d.replenish!.interval <= 0
           || instanceTargeting(inst)?.target === 'corpse'
-          || caster.isStunned() || caster.tagsForbidden(inst) || this.castReqRefusal(caster, inst)) continue;
+          || caster.isStunned() || caster.tagsForbidden(inst) || this.castSealed(caster, inst) // THE CAST SEAL stands the clock down
+          || this.castReqRefusal(caster, inst)) continue;
         const shape = replenishShape(caster, inst, d);
         const alive = d.poolGroup ? this.minionsOfGroup(caster, d.poolGroup) : this.minionsOfSkill(caster, inst.def.id);
         const capacityBodies = alive.filter(a => !a.summonOffspring);
@@ -56675,6 +56704,7 @@ export class World {
     // casting gate would break the whole point of Cast-while-Channeling
     // (instant executions never clobber a held cast).
     if (owner.isStunned() || owner.tagsForbidden(inst)) return false;
+    if (this.castSealed(owner, inst)) return false; // THE CAST SEAL reaches the side door too
     // THE CAST-TIME REQUIREMENT GATE reaches the trigger artery too — an
     // armed gem below its wielder's live attributes must not fire by the
     // side door (silent, by the artery's own law).
@@ -56746,6 +56776,8 @@ export class World {
     // Trigger-socketed skills are never hand-castable: the slot greys and
     // the key becomes the arm/disarm latch (the border glow shows state).
     if (instanceTrigger(inst)) return false;
+    // THE CAST SEAL greys the slot: the press would refuse, so the bar says so first.
+    if (this.castSealed(a, inst)) return false;
     if (def.pool && !a.venting.has(def.pool.id)
       && (a.pools.get(def.pool.id) ?? 0) < (def.pool.min ?? 1)) return false;
     // Unmet PREREQUISITE gates grey the slot ("not ready").

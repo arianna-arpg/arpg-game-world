@@ -47,6 +47,14 @@ export const MU_ZONE: SceneZoneSpec = {
   objectiveLabel: 'Choose a vessel',
   seed: 0x00a0,
   boundless: true,
+  // THE CAST SEAL (engine/castseal.ts, her ask 2026-09-16): the hub answers
+  // NO button — the wisp's empty slots swung THE UNARMED FLOOR (a fine
+  // byproduct of the one pipeline) and a ground whose only act is choosing
+  // a vessel must not imply there is something else to do. A whole, SILENT
+  // seal (no `line`: a spoken refusal would itself imply an act). The day
+  // Mu admits "certain casts", that is a row here, never a code path:
+  //   castSeal: { mode: 'shut', open: { ids: ['commune'], laws: ['reflex'] } }
+  castSeal: { mode: 'shut' },
 };
 
 /** The wisp's pale ether ink — the body, and every word the hub speaks at it. */
