@@ -21,7 +21,7 @@ import { SHEET_VITALS, sheetTabs, statBlurbOf } from '../data/sheet';
 import { resistValue } from '../engine/damage';
 import { chargeLabel } from '../engine/charges';
 import {
-  bandPointsAt, crewBoardingOpen, crewSkillsServed, effectiveSkillLevel, essenceTierForLevel, instanceChargeCost, SKILL_LEVEL_BANDS, SKILL_RARITIES, skillCooldownSeconds, skillMaxLevel,
+  bandPointsAt, crewBoardingOpen, crewSkillsServed, effectiveSkillLevel, essenceTierForLevel, instanceChargeCost, SKILL_LEVEL_BANDS, SKILL_RARITIES, skillMaxLevel,
   supportFitsInstOrCrew, supportMaxLevel, treeNodeRefusal, treeSpentBranch,
   type SkillDef, type SkillInstance, type SkillRarity, type SkillTreeNode, type SupportInstance,
 } from '../engine/skills';
@@ -915,6 +915,7 @@ export class UI {
     for (const root of [this.inventory, this.buildPanel]) bindTooltips(root, (el, ext) =>
       el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext, this.panelSeat(this.inventory), this.salvageLaneFor(this.inventory))
         : el.dataset.tip === 'skill' ? this.skillTooltip(el.dataset.skillId!, ext)
+        : el.dataset.tip === 'tree-point' ? this.skillTreePointTooltip(el.dataset.skillId!, Number(el.dataset.point), this.panelSeat(root))
         : el.dataset.tip === 'vestige' ? this.vestigeTooltip(el.dataset.vestigeId!) : null,
     { extend: true });
     bindTooltips(this.salvageMenu, (el, ext) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext, this.panelSeat(this.salvageMenu)) : null, { extend: true });
@@ -2201,7 +2202,7 @@ export class UI {
     const granted = inst.grantedBy ? ` · granted by ${inst.grantedBy}` : '';
     return {
       title: `${d.name} — Lv ${inst.level}${branch ? ` · ${branch.name}` : ''}`,
-      description: (branch?.description ?? d.description)
+      description: d.description
         + this.previewRowsHtml(preview.rows, extended),
       meta: instanceBaseTags(inst).join(' · ') + (charge ? ` · ${charge}` : '') + granted,
       wide: extended && preview.hasDetail,
@@ -3623,8 +3624,7 @@ export class UI {
   /** Rarity chip for a gem instance (the book + the inventory tabs share it). */
   private rarityTagHtml(inst: SkillInstance): string {
     const r = SKILL_RARITIES[inst.rarity ?? 'common'];
-    return `<span style="color:${r.color};font-size:10px;font-weight:bold">${r.label}</span>
-      <span style="color:#8a8678;font-size:10px">· ${inst.sockets.length} socket${inst.sockets.length > 1 ? 's' : ''}</span>`;
+    return `<span style="color:${r.color};font-size:10px;font-weight:bold">${r.label}</span>`;
   }
 
   /** THE PANEL SEAL's refusal at the press (World.panelSealed — a playing
@@ -6617,19 +6617,6 @@ export class UI {
 
   // -------------------------------------------------------------- skill book
 
-  /** A cooldown as the player will actually wait it (skillCooldownSeconds),
-   *  trimmed to the shortest honest precision. */
-  private cdText(sec: number): string {
-    return `${sec >= 10 ? Math.round(sec) : Math.round(sec * 100) / 100}s`;
-  }
-
-  private costText(cost: { mana: number; life: number }): string {
-    const parts: string[] = [];
-    if (cost.mana > 0) parts.push(`${cost.mana} mana`);
-    if (cost.life > 0) parts.push(`<span style="color:#d05050">${cost.life} life</span>`);
-    return parts.join(' + ') || 'free';
-  }
-
   /** The LEARNED-SKILLS list — the skill book's body AND the gear tab's
    *  Build flap render this same full-management view (one build, two
    *  vantages; every button works in both). */
@@ -6743,7 +6730,7 @@ Granted by ${r.source} at Level ${r.level}: cast it like any learned skill; its 
             ? `<span title="Granted by ${seated.grantedBy} — take the piece off to unseat it; there is no gem to unlearn"
                 style="font-size:9px;color:#e8a860;padding:0 1px;line-height:1">◆</span>`
             : `<button data-rackunbind="${slot}" class="rack-unlearn" aria-label="Unlearn ${sd.name}"
-              title="Unlearn ${sd.name} — it returns to your pack as its Memory"
+              title="Unlearn ${sd.name}"
               style="--unlearn-size:${BUILD_PANEL_CFG.unlearnSize}px">✕</button>`}
         </div>
         <div style="display:flex;align-items:center;gap:4px">
@@ -6763,9 +6750,9 @@ Granted by ${r.source} at Level ${r.level}: cast it like any learned skill; its 
     const rackHtml = `
       <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:5px">${seatTiles.join('')}</div>
       <div data-drop="rackFree" style="margin:5px 0 8px;padding:3px 5px;border:1px dashed #35304a;
-        border-radius:5px;font-size:10px;color:#8a8678;min-height:20px">
+        border-radius:5px;font-size:10px;color:#8a8678;min-height:36px;display:flex;align-items:center;justify-content:center;text-align:center">
         ${m.knownSkills.size
-          ? `<span style="color:#5a5668">drag seats to reorder · drop a seat here (or press its ✕) to unlearn — the skill returns to your pack</span>`
+          ? `<span>Drag seats to reorder · drop here or press ✕ to unlearn</span>`
           : `<span style="color:#5a5668">the eight seats above are your whole hand — drag a Skill Memory from your pack onto one to learn it</span>`}
       </div>`;
     // THE FIELD DISCIPLINE, spoken at the button (the engine gate's words):
@@ -6774,7 +6761,10 @@ Granted by ${r.source} at Level ${r.level}: cast it like any learned skill; its 
     // The book lists what the seat WIELDS: the learned residence plus the
     // GRANTED lane (THE LEGEND FABRIC) — a granted row sockets and picks
     // its tree like any other, but carries no level-up and no unlearn.
-    const rows = [...m.knownSkills.values(), ...(seat.grantedInsts?.values() ?? [])].map(inst => {
+    const barOrder = new Map(bar.flatMap((inst, slot) => inst ? [[inst.def.id, slot] as const] : []));
+    const rows = [...m.knownSkills.values(), ...(seat.grantedInsts?.values() ?? [])]
+      .sort((a, b) => (barOrder.get(a.def.id) ?? bar.length) - (barOrder.get(b.def.id) ?? bar.length))
+      .map(inst => {
       const def = inst.def;
       const maxLv = skillMaxLevel(def);
       // Mark gems that BOARD THE CREW (forwarded into the minions' own
@@ -6802,7 +6792,12 @@ THE CUT (fixed at the vein): ${veinLines(s.def.rollBase, s.rolled).join(' · ')}
             ${!this.getWorld().canAffordAbilityEssence(seat, supportLevelAbilityCost(s.level + 1)) || s.level >= supportMaxLevel(s.def) ? 'disabled' : ''}
             title="Level up for ${supportLevelAbilityCost(s.level + 1).count}× ${abilityEssenceOfTier(supportLevelAbilityCost(s.level + 1).tier).label}">+${abilityEssenceOfTier(supportLevelAbilityCost(s.level + 1).tier).glyph}</button>
           <button data-unsocket="${def.id}:${i}" ${unsocketWhy ? `disabled title="${unsocketWhy}"` : ''}>✕</button>
-        </span>` : `<span class="gem-chip empty">empty socket</span>`).join('');
+        </span>` : `<span class="gem-chip empty support-slot" aria-label="Empty support socket"
+          title="Socket a support here by dragging a Support Memory onto this skill.">
+          <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 2 22 12 12 22 2 12Z M12 6 18 12 12 18 6 12Z M12 2V6 M22 12H18 M12 22V18 M2 12H6"
+              fill="none" stroke="currentColor" stroke-width="1"/>
+          </svg></span>`).join('');
       const eff = effectiveSkillLevel(inst);
       const nextThresh = def.thresholds?.find(t => eff < t.level);
       const reached = def.thresholds?.filter(t => eff >= t.level) ?? [];
@@ -6870,7 +6865,7 @@ THE CUT (fixed at the vein): ${veinLines(s.def.rollBase, s.rolled).join(' · ')}
               ? `<button class="gem-chip" data-treeopen="${def.id}"
                   style="border-color:${free > 0 ? '#ffd700' : '#d8b86a'};${free > 0 ? 'color:#ffd700;' : ''}"
                   title="${free > 0 ? 'A point waits — open the tree to spend it' : 'Open this skill\'s tree'}">⟡ Tree</button>`
-              : `<span style="color:#6a6478">— the path opens at Lv ${tree.level}</span>`}
+              : ''}
           </div>`;
       }
       // Grafts riding THIS skill (chips mirror sockets; ✕ unbinds) + the
@@ -6911,19 +6906,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
             ${reached.map(t => `<span style="font-size:9px;padding:1px 6px;border-radius:7px;background:#2a2438;color:#c8a8ff;margin-left:4px" title="Lv ${t.level} threshold">${t.label}</span>`).join('')}
             ${nextThresh ? `<span style="font-size:9px;color:#6a6478;margin-left:4px">Lv ${nextThresh.level}: ${nextThresh.label}</span>` : ''}
             ${this.rarityTagHtml(inst)}${rackSeatTag}
-            <span style="color:#8a8678;font-weight:normal;font-size:10px">
-              ${replenishingDelivery(inst) ? (replenishingDelivery(inst)?.replenish?.toggle ? (inst.replenishmentPaused ? 'Toggle · paused' : 'Toggle · replenishing') : 'Passive · replenishes while seated') : `${this.costText(p.skillCost(inst))}${def.cooldown
-                ? `, ${this.cdText(skillCooldownSeconds(p, inst))} cd` : ''}`}</span>
+            ${replenishingDelivery(inst) ? `<span style="color:#8a8678;font-weight:normal;font-size:10px">${replenishingDelivery(inst)?.replenish?.toggle ? (inst.replenishmentPaused ? 'Toggle · paused' : 'Toggle · replenishing') : 'Passive · replenishes while seated'}</span>` : ''}
           </div>
           <div class="tags">${instanceBaseTags(inst).join(' · ')}</div>
           <div class="bind-btns">
             ${inst.grantedBy
               ? `<span style="font-size:10px;color:#e8a860" title="Its level is the gear's to give; there is no gem to unlearn — take the piece off instead.">◆ granted by ${inst.grantedBy}</span>`
-              : `${this.abilityLevelBtn(`data-levelup="${def.id}"`, inst.level, inst.level >= maxLv)}
-            ${(() => {
-              const why = world.swapRefusal(seat, 'unlearn', def.id);
-              return `<button data-unlearn="${def.id}" ${why ? `disabled title="${why}"` : ''}>Unlearn${why ? ` (${why})` : ''}</button>`;
-            })()}`}
+              : this.abilityLevelBtn(`data-levelup="${def.id}"`, inst.level, inst.level >= maxLv)}
           </div>
           <div class="sockets">${sockets}</div>
           ${graftRow}
@@ -6971,9 +6960,6 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     }));
     // (Grimoire attunement wires nowhere here anymore — binding is the
     // Tracker's book's drag gesture; the chip above is display-only.)
-    q<HTMLButtonElement>('button[data-unlearn]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'unlearn', skillId: btn.dataset.unlearn! }); refresh();
-    }));
     q<HTMLButtonElement>('button[data-levelup]').forEach(btn => btn.addEventListener('click', () => {
       world.requestMeta({ t: 'levelSkill', skillId: btn.dataset.levelup! }); refresh();
     }));
@@ -7647,7 +7633,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     };
     this.skillTreePanes.set(skillId, pane);
     bindTooltips(el,
-      (t) => t.dataset.tip === 'stnode' ? this.skillTreeNodeTooltip(skillId, t.dataset.node!) : null,
+      (t) => t.dataset.tip === 'stnode' ? this.skillTreeNodeTooltip(skillId, t.dataset.node!)
+        : t.dataset.tip === 'tree-point' ? this.skillTreePointTooltip(skillId, Number(t.dataset.point), this.panelSeat(el)) : null,
       { proximity: { selector: '.st-node', radiusPx: TREE_REACH_PX, hysteresis: 0.35 } });
     // THE CLOSE GLYPH (the panelClosers idiom, per minted root).
     el.addEventListener('click', (e) => {
@@ -7696,20 +7683,40 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     }
   }
 
-  /** The level bar every tree readout shares (the drawer strip + the pane):
-   *  filled to inst.level, a tick at every band end — each completed band
-   *  is a minted Ability point (bandPointsAt). */
+  /** One hoverable segment per earned point, in allocation order. Partial
+   *  fill shows level progress; the number below each tick is its unlock. */
   private treeLevelBarHtml(inst: SkillInstance, width = 110): string {
-    const maxBand = SKILL_LEVEL_BANDS[SKILL_LEVEL_BANDS.length - 1];
-    const ticks = SKILL_LEVEL_BANDS.map(b => `
-      <span style="position:absolute;left:${(b / maxBand) * 100}%;top:-2px;width:1px;height:9px;
-        background:${inst.level >= b ? '#ffd700' : '#5a5668'}"></span>`).join('');
-    return `
-      <span style="position:relative;display:inline-block;width:${width}px;height:5px;
-        background:#241d2e;border:1px solid #4a4458;border-radius:2px;vertical-align:middle;margin:0 6px">
-        <span style="position:absolute;left:0;top:0;height:100%;width:${Math.min(100, (inst.level / maxBand) * 100)}%;
-          background:${inst.def.color};opacity:0.75"></span>${ticks}
+    const segments = SKILL_LEVEL_BANDS.map((level, point) => {
+      const start = SKILL_LEVEL_BANDS[point - 1] ?? 0;
+      const fill = Math.max(0, Math.min(100, (inst.level - start) / (level - start) * 100));
+      const allocated = !!inst.treeNodes?.[point];
+      return `<span class="tree-point${allocated ? ' allocated' : inst.level >= level ? ' earned' : ''}"
+        data-tip="tree-point" data-skill-id="${inst.def.id}" data-point="${point}">
+        <span class="tree-point-track"><span style="width:${fill}%;background:${inst.def.color}"></span></span>
+        <span class="tree-point-level">${level}</span>
       </span>`;
+    }).join('');
+    return `<span class="tree-points" style="width:${width}px;grid-template-columns:repeat(${SKILL_LEVEL_BANDS.length},1fr)">${segments}</span>`;
+  }
+
+  private skillTreePointTooltip(skillId: string, point: number, seat: Seat): TooltipContent | null {
+    const inst = seat.meta.knownSkills.get(skillId) ?? seat.grantedInsts?.get(skillId);
+    const level = SKILL_LEVEL_BANDS[point];
+    if (!inst || level === undefined) return null;
+    const nodeId = inst.treeNodes?.[point];
+    if (nodeId) {
+      const tip = this.skillTreeNodeTooltip(skillId, nodeId, seat);
+      if (!tip) return null;
+      const rank = inst.treeNodes!.slice(0, point + 1).filter(id => id === nodeId).length;
+      const ranks = treeGraph(inst.def)?.nodes.get(nodeId)?.ranks ?? 1;
+      return { ...tip, meta: `Point ${point + 1} · unlocked at Lv ${level} · allocated${ranks > 1 ? ` · rank ${rank}/${ranks}` : ''}` };
+    }
+    return {
+      title: `${inst.def.name} · Tree point ${point + 1}`,
+      description: inst.level >= level ? 'An Ability point is ready. Open the tree to choose an upgrade.'
+        : `Unlocks at skill level ${level}.`,
+      meta: inst.level >= level ? `Unlocked at Lv ${level} · unallocated` : `Current skill level: ${inst.level}`,
+    };
   }
 
   /** Re-render one skill's pane, or every open pane (the drawer's beat). */
@@ -7736,10 +7743,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const limbs = treeLimbs(def);
     const R = TREE_LAYOUT_CFG.radius;
     pane.box = graph.box;
-    // Fit the graph's proportions to the viewport: broad branching trees need
-    // a broad pane, while small trees retain the familiar compact window.
+    // Fit the undocked graph to the viewport. Keep this as a CSS preference
+    // so the inventory dock's measured width wins beside its ribbon rail.
     const paneWidth = Math.min(1100, Math.max(640, graph.box.w));
-    pane.el.style.width = `min(calc(72vh / var(--ui-scale) * ${(graph.box.w / graph.box.h).toFixed(3)}), ${paneWidth}px)`;
+    pane.el.style.setProperty('--skill-tree-width', `min(calc(72vh / var(--ui-scale) * ${(graph.box.w / graph.box.h).toFixed(3)}), ${paneWidth}px)`);
 
     // Node state through THE ONE SPEND PREDICATE (+ the field discipline).
     type NodeState = 'spent' | 'open' | 'sealed' | 'locked';
@@ -7896,11 +7903,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   /** Tooltip for a skill-tree node — the shared styled box, built from LIVE
    *  state on each hover: the payload in words (overrides, mods, graft),
    *  the node's standing through THE ONE SPEND PREDICATE, what it seals. */
-  private skillTreeNodeTooltip(skillId: string, nodeId: string): TooltipContent | null {
+  private skillTreeNodeTooltip(skillId: string, nodeId: string, owner?: Seat): TooltipContent | null {
     const pane = this.skillTreePanes.get(skillId);
-    if (!pane) return null;
-    const seat = this.panelSeat(pane.el);
-    const inst = seat.meta.knownSkills.get(skillId);
+    const seat = owner ?? (pane ? this.panelSeat(pane.el) : undefined);
+    if (!seat) return null;
+    const inst = seat.meta.knownSkills.get(skillId) ?? seat.grantedInsts?.get(skillId);
     const graph = inst ? treeGraph(inst.def) : undefined;
     const gn = graph?.nodes.get(nodeId);
     if (!inst || !graph || !gn) return null;

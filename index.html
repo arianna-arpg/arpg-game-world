@@ -309,6 +309,19 @@
       padding: 1px 8px; font-size: 10px; background: rgba(255,255,255,0.04);
     }
     .gem-chip.empty { color: #555; border-style: dashed; }
+    .gem-chip.support-slot { width:30px; height:30px; padding:0; justify-content:center;
+      border-radius:5px; color:#8a789f; background:radial-gradient(circle, #30243d, #19151f); }
+    .support-slot:hover, .support-slot.tt-anchor { color:#d4b8f0; border-color:#b89ad6; }
+    .tree-points { display:inline-grid; gap:3px; flex-shrink:0; margin:0 6px; vertical-align:middle; }
+    .tree-point { display:flex; flex-direction:column; padding-top:4px; color:#81758f; }
+    .tree-point-track { position:relative; display:block; height:5px; border:1px solid #4a4458; background:#241d2e; }
+    .tree-point-track > span { display:block; height:100%; opacity:.75; }
+    .tree-point-track::after { content:''; position:absolute; right:-1px; top:-3px; width:1px; height:10px; background:currentColor; }
+    .tree-point-level { text-align:right; font-size:9px; line-height:14px; }
+    .tree-point.earned { color:#ffd700; }
+    .tree-point.allocated { color:#dbc5f0; }
+    .tree-point.allocated .tree-point-track { border-color:#a98cc0; }
+    .tree-point:hover .tree-point-track, .tree-point.tt-anchor .tree-point-track { outline:1px solid #ffe9a0; }
     .gem-chip button {
       background: none; border: none; color: var(--gold); cursor: var(--cursor-point, pointer);
       font-size: 10px; padding: 0 2px;
@@ -341,7 +354,7 @@
        skillTreePaneFor / refreshSkillTree). */
     .skill-tree {
       top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: min(calc(82vh / var(--ui-scale)), 640px); max-width: calc(95vw / var(--ui-scale));
+      width: var(--skill-tree-width, min(calc(82vh / var(--ui-scale)), 640px)); max-width: calc(95vw / var(--ui-scale));
     }
     .skill-tree svg { width: 100%; height: auto; display: block; }
     .skill-tree .st-node.available { cursor: var(--cursor-point, pointer); }
