@@ -68,7 +68,7 @@ import { sceneDue } from '../engine/scenes';
 import { dndCancel, dndCarried, dndSwallowClick, registerDragSource, registerDropTarget, type DragPayload } from './dnd';
 import { PAD_POINTER_ID } from './padpointer';
 import { applyUiScale, UI_SCALE_CFG, uiScaleNow } from './uiScale';
-import { bindFolioKeys, FolioCore, FolioStrip, FOLIO_SHELVED_CLASS, installFolioStyles, type FolioLeafSpec } from './folio';
+import { bindFolioKeys, FolioCore, FolioStrip, FOLIO_SHELVED_CLASS, installFolioStyles, type FolioArrival, type FolioLeafSpec } from './folio';
 import type { TownSiteId } from '../data/townBuild';
 import type { SuiteStation } from '../data/suites';
 import { RENDER_SCALE_CFG } from '../render/renderScale';
@@ -636,9 +636,9 @@ export class UI {
     // close, never a fronting toggle.
     enrollLeaf: (id, el, title, isOpen, close, refresh) => {
       this.folio.enroll(this.folioLeaf(`container:${id}`, el, title, isOpen, close, {
-        arrive: 'front', bay: () => this.buildPanelBay(el), refresh }));
+        kind: 'page', arrive: 'front', bay: () => this.buildPanelBay(el), refresh }));
     },
-    folioAdopt: (id) => { this.folio.adopt(`container:${id}`); },
+    folioAdopt: (id) => { this.folioAsk(`container:${id}`); }, // the ribbon's press: an explicit ask
     folioFront: (id) => this.folio.front(`container:${id}`),
     folioFrontOf: (id) => {
       const book = this.folio.bookFor(`container:${id}`);
@@ -1191,7 +1191,7 @@ export class UI {
     this.buildFlapOpen = !this.buildFlapOpen;
     hideTooltip();
     this.refreshInventory();
-    if (this.buildFlapOpen) this.folio.adopt('skills');
+    if (this.buildFlapOpen) this.folioAsk('skills'); // the ribbon's press is an explicit ask
     this.folioStrip.update();
   }
 
@@ -1300,13 +1300,31 @@ export class UI {
     queueMicrotask(() => { if (this.folioHandoff?.el === el) this.folioHandoff = null; });
   }
 
+  /** THE CALL'S WORD (ui/folio.ts adopt): a page opened by a PRESS — the
+   *  ribbon, the key, a handle — is an explicit ask and arrives in front of
+   *  whatever stands, a station included. The same page restored by memory
+   *  (the bag's remembered drawer, bound by the self-heal with no word)
+   *  obeys THE PRIMACY LAW and lands behind an open counter. Station show
+   *  paths keep the bare adopt: a dwell is the world's offer, ranked by
+   *  the ladder, never an ask. */
+  private folioAsk(id: string): FolioArrival { return this.folio.adopt(id, 'front'); }
+
   /** The thirteen dwell dialogs. `engaged` is each station's own near-read
    *  for the panel's seat (THE STANDING LAW — a master the hero walked away
-   *  from yields the front); `range` is the seat's distance to the station's
-   *  town site where one stands (THE NEARER LAW — a same-arrival tie fronts
-   *  the station the hero actually walked to); the pouch picker and the
-   *  calling arrive in FRONT (an explicit ask, a modal). Titles are the tab
-   *  labels. A new dialog is one row here + one adopt at its show path. */
+   *  from yields the front; THE DEPARTURE LAW — a leaf the hero walked out
+   *  of reach of closes on the next sync, the same read THE MENU BAR seals
+   *  its page on); `range` is the seat's distance to the station's town
+   *  site where one stands (THE NEARER LAW — a same-arrival tie fronts the
+   *  station the hero actually walked to); `kind` is the leaf's rung on THE
+   *  PRIMACY LAW's ladder — every dwell dialog is a STATION (the world's
+   *  offer fronts over the always-available player pages, so the bag's
+   *  Skills drawer stays one tab away when the counter opens), the pouch
+   *  picker and the calling are MODALS (they arrive in FRONT and no offer
+   *  shoves them aside). The crafting members carry `reach` (THE REACH LAW,
+   *  World.stationReach: at the station OR at a counter that summons it)
+   *  so a summoned tab stands at the counter while the physical `engaged`
+   *  keeps the standing law honest. Titles are the tab labels. A new dialog
+   *  is one row here + one adopt at its show path. */
   private enrollFolioLeaves(): void {
     const w = (): World => this.getWorld();
     const seat = (el: HTMLElement): Seat => this.panelSeat(el);
@@ -1326,38 +1344,49 @@ export class UI {
     };
     const enroll = (spec: FolioLeafSpec): void => this.folio.enroll(spec);
     enroll(this.folioLeaf('vendor', this.vendorMenu, () => 'Vendors', () => this.vendorOpen, () => this.closeVendor(), {
-      engaged: () => w().nearAnyVendor(seat(this.vendorMenu)), range: site(this.vendorMenu, 'blacksmith'),
+      kind: 'station', engaged: () => w().nearAnyVendor(seat(this.vendorMenu)), range: site(this.vendorMenu, 'blacksmith'),
       refresh: fronted(() => this.refreshVendor()) }));
     enroll(this.folioLeaf('salvage', this.salvageMenu, () => 'Salvage', () => this.salvageOpen, () => this.closeSalvage(), {
-      engaged: () => w().nearSalvage(seat(this.salvageMenu)), range: site(this.salvageMenu, 'salvage'),
+      kind: 'station', engaged: () => w().nearSalvage(seat(this.salvageMenu)), range: site(this.salvageMenu, 'salvage'),
+      reach: () => w().stationReach('salvage', seat(this.salvageMenu)),
       refresh: fronted(() => this.refreshSalvage()) }));
     enroll(this.folioLeaf('font', this.fontMenu, () => 'Font', () => this.fontOpen, () => this.closeFont(), {
-      engaged: () => w().nearFont(seat(this.fontMenu)), range: site(this.fontMenu, 'font'),
+      kind: 'station', engaged: () => w().nearFont(seat(this.fontMenu)), range: site(this.fontMenu, 'font'),
       refresh: fronted(() => this.refreshFont()) }));
     enroll(this.folioLeaf('recall', this.recallMenu, () => 'Recall', () => this.recallOpen, () => this.closeRecall(), {
-      arrive: 'front', refresh: fronted(() => this.refreshRecall()) }));
+      kind: 'modal', arrive: 'front', refresh: fronted(() => this.refreshRecall()) }));
     enroll(this.folioLeaf('oracle', this.oracleMenu, () => 'Oracle', () => this.oracleOpen, () => this.closeOracle(), {
-      engaged: () => w().nearOracle(seat(this.oracleMenu)), range: site(this.oracleMenu, 'oracle'),
+      kind: 'station', engaged: () => w().nearOracle(seat(this.oracleMenu)), range: site(this.oracleMenu, 'oracle'),
+      reach: () => w().stationReach('oracle', seat(this.oracleMenu)),
       refresh: fronted(() => this.refreshOracle()) }));
     enroll(this.folioLeaf('bestiary', this.bestiaryMenu, () => 'Bestiary', () => this.bestiaryOpen, () => this.closeBestiary(), {
-      engaged: () => w().nearTracker(seat(this.bestiaryMenu)), range: site(this.bestiaryMenu, 'tracker'),
+      kind: 'station', engaged: () => w().nearTracker(seat(this.bestiaryMenu)), range: site(this.bestiaryMenu, 'tracker'),
       refresh: fronted(() => this.refreshBestiary()) }));
+    // (The arming panel's villager is the dwell's own nearest-folk ledger —
+    //  no seat-level near-read stands for it, so it never departs by law.)
     enroll(this.folioLeaf('borough', this.boroughMenu, () => 'Borough', () => this.boroughOpen, () => this.closeBorough(), {
-      refresh: fronted(() => this.refreshBorough()) }));
+      kind: 'station', refresh: fronted(() => this.refreshBorough()) }));
     enroll(this.folioLeaf('bounties', this.bountyMenu, () => 'Bounties', () => this.bountiesOpen, () => this.closeBounties(), {
-      engaged: () => w().nearBountyBoard(seat(this.bountyMenu), this.bountyBoardId), range: site(this.bountyMenu, 'bounty_board'),
+      kind: 'station', engaged: () => w().nearBountyBoard(seat(this.bountyMenu), this.bountyBoardId), range: site(this.bountyMenu, 'bounty_board'),
       refresh: fronted(() => this.refreshBounties()) }));
     enroll(this.folioLeaf('caravan', this.caravanMenu, () => 'Caravan', () => this.caravanOpen, () => this.closeCaravan(), {
-      engaged: () => w().nearCaravan(seat(this.caravanMenu)), range: site(this.caravanMenu, 'caravan'),
+      kind: 'station', engaged: () => w().nearCaravan(seat(this.caravanMenu)), range: site(this.caravanMenu, 'caravan'),
       refresh: fronted(() => this.refreshCaravan()) }));
+    // The harbor board, the muster horn and the captain's parley engage on
+    // the SAME reads their dwells fire on and THE MENU BAR seals on
+    // (nearHarborBoard / nearMusterHorn / mercParley — the parley's `near`
+    // is its physical half; calm and company gate only the opening).
     enroll(this.folioLeaf('sail', this.sailMenu, () => 'Harbor', () => this.sailOpen, () => this.closeSail(), {
+      kind: 'station', engaged: () => w().nearHarborBoard(seat(this.sailMenu)),
       refresh: fronted(() => this.refreshSail()) }));
     enroll(this.folioLeaf('hold', this.holdMenu, () => 'Hold', () => this.holdOpen, () => this.closeHold(), {
+      kind: 'station', engaged: () => w().nearMusterHorn(seat(this.holdMenu)),
       refresh: fronted(() => this.refreshHold()) }));
     enroll(this.folioLeaf('merc', this.mercMenu, () => 'Mercenaries', () => this.mercOpen, () => this.closeMercMenu(), {
+      kind: 'station', engaged: () => w().mercParley(seat(this.mercMenu)).near,
       refresh: fronted(() => this.refreshMercMenu()) }));
     enroll(this.folioLeaf('vocation', this.vocationMenu, () => 'A Calling', () => this.vocationOpen, () => this.closeVocationMenu(), {
-      arrive: 'front', refresh: fronted(() => this.refreshVocationMenu()) }));
+      kind: 'modal', arrive: 'front', refresh: fronted(() => this.refreshVocationMenu()) }));
     // THE TREES (2026-09-04): the passive tree and every skill-tree pane
     // share the centred berth, so any of them up at once bind into ONE book
     // instead of painting over each other — each an explicit ask (a key, a
@@ -1367,14 +1396,14 @@ export class UI {
     // (skillTreePaneFor — the tab names the skill).
     enroll(this.folioLeaf('skills', this.buildPanel, () => 'Skills',
       () => this.inventoryOpen && this.buildFlapOpen, () => this.closeBuildPanel(), {
-        arrive: 'front', bay: () => this.buildPanelBay(this.buildPanel), refresh: () => this.refreshInventory() }));
+        kind: 'page', arrive: 'front', bay: () => this.buildPanelBay(this.buildPanel), refresh: () => this.refreshInventory() }));
     // THE TRUE CLOSE (2026-09-11): the leaf's close is closeTree, never the
     // key's toggle — toggleTree FRONTS a shelved tree (the D-pad law), so a
     // close-all routed through it fronted Passives instead of closing it
     // and left the book standing on that one tab.
     enroll(this.folioLeaf('passives', this.passiveTree, () => 'Passives', () => this.treeOpen,
       () => this.closeTree(), {
-        arrive: 'front', bay: () => this.buildPanelBay(this.passiveTree), refresh: () => { hideTooltip(); this.refreshTree(); } }));
+        kind: 'page', arrive: 'front', bay: () => this.buildPanelBay(this.passiveTree), refresh: () => { hideTooltip(); this.refreshTree(); } }));
 
     // THE SUITE (data/suites.ts): a counter's dialog SUMMONS the station
     // dialogs that stand genuinely unlocked in this zone. The world folds
@@ -7035,7 +7064,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       this.centerTreeOnStart();
       this.refreshTree();
       this.syncBuildPanels();
-      this.folio.adopt('passives');
+      this.folioAsk('passives'); // the key, the ribbon, the menu: an explicit ask
       this.folioStrip.update();
     }
   }
@@ -7674,7 +7703,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     this.folio.enroll(this.folioLeaf(`skilltree:${skillId}`, el,
       () => SKILLS[skillId]?.name ?? 'Skill Tree',
       () => pane.open, () => this.closeSkillTree(skillId), {
-        arrive: 'front', bay: () => this.buildPanelBay(el), refresh: () => { hideTooltip(); this.refreshSkillTree(skillId); } }));
+        kind: 'page', arrive: 'front', bay: () => this.buildPanelBay(el), refresh: () => { hideTooltip(); this.refreshSkillTree(skillId); } }));
     return pane;
   }
 
@@ -7700,7 +7729,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // THE FOLIO: bind (arrives in front), or — already bound and shelved
     // behind a book-mate — come forward.
     this.syncBuildPanels();
-    if (this.folio.adopt(`skilltree:${skillId}`) === 'noop') this.folio.front(`skilltree:${skillId}`);
+    if (this.folioAsk(`skilltree:${skillId}`) === 'noop') this.folio.front(`skilltree:${skillId}`);
     this.folioStrip.update();
   }
 

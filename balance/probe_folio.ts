@@ -48,6 +48,32 @@
 //      bench nothing is summoned and the stone is out of reach; nowhere is
 //      nothing; the action gates (craftSocket, craftAffix, the break lane,
 //      rerollAffix) read THE REACH LAW while the dwell + hint stay physical.
+//   R. THE PRIMACY LAW (2026-09-16, her ask) — a station arriving under a
+//      page front takes it (the page shelved, not closed, not fresh) and
+//      promotes back on the station's close; a page the self-heal binds (the
+//      bag's remembered drawer) lands BEHIND an engaged station whatever its
+//      own arrive; THE CALL'S WORD (adopt(id,'front'|'behind')) is absolute
+//      either way; a modal holds against a station and fronts over one;
+//      equals keep the master / front-arrival laws; the ladder decides
+//      across kinds even when the front is disengaged; an unnamed kind is a
+//      page; the ladder is data (a custom rung outranks the shipped three, a
+//      kind it does not name is refused at enrollment); summons stay quiet
+//      whatever the ladder; the shipped ladder ranks page < station < modal.
+//   S. THE DEPARTURE LAW (2026-09-16, her ask) — a station the player walked
+//      out of reach of closes on the sync through its own close, the page it
+//      fronted over promotes back and the departed leaf stands alone; a leaf
+//      with neither read never departs; reach overrides engaged for the
+//      departure while the standing law still reads engaged; a summoned
+//      member reaches through its anchor and the anchor's departure takes
+//      it; the dial off lingers as before; the close only asks (a refusing
+//      close is asked again); an open unbound departed leaf binds and departs
+//      in one sync; a departed solo leaf dissolves its book; among stations
+//      only the departed one goes and the front promotes by history.
+//   O11–O14 extend the census: every dwell dialog is a STATION, the picker
+//      and the calling MODALS, the trees and drawers PAGES; the crafting
+//      members carry stationReach as their reach; the harbor board, the
+//      muster horn and the parley engage on the menu bar's own reads; the
+//      four press paths ASK (folioAsk) and no station's show path does.
 //
 //   npx tsx balance/probe_folio.ts
 
@@ -55,7 +81,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   FolioCore, FOLIO_CFG, rectOverlapFrac,
-  type FolioArrive, type FolioLeafSpec, type FolioRect,
+  type FolioArrive, type FolioLeafSpec, type FolioRect, type FolioTuning,
 } from '../src/ui/folio';
 import { bootSimEngine, classById } from '../src/sim/arena';
 import { resetActorIdCounter } from '../src/engine/actor';
@@ -85,18 +111,24 @@ interface Fake {
   closes: number;
   rect: FolioRect | null;
   engaged: boolean;
+  /** The reach read's answer while one is declared (THE DEPARTURE LAW). */
+  reach: boolean;
   range: number | null;
   spec: FolioLeafSpec;
 }
 interface FakeOpts {
   bay?: string; owner?: string; arrive?: FolioArrive; companions?: string[];
   rect?: FolioRect | null; engaged?: boolean; range?: number | null;
+  /** THE PRIMACY LAW's rung (absent = the folio's default, a page). */
+  kind?: string;
+  /** Declare a reach read (absent = the folio falls back to engaged). */
+  reach?: boolean;
 }
 
 function fake(core: FolioCore, id: string, o: FakeOpts = {}): Fake {
   const f = {
     id, open: false, drawn: null, refreshes: 0, closes: 0,
-    rect: o.rect ?? null, engaged: o.engaged ?? true, range: o.range ?? null,
+    rect: o.rect ?? null, engaged: o.engaged ?? true, reach: o.reach ?? true, range: o.range ?? null,
   } as Fake;
   const spec: FolioLeafSpec = {
     id,
@@ -111,17 +143,20 @@ function fake(core: FolioCore, id: string, o: FakeOpts = {}): Fake {
     refresh: () => { f.refreshes++; },
   };
   if (o.engaged !== undefined) spec.engaged = () => f.engaged;
+  if (o.reach !== undefined) spec.reach = () => f.reach;
+  if (o.kind !== undefined) spec.kind = o.kind;
   if (o.arrive) spec.arrive = o.arrive;
   if (o.companions) spec.companions = o.companions;
   f.spec = spec;
   core.enroll(spec);
   return f;
 }
-/** A show path: the leaf's own flag flips, then adopt (as every panel does). */
-function show(core: FolioCore, f: Fake): string { f.open = true; return core.adopt(f.id); }
-function rig(): { core: FolioCore; at: (t: number) => void } {
+/** A show path: the leaf's own flag flips, then adopt (as every panel does);
+ *  `ask` is THE CALL'S WORD a press path passes. */
+function show(core: FolioCore, f: Fake, ask?: FolioArrive): string { f.open = true; return core.adopt(f.id, ask); }
+function rig(cfg?: FolioTuning): { core: FolioCore; at: (t: number) => void } {
   let t = 0;
-  return { core: new FolioCore(() => t), at: (v) => { t = v; } };
+  return { core: new FolioCore(() => t, cfg), at: (v) => { t = v; } };
 }
 const R = (left: number, top: number, width: number, height: number): FolioRect => ({ left, top, width, height });
 const ids = (core: FolioCore, id: string): string => core.bookFor(id)?.tabs.map(t => t.id).join(',') ?? '';
@@ -388,6 +423,9 @@ console.log('N. THE DIALS');
     fake(core, 'a');
     try { fake(core, 'a'); return false; } catch { return true; }
   })());
+  check('N6 the primacy ladder ships page < station < modal',
+    c.primacy['page']! < c.primacy['station']! && c.primacy['station']! < c.primacy['modal']!);
+  check('N7 departureCloses ships ON (a walked-away tab goes down)', c.departureCloses === true);
 }
 
 // --- O. THE ENROLLMENT CENSUS -----------------------------------------------
@@ -404,20 +442,22 @@ console.log('O. THE ENROLLMENT CENSUS');
   const TREES = ['skills', 'passives'];
   const ALL = [...EXPECTED, ...TREES];
   const enrolled = [...panels.matchAll(/this\.folioLeaf\('([a-z_]+)'/g)].map(m => m[1]!);
-  const adopted = [...panels.matchAll(/this\.folio\.adopt\('([a-z_]+)'\)/g)].map(m => m[1]!);
+  // A show path binds through the bare adopt (a station's offer) or through
+  // folioAsk (a page's press — THE CALL'S WORD); either is an adopt.
+  const adopted = [...panels.matchAll(/this\.folio(?:\.adopt|Ask)\('([a-z_]+)'\)/g)].map(m => m[1]!);
   check('O1 the thirteen dwell dialogs + Skills and Passives enroll, once each',
     ALL.every(id => enrolled.filter(x => x === id).length === 1) && enrolled.length === ALL.length,
     `enrolled: ${enrolled.join(',')}`);
   check('O2 every enrolled leaf adopts at its show path',
     ALL.every(id => adopted.includes(id)), `adopted: ${adopted.join(',')}`);
-  check('O2c every skill-tree pane enrolls + adopts per skill at its minting (one leaf per open tree)',
-    panels.includes('this.folioLeaf(`skilltree:${skillId}`') && panels.includes('this.folio.adopt(`skilltree:${skillId}`)'));
+  check('O2c every skill-tree pane enrolls + asks per skill at its minting (one leaf per open tree)',
+    panels.includes('this.folioLeaf(`skilltree:${skillId}`') && panels.includes('this.folioAsk(`skilltree:${skillId}`)'));
   // THE CONTAINER DRAWERS (ui/containerPane.ts): every registered side
   // board's drawer enrolls + adopts per container at its minting through the
   // panel's host seams — the ribbon beside SKILLS / PASSIVES joins the same
   // inventory-side book (the skill-tree pane's shape, derived per def).
-  check('O2d every container drawer enrolls + adopts per container at its minting (one leaf per open drawer)',
-    panels.includes('this.folioLeaf(`container:${id}`') && panels.includes('this.folio.adopt(`container:${id}`)'));
+  check('O2d every container drawer enrolls + asks per container at its minting (one leaf per open drawer)',
+    panels.includes('this.folioLeaf(`container:${id}`') && panels.includes('this.folioAsk(`container:${id}`)'));
   check('O2b the trees and the drawers arrive IN FRONT (explicit asks) with no station reads',
     ["'passives'", '`skilltree:${skillId}`', '`container:${id}`'].every(id => {
       const i = panels.indexOf(`this.folioLeaf(${id}`);
@@ -470,6 +510,39 @@ console.log('O. THE ENROLLMENT CENSUS');
     `bag@${bagAt} toggle@${toggleAt} sync@${syncAt} books@${booksAt}`);
   check('O10b the sweep never forgets the drawer itself (no closeBuildPanel in its body)',
     sweepBody.length > 0 && !sweepBody.includes('closeBuildPanel()'));
+  // THE PRIMACY LAW + THE DEPARTURE LAW (2026-09-16, her ask): every row
+  // declares its kind — the world's dwell dialogs are STATIONS (they front
+  // over the bag's always-available pages on arrival and go down when the
+  // hero walks out of reach), the picker and the calling are MODALS, the
+  // trees and the drawers PAGES; the crafting members carry THE REACH LAW
+  // as their reach read; the three host-global stations engage on the same
+  // near-reads THE MENU BAR seals their pages on; and the four PRESS paths
+  // ask through folioAsk while no station's show path does (a dwell is an
+  // offer, ranked by the ladder, never an ask).
+  const rowOf = (id: string): string => {
+    const i = panels.indexOf(`this.folioLeaf(${id}`);
+    return i < 0 ? '' : panels.slice(i, panels.indexOf('}));', i));
+  };
+  const MODALS = ['recall', 'vocation'];
+  const STATIONS = EXPECTED.filter(id => !MODALS.includes(id));
+  check('O11 every dwell dialog is a STATION and the picker + the calling are MODALS',
+    STATIONS.every(id => rowOf(`'${id}'`).includes("kind: 'station'"))
+    && MODALS.every(id => rowOf(`'${id}'`).includes("kind: 'modal'") && rowOf(`'${id}'`).includes("arrive: 'front'")),
+    STATIONS.filter(id => !rowOf(`'${id}'`).includes("kind: 'station'")).join(','));
+  check('O11b Skills, Passives, every skill-tree pane and every container drawer are PAGES',
+    ["'skills'", "'passives'", '`skilltree:${skillId}`', '`container:${id}`'].every(id => rowOf(id).includes("kind: 'page'")));
+  check('O12 the crafting members carry THE REACH LAW (stationReach) as their reach read',
+    ['salvage', 'oracle'].every(id => rowOf(`'${id}'`).includes(`reach: () => w().stationReach('${id}'`)));
+  check('O13 the harbor board, the muster horn and the parley engage on the menu bar\'s own near-reads',
+    rowOf("'sail'").includes('nearHarborBoard(') && rowOf("'hold'").includes('nearMusterHorn(')
+    && rowOf("'merc'").includes('mercParley(') && rowOf("'merc'").includes('.near'));
+  const asks = ["this.folioAsk('skills')", "this.folioAsk('passives')", 'this.folioAsk(`skilltree:${skillId}`)', 'this.folioAsk(`container:${id}`)'];
+  check('O14 the four press paths ASK (folioAsk = adopt with the front word) and no station show path does',
+    asks.every(a => panels.includes(a)) && panels.includes("this.folio.adopt(id, 'front')")
+    && EXPECTED.every(id => !panels.includes(`this.folioAsk('${id}')`)));
+  const folio = readFileSync(resolve(process.cwd(), 'src/ui/folio.ts'), 'utf8');
+  check('O14b the self-heal binds with no word (a remembered drawer obeys the ladder)',
+    folio.includes('if (open && !bound) this.adopt(id);'));
 }
 
 // --- P. THE SUITE (core) ----------------------------------------------------
@@ -599,6 +672,208 @@ console.log('Q. THE SUITE REACH (the real engine, in town)');
   check('Q9 the break lane reads it too, while the dwell and the hint stay physical',
     src.includes("if (want === 'break') return this.stationReach('salvage', seat) ? 'break' : null;")
     && src.includes('this.nearSalvage(s));') && src.includes('if (!a || !this.nearSalvage()) return null;'));
+}
+
+// --- R. THE PRIMACY LAW -----------------------------------------------------
+console.log('R. THE PRIMACY LAW');
+{
+  // The scene she named: the bag's Skills drawer stands (the build lives
+  // there, open at all times); the hero walks to the bench.
+  const { core } = rig();
+  const skills = fake(core, 'skills', { kind: 'page', arrive: 'front' });
+  const bench = fake(core, 'salvage', { kind: 'station', engaged: true });
+  show(core, skills);
+  check('R1 a station arriving under a page front takes it — the world\'s offer outranks the always-available page',
+    show(core, bench) === 'front' && bench.drawn === true && skills.drawn === false && core.bookFor('salvage')!.front === 'salvage');
+  check('R2 the page is shelved, never closed, and not marked fresh (it was the front, not a newcomer)',
+    skills.open && skills.closes === 0 && core.bookFor('skills')!.tabs.every(t => !t.fresh));
+  check('R3 closing the station promotes the page back', core.closeFront() && !bench.open && skills.drawn === true && core.bookFor('skills')!.front === 'skills');
+
+  // The other order: the counter opens the bag, whose remembered drawer the
+  // self-heal binds a frame later — with no word, so the ladder decides.
+  const r2 = rig();
+  const vendor = fake(r2.core, 'vendor', { kind: 'station', engaged: true });
+  const drawer = fake(r2.core, 'skills', { kind: 'page', arrive: 'front' });
+  show(r2.core, vendor);
+  drawer.open = true; r2.core.sync();
+  check('R4 a page the self-heal binds (the bag\'s remembered drawer) lands BEHIND an engaged station, its own arrive notwithstanding',
+    r2.core.bookKeyOf('skills') === r2.core.bookKeyOf('vendor') && drawer.drawn === false && vendor.drawn === true
+    && r2.core.bookFor('skills')!.tabs.find(t => t.id === 'skills')!.fresh);
+  check('R5 an explicit ask fronts the page over the station (THE CALL\'S WORD is absolute)', (() => {
+    const r = rig();
+    const v = fake(r.core, 'vendor', { kind: 'station', engaged: true });
+    const s = fake(r.core, 'skills', { kind: 'page' });
+    show(r.core, v);
+    return show(r.core, s, 'front') === 'front' && s.drawn === true && v.drawn === false && v.open && v.closes === 0;
+  })());
+  check('R6 an explicit behind lands a station behind a page', (() => {
+    const r = rig();
+    const s = fake(r.core, 'skills', { kind: 'page' });
+    const v = fake(r.core, 'vendor', { kind: 'station' });
+    show(r.core, s);
+    return show(r.core, v, 'behind') === 'behind' && s.drawn === true && v.drawn === false;
+  })());
+  check('R7 a modal holds: a station arriving under a modal front lands behind', (() => {
+    const r = rig();
+    const calling = fake(r.core, 'vocation', { kind: 'modal', arrive: 'front' });
+    const v = fake(r.core, 'vendor', { kind: 'station' });
+    show(r.core, calling);
+    return show(r.core, v) === 'behind' && calling.drawn === true && v.drawn === false;
+  })());
+  check('R8 a modal arriving under a station fronts by the ladder alone (no arrive needed)', (() => {
+    const r = rig();
+    const v = fake(r.core, 'vendor', { kind: 'station' });
+    const picker = fake(r.core, 'recall', { kind: 'modal' });
+    show(r.core, v);
+    return show(r.core, picker) === 'front' && picker.drawn === true;
+  })());
+  check('R9 equals keep the master law: a station under an engaged station lands behind, fresh', (() => {
+    const r = rig();
+    const a = fake(r.core, 'vendor', { kind: 'station', engaged: true });
+    const b = fake(r.core, 'font', { kind: 'station' });
+    show(r.core, a);
+    return show(r.core, b) === 'behind' && r.core.bookFor('font')!.tabs.find(t => t.id === 'font')!.fresh;
+  })());
+  check('R10 equals keep the front arrival: a page with arrive:front fronts over a page (the tree over the drawer)', (() => {
+    const r = rig();
+    const a = fake(r.core, 'skills', { kind: 'page', arrive: 'front' });
+    const b = fake(r.core, 'passives', { kind: 'page', arrive: 'front' });
+    show(r.core, a);
+    return show(r.core, b) === 'front' && b.drawn === true && a.drawn === false;
+  })());
+  check('R11 the ladder decides across kinds: a page never fronts over a DISENGAGED station on its own', (() => {
+    const r = rig();
+    const v = fake(r.core, 'vendor', { kind: 'station', engaged: false });
+    const s = fake(r.core, 'skills', { kind: 'page', arrive: 'front' });
+    show(r.core, v);
+    return show(r.core, s) === 'behind' && v.drawn === true;
+  })());
+  check('R12 an unnamed kind is a page — the least claim — and a station fronts over it', (() => {
+    const r = rig();
+    const a = fake(r.core, 'a');
+    const v = fake(r.core, 'vendor', { kind: 'station' });
+    show(r.core, a);
+    return r.core.primacyOf(a.spec) === FOLIO_CFG.primacy['page'] && show(r.core, v) === 'front';
+  })());
+  check('R13 the ladder is data: a custom rung outranks the shipped three', (() => {
+    const cfg: FolioTuning = { ...FOLIO_CFG, primacy: { ...FOLIO_CFG.primacy, alarm: 9 } };
+    const r = rig(cfg);
+    const m = fake(r.core, 'vocation', { kind: 'modal', arrive: 'front' });
+    const x = fake(r.core, 'alarm', { kind: 'alarm' });
+    show(r.core, m);
+    return show(r.core, x) === 'front' && r.core.primacyOf(x.spec) === 9;
+  })());
+  check('R14 a kind the ladder does not name is refused at enrollment', (() => {
+    const r = rig();
+    try { fake(r.core, 'x', { kind: 'nope' }); return false; } catch { return true; }
+  })());
+  check('R15 summons stay quiet whatever the ladder: an anchor fronting over a page summons its members behind, never fresh', (() => {
+    const r = rig();
+    const s = fake(r.core, 'skills', { kind: 'page', arrive: 'front' });
+    const v = fake(r.core, 'vendor', { kind: 'station' });
+    const b = fake(r.core, 'salvage', { kind: 'station' });
+    r.core.enrollSuite({ anchor: 'vendor', members: [{ id: 'salvage', stands: () => true, open: () => show(r.core, b) }] });
+    show(r.core, s); show(r.core, v);
+    return ids(r.core, 'vendor') === 'skills,vendor,salvage' && v.drawn === true && b.drawn === false && s.drawn === false
+      && r.core.isSummoned('salvage') && r.core.bookFor('salvage')!.tabs.every(t => !t.fresh);
+  })());
+  check('R16 the ladder never reaches across owners or companions (a guest\'s station makes its own book)', (() => {
+    const r = rig();
+    const s = fake(r.core, 'skills', { kind: 'page' });
+    const g = fake(r.core, 'vendor', { kind: 'station', owner: 'p1' });
+    show(r.core, s);
+    return show(r.core, g) === 'solo' && s.drawn === true && g.drawn === true;
+  })());
+}
+
+// --- S. THE DEPARTURE LAW ---------------------------------------------------
+console.log('S. THE DEPARTURE LAW');
+{
+  const { core } = rig();
+  const skills = fake(core, 'skills', { kind: 'page', arrive: 'front' });
+  const bench = fake(core, 'salvage', { kind: 'station', engaged: true });
+  show(core, skills); show(core, bench); // the bench fronts (R1)
+  core.sync();
+  check('S1 an engaged station survives the sync', bench.open && bench.closes === 0 && core.bookFor('salvage')!.front === 'salvage');
+  bench.engaged = false;
+  core.sync();
+  check('S2 a station the player walked out of reach of closes on the sync through its own close',
+    !bench.open && bench.closes === 1 && core.bookKeyOf('salvage') === null);
+  check('S3 the page it fronted over promotes back, drawn', skills.open && skills.drawn === true && core.bookFor('skills')!.front === 'skills');
+  check('S4 the departed leaf stands alone again (present true)', bench.drawn === true);
+  check('S4b a departed solo-front leaves a book of one — no strip', core.views().length === 1 && !core.anyBook());
+  check('S5 a leaf with neither read never departs (the calling, the picker, the arming panel)', (() => {
+    const r = rig();
+    const a = fake(r.core, 'borough', { kind: 'station' });
+    const m = fake(r.core, 'vocation', { kind: 'modal', arrive: 'front' });
+    show(r.core, a); show(r.core, m); r.core.sync(); r.core.sync();
+    return a.open && a.closes === 0 && m.open && m.closes === 0;
+  })());
+  check('S6 reach overrides engaged for the departure (the summoned member\'s shape) while the standing law still reads engaged', (() => {
+    const r = rig();
+    const bench6 = fake(r.core, 'salvage', { kind: 'station', engaged: false, reach: true });
+    const font = fake(r.core, 'font', { kind: 'station' });
+    show(r.core, bench6); r.core.sync();
+    const stayed = bench6.open && bench6.closes === 0;
+    const fronted = show(r.core, font) === 'front'; // THE STANDING LAW: a disengaged front yields
+    bench6.reach = false; r.core.sync();
+    return stayed && fronted && !bench6.open && bench6.closes === 1 && r.core.bookFor('font')!.front === 'font';
+  })());
+  check('S7 a summoned member reaches through its anchor: at the counter it stands, and the anchor\'s departure takes it', (() => {
+    const r = rig();
+    const anchor = fake(r.core, 'vendor', { kind: 'station', engaged: true });
+    const member = fake(r.core, 'salvage', { kind: 'station', engaged: false }); // not at the bench, no reach row
+    r.core.enrollSuite({ anchor: 'vendor', members: [{ id: 'salvage', stands: () => true, open: () => show(r.core, member) }] });
+    show(r.core, anchor); r.core.sync();
+    const stood = member.open && member.closes === 0 && r.core.isSummoned('salvage');
+    anchor.engaged = false; r.core.sync();
+    return stood && !anchor.open && anchor.closes === 1 && !member.open && member.closes === 1 && r.core.views().length === 0;
+  })());
+  check('S8 the dial off: a walked-away leaf lingers as a tab, as before', (() => {
+    const r = rig({ ...FOLIO_CFG, departureCloses: false });
+    const a = fake(r.core, 'vendor', { kind: 'station', engaged: true });
+    show(r.core, a); a.engaged = false; r.core.sync();
+    return a.open && a.closes === 0 && r.core.bookKeyOf('vendor') !== null;
+  })());
+  check('S9 the close only asks: a refusing close keeps the leaf bound and is asked again next sync', (() => {
+    const r = rig();
+    const a = fake(r.core, 'vendor', { kind: 'station', engaged: true });
+    show(r.core, a);
+    a.spec.close = () => { a.closes++; }; // refuses to close
+    a.engaged = false; r.core.sync(); r.core.sync();
+    return a.open && a.closes === 2 && r.core.bookKeyOf('vendor') !== null;
+  })());
+  check('S10 an open, unbound, already-departed leaf binds and departs in one sync', (() => {
+    const r = rig();
+    const a = fake(r.core, 'vendor', { kind: 'station', engaged: false });
+    a.open = true; r.core.sync();
+    return !a.open && a.closes === 1 && r.core.views().length === 0;
+  })());
+  check('S11 a departed solo leaf dissolves its book', (() => {
+    const r = rig();
+    const a = fake(r.core, 'font', { kind: 'station', engaged: true });
+    show(r.core, a); a.engaged = false; r.core.sync();
+    return !a.open && r.core.views().length === 0 && a.drawn === true;
+  })());
+  check('S12 among a book of stations only the departed one goes and the front promotes by history', (() => {
+    const r = rig();
+    const a = fake(r.core, 'vendor', { kind: 'station', engaged: true });
+    const b = fake(r.core, 'font', { kind: 'station', engaged: true });
+    const c = fake(r.core, 'bounties', { kind: 'station', engaged: true });
+    show(r.core, a); show(r.core, b); show(r.core, c);
+    r.core.front('font'); r.core.front('vendor');
+    a.engaged = false; r.core.sync();
+    return !a.open && b.open && c.open && b.drawn === true && c.drawn === false && r.core.bookFor('font')!.front === 'font'
+      && ids(r.core, 'font') === 'font,bounties';
+  })());
+  check('S13 sync stays idempotent under the law (a settled screen closes nothing)', (() => {
+    const r = rig();
+    const a = fake(r.core, 'vendor', { kind: 'station', engaged: true });
+    const s = fake(r.core, 'skills', { kind: 'page' });
+    show(r.core, s); show(r.core, a);
+    r.core.sync(); r.core.sync(); r.core.sync();
+    return a.open && s.open && a.closes === 0 && s.closes === 0 && r.core.bookFor('vendor')!.front === 'vendor';
+  })());
 }
 
 console.log(`\n${fail === 0 ? 'ALL PASS' : 'FAILURES'} — ${pass} passed, ${fail} failed`);

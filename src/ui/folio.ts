@@ -40,6 +40,26 @@
 //     (within arrivalSec of the front's own binding) front the NEARER one:
 //     the player walked to Brandt, not to the bench beside him. Without a
 //     range on both sides the master law stands.
+//   THE PRIMACY LAW (2026-09-16, her ask) — a leaf has a KIND (FolioKind:
+//     'page' = an always-available player page, 'station' = the world's
+//     offer, 'modal' = a decision) ranked by FOLIO_CFG.primacy. A newcomer
+//     of HIGHER primacy than the front takes it (the bench's dialog fronts
+//     over the bag's Skills drawer — the player walked to the bench, and
+//     the drawer stays one tab away); a newcomer of LOWER primacy lands
+//     behind whatever its own arrive says (the drawer the bag REMEMBERS
+//     never shoves a counter aside); equals fall to the laws above.
+//   THE CALL'S WORD — adopt(id, ask) lets the SHOW PATH say how THIS
+//     arrival lands: 'front' from a press, a key or a handle (an explicit
+//     ask is absolute — it outranks the ladder), 'behind' to land quiet.
+//     The self-heal binds with no word, so a leaf that merely turned up
+//     (a remembered drawer) obeys the ladder.
+//   THE DEPARTURE LAW (2026-09-16, her ask) — a bound leaf the player can
+//     no longer REACH (reach(), else engaged(), false on the sync) closes
+//     through its own close path: the tab goes down where the work would
+//     be refused, and the book promotes as for any close. A summoned member
+//     reaches through its anchor (the summons is the anchor's offer) and
+//     the anchor's departure takes its members. FOLIO_CFG.departureCloses
+//     is the dial; a leaf with neither read never departs.
 //   THE BAY LAW — a book gathers ONE owner's leaves of ONE bay (the declared
 //     screen berth: 'centre', a couch flank 'left'/'right'); a guest's flank
 //     never binds with the hero's centre. THE MEASURED LAW extends it: leaves
@@ -68,6 +88,17 @@ export interface FolioTuning {
   /** THE NEARER LAW's window (seconds): a newcomer bound within this many
    *  seconds of the front's own binding fronts when it stands nearer. */
   arrivalSec: number;
+  /** THE PRIMACY LAW's ladder: each leaf KIND's claim on the front. A
+   *  newcomer with no explicit ask takes the front from a front of LOWER
+   *  primacy and lands behind one of HIGHER; equals fall to the standing
+   *  laws. Any string is a kind — a new kind is one row here, and enroll()
+   *  refuses a kind the ladder does not name. */
+  primacy: Record<string, number>;
+  /** THE DEPARTURE LAW: a bound leaf the player can no longer reach (its
+   *  reach read — else its engaged read — false on the sync) closes through
+   *  its own close path. Off = a walked-away leaf lingers as a shelved tab
+   *  (the standing before 2026-09-16). */
+  departureCloses: boolean;
   strip: {
     /** A book wears its thumb index only from this many leaves. */
     minLeaves: number;
@@ -84,6 +115,8 @@ export interface FolioTuning {
 export const FOLIO_CFG: FolioTuning = {
   overlapFrac: 0.15,
   arrivalSec: 0.35,
+  primacy: { page: 0, station: 1, modal: 2 },
+  departureCloses: true,
   strip: { minLeaves: 2, seamPx: 1, closeAll: true, freshPulses: 6 },
 };
 
@@ -99,6 +132,13 @@ export type FolioBay = 'centre' | 'left' | 'right' | (string & {});
 /** Where a newly bound leaf lands: behind the front (a dwell's offer) or in
  *  front of it (an explicit ask, a modal). */
 export type FolioArrive = 'behind' | 'front';
+/** What a leaf IS on the screen — THE PRIMACY LAW's key into
+ *  FOLIO_CFG.primacy. 'page' = an always-available player page (the bag's
+ *  drawers, the trees); 'station' = the world's offer, standing only where
+ *  the player stands (a dwell dialog); 'modal' = a decision the player must
+ *  meet (the calling, a picker). Any string the ladder names is a kind;
+ *  unnamed = 'page', the least claim. */
+export type FolioKind = 'page' | 'station' | 'modal' | (string & {});
 /** What adopt() did with a leaf. */
 export type FolioArrival = 'solo' | 'front' | 'behind' | 'noop';
 
@@ -126,8 +166,16 @@ export interface FolioLeafSpec {
   rect?: () => FolioRect | null;
   /** Does the player still stand at this leaf's station? Absent = assumed. */
   engaged?: () => boolean;
+  /** May the player still WORK this leaf from where they stand? THE
+   *  DEPARTURE LAW's read. Absent = the engaged read (absent both = assumed
+   *  — a leaf with neither never departs). A suite member declares its reach
+   *  law here (at the station OR at a counter that summons it) while
+   *  `engaged` stays physical for THE STANDING LAW. */
+  reach?: () => boolean;
   /** Distance from the seat to the station, for THE NEARER LAW; null = unknown. */
   range?: () => number | null;
+  /** The leaf's kind — its rung on THE PRIMACY LAW's ladder (default 'page'). */
+  kind?: FolioKind;
   arrive?: FolioArrive;
   /** Leaves this one may stand beside un-bound (symmetric — either side may declare). */
   companions?: readonly string[];
@@ -195,6 +243,10 @@ export class FolioCore {
 
   enroll(spec: FolioLeafSpec): void {
     if (this.leaves.has(spec.id)) throw new Error(`folio: leaf '${spec.id}' enrolled twice`);
+    // THE PRIMACY LAW's ladder is a registry: a kind names a row, never a guess.
+    if (spec.kind !== undefined && !(spec.kind in this.cfg.primacy)) {
+      throw new Error(`folio: leaf '${spec.id}' wears a kind '${spec.kind}' the primacy ladder does not name`);
+    }
     this.leaves.set(spec.id, spec);
   }
 
@@ -217,8 +269,12 @@ export class FolioCore {
   bookKeyOf(id: string): string | null { return this.bookOf.get(id) ?? null; }
 
   /** Bind an OPEN leaf: call at the end of its show path (after it is
-   *  displayed, so its rect measures). Returns what happened. */
-  adopt(id: string): FolioArrival {
+   *  displayed, so its rect measures). `ask` is THE CALL'S WORD for THIS
+   *  arrival — 'front' from a press, a key or a handle (an explicit ask is
+   *  absolute), 'behind' to land quiet; absent, the laws decide off the
+   *  spec (THE PRIMACY LAW across kinds, the standing laws among equals).
+   *  Returns what happened. */
+  adopt(id: string, ask?: FolioArrive): FolioArrival {
     const leaf = this.leaves.get(id);
     if (!leaf || !leaf.isOpen() || this.bookOf.has(id)) return 'noop';
     const now = this.clock();
@@ -248,10 +304,7 @@ export class FolioCore {
       return 'behind';
     }
     const front = this.leaves.get(book.front)!;
-    const takes = leaf.arrive === 'front'
-      || (front.engaged !== undefined && !front.engaged())
-      || this.nearerOnArrival(book, leaf, front, now);
-    if (takes) { this.setFront(book, id); this.summonFor(id); return 'front'; }
+    if (this.takesFront(leaf, front, book, now, ask)) { this.setFront(book, id); this.summonFor(id); return 'front'; }
     book.fresh.add(id);
     leaf.present(false);
     return 'behind';
@@ -276,6 +329,20 @@ export class FolioCore {
       const bound = this.bookOf.has(id);
       if (open && !bound) this.adopt(id);
       else if (!open && bound) this.drop(id);
+    }
+    if (!this.cfg.departureCloses) return;
+    // THE DEPARTURE LAW: a bound leaf the player can no longer reach closes
+    // through its own close path — the tab goes down where the work would
+    // be refused — and the book promotes as for any close. The close only
+    // ASKS: a leaf whose close leaves it open stays bound and is asked again
+    // next sync. An anchor's departure takes its summoned members through
+    // drop's cascade, so the snapshot is re-checked per id.
+    for (const id of [...this.bookOf.keys()]) {
+      if (!this.bookOf.has(id)) continue;
+      const leaf = this.leaves.get(id)!;
+      if (this.reachOf(leaf)) continue;
+      leaf.close();
+      if (!leaf.isOpen()) this.drop(id);
     }
   }
 
@@ -356,6 +423,39 @@ export class FolioCore {
 
   private companionsIn(book: Book, leaf: FolioLeafSpec): boolean {
     return book.order.some(id => leaf.companions?.includes(id) || this.leaves.get(id)?.companions?.includes(leaf.id));
+  }
+
+  /** Does a newcomer take the front? THE CALL'S WORD first (an explicit ask
+   *  is absolute), then THE PRIMACY LAW across kinds, then — among equals —
+   *  THE FRONT ARRIVAL, THE STANDING LAW and THE NEARER LAW. */
+  private takesFront(leaf: FolioLeafSpec, front: FolioLeafSpec, book: Book, now: number, ask: FolioArrive | undefined): boolean {
+    if (ask !== undefined) return ask === 'front';
+    const mine = this.primacyOf(leaf), theirs = this.primacyOf(front);
+    if (mine !== theirs) return mine > theirs;
+    return leaf.arrive === 'front' || !this.engagedOf(front) || this.nearerOnArrival(book, leaf, front, now);
+  }
+
+  /** A leaf's rung on THE PRIMACY LAW's ladder (an unnamed kind is a page). */
+  primacyOf(leaf: FolioLeafSpec): number {
+    return this.cfg.primacy[leaf.kind ?? 'page'] ?? 0;
+  }
+
+  /** THE STANDING LAW's read: absent = assumed engaged. */
+  private engagedOf(leaf: FolioLeafSpec): boolean {
+    return leaf.engaged?.() ?? true;
+  }
+
+  /** THE DEPARTURE LAW's read: the leaf's own reach law, else — THE
+   *  SUMMONS' REACH — a summoned member reaches while its anchor does (the
+   *  summons is the anchor's offer), else the engaged read. */
+  private reachOf(leaf: FolioLeafSpec): boolean {
+    if (leaf.reach) return leaf.reach();
+    const anchor = this.summonedBy.get(leaf.id);
+    if (anchor !== undefined) {
+      const a = this.leaves.get(anchor);
+      if (a) return this.reachOf(a);
+    }
+    return this.engagedOf(leaf);
   }
 
   private nearerOnArrival(book: Book, leaf: FolioLeafSpec, front: FolioLeafSpec, now: number): boolean {

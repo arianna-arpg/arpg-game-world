@@ -30,6 +30,8 @@ and two verbs.
 | `engaged()` | does the player still stand at this station? (absent = assumed) |
 | `range()` | the seat's distance to the station, for the arrival tie-break |
 | `arrive` | `'behind'` (a dwell's offer, the default) or `'front'` (an explicit ask, a modal) |
+| `kind` | the leaf's rung on the primacy ladder: `'page'` (an always-available player page — the default), `'station'` (the world's offer: every dwell dialog), `'modal'` (a decision: the calling, the picker); any string the ladder names |
+| `reach()` | may the player still WORK this leaf from here? The departure law's read (absent = `engaged()`; absent both = never departs). A suite member declares the reach law here while `engaged` stays physical |
 | `companions` | leaves this one may stand beside un-bound (symmetric) |
 | `refresh()` | re-render on coming to the front |
 
@@ -60,6 +62,35 @@ strip; a book of none dissolves.
   (within `arrivalSec` of the front's binding) front the **nearer** one: the
   player walked to Brandt, not to the bench beside him. Without a range on
   both sides the master law stands.
+- **The primacy law** (2026-09-16, her ask) — a leaf has a `kind`, ranked
+  by `FOLIO_CFG.primacy` (page 0 · station 1 · modal 2). A newcomer of
+  *higher* primacy than the front takes it: the bench's dialog fronts over
+  the bag's Skills drawer, because the player walked to the bench — the
+  drawer stays one tab away and promotes back when the bench closes. A
+  newcomer of *lower* primacy lands behind whatever its own `arrive` says:
+  the drawer the bag *remembers* (bound by the self-heal) never shoves an
+  open counter aside. Equals fall to the master, front-arrival, standing and
+  nearer laws above. The ladder is a registry: `enroll` refuses a kind it
+  does not name, and a new kind is one row.
+- **The call's word** — `adopt(id, ask)` lets a show path say how *this*
+  arrival lands: `'front'` from a press, a key or a handle (an explicit ask
+  is absolute and outranks the ladder — `UI.folioAsk` is the panels' one
+  door, used by the Skills ribbon, the passive tree's key, a skill tree's
+  handle and a container drawer's ribbon), `'behind'` to land quiet. The
+  self-heal binds with no word, so a page that merely turned up obeys the
+  ladder. Station show paths keep the bare `adopt`: a dwell is an offer.
+- **The departure law** (2026-09-16, her ask) — a bound leaf the player can
+  no longer reach (`reach()`, else `engaged()`, false on the per-frame
+  sync) closes through its own close path: the tab goes down where the
+  work would be refused, and the book promotes as for any close. The close
+  only asks — a leaf whose close leaves it open stays bound and is asked
+  again. A summoned member reaches through its anchor (the summons is the
+  anchor's offer), and the anchor's departure takes its members; the
+  crafting members also carry `World.stationReach` as their own `reach`, so
+  a bench opened by its own dwell still stands when the player steps over
+  to the counter that summons it. `FOLIO_CFG.departureCloses` is the dial;
+  a leaf with neither read (the calling, the picker, the arming panel)
+  never departs.
 - **The bay law** — a book gathers *one owner's* leaves of *one bay*. A
   couch guest's flank never binds with the hero's centre.
 - **The measured law** — leaves of *different* bays still bind when their
@@ -100,10 +131,16 @@ strip; a book of none dissolves.
 One row in `UI.enrollFolioLeaves` (`folioLeaf(id, root, title, isOpen,
 close, extra)`) and one `this.folio.adopt('<id>')` at the end of its show
 path, after the panel is displayed and rendered (so its rect measures).
-Give it `engaged` when the station has a near-read, `range` when it has a
-town site, `arrive: 'front'` when the player explicitly asked for it. The
-probe's census (`O`) pins that every enrolled leaf adopts and that no dialog
-swaps the screen with `hideAll()` at its show.
+Give a dwell dialog `kind: 'station'`; give it `engaged` when the station
+has a near-read (the same read the menu bar seals its page on — it is also
+the departure read), `reach` when its work is allowed from elsewhere too (a
+suite member: `World.stationReach`), `range` when it has a town site,
+`arrive: 'front'` when the player explicitly asked for it, `kind: 'modal'`
+when nothing offered may shove it aside. A player page enrolls as
+`kind: 'page'` and its PRESS path calls `folioAsk` rather than the bare
+adopt. The probe's census (`O`) pins that every enrolled leaf adopts, every
+row declares its kind, the press paths ask and no station's does, and that
+no dialog swaps the screen with `hideAll()` at its show.
 
 The keyed panels the bag, the sheet and the map are **not** enrolled: they
 have their own homes (left, right, full) and the bench's "the bag is the
@@ -134,7 +171,12 @@ and individual skill trees in the same top-tab book. Closing the inventory also
 hides Skills; reopening remembers whether that drawer was open, however the bag
 shut (the key, the couch clear, the Esc sweep — see THE ESCAPE POLICY below).
 Closing a shelved page through the book closes that page without promoting it
-instead.
+instead. The ribbon's press ASKS (`folioAsk` — Skills comes forward over an
+open counter because the player pressed it); the drawer the bag merely
+remembers binds by the self-heal with no word and lands BEHIND an open
+station by the primacy law, promoting back when the station closes or
+departs — so a run that keeps Skills open at all times still meets each
+station first, and gets Skills back the moment it walks away.
 
 THE CONTAINER DRAWERS (2026-09-12, `ui/containerPane.ts`): every side board
 the account owns (`engine/containers.ts` — the Reliquary first) wears a third
@@ -220,7 +262,11 @@ the breaker's bench and the Oracle stone.
   `rerollAffix`) reads the one predicate; the dwell prompts and each
   station's own opening stay physical.
 - **Summons arrive quiet** — never fresh, never the front, whatever law
-  would front a stranger.
+  would front a stranger (the primacy ladder included).
+- **Summons stand while the anchor stands** — the departure law reads a
+  summoned member's reach through its anchor, and the members' own `reach`
+  rows read `World.stationReach`, so the bench's tab is never taken down at
+  the counter that summons it.
 - **The anchor's close takes its summoned members** through their own close
   paths: one Escape from the counter leaves the workbench. A member the
   player dismissed stays dismissed while the anchor stands; a member opened
@@ -272,6 +318,8 @@ there is no drawer to remember. Probe: `probe_folio` O10.
 | --- | --- | --- |
 | `overlapFrac` | 0.15 | measured-overlap threshold (intersection ÷ smaller rect) |
 | `arrivalSec` | 0.35 | the nearer law's same-arrival window |
+| `primacy` | page 0 · station 1 · modal 2 | the primacy law's ladder, keyed by leaf `kind`; a new kind is one row |
+| `departureCloses` | true | the departure law: a leaf out of reach closes on the sync (off = it lingers as a shelved tab) |
 | `strip.minLeaves` | 2 | a book wears its strip from this many leaves |
 | `strip.seamPx` | 1 | how far the strip sinks into the panel's top border |
 | `strip.closeAll` | true | the ✕ at the strip's end |

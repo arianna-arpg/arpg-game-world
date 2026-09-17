@@ -2126,6 +2126,16 @@ we verify changes.
   fronts the nearer station (THE NEARER LAW), books never cross owners or
   declared bays unless drawn rects truly overlap (THE MEASURED LAW),
   companions never bind, Esc closes the FRONT leaf through its own close.
+  THE PRIMACY LAW (2026-09-16): a leaf has a `kind` ranked by
+  `FOLIO_CFG.primacy` (page < station < modal) — a dwell dialog fronts
+  over the bag's always-available pages (the Skills drawer stays one tab
+  away when the bench opens), a page the bag merely REMEMBERS lands behind
+  an open counter, and only THE CALL'S WORD (`adopt(id, 'front')` —
+  `UI.folioAsk`, the press paths' one door) outranks the ladder; THE
+  DEPARTURE LAW: a leaf the player can no longer reach (`reach()`, else
+  `engaged()`, on the per-frame sync) closes through its own close — the
+  tab goes down where the work is refused; suite members reach through
+  `World.stationReach`, `FOLIO_CFG.departureCloses` is the dial.
   A new dialog enrolls with one `folioLeaf` row + one `folio.adopt` at its
   show; the folio keeps no open flag of its own (the SELF-HEAL sync binds
   and drops off each panel's own flag), so one dialog up is byte-identical.
