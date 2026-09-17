@@ -434,6 +434,7 @@ ${importLine}
 import { CLASSES } from './classes';
 import { VOCATIONS, VOCATION_CFG, vocationNodeId, vocationRootId } from './vocations';
 import type { GraftSpec, PassiveChoiceRef } from './passiveChoices';
+import './passiveCrossroads';
 
 export type NodeKind = 'start' | 'small' | 'notable' | 'keystone' | 'attr' | 'vocation' | 'choice';
 

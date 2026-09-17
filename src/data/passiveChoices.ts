@@ -141,6 +141,13 @@ export function choiceGroupOf(node: NodeLike): PassiveChoiceGroup | undefined {
   return node.choice ? CHOICE_GROUPS[node.choice.group] : undefined;
 }
 
+/** Search the actual deal as well as its node: a hidden graft or niche must
+ *  be discoverable without opening every choice popup on the tree. */
+export function choiceSearchText(node: NodeLike, supportText: (id: string) => string = () => ''): string {
+  const group = choiceGroupOf(node);
+  return group ? [group.name, ...group.options.flatMap(o => [o.name, o.description, o.graft ? supportText(o.graft.support) : ''])].join(' ').toLowerCase() : '';
+}
+
 /** How many picks this node deals: node override → group default → config. */
 export function choicePickLimit(node: NodeLike): number {
   const g = choiceGroupOf(node);
@@ -399,10 +406,14 @@ export function sanitizeChoices(
     const exclusive = group !== undefined && (group.deal ?? 'each') !== 'each';
     if (exclusive && claimed[group.id] !== undefined && claimed[group.id] !== nodeId) continue;
     const kept: string[] = [];
+    const accepted = { ...out, [nodeId]: kept };
     for (const oid of picked) {
       if (typeof oid !== 'string' || kept.includes(oid)) continue;
       if (!choiceOptionOf(node, oid)) continue;
       if (kept.length >= choicePickLimit(node)) break;
+      // Loading obeys the SAME character-unique rule as spending a point.
+      // First valid occurrence wins; a duplicate in another group is legal.
+      if (choiceLockReason(node, oid, accepted, nodes) !== null) continue;
       kept.push(oid);
     }
     if (kept.length) {

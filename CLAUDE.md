@@ -158,6 +158,11 @@ extension notes: `docs/design/arena-bosses.md`. Checks:
 `npm run probe -- arenabosses`, genqa, and the isolated hidden
 `balance/arena-bosses-ui.cjs` client harness after a build.
 
+The passive Star's two-point opening choices live in `src/data/passiveCrossroads.ts`;
+`docs/design/passive-crossroads.md` records the 138 options, nine schools, editor
+round-trip, save uniqueness and verification. Run `npm run probe -- passivecrossroads`
+and the hidden `balance/passive-crossroads-ui.cjs` harness after a build.
+
 ## Commands
 - `npm install` — first-time setup (also run automatically by the .bat launchers).
 - `npm run dev` — Vite dev server at http://localhost:5173 (browser dev mode, `Play Game.bat`).

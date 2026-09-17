@@ -9,7 +9,7 @@
 // ---------------------------------------------------------------------------
 
 import { CLASSES, PROGRESSION } from '../../data/classes';
-import { PASSIVE_ADJACENCY, classStartNode } from '../../data/passives';
+import { PASSIVE_ADJACENCY, PASSIVE_NODES, classStartNode } from '../../data/passives';
 import type { BuildEntry, BuildSpec } from '../types';
 
 /** Roughly how a gem keeps pace with character level, absent fancy play.
@@ -21,7 +21,9 @@ export function gemLevelAt(charLevel: number): number {
 /** Deterministic greedy tree: breadth-first from the class start node, ties
  *  broken alphabetically. Not OPTIMAL play — honest AVERAGE play: a level-L
  *  character has spent ~L points near home. Derived from the live graph, so
- *  tree edits reshape every reference build with zero edits here. */
+ *  tree edits reshape every reference build with zero edits here. Choice nodes
+ *  require explicit BuildSpec.choices: this node-id-only walk cannot make a
+ *  deal, so it must never spend a point on one or path through an empty deal. */
 export function greedyPassives(classId: string, points: number): string[] {
   const start = classStartNode(classId);
   const picks: string[] = [];
@@ -32,6 +34,7 @@ export function greedyPassives(classId: string, points: number): string[] {
     for (const at of frontier) {
       for (const n of [...(PASSIVE_ADJACENCY[at] ?? [])].sort()) {
         if (seen.has(n)) continue;
+        if (PASSIVE_NODES[n]?.choice) continue;
         seen.add(n);
         picks.push(n);
         next.push(n);

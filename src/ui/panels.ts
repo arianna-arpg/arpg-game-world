@@ -85,7 +85,7 @@ import {
 import { VIS_CFG } from '../render/vis/visConfig';
 import { CLASSES, type ClassDef } from '../data/classes';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateNodeId, vocationGateOpen, type PassiveNode } from '../data/passives';
-import { PASSIVE_CHOICE_CFG, choiceDealClaimant, choiceDealSpent, choiceGroupOf, choiceLockReason, choiceNodeLocked, choiceOptionOf, choicePickLimit, chosenOf, graftSourcesOf, nodeChoiceOpen } from '../data/passiveChoices';
+import { PASSIVE_CHOICE_CFG, choiceDealClaimant, choiceDealSpent, choiceGroupOf, choiceLockReason, choiceNodeLocked, choiceOptionOf, choicePickLimit, choiceSearchText, chosenOf, graftSourcesOf, nodeChoiceOpen } from '../data/passiveChoices';
 import { MAIN_REALM, PASSIVE_REALMS, openRealms, realmIdOf, realmOf, realmOpen } from '../data/passiveRealms';
 import { SUPPORTS, SUPPORT_LIST } from '../data/supports';
 import { VOCATIONS, vocationRootId } from '../data/vocations';
@@ -7317,7 +7317,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     for (const mo of node.mods ?? []) parts.push(formatModLine(mo, mo.value));
     for (const k of Object.keys(node.attributes ?? {})) parts.push(k);
     for (const k of Object.keys(node.attributesPct ?? {})) parts.push(k);
-    if (node.choice) parts.push('choice');
+    if (node.choice) parts.push('choice', choiceSearchText(node, id => {
+      const support = SUPPORTS[id];
+      return support ? `${support.name} ${support.description}` : '';
+    }));
     return parts.join(' ').toLowerCase();
   }
 
@@ -7477,13 +7480,22 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const pool = node.vocation !== undefined ? m.vocationPoints : m.passivePoints;
     const canPay = pool >= PASSIVE_CHOICE_CFG.pickCost;
 
+    // Choice grants retain their own names; graft mechanics come from the
+    // real support at presentation time, without a data-registry import cycle.
+    const choiceDescriptions = new Map(group.options.map(o => {
+      const support = o.graft ? SUPPORTS[o.graft.support] : undefined;
+      return [o.id, o.description + (support ? ` ${support.name}: ${support.description}` : o.graft ? ' Support unavailable.' : '')];
+    }));
+
     const pop = document.createElement('div');
     pop.className = 'choice-popup';
     pop.innerHTML = `
       <div class="choice-head">${group.name}
         <span class="choice-count">${chosen.length}/${limit} chosen${group.unique === 'character' ? ' · once per character' : ''}${
           group.deal === 'sole' ? ' · claims its whole cluster, sibling nodes lock'
-          : group.deal === 'first' ? ' · only the first node deals, siblings become plain paths' : ''}</span></div>
+          : group.deal === 'first' ? ' · only the first node deals, siblings become plain paths' : ''}</span>
+        <input class="tree-search choice-search" type="search" placeholder="Search choices…" aria-label="Search passive choices" autocomplete="off">
+        <span class="choice-search-count" aria-live="polite">${group.options.length} choices · each pick is permanent</span></div>
       ${group.options.map(o => {
         const taken = chosen.includes(o.id);
         const why = taken ? null : choiceLockReason(node, o.id, m.choices, PASSIVE_NODES);
@@ -7492,10 +7504,25 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         return `<button class="choice-opt${taken ? ' chosen' : ''}${locked ? ' locked' : ''}"
           data-opt="${o.id}" ${locked ? 'disabled' : ''}>
           <span class="opt-name">${o.name}</span>
-          <span class="opt-desc">${o.description}</span>
+          <span class="opt-desc">${choiceDescriptions.get(o.id)}</span>
           ${note ? `<span class="opt-note">${note}</span>` : ''}
         </button>`;
       }).join('')}`;
+    const choiceSearch = pop.querySelector<HTMLInputElement>('.choice-search')!;
+    const choiceSearchCount = pop.querySelector<HTMLElement>('.choice-search-count')!;
+    const choiceSearchRows = [...pop.querySelectorAll<HTMLButtonElement>('.choice-opt')].map(btn => {
+      const option = group.options.find(o => o.id === btn.dataset.opt)!;
+      return { btn, text: `${option.name} ${choiceDescriptions.get(option.id)}`.toLowerCase() };
+    });
+    choiceSearch.addEventListener('input', () => {
+      const query = choiceSearch.value.trim().toLowerCase();
+      let visible = 0;
+      for (const row of choiceSearchRows) {
+        row.btn.hidden = !row.text.includes(query);
+        if (!row.btn.hidden) visible++;
+      }
+      choiceSearchCount.textContent = visible ? `${visible} of ${group.options.length} choices · each pick is permanent` : 'No matching choices';
+    });
     document.body.appendChild(pop);
     // Fixed-position above the node's screen rect, clamped to the viewport.
     // Measured via rects, not offsetWidth: the popup rides the UI-scale dial
