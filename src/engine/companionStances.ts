@@ -34,9 +34,11 @@ import { sameStory } from './tiers';
 import { COMPANION_STANCES, companionStanceIds, type CompanionStanceDef } from '../data/companionStances';
 
 export const COMPANION_STANCE_CFG = {
-  /** The stance a bond wears until the keeper shifts it. 'aggressive' is the
-   *  pre-stance conduct byte for byte (every standing rig reads it). */
-  default: 'aggressive',
+  /** The stance a bond wears until the keeper shifts it — 'defensive' (her
+   *  ruling 2026-09-16: the intuitive feel — the beast keeps to your side
+   *  and answers your fights). 'aggressive' is the pre-stance conduct byte
+   *  for byte; a rig that wants it sets it. */
+  default: 'defensive',
   /** Heel tolerance around the keeper (the classic minion heel is 90px). */
   heelDist: 90,
   /** DEFENSIVE: how far from the KEEPER a quarry may stand (or be chased)

@@ -7919,8 +7919,21 @@ export class Renderer {
           ctx.fillRect(x, my, slot, mh);
           ctx.strokeRect(x, my, slot, mh);
           ctx.fillStyle = metaCd ? '#6a6a7a' : (face.color ?? '#e8d8a0');
-          ctx.font = 'bold 8px Verdana';
-          ctx.fillText(`⇧ ${face.label}`, x + slot / 2, my + mh - 4);
+          // THE FIT: a long face (a stance's name) sits INSIDE its button
+          // instead of spilling into the neighbours — the largest of 8/7/6px
+          // that fits, the ⇧ prefix yielding before the words shrink (a
+          // live face carries its own glyph); a short face draws exactly as
+          // it always did. Nothing fits → the bare face at 6px.
+          const inner = slot - 4;
+          let text = face.label, px = 6;
+          fit: for (const size of [8, 7, 6]) {
+            for (const cand of [`⇧ ${face.label}`, face.label]) {
+              ctx.font = `bold ${size}px Verdana`;
+              if (ctx.measureText(cand).width <= inner) { text = cand; px = size; break fit; }
+            }
+          }
+          ctx.font = `bold ${px}px Verdana`;
+          ctx.fillText(text, x + slot / 2, my + mh - 4);
         }
         if (def.id === 'command_assault' && p.assaultHud) {
           const h = p.assaultHud;

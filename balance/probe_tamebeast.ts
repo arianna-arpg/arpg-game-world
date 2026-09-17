@@ -196,6 +196,10 @@ try {
   }
   for (const family of BEAST_FAMILIES) {
     const s = setup(art), a = pet(s, family.members[0]), target = body(s.w);
+    // The hunt under test is the AGGRESSIVE conduct (engine/companionStances.ts):
+    // the default stance is defensive, whose beast answers only the keeper's
+    // fights — pin the conduct so the art fires on the beast's own initiative.
+    s.w.setCompanionStance(s.w.localSeat, 'tame_beast', 'aggressive');
     const special = a.skills.find(i => i?.def.id === family.skillId)!;
     check(`${family.name}: family art is granted to a real beast`, special);
     a.skills = [special]; a.useLock = 0; a.pos = { x: target.pos.x - 45, y: target.pos.y };

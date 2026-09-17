@@ -79,6 +79,15 @@ element belongs to that element.**
   for the button's hold. The mini-button wears a LIVE face
   (`engine/skills.ts registerMetaFace`) so it never lies about what the
   click does; the companion stance shift is its debut.
+- THE META PRESS BELONGS TO THE META (`World.applyInputs` → `spendPress`):
+  a `metaEdge` press SPENDS its slot for the button's whole hold, through
+  the same ledger a gate writes — the key is still physically down on the
+  frames after a modifier press, and the cast lane fires most skills on the
+  hold, so without the spend a stance shift's own key drank the converted
+  Whistle one frame later. Spent whatever the payload did with the press;
+  lifted by the release or the next fresh edge. EXEMPT: a slot feeding a
+  RUNNING held cast (a guard, a channel) — there the modifier alone fired
+  the held skill's meta and the hand must stay on the key.
 - THE COMPANION STANCE action (`Settings.keybinds.companionStance`, `x` by
   default, pad unbound): a rebindable verb that cycles every bonded beast's
   conduct on the bar through the host-authoritative `companionStance` intent

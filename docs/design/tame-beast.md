@@ -157,8 +157,8 @@ data rows (`id`, `label`, `glyph`, `color`, cycle `order`, `conduct`,
 
 | Stance | Conduct |
 | --- | --- |
-| Aggressive | The beast hunts on its own: nearest foe in sight, heel when none. This is the pre-stance behavior and the default (`COMPANION_STANCE_CFG.default`). |
-| Defensive | The beast heels and answers only the keeper's fights: whatever wounded the keeper, whatever the keeper wounded, or whatever bit the beast itself, nearest first, within a 520-unit leash of the keeper, read inside a four-second engage window. A quarry is held until it dies or leaves the leash. |
+| Aggressive | The beast hunts on its own: nearest foe in sight, heel when none. This is the pre-stance behavior. |
+| Defensive | The beast heels and answers only the keeper's fights: whatever wounded the keeper, whatever the keeper wounded, or whatever bit the beast itself, nearest first, within a 520-unit leash of the keeper, read inside a four-second engage window. A quarry is held until it dies or leaves the leash. The default (`COMPANION_STANCE_CFG.default`, her ruling 2026-09-16). |
 | Passive | The beast heels and never strikes of its own accord. |
 
 `src/engine/companionStances.ts` registers each stance as a command kind
@@ -185,7 +185,11 @@ three doors, all landing on `World.cycleCompanionStance`:
 
 - Tame Beast's meta is now `companion_stance`, an honest instant cast scoped by
   `hostSkillId`, so cast procs and the meta chain both see it. Whistle and
-  Rallying Whistle remain the converted base press.
+  Rallying Whistle remain the converted base press. A meta press spends its
+  slot for the button's whole hold (the spent-press law in
+  `docs/engine/input.md`), so shifting the stance on a full bond never drinks
+  the Whistle on the frame after the shift; a slot that is feeding a running
+  held cast (a guard firing its own meta with the modifier alone) is exempt.
 - The meta mini-button is clickable: the renderer publishes `hudMetaRects`
   and a plain click there is that slot's meta press (every meta, not only the
   shift). The button wears the current stance in its ink through the
@@ -210,7 +214,12 @@ under live AI, the leash and engage window, the sticky quarry, the friendly
 fire exemption, the meta press and face, the action intent, save and wire
 round trips, explicit orders outranking a passive beast and the stance
 resuming, the Command gem chain, `lunges`, the stance-art hook through a
-probe-local tree copy, and dormant, released and respec cleanup.
+probe-local tree copy, dormant, released and respec cleanup, and the meta
+press law through the real input artery: a shift on a full bond never fires
+the converted Whistle on the following frames, a release and a plain hold
+still whistle, and Shield Up stays raised through its own Phalanx meta press.
+The Tame Beast and Goad rigs that exercise a beast hunting on its own pin the
+aggressive conduct explicitly, since the default is defensive.
 
 `balance/probe_tamebeast.ts` covers certainty boundaries, boss eligibility,
 two/three-pet conversion, revival and countdown persistence, zero-socket innate

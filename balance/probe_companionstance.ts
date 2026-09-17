@@ -34,6 +34,7 @@ import { serializeSnapshot } from '../src/net/snapshot';
 import { DEFAULT_KEYBINDS, ACTION_IDS, ACTION_LABELS, bindingContextsOverlap } from '../src/meta/settings';
 import type { Actor } from '../src/engine/actor';
 import type { World } from '../src/engine/world';
+import type { PlayerInput } from '../src/net/intent';
 
 let passed = 0, failed = 0;
 const check = (name: string, ok: unknown) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); ok ? passed++ : failed++; };
@@ -48,7 +49,9 @@ function setup(nodes: string[] = [], def: SkillDef = SKILLS.tame_beast, seed = 5
   w.meta.knownSkills.set(inst.def.id, inst); p.skills.fill(null); p.skills[0] = inst;
   for (const id of nodes) w.pickTreeNode(inst.def.id, id);
   w.recalcPlayer();
-  p.sheet.setSource('rig', [mod('mana', 'flat', 10000), mod('life', 'flat', 10000), mod('lifeRegen', 'override', 0), mod('accuracy', 'flat', 100000), mod('critChance', 'override', 0)]);
+  // Every blow in these rigs LANDS: the keeper cannot dodge (a defensive
+  // answer must never hang on an evasion roll of the run's shared stream).
+  p.sheet.setSource('rig', [mod('mana', 'flat', 10000), mod('life', 'flat', 10000), mod('lifeRegen', 'override', 0), mod('accuracy', 'flat', 100000), mod('critChance', 'override', 0), mod('evasion', 'override', 0)]);
   p.fillResources();
   return { w, p, inst, seat: w.localSeat };
 }
@@ -62,7 +65,7 @@ function tick(w: World, seconds: number, ai = false) {
 function foe(w: World, x = 200, y = 0, level = 1) {
   const a = w.createMonster('plains_wolf', level, 'enemy'); a.skills = [];
   a.pos = { x: w.player.pos.x + x, y: w.player.pos.y + y }; a.tier = w.player.tier;
-  a.sheet.setSource('rig', [mod('life', 'flat', 100000), mod('lifeRegen', 'override', 0), mod('evasion', 'override', 0), mod('blockChance', 'override', 0), mod('moveSpeed', 'override', 0), mod('damage', 'override', 0)]);
+  a.sheet.setSource('rig', [mod('life', 'flat', 100000), mod('lifeRegen', 'override', 0), mod('evasion', 'override', 0), mod('blockChance', 'override', 0), mod('moveSpeed', 'override', 0), mod('damage', 'override', 0), mod('accuracy', 'flat', 100000)]);
   w.springAmbush(a, true); a.untargetable = false; a.fillResources(); w.actors.push(a); return a;
 }
 /** A wild beast claimed on the spot (level as given). */
@@ -87,7 +90,7 @@ try {
   // ---- registry + data contracts ---------------------------------------------
   check('Three stances ship in cycle order', companionStanceIds().join(',') === 'aggressive,defensive,passive');
   check('Every stance registers a command kind', companionStanceIds().every(id => COMMAND_KINDS[stanceKindId(id)]));
-  check('The default stance is aggressive (the pre-stance conduct)', defaultStanceId() === 'aggressive' && COMPANION_STANCE_CFG.default === 'aggressive');
+  check('The default stance is defensive (her ruling 2026-09-16)', defaultStanceId() === 'defensive' && COMPANION_STANCE_CFG.default === 'defensive');
   check('The cycle wraps', nextStanceId('passive') === 'aggressive' && nextStanceId('aggressive') === 'defensive');
   check('Tame Beast wears the stance shift as its meta', SKILLS.tame_beast.meta?.skillId === 'companion_stance' && !!SKILLS.companion_stance && COMPANION_SKILLS.companion_stance.effects[0].type === 'companionStance');
   check('Whistle stays the converted face', SKILLS.tame_beast.convert?.skillId === 'companion_whistle');
@@ -160,7 +163,8 @@ try {
   // ---- THE STANCES: conduct --------------------------------------------------------
   {
     const s = setup(), a = pet(s), e = foe(s.w, 220);
-    check('A bond wears the default stance as its standing order', stanceOf(s) === 'aggressive' && orderOf(a) === 'aggressive');
+    check('A bond wears the default stance as its standing order', stanceOf(s) === defaultStanceId() && orderOf(a) === defaultStanceId());
+    s.w.setCompanionStance(s.seat, TAME, 'aggressive');
     tick(s.w, 3, true);
     check('AGGRESSIVE hunts on its own (the legacy conduct)', a.aiTargetId === e.id || e.life < e.maxLife());
   }
@@ -228,20 +232,21 @@ try {
   {
     const s = setup(), a = pet(s);
     check('The bar’s meta is the stance shift', instanceMeta(s.inst)?.skillId === 'companion_stance');
-    check('The meta face wears the current stance', metaFaceOf(s.w, s.p, s.inst, instanceMeta(s.inst)!).label.includes('Aggressive'));
-    check('A shift-press walks the cycle through the real meta pipeline', s.w.useMetaSkill(s.p, s.inst, s.p.pos) && stanceOf(s) === 'defensive' && orderOf(a) === 'defensive');
+    const first = defaultStanceId(), second = nextStanceId(first), third = nextStanceId(second);
+    check('The meta face wears the current stance', metaFaceOf(s.w, s.p, s.inst, instanceMeta(s.inst)!).label.includes(COMPANION_STANCES[first].label));
+    check('A shift-press walks the cycle through the real meta pipeline', s.w.useMetaSkill(s.p, s.inst, s.p.pos) && stanceOf(s) === second && orderOf(a) === second);
     const face = metaFaceOf(s.w, s.p, s.inst, instanceMeta(s.inst)!);
-    check('The face follows the shift, in the stance’s ink', face.label.includes('Defensive') && face.color === COMPANION_STANCES.defensive.color);
+    check('The face follows the shift, in the stance’s ink', face.label.includes(COMPANION_STANCES[second].label) && face.color === COMPANION_STANCES[second].color);
     tick(s.w, 0.5);
-    check('The action intent cycles every bond on the bar', (s.w.applyAction(s.seat, { t: 'companionStance' }), stanceOf(s) === 'passive'));
-    check('An unknown stance id is refused', (s.w.applyAction(s.seat, { t: 'companionStance', stance: 'bogus' }), stanceOf(s) === 'passive'));
-    check('A named stance lands directly', (s.w.applyAction(s.seat, { t: 'companionStance', skillId: TAME, stance: 'aggressive' }), stanceOf(s) === 'aggressive' && orderOf(a) === 'aggressive'));
+    check('The action intent cycles every bond on the bar', (s.w.applyAction(s.seat, { t: 'companionStance' }), stanceOf(s) === third));
+    check('An unknown stance id is refused', (s.w.applyAction(s.seat, { t: 'companionStance', stance: 'bogus' }), stanceOf(s) === third));
+    check('A named stance lands directly', (s.w.applyAction(s.seat, { t: 'companionStance', skillId: TAME, stance: first }), stanceOf(s) === first && orderOf(a) === first));
     check('A skill the seat does not hold is refused', !s.w.setCompanionStance(s.seat, 'no_such_skill', 'passive'));
-    check('Setting the held stance again reports no change', !s.w.setCompanionStance(s.seat, TAME, 'aggressive'));
+    check('Setting the held stance again reports no change', !s.w.setCompanionStance(s.seat, TAME, first));
     // a seatless caster's shift refunds
     const loose = makeSkillInstance(SKILLS.companion_stance, 1); a.skills = [...a.skills, loose];
     s.w.useSkill(a, loose, a.pos);
-    check('A seatless caster’s shift refunds its clock', !a.cooldowns.has('companion_stance') && stanceOf(s) === 'aggressive');
+    check('A seatless caster’s shift refunds its clock', !a.cooldowns.has('companion_stance') && stanceOf(s) === first);
   }
   {
     // save + wire round trips
@@ -257,6 +262,56 @@ try {
     const u = setup(); applySavedCharacter(u.w, { ...save, stances: { [TAME]: 'zzz' } });
     check('An unknown saved stance drops to the default', u.w.companionStanceOf(u.seat, TAME) === defaultStanceId());
     void a;
+  }
+
+  // ---- THE META PRESS BELONGS TO THE META (THE SPENT PRESS on the meta lane) ---------------
+  // A full bond presses as the Whistle. Shift+slot shifts the stance on the
+  // press frame; the button is still physically DOWN on the frames after,
+  // and the cast lane fires most skills on the HOLD — so without the spend
+  // the shift's own key drank a 45-second Whistle. The meta press spends
+  // its slot for the hold; a release and a plain hold whistle as ever.
+  {
+    const s = setup(), a = pet(s); tick(s.w, 0.1);
+    check('A full bond converts the slot to Whistle', s.w.slotFaceOf(s.p, s.inst).id === 'companion_whistle');
+    const slots = (on: boolean) => Array.from({ length: 8 }, (_, i) => i === 0 && on);
+    const frame = (held: boolean, meta: boolean): PlayerInput =>
+      ({ dx: 0, dy: 0, aim: { ...s.p.pos }, held: slots(held), edge: slots(false), ...(meta ? { metaEdge: slots(true) } : {}) });
+    const feed = (f: PlayerInput, frames = 1) => { for (let i = 0; i < frames; i++) { s.w.applyInputs(new Map([[s.seat.id, f]]), 1 / 60); s.w.update(1 / 60); } };
+    const before = stanceOf(s);
+    feed(frame(true, true));
+    check('The meta press shifts the stance on its frame', stanceOf(s) === nextStanceId(before));
+    feed(frame(true, false), 30);
+    check('The held button after a meta press never fires the converted Whistle', !s.p.cooldowns.has('companion_whistle') && stanceOf(s) === nextStanceId(before));
+    feed(frame(false, false));
+    feed(frame(true, false), 2);
+    check('Released and pressed again, a plain hold still whistles', s.p.cooldowns.has('companion_whistle'));
+    void a;
+  }
+  {
+    // THE EXEMPTION: a slot feeding a RUNNING held cast keeps its hold when
+    // the modifier alone fires the held skill's meta — Phalanx under Shield
+    // Up: the thrust fires, the shield stays raised, the hand never left.
+    const s = setup();
+    const guard = makeSkillInstance(SKILLS.shield_up, 1, 3);
+    guard.sockets[0] = { def: SUPPORTS.phalanx, level: 1 };
+    s.p.skills[0] = guard; s.w.meta.knownSkills.set(guard.def.id, guard); s.w.recalcPlayer(); s.p.fillResources();
+    check('Phalanx rides Shield Up as its meta', instanceMeta(guard)?.skillId === 'phalanx_thrust');
+    const slots = (on: boolean) => Array.from({ length: 8 }, (_, i) => i === 0 && on);
+    const frame = (held: boolean, edge: boolean, meta: boolean): PlayerInput =>
+      ({ dx: 0, dy: 0, aim: { x: s.p.pos.x + 80, y: s.p.pos.y }, held: slots(held), edge: slots(edge), ...(meta ? { metaEdge: slots(true) } : {}) });
+    const feed = (f: PlayerInput, frames = 1) => { for (let i = 0; i < frames; i++) { s.w.applyInputs(new Map([[s.seat.id, f]]), 1 / 60); s.w.update(1 / 60); } };
+    let metaCalls = 0;
+    const world = s.w as unknown as { useMetaSkill: (c: Actor, h: SkillInstance, aim: { x: number; y: number }) => boolean };
+    const orig = world.useMetaSkill.bind(s.w);
+    world.useMetaSkill = (c, h, aim) => { metaCalls++; return orig(c, h, aim); };
+    feed(frame(true, true, false)); feed(frame(true, false, false), 5);
+    check('A held press raises the guard', s.p.casting?.inst === guard && s.p.casting.mode === 'guard');
+    feed(frame(true, false, true));
+    check('The modifier alone fires the held skill’s meta', metaCalls === 1);
+    feed(frame(true, false, false), 10);
+    check('The guard stays raised through its own meta press (the hold is not spent)', s.p.casting?.inst === guard && s.p.casting.mode === 'guard');
+    feed(frame(false, false, false), 2);
+    check('Releasing the key lowers the guard as ever', s.p.casting?.inst !== guard);
   }
 
   // ---- ORDERS OUTRANK THE STANCE; THE STANCE RESUMES ---------------------------------
@@ -278,15 +333,15 @@ try {
     const s = setup(), a = pet(s), e = foe(s.w, 260);
     s.inst.sockets[0] = { def: SUPPORTS.command_gem, level: 1 }; s.w.recalcPlayer(); s.w.companionBonds.refresh();
     check('The chain reads shift, then Assault, in slot order', instanceMetas(s.inst).map(m => m.skillId).join(',') === 'companion_stance,command_assault');
-    const before = e.life;
-    check('The shift-press shifts the stance NOW', s.w.useMetaSkill(s.p, s.inst, e.pos) && stanceOf(s) === 'defensive');
+    const before = e.life, shifted = nextStanceId(defaultStanceId());
+    check('The shift-press shifts the stance NOW', s.w.useMetaSkill(s.p, s.inst, e.pos) && stanceOf(s) === shifted);
     check('The Assault has not fired yet', !a.aiCommand);
     tick(s.w, META_CHAIN_INTERVAL + 0.1, true);
     check('One beat later the Assault order lands on the bond, pinned on the mark', a.aiCommand?.kind === 'assault' && a.aiCommand.targetId === e.id);
     tick(s.w, 3, true);
     check('The pack charges the mark', e.life < before);
     tick(s.w, 4, true);
-    check('Then keeps the stance it was set to', !a.aiCommand && orderOf(a) === 'defensive' && stanceOf(s) === 'defensive');
+    check('Then keeps the stance it was set to', !a.aiCommand && orderOf(a) === shifted && stanceOf(s) === shifted);
   }
   {
     // `lunges`: the bond-driven charge obeys the stance; explicit orders do not
@@ -307,7 +362,7 @@ try {
     const s = setup(['gentle_claim', 'probe_stance_art'], def), a = pet(s), e = foe(s.w, 60);
     check('The synthetic node is spent', s.inst.treeNodes?.includes('probe_stance_art'));
     const before = e.life;
-    s.w.setCompanionStance(s.seat, TAME, 'defensive'); tick(s.w, 0.2);
+    s.w.setCompanionStance(s.seat, TAME, nextStanceId(defaultStanceId())); tick(s.w, 0.2);
     check('A stance shift casts the tree’s stance art from the beast', e.life < before);
     void a;
   }
@@ -315,11 +370,11 @@ try {
   // ---- lifecycle: dormant, released, respec --------------------------------------------
   {
     const s = setup(['swift_claim']), a = pet(s), b = pet(s, 'plains_wolf', 1, 80);
-    s.w.setCompanionStance(s.seat, TAME, 'defensive');
-    check('Every beast of a litter wears the bond’s stance', orderOf(a) === 'defensive' && orderOf(b) === 'defensive');
+    s.w.setCompanionStance(s.seat, TAME, 'passive');
+    check('Every beast of a litter wears the bond’s stance', orderOf(a) === 'passive' && orderOf(b) === 'passive');
     s.w.fonts.push({ pos: { ...s.p.pos } }); s.w.meta.abilityEssences.ability4 = 999; s.w.fontResetTree(TAME); s.w.companionBonds.refresh();
     const dormant = [a, b].find(x => x.companionDormant)!, live = [a, b].find(x => !x.companionDormant)!;
-    check('A dormant over-cap bond wears no standing order; the live one keeps the stance', dormant && !dormant.standingOrder && orderOf(live) === 'defensive' && stanceOf(s) === 'defensive');
+    check('A dormant over-cap bond wears no standing order; the live one keeps the stance', dormant && !dormant.standingOrder && orderOf(live) === 'passive' && stanceOf(s) === 'passive');
     s.w.releaseCompanion(live.id, s.seat); s.w.companionBonds.refresh();
     check('A released beast drops its standing order', live.dead && !live.standingOrder);
   }

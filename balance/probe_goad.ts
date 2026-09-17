@@ -66,6 +66,10 @@ try {
     const row = BEAST_FAMILY_BY_ID.get('plains_wolf')!; BEAST_FAMILY_BY_ID.delete('plains_wolf');
     try {
       const pet = target(s.w, 40); s.w.tameCompanion(s.p, pet, 'tame_beast');
+      // The hunt under test is the AGGRESSIVE conduct (engine/companionStances.ts):
+      // the default stance is defensive, and this inert victim never wounds the
+      // keeper — pin the conduct so the art fires on the beast's own initiative.
+      s.w.setCompanionStance(s.w.localSeat, 'tame_beast', 'aggressive');
       const art = pet.skills.find(i => i?.def.id === 'beast_fallback_art')!, enemy = target(s.w, 85);
       check('An unclassified tamed beast receives a real fallback art', art);
       pet.skills = [art]; for (let i = 0; i < 90; i++) { updateAI(pet, s.w, 1 / 60); s.w.update(1 / 60); }

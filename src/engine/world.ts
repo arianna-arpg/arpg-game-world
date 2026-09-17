@@ -4979,6 +4979,18 @@ export class World {
         // "busy" — metas only worked while the host was on cooldown.
         if (inp.metaEdge?.[i] && instanceMeta(inst)) {
           this.useMetaSkill(a, inst, aim);
+          // THE META PRESS BELONGS TO THE META (THE SPENT PRESS on the meta
+          // lane — docs/engine/input.md): the physical button stays DOWN on
+          // the frames after the modifier press, and the cast lane fires
+          // most skills on the HOLD — so a stance shift's own key drank the
+          // converted Whistle one frame later. The press is spent for the
+          // hold (a release or a fresh edge lifts it — unspentHeld's law),
+          // whatever the payload did with it — UNLESS this slot is feeding a
+          // RUNNING held cast (a guard, a channel): there the modifier alone
+          // fired the held skill's meta and the hand must stay on the key.
+          const feeding = !!a.casting
+            && (a.casting.inst === inst || a.casting.inst.hostSkillId === inst.def.id);
+          if (!feeding) this.spendPress(seat, i);
         } else if (toggle ? inp.edge[i] : held[i]) {
           // The drill's count (engine/scenes.ts): the local hero's own
           // seat-pressed casts, at the one artery they all flow through.
@@ -5034,6 +5046,17 @@ export class World {
       if (!spent) this.spentPresses.set(seat.id, spent = new Set());
       spent.add(i);
     }
+  }
+
+  /** THE SPENT PRESS's targeted write: ONE slot spent for its hold — the
+   *  meta lane's law (a meta press took the slot; the host sees it again
+   *  at the button's release or its next fresh edge). Same ledger, same
+   *  lift, same 'off' dial. */
+  private spendPress(seat: Seat, slot: number): void {
+    if (SPENT_PRESS_CFG.spend === 'off') return;
+    let spent = this.spentPresses.get(seat.id);
+    if (!spent) this.spentPresses.set(seat.id, spent = new Set());
+    spent.add(slot);
   }
 
   /** Party size for ENEMY SCALING purposes — FRACTIONAL by design (coopScale
