@@ -178,6 +178,10 @@ export interface CastW {
   guardArc?: number;           // guard spec arcDeg (mode === 'guard')
   /** Guard bash tic: live arming line + inverted contract (mode 'guard'). */
   bashAt?: number; bashLow?: boolean;
+  /** THE ARM CLOCK (held seconds before the bash may convert): with the
+   *  shipped channelTime the client re-folds guardBashReady exactly as the
+   *  host did — the arm meter and the readied gold agree across the wire. */
+  bashArmAt?: number;
   /** THE VENT-RIDE's broil (LeapDelivery.vent): the column radius a casting
    *  vent-leaper will erupt at take-off — the client draws the same roil
    *  under the caster's feet (render/vis/ventRideLayer.ts). */
@@ -710,6 +714,7 @@ function actorToW(a: Actor, world: World): ActorW {
     if (cs.mode === 'guard' && cs.inst.def.guard) cw.guardArc = cs.inst.def.guard.arcDeg;
     if (cs.bashAt !== undefined) cw.bashAt = cs.bashAt;
     if (cs.bashLow) cw.bashLow = true;
+    if (cs.bashArmAt !== undefined) cw.bashArmAt = cs.bashArmAt;
     w.cast = cw;
   }
   if (a.activeAuras.size) {
@@ -1278,7 +1283,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
       mode: aw.cast.mode, total: aw.cast.total, elapsed: aw.cast.elapsed,
       pulseTimer: aw.cast.pulseTimer, shield: aw.cast.shield, maxShield: aw.cast.maxShield,
       indicatorAt: aw.cast.indicatorAt, presses: aw.cast.presses, channelTime: aw.cast.channelTime,
-      bashAt: aw.cast.bashAt, bashLow: aw.cast.bashLow,
+      bashAt: aw.cast.bashAt, bashLow: aw.cast.bashLow, bashArmAt: aw.cast.bashArmAt,
       aim: { x: a.pos.x, y: a.pos.y }, held: false, baseMult: 1,
     } as unknown as CastingState) : null;
     a.activeAuras.clear();

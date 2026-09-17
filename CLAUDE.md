@@ -51,6 +51,14 @@ debut boundaries and `balance/audit_tacticprogression.ts` compares combat pressu
 Sylvan Warden and Stone Sentinel guard commitment, bash warnings and doctrine
 level gates are documented in `docs/design/shield-defender-balance.md`;
 `balance/probe_wardenbalance.ts` checks those counterplay and progression seams.
+THE ARM CLOCK (2026-09-16): a shield bash is EARNED by the hold — a guard
+released before `GuardBashSpec.armTime` (default `BASH_CFG.armTime`, × the
+`bashArmTime` stat) held seconds simply drops and starts its cooldown; the one
+resolver writes `CastingState.bashArmAt` beside the line, `guardBashReady` is
+the ONE readied read (the release, the HUD's arm meter + readied gold, the
+AI's `aiHoldOf` wait-to-arm hold, the co-op wire), and `BehaviorSpec.guardRelease`
+grew `hold` / `waitToArm` beside `windup`. Contract: `docs/engine/guard-bash.md`;
+probe `balance/probe_bashclock.ts`.
 Raise the Gnatveil’s expanded tree lives in `src/data/gnatveilTree.ts`.
 `docs/design/gnatveil.md` records native accumulation, hatch bars, eggs,
 overflow decay, clustering, conducted contact and the throng armor floor.

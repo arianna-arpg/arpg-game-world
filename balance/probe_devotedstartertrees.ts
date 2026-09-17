@@ -4,7 +4,7 @@ import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
 import { CLASSES } from '../src/data/classes';
 import { DEVOTED_STARTER_TREES } from '../src/data/devotedStarterTrees';
-import { makeSkillInstance, instanceDelivery, instanceChannel, instanceBaseTags, instanceEffects, instanceConduits, instanceMods, skillContextTags, treeNodeRefusal, supportFitsInst, type SkillInstance } from '../src/engine/skills';
+import { BASH_CFG, makeSkillInstance, instanceDelivery, instanceChannel, instanceBaseTags, instanceEffects, instanceConduits, instanceMods, skillContextTags, treeNodeRefusal, supportFitsInst, type SkillInstance } from '../src/engine/skills';
 import { mod, STAT_DEFS } from '../src/engine/stats';
 import { serializeCharacter, rebuildSkill } from '../src/meta/character';
 import { serializeSeatMeta, applySeatMeta } from '../src/net/snapshot';
@@ -184,6 +184,9 @@ try {
     check('extended mirror window parries a real hit and preserves guard', enemy.life < target && mirror.p.life === life && mirror.p.casting!.shield === guard);
     step(mirror.w, 0.2); mirror.w.executeSkill(enemy, hit(), mirror.p.pos);
     check('expired mirror window blocks by spending guard', mirror.p.casting!.shield! < guard!);
+    // THE ARM CLOCK: the burst is earned by the hold — stand the shell past
+    // BASH_CFG.armTime (the parked foe never dents it further) before the release.
+    step(mirror.w, BASH_CFG.armTime);
     const before = enemy.life; mirror.p.casting!.held = false; step(mirror.w, 0.05);
     check('releasing the mirror shell delivers its cold bash', !mirror.p.casting && enemy.life < before);
   }

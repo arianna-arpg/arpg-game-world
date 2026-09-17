@@ -4,7 +4,7 @@ import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
 import { CLASSES } from '../src/data/classes';
 import { IMPACT_STARTER_TREES } from '../src/data/impactStarterTrees';
-import { makeSkillInstance, instanceDelivery, instanceChannel, instanceBaseTags, instanceEffects, instanceChargeCost, instanceCastCycle, instancePulsePlan, impactTreeOverrideErrors, instanceMods, skillContextTags, treeNodeRefusal, supportFitsInst, type SkillInstance } from '../src/engine/skills';
+import { BASH_CFG, makeSkillInstance, instanceDelivery, instanceChannel, instanceBaseTags, instanceEffects, instanceChargeCost, instanceCastCycle, instancePulsePlan, impactTreeOverrideErrors, instanceMods, skillContextTags, treeNodeRefusal, supportFitsInst, type SkillInstance } from '../src/engine/skills';
 import { mod, STAT_DEFS } from '../src/engine/stats';
 import { serializeCharacter, rebuildSkill } from '../src/meta/character';
 import { serializeSeatMeta, applySeatMeta } from '../src/net/snapshot';
@@ -173,7 +173,9 @@ try {
 
   {
     const bash = (nodes: string[]) => {
-      const s = setup('marching_bulwark', nodes), foe = body(s.w, 40); cast(s.w, s.inst, foe.pos); step(s.w, 0.05);
+      // THE ARM CLOCK: the bash is earned by the hold — stand the wall past
+      // BASH_CFG.armTime before releasing (the parked foe never dents it).
+      const s = setup('marching_bulwark', nodes), foe = body(s.w, 40); cast(s.w, s.inst, foe.pos); step(s.w, BASH_CFG.armTime + 0.05);
       const shield = s.p.casting!.shield!; s.p.casting!.held = false; step(s.w, 1 / 60);
       return { ...s, shield, damage: foe.maxLife() - foe.life };
     };

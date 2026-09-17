@@ -23,8 +23,12 @@ function fixture(fuse = false) {
   m.sheet.setSource('probe-target', [mod('life', 'flat', 5000),
     mod('evasion', 'override', 0), mod('blockChance', 'override', 0)]);
   m.fillResources(); w.actors.push(m);
+  // The per-skill ARM CLOCK lever isolates the contact contract: armTime 0
+  // makes the release instant, so every rig below measures the blow's
+  // damage/control/attribution and never the hold (probe_bashclock owns
+  // the clock itself). The victim's own Shield Up stays catalog data.
   const def = { ...SKILLS.shield_up,
-    guard: { ...SKILLS.shield_up.guard!, bash: { ...SKILLS.shield_up.guard!.bash!, stunChance: 1 } },
+    guard: { ...SKILLS.shield_up.guard!, bash: { ...SKILLS.shield_up.guard!.bash!, stunChance: 1, armTime: 0 } },
     ...(fuse ? { fuse: { delay: 0.2 } } : {}) };
   const inst = makeSkillInstance(def, 1);
   if (!w.useSkill(p, inst, vec(m.pos.x, m.pos.y))) throw new Error('Unable to raise test shield');

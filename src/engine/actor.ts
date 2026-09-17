@@ -111,6 +111,11 @@ export interface CastingState {
   /** Inverted contract (bashInvert stat): armed at-or-BELOW bashAt, and
    *  the payload is the shield health LOST. Same single writer. */
   bashLow?: boolean;
+  /** THE ARM CLOCK: held seconds at which the bash may convert (0 =
+   *  instant). Same single writer as bashAt (refreshGuardBash); read
+   *  through guardBashReady by the release, the HUD's arm meter, the AI's
+   *  hold and the co-op wire. Undefined = no bash rides this stance. */
+  bashArmAt?: number;
   // charge state — uses elapsed/total as the charge fraction
   // perfect / timed / multitude state
   empowered?: number;
@@ -126,6 +131,11 @@ export interface CastingState {
   /** Absolute release deadline and committed facing; absent before warning. */
   aiGuardReleaseAt?: number;
   aiGuardFacing?: number;
+  /** AI policy (BehaviorSpec.guardRelease.waitToArm === false): release on
+   *  the rolled hold even while the arm clock is still running — a
+   *  bashless early drop. Absent = the shield hand waits for its answer
+   *  (World.aiHoldOf extends the hold to CastingState.bashArmAt). */
+  aiGuardEarly?: true;
   /** AI: seconds this channel's firing line has been WALLED (occlusion) —
    *  past LOS_CFG.channelGrace the grip releases and the caster repositions
    *  instead of gnawing stone. */

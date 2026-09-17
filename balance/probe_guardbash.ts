@@ -20,7 +20,7 @@ import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
 import { setSimTap } from '../src/engine/tap';
 import { skillDamageBands } from '../src/engine/damage';
-import { instanceMods, makeSkillInstance, skillContextTags, supportFitsInst } from '../src/engine/skills';
+import { BASH_CFG, instanceMods, makeSkillInstance, skillContextTags, supportFitsInst } from '../src/engine/skills';
 import type { Actor } from '../src/engine/actor';
 import type { BuildSpec } from '../src/sim/types';
 import type { DamageType } from '../src/engine/stats';
@@ -82,6 +82,10 @@ const holdRelease = (id: string, frac: number | undefined, victim: Actor): numbe
   world.useSkill(p, skill(id)!, { x: victim.pos.x, y: victim.pos.y });
   step(0.1);
   if (!p.casting || p.casting.mode !== 'guard') return NaN;
+  // THE ARM CLOCK (probe_bashclock owns it): the bash is earned by the hold
+  // — stand the wall past BASH_CFG.armTime (parked victims never dent it),
+  // THEN bleed it to `frac`, so only the LINE decides the release below.
+  step(BASH_CFG.armTime);
   if (frac !== undefined) p.casting.shield = (p.casting.maxShield ?? 0) * frac;
   const before = victim.life;
   p.casting.held = false;
@@ -96,6 +100,8 @@ step(0.05);
 check('tic: shield_up arms at BASH_CFG.releaseFloor', Math.abs((p.casting?.bashAt ?? 0) - 0.25) < 1e-6,
   `bashAt=${p.casting?.bashAt}`);
 check('tic: upright contract (bashLow unset)', p.casting?.bashLow !== true);
+check('tic: the arm clock reads BASH_CFG.armTime on the bare stance (bashArmAt)',
+  Math.abs((p.casting?.bashArmAt ?? -1) - BASH_CFG.armTime) < 1e-6, `bashArmAt=${p.casting?.bashArmAt}`);
 p.casting!.held = false; step(0.3);
 
 world.useSkill(p, skill('defiant_bulwark')!, { x: p.pos.x + 50, y: p.pos.y });

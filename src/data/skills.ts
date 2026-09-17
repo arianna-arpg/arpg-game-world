@@ -3909,7 +3909,9 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'shield_up', name: 'Shield Up',
     description: 'Raise a frontal guard with its own health: hits and projectiles from the'
       + ' facing arc break against it instead of you, while you move at 40% speed and turn'
-      + ' heavily. Release to bash: a short blow with a 40% chance to stun and a knockback.',
+      + ' heavily. Hold it for a second and the bash readies; release then to bash: a short'
+      + ' blow with a 40% chance to stun and a knockback. Release sooner and the guard simply'
+      + ' drops.',
     tags: ['guard', 'channel', 'duration'], color: '#8ab8d8',
     manaCost: 10, cooldown: 5, useTime: 0,
     castMode: 'guard',
@@ -3917,8 +3919,11 @@ export const SKILLS: Record<string, SkillDef> = {
       arcDeg: 120, shieldLife: 60, moveFactor: 0.4, turnRate: 2.4,
       // (Parry comes from the Perfect Timing support now — socket it in.)
       // Release at/past the arming line (BASH_CFG.releaseFloor × the
-      // bashFloor stat — the guard bar's tic) and the stance converts
-      // into the bash. THE teaching guard: wall first, answer second.
+      // bashFloor stat — the guard bar's tic) AND past the arm clock
+      // (BASH_CFG.armTime × the bashArmTime stat — the meter above the
+      // bar; no per-skill armTime here, the shared clock rules) and the
+      // stance converts into the bash. THE teaching guard: wall first,
+      // answer second — and the answer is earned by the hold.
       bash: { mult: 0.7, range: 60, arcDeg: 110, stunChance: 0.4, knockback: 70 },
     },
     delivery: { type: 'self' },
@@ -4133,8 +4138,8 @@ export const SKILLS: Record<string, SkillDef> = {
     tree: IMPACT_STARTER_TREES.marching_bulwark,
     id: 'marching_bulwark', name: 'Marching Bulwark',
     description: 'Advance behind a narrow tower guard: you keep three-quarters of your movement'
-      + ' speed while it holds, behind thinner protection than a planted wall. Release to bash,'
-      + ' with a 30% chance to stun.',
+      + ' speed while it holds, behind thinner protection than a planted wall. Held for a'
+      + ' second the bash readies; release then to bash, with a 30% chance to stun.',
     tags: ['guard', 'channel', 'duration'], color: '#b0a878',
     manaCost: 10, cooldown: 5, useTime: 0,
     castMode: 'guard',
@@ -8906,7 +8911,8 @@ export const SKILLS: Record<string, SkillDef> = {
     description: 'GUARD: encase yourself in a shell of ice that blocks from every side. You'
       + ' cannot move, and nothing gets through until the shell breaks or you release it;'
       + ' either way it explodes in a cold burst at half strength, with a 30% chance to stun,'
-      + ' shoving everything nearby back. The burst is a spell hit in its own right: your cold'
+      + ' shoving everything nearby back. A release bursts only once the shell has stood for a'
+      + ' second; a break bursts at once. The burst is a spell hit in its own right: your cold'
       + ' and spell power grow it, and it can crit.',
     tags: ['spell', 'cold', 'guard', 'channel', 'aoe', 'duration'], color: '#bce8f8',
     manaCost: 14, cooldown: 7, useTime: 0,

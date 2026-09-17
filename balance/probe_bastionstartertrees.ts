@@ -4,7 +4,7 @@ import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
 import { CLASSES } from '../src/data/classes';
 import { BASTION_STARTER_TREES } from '../src/data/bastionStarterTrees';
-import { makeSkillInstance, instanceDelivery, instanceChannel, instanceBaseTags, instanceEffects, instanceChargeCost, instanceCastCycle, treeAuraOverrideErrors, hostSockets, instanceMods, skillContextTags, treeNodeRefusal, supportFitsInst, type SkillInstance } from '../src/engine/skills';
+import { BASH_CFG, makeSkillInstance, instanceDelivery, instanceChannel, instanceBaseTags, instanceEffects, instanceChargeCost, instanceCastCycle, treeAuraOverrideErrors, hostSockets, instanceMods, skillContextTags, treeNodeRefusal, supportFitsInst, type SkillInstance } from '../src/engine/skills';
 import { mod, STAT_DEFS } from '../src/engine/stats';
 import { serializeCharacter, rebuildSkill } from '../src/meta/character';
 import { serializeSeatMeta, applySeatMeta } from '../src/net/snapshot';
@@ -192,7 +192,9 @@ try {
     const guard = (nodes: string[], release: boolean) => {
       const s = setup('spiked_bulwark', nodes), a = body(s.w, 40); cast(s.w, s.inst, a.pos); step(s.w, 0.05);
       const shield = s.p.casting!.shield!;
-      if (release) { s.p.casting!.held = false; step(s.w, 1 / 60); }
+      // THE ARM CLOCK: a taught bash is earned by the hold too — stand the
+      // wall past BASH_CFG.armTime (the parked foe never dents it) first.
+      if (release) { step(s.w, BASH_CFG.armTime); s.p.casting!.held = false; step(s.w, 1 / 60); }
       else s.w.executeSkill(a, makeSkillInstance({ ...SKILLS.frost_nova, baseDamage: { chaos: [20, 20] }, effects: [{ type: 'damage' }], innateMods: [mod('critChance', 'override', 0)] }), s.p.pos);
       return { ...s, a, shield, damage: a.maxLife() - a.life };
     };

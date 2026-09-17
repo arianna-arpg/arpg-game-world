@@ -1,7 +1,7 @@
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { updateAI } from '../src/engine/ai';
-import { makeSkillInstance } from '../src/engine/skills';
+import { BASH_CFG, makeSkillInstance } from '../src/engine/skills';
 import { mod } from '../src/engine/stats';
 import { resolveTell } from '../src/engine/tells';
 import { MONSTERS } from '../src/data/monsters';
@@ -42,6 +42,15 @@ function raise(f: ReturnType<typeof fixture>, windup: number | undefined = 0.55)
 function settle(f: ReturnType<typeof fixture>, seconds = 0.8) {
   for (let i = 0; i < Math.ceil(seconds / DT); i++) f.w.update(DT);
 }
+/** THE ARM CLOCK (probe_bashclock owns it): a Warden with no hold of its own
+ *  now waits for its answer — the warning begins when the clock's remainder
+ *  equals the windup, and the bash lands the moment the clock runs. */
+const ARM = BASH_CFG.armTime;
+/** Step until `until` holds (or `max` seconds pass); returns the world time. */
+function stepUntil(f: ReturnType<typeof fixture>, until: () => boolean, max = 3) {
+  for (let i = 0; i < Math.ceil(max / DT) && !until(); i++) f.w.update(DT);
+  return f.w.time;
+}
 {
   const f = fixture(), cs = raise(f);
   cs.aiHold = 2;
@@ -57,23 +66,28 @@ function settle(f: ReturnType<typeof fixture>, seconds = 0.8) {
 for (const hz of [30, 60, 120]) {
   const f = fixture(), cs = raise(f);
   const before = f.p.life;
-  f.w.update(1 / hz);
-  const started = f.w.time;
-  check(`${hz} Hz: release starts a warning without damage`,
-    cs.aiGuardReleaseAt !== undefined && f.m.casting === cs && f.p.life === before);
-  let early = false;
-  for (let i = 0; i < hz; i++) {
+  // The hand holds to the arm clock (no roll of its own): the warning
+  // begins at ARM − windup, damage-free, and the bash lands at ARM.
+  let started = -1, early = false, hitAt = -1;
+  for (let i = 0; i < hz * 3 && f.m.casting; i++) {
     f.w.update(1 / hz);
-    if (f.p.life < before && f.w.time - started < 0.55 - 1e-8) early = true;
-    if (!f.m.casting) break;
+    if (started < 0 && cs.aiGuardReleaseAt !== undefined) {
+      started = f.w.time;
+      if (f.p.life < before) early = true;
+    }
+    if (hitAt < 0 && f.p.life < before) hitAt = f.w.time;
   }
+  check(`${hz} Hz: release starts a warning without damage`,
+    started >= 0 && !early && Math.abs(started - Math.max(0, ARM - 0.55)) <= 1 / hz + 1e-8,
+    `warning=${started.toFixed(3)}`);
   check(`${hz} Hz: a stationary target is hit after the whole warning`,
-    !early && f.p.life < before && Math.abs(f.w.time - started - 0.55) <= 1 / hz + 1e-8);
+    hitAt >= 0 && hitAt >= started + 0.55 - 1e-8 && Math.abs(hitAt - started - 0.55) <= 1 / hz + 1e-8,
+    `hit=${hitAt.toFixed(3)}`);
   check(`${hz} Hz: the completed bash pays recovery`, f.m.useLock >= 0.69);
 }
 {
   const f = fixture(), cs = raise(f);
-  f.w.update(DT);
+  stepUntil(f, () => cs.aiGuardReleaseAt !== undefined); // walk the clock to the warning
   const facing = f.m.facing, at = { ...f.m.pos }, before = f.p.life;
   f.p.pos = vec(f.m.pos.x - 45, f.m.pos.y);
   for (let i = 0; i < 18; i++) {
@@ -93,7 +107,7 @@ for (const hz of [30, 60, 120]) {
 {
   const f = fixture(), cs = raise(f);
   const before = f.p.life;
-  f.w.update(DT);
+  stepUntil(f, () => cs.aiGuardReleaseAt !== undefined); // inside the warning
   cs.shield = cs.maxShield! * 0.1;
   settle(f);
   check('weakening the shield during the warning denies its bash', !f.m.casting && f.p.life === before);
@@ -112,7 +126,8 @@ for (const hz of [30, 60, 120]) {
   check('stunning the wind-up cancels its bash', !f.m.casting && f.p.life === before);
 }
 {
-  const f = fixture(); raise(f); f.w.update(DT);
+  const f = fixture(); const cs = raise(f);
+  stepUntil(f, () => cs.aiGuardReleaseAt !== undefined); // inside the warning
   const before = f.p.life;
   const breaker = { ...SKILLS.claw, baseDamage: { physical: [1000, 1000] as [number, number] } };
   f.w.executeSkill(f.p, makeSkillInstance(breaker, 1), vec(f.m.pos.x, f.m.pos.y));
@@ -122,13 +137,19 @@ for (const hz of [30, 60, 120]) {
 }
 {
   const f = fixture(); raise(f, 0); const before = f.p.life;
-  f.w.update(DT);
-  check('zero warning preserves immediate release', !f.m.casting && f.p.life < before);
+  // Zero warning: no commitment beat — but the hand still waits for its
+  // answer, so the release (and the bash) lands the moment the clock runs.
+  const released = stepUntil(f, () => !f.m.casting);
+  check('zero warning releases unwarned the moment the clock runs',
+    !f.m.casting && f.p.life < before && Math.abs(released - ARM) <= 2 * DT + 1e-8, `release=${released.toFixed(3)}`);
 }
 {
   const f = fixture(); const cs = raise(f); delete cs.aiGuardWindup;
-  f.w.update(DT);
-  check('an omitted warning preserves existing guards', !f.m.casting && cs.aiGuardReleaseAt === undefined);
+  const before = f.p.life;
+  const released = stepUntil(f, () => !f.m.casting);
+  check('an omitted warning preserves existing guards (clock-honest, never a warning)',
+    !f.m.casting && cs.aiGuardReleaseAt === undefined && f.p.life < before && Math.abs(released - ARM) <= 2 * DT + 1e-8,
+    `release=${released.toFixed(3)}`);
 }
 {
   const f = fixture();
@@ -140,7 +161,8 @@ for (const hz of [30, 60, 120]) {
   check('player shield release does not inherit an AI warning', !f.p.casting);
 }
 {
-  const f = fixture(); raise(f); f.w.update(DT);
+  const f = fixture(); const cs = raise(f);
+  stepUntil(f, () => cs.aiGuardReleaseAt !== undefined); // a pending warning to hand over
   f.m.life = 1;
   f.m.sheet.setSource('probe-possession', [mod('evasion', 'override', 0), mod('blockChance', 'override', 0)]);
   f.p.pos = vec(f.m.pos.x - 45, f.m.pos.y);
@@ -163,7 +185,7 @@ for (const hz of [30, 60, 120]) {
   function damage(power?: number) {
     const f = fixture();
     if (power !== undefined) f.m.sheet.setSource('probe-power', [mod('bashPower', 'override', power)]);
-    raise(f, 0); const before = f.p.life; f.w.update(DT); return before - f.p.life;
+    raise(f, 0); const before = f.p.life; stepUntil(f, () => !f.m.casting); return before - f.p.life;
   }
   const current = damage(), full = damage(1);
   check('Warden bash damage uses the shared 35% reduction',

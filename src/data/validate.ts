@@ -15,7 +15,7 @@ import { spawnVeinOf } from '../engine/supportbase';
 import {
   CREW_CFG, DEFAULT_RELOAD_SKILL, crewSkillsServed, makeSkillInstance, summonCrewOf, instanceDelivery, impactTreeOverrideErrors, treeAuraOverrideErrors, CONSTRUCT_TREE_KEYS, GROUND_TREE_KEYS,
   supportFits, supportFitsInst, treeNodeOf, validTreeNodes, bandPointsAt, MAX_SKILL_LEVEL,
-  type Delivery, type SkillDef, type SkillInstance, type SupportDef, type ConduitSpec, AOE_SHAPE } from '../engine/skills';
+  type Delivery, type SkillDef, type SkillInstance, type SupportDef, type ConduitSpec, AOE_SHAPE, BASH_CFG } from '../engine/skills';
 import { treeGraph, TREE_LAYOUT_CFG } from '../engine/skilltree'; // THE SKILL-TREE GRAPH — the fold the tree laws read
 import { GRAFT_READ_SITES, rowUnreadBy, supportCarriesRow, type GraftReadRow } from './graftReadSites';
 import { PROCS } from './procs';
@@ -2168,6 +2168,10 @@ export function validateContent(): void {
     if (t !== undefined && (t < 0 || t > 1)) {
       warn(`support ${sup.id}: guardBash.threshold ${t} is outside the bar (0..1)`);
     }
+    const at = sup.guardBash.armTime;
+    if (at !== undefined && !(at >= 0)) {
+      warn(`support ${sup.id}: guardBash.armTime ${at} must be a non-negative clock (seconds)`);
+    }
   }
 
   // THE CONDUIT FABRIC (SkillDef.conduits / SupportDef.conduit): a pump only
@@ -2300,6 +2304,19 @@ export function validateContent(): void {
     }
     if (s.guard?.bashOnBreak && !s.guard.bash) {
       warn(`skill ${s.id}: guard.bashOnBreak without an innate bash — only fires if a graft gem (guardBash) is socketed`);
+    }
+    // THE ARM CLOCK sanity: a negative clock is nonsense, and a timed
+    // stance (maxDuration) that drops itself BEFORE its bash could arm
+    // carries an answer it can never give — say so at boot, not in play.
+    if (s.guard?.bash) {
+      const armTime = s.guard.bash.armTime;
+      if (armTime !== undefined && !(armTime >= 0)) {
+        warn(`skill ${s.id}: guard.bash.armTime ${armTime} must be a non-negative clock (seconds)`);
+      }
+      const clock = armTime ?? BASH_CFG.armTime;
+      if (s.guard.maxDuration !== undefined && clock > s.guard.maxDuration) {
+        warn(`skill ${s.id}: the bash can never arm — its ${clock}s arm clock outlasts the stance's ${s.guard.maxDuration}s maxDuration`);
+      }
     }
     // THE GATHER FAMILY sanity: a completion-gated release needs a
     // completion to reach (maxHold's ceiling or a fillable brim), and an

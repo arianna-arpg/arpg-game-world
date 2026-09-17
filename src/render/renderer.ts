@@ -15,7 +15,7 @@ import { replenishmentActive } from '../engine/replenishment';
 import { clamp, dist, mixHex, type Vec2 } from '../core/math';
 import { RENDER_SCALE_CFG } from './renderScale';
 import { DEFAULT_CURSOR_OPTIONS, drawAimReticle } from '../core/cursor';
-import { bandPointsAt, instanceChannel, instanceChargeCost, instanceDelivery, instanceMeta, instanceMods, metaFaceOf, instanceStrikeTiming, instanceTrigger, instanceUseCharges, poolReadOf, skillContextTags, SKILL_RARITIES, treePointsSpent, treeSpentBranch } from '../engine/skills';
+import { bandPointsAt, guardBashReady, instanceChannel, instanceChargeCost, instanceDelivery, instanceMeta, instanceMods, metaFaceOf, instanceStrikeTiming, instanceTrigger, instanceUseCharges, poolReadOf, skillContextTags, SKILL_RARITIES, treePointsSpent, treeSpentBranch } from '../engine/skills';
 import { ITEM_RARITIES } from '../engine/items';
 import { drawGroundItem } from './groundItems';
 import { TOWN_PORTAL_CFG } from '../data/townportals';
@@ -6124,14 +6124,31 @@ export class Renderer {
         // The faint underline marks the armed side: right of the tic
         // normally, LEFT of it inverted (Hollow Answer — the bar reads
         // "cash what the wall has lost"). No tic = no bash on this stance.
+        // THE ARM METER + THE READIED GOLD (2026-09-16): guardBashReady is
+        // the ONE read the release decides by. The thin bar above the
+        // guard bar is the arm clock walking (the capped-channel idiom —
+        // hidden when the clock is 0), and the moment the bash is truly
+        // READY (clock run AND wall on the armed side) meter, tic and
+        // underline turn gold together; until then the tic sits dim — a
+        // quick release just drops the wall. Enemy guards draw it too.
+        const ready = guardBashReady(cs);
+        const gold = '#ffd700';
+        if ((cs.bashArmAt ?? 0) > 0) {
+          const hy = by2 - 4;
+          ctx.fillStyle = 'rgba(0,0,0,0.7)';
+          ctx.fillRect(bx2 - 1, hy - 1, bw + 2, 4);
+          ctx.fillStyle = ready.ready ? gold : color;
+          ctx.fillRect(bx2, hy, bw * ready.clock, 3);
+        }
         const tx = bx2 + bw * cs.bashAt;
         const x0 = cs.bashLow ? bx2 : tx;
         const x1 = cs.bashLow ? tx : bx2 + bw;
-        ctx.fillStyle = '#ffffff';
-        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = ready.ready ? gold : '#ffffff';
+        ctx.globalAlpha = ready.ready ? 0.8 : 0.35;
         ctx.fillRect(x0, by2 + bh + 1, Math.max(0, x1 - x0), 1);
-        ctx.globalAlpha = 1;
+        ctx.globalAlpha = ready.ready ? 1 : 0.55;
         ctx.fillRect(tx - 1, by2 - 2, 2, bh + 4);
+        ctx.globalAlpha = 1;
       } else if (cs.mode === 'multitude') {
         ctx.strokeStyle = color;
         ctx.lineWidth = 1.5;

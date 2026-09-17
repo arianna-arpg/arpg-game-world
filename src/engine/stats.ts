@@ -1294,6 +1294,11 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  release converts. Lower = the answer comes easier; the guard bar's
    *  tic follows this stat the frame it changes (refreshGuardBash). */
   bashFloor:      { label: 'Shield Bash Arming Line', base: 1, min: 0 },
+  /** THE ARM CLOCK scalar (base 1): × the spec's armTime (default
+   *  BASH_CFG.armTime) = the held seconds before a bash may convert.
+   *  Lower readies sooner; the guard bar's arm meter follows the stat the
+   *  frame it changes (refreshGuardBash → guardBashReady). */
+  bashArmTime:    { label: 'Shield Bash Arming Time', base: 1, min: 0 },
   /** >0: the bash contract MIRRORS (Hollow Answer) — armed at-or-below
    *  1 − the arming line, payload = the shield health the wall has LOST
    *  rather than what it kept. A full wall says nothing; ride it low and

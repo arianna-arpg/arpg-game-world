@@ -2222,7 +2222,14 @@ function useOn(
   actor.aiLastSkill = { id: inst.def.id, at: world.time };
   const recovery = tuning?.behavior?.recovery;
   if (cast && actor.casting?.mode === 'guard' && actor.casting.inst === inst && !world.seatOf(actor)) {
-    actor.casting.aiGuardWindup = tuning?.behavior?.guardRelease?.windup;
+    const gr = tuning?.behavior?.guardRelease;
+    actor.casting.aiGuardWindup = gr?.windup;
+    // THE ARM CLOCK's AI dials (BehaviorSpec.guardRelease): an authored
+    // hold roll replaces the generic channel/guard roll, and waitToArm
+    // false opts the hand OUT of extending that hold to the bash's arm
+    // clock (World.aiHoldOf) — the skittish wall that rarely answers.
+    if (gr?.hold) actor.casting.aiHold = rand(gr.hold[0], gr.hold[1]);
+    if (gr?.waitToArm === false) actor.casting.aiGuardEarly = true;
   }
   if (cast && recovery && !world.seatOf(actor)) {
     const seconds = rand(recovery[0], recovery[1]);

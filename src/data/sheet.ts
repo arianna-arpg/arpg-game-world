@@ -181,7 +181,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       'castMobility', 'moveExplode', 'moveTrail', 'departSplash',
       // Field interplay & oddments
       'conduction', 'suffusion', 'poolCap', 'embedIcd', 'tetherWidth',
-      'bashPower', 'bashFloor', 'bashInvert',
+      'bashPower', 'bashFloor', 'bashInvert', 'bashArmTime',
       'durationAuraCap', 'auraEsRecharge', 'auraEsDelay',
       'reflex', 'thirstless', 'tuneFavor',
       'pourPower_surge', 'pourPower_settle', 'pourPct_surge', 'pourPct_settle', 'pourPrime',
@@ -684,6 +684,7 @@ const STAT_BLURBS: Record<string, string> = {
   bashPower: 'The payload multiplier on your shield bashes.',
   bashFloor: 'Where the bash arms: the guard-bar line at which a release converts to the blow.',
   bashInvert: 'The bash contract mirrors: ride the wall LOW and cash the damage it has taken.',
+  bashArmTime: 'Scales how long a guard must be held before its bash readies. Lower readies sooner.',
   durationAuraCap: 'How many duration-mode auras may burn at once.',
   auraEsRecharge: 'Your auras carry a recharge bonus to allied energy shields.',
   auraEsDelay: 'Your auras shorten allied energy-shield recharge delays.',

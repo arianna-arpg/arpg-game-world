@@ -241,10 +241,18 @@ export interface BehaviorSpec {
    *  Rolled at press, carried by the cast bar, paid at completion; instant
    *  skills pay immediately. Omit for the existing cadence alone. */
   recovery?: [number, number];
-  /** Seconds of visible, planted commitment before an armed AI guard
-   *  releases its bash. Facing locks when the warning begins; pressure
-   *  can still de-arm or break the shield. Omit for immediate release. */
-  guardRelease?: { windup: number };
+  /** THE SHIELD HAND'S RELEASE (autonomous guards only; players are never
+   *  bound). `windup` = seconds of visible, planted commitment before an
+   *  ARMED release — facing locks when the warning begins; pressure can
+   *  still de-arm or break the shield. `hold` = an authored hold roll
+   *  (seconds) in place of the generic channel/guard roll. `waitToArm`
+   *  (default true) = while a bash rides the stance and the wall sits on
+   *  the armed side of its line, the hold EXTENDS to the stance's arm
+   *  clock (GuardBashSpec.armTime × the caster's bashArmTime) so the
+   *  release converts; false drops the wall on the roll regardless — the
+   *  skittish guard that flickers and rarely answers. Omit the whole row
+   *  for immediate release on the generic roll (still clock-honest). */
+  guardRelease?: { windup?: number; hold?: [number, number]; waitToArm?: boolean };
   /** ENGAGEMENT RING: melee slot discipline around one victim.
    *  `front` = how many claim their own approach bearing before later
    *  arrivals wrap to the emptiest arc (default 2); `ring` = bite distance

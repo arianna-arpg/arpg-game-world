@@ -12,6 +12,7 @@ to flank. Stone Sentinels use the same behavior at a slower pace.
 | Half-turn time | 1.50 seconds | 1.85 seconds |
 | Attack alignment half-angle | 0.6 radians | 0.55 radians |
 | Bash warning | 0.55 seconds | 0.65 seconds |
+| Bash arm clock (shared `BASH_CFG.armTime` × `bashArmTime`) | 1.0 second | 1.0 second |
 | Recovery after a completed cast | 0.65–0.90 seconds | 0.70–1.00 seconds |
 
 The Warden's armor changes from 45 to 32, passive block from 15% to 8%, and
@@ -28,9 +29,23 @@ comes from the same player choice pool.
 
 ## Reusable AI commitment
 
-`BehaviorSpec.guardRelease: { windup: seconds }` opts any autonomous guard user
-into a warning before an armed release. The resolved tuning is copied at press;
-no enemy-name checks or duplicate shield skill are involved.
+`BehaviorSpec.guardRelease: { windup?, hold?, waitToArm? }` opts any autonomous
+guard user into a warning before an armed release (`windup`, seconds), an
+authored hold roll in place of the generic one (`hold`, `[min, max]` seconds),
+and the arm-clock policy (`waitToArm`, default true). The resolved tuning is
+copied at press; no enemy-name checks or duplicate shield skill are involved.
+
+THE ARM CLOCK (2026-09-16, `docs/engine/guard-bash.md`): a bash is earned by
+the hold, for monsters exactly as for players. While a bash rides the stance
+and the shield sits on the armed side of its line, `World.aiHoldOf` extends
+the hand's hold to the stance's arm clock (`GuardBashSpec.armTime`, default
+`BASH_CFG.armTime`, × the caster's `bashArmTime` stat), so a Warden with a
+short roll still releases WITH its answer, and the warning begins when the
+clock's remainder equals the windup. A wall battered below its line has no
+answer to wait for and drops on its roll; `waitToArm: false` drops on the roll
+regardless (a bashless early release, never a warning). The overhead arm meter
+draws on enemy guards too, so the moment a monster's bash becomes possible is
+readable before its warning ever begins.
 
 During the final portion of a qualifying guard hold, it displays **Bash incoming!**,
 plants its feet and locks its current facing for the full warning. Target
@@ -51,9 +66,10 @@ the existing body/tell rendering and co-op replication paths. Breaking or
 interrupting the cast removes the source; no independent delayed attack lives
 on after the guard is gone.
 
-An omitted or zero windup retains immediate release. Player-driven shields
-remain immediate, including when possession transfers a pending warning body
-to a player seat. Authored guard pulses and support triggers retain their own
+An omitted or zero windup retains an unwarned release, on the (clock-extended)
+hold. Player-driven shields answer to no AI commitment, including when
+possession transfers a pending warning body to a player seat; the arm clock
+binds them exactly as it binds the monster. Authored guard pulses and support triggers retain their own
 behavior; the warning only commits the autonomous guard release.
 
 ## Doctrine progression
@@ -76,7 +92,11 @@ shield during the fuse and a caster dying before its delayed hit arrives.
 `balance/probe_wardenbalance.ts` exercises the real guard pipeline at 30/60/120
 Hz, fixed warning duration, planted/committed facing, flanking, dynamic arming,
 shield break, stun cancellation, player and possession exemptions, body tells,
-live AI tuning, bash damage, and the exact doctrine-level boundary.
+live AI tuning, bash damage, and the exact doctrine-level boundary. Its rigs
+walk the arm clock before every warning; the clock's own contract (early vs
+held player releases, the stat and per-skill dials, the AI's wait-to-arm,
+early and authored-hold policies, the wire row) lives in
+`balance/probe_bashclock.ts`.
 
 Run `npm run check`, `npm run sim -- run --suite smoke`, and `npm run probe`.
 Hands-on focus: one Warden versus overlapping pairs, frontal shield pressure

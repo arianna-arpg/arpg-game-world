@@ -60,7 +60,7 @@ import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, ob
 import { alertScale, BEHAVIOR_CFG, BEHAVIOR_STATS, normalizeBrain, type ArenaRadius, type CommandState } from './brain';
 import { aiKitInstance, runAIActions } from './aiActions';
 import {
-  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceBirth, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, rollSkillRarityWeighted, socketSpec, treeNodeOf, treeNodeRefusal, treePointsSpent, validTreeNodes, instanceChannel, bandPointsAt, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
+  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, guardBashReady, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceBirth, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, rollSkillRarityWeighted, socketSpec, treeNodeOf, treeNodeRefusal, treePointsSpent, validTreeNodes, instanceChannel, bandPointsAt, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
   CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE, AOE_BAND_DEPTH, bandSwingGeo,
   skillContextTags, skillCooldownSeconds, skillMaxLevel, SKILL_RARITIES, essenceTierForLevel, summonCrewOf, supportFitsInst,
   type SkillRarity,
@@ -40716,7 +40716,7 @@ export class World {
    */
   private refreshGuardBash(a: Actor, cs: CastingState): void {
     const bash = guardBashSpec(cs.inst);
-    if (!bash) { cs.bashAt = undefined; cs.bashLow = undefined; return; }
+    if (!bash) { cs.bashAt = undefined; cs.bashLow = undefined; cs.bashArmAt = undefined; return; }
     const tags = skillContextTags(cs.inst.def, grantedTags(cs.inst));
     const extra = instanceMods(cs.inst);
     const floor = clamp(
@@ -40725,6 +40725,33 @@ export class World {
     const inverted = a.sheet.get('bashInvert', tags, extra) > 0;
     cs.bashAt = inverted ? 1 - floor : floor;
     cs.bashLow = inverted || undefined;
+    // THE ARM CLOCK: held seconds before the release may convert — the
+    // spec's armTime (default BASH_CFG.armTime) × the bashArmTime stat,
+    // live like the line (a buff landing mid-stance moves the clock the
+    // same frame). guardBashReady reads it beside the line for the
+    // release, the HUD's arm meter and the AI's hold alike.
+    cs.bashArmAt = Math.max(0,
+      (bash.armTime ?? BASH_CFG.armTime) * a.sheet.get('bashArmTime', tags, extra));
+  }
+
+  /**
+   * THE SHIELD HAND'S HOLD — the AI's effective hold on a held cast. The
+   * rolled (or authored, BehaviorSpec.guardRelease.hold) aiHold stands as
+   * is, except for a GUARD whose bash rides the stance with the wall on the
+   * armed side of its line: there the hold EXTENDS to the arm clock
+   * (CastingState.bashArmAt) so the release converts instead of dropping
+   * a mute wall — the mind reads the same readiness the player's meter
+   * shows. `guardRelease.waitToArm: false` (→ aiGuardEarly) keeps the raw
+   * roll (the skittish guard), and a wall already battered below its line
+   * has no answer to wait for, so pressure de-arms the wait the same tick.
+   * ONE fold for the held/release tick and the warning's remaining-hold
+   * read; Infinity while no hold has been rolled.
+   */
+  private aiHoldOf(cs: CastingState): number {
+    const hold = cs.aiHold ?? Infinity;
+    if (cs.mode !== 'guard' || cs.aiGuardEarly || cs.bashAt === undefined) return hold;
+    const armAt = cs.bashArmAt ?? 0;
+    return armAt > 0 && guardBashReady(cs).line ? Math.max(hold, armAt) : hold;
   }
 
   /**
@@ -54986,7 +55013,10 @@ export class World {
       // Charge bars release at FULL CHARGE at the latest: elapsed CAPS at
       // total, so an aiHold rolled above it would otherwise hold the cast
       // open forever (wedged monsters, totems, and echo riders mid-charge).
-      const hold = cs.mode === 'charge' ? Math.min(cs.aiHold, cs.total) : cs.aiHold;
+      // A GUARD's hold reads through aiHoldOf — THE SHIELD HAND'S HOLD
+      // extends the roll to the bash's arm clock (the mind waits for the
+      // answer the player's meter shows) unless the brain opted out.
+      const hold = cs.mode === 'charge' ? Math.min(cs.aiHold, cs.total) : this.aiHoldOf(cs);
       cs.held = (cs.mode === 'charge' ? cs.elapsed : cs.channelTime ?? 0) < hold;
       // A WALLED firing line loses the grip (occlusion): grace, then release
       // — the ray doesn't gnaw stone while the prey walks away. The wall is
@@ -55144,11 +55174,16 @@ export class World {
         // The guard stays damageable: de-arming it during this beat denies
         // the bash, and breaking/stunning it clears this state with the cast.
         if (!this.seatOf(a) && !a.dead && (cs.aiGuardWindup ?? 0) > 0) {
-          const holdLeft = Math.min(cs.aiHold ?? Infinity, guardHoldTime ?? Infinity) - (cs.channelTime ?? 0);
+          const holdLeft = Math.min(this.aiHoldOf(cs), guardHoldTime ?? Infinity) - (cs.channelTime ?? 0);
           if ((!cs.held || holdLeft <= cs.aiGuardWindup!)
             && cs.aiGuardReleaseAt === undefined && cs.bashAt !== undefined) {
-            const frac = (cs.shield ?? 0) / (cs.maxShield || 1);
-            if (cs.bashLow ? frac <= cs.bashAt : frac >= cs.bashAt) {
+            // The warning is owed only to a release that WILL convert: the
+            // wall on the armed side of its line AND the arm clock run by
+            // the end of the windup (guardBashReady's own terms — an early-
+            // policy drop before the clock owes nothing, like a battered
+            // wall below its line).
+            if (guardBashReady(cs).line
+              && (cs.channelTime ?? 0) + cs.aiGuardWindup! + 1e-6 >= (cs.bashArmAt ?? 0)) {
               cs.aiGuardReleaseAt = this.time + cs.aiGuardWindup!;
               cs.aiGuardFacing = a.facing;
               a.aiPlantUntil = Math.max(a.aiPlantUntil, cs.aiGuardReleaseAt);
@@ -55172,10 +55207,12 @@ export class World {
           if (a.shellGuard?.fromAura === def.id) a.shellGuard = undefined;
           if (def.cooldown > 0) this.stampSkillCooldown(a, cs.inst, def.cooldown);
           if (bash && !a.dead && cs.bashAt !== undefined) {
-            const frac = shieldLeft / maxShield;
-            const armed = cs.bashLow ? frac <= cs.bashAt : frac >= cs.bashAt;
+            // THE READIED READ: the arm clock has run AND the wall sits on
+            // the armed side of its line — exactly the fold the meter and
+            // the tic drew gold (guardBashReady). A release before the
+            // clock is the plain drop above: cooldown stamped, no blow.
             const payload = cs.bashLow ? maxShield - shieldLeft : shieldLeft;
-            if (armed) this.guardBash(a, cs.inst, bash, payload);
+            if (guardBashReady(cs).ready) this.guardBash(a, cs.inst, bash, payload);
           }
         }
         return;

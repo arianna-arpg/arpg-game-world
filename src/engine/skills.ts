@@ -596,6 +596,28 @@ export function guardBashSpec(inst: SkillInstance): GuardBashSpec | undefined {
   return inst.def.guard?.bash ?? socketSpec(inst, 'guardBash');
 }
 
+/** THE READIED READ — one fold for the release check, the HUD's arm meter
+ *  + tic, the AI's hold and the probes: a bash is READY when THE ARM CLOCK
+ *  has run (held seconds ≥ CastingState.bashArmAt) AND the shield sits on
+ *  the ARMED side of the arming line (bashAt / bashLow — the inverted
+ *  contract included). Structural input so the co-op client's cast stub
+ *  qualifies: drawn == tested on both sides of the wire. `clock` is the
+ *  arm clock's fraction (1 when the clock is 0 or absent); `line` is the
+ *  bar test alone (false while no bash rides the stance). */
+export function guardBashReady(cs: {
+  channelTime?: number; shield?: number; maxShield?: number;
+  bashAt?: number; bashLow?: boolean; bashArmAt?: number;
+}): { clock: number; armed: boolean; line: boolean; ready: boolean } {
+  const armAt = cs.bashArmAt ?? 0;
+  const held = cs.channelTime ?? 0;
+  const clock = armAt > 0 ? Math.min(1, held / armAt) : 1;
+  const armed = held + 1e-6 >= armAt;
+  const frac = Math.max(0, cs.shield ?? 0) / (cs.maxShield || 1);
+  const line = cs.bashAt !== undefined
+    && (cs.bashLow ? frac <= cs.bashAt : frac >= cs.bashAt);
+  return { clock, armed, line, ready: armed && line };
+}
+
 /** Every charge tap riding an instance: the skill's own + socket grafts. */
 export function instanceChargeGain(inst: SkillInstance): ChargeGainSpec[] {
   const out = [...(inst.def.chargeGain ?? [])];
@@ -2839,8 +2861,14 @@ export interface SelfStackSpec {
  * the caster's bashFloor stat — and the bashInvert stat (>0) MIRRORS the
  * whole contract: armed at-or-below the line, payload = what the wall has
  * LOST (see World.refreshGuardBash — the HUD tic and the release check
- * share that one resolver). A guard without an innate bash can be taught
- * one by a socketed graft (SupportDef.guardBash, read via guardBashSpec).
+ * share that one resolver). THE ARM CLOCK (2026-09-16) is the same shape
+ * on the time axis: `armTime` (per-skill) falls back to BASH_CFG.armTime,
+ * scaled by the caster's bashArmTime stat, and a release before the held
+ * seconds reach it is a plain drop — cooldown, no blow — so the bash is
+ * earned by the hold rather than quick-fired (guardBashReady is the ONE
+ * readied read: clock AND line). A guard without an innate bash can be
+ * taught one by a socketed graft (SupportDef.guardBash, read via
+ * guardBashSpec); the taught answer wears the same clock.
  */
 export interface GuardBashSpec {
   /** Payload multiplier on the qualifying shield health. */
@@ -2857,6 +2885,11 @@ export interface GuardBashSpec {
    *  (default BASH_CFG.releaseFloor). Always × the caster's bashFloor stat,
    *  mirrored by bashInvert — a support that moves EITHER moves the tic. */
   threshold?: number;
+  /** THE ARM CLOCK override: held seconds before a release may convert
+   *  (default BASH_CFG.armTime). Always × the caster's bashArmTime stat.
+   *  Released sooner, the stance simply drops and starts its cooldown —
+   *  the bash is EARNED by the hold, never quick-fired. 0 = instant. */
+  armTime?: number;
 }
 
 /**
@@ -3347,6 +3380,17 @@ export const BASH_CFG = {
   /** Bar fraction at/above which a release converts into the bash
    *  (inverted stances arm at/below the mirrored line, 1 − floor). */
   releaseFloor: 0.25,
+  /** THE ARM CLOCK (2026-09-16): held seconds a bash-bearing stance must
+   *  stand before its release converts — the quick-fire refusal. Every
+   *  bash shares it unless its spec overrides `armTime`; the live clock is
+   *  always this (or the override) × the caster's bashArmTime stat,
+   *  resolved by World.refreshGuardBash into CastingState.bashArmAt and
+   *  read through guardBashReady — the release, the HUD's arm meter and
+   *  the AI's hold all fold through that ONE read. The answering family
+   *  beyond the stance (charge arrival, leap landing, construct death,
+   *  shell drop) has no hold to clock and pays as before; a BREAK is not
+   *  a release, so bashOnBreak bursts stay instant. */
+  armTime: 1.0,
   /** THE POOLLESS STAND-IN (2026-07-22 — the answering charge/leap):
    *  guard-tagged workings with NO shield pool of their own (a charge's
    *  arrival, a leap's landing) pay the bash from this stand-in pool ×
