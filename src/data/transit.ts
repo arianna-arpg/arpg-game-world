@@ -259,3 +259,20 @@ registerTransit({ kind: 'npc:questgiver', dwell: 0.9, ring: { radius: 24, width:
 registerTransit({ kind: 'npc:caravanner', dwell: 0.9, ring: { radius: 24, width: 3, color: '#d8b87a' } });
 registerTransit({ kind: 'npc:bonewright', dwell: 1.0, ring: { radius: 24, width: 3, color: '#b8a2e8' } });
 registerTransit({ kind: 'npc:captain', dwell: 0.8, ring: { radius: 24, width: 3, color: '#c8b048' } });
+
+// THE REVIVE RINGS (2026-09-16, her ask): the co-op knee and the beast's
+// tending are dwells like any station's — a base ring where the reach is,
+// a fill as the linger builds. `radius` is the reach the gate reads (the
+// old REVIVE_RADIUS), `dwell` the seconds it takes (the old REVIVE_DWELL);
+// World.reviveTargetsView draws == updateDownedSeats/updateDownedCompanions dwell.
+registerTransit({ kind: 'revive', dwell: 1.0, radius: 110, ring: { radius: 30, width: 3, color: '#a8d8a0' } });
+registerTransit({ kind: 'revive:companion', dwell: 1.0, radius: 110, ring: { radius: 26, width: 3, color: '#a8d8a0' } });
+// THE LITTER'S CLOCK: a downed litter beast's passive revival counts down on
+// its own outer ring wherever it lies (the bond's reviveSeconds is the clock;
+// this row only styles it — `dwell` here documents the tree's 20).
+registerTransit({ kind: 'revive:litter', dwell: 20, ring: { radius: 32, width: 2, color: '#7fa878', alpha: 0.6 } });
+// The lingers that drew no fill: the Hunt's tracks (the surge's dwellSeconds
+// is the clock — data/packages hunt.ts; `dwell` mirrors it) and a prior run's
+// corpse (the reclaim's own clock and reach — the old CORPSE_DWELL/RADIUS).
+registerTransit({ kind: 'hunt_tracks', dwell: 0.9, ring: { radius: 46, width: 3, color: '#d8a83a' } });
+registerTransit({ kind: 'corpse_reclaim', dwell: 1.0, radius: 110, ring: { radius: 30, width: 3, color: '#d8b048' } });

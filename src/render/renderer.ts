@@ -1222,7 +1222,9 @@ export class Renderer {
     ctx.strokeStyle = '#d8a83a';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(fp.pos.x, fp.pos.y, 46, 0, Math.PI * 2);
+    // The base ring at the 'hunt_tracks' transit row's radius, so the fill
+    // (dwellRingsView → huntDwellView) lands exactly on it (drawn == dwelt).
+    ctx.arc(fp.pos.x, fp.pos.y, transitRing('hunt_tracks').radius, 0, Math.PI * 2);
     ctx.stroke();
     ctx.globalAlpha = 0.85;
     ctx.fillStyle = '#e8c87a';
@@ -4293,6 +4295,8 @@ export class Renderer {
       { h: world.trackerHint(), ink: '#c8e0a8' },
       { h: world.extractionHint(), ink: '#c8f0d4' },
       { h: world.boroughHint(), ink: '#f0dfae' },
+      // THE REVIVE RINGS' words: the nearest downed body a hand may tend.
+      { h: world.reviveHint(), ink: '#a8d8a0' },
     ];
     const { ctx } = this;
     for (const { h, ink } of hints) {
@@ -6408,8 +6412,10 @@ export class Renderer {
     for (const c of world.playerCorpses) {
       ctx.globalAlpha = c.reclaimed ? 0.25 : 1;
       if (!c.reclaimed) {
+        // The wash at the 'corpse_reclaim' transit row's radius, so the
+        // reclaim's fill (dwellRingsView → corpseTargetsView) rims it exactly.
         ctx.fillStyle = 'rgba(216,176,72,0.10)';
-        ctx.beginPath(); ctx.arc(c.pos.x, c.pos.y, 30, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(c.pos.x, c.pos.y, transitRing('corpse_reclaim').radius, 0, Math.PI * 2); ctx.fill();
       }
       ctx.fillStyle = '#3a3340';
       ctx.beginPath(); ctx.ellipse(c.pos.x, c.pos.y + 4, 16, 9, 0, 0, Math.PI * 2); ctx.fill();

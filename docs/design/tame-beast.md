@@ -49,7 +49,11 @@ Capacity counts held bonds, including downed beasts. The first pet of a litter
 therefore leaves Tame Beast available; only filling capacity converts the slot
 to Whistle. Passive revival prevents a downed first pet from depending on an
 unavailable Whistle. Revival countdowns survive saving without offline advance.
-The native nearby-ally revival remains available as well.
+The native nearby-ally revival remains available as well. Both revivals are
+visible (2026-09-16): a downed beast wears the dwell tell, a base ring while
+the keeper stands in reach that fills as the idle tending builds beside a
+`Linger to revive` line, and a litter beast also wears an outer ring counting
+its passive revival down. See THE REVIVE RINGS in `docs/engine/vendors.md`.
 
 Learned Blows snapshots the owner's invested skill and executes through the
 normal damage pipeline using the beast's stats. It accepts ordinary attack

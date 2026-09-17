@@ -302,6 +302,13 @@ export class CompanionBonds {
     return companionStanceDef(this.states.get(beast)?.stanceId ?? '').lunges;
   }
 
+  /** The passive revival clock a downed beast counts down on
+   *  (CompanionBondSpec.reviveSeconds), or undefined when the bond has none —
+   *  THE LITTER'S CLOCK ring (World.dwellRingsView) reads it. */
+  reviveClock(beast: Actor): number | undefined {
+    return this.states.get(beast)?.spec.reviveSeconds;
+  }
+
   /** THE SHIFT SHOWS: each living beast of the bond speaks the stance and
    *  casts the tree's stance art (CompanionBondSpec.stanceArt) at its own
    *  feet — the hook a tree node hangs on a behavioral change. Returns the

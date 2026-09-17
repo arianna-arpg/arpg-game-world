@@ -346,3 +346,27 @@ family rows `station` / `npc` as the fallback), so a ring's radius and
 color are data; the renderer's `drawDwellTells` paints the base ring from
 the row and `dwellRingsView` feeds the fill through the ordinary ring pass.
 The hint pass keeps only its words. Probe: `probe_shimmy` B1–B8.
+
+### THE REVIVE RINGS and the lingers that drew no fill (2026-09-16)
+
+Her ask: a revive gave no sign of reach or progress, so a player could not
+tell whether the tending had begun. `World.reviveTargetsView` adds every
+downed body a local hand may tend — a co-op ally awaiting the knee, a bonded
+beast awaiting its keeper — to `dwellTargetsView`, so the base ring stands at
+the body while a local seat is in the reach the gate reads and the fill is the
+gate's own clock (`updateDownedSeats`' per-ally clock, `updateDownedCompanions`'
+tending clock). Reach, discipline and clock are transit rows now (`revive`,
+`revive:companion`: radius 110, dwell 1.0, the old REVIVE constants), so
+drawn == dwelt by construction. A ring that stands but never fills says
+"hold still" (the dwell law builds only on an idle seat), and `reviveHint`
+puts the words beside it through the hint pass. The companion tending now
+reads the same `dwellReachable` discipline as the knee, so a wall blocks both.
+`revive:litter` draws a downed litter beast's passive countdown on an outer
+ring wherever it lies (the bond's `reviveSeconds` is the clock;
+`CompanionBonds.reviveClock` is the read). `corpse_reclaim` and `hunt_tracks`
+give the prior-run corpse and the Hunt's tracks the fill they lacked
+(`corpseTargetsView`, `huntDwellView`), with their base marks drawn at the
+rows' radii. The town portal, the borough arming, Mu's vessels, the harvest
+rite and the amalgam pick already showed theirs; the brittle clock is a
+hazard with its own crack, not a linger. Client shells draw the base ring but
+no fill for the revives (the clocks are host state). Probe: `probe_revivering`.

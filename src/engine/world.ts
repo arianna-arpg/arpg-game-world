@@ -5182,12 +5182,15 @@ export class World {
       if (!seat.actor.downed) { if (seat.reviveDwellBy.size) seat.reviveDwellBy.clear(); continue; }
       for (const ally of this.seats) {
         if (ally === seat || ally.actor.dead || ally.actor.downed) continue;
-        const close = dist(ally.actor.pos, seat.actor.pos) <= REVIVE_RADIUS
-          && this.dwellReachable(ally.actor.pos, seat.actor.pos, DWELL_CFG.reach, this.storyPair(ally.actor, seat.actor));
+        // THE REVIVE RINGS: reach, discipline and clock are the 'revive'
+        // transit row's (data/transit.ts) — the same row reviveTargetsView
+        // draws the ring from, so drawn == dwelt by construction.
+        const close = dist(ally.actor.pos, seat.actor.pos) <= transitRadius('revive', REVIVE_RADIUS)
+          && this.dwellReachable(ally.actor.pos, seat.actor.pos, transitReach('revive'), this.storyPair(ally.actor, seat.actor));
         if (close && this.seatIdle(ally)) {
           const t = (seat.reviveDwellBy.get(ally.id) ?? 0) + dt;
           seat.reviveDwellBy.set(ally.id, t);
-          if (t >= REVIVE_DWELL) { this.reviveSeat(seat); break; }
+          if (t >= transitDwell('revive', REVIVE_DWELL)) { this.reviveSeat(seat); break; }
         } else {
           seat.reviveDwellBy.delete(ally.id); // moved off / acted → progress lost
         }
@@ -28511,13 +28514,15 @@ export class World {
     if (this.player.dead || this.player.downed) return;
     for (const c of this.playerCorpses) {
       if (c.reclaimed) { c.dwell = 0; continue; }
-      if (dist(c.pos, this.player.pos) > CORPSE_RADIUS || !this.playerIdle() || !this.canReclaim(c)
-        || !this.dwellReachable(this.player.pos, c.pos, DWELL_CFG.reach, this.storyPair(this.player))) {
+      // The 'corpse_reclaim' transit row is the reach, discipline and clock
+      // (corpseTargetsView draws the ring from the same row — drawn == dwelt).
+      if (dist(c.pos, this.player.pos) > transitRadius('corpse_reclaim', CORPSE_RADIUS) || !this.playerIdle() || !this.canReclaim(c)
+        || !this.dwellReachable(this.player.pos, c.pos, transitReach('corpse_reclaim'), this.storyPair(this.player))) {
         c.dwell = 0;
         continue;
       }
       c.dwell += dt;
-      if (c.dwell >= CORPSE_DWELL) this.reclaimCorpse(c);
+      if (c.dwell >= transitDwell('corpse_reclaim', CORPSE_DWELL)) this.reclaimCorpse(c);
     }
   }
 
@@ -30136,10 +30141,16 @@ export class World {
   private updateDownedCompanions(dt: number): void {
     for (const a of this.actors) {
       if (!a.companion || a.dead || !a.downed || a.companionDormant) continue;
+      // THE REVIVE RINGS: the 'revive:companion' transit row is the reach,
+      // the discipline (the ally revive's own dwellReachable — a wall between
+      // keeper and beast blocks the tending exactly as it blocks the knee)
+      // and the clock; reviveTargetsView draws the ring from the same row.
       const tended = this.seats.some(s => !s.actor.dead && !s.actor.downed
-        && s.actor.tier === a.tier && dist(s.actor.pos, a.pos) <= REVIVE_RADIUS && this.seatIdle(s));
+        && dist(s.actor.pos, a.pos) <= transitRadius('revive:companion', REVIVE_RADIUS)
+        && this.dwellReachable(s.actor.pos, a.pos, transitReach('revive:companion'), this.storyPair(s.actor, a))
+        && this.seatIdle(s));
       a.companionReviveDwell = tended ? a.companionReviveDwell + dt : 0;
-      if (a.companionReviveDwell >= REVIVE_DWELL) this.reviveCompanion(a);
+      if (a.companionReviveDwell >= transitDwell('revive:companion', REVIVE_DWELL)) this.reviveCompanion(a);
     }
   }
 
@@ -49691,6 +49702,79 @@ export class World {
     };
   }
 
+  /** THE REVIVE RINGS (2026-09-16, her ask): every downed body a local hand
+   *  may tend — a co-op ally awaiting the knee, a bonded beast awaiting its
+   *  keeper — as a dwell target like any station's: the base ring stands
+   *  while a local seat is in the reach the gate reads (the transit row's
+   *  radius), and the fill is the SAME accumulator the gate fires on
+   *  (updateDownedSeats' per-ally clock, updateDownedCompanions' tending
+   *  clock; drawn == dwelt). A ring that stands but never fills says "hold
+   *  still": the dwell law builds only on an IDLE seat. */
+  reviveTargetsView(): { pos: Vec2; frac: number; kind: string; name: string }[] {
+    const out: { pos: Vec2; frac: number; kind: string; name: string }[] = [];
+    const seats = this.localHumanSeats().filter(s => !s.actor.dead && !s.actor.downed);
+    if (!seats.length) return out;
+    const inReach = (target: Actor, kind: string): boolean => seats.some(s =>
+      dist(s.actor.pos, target.pos) <= transitRadius(kind, REVIVE_RADIUS)
+      && this.dwellReachable(s.actor.pos, target.pos, transitReach(kind), this.storyPair(s.actor, target)));
+    for (const seat of this.seats) {
+      const a = seat.actor;
+      if (a.dead || !a.downed || !inReach(a, 'revive')) continue;
+      let built = 0;
+      for (const t of seat.reviveDwellBy.values()) built = Math.max(built, t);
+      out.push({ pos: vec(a.pos.x, a.pos.y), frac: clamp(built / transitDwell('revive', REVIVE_DWELL), 0, 1), kind: 'revive', name: a.name });
+    }
+    for (const a of this.actors) {
+      if (!a.companion || a.dead || !a.downed || a.companionDormant || !inReach(a, 'revive:companion')) continue;
+      out.push({
+        pos: vec(a.pos.x, a.pos.y), kind: 'revive:companion', name: a.name,
+        frac: clamp(a.companionReviveDwell / transitDwell('revive:companion', REVIVE_DWELL), 0, 1),
+      });
+    }
+    return out;
+  }
+
+  /** A prior run's corpse the local hero stands in reclaim reach of — the
+   *  reclaim's dwell target (drawn == dwelt: updatePlayerCorpses' own clock,
+   *  the 'corpse_reclaim' transit row's reach and discipline). */
+  corpseTargetsView(): { pos: Vec2; frac: number; kind: string }[] {
+    const out: { pos: Vec2; frac: number; kind: string }[] = [];
+    if (this.player.dead || this.player.downed) return out;
+    for (const c of this.playerCorpses) {
+      if (c.reclaimed || !this.canReclaim(c)) continue;
+      if (dist(c.pos, this.player.pos) > transitRadius('corpse_reclaim', CORPSE_RADIUS)
+        || !this.dwellReachable(this.player.pos, c.pos, transitReach('corpse_reclaim'), this.storyPair(this.player))) continue;
+      out.push({ pos: vec(c.pos.x, c.pos.y), frac: clamp(c.dwell / transitDwell('corpse_reclaim', CORPSE_DWELL), 0, 1), kind: 'corpse_reclaim' });
+    }
+    return out;
+  }
+
+  /** The Hunt's tracks: the trail-reading linger as a ring (updateHunt's
+   *  own clock over the surge's dwellSeconds), or null when no trail is
+   *  being read. */
+  huntDwellView(): { pos: Vec2; frac: number; kind: string } | null {
+    const hf = this.sim.huntField;
+    if (!hf || !this.huntFootprint || this.huntFootprintDwell <= 0) return null;
+    return {
+      pos: vec(this.huntFootprint.pos.x, this.huntFootprint.pos.y), kind: 'hunt_tracks',
+      frac: clamp(this.huntFootprintDwell / Math.max(0.01, hf.surge().dwellSeconds), 0, 1),
+    };
+  }
+
+  /** The revive's named invitation (the hint pass's words beside the ring):
+   *  the nearest downed body a local hand may tend, or null. */
+  reviveHint(): { pos: Vec2; text: string } | null {
+    const me = this.localSeat.actor;
+    if (me.dead || me.downed) return null;
+    let best: { pos: Vec2; text: string } | null = null;
+    let bd = Infinity;
+    for (const t of this.reviveTargetsView()) {
+      const d = dist(me.pos, t.pos);
+      if (d < bd) { bd = d; best = { pos: t.pos, text: `Linger to revive ${t.name}.` }; }
+    }
+    return best;
+  }
+
   /** THE DWELL TELL (2026-09-11, her ask): every station and interactable
    *  NPC a local hand stands in dwell range of, with how far its linger has
    *  built — ONE read for the renderer's base-ring pass (the pulsing
@@ -49745,6 +49829,12 @@ export class World {
     }
     const post = this.mercOutpost;
     if (post && !post.captain.dead && this.mercParley().near) put(post.captain.pos, this.mercDwell / MERC_CFG.outpost.dwellSec, 'npc:captain');
+    // THE REVIVE RINGS + the reclaim: downed bodies and a prior run's corpse
+    // are dwell targets like any station's — the base ring where the reach
+    // is, the fill off the gate's own clock (reviveTargetsView /
+    // corpseTargetsView read exactly what the ticks fire on).
+    for (const r of this.reviveTargetsView()) put(r.pos, r.frac, r.kind);
+    for (const c of this.corpseTargetsView()) put(c.pos, c.frac, c.kind);
     return out;
   }
 
@@ -49768,6 +49858,18 @@ export class World {
     add(this.wardDwellView());
     add(this.extractionDwellView());
     add(this.boroughDwellView());
+    // The Hunt's tracks: the trail-reading linger, finally with its fill.
+    add(this.huntDwellView());
+    // THE LITTER'S CLOCK (Growing Litter): a downed beast's passive revival
+    // counts down on its own outer ring wherever it lies — no hand needed;
+    // the bond's reviveSeconds is the clock, the 'revive:litter' row only
+    // styles it. The tending fill (a dwell target above) rides inside it.
+    for (const a of this.actors) {
+      if (!a.companion || a.dead || !a.downed || a.companionDormant || a.companionReviveRemaining === undefined) continue;
+      const total = this.companionBonds.reviveClock(a);
+      if (!total) continue;
+      add({ pos: vec(a.pos.x, a.pos.y), frac: clamp(1 - a.companionReviveRemaining / total, 0, 1), kind: 'revive:litter' });
+    }
     // The survey stones' charge rings — one per unfinished stone with any
     // banked charge (the 'beacon' transit row styles them; full stones are
     // lit monuments and need no gauge).
