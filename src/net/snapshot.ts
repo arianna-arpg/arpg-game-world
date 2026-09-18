@@ -124,6 +124,9 @@ export interface ActorW {
    *  worn over the body; the client bakes them identically. */
   ep?: PartSpec[];
   rarity?: string;
+  magicPack?: import('../engine/magicPacks').MagicPackState;
+  magicPackFrom?: number;
+  magicPackPower?: number;
   defId?: string;
   ss?: Actor['summonShell'];
   sg?: Actor['shellGuard'];
@@ -676,6 +679,9 @@ function actorToW(a: Actor, world: World): ActorW {
   if (a.look) w.lk = a.look;
   if (a.extraParts?.length) w.ep = a.extraParts;
   if (a.rarity) w.rarity = a.rarity;
+  if (a.magicPack) w.magicPack = { ...a.magicPack };
+  if (a.magicPackFrom && !a.magicPackFrom.dead) w.magicPackFrom = a.magicPackFrom.id;
+  if (a.magicPackPower) w.magicPackPower = a.magicPackPower;
   if (a.defId) w.defId = a.defId;
   if (a.summonShell) { w.ss = { ...a.summonShell }; if (a.shellGuard) w.sg = { ...a.shellGuard }; }
   if (a.faction) w.faction = a.faction;
@@ -1262,6 +1268,8 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
       }
     }
     a.rarity = aw.rarity as Actor['rarity'];
+    a.magicPack = aw.magicPack ? { ...aw.magicPack } : undefined;
+    a.magicPackPower = aw.magicPackPower ?? 0;
     a.defId = aw.defId;
     a.faction = aw.faction;
     // Host-computed boss-bar row (cleared when absent — pooled actors never
@@ -1343,6 +1351,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     const held = aw.bl !== undefined;
     a.bondHeld = held;
     a.bondFrom = held ? POOL.get(aw.bl!) : undefined;
+    a.magicPackFrom = aw.magicPackFrom !== undefined ? POOL.get(aw.magicPackFrom) : undefined;
   }
   world.actors = actors;
 

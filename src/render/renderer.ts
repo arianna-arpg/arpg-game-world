@@ -74,6 +74,8 @@ import { Z_LADDER } from '../ui/zorder';
 import { padDisplay } from '../core/gamepad';
 import { collectActiveFx, collectFalterK, type ActiveFx } from './screenFx';
 import { RARITY_DEFS } from '../engine/rarity';
+import { magicPackLinks, magicPackHint } from '../engine/magicPacks';
+import { MAGIC_PACK_CFG, MAGIC_PACKS } from '../data/magicPacks';
 import { FACTIONS, MONSTERS, type MonsterDef } from '../data/monsters';
 import { APPARITION_ROLE, MU_CFG } from '../data/mu';
 import { PACK_CFG, packLinks, type LinkStyleOf, type PackLink } from '../engine/pack';
@@ -943,8 +945,8 @@ export class Renderer {
     const { ctx } = this;
     const def = MONSTERS[best.defId!];
     const tint = (best.rarity ? RARITY_DEFS[best.rarity].ring : '') || '#e8dcc8';
-    const sub = best.rarity && RARITY_DEFS[best.rarity].label
-      ? `${RARITY_DEFS[best.rarity].label} ${def.name}` : def.name;
+    const sub = magicPackHint(best) ?? (best.rarity && RARITY_DEFS[best.rarity].label
+      ? `${RARITY_DEFS[best.rarity].label} ${def.name}` : def.name);
     ctx.save();
     ctx.textAlign = 'center';
     ctx.globalAlpha = bestReveal;
@@ -5562,6 +5564,18 @@ export class Renderer {
         ctx.beginPath();
         ctx.arc(0, 0, a.radius + 4, 0, Math.PI * 2);
         ctx.stroke();
+        // The magicPack combat fold owns these pips, including co-op snapshots.
+        // A broken bond loses its pip; a Vendetta survivor gains up to three.
+        if (a.magicPack && a.magicPackPower > 0) {
+          const tell = MAGIC_PACK_CFG.tell;
+          ctx.fillStyle = MAGIC_PACKS[a.magicPack.mechanic]?.color ?? ring;
+          for (let i = 0; i < a.magicPackPower; i++) {
+            const angle = -Math.PI / 2 + (i - (a.magicPackPower - 1) / 2) * tell.angleStep;
+            ctx.beginPath();
+            ctx.arc(Math.cos(angle) * (a.radius + tell.rimOffset), Math.sin(angle) * (a.radius + tell.rimOffset), tell.pipRadius, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
         if (a.rarity === 'crowned') {
           ctx.shadowBlur = 4;
           ctx.fillStyle = ring;
@@ -6783,6 +6797,7 @@ export class Renderer {
    *  view-bin-quantized order that does not reshuffle as the camera pans. */
   private drawPackLinks(world: World): void {
     const links = packLinks(world.actors, PACK_LINK_STYLE_OF, this.cam, this.packLinkBuf);
+    links.push(...magicPackLinks(world.actors, this.cam, PACK_CFG.links.max - links.length));
     if (!links.length) return;
     const { ctx } = this;
     const cfg = PACK_CFG.links;

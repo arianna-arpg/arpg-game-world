@@ -188,6 +188,12 @@ shared query scopes, relays and tradeoffs; verify with `passivespecializations`
 and the passive UI/editor harness (1,372 expansion nodes round-trip).
 
 ## Commands
+Magic rarity's ambient encounters live in `data/magicPacks.ts` and
+`engine/magicPacks.ts`: shared recipes, level-gated size bands, attributable
+cohort effects, live visual links and zone/save/co-op identity. Rares remain
+individual affixed leaders. Contract: `docs/design/magic-packs.md`; verify
+with `npm run probe -- magicpacks` plus the existing pack/packtempo probes.
+
 Physical movement tethers live in `engine/movementTether.ts`, with the Sylvan,
 undead and demon debut rows in `data/tetheredMonsters.ts`. The configurable
 movementTether cord is separate from AI leashes and damaging pack links; see

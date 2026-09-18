@@ -116,6 +116,7 @@ export function resolveResumeSpawn(
 
 /** One remembered enemy (mirrors the engine's ZoneEnemyMemo — plain JSON). */
 export interface SavedEnemyMemo {
+  magicPack?: import('../engine/magicPacks').MagicPackState;
   movementTether?: import('../engine/movementTether').MovementTetherState;
   defId: string;
   level: number;

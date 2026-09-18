@@ -62,6 +62,7 @@ export type ProbeRow =
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_passivespecializations.ts', status: 'green', tier: 'fast', why: '300 specific passives: resolved cast modes, body/family inheritance and limits, distance boundaries, investment forks, real preparation consumption, saves and co-op' },
+  { probe: 'probe_magicpacks.ts', status: 'green', tier: 'fast', why: 'Ambient magic cohorts, level/size gates, scoped shared mechanics, attributable modifiers, death/ownership cleanup, zone/save and co-op identity' },
   { probe: 'probe_movementtether.ts', status: 'green', tier: 'fast', why: 'Physical movement tethers: recoil, hard limits, entity anchors, persistence and co-op' },
   { probe: 'probe_passiveweave.ts', status: 'green', tier: 'fast', why: '72 native powers, 126 two-port junctions, shorter inter-class paths, investment and geometry, event gates, live carried hits and orbs, threshold modifiers, conduits and persistence' },
   { probe: 'probe_passiveinvestment.ts', status: 'green', tier: 'fast', why: 'Native passive replacements, zero tree graft grants, all 102 capstones behind useful small-node forks, no alternate ingress, live native proc gates and play events, run compatibility' },

@@ -1030,6 +1030,8 @@ export interface ZoneDef {
    *  `fixtures` below — those are STRUCTURE stamps at authored spots.) */
   scenery?: { monster: string; count: [number, number] }[];
   packs?: PackSpec;
+  /** Ambient magic encounter policy: content filter / difficulty size dial. */
+  magicPacks?: import('../engine/magicPacks').MagicPackPolicy | false;
   /** AUTHORED AMBIENT FAUNA — this zone's own WildlifeRow list, REPLACING the
    *  biome's WILDLIFE table outright. The one lane past the sanctuary gate:
    *  authored fauna spawns even on SAFE ground (the town's gutter rats, the

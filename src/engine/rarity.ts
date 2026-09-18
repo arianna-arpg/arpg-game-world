@@ -66,9 +66,9 @@ export const AFFIXES: Affix[] = [
 const CROWNED_CHANCE = 0.05;
 
 /** Roll a pack-leader rarity. `crownedEligible` (Warbands active) gates the apex. */
-export function rollRarity(crownedEligible: boolean): MonsterRarity {
+export function rollRarity(crownedEligible: boolean, magicEligible = true): MonsterRarity {
   if (crownedEligible && chance(CROWNED_CHANCE)) return 'crowned';
-  const tiers: MonsterRarity[] = ['normal', 'magic', 'rare', 'champion'];
+  const tiers: MonsterRarity[] = magicEligible ? ['normal', 'magic', 'rare', 'champion'] : ['normal', 'rare', 'champion'];
   const total = tiers.reduce((s, t) => s + RARITY_DEFS[t].weight, 0);
   let r = rand(0, total);
   for (const t of tiers) { r -= RARITY_DEFS[t].weight; if (r < 0) return t; }
@@ -87,11 +87,11 @@ export function pickAffixes(n: number): Affix[] {
 
 /** The full set of stat modifiers a rarity tier contributes (tier buffs +
  *  rolled affixes), for the actor's 'rarity' StatSheet source. */
-export function rarityMods(rarity: MonsterRarity): Modifier[] {
+export function rarityMods(rarity: MonsterRarity, withAffixes = true): Modifier[] {
   const def = RARITY_DEFS[rarity];
   const mods: Modifier[] = [];
   if (def.lifeMul !== 1) mods.push(mod('life', 'more', def.lifeMul - 1));
   if (def.dmgMul !== 1) mods.push(mod('damage', 'more', def.dmgMul - 1));
-  for (const a of pickAffixes(def.affixes)) mods.push(...a.mods);
+  for (const a of pickAffixes(withAffixes ? def.affixes : 0)) mods.push(...a.mods);
   return mods;
 }

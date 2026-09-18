@@ -10,6 +10,7 @@ import { FACTION_TRAITS } from '../world/traits';
 import { PRESENCE_BANDS, presenceMul, type PresenceSpec } from '../engine/presence';
 import { SKILLS } from './skills';
 import { invocationTreeErrors } from '../engine/invocation';
+import { magicPackErrors } from '../engine/magicPacks';
 import { movementTetherErrors } from '../engine/movementTether';
 import { SUPPORTS } from './supports';
 import { spawnVeinOf } from '../engine/supportbase';
@@ -133,6 +134,7 @@ const ADOPTIVE_ONLY_KINDS = ['lair', 'package', 'venture'] as const;
 
 export function validateContent(): void {
   const warn = (msg: string): void => console.warn(`[content] ${msg}`);
+  for (const issue of magicPackErrors()) warn(issue);
   validatePassiveLayout(warn);
   for (const error of localePrograms().flatMap(p => validateLocaleProgram(p, { builder: hasDistrictBuilder, doodad: hasDoodadRule, region: id => !!regionKind(id), walkable: id => !!regionKind(id)?.walkable }).map(e => 'locale ' + p.id + ': ' + e))) warn(error);
   for (const error of mapFeatureKinds().filter(f => f.destination && !localeProgram(f.destination.locale)).map(f => 'atlas destination ' + f.id + ': unknown locale ' + f.destination!.locale)) warn(error);

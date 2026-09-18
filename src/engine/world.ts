@@ -411,6 +411,8 @@ import { courtLord, courtLordForZone } from '../packages/courts';
 import type { ActiveEncounter, BoroughRuntime, VeilKnot } from './encounter';
 import { boroughVendorWeights, townResidentsHere, noteSoulsSheltered } from '../data/boroughs';
 import { rollRarity, rarityMods, RARITY_DEFS, type MonsterRarity } from './rarity';
+import { magicPackPool, magicPackSize, magicPackMinimum, rollMagicPack, readMagicPack, updateMagicPacks, magicPackDeath, type MagicPackState } from './magicPacks';
+import { MAGIC_PACKS, MAGIC_PACK_CFG } from '../data/magicPacks';
 import { MONSTER_NAME_CFG, rollMonsterName } from '../data/monsterNames';
 import type { OverlayView } from '../world/overlay';
 import { claimedZonesFromBag } from '../world/overlay';
@@ -2447,6 +2449,7 @@ export interface BossRun {
  *  createMonster + these fields on re-entry — enough to restore who/where/how-hurt
  *  without serializing full combat state). */
 interface ZoneEnemyMemo {
+  magicPack?: MagicPackState;
   movementTether?: MovementTetherState;
   defId: string;
   level: number;
@@ -7896,7 +7899,8 @@ export class World {
     let leader: Actor | null = null;
     for (let k = 0; k < n; k++) {
       const m = this.createMonster(this.weightedPick(roster.table, lvl), lvl, 'enemy');
-      if (k === 0) { const r = rollRarity(crowned); if (r !== 'normal') this.promoteRarity(m, r, { distinctName: true }); leader = m; }
+      // Invasion hosts have a leader/retinue; magicPack rolls belong to ambient cohorts.
+      if (k === 0) { const r = rollRarity(crowned, false); if (r !== 'normal') this.promoteRarity(m, r, { distinctName: true }); leader = m; }
       m.pos = this.clampPos(vec(at.x + rand(-70, 70), at.y + rand(-70, 70)), m.radius);
       this.actors.push(m);
       pack.push(m);
@@ -11654,9 +11658,15 @@ export class World {
       // roll on the stream whichever lane resolves, so undeclared defs
       // spawn byte-identically to what they always did.
       const ps = MONSTERS[type]?.packSize;
-      const n = ps ? randInt(ps[0], ps[1])
+      let n = ps ? randInt(ps[0], ps[1])
         : spec.archetypes?.length ? rollPackSize(spec.archetypes) : randInt(spec.size[0], spec.size[1]);
-      const leaderRarity = rollRarity(crownedEligible); // one elite may lead the pack
+      const magicEligible = !MONSTERS[type]?.boss && !MONSTERS[type]?.passive
+        && (!ps || ps[1] > 1) && magicPackPool(def.level, def.magicPacks, ps?.[1]).length > 0;
+      let leaderRarity = rollRarity(crownedEligible, magicEligible);
+      if (leaderRarity === 'magic') n = Math.min(magicPackSize(def.level, def.magicPacks), ps?.[1] ?? Infinity);
+      const magicPack = leaderRarity === 'magic' ? rollMagicPack(def.level, def.magicPacks, Math.random, n) : undefined;
+      if (leaderRarity === 'magic' && !magicPack) leaderRarity = 'normal';
+      const magicPackMembers: Actor[] = [];
       // A co-spawned pack IS a squad: shared id + a leader (the elite when one
       // rolled, else the first body) — squad tactics (muster, tokens, focus
       // fire, formations, leader-death reactions) all key off these stamps.
@@ -11684,7 +11694,7 @@ export class World {
         // ground — relocate onto a matching doodad, or don't spawn it at all
         // (a zone with no big-enough pond simply has no lake horror).
         if (m.habitat && !this.placeInHabitat(m)) continue;
-        if (k === 0 && leaderRarity !== 'normal') this.promoteRarity(m, leaderRarity, { distinctName: true });
+        if (k === 0 && leaderRarity !== 'normal' && !magicPack) this.promoteRarity(m, leaderRarity, { distinctName: true });
         m.squadId = squadId;
         m.squadLeader = k === 0;
         if (!m.habitat) {
@@ -11700,7 +11710,9 @@ export class World {
           }
         }
         this.actors.push(m);
+        magicPackMembers.push(m);
       }
+      if (magicPack) this.promoteMagicPack(magicPackMembers, magicPack.id);
     }
   }
 
@@ -12105,9 +12117,13 @@ export class World {
    *  absent = the authored path — set-piece bosses keep their identity under
    *  the plain tier label, exactly as before. */
   private promoteRarity(a: Actor, rarity: MonsterRarity, opts?: { distinctName?: string | boolean }): void {
+    if (a.magicPack && rarity !== 'magic') {
+      a.magicPack = undefined;
+      updateMagicPacks(this.actors);
+    }
     const def = RARITY_DEFS[rarity];
     a.rarity = rarity;
-    a.sheet.setSource('rarity', rarityMods(rarity));
+    a.sheet.setSource('rarity', rarityMods(rarity, !a.magicPack));
     a.radius *= def.sizeMul;
     a.xpValue = Math.round(a.xpValue * def.xpMul);
     if (typeof opts?.distinctName === 'string') {
@@ -12133,6 +12149,26 @@ export class World {
    *  option) and packages elevate spawns through the same one door. */
   promoteMonster(a: Actor, rarity: MonsterRarity, stacks = 1, opts?: { distinctName?: string | boolean }): void {
     this.promoteRarityStacked(a, rarity, stacks, opts);
+  }
+
+  /** Encounter promotion seam. A failed habitat placement cannot leave a lone
+   * magic elite. Existing promoted actors are deliberately not re-promoted. */
+  promoteMagicPack(members: Actor[], mechanic: string): boolean {
+    const def = MAGIC_PACKS[mechanic];
+    if (!def || members.length < magicPackMinimum(def) || members.length > MAGIC_PACK_CFG.maxMembers) return false;
+    if (new Set(members).size !== members.length || members.some(a => a.dead || a.owner
+      || a.team !== 'enemy' || a.magicPack || (a.rarity && a.rarity !== 'normal')
+      || a.level < def.minLevel || a.faction !== members[0].faction)) return false;
+    const id = this.nextSquadId();
+    members.forEach((a, i) => {
+      a.magicPack = { id, mechanic, size: members.length, fallen: 0, ...(i === 0 ? { leader: 1 as const } : {}) };
+      a.squadId = id;
+      a.squadLeader = i === 0;
+      this.promoteRarity(a, 'magic');
+      a.name = `${def.name} ${MONSTERS[a.defId ?? '']?.name ?? a.name}`;
+    });
+    updateMagicPacks(this.actors);
+    return true;
   }
 
   // --- SQUAD TACTICS: engage tokens + death reactions -------------------------
@@ -17033,6 +17069,7 @@ export class World {
       enemies.push({
         defId: a.defId, level: a.level, x: a.pos.x, y: a.pos.y,
         life: a.life, faction: a.faction, rarity: a.rarity, tag: a.tag,
+        ...(a.magicPack ? { magicPack: { ...a.magicPack } } : {}),
         movementTether: savedMovementTether(a),
         name: a.name, ...(a.tier ? { tier: a.tier } : {}),
         ...(a.aiAwakened ? { aiAwakened: 1 as const } : {}),
@@ -17143,9 +17180,17 @@ export class World {
    *  re-materialize exactly what we left (who / where / how-hurt). */
   private restoreZoneEnemies(memory: ZoneMemory): void {
     this.actors = this.actors.filter(a => !(a.fromZoneGen && a.team === 'enemy'));
+    const magicPackIds = new Map<number, number>();
     for (const e of memory.enemies) {
       if (!MONSTERS[e.defId]) continue;
       const m = this.createMonster(e.defId, Math.max(1, e.level), 'enemy');
+      const magicPack = e.rarity === 'magic' ? readMagicPack(e.magicPack) : undefined;
+      if (magicPack) {
+        if (!magicPackIds.has(magicPack.id)) magicPackIds.set(magicPack.id, this.nextSquadId());
+        m.magicPack = { ...magicPack, id: magicPackIds.get(magicPack.id)! };
+        m.squadId = m.magicPack.id;
+        m.squadLeader = m.magicPack.leader === 1;
+      }
       if (e.faction) m.faction = e.faction;
       if (e.rarity) this.promoteRarity(m, e.rarity);
       if (e.name) m.name = e.name; // the exact remembered name, never a re-roll
@@ -17159,6 +17204,7 @@ export class World {
       m.movementTether = restoreMovementTether(e.movementTether);
       this.actors.push(m);
     }
+    updateMagicPacks(this.actors);
   }
 
   /** Shared refusal for the button, menu, input and the authoritative cast. */
@@ -17741,6 +17787,7 @@ export class World {
         enemies.push({
           defId: memo.defId, level: memo.level, x: memo.x, y: memo.y, life: memo.life,
           ...(memo.faction ? { faction: memo.faction } : {}),
+          ...(readMagicPack(memo.magicPack) ? { magicPack: readMagicPack(memo.magicPack) } : {}),
           ...(memo.rarity && RARITY_DEFS[memo.rarity as MonsterRarity] ? { rarity: memo.rarity as MonsterRarity } : {}),
           ...(memo.tag ? { tag: memo.tag } : {}),
           ...(memo.name ? { name: memo.name } : {}),
@@ -45485,6 +45532,8 @@ export class World {
     }
 
     actor.dead = true;
+    if (!silent) magicPackDeath(actor, this.actors);
+    if (actor.magicPack) updateMagicPacks(this.actors);
     if (!silent && actor.summonInst?.def.hivecall) this.hivecallDeath(actor);
     if (!silent && actor.owner && actor.summonInst?.def.throng) this.throngKeepMinimum(actor.owner, actor.summonInst);
     if (!silent && this.deedEnemy(actor) && killer && killer !== this.player && this.deedOwned(killer)) {
@@ -48154,6 +48203,7 @@ export class World {
     if (this.lockHint > 0) this.lockHint -= dt;
 
     // Actors: timers, DoT, dash movement, lifespans.
+    updateMagicPacks(this.actors);
     const flowDt = dt; // the world-scaled frame; each body bends it below
     for (const a of this.actors) {
       if (a.dead) continue;

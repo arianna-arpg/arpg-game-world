@@ -1128,6 +1128,12 @@ export class Actor {
   /** Elite tier (magic/rare/champion/crowned) — buffed stats + affixes + drops.
    *  Undefined = a normal monster. A 'crowned' kill drives the Warbands unlock. */
   rarity?: MonsterRarity;
+  /** Original magic cohort identity; never copied to summons or new allies. */
+  magicPack?: import('./magicPacks').MagicPackState;
+  magicPackFrom?: Actor;
+  magicPackPower = 0;
+  magicPackSources?: string[];
+  magicPackSignature?: string;
   /** NEMESIS (meta/nemesis.ts): set on a MANIFESTED remembered foe — the saga
    *  it haunts + its record id (fate resolution on kill) + rank tint (the
    *  renderer's ring and title label). */
