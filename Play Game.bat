@@ -1,5 +1,5 @@
 @echo off
-title ARPG Test Game (browser dev mode)
+title Hollow Wake - Browser dev mode
 cd /d "%~dp0"
 
 rem =====================================================================

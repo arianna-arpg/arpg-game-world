@@ -52,12 +52,12 @@ export const entityTab: DevTabDef = {
       btn('×5', () => spawn(5)),
       btn('Edit in Forge', () => {
         const f = forgeHandle();
-        if (!f) { ctx.flash('forge off (config.ts DEV.entityForge)'); return; }
+        if (!f) { ctx.flash('forge off (config.ts DEV.entityForge, or ?dev=forges — the launcher\'s Forges toggle)'); return; }
         f.open(selId ?? undefined);
       }),
       btn('🖌 Glyph Forge', () => {
         const gf = (window as unknown as Record<string, unknown>).__glyphForge as ForgeHandle | undefined;
-        if (!gf) { ctx.flash('forge off (config.ts DEV.entityForge)'); return; }
+        if (!gf) { ctx.flash('forge off (config.ts DEV.entityForge, or ?dev=forges — the launcher\'s Forges toggle)'); return; }
         gf.open();
       }));
 

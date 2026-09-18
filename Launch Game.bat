@@ -1,5 +1,5 @@
 @echo off
-title ARPG Test Game - Launcher
+title Hollow Wake - Launcher
 cd /d "%~dp0"
 
 rem =====================================================================
@@ -35,9 +35,29 @@ if not exist "node_modules" (
     )
 )
 
+rem --- THE TERMINAL -----------------------------------------------------
+rem  Player mode hands off to the desktop shell and CLOSES this window: the
+rem  launcher's own log panel carries build and update output, so a launched
+rem  game leaves no console behind. The launcher's Developer mode with its
+rem  "Terminal window" toggle on (launcher.config.local.json: dev.developer
+rem  and dev.console both true) keeps this window open so main-process
+rem  output has somewhere to land. Read here, before the shell starts, so a
+rem  toggle applies to the NEXT launch.
+if not exist "launcher.config.local.json" goto :detach
+findstr /R /C:"\"developer\": *true" "launcher.config.local.json" >nul 2>nul || goto :detach
+findstr /R /C:"\"console\": *true" "launcher.config.local.json" >nul 2>nul || goto :detach
 echo.
-echo  Opening the launcher... keep this window open while playing.
-echo  (Build and update progress also appears here.)
+echo  Developer mode: keeping this terminal open (main-process output lands here).
 echo.
+call npx electron .
+if errorlevel 1 pause
+exit /b
+
+:detach
+if exist "node_modules\electron\dist\electron.exe" (
+    start "" "node_modules\electron\dist\electron.exe" .
+    exit /b 0
+)
+echo  The desktop shell's binary is missing - falling back to npx (keeps this window).
 call npx electron .
 if errorlevel 1 pause

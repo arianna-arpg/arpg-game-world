@@ -22,6 +22,11 @@ contextBridge.exposeInMainWorld('launcher', {
   /** FULL RESET: erase saves/ + all browser-side storage. The destructive
    *  confirm is a native dialog owned by the main process, not this page. */
   reset: () => ipcRenderer.invoke('launcher:reset'),
+  /** DEVELOPER MODE: merge a patch of the dev toggles ({ developer,
+   *  liveSource, forges, passiveEditor, console } — booleans only) into the
+   *  machine-local config; resolves { ok, dev, mode } — the stored toggles
+   *  and the effective fold the game will launch with. */
+  setDev: (/** @type {Record<string, boolean>} */ patch) => ipcRenderer.invoke('launcher:setDev', patch),
   quit: () => ipcRenderer.invoke('launcher:quit'),
   /** Streamed progress lines from git/npm/build child processes. */
   onLog: (/** @type {(line: string) => void} */ cb) => {

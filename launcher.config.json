@@ -33,6 +33,14 @@
   "paths": {
     "saves": "auto"
   },
+  "dev": {
+    "developer": false,
+    "liveSource": true,
+    "forges": false,
+    "passiveEditor": false,
+    "console": false,
+    "vitePort": 5173
+  },
   "debug": {
     "bootLog": true
   }

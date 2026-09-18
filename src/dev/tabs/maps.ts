@@ -49,7 +49,7 @@ export const mapsTab: DevTabDef = {
       }),
       btn('🗺 Edit in Map Forge', () => {
         const f = forgeHandle();
-        if (!f) { ctx.flash('map forge off (config.ts DEV.mapForge, or ?dev)'); return; }
+        if (!f) { ctx.flash('map forge off (config.ts DEV.mapForge, or ?dev / ?dev=forges — the launcher\'s Forges toggle)'); return; }
         f.open(selId ?? undefined);
       }));
 

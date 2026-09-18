@@ -36,6 +36,8 @@ npm run build     # type-check + production build to dist/
 
 On Windows you can double-click `Play Game.bat` (browser dev mode) or `Launch Game.bat` (desktop app); both run `npm install` for you the first time.
 
+**Developer mode.** The launcher opens as a plain game launcher: no DevTools, no dev panel, the build log tucked away, and `Launch Game.bat` closes its terminal once the shell is up. Tick **Developer mode** in the launcher to get DevTools (F12 / F5), the in-game dev panel and the log back, plus four toggles beneath it: **Live source** runs the game from `src/` on a Vite dev server the launcher starts (hot reload, no rebuild), **Forges** puts the Entity, Glyph and Map forges on the start menu, **Passive tree editor** turns the tree into an editor whose Save writes `src/data/passives.ts` under live source, and **Terminal window** keeps the console open on the next launch. The choices persist in `launcher.config.local.json` (machine-local, never committed).
+
 ### Controls
 
 Keyboard/mouse defaults: **WASD** move · **LMB/RMB + 1–6** skill slots · **C** character · **B** skill book · **P** passive tree · **M** map · **Esc** menu. Everything is rebindable.

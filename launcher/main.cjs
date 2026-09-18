@@ -26,11 +26,23 @@
 // path resolves through the PACKAGED/REPO/BASE seam below — nothing else
 // changes, and the smoke modes run against a packaged exe unmodified.
 //
+// THE TWO FACES (cfg.dev — the launcher page's Developer box, persisted to
+// launcher.config.local.json): PLAYER mode is the default and is a launched
+// game — the built dist/ over loopback, no DevTools, no dev panel, the log
+// tucked away, and Launch Game.bat leaves no terminal behind. DEVELOPER mode
+// opens DevTools (F12 / F5) and raises the in-game dev panel; its sub-toggles
+// add LIVE SOURCE (the game runs from src/ on a Vite dev server the launcher
+// spawns — hot reload and the passive-tree editor's source write-back;
+// checkout only), FORGES (Entity / Glyph / Map on the start menu), the
+// PASSIVE TREE EDITOR, and the TERMINAL window. `devMode()` is the one fold.
+//
 // Flags:
 //   --play                 skip the launcher, straight into the game
 //   --fullscreen           force the game window fullscreen (gamescope/Steam
 //                          Deck sessions auto-detect via window.fullscreen 'auto')
-//   --smoke-test[=game|launcher]  headless self-check: boot, assert, exit.
+//   --smoke-test[=game|launcher|source]  headless self-check: boot, assert,
+//                          exit. `game` pins the built lane and `source` the
+//                          live-source lane, whatever the local toggles say.
 //
 // Build staleness is stamped: dist/.build-head records the HEAD hash + a
 // digest of `git status --porcelain` at build time; Play rebuilds only when
@@ -112,6 +124,9 @@ const CONFIG_DEFAULTS = {
   server: { host: '127.0.0.1', port: 0 },
   launcher: { width: 700, height: 680, returnToLauncher: true, autoPlayOnGamescope: true },
   paths: { saves: 'auto' },
+  // THE TWO FACES — see devMode(). vitePort is the live-source lane's
+  // preferred port; a taken port bumps (Vite's own law), never collides.
+  dev: { developer: false, liveSource: true, forges: false, passiveEditor: false, console: false, vitePort: 5173 },
   debug: { bootLog: true },
 };
 // Merge order (later wins): hard defaults ← committed defaults (ship with the
@@ -310,6 +325,7 @@ async function repoStatus() {
       repo: { remote: cfg.repo.remote, branch: cfg.repo.branch },
       packaged: true, updateMode: UPDATE_MODE, savesDir: SAVES,
       directInstall: cfg.updates.directInstall !== false,
+      platform: process.platform, dev: cfg.dev, mode: devMode(),
     };
   }
   const pkg = readJson(path.join(/** @type {string} */ (REPO), 'package.json')) ?? {};
@@ -327,6 +343,7 @@ async function repoStatus() {
     checkOnLaunch: !!cfg.updates.checkOnLaunch,
     repo: { remote: cfg.repo.remote, branch: cfg.repo.branch },
     packaged: false, updateMode: UPDATE_MODE, savesDir: SAVES,
+    platform: process.platform, dev: cfg.dev, mode: devMode(),
   };
 }
 
@@ -707,9 +724,155 @@ async function ensureServer() {
   return started.url;
 }
 
+// ------------------------------------------------------------ developer mode
+
+/**
+ * THE MODE FOLD — one read for every consumer (the play lane, the game
+ * window, the game's address, the smoke modes, the launcher page). The
+ * sub-toggles are inert while the master is off, so player mode is player
+ * mode whatever the local file says; a packaged install has no source, so
+ * live source folds false there; the smoke modes PIN their lane (`game` =
+ * built, `source` = live, with every tool on) so a machine's toggles can never
+ * change what a self-check measures, and the perf harness always measures
+ * the built game.
+ * @returns {{ developer: boolean, liveSource: boolean, forges: boolean, passiveEditor: boolean, console: boolean, devtools: boolean }}
+ */
+function devMode() {
+  const d = cfg.dev || {};
+  const pinned = SMOKE ? SMOKE === 'source' : PERF ? false : null;
+  const developer = pinned ?? !!d.developer;
+  const liveSource = developer && !PACKAGED && (pinned ?? d.liveSource !== false);
+  return {
+    developer,
+    liveSource,
+    forges: developer && (pinned ?? !!d.forges),
+    passiveEditor: developer && (pinned ?? !!d.passiveEditor),
+    console: developer && !!d.console,
+    devtools: developer && cfg.window.devtools !== false,
+  };
+}
+
+/**
+ * THE GAME'S ADDRESS for a lane: the runtime opt-ins ride `?dev=<list>`
+ * (src/config.ts DEV_OPT_INS) — bare `?dev` is the panel (plus the Map Forge,
+ * the standing law in main.ts); `forges` and `editor` name the rest. Player
+ * mode loads the bare URL, byte-identical to before the toggles existed.
+ * @param {string} base
+ */
+function gameAddress(base) {
+  const m = devMode();
+  if (!m.developer) return base;
+  const words = [];
+  if (m.forges) words.push('forges');
+  if (m.passiveEditor) words.push('editor');
+  return base + (words.length ? `?dev=${words.join(',')}` : '?dev');
+}
+
+/**
+ * THE TOGGLE WRITE: merge a patch of booleans into cfg.dev and persist the
+ * block to the machine-local override file — the LAST word in LOCAL_CONFIGS
+ * (the repo-root file in a checkout, userData when packaged), never the
+ * committed launcher.config.json — keeping every other local key. Launch
+ * Game.bat reads the same file for its terminal decision.
+ * @param {any} patch
+ */
+function setDev(patch) {
+  const next = { ...(cfg.dev || {}) };
+  for (const k of ['developer', 'liveSource', 'forges', 'passiveEditor', 'console']) {
+    if (patch && typeof patch[k] === 'boolean') next[k] = patch[k];
+  }
+  cfg.dev = next;
+  const file = LOCAL_CONFIGS[LOCAL_CONFIGS.length - 1];
+  const cur = readJson(file) ?? {};
+  cur.dev = next;
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(cur, null, 2) + '\n');
+  } catch (e) {
+    log(`Could not save the developer settings to ${file}: ${String(e)}`);
+    return { ok: false, error: String(e), dev: cfg.dev, mode: devMode() };
+  }
+  const m = devMode();
+  log(m.developer
+    ? `Developer mode ON${m.liveSource ? ' · live source' : ''}${m.forges ? ' · forges' : ''}${m.passiveEditor ? ' · tree editor' : ''}${m.console ? ' · terminal (next launch)' : ''}`
+    : 'Player mode.');
+  return { ok: true, dev: cfg.dev, mode: m };
+}
+
+// THE LIVE SOURCE LANE: developer mode's game runs on a Vite dev server the
+// launcher spawns from the checkout — the same server `npm run dev` (Play
+// Game.bat) runs: hot reload, the /__save lane into <repo>/saves, and the
+// /__dev/passives write-back the passive-tree editor needs — instead of the
+// built dist/. Vite runs on Electron's own Node (ELECTRON_RUN_AS_NODE), so
+// no PATH is assumed; its output streams into the launcher log; the address
+// is read off Vite's own "Local:" line (a taken port bumps, so a co-session's
+// dev server never collides); it stays up across game-window closes and dies
+// with the app. Loopback-only, like the built lane.
+/** @type {import('node:child_process').ChildProcess | null} */ let viteProc = null;
+/** @type {string | null} */ let viteUrl = null;
+
+/** @returns {Promise<string>} the dev server's origin */
+function ensureSourceServer() {
+  if (viteProc && viteUrl) return Promise.resolve(viteUrl);
+  return new Promise((resolve, reject) => {
+    if (!REPO) { reject(new Error('Live source needs a checkout — this install ships no source.')); return; }
+    const bin = path.join(REPO, 'node_modules', 'vite', 'bin', 'vite.js');
+    if (!fs.existsSync(bin)) { reject(new Error('Vite is not installed — run npm install first.')); return; }
+    const port = Number(cfg.dev && cfg.dev.vitePort) || 5173;
+    log(`Starting the Vite dev server (live source) on port ${port}…`);
+    const child = spawn(process.execPath, [bin, '--host', '127.0.0.1', '--port', String(port)], {
+      cwd: REPO, windowsHide: true,
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', NO_COLOR: '1', FORCE_COLOR: '0' },
+    });
+    viteProc = child;
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true; stopSourceServer();
+      reject(new Error('The Vite dev server reported no address within 30 s.'));
+    }, 30000);
+    /** @param {Buffer} chunk */
+    const feed = (chunk) => {
+      for (const raw of chunk.toString().split(/\r?\n/)) {
+        const line = raw.replace(/\x1b\[[0-9;]*m/g, '').trimEnd();
+        if (!line.trim()) continue;
+        log(`[vite] ${line}`);
+        const m = settled ? null : /Local:\s+(https?:\/\/\S+)/.exec(line);
+        if (m) {
+          settled = true; clearTimeout(timer);
+          viteUrl = m[1].replace(/\/$/, '');
+          boot(`vite dev server on ${viteUrl} (live source)`);
+          resolve(viteUrl);
+        }
+      }
+    };
+    child.stdout?.on('data', feed);
+    child.stderr?.on('data', feed);
+    child.on('error', (e) => {
+      if (settled) return;
+      settled = true; clearTimeout(timer); viteProc = null;
+      reject(e);
+    });
+    child.on('exit', (code) => {
+      log(`[vite] dev server exited (${code ?? 'signal'})`);
+      viteProc = null; viteUrl = null;
+      if (settled) return;
+      settled = true; clearTimeout(timer);
+      reject(new Error(`The Vite dev server exited (${code ?? 'signal'}) before serving.`));
+    });
+  });
+}
+function stopSourceServer() {
+  const p = viteProc;
+  viteProc = null; viteUrl = null;
+  if (p && p.exitCode === null) { try { p.kill(); } catch { /* already gone */ } }
+}
+process.on('exit', stopSourceServer); // app.exit() skips before-quit — never orphan the server
+
 /** @param {{ show?: boolean, perfBeat?: boolean }} [opts] */
 function createGameWindow(opts) {
   const fullscreen = resolveFullscreen();
+  const tools = devMode().devtools;
   const w = new BrowserWindow({
     width: cfg.window.width,
     height: cfg.window.height,
@@ -720,7 +883,7 @@ function createGameWindow(opts) {
     icon: APP_ICON,
     fullscreen,
     webPreferences: {
-      devTools: !!cfg.window.devtools,
+      devTools: tools,
       // perfBeat: the perf harness alone loads the deadman's beat bridge
       // (perf-preload.cjs → window.__perfBeat). Play/smoke stay preload-free.
       ...(opts?.perfBeat ? { preload: path.join(__dirname, 'perf-preload.cjs') } : {}),
@@ -734,8 +897,8 @@ function createGameWindow(opts) {
   w.webContents.on('before-input-event', (e, input) => {
     if (input.type !== 'keyDown') return;
     if (input.key === 'F11') { w.setFullScreen(!w.isFullScreen()); e.preventDefault(); }
-    else if (input.key === 'F12' && cfg.window.devtools) { w.webContents.toggleDevTools(); e.preventDefault(); }
-    else if (input.key === 'F5' && cfg.window.devtools) { w.webContents.reload(); e.preventDefault(); }
+    else if (input.key === 'F12' && tools) { w.webContents.toggleDevTools(); e.preventDefault(); }
+    else if (input.key === 'F5' && tools) { w.webContents.reload(); e.preventDefault(); }
   });
   w.on('closed', () => {
     gameWin = null;
@@ -750,13 +913,28 @@ function createGameWindow(opts) {
 }
 
 async function play() {
-  const built = await ensureBuilt();
-  if (!built.ok) { boot(`play: build check failed — ${built.error || 'unknown'}`); return built; }
-  const url = await ensureServer();
+  const mode = devMode();
+  /** @type {string} */
+  let url;
+  if (mode.liveSource) {
+    try {
+      const cold = !viteProc;
+      url = await ensureSourceServer();
+      if (cold) log('Loading from source — the first load transforms the whole module graph (about 30 s); later loads are instant while the launcher stays open.');
+    } catch (e) {
+      const why = e instanceof Error ? e.message : String(e);
+      boot(`play: live source failed — ${why}`);
+      return { ok: false, error: `Live source failed: ${why}` };
+    }
+  } else {
+    const built = await ensureBuilt();
+    if (!built.ok) { boot(`play: build check failed — ${built.error || 'unknown'}`); return built; }
+    url = await ensureServer();
+  }
   if (gameWin && !gameWin.isDestroyed()) { gameWin.focus(); return { ok: true }; }
   gameWin = createGameWindow();
-  boot('game window created');
-  await gameWin.loadURL(url);
+  boot(`game window created (${mode.developer ? 'developer' : 'player'} mode${mode.liveSource ? ', live source' : ''})`);
+  await gameWin.loadURL(gameAddress(url));
   boot('game page loaded');
   if (launcherWin && !launcherWin.isDestroyed()) launcherWin.hide();
   return { ok: true };
@@ -810,6 +988,7 @@ function wireIpc() {
   ipcMain.handle('launcher:play', () => exclusive('play', () => play()));
   ipcMain.handle('launcher:rebuild', () => exclusive('rebuild', () => ensureBuilt(true)));
   ipcMain.handle('launcher:reset', () => exclusive('reset', () => resetAllData()));
+  ipcMain.handle('launcher:setDev', (_e, patch) => setDev(patch));
   ipcMain.handle('launcher:quit', () => { app.quit(); });
 }
 
@@ -860,7 +1039,49 @@ async function smoke() {
       const resetBtn = await launcherWin.webContents.executeJavaScript(`!!document.getElementById('reset')`);
       if (resetApi !== 'function') errors.push(`reset bridge missing (typeof window.launcher.reset = ${resetApi})`);
       if (!resetBtn) errors.push('reset button missing from the launcher page');
+      // The Developer box: bridge + master toggle present, player mode by
+      // default (the box folded, the log tucked away).
+      const setDevApi = await launcherWin.webContents.executeJavaScript('typeof window.launcher.setDev');
+      const devBox = await launcherWin.webContents.executeJavaScript(
+        `!!document.getElementById('dev-developer') && document.body.classList.contains('player')`);
+      if (setDevApi !== 'function') errors.push(`setDev bridge missing (typeof window.launcher.setDev = ${setDevApi})`);
+      if (!devBox) errors.push('developer box missing, or the page did not open in player mode');
       await watcherSelfTest(launcherWin.webContents);
+    } else if (SMOKE === 'source') {
+      // THE LIVE-SOURCE LANE: spawn Vite, load the game with every tool on,
+      // and require each toggle to have REACHED its tool — the address the
+      // launcher composed, the tree editor's QA handle, the forge's
+      // start-menu button — beside the built lane's own assertions.
+      const url = await ensureSourceServer();
+      gameWin = createGameWindow({ show: false });
+      watch(gameWin.webContents, 'game');
+      const t0 = Date.now();
+      await gameWin.loadURL(gameAddress(url));
+      boot(`source page loaded in ${((Date.now() - t0) / 1000).toFixed(1)} s (a cold dev server transforms the module graph on first request)`);
+      const deadline = Date.now() + 90000;
+      let game = 'undefined';
+      while (Date.now() < deadline) {
+        game = await gameWin.webContents.executeJavaScript('typeof window.__game');
+        if (game === 'object') break;
+        await wait(500);
+      }
+      boot(`source __game=${game} after ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+      await wait(1500); // async boot: account load, world init, start menu
+      const menu = await gameWin.webContents.executeJavaScript(
+        `!!document.querySelector('#start-menu:not(.hidden)')`);
+      const saveProbe = await gameWin.webContents.executeJavaScript(
+        `fetch('/__save/0').then(r => r.status).catch(() => 'ERR')`);
+      const search = await gameWin.webContents.executeJavaScript('location.search');
+      const editor = await gameWin.webContents.executeJavaScript('typeof window.__passiveEditor');
+      const forge = await gameWin.webContents.executeJavaScript(`!!document.getElementById('sm-forge')`);
+      if (game !== 'object') errors.push(`window.__game is ${game} — game did not boot from source`);
+      if (!menu) errors.push('start menu never appeared');
+      if (saveProbe !== 200 && saveProbe !== 404) errors.push(`/__save endpoint broken on the dev server (status ${saveProbe})`);
+      if (search !== '?dev=forges,editor') errors.push(`game address carried '${search}', expected '?dev=forges,editor'`);
+      if (editor !== 'object') errors.push('the passive-tree editor did not mount from ?dev=editor');
+      if (!forge) errors.push('the Entity Forge button did not reach the start menu from ?dev=forges');
+      await watcherSelfTest(gameWin.webContents);
+      console.log(`SMOKE source: url=${url} __game=${game} startMenu=${menu} saveEndpoint=${saveProbe} search=${search} editor=${editor} forge=${forge}`);
     } else {
       if (!fs.existsSync(path.join(DIST, 'index.html'))) {
         console.log('SMOKE game: dist/ missing — building first…');
@@ -894,6 +1115,7 @@ async function smoke() {
     console.log(`SMOKE ${SMOKE} OK`);
   }
   gameServer?.close();
+  stopSourceServer();
   app.exit(errors.length ? 1 : 0);
 }
 
@@ -1474,7 +1696,7 @@ if (!SMOKE && !PERF) {
 }
 
 app.on('window-all-closed', () => app.quit());
-app.on('before-quit', () => { gameServer?.close(); });
+app.on('before-quit', () => { gameServer?.close(); stopSourceServer(); });
 // Never follow navigations out of the game/launcher; external links go to the OS browser.
 app.on('web-contents-created', (_e, wc) => {
   wc.setWindowOpenHandler(({ url }) => {

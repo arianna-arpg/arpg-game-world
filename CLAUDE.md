@@ -187,6 +187,21 @@ records remain in `docs/design/passive-routes.md` and `passive-crossroads.md`.
   --force-run` on Windows, in-place AppImage swap on Linux/Steam Deck) and
   relaunches itself — the release page opens only as the fallback
   (`updates.directInstall=false` restores the old behavior).
+  THE TWO FACES (2026-09-18): the launcher page's Developer box —
+  `cfg.dev` persisted to `launcher.config.local.json`, `devMode()` in
+  `launcher/main.cjs` THE ONE FOLD. PLAYER mode (default) is a launched
+  game: the built dist/ over loopback, no DevTools, no dev panel, the log
+  tucked away, `Launch Game.bat` closing its terminal. DEVELOPER mode opens
+  DevTools/F5 + the in-game dev panel and unfolds `liveSource` (the game
+  runs from src/ on a Vite dev server the launcher spawns on Electron's own
+  Node — hot reload + the tree editor's `/__dev/passives` write-back;
+  checkout only), `forges`, `passiveEditor` and `console` (the .bat reads
+  the file). The toggles reach the game as `?dev=forges,editor` on its
+  address (`gameAddress`) and fold in `src/config.ts` (`AUTHORED` numbers
+  || `DEV_OPT_INS`), so nothing between a toggle and its tool needs a source
+  edit or a rebuild; the headless sim reads the authored numbers alone.
+  `npm run smoke:source` pins the live lane with every tool on and requires
+  each toggle to have reached its tool.
 - `npx tsc --noEmit` — fast type-check with no output. Primary correctness gate.
 - `npm run check` — type-checks the game AND the launcher (`tsconfig.launcher.json`
   runs strict checkJs over `launcher/*.cjs`).

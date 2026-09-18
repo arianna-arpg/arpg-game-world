@@ -67,6 +67,20 @@
     #btns .minor button { flex: 1; width: auto; font-size: 12px; padding: 7px 0; }
     #btns button.danger { border-color: #8a4040; color: #d08080; background: linear-gradient(180deg, #34242c, #251b21); }
     #btns button.danger:hover:not(:disabled) { background: linear-gradient(180deg, #46282f, #2f1e24); box-shadow: 0 0 9px rgba(208,80,80,0.4); }
+    /* THE DEVELOPER BOX: player mode shows one quiet row and keeps the log
+       and Rebuild out of sight (a launched game, not a build tool); the
+       master toggle unfolds the sub-toggles beneath it and brings them back.
+       A failure line still reveals the log in player mode — an error always
+       has somewhere visible to land. */
+    #devbox { border: 1px solid var(--panel-border); border-radius: 6px; background: var(--panel-bg); padding: 7px 12px; font-size: 12px; }
+    #devbox label { display: flex; align-items: center; gap: 9px; cursor: pointer; padding: 3px 0; }
+    #devbox label small { color: var(--text-dim); font-size: 11px; }
+    #devbox input[type=checkbox] { accent-color: var(--gold); margin: 0; flex: 0 0 auto; }
+    #dev-master { color: var(--gold); font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; }
+    #dev-master small { text-transform: none; letter-spacing: 0; font-weight: 400; }
+    #dev-subs { margin: 3px 0 0 6px; padding-left: 12px; border-left: 1px solid var(--panel-border); }
+    #devbox.player #dev-subs { display: none; }
+    body.player #log:not(.reveal), body.player #rebuild { display: none; }
     .hidden { display: none !important; }
 
     #log {
@@ -104,6 +118,25 @@
           Erase all saved data…</button>
       </div>
     </div>
+    <div id="devbox" class="player">
+      <label id="dev-master" title="Off: a launched game — no DevTools, no dev panel, the build log tucked away. On: DevTools (F12 / F5), the in-game dev panel, the log, and the toggles below.">
+        <input type="checkbox" id="dev-developer"> Developer mode <small>DevTools, the in-game dev panel, the build log</small>
+      </label>
+      <div id="dev-subs">
+        <label id="row-liveSource" title="Run the game from src/ on a Vite dev server the launcher starts: edits hot-reload, no rebuild, and the passive tree editor saves straight to source. Off: the built dist/ with the tools above.">
+          <input type="checkbox" id="dev-liveSource"> Live source <small>run from src/ with hot reload; no rebuild between edits</small>
+        </label>
+        <label title="Puts the Entity Forge, the Glyph Forge and the Map Forge on the start menu (and their dev-panel tabs come alive).">
+          <input type="checkbox" id="dev-forges"> Forges <small>Entity, Glyph and Map forge on the start menu</small>
+        </label>
+        <label title="Turns the passive tree (P) into an editor: move nodes, link them, edit their stats, Save. Under Live source, Save writes src/data/passives.ts; on the built game it rescues the tree to saves/save_passives_editor.json instead.">
+          <input type="checkbox" id="dev-passiveEditor"> Passive tree editor <small>edit the tree in-game; Save writes src/data/passives.ts under live source</small>
+        </label>
+        <label id="row-console" title="Launch Game.bat normally hands off to the desktop shell and closes its terminal. On, it keeps that window open so main-process output has somewhere to land. Read at launch, so it applies next time.">
+          <input type="checkbox" id="dev-console"> Terminal window <small>keep the console Launch Game.bat opens (next launch)</small>
+        </label>
+      </div>
+    </div>
     <div id="log"></div>
     <div id="hint">Updates pull from GitHub, then the game rebuilds itself. Play works offline.</div>
   </div>
@@ -115,10 +148,36 @@
     function appendLog(line) {
       logEl.textContent += line + '\n';
       logEl.scrollTop = logEl.scrollHeight;
+      if (/FAILED/.test(line)) logEl.classList.add('reveal'); // player mode still shows an error
     }
     function setBusy(b) { buttons.forEach(el => { el.disabled = b; }); }
 
+    // THE DEVELOPER BOX — the stored toggles (s.dev) drive the checkboxes,
+    // the master folds the page between its two faces, and rows that cannot
+    // apply here (no source in a packaged install; the terminal is Launch
+    // Game.bat's, a Windows checkout thing) stay hidden.
+    const DEV_KEYS = ['developer', 'liveSource', 'forges', 'passiveEditor', 'console'];
+    let lastStatus = null;
+    function renderDev(s) {
+      const d = s.dev || {};
+      for (const k of DEV_KEYS) $('dev-' + k).checked = !!d[k];
+      const dev = !!d.developer;
+      $('devbox').classList.toggle('player', !dev);
+      document.body.classList.toggle('player', !dev);
+      $('row-liveSource').classList.toggle('hidden', !!s.packaged);
+      $('row-console').classList.toggle('hidden', !!s.packaged || s.platform !== 'win32');
+    }
+    for (const k of DEV_KEYS) {
+      $('dev-' + k).addEventListener('change', async (e) => {
+        const r = await window.launcher.setDev({ [k]: !!e.target.checked });
+        if (r && r.ok) { lastStatus = { ...(lastStatus || {}), dev: r.dev, mode: r.mode }; renderDev(lastStatus); }
+        else { appendLog('SETTINGS FAILED: ' + ((r && r.error) || 'unknown error')); await refresh(); }
+      });
+    }
+
     function renderStatus(s) {
+      lastStatus = s;
+      renderDev(s);
       $('title').textContent = s.title;
       document.title = s.title + ' — Launcher';
       $('build-line').innerHTML =
