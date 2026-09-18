@@ -123,7 +123,7 @@ registerPassiveRealm({
   id: 'devotion',
   label: 'Devotion',
   color: '#7ab8d8',
-  blurb: 'Constellations attuned at shrines. Devotion points walk their stars, and their powers can be GRAFTED onto your skills.',
+  blurb: 'Constellations attuned at shrines. Invest Devotion points in supporting stars to reach their native powers.',
   adjacency: 'tree',
   roots: ['dev_hunt_root', 'dev_bul_root'],
   currency: 'devotion',

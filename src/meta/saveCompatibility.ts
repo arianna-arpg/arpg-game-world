@@ -2,8 +2,8 @@
 // A run bump resets all characters/worlds; an account bump also resets progression.
 export const SAVE_COMPATIBILITY = {
   account: 1,
-  run: 2,
-  reason: 'World geography and exploration have changed.',
+  run: 3,
+  reason: 'The passive tree now uses native powers and small-node investment before notables.',
 } as const;
 
 export interface CharacterCompatibility {

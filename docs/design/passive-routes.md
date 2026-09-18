@@ -1,5 +1,10 @@
 # Physical routes through the passive Star
 
+Historical expansion record. The subsequent [native-power and investment
+pass](passive-investment.md) replaces every tree graft, changes reward tiers
+and inserts small-node clusters. Counts and test results below describe the
+earlier pass; the current contract is in that linked document.
+
 This pass interprets a choice as a fork in the walking graph. A player can
 choose a direction by clicking a visible passive, without selecting an option
 inside a popup. The optional selection deals from

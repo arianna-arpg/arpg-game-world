@@ -1,5 +1,10 @@
 # Passive crossroads
 
+Historical first-pass record. The current [native-power and investment
+design](passive-investment.md) replaces grafts and turns 27 opening menus into
+ordinary passives, keeping nine optional mastery menus behind small clusters.
+The opening-pair counts and graft behavior below describe the earlier version.
+
 The subsequent [physical-route expansion](passive-routes.md) adds ordinary
 paths and enforces forks within two allocations. This document describes the
 optional selection deals, which are retained alongside those paths.

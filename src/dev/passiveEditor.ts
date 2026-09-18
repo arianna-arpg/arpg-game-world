@@ -477,9 +477,11 @@ export interface PassiveNode {
   vocation?: string;
 }
 
-const nodes: PassiveNode[] = [
+const nodes: PassiveNode[] = [];
+// Check rows individually instead of inferring a union for the entire Star.
+nodes.push(
 ${list.map(serNode).join('\n')}
-];
+);
 
 // --- VOCATION MINI-TREES -------------------------------------------------------
 // Each VocationDef's tree (authored in LOCAL coords around 0,0) is offset into

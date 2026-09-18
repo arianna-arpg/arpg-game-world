@@ -8,8 +8,7 @@ import { ROUTE_ACCENTS, ROUTE_PROCS } from '../src/data/passiveRoutes';
 import { CLASSES } from '../src/data/classes';
 import { STAT_DEFS, mod } from '../src/engine/stats';
 import { SKILLS } from '../src/data/skills';
-import { SUPPORTS } from '../src/data/supports';
-import { makeSkillInstance, supportFitsInst } from '../src/engine/skills';
+import { makeSkillInstance } from '../src/engine/skills';
 import { serializeCharacter, applySavedCharacter } from '../src/meta/character';
 import { serializeSeatMeta, applySeatMeta } from '../src/net/snapshot';
 import type { World } from '../src/engine/world';
@@ -71,18 +70,11 @@ for(let i=0;i<queue.length;i++)for(const id of graph[queue[i]])if(!seen.has(id))
 check('entire ordinary tree allocates through the real shared gates',allocated&&w.meta.passivePoints===0&&seen.size===Object.keys(graph).length);
 check('every visible payload reaches the passive source',added.every(n=>(n.mods??[]).every(m=>w.player.sheet.getSourceMods('passives')?.includes(m))));
 check('all plain-node conduits join the actor conversion lane',added.filter(n=>n.conduit).every(n=>w.player.wornConduits?.includes(n.conduit!)));
-let bound=0;
-for(const n of added.filter(n=>n.graft)) {
-  const support=SUPPORTS[n.graft!.support],host=Object.values(SKILLS).map(s=>makeSkillInstance(s)).find(s=>supportFitsInst(support,s));
-  if(!host)continue;
-  w.meta.knownSkills.set(host.def.id,host);const slots=host.sockets.length;
-  if(w.bindGraft(n.id,host.def.id)&&host.grafts?.some(g=>g.def.id===support.id)&&host.sockets.length===slots&&w.bindGraft(n.id,null)&&!host.grafts?.some(g=>g.def.id===support.id))bound++;
-}
-check('every ordinary graft binds and unbinds without spending a socket',bound===added.filter(n=>n.graft).length,`${bound} grants`);
+check('ordinary routes grant native powers, never grafts',added.every(n=>!n.graft));
 // Every original option is now also exposed as a literal node, preserving its
 // exact payload rather than replacing a mechanic with an approximation.
 const payload=(p:{name:string;description:string;mods?:unknown;graft?:unknown;conduit?:unknown})=>JSON.stringify([p.name,p.description,p.mods??null,p.graft??null,p.conduit??null]);
-check('all 138 original option effects also exist as visible nodes',CROSSROADS_GROUPS.every(g=>g.options.every(o=>added.some(n=>payload(n)===payload(o)))));
+check('all 138 current option effects also exist as visible nodes',CROSSROADS_GROUPS.every(g=>g.options.every(o=>added.some(n=>payload(n)===payload(o)))));
 
 // Exercise all event definitions through the shared runtime dispatcher with
 // armed/unarmed, gate, cooldown, tag-scoped consumption and depth controls.

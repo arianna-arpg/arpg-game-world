@@ -537,12 +537,9 @@ registerChoiceGroup({
   id: 'devotion_hunt',
   name: 'The Hunt: one aspect',
   options: [
-    // Each aspect grants its stats AND a bindable GRAFT (the Grim Dawn
-    // shape): the passive is the constellation's gift, the graft is where
-    // YOU choose to carry it — socketed onto one learned skill, free.
-    { id: 'stride', name: 'Aspect of the Stride', description: '6% increased movement speed. GRAFT: Swiftness.', mods: [mod('moveSpeed', 'increased', 0.06)], graft: { support: 'swiftness' } },
-    { id: 'aim', name: 'Aspect of the Eye', description: '+50 accuracy rating. GRAFT: Precision.', mods: [mod('accuracy', 'flat', 50)], graft: { support: 'precision' } },
-    { id: 'fang', name: 'Aspect of the Fang', description: 'Adds 4 physical damage to attacks. GRAFT: Brutality.', mods: [mod('addedPhysical', 'flat', 4, ['attack'])], graft: { support: 'brutality' } },
+    { id: 'stride', name: 'Aspect of the Stride', description: '6% increased movement speed; after evading, regenerate 1% of maximum life per second.', mods: [mod('moveSpeed', 'increased', .06), mod('lifeRegenPct', 'flat', .01, undefined, 'recentlyEvaded')] },
+    { id: 'aim', name: 'Aspect of the Eye', description: '+50 accuracy; while stationary, +8% projectile critical strike chance.', mods: [mod('accuracy', 'flat', 50), mod('critChance', 'flat', .08, ['projectile'], 'stationary')] },
+    { id: 'fang', name: 'Aspect of the Fang', description: 'Adds 4 physical damage to attacks; against low-life enemies, +1% life leech.', mods: [mod('addedPhysical', 'flat', 4, ['attack']), mod('lifeLeech', 'flat', .01, ['vs:lowLife'])] },
   ],
 });
 

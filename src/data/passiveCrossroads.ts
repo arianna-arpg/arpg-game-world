@@ -1,22 +1,13 @@
 // Opening build grammar. The nodes remain explicit, editor-owned rows in
 // passives.ts; their option pools live here so a visual save cannot erase them.
-// Every payload uses the ordinary modifier / conduit / graft pipeline.
+// Every payload uses the ordinary modifier, event or conduit pipeline.
 import { gaugeMod, linkMod, mod, type Modifier } from '../engine/stats';
 import { registerChoiceGroup, type PassiveChoiceOption } from './passiveChoices';
 import './passiveRoutes';
+import { NATIVE_PASSIVE_SCHOOLS } from './passiveNotables';
 
 const option = (id: string, name: string, description: string, ...mods: Modifier[]): PassiveChoiceOption =>
   ({ id, name, description, mods });
-
-/** Keep option data independent of the skill catalog: the UI resolves a graft's
- *  actual support description. These grants need only stable support ids. */
-const graft = (support: string): PassiveChoiceOption => {
-  return {
-    id: `graft_${support}`, name: `${support.split('_').map(word => word[0].toUpperCase() + word.slice(1)).join(' ')} Graft`,
-    description: 'Bind to one compatible learned skill in Skills; no socket spent, level 1. The support retains its restrictions and prices.',
-    graft: { support, level: 1 },
-  };
-};
 
 export const CROSSROADS_PURSUITS = registerChoiceGroup({
   id: 'crossroads_pursuits', name: 'Pursuits: choose how you fight', unique: 'character',
@@ -72,10 +63,10 @@ export const CROSSROADS_TECHNIQUES = registerChoiceGroup({
   ],
 });
 
-/** Two choice nodes per school, each taking one of twelve distinct options.
- *  There is no class gate; the school's placement is its only travel cost. */
-const school = (id: string, name: string, options: PassiveChoiceOption[], supports: string[]) =>
-  registerChoiceGroup({ id: `crossroads_${id}`, name, unique: 'character', options: [...options, ...supports.map(graft)] });
+/** One optional mastery per school, behind its small-node investment cluster.
+ *  Ordinary nodes also expose these powers. No class gate or graft binding. */
+const school = (id: string, name: string, options: PassiveChoiceOption[]) =>
+  registerChoiceGroup({ id: `crossroads_${id}`, name, unique: 'character', options: [...options, ...NATIVE_PASSIVE_SCHOOLS[id]] });
 
 export const CROSSROADS_SCHOOLS = [
   school('impact', 'Impact: displacement, grappling and broken poise', [
@@ -85,7 +76,7 @@ export const CROSSROADS_SCHOOLS = [
     option('cruel', 'Cruel Hold', '20% increased damage against grabbed enemies.', mod('damage', 'increased', .20, ['vs:grabbed'])),
     option('pursuit', 'No Retreat', '20% increased damage against fleeing enemies.', mod('damage', 'increased', .20, ['vs:fleeing'])),
     option('rebuttal', 'Learn from Their Shield', 'When an enemy blocks your hit, restore 20% of maximum poise, at most once a second.', mod('proc_shield_lesson', 'flat', 1)),
-  ], ['crushing_impact', 'battering_ram', 'iron_grip', 'trebuchet_arm', 'wringing_grip', 'siegebreaker']),
+  ]),
   school('tempo', 'Tempo: critical rhythms and answering blows', [
     option('persistence', 'Denied Once', 'An evaded melee hit empowers your next melee hit within 5s: +50% critical chance and 30% more damage.', mod('proc_overpower', 'flat', 1)),
     option('crit', 'Follow the Spark', 'After a critical hit: 10% increased attack and cast speed.', mod('attackSpeed', 'increased', .10, undefined, 'recentlyCrit'), mod('castSpeed', 'increased', .10, undefined, 'recentlyCrit')),
@@ -93,7 +84,7 @@ export const CROSSROADS_SCHOOLS = [
     option('rhythm', 'Rhythmic Economy', 'Repeating your recent skill sequence grants 15% reduced mana cost.', mod('manaCost', 'increased', -.15, undefined, 'comboRepeated')),
     option('variety', 'Improvised Economy', 'Varying your recent skill sequence grants 15% reduced mana cost.', mod('manaCost', 'increased', -.15, undefined, 'comboVaried')),
     option('execution', 'The Last Beat', '+25% critical strike multiplier against low-life enemies.', mod('critMulti', 'flat', .25, ['vs:lowLife'])),
-  ], ['serrated_edge', 'answering_steel', 'cast_on_crit', 'cast_on_kill', 'culmination', 'gathered_casting']),
+  ]),
   school('arcana', 'Arcana: spell engines and resource weaving', [
     option('reserve', 'Last Drop', 'A spell cast while on low mana restores 10% of maximum mana, at most once every 3s.', mod('proc_desperate_reserves', 'flat', 1)),
     option('battery', 'Reserve Becomes Shelter', '+12 maximum energy shield; gain energy shield equal to 8% of your maximum mana baseline.', mod('energyShield', 'flat', 12), linkMod('energyShield', 'mana', .08)),
@@ -101,7 +92,7 @@ export const CROSSROADS_SCHOOLS = [
     option('opening', 'Read the Incantation', '+10% critical strike chance against casting enemies.', mod('critChance', 'flat', .10, ['vs:casting'])),
     option('flow', 'Make Every Drop Count', '20% increased conduit efficiency.', mod('conduitEfficiency', 'increased', .20)),
     option('hot_streak', 'Three-Beat Spellfire', 'Two consecutive spell critical hits prepare Hot Streak: your next spell hit within 10s has +100% critical chance and 50% more damage. A noncritical spell hit breaks the preparation.', mod('proc_hot_streak', 'flat', 1), mod('proc_heating_up', 'flat', 1), mod('proc_heat_lost', 'flat', 1)),
-  ], ['cast_while_channeling', 'cast_on_overcharge', 'sequenced_invocation', 'refraction', 'unstable_compression', 'entropic_bloom']),
+  ]),
   school('host', 'The Host: companions, swarms and sacrifice', [
     option('company', 'Shelter in Company', '2% increased armor per living summon (the shared minion cap applies).', gaugeMod('armor', 'increased', .02, 'minions')),
     option('funeral', 'Mourn with Purpose', 'Summon within your recently-healed window for 16% increased minion damage. New summons inherit this bonus when created.', mod('minionDamage', 'increased', .16, undefined, 'recentlyHealed')),
@@ -109,7 +100,7 @@ export const CROSSROADS_SCHOOLS = [
     option('gather', 'Gather the Fallen', 'Each corpse-handling cast consumes or raises one additional corpse.', mod('corpseBatch', 'flat', 1)),
     option('choir', 'Wakeflame Choir', 'Gain one Wakeflame every 15s; 2% increased minion damage per Wakeflame held. New summons inherit this bonus when created.', mod('chargeRegen_wakeflame', 'flat', 1 / 15), gaugeMod('minionDamage', 'increased', .02, 'charge:wakeflame')),
     option('patience', 'Patient Keeper', 'Summon skills cost 15% less mana.', mod('manaCost', 'more', -.15, ['summon'])),
-  ], ['brood_tender', 'ghostly_communion', 'gift_of_the_choir', 'legion_doctrine', 'hiveborn', 'parasitic_pact']),
+  ]),
   school('guile', 'Guile: evasive play and selective targets', [
     option('flank', 'Open Their Back', '+20% critical strike multiplier against enemies struck from behind.', mod('critMulti', 'flat', .20, ['vs:behind'])),
     option('escape', 'Escape Becomes Tempo', 'After evading: 12% increased attack speed.', mod('attackSpeed', 'increased', .12, undefined, 'recentlyEvaded')),
@@ -117,7 +108,7 @@ export const CROSSROADS_SCHOOLS = [
     option('moving', 'A Moving Target', '18% increased evasion while moving.', mod('evasion', 'increased', .18, undefined, 'moving')),
     option('still', 'The Patient Blade', '+6% critical strike chance while stationary.', mod('critChance', 'flat', .06, undefined, 'stationary')),
     option('prey', 'Hunt the Hunter', '16% increased damage against elite enemies.', mod('damage', 'increased', .16, ['vs:elite'])),
-  ], ['envenomed_tips', 'fowlers_eye', 'quailbane', 'overmatch', 'regicide', 'limbreaver']),
+  ]),
   school('devices', 'Devices: projectiles, traps and prepared ground', [
     option('rack', 'Practiced Hands', '18% increased reload speed.', mod('reloadSpeed', 'increased', .18)),
     option('flight', 'Patient Flight', '20% reduced projectile speed; 15% increased projectile damage.', mod('projectileSpeed', 'increased', -.20), mod('damage', 'increased', .15, ['projectile'])),
@@ -125,7 +116,7 @@ export const CROSSROADS_SCHOOLS = [
     option('breach', 'Tools for the Job', '20% increased damage against guarding enemies.', mod('damage', 'increased', .20, ['vs:guarding'])),
     option('timing', 'Reset the Workshop', '12% increased cooldown recovery for construct skills.', mod('cooldownRecovery', 'increased', .12, ['construct'])),
     option('munitions', 'Stretch the Magazine', '15% reduced mana cost for munition skills; 10% increased munition damage.', mod('manaCost', 'increased', -.15, ['munition']), mod('damage', 'increased', .10, ['munition'])),
-  ], ['packed_workshop', 'overwound_mechanism', 'hair_trigger', 'tinkers_arsenal', 'barbed_snare', 'parting_gift']),
+  ]),
   school('bastion', 'Bastion: guard, retaliation and resource exchange', [
     option('spines', 'Carried Spines', '+5 thorns; 10% of flat thorns is added to your hits.', mod('thorns', 'flat', 5), mod('thornsToHit', 'flat', .10)),
     option('counter', 'Measured Reprisal', 'After being hit: 15% increased melee damage and 10% increased poise damage.', mod('damage', 'increased', .15, ['melee'], 'recentlyHurt'), mod('poiseDamage', 'increased', .10, undefined, 'recentlyHurt')),
@@ -133,7 +124,7 @@ export const CROSSROADS_SCHOOLS = [
     option('recovery', 'Bend, Then Mend', 'After a block: regenerate 1.5% of maximum life per second.', mod('lifeRegenPct', 'flat', .015, undefined, 'recentlyBlocked')),
     { id: 'wall', name: 'Feed the Wall', description: '+10 maximum poise. While guarding, drain 4% of maximum poise per second into your guard at 1.5:1. Keep a 35% poise reserve.', mods: [mod('poise', 'flat', 10)], conduit: { from: 'poise', to: 'guard', drainPct: .04, ratio: 1.5, floor: .35 } },
     option('tenacity', 'Fight Through the Break', 'While your poise is broken: 18% increased damage.', mod('damage', 'increased', .18, undefined, 'poiseBroken')),
-  ], ['unyielding_stance', 'bulwark_of_thorns', 'counterweight', 'shieldwall_doctrine', 'answering_wall', 'stalwart_rhythm']),
+  ]),
   school('chorus', 'Chorus: restoration, songs and shared strength', [
     option('friends', 'Courage in Company', '2% increased damage per nearby ally (the shared nearby-ally cap applies).', gaugeMod('damage', 'increased', .02, 'allies:near')),
     option('song', 'The Long Verse', '18% increased effect duration for song skills.', mod('effectDuration', 'increased', .18, ['song'])),
@@ -141,7 +132,7 @@ export const CROSSROADS_SCHOOLS = [
     option('grace', 'Grace in Motion', 'After a movement skill: regenerate 1% of maximum life per second.', mod('lifeRegenPct', 'flat', .01, undefined, 'recentlyMoved')),
     option('choir', 'Sheltering Choir', 'Gain one Wakeflame every 15s; gain 0.15 life regeneration per second for each Wakeflame held.', mod('chargeRegen_wakeflame', 'flat', 1 / 15), gaugeMod('lifeRegen', 'flat', .15, 'charge:wakeflame')),
     option('respite', 'Room to Recover', 'After being healed: 12% increased evasion and 6% increased movement speed.', mod('evasion', 'increased', .12, undefined, 'recentlyHealed'), mod('moveSpeed', 'increased', .06, undefined, 'recentlyHealed')),
-  ], ['held_note', 'countermelody', 'rising_chorus', 'commanding_presence', 'mending_echoes', 'sanguine_feast']),
+  ]),
   school('entropy', 'Entropy: ailments, dangerous reserves and altered time', [
     option('chill', 'Cracks in the Ice', '+20% critical strike multiplier against chilled enemies.', mod('critMulti', 'flat', .20, ['vs:chill'])),
     option('held', 'Time to Wound', '+15% ailment chance against held enemies.', mod('statusChance', 'flat', .15, ['vs:hardCC'])),
@@ -149,7 +140,7 @@ export const CROSSROADS_SCHOOLS = [
     option('blood', 'Careful Desperation', 'While on low life: 12% increased cast speed and 1.5% life leech.', mod('castSpeed', 'increased', .12, undefined, 'lowLife'), mod('lifeLeech', 'flat', .015, undefined, 'lowLife')),
     option('fury', 'A Slow Anger', 'Gain one Fury charge every 5s, up to five through this source.', mod('proc_slow_burn', 'flat', 1)),
     option('chronicle', 'Hold the Moment', '20% increased effect duration for chrono skills.', mod('effectDuration', 'increased', .20, ['chrono'])),
-  ], ['lingering_moment', 'borrowed_haste', 'smothering_spores', 'loose_thread', 'putrefaction', 'epidemic']),
+  ]),
 ];
 
 export const CROSSROADS_GROUPS = [CROSSROADS_PURSUITS, CROSSROADS_TECHNIQUES, ...CROSSROADS_SCHOOLS];
