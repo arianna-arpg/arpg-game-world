@@ -21,11 +21,21 @@ initialize after placement, never at `createMonster`'s temporary position.
 | `onAnchorLost` | Entity dies, disappears or leaves the story: `hold` its last point or `release` | `hold` |
 | `style` | `vine`, `chain`, or `spirit` drawing | Plain cord |
 | `color`, `width`, `anchorSize` | Cord and ground-marker appearance | Shared config |
+| `anchorDoodad` | Registered `DOODAD_VISUALS` key; uses the actual scenery painter and bake cache | Style's simple marker |
+| `opacity` | Cord alpha, 0–1 | 1 |
+| `glow` | Halo `{width, opacity, pulse?}`; pulse is radians/second, 0 holds still | None |
 
 Require `0 <= rest < taut <= 1`, positive finite length and return speed.
 The boot validator and binding API reject invalid mechanics. Attack reach is
 independent: a melee attack extends past the head, and a projectile may travel
-beyond the cord. The three debuts use melee skills to make their territory legible.
+beyond the cord. Ranged rooted plants deliberately threaten beyond their stem's reach.
+
+The Shade uses `tombstone`, the very same arched grave painter used in world
+scenery. Its spirit cord is continuous, translucent and softly glowing (layered
+strokes, no per-frame canvas blur). Snapper and rooted Rootwild plants use the
+existing `vine_coil` jungle doodad painter and sway cache. Anchor art is paint-only:
+it does not add a collider beneath the creature or a separately targetable object.
+Changing a scenery definition changes every tether referencing it too.
 
 ## Runtime rules
 
@@ -65,9 +75,41 @@ maximum reach and the cord brightens during recoil.
 | Gravebound Shade | Undead / 6 | 270 / 135 / 45% | Wider Shadow Slash; long reach and slower return |
 | Stakebound Hound | Demon / 8 | 235 / 320 / 18% | Fast approach, Cinder Bite, sharp chain recoil |
 
-They join faction encounter tables with low weights and small pack sizes. New
-visits can roll them naturally; already remembered zones keep their population.
-All definitions live in `data/tetheredMonsters.ts`; no enemy IDs occur in the runtime.
+Snapper and Shade join faction encounter tables with low weights and small pack
+sizes. Hounds now appear with their keeper in the Ashen Kennels rather than in
+unaccompanied faction packs. New visits can roll these encounters; already
+remembered zones keep their population. Definitions live in
+`data/tetheredMonsters.ts`; no enemy IDs occur in the movement runtime.
+
+## Rootwild and kennels
+
+Five Rootwild species use the same restraint:
+
+| Species | Reach | Role |
+| --- | --- | --- |
+| Coilmaw | 200 | Fast lunging jaw; short, sharp recoil |
+| Dragbloom | 310 | Long-stemmed pulling bloom with a close bite |
+| Sporependulum | 250 | Ranged pitcher; ground warnings extend beyond its stem |
+| Hookvine | 290 | Existing hooking predator now rooted |
+| Hingejaw | 165 | Existing ambusher now guards a small feeding patch |
+
+The three new bodies have composable plant looks, ordinary paid skills, level
+presence envelopes and small pack sizes. They inhabit jungle and rootway tables,
+Rootwild faction packs and the Seedbed Hollow. Coilmaw also joins feeding patches.
+
+`data/tetheredHabitats.ts` registers the Ashen Kennels using the existing authored
+map, lair and sidezone systems. Level-8+ steppes and volcanic surfaces can roll its
+entrance. Every fresh kennel has exactly one Ashen Houndmaster and three hounds
+at fixed posts, plus the usual pocket spoils. The keeper uses Hellfire Lash and
+Rallying Howl; hounds within 520 units gain +20% increased damage and +15%
+increased attack speed through `MonsterDef.bond`. Killing the keeper or leaving
+his range removes that bond; a previously cast rally expires normally. This is
+proximity leadership, not a new command/target-selection subsystem. Hounds remain
+physically attached to their posts even after their keeper falls.
+
+Exact spawn seats and existing zone memory keep the group coherent without
+recreating hounds on entry. Saved pockets re-mint from their entrance kind/seed;
+their remembered deaths, head positions and tether points are then restored.
 
 ## Verification
 
@@ -75,5 +117,10 @@ All definitions live in `data/tetheredMonsters.ts`; no enemy IDs occur in the ru
 hard bounds, recoil, blocking terrain, moving/destroyed anchors, actual zone revisits
 and durable reloads, co-op state removal, content reachability and each enemy's
 ordinary combat pipeline. Also run `npm run check` and `npm run sim -- run --suite smoke`.
-After a build, `npx electron balance/movement-tethers-ui.cjs` captures the three
-variants in an isolated hidden client to `balance/reports/movement-tethers.png`.
+`npm run probe -- tetherecology` checks shared-art references, the actual kennel
+entrance/load, bonds and their removal, live AI reach, revisit and durable reload.
+`npm run probe -- rootwild` covers all plant casts and habitat playability.
+Run `npm run genqa` for the habitat/map changes.
+After a build, `npx electron balance/movement-tethers-ui.cjs` captures six tether
+variants and the kennel in an isolated hidden client to
+`balance/reports/movement-tethers.png` and `balance/reports/ashen-kennels.png`.

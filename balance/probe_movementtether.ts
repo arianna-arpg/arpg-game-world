@@ -2,6 +2,7 @@ import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { updateAI } from '../src/engine/ai';
 import { MONSTERS, FACTIONS } from '../src/data/monsters';
 import { TETHERED_MONSTERS } from '../src/data/tetheredMonsters';
+import { ASHEN_KENNELS } from '../src/data/tetheredHabitats';
 import { SKILLS } from '../src/data/skills';
 import { bindMovementTether, ensureMovementTether, refreshMovementTether, movementTetherDistance,
   updateMovementTethers, savedMovementTether, restoreMovementTether, movementTetherErrors } from '../src/engine/movementTether';
@@ -23,7 +24,8 @@ const spawn = (id = 'rootlash_snapper') => {
 };
 for (const def of Object.values(TETHERED_MONSTERS)) {
   check(`${def.id}: valid tether`, !movementTetherErrors(def.movementTether!).length);
-  check(`${def.id}: discoverable faction spawn`, FACTIONS[def.faction!].table.some(r => r.id === def.id));
+  check(`${def.id}: discoverable encounter or faction spawn`, FACTIONS[def.faction!].table.some(r => r.id === def.id)
+    || !!ASHEN_KENNELS.spawns?.some(r => r.id === def.id));
   check(`${def.id}: ordinary affordable combat`, def.skills.every(id => !!SKILLS[id]?.ai
     && SKILLS[id].manaCost <= (def.base.mana ?? 0)));
 }

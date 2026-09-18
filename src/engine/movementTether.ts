@@ -16,6 +16,11 @@ export interface MovementTetherSpec {
   width?: number;
   style?: 'vine' | 'chain' | 'spirit';
   anchorSize?: number;
+  /** Reuse a registered scenery painter; cosmetic, with no terrain collider. */
+  anchorDoodad?: string;
+  /** Continuous translucent cords can carry a softly breathing halo. */
+  opacity?: number;
+  glow?: { width: number; opacity: number; pulse?: number };
 }
 export const MOVEMENT_TETHER_CFG = {
   taut: 0.98, rest: 0.3, returnSpeed: 220,
@@ -43,6 +48,10 @@ export function movementTetherErrors(s: MovementTetherSpec): string[] {
     if (s[key] !== undefined && (!Number.isFinite(s[key]) || s[key]! <= 0)) errors.push(`${key} must be positive`);
   }
   if (s.style !== undefined && !['vine', 'chain', 'spirit'].includes(s.style)) errors.push('unknown style');
+  if (s.opacity !== undefined && !(s.opacity >= 0 && s.opacity <= 1)) errors.push('opacity must be in [0,1]');
+  if (s.glow && (!Number.isFinite(s.glow.width) || s.glow.width <= 0
+    || !(s.glow.opacity >= 0 && s.glow.opacity <= 1)
+    || !Number.isFinite(s.glow.pulse ?? 0) || (s.glow.pulse ?? 0) < 0)) errors.push('invalid glow');
   if (s.onAnchorLost !== undefined && !['hold', 'release'].includes(s.onAnchorLost)) errors.push('unknown anchor loss policy');
   return errors;
 }

@@ -199,6 +199,9 @@ undead and demon debut rows in `data/tetheredMonsters.ts`. The configurable
 movementTether cord is separate from AI leashes and damaging pack links; see
 `docs/engine/movement-tethers.md`. Verify with `npm run probe -- movementtether`
 and the hidden `balance/movement-tethers-ui.cjs` capture after a build.
+Shared scenery anchors, spirit glow, and Ashen Kennels/Rootwild ecology are
+documented there too; `npm run probe -- tetherecology` checks keeper leadership
+and saved encounter composition.
 
 - `npm install` — first-time setup (also run automatically by the .bat launchers).
 - `npm run dev` — Vite dev server at http://localhost:5173 (browser dev mode, `Play Game.bat`).

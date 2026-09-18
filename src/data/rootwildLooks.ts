@@ -2,6 +2,19 @@ import type { LookDef } from '../render/vis/parts';
 
 /** The Rootwild is plant anatomy in motion: no clothes, faces or weapons. */
 export const ROOTWILD_LOOKS: Record<string, LookDef> = {
+  rootwild_coilmaw: {
+    parts:[{kind:'spearLeaves',x:-0.4,scale:0.65},{kind:'burrHusk',x:-0.3,scale:0.55},
+      {kind:'trapLobes',x:0.24,scale:1.05}],
+  },
+  rootwild_dragbloom: {
+    parts:[{kind:'spearLeaves',x:-0.25,scale:0.65},{kind:'dewCroziers',scale:0.85},
+      {kind:'hookCreepers',scale:0.95},{kind:'trapLobes',x:0.32,scale:0.55}],
+  },
+  rootwild_sporependulum: {
+    parts:[{kind:'spearLeaves',x:-0.48,scale:0.6},{kind:'pitcherCup',scale:0.95},
+      {kind:'nectarBells',x:-0.45,scale:0.55}],
+    live:[{kind:'sporeVents',x:0.4,scale:0.35,color:'#d4df98',params:{n:3}}],
+  },
   rootwild_thornfan: {
     parts:[{kind:'rootStriders',scale:0.6},{kind:'spearLeaves',x:-0.35,scale:0.65},{kind:'burrHusk',x:-0.25,scale:0.5},{kind:'thornSprays',x:0.15,scale:0.8}],
   },

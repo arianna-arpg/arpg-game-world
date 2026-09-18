@@ -5217,7 +5217,7 @@ export class Renderer {
     }
 
     // Body (untouchable spirits ghostly; stealthed/invisible actors faded)
-    drawMovementTether(ctx, a, world.time);
+    drawMovementTether(ctx, a, world);
     ctx.save();
     ctx.translate(x, y);
     // A LIVE TRAVERSAL owns the traveler's pose: the geyser's rise swells the

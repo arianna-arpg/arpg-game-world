@@ -28,6 +28,8 @@ registerSidezone({
       {id:'rootwild_sundew',weight:1},{id:'rootwild_hookvine',weight:1},
       {id:'rootwild_brambleback',weight:1},
       {id:'rootwild_windseed',weight:1},{id:'rootwild_coppice',weight:1},
+      {id:'rootwild_coilmaw',weight:2},{id:'rootwild_dragbloom',weight:2},
+      {id:'rootwild_sporependulum',weight:2},
     ]};
     def.fauna=[{id:'rootwild_nectar_bell',chance:1,count:[1,1]}];
     return def;
@@ -47,7 +49,8 @@ registerLandmark({
     {kind:'leaf_mulch',count:[2,3],radius:[12,18]},
   ]},
   spawns:{table:[{id:'rootwild_burrling',weight:2},{id:'rootwild_thornfan',weight:2},
-    {id:'rootwild_hingejaw',weight:1},{id:'rootwild_nectar_bell',weight:1}],
+    {id:'rootwild_hingejaw',weight:1},{id:'rootwild_nectar_bell',weight:1},
+    {id:'rootwild_coilmaw',weight:2}],
     count:[3,4],where:'interior'},
 });
 registerLair({

@@ -29,9 +29,10 @@ app.whenReady().then(async () => {
       w.actors = [w.player]; w.doodads = []; w.markDoodadsChanged(); w.walk = null;
       w.player.pos = {x:w.arena.w/2, y:w.arena.h/2};
       const p = w.player.pos;
-      const bodies = ['rootlash_snapper', 'gravebound_shade', 'stakebound_hound'].map((id,i) => {
+      const bodies = ['rootlash_snapper', 'gravebound_shade', 'stakebound_hound',
+        'rootwild_coilmaw', 'rootwild_dragbloom', 'rootwild_sporependulum'].map((id,i) => {
         const a = w.createMonster(id, 6, 'enemy');
-        a.pos = {x:p.x-220+i*220, y:p.y-100}; a.passive = true;
+        a.pos = {x:p.x-290+(i%3)*250, y:p.y-200+Math.floor(i/3)*260}; a.passive = true;
         w.actors.push(a); return a;
       });
       __game.step(180);
@@ -44,6 +45,26 @@ app.whenReady().then(async () => {
     const { image, ...facts } = result; log(facts);
     assert.equal(result.fatal, null); assert.ok(result.cords.every(c => c.point));
     fs.writeFileSync(path.join(dir, 'movement-tethers.png'), Buffer.from(image.split(',')[1], 'base64'));
-    log('PASS: three tether variants render in the real client');
+    log('PASS: six tether variants render in the real client');
+    const kennel = await win.webContents.executeJavaScript(`(() => {
+      const w=__game.world();
+      w.enterSidezone({pos:{...w.player.pos},seed:413,kind:'ashen_kennel_gate'});
+      w.player.invulnerable=true; w.player.pos={x:600,y:510};
+      w.actors.forEach(a=>{if(a.team==='enemy') a.passive=true;});
+      __game.step(180);
+      w.actors.filter(a=>a.defId==='stakebound_hound').forEach(a=>{
+        a.pos={x:a.pos.x+(a.pos.x<600?70:-70),y:a.pos.y+110};
+      });
+      __game.step(1);
+      return {fatal:__game.crash().fatal,
+        hounds:w.actors.filter(a=>a.defId==='stakebound_hound').map(a=>({bond:a.bondHeld,point:a.movementTether?.point})),
+        master:w.actors.some(a=>a.defId==='ashen_houndmaster'),
+        image:document.getElementById('game').toDataURL('image/png')};
+    })()`);
+    const {image:kennelImage,...kennelFacts}=kennel; log(kennelFacts);
+    assert.equal(kennel.fatal,null); assert.ok(kennel.master);
+    assert.equal(kennel.hounds.length,3); assert.ok(kennel.hounds.every(a=>a.bond && a.point));
+    fs.writeFileSync(path.join(dir,'ashen-kennels.png'),Buffer.from(kennelImage.split(',')[1],'base64'));
+    log('PASS: Ashen Kennels crew and bonds render in the real client');
   } finally { clearTimeout(timeout); win.destroy(); server.server.close(); app.quit(); }
 }).catch(error => { log(error.stack ?? String(error)); app.exit(1); });

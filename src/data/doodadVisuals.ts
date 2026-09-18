@@ -29,6 +29,11 @@ const WATER_LOOK = {
 
 export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   ...ARENA_BOSS_DOORS,
+  ashen_kennel_gate: {
+    painter:'caveMouth',order:55,
+    params:{color:'#594239',edge:'#ad7954',material:'stone',glow:'#e18e4d',throat:'#1b1010'},
+    light:{radius:-2,color:'#e18e4d',intensity:0.3,flicker:1.2},
+  },
   rootwild_seedbed_gate: {
     painter:'caveMouth',order:55,
     params:{color:'#394727',edge:'#839354',material:'wood',glow:'#d7c78c',throat:'#10170c',vines:{color:'#6d8b45'}},

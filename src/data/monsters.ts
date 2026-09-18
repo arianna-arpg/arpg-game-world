@@ -24,7 +24,7 @@ import { ABYSS_MONSTERS } from './abyssMonsters';
 import { KINSHIP_MONSTERS } from './kinshipMonsters';
 import { ROOTWILD_MONSTERS } from './rootwildMonsters';
 import { ARENA_BOSS_MONSTERS } from './arenaBosses';
-import { TETHERED_MONSTERS } from './tetheredMonsters';
+import { TETHERED_MONSTERS, TETHER_KEEPERS } from './tetheredMonsters';
 import type { MovementTetherSpec } from '../engine/movementTether';
 import { registerAIAction } from '../engine/aiActions';
 import { FluxPhase } from '../engine/flux';
@@ -2173,6 +2173,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   ...ROOTWILD_MONSTERS,
   ...ARENA_BOSS_MONSTERS,
   ...TETHERED_MONSTERS,
+  ...TETHER_KEEPERS,
 
   zombie: {
     id: 'zombie', name: 'Shambling Zombie',
@@ -23350,6 +23351,9 @@ export const FACTIONS: Record<string, {
       {id:'rootwild_brambleback',weight:1},
       {id:'rootwild_windseed',weight:2},
       {id:'rootwild_hookvine',weight:1},
+      {id:'rootwild_coilmaw',weight:2},
+      {id:'rootwild_dragbloom',weight:1},
+      {id:'rootwild_sporependulum',weight:1},
     ],
   },
   // Each roster now BREATHES with level (presence envelopes): fodder rows
@@ -23829,7 +23833,6 @@ export const FACTIONS: Record<string, {
       { id: 'ash_whelp', weight: 3, presence: 'early_only' },
       { id: 'imp', weight: 3, presence: { stops: [[1, 1.4], [12, 1], [24, 0.6], [40, 0.35]] } },
       { id: 'hellhound', weight: 3 },
-      { id: 'stakebound_hound', weight: 0.7, presence: { from: 8, fadeIn: 4 } },
       { id: 'cinder_fiend', weight: 2, presence: { from: 6, fadeIn: 3 } },
       { id: 'searing_spawn', weight: 2, presence: { from: 8, fadeIn: 4 } },
       { id: 'dread_fiend', weight: 1, presence: { from: 12, fadeIn: 5, mul: 2 } },

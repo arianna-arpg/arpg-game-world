@@ -801,6 +801,7 @@ export function validateContent(): void {
     }
     for (const [id, m] of Object.entries(MONSTERS)) {
       if (m.movementTether) for (const issue of movementTetherErrors(m.movementTether)) warn(`monster ${id}: movementTether ${issue}`);
+      if (m.movementTether?.anchorDoodad && !DOODAD_VISUALS[m.movementTether.anchorDoodad]) warn(`monster ${id}: unknown tether anchorDoodad ${m.movementTether.anchorDoodad}`);
       for (const link of m.sympathy ?? []) {
         if (!SYMPATHY_LINKS[link]) warn(`monster ${id}: sympathy link '${link}' is not registered`);
       }
