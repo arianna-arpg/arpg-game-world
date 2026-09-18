@@ -270,6 +270,17 @@ records remain in `docs/design/passive-routes.md` and `passive-crossroads.md`.
   push and PR; nightly.yml's release-candidate `cut` needs the same pair with
   `--slow`.
 - `npm run preview` — serve the built `dist/`.
+- `npm run icon` — repaints THE INSIGNIA icon set from pure math
+  (`scripts/make-icon.mjs`, zero deps): `build/icon.png` (512) +
+  `build/icon.ico` (16…256, one hinted cut per frame — strokes thicken and
+  the spokes fade toward 16 px so the trio survives the tray) +
+  `public/favicon.ico` / `site/assets/favicon.ico`. The website's nav mark
+  (`site/assets/nav.js` MARK) is the canonical geometry — change it there
+  first, mirror it here. The launcher sets the file on BOTH windows through
+  its `APP_ICON` seam (the .ico on Windows, the .png elsewhere; shipped as
+  extraResources), so a dev checkout, the packaged exe, a Linux AppImage,
+  the browser tab and the site all wear the one mark; the launcher page's
+  header carries the same SVG as a lockup.
 
 No unit-test runner is configured; `tsc --noEmit`, the probe gate, the smoke
 checks, the balance harness's smoke suite, and the generation QA sweep are how

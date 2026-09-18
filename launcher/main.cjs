@@ -85,6 +85,24 @@ const STAMP = path.join(DIST, '.build-head');
  *  scripts/make-build-info.mjs; null in a checkout — git answers live. */
 const BUILD_INFO = PACKAGED ? readJson(path.join(BASE, 'build-info.json')) : null;
 
+// ------------------------------------------------------------- the insignia
+// THE WINDOW ICON: the same mark the website and the packaged exe wear
+// (scripts/make-icon.mjs paints build/icon.ico + icon.png from the
+// insignia's math), set explicitly on BOTH windows so a dev checkout
+// (`npm run game`) and a Linux AppImage carry it on the title bar and the
+// taskbar exactly like the installed Windows exe does. Windows takes the
+// multi-size .ico (the title bar and the taskbar each pull their own
+// frame); everything else takes the 512 PNG. A packaged install ships both
+// as extraResources beside the exe (electron-builder.yml); a checkout reads
+// them from build/. A missing file degrades to Electron's default icon —
+// never a refusal, the launcher's standing law.
+const ICON_DIR = PACKAGED ? BASE : path.join(__dirname, '..', 'build');
+/** @type {string | undefined} */
+const APP_ICON = (() => {
+  const file = path.join(ICON_DIR, process.platform === 'win32' ? 'icon.ico' : 'icon.png');
+  return fs.existsSync(file) ? file : undefined;
+})();
+
 // Hard fallbacks so a missing/broken config file can never brick the launcher.
 const CONFIG_DEFAULTS = {
   game: { title: 'Hollow Wake' },
@@ -699,6 +717,7 @@ function createGameWindow(opts) {
     autoHideMenuBar: true,
     backgroundColor: '#0a0a0e',
     title: cfg.game.title,
+    icon: APP_ICON,
     fullscreen,
     webPreferences: {
       devTools: !!cfg.window.devtools,
@@ -753,6 +772,7 @@ function createLauncherWindow(opts) {
     autoHideMenuBar: true,
     backgroundColor: '#0a0a0e',
     title: `${cfg.game.title} — Launcher`,
+    icon: APP_ICON,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,

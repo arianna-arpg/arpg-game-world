@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Hollow Wake</title>
+  <!-- THE INSIGNIA on the tab: the same hand-cut favicon.ico the desktop
+       exe and the website wear (scripts/make-icon.mjs → public/, which Vite
+       copies beside index.html and rewrites for the site/play base). -->
+  <link rel="icon" href="/favicon.ico" />
   <!-- THE EARLY TRAP: a classic (non-module) script installed BEFORE the module
        graph loads, so a failure of the bundle itself — a 404'd chunk, a parse
        error, a boot-time import throw — is CAPTURED and eventually SHOWN

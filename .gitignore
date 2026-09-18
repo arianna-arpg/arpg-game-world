@@ -14,8 +14,9 @@ dist-ssr/
 # win-unpacked/. Rebuild at will; releases live on GitHub.
 release/
 # Stamped by scripts/make-build-info.mjs on every dist run (ships
-# inside the package as an extraResource). build/icon.png IS
-# committed — it's an asset, not output.
+# inside the package as an extraResource). build/icon.png + icon.ico
+# ARE committed — they're assets (scripts/make-icon.mjs paints them
+# from the insignia's math), not output.
 build/build-info.json
 
 # ── In-browser demo build ────────────────────────────────────

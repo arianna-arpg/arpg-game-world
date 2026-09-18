@@ -12,8 +12,10 @@
 # ---------------------------------------------------------------------------
 appId: com.hollowwake.game
 productName: Hollow Wake
-# Icon + build inputs live in build/ (icon.png is committed; build-info.json
-# is stamped by scripts/make-build-info.mjs on every dist run).
+# Icon + build inputs live in build/ (icon.png + icon.ico are committed —
+# scripts/make-icon.mjs paints both from the website's insignia, `npm run
+# icon`; build-info.json is stamped by scripts/make-build-info.mjs on every
+# dist run).
 directories:
   buildResources: build
   output: release
@@ -34,6 +36,13 @@ extraResources:
     to: launcher.config.json
   - from: build/build-info.json
     to: build-info.json
+  # The window icon beside the exe: launcher/main.cjs sets it on both windows
+  # (the .ico on Windows, the .png elsewhere) so the title bar and taskbar
+  # wear the insignia in every launch path — a dev checkout reads build/.
+  - from: build/icon.ico
+    to: icon.ico
+  - from: build/icon.png
+    to: icon.png
 
 asar: true
 # Nothing native to rebuild (zero deps) — skip the postinstall dance entirely.
@@ -45,7 +54,9 @@ npmRebuild: false
 afterPack: scripts/afterPack.cjs
 
 win:
-  icon: build/icon.png
+  # The hand-cut multi-size .ico (one hinted frame per size) — never let
+  # electron-builder downsample the 512 PNG into a smudged 16 px tray icon.
+  icon: build/icon.ico
   target:
     - nsis                     # installer; win-unpacked/ also lands in release/
 nsis:
