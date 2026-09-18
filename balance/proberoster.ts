@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_passiveweave.ts', status: 'green', tier: 'fast', why: '72 native powers, 126 two-port junctions, shorter inter-class paths, investment and geometry, event gates, live carried hits and orbs, threshold modifiers, conduits and persistence' },
   { probe: 'probe_passiveinvestment.ts', status: 'green', tier: 'fast', why: 'Native passive replacements, zero tree graft grants, all 102 capstones behind useful small-node forks, no alternate ingress, live native proc gates and play events, run compatibility' },
   { probe: 'probe_passiveroutes.ts', status: 'green', tier: 'fast', why: 'Physical forks every two allocations with and without menus, every class opening, 138 visible native grants, 18 event powers, live healing/death/movement/conduits, save and co-op' },
   { probe: 'probe_passivecrossroads.ts', status: 'green', tier: 'fast', why: 'Nine native school masteries, 27 supporting opening passives, all 108 school allocations, search, save/co-op reconstruction, uniqueness and obsolete choice/graft cleanup' },

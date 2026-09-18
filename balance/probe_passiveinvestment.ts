@@ -15,7 +15,7 @@ function check(label:string,ok:boolean,detail=''){checks++;if(!ok)failures++;con
 const near=(a:number,b:number)=>Math.abs(a-b)<1e-6;
 const warnings:string[]=[];const originalWarn=console.warn;console.warn=(...args:unknown[])=>warnings.push(args.join(' '));
 seedGlobalRandom(1234);bootSimEngine();console.warn=originalWarn;
-const nodes=Object.values(N).filter(n=>!n.vocation),main=nodes.filter(n=>!n.realm);
+const nodes=Object.values(N).filter(n=>!n.vocation),main=nodes.filter(n=>!n.realm&&!n.id.startsWith('weave_'));
 const prep=nodes.filter(n=>n.id.startsWith('prep_')),entries=prep.filter(n=>n.id.endsWith('_entry'));
 check('no passive-tree or choice-pool graft grants remain',nodes.every(n=>!n.graft)&&Object.values(CHOICE_GROUPS).every(g=>g.options.every(o=>!o.graft)));
 check('all allocated passive powers expose zero graft sources',graftSourcesOf(new Set(nodes.map(n=>n.id)),{},N).length===0);

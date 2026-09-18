@@ -174,6 +174,12 @@ forks within two allocations. Data lives in `passiveNotables.ts`,
 `npm run probe -- passiveinvestment`, `passivecrossroads` and `passiveroutes`,
 then `balance/passive-routes-ui.cjs` after a build. Earlier expansion/balance
 records remain in `docs/design/passive-routes.md` and `passive-crossroads.md`.
+The additive interwoven disciplines live in `src/data/passiveWeave.ts`:
+72 native notables, 270 smalls and 126 connections between old travel routes.
+`docs/design/passive-weave.md` records the 1,888-node Star, 18 playstyles,
+threshold-safe editor serialization, fractional ward fix and compatibility.
+Verify with `npm run probe -- passiveweave` plus the existing passive probes
+and the hidden `balance/passive-routes-ui.cjs` harness after a build.
 
 ## Commands
 - `npm install` — first-time setup (also run automatically by the .bat launchers).

@@ -3217,7 +3217,10 @@ export class Actor {
     if (this.ward > 0) {
       const rate = this.sheet.get('wardDecay');
       this.ward = Math.max(0, this.ward - Math.max(this.ward * rate, 2) * dt);
-      if (this.ward < 0.5) this.ward = 0;
+      // Ward is continuous like its conduit feeds. A gameplay-sized cutoff
+      // erases sub-point gains every frame, making their value frame-rate
+      // dependent; only discard a numerically negligible remainder.
+      if (this.ward < Number.EPSILON) this.ward = 0;
     }
 
     // STAGGERED damage drains on its own schedule — already-mitigated LIFE

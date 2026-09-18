@@ -388,6 +388,7 @@ export function mountPassiveEditor(ui: UI): void {
       return `linkMod(${serModTail(m, [J(m.stat), J(m.fromStat), String(m.value)]).join(', ')})`;
     }
     if (m.gauge !== undefined) {
+      if (m.gaugeAt !== undefined) return `gaugeGateMod(${serModTail(m, [J(m.stat), J(m.kind), String(m.value), J(m.gauge), String(m.gaugeAt)]).join(', ')})`;
       return `gaugeMod(${serModTail(m, [J(m.stat), J(m.kind), String(m.value), J(m.gauge)]).join(', ')})`;
     }
     return `mod(${serModTail(m, [J(m.stat), J(m.kind), String(m.value)]).join(', ')})`;
@@ -419,9 +420,10 @@ export function mountPassiveEditor(ui: UI): void {
     const list = Object.values(PASSIVE_NODES).filter(n => n.vocation === undefined);
     // Emit exactly the constructors the tree uses (unused imports fail tsc).
     const usesLink = list.some(n => n.mods?.some(m => m.kind === 'link' && m.fromStat !== undefined));
-    const usesGauge = list.some(n => n.mods?.some(m => m.gauge !== undefined));
+    const usesGauge = list.some(n => n.mods?.some(m => m.gauge !== undefined && m.gaugeAt === undefined));
+    const usesGaugeGate = list.some(n => n.mods?.some(m => m.gauge !== undefined && m.gaugeAt !== undefined));
     const usesMod = list.some(n => n.mods?.some(m => m.gauge === undefined && !(m.kind === 'link' && m.fromStat !== undefined)));
-    const fns = [usesGauge ? 'gaugeMod' : '', usesLink ? 'linkMod' : '', usesMod ? 'mod' : ''].filter(Boolean);
+    const fns = [usesGauge ? 'gaugeMod' : '', usesGaugeGate ? 'gaugeGateMod' : '', usesLink ? 'linkMod' : '', usesMod ? 'mod' : ''].filter(Boolean);
     const importLine =
       `import { ${[...fns, 'type Attributes', 'type Modifier'].join(', ')} } from '../engine/stats';`;
     return `// ---------------------------------------------------------------------------
@@ -437,6 +439,7 @@ import { VOCATIONS, VOCATION_CFG, vocationNodeId, vocationRootId } from './vocat
 import type { GraftSpec, PassiveChoiceRef } from './passiveChoices';
 import type { ConduitSpec } from '../engine/skills';
 import './passiveCrossroads';
+import './passiveWeave';
 
 export type NodeKind = 'start' | 'small' | 'notable' | 'keystone' | 'attr' | 'vocation' | 'choice';
 

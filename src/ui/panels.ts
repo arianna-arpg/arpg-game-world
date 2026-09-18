@@ -7363,11 +7363,18 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const q = this.treeSearch.trim().toLowerCase();
     svg.classList.toggle('tree-searching', q.length > 0);
     let hits = 0;
+    const searchRouteIds = new Set<string>();
     svg.querySelectorAll<SVGCircleElement>('.tree-node').forEach(el => {
       const node = PASSIVE_NODES[el.dataset.node ?? ''];
       const hit = q.length > 0 && !!node && this.passiveNodeSearchText(node).includes(q);
       el.classList.toggle('search-hit', hit);
-      if (hit) hits++;
+      if (hit) { hits++; searchRouteIds.add(node.id); }
+    });
+    // Keep the ways into matching clusters readable in a densely woven tree.
+    // Crossed strokes are not junctions; unrelated routes should recede with
+    // their nodes. Clearing the query restores the authored edge appearance.
+    svg.querySelectorAll<SVGLineElement>('line[data-a][data-b]').forEach(el => {
+      el.style.opacity = q && !searchRouteIds.has(el.dataset.a!) && !searchRouteIds.has(el.dataset.b!) ? '0.1' : '';
     });
     const n = this.passiveTree.querySelector<HTMLElement>('#tree-search-n');
     if (n) n.textContent = q ? `${hits} hit${hits === 1 ? '' : 's'}` : '';
