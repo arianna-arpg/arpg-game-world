@@ -25,7 +25,7 @@ check('no weave content warnings',!warnings.some(w=>/weave_|passiveWeave/.test(w
 check('all stat, source, owner and victim conditions resolve',added.every(n=>(n.mods??[]).every(m=>STAT_DEFS[m.stat]&&(!m.fromStat||STAT_DEFS[m.fromStat])&&(!m.when||CONDITION_IDS.includes(m.when))&&(m.tags??[]).every(t=>!t.startsWith('vs:')||victimConditionKnown(t.slice(3))))));
 check('all 18 new events have bounded clocks',WEAVE_PROCS.length===18&&WEAVE_PROCS.every(p=>(p.icd??0)>0));
 const geo:string[]=[];validatePassiveLayout(s=>geo.push(s));check('whole-tree geometry and topology remain valid',geo.length===0,geo.slice(0,8).join('; '));
-const baseNodes=Object.fromEntries(Object.entries(N).filter(([id])=>!id.startsWith('weave_'))),base=passiveWalkingGraph(baseNodes),full=passiveWalkingGraph(N);
+const baseNodes=Object.fromEntries(Object.entries(N).filter(([id])=>!id.startsWith('weave_')&&!id.startsWith('spec_'))),base=passiveWalkingGraph(baseNodes),full=passiveWalkingGraph(N);
 function distances(graph:Record<string,string[]>,start:string){const result:Record<string,number>={[start]:0},q=[start];for(let i=0;i<q.length;i++)for(const id of graph[q[i]])if(result[id]===undefined){result[id]=result[q[i]]+1;q.push(id);}return result;}
 for(const menus of [false,true]){const audit=auditPassiveRoutes(N,menus);check(`physical forks stay within two allocations, menus ${menus}`,!audit.corridors.length&&!audit.unreachable.length);}
 const starts=Object.keys(base).filter(id=>N[id].kind==='start');let improved=0,pointsSaved=0;

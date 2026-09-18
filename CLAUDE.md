@@ -180,6 +180,12 @@ The additive interwoven disciplines live in `src/data/passiveWeave.ts`:
 threshold-safe editor serialization, fractional ward fix and compatibility.
 Verify with `npm run probe -- passiveweave` plus the existing passive probes
 and the hidden `balance/passive-routes-ui.cjs` harness after a build.
+Specific elemental, casting, minion-family/body and distance investments live
+in `src/data/passiveSpecializations.ts`. The 300-node additive pass brings the
+Star to 2,188 nodes: 225 smalls, 64 notables and 11 keystones behind two-port
+investment clusters. `docs/design/passive-specializations.md` records the
+shared query scopes, relays and tradeoffs; verify with `passivespecializations`
+and the passive UI/editor harness (1,372 expansion nodes round-trip).
 
 ## Commands
 Physical movement tethers live in `engine/movementTether.ts`, with the Sylvan,

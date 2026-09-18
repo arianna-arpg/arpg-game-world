@@ -1,3 +1,4 @@
+import './minionFamilies';
 import { HIVECALL_SKILLS } from './hivecall';
 import { GOAD_SKILLS } from './goadSkills';
 import { COMPANION_SKILLS } from './companionSkills';

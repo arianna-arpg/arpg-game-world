@@ -1,3 +1,4 @@
+import { minionBodyContext } from './skillScopes';
 import { throngEvolution, throngTravelProtected, throngClusterPlies, THRONG_EVOLUTION } from './throngEvolution';
 import { cosmeticPortalLoadout, cosmeticSkillPaint, settleCosmetics } from '../meta/cosmetics';
 import { COSMETIC_CFG } from '../data/cosmetics';
@@ -38763,7 +38764,7 @@ export class World {
    *  investment. Base body stats and minionSize are never scaled: the
    *  divisor tempers the investment, not the creature. */
   bakeMinionOwnerStats(minion: Actor, caster: Actor, inst: SkillInstance, scale = 1): void {
-    const tags = skillContextTags(inst);
+    const tags = minionBodyContext(skillContextTags(inst), minion.defId);
     const extra = instanceMods(inst);
     const throngSpentPlies = Math.max(0, minion.pliesMax - minion.plies);
     const minionCombat = minionCombatOf(inst.def);
@@ -43707,9 +43708,10 @@ export class World {
     this.challenges.afterHit(caster, inst, target, dealt, depth, dmgMult);
     if (dealt > 0) {
       if (depth === 0) this.companionBonds.onHit(caster, inst, target);
-      caster.spendBuffs('hit', def.tags, def.id);
-      if (wasCrit) caster.spendBuffs('crit', def.tags, def.id);
-      if (lethal) { caster.noteRecent('kill'); caster.spendBuffs('kill', def.tags, def.id); }
+      const spentContext = [...skillContextTags(inst)];
+      caster.spendBuffs('hit', spentContext, def.id);
+      if (wasCrit) caster.spendBuffs('crit', spentContext, def.id);
+      if (lethal) { caster.noteRecent('kill'); caster.spendBuffs('kill', spentContext, def.id); }
       // THE STRIDE's spend (THE LEGEND FABRIC): a real blow that landed
       // while 'strided' held marks the walk spent — the reset lands at the
       // caster's next timer tick, so every contact of this frame's swing
@@ -44041,7 +44043,7 @@ export class World {
       const l = Array.isArray(proc.requireStatus) ? proc.requireStatus : [proc.requireStatus];
       if (!owner.statuses.some(st => st.stacks > 0 && l.includes(st.id))) return false;
     }
-    if (proc.tags && (!inst || !proc.tags.every(t => inst.def.tags.includes(t)))) return false;
+    if (proc.tags && (!inst || !proc.tags.every(t => skillContextTags(inst).has(t)))) return false;
     if (proc.oncePerCast) {
       if (owner.procFiredAt.get(proc.id) === this.time) return false;
       owner.procFiredAt.set(proc.id, this.time);

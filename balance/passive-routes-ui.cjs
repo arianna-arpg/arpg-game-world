@@ -102,22 +102,37 @@ app.whenReady().then(async () => {
       assert.ok(weave.dimmed>0&&weave.entryVisible);
       await wait(150);
       fs.writeFileSync(path.join(dir,`passive-weave-cluster-${width}.png`),(await win.webContents.capturePage()).toPNG());
+    const specialization=await win.webContents.executeJavaScript(`(() => {
+      const w=__game.world(),ui=__game.ui,id='spec_fire_devotion',entry=id+'_entry';
+      const line=[...document.querySelectorAll('#tree-svg line[data-a]')].find(e=>(e.dataset.a===entry&&!e.dataset.b.startsWith('spec_'))||(e.dataset.b===entry&&!e.dataset.a.startsWith('spec_')));
+      const port=line.dataset.a===entry?line.dataset.b:line.dataset.a;
+      w.meta.allocated=new Set(['str_start',port]);w.meta.passivePoints=3;w.recalcSeat(w.localSeat);ui.refreshTree();
+      const el=id=>document.querySelector('[data-node="'+id+'"]'),click=id=>el(id).dispatchEvent(new MouseEvent('click',{bubbles:true}));
+      click(id);const locked=w.meta.passivePoints===3;click(entry);click(id+'_a');click(id);
+      const q=document.querySelector('#tree-search');q.value='Ember Devotion';q.dispatchEvent(new Event('input'));
+      const b=ui.treeBox,x=Number(el(entry).getAttribute('cx')),y=Number(el(entry).getAttribute('cy'));
+      ui.treeZoom=7;ui.treePan={x:x-b.minX-b.w/2,y:y-b.minY-b.h/2};ui.refreshTree();
+      return {locked,owned:w.meta.allocated.has(id),points:w.meta.passivePoints,hits:document.querySelectorAll('.tree-node.search-hit').length,tooltip:ui.passiveNodeTooltip(id).description};
+    })()`);
+    log(specialization);assert.ok(specialization.locked&&specialization.owned&&specialization.hits>=4);assert.equal(specialization.points,0);assert.ok(specialization.tooltip.includes('15% less cold'));
+    await wait(150);fs.writeFileSync(path.join(dir,'passive-specialization-cluster.png'),(await win.webContents.capturePage()).toPNG());
       const restored=await win.webContents.executeJavaScript(`(() => {const q=document.querySelector('#tree-search');q.value='';q.dispatchEvent(new Event('input'));return [...document.querySelectorAll('#tree-svg line[data-a]')].every(e=>e.style.opacity==='');})()`);
       assert.ok(restored);
     }
     const editor=buildSync({entryPoints:[path.resolve(__dirname,'../src/dev/passiveEditor.ts')],bundle:true,write:false,platform:'browser',format:'iife',globalName:'__routeEditor'}).outputFiles[0].text;
     const serialized=await win.webContents.executeJavaScript(`(() => { ${editor}\n __routeEditor.mountPassiveEditor(__game.ui); return window.__passiveEditor.serializeTree(); })()`);
+    assert.ok(serialized.includes("import './passiveSpecializations';"));
     assert.ok(serialized.includes("import './passiveCrossroads';"));assert.ok(serialized.includes('conduit:'));assert.ok(serialized.includes('nodes.push('));
     assert.ok(serialized.includes("import './passiveWeave';")&&serialized.includes('gaugeGateMod('));
     const bundle=contents=>buildSync({stdin:{contents,resolveDir:path.resolve(__dirname,'../src/data'),loader:'ts'},bundle:true,write:false,platform:'browser',format:'iife',globalName:'__routeRoundtrip'}).outputFiles[0].text;
-    const snapshot=code=>win.webContents.executeJavaScript(`(() => { ${code}\n const {PASSIVE_NODES:n,PASSIVE_ADJACENCY:a}=__routeRoundtrip; return Object.values(n).filter(n=>/^(route_|prep_|cross_|weave_)/.test(n.id)).map(n=>({...n,links:[...new Set(a[n.id])].sort()})).sort((a,b)=>a.id.localeCompare(b.id)); })()`);
+    const snapshot=code=>win.webContents.executeJavaScript(`(() => { ${code}\n const {PASSIVE_NODES:n,PASSIVE_ADJACENCY:a}=__routeRoundtrip; return Object.values(n).filter(n=>/^(route_|prep_|cross_|weave_|spec_)/.test(n.id)).map(n=>({...n,links:[...new Set(a[n.id])].sort()})).sort((a,b)=>a.id.localeCompare(b.id)); })()`);
     const before=await snapshot(bundle("export * from './passives';"));
     const after=await snapshot(bundle(serialized));
     // Constructors restore absent optional properties as undefined; they have
     // identical semantics and serialize identically on disk and on the wire.
-    assert.equal(after.length,1072);assert.deepEqual(JSON.parse(JSON.stringify(after)),JSON.parse(JSON.stringify(before)));
+    assert.equal(after.length,1372);assert.deepEqual(JSON.parse(JSON.stringify(after)),JSON.parse(JSON.stringify(before)));
     assert.deepEqual(errors,[]);
-    log('PASS: opening clicks, investment, native mastery and weave cross-connections at both sizes; all 1072 changed editor payloads, thresholds and links round-trip');
+    log('PASS: opening clicks, investment, native mastery and weave cross-connections at both sizes; all 1372 changed editor payloads, thresholds and links round-trip');
     console.log('Passive routes UI PASS');
   } finally {clearTimeout(timeout);win.destroy();server.server.close();app.quit();}
 }).catch(error=>{log(error.stack??String(error));app.exit(1);});

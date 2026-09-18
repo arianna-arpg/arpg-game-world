@@ -1,3 +1,4 @@
+import { summonScopeTags } from './skillScopes';
 import { companionBondOf, type CompanionBondSpec } from './companionSpec';
 import { challengeDelivery, type ChallengeSpec } from './challengeSpec';
 // ---------------------------------------------------------------------------
@@ -6699,9 +6700,28 @@ export function instanceMods(inst: SkillInstance): Modifier[] {
 
 /** Damage + status tags a skill's context query should include. */
 export function skillContextTags(def: SkillDef | SkillInstance, extra?: SkillTag[]): Set<SkillTag> {
-  const s = new Set<SkillTag>('def' in def ? instanceBaseTags(def) : def.tags);
+  const inst = 'def' in def ? def : undefined, base = inst ? inst.def : def as SkillDef;
+  const s = new Set<SkillTag>(inst ? instanceBaseTags(inst) : base.tags);
+  s.add(castScopeTag(def));
+  const delivery = inst ? instanceDelivery(inst) : base.delivery;
+  const bodies = delivery.type === 'summon'
+    ? delivery.pool?.map(p => p.id) ?? (delivery.monsterId ? [delivery.monsterId] : [])
+    : base.throng ? [base.throng.monsterId] : [];
+  for (const tag of summonScopeTags(bodies)) s.add(tag);
   if (extra) for (const t of extra) s.add(t);
   return s;
+}
+
+/** Resolved commitment axis. Support conversions use the same admission as
+ *  useSkill; identity does not change merely because cast speed is high. */
+export function castScopeTag(skill: SkillDef | SkillInstance): SkillTag {
+  const inst = 'def' in skill ? skill : undefined, def = inst ? inst.def : skill as SkillDef;
+  if (inst && socketSpec(inst, 'guardCast')) return 'cast:instant';
+  const mode = def.castMode ?? 'cast';
+  if (mode === 'channel' || (inst && mode === 'cast' && !def.concentration && def.useTime >= .3 && socketSpec(inst, 'gather'))) return 'cast:channel';
+  if (def.concentration || mode === 'guard' || mode === 'charge' || mode === 'overcharge'
+    || (inst && ['cast', 'perfect', 'timed'].includes(mode) && instanceOvercharge(inst))) return 'cast:held';
+  return def.useTime > 0 ? 'cast:timed' : 'cast:instant';
 }
 
 /**

@@ -64,6 +64,16 @@ export function registerVictimCondition(id: string, def: VictimConditionDef): vo
   VICTIM_CONDITIONS[id] = def;
 }
 
+/** Half-open center-distance bands: touching the inner bound qualifies;
+ *  touching the outer bound belongs to the next band. Content chooses units. */
+export function registerVictimDistanceBand(id: string, label: string, min: number, max = Infinity): void {
+  if (!Number.isFinite(min) || min < 0 || !(max > min)) throw Error(`Invalid distance band: ${id}`);
+  registerVictimCondition(id, { label, test: (v, a) => {
+    const d2 = (v.pos.x-a.pos.x)**2 + (v.pos.y-a.pos.y)**2;
+    return d2 >= min*min && d2 < max*max;
+  } });
+}
+
 /** The tag for a victim condition or status id. */
 export function vsTag(id: string): SkillTag {
   return `vs:${id}`;

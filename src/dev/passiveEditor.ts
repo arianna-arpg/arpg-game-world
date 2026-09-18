@@ -440,6 +440,7 @@ import type { GraftSpec, PassiveChoiceRef } from './passiveChoices';
 import type { ConduitSpec } from '../engine/skills';
 import './passiveCrossroads';
 import './passiveWeave';
+import './passiveSpecializations';
 
 export type NodeKind = 'start' | 'small' | 'notable' | 'keystone' | 'attr' | 'vocation' | 'choice';
 

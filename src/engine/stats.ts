@@ -18,6 +18,8 @@ import { DEFENSE_CFG } from './defense';
 
 /** Tags describe what a skill / damage context *is*. Add freely. */
 export type SkillTag =
+  | 'cast:timed' | 'cast:instant' | 'cast:channel' | 'cast:held'
+  | `minion:${string}` | `body:${string}`
   | 'attack' | 'spell' | 'melee' | 'projectile' | 'aoe' | 'duration'
   | 'movement' | 'summon' | 'minion' | 'warcry' | 'buff' | 'storm'
   | 'aura' | 'totem' | 'trap' | 'mine' | 'corpse'
