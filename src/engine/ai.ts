@@ -31,6 +31,7 @@ import {
   HAUNT_CFG, type HauntSpec,
 } from './brain';
 import { erraticTurn, weaveVel } from './flight';
+import { ensureMovementTether, refreshMovementTether } from './movementTether';
 import { PACK_CFG, nerveFromLife, nerveFromOdds, nerveFromProximity, packDriveOf } from './pack';
 import {
   feedWatch, SENSE_CFG, senseReach, WATCH_CFG, WATCH_RUNG, watchArcDeg,
@@ -97,6 +98,7 @@ const RECALL = {
 
 /** Returns true when the minion was just recalled (skip normal heeling). */
 function updateRecall(actor: Actor, world: World, dt: number): boolean {
+  if (refreshMovementTether(actor, world)) return false;
   const owner = actor.owner;
   if (!owner || MONSTERS[actor.defId ?? '']?.noRecall) return false;
   actor.recallTimer -= dt;
@@ -539,6 +541,8 @@ const DEFAULT_BRAIN: BrainDef = {};
 // === THE PIPELINE ==============================================================
 
 export function updateAI(actor: Actor, world: World, dt: number): void {
+  ensureMovementTether(actor);
+  if (refreshMovementTether(actor, world)?.returning) return;
   // Skip ANY player seat (the local hero AND co-op allies) — they're driven by
   // World.applyInputs (OS / scripted / remote intent), never the monster brain.
   // A DOWNED body (a felled companion awaiting revival) doesn't scheme either.

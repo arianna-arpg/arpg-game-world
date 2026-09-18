@@ -62,6 +62,7 @@ export type Vec2W = [number, number];
 
 /** One renderer-visible actor on the wire. Short keys keep the JSON small. */
 export interface ActorW {
+  movementTether?: Actor['movementTether'];
   cosmeticKind?: 'wisp';
   cosmeticLoadout?: CosmeticLoadout;
   id: number;
@@ -617,6 +618,9 @@ function actorToW(a: Actor, world: World): ActorW {
     hf: a.hitFlash, downed: a.downed, dead: a.dead, mn: a.isMinion(), passive: a.passive, ut: a.untargetable,
   };
   if (inv > 0) w.inv = inv;
+  if (a.movementTether && !a.movementTether.released) w.movementTether = {
+    ...a.movementTether, point: { ...a.movementTether.point }, safe: { ...a.movementTether.safe },
+  };
   if (det !== 1) w.det = det;
   if (!a.aims) w.aims = false;
   // THE THRONG's husk marker rides the wire so a co-op client's renderer
@@ -1186,6 +1190,8 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.life = aw.life; a.es = aw.es; a.absorb = aw.ab ?? 0;
     a.hitFlash = aw.hf; a.downed = aw.downed; a.dead = aw.dead;
     a.passive = aw.passive; a.untargetable = aw.ut;
+    a.movementTether = aw.movementTether ? { ...aw.movementTether,
+      point: { ...aw.movementTether.point }, safe: { ...aw.movementTether.safe } } : undefined;
     a.throngUnits = aw.thu; a.throngEgg = aw.the; a.throngRosterHud = aw.thr; a.hivecallHud = aw.hive; a.assaultHud = aw.assault; a.assaultOrbit = !!aw.assaultOrbit; a.assaultAura = !!aw.assaultAura;
     for (const inst of a.skills) if (inst?.def.throng) (inst.state ??= {}).throngEvolutionGauge = aw.thg?.[inst.def.id] ?? 0;
     a.throngWild = aw.tw; // husk kind → the client's own sight gate reads it

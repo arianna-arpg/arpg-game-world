@@ -12,6 +12,8 @@ import { COSMETIC_CFG } from '../data/cosmetics';
 // ---------------------------------------------------------------------------
 
 import { DeedTracker, type DeedEvent } from './deeds';
+import { ensureMovementTether, landMovementTether, updateMovementTethers, refreshMovementTether, movementTetherLimit, movementTetherDistance,
+  savedMovementTether, restoreMovementTether, type MovementTetherState } from './movementTether';
 import { CompanionBonds } from './companionBonds';
 import { Assaults, assaultNode } from './assault';
 import { Challenges } from './challenges';
@@ -2444,6 +2446,7 @@ export interface BossRun {
  *  createMonster + these fields on re-entry — enough to restore who/where/how-hurt
  *  without serializing full combat state). */
 interface ZoneEnemyMemo {
+  movementTether?: MovementTetherState;
   defId: string;
   level: number;
   x: number;
@@ -11743,6 +11746,7 @@ export class World {
       // The story re-seat (arrivalStory): stale layer indices never survive
       // a landing — the ground under the party is the story the caller says.
       a.tier = opts?.tier ?? 0;
+      landMovementTether(a);
       a.onTierLink = false;
       a.aiTierGoal = undefined;
     };
@@ -17028,6 +17032,7 @@ export class World {
       enemies.push({
         defId: a.defId, level: a.level, x: a.pos.x, y: a.pos.y,
         life: a.life, faction: a.faction, rarity: a.rarity, tag: a.tag,
+        movementTether: savedMovementTether(a),
         name: a.name, ...(a.tier ? { tier: a.tier } : {}),
         ...(a.aiAwakened ? { aiAwakened: 1 as const } : {}),
       });
@@ -17150,6 +17155,7 @@ export class World {
       m.pos = this.clampPos(vec(e.x, e.y), m.radius, undefined, { mover: m });
       m.fillResources();
       m.life = Math.max(1, Math.min(m.maxLife(), e.life));
+      m.movementTether = restoreMovementTether(e.movementTether);
       this.actors.push(m);
     }
   }
@@ -17739,6 +17745,7 @@ export class World {
           ...(memo.name ? { name: memo.name } : {}),
           ...(memo.tier ? { tier: memo.tier } : {}),
           ...(memo.aiAwakened ? { aiAwakened: 1 as const } : {}),
+          movementTether: restoreMovementTether(memo.movementTether),
         });
       }
       const doorState: Record<string, 'open' | 'broken'> = {};
@@ -29271,6 +29278,7 @@ export class World {
     // which is exactly how barrels learned to walk. Never again. Breakables
     // (orbDrops) stay shovable; spawners, caches and townsfolk hold their ground.
     a.anchored = (def.base.moveSpeed ?? 1) <= 0 && !def.orbDrops;
+    a.movementTetherSpec = def.movementTether;
     a.faction = def.faction;
     a.adorn = def.adorn;
     a.material = def.material;
@@ -47687,6 +47695,7 @@ export class World {
     this.updateHarvest(rawDt, dt);
     if (dt <= 0) return;
     this.time += dt;
+    for (const a of this.actors) if (!a.dead) ensureMovementTether(a);
     // Fresh actor-grid epoch: the AI phase just moved monsters (kernels call
     // moveActor directly), so spatial queries from here read current bodies.
     this.actorGridRev++;
@@ -49142,6 +49151,7 @@ export class World {
     // riders' seats still win the frame.
     this.updateMounts();
     this.updateSummonShells();
+    updateMovementTethers(this, dt); // movementTether wins after body displacement
     // THE POSSESSION SEAM sweep rides behind the grabs (engine/possess.ts):
     // the ride clock + the husk ladder — a hold landed on the husk THIS
     // frame is seen this frame.
@@ -61870,6 +61880,8 @@ export class World {
    * beyond the gap crosses it, while walking and dashing slide along it.
    */
   clampPos(p: Vec2, radius: number, from?: Vec2, opts?: ClampOpts): Vec2 {
+    const movementTether = opts?.mover instanceof Actor ? refreshMovementTether(opts.mover, this) : undefined;
+    if (movementTether) p = movementTetherLimit(movementTether, p);
     const b0 = clampToBounds(p, radius, this.arena);
     const out = vec(b0.x, b0.y);
     // THE TIER FABRIC: the mover's layer, read once — gates the doodad
@@ -62030,6 +62042,17 @@ export class World {
           }
         }
       }
+    }
+    // Terrain may slide a legal destination beyond the cord. Refuse that
+    // step instead of projecting the terrain-resolved body INTO a wall.
+    if (movementTether && movementTetherDistance(movementTether, out) > movementTether.spec.length + 0.001) {
+      // A moving anchor can leave NO legal point on this side of a wall.
+      // Break that cord instead of teleporting a body through solid terrain.
+      if (movementTetherDistance(movementTether, movementTether.safe) > movementTether.spec.length) {
+        movementTether.released = true; movementTether.returning = false;
+        return out;
+      }
+      return { ...movementTether.safe };
     }
     return out;
   }
@@ -62755,6 +62778,8 @@ export class World {
   }
 
   moveActor(a: Actor, dx: number, dy: number, dt: number): void {
+    ensureMovementTether(a);
+    if (refreshMovementTether(a, this)?.returning) return;
     if (this.movementLocked(a)) return;
     // A LATCHED rider's position is slaved to its seat (engine/cling.ts):
     // the mover contract simply refuses — no pit checks, no wall slides,

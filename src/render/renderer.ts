@@ -83,6 +83,7 @@ import { adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, drawPartSpecs,
 import { drawAdornHitFlash, drawBodyHitFlash, hitFlashAlphaOf } from './vis/hitFlash';
 import { TELL_CFG, tellDressOf } from '../engine/tells';
 import { drawWatchSense, drawWatchTrails } from './vis/watchLayer';
+import { drawMovementTether } from './vis/movementTetherLayer';
 import { driftColor } from './vis/colorDrift';
 import { drawPortraitInto, portraitSubjectOf, portraitTile, type PortraitDefLike, type PortraitSubject } from './vis/portrait';
 import { EYECATCH_STYLES } from './vis/eyecatch';
@@ -5214,6 +5215,7 @@ export class Renderer {
     }
 
     // Body (untouchable spirits ghostly; stealthed/invisible actors faded)
+    drawMovementTether(ctx, a, world.time);
     ctx.save();
     ctx.translate(x, y);
     // A LIVE TRAVERSAL owns the traveler's pose: the geyser's rise swells the

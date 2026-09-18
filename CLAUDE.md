@@ -182,6 +182,12 @@ Verify with `npm run probe -- passiveweave` plus the existing passive probes
 and the hidden `balance/passive-routes-ui.cjs` harness after a build.
 
 ## Commands
+Physical movement tethers live in `engine/movementTether.ts`, with the Sylvan,
+undead and demon debut rows in `data/tetheredMonsters.ts`. The configurable
+movementTether cord is separate from AI leashes and damaging pack links; see
+`docs/engine/movement-tethers.md`. Verify with `npm run probe -- movementtether`
+and the hidden `balance/movement-tethers-ui.cjs` capture after a build.
+
 - `npm install` — first-time setup (also run automatically by the .bat launchers).
 - `npm run dev` — Vite dev server at http://localhost:5173 (browser dev mode, `Play Game.bat`).
 - `npm run game` — the DESKTOP APP: Electron launcher window (shows installed

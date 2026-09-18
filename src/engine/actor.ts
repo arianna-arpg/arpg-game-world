@@ -1,4 +1,5 @@
 import type { AssaultPreparation } from './assault';
+import type { MovementTetherSpec, MovementTetherState } from './movementTether';
 // ---------------------------------------------------------------------------
 // Actor — the ONE entity model shared by the player, monsters, and minions.
 // All of them carry a StatSheet, a skill bar, cooldowns, buffs and statuses,
@@ -1197,6 +1198,9 @@ export class Actor {
   /** Rooted in place: never walks, never pushed (spawners, townsfolk).
    *  Passive things WITHOUT this (barrels) can still be shoved around. */
   anchored = false;
+  /** Physical cord, initialized only after spawn placement. */
+  movementTetherSpec?: MovementTetherSpec;
+  movementTether?: MovementTetherState;
   /** ACTS in a direction — the renderer's aim tick rides this. Furniture
    *  constructs (bone walls, embeds, armed mines: CONSTRUCT_KIND_AIMS) and
    *  aims:false monsters clear it — a frozen facing means nothing. */

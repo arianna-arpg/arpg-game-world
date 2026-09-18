@@ -10,6 +10,7 @@ import { FACTION_TRAITS } from '../world/traits';
 import { PRESENCE_BANDS, presenceMul, type PresenceSpec } from '../engine/presence';
 import { SKILLS } from './skills';
 import { invocationTreeErrors } from '../engine/invocation';
+import { movementTetherErrors } from '../engine/movementTether';
 import { SUPPORTS } from './supports';
 import { spawnVeinOf } from '../engine/supportbase';
 import {
@@ -797,6 +798,7 @@ export function validateContent(): void {
       for (const l of a.lines) checkSympathyStat(`affix ${a.id}`, l.stat);
     }
     for (const [id, m] of Object.entries(MONSTERS)) {
+      if (m.movementTether) for (const issue of movementTetherErrors(m.movementTether)) warn(`monster ${id}: movementTether ${issue}`);
       for (const link of m.sympathy ?? []) {
         if (!SYMPATHY_LINKS[link]) warn(`monster ${id}: sympathy link '${link}' is not registered`);
       }

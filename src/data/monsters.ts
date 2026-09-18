@@ -24,6 +24,8 @@ import { ABYSS_MONSTERS } from './abyssMonsters';
 import { KINSHIP_MONSTERS } from './kinshipMonsters';
 import { ROOTWILD_MONSTERS } from './rootwildMonsters';
 import { ARENA_BOSS_MONSTERS } from './arenaBosses';
+import { TETHERED_MONSTERS } from './tetheredMonsters';
+import type { MovementTetherSpec } from '../engine/movementTether';
 import { registerAIAction } from '../engine/aiActions';
 import { FluxPhase } from '../engine/flux';
 import type { TuneSpec } from '../engine/tuning';
@@ -596,6 +598,8 @@ export interface MonsterDef {
    *  their nearest unlinked kin for `duty` seconds of every `period` — the
    *  "they're tethered, don't stand between them" enemy modifier. */
   tether?: MonsterTetherDef;
+  /** Physical movement restraint; separate from damaging pack tethers. */
+  movementTether?: MovementTetherSpec;
   /** A destructible spawner object — 'spawners' objectives count these. */
   spawner?: boolean;
   /** Scenery with a health bar: never counts toward zone objectives. */
@@ -2168,6 +2172,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   ...KINSHIP_MONSTERS,
   ...ROOTWILD_MONSTERS,
   ...ARENA_BOSS_MONSTERS,
+  ...TETHERED_MONSTERS,
 
   zombie: {
     id: 'zombie', name: 'Shambling Zombie',
@@ -23396,6 +23401,7 @@ export const FACTIONS: Record<string, {
       { id: 'zombie', weight: 3, presence: { to: 22, fadeOut: 14 } },
       { id: 'skeleton_warrior', weight: 3 },
       { id: 'skeleton_archer', weight: 2 },
+      { id: 'gravebound_shade', weight: 0.7, presence: { from: 6, fadeIn: 3 } },
       { id: 'crypt_warden', weight: 1, presence: { from: 8, fadeIn: 4 } },
       { id: 'bone_serpent', weight: 1, presence: { from: 12, fadeIn: 5 } },
       { id: 'lich_marshal', weight: 1, presence: { from: 15, fadeIn: 6 } },
@@ -23751,6 +23757,7 @@ export const FACTIONS: Record<string, {
       { id: 'thorn_sprite', weight: 4, presence: { to: 20, fadeOut: 12 } },
       { id: 'sylvan_sapling', weight: 3, presence: { to: 12, fadeOut: 5 } },
       { id: 'sylvan_warden', weight: 2 },
+      { id: 'rootlash_snapper', weight: 1, presence: { from: 4, fadeIn: 3 } },
       { id: 'twig_snarl', weight: 2, presence: { from: 5, fadeIn: 3, to: 24, fadeOut: 10 } },
       { id: 'grove_singer', weight: 1, presence: { from: 6, fadeIn: 3 } },
       { id: 'briar_beast', weight: 1, presence: { from: 9, fadeIn: 4 } },
@@ -23822,6 +23829,7 @@ export const FACTIONS: Record<string, {
       { id: 'ash_whelp', weight: 3, presence: 'early_only' },
       { id: 'imp', weight: 3, presence: { stops: [[1, 1.4], [12, 1], [24, 0.6], [40, 0.35]] } },
       { id: 'hellhound', weight: 3 },
+      { id: 'stakebound_hound', weight: 0.7, presence: { from: 8, fadeIn: 4 } },
       { id: 'cinder_fiend', weight: 2, presence: { from: 6, fadeIn: 3 } },
       { id: 'searing_spawn', weight: 2, presence: { from: 8, fadeIn: 4 } },
       { id: 'dread_fiend', weight: 1, presence: { from: 12, fadeIn: 5, mul: 2 } },
