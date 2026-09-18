@@ -401,6 +401,7 @@ export function mountPassiveEditor(ui: UI): void {
     if (n.attributes && Object.keys(n.attributes).length) p.push(`attributes: ${serAttrs(n.attributes)}`);
     if (n.attributesPct && Object.keys(n.attributesPct).length) p.push(`attributesPct: ${serAttrs(n.attributesPct)}`);
     if (n.mods && n.mods.length) p.push(`mods: [${n.mods.map(serMod).join(', ')}]`);
+    if (n.conduit) p.push(`conduit: ${JSON.stringify(n.conduit)}`);
     // Choice deals are a group REFERENCE (options live in passiveChoices.ts,
     // safely outside this file's overwrite) — pure JSON, trivially emitted.
     if (n.choice) p.push(`choice: { group: ${J(n.choice.group)}${n.choice.pick !== undefined ? `, pick: ${n.choice.pick}` : ''} }`);
@@ -434,6 +435,7 @@ ${importLine}
 import { CLASSES } from './classes';
 import { VOCATIONS, VOCATION_CFG, vocationNodeId, vocationRootId } from './vocations';
 import type { GraftSpec, PassiveChoiceRef } from './passiveChoices';
+import type { ConduitSpec } from '../engine/skills';
 import './passiveCrossroads';
 
 export type NodeKind = 'start' | 'small' | 'notable' | 'keystone' | 'attr' | 'vocation' | 'choice';
@@ -451,6 +453,8 @@ export interface PassiveNode {
    *  every flat source (base + tree + gear), so it scales the whole pool. */
   attributesPct?: Partial<Attributes>;
   mods?: Modifier[];
+  /** Actor-level resource conversion, rebuilt from allocated grants. */
+  conduit?: ConduitSpec;
   links: string[];
   /** CHOICE NODE: this node deals options from a data/passiveChoices.ts group
    *  instead of (or on top of) its own grants. Each pick spends a point and is

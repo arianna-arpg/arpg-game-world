@@ -16,6 +16,7 @@
 
 import { PASSIVE_ADJACENCY, PASSIVE_NODES, type PassiveNode } from './passives';
 import { PASSIVE_REALMS, realmOf } from './passiveRealms';
+import { auditPassiveRoutes } from './passiveTopology';
 
 const RADII: Record<PassiveNode['kind'], number> =
   { start: 13, small: 9, notable: 14, keystone: 17, attr: 11, vocation: 15, choice: 15 };
@@ -31,6 +32,12 @@ const MARGIN = 12;    // keep nodes this far inside the edge
  *  Cheap — one O(n^2) pair sweep plus an O(n+e) BFS — and runs once at boot
  *  via validateContent. Emits nothing when the tree is clean. */
 export function validatePassiveLayout(warn: (msg: string) => void): void {
+  // Travel forks must exist even when every optional selection deal is closed.
+  for (const includeChoices of [false, true]) {
+    const routes = auditPassiveRoutes(PASSIVE_NODES, includeChoices);
+    for (const [a, b] of routes.corridors) warn(`passive route corridor: ${a}/${b} delays the next fork beyond two points`);
+    for (const id of routes.unreachable) warn(`passive route isolated: ${id} is not walkable from every start${includeChoices ? '' : ' without a choice deal'}`);
+  }
   const ns = Object.values(PASSIVE_NODES);
   for (let i = 0; i < ns.length; i++) {
     for (let j = i + 1; j < ns.length; j++) {

@@ -3,6 +3,7 @@
 // Every payload uses the ordinary modifier / conduit / graft pipeline.
 import { gaugeMod, linkMod, mod, type Modifier } from '../engine/stats';
 import { registerChoiceGroup, type PassiveChoiceOption } from './passiveChoices';
+import './passiveRoutes';
 
 const option = (id: string, name: string, description: string, ...mods: Modifier[]): PassiveChoiceOption =>
   ({ id, name, description, mods });

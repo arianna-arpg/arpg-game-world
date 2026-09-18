@@ -7343,6 +7343,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
    *  "strength" all find their nodes. */
   private passiveNodeSearchText(node: PassiveNode): string {
     const parts: string[] = [node.name, node.description ?? '', node.kind];
+    if (node.graft) parts.push(node.graft.support, SUPPORTS[node.graft.support]?.description ?? '');
     for (const mo of node.mods ?? []) parts.push(formatModLine(mo, mo.value));
     for (const k of Object.keys(node.attributes ?? {})) parts.push(k);
     for (const k of Object.keys(node.attributesPct ?? {})) parts.push(k);
@@ -7654,7 +7655,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         + (vocationGateOpen(m.allocated, node.vocation) ? ''
           : ` — LOCKED until ${gateName ?? 'its class start node'} is allocated`);
     }
-    return { title: node.name, description: node.description + attrText + choiceText, meta };
+    const graftText = node.graft ? `<br>${SUPPORTS[node.graft.support]?.description ?? ''}` : '';
+    return { title: node.name, description: node.description + attrText + choiceText + graftText, meta };
   }
 
   // ------------------------------------------------------ the skill tree panes

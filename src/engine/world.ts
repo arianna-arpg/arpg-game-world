@@ -21856,6 +21856,7 @@ export class World {
       const node = PASSIVE_NODES[id];
       if (!node) continue;
       fold(node);
+      if (node.conduit) wornConduits.push(node.conduit);
       // CHOICE NODES: the options picked at this node fold exactly like node
       // grants. An unknown option id (a renamed group entry) drops silently —
       // the same registry-tolerant stance as a removed node id above.

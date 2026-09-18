@@ -170,6 +170,10 @@ The passive Star's two-point opening choices live in `src/data/passiveCrossroads
 `docs/design/passive-crossroads.md` records the 138 options, nine schools, editor
 round-trip, save uniqueness and verification. Run `npm run probe -- passivecrossroads`
 and the hidden `balance/passive-crossroads-ui.cjs` harness after a build.
+The physical-route expansion is documented in `docs/design/passive-routes.md`:
+379 ordinary nodes, forks within two allocations, reusable event powers,
+plain-node conduits and the early Magician balance concern. Verify with
+`npm run probe -- passiveroutes` and `balance/passive-routes-ui.cjs` after a build.
 
 ## Commands
 - `npm install` — first-time setup (also run automatically by the .bat launchers).

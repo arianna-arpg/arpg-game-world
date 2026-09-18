@@ -1,5 +1,9 @@
 # Passive crossroads
 
+The subsequent [physical-route expansion](passive-routes.md) adds ordinary
+paths and enforces forks within two allocations. This document describes the
+optional selection deals, which are retained alongside those paths.
+
 The opening of the Star now teaches a build direction with its first two
 earned passive points. Classes still choose a starting position and opening
 skills; none of these choices is class-locked. Existing point income and

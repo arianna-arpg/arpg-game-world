@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_passiveroutes.ts', status: 'green', tier: 'fast', why: 'Physical forks every two allocations with and without menus, every class opening, all visible grants and grafts, 18 event powers, live healing/death/movement/conduits, save and co-op' },
   { probe: 'probe_passivecrossroads.ts', status: 'green', tier: 'fast', why: 'Opening passive choices: all nine starts and every class, 1944 legal two-point pairs, 138 grants, 54 graft bindings, live healing/movement/conduit loops, geometry, search and character-unique save reconstruction' },
   { probe: 'probe_arenabosses.ts', status: 'green', tier: 'fast', why: 'Stationary arena bosses: regional doors, live phases, part breaks, warning geometry and victory cleanup.' },
   { probe: 'probe_cosmetics.ts', status: 'green', tier: 'fast', why: 'Cosmetic ownership, save validation, per-skill overrides, atomic purchases, entitlement replay/refund, owner attribution and combat/wire isolation' },

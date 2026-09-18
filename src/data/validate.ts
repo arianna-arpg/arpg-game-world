@@ -2229,6 +2229,9 @@ export function validateContent(): void {
           + `off-stance hosts read the endpoint as 0 forever`);
       }
     }
+    for (const node of Object.values(PASSIVE_NODES)) if (node.conduit) {
+      for (const p of specProblems(node.conduit)) warn(`passive ${node.id}: conduit ${p}`);
+    }
     // WORN conduits (PassiveChoiceOption.conduit) get the same spec sanity.
     // No engagement row: the pool adapters ARE the gate for a worn pump
     // (a guard endpoint reads 0/0 off-stance and idles by construction).
