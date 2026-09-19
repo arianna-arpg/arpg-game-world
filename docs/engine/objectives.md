@@ -15,7 +15,7 @@ tileset's `objectives` weight table (`data/tilesets.ts` → worldgen
 | `clear`      | THE CULL — fell a SHARE of the counted population (kill N,    |
 |              | never find-the-last-body); `all: true` = the classic empty floor |
 | `waves`      | survive N waves (0 = endless arena); boss cadence as data     |
-| `escape`     | reach an exit under an endless trickle                        |
+| `escape`     | leave through a different exit under an endless trickle       |
 | `spawners`   | destroy the spawner objects                                   |
 | `boss`       | slay the named boss (uber/promote riders)                     |
 | `beacon`     | charge the SURVEY SPIRE(S) by holding ground beside them —    |
@@ -46,6 +46,21 @@ tileset's `objectives` weight table (`data/tilesets.ts` → worldgen
 |              | back to the plain cull, no completion, no punishment            |
 
 ## Exit-seal POLICY (not physics)
+
+Escape objectives default to `exit: 'onward'`: a normal portal must lead
+somewhere other than `World.entryFrom` to bank completion, XP and quest credit.
+All portals to the arrival zone count as retreat; frontier destinations resolve
+before this comparison. Retreat stays open and leaves the objective unfinished,
+with pressure resuming on re-entry. Re-entering establishes that visit's entry
+route; completed objectives still pay only once per run.
+
+An authored `exit: 'any'` opts into retreat credit (for example, a deliberate
+one-exit escape). With no entry route, such as a waypoint arrival, any normal
+exit qualifies. The HUD and map read reflect the policy. Exact-position saves
+preserve the surface entry route in `SavedPlayerSpot.entryFrom`, so reloading
+does not turn a walked arrival into an entry-less arrival. Older saves without
+the field retain their previous no-entry behavior. Cave returns and fast travel
+retain their existing travel rules; they do not bank this normal-portal reward.
 
 Whether an UNMET objective seals the zone's other exits is data at two levels:
 

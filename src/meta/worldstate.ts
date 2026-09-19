@@ -259,6 +259,9 @@ export interface SavedCaveRung {
  *  restores the same PROPORTIONAL state, never an over-cap absolute). */
 export interface SavedPlayerSpot {
   zoneId: string;
+  /** Arrival route of the surface zone/anchor; exact resume preserves escape
+   *  eligibility and the entry exit's seal exemption. Absent = no entry. */
+  entryFrom?: string;
   x: number;
   y: number;
   vitals?: { life?: number; mana?: number; es?: number };

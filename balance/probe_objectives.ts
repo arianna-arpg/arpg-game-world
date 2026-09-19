@@ -1910,5 +1910,88 @@ withSeededRandom(0xc017e57, () => {
   check('HR10 attendance cannot charge a fixture on a different story', attended.charge === 1);
 });
 
+// Escape routes: use real zone loads and portal travel on fixed, quiet ground.
+// Keep this span independent so new cases cannot perturb the older rigs.
+withSeededRandom(0xe5ca9e, () => {
+  const w = makeSimWorld('warrior', 771005) as any;
+  const base = w.zone as ZoneDef;
+  const home = 'probe_escape_home', road = 'probe_escape_road', far = 'probe_escape_far';
+  for (const [i, id] of [home, road, far].entries()) {
+    w.zoneMap[id] = {
+      ...base, id, name: id, map: { x: 9100 + i, y: 9100 },
+      objective: id === road ? { kind: 'escape', interval: [1, 1] } : { kind: 'safe' },
+      exits: id === road ? [{ to: home, side: 'w' }, { to: far, side: 'e' }]
+        : [{ to: road, side: id === home ? 'e' : 'w' }],
+    } satisfies ZoneDef;
+  }
+  let paid = 0;
+  const credited: string[] = [];
+  w.grantXp = (amount: number) => { paid += amount; };
+  w.onQuestZoneFieldCleared = (id: string) => { credited.push(id); };
+  const enter = (from: string | undefined = home): void => {
+    w.loadZone(road, from);
+    w.activeQuests = [{ questId: 'probe_escape', zoneId: road, fieldDone: false }];
+  };
+  const leave = (to: string): void => {
+    const e = (w.exits as ZoneExit[]).find(e => e.to === to);
+    if (!e) throw new Error(`escape rig missing exit to ${to}`);
+    w.travelThrough(e);
+  };
+  enter();
+  check('E1 escape HUD and map explain the different-exit requirement',
+    w.objectiveText().includes('different exit') && objectiveRead(w.zone.objective).read.includes('different exit'));
+  check('E2 retreat remains unlocked', !(w.exits as ZoneExit[]).some(e => w.isExitLocked(e)));
+  leave(home);
+  check('E3 immediate retreat travels but earns no completion, XP or quest credit',
+    w.zone.id === home && !w.completedObjectives.has(road) && paid === 0 && credited.length === 0);
+  enter();
+  check('E4 re-entry keeps the escape unfinished and restarts its pressure timer',
+    !w.objectiveDone && w.escapeTimer > 0);
+  const save = JSON.parse(JSON.stringify(w.serializeWorldState()));
+  check('E5 exact save records the entry route', save.player?.entryFrom === home);
+  w.loadZone(home);
+  w.resumeSpawn('exact', save.player);
+  check('E6 exact resume restores the entry route', w.entryFrom === home);
+  leave(home);
+  check('E7 save/resume cannot earn retreat credit', !w.completedObjectives.has(road) && paid === 0);
+  enter();
+  leave(far);
+  const reward = 40 + base.level * 30;
+  check('E8 onward travel completes and pays once, crediting the source quest',
+    w.zone.id === far && w.completedObjectives.has(road) && paid === reward
+    && credited.length === 1 && credited[0] === road);
+  enter(far);
+  leave(home);
+  check('E9 completed escapes never repay', paid === reward && credited.length === 1);
+
+  w.completedObjectives.delete(road);
+  enter(far);
+  leave(far);
+  check('E10 entry identity follows the current visit from either side',
+    !w.completedObjectives.has(road) && paid === reward);
+  enter();
+  w.zone.objective = { kind: 'escape', interval: [1, 1], exit: 'any' };
+  check('E11 explicit any-exit policy has matching HUD and map prose',
+    !w.objectiveText().includes('different exit') && objectiveRead(w.zone.objective).read === 'find the way out');
+  leave(home);
+  check('E12 authored any-exit policy deliberately permits retreat', w.completedObjectives.has(road) && paid === reward * 2);
+
+  w.completedObjectives.delete(road);
+  w.zoneMap[road].objective = { kind: 'escape', interval: [1, 1] };
+  w.loadZone(road); // waypoint-style arrival has no entry portal
+  check('E13 entry-less arrivals ask for any way out', w.entryFrom === null && !w.objectiveText().includes('different exit'));
+  leave(home);
+  check('E14 entry-less arrival can escape normally', w.completedObjectives.has(road) && paid === reward * 3);
+
+  w.completedObjectives.delete(road);
+  enter();
+  const e = (w.exits as ZoneExit[]).find(e => e.to === far)!;
+  e.to = '?';
+  w.chartFrontier = () => w.zoneMap[home]; // a chart resolves back to the entry
+  w.travelThrough(e);
+  check('E15 frontier credit compares the resolved destination, not the question mark',
+    w.zone.id === home && !w.completedObjectives.has(road) && paid === reward * 3);
+});
+
 console.log(fails === 0 ? '\nALL PASS' : `\n${fails} FAILURES`);
 process.exit(fails === 0 ? 0 : 1);

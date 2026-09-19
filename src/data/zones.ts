@@ -136,8 +136,10 @@ export type ObjectiveSpec = (
    *  `frenzy: false` opts this arena out of the wave-frenzy overlay
    *  (data/waves.ts) — default is the full already-hunting crash. */
   | { kind: 'waves'; waves: number; bossEveryWaves?: number; bossId?: string; frenzy?: boolean }
-  /** Enemies trickle in forever; the objective is reaching an exit. */
-  | { kind: 'escape'; interval: [number, number] }
+  /** Enemies trickle in forever; leave by a route other than the entry.
+   *  `exit: 'any'` explicitly allows retreat to complete an authored escape.
+   *  With no entry route (e.g. waypoint arrival), any normal exit qualifies. */
+  | { kind: 'escape'; interval: [number, number]; exit?: 'onward' | 'any' }
   /** Destructible spawner objects seed the zone; destroy them all. */
   | { kind: 'spawners'; spawnerId: string; count: [number, number] }
   | { kind: 'boss'; id: string; levelBonus?: number; uber?: UberPolicy; promote?: BossPromote;
@@ -329,6 +331,12 @@ export function objectiveSeals(o: ObjectiveSpec): boolean {
   return o.seal ?? OBJECTIVE_SEALS[o.kind];
 }
 
+/** Escape credit uses resolved destination identity, like the exit-seal
+ *  policy. All portals back to the arrival zone count as retreat. */
+export function escapeExitAllowed(o: ObjectiveSpec, entryFrom: string | null, destination: string): boolean {
+  return o.kind === 'escape' && (o.exit === 'any' || destination !== entryFrom);
+}
+
 /** THE MAP READ — how each objective kind announces itself on the world map's
  *  zone pane BEFORE you walk in: a glyph + a static "what this ground asks"
  *  phrase. No live progress here (that's World.objectiveText(), the in-zone
@@ -340,7 +348,7 @@ export const OBJECTIVE_READS: Record<ObjectiveSpec['kind'], { glyph: string; rea
   none: { glyph: '·', read: 'open ground, nothing asked' },
   clear: { glyph: '⚔', read: 'cull the population' },
   waves: { glyph: '≋', read: 'survive the assault' },
-  escape: { glyph: '⇥', read: 'find the way out' },
+  escape: { glyph: '⇥', read: 'leave through a different exit' },
   spawners: { glyph: '✸', read: 'destroy the spawners' },
   boss: { glyph: '☠', read: 'a lair' },
   beacon: { glyph: '◬', read: 'charge the survey spire' },
@@ -368,6 +376,7 @@ export const OBJECTIVE_READS: Record<ObjectiveSpec['kind'], { glyph: string; rea
 export function objectiveRead(o: ObjectiveSpec): { glyph: string; read: string } {
   const base = OBJECTIVE_READS[o.kind];
   if (o.kind === 'none' && o.label) return { glyph: base.glyph, read: o.label };
+  if (o.kind === 'escape' && o.exit === 'any') return { glyph: base.glyph, read: 'find the way out' };
   // The authored full-clear (`all: true`) promises the classic ask; the pane
   // never knows the cull's N (need derives from ground not yet walked).
   if (o.kind === 'clear' && o.all) return { glyph: base.glyph, read: 'clear the area' };

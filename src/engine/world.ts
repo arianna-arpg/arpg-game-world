@@ -144,7 +144,7 @@ import { COMBO_CFG, comboRepeatedNow, comboStat, comboVariedNow, matchComboRule,
 import { mimicCapture, mimicPowerMods, mimicRefreshWatch, mimicSelect, mimicSelected } from './mimic';
 import { COMBO_LIST, COMBO_RULES } from '../data/combos';
 import { ATTRIBUTE_IDS, ATTRIBUTES, ELEMENTAL_TYPES, STAT_DEFS, DAMAGE_COLOR, isAttributeId } from './stats';
-import { skyOf, START_ZONE, ZONES, objectiveEarnsChest, objectiveSeals, type ExitRoadSpec, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
+import { skyOf, START_ZONE, ZONES, objectiveEarnsChest, objectiveSeals, escapeExitAllowed, type ExitRoadSpec, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
 import { SUITES, type SuiteDef, type SuiteStation } from '../data/suites';
 import { BEACON_CFG } from '../data/beacons';
 import { LEYLINE_CFG } from '../data/leyline';
@@ -17711,6 +17711,7 @@ export class World {
       : (outermost && this.zoneMap[outermost.zoneId] ? outermost.zoneId : null);
     const spotPos = this.zoneMap[this.zone.id] ? this.player.pos
       : (outermost && this.zoneMap[outermost.zoneId] ? outermost.pos : null);
+    const spotEntryFrom = this.zoneMap[this.zone.id] ? this.entryFrom : outermost?.entryFrom;
     // THE UNDERGROUND LADDER (resume policy 'exact'): when the save catches
     // us inside a caveMap pocket whose WHOLE descent is re-mintable — every
     // rung a registered sidezone mouth carrying its mint seed (pitfalls, the
@@ -17746,6 +17747,7 @@ export class World {
       ...(spotZone && spotPos ? {
         player: {
           zoneId: spotZone, x: spotPos.x, y: spotPos.y,
+          ...(spotEntryFrom != null ? { entryFrom: spotEntryFrom } : {}),
           vitals: {
             life: vfrac(p.life, p.maxLife()),
             mana: vfrac(p.mana, p.maxMana()),
@@ -18026,7 +18028,8 @@ export class World {
     const exact = policy === 'exact' && spot && this.zoneMap[spot.zoneId]
       && Number.isFinite(spot.x) && Number.isFinite(spot.y) ? spot : null;
     if (!exact) { this.loadZone(START_ZONE); return; }
-    this.loadZone(exact.zoneId, from);
+    const savedEntryFrom = typeof exact.entryFrom === 'string' ? exact.entryFrom : undefined;
+    this.loadZone(exact.zoneId, from ?? savedEntryFrom);
     // THE UNDERGROUND LADDER — descend strictly AFTER the anchor load: any
     // surface load nulls caveReturn and empties caveStack by law, so the
     // ladder must stand up on top of the loaded anchor, never before it.
@@ -51296,9 +51299,10 @@ export class World {
       def.to = gen.id; // the frontier is now charted — permanently linked
       dest = gen.id;
     }
-    // Escaping an escape zone IS the objective — the bounty pays on the far side
-    // of the portal. One-time: a re-escaped zone pays nothing (per-run gate).
-    const escaped = this.zone.objective.kind === 'escape' && !this.objectiveDone
+    // Escape credit requires an onward route by default; retreat remains free.
+    // Resolve frontier destinations before comparing with the entry route.
+    // One-time: a re-escaped zone pays nothing (per-run gate).
+    const escaped = escapeExitAllowed(this.zone.objective, this.entryFrom, dest) && !this.objectiveDone
       && !this.completedObjectives.has(this.zone.id)
       ? this.zone : null;
     this.loadZone(dest, this.zone.id);
@@ -62750,7 +62754,9 @@ export class World {
         return v.label;
       }
       case 'spawners': return `Destroy the spawners — ${this.livingSpawners().length} remain`;
-      case 'escape': return 'They keep coming — find the way out';
+      case 'escape': return o.exit === 'any' || !this.entryFrom
+        ? 'They keep coming — find the way out'
+        : 'They keep coming — leave through a different exit';
       case 'waves': return o.waves === 0
         ? `Endless waves — wave ${this.wave}`
         : `Survive the assault — wave ${Math.min(this.wave, o.waves)}/${o.waves}`;
