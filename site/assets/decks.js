@@ -59,20 +59,20 @@
     return '<div class="hwdk-thead" style="color:' + ac + '">' + esc(e.title) + '</div>' +
       '<div class="hwdk-tsub">' + esc(kind) + (tag ? ' · ' + esc(tag) : '') + '</div>' +
       (e.blurb ? '<div class="hwdk-desc">' + esc(e.blurb) + '</div>' : '') +
-      section('Fabrics', pills(e.fabrics, 6)) +
+      section('Terrain features', pills(e.fabrics, 6)) +
       section('Ambience', pills(e.ambientFx, 6)) +
       section('Objectives', pills(e.objectives, 8)) +
-      (e.variants ? section('Variants', '<span class="hwdk-v-num">' + e.variants + '</span> sub-biome face' + (e.variants === 1 ? '' : 's')) : '');
+      (e.variants ? section('Variants', '<span class="hwdk-v-num">' + e.variants + '</span> variation' + (e.variants === 1 ? '' : 's')) : '');
   }
   function eventTip(e) {
     var ac = accentOf(e.color);
-    var kindLabel = e.kind === 'substrate' ? 'Always-on substrate' : e.kind === 'place' ? 'A place, not an event' : 'World-event overlay';
+    var kindLabel = e.kind === 'substrate' ? 'Ongoing world system' : e.kind === 'place' ? 'Special destination' : 'World event';
     var facts = '';
-    if (e.factions && e.factions.length) facts += section('Fields', pills(e.factions.map(cap), 5));
+    if (e.factions && e.factions.length) facts += section('Factions', pills(e.factions.map(cap), 5));
     if (e.encounters) facts += section('Encounters', '<span class="hwdk-v-num">' + e.encounters + '</span>');
     if (e.holdfasts) facts += section('Holdfasts', '<span class="hwdk-v-num">' + e.holdfasts + '</span>');
-    if (e.dimensions && e.dimensions.length && !(e.dimensions.length === 1 && e.dimensions[0] === 'surface')) facts += section('Runs in', pills(e.dimensions.map(cap), 4));
-    if (e.tiers) facts += section('Investment', '<span class="hwdk-v-num">' + e.tiers + '</span> tier' + (e.tiers === 1 ? '' : 's'));
+    if (e.dimensions && e.dimensions.length && !(e.dimensions.length === 1 && e.dimensions[0] === 'surface')) facts += section('Location', pills(e.dimensions.map(cap), 4));
+    if (e.tiers) facts += section('Upgrade tiers', '<span class="hwdk-v-num">' + e.tiers + '</span> tier' + (e.tiers === 1 ? '' : 's'));
     return '<div class="hwdk-thead" style="color:' + ac + '">' + esc(e.name) + '</div>' +
       '<div class="hwdk-tsub">' + esc(kindLabel) + '</div>' +
       (e.blurb ? '<div class="hwdk-desc">' + esc(e.blurb) + '</div>' : '') +
@@ -92,7 +92,7 @@
       '<div class="hwdk-tsub">' + esc(e.primary || '') + (e.primary ? ' focus' : '') + '</div>' +
       (e.description ? '<div class="hwdk-desc">' + esc(e.description) + '</div>' : '') +
       section('Attributes', spread) +
-      section('Signature kit', kit);
+      section('Starting skills', kit);
   }
 
   var KINDS = {
@@ -105,7 +105,7 @@
       tip: function (e) { return biomeTip(e); },
     },
     events: {
-      files: ['events'], count: 8, min: 244, noun: 'world-events',
+      files: ['events'], count: 8, min: 244, noun: 'world events',
       accent: function (e) { return e.color; },
       title: function (e) { return e.name; },
       facet: function (e) { return e.kind === 'substrate' ? 'Always on' : e.kind === 'place' ? 'Place' : 'Event'; },
@@ -140,7 +140,15 @@
 
     Promise.all(K.files.map(fetchJSON)).then(function (res) {
       var list = res[0] || [];
-      if (!list.length) { mount.innerHTML = '<p class="hwdk-empty">Run the data export to populate this section.</p>'; return; }
+      var introductions = (window.HWGuideCopy || {})[kindKey] || {};
+      list = list.map(function (entry) {
+        if (!Object.prototype.hasOwnProperty.call(introductions, entry.id)) return entry;
+        var field = kindKey === 'classes' ? 'description' : 'blurb';
+        var card = Object.assign({}, entry);
+        card[field] = introductions[entry.id];
+        return card;
+      });
+      if (!list.length) { mount.innerHTML = '<p class="hwdk-empty">This section could not load. Refresh the page to try again.</p>'; return; }
       // classes resolve their signature skill ids → names via skills.json
       var skillMap = {};
       (res[1] || []).forEach(function (s) { if (s && s.id) skillMap[s.id] = s.name || s.id; });
@@ -151,7 +159,7 @@
         shown = sample(list, count);
         var head = '<div class="hwdk-head">' +
           '<span class="hwdk-count"><b>' + shown.length + '</b> of ' + list.length + ' ' + esc(K.noun) + '</span>' +
-          (wantShuffle ? '<button type="button" class="hwdk-shuffle" aria-label="Show a different spread">Shuffle <span aria-hidden="true">↻</span></button>' : '') +
+          (wantShuffle ? '<button type="button" class="hwdk-shuffle" aria-label="Show more examples">Shuffle <span aria-hidden="true">↻</span></button>' : '') +
           '</div>';
         var grid = '<div class="hwdk-grid" style="grid-template-columns:repeat(auto-fill,minmax(min(100%,' + min + 'px),1fr))">' +
           shown.map(function (e, i) {
@@ -162,7 +170,7 @@
               '<span class="hwdk-line">' + esc(K.line(e) || '') + '</span>' +
               '</button>';
           }).join('') + '</div>';
-        mount.innerHTML = '<div class="hwdk">' + head + grid + '<div class="hwdk-hint">Hover a card for the full read. Live data, straight from the game.</div></div>';
+        mount.innerHTML = '<div class="hwdk">' + head + grid + '<div class="hwdk-hint">Hover or focus a card for details. On touch screens, tap to inspect.</div></div>';
       }
 
       function showTip(cardEl) {

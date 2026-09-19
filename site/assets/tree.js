@@ -68,7 +68,7 @@
     .then(function (r) { if (!r.ok) throw new Error('passives ' + r.status); return r.json(); })
     .then(function (p) { return fetchClasses().then(function (cls) { boot(p, cls); }); })
     .catch(function (e) {
-      el.loading.textContent = 'Could not load the tree data (' + e.message + '). Run the export or let the deploy workflow generate data/passives.json.';
+      el.loading.textContent = 'The passive tree could not load. Refresh the page to try again.';
     });
 
   function fetchClasses() {
@@ -116,7 +116,7 @@
 
     // sample-data banner (parity with the Database)
     fetch(DATA_DIR + 'meta.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (meta) {
-      if (meta && meta.sample) el.banner.innerHTML = '<div class="databanner"><span class="tag">Sample data</span><span>Seeded preview data. On deploy the CI export replaces it with the tree the game ships.</span></div>';
+      if (meta && meta.sample) el.banner.innerHTML = '<div class="databanner"><span class="tag">Sample data</span><span>This preview uses sample nodes. Use the published planner for the current tree.</span></div>';
     }).catch(function () {});
 
     initFromURL();
@@ -178,7 +178,7 @@
   function toggle(id) {
     if (allocated.has(id)) return deallocate(id);
     if (canAllocate(id)) return allocate(id);
-    toast('Not reachable yet. Allocate a path to it first.');
+    toast('Connect this node to your path before spending a point here.');
     return false;
   }
 
@@ -408,7 +408,7 @@
 
     var count = allocated.size;
     el.allocsub.textContent = count + ' node' + (count === 1 ? '' : 's');
-    if (!rows.length) { el.totals.innerHTML = '<div class="totals-empty">Allocate nodes to see their combined modifiers here.</div>'; return; }
+    if (!rows.length) { el.totals.innerHTML = '<div class="totals-empty">Spend points to see your combined passive bonuses.</div>'; return; }
     el.totals.innerHTML = rows.join('');
   }
   function rowHTML(name, val, neg) {
@@ -446,7 +446,7 @@
     var b = el.snalloc;
     if (n.id === startNode) { b.textContent = 'Class start (fixed)'; b.disabled = true; b.style.opacity = .5; }
     else if (allocated.has(n.id)) { b.textContent = 'Refund this node'; b.disabled = false; b.style.opacity = 1; }
-    else if (canAllocate(n.id)) { b.textContent = 'Allocate'; b.disabled = false; b.style.opacity = 1; }
+    else if (canAllocate(n.id)) { b.textContent = 'Spend a point'; b.disabled = false; b.style.opacity = 1; }
     else { b.textContent = 'Not reachable'; b.disabled = true; b.style.opacity = .5; }
   }
 
@@ -544,7 +544,7 @@
 
   function showTip(n, mx, my) {
     var K = KIND[kindOf(n)];
-    var state = n.id === startNode ? 'Class start' : allocated.has(n.id) ? 'Allocated · click to refund' : canAllocate(n.id) ? 'Click to allocate' : 'Locked · no path yet';
+    var state = n.id === startNode ? 'Class start' : allocated.has(n.id) ? 'Allocated · click to refund' : canAllocate(n.id) ? 'Click to spend a point' : 'Locked · no path yet';
     el.tip.innerHTML = '<div class="tk" style="color:' + K.color + '">' + K.label + '</div>' +
       '<div class="tn">' + esc(n.name || n.id) + '</div>' +
       '<div class="td">' + esc(n.description || '') + '</div>' +

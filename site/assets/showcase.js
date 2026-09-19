@@ -43,7 +43,7 @@
   Promise.all([fetchJSON('skills'), fetchJSON('supports'), fetchJSON('uniques')]).then(function (res) {
     var skills = res[0] || [], supports = res[1] || [], uniques = res[2] || [];
     if (!skills.length && !supports.length && !uniques.length) {
-      mount.innerHTML = '<p style="color:var(--ink-faint);font-size:14px">Run the data export to populate the showcase.</p>';
+      mount.innerHTML = '<p style="color:var(--ink-faint);font-size:14px">The showcase could not load. Refresh the page to try again.</p>';
       return;
     }
 
@@ -83,10 +83,10 @@
             return '<button class="hwsc-tab" role="tab" data-key="' + t.key + '" aria-selected="' + (t.key === current) + '" style="--tab:' + t.accent + '">' +
               t.label + ' <span class="hwsc-n">' + t.items.length + '</span></button>';
           }).join('') +
-          '<button type="button" class="hwsc-shuffle" aria-label="Show a different spread">Shuffle <span aria-hidden="true">↻</span></button>' +
+          '<button type="button" class="hwsc-shuffle" aria-label="Show more examples">Shuffle <span aria-hidden="true">↻</span></button>' +
         '</div>' +
         '<div class="hwsc-rack" id="hwsc-rack"></div>' +
-        '<div class="hwsc-hint">Hover a chip to inspect it. Live data, straight from the game.</div>' +
+        '<div class="hwsc-hint">Hover or focus an item for its effects and requirements.</div>' +
       '</div>';
 
     var rack = mount.querySelector('#hwsc-rack');
