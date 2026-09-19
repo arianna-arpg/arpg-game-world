@@ -1,5 +1,6 @@
 import type { AssaultPreparation } from './assault';
 import type { MovementTetherSpec, MovementTetherState } from './movementTether';
+import type { EncounterGroupState } from './encounterGroups';
 // ---------------------------------------------------------------------------
 // Actor — the ONE entity model shared by the player, monsters, and minions.
 // All of them carry a StatSheet, a skill bar, cooldowns, buffs and statuses,
@@ -769,6 +770,9 @@ export class Actor {
    *  garrisons, bands). Leaders anchor focus-fire and on-death reactions. */
   squadId?: number;
   squadLeader?: boolean;
+  encounterGroup?: EncounterGroupState;
+  /** Original instance brain, restored if a creature leaves its encounter allegiance. */
+  encounterGroupBaseBrain?: BrainDef;
   /** Engage-token stamp: the token key held + when it was last re-asserted
    *  (world prunes stale holders, so tokens free themselves). */
   aiTokenKey?: string;

@@ -413,6 +413,10 @@ import { boroughVendorWeights, townResidentsHere, noteSoulsSheltered } from '../
 import { rollRarity, rarityMods, RARITY_DEFS, type MonsterRarity } from './rarity';
 import { magicPackPool, magicPackSize, magicPackMinimum, rollMagicPack, readMagicPack, updateMagicPacks, magicPackDeath, type MagicPackState } from './magicPacks';
 import { MAGIC_PACKS, MAGIC_PACK_CFG } from '../data/magicPacks';
+import { encounterGroupContext, rollEncounterGroup, planEncounterGroup, applyEncounterGroup,
+  clearEncounterGroup, updateEncounterGroups, readEncounterGroup, type EncounterGroupState,
+  type EncounterGroupSpawnOptions } from './encounterGroups';
+import { ENCOUNTER_GROUPS, ENCOUNTER_GROUP_CFG } from '../data/encounterGroups';
 import { stepMagicPackMechanics, type MagicPackVisual } from './magicPackMechanics';
 import { MONSTER_NAME_CFG, rollMonsterName } from '../data/monsterNames';
 import type { OverlayView } from '../world/overlay';
@@ -2450,6 +2454,7 @@ export interface BossRun {
  *  createMonster + these fields on re-entry — enough to restore who/where/how-hurt
  *  without serializing full combat state). */
 interface ZoneEnemyMemo {
+  encounterGroup?: EncounterGroupState;
   magicPack?: MagicPackState;
   movementTether?: MovementTetherState;
   defId: string;
@@ -11690,6 +11695,12 @@ export class World {
           }
         }
       }
+      // Mixed encounter groups replace NORMAL ambient packs, preserving the
+      // existing rare/magic opportunities and sealed authored-map compositions.
+      const encounterGroupRecipe = leaderRarity === 'normal' && (def.cohort !== 'authored' || spec.encounterGroups !== undefined)
+        ? rollEncounterGroup(encounterGroupContext(def, MONSTERS[type]?.faction, tierAnchorAt), spec.encounterGroups) : undefined;
+      if (encounterGroupRecipe && this.spawnEncounterGroup(encounterGroupRecipe, def.level, tierAnchor ?? at,
+        { tier: tierAnchorAt, persistent: true, maxMembers: spec.encounterGroups === false ? undefined : spec.encounterGroups?.maxMembers }).length) continue;
       for (let k = 0; k < n; k++) {
         const m = this.createMonster(type, def.level, 'enemy');
         // TERRAIN-BOUND (MonsterDef.habitat): the body exists only on its
@@ -11716,6 +11727,46 @@ export class World {
       }
       if (magicPack) this.promoteMagicPack(magicPackMembers, magicPack.id);
     }
+  }
+
+  /** Shared encounterGroup seam for ambient packs, events and bespoke maps.
+   * Planning and terrain seating finish before any member enters the world. */
+  spawnEncounterGroup(recipe: string, level: number, at: Vec2, opts: EncounterGroupSpawnOptions = {}): Actor[] {
+    const group = ENCOUNTER_GROUPS[recipe], tier = opts.tier ?? 0;
+    if (group?.id !== recipe || !Number.isFinite(at.x) || !Number.isFinite(at.y) || !Number.isInteger(tier) || tier < 0
+      || (opts.facing !== undefined && !Number.isFinite(opts.facing))) return [];
+    const plan = planEncounterGroup(recipe, encounterGroupContext(this.zone, group.faction, tier, level), opts.maxMembers);
+    if (!plan.length) return [];
+    const facing = opts.facing ?? Math.atan2(this.player.pos.y-at.y,this.player.pos.x-at.x);
+    const c = Math.cos(facing), s = Math.sin(facing), radius = group.radius ?? ENCOUNTER_GROUP_CFG.radius;
+    const field = this.pathField(tier);
+    if (tier > 0 && !this.tierViews?.[tier]) return [];
+    const members: Actor[] = [];
+    for (const seat of plan) {
+      const a = this.createMonster(seat.monster,level,'enemy'); a.tier=tier;
+      let placed=false;
+      for (let attempt=0;attempt<ENCOUNTER_GROUP_CFG.placementAttempts;attempt++) {
+        const jitter=attempt*ENCOUNTER_GROUP_CFG.placementJitter;
+        a.pos=this.findFreeSpot(vec(at.x+c*seat.offset.x-s*seat.offset.y+rand(-jitter,jitter),
+          at.y+s*seat.offset.x+c*seat.offset.y+rand(-jitter,jitter)),a.radius,tier);
+        if (a.habitat && !this.placeInHabitat(a)) continue;
+        if (dist(a.pos,at)>radius || this.pointInSolid(a.pos.x,a.pos.y,a.radius,tier)) continue;
+        if (field && (!field.isWalkable(a.pos.x,a.pos.y) || (field.reachable && !field.reachable(at,a.pos)))) continue;
+        if (members.some(b=>dist(a.pos,b.pos)<a.radius+b.radius+ENCOUNTER_GROUP_CFG.bodyClearance)) continue;
+        placed=true; break;
+      }
+      if (!placed) return []; // no orphan healer, keeper, or missing frontline
+      a.facing=facing;
+      if (opts.persistent !== undefined) a.fromZoneGen=opts.persistent;
+      members.push(a);
+    }
+    const id=this.nextSquadId();
+    members.forEach((a,i)=>{
+      applyEncounterGroup(a,{id,recipe,slot:plan[i].member.slot});
+      if (a.squadLeader) a.name=`${group.name} — ${a.name}`;
+      a.fillResources(); this.actors.push(a);
+    });
+    return members;
   }
 
   /** THE PARTY-LANDING LAW — one placement for every arrival that adjusts
@@ -17098,6 +17149,7 @@ export class World {
         life: a.life, faction: a.faction, rarity: a.rarity, tag: a.tag,
         ...(a.magicPack ? { magicPack: JSON.parse(JSON.stringify(a.magicPack)) as MagicPackState } : {}),
         movementTether: savedMovementTether(a),
+        ...(a.encounterGroup ? { encounterGroup: { ...a.encounterGroup } } : {}),
         name: a.name, ...(a.tier ? { tier: a.tier } : {}),
         ...(a.aiAwakened ? { aiAwakened: 1 as const } : {}),
       });
@@ -17208,6 +17260,7 @@ export class World {
   private restoreZoneEnemies(memory: ZoneMemory): void {
     this.actors = this.actors.filter(a => !(a.fromZoneGen && a.team === 'enemy'));
     const magicPackIds = new Map<number, number>();
+    const encounterGroupIds = new Map<number, number>();
     for (const e of memory.enemies) {
       if (!MONSTERS[e.defId]) continue;
       const m = this.createMonster(e.defId, Math.max(1, e.level), 'enemy');
@@ -17219,6 +17272,11 @@ export class World {
         m.squadLeader = m.magicPack.leader === 1;
       }
       if (e.faction) m.faction = e.faction;
+      const encounterGroup = readEncounterGroup(e.encounterGroup);
+      if (encounterGroup) {
+        if (!encounterGroupIds.has(encounterGroup.id)) encounterGroupIds.set(encounterGroup.id, m.magicPack?.id ?? this.nextSquadId());
+        applyEncounterGroup(m, { ...encounterGroup, id: encounterGroupIds.get(encounterGroup.id)! });
+      }
       if (e.rarity) this.promoteRarity(m, e.rarity);
       if (e.name) m.name = e.name; // the exact remembered name, never a re-roll
       if (e.tag) m.tag = e.tag;
@@ -17821,6 +17879,7 @@ export class World {
           ...(memo.tier ? { tier: memo.tier } : {}),
           ...(memo.aiAwakened ? { aiAwakened: 1 as const } : {}),
           movementTether: restoreMovementTether(memo.movementTether),
+          ...(readEncounterGroup(memo.encounterGroup) ? { encounterGroup: readEncounterGroup(memo.encounterGroup) } : {}),
         });
       }
       const doorState: Record<string, 'open' | 'broken'> = {};
@@ -30155,6 +30214,7 @@ export class World {
     beast.sheet.removeSource('owner');
     beast.standingOrder = undefined;   // the bond stamps the stance's order
     beast.squadId = undefined; beast.squadLeader = undefined;
+    clearEncounterGroup(beast);
     beast.tag = undefined;
     beast.aiCommand = undefined;
     beast.aiTargetId = undefined;
@@ -49231,6 +49291,7 @@ export class World {
     this.updateMounts();
     this.updateSummonShells();
     updateMovementTethers(this, dt); // movementTether wins after body displacement
+    updateEncounterGroups(this.actors);
     // THE POSSESSION SEAM sweep rides behind the grabs (engine/possess.ts):
     // the ride clock + the husk ladder — a hold landed on the husk THIS
     // frame is seen this frame.

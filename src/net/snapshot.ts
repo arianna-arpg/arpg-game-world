@@ -63,6 +63,7 @@ export type Vec2W = [number, number];
 /** One renderer-visible actor on the wire. Short keys keep the JSON small. */
 export interface ActorW {
   movementTether?: Actor['movementTether'];
+  encounterGroup?: Actor['encounterGroup'];
   cosmeticKind?: 'wisp';
   cosmeticLoadout?: CosmeticLoadout;
   id: number;
@@ -684,6 +685,7 @@ function actorToW(a: Actor, world: World): ActorW {
   if (a.extraParts?.length) w.ep = a.extraParts;
   if (a.rarity) w.rarity = a.rarity;
   if (a.magicPack) w.magicPack = { ...a.magicPack, runtime: undefined };
+  if (a.encounterGroup) w.encounterGroup = { ...a.encounterGroup };
   if (a.magicPackRole) w.magicPackRole = a.magicPackRole;
   if (a.magicPackDonors) w.magicPackDonors = a.magicPackDonors;
   if (a.magicPackPending) w.magicPackPending = a.magicPackPending;
@@ -1277,6 +1279,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     }
     a.rarity = aw.rarity as Actor['rarity'];
     a.magicPack = aw.magicPack ? { ...aw.magicPack } : undefined;
+    a.encounterGroup = aw.encounterGroup ? { ...aw.encounterGroup } : undefined;
     a.magicPackPower = aw.magicPackPower ?? 0;
     a.magicPackRole = aw.magicPackRole;
     a.magicPackDonors = aw.magicPackDonors ?? 0;

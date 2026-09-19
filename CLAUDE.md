@@ -4,6 +4,12 @@ Guidance for Claude Code working in this repository. This file is committed and
 shared with everyone who clones the repo.
 
 ## What this is
+Mixed-species encounterGroups (one faction per crew) live in
+`src/data/encounterGroups.ts`; `docs/design/encounter-groups.md` documents
+the strict habitat/debut gates, ambient replacement policy, formation slots,
+attributable tactics, survivor persistence and public spawn seam. Verify with
+`npm run probe -- encountergroups` and `balance/encounter-groups-ui.cjs` after a build.
+
 A top-down action RPG prototype in TypeScript + Vite, rendered on HTML5 Canvas
 2D. Design thesis: every system is open, modular **data** — skills, monsters,
 statuses, passives, zones are plain data entries composed by one shared engine,

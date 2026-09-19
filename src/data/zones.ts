@@ -19,6 +19,7 @@ import type { CourseJourney } from '../world/courseStages';
 import type { AtlasContext } from '../world/atlas';
 import type { ItemRarity } from '../engine/items';
 import type { PresenceSpec } from '../engine/presence';
+import type { EncounterGroupSpec } from '../engine/encounterGroups';
 import type { ZoneFogSpec } from '../engine/fog';
 import type { ZoneCreepSpec } from '../engine/creep';
 import type { CollapseSpec } from '../engine/collapse';
@@ -59,6 +60,8 @@ export interface PackTableEntry {
 export interface PackArchetype { weight: number; size: [number, number]; }
 
 export interface PackSpec {
+  /** Mixed tactical replacements; false disables them, an explicit pool curates them. */
+  encounterGroups?: EncounterGroupSpec;
   /** How many packs the zone seeds, rolled per visit. */
   count: [number, number];
   /** Monsters per pack (the default band when no `archetypes` spread is set). */

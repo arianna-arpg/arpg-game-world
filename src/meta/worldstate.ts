@@ -118,6 +118,7 @@ export function resolveResumeSpawn(
 export interface SavedEnemyMemo {
   magicPack?: import('../engine/magicPacks').MagicPackState;
   movementTether?: import('../engine/movementTether').MovementTetherState;
+  encounterGroup?: import('../engine/encounterGroups').EncounterGroupState;
   defId: string;
   level: number;
   x: number;

@@ -25,6 +25,7 @@ import { KINSHIP_MONSTERS } from './kinshipMonsters';
 import { ROOTWILD_MONSTERS } from './rootwildMonsters';
 import { ARENA_BOSS_MONSTERS } from './arenaBosses';
 import { TETHERED_MONSTERS, TETHER_KEEPERS } from './tetheredMonsters';
+import { ENCOUNTER_ADVENTURERS } from './encounterAdventurers';
 import type { MovementTetherSpec } from '../engine/movementTether';
 import { registerAIAction } from '../engine/aiActions';
 import { FluxPhase } from '../engine/flux';
@@ -2174,6 +2175,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   ...ARENA_BOSS_MONSTERS,
   ...TETHERED_MONSTERS,
   ...TETHER_KEEPERS,
+  ...ENCOUNTER_ADVENTURERS,
 
   zombie: {
     id: 'zombie', name: 'Shambling Zombie',

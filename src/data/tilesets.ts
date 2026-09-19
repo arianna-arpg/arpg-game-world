@@ -1543,6 +1543,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'rootwild_windseed', weight: 1 },
         { id: 'rootwild_nectar_bell', weight: 1 },
         { id: 'sylvan_sapling', weight: 3, presence: { to: 12, fadeOut: 5 } },
+        { id: 'rootlash_snapper', weight: 1, presence: { from: 4 } },
         { id: 'twig_snarl', weight: 3, presence: { from: 3, fadeIn: 2, to: 24, fadeOut: 9 } },
         { id: 'thorn_sprite', weight: 2, presence: { to: 20, fadeOut: 10 } },
         { id: 'thicket_stalker', weight: 2, presence: { to: 18, fadeOut: 8 } },
@@ -3748,6 +3749,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'rootwild_hingejaw', weight: 1 },
         { id: 'rootwild_hookvine', weight: 1 },
         { id: 'rootwild_pitcher', weight: 1 },
+        { id: 'rootlash_snapper', weight: 1, presence: { from: 4 } },
         { id: 'rootwild_coilmaw', weight: 2 },
         { id: 'rootwild_dragbloom', weight: 1 },
         { id: 'rootwild_sporependulum', weight: 1 },
@@ -5254,6 +5256,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       count: [5, 7], size: [3, 5],
       table: [
         { id: 'skeleton_warrior', weight: 3 },
+        { id: 'gravebound_shade', weight: 1, presence: { from: 6 } },
         { id: 'skeleton_archer', weight: 3 },
         { id: 'zombie', weight: 2, presence: { to: 22, fadeOut: 12 } },
         // The rival customer: it eats the bodies your detonations wanted.
