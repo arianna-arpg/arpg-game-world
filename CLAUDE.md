@@ -2273,6 +2273,22 @@ Prefer targeted `grep` over reading whole files.
   progression and all characters. Compatible updates leave both unchanged.
   Update the player-facing reason. See `docs/engine/save-compatibility.md`.
 
+## README.md — THE DURABLE OVERVIEW
+- `README.md` is deliberately short and names NOTHING ordinary development
+  changes: no counts, rosters, class lists, file maps, command inventories,
+  keybinds or version strings (every one went stale there within weeks).
+  **A new system, skill batch or tool does NOT earn a README line** — it earns
+  a line HERE and a contract under `docs/`. THE README TEST: would a session
+  adding content or a system ever need to edit the line? Then it does not
+  belong there.
+- Its living facts ride ZERO-COMMIT sources, so no session ever touches the
+  file to keep it current: shields.io badges over the GitHub API (stable /
+  nightly / checks) and over the Pages-published `data/meta.json` that
+  `scripts/export-web-data.ts` rebuilds from `src/data` on every push (the
+  badges read `counts.*` BY NAME — rename a key, move the README's query).
+- Edit it only when the game's identity, its install path or the four run
+  commands change. Its prose follows the site's copy rules (no em dashes).
+
 ## Commit convention
 - After a meaningful change, run `npx tsc --noEmit` (or `npm run build`) and make
   sure it is clean **before** committing.

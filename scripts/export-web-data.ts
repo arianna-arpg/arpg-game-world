@@ -425,6 +425,10 @@ async function main() {
     game: 'Hollow Wake',
     version,
     generatedAt: new Date().toISOString(),
+    // THE README BADGES read these keys BY NAME (shields.io dynamic JSON over
+    // the Pages-published data/meta.json — README.md carries no counts of its
+    // own, so it never drifts). Add keys freely; renaming or removing one
+    // turns its badge to "no result", so move the README's query with it.
     counts: {
       skills: skills.length,
       supports: supports.length,

@@ -1,150 +1,119 @@
-# Hollow Wake
+<!--
+  THE README DOCTRINE. This file is a DURABLE overview: it names nothing that
+  ordinary development changes. No counts, rosters, class lists, file maps,
+  command inventories, keybinds or version strings. Every one of those went
+  stale here within weeks. Living facts ride the badges below, which read the
+  GitHub API and the site's CI-built data/meta.json (rebuilt from src/data on
+  every push), so they stay current with ZERO commits to this file.
 
-**A top-down action RPG built around one idea: every system is open, modular data.**
+  The test for a new line: would a session adding content or a system ever
+  need to edit it? If yes, it belongs in CLAUDE.md, docs/ or the website.
+  Edit this file only when the game's identity, its install path or the run
+  commands change.
+-->
 
-Skills, monsters, statuses, passives, items, and zones are all plain data entries composed by one shared engine. The player, monsters, and minions act through a single skill pipeline — so a fireball behaves the same whether a sorcerer casts it, a monster breathes it, or your summon throws it. Classes are starting points, not cages.
+<p align="center">
+  <img src="build/icon.png" width="112" alt="The Hollow Wake insignia">
+</p>
 
-Built in TypeScript on an HTML5 Canvas 2D renderer, wrapped in an Electron desktop shell. Prototype, in active development.
+<h1 align="center">Hollow Wake</h1>
 
-`v0.2.1` · Windows · Linux · Steam Deck · TypeScript + Vite + Canvas 2D + Electron
+<p align="center"><b>A top-down action RPG where every system is open, modular data.</b></p>
 
-> **Status:** early, playable prototype. Deep, working systems under deliberately placeholder geometry art. No audio yet. See [Project status](#project-status).
+<p align="center">
+  <a href="https://github.com/arianna-arpg/arpg-game-world/releases/latest"><img alt="Latest stable release" src="https://img.shields.io/github/v/release/arianna-arpg/arpg-game-world?label=stable&amp;labelColor=07070d&amp;color=c8a84b&amp;style=flat-square"></a>
+  <a href="https://github.com/arianna-arpg/arpg-game-world/releases"><img alt="Latest nightly release candidate" src="https://img.shields.io/github/v/release/arianna-arpg/arpg-game-world?include_prereleases&amp;label=nightly&amp;labelColor=07070d&amp;color=c8a84b&amp;style=flat-square"></a>
+  <a href="https://github.com/arianna-arpg/arpg-game-world/actions/workflows/ci.yml"><img alt="Type-check and probe gate on main" src="https://img.shields.io/github/actions/workflow/status/arianna-arpg/arpg-game-world/ci.yml?branch=main&amp;label=checks&amp;labelColor=07070d&amp;style=flat-square"></a>
+</p>
+
+<p align="center">
+  <a href="https://arianna-arpg.github.io/arpg-game-world/database/"><img alt="Skills in the game right now" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Farianna-arpg.github.io%2Farpg-game-world%2Fdata%2Fmeta.json&amp;query=%24.counts.skills&amp;label=skills&amp;labelColor=07070d&amp;color=8fa8d8&amp;style=flat-square"></a>
+  <a href="https://arianna-arpg.github.io/arpg-game-world/database/"><img alt="Support gems in the game right now" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Farianna-arpg.github.io%2Farpg-game-world%2Fdata%2Fmeta.json&amp;query=%24.counts.supports&amp;label=supports&amp;labelColor=07070d&amp;color=8fa8d8&amp;style=flat-square"></a>
+  <a href="https://arianna-arpg.github.io/arpg-game-world/database/"><img alt="Monsters in the game right now" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Farianna-arpg.github.io%2Farpg-game-world%2Fdata%2Fmeta.json&amp;query=%24.counts.monsters&amp;label=monsters&amp;labelColor=07070d&amp;color=8fa8d8&amp;style=flat-square"></a>
+  <a href="https://arianna-arpg.github.io/arpg-game-world/database/"><img alt="Classes in the game right now" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Farianna-arpg.github.io%2Farpg-game-world%2Fdata%2Fmeta.json&amp;query=%24.counts.classes&amp;label=classes&amp;labelColor=07070d&amp;color=8fa8d8&amp;style=flat-square"></a>
+  <a href="https://arianna-arpg.github.io/arpg-game-world/tree/"><img alt="Passive tree nodes in the game right now" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Farianna-arpg.github.io%2Farpg-game-world%2Fdata%2Fmeta.json&amp;query=%24.counts.passives&amp;label=passive%20nodes&amp;labelColor=07070d&amp;color=8fa8d8&amp;style=flat-square"></a>
+  <a href="https://arianna-arpg.github.io/arpg-game-world/database/"><img alt="Biomes in the game right now" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Farianna-arpg.github.io%2Farpg-game-world%2Fdata%2Fmeta.json&amp;query=%24.counts.biomes&amp;label=biomes&amp;labelColor=07070d&amp;color=8fa8d8&amp;style=flat-square"></a>
+  <a href="https://arianna-arpg.github.io/arpg-game-world/database/"><img alt="Unique items in the game right now" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Farianna-arpg.github.io%2Farpg-game-world%2Fdata%2Fmeta.json&amp;query=%24.counts.uniques&amp;label=uniques&amp;labelColor=07070d&amp;color=8fa8d8&amp;style=flat-square"></a>
+</p>
+
+Skills, monsters, statuses, passives, items and zones are plain data entries composed by one shared engine. The player, monsters and minions all act through a single skill pipeline, so a fireball behaves the same whether a sorcerer casts it, a monster breathes it, or your summon throws it. Classes are starting points, not cages.
+
+Built in TypeScript and Vite on an HTML5 Canvas 2D renderer, wrapped in an Electron desktop shell. It runs on Windows, Linux and Steam Deck, and in the browser.
+
+> **Status:** a playable prototype in active development. Deep, working systems under deliberately placeholder geometry art. No audio yet. Saves can be reset between versions.
+
+The numbers above are live. They are read from the same data the game ships, so they are never out of date and nobody maintains them by hand.
 
 ---
 
-## Quick start
+## Play
 
-### Play a build
+- **In your browser.** [Play the current build](https://arianna-arpg.github.io/arpg-game-world/play/). CI rebuilds it from `main`. Saves stay in that browser's local storage.
+- **Windows.** Take the installer from the [latest release](https://github.com/arianna-arpg/arpg-game-world/releases/latest). Per-user install, no admin needed.
+- **Linux and Steam Deck.** Take the `.AppImage` from the same page, `chmod +x` it and run. [STEAM.md](STEAM.md) has the one-line Deck installer and the controller notes.
 
-Grab a packaged build from the [Releases](https://github.com/arianna-arpg/arpg-game-world/releases) page:
+The desktop launcher checks for a new stable release on start and can update itself in place. Nightly release candidates are published as pre-releases on the [Releases](https://github.com/arianna-arpg/arpg-game-world/releases) page for anyone who wants the newest build; installed stable copies never see them.
 
-- **Windows** — run `HollowWake-Setup-<version>.exe` (per-user install, no admin needed).
-- **Linux / Steam Deck** — download the `.AppImage`, `chmod +x` it, and run. To play on a Deck, add it as a non-Steam game — see [`STEAM.md`](STEAM.md) for the one-line installer and controller notes.
+Play with keyboard and mouse or any controller (Xbox, DualSense, Steam Deck). Every binding can be changed in Options.
 
-The desktop launcher checks GitHub Releases for updates on start and offers a one-click update.
+---
 
-### Run from source
+## Run from source
 
 Requires Node.js and npm.
 
 ```bash
-npm install       # first-time setup
-npm run dev       # browser dev mode at http://localhost:5173
-npm run game      # the desktop app (Electron launcher → game window)
-npm run build     # type-check + production build to dist/
+npm install
+npm run dev     # browser dev mode at http://localhost:5173
+npm run game    # the desktop app: the launcher, then the game in its own window
+npm run build   # type-check + production build to dist/
 ```
 
-On Windows you can double-click `Play Game.bat` (browser dev mode) or `Launch Game.bat` (desktop app); both run `npm install` for you the first time.
+On Windows, `Play Game.bat` (browser) and `Launch Game.bat` (desktop app) do the same and run `npm install` for you the first time. The launcher opens as a plain game launcher. Tick **Developer mode** on its page for DevTools, the in-game dev panel and hot reload straight from `src/`.
 
-**Developer mode.** The launcher opens as a plain game launcher: no DevTools, no dev panel, the build log tucked away, and `Launch Game.bat` closes its terminal once the shell is up. Tick **Developer mode** in the launcher to get DevTools (F12 / F5), the in-game dev panel and the log back, plus four toggles beneath it: **Live source** runs the game from `src/` on a Vite dev server the launcher starts (hot reload, no rebuild), **Forges** puts the Entity, Glyph and Map forges on the start menu, **Passive tree editor** turns the tree into an editor whose Save writes `src/data/passives.ts` under live source, and **Terminal window** keeps the console open on the next launch. The choices persist in `launcher.config.local.json` (machine-local, never committed).
-
-### Controls
-
-Keyboard/mouse defaults: **WASD** move · **LMB/RMB + 1–6** skill slots · **C** character · **B** skill book · **P** passive tree · **M** map · **Esc** menu. Everything is rebindable.
-
-Full native controller support (Xbox / DualSense / Steam Deck) works in the browser build and the desktop app alike — layout and feel tunables in [`STEAM.md`](STEAM.md).
-
----
-
-## What's in it
-
-Current content, all authored as data:
-
-Approximate figures — the exact, current counts are whatever's in `src/data/`
-(and are surfaced live by the website's Database):
-
-| | |
-|---|---|
-| **Skills** | 350+ active skills · 200+ support gems that reshape them |
-| **Classes** | 15 playable classes, each a starting kit of attributes and signature skills |
-| **Monsters** | A large bestiary across a set of composable AI archetypes |
-| **Passive tree** | Hundreds of nodes — keystones, notables, and raw attributes placed on the graph itself |
-| **Systems vocabulary** | 10 attributes · a spread of damage types · a deep set of status effects, charge resources, and procs |
-| **Items** | full gear system: base families, an affix gamut, uniques, a grid ("tetris bag") inventory, nestable loot tables, and socketable **vestiges** with Epitaph words |
-| **World** | two hand-authored anchors — the starting town and Wayfarer's Crossroads — opening onto an effectively infinite procedural frontier |
-| **Run modifiers** | optional per-run world-event packages (Warbands, Breach, Contagion, Demon Invasion, …) layered onto the world graph — plus meta-layer systems like the **Immortal** death mode (which rewrites the rules of death itself) and a **Mercenary** roster |
-| **Factions** | rival factions with ally/hostile relationships that fight each other on shared terrain |
+There is no unit-test runner. Changes are gated by the type-check plus headless harnesses that boot the engine itself: regression probes, smoke boots, a seeded balance sim, generation QA and a frame-time sweep. CI runs the type-check and the probe gate on every push, and the nightly job runs the full lane before it cuts a release candidate. The commands and their contracts are in [CLAUDE.md](CLAUDE.md).
 
 ---
 
 ## The core idea
 
-**Skills are loot.** Skills drop from monsters and level up by sacrificing gems at fonts — not from character levels. Character XP grants passive points instead. Your build is the skills you find and the supports you socket into them.
+**Skills are loot.** Your build is the skills you find and the supports you socket into them, not a menu unlocked by character level. Character levels feed the passive tree instead.
 
-**One pipeline for everyone.** Player, monsters, and minions all resolve actions through `World.useSkill()` in `src/engine/world.ts`. A summoner's skeletons literally run on the same skills monsters do.
+**One pipeline for everyone.** The player, monsters and minions all resolve their actions through `World.useSkill()`. A summoner's skeletons run on the same skills monsters do.
 
-**One modifier engine.** Every number flows through a layered, tag-scaled formula — `flat → increased → more → override` — implemented once in `src/engine/stats.ts` and shared by every system. Content authors compose behavior out of tags and modifiers rather than writing new engine code.
+**One modifier engine.** Every number flows through one layered, tag-scoped formula (`flat → increased → more → override`), implemented once and shared by every system. Content composes behavior out of tags and modifiers instead of new engine code.
 
-**Data in, no engine changes.** Adding a skill, support, monster, passive, proc, item base, affix, unique, or class means adding an entry under `src/data/`. The engine already knows how to run it.
-
-### Classes
-
-Warrior · Magician · Rogue · Berserker · Sorcerer · Ranger · Guardian · Summoner · Swashbuckler · Juggernaut · Pyromancer · Assassin · Necromancer · Cleric · Tamer
-
-Each ships a starting attribute spread and a handful of signature skills, but nothing locks you in — every class draws from the same shared skill and passive pools.
+**Data in, no engine changes.** Adding a skill, support, monster, passive, item, biome or class means adding an entry under `src/data/`. The engine already knows how to run it.
 
 ---
 
-## Architecture
+## Where the truth lives
 
-One engine, content as data, a Canvas renderer, and an Electron shell around it.
+This page stays short on purpose. The project moves fast, and each kind of detail has one maintained home:
 
-| Area | What lives there |
+| If you want | Go to |
 |---|---|
-| `src/engine/` | Core systems: `world.ts` (loop + `useSkill`), `stats.ts` (layered modifiers), `damage.ts`, `status.ts`, `skills.ts`, `actor.ts` (one entity model for player/monsters/minions), `ai.ts` + `brain.ts` (composable AI), `los.ts` (occlusion raycast + pathing), `presence.ts` (leveled spawn envelopes), `levelgen.ts`, `worldgen.ts`; items: `items.ts`, `itemgen.ts`, `inventory.ts`, `loot.ts` |
-| `src/data/` | Content: `skills.ts`, `supports.ts`, `monsters.ts`, `passives.ts`, `classes.ts`, `zones.ts`, `tilesets.ts`, `procs.ts`, `itembases.ts`, `itemaffixes.ts`, `uniques.ts`, `loottables.ts`, `vestiges.ts` |
-| `src/render/` | Canvas 2D renderer + the **visual fabric**: materials registry, sprite bake cache, doodad painter library, dynamic light layer, and weather particles — new doodad kinds are one data entry |
-| `src/packages/` | Optional per-run world-event overlays (Warbands, Breach, Contagion, …) |
-| `src/sim/` | Browser-safe half of the balance harness: headless boot, seeded episode runner, build injection, metric taps |
-| `src/ui/`, `src/net/`, `src/meta/` | DOM panels, co-op transport, and the account / save / permadeath meta-layer |
-| `launcher/` | The Electron desktop shell (CJS): update flow, loopback save server, launcher window |
+| What is in the game right now: every skill, support, monster, class, unique and biome | The [Database](https://arianna-arpg.github.io/arpg-game-world/database/), regenerated from `src/data/` on every push |
+| The passive tree | The [tree viewer](https://arianna-arpg.github.io/arpg-game-world/tree/) |
+| How the systems feel from the player's side | The [website](https://arianna-arpg.github.io/arpg-game-world/) and its [Systems](https://arianna-arpg.github.io/arpg-game-world/systems/) page |
+| The repository map, every command, the verification gates and the working conventions | [CLAUDE.md](CLAUDE.md), maintained continuously. [AGENTS.md](AGENTS.md) points there too |
+| One system in depth | [docs/](docs/), one contract per system, grouped by area |
+| Packaging, releases, Steam Deck and controller layout | [STEAM.md](STEAM.md) |
+| What changed between versions | [Releases](https://github.com/arianna-arpg/arpg-game-world/releases) and [docs/releases/](docs/releases/) |
 
-Entry point: `index.html` → `src/main.ts`.
-
-Some data and engine files are very large (`src/data/skills.ts`, `src/engine/world.ts`). Prefer targeted `grep` over reading them whole. For working conventions and the deeper subsystem tour, see [`CLAUDE.md`](CLAUDE.md) and the docs under [`docs/`](docs/).
-
----
-
-## Verification & tooling
-
-There is no unit-test runner. Correctness is gated by type-checking plus a set of headless harnesses:
-
-- **`npx tsc --noEmit`** — fast type-check, the primary correctness gate. `npm run check` type-checks the game, launcher, and sim projects together.
-- **`npm run smoke` / `smoke:launcher`** — headless Electron self-checks that boot the real game (or launcher) and assert it comes up.
-- **`npm run sim -- …`** — the **balance harness**: the real engine, headless and deterministic (seeded). Runs scenario suites, ranks every skill at equal investment, runs the skill × support no-op matrix, prints per-class power curves, and audits the item economy. Docs in `docs/balance/`.
-- **`npm run perf`** — the **performance harness**: boots the real desktop game and samples frame telemetry per procedural zone, gating each biome against a town control.
-- **`npm run genqa`** — the **generation QA harness**: runs level generation across the whole authored tileset/variant matrix over several seeds and asserts the generation invariants.
-
-Run the relevant harness after touching the area it covers.
-
----
-
-## Building & packaging
-
-`electron-builder` packages the desktop shell into real executables — a Windows installer and a Linux AppImage:
-
-```bash
-npm run dist          # Windows installer
-npm run dist:linux    # Linux AppImage (the Steam Deck artifact)
-npm run dist:all      # both
-```
-
-Releases are cut by tagging `v<version>` matching `package.json`; a GitHub Action builds both platforms and publishes the release the launcher and Steam Deck installer read from. The complete packaging, release, and Steam Deck story lives in [`STEAM.md`](STEAM.md).
+The short map: the engine lives in `src/engine/`, all content in `src/data/`, the renderer in `src/render/`, the desktop shell in `launcher/`, the website in `site/` and the headless harnesses in `balance/`.
 
 ---
 
 ## Project status
 
-Hollow Wake is an in-development prototype. The systems are broad and working — skills, supports, items, passives, procedural worlds, AI, factions, co-op, permadeath — but the presentation is intentionally minimal for now:
+Hollow Wake is a prototype. The systems are broad and working, and the presentation is deliberately minimal for now:
 
-- **Art** is deliberate placeholder geometry rendered through the visual-fabric shading layer, not final assets.
+- **Art** is placeholder geometry shaded by the renderer's visual fabric, not final assets.
 - **Audio** is not implemented yet.
-- Balance, class identity, and content are actively evolving between versions.
-
-If you are reading this as reference for the *current* state of the project, trust this file and [`CLAUDE.md`](CLAUDE.md) over any older description: the codebase already includes a full equipment/affix/unique/vestige item system, controller support, and desktop packaging.
+- **Saves are disposable** while the game is a prototype. A version may reset runs or the whole account, and it says so when it does.
+- **Balance, classes and content** shift between versions.
 
 ---
 
-## Credits
-
-Made by Arianna. Repository: [arianna-arpg/arpg-game-world](https://github.com/arianna-arpg/arpg-game-world).
+Made by Arianna.
