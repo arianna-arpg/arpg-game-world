@@ -18,6 +18,35 @@ export const MAGIC_PACK_CFG = {
 /** Open recipes: compose proximity and casualty rules with ordinary sheet mods.
  * No recipe-specific combat code, damage path, or monster-definition mutation. */
 export const MAGIC_PACKS: Record<string, MagicPackDef> = {
+  cinderchain: {
+    id: 'cinderchain', name: 'Cinderchain', minLevel: 7, weight: 3, color: '#ff9566',
+    hint: 'Slow bodies ignite without dying. Spread them apart to stop the chain; leave each marked blast.',
+    activeLabel: 'Living fuse', inactiveLabel: 'Living fuse',
+    rules: [{ mods: [mod('moveSpeed', 'more', -0.25)] }],
+    burst: { skill: 'magic_pack_blast', cooldown: 7, initialDelay: 3, warning: 1.35, flash: 0.35,
+      breakDistance: 32, radius: 105, chainRange: 220 },
+  },
+  mending_relay: {
+    id: 'mending_relay', name: 'Mending Relay', minLevel: 8, weight: 2, color: '#8ce5b2',
+    hint: 'A green link is preparing an ally heal. Kill the healer or separate the pair before it fills.',
+    activeLabel: 'Mending relay', inactiveLabel: 'Mending relay', rules: [],
+    mend: { cooldown: 7, initialDelay: 2, warning: 1.8, flash: 0.4, breakDistance: 32,
+      range: 300, fraction: 0.18, below: 0.75 },
+  },
+  encirclement: {
+    id: 'encirclement', name: 'Encirclement', minLevel: 15, weight: 2, color: '#ee91cc',
+    hint: 'Three members mark a ritual. Leave its triangle, or kill or displace a corner before it erupts.',
+    activeLabel: 'Triad ritual', inactiveLabel: 'Triad ritual', rules: [],
+    ritual: { skill: 'magic_pack_ritual', cooldown: 8, initialDelay: 3.5, warning: 1.7, flash: 0.45,
+      breakDistance: 32, range: 430, minArea: 2400 },
+  },
+  hollow_choir: {
+    id: 'hollow_choir', name: 'Hollow Choir', minLevel: 18, weight: 2, color: '#9aaaff',
+    hint: 'Hollow rings erupt together. Stand in a clear center or beyond every marked rim.',
+    activeLabel: 'Hollow chorus', inactiveLabel: 'Hollow chorus', rules: [],
+    burst: { skill: 'magic_pack_hollow', cooldown: 8, initialDelay: 3, warning: 1.6, flash: 0.4,
+      breakDistance: 32, radius: 175, innerRadius: 85 },
+  },
   wardbound: {
     id: 'wardbound', name: 'Wardbound', minLevel: 1, weight: 4,
     hint: 'Separate allies to break their shared protection.',

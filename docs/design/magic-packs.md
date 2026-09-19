@@ -19,6 +19,10 @@ skills or replace any creature's native kit, brain, bonds or tactics.
 | Arclink | 10+ | Two members plant their feet and mark a fixed path for 1.25 seconds, then an 0.8-second pulse travels along it; 5.5-second recovery | Leave the path or kill/displace an endpoint to cancel it |
 | Siphon Court | 13+ | One siphoner gains 16% increased attack/cast speed and 7% movement per visible feeder within 230 units. Feeders have 15% less attack/cast speed and 22% less movement | Kite the fast member away to sever its feeds, or kill it to permanently end the siphon |
 | Gravewheel | 16+ | Each casualty leaves two rotating chaos spokes, radius 115, after a 1.5-second warning; all anchors last until the pack ends | Choose where members die, keep moving through the openings, and finish the remaining pack |
+| Cinderchain | 7+ | Members move 25% slower. A living member warns for 1.35 seconds and explodes in a 105-unit radius, igniting original allies within 220. Each member fires once per chain; another chain can begin after 7 seconds of recovery | Spread the pack to stop propagation; leave each marked blast or displace its caster |
+| Mending Relay | 8+ | A member channels for 1.8 seconds to restore 18% maximum life to a wounded ally within 300 units, with a 7-second recovery | Follow the green link, kill its healer, break sight or separate the pair before completion |
+| Encirclement | 15+ | Three members plant their feet and mark a triangle; after 1.7 seconds it erupts once, then recovers for 8 seconds | Escape the triangle or remove/displace any corner. Requires three members and a nondegenerate formation |
+| Hollow Choir | 18+ | Members simultaneously warn for 1.6 seconds, then burst between radius 85 and 175, with an 8-second recovery | Stand inside a center that is clear of other members' rings, or beyond all rims |
 
 All eligible recipes stay in the weighted pool. A level-12 encounter can still
 roll Wardbound; later unlocks add variety rather than stacking every mechanic.
@@ -65,6 +69,23 @@ skill payloads; hits use ordinary skill resolution, mitigation, death gates and
 credit. Grave hits are attributed to a living sustaining member on that story,
 never a fabricated corpse actor. They target enemies of that member, including
 players and their companions, rather than friendly members of the same pack.
+
+`src/engine/magicPackEvents.ts` adds a shared select/warn/resolve/recover cycle
+for `burst`, `mend` and `ritual` specifications. Bursts optionally supply an
+`innerRadius` (a hollow center) or `chainRange` (one ignition per original slot
+per chain). Every propagated charge receives the full authored warning, and a
+disconnected member cannot be ignited through walls, across stories, or from
+another pack. Burst/ritual anchors snapshot positions and hold their casters'
+feet while warning; forced displacement cancels them. A mending recipient can
+move within the link range, while its healer channels. Healing uses `healBy`,
+including healing-received modifiers and life caps; it never revives casualties.
+The green link and target cross identify both the healer and beneficiary.
+All these cycles stop on disengagement and re-arm from an initial delay after
+travel/save restoration. Neither pending damage nor movement holds are restored.
+Explosion/ritual flashes show a completed hit; they do not deal repeated damage.
+Hollow-ring membership uses the target's center for its safe inner boundary;
+outer contact includes body radius. Triangles test the target center against
+the exact drawn polygon, with sight checks before damage.
 
 `World.promoteMagicPack(members, recipeId)` is the explicit content seam for
 events or authored encounters. It requires 2–6 distinct, living, unowned,
@@ -131,3 +152,9 @@ after a build; it captures each recipe's real links, power pips and hover plate.
 death and timed handoffs, 30/60/120 Hz beam behavior, actual damage and dodging,
 endpoint cancellation, siphon isolation, grave persistence/rotation/cleanup,
 wall/story safety, JSON save/load and co-op geometry.
+`npm run probe -- magicpackevents` covers recurring chains at 30/60/120 Hz,
+per-hop warning time, separation/occlusion, mending interruption and healTaken,
+triangle escape and collapse, hollow-ring safety/overlap, retaliation cleanup,
+disengagement and save/co-op state. The hidden visual harness includes warning
+and resolution captures for all four additions; `MAGIC_PACK_SCENARIOS` can select
+a comma-separated subset of its named scenarios.

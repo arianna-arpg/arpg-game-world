@@ -62876,6 +62876,7 @@ export class World {
    *  PREDICTION doesn't drift the hero forward while the host has them rooted. */
   movementLocked(a: Actor): boolean {
     if (a.magicPack && a.sheet.getSourceMods('magicPack:beamChannel')) return true;
+    if (a.magicPack && a.sheet.getSourceMods('magicPack:eventChannel')) return true;
     // The PASSIVE lock is a volition lock — a DRIVEN body (engine-wheeled
     // scenery: the serpent's passing glimpse) has no volition to lock; the
     // engine's own hand moves it. Death, stun, dash and anchors still hold.

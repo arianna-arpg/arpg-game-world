@@ -4,8 +4,9 @@ import { MAGIC_PACK_CFG, MAGIC_PACKS } from '../data/magicPacks';
 import { packLinks, PACK_CFG, type PackLink } from './pack';
 import { STAT_DEFS } from './stats';
 import { magicPackFallen, restoreMagicPackRuntime, type MagicPackBearer, type MagicPackBeam, type MagicPackGrave, type MagicPackRuntime } from './magicPackMechanics';
+import { magicPackEventErrors, type MagicPackEventSpec } from './magicPackEvents';
 
-export interface MagicPackDef {
+export interface MagicPackDef extends MagicPackEventSpec {
   id: string;
   name: string;
   minLevel: number;
@@ -39,7 +40,7 @@ export interface MagicPackState {
 }
 
 export function magicPackMinimum(def: MagicPackDef): number {
-  return Math.max(2, ...def.rules.map(rule => (rule.nearby?.min ?? 0) + 1));
+  return Math.max(def.ritual ? 3 : 2, ...def.rules.map(rule => (rule.nearby?.min ?? 0) + 1));
 }
 
 export function magicPackPool(level: number, policy?: MagicPackPolicy | false, memberCap = MAGIC_PACK_CFG.maxMembers): MagicPackDef[] {
@@ -174,10 +175,11 @@ export function magicPackErrors(skillExists?: (id: string) => boolean): string[]
   }
   if (MAGIC_PACK_CFG.sizeByLevel[0]?.level !== 1) errors.push('magicPack: missing level-one size');
   for (const [id, def] of Object.entries(MAGIC_PACKS)) {
+    errors.push(...magicPackEventErrors(def, skillExists).map(message => `magicPack ${id}: ${message}`));
     for (const skill of [def.beam?.skill, def.grave?.skill]) if (skill && skillExists && !skillExists(skill)) errors.push(`magicPack ${id}: missing skill ${skill}`);
     if (id !== def.id || !integer(def.minLevel, 1) || !Number.isFinite(def.weight) || def.weight < 0
       || !def.name || !def.hint || !def.color || !def.activeLabel || !def.inactiveLabel
-      || (!def.rules.length && !def.beam && !def.grave)) errors.push(`magicPack ${id}: invalid recipe`);
+      || (!def.rules.length && !def.beam && !def.grave && !def.burst && !def.mend && !def.ritual)) errors.push(`magicPack ${id}: invalid recipe`);
     const positive = (n: number): boolean => Number.isFinite(n) && n > 0;
     if (def.bearer && (!positive(def.bearer.warning) || (def.bearer.rotateEvery !== undefined
       && (!positive(def.bearer.rotateEvery) || def.bearer.rotateEvery <= def.bearer.warning))

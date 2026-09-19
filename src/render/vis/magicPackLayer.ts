@@ -10,6 +10,40 @@ export function drawMagicPackEffects(ctx: CanvasRenderingContext2D, rows: readon
   for (const row of rows) {
     ctx.strokeStyle = ctx.fillStyle = row.color;
     ctx.setLineDash([]);
+    if (row.kind === 'burst' || row.kind === 'ritual') {
+      ctx.beginPath();
+      if (row.kind === 'burst') {
+        ctx.arc(row.ax, row.ay, row.radius!, 0, Math.PI * 2);
+        if (row.innerRadius) { ctx.moveTo(row.ax + row.innerRadius, row.ay); ctx.arc(row.ax, row.ay, row.innerRadius, 0, Math.PI * 2, true); }
+      } else if (row.points?.length === 3) {
+        ctx.moveTo(row.points[0].x, row.points[0].y);
+        for (const p of row.points.slice(1)) ctx.lineTo(p.x, p.y);
+        ctx.closePath();
+      }
+      ctx.globalAlpha = row.warning ? 0.08 + row.progress * 0.14 : 0.48 * (1 - row.progress);
+      ctx.fill('evenodd');
+      ctx.lineWidth = row.warning ? 2 : 4; ctx.setLineDash(row.warning ? [8, 5] : []);
+      ctx.globalAlpha = row.warning ? 0.65 + row.progress * 0.3 : 1 - row.progress * 0.65; ctx.stroke();
+      ctx.setLineDash([]); ctx.lineWidth = 3;
+      for (const p of row.points ?? [{ x: row.ax, y: row.ay }]) {
+        ctx.beginPath(); ctx.arc(p.x, p.y, 20, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (row.warning ? row.progress : 1)); ctx.stroke();
+      }
+      continue;
+    }
+    if (row.kind === 'mend') {
+      ctx.lineWidth = row.warning ? 2 : 5; ctx.globalAlpha = row.warning ? 0.7 : 1 - row.progress;
+      ctx.setLineDash(row.warning ? [6, 4] : []);
+      ctx.beginPath(); ctx.moveTo(row.ax, row.ay); ctx.lineTo(row.bx, row.by); ctx.stroke();
+      ctx.setLineDash([]);
+      for (let i = 0; i < 3; i++) {
+        const t = (time * 0.7 + i / 3) % 1;
+        ctx.beginPath(); ctx.arc(row.ax + (row.bx - row.ax) * t, row.ay + (row.by - row.ay) * t, 3, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.beginPath(); ctx.arc(row.ax, row.ay, 25, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (row.warning ? row.progress : 1)); ctx.stroke();
+      ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(row.bx - 6, row.by - 34); ctx.lineTo(row.bx + 6, row.by - 34);
+      ctx.moveTo(row.bx, row.by - 40); ctx.lineTo(row.bx, row.by - 28); ctx.stroke();
+      continue;
+    }
     if (row.kind === 'siphon') {
       ctx.globalAlpha = 0.4; ctx.lineWidth = row.width;
       ctx.beginPath(); ctx.moveTo(row.ax, row.ay); ctx.lineTo(row.bx, row.by); ctx.stroke();

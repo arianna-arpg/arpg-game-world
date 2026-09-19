@@ -18,7 +18,9 @@ app.whenReady().then(async () => {
     await win.loadURL(server.url);
     await win.webContents.executeJavaScript("Object.defineProperty(navigator,'getGamepads',{value:()=>[]}); void 0;");
     await win.webContents.executeJavaScript("__game.account().ledger.prologue_lived=1; __game.devStartRun('warrior'); __game.ui.hideAll(); __game.step(360); void 0;");
-    for (const scenario of ['wardbound', 'chorus', 'vendetta', 'breachbearers', 'shifting_breach', 'arclink', 'arclink_fire', 'gravewheel', 'gravewheel_active', 'siphon']) {
+    const scenarios = ['wardbound', 'chorus', 'vendetta', 'breachbearers', 'shifting_breach', 'arclink', 'arclink_fire', 'gravewheel', 'gravewheel_active', 'siphon',
+      'cinderchain', 'cinderchain_fire', 'mending_relay', 'mending_relay_active', 'encirclement', 'encirclement_fire', 'hollow_choir', 'hollow_choir_fire'];
+    for (const scenario of scenarios.filter(s => !process.env.MAGIC_PACK_SCENARIOS || process.env.MAGIC_PACK_SCENARIOS.split(',').includes(s))) {
       const recipe = scenario.replace(/_(fire|active)$/, '');
       const result = await win.webContents.executeJavaScript(`(() => {
         const w = __game.world(); w.player.invulnerable = true;
@@ -39,10 +41,19 @@ app.whenReady().then(async () => {
           w.actors.push(a); return a;
         });
         if (!w.promoteMagicPack(pack, '${recipe}')) throw new Error('promotion failed');
+        if ('${recipe}' === 'encirclement') {
+          pack[0].pos={x:origin.x-150,y:origin.y-210}; pack[1].pos={x:origin.x+150,y:origin.y-210};
+          pack[2].pos={x:origin.x,y:origin.y-10};
+        }
+        if ('${recipe}' === 'mending_relay') pack[1].life = pack[1].maxLife()*0.4;
         if ('${recipe}' === 'vendetta') { w.kill(pack[0], false, w.player); w.kill(pack[1], false, w.player); }
         if ('${recipe}' === 'gravewheel') { w.kill(pack[0], false, w.player); w.kill(pack[2], false, w.player); }
         w.drops = [];
-        const seconds = '${recipe}' === 'shifting_breach' ? 5.3 : '${scenario}' === 'arclink_fire' ? 4.4
+        const seconds = '${recipe}' === 'cinderchain' ? ('${scenario}' === 'cinderchain_fire' ? 4.45 : 3.7)
+          : '${recipe}' === 'mending_relay' ? ('${scenario}' === 'mending_relay_active' ? 3.95 : 2.8)
+          : '${recipe}' === 'encirclement' ? ('${scenario}' === 'encirclement_fire' ? 5.35 : 4.3)
+          : '${recipe}' === 'hollow_choir' ? ('${scenario}' === 'hollow_choir_fire' ? 4.75 : 3.8)
+          : '${recipe}' === 'shifting_breach' ? 5.3 : '${scenario}' === 'arclink_fire' ? 4.4
           : '${recipe}' === 'arclink' ? 3.5 : '${scenario}' === 'gravewheel_active' ? 2.5 : 0.5;
         for (let t=0; t<Math.round(seconds*60); t++) w.refreshMagicPacks(1/60);
         const a = pack.find(a => !a.dead), r = __game.renderer;
@@ -68,8 +79,15 @@ app.whenReady().then(async () => {
         assert.ok(result.effects.length > 0);
         assert.ok(result.effects.every(e=>e.warning === !(scenario.endsWith('_fire') || scenario.endsWith('_active'))));
       }
+      if (['cinderchain','mending_relay','encirclement','hollow_choir'].includes(recipe)) {
+        assert.ok(result.effects.length > 0);
+        const firing = scenario.endsWith('_fire') || scenario.endsWith('_active');
+        assert.ok(result.effects.some(e=>e.warning !== firing));
+        if (recipe === 'encirclement') assert.ok(result.effects.some(e=>e.points?.length === 3));
+        if (recipe === 'hollow_choir') assert.ok(result.effects.every(e=>e.innerRadius === 85));
+      }
       fs.writeFileSync(path.join(dir, `magic-pack-${scenario}.png`), Buffer.from(image.split(',')[1], 'base64'));
     }
-    log('PASS: all eight magic pack recipes and both hazard phases render in the real client');
+    log('PASS: selected magic pack recipes and hazard phases render in the real client');
   } finally { clearTimeout(timeout); win.destroy(); server.server.close(); app.quit(); }
 }).catch(error => { log(error.stack ?? String(error)); app.exit(1); });

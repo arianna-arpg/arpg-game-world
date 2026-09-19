@@ -4,6 +4,7 @@ import { MAGIC_PACKS, MAGIC_PACK_CFG } from '../data/magicPacks';
 import { mod } from './stats';
 import { sameStory } from './tiers';
 import { pointSegDist, type Vec2 } from '../core/math';
+import { stepMagicPackEvents, type MagicPackEvents } from './magicPackEvents';
 
 export interface MagicPackBearer {
   /** No timer means the exposed role passes only when its bearer leaves. */
@@ -35,13 +36,15 @@ export interface MagicPackRuntime {
   bearer?: number; retired?: boolean; rotateLeft: number;
   beamLeft: number; pairCursor: number; beam?: MagicPackPulse;
   graves: MagicPackGraveState[];
+  events?: MagicPackEvents;
 }
 /** Host-produced geometry is also the wire/draw geometry. Width is HALF-width. */
 export type MagicPackVisual = {
-  kind: 'beam' | 'grave' | 'siphon'; pack: number; color: string;
+  kind: 'beam' | 'grave' | 'siphon' | 'burst' | 'mend' | 'ritual'; pack: number; color: string;
   ax: number; ay: number; bx: number; by: number; width: number;
   warning: boolean; progress: number; tier: number;
   cx?: number; cy?: number; radius?: number;
+  innerRadius?: number; points?: Vec2[];
 };
 export interface MagicPackContext {
   enemies(a: Actor): Actor[];
@@ -103,6 +106,7 @@ export function stepMagicPackMechanics(actors: readonly Actor[], dt: number, ctx
     a.magicPackRole = undefined; a.magicPackPending = 0; a.magicPackDonors = 0;
     if (!active(a)) {
       if (a.sheet.getSourceMods('magicPack:beamChannel')) a.sheet.removeSource('magicPack:beamChannel');
+      if (a.sheet.getSourceMods('magicPack:eventChannel')) a.sheet.removeSource('magicPack:eventChannel');
       continue;
     }
     const p = a.magicPack!;
@@ -114,7 +118,10 @@ export function stepMagicPackMechanics(actors: readonly Actor[], dt: number, ctx
     if (!def?.beam) for (const a of group) {
       if (a.sheet.getSourceMods('magicPack:beamChannel')) a.sheet.removeSource('magicPack:beamChannel');
     }
-    if (!def || (!def.bearer && !def.beam && !def.grave)) continue;
+    if (!def?.burst && !def?.mend && !def?.ritual) for (const a of group) {
+      if (a.sheet.getSourceMods('magicPack:eventChannel')) a.sheet.removeSource('magicPack:eventChannel');
+    }
+    if (!def || (!def.bearer && !def.beam && !def.grave && !def.burst && !def.mend && !def.ritual)) continue;
     // Pre-mechanic saves had no slots. Assign once; new cohorts mint them.
     const used = new Set(group.map(a => a.magicPack!.slot).filter(n => n !== undefined));
     for (const a of group) if (a.magicPack!.slot === undefined) {
@@ -130,6 +137,7 @@ export function stepMagicPackMechanics(actors: readonly Actor[], dt: number, ctx
     // Encounter clocks pause when nobody is nearby. Existing ground keeps
     // turning locally, even when survivors have been kited away from it.
     const elapsed = engaged ? Math.max(0, dt) : 0;
+    if (def.burst || def.mend || def.ritual) stepMagicPackEvents(group, def, state.events ??= {}, dt, engaged, def.color, ctx, visuals);
     if (def.bearer && !state.retired) {
       let bearer = group.find(a => slot(a) === state.bearer);
       const successor = (): Actor => group.find(a => slot(a) > (state.bearer ?? -1)) ?? group[0];
