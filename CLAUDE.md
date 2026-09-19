@@ -2289,6 +2289,23 @@ Prefer targeted `grep` over reading whole files.
 - Edit it only when the game's identity, its install path or the four run
   commands change. Its prose follows the site's copy rules (no em dashes).
 
+## License — THE CLEAN TREE
+- Hollow Wake is **PolyForm Noncommercial 1.0.0** (`LICENSE.md`; SPDX id in
+  `package.json`): anyone may read, run, modify and share it noncommercially;
+  every COMMERCIAL right stays with the author. The PolyForm text in
+  `LICENSE.md` is VERBATIM from `polyformproject/polyform-licenses@1.0.0` —
+  never reword it; only the preface above its rule is ours.
+- Those rights hold only while the tree stays CLEAN, as it is today: ZERO
+  runtime dependencies, no vendored third-party code, no bundled third-party
+  fonts / images / audio (the site's fonts load by URL). So: **never paste in
+  code from another project, never commit an asset you did not generate here,
+  and never add a runtime dependency, without the author's word.** Dev tooling
+  under MIT / Apache-2.0 / BSD / ISC is fine. Copyleft (GPL/AGPL/LGPL) code
+  and NC- or ND-licensed assets are NEVER fine — either one would encumber
+  the very rights the license reserves. The coming AUDIO pass is the classic
+  trap: every sample must be generated in-repo or carry a license that permits
+  commercial use, recorded beside the file.
+
 ## Commit convention
 - After a meaningful change, run `npx tsc --noEmit` (or `npm run build`) and make
   sure it is clean **before** committing.

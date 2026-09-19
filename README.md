@@ -24,6 +24,7 @@
   <a href="https://github.com/arianna-arpg/arpg-game-world/releases/latest"><img alt="Latest stable release" src="https://img.shields.io/github/v/release/arianna-arpg/arpg-game-world?label=stable&amp;labelColor=07070d&amp;color=c8a84b&amp;style=flat-square"></a>
   <a href="https://github.com/arianna-arpg/arpg-game-world/releases"><img alt="Latest nightly release candidate" src="https://img.shields.io/github/v/release/arianna-arpg/arpg-game-world?include_prereleases&amp;label=nightly&amp;labelColor=07070d&amp;color=c8a84b&amp;style=flat-square"></a>
   <a href="https://github.com/arianna-arpg/arpg-game-world/actions/workflows/ci.yml"><img alt="Type-check and probe gate on main" src="https://img.shields.io/github/actions/workflow/status/arianna-arpg/arpg-game-world/ci.yml?branch=main&amp;label=checks&amp;labelColor=07070d&amp;style=flat-square"></a>
+  <a href="LICENSE.md"><img alt="License: PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-c8a84b?labelColor=07070d&amp;style=flat-square"></a>
 </p>
 
 <p align="center">
@@ -113,6 +114,12 @@ Hollow Wake is a prototype. The systems are broad and working, and the presentat
 - **Audio** is not implemented yet.
 - **Saves are disposable** while the game is a prototype. A version may reset runs or the whole account, and it says so when it does.
 - **Balance, classes and content** shift between versions.
+
+---
+
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE.md). Read it, run it, mod it, fork it and share it for any noncommercial purpose. Commercial use needs the author's permission first. The name and the insignia stay with the project.
 
 ---
 
