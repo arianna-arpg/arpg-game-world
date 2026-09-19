@@ -14,6 +14,7 @@ import { magicPackErrors } from '../engine/magicPacks';
 import { movementTetherErrors } from '../engine/movementTether';
 import { encounterGroupErrors, encounterGroupSpecErrors } from '../engine/encounterGroups';
 import { ENCOUNTER_GROUPS } from './encounterGroups';
+import { encounterCombatErrors } from '../engine/encounterCombat';
 import { SUPPORTS } from './supports';
 import { spawnVeinOf } from '../engine/supportbase';
 import {
@@ -137,6 +138,7 @@ const ADOPTIVE_ONLY_KINDS = ['lair', 'package', 'venture'] as const;
 export function validateContent(): void {
   const warn = (msg: string): void => console.warn(`[content] ${msg}`);
   for (const issue of encounterGroupErrors()) warn(issue);
+  for (const issue of encounterCombatErrors()) warn(issue);
   for (const encounterGroup of Object.values(ENCOUNTER_GROUPS)) {
     for (const id of encounterGroup.habitats?.tilesets ?? []) if (!TILESETS[id]) warn(`encounterGroup ${encounterGroup.id}: unknown tileset ${id}`);
     for (const id of encounterGroup.habitats?.biomes ?? []) if (!BIOMES[id]) warn(`encounterGroup ${encounterGroup.id}: unknown biome ${id}`);

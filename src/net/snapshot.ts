@@ -64,6 +64,7 @@ export type Vec2W = [number, number];
 export interface ActorW {
   movementTether?: Actor['movementTether'];
   encounterGroup?: Actor['encounterGroup'];
+  encounterOrder?: Pick<NonNullable<Actor['encounterOrder']>, 'group' | 'recipe' | 'plan' | 'leader' | 'phase' | 'until'>;
   cosmeticKind?: 'wisp';
   cosmeticLoadout?: CosmeticLoadout;
   id: number;
@@ -686,6 +687,10 @@ function actorToW(a: Actor, world: World): ActorW {
   if (a.rarity) w.rarity = a.rarity;
   if (a.magicPack) w.magicPack = { ...a.magicPack, runtime: undefined };
   if (a.encounterGroup) w.encounterGroup = { ...a.encounterGroup };
+  if (a.encounterOrder) {
+    const {group,recipe,plan,leader,phase,until}=a.encounterOrder;
+    w.encounterOrder={group,recipe,plan,leader,phase,until};
+  }
   if (a.magicPackRole) w.magicPackRole = a.magicPackRole;
   if (a.magicPackDonors) w.magicPackDonors = a.magicPackDonors;
   if (a.magicPackPending) w.magicPackPending = a.magicPackPending;
@@ -1280,6 +1285,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.rarity = aw.rarity as Actor['rarity'];
     a.magicPack = aw.magicPack ? { ...aw.magicPack } : undefined;
     a.encounterGroup = aw.encounterGroup ? { ...aw.encounterGroup } : undefined;
+    a.encounterOrder = aw.encounterOrder ? { ...aw.encounterOrder } : undefined;
     a.magicPackPower = aw.magicPackPower ?? 0;
     a.magicPackRole = aw.magicPackRole;
     a.magicPackDonors = aw.magicPackDonors ?? 0;

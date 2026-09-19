@@ -3,11 +3,14 @@
 Encounter recipes make ordinary faction packs into tactical compositions. The
 engine draws a roster, seats the entire group, and gives its members the existing
 squad behaviors. Combat still uses ordinary skills, defenses, healing, bonds,
-movement tethers and monster loot. There is no separate encounter combat engine.
+movement tethers and monster loot. Selected crews now opt into the shared
+[encounter combat coordinator](encounter-combat.md) for reactive maneuvers.
 
 ## Where they appear
 
-`src/data/encounterGroups.ts` owns 35 recipes across 13 factions. Levels below
+`src/data/encounterGroups.ts` and `tacticalEncounters.ts` own 47 recipes across
+19 factions. The original roster below is extended by the twelve crews listed
+in [encounter-combat.md](encounter-combat.md). Levels below
 are hard minimums; required species must also pass their own presence rules.
 The habitat arrays in that file are the exact, editable terrain allowlists.
 
@@ -118,7 +121,7 @@ promoting a replacement leader. Old saves without group metadata remain valid.
 Co-op snapshots carry group identity and clear stale membership when it ends.
 
 Boot validation checks recipes, role membership, terrain references and pack
-configuration. `balance/probe_encountergroups.ts` covers all 35 rosters and
+configuration. `balance/probe_encountergroups.ts` covers all 47 rosters and
 natural faction sources, hard debut and habitat gates, alternatives, deterministic
 plans, invalid settings, atomic refusal, real ambient replacement, authored
 isolation, live guard/heal/damage, leader loss, save/revisit, co-op cleanup and

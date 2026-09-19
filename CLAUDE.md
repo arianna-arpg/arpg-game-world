@@ -4,6 +4,12 @@ Guidance for Claude Code working in this repository. This file is committed and
 shared with everyone who clones the repo.
 
 ## What this is
+Reactive encounterCombat coordination lives in `src/engine/encounterCombat.ts`:
+utility-scored plans, readable warnings, finite commitments/recovery and native
+AI role assignments. `docs/design/encounter-combat.md` documents the six plans,
+12 additional rosters, disruption rules and extension contract. Verify with
+`npm run probe -- encountercombat` and `balance/encounter-combat-ui.cjs` after a build.
+
 Mixed-species encounterGroups (one faction per crew) live in
 `src/data/encounterGroups.ts`; `docs/design/encounter-groups.md` documents
 the strict habitat/debut gates, ambient replacement policy, formation slots,

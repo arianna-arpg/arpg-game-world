@@ -1,5 +1,6 @@
 import type { EncounterGroupDef, EncounterMember } from '../engine/encounterGroups';
 import type { BrainTuning } from '../engine/brain';
+import { ENCOUNTER_DOCTRINES, TACTICAL_ENCOUNTERS } from './tacticalEncounters';
 
 export const ENCOUNTER_GROUP_CFG = { chance:0.28, maxMembers:8, radius:240, spacing:48, placementAttempts:4, placementJitter:20, bodyClearance:4 };
 const drilled: BrainTuning = {squad:{focusLeader:true,formation:'wedge',spacing:56,idle:{style:'drill'},onLeaderDeath:'scatter'}};
@@ -28,7 +29,7 @@ const crew=(id:string,name:string,faction:string,minLevel:number,tilesets:string
 
 /** Ordinary pack replacements. No rare-stat multiplication is implicit. Each
  * recipe guarantees its defining roles and carries its own hard debut floor. */
-export const ENCOUNTER_GROUPS: Record<string,EncounterGroupDef> = Object.fromEntries([
+export const ENCOUNTER_GROUPS: Record<string,EncounterGroupDef> = {...Object.fromEntries([
   crew('wayward_expedition','Wayward Expedition','bandit',8,bandit,
     'A shield and challenge in front, a mender behind, and two damage dealers. Interrupt healing or flank the guard.',[
       m('vanguard','wayward_vanguard',75,0,lead),m('mender','wayward_mender',-65,0),
@@ -140,4 +141,4 @@ export const ENCOUNTER_GROUPS: Record<string,EncounterGroupDef> = Object.fromEnt
   crew('earthshaker_raid','Earthshaker Raid','beastkin',15,tribes,
     'Ground shocks displace prey into a flayer and two mobile chasers.',[
       m('earthshaker','beastkin_earthshaker',-70,0,lead),m('flayer','beastkin_flayer',75,0),m('chasers','beastkin_chaser',15,0,{...pair,spacing:170})],hunters),
-].map(g=>[g.id,g]));
+].map(g=>[g.id,{...g,...(ENCOUNTER_DOCTRINES[g.id]?{encounterCombat:ENCOUNTER_DOCTRINES[g.id]}:{})}])),...TACTICAL_ENCOUNTERS};

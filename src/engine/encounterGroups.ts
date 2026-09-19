@@ -1,5 +1,6 @@
 import type { Vec2 } from '../core/math';
 import type { Actor } from './actor';
+import type { EncounterCombatSpec } from './encounterCombat';
 import { mergeTuning, type BrainTuning } from './brain';
 import { presenceMul, type PresenceSpec } from './presence';
 import type { Modifier } from './stats';
@@ -33,6 +34,8 @@ export interface EncounterGroupDef {
   habitats?: { biomes?: string[]; tilesets?: string[]; place?: 'surface' | 'cave'; stories?: [number, number] };
   members: EncounterMember[];
   tactics?: BrainTuning;
+  /** Optional shared planner; omitting it preserves ordinary squad behavior. */
+  encounterCombat?: EncounterCombatSpec;
   /** Maximum member distance from the requested centre after terrain seating. */
   radius?: number;
 }
@@ -141,6 +144,7 @@ export function applyEncounterGroup(a: Actor, state: EncounterGroupState): void 
   a.sheet.setSource(`encounterGroup:${s.recipe}:${s.slot}`,member.mods ?? []);
 }
 export function clearEncounterGroup(a: Actor): void {
+  a.encounterOrder = undefined;
   const s = a.encounterGroup;
   if (!s) return;
   a.sheet.removeSource(`encounterGroup:${s.recipe}:${s.slot}`);

@@ -32,6 +32,7 @@ import {
 } from './brain';
 import { erraticTurn, weaveVel } from './flight';
 import { ensureMovementTether, refreshMovementTether } from './movementTether';
+import { encounterOrderTuning, encounterOrderTarget, encounterOrderWard } from './encounterCombat';
 import { PACK_CFG, nerveFromLife, nerveFromOdds, nerveFromProximity, packDriveOf } from './pack';
 import {
   feedWatch, SENSE_CFG, senseReach, WATCH_CFG, WATCH_RUNG, watchArcDeg,
@@ -651,7 +652,9 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // script, rules, impulses) — phase transitions, cadences and rule actions
   // all fire in here.
   const norm = normalizeBrain(actor.brain ?? DEFAULT_BRAIN);
-  const tuning = resolveMachines(actor, world, norm);
+  const encounterCombat = encounterOrderTuning(actor, world);
+  const tuning = encounterCombat ? mergeTuning(resolveMachines(actor, world, norm), encounterCombat)
+    : resolveMachines(actor, world, norm);
 
   // Threat is a LEDGER, not a grudge: entries melt while unfed.
   if (actor.threat.size) {
@@ -802,6 +805,8 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
 
   // ---- PERCEPTION → the threat chart → a target --------------------------
   let { target, d: best } = acquireTarget(actor, world, tuning);
+  const encounterOrder = !ordered && !actor.aiCommand && !actor.standingOrder ? encounterOrderTarget(actor, world) : undefined;
+  if (encounterOrder) { target = encounterOrder; best = dist(actor.pos, target.pos); actor.aiTargetId = target.id; }
 
   // The order's quarry OVERRIDES the actor's own pick — the commander aims
   // the pack; perception still ran its bookkeeping, but the blade goes
@@ -3503,10 +3508,12 @@ function interposeKernel(ctx: KernelCtx): void {
   // The ward: nearest same-faction ally, weighted by how worth guarding it is —
   // MonsterDef.wardPriority when declared, else commanders rank above casters
   // above the line troops. Data decides who gets a bodyguard.
-  let ward: Actor | null = null;
+  const encounterWard = encounterOrderWard(a, world);
+  let ward: Actor | null = encounterWard ?? null;
   let bd = 600;
   for (const x of world.actors) {
     if (x === a || x.dead || x.team !== a.team || x.construct || x.passive) continue;
+    if (encounterWard) break;
     if (a.faction && x.faction !== a.faction) continue;
     const d = dist(a.pos, x.pos);
     const worth = (x.defId ? MONSTERS[x.defId]?.wardPriority : undefined)

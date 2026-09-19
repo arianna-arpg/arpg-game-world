@@ -417,6 +417,7 @@ import { encounterGroupContext, rollEncounterGroup, planEncounterGroup, applyEnc
   clearEncounterGroup, updateEncounterGroups, readEncounterGroup, type EncounterGroupState,
   type EncounterGroupSpawnOptions } from './encounterGroups';
 import { ENCOUNTER_GROUPS, ENCOUNTER_GROUP_CFG } from '../data/encounterGroups';
+import { updateEncounterCombat } from './encounterCombat';
 import { stepMagicPackMechanics, type MagicPackVisual } from './magicPackMechanics';
 import { MONSTER_NAME_CFG, rollMonsterName } from '../data/monsterNames';
 import type { OverlayView } from '../world/overlay';
@@ -49295,6 +49296,7 @@ export class World {
     this.updateSummonShells();
     updateMovementTethers(this, dt); // movementTether wins after body displacement
     updateEncounterGroups(this.actors);
+    updateEncounterCombat(this);
     // THE POSSESSION SEAM sweep rides behind the grabs (engine/possess.ts):
     // the ride clock + the husk ladder — a hold landed on the husk THIS
     // frame is seen this frame.

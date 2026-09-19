@@ -1,6 +1,7 @@
 import type { AssaultPreparation } from './assault';
 import type { MovementTetherSpec, MovementTetherState } from './movementTether';
 import type { EncounterGroupState } from './encounterGroups';
+import type { EncounterOrder } from './encounterCombat';
 // ---------------------------------------------------------------------------
 // Actor — the ONE entity model shared by the player, monsters, and minions.
 // All of them carry a StatSheet, a skill bar, cooldowns, buffs and statuses,
@@ -771,6 +772,8 @@ export class Actor {
   squadId?: number;
   squadLeader?: boolean;
   encounterGroup?: EncounterGroupState;
+  /** Transient, attributable tactical assignment; normal AI executes it. */
+  encounterOrder?: EncounterOrder;
   /** Original instance brain, restored if a creature leaves its encounter allegiance. */
   encounterGroupBaseBrain?: BrainDef;
   /** Engage-token stamp: the token key held + when it was last re-asserted
