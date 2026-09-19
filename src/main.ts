@@ -56,6 +56,7 @@ import './data/glyphParts'; // side-effect: registers the shipped hand-drawn par
 import './data/commanders'; // side-effect: the tutorial factions (the Fathers) + the prologue's resolve seam
 import './data/locales';
 import './data/authoredMaps'; // side-effect: THE AUTHORED-MAP FABRIC's shipped maps (+ the 'authored' layout via engine/authoredMaps)
+import './data/bountyJourneys';
 import './data/bountyExpeditions'; // side-effect: the bounty board's 'expedition' kind (an authored map minted at the take)
 import { updateAI } from './engine/ai';
 import { World, type Seat } from './engine/world';

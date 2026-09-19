@@ -186,8 +186,14 @@ check('B: every offer is honest (zone stands, kind-law holds, band, pay printed,
   wB.bountyOffers.every(p => {
     const z = wB.zoneMap[p.zoneId];
     if (!z || p.boardId !== BOUNTY_BOARD_CFG.boardId) return false;
-    const paySet = !!(p.pay.essence?.length || p.pay.unique || p.pay.lot || p.pay.pouch || p.pay.gem || p.pay.craft);
-    if (!paySet || (z.objective.kind === 'safe' && p.kind !== 'answer')) return false;
+    const paySet = !!(p.pay.essence?.length || p.pay.xp || p.pay.unique || p.pay.lot || p.pay.pouch || p.pay.gem || p.pay.craft);
+    if (!paySet || (z.objective.kind === 'safe' && p.kind !== 'answer' && p.kind !== 'survey')) return false;
+    if (p.kind === 'survey') return !!p.survey && p.survey.count >= 2 && p.survey.zones.length === 0
+      && p.survey.minLevel >= 1 && p.zoneId === 'lastlight';
+    if (p.kind === 'trail') return !!p.trail && p.trail.crossed === 0 && p.trail.path.length >= 3
+      && p.trail.path[0] === 'lastlight' && p.trail.path.at(-1) === p.zoneId
+      && p.trail.path.slice(1).every((id, i) => !!wB.zoneMap[p.trail!.path[i]].exits.find(e => e.to === id));
+    if (p.kind === 'puzzle') return z.objective.kind === 'puzzle' && !wB.objectiveDoneAt(z.id);
     const band = p.kind === 'charge' ? BOUNTY_BOARD_CFG.charge.band
       : p.kind === 'errand' ? BOUNTY_BOARD_CFG.errand.band
       : p.kind === 'answer' ? BOUNTY_BOARD_CFG.answer.band : BOUNTY_BOARD_CFG.cull.band;
@@ -464,7 +470,7 @@ parkAtBoard(wI);
   check('I: describe speaks every lane in the precision register',
     describeBountyPay({ lot: { count: 3, category: 'boots' } }).includes('3')
     && describeBountyPay({ pouch: { kind: 'rough', count: 4 } }).includes('4 Rough Memory')
-    && describeBountyPay({ unique: { category: 'ring' } }) === 'a unique ring');
+    && describeBountyPay({ unique: { category: 'ring' } }) === 'Unique ring');
 }
 
 // ---------------- J. THE SOURCE REGISTRY + K4 THE ANSWER (M2: the census)
@@ -1292,7 +1298,7 @@ seedGlobalRandom(0x4ead);
   const pins = (): ReturnType<typeof collectMarkers> => collectMarkers(wT).filter(m => m.id.startsWith('quest-turnin'));
   const target = (): ReturnType<typeof collectMarkers>[number] | undefined =>
     collectMarkers(wT).find(m => m.id === `quest-target-${cullT!.id}`);
-  const metNotices = (): number => wT.notices.filter(n => n.text.startsWith('The ask is met')).length;
+  const metNotices = (): number => wT.notices.filter(n => n.text === 'Bounty complete. Return to the board.').length;
   const marks = (): typeof wT.actors => wT.actors.filter(a => !a.dead && a.tag === 'bounty_mark');
   wT.loadZone(cullT.zoneId);
   check('T: the marks stand on arrival', marks().length === cullT.cull!.count, `${marks().length}/${cullT.cull!.count}`);
@@ -1305,10 +1311,10 @@ seedGlobalRandom(0x4ead);
     row()?.fieldDone === false && wT.handState(cullT) === 'afield' && wT.questStanding(row()!) === 'afield');
   check('T: the journal row reads AFIELD, its ask printed (never "done")',
     journal()?.standing === 'afield' && journal()?.ready === false
-    && !!journal()?.ask && journal()!.ask!.includes('marked quarry'),
+    && !!journal()?.ask && journal()!.ask!.includes('empowered marks'),
     journal()?.ask ?? 'no row');
   check('T: the map keeps the "?" on the target (its ask as the pane line) and raises no home pin',
-    !!target() && pins().length === 0 && (target()?.detail ?? '').includes('marked quarry'));
+    !!target() && pins().length === 0 && (target()?.detail ?? '').includes('empowered marks'));
   check('T: no withhold notice spoke', metNotices() === n0);
   check('T: the board card agrees (afield)', wT.bountyBoardView().hands.find(h => h.id === cullT!.id)?.state === 'afield');
   wT.loadZone(START_ZONE);

@@ -284,7 +284,7 @@ export const BOUNTY_BOARD_CFG = {
      *  honestly refuses there and the anchor retry deals charge/cull (an
      *  observation for her walk, not a hack). Young boards never summon
      *  or decree — the world's own events wait for the full grammar. */
-    kinds: { charge: 1, cull: 1, gather: 1, errand: 0, answer: 0, summons: 0 } as Record<string, number>,
+    kinds: { charge: 1, cull: 1, gather: 1, errand: 0, answer: 0, summons: 0, survey: 0, trail: 0, puzzle: 0 } as Record<string, number>,
     lanes: { essence: 1, pouch: 0, lot: 0, unique: 0, craft: 0 },
   },
 } as const;
@@ -293,10 +293,13 @@ export const BOUNTY_BOARD_CFG = {
  *  exact pay). `essence` is R1; `unique` is R2's two faces (named by id, or
  *  a category — "a unique ring", her amendment); `lot` is R3 (a seeded
  *  assortment); `pouch`/`gem` are R4's two faces (Memory units, or a named
- *  TRUE skill Memory under THE MINT LAW). Exactly one field is set. */
+ *  TRUE skill Memory under THE MINT LAW). Multiple fields may be set; every component is owed. */
 export interface BountyPay {
   /** Frozen reward budget; never reread the hero or a changing target at pay. */
   level?: number;
+  /** Frozen allocation and recipe for audits; every component below pays. */
+  budget?: { value: number; recipe: string };
+  xp?: number;
   essence?: EssenceCost[];
   /** R5 — THE SMITH'S WRIT (the steady hand, walk 2): a craft credit,
    *  minted as a 1×1 writ item at the turn-in; redeemed at Brandt by
@@ -306,7 +309,7 @@ export interface BountyPay {
    *  bases OF that class (card 2c) — the shape is more complex because
    *  the item is. */
   craft?: { category: ItemCategory; complexity: number };
-  unique?: { id?: string; category?: ItemCategory };
+  unique?: { id?: string; category?: ItemCategory; random?: boolean; focused?: boolean; essenceValue?: number };
   lot?: { count: number; category: ItemCategory };
   pouch?: { kind: MemoryKind; count: number };
   gem?: { id: string };
@@ -342,6 +345,8 @@ export interface BountyPosting {
    *  harvest fabric): credited at World.harvestSettle, readable anywhere,
    *  wipe-proof; re-entry re-plants the remainder (seedGatherNodes). */
   gather?: { count: number; claimed: number };
+  survey?: { count: number; zones: string[]; minLevel: number };
+  trail?: { path: string[]; crossed: number; peak: number };
   /** THE EXPEDITION's claim (data/bountyExpeditions.ts — the authored-map
    *  fabric): the hand-made map this posting charters, the charted anchor
    *  it is minted beside AT THE TAKE (the zone named by `zoneId` does not
@@ -365,6 +370,8 @@ export function clonePosting(p: BountyPosting): BountyPosting {
     id: p.id, kind: p.kind, boardId: p.boardId, zoneId: p.zoneId, beat: p.beat,
     pay: {
       ...(p.pay.level !== undefined ? { level: p.pay.level } : {}),
+      ...(p.pay.budget ? { budget: { ...p.pay.budget } } : {}),
+      ...(p.pay.xp !== undefined ? { xp: p.pay.xp } : {}),
       ...(p.pay.essence ? { essence: p.pay.essence.map(c => ({ ...c })) } : {}),
       ...(p.pay.unique ? { unique: { ...p.pay.unique } } : {}),
       ...(p.pay.lot ? { lot: { ...p.pay.lot } } : {}),
@@ -378,6 +385,8 @@ export function clonePosting(p: BountyPosting): BountyPosting {
     ...(p.acceptAt !== undefined ? { acceptAt: p.acceptAt } : {}),
     ...(p.cull ? { cull: { ...p.cull } } : {}),
     ...(p.gather ? { gather: { ...p.gather } } : {}),
+    ...(p.survey ? { survey: { ...p.survey, zones: [...p.survey.zones] } } : {}),
+    ...(p.trail ? { trail: { ...p.trail, path: [...p.trail.path] } } : {}),
     ...(p.answer ? { answer: { ...p.answer } } : {}),
     ...(p.expedition ? { expedition: { ...p.expedition } } : {}),
     ...(p.challengeLevel !== undefined ? { challengeLevel: p.challengeLevel } : {}),
@@ -529,6 +538,7 @@ export function bountySourceRows(): BountySourceRow[] {
 /** What a kind's roll may read — a narrow host so rolls stay pure over the
  *  seeded rng (World assembles it at the arm; probes can too). */
 export interface BountyRollHost {
+  routes?: ReadonlyMap<string, import('../world/travelRoutes').TravelRoute>;
   /** Actual usable approach, supplied by the board; optional for standalone rolls. */
   routeFits?(zoneId: string): boolean;
   view: OverlayView;
@@ -603,6 +613,10 @@ export interface BountyKindRow {
    *  posting with its courtesy (the stale-offer race law). May mutate the
    *  posting (the summons stamps its born key + at-accept baseline). */
   accept?(world: World, p: BountyPosting): string | null;
+  /** Optional travel contract: null means the player chooses the destination. */
+  target?(world: World, p: BountyPosting): string | null;
+  route?(world: World, p: BountyPosting): string;
+  arrival?(world: World, p: BountyPosting, zone: ZoneDef, firstVisit: boolean, from?: string): void;
   done(world: World, p: BountyPosting): boolean;
   failed?(world: World, p: BountyPosting): boolean;
   /** A reason string ANNULS the posting (the world moved on — the reconcile's
@@ -731,27 +745,30 @@ export function rollBountyPay(
 /** One line describing a pay spec (card faces + notices — the visible
  *  price law: the exact pay, printed). */
 export function describeBountyPay(pay: BountyPay): string {
-  const budget = pay.level === undefined ? '' : ` · reward level ${pay.level}`
-    + (pay.unique || pay.lot ? ` · requires level ${levelReqForTier(tierForIlvl(pay.level))}` : '');
-  return describeBountyLane(pay) + budget;
+  const budget = pay.level === undefined || !(pay.unique || pay.lot || pay.craft) ? '' : ` · item Lv ${pay.level}`
+    + (pay.unique || pay.lot ? ` · requires Lv ${levelReqForTier(tierForIlvl(pay.level))}` : '');
+  return [...(['craft', 'unique', 'lot', 'gem', 'pouch'] as const).map(k => describeBountyLane({ [k]: pay[k] })),
+    ...(pay.essence ?? []).map(c => `${c.count} ${ESSENCES[c.essence]?.label ?? c.essence}`),
+    pay.xp ? `${pay.xp} XP` : ''].filter(Boolean).join(' + ') + budget;
 }
 
 function describeBountyLane(pay: BountyPay): string {
-  if (pay.craft) return `a smith's writ: a ${['low', 'medium', 'high'][pay.craft.complexity - 1] ?? 'low'}-complexity ${pay.craft.category} piece`;
+  if (pay.craft) return `Smith's Writ: ${pay.craft.category} (${['low', 'medium', 'high'][pay.craft.complexity - 1] ?? 'low'} complexity)`;
   if (pay.unique) {
-    if (pay.unique.id) return `the unique: ${UNIQUE_LIST.find(u => u.id === pay.unique!.id)?.name ?? pay.unique.id}`;
-    return `a unique ${pay.unique.category}`;
+    if (pay.unique.random) return pay.unique.focused ? 'Random Unique (rarer odds)' : 'Random Unique';
+    if (pay.unique.id) return `Unique: ${UNIQUE_LIST.find(u => u.id === pay.unique!.id)?.name ?? pay.unique.id}`;
+    return `Unique ${pay.unique.category}`;
   }
-  if (pay.lot) return `${pay.lot.count} Magic or Rare ${pay.lot.category} pieces`;
+  if (pay.lot) return `${pay.lot.count} ${pay.lot.category} items (Magic/Rare)`;
   if (pay.gem) {
     // THE OFFERED GRADE's words: the card prints the floor its ladder can
     // never fall beneath ("Magic or finer") — the visible price law.
     const floor = skillRarityFloor(BOUNTY_BOARD_CFG.lanes.gem.rarityWeights);
     const grade = floor && floor !== 'common' ? ` (${SKILL_RARITIES[floor].label} or finer)` : '';
-    return `the skill Memory: ${SKILLS[pay.gem.id]?.name ?? pay.gem.id}${grade}`;
+    return `${SKILLS[pay.gem.id]?.name ?? pay.gem.id} Memory${grade}`;
   }
-  if (pay.pouch) return `${pay.pouch.count} Rough Memory units`;
-  return (pay.essence ?? []).map(c => `${c.count} ${ESSENCES[c.essence].label}`).join(' · ') || 'nothing';
+  if (pay.pouch) return `${pay.pouch.count} ${pay.pouch.kind === 'preformed' ? 'Preformed' : 'Rough'} Memory units`;
+  return '';
 }
 
 // --- K2 · THE CHARGE — "complete the objective of the place" ---------------
@@ -764,6 +781,7 @@ registerBountyKind({
     // level band and the seat search belong to the unpinned path).
     const ok = (zz: ZoneDef): boolean => !host.objectiveDone(zz.id)
       && !cfg.refuse.includes(zz.objective.kind)
+      && !(zz.objective.kind === 'puzzle' && host.kindClaimed('puzzle', zz.id))
       && !host.kindClaimed('charge', zz.id);
     const z = host.pin
       ? (host.zoneMap[host.pin] && ok(host.zoneMap[host.pin]) && (host.routeFits?.(host.pin) ?? true) ? host.zoneMap[host.pin] : null)
@@ -799,8 +817,8 @@ registerBountyKind({
     if (!z) return { title: 'The Charge', ask: 'the ground is gone' };
     const read = OBJECTIVE_READS[z.objective.kind]?.read ?? 'meet the ground\'s ask';
     return {
-      title: `The Charge: ${z.name}`,
-      ask: `Complete the objective of ${z.name} (level ${z.level}) — ${read}.`,
+      title: `Objective: ${z.name}`,
+      ask: `${read.charAt(0).toUpperCase()}${read.slice(1)}.`,
     };
   },
 });
@@ -848,8 +866,8 @@ registerBountyKind({
     const z = world.zoneMap[p.zoneId];
     if (!z) return { title: 'The Errand', ask: 'the ground is gone' };
     return {
-      title: `The Errand: ${z.name}`,
-      ask: `Reach ${z.name} (level ${z.level}) — entry is the deed.`,
+      title: `Explore: ${z.name}`,
+      ask: 'Enter the zone.',
     };
   },
 });
@@ -900,9 +918,8 @@ registerBountyKind({
     const left = Math.max(0, n - (p.cull?.claimed ?? 0));
     if (!z) return { title: 'The Cull', ask: 'the ground is gone' };
     return {
-      title: `The Cull: ${z.name}`,
-      ask: `Put down ${n} marked quarry in ${z.name} (level ${p.challengeLevel ?? z.level})`
-        + (p.cull && p.cull.claimed > 0 ? ` — ${left} still stand.` : ' — the marks post at your arrival.'),
+      title: `Hunt: ${z.name}`,
+      ask: `Slay ${n} empowered marks · ${n - left}/${n}`,
     };
   },
 });
@@ -955,9 +972,8 @@ registerBountyKind({
     const left = Math.max(0, n - (p.gather?.claimed ?? 0));
     if (!z) return { title: 'The Gather', ask: 'the ground is gone' };
     return {
-      title: `The Gather: ${z.name}`,
-      ask: `Bring in ${n} of the land's yield from ${z.name} (level ${p.challengeLevel ?? z.level})`
-        + (p.gather && p.gather.claimed > 0 ? ` — ${left} still stand.` : ' — the writ plants what the ground lacks.'),
+      title: `Gather: ${z.name}`,
+      ask: `Harvest ${n} resource nodes · ${n - left}/${n}`,
     };
   },
 });
@@ -1176,10 +1192,10 @@ export function postingQuestDef(p: BountyPosting, world: World): QuestDef {
     // The essence lane pays through the standing QuestReward field; every
     // richer lane (unique/lot/pouch/gem) pays through the payout site's
     // bounty branch (World.payBountyLanes) — never both.
-    reward: { ...(p.pay.essence ? { essence: p.pay.essence } : {}) },
+    reward: { ...(p.pay.essence ? { essence: p.pay.essence } : {}), ...(p.pay.xp ? { xp: p.pay.xp } : {}) },
     turnIn: {
       giver: BOUNTY_BOARD_GIVER,
-      prompt: 'The ask is met — return to the bounty board to claim the pay.',
+      prompt: 'Bounty complete. Return to the board.',
     },
   };
 }

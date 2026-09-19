@@ -457,7 +457,7 @@ registerBountySource({
     const name = MONSTERS[h.beastDefId]?.name ?? 'the great beast';
     return [{
       key: `hunt:${h.id}`, zoneId: h.currentZoneId, name,
-      ask: `${name} is run to ground at ${z.name} — bring the great beast down.`,
+      ask: `Slay ${name} · ${z.name}.`,
       ledger: 'hunt_beasts_slain',
     }];
   },

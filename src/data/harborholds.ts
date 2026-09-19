@@ -481,7 +481,7 @@ registerBountySource({
       out.push({
         key: `hold:${z.id}`, zoneId: z.id, name: z.name,
         title: `The Muster: ${z.name}`,
-        ask: `${z.name} stands besieged — sound the muster at the quay ward, and break the waves.`,
+        ask: 'Sound the muster at the quay. Defeat the siege waves.',
       });
     }
     return out;

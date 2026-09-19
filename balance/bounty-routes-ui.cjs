@@ -30,13 +30,42 @@ app.whenReady().then(async () => {
         const p=document.getElementById('bounty-menu'),r=p.getBoundingClientRect();
         return {text:p.innerText,rect:[r.x,r.y,r.width,r.height],scroll:p.scrollWidth,client:p.clientWidth};
       })()`);
-      assert(result.text.includes('Approach:')); assert(result.text.includes('reward level'));
+      assert(result.text.includes('Route:')); assert(result.text.includes('Target Lv'));
+      assert(result.text.includes('Reward:')); assert(!result.text.includes('Check target and approach levels'));
       assert(result.rect[0]>=-1 && result.rect[0]+result.rect[2]<=width+1);
       assert(result.scroll<=result.client+1);
       fs.writeFileSync(path.join(dir,`bounty-board-${width}.png`),(await win.webContents.capturePage()).toPNG());
       fs.writeFileSync(path.join(dir,`bounty-board-${width}.json`),JSON.stringify(result,null,2));
     }
+    await win.webContents.executeJavaScript(`(() => {
+      const w=__game.world();
+      w.update=()=>{}; // Keep the visual fixtures fixed while the two viewports are captured.
+      const base={boardId:'lastlight',beat:0,zoneId:'crossroads'};
+      w.bountyOffers=[
+        {...base,id:'bounty_ui_survey',kind:'survey',zoneId:'lastlight',survey:{count:3,zones:[],minLevel:1},
+          pay:{level:8,xp:80,essence:[{essence:'coarse',count:3},{essence:'glimmering',count:2}]}},
+        {...base,id:'bounty_ui_hunt',kind:'cull',cull:{count:4,claimed:0},
+          pay:{level:8,unique:{random:true},essence:[{essence:'coarse',count:4}]}},
+        {...base,id:'bounty_ui_unique',kind:'charge',pay:{level:8,unique:{random:true,focused:true}}}
+      ];
+      __game.ui.refreshBounties();
+    })()`);
+    for(const [width,height] of [[1400,1000],[1000,720]]) {
+      win.setContentSize(width,height);
+      await new Promise(r=>setTimeout(r,200));
+      const result=await win.webContents.executeJavaScript(`(() => {
+        const p=document.getElementById('bounty-menu'),r=p.getBoundingClientRect();
+        return {text:p.innerText,rect:[r.x,r.y,r.width,r.height],scroll:p.scrollWidth,client:p.clientWidth};
+      })()`);
+      fs.writeFileSync(path.join(dir,`bounty-quality-${width}.json`),JSON.stringify(result,null,2));
+      assert(result.text.includes('Route: your choice'));
+      assert(result.text.includes('80 XP')); assert(result.text.includes('rarer odds'));
+      assert(result.text.includes('empowered marks'));
+      assert(result.rect[0]>=-1 && result.rect[0]+result.rect[2]<=width+1);
+      assert(result.scroll<=result.client+1);
+      fs.writeFileSync(path.join(dir,`bounty-quality-${width}.png`),(await win.webContents.capturePage()).toPNG());
+    }
     assert.deepEqual(errors,[]);
-    console.log('PASS production bounty board: approach/reward copy, two viewport widths, no errors');
+    console.log('PASS production bounty board: concise routes, open exploration, mixed rewards, two viewport widths, no errors');
   } finally { clearTimeout(timer); win.destroy(); server.server.close(); app.quit(); }
 }).catch(e=>{console.error(e);app.exit(1);});

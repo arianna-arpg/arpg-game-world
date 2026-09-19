@@ -49,6 +49,7 @@ import '../data/glyphParts'; // the shipped glyph part kinds (looks reference th
 import '../data/commanders'; // the tutorial factions (the Fathers) — under every census net
 import '../data/locales';
 import '../data/authoredMaps'; // THE AUTHORED-MAP FABRIC's shipped maps (+ the 'authored' layout via engine/authoredMaps)
+import '../data/bountyJourneys';
 import '../data/bountyExpeditions'; // the bounty board's 'expedition' kind (mints an authored map at the take)
 import { validateContent } from '../data/validate';
 import { registerAllPackageFactions } from '../packages/factionGen';

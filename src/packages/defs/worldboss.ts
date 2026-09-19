@@ -348,7 +348,7 @@ registerBountySource({
         out.push({
           key: `wb:${s.id}`, zoneId: seat, name: s.def.name,
           title: `The Decree: ${s.def.name}`,
-          ask: `Strike off the head of ${s.def.name} where it coils — the roads stand sealed behind it.`,
+          ask: `Slay ${s.def.name} · roads sealed until victory.`,
           ledger: `worldboss_slain_${s.def.id}`,
         });
       }
@@ -357,8 +357,8 @@ registerBountySource({
           key: `wb:${a.id}`, zoneId: a.zoneId, name: a.def.name,
           title: `The Decree: ${a.def.name}`,
           ask: a.state === 'herald'
-            ? `${a.def.name} breaches soon — meet it where it lands and put it down before it departs.`
-            : `${a.def.name} stands now, and will not stand long — put it down.`,
+            ? `Slay ${a.def.name} on arrival, before it departs.`
+            : `Slay ${a.def.name} before it departs.`,
           ledger: `worldboss_slain_${a.def.id}`,
         });
       }
@@ -366,7 +366,7 @@ registerBountySource({
         out.push({
           key: `wb:${l.id}`, zoneId: l.lairZoneId ?? l.hostZoneId, name: l.def.name,
           title: `The Decree: ${l.def.name}`,
-          ask: `${l.def.name} sits enthroned within — enter, and end its reign.`,
+          ask: `Enter the lair and slay ${l.def.name}.`,
           ledger: `worldboss_slain_${l.def.id}`,
         });
       }

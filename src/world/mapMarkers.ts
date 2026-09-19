@@ -94,13 +94,15 @@ registerMarkerSource((world): MapMarker[] => {
       homes.set(h.zoneId, g);
       continue;
     }
-    const node = world.zoneMap[aq.zoneId];
+    const posting = world.bountyHands.find(h => h.id === aq.questId);
+    const kind = posting ? BOUNTY_KINDS[posting.kind] : undefined;
+    const targetId = posting && kind?.target ? kind.target(world, posting) : aq.zoneId;
+    const node = targetId ? world.zoneMap[targetId] : undefined;
     if (aq.directionsKnown === false && (!node || !world.visited.has(node.id))) continue;
     if (!node) continue;
     // A posting's pane line is its card's ASK, progress included — the same
     // words the board prints, so the chart never reads as a lie.
-    const posting = world.bountyHands.find(h => h.id === aq.questId);
-    const ask = posting ? BOUNTY_KINDS[posting.kind]?.copy(world, posting).ask : undefined;
+    const ask = posting ? [kind?.copy(world, posting).ask, kind?.route?.(world, posting)].filter(Boolean).join(' · ') : undefined;
     out.push({
       id: `quest-target-${aq.questId}`, zoneId: node.id, coord: { x: node.map.x, y: node.map.y },
       glyph: '?', fill: '#2a1a3a', stroke: '#c8a8e8', text: '#e0c0ff', r: 9,

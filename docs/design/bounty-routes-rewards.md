@@ -1,5 +1,10 @@
 # Bounty approaches and reward budgets
 
+September 18 expansion: [Bounty quality, journeys and rewards](bounty-quality.md)
+adds concise cards, exploration and itinerary objectives, puzzle postings and
+composable XP/essence/Unique reward budgets. Its reward and copy rules supersede
+the single-lane and no-turn-in-XP statements below; route guarantees remain.
+
 September 15, 2026 follow-up to `46c95db7`. No save compatibility bump.
 
 ## Diagnosis

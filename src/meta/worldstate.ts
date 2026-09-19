@@ -38,6 +38,7 @@ import { SUPPORTS } from '../data/supports';
 import { SKILL_RARITIES } from '../engine/skills';
 import type { SavedLoot } from './death';
 import { BOUNTY_KINDS, BOUNTY_SOURCES, type BountyPosting } from '../data/bountyboard';
+import { ESSENCES } from '../data/essences';
 
 export const WORLD_SCHEMA_VERSION = 1;
 
@@ -654,42 +655,52 @@ export function sanitizeBountyBoard(
     if (typeof x.boardId !== 'string' || typeof x.zoneId !== 'string'
       || (!zones[x.zoneId] && !(expedition && x.acceptAt === undefined))) return null;
     if (!isFiniteNum(x.beat)) return null;
-    // ONE pay lane survives sanitation (the visible price law's save half);
-    // a posting whose pay no longer stands drops whole (keep-what-stands).
+    // Preserve every valid component of the frozen reward bundle.
     const raw = x.pay ?? {};
-    let pay: BountyPosting['pay'] | null = null;
+    const pay: BountyPosting['pay'] = {};
     if (Array.isArray(raw.essence)) {
       const essence = raw.essence.filter(c => c && typeof c === 'object'
-        && typeof c.essence === 'string' && isFiniteNum(c.count) && c.count > 0)
+        && typeof c.essence === 'string' && !!ESSENCES[c.essence] && isFiniteNum(c.count) && c.count >= 1)
         .map(c => ({ essence: c.essence, count: Math.floor(c.count) }));
-      if (essence.length) pay = { essence };
-    } else if (raw.unique && typeof raw.unique === 'object'
+      if (essence.length) pay.essence = essence;
+    }
+    if (raw.unique && typeof raw.unique === 'object'
       && (typeof raw.unique.id === 'string' || typeof raw.unique.category === 'string')) {
-      pay = {
-        unique: {
+      pay.unique = {
           ...(typeof raw.unique.id === 'string' ? { id: raw.unique.id } : {}),
           ...(typeof raw.unique.category === 'string' ? { category: raw.unique.category } : {}),
-        },
+          ...(raw.unique.random === true ? { random: true } : {}),
+          ...(raw.unique.focused === true ? { focused: true } : {}),
+          ...(isFiniteNum(raw.unique.essenceValue) && raw.unique.essenceValue >= 1
+            ? { essenceValue: Math.floor(raw.unique.essenceValue) } : {}),
       };
-    } else if (raw.lot && typeof raw.lot === 'object'
+    }
+    if (raw.lot && typeof raw.lot === 'object'
       && isFiniteNum(raw.lot.count) && raw.lot.count > 0 && typeof raw.lot.category === 'string') {
-      pay = { lot: { count: Math.floor(raw.lot.count), category: raw.lot.category } };
-    } else if (raw.gem && typeof raw.gem === 'object' && typeof raw.gem.id === 'string' && SKILLS[raw.gem.id]) {
-      pay = { gem: { id: raw.gem.id } };
-    } else if (raw.pouch && typeof raw.pouch === 'object'
+      pay.lot = { count: Math.floor(raw.lot.count), category: raw.lot.category };
+    }
+    if (raw.gem && typeof raw.gem === 'object' && typeof raw.gem.id === 'string' && SKILLS[raw.gem.id]) {
+      pay.gem = { id: raw.gem.id };
+    }
+    if (raw.pouch && typeof raw.pouch === 'object'
       && isFiniteNum(raw.pouch.count) && raw.pouch.count > 0
       && (raw.pouch.kind === 'rough' || raw.pouch.kind === 'preformed')) {
-      pay = { pouch: { kind: raw.pouch.kind, count: Math.floor(raw.pouch.count) } };
-    } else if (raw.craft && typeof raw.craft === 'object'
+      pay.pouch = { kind: raw.pouch.kind, count: Math.floor(raw.pouch.count) };
+    }
+    if (raw.craft && typeof raw.craft === 'object'
       && typeof raw.craft.category === 'string') {
       // R5 THE SMITH'S WRIT (the steady hand, walk 2 — COMPLEXITY is the
       // axis; a pre-walk-2 posting's `tier` folds in as the class).
       const cx = raw.craft.complexity ?? (raw.craft as { tier?: number }).tier;
       if (isFiniteNum(cx) && (cx as number) > 0) {
-        pay = { craft: { category: raw.craft.category, complexity: Math.floor(cx as number) } };
+        pay.craft = { category: raw.craft.category, complexity: Math.floor(cx as number) };
       }
     }
-    if (!pay) return null;
+    if (isFiniteNum(raw.xp) && raw.xp >= 1) pay.xp = Math.floor(raw.xp);
+    if (!Object.keys(pay).length) return null;
+    if (raw.budget && isFiniteNum(raw.budget.value) && raw.budget.value >= 1 && typeof raw.budget.recipe === 'string') {
+      pay.budget = { value: Math.floor(raw.budget.value), recipe: raw.budget.recipe };
+    }
     // Compatible saves acquire a fixed budget from their existing target once.
     pay.level = isFiniteNum(raw.level) && raw.level >= 1 ? Math.floor(raw.level)
       : expedition?.level ?? zones[x.zoneId]?.level ?? 1;
@@ -716,6 +727,17 @@ export function sanitizeBountyBoard(
       } : undefined;
     // A K4 or K5 posting IS its claim — kind without answer drops whole.
     if ((x.kind === 'answer' || x.kind === 'summons') && !answer) return null;
+    const survey = x.survey && Number.isInteger(x.survey.count) && x.survey.count > 0
+      && Number.isInteger(x.survey.minLevel) && x.survey.minLevel >= 1 && Array.isArray(x.survey.zones)
+      ? { count: x.survey.count, minLevel: x.survey.minLevel,
+        zones: [...new Set(x.survey.zones.filter(id => typeof id === 'string'))].slice(0, x.survey.count) } : undefined;
+    const trail = x.trail && Array.isArray(x.trail.path) && x.trail.path.length >= 2
+      && x.trail.path.every(id => typeof id === 'string' && !!zones[id])
+      && new Set(x.trail.path).size === x.trail.path.length
+      && Number.isInteger(x.trail.crossed) && x.trail.crossed >= 0 && x.trail.crossed < x.trail.path.length
+      && isFiniteNum(x.trail.peak) && x.trail.peak >= 1
+      ? { path: [...x.trail.path], crossed: x.trail.crossed, peak: Math.floor(x.trail.peak) } : undefined;
+    if ((x.kind === 'survey' && !survey) || (x.kind === 'trail' && !trail)) return null;
     return {
       id: x.id, kind: x.kind, boardId: x.boardId, zoneId: x.zoneId,
       beat: Math.floor(x.beat), pay,
@@ -725,6 +747,8 @@ export function sanitizeBountyBoard(
       ...(isFiniteNum(x.acceptAt) ? { acceptAt: Math.max(0, x.acceptAt) } : {}),
       ...(cull ? { cull } : {}),
       ...(gather ? { gather } : {}),
+      ...(survey ? { survey } : {}),
+      ...(trail ? { trail } : {}),
       ...(answer ? { answer } : {}),
       ...(expedition ? { expedition } : {}),
       ...(isFiniteNum(x.challengeLevel) && x.challengeLevel >= 1

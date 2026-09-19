@@ -8223,14 +8223,16 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // THE TAKEN HAND(s): state speaks plainly — afield / ready / failed.
     const handsHtml = v.hands.length
       ? `<h3 style="margin:10px 0 4px 0;color:${accent}">In hand</h3>` + v.hands.map(h => {
-        const state = h.state === 'ready' ? 'the work is done — turn it in'
-          : h.state === 'failed' ? 'the ask failed — hand it back'
-            : 'afield — the ask stands';
-        const verb = h.state === 'ready' ? `Turn in · ${esc(h.pay)}`
+        const state = h.state === 'ready' ? 'Ready to collect'
+          : h.state === 'failed' ? 'Failed — return to board'
+            : 'In progress';
+        const verb = h.state === 'ready' ? 'Collect reward'
           : h.state === 'failed' ? 'Hand it back' : null;
         return `<div class="skill-entry">
           <div class="name">${esc(h.title)}</div>
           <div class="desc">${esc(h.ask)}</div>
+          <div class="desc">${esc(h.route)}</div>
+          <div class="desc">Reward: ${esc(h.pay)}</div>
           <div class="desc" style="font-style:italic">${esc(state)}</div>
           <div class="bind-btns">
             ${verb ? `<button data-bounty-turnin="${esc(h.id)}">${verb}</button>` : ''}
@@ -8249,22 +8251,23 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       ? v.offers.map(o => `<div class="skill-entry">
           <div class="name">${esc(o.title)}${o.locked ? ` <span style="color:${accent};font-size:11px" title="Pinned — this posting holds its seat through fresh deals until taken or released.">📌 held</span>` : ''}</div>
           <div class="desc">${esc(o.ask)}</div>
-          <div class="desc">Pay: ${esc(o.pay)}</div>
+          <div class="desc">${esc(o.route)}</div>
+          <div class="desc">Reward: ${esc(o.pay)}</div>
           <div class="bind-btns"><button data-bounty-accept="${esc(o.id)}"${handFull ? ' disabled title="One bounty in hand at a time."' : ''}${lessonTake && !handFull ? ' class="tut-glow"' : ''}>Accept</button>${
             pinCap > 0 ? `<button data-bounty-lock="${esc(o.id)}" data-locked="${o.locked ? '1' : ''}"${!o.locked && pinned >= pinCap ? ' disabled title="Every reserve pin is spoken for — release one first."' : ` title="${o.locked ? 'Release the pin — the next deal may replace this posting.' : 'Pin this posting — it holds its seat through fresh deals until taken or released.'}"`}>${o.locked ? 'Release' : `Pin (${pinCap - pinned} free)`}</button>` : ''}</div>
         </div>`).join('')
-      : `<div class="skill-entry"><div class="desc">The board hangs bare this beat — the wilds owe no work.</div></div>`;
+      : `<div class="skill-entry"><div class="desc">No postings available.</div></div>`;
     this.bountyMenu.innerHTML = `${this.closeGlyphHtml()}<h2>The Bounty Board</h2>`
-      + `<div class="desc" style="margin:-4px 0 8px 0;font-style:italic">Work posted from the living world — take one in hand, meet its ask, return to collect.</div>`
-      + (lessonTake ? `<div class="bounty-lesson">Each card is one piece of work: the ask, and the pay, printed plainly. Take ONE in hand — the board holds the rest for whoever comes next.</div>` : '')
-      + (lessonReturn ? `<div class="bounty-lesson">The writ rides with you now — the journal keeps its page, the map keeps the way. Meet the ask, then return here to collect.</div>` : '')
+      + `<div class="desc" style="margin:-4px 0 8px 0;font-style:italic">Choose a bounty. Return here for your reward.</div>`
+      + (lessonTake ? `<div class="bounty-lesson">Accept one bounty at a time per board.</div>` : '')
+      + (lessonReturn ? `<div class="bounty-lesson">Track your bounty in the journal and map.</div>` : '')
       // THE RECEIPT (the counter laws): what the linger just settled, printed
       // at the head of the re-opened board — the pay read, not only heard.
       + (v.receipt ? `<div class="bounty-receipt" style="border-left:3px solid ${accent}">${v.receipt.failed
-        ? `Handed back: <b>${esc(v.receipt.title)}</b> — the failed posting is struck; no pay, no debt.`
-        : `Collected: <b>${esc(v.receipt.title)}</b> — paid ${esc(v.receipt.pay)}, laid at the board's feet.`}</div>` : '')
+        ? `Handed back: <b>${esc(v.receipt.title)}</b> — no reward.`
+        : `Collected: <b>${esc(v.receipt.title)}</b> — paid ${esc(v.receipt.pay)}.`}</div>` : '')
       + handsHtml
-      + `<h3 style="margin:10px 0 4px 0">The slate (${v.offers.length}) · new postings <span data-bounty-countdown>${fmtRestock(v.countdown)}</span></h3>`
+      + `<h3 style="margin:10px 0 4px 0">Available (${v.offers.length}) · refresh in <span data-bounty-countdown>${fmtRestock(v.countdown)}</span></h3>`
       + offersHtml
       // THE COAST WRITS (a quay board only): the harborhold writ lane's
       // button — the board posts named marks on the coast's living foes,

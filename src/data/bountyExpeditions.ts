@@ -124,7 +124,7 @@ registerBountyKind({
     const read = OBJECTIVE_READS[objective.kind]?.read ?? 'meet the ground\'s ask';
     const title = `Expedition: ${map.bounty?.title ?? map.name}`;
     const ask = map.bounty?.ask ?? `Chart ${map.name} — ${read}.`;
-    const way = anchor ? ` The way opens beside ${anchor.name} (level ${x.level}).` : '';
+    const way = anchor ? ` Via ${anchor.name}.` : '';
     return { title, ask: `${ask}${way}` };
   },
 });

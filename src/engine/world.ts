@@ -214,6 +214,7 @@ import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, ty
 import { VOYAGE_ISLANDS } from '../data/voyageIslands';
 import { shipOf, type ShipDef } from '../data/ships';
 import { expandedTown, townTier, townSiteAt, townSiteStructure, townStationFeatures, type TownSiteId } from '../data/townBuild';
+import { bountyEssenceMix, rollBudgetBountyPay } from '../data/bountyRewards';
 import {
   BOUNTY_BOARD_CFG, BOUNTY_KINDS, bountyChargePay, bountySourceRows, clonePosting, describeBountyPay, liveBountyBand, postingQuestDef, rollBountyPay,
   type BountyKindRow, type BountyTargetRef,
@@ -6904,7 +6905,7 @@ export class World {
     this.seedGatherNodes(def, pois);
     // THE ERRAND's deed is the walk itself: arriving in a held errand's
     // zone flips the hand ready and speaks the withhold prompt.
-    this.noteBountyArrivals(def);
+    this.noteBountyArrivals(def, firstVisit, from);
     // THE OCCURRENCE FABRIC (engine/occurrences.ts): adopt the mint's planted
     // triggers — armed spots carry NO standing state (invisible by
     // construction); a remembered SPRUNG spot re-stands its seeded wound +
@@ -24435,6 +24436,7 @@ export class World {
       const manageable = i < BOUNTY_BOARD_CFG.routes.manageableSeats || standing;
       const routes = manageable ? approach : harderApproach;
       const host: BountyRollHost = {
+        routes, // Bounty journey rolls reuse the validated approach graph.
         routeFits: id => routes.has(id) && (manageable
           ? this.zoneMap[id].level >= Math.max(1, this.player.level - BOUNTY_BOARD_CFG.routes.appropriateBelow)
             && !objectiveSeals(this.zoneMap[id].objective) && !this.zoneMap[id].special && !this.zoneMap[id].eventOwned
@@ -24498,14 +24500,15 @@ export class World {
       // THE PAY LANE rolls at the arm, off the TARGET's level (the visible
       // price law: the card prints exactly what the turn-in will mint);
       // the band's lane override folds here (the starter's essence-only).
-      const rewardLevel = p.expedition?.level ?? this.zoneMap[p.zoneId]?.level ?? 1;
+      const rewardLevel = p.challengeLevel ?? p.expedition?.level ?? this.zoneMap[p.zoneId]?.level ?? 1;
       const weights = { ...(band?.lanes ?? BOUNTY_BOARD_CFG.lanes.weights) };
       if (!band) {
         for (const lane of Object.keys(weights) as (keyof typeof weights)[]) {
           if (offers.some(o => lane === 'pouch' ? o.pay.pouch || o.pay.gem : o.pay[lane])) weights[lane] = 0;
         }
       }
-      p.pay = { ...rollBountyPay(host, rng, rewardLevel, Object.values(weights).some(w => w > 0) ? weights : band?.lanes), level: rewardLevel };
+      p.pay = { ...(band ? rollBountyPay : rollBudgetBountyPay)(host, rng, rewardLevel,
+        Object.values(weights).some(w => w > 0) ? weights : band?.lanes), level: rewardLevel };
       taken.add(p.zoneId);
       perKind[rowId] = (perKind[rowId] ?? 0) + 1;
       offers.push(p);
@@ -24810,7 +24813,12 @@ export class World {
    *  mint is OWED (the writ's pay, not the ground's); the gem face stamps
    *  THE MINT LAW so the drop index keeps feeding the Standing Order. */
   private payBountyLanes(p: BountyPosting, seat: Seat): void {
-    const pay = p.pay;
+    for (const lane of ['unique', 'lot', 'gem', 'craft', 'pouch'] as const) {
+      if (p.pay[lane]) this.payBountyComponent(p, seat, { level: p.pay.level, [lane]: p.pay[lane] });
+    }
+  }
+
+  private payBountyComponent(p: BountyPosting, seat: Seat, pay: BountyPosting['pay']): void {
     if (!pay.unique && !pay.lot && !pay.pouch && !pay.gem && !pay.craft) return;
     const rng = new Rng((this.manifest.seed ^ hashStr(`bountypay:${p.id}`)) >>> 0);
     const rf = (): number => rng.next();
@@ -24819,7 +24827,9 @@ export class World {
     const fallback = (): void => {
       // A pool emptied between arm and pay (a registry edit mid-run):
       // never a silent nothing — essence covers the card's worth, said.
-      for (const c of bountyChargePay(ilvl)) this.dropEssenceAt(at, c);
+      const bountyFallback = pay.unique?.essenceValue === undefined ? bountyChargePay(ilvl)
+        : bountyEssenceMix(pay.unique.essenceValue, ilvl, 'mixed', rng);
+      for (const c of bountyFallback) this.dropEssenceAt(at, c);
       this.notice('The promised piece is gone from the world — the board pays in essence.', BOUNTY_BOARD_CFG.accent, 14, 'civic');
     };
     if (pay.unique) {
@@ -24886,8 +24896,8 @@ export class World {
    *  lattice boundary: one clock with the arm). */
   bountyBoardView(boardId: string = BOUNTY_BOARD_CFG.boardId): {
     countdown: number;
-    offers: { id: string; title: string; ask: string; pay: string; locked?: boolean }[];
-    hands: { id: string; title: string; ask: string; pay: string; state: 'afield' | 'ready' | 'failed' }[];
+    offers: { id: string; title: string; ask: string; route: string; pay: string; locked?: boolean }[];
+    hands: { id: string; title: string; ask: string; route: string; pay: string; state: 'afield' | 'ready' | 'failed' }[];
     /** THE COAST WRITS (a quay board only): the local writ lane's rest
      *  clock — 0 = postable now (the panel's button drives the standing
      *  postHoldWrits grammar). Absent off harborhold ground. */
@@ -24901,14 +24911,15 @@ export class World {
     const receipt = slip && slip.boardId === boardId && this.time - slip.at <= BOUNTY_BOARD_CFG.counter.receiptSec
       ? { title: slip.title, pay: slip.pay, failed: slip.failed } : undefined;
     const easyRoutes = this.bountyApproaches(boardId, true), hardRoutes = this.bountyApproaches(boardId, false);
-    const face = (p: BountyPosting): { id: string; title: string; ask: string; pay: string; locked?: boolean } => {
+    const face = (p: BountyPosting): { id: string; title: string; ask: string; route: string; pay: string; locked?: boolean } => {
       const c = BOUNTY_KINDS[p.kind]?.copy(this, p) ?? { title: p.id, ask: '' };
       const route = easyRoutes.get(p.expedition?.anchor ?? p.zoneId) ?? hardRoutes.get(p.expedition?.anchor ?? p.zoneId);
-      const approach = route ? ` Approach: ${route.path.length - 1}${p.expedition ? '+1' : ''} crossings, ground up to level ${route.peak}.`
-        : ' Approach: no open local land route within the board’s travel budget.';
-      const difficulty = this.bountyAppropriate(p, easyRoutes) ? 'At your level.' : 'Check target and approach levels.';
+      const approach = BOUNTY_KINDS[p.kind]?.route?.(this, p) ?? (route
+        ? `Route: ${route.path.length - 1}${p.expedition ? '+1' : ''} crossing${route.path.length === 2 && !p.expedition ? '' : 's'} · up to Lv ${route.peak}`
+        : 'Route: no open local approach');
+      const level = p.challengeLevel ?? p.expedition?.level ?? this.zoneMap[p.zoneId]?.level ?? 1;
       return {
-        id: p.id, title: c.title, ask: `${c.ask}${approach} ${difficulty}${p.kind === 'cull' ? ' Marked quarry are empowered.' : ''}`,
+        id: p.id, title: c.title, ask: c.ask, route: `${approach}${BOUNTY_KINDS[p.kind]?.route ? '' : ` · Target Lv ${level}`}`,
         pay: describeBountyPay(p.pay),
         ...(p.locked ? { locked: true } : {}),
       };
@@ -25004,9 +25015,11 @@ export class World {
    *  READINESS LAW's one fold at the door — the errand's entry IS its deed
    *  (the field-clear hook's twin for a kind whose predicate is the walk
    *  itself); any other kind simply reads afield until its own ask lands. */
-  private noteBountyArrivals(def: ZoneDef): void {
+  private noteBountyArrivals(def: ZoneDef, firstVisit: boolean, from?: string): void {
     for (const p of this.bountyHands) {
-      if (p.zoneId !== def.id) continue;
+      const row = BOUNTY_KINDS[p.kind];
+      if (row?.arrival && !this.clientActionHook) { row.arrival(this, p, def, firstVisit, from); this.charDirty = true; }
+      if (p.zoneId !== def.id && !row?.arrival) continue;
       this.noteBountyReady(p);
     }
   }
@@ -28244,11 +28257,12 @@ export class World {
     const active = this.activeQuests.map(e => {
       const q = this.questDefOf(e.questId); // generated postings resolve too
       const p = this.bountyHands.find(h => h.id === e.questId);
-      const z = this.zoneMap[e.zoneId];
+      const targetId = p && BOUNTY_KINDS[p.kind]?.target ? BOUNTY_KINDS[p.kind].target!(this, p) : e.zoneId;
+      const z = targetId ? this.zoneMap[targetId] : undefined;
       const standing = this.questStanding(e);
       const home = this.questHome(e);
       const homeName = this.zoneMap[home.zoneId]?.name;
-      const ask = p ? BOUNTY_KINDS[p.kind]?.copy(this, p).ask : undefined;
+      const ask = p ? [BOUNTY_KINDS[p.kind]?.copy(this, p).ask, BOUNTY_KINDS[p.kind]?.route?.(this, p)].filter(Boolean).join(' · ') : undefined;
       return {
         id: e.questId, label: q?.offerLabel ?? e.questId,
         category: q?.category ?? DEFAULT_QUEST_CATEGORY,

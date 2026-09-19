@@ -494,7 +494,7 @@ registerBountySource({
     return [{
       key: `fracture:${f.id}`, zoneId: f.zoneId, name: 'the fracture',
       title: 'The Answer: the fracture',
-      ask: `The earth tears open at ${z.name} — run the fracture down wherever it flees, and seal it.`,
+      ask: `Chase and seal the fracture · ${z.name}.`,
       ledger: 'fractures_sealed',
     }];
   },
@@ -506,7 +506,7 @@ registerBountySource({
   // seat predicate is the same targetability every ambient ignition obeys.
   summons: {
     name: 'the fracture',
-    ask: (zone, level) => `Post the writ, and the earth TEARS open at ${zone} (level ${level}) — run the fracture down, and seal it.`,
+    ask: (zone, level) => `Chase and seal a new fracture · ${zone} · Lv ${level}.`,
     ledger: 'fractures_sealed',
     // Room = the package IN THIS RUN (the manifest's own enablement — a
     // disabled package still constructs its field, and the board must
