@@ -64,8 +64,8 @@ const DT = 1 / 60;
       return !!(su?.strike || su?.bands || su?.slack);
     })
     .map(m => m.id).sort();
-  check('census: tempo dials stay scoped to the debut and Gnasher balance batches',
-    wearers.join(',') === 'beastkin_gorer,cave_gnasher,gale_elemental,great_gnasher,sylvan_warden',
+  check('census: tempo dials stay scoped to the debut, Gnasher, and expedition guard batches',
+    wearers.join(',') === 'beastkin_gorer,cave_gnasher,gale_elemental,great_gnasher,sylvan_warden,wayward_vanguard',
     wearers.join(','));
 
   const gorer = MONSTERS.beastkin_gorer.brain?.skillUse;
