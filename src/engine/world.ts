@@ -413,6 +413,7 @@ import { boroughVendorWeights, townResidentsHere, noteSoulsSheltered } from '../
 import { rollRarity, rarityMods, RARITY_DEFS, type MonsterRarity } from './rarity';
 import { magicPackPool, magicPackSize, magicPackMinimum, rollMagicPack, readMagicPack, updateMagicPacks, magicPackDeath, type MagicPackState } from './magicPacks';
 import { MAGIC_PACKS, MAGIC_PACK_CFG } from '../data/magicPacks';
+import { stepMagicPackMechanics, type MagicPackVisual } from './magicPackMechanics';
 import { MONSTER_NAME_CFG, rollMonsterName } from '../data/monsterNames';
 import type { OverlayView } from '../world/overlay';
 import { claimedZonesFromBag } from '../world/overlay';
@@ -5641,6 +5642,7 @@ export class World {
    * visit (constructs, drops, and corpses stay behind).
    */
   loadZone(zoneId: string, from?: string): void {
+    this.magicPackEffects = [];
     this.assaults.clearAll();
     this.challenges.clearAll();
     this.odyssey.leaveZone();
@@ -12119,7 +12121,7 @@ export class World {
   private promoteRarity(a: Actor, rarity: MonsterRarity, opts?: { distinctName?: string | boolean }): void {
     if (a.magicPack && rarity !== 'magic') {
       a.magicPack = undefined;
-      updateMagicPacks(this.actors);
+      this.refreshMagicPacks();
     }
     const def = RARITY_DEFS[rarity];
     a.rarity = rarity;
@@ -12161,14 +12163,39 @@ export class World {
       || a.level < def.minLevel || a.faction !== members[0].faction)) return false;
     const id = this.nextSquadId();
     members.forEach((a, i) => {
-      a.magicPack = { id, mechanic, size: members.length, fallen: 0, ...(i === 0 ? { leader: 1 as const } : {}) };
+      a.magicPack = { id, mechanic, slot: i, size: members.length, fallen: 0, ...(i === 0 ? { leader: 1 as const } : {}) };
       a.squadId = id;
       a.squadLeader = i === 0;
       this.promoteRarity(a, 'magic');
       a.name = `${def.name} ${MONSTERS[a.defId ?? '']?.name ?? a.name}`;
     });
-    updateMagicPacks(this.actors);
+    this.refreshMagicPacks();
     return true;
+  }
+
+  /** The pack conductor owns its warning geometry; ordinary skill resolution
+   * owns every hit. Also callable at dt=0 for death/promotion/restore edges. */
+  magicPackEffects: MagicPackVisual[] = [];
+  private magicPackResolving = false;
+  private magicPackRefreshPending = false;
+  refreshMagicPacks(dt = 0): void {
+    // A reflected hit can kill a conductor during this fold. Reconcile the
+    // death after the hit loop, without advancing any encounter clock twice.
+    if (this.magicPackResolving) { this.magicPackRefreshPending = true; return; }
+    this.magicPackResolving = true;
+    try {
+      this.magicPackEffects = stepMagicPackMechanics(this.actors, dt, {
+        enemies: a => this.enemiesOf(a),
+        clear: (a, b, tier) => this.lineOfSight(a, b, tier, tier),
+        clip: (a, b, tier) => this.clipShot(a, b, tier),
+        hit: (caster, skill, victim) => {
+          const def = SKILLS[skill];
+          if (def) this.resolveHit(caster, makeSkillInstance(def, monsterSkillLevelOf(caster.level)), victim, 1, 1);
+        },
+      });
+      updateMagicPacks(this.actors);
+    } finally { this.magicPackResolving = false; }
+    if (this.magicPackRefreshPending) { this.magicPackRefreshPending = false; this.refreshMagicPacks(); }
   }
 
   // --- SQUAD TACTICS: engage tokens + death reactions -------------------------
@@ -17069,7 +17096,7 @@ export class World {
       enemies.push({
         defId: a.defId, level: a.level, x: a.pos.x, y: a.pos.y,
         life: a.life, faction: a.faction, rarity: a.rarity, tag: a.tag,
-        ...(a.magicPack ? { magicPack: { ...a.magicPack } } : {}),
+        ...(a.magicPack ? { magicPack: JSON.parse(JSON.stringify(a.magicPack)) as MagicPackState } : {}),
         movementTether: savedMovementTether(a),
         name: a.name, ...(a.tier ? { tier: a.tier } : {}),
         ...(a.aiAwakened ? { aiAwakened: 1 as const } : {}),
@@ -17204,7 +17231,7 @@ export class World {
       m.movementTether = restoreMovementTether(e.movementTether);
       this.actors.push(m);
     }
-    updateMagicPacks(this.actors);
+    this.refreshMagicPacks();
   }
 
   /** Shared refusal for the button, menu, input and the authoritative cast. */
@@ -45533,7 +45560,7 @@ export class World {
 
     actor.dead = true;
     if (!silent) magicPackDeath(actor, this.actors);
-    if (actor.magicPack) updateMagicPacks(this.actors);
+    if (actor.magicPack) this.refreshMagicPacks();
     if (!silent && actor.summonInst?.def.hivecall) this.hivecallDeath(actor);
     if (!silent && actor.owner && actor.summonInst?.def.throng) this.throngKeepMinimum(actor.owner, actor.summonInst);
     if (!silent && this.deedEnemy(actor) && killer && killer !== this.player && this.deedOwned(killer)) {
@@ -48203,7 +48230,7 @@ export class World {
     if (this.lockHint > 0) this.lockHint -= dt;
 
     // Actors: timers, DoT, dash movement, lifespans.
-    updateMagicPacks(this.actors);
+    this.refreshMagicPacks(dt);
     const flowDt = dt; // the world-scaled frame; each body bends it below
     for (const a of this.actors) {
       if (a.dead) continue;
@@ -62781,6 +62808,7 @@ export class World {
    *  factor). Replicated per-seat (SeatW.rooted) so a co-op client's movement
    *  PREDICTION doesn't drift the hero forward while the host has them rooted. */
   movementLocked(a: Actor): boolean {
+    if (a.magicPack && a.sheet.getSourceMods('magicPack:beamChannel')) return true;
     // The PASSIVE lock is a volition lock — a DRIVEN body (engine-wheeled
     // scenery: the serpent's passing glimpse) has no volition to lock; the
     // engine's own hand moves it. Death, stun, dash and anchors still hold.

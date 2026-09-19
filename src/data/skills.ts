@@ -42,6 +42,7 @@ import { NECROMANCER_TREES } from './necromancerTrees';
 import { NECROMANCER_SKILLS } from './necromancerSkills';
 import { ROOTWILD_SKILLS } from './rootwildSkills';
 import { ARENA_BOSS_SKILLS } from './arenaBosses';
+import { MAGIC_PACK_SKILLS } from './magicPackSkills';
 
 export const SKILLS: Record<string, SkillDef> = {
   ...HIVECALL_SKILLS,
@@ -52,6 +53,7 @@ export const SKILLS: Record<string, SkillDef> = {
   ...PACT_SKILLS,
   ...ROOTWILD_SKILLS,
   ...ARENA_BOSS_SKILLS,
+  ...MAGIC_PACK_SKILLS,
   ...WORKSHOP_SKILLS,
   ...FLASK_SKILLS,
 

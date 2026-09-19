@@ -76,6 +76,7 @@ import { collectActiveFx, collectFalterK, type ActiveFx } from './screenFx';
 import { RARITY_DEFS } from '../engine/rarity';
 import { magicPackLinks, magicPackHint } from '../engine/magicPacks';
 import { MAGIC_PACK_CFG, MAGIC_PACKS } from '../data/magicPacks';
+import { drawMagicPackEffects, drawMagicPackRole } from './vis/magicPackLayer';
 import { FACTIONS, MONSTERS, type MonsterDef } from '../data/monsters';
 import { APPARITION_ROLE, MU_CFG } from '../data/mu';
 import { PACK_CFG, packLinks, type LinkStyleOf, type PackLink } from '../engine/pack';
@@ -692,6 +693,7 @@ export class Renderer {
       drawFogLayer(this.ctx, world.fog, 'under', this.cam.x, this.cam.y, vw, vh);
     }
     this.drawZones(world);
+    drawMagicPackEffects(this.ctx, world.magicPackEffects, world.time);
     // TRACK WARN ARCS: the approach telegraph — with the un-exploded discs,
     // under actors, sampling the riders' ACTUAL future along their lanes.
     if (world.tracks.length && !VIS_ABLATE.has('tracks')) {
@@ -5564,6 +5566,7 @@ export class Renderer {
         ctx.beginPath();
         ctx.arc(0, 0, a.radius + 4, 0, Math.PI * 2);
         ctx.stroke();
+        drawMagicPackRole(ctx, a, world.time);
         // The magicPack combat fold owns these pips, including co-op snapshots.
         // A broken bond loses its pip; a Vendetta survivor gains up to three.
         if (a.magicPack && a.magicPackPower > 0) {

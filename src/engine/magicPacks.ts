@@ -3,6 +3,7 @@ import type { Modifier } from './stats';
 import { MAGIC_PACK_CFG, MAGIC_PACKS } from '../data/magicPacks';
 import { packLinks, PACK_CFG, type PackLink } from './pack';
 import { STAT_DEFS } from './stats';
+import { magicPackFallen, restoreMagicPackRuntime, type MagicPackBearer, type MagicPackBeam, type MagicPackGrave, type MagicPackRuntime } from './magicPackMechanics';
 
 export interface MagicPackDef {
   id: string;
@@ -13,7 +14,12 @@ export interface MagicPackDef {
   activeLabel: string;
   inactiveLabel: string;
   color: string;
+  bearer?: MagicPackBearer;
+  beam?: MagicPackBeam;
+  grave?: MagicPackGrave;
   rules: {
+    role?: 'bearer' | 'others' | 'donor';
+    perDonor?: boolean;
     nearby?: { radius: number; min: number };
     /** Scale the payload once per slain original member, up to this cap. */
     fallen?: { max: number };
@@ -25,7 +31,12 @@ export interface MagicPackDef {
 export interface MagicPackPolicy { sizeMul?: number; mechanics?: string[]; }
 
 /** JSON-safe identity shared by the ORIGINAL cohort. Summons never inherit it. */
-export interface MagicPackState { id: number; mechanic: string; size: number; fallen: number; leader?: 1; }
+export interface MagicPackState {
+  id: number; mechanic: string; size: number; fallen: number; leader?: 1;
+  /** Stable identity inside the original group, independent of runtime actor IDs. */
+  slot?: number;
+  runtime?: MagicPackRuntime;
+}
 
 export function magicPackMinimum(def: MagicPackDef): number {
   return Math.max(2, ...def.rules.map(rule => (rule.nearby?.min ?? 0) + 1));
@@ -57,7 +68,10 @@ export function readMagicPack(raw: unknown): MagicPackState | undefined {
   if (!Number.isSafeInteger(p.id) || p.id < 1 || typeof p.mechanic !== 'string' || !Object.hasOwn(MAGIC_PACKS, p.mechanic)
     || !Number.isSafeInteger(p.size) || p.size < 2 || p.size > MAGIC_PACK_CFG.maxMembers
     || !Number.isSafeInteger(p.fallen) || p.fallen < 0 || p.fallen >= p.size) return;
-  return { id: p.id, mechanic: p.mechanic, size: p.size, fallen: p.fallen, ...(p.leader === 1 ? { leader: 1 as const } : {}) };
+  return { id: p.id, mechanic: p.mechanic, size: p.size, fallen: p.fallen,
+    ...(p.leader === 1 ? { leader: 1 as const } : {}),
+    ...(Number.isSafeInteger(p.slot) && p.slot! >= 0 && p.slot! < p.size ? { slot: p.slot } : {}),
+    runtime: restoreMagicPackRuntime(p.runtime, MAGIC_PACKS[p.mechanic], p.size) };
 }
 
 function active(a: Actor): boolean {
@@ -69,6 +83,7 @@ function active(a: Actor): boolean {
 export function magicPackDeath(a: Actor, actors: readonly Actor[]): void {
   const p = a.magicPack;
   if (!p || a.owner || a.team !== 'enemy' || a.rarity !== 'magic') return;
+  magicPackFallen(a, actors);
   for (const b of actors) if (active(b) && b.magicPack!.id === p.id && b.magicPack!.mechanic === p.mechanic) {
     b.magicPack = { ...b.magicPack!, fallen: Math.min(p.size - 1, b.magicPack!.fallen + 1) };
   }
@@ -96,13 +111,15 @@ export function updateMagicPacks(actors: readonly Actor[]): void {
     const def = MAGIC_PACKS[p.mechanic];
     let from: Actor | undefined;
     const stacks = def.rules.map(rule => {
+      if (rule.role && (rule.role === 'others' ? a.magicPackRole !== 'member'
+        : rule.role === 'donor' ? a.magicPackRole !== 'donor' : a.magicPackRole !== 'bearer')) return 0;
       const kin = rule.nearby ? group.filter(b => b !== a && b.faction === a.faction
         && b.tier === a.tier && b.magicPack!.mechanic === p.mechanic
         && Math.hypot(a.pos.x - b.pos.x, a.pos.y - b.pos.y) <= rule.nearby!.radius)
         .sort((b, c) => Math.hypot(a.pos.x - b.pos.x, a.pos.y - b.pos.y)
           - Math.hypot(a.pos.x - c.pos.x, a.pos.y - c.pos.y) || b.id - c.id) : [];
       if (rule.nearby && kin.length < rule.nearby.min) return 0;
-      const n = rule.fallen ? Math.min(p.fallen, rule.fallen.max) : 1;
+      const n = rule.perDonor ? a.magicPackDonors : rule.fallen ? Math.min(p.fallen, rule.fallen.max) : 1;
       if (n > 0 && kin.length) from ??= kin[0];
       return n;
     });
@@ -135,11 +152,16 @@ export function magicPackHint(a: Actor): string | undefined {
   const def = p && MAGIC_PACKS[p.mechanic];
   if (!def) return;
   const power = a.magicPackPower ?? 0;
+  if (def.bearer) {
+    const role = a.magicPackRole === 'bearer' ? (def.bearer.siphonRadius ? `Siphoning ${a.magicPackDonors}` : 'Exposed')
+      : a.magicPackRole === 'donor' ? 'Drained' : a.magicPackRole ? (def.bearer.siphonRadius ? 'Outside siphon' : 'Protected') : 'Link broken';
+    return `${role} · ${def.hint}`;
+  }
   return `${power ? def.activeLabel + (power > 1 ? ` ×${power}` : '') : def.inactiveLabel} · ${def.hint}`;
 }
 
 /** Boot-time authoring diagnostics, shared with the regression rig. */
-export function magicPackErrors(): string[] {
+export function magicPackErrors(skillExists?: (id: string) => boolean): string[] {
   const errors: string[] = [];
   const integer = (n: number, min: number): boolean => Number.isSafeInteger(n) && n >= min;
   if (!integer(MAGIC_PACK_CFG.maxMembers, 2)) errors.push('magicPack: invalid member cap');
@@ -152,10 +174,20 @@ export function magicPackErrors(): string[] {
   }
   if (MAGIC_PACK_CFG.sizeByLevel[0]?.level !== 1) errors.push('magicPack: missing level-one size');
   for (const [id, def] of Object.entries(MAGIC_PACKS)) {
+    for (const skill of [def.beam?.skill, def.grave?.skill]) if (skill && skillExists && !skillExists(skill)) errors.push(`magicPack ${id}: missing skill ${skill}`);
     if (id !== def.id || !integer(def.minLevel, 1) || !Number.isFinite(def.weight) || def.weight < 0
       || !def.name || !def.hint || !def.color || !def.activeLabel || !def.inactiveLabel
-      || !def.rules.length) errors.push(`magicPack ${id}: invalid recipe`);
+      || (!def.rules.length && !def.beam && !def.grave)) errors.push(`magicPack ${id}: invalid recipe`);
+    const positive = (n: number): boolean => Number.isFinite(n) && n > 0;
+    if (def.bearer && (!positive(def.bearer.warning) || (def.bearer.rotateEvery !== undefined
+      && (!positive(def.bearer.rotateEvery) || def.bearer.rotateEvery <= def.bearer.warning))
+      || (def.bearer.siphonRadius !== undefined && !positive(def.bearer.siphonRadius)))) errors.push(`magicPack ${id}: invalid bearer`);
+    if (def.beam && (!def.beam.skill || ![def.beam.cooldown, def.beam.initialDelay, def.beam.warning,
+      def.beam.travel, def.beam.pulseLength, def.beam.halfWidth, def.beam.range, def.beam.breakDistance].every(positive))) errors.push(`magicPack ${id}: invalid beam`);
+    if (def.grave && (!def.grave.skill || ![def.grave.warning, def.grave.radius, def.grave.halfWidth, def.grave.tick].every(positive)
+      || !integer(def.grave.spokes, 1) || def.grave.spokes > 8 || !Number.isFinite(def.grave.turnSpeed))) errors.push(`magicPack ${id}: invalid grave`);
     for (const rule of def.rules) {
+      if ((rule.role && !def.bearer) || (rule.perDonor && !def.bearer?.siphonRadius)) errors.push(`magicPack ${id}: missing role provider`);
       if (rule.nearby && (!Number.isFinite(rule.nearby.radius) || rule.nearby.radius <= 0
         || !integer(rule.nearby.min, 1) || rule.nearby.min >= MAGIC_PACK_CFG.maxMembers))
         errors.push(`magicPack ${id}: invalid proximity gate`);

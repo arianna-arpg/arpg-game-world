@@ -127,6 +127,9 @@ export interface ActorW {
   magicPack?: import('../engine/magicPacks').MagicPackState;
   magicPackFrom?: number;
   magicPackPower?: number;
+  magicPackRole?: Actor['magicPackRole'];
+  magicPackDonors?: number;
+  magicPackPending?: number;
   defId?: string;
   ss?: Actor['summonShell'];
   sg?: Actor['shellGuard'];
@@ -468,6 +471,7 @@ export function applySeatMeta(world: World, seat: Seat, w: SeatMetaW): void {
 
 /** The full render-state replace a client draws each frame. */
 export interface StateSnapshot {
+  magicPackEffects?: import('../engine/magicPackMechanics').MagicPackVisual[];
   /** Per-owner terrain grants: replicas draw exactly the host's circles. */
   grantedPockets?: { owner: number; pockets: import('../engine/fieldgrants').GrantedPocket[] }[];
   tick: number;
@@ -679,7 +683,10 @@ function actorToW(a: Actor, world: World): ActorW {
   if (a.look) w.lk = a.look;
   if (a.extraParts?.length) w.ep = a.extraParts;
   if (a.rarity) w.rarity = a.rarity;
-  if (a.magicPack) w.magicPack = { ...a.magicPack };
+  if (a.magicPack) w.magicPack = { ...a.magicPack, runtime: undefined };
+  if (a.magicPackRole) w.magicPackRole = a.magicPackRole;
+  if (a.magicPackDonors) w.magicPackDonors = a.magicPackDonors;
+  if (a.magicPackPending) w.magicPackPending = a.magicPackPending;
   if (a.magicPackFrom && !a.magicPackFrom.dead) w.magicPackFrom = a.magicPackFrom.id;
   if (a.magicPackPower) w.magicPackPower = a.magicPackPower;
   if (a.defId) w.defId = a.defId;
@@ -809,6 +816,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
 
   return {
     tick, time: world.time, zoneId: world.zone.id,
+    magicPackEffects: world.magicPackEffects.map(v => ({ ...v })),
     grantedPockets: (() => {
       const rows = world.seats.map(s => ({ owner: s.actor.id, pockets: world.grantedPocketsFor(s.actor) }))
         .filter(r => r.pockets.length);
@@ -1270,6 +1278,9 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.rarity = aw.rarity as Actor['rarity'];
     a.magicPack = aw.magicPack ? { ...aw.magicPack } : undefined;
     a.magicPackPower = aw.magicPackPower ?? 0;
+    a.magicPackRole = aw.magicPackRole;
+    a.magicPackDonors = aw.magicPackDonors ?? 0;
+    a.magicPackPending = aw.magicPackPending ?? 0;
     a.defId = aw.defId;
     a.faction = aw.faction;
     // Host-computed boss-bar row (cleared when absent — pooled actors never
@@ -1380,6 +1391,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
               ? { kind: 'abilityEssence', tier: d.tid ?? 1, count: d.cnt ?? 1 }
               : { kind: 'skill', inst: { def: { color: d.color, name: d.name ?? '?' }, rarity: d.rarity ?? 'common' } },
   })) as unknown as World['drops'];
+  world.magicPackEffects = (snap.magicPackEffects ?? []).map(v => ({ ...v }));
   world.orbs = snap.orbs.map(o => ({ pos: { x: o.p[0], y: o.p[1] }, bob: o.bob, life: o.life, kind: o.kind, amount: 0 })) as unknown as World['orbs'];
   world.texts = snap.texts.map(t => ({ pos: { x: t.p[0], y: t.p[1] }, life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, kind: t.k })) as unknown as World['texts'];
   world.notices = (snap.no ?? []).map(n => ({ text: n.text, color: n.color, size: n.size, channel: n.ch, bornAt: n.born }));

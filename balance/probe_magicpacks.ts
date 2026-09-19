@@ -24,10 +24,10 @@ const near = (a: number, b: number): void => assert.ok(Math.abs(a - b) < 1e-8, `
 check('registry, progression boundaries, content filters and bounded difficulty', () => {
   assert.deepEqual(magicPackErrors(), []);
   assert.deepEqual(magicPackPool(1).map(d => d.id), ['wardbound']);
-  assert.equal(magicPackPool(5).length, 1);
-  assert.equal(magicPackPool(6).length, 2);
-  assert.equal(magicPackPool(11).length, 2);
-  assert.equal(magicPackPool(12).length, 3);
+  assert.ok(!magicPackPool(5).some(d => d.id === 'chorus'));
+  assert.ok(magicPackPool(6).some(d => d.id === 'chorus'));
+  assert.ok(!magicPackPool(11).some(d => d.id === 'vendetta'));
+  assert.ok(magicPackPool(12).some(d => d.id === 'vendetta'));
   assert.equal(magicPackPool(99, false).length, 0);
   assert.equal(rollMagicPack(5, { mechanics: ['vendetta'] }), undefined);
   assert.equal(rollMagicPack(12, { mechanics: ['vendetta'] })?.id, 'vendetta');

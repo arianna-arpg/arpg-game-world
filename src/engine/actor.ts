@@ -1134,6 +1134,9 @@ export class Actor {
   magicPackPower = 0;
   magicPackSources?: string[];
   magicPackSignature?: string;
+  magicPackRole?: 'bearer' | 'member' | 'donor';
+  magicPackDonors = 0;
+  magicPackPending = 0;
   /** NEMESIS (meta/nemesis.ts): set on a MANIFESTED remembered foe — the saga
    *  it haunts + its record id (fate resolution on kill) + rank tint (the
    *  renderer's ring and title label). */

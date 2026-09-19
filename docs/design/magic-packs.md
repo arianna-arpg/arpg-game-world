@@ -14,6 +14,11 @@ skills or replace any creature's native kit, brain, bonds or tactics.
 | Wardbound | 1+ | 18% less damage taken while another original ally is within 190 units | Separate allies or kill a supporter |
 | Hunting Chorus | 6+ | 18% increased attack/cast speed while two original allies are within 240 units | Break the trio |
 | Vendetta | 12+ | Each original casualty grants survivors 12% increased damage and 6% increased movement speed, up to three stacks | Weaken the group before finishing members |
+| Breachbearers | 4+ | One exposed member takes 65% more damage; the others take 45% less. Death passes exposure to the next survivor | Follow the broken golden ward; avoid spending burst on closed blue wards |
+| Shifting Breach | 9+ | The same exposure rotates every 6 seconds, previewing the next recipient for 1.4 seconds; death hands it on immediately | Position for the next dotted golden halo |
+| Arclink | 10+ | Two members plant their feet and mark a fixed path for 1.25 seconds, then an 0.8-second pulse travels along it; 5.5-second recovery | Leave the path or kill/displace an endpoint to cancel it |
+| Siphon Court | 13+ | One siphoner gains 16% increased attack/cast speed and 7% movement per visible feeder within 230 units. Feeders have 15% less attack/cast speed and 22% less movement | Kite the fast member away to sever its feeds, or kill it to permanently end the siphon |
+| Gravewheel | 16+ | Each casualty leaves two rotating chaos spokes, radius 115, after a 1.5-second warning; all anchors last until the pack ends | Choose where members die, keep moving through the openings, and finish the remaining pack |
 
 All eligible recipes stay in the weighted pool. A level-12 encounter can still
 roll Wardbound; later unlocks add variety rather than stacking every mechanic.
@@ -50,6 +55,17 @@ the capped loss count. Multiple rules coexist in separately named sheet sources
 make a new combination without editing the spawn loop or damage pipeline.
 `magicPackErrors()` participates in ordinary boot content validation.
 
+Dynamic recipes compose optional `bearer`, `beam` and `grave` specifications in
+the same registry. Rules can select `role: bearer / others / donor` and scale
+their ordinary modifiers `perDonor`. A bearer can pass on loss or end permanently,
+and optionally rotate on a relative clock. Timings, widths, ranges, colors,
+rotation speed, spokes and skill references are all data. There are no recipe-ID
+branches in the conductor. `src/data/magicPackSkills.ts` supplies the two hidden
+skill payloads; hits use ordinary skill resolution, mitigation, death gates and
+credit. Grave hits are attributed to a living sustaining member on that story,
+never a fabricated corpse actor. They target enemies of that member, including
+players and their companions, rather than friendly members of the same pack.
+
 `World.promoteMagicPack(members, recipeId)` is the explicit content seam for
 events or authored encounters. It requires 2–6 distinct, living, unowned,
 unpromoted enemies of the same faction at the recipe's minimum level. The
@@ -74,11 +90,32 @@ recipe-colored pips for current power; hover names show the shared recipe and
 an active/broken state with counterplay text. The same state/supporter identity
 travels over co-op snapshots; omitted fields clear reused client shells.
 
+`src/engine/magicPackMechanics.ts` owns stable member slots, shared clocks and
+hazard geometry. Beam warnings snapshot their endpoints: they never track the
+player. The pulse sweeps its traveled segment and hits each body once. Death,
+ownership, story changes, blocked sight or displacement over the authored limit
+cancel it. The movement gate holds endpoint feet without preventing knockback.
+Grave spokes clip against walls; drawing and damage consume the same endpoints.
+Graves continue turning when surviving members are kited away, but disappear
+immediately when no original hostile member remains. Silent removal creates no
+grave. Pack clearing during a reflected hit reconciles without double-ticking.
+
+The broken golden ring marks exposure; closed blue rings mark protection. A
+dotted halo grows around the upcoming timed recipient. Siphon particles flow
+from gray feeder rings into the amber recipient. Dashed, translucent danger
+geometry warms up before becoming a solid traveling pulse or rotating spoke.
+Clients receive the host's exact geometry, roles and preview progress, with no
+independent combat clocks or hidden client damage.
+
 Zone memory and JSON world saves preserve recipe, original count, losses, leader
 identity, name and health. Restore remaps group IDs onto fresh runtime identities, preventing
 collisions with new packs, and rebuilds modifier sources without rerolling an
 individual affix. Old saves have no cohort metadata and retain their existing
 single magic bodies until refreshed. No compatibility reset is needed.
+Dynamic state adds original member slots, bearer/retirement, relative role clocks
+and fallen anchor positions. Zone memory deep-copies the runtime. Re-entry
+restarts grave warnings and discards in-flight beams in favor of a fresh initial
+delay, so a returning player cannot enter an unseen firing effect.
 
 ## Verification
 
@@ -90,3 +127,7 @@ the infrastructure this change reuses. Also run `npm run check`, the smoke sim,
 generation QA and the production build.
 The isolated hidden client check is `npx electron balance/magic-packs-ui.cjs`
 after a build; it captures each recipe's real links, power pips and hover plate.
+`npm run probe -- magicpackmechanics` additionally checks all unlock boundaries,
+death and timed handoffs, 30/60/120 Hz beam behavior, actual damage and dodging,
+endpoint cancellation, siphon isolation, grave persistence/rotation/cleanup,
+wall/story safety, JSON save/load and co-op geometry.
