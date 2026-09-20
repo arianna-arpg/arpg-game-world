@@ -726,7 +726,7 @@ registerRegion({ id: 'soul_water', walkable: true, blocks: false, label: 'the pa
 registerRegion({ id: 'boardwalk', walkable: true, blocks: false, label: 'the boards',
   pathCost: 1, laid: 'built',
   visual: { fill: '#261f19', alpha: 0.88, edge: { color: '#3d3126', width: 3 } } });
-registerRegion({ id: 'brush', walkable: true, blocks: false, label: 'the brush', standStatus: 'concealed' });
+registerRegion({ id: 'brush', walkable: true, blocks: false, label: 'the brush' });
 registerRegion({ id: 'bog', walkable: true, blocks: false, label: 'the bog', standStatus: 'bogged', pathCost: 3.5, severity: 30,
   // bog_rot, NOT combat 'poison': its own row carries the same level-scaled
   // dot without the combat-poison screen vignette — crossing a bog line
@@ -828,9 +828,9 @@ registerRegion({ id: 'road', walkable: true, blocks: false, label: 'the road', m
 registerRegion({ id: 'web', walkable: true, blocks: false, label: 'the webbing', standStatus: 'mired', pathCost: 2.2,
   enterText: { text: 'webbed!', color: '#d8d4c8' } });
 // REEDS: water-margin blades conceal like brush (the ambush margin).
-registerRegion({ id: 'reeds', walkable: true, blocks: false, label: 'the reeds', standStatus: 'concealed' });
+registerRegion({ id: 'reeds', walkable: true, blocks: false, label: 'the reeds' });
 // BERRY BUSH: a fruiting shrub — conceals exactly like the brush it grows from.
-registerRegion({ id: 'berry_bush', walkable: true, blocks: false, label: 'the bushes', standStatus: 'concealed' });
+registerRegion({ id: 'berry_bush', walkable: true, blocks: false, label: 'the bushes' });
 
 // --- PHASE-3 INSTANCE ROWS --------------------------------------------------
 // VOID: not walkable, does NOT block (you can be shoved/walk in) → its boundary

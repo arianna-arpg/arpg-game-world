@@ -260,6 +260,12 @@ investment clusters. `docs/design/passive-specializations.md` records the
 shared query scopes, relays and tradeoffs; verify with `passivespecializations`
 and the passive UI/editor harness (1,372 expansion nodes round-trip).
 
+Personal concealment, foliage sight depth and copied-position investigation are
+documented in `docs/engine/stealth.md`. Cloak and Stealth share the concealment
+fold; tree crowns retain their art while trunks block sight, and bushes/crops
+obscure sight without granting stealth. Verify `npm run probe -- stealth`,
+watchers/canopypresence and the canopy visual harness after a build.
+
 ## Commands
 Magic rarity's ambient encounters live in `data/magicPacks.ts` and
 `engine/magicPacks.ts`: shared recipes, level-gated size bands, attributable

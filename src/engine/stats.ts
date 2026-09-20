@@ -1498,6 +1498,7 @@ export const STAT_DEFS: Record<string, StatDef> = {
   // Stealth & perception
   /** Multiplier on the range at which enemies detect this actor. */
   detectability:  { label: 'Detectability', base: 1, min: 0 },
+  concealment:    { label: 'Concealment', base: 0, min: 0, max: 1 },
   /** Multiplier on the THREAT this actor's damage books on the victim's
    *  chart (world.resolveHit): loud styles goad monsters onto themselves,
    *  quiet hands slip down the ledger. Only `prefer: 'highestThreat'`

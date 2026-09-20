@@ -698,9 +698,10 @@ export class Actor {
   aiLastSeen?: Vec2;
   /** The story the quarry stood on when last seen (rides the stale-spot stalk). */
   aiLastSeenTier?: number;
-  /** World time the locked target was last actually SEEN (line of sight) —
-   *  a held lock survives blindness for the chase-memory window (the hunter
-   *  rounds the corner after you), then the thread snaps. */
+  /** Offensive use briefly suppresses concealment; world-clock time. */
+  concealmentExposedUntil = 0;
+  /** World time the target was last actually seen. On loss, the combat lock
+   * is dropped and investigation uses aiLastSeen, never a live body reference. */
   aiLosSeenAt = 0;
   /** MoveSpec.pathing, stamped per AI tick — moveToward reads it. 'none' =
    *  straight-line steer (mindless things pile at walls, an authored trait);

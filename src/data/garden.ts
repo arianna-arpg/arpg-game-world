@@ -56,10 +56,10 @@ registerStamp('bellflower', stampSingle('bellflower', [22, 34]));
 // the wheat contract with the tended gold swapped for garden green. Whole
 // runs of the stalkwood floor are this: cover for the mantis, cover for you.
 registerDoodadRule('wildgrass_blade', {
-  overlap: 'inert', blocksMove: false, blocksShot: false, blocksSight: true,
+  overlap: 'inert', blocksMove: false, blocksShot: false, sightCover: 1.2,
   spacing: 20, walkOnly: true, spin: true,
   occlude: { pad: 10, alpha: 0.32 },
-  veil: { group: 'wildgrass', standStatus: 'canopied' },
+  veil: { group: 'wildgrass', standStatus: '' },
   fuel: 'kindling',
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp', 'ice'],
 });

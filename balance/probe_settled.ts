@@ -119,7 +119,7 @@ const note = (msg: string): void => { if (VERBOSE) console.log(`  ${msg}`); };
     const r = doodadRuleOf(k);
     check(`B1 ${k} is walk-through veil cover`,
       r.overlap === 'inert' && r.blocksMove === false && r.blocksShot === false
-      && r.blocksSight === true && !!r.veil);
+      && (r.sightCover ?? 0) > 0 && !r.blocksSight && !!r.veil && !r.veil.standStatus);
     check(`B2 ${k} veil group is 'crop' (never fuses with the woods)`,
       r.veil?.group === 'crop');
   }

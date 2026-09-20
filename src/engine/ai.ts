@@ -43,6 +43,7 @@ import { minionCommandSpeed } from './minionCombat';
 import { runAIActions } from './aiActions';
 import { nearestBody, segsHittable } from './segments';
 import { LOS_CFG } from './los';
+import { concealmentActive, investigateLoss, perceiveTarget, PERCEPTION_CFG } from './perception';
 import { skillContextTags, instanceMods, socketSpec, type SkillDef, type SkillInstance } from './skills';
 import { TIER_CFG, tierFloorAt } from './tiers';
 import { doodadRuleOf } from './levelgen';
@@ -472,7 +473,7 @@ export function obedienceOf(actor: Actor): number {
 function foeNear(actor: Actor, world: World, at: Vec2, r: number): Actor | undefined {
   let best: Actor | undefined, bd = r;
   for (const e of world.enemiesOf(actor)) {
-    if (e.passive || e.sheet.get('invisible') > 0) continue;
+    if (e.passive || !perceiveTarget(actor, e, world, normalizeBrain(actor.brain ?? {}).base)) continue;
     const d = dist(e.pos, at);
     if (d < bd) { bd = d; best = e; }
   }
@@ -487,7 +488,7 @@ registerCommandKind({
   step(actor, world, cmd, dt) {
     const pinned = cmd.targetId !== undefined ? world.actorById(cmd.targetId) : undefined;
     if (pinned && !pinned.dead && !pinned.downed && !pinned.untargetable
-      && pinned.team !== actor.team && pinned.sheet.get('invisible') <= 0) {
+      && pinned.team !== actor.team && perceiveTarget(actor, pinned, world, normalizeBrain(actor.brain ?? {}).base)) {
       return pinned;
     }
     const foe = foeNear(actor, world, cmd.pos, cmd.radius ?? COMMAND_CFG.markRadius);
@@ -806,20 +807,20 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // ---- PERCEPTION → the threat chart → a target --------------------------
   let { target, d: best } = acquireTarget(actor, world, tuning);
   const encounterOrder = !ordered && !actor.aiCommand && !actor.standingOrder ? encounterOrderTarget(actor, world) : undefined;
-  if (encounterOrder) { target = encounterOrder; best = dist(actor.pos, target.pos); actor.aiTargetId = target.id; }
+  if (encounterOrder && perceiveTarget(actor, encounterOrder, world, tuning)) { target = encounterOrder; best = dist(actor.pos, target.pos); actor.aiTargetId = target.id; }
 
   // The order's quarry OVERRIDES the actor's own pick — the commander aims
   // the pack; perception still ran its bookkeeping, but the blade goes
-  // where it is pointed (an order is shared information: no sight required).
-  if (ordered) {
+  // where it is pointed once its own senses confirm the quarry.
+  if (ordered && perceiveTarget(actor, ordered, world, tuning)) {
     target = ordered;
     best = dist(actor.pos, ordered.pos);
     actor.aiTargetId = ordered.id;
   }
 
   // TAUNTED (the challenge fabric) — a LIVE taunt outranks the actor's own
-  // pick AND any standing order: attention is the whole point of the
-  // status, and no sight is required (the challenge was heard, not seen).
+  // pick AND any standing order once the taunter is perceived. A challenge
+  // does not make a hidden body's current position known.
   // The taunter must still be a legal mark (alive, hostile, targetable);
   // ignoreTaunt brains — the un-cheesable bosses — shrug the retarget
   // exactly as they shrug decoys (the off-target damage penalty still
@@ -828,7 +829,7 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
     const ts = actor.statuses.find(s => s.id === 'taunted' && s.casterId !== undefined);
     const taunter = ts ? world.actorById(ts.casterId!) : undefined;
     if (taunter && !taunter.dead && !taunter.untargetable
-      && world.hostileTo(actor, taunter)) {
+      && world.hostileTo(actor, taunter) && perceiveTarget(actor, taunter, world, tuning)) {
       target = taunter;
       best = dist(actor.pos, taunter.pos);
       actor.aiTargetId = taunter.id;
@@ -944,16 +945,19 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
         // THE INVESTIGATION CROSSES: a mark on another story is not "here"
         // at any flat distance — walk the crossing first (the goal carries
         // its story; the stair election reads it).
-        const there = dist(actor.pos, actor.alertFrom) <= 40
+        const there = dist(actor.pos, actor.alertFrom) <= PERCEPTION_CFG.searchArrive
           && (actor.alertTier === undefined || actor.alertTier === actor.tier);
         if (!there) {
           actor.facing = angleTo(actor.pos, actor.alertFrom);
           moveToward(actor, world, { x: actor.alertFrom.x, y: actor.alertFrom.y, tier: actor.alertTier }, dt);
         } else {
-          actor.alertFrom = null; // arrived — nothing here; back to the watch
+          // Search the remembered place until the evidence expires. The turn
+          // is visible in the body; no caption or omniscient pursuit needed.
+          actor.facing += (tuning.perception?.searchTurn ?? PERCEPTION_CFG.searchTurnRadSec) * dt;
         }
         return;
       }
+      if (world.time >= actor.alertUntil) actor.alertFrom = null;
       // PATROL: route-followers march their loop, camp to camp, until they
       // sight a foe (then they fall through to their brain and fight).
       if (actor.patrolRoute && actor.patrolRoute.length >= 2) {
@@ -1149,7 +1153,7 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
         !x.dead && x.squadId === actor.squadId && x.squadLeader);
       const lt = lead?.aiTargetId !== undefined ? world.actorById(lead.aiTargetId) : undefined;
       if (lt && !lt.dead && !lt.passive && lt.team !== actor.team
-        && lt.sheet.get('invisible') <= 0) {
+        && perceiveTarget(actor, lt, world, tuning)) {
         target = lt;
         best = segsHittable(target)
           ? dist(actor.pos, nearestBody(target, actor.pos).pos)
@@ -1710,12 +1714,10 @@ function acquireTarget(
   }
   const prefer = tuning.target?.prefer ?? 'nearest';
   const bias = tuning.target?.kindBias;
-  // WALLS BLIND (LOS_CFG.perception): a FRESH lock needs an actual sight
-  // line — stone between you and it, and you are not there. A HELD lock
-  // survives blindness for the chase-memory window (the hunter rounds the
-  // corner after you — pathing does the walking) before the thread snaps;
-  // relentless bonds never let go, and xray minds (tremor-sense) read
-  // through anything. Rays ride the world's memo so this stays event-rate.
+  // Every live combat lock needs sight. A lost line becomes a copied-place
+  // investigation; relentless extends reach, never grants tracking through
+  // cover. Only an authored xray sense bypasses the ray. The world's memo
+  // keeps ray work at event rate.
   const losGated = LOS_CFG.perception && per?.xray !== true;
 
   // THE RESCAN CADENCE (BEHAVIOR_CFG.retarget + TargetSpec.rescanSec): the
@@ -1748,26 +1750,16 @@ function acquireTarget(
         ? dist(actor.pos, nearestBody(e, actor.pos).pos)
         : dist(actor.pos, e.pos);
       const reach = senseReach(detect, e.sheet.get('detectability'),
-        (e.charges.get('stealth') ?? 0) > 0, alerted,
-        alerted || Math.abs(angleDiff(actor.facing, angleTo(actor.pos, e.pos))) < arcHalf,
+        concealmentActive(e, world.time), alerted,
+        Math.abs(angleDiff(actor.facing, angleTo(actor.pos, e.pos))) < arcHalf,
         rearMul);
       if (d <= reach) {
         const seen = !losGated || world.losCached(actor, e);
-        let ok = seen;
-        if (!seen) {
-          if (tuning.target?.relentless && actor.aggroed) ok = true;
-          else {
-            const holdFor = Math.max(per?.memory ?? 0, LOS_CFG.chaseMemory);
-            ok = world.time - actor.aiLosSeenAt <= holdFor;
-          }
-        }
-        if (ok) {
-          if (seen) {
-            actor.aiLosSeenAt = world.time;
-            if (actor.aiLastSeen) { actor.aiLastSeen.x = e.pos.x; actor.aiLastSeen.y = e.pos.y; }
-            else actor.aiLastSeen = vec(e.pos.x, e.pos.y);
-            actor.aiLastSeenTier = e.tier;
-          }
+        if (seen) {
+          actor.aiLosSeenAt = world.time;
+          if (actor.aiLastSeen) { actor.aiLastSeen.x = e.pos.x; actor.aiLastSeen.y = e.pos.y; }
+          else actor.aiLastSeen = vec(e.pos.x, e.pos.y);
+          actor.aiLastSeenTier = e.tier;
           if (tuning.target?.relentless) actor.aggroed = true;
           actor.lastProgress = undefined;
           return { target: e, d };
@@ -1811,19 +1803,11 @@ function acquireTarget(
       ? dist(actor.pos, nearestBody(e, actor.pos).pos)
       : dist(actor.pos, e.pos);
     const reach = senseReach(detect, e.sheet.get('detectability'),
-      (e.charges.get('stealth') ?? 0) > 0, alerted,
-      alerted || Math.abs(angleDiff(actor.facing, angleTo(actor.pos, e.pos))) < arcHalf,
+      concealmentActive(e, world.time), alerted,
+      Math.abs(angleDiff(actor.facing, angleTo(actor.pos, e.pos))) < arcHalf,
       rearMul);
     if (d > reach) continue;
-    if (losGated) {
-      if (e.id !== actor.aiTargetId) {
-        if (!world.losCached(actor, e)) continue; // unseen strangers don't exist
-      } else if (!world.losCached(actor, e)
-        && !(tuning.target?.relentless && actor.aggroed)) {
-        const holdFor = Math.max(per?.memory ?? 0, LOS_CFG.chaseMemory);
-        if (world.time - actor.aiLosSeenAt > holdFor) continue; // the thread snaps
-      }
-    }
+    if (losGated && !world.losCached(actor, e)) continue;
     if (e.taunt && d < tauntBest) { tauntBest = d; tauntTarget = e; }
     let score = scoreTarget(prefer, actor, e, d);
     if (bias) score *= bias[e.kind ?? 'monster'] ?? 1;
@@ -1859,10 +1843,9 @@ function acquireTarget(
     // walk just used — the proximity taper reads the honest fraction.
     // (strict <: a collapsed sleeper arc of 0 admits nothing — the exact
     //  boundary ray is measure-zero for every honest cone.)
-    const inCone = alerted
-      || Math.abs(angleDiff(actor.facing, angleTo(actor.pos, target.pos))) < arcHalf;
+    const inCone = Math.abs(angleDiff(actor.facing, angleTo(actor.pos, target.pos))) < arcHalf;
     const reach = senseReach(detect, target.sheet.get('detectability'),
-      (target.charges.get('stealth') ?? 0) > 0, alerted, inCone, rearMul);
+      concealmentActive(target, world.time), alerted, inCone, rearMul);
     // Sleepers hear FOOTFALLS: a slow creep feeds at stillMul.
     const sl = w.sleep;
     const asleep = !!sl && watchV < WATCH_CFG.rungs.stir;
@@ -1942,7 +1925,7 @@ function acquireTarget(
           if (a.dead || a === actor || a.team !== actor.team || a.passive || a.construct) continue;
           if (dist(a.pos, actor.pos) > shout) continue;
           a.alertUntil = Math.max(a.alertUntil, world.time + 5 * alertScale(a));
-          if (!a.alertFrom) { a.alertFrom = vec(target.pos.x, target.pos.y); a.alertTier = target.tier; }
+          if (a.aiTargetId === undefined) { a.alertFrom = vec(target.pos.x, target.pos.y); a.alertTier = target.tier; }
           // THE WATCH FABRIC: a warned watcher's ladder JUMPS to the search
           // rung (capped — a shout names a place, never a prey; its own
           // senses must close the lock) and its climb runs alert-fast.
@@ -1956,6 +1939,7 @@ function acquireTarget(
       }
     }
     actor.aiTargetId = target.id;
+    actor.alertFrom = null;
     // The last-SEEN ledger stays honest: position and clock refresh only
     // while the eye actually reaches (a blind chase stalks a stale spot).
     if (!losGated || world.losCached(actor, target)) {
@@ -1966,13 +1950,7 @@ function acquireTarget(
   } else if (actor.aiTargetId !== undefined) {
     // LOST the lock: with perception memory, stalk the last-seen position
     // (rides the alert-investigate walk); without, shrug back to the watch.
-    actor.aiTargetId = undefined;
-    const memory = tuning.perception?.memory ?? 0;
-    if (memory > 0 && actor.aiLastSeen && !actor.isMinion()) {
-      actor.alertUntil = Math.max(actor.alertUntil, world.time + memory);
-      actor.alertFrom = vec(actor.aiLastSeen.x, actor.aiLastSeen.y);
-      actor.alertTier = actor.aiLastSeenTier;
-    }
+    investigateLoss(actor, world, tuning);
   }
   // Cadence bookkeeping for the fast path above: mirror the FINAL lock as a
   // direct reference (spares the O(actors) id lookup) and arm the next-walk

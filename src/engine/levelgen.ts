@@ -1099,6 +1099,9 @@ export interface DoodadRule {
    *  blocksShot, so every existing kind keeps today's behavior; a WINDOW frame
    *  sets blocksMove true + blocksSight false (see through, walk into). */
   blocksSight?: boolean;
+  /** Optical density of walk-through foliage. Eyes cross a finite depth;
+   * feet and shots are unaffected. This grants no personal concealment. */
+  sightCover?: number;
   /** CASTS A DRAWN VISION SHADOW (render/vis/sightVeil.ts): the sight veil
    *  throws positional occlusion dark behind this kind from the local hero's
    *  eye. Defaults to blocksShot && blocksSight — a body that stops both
@@ -1833,15 +1836,15 @@ function sweepForbiddenGround(ctx: GenCtx): void {
 }
 
 /** The PHYSICAL radius of a doodad — the trunk, not the crown. Movement,
- *  projectile and spawn-clearance checks use this; sight/occlusion/shade
- *  keep the full visual radius (the canopy is real to eyes, not to feet). */
+ *  projectile and spawn-clearance checks use this; sight under an overhead
+ *  veil uses the same body. Visual occlusion and shade retain the crown. */
 export function bodyRadiusOf(d: Doodad): number {
   return d.radius * (doodadRule(d.kind).bodyScale ?? 1);
 }
 
 /** Which body a consumer is asking about: feet ('move'), effects ('shot'),
  *  or eyes ('sight'). Mirrors the classic trunk/crown split — move/shot
- *  resolve at bodyRadiusOf, sight at the full visual radius. */
+ *  resolve at bodyRadiusOf; sight uses that trunk for overhead veils too. */
 export type SurfaceChannel = 'move' | 'shot' | 'sight';
 
 /** THE hit-surface resolver — every collision consumer (clampPos, castRay,
@@ -1858,7 +1861,8 @@ export type SurfaceChannel = 'move' | 'shot' | 'sight';
 export function hitSurfaceOf(d: Doodad, channel: SurfaceChannel): HitShape {
   if (d.hitbox) return d.hitbox;
   const rule = doodadRule(d.kind);
-  const r = channel === 'sight' ? d.radius : bodyRadiusOf(d);
+  // Canopies are overhead art; their solid body blocks eyes.
+  const r = channel === 'sight' && !rule.veil ? d.radius : bodyRadiusOf(d);
   if (rule.rockForm) return rockSurfaceOf(d, r, rule.rockForm);
   const sf = rule.surface;
   if (sf) {
@@ -2490,7 +2494,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   stump:     { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 22 },
   log:       { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 26, surface: { hw: 1.7, hh: 0.62 } },
   flowers:   { overlap: 'ground', fuel: 'kindling' },
-  reeds:     { overlap: 'ground', walkOnly: true, fuel: 'kindling' },
+  reeds:     { overlap: 'ground', walkOnly: true, fuel: 'kindling', sightCover: 1 },
   cactus:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 30, forbidOn: ['water', 'chasm'] },
   web:       { overlap: 'ground', walkOnly: true },
   geyser:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 48, forbidOn: ['water', 'chasm'] },
@@ -2517,7 +2521,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   /** The Field's boundary fringe: pure visual, deliberately NOT walk-gated —
    *  it straddles the tallgrass rim to round the raster's right angles off. */
   hedgerow:  { overlap: 'ground', fuel: 'kindling' },
-  brush:     { overlap: 'ground', spin: true, fuel: 'kindling' },
+  brush:     { overlap: 'ground', spin: true, fuel: 'kindling', sightCover: 1 },
   // A lit fire WARMS (the windchill lane's mercy): any camp's ring of light
   // is a warm island on the cold slope — friend's or foe's.
   campfire:  { overlap: 'ground', warms: true },
@@ -2639,7 +2643,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
     rockForm: { spire: true } }, // spires always roll MONO — one snug honest column
   // Flora clarity: a berry bush is walkable cover exactly like brush; ferns
   // are pure understory decoration.
-  berry_bush: { overlap: 'ground', spin: true, fuel: 'kindling' },
+  berry_bush: { overlap: 'ground', spin: true, fuel: 'kindling', sightCover: 1 },
   fern:       { overlap: 'ground', walkOnly: true, spin: true, fuel: 'kindling' },
   // The fungal kit: shelves are low solids (step behind, shoot over);
   // toadstools are walkable fairy-ring decoration.

@@ -74,6 +74,9 @@ export const SENSE_CFG = {
   rearMul: 0.35,
   /** How hard stealth charges shroud their bearer (× detection reach). */
   stealthMul: 0.35,
+  /** A concealed body can reach striking distance behind an observer.
+   * Alert raises reach, but never removes this positional opening. */
+  concealedRearMul: 0.1,
   /** Alerted minds watch all around at this × reach (no cone penalty). */
   alertMul: 1.5,
 } as const;
@@ -314,10 +317,13 @@ export function senseReach(
   detect: number, detectability: number, stealthed: boolean,
   alerted: boolean, inCone: boolean, rearMul: number,
 ): number {
+  if (detect <= 0 || detectability <= 0) return 0;
   let reach = detect * detectability;
   if (stealthed) reach *= SENSE_CFG.stealthMul;
   if (alerted) reach *= SENSE_CFG.alertMul;
-  else if (!inCone) reach *= rearMul;
+  if (!inCone && (!alerted || stealthed)) {
+    reach *= stealthed ? Math.min(rearMul, SENSE_CFG.concealedRearMul) : rearMul;
+  }
   return reach;
 }
 

@@ -753,10 +753,10 @@ registerComposition({
 
 registerDoodadRule('veld_grass', { overlap: 'ground', fuel: 'kindling' });
 registerDoodadRule('spear_grass', {
-  overlap: 'inert', blocksMove: false, blocksShot: false, blocksSight: true,
+  overlap: 'inert', blocksMove: false, blocksShot: false, sightCover: 1.2,
   spacing: 20, walkOnly: true, spin: true,
   occlude: { pad: 10, alpha: 0.32 },
-  veil: { group: 'veld', standStatus: 'canopied' },
+  veil: { group: 'veld', standStatus: '' },
   fuel: 'kindling',
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp', 'ice'],
 });

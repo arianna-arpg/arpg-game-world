@@ -87,9 +87,9 @@ const KIT = ['veld_grass', 'spear_grass', 'camelthorn', 'clay_pan', 'termite_spi
   // its own veil group, so a wild stand never fuses with a farm's wheat.
   const sg = doodadRuleOf('spear_grass');
   check('kit: spear_grass is the crop-veil contract (move+shot free, sight cut)',
-    sg.blocksMove === false && sg.blocksShot === false && sg.blocksSight === true);
+    sg.blocksMove === false && sg.blocksShot === false && (sg.sightCover ?? 0) > 0 && !sg.blocksSight);
   check("kit: spear_grass veils in its OWN group ('veld' — never the farm's 'crop')",
-    sg.veil?.group === 'veld' && sg.veil?.standStatus === 'canopied');
+    sg.veil?.group === 'veld' && !sg.veil?.standStatus);
   check('kit: the grasses burn (fuel kindling — the wildfire law reaches the veld)',
     doodadRuleOf('veld_grass').fuel === 'kindling' && sg.fuel === 'kindling');
   const ts = doodadRuleOf('termite_spire');

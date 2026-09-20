@@ -35,37 +35,36 @@ registerDormantTag('freehold_watch', { coolDownSecs: 7, disengageDist: 340 });
 // --- CROPS (the vision-obscuring calm) -----------------------------------------
 // The Grim-Dawn field read, composed from three independent levers:
 //   blocksMove:false + blocksShot:false — you and your arrows pass freely;
-//   blocksSight:true                    — AI perception rays cut at the crown;
-//   veil:{...}                          — the patch conceals (aim assist drops
-//                                         foes inside, `canopied` detectability
-//                                         rides anyone standing in the crop).
+//   sightCover:1.2                      — eyes cross a finite depth of leaves;
+//   veil:{...}                          — visual canopy and aim-assist visibility.
+// No standing stealth status: nearby foes can find each other in the crop.
 // Overlapping crowns union-find into ONE field patch (group 'crop' so a
 // hedge-line oak never fuses the wheat to the woods). The visual obscuring is
 // the canopy over-draw; sightShadow stays off (a field is not a wall).
 
 registerDoodadRule('wheat', {
-  overlap: 'inert', blocksMove: false, blocksShot: false, blocksSight: true,
+  overlap: 'inert', blocksMove: false, blocksShot: false, sightCover: 1.2,
   spacing: 20, walkOnly: true, spin: true,
   occlude: { pad: 10, alpha: 0.32 },
-  veil: { group: 'crop', standStatus: 'canopied' },
+  veil: { group: 'crop', standStatus: '' },
   fuel: 'kindling',
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp', 'ice'],
 });
 registerDoodadRule('corn_stand', {
-  overlap: 'inert', blocksMove: false, blocksShot: false, blocksSight: true,
+  overlap: 'inert', blocksMove: false, blocksShot: false, sightCover: 1.2,
   spacing: 24, walkOnly: true, spin: true,
   occlude: { pad: 12, alpha: 0.3 },
-  veil: { group: 'crop', standStatus: 'canopied' },
+  veil: { group: 'crop', standStatus: '' },
   fuel: 'kindling',
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp', 'ice'],
 });
 // BARLEY: wheat's pale cousin — the same blind-field contract (the crop veil
 // law), a different band of the patchwork's palette.
 registerDoodadRule('barley', {
-  overlap: 'inert', blocksMove: false, blocksShot: false, blocksSight: true,
+  overlap: 'inert', blocksMove: false, blocksShot: false, sightCover: 1.2,
   spacing: 20, walkOnly: true, spin: true,
   occlude: { pad: 10, alpha: 0.32 },
-  veil: { group: 'crop', standStatus: 'canopied' },
+  veil: { group: 'crop', standStatus: '' },
   fuel: 'kindling',
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp', 'ice'],
 });

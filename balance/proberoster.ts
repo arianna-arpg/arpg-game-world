@@ -116,6 +116,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_pactsteelstartertrees.ts', status: 'green', tier: 'fast', why: 'Summoner/Juggernaut/Pyromancer opening trees: all 72 routes, passive identity, composable branches, Fury spenders, companion AI, moving and carried fields, expiry bursts, saves and network rebuilds' },
   { probe: 'probe_wardenbalance.ts', status: 'green', tier: 'fast', why: 'AI bash warning timing, committed facing, shield-pressure and interruption counterplay, player exemption, Warden damage and doctrine level gates' },
   { probe: 'probe_groundlookup.ts', status: 'green', tier: 'fast', why: 'Direct ground membership preserves live registry behavior without per-doodad region enumeration' },
+  { probe: 'probe_stealth.ts', status: 'green', tier: 'fast', why: 'Stealth approach, exposure, finite investigation, foliage sight depth and co-op concealment' },
   { probe: 'probe_canopypresence.ts', status: 'green', tier: 'fast', why: 'Local canopy reveal, smooth distance falloff, disconnected proximity, composite isolation and aim-assist concealment' },
   { probe: 'probe_projectilecull.ts', status: 'green', tier: 'fast', why: 'Projectile painter culls offscreen work while preserving edge effects, scales, large forms, tuning and tethers' },
   { probe: 'probe_handling.ts', status: 'green', tier: 'fast', why: 'Morphology-derived turning, stat and seat overrides, frame-rate bounds, cast/guard/channel pivot integrity, body-aimed attacks and post-cast recovery' },

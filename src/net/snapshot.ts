@@ -123,6 +123,8 @@ export interface ActorW {
   aims?: false;                // Actor.aims=false (no aim tick) — omit when it aims
   wn?: number;                 // waning presence pulse, 0..1 (omit when 0)
   inv?: number;                // sheet invisible (omit when 0)
+  concealment?: number;
+  concealmentExposedUntil?: number;
   det?: number;                // sheet detectability (omit when 1)
   seat?: string;               // player-seat id (own-hero + party identity)
   adorn?: ActorAdorn;
@@ -649,6 +651,8 @@ function actorToW(a: Actor, world: World): ActorW {
     ...a.movementTether, point: { ...a.movementTether.point }, safe: { ...a.movementTether.safe },
   };
   if (det !== 1) w.det = det;
+  if (a.sheet.get('concealment') > 0) w.concealment = a.sheet.get('concealment');
+  if (a.concealmentExposedUntil > world.time) w.concealmentExposedUntil = a.concealmentExposedUntil;
   if (!a.aims) w.aims = false;
   // THE THRONG's husk marker rides the wire so a co-op client's renderer
   // sight-gates against ITS OWN bar (engine/throng.ts).
@@ -1340,6 +1344,8 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     }
     a.sheet.setBase('invisible', aw.inv ?? 0);
     a.sheet.setBase('detectability', aw.det ?? 1);
+    a.sheet.setBase('concealment', aw.concealment ?? 0);
+    a.concealmentExposedUntil = aw.concealmentExposedUntil ?? 0;
     // Reconstruct the FX sub-objects the renderer draws (stand-in nested objects
     // so renderer.ts stays untouched). Absent → cleared → that FX simply skips.
     a.statuses.length = 0;

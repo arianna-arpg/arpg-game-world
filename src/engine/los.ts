@@ -4,9 +4,9 @@
 // Two CHANNELS ride one ray, resolved entirely from data the terrain already
 // declares (nothing here hardcodes a kind):
 //
-//   'sight' — what EYES cross. Doodads gate via blocksSightOf (full crown
-//             radius: the canopy is real to eyes) and grid cells via
-//             RegionKind.blocksSight. This is the AI-perception channel.
+//   'sight' — what EYES cross. Doodads gate via blocksSightOf (trunks under
+//             overhead veils), sightCover supplies finite optical depth,
+//             and grid cells use RegionKind.blocksSight. This is the AI-perception channel.
 //   'shot'  — what EFFECTS cross: projectiles, rays, placements, chain hops.
 //             Doodads gate via blocksProjectiles at bodyRadiusOf (the TRUNK —
 //             arrows fly under leaves and stop on the bole) and grid cells via
@@ -36,7 +36,8 @@
 // ---------------------------------------------------------------------------
 
 import type { Doodad } from './levelgen';
-import { blocksProjectiles, blocksSightOf, hitSurfaceOf } from './levelgen';
+import { sightCoverClip, type SightCoverSpan } from './sightCover';
+import { blocksProjectiles, blocksSightOf, doodadRuleOf, hitSurfaceOf } from './levelgen';
 import { rayShapeT } from './shapes';
 import { regionKind } from '../world/regions';
 import { GridWalkField } from '../world/gridWalk';
@@ -145,9 +146,8 @@ export const LOS_CFG = {
   /** Master switch: AI perception is LoS-gated (PerceptionSpec.xray opts a
    *  monster out — tremor-sense reads through stone). */
   perception: true,
-  /** Seconds a HELD lock survives without sight before the thread snaps —
-   *  the hunter rounds the corner after you instead of shrugging the moment
-   *  you break the line. PerceptionSpec.memory extends it per-monster. */
+  /** Default seconds investigating a LOST lock's copied last seen position.
+   * PerceptionSpec.memory overrides it. No blind live-target combat. */
   chaseMemory: 5,
   /** Perception-ray memo TTL (seconds): acquireTarget probes candidates
    *  every tick; the memo keeps the rays at event rate. */
@@ -291,6 +291,8 @@ export function castRay(
   let bestT = Infinity;
   let kind: RayHit['kind'] = 'doodad';
   const band = LOS_CFG.elev.doodadBand;
+  let cover: SightCoverSpan[] | undefined;
+  let covered: Set<Doodad> | undefined;
 
   // --- doodad surfaces (spatial-index buckets sampled along the segment) ----
   // Geometry rides the hit-surface fabric (engine/shapes.ts): discs keep the
@@ -310,7 +312,30 @@ export function castRay(
       bestT = ts; kind = 'medium';
     }
     for (const o of env.doodadsAt(from.x + dx * ts, from.y + dy * ts)) {
-      if (channel === 'shot' ? !blocksProjectiles(o) : !blocksSightOf(o)) continue;
+      const density = channel === 'sight' ? doodadRuleOf(o.kind).sightCover : undefined;
+      if (density && density > 0 && !o.gone && !o.felled && !covered?.has(o)) {
+        (covered ??= new Set()).add(o);
+        // Exact disc chord, clipped to the ray and to the foliage's story.
+        const ux = dx / len, uy = dy / len;
+        const ox = o.pos.x - from.x, oy = o.pos.y - from.y;
+        const along = ox * ux + oy * uy;
+        const across2 = Math.max(0, ox * ox + oy * oy - along * along);
+        if (across2 < o.radius * o.radius) {
+          const half = Math.sqrt(o.radius * o.radius - across2);
+          let start = Math.max(0, along - half), end = Math.min(len, along + half);
+          if (elev) {
+            const floor = o.tier ?? 0, slope = (elev.to - elev.from) / len;
+            if (Math.abs(slope) < 1e-9) {
+              if (elev.from < floor || elev.from >= floor + band) end = start;
+            } else {
+              const a = (floor - elev.from) / slope, b = (floor + band - elev.from) / slope;
+              start = Math.max(start, Math.min(a, b)); end = Math.min(end, Math.max(a, b));
+            }
+          }
+          if (end > start) (cover ??= []).push({ from: start, to: end, density });
+        }
+      }
+      if (o.gone || (channel === 'shot' ? !blocksProjectiles(o) : !blocksSightOf(o))) continue;
       const t = rayShapeT(hitSurfaceOf(o, channel), o.pos.x, o.pos.y, from.x, from.y, dx, dy);
       if (t === null || t >= bestT) continue;
       if (elev) {
@@ -322,6 +347,11 @@ export function castRay(
       }
       bestT = t; kind = 'doodad';
     }
+  }
+
+  if (cover) {
+    const t = sightCoverClip(cover) / len;
+    if (t <= 1 && t < bestT) { bestT = t; kind = 'doodad'; }
   }
 
   // --- grid cells (the same traversal the visual visibility query uses) ---

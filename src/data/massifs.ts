@@ -865,10 +865,10 @@ registerStamp('canopy_shaft', stampSingle('canopy_shaft', [18, 24]));
 // here, ghost-pale for want of sun. The crop law's walk-through veil cover
 // in the dark's own colors (wildgrass_blade's exact contract).
 registerDoodadRule('pale_blade', {
-  overlap: 'inert', blocksMove: false, blocksShot: false, blocksSight: true,
+  overlap: 'inert', blocksMove: false, blocksShot: false, sightCover: 1.2,
   spacing: 20, walkOnly: true, spin: true,
   occlude: { pad: 10, alpha: 0.32 },
-  veil: { group: 'wildgrass', standStatus: 'canopied' },
+  veil: { group: 'wildgrass', standStatus: '' },
   fuel: 'kindling',
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp', 'ice'],
 });

@@ -2985,7 +2985,8 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'stealth', name: 'Stealth',
     description: 'Slip into the dark and bank 3 STEALTH charges (cap 5): enemies barely sense'
       + ' you, their backs are open to you, and your first blow from hiding lands as an AMBUSH.'
-      + ' Each offensive act spends a charge; with charges left you fade back in, and the'
+      + ' Each offensive act spends a charge and briefly exposes you; remaining charges'
+      + ' conceal you again after the exposure passes, and the'
       + ' struck are ALERTED either way. The cast also grants 15% increased movement speed for'
       + ' 3 seconds.',
     tags: ['movement', 'buff', 'instant'], color: '#4a5a78',
@@ -3006,13 +3007,14 @@ export const SKILLS: Record<string, SkillDef> = {
     tree: STARTER_SKILL_TREES.cloak,
     id: 'cloak', name: 'Cloak',
     description: 'Wrap yourself in obscuring shadow for 8 seconds: enemies must come 65% closer'
-      + ' to notice you, and you move 10% faster.',
+      + ' to notice you, and you move 10% faster. Approach from behind to avoid their gaze.'
+      + ' Attacking briefly exposes you; lose their sight to leave them searching your last known position.',
     tags: ['movement', 'buff', 'duration'], color: '#587898',
     manaCost: 12, cooldown: 12, useTime: 0.4,
     delivery: { type: 'self' },
     effects: [{
       type: 'buff', id: 'cloak', duration: 8,
-      mods: [mod('detectability', 'more', -0.65), mod('moveSpeed', 'increased', 0.1)],
+      mods: [mod('concealment', 'flat', 1), mod('moveSpeed', 'increased', 0.1)],
     }],
     requirements: { dexterity: 14 },
     leveling: { perLevel: [mod('effectDuration', 'increased', 0.1)] },

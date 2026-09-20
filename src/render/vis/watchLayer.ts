@@ -31,6 +31,7 @@
 // boundary against live acquisition on both sides of walls.
 // ---------------------------------------------------------------------------
 
+import { concealmentActive } from '../../engine/perception';
 import {
   senseReach, WATCH_CFG, watchFanVisible, watchRungOf, watchValueOf,
   type TrailPoint,
@@ -59,7 +60,7 @@ export function watchFanRadius(
   viewerDetectability: number, viewerStealthed: boolean,
 ): number {
   // (strict <, matching the scan: a sleeper's collapsed arc admits nothing.)
-  const inCone = a.senseAlerted || Math.abs(rel) < a.senseArcHalf;
+  const inCone = Math.abs(rel) < a.senseArcHalf;
   const reach = senseReach(a.senseDetect, viewerDetectability, viewerStealthed,
     a.senseAlerted, inCone, a.senseRearMul);
   if (reach <= 1) return 0;
@@ -78,7 +79,7 @@ export function drawWatchSense(
   const cfg = VIS_CFG.watch;
   if (!cfg.enabled) return;
   const det = viewer.sheet.get('detectability');
-  const sneaking = (viewer.charges.get('stealth') ?? 0) > 0;
+  const sneaking = concealmentActive(viewer, world.time);
   const flood = WATCH_FAN_DEV.all;
   let drawn = 0;
   for (const a of world.actors) {
@@ -100,7 +101,7 @@ export function drawWatchSense(
     const n = Math.max(12, cfg.rays);
     for (let k = 0; k < n; k++) RELS.push(-Math.PI + (Math.PI * 2 * k) / n);
     const ah = a.senseArcHalf;
-    if (!a.senseAlerted && ah > 0.01 && ah < Math.PI - 0.01) {
+    if ((!a.senseAlerted || sneaking) && ah > 0.01 && ah < Math.PI - 0.01) {
       RELS.push(-ah - 0.001, -ah + 0.001, ah - 0.001, ah + 0.001);
       RELS.sort((x, y) => x - y);
     }

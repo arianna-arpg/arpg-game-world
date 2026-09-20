@@ -1,3 +1,4 @@
+import { concealmentActive, isConcealed, PERCEPTION_CFG } from './perception';
 import { CompanionGrants, COMPANION_GRANT_PREFIX, companionGrantStat, summonReservationUnit } from './companionGrants';
 import { TitanRuntime } from './titans';
 import { resolveMinionInheritance, applyMinionPlyBonus, minionAreaAvoidanceOf } from './minionInheritance';
@@ -750,7 +751,7 @@ const CONTAGION_GRAFT_KEY = 'contagion';
 
 /** Is the actor operating unseen — stealth charges banked or invisible? */
 function isStealthed(a: Actor): boolean {
-  return (a.charges.get(STEALTH_CHARGE) ?? 0) > 0 || a.sheet.get('invisible') > 0;
+  return isConcealed(a) || a.sheet.get('invisible') > 0;
 }
 
 /** THE BOSS BAR CONTRACT — who owns the top-center health bar, one policy in
@@ -4102,7 +4103,7 @@ export class World {
     due: number; caster: Actor; inst: SkillInstance;
   } & (
     | { kind: 'hit'; targetId: number; mult: number; depth: number;
-        flat?: Partial<Record<DamageType, number>>; force: boolean; hitEffects?: SkillEffect[] }
+        flat?: Partial<Record<DamageType, number>>; force: boolean; hitEffects?: SkillEffect[]; hitOrigin?: Vec2; hitTier?: number }
     | { kind: 'buff'; fx: BuffEffect; durScale: number; mult: number }
   ))[] = [];
 
@@ -37966,6 +37967,7 @@ export class World {
       ?? (!!def.baseDamage || def.effects.some(fx =>
         fx.type === 'damage' || fx.type === 'knockback' || fx.type === 'pull'));
     if (!offensive) return;
+    caster.concealmentExposedUntil = this.time + PERCEPTION_CFG.exposureSec;
     const have = caster.charges.get(STEALTH_CHARGE) ?? 0;
     if (have > 0) caster.spendCharge(STEALTH_CHARGE, 1);
     for (const [id, b] of [...caster.buffs]) {
@@ -40671,7 +40673,7 @@ export class World {
       if (!nb) continue;
       if (!this.zoneSees(z, v)) continue;
       noteBodyHit(v, nb.seg);
-      this.resolveHit(z.caster, z.inst, v, z.dmgMult * damageScale, z.depth, z.flatBonus, true);
+      this.resolveHit(z.caster, z.inst, v, z.dmgMult * damageScale, z.depth, z.flatBonus, true, false, undefined, z.pos, z.tier);
     }
     // THE MALLET: the segment's detonation is a fresh blast at the piece
     // (no sweep ledger, the same wall gates its victims saw).
@@ -42429,6 +42431,7 @@ export class World {
     forceDamage = false,
     fromFuse = false,
     hitEffects?: SkillEffect[],
+    hitOrigin?: Vec2, hitTier?: number,
   ): void {
     depth = Math.max(depth, inst.procChainDepth ?? 0);
     const def = inst.def;
@@ -42447,6 +42450,7 @@ export class World {
             * caster.sheet.get('fuseDelay', fTags, instanceMods(inst)),
           caster, inst, targetId: target.id,
           mult: dmgMult, depth, flat: flatBonus, force: forceDamage, hitEffects,
+          hitOrigin: { ...(hitOrigin ?? caster.pos) }, hitTier: hitTier ?? caster.tier,
         });
         this.text(vec(target.pos.x, target.pos.y - target.radius - 8),
           fuse.tell ?? '…', def.color, 11);
@@ -42518,7 +42522,8 @@ export class World {
     // anyone, investable for the committed; backstabMult stacks on top for
     // the positional art). Alert is raised AFTER the hit, so the first
     // blow from the dark is the rewarded one.
-    if (isStealthed(caster) && target.team !== caster.team && this.time >= target.alertUntil) {
+    if ((concealmentActive(caster, this.time) || caster.sheet.get('invisible') > 0)
+      && target.aiTargetId !== caster.id && target.team !== caster.team && this.time >= target.alertUntil) {
       const amb = caster.sheet.get('ambushBonus', skillContextTags(def), extra);
       if (amb > 0) {
         dmgMult *= 1 + amb;
@@ -42603,7 +42608,7 @@ export class World {
     if (hasDamage) {
       if (target === this.player) this.bindCombatDeeds();
       const deedLifeBefore = target.life;
-      const deedHidden = caster === this.player && (caster.sheet.get('invisible') > 0 || caster.sheet.get('detectability') < 1);
+      const deedHidden = caster === this.player && (caster.sheet.get('invisible') > 0 || concealmentActive(caster, this.time) || caster.sheet.get('detectability') < 1);
       const deedPanicked = caster === this.player && target.isPanicked();
       this.assaults.packet(caster, packet, depth);
       const result = applyHit(caster, target, packet);
@@ -42772,6 +42777,15 @@ export class World {
       // acquireTarget.
       target.aiHitAt = this.time;
       target.aiHitById = caster.id;
+      // Pain gives every mind a place to investigate, even without a watch
+      // ladder. It never assigns the attacker as a live combat target.
+      const evidence = hitOrigin ?? (depth > 0 ? target.pos : caster.pos);
+      if (this.hostileTo(target, caster)) {
+        target.alertUntil = Math.max(target.alertUntil,
+          this.time + PERCEPTION_CFG.woundSearchSec * alertScale(target));
+        target.alertFrom = vec(evidence.x, evidence.y);
+        target.alertTier = hitTier ?? caster.tier;
+      }
       // Caster-side twin: the last HOSTILE body this blow's author struck —
       // a defensive companion answers "whatever the keeper wounds" off it
       // (engine/companionStances.ts). Friendly-fire seams never stamp it.
@@ -42871,12 +42885,12 @@ export class World {
         // (perception.alertMul — a dull shambler forgets the wound the
         // moment you vanish; a sentry seethes for the full six).
         target.alertUntil = Math.max(target.alertUntil, this.time + 6 * alertScale(target));
-        target.alertFrom = vec(caster.pos.x, caster.pos.y); target.alertTier = caster.tier;
+        target.alertFrom = vec(evidence.x, evidence.y); target.alertTier = hitTier ?? caster.tier;
         for (const a of this.actors) {
           if (a.dead || a.team !== target.team || a === target) continue;
           if (dist(a.pos, target.pos) > 320) continue;
           a.alertUntil = Math.max(a.alertUntil, this.time + 4 * alertScale(a));
-          if (!a.alertFrom) { a.alertFrom = vec(caster.pos.x, caster.pos.y); a.alertTier = caster.tier; }
+          if (!a.alertFrom) { a.alertFrom = vec(evidence.x, evidence.y); a.alertTier = hitTier ?? caster.tier; }
         }
       }
       // THE WATCH FABRIC (engine/watch.ts): pain is a FULL stimulus — a
@@ -42888,10 +42902,10 @@ export class World {
       if (target.watch && target.team !== caster.team && !target.aggroed
         && target !== caster) {
         target.alertUntil = Math.max(target.alertUntil, this.time + 5 * alertScale(target));
-        target.alertFrom = vec(caster.pos.x, caster.pos.y); target.alertTier = caster.tier;
+        target.alertFrom = vec(evidence.x, evidence.y); target.alertTier = hitTier ?? caster.tier;
         feedWatch(target, target.watch, this.time, 1, WATCH_CFG.rungs.search);
-        if (target.watchAt) { target.watchAt.x = caster.pos.x; target.watchAt.y = caster.pos.y; }
-        else target.watchAt = vec(caster.pos.x, caster.pos.y);
+        if (target.watchAt) { target.watchAt.x = evidence.x; target.watchAt.y = evidence.y; }
+        else target.watchAt = vec(evidence.x, evidence.y);
         target.watchRung = Math.max(target.watchRung,
           watchRungOf(watchValueOf(target, target.watch, this.time)));
       }
@@ -56209,7 +56223,7 @@ export class World {
           color: pf.inst.def.color, life: 0.3, maxLife: 0.3,
         });
         this.resolveHit(pf.caster, pf.inst, target,
-          pf.mult * fPow, pf.depth, pf.flat, pf.force, true, pf.hitEffects);
+          pf.mult * fPow, pf.depth, pf.flat, pf.force, true, pf.hitEffects, pf.hitOrigin, pf.hitTier);
       } else {
         this.flashes.push({
           pos: vec(pf.caster.pos.x, pf.caster.pos.y), radius: pf.caster.radius + 12,
@@ -57564,7 +57578,7 @@ export class World {
         ? !inAoe(p.pos, radius, bShape, p.dir, e.pos, e.radius)
         : dist(p.pos, e.pos) - e.radius > radius) continue;
       if (p.parryDamage) this.resolveParryDamage(p.caster, e, p.parryDamage, scale, p.pos);
-      else this.resolveHit(p.caster, p.inst, e, scale * p.mult, 1);
+      else this.resolveHit(p.caster, p.inst, e, scale * p.mult, 1, undefined, false, false, undefined, p.origin, p.tier);
     }
     this.flashes.push({
       pos: vec(p.pos.x, p.pos.y), radius, color: p.inst.def.color,
@@ -57951,7 +57965,7 @@ export class World {
           for (const e of this.enemiesOf(p.caster)) {
             if (e.id === p.lastHitId) continue;
             if (dist(p.pos, e.pos) - e.radius > radius) continue;
-            this.resolveHit(p.caster, p.inst, e, (ts.blast.damageScale ?? 0.35) * p.mult, 1, p.flat);
+            this.resolveHit(p.caster, p.inst, e, (ts.blast.damageScale ?? 0.35) * p.mult, 1, p.flat, false, false, undefined, p.origin, p.tier);
           }
           this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius, color: p.color, life: 0.22, maxLife: 0.22 });
           // THE MALLET: each path-blast is a fresh strike surface — on the
@@ -58129,7 +58143,7 @@ export class World {
               }
             }
             noteBodyHit(enemy, bodyTouch.seg);
-            this.resolveHit(p.caster, p.inst, enemy, p.mult, 0, hitFlat);
+            this.resolveHit(p.caster, p.inst, enemy, p.mult, 0, hitFlat, false, false, undefined, p.origin, p.tier);
             // THE HIT VOICE (engine/bodyVoices.ts): the impact speaks the blow's type — fire flares, cold crackles, lightning sparks, chaos spatters, a shaft flecks the body.
             this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: 14, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(enemy.hitFlashType ?? p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'body') });
             // SHATTER: the first impact flings a fan of shard projectiles
@@ -58325,7 +58339,7 @@ export class World {
           let zapped = false;
           for (const e of this.enemiesOf(p.caster)) {
             if (dist(p.pos, e.pos) - e.radius > zap.radius) continue;
-            this.resolveHit(p.caster, p.inst, e, (zap.damageScale ?? 0.5) * p.mult, 1);
+            this.resolveHit(p.caster, p.inst, e, (zap.damageScale ?? 0.5) * p.mult, 1, undefined, false, false, undefined, p.origin, p.tier);
             zapped = true;
           }
           if (zapped) {
@@ -58645,7 +58659,7 @@ export class World {
               if (z.struck.has(victim.id)) continue;
               z.struck.add(victim.id);
             }
-            this.resolveHit(z.caster, z.inst, victim, z.dmgMult, z.depth, z.flatBonus, z.forceDamage);
+            this.resolveHit(z.caster, z.inst, victim, z.dmgMult, z.depth, z.flatBonus, z.forceDamage, false, undefined, z.pos, z.tier);
           }
           // THE MALLET: the placement's impact strikes the surfaces with
           // its victims' own gates (sweeps share the crossing ledger).
@@ -58778,7 +58792,7 @@ export class World {
               if (!this.zoneSees(z, v)) continue;
               noteBodyHit(v, nb.seg);
               this.resolveHit(z.caster, z.inst, v,
-                z.dmgMult * z.volatile.damageScale, z.depth, z.flatBonus, true);
+                z.dmgMult * z.volatile.damageScale, z.depth, z.flatBonus, true, false, undefined, z.pos, z.tier);
             }
             // THE MALLET: each re-light is a fresh blast (no sweep ledger).
             this.strikeZoneSurfaces(z, false);
@@ -58841,7 +58855,7 @@ export class World {
             if (!this.zoneSees(z, v)) continue;
             noteBodyHit(v, nb.seg);
             this.resolveHit(z.caster, z.inst, v,
-              z.dmgMult * z.pulse.dmgMult, z.depth, z.flatBonus, z.forceDamage);
+              z.dmgMult * z.pulse.dmgMult, z.depth, z.flatBonus, z.forceDamage, false, undefined, z.pos, z.tier);
           }
           // THE MALLET: each quake beat is a fresh blast (no sweep ledger)
           // at the pulse's true reach — discs quake at pr, segments stay
@@ -59021,7 +59035,7 @@ export class World {
               z.struck.add(victim.id);
             }
             noteBodyHit(victim, nb.seg);
-            this.resolveHit(z.caster, z.inst, victim, z.dmgMult, z.depth, z.flatBonus, z.forceDamage);
+            this.resolveHit(z.caster, z.inst, victim, z.dmgMult, z.depth, z.flatBonus, z.forceDamage, false, undefined, z.pos, z.tier);
           }
           // THE MALLET: the tick strikes the surfaces with its victims'
           // own gates — a drifting crescent rings the bell once per
@@ -59062,7 +59076,7 @@ export class World {
               if (!nb) continue;
               noteBodyHit(victim, nb.seg);
               this.resolveHit(z.caster, z.inst, victim,
-                z.dmgMult * z.endBurst.damageScale, z.depth, z.flatBonus, true);
+                z.dmgMult * z.endBurst.damageScale, z.depth, z.flatBonus, true, false, undefined, z.pos, z.tier);
             }
             // THE MALLET: the dying breath is a plain-disc blast, exactly
             // as its victims see it.

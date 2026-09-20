@@ -5,10 +5,10 @@
 // tree until the hero approaches. Veil crowns fade by LOCAL PRESENCE: nearby
 // foliage opens with a soft distance falloff and closes behind the walker.
 // Connected crowns still form patches for static render batching, but patch
-// membership never grants vision. Concealment is exported to GAMEPLAY too:
-// aim assist can't magnetize onto a foe under distant closed crowns, and
-// standing under cover wears the veil's standStatus
-// (detectability play — the graphics ARE the stealth, now mechanically true).
+// membership never grants vision. Visual concealment also gates aim assist
+// against foes under distant closed crowns. Standing cover grants no status
+// by default: terrain sight depth and personal concealment are independent.
+// An explicitly authored standStatus remains available for special content.
 //
 // Everything is one optional DoodadRule.veil row per kind: dense-forest oaks
 // veil, a mushroom titan's cap can veil, a fog wall could veil — no renderer
@@ -52,8 +52,8 @@ export const VEIL_DEFAULTS = {
   presenceFeather: 100,
   /** Aim assist refuses crowns at/above this opacity. */
   concealAlpha: 0.55,
-  /** Default per-tick status under cover ('' on a spec disables). */
-  standStatus: 'canopied',
+  /** Visual canopy grants no status by default; individual content may opt in. */
+  standStatus: '',
 } as const;
 
 /** The shared target opacity for one crown. Its footprint matters, so even

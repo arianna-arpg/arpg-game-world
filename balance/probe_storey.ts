@@ -372,9 +372,9 @@ const kindAt = (cx: number, cy: number): string => wf.regionAt!(inn.rect.x + cx 
     const m = hunter(hall, 1);
     m.alertFrom = vec(room.x, room.y); m.alertTier = 0; m.alertUntil = w.time + 60;
     let clearedOn: number | null = null;
-    const r = drive(m, () => { if (!m.alertFrom && clearedOn === null) clearedOn = m.tier; return clearedOn !== null; });
-    check('J3 a noise in the common room walks the lodger-story investigator DOWN the flight; the mark clears on the ground floor, never from the boards above it',
-      clearedOn === 0 && dd(m.pos, room) <= 44, `cleared on tier ${String(clearedOn)} dist ${dd(m.pos, room).toFixed(0)} ticks ${r.ticks}`);
+    const r = drive(m, () => { if (m.alertFrom && m.tier === 0 && dd(m.pos, room) <= 40 && clearedOn === null) clearedOn = m.tier; return clearedOn !== null; });
+    check('J3 a noise in the common room walks the lodger-story investigator DOWN the flight; the search reaches the ground floor and retains its mark',
+      clearedOn === 0 && dd(m.pos, room) <= 44, `searching on tier ${String(clearedOn)} dist ${dd(m.pos, room).toFixed(0)} ticks ${r.ticks}`);
     check('J4 … stride-wise', r.maxStep <= 40, `max step ${r.maxStep.toFixed(1)}px`);
     m.dead = true; w.update(1 / 30);
   }

@@ -224,7 +224,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
     label: 'Misc',
     blurb: 'Movement, presence, fortune, and anything else your build touches.',
     core: [],
-    used: ['traction', 'detectability', 'noiseOnHit', 'threatGen', 'targetPriority', 'invisible', 'luck'],
+    used: ['traction', 'detectability', 'concealment', 'noiseOnHit', 'threatGen', 'targetPriority', 'invisible', 'luck'],
   },
 };
 
@@ -765,7 +765,8 @@ const STAT_BLURBS: Record<string, string> = {
   mercHireDiscount: 'The captain knows you: hiring costs this much less.',
 
   // Misc
-  detectability: 'How far away enemies notice you: the stealth stat.',
+  detectability: 'Multiplies how far away enemies notice you.',
+  concealment: 'Reduces detection range and suppresses rear awareness. Attacking briefly exposes you; terrain cover works separately through sight.',
   noiseOnHit: 'Your blows, and your spent shots wherever they land, RING. Every watcher within this radius hears the bang and comes to look. A sound names a place, never a prey.',
   threatGen: 'How loudly your damage registers on the victim\'s ledger: loud styles goad monsters onto themselves.',
   targetPriority: 'Weights enemy target preferences. Lower values attract less attention without making you untargetable; taunts still take priority.',

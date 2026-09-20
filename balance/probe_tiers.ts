@@ -2419,9 +2419,9 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
       const m = hunter(top, 1);
       m.alertFrom = vec(valley.x, valley.y); m.alertTier = 0; m.alertUntil = w.time + 60;
       let clearedOn: number | null = null;
-      const r = drive(m, () => { if (!m.alertFrom && clearedOn === null) clearedOn = m.tier; return clearedOn !== null; });
-      check('U2 an alert mark on the valley walks the butte-top investigator DOWN; the mark clears ON the valley, never from above it',
-        clearedOn === 0 && dd(m.pos, valley) <= 44, `cleared on tier ${String(clearedOn)} dist ${dd(m.pos, valley).toFixed(0)} ticks ${r.ticks}`);
+      const r = drive(m, () => { if (m.alertFrom && m.tier === 0 && dd(m.pos, valley) <= 40 && clearedOn === null) clearedOn = m.tier; return clearedOn !== null; });
+      check('U2 an alert mark on the valley walks the butte-top investigator DOWN; the search reaches the valley and retains its mark',
+        clearedOn === 0 && dd(m.pos, valley) <= 44, `searching on tier ${String(clearedOn)} dist ${dd(m.pos, valley).toFixed(0)} ticks ${r.ticks}`);
       check('U4b … stride-wise', r.maxStep <= STRIDE, `max step ${r.maxStep.toFixed(1)}px`);
       m.dead = true; w.update(1 / 30);
     }

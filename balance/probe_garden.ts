@@ -113,7 +113,7 @@ const step = (w: World, seconds: number): void => {
 {
   const grass = doodadRuleOf('wildgrass_blade');
   check('crop law: wildgrass is walk-through sight cover with a veil group',
-    !grass.blocksMove && !grass.blocksShot && grass.blocksSight === true
+    !grass.blocksMove && !grass.blocksShot && (grass.sightCover ?? 0) > 0 && !grass.blocksSight
     && grass.veil?.group === 'wildgrass' && grass.walkOnly === true);
   const stalk = doodadRuleOf('bloom_stalk');
   check('tree contract: the bloom stalk fights at the trunk, veils at the crown',

@@ -647,8 +647,10 @@ export interface PerceptionSpec {
    *  the sentry's callout. 0/absent = fights alone. */
   alertShout?: number;
   /** Seconds it remembers a LOST target's last position and stalks it
-   *  (default 0 = shrugs and goes back to the watch). */
+   *  (default LOS_CFG.chaseMemory; 0 disables visual-loss investigation). */
   memory?: number;
+  /** Radians/sec looking around the last known point; 0 holds its bearing. */
+  searchTurn?: number;
   /** ATTENTION SPAN: the lock LAPSES after this long (rolled) — the actor
    *  simply FORGETS its target and shuffles off in a dim daze (detection
    *  collapses for a breath) unless a landed hit re-stimulates it. The

@@ -1,3 +1,4 @@
+import { concealmentActive } from '../engine/perception';
 import { drawSatellites } from './vis/satelliteLayer';
 import { drawAuroras } from './vis/auroraLayer';
 import { drawGuardians } from './vis/guardianLayer';
@@ -5292,7 +5293,7 @@ export class Renderer {
     if (epose) ctx.globalAlpha = epose.alpha; // the arrival owns its own fade-in
     if (tpose) ctx.globalAlpha = 1; // a traversal's rise stays solid — cinema, not stealth
     if (a.sheet.get('invisible') > 0) ctx.globalAlpha = 0.3;
-    else if (a.sheet.get('detectability') < 1) ctx.globalAlpha = 0.55;
+    else if (concealmentActive(a, world.time) || a.sheet.get('detectability') < 1) ctx.globalAlpha = 0.55;
     // GHOSTING AS A STATE (StatusDef.ghostAlpha, collected above): the
     // deepest worn ghost FLOORS whatever the other fade lanes chose (min
     // — never stacks, never brightens; the traversal's cinema stays
