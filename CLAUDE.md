@@ -226,6 +226,26 @@ and saved encounter composition.
   --force-run` on Windows, in-place AppImage swap on Linux/Steam Deck) and
   relaunches itself — the release page opens only as the fallback
   (`updates.directInstall=false` restores the old behavior).
+  THE RELEASE CHANNEL (2026-09-19, `launcher/updates.cjs` — the update
+  brain, PURE: no Electron, so every law runs under `npm run test:launcher`;
+  contract `docs/engine/updates.md`): `updates.channel` 'nightly' (THE
+  DEFAULT — the release LIST, newest PUBLISHED build, prereleases included,
+  so players ride the nightly cadence) | 'stable' (`/releases/latest`,
+  hand-cut stables only); `pickUpdate` is THE SELECTION (highest vX.Y.Z
+  wins, never a downgrade, non-version tags never offered). THE FAILED-NIGHT
+  LAW: a launcher can only be offered what was PUBLISHED and nothing about a
+  failed night ever is — red verify = no tag, a red package leg / packaged
+  smoke / finalize = a DRAFT no anonymous caller sees (`releaseType: draft`
+  is load-bearing); pickUpdate still re-checks (drafts dropped, a release
+  missing this platform's fully-`uploaded` artifact PASSED OVER for the one
+  beneath, by name). THE DIGEST LAW: `downloadAsset` hashes the stream
+  against the sha256 GitHub publishes and DELETES anything unverified
+  (stall timer under the ceiling; `verifyDigest`). Withdrawing a bad night =
+  delete the release or re-draft it. THE BOOTSTRAP: pre-channel installs
+  (≤ v0.5.39) only ever ask `/releases/latest` — ONE channel-aware release
+  must be made "latest" (a stable cut, or one promoted nightly) to move them.
+  The picker persists through `writeLocalConfig` (THE LOCAL WRITE — the
+  Developer box's seam too).
   THE TWO FACES (2026-09-18): the launcher page's Developer box —
   `cfg.dev` persisted to `launcher.config.local.json`, `devMode()` in
   `launcher/main.cjs` THE ONE FOLD. PLAYER mode (default) is a launched
@@ -249,6 +269,16 @@ and saved encounter composition.
   boot the real game window (or launcher), assert `__game` / start menu /
   `/__save` endpoint (or the IPC status round-trip), print `SMOKE … OK`, exit
   0/1. Run these after touching `launcher/` or anything boot-related.
+  `npm run smoke:update` is the hermetic RELEASE-lane twin of
+  `npm run test:launcher` (a loopback fixture built relative to the running
+  version: finds the successor, passes an incomplete release over, never
+  sees a draft, verifies a good artifact and deletes a bad one; installs
+  nothing, writes no settings). THE PUBLISH GATE: release.yml runs
+  launcher + update + game against the PACKAGED app on both OS legs before
+  `finalize` may publish — a build that cannot boot, or can no longer
+  update itself, never reaches an auto-updating player. The launcher-page
+  lanes pin `cfg.dev` to the committed defaults in memory (a dev machine's
+  Developer toggle used to fail `smoke:launcher` at a HEAD CI called green).
 - `npm run perf` — the PERFORMANCE HARNESS: boots the real desktop game
   (visible window — true compositor pacing), starts a run, mints one zone per
   frontier tileset through the real mint path — plus every non-frontier
@@ -2249,7 +2279,9 @@ we verify changes.
   packaged DIRECT UPDATE (GitHub-Releases download → silent install →
   relaunch), build
   stamping, IPC, smoke modes, and the full-reset wipe: `saves/` + Chromium
-  storage behind a native confirm), `server.cjs` (loopback HTTP server for `dist/`
+  storage behind a native confirm), `updates.cjs` (THE RELEASE CHANNEL's pure
+  brain — channel registry, `pickUpdate`, the probe, the digest-verified
+  download; keep it Electron-free), `server.cjs` (loopback HTTP server for `dist/`
   that re-implements the Vite disk-save `/__save/:slot` endpoints — SAME
   `saves/` folder as dev; keep the two implementations in sync), `preload.cjs`
   + `launcher.html` (the launcher UI). Tunables live in `launcher.config.json`

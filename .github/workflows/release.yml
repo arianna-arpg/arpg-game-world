@@ -6,11 +6,26 @@
 #
 # Manual runs (workflow_dispatch) on a BRANCH build the same artifacts and
 # stash them as workflow artifacts instead of publishing — a dry run for the
-# pipeline. Dispatched on a TAG ref (how nightly.yml drives this after
-# pushing its RC tag — GITHUB_TOKEN tag pushes can't trigger on:push), it
-# publishes exactly like a tag push; rc=true makes finalize publish as a
-# PRERELEASE (invisible to /releases/latest, the launcher's update probe)
-# instead of the new latest.
+# pipeline (the packaged smoke below runs there too: dispatch it on a branch
+# to prove a change to this file without publishing anything). Dispatched on
+# a TAG ref (how nightly.yml drives this after pushing its RC tag —
+# GITHUB_TOKEN tag pushes can't trigger on:push), it publishes exactly like a
+# tag push; rc=true makes finalize publish as a PRERELEASE instead of the new
+# latest.
+#
+# WHO SEES WHAT (docs/engine/updates.md): installed launchers follow a
+# CHANNEL. 'nightly' — the default — reads the release LIST and takes the
+# newest PUBLISHED build, prereleases included, so every RC this file
+# publishes reaches players that day. 'stable' reads /releases/latest, which
+# never serves a prerelease. Either way a launcher can only be offered what
+# `finalize` flipped public, and finalize needs EVERY leg — so the
+# definition of "a failed night" is simply: a leg below went red.
+#
+# THE PUBLISH GATE: each leg boots the PACKAGED app it just built through
+# three headless self-checks before the job may pass — the launcher page, the
+# hermetic update lane (can this build still find, verify and refuse a
+# successor?), and the game itself. An auto-updating player cannot be sent a
+# fix through a launcher that does not boot, so that breakage dies here.
 # ---------------------------------------------------------------------------
 name: release
 
@@ -26,6 +41,7 @@ on:
 
 permissions:
   contents: write   # electron-builder uploads release assets
+  issues: write     # the red-night alarm, rung (and answered) from the lane's true end
 
 jobs:
   package:
@@ -83,6 +99,62 @@ jobs:
             npx electron-builder ${{ matrix.args }} --publish "$PUBLISH"
           }
 
+      # THE PUBLISH GATE. The assets above sit in a DRAFT no player can see;
+      # `finalize` needs this whole job, so a red smoke here means tonight's
+      # build is simply never published — launchers keep offering the last
+      # good night. The unpacked dir is the installer's exact payload (the
+      # AppImage needs FUSE, which a runner lacks). Three lanes, cheapest
+      # first; each prints one `SMOKE <lane> …` verdict line and exits 0/1:
+      #   launcher  the launcher page boots, its bridge + channel picker live
+      #   update    hermetic (a loopback fixture, no network): this build can
+      #             find its successor, pass over an incomplete release, never
+      #             see a draft, verify a good artifact and DELETE a bad one
+      #   game      the built game serves, boots, and reaches its start menu
+      # One retry per lane absorbs a slow cold runner; a real break is
+      # deterministic and still reddens the leg.
+      - name: Smoke the packaged app (Windows)
+        if: ${{ runner.os == 'Windows' }}
+        shell: bash
+        timeout-minutes: 12
+        run: |
+          exe="release/win-unpacked/Hollow Wake.exe"
+          test -f "$exe" || { echo "::error::no unpacked app at $exe"; exit 1; }
+          for lane in launcher update game; do
+            echo "::group::smoke $lane"
+            "$exe" --smoke-test=$lane || { echo "retrying $lane once…"; sleep 5; "$exe" --smoke-test=$lane; }
+            echo "::endgroup::"
+          done
+
+      - name: Smoke the packaged app (Linux)
+        if: ${{ runner.os == 'Linux' }}
+        shell: bash
+        timeout-minutes: 12
+        run: |
+          app="release/linux-unpacked/hollow-wake"
+          test -x "$app" || { echo "::error::no unpacked app at $app"; exit 1; }
+          command -v xvfb-run >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq xvfb; }
+          # A runner has no display and no GPU, and Ubuntu 24.04 fences the
+          # unprivileged user namespaces Chromium's sandbox wants behind
+          # AppArmor — all CI-only facts, so they are flags here, never
+          # defaults in the app a player runs.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          for lane in launcher update game; do
+            echo "::group::smoke $lane"
+            xvfb-run -a "$app" --no-sandbox --disable-gpu --smoke-test=$lane \
+              || { echo "retrying $lane once…"; sleep 5; xvfb-run -a "$app" --no-sandbox --disable-gpu --smoke-test=$lane; }
+            echo "::endgroup::"
+          done
+
+      # A packaged app that dies before its first window leaves only this
+      # breadcrumb file (launcher/main.cjs `boot()`); print it when red.
+      - name: Boot log (on failure)
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          for f in "$APPDATA/Hollow Wake/launcher.log" "$HOME/.config/Hollow Wake/launcher.log"; do
+            if [ -f "$f" ]; then echo "--- $f"; cat "$f"; fi
+          done
+
       - name: Stash artifacts (manual dry runs)
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         uses: actions/upload-artifact@v4
@@ -122,8 +194,11 @@ jobs:
           fi
           if [ "$RC" = "true" ]; then
             # Nightly RC: a PRERELEASE, never latest — /releases/latest (the
-            # launcher's update probe and the Deck install link) keeps
-            # serving the newest STABLE; testers pick RCs off the page.
+            # README's install link, and the 'stable' launcher channel) keeps
+            # serving the newest STABLE. Launchers on the default 'nightly'
+            # channel read the release LIST and take this build the moment
+            # the flip below lands — which is why it is ONE atomic call, made
+            # only after every leg built AND smoked its package.
             gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/$id" \
               -f name="Hollow Wake $TAG (nightly RC)" -f body="$notes" \
               -F draft=false -F prerelease=true -f make_latest=false
@@ -131,4 +206,64 @@ jobs:
             gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/$id" \
               -f name="Hollow Wake $TAG" -f body="$notes" \
               -F draft=false -f make_latest=true
+          fi
+
+      # The green half of THE RED-NIGHT ALARM, moved to the lane's TRUE end:
+      # nightly.yml's `cut` only knows that verify passed and a release was
+      # DISPATCHED — this step is where a night has actually shipped. Fully
+      # tolerant: an API hiccup here must never taint a publish that landed.
+      - name: Close the nightly-red alarm (an RC shipped — the cadence stands)
+        if: ${{ inputs.rc }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          num="$(gh issue list --repo "$GITHUB_REPOSITORY" --label nightly-red --state open --json number --jq '.[0].number // empty' || true)"
+          if [ -n "$num" ]; then
+            gh issue close "$num" --repo "$GITHUB_REPOSITORY" \
+              --comment "$TAG built, smoked and published on every leg — the cadence stands." || true
+          fi
+
+  # THE RED-NIGHT ALARM, release half. nightly.yml's alarm watches verify +
+  # cut, but `cut` only DISPATCHES this workflow — so a red package leg, a red
+  # packaged smoke or a red finalize used to die silently on the Actions page
+  # while launchers quietly kept offering an older night. Same single
+  # `nightly-red` issue, same shape: the run link, the failing lines, and the
+  # one fact a player-facing outage needs — nothing was published, so nobody
+  # was handed a broken build. RC runs only: a hand-cut stable has a human
+  # watching its run.
+  alarm:
+    needs: [package, finalize]
+    if: ${{ failure() && inputs.rc }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: File or feed the nightly-red issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # The failed JOB's own log — the REST job-logs endpoint serves a
+          # completed job while its run is still going (this job IS that run).
+          tail="$(
+            for job in $(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs?per_page=100" \
+                --jq '.jobs[] | select(.conclusion == "failure") | .id'); do
+              gh api "repos/$REPO/actions/jobs/$job/logs" 2>/dev/null || true
+            done \
+              | sed -E 's/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z //' \
+              | grep -E 'SMOKE [a-z]+ FAILED|^  - |error TS|##\[error\]|⨯ ' | tail -n 14
+          )" || true
+          body="$(printf 'The release lane for **%s** went red — it was tagged but NOT published. The draft stays hidden, so launchers keep offering the last good night; nobody was handed this build.\n\nRun: %s\n\n```\n%s\n```\n\nRe-run the failed jobs from that run (same-name assets replace safely in the draft), or fix the tree: the next nightly re-runs an unpublished tag on its own, and cuts the next number if new commits landed.' \
+            "$TAG" "$RUN_URL" "${tail:-log tail unavailable — open the run link}")"
+          gh label create nightly-red --repo "$REPO" --color B60205 \
+            --description "The nightly RC lane is red — cadence interrupted" --force
+          num="$(gh issue list --repo "$REPO" --label nightly-red --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "$REPO" --body "$body"
+          else
+            gh issue create --repo "$REPO" --label nightly-red --body "$body" \
+              --title "Nightly RC red — the release cadence is interrupted"
           fi

@@ -38,6 +38,7 @@
       border: 1px solid var(--panel-border); border-radius: 6px;
       background: var(--panel-bg); padding: 10px 12px; font-size: 12px;
       min-height: 58px; max-height: 170px; overflow-y: auto;
+      flex: 0 0 auto; /* the LOG is the flexible row — this box scrolls only past its max */
     }
     #update-status { font-size: 13px; }
     #update-status.good { color: var(--good); }
@@ -46,6 +47,16 @@
     #changes { margin: 6px 0 0 0; padding: 0; list-style: none; }
     #changes li { padding: 1px 0; color: var(--text); }
     #changes li code { color: var(--text-dim); font-size: 11px; margin-right: 7px; }
+    /* THE RELEASE CHANNEL: one quiet row under the update box, shown only
+       where updates come from GitHub Releases (a packaged install). */
+    #channel-row { display: flex; align-items: center; gap: 9px; font-size: 12px; color: var(--text-dim); padding: 0 2px; flex: 0 0 auto; }
+    #channel-row label { color: var(--text); flex: 0 0 auto; }
+    #channel-row select {
+      flex: 0 0 auto; font: inherit; color: var(--gold); background: #1b1b2a;
+      border: 1px solid var(--panel-border); border-radius: 4px; padding: 3px 6px; cursor: pointer;
+    }
+    #channel-row select:disabled { opacity: 0.4; cursor: default; }
+    #channel-blurb { flex: 1 1 auto; font-size: 11px; line-height: 1.35; }
 
     #btns { display: flex; flex-direction: column; gap: 8px; align-items: center; }
     #btns button {
@@ -104,6 +115,11 @@
       <div id="update-status">Update check pending…</div>
       <ul id="changes"></ul>
     </div>
+    <div id="channel-row" class="hidden">
+      <label for="channel">Update channel</label>
+      <select id="channel"></select>
+      <span id="channel-blurb"></span>
+    </div>
     <div id="btns">
       <button id="play">▶&nbsp; PLAY</button>
       <button id="update-btn" class="hidden">⬇&nbsp; Update &amp; Play</button>
@@ -143,7 +159,7 @@
   <script>
     const $ = (id) => document.getElementById(id);
     const logEl = $('log');
-    const buttons = ['play', 'update-btn', 'check', 'rebuild', 'reset', 'quit'].map($);
+    const buttons = ['play', 'update-btn', 'check', 'rebuild', 'reset', 'quit', 'channel'].map($);
 
     function appendLog(line) {
       logEl.textContent += line + '\n';
@@ -175,9 +191,38 @@
       });
     }
 
+    // THE RELEASE CHANNEL — the rows come from the main process (the channel
+    // registry in launcher/updates.cjs); the page only draws them. Shown
+    // where updates come from GitHub Releases; a checkout pulls the branch.
+    function renderChannel(s) {
+      const sel = $('channel'), rows = Array.isArray(s.channels) ? s.channels : [];
+      $('channel-row').classList.toggle('hidden', s.updateMode !== 'release' || rows.length < 2);
+      if (sel.options.length !== rows.length) {
+        sel.innerHTML = '';
+        for (const c of rows) {
+          const o = document.createElement('option');
+          o.value = c.id; o.textContent = c.label;
+          sel.appendChild(o);
+        }
+      }
+      sel.value = s.channel || (rows[0] && rows[0].id) || '';
+      const row = rows.find(c => c.id === sel.value);
+      $('channel-blurb').textContent = row ? row.blurb : '';
+    }
+    $('channel').addEventListener('change', async (e) => {
+      setBusy(true);
+      try {
+        const r = await window.launcher.setChannel(e.target.value);
+        if (!(r && r.ok)) appendLog('SETTINGS FAILED: ' + ((r && r.error) || 'unknown error'));
+        if (r && r.channels) { lastStatus = { ...(lastStatus || {}), channel: r.channel, channels: r.channels }; renderChannel(lastStatus); }
+      } finally { setBusy(false); }
+      await doCheck(); // the old channel's answer no longer stands
+    });
+
     function renderStatus(s) {
       lastStatus = s;
       renderDev(s);
+      renderChannel(s);
       $('title').textContent = s.title;
       document.title = s.title + ' — Launcher';
       $('build-line').innerHTML =
@@ -204,7 +249,7 @@
       $('update-btn').classList.add('hidden');
       if (!r.ok) {
         st.className = 'bad';
-        st.textContent = 'Could not reach GitHub — playing the installed version is fine.';
+        st.textContent = r.hint || 'Could not reach GitHub — playing the installed version is fine.';
         return;
       }
       if (r.mode === 'none') {
@@ -218,7 +263,11 @@
         return;
       }
       st.className = 'avail';
-      st.textContent = `${r.behind} update${r.behind === 1 ? '' : 's'} available:`;
+      // A release install jumps straight to the NEWEST build (the first row);
+      // the rest of the list is simply what it has been missing.
+      st.textContent = (r.mode === 'release' && r.changes.length)
+        ? `${r.changes[0].hash} is available` + (r.behind > 1 ? ` — ${r.behind}${r.capped ? '+' : ''} builds newer than yours:` : ':')
+        : `${r.behind} update${r.behind === 1 ? '' : 's'} available:`;
       for (const c of r.changes.slice(0, 12)) {
         const li = document.createElement('li');
         const code = document.createElement('code'); code.textContent = c.hash;

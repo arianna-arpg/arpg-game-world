@@ -27,6 +27,8 @@
     "smoke": "electron . --smoke-test=game",
     "smoke:launcher": "electron . --smoke-test=launcher",
     "smoke:source": "electron . --smoke-test=source",
+    "smoke:update": "electron . --smoke-test=update",
+    "test:launcher": "node --test scripts/test-launcher-updates.mjs",
     "perf": "electron . --perf-test",
     "perf:ui": "electron balance/ui-perf.cjs",
     "icon": "node scripts/make-icon.mjs",

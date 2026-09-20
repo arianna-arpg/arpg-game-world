@@ -86,8 +86,12 @@ appImage:
 # local dist runs pass --publish never and just leave files in release/.
 # releaseType 'draft': both OS legs upload into a hidden draft, and the
 # workflow's finalize job flips it public only once every installer is
-# attached. /releases/latest — where the launcher's update probe and the
-# Steam Deck installer look — therefore never sees a half-built release.
+# attached AND its packaged app has smoked green. Launchers probe
+# anonymously (the release list on the default 'nightly' channel,
+# /releases/latest on 'stable' — docs/engine/updates.md) and anonymous
+# callers never see drafts, so no install is ever offered a half-built or a
+# failed night. THE FAILED-NIGHT LAW rests on this one word; never change it
+# to 'release' or 'prerelease'.
 # (v0.2.0's first run shipped 'release': the Linux leg published early, the
 # Windows leg died on a transient 504, and 'latest' briefly served an
 # AppImage-only page to every installed launcher.)

@@ -26,6 +26,15 @@
 // path resolves through the PACKAGED/REPO/BASE seam below — nothing else
 // changes, and the smoke modes run against a packaged exe unmodified.
 //
+// THE RELEASE CHANNEL (updates.channel — launcher/updates.cjs holds the
+// whole brain, pure and unit-tested; docs/engine/updates.md is the contract):
+// 'nightly' (the default) follows the release CADENCE — the newest PUBLISHED
+// release, last night's RC included; 'stable' follows hand-cut stables only.
+// A night that failed is never published (red verify = no tag; a red package
+// leg or packaged smoke = a draft no anonymous caller can see), so a
+// launcher can only ever be offered a night that passed; and the download is
+// hashed against the sha256 GitHub publishes before anything is run.
+//
 // THE TWO FACES (cfg.dev — the launcher page's Developer box, persisted to
 // launcher.config.local.json): PLAYER mode is the default and is a launched
 // game — the built dist/ over loopback, no DevTools, no dev panel, the log
@@ -40,9 +49,14 @@
 //   --play                 skip the launcher, straight into the game
 //   --fullscreen           force the game window fullscreen (gamescope/Steam
 //                          Deck sessions auto-detect via window.fullscreen 'auto')
-//   --smoke-test[=game|launcher|source]  headless self-check: boot, assert,
-//                          exit. `game` pins the built lane and `source` the
-//                          live-source lane, whatever the local toggles say.
+//   --smoke-test[=game|launcher|source|update]  headless self-check: boot,
+//                          assert, exit. `game` pins the built lane and
+//                          `source` the live-source lane, whatever the local
+//                          toggles say; `update` pins the RELEASE lane against
+//                          a loopback fixture (no network, nothing installed,
+//                          no settings written) — the publish gate's proof
+//                          that this build can still find and verify its
+//                          own successor.
 //
 // Build staleness is stamped: dist/.build-head records the HEAD hash + a
 // digest of `git status --porcelain` at build time; Play rebuilds only when
@@ -59,6 +73,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { startGameServer } = require('./server.cjs');
 const { createDeadman, skipVerdict } = require('./perfdeadman.cjs');
+const updates = require('./updates.cjs');
 
 // ------------------------------------------------------------------- config
 
@@ -119,10 +134,12 @@ const APP_ICON = (() => {
 const CONFIG_DEFAULTS = {
   game: { title: 'Hollow Wake' },
   repo: { remote: 'origin', branch: 'main', github: 'arianna-arpg/arpg-game-world' },
-  updates: { checkOnLaunch: true, mode: 'auto', directInstall: true },
+  // channel + the probe/download dials fold through updates.resolveUpdateCfg
+  // (launcher/updates.cjs UPDATE_DEFAULTS) — the one read; see updateCfg().
+  updates: { checkOnLaunch: true, mode: 'auto', directInstall: true, channel: 'nightly' },
   window: { width: 1600, height: 900, maximized: true, fullscreen: 'auto', devtools: true, zoom: 1 },
   server: { host: '127.0.0.1', port: 0 },
-  launcher: { width: 700, height: 680, returnToLauncher: true, autoPlayOnGamescope: true },
+  launcher: { width: 700, height: 720, returnToLauncher: true, autoPlayOnGamescope: true },
   paths: { saves: 'auto' },
   // THE TWO FACES — see devMode(). vitePort is the live-source lane's
   // preferred port; a taken port bumps (Vite's own law), never collides.
@@ -148,12 +165,38 @@ const LOCAL_CONFIGS = PACKAGED
   : [path.join(BASE, 'launcher.config.local.json')];
 for (const f of LOCAL_CONFIGS) cfg = merge(cfg, readJson(f));
 
-/** 'git' (pull + rebuild the checkout) | 'release' (GitHub-Releases version
- *  probe + download link) | 'none'. 'auto' picks by environment. */
+// -------------------------------------------------------------------- flags
+// (read this early: the update smoke pins UPDATE_MODE just below)
+
+const argv = process.argv.slice(1);
+/** @param {string} flag */
+const flagValue = (flag) => {
+  const hit = argv.find(a => a === flag || a.startsWith(flag + '='));
+  if (!hit) return null;
+  return hit.includes('=') ? hit.split('=')[1] : '';
+};
+const SMOKE = flagValue('--smoke-test') !== null ? (flagValue('--smoke-test') || 'game') : null;
+const PERF = flagValue('--perf-test') !== null;
+const PLAY_DIRECT = flagValue('--play') !== null;
+
+/** 'git' (pull + rebuild the checkout) | 'release' (GitHub-Releases channel
+ *  probe + direct install) | 'none'. 'auto' picks by environment. The update
+ *  smoke PINS the release lane — it proves that lane from a checkout and
+ *  from a packaged exe alike, whatever the machine's config says. */
 const UPDATE_MODE = (() => {
+  if (SMOKE === 'update') return 'release';
   const m = String(cfg.updates.mode ?? 'auto');
   return (m === 'git' || m === 'release' || m === 'none') ? m : (PACKAGED ? 'release' : 'git');
 })();
+
+/** THE UPDATE DIALS, folded live (the channel picker rewrites cfg.updates at
+ *  runtime, so this is a read, never a boot-time constant). */
+const updateCfg = () => updates.resolveUpdateCfg(cfg.updates, cfg.repo);
+/** What the launcher page needs to draw the channel picker. */
+const channelStatus = () => ({
+  channel: updateCfg().channel,
+  channels: updates.UPDATE_CHANNELS.map(c => ({ id: c.id, label: c.label, blurb: c.blurb })),
+});
 
 /**
  * The saves directory, from cfg.paths.saves. 'auto' = <repo>/saves in a
@@ -175,19 +218,6 @@ function resolveSavesDir() {
   return path.resolve(BASE, expanded);
 }
 const SAVES = resolveSavesDir();
-
-// -------------------------------------------------------------------- flags
-
-const argv = process.argv.slice(1);
-/** @param {string} flag */
-const flagValue = (flag) => {
-  const hit = argv.find(a => a === flag || a.startsWith(flag + '='));
-  if (!hit) return null;
-  return hit.includes('=') ? hit.split('=')[1] : '';
-};
-const SMOKE = flagValue('--smoke-test') !== null ? (flagValue('--smoke-test') || 'game') : null;
-const PERF = flagValue('--perf-test') !== null;
-const PLAY_DIRECT = flagValue('--play') !== null;
 
 if (PERF) {
   // Windows' native occlusion tracker can STICK a visible window at
@@ -326,6 +356,7 @@ async function repoStatus() {
       packaged: true, updateMode: UPDATE_MODE, savesDir: SAVES,
       directInstall: cfg.updates.directInstall !== false,
       platform: process.platform, dev: cfg.dev, mode: devMode(),
+      ...channelStatus(),
     };
   }
   const pkg = readJson(path.join(/** @type {string} */ (REPO), 'package.json')) ?? {};
@@ -343,7 +374,9 @@ async function repoStatus() {
     checkOnLaunch: !!cfg.updates.checkOnLaunch,
     repo: { remote: cfg.repo.remote, branch: cfg.repo.branch },
     packaged: false, updateMode: UPDATE_MODE, savesDir: SAVES,
+    directInstall: cfg.updates.directInstall !== false,
     platform: process.platform, dev: cfg.dev, mode: devMode(),
+    ...channelStatus(),
   };
 }
 
@@ -370,76 +403,76 @@ async function checkGitUpdates() {
 
 /** What the last successful check found: the release page (the fallback
  *  surface), the tag, and THIS platform's installer asset — the direct-update
- *  payload — so the Update button acts on exactly what it announced. */
-/** @type {{ url: string | null, tag: string | null, asset: { name: string, url: string, size: number } | null }} */
+ *  payload, digest included — so the Update button acts on exactly what it
+ *  announced. Reset whenever the channel changes. */
+/** @type {{ url: string | null, tag: string | null, asset: import('./updates.cjs').Asset | null }} */
 let latestRelease = { url: null, tag: null, asset: null };
 
-/** This platform's installable artifact in a release's asset list — the NSIS
- *  installer on Windows, the AppImage (the Steam Deck artifact) on Linux.
- *  @param {any} assets @returns {{ name: string, url: string, size: number } | null} */
-function pickReleaseAsset(assets) {
-  const list = Array.isArray(assets) ? assets : [];
-  const want = process.platform === 'win32' ? '.exe'
-    : process.platform === 'linux' ? '.appimage' : null;
-  if (!want) return null;
-  for (const a of list) {
-    const name = (a && typeof a.name === 'string') ? a.name : '';
-    if (!name.toLowerCase().endsWith(want)) continue;
-    if (!a || typeof a.browser_download_url !== 'string') continue;
-    return { name, url: a.browser_download_url, size: Number(a.size) || 0 };
-  }
-  return null;
-}
-
-/** @param {unknown} s @returns {number[] | null} */
-function parseVer(s) {
-  const m = /(\d+)\.(\d+)\.(\d+)/.exec(String(s ?? ''));
-  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
-}
-/** @param {number[]} a @param {number[]} b — true when a > b */
-function newerVersion(a, b) {
-  for (let i = 0; i < 3; i++) {
-    if ((a[i] ?? 0) !== (b[i] ?? 0)) return (a[i] ?? 0) > (b[i] ?? 0);
-  }
-  return false;
-}
-
-/** Packaged installs can't rebuild themselves — instead: is there a NEWER
- *  GitHub Release than the version stamped into this install? */
+/**
+ * Packaged installs can't rebuild themselves — instead: does the configured
+ * CHANNEL hold a release NEWER than the version stamped into this install?
+ * The selection itself (drafts out, off-channel out, incomplete releases
+ * passed over, highest version wins, never a downgrade) is
+ * updates.pickUpdate — this is only the fetch, the log and the page's shape.
+ */
 async function checkReleaseUpdates() {
   const gh = String(cfg.repo.github ?? '');
   if (!gh) return { ok: false, error: 'Release checks need repo.github ("owner/name") in launcher.config.json.' };
-  log(`Checking github.com/${gh} for a newer release…`);
+  const ucfg = updateCfg();
+  const row = updates.channelRow(ucfg.channel);
+  log(`Checking github.com/${gh} for a newer release (${row.label.toLowerCase()} channel)…`);
   try {
-    const res = await fetch(`https://api.github.com/repos/${gh}/releases/latest`, {
-      headers: { accept: 'application/vnd.github+json', 'user-agent': 'hollow-wake-launcher' },
-      signal: AbortSignal.timeout(8000),
+    const releases = await updates.fetchReleases({ gh, channel: ucfg.channel, ucfg });
+    const current = app.getVersion();
+    const pick = updates.pickUpdate(releases, {
+      channel: ucfg.channel, platform: process.platform, current, window: ucfg.scanReleases,
     });
-    if (res.status === 404) {
-      log('No releases published yet — you are on the newest thing there is.');
-      return { ok: true, behind: 0, ahead: 0, changes: [], mode: 'release' };
-    }
-    if (!res.ok) return { ok: false, error: `GitHub API answered HTTP ${res.status}.` };
-    const rel = /** @type {any} */ (await res.json());
-    latestRelease = {
-      url: typeof rel.html_url === 'string' ? rel.html_url : null,
-      tag: typeof rel.tag_name === 'string' ? rel.tag_name : null,
-      asset: pickReleaseAsset(rel.assets),
-    };
-    const current = parseVer(app.getVersion());
-    const latest = parseVer(rel.tag_name);
-    const behind = current && latest && newerVersion(latest, current) ? 1 : 0;
-    log(behind ? `Release ${rel.tag_name} is available.` : 'Up to date.');
+    for (const s of pick.skipped) log(`Passed over ${s.tag} — ${s.why}.`);
+    const t = pick.behind ? pick.newer[0] : null;
+    latestRelease = t ? { url: t.url, tag: t.tag, asset: t.asset } : { url: null, tag: null, asset: null };
+    if (!pick.scanned) log(`No ${row.id === 'stable' ? 'stable ' : ''}releases are published yet — you are on the newest thing there is.`);
+    else if (t) {
+      log(`Release ${t.tag} is available`
+        + (pick.behind > 1 ? ` (${pick.behind}${pick.capped ? '+' : ''} builds newer than your v${current}).` : '.'));
+    } else log('Up to date.');
     return {
-      ok: true, behind, ahead: 0, mode: 'release',
-      changes: behind
-        ? [{ hash: String(rel.tag_name ?? ''), subject: String(rel.name || rel.tag_name || 'New release') }]
-        : [],
+      ok: true, behind: pick.behind, ahead: 0, mode: 'release',
+      channel: ucfg.channel, capped: pick.capped,
+      changes: pick.newer.map(r => ({ hash: r.tag, subject: r.name })),
     };
   } catch (e) {
-    log('Update check failed (offline, or GitHub is unreachable).');
-    return { ok: false, error: String(e) };
+    const limited = e instanceof updates.ProbeError && (e.status === 403 || e.status === 429);
+    const msg = e instanceof Error ? e.message : String(e);
+    log(limited ? `Update check refused — ${msg}` : 'Update check failed (offline, or GitHub is unreachable).');
+    return {
+      ok: false, error: msg,
+      hint: limited ? 'GitHub is rate-limiting this network right now — check again later. Playing the installed version is fine.' : undefined,
+    };
   }
+}
+
+/**
+ * THE CHANNEL WRITE: fold an `updates.channel` choice into the live config
+ * and persist it to the machine-local override (the same last-word file the
+ * Developer box writes), keeping every other local key. The remembered
+ * release is dropped — it belonged to the old channel — and the page
+ * re-checks. A smoke run never writes (it must not touch a machine's
+ * settings); an unknown id folds to the default channel, never an error.
+ * @param {unknown} id
+ */
+function setChannel(id) {
+  const next = updates.channelRow(id).id;
+  cfg.updates = { ...(cfg.updates || {}), channel: next };
+  latestRelease = { url: null, tag: null, asset: null };
+  if (!SMOKE) {
+    const saved = writeLocalConfig((cur) => { cur.updates = { ...(cur.updates || {}), channel: next }; });
+    if (!saved.ok) {
+      log(`Could not save the update channel to ${saved.file}: ${saved.error}`);
+      return { ok: false, error: saved.error, ...channelStatus() };
+    }
+  }
+  log(`Update channel: ${updates.channelRow(next).label}.`);
+  return { ok: true, ...channelStatus() };
 }
 
 async function checkUpdates() {
@@ -457,46 +490,31 @@ function sendProgress(p) {
 }
 
 /**
- * Stream a release asset to disk, reporting progress to the page (every
- * percent) and the log (every ten). Verifies the byte count against
- * content-length so a truncated download can never be executed.
- * @param {string} url @param {string} dest @param {number} sizeHint @param {string} tag
- * @returns {Promise<number>} bytes written
+ * Stream a release asset to disk through updates.downloadAsset — THE DIGEST
+ * LAW lives there: hashed as it streams, refused (and DELETED) unless the
+ * byte count and the sha256 GitHub published both match, under a stall timer
+ * and a whole-download ceiling. This wrapper only carries the progress to
+ * the page (every percent) and the log (every ten).
+ * @param {import('./updates.cjs').Asset} asset @param {string} dest @param {string} tag
  */
-async function downloadAsset(url, dest, sizeHint, tag) {
-  const res = await fetch(url, {
-    headers: { accept: 'application/octet-stream', 'user-agent': 'hollow-wake-launcher' },
-    signal: AbortSignal.timeout(30 * 60_000), // a whole-download ceiling, not a stall timer
-  });
-  if (!res.ok || !res.body) throw new Error(`download answered HTTP ${res.status}`);
-  const total = Number(res.headers.get('content-length')) || sizeHint || 0;
-  fs.mkdirSync(path.dirname(dest), { recursive: true });
-  const file = fs.createWriteStream(dest);
-  const reader = res.body.getReader();
-  let got = 0, lastPct = -1, lastLogPct = -10;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (!value) continue;
-      got += value.byteLength;
-      if (!file.write(value)) await new Promise(r => file.once('drain', r));
-      if (total > 0) {
-        const pct = Math.min(100, Math.floor((got / total) * 100));
-        if (pct !== lastPct) {
-          lastPct = pct;
-          sendProgress({ pct, gotMb: got / 1048576, totalMb: total / 1048576, tag });
-          if (pct - lastLogPct >= 10) {
-            lastLogPct = pct;
-            log(`Downloading ${tag}… ${pct}% (${Math.round(got / 1048576)} / ${Math.round(total / 1048576)} MB)`);
-          }
-        }
+async function fetchUpdateArtifact(asset, dest, tag) {
+  const ucfg = updateCfg();
+  let lastLogPct = -10;
+  const got = await updates.downloadAsset({
+    url: asset.url, dest, sizeHint: asset.size, digest: asset.digest,
+    verifyDigest: ucfg.verifyDigest, stallMs: ucfg.stallMs, ceilingMs: ucfg.ceilingMs,
+    onProgress: ({ pct, got: bytes, total }) => {
+      sendProgress({ pct, gotMb: bytes / 1048576, totalMb: total / 1048576, tag });
+      if (pct - lastLogPct >= 10) {
+        lastLogPct = pct;
+        log(`Downloading ${tag}… ${pct}% (${Math.round(bytes / 1048576)} / ${Math.round(total / 1048576)} MB)`);
       }
-    }
-  } finally {
-    await new Promise(r => file.end(r));
-  }
-  if (total > 0 && got < total) throw new Error(`download truncated at ${got} of ${total} bytes`);
+    },
+  });
+  log(got.verified
+    ? `Verified ${asset.name} against its published ${asset.digest?.algo ?? 'digest'}.`
+    : asset.digest ? 'Digest verification is switched off (updates.verifyDigest) — byte count checked only.'
+      : 'This release publishes no digest — byte count checked only.');
   return got;
 }
 
@@ -524,15 +542,18 @@ async function directReleaseUpdate() {
   const asset = latestRelease.asset;
   const label = latestRelease.tag ?? 'the update';
   if (!asset) {
-    throw new Error(process.platform === 'win32' ? 'the latest release has no Windows installer attached'
-      : process.platform === 'linux' ? 'the latest release has no AppImage attached'
+    // pickUpdate only ever remembers a release that CARRIES this platform's
+    // complete artifact, so reaching here means the channel holds nothing
+    // newer that is installable (or this platform has no artifact at all).
+    throw new Error(process.platform === 'win32' ? 'this channel holds no newer build with a Windows installer attached'
+      : process.platform === 'linux' ? 'this channel holds no newer build with an AppImage attached'
         : `no direct-update artifact exists for platform '${process.platform}'`);
   }
 
   if (process.platform === 'win32') {
     const dest = path.join(app.getPath('temp'), asset.name);
     log(`Downloading ${label} (${asset.name})…`);
-    await downloadAsset(asset.url, dest, asset.size, label);
+    await fetchUpdateArtifact(asset, dest, label); // throws (and deletes dest) unless verified
     log('Download complete — installing silently; the game will restart itself.');
     boot(`direct update: spawning installer ${dest}`);
     const child = spawn(dest, ['/S', '--updated', '--force-run'], { detached: true, stdio: 'ignore' });
@@ -551,7 +572,7 @@ async function directReleaseUpdate() {
     const staged = path.join(dir, `.${asset.name}.downloading`);
     log(`Downloading ${label} (${asset.name})…`);
     try {
-      await downloadAsset(asset.url, staged, asset.size, label);
+      await fetchUpdateArtifact(asset, staged, label); // the running AppImage is only ever replaced by a verified one
       fs.chmodSync(staged, 0o755);
       fs.renameSync(staged, self);
     } catch (e) {
@@ -625,9 +646,12 @@ async function update() {
       }
     }
     const gh = String(cfg.repo.github ?? '');
-    const url = latestRelease.url ?? (gh ? `https://github.com/${gh}/releases/latest` : null);
+    // The announced release's own page; failing that, the channel's front
+    // door (/releases/latest is the newest STABLE — wrong for a nightly).
+    const door = updates.channelRow(updateCfg().channel).probe === 'latest' ? 'releases/latest' : 'releases';
+    const url = latestRelease.url ?? (gh ? `https://github.com/${gh}/${door}` : null);
     if (!url) return { ok: false, error: 'No release URL known — set repo.github in launcher.config.json.' };
-    log('Opening the latest release in your browser — install it, then relaunch.');
+    log('Opening the release page in your browser — install it, then relaunch.');
     shell.openExternal(url);
     return { ok: true, opened: true };
   }
@@ -769,11 +793,32 @@ function gameAddress(base) {
 }
 
 /**
+ * THE LOCAL WRITE — the one seam every launcher-page setting persists
+ * through (the Developer box, the update channel): read the machine-local
+ * override file — the LAST word in LOCAL_CONFIGS (the repo-root file in a
+ * checkout, userData when packaged), never the committed
+ * launcher.config.json — let the caller mutate its own block, and write it
+ * back with every other local key kept.
+ * @param {(cur: any) => void} mutate
+ * @returns {{ ok: true, file: string } | { ok: false, file: string, error: string }}
+ */
+function writeLocalConfig(mutate) {
+  const file = LOCAL_CONFIGS[LOCAL_CONFIGS.length - 1];
+  const cur = readJson(file) ?? {};
+  mutate(cur);
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(cur, null, 2) + '\n');
+    return { ok: true, file };
+  } catch (e) {
+    return { ok: false, file, error: String(e) };
+  }
+}
+
+/**
  * THE TOGGLE WRITE: merge a patch of booleans into cfg.dev and persist the
- * block to the machine-local override file — the LAST word in LOCAL_CONFIGS
- * (the repo-root file in a checkout, userData when packaged), never the
- * committed launcher.config.json — keeping every other local key. Launch
- * Game.bat reads the same file for its terminal decision.
+ * block through THE LOCAL WRITE. Launch Game.bat reads the same file for
+ * its terminal decision.
  * @param {any} patch
  */
 function setDev(patch) {
@@ -782,15 +827,10 @@ function setDev(patch) {
     if (patch && typeof patch[k] === 'boolean') next[k] = patch[k];
   }
   cfg.dev = next;
-  const file = LOCAL_CONFIGS[LOCAL_CONFIGS.length - 1];
-  const cur = readJson(file) ?? {};
-  cur.dev = next;
-  try {
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify(cur, null, 2) + '\n');
-  } catch (e) {
-    log(`Could not save the developer settings to ${file}: ${String(e)}`);
-    return { ok: false, error: String(e), dev: cfg.dev, mode: devMode() };
+  const saved = writeLocalConfig((cur) => { cur.dev = next; });
+  if (!saved.ok) {
+    log(`Could not save the developer settings to ${saved.file}: ${saved.error}`);
+    return { ok: false, error: saved.error, dev: cfg.dev, mode: devMode() };
   }
   const m = devMode();
   log(m.developer
@@ -989,6 +1029,7 @@ function wireIpc() {
   ipcMain.handle('launcher:rebuild', () => exclusive('rebuild', () => ensureBuilt(true)));
   ipcMain.handle('launcher:reset', () => exclusive('reset', () => resetAllData()));
   ipcMain.handle('launcher:setDev', (_e, patch) => setDev(patch));
+  ipcMain.handle('launcher:setChannel', (_e, id) => setChannel(id));
   ipcMain.handle('launcher:quit', () => { app.quit(); });
 }
 
@@ -1022,15 +1063,40 @@ async function smoke() {
     else errors.splice(i, 1);
   };
 
+  /** Poll a page expression until it turns truthy or the deadline passes — a
+   *  fixed sleep is a guess, and a loaded CI runner (the packaged-smoke
+   *  publish gate) guesses wrong. Resolves the last value seen.
+   *  @param {Electron.WebContents} wc @param {string} expr @param {number} ms */
+  const until = async (wc, expr, ms) => {
+    const deadline = Date.now() + ms;
+    for (;;) {
+      const v = await wc.executeJavaScript(expr).catch(() => false);
+      if (v || Date.now() >= deadline) return v;
+      await wait(150);
+    }
+  };
+
+  // THE PAGE IS PINNED TOO: devMode() pins the lane for the main process, but
+  // the launcher page folds its two faces on the STORED toggles — so a dev
+  // machine with Developer mode on failed "opens in player mode" at a HEAD
+  // that CI called green. A self-check measures the build, never the
+  // machine: the launcher-page lanes read the committed defaults, in memory
+  // only (nothing is written — setDev/setChannel are never reached here).
+  if (SMOKE === 'launcher' || SMOKE === 'update') cfg.dev = { ...CONFIG_DEFAULTS.dev };
+
   try {
-    if (SMOKE === 'launcher') {
+    if (SMOKE === 'update') {
+      await smokeUpdate({ errors, watch, wait, until, watcherSelfTest });
+    } else if (SMOKE === 'launcher') {
       launcherWin = createLauncherWindow({ show: false });
       watch(launcherWin.webContents, 'launcher');
       await new Promise(r => launcherWin?.webContents.once('did-finish-load', () => r(null)));
-      await wait(1200); // let the page run its status() round-trip
+      // The page's status() round-trip populates the build line.
+      await until(launcherWin.webContents, `(document.getElementById('build-line')?.textContent ?? '').startsWith('v')`, 15000);
+      await wait(400);
       const api = await launcherWin.webContents.executeJavaScript('typeof window.launcher');
       const version = await launcherWin.webContents.executeJavaScript(
-        `(document.getElementById('build-line')?.textContent ?? '').length > 0`);
+        `(document.getElementById('build-line')?.textContent ?? '').startsWith('v')`);
       if (api !== 'object') errors.push(`preload bridge missing (typeof window.launcher = ${api})`);
       if (!version) errors.push('status round-trip never populated the build line');
       // Presence only — NEVER invoke reset from a smoke run (it would erase
@@ -1046,7 +1112,18 @@ async function smoke() {
         `!!document.getElementById('dev-developer') && document.body.classList.contains('player')`);
       if (setDevApi !== 'function') errors.push(`setDev bridge missing (typeof window.launcher.setDev = ${setDevApi})`);
       if (!devBox) errors.push('developer box missing, or the page did not open in player mode');
+      // THE RELEASE CHANNEL: bridge + picker present and drawn from the
+      // registry (the row itself shows only in release mode — a checkout
+      // pulls its branch, so there it stays folded away).
+      const setChannelApi = await launcherWin.webContents.executeJavaScript('typeof window.launcher.setChannel');
+      const channelOpts = await launcherWin.webContents.executeJavaScript(
+        `Array.from(document.getElementById('channel')?.options ?? []).map(o => o.value).join(',')`);
+      const wantOpts = updates.UPDATE_CHANNELS.map(c => c.id).join(',');
+      if (setChannelApi !== 'function') errors.push(`setChannel bridge missing (typeof window.launcher.setChannel = ${setChannelApi})`);
+      if (channelOpts !== wantOpts) errors.push(`channel picker drew '${channelOpts}', the registry holds '${wantOpts}'`);
       await watcherSelfTest(launcherWin.webContents);
+      const status = await launcherWin.webContents.executeJavaScript(`document.getElementById('update-status')?.textContent ?? ''`);
+      console.log(`SMOKE launcher: v${app.getVersion()} packaged=${PACKAGED} updateMode=${UPDATE_MODE} channel=${updateCfg().channel} status="${status}"`);
     } else if (SMOKE === 'source') {
       // THE LIVE-SOURCE LANE: spawn Vite, load the game with every tool on,
       // and require each toggle to have REACHED its tool — the address the
@@ -1092,7 +1169,11 @@ async function smoke() {
       gameWin = createGameWindow({ show: false });
       watch(gameWin.webContents, 'game');
       await gameWin.loadURL(url);
-      await wait(2500); // async boot: account load, world init, start menu
+      // async boot: account load, world init, start menu — polled, then a
+      // short settle so a late console error still lands in the watcher.
+      await until(gameWin.webContents,
+        `typeof window.__game === 'object' && !!document.querySelector('#start-menu:not(.hidden)')`, 60000);
+      await wait(1500);
       const game = await gameWin.webContents.executeJavaScript('typeof window.__game');
       const menu = await gameWin.webContents.executeJavaScript(
         `!!document.querySelector('#start-menu:not(.hidden)')`);
@@ -1117,6 +1198,168 @@ async function smoke() {
   gameServer?.close();
   stopSourceServer();
   app.exit(errors.length ? 1 : 0);
+}
+
+/**
+ * THE UPDATE SMOKE (`--smoke-test=update`, npm run smoke:update) — the proof
+ * that THIS build can still find and verify its own successor, run inside
+ * the real Electron runtime against the real launcher page. It is the one
+ * self-check that gates a PUBLISH (release.yml runs it on the packaged app):
+ * a launcher that cannot update can never be sent its own fix, so that
+ * breakage must die in CI, never on a player's machine.
+ *
+ * Hermetic by construction: a loopback fixture stands in for GitHub (no
+ * network, no rate limit, no flake), the fixture is built RELATIVE to the
+ * running version (so it holds for a checkout and for any tagged package
+ * alike), the channel flips in memory only (a machine's settings file is
+ * asserted untouched), and nothing is ever installed — the lane stops at a
+ * verified file on disk and deletes it.
+ *
+ * The fixture is the failed-night law in miniature, newest first:
+ *   +3  a DRAFT with complete assets      → never seen (an unpublished night)
+ *   +2  a prerelease whose artifact for this platform is still 'open'
+ *                                         → passed over, by name, in the log
+ *   +1  a complete prerelease             → THE TARGET on the nightly channel
+ *   +0  the stable this install equals    → what the stable channel serves
+ *   a non-version tag carrying an .exe    → not a game build, never offered
+ * @param {{ errors: string[], watch: (wc: Electron.WebContents, tag: string) => void,
+ *   wait: (ms: number) => Promise<unknown>,
+ *   until: (wc: Electron.WebContents, expr: string, ms: number) => Promise<any>,
+ *   watcherSelfTest: (wc: Electron.WebContents) => Promise<void> }} t
+ */
+async function smokeUpdate(t) {
+  const { errors } = t;
+  const suffix = updates.PLATFORM_ARTIFACT[process.platform];
+  if (!suffix) {
+    console.log(`SMOKE update: SKIPPED — no direct-update artifact exists for platform '${process.platform}'`);
+    return;
+  }
+  const cur = updates.parseVer(app.getVersion());
+  if (!cur) { errors.push(`the running version '${app.getVersion()}' does not parse`); return; }
+  /** @param {number} bump */
+  const verAt = (bump) => `${cur[0]}.${cur[1]}.${cur[2] + bump}`;
+
+  // A deterministic payload, its true digest, and two liars sharing its name.
+  const good = Buffer.alloc(384 * 1024);
+  for (let i = 0; i < good.length; i++) good[i] = (i * 31 + (i >> 8) * 7) & 0xff;
+  const corrupt = Buffer.from(good); corrupt[corrupt.length >> 1] ^= 0xff;
+  const digest = 'sha256:' + crypto.createHash('sha256').update(good).digest('hex');
+
+  const http = require('node:http');
+  const gh = 'fixture/hollow-wake';
+  let origin = '';
+  /** @param {string} ver @param {{ draft?: boolean, prerelease?: boolean, open?: boolean }} o */
+  const release = (ver, o) => ({
+    tag_name: `v${ver}`, name: `Hollow Wake v${ver}${o.prerelease ? ' (nightly RC)' : ''}`,
+    html_url: `${origin}/release/v${ver}`, draft: !!o.draft, prerelease: !!o.prerelease,
+    assets: [`HollowWake-Setup-${ver}.exe`, `HollowWake-${ver}-x86_64.AppImage`, 'latest.yml'].map(name => ({
+      name, size: good.length, digest, browser_download_url: `${origin}/asset/good`,
+      state: (o.open && name.toLowerCase().endsWith(suffix)) ? 'open' : 'uploaded',
+    })),
+  });
+  const list = () => [
+    release(verAt(3), { draft: true, prerelease: true }),
+    release(verAt(2), { prerelease: true, open: true }),
+    release(verAt(1), { prerelease: true }),
+    release(verAt(0), {}),
+    { ...release(verAt(9), {}), tag_name: 'tools-latest' },
+  ];
+  const server = http.createServer((req, res) => {
+    const url = String(req.url || '');
+    /** @param {unknown} body */
+    const json = (body) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
+    if (url.startsWith(`/repos/${gh}/releases/latest`)) return json(release(verAt(0), {}));
+    if (url.startsWith(`/repos/${gh}/releases`)) return json(list());
+    if (url === '/asset/good') { res.writeHead(200, { 'content-length': good.length }); return res.end(good); }
+    if (url === '/asset/corrupt') { res.writeHead(200, { 'content-length': corrupt.length }); return res.end(corrupt); }
+    if (url === '/asset/short') { // promises the whole file, hangs up half way
+      res.writeHead(200, { 'content-length': good.length });
+      res.write(good.subarray(0, good.length >> 1));
+      return void setTimeout(() => res.destroy(), 50);
+    }
+    res.writeHead(404); res.end();
+  });
+  await new Promise(r => server.listen(0, '127.0.0.1', () => r(null)));
+  const addr = /** @type {import('node:net').AddressInfo} */ (server.address());
+  origin = `http://127.0.0.1:${addr.port}`;
+
+  // Pin the lane in memory: the fixture as the API, the default channel, the
+  // launch check on — whatever this machine's local config says.
+  const localFile = LOCAL_CONFIGS[LOCAL_CONFIGS.length - 1];
+  const localBefore = fs.existsSync(localFile) ? fs.readFileSync(localFile, 'utf-8') : null;
+  cfg.repo = { ...cfg.repo, github: gh, api: origin };
+  cfg.updates = { ...cfg.updates, channel: updates.UPDATE_CHANNELS[0].id, checkOnLaunch: true, directInstall: true };
+  const tmp = path.join(app.getPath('temp'), `hollow-wake-update-smoke-${process.pid}.bin`);
+
+  try {
+    launcherWin = createLauncherWindow({ show: false });
+    const wc = launcherWin.webContents;
+    t.watch(wc, 'launcher');
+    await new Promise(r => wc.once('did-finish-load', () => r(null)));
+
+    // ---- the nightly channel finds +1, passes +2 over by name, never sees +3
+    const want = `v${verAt(1)}`;
+    await t.until(wc, `document.getElementById('update-status')?.className === 'avail'`, 20000);
+    const text = await wc.executeJavaScript(`document.getElementById('update-status')?.textContent ?? ''`);
+    const rows = await wc.executeJavaScript(`document.querySelectorAll('#changes li').length`);
+    const btn = await wc.executeJavaScript(`!document.getElementById('update-btn')?.classList.contains('hidden')`);
+    const picker = await wc.executeJavaScript(
+      `!document.getElementById('channel-row')?.classList.contains('hidden') && document.getElementById('channel')?.value`);
+    const pageLog = await wc.executeJavaScript(`document.getElementById('log')?.textContent ?? ''`);
+    if (!String(text).startsWith(`${want} is available`)) errors.push(`nightly channel announced "${text}", expected "${want} is available…"`);
+    if (rows !== 1) errors.push(`nightly channel listed ${rows} newer builds, expected exactly 1 (${want})`);
+    if (!btn) errors.push('the Update button never appeared');
+    if (picker !== 'nightly') errors.push(`the channel picker reads '${picker}', expected 'nightly' and visible`);
+    const nightlyTag = latestRelease.tag;
+    if (nightlyTag !== want) errors.push(`the remembered release is ${nightlyTag}, expected ${want}`);
+    if (!latestRelease.asset?.digest) errors.push('the remembered artifact carries no digest');
+    if (!pageLog.includes(`Passed over v${verAt(2)}`)) errors.push(`the log never named the incomplete v${verAt(2)} as passed over`);
+    if (pageLog.includes(`v${verAt(3)}`)) errors.push(`the DRAFT v${verAt(3)} leaked into the log`);
+    if (process.env.HOLLOW_WAKE_SMOKE_SHOT) {
+      // Proof only (never set in CI): a hidden window's compositor may hold
+      // a stale frame, so surface it for the one capture. The DOM reads
+      // above are the verdict; this is just a picture of them.
+      try {
+        launcherWin.showInactive(); await t.wait(500);
+        fs.writeFileSync(process.env.HOLLOW_WAKE_SMOKE_SHOT, (await wc.capturePage()).toPNG());
+        launcherWin.hide();
+      } catch { /* proof only */ }
+    }
+
+    // ---- the stable channel (flipped THROUGH THE PAGE) holds: nothing newer
+    await wc.executeJavaScript(
+      `(() => { const s = document.getElementById('channel'); s.value = 'stable'; s.dispatchEvent(new Event('change')); })()`);
+    await t.until(wc, `document.getElementById('update-status')?.className === 'good'`, 20000);
+    const stableText = await wc.executeJavaScript(`document.getElementById('update-status')?.textContent ?? ''`);
+    if (!String(stableText).startsWith('Up to date')) errors.push(`stable channel announced "${stableText}", expected "Up to date."`);
+    if (updateCfg().channel !== 'stable') errors.push(`the channel fold reads '${updateCfg().channel}' after the page chose stable`);
+    if (latestRelease.asset) errors.push('the old channel\'s remembered artifact survived the channel change');
+    const localAfter = fs.existsSync(localFile) ? fs.readFileSync(localFile, 'utf-8') : null;
+    if (localAfter !== localBefore) errors.push(`a smoke run rewrote this machine's settings (${localFile})`);
+
+    // ---- THE DIGEST LAW: verified or deleted — never installed here
+    /** @param {string} route */
+    const asset = (route) => ({ name: `HollowWake-smoke${suffix}`, url: `${origin}/asset/${route}`, size: good.length, digest: updates.parseDigest(digest) });
+    const okRun = await fetchUpdateArtifact(asset('good'), tmp, want).catch((e) => e);
+    const verified = !(okRun instanceof Error) && okRun.verified && fs.existsSync(tmp) && fs.statSync(tmp).size === good.length;
+    if (!verified) errors.push(`a good artifact was not verified onto disk (${okRun instanceof Error ? okRun.message : 'unverified'})`);
+    fs.rmSync(tmp, { force: true });
+    /** @type {Record<string, boolean>} */ const refused = {};
+    for (const route of ['corrupt', 'short']) {
+      const r = await fetchUpdateArtifact(asset(route), tmp, want).catch((e) => e);
+      refused[route] = r instanceof Error && !fs.existsSync(tmp);
+      if (!(r instanceof Error)) errors.push(`a ${route} artifact was ACCEPTED`);
+      else if (fs.existsSync(tmp)) errors.push(`a refused ${route} artifact was left on disk`);
+      fs.rmSync(tmp, { force: true });
+    }
+    await t.watcherSelfTest(wc);
+    console.log(`SMOKE update: v${app.getVersion()} packaged=${PACKAGED} nightly=${nightlyTag}`
+      + ` announced="${text}" stable="${stableText}" verified=${verified}`
+      + ` corruptRefused=${refused.corrupt} shortRefused=${refused.short} settingsUntouched=${localAfter === localBefore}`);
+  } finally {
+    fs.rmSync(tmp, { force: true });
+    server.close();
+  }
 }
 
 // -------------------------------------------------------------- perf harness

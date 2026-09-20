@@ -10,7 +10,10 @@
   "updates": {
     "checkOnLaunch": true,
     "mode": "auto",
-    "directInstall": true
+    "directInstall": true,
+    "channel": "nightly",
+    "scanReleases": 10,
+    "verifyDigest": true
   },
   "window": {
     "width": 1600,
@@ -26,7 +29,7 @@
   },
   "launcher": {
     "width": 700,
-    "height": 680,
+    "height": 720,
     "returnToLauncher": true,
     "autoPlayOnGamescope": true
   },

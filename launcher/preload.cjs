@@ -11,9 +11,11 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('launcher', {
   /** Current repo/build/config state (version, branch, head, dirty, …). */
   status: () => ipcRenderer.invoke('launcher:status'),
-  /** git fetch + how far behind the GitHub branch we are (+ changelog). */
+  /** Checkout: git fetch + how far behind the GitHub branch we are (+ changelog).
+   *  Packaged: the release-channel probe — how many published builds are newer. */
   check: () => ipcRenderer.invoke('launcher:check'),
-  /** git pull --ff-only → npm install → build. */
+  /** Checkout: git pull --ff-only → npm install → build. Packaged: THE DIRECT
+   *  UPDATE — download, verify against the published digest, install, relaunch. */
   update: () => ipcRenderer.invoke('launcher:update'),
   /** Ensure the build is current, start the loopback server, open the game window. */
   play: () => ipcRenderer.invoke('launcher:play'),
@@ -27,6 +29,10 @@ contextBridge.exposeInMainWorld('launcher', {
    *  machine-local config; resolves { ok, dev, mode } — the stored toggles
    *  and the effective fold the game will launch with. */
   setDev: (/** @type {Record<string, boolean>} */ patch) => ipcRenderer.invoke('launcher:setDev', patch),
+  /** THE RELEASE CHANNEL: follow 'nightly' (every verified night's build) or
+   *  'stable' (hand-cut stables only); persisted to the machine-local config.
+   *  Resolves { ok, channel, channels } — re-run check() afterwards. */
+  setChannel: (/** @type {string} */ id) => ipcRenderer.invoke('launcher:setChannel', id),
   quit: () => ipcRenderer.invoke('launcher:quit'),
   /** Streamed progress lines from git/npm/build child processes. */
   onLog: (/** @type {(line: string) => void} */ cb) => {

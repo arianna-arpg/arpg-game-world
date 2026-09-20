@@ -4,9 +4,22 @@
 # tag (v0.5.0 → v0.5.1 → v0.5.2 → …) and run the normal release pipeline on
 # it, published as a PRERELEASE. A quiet night cuts nothing.
 #
-# Player safety: the launcher's update probe reads /releases/latest, which by
-# GitHub API definition never serves prereleases or drafts — installed stable
-# copies never see a nightly. Testers grab RCs from the Releases page.
+# WHO GETS A NIGHTLY: every installed launcher on the default 'nightly'
+# channel (launcher/updates.cjs; contract in docs/engine/updates.md) — it
+# reads the release LIST and takes the newest PUBLISHED build, so an RC cut
+# here reaches players that day. Only the opt-in 'stable' channel reads
+# /releases/latest, which by API definition never serves a prerelease.
+#
+# PLAYER SAFETY = THE FAILED-NIGHT LAW: a launcher can only be offered what
+# was PUBLISHED, and nothing about a failed night ever is —
+#   red verify (below)            → `cut` never runs: no tag, no release
+#   red package leg / red         → release.yml's uploads sit in a DRAFT, and
+#   packaged smoke / red finalize   only `finalize` (needs every leg) flips it
+#                                   public; anonymous API callers — i.e.
+#                                   every launcher — never see drafts
+# So a red night costs players nothing but a day: they keep the last good
+# night, the alarm rings, and the next night either re-runs the unpublished
+# tag (no new commits) or cuts the next number (new commits).
 #
 # Numbering law: nightlies bump the PATCH of the newest existing vX.Y.Z tag;
 # hand-cut stables keep bumping the MINOR (v0.6.0), which numerically
@@ -58,6 +71,10 @@ jobs:
       - run: npm ci
       - name: Type-check (game + launcher + balance harness)
         run: npm run check
+      # The update path's laws (selection, the failed-night law, the digest
+      # law) — a launcher that cannot update can never be sent its own fix.
+      - name: Launcher update laws
+        run: npm run test:launcher
       - name: Probes (green roster, fast + slow lanes)
         run: npm run probe -- --slow
 
@@ -70,8 +87,10 @@ jobs:
           fetch-depth: 0   # full history + tags — the gate is rev-list against the last tag
 
       - name: Gate on new commits, then tag and dispatch the release
+        id: cut
         env:
           GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           last="$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)"
@@ -81,7 +100,28 @@ jobs:
           fi
           count="$(git rev-list "$last..HEAD" --count)"
           if [ "$count" -eq 0 ]; then
-            echo "HEAD is exactly $last — no commits since the last release; skipping tonight."
+            # HEAD is exactly $last — but did that cut ever SHIP? A red
+            # release leg leaves the tag standing over a hidden draft, and
+            # with no new commits the old gate skipped it forever: a night
+            # players follow was lost to one transient upload error. GET
+            # /releases/tags/:tag answers only for a PUBLISHED release
+            # (drafts 404, even to this token), so it is the shipped test.
+            if gh api "repos/$REPO/releases/tags/$last" --silent >/dev/null 2>&1; then
+              echo "HEAD is exactly $last, and $last is published — nothing to cut tonight."
+              echo "dispatched=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            # An RC tag carries no bump commit, so package.json still names
+            # an OLDER version; a hand-cut stable's tag equals it. A stable
+            # is a human's to re-run (and must never publish as an RC).
+            if [ "v$(jq -r .version package.json)" = "$last" ]; then
+              echo "::warning::$last is a hand-cut stable that was never published — re-run its release by hand; skipping tonight."
+              echo "dispatched=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "$last was tagged but never published (a red release leg) — re-running its release."
+            gh workflow run release.yml --ref "$last" -f rc=true
+            echo "dispatched=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           ver="${last#v}"
@@ -93,14 +133,18 @@ jobs:
           git tag -a "$next" -m "Nightly RC $next — $count commit(s) since $last"
           git push origin "refs/tags/$next"
           gh workflow run release.yml --ref "$next" -f rc=true
-          echo "Dispatched release.yml on $next. It publishes (as a prerelease) only if both OS legs build."
+          echo "dispatched=true" >> "$GITHUB_OUTPUT"
+          echo "Dispatched release.yml on $next. It publishes (as a prerelease) only if both OS legs build AND smoke their package."
 
-      # The green half of THE RED-NIGHT ALARM (see `alarm` below): a night that
-      # reaches this job verified green, so any standing `nightly-red` issue is
-      # answered and closed — a quiet night (no new commits) counts, the lane
-      # is healthy either way. Fully tolerant: an API hiccup here must never
-      # taint a cut that already happened.
-      - name: Close the nightly-red alarm (the lane is green again)
+      # The green half of THE RED-NIGHT ALARM (see `alarm` below), for the
+      # QUIET night only: verify is green and the newest tag is published, so
+      # the lane is healthy and any standing `nightly-red` issue is answered.
+      # When a release was DISPATCHED the night is not over — this job cannot
+      # know whether it will ship — so the close belongs to release.yml's
+      # finalize (its own alarm rings if a leg goes red instead). Fully
+      # tolerant: an API hiccup here must never taint the run.
+      - name: Close the nightly-red alarm (a quiet, healthy night)
+        if: ${{ steps.cut.outputs.dispatched != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -115,7 +159,9 @@ jobs:
   # mercs + holdfast slow-lane rots) died silently on the Actions page — a
   # broken cadence must be LOUD. Any failure among verify/cut files (or
   # feeds) the single open `nightly-red` issue with the run link and the
-  # failing lines; the next green cut closes it (the step above). ONE issue,
+  # failing lines; the next night that truly SHIPS closes it (release.yml's
+  # finalize — or the quiet-night step above). release.yml carries the
+  # alarm's other half for its own legs, feeding the same issue. ONE issue,
   # reds accumulating as comments, so an outage reads as one timeline and
   # reaches the repo owner's notifications the night it starts.
   alarm:
