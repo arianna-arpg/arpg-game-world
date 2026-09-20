@@ -39,6 +39,12 @@ import { BAR_SLOTS, slotGraftStat } from '../engine/skills';
 import { CHARGE_DEFS, chargeCapStat } from '../engine/charges';
 import { SUPPORT_LIST } from './supports';
 import { procStat } from './procs';
+import { satelliteCountStat } from '../engine/satelliteSpec';
+import './satellites';
+import { auroraCapacityStat } from '../engine/auroraSpec';
+import './auroras';
+import { guardianCountStat } from '../engine/guardianSpec';
+import './guardians';
 
 // ------------------------------------------------------------ generation ---
 
@@ -637,6 +643,42 @@ export const RELIC_AFFIXES: readonly AffixDef[] = [...RELIC_PREFIXES, ...RELIC_S
 // ------------------------------------------------------------- prefixes ----
 
 const PREFIXES: AffixDef[] = [
+  {
+    id: 'satellite_rime_wake', family: 'satellite_rime_wake', kind: 'prefix',
+    names: ['Rimebound'], tags: ['ring', 'amulet'], weight: 14,
+    lines: [{ stat: satelliteCountStat('rime_wake'), kind: 'flat' }],
+    tiers: [{ ilvl: 16, ranges: [[1, 1]], weight: 100 }],
+  },
+  {
+    id: 'guardian_graveglass', family: 'guardian_graveglass', kind: 'prefix',
+    names: ['Glasskept'], tags: ['ring', 'amulet'], weight: 10,
+    lines: [{ stat: guardianCountStat('graveglass'), kind: 'flat' }],
+    tiers: [{ ilvl: 20, ranges: [[1, 1]], weight: 100 }],
+  },
+  {
+    id: 'satellite_storm_wake', family: 'satellite_storm_wake', kind: 'prefix',
+    names: ['Stormbound'], tags: ['ring', 'amulet'], weight: 14,
+    lines: [{ stat: satelliteCountStat('storm_wake'), kind: 'flat' }],
+    tiers: [{ ilvl: 16, ranges: [[1, 1]], weight: 100 }],
+  },
+  {
+    id: 'aurora_pall', family: 'aurora_pall', kind: 'prefix',
+    names: ['Pallbound'], tags: ['ring', 'amulet'], weight: 12,
+    lines: [{ stat: auroraCapacityStat('pall'), kind: 'flat' }],
+    tiers: [{ ilvl: 18, ranges: [[8, 8]], weight: 100 }],
+  },
+  {
+    id: 'satellite_cinder_wake', family: 'satellite_cinder_wake', kind: 'prefix',
+    names: ['Cinderbound'], tags: ['ring', 'amulet'], weight: 14,
+    lines: [{ stat: satelliteCountStat('cinder_wake'), kind: 'flat' }],
+    tiers: [{ ilvl: 12, ranges: [[1, 1]], weight: 100 }],
+  },
+  {
+    id: 'satellite_iron_wake', family: 'satellite_iron_wake', kind: 'prefix',
+    names: ['Wakebound'], tags: ['ring', 'amulet'], weight: 18,
+    lines: [{ stat: satelliteCountStat('iron_wake'), kind: 'flat' }],
+    tiers: [{ ilvl: 8, ranges: [[1, 1]], weight: 100 }],
+  },
   ...RELIC_PREFIXES,
   fam({
     id: 'life', kind: 'prefix',

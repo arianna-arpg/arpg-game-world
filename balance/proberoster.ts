@@ -61,10 +61,21 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_castingcues.ts', status: 'green', tier: 'fast', why: 'GT-019 real interruption/fizzle, held completion geometry, focus recovery, brim crossing, generic opt-out and co-op parity' },
+  { probe: 'probe_afflictioncues.ts', status: 'green', tier: 'fast', why: 'Independent simultaneous blood/kindling/poison/curse layers, individual severity, quiet-presence budget without top-N selection, typed pressure, comfort and co-op cleanup' },
+  { probe: 'probe_warningcues.ts', status: 'green', tier: 'fast', why: 'GT-011/012: exact guard-release geometry, live plan gestures, interruption/recovery and co-op warning cleanup' },
+  { probe: 'probe_combatcues.ts', status: 'green', tier: 'fast', why: 'GT-007–010: parry opening/reflection, avoided hits, timing and critical outcome cues with exact state and co-op fidelity' },
+  { probe: 'probe_defensecues.ts', status: 'green', tier: 'fast', why: 'State-driven winded, poise, guard and shell cues; profile fallback, typed overflow, recovery and co-op parity' },
+  { probe: 'probe_exhaustioncues.ts', status: 'green', tier: 'fast', why: 'Retreat exhaustion and reserve gasps follow real windows, recovery, status removal and co-op state without captions' },
+  { probe: 'probe_guardians.ts', status: 'green', tier: 'fast', why: 'Rime precision aiming and reactive Graveglass interception, suppression, recharge, equipment, lifecycle and co-op' },
+  { probe: 'probe_auroras.ts', status: 'green', tier: 'fast', why: 'Lightning satellite projectiles and independent aurora reservoirs: charge, cascade, equipment, typed scaling, lifecycle and co-op' },
+  { probe: 'probe_satellites.ts', status: 'green', tier: 'fast', why: 'Shared carried satellites: stacking, physical scaling, swept contacts, cleanup, pack progression, gear, save and co-op geometry' },
   { probe: 'probe_passivespecializations.ts', status: 'green', tier: 'fast', why: '300 specific passives: resolved cast modes, body/family inheritance and limits, distance boundaries, investment forks, real preparation consumption, saves and co-op' },
+  { probe: 'probe_parry.ts', status: 'green', tier: 'fast', why: 'Recipient-scoped parry damage windows, visible reflected flights, re-parry, typed mitigation and kill attribution' },
   { probe: 'probe_magicpacks.ts', status: 'green', tier: 'fast', why: 'Ambient magic cohorts, level/size gates, scoped shared mechanics, attributable modifiers, death/ownership cleanup, zone/save and co-op identity' },
   { probe: 'probe_magicpackmechanics.ts', status: 'green', tier: 'fast', why: 'Pack role relays, timed warnings, siphon isolation, traveling beam combat and interruption, persistent rotating graves, level gates, save/load and co-op geometry' },
   { probe: 'probe_magicpackevents.ts', status: 'green', tier: 'fast', why: 'Recurring living blast chains, interrupted healing, triad footprint counterplay, hollow safe centers, shared damage, cleanup, save and co-op warnings' },
+  { probe: 'probe_companioninheritance.ts', status: 'green', tier: 'fast', why: 'Shared summon/companion stat inheritance, real recovery, scoped grants, defenses, spent armor, growth, persistence, dormancy and owner isolation' },
   { probe: 'probe_movementtether.ts', status: 'green', tier: 'fast', why: 'Physical movement tethers: recoil, hard limits, entity anchors, persistence and co-op' },
   { probe: 'probe_tetherecology.ts', status: 'green', tier: 'fast', why: 'Shared anchor scenery, rooted flora, guaranteed kennel crew, leadership bonds and durable visits' },
   { probe: 'probe_encountergroups.ts', status: 'green', tier: 'fast', why: 'Mixed encounterGroups: habitat and level gates, atomic roles, real guard/heal/damage, leader loss, saves, co-op and tethered crews' },
@@ -82,6 +93,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_bountyroutes.ts', status: 'green', tier: 'slow', why: 'Bounty approach and reward budgets, live opening portals, fixed quarry fallback and save fidelity' },
   { probe: 'probe_bountyquality.ts', status: 'green', tier: 'slow', why: 'Bounty journey progress, puzzle attribution, mixed reward budgets and saved payouts' },
   { probe: 'probe_odyssey.ts', status: 'green', tier: 'fast', why: 'Odyssey frozen roster, tutorial release, real objectives and banked rewards, saved preparations, messenger perception/escape/interception, and Lastlight defense/trade recovery' },
+  { probe: 'probe_odysseynights.ts', status: 'green', tier: 'fast', why: 'Odyssey scenery risings: phase and faction gates, warnings, native combat, bounded placement, leader relief and ordinary saved survivors' },
   { probe: 'probe_tacticprogression.ts', status: 'green', tier: 'fast', why: 'Live novice/veteran tactic boundaries, shared brain isolation, body-level rather than target/area scaling, and summon condition composition' },
   { probe: 'probe_tacticalai.ts', status: 'green', tier: 'fast', why: 'Ranged pursuit and lateral movement openings at 30/60/120 Hz, explicit opt-outs, retarget commitment, planted artillery, fixed crossfire destinations and tactical spell sequencing' },
   { probe: 'probe_harassment.ts', status: 'green', tier: 'fast', why: 'Crow/Gnasher/bat contact at 30/60/120 Hz, replenishable summon targetability, intermittent wild escapes and flee-loop A/B' },
@@ -339,6 +351,8 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_wisplight.ts', status: 'excluded', excuse: 'flaky', why: 'FLAKY (5 fails in 10 observed runs — the loudest of the four): G10-G12/G16 cascade off "the light rides the STRONGEST body in reach", which picks the fen_hound over the level-18 weaver about half the time; the seek/ride window is not deterministic' },
   { probe: 'probe_workshop.ts', status: 'green', tier: 'fast', why: 'THE WORKSHOP (the Entity Forge\'s store) — the NAMESPACE LAW both directions: grafts refuse unprefixed ids, shipped content never squats the prefix' },
   { probe: 'probe_worldbossloot.ts', status: 'green', tier: 'fast', why: 'THE SOVEREIGN HOARDS — every world boss names its OWN resolvable loot table, the generic KillCtx.dropLootTable verb lays all three result kinds through the drop primitives, and the seal still refuses on spoils-none ground' },
+  { probe: 'probe_titans.ts', status: 'green', tier: 'fast', why: 'Durable unseen Titan journeys, physical wakes, attributable contact damage, safe terrain birth, cleanup and co-op reconciliation' },
+  { probe: 'probe_worldbossspectacle.ts', status: 'green', tier: 'fast', why: 'Colossi: real warning/damage, full-body escape routes, organ-break cancellation, recovery cycles, once-only brood and no looping phase rewards' },
   { probe: 'probe_zonepolicy.ts', status: 'green', tier: 'fast', why: 'ZONE POLICY — the layout half beside the biome half through the ONE policyFor seam: the shipped-empty layout table is byte-identical to biome-only (exhaustive biome × layout × id A/B against the old logic), authored deny/allow rows AND both ways, and eventTargetable/holdfastHostable route the composed verdict' },
 ];
 

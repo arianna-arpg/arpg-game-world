@@ -166,10 +166,10 @@ const BOROUGH_ENCOUNTER: EncounterDef = {
     ledgerLost: 'boroughs_lost',
     ledgerRefugees: 'borough_refugees',
     text: {
-      found: 'a borough! its folk brace for the horde…',
-      assault: 'the horde breaks upon the borough!',
-      held: 'the borough stands; its folk take the road to Lastlight',
-      lost: 'the borough falls silent…',
+      found: 'Borough',
+      assault: 'Assault',
+      held: 'Borough Saved',
+      lost: 'Borough Lost',
     },
   },
 };

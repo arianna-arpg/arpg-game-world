@@ -22,6 +22,7 @@
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { HUNGER_LEAN, MONSTERS, SPENT_SLUMP, SPENT_SLUMP_BUFF } from '../src/data/monsters';
+import { WIND_PUFF } from '../src/data/exhaustionCues';
 import { SKILLS } from '../src/data/skills';
 import { LOOKS } from '../src/data/looks';
 import { STATUS_DEFS } from '../src/engine/status';
@@ -356,8 +357,9 @@ const row = (source: string, over?: Partial<TellSpec>): TellSpec =>
   check('temperament: the roll is RECORDED and every personality walked in over 40 spawns',
     byV(0).length > 0 && byV(1).length > 0 && byV(2).length > 0,
     `pack ${byV(0).length} / loner ${byV(1).length} / tide ${byV(2).length}`);
-  check('temperament: the baseline roll wears NOTHING (null-cost by construction)',
-    byV(0).every(a => a.tellSpecs === undefined && tellDressOf(a) === undefined));
+  check('temperament: the rested baseline roll wears no visible state cue',
+    byV(0).every(a => tellDressOf(a)?.lean === 0 && !tellDressOf(a)?.tint
+      && tellDressOf(a)?.parts?.every(p => p.alpha === 0) === true));
   tick(w, 0.2);
   const loner = byV(1)[0], tide = byV(2)[0];
   check('temperament: the loner runs dust-dark (always-tint) and stands easy unalerted',
@@ -369,9 +371,9 @@ const row = (source: string, over?: Partial<TellSpec>): TellSpec =>
   check('temperament: the tide wears the storm crest (variant part channel)',
     tellDressOf(tide)?.parts?.[0]?.kind === 'dorsalRidge');
   check('temperament: variant rows COMPOSE with def rows (specs = def + roll)',
-    tellSpecsOf(MONSTERS.sand_skitterer, 1)?.length === 2
-    && tellSpecsOf(MONSTERS.sand_skitterer, 0) === undefined
-    && tellSpecsOf(MONSTERS.mire_leech, undefined) === MONSTERS.mire_leech.tells);
+    tellSpecsOf(MONSTERS.sand_skitterer, 1)?.length === 2 + WIND_PUFF.length
+    && tellSpecsOf(MONSTERS.sand_skitterer, 0)?.every((r, i) => r === WIND_PUFF[i]) === true
+    && MONSTERS.mire_leech.tells?.every((r, i) => tellSpecsOf(MONSTERS.mire_leech)?.[i] === r) === true);
 }
 
 // --- 9) The co-op wire round trip ----------------------------------------------------
@@ -392,7 +394,7 @@ const row = (source: string, over?: Partial<TellSpec>): TellSpec =>
   check('wire: the DERIVED scalars ride (tl mirrors the swept values exactly)',
     JSON.stringify(rowOf(leech)?.tl) === JSON.stringify(leech.tells));
   check('wire: the variant roll rides (bv) so the client rebuilds the same rows',
-    rowOf(loner!)?.bv === 1 && rowOf(loner!)?.tl?.length === 2);
+    rowOf(loner!)?.bv === 1 && rowOf(loner!)?.tl?.length === 2 + WIND_PUFF.length);
   check('wire: an all-zero reading ships nothing (the client materializes zeros free)',
     rowOf(fresh)?.tl === undefined && (fresh.tells ?? []).every(v => v === 0));
   // The REAL adopt path onto a second world (the render-mirror client).
@@ -405,7 +407,8 @@ const row = (source: string, over?: Partial<TellSpec>): TellSpec =>
     w2.actors[snap.actors.findIndex(x => x.id === a.id)];
   const cl = c(leech)!, cn = c(loner!)!, cf = c(fresh)!;
   check('wire: the client rebuilt the SAME binding lists from its own registry',
-    cl.tellSpecs === MONSTERS.mire_leech.tells && cn.tellSpecs?.length === 2
+    JSON.stringify(cl.tellSpecs) === JSON.stringify(leech.tellSpecs)
+    && cn.tellSpecs?.length === 2 + WIND_PUFF.length
     && cn.brainVariant === 1);
   check('wire: host and client materialize the SAME dress from the SAME numbers',
     JSON.stringify(cl.tells) === JSON.stringify(leech.tells)

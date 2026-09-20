@@ -748,7 +748,8 @@ export function formatModLine(line: ModLineDef, v: number): string {
   // THE GRANTED SKILL reads as a grant, never as "+1 Granted Skill": the
   // registered label carries the skill's name after the family's prefix.
   if (line.stat.startsWith(SKILLGRANT_PREFIX) && line.kind === 'flat') {
-    return `Grants Level ${Math.max(1, Math.floor(v))} ${label.replace(/^Granted Skill: /, '')}`;
+    const level = Math.max(1, Math.floor(v));
+    return `Grants Level ${level} ${label.replace(/^Granted Skill: /, '')}, or +${level} levels to your equipped copy`;
   }
   switch (line.kind) {
     case 'flat':
@@ -781,12 +782,13 @@ export function formatModLine(line: ModLineDef, v: number): string {
 }
 
 /** THE SPOKEN LINE (RangedLineDef.text): '{v}' prints the raw rolled value,
- *  '{v%}' prints it as a percentage, '{v0}' as a whole number — so an
+ *  '{v%}' prints a percentage, '{v0}' rounds and '{vf}' floors — so an
  *  authored sentence never has to hand-format what the roller already
  *  knows how to say. */
 export function speakLineText(text: string, stat: string, kind: ModKind, v: number): string {
   return text
     .replace(/\{v%\}/g, formatStatValue(stat, 'increased', v))
     .replace(/\{v0\}/g, String(Math.round(v)))
+    .replace(/\{vf\}/g, String(Math.floor(v)))
     .replace(/\{v\}/g, formatStatValue(stat, kind, v));
 }

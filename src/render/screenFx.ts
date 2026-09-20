@@ -5,8 +5,10 @@
 // you know at a glance what's on you: a pulsing coloured vignette for DoTs, a
 // frosty/snowflake wash when chilled or frozen, circling stars when stunned.
 //
-// Extensible: add a status id → ScreenFxDef entry (and, for a brand-new look, a
-// `kind` + one draw branch in renderer.drawStatusFx). Combat ailments only —
+// Extensible: StatusDef.screenCue selects/opts out of an independent layer;
+// DoTs and armed culls inherit a fallback. This registry keeps specialized
+// control cues. The vignette channel dispatches material layers in afflictionEdge.ts.
+// Combat ailments only —
 // terrain statuses (mired/sodden/…) and blessings are intentionally absent so
 // the screen never flickers from standing in a swamp.
 // ---------------------------------------------------------------------------
@@ -17,6 +19,8 @@ export type ScreenFxKind = 'vignette' | 'frost' | 'stars' | 'pall' | 'darken' | 
 
 export interface ScreenFxDef {
   kind: ScreenFxKind;
+  /** Shape family from AFFLICTION_MOTIFS; unknown families use a neutral notch. */
+  motif?: string;
   /** Colour override; defaults to the status's STATUS_DEFS colour. */
   color?: string;
   /** 0..1 strength of the overlay. */
@@ -39,9 +43,9 @@ export interface ScreenFxDef {
 }
 
 export const STATUS_FX_REGISTRY: Record<string, ScreenFxDef> = {
-  burn:   { kind: 'vignette', intensity: 0.85 },
-  poison: { kind: 'vignette', intensity: 0.7 },
-  bleed:  { kind: 'vignette', intensity: 0.7 },
+  burn:   { kind: 'vignette', intensity: 0.85, motif: 'fire' },
+  poison: { kind: 'vignette', intensity: 0.7, motif: 'toxin' },
+  bleed:  { kind: 'vignette', intensity: 0.7, motif: 'wound' },
   shock:  { kind: 'vignette', intensity: 0.6 },
   decay:  { kind: 'vignette', intensity: 0.6 },
   chill:  { kind: 'frost', intensity: 0.55 },
@@ -88,7 +92,7 @@ export const STATUS_FX_REGISTRY: Record<string, ScreenFxDef> = {
   horrified: { kind: 'pall', color: '#b8a4e8', intensity: 0.85 },
 };
 
-export interface ActiveFx { def: ScreenFxDef; color: string; k: number; }
+export interface ActiveFx { id: string; def: ScreenFxDef; color: string; k: number; }
 
 /** Shared empty result — the statusless frame (the overwhelming common case)
  *  allocates nothing. Callers never mutate collectActiveFx results. */
@@ -96,13 +100,24 @@ const EMPTY_FX: ActiveFx[] = [];
 
 /** The screen effects to draw for the player's current statuses (combat only). */
 export function collectActiveFx(statuses: ActiveStatus[]): ActiveFx[] {
+  if (!statuses.length) return EMPTY_FX;
   let out: ActiveFx[] | null = null;
+  const seen = new Set<string>();
   for (const s of statuses) {
-    const def = STATUS_FX_REGISTRY[s.id];
+    if (s.remaining <= 0 || seen.has(s.id)) continue;
+    const status = STATUS_DEFS[s.id];
+    if (status?.screenCue === false || status?.beneficial) continue;
+    const authored = status?.screenCue;
+    const inherited = Object.hasOwn(STATUS_FX_REGISTRY, s.id) ? STATUS_FX_REGISTRY[s.id] : undefined;
+    const def: ScreenFxDef | undefined = authored ? { kind: 'vignette', ...authored }
+      : inherited ?? (status?.dotType || status?.cullsAtLethal || s.dps > 0 || s.screenDot
+        ? { kind: 'vignette', intensity: 0.7, motif: status?.cullsAtLethal ? 'doom'
+          : status?.dotType === 'fire' ? 'fire' : 'generic' } : undefined);
     if (!def) continue;
-    const cap = STATUS_DEFS[s.id]?.maxStacks ?? 1;
+    seen.add(s.id);
+    const cap = status?.maxStacks ?? 1;
     const k = def.stacksScale ? Math.min(1, Math.max(0, (s.stacks || 1) / cap)) : 1;
-    (out ??= []).push({ def, color: def.color ?? STATUS_DEFS[s.id]?.color ?? '#ffffff', k });
+    (out ??= []).push({ id: s.id, def, color: def.color ?? STATUS_DEFS[s.id]?.color ?? '#ffffff', k });
   }
   return out ?? EMPTY_FX;
 }

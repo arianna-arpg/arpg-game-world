@@ -1,3 +1,5 @@
+import type { EncounterCueSpec } from '../data/warningCues';
+import type { EncounterCue } from './warningCues';
 import { dist } from '../core/math';
 import type { Actor } from './actor';
 import type { World } from './world';
@@ -9,7 +11,9 @@ export interface EncounterCombatSpec {
   plans: string[];
   /** Map composition slots onto reusable tactical roles. */
   roles?: Record<string, string>;
-  /** Local flavor for a reusable plan's readable warning. */
+  /** Local visual overrides on shared maneuvers (unknown styles fall back). */
+  cues?: Record<string, EncounterCueSpec>;
+  /** Legacy reference data; no gameplay emitter reads these strings. */
   signals?: Record<string, string>;
   minLevel?: number;
   thinkEvery?: number;
@@ -33,7 +37,10 @@ export interface EncounterAssignment {
   ward?: string;
 }
 export interface EncounterTactic {
-  id: string; name: string; signal: string; color: string;
+  id: string; name: string; color: string;
+  cue?: EncounterCueSpec;
+  /** Legacy reference text, never emitted during combat. */
+  signal?: string;
   minLevel: number;
   /** A utility decision: gates admit plans, weighted facts rank them. */
   base: number;
@@ -114,7 +121,7 @@ function recovery(w: World,s: PlanState): void {
   const p=s.plan!;
   s.phase='recover'; s.until=w.time+p.recovery;
   for(const a of s.participants) if(a.encounterOrder) a.encounterOrder={...a.encounterOrder,phase:'recover',until:s.until,use:p.recover,target:undefined,ward:undefined};
-  if(s.leader && fit(s.leader)) w.text(s.leader.pos,'Regrouping',ENCOUNTER_COMBAT_CFG.recoverColor,12,undefined,p.recovery);
+  // encounterCueOf follows the recovery clock, including disrupted conductors.
 }
 /** One bounded utility planner per group; no direct casts, teleports, stat
  * bonuses, resource refunds or replacement damage rules. */
@@ -176,8 +183,7 @@ export function updateEncounterCombat(w: World): void {
           use:assignment.use,target:assignment.focus?o.target.id:undefined,ward:ward?.id};
       }
     }
-    w.text({x:o.leader.pos.x,y:o.leader.pos.y-40},spec.signals?.[chosen.id] ?? chosen.signal,chosen.color,15,undefined,chosen.warning);
-    w.flashes.push({pos:{...o.leader.pos},radius:ENCOUNTER_COMBAT_CFG.signalRadius,color:chosen.color,life:chosen.warning,maxLife:chosen.warning});
+    // Presentation reads this bounded plan directly; no detached warning flash.
   }
 }
 function order(a: Actor,w: World): EncounterOrder | undefined {
@@ -207,7 +213,7 @@ export function encounterCombatErrors(): string[] {
   const errors:string[]=[];
   for(const [id,p] of Object.entries(ENCOUNTER_TACTICS)) {
     const bad=(s:string)=>errors.push(`encounterCombat ${id}: ${s}`);
-    if(id!==p.id || !p.signal || !Number.isFinite(p.base) || !Number.isFinite(p.minLevel) || p.minLevel<1) bad('invalid identity/score/level');
+    if(id!==p.id || !Number.isFinite(p.base) || !Number.isFinite(p.minLevel) || p.minLevel<1) bad('invalid identity/score/level');
     for(const key of ['warning','duration','recovery','cooldown'] as const) if(!Number.isFinite(p[key]) || p[key]<=0) bad(`invalid ${key}`);
     for(const [r,n] of Object.entries(p.needs)) if(!r || !Number.isInteger(n)||n<1) bad('invalid required role');
     for(const c of [...p.when,...p.score??[]]) {
@@ -223,6 +229,7 @@ export function encounterCombatErrors(): string[] {
     const c=g.encounterCombat;
     for(const id of c.plans) if(!ENCOUNTER_TACTICS[id]) errors.push(`encounterCombat ${g.id}: unknown plan ${id}`);
     for(const slot of Object.keys(c.roles??{})) if(!g.members.some(m=>m.slot===slot)) errors.push(`encounterCombat ${g.id}: unknown slot ${slot}`);
+    for(const [key,v] of Object.entries(c.cues??{})) if(!c.plans.includes(key)||!v.style) errors.push(`encounterCombat ${g.id}: invalid cue ${key}`);
     for(const key of Object.keys(c.signals??{})) if(!c.plans.includes(key)||!c.signals![key]) errors.push(`encounterCombat ${g.id}: invalid signal ${key}`);
     const capacity=(role:string)=>g.members.filter(m=>(c.roles?.[m.slot]??m.role)===role).reduce((n,m)=>n+(m.count?.[1]??1),0);
     for(const id of c.plans) for(const [role,n] of Object.entries(ENCOUNTER_TACTICS[id]?.needs??{}))
@@ -230,4 +237,24 @@ export function encounterCombatErrors(): string[] {
     for(const n of [c.thinkEvery,c.radius,c.minLevel]) if(n!==undefined && (!Number.isFinite(n)||n<=0)) errors.push(`encounterCombat ${g.id}: invalid timing/range/level`);
   }
   return errors;
+}
+
+/** Read the actual planner state without mutating AI. Leaders may conduct a
+ * plan without receiving an assignment (e.g. the piper directing flankers). */
+export function encounterCueOf(a: Actor,w: World): EncounterCue | undefined {
+  if(!a.encounterGroup && !a.encounterCue) return;
+  if(a.dead || a.downed || a.isStunned()) return;
+  if(a.encounterCue) return a.encounterCue;
+  const g=a.encounterGroup, runtime=worlds.get(w);
+  if(!g || a.faction!==ENCOUNTER_GROUPS[g.recipe]?.faction || !runtime || runtime.zone!==w.zone || !ready(a,w) || a.aiCommand || a.standingOrder) return;
+  const s=runtime.groups.get(g.id), spec=ENCOUNTER_GROUPS[g.recipe]?.encounterCombat;
+  if(!s?.plan || !s.phase || !s.leader || !spec || s.until<=w.time) return;
+  const conductor=a===s.leader;
+  if(!conductor && !order(a,w)) return;
+  if(s.phase!=='recover' && !ready(s.leader,w)) return;
+  if(a.tier!==s.leader.tier || dist(a.pos,s.leader.pos)>(spec.radius ?? ENCOUNTER_COMBAT_CFG.radius)) return;
+  const p=s.plan, cue=spec.cues?.[p.id] ?? p.cue;
+  const span=s.phase==='warning'?p.warning:s.phase==='commit'?p.duration:p.recovery;
+  return {group:g.id,leader:s.leader.id,plan:p.id,style:cue?.style ?? 'gather',color:cue?.color ?? p.color,
+    phase:s.phase,progress:Math.max(0,Math.min(1,1-(s.until-w.time)/span)),conductor,facing:a.facing};
 }

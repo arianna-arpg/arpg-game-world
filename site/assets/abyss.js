@@ -47,11 +47,11 @@
     var sy = window.scrollY || 0;
     ctx.clearRect(0, 0, W, H);
     // THE ONE GLOW (the flip, her word): the chart's own ether starlight
-    // ANCHORED at the bottom of the view — pinned to the viewport exactly
+    // ANCHORED at the bottom of the view: pinned to the viewport exactly
     // like the old corner radials were (no scroll coupling at all): the
     // breathing lift that says there is more below, staying below.
     // THE HONEST CUE (her word): the light DISSOLVES over the last stretch
-    // of scroll — a promise of more below must go dark when there is
+    // of scroll: a promise of more below must go dark when there is
     // nothing below; at the page's true end (and on pages too short to
     // scroll) only the void's rim remains.
     var vh = Math.min(H, window.innerHeight);
@@ -101,7 +101,7 @@
 
   var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (still) {
-    // One considered frame, no animation — repainted per scroll step so the
+    // One considered frame, no animation; repainted per scroll step so the
     // honest cue (the glow dissolving at the page's end) stays true here too.
     paint(3.7);
     window.addEventListener('scroll', function () { paint(3.7); }, { passive: true });

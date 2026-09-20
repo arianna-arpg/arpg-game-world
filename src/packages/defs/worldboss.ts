@@ -4,19 +4,9 @@
 // Rare, named, colossal forces of nature — near-faction equivalents that
 // belong to no war. Three distinct scenarios ride one overlay, all data:
 //
-//   VHORUN, the Sunder-Wyrm (roamer) — the world-serpent. It wakes and
-//   slithers a chain of charted zones; every road its body crosses SEALS
-//   behind a short grace window (be in the zone as it passes and you can dash
-//   through the closing coils — or watch the pass shut in your face and
-//   re-route). Its body lies drawn across the world map. When it settles, its
-//   HEAD — the segment fabric's true worm — waits ON the rest ground itself
-//   (THE SETTLED GROUND venue: the fight happens in the real world it
-//   strangled, no minted pocket jarring against the neighbors), and the land
-//   YIELDS to it: head, coils and the passing body all wear the RAMPAGE
-//   fabric (engine/rampage.ts), so standing timber and stone are crushed
-//   flat in its wake — temporarily; the regrowth law returns every piece,
-//   and a re-entered zone re-mints pristine from seed. Slay it and every
-//   strangled road falls open at once.
+//   Vhorun belongs to the TITANS package now. These sovereigns are the
+//   announced encounter roster. The generic roamer grammar remains available
+//   for authored packages, but no shipped sovereign uses portal lattice walls.
 //
 //   CRAGMAW, the Orogeny (apparition) — a walking mountain heralded on the
 //   map with a countdown; it manifests, it waits, and unbeaten it DEPARTS.
@@ -87,22 +77,18 @@ export const WORLDBOSS_SURGE: WorldBossSurge = {
   },
   defs: [
     {
-      // THE TRUE WORLD SNAKE (the SEGMENT FABRIC's debut — docs/engine/
-      // segments.md): a colossal head the whole body trails, every segment
-      // hittable, scale plates tearing where the damage spreads. The myth
-      // pays like one.
-      id: 'vhorun', name: 'Vhorun, the Sunder-Wyrm', archetype: 'roamer',
-      monster: 'primeval_wyrm_head', minLevel: 10, levelBonus: 3,
-      glyph: '🐍', color: '#7fb069',
-      escort: { table: [{ id: 'primeval_spawn', weight: 1 }], count: [3, 5] },
-      // THE SETTLED GROUND: the head fight stands in the REST ZONE itself —
-      // real country, its own dress, doors that were always there. The
-      // colossus needs no minted room to sweep because the room yields: the
-      // whole animal wears the rampage fabric (data/monsters.ts) and plows
-      // the ground's standing timber flat — temporarily, always temporarily.
-      roam: { passingMonster: 'primeval_wyrm_passing', wallKind: 'wyrm_coil', venue: 'ground' },
-      pitch: 'every scale of it is a target: tear the plates along its length and it bleeds the harder, but a torn coil spits venom',
-      reward: { xp: 1250, gems: 6, tables: ['sunderwyrm_hoard'] },
+      id: 'rimeheart', name: 'Thessara, the Rimeheart', archetype: 'apparition',
+      monster: 'sovereign_rimeheart', minLevel: 8, levelBonus: 2,
+      glyph: '❄', color: '#b7e1f5',
+      reward: { xp: 950, gems: 5, tables: ['rimeheart_hoard'] },
+      pitch: 'the ring of winter leaves shelter close to her heart; strike during the thaw',
+    },
+    {
+      id: 'stormcrown', name: 'Orun, the Stormcrowned', archetype: 'apparition',
+      monster: 'sovereign_stormcrown', minLevel: 10, levelBonus: 3,
+      glyph: 'ϟ', color: '#be9fde',
+      reward: { xp: 1000, gems: 5, tables: ['stormcrown_hoard'] },
+      pitch: 'two lightning processions leave an open central approach; close in as his crown dims',
     },
     {
       id: 'cragmaw', name: 'Cragmaw, the Orogeny', archetype: 'apparition',
@@ -159,6 +145,10 @@ const PRIMEVAL_FACTION: FactionSpec = {
     { id: 'primeval_cinder', weight: 3 },
     { id: 'bell_keeper', weight: 2 },
     { id: 'toll_wretch', weight: 3 },
+    { id: 'sovereign_rimeheart', weight: 1 },
+    { id: 'sovereign_stormcrown', weight: 1 },
+    { id: 'titan_cindergait', weight: 1 },
+    { id: 'titan_istral', weight: 1 },
     { id: 'primeval_wyrm_head', weight: 1 },
     { id: 'primeval_cragmaw', weight: 1 },
     { id: 'primeval_ashvein', weight: 1 },
@@ -170,7 +160,7 @@ const PRIMEVAL_FACTION: FactionSpec = {
 export const WORLDBOSS: ContentPackage = {
   id: 'worldboss',
   label: 'World Bosses',
-  blurb: 'The Primeval: rare, named forces of nature that belong to no faction and no war. A world-serpent slithers across the map and strangles the roads it crosses until its head is struck off; heralded colossi breach on a countdown and depart unbeaten; an enthroned horror waits in a lair minted onto the world, fused to the throne it erupts from. Watch the map: the world will warn you, once.',
+  blurb: 'The Primeval: heralded colossi breach on a countdown, while enthroned horrors wait within their lairs. Six sovereigns test different approaches. Watch the map: the world will warn you.',
   color: '#c8a03c',
   cost: 150,
   // DISCOVERED in play (runs at defaults); the Vault unlock gates TUNING,

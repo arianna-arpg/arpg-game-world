@@ -7,8 +7,15 @@
 // ---------------------------------------------------------------------------
 
 import { conversionStat, mod, STAT_DEFS, type DamageType, type Modifier, type SkillTag } from './stats';
+import type { PartSpec } from '../render/vis/parts';
 
 export interface StatusDef {
+  /** Optional independent screen layer profile. False opts out; damaging/doom statuses
+   * inherit a generic layer when absent. UI-only: never changes damage. */
+  screenCue?: { motif?: string; color?: string; intensity?: number } | false;
+  /** Persistent body presentation, following actual status presence on all
+   * actors. Parts use facing space; lean is a draw-only knee dip. */
+  bodyCue?: { lean?: number; parts?: PartSpec[] };
   label: string;
   color: string;
   /** Default duration in seconds (scaled by the caster's effectDuration). */
@@ -1221,6 +1228,9 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // whatever the shelf's CollapseSpec priced it at).
   winded: {
     label: 'Winded', color: '#c8d4ea', duration: 1.4,
+    voice: false,
+    bodyCue: { lean: 0.55, parts: [{ kind: 'breathPuff', x: 0.45, y: 0.05,
+      scale: 1.15, alpha: 0.9, params: { period: 1.4, duty: 0.85, opacity: 0.8 } }] },
     mods: [mod('moveSpeed', 'increased', -0.15)],
   },
   // CLOUDFORM — the body condenses into stabilized cloud-stuff and FLOATS:
@@ -1825,6 +1835,8 @@ for (const [id, def] of Object.entries(STATUS_DEFS)) {
 }
 
 export interface ActiveStatus {
+  /** Render-only wire hint for generic untyped DoTs (client DPS stays zero). */
+  screenDot?: true;
   /** Aura-bound wound: separate from lasting ailments and removed with its field. */
   challengeField?: number;
   id: string;

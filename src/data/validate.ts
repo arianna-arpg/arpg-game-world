@@ -11,6 +11,10 @@ import { PRESENCE_BANDS, presenceMul, type PresenceSpec } from '../engine/presen
 import { SKILLS } from './skills';
 import { invocationTreeErrors } from '../engine/invocation';
 import { magicPackErrors } from '../engine/magicPacks';
+import { satelliteErrors } from '../engine/satelliteSpec';
+import { auroraErrors } from '../engine/auroraSpec';
+import { guardianErrors } from '../engine/guardianSpec';
+import './guardians';
 import { movementTetherErrors } from '../engine/movementTether';
 import { encounterGroupErrors, encounterGroupSpecErrors } from '../engine/encounterGroups';
 import { ENCOUNTER_GROUPS } from './encounterGroups';
@@ -146,6 +150,9 @@ export function validateContent(): void {
   for (const def of [...Object.values(TILESETS), ...Object.values(ZONES)])
     for (const issue of encounterGroupSpecErrors(def.packs?.encounterGroups)) warn(`encounterGroups ${def.id}: ${issue}`);
   for (const issue of magicPackErrors(id => !!SKILLS[id])) warn(issue);
+  for (const issue of satelliteErrors(id => !!SKILLS[id], id => SKILLS[id]?.delivery.type)) warn(issue);
+  for (const issue of auroraErrors(id => SKILLS[id]?.delivery.type)) warn(issue);
+  for (const issue of guardianErrors()) warn(issue);
   validatePassiveLayout(warn);
   for (const error of localePrograms().flatMap(p => validateLocaleProgram(p, { builder: hasDistrictBuilder, doodad: hasDoodadRule, region: id => !!regionKind(id), walkable: id => !!regionKind(id)?.walkable }).map(e => 'locale ' + p.id + ': ' + e))) warn(error);
   for (const error of mapFeatureKinds().filter(f => f.destination && !localeProgram(f.destination.locale)).map(f => 'atlas destination ' + f.id + ': unknown locale ' + f.destination!.locale)) warn(error);

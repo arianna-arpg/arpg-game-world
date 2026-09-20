@@ -7,5 +7,7 @@
   "compilerOptions": {
     "types": ["node"]
   },
-  "include": ["balance", "src"]
+  "include": ["balance", "src"],
+  // Generated reports may contain isolated verification copies of the game.
+  "exclude": ["balance/reports"]
 }

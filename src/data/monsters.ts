@@ -24,6 +24,8 @@ import { ABYSS_MONSTERS } from './abyssMonsters';
 import { KINSHIP_MONSTERS } from './kinshipMonsters';
 import { ROOTWILD_MONSTERS } from './rootwildMonsters';
 import { ARENA_BOSS_MONSTERS } from './arenaBosses';
+import { WORLDBOSS_ENCOUNTER_MONSTERS, WORLDBOSS_WYRM_BRAIN } from './worldBossEncounters';
+import { TITAN_MONSTERS } from './titans';
 import { TETHERED_MONSTERS, TETHER_KEEPERS } from './tetheredMonsters';
 import { ENCOUNTER_ADVENTURERS } from './encounterAdventurers';
 import type { MovementTetherSpec } from '../engine/movementTether';
@@ -36,6 +38,8 @@ import type { RampageSpec } from '../engine/rampage';
 import type { SquishSpec } from '../engine/squish';
 import type { MountSlotSpec, MountSpec } from '../engine/mounts';
 import type { TellSpec } from '../engine/tells';
+import { VENT_GASP } from './exhaustionCues';
+export { WIND_PUFF } from './exhaustionCues';
 import type { BondLinkStyle } from '../engine/pack';
 import type { WatchSpec } from '../engine/watch';
 import type { PlySpec } from '../engine/plies';
@@ -261,17 +265,7 @@ export const CRESCENDO_BUFF: BuffEffect = {
  *  leads the mechanic by construction — and the WINDED beat that follows is
  *  the punish window the budget was always secretly opening.
  *  Portrait 0 on the puff: the book shows a rested body. */
-export const WIND_PUFF: TellSpec[] = [
-  {
-    source: 'wind', band: [0.45, 1], curve: 'smooth', portrait: 0,
-    channel: {
-      kind: 'part',
-      part: { kind: 'breathPuff', x: 0.48, y: 0.06, scale: 0.8 },
-      alpha: [0, 0.9], scale: [0.5, 1.15],
-    },
-  },
-  { source: 'winded', steps: 1, portrait: 0, channel: { kind: 'lean', amp: -0.6 } },
-];
+// WIND_PUFF lives in exhaustionCues.ts and is inherited by tellSpecsOf.
 
 /** THE UNFURL (MonsterDef.nocturne): the hour-worn mods, finally worn where
  *  they can be SEEN. Deliberately colorless — the glow takes the body's own
@@ -813,6 +807,10 @@ export interface MonsterDef {
    *  every row resolves off the live mechanic the AI itself reads — a sac
    *  that reads full IS full. Docs: docs/engine/tells.md. */
   tells?: TellSpec[];
+  /** Replace the inherited WIND_PUFF family for this body's anatomy.
+   * Appended after authored/variant tells. Sources must still follow the
+   * actual retreat budget and catch-breath window; [] is an explicit opt-out. */
+  retreatTells?: TellSpec[];
   /** THE BURST TELL (the registry-close fold at file end): a deathBurst
    *  body derives a life-banded under-glow in its blast's own color by
    *  DEFAULT — a silent invisible bomb is no longer authorable by omission.
@@ -1068,6 +1066,8 @@ export interface MonsterDef {
    *  present the shell). DoTs, ground effects and bursts bypass — shells
    *  block BLOWS. */
   shellGuard?: {
+    /** Defense cue profile; unknown/omitted uses the universal shell. */
+    shellVisual?: string;
     side: 'rear' | 'front' | 'all';
     /** Pool the shell soaks before breaking. */
     max: number;
@@ -2173,6 +2173,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
   ...KINSHIP_MONSTERS,
   ...ROOTWILD_MONSTERS,
   ...ARENA_BOSS_MONSTERS,
+  ...WORLDBOSS_ENCOUNTER_MONSTERS,
+  ...TITAN_MONSTERS,
   ...TETHERED_MONSTERS,
   ...TETHER_KEEPERS,
   ...ENCOUNTER_ADVENTURERS,
@@ -3970,11 +3972,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
           id: 'veil',
           use: { type: 'commander' },
           mods: [mod('damageTaken', 'more', -0.2)],
-          announce: 'It folds itself behind the brood. BREAK THE VEIL!',
+          announce: 'Veiled',
           onEnter: [
             { do: 'teleport', to: 'anchor' },
             { do: 'summon', monster: 'conclave_blood_demon', count: 4, ring: 190, tag: 'vhal_veil', announce: 'The brood answers!' },
-            { do: 'ward', tag: 'vhal_veil', announce: 'The veil SHATTERS. Strike now!' },
+            { do: 'ward', tag: 'vhal_veil', announce: 'Veil Broken' },
             { do: 'wash', color: '#7a2347', intensity: 0.16 },
           ],
           goto: [{ to: 'apex', tagCleared: 'vhal_veil' }],
@@ -4177,9 +4179,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
       type: 'commander',
       phases: [
         { atLifeFrac: 0.66, type: 'juggernaut', mods: [mod('moveSpeed', 'more', 0.25)],
-          announce: 'Patient Zero lurches forward, and the rot quickens!' },
+          announce: 'Quickening Rot' },
         { atLifeFrac: 0.33, type: 'artillery', mods: [mod('castSpeed', 'more', 0.5)],
-          announce: 'Patient Zero ruptures: the air thickens with spores!' },
+          announce: 'Rupture' },
       ],
     },
   },
@@ -4664,9 +4666,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
       type: 'commander',
       phases: [
         { atLifeFrac: 0.66, type: 'artillery', mods: [mod('castSpeed', 'more', 0.4)],
-          announce: 'The Heartbloom convulses: a storm of spores!' },
+          announce: 'Sporestorm' },
         { atLifeFrac: 0.33, type: 'commander', mods: [mod('castSpeed', 'more', 0.5), mod('moveSpeed', 'more', -0.3)],
-          announce: 'The Heartbloom roots deep, and tendrils erupt to drag you in!' },
+          announce: 'Grasping Roots' },
       ],
     },
   },
@@ -5936,7 +5938,6 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'stone_sentinel', name: 'Stone Sentinel',
     color: '#9a988a', shape: 'rectangle', radius: 19, look: 'sentinel',
     turnSpeed: 1.7,
-    tells: [{ source: 'guardRelease', portrait: 0, channel: { kind: 'lean', amp: -0.8 } }],
     base: { life: 180, moveSpeed: 90, accuracy: 95, armor: 70, mana: 60, manaRegen: 6, poise: 70 },
     mods: [mod('blockChance', 'flat', 0.2)],
     skills: ['shield_up', 'heavy_strike', 'cleave'],
@@ -6047,10 +6048,6 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'sylvan_warden', name: 'Sylvan Warden',
     color: '#68b878', shape: 'rectangle', radius: 17, look: 'sylvan_warden',
     turnSpeed: 2.1,
-    tells: [
-      { source: 'guardRelease', portrait: 0, channel: { kind: 'lean', amp: -0.8 } },
-      { source: 'guardRelease', portrait: 0, channel: { kind: 'glow', color: '#c8e898', max: 0.6 } },
-    ],
     base: { life: 140, moveSpeed: 105, accuracy: 100, armor: 32, mana: 80, manaRegen: 7, poise: 45 },
     mods: [mod('blockChance', 'flat', 0.08), mod('bashPower', 'more', -0.35)],
     // A third of the wardens drill the lance: shield up, then the poke
@@ -8171,7 +8168,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
       phases: [
         { atLifeFrac: 0.66, rewardGems: 1, announce: 'The Hellion erupts from the rift!',
           mods: [mod('damage', 'more', 0.25), mod('moveSpeed', 'more', 0.2)] },
-        { atLifeFrac: 0.40, type: 'artillery', rewardGems: 1, announce: 'BRIMSTONE RAINS! Flee the open ground!',
+        { atLifeFrac: 0.40, type: 'artillery', rewardGems: 1, announce: 'Brimstone Rain',
           mods: [mod('damage', 'more', 0.45)] },
         { atLifeFrac: 0.18, type: 'swarm', rewardGems: 2, announce: 'The rift collapses inward, and it charges!',
           mods: [mod('moveSpeed', 'more', 0.55), mod('damage', 'more', 0.5)] },
@@ -8248,7 +8245,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
           id: 'herald',
           use: { type: 'artillery' },
           rewardGems: 1,
-          announce: 'It rises. BRIMSTONE RAINS, and the fire CLOSES IN!',
+          announce: 'Brimstone Rain',
           mods: [mod('damage', 'more', 0.5), mod('attackSpeed', 'increased', 0.2)],
           onEnter: [
             { do: 'arenaSink', radius: { frac: 0.45, min: 340 }, mode: 'ground', dais: 150 },
@@ -8276,7 +8273,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
             { do: 'summon', monster: 'lesser_brute', count: 2, ring: 240, at: 'anchor', tag: 'unmade_add' },
             { do: 'summon', monster: 'lesser_conjurer', count: 2, ring: 240, at: 'anchor', tag: 'unmade_add' },
             { do: 'summon', monster: 'lesser_herald', count: 1, ring: 240, at: 'anchor', tag: 'unmade_add' },
-            { do: 'ward', tag: 'unmade_add', announce: 'The ward SHATTERS. Strike it down!' },
+            { do: 'ward', tag: 'unmade_add', announce: 'Ward Broken' },
             { do: 'wash', color: '#7a2347', intensity: 0.22 },
             // THE DEVOURED HOUR, spent (the castChrono beat): the final
             // stand rises inside stopped time — its echoes seated, its ward
@@ -9333,7 +9330,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 0.5, drops: 0,
     // The tideline's free lesson in the shell fabric: a thumb-sized front
     // guard — circle the critter and the whole doctrine teaches itself.
-    shellGuard: { side: 'front', max: 25, arcDeg: 150, regenDelay: 4, regenRate: 8, color: '#d89a6a' },
+    shellGuard: { shellVisual: 'carapace', side: 'front', max: 25, arcDeg: 150, regenDelay: 4, regenRate: 8, color: '#d89a6a' },
     scaleVariance: [0.8, 1.25],
     brain: { type: 'basic' },
   },
@@ -12192,7 +12189,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#c8b088', shape: 'oval', radius: 14, material: 'slime', look: 'garden_snail',
     base: { life: 110, moveSpeed: 42, accuracy: 90, armor: 20, poise: 40, mana: 0 },
     skills: ['claw'], xp: 22, faction: 'beast', tags: ['beast'],
-    shellGuard: { side: 'all', max: 60, regenDelay: 5, regenRate: 12, color: '#d8c098' },
+    shellGuard: { shellVisual: 'spiral', side: 'all', max: 60, regenDelay: 5, regenRate: 12, color: '#d8c098' },
     creepSource: { kind: 'snailslick', reach: [50, 90], bornFrac: 0.4 },
     heft: 1.3,
     turnSpeed: 2.0,
@@ -12788,7 +12785,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['bile_spray'], xp: 32,
     shellGuard: {
       side: 'front', arcDeg: 230, max: 110, regenDelay: 4, regenRate: 20,
-      color: '#9ad0c0', breathe: { period: 5, minFrac: 0.3 },
+      shellVisual: 'spiral', color: '#9ad0c0', breathe: { period: 5, minFrac: 0.3 },
     },
     turnSpeed: 2.4,
     detection: 1.0, brain: { type: 'basic' },
@@ -13888,15 +13885,15 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // plates TEARING where you spread the damage (each tear stacks damage
   // taken on the wyrm and pops venom at the wound). It MOVES now — the
   // fight is the body: coils sweep the arena as it turns, the plates read
-  // head/sail/tail at a glance, and Act II's burrow re-forms the spine at
-  // the eruption. Head-cluster weakspots stay the PARTS fabric: the maw
+  // head/sail/tail at a glance. Its warned fissures, eruptions and recovery
+  // cycles live in worldBossEncounters.ts. Head-cluster weakspots stay the PARTS fabric: the maw
   // (the prize) and two neck-coils, spread wide by the grown radius.
   primeval_wyrm_head: {
     id: 'primeval_wyrm_head', name: 'Vhorun, the Sunder-Wyrm',
     color: '#7fb069', shape: 'oval', radius: 72, material: 'chitin', look: 'sand_wyrm',
     base: { life: 1250, moveSpeed: 58, accuracy: 130, armor: 45, mana: 280, manaRegen: 14, weight: 9 },
     mods: [mod('chaosRes', 'flat', 0.4), mod('fireRes', 'flat', 0.3), mod('damage', 'increased', 0.4)],
-    skills: ['venom_bolt', 'bile_spray', 'ground_slam'],
+    skills: [], // WORLDBOSS_WYRM_BRAIN owns the warned attack/recovery rhythm
     xp: 900, boss: true, noNemesis: true, faction: 'primeval', tags: ['primeval'],
     detection: 1.4, vision: { arcDeg: 360, rearMul: 1 }, turnSpeed: 1.7,
     // THE RAMPAGE: a settled-ground fight (worldboss venue 'ground') in real
@@ -13917,7 +13914,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     ambush: { radius: 560 },
     scaling: { life: { incPerLevel: 0.15 } },
     parts: [
-      { monster: 'primeval_wyrm_maw', dx: 1.35, dy: 0, lifeFrac: 0.4, breakDamage: 0.16 },
+      { monster: 'primeval_wyrm_maw', dx: 1.35, dy: 0, lifeFrac: 0.4, breakDamage: 0.16,
+        breakDisables: ['primeval_venom_well'] },
       {
         monster: 'primeval_wyrm_coil', dx: -0.4, dy: 1.35, lifeFrac: 0.26, breakDamage: 0.08,
         breakMods: [mod('damageTaken', 'increased', 0.12)],
@@ -13927,44 +13925,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
         breakMods: [mod('damageTaken', 'increased', 0.12)],
       },
     ],
-    brain: {
-      // A moving colossus CHASES — juggernaut locomotion under the same
-      // 3-act script; the worm fabric's slither-weave rides the approach.
-      type: 'juggernaut',
-      script: [
-        { // ACT I — the HUNTING COIL: it comes for you, spitting as it turns.
-          id: 'coiled',
-          cadences: [{ every: 5.5, first: 3, actions: [{ do: 'cast', skill: 'bile_spray', at: 'target', force: true }] }],
-          goto: [{ to: 'thrash', atLifeFrac: 0.62 }],
-        },
-        { // ACT II — it THRASHES: burrows away and erupts anew (the spine
-          // re-forms at the eruption), venom raining. Telegraphs scaled to
-          // the colossus: bigger rings, longer wind-up, the same honesty.
-          id: 'thrash',
-          rewardGems: 1,
-          announce: 'Vhorun THRASHES, and the earth splits under it!',
-          mods: [mod('damage', 'more', 0.3), mod('attackSpeed', 'increased', 0.2)],
-          onEnter: [
-            { do: 'teleport', to: 'awayFromTarget', range: 420 },
-            { do: 'nova', skill: 'ground_slam', at: 'self', zoneRadius: 300, delay: 1.0, push: { strength: 260 } },
-          ],
-          cadences: [{ every: 7, actions: [{ do: 'ring', skill: 'venom_bolt', radius: 280, count: 9, waves: 1, delay: 0.9, at: 'anchor' }] }],
-          goto: [{ to: 'fury', atLifeFrac: 0.28 }],
-        },
-        { // ACT III — the BROOD: its spawn boil up and WARD it; break the ward.
-          id: 'fury',
-          rewardGems: 2,
-          announce: 'The Sunder-Wyrm keens, and its brood answers!',
-          mods: [mod('damage', 'more', 0.4)],
-          onEnter: [
-            { do: 'summon', monster: 'primeval_spawn', count: 5, ring: 320, at: 'anchor', tag: 'wyrm_brood' },
-            { do: 'ward', tag: 'wyrm_brood', announce: 'The brood breaks: Vhorun is BARED!' },
-          ],
-          cadences: [{ every: 3, actions: [{ do: 'push', radius: 340, strength: 160, from: 'anchor' }] }],
-          goto: [],
-        },
-      ],
-    },
+    brain: WORLDBOSS_WYRM_BRAIN,
   },
   primeval_wyrm_maw: {
     id: 'primeval_wyrm_maw', name: 'Sunder-Maw',
@@ -14002,67 +13963,6 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
     driven: true, passive: true, invulnerable: true, untargetable: true,
     noNemesis: true, noBestiary: true,
-  },
-
-  // CRAGMAW, the Orogeny — the walking mountain (timed apparition). Two fist
-  // silhouettes; sunder one and the slam is DISARMED. MYTHIC-SCALE PASS:
-  // a mountain LOOMS — the hull and fists grew into the tier the name
-  // promises (plain rescale, no segments: an orogeny is a mass, not a
-  // chain), telegraphs scaled with the silhouette so the reads stay fair.
-  primeval_cragmaw: {
-    id: 'primeval_cragmaw', name: 'Cragmaw, the Orogeny',
-    color: '#b0916a', shape: 'octagon', radius: 48, material: 'stone', look: 'golem',
-    base: { life: 1050, moveSpeed: 46, accuracy: 125, armor: 85, mana: 220, manaRegen: 12, weight: 9 },
-    mods: [mod('fireRes', 'flat', 0.3), mod('coldRes', 'flat', 0.3), mod('damage', 'increased', 0.4)],
-    skills: ['ground_slam', 'hurl_debris', 'cleave'],
-    xp: 780, boss: true, noNemesis: true, faction: 'primeval', tags: ['primeval'],
-    detection: 1.3, turnSpeed: 1.8,
-    rampage: true, // a walking mountain does not notice a fence
-    scaling: { life: { incPerLevel: 0.15 } },
-    parts: [
-      { monster: 'primeval_cragmaw_fist', dx: 0.85, dy: 1.25, lifeFrac: 0.28, breakDamage: 0.1, breakDisables: ['ground_slam'] },
-      {
-        monster: 'primeval_cragmaw_fist', dx: 0.85, dy: -1.25, lifeFrac: 0.28, breakDamage: 0.1,
-        breakMods: [mod('damageTaken', 'increased', 0.12)],
-      },
-    ],
-    brain: {
-      type: 'juggernaut',
-      script: [
-        { // ACT I — the MOUNTAIN WALKS: shockwave slams that hurl you back.
-          id: 'mountain',
-          cadences: [{ every: 4.5, first: 3, actions: [{ do: 'nova', skill: 'ground_slam', at: 'self', zoneRadius: 250, delay: 0.95, push: { strength: 260 } }] }],
-          goto: [{ to: 'barrage', atLifeFrac: 0.55 }],
-        },
-        { // ACT II — the BARRAGE: it plants itself and rains the hillside down.
-          id: 'barrage',
-          use: { type: 'artillery' },
-          rewardGems: 1,
-          announce: 'Cragmaw tears the hillside loose. SHELTER!',
-          mods: [mod('damage', 'more', 0.35), mod('attackSpeed', 'increased', 0.15)],
-          cadences: [{ every: 6, actions: [{ do: 'ring', skill: 'hurl_debris', radius: 230, count: 6, waves: 2, waveGap: 0.5, delay: 1.0, at: 'anchor' }] }],
-          goto: [{ to: 'landslide', atLifeFrac: 0.22 }],
-        },
-        { // ACT III — the LANDSLIDE: shards of it break off and swarm.
-          id: 'landslide',
-          use: { type: 'swarm' },
-          rewardGems: 2,
-          announce: 'The Orogeny CRUMBLES FORWARD. It will bury you!',
-          mods: [mod('moveSpeed', 'more', 0.4), mod('damage', 'more', 0.4)],
-          onEnter: [{ do: 'summon', monster: 'primeval_spawn', count: 4, ring: 260, at: 'anchor', tag: 'cragmaw_shard' }],
-          cadences: [{ every: 2.8, actions: [{ do: 'push', radius: 300, strength: 160, from: 'anchor' }] }],
-          goto: [],
-        },
-      ],
-      impulses: [{ type: 'swarm', every: [7, 10], duration: [1.3, 1.8], announce: 'It charges: a rockslide with intent!' }],
-    },
-  },
-  primeval_cragmaw_fist: {
-    id: 'primeval_cragmaw_fist', name: 'Orogen Fist',
-    color: '#9a7c56', shape: 'octagon', radius: 24, material: 'stone',
-    noNemesis: true, faction: 'primeval', tags: ['primeval'],
-    base: { life: 130, moveSpeed: 0, mana: 60, manaRegen: 6, poise: 60 },
-    skills: ['cleave'], xp: 0,
   },
 
   // DOLMOURN, THE IRON BELL — the walking mausoleum of the karst country
@@ -14125,7 +14025,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
           ],
           goto: [{ to: 'clangor', atLifeFrac: 0.6 }] },
         { id: 'clangor', rewardGems: 1,
-          announce: 'The Bell quickens: the toll comes faster!',
+          announce: 'Quickened Toll',
           mods: [mod('moveSpeed', 'more', 0.3)],
           onEnter: [{ do: 'summon', monster: 'toll_wretch', count: 3, ring: 230, tag: 'bell_procession' }],
           cadences: [
@@ -14134,7 +14034,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
           ],
           goto: [{ to: 'lastpeal', atLifeFrac: 0.25 }] },
         { id: 'lastpeal', rewardGems: 2,
-          announce: 'DOLMOURN TOLLS THE LAST PEAL. Live between the steps!',
+          announce: 'Last Peal',
           mods: [mod('moveSpeed', 'more', 0.45), mod('damage', 'more', 0.3)],
           cadences: [
             { every: 4.2, first: 0.8, actions: [{ do: 'cast', skill: 'ironbell_step', at: 'ahead', ahead: 140 }] },
@@ -14217,11 +14117,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
           // falling sky.
           id: 'furnace',
           rewardGems: 1,
-          announce: 'The furnace OPENS, and the sky catches fire!',
+          announce: 'Open Furnace',
           mods: [mod('damage', 'more', 0.35)],
           onEnter: [
             { do: 'summon', monster: 'primeval_cinder', count: 5, ring: 260, at: 'anchor', tag: 'ashvein_cinder' },
-            { do: 'ward', tag: 'ashvein_cinder', announce: 'The cinders gutter: Ashvein is BARED!' },
+            { do: 'ward', tag: 'ashvein_cinder', announce: 'Exposed' },
           ],
           cadences: [{ every: 9, actions: [{ do: 'cast', skill: 'meteor_storm', at: 'target', force: true }] }],
           goto: [{ to: 'ruin', atLifeFrac: 0.22 }],
@@ -14230,7 +14130,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
           id: 'ruin',
           use: { type: 'swarm' },
           rewardGems: 2,
-          announce: 'Ashvein RUPTURES. Run between the waves!',
+          announce: 'Rupture',
           mods: [mod('moveSpeed', 'more', 0.45), mod('damage', 'more', 0.45)],
           cadences: [{ every: 5, actions: [{ do: 'ring', skill: 'magma_glob', radius: 240, count: 8, waves: 2, waveGap: 0.5, delay: 1.0, at: 'anchor' }] }],
           goto: [],
@@ -14278,7 +14178,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
           mods: [mod('damage', 'more', 0.35)],
           onEnter: [
             { do: 'summon', monster: 'primeval_spawn', count: 4, ring: 240, at: 'anchor', tag: 'velketh_clutch' },
-            { do: 'ward', tag: 'velketh_clutch', announce: 'The clutch is broken: the husk is BARED!' },
+            { do: 'ward', tag: 'velketh_clutch', announce: 'Exposed' },
           ],
           goto: [{ to: 'paroxysm', atLifeFrac: 0.22 }],
         },
@@ -18020,11 +17920,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
           // singers to end it.
           id: 'choir',
           rewardGems: 1,
-          announce: 'the choir takes up the DIRGE. Silence them!',
+          announce: 'Dirge',
           mods: [mod('damage', 'more', 0.35)],
           onEnter: [
             { do: 'summon', monster: 'banshee', count: 2, ring: 200, tag: 'ossuarch_choir' },
-            { do: 'ward', tag: 'ossuarch_choir', announce: 'the dirge BREAKS: the Ossuarch stands bare!' },
+            { do: 'ward', tag: 'ossuarch_choir', announce: 'Dirge Broken' },
             { do: 'wash', color: '#6a5a8a', intensity: 0.18 },
           ],
           cadences: [{ every: 3.5, actions: [{ do: 'push', radius: 220, strength: 130, from: 'self' }] }],
@@ -18086,7 +17986,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
           mods: [mod('damage', 'more', 0.3), mod('attackSpeed', 'increased', 0.2)],
           onEnter: [
             { do: 'summon', monster: 'camp_bannerman', count: 2, ring: 170, tag: 'toll_guard' },
-            { do: 'ward', tag: 'toll_guard', announce: 'the account is OPEN: collect!' },
+            { do: 'ward', tag: 'toll_guard', announce: 'Exposed' },
           ],
           cadences: [{ every: 3.2, actions: [{ do: 'push', radius: 200, strength: 120, from: 'self' }] }],
           goto: [],
@@ -18122,7 +18022,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
         { // SUMMER — the green at full pressure.
           id: 'summer',
           rewardGems: 1,
-          announce: 'SUMMER: the green stands at full pressure!',
+          announce: 'Summer',
           mods: [mod('damage', 'more', 0.25), mod('moveSpeed', 'more', 0.2)],
           onEnter: [{ do: 'wash', color: '#7a9a2e', intensity: 0.14 }],
           cadences: [{
@@ -18134,7 +18034,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
         { // AUTUMN — the reaping: casings on every wind.
           id: 'autumn',
           rewardGems: 1,
-          announce: 'AUTUMN: the King reaps what you would not sow!',
+          announce: 'Autumn',
           onEnter: [
             { do: 'wash', color: '#a86a2e', intensity: 0.14 },
             { do: 'summon', monster: 'twig_snarl', count: 2, ring: 150 },
@@ -18148,7 +18048,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
         { // WINTER — the year forgets you.
           id: 'winter',
           rewardGems: 1,
-          announce: 'WINTER, and the year forgets your name.',
+          announce: 'Winter',
           use: { type: 'artillery' },
           mods: [mod('castSpeed', 'increased', 0.25), mod('damageTaken', 'more', -0.15)],
           onEnter: [
@@ -18194,7 +18094,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
         { // ACT II — THE SWALLOW: the grab fabric as the whole argument.
           id: 'swallow',
           rewardGems: 1,
-          announce: 'the Glut opens. DO NOT BE FOOD!',
+          announce: 'Devour',
           mods: [mod('moveSpeed', 'more', 0.25), mod('damage', 'more', 0.2)],
           onEnter: [{ do: 'wash', color: '#7a3a2e', intensity: 0.14 }],
           goto: [{ to: 'brood', atLifeFrac: 0.42 }],
@@ -18206,14 +18106,14 @@ export const MONSTERS: Record<string, MonsterDef> = {
           onEnter: [
             { do: 'summon', monster: 'tract_worm', count: 2, ring: 140, tag: 'glut_brood' },
             { do: 'summon', monster: 'lesser_ooze', count: 3, ring: 120, tag: 'glut_brood' },
-            { do: 'ward', tag: 'glut_brood', announce: 'the brood is SPENT: the Glut stands bare!' },
+            { do: 'ward', tag: 'glut_brood', announce: 'Exposed' },
           ],
           goto: [{ to: 'flood', atLifeFrac: 0.2 }],
         },
         { // ACT IV — THE FLOOD: the floor becomes the stomach.
           id: 'flood',
           rewardGems: 1,
-          announce: 'the floor becomes the STOMACH!',
+          announce: 'Digest',
           onEnter: [
             { do: 'arenaSink', radius: { frac: 0.5, min: 380 }, mode: 'deep_water', dais: 140, pockets: { count: 5, radius: 120, ringFrac: 0.55 } },
             { do: 'wash', color: '#8a4030', intensity: 0.2 },
@@ -18256,10 +18156,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
         { // THE SCALES: the court weighs you — break the lances to be heard.
           id: 'scales',
           rewardGems: 1,
-          announce: 'the TRIBUNAL weighs you. Answer its lances!',
+          announce: 'Tribunal',
           onEnter: [
             { do: 'summon', monster: 'virtue_lance', count: 2, ring: 190, tag: 'tribunal_scales' },
-            { do: 'ward', tag: 'tribunal_scales', announce: 'the scales TIP: the Tribunal is exposed!' },
+            { do: 'ward', tag: 'tribunal_scales', announce: 'Exposed' },
             { do: 'wash', color: '#e8d090', intensity: 0.16 },
           ],
           cadences: [{ every: 4, actions: [{ do: 'nova', skill: 'antiphon', at: 'self', zoneRadius: 170, delay: 0.8 }] }],
@@ -18268,7 +18168,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
         { // THE VERDICT: delivered in gold, appealed in footwork.
           id: 'verdict',
           rewardGems: 2,
-          announce: 'the VERDICT: let it find you standing elsewhere.',
+          announce: 'Verdict',
           mods: [mod('damage', 'more', 0.35), mod('castSpeed', 'increased', 0.25)],
           onEnter: [{ do: 'wash', color: '#f0d060', intensity: 0.2 }],
           cadences: [
@@ -18310,7 +18210,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
         { // THE GALE SESSION: it will not be cornered.
           id: 'gale',
           rewardGems: 1,
-          announce: 'the Concordance changes TONGUE: the gale session!',
+          announce: 'Gale Session',
           mods: [mod('moveSpeed', 'more', 0.3)],
           onEnter: [
             { do: 'teleport', to: 'awayFromTarget', range: 420 },
@@ -18325,7 +18225,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
         { // THE FROST SESSION: the floor votes with it.
           id: 'frost',
           rewardGems: 1,
-          announce: 'the frost session: the floor votes WITH it!',
+          announce: 'Frost Session',
           onEnter: [{ do: 'wash', color: '#8ab8dc', intensity: 0.16 }],
           cadences: [{
             every: 4,
@@ -18336,7 +18236,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
         { // THE STONE SESSION: the oldest voice speaks last.
           id: 'stone',
           rewardGems: 1,
-          announce: 'the STONE session: the oldest voice speaks last.',
+          announce: 'Stone Session',
           use: { type: 'juggernaut' },
           mods: [mod('damage', 'more', 0.3), mod('damageTaken', 'more', -0.2)],
           onEnter: [
@@ -18440,7 +18340,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
           onEnter: [
             { do: 'voidCrack', count: 3, ring: { frac: 0.3, min: 220 }, radius: 54 },
             { do: 'summon', monster: 'banshee', count: 2, ring: 210, tag: 'morthessa_choir' },
-            { do: 'ward', tag: 'morthessa_choir', announce: 'her name FAILS her: strike!' },
+            { do: 'ward', tag: 'morthessa_choir', announce: 'Exposed' },
             { do: 'wash', color: '#6a4a7a', intensity: 0.18 },
           ],
           cadences: [{ every: 4, actions: [{ do: 'shake', amount: 4 }] }],
@@ -18504,7 +18404,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
           // pierce; allies SEVER; the struggle meter is the fight.
           id: 'swallow',
           rewardGems: 1,
-          announce: 'the Maw OPENS. Do not be the portion!',
+          announce: 'Devour',
           mods: [mod('moveSpeed', 'more', 0.3), mod('damage', 'more', 0.25)],
           onEnter: [{ do: 'wash', color: '#6a2a20', intensity: 0.14 }],
           cadences: [{ every: 4, actions: [{ do: 'push', radius: 200, strength: -160, from: 'self' }] }],
@@ -20211,7 +20111,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
       regen: 0.22, regenDelay: 3.2,
       vent: {
         forSec: 2.6, status: 'winded_gasp', skillId: 'fume_vent',
-        note: 'out of breath!', refill: 1,
+        refill: 1, // VENT_GASP and the collapsed bellows carry the opening.
       },
     }],
     tells: [
@@ -20238,6 +20138,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
       { source: 'reserve:breath', band: [0, 1], portrait: 0.5, channel: { kind: 'scale', amp: 0.1 } },
       // SPENT reads on the body itself: the punish window advertises.
       { source: 'spent', steps: 1, portrait: 0, channel: { kind: 'lean', amp: -0.7 } },
+      ...VENT_GASP,
     ],
     brain: {
       type: 'juggernaut',
@@ -21527,7 +21428,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'beast', tags: ['beast'],
     detection: 1.3, drops: 0,
     scaleVariance: [0.85, 1.2],
-    shellGuard: { side: 'front', max: 45, arcDeg: 150, regenDelay: 4, regenRate: 9, color: '#e8845a' },
+    shellGuard: { shellVisual: 'carapace', side: 'front', max: 45, arcDeg: 150, regenDelay: 4, regenRate: 9, color: '#e8845a' },
     tells: HUNGER_LEAN,
     brain: {
       type: 'basic',

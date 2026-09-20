@@ -238,8 +238,12 @@ const world = makeSimWorld('warrior', 880811);
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const w = world as any;
 const homeId: string = w.zone.id;
+let observationSeat: Vec2 | undefined;
 const stepAI = (n: number): void => {
   for (let i = 0; i < n; i++) {
+    // This stationary observer measures the den's clock, not portal travel.
+    // Combat displacement must not leave it idling on the return portal.
+    if (observationSeat) w.player.pos = vec(observationSeat.x, observationSeat.y);
     for (const a of w.actors as Actor[]) updateAI(a, world, DT);
     w.update(DT);
   }
@@ -265,6 +269,7 @@ let heart: Vec2 | null = null;
     (w.ledger[GREAT_GEYSER_CFG.ledgerEntered] ?? 0) >= 1);
   const plan = VENTCAULDRON_PLANS.get(w.zone.id);
   heart = plan?.heart ?? null;
+  if (heart) observationSeat = vec(heart.x + 140, heart.y);
   const field = w.geysers;
   const authored = field?.vents[0];
   check('D4 the heart vent stands FIRST in the world\'s field, on a PRIVATE band (the metronome law), at the plan\'s heart, among the floor\'s own vents',
@@ -394,11 +399,11 @@ let heart: Vec2 | null = null;
     const readB = ventReadAt(field, v, w.time, 'bands'), readS = ventReadAt(field, v, w.time, 'solo');
     check('E8 the A/B lever moves nothing on the authored heart vent (bands == solo on an anchor — the metronome law)',
       Math.abs(readB.sinceBurst - readS.sinceBurst) < 1e-6 && readB.period === readS.period);
-    toPhase('up');
+    const reachedUp = toPhase('up');
     const lifeA = maw.life;
     const dotA = applyDot(maw, 25, 'fire');
     check('E9 UP: the same DoT LANDS (a body), life falls, targetable and drawn',
-      dotA > 0 && maw.life < lifeA && !maw.untargetable && !maw.invulnerable && !has(maw, VENT_DWELLER_CFG.submergedStatus),
+      reachedUp && w.actors.includes(maw) && dotA > 0 && maw.life < lifeA && !maw.untargetable && !maw.invulnerable && !has(maw, VENT_DWELLER_CFG.submergedStatus),
       `dot ${dotA.toFixed(1)}, life ${lifeA.toFixed(0)} → ${maw.life.toFixed(0)}`);
     maw.life = maw.maxLife();
     check('E10 the maw\'s kit fires only while up: under, its clock is stopped (timeScale 0 — no thinking, no casting)',

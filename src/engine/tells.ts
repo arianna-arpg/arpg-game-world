@@ -40,6 +40,7 @@ import type { ActorAdorn } from './actor';
 import { packDriveOf } from './pack';
 import type { CastRecord } from './sequence';
 import { STATUS_DEFS } from './status';
+import { WIND_PUFF } from '../data/exhaustionCues';
 
 // --- config ----------------------------------------------------------------
 
@@ -502,18 +503,21 @@ export function resolveTell(spec: TellSpec, a: TellBody, w: TellWorld): number {
   return Math.round(Math.round(v * steps) / steps * 1000) / 1000;
 }
 
-/** The binding list a spawned body wears: def rows + the rolled brain
- *  variant's rows. Returns the def array ITSELF when the variant adds
- *  nothing (zero alloc on the common path); undefined = no tells. */
+/** Authored rows, rolled personality, then the shared retreat vocabulary.
+ * Defaults apply at mint/adopt, including runtime-added definitions and
+ * nonbreathing bodies with an explicit kite budget. Inactive sources read
+ * zero, so tireless bodies stay visually quiet. No per-frame allocation. */
 export function tellSpecsOf(
-  def: { tells?: TellSpec[]; brainVariants?: { tells?: TellSpec[] }[] } | undefined,
+  def: { tells?: TellSpec[]; brainVariants?: { tells?: TellSpec[] }[];
+    retreatTells?: TellSpec[] } | undefined,
   variantIdx?: number,
 ): TellSpec[] | undefined {
   if (!def) return undefined;
   const vt = variantIdx !== undefined ? def.brainVariants?.[variantIdx]?.tells : undefined;
-  if (!vt?.length) return def.tells?.length ? def.tells : undefined;
-  if (!def.tells?.length) return vt;
-  return [...def.tells, ...vt];
+  const retreat = def.retreatTells ?? WIND_PUFF;
+  if (!vt?.length && !def.tells?.length) return retreat.length ? retreat : undefined;
+  if (!vt?.length && !retreat.length) return def.tells?.length ? def.tells : undefined;
+  return [...(def.tells ?? []), ...(vt ?? []), ...retreat];
 }
 
 // --- the render dress ----------------------------------------------------------
@@ -649,7 +653,8 @@ export function tellPortraitDress(specs: TellSpec[]): TellDress {
  *  name a resolvable source, band its unbounded sources, and wear a channel
  *  whose part painter exists. Returns human-readable faults (probe food). */
 export function validateTells(
-  defs: Record<string, { tells?: TellSpec[]; brainVariants?: { tells?: TellSpec[] }[] } | undefined>,
+  defs: Record<string, { tells?: TellSpec[]; brainVariants?: { tells?: TellSpec[] }[];
+    retreatTells?: TellSpec[] } | undefined>,
   painters: Record<string, unknown>,
 ): string[] {
   const bad: string[] = [];
@@ -674,6 +679,7 @@ export function validateTells(
     const def = defs[id];
     if (!def) continue;
     def.tells?.forEach((t, i) => checkRow(id, t, i));
+    (def.retreatTells ?? WIND_PUFF).forEach((t, i) => checkRow(`${id} retreat`, t, i));
     def.brainVariants?.forEach((v, vi) =>
       v.tells?.forEach((t, i) => checkRow(`${id} variant[${vi}]`, t, i)));
   }

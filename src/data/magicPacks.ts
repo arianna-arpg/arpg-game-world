@@ -1,5 +1,7 @@
 import { mod } from '../engine/stats';
 import type { MagicPackDef } from '../engine/magicPacks';
+import { satelliteCountStat } from '../engine/satelliteSpec';
+import './satellites';
 
 /** Magic is an encounter tier. These knobs govern a whole group, not its leader. */
 export const MAGIC_PACK_CFG = {
@@ -18,6 +20,18 @@ export const MAGIC_PACK_CFG = {
 /** Open recipes: compose proximity and casualty rules with ordinary sheet mods.
  * No recipe-specific combat code, damage path, or monster-definition mutation. */
 export const MAGIC_PACKS: Record<string, MagicPackDef> = {
+  cinder_wake: {
+    id: 'cinder_wake', name: 'Cinder Wake', minLevel: 9, weight: 2, color: '#f4a15b',
+    hint: 'Orbiting embers lob mortars onto fixed ground marks.',
+    activeLabel: 'Cinder satellite', inactiveLabel: 'Cinder satellite',
+    rules: [{ mods: [mod(satelliteCountStat('cinder_wake'), 'flat', 1)] }],
+  },
+  iron_wake: {
+    id: 'iron_wake', name: 'Iron Wake', minLevel: 5, weight: 3, color: '#c5c9d2',
+    hint: 'Each bearer carries a hollow iron orb. Avoid the moving orb, step inside its orbit, or kill its bearer.',
+    activeLabel: 'Iron satellite', inactiveLabel: 'Iron satellite',
+    rules: [{ mods: [mod(satelliteCountStat('iron_wake'), 'flat', 1)] }],
+  },
   cinderchain: {
     id: 'cinderchain', name: 'Cinderchain', minLevel: 7, weight: 3, color: '#ff9566',
     hint: 'Slow bodies ignite without dying. Spread them apart to stop the chain; leave each marked blast.',

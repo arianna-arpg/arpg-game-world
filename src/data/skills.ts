@@ -1,4 +1,5 @@
 import './minionFamilies';
+import { registerCompanionGrants } from '../engine/companionGrants';
 import { HIVECALL_SKILLS } from './hivecall';
 import { GOAD_SKILLS } from './goadSkills';
 import { COMPANION_SKILLS } from './companionSkills';
@@ -43,6 +44,10 @@ import { NECROMANCER_SKILLS } from './necromancerSkills';
 import { ROOTWILD_SKILLS } from './rootwildSkills';
 import { ARENA_BOSS_SKILLS } from './arenaBosses';
 import { MAGIC_PACK_SKILLS } from './magicPackSkills';
+import { SATELLITE_SKILLS } from './satellites';
+import { AURORA_SKILLS } from './auroras';
+import { WORLDBOSS_ENCOUNTER_SKILLS } from './worldBossEncounters';
+import { TITAN_SKILLS } from './titans';
 
 export const SKILLS: Record<string, SkillDef> = {
   ...HIVECALL_SKILLS,
@@ -54,6 +59,10 @@ export const SKILLS: Record<string, SkillDef> = {
   ...ROOTWILD_SKILLS,
   ...ARENA_BOSS_SKILLS,
   ...MAGIC_PACK_SKILLS,
+  ...SATELLITE_SKILLS,
+  ...AURORA_SKILLS,
+  ...WORLDBOSS_ENCOUNTER_SKILLS,
+  ...TITAN_SKILLS,
   ...WORKSHOP_SKILLS,
   ...FLASK_SKILLS,
 
@@ -3252,7 +3261,8 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'tame_beast', name: 'Tame Beast',
     description: 'HOLD your aim on a living beast to fill the 2.4 second claim: sure below half'
       + ' life, a 35% chance on a hale one. A tamed companion falls DOWNED, never dead, and'
-      + ' grows with you: the bond levels with its keeper. With every bond slot filled this'
+      + ' grows with you: the bond levels with its keeper and inherits applicable minion bonuses.'
+      + ' With every bond slot filled this'
       + ' becomes Whistle (recall, revive and heal the pack); shift-press shifts the pack’s'
       + ' STANCE (aggressive, defensive, passive), and a socketed order gem chains its order'
       + ' after the shift. Unlearning breaks the bond (relearn and it returns downed,'
@@ -16351,6 +16361,7 @@ for (const def of Object.values(SKILLS)) {
 }
 
 export const SKILL_LIST: SkillDef[] = Object.values(SKILLS);
+registerCompanionGrants(SKILL_LIST);
 
 // THE GRANTED SKILL stat family (engine/skills.ts skillGrantStat — THE
 // LEGEND FABRIC, docs/engine/legends.md): one registered stat per catalog

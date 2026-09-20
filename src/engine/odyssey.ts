@@ -1,5 +1,6 @@
 import type { Actor } from './actor';
 import type { World } from './world';
+import { OdysseyRisings } from './odysseyRisings';
 import { issueCommand } from './ai';
 import { angleDiff, angleTo, dist, vec } from '../core/math';
 import { START_ZONE } from '../data/zones';
@@ -16,9 +17,11 @@ export class OdysseyRuntime {
   state: OdysseyState | undefined;
   private scoutActor?: Actor;
   private bodies = new Map<string, Actor>();
-  constructor(private readonly w: World) {}
+  private readonly risings: OdysseyRisings;
+  constructor(private readonly w: World) { this.risings = new OdysseyRisings(w); }
 
   restore(raw: OdysseyState | undefined): void {
+    this.risings.clear();
     this.state = restoreOdyssey(raw, this.w.manifest.seed, this.w.account.ledger);
     this.scoutActor = undefined; this.bodies.clear();
   }
@@ -31,7 +34,7 @@ export class OdysseyRuntime {
 
   update(): void {
     const w = this.w;
-    if (w.clientActionHook || w.scene || !w.player || w.player.dead || w.player.downed) return;
+    if (w.clientActionHook || w.scene || !w.player || w.player.dead || w.player.downed) { this.risings.clear(); return; }
     // A safe off-world arena is not a new journey. Real runs begin in Lastlight
     // or resume in the field; the tutorial has stamped its faction by then.
     if (!this.state && w.zone.id !== START_ZONE && w.zone.objective.kind === 'safe') return;
@@ -57,7 +60,7 @@ export class OdysseyRuntime {
     for (const id of s.roster) {
       if (w.zone.id === `quest_${odysseyQuestId(id, 'operation')}`) this.reveal(id);
     }
-    this.updateScouts(); this.updateSiege(); this.capture();
+    this.updateScouts(); this.updateSiege(); this.risings.update(s); this.capture();
   }
 
   /** The giver recognizes existing opportunities; never mints a second target. */
@@ -330,5 +333,5 @@ export class OdysseyRuntime {
       if (live.length) group.bodies = live.map(a => save(a, a.tag!));
     }
   }
-  leaveZone(): void { this.capture(); this.scoutActor = undefined; this.bodies.clear(); }
+  leaveZone(): void { this.capture(); this.risings.clear(); this.scoutActor = undefined; this.bodies.clear(); }
 }

@@ -109,6 +109,36 @@ Rare captures retain their exact rarity sources, stacked rarity, name and
 size through character saving, unlearning and relearning. Additional save
 fields are optional, so existing companion saves remain readable.
 
+### Shared minion inheritance (2026-09-18)
+
+`engine/minionInheritance.ts` is the shared owner-investment resolver for
+summons, throng bodies and companion bonds. A companion is an owned minion;
+its bond now inherits the same life, damage, damage taken, movement/attack/cast
+speed, detection, flat/percentage regeneration, regeneration rate, threat,
+area avoidance, size, defensive guard and on-hit status investment. Minion
+plies and life-to-ply trades/echoes use the same discrete armor fold. Skill-local
+damage bonuses and penalties also reach the beast's own attack/spell context.
+
+Queries retain the host's tags and the recipient body's family/species context.
+Tame Beast has `minion` and `companion` tags, not `summon`: summon-only bonuses
+remain scoped to summons. Attribute bequests use this same context, including
+host-local grants. Personal regeneration is not inherited unless explicitly
+shared through the relevant minion stat or bequest.
+
+The bond refreshes investment live. Its `companionBond` source owns inherited
+stats and tree beast modifiers; `minionCombat` owns survival/threat modifiers,
+and `bequest` owns explicit attribute shares. No duplicate mint-time `owner`
+source survives claiming. Refreshes preserve life fraction, retain spent armor,
+and derive size from claimed size rather than multiplying the last result.
+Saves retain the claimed rarity size before keeper scaling, avoiding enlargement
+on every reload. Dormancy removes these grants; returning capacity restores
+them without reviving the beast. Downed beasts never regenerate themselves up.
+
+No baseline durability was changed in this pass. The level-one hound still has
+45 life and 0.6 life regeneration per second. A level-one Vital Bond now adds
+its advertised 3 life plus 0.8% maximum life per second: 3.96/s total for that
+hound. Regeneration-rate investment scales both its native and inherited lanes.
+
 Respec preserves the animals: bonds beyond reduced capacity become dormant,
 downed and unrevivable until capacity returns. It clears owned preparations,
 frenzy, pulses, fields and learned copies without deleting unrelated attacks.
@@ -210,6 +240,11 @@ tree's hook on a behavioral change: every living beast of the bond casts the
 named art at its feet when the stance shifts. No shipped node uses it yet.
 
 ## Verification
+
+`balance/probe_companioninheritance.ts` exercises actual healing, summon/bond
+stat parity, scope filters, owner isolation, socket damage penalties, attribute
+bequests, life-to-armor trades, repeated refreshes, growth, rarity persistence,
+downing/revival, dormancy and release cleanup through the real engine.
 
 `balance/probe_companionstance.ts` covers keeper-level growth, the life
 fraction, the wild-level floor, the `follow: 'claimed'` reading, kit and art

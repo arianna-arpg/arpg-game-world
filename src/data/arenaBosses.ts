@@ -52,7 +52,7 @@ export const ARENA_BOSS_SKILLS: Record<string, SkillDef> = {
 };
 
 const breath = (next: string, hot?: string): PhaseDef => ({
-  id: 'breath', announce: 'The furnace opens — strike!',
+  id: 'breath', announce: 'Exposed',
   mods: [mod('damageTaken', 'increased', 0.25)],
   goto: [...(hot ? [{ to: hot, atLifeFrac: 0.4 }] : []), { to: next, after: 3 }],
 });
@@ -76,12 +76,12 @@ export const ARENA_BOSS_MONSTERS: Record<string, MonsterDef> = {
         breakDisables: ['arena_boss_treble'], breakMods: [mod('damageTaken', 'increased', 0.1)] },
     ],
     brain: { type: 'artillery', script: [
-      { id: 'antiphon', announce: 'Break the pipes to silence their half of the court.',
+      { id: 'antiphon', announce: 'Antiphon',
         cadences: [
           { every: 8, first: 2, actions: [pattern('arena_boss_bass', ARENA_BOSS_PATTERNS.bass)] },
           { every: 8, first: 6, actions: [pattern('arena_boss_treble', ARENA_BOSS_PATTERNS.treble)] },
         ], goto: [{ to: 'requiem', atLifeFrac: 0.4 }] },
-      { id: 'requiem', announce: 'The remaining pipes sound together!',
+      { id: 'requiem', announce: 'Requiem',
         cadences: [{ every: 6.5, first: 2, actions: [
           pattern('arena_boss_bass', ARENA_BOSS_PATTERNS.bass),
           pattern('arena_boss_treble', ARENA_BOSS_PATTERNS.treble),
@@ -104,13 +104,13 @@ export const ARENA_BOSS_MONSTERS: Record<string, MonsterDef> = {
     base: { life: 1250, moveSpeed: 0, armor: 38, mana: 100, manaRegen: 8, weight: 15 },
     mods: [mod('fireRes', 'flat', 0.35)], skills: ['arena_boss_ember'], xp: 400,
     brain: { type: 'artillery', script: [
-      { id: 'sweep', announce: 'Follow the fire across the floor.',
+      { id: 'sweep', announce: 'Furnace Sweep',
         onEnter: [pattern('arena_boss_furnace', ARENA_BOSS_PATTERNS.sweep)],
         goto: [{ to: 'hot', atLifeFrac: 0.4, after: 4 }, { to: 'backwash', after: 4.5 }] },
       { id: 'backwash', onEnter: [pattern('arena_boss_furnace', ARENA_BOSS_PATTERNS.backwash)],
         goto: [{ to: 'breath', after: 4.5 }] },
       breath('sweep', 'hot'),
-      { id: 'hot', announce: 'The crucible cracks — the heat returns faster!',
+      { id: 'hot', announce: 'Overheated',
         onEnter: [pattern('arena_boss_furnace', ARENA_BOSS_PATTERNS.sweep)],
         goto: [{ to: 'hot_backwash', after: 4 }] },
       { id: 'hot_backwash', onEnter: [pattern('arena_boss_furnace', ARENA_BOSS_PATTERNS.backwash)],
@@ -124,16 +124,16 @@ export const ARENA_BOSS_MONSTERS: Record<string, MonsterDef> = {
     base: { life: 1150, moveSpeed: 0, armor: 16, mana: 100, manaRegen: 8, weight: 12 },
     mods: [mod('chaosRes', 'flat', 0.3)], skills: ['arena_boss_pulse'], xp: 360, faction: 'coven',
     brain: { type: 'artillery', script: [
-      { id: 'banks', announce: 'The banks seep — approach along the dry channel.',
+      { id: 'banks', announce: 'Black Seep',
         onEnter: [pattern('arena_boss_seep', ARENA_BOSS_PATTERNS.banks)],
         goto: [{ to: 'channel', after: 6 }] },
-      { id: 'channel', announce: 'The channel swells — take the banks.',
+      { id: 'channel', announce: 'Rising Tide',
         onEnter: [pattern('arena_boss_seep', ARENA_BOSS_PATTERNS.channel)],
         goto: [{ to: 'drained', after: 6 }] },
-      { id: 'drained', announce: 'The heart drains — strike the exposed flesh!',
+      { id: 'drained', announce: 'Exposed',
         mods: [mod('damageTaken', 'increased', 0.3)],
         goto: [{ to: 'bloom_banks', atLifeFrac: 0.4, after: 3 }, { to: 'banks', after: 4 }] },
-      { id: 'bloom_banks', announce: 'The wounded heart quickens its tide.',
+      { id: 'bloom_banks', announce: 'Quickened Tide',
         onEnter: [pattern('arena_boss_seep', ARENA_BOSS_PATTERNS.banks)],
         goto: [{ to: 'bloom_channel', after: 5 }] },
       { id: 'bloom_channel', onEnter: [pattern('arena_boss_seep', ARENA_BOSS_PATTERNS.channel)],

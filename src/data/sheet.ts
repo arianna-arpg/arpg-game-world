@@ -82,7 +82,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       'damageTaken', 'critAvoid', 'ailmentResist', 'afflictionExpiry', 'lowLifeLine', 'strideReach',
       // Block & guard
       'blockPower', 'blockValue', 'guardStrength', 'guardParry', 'guardParryPower',
-      'parryCounterBonus', 'guardHoldTime',
+      'parryCounterBonus', 'parryDamageCooldown', 'guardHoldTime', 'guardianRecharge',
       'guardAegis', 'domeDeflects',
       // Energy shield
       'energyShield', 'esRechargeRate', 'esRechargeDelay', 'esRechargeSteadfast',
@@ -138,6 +138,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
     core: ['aoeRadius', 'effectDuration', 'cooldownRecovery'],
     used: [
       // Costs
+      'satelliteCount', 'satelliteOrbit', 'satelliteSpeed', 'auroraCapacity', 'auroraRecharge',
       'manaCost', 'addedManaCost', 'addedLifeCost', 'addedCooldown',
       'costDamage_mana', 'costDamage_life',
       'costWard_mana', 'costWard_life', 'costWardDuration', 'costWardCap',
@@ -239,6 +240,9 @@ export const SHEET_VITALS: string[] = ['life', 'mana', 'moveSpeed'];
  *  The blurb serves any id of the family the tooltip meets. */
 export interface SheetFamilySeat { prefix: string; cat: string; blurb: string }
 export const SHEET_FAMILY_SEATS: SheetFamilySeat[] = [
+  { prefix: 'satelliteCount_', cat: 'skills', blurb: 'Grants orbiting satellites of this family. Additional satellites modify families you already carry.' },
+  { prefix: 'auroraCapacity_', cat: 'skills', blurb: 'Grants a rechargeable reservoir of this aurora. Its stored projectiles discharge through the family\'s own targeting rules.' },
+  { prefix: 'guardianCount_', cat: 'defense', blurb: 'Grants projectile guardians of this family, each with its own recharge.' },
   { prefix: 'takenAs_', cat: 'defense', blurb: 'Changes incoming hit damage before armor and resistance. Simultaneous routes never convert twice or create extra damage.' },
   { prefix: 'relayStatus_', cat: 'defense', blurb: 'Redirects the named incoming status to a nearby enemy. Without a recipient, it lands normally.' },
   { prefix: 'apply_', cat: 'offense', blurb: 'Chance your hits inflict this status.' },
@@ -262,7 +266,9 @@ export const SHEET_FAMILY_SEATS: SheetFamilySeat[] = [
   { prefix: 'combo_', cat: 'skills', blurb: 'Equips this cast-pattern grammar: complete its pattern with your recent casts and its payoff fires.' },
   { prefix: 'classSkill_', cat: 'skills', blurb: 'Levels added to every skill gem of this class\'s school.' },
   { prefix: 'slotgraft_', cat: 'skills', blurb: 'A support granted by what you wear, riding whichever skill you bind to that bar slot; dormant when the gem does not fit the skill seated there.' },
-  { prefix: 'skillgrant_', cat: 'skills', blurb: 'A skill granted by what you wear, at this level: bind it to a bar seat and cast it like any learned skill; its sockets live on the granting item.' },
+  { prefix: 'skillgrant_', cat: 'skills', blurb: 'Grants this skill for triggers and optional manual use, or adds this many levels to your equipped learned copy. The granted copy keeps its own sockets on the item.' },
+  { prefix: 'companiongrant_', cat: 'skills', blurb: 'Maintains an independent follower at this summon skill level without a bar slot or reservation. Its death uses the summon skill’s respawn time.' },
+  { prefix: 'summonReservation_', cat: 'skills', blurb: 'Multiplies this summon skill’s reservation, including manually equipped copies. Zero means no reservation.' },
   { prefix: 'seatPower_', cat: 'misc', blurb: 'THE SEAT LAW (engine/seatlaw.ts): read from a container seat only. Scales the lines of the pieces touching this one, or its own lines per empty or occupied seat against it, before they reach you.' },
   { prefix: 'procPower_', cat: 'skills', blurb: 'Scales how HARD this triggered effect lands (its chance is the proc line beside it).' },
   { prefix: 'trailGrant_', cat: 'skills', blurb: 'Moving leaves a registered short-lived ground effect. Its power scales through your ordinary skill stats.' },
@@ -474,6 +480,7 @@ const STAT_BLURBS: Record<string, string> = {
   guardStrength: 'Scales every guard you raise: the held stance\'s pool and the passive block\'s guard alike.',
   guardParry: 'Guard skills without a parry of their own gain a parry window this long.',
   guardParryPower: 'The riposte multiplier on damage you parry.',
+  parryDamageCooldown: 'Minimum time between damaging parry counters against the same recipient; projectile reflection still occurs during this interval.',
   parryCounterBonus: 'Adds this multiple of incoming damage to successful parry counters, including a skill\'s own counter.',
   guardHoldTime: 'Adds this many seconds to timed guard stances. The resulting stance lasts at least 0.05 seconds.',
   guardAegis: 'Your raised guard also absorbs hits against nearby minions.',

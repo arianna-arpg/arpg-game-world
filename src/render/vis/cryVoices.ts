@@ -1,14 +1,6 @@
-// ---------------------------------------------------------------------------
-// THE CRY VOICES — the drawn twins of the combat cries (show-don't-tell §3f,
-// M-CRY). A cry ('PARRY!', 'block!', 'evade', 'immune'…) stays a `combat`-
-// kinded floater the player may mute; the read survives the mute because
-// World.cry also pushes a flash wearing one of these voices at the same seat:
-//   clash — a spark at the weapon: two bright strokes crossing + a core flare
-//   glint — the shield's highlight: a short bright arc sweeping the rim
-//   blur  — the evader's body smear: fading offset discs along the facing
-//   ward  — the flat grey ring of immunity/resistance: thin, steady, no growth
-// Pure painters over THE EFFECT VOICE registry; dials in VIS_CFG.cryVoice.
-// ---------------------------------------------------------------------------
+// Legacy effect voices retained for authored/third-party effects. Migrated
+// gameplay outcomes use defenseCueLayer/combatCueLayer without captions.
+// Do not introduce new gameplay text through World.cry; see the migration audit.
 
 import { registerEffectVoice } from './effectVoice';
 import { VIS_CFG } from './visConfig';

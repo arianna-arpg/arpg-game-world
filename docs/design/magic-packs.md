@@ -11,6 +11,8 @@ skills or replace any creature's native kit, brain, bonds or tactics.
 
 | Recipe | Enemy level | Shared mechanic | Counterplay |
 | --- | --- | --- | --- |
+| Iron Wake | 5+ | Every member carries an untargetable physical satellite with a 0.9-second arming tell | Avoid the moving orb, stand inside its orbit, or kill its bearer |
+| Cinder Wake | 9+ | Every member carries a fire satellite that lobs a mortar at a fixed ground mark | Leave the marked impact or kill its bearer |
 | Wardbound | 1+ | 18% less damage taken while another original ally is within 190 units | Separate allies or kill a supporter |
 | Hunting Chorus | 6+ | 18% increased attack/cast speed while two original allies are within 240 units | Break the trio |
 | Vendetta | 12+ | Each original casualty grants survivors 12% increased damage and 6% increased movement speed, up to three stacks | Weaken the group before finishing members |
@@ -27,6 +29,8 @@ skills or replace any creature's native kit, brain, bonds or tactics.
 All eligible recipes stay in the weighted pool. A level-12 encounter can still
 roll Wardbound; later unlocks add variety rather than stacking every mechanic.
 The numbers are initial tuning, not a claim of full campaign balance.
+Combat nameplates show identity only; recipe hints are authoring/reference
+material. Links, orbs, wards and ground marks carry the mechanic in play.
 
 ## Authoring and difficulty
 

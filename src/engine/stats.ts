@@ -18,6 +18,9 @@ import { DEFENSE_CFG } from './defense';
 
 /** Tags describe what a skill / damage context *is*. Add freely. */
 export type SkillTag =
+  | 'satellite' | `satellite:${string}`
+  | 'aurora' | `aurora:${string}`
+  | 'guardian' | `guardian:${string}`
   | 'cast:timed' | 'cast:instant' | 'cast:channel' | 'cast:held'
   | `minion:${string}` | `body:${string}`
   | 'attack' | 'spell' | 'melee' | 'projectile' | 'aoe' | 'duration'
@@ -1090,6 +1093,8 @@ export const STAT_DEFS: Record<string, StatDef> = {
   guardParryPower:{ label: 'Parry Power', base: 1.5 },
   /** Added incoming-damage multiple, including guards with a native counter. */
   parryCounterBonus: { label: 'Additional Counter Power', base: 0, min: 0 },
+  /** Seconds between received parry wounds; zero opts out of protection. */
+  parryDamageCooldown: { label: 'Parry Damage Cooldown', base: DEFENSE_CFG.parry.damageCooldown, min: 0 },
   /** Added seconds for guards with an authored maximum duration. */
   guardHoldTime: { label: 'Timed Guard Duration', base: 0 },
 

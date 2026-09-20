@@ -44,6 +44,7 @@ import { VERMINFALL } from './defs/verminfall';
 import { WARBANDS } from './defs/warbands';
 import { WISPLIGHT } from './defs/wisplight';
 import { WORLDBOSS } from './defs/worldboss';
+import { TITANS } from './defs/titans';
 import { WRAITHSAIL } from './defs/wraithsail';
 import type { EncounterDef } from './encounters';
 import type { HoldfastDef } from './holdfast';
@@ -83,6 +84,7 @@ export const PACKAGES: ContentPackage[] = [
   GLOAMING,
   VENDETTA,
   WORLDBOSS,
+  TITANS,
   PIT,
   UNSEALING,
   UNDERWORLD_WAR,

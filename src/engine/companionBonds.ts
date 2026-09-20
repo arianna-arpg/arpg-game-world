@@ -3,7 +3,9 @@ import type { World } from './world';
 import type { Vec2 } from '../core/math';
 import { dist, vec } from '../core/math';
 import { mod } from './stats';
-import { instanceMods, makeSkillInstance, skillContextTags, type SkillInstance } from './skills';
+import { makeSkillInstance, type SkillInstance } from './skills';
+import { resolveMinionInheritance, applyMinionPlyBonus } from './minionInheritance';
+import { syncAttributeBequests } from './bequests';
 import { companionBondOf, companionLevelOf, type CompanionBondSpec, type CompanionSaved } from './companionSpec';
 // THE STANCES (engine/companionStances.ts): importing the module also seats
 // the stance command kinds and the meta face — the bond is their one door.
@@ -18,6 +20,8 @@ interface BondState {
   spec: CompanionBondSpec;
   policy: string;
   sheet: string;
+  /** Claimed size, including rarity but excluding keeper investment. */
+  baseRadius: number;
   /** The level the body was CLAIMED at — the floor the growing bond keeps
    *  (companionLevelOf: a beast caught above its keeper stays wild-strong). */
   claimedLevel: number;
@@ -62,7 +66,7 @@ export class CompanionBonds {
     const inst = this.host(beast);
     if (!inst || !beast.owner) return;
     this.states.set(beast, { inst, native: [...beast.skills], granted: new Map(), spec: {}, policy: '', sheet: '',
-      claimedLevel: Math.max(1, beast.level), stanceId: '',
+      baseRadius: beast.radius, claimedLevel: Math.max(1, beast.level), stanceId: '',
       orbAt: 0, chargeAt: 0, echoAt: 0, dreadAt: 0, exposure: new Map(), pulseUntil: 0, pulseAt: 0, issued: new Set() });
     // Owned animals accept orders instead of retaining a wild hunger/flee script.
     beast.brain = {};
@@ -107,7 +111,9 @@ export class CompanionBonds {
     // (World.relevelActor: life kept as a fraction, the native kit on the
     // monster ladder; the granted arts re-mint at body level below).
     const level = companionLevelOf(owner.level, state.claimedLevel);
-    if (beast.level !== level) this.w.relevelActor(beast, level);
+    const grew = beast.level !== level;
+    const plyFraction = beast.pliesMax > 0 ? beast.plies / beast.pliesMax : 1;
+    if (grew) this.w.relevelActor(beast, level);
     // THE STANCE (engine/companionStances.ts): the keeper's held conduct for
     // this bond becomes the beast's standing order — the order beneath every
     // issued one; a dormant body wears none. Re-stamped only on change.
@@ -116,18 +122,24 @@ export class CompanionBonds {
       state.stanceId = stanceId;
       beast.standingOrder = stanceId ? standingOrderFor(stanceId) : undefined;
     }
-    const tags = skillContextTags(inst), extra = instanceMods(inst);
-    const mods = dormant ? [] : [
-      mod('life', 'more', owner.sheet.get('minionLife', tags, extra) - 1),
-      mod('damage', 'more', owner.sheet.get('minionDamage', tags, extra) - 1),
-      ...(spec.beastMods ?? []),
-    ];
-    const sig = JSON.stringify(mods);
+    const inherited = resolveMinionInheritance(owner, inst, beast.defId);
+    const mods = dormant ? [] : [...inherited.ownerMods, ...(spec.beastMods ?? [])];
+    const combatMods = dormant ? [] : inherited.combatMods;
+    const sig = JSON.stringify([mods, combatMods]);
     if (state.sheet !== sig) {
       const fraction = beast.life / Math.max(1, beast.maxLife());
       beast.sheet.setSource('companionBond', mods); state.sheet = sig;
+      beast.sheet.setSource('minionCombat', combatMods);
       beast.life = Math.min(beast.maxLife(), beast.maxLife() * fraction);
     }
+    beast.radius = dormant ? state.baseRadius : Math.max(5, state.baseRadius * inherited.size);
+    beast.guardMode = !dormant && inherited.guard;
+    applyMinionPlyBonus(beast, dormant ? 0 : inherited.plyBonus);
+    if (grew) beast.plies = Math.round(beast.pliesMax * plyFraction);
+    // Bequests query the same host/body context, including socket-local grants.
+    // Dormant bonds are downed and cannot benefit until capacity returns.
+    if (dormant) { beast.sheet.removeSource('bequest'); beast.bequestSignature = undefined; }
+    else syncAttributeBequests(beast, 1, inherited.tags, inherited.extra);
     const arts = new Set(dormant ? [] : (spec.beastSkills ?? []));
     if (!dormant && spec.familyArt) {
       arts.add(beastFamilyOf(beast.defId).skillId);
@@ -156,6 +168,8 @@ export class CompanionBonds {
   refresh(): void {
     for (const [beast, state] of this.states) if (beast.dead || !beast.companion || !this.host(beast) || !this.w.actors.includes(beast)) {
       this.clearPayloads(beast, state); beast.sheet.removeSource('companionBond'); beast.skills = state.native;
+      beast.sheet.removeSource('minionCombat'); beast.sheet.removeSource('bequest'); beast.bequestSignature = undefined;
+      beast.radius = state.baseRadius; beast.guardMode = false; applyMinionPlyBonus(beast, 0);
       beast.standingOrder = undefined;
       this.states.delete(beast);
     }
@@ -333,7 +347,7 @@ export class CompanionBonds {
 
   saved(beast: Actor): CompanionSaved {
     return { defId: beast.defId!, level: beast.level, skillId: beast.sourceSkillId!.replace('__companion:', ''),
-      ...(beast.downed ? { downed: true } : {}), ...(beast.rarity ? { rarity: beast.rarity, name: beast.name, radius: beast.radius,
+      ...(beast.downed ? { downed: true } : {}), ...(beast.rarity ? { rarity: beast.rarity, name: beast.name, radius: this.states.get(beast)?.baseRadius ?? beast.radius,
         raritySources: beast.sheet.sourceNames().filter(s => s === 'rarity' || s.startsWith('rarityStack')).map(s => [s, beast.sheet.getSourceMods(s)!] as [string, import('./stats').Modifier[]]) } : {}),
       ...(beast.companionReviveRemaining !== undefined ? { reviveRemaining: beast.companionReviveRemaining } : {}) };
   }

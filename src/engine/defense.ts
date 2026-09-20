@@ -11,6 +11,12 @@
 // ---------------------------------------------------------------------------
 
 export const DEFENSE_CFG = {
+  /** Parry damage is limited per RECIPIENT, independently of free blocks.
+   * The sheet's parryDamageCooldown can override this default per body. */
+  parry: {
+    damageCooldown: 0.25,
+    maxReflections: 8,
+  },
   /** ARMOR — PoE-shaped hyperbolic mitigation with NO hard cap:
    *  reduction = armor / (armor + k × hit). Small hits bounce off high armor
    *  (reduction → 1 as the hit shrinks); enormous hits punch through

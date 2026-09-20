@@ -1,3 +1,9 @@
+import { afflictionPressureOf } from '../engine/afflictionPressure';
+import { castingCompletion, castingCueOf } from '../engine/castingCues';
+import { guardReleaseCue } from '../engine/warningCues';
+import { encounterCueOf } from '../engine/encounterCombat';
+import { parryCueStrength } from '../engine/combatCues';
+import type { TitanScenePiece } from '../engine/titans';
 import { cosmeticStyle, COSMETIC_PROJECTILES } from '../data/cosmeticStyles';
 import { cosmeticLoadoutFor, sanitizeCosmeticLoadout } from '../meta/cosmetics';
 import type { CosmeticLoadout, CosmeticMotif } from '../engine/cosmetics';
@@ -64,6 +70,8 @@ export type Vec2W = [number, number];
 export interface ActorW {
   movementTether?: Actor['movementTether'];
   encounterGroup?: Actor['encounterGroup'];
+  encounterCue?: import('../engine/warningCues').EncounterCue;
+  afflictionPressure?: import('../engine/afflictionPressure').AfflictionPressure;
   encounterOrder?: Pick<NonNullable<Actor['encounterOrder']>, 'group' | 'recipe' | 'plan' | 'leader' | 'phase' | 'until'>;
   cosmeticKind?: 'wisp';
   cosmeticLoadout?: CosmeticLoadout;
@@ -135,6 +143,7 @@ export interface ActorW {
   defId?: string;
   ss?: Actor['summonShell'];
   sg?: Actor['shellGuard'];
+  pb?: true; // persistent broken-poise cue, cleared on rearm/removal
   faction?: string;
   /** THE BOSS BAR row, host-computed (World.bossBarInfo — clients have no
    *  brain to derive pips from): [pips, lit, highlight]. Present only while
@@ -177,10 +186,14 @@ export interface ActorW {
 /** `bk` = THE BANK READ (StatusDef.bank — ActiveStatus.bankFrac, 0..1 at
  *  two decimals): the derived scalar the body FX scale by (the tells-wire
  *  idiom — never the bank's source numbers). Absent = no bank worn. */
-export interface StatusW { id: string; stacks: number; bk?: number; }
+export interface StatusW { id: string; stacks: number; bk?: number; dot?: 1; }
 export interface AuraW { c: string; r: number; sh: number; }
 /** A cast in progress — the few fields the renderer's cast bar + guard arc read. */
-export interface CastW {
+export interface CastW { parryCue?: number;
+  castingCompletion?: number;
+  castingCue?: import('../engine/castingCues').CastingCue;
+  focusBroken?: boolean;
+  guardReleaseCue?: import('../engine/warningCues').GuardReleaseCue;
   c: string; mode: string; total: number; elapsed: number;
   pulseTimer?: number; shield?: number; maxShield?: number;
   indicatorAt?: number; presses?: number; channelTime?: number;
@@ -200,7 +213,7 @@ export interface CastW {
 /** `a` = flight age (sim seconds): the deterministic phase clock the form
  *  painters roll on (wave crest, square tumble) — client and host draw the
  *  same curve the host's hit test sampled. */
-export interface ProjW { cosmeticProjectile?: string; cosmeticMotif?: CosmeticMotif; p: Vec2W; d: number; r: number; c: string; sh: string; a: number; }
+export interface ProjW { reflectedCue?: true; orbPaint?: import('../engine/skills').OrbPaint; cosmeticProjectile?: string; cosmeticMotif?: CosmeticMotif; p: Vec2W; d: number; r: number; c: string; sh: string; a: number; }
 /** A tether band, RENDER-ONLY on the client (the host owns the damage ticks). */
 export interface TetherW { ax: number; ay: number; bx: number; by: number; c: string; w: number; }
 export interface DropW { p: Vec2W; bob: number; kind: 'skill' | 'support' | 'gear' | 'vestige' | 'essence' | 'abilityEssence'; color: string; rarity?: string; name?: string; baseId?: string; vid?: string; eid?: string; tid?: number; cnt?: number; }
@@ -223,7 +236,7 @@ export interface PickupW { s: string; l: string; c: string; n: number; born: num
  *  three absent (an old host, an unkeyed flash) = the classic ring, byte-
  *  identical to the pre-wire client. Other flash costumes (beam, haze, arc,
  *  shapes) remain deliberately unshipped — MVP fidelity, renderer-guarded. */
-export interface FlashW { cosmeticMotif?: CosmeticMotif; p: Vec2W; radius: number; color: string; life: number; maxLife: number;
+export interface FlashW { combatCue?: import('../engine/combatCues').CombatCue; defenseCue?: import('../engine/defenseCues').DefenseCue; cosmeticMotif?: CosmeticMotif; p: Vec2W; radius: number; color: string; life: number; maxLife: number;
   fx?: string; bolt?: boolean; meteor?: boolean; departure?: RefugeDeparture; }
 /** A death-burst telegraph (coalesce gather → tracking orb). RENDER-ONLY: the client
  *  never simulates these (homing is host-authoritative via nearestSeatPos over the seats);
@@ -473,6 +486,10 @@ export function applySeatMeta(world: World, seat: Seat, w: SeatMetaW): void {
 
 /** The full render-state replace a client draws each frame. */
 export interface StateSnapshot {
+  satellites?: import('../engine/satellites').SatelliteVisual[];
+  satelliteFlights?: import('../engine/satelliteFlights').SatelliteFlightVisual[];
+  auroras?: import('../engine/auroras').AuroraVisual[];
+  guardians?: import('../engine/guardians').GuardianVisual[];
   magicPackEffects?: import('../engine/magicPackMechanics').MagicPackVisual[];
   /** Per-owner terrain grants: replicas draw exactly the host's circles. */
   grantedPockets?: { owner: number; pockets: import('../engine/fieldgrants').GrantedPocket[] }[];
@@ -549,6 +566,7 @@ export interface StateSnapshot {
    *  (upsert by id, absent = dissipated; the gutter-out flash rides the
    *  ordinary flash stream). Present only while any pooled well stands. */
   wells?: WellW[];
+  titans?: TitanScenePiece[];
   /** The current zone's eased GLOOM (the Gloaming) — the client's ambient
    *  darkness, wash, and zone-info read it off the world exactly as the
    *  host's renderer does. Present only while > 0. */
@@ -686,6 +704,8 @@ function actorToW(a: Actor, world: World): ActorW {
   if (a.extraParts?.length) w.ep = a.extraParts;
   if (a.rarity) w.rarity = a.rarity;
   if (a.magicPack) w.magicPack = { ...a.magicPack, runtime: undefined };
+  w.encounterCue = encounterCueOf(a, world);
+  if (a.kind === 'player' && a.statuses.length) w.afflictionPressure = afflictionPressureOf(a);
   if (a.encounterGroup) w.encounterGroup = { ...a.encounterGroup };
   if (a.encounterOrder) {
     const {group,recipe,plan,leader,phase,until}=a.encounterOrder;
@@ -697,7 +717,9 @@ function actorToW(a: Actor, world: World): ActorW {
   if (a.magicPackFrom && !a.magicPackFrom.dead) w.magicPackFrom = a.magicPackFrom.id;
   if (a.magicPackPower) w.magicPackPower = a.magicPackPower;
   if (a.defId) w.defId = a.defId;
-  if (a.summonShell) { w.ss = { ...a.summonShell }; if (a.shellGuard) w.sg = { ...a.shellGuard }; }
+  if (a.summonShell) w.ss = { ...a.summonShell };
+  if (a.shellGuard) w.sg = { ...a.shellGuard, breathe: a.shellGuard.breathe ? { ...a.shellGuard.breathe } : undefined };
+  if (a.poiseBroken) w.pb = true;
   if (a.faction) w.faction = a.faction;
   // THE BOSS BAR row rides the wire host-computed (clients have no brain
   // to derive pips from, and the policy must not fork): see BOSS_BAR_OF.
@@ -719,9 +741,9 @@ function actorToW(a: Actor, world: World): ActorW {
   }
   if (a.absorb > 0) w.ab = Math.round(a.absorb);
   if (a.statuses.length) {
-    w.st = a.statuses.map(s => s.bankFrac !== undefined
-      ? { id: s.id, stacks: s.stacks, bk: Math.round(s.bankFrac * 100) / 100 }
-      : { id: s.id, stacks: s.stacks });
+    w.st = a.statuses.map(s => ({ id: s.id, stacks: s.stacks,
+      ...(s.dps > 0 ? { dot: 1 as const } : {}),
+      ...(s.bankFrac !== undefined ? { bk: Math.round(s.bankFrac * 100) / 100 } : {}) }));
   }
   if (a.casting) {
     const cs = a.casting;
@@ -735,6 +757,11 @@ function actorToW(a: Actor, world: World): ActorW {
     if (cs.indicatorAt !== undefined) cw.indicatorAt = cs.indicatorAt;
     if (cs.presses !== undefined) cw.presses = cs.presses;
     if (cs.channelTime !== undefined) cw.channelTime = cs.channelTime;
+    if (cs.mode === 'guard') cw.parryCue = parryCueStrength(a);
+    cw.guardReleaseCue = guardReleaseCue(a, world.time);
+    cw.castingCompletion = castingCompletion(a);
+    cw.castingCue = castingCueOf(a);
+    cw.focusBroken = cs.focusBroken;
     if (cs.mode === 'guard' && cs.inst.def.guard) cw.guardArc = cs.inst.def.guard.arcDeg;
     if (cs.bashAt !== undefined) cw.bashAt = cs.bashAt;
     if (cs.bashLow) cw.bashLow = true;
@@ -824,6 +851,10 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
   return {
     tick, time: world.time, zoneId: world.zone.id,
     magicPackEffects: world.magicPackEffects.map(v => ({ ...v })),
+    satellites: world.satellites.visuals.map(v => ({ ...v })),
+    auroras: world.auroras.visuals.map(v => ({ ...v })),
+    guardians: world.guardians.visuals.map(v => ({ ...v })),
+    satelliteFlights: world.satellites.flights.visuals.map(v => ({ ...v, from: { ...v.from }, to: { ...v.to } })),
     grantedPockets: (() => {
       const rows = world.seats.map(s => ({ owner: s.actor.id, pockets: world.grantedPocketsFor(s.actor) }))
         .filter(r => r.pockets.length);
@@ -841,7 +872,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
       return b ? [[c.id, packContainerBoard(b)] as const] : [];
     })),
     actors: world.actors.filter(a => !a.dead || a.isPlayerKind()).map(a => ({ ...actorToW(a, world), cosmeticKind: a.cosmeticKind, cosmeticLoadout: cosmeticLoadoutFor(world, a) })),
-    projectiles: world.projectiles.map(p => ({ p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age, cosmeticMotif: p.cosmeticMotif, cosmeticProjectile: p.cosmeticProjectile })),
+    projectiles: world.projectiles.map(p => ({ reflectedCue: p.parryDamage ? true : undefined, orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined, p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age, cosmeticMotif: p.cosmeticMotif, cosmeticProjectile: p.cosmeticProjectile })),
     tethers: world.tethers.map(t => ({
       ax: Math.round(t.ax), ay: Math.round(t.ay), bx: Math.round(t.bx), by: Math.round(t.by),
       c: t.color, w: t.width,
@@ -870,8 +901,8 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     texts: world.texts.map(t => ({ p: v2(t.pos), life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, k: t.kind })),
     no: world.notices.map(n => ({ text: n.text, color: n.color, size: n.size, ch: n.channel, born: n.bornAt })),
     pfd: world.pickupFeed.map(e => ({ s: e.seatId, l: e.label, c: e.color, n: e.count, born: e.bornAt })),
-    flashes: world.flashes.map(f => ({ p: v2(f.pos), radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
-      fx: f.fx, cosmeticMotif: f.cosmeticMotif, departure: f.departure, bolt: f.bolt || undefined, meteor: f.meteor || undefined })),
+    flashes: world.flashes.map(f => ({ combatCue: f.combatCue ? { ...f.combatCue } : undefined, p: v2(f.pos), radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
+      defenseCue: f.defenseCue ? { ...f.defenseCue } : undefined, fx: f.fx, cosmeticMotif: f.cosmeticMotif, departure: f.departure, bolt: f.bolt || undefined, meteor: f.meteor || undefined })),
     ec: world.eyecatch
       && eyecatchElapsed(world.eyecatch, world.timeflow.age) < world.eyecatch.paneSec
       ? {
@@ -891,6 +922,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     hollows: world.openedHollows.size ? [...world.openedHollows] : undefined,
     annexes: world.annexOpen.size ? [...world.annexOpen] : undefined,
     wells: wellsOf(world),
+    titans: world.titans.scene(),
     gloom: world.gloom() > 0.005 ? Math.round(world.gloom() * 1000) / 1000 : undefined,
     laneArm: laneArmOf(world),
     laneOnce: laneOnceOf(world),
@@ -1164,6 +1196,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   // hand the eased gloom scalar to the render inputs. Same zone guard.
   if (!world.appliedZoneId || snap.zoneId === world.appliedZoneId) {
     world.applyNetWells(snap.wells ?? []);
+    world.titans.applyNet(snap.titans);
     world.setNetGloom(snap.gloom ?? 0);
     // THE RAMPAGE FABRIC's felled set — same idiom, same guard: the guest's
     // ground crushes and regrows exactly where the host's does.
@@ -1236,7 +1269,8 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.wane = aw.wn ?? 0;
     a.owner = aw.mn ? MINION_OWNER : undefined;
     a.summonShell = aw.ss;
-    a.shellGuard = aw.sg ? { ...aw.sg } : undefined;
+    a.shellGuard = aw.sg ? { ...aw.sg, breathe: aw.sg.breathe ? { ...aw.sg.breathe } : undefined } : undefined;
+    a.poiseBroken = aw.pb === true;
     a.kind = aw.seat ? 'player' : undefined;
     a.adorn = aw.adorn;
     a.material = aw.mat;
@@ -1285,6 +1319,8 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.rarity = aw.rarity as Actor['rarity'];
     a.magicPack = aw.magicPack ? { ...aw.magicPack } : undefined;
     a.encounterGroup = aw.encounterGroup ? { ...aw.encounterGroup } : undefined;
+    a.encounterCue = aw.encounterCue ? { ...aw.encounterCue } : undefined;
+    a.afflictionPressure = aw.afflictionPressure ? { ...aw.afflictionPressure } : undefined;
     a.encounterOrder = aw.encounterOrder ? { ...aw.encounterOrder } : undefined;
     a.magicPackPower = aw.magicPackPower ?? 0;
     a.magicPackRole = aw.magicPackRole;
@@ -1307,7 +1343,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     // Reconstruct the FX sub-objects the renderer draws (stand-in nested objects
     // so renderer.ts stays untouched). Absent → cleared → that FX simply skips.
     a.statuses.length = 0;
-    if (aw.st) for (const s of aw.st) a.statuses.push({ id: s.id, remaining: 99, stacks: s.stacks, dps: 0, sourceName: '', bankFrac: s.bk });
+    if (aw.st) for (const s of aw.st) a.statuses.push({ id: s.id, remaining: 99, stacks: s.stacks, dps: 0, screenDot: s.dot ? true : undefined, sourceName: '', bankFrac: s.bk });
     a.casting = aw.cast ? ({
       // THE VENT-RIDE's broil: the client's cast stub carries the column
       // radius as a leap delivery with a vent, so the roil layer reads one
@@ -1315,8 +1351,12 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
       inst: { def: { color: aw.cast.c, guard: aw.cast.guardArc !== undefined ? { arcDeg: aw.cast.guardArc } : undefined,
         delivery: aw.cast.vent !== undefined ? { type: 'leap', vent: { columnR: aw.cast.vent } } : undefined } },
       mode: aw.cast.mode, total: aw.cast.total, elapsed: aw.cast.elapsed,
+      castingCompletion: aw.cast.castingCompletion,
+      castingCue: aw.cast.castingCue ? { ...aw.cast.castingCue } : undefined,
+      focusBroken: aw.cast.focusBroken,
       pulseTimer: aw.cast.pulseTimer, shield: aw.cast.shield, maxShield: aw.cast.maxShield,
-      indicatorAt: aw.cast.indicatorAt, presses: aw.cast.presses, channelTime: aw.cast.channelTime,
+      guardReleaseCue: aw.cast.guardReleaseCue ? { ...aw.cast.guardReleaseCue } : undefined,
+      parryCue: aw.cast.parryCue, indicatorAt: aw.cast.indicatorAt, presses: aw.cast.presses, channelTime: aw.cast.channelTime,
       bashAt: aw.cast.bashAt, bashLow: aw.cast.bashLow, bashArmAt: aw.cast.bashArmAt,
       aim: { x: a.pos.x, y: a.pos.y }, held: false, baseMult: 1,
     } as unknown as CastingState) : null;
@@ -1376,7 +1416,8 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   world.actors = actors;
 
   // Lightweight entities — plain render structs the renderer reads positionally.
-  world.projectiles = snap.projectiles.map(p => ({
+  world.projectiles = snap.projectiles.map(p => ({ reflectedCue: p.reflectedCue,
+    orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined,
     pos: { x: p.p[0], y: p.p[1] }, dir: p.d, radius: p.r, color: p.c, shape: p.sh, age: p.a ?? 0, cosmeticMotif: p.cosmeticMotif,
     cosmeticProjectile: cosmeticStyle(COSMETIC_PROJECTILES, p.cosmeticProjectile) ? p.cosmeticProjectile : undefined,
   })) as unknown as World['projectiles'];
@@ -1401,12 +1442,16 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
               : { kind: 'skill', inst: { def: { color: d.color, name: d.name ?? '?' }, rarity: d.rarity ?? 'common' } },
   })) as unknown as World['drops'];
   world.magicPackEffects = (snap.magicPackEffects ?? []).map(v => ({ ...v }));
+  world.satellites.visuals = (snap.satellites ?? []).map(v => ({ ...v }));
+  world.auroras.visuals = (snap.auroras ?? []).map(v => ({ ...v }));
+  world.guardians.visuals = (snap.guardians ?? []).map(v => ({ ...v }));
+  world.satellites.flights.visuals = (snap.satelliteFlights ?? []).map(v => ({ ...v, from: { ...v.from }, to: { ...v.to } }));
   world.orbs = snap.orbs.map(o => ({ pos: { x: o.p[0], y: o.p[1] }, bob: o.bob, life: o.life, kind: o.kind, amount: 0 })) as unknown as World['orbs'];
   world.texts = snap.texts.map(t => ({ pos: { x: t.p[0], y: t.p[1] }, life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, kind: t.k })) as unknown as World['texts'];
   world.notices = (snap.no ?? []).map(n => ({ text: n.text, color: n.color, size: n.size, channel: n.ch, bornAt: n.born }));
   world.pickupFeed = (snap.pfd ?? []).map(e => ({ seatId: e.s, label: e.l, color: e.c, count: e.n, bornAt: e.born }));
-  world.flashes = snap.flashes.map(f => ({ pos: { x: f.p[0], y: f.p[1] }, radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
-    fx: f.fx, cosmeticMotif: f.cosmeticMotif, departure: f.departure, bolt: f.bolt, meteor: f.meteor })) as unknown as World['flashes'];
+  world.flashes = snap.flashes.map(f => ({ combatCue: f.combatCue ? { ...f.combatCue } : undefined, pos: { x: f.p[0], y: f.p[1] }, radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
+    defenseCue: f.defenseCue ? { ...f.defenseCue } : undefined, fx: f.fx, cosmeticMotif: f.cosmeticMotif, departure: f.departure, bolt: f.bolt, meteor: f.meteor })) as unknown as World['flashes'];
   // THE EYECATCH — re-stamped against the CLIENT's own raw clock (elapsed →
   // local t0); an absent row clears the pane with the host's (engine/ultimates.ts).
   world.eyecatch = snap.ec ? {
@@ -1611,7 +1656,7 @@ export function serializeZone(world: World): ZoneMsg {
     // Pooled LIGHTWELLS are excluded on purpose: they ride the per-tick
     // wells channel EXCLUSIVELY (a copy here would arrive stateless and
     // duplicate the reconciled one).
-    doodads: world.doodads.filter(d => !d.well).map(d => ({ p: v2(d.pos), r: d.radius, kind: d.kind, dir: d.dir, shallow: d.shallow, rot: d.rot, adorn: d.adorn, door: d.door, hitbox: d.hitbox, hollow: d.hollow, annex: d.annex, wild: d.wild, fall: d.fall })),
+    doodads: world.doodads.filter(d => !d.well && !world.titans.owns(d)).map(d => ({ p: v2(d.pos), r: d.radius, kind: d.kind, dir: d.dir, shallow: d.shallow, rot: d.rot, adorn: d.adorn, door: d.door, hitbox: d.hitbox, hollow: d.hollow, annex: d.annex, wild: d.wild, fall: d.fall })),
     exits: world.exits.map(e => ({ p: v2(e.pos), r: e.radius, to: e.to, label: e.label, b: e.boundary })),
     waypoint: world.waypointPos ? v2(world.waypointPos) : null,
     walk: world.walk instanceof GridWalkField ? world.walk.pack() : null,

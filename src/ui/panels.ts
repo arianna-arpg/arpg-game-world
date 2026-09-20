@@ -6697,15 +6697,17 @@ Worn graft: your gear grants this to Skill Slot ${r.slot + 1}; no socket spent. 
     // its source and whether it sits on the bar. A seated grant is a
     // read-only chip (the rack tile carries the skill); an UNSEATED one is
     // a drag source — drop it on an empty rack seat to bind it (the rack
-    // law: unseated is unusable; the bar filled before the grant arrived).
+    // triggers remain usable without a bar seat; manual casts need a seat).
     const grantRows = seat.grantedSkills ?? [];
     const grantChips = grantRows.map(r => {
-      const seated = r.slot >= 0;
+      const beneficiary = seat.meta.knownSkills.get(r.def.id);
+      const boosted = !!beneficiary && world.seatHero(seat).skills.includes(beneficiary);
+      const seated = r.slot >= 0 || boosted;
       return `<span class="gem-chip graft-chip"${seated ? '' : ` data-drag="rackGrant:${r.def.id}"`}
         style="border-color:${r.def.color}${seated ? '' : ';opacity:0.78;cursor:var(--cursor-point, pointer)'}"
         title="${r.def.description}
-Granted by ${r.source} at Level ${r.level}: cast it like any learned skill; its sockets live on that piece. ${seated ? 'Seated on the bar.' : 'UNSEATED: drag it onto an empty rack seat to bind it.'}">
-        ◆ ${r.def.name} <b>L${r.level}</b> ← ${r.source}${seated ? '' : ' — unseated'}</span>`;
+${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its supports and tree remain yours.` : `Granted by ${r.source} at Level ${r.level}. Triggers require no bar slot. Drag onto an empty seat for manual use; the granted copy’s sockets live on the item.`}">
+        ◆ ${r.def.name} <b>${boosted ? '+' : 'L'}${r.level}</b> ← ${r.source}${boosted ? ' — equipped skill bonus' : seated ? '' : ' — optional skill'}</span>`;
     }).join('');
     const graftBank = (graftSources.length || wornRows.length || grantRows.length) ? `
       <div class="graft-bank">
@@ -10341,6 +10343,10 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         <button id="opt-lowlife" title="Blood seeps in at the screen edge while life is low, pressing inward on a slow heartbeat at the last sliver. OFF: only the struck-while-low surge shows (the sane pick for 1/1-life or heavy-reservation builds).">${s.lowLifePulse ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
+        <span>Ailment Screen Effects</span>
+        <button id="opt-affliction" title="Blood drips, rising kindling, poison haze and curse effects appear together, each scaling with its own severity. STILL stops their motion; OFF hides these layers. Status icons, body effects, frost, stun and the separate low-life pulse keep their own behavior.">${s.afflictionOverlays.toUpperCase()}</button>
+      </div>
+      <div class="rebind-row">
         <span>Faintness Frame-Falter</span>
         <button id="opt-falter" title="While light-headed (faintness / a swoon), the picture itself deliberately skips: brief, simulated lag spikes, on purpose: your hero's head is going light, so your frames seem to. The game underneath never stutters (movement, casts and co-op keep running at full rate). OFF for comfort or motion sensitivity; the grey pall still shows.">${s.statusFalter ? 'ON' : 'OFF'}</button>
       </div>
@@ -10379,6 +10385,12 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     root.querySelector<HTMLElement>('#opt-lowlife')?.addEventListener('click', () => {
       const s = this.getSettings();
       s.lowLifePulse = !s.lowLifePulse;
+      this.saveSettings();
+      this.renderOptions(root, onBack);
+    });
+    root.querySelector<HTMLElement>('#opt-affliction')?.addEventListener('click', () => {
+      const s = this.getSettings();
+      s.afflictionOverlays = s.afflictionOverlays === 'gentle' ? 'still' : s.afflictionOverlays === 'still' ? 'off' : 'gentle';
       this.saveSettings();
       this.renderOptions(root, onBack);
     });

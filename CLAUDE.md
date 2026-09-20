@@ -3,7 +3,59 @@
 Guidance for Claude Code working in this repository. This file is committed and
 shared with everyone who clones the repo.
 
+Parry retaliation windows and actual projectile reflection are documented in
+`docs/engine/parry.md`; `balance/probe_parry.ts` pins the shared recipient cooldown,
+typed returning damage, defensive preservation and symmetric ownership transfer.
+
 ## What this is
+**SHOW, DON'T TELL — absolute gameplay-signaling law.** Convey mechanics,
+danger, escalation and counterplay through visible world behavior, animation,
+effects and sound. Do not add explanatory combat captions, instruction banners,
+text countdowns or prose tutorials to make a gameplay mechanic legible. The
+player must be able to read and respond to the event without reading text.
+Tie cues to the actual affected place, timing and outcome; intensify them as
+the event develops and visibly release them when it is avoided or interrupted.
+`docs/design/combat-readability.md` records the names/states/counters policy
+and the removal of pack subtitles and explanatory combat prose.
+GT-001/002 exhaustion replacements are documented in `docs/design/exhaustion-cues.md`:
+inherited configurable retreat gasps and status-driven Fumelung gasping,
+verified by `probe_exhaustioncues.ts` and `balance/exhaustion-cues-ui.cjs`.
+GT-003–006 body/defense cues and shell anatomy profiles are documented in
+`docs/design/defense-cues.md`; verify `probe_defensecues.ts` and the hidden
+`balance/defense-cues-ui.cjs` harness after a build.
+GT-007–010 combat outcomes, parry openings and reflected-flight cues are documented
+in `docs/design/combat-outcome-cues.md`; verify `probe_combatcues.ts` and
+`balance/combat-cues-ui.cjs` after a build.
+GT-011/012 live guard-release footprints and coordinated-maneuver gestures are
+documented in `docs/design/warning-cues.md`; verify `probe_warningcues.ts`,
+`probe_encountercombat.ts` and `balance/warning-cues-ui.cjs` after a build.
+Player ailments use independent simultaneous blood drips, kindling, poison haze
+and curse layers, each scaled by its own severity with a shared clutter budget. See `docs/design/affliction-cues.md`; verify
+`probe_afflictioncues.ts` and `balance/affliction-cues-ui.cjs` after a build.
+GT-019 cast interruptions, concentration fizzles/refocus and held completion
+use reusable geometry documented in `docs/design/casting-cues.md`; verify
+`probe_castingcues.ts` and `balance/casting-cues-ui.cjs` after a build.
+Author cues as reusable, configurable data. Undead nights demonstrate this with
+disturbed soil and grasping hands at committed emergence sites (`groundRising`).
+
+Carried satellites live in `data/satellites.ts` and `engine/satellites.ts`:
+untargetable, modifier-granted orbiting effects shared by players and monsters.
+Iron Wake debuts as a level-5 magic pack recipe and the Wakebound jewelry
+prefix; Cinder Wake adds level-9 packs and level-12 Cinderbound jewelry. `docs/engine/satellites.md` covers count stacking, contact/scaling,
+cleanup and co-op; verify with `npm run probe -- satellites` and the hidden
+`balance/satellites-ui.cjs` harness after a build.
+
+Storm Wake lightning projectiles and independent charged aurora reservoirs
+are documented in `docs/engine/auroras.md`. Both debut on jewelry, without
+new magic-pack recipes. Verify with `npm run probe -- auroras` and the hidden
+`balance/auroras-ui.cjs` harness after a build.
+
+Rime Wake cold precision and the independent Graveglass projectile guardian
+are documented in `docs/engine/guardians.md`. Their Rimebound/Glasskept
+jewelry uses shared modifier grants; no magic-pack recipes are added.
+Verify with `npm run probe -- guardians` and the hidden
+`balance/guardians-ui.cjs` harness after a build.
+
 Reactive encounterCombat coordination lives in `src/engine/encounterCombat.ts`:
 utility-scored plans, readable warnings, finite commitments/recovery and native
 AI role assignments. `docs/design/encounter-combat.md` documents the six plans,
@@ -15,6 +67,10 @@ Mixed-species encounterGroups (one faction per crew) live in
 the strict habitat/debut gates, ambient replacement policy, formation slots,
 attributable tactics, survivor persistence and public spawn seam. Verify with
 `npm run probe -- encountergroups` and `balance/encounter-groups-ui.cjs` after a build.
+
+Titans (durable unannounced journeys, physical bodies and temporary terrain
+wakes) are documented in `docs/design/titans.md`; roster/tuning live in
+`src/data/titans.ts`, regression coverage in `balance/probe_titans.ts`.
 
 A top-down action RPG prototype in TypeScript + Vite, rendered on HTML5 Canvas
 2D. Design thesis: every system is open, modular **data** — skills, monsters,
@@ -169,6 +225,11 @@ Class discovery combat recipes live in `src/data/classdeeds.ts`, with reusable
 ledger aggregation in `src/engine/deeds.ts`. `docs/meta/class-deeds.md` covers
 account attribution, encounter streaks, hints, and the starting-kit cost pass.
 Class levels remain the mastery/skill-swap ladder.
+
+`docs/design/world-boss-colossi.md` documents the world-boss encounter pass:
+`data/worldBossEncounters.ts` owns Cragmaw's colossal anatomy and the two
+sovereigns' warned attack/recovery patterns. Verify with
+`npm run probe -- worldbossspectacle` and `balance/world-bosses-ui.cjs` after a build.
 
 Stationary arena bosses live in `data/arenaBosses.ts`, with regional doors in
 `data/arenaBossHabitats.ts` and courts in `data/arenaBossTilesets.ts`.
@@ -2031,9 +2092,9 @@ we verify changes.
   gate); bindable, castable, socketable, with THE RESIDENCE ON THE ITEM
   (`ItemInstance.grantState` — sockets + tree picks written back every
   recalc onto the first granting piece, `packGrantState`/
-  `restoreGrantState`), THE SEATING (`GRANT_CFG.autoSeat` takes the first
-  empty seat; a full bar leaves the Granted strip's chip a drag source onto
-  EMPTY seats only), THE ONE LOOKUP (`World.seatSkillById` — book, then
+  `restoreGrantState`), OPTIONAL SEATING (`GRANT_CFG.autoSeat` defaults
+  off; triggers use the item copy without a seat; an equipped learned copy
+  gains the folded grant level as a derived bonus and keeps its investment), THE ONE LOOKUP (`World.seatSkillById` — book, then
   the granted lane, minting a worn grant on demand off the gear so a saved
   or wired bar seats it where it stood) and the ledger `Seat.grantedSkills`
   the panels read; class bonus levels, tree grafts and worn grafts iterate
@@ -2067,8 +2128,9 @@ we verify changes.
   riding THE SEAT LAW (`engine/seatlaw.ts` — `seatPower_outward` /
   `_solitude` / `_communion` amplifier stats THE CONTAINER FOLD reads off
   board GEOMETRY as one single-hop factor per seated piece; the
-  `seated:<container>` derived gauge), a case-granted skill (the fold feeds
-  the grant scan and hosts the stones on the seated relic) and a rolled
+  `seated:<container>` derived gauge), an independent companion grant (the Idol maintains a Stone Golem
+  without a bar slot or reservation; a manual golem can coexist and also
+  reserves no mana via `summonReservation_<id>`; `engine/companionGrants.ts`) and a rolled
   sunder element.
   THE WORN GRAFT (slot grafts — supports granted BY POSITION): the
   `slotgraft_<slot>_<gemId>` stat family (engine/skills.ts `slotGraftStat`,

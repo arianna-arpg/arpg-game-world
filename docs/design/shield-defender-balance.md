@@ -47,8 +47,10 @@ regardless (a bashless early release, never a warning). The overhead arm meter
 draws on enemy guards too, so the moment a monster's bash becomes possible is
 readable before its warning ever begins.
 
-During the final portion of a qualifying guard hold, it displays **Bash incoming!**,
-plants its feet and locks its current facing for the full warning. Target
+During the final portion of a qualifying guard hold, a fixed sector shows the
+actual bash reach and arc while the shield/body load backward. GT-011 retires
+**Bash incoming!**; [warning cues](warning-cues.md) documents the live shared
+presentation. The guard plants its feet and locks its facing for the full warning. Target
 tracking cannot rotate that commitment, and normal AI skill selection cannot
 insert a guard-combo poke inside it. External forces can still move the body.
 The warning occupies the end of the normal hold instead of adding extra shield
@@ -60,11 +62,10 @@ the bash, breaking the shield cancels it, and a stun interrupts the cast.
 A shield already below its arming line drops normally without a false warning.
 The ordinary post-cast recovery begins only after release.
 
-`guardRelease` is also a tell source, reading actual progress from the live
-cast. The Warden leans back and brightens; the Sentinel leans back. These use
-the existing body/tell rendering and co-op replication paths. Breaking or
-interrupting the cast removes the source; no independent delayed attack lives
-on after the guard is gone.
+`guardRelease` remains an available tell source. Warden and Sentinel now use
+the shared live warning posture and footprint, including immediate removal
+when pressure de-arms the payload. Co-op receives resolved geometry/progress.
+No independent delayed attack survives when the guard is gone.
 
 An omitted or zero windup retains an unwarned release, on the (clock-extended)
 hold. Player-driven shields answer to no AI commitment, including when

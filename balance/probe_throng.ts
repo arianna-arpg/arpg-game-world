@@ -403,6 +403,8 @@ const step = (w: ReturnType<typeof makeSimWorld>, sec: number): void => {
   // The host swings THROUGH its own parasite: a claw aimed dead at the
   // seat tears nothing. The bystander's same claw tears a ply.
   const plies0 = grub.plies;
+  // Isolate the ownership exclusion from an unrelated random defensive roll.
+  grub.sheet.setSource('scrape-probe', [mod('evasion', 'override', 0), mod('blockChance', 'override', 0), mod('areaAvoidance', 'override', 0)]);
   const claw = makeSkillInstance(SKILLS.claw, 1);
   host.facing = Math.atan2(grub.pos.y - host.pos.y, grub.pos.x - host.pos.x);
   w.executeSkill(host, claw, vec(grub.pos.x, grub.pos.y));

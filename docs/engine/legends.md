@@ -46,12 +46,17 @@ learned book. The laws:
   socket-row shape — engine/gemitems.ts `packGrantState` /
   `restoreGrantState`), so unequip → re-equip, a save, and the co-op wire
   all mint the same stones back. Level is never stored.
-- **THE SEATING.** A fresh grant takes the first empty bar seat
-  (`GRANT_CFG.autoSeat` — the rack law: unseated is unusable). A full bar
-  leaves it waiting in the Granted strip, where its chip is a drag source
-  onto an EMPTY seat only: a grant never evicts a learned sitter. A grant
-  that leaves comes off the bar, its auras and summon toggles shut, its
-  instance dropped.
+- **Optional seating.** Grants do not automatically occupy the bar
+  (`GRANT_CFG.autoSeat = false`). Their item triggers work without a seat;
+  players may bind them for manual casting. A learned copy takes priority
+  on the bar and retains its own base level, supports and tree.
+- **Additive investment.** An equipped learned copy gains the folded grant
+  level as bonus levels, additive with class bonuses. Recalculation derives
+  the bonus from scratch; unbinding or removing the grant removes only that
+  bonus. Own-copy triggers use the equipped copy, otherwise the item copy,
+  then an unseated learned copy as the final fallback. Grant sockets remain
+  on the item, separate from the learned skill's investment. Removing a
+  grant ends only a toggle or aura owned by that granted instance.
 - **THE ONE LOOKUP.** `World.seatSkillById(seat, id)` answers "the skill
   this seat holds under this id" — the book, then the granted lane, minting
   a worn grant on demand off the gear when the bar is restored BEFORE the
@@ -84,7 +89,7 @@ Three new levers on any proc:
   structural and stay as authored. A legend rolls "how often" and "how
   hard" as two ordinary lines (Stormcall, Bloodletter's Girdle).
 - **THE OWN-COPY LAW** — `ProcCastSpec.own`: the payload plays the caster's
-  HELD instance of the skill (bar, learned book, granted lane — level,
+  HELD instance of the skill (bar, granted lane, learned book — level,
   sockets, grafts, tree picks) instead of a plain synthetic. "Trigger Ember
   Fusillade on casting a spell" fires the fusillade you built. Opt-in, so
   standing riders keep their authored pacing byte-identical.
@@ -168,7 +173,7 @@ stat a known one.
 | The Lodestone (relic) | THE SEAT LAW, communion: the talisman's lines grow per relic touching it |
 | The Reliquary Crown (relic) | THE SEAT LAW, outward: every relic touching the effigy has stronger lines |
 | The Tally Idol (relic) | THE CASE GAUGE: damage per relic seated in the Reliquary |
-| The Unquarried Idol (relic) | Grants Summon Stone Golem from the case (the container fold hosts the stones) |
+| The Unquarried Idol (relic) | Independent Stone Golem follower; manually equipped Stone Golems also reserve no mana |
 | Sunderstone (relic) | a rolled element's penetration and tagged damage, paid in your own resistance |
 | the build-around wave | slot grafts, combos, conversions, sympathy, the low-life line, reflex, throng finds, the din — unchanged |
 
@@ -184,6 +189,41 @@ gauge per container (`seated:<id>`) for "per relic seated" lines; and the
 granted-skill lane reaching a seated piece (the fold feeds the grant scan and
 hosts the stones on the relic). Contract and laws: `docs/engine/containers.md`
 — THE SEAT LAW.
+
+## 7. Independent companion grants (engine/companionGrants.ts)
+
+`companiongrant_<skillId>` maintains one follower through an existing
+persistent summon skill. Its summed, floored, skill-capped value is the
+summon skill level, not the monster's world level. The registry generates
+these stats for persistent summon definitions. Any equipment, active
+container, class or passive modifier can supply them; the runtime contains
+no unique-item or monster IDs.
+
+The follower uses the normal summon constructor, owner modifiers, combat,
+team and source-skill attribution. Its instance also names the granting
+item. It occupies no skill slot, manual summon pool or reservation. A
+manual copy can summon alongside it and toggle off independently. Multiple
+grants of the same skill add levels to one follower; a level change updates
+its inherited stats while preserving its body and life fraction.
+
+Death waits the skill's authored respawn time, modified by ordinary minion
+respawn investment. Removing the last grant retires its follower silently;
+owner death retires it too. Missing bodies after zone travel are rebuilt,
+and reload derives the companion from active items. These companions do
+not have separately editable sockets or trees. The player may customize
+an independently equipped summon skill as usual.
+
+`summonReservation_<skillId>` is a separate multiplier, read by
+`summonReservationUnit` for cast admission, initial reservation, live
+contract repricing and cap previews. It defaults to 1. The Idol authors a
+zero override, so multiple copies and Reliquary amplification cannot turn
+free reservation into a positive or negative price. This applies to the
+manual skill too. Its ordinary cast cost still applies.
+
+Regression coverage: `probe_legends` pins full bars, bonus re-derivation,
+separate socket residence, removal, save/reload and unseated proc casts.
+`probe_relicuniques` pins coexistence, timed reforming, live repricing,
+stacked grant levels, travel reconstruction and owner death.
 
 ## Boundaries
 

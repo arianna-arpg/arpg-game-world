@@ -82,6 +82,69 @@ signal. Four fragments unlock an actionable survey preparation, not victory.
 Faction-specific interpretations foreshadow the shared problem without deciding
 its ultimate explanation. No final boss or endgame completion is claimed here.
 
+## Undead nights and scenery risings
+
+When Undead are among the selected leaders and Nhal survives, open expedition
+ground can raise small groups from nearby tombstones, bone piles/cairns, burial
+urns, dead trees, stumps and rubble at night. The existing world day/night clock
+owns this gate; darkness in a sheltered cave does not count as night exposure.
+Towns, sheltered ground, side caves, special/boundless zones, quest grounds and
+scripted scenes are excluded. No terrain is generated for this mechanic.
+
+The first opportunity has an eight-second entry/nightfall grace. Subsequent
+warnings are 32/24/16/10 seconds apart after 0/1/2/3 leader victories. A surviving
+Undead campaign therefore becomes more active as other leaders fall. Silencing
+the mustering crypt doubles those intervals, including the remaining portion of
+an existing cooldown. Defeating Nhal stops new risings. Existing bodies remain
+ordinary enemies; dawn prevents further births without erasing a fight.
+
+Each opportunity selects suitable scenery 180–520 units from the player and
+reserves up to two reachable emergence spots. Across four seconds, loose dust
+thickens, soil cracks and skeletal hands reach and grasp from those exact spots.
+The Undead emerge where the hands were shown. There can be at most ten living night-risen enemies
+in the active zone. The source must still exist on the same story and at the
+warned position; leaving it beyond 650 units cancels the rising. Births require
+reachable, unoccupied ground clear of solid scenery, player feet and exits.
+Placement is checked both before showing a disturbance and before emergence.
+A newly blocked spot is cancelled, never moved to an unmarked fallback spot.
+Avoided or interrupted risings lose their hands and leave a brief settling dust.
+Removing suitable scenery and moving through open ground provide local relief.
+
+Bodies use native assault orders toward the warned sighting for twelve seconds,
+then ordinary perception/combat. They carry an `odyssey_rising:<row id>` tag for
+attribution and keep their ordinary species names. Their normal bounties, wounds,
+species, casualties and tags ride the existing zone-memory/save paths, with the
+same expiry and refresh rules as other inhabitants. This pressure adds no second
+body save. Cadence alone persists in optional validated Odyssey `risings` rows;
+old saves need no reset. Travel, reload, player incapacitation and scenes cancel
+unfinished warnings and restore an entry grace. Offline time produces no births.
+
+`src/data/odysseyRisings.ts` owns the open `ODYSSEY_RISINGS` rows: faction gate,
+phase list, onset act, intervals, preparation multiplier, scenery, roster, cap,
+placement and presentation. `src/engine/odysseyRisings.ts` conducts any such row;
+adding another scenery-born faction pressure needs data rather than another
+faction branch. `src/world/odysseyRisings.ts` validates its saved clocks.
+The `cue` row selects registered visual effects, tint, size and settling duration.
+`src/render/vis/groundRising.ts` owns the reusable earth/hand painters and their
+visual tuning. Existing flash snapshots carry the same positions and animation
+progress to co-op clients. Scatter is stable at the wire's position precision.
+
+**Show, don't tell is the gameplay-signaling law.** Undead risings add no floating
+captions, notices, HUD instructions, textual countdowns or journal tutorial of
+their cadence/counterplay. Disturbed ground, growing motion and actual emergence
+carry the mechanic. The existing zone objective stays visible. This pass replaces
+the Undead signaling; older Bandit/Goblin text remains a future conversion task.
+
+`npm run probe -- odysseynights` verifies gates, warned real AI bodies, collision
+and reachability, caps, save/travel survivors and casualties, live cadence changes,
+the absence of instruction text, committed-site cancellation, co-op cues, and
+the actual crypt/leader objective paths. After a build, run
+`node_modules/.bin/electron.cmd balance/odyssey-nights-ui.cjs` on Windows (or
+`npx electron balance/odyssey-nights-ui.cjs`) for isolated hidden real-client
+early/middle/late visual and birth assertions and screenshots in `balance/reports/`.
+These checks establish mechanics;
+the 32/24/16/10 cadence remains initial tuning for human playthroughs.
+
 ## Verification and extension
 
 ### Playing the foundation

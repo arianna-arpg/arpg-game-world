@@ -7,7 +7,7 @@
 //      at least one SIGNATURE line (THE DEFINING LAW: a shape no rolled
 //      affix can produce), and the describer speaks the new lines.
 //   B. THE GRANTED SKILL — equip → a real instance on the seat's granted
-//      lane at the folded level, auto-seated on the bar, castable, refusing
+//      lane at the folded level, optionally seated on the bar, castable, refusing
 //      unlearn and essence leveling, socketing a support whose residence
 //      lands on the item, surviving unequip → re-equip and a save round
 //      trip (same seat, same stone), summing across grantors, and leaving
@@ -32,7 +32,7 @@ import { seedGlobalRandom } from '../src/sim/rng';
 import { vec } from '../src/core/math';
 import type { World } from '../src/engine/world';
 import type { Actor } from '../src/engine/actor';
-import { GRANT_CFG, makeSkillInstance, skillGrantStat, skillMaxLevel } from '../src/engine/skills';
+import { GRANT_CFG, effectiveSkillLevel, makeSkillInstance, skillGrantStat, skillMaxLevel } from '../src/engine/skills';
 import { STAT_DEFS, extraAsStat, mod } from '../src/engine/stats';
 import { applyConversion } from '../src/engine/damage';
 import { DERIVED_GAUGES, GAUGE_CFG } from '../src/engine/gauges';
@@ -154,9 +154,9 @@ check('B2 worn, the helm grants both skills at the folded levels, sourced to the
   (seat.grantedSkills ?? []).map(r => `${r.def.id}@L${r.level}:${r.slot}`).join(' '));
 check('B3 a grant is worn, not owned: the learned book never holds it',
   !seat.meta.knownSkills.has('firebolt') && !seat.meta.knownSkills.has('pyroclast_bolt'));
-check('B4 THE SEATING: both auto-seat on empty bar seats',
-  (fireRow()?.slot ?? -1) >= 0 && hero.skills[fireRow()!.slot] === fireRow()!.inst
-  && (pyroRow()?.slot ?? -1) >= 0);
+check('B4 grants leave bar seats free by default', fireRow()?.slot === -1 && pyroRow()?.slot === -1);
+w.bindSkill(hero.skills.indexOf(null), 'firebolt', seat);
+// Leave Pyroclast unseated: its real cast proc below must still fire.
 check('B5 the granted instance carries GRANT_CFG.sockets sockets',
   fireRow()?.inst.sockets.length === GRANT_CFG.sockets);
 {
@@ -402,6 +402,40 @@ w.recalcSeat(seat);
   check('H2 the extra lane ADDS fire and keeps the physical whole',
     extra.physical === 100 && Math.abs((extra.fire ?? 0) - 50) < 1e-9, JSON.stringify(extra));
   p6.sheet.removeSource('probe');
+}
+
+// I. Grants complement invested skills, even on a full bar.
+{
+  const w = makeSimWorld('warrior', 0x1ea9), seat = w.localSeat, p = seat.actor;
+  const learned = makeSkillInstance(SKILLS.firebolt, 12, 2);
+  learned.sockets[0] = { def: SUPPORTS.splitting, level: 3 };
+  seat.meta.knownSkills.set('firebolt', learned);
+  p.skills[0] = learned;
+  for (let i = 1; i < p.skills.length; i++) p.skills[i] ??= makeSkillInstance(SKILLS.fireball, 1);
+  const before = [...p.skills];
+  const ring = rollItem({ ilvl: 20, uniqueId: 'emberbrand' })!;
+  seat.meta.equipped.ring1 = ring;
+  w.recalcSeat(seat);
+  const grant = seat.grantedInsts!.get('firebolt')!;
+  check('I1 full bar remains unchanged and the learned copy gains rolled levels',
+    p.skills.every((s, i) => s === before[i]) && effectiveSkillLevel(learned) === 12 + grant.level);
+  check('I2 sockets, base level and item residence stay separate', learned.level === 12
+    && learned.sockets[0]?.level === 3 && grant.sockets.every(s => !s));
+  const held = () => (w as unknown as { heldSkillInst(a: Actor, id: string): import('../src/engine/skills').SkillInstance | null }).heldSkillInst(p, 'firebolt');
+  check('I3 own-copy triggers choose the boosted equipped instance', held() === learned);
+  w.recalcSeat(seat);
+  check('I4 repeated recalculation never compounds bonus levels', effectiveSkillLevel(learned) === 12 + grant.level);
+  const saved = serializeCharacter(w), w2 = makeSimWorld('warrior', 0x1eaa);
+  check('I5 save/reload retains investment and derives the bonus once', applySavedCharacter(w2, saved)
+    && w2.localSeat.meta.knownSkills.get('firebolt')?.level === 12
+    && effectiveSkillLevel(w2.localSeat.meta.knownSkills.get('firebolt')!) === effectiveSkillLevel(learned));
+  w.bindSkill(0, null, seat);
+  check('I6 unbinding clears the bonus and triggers use the item copy', learned.bonusLevels === 0 && held() === grant);
+  w.bindSkill(0, 'firebolt', seat);
+  delete seat.meta.equipped.ring1;
+  w.recalcSeat(seat);
+  check('I7 removing the item preserves the learned bar and investment', p.skills[0] === learned
+    && effectiveSkillLevel(learned) === 12 && learned.sockets[0]?.level === 3 && !seat.grantedInsts);
 }
 
 console.log(failed === 0 ? '\nALL GREEN' : `\n${failed} FAILED`);

@@ -84,6 +84,8 @@ export interface Settings {
    *  is a real build choice: a 1/1-life or 90%-reserved hero would otherwise
    *  dwell inside a permanent wound. The hit-while-low surge always shows. */
   lowLifePulse: boolean;
+  /** Independent ailment layers: gentle motion, still, or disabled. Icons stay visible. */
+  afflictionOverlays: import('../data/afflictionCues').AfflictionOverlayMode;
   /** THE FALTER (render/screenFx.ts ScreenFxDef.falter): faintness and the
    *  swoon deliberately HOLD presented frames — a simulated lag spike, the
    *  vasovagal skip. Designed and documented (docs/render/falter.md); the
@@ -278,6 +280,7 @@ export interface SettingsSave {
   pad?: Partial<PadOptions>;
   cursor?: Partial<CursorOptions>;
   lowLifePulse?: boolean;
+  afflictionOverlays?: import('../data/afflictionCues').AfflictionOverlayMode;
   statusFalter?: boolean;
   invertMove?: boolean;
   gearPickup?: 'vacuum' | 'key';
@@ -437,6 +440,7 @@ export const makeSettings = (): Settings => ({
   pad: { ...DEFAULT_PAD_OPTIONS },
   cursor: { ...DEFAULT_CURSOR_OPTIONS },
   lowLifePulse: true,
+  afflictionOverlays: 'gentle',
   statusFalter: true,
   invertMove: false,
   gearPickup: 'vacuum',
@@ -477,6 +481,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   pad: { ...s.pad },
   cursor: { ...s.cursor },
   lowLifePulse: s.lowLifePulse,
+  afflictionOverlays: s.afflictionOverlays,
   statusFalter: s.statusFalter,
   invertMove: s.invertMove,
   gearPickup: s.gearPickup,
@@ -569,6 +574,7 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     // default; the color takes any CSS-safe #rrggbb, else the default tint.
     cursor: normalizeCursorOptions(s.cursor),
     lowLifePulse: s.lowLifePulse ?? true,
+    afflictionOverlays: s.afflictionOverlays === 'off' || s.afflictionOverlays === 'still' ? s.afflictionOverlays : 'gentle',
     statusFalter: s.statusFalter ?? true,
     invertMove: s.invertMove ?? false,
     gearPickup: s.gearPickup === 'key' ? 'key' : 'vacuum',

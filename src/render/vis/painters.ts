@@ -11,6 +11,7 @@
 // zone theme — so one data entry skins itself per biome.
 // ---------------------------------------------------------------------------
 
+import { creatureTerrain } from './creatureTerrain';
 import { doodadRuleOf, type Doodad } from '../../engine/levelgen';
 import { rockFormBodies, rockSeedOf } from '../../engine/rockForms';
 import type { World } from '../../engine/world';
@@ -9293,6 +9294,7 @@ const rootHairs: GroupPainter = (env, group, def) => {
 };
 
 export const PAINTERS: Record<string, GroupPainter> = {
+  creatureTerrain,
   wheatStalk, windmillTower, chimneyStack, hideRack, targetButt, sewerGrate, lightShaft, culvertStair,
   trackGroove, shearDisc, rimeFlail, bumperDome, rollingStone, floorPlate, dartBolt,
   liquid, chasmPit, cliffMass, mound, boulder, cairn: cairnPainter, scree,

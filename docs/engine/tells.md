@@ -10,6 +10,13 @@ lives in `engine/tells.ts` (a pure leaf: `TELL_CFG`, the source registry,
 the resolver, the dress materializer); the sweep is `World.updateTells`;
 the channels apply in `drawActor` and the bestiary book.
 
+Retreat exhaustion is inherited by every spawned definition through
+`tellSpecsOf`: authored rows, rolled variant rows, then the configurable
+`WIND_PUFF` family. `MonsterDef.retreatTells` replaces that final family for
+another anatomy. Inactive budgets/windows read zero; these cues are absent
+from rested portraits. See [Exhaustion cues](../design/exhaustion-cues.md)
+for GT-001/002, the paired reserve-vulnerability gasps, tuning and checks.
+
 ```ts
 tells: [{
   source: 'drive:glut',                    // the state read (open registry)

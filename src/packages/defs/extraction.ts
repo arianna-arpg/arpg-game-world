@@ -137,10 +137,10 @@ const EXTRACTION_ENCOUNTER: EncounterDef = {
     disperse: { lingerSec: [14, 26], arriveDist: 56 },
     ledgerLost: 'extractions_lost',
     text: {
-      found: 'something wells up from below…',
-      armed: 'the seam is tapped; the ground remembers who it belongs to',
-      depleted: 'the seam runs dry, and its marrow is yours',
-      shattered: 'the seam is torn apart; what little bled free is yours',
+      found: 'Marrow Seam',
+      armed: 'Tapped',
+      depleted: 'Depleted',
+      shattered: 'Shattered',
     },
   },
 };

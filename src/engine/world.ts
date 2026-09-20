@@ -1,4 +1,6 @@
-import { minionBodyContext } from './skillScopes';
+import { CompanionGrants, COMPANION_GRANT_PREFIX, companionGrantStat, summonReservationUnit } from './companionGrants';
+import { TitanRuntime } from './titans';
+import { resolveMinionInheritance, applyMinionPlyBonus, minionAreaAvoidanceOf } from './minionInheritance';
 import { throngEvolution, throngTravelProtected, throngClusterPlies, THRONG_EVOLUTION } from './throngEvolution';
 import { cosmeticPortalLoadout, cosmeticSkillPaint, settleCosmetics } from '../meta/cosmetics';
 import { COSMETIC_CFG } from '../data/cosmetics';
@@ -55,6 +57,7 @@ import { ZONE_MEMORY_CFG, captureZoneContents, restoreZoneContents, savedZoneCon
 import { TOWN_PORTAL_CFG } from '../data/townportals';
 import { readTownPortals, type TownPortal, type TownPortalView } from './townportal';
 import { applyConversion, applyDot, applyHit, landLifeDamage, mitigateTyped, resistValue, rollSkillDamage, type DamagePacket } from './damage';
+import { ParryDamageWindow, parryCounter, type ParryDamage } from './parry';
 import { HIVECALL, hivecallNode, hivecallState, hivecallRescueFactor, hivecallFormDamage } from './hivecall';
 import { SEG_CFG, bodyWhere, nearestBody, noteBodyHit, reachTo, segR, segsHittable, stampSegFlash, tickSegFlash, woundCount, type SegBody } from './segments';
 import { DEFENSE_CFG } from './defense';
@@ -284,7 +287,7 @@ import { LEDGER_TRAP_SPRUNG, lintTrapworkSpec, trapAnchor, trapEffect, trapTrigg
 import { bootOccSites, driveOccSites, OCC_CFG, reviveOccSite, seedOccClockMarks, wakeRousedResidents, type OccHost, type OccKinSpec, type OccSite } from './occurrences';
 import { attunedStatus, rollStartTone, toneAccepted, toneOfAmounts, toneTint, TUNE_CFG } from './tuning';
 import { pickKnockNode, PUZZLE_CFG, PUZZLE_KINDS, puzzleHumOf, puzzleKnockOf, puzzleRewardOf, puzzleSpillOf, type PuzzleHost, type PuzzleRun } from './puzzles';
-import { minionCombatOf, MINION_COMBAT } from './minionCombat';
+import { MINION_COMBAT } from './minionCombat';
 import {
   batchScaleOf, buildWornThrongDef, isThrongBody, THRONG_CFG, throngMarkerOf,
   throngPocketKey, throngSkillSalt, throngSpecsOn, WORN_THRONGS,
@@ -316,6 +319,11 @@ import {
   MOUNT_CFG, seatCount, seatPos, type MountSlotSpec,
 } from './mounts';
 import { resolveTell, TELL_CFG, tellSpecsOf } from './tells';
+import { defenseCueFlash } from './defenseCues';
+import { combatCueFlash, timingCueFlash } from './combatCues';
+import { castingEventFlash } from './castingCues';
+import { guardBashGeometry } from './warningCues';
+import { DEFENSE_CUE_CFG } from '../data/defenseCues';
 import { speechTell, speechWindowFor, type SpeechMemory } from './speech'; // THE TRANSIENT TELLING — the speech fabric's world half (residentPrompt)
 import { SPEECH_GRAMMAR_CFG, composeSpeech, dealSpeechDecks, hauntPhrase, makeSpeakerRow, type SpeechContext, type SpeechSpeakerRow } from './speechGrammar'; // THE SPEECH GRAMMAR — what a spoken body says (residentPrompt composes through it)
 import '../data/speechGrammar'; // THE SPEECH GRAMMAR's corpus: registers the templates + haunt phrases on import
@@ -420,6 +428,11 @@ import { encounterGroupContext, rollEncounterGroup, planEncounterGroup, applyEnc
 import { ENCOUNTER_GROUPS, ENCOUNTER_GROUP_CFG } from '../data/encounterGroups';
 import { updateEncounterCombat } from './encounterCombat';
 import { stepMagicPackMechanics, type MagicPackVisual } from './magicPackMechanics';
+import { Satellites } from './satellites';
+import type { CarriedEffectContext } from './carriedEffects';
+import { Auroras } from './auroras';
+import { Guardians } from './guardians';
+import { SATELLITE_CFG } from './satelliteSpec';
 import { MONSTER_NAME_CFG, rollMonsterName } from '../data/monsterNames';
 import type { OverlayView } from '../world/overlay';
 import { claimedZonesFromBag } from '../world/overlay';
@@ -978,6 +991,11 @@ const HAUNT_TAGS = new Set([
 ]);
 
 interface Projectile {
+  orbPaint?: ProjectileDelivery['orbPaint'];
+  /** A parried flight carries a captured counter payload, not a new cast. */
+  parryDamage?: ParryDamage;
+  /** Render-only mirror bit; the host derives it from parryDamage. */
+  reflectedCue?: boolean;
   cosmeticProjectile?: string;
   /** Optional victim anchor for a lodged orbit; the caster retains attribution. */
   orbitAnchorId?: number;
@@ -1462,6 +1480,8 @@ export interface EmergeRecord {
 type ComboCursor = { comboIdx?: number; comboAt?: number; comboSelf?: number };
 
 interface Flash {
+  combatCue?: import('./combatCues').CombatCue;
+  defenseCue?: import('./defenseCues').DefenseCue;
   cosmeticMotif?: import('./cosmetics').CosmeticMotif;
   departure?: RefugeDeparture;
   pos: Vec2; radius: number; color: string; life: number; maxLife: number;
@@ -3513,8 +3533,12 @@ export class World {
    *  the same skill returns them DOWNED, owed a revival. Serialized with
    *  the character (character.ts merges them into `companions`). */
   stashedCompanions: CompanionSaved[] = [];
+  readonly titans = new TitanRuntime(this);
   readonly companionBonds = new CompanionBonds(this);
   readonly assaults = new Assaults(this);
+  readonly satellites = new Satellites();
+  readonly auroras = new Auroras();
+  readonly guardians = new Guardians();
   readonly challenges = new Challenges(this);
   /** ONE-SHOT: lingering at any REGISTERED vendor counter with stock (the
    *  data/vendors.ts registry) asks the main loop to open the Vendor screen. */
@@ -5171,7 +5195,7 @@ export class World {
     }
     this.events.emit('player/downed', { actor, killer });
     this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * 2, color: '#d05050', life: 0.4, maxLife: 0.4 });
-    this.text(actor.pos, 'downed — an ally must revive you!', '#e88080', 14);
+    this.text(actor.pos, 'Downed', '#e88080', 14);
   }
 
   /** Dwell-revive a downed seat: back on its feet at a FRACTION of life (no grace
@@ -5650,6 +5674,9 @@ export class World {
    */
   loadZone(zoneId: string, from?: string): void {
     this.magicPackEffects = [];
+    this.satellites.clear();
+    this.auroras.clear();
+    this.guardians.clear();
     this.assaults.clearAll();
     this.challenges.clearAll();
     this.odyssey.leaveZone();
@@ -7532,6 +7559,11 @@ export class World {
         reset: () => { this.materializedMigrations.clear(); this.migrationStreamTimer = 0; },
       },
       {
+        // Titans project their durable journey into local terrain. The live
+        // update owns the cadence; entry only primes the warning pass.
+        id: 'titans', noLive: true, reset: () => this.titans.reset(), enter: () => this.titans.update(0.25),
+      },
+      {
         // WORLD BOSSES: a settled serpent head / manifest apparition /
         // enthroned lair fields its fight — including one that manifests on
         // the standing zone live. Coil walls + the passing body are driven
@@ -8828,7 +8860,7 @@ export class World {
       if (!e.def.extract || e.phase !== 'dormant') continue;
       if (dist(this.player.pos, e.pos) > e.def.extract.arm.radius + 90) continue;
       const look = extractionLookFor(this.zone.biome);
-      return { pos: vec(e.pos.x, e.pos.y), text: `Linger to tap the ${look.title}.` };
+      return { pos: vec(e.pos.x, e.pos.y), text: `${look.title}` };
     }
     return null;
   }
@@ -9231,7 +9263,7 @@ export class World {
         const f = this.actorById(id);
         if (!f || f.dead) continue;
         if (dist(this.player.pos, f.pos) > radius + 60) continue;
-        return { pos: vec(f.pos.x, f.pos.y), text: `Linger to arm ${f.name}.` };
+        return { pos: vec(f.pos.x, f.pos.y), text: `${f.name}` };
       }
     }
     return null;
@@ -12231,6 +12263,42 @@ export class World {
   magicPackEffects: MagicPackVisual[] = [];
   private magicPackResolving = false;
   private magicPackRefreshPending = false;
+  /** Carried satellite geometry and hits share this host-only update. */
+  refreshSatellites(dt = 0): void {
+    this.satellites.update(this.actors, dt, this.carriedEffectContext());
+  }
+  refreshAuroras(dt = 0): void {
+    this.auroras.update(this.actors, dt, this.carriedEffectContext());
+  }
+  refreshGuardians(dt = 0): void {
+    this.guardians.update(this.actors, dt, this.carriedEffectContext());
+  }
+  private carriedEffectContext(): CarriedEffectContext {
+    return {
+      active: a => !a.untargetable && !a.passive && !a.burrow && !a.summonShell && !isDormant(a)
+        && !a.statuses.some(s => STATUS_DEFS[s.id]?.conceals),
+      elapsed: (a, elapsed) => elapsed * this.timeflow.actorScale(a),
+      enemies: (a, reach, at = a.pos) => {
+        if (this.lite.liveCount) this.litePromoteNearest(at, {
+          within: reach + SATELLITE_CFG.sweepSpacing, max: SATELLITE_CFG.promotePerFrame,
+          opposing: a.team, story: a.tier,
+        });
+        return this.enemiesOf(a);
+      },
+      hostile: (a, b) => this.hostileTo(a, b) && !isDormant(b),
+      clear: (a, b, tier) => this.lineOfSight(a, b, tier, tier),
+      instance: (a, id) => SKILLS[id] ? makeSkillInstance(SKILLS[id], monsterSkillLevelOf(a.level)) : undefined,
+      hit: (a, inst, b) => this.resolveHit(a, inst, b, 1, 1),
+      launch: (a, inst, from, dir) => this.spawnProjectile(a, inst, from, dir, { depth: 1 }),
+      radius: (a, inst) => {
+        const delivery = instanceDelivery(inst);
+        return delivery.type === 'ground'
+          ? delivery.radius * a.sheet.get('aoeRadius', skillContextTags(inst), instanceMods(inst))
+          : delivery.type === 'projectile'
+            ? delivery.radius * a.sheet.get('projectileSize', skillContextTags(inst), instanceMods(inst)) : 0;
+      },
+    };
+  }
   refreshMagicPacks(dt = 0): void {
     // A reflected hit can kill a conductor during this fold. Reconcile the
     // death after the hit loop, without advancing any encounter clock twice.
@@ -13892,7 +13960,7 @@ export class World {
    *  (the flee goal + speed/damage-reduction mods are already set by the phase). */
   private onBeastFleeBegin(actor: Actor, _exit: ZoneExit | null): void {
     if (actor.tag !== 'hunt_beast') return;
-    this.notice('The beast breaks for the next zone — run it down!', '#d8a83a', 15, 'events');
+    this.notice('Beast Fleeing', '#d8a83a', 15, 'events');
   }
 
   /** The Hunt beast reached its exit: resolve the destination zone (generating the
@@ -13958,10 +14026,10 @@ export class World {
           if (step === 'locate' || !dest) {
             const where = dest ?? this.zone.id;
             hf.locateBeast(where);
-            this.notice(`The beast is cornered in ${this.zoneMap[where]?.name ?? where} — close in! (M)`, '#d8a83a', 16, 'events');
+            this.notice(`Cornered · ${this.zoneMap[where]?.name ?? where}`, '#d8a83a', 16, 'events');
           } else {
             hf.relocateTrack(dest);
-            this.notice(`Fresher tracks lead to ${this.zoneMap[dest]?.name ?? dest} — follow them! (M)`, '#d8a83a', 16, 'events');
+            this.notice(`Beast Tracks · ${this.zoneMap[dest]?.name ?? dest}`, '#d8a83a', 16, 'events');
           }
         }
       } else {
@@ -14028,7 +14096,7 @@ export class World {
       this.beginFissure(this.fractureRun, 'The fracture surfaces here — run it down!');
       // The surface announce above draws at the fissure (likely off-screen);
       // tell the PLAYER where to run, in their own field of view.
-      this.notice(`The fracture has surfaced to the ${this.bearingOf(this.player.pos, at)} — run it down! (M)`, info.color, 15, 'events');
+      this.notice(`Fracture · ${this.bearingOf(this.player.pos, at)}`, info.color, 15, 'events');
     }
   }
 
@@ -14151,7 +14219,7 @@ export class World {
     this.doodads.push(dood);
     run.chasmDoodad = dood;
     this.flashes.push({ pos: vec(run.chasm.x, run.chasm.y), radius: surge.chasm.radius, color: run.color, life: 0.6, maxLife: 0.6 });
-    this.text(vec(run.chasm.x, run.chasm.y - 30), 'A chasm yawns open — clear it!', run.color, 17);
+    this.text(vec(run.chasm.x, run.chasm.y - 30), 'Chasm', run.color, 17);
   }
 
   /** The chasm's foes are cleared in time: small reward, then split a fresh
@@ -14246,7 +14314,7 @@ export class World {
     this.placeFractureRiftContent(this.zone);
     bumpLedger(this.ledger, 'fracture_rifts_opened');
     this.flashes.push({ pos: vec(p.x, p.y), radius: 150, color: run.color, life: 1.1, maxLife: 1.1 });
-    this.text(vec(p.x, p.y - 46), `A ${run.variant} RIFT tears open — a champion stirs within! (step in)`, run.color, 18);
+    this.text(vec(p.x, p.y - 46), `${run.variant} Rift`, run.color, 18);
   }
 
   /** Materialize the pending rift's portal in this zone — on open AND on every
@@ -14297,7 +14365,7 @@ export class World {
     if (!ff || !run) return;
     const at = run.chasm ?? run.head;
     this.flashes.push({ pos: vec(at.x, at.y), radius: 90, color: '#5a3a8a', life: 0.5, maxLife: 0.5 });
-    this.notice('The fracture seals shut — too slow.', '#9a7ad0', 15, 'events');
+    this.notice('Fracture Sealed', '#9a7ad0', 15, 'events');
     ff.endFracture();
     run.phase = 'done';
     this.clearFractureRun(true);
@@ -14808,7 +14876,7 @@ export class World {
     }
     this.holdfastSite = { zoneId: def.id, lockId: info.lockId, defId: gdef.id, keeperId: keeper.id, banditIds, gateDoodads };
     this.flashes.push({ pos: vec(standC.x, standC.y), radius: 120, color: gdef.marker?.color ?? '#c8a04a', life: 0.7, maxLife: 0.7 });
-    this.text(vec(standC.x, standC.y - 54), `${gdef.name} — ${gdef.sealedHint}`, gdef.marker?.color ?? '#c8a04a', 16);
+    this.text(vec(standC.x, standC.y - 54), `${gdef.name}`, gdef.marker?.color ?? '#c8a04a', 16);
   }
 
   /** Per-frame: if every warden of an UNPAID holdfast has fallen, resolve the slaughter
@@ -15119,7 +15187,7 @@ export class World {
               g.pos = this.clampPos(vec(at.x + rand(-70, 70), at.y + rand(-70, 70)), g.radius);
               this.actors.push(g);
             }
-            this.notice(`${m.name} keeps this vault — its fall flares ${ward.label}`, cfg.gold, 15, 'events');
+            this.notice(`${m.name} · ${ward.label}`, cfg.gold, 15, 'events');
           }
         }
       }
@@ -15199,7 +15267,7 @@ export class World {
     }
     this.amalgamSite = { id: info.id, zoneId: def.id, center: vec(center.x, center.y), necroId: necro.id, bossId: null };
     bumpLedger(this.ledger, 'necromancers_seen'); // DISCOVERY — surfaces the Vault unlock
-    this.text(vec(center.x, center.y - cfg.ringRadius - 14), 'The Bonewright beckons — linger to hear its work.', '#9ad0b0', 15);
+    this.text(vec(center.x, center.y - cfg.ringRadius - 14), 'The Bonewright', '#9ad0b0', 15);
     if (info.quest === 'boss') this.riseAmalgamation();
   }
 
@@ -15222,7 +15290,7 @@ export class World {
     m.pos = this.clampPos(this.farPoint(420, true), m.radius);
     this.actors.push(m);
     this.flashes.push({ pos: vec(m.pos.x, m.pos.y), radius: 130, color: '#e8e0c8', life: 0.8, maxLife: 0.8 });
-    this.text(vec(m.pos.x, m.pos.y - 50), `${m.name} — slay it for the Bonewright!`, '#e8e0c8', 16);
+    this.text(vec(m.pos.x, m.pos.y - 50), `${m.name}`, '#e8e0c8', 16);
   }
 
   /** ASSEMBLE + raise the Amalgamation from the chosen parts: their stat mods (one
@@ -22123,19 +22191,36 @@ export class World {
     // tree picks (ItemInstance.grantState) — written back here from the
     // live instance every recalc (every socket/tree mutation recalcs), so
     // a later equip, load or wire mints the same stones back. THE
-    // SEATING: a fresh grant takes the first empty bar seat (the rack law —
-    // unseated is unusable; GRANT_CFG.autoSeat); a grant that LEAVES comes
+    // SEATING: grants are optional manual skills by default (GRANT_CFG.autoSeat);
+    // triggers can use them without a bar seat. A grant that LEAVES comes
     // off the bar, its toggles shut, its instance dropped.
     {
       const grantStats = new Set<string>();
+      const companionGrantIds = new Set<string>();
       const scanGrants = (mods: readonly Modifier[] | undefined): void => {
         if (!mods) return;
-        for (const gm of mods) if (gm.stat.startsWith(SKILLGRANT_PREFIX)) grantStats.add(gm.stat);
+        for (const gm of mods) {
+          if (gm.stat.startsWith(SKILLGRANT_PREFIX)) grantStats.add(gm.stat);
+          if (gm.stat.startsWith(COMPANION_GRANT_PREFIX)) companionGrantIds.add(gm.stat.slice(COMPANION_GRANT_PREFIX.length));
+        }
       };
       scanGrants(m.classDef.innate);
       scanGrants(passiveMods);
       for (const mods of gearSheetMods.values()) scanGrants(mods);
       for (const mods of containerSheetMods.values()) scanGrants(mods); // a seated relic may grant (THE CONTAINER FOLD)
+      this.companionGrants.derive(p, [...companionGrantIds].flatMap(id => SKILLS[id] ? [SKILLS[id]] : []), id => {
+        const stat = companionGrantStat(id);
+        for (const slot of EQUIP_SLOTS) {
+          if (gearSheetMods.get(slot.id)?.some(m => m.stat === stat)) return m.equipped[slot.id]!.name;
+        }
+        for (const [item, mods] of containerPieceMods) if (mods.some(m => m.stat === stat)) return item.name;
+        return 'your passives';
+      }, body => this.kill(body, true), (body, inst) => {
+        const fraction = body.life / body.maxLife();
+        body.radius = MONSTERS[body.defId!]?.radius ?? body.radius;
+        this.bakeMinionOwnerStats(body, p, inst);
+        body.life = Math.min(body.maxLife(), fraction * body.maxLife());
+      });
       const prevInsts = seat.grantedInsts;
       const keep = new Map<string, SkillInstance>();
       const rows: GrantedSkillRow[] = [];
@@ -22168,6 +22253,13 @@ export class World {
         }
         inst.grantedBy = host?.name ?? 'your passives';
         keep.set(skillId, inst);
+        // A learned copy takes over the old granted seat without losing its investment.
+        const beneficiary = m.knownSkills.get(skillId);
+        if (beneficiary) {
+          for (let i = 0; i < p.skills.length; i++) if (p.skills[i] === inst) {
+            p.skills[i] = p.skills.includes(beneficiary) ? null : beneficiary;
+          }
+        }
         if (host) (host.grantState ??= {})[skillId] = packGrantState(inst);
         rows.push({ def, level, inst, source: inst.grantedBy, hostUid: host?.uid, slot: p.skills.indexOf(inst) });
       }
@@ -22176,13 +22268,13 @@ export class World {
         for (const [id, inst] of prevInsts) {
           if (keep.has(id)) continue;
           for (let i = 0; i < p.skills.length; i++) if (p.skills[i] === inst) p.skills[i] = null;
-          if (p.activeAuras.has(id)) this.deactivateAura(p, id);
-          if (p.summonToggles.has(id)) this.dismissSummonToggle(p, id);
+          if (p.activeAuras.get(id)?.inst === inst) this.deactivateAura(p, id);
+          if (p.summonToggles.get(id)?.inst === inst) this.dismissSummonToggle(p, id);
         }
       }
       if (GRANT_CFG.autoSeat) {
         for (const row of rows) {
-          if (row.slot >= 0) continue;
+          if (row.slot >= 0 || m.knownSkills.has(row.def.id)) continue; // no duplicate grant
           const free = p.skills.indexOf(null);
           if (free < 0) break;
           p.skills[free] = row.inst;
@@ -22203,7 +22295,8 @@ export class World {
     // a class retunes every such affix with zero data edits. Written onto the
     // instance (bonusLevels) so effectiveSkillLevel needs no actor threading.
     for (const inst of wielded()) {
-      let bonus = 0;
+      const grant = seat.grantedInsts?.get(inst.def.id);
+      let bonus = grant && grant !== inst && p.skills.includes(inst) ? grant.level : 0;
       for (const c of CLASSES) {
         if (classOpeningSkills(c).includes(inst.def.id)) bonus += p.sheet.get(classSkillStat(c.id));
       }
@@ -29500,6 +29593,7 @@ export class World {
         regenRate: sg.regenRate ?? sg.max / 6,
         lastHitAt: -999, broken: false,
         color: sg.color ?? '#c8b87a',
+        shellVisual: sg.shellVisual,
         breathe: sg.breathe, // the tidal shell's opening rides along
       };
     }
@@ -29579,7 +29673,7 @@ export class World {
   /** Minions counting against a shared cap group (golems). */
   minionsOfGroup(owner: Actor, group: string): Actor[] {
     return this.actors.filter(a =>
-      a.owner === owner && !a.dead && a.sourcePoolGroup === group);
+      a.owner === owner && !a.dead && !a.summonInst?.companionGrant && a.sourcePoolGroup === group);
   }
 
   removeCorpse(c: Corpse): void {
@@ -30225,8 +30319,8 @@ export class World {
     // ONE FOLD for the keeper's investment: a body minted WITH an owner (the
     // starting hound, a restored bond) carries createMonster's untagged
     // 'owner' minion source — the bond's own 'companionBond' source
-    // (engine/companionBonds.ts refreshBeast) reads the same minionLife /
-    // minionDamage through the host skill's tags, so the mint-time copy
+    // (resolveMinionInheritance via companionBonds.refreshBeast) reads
+    // investment through the host/body context, so the mint-time copy
     // would count the keeper's passives twice on a loaded companion and
     // never on a wild claim. The bond's fold is the only fold.
     beast.sheet.removeSource('owner');
@@ -30546,7 +30640,7 @@ export class World {
     if (d.type !== 'summon') return 0;
     const raw = Math.max(1, Math.round(hero.sheet.get('minionMaxCount', skillContextTags(inst), instanceMods(inst), d.maxActive)));
     const contract = hero.summonToggles.get(inst.def.id);
-    const unit = (d.persistent?.reserve ?? 0) * hero.sheet.get('manaCost', skillContextTags(inst), instanceMods(inst));
+    const unit = summonReservationUnit(hero, inst, d);
     return contract && unit > 0 ? Math.min(raw, Math.round(contract.reserved / unit)) : raw;
   }
 
@@ -34208,7 +34302,7 @@ export class World {
           regenDelay: graft.regenDelay ?? 4,
           regenRate: graft.regenRate ?? gmax / 5,
           lastHitAt: -999, broken: false,
-          color: graft.color ?? def.color,
+          color: graft.color ?? def.color, shellVisual: graft.shellVisual,
           fromAura: def.id,
         };
       }
@@ -34335,7 +34429,7 @@ export class World {
       cs.pressUsed = true;
       if (frac >= 0.72) {
         cs.empowered = 1 + (timing?.bonus ?? 0.7);
-        this.cry(caster.pos, 'Perfect!', '#ffd700', 14, 'wink');
+        this.flashes.push(timingCueFlash(caster, 'perfect', cs.aim));
         // The made window IS an event — skill expression as a trigger.
         this.rollTriggers(caster, 'flawless',
           { aim: vec(cs.aim.x, cs.aim.y), sourceInst: cs.inst });
@@ -34344,7 +34438,7 @@ export class World {
       cs.pressUsed = true;
       if (cs.indicatorAt !== undefined && Math.abs(frac - cs.indicatorAt) <= 0.08) {
         cs.empowered = 1 + (timing?.bonus ?? 1.2);
-        this.cry(caster.pos, 'Flawless!', '#ffd700', 14, 'wink');
+        this.flashes.push(timingCueFlash(caster, 'flawless', cs.aim));
         this.rollTriggers(caster, 'flawless',
           { aim: vec(cs.aim.x, cs.aim.y), sourceInst: cs.inst });
       }
@@ -36264,8 +36358,7 @@ export class World {
           }
           const slots = Math.max(1, Math.round(
             caster.sheet.get('minionMaxCount', tags, extra, d.maxActive)));
-          const reserve = d.persistent.reserve * slots
-            * caster.sheet.get('manaCost', tags, extra);
+          const reserve = summonReservationUnit(caster, inst, d) * slots;
           if (caster.reservedMana + reserve > caster.maxMana()) {
             this.text(caster.pos, 'cannot sustain', '#d05050', 12);
             break;
@@ -37948,6 +38041,7 @@ export class World {
 
     this.projectiles.push({
       pos: vec(origin.x, origin.y),
+      orbPaint: d.orbPaint,
       // THE TIER LAW: a flight belongs to its caster's layer (chain children
       // spread-copy it; hostility keeps victims same-tier).
       tier: caster.tier,
@@ -38709,7 +38803,7 @@ export class World {
   /** Minions summoned by a specific skill (caps are per-skill). */
   minionsOfSkill(owner: Actor, skillId: string): Actor[] {
     return this.actors.filter(a =>
-      a.owner === owner && !a.dead && a.sourceSkillId === skillId);
+      a.owner === owner && !a.dead && !a.summonInst?.companionGrant && a.sourceSkillId === skillId);
   }
 
   /** Pick a minion type: fixed id, or weighted roll from the pool. */
@@ -38759,7 +38853,7 @@ export class World {
       minion.manaReserved = 0;
     }
     const inst = minion.summonInst;
-    if (scheduleRespawn && !inst?.def.hivecall && !minion.summonOffspring && owner && !owner.dead && inst
+    if (scheduleRespawn && !inst?.companionGrant && !inst?.def.hivecall && !minion.summonOffspring && owner && !owner.dead && inst
       && inst.def.delivery.type === 'summon' && inst.def.delivery.persistent) {
       const tags = skillContextTags(inst);
       const extra = instanceMods(inst);
@@ -38903,133 +38997,26 @@ export class World {
   }
 
   private minionAreaAvoidanceOf(caster: Actor, inst: SkillInstance): number {
-    return Math.max(0, Math.min(MINION_COMBAT.maxAreaAvoidance,
-      (minionCombatOf(inst.def).areaAvoidance ?? 0)
-      + caster.sheet.get('minionAreaAvoidance', skillContextTags(inst), instanceMods(inst))));
+    return minionAreaAvoidanceOf(caster, inst);
   }
 
   /** Fold the OWNER's minion-stat investment onto a freshly minted body —
-   *  THE ONE INHERITANCE SEAM (spawnMinion and throng claims share it).
+   *  resolveMinionInheritance also supplies persistent companion bonds.
    *  `scale` tempers every owner CONTRIBUTION (damage/life/haste/regen/
    *  status-carry, mores and flats alike) — THE THRONG BATCH RULE passes
    *  1/batch so five gathered bodies wear one classic minion's worth of
    *  investment. Base body stats and minionSize are never scaled: the
    *  divisor tempers the investment, not the creature. */
   bakeMinionOwnerStats(minion: Actor, caster: Actor, inst: SkillInstance, scale = 1): void {
-    const tags = minionBodyContext(skillContextTags(inst), minion.defId);
-    const extra = instanceMods(inst);
+    const inherited = resolveMinionInheritance(caster, inst, minion.defId, scale);
     const throngSpentPlies = Math.max(0, minion.pliesMax - minion.plies);
-    const minionCombat = minionCombatOf(inst.def);
-    const minionThreat = Math.max(MINION_COMBAT.minThreat,
-      (minionCombat.threat ?? 1) * caster.sheet.get('minionThreat', tags, extra));
-    // Survival fractions are per body, like minionPlies; never batch-divided.
-    minion.sheet.setSource('minionCombat', [
-      mod('armorDamageFloor', 'flat', (inst.def.throng || inst.def.hivecall) ? THRONG_EVOLUTION.armorFloor : 0),
-      mod('threatGen', 'more', minionThreat - 1),
-      mod('targetPriority', 'more', minionThreat - 1),
-      mod('areaAvoidance', 'flat', this.minionAreaAvoidanceOf(caster, inst)),
-    ]);
-    const size = caster.sheet.get('minionSize', tags, extra);
-    minion.radius = Math.max(5, ((inst.def.throng || inst.def.hivecall) ? MONSTERS[minion.defId!]?.radius ?? minion.radius : minion.radius) * size);
-    const haste = caster.sheet.get('minionHaste', tags, extra);
-    const regenRate = caster.sheet.get('minionRegenRate', tags, extra);
-    const s = scale;
-    // THE CALCIFIED TRADE (minionLifePlyTrade): every <threshold> of the
-    // OWNER's minion-life increase converts into +1 ply instead,
-    // CONSUMING the increase — life investment become hit-counted shell.
-    // THE MARROWBOUND ECHO (minionLifePlyEcho) is its additive sibling:
-    // every <threshold> grants +1 ply with the life KEPT whole. Both
-    // read the SAME pre-trade baseline (lifeInc0 — the stat-link golden
-    // rule's shape: one source read, grants never feed further grants),
-    // and only the TRADE consumes from the life that folds below; the
-    // whole computation is one bake pass, so plies can never feed back
-    // into the life that granted them — loop-free by construction.
-    // Both read the PRE-batch investment (the quanta law's symmetry:
-    // plies never batch-scale, so the life that becomes them is never
-    // batch-diluted either — a throng body and a classic summon calcify
-    // at the same price, and armor stays linear in count); the trade's
-    // REMAINDER then folds through the ordinary batch scale below.
-    // Un-invested or negative life trades and echoes nothing.
-    // (The epsilon rides every threshold division: IEEE puts 1.9 − 1 a
-    // hair under 0.9, and a player who buys EXACTLY the threshold must
-    // never be robbed of the ply by the 53rd bit.)
-    const lifeInc0 = caster.sheet.get('minionLife', tags, extra) - 1;
-    let lifeInc = lifeInc0;
-    const tradeAt = caster.sheet.get('minionLifePlyTrade', tags, extra);
-    let tradedPlies = 0;
-    if (tradeAt > 0 && lifeInc0 > 0) {
-      tradedPlies = Math.floor(lifeInc0 / tradeAt + 1e-9);
-      lifeInc = Math.max(0, lifeInc0 - tradedPlies * tradeAt);
-    }
-    const echoAt = caster.sheet.get('minionLifePlyEcho', tags, extra);
-    const echoPlies = echoAt > 0 && lifeInc0 > 0
-      ? Math.floor(lifeInc0 / echoAt + 1e-9) : 0;
-    const ownerMods = [
-      mod('damage', 'more', (caster.sheet.get('minionDamage', tags, extra) - 1) * s),
-      mod('life', 'more', lifeInc * (throngEvolution(inst).lifeScale ?? s)),
-      mod('damageTaken', 'more', (caster.sheet.get('minionDamageTaken', tags, extra) - 1) * s),
-      mod('moveSpeed', 'more', (caster.sheet.get('minionMoveSpeed', tags, extra) * haste - 1) * s),
-      mod('attackSpeed', 'more', (haste - 1) * s),
-      mod('castSpeed', 'more', (haste - 1) * s),
-      mod('detectionRange', 'more', (caster.sheet.get('minionDetectionRange', tags, extra) - 1) * s),
-      // Minion regeneration (Vital Bond / Convocation investment): queried
-      // with the SUMMON skill's tags, so gems and tag-filtered passives
-      // split freely by skill or type.
-      mod('lifeRegen', 'flat', caster.sheet.get('minionRegen', tags, extra) * s),
-      mod('lifeRegenPct', 'flat', caster.sheet.get('minionRegenPct', tags, extra) * s),
-      // THE REGEN RATE (minionRegenRate): the owner's rate investment rides
-      // BOTH lanes as 'increased' — the crew's own base regen and every
-      // forwarded flat/pct point quicken together. Deliberately UNSCALED by
-      // `s`: a rate is dimensionless, and the lanes it multiplies already
-      // paid the batch divisor once — scaling the multiplier too would tax
-      // a throng batch twice (s² on the investment product).
-      mod('lifeRegen', 'increased', regenRate - 1),
-      mod('lifeRegenPct', 'increased', regenRate - 1),
-    ];
-    // THE MALUS TOTALITY RULE (2026-07-22, the user's ruling): a socketed
-    // more/less damage multiplier applies to ANYTHING descending from the
-    // skill. Constructs, children and sequels inherit through the instance
-    // roll (rollSkillDamage folds instanceMods); minions are the one
-    // descendant rolling on their OWN sheet, so the instance's plain
-    // 'damage' mods board here — batch-scaled like every owner investment
-    // (the 1/batch quadratic-proof law holds for maluses and buffs alike;
-    // overrides pass whole, a scaled override is a corrupted one).
-    for (const m of extra) {
-      if (m.stat !== 'damage') continue;
-      ownerMods.push(m.kind === 'override' ? m : { ...m, value: m.value * s });
-    }
-    // MINION STATUS CARRY: the owner's minionApply_<status> investment becomes
-    // the minion's own apply_<status> chance — "minions poison on hit" is one
-    // modifier anywhere on the owner (gem, passive, vocation node). Generated
-    // per-status alongside apply_<id> in engine/status.ts.
-    // Swept over THE ARMED LIST (StatSheet.armedFamily), not the whole ~130-id
-    // registry: the ids the owner's own layers or this instance's gems even
-    // NAME, in STATUS_IDS order. An uncarried id resolved to zero and pushed
-    // nothing — visiting it was pure cost.
-    for (const sid of caster.sheet.armedFamily('minionApply_', STATUS_IDS, extra)) {
-      const carry = caster.sheet.get('minionApply_' + sid, tags, extra);
-      if (carry > 0) ownerMods.push(mod('apply_' + sid, 'flat', carry * s));
-    }
-    minion.sheet.setSource('owner', ownerMods);
-    syncAttributeBequests(minion, scale, tags, extra);
-    // Meat Shield: guarded minions keep a short leash and fight defensively.
-    minion.guardMode = caster.sheet.get('minionGuard', tags, extra) > 0;
-    // THE PLY FABRIC's owner levers (minionPlies + the calcified trade
-    // above). QUANTA LAW: never fractioned, never batch-scaled (+1 ply
-    // is one more real hit eaten on EVERY body — linear in count, never
-    // quadratic). A grant on a plied-LESS body STANDS THE FABRIC UP (a
-    // zero-count spec, so hit-counted armor is a build choice on ANY
-    // summon, never a birthright of the throng kinds). Re-derived from
-    // the def each bake (idempotent under the live rebake); current
-    // plies clamp, never refill.
-    const plyBonus = tradedPlies + echoPlies + minion.hiveDeathPlies + minion.assaultWardCount
-      + Math.max(0, Math.round(caster.sheet.get('minionPlies', tags, extra)));
-    if (minion.plySpec || plyBonus > 0) {
-      if (!minion.plySpec) minion.plySpec = { count: 0 };
-      const spent = Math.max(0, minion.pliesMax - minion.plies);
-      minion.pliesMax = plyCountOf(minion.plySpec, minion.level) + plyBonus;
-      minion.plies = Math.max(0, minion.pliesMax - spent);
-    }
+    minion.sheet.setSource('minionCombat', inherited.combatMods);
+    minion.sheet.setSource('owner', inherited.ownerMods);
+    minion.radius = Math.max(5, ((inst.def.throng || inst.def.hivecall)
+      ? MONSTERS[minion.defId!]?.radius ?? minion.radius : minion.radius) * inherited.size);
+    syncAttributeBequests(minion, scale, inherited.tags, inherited.extra);
+    minion.guardMode = inherited.guard;
+    applyMinionPlyBonus(minion, inherited.plyBonus);
     if (!inst.def.throng) return;
     minion.summonInst = inst;
     const evo = throngEvolution(inst), units = minion.throngUnits ?? 1;
@@ -39080,7 +39067,7 @@ export class World {
     const maxActive = Math.max(1, Math.round(
       caster.sheet.get('minionMaxCount', tags, extra, d.maxActive)));
     // Shared pool groups (golems) cap across every skill in the group.
-    const existing = d.poolGroup
+    const existing = inst.companionGrant ? [] : d.poolGroup
       ? this.minionsOfGroup(caster, d.poolGroup)
       : this.minionsOfSkill(caster, inst.def.id);
     if (overrides?.offspring) {
@@ -39102,7 +39089,7 @@ export class World {
     // the minion carries 0 and its death frees nothing.
     let reserve = 0;
     if (d.persistent && !d.persistent.toggle) {
-      reserve = d.persistent.reserve * caster.sheet.get('manaCost', tags, extra);
+      reserve = summonReservationUnit(caster, inst, d);
       if (caster.reservedMana + reserve > caster.maxMana()) {
         this.text(caster.pos, 'cannot sustain', '#d05050', 12);
         return null;
@@ -39169,7 +39156,7 @@ export class World {
     if (d.shell) {
       const s = d.shell;
       const max = Math.max(1, minion.maxLife() * s.lifeFraction * caster.sheet.get('guardStrength', tags, extra) * Math.pow(caster.sheet.get('minionSize', tags, extra), s.sizeScaling ?? 0));
-      minion.shellGuard = { side: 'front', arcDeg: s.arcDeg, max, pool: max,
+      minion.shellGuard = { side: 'front', arcDeg: s.arcDeg, max, pool: max, shellVisual: s.shellVisual,
         regenDelay: s.regenDelay, regenRate: max * s.regenFraction,
         reformFraction: s.reformFraction, lastHitAt: -999, broken: false, color: inst.def.color };
     }
@@ -39901,7 +39888,7 @@ export class World {
         regenDelay: s.regenDelay ?? 3,
         regenRate: s.regenRate ?? max / 5,
         lastHitAt: -999, broken: false,
-        color: s.color ?? inst.def.color,
+        color: s.color ?? inst.def.color, shellVisual: s.shellVisual,
         fromAura: inst.def.id,
       };
     }
@@ -40678,8 +40665,7 @@ export class World {
     const at = z.seg
       ? vec((z.seg.ax + z.seg.bx) / 2, (z.seg.ay + z.seg.by) / 2)
       : vec(z.pos.x, z.pos.y);
-    this.cry(at, 'aftershock!', z.color, 12, 'ripple', 18);
-    this.flashes.push({ pos: vec(at.x, at.y), radius, color: z.color, life: 0.3, maxLife: 0.3 });
+    this.flashes.push(combatCueFlash(at, 'aftershock', radius, z.facing ?? 0, z.color));
     for (const v of this.zoneVictims(z)) {
       const nb = bodyWhere(v, (bp, br) => dist(at, bp) - br <= radius);
       if (!nb) continue;
@@ -40776,11 +40762,13 @@ export class World {
     sg.pool -= absorb;
     if (sg.pool <= 0) {
       sg.broken = true;
-      this.cry(victim.pos, 'SHELL BREAKS!', '#ffd27a', 15, 'shatter', victim.radius + 6);
-      this.flashes.push({ pos: vec(victim.pos.x, victim.pos.y), radius: victim.radius * 2, color: sg.color, life: 0.35, maxLife: 0.35 });
+      this.flashes.push(defenseCueFlash(victim, 'shell', 'break', sg.color, { style: sg.shellVisual,
+        facing: victim.facing + (sg.side === 'rear' ? Math.PI : 0),
+        arc: sg.side === 'all' ? Math.PI * 2 : sg.arcDeg * Math.PI / 180 * shellArcFactor(sg, this.time) }));
     }
+    if (!sg.broken) this.flashes.push(defenseCueFlash(victim, 'shell', 'impact', sg.color,
+      { style: sg.shellVisual, facing: angleTo(victim.pos, threatPos), arc: 0.85 }));
     if (absorb >= raw) {
-      this.text(victim.pos, 'shell', '#c8b87a', 11);
       return true; // fully eaten — statuses and knockback with it
     }
     // The breaking blow: only the overflow lands.
@@ -40791,7 +40779,69 @@ export class World {
     return false;
   }
 
-  private tryGuardBlock(victim: Actor, attacker: Actor, threatPos: Vec2, rawDamage: number): boolean {
+  private parryDamageWindow = new ParryDamageWindow();
+
+  /** Captured counters use ordinary mitigation and attribution, without
+   * re-casting the original skill's statuses, summons or proc chains. */
+  private resolveParryDamage(caster: Actor, target: Actor, payload: ParryDamage, scale = 1, threatPos = caster.pos): void {
+    // Consume the contact latch even when the retaliation window refuses
+    // this wound, so the next unrelated hit cannot inherit its body segment.
+    const parrySegment = target.segHitPending;
+    target.segHitPending = undefined;
+    if (target.dead || target.invulnerable || !this.parryDamageWindow.ready(target, this.time)) return;
+    const packet = parryCounter(payload, scale);
+    if (!Object.values(packet.amounts).some(v => (v ?? 0) > 0)) return;
+    if (this.tryShellBlock(target, threatPos, packet, caster)) {
+      this.parryDamageWindow.spend(target, this.time);
+      return;
+    }
+    const before = target.life;
+    target.segHitPending = parrySegment;
+    const result = applyHit(caster, target, packet);
+    // A fully soaked wound still spends defense: protect the pools as well.
+    if (!result.evaded && !result.immune && (!result.blocked || result.total > 0 || result.plyEaten)) {
+      this.parryDamageWindow.spend(target, this.time);
+    }
+    this.recordIndirectDamage(target, caster, before);
+    if (result.total > 0) this.text(target.pos, Math.round(result.total).toString(), '#ffd700', 14);
+    if (target.life <= 0 && !target.dead) this.kill(target, false, caster);
+  }
+
+  private reflectParriedProjectile(p: Projectile, guardian: Actor, power: number, parryPacket?: DamagePacket): void {
+    const previous = p.caster;
+    if (!p.parryDamage) {
+      const packet = parryPacket ?? rollSkillDamage(previous, p.inst, p.flat);
+      for (const type of Object.keys(packet.amounts) as DamageType[]) packet.amounts[type]! *= p.mult;
+      p.parryDamage = { packet, power, reflections: 0 };
+    }
+    p.parryDamage.power = Math.max(0, power);
+    p.parryDamage.reflections++;
+    if (p.parryDamage.reflections > DEFENSE_CFG.parry.maxReflections) {
+      p.dissolved = true;
+      return;
+    }
+    // Release steering axes: an orbit, guided shot or return must not snap
+    // back to its old route. Keep the same visible body and flight speed.
+    p.dir = p.guideDir = dist(p.pos, previous.pos) > 0.01
+      ? angleTo(p.pos, previous.pos) : p.dir + Math.PI;
+    p.caster = guardian;
+    p.anchor = vec(p.pos.x, p.pos.y);
+    p.origin = vec(p.pos.x, p.pos.y);
+    p.homing = p.guide = p.orbit = p.spiral = p.spin = p.weave = p.erratic = 0;
+    p.guided = false;
+    p.returnMode = 0;
+    p.returnPhase = false;
+    p.landAt = p.destAt = undefined;
+    p.patrol = p.zig = undefined;
+    p.preyId = p.orbitAnchorId = undefined;
+    p.hits.clear();
+    p.lastHitId = undefined;
+    p.range = Math.max(p.range, p.traveled, dist(p.pos, previous.pos) + previous.radius + p.radius);
+    p.traveled = 0;
+    if (p.maxAge !== undefined) p.maxAge = p.age + p.range / Math.max(1, p.speed);
+  }
+
+  private tryGuardBlock(victim: Actor, attacker: Actor, threatPos: Vec2, rawDamage: number, parryProjectile?: Projectile, parryPacket?: DamagePacket): boolean {
     const guardian = this.guardianFor(victim);
     if (!guardian) return false;
     const cs = guardian.casting!;
@@ -40816,21 +40866,31 @@ export class World {
     const counterMult = (spec.parry?.counterMult
       ?? guardian.sheet.get('guardParryPower', gtags, gextra))
       + guardian.sheet.get('parryCounterBonus', gtags, gextra);
-    if (window > 0 && (cs.channelTime ?? 99) <= window
-      && !attacker.dead && !attacker.invulnerable) {
+    if (window > 0 && (cs.channelTime ?? 99) <= window) {
+      const parryCueFacing = angleTo(guardian.pos, threatPos);
       // Riposte snaps the guardian's face toward the parried blow.
       guardian.facing = angleTo(guardian.pos, attacker.pos);
-      const counter = rawDamage * counterMult * attacker.sheet.get('damageTaken');
-      attacker.life -= counter;
-      attacker.hitFlash = 0.15;
-      attacker.hitFlashType = undefined; // raw riposte — the flash reads white
-      this.cry(vec(guardian.pos.x + Math.cos(guardian.facing) * (guardian.radius + 10), guardian.pos.y + Math.sin(guardian.facing) * (guardian.radius + 10)), 'PARRY!', '#ffd700', 15, 'clash', 16, guardian.facing); // the spark at the weapon
-      this.text(attacker.pos, Math.round(counter).toString(), '#ffd700', 14);
-      this.flashes.push({
-        pos: vec(attacker.pos.x, attacker.pos.y), radius: attacker.radius + 10,
-        color: '#ffd700', life: 0.25, maxLife: 0.25,
-      });
-      if (attacker.life <= 0 && !attacker.dead) this.kill(attacker, false, guardian);
+      if (parryProjectile) {
+        this.reflectParriedProjectile(parryProjectile, guardian, counterMult, parryPacket);
+      } else if (!attacker.dead && !attacker.invulnerable
+        && this.parryDamageWindow.ready(attacker, this.time)) {
+        const counter = Math.max(0, rawDamage * counterMult * attacker.sheet.get('damageTaken'));
+        if (counter > 0) {
+          this.parryDamageWindow.spend(attacker, this.time);
+          const before = attacker.life;
+          landLifeDamage(attacker, counter);
+          this.recordIndirectDamage(attacker, guardian, before);
+          attacker.hitFlash = 0.15;
+          attacker.hitFlashType = undefined;
+          this.text(attacker.pos, Math.round(counter).toString(), '#ffd700', 14);
+          this.flashes.push({
+            pos: vec(attacker.pos.x, attacker.pos.y), radius: attacker.radius + 10,
+            color: '#ffd700', life: 0.25, maxLife: 0.25,
+          });
+          if (attacker.life <= 0 && !attacker.dead) this.kill(attacker, false, guardian);
+        }
+      }
+      this.flashes.push(combatCueFlash(vec(guardian.pos.x + Math.cos(parryCueFacing) * (guardian.radius + 10), guardian.pos.y + Math.sin(parryCueFacing) * (guardian.radius + 10)), 'parry', 16, parryCueFacing));
       // A parry IS a block — the finest one; block taps, procs and
       // trigger gems all answer it.
       this.tapCharges(guardian, 'block');
@@ -40848,13 +40908,8 @@ export class World {
     }
 
     cs.shield = (cs.shield ?? 0) - rawDamage;
-    this.flashes.push({
-      pos: vec(
-        guardian.pos.x + Math.cos(guardian.facing) * (guardian.radius + 10),
-        guardian.pos.y + Math.sin(guardian.facing) * (guardian.radius + 10)),
-      radius: 16, color: cs.inst.def.color, life: 0.15, maxLife: 0.15, fx: 'glint', facing: guardian.facing, // THE CRY's drawn twin (M-CRY): the shield glints
-    });
-    this.text(guardian.pos, 'blocked', '#8ab8d8', 11, 'combat');
+    this.flashes.push(defenseCueFlash(guardian, 'guard', 'impact', cs.inst.def.color,
+      { facing: angleTo(guardian.pos, threatPos), arc: spec.arcDeg * Math.PI / 180 }));
     this.applyThorns(guardian, attacker);
     this.tapCharges(guardian, 'block');
     // CAST-ON-BLOCK trigger gems answer the raised-shield block too.
@@ -40863,7 +40918,8 @@ export class World {
       guardian.casting = null;
       guardian.useLock = 0.3;
       if (cs.inst.def.cooldown > 0) this.stampSkillCooldown(guardian, cs.inst, cs.inst.def.cooldown);
-      this.cry(guardian.pos, 'guard broken!', '#d05050', 14, 'shatter', guardian.radius + 8);
+      this.flashes.push(defenseCueFlash(guardian, 'guard', 'break', cs.inst.def.color,
+        { arc: spec.arcDeg * Math.PI / 180 }));
       // Ice Shield's dying burst: a broken shield spends its FULL absorbed
       // capacity as the payload — with the stance's EFFECTIVE bash, innate
       // or socket-grafted (and the inverted contract agrees: a broken wall
@@ -40939,9 +40995,7 @@ export class World {
    */
   private guardBash(a: Actor, inst: SkillInstance, bash: GuardBashSpec, payloadShield: number): void {
     if (a.dead || payloadShield <= 0) return;
-    const reach = a.radius + bash.range;
-    const arcRad = bash.arcDeg * Math.PI / 180;
-    const fullCircle = arcRad >= Math.PI * 1.9;
+    const { radius: reach, arc: arcRad, fullCircle } = guardBashGeometry(a, bash);
     const elem = (['fire', 'cold', 'lightning'] as const)
       .find(e => inst.def.tags.includes(e) || grantedTags(inst).includes(e));
     // The bashPower stat is the investable lever on the payload — Reckless
@@ -40967,7 +41021,7 @@ export class World {
       life: 0.25, maxLife: 0.25,
       ...(fullCircle ? {} : { arc: { facing: a.facing, arcRad } }),
     });
-    this.cry(vec(a.pos.x + Math.cos(a.facing) * (a.radius + 10), a.pos.y + Math.sin(a.facing) * (a.radius + 10)), 'shield bash!', inst.def.color, 13, 'glint', 16, a.facing);
+    this.flashes.push(defenseCueFlash(a, 'guard', 'bash', inst.def.color, { arc: fullCircle ? Math.PI * 2 : arcRad }));
   }
 
   /**
@@ -41805,7 +41859,7 @@ export class World {
     const extra = instanceMods(inst);
     if (!chance(caster.sheet.get('critChance', tags, extra))) return 1;
     const mult = caster.sheet.get('critMulti', tags, extra);
-    if (at) this.cry(at, 'crit mend!', '#ffd24a', 12, 'wink');
+    if (at) this.flashes.push(combatCueFlash(at, 'mend', 18));
     return mult;
   }
 
@@ -42578,7 +42632,7 @@ export class World {
         }
       }
       if (result.evaded) {
-        this.cry(target.pos, 'evade', '#9ab0c8', 12, 'blur', target.radius, target.facing); // the body's trailing ghosts
+        this.flashes.push(combatCueFlash(target.pos, 'evade', target.radius, angleTo(target.pos, caster.pos)));
         // The evader's rewards: the deterministic lifeOnEvade floor plus
         // their own 'evade' procs (global sheet — golden rule 3).
         const mend = target.sheet.get('lifeOnEvade');
@@ -42593,7 +42647,8 @@ export class World {
         return; // an evaded attack applies nothing
       }
       if (result.blocked) {
-        this.cry(target.pos, 'block!', '#8ab8d8', 12, 'glint', target.radius + 6, target.facing);
+        this.flashes.push(defenseCueFlash(target, 'guard', 'impact', '#8ab8d8',
+          { facing: angleTo(target.pos, caster.pos), arc: 0.85 }));
         this.applyThorns(target, caster);
         if (depth === 0) this.tapCharges(target, 'block');
         const mend = target.sheet.get('lifeOnBlock');
@@ -42614,7 +42669,7 @@ export class World {
         return; // a passively blocked hit applies nothing either
       }
       if (result.immune) {
-        this.cry(target.pos, 'immune', '#9ab0c8', 12, 'ward', target.radius + 8); // the flat grey ring
+        this.flashes.push(combatCueFlash(target.pos, 'immune', target.radius + 8, angleTo(target.pos, caster.pos)));
         // THE KNOCK LAW: the blow CONNECTED — invulnerability zeroed the
         // wound, not the contact — so enrolled fixtures still ring and
         // tunable bodies still take the color (the bell needn't bleed).
@@ -43317,7 +43372,7 @@ export class World {
         const shrug = target.sheet.get('ailmentResist',
           el ? new Set<SkillTag>([el]) : undefined);
         if (shrug > 0 && chance(shrug)) {
-          this.cry(target.pos, 'resisted', '#9ab0c8', 11, 'ward', target.radius + 8);
+          this.flashes.push(combatCueFlash(target.pos, 'resist', target.radius + 8, angleTo(target.pos, caster.pos), STATUS_DEFS[fx.status]?.color));
           continue;
         }
         // GLOBAL BASELINE TUNING: incidental (sub-identity-threshold) authored
@@ -43391,7 +43446,7 @@ export class World {
               const cm = caster.sheet.get('critMulti', tags, extra);
               dpsOut *= cm;
               if (rupture !== undefined) rupture *= cm;
-              this.cry(target.pos, 'crit affliction!', '#ffd24a', 12, 'wink');
+              this.flashes.push(combatCueFlash(target.pos, 'affliction', target.radius + 7, angleTo(target.pos, caster.pos), sdef?.color));
             }
           }
           this.notePopFx(target, fx.status);
@@ -44487,11 +44542,7 @@ export class World {
   sweepDefenseEvents(a: Actor, depth = 0): void {
     if (a.poiseJustBroke) {
       a.poiseJustBroke = false;
-      this.cry(a.pos, 'BROKEN!', '#d8b06a', 15, 'shatter', a.radius + 6); // the poise shell's own shatter
-      this.flashes.push({
-        pos: vec(a.pos.x, a.pos.y), radius: a.radius + 12,
-        color: '#d8b06a', life: 0.3, maxLife: 0.3,
-      });
+      this.flashes.push(defenseCueFlash(a, 'poise', 'break', DEFENSE_CUE_CFG.poiseColor));
       this.rollOwnProcs(a, 'poiseBroken', { depth });
     }
     if (a.poiseBracketHits.length) {
@@ -44501,7 +44552,7 @@ export class World {
     }
     if (a.poiseJustRearmed) {
       a.poiseJustRearmed = false;
-      this.cry(a.pos, 'POISED', '#d8b06a', 12, 'ward', a.radius + 8);
+      this.flashes.push(defenseCueFlash(a, 'poise', 'reform', DEFENSE_CUE_CFG.poiseColor));
       this.rollOwnProcs(a, 'poiseRearmed', { depth });
     }
     if (a.esRechargeJustStarted) {
@@ -44904,12 +44955,13 @@ export class World {
 
   /** THE HELD COPY: the instance of `skillId` this actor actually wields —
    *  its bar first (monsters' kits, the player's seated skills), then the
-   *  seat's learned book and granted lane. Null when it holds none. */
+   *  seat's granted lane then learned book. An unseated learned skill must
+   *  not displace the item's free triggered copy. Null when it holds none. */
   private heldSkillInst(actor: Actor, skillId: string): SkillInstance | null {
     for (const s of actor.skills) if (s?.def.id === skillId) return s;
     const seat = this.seatOf(actor);
     if (!seat) return null;
-    return seat.meta.knownSkills.get(skillId) ?? seat.grantedInsts?.get(skillId) ?? null;
+    return seat.grantedInsts?.get(skillId) ?? seat.meta.knownSkills.get(skillId) ?? null;
   }
 
   /** THE ONE LOOKUP for "the skill this seat holds under this id": the
@@ -45637,6 +45689,9 @@ export class World {
     }
 
     actor.dead = true;
+    this.satellites.retire(actor);
+    this.auroras.retire(actor);
+    this.guardians.retire(actor);
     if (!silent) magicPackDeath(actor, this.actors);
     if (actor.magicPack) this.refreshMagicPacks();
     if (!silent && actor.summonInst?.def.hivecall) this.hivecallDeath(actor);
@@ -47987,6 +48042,7 @@ export class World {
     this.updateMigrationStream(dt);
     this.updateSwarmStream(dt);
     this.updateWorldBosses(dt);
+    this.titans.update(dt);
     this.updateBrigandRaid(dt);
     this.updateNeutralCooldown(); // roused neutrals lose interest + re-dormant on disengage
     this.pruneEngageTokens();     // stale/dead attack-token holders rotate out
@@ -48318,7 +48374,9 @@ export class World {
       this.syncPocketGrants(a);
       a.statusRelay ??= this.relayStatus;
       this.updateGrantedTrails(a);
-      if (a.owner || a.bequestSignature) {
+      // Bound companions refresh with their host/body context. Other owned
+      // companions still need the generic bequest refresh and retraction.
+      if ((a.owner || a.bequestSignature) && (!a.companion || !this.companionBonds.host(a))) {
         const anchor = a.summonInst;
         syncAttributeBequests(a, anchor?.def.throng ? batchScaleOf(anchor.def.throng) : 1,
           anchor ? skillContextTags(anchor.def) : undefined, anchor ? instanceMods(anchor) : undefined);
@@ -48660,7 +48718,9 @@ export class World {
         sg.pool = Math.min(sg.max, sg.pool + sg.regenRate * dt);
         if (sg.broken && sg.pool >= sg.max * (sg.reformFraction ?? 0.4)) {
           sg.broken = false;
-          this.text(vec(a.pos.x, a.pos.y - 20), 'shell regrows', '#c8d8a0', 12);
+          this.flashes.push(defenseCueFlash(a, 'shell', 'reform', sg.color, { style: sg.shellVisual,
+            facing: a.facing + (sg.side === 'rear' ? Math.PI : 0),
+            arc: sg.side === 'all' ? Math.PI * 2 : sg.arcDeg * Math.PI / 180 * shellArcFactor(sg, this.time) }));
         }
       }
       // CAST LOCK: a running cast bar PINS the body on its STAMPED aim —
@@ -49265,6 +49325,9 @@ export class World {
     this.updateWorms(dt);
     this.updateParts();
     this.updateCreepHearts();
+    this.refreshSatellites(dt);
+    this.refreshAuroras(dt);
+    this.refreshGuardians(dt);
     this.updateProjectiles(dt);
     this.updateZones(dt);
     this.updateEnemyTethers(dt);
@@ -49280,6 +49343,7 @@ export class World {
     this.updatePendingSummons(dt);
     this.updatePendingRespawns(dt);
     this.updateSummonContracts();
+    this.updateCompanionGrants(dt);
     this.updateReplenishment(dt);
     this.updatePendingBlinks(dt);
     this.checkMinionDetonations();
@@ -52993,10 +53057,14 @@ export class World {
    *  kept so re-scans never reset a body's re-hit grace. */
   collectContactHazards(): void {
     const prior = new Map(this.contactHazards.map(c => [c.d, c.gate]));
+    const groups = new Map<string, Map<number, number>>();
+    for (const c of this.contactHazards) if (c.d.contactGroup) groups.set(c.d.contactGroup, c.gate);
     this.contactHazards = [];
     for (const d of this.doodads) {
       if (doodadRuleOf(d.kind).contact) {
-        this.contactHazards.push({ d, gate: prior.get(d) ?? new Map() });
+        const gate = (d.contactGroup ? groups.get(d.contactGroup) : prior.get(d)) ?? new Map<number, number>();
+        if (d.contactGroup) groups.set(d.contactGroup, gate);
+        this.contactHazards.push({ d, gate });
       }
     }
   }
@@ -54040,7 +54108,7 @@ export class World {
       const rule = doodadRuleOf(c.d.kind);
       if (!rule.contact) continue;
       const shape = hitSurfaceOf(c.d, 'move');
-      this.sweepHazardSurface(c.d.pos.x, c.d.pos.y, shape, c.d.rot ?? 0, rule.contact, c.gate, undefined, this.actors, c.d.tier ?? 0);
+      this.sweepHazardSurface(c.d.pos.x, c.d.pos.y, shape, c.d.rot ?? 0, rule.contact, c.gate, c.d.contactSource, this.actors, c.d.tier ?? 0);
     }
   }
 
@@ -55252,7 +55320,8 @@ export class World {
       // the interrupt strips both, or the carapace would outlive its guard.
       if (a.shellGuard?.fromAura === cs.inst.def.id) a.shellGuard = undefined;
       a.casting = null;
-      this.text(a.pos, 'interrupted', '#d05050', 11);
+      const cue = castingEventFlash(a, cs, 'interrupt');
+      if (cue) this.flashes.push(cue);
       return;
     }
     // THE LATCHED HAND (engine/cling.ts): a rider casts FROM a seat that
@@ -55365,7 +55434,8 @@ export class World {
           } else {
             // A fizzle still stamps the clock (executeSkill would have) —
             // the retry economy is the skill's cooldown, not free spam.
-            this.text(vec(a.pos.x, a.pos.y - 18), 'fizzled', '#8a8678', 11);
+            const cue = castingEventFlash(a, cs, 'fizzle');
+            if (cue) this.flashes.push(cue);
             if (def.cooldown > 0) {
               const tags = skillContextTags(def);
               const extra = instanceMods(cs.inst);
@@ -55460,7 +55530,7 @@ export class World {
               cs.aiGuardReleaseAt = this.time + cs.aiGuardWindup!;
               cs.aiGuardFacing = a.facing;
               a.aiPlantUntil = Math.max(a.aiPlantUntil, cs.aiGuardReleaseAt);
-              this.text(a.pos, 'Bash incoming!', def.color, 12);
+              // guardReleaseCue reads this live commitment; pressure can erase the threat.
             }
           }
           if (cs.aiGuardReleaseAt !== undefined) cs.held = this.time + 1e-9 < cs.aiGuardReleaseAt;
@@ -55530,7 +55600,8 @@ export class World {
           const before = bs.fill;
           bs.fill = Math.min(1, bs.fill + dt * rate);
           if (before < 1 && bs.fill >= 1) {
-            this.text(vec(a.pos.x, a.pos.y - a.radius - 26), 'BRIMMING', def.color, 12);
+            const cue = castingEventFlash(a, cs, 'ready');
+            if (cue) this.flashes.push(cue);
             if (!cs.finishRolled) {
               cs.finishRolled = true;
               this.rollTriggers(a, 'channelFinish',
@@ -55647,8 +55718,8 @@ export class World {
             const thin = brim !== undefined && bFill < (brim.minRelease ?? 0);
             const unfinished = !!rel.requireFull && !cs.hitCap;
             if (thin || unfinished) {
-              this.failNote(a, def.id + ':gather',
-                unfinished ? 'the gather broke early' : 'the gather is too thin');
+              const cue = castingEventFlash(a, cs, 'fizzle');
+              if (cue) this.flashes.push(cue);
             } else {
               const power = brim
                 ? Math.max(0.05,
@@ -55889,9 +55960,9 @@ export class World {
             chargesSpent: cs.chargesSpent,
           });
           if (strikeMult > 1) {
-            this.cry(a.pos, timing?.kind === 'timed' ? 'Flawless release!' : 'Perfect release!', '#ffd700', 14, 'wink');
+            this.flashes.push(timingCueFlash(a, timing?.kind === 'timed' ? 'flawless' : 'perfect', cs.aim));
           }
-          if (spark) this.cry(a.pos, 'On the spark!', '#ffd700', 13, 'wink');
+          if (spark) this.flashes.push(timingCueFlash(a, 'spark', cs.aim));
         }
         break;
       }
@@ -56187,6 +56258,7 @@ export class World {
     // sources ('__proc:*') are exempt.
     for (const m of [...this.actors]) {
       if (m.dead || !m.owner || m.owner.kind !== 'player') continue;
+      if (m.summonInst?.companionGrant) continue; // companionGrants owns this lifecycle
       const anchor = m.summonInst?.hostSkillId ?? m.sourceSkillId;
       if (!anchor || anchor.startsWith('__')) continue;
       if (m.owner.skills.some(s => s?.def.id === anchor)) continue;
@@ -56353,7 +56425,7 @@ export class World {
         // The reservation TRACKS the live slot count — a mid-contract
         // passive node re-prices the bill (no free golems), a respec
         // refunds it. Growth is capped at what the pool can sustain.
-        const unit = d.persistent.reserve * a.sheet.get('manaCost', tags, extra);
+        const unit = summonReservationUnit(a, t.inst, d);
         const headroom = a.maxMana() - (a.reservedMana - t.reserved);
         if (unit * slots > headroom) {
           slots = Math.max(1, Math.floor(headroom / Math.max(1, unit)));
@@ -56398,6 +56470,17 @@ export class World {
       body.pos = { ...body.owner.pos }; body.tier = body.owner.tier;
       body.facing = body.owner.facing; body.facingPrev = body.owner.facing;
       if (body.owner.dead || body.owner.downed || body.shellGuard?.broken) body.casting = null;
+    }
+  }
+
+  private companionGrants = new CompanionGrants();
+
+  private updateCompanionGrants(dt: number): void {
+    for (const seat of this.seats) {
+      const owner = this.seatHero(seat);
+      this.companionGrants.update(owner, this.actors, dt,
+        (inst, delivery) => this.spawnMinion(owner, inst, { delivery }),
+        body => this.kill(body, true));
     }
   }
 
@@ -57480,7 +57563,8 @@ export class World {
       if (bShape
         ? !inAoe(p.pos, radius, bShape, p.dir, e.pos, e.radius)
         : dist(p.pos, e.pos) - e.radius > radius) continue;
-      this.resolveHit(p.caster, p.inst, e, scale * p.mult, 1);
+      if (p.parryDamage) this.resolveParryDamage(p.caster, e, p.parryDamage, scale, p.pos);
+      else this.resolveHit(p.caster, p.inst, e, scale * p.mult, 1);
     }
     this.flashes.push({
       pos: vec(p.pos.x, p.pos.y), radius, color: p.inst.def.color,
@@ -57550,7 +57634,41 @@ export class World {
     return true;
   }
 
+  /** Shared interception for ordinary and parry-returned flights. */
+  private interceptProjectileDomes(p: Projectile): boolean {
+    for (const d of this.actors) {
+      const c = d.construct;
+      if (!c || c.kind !== 'dome' || d.dead) continue;
+      if (d.team === p.caster.team) continue;
+      if (d.tier !== (p.tier ?? 0)) continue; // the dome stands on its own story (the sovereignty gate)
+      if (dist(p.pos, d.pos) > (c.domeRadius ?? 100)) continue;
+      // TORPOR (mode 'slow'): the bubble STALLS the shot instead of
+      // eating it — re-stamped per frame, no flash spam, keep scanning.
+      if (c.domeMode === 'slow') {
+        p.stall = Math.min(p.stall ?? 1, c.domeSlow ?? 0.35);
+        continue;
+      }
+      this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: 14, color: d.color, life: 0.2, maxLife: 0.2 });
+      if (c.domeMode === 'deflect') {
+        p.dir += Math.PI;
+        p.guideDir = p.dir;
+        // Polar flights keep their angle (position stays continuous) —
+        // the caster swap re-tethers an orbiter to the dome's owner.
+        p.caster = d.owner ?? d;
+        p.hits.clear();
+        p.traveled = 0;
+      } else {
+        p.dissolved = true; // eaten whole — no dying explosion
+        return true;
+      }
+      break;
+    }
+
+    return false;
+  }
+
   private updateProjectiles(dt: number): void {
+    const guardianContext = this.guardians.active ? this.carriedEffectContext() : undefined;
     const flowDt = dt; // the world-scaled frame; each flight bends it below
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
@@ -57776,6 +57894,49 @@ export class World {
         }
       }
 
+      // A charged guardian catches an incoming path before its body hit or
+      // auxiliary payload. Dissolution uses the existing no-explosion ending.
+      if (!dead && guardianContext) {
+        const caught = this.guardians.intercept(p.caster, p.tier ?? 0, prev, p.pos, p.radius, guardianContext);
+        if (caught) { p.pos = caught; p.dissolved = true; dead = true; }
+      }
+
+      // A parry returns the captured wound. Geometry, terrain and rendering
+      // remain the normal flight; original cast riders cannot create fresh
+      // ungoverned damage under the defender's ownership.
+      if (p.parryDamage) {
+        let parryTurned = false;
+        if (!dead) dead = this.interceptProjectileDomes(p);
+        if (!dead) {
+          for (const enemy of this.enemiesOf(p.caster)) {
+            if (p.age < (p.hits.get(enemy.id) ?? -Infinity)) continue;
+            const touch = this.projTouchesBody(p, enemy);
+            if (!touch) continue;
+            const raw = Object.values(parryCounter(p.parryDamage).amounts).reduce((s, v) => s + (v ?? 0), 0);
+            const reflections = p.parryDamage.reflections;
+            if (this.tryGuardBlock(enemy, p.caster, p.pos, raw, p)) {
+              dead = p.parryDamage.reflections === reflections || !!p.dissolved;
+              parryTurned = !dead;
+              if (dead) p.dissolved = true;
+              break;
+            }
+            p.hits.set(enemy.id, p.rehit ? p.age + p.rehit : Infinity);
+            p.lastHitId = enemy.id;
+            noteBodyHit(enemy, touch.seg);
+            this.resolveParryDamage(p.caster, enemy, p.parryDamage, 1, p.pos);
+            if (!p.rehit && --p.pierce < 0) dead = true;
+            if (!dead && p.hitDetonate) this.explodeProjectile(p, enemy.id);
+            break;
+          }
+        }
+        if (!dead && !parryTurned && this.lite.liveCount && this.liteProjectileSweep(p, prev.x, prev.y)) dead = true;
+        if (dead) {
+          this.explodeProjectile(p, p.lastHitId);
+          this.projectiles.splice(i, 1);
+        }
+        continue;
+      }
+
       // PATH DESTRUCTION (ProjTrailSpec): every `every` units the projectile
       // drops a blast and/or a lingering ground zone where it flies — drag a
       // guided missile around and it writes an arc of ruin.
@@ -57903,37 +58064,7 @@ export class World {
         }
       }
 
-      // Protection domes: enemy projectiles crossing one dissolve — or, on
-      // a deflecting dome, turn around wearing the dome owner's colors.
-      if (!dead) {
-        for (const d of this.actors) {
-          const c = d.construct;
-          if (!c || c.kind !== 'dome' || d.dead) continue;
-          if (d.team === p.caster.team) continue;
-          if (d.tier !== (p.tier ?? 0)) continue; // the dome stands on its own story (the sovereignty gate)
-          if (dist(p.pos, d.pos) > (c.domeRadius ?? 100)) continue;
-          // TORPOR (mode 'slow'): the bubble STALLS the shot instead of
-          // eating it — re-stamped per frame, no flash spam, keep scanning.
-          if (c.domeMode === 'slow') {
-            p.stall = Math.min(p.stall ?? 1, c.domeSlow ?? 0.35);
-            continue;
-          }
-          this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: 14, color: d.color, life: 0.2, maxLife: 0.2 });
-          if (c.domeMode === 'deflect') {
-            p.dir += Math.PI;
-            p.guideDir = p.dir;
-            // Polar flights keep their angle (position stays continuous) —
-            // the caster swap re-tethers an orbiter to the dome's owner.
-            p.caster = d.owner ?? d;
-            p.hits.clear();
-            p.traveled = 0;
-          } else {
-            p.dissolved = true; // eaten whole — no dying explosion
-            dead = true;
-          }
-          break;
-        }
-      }
+      if (!dead) dead = this.interceptProjectileDomes(p);
 
       // THE MALLET IN FLIGHT: your own shot rings your own bell as it
       // passes — the flight-side sibling of the brittle 'hit' pop in the
@@ -57964,10 +58095,11 @@ export class World {
           if (bodyTouch) {
             // A raised shield in the projectile's path stops it cold —
             // no pierce, no chain, no statuses. Just a dent in the shield.
-            const guardRaw = Object.values(rollSkillDamage(p.caster, p.inst).amounts)
-              .reduce((s, v) => s + (v ?? 0), 0);
-            if (guardRaw > 0 && this.tryGuardBlock(enemy, p.caster, p.pos, guardRaw)) {
-              dead = true;
+            const parryPacket = rollSkillDamage(p.caster, p.inst, p.flat);
+            const guardRaw = Object.values(parryPacket.amounts)
+              .reduce((s, v) => s + (v ?? 0), 0) * p.mult;
+            if (guardRaw > 0 && this.tryGuardBlock(enemy, p.caster, p.pos, guardRaw, p, parryPacket)) {
+              dead = !p.parryDamage || !!p.dissolved;
               diedOnBody = true; // a guarded stop still struck someone
               break;
             }
@@ -58168,6 +58300,12 @@ export class World {
             break;
           }
         }
+      }
+      // The newly reflected flight starts its return on the next update;
+      // never hit something on the stale, incoming movement segment.
+      if (p.parryDamage) {
+        if (dead) this.projectiles.splice(i, 1);
+        continue;
       }
       // THE LITE TIER (engine/lite.ts): the flight mows the pool along this
       // step — cross-team only, honoring the pierce budget (a non-piercing
@@ -60687,7 +60825,7 @@ export class World {
           // prose takes the objective LINE while the linger gates run —
           // the banking itself stays at the resolution instant (chest,
           // seals, XP timing byte-unchanged; only the TEXT lingers).
-          const line = v.wonText ?? `${o.title} is won!`;
+          const line = v.wonText ?? `${o.title} · Complete`;
           this.objectiveLatch = { text: line, at: this.time, kills: this.kills };
           this.completeObjective(line);
           return;
@@ -60700,7 +60838,7 @@ export class World {
           // text. A vanished fabric (v null) stays silent, as it always
           // was: nothing resolved, there is no prose to hold.
           this.objectiveLatch = {
-            text: v.lostText ?? `${o.title} is forfeit — the wilds still ask their cull`,
+            text: v.lostText ?? `${o.title} · Lost`,
             at: this.time, kills: this.kills,
           };
         }
@@ -62722,43 +62860,43 @@ export class World {
     if (this.objectiveLost) {
       const barred = objectiveSeals(o);
       return o.kind === 'procession'
-        ? (barred ? 'The caravan was lost — the pass stays barred'
-          : 'The caravan was lost — the roads remain open')
-        : (barred ? 'The objective was lost — the roads stay barred'
-          : 'The objective was lost — the roads remain open');
+        ? (barred ? 'Caravan Lost · Sealed'
+          : 'Caravan Lost · Open')
+        : (barred ? 'Lost · Sealed'
+          : 'Lost · Open');
     }
     if (this.objectiveDone) return 'Cleared';
     switch (o.kind) {
-      case 'none': return o.label ?? 'Nothing is asked of you here';
+      case 'none': return o.label ?? 'Wilderness';
       case 'clear': {
         // THE CULL reads its scoreboard; authored full-clear ground
         // (`all: true` — cull state never stands there) keeps the classic
         // remain-count line, as does any ground with no stamped ask.
         const cu = this.cull;
-        if (!cu) return `Clear the area — ${this.countedEnemies().length} remain`;
-        return `Cull the area — ${cu.kills}/${cu.need} felled`;
+        if (!cu) return `Clear · ${this.countedEnemies().length}`;
+        return `Cull · ${cu.kills}/${cu.need}`;
       }
-      case 'boss': return `Slay ${MONSTERS[o.id].name}`;
+      case 'boss': return `${MONSTERS[o.id].name}`;
       case 'lair': {
         // THE ADOPTED ASK — THE UNTITLED CLAIM (her ruling, 2026-08-07):
         // the line never names the claim; identity lives in the mouth's
         // own distinct visual. Structure unchanged (den/hunt, entered,
         // keeper count) — only the title left the prose.
         const v = this.lairAskView();
-        if (!v) return 'A lair stands on this ground';
+        if (!v) return 'Lair';
         if (v.mode === 'den') {
           return v.entered
-            ? 'Brave the lair — settle what keeps it'
-            : 'Brave the lair — its door stands on this ground';
+            ? 'Lair · Entered'
+            : 'Lair';
         }
-        return `Fell the lair's keepers — ${v.remain} remain${v.remain === 1 ? 's' : ''}`;
+        return `Keepers · ${v.remain}`;
       }
       case 'package': {
         // THE ADOPTED GUEST: the row's own view authors the line (the label
         // arrives capitalized for the HUD's opening position). A gone guest
         // reads its exit for the frame before the driver hands the ask back.
         const v = this.packageAskView();
-        if (!v || !v.standing) return `${o.title} has moved on`;
+        if (!v || !v.standing) return `${o.title} · Departed`;
         return v.label;
       }
       case 'venture': {
@@ -62766,67 +62904,67 @@ export class World {
         // or vanished venture reads its forfeit for the frame before the
         // driver hands the ask back to the cull.
         const v = this.ventureAskView();
-        if (!v || v.verdict === 'lost') return `${o.title} is forfeit`;
+        if (!v || v.verdict === 'lost') return `${o.title} · Lost`;
         return v.label;
       }
-      case 'spawners': return `Destroy the spawners — ${this.livingSpawners().length} remain`;
+      case 'spawners': return `Spawners · ${this.livingSpawners().length}`;
       case 'escape': return o.exit === 'any' || !this.entryFrom
-        ? 'They keep coming — find the way out'
-        : 'They keep coming — leave through a different exit';
+        ? 'Escape'
+        : 'Escape · Another Exit';
       case 'waves': return o.waves === 0
-        ? `Endless waves — wave ${this.wave}`
-        : `Survive the assault — wave ${Math.min(this.wave, o.waves)}/${o.waves}`;
+        ? `Endless Waves · ${this.wave}`
+        : `Assault · ${Math.min(this.wave, o.waves)}/${o.waves}`;
       case 'beacon': {
         const v = this.spireView();
-        if (!v) return 'Find the survey spire and hold your ground beside it';
+        if (!v) return 'Survey Spire';
         // The contest reads on the line itself — the scoreboard never lies
         // about WHY the number stopped (or fell).
-        const mark = v.draining ? ' — OVERRUN, the charge drains!'
-          : v.contested ? ' — contested, clear the ground!'
-            : v.recouping ? ' — ground cleared, the charge quickens!' : '';
-        if (v.count > 1) return `Attune the waystones — ${v.charged}/${v.count}${mark}`;
+        const mark = v.draining ? ' · Overrun'
+          : v.contested ? ' · Contested'
+            : v.recouping ? ' · Recovering' : '';
+        if (v.count > 1) return `Waystones · ${v.charged}/${v.count}${mark}`;
         return v.frac > 0
-          ? `Charge the survey spire — ${Math.round(v.frac * 100)}%${mark}`
-          : `Find the survey spire and hold your ground beside it${mark}`;
+          ? `Survey Spire · ${Math.round(v.frac * 100)}%${mark}`
+          : `Survey Spire${mark}`;
       }
       case 'leyline': {
         const v = this.leylineView();
-        if (!v || !v.besieged) return 'The waypoint is besieged — fell the siphon';
-        return `Fell ${v.name || 'the siphon'} — the waypoint bleeds to it`;
+        if (!v || !v.besieged) return 'Besieged Waypoint';
+        return `${v.name || 'Siphon'}`;
       }
       case 'rifts': {
         const v = this.riftsView();
-        if (!v) return 'Seal the seeping rifts';
-        const mark = v.draining ? ' — OVERRUN, the seal unravels!'
-          : v.contested ? ' — contested, cut down the pour!'
-            : v.recouping ? ' — ground cleared, the seal quickens!' : '';
-        return `Seal the rifts — ${v.sealed}/${v.count}${mark}`;
+        if (!v) return 'Rifts';
+        const mark = v.draining ? ' · Overrun'
+          : v.contested ? ' · Contested'
+            : v.recouping ? ' · Recovering' : '';
+        return `Rifts · ${v.sealed}/${v.count}${mark}`;
       }
       case 'pyres': {
         const v = this.pyresView();
-        if (!v) return 'Kindle the cold pyres';
-        const mark = v.draining ? ' — OVERRUN, the kindling smothers!'
-          : v.contested ? ' — contested, clear the ground!'
-            : v.recouping ? ' — ground cleared, the flame quickens!' : '';
-        return `Kindle the pyres — ${v.lit}/${v.count} burning${mark}`;
+        if (!v) return 'Pyres';
+        const mark = v.draining ? ' · Overrun'
+          : v.contested ? ' · Contested'
+            : v.recouping ? ' · Recovering' : '';
+        return `Pyres · ${v.lit}/${v.count}${mark}`;
       }
       case 'unearth': {
         const v = this.digsView();
-        if (!v) return 'Unearth the buried caches';
-        const mark = v.draining ? ' — OVERRUN, the dig collapses!'
-          : v.contested ? ' — contested, see off the mourners!'
-            : v.recouping ? ' — ground cleared, the dig quickens!' : '';
-        return `Unearth the caches — ${v.dug}/${v.count} opened${mark}`;
+        if (!v) return 'Buried Caches';
+        const mark = v.draining ? ' · Overrun'
+          : v.contested ? ' · Contested'
+            : v.recouping ? ' · Recovering' : '';
+        return `Caches · ${v.dug}/${v.count}${mark}`;
       }
       case 'procession': {
         const v = this.processionView();
-        if (!v || (!v.started && !v.rolling)) return 'A caravan waits by the gate — linger beside it to set out';
-        if (!v.rolling) return 'The caravan holds — linger beside it to move on';
-        return `Escort the caravan — ${Math.round(v.frac * 100)}% of the way`;
+        if (!v || (!v.started && !v.rolling)) return 'Caravan · Waiting';
+        if (!v.rolling) return 'Caravan · Waiting';
+        return `Caravan · ${Math.round(v.frac * 100)}%`;
       }
       case 'bounty': {
         const n = this.actors.filter(a => !a.dead && a.tag === 'bounty_mark').length;
-        return `Hunt the marked — ${n} writ${n === 1 ? '' : 's'} unclaimed`;
+        return `Bounties · ${n}`;
       }
       case 'puzzle': {
         const run = this.puzzles.find(r => r.isObjective);
@@ -62837,14 +62975,14 @@ export class World {
       }
       case 'offering': {
         const of = this.offering;
-        if (!of) return 'Find the hungering altar';
+        if (!of) return 'Hungering Altar';
         const alive = this.actors.some(a => a.team === 'enemy' && !a.dead);
         if (!alive && of.offered < of.need) {
           // STALLED, not lost — derived, so a migration/warband/storm that
           // spawns new bodies revives the hunt with zero bookkeeping.
-          return 'The altar hungers — nothing lives to offer it (the wilds may yet provide)';
+          return 'Hungering Altar · Waiting';
         }
-        return `Feed the altar — ${of.offered}/${of.need} offerings (slay within its light)`;
+        return `Hungering Altar · ${of.offered}/${of.need}`;
       }
     }
   }

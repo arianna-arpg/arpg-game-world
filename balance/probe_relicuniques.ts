@@ -18,9 +18,8 @@
 //   E. THE LODESTONE — communion per touching relic; a far relic is not one.
 //   F. THE CASE GAUGE — 'seated:reliquary' publishes the seated count and the
 //      Tally Idol's damage climbs with it.
-//   G. THE UNQUARRIED IDOL — a seated relic GRANTS Summon Stone Golem: the
-//      row, the host, a socketed stone resident on the idol, the clean leave,
-//      the return, a save round trip.
+//   G. THE UNQUARRIED IDOL — independent companion, manual golem coexistence,
+//      free reservation, death/reform, clean removal, stacking and save/load.
 //   H. SUNDERSTONE — a rolled element; its penetration and price on the
 //      sheet; the choice survives a save.
 // The boards are found by SEAT COUNT (ring 8 / shelves 20 / heart 21 / case
@@ -38,7 +37,8 @@ import { UNIQUE_LIST } from '../src/data/uniques';
 import { ITEM_AFFIX_LIST } from '../src/data/itemaffixes';
 import { ITEM_BASES } from '../src/data/itembases';
 import { SKILLS } from '../src/data/skills';
-import { SUPPORTS } from '../src/data/supports';
+import { makeSkillInstance } from '../src/engine/skills';
+import { summonReservationUnit } from '../src/engine/companionGrants';
 import { DERIVED_GAUGES } from '../src/engine/gauges';
 import { STAT_DEFS, type Modifier } from '../src/engine/stats';
 import { compileItemMods, describeItem, forgeItem, isKnownItemStat, rollItem } from '../src/engine/itemgen';
@@ -122,7 +122,7 @@ const take = (w: World, it: ItemInstance): void => { w.applyAction(w.localSeat, 
     /stronger for every open seat touching it that stands empty/.test(spoken('hermits_bead'))
     && /Relics touching this effigy have [0-9.]+% stronger lines/.test(spoken('reliquary_crown'))
     && /for every relic seated in your Reliquary/.test(spoken('tally_idol'))
-    && /Grants Level \d Summon Stone Golem/.test(spoken('unquarried_idol'))
+    && /A Stone Golem from Level \d Summon Stone Golem/.test(spoken('unquarried_idol'))
     && /penetrates [0-9.]+% of/.test(spoken('sunderstone'))
     && /stronger for every relic touching it/.test(spoken('lodestone')), spoken('reliquary_crown'));
   const rng = lcg(0xbead);
@@ -311,35 +311,69 @@ const take = (w: World, it: ItemInstance): void => { w.applyAction(w.localSeat, 
   check('F4 unseating drops the tally', hero.derivedGauges?.get(gid) === 2 && near(hero.sheet.get('damage') - dmg0, 2 * per, 1e-6));
 }
 
-// ------------------------------------------------------ G. THE UNQUARRIED IDOL
+// G. Independent companions and the manual reservation benefit.
 {
   const w = makeSimWorld(CLASSES[0].id, 25);
   const seat = w.localSeat, hero = w.player;
   own(w, FULL);
+  seat.meta.baseAttrs.willpower = 100;
   w.recalcSeat(seat);
-  check('G0 a bare seat grants nothing', seat.grantedSkills === undefined);
   const idol = legend('unquarried_idol', 1);
-  const level = Math.floor(lineOf(idol, 'skillgrant_summon_stone_golem'));
-  place(w, idol, 1, 1);
-  const row = () => (seat.grantedSkills ?? []).find(r => r.def.id === 'summon_stone_golem');
-  check('G1 seated, the idol grants Summon Stone Golem at the folded level, hosted by the idol', row()?.level === level && level >= 1 && row()?.hostUid === idol.uid && row()?.inst.grantedBy === idol.name, `L${row()?.level} host ${row()?.hostUid}`);
-  check('G2 worn, not owned: the book never holds it; the bar seats it', !seat.meta.knownSkills.has('summon_stone_golem') && (row()?.slot ?? -1) >= 0 && hero.skills[row()!.slot] === row()!.inst);
-  const stone = w.grantSupportGemItem(seat, { def: SUPPORTS.hardy_brood, level: 1 });
-  check('G3 a support sockets into the granted golem and its residence lands on the idol',
-    !!stone && w.socketSupport(stone!.uid, 'summon_stone_golem', seat) && idol.grantState?.summon_stone_golem?.sockets.some(s => s?.supportId === 'hardy_brood') === true);
-  const instBefore = row()!.inst;
-  take(w, idol);
-  check('G4 unseated, the grant leaves cleanly: lane empty, bar cleared', seat.grantedSkills === undefined && hero.skills.every(s => s?.def.id !== 'summon_stone_golem'));
-  place(w, idol, 1, 1);
-  check('G5 reseated, a fresh instance wears the same stone from the idol', row()!.inst !== instBefore && row()!.inst.sockets.some(s => s?.def.id === 'hardy_brood'));
-  const save = serializeCharacter(w);
-  const w2 = makeSimWorld(CLASSES[0].id, 26);
+  const level = Math.floor(lineOf(idol, 'companiongrant_summon_stone_golem'));
+  check('G0 follower tooltip floors its actual skill level', describeItem(idol).unique.some(line => line.includes('Level ' + level + ' Summon Stone Golem')));
+  const bar = [...hero.skills];
+  const step = (n = 1) => { for (let i = 0; i < n; i++) w.update(0.05); };
+  const followers = () => w.actors.filter(a => !a.dead && a.owner === hero && a.summonInst?.companionGrant);
+  place(w, idol, 1, 1); step();
+  const first = followers()[0];
+  check('G1 idol maintains an attributed follower at its rolled skill level', followers().length === 1
+    && first?.summonInst?.level === level && first.summonInst.grantedBy === idol.name);
+  check('G2 follower uses no skill slot, learned entry or reservation', hero.skills.every((s, i) => s === bar[i])
+    && !seat.meta.knownSkills.has('summon_stone_golem') && !seat.grantedInsts && hero.reservedMana === 0);
+  step(20); w.recalcSeat(seat); step();
+  check('G3 ordinary ticking and recalculation preserve the same follower', followers()[0] === first && followers().length === 1);
+  const manual = makeSkillInstance(SKILLS.summon_stone_golem, 10, 2);
+  seat.meta.knownSkills.set(manual.def.id, manual);
+  hero.skills[0] = manual; w.recalcSeat(seat);
+  hero.mana = hero.maxMana();
+  const pressed = w.useSkill(hero, manual, { x: hero.pos.x + 40, y: hero.pos.y });
+  step(30);
+  check('G4 a manual golem coexists with the free follower', pressed
+    && w.minionsOfSkill(hero, manual.def.id).length === 1 && followers()[0] === first);
+  check('G5 the manual contract also reserves no mana', hero.summonToggles.has(manual.def.id) && hero.reservedMana === 0);
+  first.life = 0; w.kill(first); step();
+  check('G6 a slain follower waits to reform', followers().length === 0 && w.minionsOfSkill(hero, manual.def.id).length === 1);
+  step(170);
+  check('G7 the follower reforms without evicting the manual golem', followers().length === 1
+    && followers()[0] !== first && w.minionsOfSkill(hero, manual.def.id).length === 1);
+  const save = serializeCharacter(w), w2 = makeSimWorld(CLASSES[0].id, 26);
   own(w2, FULL);
-  check('G6 the save adopts', applySavedCharacter(w2, save));
-  const row2 = (w2.localSeat.grantedSkills ?? []).find(r => r.def.id === 'summon_stone_golem');
-  check('G7 a reload seats the idol, its grant at its level, wearing its stone',
-    w2.localSeat.meta.containers[RELIQUARY_ID]?.some(i => i.uid === idol.uid) === true && row2?.level === level && row2?.hostUid === idol.uid
-    && row2?.inst.sockets.some(s => s?.def.id === 'hardy_brood') === true, `${row2?.level}@${row2?.slot}`);
+  check('G8 save adopts', applySavedCharacter(w2, save)); w2.update(0.05);
+  check('G9 reload reconstructs one follower from the item', w2.actors.filter(a => !a.dead
+    && a.owner === w2.player && a.summonInst?.companionGrant).length === 1);
+  const manualBody = w.minionsOfSkill(hero, manual.def.id)[0];
+  take(w, idol); step();
+  check('G10 removing the idol retires only its follower', followers().length === 0
+    && !manualBody.dead && hero.skills[0] === manual);
+  const delivery = manual.def.delivery;
+  check('G11 the manual reservation returns to its ordinary live price', delivery.type === 'summon'
+    && hero.reservedMana > 0 && Math.abs(hero.reservedMana - summonReservationUnit(hero, manual, delivery)) < 0.001);
+  place(w, idol, 1, 1); step();
+  check('G12 reseating restores one follower and removes manual reservation again', followers().length === 1 && hero.reservedMana === 0);
+  const old = followers()[0];
+  w.actors = w.actors.filter(a => a !== old); step();
+  check('G13 a body missing after travel is reconstructed once', followers().length === 1 && followers()[0] !== old);
+  const second = legend('unquarried_idol', 1);
+  const beforeStack = followers()[0];
+  beforeStack.life = beforeStack.maxLife() * 0.4;
+  place(w, second, 3, 1); step();
+  check('G14 duplicate idols add levels to one follower without healing or consuming the manual pool',
+    followers().length === 1 && followers()[0] === beforeStack
+    && followers()[0].summonInst!.level === level + Math.floor(lineOf(second, 'companiongrant_summon_stone_golem'))
+    && followers()[0].life / followers()[0].maxLife() < 0.41
+    && hero.reservedMana === 0 && w.minionsOfSkill(hero, manual.def.id).length === 1);
+  hero.dead = true; step();
+  check('G15 owner death retires the follower', followers().length === 0);
 }
 
 // ------------------------------------------------------------ H. SUNDERSTONE

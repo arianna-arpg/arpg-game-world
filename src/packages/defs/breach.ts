@@ -201,7 +201,7 @@ const BREACH_ENCOUNTER: EncounterDef = {
     rewardUncoverBonus: 0.6,
     collapseSec: 2.6,
     spareEngagedWithin: 150,
-    text: { collapse: 'The breach collapses, and the veil comes back for its own!' },
+    text: { collapse: 'Breach Collapsing' },
   },
   // THE COURT: one of the four themes each zone's tear. The door threshold
   // sits past what passive growth alone reaches on the common scales — feed

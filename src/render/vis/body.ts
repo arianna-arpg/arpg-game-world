@@ -57,6 +57,9 @@ export function drawLiveParts(ctx: CanvasRenderingContext2D, look: BodyLook,
  *  with the body it rides. */
 export function drawPartSpecs(ctx: CanvasRenderingContext2D, look: BodyLook,
   specs: PartSpec[], t: number): void {
+  // Inherited state cues are usually dormant. Avoid even palette creation
+  // when every part is invisible; active gauges retain the same draw path.
+  if (!specs.some(spec => spec.alpha !== 0)) return;
   const pal = lookPalette(look.color, look.material);
   for (const spec of specs) {
     const painter = PART_PAINTERS[spec.kind];

@@ -10,6 +10,21 @@
 import type { LootTableDef } from '../engine/loot';
 
 const TABLE_LIST: LootTableDef[] = [
+  // Titans-era sovereigns keep distinct hoards on the shared primeval tier.
+  { id: 'rimeheart_hoard', rolls: [
+    { count: [1, 2], entries: [{ weight: 1, kind: 'table', table: 'primeval_spoil' }] },
+    { count: 1, entries: [
+      { weight: 3, kind: 'item', category: 'amulet', ilvlBonus: 2, rarityWeights: { common: 0, magic: 35, rare: 60, unique: 5 } },
+      { weight: 1, kind: 'gem' },
+    ] },
+  ] },
+  { id: 'stormcrown_hoard', rolls: [
+    { count: [1, 2], entries: [{ weight: 1, kind: 'table', table: 'primeval_spoil' }] },
+    { count: 1, entries: [
+      { weight: 3, kind: 'item', category: 'ring', ilvlBonus: 2, rarityWeights: { common: 0, magic: 35, rare: 60, unique: 5 } },
+      { weight: 1, kind: 'vestige' },
+    ] },
+  ] },
   // Container families share nested bonuses and the same mint primitives as foes.
   { id: 'container_curios', rolls: [{ count: 1, entries: [
     { weight: 35, kind: 'gem' }, { weight: 25, kind: 'memory' },

@@ -148,19 +148,6 @@ export function magicPackLinks(actors: readonly Actor[], view: { x: number; y: n
   return packLinks(bodies, id => ({ color: MAGIC_PACKS[id ?? '']?.color, style: 'beam' }), view).slice(0, Math.max(0, limit));
 }
 
-export function magicPackHint(a: Actor): string | undefined {
-  const p = a.magicPack;
-  const def = p && MAGIC_PACKS[p.mechanic];
-  if (!def) return;
-  const power = a.magicPackPower ?? 0;
-  if (def.bearer) {
-    const role = a.magicPackRole === 'bearer' ? (def.bearer.siphonRadius ? `Siphoning ${a.magicPackDonors}` : 'Exposed')
-      : a.magicPackRole === 'donor' ? 'Drained' : a.magicPackRole ? (def.bearer.siphonRadius ? 'Outside siphon' : 'Protected') : 'Link broken';
-    return `${role} · ${def.hint}`;
-  }
-  return `${power ? def.activeLabel + (power > 1 ? ` ×${power}` : '') : def.inactiveLabel} · ${def.hint}`;
-}
-
 /** Boot-time authoring diagnostics, shared with the regression rig. */
 export function magicPackErrors(skillExists?: (id: string) => boolean): string[] {
   const errors: string[] = [];

@@ -13,6 +13,7 @@
 
 import type { DoodadVisualDef } from '../render/vis/painters';
 import { ARENA_BOSS_DOORS } from './arenaBossTilesets';
+import { TITAN_DOODAD_VISUALS } from './titans';
 
 // THE WATER LOOK — one shared params object (the reskin doctrine: hovel/
 // goblin_hut for plans, this for liquids). The mirage oasis draws with these
@@ -28,6 +29,7 @@ const WATER_LOOK = {
 };
 
 export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
+  ...TITAN_DOODAD_VISUALS,
   ...ARENA_BOSS_DOORS,
   ashen_kennel_gate: {
     painter:'caveMouth',order:55,

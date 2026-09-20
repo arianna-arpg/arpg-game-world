@@ -19,10 +19,13 @@ import { ABYSS_LOOKS } from './abyssLooks';
 import { KINSHIP_LOOKS } from './kinshipLooks';
 import { ROOTWILD_LOOKS } from './rootwildLooks';
 import { ARENA_BOSS_LOOKS } from './arenaBosses';
+import { WORLDBOSS_ENCOUNTER_LOOKS } from './worldBossEncounters';
+import { TITAN_LOOKS } from './titans';
 import { COSMETIC_LOOKS } from './cosmeticModels';
 import { COSMETIC_WISP_LOOKS } from './cosmeticExpansionModels';
 
 export const LOOKS: Record<string, LookDef> = {
+  ...TITAN_LOOKS,
   ...COSMETIC_LOOKS,
   ...COSMETIC_WISP_LOOKS,
   ...CASTER_LOOKS,
@@ -32,6 +35,7 @@ export const LOOKS: Record<string, LookDef> = {
   ...KINSHIP_LOOKS,
   ...ROOTWILD_LOOKS,
   ...ARENA_BOSS_LOOKS,
+  ...WORLDBOSS_ENCOUNTER_LOOKS,
 
   // ============================================== THE DEAD (the flagship set)
   /** Bare bones and a blade: ribs radiating off a spine, skull forward. */

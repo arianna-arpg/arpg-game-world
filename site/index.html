@@ -56,7 +56,7 @@
 
   /* ---------- background field ---------- */
   #bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:0;opacity:.9}
-  /* THE FLIP (her word): the corner and bottom accent glows are gone — the
+  /* THE FLIP (her word): the corner and bottom accent glows are gone; the
      trio lives in the star sprites now, and the ONE glow left is the
      chart's own ether starlight hugging the bottom of the view (painted
      live by assets/abyss.js): the invitation to scroll down. */
@@ -801,11 +801,11 @@ npm run <span class="g">build</span></pre>
   var W=0,H=0,dpr=Math.min(window.devicePixelRatio||1, 1.75);
   var nodes=[], embers=[], LINK=132, tick=0;
   /* the chart's flickers ARE the insignia's three points: teal / violet /
-     ember, same hexes as the mark in the nav, the hero and the footer —
+     ember, same hexes as the mark in the nav, the hero and the footer:
      the splash over the ether field, never the field itself. */
   var COLORS=['#4fd6c4','#a98bff','#ff8a4c'];
   var ETHER='#9ab8dc';
-  /* the tilt: nearness rises DOWN the banner — far and small at the top,
+  /* the tilt: nearness rises DOWN the banner: far and small at the top,
      close and bright at the bottom; quadratic so the foreshortening reads
      as a receding plane. */
   function scaleOf(y){
@@ -833,7 +833,7 @@ npm run <span class="g">build</span></pre>
     nodes=[];
     for(var i=0;i<count;i++){
       nodes.push({
-        /* uniform seeding (her word: the full field back) — the TILT still
+        /* uniform seeding (her word: the full field back); the TILT still
            reads through per-depth size and pace, never through absence */
         x:Math.random()*W, y:Math.random()*H,
         vx:(Math.random()-.5)*.14, vy:(Math.random()-.5)*.14,
@@ -894,15 +894,15 @@ npm run <span class="g">build</span></pre>
           a.dvx+=(ddx/dd)*bf; a.dvy+=(ddy/dd)*bf;
         }
       }
-      /* THE TILT: a star's pace scales by its nearness — far ones crawl,
-         near ones stride — with no restoring spring (her word: a shoved
+      /* THE TILT: a star's pace scales by its nearness: far ones crawl,
+         near ones stride, with no restoring spring (her word: a shoved
          node drifts on; it never bounces back and forth). */
       var asc=scaleOf(a.y);
       a.x+=(a.vx+a.dvx)*asc; a.y+=(a.vy+a.dvy)*asc;
       a.dvx*=.9; a.dvy*=.9;
       if(a.x<0||a.x>W){ a.vx*=-1; a.dvx=0; a.x=a.x<0?0:W; }
       if(a.y<0||a.y>H){ a.vy*=-1; a.dvy=0; a.y=a.y<0?0:H; }
-      /* THE WEB (her word: the network-like, attached spritework) — links
+      /* THE WEB (her word: the network-like, attached spritework): links
          everywhere, the original reach and ink. */
       for(var k=i+1;k<nodes.length;k++){
         var b=nodes[k], dx=a.x-b.x, dy=a.y-b.y, d=Math.sqrt(dx*dx+dy*dy);
@@ -962,7 +962,7 @@ npm run <span class="g">build</span></pre>
   /* QA handle (the site's __game): state only, drives nothing */
   window.__hwbg = { get nodes(){ return nodes; }, get ripples(){ return ripples; }, get ptr(){ return ptr; } };
   function staticFrame(){
-    /* draw a single frame with no animation — the tilt still reads */
+    /* draw a single frame with no animation; the tilt still reads */
     ctx.clearRect(0,0,W,H);
     for(var n=0;n<nodes.length;n++){
       var p=nodes[n], sc=scaleOf(p.y);

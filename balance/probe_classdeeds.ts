@@ -237,7 +237,10 @@ hit(e, p);
 check('real evade stamps once', n('evades') === 1);
 p.sheet.removeSource('immune-probe');
 p.sheet.setSource('block-probe', [mod('blockChance', 'override', 1), mod('blockValue', 'override', 0), mod('blockPower', 'override', 0.5)]);
-hit(e, p);
+// Block chance is capped below certainty. Pin this event's rolls rather than
+// depending on how many cosmetic draws the earlier hits happened to consume.
+const blockRoll = Math.random;
+try { Math.random = () => 0; hit(e, p); } finally { Math.random = blockRoll; }
 check('real passive block records stopped damage', n('blocks') === 1 && n('blocked_damage') > 0);
 const restoreBlockRandom = seedGlobalRandom(7); // first roll .0117, below the .6 block cap.
 const passive = applyHit(e, p, { amounts: { physical: 1000 }, tags: new Set(['spell']), crit: false, sourceName: 'block probe' });

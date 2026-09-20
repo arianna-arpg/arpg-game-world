@@ -329,9 +329,8 @@ export const GRANT_CFG = {
   /** Sockets a granted instance carries (the Magic cut's count — a gift,
    *  not a find; the worn-graft lane adds seats on top by position). */
   sockets: 2,
-  /** A newly granted skill SEATS ITSELF on the first empty bar seat (the
-   *  rack law: unseated is unusable). Off = it waits in the Granted strip. */
-  autoSeat: true,
+  /** Optional manual skills wait in the Granted strip; triggers need no seat. */
+  autoSeat: false,
 };
 
 /** THE BLOOM's nature (minionBloom / minionBloomPower — Gravebloom): the
@@ -1221,7 +1220,11 @@ export function bandSwingGeo(reach: number, arcRad: number): BandSwingGeo {
 /** Named values of the projReturn stat. */
 export const PROJ_RETURN = { none: 0, origin: 1, caster: 2 } as const;
 
+/** Reusable translucent orb appearance; collision remains the delivery radius. */
+export interface OrbPaint { fill: number; rim: number; spark?: boolean; }
+
 export interface ProjectileDelivery {
+  orbPaint?: OrbPaint;
   type: 'projectile';
   speed: number;          // units / second
   radius: number;         // collision radius
@@ -1897,6 +1900,7 @@ export interface SelfDelivery {
  * Its own kit becomes the strike skill plus taught crew arts. It protects its
  * owner through the ordinary shell absorption path, without replacing other shells. */
 export interface SummonShellSpec {
+  shellVisual?: string;
   lifeFraction: number;
   /** Capacity scales by minionSize raised to this power; angular coverage stays fixed. */
   sizeScaling?: number;
@@ -2581,6 +2585,7 @@ export interface AuraDelivery {
    *  soak into a breakable, self-knitting pool. `max` scales with the
    *  guardStrength stat. The bestiary's back-armor, as a toggle. */
   shellGuard?: {
+    shellVisual?: string;
     side?: 'rear' | 'front' | 'all';
     max: number;
     arcDeg?: number;
@@ -2913,6 +2918,8 @@ export interface GuardSpec {
   /**
    * PARRY: a hit blocked within `window` seconds of raising the guard
    * costs NO shield and ripostes the blocked damage back × counterMult.
+   * Projectiles reflect visibly; received retaliation shares the victim's
+   * parryDamageCooldown across all parriers (docs/engine/parry.md).
    * Omit to let the guardParry STAT grant it (Perfect Timing support).
    */
   parry?: { window: number; counterMult: number };
@@ -4266,6 +4273,8 @@ export type SkillEffect =
 // --- The skill definition ---------------------------------------------------
 
 export interface SkillDef {
+  /** Reusable casting-read profile; false omits supplemental body/outcome cues. Bars remain. */
+  castingCue?: string | false;
   /** A serial resurrection contract with native Hivecall tree mechanics. */
   hivecall?: boolean;
   id: string;
@@ -5630,6 +5639,7 @@ export interface SupportDef {
    *  (the guard-hall economy); installed at the raise, stripped when the
    *  stance drops (release, parry-end, or a stun). */
   shellGraft?: {
+    shellVisual?: string;
     side?: 'rear' | 'front' | 'all';
     arcDeg?: number;
     max: number;
@@ -5892,6 +5902,8 @@ export interface SkillInstance {
    *  never in the learned book: no unlearn, no essence leveling, no learn
    *  gate — its level is the grant's fold, its sockets ride the item. */
   grantedBy?: string;
+  /** Derived companion grant: separate from the player's manual summon pool. */
+  companionGrant?: boolean;
   /** THE KEEPER'S MARK (salvageLock intent): a locked carried gem refuses
    *  salvage on BOTH lanes and every salvageBulk sweep passes it by. */
   locked?: boolean;

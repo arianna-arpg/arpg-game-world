@@ -2711,7 +2711,8 @@ function retreatMove(actor: Actor, world: World, dx: number, dy: number, dt: num
       actor.aiKiteAcc = 0;
       const w = ks.windedFor ?? [1.0, 1.6];
       actor.aiWindedUntil = world.time + rand(w[0], w[1]);
-      world.text(vec(actor.pos.x, actor.pos.y - 16), 'winded!', '#e8d44a', 12);
+      // WIND_PUFF reads this window; no caption or independent FX timer.
+      actor.tellNextAt = 0;
       return false;
     }
   }

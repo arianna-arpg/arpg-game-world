@@ -1,3 +1,4 @@
+import { summonReservationUnit } from './companionGrants';
 import type { AssaultPreparation } from './assault';
 import type { MovementTetherSpec, MovementTetherState } from './movementTether';
 import type { EncounterGroupState } from './encounterGroups';
@@ -72,6 +73,11 @@ export interface GainEvent {
 
 /** A cast in progress (also drives the cast bar above the actor's head). */
 export interface CastingState {
+  /** Resolved completion and body read on render-only co-op shells. */
+  castingCompletion?: number;
+  castingCue?: import('./castingCues').CastingCue;
+  /** Resolved host-only presentation read on a co-op render shell. */
+  parryCue?: number;
   inst: SkillInstance;
   mode: CastMode;
   aim: Vec2;               // updated each frame when the mode tracks aim
@@ -133,6 +139,8 @@ export interface CastingState {
   aiGuardWindup?: number;
   /** Absolute release deadline and committed facing; absent before warning. */
   aiGuardReleaseAt?: number;
+  /** Host-resolved warning geometry on a co-op render shell. */
+  guardReleaseCue?: import('./warningCues').GuardReleaseCue;
   aiGuardFacing?: number;
   /** AI policy (BehaviorSpec.guardRelease.waitToArm === false): release on
    *  the rolled hold even while the arm clock is still running — a
@@ -774,6 +782,10 @@ export class Actor {
   encounterGroup?: EncounterGroupState;
   /** Transient, attributable tactical assignment; normal AI executes it. */
   encounterOrder?: EncounterOrder;
+  /** Host-resolved maneuver presentation on a co-op render shell. */
+  encounterCue?: import('./warningCues').EncounterCue;
+  /** Host-derived screen pressure for render-only co-op actors; undefined on simulation actors. */
+  afflictionPressure?: import('./afflictionPressure').AfflictionPressure;
   /** Original instance brain, restored if a creature leaves its encounter allegiance. */
   encounterGroupBaseBrain?: BrainDef;
   /** Engage-token stamp: the token key held + when it was last re-asserted
@@ -1569,6 +1581,7 @@ export class Actor {
    *  the stance dropping) removes ONLY its own shell. `breathe` makes the
    *  covered ARC swell and wane on a period — the opening you time. */
   shellGuard?: {
+    shellVisual?: string;
     side: 'rear' | 'front' | 'all';
     arcDeg: number;
     max: number;
@@ -4070,8 +4083,7 @@ export class Actor {
       const slots = d.persistent.toggle
         ? Math.max(1, Math.round(this.sheet.get('minionMaxCount', tags2, extra2, d.maxActive)))
         : 1;
-      const reserve = d.persistent.reserve * slots
-        * this.sheet.get('manaCost', tags2, extra2);
+      const reserve = summonReservationUnit(this, inst, d) * slots;
       // A one-press pool swap DISMISSES rival same-poolGroup contracts —
       // count their reservation as freed, or the swap greys out forever.
       let freed = 0;

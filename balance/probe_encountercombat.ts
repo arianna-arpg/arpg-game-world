@@ -4,7 +4,7 @@ import { seedGlobalRandom } from '../src/sim/rng';
 import { ENCOUNTER_GROUPS } from '../src/data/encounterGroups';
 import { ENCOUNTER_TACTICS } from '../src/data/encounterTactics';
 import { TACTICAL_ENCOUNTERS } from '../src/data/tacticalEncounters';
-import { updateEncounterCombat, encounterCombatErrors, encounterOrderTuning, encounterOrderTarget, encounterOrderWard } from '../src/engine/encounterCombat';
+import { encounterCueOf, updateEncounterCombat, encounterCombatErrors, encounterOrderTuning, encounterOrderTarget, encounterOrderWard } from '../src/engine/encounterCombat';
 import { updateAI } from '../src/engine/ai';
 import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 import { ensureMovementTether, movementTetherDistance } from '../src/engine/movementTether';
@@ -38,7 +38,8 @@ function arm(expected:string,members:typeof w.actors) {
   think(1.3); const o=planOf(members);
   assert.equal(o?.plan,expected); assert.equal(o?.phase,'warning');
   assert.ok(members.every(a=>encounterOrderTuning(a,w)===undefined),'No maneuver starts before its warning');
-  assert.ok(w.texts.some(t=>t.text===ENCOUNTER_TACTICS[expected].signal),'Missing player-readable signal');
+  assert.ok(members.some(a=>encounterCueOf(a,w)?.phase==='warning'),'Missing live warning cue');
+  assert.ok(!w.texts.some(t=>t.text===ENCOUNTER_TACTICS[expected].signal),'Retired plan caption returned');
   return o!;
 }
 

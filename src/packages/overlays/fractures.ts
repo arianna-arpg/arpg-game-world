@@ -581,8 +581,8 @@ registerPackageAsk({
           : run.phase === 'chasm' && run.chasm ? { x: run.chasm.x, y: run.chasm.y }
             : { x: run.head.x, y: run.head.y },
       label: live
-        ? 'See the fracture through — survive its run, however it ends'
-        : 'Trip the volatile fracture and see its run through',
+        ? 'Fracture · Active'
+        : 'Volatile Fracture',
     };
   },
 });

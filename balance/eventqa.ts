@@ -490,7 +490,9 @@ console.log('eventqa: ledger contract (reads ⊆ bumps)');
       if (f.isDirectory()) { walk(p); continue; }
       if (!f.name.endsWith('.ts')) continue;
       const text = fs.readFileSync(p, 'utf8');
-      for (const m of text.matchAll(/bump(?:Account)?Ledger\(\s*(?:this\.ledger,\s*)?'([a-z0-9_]+)'/g)) bumped.add(m[1]);
+      // Modular hosts (e.g. TitanRuntime) alias World as w; the literal
+      // counter contract must not depend on the caller's variable name.
+      for (const m of text.matchAll(/bump(?:Account)?Ledger\(\s*(?:[\w.]+\.ledger,\s*)?'([a-z0-9_]+)'/g)) bumped.add(m[1]);
       for (const m of text.matchAll(/ledgerOnEnter:\s*'([a-z0-9_]+)'/g)) bumped.add(m[1]);
       for (const m of text.matchAll(/ledgerKill:\s*'([a-z0-9_]+)'/g)) bumped.add(m[1]);
       for (const m of text.matchAll(/ctx\.ledger\.([a-z0-9_]+)/g)) readKeys.add(m[1]);

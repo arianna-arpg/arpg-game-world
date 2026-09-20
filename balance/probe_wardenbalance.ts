@@ -119,9 +119,12 @@ for (const hz of [30, 60, 120]) {
   check('an unarmed shield drops without a false bash warning', !f.m.casting && cs.aiGuardReleaseAt === undefined);
 }
 {
-  const f = fixture(); raise(f); f.w.update(DT);
+  const f = fixture(), cs = raise(f);
+  stepUntil(f, () => cs.aiGuardReleaseAt !== undefined);
   const before = f.p.life;
+  f.m.poise = 0; // guardReleaseCue cancellation rig: prevent the legitimate poise CC shrug.
   f.m.applyStatus('stun', 0, 1, 'probe');
+  check('guardReleaseCue stun fixture actually applies control', f.m.isStunned());
   settle(f);
   check('stunning the wind-up cancels its bash', !f.m.casting && f.p.life === before);
 }

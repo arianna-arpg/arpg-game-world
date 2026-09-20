@@ -27,9 +27,9 @@ p{margin:0}
 .display{font-family:var(--font-display)}
 :focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:4px}
 
-/* shared background layer — THE FLIP (her word): no corner accent glows;
+/* shared background layer: THE FLIP (her word): no corner accent glows;
    the abyss (assets/abyss.js) mounts its live canvas here and its ether
-   well, hugging the bottom of the view, is the ONE glow — the trio lives
+   well, hugging the bottom of the view, is the ONE glow: the trio lives
    in the sprites, and the light below says "scroll". */
 .bg-veil{position:fixed;inset:0;z-index:0;pointer-events:none;}
 .page{position:relative;z-index:1}

@@ -13,8 +13,8 @@
 //     paid in your own resistance to it (the D2 sunder trade).
 //   · The Lodestone (talisman 2×1) — COMMUNION: stronger per relic touching
 //     it; crowd it.
-//   · The Unquarried Idol (idol 1×2) — GRANTS Summon Stone Golem from the
-//     case (the granted-skill law: the golem's stones live on the idol).
+//   · The Unquarried Idol (idol 1×2) — an independent Stone Golem follower
+//     and free reservation for manually equipped Stone Golems.
 //   · The Tally Idol (idol 1×2) — THE CASE GAUGE: damage per relic seated
 //     in the Reliquary; fill the case.
 //   · The Reliquary Crown (effigy 2×2) — OUTWARD: every relic touching it
@@ -29,7 +29,7 @@
 
 import type { RangedLineDef, UniqueDef } from '../../engine/items';
 import type { UniqueChoiceGroup } from '../../engine/itemchoices';
-import { skillGrantStat } from '../../engine/skills';
+import { companionGrantStat, summonReservationStat } from '../../engine/companionGrants';
 import { seatPowerStat, seatedGaugeId } from '../../engine/seatlaw';
 
 /** The container the Tally Idol counts (data/containers.ts RELIQUARY_ID —
@@ -99,16 +99,17 @@ export const RELIC_UNIQUES: UniqueDef[] = [
       { stat: 'critChance', kind: 'flat', range: [0.02, 0.03] },
     ],
   },
-  // THE UNQUARRIED IDOL — a GRANTED SKILL from the case: Summon Stone Golem
-  // at a level that deepens with the tier (the leveling law on a grant),
-  // its sockets and tree picks resident on the idol (THE RESIDENCE ON THE
-  // ITEM reaches a seated piece through the container fold's host scan).
-  // The golem's own binding reserve is the price.
+  // THE UNQUARRIED IDOL — an independent, attributable companion grant.
+  // A zero reservation override remains zero under board amplification,
+  // including multiple amplified copies; the manual skill still pays its cast cost.
   {
     id: 'unquarried_idol', name: 'The Unquarried Idol', baseId: 'relic_idol', weight: 35, minIlvl: 10,
     flavor: 'Nobody carved it. It simply stopped being a mountain.',
     lines: [
-      { stat: skillGrantStat('summon_stone_golem'), kind: 'flat', range: [1, 2], tierScale: 0.3 },
+      { stat: companionGrantStat('summon_stone_golem'), kind: 'flat', range: [1, 2], tierScale: 0.3,
+        text: 'A Stone Golem from Level {vf} Summon Stone Golem follows you without using a skill slot or reserving Mana; reforms after death' },
+      { stat: summonReservationStat('summon_stone_golem'), kind: 'override', range: [0, 0], tierScale: 0,
+        text: 'Summon Stone Golem has 100% less Mana Reservation (including your equipped skill)' },
       { stat: 'minionLife', kind: 'increased', range: [0.15, 0.25] },
       { stat: 'minionDamage', kind: 'increased', range: [0.1, 0.15] },
       { stat: 'manaRegen', kind: 'increased', range: [0.1, 0.15] },

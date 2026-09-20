@@ -1,6 +1,7 @@
 import { Rng } from '../core/rng';
 import { tutorialFactionOf } from '../data/commanders';
 import { ODYSSEY_CFG, ODYSSEY_FACTIONS, ODYSSEY_TUTORIAL_RELEASE } from '../data/odyssey';
+import { restoreRisingClocks, type OdysseyRisingClocks } from './odysseyRisings';
 
 export interface OdysseyBody {
   id: string; x: number; y: number; life: number;
@@ -11,6 +12,7 @@ export interface OdysseyScout extends OdysseyBody {
   seenX?: number; seenY?: number;
 }
 export interface OdysseyState {
+  risings?: OdysseyRisingClocks;
   version: 1; roster: string[]; defeated: string[]; prepared: string[];
   leads: string[]; kills: Record<string, number>; surveyDone: boolean;
   nextScoutAt: number; scout?: OdysseyScout;
@@ -40,6 +42,7 @@ export function restoreOdyssey(raw: OdysseyState | undefined, seed: number, ledg
     || raw.roster.length !== ODYSSEY_CFG.rosterSize || new Set(raw.roster).size !== raw.roster.length
     || raw.roster.some(id => !ODYSSEY_FACTIONS.some(f => f.id === id))) return newOdyssey(seed, ledger);
   const s = structuredClone(raw);
+  if (s.risings !== undefined) s.risings = restoreRisingClocks(s.risings);
   const subset = (a: string[]): string[] => Array.isArray(a) ? [...new Set(a.filter(id => s.roster.includes(id)))] : [];
   s.defeated = subset(s.defeated); s.prepared = subset(s.prepared); s.leads = subset(s.leads);
   s.kills = Object.fromEntries(Object.entries(s.kills ?? {}).filter(([id, n]) => s.roster.includes(id) && Number.isFinite(n) && n >= 0));

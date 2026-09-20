@@ -6,6 +6,7 @@
 // ---------------------------------------------------------------------------
 
 import type { World } from '../../engine/world';
+import { TITAN_TUNING } from '../../data/titans';
 import { collectOmens, omenReach } from '../../world/omens';
 import type { OverlayView } from '../../world/overlay';
 import type { FrequencyProfile } from '../../packages/frequency';
@@ -35,6 +36,7 @@ export const eventsTab: DevTabDef = {
       });
 
     spawnRow.append(
+      ...TITAN_TUNING.defs.map(d => forceEvent(`Titan: ${d.name}`, (w, v, z) => w.titans.field()?.devIgnite(v, z, d.id) ?? false)),
       forceEvent('Demon Invasion', (w, v, z) => w.sim.demonField?.devIgnite(v, z) ?? false),
       forceEvent('Crusade (throne here)', (w, v, z) => w.sim.crusadeField?.devIgnite(v, z) ?? false),
       // The pre-anchor arc: an EMBER that oscillates, can be snuffed by

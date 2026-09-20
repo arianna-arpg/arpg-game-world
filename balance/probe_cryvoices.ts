@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // ONE-OFF PROBE — M-CRY (docs/design/show-dont-tell.md §3f): the combat cries
-// stay `combat`-kinded floaters and each earns a DRAWN TWIN. Pins:
+// legacy wrapper remains supported; GT-003–010 now use caption-free cues. Pins:
 //   A. THE VOICES — clash / glint / blur / ward stand registered (vis/cryVoices).
 //   B. THE CRY — World.cry pushes ONE combat-kinded floater + ONE flash wearing
 //      the voice at the same seat (radius + facing carried); fx undefined =
@@ -71,12 +71,12 @@ const w = makeSimWorld('warrior', 0xc47);
   }
   check('C1 no §3f cry stands as a bare un-kinded this.text(…)', bare.length === 0, bare.join(' ') || 'all kinded');
   const has = (a: string, b: string): boolean => src.split('\n').some(l => l.includes(a) && l.includes(b));
-  check('C2 the twins sit at their seats: clash@parry, glint@blocked/block!/shield bash, blur@evade, ward@immune/resisted/POISED',
-    has("'PARRY!'", "'clash'") && has("'block!'", "'glint'") && has("'shield bash!'", "'glint'") && src.includes("fx: 'glint', facing: guardian.facing")
-    && has("'evade'", "'blur'") && has("'immune'", "'ward'") && has("'resisted'", "'ward'") && has("'POISED'", "'ward'"));
-  check('C3 shatter at the broken guard / shell / poise; wink at the timing cries',
-    has("'guard broken!'", "'shatter'") && has("'SHELL BREAKS!'", "'shatter'") && has("'BROKEN!'", "'shatter'")
-    && has("'Perfect!'", "'wink'") && has("'Flawless!'", "'wink'") && has("'On the spark!'", "'wink'") && has("'crit mend!'", "'wink'") && has("'crit affliction!'", "'wink'"));
+  // GT-003–010 supersede the old caption twins; keep the legacy wrapper
+  // contract above for families still in the backlog.
+  const retired = /this\.(?:cry|text)\([^;]*?(?:'PARRY!'|'blocked'|'block!'|'guard broken!'|'shield bash!'|'evade'|'immune'|'resisted'|'POISED'|'SHELL BREAKS!'|'BROKEN!'|'Perfect!'|'Flawless!'|'On the spark!'|'crit mend!'|'crit affliction!'|'aftershock!')/g;
+  check('C2 migrated defensive/outcome captions cannot return', !retired.test(src));
+  check('C3 current cue families register through the renderer',
+    rend.includes("from './vis/defenseCueLayer'") && rend.includes("from './vis/combatCueLayer'"));
   check('C4 the ART ledger notes ride the notice feed (off the head)', has('ART WITNESSED', 'this.notice(') && has('ART CAPTURED', 'this.notice(') && !has('ART WITNESSED', 'this.text('));
   check('C5 the renderer imports the cry voices', rend.includes("import './vis/cryVoices'"));
 }

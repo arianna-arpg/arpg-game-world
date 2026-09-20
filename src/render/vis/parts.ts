@@ -3192,17 +3192,23 @@ const furRuff: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
-/** LIVE: cold breath puffing ahead of the face on a slow rhythm. */
+/** LIVE: breath in facing space. Existing cold-breath looks keep their
+ * slow defaults; tell rows can tune period, effortPeriod, duty and opacity.
+ * `fill` changes the breathing rate, while the tell's alpha owns lifetime. */
 const breathPuff: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  if (spec.alpha === 0) return;
   const col = spec.color ?? '#e8f4fa';
   place(ctx, r, spec, (c, R) => {
-    const PERIOD = 2.8;
+    const fill = Math.max(0, Math.min(1, P(spec, 'fill', 0)));
+    const period = P(spec, 'period', 2.8);
+    const PERIOD = Math.max(0.1, period + (P(spec, 'effortPeriod', period) - period) * fill);
+    const duty = Math.max(0.05, Math.min(1, P(spec, 'duty', 0.55)));
     const cyc = ((t + R) % PERIOD) / PERIOD;
-    if (cyc > 0.55) return; // between breaths
-    const k = cyc / 0.55;
+    if (cyc > duty) return; // between breaths
+    const k = cyc / duty;
     const x = R * (0.85 + k * 0.55);
     const size = R * (0.1 + k * 0.22);
-    c.globalAlpha *= (1 - k) * 0.4;
+    c.globalAlpha *= (1 - k) * Math.max(0, Math.min(1, P(spec, 'opacity', 0.4)));
     c.fillStyle = col;
     c.beginPath();
     c.arc(x, R * 0.06 * Math.sin(t * 2), size, 0, Math.PI * 2);

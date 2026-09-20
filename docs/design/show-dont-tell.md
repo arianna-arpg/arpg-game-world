@@ -1,5 +1,13 @@
 # SHOW, DON'T TELL — the information-surface census (what still speaks, who it speaks to, what should be drawn instead)
 
+> **GAMEPLAY-TEXT-AUDIT update (2026-09-19):** use the maintained
+> [gameplay text migration backlog](gameplay-text-audit.md) and its repeatable
+> source inventory for current work. The counts below are an August snapshot.
+> The latest absolute gameplay-signaling rule in `CLAUDE.md` supersedes this
+> document's permission to retain mutable combat cries and instructional
+> captions. This older census remains as design history, not an exception to
+> the current rule.
+
 **Status: CENSUS + CHARTER v1 (2026-08-22, written at the dissolution grammar's
 landing — D0 `40f1729`, D1 `2c40f02`, the row law beside this file). Her ask,
 near-verbatim: "get a list of the text-centric modes that may be better served

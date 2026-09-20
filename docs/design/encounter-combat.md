@@ -19,8 +19,9 @@ turning, navigation, morale, defenses and damage still resolve the fight.
 Plans have no damage multiplier and do not force a skill or bypass its cost.
 Countercast is a positional response, not an automatic interrupt. Root barrage
 combines the members' actual skills; it does not create roots for a creature
-that lacks them. Encounter-specific signals supply appropriate flavor for
-fungi, vermin, plants and handlers using the same plan.
+that lacks them. Encounter-specific cue profiles dress fungi, vermin, plants and handlers
+using the same plan. GT-012 replaces plan/recovery captions with live body
+preparation and conductor gestures; see [warning cues](warning-cues.md).
 
 Warnings last 1–1.4 seconds. Commitments last 1.8–2.6 seconds, then participating
 members hold ground and use a slower decision cadence for 1.6–2 seconds.
@@ -67,7 +68,7 @@ encounterCombat: {
   minLevel: 10,
   thinkEvery: 0.45,
   radius: 600,
-  signals: { protect_support: 'Shield the lantern bearer!' },
+  cues: { protect_support: { style: 'cover', color: '#a8d68b' } },
 }
 ```
 
@@ -80,7 +81,7 @@ vocabulary, so players, companions and other enemies can use them too.
 `Actor.encounterOrder` attributes the current assignment to its group, recipe,
 plan, leader, phase and expiry. It is a transient overlay at AI resolution,
 never a mutation to the species brain. Co-op carries the compact identity/phase
-cue, while the host owns planning. Saving or leaving a zone preserves the group
+cue plus resolved gesture/progress, while the host owns planning. Saving or leaving a zone preserves the group
 and its survivors but drops transient plans; returning starts with fresh warning
 requirements. World-local state is discarded on zone changes and group removal.
 

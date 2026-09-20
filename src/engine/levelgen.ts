@@ -18,6 +18,7 @@
 // Everything draws from one Rng, so a layout is one seed.
 // ---------------------------------------------------------------------------
 
+import type { Actor } from './actor';
 import { dist, vec, type Vec2 } from '../core/math';
 import { shapeBoundR, type HitShape } from './shapes';
 import type { TrackSpec, TrackPayload } from './tracks';
@@ -505,6 +506,9 @@ export interface DoodadEffect {
 }
 
 export interface Doodad {
+  /** Runtime contact ownership and shared re-hit grace for one continuous hazard. */
+  contactSource?: Actor;
+  contactGroup?: string;
   pos: Vec2;
   radius: number;
   kind: DoodadKind;

@@ -158,7 +158,7 @@
       var mtags = uniqVals(p, function (e) { return e.tags; });
       if (mtags.length) html += facetGroup('Tags', 'tags', mtags, '');
     }
-    if (!html) html = '<h4>Filters</h4><p style="color:var(--ink-faint);font-size:13px">Search above to narrow ' + esc(TYPE_LABEL[state.type].toLowerCase()) + '.</p>';
+    if (!html) html = '<h4>Filters</h4><p style="color:var(--ink-faint);font-size:13px">No filters on this tab. The search box above still narrows ' + esc(TYPE_LABEL[state.type].toLowerCase()) + '.</p>';
     else html += '<button class="clearf" id="clearf">Clear filters</button>';
     el.filters.innerHTML = html;
 

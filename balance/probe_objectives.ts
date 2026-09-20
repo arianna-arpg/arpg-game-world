@@ -306,13 +306,13 @@ withSeededRandom(0x0bec7a, () => {
     const v1 = w.spireView();
     check('C4 the stamped view speaks the stall (drawn == tested)',
       v1?.contested === true && v1?.draining === false
-      && String(w.objectiveText()).includes('contested'));
+      && String(w.objectiveText()).includes('Contested'));
     const crowd = [plantFoe(spire.pos.x, spire.pos.y - 40), plantFoe(spire.pos.x, spire.pos.y + 40), plantFoe(spire.pos.x + 44, spire.pos.y)];
     step(1);
     check('C5 a CROWD (drainAt+) DRAINS banked charge',
       spire.charge < built - 0.2, `${built.toFixed(2)} → ${spire.charge.toFixed(2)}`);
     check('C6 the view + HUD speak the drain',
-      w.spireView()?.draining === true && String(w.objectiveText()).includes('OVERRUN'));
+      w.spireView()?.draining === true && String(w.objectiveText()).includes('Overrun'));
     for (const m of [z1, ...crowd]) w.kill(m, true);
     step(1.2);
     check('C7 cleared ground RESUMES the build', spire.charge > built + 0.6,
@@ -585,7 +585,7 @@ withSeededRandom(0x0bec7a, () => {
       && Math.abs((owed - spire.recoup) - (REC.boost - 1)) < 0.12,
       `Δ ${(spire.charge - c0).toFixed(2)}/s, owed ${owed.toFixed(2)} → ${spire.recoup.toFixed(2)}`);
     check('R7 the stamped view + HUD speak the sprint (drawn == tested)',
-      w.spireView()?.recouping === true && String(w.objectiveText()).includes('quickens'));
+      w.spireView()?.recouping === true && String(w.objectiveText()).includes('Recovering'));
     step(Math.max(0.5, spire.recoup / (REC.boost - 1) + 0.3)); // spend the debt down
     const c1 = spire.charge;
     step(0.5);
@@ -775,7 +775,7 @@ withSeededRandom(0x0bec7a, () => {
       const v = w.lairAskView();
       check('T11 the stamped view: den mode, door found, unentered, not done; HUD asks TITLE-FREE (THE UNTITLED CLAIM)',
         v?.mode === 'den' && v.pos !== null && v.entered === false && v.done === false
-        && String(w.objectiveText()).includes('Brave the lair')
+        && String(w.objectiveText()).startsWith('Lair')
         && !String(w.objectiveText()).includes('Emberwyrm'));
       check('T12 the adopted ask never seals the roads', objectiveSeals(o) === false && w.objectiveDone === false);
       // Settle the den WITHOUT walking it: the completion read is the derived
@@ -815,7 +815,7 @@ withSeededRandom(0x0bec7a, () => {
       const v = w.lairAskView();
       check('T16 the hunt view counts the keepers; the HUD speaks TITLE-FREE (THE UNTITLED CLAIM)',
         v?.mode === 'hunt' && v.remain === giants.length && v.done === false
-        && String(w.objectiveText()).includes("Fell the lair's keepers")
+        && String(w.objectiveText()).startsWith("Keepers ·")
         && !String(w.objectiveText()).includes('Cairn'),
         String(w.objectiveText()));
       for (const g of giants) w.kill(g, true);
@@ -888,7 +888,7 @@ withSeededRandom(0x0bec7a, () => {
       const v = w.packageAskView();
       check('U3c the stamped view: standing, unengaged, pointing at the dormant seat; the HUD speaks the trip line',
         v?.standing === true && v.engaged === false && v.pos !== null
-        && String(w.objectiveText()).includes('Trip the volatile fracture'));
+        && String(w.objectiveText()).includes('Volatile Fracture'));
       check('U3d the guest ask: roads OPEN, NO parent chest, the pane names the guest',
         objectiveSeals(o) === false && !objectiveEarnsChest(o)
         && objectiveRead(o).read === 'a roving power claims this ground: the fracture');
@@ -971,7 +971,7 @@ withSeededRandom(0x0bec7a, () => {
       step(0.2);
       check('U7c the trigger took (fissure live) and the HUD flips to the survive line',
         w.fractureView()?.phase === 'fissure'
-        && String(w.objectiveText()).includes('See the fracture through'));
+        && String(w.objectiveText()).includes('Fracture · Active'));
       w.player.pos = w.clampPos(vec(run.origin.x + 900, run.origin.y + 900), w.player.radius);
       let guard = 0;
       while (w.fractureView() && guard++ < 80) step(0.5);
@@ -1671,10 +1671,10 @@ withSeededRandom(0x0bec7a, () => {
       check('X13d the entry edge stays spared even lost (the walk back is never punished)',
         !!backL && !w.isExitLocked(backL!));
       check('X13e the HUD speaks the barred pass (the lost line no longer lies on sealed ground)',
-        String(w.objectiveText()) === 'The caravan was lost — the pass stays barred');
+        String(w.objectiveText()) === 'Caravan Lost · Sealed');
       leaveToHome();
     }
-    // X14 the control: an UNSEALED lost escort keeps the legacy words and
+    // X14 the control: an UNSEALED lost escort keeps the open-road state and
     // the open roads byte-for-byte (open ground: losing costs the reward,
     // never the road — the standing law untouched).
     {
@@ -1683,10 +1683,10 @@ withSeededRandom(0x0bec7a, () => {
       const cart = pr?.cartId != null ? w.actorById(pr.cartId) : null;
       check('X14a the control escort staged', !!cart && !cart.dead);
       if (cart) { w.kill(cart, true); step(0.3); }
-      check('X14b an unsealed loss keeps every road open + the legacy line byte-same',
+      check('X14b an unsealed loss keeps every road open + the compact open-road state',
         w.objectiveLost === true
         && liveExits().every(e => !w.isExitLocked(e))
-        && String(w.objectiveText()) === 'The caravan was lost — the roads remain open');
+        && String(w.objectiveText()) === 'Caravan Lost · Open');
       leaveToHome();
     }
   }
@@ -1745,7 +1745,7 @@ withSeededRandom(0x0bec7a, () => {
       const gateFoe = plantFoe(w.player.pos.x + 420, w.player.pos.y);
       latchVerdict = 'lost';
       step(0.1);
-      const lostLine = 'the Latch Stand is forfeit — the wilds still ask their cull';
+      const lostLine = 'the Latch Stand · Lost';
       check('WL2 the loss handed back INSTANTLY (the latch is display state — the ask is already the cull)',
         (w.zone.objective as ObjectiveSpec).kind === 'clear' && w.objectiveDone === false);
       check('WL3 the forfeit prose HOLDS the objective line (the title fallback lane)',
@@ -1758,7 +1758,7 @@ withSeededRandom(0x0bec7a, () => {
         String(w.objectiveText()) === lostLine);
       (w.objectiveLatch as { at: number }).at -= linger.sec + 1;
       check('WL6 both gates met ⇒ the line converts to what the prose stated (the live cull)',
-        String(w.objectiveText()).startsWith('Clear the area')
+        String(w.objectiveText()).startsWith('Clear ·')
         && !String(w.objectiveText()).includes('forfeit'));
       latchArmId = null;
       leaveToHome();
@@ -1845,8 +1845,8 @@ withSeededRandom(0xc017e57, () => {
   w.updateObjective(1);
   check('HR3 a visible enemy on the same ground still stalls from zero',
     spire.charge === 0 && w.spireView()?.contested);
-  check('HR4 the zero-charge spire explains its stall on the HUD',
-    String(w.objectiveText()).includes('contested'));
+  check('HR4 the zero-charge spire identifies its stalled state on the HUD',
+    String(w.objectiveText()).includes('Contested'));
 
   foe.tier = 1;
   w.updateObjective(1);
@@ -1896,7 +1896,7 @@ withSeededRandom(0xc017e57, () => {
   check('HR7 pressure drains the remote fixture while the local pyre builds',
     remote.charge < 2 && nearby.charge === 1);
   check('HR8 the local fixture HUD never borrows a distant overrun warning',
-    !w.pyresView()?.draining && !String(w.objectiveText()).includes('OVERRUN'));
+    !w.pyresView()?.draining && !String(w.objectiveText()).includes('Overrun'));
   const hidden = fixture(315, 225), attended = fixture(165, 225);
   w.pyres = [hidden, attended];
   w.actors = [w.player];
@@ -1938,8 +1938,8 @@ withSeededRandom(0xe5ca9e, () => {
     w.travelThrough(e);
   };
   enter();
-  check('E1 escape HUD and map explain the different-exit requirement',
-    w.objectiveText().includes('different exit') && objectiveRead(w.zone.objective).read.includes('different exit'));
+  check('E1 escape HUD and map identify the different-exit requirement',
+    w.objectiveText().includes('Another Exit') && objectiveRead(w.zone.objective).read.includes('different exit'));
   check('E2 retreat remains unlocked', !(w.exits as ZoneExit[]).some(e => w.isExitLocked(e)));
   leave(home);
   check('E3 immediate retreat travels but earns no completion, XP or quest credit',
@@ -1972,14 +1972,14 @@ withSeededRandom(0xe5ca9e, () => {
   enter();
   w.zone.objective = { kind: 'escape', interval: [1, 1], exit: 'any' };
   check('E11 explicit any-exit policy has matching HUD and map prose',
-    !w.objectiveText().includes('different exit') && objectiveRead(w.zone.objective).read === 'find the way out');
+    !w.objectiveText().includes('Another Exit') && objectiveRead(w.zone.objective).read === 'find the way out');
   leave(home);
   check('E12 authored any-exit policy deliberately permits retreat', w.completedObjectives.has(road) && paid === reward * 2);
 
   w.completedObjectives.delete(road);
   w.zoneMap[road].objective = { kind: 'escape', interval: [1, 1] };
   w.loadZone(road); // waypoint-style arrival has no entry portal
-  check('E13 entry-less arrivals ask for any way out', w.entryFrom === null && !w.objectiveText().includes('different exit'));
+  check('E13 entry-less arrivals ask for any way out', w.entryFrom === null && !w.objectiveText().includes('Another Exit'));
   leave(home);
   check('E14 entry-less arrival can escape normally', w.completedObjectives.has(road) && paid === reward * 3);
 

@@ -1,3 +1,7 @@
+import { drawSatellites } from './vis/satelliteLayer';
+import { drawAuroras } from './vis/auroraLayer';
+import { drawGuardians } from './vis/guardianLayer';
+import { drawOrbMote } from './vis/orbMote';
 import { ASSAULT, assaultOrbitPositions } from '../engine/assault';
 import { cosmeticPortalColor, drawCosmeticPortal, cosmeticProjectileExtent, drawCosmeticProjectile, cosmeticHotbar, drawCosmeticHotbar } from './vis/cosmeticEffects';
 import { HIVECALL } from '../engine/hivecall';
@@ -15,7 +19,7 @@ import { replenishmentActive } from '../engine/replenishment';
 import { clamp, dist, mixHex, type Vec2 } from '../core/math';
 import { RENDER_SCALE_CFG } from './renderScale';
 import { DEFAULT_CURSOR_OPTIONS, drawAimReticle } from '../core/cursor';
-import { bandPointsAt, guardBashReady, instanceChannel, instanceChargeCost, instanceDelivery, instanceMeta, instanceMods, metaFaceOf, instanceStrikeTiming, instanceTrigger, instanceUseCharges, poolReadOf, skillContextTags, SKILL_RARITIES, treePointsSpent, treeSpentBranch } from '../engine/skills';
+import { bandPointsAt, guardBashReady, instanceChargeCost, instanceDelivery, instanceMeta, instanceMods, metaFaceOf, instanceStrikeTiming, instanceTrigger, instanceUseCharges, poolReadOf, skillContextTags, SKILL_RARITIES, treePointsSpent, treeSpentBranch } from '../engine/skills';
 import { ITEM_RARITIES } from '../engine/items';
 import { drawGroundItem } from './groundItems';
 import { TOWN_PORTAL_CFG } from '../data/townportals';
@@ -23,7 +27,7 @@ import { VESTIGES } from '../data/vestiges';
 import { abilityEssenceOfTier, ESSENCES } from '../data/essences';
 import { STATUS_DEFS, type StatusDef } from '../engine/status';
 import { toneTint } from '../engine/tuning';
-import { STANCE_PLANT_TIME, shellArcFactor, type Actor } from '../engine/actor';
+import { STANCE_PLANT_TIME, type Actor } from '../engine/actor';
 import { throngEvolution } from '../engine/throngEvolution';
 import { throngSightSet, wornThrongKindsOf } from '../engine/throng';
 import { GRAB_VERB_LABEL } from '../engine/grab';
@@ -73,8 +77,10 @@ import { UI_SCALE_CFG } from '../ui/uiScale';
 import { Z_LADDER } from '../ui/zorder';
 import { padDisplay } from '../core/gamepad';
 import { collectActiveFx, collectFalterK, type ActiveFx } from './screenFx';
+import { afflictionPressureOf } from '../engine/afflictionPressure';
+import { composeAfflictionEdge, drawAfflictionLayers } from './vis/afflictionEdge';
 import { RARITY_DEFS } from '../engine/rarity';
-import { magicPackLinks, magicPackHint } from '../engine/magicPacks';
+import { magicPackLinks } from '../engine/magicPacks';
 import { MAGIC_PACK_CFG, MAGIC_PACKS } from '../data/magicPacks';
 import { drawMagicPackEffects, drawMagicPackRole } from './vis/magicPackLayer';
 import { FACTIONS, MONSTERS, type MonsterDef } from '../data/monsters';
@@ -85,6 +91,15 @@ import { materialOf, rampOf } from './vis/materials';
 import { adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, drawPartSpecs, lookOf, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
 import { drawAdornHitFlash, drawBodyHitFlash, hitFlashAlphaOf } from './vis/hitFlash';
 import { TELL_CFG, tellDressOf } from '../engine/tells';
+import { guardReleaseCue } from '../engine/warningCues';
+import { encounterCueOf } from '../engine/encounterCombat';
+import { WARNING_CUE_CFG } from '../data/warningCues';
+import { drawGuardReleaseGround, drawEncounterCue, warningCueLean } from './vis/warningCueLayer';
+import { drawParryReady, drawReflectedCue } from './vis/combatCueLayer';
+import { drawCastingCue, drawFocusFrame } from './vis/castingCueLayer';
+import { castingCompletion } from '../engine/castingCues';
+import { COMBAT_CUE_CFG } from '../data/combatCues';
+import { drawShellCue, drawPoiseCue, statusBodyLean, drawStatusBodyCue } from './vis/defenseCueLayer';
 import { drawWatchSense, drawWatchTrails } from './vis/watchLayer';
 import { drawMovementTether } from './vis/movementTetherLayer';
 import { driftColor } from './vis/colorDrift';
@@ -96,7 +111,7 @@ import { drawGlow, drawLongShadow, drawShadow, releaseCanvas, sunCast } from './
 import { drawRuneRing } from './vis/runeRing';
 import { registerVisCache, trimVisCaches } from './vis/caches';
 import { resolveSpeech, revealedChars, wrapSpeech, resolveNameTokens, dodgeSpeechBox, layoutSpeechSeats, speechTailBase, type SpeechStyle, type SpeechRect, type SpeechSeatMemory } from './vis/speech';
-import { drawEdgeOverlay, qFrac, qChan } from './vis/overlays';
+import { drawEdgeOverlay, qFrac } from './vis/overlays';
 import { canvasCap, canvasCapsReport } from './vis/canvasCaps';
 import { GroundRenderer } from './vis/ground';
 import { CANOPY_PAINTERS, CANOPY_STATIC, PAINTERS, paintBakedWhole, paintBlendUnderlay, paintGroupShadows, type DoodadVisualDef, type PaintEnv } from './vis/painters';
@@ -125,6 +140,7 @@ import { drawLakeBroil } from './vis/lakeLayer';
 import { boilRamp, drawBoilCells, groundedCellsIn } from './vis/boilLayer'; // THE GROUNDED STRIKE's telegraph (the crone's boil)
 import { drawTrapworkTells } from './vis/trapLayer';
 import { drawEffectVoice } from './vis/effectVoice';
+import './vis/groundRising'; // Ground-born encounters signal through soil, dust and grasping hands.
 import { traceAoePath } from './vis/aoeTrace'; // THE AOE TRACER — one path builder per registered figure (drawn == tested with world.ts inAoe)
 import { AOE_SHAPE, bandSwingGeo } from '../engine/skills';
 
@@ -493,7 +509,7 @@ export class Renderer {
     // the eye gets is briefly stale, exactly like the hitch it impersonates.
     // Boundary frames (zone/world flip) and resizes always draw — a swap's
     // first frame or a fresh backing store must never present stale pixels.
-    this.frameFx = collectActiveFx(world.player.statuses);
+    this.frameFx = world.player.dead || world.player.downed ? [] : collectActiveFx(world.player.statuses);
     const resized = w !== this.falterW || h !== this.falterH;
     this.falterW = w; this.falterH = h;
     const falterK = (this.getSettings?.().statusFalter ?? true)
@@ -756,6 +772,9 @@ export class Renderer {
       drawStatusVoices(this.ctx, world, this.frameDt, this.cam.x, this.cam.y, vw, vh);
       for (const a of world.actors) if (!a.dead && a.nemesis) this.drawNemesisMark(a);
     }
+    drawSatellites(this.ctx, world);
+    drawAuroras(this.ctx, world);
+    drawGuardians(this.ctx, world);
     this.drawProjectiles(world);
     // THE COLUMN + THE PLUME + THE LOB COMETS (vis/geyserLayer.ts): the
     // spout wraps whoever stands in it, so it draws OVER bodies — and
@@ -858,6 +877,7 @@ export class Renderer {
     this.drawStatusFx();          // status ailment overlays (edge vignettes/frost/stars)
     this.drawSurvivalVignette(world); // THE SURVIVAL VEIL: per-row meter washes (breath's asphyxiation blue)
     this.drawLowLifeGlow(world);  // low-life blood vignette + heartbeat + hit surge — over the veil: death keeps the last word
+    this.drawAfflictionOverlays(world); // blood, kindling, poison and curses retain separate identities
     // THE UI-SCALE SUB-PASS: pure screen-space widgets draw in virtual
     // (uiW×uiH) coords under one ctx.scale, so the player's UI Scale dial
     // grows the whole HUD together (ui/uiScale.ts — the DOM surfaces ride
@@ -947,7 +967,7 @@ export class Renderer {
     const { ctx } = this;
     const def = MONSTERS[best.defId!];
     const tint = (best.rarity ? RARITY_DEFS[best.rarity].ring : '') || '#e8dcc8';
-    const sub = magicPackHint(best) ?? (best.rarity && RARITY_DEFS[best.rarity].label
+    const sub = best.magicPack ? undefined : (best.rarity && RARITY_DEFS[best.rarity].label
       ? `${RARITY_DEFS[best.rarity].label} ${def.name}` : def.name);
     ctx.save();
     ctx.textAlign = 'center';
@@ -955,10 +975,9 @@ export class Renderer {
     ctx.fillStyle = tint;
     ctx.font = 'bold 12px Verdana';
     ctx.fillText(best.name, best.pos.x, best.pos.y - best.radius - 20);
-    // A plate whose identity IS its name has nothing further to say — the
-    // sub seat stays reserved, the duplicate stays unprinted. Unreachable in
-    // 'named' mode by construction (the gate demands a distinct mint).
-    if (sub !== best.name) {
+    // Pack identity is the only caption; its world effects explain the mechanic.
+    // Other named bodies may retain a concise species/rarity subtitle.
+    if (sub && sub !== best.name) {
       ctx.globalAlpha = 0.75 * bestReveal;
       ctx.font = '10px Verdana';
       ctx.fillText(sub, best.pos.x, best.pos.y - best.radius - 8);
@@ -1235,7 +1254,7 @@ export class Renderer {
     ctx.fillStyle = '#e8c87a';
     ctx.font = '11px Verdana';
     ctx.textAlign = 'center';
-    ctx.fillText('beast tracks — dwell to follow', fp.pos.x, fp.pos.y - 32);
+    ctx.fillText('Beast Tracks', fp.pos.x, fp.pos.y - 32);
     ctx.restore();
   }
 
@@ -1776,7 +1795,7 @@ export class Renderer {
       ctx.beginPath(); ctx.arc(0, 0, 5 * pulse, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
       ctx.globalAlpha = 0.85; ctx.fillStyle = col; ctx.font = '11px Verdana'; ctx.textAlign = 'center';
-      ctx.fillText('a fracture — run over it to crack it open', run.origin.x, run.origin.y - 32);
+      ctx.fillText('Fracture', run.origin.x, run.origin.y - 32);
       ctx.globalAlpha = 1;
       return;
     }
@@ -1808,7 +1827,7 @@ export class Renderer {
       ctx.globalAlpha = 0.95; ctx.fillStyle = '#ffffff';
       ctx.beginPath(); ctx.arc(run.head.x, run.head.y, 3, 0, Math.PI * 2); ctx.fill();
       ctx.globalAlpha = 0.85; ctx.fillStyle = col; ctx.font = '11px Verdana'; ctx.textAlign = 'center';
-      ctx.fillText('chase the fissure', run.head.x, run.head.y - 18);
+      ctx.fillText('Fissure', run.head.x, run.head.y - 18);
       ctx.restore();
       ctx.globalAlpha = 1;
     } else if (run.phase === 'chasm' && run.chasm) {
@@ -1844,9 +1863,9 @@ export class Renderer {
     // the player crosses the zone — the bar reads "held", not "you're losing".
     const surfaced = run.phase === 'fissure' && !chasing && run.grace > 0;
     const label = run.phase === 'chasm'
-      ? `Chasm ${run.chasmsSealed + 1}/${run.chasmsTarget} — clear it!`
-      : chasing ? 'Fissure — chasing (timer held)'
-        : surfaced ? 'Fracture surfaced — run it down! (timer held)' : 'Fissure — closing!';
+      ? `Chasm ${run.chasmsSealed + 1}/${run.chasmsTarget}`
+      : chasing ? 'Fissure'
+        : surfaced ? 'Fracture' : 'Fissure · Closing';
     ctx.textAlign = 'center';
     ctx.font = 'bold 13px Verdana';
     ctx.fillStyle = run.color;
@@ -1927,26 +1946,9 @@ export class Renderer {
   private drawStatusFx(): void {
     const fx = this.frameFx; // gathered once at the top of render()
     if (fx.length === 0) return;
-    const { ctx, canvas } = this;
+    const { canvas } = this;
     const w = canvas.width, h = canvas.height, t = performance.now() / 1000;
-    // Blend all DoT-style ailments into one pulsing colour vignette.
-    const vig = fx.filter(f => f.def.kind === 'vignette');
-    if (vig.length) {
-      let r = 0, g = 0, b = 0, wsum = 0, peak = 0;
-      for (const f of vig) {
-        const [cr, cg, cb] = hexToRgb(f.color);
-        const k = f.def.intensity ?? 0.6;
-        r += cr * k; g += cg * k; b += cb * k; wsum += k; peak = Math.max(peak, k);
-      }
-      // Quantized blend channels key the bake; a multi-ailment palette
-      // shift walks a handful of LRU entries, never one per frame.
-      const qr = qChan(r / wsum), qg = qChan(g / wsum), qb = qChan(b / wsum);
-      const a = peak * (0.16 + 0.1 * (0.5 + 0.5 * Math.sin(t * 3)));
-      drawEdgeOverlay(ctx, w, h, {
-        key: `sfxvig|${qr},${qg},${qb}`, innerFrac: 0.34,
-        stops: [[0, `rgba(${qr},${qg},${qb},0)`], [1, `rgba(${qr},${qg},${qb},1)`]],
-      }, a);
-    }
+    // Material ailment layers draw separately in drawAfflictionOverlays.
     if (fx.some(f => f.def.kind === 'frost')) this.drawFrost(w, h, t);
     if (fx.some(f => f.def.kind === 'framecage')) this.drawFrameCage(w, h, t);
     if (fx.some(f => f.def.kind === 'stars')) this.drawStunStars(w, h, t);
@@ -1955,6 +1957,15 @@ export class Renderer {
     if (pall.length) this.drawPall(w, h, Math.min(1, Math.max(...pall.map(f => (f.def.intensity ?? 1) * f.k))));
     const dark = fx.filter(f => f.def.kind === 'darken');
     if (dark.length) this.drawDarken(w, h, Math.min(1, Math.max(...dark.map(f => (f.def.intensity ?? 1) * f.k))));
+  }
+
+  /** Independent simultaneous ailment layers. Low-life never selects,
+   * recolors or replaces a status effect. The compositor budgets intensity. */
+  private drawAfflictionOverlays(world: World): void {
+    const mode = this.getSettings?.().afflictionOverlays ?? 'gentle';
+    if (mode === 'off' || world.player.dead || world.player.downed || !this.frameFx.length) return;
+    const edge = composeAfflictionEdge(this.frameFx, afflictionPressureOf(world.player), mode, performance.now() / 1000);
+    if (edge) drawAfflictionLayers(this.ctx, this.canvas.width, this.canvas.height, edge);
   }
 
   /** THE PALL (faintness/swoon — the vasovagal read): the world DESATURATES
@@ -2088,8 +2099,9 @@ export class Renderer {
    *  in VIS_CFG.lowLife. The continuous part honors the settings toggle
    *  (a 1/1-life or 90%-reserved build would dwell inside a permanent wound
    *  otherwise); the hit-while-low surge draws regardless — you always
-   *  learn you were struck while low. */
+   *  learn you were struck while low. Ailments have their own material layers. */
   private drawLowLifeGlow(world: World): void {
+    if (world.player.dead || world.player.downed) return;
     const C = VIS_CFG.lowLife;
     const p = world.player;
     const frac = p.maxLife() > 0 ? Math.max(0, p.life) / p.maxLife() : 1;
@@ -4434,8 +4446,8 @@ export class Renderer {
       this.drawProgressRing(ndw.pos.x, ndw.pos.y, ndw.frac, 'voyage_landing', world.zone.theme.accent);
       ctx.textAlign = 'center';
       ctx.font = 'bold 11px Verdana';
-      const msg = !ndw.ready ? 'coming about…'
-        : ndw.isle ? `linger to land on ${ndw.isle}…` : 'linger to make landfall…';
+      const msg = !ndw.ready ? 'Coming About'
+        : ndw.isle || 'Landfall';
       ctx.strokeStyle = 'rgba(0,0,0,0.85)';
       ctx.lineWidth = 3;
       ctx.strokeText(msg, ndw.pos.x, ndw.pos.y - 46);
@@ -5102,32 +5114,18 @@ export class Renderer {
     ctx.fillStyle = '#e8d8b8';
     ctx.font = 'bold 9px Verdana';
     ctx.textAlign = 'center';
-    ctx.fillText(a === world.player ? `${label} — struggle!` : label, a.pos.x, gy - 3);
+    ctx.fillText(label, a.pos.x, gy - 3);
   }
 
   /** An attached summon leaves the keeper visible inside its breakable shell.
    * Arc, pool and break state are the same values used by damage absorption. */
-  private drawSummonShell(a: Actor): void {
+  private drawSummonShell(a: Actor, time: number): void {
     const sg = a.shellGuard;
     if (!sg) return;
-    const ctx = this.ctx, arc = sg.arcDeg * Math.PI / 180;
-    const r = Math.max(25, a.radius + 8), start = a.facing - arc / 2;
-    const frac = Math.max(0, sg.pool / sg.max);
+    const ctx = this.ctx, r = Math.max(25, a.radius + 8);
     ctx.save(); ctx.translate(a.pos.x, a.pos.y);
+    drawShellCue(ctx, a, time, r);
     ctx.strokeStyle = sg.color;
-    ctx.globalAlpha = sg.broken ? 0.3 : 0.35 + 0.4 * frac;
-    ctx.lineWidth = sg.broken ? 2 : 4;
-    if (sg.broken) ctx.setLineDash([4, 7]);
-    ctx.beginPath(); ctx.arc(0, 0, r, start, start + arc); ctx.stroke();
-    // Jointed segments suggest the golem wrapped around the caster; the empty
-    // wedge remains legible, and cracked segments show the vulnerable period.
-    const segments = Math.max(3, Math.round(arc * 2));
-    for (let i = 0; i <= segments; i++) {
-      const angle = start + arc * i / segments;
-      ctx.beginPath();
-      ctx.moveTo(Math.cos(angle) * (r - 5), Math.sin(angle) * (r - 5));
-      ctx.lineTo(Math.cos(angle) * (r + 5), Math.sin(angle) * (r + 5)); ctx.stroke();
-    }
     if (a.casting && !sg.broken) {
       const facing = Math.atan2(a.casting.aim.y - a.pos.y, a.casting.aim.x - a.pos.x);
       ctx.globalAlpha = 0.8; ctx.lineWidth = 5;
@@ -5141,7 +5139,7 @@ export class Renderer {
   }
 
   private drawActor(a: Actor, world: World): void {
-    if (a.summonShell) { this.drawSummonShell(a); return; }
+    if (a.summonShell) { this.drawSummonShell(a, world.time); return; }
     const { ctx } = this;
     const { x, y } = a.pos;
 
@@ -5218,10 +5216,13 @@ export class Renderer {
       return;
     }
 
+    const guardWarning = guardReleaseCue(a, world.time);
+    const encounterWarning = encounterCueOf(a, world);
     // Body (untouchable spirits ghostly; stealthed/invisible actors faded)
     drawMovementTether(ctx, a, world);
     ctx.save();
     ctx.translate(x, y);
+    const warningGround = guardWarning ? ctx.getTransform() : undefined;
     // A LIVE TRAVERSAL owns the traveler's pose: the geyser's rise swells the
     // body toward the camera over its pinned, thinning shadow; the fall
     // shrinks and spins it away into the hole (engine/traversal.ts eases).
@@ -5324,6 +5325,10 @@ export class Renderer {
     if (tdress && tdress.alpha < 1) ctx.globalAlpha *= tdress.alpha;
     // Every overlay from here rides the same fade as the body itself.
     const baseAlpha = ctx.globalAlpha;
+    if (guardWarning && warningGround) {
+      ctx.save(); ctx.setTransform(warningGround); drawGuardReleaseGround(ctx, guardWarning); ctx.restore();
+    }
+    if (encounterWarning) drawEncounterCue(ctx, encounterWarning, a.radius);
 
     // THE BAKED BODY (vis/body.ts): the def's own shape/color/adorn — plus an
     // optional material — compiled once into a shaded sprite: volume light,
@@ -5440,6 +5445,12 @@ export class Renderer {
         ctx.scale(1, 1 - k * TELL_CFG.lean.squash);
       }
     }
+    const bodyCueLean = statusBodyLean(a) + warningCueLean(guardWarning, a.casting ? undefined : encounterWarning);
+    if (bodyCueLean !== 0) {
+      ctx.translate(Math.cos(a.facing) * bodyCueLean * TELL_CFG.lean.shift * a.radius,
+        Math.sin(a.facing) * bodyCueLean * TELL_CFG.lean.shift * a.radius);
+      ctx.scale(1, 1 - bodyCueLean * TELL_CFG.lean.squash);
+    }
     if (rot !== 0) ctx.rotate(rot);
     ctx.drawImage(bodySprite(look), -half, -half);
     // THE HIT FLASH rides the body's own pose — a white wash or rim OVER
@@ -5457,6 +5468,9 @@ export class Renderer {
       drawPartSpecs(ctx, look, tdress.parts, world.time);
       ctx.rotate(-a.facing);
     }
+    ctx.rotate(a.facing);
+    drawStatusBodyCue(ctx, a, look, world.time);
+    ctx.rotate(-a.facing);
     const cosmeticAdorn = cosmeticPick(cosmeticLoadout, a.cosmeticKind === 'wisp' ? 'wispSkin' : a.isMinion() ? 'summonSkin' : 'playerSkin')?.paint.adorn;
     const adornImg = adornSprite(cosmeticAdorn ? { ...look, look: undefined } : look);
     if (adornImg) {
@@ -5598,7 +5612,7 @@ export class Renderer {
       const spec = cs.inst.def.guard!;
       const frac = Math.max(0, (cs.shield ?? 0) / (cs.maxShield ?? 1));
       const arcRad = spec.arcDeg * Math.PI / 180;
-      const r = a.radius + 9;
+      const r = a.radius + 9 - (guardWarning ? a.radius * WARNING_CUE_CFG.bash.shieldPull * guardWarning.progress : 0);
       ctx.strokeStyle = cs.inst.def.color;
       ctx.lineWidth = 5;
       ctx.globalAlpha = 0.35 + 0.55 * frac;
@@ -5613,37 +5627,10 @@ export class Renderer {
       ctx.globalAlpha = 1;
     }
 
-    // SHELL GLYPH (Actor.shellGuard): the covered side reads BEFORE the
-    // first tink — a faint arc riding the body on the shell's side, its
-    // alpha following the pool. Breathing shells draw their LIVE arc (the
-    // same factor the block test uses — what you read is what blocks),
-    // and a BROKEN shell turns to cracked dashes while it knits.
-    if (a.shellGuard) {
-      const sg = a.shellGuard;
-      const r = a.radius + 6;
-      const live = sg.side === 'all'
-        ? Math.PI * 2
-        : (sg.arcDeg * Math.PI / 180) * shellArcFactor(sg, world.time);
-      const center = sg.side === 'rear' ? a.facing + Math.PI : a.facing;
-      const poolFrac = sg.max > 0 ? Math.max(0, sg.pool) / sg.max : 0;
-      ctx.strokeStyle = sg.color;
-      if (sg.broken || sg.pool <= 0) {
-        // Cracked: short dashes, dim — the shell is OPEN; hit the meat.
-        ctx.setLineDash([3, 6]);
-        ctx.lineWidth = 2;
-        ctx.globalAlpha = 0.35;
-      } else {
-        ctx.setLineDash([]);
-        ctx.lineWidth = 3.5;
-        ctx.globalAlpha = 0.18 + 0.4 * poolFrac;
-      }
-      ctx.beginPath();
-      if (sg.side === 'all') ctx.arc(0, 0, r, 0, Math.PI * 2);
-      else ctx.arc(0, 0, r, center - live / 2, center + live / 2);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.globalAlpha = 1;
-    }
+    drawShellCue(ctx, a, world.time);
+    drawPoiseCue(ctx, a);
+    drawParryReady(ctx, a);
+    drawCastingCue(ctx, a);
 
     // FEAR GLYPH (the harrowing ladder, status.ts): dread reads BEFORE the
     // rout — quiver ticks fan over the crown as stacks climb (trembling on
@@ -6115,15 +6102,7 @@ export class Renderer {
         // bar (the overcharge stacked-bar idiom): the gather's walk to
         // its ceiling, gold the instant it truly finishes. Enemies wear
         // it too — the whole room reads the doom-cast burning in.
-        const chSpec = cs.gather ?? instanceChannel(cs.inst); // the resolved view (skill-mode audit)
-        let holdFrac: number | null = null;
-        if (chSpec?.brim) {
-          holdFrac = a.brims?.get(cs.inst.def.id)?.fill ?? 0;
-        } else if (chSpec?.maxHold !== undefined) {
-          const cap = chSpec.maxHold * a.sheet.get('effectDuration',
-            skillContextTags(cs.inst.def), instanceMods(cs.inst));
-          holdFrac = cap > 0 ? Math.min(1, (cs.channelTime ?? 0) / cap) : null;
-        }
+        const holdFrac = castingCompletion(a) ?? null;
         if (holdFrac !== null) {
           const hy = by2 - 4;
           ctx.fillStyle = 'rgba(0,0,0,0.7)';
@@ -6186,16 +6165,7 @@ export class Renderer {
         ctx.lineWidth = 2;
         ctx.strokeRect(bx2 - 2, by2 - 2, bw + 4, bh + 4);
       } else if (cs.mode === 'concentration') {
-        // FOCUS cue: a steady green frame while the gaze holds the quarry;
-        // red + 'refocus!' the instant it breaks (drain bleeds meanwhile).
-        ctx.strokeStyle = cs.focusBroken ? '#e05050' : '#a8d8a0';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(bx2 - 2, by2 - 2, bw + 4, bh + 4);
-        if (cs.focusBroken) {
-          ctx.fillStyle = '#e05050';
-          ctx.font = 'bold 9px Verdana';
-          ctx.fillText('refocus!', x, by2 - 5);
-        }
+        drawFocusFrame(ctx, bx2, by2, bw, bh, !!cs.focusBroken);
       } else if (cs.mode === 'overcharge') {
         // STACKED bars: every banked stage is a thin filled bar laid on
         // top of the refilling one — the old JRPG hold, made literal.
@@ -6443,7 +6413,7 @@ export class Renderer {
       ctx.fillText('☠', c.pos.x, c.pos.y + 2);
       if (!c.reclaimed) {
         ctx.font = '10px Verdana'; ctx.fillStyle = '#d8b048';
-        ctx.fillText(`your fallen ${c.who.classId} — linger to reclaim`, c.pos.x, c.pos.y - 22);
+        ctx.fillText(`Fallen ${c.who.classId}`, c.pos.x, c.pos.y - 22);
       }
       ctx.globalAlpha = 1;
     }
@@ -6907,9 +6877,15 @@ export class Renderer {
     // Cover any jitter the world transform can apply this frame as well.
     const edgePad = 1 + 2 / this.zoom + Math.max(0, world.shake);
     for (const p of world.projectiles) {
-      const reach = p.radius * Math.max(reachScale, cosmeticProjectileExtent(p.cosmeticProjectile)) + edgePad;
+      const reflectedCue = !!p.parryDamage || !!p.reflectedCue;
+      const reach = Math.max(p.radius, reflectedCue ? 3 : 0) * Math.max(reachScale, cosmeticProjectileExtent(p.cosmeticProjectile), reflectedCue ? COMBAT_CUE_CFG.reflectedScale : 0) + edgePad;
       if (p.pos.x + reach < x0 || p.pos.x - reach > x1
         || p.pos.y + reach < y0 || p.pos.y - reach > y1) continue;
+      if (reflectedCue) drawReflectedCue(ctx, p);
+      if (p.orbPaint && !p.cosmeticProjectile) {
+        drawOrbMote(ctx, p.pos.x, p.pos.y, p.radius, p.color, p.orbPaint, p.age);
+        continue;
+      }
       // Every projectile is ENERGY IN FLIGHT now: an additive glow underlay
       // in its own color + a motion streak trailing the heading. The shape
       // language on top is unchanged — behavior stays readable, it just

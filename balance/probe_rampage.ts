@@ -258,6 +258,11 @@ const D = (kind: string, x = 0, y = 0, extra: Partial<Doodad> = {}): Doodad =>
 
   const mkSurge = (): WorldBossSurge => {
     const s = structuredClone(WORLDBOSS_SURGE) as WorldBossSurge;
+    // Roaming remains an authorable world-boss archetype; Vhorun now lives in Titans.
+    s.defs.push({ id: 'qa_ground_roamer', name: 'QA Ground Roamer', archetype: 'roamer',
+      monster: 'primeval_wyrm_head', minLevel: 1, glyph: 'S', color: '#7fb069',
+      roam: { passingMonster: 'primeval_wyrm_passing', wallKind: 'wyrm_coil', venue: 'ground' },
+      reward: { xp: 1, gems: 0, tables: ['sunderwyrm_hoard'] } });
     s.roamer.slitherSecondsPerEdge = 1;
     s.roamer.sealSeconds = 0.5;
     s.roamer.pathLen = [4, 4];
@@ -270,7 +275,7 @@ const D = (kind: string, x = 0, y = 0, extra: Partial<Doodad> = {}): Doodad =>
     }
   };
 
-  // The GROUND venue — the shipped default, Vhorun as authored.
+  // The GROUND venue — an authored fixture of the retained roamer grammar.
   const fg = new WorldBossField({ seed: 99, gate: () => gate, biomeSeed: 99 }, mkSurge());
   check('F1 the wake takes (devIgnite on the ring)', fg.devIgnite(view, 'n0'));
   drive(fg, 8);
@@ -296,12 +301,12 @@ const D = (kind: string, x = 0, y = 0, extra: Partial<Doodad> = {}): Doodad =>
 
   // The slaying: every strangled road falls open at once.
   const slain = fg.onBossSlain(sg.id);
-  check('F9 the slaying resolves the def', slain?.id === 'vhorun');
+  check('F9 the slaying resolves the def', slain?.id === 'qa_ground_roamer');
   check('F10 …and every road falls open', nodes.every(z => z.exits.every(e => !fg.edgeBlocked(z.id, e.to))));
 
   // The ARENA lane stays pure data.
   const surgeA = mkSurge();
-  const vh = surgeA.defs.find(d => d.id === 'vhorun')!;
+  const vh = surgeA.defs.find(d => d.id === 'qa_ground_roamer')!;
   vh.roam = { ...vh.roam!, venue: 'arena', arenaName: 'QA Coil' };
   const fa = new WorldBossField({ seed: 99, gate: () => gate, biomeSeed: 99 }, surgeA);
   fa.devIgnite(view, 'n0');
@@ -318,9 +323,8 @@ const D = (kind: string, x = 0, y = 0, extra: Partial<Doodad> = {}): Doodad =>
   const look = { monster: (id: string) => !!MONSTERS[id], biome: (id: string) => !!BIOMES[id] };
   const problems = WORLDBOSS.validate?.(look as never) ?? [];
   check('F13 the shipped package validates clean', problems.length === 0, problems.join('; '));
-  const vhShipped = WORLDBOSS_SURGE.defs.find(d => d.id === 'vhorun')!;
-  check('F14 Vhorun ships venue ground, no dead arena knobs',
-    vhShipped.roam?.venue === 'ground' && !vhShipped.roam?.arenaName && !vhShipped.arenaBand);
+  check('F14 Vhorun is no longer a lattice-bearing world boss',
+    !WORLDBOSS_SURGE.defs.some(d => d.id === 'vhorun'));
 }
 
 // --- RIG G: THE SINK-AWAY SWEEP (engine half) -------------------------------------

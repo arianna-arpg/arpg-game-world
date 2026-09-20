@@ -352,13 +352,13 @@ registerVentureAsk({
     if (info.resolved === 'open') {
       return {
         verdict: 'won' as const, pos, label: `${gdef.name} stands open`,
-        wonText: `${gdef.name} stands open!`,
+        wonText: `${gdef.name} · Open`,
       };
     }
     if (info.resolved === 'failed') {
       return {
         verdict: 'lost' as const, pos, label: `${gdef.name} is forfeit`,
-        lostText: `${gdef.name} is forfeit — the wilds still ask their cull`,
+        lostText: `${gdef.name} · Lost`,
       };
     }
     const ask = gdef.unlock.kind === 'pay-currency' && gdef.unlock.currency === 'mortal'
