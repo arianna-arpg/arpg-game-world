@@ -194,8 +194,8 @@ jobs:
           fi
           if [ "$RC" = "true" ]; then
             # Nightly RC: a PRERELEASE, never latest — /releases/latest (the
-            # README's install link, and the 'stable' launcher channel) keeps
-            # serving the newest STABLE. Launchers on the default 'nightly'
+            # public "latest release" link, and the 'stable' launcher channel)
+            # keeps serving the newest STABLE. Launchers on the default 'nightly'
             # channel read the release LIST and take this build the moment
             # the flip below lands — which is why it is ONE atomic call, made
             # only after every leg built AND smoked its package.

@@ -245,7 +245,15 @@ and saved encounter composition.
   (≤ v0.5.39) only ever ask `/releases/latest` — ONE channel-aware release
   must be made "latest" (a stable cut, or one promoted nightly) to move them.
   The picker persists through `writeLocalConfig` (THE LOCAL WRITE — the
-  Developer box's seam too).
+  Developer box's seam too). THE QUIET UPDATE (`quietUpdate`,
+  `updates.quiet`): a session that boots straight into the game (Steam Deck
+  Game Mode, `--play`) never shows the launcher page, so after
+  `quietDelaySec` it runs the same channel check in the background and
+  `swapInPlace`s a verified AppImage over the SAME path (staged dotfile →
+  verify → chmod → rename; stale `.downloading` leftovers swept) — the
+  running game keeps its old inode, the NEXT launch is the new build; no
+  prompt, no restart, every failure one `launcher.log` line (Linux-only: a
+  Windows install always shows the launcher).
   THE TWO FACES (2026-09-18): the launcher page's Developer box —
   `cfg.dev` persisted to `launcher.config.local.json`, `devMode()` in
   `launcher/main.cjs` THE ONE FOLD. PLAYER mode (default) is a launched

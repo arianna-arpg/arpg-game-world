@@ -32,6 +32,12 @@
 // THE DIGEST LAW: GitHub publishes a sha256 per release asset; the download
 // is hashed as it streams and the file is DELETED unless the digest, and
 // the byte count, match. Nothing unverified is ever left on disk to run.
+//
+// THE IN-PLACE SWAP (swapInPlace): how an AppImage replaces ITSELF — staged
+// beside the running file on the same filesystem, verified, marked
+// executable, then renamed over the SAME path, so a Steam or desktop entry
+// pointing at it stays valid. The running image keeps its old inode, which
+// is what lets THE QUIET UPDATE (main.cjs) do this under a live game.
 // ---------------------------------------------------------------------------
 // @ts-check
 'use strict';
@@ -79,6 +85,13 @@ const UPDATE_DEFAULTS = Object.freeze({
   ceilingMin: 30,
   /** REST root — a value, so a mirror or an Enterprise host is a config line. */
   api: 'https://api.github.com',
+  /** THE QUIET UPDATE: a session that boots straight into the game (Steam
+   *  Deck Game Mode, --play) never shows the launcher page, so nothing there
+   *  would ever check. true = check in the background and swap a verified
+   *  build in place for the NEXT launch — no prompt, no restart. */
+  quiet: true,
+  /** …after this long, so the check never competes with the game's own boot. */
+  quietDelaySec: 20,
 });
 
 /** @param {unknown} id @returns {ChannelRow} */
@@ -108,6 +121,8 @@ function resolveUpdateCfg(updates, repo) {
     stallMs: clampNum(u.stallSec, d.stallSec, 5, 3600) * 1000,
     ceilingMs: clampNum(u.ceilingMin, d.ceilingMin, 1, 24 * 60) * 60_000,
     api,
+    quiet: u.quiet !== false && d.quiet,
+    quietDelayMs: clampNum(u.quietDelaySec, d.quietDelaySec, 0, 3600) * 1000,
   };
 }
 
@@ -374,10 +389,62 @@ async function downloadAsset(o) {
   }
 }
 
+// ------------------------------------------------------------ the in-place swap
+
+/** Our own staging name: a dotfile beside the target, so it is hidden, on the
+ *  same filesystem (rename is atomic there), and unmistakably ours to sweep. */
+const STAGED_SUFFIX = '.downloading';
+/** @param {string} dir @param {string} assetName */
+const stagedPath = (dir, assetName) => path.join(dir, `.${assetName}${STAGED_SUFFIX}`);
+
+/**
+ * Remove staging leftovers — a session killed mid-download (Steam's Exit
+ * sends SIGKILL soon after SIGTERM) cannot tidy up after itself, and each
+ * night's artifact has a new name, so they would pile up ~130 MB at a time.
+ * Only our own `.<name>.downloading` dotfiles are ever touched.
+ * @param {string} dir @returns {string[]} the names removed
+ */
+function sweepStaged(dir) {
+  /** @type {string[]} */ const gone = [];
+  let names;
+  try { names = fs.readdirSync(dir); } catch { return gone; }
+  for (const n of names) {
+    if (!n.startsWith('.') || !n.endsWith(STAGED_SUFFIX)) continue;
+    try { fs.rmSync(path.join(dir, n), { force: true }); gone.push(n); } catch { /* best-effort */ }
+  }
+  return gone;
+}
+
+/**
+ * THE IN-PLACE SWAP. `download(dest)` must resolve ONLY for a verified file
+ * (downloadAsset's contract) — so `self` is only ever replaced by a verified
+ * successor, and on any failure it is left exactly as it was with nothing
+ * staged beside it. Safe under a running AppImage: the mounted image holds
+ * its old inode, the path simply starts naming the new one.
+ * @param {{ self: string, assetName: string, download: (dest: string) => Promise<unknown> }} o
+ * @returns {Promise<{ swept: string[] }>}
+ */
+async function swapInPlace(o) {
+  const dir = path.dirname(o.self);
+  fs.accessSync(dir, fs.constants.W_OK); // throws when the folder is read-only
+  const swept = sweepStaged(dir);
+  const staged = stagedPath(dir, o.assetName);
+  try {
+    await o.download(staged);
+    fs.chmodSync(staged, 0o755);
+    fs.renameSync(staged, o.self);
+  } catch (e) {
+    try { fs.rmSync(staged, { force: true }); } catch { /* best-effort tidy */ }
+    throw e;
+  }
+  return { swept };
+}
+
 module.exports = {
   UPDATE_CHANNELS, UPDATE_DEFAULTS, PLATFORM_ARTIFACT, ProbeError,
   channelRow, resolveUpdateCfg,
   parseVer, parseTag, cmpVer, newerVersion,
   parseDigest, pickReleaseAsset, pickUpdate,
   probeUrl, fetchReleases, downloadAsset,
+  STAGED_SUFFIX, stagedPath, sweepStaged, swapInPlace,
 };

@@ -13,7 +13,9 @@
     "directInstall": true,
     "channel": "nightly",
     "scanReleases": 10,
-    "verifyDigest": true
+    "verifyDigest": true,
+    "quiet": true,
+    "quietDelaySec": 20
   },
   "window": {
     "width": 1600,

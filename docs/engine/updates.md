@@ -62,7 +62,7 @@ published, and nothing about a failed night ever is.**
 | --- | --- | --- | --- |
 | Type-check, the update laws, or a probe | `nightly.yml` `verify` | Nothing. `cut` needs `verify`: no tag, no release. | The last good night |
 | A package leg (build, packaging, upload) | `release.yml` `package` | A tag and a **draft** | The last good night. Anonymous API callers never see drafts. |
-| The packaged smoke (section 5) | `release.yml` `package` | A tag and a draft with assets | The last good night |
+| The packaged smoke (section 6) | `release.yml` `package` | A tag and a draft with assets | The last good night |
 | `finalize` | `release.yml` | A tag and a draft | The last good night |
 
 `finalize` needs every leg and publishes with **one atomic API call**, made only
@@ -77,7 +77,7 @@ name wins, so a stray hand-attached `.exe` is never the thing the launcher runs.
 This is the v0.2.0 incident (an AppImage-only release served to Windows installs)
 made structurally harmless.
 
-A red night costs players one day. The alarm rings (section 6), and the next
+A red night costs players one day. The alarm rings (section 7), and the next
 night either **re-runs the unpublished tag** (no new commits) or cuts the next
 number (new commits).
 
@@ -106,7 +106,41 @@ verified one.
   than happened.
 - Any direct-update failure falls back to opening the release's own page.
 
-## 5. The publish gate
+### The in-place swap
+
+How an AppImage replaces itself (`swapInPlace`): staged beside the running file
+as a dotfile on the same filesystem, verified, marked executable, then renamed
+over the **same path**, so a Steam or desktop entry pointing at it stays valid.
+The running image keeps its old inode, so this is safe under a live process. On
+any failure the running file is left exactly as it was with nothing staged
+beside it. Each swap first sweeps `.<name>.downloading` leftovers: a session
+killed mid-download cannot tidy up after itself, and every night's artifact has
+a new name.
+
+## 5. The quiet update
+
+A Steam Deck in Game Mode (any gamescope session, and `--play`) boots **straight
+into the game**, console-style. No launcher page means nothing ever ran the
+check, so such an install sat on its install-day build forever. Showing the
+launcher there would be worse than the problem: a utility page no gamepad can
+drive. The update comes to the player instead.
+
+`quietUpdate` runs only when direct play **succeeded** (a failed one falls back
+to the launcher, whose page checks for itself). After `updates.quietDelaySec`,
+so the game's own boot goes first, it runs the ordinary channel check. If a newer
+build is published it streams it beside the running AppImage, verifies it and
+swaps it in place. The running game is never touched. **The next launch is
+simply the new version.** No prompt, no restart, no window.
+
+Every failure (offline, rate-limited, a read-only folder, a bad digest, a full
+disk) is one `launcher.log` line and nothing else. Play is never affected, and
+the next launch tries again. Only an AppImage can be replaced under a running
+process, so this is Linux-only. A Windows install always shows the launcher,
+whose button is the same update with a restart. The Update button refuses while
+a quiet download is in flight, so the two never race for one staged file.
+`updates.quiet: false` turns it off.
+
+## 6. The publish gate
 
 `release.yml` boots **the packaged app it just built** through three headless
 self-checks before the job may pass. Each prints one `SMOKE <lane> …` verdict
@@ -115,7 +149,7 @@ line and exits 0 or 1, with one retry per lane.
 | Lane | Proves |
 | --- | --- |
 | `launcher` | The launcher page boots; its bridge, Developer box and channel picker are live |
-| `update` | Hermetic, against a loopback fixture built **relative to the running version**: this build finds its successor, passes an incomplete release over by name, never sees a draft, holds on the stable channel, verifies a good artifact onto disk, **deletes** a corrupt and a truncated one, and writes no settings. Nothing is installed. |
+| `update` | Hermetic, against a loopback fixture built **relative to the running version**: this build finds its successor, passes an incomplete release over by name, never sees a draft, holds on the stable channel, verifies a good artifact onto disk, **deletes** a corrupt and a truncated one, swaps a verified build over a stand-in AppImage (and leaves it untouched on a refused one), and writes no settings. Nothing is installed. |
 | `game` | The built game serves over loopback, boots and reaches its start menu |
 
 Why the gate exists: once players auto-follow nightlies, a build that compiles
@@ -128,7 +162,7 @@ toggles can never change what a self-check measures.
 Dispatch `release.yml` by hand **on a branch** to prove a change to the gate. It
 builds and smokes both platforms and publishes nothing.
 
-## 6. The alarm
+## 7. The alarm
 
 One open `nightly-red` issue, reds accumulating as comments.
 
@@ -138,7 +172,7 @@ One open `nightly-red` issue, reds accumulating as comments.
 - It closes where a night has actually shipped: `release.yml`'s `finalize`, or
   the quiet-night step in `nightly.yml` (verify green, newest tag published).
 
-## 7. Moving installs that predate the channel
+## 8. Moving installs that predate the channel
 
 A launcher from before this design (`v0.5.39` and older) only ever asks
 `/releases/latest`. **It cannot see a nightly, and no launcher change can reach
@@ -150,12 +184,12 @@ the channel-aware launcher has to become "latest", once. Either
   the latest release* on its page.
 
 Every old install then updates to it through its old probe, and follows the
-nightly channel by itself from that launch on. The README's install link points
-at `/releases/latest` too, so the same act keeps a stranger's first download
-from being a dead end. After that hop a stale "latest" costs a new player one
-extra click, never a stuck install.
+nightly channel by itself from that launch on. Anyone installing from the public
+"latest release" link lands on the same build, so the same act keeps a
+stranger's first download from being a dead end. After that hop a stale
+"latest" costs a new player one extra click, never a stuck install.
 
-## 8. Dials
+## 9. Dials
 
 `launcher.config.json` (committed defaults), overridden by
 `launcher.config.local.json`. All fold through `resolveUpdateCfg`, the one read.
@@ -165,6 +199,7 @@ extra click, never a stuck install.
 | `updates.channel` | `nightly` | Section 2 |
 | `updates.scanReleases` | `10` | How many of the newest releases the list probe reads. The window is what lets a passed-over release fall through to the one beneath it. |
 | `updates.verifyDigest` | `true` | Section 4 |
+| `updates.quiet` / `quietDelaySec` | `true` / `20` | Section 5 |
 | `updates.probeTimeoutSec` / `stallSec` / `ceilingMin` | `8` / `60` / `30` | Probe timeout, stall timer, whole-download ceiling |
 | `updates.checkOnLaunch` / `directInstall` / `mode` | `true` / `true` / `auto` | Unchanged |
 | `repo.github` | `arianna-arpg/arpg-game-world` | `owner/name` |
@@ -174,7 +209,7 @@ The probe is anonymous (GitHub allows 60 requests an hour per network). One
 check costs one request. A spent allowance is reported in words, with the refill
 time, and playing is never blocked.
 
-## 9. Extending
+## 10. Extending
 
 - **A channel** is one `UPDATE_CHANNELS` row (`prereleases`, `probe`). The
   picker, the smoke and the law rig read the registry.
@@ -183,7 +218,7 @@ time, and playing is never blocked.
 - Keep `updates.cjs` free of Electron. It is what lets every law be proven
   without a window or a network.
 
-## 10. Verify
+## 11. Verify
 
 ```
 npm run test:launcher     the laws, pure (about a second)
@@ -192,13 +227,8 @@ npm run smoke:launcher    the launcher page
 npm run check             strict checkJs over launcher/*.cjs
 ```
 
-## 11. Known gaps
+## 12. Known gaps
 
-- **Steam Deck Game Mode never checks for updates.** A gamescope session boots
-  straight into the game (`launcher.autoPlayOnGamescope`), so the launcher page,
-  and with it the check, only runs in Desktop Mode. The AppImage swap is safe
-  under a running app, so a background check that applies on the next launch is
-  the natural fix. It is a policy decision (silent downloads), not yet ruled.
 - **Checkouts follow the branch HEAD**, which can be red. A friend's clone could
   follow green tags instead (`git merge --ff-only <newest published tag>`).
 - **Old RCs are never pruned.** Each night adds about 235 MB of release assets.

@@ -12,7 +12,7 @@ import { test, after, before } from 'node:test';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 
@@ -61,6 +61,10 @@ test('the one dial fold: defaults, clamps and the api root', () => {
   assert.equal(c.stallMs, 5000, 'a zero stall timer clamps up — never an instant abort');
   assert.equal(c.api, 'http://127.0.0.1:9', 'a trailing slash is trimmed');
   assert.equal(U.resolveUpdateCfg({}, { api: 'ftp://nope' }).api, 'https://api.github.com', 'a non-http root is refused');
+  assert.equal(d.quiet, true, 'the quiet update is on by default');
+  assert.equal(d.quietDelayMs, U.UPDATE_DEFAULTS.quietDelaySec * 1000);
+  assert.equal(U.resolveUpdateCfg({ quiet: false }).quiet, false);
+  assert.equal(U.resolveUpdateCfg({ quietDelaySec: -5 }).quietDelayMs, 0, 'a negative delay clamps to none');
 });
 
 test('probe urls: the list for nightly, /latest for stable', () => {
@@ -282,4 +286,46 @@ test('a truncated, stalled or missing download is a named failure that leaves no
   await assert.rejects(U.downloadAsset({ url: `${origin}/dl/stall`, dest: join(tmp, 'ceiling.bin'), digest: trueDigest, stallMs: 60000, ceilingMs: 300 }), /ceiling/);
   await assert.rejects(U.downloadAsset({ url: `${origin}/dl/missing`, dest: join(tmp, 'missing.bin') }), /HTTP 404/);
   assert.equal(existsSync(join(tmp, 'missing.bin')), false);
+});
+
+// ------------------------------------------------------------ the in-place swap
+
+const goodDownload = (dest) => U.downloadAsset({ url: `${origin}/dl/good`, dest, sizeHint: payload.length, digest: trueDigest });
+const liarDownload = (dest) => U.downloadAsset({ url: `${origin}/dl/liar`, dest, sizeHint: liar.length, digest: trueDigest });
+/** A folder shaped like a Deck's: the running AppImage, a leftover from a
+ *  session killed mid-download, and files that are none of our business. */
+function deckFolder(name) {
+  const dir = join(tmp, name);
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true });
+  const self = join(dir, 'HollowWake.AppImage');
+  writeFileSync(self, 'the build that is running');
+  writeFileSync(join(dir, '.HollowWake-0.5.1-x86_64.AppImage.downloading'), 'killed mid-download');
+  writeFileSync(join(dir, 'notes.txt'), 'a player file');
+  writeFileSync(join(dir, '.hidden-but-not-ours'), 'x');
+  return { dir, self };
+}
+
+test('THE IN-PLACE SWAP: a verified successor takes the SAME path, and stale staging is swept', async () => {
+  const { dir, self } = deckFolder('deck-good');
+  const r = await U.swapInPlace({ self, assetName: 'HollowWake-0.5.2-x86_64.AppImage', download: goodDownload });
+  assert.ok(readFileSync(self).equals(payload), 'the path now names the verified build');
+  assert.deepEqual(r.swept, ['.HollowWake-0.5.1-x86_64.AppImage.downloading']);
+  assert.deepEqual(readdirSync(dir).sort(), ['.hidden-but-not-ours', 'HollowWake.AppImage', 'notes.txt'],
+    'nothing staged is left, and nothing that is not ours was touched');
+});
+
+test('THE IN-PLACE SWAP: a refused download leaves the running file exactly as it was', async () => {
+  const { dir, self } = deckFolder('deck-liar');
+  await assert.rejects(U.swapInPlace({ self, assetName: 'HollowWake-0.5.2-x86_64.AppImage', download: liarDownload }), /failed verification/);
+  assert.equal(readFileSync(self, 'utf8'), 'the build that is running');
+  assert.equal(readdirSync(dir).some(n => n.endsWith(U.STAGED_SUFFIX)), false, 'no staging residue');
+});
+
+test('THE IN-PLACE SWAP: an unwritable or missing folder refuses BEFORE any download', async () => {
+  let called = false;
+  await assert.rejects(U.swapInPlace({ self: join(tmp, 'no-such-folder', 'HollowWake.AppImage'), assetName: 'a.AppImage',
+    download: async () => { called = true; } }));
+  assert.equal(called, false);
+  assert.deepEqual(U.sweepStaged(join(tmp, 'no-such-folder')), [], 'sweeping nowhere is nothing, not an error');
 });

@@ -34,6 +34,10 @@
 // leg or packaged smoke = a draft no anonymous caller can see), so a
 // launcher can only ever be offered a night that passed; and the download is
 // hashed against the sha256 GitHub publishes before anything is run.
+// THE QUIET UPDATE: a session that boots straight into the game (Steam Deck
+// Game Mode, --play) never shows this page, so it checks in the background
+// and swaps a verified AppImage in place for the NEXT launch — no prompt, no
+// restart (quietUpdate; updates.quiet).
 //
 // THE TWO FACES (cfg.dev — the launcher page's Developer box, persisted to
 // launcher.config.local.json): PLAYER mode is the default and is a launched
@@ -567,18 +571,10 @@ async function directReleaseUpdate() {
     if (!self || !fs.existsSync(self)) {
       throw new Error('not running from an AppImage (APPIMAGE unset) — nothing to swap in place');
     }
-    const dir = path.dirname(self);
-    fs.accessSync(dir, fs.constants.W_OK); // throws when the folder is read-only
-    const staged = path.join(dir, `.${asset.name}.downloading`);
     log(`Downloading ${label} (${asset.name})…`);
-    try {
-      await fetchUpdateArtifact(asset, staged, label); // the running AppImage is only ever replaced by a verified one
-      fs.chmodSync(staged, 0o755);
-      fs.renameSync(staged, self);
-    } catch (e) {
-      try { fs.rmSync(staged, { force: true }); } catch { /* best-effort tidy */ }
-      throw e;
-    }
+    // THE IN-PLACE SWAP (updates.cjs): the running AppImage is only ever
+    // replaced by a verified one; any failure leaves it exactly as it was.
+    await updates.swapInPlace({ self, assetName: asset.name, download: (dest) => fetchUpdateArtifact(asset, dest, label) });
     log('Update installed over this AppImage — restarting.');
     boot(`direct update: swapped ${self}, relaunching`);
     const child = spawn(self, [], { detached: true, stdio: 'ignore' });
@@ -588,6 +584,58 @@ async function directReleaseUpdate() {
   }
 
   throw new Error(`no direct-update path for platform '${process.platform}'`);
+}
+
+/** True while THE QUIET UPDATE is downloading — the Update button (reachable
+ *  only if direct play failed back to the launcher) must never race it for
+ *  the same staged file. */
+let quietBusy = false;
+
+/**
+ * THE QUIET UPDATE — for the session that never sees the launcher page. A
+ * gamescope / Steam Deck Game Mode boot (and `--play`) goes straight into
+ * the game, console-style: no launcher window means nothing ever ran the
+ * check, so a Deck in Game Mode sat on its install-day build forever. A
+ * launcher window there would be worse than the problem — a utility page no
+ * gamepad can drive — so the update comes to the player instead:
+ *   after updates.quietDelaySec (the game's own boot goes first) run the
+ *   ordinary channel check; if a newer build is published, stream it BESIDE
+ *   the running AppImage, verify it (THE DIGEST LAW) and swap it in place
+ *   (THE IN-PLACE SWAP). The running game keeps its old inode and is never
+ *   touched; the NEXT launch is simply the new version.
+ * No prompt, no restart, no window. Every failure — offline, rate-limited, a
+ * read-only folder, a bad digest, a full disk — is one boot-log line and
+ * nothing else: play is never affected, and the next launch just tries
+ * again. Only an AppImage can be replaced under a running process, so this
+ * is Linux-only; a Windows install always shows the launcher, whose button
+ * is the same update with a restart. `updates.quiet: false` turns it off.
+ */
+async function quietUpdate() {
+  const ucfg = updateCfg();
+  if (UPDATE_MODE !== 'release' || !cfg.updates.checkOnLaunch || !ucfg.quiet) return;
+  const self = process.env.APPIMAGE;
+  if (process.platform !== 'linux' || !self || !fs.existsSync(self)) {
+    boot('quiet update: skipped — only a running AppImage can be replaced in place');
+    return;
+  }
+  await new Promise(r => setTimeout(r, ucfg.quietDelayMs));
+  try {
+    const res = await checkReleaseUpdates();
+    const asset = latestRelease.asset, tag = latestRelease.tag ?? 'the update';
+    if (!res.ok) { boot(`quiet update: check failed — ${res.error} (play is unaffected)`); return; }
+    if (!res.behind || !asset) { boot(`quiet update: up to date on the ${ucfg.channel} channel`); return; }
+    boot(`quiet update: ${tag} found — downloading ${asset.name} in the background`);
+    quietBusy = true;
+    const { swept } = await updates.swapInPlace({
+      self, assetName: asset.name, download: (dest) => fetchUpdateArtifact(asset, dest, tag),
+    });
+    boot(`quiet update: ${tag} verified and in place — it starts on the next launch`
+      + (swept.length ? ` (swept ${swept.length} stale staging file${swept.length === 1 ? '' : 's'})` : ''));
+  } catch (e) {
+    boot(`quiet update: failed — ${e instanceof Error ? e.message : String(e)} (play is unaffected; the next launch tries again)`);
+  } finally {
+    quietBusy = false;
+  }
 }
 
 /** The build stamp: HEAD + a digest of what's uncommitted. Any pull or local
@@ -636,6 +684,7 @@ async function ensureBuilt(force) {
 
 async function update() {
   if (UPDATE_MODE === 'release') {
+    if (quietBusy) return { ok: false, error: 'An update is already downloading in the background — it will be in place for the next launch.' };
     // THE DIRECT UPDATE first — download + install + relaunch, no browser.
     if (cfg.updates.directInstall !== false) {
       try { return await directReleaseUpdate(); }
@@ -1352,10 +1401,33 @@ async function smokeUpdate(t) {
       else if (fs.existsSync(tmp)) errors.push(`a refused ${route} artifact was left on disk`);
       fs.rmSync(tmp, { force: true });
     }
+    // ---- THE IN-PLACE SWAP (the Deck's quiet update, and the Linux button):
+    // a stand-in "running AppImage" in a folder that also holds a leftover
+    // from a session killed mid-download. Verified → the SAME path names the
+    // new build and the leftover is swept; refused → the file is untouched.
+    const deck = path.join(app.getPath('temp'), `hollow-wake-swap-smoke-${process.pid}`);
+    fs.rmSync(deck, { recursive: true, force: true });
+    fs.mkdirSync(deck, { recursive: true });
+    const selfImg = path.join(deck, 'HollowWake.AppImage');
+    fs.writeFileSync(selfImg, 'the build that is running');
+    fs.writeFileSync(updates.stagedPath(deck, 'HollowWake-older.AppImage'), 'killed mid-download');
+    let swapped = false, swapHeld = false;
+    try {
+      const bad = await updates.swapInPlace({ self: selfImg, assetName: 'HollowWake-next.AppImage', download: (dest) => fetchUpdateArtifact(asset('corrupt'), dest, want) }).catch((e) => e);
+      swapHeld = bad instanceof Error && fs.readFileSync(selfImg, 'utf-8') === 'the build that is running';
+      if (!swapHeld) errors.push('a refused swap did not leave the running file exactly as it was');
+      await updates.swapInPlace({ self: selfImg, assetName: 'HollowWake-next.AppImage', download: (dest) => fetchUpdateArtifact(asset('good'), dest, want) });
+      swapped = fs.readFileSync(selfImg).equals(good);
+      if (!swapped) errors.push('a verified swap did not put the new build at the same path');
+      const residue = fs.readdirSync(deck).filter(n => n !== 'HollowWake.AppImage');
+      if (residue.length) errors.push(`the swap left staging residue behind: ${residue.join(', ')}`);
+    } finally { fs.rmSync(deck, { recursive: true, force: true }); }
+
     await t.watcherSelfTest(wc);
     console.log(`SMOKE update: v${app.getVersion()} packaged=${PACKAGED} nightly=${nightlyTag}`
       + ` announced="${text}" stable="${stableText}" verified=${verified}`
-      + ` corruptRefused=${refused.corrupt} shortRefused=${refused.short} settingsUntouched=${localAfter === localBefore}`);
+      + ` corruptRefused=${refused.corrupt} shortRefused=${refused.short} swapped=${swapped} swapHeld=${swapHeld}`
+      + ` settingsUntouched=${localAfter === localBefore}`);
   } finally {
     fs.rmSync(tmp, { force: true });
     server.close();
@@ -1966,6 +2038,8 @@ app.whenReady().then(async () => {
     if (!res.ok) { // fall back to the launcher so the error is visible
       boot(`direct play failed: ${res.error || 'unknown'} — showing the launcher`);
       launcherWin = createLauncherWindow();
+    } else {
+      void quietUpdate(); // no launcher page will ever check for this session
     }
     return;
   }
