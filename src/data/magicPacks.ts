@@ -20,6 +20,43 @@ export const MAGIC_PACK_CFG = {
 /** Open recipes: compose proximity and casualty rules with ordinary sheet mods.
  * No recipe-specific combat code, damage path, or monster-definition mutation. */
 export const MAGIC_PACKS: Record<string, MagicPackDef> = {
+  footfall: {
+    id: 'footfall', name: 'Footfall', minLevel: 1, weight: 3, color: '#dfb782',
+    hint: 'One caster marks your last position. Leave the mark or interrupt its stationary caster.',
+    activeLabel: 'Ground echo', inactiveLabel: 'Ground echo', rules: [],
+    burst: { skill: 'magic_pack_footfall', cooldown: 7, initialDelay: 3, warning: 1.65, flash: 0.35,
+      breakDistance: 28, radius: 65, single: true, targetRange: 420 },
+  },
+  scattershock: {
+    id: 'scattershock', name: 'Scattershock', minLevel: 1, weight: 3, color: '#a8dfdf',
+    hint: 'One member plants its feet and winds up a repelling pulse. Step back, then close during recovery.',
+    activeLabel: 'Repelling pulse', inactiveLabel: 'Repelling pulse', rules: [],
+    burst: { skill: 'magic_pack_scattershock', cooldown: 7.5, initialDelay: 3.5, warning: 1.5, flash: 0.4,
+      breakDistance: 28, radius: 110, single: true },
+  },
+  bloodfont: {
+    id: 'bloodfont', name: 'Bloodfont', minLevel: 2, weight: 3, color: '#ef8d9e',
+    hint: 'A red stream trades the healer’s life for an ally’s. Wound the donor or break the link before it completes.',
+    activeLabel: 'Blood offering', inactiveLabel: 'Blood offering', rules: [],
+    mend: { cooldown: 8, initialDelay: 2.5, warning: 2, flash: 0.5, breakDistance: 28,
+      range: 240, fraction: 0.14, below: 0.65, lifeCost: 0.18 },
+  },
+  rallyheart: {
+    id: 'rallyheart', name: 'Rallyheart', minLevel: 2, weight: 3, color: '#efc36b',
+    hint: 'An exposed golden leader rallies nearby followers. Separate them or kill the leader to end its rally.',
+    activeLabel: 'Rallied', inactiveLabel: 'Rally broken',
+    bearer: { warning: 1.2, onLoss: 'end', color: '#ffd17a', protectedOthers: false },
+    rules: [
+      { role: 'bearer', mods: [mod('damageTaken', 'more', 0.3)] },
+      { role: 'others', nearby: { radius: 220, min: 1, role: 'bearer' }, mods: [mod('damage', 'increased', 0.16)] },
+    ],
+  },
+  skirmishers: {
+    id: 'skirmishers', name: 'Skirmishers', minLevel: 3, weight: 3, color: '#b6e797',
+    hint: 'Isolated members sprint; bunch them together to extinguish their speed trails.',
+    activeLabel: 'Free stride', inactiveLabel: 'Crowded', strideTell: true,
+    rules: [{ nearby: { radius: 170, min: 0, max: 0 }, mods: [mod('moveSpeed', 'increased', 0.22)] }],
+  },
   cinder_wake: {
     id: 'cinder_wake', name: 'Cinder Wake', minLevel: 9, weight: 2, color: '#f4a15b',
     hint: 'Orbiting embers lob mortars onto fixed ground marks.',

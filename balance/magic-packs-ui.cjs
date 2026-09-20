@@ -19,9 +19,10 @@ app.whenReady().then(async () => {
     await win.webContents.executeJavaScript("Object.defineProperty(navigator,'getGamepads',{value:()=>[]}); void 0;");
     await win.webContents.executeJavaScript("__game.account().ledger.prologue_lived=1; __game.devStartRun('warrior'); __game.ui.hideAll(); __game.step(360); void 0;");
     const scenarios = ['wardbound', 'chorus', 'vendetta', 'breachbearers', 'shifting_breach', 'arclink', 'arclink_fire', 'gravewheel', 'gravewheel_active', 'siphon',
-      'cinderchain', 'cinderchain_fire', 'mending_relay', 'mending_relay_active', 'encirclement', 'encirclement_fire', 'hollow_choir', 'hollow_choir_fire'];
+      'cinderchain', 'cinderchain_fire', 'mending_relay', 'mending_relay_active', 'encirclement', 'encirclement_fire', 'hollow_choir', 'hollow_choir_fire',
+      'footfall', 'footfall_fire', 'scattershock', 'scattershock_fire', 'bloodfont', 'bloodfont_active', 'rallyheart', 'skirmishers', 'skirmishers_crowded'];
     for (const scenario of scenarios.filter(s => !process.env.MAGIC_PACK_SCENARIOS || process.env.MAGIC_PACK_SCENARIOS.split(',').includes(s))) {
-      const recipe = scenario.replace(/_(fire|active)$/, '');
+      const recipe = scenario.replace(/_(fire|active|crowded)$/, '');
       const result = await win.webContents.executeJavaScript(`(() => {
         const w = __game.world(); w.player.invulnerable = true;
         w.zoneMap.qa_magic_packs = {
@@ -45,11 +46,15 @@ app.whenReady().then(async () => {
           pack[0].pos={x:origin.x-150,y:origin.y-210}; pack[1].pos={x:origin.x+150,y:origin.y-210};
           pack[2].pos={x:origin.x,y:origin.y-10};
         }
-        if ('${recipe}' === 'mending_relay') pack[1].life = pack[1].maxLife()*0.4;
+        if ('${scenario}' === 'skirmishers') pack.forEach((a,i)=>{ a.pos={x:origin.x+(i-1.5)*200,y:origin.y-150}; });
+        if ('${recipe}' === 'mending_relay' || '${recipe}' === 'bloodfont') pack[1].life = pack[1].maxLife()*0.4;
         if ('${recipe}' === 'vendetta') { w.kill(pack[0], false, w.player); w.kill(pack[1], false, w.player); }
         if ('${recipe}' === 'gravewheel') { w.kill(pack[0], false, w.player); w.kill(pack[2], false, w.player); }
         w.drops = [];
         const seconds = '${recipe}' === 'cinderchain' ? ('${scenario}' === 'cinderchain_fire' ? 4.45 : 3.7)
+          : '${recipe}' === 'footfall' ? ('${scenario}' === 'footfall_fire' ? 4.8 : 3.8)
+          : '${recipe}' === 'scattershock' ? ('${scenario}' === 'scattershock_fire' ? 5.2 : 4.2)
+          : '${recipe}' === 'bloodfont' ? ('${scenario}' === 'bloodfont_active' ? 4.7 : 3.3)
           : '${recipe}' === 'mending_relay' ? ('${scenario}' === 'mending_relay_active' ? 3.95 : 2.8)
           : '${recipe}' === 'encirclement' ? ('${scenario}' === 'encirclement_fire' ? 5.35 : 4.3)
           : '${recipe}' === 'hollow_choir' ? ('${scenario}' === 'hollow_choir_fire' ? 4.75 : 3.8)
@@ -75,16 +80,20 @@ app.whenReady().then(async () => {
       if (['breachbearers','shifting_breach','siphon'].includes(recipe)) assert.equal(result.roles.filter(r=>r==='bearer').length,1);
       if (recipe === 'shifting_breach') assert.ok(result.pending.some(p=>p>0));
       if (recipe === 'siphon') assert.ok(result.donors.some(n=>n===3));
+      if (recipe === 'rallyheart') { assert.equal(result.roles.filter(r=>r==='bearer').length,1); assert.equal(result.links,3); }
+      if (recipe === 'skirmishers') assert.ok(result.powers.every(n=>n===(scenario.endsWith('_crowded')?0:1)));
       if (['arclink','gravewheel'].includes(recipe)) {
         assert.ok(result.effects.length > 0);
         assert.ok(result.effects.every(e=>e.warning === !(scenario.endsWith('_fire') || scenario.endsWith('_active'))));
       }
-      if (['cinderchain','mending_relay','encirclement','hollow_choir'].includes(recipe)) {
+      if (['cinderchain','mending_relay','encirclement','hollow_choir','footfall','scattershock','bloodfont'].includes(recipe)) {
         assert.ok(result.effects.length > 0);
         const firing = scenario.endsWith('_fire') || scenario.endsWith('_active');
         assert.ok(result.effects.some(e=>e.warning !== firing));
         if (recipe === 'encirclement') assert.ok(result.effects.some(e=>e.points?.length === 3));
         if (recipe === 'hollow_choir') assert.ok(result.effects.every(e=>e.innerRadius === 85));
+        if (recipe === 'footfall') { assert.equal(result.effects.length,1); assert.ok(result.effects[0].sourceX !== undefined); }
+        if (recipe === 'scattershock') assert.equal(result.effects.length,1);
       }
       fs.writeFileSync(path.join(dir, `magic-pack-${scenario}.png`), Buffer.from(image.split(',')[1], 'base64'));
     }

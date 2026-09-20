@@ -15,13 +15,15 @@ export interface MagicPackDef extends MagicPackEventSpec {
   activeLabel: string;
   inactiveLabel: string;
   color: string;
+  /** Active speed chevrons, driven by the same rule state as the modifiers. */
+  strideTell?: boolean;
   bearer?: MagicPackBearer;
   beam?: MagicPackBeam;
   grave?: MagicPackGrave;
   rules: {
     role?: 'bearer' | 'others' | 'donor';
     perDonor?: boolean;
-    nearby?: { radius: number; min: number };
+    nearby?: { radius: number; min: number; max?: number; role?: 'bearer' };
     /** Scale the payload once per slain original member, up to this cap. */
     fallen?: { max: number };
     mods: Modifier[];
@@ -116,10 +118,12 @@ export function updateMagicPacks(actors: readonly Actor[]): void {
         : rule.role === 'donor' ? a.magicPackRole !== 'donor' : a.magicPackRole !== 'bearer')) return 0;
       const kin = rule.nearby ? group.filter(b => b !== a && b.faction === a.faction
         && b.tier === a.tier && b.magicPack!.mechanic === p.mechanic
+        && (!rule.nearby!.role || b.magicPackRole === rule.nearby!.role)
         && Math.hypot(a.pos.x - b.pos.x, a.pos.y - b.pos.y) <= rule.nearby!.radius)
         .sort((b, c) => Math.hypot(a.pos.x - b.pos.x, a.pos.y - b.pos.y)
           - Math.hypot(a.pos.x - c.pos.x, a.pos.y - c.pos.y) || b.id - c.id) : [];
       if (rule.nearby && kin.length < rule.nearby.min) return 0;
+      if (rule.nearby?.max !== undefined && kin.length > rule.nearby.max) return 0;
       const n = rule.perDonor ? a.magicPackDonors : rule.fallen ? Math.min(p.fallen, rule.fallen.max) : 1;
       if (n > 0 && kin.length) from ??= kin[0];
       return n;
@@ -178,7 +182,9 @@ export function magicPackErrors(skillExists?: (id: string) => boolean): string[]
     for (const rule of def.rules) {
       if ((rule.role && !def.bearer) || (rule.perDonor && !def.bearer?.siphonRadius)) errors.push(`magicPack ${id}: missing role provider`);
       if (rule.nearby && (!Number.isFinite(rule.nearby.radius) || rule.nearby.radius <= 0
-        || !integer(rule.nearby.min, 1) || rule.nearby.min >= MAGIC_PACK_CFG.maxMembers))
+        || !integer(rule.nearby.min, 0) || rule.nearby.min >= MAGIC_PACK_CFG.maxMembers
+        || (rule.nearby.max !== undefined && (!integer(rule.nearby.max, rule.nearby.min) || rule.nearby.max >= MAGIC_PACK_CFG.maxMembers))
+        || (rule.nearby.role && !def.bearer)))
         errors.push(`magicPack ${id}: invalid proximity gate`);
       if (rule.fallen && (!integer(rule.fallen.max, 1) || rule.fallen.max >= MAGIC_PACK_CFG.maxMembers))
         errors.push(`magicPack ${id}: invalid casualty cap`);

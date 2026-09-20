@@ -7,6 +7,8 @@ import { pointSegDist, type Vec2 } from '../core/math';
 import { stepMagicPackEvents, type MagicPackEvents } from './magicPackEvents';
 
 export interface MagicPackBearer {
+  /** False for an exposed leader whose followers do not have ward protection. */
+  protectedOthers?: boolean;
   /** No timer means the exposed role passes only when its bearer leaves. */
   rotateEvery?: number;
   warning: number;
@@ -45,6 +47,8 @@ export type MagicPackVisual = {
   warning: boolean; progress: number; tier: number;
   cx?: number; cy?: number; radius?: number;
   innerRadius?: number; points?: Vec2[];
+  /** Optional warning tether from a remote footprint to its actual caster. */
+  sourceX?: number; sourceY?: number;
 };
 export interface MagicPackContext {
   enemies(a: Actor): Actor[];

@@ -11,6 +11,12 @@ export function drawMagicPackEffects(ctx: CanvasRenderingContext2D, rows: readon
     ctx.strokeStyle = ctx.fillStyle = row.color;
     ctx.setLineDash([]);
     if (row.kind === 'burst' || row.kind === 'ritual') {
+      if (row.warning && row.sourceX !== undefined && row.sourceY !== undefined) {
+        ctx.globalAlpha = 0.35 + row.progress * 0.3; ctx.lineWidth = 1.5; ctx.setLineDash([3, 6]);
+        ctx.beginPath(); ctx.moveTo(row.sourceX, row.sourceY); ctx.lineTo(row.ax, row.ay); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.beginPath(); ctx.arc(row.sourceX, row.sourceY, 22, -Math.PI / 2, -Math.PI / 2 + row.progress * Math.PI * 2); ctx.stroke();
+      }
       ctx.beginPath();
       if (row.kind === 'burst') {
         ctx.arc(row.ax, row.ay, row.radius!, 0, Math.PI * 2);
@@ -82,6 +88,21 @@ export function drawMagicPackEffects(ctx: CanvasRenderingContext2D, rows: readon
  * Siphon recipients instead wear an inward-pointing amber crown. */
 export function drawMagicPackRole(ctx: CanvasRenderingContext2D, a: Actor, time: number): void {
   const def = a.magicPack && MAGIC_PACKS[a.magicPack.mechanic];
+  if (def?.strideTell && a.magicPackPower > 0) {
+    ctx.save(); ctx.strokeStyle = def.color; ctx.lineWidth = 2.5;
+    // Trailing chevrons light only while the actual isolation rule is active.
+    for (let i = 0; i < 3; i++) {
+      const r = a.radius + 8 + i * 7 + (time * 18) % 7;
+      ctx.globalAlpha = (1 - i / 3) * 0.7;
+      ctx.beginPath();
+      for (const [j, [angle, length]] of [[a.facing + Math.PI - 0.35, r + 5], [a.facing + Math.PI, r], [a.facing + Math.PI + 0.35, r + 5]].entries()) {
+        const x = Math.cos(angle) * length, y = Math.sin(angle) * length;
+        if (j === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
   if (!def?.bearer || (!a.magicPackRole && !a.magicPackPending)) return;
   const cfg = MAGIC_PACK_CFG.roleTell, r = a.radius + cfg.radius;
   ctx.save(); ctx.lineWidth = cfg.width; ctx.lineCap = 'round';
@@ -100,7 +121,7 @@ export function drawMagicPackRole(ctx: CanvasRenderingContext2D, a: Actor, time:
   } else if (a.magicPackRole === 'donor') {
     ctx.strokeStyle = cfg.donorColor; ctx.globalAlpha = 0.75; ctx.setLineDash([2, 5]);
     ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
-  } else if (!siphon && a.magicPackRole === 'member') {
+  } else if (!siphon && def.bearer.protectedOthers !== false && a.magicPackRole === 'member') {
     ctx.strokeStyle = cfg.protectedColor; ctx.globalAlpha = 0.8;
     ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
   }

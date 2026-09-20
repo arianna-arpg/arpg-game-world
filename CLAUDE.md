@@ -266,6 +266,10 @@ Magic rarity's ambient encounters live in `data/magicPacks.ts` and
 cohort effects, live visual links and zone/save/co-op identity. Rares remain
 individual affixed leaders. Contract: `docs/design/magic-packs.md`; verify
 with `npm run probe -- magicpacks` plus the existing pack/packtempo probes.
+Early magic-pack variety adds Footfall, Scattershock, Bloodfont, Rallyheart and
+Skirmishers at levels 1–3. `magicPackEvents` supports fixed target footprints,
+single-caster cycles and nonlethal healing payments; proximity rules support
+maximum counts and bearer filters. The same contract and magicpack probes apply.
 
 Physical movement tethers live in `engine/movementTether.ts`, with the Sylvan,
 undead and demon debut rows in `data/tetheredMonsters.ts`. The configurable

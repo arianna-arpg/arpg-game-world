@@ -8,12 +8,21 @@ export interface MagicPackCycle { cooldown: number; initialDelay: number; warnin
 /** A volley may propagate once per member, with a full warning on every hop. */
 export interface MagicPackBurst extends MagicPackCycle {
   skill: string; radius: number; innerRadius?: number; chainRange?: number;
+  /** One original member per cycle instead of a simultaneous volley. */
+  single?: boolean;
+  /** Mark the nearest visible enemy's current ground position; never track it. */
+  targetRange?: number;
 }
-export interface MagicPackMend extends MagicPackCycle { range: number; fraction: number; below: number; }
+export interface MagicPackMend extends MagicPackCycle {
+  range: number; fraction: number; below: number;
+  /** Nonlethal fraction of donor maximum life paid on completion. Raw healing
+   * is capped by the payment before ordinary healing-received modifiers. */
+  lifeCost?: number;
+}
 export interface MagicPackRitual extends MagicPackCycle { skill: string; range: number; minArea: number; }
 export interface MagicPackEventSpec { burst?: MagicPackBurst; mend?: MagicPackMend; ritual?: MagicPackRitual; }
 interface Anchor extends Vec2 { slot: number; tier: number; }
-interface Charge { anchors: Anchor[]; left: number; fired: boolean; }
+interface Charge { anchors: Anchor[]; left: number; fired: boolean; center?: Vec2; }
 export interface MagicPackEventState { left: number; cursor: number; charges: Charge[]; visited: number[]; }
 export type MagicPackEvents = Partial<Record<keyof MagicPackEventSpec, MagicPackEventState>>;
 const alive = (a: Actor): boolean => !a.dead && !a.owner && a.team === 'enemy' && a.rarity === 'magic' && !!a.magicPack;
@@ -47,14 +56,26 @@ export function stepMagicPackEvents(group: Actor[], spec: MagicPackEventSpec, st
         const members = candidates();
         if (kind === 'burst') {
           const burst = spec.burst!;
-          const starters = burst.chainRange ? [members[state.cursor++ % members.length]].filter(Boolean) : members;
-          pending.push(...starters.map(a => charge([a], rule))); state.visited = starters.map(a => a.magicPack!.slot!);
+          const starters = burst.chainRange || burst.single ? [members[state.cursor++ % members.length]].filter(Boolean) : members;
+          for (const a of starters) {
+            const c = charge([a], rule);
+            if (burst.targetRange !== undefined) {
+              const target = ctx.enemies(a).filter(e => !e.dead && !e.untargetable && sameStory(a, e)
+                && gap(a.pos, e.pos) <= burst.targetRange! && ctx.clear(a.pos, e.pos, a.tier))
+                .sort((b, c) => gap(a.pos, b.pos) - gap(a.pos, c.pos) || b.id - c.id)[0];
+              if (!target) continue;
+              c.center = { ...target.pos };
+            }
+            pending.push(c);
+          }
+          state.visited = pending.map(c => c.anchors[0].slot);
         } else if (kind === 'mend') {
           const mend = spec.mend!;
           const wounded = members.filter(a => a.life / a.maxLife() < mend.below)
             .sort((a, b) => a.life / a.maxLife() - b.life / b.maxLife());
           for (const target of wounded) {
             const donor = members.find(a => a !== target && kin(a, target) && gap(a.pos, target.pos) <= mend.range
+              && (!mend.lifeCost || a.life > a.maxLife() * mend.lifeCost)
               && ctx.clear(a.pos, target.pos, a.tier));
             if (donor) { pending.push(charge([donor, target], rule)); break; }
           }
@@ -81,24 +102,36 @@ export function stepMagicPackEvents(group: Actor[], spec: MagicPackEventSpec, st
         && (c.fired || gap(a.pos, c.anchors[i]) <= rule.breakDistance || (kind === 'mend' && i === 1)))
         && bodies.every((a, i) => bodies.slice(i + 1).every(b => a && b && ctx.clear(a.pos, b.pos, a.tier)));
       const linked = kind !== 'mend' || (!!first && !!bodies[1] && gap(first.pos, bodies[1].pos) <= spec.mend!.range);
-      if (!valid || !linked || (c.fired && c.left <= 0)) continue;
+      if (!valid || !linked || (c.center && !ctx.clear(first!.pos, c.center, first!.tier)) || (c.fired && c.left <= 0)) continue;
       if (kind === 'mend') c.anchors[1] = anchor(bodies[1]!);
       if (!c.fired && c.left <= 0 && elapsed > 0) {
         c.fired = true; c.left = rule.flash;
         if (kind === 'mend') {
-          bodies[1]!.healBy(bodies[1]!.maxLife() * spec.mend!.fraction);
+          const mend = spec.mend!, target = bodies[1]!;
+          let amount = target.maxLife() * mend.fraction;
+          if (mend.lifeCost) {
+            const cost = first!.maxLife() * mend.lifeCost;
+            // Recheck after the warning: damaging a donor can interrupt its
+            // payment, and a full/sealed recipient cannot drain it for nothing.
+            if (first!.life <= cost || target.life >= Math.min(target.lifeCeiling(), target.lifeSealAt ?? Infinity)
+              || target.sheet.get('healTaken') <= 0) continue;
+            first!.life -= cost;
+            first!.onLifeSpent?.(cost);
+            amount = Math.min(amount, cost);
+          }
+          target.healBy(amount);
         } else {
           const skill = kind === 'burst' ? spec.burst!.skill : spec.ritual!.skill;
           for (const victim of ctx.enemies(first!)) {
             if (!alive(first!)) break;
             if (victim.dead || victim.untargetable || !sameStory(victim, c.anchors[0])) continue;
             if (kind === 'burst') {
-              const b = spec.burst!, d = gap(victim.pos, c.anchors[0]);
+              const b = spec.burst!, d = gap(victim.pos, c.center ?? c.anchors[0]);
               // The center point owns ring membership; this is exactly the
               // visible safe center. Outer contact includes the body radius.
               if (d < (b.innerRadius ?? 0) || d > b.radius + victim.radius) continue;
             } else if (!insideMagicPackTriangle(victim.pos, c.anchors)) continue;
-            if (ctx.clear(c.anchors[0], victim.pos, victim.tier)) ctx.hit(first!, skill, victim);
+            if (ctx.clear(c.center ?? c.anchors[0], victim.pos, victim.tier)) ctx.hit(first!, skill, victim);
           }
           if (kind === 'burst' && spec.burst!.chainRange && alive(first!)) {
             for (const a of candidates()) if (!state.visited.includes(a.magicPack!.slot!) && kin(first!, a)
@@ -115,9 +148,11 @@ export function stepMagicPackEvents(group: Actor[], spec: MagicPackEventSpec, st
     state.charges = state.charges.filter(c => c.anchors.every(p => !!find(p)));
     for (const c of state.charges) {
       const [a, b] = c.anchors;
+      const center = c.center ?? a;
       if (!c.fired) for (const p of (kind === 'mend' ? [a] : c.anchors)) { const body = find(p); if (body) held.add(body); }
       visuals.push({ kind: kind === 'burst' ? 'burst' : kind === 'mend' ? 'mend' : 'ritual', pack: group[0].magicPack!.id,
-        color, ax: a.x, ay: a.y, bx: b?.x ?? a.x, by: b?.y ?? a.y, tier: a.tier, width: 2,
+        color, ax: center.x, ay: center.y, bx: b?.x ?? center.x, by: b?.y ?? center.y, tier: a.tier, width: 2,
+        ...(c.center ? { sourceX: a.x, sourceY: a.y } : {}),
         warning: !c.fired, progress: c.fired ? 1 - c.left / rule.flash : 1 - c.left / rule.warning,
         radius: kind === 'burst' ? spec.burst!.radius : undefined,
         innerRadius: kind === 'burst' ? spec.burst!.innerRadius : undefined,
@@ -142,10 +177,12 @@ export function magicPackEventErrors(spec: MagicPackEventSpec, skillExists?: (id
   if (spec.burst) {
     const s = spec.burst;
     if (!positive(s.radius) || (s.chainRange !== undefined && !positive(s.chainRange))
+      || (s.targetRange !== undefined && (!positive(s.targetRange) || s.chainRange !== undefined))
       || (s.innerRadius !== undefined && (!positive(s.innerRadius) || s.innerRadius >= s.radius))) errors.push('invalid burst geometry');
   }
   if (spec.mend && (!positive(spec.mend.range) || !positive(spec.mend.fraction) || spec.mend.fraction > 1
-    || !positive(spec.mend.below) || spec.mend.below > 1)) errors.push('invalid mend');
+    || !positive(spec.mend.below) || spec.mend.below > 1
+    || (spec.mend.lifeCost !== undefined && (!positive(spec.mend.lifeCost) || spec.mend.lifeCost >= 1)))) errors.push('invalid mend');
   if (spec.ritual && (!positive(spec.ritual.range) || !positive(spec.ritual.minArea))) errors.push('invalid ritual');
   return errors;
 }

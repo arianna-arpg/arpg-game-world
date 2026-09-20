@@ -3,6 +3,20 @@ import type { SkillDef } from '../engine/skills';
 /** Ordinary attributed spell payloads. The pack conductor owns geometry/timing;
  * the existing hit pipeline owns mitigation, wards, statuses and kill credit. */
 export const MAGIC_PACK_SKILLS: Record<string, SkillDef> = {
+  magic_pack_footfall: {
+    id: 'magic_pack_footfall', name: 'Ground Echo', color: '#dfb782', noDrop: true,
+    description: 'A fixed, warned footprint erupts where a foe stood.',
+    tags: ['spell', 'aoe', 'physical'], manaCost: 0, cooldown: 0, useTime: 0,
+    baseDamage: { physical: [4, 6] }, effects: [{ type: 'damage' }],
+    delivery: { type: 'ground', radius: 65, castRange: 420, delay: 0 },
+  },
+  magic_pack_scattershock: {
+    id: 'magic_pack_scattershock', name: 'Repelling Pulse', color: '#a8dfdf', noDrop: true,
+    description: 'A planted caster releases a warned pulse that pushes nearby foes away.',
+    tags: ['spell', 'aoe', 'physical'], manaCost: 0, cooldown: 0, useTime: 0,
+    baseDamage: { physical: [2, 3] }, effects: [{ type: 'damage' }, { type: 'knockback', strength: 85 }],
+    delivery: { type: 'ground', radius: 110, castRange: 420, delay: 0 },
+  },
   magic_pack_blast: {
     id: 'magic_pack_blast', name: 'Living Blast', color: '#ff9566', noDrop: true,
     description: 'A living pack member vents a warned blast and ignites nearby allies.',

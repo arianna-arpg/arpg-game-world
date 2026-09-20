@@ -11,6 +11,11 @@ skills or replace any creature's native kit, brain, bonds or tactics.
 
 | Recipe | Enemy level | Shared mechanic | Counterplay |
 | --- | --- | --- | --- |
+| Footfall | 1+ | One member plants its feet and marks the nearest visible foe's position within 420 units; a 65-unit physical blast follows after 1.65 seconds, then a 7-second recovery | Leave the fixed mark or kill/displace its tethered caster |
+| Scattershock | 1+ | One member warns for 1.5 seconds, then releases a low-damage, 110-unit repelling pulse; members take turns, with 7.5 seconds of recovery | Step outside the rim and close again during recovery |
+| Bloodfont | 2+ | A donor channels for 2 seconds, paying 18% maximum life to restore up to 14% of a wounded ally's maximum life within 240 units; 8-second recovery | Follow the red stream, interrupt the donor, or damage it below its payment threshold |
+| Rallyheart | 2+ | The golden leader takes 30% more damage; original followers within 220 units deal 16% increased damage while linked to it | Kill the vulnerable leader to permanently end the rally, or separate followers |
+| Skirmishers | 3+ | Members with no original ally within 170 units gain 22% increased movement speed and visible stride chevrons | Bunch them together to extinguish their speed; an isolated final survivor retains it |
 | Iron Wake | 5+ | Every member carries an untargetable physical satellite with a 0.9-second arming tell | Avoid the moving orb, stand inside its orbit, or kill its bearer |
 | Cinder Wake | 9+ | Every member carries a fire satellite that lobs a mortar at a fixed ground mark | Leave the marked impact or kill its bearer |
 | Wardbound | 1+ | 18% less damage taken while another original ally is within 190 units | Separate allies or kill a supporter |
@@ -28,11 +33,23 @@ skills or replace any creature's native kit, brain, bonds or tactics.
 
 All eligible recipes stay in the weighted pool. A level-12 encounter can still
 roll Wardbound; later unlocks add variety rather than stacking every mechanic.
+The opening now offers three recipes at level 1, five at level 2 and six at
+level 3; every previous debut stays at its original level. Each addition has
+weight 3, alongside Wardbound's weight 4, so it is no longer the only opening roll.
 The numbers are initial tuning, not a claim of full campaign balance.
 Combat nameplates show identity only; recipe hints are authoring/reference
 material. Links, orbs, wards and ground marks carry the mechanic in play.
 
 ## Authoring and difficulty
+
+`RARITY_DEFS` in `src/engine/rarity.ts` owns ambient encounter frequency.
+Normal/magic/rare/champion weights are **110/12/7/2**, previously 100/22/7/2.
+For eligible non-crowned rolls, magic falls from 22/131 (16.8%) to 12/131
+(9.2%); normal rises to 84.0%, and rare/champion chances remain unchanged.
+This is encounter-roll probability, not a promised percentage of monster bodies:
+natural pack sizes, magic size caps, habitat refusal and authored encounters
+still matter. These weights affect newly generated encounters; existing saved
+packs are preserved. Disabled/ineligible magic pools continue to omit its weight.
 
 `src/data/magicPacks.ts` owns the open `MAGIC_PACKS` registry, selection weights,
 minimum levels, ordinary modifier payloads, counterplay text, colors and tells.
@@ -62,13 +79,18 @@ the capped loss count. Multiple rules coexist in separately named sheet sources
 `magicPack:<recipe>:<rule>`, preserving stat attribution. Add a registry row to
 make a new combination without editing the spawn loop or damage pipeline.
 `magicPackErrors()` participates in ordinary boot content validation.
+Proximity rules may also specify `max` (inclusive; `min: 0, max: 0` means
+isolated) and `role: 'bearer'` to count only the current original leader.
+The same faction, story, ownership and cohort rules apply to both bounds.
+`strideTell` draws chevrons from actual active rule power; `bearer.protectedOthers:
+false` suppresses closed ward rings for followers that are not protected.
 
 Dynamic recipes compose optional `bearer`, `beam` and `grave` specifications in
 the same registry. Rules can select `role: bearer / others / donor` and scale
 their ordinary modifiers `perDonor`. A bearer can pass on loss or end permanently,
 and optionally rotate on a relative clock. Timings, widths, ranges, colors,
 rotation speed, spokes and skill references are all data. There are no recipe-ID
-branches in the conductor. `src/data/magicPackSkills.ts` supplies the two hidden
+branches in the conductor. `src/data/magicPackSkills.ts` supplies the hidden
 skill payloads; hits use ordinary skill resolution, mitigation, death gates and
 credit. Grave hits are attributed to a living sustaining member on that story,
 never a fabricated corpse actor. They target enemies of that member, including
@@ -91,6 +113,23 @@ Hollow-ring membership uses the target's center for its safe inner boundary;
 outer contact includes body radius. Triangles test the target center against
 the exact drawn polygon, with sight checks before damage.
 
+Burst `single: true` rotates one caster per cycle. Optional `targetRange` acquires
+the nearest visible enemy on the caster's story and snapshots its ground position
+when the warning begins. The caster remains the attribution and cancellation
+anchor; the mark, warning tether and hit test share that exact fixed center.
+No target following, new actor, recipe-ID branch or alternate damage path is
+introduced. Remote marks cannot combine with chain propagation. Loss of caster
+sight to the mark cancels the charge, and the footprint checks sight to each victim.
+
+Mend `lifeCost` is an optional, nonlethal fraction of donor maximum life, checked
+both at selection and completion. It is a resource payment rather than damage,
+so it does not trigger retaliation or create a casualty. Interrupted, unaffordable,
+fully healed, life-sealed or zero-healing-received targets consume no payment.
+Raw healing is capped by the paid amount and then uses ordinary `healBy`, including
+healing-received modifiers and caps. Positive healing modifiers can amplify it.
+Bloodfont's default payment exceeds its healing, making each successful relay
+deplete the group's combined life. This is distinct from Mending Relay's free heal.
+
 `World.promoteMagicPack(members, recipeId)` is the explicit content seam for
 events or authored encounters. It requires 2–6 distinct, living, unowned,
 unpromoted enemies of the same faction at the recipe's minimum level. The
@@ -111,8 +150,8 @@ bounded by encounter size; modifier sources change only when rule state changes.
 
 The combat fold records the supporter that the renderer links. Existing bond
 links retain priority within the existing total line budget. Magic rings carry
-recipe-colored pips for current power; hover names show the shared recipe and
-an active/broken state with counterplay text. The same state/supporter identity
+recipe-colored pips for current power; hover names show shared recipe identity.
+Counterplay lives in world cues, not explanatory combat text. The state/supporter identity
 travels over co-op snapshots; omitted fields clear reused client shells.
 
 `src/engine/magicPackMechanics.ts` owns stable member slots, shared clocks and
@@ -162,3 +201,9 @@ triangle escape and collapse, hollow-ring safety/overlap, retaliation cleanup,
 disengagement and save/co-op state. The hidden visual harness includes warning
 and resolution captures for all four additions; `MAGIC_PACK_SCENARIOS` can select
 a comma-separated subset of its named scenarios.
+The opening additions extend the same probes: seeded rarity distribution,
+all recipe debut boundaries, isolation crowding and cleanup, rally retirement,
+30/60/120 Hz fixed marks and repelling pulses, caster interruption, nonlethal
+blood payments, heal caps, co-op geometry and save/travel warning resets.
+Visual scenarios include both active and crowded Skirmishers, Rallyheart's
+unprotected followers, and warning/resolution pairs for all three new events.

@@ -3,7 +3,7 @@ import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { MAGIC_PACKS, MAGIC_PACK_CFG } from '../src/data/magicPacks';
 import { magicPackErrors, magicPackPool, magicPackSize, rollMagicPack, readMagicPack, updateMagicPacks, magicPackLinks } from '../src/engine/magicPacks';
-import { RARITY_DEFS, rarityMods, type MonsterRarity } from '../src/engine/rarity';
+import { RARITY_DEFS, rarityMods, rollRarity, type MonsterRarity } from '../src/engine/rarity';
 import { MONSTERS } from '../src/data/monsters';
 import { START_ZONE, type ZoneDef } from '../src/data/zones';
 import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
@@ -23,7 +23,14 @@ const near = (a: number, b: number): void => assert.ok(Math.abs(a - b) < 1e-8, `
 
 check('registry, progression boundaries, content filters and bounded difficulty', () => {
   assert.deepEqual(magicPackErrors(), []);
-  assert.deepEqual(magicPackPool(1).map(d => d.id), ['wardbound']);
+  assert.deepEqual(magicPackPool(1).map(d => d.id).sort(), ['footfall', 'scattershock', 'wardbound']);
+  assert.equal(magicPackPool(2).length, 5);
+  assert.equal(magicPackPool(3).length, 6);
+  for (const d of Object.values(MAGIC_PACKS)) {
+    assert.ok(!magicPackPool(d.minLevel - 1).includes(d));
+    assert.ok(magicPackPool(d.minLevel).includes(d));
+    assert.ok(magicPackPool(99).includes(d));
+  }
   assert.ok(!magicPackPool(5).some(d => d.id === 'chorus'));
   assert.ok(magicPackPool(6).some(d => d.id === 'chorus'));
   assert.ok(!magicPackPool(11).some(d => d.id === 'vendetta'));
@@ -40,6 +47,53 @@ check('registry, progression boundaries, content filters and bounded difficulty'
   assert.equal(magicPackSize(1, { sizeMul: 0 }), 2);
   assert.equal(readMagicPack({ id: 1, mechanic: '__proto__', size: 3, fallen: 0 }), undefined);
   assert.equal(readMagicPack({ id: 1, mechanic: 'wardbound', size: 3, fallen: 3 }), undefined);
+});
+
+check('rarity budget moves magic opportunities to normal and the seeded roll follows it', () => {
+  const total = ['normal', 'magic', 'rare', 'champion'].reduce((n, id) => n + RARITY_DEFS[id as MonsterRarity].weight, 0);
+  assert.equal(total, 131); assert.equal(RARITY_DEFS.magic.weight, 12);
+  assert.equal(RARITY_DEFS.rare.weight, 7); assert.equal(RARITY_DEFS.champion.weight, 2);
+  seedGlobalRandom(210921);
+  const counts = { normal: 0, magic: 0, rare: 0, champion: 0, crowned: 0 };
+  for (let i = 0; i < 20000; i++) counts[rollRarity(false)]++;
+  for (const id of ['normal', 'magic', 'rare', 'champion'] as const)
+    assert.ok(Math.abs(counts[id] / 20000 - RARITY_DEFS[id].weight / total) < 0.01, id);
+  for (let i = 0; i < 1000; i++) assert.notEqual(rollRarity(false, false), 'magic');
+});
+
+check('rally buffs only followers near their original bearer and ends permanently on leader loss', () => {
+  const w = world(), [a, b, c] = cohort(w, 3, 2);
+  const damage = b.sheet.get('damage');
+  assert.ok(w.promoteMagicPack([a, b, c], 'rallyheart'));
+  near(a.sheet.get('damageTaken'), 1.3);
+  assert.equal(b.magicPackFrom, a); assert.ok(b.sheet.get('damage') > damage * 1.2);
+  const boosted = b.sheet.get('damage');
+  c.pos = { x: 1000, y: 300 }; w.refreshMagicPacks(); assert.ok(c.sheet.get('damage') < boosted);
+  b.tier++; w.refreshMagicPacks(); assert.equal(b.magicPackPower, 0);
+  b.tier--; b.faction = 'foreign'; w.refreshMagicPacks(); assert.equal(b.magicPackPower, 0);
+  b.faction = a.faction; b.owner = w.player; w.refreshMagicPacks(); assert.equal(b.magicPackPower, 0);
+  b.owner = undefined; w.refreshMagicPacks(); near(b.sheet.get('damage'), boosted);
+  const remote = cohort(w, 2, 2); w.promoteMagicPack(remote, 'rallyheart');
+  w.kill(a, false, w.player);
+  assert.ok(b.magicPack!.runtime!.retired); assert.equal(b.magicPackFrom, undefined);
+  assert.equal(b.magicPackPower, 0); assert.equal(c.magicPackPower, 0);
+  w.refreshMagicPacks(20); assert.equal(b.magicPackRole, undefined);
+  assert.ok(remote[1].magicPackPower > 0); // nearby foreign cohort cannot replace its leader
+});
+
+check('isolation speed uses a maximum-neighbor gate and clears on crowding, claim or promotion', () => {
+  const w = world(), [a, b] = cohort(w, 2, 3), base = a.sheet.get('moveSpeed');
+  w.promoteMagicPack([a, b], 'skirmishers'); near(a.sheet.get('moveSpeed'), base);
+  b.pos.x = a.pos.x + 171; w.refreshMagicPacks();
+  assert.ok(a.sheet.get('moveSpeed') > base); assert.equal(a.magicPackPower, 1);
+  assert.ok(a.sheet.getSourceMods('magicPack:skirmishers:0'));
+  b.pos.x = a.pos.x + 170; w.refreshMagicPacks(); near(a.sheet.get('moveSpeed'), base);
+  b.tier++; w.refreshMagicPacks(); assert.equal(a.magicPackPower, 1);
+  b.tier--; b.owner = w.player; w.refreshMagicPacks(); assert.equal(a.magicPackPower, 1);
+  assert.equal(b.magicPackPower, 0); near(b.sheet.get('moveSpeed'), base);
+  const foreign = cohort(w, 2, 3); w.promoteMagicPack(foreign, 'skirmishers');
+  assert.equal(a.magicPackPower, 1);
+  w.promoteMonster(a, 'rare'); assert.ok(!a.sheet.getSourceMods('magicPack:skirmishers:0'));
 });
 
 check('real ambient spawner promotes the whole cohort; rares retain one elite leader', () => {
