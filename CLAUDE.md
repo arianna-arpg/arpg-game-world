@@ -243,7 +243,8 @@ and saved encounter composition.
   (stall timer under the ceiling; `verifyDigest`). Withdrawing a bad night =
   delete the release or re-draft it. THE BOOTSTRAP: pre-channel installs
   (≤ v0.5.39) only ever ask `/releases/latest` — ONE channel-aware release
-  must be made "latest" (a stable cut, or one promoted nightly) to move them.
+  must be made "latest" (a stable cut, or one promoted nightly) to move them
+  (`v0.6.0` is that release — every install from it onward follows a channel).
   The picker persists through `writeLocalConfig` (THE LOCAL WRITE — the
   Developer box's seam too). THE QUIET UPDATE (`quietUpdate`,
   `updates.quiet`): a session that boots straight into the game (Steam Deck

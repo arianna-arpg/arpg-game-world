@@ -1,7 +1,7 @@
 {
   "name": "arpg-test-game",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Hollow Wake — a data-driven top-down action RPG (TypeScript + Canvas 2D + Electron).",
   "author": "Arianna",
   "license": "PolyForm-Noncommercial-1.0.0",

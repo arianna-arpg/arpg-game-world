@@ -189,6 +189,9 @@ nightly channel by itself from that launch on. Anyone installing from the public
 stranger's first download from being a dead end. After that hop a stale
 "latest" costs a new player one extra click, never a stuck install.
 
+**`v0.6.0` is that release**: the first build whose launcher follows a channel.
+Every install from it onward stays current with no hand-cut release at all.
+
 ## 9. Dials
 
 `launcher.config.json` (committed defaults), overridden by
