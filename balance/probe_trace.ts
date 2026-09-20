@@ -148,7 +148,7 @@ w.player.level = 8;
   check('B: the craft lane deals (R5 turned on)', !!craft,
     craft ? describeBountyPay(craft.pay) : 'none in 30 beats');
   check('B: the card prints the writ (the visible price law)',
-    !!craft && describeBountyPay(craft.pay).includes("smith's writ"));
+    !!craft && describeBountyPay(craft.pay).includes("Smith's Writ"));
   // The turn-in mints the writ item owed (handcrafted hand — rig-I law).
   const zB = Object.values(w.zoneMap).find(z =>
     z.id !== START_ZONE && z.id !== 'crossroads' && !z.boundless && z.objective.kind !== 'safe')!;
@@ -272,7 +272,7 @@ w.player.level = 8;
   `${seen.length} writs dealt`);
   check('C: the card speaks the named complexity (choosing the bounty IS choosing the class)',
     describeBountyPay({ craft: { category: 'chest', complexity: 2 } })
-      === "a smith's writ: a medium-complexity chest piece");
+      === "Smith's Writ: chest (medium complexity)");
   // The class narrows the bench (card 2c); a legacy tier payload reads.
   const writFine: ItemInstance = {
     uid: 999902, baseId: 'smith_writ', ilvl: 12, tier: 1, rarity: 'common',

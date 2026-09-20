@@ -33,8 +33,12 @@ export const TETHERED_MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('fireRes', 'flat', 0.3)],
     bond: { kin: 'ashen_houndmaster', radius: 520,
       mods: [mod('damage', 'increased', 0.2), mod('attackSpeed', 'increased', 0.15)],
-      // Leadership is shown by his rally; a second cord would imply a second physical anchor.
+      // Show the buff on the hound; a second cord would imply another physical anchor.
       link: false },
+    tells: [
+      { source: 'warded', steps: 1, channel: { kind: 'scale', amp: 0.07 } },
+      { source: 'warded', steps: 1, channel: { kind: 'glow', color: '#df6d3c', max: 0.22 } },
+    ],
     brain: { type: 'basic', behavior: { castArc: 0.65 } },
     movementTether: { length: 235, rest: 0.18, returnSpeed: 320,
       style: 'chain', color: '#c88a61', width: 4, anchorSize: 10 },

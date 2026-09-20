@@ -64,7 +64,7 @@
       el.rescount.textContent = '';
       el.grid.innerHTML = '';
       el.empty.hidden = false;
-      el.empty.innerHTML = '<h3>No exported data found</h3><p>Run <code class="mono">npx tsx scripts/export-web-data.ts</code> (or let the deploy workflow run) to generate <code class="mono">site/data/*.json</code> from the game.</p>';
+      el.empty.innerHTML = '<h3>The database could not load</h3><p>Refresh the page to try again. If it is still unavailable, please check back later.</p>';
       el.filters.innerHTML = '';
       return;
     }
@@ -77,7 +77,7 @@
 
     if (meta) {
       if (meta.sample) {
-        el.banner.innerHTML = '<div class="databanner"><span class="tag">Sample data</span><span>This preview is seeded with <b>sample entries</b> so you can see the catalog working. On deploy, the CI export replaces it with the game\'s <b>complete</b> data, and this banner disappears on its own.</span></div>';
+        el.banner.innerHTML = '<div class="databanner"><span class="tag">Sample data</span><span>This preview contains sample entries. Use the published database for current game data.</span></div>';
       }
       if (meta.generatedAt) {
         var d = new Date(meta.generatedAt);
