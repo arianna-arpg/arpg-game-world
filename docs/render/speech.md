@@ -1,5 +1,11 @@
 # THE SPEECH FABRIC + THE WORD LAYER
 
+The default NPC presentation is now a **portrait dialogue reader**. It consumes
+the same speech focus, content and portrait fabrics described here; overhead
+bubbles remain selectable through `DIALOGUE_CFG.presentation`. See
+`docs/ui/dialogue.md` for reader lifetime, controls, page handling and cooldown
+completion. The bubble-only timing/rendering laws below remain its fallback.
+
 NPC talk as wrapped **bubbles** with a **typewriter reveal**, drawn on a text
 layer that the interior darkness can never drown — while the veils still
 decide *whether* a line shows at all.
@@ -11,7 +17,62 @@ Files: `src/render/vis/speech.ts` (the pure laws), `src/render/renderer.ts`
 The fabric's WORLD half — *when* a folk line stands at all — is
 `src/engine/speech.ts` (`SPEECH_CFG`, THE TRANSIENT TELLING below), consumed
 by `World.residentPrompt`.
-Probe: `balance/probe_speech.ts` (rig J for the telling's clock).
+Probe: `balance/probe_speech.ts` (rig J for the telling's clock, K for selection
+and dwell), `balance/speech-focus-ui.cjs` for the built client.
+
+## Speech focus and dwell
+
+`World.npcSpeechView()` is the renderer's single proximity-speech feed. It
+gathers the reachable company before drawing any actor, selects attention
+through the reusable `engine/dwellFocus.ts` fold, then admits the selected
+speaker to the existing telling clock. Actor order cannot decide who speaks.
+The raw `*Prompt` methods remain content/state reads; `residentPrompt` also
+accepts admission from this feed. Calling the raw reads alone does not exercise
+the presentation dwell.
+
+`data/speechAttention.ts` owns the defaults:
+
+| Purpose | Priority | Idle dwell |
+| --- | ---: | ---: |
+| Functional counter / lesson | 100 | 0.40 seconds |
+| Ambient resident / guest / spoken seat | 0 | 0.65 seconds |
+
+The existing `World.seatIdle` input grace and body-quiescence rule apply before
+these durations. Walking, casting, knockback and other ongoing actions reset
+an unfinished dwell. Time paused with the world never advances it. A polling
+gap over `focus.staleSec` (1 second) starts a new dwell rather than crediting
+unobserved time. Once opened, a functional prompt remains readable while its
+target remains selected, including while acting on its lesson.
+
+Higher priority wins before distance. Within one priority, the nearest wins;
+the incumbent keeps focus until another is more than `focus.switchMargin`
+(18 world pixels) closer. Exact initial ties use actor id. Every new target
+earns its own dwell. Range, roof/wall reach and story gates remain those of the
+existing interaction. Dead speakers and dead listeners cannot begin a prompt.
+The renderer still applies the actor's concealment and story culling before
+queueing its bubble.
+
+Tune purpose defaults, `SPEECH_ATTENTION_CFG.roles[role]`, or
+`MonsterDef.speechAttention` in that order. Each rung can override `priority`,
+`dwellSec` and `reserveSilent`. Functional counters reserve attention even
+when no instruction is needed by default (`reserveSilent: true`), so an
+unlocked innkeeper does not yield to nearby small talk. This is purpose data,
+not a Mireille-specific selection rule.
+
+The focus stays on a nearby resident after its line expires: idle time does
+not turn a room into a revolving queue of speakers. A fresh focus admission
+still obeys that resident's existing reading window and lane cooldown.
+Switching targets never clears cooldowns, and an approach admitted during a
+cooldown does not automatically repeat when the cooldown expires. Unselected
+speakers are polled with admission false, so unseen lines consume neither a
+grammar entry nor a new cooldown. A new focus retires the old visible line;
+without a new target, an already-spoken line can finish its existing window.
+
+This pass selects **speech**, not service execution: station actions retain
+their current dwell gates. Counter content remains local-hero scoped except
+the existing couch-aware caravan, whose dwell is independently seat-scoped.
+Focus and telling memory clear on zone load, are not saved, and do not require
+a save compatibility change.
 
 ## The defect this closed
 
@@ -197,7 +258,7 @@ of a twenty-second stand.
 the line ONCE — a template with slots off its own state (`{other}`,
 `{doing}`, `{weather}`, `{lastEvent}`, `{monster}` …) from a per-company-day
 deck — stamps it for the whole window, and this clock reads the line
-actually told. The renderer still draws whatever `residentPrompt` returns;
+actually told. The renderer draws the selected `npcSpeechView` result;
 `{hero}` arrives as the literal `{name}` token this file's address seam
 expands.
 

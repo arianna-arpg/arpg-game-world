@@ -20,6 +20,7 @@ import { CouchJoinOverlay, type CouchJoinChoice, type CouchJoinView } from './ui
 import { applyCursor } from './core/cursor';
 import { assistAim, AIM_ASSIST } from './engine/aimassist';
 import { PadPointer } from './ui/padpointer';
+import { DialogueUI } from './ui/dialogue';
 import { applyUiScale, installUiScaleStyles } from './ui/uiScale';
 import { installUiStack } from './ui/zorder';
 import { escapeModeOf } from './ui/escapeConfig';
@@ -420,6 +421,18 @@ renderer.getPlayerName = () => world.heroKnown() ? world.meta.name : '';
 renderer.uiObstructions = () => ui.obstructionRects();
 
 let running = false;
+const dialogue = new DialogueUI({
+  settings: () => settings, padActive: padActiveNow,
+  hudTop: () => ui.hudCluster?.()?.y,
+});
+renderer.npcDialogueAvailable = () => running && !world.player?.dead && !world.player?.downed && !ui.uiBlocking();
+renderer.onNpcDialogue = (w, line, focusId) => {
+  dialogue.setAvailable(renderer.npcDialogueAvailable());
+  dialogue.sync(w, line, focusId);
+};
+// A consumed dialogue button stays out of gameplay until physically released,
+// including the frame in which Finish closes the reader.
+const dialoguePadHeld = new Set<string>();
 let deathShown = false;
 let uiRefreshTimer = 0;
 let autosaveTimer = 0;
@@ -876,6 +889,8 @@ function readLocalInput(dt: number): PlayerInput | null {
   // not gameplay intent (Ⓐ under an inventory must never also swing a sword).
   // The keyboard/mouse half keeps flowing either way.
   const padLive = !padPointer.active;
+  const dialoguePadDown = (code: string): boolean => !dialoguePadHeld.has(code) && pad.isDown(code);
+  const dialoguePadPressed = (code: string): boolean => !dialoguePadHeld.has(code) && pad.justPressed(code);
   // THE PRESSABLE BAR's press: armed on the mouse's down edge over a slot,
   // released with the button. (CSS px = buffer px ÷ the render-scale seam.)
   let barEdge = false;
@@ -893,10 +908,10 @@ function readLocalInput(dt: number): PlayerInput | null {
   }
   if (barPress && !input.lmb) barPress = null;
   let dx = 0, dy = 0;
-  if (input.keys.has(kb.moveUp) || (padLive && pad.isDown(pb.moveUp))) dy -= 1;
-  if (input.keys.has(kb.moveDown) || (padLive && pad.isDown(pb.moveDown))) dy += 1;
-  if (input.keys.has(kb.moveLeft) || (padLive && pad.isDown(pb.moveLeft))) dx -= 1;
-  if (input.keys.has(kb.moveRight) || (padLive && pad.isDown(pb.moveRight))) dx += 1;
+  if (input.keys.has(kb.moveUp) || (padLive && dialoguePadDown(pb.moveUp))) dy -= 1;
+  if (input.keys.has(kb.moveDown) || (padLive && dialoguePadDown(pb.moveDown))) dy += 1;
+  if (input.keys.has(kb.moveLeft) || (padLive && dialoguePadDown(pb.moveLeft))) dx -= 1;
+  if (input.keys.has(kb.moveRight) || (padLive && dialoguePadDown(pb.moveRight))) dx += 1;
   // The move stick adds its ANALOG vector — deflection rides straight into
   // moveActor, so half-tilt is a slow stalk without any new movement path.
   if (padLive) { dx += pad.move.x; dy += pad.move.y; }
@@ -991,16 +1006,16 @@ function readLocalInput(dt: number): PlayerInput | null {
   ] as const;
   const skillKeys = [kb.skillSlot2, kb.skillSlot3, kb.skillSlot4, kb.skillSlot5, kb.skillSlot6, kb.skillSlot7];
   const held = [
-    (input.lmb && !barPress) || (padLive && pad.isDown(pb.skillSlot0)),
-    input.rmb || (padLive && pad.isDown(pb.skillSlot1)),
-    ...skillKeys.map((k, i) => input.keys.has(k) || (padLive && pad.isDown(pb[slotActs[i + 2]]))),
+    (input.lmb && !barPress) || (padLive && dialoguePadDown(pb.skillSlot0)),
+    input.rmb || (padLive && dialoguePadDown(pb.skillSlot1)),
+    ...skillKeys.map((k, i) => input.keys.has(k) || (padLive && dialoguePadDown(pb[slotActs[i + 2]]))),
   ];
   const edge = [
-    (input.lmbPressed && !barPress) || (padLive && pad.justPressed(pb.skillSlot0)),
-    input.rmbPressed || (padLive && pad.justPressed(pb.skillSlot1)),
+    (input.lmbPressed && !barPress) || (padLive && dialoguePadPressed(pb.skillSlot0)),
+    input.rmbPressed || (padLive && dialoguePadPressed(pb.skillSlot1)),
     ...skillKeys.map((k, i) => {
       const fromKey = input.justPressed(k);
-      const fromPad = padLive && pad.justPressed(pb[slotActs[i + 2]]);
+      const fromPad = padLive && dialoguePadPressed(pb[slotActs[i + 2]]);
       return fromKey || fromPad;
     }),
   ];
@@ -1040,8 +1055,8 @@ function readLocalInput(dt: number): PlayerInput | null {
   // shield-bash-on-shift bug); only fresh EDGES reroute.
   const metaKey = kb.metaModifier ?? 'shift';
   const metaEdgePressed = input.justPressed(metaKey)
-    || (padLive && pad.justPressed(pb.metaModifier));
-  if (input.keys.has(metaKey) || (padLive && pad.isDown(pb.metaModifier))) {
+    || (padLive && dialoguePadPressed(pb.metaModifier));
+  if (input.keys.has(metaKey) || (padLive && dialoguePadDown(pb.metaModifier))) {
     const metaEdge = edge.map(() => false);
     for (let i = 0; i < edge.length; i++) if (edge[i]) metaEdge[i] = true;
     // HELD-CAST META (Phalanx while Shield Up): you can't re-press a
@@ -1067,6 +1082,15 @@ function handleLocalPanels(): void {
   // death screen. (A downed local hero in co-op likewise can't toggle panels.)
   if (world.player.dead || world.player.downed) return;
   const kb = settings.keybinds;
+  if (dialogue.open && !padPointer.active) {
+    const next = settings.padBinds.dialogueAdvance, back = PAD_CFG.pointer.cancel;
+    const cancel = next !== back && pad.justPressed(back);
+    const advance = pad.justPressed(next);
+    if (cancel) dialoguePadHeld.add(back);
+    if (advance) dialoguePadHeld.add(next);
+    if (cancel) dialogue.close();
+    else if (advance) dialogue.advance();
+  }
   // Escape toggles the pause/menu (hardwired — never rebindable). While it's up,
   // gameplay intent is suppressed (readLocalInput returns null). An open DWELL
   // dialog (caravan / toll / sail) is dismissed FIRST and the press stops there —
@@ -1090,6 +1114,7 @@ function handleLocalPanels(): void {
     if (ui.escapeMenuOpen) { ui.hideEscapeMenu(); return; }
     // The couch join overlay dismisses like any dialog — one press, gone.
     if (ui.couchJoinOpen) { closeCouchJoin(); return; }
+    if (dialogue.open && dialogue.close()) return;
     // COUCH: the hero's Esc walks ITS OWN cascade — a guest's open panels
     // are the guest's business (their Ⓑ walks theirs). Solo falls through
     // to the classic global cascade below, byte-identically.
@@ -1699,6 +1724,9 @@ function tick(now: number): void {
   // cascade stays single-sourced in handleLocalPanels.
   const nowSec = now / 1000;
   pad.poll(nowSec);
+  for (const code of dialoguePadHeld) if (!pad.isDown(code)) dialoguePadHeld.delete(code);
+  if (!running || world.player?.dead || world.player?.downed) dialogue.reset();
+  dialogue.setAvailable(running && !world.player?.dead && !world.player?.downed && !ui.uiBlocking());
   if (input.mouse.x !== lastMouse.x || input.mouse.y !== lastMouse.y) {
     // The mouse reclaims aim only through DELIBERATE travel: motion
     // accumulates while the pad holds the reticle, and only past the

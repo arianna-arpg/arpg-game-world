@@ -42,7 +42,9 @@ import { RUNE_INFO } from '../data/invocations';
 import { COMBO_LIST, COMBO_RULES } from '../data/combos';
 import { COMBO_CFG, comboProgress, comboStat } from '../engine/sequence';
 import { CORPSE_CFG, LOW_LIFE_FLASH_SEC, SNOW_CFG } from '../engine/world';
-import type { Seat, World } from '../engine/world';
+import type { NpcSpeechLine, Seat, World } from '../engine/world';
+import { DIALOGUE_CFG } from '../data/dialogue';
+import { liveActorPortrait } from './actorPortrait';
 import { ATTENTION_CFG, collectAttention } from '../world/attention';
 import {
   floatKindOn, noticeChannelOn, NOTICE_CFG, PICKUP_FEED_CFG, type NoticeEntry,
@@ -65,7 +67,6 @@ import { courtLord } from '../packages/courts';
 import { boundaryGateOf } from '../data/boundaryGates';
 import { VEIL_DEFAULTS, veilPresenceAlpha } from '../engine/veil';
 import { DEFENSE_CFG } from '../engine/defense';
-import { QUEST_GIVER_IDS } from '../quests/defs';
 
 /** View-cull margin beyond a doodad's own radius: canopy crowns, vent rims,
  *  and blob `grow` passes all overdraw past the disc — the pad keeps their
@@ -766,6 +767,10 @@ export class Renderer {
       // one composited sprite per body, no per-body state churn.
       this.drawLite(world, vw, vh);
       for (const a of world.actors) if (!a.dead && a.worm) this.drawWormTail(a, world.time);
+      // THE SPEECH FOCUS resolves the whole company before any bubble draws.
+      this.speechFocusLines.clear();
+      this.dialogueVisibleSpeaker = null;
+      for (const line of world.npcSpeechView(!this.dialogueReaderEnabled() || this.npcDialogueAvailable())) this.speechFocusLines.set(line.a, line);
       for (const a of world.actors) if (!a.dead) this.drawActor(a, world);
       if (world.deathPresentation) drawPlayerDeath(this.ctx, world.player, world.deathPresentation, world.time);
       // THE STATUS VOICE (vis/statusVoiceLayer.ts): what just LANDED on a
@@ -2329,14 +2334,7 @@ export class Renderer {
     }
     const a = world.actors.find(x => x.id === st.casterId);
     if (!a) return this.eyecatchSubject; // body gone mid-pane: keep the last face
-    const def = a.defId ? MONSTERS[a.defId] : undefined;
-    return portraitSubjectOf({
-      shape: a.shape, radius: a.radius, color: a.color,
-      material: a.material, adorn: a.adorn, look: a.look,
-      demonHorns: !!FACTIONS[a.faction ?? '']?.nubHorns,
-      portrait: def?.portrait, worm: def?.worm, parts: def?.parts,
-      extraParts: a.extraParts,
-    }, { resolvePart });
+    return liveActorPortrait(a);
   }
 
   /** A screen-space wash for time of day and weather — subtle enough to keep
@@ -3633,6 +3631,11 @@ export class Renderer {
   /** This frame's spoken lines — queued by the actor pass (role prompts and
    *  any future talker), drawn as bubbles in the WORD LAYER above the veils. */
   private speeches: { a: Actor; text: string; color: string; style?: SpeechStyle }[] = [];
+  private speechFocusLines = new Map<Actor, NpcSpeechLine>();
+  private dialogueVisibleSpeaker: Actor | null = null;
+  npcDialogueAvailable: () => boolean = () => true;
+  onNpcDialogue: ((world: World, line: NpcSpeechLine | null, focusId: number | null) => void) | null = null;
+  private dialogueReaderEnabled(): boolean { return !!this.onNpcDialogue && DIALOGUE_CFG.presentation === 'dialogue'; }
   /** Per-speaker utterance clocks (sim time, so menu holds freeze the
    *  telling): when this text started arriving, or null while the veils
    *  conceal the speaker — first sight starts the telling from its first
@@ -3665,6 +3668,13 @@ export class Renderer {
   }
 
   private drawSpeeches(world: World): void {
+    // The reader sees the same body/story/concealment gates as an overhead
+    // bubble, including frames after an ambient offer expires.
+    const speaker = this.dialogueVisibleSpeaker;
+    const visible = this.dialogueReaderEnabled() && speaker && this.labelRevealAt(world, speaker.pos) > 0.02;
+    const line = visible ? this.speechFocusLines.get(speaker) : undefined;
+    this.onNpcDialogue?.(world, line?.seatId === world.localSeat?.id
+      ? { ...line, text: this.resolveText(line.text) } : null, visible ? speaker.id : null);
     if (!this.speeches.length) {
       if (this.speechClocks.size) this.speechClocks.clear();
       this.speechLayoutAtMs = 0;
@@ -5886,60 +5896,11 @@ export class Renderer {
       this.queueLabel(a, a.name, ink, dy, { font: '10px Verdana', stroke: false });
     }
 
-    // The innkeep "talks" — ROLE-BOUND through world.innkeepPrompt() like its
-    // caravanner/bonewright/delver siblings: the welcome-gift invitation
-    // while the flasks are owed, else the locked-care note. Any body a
-    // package dresses in the role gets the prompt, no renderer edit.
-    // TALK rides THE SPEECH FABRIC (queueSpeech): a wrapped bubble in the
-    // speaker's ink, told glyph by glyph — so it reads as the NPC speaking,
-    // not a caption; names and marks stay on the plain label lane.
-    if (a.defId && MONSTERS[a.defId]?.npcRole === 'innkeep') {
-      const msg = world.innkeepPrompt();
-      if (msg) this.queueSpeech(a, msg, '#d8b87a');
-    }
-
-    // THE WARD'S RESIDENTS (and the inn's guests, and every spoken seat)
-    // speak their line when you come near — role-bound through
-    // world.residentPrompt() (data/boroughs.ts TOWN_RESIDENTS gives each
-    // family its words at the seat). WHEN they speak is the world's read:
-    // THE TRANSIENT TELLING (engine/speech.ts SPEECH_CFG — a fresh approach,
-    // a held window, a held tongue); this pass stays dumb and draws whatever
-    // the read returns, the utterance clock keyed to the line as ever.
-    if (a.defId && MONSTERS[a.defId]?.npcRole === 'resident') {
-      const msg = world.residentPrompt(a);
-      if (msg) this.queueSpeech(a, msg, '#d8c8a8');
-    }
-
-    // Any quest-giving NPC posts its offer above its head while you're near —
-    // the id set derives from the QUESTS registry (quartermaster, a secret
-    // vocation's shrine spirit, future field boards), never a hand list.
-    if (a.defId && QUEST_GIVER_IDS.has(a.defId)) {
-      const msg = world.questGiverPrompt();
-      if (msg) this.queueSpeech(a, msg, '#c8a8e8');
-    }
-
-    if (a.defId && MONSTERS[a.defId]?.npcRole === 'caravanner') {
-      // COUCH: the bubble answers whichever LOCAL hand is standing at the
-      // escort — the Caravanner speaks to the guest who walked up, not only to
-      // P1. Solo (and on a client) that list is the one seat: one call, as before.
-      for (const s of world.localHumanSeats()) {
-        const msg = world.caravanPrompt(s);
-        if (msg) { this.queueSpeech(a, msg, '#d8b87a'); break; }
-      }
-    }
-
-    // The Bonewright posts its current demand above its head — bound to the
-    // ROLE (npcRole 'bonewright'), like every other counter: any body a
-    // package dresses in the role gets the prompt, no renderer edit.
-    if (a.defId && MONSTERS[a.defId]?.npcRole === 'bonewright') {
-      const msg = world.amalgamPrompt();
-      if (msg) this.queueSpeech(a, msg, '#9ad0b0');
-    }
-
-    // The Delver posts its trade/descend prompt above its head (role-bound).
-    if (a.defId && MONSTERS[a.defId]?.npcRole === 'delver') {
-      const msg = world.delverPrompt();
-      if (msg) this.queueSpeech(a, msg, '#7fe0d8');
+    // Keep the actor's concealment/story gates above this presentation read.
+    const speechFocusLine = this.speechFocusLines.get(a);
+    if (world.speechFocusTarget()?.id === a.id) this.dialogueVisibleSpeaker = a;
+    if (speechFocusLine && (!this.dialogueReaderEnabled() || speechFocusLine.seatId !== world.localSeat.id)) {
+      this.queueSpeech(a, speechFocusLine.text, speechFocusLine.color);
     }
 
     // Status pips

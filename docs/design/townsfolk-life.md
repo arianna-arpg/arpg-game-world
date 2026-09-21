@@ -69,10 +69,18 @@ patron and the corner-room lodger stay fixed.
   `watch_change` does — a haunt's `home` follows the post.
 
 ### 1.4 THE TRANSIENT TELLING — `engine/speech.ts`, `SPEECH_CFG` (built 2026-09-06)
+The presentation now admits these tellings through **speech focus**:
+`World.npcSpeechView` selects one reachable speaker and requires idle dwell.
+Functional counters outrank ambient talk; timing and priority fold from
+purpose to role to `MonsterDef.speechAttention`. The existing window and
+cooldown below remain the telling's clock. See `docs/render/speech.md` for
+selection, interruption, persistence and extension rules; probe rig K covers
+their integration. Raw prompt/grammar reads below do not run selection.
+
 A folk line is an UTTERANCE, not a caption. Before this the spoken seat's
 bubble stood as long as the hero stood in reach and popped in and out at
 the radius edge as they walked past. Now `World.residentPrompt` (the
-renderer's per-frame poll) answers through one pure fold, `speechTell`:
+speech focus feed's admitted poll) answers through one pure fold, `speechTell`:
 a telling begins on A FRESH APPROACH (the nearness EDGE — within
 `RESIDENT_RADIUS` + `dwellReachable` under THE SAME-STORY LAW, not there at
 the last live read; standing there earns nothing), stands its WHOLE window

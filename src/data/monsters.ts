@@ -1,4 +1,5 @@
 import { HIVECALL_MONSTERS } from './hivecall';
+import type { SpeechAttention } from './speechAttention';
 ﻿// ---------------------------------------------------------------------------
 // THE BESTIARY.
 //
@@ -682,6 +683,8 @@ export interface MonsterDef {
    *  for every line this body speaks through queueSpeech; absent = the
    *  fabric's defaults. Render-only flavor, never gameplay. */
   speech?: SpeechStyle;
+  /** Speech focus: purpose defaults → role → this definition. */
+  speechAttention?: Partial<SpeechAttention>;
   /** THE SPEECH GRAMMAR (engine/speechGrammar.ts): the role pools this
    *  kind draws its talk from when it stands as a spoken seat (a plan's
    *  npcs row) — 'patron', 'lodger', 'resident', 'warden' … Rostered folk

@@ -60,6 +60,11 @@ import { bootSimEngine, classById, makeSimWorld } from '../src/sim/arena';
 import { bumpLedger } from '../src/packages/ledger';
 import { LEDGER_HERO_RENOWNED, World } from '../src/engine/world';
 import { SPEECH_CFG, speechTell, speechWindowFor, type SpeechMemory } from '../src/engine/speech'; // rig J — THE TRANSIENT TELLING
+import { dwellFocus, type DwellFocus } from '../src/engine/dwellFocus';
+import { SPEECH_ATTENTION_CFG, speechAttentionFor } from '../src/data/speechAttention';
+import { makeSpeakerRow, type SpeechSpeakerRow } from '../src/engine/speechGrammar';
+import { MONSTERS } from '../src/data/monsters';
+import { DialogueSession, dialoguePages, type DialogueOffer } from '../src/engine/dialogue';
 import { resetActorIdCounter } from '../src/engine/actor';
 import { buildManifest } from '../src/packages/manifest';
 import { makeAccount } from '../src/meta/account';
@@ -734,6 +739,133 @@ console.log('J. THE TRANSIENT TELLING (speechTell — a fresh approach, a held w
     check('J19 THE LESSON EXEMPTION — Mireille\'s prompt stands every frame of a 20 s stand (the counters never ride this clock)',
       !!mir && stood === 600, `${stood}/600`);
   }
+}
+
+// K. The presentation seam: attention + telling clocks, as the renderer reads.
+console.log('K. THE SPEECH FOCUS (idle dwell, priority, stability and cooldowns)');
+{
+  const tune = SPEECH_ATTENTION_CFG.focus;
+  const ambient = { id: 2, distance: 10, ...speechAttentionFor('ambient', 'resident') };
+  const service = { id: 3, distance: 90, ...speechAttentionFor('functional', 'innkeep') };
+  let f = dwellFocus(undefined, [ambient, service], true, 0, tune)!;
+  check('K1 a farther functional speaker wins, with no immediate bubble', f.id === 3 && !f.ready);
+  check('K2 selection is independent of enumeration order',
+    dwellFocus(undefined, [service, ambient], true, 0, tune)?.id === f.id);
+  f = dwellFocus(f, [ambient, service], true, 0.41, tune)!;
+  check('K3 sustained idle focus opens the functional prompt', f.ready);
+  const peer = { ...ambient, id: 1, distance: 9 };
+  let a = dwellFocus(undefined, [ambient], true, 0, tune)!;
+  check('K4 a tiny distance change preserves the incumbent', dwellFocus(a, [peer, ambient], true, 0.1, tune)?.id === 2);
+  check('K5 a materially closer peer changes focus and restarts dwell',
+    dwellFocus(a, [{ ...peer, distance: 0 }, { ...ambient, distance: 40 }], true, 0.2, tune)?.since === 0.2);
+  a = dwellFocus(a, [ambient], false, 0.3, tune)!;
+  a = dwellFocus(a, [ambient], true, 0.6, tune)!;
+  check('K6 acting resets an unfinished dwell', !a.ready && a.since === 0.6);
+  check('K7 stale/unobserved time cannot complete dwell',
+    !dwellFocus(a, [ambient], true, 5, tune)?.ready);
+  check('K8 an action between polls also resets pending dwell',
+    dwellFocus(a, [ambient], true, 1.1, tune, 0.7)?.since === 1.1);
+  check('K9 completed lessons remain open during an action', !!dwellFocus(f, [service], false, 0.5, tune)?.ready);
+  check('K10 no reachable candidate clears focus', dwellFocus(f, [], true, 0.5, tune) === undefined);
+  const snapshot = JSON.stringify(f);
+  dwellFocus(f, [ambient], true, 0.5, tune);
+  check('K11 the focus fold does not mutate its inputs', JSON.stringify(f) === snapshot);
+  for (const hz of [20, 30, 60, 144]) {
+    let m: DwellFocus | undefined;
+    let at = -1;
+    for (let i = 0; i < hz * 2; i++) {
+      m = dwellFocus(m, [ambient], true, i / hz, tune);
+      if (m?.ready) { at = i / hz; break; }
+    }
+    check(`K12.${hz} dwell uses elapsed time at ${hz} Hz`, at >= ambient.dwellSec && at < ambient.dwellSec + 1 / hz + 1e-9);
+  }
+  SPEECH_ATTENTION_CFG.roles.resident = { priority: 25 };
+  const folded = speechAttentionFor('ambient', 'resident', { dwellSec: 0.9 });
+  delete SPEECH_ATTENTION_CFG.roles.resident;
+  check('K13 purpose, role and definition compose', folded.priority === 25 && folded.dwellSec === 0.9);
+
+  const w = makeSimWorld('warrior', 77034);
+  const patron = w.createMonster('townsfolk_patron', 1, 'player');
+  const keeper = w.createMonster('townsfolk_innkeep', 1, 'player');
+  patron.pos = { x: w.player.pos.x + 30, y: w.player.pos.y };
+  keeper.pos = { x: w.player.pos.x + 90, y: w.player.pos.y };
+  w.actors.push(patron, keeper);
+  const rows = (w as unknown as { speakerRows: Map<number, SpeechSpeakerRow> }).speakerRows;
+  rows.set(patron.id, makeSpeakerRow(patron.id, 'Take the stairs.', 'seat', {
+    key: 'focus:patron', company: 'focus', name: null, roles: ['patron'], own: ['Take the stairs.'],
+  }));
+  w.time = 10; w.localSeat.lastActedAt = 10;
+  check('K14 walking into two ranges produces no immediate bubble', w.npcSpeechView().length === 0);
+  const poll = (seconds: number) => {
+    let view = w.npcSpeechView();
+    for (let i = 0; i < Math.ceil(seconds * 60); i++) { w.time += 1 / 60; view = w.npcSpeechView(); }
+    return view;
+  };
+  let view = poll(0.3);
+  check('K15 input grace and speech dwell both apply', view.length === 0);
+  view = poll(0.5);
+  check('K16 Mireille beats the closer patron in the real world seam', view.length === 1 && view[0].a === keeper);
+  w.actors.reverse();
+  check('K17 reversing real actor order cannot change the speaker', w.npcSpeechView()[0]?.a === keeper);
+  const old = MONSTERS[patron.defId!].speechAttention;
+  MONSTERS[patron.defId!].speechAttention = { priority: 200 };
+  check('K18 a data override changes focus but earns a new dwell', w.npcSpeechView().length === 0);
+  view = poll(0.7);
+  check('K19 the newly selected patron speaks its first authored line', view.length === 1 && view[0].text === 'Take the stairs.');
+  const win = speechWindowFor('seat', view[0]?.text ?? '');
+  view = poll(win.holdSec + win.cooldownSec + 1);
+  check('K20 standing through window and cooldown never repeats', view.length === 0);
+  const home = { ...w.player.pos };
+  w.player.pos.x -= 500; poll(0.1); w.player.pos = { ...home };
+  check('K21 returning after cooldown still requires a fresh dwell', w.npcSpeechView().length === 0);
+  check('K22 the fresh dwell admits another line', poll(0.7).some(x => x.a === patron));
+  w.player.pos.x -= 500; poll(win.holdSec + 1); w.player.pos = { ...home };
+  check('K23 stepping out/back during cooldown cannot bypass it', poll(0.7).length === 0);
+  MONSTERS[patron.defId!].speechAttention = old;
+  view = poll(0.5);
+  check('K24 functional prompts preempt a cooling resident', view.length === 1 && view[0].a === keeper);
+  keeper.tier = 1;
+  check('K25 another story cannot win speech focus', !w.npcSpeechView().some(x => x.a === keeper));
+  keeper.dead = true;
+  check('K26 a dead speaker cannot win focus', !poll(0.7).some(x => x.a === keeper));
+  w.loadZone(START_ZONE);
+  check('K27 zone loading clears transient focus', (w as unknown as { speechFocus: Map<unknown, unknown> }).speechFocus.size === 0);
+}
+
+console.log('L. THE DIALOGUE READER (pages, explicit advance, pending state and dismissal)');
+{
+  const text = 'One two three four five six seven eight nine ten.';
+  const pages = dialoguePages(text, 15);
+  check('L1 pagination preserves every word in order', pages.length > 1 && pages.join(' ') === text && pages.every(p => p.length <= 15));
+  check('L2 blank lines author explicit page breaks', dialoguePages('First.\n\nSecond.', 210).join('|') === 'First.|Second.');
+  check('L3 a long token stays intact and a blank offer stays empty',
+    dialoguePages('abcdefghijk small', 3).join('|') === 'abcdefghijk|small' && dialoguePages('  ', 10).length === 0);
+  const d = new DialogueSession();
+  const offer: DialogueOffer = { speakerId: 1, key: 'first', pages: ['First page.', 'Second page.'] };
+  d.sync(1, offer);
+  check('L4 an admitted offer opens on its first page', d.reading?.page === 0 && d.hasNext());
+  d.sync(1, null);
+  check('L5 expiry of the overhead window never cuts off the reader', d.reading?.offer.key === 'first');
+  d.advance();
+  check('L6 advance moves one page', d.reading?.page === 1 && !d.hasNext());
+  const changed = { speakerId: 1, key: 'lesson', pages: ['A new lesson.'] };
+  d.sync(1, changed);
+  check('L7 a changed lesson queues without replacing the page being read', d.reading?.page === 1 && d.hasNext());
+  d.sync(1, { ...changed, key: 'latest', pages: ['The current lesson.'] });
+  d.advance();
+  check('L8 advancing reaches the latest state, not obsolete queued instructions', d.reading?.offer.key === 'latest' && d.reading.page === 0);
+  check('L9 finish reports the speaker for cooldown attribution', d.advance()?.speakerId === 1 && d.reading === null);
+  d.sync(1, offer);
+  check('L10 closing cannot immediately reopen while still focused', d.reading === null);
+  d.sync(null, null); d.sync(1, offer);
+  check('L11 a genuinely new approach rearms the reader', d.reading?.page === 0);
+  check('L12 switching speakers ends the prior exchange', d.sync(2, null)?.speakerId === 1 && d.reading === null);
+  d.sync(2, offer);
+  check('L13 another speaker cannot borrow the selected actor\'s dialogue', d.reading === null);
+  d.sync(2, { ...offer, speakerId: 2 }); d.reset();
+  check('L14 resetting clears reading and dismissal state', d.reading === null);
+  d.sync(2, { ...offer, speakerId: 2 });
+  check('L15 reset permits a fresh conversation with reused actor ids', !!d.reading);
 }
 
 console.log(`\n${fail === 0 ? 'ALL PASS' : 'FAILURES'} — ${pass} passed, ${fail} failed`);

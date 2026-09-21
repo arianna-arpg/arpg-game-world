@@ -2317,6 +2317,18 @@ we verify changes.
   the veils decide WHETHER text shows (`labelRevealAt` at the speaker's
   feet: the same-view gate), never get to drown what they revealed —
   docs in `docs/render/speech.md`; probe `balance/probe_speech.ts`.
+  THE PORTRAIT DIALOGUE (`ui/dialogue.ts`, `engine/dialogue.ts`,
+  `data/dialogue.ts`) is its default reader: live actor portraits shared
+  with ultimate cutaways, paged reveal/advance, explicit finish, walk-away
+  dismissal, cooldown from completion, and queued functional updates.
+  `DIALOGUE_CFG.presentation` retains the bubble comparison. Contract:
+  `docs/ui/dialogue.md`; probe_speech rig L + `balance/dialogue-ui.cjs`.
+  THE SPEECH FOCUS now gates presentation through `World.npcSpeechView`:
+  `engine/dwellFocus.ts` selects by priority then stable distance, requires
+  idle dwell, and admits the winner to the existing telling/cooldown clock.
+  `data/speechAttention.ts` folds purpose → role → MonsterDef.speechAttention;
+  functional counters outrank ambient talk. Docs `docs/render/speech.md`,
+  probe_speech rig K + `balance/speech-focus-ui.cjs` pin the integration.
   THE TRANSIENT TELLING (`engine/speech.ts` — the fabric's WORLD half,
   `SPEECH_CFG`): a folk line is an UTTERANCE, not a caption — it begins on
   A FRESH APPROACH (the nearness EDGE, never the level), stands its whole

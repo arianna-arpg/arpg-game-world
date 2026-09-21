@@ -328,6 +328,8 @@ import { castingEventFlash } from './castingCues';
 import { guardBashGeometry } from './warningCues';
 import { DEFENSE_CUE_CFG } from '../data/defenseCues';
 import { speechTell, speechWindowFor, type SpeechMemory } from './speech'; // THE TRANSIENT TELLING — the speech fabric's world half (residentPrompt)
+import { dwellFocus, type DwellFocus } from './dwellFocus';
+import { SPEECH_ATTENTION_CFG, speechAttentionFor } from '../data/speechAttention';
 import { SPEECH_GRAMMAR_CFG, composeSpeech, dealSpeechDecks, hauntPhrase, makeSpeakerRow, type SpeechContext, type SpeechSpeakerRow } from './speechGrammar'; // THE SPEECH GRAMMAR — what a spoken body says (residentPrompt composes through it)
 import '../data/speechGrammar'; // THE SPEECH GRAMMAR's corpus: registers the templates + haunt phrases on import
 import { PACK_CFG, foldPack } from './pack';
@@ -2789,6 +2791,8 @@ function procIndex(): NonNullable<typeof PROC_INDEX> {
   }
   return PROC_INDEX;
 }
+
+export interface NpcSpeechLine { a: Actor; text: string; color: string; seatId: string }
 
 export class World {
   actors: Actor[] = [];
@@ -6397,6 +6401,9 @@ export class World {
     // — both keyed by the body minted below).
     this.speakerRows.clear(); // THE SPEECH GRAMMAR's rows go with them (the deck re-deals at the next telling)
     this.speechMemory.clear(); // THE TRANSIENT TELLING: the clocks go with the lines (speechTell keeps no memory across a load)
+    this.speechFocus.clear();
+    this.speechFocusSpeaker = undefined;
+    this.dialogueScene++;
     let npcSeat = 0; // THE SPEECH GRAMMAR's seat index — a stable speaker key per plan seat
     for (const n of layout.npcs) {
       // Mireille the Innkeep is ALWAYS present (she talks if her heal is locked).
@@ -23868,6 +23875,92 @@ export class World {
    *  with the lines at every zone load, never serialized, never on the
    *  wire (a co-op client polls its own world through the same read). */
   private speechMemory = new Map<number, SpeechMemory>();
+  private speechFocus = new Map<Seat, DwellFocus>();
+  private speechFocusSpeaker?: number;
+  /** Zone-load generation, including reloading the same zone. UI readers
+   * must never carry a conversation into newly minted actors. */
+  dialogueScene = 0;
+
+  speechFocusTarget(seat: Seat = this.localSeat): Readonly<DwellFocus> | undefined {
+    return this.speechFocus.get(seat);
+  }
+
+  /** A reader-paced dialogue starts its ambient cooldown when finished or
+   * interrupted, even if reading outlasted the old overhead telling window. */
+  finishNpcDialogue(actorId: number): void {
+    const memory = this.speechMemory.get(actorId);
+    if (memory) this.speechMemory.set(actorId, {
+      ...memory, spokeAt: this.time, holdSec: 0, readAt: this.time,
+    });
+  }
+
+  /** THE SPEECH FOCUS: one batch before drawing actors, independent of actor
+   * order/culling. Raw counter reads remain available to menus and lessons;
+   * only this presentation seam admits proximity bubbles. Service actions
+   * retain their existing dwell gates. Couch caravans keep their seat scope. */
+  npcSpeechView(admit = true): NpcSpeechLine[] {
+    const out: NpcSpeechLine[] = [];
+    for (const seat of this.localHumanSeats()) {
+      const candidates: { id: number; a: Actor; text: string | null; color: string;
+        distance: number; priority: number; dwellSec: number; ambient: boolean }[] = [];
+      if (!seat.actor.dead) for (const a of this.actors) {
+        if (a.dead || !a.defId) continue;
+        const def = MONSTERS[a.defId];
+        const role = def?.npcRole ?? '';
+        const ambient = role === 'resident' && this.speakerRows.has(a.id);
+        const quest = QUEST_GIVER_IDS.has(a.defId);
+        // Other counter content is local-hero scoped; the caravan already
+        // supports couch guests. Do not lend one hero another's lesson.
+        if (seat !== this.localSeat && role !== 'caravanner') continue;
+        let radius: number, text: string | null = null, color = '#d8b87a';
+        if (ambient) { radius = RESIDENT_RADIUS; color = '#d8c8a8'; }
+        else if (quest) { radius = QUESTGIVER_RADIUS; text = this.questGiverPrompt(); color = '#c8a8e8'; }
+        else if (role === 'innkeep') { radius = MIREILLE_RADIUS; text = this.innkeepPrompt(); }
+        else if (role === 'caravanner') { radius = CARAVAN_RADIUS; text = this.caravanPrompt(seat); }
+        else if (role === 'bonewright') { radius = AMALGAM_RADIUS; text = this.amalgamPrompt(); color = '#9ad0b0'; }
+        else if (role === 'delver') { radius = DELVER_RADIUS; text = this.delverPrompt(); color = '#7fe0d8'; }
+        else continue;
+        if (role === 'bonewright' && this.amalgamSite?.necroId !== a.id) continue;
+        if (role === 'delver' && (this.descentSite?.delverId !== a.id || this.descentRun)) continue;
+        const distance = dist(seat.actor.pos, a.pos);
+        if (distance > radius || !this.dwellReachable(seat.actor.pos, a.pos,
+          npcDwellReach(quest ? 'questgiver' : role), this.storyPair(seat.actor, a))) continue;
+        const attention = speechAttentionFor(ambient ? 'ambient' : 'functional', role, def.speechAttention);
+        if (!ambient && !text && !attention.reserveSilent) continue;
+        candidates.push({ id: a.id, a, text, color, distance, ambient,
+          ...attention });
+      }
+      const focus = dwellFocus(this.speechFocus.get(seat), candidates,
+        admit && this.seatIdle(seat), this.time, SPEECH_ATTENTION_CFG.focus, seat.lastActedAt);
+      if (focus) this.speechFocus.set(seat, focus);
+      else this.speechFocus.delete(seat);
+      const selected = candidates.find(c => c.id === focus?.id);
+      if (seat === this.localSeat && selected && selected.id !== this.speechFocusSpeaker) {
+        // A new focus retires the previous visible utterance, even while
+        // dwelling. Its existing cooldown still runs without interruption.
+        this.speechFocusSpeaker = selected.id;
+      }
+      let spoken: { a: Actor; text: string; color: string } | undefined;
+      if (seat === this.localSeat) {
+        // Poll even the non-selected speakers: selection cannot reset a
+        // cooldown or turn render culling into a fresh approach. A finished
+        // focus stays selected while near, so standing never rotates a crowd.
+        for (const a of this.actors) {
+          if (!this.speakerRows.has(a.id)) continue;
+          const text = this.residentPrompt(a, admit && selected?.id === a.id && !!focus?.ready);
+          if (text && !seat.actor.dead && this.speechFocusSpeaker === a.id
+            && (!selected || (selected.id === a.id && focus?.ready))) {
+            spoken = { a, text, color: '#d8c8a8' };
+          }
+        }
+      }
+      if (selected && !selected.ambient && focus?.ready && selected.text) {
+        spoken = { a: selected.a, text: selected.text, color: selected.color };
+      }
+      if (admit && spoken && !out.some(row => row.a.id === spoken!.a.id)) out.push({ ...spoken, seatId: seat.id });
+    }
+    return out;
+  }
   /** THE SPEECH GRAMMAR's gossip logs (engine/speechGrammar.ts): the newest
    *  world news lines ('{lastEvent}' — stamped at notice()) and the hero's
    *  credited kills ('{monster}' — stamped at kill()), each a short ring
@@ -23890,10 +23983,12 @@ export class World {
    *  prompts (innkeepPrompt — Mireille's flask lesson included —
    *  questGiverPrompt, caravanPrompt, amalgamPrompt, delverPrompt) are
    *  FUNCTIONAL, stand until acted on, and never ride this clock. */
-  residentPrompt(a: Actor): string | null {
+  // Raw telling read: npcSpeechView supplies admission after selection and
+  // dwell. Default admission remains useful to content/grammar probes.
+  residentPrompt(a: Actor, admitted = true): string | null {
     const row = this.speakerRows.get(a.id);
     if (!row || a.dead) return null;
-    const near = dist(a.pos, this.player.pos) <= RESIDENT_RADIUS
+    const near = admitted && dist(a.pos, this.player.pos) <= RESIDENT_RADIUS
       && this.dwellReachable(this.player.pos, a.pos, DWELL_CFG.reach, { from: this.player.tier ?? 0, to: a.tier ?? 0 });
     const prev = this.speechMemory.get(a.id);
     const step = speechTell(prev, near, this.time, speechWindowFor(row.lane, row.current ?? row.line));

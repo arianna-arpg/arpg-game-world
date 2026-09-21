@@ -35,7 +35,7 @@ export type ActionId =
   | 'skillSlot2' | 'skillSlot3' | 'skillSlot4' | 'skillSlot5' | 'skillSlot6' | 'skillSlot7'
   | 'metaModifier' | 'pickup'
   | 'panelChar' | 'panelTree' | 'panelMap' | 'panelInv'
-  | 'panelMenu' | 'townPortal' | 'itemLock' | 'companionStance';
+  | 'panelMenu' | 'townPortal' | 'itemLock' | 'companionStance' | 'dialogueAdvance';
 
 /** Pad-bindable actions: everything the keyboard binds, PLUS bar slots 0/1
  *  (fixed to LMB/RMB on mouse, free to live on any button on a pad). */
@@ -333,6 +333,7 @@ export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
   // THE COMPANION STANCE (engine/companionStances.ts): cycles every bonded
   // beast's conduct on the bar — the hunter's whistle-and-hand-signal key.
   companionStance: 'x',
+  dialogueAdvance: 'enter',
 };
 
 export const ACTION_IDS = Object.keys(DEFAULT_KEYBINDS) as ActionId[];
@@ -340,6 +341,7 @@ export const ACTION_IDS = Object.keys(DEFAULT_KEYBINDS) as ActionId[];
 /** Menu holds may share combat controls, but not panel/pickup controls
  *  which remain active while browsing. */
 export function bindingContextsOverlap(a: string, b: string): boolean {
+  if (a === 'dialogueAdvance' || b === 'dialogueAdvance') return false;
   const other = a === 'itemLock' ? b : b === 'itemLock' ? a : null;
   return !other || !/^(skillSlot\d+|moveUp|moveDown|moveLeft|moveRight|townPortal|companionStance)$/.test(other);
 }
@@ -358,6 +360,7 @@ export const DEFAULT_PAD_BINDS: Record<PadActionId, string> = {
   panelMenu: 'pad:l3',
   townPortal: '', itemLock: 'pad:a',
   companionStance: '', // pad buttons are scarce — bindable, ships unbound
+  dialogueAdvance: 'pad:a',
 };
 
 /** Rebind-UI order for the controller section: the bar first (incl. the two
@@ -384,6 +387,7 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   panelInv: 'Inventory', panelMenu: 'Menu',
   townPortal: 'Town Portal', itemLock: 'Hold to Lock / Reserve (menus)',
   companionStance: 'Companion Stance (cycle)',
+  dialogueAdvance: 'Advance Dialogue',
 };
 
 /** Labels for the pad-only actions; everything else reuses ACTION_LABELS. */
