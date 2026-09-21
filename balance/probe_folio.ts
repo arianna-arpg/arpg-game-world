@@ -118,6 +118,7 @@ interface Fake {
 }
 interface FakeOpts {
   bay?: string; owner?: string; arrive?: FolioArrive; companions?: string[];
+  binding?: 'active';
   rect?: FolioRect | null; engaged?: boolean; range?: number | null;
   /** THE PRIMACY LAW's rung (absent = the folio's default, a page). */
   kind?: string;
@@ -146,6 +147,7 @@ function fake(core: FolioCore, id: string, o: FakeOpts = {}): Fake {
   if (o.reach !== undefined) spec.reach = () => f.reach;
   if (o.kind !== undefined) spec.kind = o.kind;
   if (o.arrive) spec.arrive = o.arrive;
+  if (o.binding) spec.binding = o.binding;
   if (o.companions) spec.companions = o.companions;
   f.spec = spec;
   core.enroll(spec);
@@ -874,6 +876,51 @@ console.log('S. THE DEPARTURE LAW');
     r.core.sync(); r.core.sync(); r.core.sync();
     return a.open && s.open && a.closes === 0 && s.closes === 0 && r.core.bookFor('vendor')!.front === 'vendor';
   })());
+}
+
+// Quiet offers join the active book even when its drawer lives in another bay.
+console.log('T. QUIET ACTIVE-BOOK OFFERS');
+{
+  const { core, at } = rig();
+  const old = fake(core, 'old', { bay: 'centre' });
+  const page = fake(core, 'skills', { bay: 'build', kind: 'page' });
+  const board = fake(core, 'bounties', { kind: 'station', binding: 'active', arrive: 'behind', engaged: true });
+  show(core, old); at(1); show(core, page); at(2);
+  check('T1 quiet station joins the active drawer across bays without taking focus',
+    show(core, board) === 'behind' && ids(core, 'skills') === 'skills,bounties'
+    && page.drawn === true && board.drawn === false && core.bookFor('old')!.tabs.length === 1);
+  board.engaged = false; core.sync();
+  check('T2 departure removes a hidden offer without closing or refreshing the active page',
+    !board.open && board.closes === 1 && page.open && page.drawn === true && page.refreshes === 0);
+  board.engaged = true; show(core, board); core.front('bounties'); board.engaged = false; core.sync();
+  check('T3 departure from the selected board restores the previous page',
+    !board.open && core.bookFor('skills')!.front === 'skills' && page.drawn === true);
+  board.engaged = true;
+  check('T4 explicit front ask overrides the quiet arrival policy', show(core, board, 'front') === 'front');
+}
+{
+  const { core } = rig();
+  const guest = fake(core, 'guest', { owner: 'p1' });
+  const board = fake(core, 'bounties', { owner: 'p0', kind: 'station', binding: 'active', arrive: 'behind' });
+  show(core, guest);
+  check('T5 no same-owner book means an immediate solo board, never a guest tab',
+    show(core, board) === 'solo' && guest.drawn === true && board.drawn === true && core.views().length === 2);
+}
+{
+  const { core, at } = rig();
+  const a = fake(core, 'a', { bay: 'a' }), b = fake(core, 'b', { bay: 'b' });
+  const board = fake(core, 'bounties', { binding: 'active', arrive: 'behind', kind: 'station' });
+  show(core, a); at(1); show(core, b); at(2); core.front('a');
+  board.open = true; core.sync();
+  check('T6 self-healing arrival respects quiet policy and the last selected book',
+    ids(core, 'a') === 'a,bounties' && a.drawn === true && board.drawn === false);
+}
+{
+  const { core } = rig();
+  const companion = fake(core, 'companion', { companions: ['bounties'] });
+  const board = fake(core, 'bounties', { binding: 'active', arrive: 'behind' });
+  show(core, companion);
+  check('T7 active binding preserves companion exclusions', show(core, board) === 'solo' && core.views().length === 2);
 }
 
 console.log(`\n${fail === 0 ? 'ALL PASS' : 'FAILURES'} — ${pass} passed, ${fail} failed`);

@@ -29,7 +29,8 @@ and two verbs.
 | `rect()` | the drawn box while displayed — the measured-overlap read and the strip's seat |
 | `engaged()` | does the player still stand at this station? (absent = assumed) |
 | `range()` | the seat's distance to the station, for the arrival tie-break |
-| `arrive` | `'behind'` (a dwell's offer, the default) or `'front'` (an explicit ask, a modal) |
+| `arrive` | Explicit `'behind'` keeps an automatic offer quiet across kinds; `'front'` takes the front among equal kinds. Absent = normal primacy/standing rules. A call's `ask` overrides either. |
+| `binding` | `'active'` joins the owner's most recently active book regardless of bay/overlap; absent = normal placement rules. Companion exclusions still apply. |
 | `kind` | the leaf's rung on the primacy ladder: `'page'` (an always-available player page — the default), `'station'` (the world's offer: every dwell dialog), `'modal'` (a decision: the calling, the picker); any string the ladder names |
 | `reach()` | may the player still WORK this leaf from here? The departure law's read (absent = `engaged()`; absent both = never departs). A suite member declares the reach law here while `engaged` stays physical |
 | `companions` | leaves this one may stand beside un-bound (symmetric) |
@@ -48,6 +49,18 @@ the tabs sit on whatever is actually drawn. A book of one leaf wears no
 strip; a book of none dissolves.
 
 ## The laws
+
+The Bounty Board uses `binding: 'active', arrive: 'behind'`. Incidental dwell
+adds an inactive Bounties tab beside the current Skills, Passives or skill
+tree page, including drawers docked beside inventory. With no eligible book,
+the board opens immediately on its own. Clicking its tab or choosing its menu
+entry explicitly fronts it. Other stations retain their existing priority.
+The board's existing owner-specific `nearBountyBoard` read closes it on departure,
+whether selected or shelved; opening also checks that read to reject stale dwell
+requests after movement or zone changes. No new distance threshold is introduced.
+
+Regression coverage: `balance/probe_folio.ts` and, after a build,
+`npx electron balance/bounty-focus-ui.cjs` (hidden window, isolated saves).
 
 - **The master law** — the first leaf opened holds the front; a newcomer
   arrives *behind* it as a shelved tab, pulsing fresh until looked at. The
@@ -71,7 +84,8 @@ strip; a book of none dissolves.
   the drawer the bag *remembers* (bound by the self-heal) never shoves an
   open counter aside. Equals fall to the master, front-arrival, standing and
   nearer laws above. The ladder is a registry: `enroll` refuses a kind it
-  does not name, and a new kind is one row.
+  does not name, and a new kind is one row. An explicit `arrive: 'behind'`
+  bypasses these automatic fronting rules for a quiet offer.
 - **The call's word** — `adopt(id, ask)` lets a show path say how *this*
   arrival lands: `'front'` from a press, a key or a handle (an explicit ask
   is absolute and outranks the ladder — `UI.folioAsk` is the panels' one

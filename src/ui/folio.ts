@@ -53,6 +53,10 @@
 //     ask is absolute — it outranks the ladder), 'behind' to land quiet.
 //     The self-heal binds with no word, so a leaf that merely turned up
 //     (a remembered drawer) obeys the ladder.
+//   QUIET OFFERS — an explicit arrive:'behind' keeps automatic arrivals
+//     behind any front, even across kinds. binding:'active' joins the owner's
+//     last active book across placements. The board uses both; a tab/menu
+//     selection still fronts it, and reach still governs departure.
 //   THE DEPARTURE LAW (2026-09-16, her ask) — a bound leaf the player can
 //     no longer REACH (reach(), else engaged(), false on the sync) closes
 //     through its own close path: the tab goes down where the work would
@@ -176,7 +180,12 @@ export interface FolioLeafSpec {
   range?: () => number | null;
   /** The leaf's kind — its rung on THE PRIMACY LAW's ladder (default 'page'). */
   kind?: FolioKind;
+  /** Explicit 'behind' keeps an automatic offer quiet even across kinds.
+   *  'front' follows primacy; an adopt() ask overrides either policy. */
   arrive?: FolioArrive;
+  /** Join the owner's most recently active book regardless of placement.
+   *  Absent = bind by bay/overlap. Owner and companion boundaries still hold. */
+  binding?: 'active';
   /** Leaves this one may stand beside un-bound (symmetric — either side may declare). */
   companions?: readonly string[];
   /** Re-render on coming to the front (the leaf may have aged on the shelf). */
@@ -405,6 +414,14 @@ export class FolioCore {
   // --- internals ------------------------------------------------------------
 
   private findBook(leaf: FolioLeafSpec, owner: string, bay: FolioBay): Book | null {
+    if (leaf.binding === 'active') {
+      let active: Book | null = null;
+      for (const b of this.books.values()) {
+        if (b.owner !== owner || this.companionsIn(b, leaf) || !this.leaves.get(b.front)?.isOpen()) continue;
+        if (!active || b.touchedAt >= active.touchedAt) active = b;
+      }
+      if (active) return active;
+    }
     // THE BAY LAW: the standing book of this owner + bay.
     for (const b of this.books.values()) {
       if (b.owner !== owner || b.bay !== bay || this.companionsIn(b, leaf)) continue;
@@ -426,10 +443,11 @@ export class FolioCore {
   }
 
   /** Does a newcomer take the front? THE CALL'S WORD first (an explicit ask
-   *  is absolute), then THE PRIMACY LAW across kinds, then — among equals —
+   *  is absolute), then a quiet arrival, then THE PRIMACY LAW across kinds and — among equals —
    *  THE FRONT ARRIVAL, THE STANDING LAW and THE NEARER LAW. */
   private takesFront(leaf: FolioLeafSpec, front: FolioLeafSpec, book: Book, now: number, ask: FolioArrive | undefined): boolean {
     if (ask !== undefined) return ask === 'front';
+    if (leaf.arrive === 'behind') return false;
     const mine = this.primacyOf(leaf), theirs = this.primacyOf(front);
     if (mine !== theirs) return mine > theirs;
     return leaf.arrive === 'front' || !this.engagedOf(front) || this.nearerOnArrival(book, leaf, front, now);

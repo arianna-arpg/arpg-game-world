@@ -1368,6 +1368,7 @@ export class UI {
     enroll(this.folioLeaf('borough', this.boroughMenu, () => 'Borough', () => this.boroughOpen, () => this.closeBorough(), {
       kind: 'station', refresh: fronted(() => this.refreshBorough()) }));
     enroll(this.folioLeaf('bounties', this.bountyMenu, () => 'Bounties', () => this.bountiesOpen, () => this.closeBounties(), {
+      arrive: 'behind', binding: 'active',
       kind: 'station', engaged: () => w().nearBountyBoard(seat(this.bountyMenu), this.bountyBoardId), range: site(this.bountyMenu, 'bounty_board'),
       refresh: fronted(() => this.refreshBounties()) }));
     enroll(this.folioLeaf('caravan', this.caravanMenu, () => 'Caravan', () => this.caravanOpen, () => this.closeCaravan(), {
@@ -1492,7 +1493,10 @@ export class UI {
         open: id => {
           const seat = this.couchSeatFor(id);
           const b = w().bountyBoardsHere().find(x => w().nearBountyBoard(seat, x.id));
-          this.showBounties(id, b?.id);
+          if (b) {
+            this.showBounties(id, b.id);
+            this.folio.front('bounties'); // a menu press explicitly chooses the board
+          }
         },
         isOpen: () => this.bountiesOpen,
       },
@@ -8179,11 +8183,18 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   /** Open THE BOUNTY BOARD's postings panel (the board's dwell asked —
    *  docs/design/bounty-board.md M0). Couch-routed like every station. */
   showBounties(seatId?: string, boardId?: string): void {
-    // No hideAll() swap: a dialog already up keeps the screen and this one
-    // binds beside it as a tab (THE FOLIO, ui/folio.ts).
-    this.ownPanel(this.bountyMenu, this.couchSeatFor(seatId));
+    const world = this.getWorld(), seat = this.couchSeatFor(seatId);
+    const board = boardId ?? world.bountyDwellBoardId;
+    // A dwell queued before a pause or a zone change must not open a remote board.
+    if (!world.nearBountyBoard(seat, board)) return;
+    if (this.bountiesOpen && (this.panelSeat(this.bountyMenu).id !== seat.id || this.bountyBoardId !== board)) {
+      this.closeBounties();
+      this.folio.sync(); // release the old owner's book before rebinding
+    }
+    // Join the active book quietly, including drawers docked beside inventory.
+    this.ownPanel(this.bountyMenu, seat);
     this.bountiesOpen = true;
-    this.bountyBoardId = boardId ?? this.getWorld().bountyDwellBoardId;
+    this.bountyBoardId = board;
     this.bountyPendingTake = null; // a fresh open owes no earlier reach
     this.bountyMenu.classList.remove('hidden');
     this.refreshBounties();
@@ -8204,6 +8215,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
   closeBounties(): void {
     this.bountiesOpen = false;
+    this.bountyPendingTake = null;
     this.bountyMenu.classList.add('hidden');
     if (this.bountyTicker !== null) { window.clearInterval(this.bountyTicker); this.bountyTicker = null; }
   }
