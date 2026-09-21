@@ -45,6 +45,7 @@ import { procPowerStat, procStat, registerProc, type ProcDef } from './procs';
 import { EMERGENT_PROCS, EMERGENT_UNIQUES } from './uniques/emergent';
 import { borrowedRefugeLine, GLEANER_CHOICES, LIVING_UNIQUES } from './uniques/living';
 import { ROTE_CHOICES, CUP_MINION_LINES, LATTICE_LINES, GALEWRIGHT_LINES, REACTIVE_PROCS, REACTIVE_UNIQUES } from './uniques/reactive';
+import { ACCORD_PROCS, ACCORD_UNIQUES } from './uniques/accords';
 import { RELIC_UNIQUES } from './uniques/relics';
 
 // ---------------------------------------------------------------------------
@@ -96,8 +97,8 @@ export const LEGEND_PROCS: ProcDef[] = [
     trigger: 'condition', condition: 'lowMana', icd: 10,
     effect: { type: 'cooldown', fraction: 0.5 },
   },
-  // THE VIGIL'S ANSWER (The Cindervigil): every REAL spell cast also looses
-  // the wearer's Pyroclast Bolt — the GRANTED copy (own) — at the spell's
+  // THE VIGIL'S ANSWER (The Cindervigil): a REAL spell cast can also loose
+  // the wearer's Pyroclast Bolt — the equipped or GRANTED copy (own) — at the spell's
   // own mark (the aimed 'cast' payload). Payload casts never re-roll the
   // trigger (they pass as echoes), so the vigil can never answer itself.
   {
@@ -108,6 +109,7 @@ export const LEGEND_PROCS: ProcDef[] = [
 ];
 LEGEND_PROCS.push(...EMERGENT_PROCS);
 LEGEND_PROCS.push(...REACTIVE_PROCS);
+LEGEND_PROCS.push(...ACCORD_PROCS);
 for (const def of LEGEND_PROCS) registerProc(def);
 
 export const UNIQUE_LIST: UniqueDef[] = [
@@ -140,8 +142,8 @@ export const UNIQUE_LIST: UniqueDef[] = [
     flavor: 'It remembers every fire it has started.',
     lines: [
       { stat: skillGrantStat('firebolt'), kind: 'flat', range: [1, 2], tierScale: 0.3 },
-      { stat: procStat('emberbrand_rekindle'), kind: 'flat', range: [0.35, 0.5],
-        text: '{v%} chance to loose your Firebolt at an enemy you set Burning' },
+      { stat: procStat('emberbrand_rekindle'), kind: 'flat', range: [0.35, 0.5], tierScale: 0,
+        text: '{v%} chance to loose your Firebolt at an enemy you set Burning (once per 1s; no skill slot required)' },
       { stat: 'addedFire', kind: 'flat', range: [4, 7] },
       { stat: 'damageVs_burn', kind: 'flat', range: [0.1, 0.18] },
       { stat: 'fireRes', kind: 'flat', range: [0.1, 0.15] },
@@ -591,8 +593,8 @@ export const UNIQUE_LIST: UniqueDef[] = [
     lines: [
       { stat: skillGrantStat('firebolt'), kind: 'flat', range: [1, 2], tierScale: 0.3 },
       { stat: skillGrantStat('pyroclast_bolt'), kind: 'flat', range: [1, 1], tierScale: 0 },
-      { stat: procStat('cindervigil_answer'), kind: 'flat', range: [1, 1], tierScale: 0,
-        text: 'Casting a spell also looses your Pyroclast Bolt at its mark' },
+      { stat: procStat('cindervigil_answer'), kind: 'flat', range: [0.95, 0.95], tierScale: 0,
+        text: '{v%} chance when casting a Spell to loose your Pyroclast Bolt at its mark (once per 0.8s; no skill slot required)' },
       { stat: 'extraAs_fire', kind: 'flat', range: [0.3, 0.5],
         text: 'Gain {v%} of damage as extra fire damage' },
       { stat: 'damage', kind: 'increased', range: [0.25, 0.4], tags: ['spell'] },
@@ -602,6 +604,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   },
 ];
 
+UNIQUE_LIST.push(...ACCORD_UNIQUES);
 UNIQUE_LIST.push(...EMERGENT_UNIQUES);
 UNIQUE_LIST.push(...LIVING_UNIQUES);
 UNIQUE_LIST.push(...REACTIVE_UNIQUES);

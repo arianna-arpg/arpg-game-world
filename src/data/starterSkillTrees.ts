@@ -1,3 +1,4 @@
+import { CLEAVE_TREE } from './cleaveTree';
 import type { SkillTreeSpec, TreeBuffPatch } from '../engine/skills';
 import { mod, conversionStat } from '../engine/stats';
 import { tree, n, type Node } from './skillTreeBuilder';
@@ -7,23 +8,7 @@ const buff = (node: Node, id: string, patch: Omit<TreeBuffPatch, 'id'>): Node =>
 /** Complete opening bars for the three fresh-account classes. These use the
  * same binary anatomy as the undead trees; no class owns a private mechanic. */
 export const STARTER_SKILL_TREES: Record<string, SkillTreeSpec> = {
-  cleave: tree([
-    n('lodged_steel', 'Lodged Steel', 'Lodge 18% of physical hit damage as an impale, discharged by a subsequent hit.', [mod('impalePower', 'flat', 0.18)]),
-    [n('deep_notches', 'Deep Notches', 'Lodge an additional 12% of physical hit damage as impale.', [mod('impalePower', 'flat', 0.12)]),
-      n('barbed_edge', 'Barbed Edge', 'Hits gain 35% chance to bleed and 25% increased physical ailment magnitude.', [mod('apply_bleed', 'flat', 0.35), mod('statusMagnitude', 'increased', 0.25, ['physical'])]),
-      n('splitting_armor', 'Splitting Armor', 'Ignore 15% of enemy armor.', [mod('armorPen', 'flat', 0.15)])],
-    [n('steady_cuts', 'Steady Cuts', '20% increased attack speed and 20% increased accuracy.', [mod('attackSpeed', 'increased', 0.2), mod('accuracy', 'increased', 0.2)]),
-      n('close_quarters', 'Close Quarters', 'Restore 2 life per landed hit.', [mod('lifeOnHit', 'flat', 2)]),
-      n('finishing_cut', 'Finishing Cut', 'Cull enemies below 8% life.', [mod('cullThreshold', 'flat', 0.08)])],
-  ], [
-    graft(n('unbound_cleave', 'Unbound Cleave', 'Throw the arc as a traveling crescent, striking each enemy once. 20% less damage and 35% more mana cost.'), 'sweeping_blow'),
-    [n('long_edge', 'Long Edge', '35% increased sweep travel and 20% increased duration.', [mod('sweepRange', 'increased', 0.35), mod('effectDuration', 'increased', 0.2)]),
-      n('wide_front', 'Wide Front', '30% increased area radius and 25% increased arc width.', [mod('aoeRadius', 'increased', 0.3), mod('swingArc', 'increased', 0.25)]),
-      n('driving_front', 'Driving Front', 'Hits gain 45 knockback strength.', [mod('knockback', 'flat', 45)])],
-    [n('tempered_wave', 'Tempered Wave', '30% increased damage.', [mod('damage', 'increased', 0.3)]),
-      n('razor_horizon', 'Razor Horizon', '10% additional critical chance and 25% critical multiplier.', [mod('critChance', 'flat', 0.1), mod('critMulti', 'flat', 0.25)]),
-      n('heavy_wave', 'Heavy Wave', '35% more damage at 15% less attack speed.', [mod('damage', 'more', 0.35), mod('attackSpeed', 'more', -0.15)])],
-  ], n('practiced_edge', 'Practiced Edge', '15% increased damage.', [mod('damage', 'increased', 0.15)])),
+  cleave: CLEAVE_TREE,
 
   shield_up: tree([
     graft(n('iron_shelter', 'Iron Shelter', 'While guarding, a separate 200-degree rear shell covers your blind side. Its 55 base pool scales with guard strength; after breaking it begins to reform after 4 seconds. Dropping the guard removes it.'), 'grafted_carapace'),

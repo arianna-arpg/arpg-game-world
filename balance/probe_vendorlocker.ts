@@ -309,6 +309,7 @@ check('A: the purchase stamps the market ledger',
   const SEED_D = 0x66d3;
   seedGlobalRandom(0x77e2);
   const wD = makeSimWorld('warrior', SEED_D);
+  wD.account.memorySecondary.clear(); // this rig exercises account progression, not the arena's open-tree fixture
   openMarket(wD);
   enterTown(wD);
   const skillId = STARTER_SKILLS[0];
@@ -318,9 +319,10 @@ check('A: the purchase stamps the market ledger',
   wD.account.features.add(FEATURE.VENDOR_COMMISSION);
   check('D: an unknown gem refuses',
     wD.setVendorCommission('brandt', { kind: 'skill', id: 'no_such_gem' }) === false);
-  check('D: an index below the need refuses',
+  check('D: an unawakened skill refuses commissioning',
     wD.setVendorCommission('brandt', { kind: 'skill', id: skillId }) === false);
   wD.account.ledger[gemDropKey(skillId)] = need;
+  wD.account.memorySecondary.add(`skill:${skillId}`);
   wD.account.ledger[gemDropKey(supId)] = need;
   check('D: a support refuses at HONEST zero odds while Brandt sells none',
     wD.commissionOdds({ kind: 'support', id: supId }) === 0
@@ -429,11 +431,12 @@ check('A: the purchase stamps the market ledger',
   shallow.features.add(rungs[0].flag);
   shallow.ledger[LEDGER_GEMDROP_TOTAL] = 999; // a wide index with no DEEP gem
   shallow.ledger[gemDropKey(skillId)] = need - 1;
-  check('D: the Vault sells the order exactly when ONE gem is orderable (prefix ≥ need; totals prove nothing)',
+  seen.memorySecondary.add(`skill:${skillId}`);
+  check('D: the Vault sells the order when ONE Memory is eligible; old drop counts alone cannot awaken skills',
     !isUnlockVisible(bare, comm) && !isUnlockVisible(shallow, comm) && isUnlockVisible(seen, comm));
   check('D: the hold-owning account TEASES the sealed order card with its road',
     sealedUnlocks(shallow).some(s => s.u.id === 'feat_vendor_commission'
-      && s.lines.some(l => l.anyOf && !l.met)));
+      && s.lines.some(l => !l.met)));
 }
 
 // ------------------------------------------------ E. THE MARKET CHAIN

@@ -9,12 +9,16 @@ import { AMBIENT_TAGS, FACTIONS, FIXTURE_IDS, MATERIAL_NATURE, MONSTERS, RESERVE
 import { FACTION_TRAITS } from '../world/traits';
 import { PRESENCE_BANDS, presenceMul, type PresenceSpec } from '../engine/presence';
 import { SKILLS } from './skills';
+import { memoryCatalog } from '../meta/memoryUnlocks';
+import { MEMORY_UNLOCKS } from './memoryUnlocks';
 import { invocationTreeErrors } from '../engine/invocation';
 import { magicPackErrors } from '../engine/magicPacks';
 import { satelliteErrors } from '../engine/satelliteSpec';
 import { auroraErrors } from '../engine/auroraSpec';
 import { guardianErrors } from '../engine/guardianSpec';
 import './guardians';
+import { creeperErrors } from '../engine/creeperSpec';
+import './creepers';
 import { movementTetherErrors } from '../engine/movementTether';
 import { encounterGroupErrors, encounterGroupSpecErrors } from '../engine/encounterGroups';
 import { ENCOUNTER_GROUPS } from './encounterGroups';
@@ -22,7 +26,7 @@ import { encounterCombatErrors } from '../engine/encounterCombat';
 import { SUPPORTS } from './supports';
 import { spawnVeinOf } from '../engine/supportbase';
 import {
-  CREW_CFG, DEFAULT_RELOAD_SKILL, crewSkillsServed, makeSkillInstance, summonCrewOf, instanceDelivery, impactTreeOverrideErrors, treeAuraOverrideErrors, CONSTRUCT_TREE_KEYS, GROUND_TREE_KEYS,
+  TRIGGER_CFG, CREW_CFG, DEFAULT_RELOAD_SKILL, crewSkillsServed, makeSkillInstance, summonCrewOf, instanceDelivery, impactTreeOverrideErrors, treeAuraOverrideErrors, CONSTRUCT_TREE_KEYS, GROUND_TREE_KEYS,
   supportFits, supportFitsInst, treeNodeOf, validTreeNodes, bandPointsAt, MAX_SKILL_LEVEL,
   type Delivery, type SkillDef, type SkillInstance, type SupportDef, type ConduitSpec, AOE_SHAPE, BASH_CFG } from '../engine/skills';
 import { treeGraph, TREE_LAYOUT_CFG } from '../engine/skilltree'; // THE SKILL-TREE GRAPH — the fold the tree laws read
@@ -153,6 +157,7 @@ export function validateContent(): void {
   for (const issue of satelliteErrors(id => !!SKILLS[id], id => SKILLS[id]?.delivery.type)) warn(issue);
   for (const issue of auroraErrors(id => SKILLS[id]?.delivery.type)) warn(issue);
   for (const issue of guardianErrors()) warn(issue);
+  for (const issue of creeperErrors(id => SKILLS[id]?.delivery.type)) warn(issue);
   validatePassiveLayout(warn);
   for (const error of localePrograms().flatMap(p => validateLocaleProgram(p, { builder: hasDistrictBuilder, doodad: hasDoodadRule, region: id => !!regionKind(id), walkable: id => !!regionKind(id)?.walkable }).map(e => 'locale ' + p.id + ': ' + e))) warn(error);
   for (const error of mapFeatureKinds().filter(f => f.destination && !localeProgram(f.destination.locale)).map(f => 'atlas destination ' + f.id + ': unknown locale ' + f.destination!.locale)) warn(error);
@@ -2818,6 +2823,10 @@ export function validateContent(): void {
   {
     const pooled = new Set<string>(STARTER_SKILLS);
     const pooledSup = new Set<string>(STARTER_SUPPORTS);
+    for (const c of memoryCatalog()) {
+      if (MEMORY_UNLOCKS.some(r => r.tier === 'discovery' && r.weights[c.kind] > 0))
+        (c.kind === 'skill' ? pooled : pooledSup).add(c.id);
+    }
     for (const u of unlocks) {
       if (u.kind === 'skill' || u.kind === 'class' || u.kind === 'classtier') for (const id of u.payload.skillIds) pooled.add(id);
       if (u.kind === 'support' || u.kind === 'class') for (const id of u.payload.supportIds) pooledSup.add(id);
@@ -3144,6 +3153,14 @@ export function validateContent(): void {
         }
         for (const error of impactTreeOverrideErrors(def, n)) warn(`${at}/${n.id}: ${error}`);
         for (const error of treeAuraOverrideErrors(def, n)) warn(`${at}/${n.id}: ${error}`);
+        if (n.trigger) {
+          if (!(n.trigger.on in TRIGGER_CFG.icd)) warn(`${at}/${n.id}: invalid trigger event`);
+          for (const key of ['icd', 'maxUseTime', 'chance'] as const) {
+            const value = n.trigger[key];
+            if (value !== undefined && (!Number.isFinite(value) || value < 0)) warn(`${at}/${n.id}: invalid trigger.${key}`);
+          }
+          if (!n.excludes?.length) warn(`${at}/${n.id}: trigger identity belongs on an exclusive trunk`);
+        }
         for (const error of invocationTreeErrors(def, n)) warn(`${at}/${n.id}: ${error}`);
         const constructOver = n.over?.construct;
         if (constructOver) {

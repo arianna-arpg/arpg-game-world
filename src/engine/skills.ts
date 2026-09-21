@@ -1426,9 +1426,14 @@ export interface FissureTrailSpec {
 //  5. Honest economics: triggered casts pay costs (× costMult), respect
 //     and set their cooldowns, and every gem wears an ICD no amount of
 //     stacked chance can beat. Trigger chance caps at 95% per event.
+// Native/tree TriggerSpec rows share this pipeline. Explicit `guaranteed`
+// responses skip randomness, and `maxUseTime` can pin their instant limit;
+// neither bypasses eligibility, payment, cooldowns or chain restrictions.
 // ---------------------------------------------------------------------------
 
 export type TriggerKind =
+  /** A direct melee attack lands; proc/trigger descendants cannot raise it. */
+  | 'meleeHit'
   | 'crit' | 'damageTaken' | 'channelBeat' | 'overchargeStage'
   /** A channel of the owner's reaches TRUE COMPLETION — the hold hits its
    *  maxHold cap or its brim fills (once per unbroken channel). The
@@ -1468,6 +1473,7 @@ export const TRIGGER_CFG = {
   costMult: 1,
   /** Per-kind fallback internal cooldowns, seconds (a spec's icd wins). */
   icd: {
+    meleeHit: 0.05,
     crit: 0.15, damageTaken: 0.25, channelBeat: 0.35, overchargeStage: 0,
     channelFinish: 0,
     statusApply: 0.2, block: 0.5, kill: 0.4, highRoll: 0.25,
@@ -1497,6 +1503,12 @@ export const TRIGGER_CFG = {
 
 export interface TriggerSpec {
   on: TriggerKind;
+  /** Deterministic event response; bypasses chance rolls, never eligibility. */
+  guaranteed?: true;
+  /** Maximum base use time eligible for instant release. Defaults to the shared limit. */
+  maxUseTime?: number;
+  /** Requires an explicit first press to arm. Transient state resets on load. */
+  startsOff?: true;
   /** Chance per event — the BASE of the triggerChance stat query
    *  (tag-filtered, so gems/passives can scale it). Default 1. */
   chance?: number;
@@ -1518,10 +1530,23 @@ export interface TriggerSpec {
   rollTop?: number;
 }
 
-/** The trigger conversion riding an instance (first socketed wins). */
+/** Trigger precedence: first socket/graft, exclusive tree trunk, native def. */
 export function instanceTrigger(inst: SkillInstance): TriggerSpec | undefined {
   for (const s of hostSockets(inst)) if (s.def.trigger) return s.def.trigger;
-  return undefined;
+  for (const id of inst.treeNodes ?? []) {
+    const node = treeNodeOf(inst.def, id);
+    if (node?.trigger) return node.trigger;
+  }
+  return inst.def.trigger;
+}
+
+/** Shared armed-state read for the event gate, press and bar face. */
+export function instanceTriggerArmed(inst: SkillInstance): boolean {
+  const trigger = instanceTrigger(inst);
+  return !!trigger && !(inst.state?.triggerOff ?? trigger.startsOff ?? false);
+}
+export function instanceTriggerLimit(inst: SkillInstance): number {
+  return instanceTrigger(inst)?.maxUseTime ?? TRIGGER_CFG.maxUseTime;
 }
 
 /**
@@ -4273,6 +4298,8 @@ export type SkillEffect =
 // --- The skill definition ---------------------------------------------------
 
 export interface SkillDef {
+  /** Native armed-cast behavior, also available to exclusive tree trunks. */
+  trigger?: TriggerSpec;
   /** Reusable casting-read profile; false omits supplemental body/outcome cues. Bars remain. */
   castingCue?: string | false;
   /** A serial resurrection contract with native Hivecall tree mechanics. */
@@ -4949,6 +4976,8 @@ function mergeTreeDomain(a: GroundDelivery['domain'], b: GroundDelivery['domain'
 }
 
 export interface SkillTreeNode {
+  /** Complete armed-cast identity; sockets override it. Author on exclusive trunks. */
+  trigger?: TriggerSpec;
   /** Increased damage per rank, applied only to this Hivecall's Sovereign body. */
   hivecallFormDamage?: number;
   throngEvolution?: import('./throngEvolution').ThrongEvolutionSpec;
@@ -5902,6 +5931,8 @@ export interface SkillInstance {
    *  never in the learned book: no unlearn, no essence leveling, no learn
    *  gate — its level is the grant's fold, its sockets ride the item. */
   grantedBy?: string;
+  /** Transient identity of the item hosting this grant's sockets and tree. */
+  grantedHostUid?: number;
   /** Derived companion grant: separate from the player's manual summon pool. */
   companionGrant?: boolean;
   /** THE KEEPER'S MARK (salvageLock intent): a locked carried gem refuses
@@ -6209,6 +6240,7 @@ export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance, param?: st
    *  there. */
   cooldown: inst =>
     inst.def.cooldown > 0
+    || instanceInnateMods(inst).some(m => m.stat === 'addedCooldown' && m.value > 0)
     || hostSockets(inst).some(s =>
       [...s.def.mods, ...(s.def.perLevel ?? [])].some(m => m.stat === 'addedCooldown' && m.value > 0)),
   /** A STANDING ENGAGEMENT: the host holds a presence — an aura's toggle

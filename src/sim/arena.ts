@@ -13,6 +13,7 @@
 // ---------------------------------------------------------------------------
 
 import { installHeadlessShims } from './shims';
+import { SKILLS } from '../data/skills';
 import { resetActorIdCounter } from '../engine/actor';
 import { FORECHART_CFG } from '../world/forechart';
 // The same side-effect registrations main.ts performs — a World without them
@@ -140,6 +141,8 @@ export function makeSimWorld(classId: string, seed: number): World {
   const account = makeAccount();
   // Sims may probe any class — unlock the full roster on the throwaway account.
   for (const c of CLASSES) account.unlockedClasses.add(c.id);
+  // Combat rigs exercise fully available trees; progression probes clear this fixture.
+  for (const id of Object.keys(SKILLS)) account.memorySecondary.add(`skill:${id}`);
   const manifest = buildManifest(account, seed);
   for (const p of manifest.packages) p.enabled = false; // a QUIET expedition
   const world = new World(account, Object.freeze(manifest));

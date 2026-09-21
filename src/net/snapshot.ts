@@ -1,4 +1,5 @@
 import { afflictionPressureOf } from '../engine/afflictionPressure';
+import { memoryAccessView } from '../meta/memoryUnlocks';
 import { castingCompletion, castingCueOf } from '../engine/castingCues';
 import { guardReleaseCue } from '../engine/warningCues';
 import { encounterCueOf } from '../engine/encounterCombat';
@@ -281,7 +282,7 @@ export interface SupportInstW { id: string; lvl: number; lk?: 1; }
  *  when unpicked (the sparse idiom); the client rehydrates through
  *  validTreeNodes so its tooltip/pip/panel read the same truth the host
  *  spends (orphans from a version-skewed host drop with a note). */
-export interface SkillInstW { id: string; lvl: number; rarity?: string; sockets: (SupportInstW | null)[]; mark?: { x: number; y: number } | null; g?: boolean; lk?: 1; tn?: string[]; rp?: 1; }
+export interface SkillInstW { id: string; lvl: number; rarity?: string; sockets: (SupportInstW | null)[]; mark?: { x: number; y: number } | null; g?: boolean; lk?: 1; tn?: string[]; rp?: 1; triggerOff?: boolean; }
 /** The client OWN-seat build: enough to render the char-sheet / skill-book / tree
  *  and re-derive the stat sheet (recalcSeat) on the client. */
 export interface SeatMetaW {
@@ -339,6 +340,7 @@ const skillInstW = (s: SkillInstance): SkillInstW => ({
   lk: s.locked ? 1 : undefined,
   tn: s.treeNodes?.length ? [...s.treeNodes] : undefined,
   rp: s.replenishmentPaused ? 1 : undefined,
+  triggerOff: s.state?.triggerOff,
 });
 
 /** Host: serialize one seat's build/progression for its owning client.
@@ -394,6 +396,7 @@ const rehydrateSkill = (w: SkillInstW): SkillInstance | null => {
   // Untrusted wire → the one validation seam (structure + budget), so the
   // client's panels can never render a state the host would refuse.
   if (w.tn?.length) inst.treeNodes = validTreeNodes(def, w.tn, w.lvl);
+  if (typeof w.triggerOff === 'boolean') (inst.state ??= {}).triggerOff = w.triggerOff;
   if (w.rp === 1 && replenishingDelivery(inst)?.replenish?.toggle) inst.replenishmentPaused = true;
   return inst;
 };
@@ -492,6 +495,7 @@ export interface StateSnapshot {
   satelliteFlights?: import('../engine/satelliteFlights').SatelliteFlightVisual[];
   auroras?: import('../engine/auroras').AuroraVisual[];
   guardians?: import('../engine/guardians').GuardianVisual[];
+  creepers?: import('../engine/creepers').CreeperVisual[];
   magicPackEffects?: import('../engine/magicPackMechanics').MagicPackVisual[];
   /** Per-owner terrain grants: replicas draw exactly the host's circles. */
   grantedPockets?: { owner: number; pockets: import('../engine/fieldgrants').GrantedPocket[] }[];
@@ -511,6 +515,7 @@ export interface StateSnapshot {
   /** The HOST account's reserve capacity (World.vendorLockCap) — the client
    *  panel draws toggles against the counter's true ledger, not its own. */
   vendorCap?: number;
+  memoryAccess?: import('../meta/memoryUnlocks').MemoryAccess;
   /** THE KEEPER'S GATE, mirrored (World.vendorTradeRefusal === null /
    *  vendorGemsOpen): the host's trade-gate + gem-case verdicts, so a client
    *  panel disables and seals with the keeper's own truth. Absent (older
@@ -858,6 +863,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     satellites: world.satellites.visuals.map(v => ({ ...v })),
     auroras: world.auroras.visuals.map(v => ({ ...v })),
     guardians: world.guardians.visuals.map(v => ({ ...v })),
+    creepers: world.creepers.visuals.map(v => ({ ...v, trail: v.trail.map(p => ({ ...p })) })),
     satelliteFlights: world.satellites.flights.visuals.map(v => ({ ...v, from: { ...v.from }, to: { ...v.to } })),
     grantedPockets: (() => {
       const rows = world.seats.map(s => ({ owner: s.actor.id, pockets: world.grantedPocketsFor(s.actor) }))
@@ -868,6 +874,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     seats, seatMeta,
     vendor: world.vendorStock.map(e => vendorEntryW(e, world)), vendorRestockAt: world.vendorRestockAt,
     vendorCap: world.vendorLockCap(),
+    memoryAccess: memoryAccessView(world.account),
     vendorTradeOpen: world.vendorTradeRefusal() === null,
     vendorGemsOpen: world.vendorGemsOpen(),
     bagBoard: bagBoard(),
@@ -1451,6 +1458,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   world.satellites.visuals = (snap.satellites ?? []).map(v => ({ ...v }));
   world.auroras.visuals = (snap.auroras ?? []).map(v => ({ ...v }));
   world.guardians.visuals = (snap.guardians ?? []).map(v => ({ ...v }));
+  world.creepers.visuals = (snap.creepers ?? []).map(v => ({ ...v, trail: v.trail.map(p => ({ ...p })) }));
   world.satellites.flights.visuals = (snap.satelliteFlights ?? []).map(v => ({ ...v, from: { ...v.from }, to: { ...v.to } }));
   world.orbs = snap.orbs.map(o => ({ pos: { x: o.p[0], y: o.p[1] }, bob: o.bob, life: o.life, kind: o.kind, amount: 0 })) as unknown as World['orbs'];
   world.texts = snap.texts.map(t => ({ pos: { x: t.p[0], y: t.p[1] }, life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, kind: t.k })) as unknown as World['texts'];
@@ -1494,6 +1502,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     world.vendorHolds['brandt'] = { locks, watchedSec: 0 };
     world.vendorRestockAt = snap.vendorRestockAt;
     world.netVendorCap = snap.vendorCap;
+    world.netMemoryAccess = snap.memoryAccess;
     world.netVendorTradeOpen = snap.vendorTradeOpen;
     world.netVendorGemsOpen = snap.vendorGemsOpen;
     world.netBagBoard = snap.bagBoard;

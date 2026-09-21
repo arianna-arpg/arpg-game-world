@@ -32,7 +32,7 @@ import { skillAbsorbAmount } from './absorb';
 import { guardSurgePreview } from './guardSurge';
 import { instanceInvocation, makeInvocationPayload } from './invocation';
 import { resolveInvocation, RUNE_INFO, type RuneId } from '../data/invocations';
-import { instanceEffects } from './skills';
+import { instanceEffects, instanceTrigger, instanceTriggerLimit } from './skills';
 import { costWard } from './costward';
 import { summonKitIds } from './skills';
 import type { Actor } from './actor';
@@ -157,16 +157,18 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
     if (cost.life > 0) parts.push(`${cost.life} life`);
     push('cost', 'Cost', parts.join(' + '));
   }
-  if (def.useTime > 0 && !replenishing) {
+  const trigger = instanceTrigger(inst);
+  if (trigger?.on === 'meleeHit') push('trigger', 'Release', 'Next landed melee attack', 'headline', 'Toggle on to arm; pays this skill’s cost each release.');
+  if (def.useTime > 0 && !replenishing && !(trigger && def.useTime <= instanceTriggerLimit(inst))) {
     const speed = caster.speedFactor(inst);
     push('castTime', tags.has('attack') ? 'Attack time' : 'Cast time',
       secs(def.useTime / Math.max(0.01, speed)), 'headline',
       Math.abs(speed - 1) > 0.005 ? `base ${secs(def.useTime)}` : undefined);
   }
-  if (def.cooldown > 0 && !replenishing) {
+  if (skillCooldownSeconds(caster, inst) > 0 && !replenishing) {
     const cd = skillCooldownSeconds(caster, inst);
     push('cooldown', 'Cooldown', secs(cd), 'headline',
-      Math.abs(cd - def.cooldown) > 0.005 ? `base ${secs(def.cooldown)}` : undefined);
+      def.cooldown > 0 && Math.abs(cd - def.cooldown) > 0.005 ? `base ${secs(def.cooldown)}` : undefined);
   }
 
   // ---- how many things this cast puts in the world -------------------------

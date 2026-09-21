@@ -61,12 +61,15 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_memoryunlocks.ts', status: 'green', tier: 'fast', why: 'Repeatable memory discovery, secondary access, payment, exhaustion, persistence, legendary mint and host gate' },
+  { probe: 'probe_uniqueaccords.ts', status: 'green', tier: 'fast', why: 'Unique grant census, item-owned sockets, live companion investment, Cinder Conductor fuel, Breach Bell cries and Unspent Reply casting costs' },
   { probe: 'probe_castingcues.ts', status: 'green', tier: 'fast', why: 'GT-019 real interruption/fizzle, held completion geometry, focus recovery, brim crossing, generic opt-out and co-op parity' },
   { probe: 'probe_afflictioncues.ts', status: 'green', tier: 'fast', why: 'Independent simultaneous blood/kindling/poison/curse layers, individual severity, quiet-presence budget without top-N selection, typed pressure, comfort and co-op cleanup' },
   { probe: 'probe_warningcues.ts', status: 'green', tier: 'fast', why: 'GT-011/012: exact guard-release geometry, live plan gestures, interruption/recovery and co-op warning cleanup' },
   { probe: 'probe_combatcues.ts', status: 'green', tier: 'fast', why: 'GT-007–010: parry opening/reflection, avoided hits, timing and critical outcome cues with exact state and co-op fidelity' },
   { probe: 'probe_defensecues.ts', status: 'green', tier: 'fast', why: 'State-driven winded, poise, guard and shell cues; profile fallback, typed overflow, recovery and co-op parity' },
   { probe: 'probe_exhaustioncues.ts', status: 'green', tier: 'fast', why: 'Retreat exhaustion and reserve gasps follow real windows, recovery, status removal and co-op state without captions' },
+  { probe: 'probe_creepers.ts', status: 'green', tier: 'fast', why: 'Autonomous carried burrowers: wandering, pursuit, leash, committed eruptions, gear, scaling, terrain and co-op' },
   { probe: 'probe_guardians.ts', status: 'green', tier: 'fast', why: 'Rime precision aiming and reactive Graveglass interception, suppression, recharge, equipment, lifecycle and co-op' },
   { probe: 'probe_auroras.ts', status: 'green', tier: 'fast', why: 'Lightning satellite projectiles and independent aurora reservoirs: charge, cascade, equipment, typed scaling, lifecycle and co-op' },
   { probe: 'probe_satellites.ts', status: 'green', tier: 'fast', why: 'Shared carried satellites: stacking, physical scaling, swept contacts, cleanup, pack progression, gear, save and co-op geometry' },
@@ -132,6 +135,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_visualcues.ts', status: 'green', tier: 'fast', why: 'Settlement Font placement and dwell; silent body departures and co-op visual parity' },
   { probe: 'probe_itemreadability.ts', status: 'green', tier: 'fast', why: 'Earned first passive point and attention; compact equipment silhouettes, gemstone shapes and co-op ground-drop rendering parity' },
   { probe: 'probe_frontierstartertrees.ts', status: 'green', tier: 'fast', why: 'Hivecaller, Ranger and Guardian opening trees; source grafts, pooled command participation, minion blessings, absorb power and all terminal routes' },
+  { probe: 'probe_cleave.ts', status: 'green', tier: 'fast', why: 'Cleave armed melee release, cost and recovery, direct-hit exclusions, attribution, tree investment, respec and save/wire state' },
   { probe: 'probe_startertrees.ts', status: 'green', tier: 'fast', why: 'Nine opening skill trees, buff mutation recipients and consumption, source-specific respec cleanup, real casts and save round trips' },
   { probe: 'probe_necromancersacraments.ts', status: 'green', tier: 'fast', why: 'Necromancer blood and pyre trees, paid-resource wards, and saved edge-triggered horde toggles' },
   { probe: 'probe_necromancerrites.ts', status: 'green', tier: 'fast', why: 'Plague and scythe binary trees, real return/propagation/curse fields/waves, derived support identity, save repair and respec cleanup' },

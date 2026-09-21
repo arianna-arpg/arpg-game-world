@@ -45,6 +45,8 @@ import { auroraCapacityStat } from '../engine/auroraSpec';
 import './auroras';
 import { guardianCountStat } from '../engine/guardianSpec';
 import './guardians';
+import { creeperCountStat } from '../engine/creeperSpec';
+import './creepers';
 
 // ------------------------------------------------------------ generation ---
 
@@ -643,6 +645,12 @@ export const RELIC_AFFIXES: readonly AffixDef[] = [...RELIC_PREFIXES, ...RELIC_S
 // ------------------------------------------------------------- prefixes ----
 
 const PREFIXES: AffixDef[] = [
+  {
+    id: 'creeper_barrow', family: 'creeper_barrow', kind: 'prefix',
+    names: ['Barrowbound'], tags: ['ring', 'amulet'], weight: 12,
+    lines: [{ stat: creeperCountStat('barrow'), kind: 'flat' }],
+    tiers: [{ ilvl: 14, ranges: [[1, 1]], weight: 100 }],
+  },
   {
     id: 'satellite_rime_wake', family: 'satellite_rime_wake', kind: 'prefix',
     names: ['Rimebound'], tags: ['ring', 'amulet'], weight: 14,

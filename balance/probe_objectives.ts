@@ -554,6 +554,9 @@ withSeededRandom(0x0bec7a, () => {
       check(`R2 '${label}' inherits the recoup spread`, !!c.recoup);
     }
     mintWith({ kind: 'beacon' }, 818181, 8);
+    // R9 moves the hero through generated scenery. Resource-harvest dwell
+    // can freeze the world there; this rig isolates the objective clock.
+    w.harvestNodes.length = 0;
     const spire = w.spires[0];
     const need = transitDwell('beacon', BEACON_CFG.chargeSec);
     killAllEnemies();
@@ -609,6 +612,8 @@ withSeededRandom(0x0bec7a, () => {
     spire.recoup = 1e9;
     w.player.pos = vec(spire.pos.x + 30, spire.pos.y);
     step(1 / 30);
+    check('R10 the cap fixture is attended and draining',
+      w.heldFixture === spire && spire.holdRead?.draining === true);
     check('R10 the owed bank CAPS at need × capFrac (the ghost never laps the bar)',
       spire.recoup <= need * REC.capFrac + 0.01,
       `${spire.recoup.toFixed(1)} vs ${(need * REC.capFrac).toFixed(1)}`);

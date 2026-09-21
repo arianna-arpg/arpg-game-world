@@ -25,12 +25,14 @@
 // ---------------------------------------------------------------------------
 
 import { CLASS_DEEDS, discoveryCount } from '../data/classdeeds';
+import { MEMORY_UNLOCK_CFG, MEMORY_UNLOCKS } from '../data/memoryUnlocks';
+import { grantMemoryUnlock, memoryCatalog, memoryCommissionReady, memoryUnlockCandidates, memoryUnlockDef } from './memoryUnlocks';
 import { encipher, revealScript } from '../data/runescript';
 import {
   FEATURE, LEDGER_ACCOUNT_DEATHS, LEDGER_CORPSES_RECLAIMED, LEDGER_CRAFTS_UNLOCKED,
-  LEDGER_FLASK_LESSON, LEDGER_GEMDROP_PREFIX, LEDGER_LEGENDARY_SKILL_DROP,
+  LEDGER_FLASK_LESSON, LEDGER_LEGENDARY_SKILL_DROP,
   LEDGER_VENDOR_BOUGHT, LEDGER_ZONES_EXPLORED, STARTER_CLASSES, bossSlainKey,
-  classLevelLedgerKey, reachedLevelKey, type Account,
+  classLevelLedgerKey, reachedLevelKey, unlockedClassCount, type Account,
 } from './account';
 import {
   gateClassLevelNeeds, gateLevelNeeds, gateMet, gateRowLabel, gateRowMet, gateRowProgress,
@@ -102,6 +104,8 @@ interface UnlockBase {
   /** Earned through gameplay, never investment. After the automatic grant,
    *  a free Vault button acknowledges the persistent pending reward. */
   earned?: boolean;
+  /** Surface the service only when at least one Memory is eligible. */
+  requiresMemoryCommission?: boolean;
 }
 
 export type Unlockable =
@@ -116,6 +120,7 @@ export type Unlockable =
   | (UnlockBase & { kind: 'classtier'; payload: { classId: string; tierId: string; skillIds: string[] } })
   | (UnlockBase & { kind: 'skill'; payload: { skillIds: string[] } })
   | (UnlockBase & { kind: 'support'; payload: { supportIds: string[] } })
+  | (UnlockBase & { kind: 'memory'; payload: { memoryUnlockId: string } })
   | (UnlockBase & { kind: 'feature'; requiresFeature?: string; payload: { flag: string } })
   | (UnlockBase & { kind: 'package'; payload: { packageId: string; tierId?: string } })
   // THE SKILL GRAFT — the REPEATABLE charge (never owned): buying arms
@@ -545,7 +550,7 @@ function classBundleEntry(b: ClassBundleDef): Unlockable {
     reqAnyOf: objectives,
     ...(doors.length ? { requiresUnlock: doors } : {}),
     label: `Class: ${name}`,
-    description: `${b.blurb} Available at character creation.`
+    description: `${b.blurb} Unlock in the Vault to enter the class selection pool.`
       + ` Added to the drop pool: ${gemNames(b.skillIds, SKILLS)}`
       + (sups.length ? ` · supports: ${gemNames(sups, SUPPORTS)}` : '') + '.',
     payload: { classId: b.classId, skillIds: [...b.skillIds], supportIds: [...sups], hint: spec.hint, rumor: b.rumor },
@@ -630,6 +635,8 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   ...CLASS_BUNDLES.map(classBundleEntry),
   // --- THE MASTERY LADDER: per-class rungs, the essence's new home ----------
   ...classTierEntries(),
+  ...MEMORY_UNLOCKS.map((r): Unlockable => ({ id: r.id, kind: 'memory', cost: r.cost,
+    label: r.label, description: r.description, payload: { memoryUnlockId: r.id } })),
 
   // --- Skill drop bundles (tier-1 are starters; these add more to the pool) -
   { id: 'gem_skills_t2', kind: 'skill', cost: 75, reqLevel: 0, label: 'Skill Pool II',
@@ -954,10 +961,9 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   // never sell with nothing to name. Teases sealed once the hold is owned.
   { id: 'feat_vendor_commission', kind: 'feature', cost: VENDOR_CFG.commission.cost, reqLevel: 0,
     requiresUnlock: 'feat_vendor_lock_1', tease: true,
-    reqAnyOf: [{ ledgerPrefix: LEDGER_GEMDROP_PREFIX, n: VENDOR_CFG.commission.need,
-                 label: `a Memory your line has seen drop ${VENDOR_CFG.commission.need}+ times` }],
+    requiresMemoryCommission: true,
     label: 'The Standing Order: Commission',
-    description: `Name a Memory your line has seen drop ${VENDOR_CFG.commission.need}+ times (the drop index counts only true finds) and the counter WATCHES for it: every restock that passes while you're away is resolved at the shelf's own odds, and a hit waits for you, reserved. One standing order per counter; fulfilled on purchase.`,
+    description: `Commission an awakened skill or a support found ${VENDOR_CFG.commission.need}+ times. The counter watches at its normal restock odds and reserves a find for you. One standing order per counter; fulfilled on purchase.`,
     payload: { flag: FEATURE.VENDOR_COMMISSION } },
 
   // --- Town-building: the Quest Package (surfaces once any character reaches L5)
@@ -1134,8 +1140,8 @@ export const UNLOCK_CATALOG: Unlockable[] = [
 
   // --- Master gem unlock: everything obtainable (a deliberate, expensive flip) -
   { id: 'feat_unlock_all_gems', kind: 'feature', cost: 500, reqLevel: 2,
-    label: 'Grand Codex: Unlock All Memories',
-    description: 'EVERY Skill and Support Memory becomes obtainable (drops, chests, Brandt), including anything added in the future. One deliberate unlock so new content is always reachable. (Classes are unlocked apart; each Class bundle also widens the roll at character select.)',
+    label: 'Grand Codex: Debug Unlock All Memories',
+    description: 'DEBUG shortcut retained for testing: every skill and support becomes obtainable, including future additions. Secondary access is bypassed while the debug bypass is enabled. Planned for removal from the player economy after unlock experiments.',
     payload: { flag: FEATURE.UNLOCK_ALL_GEMS } },
 
   // --- THE SKILL GRAFT: the veteran's essence valve — a REPEATABLE charge
@@ -1239,13 +1245,14 @@ export function classRumorRead(a: Account, u: Unlockable) {
   };
 }
 
-/** These rewards already function in play, but stay on the Classes shelf
- *  until deliberately acknowledged. Merely opening the Vault never clears them. */
+/** Discovery grants gems immediately; these classes stay off the selectable
+ *  pool until activated. Merely opening the Vault never activates them. */
 export function pendingClassUnlocks(a: Account): Unlockable[] {
   return UNLOCK_CATALOG.filter(u => u.kind === 'class' && isUnlockOwned(a, u)
     && a.pendingClassUnlocks.has(u.payload.classId));
 }
 
+/** Activate selection for a discovered class, without spending or re-granting gems. */
 export function acknowledgeClassUnlock(a: Account, u: Unlockable): boolean {
   return u.kind === 'class' && isUnlockOwned(a, u) && a.pendingClassUnlocks.delete(u.payload.classId);
 }
@@ -1284,6 +1291,17 @@ export function settleClassUnlocks(a: Account, view?: Readonly<Record<string, nu
 /** Reconcile authored additions once after account loading, before any gem
  * rolls. Never change the pool in the middle of a seeded recall or reward. */
 export function reconcileClassBundleGems(a: Account): void {
+  // Retired bundles keep already-granted gems. Unspent investments transfer
+  // once to discovery; overflow funds later deliberate draws, never vanishes.
+  if (!MEMORY_UNLOCK_CFG.legacyGemBundles) {
+    const target = MEMORY_UNLOCKS.find(r => r.tier === 'discovery');
+    if (target) for (const u of UNLOCK_CATALOG) {
+      if (u.kind !== 'skill' && u.kind !== 'support') continue;
+      const held = investedToward(a, u);
+      if (held > 0) a.invested[target.id] = (a.invested[target.id] ?? 0) + held;
+      delete a.invested[u.id];
+    }
+  }
   for (const b of CLASS_BUNDLES) if (a.unlockedClasses.has(b.classId)) {
     for (const id of b.skillIds) a.unlockedSkills.add(id);
     for (const id of b.supportIds ?? []) a.unlockedSupports.add(id);
@@ -1342,12 +1360,13 @@ export function catalogClassLevelMilestones(classId: string): number[] {
 export function isUnlockOwned(a: Account, u: Unlockable): boolean {
   switch (u.kind) {
     case 'slot':    return a.unlockedSlots.has(u.payload.slotCount);
-    // Owning the CLASS is the bundle's identity — gem overlap with old saves'
-    // pool purchases never blocks the class itself from being purchasable.
+    // The earned bundle gates discovery chains and rewards. Class selection
+    // separately requires isClassUnlocked (the deliberate Vault activation).
     case 'class':   return a.unlockedClasses.has(u.payload.classId);
     case 'classtier': return a.unlockedClassTiers.has(u.id);
     case 'skill':   return u.payload.skillIds.every(id => a.unlockedSkills.has(id));
     case 'support': return u.payload.supportIds.every(id => a.unlockedSupports.has(id));
+    case 'memory': return false;
     case 'feature': return a.features.has(u.payload.flag);
     case 'package': return a.packageUnlocks.has(u.payload.tierId ?? u.payload.packageId);
     // A graft is NEVER owned — the repeatable charge's whole identity. Its
@@ -1414,13 +1433,20 @@ function packageUnlockables(): Unlockable[] {
  *  is handed over, its own FALLEN-vessel resurrections (account-derived
  *  stock; account-less callers keep the pure static view). */
 export function allUnlockables(a?: Account): Unlockable[] {
-  return [...UNLOCK_CATALOG, ...packageUnlockables(), ...(a ? resurrectUnlockables(a) : [])];
+  return [...UNLOCK_CATALOG.filter(u => MEMORY_UNLOCK_CFG.legacyGemBundles || (u.kind !== 'skill' && u.kind !== 'support')),
+    ...packageUnlockables(), ...(a ? resurrectUnlockables(a) : [])];
 }
 
 /** Is this unlock visible/purchasable yet (its gate met)? Static entries gate on
  *  sequencing/level/ledger; package BASE entries on the unlock predicate; package
  *  TIER entries on (base owned + every prior tier owned + this tier's milestone). */
 export function isUnlockVisible(a: Account, u: Unlockable): boolean {
+  if (!MEMORY_UNLOCK_CFG.legacyGemBundles && (u.kind === 'skill' || u.kind === 'support')) return false;
+  if (u.id === 'feat_unlock_all_gems' && !MEMORY_UNLOCK_CFG.showDebugCodex) return false;
+  if (u.kind === 'memory') {
+    const def = memoryUnlockDef(u.payload.memoryUnlockId);
+    return !!def && memoryUnlockCandidates(a, def).length > 0 && staticGateMet(a, u);
+  }
   // A graft stands down while its charge is ARMED (bought, unspent): the
   // shelf offers it again only once a run's beginning consumes the charge.
   if (u.kind === 'graft' && a.skillGraft) return false;
@@ -1446,6 +1472,7 @@ export function isUnlockVisible(a: Account, u: Unlockable): boolean {
 /** Sequencing + account-level + (for features) a lifetime-ledger milestone
  *  gate. Non-package. */
 function staticGateMet(a: Account, u: Unlockable): boolean {
+  if (u.requiresMemoryCommission && !memoryCatalog().some(c => memoryCommissionReady(a, c.kind, c.id, VENDOR_CFG.commission.need))) return false;
   if ((u.reqLevel ?? 0) > a.level) return false;
   // GENERIC LADDERS: hidden until the named catalog unlock(s) are OWNED — the
   // class-slot sequence is pure prior-purchase gating, no account level at all.
@@ -1471,7 +1498,7 @@ function staticGateMet(a: Account, u: Unlockable): boolean {
   }
   // THE MOOT LAW: pool-fed purchases (class slots) hide until the unlocked-
   // class pool is deep enough for the purchase to actually do something.
-  if (u.reqClasses !== undefined && a.unlockedClasses.size < u.reqClasses) return false;
+  if (u.reqClasses !== undefined && unlockedClassCount(a) < u.reqClasses) return false;
   // Sequential feature ladders (e.g. Mireille life → mana → XP buff).
   if (u.kind === 'feature' && u.requiresFeature && !a.features.has(u.requiresFeature)) return false;
   // THE GATEWORK: one held avenue opens the any-of group (gates.ts).
@@ -1509,6 +1536,8 @@ function structuralPrereqsMet(a: Account, u: Unlockable): boolean {
 export function sealedGateLines(a: Account, u: Unlockable): { label: string; met: boolean; anyOf: boolean }[] {
   const owned = ownedUnlockById(a);
   const out: { label: string; met: boolean; anyOf: boolean }[] = [];
+  if (u.requiresMemoryCommission) out.push({ label: 'an awakened skill or an indexed support',
+    met: memoryCatalog().some(c => memoryCommissionReady(a, c.kind, c.id, VENDOR_CFG.commission.need)), anyOf: false });
   for (const r of u.reqAnyOf ?? []) {
     out.push({ label: gateRowLabel(r), met: gateRowMet(a, r, owned), anyOf: true });
   }
@@ -1520,7 +1549,7 @@ export function sealedGateLines(a: Account, u: Unlockable): { label: string; met
   for (const r of ledgerRows) out.push({ label: gateRowLabel(r), met: gateRowMet(a, r, owned), anyOf: false });
   if (u.reqLevel) out.push({ label: `account level ${u.reqLevel}`, met: a.level >= u.reqLevel, anyOf: false });
   if (u.reqClasses !== undefined) {
-    out.push({ label: `${u.reqClasses} classes unlocked`, met: a.unlockedClasses.size >= u.reqClasses, anyOf: false });
+    out.push({ label: `${u.reqClasses} classes unlocked`, met: unlockedClassCount(a) >= u.reqClasses, anyOf: false });
   }
   return out;
 }
@@ -1572,7 +1601,8 @@ export function availableUnlocks(a: Account): Unlockable[] {
  *  change for the service kinds (the graft's armed charge, a resurrection's
  *  cleared stamp, which is never "owned"). ONE predicate for the Vault's
  *  completion toasts and the seal log — the panels never re-derive it. */
-export function unlockCompleted(a: Account, u: Unlockable): boolean {
+export function unlockCompleted(a: Account, u: Unlockable, memorySequence = 0): boolean {
+  if (u.kind === 'memory') return (a.memoryReceipts[u.id]?.sequence ?? 0) > memorySequence;
   if (u.kind === 'graft') return a.skillGraft;
   if (u.kind === 'resurrect') return !a.roster.find(r => r.charId === u.payload.charId)?.fallen;
   return isUnlockOwned(a, u);
@@ -1639,9 +1669,9 @@ export const VAULT_TABS: readonly VaultTabDef[] = [
     emptyNote: 'More class choices and Mastery become available as your account grows.',
   },
   {
-    id: 'gems', label: 'Memories', kinds: ['skill', 'support', 'graft'],
-    blurb: 'Skill and support pools: buy one and its skills join the drop tables (and the town counters) for every character after, forever. Skill Grafts arm a chosen skill onto your next run\'s start.',
-    emptyNote: 'No Memory pools on the shelf right now; some surface with account levels, others only once the world has taught them.',
+    id: 'gems', label: 'Memories', kinds: ['memory', 'skill', 'support', 'graft'],
+    blurb: 'Discover random new skills and supports, or awaken the deeper arts of a skill you can already find. Each purchase grants one new result. Class discovery still grants its own Memories.',
+    emptyNote: 'No eligible Memories remain for these purchases. New catalog entries join automatically.',
   },
   {
     id: 'town', label: 'Town', kinds: ['feature'], fallback: true,
@@ -1666,7 +1696,7 @@ export const VAULT_TABS: readonly VaultTabDef[] = [
 export const VAULT_KIND_LABELS: Record<UnlockKind, string> = {
   slot: 'Class Slots', class: 'Classes', classtier: 'Mastery', skill: 'Skill Pools',
   support: 'Support Pools', feature: 'Town & Features', package: 'World Events',
-  graft: 'Skill Grafts', resurrect: 'Fallen Vessel',
+  graft: 'Skill Grafts', resurrect: 'Fallen Vessel', memory: 'Memory Unlocks',
 };
 
 /** The shelf a kind sits on — its explicit seat first, else the fallback
@@ -1809,9 +1839,9 @@ export function remainingCost(a: Account, u: Unlockable): number {
   return Math.max(0, u.cost - investedToward(a, u));
 }
 
-/** GRANT — the ownership switch, reached only through a completed
- *  investment. A class bundle is SEVERAL unlocks in one: the class enters
- *  the roll pool, its gems enter the drop pool (Sets dedupe any overlap
+/** GRANT — reached through completed investment or an earned discovery.
+ *  A class bundle records discovery; its pending stamp holds selection for
+ *  the Vault click, while its gems enter the drop pool (Sets dedupe overlap
  *  with owned pools) — and realizing the class later opens its vocation
  *  chain for free. */
 function grantUnlock(a: Account, u: Unlockable): void {
@@ -1828,6 +1858,7 @@ function grantUnlock(a: Account, u: Unlockable): void {
       break;
     case 'skill':   for (const id of u.payload.skillIds) a.unlockedSkills.add(id); break;
     case 'support': for (const id of u.payload.supportIds) a.unlockedSupports.add(id); break;
+    case 'memory': break; // Completed atomically by investUnlock before any currency is consumed.
     case 'feature': a.features.add(u.payload.flag); break;
     case 'package': a.packageUnlocks.add(u.payload.tierId ?? u.payload.packageId); break;
     case 'graft':   a.skillGraft = true; break;
@@ -1851,6 +1882,17 @@ export function investUnlock(a: Account, u: Unlockable, amount: number): number 
   // THE EARNED LAW: no pour reaches an earned entry — the world claims it.
   if (u.earned || isUnlockOwned(a, u) || !isUnlockVisible(a, u)) return 0;
   const rem = remainingCost(a, u);
+  if (u.kind === 'memory') {
+    const def = memoryUnlockDef(u.payload.memoryUnlockId);
+    if (!def || !Number.isFinite(amount)) return 0;
+    const put = Math.min(Math.max(0, Math.floor(amount)), Math.max(0, Math.floor(a.credits)), rem);
+    const total = investedToward(a, u) + put;
+    if (total >= u.cost && !grantMemoryUnlock(a, def)) return 0;
+    a.credits -= put;
+    const left = total >= u.cost ? total - u.cost : total;
+    if (left > 0) a.invested[u.id] = left; else delete a.invested[u.id];
+    return put;
+  }
   if (rem === 0) {
     // A retuned catalog left an investment at/over the new cost: settle it.
     delete a.invested[u.id];

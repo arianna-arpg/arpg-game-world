@@ -25,17 +25,28 @@ placeholder until earned; the actual name is not encoded into the shrouded card.
 Class-select teasers use the same safe prose. Vestiges share the alphabet as lore;
 finding them never translates the card, and the UI makes no such claim.
 
-Earning still grants the class and its drop pools immediately. It also adds the
-class to `Account.pendingClassUnlocks`, persisted through normal account saves.
+Earning discovers the class and grants its skill/support drop pools immediately.
+It also adds the class to `Account.pendingClassUnlocks`, persisted through normal account saves.
 The Classes shelf keeps the fully revealed card above the collapsible mystery
 section, with an enabled **Unlock** button and no essence price. Clicking it
-acknowledges the reward for free and moves the card to Owned; browsing, reloads,
+activates class selection for free and moves the card to Owned; browsing, reloads,
 and repeated settle sweeps never clear or re-arm it. The Classes tab includes
 pending rewards in its highlighted count. Older saves keep existing ownership
 and begin with no retrospective pending notices; no compatibility reset is needed.
+Existing pending entries now require that click before becoming selectable.
+
+Mu shows pending discoveries as their own named class vessels in the background,
+never in its dealt hand or contract offers. Unknown classes remain nameless cowls.
+All class pickers use `isClassUnlocked`, and slot prerequisites use
+`unlockedClassCount`, so only activated classes make wider hands purchasable.
+Discovery cannot alter the seeded hand or its contract rolls.
+
+The historical `unlockedClasses` save field retains discovered classes;
+`isClassDiscovered` reads it, while `isClassUnlocked` excludes pending entries.
+This keeps discovery rewards and saved gem pools intact without a migration.
 
 Ownership of a parent reveals deeper branches; deeds accumulated before that
-reveal still count. Acknowledgement never delays gameplay rewards or parent chains.
+reveal still count. Activation never delays gem rewards or discovery chains.
 
 ## Current recipes
 

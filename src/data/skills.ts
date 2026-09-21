@@ -46,6 +46,7 @@ import { ARENA_BOSS_SKILLS } from './arenaBosses';
 import { MAGIC_PACK_SKILLS } from './magicPackSkills';
 import { SATELLITE_SKILLS } from './satellites';
 import { AURORA_SKILLS } from './auroras';
+import { CREEPER_SKILLS } from './creepers';
 import { WORLDBOSS_ENCOUNTER_SKILLS } from './worldBossEncounters';
 import { TITAN_SKILLS } from './titans';
 
@@ -61,6 +62,7 @@ export const SKILLS: Record<string, SkillDef> = {
   ...MAGIC_PACK_SKILLS,
   ...SATELLITE_SKILLS,
   ...AURORA_SKILLS,
+  ...CREEPER_SKILLS,
   ...WORLDBOSS_ENCOUNTER_SKILLS,
   ...TITAN_SKILLS,
   ...WORKSHOP_SKILLS,

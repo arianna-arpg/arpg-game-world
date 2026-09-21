@@ -123,6 +123,8 @@ export const MU_CFG = {
   prompt: 'Drift near a standing vessel and be still.',
   /** A veiled vessel's refusal (dealt-hand law: not offered this waking). */
   veiledLine: 'This vessel does not stir — not this waking.',
+  /** A discovered vessel that still awaits the player's Vault unlock. */
+  pendingLine: 'This calling awaits your unlock in the Vault.',
   /** A faint cowl's non-answer. */
   faintLine: 'A shape not yet earned.',
   /** THE PANEL SEAL (her lever, 2026-09-11): hero pages (menu-entry ids,

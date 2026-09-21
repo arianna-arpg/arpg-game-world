@@ -90,7 +90,9 @@ import {
 } from '../src/data/scaldkit';
 import { PART_PAINTERS } from '../src/render/vis/parts';
 import { isSkillUnlockedForDrop, isSupportUnlockedForDrop } from '../src/meta/account';
-import { UNLOCK_CATALOG, applyUnlock, isUnlockVisible } from '../src/meta/unlocks';
+import { UNLOCK_CATALOG, isUnlockVisible } from '../src/meta/unlocks';
+import { MEMORY_UNLOCKS } from '../src/data/memoryUnlocks';
+import { grantMemoryUnlock, memoryUnlockCandidates } from '../src/meta/memoryUnlocks';
 import type { World } from '../src/engine/world';
 import type { Actor } from '../src/engine/actor';
 
@@ -1105,13 +1107,24 @@ const K2_SUPPORTS = SCALD_KIT_PLAYER_SUPPORTS.map(s => s.support);
       && !K2_SUPPORTS.some(id => isSupportUnlockedForDrop(acc, id))
       && !isSkillUnlockedForDrop(acc, 'geyser_step'));
     check('P8 live: the row is SEALED (not yet visible-and-buyable) before any scald ledger stands', !isUnlockVisible(acc, row!));
-    // ONE of the three roads is enough (the any-of law) — the cistern's.
+    // Regional access remains independent; the default Vault now draws single Memories.
     acc.ledger.cistern_entered = 1;
-    check('P9 live: the cistern\'s descent alone OPENS the row (any-of: whichever road the player crossed first)',
-      isUnlockVisible(acc, row!));
-    acc.credits = 99999;
-    const bought = applyUnlock(acc, row!) && applyUnlock(acc, supRow!);
-    check('P10 live: buying the pool carries the WHOLE kit into the account-wide pool — every K2 gem now drops and vends ANYWHERE (the no-lock law\'s other half)',
+    const discovery = MEMORY_UNLOCKS.find(d => d.tier === 'discovery')!;
+    const targets = [...K2_SKILLS, 'geyser_step'].map(id => ({ kind: 'skill', id }))
+      .concat(K2_SUPPORTS.map(id => ({ kind: 'support', id })));
+    const pool = memoryUnlockCandidates(acc, discovery);
+    check('P9 live: legacy bundles stay hidden; every scald Memory is eligible for individual discovery',
+      !isUnlockVisible(acc, row!) && targets.every(t => pool.some(c => c.kind === t.kind && c.id === t.id)));
+    const bought = targets.every(t => {
+      const remaining = memoryUnlockCandidates(acc, discovery);
+      const index = remaining.findIndex(c => c.kind === t.kind && c.id === t.id);
+      if (index < 0) return false;
+      const total = remaining.reduce((n, c) => n + c.weight, 0);
+      const before = remaining.slice(0, index).reduce((n, c) => n + c.weight, 0);
+      const receipt = grantMemoryUnlock(acc, discovery, () => (before + remaining[index].weight / 2) / total);
+      return receipt?.kind === t.kind && receipt.id === t.id;
+    });
+    check('P10 live: individual discoveries carry the WHOLE kit into the account-wide pool — every K2 gem now drops and vends ANYWHERE',
       bought && K2_SKILLS.every(id => isSkillUnlockedForDrop(acc, id))
       && isSkillUnlockedForDrop(acc, 'geyser_step')
       && K2_SUPPORTS.every(id => isSupportUnlockedForDrop(acc, id)));
@@ -1122,8 +1135,7 @@ const K2_SUPPORTS = SCALD_KIT_PLAYER_SUPPORTS.map(s => s.support);
     const odds = w.commissionOdds({ kind: 'skill', id: 'boil_over' });
     check('P11 live: THE COUNTER sees it too — the standing order\'s odds for a scald gem are non-zero once the pool is open (the shelf reads the same pool the mint does)',
       odds > 0, `odds ${odds.toFixed(4)}`);
-    // …and geyser_step's K1 dev-only gate is now THIS unlock.
-    check('P12 live: GEYSER-STEP is no longer dev-only — the same row that opened the kit opened the spike (K1\'s owed acquisition, paid)',
+    check('P12 live: GEYSER-STEP is discoverable through the same repeatable Memory pool',
       isSkillUnlockedForDrop(acc, 'geyser_step') && !SKILLS.geyser_step.noDrop);
   }
   // THE POOL-ORPHAN NET's own promise, checked from this side: nothing K2

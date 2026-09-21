@@ -45,7 +45,10 @@ learned book. The laws:
   (`ItemInstance.grantState[skillId]`, packed in the gem wrapper's own
   socket-row shape — engine/gemitems.ts `packGrantState` /
   `restoreGrantState`), so unequip → re-equip, a save, and the co-op wire
-  all mint the same stones back. Level is never stored.
+  all mint the same stones back. Level is never stored. `grantedHostUid`
+  tracks the current item residence: when the first host changes, restore
+  the incoming item's state and replace the bound instance. Retire only
+  effects owned by the outgoing instance; never copy its stones to its successor.
 - **Optional seating.** Grants do not automatically occupy the bar
   (`GRANT_CFG.autoSeat = false`). Their item triggers work without a seat;
   players may bind them for manual casting. A learned copy takes priority
@@ -138,7 +141,8 @@ STAT the item rolls; the roll never lives inside a proc def.
 ## 4. The spoken line
 
 `RangedLineDef.text` speaks an authored sentence: `{v}` prints the raw
-rolled value, `{v%}` a percentage, `{v0}` a whole number
+rolled value, `{v%}` a percentage, `{v0}` a rounded whole number and `{vf}`
+a floored whole number (matching granted skill levels)
 (`speakLineText`). A gauge line reads its registered gauge label ("per
 second standing still"); a gauge-gate line reads a threshold ("at 5 fury
 charges"); a `skillgrant_` line reads "Grants Level N Skill".
@@ -168,7 +172,10 @@ stat a known one.
 | The Miser's Loop | THE WHISPER: running dry halves every waiting cooldown |
 | Titan's Grasp | melee MORE, hands slower — the heavy trade |
 | Halo of the Ninth Choir | lightning damage per enemy near you (the count) |
-| The Cindervigil | the flagship: two granted skills, a spell-cast trigger firing the granted copy, the extra lane |
+| The Cindervigil | two grants, a spell-cast trigger using the equipped or granted copy, the extra lane |
+| The Cinder Conductor | independent Fire Golem; wearer/minion Fire hits fund Mana through one shared cooldown |
+| The Bell of the Breach | breaking enemy Poise triggers an equipped or granted War Cry |
+| The Unspent Reply | blocking prepares a mana-free, wider next Spell; ordinary spells cost more |
 | The Hermit's Bead (relic) | THE SEAT LAW, solitude: the bead's lines grow per empty seat touching it in the Reliquary |
 | The Lodestone (relic) | THE SEAT LAW, communion: the talisman's lines grow per relic touching it |
 | The Reliquary Crown (relic) | THE SEAT LAW, outward: every relic touching the effigy has stronger lines |
@@ -203,8 +210,10 @@ The follower uses the normal summon constructor, owner modifiers, combat,
 team and source-skill attribution. Its instance also names the granting
 item. It occupies no skill slot, manual summon pool or reservation. A
 manual copy can summon alongside it and toggle off independently. Multiple
-grants of the same skill add levels to one follower; a level change updates
-its inherited stats while preserving its body and life fraction.
+grants of the same skill add levels to one follower. Every build recalculation
+refreshes owner level and inherited stats, even when the granted skill level
+is unchanged, preserving the body and life fraction. Size is reapplied from
+the native monster radius so repeated refresh cannot compound it.
 
 Death waits the skill's authored respawn time, modified by ordinary minion
 respawn investment. Removing the last grant retires its follower silently;
@@ -224,6 +233,21 @@ Regression coverage: `probe_legends` pins full bars, bonus re-derivation,
 separate socket residence, removal, save/reload and unseated proc casts.
 `probe_relicuniques` pins coexistence, timed reforming, live repricing,
 stacked grant levels, travel reconstruction and owner death.
+
+## 8. Prepared spells and use costs
+
+`manaUseCost` (base 1, minimum 0) multiplies the final Mana component in
+`Actor.skillCost`, after `manaCost` and resource conversion. It does not
+discount Life or standing reservation. Any modifier source can supply it,
+including tagged consumable buffs. A `more: -1` modifier on Spell use cost
+lets The Unspent Reply prepare a mana-free cast without accidentally granting
+a free permanent aura or summon. Preview uses the same cost resolver.
+
+The new item definitions compose ordinary proc triggers (`hit`,
+`poiseBreakDealt`, `block`), minion carry, resource restoration, own-copy casts
+and `consumeOnUse` buffs. Content, tradeoffs and tuning are documented in
+`docs/design/unique-accords.md`; `probe_uniqueaccords` pins the current grant
+census, host swaps, live companion investment and the three combat payoffs.
 
 ## Boundaries
 

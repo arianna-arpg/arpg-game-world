@@ -56,6 +56,12 @@ jewelry uses shared modifier grants; no magic-pack recipes are added.
 Verify with `npm run probe -- guardians` and the hidden
 `balance/guardians-ui.cjs` harness after a build.
 
+Autonomous carried Barrow Creepers are documented in `docs/engine/creepers.md`:
+Barrowbound jewelry grants irregular roaming, target pursuit, warned ground
+eruptions and leashed returns through the shared actor/hit/pathing systems.
+Verify with `npm run probe -- creepers` and `balance/creepers-ui.cjs` after
+a build; Goad's construct-hosted Burrowing Pursuer remains independently authored.
+
 Reactive encounterCombat coordination lives in `src/engine/encounterCombat.ts`:
 utility-scored plans, readable warnings, finite commitments/recovery and native
 AI role assignments. `docs/design/encounter-combat.md` documents the six plans,
@@ -82,6 +88,11 @@ Necromancer summon trees live in `src/data/necromancerTrees.ts`; reusable crew
 arts and forms are in `necromancerSkills.ts` / `necromancerMinions.ts`. The
 current binary mutator anatomy, comparison checkpoint and summon grammar are
 documented in `docs/design/necromancer-skill-trees.md`.
+
+Cleave’s toggled melee-release and traveling-wound trees live in
+`src/data/cleaveTree.ts`; `docs/design/cleave.md` documents native tree triggers,
+independent recovery, attribution and save/co-op state. Verify with
+`npm run probe -- cleave` and the hidden `balance/cleave-ui.cjs` harness.
 
 Fresh-account starting trees live in `src/data/starterSkillTrees.ts`. Their
 shared temporary buff mutations (`SkillTreeNode.buffs` / `instanceEffects`),
@@ -225,6 +236,15 @@ Class discovery combat recipes live in `src/data/classdeeds.ts`, with reusable
 ledger aggregation in `src/engine/deeds.ts`. `docs/meta/class-deeds.md` covers
 account attribution, encounter streaks, hints, and the starting-kit cost pass.
 Class levels remain the mastery/skill-swap ladder.
+
+Repeatable Memory discovery and secondary awakening live in
+`data/memoryUnlocks.ts` + `meta/memoryUnlocks.ts`. One mixed skill/support
+draw replaces the package shelf; another awakens a discoverable skill's tree
+and commissions, also earned by a legendary mint/recall. Class gem rewards
+remain unchanged. `docs/meta/memory-unlocks.md` records experiment knobs,
+saved investment transfer, host authority and the future removal of the
+temporary debug Grand Codex. Verify `probe_memoryunlocks.ts` and the isolated
+`balance/memory-unlocks-ui.cjs` harness after a build.
 
 `docs/design/world-boss-colossi.md` documents the world-boss encounter pass:
 `data/worldBossEncounters.ts` owns Cragmaw's colossal anatomy and the two
@@ -2055,8 +2075,11 @@ we verify changes.
   `ClassUnlockSpec` compiles ANY-of gameplay deeds and optional ownership
   chains onto `reqAnyOf`/`requiresUnlock`; levels remain mastery-only.
   Earned entries cost zero and refuse investment. `pendingClassUnlocks`
-  persists newly earned cards on Classes with a free Unlock acknowledgement
-  before shelving them under Owned. See `docs/meta/class-deeds.md` and
+  persists newly discovered cards on Classes; the free Vault Unlock click
+  activates selection before shelving them under Owned. `isClassUnlocked`
+  excludes pending discoveries, and `unlockedClassCount` gates class slots
+  on that same pool. Mu reveals pending classes as named background vessels,
+  never dealt or contract-offered. See `docs/meta/class-deeds.md` and
   `balance/vault-discovery-ui.cjs` for the reveal and acknowledgement contract.
   THE CLAIM: `settleClassUnlocks` (the live sweep every `sweepSec` against
   `World.ledgerView()` — the merged account+run fold — plus the Vault, the
@@ -2142,6 +2165,11 @@ we verify changes.
   without a bar slot or reservation; a manual golem can coexist and also
   reserves no mana via `summonReservation_<id>`; `engine/companionGrants.ts`) and a rolled
   sunder element.
+  Unique grant audit and three additional builds: `docs/design/unique-accords.md`,
+  `data/uniques/accords.ts`, `balance/probe_uniqueaccords.ts`. Item grant hosts
+  preserve separate socket/tree residence through `grantedHostUid`; companions
+  refresh live owner investment without healing. `manaUseCost` discounts only
+  Mana spent on use, after conversion, leaving Life and reservation intact.
   THE WORN GRAFT (slot grafts — supports granted BY POSITION): the
   `slotgraft_<slot>_<gemId>` stat family (engine/skills.ts `slotGraftStat`,
   slot 1-based "Skill Slot N"; value = granted gem LEVEL, grantors SUM,

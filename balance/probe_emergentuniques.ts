@@ -125,6 +125,7 @@ check('each new proc registers once', EMERGENT_PROCS.every(p => PROC_LIST.filter
   const w = rig(0xe116), p = w.player;
   equip(w, 'mourning_bell');
   const summon = w.localSeat.grantedInsts!.get('summon_skeleton')!;
+  w.bindSkill(p.skills.indexOf(null), summon.def.id); // optional summon must be seated for manual upkeep
   p.mana = p.maxMana();
   const cast = w.useSkill(p, summon, vec(p.pos.x + 60, p.pos.y));
   step(w, 1.2);

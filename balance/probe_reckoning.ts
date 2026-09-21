@@ -112,13 +112,12 @@ const wallet = (w: Partial<Record<EssenceId, number>>): Record<EssenceId, number
 // --- D) The investment lane --------------------------------------------------
 {
   const a = makeAccount();
-  // A visible-from-the-start feature row with a real cost (the Grand Codex
-  // gates on level 2 — pick the all-gems flip's cheaper sibling instead):
-  // the first slot tier is gated by pool depth; use a plain catalog entry
-  // that is visible on a fresh account.
+  // Permanent ownership investment is distinct from repeatable Memory draws.
+  // Open the retained debug feature to exercise the permanent grant path.
+  a.level = 2;
   const fresh = availableUnlocks(a);
   check('invest: a fresh account has stock on the shelf', fresh.length > 0, `${fresh.length}`);
-  const u = fresh.reduce((m, x) => (x.cost > m.cost ? x : m), fresh[0]);
+  const u = fresh.find(x => x.kind === 'feature' && x.cost > 0)!;
   applyCredits(a, Math.floor(u.cost / 2));
   const put = investUnlock(a, u, a.credits);
   check('invest: a pour clamps to the pool, records progress, spends the pool',
@@ -135,7 +134,8 @@ const wallet = (w: Partial<Record<EssenceId, number>>): Record<EssenceId, number
     applyUnlock(a, u) && isUnlockOwned(a, u) && a.invested[u.id] === undefined && a.credits === 0);
   // Over-pour clamps to the remainder.
   const b = makeAccount();
-  const v = availableUnlocks(b).reduce((m, x) => (x.cost > m.cost ? x : m), availableUnlocks(b)[0]);
+  b.level = 2;
+  const v = u;
   applyCredits(b, v.cost + 500);
   const putAll = investUnlock(b, v, 99999);
   check('invest: an over-pour clamps to the cost and grants',

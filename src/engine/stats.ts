@@ -21,6 +21,7 @@ export type SkillTag =
   | 'satellite' | `satellite:${string}`
   | 'aurora' | `aurora:${string}`
   | 'guardian' | `guardian:${string}`
+  | 'creeper' | `creeper:${string}`
   | 'cast:timed' | 'cast:instant' | 'cast:channel' | 'cast:held'
   | `minion:${string}` | `body:${string}`
   | 'attack' | 'spell' | 'melee' | 'projectile' | 'aoe' | 'duration'
@@ -1336,6 +1337,8 @@ export const STAT_DEFS: Record<string, StatDef> = {
   fusePower:      { label: 'Fused Resolution Power', base: 1, min: 0.1 },
   statusChance:   { label: 'Ailment Chance', base: 0, percent: true },
   manaCost:       { label: 'Mana Cost Multiplier', base: 1, min: 0 },
+  /** Mana actually spent on use, after cost conversion; never reservation or life. */
+  manaUseCost:    { label: 'Mana Use Cost Multiplier', base: 1, min: 0 },
   /** Flat cost adders — a support's teeth on cheap skills (Mana Feeder). */
   addedManaCost:  { label: 'Added Mana Cost', base: 0, min: 0 },
   addedLifeCost:  { label: 'Added Life Cost', base: 0, min: 0 },

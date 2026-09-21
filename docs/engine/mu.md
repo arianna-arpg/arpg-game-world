@@ -88,8 +88,16 @@ account's own history (runs + deaths):
 | rank | who | face |
 |---|---|---|
 | **awake** | the dealt hand (`selectableSlotCount` from the unlocked pool) | full apparition, gold nameplate, commune bar, opens the card |
-| **veiled** | the unlocked remainder | named, dimmer (`mu_veiled` ghostAlpha), refuses: "not this waking" |
-| **faint** | the locked remainder, capped (`MU_CFG.faintCap`) | one shared nameless cowl (`apparition_unknown`, the `ghost` look) — the discovery web keeps its secrets |
+| **veiled** | activated classes outside the hand, plus discoveries awaiting Vault activation | class's own named body, dimmer (`mu_veiled` ghostAlpha); pending discoveries use `MU_CFG.pendingLine`, the rest use `veiledLine` |
+| **faint** | the undiscovered remainder, capped (`MU_CFG.faintCap`) | one shared nameless cowl (`apparition_unknown`, the `ghost` look) — the discovery web keeps its secrets |
+
+`isClassUnlocked` admits only starters and classes activated by the free
+Vault Unlock click. Discovery immediately opens the class's gem drops and
+reveals its background vessel, without consuming hand slots or participating
+in contract rolls. Pending discoveries append to the veiled rank after the
+deal, preserving the hand and offer random stream. Slot prerequisites count
+the same activated pool. Existing saves keep their discovered classes and
+pending stamps; already activated classes remain selectable.
 
 One generated `MonsterDef` per class (`apparition_<classId>` — the class's
 own `look`/`color`/`name`, `passive + invulnerable + untargetable`,

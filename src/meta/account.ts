@@ -18,6 +18,7 @@
 // ---------------------------------------------------------------------------
 
 import { SAVE_COMPATIBILITY } from './saveCompatibility';
+import type { MemoryReceipt } from './memoryUnlocks';
 import { emptyCosmetics, type CosmeticState } from '../engine/cosmetics';
 import { sanitizeCosmetics } from './cosmetics';
 import type { CraftLore } from '../engine/crafting';
@@ -435,11 +436,10 @@ export interface Account {
   /** THE RUN CHRONICLE: every concluded run the account remembers (capped,
    *  personal bests protected — see recordRun). */
   runRecords: RunRecord[];
-  /** THE CLASS POOL: the character-select hand is dealt ONLY from this set
-   *  (starters + every class the world has CLAIMED for the account through
-   *  its objectives — meta/unlocks.ts). Also gates the co-op lobby. */
+  /** Discovered classes, including starters. Kept under its historical save
+   *  key; selection uses isClassUnlocked, which excludes pending classes. */
   unlockedClasses: Set<string>;
-  /** Earned classes awaiting the Vault's deliberate, free Unlock acknowledgement. */
+  /** Discovered classes whose selection awaits the Vault's free Unlock click. */
   pendingClassUnlocks: Set<string>;
   /** THE MASTERY LADDER (data/classTiers.ts): owned rung ids (classTierId)
    *  — each opens an alternate opening for its class at the wake. */
@@ -451,6 +451,10 @@ export interface Account {
   kitPicks: Record<string, Record<string, string>>;
   unlockedSkills: Set<string>;
   unlockedSupports: Set<string>;
+  /** Secondary access is account-wide; keys preserve skill/support identity. */
+  memorySecondary: Set<string>;
+  /** Last result and completion sequence per repeatable purchase. */
+  memoryReceipts: Record<string, MemoryReceipt>;
   features: Set<string>;
   /** Owned slot-tier counts (e.g. {4,5}); selectable count derives from the max. */
   unlockedSlots: Set<number>;
@@ -507,6 +511,8 @@ export interface AccountSave {
   pendingClassUnlocks?: string[];
   unlockedSkills: string[];
   unlockedSupports: string[];
+  memorySecondary?: string[];
+  memoryReceipts?: Record<string, MemoryReceipt>;
   features: string[];
   unlockedSlots: number[];
   /** THE MASTERY LADDER + THE REMEMBERED KIT — optional so older saves load. */
@@ -539,6 +545,8 @@ export function makeAccount(): Account {
     kitPicks: {},
     unlockedSkills: new Set(STARTER_SKILLS),
     unlockedSupports: new Set(STARTER_SUPPORTS),
+    memorySecondary: new Set<string>(),
+    memoryReceipts: {},
     features: new Set<string>(),
     unlockedSlots: new Set<number>(), // empty ⇒ STARTER_SLOT_COUNT selectable
     packageUnlocks: new Set<string>(),
@@ -569,6 +577,8 @@ export function serializeAccount(a: Account): AccountSave {
     kitPicks: a.kitPicks,
     unlockedSkills: [...a.unlockedSkills],
     unlockedSupports: [...a.unlockedSupports],
+    memorySecondary: [...a.memorySecondary],
+    memoryReceipts: structuredClone(a.memoryReceipts),
     features: [...a.features],
     unlockedSlots: [...a.unlockedSlots].sort((x, y) => x - y),
     packageUnlocks: [...a.packageUnlocks],
@@ -624,6 +634,10 @@ export function deserializeAccount(s: AccountSave): Account | null {
         .filter(([, sid]) => typeof sid === 'string'))] as const)),
     unlockedSkills: new Set([...STARTER_SKILLS, ...(s.unlockedSkills ?? [])]),
     unlockedSupports: new Set([...STARTER_SUPPORTS, ...(s.unlockedSupports ?? [])]),
+    memorySecondary: new Set((s.memorySecondary ?? []).filter(k => typeof k === 'string' && /^(skill|support):.+/.test(k))),
+    memoryReceipts: Object.fromEntries(Object.entries(s.memoryReceipts ?? {}).filter(([, r]) =>
+      r && Number.isSafeInteger(r.sequence) && r.sequence > 0 && typeof r.id === 'string'
+      && (r.kind === 'skill' || r.kind === 'support') && (r.tier === 'discovery' || r.tier === 'secondary'))),
     features: new Set(s.features ?? []),
     unlockedSlots: new Set<number>(s.unlockedSlots ?? []),
     packageUnlocks: new Set<string>(s.packageUnlocks ?? []),
@@ -683,7 +697,7 @@ function migrateLore(raw?: Record<string, number | { rank: number; progress: num
 
 /** The HAND SIZE at character select: the starter count, or the highest owned
  *  slot tier (whichever is greater). The hand is dealt from the account's
- *  unlockedClasses pool, so the classes actually shown = min(this, pool). */
+ *  activated pool (isClassUnlocked), so the classes shown = min(this, pool). */
 export function selectableSlotCount(a: Account): number {
   return a.unlockedSlots.size === 0
     ? STARTER_SLOT_COUNT
@@ -691,7 +705,13 @@ export function selectableSlotCount(a: Account): number {
 }
 
 // --- predicates (pure) ------------------------------------------------------
-export const isClassUnlocked = (a: Account, id: string): boolean => a.unlockedClasses.has(id);
+/** Discovery opens gem drops and reveals the vessel; activation opens selection. */
+export const isClassDiscovered = (a: Account, id: string): boolean => a.unlockedClasses.has(id);
+export const isClassUnlocked = (a: Account, id: string): boolean =>
+  isClassDiscovered(a, id) && !a.pendingClassUnlocks.has(id);
+/** Same registered pool used by Mu and the class pickers, for slot prerequisites. */
+export const unlockedClassCount = (a: Account): number =>
+  CLASSES.filter(c => isClassUnlocked(a, c.id)).length;
 /** A gem may drop/vend if it's individually unlocked OR the master UNLOCK_ALL_GEMS
  *  flag is owned (which makes EVERYTHING obtainable, new content included). */
 export const isSkillUnlockedForDrop = (a: Account, id: string): boolean =>

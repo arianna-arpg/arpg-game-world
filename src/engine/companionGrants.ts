@@ -50,9 +50,9 @@ export class CompanionGrants {
         inst.companionGrant = true;
         row = { inst, remaining: 0 };
       }
-      const changed = row.inst.level !== level;
       row.inst.level = level;
-      if (changed && row.body && !row.body.dead) refresh(row.body, row.inst);
+      // Every build change reaches living followers, not just a different rolled level.
+      if (row.body && !row.body.dead) refresh(row.body, row.inst);
       row.inst.grantedBy = source(def.id);
       next.set(def.id, row);
     }

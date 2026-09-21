@@ -3,8 +3,8 @@
 // of data/mu.ts; the mu stage in engine/scenes.ts seats what this returns).
 //
 // THE HAND LAW: the class screen's exact economy — hand size =
-// selectableSlotCount, dealt from the account-unlocked pool; the unlocked
-// remainder stands VEILED, the locked remainder as capped FAINT cowls.
+// selectableSlotCount, dealt from the Vault-activated pool; known classes
+// outside the hand stand VEILED, undiscovered ones as capped FAINT cowls.
 // Seeded off the account's own history (runs + deaths), so a re-entered Mu
 // keeps its hand within a sitting and re-deals as the account moves on.
 //
@@ -27,14 +27,14 @@
 import { Rng } from '../core/rng';
 import { CLASSES, type ClassDef } from '../data/classes';
 import { MU_CFG, MU_ZONE } from '../data/mu';
-import { isClassUnlocked, selectableSlotCount, type Account } from '../meta/account';
+import { isClassDiscovered, isClassUnlocked, selectableSlotCount, type Account } from '../meta/account';
 import { muOfferableModes } from '../meta/modes';
 
 /** One waking's deal. */
 export interface MuDeal {
   /** The dealt hand — AWAKE, selectable — in seat order. */
   awake: ClassDef[];
-  /** The unlocked remainder — VEILED (named, refusing). */
+  /** Known classes outside the hand, including pending Vault unlocks (named, refusing). */
   veiled: ClassDef[];
   /** How many faint unknown cowls stand (the locked remainder, capped). */
   faintN: number;
@@ -63,8 +63,11 @@ export function muDeal(acc: Account, seed: number = muDealSeed(acc)): MuDeal {
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
   const awake = shuffled.slice(0, handN);
-  const veiled = shuffled.slice(handN);
-  const faintN = Math.min(MU_CFG.faintCap, CLASSES.length - pool.length);
+  // Pending discoveries reveal their own bodies without entering the deal
+  // or consuming its random stream. Only the Vault click activates them.
+  const discovered = CLASSES.filter(c => isClassDiscovered(acc, c.id));
+  const veiled = [...shuffled.slice(handN), ...discovered.filter(c => !isClassUnlocked(acc, c.id))];
+  const faintN = Math.min(MU_CFG.faintCap, CLASSES.length - discovered.length);
   // THE OFFERED CONTRACT — rolled AFTER the deal on the same stream (an
   // ineligible account draws nothing here and deals the identical hand),
   // registry order across contracts, seat order along the hand, one

@@ -15,7 +15,7 @@ passive with a branch, or specialize entirely within one identity.
 
 | Class | Skill | First identity | Second identity |
 |---|---|---|---|
-| Warrior | Cleave | Physical impales, sustain and execution | A traveling crescent with reach, breadth and heavier hits |
+| Warrior | Cleave | A toggled next-melee release with independent recovery, impales and sustain | A traveling crescent with reach, knockback and spreading bleeds |
 | Warrior | Shield Up | A rear shell, minion shelter and guarded utility | Timed parries and an investable release bash |
 | Warrior | War Cry | A blessing shared with nearby allies and minions | Preparation consumed by one landed attack hit |
 | Magician | Firebolt | Orbiting flames, additional orbs and spreading burns | Faster piercing bolts with penetration and prolonged burning |
@@ -29,6 +29,9 @@ Base definitions retain their existing damage, cost, attributes, delivery and
 effects. Players without allocations keep the original behavior. The current
 Shadow Step crosses to the far side of the target relative to the approach;
 it does not guarantee the target is facing away after arrival.
+
+Cleave's expanded identities and reusable native trigger contract are documented
+in [Cleave](cleave.md); its data now lives in `src/data/cleaveTree.ts`.
 
 ## Reusable temporary buff mutations
 

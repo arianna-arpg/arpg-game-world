@@ -960,7 +960,7 @@ registerSceneStage('home', {
 // ------------------------------------------------------- the mu stage (hub) --
 // THE HUB BETWEEN LIVES (data/mu.ts): the hero stands as a wisp in a zone of
 // nothing; the class roster stands as shaded apparitions in three arcs — the
-// dealt hand AWAKE, the unlocked remainder VEILED, the locked remainder as
+// dealt hand AWAKE, known classes outside the hand VEILED, undiscovered ones as
 // faint unknown cowls. A still linger by an awake vessel fills the scene bar
 // and posts a CLASS REQUEST the shell polls (muTakeClassRequest) to open that
 // class's card; taking it builds the run's whole new world outside, so this
@@ -1193,11 +1193,13 @@ registerSceneStage('mu', {
       return false;
     }
     if (row.rank === 'veiled') {
+      const line = row.classId && w.account.pendingClassUnlocks.has(row.classId)
+        ? MU_CFG.pendingLine : MU_CFG.veiledLine;
       if (!row.noted) {
         row.noted = true;
-        w.text(vec(a.pos.x, a.pos.y - a.radius - 18), MU_CFG.veiledLine, '#8a86a0', 12);
+        w.text(vec(a.pos.x, a.pos.y - a.radius - 18), line, '#8a86a0', 12);
       }
-      if (young) sc.prompt = MU_CFG.veiledLine;
+      if (young) sc.prompt = line;
       return false;
     }
     // AWAKE: the still linger fills the bar, then posts the class request

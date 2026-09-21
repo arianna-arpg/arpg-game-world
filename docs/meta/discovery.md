@@ -19,8 +19,13 @@ A class SLOT is a hand size. A 4th slot over a 3-class pool deals nothing —
 under the old rules it could be bought anyway (and was: a real account paid
 40 essence for exactly that). Now every slot tier authors
 `reqClasses: <its own slot count>` (`UnlockBase.reqClasses`, checked in
-`staticGateMet`), so the tier stays hidden until the earned-class pool can
+`staticGateMet`), so the tier stays hidden until the Vault-activated class pool can
 actually fill the hand it sells.
+
+Discovery alone does not count toward `reqClasses`: `unlockedClassCount`
+uses the same `isClassUnlocked` predicate as every class picker. The free
+Vault Unlock click admits the class to that pool. Previously bought slot
+tiers remain owned; their hands still deal only activated classes.
 
 The class-select teasers stay in step **by arithmetic, not by wiring**: a
 "more Class Slots" teaser exists iff `pool > hand`, and the next tier
@@ -47,6 +52,8 @@ account: `settleClassUnlocks` runs on the live run's sweep (every
 moment it completes, and the class's gems drop from the next kill, because
 the drop pool reads the account live), at the Vault's render, at the class
 deal, and at the run's end. No coin ever changes hands for a class.
+Discovery reveals the class vessel in Mu's background; the free Vault
+Unlock click is required before it may enter a dealt hand or contract offer.
 
 The spec compiles onto the catalog's generic gates (`objectives` → `reqAnyOf`,
 `chain` → `requiresUnlock`) under **THE EARNED
@@ -70,7 +77,8 @@ A shrouded card's objectives are runes too — until ANY one of them stands
 `gateRowProgress` 0..1 — counted forms held/n, the level sugars the highest
 stamped milestone over the ask, binary forms 0 or 1). Then the objectives —
 and only the objectives — read plain, each with a hairline progress fill; the
-name stays runes until the class is claimed, and then the card is Owned —
+name stays runes until the class is discovered, then its revealed card waits
+for the Vault Unlock click before moving to Owned —
 and KEEPS ITS ROWS (2026-09-11, her ask): the owned card prints the same
 objective rows, met ones checked, so the trophy case still says how each
 class was won, and its hover story speaks the hint plus every road with its

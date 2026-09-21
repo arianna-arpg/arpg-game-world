@@ -34,7 +34,9 @@ import {
   CLASS_LEVEL_MILESTONES, FEATURE, LEDGER_BOSS_SLAIN_PREFIX, LEDGER_CORPSES_RECLAIMED,
   LEDGER_CRAFTS_UNLOCKED, LEDGER_FLASK_LESSON, LEDGER_LEGENDARY_SKILL_DROP, LEDGER_ZONES_EXPLORED,
   STARTER_CLASSES, bossSlainKey, classLevelLedgerKey, makeAccount, serializeAccount, deserializeAccount,
+  isClassDiscovered, isClassUnlocked, isSkillUnlockedForDrop, isSupportUnlockedForDrop, unlockedClassCount,
 } from '../src/meta/account';
+import { muDeal } from '../src/engine/muDeal';
 import { CLASS_WEB_CFG } from '../src/data/classTiers';
 import { CLASSES } from '../src/data/classes';
 import { QUESTS } from '../src/quests/defs';
@@ -209,7 +211,11 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
     && !shroudedIds().includes('sorcerer'));
   check('claim: the settle is idempotent', settleClassUnlocks(a).length === 0);
 
-  // THE MOOT LAW rides the new pool exactly as before.
+  check('moot law: discoveries alone cannot expose or buy another class slot',
+    visibleSlotIds().length === 0 && !applyUnlock(a, UNLOCK_CATALOG.find(u => u.id === 'slot_tier_4')!));
+  acknowledgeClassUnlock(a, classUnlockFor('sorcerer')!);
+  acknowledgeClassUnlock(a, classUnlockFor('pyromancer')!);
+  // THE MOOT LAW counts deliberate Vault unlocks, never pending discoveries.
   check('moot law: a 5-deep pool surfaces slot tier 4 alone', visibleSlotIds().join(',') === 'slot_tier_4');
   check('buy: slot tier 4', applyUnlock(a, UNLOCK_CATALOG.find(u => u.id === 'slot_tier_4')!));
   check('moot law: tier 5 surfaces the moment the pool can fill it', visibleSlotIds().join(',') === 'slot_tier_5');
@@ -242,7 +248,7 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
   // No visible entry may ever carry an unmet reqClasses (the law, swept wide).
   check('moot law: nothing visible wants a deeper pool than the account holds',
     allUnlockables().filter(u => isUnlockVisible(a, u))
-      .every(u => u.reqClasses === undefined || a.unlockedClasses.size >= u.reqClasses));
+      .every(u => u.reqClasses === undefined || unlockedClassCount(a) >= u.reqClasses));
 
   // Migration stance: a class OWNED before its objectives existed is owned —
   // never re-shrouded, never on the wall.
@@ -335,7 +341,7 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
   const deeds = [LEDGER_FLASK_LESSON, 'reached_level_5'];
   let bought = 0;
   while (!vaultStripVisible(a) && bought < 50) {
-    const u = availableUnlocks(a)[0];
+    const u = availableUnlocks(a).find(u => u.kind !== 'memory'); // repeatable draws never become Owned shelf cards
     if (u && applyUnlock(a, u)) { bought++; continue; }
     const deed = deeds.shift();
     if (deed === undefined) break;
@@ -572,29 +578,58 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
   check('acknowledgement: refuses an unearned class', !acknowledgeClassUnlock(a, u));
   settleClassUnlocks(a);
   const shelf = vaultShelfCensus(a).find(c => c.tab.id === 'classes')!;
-  check('acknowledgement: earned reward works immediately and stays on Classes, outside priced stock',
+  check('activation: discovery grants gems but holds class selection for the Vault',
     a.unlockedClasses.has('sorcerer') && a.unlockedSkills.has('infernal_ray')
+    && isClassDiscovered(a, 'sorcerer') && !isClassUnlocked(a, 'sorcerer')
+    && isSkillUnlockedForDrop(a, 'infernal_ray') && isSupportUnlockedForDrop(a, 'spark_discipline')
     && shelf.visible && shelf.pending.some(p => p.id === u.id) && !shelf.stock.some(p => p.id === u.id)
     && !vaultShelfCensus(a).find(c => c.tab.owned)!.owned.some(p => p.id === u.id));
   const loaded = deserializeAccount(serializeAccount(a))!;
   check('acknowledgement: pending reward survives saving and repeated settles',
     loaded.pendingClassUnlocks.has('sorcerer') && settleClassUnlocks(loaded).length === 0
+    && !isClassUnlocked(loaded, 'sorcerer') && unlockedClassCount(loaded) === STARTER_CLASSES.length
     && pendingClassUnlocks(loaded).some(p => p.id === u.id));
+  const baseline = makeAccount();
+  baseline.features.add(FEATURE.IMMORTAL);
+  loaded.features.add(FEATURE.IMMORTAL);
+  let isolated = true;
+  for (let seed = 0; seed < 256; seed++) {
+    const before = muDeal(baseline, seed), after = muDeal(loaded, seed);
+    isolated &&= after.awake.map(c => c.id).join(',') === before.awake.map(c => c.id).join(',')
+      && JSON.stringify([...after.offers]) === JSON.stringify([...before.offers])
+      && after.veiled.some(c => c.id === 'sorcerer') && !after.offers.has('sorcerer');
+  }
+  check('activation: pending discovery reveals a background vessel without changing hands or contracts across 256 deals', isolated);
+  // Even an oversized previously purchased hand cannot surface pending classes.
+  loaded.unlockedSlots.add(CLASSES.length);
+  check('activation: oversized hands still exclude pending discoveries',
+    muDeal(loaded).awake.length === STARTER_CLASSES.length);
   loaded.credits = 0;
   check('acknowledgement: free click moves the card to Owned without touching the reward',
     acknowledgeClassUnlock(loaded, u) && loaded.credits === 0 && loaded.unlockedClasses.has('sorcerer')
+    && isClassUnlocked(loaded, 'sorcerer') && muDeal(loaded).awake.some(c => c.id === 'sorcerer')
     && loaded.unlockedSkills.has('infernal_ray') && !pendingClassUnlocks(loaded).some(p => p.id === u.id)
     && vaultShelfCensus(loaded).find(c => c.tab.owned)!.owned.some(p => p.id === u.id));
   check('acknowledgement: repeat clicks and subsequent loads cannot re-arm it',
     !acknowledgeClassUnlock(loaded, u) && !deserializeAccount(serializeAccount(loaded))!.pendingClassUnlocks.has('sorcerer')
+    && isClassUnlocked(deserializeAccount(serializeAccount(loaded))!, 'sorcerer')
     && settleClassUnlocks(loaded).length === 0);
   const legacy = serializeAccount(a);
   delete legacy.pendingClassUnlocks;
   check('acknowledgement: existing saves retain owned classes without manufacturing notices',
-    deserializeAccount(legacy)!.unlockedClasses.has('sorcerer') && deserializeAccount(legacy)!.pendingClassUnlocks.size === 0);
+    isClassUnlocked(deserializeAccount(legacy)!, 'sorcerer') && deserializeAccount(legacy)!.pendingClassUnlocks.size === 0);
   legacy.pendingClassUnlocks = ['warrior', 'missing_class', 'necromancer', 'sorcerer'];
   check('acknowledgement: load rejects starters, missing classes and unearned entries',
     [...deserializeAccount(legacy)!.pendingClassUnlocks].join(',') === 'sorcerer');
+  const known = makeAccount();
+  for (const c of CLASSES) {
+    known.unlockedClasses.add(c.id);
+    if (!STARTER_CLASSES.includes(c.id)) known.pendingClassUnlocks.add(c.id);
+  }
+  const allKnown = muDeal(known);
+  check('activation: a fully discovered roster has no unknown cowls, but only starters are selectable',
+    allKnown.faintN === 0 && allKnown.veiled.length === CLASSES.length - STARTER_CLASSES.length
+    && allKnown.awake.every(c => STARTER_CLASSES.includes(c.id)));
 }
 
 // --- 4) LIVE: the engine stamps land (local hero only) ----------------------

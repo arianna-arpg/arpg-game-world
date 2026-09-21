@@ -58,6 +58,9 @@ try {
     for (const leaf of nodes.filter(n => n.links?.length && !nodes.some(other => other.links?.includes(n.id)))) {
       const mid = nodes.find(n => n.id === leaf.links![0])!, s = setup(id, [mid.links![0], mid.id, leaf.id]), a = body(s.w, mid.links![0] === 'unbound_cleave' ? 180 : 45);
       const used = cast(s.w, s.inst, a.pos);
+      if (id === 'cleave' && mid.links![0] === 'readied_cleave') {
+        cast(s.w, makeSkillInstance(SKILLS.backstab), a.pos);
+      }
       step(s.w, 0.8);
       const worked = id === 'shield_up' ? s.p.casting?.mode === 'guard'
         : id === 'war_cry' || id === 'cloak' ? s.p.buffs.has(id)

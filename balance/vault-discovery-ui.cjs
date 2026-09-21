@@ -38,8 +38,9 @@ app.whenReady().then(async () => {
     assert(!/sorcerer/i.test(partial.html + JSON.stringify(partial.tip)), 'partial progress does not name the class');
     assert(partial.tip.description.includes(partial.body), 'card and hover share the same prose');
     fs.writeFileSync(path.join(dir, 'vault-partial.png'), (await win.webContents.capturePage()).toPNG());
-    // Raise shelves through the account's normal available-stock census.
-    await js(`__game.account().level=20; __game.account().ledger['deed:elements_rehearsed']=3; void 0`);
+    // The repeatable Memory shelf has fewer stock rows. Earn the tab strip
+    // through its permanent-ownership path instead of the retired bundle count.
+    await js(`__game.account().level=20; for (const flag of ['target_dummy','campfire','tracker']) __game.account().features.add(flag); __game.account().ledger['deed:elements_rehearsed']=3; void 0`);
     await open();
     const ready = await js(`(() => {
       const a=__game.account(), c=document.querySelector('[data-class-unlock="class_sorcerer"]');
@@ -50,6 +51,12 @@ app.whenReady().then(async () => {
     assert(ready.pending && ready.reward && ready.button === 'Unlock' && !ready.disabled, 'earned reward has an enabled free acknowledgement');
     assert(ready.card.includes('Sorcerer') && !/Mortal Essence|Claim · free/.test(ready.card), 'earned card reveals its identity without a price');
     assert(ready.tab?.includes('Classes'), 'ready card is on the Classes shelf');
+    assert(await js(`(() => {
+      const ui=__game.ui;
+      ui.showMuClassCard('sorcerer', () => {});
+      return !ui.muCardOpen;
+    })()`), 'pending class cannot open a selectable Mu card');
+    assert(await js(`!document.querySelector('[data-invest="slot_tier_4"]')`), 'pending class does not surface a fourth slot');
     fs.writeFileSync(path.join(dir, 'vault-ready.png'), (await win.webContents.capturePage()).toPNG());
     await reload();
     assert(await js(`!!document.querySelector('[data-class-unlock="class_sorcerer"]')`), 'unacknowledged card survives reload');
@@ -61,10 +68,18 @@ app.whenReady().then(async () => {
         credits:a.credits, button:!!document.querySelector('[data-class-unlock="class_sorcerer"]')};
     })()`);
     assert(!clicked.pending && clicked.reward && clicked.credits===0 && !clicked.button, 'click acknowledges freely and retains the gameplay reward');
+    assert(await js(`!!document.querySelector('[data-invest="slot_tier_4"]')`), 'Vault activation makes a fourth slot useful and purchasable');
     await js(`document.querySelector('[data-vtab="owned"]').click(); void 0`);
     assert(await js(`document.querySelector('[data-unlock-id="class_sorcerer"]')?.textContent.includes('Owned')`), 'acknowledged card moves to Owned');
     await reload();
     assert(await js(`!__game.account().pendingClassUnlocks.has('sorcerer') && __game.account().unlockedClasses.has('sorcerer')`), 'acknowledgement survives reload');
+    assert(await js(`(() => {
+      const ui=__game.ui;
+      ui.showMuClassCard('sorcerer', () => {});
+      const open=ui.muCardOpen;
+      ui.closeMuClassCard();
+      return open;
+    })()`), 'activated class opens its Mu card after reload');
     // Ordinary early habits stay banked until both town introductions stand.
     await js(`Object.assign(__game.account().ledger, {'deed:melee_finishes':300, 'deed:cold_hits':90, 'deed:mended_wounds':1200}); void 0`);
     await open();

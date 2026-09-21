@@ -83,6 +83,9 @@ const keep = new Set(CLASSES.slice(0, 6).map(c => c.id));
 for (const id of [...w.account.unlockedClasses]) {
   if (!keep.has(id)) w.account.unlockedClasses.delete(id);
 }
+const pendingClass = CLASSES[6];
+w.account.unlockedClasses.add(pendingClass.id);
+w.account.pendingClassUnlocks.add(pendingClass.id);
 const p = w.player;
 const heroLook = p.look;
 check('A1: the standalone hub scene takes', sceneBegin(w, 'mu'));
@@ -199,6 +202,9 @@ check('C5: awake + veiled wear their CLASS\'s own face (def per class)',
   [...awake, ...veiled].every(a => pool.some(c => apparitionDefId(c.id) === a.defId)));
 check('C6: the unknown cowls are NAMELESS (no npcRole — no nameplate to leak)',
   faint.every(a => a.defId === APPARITION_UNKNOWN_ID));
+check('C6b: a pending discovery stands as its own named background vessel, never awake',
+  veiled.some(a => a.defId === apparitionDefId(pendingClass.id) && a.name === pendingClass.name)
+  && !awake.some(a => a.defId === apparitionDefId(pendingClass.id)));
 // THE GAZE (2026-09-11, her word: the vessels stood facing east — they
 // should look AT the wisp that will inhabit them): every apparition is born
 // facing its mark (the live wisp by default) and FOLLOWS a drifting wisp at
@@ -248,6 +254,11 @@ check('C6: the unknown cowls are NAMELESS (no npcRole — no nameplate to leak)'
 
 // === E) THE REFUSALS =========================================================
 {
+  const pending = veiled.find(a => a.defId === apparitionDefId(pendingClass.id))!;
+  p.pos.x = pending.pos.x; p.pos.y = pending.pos.y + pending.radius + 8;
+  step(w, MU_CFG.dwell.sec + 0.8);
+  check('E0: a discovered class refuses selection and points to its Vault unlock',
+    muTakeClassRequest(w) === null && w.scene!.prompt === MU_CFG.pendingLine && w.scene!.bar === null);
   const v = veiled[0];
   p.pos.x = v.pos.x; p.pos.y = v.pos.y + v.radius + 8;
   step(w, MU_CFG.dwell.sec + 0.8);

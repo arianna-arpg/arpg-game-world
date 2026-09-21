@@ -67,7 +67,7 @@ import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, ob
 import { alertScale, BEHAVIOR_CFG, BEHAVIOR_STATS, normalizeBrain, type ArenaRadius, type CommandState } from './brain';
 import { aiKitInstance, runAIActions } from './aiActions';
 import {
-  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, guardBashReady, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceBirth, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, rollSkillRarityWeighted, socketSpec, treeNodeOf, treeNodeRefusal, treePointsSpent, validTreeNodes, instanceChannel, bandPointsAt, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
+  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, guardBashReady, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceBirth, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerArmed, instanceTriggerLimit, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, rollSkillRarityWeighted, socketSpec, treeNodeOf, treeNodeRefusal, treePointsSpent, validTreeNodes, instanceChannel, bandPointsAt, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
   CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE, AOE_BAND_DEPTH, bandSwingGeo,
   skillContextTags, skillCooldownSeconds, skillMaxLevel, SKILL_RARITIES, essenceTierForLevel, summonCrewOf, supportFitsInst,
   type SkillRarity,
@@ -124,6 +124,8 @@ import { MONSTER_THEMES } from '../data/infrequents';
 import { VENDORS, VENDOR_CFG, type VendorDef } from '../data/vendors';
 import { ITEM_BASES } from '../data/itembases';
 import { treeNodeRanks, treeSpentCount } from './skilltree'; // THE SKILL-TREE GRAPH — ranked spends (pickTreeNode)
+import { awakenMemoryFromDrop, memoryCommissionReady, memorySecondaryOpen, type MemoryAccess } from '../meta/memoryUnlocks';
+import type { MemorySecondaryMechanic } from '../data/memoryUnlocks';
 import { SKILL_LIST, SKILLS } from '../data/skills';
 import { AMBIENT_TAGS, CAVE_POOLS, CAVE_POOL_CFG, FACTIONS, FIXTURE_IDS, MONSTERS, WAVE_TABLE, WILDLIFE, factionStance, temperOf, defBreathes, defDensity, defLeavesRemains, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
 import { presenceMul, presenceTable } from './presence';
@@ -433,6 +435,7 @@ import { Satellites } from './satellites';
 import type { CarriedEffectContext } from './carriedEffects';
 import { Auroras } from './auroras';
 import { Guardians } from './guardians';
+import { Creepers } from './creepers';
 import { SATELLITE_CFG } from './satelliteSpec';
 import { MONSTER_NAME_CFG, rollMonsterName } from '../data/monsterNames';
 import type { OverlayView } from '../world/overlay';
@@ -3540,6 +3543,7 @@ export class World {
   readonly satellites = new Satellites();
   readonly auroras = new Auroras();
   readonly guardians = new Guardians();
+  readonly creepers = new Creepers();
   readonly challenges = new Challenges(this);
   /** ONE-SHOT: lingering at any REGISTERED vendor counter with stock (the
    *  data/vendors.ts registry) asks the main loop to open the Vendor screen. */
@@ -5678,6 +5682,7 @@ export class World {
     this.satellites.clear();
     this.auroras.clear();
     this.guardians.clear();
+    this.creepers.clear();
     this.assaults.clearAll();
     this.challenges.clearAll();
     this.odyssey.leaveZone();
@@ -12273,6 +12278,24 @@ export class World {
   }
   refreshGuardians(dt = 0): void {
     this.guardians.update(this.actors, dt, this.carriedEffectContext());
+  }
+  refreshCreepers(dt = 0): void {
+    this.creepers.update(this.actors, dt, {
+      ...this.carriedEffectContext(),
+      move: (a, from, goal, radius, distance) => {
+        if (distance <= 0) return { ...from };
+        const field = this.pathField(a.tier);
+        const toward = field?.pathStep && !(field.lineWalkable?.(from, goal) ?? false)
+          ? field.pathStep(from, goal) ?? from : goal;
+        const length = Math.hypot(toward.x - from.x, toward.y - from.y);
+        const scale = Math.min(1, distance / Math.max(1e-9, length));
+        const to = this.clampPos({ x: from.x + (toward.x - from.x) * scale,
+          y: from.y + (toward.y - from.y) * scale }, radius, from, { tier: a.tier });
+        // A terrain snap must not become an invisible leap through a barrier.
+        return Math.hypot(to.x - from.x, to.y - from.y) <= distance + 1e-6
+          && this.lineOfSight(from, to, a.tier, a.tier) ? to : { ...from };
+      },
+    });
   }
   private carriedEffectContext(): CarriedEffectContext {
     return {
@@ -22218,6 +22241,7 @@ export class World {
         return 'your passives';
       }, body => this.kill(body, true), (body, inst) => {
         const fraction = body.life / body.maxLife();
+        this.relevelActor(body, p.level);
         body.radius = MONSTERS[body.defId!]?.radius ?? body.radius;
         this.bakeMinionOwnerStats(body, p, inst);
         body.life = Math.min(body.maxLife(), fraction * body.maxLife());
@@ -22244,7 +22268,8 @@ export class World {
             if (mods.some(gm => gm.stat === stat)) { host = seated; break; }
           }
         }
-        let inst = prevInsts?.get(skillId);
+        const previousGrant = prevInsts?.get(skillId);
+        let inst = previousGrant?.grantedHostUid === host?.uid ? previousGrant : undefined;
         if (inst) {
           inst.level = level;
         } else {
@@ -22253,6 +22278,11 @@ export class World {
           if (state) restoreGrantState(inst, state);
         }
         inst.grantedBy = host?.name ?? 'your passives';
+        inst.grantedHostUid = host?.uid;
+        // A new granting item restores its own investment, never copies the old item's stones.
+        if (previousGrant && previousGrant !== inst) {
+          for (let i = 0; i < p.skills.length; i++) if (p.skills[i] === previousGrant) p.skills[i] = inst;
+        }
         keep.set(skillId, inst);
         // A learned copy takes over the old granted seat without losing its investment.
         const beneficiary = m.knownSkills.get(skillId);
@@ -22267,7 +22297,7 @@ export class World {
       // Grants that LEFT: off the bar, workings shut, the instance dropped.
       if (prevInsts) {
         for (const [id, inst] of prevInsts) {
-          if (keep.has(id)) continue;
+          if (keep.get(id) === inst) continue;
           for (let i = 0; i < p.skills.length; i++) if (p.skills[i] === inst) p.skills[i] = null;
           if (p.activeAuras.get(id)?.inst === inst) this.deactivateAura(p, id);
           if (p.summonToggles.get(id)?.inst === inst) this.dismissSummonToggle(p, id);
@@ -23007,7 +23037,12 @@ export class World {
     this.dismissSummonToggle(p, inst.def.id);
     this.clearSummonTreeBodies(p, inst);
     this.clearTreeFields(p, inst);
+    const retiredTrigger = instanceTrigger(inst);
     inst.treeNodes = undefined;
+    if (retiredTrigger !== instanceTrigger(inst) && inst.state) {
+      delete inst.state.triggerOff;
+      delete inst.state.trigDepth;
+    }
     delete inst.replenishmentPaused;
     // The refund is FULL-TREE by law (never node-wise — partial refunds
     // breed prerequisite paradoxes); the derived graft lane unmakes with it.
@@ -25221,7 +25256,7 @@ export class World {
       // drawer) while the pip waited — offer only what still has an
       // unspent point to place.
       const inst = seat.meta.knownSkills.get(skillId);
-      if (!inst?.def.tree || treePointsSpent(inst) >= bandPointsAt(inst.level)) continue;
+      if (!inst?.def.tree || this.memorySecondaryRefusal(skillId) || treePointsSpent(inst) >= bandPointsAt(inst.level)) continue;
       this.treePopupRequested = true;
       this.treePopupSeatId = seat.id;
       this.treePopupSkillId = skillId;
@@ -28863,7 +28898,7 @@ export class World {
     // A COMPLETED BAND mints an Ability point (bandPointsAt — derived,
     // never stored). A tree-wearing skill banks the milestone pip; the
     // popup waits for the disciplined calm (updateTreePips).
-    if (inst.def.tree && bandPointsAt(inst.level) > bandPointsAt(inst.level - 1)) {
+    if (inst.def.tree && !this.memorySecondaryRefusal(skillId) && bandPointsAt(inst.level) > bandPointsAt(inst.level - 1)) {
       const queue = this.pendingTreePips.get(seat.id) ?? [];
       if (!queue.includes(skillId)) {
         queue.push(skillId);
@@ -33479,6 +33514,18 @@ export class World {
    *  the graft lane (a node's `graft` payload injects there). Rides the
    *  requestMeta intent lane, so a co-op client's panel works untrusted
    *  like every meta mutation. */
+  /** Shared session authority; remote shells draw the host's exact gate. */
+  netMemoryAccess?: MemoryAccess;
+  memorySecondaryRefusal(skillId: string, mechanic: MemorySecondaryMechanic = 'tree'): string | null {
+    const def = SKILLS[skillId];
+    if (!def || def.noDrop || (def.dropWeight ?? 100) <= 0) return null; // internal/granted-only verbs have no discovery purchase
+    const remote = this.netMemoryAccess?.[mechanic];
+    const open = this.netMemoryAccess && remote !== undefined
+      ? remote === null || remote.includes(skillId)
+      : memorySecondaryOpen(this.account, 'skill', skillId, mechanic);
+    return open ? null : 'Awaken this skill through a legendary find or the Vault.';
+  }
+
   pickTreeNode(skillId: string, nodeId: string, seat: Seat = this.localSeat): void {
     // A granted skill's picks ride its item's residence (the recalc below writes them back).
     const inst = seat.meta.knownSkills.get(skillId) ?? seat.grantedInsts?.get(skillId);
@@ -33489,7 +33536,7 @@ export class World {
     // full rank = the silent no-op a single-rank node always was.
     if (treeSpentCount(inst.treeNodes, nodeId) >= treeNodeRanks(inst.def, nodeId)) return;
     const at = seat.actor.pos;
-    const sealed = treeNodeRefusal(inst, nodeId);
+    const sealed = this.memorySecondaryRefusal(skillId) ?? treeNodeRefusal(inst, nodeId);
     if (sealed) {
       this.text(vec(at.x, at.y - 20), sealed, '#8a8678', 11);
       return;
@@ -33724,10 +33771,10 @@ export class World {
       if (trig) {
         if (!seatPress) return false;
         const st = (inst.state ??= {});
-        st.triggerOff = !st.triggerOff;
-        this.text(vec(caster.pos.x, caster.pos.y - 16),
-          st.triggerOff ? 'disarmed' : 'armed', inst.def.color, 11);
-        caster.useLock = 0.25;
+        st.triggerOff = instanceTriggerArmed(inst);
+        const triggerSeat = this.seats.find(s => s.actor === caster);
+        if (triggerSeat) this.markMetaDirty(triggerSeat);
+        caster.useLock = Math.max(caster.useLock, 0.25);
         return true;
       }
       // A stale chain-depth stamp on a NO-LONGER-triggered skill must not
@@ -43960,6 +44007,13 @@ export class World {
       });
       this.kill(target, false, caster);
     }
+    // meleeHit belongs to the wielded attack, never proc/trigger descendants.
+    if (dealt > 0 && depth === 0 && !inst.state?.trigDepth
+      && !instanceTrigger(inst) && packet.tags.has('attack') && packet.tags.has('melee')) {
+      this.rollTriggers(caster, 'meleeHit', {
+        aim: vec(target.pos.x, target.pos.y), sourceInst: inst,
+      });
+    }
   }
 
   /** Fire every equipped chargeGain tap matching this trigger on the actor
@@ -45010,6 +45064,7 @@ export class World {
     const state = host.grantState?.[skillId];
     if (state) restoreGrantState(inst, state);
     inst.grantedBy = host.name;
+    inst.grantedHostUid = host.uid;
     (seat.grantedInsts ??= new Map()).set(skillId, inst);
     return inst;
   }
@@ -45706,6 +45761,7 @@ export class World {
     this.satellites.retire(actor);
     this.auroras.retire(actor);
     this.guardians.retire(actor);
+    this.creepers.retire(actor);
     if (!silent) magicPackDeath(actor, this.actors);
     if (actor.magicPack) this.refreshMagicPacks();
     if (!silent && actor.summonInst?.def.hivecall) this.hivecallDeath(actor);
@@ -46085,6 +46141,7 @@ export class World {
    *  the next scheduled save otherwise — the bestiary's cadence). */
   private noteGemDrop(gemId: string, skillRarity?: SkillInstance['rarity']): void {
     if (!this.metaProgressionActive()) return;
+    if (awakenMemoryFromDrop(this.account, gemId, skillRarity)) this.accountDirty = true;
     const key = gemDropKey(gemId);
     const after = (this.account.ledger[key] ?? 0) + 1;
     this.account.ledger[key] = after;
@@ -47605,7 +47662,9 @@ export class World {
       ? isSkillUnlockedForDrop(this.account, gem.id)
       : isSupportUnlockedForDrop(this.account, gem.id);
     if (!unlocked) return false;
-    if ((this.account.ledger[gemDropKey(gem.id)] ?? 0) < VENDOR_CFG.commission.need) {
+    const memoryWhy = gem.kind === 'skill' ? this.memorySecondaryRefusal(gem.id, 'commission') : null;
+    if (memoryWhy) { this.failNote(seat.actor, 'vcomm:' + key, memoryWhy); return false; }
+    if (!memoryCommissionReady(this.account, gem.kind, gem.id, VENDOR_CFG.commission.need)) {
       this.failNote(seat.actor, 'vcomm:' + key,
         `the drop index knows too few (${VENDOR_CFG.commission.need} finds needed)`);
       return false;
@@ -49342,6 +49401,7 @@ export class World {
     this.refreshSatellites(dt);
     this.refreshAuroras(dt);
     this.refreshGuardians(dt);
+    this.refreshCreepers(dt);
     this.updateProjectiles(dt);
     this.updateZones(dt);
     this.updateEnemyTethers(dt);
@@ -57183,7 +57243,7 @@ export class World {
       const spec = instanceTrigger(inst);
       if (!spec || spec.on !== kind) continue;
       const st = (inst.state ??= {});
-      if (st.triggerOff) continue;
+      if (!instanceTriggerArmed(inst)) continue;
       if (this.time < (st.trigReadyAt ?? 0)) continue;
       const tags = skillContextTags(inst, grantedTags(inst));
       const extra = instanceMods(inst);
@@ -57210,7 +57270,7 @@ export class World {
       // SELECTED: the cursor advances here whatever the dice say.
       owner.triggerRR.set(kind, idx);
       const p = owner.sheet.get('triggerChance', tags, extra, spec.chance ?? 1);
-      if (!chance(Math.min(TRIGGER_CFG.chanceCap, p))) return;
+      if (!spec.guaranteed && !chance(Math.min(TRIGGER_CFG.chanceCap, p))) return;
       st.trigReadyAt = this.time + (spec.icd ?? TRIGGER_CFG.icd[kind]);
       if (kind === 'damageTaken' || kind === 'statusApply') st.trigAccum = 0;
       st.trigDepth = depth + 1;
@@ -57219,8 +57279,7 @@ export class World {
       const aim = ctx.aim ?? owner.aimPos ?? vec(
         owner.pos.x + Math.cos(owner.facing) * 140,
         owner.pos.y + Math.sin(owner.facing) * 140);
-      this.text(vec(owner.pos.x, owner.pos.y - 24), inst.def.name + '!', inst.def.color, 11);
-      if (inst.def.useTime > TRIGGER_CFG.maxUseTime) {
+      if (inst.def.useTime > instanceTriggerLimit(inst)) {
         // PERMIT path: the heavy spell answers as a REAL bar in
         // succession — rooted like any bar; castMove investments walk it.
         owner.casting = {
@@ -57261,7 +57320,7 @@ export class World {
     // armed gem below its wielder's live attributes must not fire by the
     // side door (silent, by the artery's own law).
     if (this.castReqRefusal(owner, inst) !== undefined) return false;
-    if (def.useTime > TRIGGER_CFG.maxUseTime) {
+    if (def.useTime > instanceTriggerLimit(inst)) {
       if (!instanceTriggerPermit(inst)) return false;
       // A bar cast needs the caster FREE — never interrupt a held channel
       // or a running bar for a trigger.
@@ -57291,7 +57350,7 @@ export class World {
         if (!list.includes(statusId)) continue;
       }
       const st = (inst.state ??= {});
-      if (st.triggerOff) continue;
+      if (!instanceTriggerArmed(inst)) continue;
       st.trigAccum = (st.trigAccum ?? 0) + 1;
       any = true;
     }
@@ -57309,7 +57368,7 @@ export class World {
       const spec = instanceTrigger(inst);
       if (!spec || spec.on !== 'damageTaken') continue;
       const st = (inst.state ??= {});
-      if (st.triggerOff) continue;
+      if (!instanceTriggerArmed(inst)) continue;
       st.trigAccum = (st.trigAccum ?? 0) + amount;
       any = true;
     }

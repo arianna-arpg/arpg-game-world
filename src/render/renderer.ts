@@ -2,6 +2,7 @@ import { concealmentActive } from '../engine/perception';
 import { drawSatellites } from './vis/satelliteLayer';
 import { drawAuroras } from './vis/auroraLayer';
 import { drawGuardians } from './vis/guardianLayer';
+import { drawCreepers } from './vis/creeperLayer';
 import { drawOrbMote } from './vis/orbMote';
 import { ASSAULT, assaultOrbitPositions } from '../engine/assault';
 import { cosmeticPortalColor, drawCosmeticPortal, cosmeticProjectileExtent, drawCosmeticProjectile, cosmeticHotbar, drawCosmeticHotbar } from './vis/cosmeticEffects';
@@ -20,7 +21,7 @@ import { replenishmentActive } from '../engine/replenishment';
 import { clamp, dist, mixHex, type Vec2 } from '../core/math';
 import { RENDER_SCALE_CFG } from './renderScale';
 import { DEFAULT_CURSOR_OPTIONS, drawAimReticle } from '../core/cursor';
-import { bandPointsAt, guardBashReady, instanceChargeCost, instanceDelivery, instanceMeta, instanceMods, metaFaceOf, instanceStrikeTiming, instanceTrigger, instanceUseCharges, poolReadOf, skillContextTags, SKILL_RARITIES, treePointsSpent, treeSpentBranch } from '../engine/skills';
+import { bandPointsAt, guardBashReady, instanceChargeCost, instanceDelivery, instanceMeta, instanceMods, metaFaceOf, instanceStrikeTiming, instanceTriggerArmed, instanceUseCharges, poolReadOf, skillContextTags, SKILL_RARITIES, treePointsSpent, treeSpentBranch } from '../engine/skills';
 import { ITEM_RARITIES } from '../engine/items';
 import { drawGroundItem } from './groundItems';
 import { TOWN_PORTAL_CFG } from '../data/townportals';
@@ -773,6 +774,7 @@ export class Renderer {
       drawStatusVoices(this.ctx, world, this.frameDt, this.cam.x, this.cam.y, vw, vh);
       for (const a of world.actors) if (!a.dead && a.nemesis) this.drawNemesisMark(a);
     }
+    drawCreepers(this.ctx, world);
     drawSatellites(this.ctx, world);
     drawAuroras(this.ctx, world);
     drawGuardians(this.ctx, world);
@@ -7515,7 +7517,7 @@ export class Renderer {
         || p.hexToggles.has(inst.def.id)
         // ARMED trigger gems (the "Cast on X" family): the slot itself is
         // greyed (never hand-castable), but the border glow says "live".
-        || (instanceTrigger(inst) !== undefined && !inst.state?.triggerOff)
+        || instanceTriggerArmed(inst)
         || (inst.def.pool !== undefined && p.venting.has(inst.def.pool.id))
         || world.zones.some(z => z.caster === p && z.toggled && z.inst.def.id === inst.def.id)
       ) : false;
@@ -7665,7 +7667,7 @@ export class Renderer {
         // tooltip's first line names the branch — this pip only flags it.
         if (def.tree && inst.level >= def.tree.level) {
           const px2 = x + slot - 8, py2 = by + slot - 8;
-          if (treePointsSpent(inst) < bandPointsAt(inst.level)) {
+          if (!world.memorySecondaryRefusal(inst.def.id) && treePointsSpent(inst) < bandPointsAt(inst.level)) {
             // THE AWAKENING, SHOWN (2026-09-11, her law): a freshly minted
             // point BLOOMS — a gold ring breathing out of the corner for
             // bloomSec (inst.state.treeAwokeAt, stamped at the band) — and

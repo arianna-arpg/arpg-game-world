@@ -161,6 +161,7 @@ import { oracleRerollCost } from '../data/essences';
 import { ITEM_AFFIXES } from '../data/itemaffixes';
 import { formatModLine, lerpRange, roundStatValue } from '../engine/items';
 import { treeGraph, treeLimbOfNode, treeLimbs, treeNodeRanks, treeSealedSet, treeSpentCount, TREE_LAYOUT_CFG, type TreeGraphNode } from '../engine/skilltree'; // THE SKILL-TREE PANE reads the one graph
+import { memoryCommissionReady, memoryUnlockCandidates, memoryUnlockDef } from '../meta/memoryUnlocks';
 import { attachPanZoom, clampZoom, PANZOOM_DEFAULTS } from './panzoom';
 import { attachPanelMove, configurePanelLayout, panelLayoutRefresh, panelLayoutSync, panelMoved, panelMoveReset, panelMoveTo, panelSeatOf, persistPanelSeat, resetPanelLayout } from './panelmove'; // THE PANEL MOVE — ribbons drag their panels; THE LAYOUT remembers
 import { ATLAS_LAYER_CHIPS, MAP_CFG, MAP_CHART_MODES, MAP_LABEL_MODES } from './mapConfig';
@@ -2510,6 +2511,7 @@ export class UI {
    *  chip) go through renderMuClassCard and keep the player's standing pick. */
   showMuClassCard(classId: string, onPick: (def: ClassDef, modeId?: string, name?: string, kitPicks?: Record<string, string>) => void,
     offered: string | null = null): void {
+    if (!isClassUnlocked(this.getAccount(), classId)) return;
     this.muOffer = offered;
     if (offered) this.pendingModeId = offered;
     this.renderMuClassCard(classId, onPick);
@@ -3020,10 +3022,15 @@ export class UI {
         // click law — the button must stand enabled at an empty purse.
         const free = rem <= 0;
         const canPour = acc.credits > 0 && rem > 0;
-        const pct = u.cost > 0 ? Math.round((inv / u.cost) * 100) : 0;
+        const pct = u.cost > 0 ? Math.min(100, Math.round((inv / u.cost) * 100)) : 0;
+        const memoryDef = u.kind === 'memory' ? memoryUnlockDef(u.payload.memoryUnlockId) : undefined;
+        const memoryReceipt = memoryDef ? acc.memoryReceipts[u.id] : undefined;
+        const memoryName = memoryReceipt ? (memoryReceipt.kind === 'skill' ? SKILLS[memoryReceipt.id] : SUPPORTS[memoryReceipt.id])?.name ?? memoryReceipt.id : '';
         return `
             <div class="unlock-card${u.id === lessonGlowId ? ' tut-glow' : ''}" data-tip="unlock" data-unlock-id="${u.id}">
               <div class="uname">${u.label}</div>
+              ${memoryDef ? `<div style="font-size:11px;color:var(--text-dim)">${memoryUnlockCandidates(acc, memoryDef).length} eligible · one new result per purchase</div>` : ''}
+              ${memoryReceipt ? `<div data-memory-result="${u.id}" style="font-size:12px;color:var(--gold)">Last ${memoryReceipt.tier === 'discovery' ? 'discovered' : 'awakened'}: ${esc(memoryName)}</div>` : ''}
               <div class="uinvest"><i style="width:${pct}%"></i></div>
               <button data-invest="${u.id}" ${(canPour || free) ? '' : 'disabled'} title="${investTitle(u, free)}">${
                 free ? 'Claim · free' : inv > 0 ? `${buyVerb(u)} · ${rem} more` : `${buyVerb(u)} · ${u.cost}`}</button>
@@ -3245,6 +3252,7 @@ export class UI {
       let holdTimer = 0;
       this.accountScreen.querySelectorAll<HTMLButtonElement>('[data-invest]').forEach(btn => {
         const id = btn.dataset.invest!;
+        const memorySequence = acc.memoryReceipts[id]?.sequence ?? 0;
         const findU = (): Unlockable | undefined => availableUnlocks(acc).find(x => x.id === id);
         const updateFaces = (u: Unlockable): void => {
           btn.textContent = `${buyVerb(u)} · ${remainingCost(acc, u)} more`;
@@ -3253,14 +3261,20 @@ export class UI {
           const cred = document.getElementById('vault-cred');
           if (cred) cred.textContent = String(acc.credits);
         };
-        const doneToast = (u: Unlockable): string => u.kind === 'graft'
+        const doneToast = (u: Unlockable): string => u.kind === 'memory'
+          ? (() => {
+            const r = acc.memoryReceipts[u.id];
+            const name = r ? (r.kind === 'skill' ? SKILLS[r.id] : SUPPORTS[r.id])?.name ?? r.id : u.label;
+            return `${r?.tier === 'secondary' ? 'Awakened' : 'Discovered'}: ${name}`;
+          })()
+          : u.kind === 'graft'
           ? `⚔ ${u.label}: a charge awaits your next run's start`
           : u.kind === 'resurrect'
             ? `✦ ${u.label} RISEN: the vessel wakes in Lastlight`
             : `✦ ${u.label} UNLOCKED`;
         // "This pour finished": ownership for the permanent kinds, the state
         // change for the service kinds (unlockCompleted — the one predicate).
-        const completed = (u: Unlockable): boolean => unlockCompleted(acc, u);
+        const completed = (u: Unlockable): boolean => unlockCompleted(acc, u, memorySequence);
         const settle = (poured: boolean, done?: Unlockable): void => {
           if (pourTimer) { window.clearInterval(pourTimer); pourTimer = 0; }
           if (!poured) return;
@@ -5305,7 +5319,7 @@ export class UI {
     const seat = this.couchSeatFor(seatId);
     const inst = seat.meta.knownSkills.get(skillId);
     const tree = inst?.def.tree;
-    if (!inst || !tree) return;
+    if (!inst || !tree || world.memorySecondaryRefusal(skillId)) return;
     const spent = inst.treeNodes ?? [];
     const free = Math.max(0, bandPointsAt(inst.level) - spent.length);
     if (!free) return;
@@ -6226,7 +6240,7 @@ export class UI {
     for (const s of SKILL_LIST) {
       if (s.noDrop || !isSkillUnlockedForDrop(acc, s.id)) continue;
       const count = acc.ledger[gemDropKey(s.id)] ?? 0;
-      if (!count) continue; // the index has never seen it — not yet a name to give
+      if (!count && !memoryCommissionReady(acc, 'skill', s.id, need)) continue;
       if (query && !s.name.toLowerCase().includes(query)) continue;
       rows.push({ kind: 'skill', id: s.id, name: s.name, color: s.color,
         count, odds: world.commissionOdds({ kind: 'skill', id: s.id }) });
@@ -6240,14 +6254,15 @@ export class UI {
         count, odds: world.commissionOdds({ kind: 'support', id: d.id }) });
     }
     rows.sort((a, b) =>
-      (b.count >= need ? 1 : 0) - (a.count >= need ? 1 : 0)
+      Number(memoryCommissionReady(acc, b.kind, b.id, need)) - Number(memoryCommissionReady(acc, a.kind, a.id, need))
       || b.count - a.count || a.name.localeCompare(b.name));
     const CAP = 40;
     const shown = rows.slice(0, CAP);
     const oddsText = (p: number): string => p < 0.01 ? '<1%' : `~${Math.round(p * 100)}%`;
     const line = (r: PickRow): string => {
-      const ready = r.count >= need && r.odds > 0;
-      const why = r.count < need ? `${r.count}/${need} found`
+      const eligible = memoryCommissionReady(acc, r.kind, r.id, need);
+      const ready = eligible && r.odds > 0;
+      const why = !eligible ? (r.kind === 'skill' ? world.memorySecondaryRefusal(r.id, 'commission') ?? `${r.count}/${need} found` : `${r.count}/${need} found`)
         : r.odds <= 0 ? 'not rollable here yet'
         : `${oddsText(r.odds)} each restock`;
       return `<div data-tip="gem-overview" data-gem-kind="${r.kind}" data-gem-id="${esc(r.id)}"
@@ -6882,23 +6897,25 @@ THE CUT (fixed at the vein): ${veinLines(s.def.rollBase, s.rolled).join(' · ')}
       let modeRow = '';
       if (def.tree) {
         const tree = def.tree;
+        const memoryWhy = world.memorySecondaryRefusal(def.id);
         const open = inst.level >= tree.level;
         const spent = inst.treeNodes ?? [];
         const budget = bandPointsAt(inst.level);
         const free = Math.max(0, budget - spent.length);
         const committed = treeSpentBranch(inst);
-        const pip = free > 0
+        const pip = free > 0 && !memoryWhy
           ? `<span title="${free} Ability point${free === 1 ? '' : 's'} waiting" style="color:#ffd700">◉ ${free}</span>`
           : '';
         modeRow = `
           <div style="margin-top:3px;font-size:10px;color:#d8b86a;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
             <span>Tree:</span>
+            ${memoryWhy ? `<span style="color:var(--text-dim)">${esc(memoryWhy)}</span>` : ''}
             ${committed ? `<span style="color:${def.color}">${committed.name}</span>` : open ? '<span style="color:#8a8678">unchosen</span>' : ''}
             ${this.treeLevelBarHtml(inst)}<span style="color:#8a8678">${spent.length}/${budget} pt${budget === 1 ? '' : 's'}</span> ${pip}
             ${open
               ? `<button class="gem-chip" data-treeopen="${def.id}"
-                  style="border-color:${free > 0 ? '#ffd700' : '#d8b86a'};${free > 0 ? 'color:#ffd700;' : ''}"
-                  title="${free > 0 ? 'A point waits — open the tree to spend it' : 'Open this skill\'s tree'}">⟡ Tree</button>`
+                  style="border-color:${free > 0 && !memoryWhy ? '#ffd700' : '#d8b86a'};${free > 0 && !memoryWhy ? 'color:#ffd700;' : ''}"
+                  title="${memoryWhy ? esc(memoryWhy) : free > 0 ? 'A point waits — open the tree to spend it' : 'Open this skill\'s tree'}">⟡ Tree</button>`
               : ''}
           </div>`;
       }
@@ -7783,8 +7800,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     }
     return {
       title: `${inst.def.name} · Tree point ${point + 1}`,
-      description: inst.level >= level ? 'An Ability point is ready. Open the tree to choose an upgrade.'
-        : `Unlocks at skill level ${level}.`,
+      description: this.getWorld().memorySecondaryRefusal(skillId)
+        ?? (inst.level >= level ? 'An Ability point is ready. Open the tree to choose an upgrade.'
+          : `Unlocks at skill level ${level}.`),
       meta: inst.level >= level ? `Unlocked at Lv ${level} · unallocated` : `Current skill level: ${inst.level}`,
     };
   }
@@ -7807,7 +7825,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const spent = inst.treeNodes ?? [];
     const budget = bandPointsAt(inst.level);
     const free = Math.max(0, budget - spent.length);
-    const discipline = world.swapRefusal(seat, 'socket');
+    const discipline = world.memorySecondaryRefusal(def.id) ?? world.swapRefusal(seat, 'socket');
     const committed = treeSpentBranch(inst);
     const sealed = treeSealedSet(def, spent);
     const limbs = treeLimbs(def);
@@ -7877,7 +7895,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       circles += `<text class="st-label" x="${gn.x}" y="${gn.y + r + 12}" text-anchor="middle" fill="${labelFill}">${esc(gn.node.name)}</text>`;
     }
 
-    const pip = free > 0
+    const pip = free > 0 && !discipline
       ? `<span style="color:#ffd700" title="${free} Ability point${free === 1 ? '' : 's'} waiting — click a lit node">◉ ${free} waiting</span>`
       : '';
     const status = committed
@@ -7903,8 +7921,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       <svg viewBox="${this.skillTreeViewBox(pane)}" class="st-svg"
         style="cursor:var(--cursor-grab, grab);touch-action:none;background:#100e16;border:1px solid #2a2438;border-radius:5px">${edges}${circles}</svg>
       <div style="font-size:10px;color:#6a6478;margin-top:5px">
-        ${open ? 'click a lit node to spend a point · scroll to zoom, drag to pan' : `no points yet — the tree opens at level ${tree.level}`}${
-          discipline ? ` · <span style="color:#a08a6a">${esc(discipline)}</span>` : ''}
+        ${discipline ? esc(discipline) : open ? 'click a lit node to spend a point · scroll to zoom, drag to pan' : `no points yet — the tree opens at level ${tree.level}`}
       </div>`;
 
     // Clicks: a lit node spends through the ordinary intent; the drawer
@@ -8018,7 +8035,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (have >= gn.ranks) {
       meta = gn.ranks > 1 ? `walked — ${have}/${gn.ranks} ranks` : 'walked';
     } else {
-      const why = treeNodeRefusal(inst, nodeId) ?? this.getWorld().swapRefusal(seat, 'socket');
+      const why = this.getWorld().memorySecondaryRefusal(skillId) ?? treeNodeRefusal(inst, nodeId) ?? this.getWorld().swapRefusal(seat, 'socket');
       meta = why ? why
         : have > 0 ? `${have}/${gn.ranks} ranks — click to deepen`
         : gn.ranks > 1 ? `click to spend a point (${gn.ranks} ranks)` : 'click to spend a point';

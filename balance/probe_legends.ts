@@ -122,7 +122,7 @@ const isSignature = (l: ModLineDef): boolean =>
   const spoken = vigil ? describeItem(vigil).unique.join(' | ') : '';
   check('A7 the describer speaks the grant, the trigger and the extra lane',
     /Grants Level \d Firebolt/.test(spoken) && spoken.includes('Grants Level 1 Pyroclast Bolt')
-    && spoken.includes('looses your Pyroclast Bolt') && /Gain \d+(\.\d+)?% of damage as extra fire/.test(spoken),
+    && spoken.includes('loose your Pyroclast Bolt') && /Gain \d+(\.\d+)?% of damage as extra fire/.test(spoken),
     spoken);
   const wake = rollItem({ ilvl: 20, uniqueId: 'wanderers_wake' });
   const wakeSpoken = wake ? describeItem(wake).unique.join(' | ') : '';

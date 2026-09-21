@@ -511,8 +511,15 @@
     #salvage-menu { width: 540px; max-height: calc(84vh / var(--ui-scale)); }
     /* The Sacrificial Font's recipe screen (skill-mode trees, M1). */
     #font-menu { width: 540px; max-height: calc(84vh / var(--ui-scale)); }
-    /* THE RECALL (skill-items M2) — the Rough Memory pouch's picker. */
-    #recall-menu { width: 470px; max-height: calc(84vh / var(--ui-scale)); }
+    /* Recall grows downward from a stable seat. Reserve the scrollbar's
+       space so a growing reveal cannot shift the first action sideways. */
+    #recall-menu {
+      top: 8%; transform: translateX(-50%);
+      width: 470px; max-height: calc(84vh / var(--ui-scale));
+      scrollbar-gutter: stable; overflow-anchor: none;
+    }
+    /* Names, odds chips and reveals may wrap; the action stays at row top. */
+    #recall-menu [data-mem-recall] { align-self: flex-start; flex-shrink: 0; }
     #oracle-menu { width: 520px; max-height: calc(84vh / var(--ui-scale)); }
     #vendor-menu { width: 540px; max-height: calc(84vh / var(--ui-scale)); }
     /* The Tracker's book spreads two facing columns. */

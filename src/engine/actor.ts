@@ -3683,7 +3683,8 @@ export class Actor {
     const mult = this.sheet.get('manaCost', tags, extra);
     const toLife = this.sheet.get('costToLife', tags, extra);
     const toMana = this.sheet.get('costToMana', tags, extra);
-    const mana = baseMana * mult * (1 - toLife) + baseLife * mult * toMana;
+    const mana = (baseMana * mult * (1 - toLife) + baseLife * mult * toMana)
+      * this.sheet.get('manaUseCost', tags, extra);
     const life = baseLife * mult * (1 - toMana) + baseMana * mult * toLife;
     return {
       mana: mana > 0 ? Math.ceil(mana) : 0,

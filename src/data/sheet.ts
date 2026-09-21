@@ -138,8 +138,8 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
     core: ['aoeRadius', 'effectDuration', 'cooldownRecovery'],
     used: [
       // Costs
-      'satelliteCount', 'satelliteOrbit', 'satelliteSpeed', 'auroraCapacity', 'auroraRecharge',
-      'manaCost', 'addedManaCost', 'addedLifeCost', 'addedCooldown',
+      'satelliteCount', 'satelliteOrbit', 'satelliteSpeed', 'auroraCapacity', 'auroraRecharge', 'creeperSpeed',
+      'manaCost', 'manaUseCost', 'addedManaCost', 'addedLifeCost', 'addedCooldown',
       'costDamage_mana', 'costDamage_life',
       'costWard_mana', 'costWard_life', 'costWardDuration', 'costWardCap',
       // THE GAUGE FABRIC (engine/gauge.ts): the bank's terms
@@ -240,6 +240,7 @@ export const SHEET_VITALS: string[] = ['life', 'mana', 'moveSpeed'];
  *  The blurb serves any id of the family the tooltip meets. */
 export interface SheetFamilySeat { prefix: string; cat: string; blurb: string }
 export const SHEET_FAMILY_SEATS: SheetFamilySeat[] = [
+  { prefix: 'creeperCount_', cat: 'skills', blurb: 'Grants roaming creepers of this family, which pursue nearby enemies and erupt beneath them.' },
   { prefix: 'satelliteCount_', cat: 'skills', blurb: 'Grants orbiting satellites of this family. Additional satellites modify families you already carry.' },
   { prefix: 'auroraCapacity_', cat: 'skills', blurb: 'Grants a rechargeable reservoir of this aurora. Its stored projectiles discharge through the family\'s own targeting rules.' },
   { prefix: 'guardianCount_', cat: 'defense', blurb: 'Grants projectile guardians of this family, each with its own recharge.' },
@@ -574,9 +575,11 @@ const STAT_BLURBS: Record<string, string> = {
   overdriveLifeFactor: 'Blood-debt metabolism: life-lane repayment scales with your regeneration and pace.',
 
   // Skills
+  creeperSpeed: 'Multiplies how quickly your carried creepers travel.',
   aoeRadius: 'Widens every area effect you create.',
   effectDuration: 'Lengthens your timed effects: buffs, ailments you inflict, lingering zones.',
   manaCost: 'Multiplies what your skills cost.',
+  manaUseCost: 'Multiplies only Mana spent using a skill, after cost conversion. Reservation and Life costs are unchanged.',
   addedManaCost: 'Flat mana added to every cost.',
   addedLifeCost: 'Flat life added to every cost.',
   addedCooldown: 'Flat seconds added to a skill\'s cooldown, still reducible by recovery.',
