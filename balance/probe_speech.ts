@@ -934,6 +934,17 @@ console.log('L. THE DIALOGUE READER (pages, explicit advance, pending state and 
   check('L14 resetting clears reading and dismissal state', d.reading === null);
   d.sync(2, { ...offer, speakerId: 2 });
   check('L15 reset permits a fresh conversation with reused actor ids', !!d.reading);
+  d.close();
+  d.sync(2, { speakerId: 2, key: 'reward-ready', pages: ['Your hammer is home.'] });
+  check('L16 a newly relevant line can speak after dismissal without leaving the counter', d.reading?.offer.key === 'reward-ready');
+  d.sync(2, { ...offer, speakerId: 2 });
+  check('L17 a previously heard line cannot queue again during the visit', !d.hasNext());
+  d.sync(2, { speakerId: 2, key: 'pending-reward', pages: ['Choose your reward.'] });
+  d.close();
+  d.sync(2, { speakerId: 2, key: 'pending-reward', pages: ['Choose your reward.'] });
+  check('L18 dismissal includes the pending state, so it cannot immediately reopen', !d.reading);
+  d.sync(2, null);
+  check('L19 a silent service never invents a conversation', !d.reading);
 }
 
 console.log(`\n${fail === 0 ? 'ALL PASS' : 'FAILURES'} — ${pass} passed, ${fail} failed`);

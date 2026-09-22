@@ -2361,6 +2361,10 @@ we verify changes.
   `data/dialogue.ts`) is its default reader: live actor portraits shared
   with ultimate cutaways, paged reveal/advance, explicit finish, walk-away
   dismissal, cooldown from completion, and queued functional updates.
+  Station folio leaves share its reader through `UI.dialogueContext` and
+  `ui/dialogueLayout.ts`: services/bag above, conversation below, temporary
+  seats and readable scaled controls. Dismissed content stays quiet for the
+  visit; newly relevant content may speak. Verify `dialogue-services-ui.cjs`.
   `DIALOGUE_CFG.presentation` retains the bubble comparison. Contract:
   `docs/ui/dialogue.md`; probe_speech rig L + `balance/dialogue-ui.cjs`.
   Authored state/quest rules, Mireille's optional road invitation, Brandt's

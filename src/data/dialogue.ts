@@ -9,4 +9,18 @@ export const DIALOGUE_CFG = {
   hudGap: 18,
   fontSize: 18,
   lineHeight: 1.65,
+  /** Shared service workspace. All sizes are pre-scale except edge/gap. */
+  services: {
+    readerHeight: 190,
+    readerMaxFraction: 0.36,
+    readerLimitFraction: 0.6,
+    portraitSize: 72,
+    /** Screen pixels: smaller windows scroll each service's content. */
+    minPanelWidth: 300,
+    minPanelHeight: 180,
+    minReaderHeight: 130,
+    controlClearance: 60,
+    gap: 14,
+    top: 48,
+  },
 };

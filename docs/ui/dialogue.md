@@ -26,16 +26,25 @@ prompt reads; it does not execute quests, award items, or replace station gates.
 - Escape, controller B or the close button dismisses. Escape closes a visible dialogue
   before reaching the pause menu. The reader does not pause the world or lock
   movement; leaving the speaker's focus closes the exchange.
-- Finishing/dismissing cannot reopen the same focused conversation. Departing
-  and returning must earn dwell again. Ambient speech additionally honors its
+- Finishing/dismissing cannot reopen the same content during a focused visit.
+  A newly relevant line (for example, a quest or stock unlock) may speak while
+  the player remains at the counter. Dismissal covers queued content too;
+  already read lines cannot cycle back into the queue. Departing and returning
+  must earn dwell again. Ambient speech additionally honors its
   existing lane cooldown, starting at reader completion or interruption.
 - An ambient offer's old bubble window can expire while the page remains open.
   Reading has no deadline. Generated text is composed once, not every frame.
 - A changing functional line queues behind the current text. Only the latest
   pending state survives; it is reached through Continue, never substituted
   halfway through a page. Closing dismisses the pending text too.
-- Other blocking panels suspend the reader and new dialogue admission. Closing
-  the panel resumes the page if its speaker remains in focus. Death, run exit,
+- Ordinary station services coexist with the reader, including summoned
+  crafting tabs and their selling inventory. A station opening or changing
+  tabs never interrupts its conversation or requires it to be finished first.
+  A service with no eligible speech opens without an empty dialogue box.
+- Visible personal pages, modal decisions, minigames and pause suspend the
+  reader and new dialogue admission. Shelved tabs cannot suppress speech.
+  Closing the blocking surface resumes the page if its speaker remains in
+  focus. Death, run exit,
   world replacement and every zone load clear the reader.
 
 The local hero owns the reader. Existing couch guests retain their seat-scoped
@@ -51,7 +60,8 @@ pages through the same reader. `dialoguePages` treats blank lines as explicit
 page breaks and otherwise splits at word boundaries.
 
 `src/data/dialogue.ts` owns presentation mode, page budget, reader width,
-portrait size, font, spacing and HUD clearance. Set `presentation: 'bubble'`
+portrait size, font, spacing, HUD clearance and service workspace dials.
+Set `presentation: 'bubble'`
 to compare the prior overhead presentation without changing dwell/priority.
 Selection remains configurable through `speechAttention.ts` and
 `MonsterDef.speechAttention`: `restingLine` folds through role and definition,
@@ -73,6 +83,25 @@ renderer's existing text seam. Full text is announced once per page, rather
 than once per typed glyph. UI scaling and stack order use the shared fabrics;
 compact layouts remain within the viewport and can scroll at high UI scales.
 
+`UI.dialogueContext` derives coexistence from the same enrolled folio leaves
+that own station open/close, reach and tab selection. Every `kind: 'station'`
+joins automatically; modal/page leaves suspend only while drawn. Inventory
+joins only with a local service. Gameplay and controller menu-pointer gates
+remain unchanged. Keyboard advance does not steal native activation from
+focused service controls; controller A uses the service pointer to operate
+either surface, and Escape dismisses dialogue before closing services.
+
+`ui/dialogueLayout.ts` reserves a stable reading band beneath the services,
+with the animated portrait and continuously reachable advance/close controls.
+Services and inventory fit beside one another, or stack when too narrow, with
+scrolling content. On a short/high-scale screen they may borrow the inactive
+HUD space while services own input. Font size continues to follow the user's
+scale. The layout uses temporary CSS properties: dismissal, suspension and
+departure restore the authored/movable seats; saved positions are untouched.
+Folio tabs measure the displaced front after layout. Panels measure their own
+seats again before each folio sync, so temporary placement cannot alter which
+leaves belong together.
+
 The renderer batches selection once before actors, then delivers dialogue
 through the same actor and room visibility gates as bubbles. It suppresses
 the local reader's duplicate overhead bubble. It never owns conversation
@@ -85,6 +114,10 @@ rewards or scene-specific dialogue rules.
 - `npm run sim -- run --suite smoke`
 - `npm run build`, then `npx electron balance/dialogue-ui.cjs`
 - `npx electron balance/speech-focus-ui.cjs` retains the original inn focus rig.
+- `npx electron balance/dialogue-services-ui.cjs` checks actual stocked-counter
+  dwell with summoned crafting tabs, purchases, independent dismissal, new
+  state admission, suspension, controller input, departure, and non-overlapping
+  readable layouts at desktop/compact/175% scale.
 
 The hidden client uses isolated saves and captures the actual DOM plus canvas.
 It checks dwell, priority, the live portrait, reveal/advance, paged content,

@@ -856,6 +856,7 @@ export class UI {
    *  through the panel's own close path. One dialog up is byte-identical. */
   private readonly folio = new FolioCore(() => performance.now() / 1000);
   private readonly folioStrip = new FolioStrip(this.folio);
+  private readonly dialogueSurfaces = new Map<HTMLElement, { isOpen: () => boolean; kind: string }>();
   /** True while the couch JOIN overlay is up (main.ts owns the claim scan). */
   couchJoinOpen = false;
   /** The escape menu's MAIN view re-renderer, live only while the menu is up
@@ -1268,6 +1269,7 @@ export class UI {
    *  the arrival policy and the front refresh. */
   private folioLeaf(id: string, el: HTMLElement, title: () => string, isOpen: () => boolean,
     close: () => void, extra: Partial<FolioLeafSpec> = {}): FolioLeafSpec {
+    this.dialogueSurfaces.set(el, { isOpen, kind: extra.kind ?? 'page' });
     return {
       id, title, isOpen, close,
       present: (front) => {
@@ -1292,7 +1294,7 @@ export class UI {
           }
         } else {
           const r = el.getBoundingClientRect();
-          if (r.width > 0 && r.height > 0) this.stashFolioSeat(el, panelMoved(el) ? { left: r.left, top: r.top } : null);
+          if (r.width > 0 && r.height > 0) this.stashFolioSeat(el, panelSeatOf(el));
           el.classList.add(FOLIO_SHELVED_CLASS);
         }
       },
@@ -2383,16 +2385,36 @@ export class UI {
   /** ANY blocking DOM surface is up — panels, dwell dialogs, the pause menu,
    *  a minigame, the start menu. The ONE seam device layers ask before
    *  switching habits (the pad flips to menu-pointer mode on this); new
-   *  surfaces join here and every input layer follows for free. The dialogue
-   *  reader alone may coexist with a vendor/Oracle window; gameplay stays blocked. */
-  uiBlocking(allowVendorDialogue = false): boolean {
-    return this.anyPanelOpen(allowVendorDialogue && (this.vendorOpen || this.oracleOpen)) || this.escapeMenuOpen || this.minigameActive || this.menuBar.isTrayOpen()
+   *  surfaces join here and every input layer follows for free. Dialogue has
+   *  its own presentation context; it never relaxes gameplay input gates. */
+  uiBlocking(): boolean {
+    return this.anyPanelOpen() || this.escapeMenuOpen || this.minigameActive || this.menuBar.isTrayOpen()
       || this.couchJoinOpen || this.muCardOpen
       || this.caravanOpen || this.mercOpen || this.salvageOpen
-      || (this.oracleOpen && !allowVendorDialogue) || (this.vendorOpen && !allowVendorDialogue) || this.sailOpen || this.holdOpen || this.vocationOpen
+      || this.oracleOpen || this.vendorOpen || this.sailOpen || this.holdOpen || this.vocationOpen
       || this.bestiaryOpen || this.boroughOpen
       || !this.startMenu.classList.contains('hidden');
   }
+
+  /** One enrollment governs service coexistence as well as folio membership.
+   * Shelved leaves cannot suppress a conversation; visible modals/pages can.
+   * Inventory accompanies a service only for that service's local owner. */
+  dialogueContext(): { available: boolean; surfaces: HTMLElement[] } {
+    const local = this.getWorld().localSeat.id;
+    const drawn = [...this.dialogueSurfaces].filter(([el, row]) => row.isOpen()
+      && !el.classList.contains('hidden') && this.folioDrawn(el));
+    const services = drawn.filter(([el, row]) => row.kind === 'station' && this.panelSeat(el).id === local).map(([el]) => el);
+    const blocked = this.escapeMenuOpen || this.minigameActive || this.menuBar.isTrayOpen()
+      || this.couchJoinOpen || this.muCardOpen || this.storyCardOpen()
+      || !this.startMenu.classList.contains('hidden') || this.charSheetOpen || this.mapOpen
+      || drawn.some(([el, row]) => row.kind !== 'station' || this.panelSeat(el).id !== local)
+      || (this.inventoryOpen && (!services.length || this.panelSeat(this.inventory).id !== local));
+    return { available: !blocked, surfaces: blocked ? [] : [
+      ...services, ...(this.inventoryOpen ? [this.inventory] : []),
+    ] };
+  }
+
+  dialogueSurfacesSeated(): void { this.folioStrip.update(); }
 
   /** A crafting minigame overlay is live (Escape and panels hold still). */
   minigameRunning(): boolean { return this.minigameActive; }

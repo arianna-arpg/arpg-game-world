@@ -433,8 +433,10 @@ let running = false;
 const dialogue = new DialogueUI({
   settings: () => settings, padActive: padActiveNow,
   hudTop: () => ui.hudCluster?.()?.y,
+  surfaces: () => ui.dialogueContext().surfaces,
+  seated: () => ui.dialogueSurfacesSeated(),
 });
-renderer.npcDialogueAvailable = () => running && !world.player?.dead && !world.player?.downed && !ui.uiBlocking(true);
+renderer.npcDialogueAvailable = () => running && !world.player?.dead && !world.player?.downed && ui.dialogueContext().available;
 renderer.onNpcDialogue = (w, line, focusId) => {
   dialogue.setAvailable(renderer.npcDialogueAvailable());
   dialogue.sync(w, line, focusId);
@@ -1734,7 +1736,7 @@ function tick(now: number): void {
   pad.poll(nowSec);
   for (const code of dialoguePadHeld) if (!pad.isDown(code)) dialoguePadHeld.delete(code);
   if (!running || world.player?.dead || world.player?.downed) dialogue.reset();
-  dialogue.setAvailable(running && !world.player?.dead && !world.player?.downed && !ui.uiBlocking(true));
+  dialogue.setAvailable(renderer.npcDialogueAvailable());
   if (input.mouse.x !== lastMouse.x || input.mouse.y !== lastMouse.y) {
     // The mouse reclaims aim only through DELIBERATE travel: motion
     // accumulates while the pad holds the reticle, and only past the
@@ -1773,7 +1775,10 @@ function tick(now: number): void {
   // the classic any-surface gate byte-identically.
   // THE FOLIO (ui/folio.ts): reconcile the books to every dialog's own open
   // flag — whatever path opened or closed it — and seat the thumb indexes.
+  dialogue.layout.clear(); // folios and movable seats measure their own layout before dialogue lends space
   ui.folioSync();
+  dialogue.setAvailable(renderer.npcDialogueAvailable());
+  dialogue.syncLayout(); // controller hit-testing must see the same displaced panels the player sees
   // THE MENU BAR (ui/menubar.ts): shown for a live run — never over the
   // flow screens, never under the Mu hub's HUD veil.
   // THE MENU BUTTON IS THE SHELL'S DOOR (2026-09-11, her ask): it stands

@@ -31,7 +31,7 @@ export function dialoguePages(text: string, limit: number): string[] {
 export class DialogueSession {
   reading: DialogueReading | null = null;
   private focus: number | null = null;
-  private dismissed = false;
+  private heard = new Set<string>();
   private pending: DialogueOffer | null = null;
 
   /** Returns the conversation that ended on a departure/selection change.
@@ -40,9 +40,10 @@ export class DialogueSession {
     let ended: DialogueOffer | null = null;
     if (focus !== this.focus) {
       ended = this.reading?.offer ?? null;
-      this.reading = null; this.pending = null; this.dismissed = false; this.focus = focus;
+      this.reading = null; this.pending = null; this.heard.clear(); this.focus = focus;
     }
-    if (!offer || offer.speakerId !== focus || this.dismissed || !offer.pages.length) return ended;
+    if (!offer || offer.speakerId !== focus || !offer.pages.length) return ended;
+    if (this.heard.has(offer.key)) { this.pending = null; return ended; }
     if (!this.reading) this.reading = { offer, page: 0 };
     else if (offer.key !== this.reading.offer.key) this.pending = offer;
     else this.pending = null;
@@ -58,15 +59,20 @@ export class DialogueSession {
   advance(): DialogueOffer | null {
     if (!this.reading) return null;
     if (this.reading.page + 1 < this.reading.offer.pages.length) { this.reading.page++; return null; }
-    if (this.pending) { this.reading = { offer: this.pending, page: 0 }; this.pending = null; return null; }
+    if (this.pending) {
+      this.heard.add(this.reading.offer.key);
+      this.reading = { offer: this.pending, page: 0 }; this.pending = null; return null;
+    }
     return this.close();
   }
 
   close(): DialogueOffer | null {
     const ended = this.reading?.offer ?? null;
-    this.reading = null; this.pending = null; this.dismissed = true;
+    if (ended) this.heard.add(ended.key);
+    if (this.pending) this.heard.add(this.pending.key);
+    this.reading = null; this.pending = null;
     return ended;
   }
 
-  reset(): void { this.reading = null; this.pending = null; this.dismissed = false; this.focus = null; }
+  reset(): void { this.reading = null; this.pending = null; this.heard.clear(); this.focus = null; }
 }

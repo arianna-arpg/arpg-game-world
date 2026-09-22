@@ -663,7 +663,7 @@ console.log('Q. THE SUITE REACH (the real engine, in town)');
     && w.stationReach('salvage', seat) && w.suiteSummons(seat).length === 0 && !w.stationReach('oracle', seat));
   at(-5000, -5000);
   check('Q7 away from everything nothing is within reach', !w.stationReach('salvage', seat) && !w.stationReach('oracle', seat) && w.suiteSummons(seat).length === 0);
-  const src = readFileSync(resolve(process.cwd(), 'src/engine/world.ts'), 'utf8');
+  const src = readFileSync(resolve(process.cwd(), 'src/engine/world.ts'), 'utf8').replace(/\r\n/g, '\n');
   const gate = (fn: string, id: string): boolean =>
     new RegExp(`\\n  ${fn}\\([^)]*\\)[^{]*\\{\\n    if \\(!this\\.stationReach\\('${id}', seat\\)\\) return;`).test(src);
   check('Q8 the action gates read THE REACH LAW: craftSocket, craftAffix, rerollAffix',
