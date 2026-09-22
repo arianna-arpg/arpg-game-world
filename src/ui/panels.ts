@@ -732,6 +732,7 @@ export class UI {
   private bestiaryPage = 0;
   private bestiarySel: string | null = null;
   vendorOpen = false;
+  private vendorPages = new Map<string, number>();
   /** The Borough arming panel: which villager the dwell offered. */
   boroughOpen = false;
   private boroughFolkId = -1;
@@ -6489,6 +6490,12 @@ export class UI {
         const CELL = 34;
         const pack = world.vendorGridPack(stock, v.grid);
         const b = pack.board;
+        const page = Math.min(this.vendorPages.get(v.id) ?? 0, pack.pages - 1);
+        this.vendorPages.set(v.id, page);
+        const vendorPageNav = pack.pages > 1 ? `<div class="bind-btns" style="margin:4px 0">
+          <button data-vpage="${v.id}:${page - 1}" ${page === 0 ? 'disabled' : ''}>Previous</button>
+          <span>Page ${page + 1} / ${pack.pages}</span>
+          <button data-vpage="${v.id}:${page + 1}" ${page + 1 >= pack.pages ? 'disabled' : ''}>Next</button></div>` : '';
         let cells = '';
         for (let y = 0; y < b.h; y++) {
           for (let x = 0; x < b.w; x++) {
@@ -6499,6 +6506,8 @@ export class UI {
         let tiles = '';
         let overflowRows = '';
         stock.forEach((e, idx) => {
+          const cell = e.kind === 'item' ? pack.cells.get(e.item.uid) : pack.gemCells.get(idx);
+          if (cell ? cell.page !== page : page !== 0) return;
           const { afford, priceHtml, pricePlain, tagHtml } = priceBits(e);
           // THE PRICE ON THE GLASS (VENDOR_CFG.glass.priceTag, 2026-09-11 —
           // her report: gear and pouches spoke no cost, "I'm not sure whether
@@ -6598,7 +6607,7 @@ export class UI {
         });
         const empty = stock.length === 0
           ? '<div style="color:#8a8678;font-size:11px;margin-top:4px">The shelf stands empty; come back after the restock.</div>' : '';
-        return `
+        return `${vendorPageNav}
           <div style="position:relative;width:${b.w * CELL}px;height:${b.h * CELL}px;margin-top:2px">${cells}${tiles}</div>
           ${overflowRows}${empty}
           <div style="margin-top:4px;color:#8a8678;font-size:10px">hover a ware for its full story · click it to buy${canLock && lockCap > 0 ? ` · ${this.lockHintHtml()}` : ''}</div>`;
@@ -6708,6 +6717,13 @@ export class UI {
       <div class="bind-btns panel-foot"><button data-vendor-close>Step away</button></div>`;
 
     const q = <T extends HTMLElement>(sel: string): T[] => [...this.vendorMenu.querySelectorAll<T>(sel)];
+    for (const btn of q<HTMLButtonElement>('[data-vpage]')) {
+      btn.onclick = () => {
+        const [id, page] = btn.dataset.vpage!.split(':');
+        this.vendorPages.set(id, Math.max(0, Number(page)));
+        this.refreshVendor();
+      };
+    }
     for (const btn of [...this.vendorMenu.querySelectorAll<HTMLButtonElement>('button[data-forge-begin]')]) {
       btn.addEventListener('click', () => {
         const uid = Number(btn.dataset.forgeBegin);

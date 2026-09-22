@@ -1,5 +1,10 @@
 # THE FIRST WRIT — side charter to the Bounty Board (the board as the account's first door)
 
+Current reward tuning supersedes the essence-only starter payout described
+in the original design below: the small board now pairs a crafting writ plus
+Coarse Essence with a cash alternative. See [vendor investment](vendor-investment.md).
+
+
 September 15, 2026: [Approach and reward follow-up](bounty-routes-rewards.md)
 preserves the first-writ teaching band and adds an appropriate route guarantee
 after its expiry, with fixed quarry commissions when existing asks are depleted.

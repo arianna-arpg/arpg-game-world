@@ -229,7 +229,7 @@ import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, ty
 import { VOYAGE_ISLANDS } from '../data/voyageIslands';
 import { shipOf, type ShipDef } from '../data/ships';
 import { expandedTown, townTier, townSiteAt, townSiteStructure, townStationFeatures, TOWN_TIERS, type TownSiteId } from '../data/townBuild';
-import { bountyEssenceMix, rollBudgetBountyPay } from '../data/bountyRewards';
+import { bountyEssenceMix, rollBudgetBountyPay, ensureBountyRewardChoices } from '../data/bountyRewards';
 import {
   BOUNTY_BOARD_CFG, BOUNTY_KINDS, bountyChargePay, bountySourceRows, clonePosting, describeBountyPay, liveBountyBand, postingQuestDef, rollBountyPay,
   type BountyKindRow, type BountyTargetRef,
@@ -24780,6 +24780,7 @@ export class World {
     // truth); the kept rows seed the diversity/zone bookkeeping so fresh
     // deals fill honestly around them.
     const offers: BountyPosting[] = this.bountyOffers.filter(o => (standing || o.locked) && o.boardId === boardId);
+    const preservedRewardIds = new Set(offers.map(o => o.id));
     const perKind: Record<string, number> = {};
     for (const o of offers) {
       perKind[o.kind] = (perKind[o.kind] ?? 0) + 1;
@@ -24854,7 +24855,7 @@ export class World {
       if (!p) continue; // no honest target for this seat — the slate runs short
       // THE PAY LANE rolls at the arm, off the TARGET's level (the visible
       // price law: the card prints exactly what the turn-in will mint);
-      // the band's lane override folds here (the starter's essence-only).
+      // rollBudgetBountyPay also folds the starter's cash and writ lanes.
       const rewardLevel = p.challengeLevel ?? p.expedition?.level ?? this.zoneMap[p.zoneId]?.level ?? 1;
       const weights = { ...(band?.lanes ?? BOUNTY_BOARD_CFG.lanes.weights) };
       if (!band) {
@@ -24862,7 +24863,7 @@ export class World {
           if (offers.some(o => lane === 'pouch' ? o.pay.pouch || o.pay.gem : o.pay[lane])) weights[lane] = 0;
         }
       }
-      p.pay = { ...(band ? rollBountyPay : rollBudgetBountyPay)(host, rng, rewardLevel,
+      p.pay = { ...rollBudgetBountyPay(host, rng, rewardLevel,
         Object.values(weights).some(w => w > 0) ? weights : band?.lanes), level: rewardLevel };
       taken.add(p.zoneId);
       perKind[rowId] = (perKind[rowId] ?? 0) + 1;
@@ -24894,6 +24895,8 @@ export class World {
         }
       }
     }
+    if (!standing) ensureBountyRewardChoices(offers, preservedRewardIds,
+      { pickGemId: (level, r) => this.pickBountyGemId(level, r) }, rng, band?.lanes ?? BOUNTY_BOARD_CFG.lanes.weights);
     // THE MERGE (the kinship): this board's fresh slate replaces only its
     // own postings — every other board's standing offers ride untouched.
     this.bountyOffers = [...this.bountyOffers.filter(o => o.boardId !== boardId), ...offers];
@@ -47897,27 +47900,37 @@ export class World {
    *  real one), so both co-op sides pack their replicated arrays to the
    *  identical glass. What cannot seat reports in `overflow` (item uids) /
    *  `gemOverflow` (stock indices) for the panel to list honestly — though
-   *  the probe derives the worst case from the catalog and fails the build
-   *  before content can outgrow the glass. */
+   *  vendorGridPack retains a buy-list fallback for oversized future content.
+   *  Ordinary stock continues onto another page when the current one fills. */
   vendorGridPack(stock: readonly VendorEntry[], board?: { w: number; h: number }): {
-    cells: Map<number, { x: number; y: number }>;
-    gemCells: Map<number, { x: number; y: number }>;
+    cells: Map<number, { x: number; y: number; page: number }>;
+    gemCells: Map<number, { x: number; y: number; page: number }>;
+    pages: number;
     board: { w: number; h: number };
     overflow: number[];
     gemOverflow: number[];
   } {
     const b = board ?? VENDOR_CFG.gearGrid;
-    const scratch: ItemInstance[] = [];
-    const cells = new Map<number, { x: number; y: number }>();
-    const gemCells = new Map<number, { x: number; y: number }>();
+    let scratch: ItemInstance[] = [], page = 0;
+    const cells = new Map<number, { x: number; y: number; page: number }>();
+    const gemCells = new Map<number, { x: number; y: number; page: number }>();
     const overflow: number[] = [];
     const gemOverflow: number[] = [];
+    const placeVendorTile = (ghost: ItemInstance): boolean => {
+      const size = itemGridSize(ghost);
+      if (size.w > b.w || size.h > b.h || b.w < 1 || b.h < 1) return false;
+      if (!autoPlace(scratch, ghost, b)) {
+        scratch = []; page++;
+        return autoPlace(scratch, ghost, b);
+      }
+      return true;
+    };
     stock.forEach((e, idx) => {
       if (e.kind === 'item') {
         const ghost: ItemInstance = { ...e.item };
         delete ghost.x;
         delete ghost.y;
-        if (autoPlace(scratch, ghost, b)) cells.set(e.item.uid, { x: ghost.x!, y: ghost.y! });
+        if (placeVendorTile(ghost)) cells.set(e.item.uid, { x: ghost.x!, y: ghost.y!, page });
         else overflow.push(e.item.uid);
         return;
       }
@@ -47928,10 +47941,10 @@ export class World {
         uid: -(idx + 1), baseId: 'skill_gem', ilvl: 1, tier: 1, rarity: 'common',
         name: '', baseRoll: 0, implicitRolls: [], affixes: [],
       };
-      if (autoPlace(scratch, ghost, b)) gemCells.set(idx, { x: ghost.x!, y: ghost.y! });
+      if (placeVendorTile(ghost)) gemCells.set(idx, { x: ghost.x!, y: ghost.y!, page });
       else gemOverflow.push(idx);
     });
-    return { cells, gemCells, board: b, overflow, gemOverflow };
+    return { cells, gemCells, board: b, pages: page + 1, overflow, gemOverflow };
   }
 
   // --- THE PATRON'S HOLD (data/vendors.ts VENDOR_CFG) -----------------------
@@ -48059,8 +48072,37 @@ export class World {
     // level-up or borough swell mid-beat changes what a FRESH arm rolls,
     // but the standing-shelf law means mid-beat re-arms don't happen.)
     const seed = (this.manifest.seed ^ hashStr(`vendorshelf:${key}:${this.restockOrdinal()}`)) >>> 0;
-    return this.overlayHold(key, withSeededRandom(seed, () => this.buildVendorStock({ counter: key })))
-      .filter(entry => this.vendorEntryAllowed(key, entry));
+    return withSeededRandom(seed, () => {
+      const stock = this.overlayHold(key, this.buildVendorStock({ counter: key }))
+        .filter(entry => this.vendorEntryAllowed(key, entry));
+      this.curateVendorStock(key, stock);
+      return stock;
+    });
+  }
+
+  vendorQualityPieces(key: string): number {
+    if (!VENDORS.find(v => v.id === key)?.quality) return 0;
+    return VENDOR_CFG.quality.ladder.reduce((n, r) => n + (featureEnabled(this.account, r.flag) ? r.pieces : 0), 0);
+  }
+
+  /** Select fresh equipment after reservations are seated. This stays inside
+   * the shelf's seeded stream and never changes a held item's properties. */
+  private curateVendorStock(key: string, stock: VendorEntry[]): void {
+    const count = this.vendorQualityPieces(key);
+    if (!count) return;
+    const held = new Set(this.vendorHolds[key]?.locks.map(r => r.entry) ?? []);
+    const pool = stock.filter((e): e is VendorEntry & { kind: 'item' } => e.kind === 'item'
+      && !held.has(e) && !e.item.mem && !e.item.gem && e.item.rarity !== 'unique');
+    let selected = 0;
+    while (pool.length && selected < count) {
+      const e = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+      const rarity = selected < VENDOR_CFG.quality.magicPieces || e.item.rarity === 'common' ? 'magic' : e.item.rarity;
+      if (!this.vendorEntryAllowed(key, { kind: 'item', item: { ...e.item, rarity } })) continue;
+      const baseId = rarity === 'magic' && ITEM_BASES[e.item.baseId]?.minRarity === 'rare' ? undefined : e.item.baseId;
+      const item = rollItem({ baseId, ilvl: e.item.ilvl, rarity,
+        rarityCeiling: rarity, affixQuality: VENDOR_CFG.quality });
+      if (item?.affixes.length) { e.item = item; selected++; }
+    }
   }
 
   /** Roll a fresh counter onto the ONE shelf (skill-items M3, §6 — the

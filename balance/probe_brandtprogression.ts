@@ -62,7 +62,7 @@ test('Magic stock and old saved reservations respect rarity gates', () => {
   assert.ok(w.armVendorStock('brandt').some(e => e.kind === 'skill'));
   assert.ok(!w.armVendorStock('brandt').some(e => e.kind === 'support'));
 });
-test('Early investment and both gated five-tier ladders', () => {
+test('Early investment and both gated ten-tier ladders', () => {
   const a = makeAccount(); a.credits = 10000;
   for (const family of ['restock', 'wares']) {
     for (let i = 1; i <= 3; i++) {
@@ -70,10 +70,10 @@ test('Early investment and both gated five-tier ladders', () => {
     }
     assert.equal(isUnlockVisible(a, row(`feat_vendor_${family}_4`)), false);
   }
-  const { w } = town(); w.time = 0; w.restockVendor(); assert.equal(w.vendorRestockAt, 900);
+  const { w } = town(); w.time = 0; w.restockVendor(); assert.equal(w.vendorRestockAt, 1200);
   const times: number[] = [];
   for (const r of VENDOR_CFG.restock.ladder) { w.account.features.add(r.flag); w.restockVendor(); times.push(w.vendorRestockAt); }
-  assert.deepEqual(times, [780, 660, 540, 420, 300]);
+  assert.deepEqual(times, [1110, 1020, 930, 840, 750, 660, 570, 480, 390, 300]);
   a.features.add(FEATURE.BRANDT_MAGIC_WARES);
   for (const family of ['restock', 'wares']) for (let i = 4; i <= 5; i++) {
     const u = row(`feat_vendor_${family}_${i}`); assert.ok(isUnlockVisible(a, u)); assert.equal(investUnlock(a, u, u.cost), u.cost);

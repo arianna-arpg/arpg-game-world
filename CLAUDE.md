@@ -1,5 +1,10 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Ten-rank vendor investment, curated affixes, paged shelves and mixed writ/cash
+bounty choices are documented in `docs/design/vendor-investment.md`. Tuning
+lives in `data/vendors.ts` and `data/bountyRewards.ts`; verify
+`probe_vendorinvestment.ts` and hidden `balance/vendor-investment-ui.cjs`.
+
 Sacrificial Font passive refunds use `engine/passiveRefund.ts` for shared path,
 root, gate and point-pool validation. See `docs/design/passive-refunds.md`;
 verify `probe_passiverefund.ts` and the hidden `balance/font-passives-ui.cjs`.

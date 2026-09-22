@@ -65,7 +65,9 @@ test('Vault chain: magic → memories → reservations; hammer → rare → salv
   const reserve = row('feat_vendor_lock_1'); assert.equal(isUnlockVisible(a, reserve), false);
   for (const [key, n] of Object.entries(reserve.reqLedgerCounts ?? {})) a.ledger[key] = n;
   if (reserve.reqLedger) for (const key of Array.isArray(reserve.reqLedger) ? reserve.reqLedger : [reserve.reqLedger]) a.ledger[key] = 1;
-  assert.ok(isUnlockVisible(a, reserve)); assert.ok(!a.features.has(FEATURE.BRANDT_EXTRA_GEMS));
+  assert.equal(isUnlockVisible(a, reserve), false);
+  a.features.add(FEATURE.VENDOR_WARES_2); a.features.add(FEATURE.VENDOR_RESTOCK_2);
+  assert.ok(isUnlockVisible(a, reserve));
   assert.equal(isUnlockVisible(a, row(BRANDT_CFG.rareWares.unlock)), false);
   assert.equal(isUnlockVisible(a, row('feat_salvage_station')), false);
   a.ledger[questDoneKey(HAMMER)] = 1;

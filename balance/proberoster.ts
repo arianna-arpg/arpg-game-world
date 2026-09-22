@@ -65,6 +65,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_stash.ts', status: 'green', tier: 'fast', why: 'Paged grid storage, atomic capacity and swaps, overflow migration, Vault progression and personal Immortal lockers.' },
   { probe: 'probe_brandtquest.ts', status: 'green', tier: 'fast', why: 'Hammer/trophy continuity, collected cargo, stable deferred imbues, rarity ceilings and Vault progression' },
   { probe: 'probe_brandtprogression.ts', status: 'green', tier: 'fast', why: 'Brandt rarity ceilings, starter trade, staged investments, craft-bounty qualification, board cues and quest appearance' },
+  { probe: 'probe_vendorinvestment.ts', status: 'green', tier: 'fast', why: 'Ten-tier market investment, curated affix floors and Magic bases, paged purchases, protected reservations and mixed writ/cash choices' },
   { probe: 'probe_companionrecovery.ts', status: 'green', tier: 'fast', why: 'Revival/Whistle cleanse, damage and debuff immunity, body-count budget, expiry, living/downed parity, litter/dwell paths and co-op cue' },
   { probe: 'probe_memoryunlocks.ts', status: 'green', tier: 'fast', why: 'Repeatable memory discovery, secondary access, payment, exhaustion, persistence, legendary mint and host gate' },
   { probe: 'probe_uniqueaccords.ts', status: 'green', tier: 'fast', why: 'Unique grant census, item-owned sockets, live companion investment, Cinder Conductor fuel, Breach Bell cries and Unspent Reply casting costs' },

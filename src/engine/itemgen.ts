@@ -117,6 +117,27 @@ export function affixPoolsFor(base: ItemBaseDef): { prefix: AffixDef[]; suffix: 
 
 // -------------------------------------------------------- tier selection ---
 
+export interface AffixQuality {
+  bestTierCount: number;
+  rollFloor: number;
+}
+
+/** A mint-time quality policy. It never adds families, bends rarity gates,
+ * or downgrades a naturally overrolled Magic tier. Ordinary drops opt out. */
+export function improveAffixQuality(affixes: AffixRollState[], ilvl: number, rarity: ItemRarity,
+  quality: AffixQuality, rng: RngFn): void {
+  if (rarity !== 'magic' && rarity !== 'rare') return;
+  const floor = Math.max(0, Math.min(1, quality.rollFloor));
+  for (const a of affixes) a.rolls = a.rolls.map(r => floor + (1 - floor) * r);
+  const pool = [...affixes];
+  for (let i = 0; i < Math.max(0, Math.floor(quality.bestTierCount)) && pool.length; i++) {
+    const a = pool.splice(Math.min(pool.length - 1, Math.floor(rng() * pool.length)), 1)[0];
+    const def = ITEM_AFFIXES[a.id];
+    const best = def && eligibleTiers(def, ilvl, rarity)[0];
+    if (best) a.tier = Math.min(a.tier, best.index);
+  }
+}
+
 interface EligibleTier { index: number; def: AffixTierDef; }
 
 function eligibleTiers(def: AffixDef, ilvl: number, rarity: ItemRarity): EligibleTier[] {
@@ -333,6 +354,7 @@ export interface RollItemOpts {
    *  authored). Silently skipped when the family cannot roll on the
    *  resolved base — the tag gate is never bent. */
   withFamily?: string;
+  affixQuality?: AffixQuality;
 }
 
 function rollRarity(opts: RollItemOpts, rng: RngFn): ItemRarity {
@@ -416,6 +438,7 @@ export function rollItem(opts: RollItemOpts): ItemInstance | null {
   if (opts.withFamily && !unique && (rarity === 'magic' || rarity === 'rare')) {
     forceFamilyAffix(base, affixes, opts.withFamily, ilvl, rarity, rng);
   }
+  if (opts.affixQuality) improveAffixQuality(affixes, ilvl, rarity, opts.affixQuality, rng);
 
   const item: ItemInstance = {
     uid: nextItemUid(),

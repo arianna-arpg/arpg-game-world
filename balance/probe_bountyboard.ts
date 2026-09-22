@@ -53,7 +53,7 @@
 //      empty-purse claim — and the board lesson's live read (never accepted
 //      = live; the M0 accept stamp closes it forever, no new key).
 //   M (first-writ W1): THE STARTER BAND — live per run while the Crossroads
-//      stands uncleared; young = every seat pinned, essence-only, distinct
+//      stands uncleared; young = every seat pinned, cash-and-writ, distinct
 //      kinds; mature = one perpetual anchor + near-ground; the cleared
 //      Crossroads expires the band structurally.
 //   N (first-writ W2): THE GATHER — the fit is the harvest fabric's row
@@ -669,7 +669,7 @@ const wK = mkWorld();
 
 // ------------- M. THE STARTER BAND (W1 — the young board's small hand;
 // docs/design/bounty-first-writ.md §4, walk cards 1+2 coupled: per run
-// while the Crossroads stands uncleared, essence-only; every seat pinned
+// while the Crossroads stands uncleared, cash-and-writ; every seat pinned
 // while the account is YOUNG, one perpetual anchor writ after; the band
 // EXPIRES structurally when the Crossroads falls.)
 seedGlobalRandom(0xba4d);
@@ -689,7 +689,7 @@ seedGlobalRandom(0xba4d);
   check('M: YOUNG — every seat pins the anchor, one kind each (distinct faces)',
     wM.bountyOffers.every(p => p.zoneId === S.anchorZone)
     && new Set(wM.bountyOffers.map(p => p.kind)).size === wM.bountyOffers.length);
-  check('M: the young slate pays ONLY essence',
+  check('M: the young slate pairs writs with essence',
     wM.bountyOffers.every(p => !!p.pay.essence?.length
       && !p.pay.unique && !p.pay.lot && !p.pay.pouch && !p.pay.gem));
   check('M: decrees and errands stay off the young slate (band kind weights)',
@@ -702,7 +702,7 @@ seedGlobalRandom(0xba4d);
   const anchored = wM.bountyOffers.filter(p => p.zoneId === S.anchorZone);
   check('M: MATURE — exactly one perpetual anchor writ', anchored.length === 1,
     `${anchored.length} of ${wM.bountyOffers.length} on ${S.anchorZone}`);
-  check('M: the mature band still pays only essence',
+  check('M: the mature band retains essence alongside writs',
     wM.bountyOffers.every(p => !!p.pay.essence?.length));
   // THE STRUCTURAL HANDOFF: the Crossroads cleared → the band expires and
   // the full grammar returns on the next turned beat.

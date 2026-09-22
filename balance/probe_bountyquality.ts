@@ -51,7 +51,9 @@ const poster = (pay: BountyPosting['pay']): BountyPosting => ({ id: 'bounty_qual
         const saved = sanitizeBountyBoard({ offers: [clone] }, w.zoneMap)!.offers[0];
         assert.deepEqual(saved.pay, pay);
         if (!recipe.shares.unique && !recipe.shares.legacy) {
-          assert.equal(valueOf(pay) + (pay.xp ?? 0) / BOUNTY_REWARD_CFG.xpPerValue, pay.budget!.value);
+          const shares = Object.values(recipe.shares).reduce((n, v) => n + v, 0);
+          const craftSpend = pay.craft ? Math.floor(pay.budget!.value * (recipe.shares.craft ?? 0) / shares) : 0;
+          assert.equal(valueOf(pay) + (pay.xp ?? 0) / BOUNTY_REWARD_CFG.xpPerValue + craftSpend, pay.budget!.value);
         }
         if (pay.unique?.id) {
           const u = UNIQUE_LIST.find(u => u.id === pay.unique!.id)!;
@@ -162,10 +164,12 @@ const poster = (pay: BountyPosting['pay']): BountyPosting => ({ id: 'bounty_qual
   console.log('PASS puzzle posting: native puzzle spawn and completion, objective attribution');
 }
 
-// The starter lesson remains small and essence-only.
+// The starter lesson stays small and pairs a writ with a cash alternative.
 {
-  const w = make(); w.completedObjectives.delete('crossroads'); w.armBountyBoard();
+  const w = make(); w.completedObjectives.delete('crossroads'); w.time += w.bountyBeatSeconds(); w.armBountyBoard();
   assert(w.bountyOffers.length <= BOUNTY_BOARD_CFG.starter.offers);
-  assert(w.bountyOffers.every(p => p.pay.essence && !p.pay.xp && !p.pay.budget && !p.survey && !p.trail));
+  assert(w.bountyOffers.every(p => p.pay.essence && !p.pay.xp && !p.survey && !p.trail));
+  assert(w.bountyOffers.some(p => p.pay.craft));
+  assert(w.bountyOffers.some(p => !p.pay.craft));
 }
 console.log('PASS bounty quality');

@@ -163,10 +163,10 @@ check('A: the purchase stamps the market ledger',
   const met = makeAccount();
   met.ledger[LEDGER_VENDOR_BOUGHT] = 1;
   met.features.add(FEATURE.VENDOR_GEMS);
-  met.features.add(VENDOR_CFG.wares.ladder[0].flag);
+  met.features.add(FEATURE.VENDOR_WARES_2); met.features.add(FEATURE.VENDOR_RESTOCK_2);
   const chainOnly = makeAccount();
   chainOnly.features.add(FEATURE.VENDOR_GEMS);
-  chainOnly.features.add(VENDOR_CFG.wares.ladder[0].flag);
+  chainOnly.features.add(FEATURE.VENDOR_WARES_2); chainOnly.features.add(FEATURE.VENDOR_RESTOCK_2);
   check('A: the Vault hides the ladder until the whole chain is walked + the account has traded',
     !isUnlockVisible(fresh, lock1) && !isUnlockVisible(chainOnly, lock1) && isUnlockVisible(met, lock1));
   check('A: the walked-but-untraded rung TEASES sealed (visible, unbuyable, its road printed)',
@@ -509,10 +509,13 @@ check('A: the purchase stamps the market ledger',
   check('E: the pack is deterministic (same stock, same glass)',
     JSON.stringify([...pack1.cells.entries()]) === JSON.stringify([...pack2.cells.entries()])
     && JSON.stringify([...pack1.gemCells.entries()]) === JSON.stringify([...pack2.gemCells.entries()]));
-  const maxFoot = Object.values(ITEM_BASES).reduce((m, b) => Math.max(m, (b.w ?? 1) * (b.h ?? 1)), 1);
-  check('E: the capacity law — the glass holds the worst case the catalog can roll',
-    expGear * maxFoot + expGems + pouchKinds.length <= VENDOR_CFG.gearGrid.w * VENDOR_CFG.gearGrid.h,
-    `${expGear}×${maxFoot} + ${expGems} + ${pouchKinds.length} ≤ ${VENDOR_CFG.gearGrid.w * VENDOR_CFG.gearGrid.h}`);
+  const largest = Object.values(ITEM_BASES).reduce((a, b) => (a.w ?? 1) * (a.h ?? 1) >= (b.w ?? 1) * (b.h ?? 1) ? a : b);
+  const worst = wE.vendorStock.map((e, i) => e.kind === 'item' && !e.item.mem
+    ? { ...e, item: { ...e.item, uid: 990000 + i, baseId: largest.id } } : e);
+  const packedWorst = wE.vendorGridPack(worst);
+  check('E: paged glass seats the largest footprints without losing wares',
+    !packedWorst.overflow.length && !packedWorst.gemOverflow.length && packedWorst.pages > 1
+    && packedWorst.cells.size + packedWorst.gemCells.size === worst.length);
 
   // --- The single-half builders (arm sites standing down a half).
   check('E: a gems-half build rolls no gear (the pouches ride the gems half)',

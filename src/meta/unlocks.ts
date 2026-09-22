@@ -808,7 +808,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     id: `feat_vendor_wares_${i + 1}`, kind: 'feature', cost: rung.cost, reqLevel: 0,
     requiresUnlock: i === 0 ? undefined : `feat_vendor_wares_${i}`,
     ...(rung.gate ? { reqAnyOf: rung.gate, tease: true } : {}),
-    label: `Broader Wares ${['I', 'II', 'III', 'IV', 'V'][i] ?? i + 1}`,
+    label: `Broader Wares ${['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][i] ?? i + 1}`,
     description: `Every counter stocks wider: +${rung.gems} Memory slot${rung.gems === 1 ? '' : 's'} on the one shelf (they fill once the Memory Counter opens) and +${rung.gear} rolled piece${rung.gear === 1 ? '' : 's'} in the glass beside them. One purchase, every market your line will ever trade in.`,
     payload: { flag: rung.flag },
   })),
@@ -837,11 +837,21 @@ export const UNLOCK_CATALOG: Unlockable[] = [
       id: `feat_vendor_restock_${i + 1}`, kind: 'feature', cost: rung.cost, reqLevel: 0,
       requiresUnlock: i === 0 ? undefined : `feat_vendor_restock_${i}`,
       ...(rung.gate ? { reqAnyOf: rung.gate, tease: true } : {}),
-      label: `Rush Orders ${['I', 'II', 'III', 'IV', 'V'][i] ?? i + 1}`,
+      label: `Rush Orders ${['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][i] ?? i + 1}`,
       description: `Every counter restocks in ${Math.round(after / 60 * 10) / 10} minutes instead of ${Math.round(before / 60 * 10) / 10}. One purchase, every market.`,
       payload: { flag: rung.flag },
     };
   }),
+  ...VENDOR_CFG.quality.ladder.map((rung, i): Unlockable => ({
+    id: `feat_vendor_quality_${i + 1}`, kind: 'feature', cost: rung.cost, reqLevel: 0,
+    requiresUnlock: i === 0 ? BRANDT_CFG.rareWares.unlock : `feat_vendor_quality_${i}`,
+    requiresFeature: i === 0 ? VENDOR_CFG.quality.requiresRestock : rung.requiresWares,
+    ...(i === 0 ? {
+      reqAnyOf: [{ feature: VENDOR_CFG.quality.requiresWares }], tease: true } : {}),
+    label: `Curated Wares ${['I', 'II', 'III', 'IV', 'V'][i] ?? i + 1}`,
+    description: `Brandt selects ${VENDOR_CFG.quality.ladder.slice(0, i + 1).reduce((n, r) => n + r.pieces, 0)} fresh pieces per restock with ${VENDOR_CFG.quality.bestTierCount} affix at its best level-eligible tier and all affix rolls in the top ${Math.round((1 - VENDOR_CFG.quality.rollFloor) * 100)}%. At least ${VENDOR_CFG.quality.magicPieces} selected pieces remain magic crafting bases. Reserved items keep their original properties.`,
+    payload: { flag: rung.flag },
+  })),
   // Mireille's care, in sequence: life heal, then mana heal, then an XP buff —
   // each surfaces once the previous is owned (a town pitstop that grows).
   // THE INTRODUCTION LAW: the whole chain waits behind her OWN lesson — the
@@ -866,12 +876,14 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   //     you've traded in); each rung requires the last. ---------------------
   // Rung 1 now stands at the chain's far end (the user's meta-progression:
   // width first, then the Memory Counter, then the right to HOLD) — it
-  // requires the Memory Counter AND a Broader Wares rung owned, plus the standing
+  // requires the Memory Counter, Broader Wares II and Rush Orders II, plus the standing
   // discovery law (LEDGER_VENDOR_BOUGHT: you can only reserve at a market
   // you've traded in), and TEASES once the chain is walked: the card hangs
   // sealed until the first purchase stamps the ledger.
   ...VENDOR_CFG.lock.ladder.map((rung, i): Unlockable => ({
     id: `feat_vendor_lock_${i + 1}`, kind: 'feature', cost: rung.cost, reqLevel: 0,
+    requiresFeature: rung.requiresFeature,
+    ...(rung.gate ? { reqAnyOf: rung.gate, tease: true } : {}),
     ...(i === 0
       ? { requiresUnlock: 'feat_vendor_gems',
           reqLedger: LEDGER_VENDOR_BOUGHT, tease: true }
@@ -965,7 +977,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     reqLevel: 0, requiresUnlock: BRANDT_CFG.magicWares.unlock,
     reqLedger: BRANDT_CFG.rareWares.ledger, tease: true,
     label: BRANDT_CFG.rareWares.label,
-    description: 'Return Brandt’s hammer, then invest to bring rare equipment and rare Memories to his shelves. Opens the Salvage Station for further investment.',
+    description: 'Return Brandt’s hammer, then invest to bring rare equipment and rare Memories to his shelves. Opens the Salvage Station, Rush Orders VI–X, Broader Wares VI–X and Curated Wares for further investment.',
     payload: { flag: BRANDT_CFG.rareWares.flag } },
   { id: 'feat_salvage_station', kind: 'feature', cost: 1, reqLevel: 0, requiresUnlock: BRANDT_CFG.rareWares.unlock,
     label: 'Salvage Station: Town',

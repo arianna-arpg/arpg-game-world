@@ -7,17 +7,15 @@ craft study rather than enabling selling. A fresh shelf stocks only common
 Memory pouches and the Memory Essence exchange; supports retain their own
 additional Vault unlock. Other counters retain their existing stock policies.
 
-The shared market refresh clock now starts at 15 minutes, matching the Bounty
+The shared market refresh clock starts at 20 minutes, matching the Bounty
 Board's base period. They remain independent clocks: Rush Orders do not speed
 up the board. Upgrade flags and previous investments remain compatible.
 
-| Tier | Rush Orders cost (Mortal Essence) | Refresh | Broader Wares cost | Added gear / Memory slots |
-|---|---:|---:|---:|---:|
-| I | 100 | 13 minutes | 60 | 1 / 2 |
-| II | 220 | 11 minutes | 140 | 2 / 1 |
-| III | 360 | 9 minutes | 260 | 2 / 1 |
-| IV | 520 | 7 minutes | 420 | 2 / 1 |
-| V | 740 | 5 minutes | 600 | 2 / 1 |
+Rush Orders now has ten ranks, each reducing the clock by 90 seconds, down to
+5 minutes at rank X. Broader Wares also has ten ranks. VI–X require Rare Wares;
+the expanded stock uses multiple pages. Curated Wares improves selected
+pieces' affix tiers and rolls while preserving Magic crafting bases. See
+[vendor investment](vendor-investment.md) for costs, exact gates and reservations.
 
 I–III are available sequentially through investment from the initial Vault.
 IV–V also require **Brandt: Magic Wares**. That purchase costs 200 Mortal Essence
@@ -29,7 +27,7 @@ gear to the existing common pool; rare and unique gear remain excluded.
 prices, refresh cuts and width increments. The Vault derives its rows from those
 ladders, including optional gate avenues. Further encounter-gated tiers can be
 authored using the same gate vocabulary. Memory slot additions only fill after
-the Memory Counter is owned. The grid capacity was enlarged for the full ladder.
+the Memory Counter is owned. The grid pages automatically as the shelf expands.
 
 ## Exact progression and save behavior
 

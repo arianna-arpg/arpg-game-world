@@ -49,7 +49,7 @@ export const BOUNTY_BOARD_CFG = {
   /** THE BEAT — the board's OWN clock (never the vendor restock quantum:
    *  a Rush Order rung must not silently re-pace the board). Future board
    *  rush rungs fold into World.bountyBeatSeconds, floored here. */
-  beatSec: 900,
+  beatSec: 1200,
   minBeatSec: 120,
   /** Offers per slate (walk 1: opens at FIVE; ONE dial, retuned at walks).
    *  M0 fields one kind, so no per-kind diversity guarantee is enforced
@@ -131,7 +131,7 @@ export const BOUNTY_BOARD_CFG = {
    *  (the visible price law). Unique lane: unseen uniques POST (ruled) and
    *  R2 is split named/category (her amendment — "a unique ring"). */
   lanes: {
-    weights: { essence: 0.5, pouch: 0.18, lot: 0.12, unique: 0.1, craft: 0.1 },
+    weights: { essence: 0.4, pouch: 0.18, lot: 0.12, unique: 0.1, craft: 0.2 },
     unique: {
       namedShare: 0.5,
       /** Category-face pool (filtered at arm to categories that actually
@@ -287,7 +287,7 @@ export const BOUNTY_BOARD_CFG = {
      *  observation for her walk, not a hack). Young boards never summon
      *  or decree — the world's own events wait for the full grammar. */
     kinds: { charge: 1, cull: 1, gather: 1, errand: 0, answer: 0, summons: 0, survey: 0, trail: 0, puzzle: 0 } as Record<string, number>,
-    lanes: { essence: 1, pouch: 0, lot: 0, unique: 0, craft: 0 },
+    lanes: { essence: 0.65, pouch: 0, lot: 0, unique: 0, craft: 0.35 },
   },
 } as const;
 
@@ -474,7 +474,7 @@ export function registerBountySource(row: BountySourceRow): void {
 // coupled: per run while the Crossroads stands uncleared (her caveat
 // recorded — an aggregated walk may re-rule the predicate to account-young;
 // that re-rule is this one `while` line), the slate deals small and pays
-// only essence, with THE ANCHOR pinning the Crossroads — every seat while
+// cash and crafting writs, with THE ANCHOR pinning the Crossroads — every seat while
 // the account is YOUNG (the tutorial phase), ONE seat in perpetuity after
 // ("so that it isn't the only option available", her words).
 // ---------------------------------------------------------------------------
@@ -669,7 +669,7 @@ export function bountyUniqueCategories(level: number): ItemCategory[] {
  *  arm). Falls back down the ladder to essence whenever a richer lane's
  *  pool is empty at this level, so a card never prints a hollow pay.
  *  `weights` overrides the standing lane weights (the band fold — the
- *  starter band's essence-only slate rides this one parameter). */
+ *  starter band's cash-and-writ slate rides this one parameter). */
 export function rollBountyPay(
   host: Pick<BountyRollHost, 'pickGemId'>, rng: Rng, level: number,
   weights?: { essence: number; pouch: number; lot: number; unique: number; craft: number },

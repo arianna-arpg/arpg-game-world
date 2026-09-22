@@ -69,17 +69,21 @@ export const VENDOR_CFG = {
    *  player plans around, never background noise); the RUSH ladder below
    *  shortens the beat per owned rung, floored at minSec whatever the
    *  ladder grows to. unlocks.ts DERIVES the catalog rows (Rush Order
-   *  I–V — rung 1 wears the LEGACY brandt_fast_restock flag, so accounts
+   *  I–X — rung 1 wears the LEGACY brandt_fast_restock flag, so accounts
    *  that bought the old 15s rush keep their edge in the new economy). */
   restock: {
-    baseSec: 900,
-    minSec: 60,
+    baseSec: 1200,
+    minSec: 300,
     ladder: [
-      { flag: FEATURE.BRANDT_FAST_RESTOCK, cost: 100, cutSec: 120 },
-      { flag: FEATURE.VENDOR_RESTOCK_2, cost: 220, cutSec: 120 },
-      { flag: FEATURE.VENDOR_RESTOCK_3, cost: 360, cutSec: 120 },
-      { flag: FEATURE.VENDOR_RESTOCK_4, cost: 520, cutSec: 120, gate: [{ feature: FEATURE.BRANDT_MAGIC_WARES }] },
-      { flag: FEATURE.VENDOR_RESTOCK_5, cost: 740, cutSec: 120, gate: [{ feature: FEATURE.BRANDT_MAGIC_WARES }] },
+      { flag: FEATURE.BRANDT_FAST_RESTOCK, cost: 100, cutSec: 90 },
+      { flag: FEATURE.VENDOR_RESTOCK_2, cost: 220, cutSec: 90 },
+      { flag: FEATURE.VENDOR_RESTOCK_3, cost: 360, cutSec: 90 },
+      { flag: FEATURE.VENDOR_RESTOCK_4, cost: 520, cutSec: 90, gate: [{ feature: FEATURE.BRANDT_MAGIC_WARES }] },
+      { flag: FEATURE.VENDOR_RESTOCK_5, cost: 740, cutSec: 90, gate: [{ feature: FEATURE.BRANDT_MAGIC_WARES }] },
+      ...[1000, 1300, 1650, 2050, 2500].map((cost, i) => ({
+        flag: `vendor_restock_${i + 6}`, cost, cutSec: 90,
+        gate: [{ feature: BRANDT_CFG.rareWares.flag }],
+      })),
     ] as readonly { flag: string; cost: number; cutSec: number; gate?: readonly GateRow[] }[],
   },
   /** The support-gem share of each gem slot once Brandt sells supports
@@ -99,7 +103,7 @@ export const VENDOR_CFG = {
     hint: 'You have no way to pay. Essence means nothing to you yet; the Vault\'s SALVAGE STATION teaches worth.',
   },
   /** Shared stock-width ladder. I–III are early investments; IV–V require
-   * Brandt's Magic Wares. Existing flags preserve already-owned tiers. */
+   * Brandt's Magic Wares; VI–X require Rare Wares. Existing flags preserve owned tiers. */
   wares: {
     baseGems: 4,
     ladder: [
@@ -110,6 +114,10 @@ export const VENDOR_CFG = {
         gate: [{ feature: FEATURE.BRANDT_MAGIC_WARES }] },
       { flag: FEATURE.VENDOR_WARES_5,    cost: 600, gems: 1, gear: 2,
         gate: [{ feature: FEATURE.BRANDT_MAGIC_WARES }] },
+      ...[850, 1150, 1500, 1900, 2350].map((cost, i) => ({
+        flag: `vendor_wares_${i + 6}`, cost, gems: 2, gear: 4,
+        gate: [{ feature: BRANDT_CFG.rareWares.flag }],
+      })),
     ] as readonly WaresRung[],
   },
   /** THE COUNTER GLASS: every counter's whole shelf packs into a real grid
@@ -118,10 +126,8 @@ export const VENDOR_CFG = {
    *  side by side on the ONE face (skill-items M3 — the tabs and the gem
    *  case's seal retired; FEATURE.VENDOR_GEMS gates the true-gem STOCK
    *  now, never a face). These dims serve every counter unless a
-   *  VendorDef.grid overrides. Sized so the widest ladder + the largest
-   *  base footprint can NEVER overflow — balance/probe_vendorlocker.ts
-   *  derives the worst case from the catalog and fails the build if
-   *  content outgrows the glass. */
+   *  VendorDef.grid overrides. Full shelves grow onto additional pages;
+   *  each page obeys the same footprint and buy-index law. */
   gearGrid: { w: 12, h: 9 },
   /** THE PRICE ON THE GLASS (2026-09-11, her report: "I see the cost for the
    *  skills, but I don't see any mention of a cost on most of the other
@@ -141,6 +147,20 @@ export const VENDOR_CFG = {
    *  own foreordained beat stream. Priced per unit in
    *  data/essences.ts VENDOR_MEMORY_PRICE. */
   pouches: { rough: 3, preformed: 1 } as Record<MemoryKind, number>,
+  /** Curated equipment keeps its family pool and level. Each rank adds
+   * two fresh pieces with one best eligible affix and stronger numeric rolls.
+   * The first two are magic crafting bases; remaining pieces may be rare.
+   * Reserved stock is excluded and never upgraded or rerolled in place. */
+  quality: {
+    requiresWares: FEATURE.VENDOR_WARES_5,
+    requiresRestock: FEATURE.VENDOR_RESTOCK_5,
+    magicPieces: 2,
+    bestTierCount: 1,
+    rollFloor: 0.65,
+    ladder: [450, 750, 1150, 1650, 2250].map((cost, i) => ({
+      flag: `vendor_quality_${i + 1}`, cost, pieces: 2, requiresWares: `vendor_wares_${i + 5}`,
+    })),
+  },
   lock: {
     /** The reserve LADDER: each owned Vault rung grants one more lockable
      *  slot at every holding counter (the cap = owned rungs, counted across
@@ -149,10 +169,11 @@ export const VENDOR_CFG = {
      *  costs) from THIS list, and World.vendorLockCap folds it; no literal
      *  anywhere counts to three. */
     ladder: [
-      { flag: FEATURE.VENDOR_LOCK_1, cost: 80 },
-      { flag: FEATURE.VENDOR_LOCK_2, cost: 160 },
-      { flag: FEATURE.VENDOR_LOCK_3, cost: 280 },
-    ] as readonly { flag: string; cost: number }[],
+      { flag: FEATURE.VENDOR_LOCK_1, cost: 80, requiresFeature: FEATURE.VENDOR_WARES_2,
+        gate: [{ feature: FEATURE.VENDOR_RESTOCK_2 }] },
+      { flag: FEATURE.VENDOR_LOCK_2, cost: 160, requiresFeature: 'vendor_quality_2' },
+      { flag: FEATURE.VENDOR_LOCK_3, cost: 280, requiresFeature: 'vendor_quality_4' },
+    ] as readonly { flag: string; cost: number; requiresFeature?: string; gate?: readonly GateRow[] }[],
   },
   commission: {
     /** The Vault price of THE STANDING ORDER's rung (the catalog row is
@@ -193,6 +214,8 @@ export interface VendorPrice {
 }
 
 export interface VendorDef {
+  /** Participates in the account's curated-equipment investment. */
+  quality?: boolean;
   /** Optional counter-specific stock ceilings, applied before mint and buy. */
   stockPolicy?: VendorStockPolicy;
   id: string;
@@ -252,7 +275,7 @@ export function fmtRestock(sec: number): string {
 
 export const VENDORS: VendorDef[] = [
   {
-    id: 'brandt', label: "BRANDT'S WARES", accent: '#e8c87a', bg: 'rgba(232,200,122,0.05)',
+    id: 'brandt', label: "BRANDT'S WARES", accent: '#e8c87a', bg: 'rgba(232,200,122,0.05)', quality: true,
     stockPolicy: BRANDT_CFG.stock,
     tradeGate: false,
     near: (w, seat) => w.nearSmith(seat),
@@ -262,7 +285,7 @@ export const VENDORS: VendorDef[] = [
     buyT: 'buyVendor',
     // Basic selling is available immediately; the Salvage Station adds breaking and study.
     salvage: () => true,
-    headline: w => `restock ${fmtRestock(w.vendorRestockAt - w.time)}`,
+    headline: w => `restock ${fmtRestock(w.vendorRestockAt - w.time)}${w.vendorQualityPieces('brandt') ? ` · ${w.vendorQualityPieces('brandt')} curated pieces per restock` : ''}`,
     holds: { locks: true, commission: true },
   },
   {
