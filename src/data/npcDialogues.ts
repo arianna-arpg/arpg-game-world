@@ -2,6 +2,7 @@ import { HUB_ZONE, START_ZONE } from './zones';
 import { odysseyMilestoneKey } from './powerProgression';
 import { questDoneKey } from '../meta/account';
 import { BRANDT_CFG, BRANDT_HAMMER_QUEST, BRANDT_TROPHY_QUEST } from './brandt';
+import { RELIQUARY_CFG } from './reliquary';
 import { ORACLE_RESCUED } from './oracle';
 export { BRANDT_HAMMER_QUEST } from './brandt';
 import type { World } from '../engine/world';
@@ -32,6 +33,7 @@ export interface NpcDialogueDef {
 /** Live facts supplement durable ledgers without putting NPC-specific cases in
  * the director. New systems can register their own facts here. */
 export const NPC_DIALOGUE_FACTS: Record<string, (w: World) => boolean> = {
+  oracleAttuned: w => !!w.account.ledger[RELIQUARY_CFG.attunement],
   oracleAtHome: w => w.zone.id === START_ZONE,
   oracleRelicWaiting: w => w.activeQuests.some(a => w.questStanding(a) === 'ready'
     && w.questDefOf(a.questId)?.reward.choices?.some(c => c.baseId === 'relic_charm')),
@@ -84,6 +86,12 @@ export const NPC_DIALOGUES: NpcDialogueDef[] = [
     all: [{ fact: 'oracleAtHome' }, { fact: 'reliquaryLesson' }],
     trigger: { kind: 'dwell', radius: 150, seconds: 0.4 },
     lines: [{ text: 'Set a charm into the open seat of your Reliquary. A place freely given, a strength freely shared.\n\nYou will find other relics on the road now. Bring the ones whose stories belong beside yours.' }],
+  },
+  {
+    id: 'oracle_attunement', speaker: { defId: 'townsfolk_oracle' }, priority: 202,
+    all: [{ fact: 'oracleAtHome' }], none: [{ fact: 'oracleAttuned' }, { fact: 'reliquaryLesson' }],
+    trigger: { kind: 'dwell', radius: 150, seconds: 0.4 },
+    lines: [{ text: 'I can keep these Relics for the lives still to come. Bring me your finds, and exchange what rests in your case whenever you return.\n\nAsk me to attune the Reliquary. Then, at each Reckoning, you may give it Mortal Essence. The case remembers every offering, even one too small to finish its next strengthening.' }],
   },
   {
     id: 'oracle_resident', speaker: { defId: 'townsfolk_oracle' }, priority: 200,

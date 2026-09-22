@@ -94,6 +94,8 @@ interface FamOpts {
 }
 
 const DEFAULT_FLOOR = 0.14;
+import { RELIQUARY_CFG } from './reliquary';
+
 const DEFAULT_COUNT = 5;
 const LADDER_CURVE = 1.15;
 
@@ -104,7 +106,9 @@ function fam(o: FamOpts): AffixDef {
     ...(o.local ? { local: true } : {}),
   }];
   const tops = Array.isArray(o.top) ? o.top : lines.map(() => o.top as number);
-  const floor = o.floor ?? DEFAULT_FLOOR;
+  const relic = o.baseTags?.includes('relic');
+  if (relic) for (let i = 0; i < tops.length; i++) tops[i] *= RELIQUARY_CFG.baseline;
+  const floor = relic ? RELIQUARY_CFG.affixFloor : o.floor ?? DEFAULT_FLOOR;
   const count = o.count ?? DEFAULT_COUNT;
   const maxIlvl = o.maxIlvl ?? ITEM_CFG.tierBreaks[Math.max(0, ITEM_CFG.tierBreaks.length - 2)];
 
@@ -142,13 +146,14 @@ function fam(o: FamOpts): AffixDef {
     const ex = ITEM_CFG.exquisite;
     tiers.unshift({
       ilvl: tiers[0].ilvl + ex.ilvlPad,
-      ranges: tops.map(top => ordered(top, top * (1 + ex.rangeLift))),
+      ranges: tops.map(top => ordered(top, top * (1 + (relic ? 0.03 : ex.rangeLift)))),
       weight: Math.round(100 * ex.weightFrac),
       magicOnly: true,
     });
   }
   return {
-    id: o.id, kind: o.kind, family: o.id, names: o.names, lines, tiers,
+    id: o.id, kind: o.kind, family: o.id, names: o.names, lines,
+    tiers: relic ? tiers.map(t => ({ ...t, ilvl: Math.max(t.ilvl, RELIQUARY_CFG.affixDebut[o.id] ?? 1) })) : tiers,
     weight: o.weight ?? 100, tags: o.baseTags, excludeTags: o.excludeTags,
     themes: o.themes,
   };

@@ -1,3 +1,5 @@
+import { oracleReliquaryHtml, reliquaryInvestmentHtml } from './reliquary';
+import { investReliquary } from '../meta/reliquary';
 import { renderWardrobe } from './wardrobe';
 import { BUILD_PANEL_CFG, buildPanelSeat } from './buildPanels';
 // ---------------------------------------------------------------------------
@@ -702,6 +704,7 @@ export class UI {
   private craftTargetUid: number | null = null;
   oracleOpen = false;
   private oracleTargetUid: number | null = null;
+  private oracleRelicQuery = '';
   /** The Sacrificial Font's recipe screen (skill-mode trees, M1 — §7). */
   fontOpen = false;
   private fontTab: 'merge' | 'convert' | 'reset' = 'merge';
@@ -3213,8 +3216,18 @@ export class UI {
           ${boardLessonTalk && !featureEnabled(acc, FEATURE.BOUNTY_BOARD) ? `<div class="vault-lesson">Every run ends here: what you carried home became ${META_CURRENCY_LABEL}, and ${META_CURRENCY_LABEL} buys the town's standing services, which persist run after run.<br>The <b>Bounty Board</b> asks nothing. Claim it free, and Lastlight raises a posting board whose work pays the very essence this Vault spends.</div>` : ''}
           ${tabStrip}
         </div>
-        <div class="vault-body">${body}</div>
+        <div class="vault-body">${reliquaryInvestmentHtml(acc)}${body}</div>
         <div class="vault-foot acct-btns"><button id="acct-wardrobe">Wardrobe</button><button id="acct-close">${reckoning ? 'Seal &amp; Continue' : 'Back'}</button></div>`;
+      this.accountScreen.querySelector('[data-reliquary-invest]')?.addEventListener('click', () => {
+        const previousRank = acc.reliquary.rank;
+        const spent = investReliquary(acc); if (!spent) return;
+        const previous = visitLog.get('account_reliquary');
+        visitLog.set('account_reliquary', { label: `Reliquary · Rank ${acc.reliquary.rank}`,
+          put: (previous?.put ?? 0) + spent, done: !!previous?.done || acc.reliquary.rank > previousRank });
+        const world = this.getWorld();
+        if (world.account === acc && world.localSeat && !world.clientActionHook) { world.recalcPlayer(); world.markMetaDirty(world.localSeat); }
+        this.saveAccount(); render();
+      });
       this.accountScreen.querySelector('#acct-wardrobe')!.addEventListener('click', () => this.wardrobeView(this.accountScreen, render));
       const bodyEl = this.accountScreen.querySelector<HTMLElement>('.vault-body');
       if (bodyEl) bodyEl.scrollTop = this.vaultScroll[this.vaultTab || '_flat'] ?? 0;
@@ -6082,11 +6095,27 @@ export class UI {
       ${this.closeGlyphHtml()}<h2>The Oracle Stone</h2>
       <div class="desc" style="color:#8a8678;font-size:10px;margin-bottom:6px">
         ${this.essWallet()}</div>
-      <h3>Piece</h3><div class="bind-btns">${targetRows}</div>
+      ${oracleReliquaryHtml(world, seat, this.oracleRelicQuery)}
+      <h3>Commune with equipment</h3><div class="bind-btns">${targetRows}</div>
       <h3>Lines</h3>${affixRows}
       <div class="bind-btns" style="margin-top:8px"><button data-oracle-close>Step back</button></div>`;
 
     const q = <T extends HTMLElement>(sel: string): T[] => [...this.oracleMenu.querySelectorAll<T>(sel)];
+    const search = this.oracleMenu.querySelector<HTMLInputElement>('[data-relic-search]');
+    search?.addEventListener('input', () => {
+      this.oracleRelicQuery = search.value; const at = search.selectionStart;
+      this.refreshOracle();
+      const next = this.oracleMenu.querySelector<HTMLInputElement>('[data-relic-search]');
+      next?.focus(); if (at !== null) next?.setSelectionRange(at, at);
+    });
+    this.oracleMenu.querySelector('[data-oracle-attune]')?.addEventListener('click', () => {
+      world.requestMeta({ t: 'oracleAttune' }); this.refreshOracle();
+    });
+    q<HTMLButtonElement>('button[data-relic-operation]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'oracleRelic', uid: Number(btn.dataset.relicUid),
+        operation: btn.dataset.relicOperation as 'store' | 'equip' | 'unseat' });
+      this.refreshOracle(); this.refreshInventory(); this.refreshCharSheet();
+    }));
     q<HTMLButtonElement>('button[data-otar]').forEach(btn => btn.addEventListener('click', () => {
       this.oracleTargetUid = Number(btn.dataset.otar);
       this.refreshOracle();

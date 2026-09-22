@@ -190,6 +190,8 @@ const seat = world.localSeat;
 const hero = world.player;
 world.account.features.add(FEATURE.RELIQUARY);
 world.account.features.add(FEATURE.RELIQUARY_RING);
+world.account.features.add(FEATURE.ORACLE_STONE); world.account.ledger.oracle_rescued = 1;
+world.loadZone('lastlight'); world.player.pos = { ...world.stationAnchor('oracle')!.pos };
 check('D1 the board exists once rung 0 is owned', containerBoard(R)?.cells === 8);
 const charm = forgeItem({ ilvl: 1, baseId: 'relic_charm', rarity: 'magic', affixes: [{ id: 'relic_life' }], quality: 1 })!;
 const lifeLine = compileItemMods(charm).find(m => m.stat === 'life')!.value;
@@ -202,10 +204,10 @@ check('D2 containerPlace seats the charm (first open fit)', findCarried(seat.met
 check('D3 the seated charm\'s life folds into the sheet', Math.abs(hero.sheet.get('life') - lifeBase - lifeLine) < 0.01,
   `+${lifeLine} → ${hero.sheet.get('life') - lifeBase}`);
 world.applyAction(seat, { t: 'containerTake', container: RELIQUARY_ID, uid: charm.uid });
-check('D4 containerTake returns it to the bag and the line leaves',
-  findCarried(seat.meta, charm.uid)?.where.kind === 'bag' && Math.abs(hero.sheet.get('life') - lifeBase) < 1e-6);
+check('D4 containerTake returns it to account reserve and the line leaves',
+  !findCarried(seat.meta, charm.uid) && world.account.reliquary.items.includes(charm) && Math.abs(hero.sheet.get('life') - lifeBase) < 1e-6);
 world.applyAction(seat, { t: 'containerPlace', container: RELIQUARY_ID, uid: charm.uid, x: 2, y: 2 });
-check('D5 an aimed seat on the sealed centre is refused', findCarried(seat.meta, charm.uid)?.where.kind === 'bag');
+check('D5 an aimed seat on the sealed centre is refused', !findCarried(seat.meta, charm.uid) && world.account.reliquary.items.includes(charm));
 world.applyAction(seat, { t: 'containerPlace', container: RELIQUARY_ID, uid: charm.uid, x: 1, y: 1 });
 check('D6 an aimed seat on an open cell lands there', findCarried(seat.meta, charm.uid)?.where.kind === 'container' && charm.x === 1 && charm.y === 1);
 world.applyAction(seat, { t: 'containerMove', container: RELIQUARY_ID, uid: charm.uid, x: 3, y: 3 });
@@ -220,7 +222,8 @@ check('D8 containerMove refuses the sealed centre', charm.x === 3 && charm.y ===
   const deep = forgeItem({ ilvl: 30, baseId: 'relic_charm', rarity: 'magic', affixes: [{ id: 'relic_life' }], quality: 1 })!;
   autoPlace(seat.meta.items, deep);
   world.applyAction(seat, { t: 'containerPlace', container: RELIQUARY_ID, uid: deep.uid });
-  check('D10 a relic above the hero\'s level is refused (the level gate)', findCarried(seat.meta, deep.uid)?.where.kind === 'bag' && hero.level < 5);
+  check('D10 deep relics remain usable in a new life', findCarried(seat.meta, deep.uid)?.where.kind === 'container' && hero.level < 5);
+  world.containerTake(seat, RELIQUARY_ID, deep.uid);
 }
 {
   // Fill the ring: seven more charms seat, an eighth is refused (full).
@@ -243,15 +246,15 @@ check('D8 containerMove refuses the sealed centre', charm.x === 3 && charm.y ===
   const verdict = containerLanding(R, containerBoard(R), seat.meta.containers[RELIQUARY_ID], mover, 'bag', bx, by, hero.level, seat.meta.items, bagBoard());
   check('D12 the landing law reads the swap', verdict.verdict === 'swap' && verdict.with?.uid === blocker.uid);
   world.applyAction(seat, { t: 'containerPlace', container: RELIQUARY_ID, uid: mover.uid, x: bx, y: by });
-  check('D12b the swap lands: mover seated where the blocker stood, blocker in the mover\'s bag cell',
+  check('D12b the swap seats the mover and safely stores the blocker',
     mover.x === bx && mover.y === by && findCarried(seat.meta, mover.uid)?.where.kind === 'container'
-    && findCarried(seat.meta, blocker.uid)?.where.kind === 'bag' && blocker.x === bagCell.x && blocker.y === bagCell.y);
+    && !findCarried(seat.meta, blocker.uid) && world.account.reliquary.items.includes(blocker) && blocker.x === undefined && blocker.y === undefined && bagCell.x >= 0);
   // Drop a seated piece to the ground: it leaves the board and the sheet.
   const before = hero.sheet.get('life');
   const drops = world.drops.length;
   world.applyAction(seat, { t: 'dropItem', uid: charm.uid });
-  check('D13 a seated piece dropped to the world leaves the board and sheds its line',
-    !findCarried(seat.meta, charm.uid) && world.drops.length === drops + 1 && Math.abs(hero.sheet.get('life') - (before - lifeLine)) < 0.01);
+  check('D13 account property refuses a drop without changing stats',
+    !!findCarried(seat.meta, charm.uid) && world.drops.length === drops && Math.abs(hero.sheet.get('life') - before) < 0.01);
   // THE KEEPER'S MARK holds on a seated piece.
   world.applyAction(seat, { t: 'salvageLock', uid: mover.uid, on: true });
   world.applyAction(seat, { t: 'dropItem', uid: mover.uid });
@@ -265,7 +268,7 @@ check('D8 containerMove refuses the sealed centre', charm.x === 3 && charm.y ===
   ghost.x = 2; ghost.y = 2;
   seat.meta.containers[RELIQUARY_ID].push(ghost);
   world.reconcileContainers(seat);
-  check('D15 a misfit reconciles to the bag', findCarried(seat.meta, ghost.uid)?.where.kind === 'bag');
+  check('D15 a misfit returns to account reserve', !findCarried(seat.meta, ghost.uid) && world.account.reliquary.items.includes(ghost));
   // An unowned board folds nothing and refuses seats.
   const seatedNow = seat.meta.containers[RELIQUARY_ID].length;
   world.recalcSeat(seat);
@@ -274,7 +277,7 @@ check('D8 containerMove refuses the sealed centre', charm.x === 3 && charm.y ===
   world.recalcSeat(seat);
   check('D16 an unowned board folds nothing (the existence law)', seatedNow > 0 && hero.sheet.get('mana') < withBoard);
   world.applyAction(seat, { t: 'containerPlace', container: RELIQUARY_ID, uid: ghost.uid });
-  check('D17 an unowned board refuses a seat', findCarried(seat.meta, ghost.uid)?.where.kind === 'bag');
+  check('D17 an unowned board refuses a seat', !findCarried(seat.meta, ghost.uid));
   world.account.features.add(FEATURE.RELIQUARY);
   world.recalcSeat(seat);
   check('D18 re-owning the board re-folds the seated pieces', Math.abs(hero.sheet.get('mana') - withBoard) < 1e-6);
@@ -286,11 +289,10 @@ check('D8 containerMove refuses the sealed centre', charm.x === 3 && charm.y ===
   const n = held.length;
   const first = held[0];
   const save = serializeCharacter(world);
-  check('E1 the character save carries the seated pieces with their cells',
-    (save.containers?.[RELIQUARY_ID]?.length ?? 0) === n && save.containers![RELIQUARY_ID][0].x === first.x);
+  check('E1 the account owns the pieces; character saves carry no duplicate',
+    (save.containers?.[RELIQUARY_ID]?.length ?? 0) === 0 && world.account.reliquary.items.includes(first));
   const rebuilt = rebuildSavedMeta(save)!;
-  check('E2 the rebuild seats them again', rebuilt.meta.containers[RELIQUARY_ID].length === n
-    && rebuilt.meta.containers[RELIQUARY_ID].find(i => i.uid === first.uid)?.y === first.y);
+  check('E2 character rebuild waits for the account board', rebuilt.meta.containers[RELIQUARY_ID].length === 0);
   const w = serializeSeatMeta(seat);
   check('E3 the wire ships the boards', (w.gear?.containers?.[RELIQUARY_ID]?.length ?? 0) === n);
   applySeatMeta(world, seat, w);
@@ -299,8 +301,8 @@ check('D8 containerMove refuses the sealed centre', charm.x === 3 && charm.y ===
   world.recalcSeat(seat);
   const loot = captureLoot(seat.meta);
   const carried = loot.items.filter(l => l.kind === 'gear' && seat.meta.containers[RELIQUARY_ID].some(i => i.uid === l.item.uid));
-  check('E5 the corpse carries the seated pieces, cells stripped',
-    carried.length === n && carried.every(l => l.kind === 'gear' && l.item.x === undefined && l.item.y === undefined));
+  check('E5 account Relics never enter corpse loot',
+    carried.length === 0);
 }
 
 // ------------------------------------------------------ F. THE VAULT
@@ -357,7 +359,8 @@ check('D8 containerMove refuses the sealed centre', charm.x === 3 && charm.y ===
     bagKindRank(relic) > bagKindRank(boots) && bagKindRank(relic) < bagKindRank(gem));
   const m = seat.meta;
   const seated = m.containers[RELIQUARY_ID][0];
-  const bagged = m.items.find(i => ITEM_BASES[i.baseId]?.category === 'relic')!;
+  const bagged = forgeItem({ ilvl: 1, baseId: 'relic_charm', rarity: 'magic', affixes: [{ id: 'relic_life' }], quality: 1 })!;
+  autoPlace(m.items, bagged);
   check('H2 containerOriginOf speaks bag / board', containerOriginOf(m, bagged.uid) === 'bag' && containerOriginOf(m, seated.uid) === `c:${RELIQUARY_ID}`);
   check('H3 containerFor / containerAccepts', containerFor(relic)?.id === RELIQUARY_ID && containerFor(boots) === null && containerAccepts(R, relic) && !containerAccepts(R, boots));
   check('H4 the refusals speak', /not yours/.test(containerSeatRefusal(R, null, relic, 1) ?? '')
@@ -449,6 +452,8 @@ check('D8 containerMove refuses the sealed centre', charm.x === 3 && charm.y ===
     && w.account.ledger[RELIQUARY_LESSON] === 1 && w.player.sheet.get('life') > lifeBefore);
   w.dropGearAt(w.player.pos, mk('relic_charm'));
   check('I18 ambient relics continue to land after seating', w.drops.length === nDrops + 2);
+  w.account.features.add(FEATURE.ORACLE_STONE); w.account.ledger.oracle_rescued = 1;
+  w.loadZone('lastlight'); w.player.pos = { ...w.stationAnchor('oracle')!.pos };
   w.containerTake(w.localSeat, RELIQUARY_ID, reward.uid);
   check('I19 unseating removes power without relocking discovery', !w.reliquaryLesson()
     && Math.abs(w.player.sheet.get('life') - lifeBefore) < 0.01);

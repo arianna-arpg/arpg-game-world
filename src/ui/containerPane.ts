@@ -44,6 +44,7 @@ import { ITEM_BASES } from '../data/itembases';
 import { ITEM_RARITIES, type ItemInstance } from '../engine/items';
 import { CATEGORY_GLYPHS } from '../render/itemIcons';
 import type { Seat, World } from '../engine/world';
+import { empowermentText } from './reliquary';
 import { isVaultAvailable } from '../meta/account';
 
 /** What the drawers need from the panel that hosts them — read live, never
@@ -296,18 +297,18 @@ export class ContainerPane {
         ${lessonCharm ? `<button data-reliquary-lesson-seat="${lessonCharm.uid}" style="display:block;width:100%;margin-top:8px;white-space:normal">Seat ${esc(lessonCharm.name)}</button>`
           : '<br>Bring your recovered charm from the pack. If it was dropped, retrieve it first.'}
       </div>` : ''}
-      <div style="color:#8a8678;font-size:11px;margin:-4px 0 8px">${held.length} seated · ${board.cells} seat${board.cells === 1 ? '' : 's'} open${sealed > 0 ? ` · ${sealed} sealed` : ''}</div>
+      <div style="color:#8a8678;font-size:11px;margin:-4px 0 8px">${id === 'reliquary' ? esc(this.host.world().clientActionHook || this.host.seat() !== this.host.world().localSeat ? `Your equipped Relics are empowered: +${Math.round((this.host.seat().meta.relicEmpowerment ?? 0) * 100)}%` : empowermentText(this.host.world().account)) + '<br>Account equipment · Visit the Oracle to swap Relics.<br>' : ''}${held.length} seated · ${board.cells} seat${board.cells === 1 ? '' : 's'} open${sealed > 0 ? ` · ${sealed} sealed` : ''}</div>
       <div style="display:flex;justify-content:center">
         <div data-bag-grid="c:${esc(id)}" data-container-grid="${esc(id)}"
           style="position:relative;width:${boardW}px;height:${boardH}px">${cells}${tiles}</div>
       </div>
       <div data-drop="containerUnseat:${esc(id)}"
         style="margin-top:10px;padding:7px 8px;text-align:center;color:#6a6478;font-size:10px;background:#120f18;border:1px dashed #2a2634;border-radius:4px">
-        ⤓ drop a seated piece here to return it to the pack
+        ⤓ ${id === 'reliquary' ? 'at the Oracle: return a Relic to account reserve' : 'drop a seated piece here to return it to the pack'}
       </div>
       <div style="margin-top:8px;color:#8a8678;font-size:10px;line-height:1.5">
         ${esc(def.blurb)}<br>
-        <span style="color:#6a6478">Drag a piece from your pack onto an open seat; drag it back to the pack (or the strip above) to unseat.
+        <span style="color:#6a6478">${id === 'reliquary' ? 'At the Oracle, seat a loose Relic or return an equipped Relic to reserve. Your first charm may be seated on the road.' : 'Drag a piece from your pack onto an open seat; drag it back to the pack to unseat.'}
         ${isVaultAvailable(this.host.world().account) ? 'Sealed seats open through the Vault.' : ''}</span>
       </div>
       <div style="margin-top:6px;color:#8a8678;font-size:10px">${this.host.lockHintHtml()}</div>`;
@@ -409,6 +410,8 @@ export class ContainerPane {
     const found = p.kind === 'gearItem' ? findCarried(m, Number(p.arg)) : undefined;
     const from = found ? containerOriginOf(m, found.item.uid) : 'bag';
     const def = CONTAINERS[containerId];
+    if (def?.accountStorage && !this.host.world().canManageAccountRelics(this.host.seat())
+      && !(from === 'bag' && this.host.world().reliquaryLesson())) return { verdict: 'blocked', x, y, w: 1, h: 1, from, why: 'Visit the Oracle to exchange Relics.' };
     if (!found || !def) return { verdict: 'blocked', x, y, w: 1, h: 1, from };
     const fromKind = from === 'bag' ? 'bag' : originContainerId(from) === containerId ? 'self' : 'other';
     const level = this.host.world().seatHero(this.host.seat()).level;

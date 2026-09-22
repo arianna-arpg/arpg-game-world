@@ -46,6 +46,7 @@ import { uniqueDefinitionLines } from '../src/engine/itemchoices';
 import { sheetFamilyOf, statBlurbOf } from '../src/data/sheet';
 import { resolveLootTable } from '../src/engine/loot';
 import { autoPlace } from '../src/engine/inventory';
+import { serializeAccount, deserializeAccount } from '../src/meta/account';
 import { applySavedCharacter, serializeCharacter } from '../src/meta/character';
 import { CLASSES } from '../src/data/classes';
 import type { ItemInstance, ModLineDef } from '../src/engine/items';
@@ -77,7 +78,7 @@ const rungsFor = (cells: number): Set<string> => {
   return new Set(R.ladder.map(r => r.feature));
 };
 const RING = rungsFor(8), SHELVES = rungsFor(20), HEART = rungsFor(21), FULL = rungsFor(25);
-const own = (w: World, f: Set<string>): void => { for (const x of f) w.account.features.add(x); };
+const own = (w: World, f: Set<string>): void => { for (const x of f) w.account.features.add(x); w.account.features.add('oracle_stone'); w.account.ledger.oracle_rescued = 1; w.loadZone('lastlight'); w.player.pos = { ...w.stationAnchor('oracle')!.pos }; };
 let uidSeq = 910000;
 const mk = (baseId: string, x?: number, y?: number): ItemInstance =>
   ({ uid: uidSeq++, baseId, ilvl: 1, tier: 1, rarity: 'magic', name: baseId, baseRoll: 0, implicitRolls: [], affixes: [], x, y } as ItemInstance);
@@ -89,7 +90,7 @@ const charm = (affix: string): ItemInstance =>
 const lineOf = (it: ItemInstance, stat: string): number => compileItemMods(it).find(m => m.stat === stat)?.value ?? 0;
 const IDS = ['hermits_bead', 'sunderstone', 'lodestone', 'unquarried_idol', 'tally_idol', 'reliquary_crown'];
 const place = (w: World, it: ItemInstance, x: number, y: number): void => {
-  autoPlace(w.localSeat.meta.items, it);
+  if (!it.relicKey) autoPlace(w.localSeat.meta.items, it);
   w.applyAction(w.localSeat, { t: 'containerPlace', container: RELIQUARY_ID, uid: it.uid, x, y });
 };
 const take = (w: World, it: ItemInstance): void => { w.applyAction(w.localSeat, { t: 'containerTake', container: RELIQUARY_ID, uid: it.uid }); };
@@ -347,7 +348,7 @@ const take = (w: World, it: ItemInstance): void => { w.applyAction(w.localSeat, 
   check('G7 the follower reforms without evicting the manual golem', followers().length === 1
     && followers()[0] !== first && w.minionsOfSkill(hero, manual.def.id).length === 1);
   const save = serializeCharacter(w), w2 = makeSimWorld(CLASSES[0].id, 26);
-  own(w2, FULL);
+  Object.assign(w2.account, deserializeAccount(serializeAccount(w.account))!); own(w2, FULL);
   check('G8 save adopts', applySavedCharacter(w2, save)); w2.update(0.05);
   check('G9 reload reconstructs one follower from the item', w2.actors.filter(a => !a.dead
     && a.owner === w2.player && a.summonInst?.companionGrant).length === 1);
@@ -392,7 +393,7 @@ const take = (w: World, it: ItemInstance): void => { w.applyAction(w.localSeat, 
   check('H3 seated, the sheet wears both', near(hero.sheet.get(`${el}Pen`) - pen0, pen, 1e-6) && near(hero.sheet.get(`${el}Res`) - res0, res, 1e-6));
   const save = serializeCharacter(w);
   const w2 = makeSimWorld(CLASSES[0].id, 28);
-  own(w2, FULL);
+  Object.assign(w2.account, deserializeAccount(serializeAccount(w.account))!); own(w2, FULL);
   applySavedCharacter(w2, save);
   const back = w2.localSeat.meta.containers[RELIQUARY_ID]?.find(i => i.uid === stone.uid);
   check('H4 the element survives a save', back?.uniqueChoices?.sundered?.id === el && near(w2.player.sheet.get(`${el}Pen`), hero.sheet.get(`${el}Pen`), 1e-6));

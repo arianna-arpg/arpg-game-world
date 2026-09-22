@@ -90,6 +90,8 @@ export interface ContainerDef {
   accepts: ContainerAccepts;
   /** Seated pieces fold their compiled mods into the seat's sheet. */
   active: boolean;
+  /** Displaced items enter permanent reserve rather than the mover's bag cell. */
+  accountStorage?: boolean;
   /** Seating honors the piece's level requirement (default true). */
   levelGate?: boolean;
   /** THE DISCOVERY LEDGER: account key stamped when a genuine world mint of
@@ -393,7 +395,7 @@ export function containerLanding(
     return other ? { ...base, verdict: 'swap', with: other } : base;
   }
   // bag → container: one blocker that fits the mover's vacated BAG cell.
-  if (!bag || !bagBoardDims || item.x === undefined || item.y === undefined) return base;
+  if (!def.accountStorage && (!bag || !bagBoardDims || item.x === undefined || item.y === undefined)) return base;
   if (x < 0 || y < 0 || x + s.w > board.w || y + s.h > board.h) return base;
   for (let dy = 0; dy < s.h; dy++) for (let dx = 0; dx < s.w; dx++) {
     if (!boardOpenAt(board, x + dx, y + dy)) return base;
@@ -402,9 +404,10 @@ export function containerLanding(
     && h.x < x + s.w && x < h.x + itemGridSize(h).w && h.y < y + s.h && y < h.y + itemGridSize(h).h);
   if (blockers.length !== 1) return base;
   const other = blockers[0];
-  const rest = bag.filter(i => i.uid !== item.uid);
+  if (def.accountStorage) return { ...base, verdict: 'swap', with: other };
+  const rest = bag!.filter(i => i.uid !== item.uid);
   if (!containerAccepts(def, other)) return base; // (a foreign occupant can never be there; belt to suspenders)
-  return canPlaceAt(rest, other, item.x, item.y, bagBoardDims) ? { ...base, verdict: 'swap', with: other } : base;
+  return canPlaceAt(rest, other, item.x!, item.y!, bagBoardDims!) ? { ...base, verdict: 'swap', with: other } : base;
 }
 
 /** Pieces on a board that no longer fit it — a footprint over a closed or

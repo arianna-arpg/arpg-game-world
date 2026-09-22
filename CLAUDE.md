@@ -1,5 +1,12 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Account Relic ownership, Oracle reserve, repeatable quadratic-cost Reliquary
+investment and attributable Relic followers are documented in
+`docs/design/account-reliquary.md`. Tuning lives in `data/reliquary.ts`;
+`engine/accountReliquary.ts` owns migration and `engine/relicPower.ts` the safe
+numeric fold. Verify `probe_accountreliquary.ts`, `probe_reliquary.ts`,
+`probe_relicuniques.ts` and `balance/oracle-rescue-ui.cjs`.
+
 Oracle rescue and account-wide relic access are documented in
 `docs/design/oracle-rescue.md`. `data/oracle.ts` and `QuestDef.rescue` configure
 captivity, residency and grants; `engine/questRescues.ts` validates completion.

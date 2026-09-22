@@ -426,6 +426,8 @@ export interface RoughMemoryUnit {
 /** A live item — PURE JSON (ids + numbers only), which makes it the save
  *  shape, the corpse shape, and the wire shape all at once. */
 export interface ItemInstance {
+  /** Account-owned Relic identity; never exported to bag, trade or corpse. */
+  relicKey?: string;
   /** Protected quest cargo. Only its owning quest's return leg consumes it. */
   questId?: string;
   uid: number;

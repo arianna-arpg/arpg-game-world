@@ -143,6 +143,7 @@ export function captureLoot(meta: PlayerMeta, policy: DeathLootPolicy = DEFAULT_
   if (policy.containers) {
     for (const held of Object.values(meta.containers ?? {})) {
       for (const seated of held) {
+        if (seated.relicKey) continue; // Account property never enters a corpse.
         const { x: _cx, y: _cy, ...item } = seated;
         items.push({ kind: 'gear', item });
       }

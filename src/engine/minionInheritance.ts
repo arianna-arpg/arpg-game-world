@@ -1,5 +1,6 @@
 import type { Actor } from './actor';
-import { mod, type Modifier, type SkillTag } from './stats';
+import { RELIQUARY_CFG } from '../data/reliquary';
+import { STAT_DEFS, mod, type Modifier, type SkillTag } from './stats';
 import { instanceMods, skillContextTags, type SkillInstance } from './skills';
 import { minionBodyContext } from './skillScopes';
 import { minionCombatOf, MINION_COMBAT } from './minionCombat';
@@ -25,7 +26,7 @@ export function minionAreaAvoidanceOf(caster: Actor, inst: SkillInstance,
   tags = skillContextTags(inst), extra = instanceMods(inst)): number {
   return Math.max(0, Math.min(MINION_COMBAT.maxAreaAvoidance,
     (minionCombatOf(inst.def).areaAvoidance ?? 0)
-    + caster.sheet.get('minionAreaAvoidance', tags, extra)));
+    + caster.sheet.get('minionAreaAvoidance', tags, extra) * (inst.relicSource ? RELIQUARY_CFG.minion.ordinaryStats : 1)));
 }
 
 /** Owner contributions pay the throng batch divisor once. Rates, body size,
@@ -34,7 +35,12 @@ export function minionAreaAvoidanceOf(caster: Actor, inst: SkillInstance,
 export function resolveMinionInheritance(caster: Actor, inst: SkillInstance,
   bodyId?: string, scale = 1): MinionInheritance {
   const tags = minionBodyContext(skillContextTags(inst), bodyId), extra = instanceMods(inst);
-  const get = (stat: string) => caster.sheet.get(stat, tags, extra);
+  const get = (stat: string): number => {
+    const raw = caster.sheet.get(stat, tags, extra);
+    if (!inst.relicSource) return raw;
+    const base = STAT_DEFS[stat]?.base ?? 0;
+    return base + (raw - base) * RELIQUARY_CFG.minion.ordinaryStats;
+  };
   const combat = minionCombatOf(inst.def);
   const threat = Math.max(MINION_COMBAT.minThreat, (combat.threat ?? 1) * get('minionThreat'));
   const combatMods = [

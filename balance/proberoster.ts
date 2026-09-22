@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_accountreliquary.ts', status: 'green', tier: 'fast', why: 'Account Relic ownership, migration, investment and attributable followers.' },
   { probe: 'probe_brandtquest.ts', status: 'green', tier: 'fast', why: 'Hammer/trophy continuity, collected cargo, stable deferred imbues, rarity ceilings and Vault progression' },
   { probe: 'probe_brandtprogression.ts', status: 'green', tier: 'fast', why: 'Brandt rarity ceilings, starter trade, staged investments, craft-bounty qualification, board cues and quest appearance' },
   { probe: 'probe_companionrecovery.ts', status: 'green', tier: 'fast', why: 'Revival/Whistle cleanse, damage and debuff immunity, body-count budget, expiry, living/downed parity, litter/dwell paths and co-op cue' },

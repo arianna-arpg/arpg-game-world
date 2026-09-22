@@ -1,3 +1,4 @@
+import { emptyReliquary, restoreReliquary, type AccountReliquary } from './reliquary';
 // ---------------------------------------------------------------------------
 // ACCOUNT — the META-PROGRESSION layer that outlives any single character.
 //
@@ -427,6 +428,7 @@ export interface PackagePref {
 
 /** Runtime account (Sets for O(1) membership). Survives death + World recreation. */
 export interface Account {
+  reliquary: AccountReliquary;
   cosmetics: CosmeticState;
   credits: number;
   lifetimeCredits: number;
@@ -508,6 +510,7 @@ export interface Account {
 
 /** Serializable form (Sets → arrays) written to localStorage. */
 export interface AccountSave {
+  reliquary?: AccountReliquary;
   cosmetics?: CosmeticState;
   schemaVersion: number;
   runVersion?: number;
@@ -546,6 +549,7 @@ export interface AccountSave {
 
 export function makeAccount(): Account {
   return {
+    reliquary: emptyReliquary(),
     cosmetics: emptyCosmetics(),
     credits: 0, lifetimeCredits: 0, level: 0,
     invested: {},
@@ -577,6 +581,7 @@ export function makeAccount(): Account {
 
 export function serializeAccount(a: Account): AccountSave {
   return {
+    reliquary: structuredClone(a.reliquary),
     cosmetics: sanitizeCosmetics(a.cosmetics),
     schemaVersion: SCHEMA_VERSION,
     runVersion: SAVE_COMPATIBILITY.run,
@@ -621,6 +626,7 @@ export function deserializeAccount(s: AccountSave): Account | null {
     ledger[LEDGER_ACCOUNT_DEATHS] = s.deaths!.length;
   }
   return {
+    reliquary: restoreReliquary(s.reliquary),
     credits: s.credits ?? 0,
     cosmetics: sanitizeCosmetics(s.cosmetics),
     lifetimeCredits: s.lifetimeCredits ?? 0,

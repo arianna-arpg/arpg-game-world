@@ -321,6 +321,7 @@ export interface SeatMetaW {
      *  id, seat cells included. Optional → a host one wire-version behind
      *  ships bare boards. */
     containers?: Record<string, ItemInstance[]>;
+    relicEmpowerment?: number;
   };
   /** Essence wallet (salvage currency), per essence id. */
   ess?: Record<string, number>;
@@ -366,6 +367,7 @@ export function serializeSeatMeta(seat: Seat): SeatMetaW {
     op: [...m.opening],
     st: { ...m.stances },
     gear: {
+      relicEmpowerment: m.relicEmpowerment ?? 0,
       items: m.items.map(i => ({ ...i })),
       equipped: Object.fromEntries(
         Object.entries(m.equipped).flatMap(([k, v]) => (v ? [[k, { ...v }] as const] : [])),
@@ -468,6 +470,7 @@ export function applySeatMeta(world: World, seat: Seat, w: SeatMetaW): void {
   // THE CONTAINER FABRIC: every board's seated pieces, re-validated like
   // the doll's (a client whose registry lacks a board keeps the rows — the
   // host is the authority on what sits where).
+  m.relicEmpowerment = Number.isFinite(w.gear?.relicEmpowerment) ? Math.max(0, w.gear!.relicEmpowerment!) : 0;
   m.containers = {};
   for (const [cid, held] of Object.entries(w.gear?.containers ?? {})) {
     m.containers[cid] = (held ?? []).map(rebuildItem).filter((x): x is ItemInstance => !!x);

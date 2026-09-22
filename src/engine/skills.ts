@@ -5936,6 +5936,8 @@ export interface SkillInstance {
   grantedHostUid?: number;
   /** Derived companion grant: separate from the player's manual summon pool. */
   companionGrant?: boolean;
+  /** Canonical account item that supplies this summon, never inferred from a name. */
+  relicSource?: string;
   /** THE KEEPER'S MARK (salvageLock intent): a locked carried gem refuses
    *  salvage on BOTH lanes and every salvageBulk sweep passes it by. */
   locked?: boolean;

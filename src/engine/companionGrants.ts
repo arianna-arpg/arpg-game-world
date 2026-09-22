@@ -37,7 +37,8 @@ export class CompanionGrants {
   private owners = new WeakMap<Actor, Map<string, CompanionGrant>>();
 
   derive(owner: Actor, defs: readonly SkillDef[], source: (id: string) => string,
-    retire: (body: Actor) => void, refresh: (body: Actor, inst: SkillInstance) => void): void {
+    retire: (body: Actor) => void, refresh: (body: Actor, inst: SkillInstance) => void,
+    relicSource: (id: string) => string | undefined = () => undefined): void {
     const previous = this.owners.get(owner) ?? new Map<string, CompanionGrant>();
     const next = new Map<string, CompanionGrant>();
     for (const def of defs) {
@@ -51,6 +52,7 @@ export class CompanionGrants {
         row = { inst, remaining: 0 };
       }
       row.inst.level = level;
+      row.inst.relicSource = relicSource(def.id);
       // Every build change reaches living followers, not just a different rolled level.
       if (row.body && !row.body.dead) refresh(row.body, row.inst);
       row.inst.grantedBy = source(def.id);

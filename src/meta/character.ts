@@ -68,6 +68,8 @@ interface SavedSkill {
   replenishmentPaused?: true;
 }
 export interface CharacterSave {
+  accountRelics?: 1;
+  relicScope?: string;
   schemaVersion: number;
   accountVersion: number;
   classId: string;
@@ -226,6 +228,8 @@ export function serializeCharacter(world: World): CharacterSave {
   const ws = world.serializeWorldState();
   const keptZones = new Set(ws.zones.map(z => z.id));
   return {
+    relicScope: m.relicScope ?? (m.charId || 'run:' + world.manifest.seed),
+    accountRelics: 1,
     schemaVersion: CHAR_SCHEMA_VERSION,
     accountVersion: SAVE_COMPATIBILITY.account,
     classId: m.classDef.id,
@@ -248,7 +252,7 @@ export function serializeCharacter(world: World): CharacterSave {
     ),
     // THE CONTAINER FABRIC: seated pieces by board, seat cells included.
     containers: Object.fromEntries(
-      Object.entries(m.containers).map(([id, held]) => [id, held.map(i => ({ ...i }))]),
+      Object.entries(m.containers).map(([id, held]) => [id, held.filter(i => !i.relicKey).map(i => ({ ...i }))]),
     ),
     essences: { ...m.essences },
     abilityEssences: { ...m.abilityEssences },
@@ -434,6 +438,8 @@ export function rebuildSavedMeta(save: CharacterSave): { meta: PlayerMeta; death
     vocationPoints: save.vocationPoints ?? 0,
     knownSkills,
     items, equipped, containers,
+    legacyRelics: save.accountRelics !== 1,
+    relicScope: save.relicScope ?? (save.charId || 'run:' + (save.expedition?.seed ?? save.classId)),
     essences: { ...emptyEssences(), ...(save.essences ?? {}) },
     abilityEssences: { ...emptyAbilityEssences(), ...(save.abilityEssences ?? {}) },
     vestiges: { ...(save.vestiges ?? {}) },
@@ -617,6 +623,7 @@ export function characterBody(world: World, save: CharacterSave): string {
 
 export function saveCharacter(world: World): void {
   if (saveRefused('character')) return; // the crash trap's stand-down (persistence.ts)
+  if (!world.clientActionHook) saveAccount(world.account);
   const slot = saveSlotFor(world);
   if (slot < 0) return;
   let body: string;
@@ -635,6 +642,7 @@ export function saveCharacter(world: World): void {
  *  write that actually landed. Same routing as saveCharacter. */
 export function saveCharacterDurable(world: World): void {
   if (saveRefused('character')) return; // stand-down: the quit flush refuses too
+  if (!world.clientActionHook) saveAccountDurable(world.account);
   const slot = saveSlotFor(world);
   if (slot < 0) return;
   // The session's LAST write is always built fresh — the memo's fold never
@@ -718,6 +726,8 @@ export function serializeCouchGuest(
   const m = seat.meta;
   const hero = world.seatHero(seat);
   return {
+    accountRelics: 1,
+    relicScope: m.relicScope ?? (m.charId || 'run:' + world.manifest.seed),
     schemaVersion: CHAR_SCHEMA_VERSION,
     accountVersion: SAVE_COMPATIBILITY.account,
     classId: m.classDef.id,
@@ -739,7 +749,7 @@ export function serializeCouchGuest(
     ),
     // THE CONTAINER FABRIC: seated pieces by board, seat cells included.
     containers: Object.fromEntries(
-      Object.entries(m.containers).map(([id, held]) => [id, held.map(i => ({ ...i }))]),
+      Object.entries(m.containers).map(([id, held]) => [id, held.filter(i => !i.relicKey).map(i => ({ ...i }))]),
     ),
     essences: { ...m.essences },
     abilityEssences: { ...m.abilityEssences },

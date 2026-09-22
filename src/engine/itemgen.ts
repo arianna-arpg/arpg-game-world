@@ -1,3 +1,4 @@
+import { relicUniqueValue } from './relicPower';
 // ---------------------------------------------------------------------------
 // ITEM GENERATOR — the one roller every drop source shares.
 //
@@ -617,7 +618,8 @@ function eachItemLine(
   if (item.uniqueId) {
     const unique = UNIQUES[item.uniqueId];
     if (unique) for (const { line, roll } of rolledUniqueLines(item, unique)) {
-      visit(line, rangedLineValue(line, roll, item.tier, ITEM_CFG.uniqueTierScale));
+      const value = rangedLineValue(line, roll, base.category === 'relic' ? 1 : item.tier, ITEM_CFG.uniqueTierScale);
+      visit(line, base.category === 'relic' ? relicUniqueValue({ ...line, value }) : value);
     }
   }
 }
@@ -750,7 +752,7 @@ export function describeItem(item: ItemInstance): ItemDescription {
     baseLine: base
       ? `${tieredBaseName(base, item.tier)} · ${base.category} · Tier ${item.tier} · ilvl ${item.ilvl}`
       : `(unknown base) · ilvl ${item.ilvl}`,
-    reqLine: `Requires Level ${levelReqForTier(item.tier)}`,
+    reqLine: `Requires Level ${itemLevelReq(item)}`,
     defense: [], implicit: [], affix: [], unique: [],
   };
   if (!base) return d;
@@ -782,7 +784,8 @@ export function describeItem(item: ItemInstance): ItemDescription {
   if (item.uniqueId) {
     const u = UNIQUES[item.uniqueId];
     if (u) rolledUniqueLines(item, u).forEach(({ line, roll }) => {
-      const v = rangedLineValue(line, roll, item.tier, ITEM_CFG.uniqueTierScale);
+      const raw = rangedLineValue(line, roll, base.category === 'relic' ? 1 : item.tier, ITEM_CFG.uniqueTierScale);
+      const v = base.category === 'relic' ? relicUniqueValue({ ...line, value: raw }) : raw;
       d.unique.push(line.text ? speakLineText(line.text, line.stat, line.kind, v) : formatModLine(line, v));
     });
     d.flavor = u?.flavor;
@@ -890,7 +893,7 @@ export function itemGridSize(item: ItemInstance): { w: number; h: number } {
 }
 
 export function itemLevelReq(item: ItemInstance): number {
-  return levelReqForTier(item.tier);
+  return ITEM_BASES[item.baseId]?.category === 'relic' ? 1 : levelReqForTier(item.tier);
 }
 
 // --------------------------------------------------------------- rebuild ---

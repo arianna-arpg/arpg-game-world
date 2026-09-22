@@ -109,6 +109,10 @@ import {
   type MemoryKind, type MemoryPin, type MemoryProvenance, type MemoryRecallGroup, type MemoryRecallResult,
   type MemoryRecallViewData,
 } from './memories';
+import { accountRelicBoard, bankRelic, isRelic, migrateRelicCarry, migrateRelicCorpses } from './accountReliquary';
+import { empowerRelicMods } from './relicPower';
+import { reliquaryPower } from '../meta/reliquary';
+import { RELIQUARY_CFG } from '../data/reliquary';
 import { nextItemUid, compileItemMods, itemLevelReq, rebuildItem, rollItem, forgeItem, describeItem, itemGridSize } from './itemgen';
 import {
   ABILITY_ESSENCE_CFG, ABILITY_ESSENCES, abilityEssenceOfTier,
@@ -1813,6 +1817,8 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'sortBag': return isStr(a.mode) && !!bagSortMode(a.mode) && (a.dir === undefined || a.dir === 'asc' || a.dir === 'desc');
     case 'dropItem': return isIdx(a.uid);
     case 'salvageItem': return isIdx(a.uid) && isLane(a.lane);
+    case 'oracleAttune': return true;
+    case 'oracleRelic': return isIdx(a.uid) && ['store', 'equip', 'unseat'].includes(a.operation as string);
     case 'pickupItem': return true;
     // THE CONTAINER FABRIC: the board is a registry id (re-resolved at
     // apply), the piece a uid, the cell an untrusted pair — both or neither.
@@ -1941,6 +1947,11 @@ export interface PlayerMeta {
   modeStage: number;
   /** Account-roster identity for roster-saved modes ('' = the shared run slot). */
   charId: string;
+  /** Resume-only migration marker. */
+  legacyRelics?: boolean;
+  relicScope?: string;
+  /** Authoritative host fold, shipped to remote views. */
+  relicEmpowerment?: number;
 }
 
 /** A zeroed essence wallet (fresh seats, wire fallbacks). */
@@ -4179,6 +4190,9 @@ export class World {
 
   constructor(account: Account, manifest: ExpeditionManifest) {
     this.account = account;
+    // Rebuild account item bodies before a new run mints session uids.
+    this.account.reliquary.items = this.account.reliquary.items.map(rebuildItem).filter((i): i is ItemInstance => !!i);
+    migrateRelicCorpses(this.account, this.account.deaths);
     // THE BAG BOARD (engine/inventory.ts): the player bag's dims resolve
     // through this one lazy read — a client mirrors the host's shipped
     // dims (netBagBoard), everyone else folds the account's expansions —
@@ -4317,6 +4331,9 @@ export class World {
     this.bindCombatDeeds();
     this.seats = [this.localSeat];
     this.indexSeats();
+    this.restoreAccountRelics(this.localSeat);
+    this.recalcSeat(this.localSeat);
+    this.localSeat.actor.fillResources();
     this.actors.push(this.localSeat.actor);
     // Roster lifecycle: the local hero joins the party (drives the party UI).
     this.events.emit('party/join', { actor: this.localSeat.actor, seat: 'p0' });
@@ -4389,6 +4406,12 @@ export class World {
    *  spawn. Levels land on the HERO body (the possession seam). */
   adoptSeatMeta(seat: Seat, meta: PlayerMeta, bar: (string | null)[], level: number): void {
     seat.meta = meta;
+    if (seat === this.localSeat && !this.clientActionHook) {
+      migrateRelicCarry(this.account, meta, meta.relicScope ?? (meta.charId || 'run:' + this.manifest.seed), meta.legacyRelics ?? true);
+      migrateRelicCorpses(this.account, this.charDeaths);
+      this.restoreAccountRelics(seat);
+      saveAccount(this.account);
+    }
     const hero = this.seatHero(seat);
     hero.name = meta.name;   // the save's name is the actor's name
     hero.level = level;
@@ -4417,6 +4440,9 @@ export class World {
   reconcileContainers(seat: Seat): void {
     const m = seat.meta;
     for (const cid of Object.keys(m.containers)) {
+      if (cid === 'reliquary' && seat === this.localSeat && !this.clientActionHook) {
+        this.restoreAccountRelics(seat); continue;
+      }
       const def = CONTAINERS[cid];
       const held = m.containers[cid];
       const misfits = def ? containerMisfits(containerBoard(def), held) : [...held];
@@ -5536,7 +5562,8 @@ export class World {
     const m = seat.meta;
     m.items = []; // gem wrappers ride the bag — one wipe covers them (M1)
     m.equipped = {};
-    m.containers = {}; // the side boards go with the doll (death.ts: seated = worn)
+    m.containers = {};
+    this.restoreAccountRelics(seat); // Account equipment survives every death policy.
     m.essences = emptyEssences();
     m.abilityEssences = emptyAbilityEssences();
     m.vestiges = {};
@@ -22103,6 +22130,7 @@ export class World {
    *  Always the HERO body (the possession seam): a build belongs to the
    *  flesh that earned it, never to a borrowed one. */
   recalcSeat(seat: Seat): void {
+    if (!this.clientActionHook) seat.meta.relicEmpowerment = seat === this.localSeat ? reliquaryPower(this.account.reliquary) : 0;
     const p = this.seatHero(seat);
     p.statusRelay = this.relayStatus;
     const m = seat.meta;
@@ -22197,7 +22225,9 @@ export class World {
       const amps = seatAmplification(board, seatedPieces, it => compiled.get(it) ?? []);
       const sheetMods: Modifier[] = [];
       for (const seated of seatedPieces) {
-        const mods = amplifySeatMods(compiled.get(seated) ?? [], amps.get(seated) ?? 1);
+        const mods = def.id === 'reliquary'
+          ? empowerRelicMods(compiled.get(seated) ?? [], (seat.meta.relicEmpowerment ?? 0), amps.get(seated) ?? 1)
+          : amplifySeatMods(compiled.get(seated) ?? [], amps.get(seated) ?? 1);
         containerPieceMods.set(seated, mods);
         for (const gm of mods) {
           if (isAttributeId(gm.stat)) {
@@ -22277,6 +22307,9 @@ export class World {
         body.radius = MONSTERS[body.defId!]?.radius ?? body.radius;
         this.bakeMinionOwnerStats(body, p, inst);
         body.life = Math.min(body.maxLife(), fraction * body.maxLife());
+      }, id => {
+        if ([...gearSheetMods.values()].some(mods => mods.some(m => m.stat === companionGrantStat(id)))) return undefined;
+        return [...containerPieceMods].find(([, mods]) => mods.some(m => m.stat === companionGrantStat(id)))?.[0].relicKey;
       });
       const prevInsts = seat.grantedInsts;
       const keep = new Map<string, SkillInstance>();
@@ -22311,6 +22344,7 @@ export class World {
         }
         inst.grantedBy = host?.name ?? 'your passives';
         inst.grantedHostUid = host?.uid;
+        inst.relicSource = host?.relicKey;
         // A new granting item restores its own investment, never copies the old item's stones.
         if (previousGrant && previousGrant !== inst) {
           for (let i = 0; i < p.skills.length; i++) if (p.skills[i] === previousGrant) p.skills[i] = inst;
@@ -29589,6 +29623,8 @@ export class World {
       case 'moveItem': this.moveBagItem(seat, action.uid, action.x, action.y); break;
       case 'sortBag': this.sortBag(seat, action.mode, action.dir); break;
       case 'dropItem': this.dropGearFromBag(seat, action.uid); break;
+      case 'oracleRelic': this.oracleRelic(seat, action.uid, action.operation); break;
+      case 'oracleAttune': this.oracleAttune(seat); break;
       case 'containerPlace': this.containerPlace(seat, action.container, action.uid, action.x, action.y); break;
       case 'containerTake': this.containerTake(seat, action.container, action.uid, action.x, action.y); break;
       case 'containerMove': this.containerMove(seat, action.container, action.uid, action.x, action.y); break;
@@ -39335,13 +39371,24 @@ export class World {
    *  investment. Base body stats and minionSize are never scaled: the
    *  divisor tempers the investment, not the creature. */
   bakeMinionOwnerStats(minion: Actor, caster: Actor, inst: SkillInstance, scale = 1): void {
+    const relic = !!inst.relicSource;
     const inherited = resolveMinionInheritance(caster, inst, minion.defId, scale);
+    for (const source of minion.sheet.sourceNames()) if (source.startsWith('relic:')) minion.sheet.removeSource(source);
+    if (relic) {
+      this.relevelActor(minion, Math.max(1, Math.floor(caster.level * RELIQUARY_CFG.minion.levelFactor)));
+      const power = this.seatOf(caster) === this.localSeat ? reliquaryPower(this.account.reliquary) : 0;
+      const factor = 1 + power * RELIQUARY_CFG.minion.empowerment;
+      minion.sheet.setSource('relic:' + inst.relicSource, [
+        mod('damage', 'more', RELIQUARY_CFG.minion.baseDamage * factor - 1),
+        mod('life', 'more', RELIQUARY_CFG.minion.baseLife * factor - 1),
+      ]);
+    }
     const throngSpentPlies = Math.max(0, minion.pliesMax - minion.plies);
     minion.sheet.setSource('minionCombat', inherited.combatMods);
     minion.sheet.setSource('owner', inherited.ownerMods);
     minion.radius = Math.max(5, ((inst.def.throng || inst.def.hivecall)
       ? MONSTERS[minion.defId!]?.radius ?? minion.radius : minion.radius) * inherited.size);
-    syncAttributeBequests(minion, scale, inherited.tags, inherited.extra);
+    syncAttributeBequests(minion, relic ? scale * RELIQUARY_CFG.minion.ordinaryStats : scale, inherited.tags, inherited.extra);
     minion.guardMode = inherited.guard;
     applyMinionPlyBonus(minion, inherited.plyBonus);
     if (!inst.def.throng) return;
@@ -46845,6 +46892,96 @@ export class World {
     return Object.keys(seat.meta.equipped).find(sid => seat.meta.equipped[sid]?.uid === uid);
   }
 
+  /** Only the account's local host can change its property. Couch/remote
+   * seats never borrow this account's reserve or empowerment. */
+  private isBankedRelicEcho(item: ItemInstance): boolean {
+    if (!isRelic(item)) return false;
+    const scope = this.meta.relicScope ?? (this.meta.charId || 'run:' + this.manifest.seed);
+    return !!item.relicKey || this.account.reliquary.items.some(i => i.relicKey === 'legacy:' + scope + ':' + item.uid);
+  }
+
+  canManageAccountRelics(seat: Seat): boolean {
+    return seat === this.localSeat && !this.clientActionHook && !seat.actor.dead
+      && !seat.actor.downed && this.stationReach('oracle', seat);
+  }
+
+  restoreAccountRelics(seat: Seat): void {
+    if (seat !== this.localSeat || this.clientActionHook) return;
+    migrateRelicCarry(this.account, seat.meta, seat.meta.relicScope ?? (seat.meta.charId || 'run:' + this.manifest.seed), false);
+    const held = accountRelicBoard(this.account);
+    const misfits = new Set(containerMisfits(containerBoard(CONTAINERS.reliquary), held));
+    seat.meta.containers.reliquary = held.filter(i => !misfits.has(i));
+    // A retuned board sends property to reserve, never to the floor.
+    this.account.reliquary.seated = seat.meta.containers.reliquary.map(i => i.relicKey!);
+    for (const item of misfits) { delete item.x; delete item.y; }
+  }
+
+  private persistAccountRelics(seat: Seat): void {
+    if (seat !== this.localSeat || this.clientActionHook) return;
+    this.account.reliquary.seated = (seat.meta.containers.reliquary ?? []).flatMap(i => i.relicKey ? [i.relicKey] : []);
+    this.accountDirty = true;
+    saveAccount(this.account);
+    this.markMetaDirty(seat);
+  }
+
+  oracleAttune(seat: Seat): void {
+    if (!this.canManageAccountRelics(seat) || !this.account.features.has(FEATURE.RELIQUARY)
+      || this.account.ledger[RELIQUARY_CFG.attunement]) return;
+    this.account.ledger[RELIQUARY_CFG.attunement] = 1;
+    this.persistAccountRelics(seat);
+  }
+
+  oracleRelic(seat: Seat, uid: number, operation: 'store' | 'equip' | 'unseat'): void {
+    if (!this.canManageAccountRelics(seat) || !this.account.features.has(FEATURE.RELIQUARY)) return;
+    if (operation === 'equip') { this.seatAccountRelic(seat, uid); return; }
+    if (operation === 'store') {
+      const item = seat.meta.items.find(i => i.uid === uid);
+      if (!item || !isRelic(item) || item.questId) return;
+      if (!bankRelic(this.account, item, seat.meta.relicScope ?? (seat.meta.charId || 'run:' + this.manifest.seed))) return;
+      removeFromBag(seat.meta.items, uid);
+    } else {
+      const held = seat.meta.containers.reliquary ?? [];
+      const item = held.find(i => i.uid === uid);
+      if (!item?.relicKey) return;
+      seat.meta.containers.reliquary = held.filter(i => i !== item);
+      delete item.x; delete item.y;
+      this.recalcSeat(seat);
+    }
+    this.persistAccountRelics(seat);
+  }
+
+  private seatAccountRelic(seat: Seat, uid: number, x?: number, y?: number): void {
+    const lesson = this.reliquaryLesson();
+    if (seat !== this.localSeat || this.clientActionHook || seat.actor.dead || seat.actor.downed
+      || (!lesson && !this.canManageAccountRelics(seat))) return;
+    const def = CONTAINERS.reliquary, board = containerBoard(def);
+    if (!board) return;
+    const bagged = seat.meta.items.find(i => i.uid === uid);
+    const item = bagged ?? this.account.reliquary.items.find(i => i.uid === uid);
+    const held = this.containerHeld(seat, def.id);
+    if (!item || !isRelic(item) || item.questId || held.includes(item)) return;
+    // Prove the entire placement on copies before changing either owner.
+    const trial = held.map(i => ({ ...i })), candidate = { ...item };
+    delete candidate.x; delete candidate.y;
+    let displaced: ItemInstance | undefined;
+    if (x !== undefined && y !== undefined) {
+      const landing = containerLanding(def, board, held, item, 'bag', x, y, this.seatHero(seat).level);
+      if (landing.verdict === 'blocked') return;
+      displaced = landing.with; candidate.x = x; candidate.y = y;
+    } else if (!autoPlace(trial, candidate, boardDims(board))) {
+      this.failNote(seat.actor, 'seat:' + uid, 'No open seat. Return a Relic to the Oracle reserve first.'); return;
+    }
+    const stored = bankRelic(this.account, item, seat.meta.relicScope ?? (seat.meta.charId || 'run:' + this.manifest.seed));
+    if (!stored) return;
+    if (bagged) removeFromBag(seat.meta.items, uid);
+    if (displaced) { held.splice(held.indexOf(displaced), 1); delete displaced.x; delete displaced.y; }
+    stored.x = candidate.x; stored.y = candidate.y;
+    held.push(stored);
+    if (lesson) this.account.ledger[RELIQUARY_LESSON] = 1;
+    this.recalcSeat(seat);
+    this.persistAccountRelics(seat);
+  }
+
   // --- THE CONTAINER FABRIC (engine/containers.ts) --------------------------
   // Seat / unseat / re-place on a side board. Every verdict is the fabric's
   // own (containerLanding — the same read the panel's preview paints), so a
@@ -46856,6 +46993,7 @@ export class World {
    *  first open fit when no cell is named. The board must exist for the
    *  account, accept the piece, and the hero must meet its level. */
   containerPlace(seat: Seat, containerId: string, uid: number, x?: number, y?: number): void {
+    if (containerId === 'reliquary') { this.seatAccountRelic(seat, uid, x, y); return; }
     const m = seat.meta;
     const def = CONTAINERS[containerId];
     if (!def) return;
@@ -46910,6 +47048,7 @@ export class World {
    *  (fails blocked), else first fit (fails full). The seat is kept until
    *  the bag has taken the piece — a refusal changes nothing. */
   containerTake(seat: Seat, containerId: string, uid: number, x?: number, y?: number): void {
+    if (containerId === 'reliquary') { this.oracleRelic(seat, uid, 'unseat'); return; }
     const m = seat.meta;
     const held = m.containers[containerId];
     const item = held?.find(i => i.uid === uid);
@@ -46932,6 +47071,7 @@ export class World {
   /** Re-place a seated piece on its own board; a single blocker swaps into
    *  the vacated seat when it fits — the bag's tetris shuffle, masked. */
   containerMove(seat: Seat, containerId: string, uid: number, x: number, y: number): void {
+    if (containerId === 'reliquary' && !this.canManageAccountRelics(seat)) return;
     const def = CONTAINERS[containerId];
     const held = seat.meta.containers[containerId];
     const item = held?.find(i => i.uid === uid);
@@ -46939,13 +47079,14 @@ export class World {
     const board = containerBoard(def);
     if (!board) return;
     const dims = boardDims(board);
-    if (placeAt(held, item, x, y, dims)) { this.markMetaDirty(seat); return; }
+    if (placeAt(held, item, x, y, dims)) { this.recalcSeat(seat); this.persistAccountRelics(seat); this.markMetaDirty(seat); return; }
     const other = swapBlockerFits(held, item, x, y, dims);
     if (!other || item.x === undefined || item.y === undefined) return;
     const from = { x: item.x, y: item.y };
     const otherFrom = { x: other.x, y: other.y };
     delete other.x; delete other.y;
     if (placeAt(held, item, x, y, dims) && placeAt(held, other, from.x, from.y, dims)) {
+      this.recalcSeat(seat); this.persistAccountRelics(seat);
       this.markMetaDirty(seat);
       return;
     }
@@ -47067,6 +47208,7 @@ export class World {
     // thing never leaves the hand, bag or worn, gem or gear.
     const found = findCarried(m, uid);
     if (!found) return;
+    if (found.item.relicKey) return; // Account property cannot become tradeable ground loot.
     if (found.item.questId) { this.failNote(seat.actor, 'drop:' + uid, 'Bring this back to its quest giver.'); return; }
     if (found.item.locked) { this.failNote(seat.actor, 'drop:' + uid, 'locked — hold right-click to unlock'); return; }
     if (found.where.kind === 'bag' && found.item.gem) { this.dropGemFromBag(seat, uid); return; }
@@ -47233,6 +47375,7 @@ export class World {
     const drop = this.drops[bestIdx];
     if (drop.item.kind !== 'gear') return;
     const item = drop.item.item;
+    if (this.isBankedRelicEcho(item)) { this.drops.splice(bestIdx, 1); return; }
     if (item.questId && seat !== this.localSeat) return;
     // THE STONE (M2): a lying pouch (a full bag left it) still merges free.
     if (item.mem && this.tryMergeMemoryItem(seat, item)) {
@@ -57323,6 +57466,7 @@ export class World {
       // it fits, else it stays lying with a throttled note. Key mode makes it
       // a deliberate press (pickupNearestGear); the key works in both modes.
       if (drop.item.kind === 'gear') {
+        if (this.isBankedRelicEcho(drop.item.item)) { this.drops.splice(i, 1); continue; }
         if (!this.gearVacuum) continue;
         const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.gear, exclude, drop.tier);
         if (!seat) continue;

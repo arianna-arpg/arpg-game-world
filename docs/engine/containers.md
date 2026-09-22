@@ -1,5 +1,11 @@
 # The Container Fabric — side inventories as data (and the Reliquary)
 
+**Current Reliquary rules:** [Account Reliquary](../design/account-reliquary.md)
+supersedes the historical run-owned bag/corpse behavior below. Equipped pieces
+and reserve persist across lives, swaps occur at the Oracle, and percentage
+scaling uses an explicit safe numeric policy. The generic grid and registry
+contracts below remain applicable.
+
 `src/engine/containers.ts` (the fabric) · `src/data/containers.ts` (the
 Reliquary and every board after it) · `src/engine/inventory.ts` (`BoardDims.open`
 — THE MASK on the one cell law) · `src/engine/items.ts` (`'relic'`,

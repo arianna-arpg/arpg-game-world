@@ -136,6 +136,8 @@ export type MetaAction =
   | { t: 'moveItem'; uid: number; x: number; y: number }       // bag re-place (swap when exactly one blocker)
   | { t: 'sortBag'; mode: string; dir?: 'asc' | 'desc' }       // re-pack the bag by a registered sort mode (engine/bagsort.ts); dir mirrors the order
   | { t: 'dropItem'; uid: number }                             // bag OR worn OR container item → ground
+  | { t: 'oracleRelic'; uid: number; operation: 'store' | 'equip' | 'unseat' }
+  | { t: 'oracleAttune' }
   | { t: 'pickupItem' }                                        // nearest ground gear within reach → bag
   // THE CONTAINER FABRIC (engine/containers.ts — the Reliquary and every
   // side board after it): a container is addressed by its registry id, the

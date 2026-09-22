@@ -33,9 +33,10 @@ export const RELIQUARY: ContainerDef = registerContainer({
   label: 'Reliquary',
   glyph: '🧿',
   icon: 'relic',
-  blurb: 'A case for relics. A charm, a talisman, an idol or an effigy speaks only from a seat here; carried loose in the pack it is silent.',
+  blurb: 'Your account’s equipped Relics persist across lives. Visit the Oracle to exchange them with your permanent reserve. Loose finds in your pack are not yet stored.',
   accepts: { categories: ['relic'] },
   active: true,
+  accountStorage: true,
   foundLedger: LEDGER_RELIC_FOUND,
   dropLedger: ORACLE_RESCUED,
   ladder: [
