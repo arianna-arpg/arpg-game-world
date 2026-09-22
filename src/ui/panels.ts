@@ -1,5 +1,4 @@
-import { oracleReliquaryHtml, reliquaryInvestmentHtml } from './reliquary';
-import { investReliquary, investRelicStash } from '../meta/reliquary';
+import { oracleReliquaryHtml } from './reliquary';
 import { planRelicStorage } from '../engine/accountReliquary';
 import { personalStashHtml, STASH_CELL_PX } from './stash';
 import { emptyStash, personalStashEntries, planStashMove } from '../engine/stash';
@@ -1836,6 +1835,7 @@ export class UI {
     const relicCellPlan = (p: DragPayload, arg: string) => {
       const w = world(), seat = this.panelSeat(this.oracleMenu), item = relicItem(p);
       if (!['relicTile', 'gearItem'].includes(p.kind) || !item || !w.canManageAccountRelics(seat)) return;
+      if ((seat.meta.containers.reliquary ?? []).includes(item) && w.reliquaryRefusal(seat)) return;
       const [page, cx, cy] = arg.split(':').map(Number), grab = this.payloadGrab(p);
       const target = { page, x: cx - grab.x, y: cy - grab.y };
       return planRelicStorage(w.account, item, target) ? target : undefined;
@@ -1843,12 +1843,6 @@ export class UI {
     registerDropTarget({ kind: 'relicCell', accepts: (p, arg) => !!relicCellPlan(p, arg), drop: (p, arg) => {
       const target = relicCellPlan(p, arg); if (!target) return;
       world().requestMeta({ t: 'relicStashMove', uid: Number(p.arg), ...target }); relicRefresh();
-    } });
-    registerDropTarget({ kind: 'relicSeat', accepts: (p, arg) =>
-      this.containerPane.landing(p, 'reliquary', arg).verdict !== 'blocked', drop: (p, arg) => {
-      const l = this.containerPane.landing(p, 'reliquary', arg); if (l.verdict === 'blocked') return;
-      world().requestMeta({ t: l.from === 'c:reliquary' ? 'containerMove' : 'containerPlace', container: 'reliquary', uid: Number(p.arg), x: l.x, y: l.y });
-      relicRefresh();
     } });
     registerDragSource({ kind: 'personalStashTile', clickLift: true, payload: (arg, el, at) => {
       const seat = this.panelSeat(this.oracleMenu);
@@ -1948,6 +1942,10 @@ export class UI {
       drop: (p, arg) => {
         const l = this.bagLanding(p, arg);
         const uid = Number(p.arg);
+        if (p.kind === 'relicTile') {
+          if (l.verdict !== 'blocked') world().requestMeta({ t: 'withdrawRelic', uid, x: l.x, y: l.y });
+          relicRefresh(); return;
+        }
         if (p.kind === 'personalStashTile') {
           if (l.verdict !== 'blocked') world().requestMeta({ t: 'personalStash', uid, operation: 'take', x: l.x, y: l.y });
           relicRefresh(); return;
@@ -3042,6 +3040,10 @@ export class UI {
       if (settleClassUnlocks(acc).length) this.saveAccount();
       // THE CENSUS (vaultShelfCensus): every shelf's stock/owned/rumors and
       // its mystery-law verdict in one read the strip, faces and floor share.
+      const live = this.getWorld();
+      if (live.account === acc && live.localSeat && !live.clientActionHook) {
+        live.recalcPlayer(); live.markMetaDirty(live.localSeat);
+      }
       const census = vaultShelfCensus(acc);
       // THE SEALED CARDS (gatework, meta/unlocks.ts): tease-marked entries
       // whose chain is walked but whose avenues still hold them shut hang
@@ -3276,25 +3278,8 @@ export class UI {
           ${boardLessonTalk && !featureEnabled(acc, FEATURE.BOUNTY_BOARD) ? `<div class="vault-lesson">Every run ends here: what you carried home became ${META_CURRENCY_LABEL}, and ${META_CURRENCY_LABEL} buys the town's standing services, which persist run after run.<br>The <b>Bounty Board</b> asks nothing. Claim it free, and Lastlight raises a posting board whose work pays the very essence this Vault spends.</div>` : ''}
           ${tabStrip}
         </div>
-        <div class="vault-body">${reliquaryInvestmentHtml(acc)}${body}</div>
+        <div class="vault-body">${body}</div>
         <div class="vault-foot acct-btns"><button id="acct-wardrobe">Wardrobe</button><button id="acct-close">${reckoning ? 'Seal &amp; Continue' : 'Back'}</button></div>`;
-      this.accountScreen.querySelector('[data-reliquary-invest]')?.addEventListener('click', () => {
-        const previousRank = acc.reliquary.rank;
-        const spent = investReliquary(acc); if (!spent) return;
-        const previous = visitLog.get('account_reliquary');
-        visitLog.set('account_reliquary', { label: `Reliquary · Rank ${acc.reliquary.rank}`,
-          put: (previous?.put ?? 0) + spent, done: !!previous?.done || acc.reliquary.rank > previousRank });
-        const world = this.getWorld();
-        if (world.account === acc && world.localSeat && !world.clientActionHook) { world.recalcPlayer(); world.markMetaDirty(world.localSeat); }
-        this.saveAccount(); render();
-      });
-      this.accountScreen.querySelector('[data-relic-stash-invest]')?.addEventListener('click', () => {
-        const pages = acc.reliquary.stash.pages, spent = investRelicStash(acc); if (!spent) return;
-        const previous = visitLog.get('relic_stash');
-        visitLog.set('relic_stash', { label: `Relic stash · ${acc.reliquary.stash.pages} pages`,
-          put: (previous?.put ?? 0) + spent, done: !!previous?.done || acc.reliquary.stash.pages > pages });
-        this.saveAccount(); render();
-      });
       this.accountScreen.querySelector('#acct-wardrobe')!.addEventListener('click', () => this.wardrobeView(this.accountScreen, render));
       const bodyEl = this.accountScreen.querySelector<HTMLElement>('.vault-body');
       if (bodyEl) bodyEl.scrollTop = this.vaultScroll[this.vaultTab || '_flat'] ?? 0;
@@ -3905,6 +3890,8 @@ export class UI {
     if (seatNote) lines.push(`<div style="color:${seatNote.color};font-size:10px">${seatNote.text}</div>`);
     if (item.locked) {
       lines.unshift(`<div style="color:#c8a84b">🔒 Locked — it stays: no salvage, no drop, no sort (${this.lockGestureText()} to unlock)</div>`);
+    } else if (salv && item.relicKey) {
+      lines.unshift('<div>Account Relic · store with the Oracle or equip in the Reliquary.</div>');
     } else if (salv) {
       const breakLine = seat.meta.items.some(i => i.uid === item.uid)
         ? `<div style="color:#e8c87a;font-weight:bold">${salv === 'sell'
@@ -4869,6 +4856,11 @@ export class UI {
     const grab = this.payloadGrab(p);
     const x = cx - grab.x, y = cy - grab.y;
     const from = this.payloadOrigin(p);
+    if (p.kind === 'relicTile') {
+      const w = this.getWorld(), seat = this.panelSeat(this.inventory), item = w.account.reliquary.items.find(i => i.uid === Number(p.arg));
+      const size = item ? itemGridSize(item) : { w: 1, h: 1 };
+      return { verdict: item && w.canManageAccountRelics(seat) && canPlaceAt(seat.meta.items, item, x, y) ? 'unequip' : 'blocked', x, y, ...size, from: 'relicStash' };
+    }
     if (p.kind === 'personalStashTile') {
       const seat = this.panelSeat(this.inventory), item = seat.meta.stash?.items.find(i => i.uid === Number(p.arg));
       const size = item ? itemGridSize(item) : { w: 1, h: 1 };
@@ -4878,7 +4870,7 @@ export class UI {
     if (!item) return { verdict: 'blocked', x, y, w: 1, h: 1, from };
     const s = itemGridSize(item);
     const base: BagLanding = { verdict: 'blocked', x, y, w: s.w, h: s.h, from };
-    if (originContainerId(from) === 'reliquary') return base; // Account property returns to stash, never the pack.
+    if (originContainerId(from) === 'reliquary' && this.getWorld().reliquaryRefusal(this.panelSeat(this.inventory))) return base;
     const bag = this.panelSeat(this.inventory).meta.items;
     if (canPlaceAt(bag, item, x, y)) return { ...base, verdict: from === 'bag' ? 'place' : 'unequip' };
     if (from === 'bag') {
@@ -5547,7 +5539,7 @@ export class UI {
     // THE ONE BAG (M1): gear tiles and gem wrappers share m.items — the
     // sweeps split them exactly as the host's salvageBulk filters do.
     const gemItems = m.items.filter(i => i.gem);
-    const gearItems = m.items.filter(i => !i.gem);
+    const gearItems = m.items.filter(i => !i.gem && !i.mem && !i.questId && !i.relicKey);
     const gearAll = gearItems.filter(i => !i.locked);
     const gearLocked = gearItems.length - gearAll.length;
     const skillRows = gemItems.flatMap(i => {
@@ -6115,6 +6107,7 @@ export class UI {
 
   showOracle(seatId?: string): void {
     this.ownPanel(this.oracleMenu, this.couchSeatFor(seatId));
+    if (!this.inventoryOpen) this.toggleInventory(seatId);
     this.oracleOpen = true;
     this.oracleMenu.classList.remove('hidden');
     this.refreshOracle();
@@ -6188,7 +6181,7 @@ export class UI {
       ev.preventDefault(); if (dndCarried()) return;
       const uid = Number(tile.dataset.itemUid), equipped = seat.meta.containers.reliquary?.some(i => i.uid === uid);
       if (tile.dataset.drag?.startsWith('personalStashTile:')) world.requestMeta({ t: 'personalStash', uid, operation: 'take' });
-      else world.requestMeta({ t: 'oracleRelic', uid, operation: equipped ? 'unseat' : 'equip' });
+      else world.requestMeta({ t: 'oracleRelic', uid, operation: equipped ? 'unseat' : 'withdraw' });
       this.refreshOracle(); this.refreshInventory(); this.refreshCharSheet();
     }));
     q<HTMLButtonElement>('[data-relic-release]').forEach(btn => btn.addEventListener('click', () => {
@@ -6209,7 +6202,7 @@ export class UI {
     });
     q<HTMLButtonElement>('button[data-relic-operation]').forEach(btn => btn.addEventListener('click', () => {
       world.requestMeta({ t: 'oracleRelic', uid: Number(btn.dataset.relicUid),
-        operation: btn.dataset.relicOperation as 'store' | 'equip' | 'unseat' });
+        operation: btn.dataset.relicOperation as 'store' | 'equip' | 'unseat' | 'withdraw' });
       this.refreshOracle(); this.refreshInventory(); this.refreshCharSheet();
     }));
     q<HTMLButtonElement>('button[data-otar]').forEach(btn => btn.addEventListener('click', () => {

@@ -2,7 +2,9 @@
 export const RELIQUARY_CFG = {
   attunement: 'oracle_reliquary_attuned',
   costBase: 25,
-  powerPerRank: 0.05,
+  powerPerRank: 0.02,
+  xpPenaltyPerCell: 0.02,
+  toggleCalmSeconds: 5,
   // A numerical guard, not a practical progression ceiling.
   maxRank: 1000000,
   baseline: 0.2,

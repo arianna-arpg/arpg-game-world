@@ -6,8 +6,11 @@ import type { CarrySlice } from './containers';
 import type { DeathRecord } from '../meta/death';
 import { RELIC_STASH } from '../data/stashes';
 import { planStashMove, restoreStash, type StashCell, type StashState } from './stash';
+import { autoPlace, placeAt } from './inventory';
+import { itemGridSize } from './itemgen';
+import { RELIQUARY_CFG } from '../data/reliquary';
 
-export const relicReserve = (a: Account) => a.reliquary.items.filter(i => !a.reliquary.seated.includes(i.relicKey!))
+export const relicReserve = (a: Account) => a.reliquary.items.filter(i => !a.reliquary.seated.includes(i.relicKey!) && !a.reliquary.carried.includes(i.relicKey!))
   .map(item => ({ key: item.relicKey!, item }));
 export function reconcileRelicStash(a: Account): void {
   a.reliquary.stash = restoreStash(RELIC_STASH, relicReserve(a), a.reliquary.stash);
@@ -18,6 +21,10 @@ export function planRelicStorage(a: Account, item: ItemInstance, target?: StashC
 }
 
 export const isRelic = (i: ItemInstance): boolean => ITEM_BASES[i.baseId]?.category === 'relic';
+export function reliquaryExperience(items: readonly ItemInstance[], enabled = true): number {
+  const cells = items.reduce((n, i) => { const size = itemGridSize(i); return n + size.w * size.h; }, 0);
+  return enabled ? Math.max(0, 1 - cells * RELIQUARY_CFG.xpPenaltyPerCell) : 1;
+}
 
 /** Stable provenance precedes the session-local uid. A stale character save
  * can present the same item again, but can never replace the account's body. */
@@ -68,6 +75,24 @@ export function migrateRelicCarry(a: Account, carry: CarrySlice & { items: ItemI
   // Mutable PlayerMeta arrays satisfy the read-only inspection contract.
   carry.items = carry.items.filter(i => !(legacy && isRelic(i)) && !i.relicKey
     && !a.reliquary.items.some(stored => stored.relicKey === `legacy:${scope}:${i.uid}`));
+  // An older vessel may have ordinary gear with the same session uid. Stable
+  // account keys remain unchanged; live drag/action addresses must be unique.
+  const used = new Set([...carry.items, ...Object.values(carry.equipped),
+    ...Object.entries(carry.containers).filter(([id]) => id !== 'reliquary').flatMap(([, items]) => items)]
+    .filter((i): i is ItemInstance => !!i).map(i => i.uid));
+  for (const item of a.reliquary.items) {
+    while (used.has(item.uid)) item.uid = nextItemUid();
+    used.add(item.uid);
+  }
+  // The account, never a vessel's stale save, supplies carried Relic bodies.
+  // Bag conflicts on another vessel fall safely back to stash/recovery.
+  for (const item of a.reliquary.items.filter(i => a.reliquary.carried.includes(i.relicKey!))) {
+    if (!(item.x !== undefined && item.y !== undefined && placeAt(carry.items, item, item.x, item.y))
+      && !autoPlace(carry.items, item)) {
+      a.reliquary.carried = a.reliquary.carried.filter(k => k !== item.relicKey);
+      delete item.x; delete item.y;
+    }
+  }
   carry.containers.reliquary = accountRelicBoard(a);
   reconcileRelicStash(a);
 }

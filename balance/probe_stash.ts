@@ -48,14 +48,16 @@ assert.equal(relicReserve(w.account).length, 24); assert.equal(Object.keys(w.acc
 const extra = charm(); autoPlace(w.meta.items, extra);
 const full = JSON.stringify(serializeAccount(w.account));
 w.oracleRelic(w.localSeat, extra.uid, 'store'); assert(w.meta.items.includes(extra)); assert.equal(JSON.stringify(serializeAccount(w.account)), full);
-w.oracleRelic(w.localSeat, equipped.uid, 'unseat'); assert(w.meta.containers.reliquary.includes(equipped));
-w.containerPlace(w.localSeat, 'reliquary', extra.uid, 1, 1); assert(w.meta.items.includes(extra)); assert.equal(JSON.stringify(serializeAccount(w.account)), full);
+w.oracleRelic(w.localSeat, equipped.uid, 'unseat'); assert(w.meta.items.includes(equipped));
+w.containerPlace(w.localSeat, 'reliquary', equipped.uid, 1, 1);
+w.containerPlace(w.localSeat, 'reliquary', extra.uid, 1, 1); assert(w.meta.items.includes(equipped)); assert(w.meta.containers.reliquary.includes(extra));
+w.containerPlace(w.localSeat, 'reliquary', equipped.uid, 1, 1); assert(w.meta.items.includes(extra));
 const reserve = relicReserve(w.account)[0].item, cell = { ...w.account.reliquary.stash.cells[reserve.relicKey!] };
 w.containerPlace(w.localSeat, 'reliquary', reserve.uid, 1, 1);
 assert(w.meta.containers.reliquary.includes(reserve)); assert.deepEqual(w.account.reliquary.stash.cells[equipped.relicKey!], cell);
 assert.equal(Object.keys(w.account.reliquary.stash.cells).length, 24);
 assert(!w.account.reliquary.stash.cells[reserve.relicKey!]);
-console.log('PASS full-stash deposits and unseats refuse atomically; exchange reuses vacated storage');
+console.log('PASS full-stash deposits refuse atomically; bag exchanges remain available and reserve exchange reuses vacated storage');
 
 w.account.credits = 15; assert.equal(investRelicStash(w.account), 15); sealReckoning(w.account);
 let restored = deserializeAccount(serializeAccount(w.account))!;

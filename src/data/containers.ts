@@ -33,7 +33,7 @@ export const RELIQUARY: ContainerDef = registerContainer({
   label: 'Reliquary',
   glyph: '🧿',
   icon: 'relic',
-  blurb: 'Your account’s equipped Relics persist across lives. Visit the Oracle to exchange them with your permanent reserve. Loose finds in your pack are not yet stored.',
+  blurb: 'Your account’s equipped Relics persist across lives. Change them through your inventory while out of combat. The Oracle keeps your spare Relics in account storage.',
   accepts: { categories: ['relic'] },
   active: true,
   accountStorage: true,

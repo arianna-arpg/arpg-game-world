@@ -109,7 +109,7 @@ import {
   type MemoryKind, type MemoryPin, type MemoryProvenance, type MemoryRecallGroup, type MemoryRecallResult,
   type MemoryRecallViewData,
 } from './memories';
-import { accountRelicBoard, bankRelic, isRelic, migrateRelicCarry, migrateRelicCorpses, planRelicStorage, reconcileRelicStash } from './accountReliquary';
+import { accountRelicBoard, bankRelic, isRelic, migrateRelicCarry, migrateRelicCorpses, planRelicStorage, reconcileRelicStash, reliquaryExperience } from './accountReliquary';
 import { emptyStash, personalStashEntries, planStashMove, type PersonalStash, type StashCell } from './stash';
 import { STASH_DEFS } from '../data/stashes';
 import { empowerRelicMods } from './relicPower';
@@ -1820,7 +1820,9 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'dropItem': return isIdx(a.uid);
     case 'salvageItem': return isIdx(a.uid) && isLane(a.lane);
     case 'oracleAttune': return true;
-    case 'oracleRelic': return isIdx(a.uid) && ['store', 'equip', 'unseat', 'release'].includes(a.operation as string);
+    case 'oracleRelic': return isIdx(a.uid) && ['store', 'equip', 'unseat', 'release', 'withdraw'].includes(a.operation as string);
+    case 'reliquaryToggle': return typeof a.enabled === 'boolean';
+    case 'withdrawRelic': return isIdx(a.uid) && ((a.x === undefined && a.y === undefined) || (isIdx(a.x) && isIdx(a.y)));
     case 'relicStashMove': return isIdx(a.uid) && isIdx(a.page) && isIdx(a.x) && isIdx(a.y);
     case 'personalStash': return isIdx(a.uid) && ['store', 'take', 'move'].includes(a.operation as string)
       && ((a.x === undefined && a.y === undefined) || (isIdx(a.x) && isIdx(a.y)));
@@ -1959,6 +1961,7 @@ export interface PlayerMeta {
   relicScope?: string;
   /** Authoritative host fold, shipped to remote views. */
   relicEmpowerment?: number;
+  relicEnabled?: boolean;
 }
 
 /** A zeroed essence wallet (fresh seats, wire fallbacks). */
@@ -9389,6 +9392,7 @@ export class World {
    *  steps out of the huddle, a militiaman now. Host-authoritative (a
    *  client routes the armFolkItem intent). */
   armFolkWithItem(folkId: number, uid: number, seat: Seat = this.localSeat): boolean {
+    if (this.bagItem(seat, uid)?.relicKey) return false;
     const found = this.boroughOf(folkId);
     if (!found) return false;
     // THE KEEPER'S MARK HOLDS: a locked piece is never gifted away either.
@@ -22137,7 +22141,10 @@ export class World {
    *  Always the HERO body (the possession seam): a build belongs to the
    *  flesh that earned it, never to a borrowed one. */
   recalcSeat(seat: Seat): void {
-    if (!this.clientActionHook) seat.meta.relicEmpowerment = seat === this.localSeat ? reliquaryPower(this.account.reliquary) : 0;
+    if (!this.clientActionHook) {
+      seat.meta.relicEmpowerment = seat === this.localSeat ? reliquaryPower(this.account.reliquary) : 0;
+      seat.meta.relicEnabled = seat === this.localSeat ? this.account.reliquary.enabled : true;
+    }
     const p = this.seatHero(seat);
     p.statusRelay = this.relayStatus;
     const m = seat.meta;
@@ -22223,6 +22230,7 @@ export class World {
     for (const def of CONTAINER_DEFS) {
       const held = m.containers[def.id];
       if (!def.active || !held?.length) continue;
+      if (def.id === 'reliquary' && m.relicEnabled === false) continue;
       const board = containerBoard(def);
       if (!board) continue;
       const misfit = new Set(containerMisfits(board, held));
@@ -22537,6 +22545,7 @@ export class World {
     const p = this.seatHero(seat);
     // Mireille's Traveller's Rest blessing boosts experience while it lasts.
     if (this.mireilleXpBuff > 0) amount = Math.round(amount * (1 + MIREILLE_XP_BUFF_MULT));
+    amount *= reliquaryExperience(m.containers.reliquary ?? [], m.relicEnabled !== false);
     m.xp += amount;
     // Any XP change re-replicates this seat's meta (xp bar + level + points). The
     // dirty Set coalesces, so a kill-storm still ships at most one meta/snapshot.
@@ -25508,10 +25517,11 @@ export class World {
   }
 
   nearOracle(seat: Seat = this.localSeat): boolean {
-    const a = this.stationAnchor('oracle'); // THE ANCHORED DWELL: the altar slab
-    return this.hasOracle() && !!a
+    const stone = this.stationAnchor('oracle');
+    const oracle = this.actors.find(a => a.defId === 'townsfolk_oracle' && !a.dead);
+    return this.hasOracle() && [stone, oracle].some(a => !!a
       && dist(seat.actor.pos, a.pos) <= SALVAGE_CFG.stationRadius
-      && this.dwellReachable(seat.actor.pos, a.pos, DWELL_CFG.reach, { from: seat.actor.tier ?? 0, to: a.tier });
+      && this.dwellReachable(seat.actor.pos, a.pos, DWELL_CFG.reach, { from: seat.actor.tier ?? 0, to: a.tier ?? 0 }));
   }
 
   private updateOracle(dt: number): void {
@@ -25526,9 +25536,12 @@ export class World {
   }
 
   oracleHint(): { pos: Vec2; text: string } | null {
-    const a = this.stationAnchor('oracle');
+    const player = this.player;
+    const a = [this.stationAnchor('oracle'), this.actors.find(a => a.defId === 'townsfolk_oracle' && !a.dead)]
+      .filter(a => !!a && this.dwellReachable(player.pos, a.pos, DWELL_CFG.reach, { from: player.tier ?? 0, to: a.tier ?? 0 }))
+      .sort((a, b) => dist(player.pos, a!.pos) - dist(player.pos, b!.pos))[0];
     if (!a || !this.nearOracle()) return null;
-    return { pos: a.pos, text: 'Linger to commune with the stone.' };
+    return { pos: a.pos, text: 'Linger to open Oracle storage.' };
   }
 
   // --------------------------------------------------------------- vendors ---
@@ -29631,6 +29644,8 @@ export class World {
       case 'sortBag': this.sortBag(seat, action.mode, action.dir); break;
       case 'dropItem': this.dropGearFromBag(seat, action.uid); break;
       case 'oracleRelic': this.oracleRelic(seat, action.uid, action.operation); break;
+      case 'reliquaryToggle': this.reliquaryToggle(seat, action.enabled); break;
+      case 'withdrawRelic': this.withdrawRelic(seat, action.uid, action.x, action.y); break;
       case 'relicStashMove': this.relicStashMove(seat, action.uid, action); break;
       case 'personalStash': this.personalStash(seat, action.uid, action.operation, action.x, action.y); break;
       case 'oracleAttune': this.oracleAttune(seat); break;
@@ -46915,6 +46930,44 @@ export class World {
       && !seat.actor.downed && this.stationReach('oracle', seat);
   }
 
+  reliquaryRefusal(seat: Seat): string | null {
+    if (seat !== this.localSeat || this.clientActionHook || !this.account.features.has(FEATURE.RELIQUARY)) return 'Available in your own hosted journey.';
+    if (seat.actor.dead || seat.actor.downed) return 'Unavailable while fallen.';
+    if (this.seatHero(seat).casting) return 'Finish casting before changing the Reliquary.';
+    if (this.time - this.lastCombatAt < RELIQUARY_CFG.toggleCalmSeconds || this.pressingFoeNear(seat.actor.pos, seat.actor.tier)) return 'Leave combat before changing the Reliquary.';
+    return null;
+  }
+
+  reliquaryToggle(seat: Seat, enabled: boolean): void {
+    const refusal = this.reliquaryRefusal(seat);
+    if (refusal) { this.failNote(seat.actor, 'reliquaryToggle', refusal); return; }
+    if (this.account.reliquary.enabled === enabled) return;
+    this.account.reliquary.enabled = enabled;
+    if (!enabled) for (const body of this.actors) {
+      if (!body.dead && body.owner === this.seatHero(seat) && body.summonInst?.relicSource) this.kill(body, true);
+    }
+    const hero = this.seatHero(seat), life = hero.life / Math.max(1, hero.maxLife());
+    this.recalcSeat(seat);
+    hero.life = hero.maxLife() * life;
+    this.persistAccountRelics(seat);
+  }
+
+  /** Account property can travel through the bag without becoming vessel-owned. */
+  withdrawRelic(seat: Seat, uid: number, x?: number, y?: number): void {
+    const item = this.account.reliquary.items.find(i => i.uid === uid);
+    if (!item || this.account.reliquary.carried.includes(item.relicKey!)) return;
+    const equipped = (seat.meta.containers.reliquary ?? []).includes(item);
+    if (equipped ? !!this.reliquaryRefusal(seat) : !this.canManageAccountRelics(seat)) return;
+    const trial = { ...item }; delete trial.x; delete trial.y;
+    const bag = seat.meta.items.map(i => ({ ...i }));
+    const fits = x !== undefined && y !== undefined ? placeAt(bag, trial, x, y) : autoPlace(bag, trial);
+    if (!fits) { this.failNote(seat.actor, 'relicBag', 'No room in your pack.'); return; }
+    seat.meta.containers.reliquary = (seat.meta.containers.reliquary ?? []).filter(i => i !== item);
+    delete this.account.reliquary.stash.cells[item.relicKey!];
+    item.x = trial.x; item.y = trial.y; seat.meta.items.push(item);
+    this.recalcSeat(seat); this.persistAccountRelics(seat);
+  }
+
   restoreAccountRelics(seat: Seat): void {
     if (seat !== this.localSeat || this.clientActionHook) return;
     migrateRelicCarry(this.account, seat.meta, seat.meta.relicScope ?? (seat.meta.charId || 'run:' + this.manifest.seed), false);
@@ -46930,6 +46983,7 @@ export class World {
   private persistAccountRelics(seat: Seat): void {
     if (seat !== this.localSeat || this.clientActionHook) return;
     this.account.reliquary.seated = (seat.meta.containers.reliquary ?? []).flatMap(i => i.relicKey ? [i.relicKey] : []);
+    this.account.reliquary.carried = seat.meta.items.flatMap(i => i.relicKey ? [i.relicKey] : []);
     reconcileRelicStash(this.account);
     this.accountDirty = true;
     saveAccount(this.account);
@@ -46973,6 +47027,7 @@ export class World {
     const bagged = seat.meta.items.find(i => i.uid === uid);
     const item = bagged ?? this.account.reliquary.items.find(i => i.uid === uid);
     if (!item || !isRelic(item) || item.questId) return;
+    if ((seat.meta.containers.reliquary ?? []).includes(item) && this.reliquaryRefusal(seat)) return;
     const plan = planRelicStorage(this.account, item, target);
     if (!plan) { this.failNote(seat.actor, 'stash:' + uid, 'No room in the Relic stash. Make space or unlock another page in the Vault.'); return; }
     const incoming = !item.relicKey;
@@ -46987,12 +47042,13 @@ export class World {
     this.persistAccountRelics(seat);
   }
 
-  oracleRelic(seat: Seat, uid: number, operation: 'store' | 'equip' | 'unseat' | 'release'): void {
+  oracleRelic(seat: Seat, uid: number, operation: 'store' | 'equip' | 'unseat' | 'release' | 'withdraw'): void {
+    if (operation === 'unseat' || operation === 'withdraw') { this.withdrawRelic(seat, uid); return; }
     if (!this.canManageAccountRelics(seat) || !this.account.features.has(FEATURE.RELIQUARY)) return;
     if (operation === 'equip') { this.seatAccountRelic(seat, uid); return; }
     if (operation === 'release') {
       const item = this.account.reliquary.items.find(i => i.uid === uid);
-      if (!item || item.locked || this.account.reliquary.seated.includes(item.relicKey!)) return;
+      if (!item || item.locked || this.account.reliquary.seated.includes(item.relicKey!) || this.account.reliquary.carried.includes(item.relicKey!)) return;
       this.account.reliquary.released.push(item.relicKey!);
       this.account.reliquary.items = this.account.reliquary.items.filter(i => i !== item);
       delete this.account.reliquary.stash.cells[item.relicKey!];
@@ -47004,11 +47060,12 @@ export class World {
   private seatAccountRelic(seat: Seat, uid: number, x?: number, y?: number): void {
     const lesson = this.reliquaryLesson();
     if (seat !== this.localSeat || this.clientActionHook || seat.actor.dead || seat.actor.downed
-      || (!lesson && !this.canManageAccountRelics(seat))) return;
+      || (!lesson && !!this.reliquaryRefusal(seat))) return;
     const def = CONTAINERS.reliquary, board = containerBoard(def);
     if (!board) return;
     const bagged = seat.meta.items.find(i => i.uid === uid);
     const item = bagged ?? this.account.reliquary.items.find(i => i.uid === uid);
+    if (!bagged && !this.canManageAccountRelics(seat)) return;
     const held = this.containerHeld(seat, def.id);
     if (!item || !isRelic(item) || item.questId || held.includes(item)) return;
     // Prove the entire placement on copies before changing either owner.
@@ -47020,14 +47077,20 @@ export class World {
       if (landing.verdict === 'blocked') return;
       displaced = landing.with; candidate.x = x; candidate.y = y;
     } else if (!autoPlace(trial, candidate, boardDims(board))) {
-      this.failNote(seat.actor, 'seat:' + uid, 'No open seat. Return a Relic to the Oracle reserve first.'); return;
+      this.failNote(seat.actor, 'seat:' + uid, 'No open seat. Return a Relic to your pack first.'); return;
     }
-    const stashPlan = displaced ? planRelicStorage(this.account, displaced, undefined, item.relicKey) : undefined;
-    if (displaced && !stashPlan) { this.failNote(seat.actor, 'stash:' + uid, 'No room for the exchanged Relic in storage.'); return; }
+    const bagReturn = displaced && bagged ? { ...displaced } : undefined;
+    if (bagReturn) {
+      const bag = seat.meta.items.filter(i => i !== bagged).map(i => ({ ...i }));
+      if (!(bagged!.x !== undefined && bagged!.y !== undefined && placeAt(bag, bagReturn, bagged!.x, bagged!.y)) && !autoPlace(bag, bagReturn)) return;
+    }
+    const stashPlan = displaced && !bagged ? planRelicStorage(this.account, displaced, undefined, item.relicKey) : undefined;
+    if (displaced && !bagged && !stashPlan) { this.failNote(seat.actor, 'stash:' + uid, 'No room for the exchanged Relic in storage.'); return; }
     const stored = bankRelic(this.account, item, seat.meta.relicScope ?? (seat.meta.charId || 'run:' + this.manifest.seed));
     if (!stored) return;
     if (bagged) removeFromBag(seat.meta.items, uid);
     if (displaced) { held.splice(held.indexOf(displaced), 1); delete displaced.x; delete displaced.y; }
+    if (displaced && bagReturn) { displaced.x = bagReturn.x; displaced.y = bagReturn.y; seat.meta.items.push(displaced); }
     if (stashPlan) this.account.reliquary.stash = stashPlan;
     delete this.account.reliquary.stash.cells[stored.relicKey!];
     stored.x = candidate.x; stored.y = candidate.y;
@@ -47103,7 +47166,7 @@ export class World {
    *  (fails blocked), else first fit (fails full). The seat is kept until
    *  the bag has taken the piece — a refusal changes nothing. */
   containerTake(seat: Seat, containerId: string, uid: number, x?: number, y?: number): void {
-    if (containerId === 'reliquary') { this.oracleRelic(seat, uid, 'unseat'); return; }
+    if (containerId === 'reliquary') { this.withdrawRelic(seat, uid, x, y); return; }
     const m = seat.meta;
     const held = m.containers[containerId];
     const item = held?.find(i => i.uid === uid);
@@ -47126,7 +47189,7 @@ export class World {
   /** Re-place a seated piece on its own board; a single blocker swaps into
    *  the vacated seat when it fits — the bag's tetris shuffle, masked. */
   containerMove(seat: Seat, containerId: string, uid: number, x: number, y: number): void {
-    if (containerId === 'reliquary' && !this.canManageAccountRelics(seat)) return;
+    if (containerId === 'reliquary' && this.reliquaryRefusal(seat)) return;
     const def = CONTAINERS[containerId];
     const held = seat.meta.containers[containerId];
     const item = held?.find(i => i.uid === uid);
@@ -47538,6 +47601,7 @@ export class World {
     if (!mode) return;
     const item = this.bagItem(seat, uid);
     if (!item) return;
+    if (item.relicKey) { this.failNote(seat.actor, 'relicSale', 'Account Relics belong in your stash or Reliquary.'); return; }
     if (item.questId) { this.failNote(seat.actor, 'questCargo', 'Bring this back to its quest giver.'); return; }
     if (item.locked) { this.lockedRefusal(seat); return; }
     // THE STONE (M2) + THE COUNTER'S BUY-BACK (2026-09-12): the BENCH never
@@ -47598,7 +47662,7 @@ export class World {
       // GEM WRAPPERS sit out of the gear sweep: they are their own
       // categories below (a "break all gear" blow never eats the memories).
       // The ROUGH MEMORY pouch (M2) sits out of EVERY sweep likewise.
-      const targets = m.items.filter(i => !i.gem && !i.mem && !i.locked && !i.questId && (!rarity || i.rarity === rarity));
+      const targets = m.items.filter(i => !i.gem && !i.mem && !i.locked && !i.questId && !i.relicKey && (!rarity || i.rarity === rarity));
       for (const item of targets) {
         const taught = this.breakOneItem(seat, item, mode);
         ranked.push(...taught.filter(t => t.rankedUp).map(t => t.family));

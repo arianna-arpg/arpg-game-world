@@ -5,11 +5,13 @@ and `data/stashes.ts`; see `docs/engine/stashes.md`. Storage capacity is
 independent from equipped Reliquary expansion and empowerment. Verify
 `probe_stash.ts` and `balance/oracle-rescue-ui.cjs` (grid gestures and reload).
 
-Account Relic ownership, Oracle reserve, repeatable quadratic-cost Reliquary
+Account Relic ownership, separate Oracle storage, standard Vault Reliquary
 investment and attributable Relic followers are documented in
 `docs/design/account-reliquary.md`. Tuning lives in `data/reliquary.ts`;
 `engine/accountReliquary.ts` owns migration and `engine/relicPower.ts` the safe
-numeric fold. Verify `probe_accountreliquary.ts`, `probe_reliquary.ts`,
+numeric fold. The inventory toggle trades equipped power for 2% XP per occupied
+cell; empowerment grows by 2% per account rank. Verify `probe_relicflow.ts`,
+`probe_accountreliquary.ts`, `probe_reliquary.ts`,
 `probe_relicuniques.ts` and `balance/oracle-rescue-ui.cjs`.
 
 Oracle rescue and account-wide relic access are documented in

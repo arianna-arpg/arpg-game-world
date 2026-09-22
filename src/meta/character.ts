@@ -250,7 +250,7 @@ export function serializeCharacter(world: World): CharacterSave {
     knownSkills: [...m.knownSkills.values()].map(saveSkill),
     // THE RESIDENCE (skill-items M1): loose gems ride `items` as wrapper
     // ItemInstances (pure JSON, payload included) — no side arrays written.
-    items: m.items.map(i => ({ ...i })),
+    items: m.items.filter(i => !i.relicKey).map(i => ({ ...i })),
     equipped: Object.fromEntries(
       Object.entries(m.equipped).flatMap(([k, v]) => (v ? [[k, { ...v }] as const] : [])),
     ),
@@ -760,7 +760,7 @@ export function serializeCouchGuest(
     vocationPoints: m.vocationPoints,
     knownSkills: [...m.knownSkills.values()].map(saveSkill),
     // THE RESIDENCE: loose gems ride `items` (the run-save's own law).
-    items: m.items.map(i => ({ ...i })),
+    items: m.items.filter(i => !i.relicKey).map(i => ({ ...i })),
     equipped: Object.fromEntries(
       Object.entries(m.equipped).flatMap(([k, v]) => (v ? [[k, { ...v }] as const] : [])),
     ),

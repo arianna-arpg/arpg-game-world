@@ -25,6 +25,10 @@
 // ---------------------------------------------------------------------------
 
 import { BRANDT_CFG } from '../data/brandt';
+import { RELIQUARY_CFG } from '../data/reliquary';
+import { RELIC_STASH } from '../data/stashes';
+import { stashPageCost } from '../engine/stash';
+import { reliquaryCost, reliquaryPower, investReliquary, investRelicStash } from './reliquary';
 import { CLASS_DEEDS, discoveryCount } from '../data/classdeeds';
 import { MEMORY_UNLOCK_CFG, MEMORY_UNLOCKS } from '../data/memoryUnlocks';
 import { grantMemoryUnlock, memoryCatalog, memoryCommissionReady, memoryProgressionOpen, memoryUnlockCandidates, memoryUnlockDef } from './memoryUnlocks';
@@ -111,6 +115,7 @@ interface UnlockBase {
 }
 
 export type Unlockable =
+  | (UnlockBase & { kind: 'power' | 'storage'; payload: { rank: number } })
   | (UnlockBase & { kind: 'slot'; payload: { slotCount: number } })
   | (UnlockBase & { kind: 'class'; payload: { classId: string; skillIds: string[]; supportIds: string[];
       /** Detailed deed instructions; visible only after the objectives reveal. */
@@ -1293,6 +1298,8 @@ export function catalogClassLevelMilestones(classId: string): number[] {
 
 export function isUnlockOwned(a: Account, u: Unlockable): boolean {
   switch (u.kind) {
+    case 'power': return a.reliquary.rank >= u.payload.rank;
+    case 'storage': return a.reliquary.stash.pages >= u.payload.rank;
     case 'slot':    return a.unlockedSlots.has(u.payload.slotCount);
     // The earned bundle gates discovery chains and rewards. Class selection
     // separately requires isClassUnlocked (the deliberate Vault activation).
@@ -1368,13 +1375,35 @@ function packageUnlockables(): Unlockable[] {
  *  stock; account-less callers keep the pure static view). */
 export function allUnlockables(a?: Account): Unlockable[] {
   return [...UNLOCK_CATALOG.filter(u => MEMORY_UNLOCK_CFG.legacyGemBundles || (u.kind !== 'skill' && u.kind !== 'support')),
-    ...packageUnlockables(), ...(a ? resurrectUnlockables(a) : [])];
+    ...packageUnlockables(), ...(a ? [...resurrectUnlockables(a), ...reliquaryUnlockables(a)] : [])];
+}
+
+/** Account-owned ladders use the ordinary card, pour, receipt and gate path. */
+export function reliquaryUnlockables(a: Account): Unlockable[] {
+  const r = a.reliquary, s = r.stash;
+  const out: Unlockable[] = [];
+  // Keep one compact receipt for each ladder on the ordinary Owned shelf.
+  if (r.rank > 0) out.push({ id: `reliquary_power_${r.rank}`, kind: 'power',
+    label: `Reliquary Empowerment ${r.rank}`, cost: 0,
+    description: `Active Relics are empowered by ${Math.round(reliquaryPower(r) * 100)}% across every life.`, payload: { rank: r.rank } });
+  if (s.pages > RELIC_STASH.initialPages) out.push({ id: `relic_stash_${s.pages}`, kind: 'storage',
+    label: `Relic Stash: ${s.pages} Pages`, cost: 0,
+    description: `${s.pages} pages of account storage at the Oracle.`, payload: { rank: s.pages } });
+  if (r.rank < RELIQUARY_CFG.maxRank) out.push({ id: `reliquary_power_${r.rank + 1}`, kind: 'power',
+    label: `Reliquary Empowerment ${r.rank + 1}`, cost: reliquaryCost(r), reqLedger: RELIQUARY_CFG.attunement,
+    description: `Empower active Relics by another ${RELIQUARY_CFG.powerPerRank * 100}%. Current empowerment: +${Math.round(reliquaryPower(r) * 100)}%. Applies across every life.`, payload: { rank: r.rank + 1 } });
+  if (s.pages < RELIC_STASH.maxPages) out.push({ id: `relic_stash_${s.pages + 1}`, kind: 'storage',
+    label: `Relic Stash: Page ${s.pages + 1}`, cost: stashPageCost(RELIC_STASH, s),
+    description: `Add a ${RELIC_STASH.board.w} × ${RELIC_STASH.board.h} page to your account's Oracle storage.`, payload: { rank: s.pages + 1 } });
+  return out;
 }
 
 /** Is this unlock visible/purchasable yet (its gate met)? Static entries gate on
  *  sequencing/level/ledger; package BASE entries on the unlock predicate; package
  *  TIER entries on (base owned + every prior tier owned + this tier's milestone). */
 export function isUnlockVisible(a: Account, u: Unlockable): boolean {
+  if (u.kind === 'power' || u.kind === 'storage') return a.features.has(FEATURE.RELIQUARY)
+    && u.payload.rank === (u.kind === 'power' ? a.reliquary.rank : a.reliquary.stash.pages) + 1 && staticGateMet(a, u);
   if (!MEMORY_UNLOCK_CFG.legacyGemBundles && (u.kind === 'skill' || u.kind === 'support')) return false;
   if (u.id === 'feat_unlock_all_gems' && !MEMORY_UNLOCK_CFG.showDebugCodex) return false;
   if (u.kind === 'memory') {
@@ -1604,12 +1633,12 @@ export const VAULT_TABS: readonly VaultTabDef[] = [
     emptyNote: 'More class choices and Mastery become available as your account grows.',
   },
   {
-    id: 'gems', label: 'Memories', kinds: ['memory', 'skill', 'support', 'graft'],
-    blurb: 'Discover random new skills and supports, or awaken the deeper arts of a skill you can already find. Each purchase grants one new result. Class discovery still grants its own Memories.',
+    id: 'gems', label: 'Memories & Power', kinds: ['memory', 'power', 'skill', 'support', 'graft'],
+    blurb: 'Discover Memories, awaken deeper arts, and unlock lasting account power.',
     emptyNote: 'No eligible Memories remain for these purchases. New catalog entries join automatically.',
   },
   {
-    id: 'town', label: 'Town', kinds: ['feature'], fallback: true,
+    id: 'town', label: 'Town', kinds: ['feature', 'storage'], fallback: true,
     blurb: 'Lastlight grows by purchase: stations and services, counter privileges, hulls and routes, and account-wide features.',
     emptyNote: 'Nothing to raise in town right now; milestones out in the world surface more.',
   },
@@ -1629,6 +1658,7 @@ export const VAULT_TABS: readonly VaultTabDef[] = [
  *  line. Total by type: a new catalog kind fails the build here until it
  *  gets a name. */
 export const VAULT_KIND_LABELS: Record<UnlockKind, string> = {
+  power: 'Account Power', storage: 'Storage',
   slot: 'Class Slots', class: 'Classes', classtier: 'Mastery', skill: 'Skill Pools',
   support: 'Support Pools', feature: 'Town & Features', package: 'World Events',
   graft: 'Skill Grafts', resurrect: 'Fallen Vessel', memory: 'Memory Unlocks',
@@ -1702,7 +1732,7 @@ export interface VaultShelfCensus {
 
 export function vaultShelfCensus(a: Account): VaultShelfCensus[] {
   const avail = availableUnlocks(a);
-  const ownedAll = allUnlockables().filter(u => isUnlockOwned(a, u)
+  const ownedAll = allUnlockables(a).filter(u => isUnlockOwned(a, u)
     && !(u.kind === 'class' && a.pendingClassUnlocks.has(u.payload.classId)));
   const rumorsAll = shroudedClassUnlocks(a);
   const pendingAll = pendingClassUnlocks(a);
@@ -1765,6 +1795,8 @@ export const INVEST_CFG = {
 
 /** Mortal Essence already poured into an unlock (0 for untouched entries). */
 export function investedToward(a: Account, u: Unlockable): number {
+  if (u.kind === 'power') return u.payload.rank === a.reliquary.rank + 1 ? a.reliquary.invested : 0;
+  if (u.kind === 'storage') return u.payload.rank === a.reliquary.stash.pages + 1 ? a.reliquary.stash.invested : 0;
   return Math.max(0, Math.floor(a.invested[u.id] ?? 0));
 }
 
@@ -1781,6 +1813,7 @@ export function remainingCost(a: Account, u: Unlockable): number {
  *  chain for free. */
 function grantUnlock(a: Account, u: Unlockable): void {
   switch (u.kind) {
+    case 'power': case 'storage': break; // Their bounded account ladder pour grants atomically.
     case 'slot':    a.unlockedSlots.add(u.payload.slotCount); break;
     case 'class':
       a.unlockedClasses.add(u.payload.classId);
@@ -1816,6 +1849,8 @@ function grantUnlock(a: Account, u: Unlockable): void {
 export function investUnlock(a: Account, u: Unlockable, amount: number): number {
   // THE EARNED LAW: no pour reaches an earned entry — the world claims it.
   if (u.earned || isUnlockOwned(a, u) || !isUnlockVisible(a, u)) return 0;
+  if (u.kind === 'power') return investReliquary(a, amount);
+  if (u.kind === 'storage') return investRelicStash(a, amount);
   const rem = remainingCost(a, u);
   if (u.kind === 'memory') {
     const def = memoryUnlockDef(u.payload.memoryUnlockId);

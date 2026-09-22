@@ -1,0 +1,90 @@
+import assert from 'node:assert/strict';
+import { makeSimWorld } from '../src/sim/arena';
+import { FEATURE, makeAccount, serializeAccount, deserializeAccount } from '../src/meta/account';
+import { RELIQUARY_CFG } from '../src/data/reliquary';
+import { RELIQUARY } from '../src/data/containers';
+import { availableUnlocks, investUnlock, investedToward, VAULT_TABS, unlockCompleted, vaultShelfCensus } from '../src/meta/unlocks';
+import { forgeItem } from '../src/engine/itemgen';
+import { autoPlace, bagBoard } from '../src/engine/inventory';
+import { reliquaryExperience, relicReserve } from '../src/engine/accountReliquary';
+import { serializeCharacter, applySavedCharacter } from '../src/meta/character';
+import { captureLoot } from '../src/meta/death';
+import { serializeSeatMeta, applySeatMeta } from '../src/net/snapshot';
+
+const near = (a: number, b: number) => assert(Math.abs(a - b) < 1e-6, `${a} != ${b}`);
+const relic = (baseId = 'relic_charm') => forgeItem({ baseId, ilvl: 1, rarity: 'magic', affixes: [{ id: 'relic_life' }], quality: 1 })!;
+const a = makeAccount(); a.features.add(FEATURE.RELIQUARY); a.ledger[RELIQUARY_CFG.attunement] = 1; a.credits = 1000;
+const power = availableUnlocks(a).find(u => u.kind === 'power')!;
+assert(power); assert(VAULT_TABS.find(t => t.id === 'gems')!.kinds!.includes(power.kind));
+assert.equal(investUnlock(a, power, 10), 10); assert.equal(investedToward(a, power), 10);
+const restored = deserializeAccount(serializeAccount(a))!;
+assert.equal(investUnlock(restored, power, 100), 15); assert(unlockCompleted(restored, power));
+assert.equal(investUnlock(restored, power, 100), 0); assert.equal(restored.reliquary.rank, 1);
+const page = availableUnlocks(restored).find(u => u.kind === 'storage')!;
+assert.equal(investUnlock(restored, page, 15), 15); assert.equal(investUnlock(restored, page, 100), 25);
+assert.equal(restored.reliquary.stash.pages, 2); assert.equal(investUnlock(restored, page, 100), 0);
+const owned = vaultShelfCensus(restored).find(c => c.tab.owned)!.owned;
+assert(owned.some(u => u.id === power.id)); assert(owned.some(u => u.id === page.id));
+console.log('PASS standard Vault categories, partial pours, reload, completion and stale-card refusal');
+
+near(reliquaryExperience([relic()]), .98);
+near(reliquaryExperience([relic('relic_talisman')]), .96);
+near(reliquaryExperience([relic('relic_effigy')]), .92);
+near(reliquaryExperience(Array.from({ length: 25 }, () => relic())), .5);
+near(reliquaryExperience([relic()], false), 1);
+const w = makeSimWorld('warrior', 27981);
+for (const rung of RELIQUARY.ladder) w.account.features.add(rung.feature);
+w.account.features.add(FEATURE.ORACLE_STONE); w.account.ledger.oracle_rescued = 1;
+w.loadZone('lastlight'); w.player.pos = { ...w.stationAnchor('oracle')!.pos }; w.lastCombatAt = -999;
+const item = relic(); autoPlace(w.meta.items, item); const baseLife = w.player.maxLife();
+w.containerPlace(w.localSeat, 'reliquary', item.uid, 1, 1); assert(w.player.maxLife() > baseLife);
+w.meta.xp = 0; for (let i = 0; i < 10; i++) w.grantXp(1); near(w.meta.xp, 9.8);
+w.player.pos = { x: 0, y: 0 }; assert(!w.nearOracle()); w.player.life = w.player.maxLife() * .4;
+w.reliquaryToggle(w.localSeat, false); assert.equal(w.meta.relicEnabled, false); near(w.player.maxLife(), baseLife); near(w.player.life / w.player.maxLife(), .4);
+w.grantXp(1); near(w.meta.xp, 10.8);
+const off = deserializeAccount(serializeAccount(w.account))!; assert.equal(off.reliquary.enabled, false);
+const offWire = serializeSeatMeta(w.localSeat);
+w.lastCombatAt = w.time; w.reliquaryToggle(w.localSeat, true); assert.equal(w.meta.relicEnabled, false);
+w.lastCombatAt = -999; w.reliquaryToggle(w.localSeat, true); assert.equal(w.meta.relicEnabled, true); near(w.player.life / w.player.maxLife(), .4);
+w.containerTake(w.localSeat, 'reliquary', item.uid, 3, 2); assert(w.meta.items.includes(item)); assert.equal(item.x, 3); near(w.player.maxLife(), baseLife);
+w.player.dead = true; w.reliquaryToggle(w.localSeat, false); assert.equal(w.meta.relicEnabled, true); w.player.dead = false;
+w.reliquaryToggle({ ...w.localSeat, id: 'guest' }, false); assert.equal(w.meta.relicEnabled, true);
+console.log('PASS occupied-cell XP, fractional awards, off-state stats/wire/save, calm toggle, health ratio and field unequip');
+
+w.meta.modeId = 'immortal'; w.meta.charId = 'vessel-a'; const oldA = serializeCharacter(w);
+w.meta.charId = 'vessel-b'; const oldB = serializeCharacter(w);
+assert(!oldA.items?.some(i => i.relicKey)); assert(!captureLoot(w.meta).items.some(i => i.kind === 'gear' && i.item.relicKey));
+for (const saved of [oldA, oldB, oldA]) {
+  assert(applySavedCharacter(w, saved));
+  assert.equal(w.meta.items.filter(i => i.relicKey).length, 1); assert.equal(w.meta.items.find(i => i.relicKey), item);
+  assert.equal(w.account.reliquary.items.length, 1);
+}
+w.player.pos = { x: 0, y: 0 }; w.lastCombatAt = -999;
+assert.equal(w.reliquaryRefusal(w.localSeat), null);
+w.containerPlace(w.localSeat, 'reliquary', item.uid, 1, 1); assert(w.meta.containers.reliquary.includes(item));
+assert(applySavedCharacter(w, oldB)); assert.equal(w.meta.containers.reliquary[0], item); assert(!w.meta.items.some(i => i.relicKey));
+w.lastCombatAt = -999; w.containerTake(w.localSeat, 'reliquary', item.uid);
+w.player.pos = { ...w.stationAnchor('oracle')!.pos }; w.oracleRelic(w.localSeat, item.uid, 'store');
+assert(applySavedCharacter(w, oldA)); assert.equal(relicReserve(w.account).length, 1); assert(!w.meta.items.some(i => i.relicKey));
+w.player.pos = { ...w.stationAnchor('oracle')!.pos }; w.withdrawRelic(w.localSeat, item.uid, 3, 2);
+assert(w.meta.items.includes(item)); w.dropGearFromBag(w.localSeat, item.uid); assert(w.meta.items.includes(item));
+const collision = structuredClone(oldB), key = item.relicKey;
+const ordinary = forgeItem({ baseId: 'helmet_armor', ilvl: 1, rarity: 'magic' })!;
+ordinary.uid = item.uid; ordinary.x = 3; ordinary.y = 2; collision.items = [ordinary];
+assert(applySavedCharacter(w, collision)); assert.equal(w.meta.items.length, 2);
+assert.equal(new Set(w.meta.items.map(i => i.uid)).size, 2); assert.equal(item.relicKey, key);
+assert(w.meta.items.includes(item));
+// A full second vessel cannot lose or duplicate account property; restore routes it to storage.
+const crowded = structuredClone(oldB); crowded.items = [];
+for (let y = 0; y < bagBoard().h; y++) for (let x = 0; x < bagBoard().w; x++) crowded.items.push({ ...relic(), x, y });
+assert(applySavedCharacter(w, crowded)); assert.equal(w.account.reliquary.carried.length, 0); assert.equal(relicReserve(w.account).length, 1);
+w.player.pos = { ...w.stationAnchor('oracle')!.pos }; w.withdrawRelic(w.localSeat, item.uid); assert.equal(relicReserve(w.account).length, 1);
+assert.equal(w.account.reliquary.items.length, 1);
+console.log('PASS stale Immortal saves across bag/board/storage, canonical identity, death/drop exclusion and full-bag recovery');
+
+const oracle = w.actors.find(a => a.defId === 'townsfolk_oracle')!; assert(oracle);
+w.player.pos = { ...oracle.pos }; w.player.tier = oracle.tier; assert(w.nearOracle());
+console.log('PASS Oracle NPC storage access');
+
+const client = makeSimWorld('warrior', 27982); client.clientActionHook = () => {};
+applySeatMeta(client, client.localSeat, offWire); assert.equal(client.meta.relicEnabled, false); near(client.player.maxLife(), baseLife);

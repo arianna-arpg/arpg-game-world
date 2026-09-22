@@ -136,7 +136,9 @@ export type MetaAction =
   | { t: 'moveItem'; uid: number; x: number; y: number }       // bag re-place (swap when exactly one blocker)
   | { t: 'sortBag'; mode: string; dir?: 'asc' | 'desc' }       // re-pack the bag by a registered sort mode (engine/bagsort.ts); dir mirrors the order
   | { t: 'dropItem'; uid: number }                             // bag OR worn OR container item → ground
-  | { t: 'oracleRelic'; uid: number; operation: 'store' | 'equip' | 'unseat' | 'release' }
+  | { t: 'oracleRelic'; uid: number; operation: 'store' | 'equip' | 'unseat' | 'release' | 'withdraw' }
+  | { t: 'reliquaryToggle'; enabled: boolean }
+  | { t: 'withdrawRelic'; uid: number; x?: number; y?: number }
   | { t: 'relicStashMove'; uid: number; page: number; x: number; y: number }
   | { t: 'personalStash'; uid: number; operation: 'store' | 'take' | 'move'; x?: number; y?: number }
   | { t: 'oracleAttune' }

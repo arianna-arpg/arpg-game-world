@@ -10,9 +10,9 @@
 
 ## Account Relics
 
-One 6×4 page; eight-page ceiling. Each next page costs `40 × (purchasedPages + 1)²` Mortal Essence. This is horizontal capacity only, independent from the equipped board and +5% power ranks. All parameters are in `RELIC_STASH`. Free initial capacity arrives with the Reliquary feature. The page card appears in the Vault without requiring the power lesson.
+One 6×4 page; eight-page ceiling. Each next page costs `40 × (purchasedPages + 1)²` Mortal Essence. This is horizontal capacity only, independent from the equipped board and +2% power ranks. All parameters are in `RELIC_STASH`. Free initial capacity arrives with the Reliquary feature. The standard page card appears under Town in the Vault without requiring the power lesson.
 
-`World.relicStashMove` accepts loose finds, equipped items and stored items. `seatAccountRelic` proves storage for displaced equipment before committing an aimed swap. Account property cannot leave for the bag, vendor, ground or corpse. `release` only consumes an unlocked, unequipped item after the UI's second press; its stable identity is retained as a tombstone so legacy saves cannot re-import it. Restoring account items advances the uid allocator to prevent fresh-run collisions.
+`World.relicStashMove` accepts loose finds, equipped items and stored items. `withdrawRelic` proves bag space before moving a stored body. `seatAccountRelic` proves bag room for bag exchanges or storage room for reserve exchanges before committing. Equipped-board edits require calm. The bag holds canonical account references; character saves omit them and restore account carried identities on adoption. Account property cannot leave for the vendor, ground or corpse. `release` only consumes an unlocked, stored item after the UI's second press; its stable identity is retained as a tombstone so legacy saves cannot re-import it. Restoring account items advances the uid allocator to prevent fresh-run collisions.
 
 ## Immortal lockers
 

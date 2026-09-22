@@ -22,12 +22,14 @@ app.whenReady().then(async () => {
   try {
     await win.loadURL(server.url);
     await js(`(() => {
+      // Keep terrain, loot and dwell fixtures reproducible across UI runs.
+      let seed=27811;Math.random=()=>{seed=(seed+0x6d2b79f5)>>>0;let t=seed;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return ((t^(t>>>14))>>>0)/4294967296;};
       __game.account().ledger.prologue_lived=1;__game.account().ledger['tutorial_faction:goblin']=1;
       __game.devStartRun('warrior');__game.ui.hideAll();const w=__game.world();w.player.invulnerable=true;w.player.level=14;
       w.odyssey.update();w.loadZone('quest_revenge_commander_goblin');w.questRescues.update();
       const q=window.oracleQA={w,id:'revenge_commander_goblin'};
       q.box=()=>{const r=document.getElementById('npc-dialogue');return {open:!r.hidden,name:r.querySelector('h2').textContent,text:r.querySelector('.dialogue-accessible').textContent,oracle:__game.ui.oracleOpen,fatal:__game.crash().fatal};};
-      q.approach=()=>{const a=w.actors.find(a=>a.defId==='townsfolk_oracle');w.player.pos={x:a.pos.x+30,y:a.pos.y};w.player.tier=a.tier;return a;};
+      q.approach=()=>{const a=w.actors.find(a=>a.defId==='townsfolk_oracle');w.player.pos={...a.pos};w.player.tier=a.tier;return a;};
       q.step=n=>{for(let i=0;i<n;i++){q.approach();__game.step(1);}return q.box();};
       for(const a of w.actors)if(a.team==='enemy')a.pos={x:50,y:50};
     })()`);
@@ -57,10 +59,11 @@ app.whenReady().then(async () => {
       document.querySelector('.dialogue-close').click();
       document.querySelector('[data-oracle-attune]').click();
       const relic=w.meta.containers.reliquary[0];
-      document.querySelector('[data-relic-operation="unseat"]').click();
-      if(w.meta.containers.reliquary.length!==0||w.meta.items.some(i=>i.uid===relic.uid))throw Error('Unseat did not enter reserve');
-      const search=document.querySelector('[data-relic-search]');search.value=relic.name;search.dispatchEvent(new Event('input',{bubbles:true}));
-      document.querySelector('[data-relic-operation="equip"]').click();
+      w.lastCombatAt=-999;__game.ui.containerPane.openFromMenu('reliquary');
+      const toggle=document.querySelector('[data-reliquary-toggle]');if(!toggle||toggle.disabled)throw Error('No enabled inventory toggle');toggle.click();
+      if(w.meta.relicEnabled!==false)throw Error('Reliquary did not disable');
+      document.querySelector('[data-reliquary-toggle]').click();if(w.meta.relicEnabled!==true)throw Error('Reliquary did not enable');
+      if(document.querySelector('[data-drop^="relicSeat:"]'))throw Error('Oracle still exposes equipped board');
       const loose=JSON.parse(JSON.stringify(relic));delete loose.relicKey;loose.uid=900001;loose.x=0;loose.y=0;loose.name='Reserve test charm';w.meta.items.push(loose);
       __game.ui.refreshOracle();document.querySelector('[data-relic-operation="store"]').click();
       if(w.meta.items.some(i=>i.uid===loose.uid))throw Error('Deposit left duplicate');
@@ -70,27 +73,36 @@ app.whenReady().then(async () => {
       oracleQA.clickTile('[data-drop="relicCell:0:5:3"]');
       const cell=w.account.reliquary.stash.cells[loose.relicKey];if(cell.x!==5||cell.y!==3)throw Error('Grid click-lift did not move '+JSON.stringify({cell,last:oracleQA.lastClick}));
       oracleQA.clickTile('[data-drag="relicTile:'+loose.uid+'"]');
-      oracleQA.clickTile('[data-drop="relicSeat:1:1"]');
-      if(w.meta.containers.reliquary[0].uid!==loose.uid)throw Error('Grid swap did not equip reserve');
-      const displaced=w.account.reliquary.stash.cells[relic.relicKey];if(displaced.x!==5||displaced.y!==3)throw Error('Swap did not reuse storage cell');
+      oracleQA.clickTile('[data-drop="bagCell:11:7"]');
+      if(!w.meta.items.includes(loose))throw Error('Storage drag did not reach inventory '+JSON.stringify({last:oracleQA.lastClick,bag:w.meta.items.map(i=>({uid:i.uid,x:i.x,y:i.y})),reach:w.canManageAccountRelics(w.localSeat)}));
+      document.querySelector('[data-containerflap="reliquary"]').click();
+      oracleQA.clickTile('[data-drag="gearItem:'+loose.uid+'"]');
+      oracleQA.clickTile('[data-drop="containerCell:reliquary:1:1"]');
+      if(w.meta.containers.reliquary[0].uid!==loose.uid||!w.meta.items.includes(relic))throw Error('Inventory swap failed');
+      document.querySelector('[data-folio-tab="oracle"]').click();
+      oracleQA.clickTile('[data-drag="gearItem:'+relic.uid+'"]');
+      oracleQA.clickTile('[data-drop="relicCell:0:5:3"]');
+      if(w.meta.items.includes(relic)||!w.account.reliquary.stash.cells[relic.relicKey])throw Error('Inventory drag did not store');
       return {attuned:w.account.ledger.oracle_reliquary_attuned,stored:w.account.reliquary.items.length,equipped:w.meta.containers.reliquary.length};
     })()`);log({stage:'account-storage',...storage});assert.equal(storage.attuned,1);assert.equal(storage.stored,2);assert.equal(storage.equipped,1);await capture('account-storage');
     const investment=await js(`(() => {
-      __game.ui.hideAll();const a=__game.account();a.ledger.account_deaths=1;a.credits=10;__game.ui.showAccountScreen();
-      document.querySelector('[data-reliquary-invest]').click();
+      const w=oracleQA.w;__game.ui.hideAll();const a=__game.account();a.ledger.account_deaths=1;a.credits=10;__game.ui.showAccountScreen();document.querySelector('[data-vtab="gems"]')?.click();
+      document.querySelector('[data-invest="reliquary_power_1"]').click();
       if(a.reliquary.invested!==10||a.reliquary.rank!==0)throw Error('Partial pour lost');
-      a.credits=20;__game.ui.showAccountScreen();document.querySelector('[data-reliquary-invest]').click();
-      const credits=a.credits;a.credits=15;__game.ui.showAccountScreen();document.querySelector('[data-relic-stash-invest]').click();
+      a.credits=20;__game.ui.showAccountScreen();document.querySelector('[data-invest="reliquary_power_1"]').click();
+      const credits=a.credits;a.credits=15;__game.ui.showAccountScreen();document.querySelector('[data-vtab="town"]')?.click();document.querySelector('[data-invest="relic_stash_2"]').click();
       if(a.reliquary.stash.invested!==15||a.reliquary.stash.pages!==1)throw Error('Stash partial pour lost');
-      a.credits=30;__game.ui.showAccountScreen();document.querySelector('[data-relic-stash-invest]').click();
+      a.credits=30;__game.ui.showAccountScreen();document.querySelector('[data-invest="relic_stash_2"]').click();
       if(a.reliquary.stash.pages!==2||a.credits!==5)throw Error('Stash page purchase failed');
-      return {rank:a.reliquary.rank,partial:a.reliquary.invested,credits,text:document.querySelector('[data-reliquary-invest]').closest('.vault-lesson').textContent};
-    })()`);log({stage:'investment',...investment});assert.equal(investment.rank,1);assert.equal(investment.partial,0);assert.equal(investment.credits,5);assert.match(investment.text,/\+5%/);await capture('account-investment');
-    await js(`(() => {__game.ui.hideAll();document.getElementById('account-screen').classList.add('hidden');const w=oracleQA.w;w.player.pos={...w.stationAnchor('oracle').pos};__game.ui.showOracle();
+      return {rank:a.reliquary.rank,partial:a.reliquary.invested,credits,power:w.meta.relicEmpowerment};
+    })()`);log({stage:'investment',...investment});assert.equal(investment.rank,1);assert.equal(investment.partial,0);assert.equal(investment.credits,5);assert.equal(investment.power,.02);await capture('account-investment');
+    await js(`(() => {__game.ui.hideAll();document.getElementById('account-screen').classList.add('hidden');const w=oracleQA.w;w.player.pos={...w.stationAnchor('oracle').pos};__game.ui.showOracle();})()`);
+    await capture('stash-page-one');
+    await js(`(() => {const w=oracleQA.w;document.querySelector('[data-folio-tab="oracle"]')?.click();
       const item=w.account.reliquary.items.find(i=>!w.account.reliquary.seated.includes(i.relicKey));oracleQA.storedKey=item.relicKey;
       oracleQA.clickTile('[data-drag="relicTile:'+item.uid+'"]');document.querySelector('[data-relic-page="1"]').click();
       oracleQA.clickTile('[data-drop="relicCell:1:4:2"]');
-      const cell=w.account.reliquary.stash.cells[item.relicKey];if(cell.page!==1||cell.x!==4||cell.y!==2)throw Error('Cross-page drag failed');
+      const cell=w.account.reliquary.stash.cells[item.relicKey];if(cell.page!==1||cell.x!==4||cell.y!==2)throw Error('Cross-page drag failed '+JSON.stringify({cell,last:oracleQA.lastClick}));
       __game.saveAccount();__game.save();})()`);
     await capture('stash-page-two');
     const residence = await js(`(() => {
@@ -124,6 +136,8 @@ app.whenReady().then(async () => {
       target.scrollIntoView({block:'center',behavior:'instant'});const end=target.getBoundingClientRect();
       document.dispatchEvent(new PointerEvent('pointermove',{bubbles:true,clientX:end.left+8,clientY:end.top+8}));
       document.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,button:0,clientX:end.left+8,clientY:end.top+8}));
+      // A native pointer release also emits click; consume the drag's trailing click.
+      document.dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:end.left+8,clientY:end.top+8}));
       if(w.meta.stash.layout.cells[item.uid].x!==3)throw Error('Personal stash grid move failed');
       return {count:w.meta.stash.items.length,uid:item.uid};})()`);log({stage:'immortal-locker',...locker});assert.equal(locker.count,1);await capture('immortal-locker');
     await js(`(() => {const w=oracleRepeatQA.w;document.querySelector('[data-personal-stash-take]').click();if(w.meta.stash.items.length!==0)throw Error('Personal stash retrieval failed');w.meta.modeId='mortal';__game.ui.hideAll();})()`);

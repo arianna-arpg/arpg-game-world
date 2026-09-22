@@ -126,6 +126,7 @@ export function captureLoot(meta: PlayerMeta, policy: DeathLootPolicy = DEFAULT_
   // it like any load (rebuildAnyItem in engine/gemitems.ts).
   if (policy.bagItems) {
     for (const bagged of meta.items) {
+      if (bagged.relicKey) continue;
       const { x: _bx, y: _by, ...item } = bagged; // a corpse item has no bag cell
       items.push({ kind: 'gear', item });
     }
