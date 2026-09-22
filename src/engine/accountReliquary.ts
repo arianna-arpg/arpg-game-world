@@ -48,6 +48,21 @@ export function accountRelicBoard(a: Account): ItemInstance[] {
   return a.reliquary.items.filter(i => keys.has(i.relicKey!));
 }
 
+/** Pack custody is at risk, even for a previously stored account Relic.
+ * Tombstones prevent old vessel saves or ground echoes from restoring losses. */
+export function loseCarriedRelics(a: Account, bag: readonly ItemInstance[], scope: string): number {
+  const lost = new Set(bag.filter(isRelic).map(i => i.relicKey ?? `legacy:${scope}:${i.uid}`));
+  if (!lost.size) return 0;
+  const r = a.reliquary;
+  r.released = [...new Set([...r.released, ...lost])];
+  r.items = r.items.filter(i => !lost.has(i.relicKey!));
+  r.carried = r.carried.filter(k => !lost.has(k));
+  r.seated = r.seated.filter(k => !lost.has(k));
+  for (const key of lost) delete r.stash.cells[key];
+  reconcileRelicStash(a);
+  return lost.size;
+}
+
 export function migrateRelicCorpses(a: Account, deaths: DeathRecord[]): void {
   for (const d of deaths) d.loot.items = d.loot.items.filter(row => {
     if (row.kind !== 'gear' || !isRelic(row.item)) return true;
@@ -74,6 +89,7 @@ export function migrateRelicCarry(a: Account, carry: CarrySlice & { items: ItemI
   }
   // Mutable PlayerMeta arrays satisfy the read-only inspection contract.
   carry.items = carry.items.filter(i => !(legacy && isRelic(i)) && !i.relicKey
+    && !a.reliquary.released.includes(`legacy:${scope}:${i.uid}`)
     && !a.reliquary.items.some(stored => stored.relicKey === `legacy:${scope}:${i.uid}`));
   // An older vessel may have ordinary gear with the same session uid. Stable
   // account keys remain unchanged; live drag/action addresses must be unique.

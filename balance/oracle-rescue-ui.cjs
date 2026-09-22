@@ -146,6 +146,25 @@ app.whenReady().then(async () => {
     const reloaded=await js(`({rank:__game.account().reliquary.rank,items:__game.account().reliquary.items.length,seated:__game.account().reliquary.seated.length,pages:__game.account().reliquary.stash.pages,cells:Object.values(__game.account().reliquary.stash.cells),fatal:__game.crash().fatal})`);
     log({stage:'disk-reload',...reloaded});assert.equal(reloaded.rank,1);assert.equal(reloaded.items,2);assert.equal(reloaded.seated,1);assert.equal(reloaded.fatal,null);
     assert.equal(reloaded.pages,2);assert.deepEqual(reloaded.cells,[{page:1,x:4,y:2}]);
+    const death = await js(`(() => {
+      __game.devStartRun('warrior');__game.ui.hideAll();const w=__game.world();w.loadZone('lastlight');
+      w.player.pos={...w.stationAnchor('oracle').pos};w.player.invulnerable=false;w.lastCombatAt=-999;
+      const r=w.account.reliquary, withdrawn=r.items.find(i=>!r.seated.includes(i.relicKey));
+      const stored=structuredClone(withdrawn);delete stored.relicKey;stored.uid=900101;stored.x=10;stored.y=7;
+      w.meta.items.push(stored);w.oracleRelic(w.localSeat,stored.uid,'store');
+      w.withdrawRelic(w.localSeat,withdrawn.uid);if(!w.meta.items.includes(withdrawn))throw Error('Death fixture did not withdraw');
+      const fresh=structuredClone(withdrawn);delete fresh.relicKey;fresh.uid=900102;fresh.x=11;fresh.y=7;w.meta.items.push(fresh);
+      __game.save();w.kill(w.player);__game.step(2);
+      if(r.items.length!==2||r.carried.length||w.meta.items.some(i=>i.uid===withdrawn.uid||i.uid===fresh.uid))throw Error('Death retained a pack Relic');
+      return {lost:withdrawn.relicKey,equipped:r.seated[0],stored:stored.relicKey};
+    })()`);
+    await js(`(async()=>{for(let i=0;i<60;i++){const a=await fetch('/__save/0').then(r=>r.json());if(a.reliquary?.released.includes(${JSON.stringify(death.lost)})&&a.reliquary.items.length===2&&a.reliquary.carried.length===0)return;await new Promise(r=>setTimeout(r,50));}throw Error('Death loss was not persisted');})()`);
+    await win.loadURL(server.url);
+    const afterDeath=await js(`({keys:__game.account().reliquary.items.map(i=>i.relicKey),seated:__game.account().reliquary.seated,carried:__game.account().reliquary.carried,lost:__game.account().reliquary.released,fatal:__game.crash().fatal})`);
+    assert.deepEqual(afterDeath.keys.sort(),[death.equipped,death.stored].sort());assert.deepEqual(afterDeath.carried,[]);
+    assert.deepEqual(afterDeath.seated,[death.equipped]);assert(afterDeath.lost.includes(death.lost));assert.equal(afterDeath.fatal,null);
+    log({stage:'death-disk-reload',...afterDeath});
+    log('PASS: actual death destroys withdrawn/new pack Relics durably; equipped and stored Relics survive app reload');
     log('PASS: grid moves, capacity-preserving equipment swaps, cross-page drag, Vault page investment and personal Immortal storage');
     log('PASS: account reserve, equipped selection and empowerment survive a real app reload');
     log('PASS: captive dialogue, real commander kill, freed body, home choice, reward button, relic seating and Oracle service dialogue coexist');

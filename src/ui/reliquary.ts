@@ -36,6 +36,6 @@ export function oracleReliquaryHtml(w: World, seat: Seat, query: string, page = 
     ${stashGridHtml(RELIC_STASH.board, stashPage(entries, stash, page), 'relicTile', `relicCell:${page}`, query)}
     <details><summary>Page contents and release</summary>${matching.map(i => relicRow(i, 'withdraw', 'Withdraw to pack') + `<button data-relic-release="${i.uid}" ${i.locked ? 'disabled' : ''}>Release ${esc(i.name)} permanently</button>`).join('') || '<div class="desc">No matching stored Relics on this page.</div>'}</details>
     ${overflow.length ? `<h3>Recovery (${overflow.length})</h3><div class="desc">Your old collection exceeded the new grid. Withdraw or release these Relics, or unlock space. New deposits wait until recovery is empty.</div>${overflow.map(({ item }) => relicRow(item, 'withdraw', 'Recover to pack') + `<button data-relic-release="${item.uid}" ${item.locked ? 'disabled' : ''}>Release ${esc(item.name)} permanently</button>`).join('')}` : ''}
-    <h3>Relics in your pack</h3><div class="desc">New finds become account property when stored or equipped. Account Relics cannot be sold or dropped.</div>
+    <h3>Relics in your pack</h3><div class="desc">Relics in your pack are lost on death, including withdrawals. Equip them in the Reliquary or store them here to keep them.</div>
     ${seat.meta.items.filter(isRelic).map(i => relicRow(i, 'store', 'Store permanently')).join('') || '<div class="desc">No loose Relics in your pack.</div>'}`;
 }

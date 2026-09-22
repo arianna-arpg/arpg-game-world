@@ -109,7 +109,7 @@ import {
   type MemoryKind, type MemoryPin, type MemoryProvenance, type MemoryRecallGroup, type MemoryRecallResult,
   type MemoryRecallViewData,
 } from './memories';
-import { accountRelicBoard, bankRelic, isRelic, migrateRelicCarry, migrateRelicCorpses, planRelicStorage, reconcileRelicStash, reliquaryExperience } from './accountReliquary';
+import { accountRelicBoard, bankRelic, isRelic, loseCarriedRelics, migrateRelicCarry, migrateRelicCorpses, planRelicStorage, reconcileRelicStash, reliquaryExperience } from './accountReliquary';
 import { emptyStash, personalStashEntries, planStashMove, type PersonalStash, type StashCell } from './stash';
 import { STASH_DEFS } from '../data/stashes';
 import { empowerRelicMods } from './relicPower';
@@ -5426,6 +5426,7 @@ export class World {
    *  falling covenant fells the vessel (run over, no wipe), a
    *  death-surviving mode stage respawns, and permadeath ends the run. */
   private concludeWipe(): void {
+    for (const seat of this.seats) this.loseBagRelicsOnDeath(seat);
     if (this.descentRun) { this.resurfaceFromDescent('died'); return; }
     // The world remembers the fall BEFORE the mode decides what it costs —
     // an Undying death feeds the saga exactly as a mortal one does.
@@ -5559,6 +5560,21 @@ export class World {
     this.accountDirty = true;
   }
 
+  /** Settle pack Relics before corpse exclusions, carry restore or a death fade.
+   * Safe to repeat across the wipe, corpse and strip paths. */
+  private loseBagRelicsOnDeath(seat: Seat): void {
+    if (this.clientActionHook) return;
+    if (seat === this.localSeat) {
+      const scope = seat.meta.relicScope ?? (seat.meta.charId || 'run:' + this.manifest.seed);
+      if (loseCarriedRelics(this.account, seat.meta.items, scope)) {
+        this.accountDirty = true;
+        saveAccount(this.account);
+      }
+    }
+    seat.meta.items = seat.meta.items.filter(i => !isRelic(i));
+    this.markMetaDirty(seat);
+  }
+
   /** What a survived death TAKES: the whole carry (bag + doll + carried gems +
    *  materials, both essence wallets), mirroring exactly what a mortal wipe
    *  loses — minus what recordDeath just banked onto the corpse. The BUILD
@@ -5569,6 +5585,7 @@ export class World {
   /** The seat-general strip (the local wipe above; a couch guest's vessel
    *  paying its own covenant on a party wipe). */
   private stripCarryOf(seat: Seat): void {
+    this.loseBagRelicsOnDeath(seat);
     const m = seat.meta;
     m.items = []; // gem wrappers ride the bag — one wipe covers them (M1)
     m.equipped = {};
@@ -5647,6 +5664,7 @@ export class World {
    *  Called by main.ts for a mortal death and by beginModeRespawn for a
    *  survived one. Skips caves (off-graph, no stable node) + empty loot. */
   recordDeath(): void {
+    this.loseBagRelicsOnDeath(this.localSeat);
     if (this.inCave) return;
     const loot = captureLoot(this.meta);
     if (loot.items.length === 0) return;
@@ -5672,6 +5690,7 @@ export class World {
    *  vessel's roster save; those corpses spawn when that vessel is next
    *  played as the hero), 'account' lands on the shared account ring. */
   private recordSeatDeath(seat: Seat): void {
+    this.loseBagRelicsOnDeath(seat);
     if (this.inCave) return;
     const loot = captureLoot(seat.meta);
     if (loot.items.length === 0) return;

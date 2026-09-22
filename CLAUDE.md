@@ -10,7 +10,8 @@ investment and attributable Relic followers are documented in
 `docs/design/account-reliquary.md`. Tuning lives in `data/reliquary.ts`;
 `engine/accountReliquary.ts` owns migration and `engine/relicPower.ts` the safe
 numeric fold. The inventory toggle trades equipped power for 2% XP per occupied
-cell; empowerment grows by 2% per account rank. Verify `probe_relicflow.ts`,
+cell; empowerment grows by 2% per account rank. Pack Relics are lost on death;
+equipped/stored Relics persist. Verify `probe_relicdeath.ts`, `probe_relicflow.ts`,
 `probe_accountreliquary.ts`, `probe_reliquary.ts`,
 `probe_relicuniques.ts` and `balance/oracle-rescue-ui.cjs`.
 

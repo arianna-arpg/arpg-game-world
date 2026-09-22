@@ -24,6 +24,7 @@
 import type { ItemInstance } from '../engine/items';
 import type { SkillInstance, SkillRarity } from '../engine/skills';
 import type { PlayerMeta } from '../engine/world';
+import { ITEM_BASES } from '../data/itembases';
 
 export const DEATH_SCHEMA = 1;
 /** Newest-first ring buffer of recent deaths kept on the account. */
@@ -64,16 +65,14 @@ export interface DeathLootPolicy {
   bagItems: boolean;
   /** EQUIPPED gear (the doll — never the carried bag). */
   equipment: boolean;
-  /** THE CONTAINER FABRIC (engine/containers.ts): pieces SEATED in a side
-   *  board (the Reliquary's relics) — worn in every sense but the doll's,
-   *  so they ride the corpse with the equipment by default. */
+  /** Pieces in character-owned side boards. Relics never enter corpse loot:
+   * equipped/stored Relics persist; pack Relics are destroyed by death. */
   containers: boolean;
   // FUTURE: currency?: boolean; …
 }
 
-/** THE GEAR ERA: the corpse carries only what was WORN — doll and seated
- *  containers alike. Skills, supports, and the carried bag are lost to the
- *  death. Tune freely; this is the single knob. */
+/** The corpse carries worn ordinary gear. Skills, supports and pack contents
+ * are lost; account Relics are handled separately and never enter corpse loot. */
 export const DEFAULT_LOOT_POLICY: DeathLootPolicy = {
   knownSkills: false,
   bagItems: false,
@@ -120,31 +119,31 @@ export function skillToLoot(inst: SkillInstance): SavedLoot {
  *  qualifies (the caller then skips recording — an empty corpse is pointless). */
 export function captureLoot(meta: PlayerMeta, policy: DeathLootPolicy = DEFAULT_LOOT_POLICY): LootPayload {
   const items: SavedLoot[] = [];
+  const relic = (i: ItemInstance): boolean => !!i.relicKey || ITEM_BASES[i.baseId]?.category === 'relic';
   if (policy.knownSkills) for (const inst of meta.knownSkills.values()) items.push(skillToLoot(inst));
   // The bag lane: gear tiles and gem wrappers together — the wrapper's pure
   // JSON payload rides the 'gear' arm, and the reclaim's rebuild validates
   // it like any load (rebuildAnyItem in engine/gemitems.ts).
   if (policy.bagItems) {
     for (const bagged of meta.items) {
-      if (bagged.relicKey) continue;
+      if (relic(bagged)) continue;
       const { x: _bx, y: _by, ...item } = bagged; // a corpse item has no bag cell
       items.push({ kind: 'gear', item });
     }
   }
   if (policy.equipment) {
     for (const worn of Object.values(meta.equipped)) {
-      if (!worn) continue;
+      if (!worn || relic(worn)) continue;
       const { x: _x, y: _y, ...item } = worn; // a corpse item has no bag cell
       items.push({ kind: 'gear', item });
     }
   }
-  // THE CONTAINER FABRIC: every seated piece of every side board rides the
-  // same 'gear' arm (a relic is plain gear; its seat cell is stripped like
-  // a bag cell — the reclaim re-seats it in the BAG, honestly inert).
+  // Ordinary side-board equipment follows the policy. Relics are exempt,
+  // including legacy instances which have not acquired an account key yet.
   if (policy.containers) {
     for (const held of Object.values(meta.containers ?? {})) {
       for (const seated of held) {
-        if (seated.relicKey) continue; // Account property never enters a corpse.
+        if (relic(seated)) continue;
         const { x: _cx, y: _cy, ...item } = seated;
         items.push({ kind: 'gear', item });
       }

@@ -403,6 +403,9 @@ export class ContainerPane {
       const active = def.id !== 'reliquary' || this.host.seat().meta.relicEnabled !== false;
       return { text: `${def.glyph} Seated in the ${def.label} · ${active ? 'active' : 'inactive'}.`, color: '#c8a84b' };
     }
+    if (def.id === 'reliquary' && found?.where.kind === 'bag') {
+      return { text: 'Inactive in your pack · lost on death. Equip in the Reliquary or store with the Oracle to keep it.', color: '#c8a84b' };
+    }
     if (!containerBoard(def)) {
       return { text: `${def.glyph} Silent in the pack — ${isVaultAvailable(this.host.world().account) ? `the ${def.label} that could seat it waits in the Vault` : `find the ${def.label} to seat it`}.`, color: '#6a6478' };
     }
