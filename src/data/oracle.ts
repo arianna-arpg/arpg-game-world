@@ -2,6 +2,7 @@ import { FEATURE } from '../meta/account';
 import type { QuestRescue } from '../quests/types';
 
 export const ORACLE_RESCUED = 'oracle_rescued';
+export const ORACLE_MEMORY_REWARD = { rarity: 'magic', level: 1 } as const;
 /** Rescue grants services directly; it is never bought with crafting expertise. */
 export const ORACLE_RESCUE: QuestRescue = {
   ledger: ORACLE_RESCUED, legacyLedger: 'revenge_taken', npc: 'townsfolk_oracle',

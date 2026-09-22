@@ -33,7 +33,10 @@ export interface NpcDialogueDef {
  * the director. New systems can register their own facts here. */
 export const NPC_DIALOGUE_FACTS: Record<string, (w: World) => boolean> = {
   oracleAtHome: w => w.zone.id === START_ZONE,
-  oracleRelicWaiting: w => w.questRewardOffers().some(q => q.choices.some(c => c.baseId === 'relic_charm')),
+  oracleRelicWaiting: w => w.activeQuests.some(a => w.questStanding(a) === 'ready'
+    && w.questDefOf(a.questId)?.reward.choices?.some(c => c.baseId === 'relic_charm')),
+  oracleMemoryWaiting: w => w.activeQuests.some(a => w.questStanding(a) === 'ready' && !!w.questDefOf(a.questId)?.reward.skillChoice),
+  oracleCommanderAfield: w => w.activeQuests.some(q => q.questId.startsWith('oracle_commander_') && !q.fieldDone),
   reliquaryLesson: w => w.reliquaryLesson(),
   mireilleLessonComplete: w => w.mireilleLessonLived(),
   brandtImbueWaiting: w => w.questImbues.some(r => [BRANDT_HAMMER_QUEST, BRANDT_TROPHY_QUEST].includes(r.questId)),
@@ -46,6 +49,18 @@ export const NPC_APPEARANCES: Record<string, { base: string; variants: { all: re
   ] },
 };
 export const NPC_DIALOGUES: NpcDialogueDef[] = [
+  {
+    id: 'oracle_memory_choice', speaker: { defId: 'townsfolk_oracle' }, priority: 212,
+    all: [{ fact: 'oracleAtHome' }, { fact: 'oracleMemoryWaiting' }],
+    trigger: { kind: 'dwell', radius: 150, seconds: 0.4 },
+    lines: [{ text: 'A familiar shadow falls, and this life has room for a different answer. Choose a magic Memory in your Quest Journal.\n\nI can call upon the skills you have made your own. A calling glimpsed must first be welcomed in the Vault before its arts can answer by name.' }],
+  },
+  {
+    id: 'oracle_commander_pursuit', speaker: { defId: 'townsfolk_oracle' }, priority: 201,
+    all: [{ fact: 'oracleAtHome' }, { fact: 'oracleCommanderAfield' }],
+    trigger: { kind: 'dwell', radius: 150, seconds: 0.4 },
+    lines: [{ text: 'My door still stands because you opened another. I have not forgotten.\n\nThe old commander gathers a new warband. Break that command and return. This time, I will help you call a Memory of your choosing — a strength to shape the road ahead.' }],
+  },
   {
     id: 'oracle_captive', speaker: { defId: 'townsfolk_oracle' }, priority: 220,
     none: [{ ledger: ORACLE_RESCUED, scope: 'either' }, { fact: 'oracleAtHome' }],

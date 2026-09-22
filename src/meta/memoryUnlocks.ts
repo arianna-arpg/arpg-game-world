@@ -69,6 +69,7 @@ export function grantMemoryUnlock(a: Account, def: MemoryUnlockDef, random = Mat
   const picked = pool.find(c => { cursor -= c.weight; return cursor < 0; }) ?? pool[pool.length - 1];
   if (def.tier === 'discovery') {
     (picked.kind === 'skill' ? a.unlockedSkills : a.unlockedSupports).add(picked.id);
+    if (picked.kind === 'skill') a.explicitSkillUnlocks.add(picked.id);
   } else a.memorySecondary.add(memoryKey(picked.kind, picked.id));
   const receipt = { sequence: (a.memoryReceipts[def.id]?.sequence ?? 0) + 1,
     kind: picked.kind, id: picked.id, tier: def.tier };

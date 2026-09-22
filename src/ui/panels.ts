@@ -9456,6 +9456,15 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         this.refreshMap();
       });
     });
+    this.worldMap.querySelectorAll<HTMLInputElement>('[data-reward-search]').forEach(input => {
+      input.addEventListener('input', () => {
+        const query = input.value.trim().toLocaleLowerCase();
+        input.closest('section')?.querySelectorAll<HTMLButtonElement>('[data-quest-reward]').forEach(btn => {
+          btn.hidden = !btn.textContent?.toLocaleLowerCase().includes(query);
+          btn.style.display = btn.hidden ? 'none' : 'block';
+        });
+      });
+    });
     this.wireMapTabs();
   }
 

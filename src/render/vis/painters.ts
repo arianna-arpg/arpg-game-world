@@ -6794,6 +6794,21 @@ const snowman: GroupPainter = (env, group) => {
 };
 
 /** A fingerboard SIGNPOST: post + two weathered boards pointing old ways. */
+const serviceSign: GroupPainter = (env, group, def) => {
+  const p = def.params ?? {}, { ctx } = env;
+  for (const o of group) {
+    const r = o.radius, x = o.pos.x, y = o.pos.y;
+    ctx.save(); ctx.fillStyle = '#423328'; ctx.fillRect(x - 3, y - r, 6, r * 2);
+    ctx.fillStyle = '#211f27'; ctx.fillRect(x - r, y - r, r * 2, r * 1.5);
+    ctx.strokeStyle = String(p.color ?? '#dbc59a'); ctx.lineWidth = 1.5; ctx.strokeRect(x - r, y - r, r * 2, r * 1.5);
+    ctx.fillStyle = ctx.strokeStyle; ctx.font = `bold ${r}px Verdana`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(p.glyph ?? '◆'), x, y - r * .25); ctx.restore();
+    if (Math.hypot(env.world.player.pos.x - x, env.world.player.pos.y - y) < Number(p.labelRadius ?? 280)) {
+      env.labelSink?.(o, o.pos, x, y - r - 10, String(p.name ?? ''), String(p.color ?? '#dbc59a'), { font: 'bold 12px Verdana', stroke: true });
+    }
+  }
+};
+
 const signpost: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as { wood?: ColorSpec };
   const { ctx, theme } = env;
@@ -9307,7 +9322,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   watcherStone, hungBell, spiralStone,
   chitinFin, umbilic, mawPit,
   finBlade, impaler, groundChain, stairFlight,
-  cactus, duneCrest, saltPillar, boneArch, awningPoles, mirageGhost, web, deadTree, stump, log, snowman, signpost, firewoodPile,
+  cactus, duneCrest, saltPillar, boneArch, awningPoles, mirageGhost, web, deadTree, stump, log, snowman, signpost, serviceSign, firewoodPile,
   fountain, well, lanternPost, bench, marketStall, brokenCart,
   plagueCart, shallowGrave,
   scarecrow, hayBale, potCluster, rubble, bannerPost,

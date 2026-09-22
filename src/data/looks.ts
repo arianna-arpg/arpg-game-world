@@ -1464,7 +1464,7 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'staff', params: { orb: 'glow' } },
     ],
   },
-  npc_oracle_bound: { parts: [{ kind: 'robe' }] },
+  npc_oracle_bound: { parts: [{ kind: 'robe' }, { kind: 'captiveCage', color: '#858c98', params: { width: 1.7, height: 1.5, bars: 5 } }] },
   npc_trader: {
     parts: [
       { kind: 'torso' },

@@ -29,6 +29,10 @@ const WATER_LOOK = {
 };
 
 export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
+  service_sign_oracle: { painter: 'serviceSign', order: 59, params: { name: 'Oracle’s House', glyph: '◉', color: '#c7adeb' } },
+  service_sign_inn: { painter: 'serviceSign', order: 59, params: { name: 'Mireille’s Inn', glyph: '☾', color: '#e4c580' } },
+  service_sign_smith: { painter: 'serviceSign', order: 59, params: { name: 'Brandt’s Blacksmithery', glyph: '⚒', color: '#eba977' } },
+  service_sign_quests: { painter: 'serviceSign', order: 59, params: { name: 'Quartermaster · Quests', glyph: '!', color: '#9dcbe6' } },
   ...TITAN_DOODAD_VISUALS,
   ...ARENA_BOSS_DOORS,
   ashen_kennel_gate: {

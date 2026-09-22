@@ -62,8 +62,10 @@ lever; every number is unblessed. The probe is
 Count-based (RULED, card 1): the town stands at the highest rung whose
 `stations` the account meets, counting every `TOWN_ADDITIONS` feature it
 owns (derived — never a second list). Order-free, every purchase pushes the
-town toward its next stage, reads ONCE at World construction (the
-tier-flicker law: a threshold crossed mid-run re-lays home next run).
+town toward its next stage. Growth applies on the next town arrival, including
+within the same life, and never moves buildings under the player. Additions can
+author a minimum tier: the Oracle’s residence requires village size. Existing
+worlds grow monotonically; older town saves re-land safely when buildings move.
 
 | rung | id | stations | size | scatter × |
 |---|---|---|---|---|

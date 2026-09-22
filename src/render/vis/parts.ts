@@ -5529,7 +5529,28 @@ const sinterPlates: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+/** A reusable iron enclosure drawn over an immobile captive's body. The freed
+ * look removes the enclosure; actor look replication also updates portraits. */
+const captiveCage: PartPainter = (ctx, r, spec) => {
+  const p = spec.params ?? {}, w = r * Number(p.width ?? 1.7), h = r * Number(p.height ?? 1.5);
+  const bars = Math.max(3, Math.min(12, Number(p.bars ?? 5)));
+  ctx.save();
+  ctx.strokeStyle = '#252932'; ctx.lineWidth = Math.max(3, r * .24);
+  ctx.strokeRect(-w, -h, w * 2, h * 2);
+  ctx.strokeStyle = spec.color ?? '#858c98'; ctx.lineWidth = Math.max(1.2, r * .1);
+  ctx.strokeRect(-w, -h, w * 2, h * 2);
+  for (let i = 1; i < bars; i++) {
+    const x = -w + 2 * w * i / bars;
+    ctx.beginPath(); ctx.moveTo(x, -h); ctx.lineTo(x, h); ctx.stroke();
+  }
+  ctx.beginPath(); ctx.moveTo(-w, h * .6); ctx.lineTo(w, h * .6); ctx.stroke();
+  ctx.fillStyle = '#bd9651'; ctx.fillRect(-r * .23, h * .55, r * .46, r * .55);
+  ctx.fillStyle = '#292521'; ctx.beginPath(); ctx.arc(0, h * .82, r * .08, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+};
+
 export const PART_PAINTERS: Record<string, PartPainter> = {
+  captiveCage,
   disc, blob, carapace, torso, robe, serpentHead,
   skull, ribs, spineTrail, crown,
   hood, tatters, pauldrons,

@@ -8,7 +8,7 @@ import { MONSTERS } from '../data/monsters';
 import { odysseyMilestoneKey } from '../data/powerProgression';
 import { ORACLE_RESCUED } from '../data/oracle';
 import { QUESTS } from '../quests/defs';
-import { revengeFactionOf, revengeCullId, revengeCommanderId } from '../quests/revenge';
+import { revengeFactionOf, revengeCullId, revengeCommanderId, oracleCommanderId } from '../quests/revenge';
 import { ODYSSEY_CFG as C, ODYSSEY_SURVEY, ODYSSEY_TUTORIAL_RELEASE, odysseyFaction, odysseyQuestId } from '../data/odyssey';
 import { newOdyssey, restoreOdyssey, defeatOdysseyLeader, odysseyAct, odysseyReadiness, odysseySurvives,
   type OdysseyState, type OdysseyBody } from '../world/odyssey';
@@ -77,6 +77,13 @@ export class OdysseyRuntime {
       const revenge = revengeFactionOf(w.account.ledger);
       w.enrollOdysseyQuest(QUESTS[revengeCullId(revenge)], true);
       w.enrollOdysseyQuest(QUESTS[revengeCommanderId(revenge)], false);
+    }
+    // One commander opportunity per life: rescue OR remembrance, never both.
+    const rescuedThisLife = !!w.ledger[ORACLE_RESCUED] || !!w.ledger.revenge_taken
+      || w.activeQuests.some(a => !!QUESTS[a.questId]?.rescue)
+      || [...w.completedQuests].some(id => !!QUESTS[id]?.rescue);
+    if (w.account.ledger[ORACLE_RESCUED] && !rescuedThisLife) {
+      w.enrollOdysseyQuest(QUESTS[oracleCommanderId(revengeFactionOf(w.account.ledger))], true);
     }
     // Discover the operation by walking it; local faction kills and the giver
     // are independent ways to learn its target before reaching it.

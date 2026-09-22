@@ -107,6 +107,8 @@ export interface QuestReward {
   imbue?: { level: number; choices: number; prompt?: string };
   /** Choose exactly one item at the giver before ANY part of the payout lands. */
   choices?: readonly QuestRewardChoice[];
+  /** Any explicitly unlocked skill; class discovery alone never enters this pool. */
+  skillChoice?: { rarity: 'common' | 'magic' | 'rare' | 'legendary'; level: number };
   /** Giver's introduction to the choice, shown with the reward cards. */
   choicePrompt?: string;
   /** Account features earned with this reward, without a Vault purchase. */
@@ -138,6 +140,7 @@ export interface QuestRewardChoice {
   description: string;
   baseId: string;
   affixes: readonly string[];
+  skillId?: string;
 }
 
 /** Everything a QuestDef.gate predicate may consult — a read-only slice of the

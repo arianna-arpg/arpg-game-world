@@ -8,6 +8,7 @@ export function questRewardHtml(world: World): string {
   return world.questRewardOffers().map(q => `<section style="padding:12px;margin:6px 0 16px;background:#211d28;border:1px solid #9b8055;border-radius:6px">
     <h3 style="color:#e4cb97;margin:0 0 8px">Choose your reward</h3>
     <p style="font-size:12px;line-height:1.6;color:#c9c1b1">${esc(q.prompt)}</p>
+    ${q.choices.some(c => c.skillId) ? '<label>Find a skill <input data-reward-search type="search" placeholder="Search unlocked skills" style="width:100%;box-sizing:border-box;margin:8px 0;padding:8px;background:#14131c;color:#eee1c8;border:1px solid #706080;border-radius:3px"></label>' : ''}
     ${q.xp ? `<div style="color:#aaa18e;font-size:11px">Also awarded: ${q.xp} experience</div>` : ''}
     ${q.choices.map(c => `<button data-quest-reward="${esc(q.questId)}" data-reward-choice="${esc(c.id)}"
       style="display:block;width:100%;text-align:left;white-space:normal;margin:8px 0;padding:12px;line-height:1.5">

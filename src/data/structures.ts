@@ -853,6 +853,11 @@ export const STRUCTURES: Record<string, StructureDef> = {
       { kind: 'rock', x: 0, y: 0, radius: 13, anchor: true }, // the altar slab — THE STATION ANCHOR
     ],
   },
+  oracle_home: {
+    id: 'oracle_home', halfW: 70, halfH: 50, cellSize: 20,
+    plan: ['#######', '#Z...k#', '#..r..#', '#h...i#', '##DD###'],
+    confineVision: 'rooms', roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards',
+  },
 
   // A traveller's campfire: a ring of stones round a fire. Dwelling here REFRESHES
   // the wilds (the World reads the player's proximity to CAMPFIRE_SITE).
@@ -1556,3 +1561,15 @@ export const STRUCTURES: Record<string, StructureDef> = {
     garrison: 'seraphic', garrisonSize: [4, 6],
   },
 };
+
+/** Service signs are ordinary world props, composed onto reusable buildings. */
+export const STRUCTURE_SERVICE_SIGNS = [
+  { structure: 'oracle_home', kind: 'service_sign_oracle', x: 56, y: 100 },
+  { structure: 'inn', kind: 'service_sign_inn', x: 60, y: 155 },
+  { structure: 'blacksmith', kind: 'service_sign_smith', x: 72, y: 88 },
+  { structure: 'quest_house', kind: 'service_sign_quests', x: 56, y: 105 },
+] as const;
+for (const sign of STRUCTURE_SERVICE_SIGNS) {
+  const s = STRUCTURES[sign.structure];
+  s.props = [...(s.props ?? []), { kind: sign.kind, x: sign.x, y: sign.y, radius: 15 }];
+}

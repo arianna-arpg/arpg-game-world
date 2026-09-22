@@ -3,7 +3,10 @@
 Oracle rescue and account-wide relic access are documented in
 `docs/design/oracle-rescue.md`. `data/oracle.ts` and `QuestDef.rescue` configure
 captivity, residency and grants; `engine/questRescues.ts` validates completion.
-Verify with `probe_oraclerescue.ts` and `balance/oracle-rescue-ui.cjs`.
+Verify with `probe_oraclerescue.ts`, `probe_oraclerefinement.ts` and
+`balance/oracle-rescue-ui.cjs` (both lives). Selection rewards use
+`QuestReward.skillChoice` and `isSkillUnlockedForSelection`, separate from drops.
+Town growth folds on arrival; Oracle residency requires village size.
 
 Brandt's hammer/trophy quests and deferred, level-fixed imbues are documented in
 `docs/design/brandt-progression.md`. Content and tuning live in `data/brandt.ts`

@@ -33,7 +33,7 @@ import { encipher, revealScript } from '../data/runescript';
 import {
   FEATURE, LEDGER_ACCOUNT_DEATHS, LEDGER_CORPSES_RECLAIMED,
   LEDGER_FLASK_LESSON, LEDGER_LEGENDARY_SKILL_DROP,
-  LEDGER_VENDOR_BOUGHT, LEDGER_ZONES_EXPLORED, STARTER_CLASSES, bossSlainKey,
+  LEDGER_VENDOR_BOUGHT, LEDGER_ZONES_EXPLORED, STARTER_CLASSES, STARTER_SKILLS, isClassUnlocked, bossSlainKey,
   classLevelLedgerKey, reachedLevelKey, unlockedClassCount, type Account,
 } from './account';
 import {
@@ -1231,6 +1231,17 @@ export function reconcileClassBundleGems(a: Account): void {
   }
 }
 
+/** Deliberate rewards differ from drops: discovery alone cannot select a class's
+ * skills. Shared skills remain selectable through any activated class or an
+ * independent grant. Ambiguous legacy pending-only grants stay drop-only. */
+export function isSkillUnlockedForSelection(a: Account, id: string): boolean {
+  if (!a.unlockedSkills.has(id)) return false;
+  if (STARTER_SKILLS.includes(id) || a.explicitSkillUnlocks.has(id)) return true;
+  const owners = CLASS_BUNDLES.filter(b => b.skillIds.includes(id));
+  if (owners.some(b => isClassUnlocked(a, b.classId))) return true;
+  return !owners.some(b => a.pendingClassUnlocks.has(b.classId));
+}
+
 /** Every ledger key any class objective names, as key → the LARGEST count
  *  asked (presence keys 1; play thresholds their milestone key at 1). The
  *  dev tab's "stamp every objective" lever and the probe's reachability
@@ -1778,9 +1789,9 @@ function grantUnlock(a: Account, u: Unlockable): void {
       break;
     case 'classtier':
       a.unlockedClassTiers.add(u.id);
-      for (const id of u.payload.skillIds) a.unlockedSkills.add(id);
+      for (const id of u.payload.skillIds) { a.unlockedSkills.add(id); a.explicitSkillUnlocks.add(id); }
       break;
-    case 'skill':   for (const id of u.payload.skillIds) a.unlockedSkills.add(id); break;
+    case 'skill':   for (const id of u.payload.skillIds) { a.unlockedSkills.add(id); a.explicitSkillUnlocks.add(id); } break;
     case 'support': for (const id of u.payload.supportIds) a.unlockedSupports.add(id); break;
     case 'memory': break; // Completed atomically by investUnlock before any currency is consumed.
     case 'feature': a.features.add(u.payload.flag); break;

@@ -27,7 +27,7 @@
 import type { QuestDef } from './types';
 import { TUTORIAL_FACTIONS, tutorialFactionOf, type TutorialFactionRow } from '../data/commanders';
 import { FACTIONS } from '../data/monsters';
-import { ORACLE_RESCUE, ORACLE_RESCUED } from '../data/oracle';
+import { ORACLE_RESCUE, ORACLE_RESCUED, ORACLE_MEMORY_REWARD } from '../data/oracle';
 import { RELIQUARY_CHOICES } from './reliquary';
 
 /** Where each legion's war-camp country lies (tileset + compass off town). */
@@ -43,6 +43,7 @@ const REVENGE_GROUND: Record<string, { tileset: string; direction: 'n' | 'e' | '
 
 export const revengeCullId = (f: string): string => `revenge_cull_${f}`;
 export const revengeCommanderId = (f: string): string => `revenge_commander_${f}`;
+export const oracleCommanderId = (f: string): string => `oracle_commander_${f}`;
 /** The cull's payout key — the chain mechanism (Q2's requiresLedger). */
 export const revengeTrailKey = (f: string): string => `revenge_trail:${f}`;
 
@@ -106,5 +107,19 @@ const commanderQuest = (row: TutorialFactionRow): QuestDef => {
 /** One cull + one commander hunt per tutorial faction — spread into QUESTS
  *  beside the vocation chains. */
 export function revengeQuestDefs(): QuestDef[] {
-  return TUTORIAL_FACTIONS.flatMap(row => [cullQuest(row), commanderQuest(row)]);
+  return TUTORIAL_FACTIONS.flatMap(row => {
+    const rescue = commanderQuest(row);
+    const remembrance: QuestDef = {
+      ...rescue, id: oracleCommanderId(row.id), giver: 'townsfolk_oracle', rescue: undefined,
+      offerLabel: `Break ${row.banner}'s command — a Memory of your choosing`,
+      requiresLedger: ORACLE_RESCUED,
+      gate: ctx => !!ctx.accountLedger[ORACLE_RESCUED] && !ctx.runLedger[ORACLE_RESCUED]
+        && !ctx.runLedger.revenge_taken && revengeFactionOf(ctx.accountLedger) === row.id,
+      reward: { xp: 2200, passivePoints: 1, skillChoice: ORACLE_MEMORY_REWARD,
+        ledger: { quests_completed: 1, oracle_commander_done: 1 },
+        choicePrompt: '“The road is yours to choose.” Choose any skill you have explicitly unlocked, as a magic Memory. Classes awaiting their Vault Unlock do not add their skills here.' },
+      turnIn: { giver: 'townsfolk_oracle', prompt: 'The commander falls. Return to the Oracle in Lastlight and choose a magic Memory for this life.' },
+    };
+    return [cullQuest(row), rescue, remembrance];
+  });
 }

@@ -222,7 +222,7 @@ import { connectFloatingZone, countRoads, generateZone, mintCave, placeZoneAt, p
 import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
 import { VOYAGE_ISLANDS } from '../data/voyageIslands';
 import { shipOf, type ShipDef } from '../data/ships';
-import { expandedTown, townTier, townSiteAt, townSiteStructure, townStationFeatures, type TownSiteId } from '../data/townBuild';
+import { expandedTown, townTier, townSiteAt, townSiteStructure, townStationFeatures, TOWN_TIERS, type TownSiteId } from '../data/townBuild';
 import { bountyEssenceMix, rollBudgetBountyPay } from '../data/bountyRewards';
 import {
   BOUNTY_BOARD_CFG, BOUNTY_KINDS, bountyChargePay, bountySourceRows, clonePosting, describeBountyPay, liveBountyBand, postingQuestDef, rollBountyPay,
@@ -254,6 +254,7 @@ import { RELIQUARY_LESSON, resolveQuestZone } from '../quests/reliquary';
 import type { QuestDef, QuestGateCtx } from '../quests/types';
 import { imbuedItem, imbueOptions, mintQuestImbue, restoreQuestImbues, type QuestImbue } from './questImbue';
 import { QuestRescues } from './questRescues';
+import { questRewardChoices } from './questRewardChoices';
 import { QUEST_CATEGORY_CAPS, DEFAULT_QUEST_CATEGORY, questStandingLine, type QuestCategory, type QuestStanding } from '../quests/types';
 import { Rng, rollSeed, withSeededRandom } from '../core/rng';
 import { ALTARS, INTERACT_PLACE_CFG, SHRINES, type AltarDef, type ShrineDef } from '../data/shrines';
@@ -4194,11 +4195,8 @@ export class World {
     this.manifest = manifest;
     this.sim = new WorldSim(manifest);
     // TOWN-BUILDING: swap the per-run town for its expanded form (account-gated
-    // additions). Keyed off account.features (stable for the run) — a mid-run
-    // purchase only takes effect next run, like every town feature.
-    // THE TOWN'S TIER (townBuild TOWN_TIERS) reads ONCE here — every town
-    // seat this World resolves (townSeat) rides this index, never a live
-    // count, so a threshold crossed mid-run never re-lays home between visits.
+    // additions). This starts the tier; arrival-time folds can grow it after
+    // new services are earned. Buildings never move during an active visit.
     this.townTierIdx = townTier(account);
     this.zoneMap[START_ZONE] = expandedTown(account, this.zoneMap[START_ZONE]);
     this.townStationKey = this.ownedTownStationsKey(); // THE STATION FOLD's baseline
@@ -5693,6 +5691,7 @@ export class World {
    * visit (constructs, drops, and corpses stay behind).
    */
   loadZone(zoneId: string, from?: string): void {
+    this.townLayoutChangedOnLoad = false;
     // Legacy rescue evidence must arrive before the town layout is generated.
     this.questRescues.reconcile();
     this.magicPackEffects = [];
@@ -17943,6 +17942,9 @@ export class World {
     const healed = sanitizeWorldZones(ws.zones, claimed);
     if (!healed) return false;
     this.zoneMap = healed;
+    this.townStationKey = '';
+    const savedTownTier = TOWN_TIERS.findIndex(t => t.w === healed[START_ZONE].size.w && t.h === healed[START_ZONE].size.h);
+    this.townTierIdx = Math.max(this.townTierIdx, savedTownTier);
     // HARBORHOLD state rides the defs verbatim — sanitize each (foreign
     // saves, hand edits, renamed classes): a malformed state drops to a
     // bare quay, valid ones clamp to the data ladder. Never a crash.
@@ -18161,7 +18163,10 @@ export class World {
     // portal): the hero exactly there, allies + carried minions in a loose
     // ring (THE PARTY-LANDING LAW — this wake was its reference idiom).
     const p = this.player;
-    this.landPartyAt(below ?? vec(exact.x, exact.y), { spread: 80, band: [-80, 80] });
+    // A newly expanded town has moved its buildings. Keep the safe arrival
+    // chosen by loadZone instead of placing an old coordinate inside a new wall.
+    this.landPartyAt(below ?? (exact.zoneId === START_ZONE && this.townLayoutChangedOnLoad
+      ? { ...p.pos } : vec(exact.x, exact.y)), { spread: 80, band: [-80, 80] });
     // Vitals: proportional restore with a reaction floor — an exact wake is
     // honest about how hurt you were, not a free refill.
     const v = exact.vitals;
@@ -23803,14 +23808,14 @@ export class World {
    *  and the station serves as ever. Cleared per zone load. */
   private stationArmed = new Set<string>();
 
-  /** THE TOWN'S TIER — the size-ladder rung this World's Lastlight stands
-   *  on (townBuild TOWN_TIERS), read ONCE at construction. */
+  /** Town growth is monotone, applied at arrival rather than underfoot. */
   private townTierIdx = 0;
+  private townLayoutChangedOnLoad = false;
 
   /** THE STATION FOLD (2026-09-06): the town's OWNED additions fold into its
    *  fixtures at construction (expandedTown) and again at every town LOAD
-   *  whose owned-station set differs from the last fold — at the SAME rung
-   *  (the ladder reads once per world; the fold never re-sizes home). A
+   *  whose owned-station set differs from the last fold. The same fold grows
+   *  the tier when a threshold or a residence's minimum requires it. A
    *  station gained after this world stood raises its structure on the
    *  next arrival, and THE ANCHORED DWELL reads that structure — never a
    *  bare coordinate — so a station is usable exactly when it stands. */
@@ -23820,9 +23825,15 @@ export class World {
   }
   private refoldTownStations(): void {
     const key = this.ownedTownStationsKey();
-    if (key === this.townStationKey) return;
+    const nextTier = Math.max(this.townTierIdx, townTier(this.account));
+    if (key === this.townStationKey && nextTier === this.townTierIdx) return;
     this.townStationKey = key;
-    this.zoneMap[START_ZONE].fixtures = expandedTown(this.account, ZONES[START_ZONE], this.townTierIdx).fixtures;
+    this.townTierIdx = nextTier;
+    const grown = expandedTown(this.account, ZONES[START_ZONE], nextTier);
+    this.townLayoutChangedOnLoad = this.zoneMap[START_ZONE].size.w !== grown.size.w
+      || this.zoneMap[START_ZONE].size.h !== grown.size.h;
+    Object.assign(this.zoneMap[START_ZONE], { size: grown.size, fixtures: grown.fixtures,
+      layout: grown.layout, layoutParams: grown.layoutParams });
   }
   townTierIndex(): number { return this.townTierIdx; }
 
@@ -28776,7 +28787,7 @@ export class World {
       const cargo = this.meta.items.find(i => i.questId === q.id && i.baseId === q.collect!.baseId);
       if (!cargo || this.questStanding(aq) !== 'ready' || this.giverPresent(q.turnIn?.giver ?? []) === null) return;
     }
-    if (q?.reward.choices?.length) {
+    if (q && (q.reward.choices?.length || q.reward.skillChoice)) {
       // No XP, chain stamp or case until a real choice fits in the bag.
       if (questRewardChoice === undefined) {
         if (this.questRewardShown !== q.id) {
@@ -28785,9 +28796,9 @@ export class World {
         }
         return;
       }
-      const choice = q.reward.choices.find(c => c.id === questRewardChoice);
+      const choice = questRewardChoices(this.account, q).find(c => c.id === questRewardChoice);
       if (!choice) return;
-      const questReward = this.questRewardItem(q, choice.id);
+      const questReward = this.questRewardItem(q, choice.id, choice);
       if (!questReward) return;
       if (!autoPlace(this.meta.items, questReward)) {
         this.failNote(this.player, 'questReward', 'Make room in your pack, then choose your reward again.');
@@ -28875,7 +28886,7 @@ export class World {
     if (!posting) this.completedQuests.add(aq.questId);
     this.activeQuests.splice(idx, 1);
     this.markMetaDirty(this.localSeat);
-    if ((q?.reward.choices?.length || q?.reward.imbue) && !this.clientActionHook) {
+    if ((q?.reward.choices?.length || q?.reward.skillChoice || q?.reward.imbue) && !this.clientActionHook) {
       saveAccount(this.account);
       saveCharacter(this);
     }
@@ -28886,10 +28897,10 @@ export class World {
     choices: (NonNullable<QuestDef['reward']['choices']>[number] & { lines: string[]; footprint: string })[] }[] {
     return this.pendingTurnIns().flatMap(aq => {
       const q = this.questDefOf(aq.questId);
-      return q?.reward.choices?.length ? [{ questId: q.id, label: q.offerLabel,
+      return q && (q.reward.choices?.length || q.reward.skillChoice) ? [{ questId: q.id, label: q.offerLabel,
         prompt: q.reward.choicePrompt ?? 'Choose one item as your quest reward.', xp: q.reward.xp ?? 0,
-        choices: q.reward.choices.map(c => {
-          const item = this.questRewardItem(q, c.id);
+        choices: questRewardChoices(this.account, q).map(c => {
+          const item = this.questRewardItem(q, c.id, c);
           const size = item ? itemGridSize(item) : { w: 1, h: 1 };
           return { ...c, lines: item ? describeItem(item).affix.map(l => l.text) : [],
             footprint: `${size.w} × ${size.h}` };
@@ -28899,12 +28910,19 @@ export class World {
 
   /** One fixed item per card: preview and payout share exactly the same lines.
    * Reopening or reloading never rerolls it; only the runtime uid is transient. */
-  private questRewardItem(q: QuestDef, choiceId: string): ItemInstance | null {
+  private questRewardItem(q: QuestDef, choiceId: string, preview?: NonNullable<QuestDef['reward']['choices']>[number]): ItemInstance | null {
     const key = `${q.id}:${choiceId}`;
+    const c = preview ?? questRewardChoices(this.account, q).find(c => c.id === choiceId);
+    if (!c) return null;
     const cached = this.questRewardItems.get(key);
     if (cached) return cached;
-    const c = q.reward.choices?.find(c => c.id === choiceId);
-    if (!c) return null;
+    if (c.skillId && q.reward.skillChoice) {
+      const inst = withSeededRandom(this.manifest.seed ^ hashStr(key), () =>
+        makeSkillGem(SKILLS[c.skillId!], q.reward.skillChoice!.level, q.reward.skillChoice!.rarity));
+      const item = makeSkillGemItem(inst);
+      this.questRewardItems.set(key, item);
+      return item;
+    }
     const item = forgeItem({ ilvl: 1, baseId: c.baseId, rarity: 'magic',
       affixes: c.affixes.map(id => ({ id })), quality: 1, sockets: 0, rng: () => 0.5 });
     if (!item) return null;
@@ -28918,7 +28936,7 @@ export class World {
     if (seat !== this.localSeat || this.clientActionHook || this.player.dead || this.player.downed) return false;
     const aq = this.pendingTurnIns().find(e => e.questId === questId);
     const q = aq && this.questDefOf(aq.questId);
-    if (!aq || !q?.reward.choices?.some(c => c.id === choiceId)) return false;
+    if (!aq || !q || !questRewardChoices(this.account, q).some(c => c.id === choiceId)) return false;
     this.onQuestZoneCleared(aq, choiceId);
     return !this.activeQuests.includes(aq);
   }

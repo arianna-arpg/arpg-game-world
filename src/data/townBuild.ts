@@ -22,9 +22,9 @@
 //
 // Applied at World construction by CLONE-replace of the per-run town def —
 // never mutating the static ZONES row (cloneZones shares the fixtures array
-// by reference, so we always build fresh arrays). The tier reads ONCE at
-// construction (a mid-run purchase takes effect next run, like every town
-// feature); co-op reads the keeper's account.
+// by reference, so we always build fresh arrays). New services can grow home
+// on the next arrival, never while someone stands there. Co-op reads the
+// keeper's account. An addition may author a minimum tier for its residence.
 //
 // Adding a station = one TOWN_SITES row (its seat per tier) + one
 // TOWN_ADDITIONS row (its feature + structure). Adding a tier = one
@@ -81,7 +81,7 @@ export const TOWN_TIERS: TownTierDef[] = [
 export type TownSiteId =
   | 'waking_house' | 'blacksmith' | 'inn' | 'cottage_west' | 'cellar_house' | 'wayside_camp'
   | 'plaza' | 'waypoint' | 'font'
-  | 'salvage' | 'oracle' | 'bounty_board' | 'caravan' | 'recruiter' | 'quest_house'
+  | 'salvage' | 'oracle' | 'oracle_home' | 'bounty_board' | 'caravan' | 'recruiter' | 'quest_house'
   | 'campfire' | 'tracker' | 'training_yard'
   | 'mill_bank' | 'green' | 'cottage_1' | 'cottage_2' | 'cottage_3' | 'cottage_4' | 'cottage_5';
 
@@ -155,6 +155,8 @@ export const TOWN_SITES: TownSiteDef[] = [
     tiers: [{ x: 450, y: 480 }, { x: 460, y: 560 }, { x: 520, y: 640 }, { x: 600, y: 740 }] },
   { id: 'oracle', quarter: 'n', dwell: 120,
     tiers: [{ x: 1230, y: 330 }, { x: 720, y: 390 }, { x: 870, y: 450 }, { x: 1040, y: 520 }] },
+  { id: 'oracle_home', quarter: 'n',
+    tiers: [null, { x: 720, y: 200 }, { x: 870, y: 220 }, { x: 1040, y: 260 }] },
   { id: 'font', quarter: 'n', press: 150,
     tiers: [{ x: 1170, y: 230 }, { x: 850, y: 410 }, { x: 1000, y: 470 }, { x: 1170, y: 540 }] },
 
@@ -254,6 +256,7 @@ export function townTier(account: Account): number {
   const n = townStationCount(account);
   let tier = 0;
   for (let i = 0; i < TOWN_TIERS.length; i++) if (n >= TOWN_TIERS[i].stations) tier = i;
+  for (const add of TOWN_ADDITIONS) if (account.features.has(add.feature)) tier = Math.max(tier, add.minimumTier ?? 0);
   return tier;
 }
 
@@ -265,6 +268,8 @@ export function townSiteOf(account: Account, id: TownSiteId): Pt | null {
 export interface TownAddition {
   /** The account FEATURE flag that enables this addition. */
   feature: string;
+  /** A service needing its own residence can require an earlier town expansion. */
+  minimumTier?: number;
   /** The structures the feature raises, each at a town SITE (+ an offset in
    *  zone units — the structure's own footprint centred on the seat). */
   fixtures: { structure: string; site: TownSiteId; dx?: number; dy?: number }[];
@@ -291,7 +296,9 @@ export const TOWN_ADDITIONS: TownAddition[] = [
   // The Tracker's camp — the west edge, half in the wilds.
   { feature: FEATURE.TRACKER, fixtures: [{ structure: 'wayside_camp', site: 'tracker' }] },
   // The Oracle Stone — the smith's yard, off the forge's open east face.
-  { feature: FEATURE.ORACLE_STONE, fixtures: [{ structure: 'oracle_site', site: 'oracle' }] },
+  { feature: FEATURE.ORACLE_STONE, minimumTier: 1, fixtures: [
+    { structure: 'oracle_site', site: 'oracle' }, { structure: 'oracle_home', site: 'oracle_home' },
+  ] },
   // The Mercenary Recruiter — no structure of his own (World seats the
   // officer + banner at the site); the town grows so his corner exists.
   { feature: FEATURE.MERC_RECRUITER, fixtures: [] },

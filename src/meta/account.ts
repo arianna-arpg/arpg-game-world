@@ -459,6 +459,8 @@ export interface Account {
    *  falls back to the base at resolve. */
   kitPicks: Record<string, Record<string, string>>;
   unlockedSkills: Set<string>;
+  /** Independent explicit grants, retained even when a pending class shares a skill. */
+  explicitSkillUnlocks: Set<string>;
   unlockedSupports: Set<string>;
   /** Secondary access is account-wide; keys preserve skill/support identity. */
   memorySecondary: Set<string>;
@@ -519,6 +521,7 @@ export interface AccountSave {
   unlockedClasses: string[];
   pendingClassUnlocks?: string[];
   unlockedSkills: string[];
+  explicitSkillUnlocks?: string[];
   unlockedSupports: string[];
   memorySecondary?: string[];
   memoryReceipts?: Record<string, MemoryReceipt>;
@@ -553,6 +556,7 @@ export function makeAccount(): Account {
     unlockedClassTiers: new Set<string>(),
     kitPicks: {},
     unlockedSkills: new Set(STARTER_SKILLS),
+    explicitSkillUnlocks: new Set(STARTER_SKILLS),
     unlockedSupports: new Set(STARTER_SUPPORTS),
     memorySecondary: new Set<string>(),
     memoryReceipts: {},
@@ -585,6 +589,7 @@ export function serializeAccount(a: Account): AccountSave {
     unlockedClassTiers: [...a.unlockedClassTiers],
     kitPicks: a.kitPicks,
     unlockedSkills: [...a.unlockedSkills],
+    explicitSkillUnlocks: [...a.explicitSkillUnlocks],
     unlockedSupports: [...a.unlockedSupports],
     memorySecondary: [...a.memorySecondary],
     memoryReceipts: structuredClone(a.memoryReceipts),
@@ -642,6 +647,7 @@ export function deserializeAccount(s: AccountSave): Account | null {
       .map(([cls, v]) => [cls, Object.fromEntries(Object.entries(v)
         .filter(([, sid]) => typeof sid === 'string'))] as const)),
     unlockedSkills: new Set([...STARTER_SKILLS, ...(s.unlockedSkills ?? [])]),
+    explicitSkillUnlocks: new Set([...STARTER_SKILLS, ...(s.explicitSkillUnlocks ?? [])]),
     unlockedSupports: new Set([...STARTER_SUPPORTS, ...(s.unlockedSupports ?? [])]),
     memorySecondary: new Set((s.memorySecondary ?? []).filter(k => typeof k === 'string' && /^(skill|support):.+/.test(k))),
     memoryReceipts: Object.fromEntries(Object.entries(s.memoryReceipts ?? {}).filter(([, r]) =>
