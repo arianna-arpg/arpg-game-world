@@ -109,7 +109,9 @@ import {
   type MemoryKind, type MemoryPin, type MemoryProvenance, type MemoryRecallGroup, type MemoryRecallResult,
   type MemoryRecallViewData,
 } from './memories';
-import { accountRelicBoard, bankRelic, isRelic, migrateRelicCarry, migrateRelicCorpses } from './accountReliquary';
+import { accountRelicBoard, bankRelic, isRelic, migrateRelicCarry, migrateRelicCorpses, planRelicStorage, reconcileRelicStash } from './accountReliquary';
+import { emptyStash, personalStashEntries, planStashMove, type PersonalStash, type StashCell } from './stash';
+import { STASH_DEFS } from '../data/stashes';
 import { empowerRelicMods } from './relicPower';
 import { reliquaryPower } from '../meta/reliquary';
 import { RELIQUARY_CFG } from '../data/reliquary';
@@ -1818,7 +1820,10 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'dropItem': return isIdx(a.uid);
     case 'salvageItem': return isIdx(a.uid) && isLane(a.lane);
     case 'oracleAttune': return true;
-    case 'oracleRelic': return isIdx(a.uid) && ['store', 'equip', 'unseat'].includes(a.operation as string);
+    case 'oracleRelic': return isIdx(a.uid) && ['store', 'equip', 'unseat', 'release'].includes(a.operation as string);
+    case 'relicStashMove': return isIdx(a.uid) && isIdx(a.page) && isIdx(a.x) && isIdx(a.y);
+    case 'personalStash': return isIdx(a.uid) && ['store', 'take', 'move'].includes(a.operation as string)
+      && ((a.x === undefined && a.y === undefined) || (isIdx(a.x) && isIdx(a.y)));
     case 'pickupItem': return true;
     // THE CONTAINER FABRIC: the board is a registry id (re-resolved at
     // apply), the piece a uid, the cell an untrusted pair — both or neither.
@@ -1853,6 +1858,8 @@ function isValidMetaAction(a: MetaAction): boolean {
 }
 
 export interface PlayerMeta {
+  /** Character-owned town storage; never part of carried/corpse loot. */
+  stash?: PersonalStash;
   classDef: ClassDef;
   /** THE STAMPED OPENING (meta/classkit.ts resolveClassKit): the resolved
    *  kit bar this hero WOKE with — the class's base bar with each chosen
@@ -29624,6 +29631,8 @@ export class World {
       case 'sortBag': this.sortBag(seat, action.mode, action.dir); break;
       case 'dropItem': this.dropGearFromBag(seat, action.uid); break;
       case 'oracleRelic': this.oracleRelic(seat, action.uid, action.operation); break;
+      case 'relicStashMove': this.relicStashMove(seat, action.uid, action); break;
+      case 'personalStash': this.personalStash(seat, action.uid, action.operation, action.x, action.y); break;
       case 'oracleAttune': this.oracleAttune(seat); break;
       case 'containerPlace': this.containerPlace(seat, action.container, action.uid, action.x, action.y); break;
       case 'containerTake': this.containerTake(seat, action.container, action.uid, action.x, action.y); break;
@@ -46897,7 +46906,8 @@ export class World {
   private isBankedRelicEcho(item: ItemInstance): boolean {
     if (!isRelic(item)) return false;
     const scope = this.meta.relicScope ?? (this.meta.charId || 'run:' + this.manifest.seed);
-    return !!item.relicKey || this.account.reliquary.items.some(i => i.relicKey === 'legacy:' + scope + ':' + item.uid);
+    return !!item.relicKey || this.account.reliquary.released.includes('legacy:' + scope + ':' + item.uid)
+      || this.account.reliquary.items.some(i => i.relicKey === 'legacy:' + scope + ':' + item.uid);
   }
 
   canManageAccountRelics(seat: Seat): boolean {
@@ -46914,11 +46924,13 @@ export class World {
     // A retuned board sends property to reserve, never to the floor.
     this.account.reliquary.seated = seat.meta.containers.reliquary.map(i => i.relicKey!);
     for (const item of misfits) { delete item.x; delete item.y; }
+    reconcileRelicStash(this.account);
   }
 
   private persistAccountRelics(seat: Seat): void {
     if (seat !== this.localSeat || this.clientActionHook) return;
     this.account.reliquary.seated = (seat.meta.containers.reliquary ?? []).flatMap(i => i.relicKey ? [i.relicKey] : []);
+    reconcileRelicStash(this.account);
     this.accountDirty = true;
     saveAccount(this.account);
     this.markMetaDirty(seat);
@@ -46931,23 +46943,62 @@ export class World {
     this.persistAccountRelics(seat);
   }
 
-  oracleRelic(seat: Seat, uid: number, operation: 'store' | 'equip' | 'unseat'): void {
+  personalStash(seat: Seat, uid: number, operation: 'store' | 'take' | 'move', x?: number, y?: number): void {
+    const def = STASH_DEFS[this.seatModeDef(seat).stash ?? ''];
+    if (!def || !this.canManageAccountRelics(seat)) return;
+    const stash = seat.meta.stash ?? { items: [], layout: emptyStash(def) };
+    const item = (operation === 'store' ? seat.meta.items : stash.items).find(i => i.uid === uid);
+    if (!item || !def.accepts(item)) return;
+    if (operation === 'take') {
+      // Prove the destination before changing either owner.
+      const trial = { ...item }; delete trial.x; delete trial.y;
+      const bag = seat.meta.items.map(i => ({ ...i }));
+      const fit = x !== undefined && y !== undefined ? placeAt(bag, trial, x, y) : autoPlace(bag, trial);
+      if (!fit) { this.failNote(seat.actor, 'stash:' + uid, 'No room in your pack.'); return; }
+      stash.items = stash.items.filter(i => i !== item); delete stash.layout.cells[String(uid)];
+      item.x = trial.x; item.y = trial.y; seat.meta.items.push(item);
+    } else {
+      const target = x !== undefined && y !== undefined ? { page: 0, x, y } : undefined;
+      const plan = planStashMove(def, personalStashEntries(stash), stash.layout, { key: String(uid), item }, target);
+      if (!plan) { this.failNote(seat.actor, 'stash:' + uid, 'No room in this personal locker.'); return; }
+      if (operation === 'store') { removeFromBag(seat.meta.items, uid); stash.items.push(item); }
+      delete item.x; delete item.y; stash.layout = plan;
+    }
+    seat.meta.stash = stash;
+    this.markMetaDirty(seat);
+  }
+
+  relicStashMove(seat: Seat, uid: number, target?: StashCell): void {
+    if (!this.canManageAccountRelics(seat) || !this.account.features.has(FEATURE.RELIQUARY)) return;
+    const bagged = seat.meta.items.find(i => i.uid === uid);
+    const item = bagged ?? this.account.reliquary.items.find(i => i.uid === uid);
+    if (!item || !isRelic(item) || item.questId) return;
+    const plan = planRelicStorage(this.account, item, target);
+    if (!plan) { this.failNote(seat.actor, 'stash:' + uid, 'No room in the Relic stash. Make space or unlock another page in the Vault.'); return; }
+    const incoming = !item.relicKey;
+    const stored = bankRelic(this.account, item, seat.meta.relicScope ?? (seat.meta.charId || 'run:' + this.manifest.seed));
+    if (!stored) return;
+    if (incoming) { plan.cells[stored.relicKey!] = plan.cells.incoming; delete plan.cells.incoming; }
+    if (bagged) removeFromBag(seat.meta.items, uid);
+    seat.meta.containers.reliquary = (seat.meta.containers.reliquary ?? []).filter(i => i !== stored);
+    delete stored.x; delete stored.y;
+    this.account.reliquary.stash = plan;
+    this.recalcSeat(seat);
+    this.persistAccountRelics(seat);
+  }
+
+  oracleRelic(seat: Seat, uid: number, operation: 'store' | 'equip' | 'unseat' | 'release'): void {
     if (!this.canManageAccountRelics(seat) || !this.account.features.has(FEATURE.RELIQUARY)) return;
     if (operation === 'equip') { this.seatAccountRelic(seat, uid); return; }
-    if (operation === 'store') {
-      const item = seat.meta.items.find(i => i.uid === uid);
-      if (!item || !isRelic(item) || item.questId) return;
-      if (!bankRelic(this.account, item, seat.meta.relicScope ?? (seat.meta.charId || 'run:' + this.manifest.seed))) return;
-      removeFromBag(seat.meta.items, uid);
-    } else {
-      const held = seat.meta.containers.reliquary ?? [];
-      const item = held.find(i => i.uid === uid);
-      if (!item?.relicKey) return;
-      seat.meta.containers.reliquary = held.filter(i => i !== item);
-      delete item.x; delete item.y;
-      this.recalcSeat(seat);
+    if (operation === 'release') {
+      const item = this.account.reliquary.items.find(i => i.uid === uid);
+      if (!item || item.locked || this.account.reliquary.seated.includes(item.relicKey!)) return;
+      this.account.reliquary.released.push(item.relicKey!);
+      this.account.reliquary.items = this.account.reliquary.items.filter(i => i !== item);
+      delete this.account.reliquary.stash.cells[item.relicKey!];
+      this.persistAccountRelics(seat); return;
     }
-    this.persistAccountRelics(seat);
+    this.relicStashMove(seat, uid);
   }
 
   private seatAccountRelic(seat: Seat, uid: number, x?: number, y?: number): void {
@@ -46971,10 +47022,14 @@ export class World {
     } else if (!autoPlace(trial, candidate, boardDims(board))) {
       this.failNote(seat.actor, 'seat:' + uid, 'No open seat. Return a Relic to the Oracle reserve first.'); return;
     }
+    const stashPlan = displaced ? planRelicStorage(this.account, displaced, undefined, item.relicKey) : undefined;
+    if (displaced && !stashPlan) { this.failNote(seat.actor, 'stash:' + uid, 'No room for the exchanged Relic in storage.'); return; }
     const stored = bankRelic(this.account, item, seat.meta.relicScope ?? (seat.meta.charId || 'run:' + this.manifest.seed));
     if (!stored) return;
     if (bagged) removeFromBag(seat.meta.items, uid);
     if (displaced) { held.splice(held.indexOf(displaced), 1); delete displaced.x; delete displaced.y; }
+    if (stashPlan) this.account.reliquary.stash = stashPlan;
+    delete this.account.reliquary.stash.cells[stored.relicKey!];
     stored.x = candidate.x; stored.y = candidate.y;
     held.push(stored);
     if (lesson) this.account.ledger[RELIQUARY_LESSON] = 1;

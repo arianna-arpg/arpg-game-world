@@ -46,6 +46,7 @@ import { CATEGORY_GLYPHS } from '../render/itemIcons';
 import type { Seat, World } from '../engine/world';
 import { empowermentText } from './reliquary';
 import { isVaultAvailable } from '../meta/account';
+import { planRelicStorage } from '../engine/accountReliquary';
 
 /** What the drawers need from the panel that hosts them — read live, never
  *  held. The folio ids (`container:<id>`) and the docking law stay the
@@ -389,6 +390,7 @@ export class ContainerPane {
     const def = containerFor(item);
     if (!def) return null;
     const found = findCarried(this.host.seat().meta, item.uid);
+    if (item.relicKey && !found) return { text: 'Stored in the Oracle stash — its lines are inactive.', color: '#8a8678' };
     if (found?.where.kind === 'container') {
       return { text: `${def.glyph} Seated in the ${def.label} — its lines are live.`, color: '#c8a84b' };
     }
@@ -407,7 +409,10 @@ export class ContainerPane {
     const grab = d?.grab ?? { x: 0, y: 0 };
     const x = cx - grab.x, y = cy - grab.y;
     const m = this.host.seat().meta;
-    const found = p.kind === 'gearItem' ? findCarried(m, Number(p.arg)) : undefined;
+    const accountItem = p.kind === 'relicTile' && containerId === 'reliquary'
+      ? this.host.world().account.reliquary.items.find(i => i.uid === Number(p.arg)) : undefined;
+    const carried = ['gearItem', 'relicTile'].includes(p.kind) ? findCarried(m, Number(p.arg)) : undefined;
+    const found = carried ?? (accountItem ? { item: accountItem } : undefined);
     const from = found ? containerOriginOf(m, found.item.uid) : 'bag';
     const def = CONTAINERS[containerId];
     if (def?.accountStorage && !this.host.world().canManageAccountRelics(this.host.seat())
@@ -417,6 +422,10 @@ export class ContainerPane {
     const level = this.host.world().seatHero(this.host.seat()).level;
     const l = containerLanding(def, containerBoard(def), m.containers[containerId] ?? [], found.item, fromKind,
       x, y, level, m.items, bagBoard());
+    if (def.accountStorage && l.with && fromKind !== 'self'
+      && !planRelicStorage(this.host.world().account, l.with, undefined, found.item.relicKey)) {
+      return { ...l, verdict: 'blocked', from, why: 'No room for the exchanged Relic in storage.' };
+    }
     return { ...l, from };
   }
 
@@ -428,7 +437,7 @@ export class ContainerPane {
       kind: 'containerCell',
       accepts: (p, arg) => {
         const [cid, cx, cy] = arg.split(':');
-        return p.kind === 'gearItem' && this.landing(p, cid, `${cx}:${cy}`).verdict !== 'blocked';
+        return ['gearItem', 'relicTile'].includes(p.kind) && this.landing(p, cid, `${cx}:${cy}`).verdict !== 'blocked';
       },
       drop: (p, arg) => {
         const [cid, cx, cy] = arg.split(':');
@@ -447,6 +456,8 @@ export class ContainerPane {
       accepts: (p, cid) => {
         if (p.kind !== 'gearItem') return false;
         const found = findCarried(this.host.seat().meta, Number(p.arg));
+        if (cid === 'reliquary' && found && (!world().canManageAccountRelics(this.host.seat())
+          || !planRelicStorage(world().account, found.item))) return false;
         return found?.where.kind === 'container' && found.where.container === cid;
       },
       drop: (p, cid) => {

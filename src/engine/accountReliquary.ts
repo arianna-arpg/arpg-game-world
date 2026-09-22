@@ -4,6 +4,18 @@ import type { ItemInstance } from './items';
 import { nextItemUid } from './itemgen';
 import type { CarrySlice } from './containers';
 import type { DeathRecord } from '../meta/death';
+import { RELIC_STASH } from '../data/stashes';
+import { planStashMove, restoreStash, type StashCell, type StashState } from './stash';
+
+export const relicReserve = (a: Account) => a.reliquary.items.filter(i => !a.reliquary.seated.includes(i.relicKey!))
+  .map(item => ({ key: item.relicKey!, item }));
+export function reconcileRelicStash(a: Account): void {
+  a.reliquary.stash = restoreStash(RELIC_STASH, relicReserve(a), a.reliquary.stash);
+}
+export function planRelicStorage(a: Account, item: ItemInstance, target?: StashCell, vacate?: string): StashState | undefined {
+  return planStashMove(RELIC_STASH, relicReserve(a), a.reliquary.stash,
+    { key: item.relicKey ?? 'incoming', item }, target, vacate);
+}
 
 export const isRelic = (i: ItemInstance): boolean => ITEM_BASES[i.baseId]?.category === 'relic';
 
@@ -12,6 +24,7 @@ export const isRelic = (i: ItemInstance): boolean => ITEM_BASES[i.baseId]?.categ
 export function bankRelic(a: Account, item: ItemInstance, scope: string): ItemInstance | undefined {
   if (!isRelic(item)) return;
   const key = item.relicKey ?? `legacy:${scope}:${item.uid}`;
+  if (a.reliquary.released.includes(key)) return;
   const existing = a.reliquary.items.find(i => i.relicKey === key);
   if (existing) return existing;
   const copy = item;
@@ -34,6 +47,7 @@ export function migrateRelicCorpses(a: Account, deaths: DeathRecord[]): void {
     bankRelic(a, row.item, `corpse:${d.owner}:${d.timestamp}`);
     return false;
   });
+  reconcileRelicStash(a);
 }
 
 /** Adoption only: old bag relics go safely into reserve, old equipped relics
@@ -55,4 +69,5 @@ export function migrateRelicCarry(a: Account, carry: CarrySlice & { items: ItemI
   carry.items = carry.items.filter(i => !(legacy && isRelic(i)) && !i.relicKey
     && !a.reliquary.items.some(stored => stored.relicKey === `legacy:${scope}:${i.uid}`));
   carry.containers.reliquary = accountRelicBoard(a);
+  reconcileRelicStash(a);
 }

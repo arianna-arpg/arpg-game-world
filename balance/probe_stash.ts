@@ -1,0 +1,108 @@
+import assert from 'node:assert/strict';
+import { emptyStash, planStashMove, restoreStash, stashOverflow, type StashDef } from '../src/engine/stash';
+import { RELIC_STASH } from '../src/data/stashes';
+import { forgeItem } from '../src/engine/itemgen';
+import { makeSimWorld } from '../src/sim/arena';
+import { RELIQUARY } from '../src/data/containers';
+import { FEATURE, deserializeAccount, serializeAccount, sealReckoning } from '../src/meta/account';
+import { investRelicStash } from '../src/meta/reliquary';
+import { relicReserve, reconcileRelicStash, migrateRelicCarry } from '../src/engine/accountReliquary';
+import { autoPlace, bagBoard } from '../src/engine/inventory';
+import { serializeCharacter, applySavedCharacter } from '../src/meta/character';
+import { captureLoot } from '../src/meta/death';
+import type { World } from '../src/engine/world';
+
+const charm = () => forgeItem({ baseId: 'relic_charm', ilvl: 1, rarity: 'magic' })!;
+const effigy = () => forgeItem({ baseId: 'relic_effigy', ilvl: 1, rarity: 'magic' })!;
+const home = (w: World) => {
+  for (const r of RELIQUARY.ladder) w.account.features.add(r.feature);
+  w.account.features.add(FEATURE.ORACLE_STONE); w.account.ledger.oracle_rescued = 1;
+  w.loadZone('lastlight'); w.player.pos = { ...w.stationAnchor('oracle')!.pos }; w.player.invulnerable = true;
+};
+const def: StashDef = { ...RELIC_STASH, board: { w: 2, h: 2 }, initialPages: 2 };
+const a = charm(), b = charm(), big = effigy();
+const entries = [{ key: 'a', item: a }, { key: 'b', item: b }];
+let s = emptyStash(def); s.cells = { a: { page: 0, x: 0, y: 0 }, b: { page: 1, x: 1, y: 1 } };
+const before = JSON.stringify(s);
+const swap = planStashMove(def, entries, s, entries[0], s.cells.b)!;
+assert.deepEqual(swap.cells.a, s.cells.b); assert.deepEqual(swap.cells.b, s.cells.a);
+assert.equal(JSON.stringify(s), before);
+assert(!planStashMove(def, entries, s, { key: 'big', item: big }, { page: 0, x: 1, y: 1 }));
+for (const target of [{ page: -1, x: 0, y: 0 }, { page: 2, x: 0, y: 0 }, { page: 0, x: 0.5, y: 0 }, { page: NaN, x: 0, y: 0 }]) {
+  assert(!planStashMove(def, entries, s, entries[0], target));
+}
+const crowded = Array.from({ length: 9 }, (_, i) => ({ key: String(i), item: charm() }));
+s = restoreStash(def, crowded);
+assert.equal(Object.keys(s.cells).length, 8); assert.equal(stashOverflow(crowded, s).length, 1);
+assert(!planStashMove(def, crowded, s, { key: 'new', item: charm() }));
+assert(planStashMove(def, crowded, s, crowded[0], s.cells['1']), 'recovery must not prevent rearranging existing storage');
+const repaired = restoreStash(def, entries, { ...s, pages: -4, cells: { a: { page: 0, x: 99, y: 0 }, b: { page: 0, x: 0, y: 0 } } });
+assert.equal(repaired.pages, 2); assert.deepEqual(repaired.cells.b, { page: 0, x: 0, y: 0 });
+assert.notDeepEqual(repaired.cells.a, repaired.cells.b);
+console.log('PASS shared footprints, exact cross-page swaps, atomic invalid/full refusals, bounded restore and recovery');
+
+const w = makeSimWorld('warrior', 27811); home(w);
+const equipped = charm(); autoPlace(w.meta.items, equipped); w.containerPlace(w.localSeat, 'reliquary', equipped.uid, 1, 1);
+for (let i = 0; i < 24; i++) { const item = charm(); autoPlace(w.meta.items, item); w.oracleRelic(w.localSeat, item.uid, 'store'); }
+assert.equal(relicReserve(w.account).length, 24); assert.equal(Object.keys(w.account.reliquary.stash.cells).length, 24);
+const extra = charm(); autoPlace(w.meta.items, extra);
+const full = JSON.stringify(serializeAccount(w.account));
+w.oracleRelic(w.localSeat, extra.uid, 'store'); assert(w.meta.items.includes(extra)); assert.equal(JSON.stringify(serializeAccount(w.account)), full);
+w.oracleRelic(w.localSeat, equipped.uid, 'unseat'); assert(w.meta.containers.reliquary.includes(equipped));
+w.containerPlace(w.localSeat, 'reliquary', extra.uid, 1, 1); assert(w.meta.items.includes(extra)); assert.equal(JSON.stringify(serializeAccount(w.account)), full);
+const reserve = relicReserve(w.account)[0].item, cell = { ...w.account.reliquary.stash.cells[reserve.relicKey!] };
+w.containerPlace(w.localSeat, 'reliquary', reserve.uid, 1, 1);
+assert(w.meta.containers.reliquary.includes(reserve)); assert.deepEqual(w.account.reliquary.stash.cells[equipped.relicKey!], cell);
+assert.equal(Object.keys(w.account.reliquary.stash.cells).length, 24);
+assert(!w.account.reliquary.stash.cells[reserve.relicKey!]);
+console.log('PASS full-stash deposits and unseats refuse atomically; exchange reuses vacated storage');
+
+w.account.credits = 15; assert.equal(investRelicStash(w.account), 15); sealReckoning(w.account);
+let restored = deserializeAccount(serializeAccount(w.account))!;
+assert.equal(restored.reliquary.stash.invested, 15); assert.equal(restored.reliquary.stash.pages, 1);
+restored.credits = 40; assert.equal(investRelicStash(restored), 25); assert.equal(restored.credits, 15); assert.equal(restored.reliquary.stash.pages, 2);
+assert.equal(restored.reliquary.rank, 0);
+Object.assign(w.account, restored); home(w); w.restoreAccountRelics(w.localSeat);
+w.requestMeta({ t: 'relicStashMove', uid: equipped.uid, page: 1, x: 5, y: 3 });
+assert.deepEqual(w.account.reliquary.stash.cells[equipped.relicKey!], { page: 1, x: 5, y: 3 });
+restored = deserializeAccount(serializeAccount(w.account))!;
+assert.deepEqual(restored.reliquary.stash.cells[equipped.relicKey!], { page: 1, x: 5, y: 3 });
+restored.reliquary.stash.pages = RELIC_STASH.maxPages; restored.credits = 1000; assert.equal(investRelicStash(restored), 0);
+restored.reliquary.stash.pages = 1; restored.credits = Infinity; assert.equal(investRelicStash(restored), 0);
+console.log('PASS independent Vault page progression, partial investment, seal and exact coordinate reload');
+
+const legacy = makeSimWorld('warrior', 27812); home(legacy);
+const oldItems = Array.from({ length: 27 }, charm);
+const old = { items: oldItems.map(i => ({ ...i })), containers: {}, equipped: {} };
+migrateRelicCarry(legacy.account, old, 'legacy');
+assert.equal(legacy.account.reliquary.items.length, 27); assert.equal(stashOverflow(relicReserve(legacy.account), legacy.account.reliquary.stash).length, 3);
+const recovered = legacy.account.reliquary.items[26];
+legacy.oracleRelic(legacy.localSeat, recovered.uid, 'equip'); assert(legacy.meta.containers.reliquary.includes(recovered));
+const removed = legacy.account.reliquary.items[0]; removed.locked = true;
+legacy.oracleRelic(legacy.localSeat, removed.uid, 'release'); assert(legacy.account.reliquary.items.includes(removed));
+delete removed.locked; legacy.oracleRelic(legacy.localSeat, removed.uid, 'release'); assert(!legacy.account.reliquary.items.includes(removed));
+migrateRelicCarry(legacy.account, { items: oldItems.map(i => ({ ...i })), containers: {}, equipped: {} }, 'legacy');
+assert.equal(legacy.account.reliquary.items.length, 26);
+reconcileRelicStash(legacy.account); assert.equal(stashOverflow(relicReserve(legacy.account), legacy.account.reliquary.stash).length, 1);
+console.log('PASS legacy overflow preserved, recovery equips, locked releases refuse and stale saves cannot resurrect releases');
+
+const immortal = makeSimWorld('warrior', 27813); home(immortal); immortal.meta.modeId = 'immortal'; immortal.meta.charId = 'stash-owner';
+const gear = forgeItem({ baseId: 'helmet_armor', ilvl: 1, rarity: 'magic' })!;
+assert(gear, 'fixture base exists'); autoPlace(immortal.meta.items, gear);
+immortal.personalStash(immortal.localSeat, gear.uid, 'store');
+assert.equal(immortal.meta.stash?.items.length, 1); assert(!immortal.meta.items.includes(gear));
+assert(!captureLoot(immortal.meta).items.some(i => i.kind === 'gear' && i.item.uid === gear.uid));
+(immortal as any).stripCarryOf(immortal.localSeat); assert.equal(immortal.meta.stash?.items.length, 1);
+const saved = serializeCharacter(immortal);
+const next = makeSimWorld('warrior', 27814); home(next); assert(applySavedCharacter(next, saved)); home(next);
+assert.equal(next.meta.stash?.items.length, 1);
+assert.equal(makeSimWorld('warrior', 27815).meta.stash, undefined);
+const cols = bagBoard().w, rows = bagBoard().h;
+for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) next.meta.items.push({ ...charm(), x, y });
+next.personalStash(next.localSeat, gear.uid, 'take'); assert.equal(next.meta.stash?.items.length, 1);
+next.meta.items = []; next.personalStash(next.localSeat, gear.uid, 'take'); assert.equal(next.meta.stash?.items.length, 0); assert.equal(next.meta.items[0].uid, gear.uid);
+const privateBefore = JSON.stringify(next.meta.stash);
+next.personalStash({ ...next.localSeat, id: 'guest' }, gear.uid, 'store'); assert.equal(JSON.stringify(next.meta.stash), privateBefore);
+next.player.pos = { x: 0, y: 0 }; next.personalStash(next.localSeat, gear.uid, 'store'); assert.equal(JSON.stringify(next.meta.stash), privateBefore);
+home(next); next.meta.modeId = 'mortal'; next.personalStash(next.localSeat, gear.uid, 'store'); assert.equal(JSON.stringify(next.meta.stash), privateBefore);
+console.log('PASS Immortal locker ownership, death exclusion, character reload, full-pack atomic withdrawal and station/mode/guest gates');

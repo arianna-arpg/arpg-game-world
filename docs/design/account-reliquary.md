@@ -4,7 +4,11 @@ The Oracle rescue, iron cage, furnished Lastlight home, town expansion and later
 
 ## Ownership and use
 
-The account owns Relic bodies, the equipped grid and an unbounded, searchable reserve. Equipped Relics remain equipped across lives, character changes, death and reload. Only equipped Relics contribute stats. Oracle buttons deposit loose finds, equip a stored Relic in the first available seat, or return equipment to reserve. The inventory drawer retains exact grid placement and rearrangement. Aimed placement can exchange one occupant directly into reserve; preview and mutation share `containerLanding`.
+The account owns Relic bodies, the equipped grid and a finite, searchable grid stash. Equipped Relics remain equipped across lives, character changes, death and reload. Only equipped Relics contribute stats. The Oracle shows the equipped grid and paged stash with the shared drag/click-lift gestures; the inventory drawer retains exact grid placement and rearrangement. Aimed equipment placement can exchange one occupant only when the displaced item fits in storage. The incoming item's vacated stash cell is preferred, then first fit. Full-storage refusals change neither owner. Preview and mutation share the same grid/transaction rules.
+
+Storage starts at one 6×4 page, with a maximum of eight. The Vault sells additional pages independently of equipped-board expansion and empowerment: 40, 160, 360, 640, 1,000, 1,440 and 1,960 Mortal Essence. Partial payments survive sealing; surplus stays available. Search dims nonmatches in place, preserving the true occupancy, and shows match counts per page. Right-click equips/stores; page-content controls also allow an unlocked stored Relic to be permanently released after an inline confirmation. Released identities cannot be resurrected by replaying an old save.
+
+The shared storage engine, safety rules, migration and personal Immortal lockers are documented in `docs/engine/stashes.md`. Tuning lives in `src/data/stashes.ts`.
 
 Changes require the living local host to reach the Oracle service. The original first-charm lesson still allows initial seating on the road, which also banks the item. Newly found loose Relics remain run property until deposited or seated; the UI states this distinction. Account property cannot be sold, dropped, traded, withdrawn to the bag, or placed in corpse loot.
 
@@ -44,9 +48,11 @@ Granted summon instances and independent companion grants carry a `relicSource` 
 
 ## Persistence and migration
 
-`Account.reliquary` owns item bodies, equipped identities, rank and partial investment. Character saves omit account-owned Relic bodies. The primary live board references canonical account items, including granted-skill state. Account writes accompany character saves and durable quit saves.
+`Account.reliquary` owns item bodies, equipped identities, rank, power investment, stash pages/cells/page investment, and released identities. Character saves omit account-owned Relic bodies. Storage coordinates are separate from the item's equipped coordinates. The primary live board references canonical account items, including granted-skill state. Account writes accompany character saves and durable quit saves.
 
 Old saves import seated Relics with coordinates and loose Relics into reserve. Account corpse Relics migrate at World construction; character corpse Relics migrate on adoption. Roster saves migrate lazily when opened. Invalid/retuned grid placements return to reserve rather than the floor. There is no compatibility reset.
+
+Collections predating finite stash capacity are packed into the existing unlocked pages. Excess items remain in a visible recovery queue, never deleted or rewarded with free pages. Recovery items can equip or be released; new deposits stop until the queue is empty. Opening capacity or releasing items repacks recovery. Valid existing cells remain fixed during repair.
 
 Stable character/run scope plus original uid identifies each legacy item. A stored `relicKey` survives subsequent moves. Replaying an import cannot replace the account's item or equipped selection. Pre-character-id saves use their persisted expedition seed as scope. Current saves carry an `accountRelics` marker, so reloading does not bank loose new finds for free. Both pickup paths discard stale ground echoes of already banked items.
 
@@ -54,4 +60,4 @@ Migration cannot recover Relics already deleted by older completed runs, or dist
 
 ## Verification
 
-`probe_accountreliquary.ts` checks costs, linear power, partial payments, authority, swaps, death, save roundtrips, migration replay, safe stat scaling, baseline level differences and attributable followers. Existing `probe_reliquary.ts` and `probe_relicuniques.ts` retain grid, amplifier, grant, wire and lifecycle coverage with account ownership expectations. `balance/oracle-rescue-ui.cjs` covers rescue, both lives, reserve and investment controls in a hidden renderer with isolated saves.
+`probe_accountreliquary.ts` checks costs, linear power, partial payments, authority, swaps, death, save roundtrips, migration replay, safe stat scaling, baseline level differences and attributable followers. `probe_stash.ts` checks grid transactions, capacity, migration recovery, page investment and private Immortal lockers. Existing `probe_reliquary.ts` and `probe_relicuniques.ts` retain grid, amplifier, grant, wire and lifecycle coverage with account ownership expectations. `balance/oracle-rescue-ui.cjs` covers rescue, both lives, grid moves/swaps, cross-page drag, investment, personal storage and disk reload in a hidden renderer with isolated saves.

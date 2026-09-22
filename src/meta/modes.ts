@@ -162,6 +162,8 @@ export interface CharacterModeDef {
    *  wiped by permadeath; 'roster' = an owned, cross-session account slot
    *  (the character is a persistent possession, not a run). */
   save: 'run' | 'roster';
+  /** Optional personal storage policy, keyed in data/stashes. */
+  stash?: string;
   /** PIN the relaunch wake policy (meta/worldstate.ts): 'exact' = wake at the
    *  saved spot in the saved situation (the anti-Alt-F4 covenant — quitting
    *  saves you from nothing); 'town' = always wake in Lastlight. UNDEFINED =
@@ -263,6 +265,7 @@ export const MODES: CharacterModeDef[] = [
   },
   {
     id: 'immortal',
+    stash: 'immortal',
     name: 'Immortal',
     blurb: 'A covenant against the dark: your first death seals you outside '
       + 'the mortal ledger — you wake in town, build intact, carry lost. '

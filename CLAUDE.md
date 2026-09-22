@@ -1,5 +1,10 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Paged Relic storage and personal Immortal lockers share `engine/stash.ts`
+and `data/stashes.ts`; see `docs/engine/stashes.md`. Storage capacity is
+independent from equipped Reliquary expansion and empowerment. Verify
+`probe_stash.ts` and `balance/oracle-rescue-ui.cjs` (grid gestures and reload).
+
 Account Relic ownership, Oracle reserve, repeatable quadratic-cost Reliquary
 investment and attributable Relic followers are documented in
 `docs/design/account-reliquary.md`. Tuning lives in `data/reliquary.ts`;

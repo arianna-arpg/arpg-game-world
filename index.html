@@ -584,6 +584,9 @@
        gear carries: the footprint IS the mark. */
     .dnd-ghost.bare { padding: 0; border: none; background: none; box-shadow: none; border-radius: 0; }
     body.dnd-kind-gearItem [data-bag-item] { pointer-events: none; }
+    body.dnd-kind-gearItem [data-stash-tile], body.dnd-kind-relicTile [data-stash-tile],
+    body.dnd-kind-relicTile [data-bag-item] { pointer-events: none; }
+    body.dnd-kind-personalStashTile [data-stash-tile], body.dnd-kind-personalStashTile [data-bag-item] { pointer-events: none; }
     body.dnd-kind-gearItem [data-cell].dnd-over { outline: none; background: #16131d; }
     .bag-landing { position: absolute; pointer-events: none; box-sizing: border-box; border-radius: 3px; z-index: 2; }
     .bag-landing.place { border: 2px solid var(--gold); background: rgba(200,168,75,0.22); }

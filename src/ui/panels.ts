@@ -1,5 +1,9 @@
 import { oracleReliquaryHtml, reliquaryInvestmentHtml } from './reliquary';
-import { investReliquary } from '../meta/reliquary';
+import { investReliquary, investRelicStash } from '../meta/reliquary';
+import { planRelicStorage } from '../engine/accountReliquary';
+import { personalStashHtml, STASH_CELL_PX } from './stash';
+import { emptyStash, personalStashEntries, planStashMove } from '../engine/stash';
+import { STASH_DEFS } from '../data/stashes';
 import { renderWardrobe } from './wardrobe';
 import { BUILD_PANEL_CFG, buildPanelSeat } from './buildPanels';
 // ---------------------------------------------------------------------------
@@ -392,7 +396,7 @@ interface SalvageModeView {
 
 /** The bag grid's cell pitch (CSS px inside the zoomed panel) — the tiles,
  *  the cells, the footprint ghost and the landing preview all lay out on it. */
-const BAG_CELL_PX = 34;
+const BAG_CELL_PX = STASH_CELL_PX;
 
 /** THE LANDING LAW's verdict for a gear payload over one bag cell (bagLanding):
  *  the piece's origin (hovered cell − grab cell), its footprint, where it
@@ -619,7 +623,7 @@ export class UI {
     seat: () => this.panelSeat(this.inventory),
     inventoryOpen: () => this.inventoryOpen,
     openInventory: (seatId) => { if (!this.inventoryOpen) this.toggleInventory(seatId); },
-    refresh: () => { this.refreshInventory(); this.refreshCharSheet(); },
+    refresh: () => { this.refreshInventory(); this.refreshCharSheet(); this.refreshOracle(); },
     sync: () => this.syncBuildPanels(),
     cellPx: BAG_CELL_PX,
     breaking: () => this.salvageLaneFor(this.inventory) !== null,
@@ -705,6 +709,7 @@ export class UI {
   oracleOpen = false;
   private oracleTargetUid: number | null = null;
   private oracleRelicQuery = '';
+  private relicStashPage = 0;
   /** The Sacrificial Font's recipe screen (skill-mode trees, M1 — §7). */
   fontOpen = false;
   private fontTab: 'merge' | 'convert' | 'reset' = 'merge';
@@ -1811,7 +1816,58 @@ export class UI {
 
   private installGearDnd(): void {
     const world = (): World => this.getWorld();
-    const gearRefresh = (): void => { this.refreshInventory(); this.refreshCharSheet(); };
+    const gearRefresh = (): void => { this.refreshInventory(); this.refreshCharSheet(); this.refreshOracle(); };
+    const relicRefresh = (): void => { gearRefresh(); this.refreshOracle(); };
+    const relicItem = (p: { arg: string }) => {
+      const w = world(), seat = this.panelSeat(this.oracleMenu);
+      return seat === w.localSeat ? w.account.reliquary.items.find(i => i.uid === Number(p.arg))
+        ?? seat.meta.items.find(i => i.uid === Number(p.arg)) : undefined;
+    };
+    const stashPayload = (kind: string, arg: string, el: HTMLElement, at: { x: number; y: number } | undefined, item: ItemInstance | undefined): DragPayload | null => {
+      if (!item || !world().canManageAccountRelics(this.panelSeat(this.oracleMenu))) return null;
+      const size = itemGridSize(item), rect = el.getBoundingClientRect();
+      const grab = { x: Math.max(0, Math.min(size.w - 1, Math.floor(((at?.x ?? rect.left) - rect.left) / (rect.width / size.w)))),
+        y: Math.max(0, Math.min(size.h - 1, Math.floor(((at?.y ?? rect.top) - rect.top) / (rect.height / size.h)))) };
+      return { kind, arg, label: item.name, data: { grab }, ghostHtml: this.footprintFaceHtml(item, size),
+        ghostOffset: { x: rect.left - (at?.x ?? rect.left), y: rect.top - (at?.y ?? rect.top) }, ghostBare: true };
+    };
+    registerDragSource({ kind: 'relicTile', clickLift: true,
+      payload: (arg, el, at) => stashPayload('relicTile', arg, el, at, relicItem({ arg })) });
+    const relicCellPlan = (p: DragPayload, arg: string) => {
+      const w = world(), seat = this.panelSeat(this.oracleMenu), item = relicItem(p);
+      if (!['relicTile', 'gearItem'].includes(p.kind) || !item || !w.canManageAccountRelics(seat)) return;
+      const [page, cx, cy] = arg.split(':').map(Number), grab = this.payloadGrab(p);
+      const target = { page, x: cx - grab.x, y: cy - grab.y };
+      return planRelicStorage(w.account, item, target) ? target : undefined;
+    };
+    registerDropTarget({ kind: 'relicCell', accepts: (p, arg) => !!relicCellPlan(p, arg), drop: (p, arg) => {
+      const target = relicCellPlan(p, arg); if (!target) return;
+      world().requestMeta({ t: 'relicStashMove', uid: Number(p.arg), ...target }); relicRefresh();
+    } });
+    registerDropTarget({ kind: 'relicSeat', accepts: (p, arg) =>
+      this.containerPane.landing(p, 'reliquary', arg).verdict !== 'blocked', drop: (p, arg) => {
+      const l = this.containerPane.landing(p, 'reliquary', arg); if (l.verdict === 'blocked') return;
+      world().requestMeta({ t: l.from === 'c:reliquary' ? 'containerMove' : 'containerPlace', container: 'reliquary', uid: Number(p.arg), x: l.x, y: l.y });
+      relicRefresh();
+    } });
+    registerDragSource({ kind: 'personalStashTile', clickLift: true, payload: (arg, el, at) => {
+      const seat = this.panelSeat(this.oracleMenu);
+      const item = seat.meta.stash?.items.find(i => i.uid === Number(arg));
+      return stashPayload('personalStashTile', arg, el, at, item);
+    } });
+    const personalStashPlan = (p: DragPayload, arg: string) => {
+      const w = world(), seat = this.panelSeat(this.oracleMenu), def = STASH_DEFS[w.seatModeDef(seat).stash ?? ''];
+      if (!def || !w.canManageAccountRelics(seat) || !['gearItem', 'personalStashTile'].includes(p.kind)) return;
+      const stash = seat.meta.stash ?? { items: [], layout: emptyStash(def) };
+      const item = (p.kind === 'gearItem' ? seat.meta.items : stash.items).find(i => i.uid === Number(p.arg));
+      if (!item) return;
+      const [cx, cy] = arg.split(':').map(Number), grab = this.payloadGrab(p), target = { page: 0, x: cx - grab.x, y: cy - grab.y };
+      return planStashMove(def, personalStashEntries(stash), stash.layout, { key: String(item.uid), item }, target) ? target : undefined;
+    };
+    registerDropTarget({ kind: 'personalStashCell', accepts: (p, arg) => !!personalStashPlan(p, arg), drop: (p, arg) => {
+      const target = personalStashPlan(p, arg); if (!target) return;
+      world().requestMeta({ t: 'personalStash', uid: Number(p.arg), operation: p.kind === 'gearItem' ? 'store' : 'move', x: target.x, y: target.y }); relicRefresh();
+    } });
 
     // SOURCES ----------------------------------------------------------------
     // Bag tiles AND worn doll chips lift the same payload kind; `data.from`
@@ -1892,6 +1948,10 @@ export class UI {
       drop: (p, arg) => {
         const l = this.bagLanding(p, arg);
         const uid = Number(p.arg);
+        if (p.kind === 'personalStashTile') {
+          if (l.verdict !== 'blocked') world().requestMeta({ t: 'personalStash', uid, operation: 'take', x: l.x, y: l.y });
+          relicRefresh(); return;
+        }
         if (l.verdict === 'place' || l.verdict === 'swap') world().requestMeta({ t: 'moveItem', uid, x: l.x, y: l.y });
         else if (l.verdict === 'unequip') {
           // THE CONTAINER FABRIC: a piece lifted off a side board lands in
@@ -3228,6 +3288,13 @@ export class UI {
         if (world.account === acc && world.localSeat && !world.clientActionHook) { world.recalcPlayer(); world.markMetaDirty(world.localSeat); }
         this.saveAccount(); render();
       });
+      this.accountScreen.querySelector('[data-relic-stash-invest]')?.addEventListener('click', () => {
+        const pages = acc.reliquary.stash.pages, spent = investRelicStash(acc); if (!spent) return;
+        const previous = visitLog.get('relic_stash');
+        visitLog.set('relic_stash', { label: `Relic stash · ${acc.reliquary.stash.pages} pages`,
+          put: (previous?.put ?? 0) + spent, done: !!previous?.done || acc.reliquary.stash.pages > pages });
+        this.saveAccount(); render();
+      });
       this.accountScreen.querySelector('#acct-wardrobe')!.addEventListener('click', () => this.wardrobeView(this.accountScreen, render));
       const bodyEl = this.accountScreen.querySelector<HTMLElement>('.vault-body');
       if (bodyEl) bodyEl.scrollTop = this.vaultScroll[this.vaultTab || '_flat'] ?? 0;
@@ -3823,7 +3890,8 @@ export class UI {
    *  on the sell lane — or why the tool refuses (locked / worn). The
    *  keeper's-mark line shows in EVERY mode. */
   private itemTooltip(uid: number, extended?: boolean, seat: Seat = this.getWorld().localSeat, salv: 'break' | 'sell' | null = null): TooltipContent | null {
-    const item = this.findItem(uid, seat);
+    const item = this.findItem(uid, seat) ?? (seat === this.getWorld().localSeat && !this.getWorld().clientActionHook
+      ? this.getWorld().account.reliquary.items.find(i => i.uid === uid) ?? seat.meta.stash?.items.find(i => i.uid === uid) : undefined);
     if (!item) return null;
     // THE RESIDENCE (M1): a gem wrapper's card speaks the gem, not the steel.
     if (item.gem) return this.gemItemTooltip(item, seat, salv);
@@ -4801,10 +4869,16 @@ export class UI {
     const grab = this.payloadGrab(p);
     const x = cx - grab.x, y = cy - grab.y;
     const from = this.payloadOrigin(p);
+    if (p.kind === 'personalStashTile') {
+      const seat = this.panelSeat(this.inventory), item = seat.meta.stash?.items.find(i => i.uid === Number(p.arg));
+      const size = item ? itemGridSize(item) : { w: 1, h: 1 };
+      return { verdict: item && this.getWorld().canManageAccountRelics(seat) && canPlaceAt(seat.meta.items, item, x, y) ? 'unequip' : 'blocked', x, y, ...size, from: 'personalStash' };
+    }
     const item = p.kind === 'gearItem' ? this.payloadGear(p) : undefined;
     if (!item) return { verdict: 'blocked', x, y, w: 1, h: 1, from };
     const s = itemGridSize(item);
     const base: BagLanding = { verdict: 'blocked', x, y, w: s.w, h: s.h, from };
+    if (originContainerId(from) === 'reliquary') return base; // Account property returns to stash, never the pack.
     const bag = this.panelSeat(this.inventory).meta.items;
     if (canPlaceAt(bag, item, x, y)) return { ...base, verdict: from === 'bag' ? 'place' : 'unequip' };
     if (from === 'bag') {
@@ -6048,6 +6122,7 @@ export class UI {
   }
 
   closeOracle(): void {
+    dndCancel();
     this.oracleOpen = false;
     this.oracleMenu.classList.add('hidden');
     this.oracleTargetUid = null;
@@ -6095,12 +6170,33 @@ export class UI {
       ${this.closeGlyphHtml()}<h2>The Oracle Stone</h2>
       <div class="desc" style="color:#8a8678;font-size:10px;margin-bottom:6px">
         ${this.essWallet()}</div>
-      ${oracleReliquaryHtml(world, seat, this.oracleRelicQuery)}
+      ${oracleReliquaryHtml(world, seat, this.oracleRelicQuery, this.relicStashPage)}
+      ${personalStashHtml(world, seat)}
       <h3>Commune with equipment</h3><div class="bind-btns">${targetRows}</div>
       <h3>Lines</h3>${affixRows}
       <div class="bind-btns" style="margin-top:8px"><button data-oracle-close>Step back</button></div>`;
 
     const q = <T extends HTMLElement>(sel: string): T[] => [...this.oracleMenu.querySelectorAll<T>(sel)];
+    for (const operation of ['store', 'take'] as const) q<HTMLButtonElement>(`[data-personal-stash-${operation}]`).forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'personalStash', uid: Number(btn.getAttribute(`data-personal-stash-${operation}`)), operation });
+      this.refreshOracle(); this.refreshInventory();
+    }));
+    q<HTMLButtonElement>('[data-relic-page]').forEach(btn => btn.addEventListener('click', () => {
+      this.relicStashPage = Number(btn.dataset.relicPage); this.refreshOracle();
+    }));
+    q<HTMLElement>('[data-stash-tile]').forEach(tile => tile.addEventListener('contextmenu', ev => {
+      ev.preventDefault(); if (dndCarried()) return;
+      const uid = Number(tile.dataset.itemUid), equipped = seat.meta.containers.reliquary?.some(i => i.uid === uid);
+      if (tile.dataset.drag?.startsWith('personalStashTile:')) world.requestMeta({ t: 'personalStash', uid, operation: 'take' });
+      else world.requestMeta({ t: 'oracleRelic', uid, operation: equipped ? 'unseat' : 'equip' });
+      this.refreshOracle(); this.refreshInventory(); this.refreshCharSheet();
+    }));
+    q<HTMLButtonElement>('[data-relic-release]').forEach(btn => btn.addEventListener('click', () => {
+      // A deliberate second press, kept inline so the game never opens a native modal.
+      if (!btn.dataset.confirmRelease) { btn.dataset.confirmRelease = 'yes'; btn.textContent = 'Confirm permanent release'; return; }
+      world.requestMeta({ t: 'oracleRelic', uid: Number(btn.dataset.relicRelease), operation: 'release' });
+      this.refreshOracle();
+    }));
     const search = this.oracleMenu.querySelector<HTMLInputElement>('[data-relic-search]');
     search?.addEventListener('input', () => {
       this.oracleRelicQuery = search.value; const at = search.selectionStart;

@@ -36,6 +36,8 @@ import { DEFAULT_MODE_ID, mintCharId, modeById, ROSTER_SLOT_BASE, type RosterEnt
 import type { WorldStateSave } from './worldstate';
 import type { MercSnapshot } from './mercs';
 import type { Account } from './account';
+import { personalStashEntries, restoreStash, type PersonalStash } from '../engine/stash';
+import { STASH_DEFS } from '../data/stashes';
 
 export const CHAR_SCHEMA_VERSION = SAVE_COMPATIBILITY.run;
 const CHAR_KEY = 'arpg_character_v1';
@@ -68,6 +70,7 @@ interface SavedSkill {
   replenishmentPaused?: true;
 }
 export interface CharacterSave {
+  stash?: PersonalStash;
   accountRelics?: 1;
   relicScope?: string;
   schemaVersion: number;
@@ -230,6 +233,7 @@ export function serializeCharacter(world: World): CharacterSave {
   return {
     relicScope: m.relicScope ?? (m.charId || 'run:' + world.manifest.seed),
     accountRelics: 1,
+    stash: m.stash ? structuredClone(m.stash) : undefined,
     schemaVersion: CHAR_SCHEMA_VERSION,
     accountVersion: SAVE_COMPATIBILITY.account,
     classId: m.classDef.id,
@@ -414,6 +418,17 @@ export function rebuildSavedMeta(save: CharacterSave): { meta: PlayerMeta; death
   for (const [cid, held] of Object.entries(save.containers ?? {})) {
     containers[cid] = (held ?? []).map(rebuildItem).filter((x): x is ItemInstance => x !== null);
   }
+  const stashDef = STASH_DEFS[modeById(save.modeId ?? DEFAULT_MODE_ID).stash ?? ''];
+  let stash: PersonalStash | undefined;
+  if (stashDef && save.stash) {
+    const occupied = new Set([...items, ...Object.values(equipped).filter((i): i is ItemInstance => !!i), ...Object.values(containers).flat()].map(i => i.uid));
+    const stored = (Array.isArray(save.stash.items) ? save.stash.items : []).map(rebuildAnyItem).filter((i): i is ItemInstance => {
+      if (!i || !stashDef.accepts(i) || occupied.has(i.uid)) return false;
+      occupied.add(i.uid); return true;
+    });
+    stash = { items: stored, layout: save.stash.layout };
+    stash.layout = restoreStash(stashDef, personalStashEntries(stash), stash.layout);
+  }
 
   // Tree state rebuilds registry-tolerantly, in dependency order: the
   // allocation seeds choice sanitizing, both seed graft-binding sanitizing
@@ -438,6 +453,7 @@ export function rebuildSavedMeta(save: CharacterSave): { meta: PlayerMeta; death
     vocationPoints: save.vocationPoints ?? 0,
     knownSkills,
     items, equipped, containers,
+    stash,
     legacyRelics: save.accountRelics !== 1,
     relicScope: save.relicScope ?? (save.charId || 'run:' + (save.expedition?.seed ?? save.classId)),
     essences: { ...emptyEssences(), ...(save.essences ?? {}) },
@@ -727,6 +743,7 @@ export function serializeCouchGuest(
   const hero = world.seatHero(seat);
   return {
     accountRelics: 1,
+    stash: m.stash ? structuredClone(m.stash) : undefined,
     relicScope: m.relicScope ?? (m.charId || 'run:' + world.manifest.seed),
     schemaVersion: CHAR_SCHEMA_VERSION,
     accountVersion: SAVE_COMPATIBILITY.account,
