@@ -6,7 +6,7 @@ import { mod } from './stats';
 import { makeSkillInstance, type SkillInstance } from './skills';
 import { resolveMinionInheritance, applyMinionPlyBonus } from './minionInheritance';
 import { syncAttributeBequests } from './bequests';
-import { companionBondOf, companionLevelOf, type CompanionBondSpec, type CompanionSaved } from './companionSpec';
+import { companionBondOf, companionLevelOf, COMPANION_CFG, type CompanionBondSpec, type CompanionSaved } from './companionSpec';
 // THE STANCES (engine/companionStances.ts): importing the module also seats
 // the stance command kinds and the meta face — the bond is their one door.
 import { companionStanceDef, companionStanceIdOf, standingOrderFor } from './companionStances';
@@ -105,7 +105,10 @@ export class CompanionBonds {
     if (state.policy && state.policy !== policy) this.clearPayloads(beast, state);
     state.policy = policy; state.spec = spec; state.inst = inst;
     beast.companionDormant = dormant;
-    if (dormant) { beast.downed = true; beast.life = 0; beast.companionReviveRemaining = undefined; }
+    if (dormant) {
+      beast.downed = true; beast.life = 0; beast.companionReviveRemaining = undefined;
+      beast.endStatus(COMPANION_CFG.recovery.status);
+    }
     // THE GROWING BOND (COMPANION_CFG.level): the body's level follows its
     // keeper — re-stamped in place through the one monster level fold
     // (World.relevelActor: life kept as a fraction, the native kit on the
@@ -171,6 +174,7 @@ export class CompanionBonds {
       beast.sheet.removeSource('minionCombat'); beast.sheet.removeSource('bequest'); beast.bequestSignature = undefined;
       beast.radius = state.baseRadius; beast.guardMode = false; applyMinionPlyBonus(beast, 0);
       beast.standingOrder = undefined;
+      beast.endStatus(COMPANION_CFG.recovery.status);
       this.states.delete(beast);
     }
     const groups = new Map<SkillInstance, Actor[]>();
@@ -228,6 +232,7 @@ export class CompanionBonds {
 
   /** Called after a landed top-level hit, before ordinary consumed buffs clear. */
   down(beast: Actor): void {
+    beast.endStatus(COMPANION_CFG.recovery.status);
     const state = this.states.get(beast);
     if (state) this.clearPayloads(beast, state);
     beast.companionReviveRemaining = state?.spec.reviveSeconds;

@@ -1,9 +1,17 @@
 import type { QuestDef, QuestZoneSpec } from './types';
-import { FEATURE } from '../meta/account';
+import { ORACLE_RESCUED } from '../data/oracle';
 import { Rng } from '../core/rng';
 
 export const RELIQUARY_QUEST_ID = 'relic_east_l8';
 export const RELIQUARY_LESSON = 'reliquary_lesson';
+export const RELIQUARY_CHOICES: NonNullable<QuestDef['reward']['choices']> = [
+  { id: 'hearth', name: 'Hearthkeeper’s Charm', baseId: 'relic_charm',
+    affixes: ['relic_life'], description: 'Maximum life. A little warmth kept for the living.' },
+  { id: 'well', name: 'Stillwell Charm', baseId: 'relic_charm',
+    affixes: ['relic_mana'], description: 'Maximum mana. The last clear drop in a sealed well.' },
+  { id: 'veil', name: 'Vigilkeeper’s Charm', baseId: 'relic_charm',
+    affixes: ['relic_es'], description: 'Energy shield. The keeper’s watch passes into your hands.' },
+];
 
 /** A separate stream: accepting other quests or fighting never changes the site. */
 export function resolveQuestZone(q: QuestDef, questSeed: number): QuestZoneSpec {
@@ -32,25 +40,18 @@ const sites = [
  * character, so losing the first charm before the lesson never seals an account. */
 export const Q_RELIQUARY: QuestDef = {
   id: RELIQUARY_QUEST_ID,
-  giver: 'townsfolk_questgiver', offerAtLevel: 8,
+  giver: 'townsfolk_oracle', offerAtLevel: 8, requiresLedger: ORACLE_RESCUED,
   offerLabel: 'A Place for the Unremembered — recover a forgotten shrine’s keepsakes',
   zone: sites[0], zoneVariants: sites,
   turnIn: {
-    giver: 'townsfolk_questgiver',
-    prompt: 'The shrine is quiet. Return to the Quartermaster to choose a recovered charm and receive its Reliquary.',
+    giver: 'townsfolk_oracle',
+    prompt: 'The shrine is quiet. Return to the Oracle to choose a recovered charm for your Reliquary.',
   },
   reward: {
-    xp: 500, features: [FEATURE.RELIQUARY],
-    choicePrompt: '“We keep their names. You carry their courage.” Choose one recovered charm. The Quartermaster also gives you its Reliquary with the first seat open. Every charm fits that seat and can be used immediately.',
+    xp: 500,
+    choicePrompt: '“We keep their names. You carry their courage.” Choose one recovered charm for the Reliquary. Every charm fits its first seat and can be used immediately.',
     ledger: { quests_completed: 1, relic_recovered: 1 },
-    choices: [
-      { id: 'hearth', name: 'Hearthkeeper’s Charm', baseId: 'relic_charm',
-        affixes: ['relic_life'], description: 'Maximum life. A little warmth kept for the living.' },
-      { id: 'well', name: 'Stillwell Charm', baseId: 'relic_charm',
-        affixes: ['relic_mana'], description: 'Maximum mana. The last clear drop in a sealed well.' },
-      { id: 'veil', name: 'Vigilkeeper’s Charm', baseId: 'relic_charm',
-        affixes: ['relic_es'], description: 'Energy shield. The keeper’s watch passes into your hands.' },
-    ],
+    choices: RELIQUARY_CHOICES,
   },
   next: 'relic_depths_l8',
 };

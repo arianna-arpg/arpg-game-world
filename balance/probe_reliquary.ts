@@ -335,8 +335,8 @@ check('D8 containerMove refuses the sealed centre', charm.x === 3 && charm.y ===
   w2.dropGearAt(w2.player.pos, { ...relic, uid: relic.uid + 1 }, w2.localSeat.id); // a DISCARD
   check('G1 a discard never stamps the discovery ledger', !(w2.account.ledger[LEDGER_RELIC_FOUND] ?? 0));
   w2.dropGearAt(w2.player.pos, relic); // a genuine world mint
-  check('G1b ambient relics wait for the seating lesson', w2.drops.length === 1);
-  w2.account.ledger[RELIQUARY_LESSON] = 1;
+  check('G1b ambient relics wait for the Oracle rescue', w2.drops.length === 1);
+  w2.account.ledger.oracle_rescued = 1;
   w2.dropGearAt(w2.player.pos, relic);
   if (meta) check('G2 a genuine world mint stamps it once', (w2.account.ledger[LEDGER_RELIC_FOUND] ?? 0) === 1);
   else check('G2 (meta sealed in this stage) the ledger stays honest', !(w2.account.ledger[LEDGER_RELIC_FOUND] ?? 0));
@@ -384,6 +384,8 @@ check('D8 containerMove refuses the sealed centre', charm.x === 3 && charm.y ===
   }
   check('I2 seeds span all authored burial sites', variants.size === Q_RELIQUARY.zoneVariants!.length);
   const w = makeSimWorld(CLASSES[0].id, 9001);
+  w.account.ledger.oracle_rescued = 1;
+  w.account.features.add(FEATURE.RELIQUARY);
   const hooks = w as unknown as {
     acceptQuest(q: QuestDef): void;
     onQuestZoneFieldCleared(zoneId: string): void;
@@ -400,10 +402,10 @@ check('D8 containerMove refuses the sealed centre', charm.x === 3 && charm.y ===
     fieldSave.quests?.active.some(q => q.questId === aq.questId) === true);
   check('I5 no claim before completing the field objective', !w.claimQuestReward(Q_RELIQUARY.id, 'hearth'));
   hooks.onQuestZoneFieldCleared(aq.zoneId);
-  check('I6 field completion grants neither relic nor case', aq.fieldDone && !w.account.features.has(FEATURE.RELIQUARY)
+  check('I6 optional field completion preserves the rescued case without paying a relic', aq.fieldDone && w.account.features.has(FEATURE.RELIQUARY)
     && !w.meta.items.some(i => ITEM_BASES[i.baseId]?.category === 'relic'));
   check('I7 no remote claim away from the giver', !w.claimQuestReward(Q_RELIQUARY.id, 'hearth'));
-  const giver = w.createMonster('townsfolk_questgiver', 1, 'player');
+  const giver = w.createMonster('townsfolk_oracle', 1, 'player');
   giver.pos = { ...w.player.pos };
   w.actors.push(giver);
   hooks.onQuestZoneCleared(aq);
@@ -418,8 +420,8 @@ check('D8 containerMove refuses the sealed centre', charm.x === 3 && charm.y ===
   const bag = w.meta.items;
   while (autoPlace(bag, mk('relic_charm'))) { /* occupy every bag cell */ }
   const beforeFull = bag.length;
-  check('I10 full pack defers the ENTIRE reward and unlock', !w.claimQuestReward(Q_RELIQUARY.id, 'hearth')
-    && bag.length === beforeFull && !w.account.features.has(FEATURE.RELIQUARY)
+  check('I10 full pack defers the reward without relocking the rescued case', !w.claimQuestReward(Q_RELIQUARY.id, 'hearth')
+    && bag.length === beforeFull && w.account.features.has(FEATURE.RELIQUARY)
     && !(w.ledger.relic_recovered ?? 0) && w.activeQuests.includes(aq));
   bag.length = 0;
   const awaitingChoice = w.serializeWorldState();
@@ -438,7 +440,7 @@ check('D8 containerMove refuses the sealed centre', charm.x === 3 && charm.y ===
     && w.reliquaryLesson() && !w.meta.containers[RELIQUARY_ID]?.length);
   const nDrops = w.drops.length;
   w.dropGearAt(w.player.pos, mk('relic_charm'));
-  check('I15 claiming the case alone does not enable ambient drops', w.drops.length === nDrops);
+  check('I15 the rescue enables ambient relics before seating', w.drops.length === nDrops + 1);
   w.containerPlace(w.localSeat, RELIQUARY_ID, reward.uid, 2, 2);
   check('I16 a refused seating does not complete the lesson', w.reliquaryLesson());
   const lifeBefore = w.player.sheet.get('life');
@@ -446,7 +448,7 @@ check('D8 containerMove refuses the sealed centre', charm.x === 3 && charm.y ===
   check('I17 actual seating completes the lesson and adds the relic stats', !w.reliquaryLesson()
     && w.account.ledger[RELIQUARY_LESSON] === 1 && w.player.sheet.get('life') > lifeBefore);
   w.dropGearAt(w.player.pos, mk('relic_charm'));
-  check('I18 ambient relics now land', w.drops.length === nDrops + 1);
+  check('I18 ambient relics continue to land after seating', w.drops.length === nDrops + 2);
   w.containerTake(w.localSeat, RELIQUARY_ID, reward.uid);
   check('I19 unseating removes power without relocking discovery', !w.reliquaryLesson()
     && Math.abs(w.player.sheet.get('life') - lifeBefore) < 0.01);

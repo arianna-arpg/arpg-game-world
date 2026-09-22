@@ -322,6 +322,9 @@ export interface RollItemOpts {
   uniqueId?: string;
   /** Per-call rarity weight overrides layered over ITEM_CFG.rarityWeights. */
   rarityWeights?: Partial<Record<ItemRarity, number>>;
+  /** A constrained supplier excludes bases whose native rarity floor exceeds
+   * this ceiling; it never downgrades their identity after minting. */
+  rarityCeiling?: ItemRarity;
   /** Guarantee ONE affix from this FAMILY (AffixDef.family) on the minted
    *  item — the THEMED-DROP lever (a royal-jelly cache forcing its register;
    *  any future themed cache names any family, pure data). Commons promote
@@ -333,7 +336,8 @@ export interface RollItemOpts {
 
 function rollRarity(opts: RollItemOpts, rng: RngFn): ItemRarity {
   const table = ITEM_RARITY_IDS.map(id => ({
-    id, weight: opts.rarityWeights?.[id] ?? ITEM_CFG.rarityWeights[id],
+    id, weight: opts.rarityCeiling && ITEM_RARITY_IDS.indexOf(id) > ITEM_RARITY_IDS.indexOf(opts.rarityCeiling)
+      ? 0 : opts.rarityWeights?.[id] ?? ITEM_CFG.rarityWeights[id],
   }));
   return pickWeighted(table, rng)?.id ?? 'common';
 }
@@ -362,6 +366,8 @@ export function rollItem(opts: RollItemOpts): ItemInstance | null {
   // A forced-family pull needs an affix SLOT: commons promote to magic (the
   // themed cache must always pay); an explicit/rolled magic+ stands as-is.
   if (opts.withFamily && !unique && rarity === 'common') rarity = 'magic';
+  const ceiling = opts.rarityCeiling ? ITEM_RARITY_IDS.indexOf(opts.rarityCeiling) : Infinity;
+  if (ITEM_RARITY_IDS.indexOf(rarity) > ceiling) return null;
 
   if (rarity === 'unique' && !unique) {
     const pool = candidateUniques(ilvl, opts.category, opts.baseId);
@@ -377,7 +383,7 @@ export function rollItem(opts: RollItemOpts): ItemInstance | null {
   // a silently unthemed payout every themed table shares (royal / drowned /
   // pastoral). Falls back to the whole pool when nothing fits — a themed
   // pull must degrade to an ordinary item, never to null.
-  let openPool = basePool(ilvl, opts.category);
+  let openPool = basePool(ilvl, opts.category).filter(b => ITEM_RARITY_IDS.indexOf(b.minRarity ?? 'common') <= ceiling);
   if (opts.withFamily && !unique && !opts.baseId) {
     const fits = openPool.filter(b => {
       const pools = affixPoolsFor(b);
@@ -392,6 +398,7 @@ export function rollItem(opts: RollItemOpts): ItemInstance | null {
       ? ITEM_BASES[opts.baseId]
       : pickWeighted(openPool.map(b => ({ b, weight: b.dropWeight })), rng)?.b;
   if (!base) return null;
+  if (ITEM_RARITY_IDS.indexOf(base.minRarity ?? 'common') > ceiling) return null;
   // THE RARITY FLOOR (ItemBaseDef.minRarity): a family that never drops
   // below a rarity PROMOTES a lower roll — the withFamily common→magic
   // shape, authored per base (a relic with no lines is nothing). Uniques

@@ -1,0 +1,136 @@
+<div id="hw-whole-progression">
+  <style>
+    #hw-whole-progression { color:var(--foreground); }
+    #hw-whole-progression .hw-title { display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    #hw-whole-progression .hw-key { display:flex; gap:12px; flex-wrap:wrap; margin:12px 0; }
+    #hw-whole-progression .hw-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; background:var(--viz-series-1); }
+    #hw-whole-progression .kind-account .hw-dot { background:var(--viz-series-2); }
+    #hw-whole-progression .kind-vault .hw-dot { background:var(--viz-series-3); }
+    #hw-whole-progression .kind-character .hw-dot { background:var(--viz-series-4); }
+    #hw-whole-progression .kind-world .hw-dot { background:var(--viz-series-5); }
+    #hw-whole-progression .kind-debug .hw-dot { background:var(--viz-series-6); }
+    #hw-whole-progression .hw-graph { position:relative; padding:12px 24px; }
+    #hw-whole-progression .hw-lines { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+    #hw-whole-progression .hw-row { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:24px; align-items:start; position:relative; margin-bottom:42px; }
+    #hw-whole-progression .hw-row.single .hw-seat { grid-column:2; }
+    #hw-whole-progression .hw-seat { min-width:0; display:grid; gap:5px; }
+    #hw-whole-progression .hw-caption { overflow-wrap:anywhere; background:var(--background); width:fit-content; }
+    #hw-whole-progression .hw-detail { grid-column:1/-1; min-width:0; padding-top:12px; background:var(--background); overflow-wrap:anywhere; }
+    #hw-whole-progression .hw-detail h3 { margin-top:14px; }
+    #hw-whole-progression .hw-detail p { margin:8px 0; }
+    #hw-whole-progression .hw-entries { margin:12px 0; padding-left:18px; border-left:1px solid var(--border); }
+    #hw-whole-progression .hw-entry { padding:9px 0; overflow-wrap:anywhere; }
+    #hw-whole-progression .hw-entry summary { cursor:default; }
+    #hw-whole-progression .hw-entry dl { display:grid; grid-template-columns:minmax(60px,auto) 1fr; gap:6px 12px; }
+    #hw-whole-progression .hw-entry dd { margin:0; min-width:0; }
+    #hw-whole-progression .hw-entry dt { color:var(--muted-foreground); }
+    #hw-whole-progression .hw-caption, #hw-whole-progression .hw-stamp { color:var(--muted-foreground); }
+    #hw-whole-progression .hw-connection { padding:4px 0; }
+    #hw-whole-progression .hw-connection strong { font-weight:500; }
+    #hw-whole-progression .hw-path-label { fill:var(--foreground); }
+    #hw-whole-progression .hw-mobile-from { display:none; }
+    @media(max-width:540px) {
+      #hw-whole-progression .hw-lines { display:none; }
+      #hw-whole-progression .hw-row { grid-template-columns:minmax(0,1fr); gap:22px; margin-bottom:28px; }
+      #hw-whole-progression .hw-row.single .hw-seat { grid-column:auto; }
+      #hw-whole-progression .hw-graph { padding:12px 12px 12px 26px; }
+      #hw-whole-progression .hw-mobile-from { display:block; color:var(--muted-foreground); overflow-wrap:anywhere; }
+      #hw-whole-progression .hw-entry dl { grid-template-columns:1fr; }
+    }
+  </style>
+  <div class="hw-title"><h2>The whole progression tree</h2><span class="text-small hw-stamp" id="hw-whole-count"></span></div>
+  <div class="hw-key text-small" aria-label="Node types">
+    <span class="kind-play"><i class="hw-dot"></i>Play / discover</span>
+    <span class="kind-account"><i class="hw-dot"></i>Account permission</span>
+    <span class="kind-vault"><i class="hw-dot"></i>Vault investment</span>
+    <span class="kind-character"><i class="hw-dot"></i>Character growth</span>
+    <span class="kind-world"><i class="hw-dot"></i>World baseline</span>
+    <span class="kind-debug"><i class="hw-dot"></i>Debug</span>
+  </div>
+  <div class="text-small hw-stamp">One shared loop · select a node for connections, exact gates and its full branch</div>
+  <div id="hw-whole-graph" class="hw-graph" aria-label="Connected progression tree">
+    <svg class="hw-lines" aria-hidden="true"></svg>
+    <div id="hw-whole-nodes"></div>
+  </div>
+  <div class="text-small hw-stamp" id="hw-whole-foot"></div>
+  <script type="application/json" id="hw-whole-data">__OVERVIEW_DATA__</script>
+  <script>
+    (()=>{
+      const root=document.getElementById('hw-whole-progression');
+      const data=JSON.parse(root.querySelector('#hw-whole-data').textContent);
+      const graph=root.querySelector('#hw-whole-graph'), holder=root.querySelector('#hw-whole-nodes'), svg=root.querySelector('.hw-lines');
+      const nodes=new Map(data.nodes.map(n=>[n.id,n])), rows=new Map(data.rows.map(r=>[r.id,r]));
+      const tags={play:'Play / discover',account:'Account permission',vault:'Vault investment',character:'Character growth',world:'World baseline',debug:'Debug shortcut'};
+      let selected=null;
+      const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
+      root.querySelector('#hw-whole-count').textContent=`${data.nodes.length} systems · ${data.counts.rows} Vault entries`;
+      root.querySelector('#hw-whole-foot').textContent=`${data.counts.classes} classes · ${data.counts.packages} world packages · ${data.counts.vocations} Vocations · ${data.counts.quests} registered quests · ${data.cosmetics.length} cosmetic acquisitions. Snapshot ${new Date(data.captured).toLocaleString()}.`;
+      function save(){window.openai?.setWidgetState?.({modelContent:{progressionView:'Whole progression tree',selectedSystem:nodes.get(selected)?.label||null},privateContent:{overviewNode:selected}})?.catch(()=>{});}
+      function field(dl,label,value){if(!value)return;dl.append(el('dt',label),el('dd',value));}
+      function entry(title,fields){const d=el('details',undefined,'hw-entry');d.append(el('summary',title));const dl=el('dl');for(const [k,v] of fields)field(dl,k,v);d.append(dl);return d;}
+      function catalog(container,ids){
+        const own=new Set(ids), children=new Map(), roots=[];
+        for(const id of ids){const r=rows.get(id);const parents=[].concat(r.requiresUnlock||[]);if(r.requiresFeature){const p=data.rows.find(v=>v.kind==='feature'&&v.payload.flag===r.requiresFeature);if(p)parents.push(p.id);}if(r.kind==='package'&&r.payload.tierId){const p=data.packages.find(p=>p.id===r.payload.packageId);const i=p.tiers.findIndex(t=>t.id===r.payload.tierId);if(i>0){const prev=data.rows.find(v=>v.payload?.packageId===p.id&&v.payload?.tierId===p.tiers[i-1].id);if(prev)parents.push(prev.id);}}
+          const parent=parents.filter(p=>own.has(p)).at(-1);if(parent){if(!children.has(parent))children.set(parent,[]);children.get(parent).push(id);}else roots.push(id);
+        }
+        const shown=new Set();
+        function draw(parent,items){const branch=el('div',undefined,'hw-entries');for(const id of items){if(shown.has(id))continue;shown.add(id);const r=rows.get(id);const d=entry(`${r.label} · ${r.cost===0?'free':r.cost+' Mortal Essence'}`,[['All required',r.all.join('; ')||'No row-specific prerequisite; Vault access and funding still apply.'],['Any one',r.any.join(' OR ')],['Effect',r.effect],['Source',`${r.source} · ${r.id}`]]);d.dataset.catalogRow=id;branch.append(d);if(children.has(id))draw(d,children.get(id));}parent.append(branch);}
+        draw(container,roots);if(shown.size!==ids.length)draw(container,ids.filter(id=>!shown.has(id)));
+      }
+      function detail(n){
+        const area=el('section',undefined,'hw-detail');area.id='hw-whole-detail';area.setAttribute('aria-label',n.label+' details');area.append(el('h3',n.label));
+        const status=el('div',`${n.label} selected`,'sr-only');status.setAttribute('aria-live','polite');area.append(status);
+        if(n.detail)area.append(el('p',n.detail));
+        const linked=data.edges.filter(e=>e.from===n.id||e.to===n.id);
+        const connections=el('div');
+        for(const e of linked){const incoming=e.to===n.id;const line=el('div',undefined,'hw-connection text-small');line.append(el('strong',(incoming?'From ':'To ')+nodes.get(incoming?e.from:e.to).label),document.createTextNode(' — '+e.label));connections.append(line);}
+        area.append(connections);
+        if(n.steps.length){const mechanics=el('details',undefined,'hw-entry');mechanics.append(el('summary','Mechanic steps & outcomes'));for(const s of n.steps)mechanics.append(entry(s.label,[['Behavior',s.detail]]));area.append(mechanics);}
+        if(n.rows.length){area.append(el('h3',`Vault branch · ${n.rows.length} entries`));catalog(area,n.rows);}
+        if(n.id==='vocations'){area.append(el('h3',`${data.vocations.length} Vocation chains`));for(const v of data.vocations)area.append(entry(v.name,[['Account gate',`${data.power.vocations.odysseyStage} leaders in one Odyssey`],['Home class',v.home],['Offer level',String(v.level)],['Steps',String(v.steps)],['Route',v.secret?'Secret site + authored home-class/site requirements':'Ordinary home-class offer; account discovery opens foreign-class chains'],['Spending',v.gateNode||'Home-class start node + available Vocation points']]));}
+        if(n.id==='quests'){const list=el('details',undefined,'hw-entry');list.append(el('summary',`All ${data.quests.length} registered quest definitions`));for(const q of data.quests)list.append(entry(q.label,[['ID',q.id],['Offer level',q.level==null?'Route-specific':String(q.level)],['Ledger',q.requires],['Runtime gate',q.gate],['Reward',JSON.stringify(q.reward)]]));area.append(list);}
+        if(['world','eventbase','eventtiers'].includes(n.id)){const list=el('details',undefined,'hw-entry');list.append(el('summary',`All ${data.packages.length} world baselines & discovery tests`));for(const p of data.packages)list.append(entry(p.label,[['Before purchase',p.alwaysOn?'Always active':p.enabled?'Enabled by default':'Disabled by default'],['Start level',String(p.start)],['Discovery',p.unlock?.label],['Exact predicate',p.unlock?.predicate],['Tiers',JSON.stringify(p.tiers)]]));area.append(list);}
+        if(n.id==='wardrobe')for(const c of data.cosmetics)area.append(entry(c.name,[['Acquisition',c.acquire.kind==='credits'?`${c.acquire.cost} Mortal Essence${c.consume?' · repeatable charges':''}`:c.labels.join(c.acquire.mode==='any'?' OR ':' AND ')],['Effect',c.description]]));
+        if(n.id==='resurrect')area.append(el('p','Fallen-vessel rows are generated from the saved roster; they are additional to the static Vault catalog above.'));
+        area.append(el('div','Arrows show named relationships, not a forced play order. “All required” and “Any one” inside each entry preserve its gate logic.','text-small hw-stamp'));
+        return area;
+      }
+      function render(){
+        holder.replaceChildren();
+        for(const layer of data.layers){const row=el('div',undefined,'hw-row'+(layer.length===1?' single':''));
+          for(const id of layer){const n=nodes.get(id), seat=el('div',undefined,'hw-seat kind-'+n.kind);seat.dataset.seat=id;
+            const cap=el('div',undefined,'text-small hw-caption');cap.append(el('i',undefined,'hw-dot'),document.createTextNode(tags[n.kind]+(n.rows.length?' · '+n.rows.length+' entries':'')));
+            const b=el('button',undefined,'btn');let line='';for(const word of n.label.split(' ')){if(line.length+word.length>25){b.append(document.createTextNode(line.trim()),el('br'));line='';}line+=word+' ';}b.append(document.createTextNode(line.trim()));b.type='button';b.dataset.node=id;b.setAttribute('aria-expanded',String(selected===id));b.setAttribute('aria-pressed',String(selected===id));b.addEventListener('click',()=>{selected=selected===id?null:id;render();save();const replacement=holder.querySelector(`[data-node="${id}"]`);replacement.focus({preventScroll:true});});
+            seat.append(cap,b);
+            const incoming=data.edges.filter(e=>e.to===id);if(incoming.length)seat.append(el('div','From: '+incoming.map(e=>nodes.get(e.from).label).join(' · '),'text-small hw-mobile-from'));
+            row.append(seat);
+          }
+          if(layer.includes(selected))row.append(detail(nodes.get(selected)));holder.append(row);
+        }
+        requestAnimationFrame(draw);
+      }
+      function draw(){
+        const box=graph.getBoundingClientRect(),w=box.width,h=graph.offsetHeight;
+        svg.setAttribute('viewBox',`0 0 ${w} ${h}`);svg.replaceChildren();
+        const ns='http://www.w3.org/2000/svg', S=(name,attrs)=>{const e=document.createElementNS(ns,name);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,v);return e;};
+        const defs=S('defs',{});
+        for(const [id,color] of [['base','var(--muted-foreground)'],['active','var(--viz-series-1)']]){const marker=S('marker',{id:'hw-whole-arrow-'+id,viewBox:'0 0 8 8',refX:7,refY:4,markerWidth:6,markerHeight:6,orient:'auto'});marker.append(S('path',{d:'M 0 0 L 8 4 L 0 8 Z',fill:color}));defs.append(marker);}svg.append(defs);
+        const bounds=new Map([...holder.querySelectorAll('[data-node]')].map(e=>{const r=e.getBoundingClientRect();return [e.dataset.node,{x:r.left-box.left,y:r.top-box.top,w:r.width,h:r.height}]}));
+        const links=[...data.edges].sort((a,b)=>Number(a.from===selected||a.to===selected)-Number(b.from===selected||b.to===selected));
+        for(const [i,e] of links.entries()){
+          const a=bounds.get(e.from),b=bounds.get(e.to),active=e.from===selected||e.to===selected;
+          const downward=b.y>a.y, startX=a.x+a.w/2,startY=downward?a.y+a.h:a.y,endX=b.x+b.w/2,endY=downward?b.y:b.y+b.h;
+          const near=downward&&b.y-a.y<185&&Math.abs(startX-endX)<w*.4;
+          let d;
+          if(near){const mid=(startY+endY)/2;d=`M${startX},${startY} C${startX},${mid} ${endX},${mid} ${endX},${endY}`;}
+          else {const rail=w<540?8+(i%3)*4:Math.max(8,b.x-10-(i%3)*3);const sy=startY+(downward?14:-18),ey=endY+(downward?-28:14);d=`M${startX},${startY} V${sy} H${rail} V${ey} H${endX} V${endY}`;}
+          const p=S('path',{d,fill:'none',stroke:active?'var(--viz-series-1)':'var(--muted-foreground)','stroke-width':active?2:1,opacity:active?1:.18,'marker-end':'url(#hw-whole-arrow-'+(active?'active':'base')+')','data-from':e.from,'data-to':e.to});svg.append(p);
+        }
+      }
+      function restore(state){const id=state?.privateContent?.overviewNode;selected=nodes.has(id)?id:null;render();}
+      new ResizeObserver(draw).observe(graph);
+      window.addEventListener('openai:set_globals',e=>{if(e.detail?.globals?.widgetState)restore(e.detail.globals.widgetState);});
+      restore(window.openai?.widgetState);
+    })();
+  </script>
+</div>

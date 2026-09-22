@@ -19,7 +19,7 @@ export const MEMORY_UNLOCKS: MemoryUnlockDef[] = [
     description: 'Unlock one random skill or support you have not unlocked yet. It joins your find and selection pools permanently. Every eligible Memory has the same chance; no duplicates.',
     weights: { skill: 1, support: 1 } },
   { id: 'memory_secondary', tier: 'secondary', label: 'Awaken a Skill', cost: 90,
-    description: 'Awaken one random skill already in your find pool. Awakening opens its skill tree and commissioning access. A legendary find awakens the same access through play. Already awakened skills cannot repeat.',
+    description: 'After your account reaches the second Odyssey victory, awaken one random skill already in your find pool. Awakening opens its skill tree and commissioning access. Earlier legendary finds awaken at that milestone. Already awakened skills cannot repeat.',
     weights: { skill: 1, support: 0 } },
 ];
 

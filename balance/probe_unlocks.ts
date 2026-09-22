@@ -385,7 +385,7 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
 // Dummy, Oracle and Campfire each wait on their OWN themed deed — never a
 // shared level milestone — so the young store stays slim and every unlock
 // arrives as the play it serves: the first legendary skill begs a practice
-// target, five studied crafts make the stone worth consulting, fifty
+// target, rescuing the Oracle opens his stone, fifty
 // charted zones earn the wanderer's fire. Boundary values are read from
 // the catalog rows themselves (authored once, tested verbatim).
 {
@@ -396,10 +396,9 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
     .filter(u => three.includes(u.id) && isUnlockVisible(a, u)).map(u => u.id);
   const needOf = (id: string, key: string): number =>
     allUnlockables().find(u => u.id === id)?.reqLedgerCounts?.[key] ?? NaN;
-  const craftNeed = needOf('feat_oracle_stone', LEDGER_CRAFTS_UNLOCKED);
   const zoneNeed = needOf('feat_campfire', LEDGER_ZONES_EXPLORED);
-  check('deeds: the Oracle and the Campfire author COUNTED gates on their own keys',
-    craftNeed > 0 && zoneNeed > 0, `crafts ${craftNeed}, zones ${zoneNeed}`);
+  check('deeds: the Oracle requires rescue and the Campfire counts explored zones',
+    allUnlockables().find(u => u.id === 'feat_oracle_stone')?.reqLedger === 'oracle_rescued' && zoneNeed > 0);
   check('deeds: level 5 alone opens none of the three (the shared gate is retired)',
     visOf().length === 0, visOf().join(','));
   check('deeds: level 5 still surfaces the Quest Package (its own gate stands)',
@@ -407,11 +406,11 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
   a.ledger[LEDGER_LEGENDARY_SKILL_DROP] = 1;
   check('deeds: the first legendary skill drop surfaces the Training Dummy ALONE',
     visOf().join(',') === 'feat_target_dummy');
-  a.ledger[LEDGER_CRAFTS_UNLOCKED] = craftNeed - 1;
-  check('deeds: one craft short of the need, the Oracle keeps its counsel',
+  a.ledger[LEDGER_CRAFTS_UNLOCKED] = 500;
+  check('deeds: crafting expertise cannot rescue the Oracle',
     !visOf().includes('feat_oracle_stone'));
-  a.ledger[LEDGER_CRAFTS_UNLOCKED] = craftNeed;
-  check('deeds: the authored craft count surfaces the Oracle Stone',
+  a.ledger.oracle_rescued = 1;
+  check('deeds: the rescue receipt surfaces the Oracle Stone',
     visOf().includes('feat_oracle_stone'));
   a.ledger[LEDGER_ZONES_EXPLORED] = zoneNeed - 1;
   check('deeds: one zone short of the need, the fire waits',
@@ -451,9 +450,11 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
   // until the world introduces it.
   {
     const town = vaultShelfCensus(a).find(c => c.tab.id === 'town')!;
-    check('introduction: a fresh Town shelf holds exactly the free board row (the first door; the mystery law holds past it)',
-      town.visible && town.stock.length === 1
-      && town.stock[0].id === 'feat_bounty_board' && town.stock[0].cost === 0);
+    check('introduction: a fresh Town shelf offers the free board and Brandt’s first service investments',
+      town.visible && town.stock.length === 3
+      && town.stock.some(r => r.id === 'feat_bounty_board' && r.cost === 0)
+      && town.stock.some(r => r.id === 'feat_vendor_restock_1')
+      && town.stock.some(r => r.id === 'feat_vendor_wares_1'), town.stock.map(r => r.id).join(','));
   }
   a.ledger[LEDGER_FLASK_LESSON] = 1;
   a.credits = 1000;
@@ -479,6 +480,7 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
   const grantedFlags = new Set([
     ...all.filter(u => u.kind === 'feature').map(u => (u as { payload: { flag: string } }).payload.flag),
     ...Object.values(QUESTS).flatMap(quest => quest.reward.features ?? []),
+    ...Object.values(QUESTS).flatMap(quest => quest.rescue?.features ?? []),
   ]);
   const orphanChains = all.filter(u => u.kind === 'feature' && u.requiresFeature !== undefined
     && !grantedFlags.has(u.requiresFeature));

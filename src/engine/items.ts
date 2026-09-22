@@ -419,11 +419,15 @@ export interface RoughMemoryUnit {
   e?: MonsterRarity;
   t?: string;
   g?: MemoryPin;
+  /** Purchased memories retain their counter's rarity ceiling through recall. */
+  ceiling?: SkillRarity;
 }
 
 /** A live item — PURE JSON (ids + numbers only), which makes it the save
  *  shape, the corpse shape, and the wire shape all at once. */
 export interface ItemInstance {
+  /** Protected quest cargo. Only its owning quest's return leg consumes it. */
+  questId?: string;
   uid: number;
   baseId: string;
   ilvl: number;

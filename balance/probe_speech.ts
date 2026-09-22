@@ -832,6 +832,74 @@ console.log('K. THE SPEECH FOCUS (idle dwell, priority, stability and cooldowns)
   check('K27 zone loading clears transient focus', (w as unknown as { speechFocus: Map<unknown, unknown> }).speechFocus.size === 0);
 }
 
+console.log('Kp. POINTER ATTENTION (eligible intent, overlap, dwell and cues)');
+{
+  const tune = SPEECH_ATTENTION_CFG.focus;
+  const keeper = { id: 1, distance: 15, priority: 100, dwellSec: 0.4 };
+  const patron = { id: 2, distance: 80, priority: 0, dwellSec: 0.65, pointerDistance: 4 };
+  const guest = { ...patron, id: 3, pointerDistance: 8 };
+  let focus = dwellFocus(undefined, [keeper, guest, patron], true, 0, tune)!;
+  check('Kp1 nearest pointer hit overrides purpose and hero distance', focus.id === patron.id && !focus.ready);
+  check('Kp2 overlap selection is independent of enumeration order',
+    dwellFocus(undefined, [patron, keeper, guest], true, 0, tune)?.id === patron.id);
+  check('Kp3 a passing hover cannot bank a completed dwell',
+    dwellFocus(focus, [keeper, { ...patron, pointerDistance: undefined }], true, 0.1, tune)?.id === keeper.id);
+  const automatic = dwellFocus(focus, [{ ...patron, pointerDistance: undefined }], true, 0.7, tune)!;
+  check('Kp3b an unfinished hover cannot latch later automatic dwell', automatic.ready && !automatic.pointed
+    && dwellFocus(automatic, [keeper, { ...patron, pointerDistance: undefined }], true, 0.8, tune)?.id === keeper.id);
+  focus = dwellFocus(focus, [keeper, patron], true, 0.7, tune)!;
+  check('Kp4 sustained hover earns the full ambient dwell', focus.ready);
+  focus = dwellFocus(focus, [keeper, { ...patron, pointerDistance: undefined }], true, 0.8, tune)!;
+  check('Kp5 moving to reader controls preserves completed cursor choice', focus.id === patron.id && focus.ready);
+  focus = dwellFocus(focus, [{ ...keeper, pointerDistance: 0 }, patron], true, 0.9, tune)!;
+  check('Kp6 pointing at a new target resets its dwell', focus.id === keeper.id && !focus.ready && focus.since === 0.9);
+  check('Kp7 an unreachable cursor choice is forgotten', dwellFocus(focus, [], true, 1, tune) === undefined);
+  check('Kp8 exact overlaps break ties by stable id',
+    dwellFocus(undefined, [guest, { ...patron, pointerDistance: guest.pointerDistance }], true, 0, tune)?.id === patron.id);
+
+  const w = makeSimWorld('warrior', 77035);
+  const a = w.createMonster('townsfolk_patron', 1, 'player');
+  const k = w.createMonster('townsfolk_innkeep', 1, 'player');
+  a.pos = { x: w.player.pos.x + 30, y: w.player.pos.y };
+  k.pos = { x: w.player.pos.x + 80, y: w.player.pos.y };
+  w.actors.push(a, k);
+  const rows = (w as unknown as { speakerRows: Map<number, SpeechSpeakerRow> }).speakerRows;
+  rows.set(a.id, makeSpeakerRow(a.id, 'Stay by the fire.', 'seat', {
+    key: 'pointer:patron', company: 'pointer', name: null, roles: ['patron'], own: ['Stay by the fire.'],
+  }));
+  w.time = 20; w.localSeat.lastActedAt = 0;
+  const hits = new Map([[a.id, 0]]);
+  const poll = (seconds: number, pointer = hits) => {
+    let lines = w.npcSpeechView(true, pointer);
+    for (let i = 0; i < seconds * 60; i++) { w.time += 1 / 60; lines = w.npcSpeechView(true, pointer); }
+    return lines;
+  };
+  check('Kp9 unselected speakers advertise availability without starting speech',
+    w.speechDwellTargetsView().some(r => r.a === a && r.frac === 0 && !r.selected));
+  check('Kp10 hover never skips the initial dwell', poll(0.2).length === 0);
+  const cue = w.speechDwellTargetsView().find(r => r.a === a);
+  check('Kp11 cue progress comes from the selected speech clock', !!cue && cue.selected && cue.frac > 0 && cue.frac < 1);
+  check('Kp12 hovered patron speaks with Mireille still in range', poll(0.6).some(r => r.a === a));
+  w.finishNpcDialogue(a.id);
+  poll(0.5, new Map([[k.id, 0]]));
+  check('Kp13 cooling patrons cannot steal pointer focus or advertise ready rings',
+    !poll(0.8).some(r => r.a === a) && w.speechFocusTarget()?.id === k.id
+    && !w.speechDwellTargetsView().some(r => r.a === a));
+  a.tier = 1;
+  check('Kp14 another floor cannot be pointed at or advertise a cue',
+    !poll(13).some(r => r.a === a) && !w.speechDwellTargetsView().some(r => r.a === a));
+  a.tier = 0; a.pos.x += 1000;
+  check('Kp15 remote pointer hits cannot widen dwell reach', !poll(1).some(r => r.a === a));
+  w.ledger.mireille_flasks_given = 1;
+  w.mireilleUnlocked = () => true;
+  check('Kp16 a keeper without a gift or lesson offers the configured resting line',
+    w.innkeepPrompt() === SPEECH_ATTENTION_CFG.roles.innkeep?.restingLine);
+  const def = MONSTERS[k.defId!], prior = def.speechAttention;
+  def.speechAttention = { restingLine: 'Make yourself at home.' };
+  check('Kp17 packages can customize a keeper response by definition', w.innkeepPrompt() === 'Make yourself at home.');
+  def.speechAttention = prior;
+}
+
 console.log('L. THE DIALOGUE READER (pages, explicit advance, pending state and dismissal)');
 {
   const text = 'One two three four five six seven eight nine ten.';

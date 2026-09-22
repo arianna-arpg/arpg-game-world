@@ -25,7 +25,11 @@ placeholder until earned; the actual name is not encoded into the shrouded card.
 Class-select teasers use the same safe prose. Vestiges share the alphabet as lore;
 finding them never translates the card, and the UI makes no such claim.
 
-Earning discovers the class and grants its skill/support drop pools immediately.
+Earning discovers the class and grants its actual base starting skills plus its
+small authored support selection immediately. `CLASS_BUNDLES.skillIds` derives
+from `ClassDef.bar`; wider schools stay in Memory discovery and alternate kits
+stay on the mastery ladder. Existing gem grants are retained. These rewards
+grant discovery, not Awakening; see [account power progression](power-progression.md).
 It also adds the class to `Account.pendingClassUnlocks`, persisted through normal account saves.
 The Classes shelf keeps the fully revealed card above the collapsible mystery
 section, with an enabled **Unlock** button and no essence price. Clicking it

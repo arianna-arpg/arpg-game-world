@@ -96,6 +96,9 @@ function discCentre(tier: number, id: TownSiteId): { x: number; y: number } | nu
   if (!p) return null;
   const add = TOWN_ADDITIONS.find(a => a.fixtures.some(f => f.site === id));
   const fx = add?.fixtures.find(f => f.site === id);
+  // A resident beside a prop-anchored station does not move its service disc.
+  const anchor = fx && STRUCTURES[fx.structure]?.props?.find(p => p.anchor);
+  if (anchor) return { x: p.x + (fx?.dx ?? 0) + anchor.x, y: p.y + (fx?.dy ?? 0) + anchor.y };
   const npc = fx ? STRUCTURES[fx.structure]?.npcs?.[0] : undefined;
   if (npc) return { x: p.x + (fx?.dx ?? 0) + npc.x, y: p.y + (fx?.dy ?? 0) + npc.y };
   if (id === 'recruiter') return { x: p.x + OFFICER_STAND.x, y: p.y + OFFICER_STAND.y };

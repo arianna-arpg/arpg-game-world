@@ -1,0 +1,138 @@
+<div id="hw-progression">
+  <style>
+    #hw-progression { color: var(--foreground); }
+    #hw-progression .hw-header { display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    #hw-progression .hw-map { position:relative; padding:16px 28px; }
+    #hw-progression .hw-edges { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:visible; }
+    #hw-progression .hw-layer { display:grid; grid-template-columns:repeat(var(--columns),minmax(0,1fr)); gap:20px; position:relative; margin-bottom:40px; align-items:center; }
+    #hw-progression .hw-layer:last-child { margin-bottom:0; }
+    #hw-progression .hw-seat { min-width:0; position:relative; }
+    #hw-progression .hw-seat:only-child { max-width:340px; width:100%; justify-self:center; }
+    #hw-progression .hw-mobile-edge { display:none; }
+    #hw-progression .hw-gates { margin-top:20px; }
+    #hw-progression .hw-item { padding:10px 0; border-bottom:1px solid var(--border); }
+    #hw-progression .hw-item summary { overflow-wrap:anywhere; }
+    #hw-progression dl { display:grid; grid-template-columns:minmax(85px,auto) 1fr; gap:8px 16px; }
+    #hw-progression dt { color:var(--muted-foreground); }
+    #hw-progression dd { margin:0; min-width:0; overflow-wrap:anywhere; }
+    #hw-progression .hw-detail { min-height:48px; }
+    #hw-progression .hw-scope { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:6px; background:var(--viz-series-1); }
+    #hw-progression .scope-account { background:var(--viz-series-2); }
+    #hw-progression .scope-character { background:var(--viz-series-3); }
+    #hw-progression .scope-world { background:var(--viz-series-4); }
+    #hw-progression .scope-debug { background:var(--viz-series-5); }
+    @media(max-width:540px) {
+      #hw-progression .hw-map { padding:12px 0; }
+      #hw-progression .hw-layer { grid-template-columns:1fr; gap:20px; margin-bottom:20px; }
+      #hw-progression .hw-seat:only-child { max-width:none; }
+      #hw-progression .hw-edges { display:none; }
+      #hw-progression .hw-mobile-edge { display:block; margin-bottom:6px; }
+      #hw-progression dl { grid-template-columns:1fr; gap:4px; }
+      #hw-progression dd { margin-bottom:10px; }
+    }
+  </style>
+  <div class="hw-header">
+    <h2>Hollow Wake · progression</h2>
+    <span class="text-small text-muted">Current implementation · 21 Sep 2026</span>
+  </div>
+  <div class="viz-controls">
+    <label class="form-label" for="hw-path">Progression path
+      <select class="form-select" id="hw-path"></select>
+    </label>
+  </div>
+  <div class="text-small text-muted">Arrows: progression or prerequisite flow · ME: Mortal Essence</div>
+  <div class="hw-map" id="hw-map" role="group" aria-label="Progression flowchart"></div>
+  <div class="hw-detail" id="hw-detail" aria-live="polite"></div>
+  <details class="hw-gates" id="hw-register">
+    <summary id="hw-register-title">Exact prerequisites</summary>
+    <div id="hw-register-content"></div>
+  </details>
+  <div id="hw-extra"></div>
+  <script type="application/json" id="hw-data">__PROGRESSION_DATA__</script>
+  <script>
+    (() => {
+      const root = document.getElementById('hw-progression');
+      const data = JSON.parse(root.querySelector('#hw-data').textContent);
+      const select = root.querySelector('#hw-path');
+      const figure = root.querySelector('#hw-map');
+      const detail = root.querySelector('#hw-detail');
+      const register = root.querySelector('#hw-register');
+      const registerTitle = root.querySelector('#hw-register-title');
+      const registerContent = root.querySelector('#hw-register-content');
+      const extra = root.querySelector('#hw-extra');
+      const rows = Object.fromEntries(data.rows.map(row => [row.id,row]));
+      const names = {play:'Play',vault:'Vault',account:'Account',character:'Character',world:'World',debug:'Debug'};
+      const esc = s => String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      let current = data.maps[0], selected = current.focus;
+      select.innerHTML = data.maps.map(m => `<option value="${m.id}">${esc(m.title)}</option>`).join('');
+      function save() {
+        const state = {modelContent:{progressionPath:current.title,selectedStep:current.nodes.find(n=>n.id===selected)?.label},privateContent:{path:current.id,node:selected}};
+        window.openai?.setWidgetState?.(state)?.catch?.(()=>{});
+      }
+      function pick(id,remember=true){
+        const node=current.nodes.find(n=>n.id===id);if(!node)return;
+        selected=id;
+        figure.querySelectorAll('[data-node]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.node===id)));
+        detail.innerHTML=`<span class="hw-scope scope-${node.kind}" aria-hidden="true"></span><strong>${esc(node.label)}:</strong> ${esc(node.detail)}`;
+        if(remember)save();
+      }
+      function drawEdges(){
+        const svg=figure.querySelector('.hw-edges');if(!svg)return;
+        const box=figure.getBoundingClientRect();
+        svg.setAttribute('viewBox',`0 0 ${box.width} ${box.height}`);
+        let paths='';
+        const layerOf=id=>current.layers.findIndex(l=>l.includes(id));
+        current.edges.forEach(([a,b],i)=>{
+          const from=figure.querySelector(`[data-node="${a}"]`).getBoundingClientRect();
+          const to=figure.querySelector(`[data-node="${b}"]`).getBoundingClientRect();
+          let d;
+          if(layerOf(b)-layerOf(a)>1){
+            const left=(i%2===0), gutter=left?8+(i%3)*6:box.width-8-(i%3)*6;
+            const x1=from.left+from.width/2-box.left,y1=from.bottom-box.top;
+            const x2=to.left+to.width/2-box.left,y2=to.top-box.top;
+            d=`M ${x1} ${y1} V ${y1+10} H ${gutter} V ${y2-12} H ${x2} V ${y2-3}`;
+          }else{
+            const x1=from.left+from.width/2-box.left,y1=from.bottom-box.top;
+            const x2=to.left+to.width/2-box.left,y2=to.top-box.top;
+            if(layerOf(a)===layerOf(b)){
+              d=`M ${from.right-box.left} ${from.top+from.height/2-box.top} H ${to.left-box.left}`;
+            }else d=`M ${x1} ${y1} C ${x1} ${(y1+y2)/2} ${x2} ${(y1+y2)/2} ${x2} ${y2-3}`;
+          }
+          paths+=`<path d="${d}" fill="none" stroke="var(--muted-foreground)" stroke-width="1.2" marker-end="url(#hw-arrow)"><title>${esc(a)} to ${esc(b)}</title></path>`;
+        });
+        svg.innerHTML=`<defs><marker id="hw-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7" fill="var(--muted-foreground)"/></marker></defs>${paths}`;
+      }
+      function render(){
+        select.value=current.id;
+        const nodes=Object.fromEntries(current.nodes.map(n=>[n.id,n]));
+        figure.setAttribute('aria-label',current.title+'; arrows indicate prerequisite or reward flow; select a step for its rule');
+        figure.innerHTML='<svg class="hw-edges" aria-hidden="true"></svg>'+current.layers.map(layer=>`<div class="hw-layer" style="--columns:${layer.length}">${layer.map(id=>{
+          const node=nodes[id],row=rows[node.row];
+          const scope=names[node.kind]+(row?` · ${row.cost===0?'free':row.cost+' ME'}`:'');
+          const incoming=current.edges.filter(e=>e[1]===id).map(e=>nodes[e[0]].label);
+          return `<div class="hw-seat">${incoming.length?`<div class="hw-mobile-edge text-small text-muted">↓ From: ${esc(incoming.join(' · '))}</div>`:''}<button type="button" class="btn btn-block" data-node="${id}" aria-pressed="false"><span><span class="text-small"><span class="hw-scope scope-${node.kind}" aria-hidden="true"></span>${esc(scope)}</span><br>${esc(node.label)}</span></button></div>`;
+        }).join('')}</div>`).join('');
+        figure.querySelectorAll('[data-node]').forEach(b=>b.addEventListener('click',()=>pick(b.dataset.node)));
+        register.hidden=!current.catalog.length;
+        registerTitle.textContent=`Exact Vault prerequisites · ${current.catalog.length} entries`;
+        registerContent.innerHTML=current.catalog.map(id=>{
+          const r=rows[id];
+          return `<details class="hw-item"><summary>${esc(r.label)} · ${r.cost===0?'free':r.cost+' ME'}</summary><dl><dt>All required</dt><dd>${esc(r.all.join(' + ')||'No row-specific prerequisite; Vault access still required')}</dd>${r.any.length?`<dt>Any one road</dt><dd>${esc(r.any.join(' OR '))}</dd>`:''}<dt>Result</dt><dd>${esc(r.kind==='class'?'Discovery grants class gems immediately; free Vault activation opens selection. '+r.effect:r.effect)}</dd><dt>Scope</dt><dd>${r.kind==='class'?'Account discovery, then separate activation':r.kind==='memory'||r.kind==='graft'?'Repeatable purchase':'Permanent account purchase'}</dd></dl></details>`;
+        }).join('');
+        extra.innerHTML=current.id==='journey'?`<details class="hw-gates"><summary>Vocation entry paths · ${data.vocations.length}</summary><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Vocation</th><th>Home class</th><th>Offer level</th><th>Path</th></tr></thead><tbody>${data.vocations.map(v=>`<tr><td>${esc(v.name)}</td><td>${esc(v.home)}</td><td>${v.level}</td><td>${v.secret?'Secret calling':'Ordinary chain'} · ${v.steps} steps</td></tr>`).join('')}</tbody></table></div></details>`:current.id==='events'?`<details class="hw-gates"><summary>What runs before purchase? · ${data.packages.length} packages</summary><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Package</th><th>Before purchase</th><th>Default start</th></tr></thead><tbody>${data.packages.map(p=>`<tr><td>${esc(p.label)}</td><td>${p.alwaysOn?'Always active':p.enabled?'Enabled':'Absent'}</td><td>${p.start}</td></tr>`).join('')}</tbody></table></div></details>`:'';
+        if(current.id==='loop') extra.innerHTML=`<details class="hw-gates"><summary>Wardrobe unlocks outside the Vault catalog · ${data.cosmetics.length}</summary><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Appearance</th><th>Acquisition</th></tr></thead><tbody>${data.cosmetics.map(c=>`<tr><td>${esc(c.name)}</td><td>${c.acquire.kind==='credits'?c.acquire.cost+' ME'+(c.consume?' · repeatable, 2 charges included':''):esc(c.labels.join(' + '))}</td></tr>`).join('')}</tbody></table></div></details>`;
+        pick(current.nodes.some(n=>n.id===selected)?selected:current.focus,false);
+        requestAnimationFrame(drawEdges);
+      }
+      function restore(state){
+        const saved=state?.privateContent;
+        if(saved){current=data.maps.find(m=>m.id===saved.path)||data.maps[0];selected=saved.node||current.focus;}
+        render();
+      }
+      select.addEventListener('change',()=>{current=data.maps.find(m=>m.id===select.value);selected=current.focus;register.open=false;render();save();});
+      window.addEventListener('openai:set_globals',event=>{if(event.detail?.globals?.widgetState)restore(event.detail.globals.widgetState);});
+      new ResizeObserver(drawEdges).observe(figure);
+      restore(window.openai?.widgetState);
+    })();
+  </script>
+</div>

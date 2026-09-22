@@ -1,6 +1,7 @@
 import { MEMORY_UNLOCK_CFG, MEMORY_UNLOCKS, type MemoryKind, type MemorySecondaryMechanic, type MemoryUnlockDef } from '../data/memoryUnlocks';
 import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
+import { powerProgressionOpen } from '../data/powerProgression';
 import { FEATURE, gemDropKey, isSkillUnlockedForDrop, isSupportUnlockedForDrop, type Account } from './account';
 
 export interface MemoryCandidate { kind: MemoryKind; id: string; name: string; weight: number }
@@ -23,24 +24,31 @@ export function memoryDiscovered(a: Account, kind: MemoryKind, id: string): bool
 }
 
 export function memorySecondaryOwned(a: Account, kind: MemoryKind, id: string): boolean {
-  return a.memorySecondary.has(memoryKey(kind, id))
+  return memoryProgressionOpen(a) && (a.memorySecondary.has(memoryKey(kind, id))
+    || (MEMORY_UNLOCK_CFG.debugCodexBypassesSecondary && a.features.has(FEATURE.UNLOCK_ALL_GEMS)));
+}
+
+/** Legendary receipts can predate the milestone; their access becomes live here. */
+export function memoryProgressionOpen(a: Account): boolean {
+  return powerProgressionOpen(a.ledger, 'awakening')
     || (MEMORY_UNLOCK_CFG.debugCodexBypassesSecondary && a.features.has(FEATURE.UNLOCK_ALL_GEMS));
 }
 
 /** One switch per mechanic; future prestige consumers use this same read. */
 export function memorySecondaryOpen(a: Account, kind: MemoryKind, id: string, mechanic: MemorySecondaryMechanic): boolean {
+  if (MEMORY_UNLOCK_CFG.secondary.mechanics[mechanic] && !memoryProgressionOpen(a)) return false;
   return !MEMORY_UNLOCK_CFG.secondary.mechanics[mechanic] || !MEMORY_UNLOCK_CFG.secondary.kinds.includes(kind)
     || memorySecondaryOwned(a, kind, id);
 }
 
 export function memoryCommissionReady(a: Account, kind: MemoryKind, id: string, need: number): boolean {
-  if (!memoryDiscovered(a, kind, id)) return false;
+  if (!memoryProgressionOpen(a) || !memoryDiscovered(a, kind, id)) return false;
   return MEMORY_UNLOCK_CFG.secondary.mechanics.commission && MEMORY_UNLOCK_CFG.secondary.kinds.includes(kind)
     ? memorySecondaryOwned(a, kind, id) : (a.ledger[gemDropKey(id)] ?? 0) >= need;
 }
 
 export function memoryUnlockCandidates(a: Account, def: MemoryUnlockDef): MemoryCandidate[] {
-  if (def.tier === 'secondary' && !MEMORY_UNLOCK_CFG.secondary.vault) return [];
+  if (def.tier === 'secondary' && (!MEMORY_UNLOCK_CFG.secondary.vault || !memoryProgressionOpen(a))) return [];
   return memoryCatalog().filter(c => def.tier === 'discovery'
     ? !memoryDiscovered(a, c.kind, c.id)
     : MEMORY_UNLOCK_CFG.secondary.kinds.includes(c.kind)
@@ -68,7 +76,8 @@ export function grantMemoryUnlock(a: Account, def: MemoryUnlockDef, random = Mat
   return receipt;
 }
 
-/** Genuine minted/remembered legendary skills only; never purchases or transfers. */
+/** Genuine legendary receipts only; never purchases or transfers. Before the
+ * milestone these are dormant, retained across saves even if the gem is lost. */
 export function awakenMemoryFromDrop(a: Account, id: string, rarity?: string): boolean {
   if (!MEMORY_UNLOCK_CFG.secondary.legendaryFinds || !MEMORY_UNLOCK_CFG.secondary.kinds.includes('skill')
     || rarity !== 'legendary' || !SKILLS[id] || SKILLS[id].noDrop) return false;
@@ -81,11 +90,12 @@ export function awakenMemoryFromDrop(a: Account, id: string, rarity?: string): b
 }
 
 /** Mirrors the session host's gate on remote clients, without copying its account. */
-export type MemoryAccess = Partial<Record<MemorySecondaryMechanic, string[] | null>>;
+export type MemoryAccess = Partial<Record<MemorySecondaryMechanic, string[] | null>> & { progression?: boolean };
 export function memoryAccessView(a: Account): MemoryAccess {
-  return Object.fromEntries(Object.entries(MEMORY_UNLOCK_CFG.secondary.mechanics).map(([mechanic, gated]) => [mechanic,
+  return { progression: memoryProgressionOpen(a), ...Object.fromEntries(Object.entries(MEMORY_UNLOCK_CFG.secondary.mechanics).map(([mechanic, gated]) => [mechanic,
     !gated || !MEMORY_UNLOCK_CFG.secondary.kinds.includes('skill')
       || (MEMORY_UNLOCK_CFG.debugCodexBypassesSecondary && a.features.has(FEATURE.UNLOCK_ALL_GEMS))
-      ? null : [...a.memorySecondary].filter(k => k.startsWith('skill:')).map(k => k.slice(6)),
-  ]));
+      ? null : memoryProgressionOpen(a)
+        ? [...a.memorySecondary].filter(k => k.startsWith('skill:')).map(k => k.slice(6)) : [],
+  ])) };
 }

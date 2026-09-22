@@ -239,6 +239,43 @@ matrix slice for the gem stays clean. `CompanionBondSpec.stanceArt` is the
 tree's hook on a behavioral change: every living beast of the bond casts the
 named art at its feet when the stance shifts. No shipped node uses it yet.
 
+## Recovery and Whistle protection (2026-09-21)
+
+Every companion revival and both Whistle variants call `World.recoverCompanion`.
+Recovery consumes all harmful statuses and their stat sources without triggering
+expiry ruptures; blessings remain. Whistle gives living beasts the same cleanse
+and protection as downed ones, alongside its existing full heal and recall.
+Queued harmful expiry payloads from a lethal frame are discarded on recovery.
+
+`COMPANION_CFG.recovery` configures cleansing, the protection status and the
+duration budget. By default, three seconds are divided by the keeper's active
+bonded **body count**: one beast gets 3s, two get 1.5s each, three get 1s each.
+Count includes downed beasts and all bond skills belonging to that keeper,
+excludes dead/dormant beasts, and ignores bond-group consolidation. Individual
+revivals use the same divisor. Duration is sampled at recovery; repeated calls
+replace the window rather than adding time or retaining a longer old window.
+Generic effect-duration investment does not multiply this budget.
+
+The beneficial `companion_recovery` status supplies reusable `damageImmunity`
+and `debuffImmunity` stats. Damage immunity joins the existing invulnerability
+read without overwriting intrinsic invulnerability, and protects hit, DoT,
+direct typed-hazard and life-damage paths. Debuff immunity refuses harmful
+status applications while allowing blessings. The ordinary status clock removes
+both grants at expiry; deliberate life costs and scripted kills remain separate.
+This temporary state uses ordinary status lifetime/persistence rules.
+
+Its mint glow and bright rim are authored through `StatusDef.bodyFx` and follow
+actual status presence, including on co-op clients. Whistle descriptions explain
+the shared duration; no new combat captions or text countdowns are introduced.
+
+`balance/probe_companionrecovery.ts` verifies cleanse/source cleanup, actual hit,
+DoT and area immunity, debuff refusal, expiry, living/downed Whistle parity,
+nonstacking pack budgets, owner isolation, dormant bodies, automatic and nearby
+revivals, Rallying Whistle, intrinsic immunity and co-op status presentation.
+
+The hidden `balance/companion-recovery-ui.cjs` harness verifies and captures the
+protected/expired states in the real renderer after a production build.
+
 ## Verification
 
 `balance/probe_companioninheritance.ts` exercises actual healing, summon/bond

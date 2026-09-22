@@ -44,7 +44,9 @@ import { COMBO_CFG, comboProgress, comboStat } from '../engine/sequence';
 import { CORPSE_CFG, LOW_LIFE_FLASH_SEC, SNOW_CFG } from '../engine/world';
 import type { NpcSpeechLine, Seat, World } from '../engine/world';
 import { DIALOGUE_CFG } from '../data/dialogue';
+import { SPEECH_ATTENTION_CFG } from '../data/speechAttention';
 import { liveActorPortrait } from './actorPortrait';
+import { BOUNTY_BOARD_CFG } from '../data/bountyboard';
 import { ATTENTION_CFG, collectAttention } from '../world/attention';
 import {
   floatKindOn, noticeChannelOn, NOTICE_CFG, PICKUP_FEED_CFG, type NoticeEntry,
@@ -227,6 +229,8 @@ export class Renderer {
   /** Screen-space mouse, fed by main each frame — HUD hover affordances
    *  (buff-pip names) read it; (-1,-1) = no pointer. */
   hudMouse = { x: -1, y: -1 };
+  /** Only a real mouse over the play surface may nominate a dwell target. */
+  speechPointerEnabled = false;
   /** THE UI-SCALE SUB-PASS state (Settings.uiScale — ui/uiScale.ts): the
    *  VIRTUAL canvas dims + mouse, physical ÷ scale, refreshed each frame in
    *  render(). Every pure screen-space widget pass draws against uiW/uiH
@@ -703,6 +707,13 @@ export class Renderer {
     this.drawWaypoint(world);
     this.drawHuntFootprint(world); // beast tracks to dwell on (the Hunt)
     this.drawAmalgamPicks(world);  // the Bonewright's body-part choice spots
+    // Resolve attention once before both its ground cues and actor labels.
+    this.speechFocusLines.clear();
+    this.dialogueVisibleSpeaker = null;
+    if (!VIS_ABLATE.has('actors')) {
+      for (const line of world.npcSpeechView(!this.dialogueReaderEnabled() || this.npcDialogueAvailable(),
+        this.speechPointerHits(world))) this.speechFocusLines.set(line.a, line);
+    }
     this.drawDwellTells(world);    // THE DWELL TELL: the base ring on every station/NPC in dwell range
     this.drawCampfireHint(world);  // "linger to refresh" prompt by the town campfire
     this.drawExits(world);
@@ -767,10 +778,6 @@ export class Renderer {
       // one composited sprite per body, no per-body state churn.
       this.drawLite(world, vw, vh);
       for (const a of world.actors) if (!a.dead && a.worm) this.drawWormTail(a, world.time);
-      // THE SPEECH FOCUS resolves the whole company before any bubble draws.
-      this.speechFocusLines.clear();
-      this.dialogueVisibleSpeaker = null;
-      for (const line of world.npcSpeechView(!this.dialogueReaderEnabled() || this.npcDialogueAvailable())) this.speechFocusLines.set(line.a, line);
       for (const a of world.actors) if (!a.dead) this.drawActor(a, world);
       if (world.deathPresentation) drawPlayerDeath(this.ctx, world.player, world.deathPresentation, world.time);
       // THE STATUS VOICE (vis/statusVoiceLayer.ts): what just LANDED on a
@@ -3670,9 +3677,10 @@ export class Renderer {
   private drawSpeeches(world: World): void {
     // The reader sees the same body/story/concealment gates as an overhead
     // bubble, including frames after an ambient offer expires.
-    const speaker = this.dialogueVisibleSpeaker;
-    const visible = this.dialogueReaderEnabled() && speaker && this.labelRevealAt(world, speaker.pos) > 0.02;
-    const line = visible ? this.speechFocusLines.get(speaker) : undefined;
+    const callout = [...this.speechFocusLines.values()].find(line => line.delivery === 'callout');
+    const speaker = callout?.a ?? this.dialogueVisibleSpeaker;
+    const visible = this.dialogueReaderEnabled() && speaker && (callout || this.labelRevealAt(world, speaker.pos) > 0.02);
+    const line = visible ? callout ?? this.speechFocusLines.get(speaker) : undefined;
     this.onNpcDialogue?.(world, line?.seatId === world.localSeat?.id
       ? { ...line, text: this.resolveText(line.text) } : null, visible ? speaker.id : null);
     if (!this.speeches.length) {
@@ -4288,6 +4296,21 @@ export class Renderer {
   /** Zone portals: a pulsing ring with the destination written below. */
   /** The town campfire's "linger to refresh" prompt + a warm inviting ring while
    *  the player rests near it (the fire itself is a campfire doodad). */
+  /** Hit scores are presentation intent only: the world's common eligibility
+   * read still decides which bodies may compete. Nearest center wins stacks. */
+  private speechPointerHits(world: World): ReadonlyMap<number, number> {
+    const hits = new Map<number, number>();
+    if (!this.speechPointerEnabled || !SPEECH_ATTENTION_CFG.pointer.enabled) return hits;
+    const cursor = this.toWorld(this.hudMouse);
+    for (const a of world.actors) {
+      if (a.dead || !a.defId || !MONSTERS[a.defId]?.npcRole) continue;
+      const distance = Math.hypot(a.pos.x - cursor.x, a.pos.y - cursor.y);
+      if (distance <= a.radius + SPEECH_ATTENTION_CFG.pointer.hitPadding
+        && this.labelRevealAt(world, a.pos) > 0.02) hits.set(a.id, distance);
+    }
+    return hits;
+  }
+
   /** THE DWELL TELL's base ring (2026-09-11, her ask): every station and
    *  interactable NPC a local hand stands in dwell range of wears the
    *  pulsing "linger" ring the town hints used to draw for a few — radius
@@ -4298,7 +4321,32 @@ export class Renderer {
   private drawDwellTells(world: World): void {
     const { ctx } = this;
     const t = world.time;
+    const intro = BOUNTY_BOARD_CFG.boardIntroduction;
+    for (const board of world.boardIntroduction()) {
+      const reveal = this.labelRevealAt(world, board.pos);
+      if (reveal > 0.02) drawGlow(ctx, board.pos.x, board.pos.y, intro.radius, intro.color,
+        reveal * (intro.alpha + intro.pulse * Math.sin(t * intro.hz)));
+    }
     const pulse = Math.sin(t * 3);
+    const cue = SPEECH_ATTENTION_CFG.cue;
+    for (const d of world.speechDwellTargetsView()) {
+      const reveal = this.labelRevealAt(world, d.a.pos);
+      if (reveal <= 0.02) continue;
+      ctx.save();
+      ctx.strokeStyle = cue.color;
+      ctx.lineWidth = cue.width;
+      ctx.globalAlpha = reveal * (d.selected ? cue.selectedAlpha : cue.alpha);
+      ctx.beginPath();
+      ctx.arc(d.a.pos.x, d.a.pos.y, cue.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      if (d.frac > 0 && d.frac < 1) {
+        ctx.globalAlpha = reveal * cue.progressAlpha;
+        ctx.beginPath();
+        ctx.arc(d.a.pos.x, d.a.pos.y, cue.radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * d.frac);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
     for (const d of world.dwellTargetsView()) {
       const s = transitRing(d.kind);
       ctx.save();

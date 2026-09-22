@@ -307,6 +307,7 @@ export interface WorldStateSave {
   discoveredWaypoints: string[];
   memory?: SavedZoneMemory[];
   quests?: { active: SavedQuestEntry[]; completed: string[] };
+  questImbues?: import('../engine/questImbue').QuestImbue[];
   player?: SavedPlayerSpot;
   /** Per-overlay snapshot bag (WorldSim.snapshotOverlays — open, keyed by
    *  overlay id[@dimension], ':'-prefixed keys reserved for sim ledgers). */

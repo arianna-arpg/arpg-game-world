@@ -253,6 +253,11 @@ function reticleAllowed(): boolean {
     && !world.player.dead && !world.player.downed;
 }
 
+let speechPointerOnCanvas = false;
+canvas.addEventListener('mousemove', () => { speechPointerOnCanvas = true; });
+canvas.addEventListener('mouseleave', () => { speechPointerOnCanvas = false; });
+window.addEventListener('blur', () => { speechPointerOnCanvas = false; });
+
 /** Feed the renderer this frame's aim view: the HUD mouse plus — while the
  *  PAD owns the reticle in live play, or a mouse HANDOFF is still carrying
  *  the pad's aim — the aim point (and soft-lock target) the in-world reticle
@@ -267,6 +272,10 @@ function feedRendererAim(): void {
   if (mouseHandoff && !allowed) mouseHandoff = null;
   const padOwns = aimSource === 'pad' && allowed;
   const handoffOwns = aimSource === 'mouse' && mouseHandoff !== null && allowed;
+  const speechMouse = { x: input.mouse.x / input.pointerScale, y: input.mouse.y / input.pointerScale };
+  renderer.speechPointerEnabled = allowed && aimSource === 'mouse' && !handoffOwns && speechPointerOnCanvas
+    && !renderer.hudClusterRects.some(r => speechMouse.x >= r.x && speechMouse.x <= r.x + r.w
+      && speechMouse.y >= r.y && speechMouse.y <= r.y + r.h);
   renderer.padAim = (padOwns || handoffOwns) ? padAimView : null;
   const wantCursor = (padOwns || handoffOwns) ? 'none' : '';
   if (canvas.style.cursor !== wantCursor) canvas.style.cursor = wantCursor;
@@ -425,7 +434,7 @@ const dialogue = new DialogueUI({
   settings: () => settings, padActive: padActiveNow,
   hudTop: () => ui.hudCluster?.()?.y,
 });
-renderer.npcDialogueAvailable = () => running && !world.player?.dead && !world.player?.downed && !ui.uiBlocking();
+renderer.npcDialogueAvailable = () => running && !world.player?.dead && !world.player?.downed && !ui.uiBlocking(true);
 renderer.onNpcDialogue = (w, line, focusId) => {
   dialogue.setAvailable(renderer.npcDialogueAvailable());
   dialogue.sync(w, line, focusId);
@@ -491,12 +500,11 @@ function startGame(
   // actually OWNS (an unowned alternate falls back to its base; owned
   // Master grants seat themselves): the engine wakes the resolved bar.
   if (kitPicks) { rememberKitPicks(account, classDef, kitPicks); saveAccount(account); }
-  world.createPlayer(classDef, { modeId: mode.id, charId, name: charName, kit: resolveClassKit(account, classDef, kitPicks) });
   // A GRADUATED account (Mireille's flask lesson lived once, any character)
   // skips the re-walk: the flasks arrive learned, barred, and brimming at
   // first breath. No-op until that first graduation — and placed BEFORE
   // persistRun so the baseline snapshot already carries them.
-  world.dealVeteranFlasks();
+  world.createPlayer(classDef, { modeId: mode.id, charId, name: charName, kit: resolveClassKit(account, classDef, kitPicks) });
   // THE LAB KIT (ULT_QA.grantArts — engine/ultimates.ts): iteration builds
   // deal the ultimate + gauge debuts into the fresh bag, unlearned.
   world.dealLabArts();
@@ -551,7 +559,7 @@ function startMu(): void {
   couchReset();
   world = adoptWorld(new World(account, Object.freeze(buildManifest(account, rollSeed()))));
   const cls = CLASSES.find(c => c.id === MU_CFG.provisionalClass) ?? CLASSES[0];
-  world.createPlayer(cls, { modeId: DEFAULT_MODE_ID, startingCompanions: false });
+  world.createPlayer(cls, { modeId: DEFAULT_MODE_ID, startingCompanions: false, startingFlasks: false });
   lastSentZone = '';
   ui.resetRunView();
   deathShown = false;
@@ -626,7 +634,7 @@ function resumeRosterChar(entry: RosterEntry): void {
     }
     const manifest = reconcileManifest(save.expedition, account, rollSeed());
     world = adoptWorld(new World(account, Object.freeze(manifest)));
-    world.createPlayer(classDef, { modeId: entry.modeId, charId: entry.charId, startingCompanions: false });
+    world.createPlayer(classDef, { modeId: entry.modeId, charId: entry.charId, startingCompanions: false, startingFlasks: false });
     if (!applySavedCharacter(world, save)) {
       ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
       return;
@@ -661,7 +669,7 @@ function resumeGame(preloaded?: CharacterSave | null): void {
   // its stored seed makes the resumed world deterministic.
   const manifest = reconcileManifest(save.expedition, account, rollSeed());
   world = adoptWorld(new World(account, Object.freeze(manifest)));
-  world.createPlayer(classDef, { startingCompanions: false });          // builds a valid skeleton in town…
+  world.createPlayer(classDef, { startingCompanions: false, startingFlasks: false });          // builds a valid skeleton in town…
   if (!applySavedCharacter(world, save)) { // …then the save overwrites the build
     clearCharacter();
     ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
@@ -1383,7 +1391,7 @@ function mintCouchSeat(padIdx: number, cls: ClassDef, vessel?: CouchGuestCtx['ve
     invertMove: () => settings.invertMove,
     suspended: () => couchGuestSuspended(id),
   });
-  const seat = world.addSeat(id, cls, source, { startingCompanions: !vessel });
+  const seat = world.addSeat(id, cls, source, { startingCompanions: !vessel, startingFlasks: !vessel });
   const side = COUCH_CFG.join.sides[
     Math.min(COUCH_CFG.join.sides.length - 1, world.couchSeats().length + 1)] ?? 'right';
   seat.couch = { pad: padIdx, side };
@@ -1726,7 +1734,7 @@ function tick(now: number): void {
   pad.poll(nowSec);
   for (const code of dialoguePadHeld) if (!pad.isDown(code)) dialoguePadHeld.delete(code);
   if (!running || world.player?.dead || world.player?.downed) dialogue.reset();
-  dialogue.setAvailable(running && !world.player?.dead && !world.player?.downed && !ui.uiBlocking());
+  dialogue.setAvailable(running && !world.player?.dead && !world.player?.downed && !ui.uiBlocking(true));
   if (input.mouse.x !== lastMouse.x || input.mouse.y !== lastMouse.y) {
     // The mouse reclaims aim only through DELIBERATE travel: motion
     // accumulates while the pad holds the reticle, and only past the
@@ -2495,7 +2503,7 @@ function startAsClient(classDef: ClassDef, selfSeat: string, hostSeed: number): 
   // disagree with the authority we render). wireSeed normalizes the untrusted
   // wire value; ONE seam covers both seating roads (welcome and newRun).
   world = adoptWorld(new World(account, Object.freeze(buildManifest(account, wireSeed(hostSeed, rollSeed())))));
-  world.createPlayer(classDef, { startingCompanions: false });   // a local shell (getters/camera/HUD) — not the authority
+  world.createPlayer(classDef, { startingCompanions: false, startingFlasks: false });   // a local shell (getters/camera/HUD) — not the authority
   world.clientSeatId = selfSeat;
   // META mutations on a client are INTENTS: ship them to the host (which owns every
   // mutation) instead of applying to the throwaway render shell. requestMeta routes

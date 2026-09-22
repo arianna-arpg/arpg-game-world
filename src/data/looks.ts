@@ -1449,6 +1449,9 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'mace' },
     ],
   },
+  npc_smith_unarmed: {
+    parts: [{ kind: 'torso' }, { kind: 'apron' }],
+  },
   npc_keeper: {
     parts: [
       { kind: 'torso' },
@@ -1461,6 +1464,7 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'staff', params: { orb: 'glow' } },
     ],
   },
+  npc_oracle_bound: { parts: [{ kind: 'robe' }] },
   npc_trader: {
     parts: [
       { kind: 'torso' },

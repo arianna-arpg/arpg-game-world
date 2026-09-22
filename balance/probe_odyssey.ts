@@ -13,6 +13,8 @@ import { START_ZONE } from '../src/data/zones';
 import { updateAI } from '../src/engine/ai';
 import type { World } from '../src/engine/world';
 import { angleTo, vec } from '../src/core/math';
+import { odysseyMilestoneKey, powerProgressionOpen } from '../src/data/powerProgression';
+import { ORACLE_RESCUED } from '../src/data/oracle';
 
 seedGlobalRandom(0x0d155e7);
 function pass(label: string): void { console.log(`PASS ${label}`); }
@@ -41,6 +43,8 @@ pass('campaign references resolve; Vocation chains have no second point income')
 let seed = 1;
 while (!newOdyssey(seed, {}).roster.includes('bandit')) seed++;
 const w = makeSimWorld('warrior', seed);
+delete w.account.ledger[odysseyMilestoneKey(1)];
+delete w.account.ledger[odysseyMilestoneKey(2)];
 w.loadZone(START_ZONE); w.odyssey.update();
 const s = w.odyssey.state!;
 assert.equal(w.activeQuests.filter(q => q.questId.startsWith('odyssey_')).length, 8);
@@ -68,12 +72,18 @@ function clearQuest(world: World, id: string): void {
 
 clearQuest(w, revengeCommanderId('goblin'));
 assert.equal(s.defeated.length, 0);
+assert(!powerProgressionOpen(w.account.ledger, 'vocations'));
 assert(!w.account.ledger[ODYSSEY_TUTORIAL_RELEASE]);
 clearQuest(w, odysseyQuestId('goblin', 'operation'));
 assert(s.prepared.includes('goblin'));
 assert.equal(w.zoneMap[`quest_${odysseyQuestId('goblin', 'leader')}`].packs!.count[0], 0);
 const others = s.roster.filter(id => id !== 'goblin' && id !== 'bandit');
-for (const id of others) clearQuest(w, odysseyQuestId(id, 'leader'));
+for (const [index, id] of others.entries()) {
+  clearQuest(w, odysseyQuestId(id, 'leader'));
+  assert(powerProgressionOpen(w.account.ledger, 'vocations'));
+  assert.equal(powerProgressionOpen(w.account.ledger, 'awakening'), index >= 1);
+  assert(w.accountDirty);
+}
 assert.equal(s.defeated.length, 2); assert.equal(w.meta.vocationPoints, 4);
 assert(s.prepared.includes('goblin'));
 assert.equal(w.zoneMap[`quest_${odysseyQuestId('goblin', 'leader')}`].level, 60);
@@ -83,7 +93,10 @@ pass('real commander/operation/leader fights write distinct milestones; preparat
 const saved = JSON.parse(JSON.stringify(serializeCharacter(w)));
 const resumed = makeSimWorld('warrior', seed);
 resumed.account.ledger = { ...w.account.ledger };
+delete resumed.account.ledger[odysseyMilestoneKey(1)];
+delete resumed.account.ledger[odysseyMilestoneKey(2)];
 assert(applySavedCharacter(resumed, saved)); assert(resumed.adoptWorldState(saved.world));
+assert(powerProgressionOpen(resumed.account.ledger, 'awakening'), 'validated saved campaign restores account milestones');
 assert.deepEqual(resumed.odyssey.state, s);
 assert.equal(resumed.meta.vocationPoints, 4);
 resumed.resumeSpawn('exact', saved.world.player);
@@ -91,6 +104,15 @@ const receipts = resumed.activeQuests.length;
 resumed.odyssey.update(); assert.equal(resumed.activeQuests.length, receipts);
 assert.equal(resumed.meta.vocationPoints, 4, 'resuming a completed leader ground never pays again');
 pass('character and world save round-trip preserves roster, preparations, receipts, and unspent points');
+
+const unearned = makeSimWorld('warrior', seed);
+unearned.account.ledger = { 'odyssey_leader:goblin': 100, 'odyssey_leader:bandit': 100 };
+unearned.odyssey.restore(undefined);
+assert(!powerProgressionOpen(unearned.account.ledger, 'awakening'), 'lifetime faction kills never synthesize depth');
+unearned.metaProgressionActive = () => false;
+unearned.odyssey.restore(saved.world.odyssey);
+assert(!powerProgressionOpen(unearned.account.ledger, 'awakening'), 'non-progressing mode cannot earn account milestones');
+pass('historical faction totals and non-progressing modes cannot bypass milestone receipts');
 
 clearQuest(w, odysseyQuestId('goblin', 'leader'));
 assert.equal(w.account.ledger[ODYSSEY_TUTORIAL_RELEASE], 1);
@@ -109,6 +131,7 @@ pass('tutorial leader releases future selection; repeat kills cannot repay; four
 const veteran = makeSimWorld('warrior', seed);
 veteran.account.ledger['tutorial_faction:goblin'] = 1;
 veteran.account.ledger[ODYSSEY_TUTORIAL_RELEASE] = 1;
+veteran.account.ledger[ORACLE_RESCUED] = 1;
 veteran.loadZone(START_ZONE); veteran.odyssey.update();
 assert.equal(veteran.activeQuests.filter(q => q.questId.startsWith('odyssey_')).length, 8);
 assert(!veteran.activeQuests.some(q => q.questId.startsWith('revenge_')));

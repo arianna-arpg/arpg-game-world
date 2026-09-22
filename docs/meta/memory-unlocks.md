@@ -11,24 +11,29 @@ starting points for playtesting, not settled balance.
   pool; the categories are not forced to a 50/50 split.
 - **Awaken a Skill** costs 90 Mortal Essence. Each purchase chooses one skill
   already discoverable by this account whose secondary access remains locked.
-  It opens skill-tree investment and skill commissioning. A genuine legendary
-  skill find grants the same account-wide access without this purchase.
+  After the account defeats two leaders in one Odyssey, it opens skill-tree
+  investment and skill commissioning. A genuine legendary skill find records
+  the same per-skill entitlement for free; finds before that milestone remain
+  dormant and awaken automatically when it is reached.
 - Both purchases repeat while eligible results remain, never return duplicates,
   and save partial investment. One held press completes at most one purchase.
   The Vault names the result and retains the last result on the card.
-- Current class discovery rewards remain unchanged. Unlocking the class for
-  selection still requires its separate free Vault click. Class rewards grant
-  discovery, not secondary access. Class mastery purchases keep their existing
-  role and costs.
+- Class discovery grants exactly its current starting bar and a small authored
+  selection of related supports. The wider skill school stays in Memory discovery.
+  Unlocking selection still requires the separate free Vault click. Discovery does
+  not awaken skills. Class mastery keeps its existing alternate-kit role and costs.
+  Existing accounts retain previously granted skills and supports.
 - Supports share discovery's pool. They have no legendary rarity or skill trees
-  today, so the secondary draw initially contains skills only. Supports retain
-  the existing commissioning threshold of three genuine finds.
+  today, so the secondary draw initially contains skills only. After Odyssey 2,
+  supports retain the commissioning threshold of three genuine finds.
 - Awakening satisfies a skill's commissioning knowledge requirement; the vendor
   service, reach, stock availability, level brackets and actual roll odds still
   apply. A Vault-awakened skill can be commissioned without first finding copies.
 
-Skill level requirements and point budgets still apply after awakening. Locked
-trees can be previewed; their nodes refuse spending in both UI and engine.
+Skill level requirements and point budgets still apply after awakening. Unawakened
+trees have no player-facing preview, point bar, count, button or attention pip.
+Direct opening and spending are both refused; stale panes close. Level-derived
+points appear once the skill awakens, without losing earlier skill levels.
 Previously allocated nodes are preserved, but further investment needs access.
 Basic casting, skill leveling, normal support sockets and existing loot rarity
 are unchanged. There is no separate prestige implementation yet; future prestige
@@ -57,6 +62,16 @@ drop-level restrictions still control when an unlocked entry can actually fall.
 If experimenting with descriptions/odds, update the purchase's adjacent player
 copy to match the experiment.
 
+`src/data/powerProgression.ts` owns the configurable account milestones:
+Vocations at Odyssey 1, Awakening (including all commissioning) at Odyssey 2.
+Odyssey victories stamp `odyssey_stage_N` flags immediately on the account,
+only in modes that earn account progression. These are depth receipts from
+one campaign, never summed faction kills. Validated saved campaigns reconcile
+receipts on restoration; new runs retain account access. Vocation chains retain
+their class, level, site and step requirements after the first milestone.
+Later power systems can use the same stage receipts; stages 3 and 4 currently
+add no new system. Town purchases and Skill Grafting are unchanged.
+
 `src/meta/memoryUnlocks.ts` resolves candidates, grants discoveries and secondary
 access, and exposes the shared mechanic and commission predicates. The ordinary
 Vault investment system owns payment. A typed `memory` row is repeatable, never
@@ -65,12 +80,15 @@ from its predecessor, including during held investment. Empty pools hide their
 purchase and reject stale actions without spending. Surplus stored investment
 funds later explicit purchases, one result at a time.
 
-`Account.memorySecondary` stores `kind:id` keys. `memoryReceipts` records the
+`Account.memorySecondary` stores earned `kind:id` entitlements, including
+dormant legendary finds. The shared access predicate applies the account
+milestone before exposing any earned entitlement. `memoryReceipts` records the
 last outcome and completion sequence per purchase. Existing discovered gems
 stay discovered. Old package investments transfer once to discovery investment
-on the normal account reconciliation path, preserving their full value. An older
-save has no per-skill legendary history, so the old global legendary flag does
-not retroactively awaken arbitrary skills. No account/run reset is required.
+on the normal account reconciliation path, preserving their full value. Existing per-skill receipts are honored retroactively. Saves predating those
+receipts have no per-skill legendary history, so the old global legendary flag
+cannot identify which skills to awaken. Historical account faction totals
+cannot prove second-stage completion either; an extant saved campaign can. No account/run reset is required.
 
 The field route uses `World.noteGemDrop`, the existing genuine gem-mint seam.
 Opaque Memories awaken their skill when recalled and identified, not on preview.
@@ -88,7 +106,7 @@ fixture and exercise fresh-account gates.
 ## Grand Codex follow-up
 
 Grand Codex remains available, explicitly labelled **Debug**, and by default
-bypasses discovery and secondary access. It is not the intended player economy.
+bypasses discovery, the Awakening milestone and secondary access. It is not the intended player economy.
 Remove it from player-facing progression after these experiments; retain an
 equivalent developer control. Review Skill Grafting's current Codex prerequisite
 at that time. Already activated Codex accounts intentionally have no eligible

@@ -1,5 +1,15 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Oracle rescue and account-wide relic access are documented in
+`docs/design/oracle-rescue.md`. `data/oracle.ts` and `QuestDef.rescue` configure
+captivity, residency and grants; `engine/questRescues.ts` validates completion.
+Verify with `probe_oraclerescue.ts` and `balance/oracle-rescue-ui.cjs`.
+
+Brandt's hammer/trophy quests and deferred, level-fixed imbues are documented in
+`docs/design/brandt-progression.md`. Content and tuning live in `data/brandt.ts`
+and `quests/brandt.ts`; `engine/questImbue.ts` owns saved affix offers. Verify
+with `probe_brandtquest.ts` and the hidden `balance/brandt-quest-ui.cjs` harness.
+
 Guidance for Claude Code working in this repository. This file is committed and
 shared with everyone who clones the repo.
 
@@ -240,8 +250,11 @@ Class levels remain the mastery/skill-swap ladder.
 Repeatable Memory discovery and secondary awakening live in
 `data/memoryUnlocks.ts` + `meta/memoryUnlocks.ts`. One mixed skill/support
 draw replaces the package shelf; another awakens a discoverable skill's tree
-and commissions, also earned by a legendary mint/recall. Class gem rewards
-remain unchanged. `docs/meta/memory-unlocks.md` records experiment knobs,
+and commissions after the account reaches Odyssey 2. Earlier legendary
+mints/recalls retain dormant entitlements. `data/powerProgression.ts` owns
+account power milestones (Vocations: Odyssey 1; Awakening: Odyssey 2);
+class discovery now grants its live starting bar plus authored supports.
+`docs/meta/memory-unlocks.md` records experiment knobs,
 saved investment transfer, host authority and the future removal of the
 temporary debug Grand Codex. Verify `probe_memoryunlocks.ts` and the isolated
 `balance/memory-unlocks-ui.cjs` harness after a build.
@@ -2059,8 +2072,8 @@ we verify changes.
   — authoring a level gate IS registering its signal (the old dead
   reached_level_15 gate now lives); quest turn-ins stamp
   `quest_done:<id>` run + account immediately (the grantVocation
-  durability precedent). Debut chain: station → Broader Wares I→II→III
-  (III any-of level-15/vocation/quest) → Gem Counter → Reserved Wares →
+  durability precedent). Market chain: early Broader Wares I→II→III; IV→V require Magic Wares
+  (ten craft-writ bounties then a Vault investment). Wares I → Memory Counter → Reserved Wares →
   Standing Order (needs one ORDERABLE gem via gemdrop: prefix) — docs in
   `docs/meta/gatework.md`, probes `balance/probe_vendorlocker.ts` E/F.
   THE OBJECTIVE WEB + THE MASTERY LADDER + THE RUNESCRIPT (her ruling
@@ -2323,6 +2336,13 @@ we verify changes.
   dismissal, cooldown from completion, and queued functional updates.
   `DIALOGUE_CFG.presentation` retains the bubble comparison. Contract:
   `docs/ui/dialogue.md`; probe_speech rig L + `balance/dialogue-ui.cjs`.
+  Authored state/quest rules, Mireille's optional road invitation, Brandt's
+  hammer foreshadowing and fresh-life flask provision are documented in
+  `docs/design/town-welcome.md`; verify `probe_townwelcome.ts` and the hidden
+  `balance/town-welcome-ui.cjs` harness. Brandt’s white-to-magic stock, five-tier
+  market ladders, exact craft-writ bounty progress, board introduction and
+  quest-driven hammer appearance: `docs/design/brandt-progression.md`; verify
+  `probe_brandtprogression.ts` and `balance/brandt-progression-ui.cjs`.
   THE SPEECH FOCUS now gates presentation through `World.npcSpeechView`:
   `engine/dwellFocus.ts` selects by priority then stable distance, requires
   idle dwell, and admits the winner to the existing telling/cooldown clock.

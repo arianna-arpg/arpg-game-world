@@ -154,6 +154,12 @@ export const FEATURE = {
    *  legacy BRANDT_FAST_RESTOCK above): each owned rung CUTS the counters'
    *  restock beat by its own seconds, floored at the config's minSec. */
   VENDOR_RESTOCK_2: 'vendor_restock_2',
+  VENDOR_RESTOCK_3: 'vendor_restock_3',
+  VENDOR_RESTOCK_4: 'vendor_restock_4',
+  VENDOR_RESTOCK_5: 'vendor_restock_5',
+  VENDOR_WARES_4: 'vendor_wares_4',
+  VENDOR_WARES_5: 'vendor_wares_5',
+  BRANDT_MAGIC_WARES: 'brandt_magic_wares',
   /** THE STANDING ORDER (World.resolveCommission): pre-select one gem the
    *  account KNOWS (drop index ≥ VENDOR_CFG.commission.need) and the counter
    *  watches its own restock beats for it — every beat that passed while you
@@ -306,6 +312,9 @@ export const LEDGER_SOULS_SHELTERED = 'souls_sheltered';
  *  moment. Gatework gates on the prefix ("N bounties of any kind") or a
  *  kind's own key ("N charges seen through"). */
 export const LEDGER_BOUNTY_DONE = 'bounty_done';
+/** Exact lifetime craft-paying bounty turn-ins, written to the account ONLY
+ * at payout; never copied to the run ledger and counted again at reckoning. */
+export const LEDGER_BOUNTY_CRAFT_DONE = 'bounty_craft_done';
 export const LEDGER_BOUNTY_DONE_PREFIX = 'bounty_done:';
 export const bountyDoneKindKey = (kind: string): string => `${LEDGER_BOUNTY_DONE_PREFIX}${kind}`;
 

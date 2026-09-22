@@ -84,15 +84,13 @@ One spelling per fact, exported beside `gemDropKey`:
 
 ## The debut chain (the vendor market)
 
-salvage station (essence-touched discovery) → **Broader Wares I** (chains
-off the station; legacy `brandt_extra_gems` flag) → **II** → **III**
-(any-of: level 15 / a vocation / a quest — authored ON the ladder row,
-`VENDOR_CFG.wares.ladder[2].gate`) · **The Gem Counter** (chains off
-Wares I; opens the counters' gem tab account-wide) → **Reserved Wares 1**
-(requires Gem Counter + Wares I + the vendor-bought stamp, teased) →
-**The Standing Order** (requires the hold + one ORDERABLE gem —
-`{ ledgerPrefix: 'gemdrop:', n: need }` — teased). Every arrow is data;
-`docs/engine/vendors.md` carries the market half.
+Broader Wares I → II → III and Rush Orders I → II → III are early Mortal
+Essence investments. Their IV/V tiers require Brandt: Magic Wares, itself a
+Vault purchase qualified by ten craft-writ bounty turn-ins. Magic Wares opens
+the Memory Counter; the Counter plus a purchase opens Reserved Wares. Returning
+Brandt's hammer qualifies Rare Wares, which then opens the Salvage Station.
+Every arrow and gate is data; see
+[Brandt progression](../design/brandt-progression.md) for current tuning.
 
 ## Recipes
 

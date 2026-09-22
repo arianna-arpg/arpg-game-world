@@ -37,7 +37,15 @@ export interface CompanionBondSpec {
  *  level (a future "beasts run two levels behind" lever). */
 export const COMPANION_CFG = {
   level: { follow: 'keeper' as 'keeper' | 'claimed', keepClaimed: true, offset: 0 },
+  /** One keeper-wide budget, divided by active bonded BODIES, including
+   * downed beasts. Capacity and bond-group counts cannot multiply immunity. */
+  recovery: { seconds: 3, divideByPack: true, cleanse: true, status: 'companion_recovery' },
 };
+
+export function companionRecoverySeconds(activeBodies: number): number {
+  const cfg = COMPANION_CFG.recovery;
+  return Math.max(0, cfg.seconds) / (cfg.divideByPack ? Math.max(1, activeBodies) : 1);
+}
 
 /** The level a bonded body should stand at beside its keeper. */
 export function companionLevelOf(keeperLevel: number, claimedLevel: number): number {

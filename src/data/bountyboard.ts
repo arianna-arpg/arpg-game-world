@@ -44,6 +44,8 @@ import { OBJECTIVE_READS, type ZoneDef } from './zones';
 /** ⚠ EVERY number here is UNBLESSED (2026-08-24) — the charter's open dials;
  *  her walks retune them. The offer count is HER walk-1 number (five). */
 export const BOUNTY_BOARD_CFG = {
+  /** Introductory interaction cue: the same violet family as .tut-glow. */
+  boardIntroduction: { receipt: 'bounty_board_introduced', color: '#c8a8ff', radius: 48, alpha: 0.22, pulse: 0.10, hz: 3, glyph: '!', label: 'Bounty Board' },
   /** THE BEAT — the board's OWN clock (never the vendor restock quantum:
    *  a Rush Order rung must not silently re-pace the board). Future board
    *  rush rungs fold into World.bountyBeatSeconds, floored here. */
@@ -1166,6 +1168,11 @@ registerOmenSource((world: World) => world.bountyOmens());
 // of its own; every other kind's target already speaks (writ ☠ by law,
 // event fabrics' own chevrons, the objective's guidance).
 registerAttentionSource((world: World) => world.bountyAttention());
+registerAttentionSource((world: World) => world.boardIntroduction().map(b => ({
+  id: `board-introduction:${b.id}`, pos: b.pos,
+  color: BOUNTY_BOARD_CFG.boardIntroduction.color, glyph: BOUNTY_BOARD_CFG.boardIntroduction.glyph,
+  label: BOUNTY_BOARD_CFG.boardIntroduction.label, z: 2,
+})));
 
 /** The board-giver sentinel: no NPC carries this id, so the standing
  *  quest-giver dwell can never offer or pay a posting — the board's own

@@ -19,6 +19,14 @@ import type { MemoryKind } from '../engine/memories';
 import type { Seat, VendorEntry, World } from '../engine/world';
 import { FEATURE } from '../meta/account';
 import type { GateRow } from '../meta/gates';
+import { BRANDT_CFG } from './brandt';
+import type { ItemRarity } from '../engine/items';
+
+export interface VendorStockPolicy {
+  baseRarities: readonly ItemRarity[];
+  upgrades?: readonly { feature: string; rarities: readonly ItemRarity[] }[];
+  memoriesRequire?: string;
+}
 
 /** One rung of THE BROADER-WARES ladder: the flag ownership rides, the Vault
  *  price, and what the rung ADDS to every counter's stock — gem slots on the
@@ -61,15 +69,18 @@ export const VENDOR_CFG = {
    *  player plans around, never background noise); the RUSH ladder below
    *  shortens the beat per owned rung, floored at minSec whatever the
    *  ladder grows to. unlocks.ts DERIVES the catalog rows (Rush Order
-   *  I/II — rung 1 wears the LEGACY brandt_fast_restock flag, so accounts
+   *  I–V — rung 1 wears the LEGACY brandt_fast_restock flag, so accounts
    *  that bought the old 15s rush keep their edge in the new economy). */
   restock: {
-    baseSec: 300,
+    baseSec: 900,
     minSec: 60,
     ladder: [
-      { flag: FEATURE.BRANDT_FAST_RESTOCK, cost: 100, cutSec: 60 },
-      { flag: FEATURE.VENDOR_RESTOCK_2, cost: 220, cutSec: 60 },
-    ] as readonly { flag: string; cost: number; cutSec: number }[],
+      { flag: FEATURE.BRANDT_FAST_RESTOCK, cost: 100, cutSec: 120 },
+      { flag: FEATURE.VENDOR_RESTOCK_2, cost: 220, cutSec: 120 },
+      { flag: FEATURE.VENDOR_RESTOCK_3, cost: 360, cutSec: 120 },
+      { flag: FEATURE.VENDOR_RESTOCK_4, cost: 520, cutSec: 120, gate: [{ feature: FEATURE.BRANDT_MAGIC_WARES }] },
+      { flag: FEATURE.VENDOR_RESTOCK_5, cost: 740, cutSec: 120, gate: [{ feature: FEATURE.BRANDT_MAGIC_WARES }] },
+    ] as readonly { flag: string; cost: number; cutSec: number; gate?: readonly GateRow[] }[],
   },
   /** The support-gem share of each gem slot once Brandt sells supports
    *  (FEATURE.BRANDT_SELL_SUPPORTS) — the shelf builder's roll AND the
@@ -87,19 +98,18 @@ export const VENDOR_CFG = {
     gate: [{ feature: FEATURE.SALVAGE_STATION, label: 'own the Salvage Station' }] as readonly GateRow[],
     hint: 'You have no way to pay. Essence means nothing to you yet; the Vault\'s SALVAGE STATION teaches worth.',
   },
-  /** THE BROADER-WARES LADDER (see WaresRung): rung 1 wears the LEGACY flag
-   *  (accounts that bought "Brandt: +2 Wares" own it outright — ownership
-   *  rides flags, never catalog ids); rung 3 debuts the GATEWORK: level 15,
-   *  OR a vocation completed, OR a quest turned in — whichever the player's
-   *  own road crosses first. baseGems is the shelf every account starts
-   *  with; the gear base is VENDOR_ITEM_CFG.slots (the shelf's own home). */
+  /** Shared stock-width ladder. I–III are early investments; IV–V require
+   * Brandt's Magic Wares. Existing flags preserve already-owned tiers. */
   wares: {
     baseGems: 4,
     ladder: [
       { flag: FEATURE.BRANDT_EXTRA_GEMS, cost: 60,  gems: 2, gear: 1 },
       { flag: FEATURE.VENDOR_WARES_2,    cost: 140, gems: 1, gear: 2 },
-      { flag: FEATURE.VENDOR_WARES_3,    cost: 260, gems: 1, gear: 2,
-        gate: [{ level: 15 }, { vocation: true }, { quest: true }] },
+      { flag: FEATURE.VENDOR_WARES_3,    cost: 260, gems: 1, gear: 2 },
+      { flag: FEATURE.VENDOR_WARES_4,    cost: 420, gems: 1, gear: 2,
+        gate: [{ feature: FEATURE.BRANDT_MAGIC_WARES }] },
+      { flag: FEATURE.VENDOR_WARES_5,    cost: 600, gems: 1, gear: 2,
+        gate: [{ feature: FEATURE.BRANDT_MAGIC_WARES }] },
     ] as readonly WaresRung[],
   },
   /** THE COUNTER GLASS: every counter's whole shelf packs into a real grid
@@ -112,7 +122,7 @@ export const VENDOR_CFG = {
    *  base footprint can NEVER overflow — balance/probe_vendorlocker.ts
    *  derives the worst case from the catalog and fails the build if
    *  content outgrows the glass. */
-  gearGrid: { w: 12, h: 7 },
+  gearGrid: { w: 12, h: 9 },
   /** THE PRICE ON THE GLASS (2026-09-11, her report: "I see the cost for the
    *  skills, but I don't see any mention of a cost on most of the other
    *  items — I'm not sure whether I can go shopping"): every ware tile —
@@ -123,9 +133,9 @@ export const VENDOR_CFG = {
    *  'always' = the tag on every tile; 'hover' = the card alone. */
   glass: { priceTag: 'always' as 'always' | 'hover' },
   /** THE MEMORY POUCHES on the shelf (skill-items M3, §6 — her "standard
-   *  shop" ask): units per restock stack, one stack per kind, stocked from
-   *  the FIRST day (no rung gates the pouches; the true-gem slots are what
-   *  THE MEMORY COUNTER opens). 0 stands a kind down. Units mint with the
+   *  shop" ask): units per restock stack, one stack per kind, subject to
+   *  the counter's memoriesRequire policy (Brandt requires the Memory
+   *  Counter). 0 stands a kind down. Units mint with the
    *  TRADED provenance (no monster forged them — the wild lean honestly
    *  reads wide; the banner's facet choice is untouched) on the shelf's
    *  own foreordained beat stream. Priced per unit in
@@ -183,6 +193,8 @@ export interface VendorPrice {
 }
 
 export interface VendorDef {
+  /** Optional counter-specific stock ceilings, applied before mint and buy. */
+  stockPolicy?: VendorStockPolicy;
   id: string;
   label: string;
   accent: string;
@@ -241,15 +253,15 @@ export function fmtRestock(sec: number): string {
 export const VENDORS: VendorDef[] = [
   {
     id: 'brandt', label: "BRANDT'S WARES", accent: '#e8c87a', bg: 'rgba(232,200,122,0.05)',
+    stockPolicy: BRANDT_CFG.stock,
+    tradeGate: false,
     near: (w, seat) => w.nearSmith(seat),
     npcRole: 'vendor',
     stock: w => w.vendorStock,
     priceOf: (w, e) => ({ essences: w.vendorPrice(e) }),
     buyT: 'buyVendor',
-    // The smith BUYS scrap (sell lane: coarse by quality) — but only once the
-    // account owns the Salvage Station: one Vault purchase opens both doors.
-    salvage: w => w.salvageUnlocked(),
-    salvageLocked: 'Brandt eyes your scrap and shrugs. The Vault\'s SALVAGE STATION would teach him its worth.',
+    // Basic selling is available immediately; the Salvage Station adds breaking and study.
+    salvage: () => true,
     headline: w => `restock ${fmtRestock(w.vendorRestockAt - w.time)}`,
     holds: { locks: true, commission: true },
   },

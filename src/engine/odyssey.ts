@@ -5,6 +5,8 @@ import { issueCommand } from './ai';
 import { angleDiff, angleTo, dist, vec } from '../core/math';
 import { START_ZONE } from '../data/zones';
 import { MONSTERS } from '../data/monsters';
+import { odysseyMilestoneKey } from '../data/powerProgression';
+import { ORACLE_RESCUED } from '../data/oracle';
 import { QUESTS } from '../quests/defs';
 import { revengeFactionOf, revengeCullId, revengeCommanderId } from '../quests/revenge';
 import { ODYSSEY_CFG as C, ODYSSEY_SURVEY, ODYSSEY_TUTORIAL_RELEASE, odysseyFaction, odysseyQuestId } from '../data/odyssey';
@@ -23,6 +25,7 @@ export class OdysseyRuntime {
   restore(raw: OdysseyState | undefined): void {
     this.risings.clear();
     this.state = restoreOdyssey(raw, this.w.manifest.seed, this.w.account.ledger);
+    this.recordPowerMilestones();
     this.scoutActor = undefined; this.bodies.clear();
   }
   snapshot(): OdysseyState | undefined {
@@ -32,6 +35,18 @@ export class OdysseyRuntime {
   private tell(line: string): void { this.w.notice(line, '#6ad8c0', 17, 'world'); }
   private dirty(): void { this.w.markMetaDirty(this.w.localSeat); }
 
+  /** Validated saved receipts also upgrade existing live campaigns. Never infer
+   * depth from account faction totals: two first victories are not stage two. */
+  private recordPowerMilestones(): void {
+    if (!this.state || !this.w.metaProgressionActive()) return;
+    for (let stage = 1; stage <= odysseyAct(this.state); stage++) {
+      const key = odysseyMilestoneKey(stage);
+      if (this.w.account.ledger[key]) continue;
+      this.w.account.ledger[key] = 1;
+      this.w.accountDirty = true;
+    }
+  }
+
   update(): void {
     const w = this.w;
     if (w.clientActionHook || w.scene || !w.player || w.player.dead || w.player.downed) { this.risings.clear(); return; }
@@ -40,20 +55,28 @@ export class OdysseyRuntime {
     if (!this.state && w.zone.id !== START_ZONE && w.zone.objective.kind === 'safe') return;
     const s = this.state ??= newOdyssey(w.manifest.seed, w.account.ledger);
     if (!s.initialized) {
+      w.questRescues.reconcile();
       s.initialized = true;
       for (const id of s.roster) {
         w.enrollOdysseyQuest(QUESTS[odysseyQuestId(id, 'operation')], false);
         w.enrollOdysseyQuest(QUESTS[odysseyQuestId(id, 'leader')], false);
       }
-      if (!w.account.ledger[ODYSSEY_TUTORIAL_RELEASE]) {
+      if (!w.account.ledger[ORACLE_RESCUED]) {
         const revenge = revengeFactionOf(w.account.ledger);
         w.enrollOdysseyQuest(QUESTS[revengeCullId(revenge)], true);
         w.enrollOdysseyQuest(QUESTS[revengeCommanderId(revenge)], false);
-        this.tell('The commander who ended your old life still holds a war camp. Follow the old-road lead, or find the camp yourself. Expect a reckoning around level 14.');
+        this.tell('Your old enemy holds the Oracle captive. Follow the old-road lead, or find the commander’s camp.');
       }
       this.reconcileGrounds();
       this.tell('Your Odyssey has four leaders. Explore their operations or seek leads from the Quartermaster. Choose any pursuit in the quest journal.');
       this.dirty();
+    }
+    // Older initialized campaigns may predate the rescue lead. Enrollment is
+    // idempotent and preserves any existing target, directions and progress.
+    if (!w.account.ledger[ORACLE_RESCUED]) {
+      const revenge = revengeFactionOf(w.account.ledger);
+      w.enrollOdysseyQuest(QUESTS[revengeCullId(revenge)], true);
+      w.enrollOdysseyQuest(QUESTS[revengeCommanderId(revenge)], false);
     }
     // Discover the operation by walking it; local faction kills and the giver
     // are independent ways to learn its target before reaching it.
@@ -103,6 +126,7 @@ export class OdysseyRuntime {
         this.tell(`${odysseyFaction(id).name}: preparations complete. The leader loses its escort; this work will survive later acts.`);
       }
       if (questId !== odysseyQuestId(id, 'leader') || !defeatOdysseyLeader(s, id)) continue;
+      this.recordPowerMilestones();
       // Receipt first, then pay. Neither ordinary warlords nor account kill
       // counters can enter this path; the active objective supplies the writer.
       w.meta.vocationPoints += C.pointsPerLeader;

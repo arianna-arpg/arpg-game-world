@@ -8,6 +8,7 @@ import type { QuestDef } from './types';
 import { vocationQuestDefs } from './vocations';
 import { revengeQuestDefs } from './revenge';
 import { Q_RELIQUARY } from './reliquary';
+import { brandtQuestDefs } from './brandt';
 import { odysseyQuestDefs } from './odyssey';
 import { registerGenPin } from '../engine/genPins';
 
@@ -101,6 +102,7 @@ export const Q_UNMADE: QuestDef = {
 };
 
 export const QUESTS: Record<string, QuestDef> = {
+  ...Object.fromEntries(brandtQuestDefs().map(q => [q.id, q])),
   ...Object.fromEntries(odysseyQuestDefs().map(q => [q.id, q])),
   [Q_UNDEAD_SOUTH.id]: Q_UNDEAD_SOUTH,
   [Q_RELIQUARY.id]: Q_RELIQUARY,

@@ -8,6 +8,9 @@ import { serializeCharacter, rebuildSkill } from '../src/meta/character';
 import { serializeSeatMeta, applySeatMeta } from '../src/net/snapshot';
 import type { World } from '../src/engine/world';
 import { CLASS_BUNDLES } from '../src/meta/unlocks';
+import { makeAccount } from '../src/meta/account';
+import { MEMORY_UNLOCKS } from '../src/data/memoryUnlocks';
+import { memoryUnlockCandidates } from '../src/meta/memoryUnlocks';
 let passed = 0, failed = 0;
 const check = (name: string, ok: boolean) => { console.log((ok ? 'PASS ' : 'FAIL ') + name); ok ? passed++ : failed++; };
 const near = (a: number, b: number) => Math.abs(a - b) < 0.00001;
@@ -36,7 +39,10 @@ function move(s: ReturnType<typeof setup>, host: SkillInstance = s.inst) {
 }
 const restore = seedGlobalRandom(0x902);
 try {
-  check('Trapper bundle makes Packed Workshop obtainable', CLASS_BUNDLES.find(b => b.classId === 'trapper')!.supportIds!.includes('packed_workshop'));
+  check('Packed Workshop stays discoverable outside the narrower Trapper starting rewards',
+    !CLASS_BUNDLES.find(b => b.classId === 'trapper')!.supportIds!.includes('packed_workshop')
+      && memoryUnlockCandidates(makeAccount(), MEMORY_UNLOCKS.find(r => r.tier === 'discovery')!)
+        .some(c => c.kind === 'support' && c.id === 'packed_workshop'));
   const eligible: string[] = [], mismatches: string[] = [];
   for (const [id, def] of Object.entries(SKILLS).filter(([, d]) => !d.noDrop)) {
     const inst = makeSkillInstance(def), d = instanceDelivery(inst);

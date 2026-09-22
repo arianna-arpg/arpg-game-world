@@ -79,7 +79,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
     used: [
       // Resistance ceilings & incoming-hit texture
       'fireResMax', 'coldResMax', 'lightningResMax', 'chaosResMax',
-      'damageTaken', 'critAvoid', 'ailmentResist', 'afflictionExpiry', 'lowLifeLine', 'strideReach',
+      'damageTaken', 'damageImmunity', 'debuffImmunity', 'critAvoid', 'ailmentResist', 'afflictionExpiry', 'lowLifeLine', 'strideReach',
       // Block & guard
       'blockPower', 'blockValue', 'guardStrength', 'guardParry', 'guardParryPower',
       'parryCounterBonus', 'parryDamageCooldown', 'guardHoldTime', 'guardianRecharge',
@@ -476,6 +476,8 @@ const STAT_BLURBS: Record<string, string> = {
   critAvoid: 'Chance an incoming critical lands as a normal hit instead.',
   ailmentResist: 'Chance to shrug an incoming ailment outright.',
   afflictionExpiry: 'Harmful statuses on you run out this much faster.',
+  damageImmunity: 'While active, prevents damage from hits, damage over time and damaging hazards.',
+  debuffImmunity: 'While active, prevents new harmful statuses. Beneficial statuses can still apply.',
   blockPower: 'Caps the fraction of a blocked hit your guard may stop.',
   blockValue: 'Flat damage added to what your block guards.',
   guardStrength: 'Scales every guard you raise: the held stance\'s pool and the passive block\'s guard alike.',

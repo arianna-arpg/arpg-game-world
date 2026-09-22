@@ -44,14 +44,13 @@ import { seedGlobalRandom } from '../src/sim/rng';
 import {
   FEATURE, STARTER_SKILLS, STARTER_SUPPORTS, gemDropKey,
   LEDGER_GEMDROP_TOTAL, LEDGER_VENDOR_BOUGHT, makeAccount,
-  questDoneKey, reachedLevelKey, vocationUnlockKey,
 } from '../src/meta/account';
 import { VENDOR_CFG } from '../src/data/vendors';
 import { GEM_DROP_CFG } from '../src/engine/loot';
 import { autoPlace } from '../src/engine/inventory';
 import { sanitizeVendorHolds } from '../src/meta/worldstate';
 import {
-  allUnlockables, catalogLevelMilestones, isUnlockVisible, sealedUnlocks,
+  allUnlockables, isUnlockVisible, sealedUnlocks,
 } from '../src/meta/unlocks';
 import { START_ZONE } from '../src/data/zones';
 import { MONSTERS } from '../src/data/monsters';
@@ -187,6 +186,7 @@ check('A: the purchase stamps the market ledger',
 
   seedGlobalRandom(0x77e2);
   const wB = makeSimWorld('warrior', SEED_A);
+  openMarket(wB); // account ownership is restored separately from world holds
   for (const r of rungs) wB.account.features.add(r.flag);
   check('B: adoptWorldState stands the hold back up', wB.adoptWorldState(ws) === true
     && wB.vendorHolds.brandt?.locks.length === 1);
@@ -432,6 +432,7 @@ check('A: the purchase stamps the market ledger',
   shallow.ledger[LEDGER_GEMDROP_TOTAL] = 999; // a wide index with no DEEP gem
   shallow.ledger[gemDropKey(skillId)] = need - 1;
   seen.memorySecondary.add(`skill:${skillId}`);
+  seen.ledger.odyssey_stage_2 = 1;
   check('D: the Vault sells the order when ONE Memory is eligible; old drop counts alone cannot awaken skills',
     !isUnlockVisible(bare, comm) && !isUnlockVisible(shallow, comm) && isUnlockVisible(seen, comm));
   check('D: the hold-owning account TEASES the sealed order card with its road',
@@ -460,34 +461,17 @@ check('A: the purchase stamps the market ledger',
   // --- THE ONE SHELF, fresh: pouches + gear stand; the true gems WAIT on
   // the Memory Counter (the rung re-aimed from face-seal to stock share).
   const fresh = counts(wE);
-  check('E: the fresh shelf = pouches (per dial) + gear, ZERO true gems (stock-side gating)',
-    fresh.pouches === pouchKinds.length && fresh.gems === 0 && fresh.gear === VENDOR_ITEM_CFG.slots,
+  check('E: Brandt starts with gear only; all Memories wait on the Vault',
+    fresh.pouches === 0 && fresh.gems === 0 && fresh.gear === VENDOR_ITEM_CFG.slots,
     `p${fresh.pouches} g${fresh.gems} r${fresh.gear}`);
 
-  // --- THE TRADE GATE: a bare account browses freely and buys NOTHING.
+  // Brandt trades plain equipment immediately; other counters keep their gates.
   const gearIdx = wE.vendorStock.findIndex(e => e.kind === 'item' && !e.item.mem);
-  const pouchIdx = wE.vendorStock.findIndex(isPouch);
-  const stockLen = wE.vendorStock.length;
-  const coarseBefore = wE.localSeat.meta.essences.coarse;
-  check('E: the trade gate speaks while the station is unowned',
-    typeof wE.vendorTradeRefusal() === 'string');
-  check('E: a gated counter refuses GEAR — stock intact, essence unspent',
-    gearIdx >= 0 && wE.buyVendorGem(gearIdx) === false
-    && wE.vendorStock.length === stockLen
-    && wE.localSeat.meta.essences.coarse === coarseBefore);
-  check('E: a gated counter refuses the POUCHES the same',
-    pouchIdx >= 0 && wE.buyVendorGem(pouchIdx) === false);
-
-  // --- The station opens TRADE; pouches + gear sell at once (the standard
-  // offering asks no further rung); the true gems still wait on their own.
+  check('E: the default market gate still requires the station', typeof wE.vendorTradeRefusal() === 'string');
+  check('E: Brandt sells basic gear before the station', gearIdx >= 0 && wE.buyVendorGem(gearIdx));
+  check('E: the Memory Counter still gates the memory shelf', !wE.vendorGemsOpen() && counts(wE).pouches === 0);
   wE.account.features.add(FEATURE.SALVAGE_STATION);
-  check('E: the salvage station opens the trade gate', wE.vendorTradeRefusal() === null);
-  check('E: gear now sells',
-    wE.buyVendorGem(wE.vendorStock.findIndex(e => e.kind === 'item' && !e.item.mem)) === true);
-  check('E: a pouch sells from the first day (her standard-shop ask)',
-    wE.buyVendorGem(wE.vendorStock.findIndex(isPouch)) === true);
-  check('E: the true gems still wait on the Memory Counter (none stocked to buy)',
-    wE.vendorGemsOpen() === false && counts(wE).gems === 0);
+  check('E: the station opens other market gates', wE.vendorTradeRefusal() === null);
   wE.account.features.add(FEATURE.VENDOR_GEMS);
   wE.restockVendor(); // the rung joins the slots at the shelf's own re-arm
   check('E: the Memory Counter rung joins vendorSize() true-gem slots to the one shelf',
@@ -564,41 +548,14 @@ check('A: the purchase stamps the market ledger',
 // Rung 3 of the wares family opens along ANY of its authored roads — level,
 // vocation, quest — in the player's own order; until then it hangs SEALED.
 {
-  const rung3 = allUnlockables().find(u => u.id === 'feat_vendor_wares_3')!;
-  const walk = (): ReturnType<typeof makeAccount> => {
-    const a = makeAccount();
-    a.features.add(FEATURE.SALVAGE_STATION);
-    a.features.add(VENDOR_CFG.wares.ladder[0].flag);
-    a.features.add(VENDOR_CFG.wares.ladder[1].flag);
-    return a;
-  };
-  const chained = walk();
-  check('F: rung 3 hangs SEALED once rung 2 is owned (visible road, shut door)',
-    !isUnlockVisible(chained, rung3)
-    && sealedUnlocks(chained).some(s => s.u.id === 'feat_vendor_wares_3'
-      && s.lines.filter(l => l.anyOf).length === (VENDOR_CFG.wares.ladder[2].gate?.length ?? 0)));
-  check('F: an un-walked chain teases NOTHING (structure first, roads after)',
-    !sealedUnlocks(makeAccount()).some(s => s.u.id === 'feat_vendor_wares_3'));
-
-  const byLevel = walk();
-  byLevel.ledger[reachedLevelKey(15)] = 1;
-  const byVocation = walk();
-  byVocation.ledger[vocationUnlockKey('warbringer')] = 1;
-  const byQuest = walk();
-  byQuest.ledger[questDoneKey('undead_south')] = 1;
-  const byOldQuests = walk();
-  byOldQuests.ledger.quests_completed = 3; // the pre-gatework spelling still speaks
-  check('F: the LEVEL road opens rung 3 alone', isUnlockVisible(byLevel, rung3));
-  check('F: the VOCATION road opens rung 3 alone', isUnlockVisible(byVocation, rung3));
-  check('F: the QUEST road opens rung 3 alone', isUnlockVisible(byQuest, rung3));
-  check('F: an old account\'s quests_completed counter opens the quest road',
-    isUnlockVisible(byOldQuests, rung3));
-
-  // THE MILESTONE DERIVATION: authoring the level avenue REGISTERED its
-  // stamp — the catalog's own scan carries 15 (rung 3's road and the old
-  // dead reached_level_15 gate both live now, one mechanism).
-  check('F: catalogLevelMilestones carries every authored level road',
-    catalogLevelMilestones().includes(15), catalogLevelMilestones().join(','));
+  const rung4 = allUnlockables().find(u => u.id === 'feat_vendor_wares_4')!;
+  const a = makeAccount();
+  for (const r of VENDOR_CFG.wares.ladder.slice(0, 3)) a.features.add(r.flag);
+  check('F: fourth wares tier is sealed after the three early tiers', !isUnlockVisible(a, rung4)
+    && sealedUnlocks(a).some(s => s.u.id === rung4.id));
+  a.features.add(FEATURE.BRANDT_MAGIC_WARES);
+  check('F: Magic Wares opens the fourth wares tier', isUnlockVisible(a, rung4));
+  check('F: an unwalked chain does not tease later tiers', !sealedUnlocks(makeAccount()).some(s => s.u.id === rung4.id));
 }
 
 // ------------------------------------------------ G. THE BEAT LAW
@@ -662,9 +619,9 @@ check('A: the purchase stamps the market ledger',
   check('G: the full rush ladder re-times the mark onto its own lattice',
     rushed < RESTOCK_SEC && wG.vendorRestockAt === (Math.floor(wG.time / rushed) + 1) * rushed,
     `sec=${rushed}`);
-  check('G: the Vault derives the rush rows, chained off the station',
+  check('G: the Vault derives the rush rows, open initially then chained',
     allUnlockables().some(u => u.id === 'feat_vendor_restock_1'
-      && (Array.isArray(u.requiresUnlock) ? u.requiresUnlock[0] : u.requiresUnlock) === 'feat_salvage_station')
+      && u.requiresUnlock === undefined)
     && allUnlockables().some(u => u.id === 'feat_vendor_restock_2'
       && (Array.isArray(u.requiresUnlock) ? u.requiresUnlock[0] : u.requiresUnlock) === 'feat_vendor_restock_1'));
 

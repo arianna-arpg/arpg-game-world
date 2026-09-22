@@ -33,6 +33,7 @@ app.whenReady().then(async () => {
       const kpos={...keeper.pos}, home={x:kpos.x,y:kpos.y+70};
       for (const a of w.actors) if (![keeper,patron,w.player].includes(a)) a.pos={x:20,y:20};
       const q=window.dialogueQA={w,keeper,patron,kpos,home,here:true,keeperHere:true};
+      q.originalInnkeepPrompt=w.innkeepPrompt.bind(w);
       q.box=()=>{
         const root=document.getElementById('npc-dialogue'), rect=root.getBoundingClientRect();
         const cv=root.querySelector('canvas'), px=cv.getContext('2d').getImageData(0,0,cv.width,cv.height).data;
@@ -47,6 +48,11 @@ app.whenReady().then(async () => {
           w.player.pos=q.here?{...home}:{x:home.x-600,y:home.y}; w.player.tier=0;
           keeper.pos=q.keeperHere?{...kpos}:{x:20,y:20}; patron.pos={x:home.x+25,y:home.y}; patron.tier=0;
           w.mireilleCd=999;
+          if(q.hoverActor){
+            const r=__game.renderer,p=r.toScreen(q.hoverActor.pos);
+            document.getElementById('game').dispatchEvent(new MouseEvent('mousemove',{
+              clientX:p.x/r.pixelScale,clientY:p.y/r.pixelScale,bubbles:true}));
+          }
           if(moving)w.localSeat.lastActedAt=w.time;
           __game.step(1);
         }
@@ -135,9 +141,41 @@ app.whenReady().then(async () => {
       return {box,casts};
     })()`);
     assert.equal(cancel.box.open, false, 'controller B closes');assert.equal(cancel.casts,0,'controller close never casts');
+    await win.setSize(1400, 1000);
+    box = await js(`(() => {
+      const q=dialogueQA;
+      __game.ui.showEscapeMenu();document.getElementById('esc-keys').click();
+      document.querySelector('[data-opttab="interface"]').click();
+      const slider=document.getElementById('opt-uiscale');slider.value='100';slider.dispatchEvent(new Event('input',{bubbles:true}));
+      __game.ui.hideEscapeMenu();
+      q.w.innkeepPrompt=q.originalInnkeepPrompt;
+      q.w.ledger.mireille_flasks_given=1;
+      q.w.account.features.add('mireille_heal_life');q.w.player.refillLife();
+      q.here=false;q.wait(15);q.here=true;q.keeperHere=true;
+      return q.run(90);
+    })()`);
+    assert.equal(box.open,true); assert.match(box.full,/place for you by the fire/, 'resting keeper acknowledges a healthy returning hero');
+    await capture('resting');
+    const cues = await js('dialogueQA.w.speechDwellTargetsView().map(r=>({id:r.a.id,frac:r.frac,selected:r.selected}))');
+    assert.ok(cues.some(r=>r.id===box.speaker)===false, 'service bodies keep their existing service rings');
+    assert.ok(cues.some(r=>!r.selected&&r.frac===0), 'unselected patron advertises a subtle available ring');
+    await js('dialogueQA.key("Escape");');
+    await capture('available-rings');
+    box = await js('dialogueQA.hoverActor=dialogueQA.patron; dialogueQA.run(3);');
+    assert.equal(box.open,false,'pointing at a patron starts a new dwell');
+    box = await js('dialogueQA.run(80)'); log({stage:'pointed-patron',...box});
+    assert.equal(box.open,true);assert.match(box.name,/Patron/,'cursor selects patron while keeper stays nearby');
+    await capture('pointed-patron');
+    box = await js(`dialogueQA.hoverActor=null;document.getElementById('game').dispatchEvent(new MouseEvent('mouseleave'));dialogueQA.run(80);`);
+    assert.equal(box.open,true);assert.match(box.name,/Patron/,'moving onto reader controls preserves speaker');
+    await js('dialogueQA.key("Escape"); dialogueQA.hoverActor=dialogueQA.keeper; dialogueQA.run(80);');
+    box = await js('dialogueQA.hoverActor=dialogueQA.patron;dialogueQA.run(80)');
+    assert.match(box.name,/Mireille/,'cooling patron cannot steal attention back');
+    assert.equal(await js('dialogueQA.w.speechDwellTargetsView().some(r=>r.a===dialogueQA.patron)'),false,'cooldown hides availability cue');
+    await js('dialogueQA.hoverActor=null;document.getElementById("game").dispatchEvent(new MouseEvent("mouseleave"));');
     await js('dialogueQA.w.loadZone("lastlight"); __game.step(1);');
     assert.equal((await js('dialogueQA.box()')).open, false, 'same-zone reload clears conversation');
     assert.equal(await js('__game.crash().fatal'), null);
-    log('PASS dialogue: dwell, priority, portraits, reveal/pages, pending state, Escape, dismissal, reading lifetime, cooldown, pad isolation, compact layout, zone reset');
+    log('PASS dialogue: dwell, cursor priority, resting response, available rings, portraits, reveal/pages, pending state, Escape, dismissal, reading lifetime, cooldown, pad isolation, compact layout, zone reset');
   } finally { clearTimeout(timeout); win.destroy(); server.server.close(); app.quit(); }
 }).catch(error => { log(error.stack ?? String(error)); app.exit(1); });

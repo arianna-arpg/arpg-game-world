@@ -14,6 +14,7 @@
 
 import { installHeadlessShims } from './shims';
 import { SKILLS } from '../data/skills';
+import { POWER_PROGRESSION, odysseyMilestoneKey } from '../data/powerProgression';
 import { resetActorIdCounter } from '../engine/actor';
 import { FORECHART_CFG } from '../world/forechart';
 // The same side-effect registrations main.ts performs — a World without them
@@ -139,6 +140,7 @@ export function makeSimWorld(classId: string, seed: number): World {
   // throwaway world starts a fresh id space, by construction.
   resetActorIdCounter();
   const account = makeAccount();
+  for (const gate of Object.values(POWER_PROGRESSION)) account.ledger[odysseyMilestoneKey(gate.odysseyStage)] = 1;
   // Sims may probe any class — unlock the full roster on the throwaway account.
   for (const c of CLASSES) account.unlockedClasses.add(c.id);
   // Combat rigs exercise fully available trees; progression probes clear this fixture.

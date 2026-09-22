@@ -3303,7 +3303,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // itself when no bond answers).
   companion_whistle: {
     id: 'companion_whistle', name: 'Whistle', noDrop: true,
-    description: 'The bond answers: your companion is pulled to your side, revived if downed, healed whole.',
+    description: 'Recall, revive and fully heal your beasts. Cleanse harmful statuses and grant damage/debuff protection shared across your active pack: 3 seconds for one beast, 1.5 each for two, 1 each for three.',
     tags: ['spell', 'instant', 'companion'], color: '#a8c87a',
     manaCost: 0, cooldown: 45, useTime: 0,
     delivery: { type: 'self' },

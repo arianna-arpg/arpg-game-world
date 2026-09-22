@@ -9,6 +9,17 @@ prompt reads; it does not execute quests, award items, or replace station gates.
 
 - Speech focus still applies: idle grace, dwell, purpose priority, stable
   distance selection, range, roof/wall reach, story and body visibility.
+- Hover a reachable speaker to override purpose priority. Overlapping hits
+  choose the nearest body center, then stable actor id. A passing hover cannot
+  complete dwell; a completed cursor choice stays selected when the mouse moves
+  onto the reader. Point at another eligible speaker or leave range to switch.
+  Menus, HUD controls and controller aim do not nominate mouse targets.
+- Available ambient speakers wear faint rings. The selected ring brightens and
+  fills from its actual speech dwell clock. Cooling speakers cannot steal cursor
+  focus and do not advertise availability; their cooldown is never bypassed.
+  Functional bodies retain rings tied to their independent service clocks.
+- Mireille offers a resting response when her care is unlocked and no gift or
+  lesson takes precedence, including when the hero needs no replenishment.
 - Enter, controller A, the text area or the advance button reveals the page
   first; the next press continues, or finishes on the last page. Keyboard and
   pad advance are rebindable as **Advance Dialogue** in Options.
@@ -43,7 +54,11 @@ page breaks and otherwise splits at word boundaries.
 portrait size, font, spacing and HUD clearance. Set `presentation: 'bubble'`
 to compare the prior overhead presentation without changing dwell/priority.
 Selection remains configurable through `speechAttention.ts` and
-`MonsterDef.speechAttention`. Typing speed and punctuation pauses continue to
+`MonsterDef.speechAttention`: `restingLine` folds through role and definition,
+`pointer` controls hover admission/hit padding, and `cue` controls ring size,
+color, weight and opacity. The reusable `dwellFocus` fold accepts optional
+pointer hit scores from any dwell family; NPC admission and visuals share the
+world's candidate read. Typing speed and punctuation pauses continue to
 fold `VIS_CFG.speech` through `MonsterDef.speech`; the existing **NPC Talk
 Typing** option disables reveal animation for the reader as well.
 

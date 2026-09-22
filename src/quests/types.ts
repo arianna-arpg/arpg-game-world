@@ -103,6 +103,8 @@ export interface QuestZoneSpec {
 }
 
 export interface QuestReward {
+  /** A deferred, once-per-run imbue at the giver. Its level never follows the hero. */
+  imbue?: { level: number; choices: number; prompt?: string };
   /** Choose exactly one item at the giver before ANY part of the payout lands. */
   choices?: readonly QuestRewardChoice[];
   /** Giver's introduction to the choice, shown with the reward cards. */
@@ -142,6 +144,7 @@ export interface QuestRewardChoice {
  *  run handed in by the engine (quests stay a pure data leaf; no World import).
  *  Extend this ctx rather than importing engine state into quest defs. */
 export interface QuestGateCtx {
+  features?: ReadonlySet<string>;
   /** The local hero's class id. */
   classId: string;
   /** Vocations already GRANTED to this character. */
@@ -166,6 +169,8 @@ export interface QuestTurnIn {
 }
 
 export interface QuestDef {
+  /** A prisoner freed by the actual field objective, before the return reward. */
+  rescue?: QuestRescue;
   id: string;
   /** Monster defId(s) of the giver NPC that offers this — ANY listed giver
    *  present may offer (e.g. a secret chain's field shrine plus, once the
@@ -176,6 +181,10 @@ export interface QuestDef {
   category?: QuestCategory;
   /** Character level the giver starts offering it at. */
   offerAtLevel: number;
+  /** Stable per run and quest; a late arrival remains eligible. */
+  offerLevelRange?: readonly [number, number];
+  /** Physical objective spoil, collected before the return leg can pay. */
+  collect?: { name: string; baseId: string };
   /** Ledger key (per-run OR per-account) that must be ≥1 to offer this — the
    *  chain mechanism (a follow-up quest requires a prior quest's reward key). */
   requiresLedger?: string;
@@ -196,6 +205,19 @@ export interface QuestDef {
   turnIn?: QuestTurnIn;
   /** Forward pointer to the next quest in the chain (informational). */
   next?: string;
+}
+
+export interface QuestRescue {
+  ledger: string;
+  /** Existing accounts can prove this rescue through an older victory receipt. */
+  legacyLedger?: string;
+  npc: string;
+  captiveName: string;
+  captiveLook: string;
+  freeLook: string;
+  offset: { x: number; y: number };
+  features: readonly string[];
+  message: string;
 }
 
 /** THE READINESS LAW (docs/design/bounty-board.md §8): what a held quest

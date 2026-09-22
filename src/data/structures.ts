@@ -843,6 +843,7 @@ export const STRUCTURES: Record<string, StructureDef> = {
   // communion (affix-reroll) menu — the World reads proximity to ORACLE_SITE.
   oracle_site: {
     id: 'oracle_site', halfW: 68, halfH: 68,
+    npcs: [{ id: 'townsfolk_oracle', x: 0, y: 28 }],
     props: [
       { kind: 'tombstone', x: 0, y: -46, radius: 11 },
       { kind: 'tombstone', x: 44, y: -14, radius: 10 },

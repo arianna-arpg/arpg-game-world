@@ -27,7 +27,8 @@
 import type { QuestDef } from './types';
 import { TUTORIAL_FACTIONS, tutorialFactionOf, type TutorialFactionRow } from '../data/commanders';
 import { FACTIONS } from '../data/monsters';
-import { ODYSSEY_TUTORIAL_RELEASE } from '../data/odyssey';
+import { ORACLE_RESCUE, ORACLE_RESCUED } from '../data/oracle';
+import { RELIQUARY_CHOICES } from './reliquary';
 
 /** Where each legion's war-camp country lies (tileset + compass off town). */
 const REVENGE_GROUND: Record<string, { tileset: string; direction: 'n' | 'e' | 's' | 'w' }> = {
@@ -59,7 +60,7 @@ const cullQuest = (row: TutorialFactionRow): QuestDef => {
     offerLabel: `Cull ${row.banner} on the old road`,
     offerAtLevel: 2, // Odyssey's personal lead arrives before the readiness band.
     // Exactly ONE legion's chain is live per account — the stamp decides.
-    gate: (ctx) => !ctx.accountLedger[ODYSSEY_TUTORIAL_RELEASE] && revengeFactionOf(ctx.accountLedger) === row.id,
+    gate: (ctx) => !ctx.accountLedger[ORACLE_RESCUED] && revengeFactionOf(ctx.accountLedger) === row.id,
     zone: {
       tileset: ground.tileset, direction: ground.direction, level: 10,
       bandPlacement: true, // revenge ground sits in its own readiness band
@@ -80,10 +81,11 @@ const commanderQuest = (row: TutorialFactionRow): QuestDef => {
   return {
     id: revengeCommanderId(row.id),
     giver: 'townsfolk_questgiver',
-    offerLabel: `Run the legion commander to ground`,
+    offerLabel: `Run the legion commander to ground — free the captive Oracle`,
+    rescue: ORACLE_RESCUE,
     offerAtLevel: 2, // the revenge trail opens the pursuit
     requiresLedger: revengeTrailKey(row.id), // giver fallback; Odyssey already seats the discoverable camp
-    gate: (ctx) => !ctx.accountLedger[ODYSSEY_TUTORIAL_RELEASE] && revengeFactionOf(ctx.accountLedger) === row.id,
+    gate: (ctx) => !ctx.accountLedger[ORACLE_RESCUED] && revengeFactionOf(ctx.accountLedger) === row.id,
     zone: {
       tileset: ground.tileset, direction: ground.direction, level: 13,
       bandPlacement: true,
@@ -91,10 +93,12 @@ const commanderQuest = (row: TutorialFactionRow): QuestDef => {
       packsOverride: { count: [6, 8], size: [3, 5], table: packs },
       forceWaypoint: true,
     },
-    reward: { xp: 2200, gems: 7, passivePoints: 1, ledger: { quests_completed: 1, revenge_taken: 1 } },
+    reward: { xp: 2200, gems: 7, passivePoints: 1, ledger: { quests_completed: 1, revenge_taken: 1 },
+      choices: RELIQUARY_CHOICES,
+      choicePrompt: '“They wanted me to bind the dead to their war. You gave me another road.” Choose a charm for your newly opened Reliquary. Seat it in the case to awaken its strength.' },
     turnIn: {
-      giver: 'townsfolk_questgiver',
-      prompt: 'The Father is felled — return to the quartermaster. The road is a little shorter now.',
+      giver: 'townsfolk_oracle',
+      prompt: 'The Father is felled and the Oracle is free. Meet him at Lastlight’s standing stones and choose a charm for your Reliquary.',
     },
   };
 };

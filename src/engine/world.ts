@@ -22,10 +22,12 @@ import { CompanionBonds } from './companionBonds';
 import { Assaults, assaultNode } from './assault';
 import { Challenges } from './challenges';
 import { challengeOf } from './challengeSpec';
-import { companionBondOf, type CompanionSaved } from './companionSpec';
+import { companionBondOf, companionRecoverySeconds, COMPANION_CFG, type CompanionSaved } from './companionSpec';
 import { companionStanceIdOf, nextStanceId } from './companionStances';
 import { COMPANION_STANCES } from '../data/companionStances';
 import { OdysseyRuntime } from './odyssey';
+import { NpcDialogueDirector } from './npcDialogues';
+import { fillFlaskChargeBanks } from './flaskState';
 import { ODYSSEY_CFG, odysseyFaction, odysseyQuestId } from '../data/odyssey';
 import { instanceCastCycle, instanceTreeMods, instanceTreeOver } from './skills';
 import { finishAIRecovery, monsterTurnSpeed } from './handling';
@@ -117,15 +119,16 @@ import {
   VENDOR_ESSENCE_PRICE, VENDOR_ITEM_CFG, VENDOR_MEMORY_PRICE, VENDOR_SUPPORT_PRICE, walletBreakdown, walletMortalValue,
   type AbilityCost, type EssenceCost, type EssenceId, type EssenceSpillSpec,
 } from '../data/essences';
-import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, baseComplexityOf, slotsForCategory, socketCap, type ItemCategory, type ItemInstance, type ItemRarity, type RoughMemoryUnit } from './items';
+import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, ITEM_RARITY_IDS, SLOT_BY_ID, baseComplexityOf, slotsForCategory, socketCap, type ItemCategory, type ItemInstance, type ItemRarity, type RoughMemoryUnit } from './items';
 import { DROP_CFG, GEM_DROP_CFG, resolveLootTable, rollVestigeId, gemFloorFor, type GemFloor } from './loot';
 import { epitaphFor, VESTIGES } from '../data/vestiges';
 import { MONSTER_THEMES } from '../data/infrequents';
 import { VENDORS, VENDOR_CFG, type VendorDef } from '../data/vendors';
 import { ITEM_BASES } from '../data/itembases';
 import { treeNodeRanks, treeSpentCount } from './skilltree'; // THE SKILL-TREE GRAPH — ranked spends (pickTreeNode)
-import { awakenMemoryFromDrop, memoryCommissionReady, memorySecondaryOpen, type MemoryAccess } from '../meta/memoryUnlocks';
-import type { MemorySecondaryMechanic } from '../data/memoryUnlocks';
+import { awakenMemoryFromDrop, memoryCommissionReady, memoryProgressionOpen, memorySecondaryOpen, type MemoryAccess } from '../meta/memoryUnlocks';
+import { MEMORY_UNLOCK_CFG, type MemorySecondaryMechanic } from '../data/memoryUnlocks';
+import { powerProgressionRefusal } from '../data/powerProgression';
 import { SKILL_LIST, SKILLS } from '../data/skills';
 import { AMBIENT_TAGS, CAVE_POOLS, CAVE_POOL_CFG, FACTIONS, FIXTURE_IDS, MONSTERS, WAVE_TABLE, WILDLIFE, factionStance, temperOf, defBreathes, defDensity, defLeavesRemains, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
 import { presenceMul, presenceTable } from './presence';
@@ -249,6 +252,8 @@ import { TILESETS, CAVE_FACE_IDS, pickTilesetForBiome } from '../data/tilesets';
 import { QUEST_GIVER_IDS, QUESTS } from '../quests/defs';
 import { RELIQUARY_LESSON, resolveQuestZone } from '../quests/reliquary';
 import type { QuestDef, QuestGateCtx } from '../quests/types';
+import { imbuedItem, imbueOptions, mintQuestImbue, restoreQuestImbues, type QuestImbue } from './questImbue';
+import { QuestRescues } from './questRescues';
 import { QUEST_CATEGORY_CAPS, DEFAULT_QUEST_CATEGORY, questStandingLine, type QuestCategory, type QuestStanding } from '../quests/types';
 import { Rng, rollSeed, withSeededRandom } from '../core/rng';
 import { ALTARS, INTERACT_PLACE_CFG, SHRINES, type AltarDef, type ShrineDef } from '../data/shrines';
@@ -327,8 +332,8 @@ import { combatCueFlash, timingCueFlash } from './combatCues';
 import { castingEventFlash } from './castingCues';
 import { guardBashGeometry } from './warningCues';
 import { DEFENSE_CUE_CFG } from '../data/defenseCues';
-import { speechTell, speechWindowFor, type SpeechMemory } from './speech'; // THE TRANSIENT TELLING — the speech fabric's world half (residentPrompt)
-import { dwellFocus, type DwellFocus } from './dwellFocus';
+import { speechTell, speechWindowFor, speechAvailable, type SpeechMemory } from './speech'; // THE TRANSIENT TELLING — the speech fabric's world half (residentPrompt)
+import { dwellFocus, type DwellFocus, type DwellCandidate } from './dwellFocus';
 import { SPEECH_ATTENTION_CFG, speechAttentionFor } from '../data/speechAttention';
 import { SPEECH_GRAMMAR_CFG, composeSpeech, dealSpeechDecks, hauntPhrase, makeSpeakerRow, type SpeechContext, type SpeechSpeakerRow } from './speechGrammar'; // THE SPEECH GRAMMAR — what a spoken body says (residentPrompt composes through it)
 import '../data/speechGrammar'; // THE SPEECH GRAMMAR's corpus: registers the templates + haunt phrases on import
@@ -474,7 +479,7 @@ import {
   classLevelLedgerKey, gemDropKey, LEDGER_GEMDROP_TOTAL, LEDGER_VENDOR_BOUGHT,
   LEDGER_CRAFTS_UNLOCKED, LEDGER_LEGENDARY_SKILL_DROP, LEDGER_ZONES_EXPLORED,
   questDoneKey, reachedLevelKey,
-  LEDGER_BOUNTY_DONE, bountyDoneKindKey,
+  LEDGER_BOUNTY_DONE, LEDGER_BOUNTY_CRAFT_DONE, bountyDoneKindKey,
   type Account,
 } from '../meta/account';
 import { gateMet } from '../meta/gates';
@@ -1772,6 +1777,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'bindGraft': return isStr(a.key) && (a.skillId === null || isStr(a.skillId));
     case 'vocationQuest': return isStr(a.questId); // menu-accept a vocation chain step
     case 'questReward': return isStr(a.questId) && isStr(a.choiceId);
+    case 'questImbue': return isStr(a.questId) && isIdx(a.uid) && isStr(a.affixId);
     case 'bindSkill': return isIdx(a.slot) && (a.skillId === null || isStr(a.skillId));
     case 'swapSkillSlots': return isIdx(a.a) && isIdx(a.b);
     // THE STONE (skill-items M2): the pouch wrapper by uid + the dropper
@@ -2792,7 +2798,7 @@ function procIndex(): NonNullable<typeof PROC_INDEX> {
   return PROC_INDEX;
 }
 
-export interface NpcSpeechLine { a: Actor; text: string; color: string; seatId: string }
+export interface NpcSpeechLine { a: Actor; text: string; color: string; seatId: string; delivery?: 'callout' }
 
 export class World {
   actors: Actor[] = [];
@@ -3564,6 +3570,8 @@ export class World {
   questRewardRequested = false;
   private questRewardShown: string | null = null;
   private readonly questRewardItems = new Map<string, ItemInstance>();
+  questImbues: QuestImbue[] = [];
+  readonly questRescues = new QuestRescues(this);
   /** ONE-SHOT: the run wrote something ACCOUNT-scoped mid-run (a vocation
    *  unlock's ledger key) — the main loop persists the account when it sees
    *  this, so quitting without dying can't lose the unlock. World stays
@@ -4292,6 +4300,7 @@ export class World {
   createPlayer(classDef: ClassDef, opts?: { modeId?: string; charId?: string; name?: string;
     /** Resume shells and isolated test arenas suppress fresh-character gifts. */
     startingCompanions?: boolean;
+    startingFlasks?: boolean;
     /** THE OPENING (meta/classkit.ts): the resolved kit bar — see makePlayerSeat. */
     kit?: readonly (string | null)[] }): void {
     // The local seat is this client's own hero (camera + input anchor). Input is
@@ -4315,6 +4324,7 @@ export class World {
     this.events.emit('party/join', { actor: this.localSeat.actor, seat: 'p0' });
     this.loadZone(START_ZONE);
     if (opts?.startingCompanions !== false) this.grantStartingCompanions();
+    if (opts?.startingFlasks !== false) this.dealVeteranFlasks();
   }
 
   grantStartingCompanions(seat: Seat = this.localSeat): void {
@@ -4332,7 +4342,7 @@ export class World {
   /** Add a co-op seat beside the local hero — a player-kind actor with the given
    *  input source. Used for the local stand-in ally now (ScriptedInput); a remote
    *  join calls this with a RemoteInput. Emits party/join. */
-  addSeat(id: string, classDef: ClassDef, input: PlayerInputSource, opts?: { startingCompanions?: boolean }): Seat {
+  addSeat(id: string, classDef: ClassDef, input: PlayerInputSource, opts?: { startingCompanions?: boolean; startingFlasks?: boolean }): Seat {
     const pos = this.clampPos(vec(this.player.pos.x + 50, this.player.pos.y), 16);
     const seat = this.makePlayerSeat(id, classDef, input, pos);
     this.seats.push(seat);
@@ -4343,6 +4353,7 @@ export class World {
     this.markMetaDirty(seat);
     this.events.emit('party/join', { actor: seat.actor, seat: id });
     if (opts?.startingCompanions !== false) this.grantStartingCompanions(seat);
+    if (opts?.startingFlasks !== false) this.dealVeteranFlasks(seat);
     return seat;
   }
 
@@ -5682,6 +5693,8 @@ export class World {
    * visit (constructs, drops, and corpses stay behind).
    */
   loadZone(zoneId: string, from?: string): void {
+    // Legacy rescue evidence must arrive before the town layout is generated.
+    this.questRescues.reconcile();
     this.magicPackEffects = [];
     this.satellites.clear();
     this.auroras.clear();
@@ -6404,8 +6417,11 @@ export class World {
     this.speechFocus.clear();
     this.speechFocusSpeaker = undefined;
     this.dialogueScene++;
+    this.npcDialogues.leaveZone();
     let npcSeat = 0; // THE SPEECH GRAMMAR's seat index — a stable speaker key per plan seat
     for (const n of layout.npcs) {
+      const arrival = MONSTERS[n.id]?.npcRequiresLedger;
+      if (arrival && !this.account.ledger[arrival] && !this.ledger[arrival]) continue;
       // Mireille the Innkeep is ALWAYS present (she talks if her heal is locked).
       const c = this.createMonster(n.id, 1, 'player');
       // THE STOREY (engine/storeys.ts): a body seated on a structure's floor
@@ -17845,6 +17861,7 @@ export class World {
         active: this.activeQuests.map(q => ({ ...q })),
         completed: [...this.completedQuests],
       },
+      questImbues: structuredClone(this.questImbues),
       ...(spotZone && spotPos ? {
         player: {
           zoneId: spotZone, x: spotPos.x, y: spotPos.y,
@@ -18073,6 +18090,8 @@ export class World {
     }
     this.completedQuests = new Set(
       (ws.quests?.completed ?? []).filter((id): id is string => typeof id === 'string'));
+    this.questImbues = restoreQuestImbues(ws.questImbues)
+      .filter(r => !!QUESTS[r.questId]?.reward.imbue && this.completedQuests.has(r.questId));
     // THE MUSTER-ROLL LAW: the locked officer sheets stand back up (registry-
     // tolerant; empty sheets survive — a sold-out officer never re-mints).
     // The next arm's supply reconcile squares veteran rows with the LIVE
@@ -18095,6 +18114,7 @@ export class World {
     // zone keys), so a stale clear-key would pre-clear the freshly re-rolled
     // event — the exact bug the old save-strip prefix filter existed to close.
     this.scrubStaleObjectives();
+    this.questRescues.reconcile();
     // Overlays: each opted-in field takes its snapshot back; everything else
     // is re-seeded over the restored graph exactly as mint-time charting
     // would have (floating zones excepted — they chart when a road forms).
@@ -23036,7 +23056,7 @@ export class World {
     const p = seat.actor;
     if (!this.nearFont(seat)) return false;
     const inst = m.knownSkills.get(skillId);
-    if (!inst || !inst.treeNodes?.length) return false;
+    if (!inst || !inst.treeNodes?.length || this.memorySecondaryRefusal(skillId)) return false;
     const why = this.swapRefusal(seat, 'socket');
     if (why) { this.failNote(p, skillId + ':fontreset', why); return false; }
     const cost: AbilityCost = { tier: essenceTierForLevel(inst.level), count: FONT_CFG.reset.count };
@@ -23297,13 +23317,13 @@ export class World {
   buyVendorGem(index: number, seat: Seat = this.localSeat): boolean {
     const m = seat.meta;
     const entry = this.vendorStock[index];
-    if (!entry || !this.nearSmith(seat)) return false;
+    if (!entry || !this.nearSmith(seat) || !this.vendorEntryAllowed('brandt', entry)) return false;
     // THE TRADE GATE — the panel disables through this SAME predicate;
     // refusals mutate nothing and speak the config's own words. (The gem
     // case's face-seal retired with the one-shelf fold, skill-items M3:
     // FEATURE.VENDOR_GEMS gates the true-gem STOCK in buildVendorStock —
     // what stands on the shelf is honestly buyable.)
-    const refusal = this.vendorTradeRefusal();
+    const refusal = this.vendorTradeRefusal(VENDORS.find(v => v.id === 'brandt'));
     if (refusal) { this.failNote(seat.actor, 'vendortrade', refusal); return false; }
     const price = this.vendorPrice(entry);
     // Affordability first (names the missing tint), then bag space for gear,
@@ -23351,7 +23371,12 @@ export class World {
    *  (ABILITY_ESSENCE_CFG.vendor.rungNeeded — the drop floors' echo, ruled);
    *  DEEP counters (VendorDef.essenceDeep) waive the ladder: their own
    *  access was the gate. The trade gate stays its own read, as everywhere. */
+  vendorMemoryServicesOpen(v: VendorDef): boolean {
+    return !v.stockPolicy?.memoriesRequire || featureEnabled(this.account, v.stockPolicy.memoriesRequire);
+  }
+
   abilityEssTierRefusal(v: VendorDef, tier: number): string | null {
+    if (!this.vendorMemoryServicesOpen(v)) return 'the Memory Counter would stock it';
     const cfg = ABILITY_ESSENCE_CFG.vendor;
     if (!Number.isInteger(tier) || tier < 1 || tier > ABILITY_ESSENCES.length) return 'no such essence';
     if (cfg.deepWaives && v.essenceDeep) return null;
@@ -23460,7 +23485,7 @@ export class World {
    *  reward already paid, or this run's lived stamp (the close moments —
    *  see MIREILLE_LESSON_LEDGER). A ledger read only — nothing here ever
    *  un-completes. */
-  private mireilleLessonLived(): boolean {
+  mireilleLessonLived(): boolean {
     return (this.account.ledger[LEDGER_FLASK_LESSON] ?? 0) >= 1
       || (this.ledger[MIREILLE_FILL_LEDGER] ?? 0) >= 1
       || (this.ledger[MIREILLE_LESSON_LEDGER] ?? 0) >= 1;
@@ -23527,7 +23552,8 @@ export class World {
     // the locked-care line below waits for the next visit.
     if (this.mireilleAfterglow) return 'Well set, love — a sip when it hurts, that\'s what they\'re for. Off with you now; the world\'s less kind than I am.';
     if (!this.mireilleUnlocked()) return 'No free innstay — unlock my care in the Vault.';
-    return null;
+    const def = this.getMireille()?.defId;
+    return speechAttentionFor('functional', 'innkeep', def ? MONSTERS[def]?.speechAttention : undefined).restingLine ?? null;
   }
 
   /** Mireille's service, by which of her unlocks the account owns: restore LIFE,
@@ -23636,30 +23662,23 @@ export class World {
       this.account.ledger[LEDGER_FLASK_LESSON] = 1;
       this.accountDirty = true;
     }
-    // THE LESSON'S REWARD (once, ledger-remembered): the first time she sees
-    // her flasks LEARNED and ON THE BAR, she fills both founts to the brim.
-    // No dwell, no unlock, no cooldown — the payoff lands the moment you
-    // step back into her reach with the lesson lived, even if the last bind
-    // happened out in the square. Gated on the RAW step read, not the
-    // latched lesson: the brim pays on the real end-state alone.
+    // The lesson pays its once-only fill wherever the final flask is learned.
+    // Only the nearby teacher speaks the send-off.
     if (this.ledger[MIREILLE_GIFT_LEDGER] && !this.ledger[MIREILLE_FILL_LEDGER]
       && !this.player.dead && !this.player.downed
-      && this.getMireille() !== null && this.mireilleLessonStep() === null) {
+      && this.mireilleLessonStep() === null) {
       bumpLedger(this.ledger, MIREILLE_FILL_LEDGER);
+      this.charDirty = true;
       const p = this.player;
-      for (const sid of MIREILLE_GIFT_SKILLS) {
-        const inst = this.meta.knownSkills.get(sid);
-        for (const cg of inst?.def.chargeGain ?? []) {
-          if (cg.on !== 'orbPickup') continue;
-          p.gainCharge(cg.charge, 999, cg.max, inst!);
-        }
-      }
-      this.text(p.pos, 'Mireille: there, love — full to the brim.', '#a0d8a0', 14);
+      fillFlaskChargeBanks(p, MIREILLE_GIFT_SKILLS.flatMap(sid => {
+        const inst = this.meta.knownSkills.get(sid); return inst ? [inst] : [];
+      }));
+      if (this.getMireille()) this.text(p.pos, 'Mireille: there, love — full to the brim.', '#a0d8a0', 14);
       // THE AFTERGLOW: her send-off replaces the locked-care pitch until
       // the player steps away — no mid-breath pivot from teacher to
       // landlady. Only a lesson that truly ended with a SEATED flask earns
       // it; the traded-away close keeps her standing line instead.
-      this.mireilleAfterglow = MIREILLE_GIFT_SKILLS.some(sid => this.meta.knownSkills.has(sid));
+      this.mireilleAfterglow = this.getMireille() !== null && MIREILLE_GIFT_SKILLS.some(sid => this.meta.knownSkills.has(sid));
     }
     // Dwell only builds toward an AVAILABLE service: not while dead, away from
     // her, or while the player is acting. Her WELCOME GIFT (the flasks) needs
@@ -23676,43 +23695,35 @@ export class World {
     }
   }
 
-  /** THE VETERAN'S DEAL: once ANY character has lived Mireille's flask
-   *  lesson (LEDGER_FLASK_LESSON on the account), later characters skip the
-   *  re-walk — at first breath the gift flasks arrive already LEARNED,
-   *  bound to the first OPEN bar slots (never displacing a class skill;
-   *  each slot's own keybind applies exactly as if the player had set it),
-   *  and their founts brimming. Everything rides the REAL paths — the same
-   *  magic-rarity gems her hands mint, learnSkill's cap/requirement gates,
-   *  bindSkill's dedupe, gainCharge's cap fold — so a refused step degrades
-   *  to a carried gem the veteran manages at leisure (the graduated
-   *  account's latch keeps every teaching surface quiet), never a bespoke
-   *  state. Both run-ledger keys are bumped so her gift arc reads LIVED for
-   *  this character (no re-offer, no double fill). Called by main.ts startGame
-   *  on a FRESH spawn only: a resumed character keeps what it saved, and an
-   *  ungraduated account no-ops straight into the tutorial as ever. */
-  dealVeteranFlasks(): void {
-    if (!(this.account.ledger[LEDGER_FLASK_LESSON] ?? 0)) return;
-    if (this.ledger[MIREILLE_GIFT_LEDGER]) return; // dealt already (belt)
-    const p = this.player;
+  /** Fresh characters inherit the account's lesson. Existing kit/bag flasks
+   * use the same learn/bind paths as new gifts. Resume shells opt out at creation. */
+  private veteranFlaskDeals = new WeakSet<Seat>();
+  dealVeteranFlasks(seat: Seat = this.localSeat): void {
+    if (!(this.account.ledger[LEDGER_FLASK_LESSON] ?? 0) || this.veteranFlaskDeals.has(seat)) return;
+    if (seat === this.localSeat && this.ledger[MIREILLE_FILL_LEDGER]) return;
+    const p = seat.actor, m = seat.meta;
+    let complete = true;
     for (const sid of MIREILLE_GIFT_SKILLS) {
-      if (!SKILLS[sid] || this.meta.knownSkills.has(sid)
-        || findBagGem(this.meta.items, 'skill', sid)) continue;
-      // THE RESIDENCE: the flask lands as a bag item (a fresh spawn's bag is
-      // empty — the spill lane is a formality), then the ONE learn gesture
-      // seats it (learn = seat; cap and requirements are the real gates). A
-      // refusal leaves the item carried — Mireille's talk line picks the
-      // lesson up, nothing is lost.
-      const item = this.grantSkillGemItem(this.localSeat, makeSkillGem(SKILLS[sid], 1, 'magic'), true);
-      if (!item || !this.learnSkill(item.uid)) continue;
-      // Brimming from the first breath — the same top-up her reward pours.
-      const known = this.meta.knownSkills.get(sid);
-      for (const cg of known?.def.chargeGain ?? []) {
-        if (cg.on !== 'orbPickup') continue;
-        p.gainCharge(cg.charge, 999, cg.max, known!);
+      if (!SKILLS[sid]) { complete = false; continue; }
+      if (!m.knownSkills.has(sid)) {
+        const item = findBagGem(m.items, 'skill', sid)
+          ?? this.grantSkillGemItem(seat, makeSkillGem(SKILLS[sid], 1, 'magic'), true);
+        if (!item || !this.learnSkill(item.uid, seat)) { complete = false; continue; }
+      }
+      if (!p.skills.some(inst => inst?.def.id === sid)) {
+        const slot = p.skills.findIndex(inst => !inst);
+        if (slot < 0 || !this.bindSkill(slot, sid, seat)) complete = false;
       }
     }
-    bumpLedger(this.ledger, MIREILLE_GIFT_LEDGER);
-    bumpLedger(this.ledger, MIREILLE_FILL_LEDGER);
+    fillFlaskChargeBanks(p, m.knownSkills.values());
+    if (!complete) return; // keep carried gifts recoverable; never stamp a refused deal
+    this.veteranFlaskDeals.add(seat);
+    if (seat === this.localSeat) {
+      bumpLedger(this.ledger, MIREILLE_GIFT_LEDGER);
+      bumpLedger(this.ledger, MIREILLE_FILL_LEDGER);
+      this.charDirty = true;
+    }
+    this.markMetaDirty(seat);
   }
 
   /** THE LAB KIT (ULT_QA.grantArts — engine/ultimates.ts): iteration builds
@@ -23880,6 +23891,7 @@ export class World {
   /** Zone-load generation, including reloading the same zone. UI readers
    * must never carry a conversation into newly minted actors. */
   dialogueScene = 0;
+  readonly npcDialogues = new NpcDialogueDirector(this);
 
   speechFocusTarget(seat: Seat = this.localSeat): Readonly<DwellFocus> | undefined {
     return this.speechFocus.get(seat);
@@ -23888,47 +23900,78 @@ export class World {
   /** A reader-paced dialogue starts its ambient cooldown when finished or
    * interrupted, even if reading outlasted the old overhead telling window. */
   finishNpcDialogue(actorId: number): void {
+    this.npcDialogues.finish(actorId);
     const memory = this.speechMemory.get(actorId);
     if (memory) this.speechMemory.set(actorId, {
       ...memory, spokeAt: this.time, holdSec: 0, readAt: this.time,
     });
   }
 
+  /** Shared eligibility for selection and discoverability; no telling clocks
+   * are advanced by this read. Pointer intent never widens reach or floors. */
+  private speechCandidates(seat: Seat) {
+    const candidates: (DwellCandidate & { a: Actor; text: string | null; color: string;
+      ambient: boolean; available: boolean })[] = [];
+    if (!seat.actor.dead && !seat.actor.downed) for (const a of this.actors) {
+      if (a.dead || !a.defId) continue;
+      const def = MONSTERS[a.defId];
+      const role = def?.npcRole ?? '';
+      const authored = seat === this.localSeat ? this.npcDialogues.dwell(a) : null;
+      const ambient = !authored && role === 'resident' && this.speakerRows.has(a.id);
+      const quest = QUEST_GIVER_IDS.has(a.defId);
+      // Other counter content is local-hero scoped; the caravan already
+      // supports couch guests. Do not lend one hero another's lesson.
+      if (seat !== this.localSeat && role !== 'caravanner') continue;
+      let radius: number, text: string | null = null, color = '#d8b87a';
+      if (authored) { radius = authored.radius; text = authored.text; color = authored.def.color ?? def.color; }
+      else if (ambient) { radius = RESIDENT_RADIUS; color = '#d8c8a8'; }
+      else if (quest) { radius = QUESTGIVER_RADIUS; text = this.questGiverPrompt(); color = '#c8a8e8'; }
+      else if (role === 'innkeep') { radius = MIREILLE_RADIUS; text = this.innkeepPrompt(); }
+      else if (role === 'caravanner') { radius = CARAVAN_RADIUS; text = this.caravanPrompt(seat); }
+      else if (role === 'bonewright') { radius = AMALGAM_RADIUS; text = this.amalgamPrompt(); color = '#9ad0b0'; }
+      else if (role === 'delver') { radius = DELVER_RADIUS; text = this.delverPrompt(); color = '#7fe0d8'; }
+      else continue;
+      if (role === 'bonewright' && this.amalgamSite?.necroId !== a.id) continue;
+      if (role === 'delver' && (this.descentSite?.delverId !== a.id || this.descentRun)) continue;
+      const distance = dist(seat.actor.pos, a.pos);
+      if (distance > radius || !this.dwellReachable(seat.actor.pos, a.pos,
+        npcDwellReach(quest ? 'questgiver' : role), this.storyPair(seat.actor, a))) continue;
+      const attention = speechAttentionFor(ambient ? 'ambient' : 'functional', role, def.speechAttention);
+      if (!ambient && !text) text = attention.restingLine ?? null;
+      if (!ambient && !text && !attention.reserveSilent) continue;
+      const row = this.speakerRows.get(a.id), memory = this.speechMemory.get(a.id);
+      const available = !ambient || !row || speechAvailable(memory, this.time,
+        speechWindowFor(row.lane, row.current ?? row.line));
+      candidates.push({ id: a.id, a, text, color, distance, ambient, available,
+        ...attention, ...(authored ? { priority: authored.def.priority, dwellSec: authored.seconds } : {}) });
+    }
+    return candidates;
+  }
+
+  /** Ambient speakers use the same attention clock for their subtle tell.
+   * Service bodies already have rings showing their service's own clock. */
+  speechDwellTargetsView(): { a: Actor; frac: number; selected: boolean }[] {
+    const focus = this.speechFocus.get(this.localSeat);
+    return this.speechCandidates(this.localSeat).filter(c => c.ambient && c.available).map(c => ({
+      a: c.a, selected: focus?.id === c.id,
+      frac: focus?.id !== c.id || focus.since === null ? 0 : focus.ready ? 1
+        : clamp((this.time - focus.since) / Math.max(0.001, c.dwellSec), 0, 1),
+    }));
+  }
+
   /** THE SPEECH FOCUS: one batch before drawing actors, independent of actor
    * order/culling. Raw counter reads remain available to menus and lessons;
    * only this presentation seam admits proximity bubbles. Service actions
    * retain their existing dwell gates. Couch caravans keep their seat scope. */
-  npcSpeechView(admit = true): NpcSpeechLine[] {
+  npcSpeechView(admit = true, pointerHits?: ReadonlyMap<number, number>): NpcSpeechLine[] {
+    this.npcDialogues.refreshAppearances();
+    const callout = this.npcDialogues.callout(admit);
+    if (callout) return [callout];
     const out: NpcSpeechLine[] = [];
     for (const seat of this.localHumanSeats()) {
-      const candidates: { id: number; a: Actor; text: string | null; color: string;
-        distance: number; priority: number; dwellSec: number; ambient: boolean }[] = [];
-      if (!seat.actor.dead) for (const a of this.actors) {
-        if (a.dead || !a.defId) continue;
-        const def = MONSTERS[a.defId];
-        const role = def?.npcRole ?? '';
-        const ambient = role === 'resident' && this.speakerRows.has(a.id);
-        const quest = QUEST_GIVER_IDS.has(a.defId);
-        // Other counter content is local-hero scoped; the caravan already
-        // supports couch guests. Do not lend one hero another's lesson.
-        if (seat !== this.localSeat && role !== 'caravanner') continue;
-        let radius: number, text: string | null = null, color = '#d8b87a';
-        if (ambient) { radius = RESIDENT_RADIUS; color = '#d8c8a8'; }
-        else if (quest) { radius = QUESTGIVER_RADIUS; text = this.questGiverPrompt(); color = '#c8a8e8'; }
-        else if (role === 'innkeep') { radius = MIREILLE_RADIUS; text = this.innkeepPrompt(); }
-        else if (role === 'caravanner') { radius = CARAVAN_RADIUS; text = this.caravanPrompt(seat); }
-        else if (role === 'bonewright') { radius = AMALGAM_RADIUS; text = this.amalgamPrompt(); color = '#9ad0b0'; }
-        else if (role === 'delver') { radius = DELVER_RADIUS; text = this.delverPrompt(); color = '#7fe0d8'; }
-        else continue;
-        if (role === 'bonewright' && this.amalgamSite?.necroId !== a.id) continue;
-        if (role === 'delver' && (this.descentSite?.delverId !== a.id || this.descentRun)) continue;
-        const distance = dist(seat.actor.pos, a.pos);
-        if (distance > radius || !this.dwellReachable(seat.actor.pos, a.pos,
-          npcDwellReach(quest ? 'questgiver' : role), this.storyPair(seat.actor, a))) continue;
-        const attention = speechAttentionFor(ambient ? 'ambient' : 'functional', role, def.speechAttention);
-        if (!ambient && !text && !attention.reserveSilent) continue;
-        candidates.push({ id: a.id, a, text, color, distance, ambient,
-          ...attention });
+      const candidates = this.speechCandidates(seat);
+      if (admit && seat === this.localSeat && SPEECH_ATTENTION_CFG.pointer.enabled) {
+        for (const c of candidates) if (c.available) c.pointerDistance = pointerHits?.get(c.id);
       }
       const focus = dwellFocus(this.speechFocus.get(seat), candidates,
         admit && this.seatIdle(seat), this.time, SPEECH_ATTENTION_CFG.focus, seat.lastActedAt);
@@ -23956,6 +23999,7 @@ export class World {
       }
       if (selected && !selected.ambient && focus?.ready && selected.text) {
         spoken = { a: selected.a, text: selected.text, color: selected.color };
+        if (admit) this.npcDialogues.admitted(selected.a);
       }
       if (admit && spoken && !out.some(row => row.a.id === spoken!.a.id)) out.push({ ...spoken, seatId: seat.id });
     }
@@ -24164,8 +24208,13 @@ export class World {
    *  stamp closes it forever across run + account, no new key. The panel
    *  wears the glow + direction lines while this reads true. */
   bountyLessonLive(): boolean {
-    return (this.ledger.bounties_accepted ?? 0)
+    return !this.account.ledger[BOUNTY_BOARD_CFG.boardIntroduction.receipt] && (this.ledger.bounties_accepted ?? 0)
       + (this.account.ledger.bounties_accepted ?? 0) === 0;
+  }
+
+  boardIntroduction(): { id: string; pos: Vec2; tier: number }[] {
+    if (!this.bountyLessonLive() || this.scene || this.player.dead || this.player.downed) return [];
+    return this.bountyBoardsHere().filter(b => b.id === BOUNTY_BOARD_CFG.boardId);
   }
 
   /** THE BOARDS HERE (the kinship): every board standing in the CURRENT
@@ -24884,6 +24933,10 @@ export class World {
       this.refreshExitLabels();
     }
     bumpLedger(this.ledger, 'bounties_accepted');
+    if (this.metaProgressionActive()) {
+      this.account.ledger[BOUNTY_BOARD_CFG.boardIntroduction.receipt] = 1;
+      this.accountDirty = true;
+    }
     const c = row.copy(this, p);
     this.notice(`Bounty taken: ${c.title}. Pay on return: ${describeBountyPay(p.pay)}.`, BOUNTY_BOARD_CFG.accent, 16, 'civic');
     this.charDirty = true;
@@ -25103,6 +25156,10 @@ export class World {
         writ: { category: pay.craft.category, complexity: pay.craft.complexity },
       };
       this.dropGearAt(at, it, undefined, true);
+      if (this.metaProgressionActive()) {
+        bumpLedger(this.account.ledger, LEDGER_BOUNTY_CRAFT_DONE);
+        this.accountDirty = true;
+      }
       return;
     }
     if (pay.pouch) {
@@ -27680,7 +27737,7 @@ export class World {
     // unique across hires and mid-run dismissals.
     let mi = 0;
     while (this.seats.some(s => s.id === `m${mi}`)) mi++;
-    const seat = this.addSeat(`m${mi}`, classDef, new MercInput(), { startingCompanions: false });
+    const seat = this.addSeat(`m${mi}`, classDef, new MercInput(), { startingCompanions: false, startingFlasks: false });
     seat.merc = { name, ...ref };
     seat.actor.name = name;
     if (!this.applyMercNormalization(seat, snapshot, true)) {
@@ -28068,6 +28125,7 @@ export class World {
   private getQuestGiver(defId?: string): Actor | null {
     return this.actors.find(a =>
       (defId ? a.defId === defId && !a.dead : this.hasNpcRole(a, 'questgiver'))
+      && !a.tag?.startsWith('quest_rescue:') // rescued prisoners transact after arriving home
       && dist(a.pos, this.player.pos) <= QUESTGIVER_RADIUS
       && this.dwellReachable(this.player.pos, a.pos, npcDwellReach('questgiver'), this.storyPair(this.player, a))) ?? null;
   }
@@ -28127,6 +28185,7 @@ export class World {
    *  the world learns who you are.) */
   questGiverPrompt(): string | null {
     if (!this.nearAnyQuestGiver()) return null;
+    if (this.questImbues.some(r => this.giverPresent(QUESTS[r.questId]?.turnIn?.giver ?? []) !== null)) return 'Your imbue awaits — choose a magic item in the Quest Journal.';
     if (this.questRewardOffers().length) return 'Your keepsake awaits — choose a reward in the Quest Journal.';
     if (this.reliquaryLesson()) return 'A keepsake needs a home. Open your inventory and seat your charm in the Reliquary.';
     if (this.nearQuestGiver() && this.odyssey.hasLocalLeads()) return 'Linger — I can mark the Odyssey leaders and their supply operations.';
@@ -28168,6 +28227,7 @@ export class World {
   /** The read-only slice of run state a QuestDef.gate predicate may consult. */
   private questGateCtx(): QuestGateCtx {
     return {
+      features: this.account.features,
       classId: this.meta.classDef.id,
       vocations: this.meta.vocations,
       runLedger: this.ledger,
@@ -28179,13 +28239,19 @@ export class World {
    *  completed, level + ledger gates met, its optional gate predicate satisfied,
    *  and its category still under its active cap. The chain (requiresLedger) still
    *  gates chained links; un-chained quests (the Unmade) are offered independently. */
+  questOfferLevel(q: QuestDef): number {
+    const range = q.offerLevelRange;
+    return range ? range[0] + Math.floor(new Rng((this.manifest.seed ^ hashStr(`offer:${q.id}`)) >>> 0).next()
+      * (range[1] - range[0] + 1)) : q.offerAtLevel;
+  }
+
   private acceptableQuests(): QuestDef[] {
     const counts = this.activeCategoryCounts();
     const gateCtx = this.questGateCtx();
     return Object.values(QUESTS).filter(q => {
       if (this.completedQuests.has(q.id)) return false;
       if (this.activeQuests.some(e => e.questId === q.id)) return false;
-      if (this.player.level < q.offerAtLevel) return false;
+      if (this.player.level < this.questOfferLevel(q)) return false;
       if (this.giverPresent(q.giver) === null) return false; // one of its offering NPCs must be present
       if (q.requiresLedger
         && (this.ledger[q.requiresLedger] ?? 0) < 1
@@ -28236,6 +28302,7 @@ export class World {
    *  ELSE — with fresh vocation chains on offer — ask the main loop to open the
    *  CHOICE menu. ONE action per dwell, so a stack resolves a step at a time. */
   private updateQuestGiver(dt: number): void {
+    this.ensureQuestCargo();
     if (!this.nearAnyQuestGiver()) this.questRewardShown = null;
     if (this.player.dead || this.player.downed || !this.playerIdle()) {
       this.questGiverDwell = 0;
@@ -28442,7 +28509,9 @@ export class World {
   questStanding(e: { questId: string; fieldDone: boolean }): QuestStanding {
     const p = this.bountyHands.find(h => h.id === e.questId);
     if (p) return this.handState(p);
-    return e.fieldDone && !!QUESTS[e.questId]?.turnIn ? 'ready' : 'afield';
+    const q = QUESTS[e.questId];
+    const collected = !q?.collect || this.meta.items.some(i => i.questId === e.questId && i.baseId === q.collect!.baseId);
+    return e.fieldDone && collected && !!q?.turnIn ? 'ready' : 'afield';
   }
 
   /** Where a held quest row TURNS IN — the counter its "!" pin and its
@@ -28667,11 +28736,32 @@ export class World {
       if (q?.turnIn) {
         if (!aq.fieldDone) {
           aq.fieldDone = true;
+          this.questRescues.free(q);
+          this.ensureQuestCargo();
+          this.charDirty = true;
           this.notice(q.turnIn.prompt ?? 'Objective complete — return to the quartermaster to claim your reward.', '#ffd700', 16, 'civic');
         }
         continue;
       }
       this.onQuestZoneCleared(aq);
+    }
+  }
+
+  /** Owed quest objects survive an expired ground cache or a full pack. A field
+   * deed can recreate its uncollected object only on that quest's own ground. */
+  private ensureQuestCargo(): void {
+    for (const aq of this.activeQuests) {
+      if (!aq.fieldDone || aq.zoneId !== this.zone.id) continue;
+      const q = this.questDefOf(aq.questId);
+      if (!q?.collect || this.meta.items.some(i => i.questId === q.id)
+        || this.drops.some(d => d.item.kind === 'gear' && d.item.item.questId === q.id)) continue;
+      const item: ItemInstance = { uid: nextItemUid(), baseId: q.collect.baseId,
+        name: q.collect.name, questId: q.id, rarity: 'common', ilvl: this.zone.level,
+        tier: 1, baseRoll: 0, affixes: [], implicitRolls: [] };
+      const boss = this.zone.objective.kind === 'boss' ? this.zone.objective.id : undefined;
+      const at = this.actors.find(a => a.defId === boss && a.dead)?.pos ?? this.player.pos;
+      this.dropGearAt(at, item, undefined, true);
+      this.charDirty = true;
     }
   }
 
@@ -28682,6 +28772,10 @@ export class World {
     if (idx < 0) return;
     this.odyssey.questCompleted(aq.questId);
     const q = this.questDefOf(aq.questId);
+    if (q?.collect) {
+      const cargo = this.meta.items.find(i => i.questId === q.id && i.baseId === q.collect!.baseId);
+      if (!cargo || this.questStanding(aq) !== 'ready' || this.giverPresent(q.turnIn?.giver ?? []) === null) return;
+    }
     if (q?.reward.choices?.length) {
       // No XP, chain stamp or case until a real choice fits in the bag.
       if (questRewardChoice === undefined) {
@@ -28704,6 +28798,14 @@ export class World {
     // removes it after this returns): the shared-stamp branch below.
     const posting = this.bountyHands.find(h => h.id === aq.questId) ?? null;
     if (q) {
+      if (q.collect) {
+        const cargo = this.meta.items.find(i => i.questId === q.id && i.baseId === q.collect!.baseId)!;
+        removeFromBag(this.meta.items, cargo.uid);
+      }
+      if (q.reward.imbue) {
+        this.questImbues.push(mintQuestImbue(q.id, this.manifest.seed, q.reward.imbue.level, q.reward.imbue.choices));
+        this.questRewardRequested = true;
+      }
       for (const feature of q.reward.features ?? []) this.account.features.add(feature);
       if (q.reward.features?.length) this.accountDirty = true;
       if (q.reward.xp) this.grantXp(q.reward.xp);
@@ -28773,7 +28875,7 @@ export class World {
     if (!posting) this.completedQuests.add(aq.questId);
     this.activeQuests.splice(idx, 1);
     this.markMetaDirty(this.localSeat);
-    if (q?.reward.choices?.length && !this.clientActionHook) {
+    if ((q?.reward.choices?.length || q?.reward.imbue) && !this.clientActionHook) {
       saveAccount(this.account);
       saveCharacter(this);
     }
@@ -28819,6 +28921,44 @@ export class World {
     if (!aq || !q?.reward.choices?.some(c => c.id === choiceId)) return false;
     this.onQuestZoneCleared(aq, choiceId);
     return !this.activeQuests.includes(aq);
+  }
+
+  /** Deferred rewards remain visible away from town, but only the giver can work. */
+  questImbueOffers() {
+    return this.questImbues.map(reward => {
+      const q = QUESTS[reward.questId];
+      const near = !!q && this.giverPresent(q.turnIn?.giver ?? q.giver) !== null;
+      const givers = q?.turnIn?.giver ?? q?.giver;
+      const giverId = Array.isArray(givers) ? givers[0] : givers;
+      const giver = giverId ? MONSTERS[giverId]?.name ?? 'The giver' : 'The giver';
+      return { questId: reward.questId, level: reward.level, near, giver,
+        prompt: q?.reward.imbue?.prompt ?? 'Choose a magic piece to make finer.',
+        items: this.meta.items.filter(item => item.rarity === 'magic' && !item.gem && !item.mem).map(item => ({
+          uid: item.uid, name: item.name, current: describeItem(item).affix.map(l => l.text),
+          options: imbueOptions(reward, item).map(a => ({ id: a.id,
+            lines: describeItem({ ...item, affixes: [a] }).affix.map(l => l.text),
+            unstudied: expertiseRank(this.account.craftLore, ITEM_AFFIXES[a.id].family) < 1,
+          })),
+        })),
+      };
+    });
+  }
+
+  claimQuestImbue(questId: string, uid: number, affixId: string, seat: Seat = this.localSeat): boolean {
+    if (seat !== this.localSeat || this.clientActionHook || seat.actor.dead || seat.actor.downed) return false;
+    const reward = this.questImbues.find(r => r.questId === questId), q = QUESTS[questId];
+    const giver = q && this.giverPresent(q.turnIn?.giver ?? q.giver);
+    if (!reward || !q || !giver) return false;
+    const item = this.bagItem(seat, uid);
+    const affix = item && imbueOptions(reward, item).find(a => a.id === affixId);
+    if (!item || !affix) return false;
+    const result = imbuedItem(item, affix);
+    seat.meta.items = seat.meta.items.map(i => i.uid === uid ? result : i);
+    this.questImbues = this.questImbues.filter(r => r !== reward);
+    this.markMetaDirty(seat);
+    this.notice(`${result.name} — ${giver.name ?? 'the giver'}’s promise is kept.`, ITEM_RARITIES.rare.color, 16, 'civic');
+    saveCharacter(this);
+    return true;
   }
 
   /** Quit-proof account lesson: until a charm is actually seated, keep teaching. */
@@ -29425,6 +29565,7 @@ export class World {
       case 'payToll': this.payHoldfastToll(action.index, seat); break;
       case 'vocationQuest': this.acceptVocationQuest(action.questId, seat); break;
       case 'questReward': this.claimQuestReward(action.questId, action.choiceId, seat); break;
+      case 'questImbue': this.claimQuestImbue(action.questId, action.uid, action.affixId, seat); break;
       case 'equipItem': this.equipItem(seat, action.uid, action.slot); break;
       case 'unequipItem': this.unequipItem(seat, action.slot, action.x, action.y); break;
       case 'moveItem': this.moveBagItem(seat, action.uid, action.x, action.y); break;
@@ -29658,7 +29799,7 @@ export class World {
     a.faction = def.faction;
     a.adorn = def.adorn;
     a.material = def.material;
-    a.look = def.look;
+    a.look = this.npcDialogues.appearanceFor(a.defId!) ?? def.look;
     if (def.worm) {
       a.worm = {
         length: def.worm.length,
@@ -30486,16 +30627,37 @@ export class World {
   /** Bring a downed companion back on its feet (the dwell path and the
    *  whistle both land here). */
   reviveCompanion(a: Actor, frac = 0.5): void {
-    if (!a.companion || !a.downed || a.companionDormant) return;
+    if (!a.companion || a.dead || !a.downed || a.companionDormant) return;
     a.downed = false;
     a.companionReviveRemaining = undefined;
-    a.life = Math.max(1, a.maxLife() * frac);
     a.companionReviveDwell = 0;
+    this.recoverCompanion(a);
+    a.life = Math.max(1, a.maxLife() * frac);
     this.text(vec(a.pos.x, a.pos.y - 22), `${a.name} rises!`, '#a8d8a0', 14);
     this.flashes.push({
       pos: vec(a.pos.x, a.pos.y), radius: a.radius + 16,
       color: '#a8d8a0', life: 0.35, maxLife: 0.35,
     });
+  }
+
+  /** Shared revival/Whistle recovery, equally useful on a living beast.
+   * Count every active body held by this keeper, even on another bond skill
+   * or downed, so splitting casts/hosts cannot evade the pack budget. */
+  recoverCompanion(a: Actor): void {
+    if (!a.companion || a.dead || a.downed || a.companionDormant || !a.owner) return;
+    const cfg = COMPANION_CFG.recovery;
+    if (cfg.cleanse) {
+      a.cleanseDebuffs();
+      // An expiry queued on the lethal frame cannot rupture after revival.
+      a.expiredStatuses = a.expiredStatuses.filter(s => STATUS_DEFS[s.id]?.beneficial);
+    }
+    const count = this.actors.filter(b => b.companion && !b.dead && !b.companionDormant && b.owner === a.owner).length;
+    const seconds = companionRecoverySeconds(count);
+    const status = STATUS_DEFS[cfg.status];
+    // Reapplication refreshes one window, never adds or keeps a longer old
+    // window when the pack grew. No effect-duration multiplier expands it.
+    a.endStatus(cfg.status);
+    if (seconds > 0 && status?.duration > 0) a.applyStatus(cfg.status, 0, seconds / status.duration, a.owner.name);
   }
 
   /** Narrow combat seams for the data-driven companion controller. */
@@ -33612,6 +33774,8 @@ export class World {
   /** Shared session authority; remote shells draw the host's exact gate. */
   netMemoryAccess?: MemoryAccess;
   memorySecondaryRefusal(skillId: string, mechanic: MemorySecondaryMechanic = 'tree'): string | null {
+    if (MEMORY_UNLOCK_CFG.secondary.mechanics[mechanic]
+      && !(this.netMemoryAccess?.progression ?? memoryProgressionOpen(this.account))) return powerProgressionRefusal('awakening');
     const def = SKILLS[skillId];
     if (!def || def.noDrop || (def.dropWeight ?? 100) <= 0) return null; // internal/granted-only verbs have no discovery purchase
     const remote = this.netMemoryAccess?.[mechanic];
@@ -37363,6 +37527,7 @@ export class World {
           bonded.forEach((comp, i) => {
             if (comp.companionDormant) return;
             if (comp.downed) this.reviveCompanion(comp, 1);
+            else this.recoverCompanion(comp);
             comp.life = comp.maxLife();
             const ang = caster.facing + Math.PI * 0.75 + i * 0.7;
             this.teleportActor(comp, vec(
@@ -42105,16 +42270,7 @@ export class World {
   /** Strip up to `count` HARMFUL statuses (never beneficial ones), newest
    *  first. Consumed, not expired — a cleansed Doom never detonates. */
   private cleanseActor(target: Actor, count = 2): number {
-    let stripped = 0;
-    for (let i = target.statuses.length - 1; i >= 0 && stripped < count; i--) {
-      const s = target.statuses[i];
-      if (STATUS_DEFS[s.id]?.beneficial) continue;
-      target.statuses.splice(i, 1);
-      if (!target.statuses.some(o => o.id === s.id)) {
-        target.sheet.removeSource('status:' + s.id);
-      }
-      stripped++;
-    }
+    const stripped = target.cleanseDebuffs(count);
     if (stripped > 0) this.text(target.pos, 'cleansed', '#a8e8d8', 12, 'combat');
     return stripped;
   }
@@ -46178,14 +46334,14 @@ export class World {
    *  mints at level 1 — leveling is the Ability Essence economy's job, so
    *  a find is a SHAPE (skill × rarity), never a pre-walked ladder. (The
    *  old GEM_DROP_CFG.preLevel deep-zone roll retired with M-ECON.) */
-  rollSkillGem(bias?: SkillTag[], atLevel = this.zone.level, floor?: GemFloor): SkillInstance {
+  rollSkillGem(bias?: SkillTag[], atLevel = this.zone.level, floor?: GemFloor, ceiling?: SkillRarity): SkillInstance {
     const pool = this.skillDropPool(atLevel, floor);
     const owned = this.carriedGemIds().skills;
     const skillDef = this.pickGem(pool, s => s.tags,
       // THE GEM FLOOR's lean: the country's own gems roll at ×floorMult here.
       s => (s.dropWeight ?? 100) * (floor?.skills.has(s.id) ? GEM_DROP_CFG.floorMult : 1), bias,
       s => owned.has(s.id)) ?? pick(pool);
-    const rarity = rollSkillRarity(Math.random());
+    const rarity = rollSkillRarity(Math.random(), ceiling);
     return makeSkillGem(skillDef, 1, rarity);
   }
 
@@ -46463,7 +46619,7 @@ export class World {
     if (unit.g) {
       const rng = new Rng(unit.s);
       if (unit.g.k === 'skill' && SKILLS[unit.g.id]) {
-        return { kind: 'skill', def: SKILLS[unit.g.id], rarity: unit.g.r ?? rollSeededRarity(rng, lean), level: unit.g.l ?? 1 };
+        return { kind: 'skill', def: SKILLS[unit.g.id], rarity: unit.g.r ?? rollSeededRarity(rng, lean, unit.ceiling), level: unit.g.l ?? 1 };
       }
       if (unit.g.k === 'support' && SUPPORTS[unit.g.id]) {
         return { kind: 'support', def: SUPPORTS[unit.g.id], level: unit.g.l ?? 1, rand: () => rng.next() };
@@ -46477,7 +46633,7 @@ export class World {
       const lane = banner.length > 0 ? banner : pool;
       const w = this.gemWeights(lane, s => s.tags, skillW);
       const def = pickSeeded(lane, w, rng)!;
-      const rarity = rollSeededRarity(rng, lean);
+      const rarity = rollSeededRarity(rng, lean, unit.ceiling);
       return { kind: 'skill', def, rarity, level: 1 };
     }
     const rng = new Rng(unit.s);
@@ -46501,7 +46657,7 @@ export class World {
     const def = pickSeeded(pool, w, rng)!;
     // Rarity at the cut: the standing table, seeded, leaned by PROVENANCE
     // (the boss lean is DEF-grain; the tier lean reads the sealed `e`).
-    const rarity = rollSeededRarity(rng, lean);
+    const rarity = rollSeededRarity(rng, lean, unit.ceiling);
     return { kind: 'skill', def, rarity, level: 1 };
   }
 
@@ -46725,7 +46881,7 @@ export class World {
       this.account.ledger[RELIQUARY_LESSON] = 1;
       this.accountDirty = true;
       saveAccount(this.account);
-      this.notice('The charm wakes. Its power is yours while seated. Relics can now be found in the wilds; expand your case in the Vault.', '#d8c28a', 18, 'civic');
+      this.notice('The charm wakes. Its power is yours while seated. Expand your case in the Vault.', '#d8c28a', 18, 'civic');
     }
     this.recalcSeat(seat);
     this.text(seat.actor.pos, `${def.glyph} ${item.name}`, ITEM_RARITIES[item.rarity].color, 13);
@@ -46893,6 +47049,7 @@ export class World {
     // thing never leaves the hand, bag or worn, gem or gear.
     const found = findCarried(m, uid);
     if (!found) return;
+    if (found.item.questId) { this.failNote(seat.actor, 'drop:' + uid, 'Bring this back to its quest giver.'); return; }
     if (found.item.locked) { this.failNote(seat.actor, 'drop:' + uid, 'locked — hold right-click to unlock'); return; }
     if (found.where.kind === 'bag' && found.item.gem) { this.dropGemFromBag(seat, uid); return; }
     let item: ItemInstance | undefined;
@@ -47058,6 +47215,7 @@ export class World {
     const drop = this.drops[bestIdx];
     if (drop.item.kind !== 'gear') return;
     const item = drop.item.item;
+    if (item.questId && seat !== this.localSeat) return;
     // THE STONE (M2): a lying pouch (a full bag left it) still merges free.
     if (item.mem && this.tryMergeMemoryItem(seat, item)) {
       this.drops.splice(bestIdx, 1);
@@ -47164,6 +47322,7 @@ export class World {
     if (!mode) return;
     const item = this.bagItem(seat, uid);
     if (!item) return;
+    if (item.questId) { this.failNote(seat.actor, 'questCargo', 'Bring this back to its quest giver.'); return; }
     if (item.locked) { this.lockedRefusal(seat); return; }
     // THE STONE (M2) + THE COUNTER'S BUY-BACK (2026-09-12): the BENCH never
     // salvages a pouch — its units are potential, not steel to study — but
@@ -47223,7 +47382,7 @@ export class World {
       // GEM WRAPPERS sit out of the gear sweep: they are their own
       // categories below (a "break all gear" blow never eats the memories).
       // The ROUGH MEMORY pouch (M2) sits out of EVERY sweep likewise.
-      const targets = m.items.filter(i => !i.gem && !i.mem && !i.locked && (!rarity || i.rarity === rarity));
+      const targets = m.items.filter(i => !i.gem && !i.mem && !i.locked && !i.questId && (!rarity || i.rarity === rarity));
       for (const item of targets) {
         const taught = this.breakOneItem(seat, item, mode);
         ranked.push(...taught.filter(t => t.rankedUp).map(t => t.family));
@@ -47491,6 +47650,10 @@ export class World {
   private overlayHold(key: string, out: VendorEntry[]): VendorEntry[] {
     const hold = this.vendorHolds[key];
     if (!hold?.locks.length) return out;
+    // Unpaid reservations outside a retuned stock policy cannot occupy an
+    // invisible reserve slot. Release them before overlay, preserving legal rows.
+    const legal = hold.locks.filter(row => this.vendorEntryAllowed(key, row.entry));
+    if (legal.length !== hold.locks.length) { hold.locks = legal; this.charDirty = true; }
     const used = new Set<number>();
     for (const row of [...hold.locks].sort((a, b) => a.idx - b.idx)) {
       let at = Math.min(Math.max(0, Math.floor(row.idx)), Math.max(0, out.length - 1));
@@ -47501,6 +47664,33 @@ export class World {
       out[at] = row.entry;
     }
     return out;
+  }
+
+  private vendorStockPolicy(key?: string) { return VENDORS.find(v => v.id === key)?.stockPolicy; }
+
+  vendorMemoryCeiling(key?: string): SkillRarity | undefined {
+    const policy = this.vendorStockPolicy(key);
+    if (!policy) return undefined;
+    const allowed = new Set<string>(policy.baseRarities);
+    for (const upgrade of policy.upgrades ?? []) if (featureEnabled(this.account, upgrade.feature)) {
+      for (const rarity of upgrade.rarities) allowed.add(rarity);
+    }
+    const top = [...ITEM_RARITY_IDS].reverse().find(r => allowed.has(r)) ?? 'common';
+    return top === 'unique' ? 'legendary' : top;
+  }
+
+  /** Stock ceilings also guard old reserved rows and direct purchase intents. */
+  vendorEntryAllowed(key: string, entry: VendorEntry): boolean {
+    const policy = this.vendorStockPolicy(key);
+    if (!policy) return true;
+    const ceiling = this.vendorMemoryCeiling(key)!;
+    const ranks = Object.keys(SKILL_RARITIES);
+    if (entry.kind === 'skill') return this.vendorGemsOpen() && ranks.indexOf(entry.inst.rarity ?? 'common') <= ranks.indexOf(ceiling);
+    if (entry.kind === 'support') return this.vendorGemsOpen() && featureEnabled(this.account, FEATURE.BRANDT_SELL_SUPPORTS);
+    if (memoryKindOf(entry.item)) return (!policy.memoriesRequire || featureEnabled(this.account, policy.memoriesRequire))
+      && !!entry.item.mem?.every(u => u.ceiling && ranks.indexOf(u.ceiling) <= ranks.indexOf(ceiling));
+    return policy.baseRarities.includes(entry.item.rarity)
+      || !!policy.upgrades?.some(u => featureEnabled(this.account, u.feature) && u.rarities.includes(entry.item.rarity));
   }
 
   /** Arm/refresh ONE counter: resolve the standing order's elapsed beats,
@@ -47518,12 +47708,13 @@ export class World {
     // level-up or borough swell mid-beat changes what a FRESH arm rolls,
     // but the standing-shelf law means mid-beat re-arms don't happen.)
     const seed = (this.manifest.seed ^ hashStr(`vendorshelf:${key}:${this.restockOrdinal()}`)) >>> 0;
-    return this.overlayHold(key, withSeededRandom(seed, () => this.buildVendorStock()));
+    return this.overlayHold(key, withSeededRandom(seed, () => this.buildVendorStock({ counter: key })))
+      .filter(entry => this.vendorEntryAllowed(key, entry));
   }
 
   /** Roll a fresh counter onto the ONE shelf (skill-items M3, §6 — the
-   *  gem-case face is retired): MEMORY POUCHES stock from the first day
-   *  (VENDOR_CFG.pouches — her "standard shop" ask; units wear the TRADED
+   *  gem-case face is retired): MEMORY POUCHES follow the counter's policy
+   *  (VENDOR_CFG.pouches sets counts; units wear the TRADED
    *  provenance, seeds off the shelf's own foreordained stream), TRUE gems
    *  join once THE MEMORY COUNTER opens the slots (vendorGemsOpen — the
    *  FEATURE.VENDOR_GEMS rung re-aimed from face-seal to stock share),
@@ -47532,8 +47723,9 @@ export class World {
    *  priced by quality in mixed essence. Both halves widen through the ONE
    *  broader-wares fold (waresBonus). `opts` lets an arm site stand down a
    *  half it does not deal (pouches ride the gems half). */
-  buildVendorStock(opts?: { gems?: boolean; gear?: boolean }): VendorEntry[] {
+  buildVendorStock(opts?: { gems?: boolean; gear?: boolean; counter?: string }): VendorEntry[] {
     const out: VendorEntry[] = [];
+    const ceiling = this.vendorMemoryCeiling(opts?.counter);
     const sellSupports = featureEnabled(this.account, FEATURE.BRANDT_SELL_SUPPORTS);
     const lvl = this.vendorGemLevel();
     if (opts?.gems !== false) {
@@ -47543,10 +47735,11 @@ export class World {
       // (world seed, counter, beat): reload or re-entry meets the same
       // sealed futures (THE FOREORDAINED SHELF, extended to the pouches).
       for (const kind of MEMORY_KIND_IDS) {
-        const n = VENDOR_CFG.pouches[kind];
+        const policy = this.vendorStockPolicy(opts?.counter);
+        const n = policy?.memoriesRequire && !featureEnabled(this.account, policy.memoriesRequire) ? 0 : VENDOR_CFG.pouches[kind];
         if (n <= 0) continue;
         const units: RoughMemoryUnit[] = Array.from({ length: n }, () =>
-          ({ d: MEMORY_TRADED_PROVENANCE, s: (Math.random() * 4294967296) >>> 0 }));
+          ({ d: MEMORY_TRADED_PROVENANCE, s: (Math.random() * 4294967296) >>> 0, ...(ceiling ? { ceiling } : {}) }));
         out.push({ kind: 'item', item: makeMemoryItem(kind, units) });
       }
       if (this.vendorGemsOpen()) {
@@ -47557,7 +47750,7 @@ export class World {
             // seeded swap, so the shelf's cuts are foreordained too.
             if (sd) { out.push({ kind: 'support', gem: mintSupportInstance(sd, 1) }); continue; }
           }
-          out.push({ kind: 'skill', inst: this.rollSkillGem(undefined, lvl) });
+          out.push({ kind: 'skill', inst: this.rollSkillGem(undefined, lvl, undefined, ceiling) });
         }
       }
     }
@@ -47569,10 +47762,22 @@ export class World {
       // THE PROSPERITY CURVE: a fuller Lastlight attracts finer wares — the
       // authored weights lifted by the refugee population (data/boroughs.ts;
       // population 0, or the Borough package off, = the authored table verbatim).
-      const shelfWeights = boroughVendorWeights(this.sim.boroughField?.population ?? 0);
+      const shelfWeights = { ...boroughVendorWeights(this.sim.boroughField?.population ?? 0) };
+      const policy = this.vendorStockPolicy(opts?.counter);
+      let rarityCeiling: ItemRarity | undefined;
+      if (policy) {
+        const allowed = new Set<string>(policy.baseRarities);
+        for (const upgrade of policy.upgrades ?? []) if (featureEnabled(this.account, upgrade.feature)) {
+          for (const rarity of upgrade.rarities) allowed.add(rarity);
+        }
+        for (const rarity of Object.keys(shelfWeights) as (keyof typeof shelfWeights)[]) {
+          if (!allowed.has(rarity)) shelfWeights[rarity] = 0;
+        }
+        rarityCeiling = [...ITEM_RARITY_IDS].reverse().find(r => allowed.has(r));
+      }
       for (let i = 0; i < shelf; i++) {
         const ilvl = Math.max(1, this.player.level + randInt(-VENDOR_ITEM_CFG.ilvlJitter, VENDOR_ITEM_CFG.ilvlJitter));
-        const item = rollItem({ ilvl, rarityWeights: shelfWeights });
+        const item = rollItem({ ilvl, rarityWeights: shelfWeights, rarityCeiling });
         if (item) out.push({ kind: 'item', item });
       }
     }
@@ -47619,7 +47824,8 @@ export class World {
     const hold = this.vendorHolds[key];
     if (!hold) return;
     const c = hold.commission;
-    if (!c || hold.locks.some(r => r.commission)) { hold.watchedSec = this.time; return; }
+    if (!c || hold.locks.some(r => r.commission)
+      || !memoryCommissionReady(this.account, c.kind, c.id, VENDOR_CFG.commission.need)) { hold.watchedSec = this.time; return; }
     // THE WALL-TIME ANCHOR: beats to resolve = the lattice indices whose
     // spans END inside (watchedSec, now] under the CURRENT quantum. The
     // watch remembers seconds, never beat indices — a rush rung bought
@@ -47633,7 +47839,7 @@ export class World {
     for (let o = from; o <= nowBeat && p > 0; o++) {
       const rng = new Rng((this.manifest.seed ^ hashStr(`vendorhold:${key}:${c.kind}:${c.id}:${o}`)) >>> 0);
       if (rng.next() >= p) continue;
-      const entry = this.mintCommissionEntry(c, rng);
+      const entry = this.mintCommissionEntry(c, rng, key);
       if (!entry) break; // the registry lost the gem — the sanitizer owns the rest
       const used = new Set(hold.locks.map(r => r.idx));
       let idx = 0;
@@ -47687,11 +47893,11 @@ export class World {
   /** Mint the standing order's find on the hit beat's own stream — the
    *  roller's own mint (rarity → sockets), the beat as its die. The counter
    *  takes no deep-zone pre-level: the ground is the ground. */
-  private mintCommissionEntry(c: { kind: 'skill' | 'support'; id: string }, rng: Rng): VendorEntry | null {
+  private mintCommissionEntry(c: { kind: 'skill' | 'support'; id: string }, rng: Rng, key = 'brandt'): VendorEntry | null {
     if (c.kind === 'skill') {
       const def = SKILLS[c.id];
       if (!def) return null;
-      return { kind: 'skill', inst: makeSkillGem(def, 1, rollSkillRarity(rng.next())) };
+      return { kind: 'skill', inst: makeSkillGem(def, 1, rollSkillRarity(rng.next(), this.vendorMemoryCeiling(key))) };
     }
     const def = SUPPORTS[c.id];
     if (!def) return null;
@@ -47750,6 +47956,10 @@ export class World {
       hold.locks = hold.locks.filter(r => !r.commission);
       this.charDirty = true;
       return true;
+    }
+    if (!memoryProgressionOpen(this.account)) {
+      this.failNote(seat.actor, 'vcomm:' + key, powerProgressionRefusal('awakening'));
+      return false;
     }
     const def = gem.kind === 'skill' ? SKILLS[gem.id] : SUPPORTS[gem.id];
     if (!def) return false;
@@ -48179,6 +48389,7 @@ export class World {
     // Advance the living world (day/night, weather drift, faction territory).
     this.sim.update(dt, this.simView());
     this.odyssey.update();
+    this.questRescues.update();
     // THE FORECHART: keep the veiled halo minted ahead of the walker, and grow
     // any far soundings the overlays have requested (world/forechart.ts).
     this.updateForechart();
@@ -57097,6 +57308,7 @@ export class World {
         if (!this.gearVacuum) continue;
         const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.gear, exclude, drop.tier);
         if (!seat) continue;
+        if (drop.item.item.questId && seat !== this.localSeat) continue;
         if (!autoPlace(seat.meta.items, drop.item.item)) {
           this.failNote(seat.actor, 'bagfull', 'inventory full');
           continue;

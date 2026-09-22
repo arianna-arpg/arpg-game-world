@@ -76,7 +76,7 @@ rung that opens them on hover — `containerRungAt`).
 
 | Rung | Feature | Opens | Board | Vault gate |
 | --- | --- | --- | --- | --- |
-| 0 The Reliquary | `reliquary` | one charm cell at (1,1) | 1 | Quest reward; no purchase |
+| 0 The Reliquary | `reliquary` | one charm cell at (1,1) | 1 | Oracle rescue; no purchase |
 | 1 The First Ring | `reliquary_ring` | the hollow ring | 8, centre sealed | Case owned; 60 essence |
 | 2 Wider Shelves | `reliquary_shelves` | the outer walls | 20 | Ring owned + reach level 12 (teased) |
 | 3 The Heart | `reliquary_heart` | the centre | 21 | Shelves + level 25 (teased) |
@@ -87,34 +87,39 @@ seats until the heart opens — the tetris is the design. Costs and level roads
 are dials on the rung rows; the level roads register their milestones through
 the catalog's own derivation.
 
-## Introduction: A Place for the Unremembered
+## Introduction: the rescued Oracle
 
-`src/quests/reliquary.ts` refines the existing `relic_east_l8` chain entry.
-At level 8 the Quartermaster sends the player to one of three named burial
+The tutorial faction’s revenge commander holds the Oracle captive. Clearing that
+miniboss objective opens the case and ambient relic drops account-wide, then sends
+the player to the Oracle’s new home at Lastlight’s standing stones for a charm.
+See [Oracle rescue](../design/oracle-rescue.md) for authority and save migration.
+
+`src/quests/reliquary.ts` retains `relic_east_l8` as an optional follow-up offered
+by the rescued Oracle, with level-8 ground. It visits one of three named burial
 sites: the Unremembered Chapel, the Bonekeeper’s Vigil, or the Silent Keeping.
 The run seed and quest id select the site and its keeper-fight/clear objective
 on an isolated RNG stream. Placement uses the level-8 band and a seeded bearing,
 connects a charted road, and provides a waypoint home. The generated zone and
 active quest persist through the existing world save.
 
-Field completion only readies the return leg. At the Quartermaster the journal
+Field completion only readies the return leg. At the Oracle the journal
 offers three fixed magic 1×1 charms: life, mana, or energy shield. `QuestReward.choices`
 holds the entire payout until a valid selection fits in the pack; a full bag,
 invalid selection, remote claim, guest claim, or repeat claim pays nothing.
-The successful claim grants the chosen item, 500 XP, the chain stamp and
-`FEATURE.RELIQUARY`, then saves. There is no first-drop reservation.
+The optional shrine claim grants the chosen item, 500 XP and the chain stamp,
+then saves. The case is already owned from rescue. There is no first-drop reservation.
 
 The inventory and case open on the lesson. Its persistent instructions explain
 that carried relics are inert, highlight the open cell, and offer ordinary drag
 placement or an explicit **Seat** button. Only successful placement stamps the
-account's `reliquary_lesson` key and enables ambient relics, including cache and
-boss payouts through `dropGearAt`. Unseating removes the stats but never relocks
+account's `reliquary_lesson` key. Ambient relics, including cache and boss payouts
+through `dropGearAt`, already opened with rescue. Unseating removes stats without relocking
 drops. Owned discards and owed property bypass the mint gate. The inventory's
 LESSON attention remains until seating, including after a reload. The quest
 can be completed on later characters for another starter charm; account cells
 and completed lesson are retained.
 
-Reusable seams: `QuestDef.zoneVariants`, `QuestZoneSpec.name`,
+Reusable seams: `QuestDef.rescue/zoneVariants`, `QuestZoneSpec.name`,
 `QuestReward.choices/choicePrompt/features`, `ContainerRung.rewardOnly`, and
 `ContainerDef.dropLedger`. The journal owns choice presentation; `questReward`
 is a validated host action that rechecks readiness and giver proximity.

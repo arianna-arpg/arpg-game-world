@@ -614,17 +614,20 @@ const resolveTwin = (unit: RoughMemoryUnit, facet?: string): { kind: string; id:
   const gemEntries = (): VendorEntry[] => stock().filter(e => e.kind !== 'item');
   const gearEntries = (): VendorEntry[] => stock().filter(e => e.kind === 'item' && !e.item.mem);
 
-  // The standard offering: pouches + gear from the first day, NO true gems.
+  check('Q: Brandt keeps pouches and true gems behind the Memory Counter',
+    pouchEntries().length === 0 && gemEntries().length === 0 && gearEntries().length === VENDOR_ITEM_CFG.slots);
+  w.account.features.add(FEATURE.BRANDT_MAGIC_WARES);
+  w.account.features.add(FEATURE.VENDOR_GEMS);
+  w.restockVendor();
+  // Purchased pouches retain the current stock ceiling when recalled later.
   const kinds = Object.keys(VENDOR_CFG.pouches) as MemoryKind[];
   const wantPouches = kinds.filter(k => VENDOR_CFG.pouches[k] > 0);
-  check('Q: the fresh shelf stocks every pouch kind at its dialed unit count (TRADED provenance)',
+  check('Q: the unlocked shelf stocks every pouch kind at its dialed unit count (TRADED provenance)',
     pouchEntries().length === wantPouches.length
     && wantPouches.every(k => pouchEntries().some(e => e.kind === 'item'
       && e.item.baseId === MEMORY_KINDS[k].base
       && e.item.mem!.length === VENDOR_CFG.pouches[k]
-      && e.item.mem!.every(u => u.d === MEMORY_TRADED_PROVENANCE))));
-  check('Q: TRUE gems stay off the shelf until the Memory Counter rung (stock-side gating)',
-    gemEntries().length === 0 && gearEntries().length === VENDOR_ITEM_CFG.slots);
+      && e.item.mem!.every(u => u.d === MEMORY_TRADED_PROVENANCE && u.ceiling === 'magic'))));
 
   // Per-unit pricing off the dial.
   const rough = pouchEntries().find(e => e.kind === 'item' && e.item.baseId === MEMORY_KINDS.rough.base)!;
@@ -690,17 +693,18 @@ const resolveTwin = (unit: RoughMemoryUnit, facet?: string): { kind: string; id:
   check('Q: feat_vendor_gems resolves — the Memory Counter, same flag, same chain',
     !!gemsRow && gemsRow.label === 'The Memory Counter'
     && (gemsRow.payload as { flag?: string } | undefined)?.flag === FEATURE.VENDOR_GEMS
-    && gemsRow.requiresUnlock === 'feat_vendor_wares_1');
+    && gemsRow.requiresUnlock === 'feat_brandt_magic_wares');
   check('Q: the wares rungs\' derived copy no longer names the gem case',
     rows.filter(u => u.id.startsWith('feat_vendor_wares_')).every(u => !/gem case/i.test(u.description)));
   const lock1 = rows.find(u => u.id === 'feat_vendor_lock_1');
   check('Q: feat_vendor_lock_1 still requires the re-aimed rung',
-    !!lock1 && Array.isArray(lock1.requiresUnlock) && lock1.requiresUnlock.includes('feat_vendor_gems'));
+    !!lock1 && lock1.requiresUnlock === 'feat_vendor_gems');
   const supRow = rows.find(u => u.id === 'feat_brandt_supports');
   check('Q: feat_brandt_supports keeps its spirit on the one shelf (chained off the rung)',
     !!supRow && supRow.requiresUnlock === 'feat_vendor_gems'
     && (supRow.payload as { flag?: string } | undefined)?.flag === FEATURE.BRANDT_SELL_SUPPORTS);
   w.account.features.delete(FEATURE.VENDOR_GEMS); // leave the account as this rig found it
+  w.account.features.delete(FEATURE.BRANDT_MAGIC_WARES);
 }
 
 // ------------------------------- R. THE MEMORY LAW (2026-09-12, her ruling)

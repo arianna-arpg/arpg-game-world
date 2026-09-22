@@ -5,6 +5,15 @@
 (`WorldStateSave.vendorHolds` + sanitizer) · `src/meta/unlocks.ts` (derived
 Vault rows) · probe: `balance/probe_vendorlocker.ts`.
 
+Current early-game stock and gates are documented in
+[Brandt progression](../design/brandt-progression.md): white starter equipment,
+instant selling, ten crafting-writ bounties qualifying Magic Wares, and five-tier
+Rush Orders/Broader Wares. Unpaid old reservations outside a counter’s new stock
+policy are released before overlay; legal reservations retain their identity.
+Magic Wares opens the Memory Counter; memories, commissions and purchased pouch
+contents obey the equipment rarity ceiling. The hammer quest qualifies Rare
+Wares and the Salvage Station, with a saved, level-fixed imbue earned each life.
+
 ## The counter registry (recap)
 
 A vendor is an `npcRole` NPC plus ONE row in `VENDORS` (`data/vendors.ts`):
@@ -60,7 +69,7 @@ ledger unstamped.
 
 ## The beat law + the standing shelf (2026-07-22)
 
-**One clock.** `restockSeconds()` = `VENDOR_CFG.restock.baseSec` (300) minus
+**One clock.** `restockSeconds()` = `VENDOR_CFG.restock.baseSec` (900) minus
 every owned RUSH rung's `cutSec` (`restock.ladder` — rung 1 wears the legacy
 `brandt_fast_restock` flag; catalog rows "Rush Order I/II" are DERIVED, with
 before/after copy computed from the config), floored at `minSec`. Everything
@@ -258,13 +267,10 @@ with the keeper's own truth.
 `vendorSize() = baseGems + Σ owned gems`; the gear shelf =
 `VENDOR_ITEM_CFG.slots + Σ owned gear` — a rung can never widen one face
 and not the other. `unlocks.ts` derives the catalog rows
-(`feat_vendor_wares_N`, "Broader Wares I/II/III"): rung 1 chains off the
-Salvage Station and wears the LEGACY `brandt_extra_gems` flag (accounts
-that bought "Brandt: +2 Wares" own rung 1 outright — ownership rides
-flags, never catalog ids); later rungs chain rung-to-rung; a rung wearing
-`gate` avenues (rung 3's `[{level:15},{vocation:true},{quest:true}]`)
-becomes a GATEWORK any-of rung — sealed in the Vault with its roads
-printed until ANY avenue is walked (docs/meta/gatework.md).
+(`feat_vendor_wares_N`, Broader Wares I–V). The first three are early
+sequential investments; IV/V require Magic Wares. The legacy first-rung flag
+still honors existing ownership. Rows with gate avenues become sealed Vault
+entries until an authored avenue holds (see the progression contract above).
 
 ## The panel
 

@@ -43,6 +43,7 @@ import {
   holdfastTollLabel, unlockImplemented,
 } from '../src/packages/holdfast';
 import { MERC_CFG } from '../src/meta/mercs';
+import { BRANDT_CFG } from '../src/data/brandt';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -157,13 +158,16 @@ const wallet = (w: Partial<Record<EssenceId, number>>): Record<EssenceId, number
 // --- E) The first exchange (Salvage Station) ---------------------------------
 {
   const row = UNLOCK_CATALOG.find(u => u.id === 'feat_salvage_station');
-  check('first exchange: the Salvage Station costs exactly 1 and gates on essence touched',
-    !!row && row.cost === 1 && row.reqLedger === LEDGER_ESSENCE_TOUCHED);
+  check('first exchange: the Salvage Station costs exactly 1 and gates on Rare Wares',
+    !!row && row.cost === 1 && row.requiresUnlock === BRANDT_CFG.rareWares.unlock);
   const a = makeAccount();
   a.ledger[LEDGER_ESSENCE_TOUCHED] = 1;
   applyCredits(a, 1);
+  check('first exchange: touching essence alone does not restore Brandt’s services',
+    !availableUnlocks(a).some(x => x.id === 'feat_salvage_station'));
+  a.features.add(BRANDT_CFG.rareWares.flag);
   const u = availableUnlocks(a).find(x => x.id === 'feat_salvage_station');
-  check('first exchange: one touched essence + one minted Mortal Essence buys it',
+  check('first exchange: Rare Wares plus one Mortal Essence buys it',
     !!u && applyUnlock(a, u!) && a.credits === 0);
 }
 

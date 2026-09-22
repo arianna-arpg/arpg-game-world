@@ -423,6 +423,15 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     beneficial: true,
     mods: [mod('moveSpeed', 'more', 0.08)],
   },
+  // COMPANION_RECOVERY uses the ordinary status clock, modifiers and co-op
+  // presentation. The caller supplies the shared pack-duration budget.
+  companion_recovery: {
+    label: 'Bond Shelter', color: '#b8f4d8', duration: 1,
+    beneficial: true, powerInert: true,
+    mods: [mod('damageImmunity', 'flat', 1), mod('debuffImmunity', 'flat', 1)],
+    bodyFx: { glow: '#b8f4d8', glowScale: 1.8, glowAlpha: 0.3,
+      rim: '#e0fff0', rimWidth: 2, rimAlpha: 0.8 },
+  },
   poison: {
     label: 'Poisoned', color: '#7ec850', duration: 6,
     element: 'chaos',

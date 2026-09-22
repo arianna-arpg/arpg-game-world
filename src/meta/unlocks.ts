@@ -24,12 +24,14 @@
 //   honest; balance/probe_classmastery.ts the ladder, the kit, the runes.
 // ---------------------------------------------------------------------------
 
+import { BRANDT_CFG } from '../data/brandt';
 import { CLASS_DEEDS, discoveryCount } from '../data/classdeeds';
 import { MEMORY_UNLOCK_CFG, MEMORY_UNLOCKS } from '../data/memoryUnlocks';
-import { grantMemoryUnlock, memoryCatalog, memoryCommissionReady, memoryUnlockCandidates, memoryUnlockDef } from './memoryUnlocks';
+import { grantMemoryUnlock, memoryCatalog, memoryCommissionReady, memoryProgressionOpen, memoryUnlockCandidates, memoryUnlockDef } from './memoryUnlocks';
+import { powerProgressionRefusal } from '../data/powerProgression';
 import { encipher, revealScript } from '../data/runescript';
 import {
-  FEATURE, LEDGER_ACCOUNT_DEATHS, LEDGER_CORPSES_RECLAIMED, LEDGER_CRAFTS_UNLOCKED,
+  FEATURE, LEDGER_ACCOUNT_DEATHS, LEDGER_CORPSES_RECLAIMED,
   LEDGER_FLASK_LESSON, LEDGER_LEGENDARY_SKILL_DROP,
   LEDGER_VENDOR_BOUGHT, LEDGER_ZONES_EXPLORED, STARTER_CLASSES, bossSlainKey,
   classLevelLedgerKey, reachedLevelKey, unlockedClassCount, type Account,
@@ -41,7 +43,7 @@ import {
 import { CLASS_TIERS, CLASS_WEB_CFG, classTierId } from '../data/classTiers';
 import { BOUNTY_BOARD_CFG } from '../data/bountyboard';
 import { VENDOR_CFG } from '../data/vendors';
-import { LEDGER_ESSENCE_TOUCHED } from '../data/essences';
+import { ORACLE_RESCUED } from '../data/oracle';
 import { SCALD_KIT_UNLOCK_LEDGERS } from '../data/scaldkit';
 // THE CONTAINER FABRIC (engine/containers.ts): the side boards' ladders —
 // every rung's Vault row is DERIVED below (containerUnlocks), never listed.
@@ -165,11 +167,11 @@ export function maxSlotCount(): number {
 /** CLASS BUNDLES — one purchase, several unlocks that grow together:
  *    1. the class joins the RANDOM ROLL at character select (the pool the
  *       slot-sized hand is dealt from),
- *    2. its thematic skill/support gems join the DROP pool (which also makes
+ *    2. its base bar and authored supports join the DROP pool (which also makes
  *       the class's own kit re-droppable — bar gems are granted on pick, but
  *       only unlocked gems can be found again),
  *    3. and, downstream for free, realizing the class in a run opens its home
- *       VOCATION chain at the quartermaster (vocations key off the character's
+ *       VOCATION chain after the account milestone (vocations key off the character's
  *       class — no extra wiring here).
  *  Adding a class to the game = one ClassDef + one entry here (plus,
  *  its `unlock` row — see THE OBJECTIVE WEB above; every non-starter
@@ -226,25 +228,22 @@ export interface ClassBundleDef {
   unlock: ClassUnlockSpec;
 }
 
-export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
+const CLASS_DISCOVERIES: readonly Omit<ClassBundleDef, 'skillIds'>[] = [
   // First natural discoveries: the board and quartermaster arrive before
   // these habits become new starting choices. No death-count or run wall.
   { classId: 'spellblade',
     rumor: 'A familiar blade begins to carry a stranger kind of light.',
     blurb: 'Steel carries the storm: strike, lash with fire, then slip through a mirage.',
-    skillIds: ['static_strike', 'hellfire_lash', 'mirage_step'],
     supportIds: ['static_charge', 'slow_burn'],
     unlock: { town: ['feat_bounty_board', 'feat_quest_giver'], ...CLASS_DEEDS.spellblade } },
   { classId: 'cryomancer',
     rumor: 'The cold lingers where you pass, patient enough to hold the world still.',
     blurb: 'Winter as control: piercing frost prepares a freeze, and ice covers the retreat.',
-    skillIds: ['frost_pulse', 'flash_freeze', 'shatterstep'],
     supportIds: ['biting_cold', 'chill_chance'],
     unlock: { town: ['feat_bounty_board', 'feat_quest_giver'], ...CLASS_DEEDS.cryomancer } },
   { classId: 'apothecary',
     rumor: 'Hands that have learned to mend begin to understand the other use of a dose.',
     blurb: 'Poison and remedy: stack venom, seed spores, and cleanse wounds while the dose works.',
-    skillIds: ['venom_bolt', 'spore_bloom', 'cleansing_light'],
     supportIds: ['envenomed_tips', 'poison_chance'],
     unlock: { town: ['feat_bounty_board', 'feat_quest_giver'], ...CLASS_DEEDS.apothecary } },
   // --- THE BLOOD LINE: the Warrior is the Strength branch — its road opens
@@ -252,9 +251,7 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
   // owned and lived in, opens its own deeper kin.
   { classId: 'berserker',
     rumor: 'Blood runs hot, and every swing carries the fury of the last.',
-    blurb: 'Fury as a fighting style: heavy arcs, boiling blood, and the whole rage-fed Warpath.',
-    skillIds: ['heavy_strike', 'whirlwind', 'dash',
-      'berserk', 'bloodlust', 'soul_harvest', 'flame_imbuement', 'venom_ammunition', 'flame_blast'],
+    blurb: 'Fury as a fighting style: heavy blows, whirling steel, and a sudden dash.',
     unlock: { ...CLASS_DEEDS.berserker } },
   // --- THE MIND LINE: the Magician is the Intelligence branch — played deep,
   // it opens its own INT kin first, then the doors into its constituent
@@ -262,7 +259,6 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
   { classId: 'sorcerer',
     rumor: 'A restless mind bends the forces of the world into ruin.',
     blurb: 'The scholar of annihilation steps forward, frost ward in hand.',
-    skillIds: ['infernal_ray', 'storm_call', 'ice_shield'],
     supportIds: ['spark_discipline'],
     unlock: { ...CLASS_DEEDS.sorcerer } },
   // --- THE SHADOW LINE: the Rogue is the Dexterity branch — its road forks
@@ -271,66 +267,41 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
   { classId: 'ranger',
     rumor: 'A distant figure watches the wind and waits for a clear shot.',
     blurb: 'Death from afar, and the field disciplines that perfect the shot.',
-    skillIds: ['piercing_arrow', 'fan_of_blades', 'quickstep'],
     supportIds: ['perfect_draw', 'wandering_mark'],
     unlock: { ...CLASS_DEEDS.ranger } },
   { classId: 'guardian',
     rumor: 'Behind an unyielding shield, the weary find room to breathe.',
-    blurb: 'The unmoved wall, raised together with the Bulwark\'s wards, pacts, and reprisals.',
-    skillIds: ['hammer_of_judgment', 'aegis_ward', 'rallying_howl',
-      'iron_ward', 'magma_ward', 'transgression', 'pain_hounds', 'bristleback', 'soul_link',
-      'stone_communion'],
+    blurb: 'The unmoved wall: a judgment hammer, a sheltering ward, and a rallying howl.',
     supportIds: ['stoneblood_conduit', 'bulwarks_tithe', 'warding_flesh'],
     unlock: { ...CLASS_DEEDS.guardian } },
-  // THE ARCANIST (her retheme 2026-09-05): the bolt, the one bonded
-  // familiar, the drain — and the elemental golem contracts + the arcane
-  // bolts as its pool (the four golems were orphans; they are the
-  // Summoner's found companions now). The bone/chitin supports moved to
-  // the Necromancer and the Hivecaller.
   { classId: 'summoner',
     rumor: 'An unseen bond joins two wills, and neither fights alone.',
-    blurb: 'The arcanist: consuming bolts, one bonded familiar, and the binding contracts of the elemental golems.',
-    skillIds: ['ruin', 'bind_familiar', 'essence_drain',
-      'command_assault', 'summon_fire_golem', 'summon_ice_golem', 'summon_stone_golem', 'summon_blood_golem',
-      'null_lance', 'arcane_missiles'],
-    supportIds: ['soul_tether', 'vital_bond', 'resonance', 'hardy_brood'],
+    blurb: 'The arcanist: consuming bolts, one bonded familiar, and essence drawn from the foe.',
+    supportIds: ['soul_tether', 'vital_bond', 'resonance'],
     unlock: { chain: 'necromancer', ...CLASS_DEEDS.summoner } },
   { classId: 'swashbuckler',
     rumor: 'Steel flashes with a flourish; danger is another partner in the dance.',
-    blurb: 'The duelist\'s stage: four blades\' worth of flourish, and the momentum to keep it rolling.',
-    skillIds: ['surgical_strike', 'dash_strike', 'buckler_strike', 'wild_strike'],
+    blurb: 'The duelist moves between surgical cuts, rushing strikes, and the buckler.',
     supportIds: ['momentum'],
     unlock: { ...CLASS_DEEDS.swashbuckler } },
   { classId: 'juggernaut',
     rumor: 'A heavy tread carries on through the blows that would halt another.',
-    blurb: 'It hits, it takes hits, and it does not stop. Now it keeps the wake too: votive flames, a lit vigil, and the last word.',
-    // Frenzy rides along: it left the Rogue's (starter) bar in the parity
-    // pass, so this bundle is what keeps the fast fury-feeder droppable.
-    skillIds: ['piledriver', 'reckoning', 'stone_skin', 'frenzy',
-      'cindershell', 'deathwatch', 'requiem'],
+    blurb: 'It hits, it takes hits, and it does not stop.',
     supportIds: ['kindled_wake', 'victors_tempo', 'abundant_harvest'],
     unlock: { chain: 'guardian', ...CLASS_DEEDS.juggernaut } },
   { classId: 'pyromancer',
     rumor: 'An ember rests in an open palm, hungry for the world beyond it.',
     blurb: 'Everything burns eventually; these are the words for "now".',
-    skillIds: ['flame_arrow', 'ignite', 'pillar_of_flame'],
     unlock: { ...CLASS_DEEDS.pyromancer } },
   { classId: 'assassin',
     rumor: 'A quiet shadow closes the distance, leaving no time for an answer.',
-    blurb: 'The quiet trade, with the Verdict\'s marks, dooms, and executions in its kit.',
-    skillIds: ['rend', 'eviscerate', 'invisibility',
-      'expose_weakness', 'word_of_doom', 'execution'],
+    blurb: 'The quiet trade: open the wound, finish it, and disappear.',
     supportIds: ['exposure', 'bristling_riposte'],
     unlock: { ...CLASS_DEEDS.assassin } },
   { classId: 'necromancer',
     rumor: 'Among the still and buried, a patient voice gathers company.',
-    blurb: 'Death as a resource: the corpse-and-poison artisan, with the whole Harvest & Hordes gamut.',
-    skillIds: ['poison_nova', 'raise_dead', 'despair',
-      'reap', 'whirling_reap', 'summon_raging_spirit', 'spirit_pyre',
-      'summon_wraith', 'infernal_bombardment', 'archon_lance', 'sanguine_burst',
-      'venom_bolt', 'summon_skeleton', 'summon_skeleton_archer', 'summon_skeleton_mage'],
-    supportIds: ['sweeping_blow', 'mana_feeder', 'enduring_bond',
-      'calcified_vigor', 'marrowbound_vigor', 'septic_bargain'],
+    blurb: 'Death as a resource: poison, risen bodies, and despair.',
+    supportIds: ['mana_feeder', 'enduring_bond', 'septic_bargain'],
     // HER OBJECTIVES (2026-09-05): the corpse run's own class — reclaim
     // enough of what death took from you, OR put enough of the risen back
     // down. Both counted, both ACCOUNT-DIRECT stamps (account.ts).
@@ -342,49 +313,36 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
   { classId: 'tamer',
     rumor: 'Wild eyes meet a steady gaze, and something like trust takes root.',
     blurb: 'The wild answers a steady gaze: stalk in unannounced, hold the claim, and fight beside the bond that downs but never dies.',
-    skillIds: ['goad', 'tame_beast', 'stalk', 'command_assault'],
-    supportIds: ['alphas_bond', 'pack_instinct', 'reciprocal_bond',
-      'gentling_hand', 'beast_master'],
+    supportIds: ['alphas_bond', 'pack_instinct', 'reciprocal_bond'],
     // A HARD LESSON, not a syllabus: Crowned beasts roam the base wilds
     // (killHandlers stamps the same key the Warbands package reads).
     unlock: { objectives: [{ ledger: 'crowned_killed', label: 'put down a Crowned beast' }],
       hint: 'Every pack answers to a crown. Put one down, and you will know the bond can be claimed.' } },
   { classId: 'cleric',
     rumor: 'Gentle hands carry a light that can shelter or sear.',
-    blurb: 'The support archetype, played straight: Communion\'s mending arts and the Devout\'s sanctified arsenal, bundled with the one class built to carry them.',
-    skillIds: ['sanctified_strike', 'mend', 'consecration', 'benediction',
-      'greater_mending', 'communion', 'healing_rain', 'healing_stream', 'cleansing_light',
-      'lifedrain', 'soul_volley', 'tree_of_life', 'font_of_renewal', 'summon_cleric', 'spirit_mender'],
+    blurb: 'A sanctified strike, a mending hand, and consecrated ground.',
     supportIds: ['intensive_care', 'mending_chain', 'overmend'],
     unlock: { ...CLASS_DEEDS.cleric } },
 
   // --- The parity twelve (every star point now anchors three classes) -------
   { classId: 'breaker',
     rumor: 'A great weight falls, and the surest footing gives way.',
-    blurb: 'The executioner\'s grammar: break the stance, quake the rout, pass The Verdict. The whole slam-and-sentence school rides along.',
-    skillIds: ['sunder_maul', 'earthquake', 'verdict',
-      'tolling_ruin', 'groundswell', 'faultbreak'],
+    blurb: 'Break the stance, quake the ground, and pass the verdict.',
     supportIds: ['concussive_blows'],
     unlock: { ...CLASS_DEEDS.breaker } },
   { classId: 'vanguard',
     rumor: 'At the front of the line, a moving shield makes room for those behind.',
     blurb: 'First through the gap, shield still moving: the charges, thrusts, and leaps of the advancing line.',
-    skillIds: ['charge', 'shockfront', 'marching_bulwark',
-      'shield_charge', 'bastion_thrust', 'crushing_leap'],
     supportIds: ['phalanx'],
     unlock: { ...CLASS_DEEDS.vanguard } },
   { classId: 'blademaster',
     rumor: 'A waiting blade holds a thousand motions in a moment of stillness.',
-    blurb: 'The sword as a sentence, with the whole dueling school: the thousand cuts and the one perfect stroke.',
-    skillIds: ['iai_strike', 'zanshin_cut', 'riposte',
-      'thousand_cuts', 'sheathed_moon', 'perfect_strike', 'infinite_slashes'],
+    blurb: 'The sword as a sentence: a drawn cut, its echo, and the answering riposte.',
     supportIds: ['building_rhythm'],
     unlock: { chain: 'berserker', ...CLASS_DEEDS.blademaster } },
   { classId: 'brawler',
     rumor: 'Scarred knuckles and a close embrace settle what words cannot.',
     blurb: 'No blade, no apology: the pit\'s arithmetic, plus the carving rhythms that keep the fists warm.',
-    skillIds: ['one_two', 'chain_pull', 'haymaker',
-      'carve', 'deep_carve', 'bloodlust'],
     supportIds: ['echoing_might'],
     // THE user-named exemplar of learn-by-getting-wrecked: the grip kin
     // (wranglers, yoke-maulers, gulpers, planted maws) teach with their
@@ -394,23 +352,17 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
   { classId: 'sentinel',
     rumor: 'An iron watch endures; every reckless blow finds an answer.',
     blurb: 'Hitting it is the mistake: spikes, quills, bells, and every other way a wall bills its visitors.',
-    skillIds: ['spiked_bulwark', 'bristleback', 'reprisal',
-      'defiant_bulwark', 'tolling_bell', 'rearguard_aegis'],
     supportIds: ['answering_steel'],
     unlock: { chain: 'guardian', ...CLASS_DEEDS.sentinel } },
   { classId: 'lancer',
     rumor: 'Long shafts cross the field, each wound a thread waiting to be drawn.',
-    blurb: 'Steel left in every wound and called home through the crowd: the full impale ledger, javelin rain included.',
-    skillIds: ['skewer', 'pinning_spear', 'spear_recall',
-      'voltspear', 'blightspear', 'skyfall_volley', 'radiant_lance'],
+    blurb: 'Steel left in every wound, pinning the quarry, then called home through the crowd.',
     supportIds: ['skewering_blows', 'tripwire_web'],
     unlock: { chain: 'ranger', ...CLASS_DEEDS.lancer } },
   { classId: 'trapper',
     rumor: 'Careful hands prepare the ground, then leave it waiting in silence.',
     blurb: 'The battlefield as a workshop: snares, mines, sentries, and the patience to let the ground do the arguing.',
-    skillIds: ['caltrops', 'aftershock_snare', 'ballista_sentry',
-      'cinderwhirl_trap', 'frost_trap', 'fire_mine', 'detonate_mines', 'lodestone'],
-    supportIds: ['tripwire', 'enduring_snares', 'overwound_mechanism', 'packed_workshop'],
+    supportIds: ['tripwire', 'enduring_snares', 'overwound_mechanism'],
     // Learn-by-getting-wrecked, the field-craft edition: spring any
     // trapwork with your own feet (world.ts springTrapwork stamps it) —
     // the sunken ruins' toothed halls and the highland's boulder plates
@@ -420,8 +372,6 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
   { classId: 'warlord',
     rumor: 'A banner rises, and scattered hearts begin to beat as one.',
     blurb: 'Presence as mechanics: the first Charisma class, with the horns, standards, and blessings of command.',
-    skillIds: ['battle_standard', 'single_out', 'challenging_shout',
-      'war_horn', 'trumpet_peal', 'blessing_of_might'],
     supportIds: ['provocation', 'clamor'],
     // The war-camps' own lesson (killHandlers stamps warlords_killed —
     // the same key that unlocks Demon Invasions): kill command, learn it.
@@ -429,23 +379,17 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
       hint: 'Kill a thing that commands, and its voice goes looking for a new throat.' } },
   { classId: 'skald',
     rumor: 'A voice carries over the clash of steel, giving the battle its rhythm.',
-    blurb: 'The battle keeps time whether it wants to or not: the whole hymnal, shrieks and squalls included.',
-    skillIds: ['war_chant', 'dissonance', 'coda',
-      'keening_shriek', 'gust_burst', 'aureole'],
+    blurb: 'The battle keeps time: a war chant, dissonance, and a closing coda.',
     supportIds: ['held_note', 'countermelody'],
     unlock: { chain: 'warlord', ...CLASS_DEEDS.skald } },
   { classId: 'beguiler',
     rumor: 'A familiar face turns away; its shadow takes a different path.',
     blurb: 'Never be where the blow lands: doubles, decoys, quiet steps, and one whispered madness.',
-    skillIds: ['decoy', 'shadow_clone', 'beguile',
-      'cloudstep', 'quiet_step', 'mirage_archer'],
     supportIds: ['synchronicity', 'vessel_of_shadow'],
     unlock: { ...CLASS_DEEDS.beguiler } },
   { classId: 'chronomancer',
     rumor: 'Between one heartbeat and the next, a patient hand finds room to move.',
     blurb: 'Time as a resource everyone else spends carelessly, up to and including stopping it outright.',
-    skillIds: ['stasis_lock', 'torpor_field', 'time_dilation',
-      'time_stop', 'warp', 'temporal_pad'],
     supportIds: ['lingering_moment', 'borrowed_haste'],
     // The Chronophage's spoils (quests/defs.ts stamps unmade_slain — the
     // same key the far Caravan tiers read): time-craft is TAKEN, not taught.
@@ -454,8 +398,6 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
   { classId: 'ascetic',
     rumor: 'A measured breath settles the body, and stillness gathers strength.',
     blurb: 'Stillness pays cash: the practiced palm, the rooted stances, and the long breath between.',
-    skillIds: ['mantra_strike', 'wellspring_stance', 'long_exhale',
-      'grit_stance', 'surgewind', 'siphon_strike'],
     supportIds: ['colossus_stance', 'stillwater_discipline'],
     unlock: { chain: 'cleric', ...CLASS_DEEDS.ascetic } },
 
@@ -466,11 +408,8 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
   // crown the chitin country) and the humming does not stop; it waits.
   { classId: 'hivecaller',
     rumor: 'Countless small wings stir together, listening for a single will.',
-    blurb: 'The swarm is the weapon; you are only its will. A hive that reknits itself, a veil of biting motes, the quiet dead gathered glimmering, and one pointed word the whole chorus obeys.',
-    skillIds: ['summon_swarmlings', 'raise_gnatveil', 'command_assault',
-      'beckon_palewisps', 'loose_marrowgrubs', 'gather_cinderkin'],
-    supportIds: ['broodclutch', 'vicious_brood', 'hiveborn',
-      'patient_brood', 'hidden_reserves', 'teeming_warrens', 'chitinous_brood'],
+    blurb: 'The swarm is the weapon: a living brood, a veil of biting motes, and one pointed command.',
+    supportIds: ['broodclutch', 'vicious_brood', 'hiveborn'],
     unlock: { objectives: [{ ledger: 'broodmothers_slain', label: 'kill a mother of broods' }],
       hint: 'Kill a mother of broods and listen: the humming does not stop. It waits to be told where to go.' } },
 
@@ -481,17 +420,14 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
   { classId: 'wallwright',
     rumor: 'Stone rises at a gesture; shelter and ruin share the same hands.',
     blurb: 'Architecture, weaponized: raise the rampart, breach through it, and swing the demolition arc that unbuilds whatever argues back.',
-    skillIds: ['stone_rampart', 'toppling_stroke', 'shield_charge'],
     unlock: { chain: 'breaker', ...CLASS_DEEDS.wallwright } },
   { classId: 'matador',
     rumor: 'A bright flourish invites the rush, then slips beyond its reach.',
     blurb: 'The duel as theatre: bait the charge, pass through the horns, schedule the third act.',
-    skillIds: ['planted_banderilla', 'cape_feint', 'perfect_strike'],
     unlock: { chain: 'brawler', ...CLASS_DEEDS.matador } },
   { classId: 'flagellant',
     rumor: 'Beneath old scars, a solemn promise draws strength from suffering.',
     blurb: 'Pain, notarized: a covenant that feeds on its keeper and repays exactly when the flesh runs short.',
-    skillIds: ['ashen_vow', 'transgression', 'blood_mortgage'],
     // THE COUNTED DISCOVERY (ledgerCounts debut): the account's own deaths
     // are the syllabus — the same lifetime counter the Immortal reads.
     unlock: { objectives: [{ ledger: LEDGER_ACCOUNT_DEATHS, n: discoveryCount(8), label: `die ${discoveryCount(8)} times` }],
@@ -499,32 +435,33 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
   { classId: 'falconer',
     rumor: 'A circling shape folds its wings, guided by the hand below.',
     blurb: 'The mark has wings and an opinion: one huntress, loosed to latch and hold the quarry open.',
-    skillIds: ['cast_falcon', 'expose_weakness', 'cloudstep'],
     unlock: { chain: 'tamer', ...CLASS_DEEDS.falconer } },
   { classId: 'sharper',
     rumor: 'A hidden card changes hands; fortune seems to favor the prepared.',
     blurb: 'Probability owes money: every suit rides every throw, the odds arrive pre-palmed, and nobody can prove anything.',
-    skillIds: ['thrown_ace', 'stack_the_deck', 'quiet_step'],
     unlock: { chain: 'swashbuckler', ...CLASS_DEEDS.sharper } },
   { classId: 'firebrand',
     rumor: 'A whisper passes through the crowd, and unease becomes an uproar.',
     blurb: 'The riot, delivered as a speech: the crowd does the fighting, and you were provably elsewhere.',
-    skillIds: ['incite', 'trumpet_peal', 'harrowing_wail'],
     unlock: { chain: 'beguiler', ...CLASS_DEEDS.firebrand } },
   { classId: 'runeweaver',
     rumor: 'Patient fingers arrange old signs until their separate voices join.',
     blurb: 'Spells are sentences, runes are the words, patience is the grammar: the invocation bank made a calling.',
-    skillIds: ['invocation', 'rune_of_power', 'warp'],
     unlock: { ...CLASS_DEEDS.runeweaver } },
   { classId: 'resonator',
     rumor: 'A clear note lingers in the air, waiting for the chord that follows.',
     blurb: 'Everything rings if struck sincerely: leave the body humming a bright tone, then play the chord fortissimo.',
-    skillIds: ['tuning_strike', 'shatterchord', 'purity_of_elements'],
     // The starfall lattices already sing when broken (killHandlers stamps
     // fallen_stars_broken) — whoever shattered one has heard the tone.
     unlock: { objectives: [{ ledger: 'fallen_stars_broken', label: 'break a fallen star' }],
       hint: 'Break a fallen star and listen to the lattice go: everything, struck sincerely, will tell you its note.' } },
 ];
+
+/** Class discovery follows the actual base bar. Mastery alternates and the wider
+ * school remain independent discoveries; support gifts stay explicitly authored. */
+export const CLASS_BUNDLES: readonly ClassBundleDef[] = CLASS_DISCOVERIES.map(b => ({
+  ...b, skillIds: [...new Set(CLASSES.find(c => c.id === b.classId)?.bar.filter((id): id is string => id !== null) ?? [])],
+}));
 
 const gemNames = (ids: readonly string[], reg: Record<string, { name: string }>): string =>
   ids.map(i => reg[i]?.name ?? i).join(', ');
@@ -860,53 +797,42 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     payload: { supportIds: ['polyphony', 'ostinato'] } },
 
   // --- Town features (the roguelite town framework) ------------------------
-  // THE BROADER-WARES FAMILY — derived from VENDOR_CFG.wares.ladder (the
-  // lock ladder's own doctrine: append a rung THERE and the catalog, the
-  // stock fold, and the milestone stamps all grow together; nothing here
-  // counts to three). Rung 1 chains off the Salvage Station (trade must be
-  // POSSIBLE before width means anything) and keeps the legacy
-  // brandt_extra_gems flag, so accounts that bought "Brandt: +2 Wares" own
-  // it outright. Later rungs chain rung-to-rung; a rung wearing GATEWORK
-  // avenues (rung 3's level-15 / vocation / quest any-of) surfaces SEALED
-  // (tease) the moment its predecessor is owned — the player sees the next
-  // rung and every road that opens it, and walks whichever their play
-  // crosses first.
+  // Width and refresh rows derive their prices, sequencing and deed gates
+  // from vendor data. Early tiers need investment; later tiers also need deeds.
   ...VENDOR_CFG.wares.ladder.map((rung, i): Unlockable => ({
     id: `feat_vendor_wares_${i + 1}`, kind: 'feature', cost: rung.cost, reqLevel: 0,
-    requiresUnlock: i === 0 ? 'feat_salvage_station' : `feat_vendor_wares_${i}`,
+    requiresUnlock: i === 0 ? undefined : `feat_vendor_wares_${i}`,
     ...(rung.gate ? { reqAnyOf: rung.gate, tease: true } : {}),
     label: `Broader Wares ${['I', 'II', 'III', 'IV', 'V'][i] ?? i + 1}`,
     description: `Every counter stocks wider: +${rung.gems} Memory slot${rung.gems === 1 ? '' : 's'} on the one shelf (they fill once the Memory Counter opens) and +${rung.gear} rolled piece${rung.gear === 1 ? '' : 's'} in the glass beside them. One purchase, every market your line will ever trade in.`,
     payload: { flag: rung.flag },
   })),
-  // THE MEMORY COUNTER (skill-items M3 — the gem-case FACE retired; §6's
-  // re-aim): the rung now gates the shelf's TRUE-GEM share in
-  // buildVendorStock — Rough/Preformed pouches stock from the first day
-  // (the standard offering), and buying this rung joins the direct Skill
-  // Memory finds to the same one shelf, account-wide.
+  { id: BRANDT_CFG.magicWares.unlock, kind: 'feature', cost: BRANDT_CFG.magicWares.cost,
+    reqLevel: 0, requiresUnlock: 'feat_bounty_board', tease: true,
+    reqLedgerCounts: { [BRANDT_CFG.magicWares.ledger]: BRANDT_CFG.magicWares.required },
+    label: BRANDT_CFG.magicWares.label,
+    description: `After collecting ${BRANDT_CFG.magicWares.required} crafting-writ bounties, invest Mortal Essence to bring magic equipment to Brandt’s shelves. Opens Rush Orders IV–V and Broader Wares IV–V for further investment.`,
+    payload: { flag: BRANDT_CFG.magicWares.flag } },
+  // Magic Wares precedes the Memory Counter. Brandt's policy gates pouches
+  // as well as direct skill memories; other counters keep their own policies.
   { id: 'feat_vendor_gems', kind: 'feature', cost: 120, reqLevel: 0,
-    requiresUnlock: 'feat_vendor_wares_1',
+    requiresUnlock: BRANDT_CFG.magicWares.unlock,
     label: 'The Memory Counter',
     description: 'Every counter\'s shelf grows its true finds: direct Skill Memories stock in the glass beside the pouches, account-wide. Support Memories and the deeper counter services grow from here.',
     payload: { flag: FEATURE.VENDOR_GEMS } },
   // (Chain-gated only, like every market rung — the stray account-level gate
   // it wore before the gatework re-parented it was pre-chain residue.)
   { id: 'feat_brandt_supports', kind: 'feature', cost: 80,  reqLevel: 0, requiresUnlock: 'feat_vendor_gems', label: 'Memory Counter: Supports', description: 'The counters\' Memory slots also deal Support Memories.', payload: { flag: FEATURE.BRANDT_SELL_SUPPORTS } },
-  // THE RUSH LADDER — derived from VENDOR_CFG.restock.ladder (the beat law's
-  // own home): each rung CUTS the counters' restock beat by its row's
-  // seconds. Rung 1 keeps the legacy brandt_fast_restock flag (the old 15s
-  // rush's owners keep their edge in the five-minute economy) and chains
-  // off the Salvage Station — no point rushing a counter you cannot buy
-  // from; later rungs chain rung-to-rung. Descriptions COMPUTE the honest
-  // before/after from the config itself.
+  // Rush Orders retain the shared market clock and the original owned flags.
   ...VENDOR_CFG.restock.ladder.map((rung, i): Unlockable => {
     const before: number = VENDOR_CFG.restock.ladder.slice(0, i)
       .reduce((s: number, r) => Math.max(VENDOR_CFG.restock.minSec, s - r.cutSec), VENDOR_CFG.restock.baseSec as number);
     const after = Math.max(VENDOR_CFG.restock.minSec, before - rung.cutSec);
     return {
       id: `feat_vendor_restock_${i + 1}`, kind: 'feature', cost: rung.cost, reqLevel: 0,
-      requiresUnlock: i === 0 ? 'feat_salvage_station' : `feat_vendor_restock_${i}`,
-      label: `Rush Order ${['I', 'II', 'III', 'IV', 'V'][i] ?? i + 1}`,
+      requiresUnlock: i === 0 ? undefined : `feat_vendor_restock_${i}`,
+      ...(rung.gate ? { reqAnyOf: rung.gate, tease: true } : {}),
+      label: `Rush Orders ${['I', 'II', 'III', 'IV', 'V'][i] ?? i + 1}`,
       description: `Every counter restocks in ${Math.round(after / 60 * 10) / 10} minutes instead of ${Math.round(before / 60 * 10) / 10}. One purchase, every market.`,
       payload: { flag: rung.flag },
     };
@@ -942,7 +868,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   ...VENDOR_CFG.lock.ladder.map((rung, i): Unlockable => ({
     id: `feat_vendor_lock_${i + 1}`, kind: 'feature', cost: rung.cost, reqLevel: 0,
     ...(i === 0
-      ? { requiresUnlock: ['feat_vendor_gems', 'feat_vendor_wares_1'],
+      ? { requiresUnlock: 'feat_vendor_gems',
           reqLedger: LEDGER_VENDOR_BOUGHT, tease: true }
       : { requiresUnlock: `feat_vendor_lock_${i}` }),
     label: `Reserved Wares ${['I', 'II', 'III', 'IV', 'V'][i] ?? i + 1}`,
@@ -1028,30 +954,27 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     description: 'Fifty zones charted, and the wilds know your steps. A campfire is laid in Lastlight. Zones already remember their layout and surviving foes as you cross between them; dwell by the fire to REFRESH the wilds on command, and every zone repopulates fresh (your cleared objectives stay claimed).',
     payload: { flag: FEATURE.CAMPFIRE } },
 
-  // --- The Salvage Station (the essence economy's front door). Surfaces the
-  //     moment a line first TOUCHES essence (a Gilded Scamp's spill, most
-  //     likely) — the discovery IS the pitch. One purchase, two doors: the
-  //     bench (break: rarity essence + craft lore) and Brandt's scrap counter
-  //     (sell: coarse volume by quality). THE FIRST EXCHANGE: priced at a
-  //     single Mortal Essence, so the run that first touches essence can
-  //     claim it at its own reckoning — the vault's teaching purchase, and
-  //     the trade gate's key, nearly free by design. ------------------------
-  { id: 'feat_salvage_station', kind: 'feature', cost: 1, reqLevel: 0, reqLedger: LEDGER_ESSENCE_TOUCHED,
+  // Returning the hammer qualifies rare stock; purchasing it opens the bench.
+  // Selling at Brandt remains available from the first visit.
+  { id: BRANDT_CFG.rareWares.unlock, kind: 'feature', cost: BRANDT_CFG.rareWares.cost,
+    reqLevel: 0, requiresUnlock: BRANDT_CFG.magicWares.unlock,
+    reqLedger: BRANDT_CFG.rareWares.ledger, tease: true,
+    label: BRANDT_CFG.rareWares.label,
+    description: 'Return Brandt’s hammer, then invest to bring rare equipment and rare Memories to his shelves. Opens the Salvage Station for further investment.',
+    payload: { flag: BRANDT_CFG.rareWares.flag } },
+  { id: 'feat_salvage_station', kind: 'feature', cost: 1, reqLevel: 0, requiresUnlock: BRANDT_CFG.rareWares.unlock,
     label: 'Salvage Station: Town',
-    description: 'That strange residue has a name: ESSENCE. A breaker\'s bench is raised in Lastlight; dwell there to BREAK gear and carried Memories into their rarity\'s essence (coarse, glimmering, brilliant, pristine), studying every affix broken. The same wisdom teaches Brandt to BUY SCRAP at his counter, paying Coarse Essence by an item\'s overall quality: sell for volume, break for the deep tints and the lore. Spend essence levelling skills, at counters, and crafting studied affixes onto your gear.',
+    description: 'That strange residue has a name: ESSENCE. A breaker\'s bench is raised in Lastlight; dwell there to BREAK gear and carried Memories into their rarity\'s essence (coarse, glimmering, brilliant, pristine), studying every affix broken. Brandt already BUYS SCRAP at his counter, paying Coarse Essence by an item\'s overall quality: sell for volume, break for the deep tints and the lore. Spend essence levelling skills, at counters, and crafting studied affixes onto your gear.',
     payload: { flag: FEATURE.SALVAGE_STATION } },
   { id: 'feat_craft_second', kind: 'feature', cost: 400, reqLevel: 0, reqLedger: 'reached_level_15', requiresFeature: FEATURE.SALVAGE_STATION,
     label: 'Salvage Station: Twin Anvils',
     description: 'The bench learns to hold TWO crafted affixes on one item (the one-craft rule, bought apart).',
     payload: { flag: FEATURE.CRAFT_SECOND_AFFIX } },
-  // THE DEED GATE: the stone answers those who already understand the
-  // lines they'd reroll — five craft families studied to rank 1 at the
-  // bench (LEDGER_CRAFTS_UNLOCKED, stamped as studySalvage first ranks
-  // each family up at World.salvageItem).
-  { id: 'feat_oracle_stone', kind: 'feature', cost: 90, reqLevel: 0,
-    reqLedgerCounts: { [LEDGER_CRAFTS_UNLOCKED]: 5 },
+  // The rescue grants this service directly; the catalog records its source.
+  { id: 'feat_oracle_stone', kind: 'feature', cost: 0, reqLevel: 0,
+    reqLedger: ORACLE_RESCUED,
     label: 'Oracle Stone: Town',
-    description: 'Five crafts studied deep enough to work, and the runes will speak to you now. Standing stones rise in Lastlight. Commune over an item (trace the runes; precision and haste decide the outcome) to REROLL one of its affixes; the stone answers each line only once, sealing it forever.',
+    description: 'Granted by rescuing the Oracle from your revenge commander. He settles among Lastlight’s standing stones and opens the Reliquary. Commune over an item to reroll an affix; each line answers once, sealing it forever.',
     payload: { flag: FEATURE.ORACLE_STONE } },
 
   // --- The Mercenary Recruiter (meta/mercs.ts): surfaces once the account
@@ -1536,6 +1459,7 @@ function structuralPrereqsMet(a: Account, u: Unlockable): boolean {
 export function sealedGateLines(a: Account, u: Unlockable): { label: string; met: boolean; anyOf: boolean }[] {
   const owned = ownedUnlockById(a);
   const out: { label: string; met: boolean; anyOf: boolean }[] = [];
+  if (u.requiresMemoryCommission && !memoryProgressionOpen(a)) out.push({ label: powerProgressionRefusal('awakening'), met: false, anyOf: false });
   if (u.requiresMemoryCommission) out.push({ label: 'an awakened skill or an indexed support',
     met: memoryCatalog().some(c => memoryCommissionReady(a, c.kind, c.id, VENDOR_CFG.commission.need)), anyOf: false });
   for (const r of u.reqAnyOf ?? []) {

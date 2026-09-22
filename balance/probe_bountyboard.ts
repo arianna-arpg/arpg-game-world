@@ -1268,7 +1268,10 @@ seedGlobalRandom(0x5ea7);
     && /v\.hands\.some\(h => h\.id === id\)[\s\S]{0,160}closeOnAccept[\s\S]{0,60}this\.closeBounties\(\)/.test(panels));
   check('S: a struck card drops the reach without closing (the refusal stays open)',
     /!v\.offers\.some\(o => o\.id === id\)[\s\S]{0,80}bountyPendingTake = null/.test(panels));
-  check('S: a fresh open owes no earlier reach', /showBounties[\s\S]{0,400}bountyPendingTake = null/.test(panels));
+  const showBody = panels.slice(panels.indexOf('  showBounties('), panels.indexOf('  closeBounties('));
+  check('S: a fresh open clears pending reach before painting',
+    showBody.includes('this.bountyPendingTake = null')
+    && showBody.indexOf('this.bountyPendingTake = null') < showBody.indexOf('this.refreshBounties()'));
   check('S: the receipt is drawn at the head of the board', panels.includes('v.receipt') && panels.includes('bounty-receipt'));
 }
 

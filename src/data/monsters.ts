@@ -835,6 +835,8 @@ export interface MonsterDef {
    *  floats the actor's nameplate. Distinct from `tag`, the spawn-time actor
    *  label event spawners overwrite at will. */
   npcRole?: string;
+  /** A town resident's authored arrival deed; field rescue bodies bypass this. */
+  npcRequiresLedger?: string;
   /** IMMORTAL fixture: the kill path shows the hit then snaps life back to
    *  full — no death, no credit, no loot (the Training Dummy; any future
    *  practice target opts in with this flag, never a def-id gate). */
@@ -3636,6 +3638,15 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 35,
     faction: 'undead',
     brain: { type: 'basic', behavior: { castArc: 0.65, recovery: [0.35, 0.55] } },
+  },
+
+  cindermaw_toolthief: {
+    id: 'cindermaw_toolthief', name: 'Cindermaw, the Tool Thief', boss: true,
+    color: '#b88658', shape: 'square', radius: 25, material: 'bone', look: 'crypt_warden',
+    turnSpeed: 2.0,
+    base: { life: 650, moveSpeed: 85, accuracy: 110, armor: 60, mana: 90, manaRegen: 8 },
+    skills: ['shield_up', 'heavy_strike', 'cleave'], xp: 160, faction: 'undead',
+    brain: { type: 'basic', behavior: { castArc: 0.65, recovery: [0.5, 0.8] } },
   },
 
   bone_serpent: {
@@ -6553,7 +6564,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // so any body — these or a package's — can staff a counter.
   townsfolk_smith: {
     id: 'townsfolk_smith', name: 'Brandt the Smith',
-    color: '#c89a5e', shape: 'circle', radius: 13, look: 'npc_smith', npcRole: 'vendor',
+    color: '#c89a5e', shape: 'circle', radius: 13, look: 'npc_smith_unarmed', npcRole: 'vendor',
     base: { life: 100, moveSpeed: 0, mana: 0 },
     skills: [],
     xp: 0,
@@ -6579,6 +6590,13 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 0,
     passive: true,
     invulnerable: true,
+  },
+  townsfolk_oracle: {
+    id: 'townsfolk_oracle', name: 'The Oracle', npcRole: 'oracle',
+    npcRequiresLedger: 'oracle_rescued',
+    color: '#c7adeb', shape: 'circle', radius: 13, look: 'npc_scholar',
+    base: { life: 100, moveSpeed: 0, mana: 0 }, skills: [], xp: 0,
+    passive: true, invulnerable: true,
   },
 
   // The Tracker — the Bestiary's keeper (FEATURE.TRACKER; data/bestiary.ts).

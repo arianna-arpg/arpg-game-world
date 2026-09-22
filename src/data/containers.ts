@@ -24,7 +24,7 @@
 
 import { registerContainer, type ContainerDef } from '../engine/containers';
 import { FEATURE, LEDGER_RELIC_FOUND } from '../meta/account';
-import { RELIQUARY_LESSON } from '../quests/reliquary';
+import { ORACLE_RESCUED } from './oracle';
 
 export const RELIQUARY_ID = 'reliquary';
 
@@ -37,11 +37,11 @@ export const RELIQUARY: ContainerDef = registerContainer({
   accepts: { categories: ['relic'] },
   active: true,
   foundLedger: LEDGER_RELIC_FOUND,
-  dropLedger: RELIQUARY_LESSON,
+  dropLedger: ORACLE_RESCUED,
   ladder: [
     {
       feature: FEATURE.RELIQUARY, label: 'The Reliquary', cost: 0, rewardOnly: true,
-      description: 'Earned by returning a forgotten shrine’s keepsakes to the Quartermaster. One seat opens for your chosen charm. A relic wakes only when seated here.',
+      description: 'Rescue the Oracle from the commander who ended your first life. One seat opens for a charm, and relics begin to appear. A relic wakes only when seated here.',
       cells: ['.....', '.#...', '.....', '.....', '.....'],
     },
     {

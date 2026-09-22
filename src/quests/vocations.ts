@@ -4,8 +4,9 @@
 // Each vocation's authored steps become a sequential chain on the standard
 // quest machinery. The RULES live in the generated gates:
 //
-//   AVAILABILITY (every step): the character's OWN class's vocation is always
-//   offered; any OTHER vocation only once the ACCOUNT has unlocked it (a past
+//   AVAILABILITY (every step): after the first account Odyssey milestone,
+//   the character's OWN class's vocation is offered; any OTHER vocation only
+//   once the ACCOUNT has unlocked it (a past
 //   character completed its chain — vocationLedgerKey). A character that has
 //   reached VOCATION_CFG.maxPerCharacter granted vocations is offered nothing.
 //
@@ -28,6 +29,7 @@ import {
   vocationUnlockedOnAccount, type VocationDef,
 } from '../data/vocations';
 import type { QuestDef, QuestGateCtx } from './types';
+import { powerProgressionOpen } from '../data/powerProgression';
 
 /** The generated quest id for a vocation's step N (1-based). */
 export function vocationStepQuestId(vocId: string, step: number): string {
@@ -36,6 +38,7 @@ export function vocationStepQuestId(vocId: string, step: number): string {
 
 function stepGate(v: VocationDef, stepIndex: number): (ctx: QuestGateCtx) => boolean {
   return (ctx) => {
+    if (!powerProgressionOpen(ctx.accountLedger, 'vocations')) return false;
     // Already ascended into this vocation → its chain is spent for this character.
     if (ctx.vocations.includes(v.id)) return false;
     // Per-character cap: a fully-vocationed character is offered no more chains.

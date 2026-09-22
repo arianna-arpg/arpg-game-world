@@ -5,6 +5,9 @@ export interface DwellCandidate {
   distance: number;
   priority: number;
   dwellSec: number;
+  /** Supplied only for eligible targets hit by an intentional pointer.
+   * Lower scores win overlaps; absent means ordinary proximity selection. */
+  pointerDistance?: number;
 }
 
 export interface DwellFocus {
@@ -12,6 +15,8 @@ export interface DwellFocus {
   since: number | null;
   readAt: number;
   ready: boolean;
+  /** A completed pointer choice persists while reachable (e.g. reading UI). */
+  pointed?: boolean;
 }
 
 export interface DwellFocusTuning {
@@ -21,7 +26,7 @@ export interface DwellFocusTuning {
   staleSec: number;
 }
 
-/** Priority first, distance second, stable id last. Completed focus stays
+/** Pointer intent first; otherwise priority, distance, then stable id. Completed focus stays
  * open until its target leaves or another wins; acting only resets a pending
  * dwell. Keeping the incumbent after it speaks prevents a crowd slideshow. */
 export function dwellFocus(
@@ -41,10 +46,19 @@ export function dwellFocus(
   const incumbent = live && candidates.find(c => c.id === live.id);
   if (incumbent && incumbent.priority === best.priority
     && incumbent.distance <= best.distance + tuning.switchMargin) best = incumbent;
+  let pointed: DwellCandidate | undefined;
+  for (const c of candidates) {
+    if (c.pointerDistance === undefined || !Number.isFinite(c.pointerDistance)) continue;
+    if (!pointed || c.pointerDistance < pointed.pointerDistance!
+      || (c.pointerDistance === pointed.pointerDistance && c.id < pointed.id)) pointed = c;
+  }
+  if (pointed) best = pointed;
+  else if (incumbent && live?.ready && live.pointed) best = incumbent;
   const same = live?.id === best.id;
   const ready = !!(same && live.ready);
   const continuous = same && live.since !== null && interruptedAt < live.since;
   const since = ready ? live!.since : !idle ? null : continuous ? live!.since : now;
   return { id: best.id, since, readAt: now,
+    pointed: !!pointed || !!(same && live.ready && live.pointed),
     ready: ready || (since !== null && now - since >= best.dwellSec) };
 }

@@ -5822,8 +5822,9 @@ export const SKILL_RARITIES: Record<SkillRarity, {
 export const CLASS_KIT_RARITY: SkillRarity = 'common';
 
 /** Roll a rarity from a uniform [0,1) sample. */
-export function rollSkillRarity(roll: number): SkillRarity {
-  const entries = Object.entries(SKILL_RARITIES) as [SkillRarity, { weight: number }][];
+export function rollSkillRarity(roll: number, ceiling?: SkillRarity): SkillRarity {
+  const all = Object.entries(SKILL_RARITIES) as [SkillRarity, { weight: number }][];
+  const entries = ceiling ? all.slice(0, all.findIndex(([id]) => id === ceiling) + 1) : all;
   let total = 0;
   for (const [, def] of entries) total += def.weight;
   let r = roll * total;

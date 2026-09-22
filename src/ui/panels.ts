@@ -38,7 +38,7 @@ import { bagBoard, canPlaceAt, overlappingItems, swapBlockerFits } from '../engi
 // ui/containerPane.ts; the panel only seats it, routes its gestures and
 // resolves carried pieces through the one lookup (findCarried).
 import { ContainerPane } from './containerPane';
-import { questRewardHtml } from './questRewards';
+import { questRewardHtml, questImbueHtml } from './questRewards';
 import { containerOriginOf, findCarried, originContainerId } from '../engine/containers';
 import { CONTAINER_DEFS } from '../data/containers';
 import { BAG_SORT_MODES, type BagSortDir } from '../engine/bagsort';
@@ -161,7 +161,7 @@ import { oracleRerollCost } from '../data/essences';
 import { ITEM_AFFIXES } from '../data/itemaffixes';
 import { formatModLine, lerpRange, roundStatValue } from '../engine/items';
 import { treeGraph, treeLimbOfNode, treeLimbs, treeNodeRanks, treeSealedSet, treeSpentCount, TREE_LAYOUT_CFG, type TreeGraphNode } from '../engine/skilltree'; // THE SKILL-TREE PANE reads the one graph
-import { memoryCommissionReady, memoryUnlockCandidates, memoryUnlockDef } from '../meta/memoryUnlocks';
+import { memoryCommissionReady, memoryProgressionOpen, memoryUnlockCandidates, memoryUnlockDef } from '../meta/memoryUnlocks';
 import { attachPanZoom, clampZoom, PANZOOM_DEFAULTS } from './panzoom';
 import { attachPanelMove, configurePanelLayout, panelLayoutRefresh, panelLayoutSync, panelMoved, panelMoveReset, panelMoveTo, panelSeatOf, persistPanelSeat, resetPanelLayout } from './panelmove'; // THE PANEL MOVE — ribbons drag their panels; THE LAYOUT remembers
 import { ATLAS_LAYER_CHIPS, MAP_CFG, MAP_CHART_MODES, MAP_LABEL_MODES } from './mapConfig';
@@ -2311,20 +2311,21 @@ export class UI {
 
   /** Any ORDINARY panel open? (Dwell dialogs and the pause menu are tracked
    *  apart — the Escape cascade treats each class differently.) */
-  anyPanelOpen(): boolean {
+  anyPanelOpen(ignoreInventory = false): boolean {
     return this.charSheetOpen || this.treeOpen || this.openSkillTreePanes().length > 0
-      || this.mapOpen || this.inventoryOpen;
+      || this.mapOpen || (this.inventoryOpen && !ignoreInventory);
   }
 
   /** ANY blocking DOM surface is up — panels, dwell dialogs, the pause menu,
    *  a minigame, the start menu. The ONE seam device layers ask before
    *  switching habits (the pad flips to menu-pointer mode on this); new
-   *  surfaces join here and every input layer follows for free. */
-  uiBlocking(): boolean {
-    return this.anyPanelOpen() || this.escapeMenuOpen || this.minigameActive || this.menuBar.isTrayOpen()
+   *  surfaces join here and every input layer follows for free. The dialogue
+   *  reader alone may coexist with a vendor/Oracle window; gameplay stays blocked. */
+  uiBlocking(allowVendorDialogue = false): boolean {
+    return this.anyPanelOpen(allowVendorDialogue && (this.vendorOpen || this.oracleOpen)) || this.escapeMenuOpen || this.minigameActive || this.menuBar.isTrayOpen()
       || this.couchJoinOpen || this.muCardOpen
       || this.caravanOpen || this.mercOpen || this.salvageOpen
-      || this.oracleOpen || this.vendorOpen || this.sailOpen || this.holdOpen || this.vocationOpen
+      || (this.oracleOpen && !allowVendorDialogue) || (this.vendorOpen && !allowVendorDialogue) || this.sailOpen || this.holdOpen || this.vocationOpen
       || this.bestiaryOpen || this.boroughOpen
       || !this.startMenu.classList.contains('hidden');
   }
@@ -5101,6 +5102,9 @@ export class UI {
     // Walking away closes the screen (the station panels' proximity law).
     if (!world.nearFont(seat)) { this.closeFont(); return; }
 
+    const treesOpen = [...m.knownSkills.values()].some(inst => inst.def.tree && !world.memorySecondaryRefusal(inst.def.id));
+    if (this.fontTab === 'reset' && !treesOpen) this.fontTab = 'merge';
+
     const tabBtn = (id: typeof this.fontTab, label: string): string =>
       `<button class="book-tab ${this.fontTab === id ? 'active' : ''}" data-fonttab="${id}">${label}</button>`;
     const wallet = ABILITY_ESSENCES.map(d =>
@@ -5170,7 +5174,7 @@ export class UI {
     } else {
       const why = world.swapRefusal(seat, 'socket');
       const rows = [...m.knownSkills.values()]
-        .filter(inst => inst.treeNodes?.length)
+        .filter(inst => inst.treeNodes?.length && !world.memorySecondaryRefusal(inst.def.id))
         .map(inst => {
           const cost: AbilityCost = { tier: essenceTierForLevel(inst.level), count: FONT_CFG.reset.count };
           const dd = abilityEssenceOfTier(cost.tier);
@@ -5197,7 +5201,7 @@ export class UI {
       <div style="font-size:11px;color:#8a8678;margin-bottom:6px">
         Memories merged, essences broken, choices unmade. &nbsp;${wallet}</div>
       <div class="book-tabs" style="margin-bottom:8px">
-        ${tabBtn('merge', 'Merge')}${tabBtn('convert', 'Convert')}${tabBtn('reset', 'Reset')}
+        ${tabBtn('merge', 'Merge')}${tabBtn('convert', 'Convert')}${treesOpen ? tabBtn('reset', 'Reset') : ''}
       </div>
       ${body}
       <div class="bind-btns panel-foot"><button data-fontclose>Leave the font</button></div>`;
@@ -6475,7 +6479,7 @@ export class UI {
       // quiet here — the order reads the KEEPER's account (host-side).
       const commStrip = ((): string => {
         if (!v.holds?.commission || isClient) return '';
-        if (!featureEnabled(world.account, FEATURE.VENDOR_COMMISSION)) return '';
+        if (!featureEnabled(world.account, FEATURE.VENDOR_COMMISSION) || !memoryProgressionOpen(world.account)) return '';
         const c = hold?.commission;
         const found = hold?.locks.find(r => r.commission);
         const cDef = c ? (c.kind === 'skill' ? SKILLS[c.id] : SUPPORTS[c.id]) : undefined;
@@ -6520,7 +6524,7 @@ export class UI {
       // chips priced in tints, sell-direction only. Availability by wares
       // rung (deep counters waive) through the engine's OWN refusal
       // predicate — the panel and the buy handler can never disagree.
-      const essStrip = `<div style="margin:2px 0 6px;font-size:10px;color:#8a8678">
+      const essStrip = !world.vendorMemoryServicesOpen(v) ? '' : `<div style="margin:2px 0 6px;font-size:10px;color:#8a8678">
         Memory Essence:
         ${ABILITY_ESSENCES.map(d => {
           const price = ABILITY_ESSENCE_CFG.vendor.prices[d.tier - 1];
@@ -6899,7 +6903,7 @@ THE CUT (fixed at the vein): ${veinLines(s.def.rollBase, s.rolled).join(' · ')}
       // handle gold while a point is free, and the Font's reset ritual when
       // a font stands near. Chunky buttons: couch lens + pad law.
       let modeRow = '';
-      if (def.tree) {
+      if (def.tree && !world.memorySecondaryRefusal(def.id)) {
         const tree = def.tree;
         const memoryWhy = world.memorySecondaryRefusal(def.id);
         const open = inst.level >= tree.level;
@@ -7748,7 +7752,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   openSkillTree(skillId: string, seatId?: string): void {
     const seat = this.couchSeatFor(seatId);
     const inst = seat.meta.knownSkills.get(skillId);
-    if (!inst?.def.tree) return;
+    if (!inst?.def.tree || this.getWorld().memorySecondaryRefusal(skillId)) return;
     const pane = this.skillTreePaneFor(skillId);
     if (!pane.open) {
       pane.zoom = 1;
@@ -7822,7 +7826,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const seat = this.panelSeat(pane.el);
     const inst = seat.meta.knownSkills.get(pane.skillId);
     const graph = inst ? treeGraph(inst.def) : undefined;
-    if (!inst || !graph) { this.closeSkillTree(pane.skillId); return; } // unlearned under the pane
+    if (!inst || !graph || world.memorySecondaryRefusal(pane.skillId)) { this.closeSkillTree(pane.skillId); return; }
     const def = inst.def;
     const tree = def.tree!;
     const open = inst.level >= tree.level;
@@ -9425,6 +9429,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       <div style="color:#6ad8c0;font-size:12px;padding:8px">${esc(world.odyssey.status())}</div>
       <div id="quest-scroll" style="overflow-y:auto;max-height:64vh;padding:2px 4px 8px 2px">
         ${questRewardHtml(world)}
+        ${questImbueHtml(world)}
         <h3 style="font-size:12px;color:#c8a8e8;margin:4px 0 6px 0">Active (${log.active.length})</h3>
         ${activeHtml}
         <h3 style="font-size:12px;color:#8a8678;margin:14px 0 6px 0">Completed (${log.completed.length})</h3>
@@ -9442,6 +9447,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           if (this.mapOpen) this.toggleMap();
           this.containerPane.openFromMenu('reliquary');
         } else this.refreshMap();
+      });
+    });
+    this.worldMap.querySelectorAll<HTMLButtonElement>('[data-quest-imbue]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        world.requestMeta({ t: 'questImbue', questId: btn.dataset.questImbue!,
+          uid: Number(btn.dataset.itemUid), affixId: btn.dataset.affixId! });
+        this.refreshMap();
       });
     });
     this.wireMapTabs();

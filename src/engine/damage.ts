@@ -424,6 +424,9 @@ export function mitigateTyped(
   target: Actor, amounts: Partial<Record<DamageType, number>>,
   opts?: MitigateOpts,
 ): number {
+  // Stat-granted damageImmunity also protects direct typed hazards/bursts
+  // that do not enter applyHit; no defense pool is spent during shelter.
+  if (target.sheet.get('damageImmunity') > 0) return 0;
   return mitigatePools(target, mitigateWound(target, amounts, opts), opts);
 }
 
@@ -665,6 +668,7 @@ function plyEats(attacker: Actor, target: Actor, total: number, packet: DamagePa
  * Returns the life actually removed.
  */
 export function landLifeDamage(target: Actor, total: number): number {
+  if (target.sheet.get('damageImmunity') > 0) return 0;
   for (const intercept of target.lifeDamageInterceptors?.values() ?? []) total = Math.max(0, intercept(total));
   if (total <= 0) return 0;
   if (total >= target.life && target.life > 0 && !target.dead && !target.invulnerable

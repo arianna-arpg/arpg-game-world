@@ -12,6 +12,14 @@ import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 import { VENDOR_CFG } from '../src/data/vendors';
 import { makeMemoryItem, memoryGroupKey } from '../src/engine/memories';
 import { autoPlace } from '../src/engine/inventory';
+import { CLASSES } from '../src/data/classes';
+import { POWER_PROGRESSION, odysseyMilestoneKey, powerProgressionOpen } from '../src/data/powerProgression';
+import { QUESTS } from '../src/quests/defs';
+import { abilityEssenceOfTier, skillLevelAbilityCost } from '../src/data/essences';
+
+function graduate(a: ReturnType<typeof makeAccount>): void {
+  for (const gate of Object.values(POWER_PROGRESSION)) a.ledger[odysseyMilestoneKey(gate.odysseyStage)] = 1;
+}
 
 let passed = 0;
 function check(name: string, fn: () => void): void { fn(); passed++; console.log(`PASS ${name}`); }
@@ -80,6 +88,7 @@ check('weights and live registry additions are data, not another authored bundle
 
 check('secondary draw only awakens discoverable skills, and cannot repeat', () => {
   const a = makeAccount(); a.unlockedSkills = new Set([STARTER_SKILLS[0]]); a.credits = wake.cost * 2;
+  graduate(a);
   assert(!memorySecondaryOpen(a, 'skill', STARTER_SKILLS[0], 'tree'));
   assert(applyUnlock(a, wake));
   assert(memorySecondaryOpen(a, 'skill', STARTER_SKILLS[0], 'tree'));
@@ -98,6 +107,7 @@ check('legendary finds and Vault grants share access; drop-only and Vault-only d
   assert(!awakenMemoryFromDrop(a, id, 'legendary'));
   assert(!memoryUnlockCandidates(a, secondary).some(c => c.id === id));
   const b = makeAccount();
+  graduate(b);
   try {
     MEMORY_UNLOCK_CFG.secondary.legendaryFinds = false;
     assert(!awakenMemoryFromDrop(b, id, 'legendary'));
@@ -129,8 +139,74 @@ check('Grand Codex is a retained debug bypass, without paid duplicate draws', ()
 });
 
 bootSimEngine();
+check('sealed skills still level through Memory Essence without tree prompts or reset spending', () => {
+  const w = makeSimWorld('warrior', 0x71af);
+  w.account.memorySecondary.clear(); delete w.account.ledger[odysseyMilestoneKey(2)];
+  const inst = [...w.meta.knownSkills.values()].find(s => s.def.tree)!;
+  inst.level = 4;
+  const cost = skillLevelAbilityCost(5), id = abilityEssenceOfTier(cost.tier).id;
+  w.meta.abilityEssences[id] = cost.count + 100;
+  assert(w.levelUpSkill(inst.def.id));
+  assert.equal(inst.level, 5); assert.equal(w.meta.abilityEssences[id], 100);
+  assert.equal(inst.state?.treeAwokeAt, undefined);
+  assert(!w.treePopupRequested);
+  const node = treeGraph(inst.def)!.rootChildren[0]; inst.treeNodes = [node];
+  w.fonts = [{ pos: { ...w.player.pos }, tier: w.player.tier }];
+  assert(!w.fontResetTree(inst.def.id));
+  assert.deepEqual(inst.treeNodes, [node]); assert.equal(w.meta.abilityEssences[id], 100);
+});
+check('Odyssey gates reject paid and stale grants, remember early legendaries, and survive account reload', () => {
+  let a = makeAccount(); a.credits = 1000; a.invested[wake.id] = 23;
+  const id = STARTER_SKILLS[0];
+  assert(awakenMemoryFromDrop(a, id, 'legendary'));
+  for (const stage of [0, 1]) {
+    if (stage) a.ledger[odysseyMilestoneKey(stage)] = 1;
+    assert(!memorySecondaryOpen(a, 'skill', id, 'tree'));
+    assert(!memoryCommissionReady(a, 'skill', id, 3));
+    assert(!isUnlockVisible(a, wake)); assert(!applyUnlock(a, wake));
+    assert.equal(investUnlock(a, wake, 99), 0);
+    assert.equal(grantMemoryUnlock(a, secondary), null);
+    assert.equal(a.credits, 1000); assert.equal(a.invested[wake.id], 23);
+  }
+  const support = [...a.unlockedSupports][0]; a.ledger[`gemdrop:${support}`] = 3;
+  assert(!memoryCommissionReady(a, 'support', support, 3));
+  a = deserializeAccount(serializeAccount(a))!;
+  graduate(a);
+  assert(memorySecondaryOpen(a, 'skill', id, 'tree'));
+  assert(memoryCommissionReady(a, 'skill', id, 3));
+  assert(memoryCommissionReady(a, 'support', support, 3));
+  assert(!memoryUnlockCandidates(a, secondary).some(c => c.id === id));
+  assert(!memorySecondaryOpen(a, 'skill', STARTER_SKILLS[1], 'tree'));
+  assert(powerProgressionOpen(deserializeAccount(serializeAccount(a))!.ledger, 'awakening'));
+});
+check('class discoveries grant precisely the starting bar; old discoveries remain owned', () => {
+  const a = makeAccount();
+  for (const u of UNLOCK_CATALOG) {
+    if (u.kind !== 'class') continue;
+    const cls = CLASSES.find(c => c.id === u.payload.classId)!;
+    assert.deepEqual(u.payload.skillIds, [...new Set(cls.bar.filter(Boolean))]);
+    assert(u.payload.supportIds.length <= 3);
+    a.unlockedClasses.add(cls.id);
+  }
+  a.unlockedSkills.add('summon_fire_golem');
+  reconcileClassBundleGems(a);
+  assert(a.unlockedSkills.has('summon_fire_golem'));
+  const fresh = makeAccount(); fresh.unlockedClasses.add('summoner');
+  reconcileClassBundleGems(fresh);
+  assert(!fresh.unlockedSkills.has('summon_fire_golem'));
+});
+check('Vocation chains require the first account milestone, retaining their class rules', () => {
+  const q = Object.values(QUESTS).find(q => q.vocation === 'warbringer' && q.id.endsWith('_1'))!;
+  assert(q?.gate);
+  const ctx = { classId: 'warrior', vocations: [] as string[], runLedger: {}, accountLedger: {} as Record<string, number> };
+  assert(!q.gate(ctx));
+  ctx.accountLedger[odysseyMilestoneKey(1)] = 1;
+  assert(q.gate(ctx));
+  assert(!q.gate({ ...ctx, classId: 'magician' }));
+});
 check('engine enforces tree gate, genuine legendary mint opens it, client mirrors host', () => {
   const w = makeSimWorld('warrior', 0x71ac);
+  delete w.account.ledger[odysseyMilestoneKey(2)];
   w.account.memorySecondary.clear();
   const inst = [...w.localSeat.meta.knownSkills.values()].find(s => s.def.tree)!;
   inst.level = 100;
@@ -149,8 +225,13 @@ check('engine enforces tree gate, genuine legendary mint opens it, client mirror
   assert(w.account.memorySecondary.has(memoryKey('skill', inst.def.id)));
   assert(w.accountDirty);
   w.pickTreeNode(inst.def.id, node);
-  assert.equal(inst.treeNodes?.length, 1);
+  assert.equal(inst.treeNodes?.length ?? 0, 0, 'early legendary remains dormant');
   applySnapshot(remote, serializeSnapshot(w, 2));
+  assert(remote.memorySecondaryRefusal(inst.def.id), 'host gate overrides graduated client');
+  graduate(w.account);
+  w.pickTreeNode(inst.def.id, node);
+  assert.equal(inst.treeNodes?.length, 1);
+  applySnapshot(remote, serializeSnapshot(w, 3));
   assert.equal(remote.memorySecondaryRefusal(inst.def.id), null);
 });
 check('opaque legendary Memory awakens only at recall, never preview, and respects progression mode', () => {

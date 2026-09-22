@@ -109,6 +109,17 @@ export function speechWindowFor(lane: SpeechLane, text: string, cfg: typeof SPEE
   return { holdSec: w.holdSec + w.holdPerChar * text.length, cooldownSec: w.cooldownSec };
 }
 
+/** A telling may continue, or a fresh approach may start one. Shared by the
+ * telling fold and attention/cue admission so pointer intent cannot bypass
+ * a lane's cooldown. This read does not consume an approach or compose text. */
+export function speechAvailable(
+  mem: SpeechMemory | undefined, now: number, win: { cooldownSec: number },
+): boolean {
+  if (mem?.spokeAt == null) return true;
+  const end = mem.spokeAt + mem.holdSec;
+  return now < end || now >= end + win.cooldownSec;
+}
+
 /** THE TELLING FOLD — one read of one speaker. Given the speaker's memory
  *  (undefined before its first read), whether the hero is near NOW, the
  *  world clock and the line's folded window, answer whether the line stands
@@ -126,7 +137,7 @@ export function speechTell(
   let hold = mem?.holdSec ?? 0;
   let telling = spokeAt !== null && now < spokeAt + hold;
   if (!telling && near && !wasNear) {
-    const cooled = spokeAt === null || now >= spokeAt + hold + win.cooldownSec;
+    const cooled = speechAvailable(mem, now, win);
     if (cooled) { spokeAt = now; hold = win.holdSec; telling = hold > 0; }
   }
   return { mem: { spokeAt, holdSec: hold, near, readAt: now }, telling };

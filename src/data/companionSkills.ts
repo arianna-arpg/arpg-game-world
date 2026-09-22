@@ -38,7 +38,7 @@ export const COMPANION_SKILLS: Record<string, SkillDef> = {
   beast_pursuit: { ...attack('beast_pursuit', 'Pursuit', leap, []), cooldown: 5, useTime: 0 },
   beast_rallying_whistle: {
     id: 'beast_rallying_whistle', name: 'Rallying Whistle', noDrop: true,
-    description: 'Revive, fully heal and recall bonded beasts, then send them toward your aim with five seconds of damage pulses.',
+    description: 'Revive, fully heal, cleanse and recall bonded beasts. Grant damage/debuff protection shared across your active pack (3 seconds divided by beast count), then send them toward your aim with five seconds of damage pulses.',
     tags: ['spell', 'instant', 'companion'], color: '#a8c87a', manaCost: 0, cooldown: 45, useTime: 0,
     delivery: { type: 'self' }, effects: [{ type: 'whistleCompanion' }],
   },

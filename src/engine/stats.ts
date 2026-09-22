@@ -452,6 +452,8 @@ export const STAT_DEFS: Record<string, StatDef> = {
   addedChaos:     { label: 'Added Chaos Damage', base: 0 },
 
   // Defense
+  damageImmunity: { label: 'Damage Immunity', base: 0, min: 0 },
+  debuffImmunity: { label: 'Debuff Immunity', base: 0, min: 0 },
   armor:          { label: 'Armor', base: 0, min: 0 },
   evasion:        { label: 'Evasion Rating', base: 40, min: 0 },
   // Resistances are UNCAPPED raw values — overcap buffers against shred.

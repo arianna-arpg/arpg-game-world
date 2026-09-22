@@ -468,8 +468,9 @@ export function pickSeeded<T>(pool: readonly T[], weights: readonly number[], rn
 /** Rarity at the cut: the standing SKILL_RARITIES table (54/30/14/2),
  *  seeded, optionally leaned by provenance (boss defs cut richer). Reads
  *  the registry's own weights — never a parallel table. */
-export function rollSeededRarity(rng: Rng, lean?: Partial<Record<SkillRarity, number>>): SkillRarity {
-  const ids = Object.keys(SKILL_RARITIES) as SkillRarity[];
+export function rollSeededRarity(rng: Rng, lean?: Partial<Record<SkillRarity, number>>, ceiling?: SkillRarity): SkillRarity {
+  const all = Object.keys(SKILL_RARITIES) as SkillRarity[];
+  const ids = ceiling ? all.slice(0, all.indexOf(ceiling) + 1) : all;
   const weights = ids.map(id => SKILL_RARITIES[id].weight * (lean?.[id] ?? 1));
   return pickSeeded(ids, weights, rng) ?? 'common';
 }

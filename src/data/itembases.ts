@@ -295,6 +295,10 @@ export const BASE_LIST: ItemBaseDef[] = [
     id: 'smith_writ', name: "Smith's Writ", category: 'gem',
     w: 1, h: 1, tags: ['writ'], dropWeight: 0,
   },
+  { id: 'quest_hammer', name: 'Brandt’s Hammer', category: 'gem',
+    w: 1, h: 2, tags: ['quest'], dropWeight: 0 },
+  { id: 'quest_trophy', name: 'Iron Fang', category: 'gem',
+    w: 1, h: 1, tags: ['quest'], dropWeight: 0 },
   // M3, §4 lane 2 THE TRUED CUT: the banner pouch — rarer by the drop
   // split (GEM_DROP_CFG.preformedShare), recall interposes THE FACET.
   {

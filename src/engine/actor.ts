@@ -1753,7 +1753,9 @@ export class Actor {
   /** Seconds until natural expiry (0 = permanent until killed). */
   lifespan = 0;
   /** Cannot be damaged (hits report immune). */
-  invulnerable = false;
+  private baseInvulnerable = false;
+  get invulnerable(): boolean { return this.baseInvulnerable || this.sheet.get('damageImmunity') > 0; }
+  set invulnerable(value: boolean) { this.baseInvulnerable = value; }
   /** Cannot be hit or targeted — projectiles pass through, AI ignores it. */
   untargetable = false;
   /** Floats over fall hazards: void/chasm 'fall' recovery is SKIPPED (no fall damage,
@@ -2684,6 +2686,7 @@ export class Actor {
   ): void {
     const def = STATUS_DEFS[id];
     if (!def) return;
+    if (!def.beneficial && this.sheet.get('debuffImmunity') > 0) return;
     if (!opts?.relayed && this.statusRelay && this.sheet.armedFamily('relayStatus_', STATUS_RELAY_IDS).length
       && this.statusRelay(this, [id, dps, durationScale, sourceName, opts])) return;
     // POISE holds the line: while the break-bar stands, incoming HARD CC
@@ -3065,6 +3068,20 @@ export class Actor {
     if (any && !this.statuses.some(o => o.id === id)) {
       this.sheet.removeSource('status:' + id);
     }
+  }
+
+  /** Consume harmful statuses without expiry payloads, preserving blessings.
+   * The same cleanup serves skill cleanses and companion recovery. */
+  cleanseDebuffs(count = Infinity): number {
+    let stripped = 0;
+    for (let i = this.statuses.length - 1; i >= 0 && stripped < count; i--) {
+      const s = this.statuses[i];
+      if (STATUS_DEFS[s.id]?.beneficial) continue;
+      this.statuses.splice(i, 1);
+      if (!this.statuses.some(o => o.id === s.id)) this.sheet.removeSource('status:' + s.id);
+      stripped++;
+    }
+    return stripped;
   }
 
   /** Tick durations; returns the frame's DoT damage to inflict, BY DAMAGE
