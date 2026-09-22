@@ -261,6 +261,7 @@ import type { QuestDef, QuestGateCtx } from '../quests/types';
 import { imbuedItem, imbueOptions, mintQuestImbue, restoreQuestImbues, type QuestImbue } from './questImbue';
 import { QuestRescues } from './questRescues';
 import { questRewardChoices } from './questRewardChoices';
+import { passiveRefund } from './passiveRefund';
 import { QUEST_CATEGORY_CAPS, DEFAULT_QUEST_CATEGORY, questStandingLine, type QuestCategory, type QuestStanding } from '../quests/types';
 import { Rng, rollSeed, withSeededRandom } from '../core/rng';
 import { ALTARS, INTERACT_PLACE_CFG, SHRINES, type AltarDef, type ShrineDef } from '../data/shrines';
@@ -1781,6 +1782,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     // The vendors' Ability Essence sell lane — counter id + tier.
     case 'buyAbilityEss': return isStr(a.vendor) && isIdx(a.tier);
     case 'allocate': return isStr(a.nodeId) && (a.optionId === undefined || isStr(a.optionId));
+    case 'refundPassive': return isStr(a.nodeId);
     case 'bindGraft': return isStr(a.key) && (a.skillId === null || isStr(a.skillId));
     case 'vocationQuest': return isStr(a.questId); // menu-accept a vocation chain step
     case 'questReward': return isStr(a.questId) && isStr(a.choiceId);
@@ -29405,7 +29407,12 @@ export class World {
     }
     m.allocated.add(nodeId);
     this.recalcSeat(seat);
-    // THE COMPANY FOLLOWS THE TREE: an allocation may have moved the patron
+    this.refreshPassiveCompany(seat);
+    return true;
+  }
+
+  private refreshPassiveCompany(seat: Seat): void {
+    // THE COMPANY FOLLOWS THE TREE: an allocation or refund may move the patron
     // stats the merc seams read (mercEase → enemy party scale; mercVigor →
     // the blades' own sheets). Both refreshes are cheap and idempotent —
     // and only run while a company is actually fielded.
@@ -29418,8 +29425,52 @@ export class World {
         } else {
           hm.seat.actor.sheet.removeSource('patron');
         }
+        hm.seat.actor.life = Math.min(hm.seat.actor.life, hm.seat.actor.maxLife());
       }
     }
+  }
+
+  /** Shared live service refusal for the Font, tree affordance and host. */
+  passiveRefundRefusal(seat: Seat = this.localSeat): string | null {
+    if (!FONT_CFG.passiveRespec.enabled) return 'Passive refunds are unavailable.';
+    if (seat.actor.dead || seat.actor.downed || this.seatHero(seat).dead) return 'Return to life before using the Font.';
+    if (!this.nearFont(seat)) return 'Stand beside the Sacrificial Font to refund passives.';
+    return this.swapRefusal(seat, 'socket');
+  }
+
+  refundPassiveNode(nodeId: string, seat: Seat = this.localSeat): boolean {
+    const refund = passiveRefund(seat.meta, nodeId);
+    const why = this.passiveRefundRefusal(seat) ?? refund.refusal;
+    if (why) { this.failNote(seat.actor, 'passiveRefund', why); return false; }
+    const m = seat.meta, hero = this.seatHero(seat);
+    // Ordinary summons snapshot owner power. Refresh their combat investment
+    // without reapplying spawn-time geometry (offspring and shell sizes).
+    const bodies = this.actors.filter(a => !a.dead && a.owner === hero && !a.construct && !a.companion && a.summonInst);
+    m.allocated.delete(nodeId);
+    delete m.choices[nodeId];
+    for (const key of Object.keys(m.grafts)) if (key === nodeId || key.startsWith(nodeId + ':')) delete m.grafts[key];
+    if (PASSIVE_NODES[nodeId].vocation !== undefined) m.vocationPoints += refund.points;
+    else if (refund.currency === 'passive') m.passivePoints += refund.points;
+    else m.realmPoints[refund.currency] = (m.realmPoints[refund.currency] ?? 0) + refund.points;
+    this.recalcSeat(seat);
+    for (const inst of [...m.knownSkills.values(), ...(seat.grantedInsts?.values() ?? [])]) this.resyncMinionSupports(inst);
+    for (const a of bodies) {
+      if (a.dead) continue;
+      const inst = a.summonInst!;
+      if (inst.def.throng || inst.def.hivecall) this.bakeMinionOwnerStats(a, hero, inst, inst.def.throng ? batchScaleOf(inst.def.throng) : 1);
+      else {
+        const inherited = resolveMinionInheritance(hero, inst, a.defId);
+        a.sheet.setSource('owner', inherited.ownerMods);
+        a.sheet.setSource('minionCombat', inherited.combatMods);
+        a.guardMode = inherited.guard;
+        applyMinionPlyBonus(a, inherited.plyBonus);
+        syncAttributeBequests(a, inst.relicSource ? RELIQUARY_CFG.minion.ordinaryStats : 1, inherited.tags, inherited.extra);
+      }
+      a.life = Math.min(a.life, a.maxLife());
+    }
+    this.refreshPassiveCompany(seat);
+    this.markMetaDirty(seat);
+    this.charDirty = true;
     return true;
   }
 
@@ -29634,6 +29685,7 @@ export class World {
       case 'socket': this.socketSupport(action.uid, action.skillId, seat); break;
       case 'unsocket': this.unsocketSupport(action.skillId, action.socket, seat); break;
       case 'allocate': this.allocateNode(action.nodeId, seat, action.optionId); break;
+      case 'refundPassive': this.refundPassiveNode(action.nodeId, seat); break;
       case 'bindGraft': this.bindGraft(action.key, action.skillId, seat); break;
       case 'bindSkill': this.bindSkill(action.slot, action.skillId, seat); break;
       case 'swapSkillSlots': this.swapSkillSlots(action.a, action.b, seat); break;

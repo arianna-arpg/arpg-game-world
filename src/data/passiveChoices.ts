@@ -3,10 +3,10 @@
 //
 // A choice node (PassiveNode.choice = { group, pick? }) references a group
 // here by id. Clicking the node deals the group's options in a popup; each
-// pick spends a passive point (PASSIVE_CHOICE_CFG.pickCost), permanently
+// pick spends a passive point (PASSIVE_CHOICE_CFG.pickCost), durably
 // records the option on the character (PlayerMeta.choices), and locks the
-// rest of that node's deal out once the pick limit is reached. There is no
-// respec — a pick is a commitment, exactly like the node itself.
+// rest of that node's deal out once the pick limit is reached. The Sacrificial
+// Font can refund a whole node and its picks while preserving connected paths.
 //
 // The registry is the extensibility surface:
 //   * one node, one pick        → "choose Strength / Fortitude / Intelligence"

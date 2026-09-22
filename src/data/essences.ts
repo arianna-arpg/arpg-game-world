@@ -418,6 +418,9 @@ export const FONT_CFG = {
    *  level-14 skill: a consideration, never a wall"). M1's full-tree
    *  resets consume this same seam. */
   reset: { count: 1 },
+  /** Passive refunds return their original point pool, one whole node at a
+   * time. Proximity and the existing calm discipline gate the free service. */
+  passiveRespec: { enabled: true },
 } as const;
 
 /** BRANDT'S SHELF (the buy lane) — rolled GEAR on the counter beside his

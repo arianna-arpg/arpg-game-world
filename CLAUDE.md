@@ -1,5 +1,9 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Sacrificial Font passive refunds use `engine/passiveRefund.ts` for shared path,
+root, gate and point-pool validation. See `docs/design/passive-refunds.md`;
+verify `probe_passiverefund.ts` and the hidden `balance/font-passives-ui.cjs`.
+
 Paged Relic storage and personal Immortal lockers share `engine/stash.ts`
 and `data/stashes.ts`; see `docs/engine/stashes.md`. Storage capacity is
 independent from equipped Reliquary expansion and empowerment. Verify

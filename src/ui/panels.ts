@@ -91,6 +91,7 @@ import { VIS_CFG } from '../render/vis/visConfig';
 import { CLASSES, type ClassDef } from '../data/classes';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateNodeId, vocationGateOpen, type PassiveNode } from '../data/passives';
 import { PASSIVE_CHOICE_CFG, choiceDealClaimant, choiceDealSpent, choiceGroupOf, choiceLockReason, choiceNodeLocked, choiceOptionOf, choicePickLimit, choiceSearchText, chosenOf, graftSourcesOf, nodeChoiceOpen } from '../data/passiveChoices';
+import { passiveRefund } from '../engine/passiveRefund';
 import { MAIN_REALM, PASSIVE_REALMS, openRealms, realmIdOf, realmOf, realmOpen } from '../data/passiveRealms';
 import { SUPPORTS, SUPPORT_LIST } from '../data/supports';
 import { VOCATIONS, vocationRootId } from '../data/vocations';
@@ -600,6 +601,7 @@ export class UI {
    *  refreshes; matches name + description + granted lines, hits glow,
    *  the rest dims). */
   private treeSearch = '';
+  private treeRefundMode = false;
   /** Suppresses the trailing synthetic click after a handled pointer press
    *  on an Unlock card (native mice AND the pad pointer both send one) —
    *  the keyboard lane is exactly the clicks arriving with no recent press. */
@@ -5283,7 +5285,9 @@ export class UI {
         ${tabBtn('merge', 'Merge')}${tabBtn('convert', 'Convert')}${treesOpen ? tabBtn('reset', 'Reset') : ''}
       </div>
       ${body}
-      <div class="bind-btns panel-foot"><button data-fontclose>Leave the font</button></div>`;
+      <div class="bind-btns panel-foot">
+        ${FONT_CFG.passiveRespec.enabled ? `<button data-fontpassives ${world.passiveRefundRefusal(seat) ? 'disabled' : ''}>Refund passives</button>` : ''}
+        <button data-fontclose>Leave the font</button></div>`;
 
     const q = <T extends HTMLElement>(sel: string): T[] => [...this.fontMenu.querySelectorAll<T>(sel)];
     q<HTMLButtonElement>('button[data-fonttab]').forEach(btn => btn.addEventListener('click', () => {
@@ -5308,6 +5312,14 @@ export class UI {
       if (this.inventoryOpen) this.refreshInventory();
     }));
     this.fontMenu.querySelector<HTMLButtonElement>('[data-fontclose]')?.addEventListener('click', () => this.closeFont());
+    this.fontMenu.querySelector<HTMLButtonElement>('[data-fontpassives]')?.addEventListener('click', () => {
+      this.closeFont();
+      if (!this.treeOpen || this.panelSeat(this.passiveTree) !== seat) this.toggleTree(seat.id);
+      this.treeRefundMode = true;
+      this.refreshTree();
+      this.folio.front('passives');
+      this.folioStrip.update();
+    });
   }
 
   // ---------------------------------------------- the milestone tree popup ---
@@ -7223,6 +7235,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   closeTree(): void {
     if (!this.treeOpen) return;
     this.treeOpen = false;
+    this.treeRefundMode = false;
     this.closeChoicePopup(); // a popup never outlives its panel
     this.closeTreePopup();
     this.passiveTree.classList.add('hidden');
@@ -7291,12 +7304,16 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const world = this.getWorld();
     const m = this.panelSeat(this.passiveTree).meta;
 
+    const refundWhy = world.passiveRefundRefusal(this.panelSeat(this.passiveTree));
+    if (refundWhy || DEV.passiveTreeEditor) this.treeRefundMode = false;
+    const refundMode = this.treeRefundMode;
+
     // REALM TABS (data/passiveRealms.ts): resolve the open set, snap the
     // active tab back to the star if its realm closed, seed root crests.
     const realms = openRealms(world.ledger);
     if (!realms.some(r => r.id === this.treeRealm)) this.treeRealm = MAIN_REALM;
     const activeRealm = PASSIVE_REALMS[this.treeRealm];
-    world.ensureOpenRealmRoots();
+    world.ensureOpenRealmRoots(this.panelSeat(this.passiveTree));
 
     // Fit the view to the NODE BOUNDS (not a fixed viewBox) so the tree stays
     // extensible — adding nodes anywhere just grows the fitted box; zoom/pan navigate.
@@ -7362,15 +7379,18 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       const dealClaimed = node.choice ? choiceDealClaimant(node, m.choices, PASSIVE_NODES) : null;
       const dealSpent = dealClaimed !== null && choiceGroupOf(node)?.deal === 'first';
       const clusterLocked = dealClaimed !== null && choiceGroupOf(node)?.deal === 'sole';
-      const available = this.nodeAllocatable(node, m);
-      const fill = allocated ? (voc?.color ?? (node.kind === 'choice' ? '#8a68c8' : '#c8a84b'))
+      const refund = refundMode && allocated ? passiveRefund(m, node.id) : null;
+      const available = refundMode ? !!refund && !refund.refusal : this.nodeAllocatable(node, m);
+      const fill = refundMode && available ? '#9963bd'
+        : allocated ? (voc?.color ?? (node.kind === 'choice' ? '#8a68c8' : '#c8a84b'))
         : node.kind === 'keystone' ? '#5a2a3a'
         : node.kind === 'notable' ? '#3a3a5a'
         : node.kind === 'attr' ? '#2a4a3a'
         : node.kind === 'vocation' ? '#241f33'
         : node.kind === 'choice' ? '#33244a'
         : '#26262e';
-      const stroke = node.kind === 'vocation' ? (voc?.color ?? '#ffe9a0')
+      const stroke = refundMode ? (available ? '#cf92f0' : '#4a4a5e')
+        : node.kind === 'vocation' ? (voc?.color ?? '#ffe9a0')
         // An allocated choice node with picks still open keeps its "come
         // back" shimmer: the available-stroke over the allocated fill.
         : allocated ? (available ? '#e6d8ff' : '#ffe9a0')
@@ -7424,6 +7444,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       ${realmTabs}
       <div class="build-tree-tools tree-tools">
         <span>${realmChip}${poolChip}${vocChips}</span>
+        ${!DEV.passiveTreeEditor && FONT_CFG.passiveRespec.enabled ? `<button data-passive-refund-mode aria-pressed="${refundMode}"
+          ${refundWhy ? 'disabled' : ''} title="${esc(refundWhy ?? 'Return a whole node and its choices to their original point pool.')}"
+          style="color:#cf92f0">${refundMode ? 'Finish refunding' : 'Refund at Font'}</button>` : ''}
         <input id="tree-search" class="tree-search" type="text" placeholder="search nodes…"
           value="${esc(this.treeSearch)}" title="Matches node names, descriptions, and granted lines — hits glow, the rest dims.">
         <span id="tree-search-n" class="tree-search-n"></span>
@@ -7434,6 +7457,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         </span>
         <span>${DEV.passiveTreeEditor
           ? 'EDITOR · scroll to zoom · drag empty space to pan'
+          : refundMode ? 'Refund mode · click a lit node · choices refund together · keep every path connected'
           : `${m.allocated.size} allocated · click to allocate · scroll to zoom, drag to pan`}</span>
       </div>
       <svg viewBox="${viewBox}" id="tree-svg" style="cursor:var(--cursor-grab, grab);touch-action:none">${edges}${circles}</svg>`;
@@ -7448,6 +7472,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     });
     this.applyTreeSearch();
 
+    this.passiveTree.querySelector<HTMLButtonElement>('[data-passive-refund-mode]')?.addEventListener('click', () => {
+      this.treeRefundMode = !this.treeRefundMode;
+      this.refreshTree();
+    });
+
     // In EDITOR mode, clicks SELECT nodes (the editor wires that up) — skip the
     // play-mode allocate handler so the two don't fight over the same click.
     // Realm tab clicks re-aim the whole panel at that constellation.
@@ -7460,9 +7489,16 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       });
     });
     if (!DEV.passiveTreeEditor) {
-      this.passiveTree.querySelectorAll<SVGCircleElement>('.tree-node.available').forEach(el => {
+      this.passiveTree.querySelectorAll<SVGCircleElement>(refundMode ? '.tree-node.allocated' : '.tree-node.available').forEach(el => {
         el.addEventListener('click', () => {
           const node = PASSIVE_NODES[el.dataset.node!];
+          if (refundMode) {
+            world.requestMeta({ t: 'refundPassive', nodeId: el.dataset.node! });
+            this.refreshTree();
+            this.refreshCharSheet();
+            hideTooltip();
+            return;
+          }
           // CHOICE NODES deal their options in a popup instead of allocating
           // blind — the pick itself is dispatched from the popup's buttons.
           // THE DEAL LAW: a 'first' group spent at a sibling leaves this a
@@ -7677,7 +7713,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           group.deal === 'sole' ? ' · claims its whole cluster, sibling nodes lock'
           : group.deal === 'first' ? ' · only the first node deals, siblings become plain paths' : ''}</span>
         <input class="tree-search choice-search" type="search" placeholder="Search choices…" aria-label="Search passive choices" autocomplete="off">
-        <span class="choice-search-count" aria-live="polite">${group.options.length} choices · each pick is permanent</span></div>
+        <span class="choice-search-count" aria-live="polite">${group.options.length} choices · refundable together at the Font</span></div>
       ${group.options.map(o => {
         const taken = chosen.includes(o.id);
         const why = taken ? null : choiceLockReason(node, o.id, m.choices, PASSIVE_NODES);
@@ -7703,7 +7739,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         row.btn.hidden = !row.text.includes(query);
         if (!row.btn.hidden) visible++;
       }
-      choiceSearchCount.textContent = visible ? `${visible} of ${group.options.length} choices · each pick is permanent` : 'No matching choices';
+      choiceSearchCount.textContent = visible ? `${visible} of ${group.options.length} choices · refundable together at the Font` : 'No matching choices';
     });
     document.body.appendChild(pop);
     // Fixed-position above the node's screen rect, clamped to the viewport.
@@ -7796,7 +7832,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       ? ` — ${chosenOf(m.choices, node.id).length}/${choicePickLimit(node)} picked`
       : '';
     let meta = m.allocated.has(node.id)
-      ? `${KIND_LABELS[node.kind]} — allocated${openPicks}${this.nodeAllocatable(node, m) ? ' — click to choose' : ''}`
+      ? `${KIND_LABELS[node.kind]} — allocated${openPicks}${!this.treeRefundMode && this.nodeAllocatable(node, m) ? ' — click to choose' : ''}`
       : this.nodeAllocatable(node, m) ? `${KIND_LABELS[node.kind]} — click to ${node.choice && !dealSpent ? 'choose' : 'allocate'}`
       : KIND_LABELS[node.kind];
     if (node.vocation !== undefined) {
@@ -7808,6 +7844,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           : ` — LOCKED until ${gateName ?? 'its class start node'} is allocated`);
     }
     const graftText = node.graft ? `<br>${SUPPORTS[node.graft.support]?.description ?? ''}` : '';
+    if (m.allocated.has(nodeId)) {
+      const refund = passiveRefund(m, nodeId);
+      const why = this.getWorld().passiveRefundRefusal(this.panelSeat(this.passiveTree)) ?? refund.refusal;
+      meta += `<br><span style="color:#cf92f0">${esc(why ?? `${this.treeRefundMode ? 'Click to refund' : 'Font refund'}: ${refund.points} ${refund.currency} point${refund.points === 1 ? '' : 's'}${chosenOf(m.choices, nodeId).length ? ' (all choices)' : ''}`)}</span>`;
+    }
     return { title: node.name, description: node.description + attrText + choiceText + graftText, meta };
   }
 
