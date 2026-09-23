@@ -7,13 +7,14 @@ const byId = Object.fromEntries(raw.rows.map(r=>[r.id,r]));
 const byFlag = Object.fromEntries(raw.rows.filter(r=>r.kind==='feature').map(r=>[r.payload.flag,r.label]));
 const list = v=>v==null?[]:Array.isArray(v)?v:[v];
 const ledgerLabels = {
+  bounty_craft_done:'Turn in bounties that actually pay crafting writs', oracle_rescued:'Rescue the Oracle from the revenge commander', oracle_reliquary_attuned:'Learn Reliquary Empowerment from the Oracle', quest_brandt_hammer:'Return Brandt’s physical hammer',
   essence_touched:'Touch ordinary Essence', mireille_flasks_filled:'Complete Mireille’s flask refill lesson', vendor_bought:'Buy something from a vendor', bounty_done:'Complete a bounty', legendary_skill_dropped:'Find a genuine legendary skill', merc_market_met:'Meet a mercenary market', voyages_sailed:'Sail a voyage', islands_landed:'Land on an island', unmade_slain:'Slay the Unmade', zones_explored:'Explore distinct zones', crafts_unlocked:'Unlock craft families', account_deaths:'Counted account deaths', cellar_entered:'Discover Lastlight’s cellar'
 };
 function ledger(k){return ledgerLabels[k] || (/^reached_level_/.test(k)?`Any character reaches level ${k.split('_').at(-1)}`:k.replaceAll('_',' '));}
 const rows = raw.rows.map(r=>{
   const all = [r.reqLevel?`Account level ${r.reqLevel}`:null,
     ...list(r.requiresUnlock).map(id=>byId[id]?.label||id),
-    r.requiresFeature?(byFlag[r.requiresFeature]||r.requiresFeature==='reliquary'&&'Reliquary quest reward'||r.requiresFeature):null,
+    r.requiresFeature?(byFlag[r.requiresFeature]||r.requiresFeature==='reliquary'&&'Reliquary granted by Oracle rescue'||r.requiresFeature):null,
     ...list(r.reqLedger).map(ledger),
     ...Object.entries(r.reqLedgerCounts||{}).map(([k,n])=>`${ledger(k)} ≥ ${n}`),
     r.reqClasses?`${r.reqClasses} activated selectable classes`:null,
@@ -26,7 +27,10 @@ const rows = raw.rows.map(r=>{
   }
   if(r.kind==='memory')all.push(r.payload.memoryUnlockId==='memory_discovery'?'At least one eligible undiscovered skill/support':`Odyssey stage ${raw.power.awakening.odysseyStage}; at least one discoverable, unawakened skill`);
   if(r.kind==='graft')all.push('No unused Skill Graft charge already armed');
-  return {...r,all,any,effect,source};
+  if(r.kind==='power'||r.kind==='storage')all.push('Reliquary owned', 'Next rank/page only; this row represents the initial account state');
+  if(r.id==='feat_oracle_stone')effect='Granted immediately by the Oracle rescue; no additional paid purchase is needed. '+effect;
+  const shelf=raw.vaultTabs.find(t=>!t.owned&&t.kinds?.includes(r.kind))||raw.vaultTabs.find(t=>t.fallback);
+  return {...r,all,any,effect,source,shelf:shelf?.label};
 });
 const n=(id,label,kind,detail,row)=>({id,label,kind,detail,row});
 const map=(id,title,nodes,layers,edges,filter,focus)=>({id,title,nodes,layers,edges:edges.map(s=>s.split('>')),catalog:rows.filter(filter).map(r=>r.id),focus});
@@ -163,15 +167,17 @@ revise('memories','access','Odyssey stage '+raw.power.awakening.odysseyStage+' A
 revise('memories','wake','After Odyssey stage '+raw.power.awakening.odysseyStage+', randomly awaken one discoverable skill whose secondary access remains locked.');
 revise('markets','ready','Odyssey stage '+raw.power.awakening.odysseyStage+' AND a discovered awakened skill, or a discovered support with '+raw.commissionFinds+' genuine finds.');
 revise('journey','chain','Account Odyssey stage '+raw.power.vocations.odysseyStage+' first; then class, level, site and sequential quest requirements.');
-for(const m of maps){const ids=new Set(m.nodes.map(n=>n.id)); for(const [a,b] of m.edges)if(!ids.has(a)||!ids.has(b))throw Error('bad edge '+a+b);for(const id of m.layers.flat())if(!ids.has(id))throw Error('bad layer');for(const node of m.nodes)if(node.row&&!byId[node.row])throw Error('bad row '+node.row);}
-const data={captured:raw.captured,cosmetics:raw.cosmetics,counts:{rows:rows.length,classes:raw.classes.length,packages:raw.packages.length,vocations:raw.vocations.length,quests:raw.quests.length},maps,rows,
+require('./current-paths.cjs')({maps,map,n,raw});
+for(const m of maps){const ids=new Set(m.nodes.map(n=>n.id)); if(ids.size!==m.nodes.length||m.layers.flat().length!==ids.size||new Set(m.layers.flat()).size!==ids.size)throw Error('Duplicate or unplaced nodes in '+m.id);for(const [a,b] of m.edges)if(!ids.has(a)||!ids.has(b))throw Error('bad edge '+a+b);for(const id of m.layers.flat())if(!ids.has(id))throw Error('bad layer');for(const node of m.nodes)if(node.row&&!byId[node.row])throw Error('bad row '+node.row);}
+const unmapped=rows.filter(r=>!maps.some(m=>m.catalog.includes(r.id)));if(unmapped.length)throw Error('Unmapped category rows: '+unmapped.map(r=>r.id));
+const data={captured:raw.captured,defaultPath:'markets',rules:raw.rules,vaultTabs:raw.vaultTabs,cosmetics:raw.cosmetics,counts:{rows:rows.length,staticRows:rows.filter(r=>!['power','storage','resurrect'].includes(r.kind)).length,classes:raw.classes.length,packages:raw.packages.length,vocations:raw.vocations.length,quests:raw.quests.length},maps,rows,
  packages:raw.packages.map(p=>({id:p.id,label:p.label,enabled:p.defaultEnabled,alwaysOn:p.alwaysOn,pressureless:p.pressureless,start:p.defaultStartLevel,unlock:p.unlock,tiers:p.tiers})),
  vocations:raw.vocations.map(v=>({id:v.id,name:v.name,home:raw.classes.find(c=>c.id===v.classId)?.name||v.classId,level:v.quest.offerAtLevel||30,secret:!!v.secret,steps:v.quest.steps.length,site:v.secret?.site,gateNode:v.gateNode}))};
 fs.mkdirSync(out,{recursive:true});fs.writeFileSync(path.join(out,'progression-data.json'),JSON.stringify(data));
 
 const cell=v=>String(v??'—').replaceAll('|','\\|').replaceAll('\n',' ');
 let appendix=`\n\nLive extraction: ${raw.captured}. **${rows.length} active catalog entries**, excluding dynamic Fallen vessels. Costs below are Mortal Essence.\n`;
-const groups=[['Town services, travel, contracts and debug','feature'],['Class card slots','slot'],['Earned class discoveries','class'],['Class mastery','classtier'],['Repeatable Memory purchases','memory'],['Repeatable Skill Grafting','graft'],['World package purchases and tiers','package']];
+const groups=[['Town services, travel, contracts and debug','feature'],['Class card slots','slot'],['Earned class discoveries','class'],['Class mastery','classtier'],['Repeatable Memory purchases','memory'],['Repeatable Skill Grafting','graft'],['World package purchases and tiers','package'],['Reliquary power: initial rank example','power'],['Relic storage: initial next-page example','storage']];
 for(const [title,kind] of groups){appendix+=`\n### ${title}\n\n| Entry | Cost | All required | Any one road | Result |\n|---|---:|---|---|---|\n`;for(const r of rows.filter(r=>r.kind===kind))appendix+=`| ${cell(r.label)} (\`${r.id}\`) | ${r.cost} | ${cell(r.all.join('; ')||'No row-specific prerequisite')} | ${cell(r.any.join(' OR ')||'—')} | ${cell(r.kind==='class'?'Earned discovery + gems; free Vault activation still required':r.effect)} |\n`;}
 appendix+='\n### World baselines and executable discovery tests\n\nThe predicate column is retained because human-facing labels can be narrower than their actual OR conditions. Tiers remain sequential even if a later milestone is already held.\n\n| Package | Active before purchase? | Default start level | Base discovery test |\n|---|---|---:|---|\n';
 for(const p of raw.packages)appendix+=`| ${p.label} | ${p.alwaysOn?'Always; no purchase':p.defaultEnabled?'Yes':'No'} | ${p.defaultStartLevel} | ${cell(p.unlock?.predicate)} |\n`;

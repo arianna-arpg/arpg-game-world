@@ -63,8 +63,8 @@
       const tags={play:'Play / discover',account:'Account permission',vault:'Vault investment',character:'Character growth',world:'World baseline',debug:'Debug shortcut'};
       let selected=null;
       const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
-      root.querySelector('#hw-whole-count').textContent=`${data.nodes.length} systems · ${data.counts.rows} Vault entries`;
-      root.querySelector('#hw-whole-foot').textContent=`${data.counts.classes} classes · ${data.counts.packages} world packages · ${data.counts.vocations} Vocations · ${data.counts.quests} registered quests · ${data.cosmetics.length} cosmetic acquisitions. Snapshot ${new Date(data.captured).toLocaleString()}.`;
+      root.querySelector('#hw-whole-count').textContent=`${data.nodes.length} systems · ${data.counts.rows} catalog rows`;
+      root.querySelector('#hw-whole-foot').textContent=`${data.counts.staticRows} static catalog rows + initial power/storage examples; later ranks, pages and Fallen vessels depend on the account. ${data.counts.classes} classes · ${data.counts.packages} world packages · ${data.counts.vocations} Vocations · ${data.counts.quests} registered quests. Snapshot ${new Date(data.captured).toLocaleString()}.`;
       function save(){window.openai?.setWidgetState?.({modelContent:{progressionView:'Whole progression tree',selectedSystem:nodes.get(selected)?.label||null},privateContent:{overviewNode:selected}})?.catch(()=>{});}
       function field(dl,label,value){if(!value)return;dl.append(el('dt',label),el('dd',value));}
       function entry(title,fields){const d=el('details',undefined,'hw-entry');d.append(el('summary',title));const dl=el('dl');for(const [k,v] of fields)field(dl,k,v);d.append(dl);return d;}

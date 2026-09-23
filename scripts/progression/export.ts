@@ -1,7 +1,7 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { bootSimEngine } from '../../src/sim/arena';
-import { allUnlockables, UNLOCK_CATALOG, CLASS_BUNDLES, SLOT_TIERS } from '../../src/meta/unlocks';
+import { allUnlockables, UNLOCK_CATALOG, CLASS_BUNDLES, SLOT_TIERS, VAULT_TABS } from '../../src/meta/unlocks';
 import { gateRowLabel } from '../../src/meta/gates';
 import { PACKAGES } from '../../src/packages/registry';
 import { makeAccount, FEATURE, STARTER_CLASSES, STARTER_SKILLS, STARTER_SUPPORTS } from '../../src/meta/account';
@@ -15,11 +15,20 @@ import '../../src/data/cosmetics';
 import { COSMETICS } from '../../src/engine/cosmetics';
 import { POWER_PROGRESSION } from '../../src/data/powerProgression';
 import { VENDOR_CFG } from '../../src/data/vendors';
+import { BRANDT_CFG } from '../../src/data/brandt';
+import { ORACLE_RESCUE, ORACLE_MEMORY_REWARD } from '../../src/data/oracle';
+import { RELIQUARY_CFG } from '../../src/data/reliquary';
+import { RELIC_STASH, IMMORTAL_STASH } from '../../src/data/stashes';
+import { FONT_CFG } from '../../src/data/essences';
 bootSimEngine();
 const snapshot = {
   captured: new Date().toISOString(),
   power: POWER_PROGRESSION,
   commissionFinds: VENDOR_CFG.commission.need,
+  rules: { brandt: BRANDT_CFG, oracle: ORACLE_RESCUE, oracleReward: ORACLE_MEMORY_REWARD,
+    reliquary: RELIQUARY_CFG, relicStash: RELIC_STASH, immortalStash: IMMORTAL_STASH,
+    font: FONT_CFG, vendors: VENDOR_CFG },
+  vaultTabs: VAULT_TABS,
   starters: { classes: STARTER_CLASSES, skills: STARTER_SKILLS, supports: STARTER_SUPPORTS },
   features: FEATURE, slots: SLOT_TIERS, classes: CLASSES, bundles: CLASS_BUNDLES,
   rows: allUnlockables(makeAccount()).map(u => ({ ...u, anyLabels: u.reqAnyOf?.map(gateRowLabel) })),

@@ -33,7 +33,7 @@
   </style>
   <div class="hw-header">
     <h2>Hollow Wake · progression</h2>
-    <span class="text-small text-muted">Current implementation · 21 Sep 2026</span>
+    <span class="text-small text-muted" id="hw-captured"></span>
   </div>
   <div class="viz-controls">
     <label class="form-label" for="hw-path">Progression path
@@ -61,9 +61,11 @@
       const registerContent = root.querySelector('#hw-register-content');
       const extra = root.querySelector('#hw-extra');
       const rows = Object.fromEntries(data.rows.map(row => [row.id,row]));
+      root.querySelector('#hw-captured').textContent='Current implementation · '+new Date(data.captured).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'});
       const names = {play:'Play',vault:'Vault',account:'Account',character:'Character',world:'World',debug:'Debug'};
       const esc = s => String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-      let current = data.maps[0], selected = current.focus;
+      const labelHTML = text => {const lines=[];let line='';for(const word of text.split(' ')){if(line.length+word.length>25){lines.push(line.trim());line='';}line+=word+' ';}if(line)lines.push(line.trim());return lines.map(esc).join('<br>');};
+      let current = data.maps.find(m=>m.id===data.defaultPath)||data.maps[0], selected = current.focus;
       select.innerHTML = data.maps.map(m => `<option value="${m.id}">${esc(m.title)}</option>`).join('');
       function save() {
         const state = {modelContent:{progressionPath:current.title,selectedStep:current.nodes.find(n=>n.id===selected)?.label},privateContent:{path:current.id,node:selected}};
@@ -110,14 +112,14 @@
           const node=nodes[id],row=rows[node.row];
           const scope=names[node.kind]+(row?` · ${row.cost===0?'free':row.cost+' ME'}`:'');
           const incoming=current.edges.filter(e=>e[1]===id).map(e=>nodes[e[0]].label);
-          return `<div class="hw-seat">${incoming.length?`<div class="hw-mobile-edge text-small text-muted">↓ From: ${esc(incoming.join(' · '))}</div>`:''}<button type="button" class="btn btn-block" data-node="${id}" aria-pressed="false"><span><span class="text-small"><span class="hw-scope scope-${node.kind}" aria-hidden="true"></span>${esc(scope)}</span><br>${esc(node.label)}</span></button></div>`;
+          return `<div class="hw-seat">${incoming.length?`<div class="hw-mobile-edge text-small text-muted">↓ From: ${esc(incoming.join(' · '))}</div>`:''}<button type="button" class="btn btn-block" data-node="${id}" aria-pressed="false"><span><span class="text-small"><span class="hw-scope scope-${node.kind}" aria-hidden="true"></span>${esc(scope)}</span><br>${labelHTML(node.label)}</span></button></div>`;
         }).join('')}</div>`).join('');
         figure.querySelectorAll('[data-node]').forEach(b=>b.addEventListener('click',()=>pick(b.dataset.node)));
         register.hidden=!current.catalog.length;
         registerTitle.textContent=`Exact Vault prerequisites · ${current.catalog.length} entries`;
         registerContent.innerHTML=current.catalog.map(id=>{
           const r=rows[id];
-          return `<details class="hw-item"><summary>${esc(r.label)} · ${r.cost===0?'free':r.cost+' ME'}</summary><dl><dt>All required</dt><dd>${esc(r.all.join(' + ')||'No row-specific prerequisite; Vault access still required')}</dd>${r.any.length?`<dt>Any one road</dt><dd>${esc(r.any.join(' OR '))}</dd>`:''}<dt>Result</dt><dd>${esc(r.kind==='class'?'Discovery grants class gems immediately; free Vault activation opens selection. '+r.effect:r.effect)}</dd><dt>Scope</dt><dd>${r.kind==='class'?'Account discovery, then separate activation':r.kind==='memory'||r.kind==='graft'?'Repeatable purchase':'Permanent account purchase'}</dd></dl></details>`;
+          return `<details class="hw-item"><summary>${esc(r.label)} · ${r.cost===0?'free':r.cost+' ME'}</summary><dl><dt>Vault shelf</dt><dd>${esc(r.shelf)}</dd><dt>All required</dt><dd>${esc(r.all.join(' + ')||'No row-specific prerequisite; Vault access still required')}</dd>${r.any.length?`<dt>Any one road</dt><dd>${esc(r.any.join(' OR '))}</dd>`:''}<dt>Result</dt><dd>${esc(r.kind==='class'?'Discovery grants class gems immediately; free Vault activation opens selection. '+r.effect:r.effect)}</dd><dt>Scope</dt><dd>${r.kind==='class'?'Account discovery, then separate activation':['power','storage'].includes(r.kind)?'Account-derived ladder; first next-rank/page example, not every future row':r.kind==='memory'||r.kind==='graft'?'Repeatable purchase':r.id==='feat_oracle_stone'?'Automatic account rescue grant':'Permanent account purchase'}</dd></dl></details>`;
         }).join('');
         extra.innerHTML=current.id==='journey'?`<details class="hw-gates"><summary>Vocation entry paths · ${data.vocations.length}</summary><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Vocation</th><th>Home class</th><th>Offer level</th><th>Path</th></tr></thead><tbody>${data.vocations.map(v=>`<tr><td>${esc(v.name)}</td><td>${esc(v.home)}</td><td>${v.level}</td><td>${v.secret?'Secret calling':'Ordinary chain'} · ${v.steps} steps</td></tr>`).join('')}</tbody></table></div></details>`:current.id==='events'?`<details class="hw-gates"><summary>What runs before purchase? · ${data.packages.length} packages</summary><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Package</th><th>Before purchase</th><th>Default start</th></tr></thead><tbody>${data.packages.map(p=>`<tr><td>${esc(p.label)}</td><td>${p.alwaysOn?'Always active':p.enabled?'Enabled':'Absent'}</td><td>${p.start}</td></tr>`).join('')}</tbody></table></div></details>`:'';
         if(current.id==='loop') extra.innerHTML=`<details class="hw-gates"><summary>Wardrobe unlocks outside the Vault catalog · ${data.cosmetics.length}</summary><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Appearance</th><th>Acquisition</th></tr></thead><tbody>${data.cosmetics.map(c=>`<tr><td>${esc(c.name)}</td><td>${c.acquire.kind==='credits'?c.acquire.cost+' ME'+(c.consume?' · repeatable, 2 charges included':''):esc(c.labels.join(' + '))}</td></tr>`).join('')}</tbody></table></div></details>`;
