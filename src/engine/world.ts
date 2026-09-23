@@ -27,6 +27,7 @@ import { companionStanceIdOf, nextStanceId } from './companionStances';
 import { COMPANION_STANCES } from '../data/companionStances';
 import { OdysseyRuntime } from './odyssey';
 import { NpcDialogueDirector } from './npcDialogues';
+import { siteZoneExits } from './exitSiting';
 import { fillFlaskChargeBanks } from './flaskState';
 import { ODYSSEY_CFG, odysseyFaction, odysseyQuestId } from '../data/odyssey';
 import { instanceCastCycle, instanceTreeMods, instanceTreeOver } from './skills';
@@ -6003,6 +6004,7 @@ export class World {
       });
       if (kept.length !== def.exits.length) def.exits = kept;
     }
+    siteZoneExits(def);
     this.exits = def.exits.map((e, i) => this.placeExit(e, i));
     // Stash the boundary annotations on the def (index-aligned, TRANSIENT —
     // re-derived every load) so generateLayout below can erect the gate
@@ -11690,8 +11692,9 @@ export class World {
    *  Caves never gain exits, so it's a no-op underground. */
   private syncZoneExits(): void {
     if (this.inCave) return;
+    if (this.exits.length >= this.zone.exits.length) return;
+    siteZoneExits(this.zone, this.exits.length);
     const defs = this.zone.exits;
-    if (this.exits.length >= defs.length) return;
     for (let i = this.exits.length; i < defs.length; i++) {
       const ze = this.placeExit(defs[i], i);
       this.exits.push(ze);
@@ -23904,7 +23907,7 @@ export class World {
     this.townLayoutChangedOnLoad = this.zoneMap[START_ZONE].size.w !== grown.size.w
       || this.zoneMap[START_ZONE].size.h !== grown.size.h;
     Object.assign(this.zoneMap[START_ZONE], { size: grown.size, fixtures: grown.fixtures,
-      layout: grown.layout, layoutParams: grown.layoutParams });
+      layout: grown.layout, layoutParams: grown.layoutParams, exitSiting: grown.exitSiting });
   }
   townTierIndex(): number { return this.townTierIdx; }
 

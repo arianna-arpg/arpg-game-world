@@ -24,22 +24,24 @@ app.whenReady().then(async () => {
     await js(`(() => {
       __game.account().ledger.prologue_lived=1; __game.devStartRun('warrior'); __game.ui.hideAll();
       __game.settings().speechTyping=false;
-      const w=__game.world();w.loadZone('lastlight');w.player.invulnerable=true;
+      const w=__game.world();w.zoneMap.lastlight.exits=[{to:'crossroads',side:'w'}];w.loadZone('lastlight');w.player.invulnerable=true;
       const exit=w.exits.find(e=>e.to==='crossroads');if(!exit)throw Error('No Crossroads exit');
       const center={x:w.arena.w/2,y:w.arena.h/2}, dx=center.x-exit.pos.x,dy=center.y-exit.pos.y,len=Math.hypot(dx,dy);
       const q=window.townQA={w,exit,point:d=>({x:exit.pos.x+dx/len*d,y:exit.pos.y+dy/len*d})};
       q.box=()=>{const r=document.getElementById('npc-dialogue');return {open:!r.hidden,name:r.querySelector('h2').textContent,text:r.querySelector('.dialogue-accessible').textContent,zone:w.zone.id,blocking:__game.ui.uiBlocking(),vendor:__game.ui.vendorOpen};};
       q.run=(n,pos)=>{for(let i=0;i<n;i++){if(pos)w.player.pos={...pos};w.player.tier=0;w.mireilleCd=999;__game.step(1);}return q.box();};
       q.key=key=>{window.dispatchEvent(new KeyboardEvent('keydown',{key,code:key,bubbles:true}));__game.step(1);window.dispatchEvent(new KeyboardEvent('keyup',{key,code:key,bubbles:true}));return q.box();};
+      if(q.run(3,{x:225,y:290}).open)throw Error('Road reminder interrupted the waking-house departure');
+      if(q.run(3,{x:220,y:400}).open)throw Error('Road reminder appeared through the cellar wall');
       q.run(3,q.point(410));
     })()`);
-    let box = await js('townQA.run(3,townQA.point(230))'); log({ stage: 'road', ...box });
+    let box = await js('townQA.run(3,townQA.point(120))'); log({ stage: 'road', ...box });
     assert.equal(box.open, true); assert.match(box.name, /Mireille/); assert.equal(box.blocking, false);
     await js('document.querySelector(".dialogue-next").click()'); await capture('mireille');
     box = await js('townQA.key("Escape")'); assert.equal(box.open, false);
-    box = await js('townQA.run(3,townQA.point(230))'); assert.equal(box.open, false);
+    box = await js('townQA.run(3,townQA.point(120))'); assert.equal(box.open, false);
     // Re-arm the fixture to test departure while the invitation is still open.
-    box = await js('delete townQA.w.ledger["dialogue_seen:mireille_road_welcome"];townQA.w.npcDialogues.leaveZone();townQA.run(3,townQA.point(410));townQA.run(3,townQA.point(230))');
+    box = await js('delete townQA.w.ledger["dialogue_seen:mireille_road_welcome"];townQA.w.npcDialogues.leaveZone();townQA.run(3,townQA.point(410));townQA.run(3,townQA.point(120))');
     assert.equal(box.open, true);
     // Trigger the ordinary exit by actually stepping inside its travel radius.
     box = await js(`(() => {for(let i=0;i<240 && townQA.w.zone.id==='lastlight';i++)townQA.run(1,townQA.exit.pos);return townQA.box();})()`);

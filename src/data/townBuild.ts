@@ -37,6 +37,13 @@ import type { WaysideSpec } from '../engine/levelgen';
 
 export interface Pt { x: number; y: number }
 
+/** Clear space measured beyond the full building footprint, in world units.
+ * The plaza is traversable; every other raised fixture reserves its ground. */
+export const TOWN_EXIT_SITING = {
+  fixtureClearance: 90, laneLength: 180, laneHalfWidth: 30, portalSeparation: 180, sampleStep: 4,
+  ignoreStructures: ['plaza_square'],
+};
+
 /** One rung of the size ladder. */
 export interface TownTierDef {
   id: string;
@@ -414,6 +421,7 @@ export function expandedTown(account: Account, base: ZoneDef, tier = townTier(ac
   }
   return {
     ...base, size: { w: t.w, h: t.h }, fixtures, layout: townLayoutFor(tier, base.layout),
+    exitSiting: { ...TOWN_EXIT_SITING, target: townSiteAt(tier, 'waypoint')! },
     // THE LAMPS ALONG THE WAYS: the town's lanes wear the wayside marker row.
     layoutParams: { ...(base.layoutParams ?? {}), wayside: TOWN_WAYSIDE },
   };

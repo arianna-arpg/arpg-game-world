@@ -5705,7 +5705,7 @@ const WALK_CELL = 30;
  *  not the raw candidate: half a cell of phase decides which cells the walls
  *  land on, and a severance test reading the unsnapped rect would judge a
  *  different building than the one that gets built. */
-function plannedRect(c: Vec2, w: number, h: number): { x: number; y: number; w: number; h: number } {
+export function plannedRect(c: Vec2, w: number, h: number): { x: number; y: number; w: number; h: number } {
   return {
     x: Math.round((c.x - w / 2) / WALK_CELL) * WALK_CELL,
     y: Math.round((c.y - h / 2) / WALK_CELL) * WALK_CELL,

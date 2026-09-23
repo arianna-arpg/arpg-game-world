@@ -113,8 +113,12 @@ export class NpcDialogueDirector {
       if (def.trigger.kind !== 'exitApproach' || !npcDialogueEligible(w, def)) continue;
       const trigger = def.trigger;
       const exits = w.exits.filter(e => e.to === trigger.to && (w.player.tier ?? 0) === 0);
-      const distance = Math.min(...exits.map(e => dist(w.player.pos, e.pos)));
-      if (distance > trigger.radius) { this.armed.add(def.id); continue; }
+      const frame = w.viewRectFor(w.player);
+      const approached = exits.some(e => dist(w.player.pos, e.pos) <= trigger.radius
+        && (!trigger.visible || (e.pos.x >= frame.x && e.pos.x <= frame.x + frame.w
+          && e.pos.y >= frame.y && e.pos.y <= frame.y + frame.h
+          && w.lineOfSight(w.player.pos, e.pos, w.player.tier ?? 0, 0))));
+      if (!approached) { this.armed.add(def.id); continue; }
       if (!admit || !this.armed.has(def.id)) continue;
       const a = w.actors.find(a => this.matches(a, def));
       if (!a) continue;

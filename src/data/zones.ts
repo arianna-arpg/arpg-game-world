@@ -1103,6 +1103,17 @@ export interface ZoneDef {
   seed?: number;
   /** Hand-placed structures at exact coordinates (the town's buildings). */
   fixtures?: { structure: string; x: number; y: number }[];
+  /** Opt-in edge siting: reserve a portal forecourt and an open lane into
+   * the settlement. Resolved before arrivals and terrain generation. */
+  exitSiting?: {
+    target: { x: number; y: number };
+    laneLength: number;
+    fixtureClearance: number;
+    laneHalfWidth: number;
+    portalSeparation: number;
+    sampleStep: number;
+    ignoreStructures?: readonly string[];
+  };
   /** Structure CHANCES rolled at generation (merged from tileset + biome at
    *  mint); also the zone's bastion-layout candidate pool. */
   structures?: StructureRoll[];

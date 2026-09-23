@@ -82,6 +82,21 @@ fixtures at THEIR sites, the base scatter scaled, plus the rung's brook and
 the traveled ways as authored `course` rows.
 
 ### 1.2 THE ONE-TRUTH SITE LAW — `TOWN_SITES` + `townSiteAt`
+Town portals also resolve against the current rung and owned fixtures, before
+terrain and return arrivals are generated. `TOWN_EXIT_SITING` supplies the
+reusable `ZoneDef.exitSiting` policy: 90 units from the actual snapped building
+footprint, a 180-unit approach lane with 30 units of clearance on either side,
+and 180 units between portals. `engine/exitSiting.ts` keeps the preferred seat
+when clear and otherwise searches the same edge deterministically. The public
+plaza remains traversable. Return landings must also clear all fixtures.
+The lane opens into town; navigation beyond it follows the generated paths
+around buildings, rather than requiring a straight road through the town.
+Growth and save restoration refresh this policy with the building seats.
+Live road additions preserve already visible exits. Unsatisfiable authored
+constraints report the zone/side/destination instead of carving a building.
+`probe_townexits.ts` checks shifted exits over every size and individual/full
+station sets using the same snapped footprint bounds as generation.
+
 Every seat is a row: `{ id, quarter, tiers: (Pt|null)[], structure?,
 dwell?, press? }`. ONE resolver (`townSiteAt(tier, id)`; on the World,
 `townSeat(id, dx, dy)` = THE ONE READ) feeds the fixture raised there, the

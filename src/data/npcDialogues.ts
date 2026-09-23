@@ -23,7 +23,10 @@ export interface NpcDialogueDef {
   any?: readonly DialogueCondition[];
   none?: readonly DialogueCondition[];
   trigger: { kind: 'dwell'; radius: number; seconds: number }
-    | { kind: 'exitApproach'; to: string; radius: number; holdSec: number };
+    | { kind: 'exitApproach'; to: string; radius: number; holdSec: number;
+        /** Require an on-screen exit with an unobstructed sight ray. Hidden
+         * approaches arm the trigger, even when already inside its radius. */
+        visible?: boolean };
   /** Receipt is stamped on admission, never on a mere condition/preview read. */
   once?: 'run' | 'account';
   lines: readonly { text: string; weight?: number }[];
@@ -120,7 +123,7 @@ export const NPC_DIALOGUES: NpcDialogueDef[] = [
   {
     id: 'mireille_road_welcome', speaker: { defId: 'townsfolk_innkeep' }, zone: START_ZONE,
     priority: 200, all: [{ fact: 'mireilleLessonComplete', is: false }], once: 'run',
-    trigger: { kind: 'exitApproach', to: HUB_ZONE, radius: 300, holdSec: 16 },
+    trigger: { kind: 'exitApproach', to: HUB_ZONE, radius: 300, holdSec: 16, visible: true },
     lines: [
       { text: 'Off to the Crossroads already, love? Come find me by the fire before you go. Let us see those two little flasks settled where you can reach them.\n\nNo hurry. Stay beside me a moment when you are ready. The road can spare you that much kindness.' },
       { text: 'A moment, dear, before the Crossroads carries you off. Come warm yourself by my fire. We ought to see those flasks settled where you can reach them.\n\nJust linger beside me when you are ready, love. I would rather send you out with a full cup.' },

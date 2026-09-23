@@ -117,8 +117,15 @@ for (const seed of [3344, 4455, 5566]) check('Optional road callout lifecycle, s
   const w = makeSimWorld('warrior', seed); w.loadZone(START_ZONE);
   const exit = w.exits.find(e => e.to === HUB_ZONE)!; assert.ok(exit);
   const before = JSON.stringify(w.exits);
-  w.player.pos = { x: exit.pos.x + 400, y: exit.pos.y }; w.npcSpeechView();
-  w.player.pos = { x: exit.pos.x + 200, y: exit.pos.y };
+  const dx = w.arena.w / 2 - exit.pos.x, dy = w.arena.h / 2 - exit.pos.y, length = Math.hypot(dx, dy);
+  const point = (d: number) => ({ x: exit.pos.x + dx / length * d, y: exit.pos.y + dy / length * d });
+  w.player.pos = point(400); w.npcSpeechView();
+  w.player.pos = point(120);
+  assert.ok(w.lineOfSight(w.player.pos, exit.pos, 0, 0));
+  w.publishViewFrame(w.player.pos.x - 10, w.player.pos.y - 10, 20, 20);
+  assert.equal(w.npcDialogues.callout(true), null, 'off-screen exits stay quiet');
+  assert.equal(w.ledger[npcDialogueReceipt('mireille_road_welcome')], undefined);
+  w.viewFrame = null;
   assert.equal(w.npcDialogues.callout(false), null);
   assert.equal(w.ledger[npcDialogueReceipt('mireille_road_welcome')], undefined);
   const line = w.npcSpeechView()[0]; assert.equal(line?.delivery, 'callout'); assert.equal(line.a.defId, 'townsfolk_innkeep');
@@ -130,5 +137,21 @@ for (const seed of [3344, 4455, 5566]) check('Optional road callout lifecycle, s
   w.player.pos.x += 500; w.npcDialogues.callout(true); w.player.pos.x -= 500;
   w.account.ledger[LEDGER_FLASK_LESSON] = 1;
   assert.equal(w.npcDialogues.callout(true), null, 'graduated accounts stay quiet');
+});
+check('West road stays quiet behind the cellar and along the waking-house departure', () => {
+  const w = makeSimWorld('warrior', 3344);
+  w.zoneMap[START_ZONE].exits = [{ to: HUB_ZONE, side: 'w' }];
+  w.loadZone(START_ZONE);
+  const exit = w.exits.find(e => e.to === HUB_ZONE)!;
+  for (const pos of [{ x: 225, y: 290 }, { x: 300, y: 290 }, { x: 220, y: 400 }]) {
+    w.player.pos = pos;
+    assert.equal(w.npcDialogues.callout(true), null, 'no interruption en route to the inn or through a wall');
+  }
+  assert.ok(Math.hypot(w.player.pos.x - exit.pos.x, w.player.pos.y - exit.pos.y) < 300);
+  assert.equal(w.lineOfSight(w.player.pos, exit.pos, 0, 0), false, 'real cellar wall hides the nearby road');
+  assert.equal(w.ledger[npcDialogueReceipt('mireille_road_welcome')], undefined);
+  w.player.pos = { x: exit.pos.x + 100, y: exit.pos.y };
+  assert.ok(w.lineOfSight(w.player.pos, exit.pos, 0, 0));
+  assert.equal(w.npcDialogues.callout(true)?.a.defId, 'townsfolk_innkeep', 'hidden-to-visible approach arms inside the radius');
 });
 console.log(`TOWN WELCOME: ${passed} passed`);

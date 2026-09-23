@@ -4,7 +4,11 @@
 selects them; the existing speech attention and portrait reader present them.
 
 Before the account has lived Mireille's lesson, approaching the exit **to the
-Crossroads** from outside its invitation radius earns one warm call-out per run.
+Crossroads** earns one warm call-out per run once the road is within 300 units,
+on screen and in unobstructed line of sight. Being outside that range, behind
+terrain or off screen arms the approach; revealing the exit can trigger it
+without first leaving the radius. Buildings and closed doors use the shared
+sight-ray rules. Headless play uses the world's normal fallback view frame.
 The exit destination is resolved from the generated town, never a compass side
 or fixed coordinate. The invitation admits while moving, lasts up to 16 seconds,
 and can be dismissed. It changes no travel gate, input lock, service or quest.
