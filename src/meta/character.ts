@@ -497,6 +497,8 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
     if (free >= 0) bar[free] = id;
   }
   world.adoptSavedMeta(built.meta, bar, save.level);
+  // Seed pre-memory saves without replacing preferences from a newer life.
+  world.rememberSkillSlots(world.localSeat, undefined, false);
   restoreFlaskChargeBanks(world.seatHero(world.localSeat), save.flaskCharges);
   // Re-field the saved COMPANY (already paid + pool-marked). The legacy
   // single-contract field folds in as a one-blade company (old saves).

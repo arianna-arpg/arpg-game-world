@@ -492,6 +492,7 @@ import {
   type Account,
 } from '../meta/account';
 import { gateMet } from '../meta/gates';
+import { planSkillSlots, rememberSkillSlot } from '../meta/skillSlotMemory';
 // THE MILESTONE DERIVATION: every level the unlock catalog's own gates ask
 // about — the XP sweep stamps exactly these beside its standing decade keys,
 // so a level gate authored anywhere in the catalog has a live signal BY
@@ -23004,6 +23005,7 @@ export class World {
         x !== undefined ? 'no room there' : 'no room in the bag');
       return false;
     }
+    this.rememberSkillSlots(seat, [inst]);
     if (inst.def.tags.includes('flask')) this.clearTreeFields(p, inst);
     m.knownSkills.delete(skillId);
     for (let i = 0; i < p.skills.length; i++) {
@@ -23777,22 +23779,31 @@ export class World {
   /** Fresh characters inherit the account's lesson. Existing kit/bag flasks
    * use the same learn/bind paths as new gifts. Resume shells opt out at creation. */
   private veteranFlaskDeals = new WeakSet<Seat>();
+  private provisioningFlaskSlots = new Set<Seat>();
   dealVeteranFlasks(seat: Seat = this.localSeat): void {
     if (!(this.account.ledger[LEDGER_FLASK_LESSON] ?? 0) || this.veteranFlaskDeals.has(seat)) return;
     if (seat === this.localSeat && this.ledger[MIREILLE_FILL_LEDGER]) return;
     const p = seat.actor, m = seat.meta;
+    const slots = planSkillSlots(MIREILLE_GIFT_SKILLS, p.skills.map(inst => inst?.def.id ?? null), this.account.skillSlotMemory);
     let complete = true;
-    for (const sid of MIREILLE_GIFT_SKILLS) {
-      if (!SKILLS[sid]) { complete = false; continue; }
-      if (!m.knownSkills.has(sid)) {
-        const item = findBagGem(m.items, 'skill', sid)
-          ?? this.grantSkillGemItem(seat, makeSkillGem(SKILLS[sid], 1, 'magic'), true);
-        if (!item || !this.learnSkill(item.uid, seat)) { complete = false; continue; }
+    // Automatic fallback seating must not replace a remembered preference.
+    this.provisioningFlaskSlots.add(seat);
+    try {
+      for (const sid of MIREILLE_GIFT_SKILLS) {
+        if (!SKILLS[sid]) { complete = false; continue; }
+        const slot = slots.get(sid) ?? -1;
+        if (!m.knownSkills.has(sid)) {
+          const item = findBagGem(m.items, 'skill', sid)
+            ?? this.grantSkillGemItem(seat, makeSkillGem(SKILLS[sid], 1, 'magic'), true);
+          if (!item || !this.learnSkill(item.uid, seat, slot)) { complete = false; continue; }
+        }
+        if (!p.skills.some(inst => inst?.def.id === sid)) {
+          if (slot < 0 || !this.bindSkill(slot, sid, seat)) complete = false;
+        }
       }
-      if (!p.skills.some(inst => inst?.def.id === sid)) {
-        const slot = p.skills.findIndex(inst => !inst);
-        if (slot < 0 || !this.bindSkill(slot, sid, seat)) complete = false;
-      }
+    } finally {
+      this.provisioningFlaskSlots.delete(seat);
+      this.rememberSkillSlots(seat, undefined, false);
     }
     fillFlaskChargeBanks(p, m.knownSkills.values());
     if (!complete) return; // keep carried gifts recoverable; never stamp a refused deal
@@ -29544,6 +29555,7 @@ export class World {
     if (slot < 0 || slot >= p.skills.length) return false;
     const prev = p.skills[slot];
     if (skillId === null) {
+      this.rememberSkillSlots(seat, [prev]);
       p.skills[slot] = null;
       this.rebindWornGrafts(seat, [prev]);
       return true;
@@ -29551,6 +29563,7 @@ export class World {
     // Learned or GRANTED (THE LEGEND FABRIC): both bind by id.
     const inst = this.seatSkillById(seat, skillId);
     if (!inst) return false;
+    this.rememberSkillSlots(seat, [prev]);
     const already = prev?.def.id === skillId;
     for (let i = 0; i < p.skills.length; i++) {
       if (p.skills[i]?.def.id === skillId) p.skills[i] = null;
@@ -29582,6 +29595,7 @@ export class World {
    *  skill): re-derive the graft lane, then re-mint forwarded copies on the
    *  hosts the move touched — bindGraft's exact law, aimed by position. */
   private rebindWornGrafts(seat: Seat, touched: (SkillInstance | null | undefined)[]): void {
+    this.rememberSkillSlots(seat, touched);
     this.recalcSeat(seat);
     const seen = new Set<SkillInstance>();
     for (const inst of touched) {
@@ -29589,6 +29603,21 @@ export class World {
       seen.add(inst);
       if (inst.def.tags.includes('flask') && !seat.actor.skills.includes(inst)) this.clearTreeFields(seat.actor, inst);
       this.resyncMinionSupports(inst);
+    }
+  }
+
+  /** The account owner's real hero bar teaches preferences; guest edits and
+   * borrowed possession kits cannot rewrite them. Capture only touched skills
+   * so an unrelated move does not teach an automatic fallback as a preference. */
+  rememberSkillSlots(seat: Seat = this.localSeat,
+    touched: readonly (SkillInstance | null | undefined)[] = this.seatHero(seat).skills,
+    overwrite = true): void {
+    if (seat !== this.localSeat || this.provisioningFlaskSlots.has(seat)) return;
+    const bar = this.seatHero(seat).skills;
+    for (const inst of touched) {
+      if (inst && rememberSkillSlot(this.account.skillSlotMemory, inst, bar.indexOf(inst), overwrite)) {
+        this.accountDirty = true;
+      }
     }
   }
 

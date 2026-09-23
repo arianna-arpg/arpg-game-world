@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
-import { World } from '../src/engine/world';
-import { CLASSES } from '../src/data/classes';
+import { World, BAR_SLOTS } from '../src/engine/world';
+import { CLASSES, kitRungs } from '../src/data/classes';
 import { SKILLS } from '../src/data/skills';
 import { HUB_ZONE, START_ZONE } from '../src/data/zones';
 import { NPC_DIALOGUES, BRANDT_HAMMER_QUEST } from '../src/data/npcDialogues';
 import { dialogueConditionMet, npcDialogueReceipt } from '../src/engine/npcDialogues';
-import { LEDGER_FLASK_LESSON } from '../src/meta/account';
+import { LEDGER_FLASK_LESSON, makeAccount, serializeAccount, deserializeAccount } from '../src/meta/account';
+import { classTierId } from '../src/data/classTiers';
+import { resolveClassKit } from '../src/meta/classkit';
+import { planSkillSlots, restoreSkillSlotMemory, SKILL_SLOT_MEMORY_CFG } from '../src/meta/skillSlotMemory';
 import { odysseyMilestoneKey } from '../src/data/powerProgression';
 import { makeSkillGem } from '../src/engine/skills';
 import { flaskChargeBanks } from '../src/engine/flaskState';
@@ -69,6 +72,130 @@ check('First lesson completed far from Mireille fills immediately and graduates 
   assert.equal(w.account.ledger[LEDGER_FLASK_LESSON], 1);
   w.player.charges.set('flask_life', 0); w.update(1 / 60);
   assert.equal(w.player.charges.get('flask_life'), 0);
+});
+
+const slotOf = (w: World, id: string) => w.seatHero(w.localSeat).skills.findIndex(s => s?.def.id === id);
+function veteran(memory: Record<string, number> = {}, kit?: readonly (string | null)[]) {
+  const account = makeAccount(); account.ledger[LEDGER_FLASK_LESSON] = 1;
+  account.skillSlotMemory = { ...memory };
+  const w = new World(account, fixture.manifest);
+  w.createPlayer(CLASSES[0], { startingCompanions: false, kit });
+  return w;
+}
+function nextLife(w: World) {
+  const account = deserializeAccount(JSON.parse(JSON.stringify(serializeAccount(w.account))))!;
+  const next = new World(account, fixture.manifest);
+  next.createPlayer(CLASSES[0], { startingCompanions: false });
+  return next;
+}
+check('Moved, swapped and removed flasks keep their last positions across saved accounts and lives', () => {
+  const w = veteran(), last = BAR_SLOTS - 1, penultimate = last - 1;
+  w.accountDirty = false;
+  assert.ok(w.swapSkillSlots(slotOf(w, 'life_flask'), penultimate));
+  assert.ok(w.bindSkill(last, 'mana_flask'));
+  assert.ok(w.swapSkillSlots(last, penultimate));
+  assert.equal(w.accountDirty, true, 'slot edits request immediate account persistence');
+  assert.deepEqual(w.account.skillSlotMemory, { life_flask: last, mana_flask: penultimate });
+  assert.ok(w.bindSkill(last, 'life_flask'), 'toggle life flask off');
+  assert.ok(w.unlearnSkill('mana_flask'), 'return mana flask to the bag');
+  const saved = serializeCharacter(w), resumed = new World(w.account, fixture.manifest);
+  resumed.createPlayer(CLASSES[0], { startingCompanions: false, startingFlasks: false });
+  assert.ok(applySavedCharacter(resumed, saved)); resumed.dealVeteranFlasks();
+  assert.equal(slotOf(resumed, 'mana_flask'), -1, 'continue respects deliberate unlearning');
+  const next = nextLife(w); full(next);
+  assert.equal(slotOf(next, 'life_flask'), last);
+  assert.equal(slotOf(next, 'mana_flask'), penultimate);
+});
+check('Tutorial placement and gem replacement teach memory; removal without prior memory captures the departed slot', () => {
+  const w = makeSimWorld('warrior', 5567), last = BAR_SLOTS - 1;
+  w.ledger.mireille_flasks_given = 1;
+  for (const [i, id] of flasks.entries()) {
+    const gem = w.grantSkillGemItem(w.localSeat, makeSkillGem(SKILLS[id], 1, 'magic'))!;
+    assert.ok(w.learnSkill(gem.uid, w.localSeat, last - i));
+  }
+  w.update(1 / 60); full(w);
+  assert.equal(w.account.ledger[LEDGER_FLASK_LESSON], 1);
+  const replacement = w.grantSkillGemItem(w.localSeat, makeSkillGem(SKILLS.life_flask, 1, 'rare'))!;
+  assert.ok(w.learnSkill(replacement.uid));
+  assert.equal(w.account.skillSlotMemory.life_flask, last);
+  w.account.skillSlotMemory = {};
+  assert.ok(w.unlearnSkill('life_flask'));
+  assert.ok(w.bindSkill(last - 1, null));
+  assert.deepEqual(w.account.skillSlotMemory, { life_flask: last, mana_flask: last - 1 });
+  assert.equal(slotOf(nextLife(w), 'life_flask'), last);
+});
+check('Fallback reserves the other flask preference, preserves class occupants and does not rewrite memory', () => {
+  const free = CLASSES[0].bar.indexOf(null);
+  const memory = { life_flask: 0, mana_flask: free };
+  const w = veteran(memory); full(w);
+  assert.equal(w.player.skills[0]?.def.id, CLASSES[0].bar[0]);
+  assert.equal(slotOf(w, 'mana_flask'), free);
+  assert.equal(slotOf(w, 'life_flask'), free + 1);
+  assert.deepEqual(w.account.skillSlotMemory, memory);
+  assert.ok(w.swapSkillSlots(0, 1));
+  assert.deepEqual(w.account.skillSlotMemory, memory, 'unrelated edits leave fallback preferences alone');
+  const duplicate = veteran({ life_flask: BAR_SLOTS - 1, mana_flask: BAR_SLOTS - 1 }); full(duplicate);
+  assert.equal(slotOf(duplicate, 'life_flask'), BAR_SLOTS - 1);
+  assert.equal(slotOf(duplicate, 'mana_flask'), free);
+});
+check('Every authored mastery grant keeps its starting slot with remembered and default flask placements', () => {
+  for (const cls of CLASSES) {
+    const grants = kitRungs(cls).filter(r => !r.replaces);
+    if (!grants.length) continue;
+    const preferences: Record<string, number>[] = [{}, { life_flask: cls.bar.indexOf(null), mana_flask: BAR_SLOTS - 1 }];
+    for (const memory of preferences) {
+      const account = makeAccount(); account.ledger[LEDGER_FLASK_LESSON] = 1;
+      account.skillSlotMemory = { ...memory };
+      for (const grant of grants) account.unlockedClassTiers.add(classTierId(cls.id, grant.tier));
+      const kit = resolveClassKit(account, cls);
+      const w = new World(account, fixture.manifest);
+      w.createPlayer(cls, { startingCompanions: false, kit }); full(w);
+      for (const [i, id] of kit.entries()) if (id) assert.equal(w.player.skills[i]?.def.id, id, cls.id);
+      assert.equal(w.meta.knownSkills.size, new Set(kit.filter(Boolean)).size + flasks.length);
+    }
+  }
+});
+check('Malformed, missing and out-of-range memory degrade safely; full bars leave recoverable gifts', () => {
+  assert.deepEqual(restoreSkillSlotMemory({ life_flask: 0, bad: -1, frac: 1.5, text: '6', nil: null, infinite: Infinity }), { life_flask: 0 });
+  assert.deepEqual(restoreSkillSlotMemory([]), {});
+  const old = serializeAccount(makeAccount()); delete old.skillSlotMemory;
+  assert.deepEqual(deserializeAccount(old)!.skillSlotMemory, {});
+  const w = veteran({ life_flask: BAR_SLOTS, mana_flask: -1 }); full(w);
+  assert.equal(slotOf(w, 'life_flask'), CLASSES[0].bar.indexOf(null));
+  const kit = Array.from({ length: BAR_SLOTS }, (_, i) => CLASSES[0].bar[i % 3]);
+  const crowded = veteran({}, kit);
+  assert.deepEqual(crowded.player.skills.map(s => s?.def.id ?? null), kit);
+  assert.equal(crowded.ledger[LEDGER_FLASK_LESSON], undefined);
+  assert.ok(flasks.every(id => crowded.meta.items.some(i => i.gem?.kind === 'skill' && i.gem.skillId === id)));
+  crowded.bindSkill(BAR_SLOTS - 1, null); crowded.bindSkill(BAR_SLOTS - 2, null);
+  crowded.dealVeteranFlasks(); full(crowded);
+  assert.equal(crowded.ledger[LEDGER_FLASK_LESSON], 1);
+});
+check('Resume seeds old bars without overwriting newer preferences; fresh guests reuse but cannot rewrite owner memory', () => {
+  const w = veteran({ life_flask: BAR_SLOTS - 2, mana_flask: BAR_SLOTS - 1 });
+  const save = serializeCharacter(w); w.account.skillSlotMemory = {};
+  const restored = new World(w.account, fixture.manifest);
+  restored.createPlayer(CLASSES[0], { startingCompanions: false, startingFlasks: false });
+  assert.ok(applySavedCharacter(restored, save));
+  assert.deepEqual(w.account.skillSlotMemory, { life_flask: BAR_SLOTS - 2, mana_flask: BAR_SLOTS - 1 });
+  w.account.skillSlotMemory.life_flask = 0;
+  assert.ok(applySavedCharacter(restored, save));
+  assert.equal(w.account.skillSlotMemory.life_flask, 0);
+  const before = { ...w.account.skillSlotMemory };
+  const guest = restored.addSeat('memory-guest', CLASSES[0], new NullInput(), { startingCompanions: false }); full(restored, guest);
+  assert.equal(guest.actor.skills[BAR_SLOTS - 1]?.def.id, 'mana_flask');
+  assert.ok(restored.swapSkillSlots(BAR_SLOTS - 1, BAR_SLOTS - 2, guest));
+  assert.deepEqual(w.account.skillSlotMemory, before);
+});
+check('Slot-memory policy follows tags and the planner accepts arbitrary skill IDs and bar lengths', () => {
+  assert.deepEqual([...planSkillSlots(['mod_flask', 'other_flask'], ['starter', null, null], { mod_flask: 2 })],
+    [['mod_flask', 2], ['other_flask', 1]]);
+  const w = veteran(), before = { ...w.account.skillSlotMemory }, tags = SKILL_SLOT_MEMORY_CFG.tags;
+  try {
+    SKILL_SLOT_MEMORY_CFG.tags = [];
+    w.bindSkill(BAR_SLOTS - 1, 'life_flask');
+    assert.deepEqual(w.account.skillSlotMemory, before);
+  } finally { SKILL_SLOT_MEMORY_CFG.tags = tags; }
 });
 
 check('Rule census is unambiguous and weights valid', () => {

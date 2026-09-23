@@ -144,6 +144,11 @@ support inheritance, primed cargo and balance evidence. Verification is
 `balance/probe_flasktrees.ts`, `balance/audit_flasktrees.ts`, and the isolated
 hidden `balance/flask-ui.cjs` harness (run the probe and build first).
 
+Persistent flask placement lives in `meta/skillSlotMemory.ts`: account slot
+preferences survive removal and fresh-life provision respects occupied class
+slots. Contract: `docs/design/town-welcome.md`; verify `probe_townwelcome.ts`
+and the hidden `balance/flask-slots-ui.cjs` disk-reload harness after a build.
+
 Gorer carry bounds and Gloomling motion-based shake-off tuning live in
 `docs/design/gorer-gloomling-balance.md`; `balance/probe_clingbalance.ts`
 covers the reusable `maxCarryDistance`, `releaseGrace` and `motionShake` levers.

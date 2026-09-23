@@ -19,6 +19,7 @@ import { emptyReliquary, restoreReliquary, type AccountReliquary } from './reliq
 // ---------------------------------------------------------------------------
 
 import { SAVE_COMPATIBILITY } from './saveCompatibility';
+import { restoreSkillSlotMemory, type SkillSlotMemory } from './skillSlotMemory';
 import type { MemoryReceipt } from './memoryUnlocks';
 import { emptyCosmetics, type CosmeticState } from '../engine/cosmetics';
 import { sanitizeCosmetics } from './cosmetics';
@@ -460,6 +461,8 @@ export interface Account {
    *  card re-opens as it was left; a pick whose rung is no longer owned
    *  falls back to the base at resolve. */
   kitPicks: Record<string, Record<string, string>>;
+  /** Last equipped positions for opted-in skill families, retained on removal. */
+  skillSlotMemory: SkillSlotMemory;
   unlockedSkills: Set<string>;
   /** Independent explicit grants, retained even when a pending class shares a skill. */
   explicitSkillUnlocks: Set<string>;
@@ -533,6 +536,7 @@ export interface AccountSave {
   /** THE MASTERY LADDER + THE REMEMBERED KIT — optional so older saves load. */
   unlockedClassTiers?: string[];
   kitPicks?: Record<string, Record<string, string>>;
+  skillSlotMemory?: SkillSlotMemory;
   // Content-package meta (all optional so older saves load with ?? defaults).
   packageUnlocks?: string[];
   packageDefaults?: Record<string, PackagePref>;
@@ -559,6 +563,7 @@ export function makeAccount(): Account {
     pendingClassUnlocks: new Set<string>(),
     unlockedClassTiers: new Set<string>(),
     kitPicks: {},
+    skillSlotMemory: {},
     unlockedSkills: new Set(STARTER_SKILLS),
     explicitSkillUnlocks: new Set(STARTER_SKILLS),
     unlockedSupports: new Set(STARTER_SUPPORTS),
@@ -593,6 +598,7 @@ export function serializeAccount(a: Account): AccountSave {
     pendingClassUnlocks: [...a.pendingClassUnlocks],
     unlockedClassTiers: [...a.unlockedClassTiers],
     kitPicks: a.kitPicks,
+    skillSlotMemory: { ...a.skillSlotMemory },
     unlockedSkills: [...a.unlockedSkills],
     explicitSkillUnlocks: [...a.explicitSkillUnlocks],
     unlockedSupports: [...a.unlockedSupports],
@@ -646,6 +652,7 @@ export function deserializeAccount(s: AccountSave): Account | null {
       typeof id === 'string' && !STARTER_CLASSES.includes(id)
       && CLASSES.some(c => c.id === id) && (s.unlockedClasses ?? []).includes(id))),
     unlockedClassTiers: new Set<string>((s.unlockedClassTiers ?? []).filter(t => typeof t === 'string')),
+    skillSlotMemory: restoreSkillSlotMemory(s.skillSlotMemory),
     // Strings only, per class per base — a malformed pick is dropped, never
     // a wipe (the resolver falls back to the base kit regardless).
     kitPicks: Object.fromEntries(Object.entries(s.kitPicks ?? {})
