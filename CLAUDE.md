@@ -40,6 +40,10 @@ with `probe_brandtquest.ts` and the hidden `balance/brandt-quest-ui.cjs` harness
 Guidance for Claude Code working in this repository. This file is committed and
 shared with everyone who clones the repo.
 
+Support item and vendor tooltips show live equipped-skill compatibility through
+the shared socket gate. See `docs/ui/support-tooltips.md`; verify with the hidden
+`balance/support-tooltips-ui.cjs` harness after a build.
+
 Parry retaliation windows and actual projectile reflection are documented in
 `docs/engine/parry.md`; `balance/probe_parry.ts` pins the shared recipient cooldown,
 typed returning damage, defensive preservation and symmetric ownership transfer.

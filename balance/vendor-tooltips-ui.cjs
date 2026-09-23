@@ -30,9 +30,9 @@ app.whenReady().then(async () => {
       for (const flag of ['salvage_station', 'unlock_all_gems', 'vendor_gems', 'vendor_commission', 'brandt_sell_supports']) account.features.add(flag);
       const skills = w.skillDropPool(1);
       const skill = skills.find(s => !w.meta.knownSkills.has(s.id) && s.description);
-      const otherSkill = skills.find(s => s !== skill && s.description);
+      const otherSupport = w.supportDropPool(100).find(s => !s.rollBase);
       const support = w.supportDropPool(100).find(s => s.rollBase);
-      check('fixture uses real unlearned skill and rolled support definitions', !!skill && !!otherSkill && !!support);
+      check('fixture uses real unlearned skill and rolled support definitions', !!skill && !!otherSupport && !!support);
       const rolled = Object.fromEntries(support.rollBase.axes.map(a => [a.id, a.rows.at(-1).id]));
       const cutLines = support.rollBase.axes.map(a => a.rows.at(-1).line);
       w.vendorStock = [
@@ -69,7 +69,7 @@ app.whenReady().then(async () => {
         && JSON.stringify(w.vendorStock) === before && w.meta.knownSkills.size === known);
 
       account.ledger['gemdrop:' + skill.id] = 100;
-      account.ledger['gemdrop:' + otherSkill.id] = 1;
+      account.ledger['gemdrop:' + otherSupport.id] = 1;
       account.ledger['gemdrop:' + support.id] = 100;
       ui.refreshVendor();
       vendor.querySelector('[data-vcomm-open="brandt"]').click();
@@ -78,9 +78,11 @@ app.whenReady().then(async () => {
       const supportOverview = hover(row('support', support.id));
       check('commission support describes the definition without inventing a roll', supportOverview.includes(plain(support.description))
         && !cutLines.some(line => supportOverview.includes(plain(line))) && !supportOverview.includes('Lv 4'));
-      const disabled = row('skill', otherSkill.id);
+      const otherSupportSearch = vendor.querySelector('[data-vcomm-search]');
+      otherSupportSearch.value = otherSupport.name; otherSupportSearch.dispatchEvent(new Event('input', { bubbles: true }));
+      const disabled = row('support', otherSupport.id); // Skill awakening is bypassed by the fixture's debug Codex; support counts still gate.
       check('ineligible commission retains hover details', disabled.querySelector('button').disabled
-        && hover(disabled.querySelector('span')).includes(plain(otherSkill.description)));
+        && hover(disabled.querySelector('span')).includes(plain(otherSupport.description)));
       const search = vendor.querySelector('[data-vcomm-search]');
       search.value = support.name; search.dispatchEvent(new Event('input', { bubbles: true }));
       check('search rebuild preserves commission tooltip wiring', hover(row('support', support.id)).includes(plain(support.description)));

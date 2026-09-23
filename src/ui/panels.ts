@@ -5,6 +5,7 @@ import { emptyStash, personalStashEntries, planStashMove } from '../engine/stash
 import { STASH_DEFS } from '../data/stashes';
 import { renderWardrobe } from './wardrobe';
 import { BUILD_PANEL_CFG, buildPanelSeat } from './buildPanels';
+import { supportCompatibilityHtml } from './supportCompatibility';
 // ---------------------------------------------------------------------------
 // DOM panels: class selection, character sheet, skill book (unlock / level /
 // socket support gems), passive tree, death screen.
@@ -4105,6 +4106,7 @@ export class UI {
       if (e.gem.def.rollBase) {
         lines.push(...veinLines(e.gem.def.rollBase, e.gem.rolled).map(line => `<div style="color:#c8b06a">◈ ${line}</div>`));
       }
+      lines.push(supportCompatibilityHtml(e.gem, world.seatHero(buyer).skills, inst => world.summonCrewSkills(inst)));
     }
     lines.push(...this.vendorWareFooter(key));
     const name = e.kind === 'skill' ? e.inst.def.name : e.gem.def.name;
@@ -4217,14 +4219,9 @@ export class UI {
       }
       lines.push('<div style="color:#9a94a8;font-size:10px">Cut once at the vein — fixed forever. Read it before you choose its skill.</div>');
     }
+    lines.push(supportCompatibilityHtml({ def, rolled: gp.rolled }, world.seatHero(seat).skills, inst => world.summonCrewSkills(inst)));
     if (inBag && !salv) {
-      const hosts = [...m.knownSkills.values()]
-        .filter(inst => inst.sockets.includes(null)
-          && supportFitsInstOrCrew(def, inst, world.summonCrewSkills(inst)))
-        .map(inst => inst.def.name);
-      lines.push(`<div style="color:#c8a84b;font-size:10px;margin-top:3px">${hosts.length
-        ? `drag onto a skill in the SKILLS flap to socket it — fits: ${hosts.join(', ')}`
-        : 'no learned skill has a free, fitting socket right now'}</div>`);
+      lines.push('<div style="color:#c8a84b;font-size:10px;margin-top:3px">drag onto a skill in the SKILLS flap to socket it</div>');
     }
     return {
       title: `<span style="color:${def.color}">${def.name}</span> <span style="color:#ffd700;font-size:11px">Lv ${gp.level}</span>`,
