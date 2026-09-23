@@ -3681,8 +3681,12 @@ export class Renderer {
     const speaker = callout?.a ?? this.dialogueVisibleSpeaker;
     const visible = this.dialogueReaderEnabled() && speaker && (callout || this.labelRevealAt(world, speaker.pos) > 0.02);
     const line = visible ? callout ?? this.speechFocusLines.get(speaker) : undefined;
+    // Visibility admits NEW text; it does not revoke a page already being
+    // read. Reach/selection still end the conversation through world focus,
+    // independently of roof fades, culling and service-panel presentation.
     this.onNpcDialogue?.(world, line?.seatId === world.localSeat?.id
-      ? { ...line, text: this.resolveText(line.text) } : null, visible ? speaker.id : null);
+      ? { ...line, text: this.resolveText(line.text) } : null,
+      this.dialogueReaderEnabled() ? callout?.a.id ?? world.speechFocusTarget()?.id ?? null : null);
     if (!this.speeches.length) {
       if (this.speechClocks.size) this.speechClocks.clear();
       this.speechLayoutAtMs = 0;

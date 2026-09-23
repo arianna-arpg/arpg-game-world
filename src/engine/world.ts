@@ -215,7 +215,7 @@ import { underSpanPolicyOf } from '../data/underspans';
 import { hollowDef } from '../data/hollows';
 import { annexKindDef, annexParentIdOf } from '../data/annexes';
 import type { AnnexSpec, HollowSpec } from './levelgen';
-import { DWELL_CFG, npcDwellReach, transitDwell, transitRadius, transitReach } from '../data/transit';
+import { DWELL_CFG, npcDwellReach, npcDwellRadius, transitDwell, transitRadius, transitReach } from '../data/transit';
 import type { DwellReach } from '../data/transit';
 import type { ArenaCrowdSpec, ArenaSpec, ArenaWardSpec } from '../data/arenas';
 import '../data/arenas'; // side-effect: the ward-seal doodad rules register
@@ -23366,7 +23366,7 @@ export class World {
   nearSmith(seat: Seat = this.localSeat): boolean {
     return this.actors.some(a =>
       this.hasNpcRole(a, 'vendor')
-      && dist(a.pos, seat.actor.pos) <= 160
+      && dist(a.pos, seat.actor.pos) <= npcDwellRadius('vendor')
       && this.dwellReachable(seat.actor.pos, a.pos, npcDwellReach('vendor'), { from: seat.actor.tier ?? 0, to: a.tier ?? 0 }));
   }
 
@@ -24020,7 +24020,7 @@ export class World {
       if (role === 'delver' && (this.descentSite?.delverId !== a.id || this.descentRun)) continue;
       const distance = dist(seat.actor.pos, a.pos);
       if (distance > radius || !this.dwellReachable(seat.actor.pos, a.pos,
-        npcDwellReach(quest ? 'questgiver' : role), this.storyPair(seat.actor, a))) continue;
+        npcDwellReach(role || (quest ? 'questgiver' : '')), this.storyPair(seat.actor, a))) continue;
       const attention = speechAttentionFor(ambient ? 'ambient' : 'functional', role, def.speechAttention);
       if (!ambient && !text) text = attention.restingLine ?? null;
       if (!ambient && !text && !attention.reserveSilent) continue;

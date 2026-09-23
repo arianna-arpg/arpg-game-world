@@ -96,14 +96,19 @@ with the animated portrait and continuously reachable advance/close controls.
 Services and inventory fit beside one another, or stack when too narrow, with
 scrolling content. On a short/high-scale screen they may borrow the inactive
 HUD space while services own input. Font size continues to follow the user's
-scale. The layout uses temporary CSS properties: dismissal, suspension and
-departure restore the authored/movable seats; saved positions are untouched.
-Folio tabs measure the displaced front after layout. Panels measure their own
-seats again before each folio sync, so temporary placement cannot alter which
-leaves belong together.
+scale. The layout reserves its CSS geometry until each service panel actually
+closes. Dismissal, finishing a page and modal suspension preserve panel bounds,
+scroll limits and purchase/sale targets. Folio tabs measure those same retained
+seats; explicit tab, viewport and scale changes may refit the workspace. Saved
+positions remain untouched, and closing a panel releases its reservation.
 
 The renderer batches selection once before actors, then delivers dialogue
-through the same actor and room visibility gates as bubbles. It suppresses
+through the same actor and room visibility gates as bubbles for initial
+admission. Once admitted, a page remains while the world's reachable focus
+holds, even if a roof animation or render culling temporarily hides the body.
+An NPC's functional role supplies its dwell reach even when it also gives
+quests. `NPC_DWELL_RADII` supplies shared counter/dialogue range overrides;
+unlisted roles retain their authored conversation radii. It suppresses
 the local reader's duplicate overhead bubble. It never owns conversation
 rewards or scene-specific dialogue rules.
 

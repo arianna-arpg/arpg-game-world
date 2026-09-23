@@ -1,5 +1,6 @@
 import { NPC_DIALOGUES, NPC_DIALOGUE_FACTS, NPC_APPEARANCES, type DialogueCondition, type NpcDialogueDef } from '../data/npcDialogues';
 import { MONSTERS } from '../data/monsters';
+import { npcDwellRadius } from '../data/transit';
 import { dist } from '../core/math';
 import { Rng } from '../core/rng';
 import type { Actor } from './actor';
@@ -83,9 +84,11 @@ export class NpcDialogueDirector {
     const defs = NPC_DIALOGUES.filter(d => d.trigger.kind === 'dwell' && this.matches(a, d)
       && npcDialogueEligible(this.w, this.admittedVisits.get(a.id) === d.id ? { ...d, once: undefined } : d))
       .sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id));
-    const def = defs.find(d => d.trigger.kind === 'dwell' && dist(a.pos, this.w.player.pos) <= d.trigger.radius);
+    const radiusFor = (d: NpcDialogueDef) => d.trigger.kind === 'dwell'
+      ? npcDwellRadius(MONSTERS[a.defId!]?.npcRole ?? '', d.trigger.radius) : 0;
+    const def = defs.find(d => d.trigger.kind === 'dwell' && dist(a.pos, this.w.player.pos) <= radiusFor(d));
     if (!def || def.trigger.kind !== 'dwell') { this.choices.delete(a.id); this.admittedVisits.delete(a.id); return null; }
-    return { def, text: this.text(a, def), radius: def.trigger.radius, seconds: def.trigger.seconds };
+    return { def, text: this.text(a, def), radius: radiusFor(def), seconds: def.trigger.seconds };
   }
 
   /** Called only after attention/dwell admits the selected authored line. */

@@ -2400,7 +2400,8 @@ export class UI {
    * Shelved leaves cannot suppress a conversation; visible modals/pages can.
    * Inventory accompanies a service only for that service's local owner. */
   dialogueContext(): { available: boolean; surfaces: HTMLElement[] } {
-    const local = this.getWorld().localSeat.id;
+    const local = this.getWorld().localSeat?.id;
+    if (!local) return { available: false, surfaces: [] }; // no dialogue workspace before a hero exists
     const drawn = [...this.dialogueSurfaces].filter(([el, row]) => row.isOpen()
       && !el.classList.contains('hidden') && this.folioDrawn(el));
     const services = drawn.filter(([el, row]) => row.kind === 'station' && this.panelSeat(el).id === local).map(([el]) => el);

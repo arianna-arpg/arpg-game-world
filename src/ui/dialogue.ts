@@ -131,14 +131,14 @@ export class DialogueUI {
   /** Seat before DOM hit-testing as well as after rendering a new page. */
   syncLayout(): void {
     if (this.open) this.layout.sync(this.root, this.host.hudTop(), this.host.surfaces());
-    else this.layout.clear();
+    else this.layout.maintain(this.root, this.host.hudTop(), this.host.surfaces());
     this.host.seated();
   }
 
   setAvailable(available: boolean): void {
     this.available = available;
     this.root.hidden = !available || !this.session.reading;
-    if (this.root.hidden) this.layout.clear();
+    if (this.root.hidden) this.layout.retain();
   }
 
   private finish(offer: DialogueOffer | null): void {
@@ -199,7 +199,7 @@ export class DialogueUI {
   close(): boolean {
     if (!this.session.reading) return false;
     this.finish(this.session.close()); this.pageKey = ''; this.root.hidden = true;
-    this.layout.clear(); this.host.seated();
+    this.layout.retain(); this.host.seated();
     return true;
   }
 }

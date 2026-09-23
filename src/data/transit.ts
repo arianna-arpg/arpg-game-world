@@ -99,6 +99,13 @@ export function npcDwellReach(role: string): DwellReach {
   return DWELL_CFG.npcReach[role] ?? DWELL_CFG.reach;
 }
 
+/** A counter's conversation and service share a reach envelope. Roles with
+ * no counter override retain each dialogue's authored radius. */
+export const NPC_DWELL_RADII: Readonly<Record<string, number>> = { vendor: 160 };
+export function npcDwellRadius(role: string, fallback = 150): number {
+  return NPC_DWELL_RADII[role] ?? fallback;
+}
+
 export interface TransitDef {
   /** Registry key. Sub-kinds chain: 'family:sub' falls back to 'family'. */
   kind: string;

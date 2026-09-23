@@ -1,10 +1,12 @@
 import { DIALOGUE_CFG } from '../data/dialogue';
 import { uiScaleNow } from './uiScale';
 
-/** Temporary space for a conversation and its service surfaces. The panel's
- * authored/movable seat is untouched; closing the reader restores it. */
+/** A conversation reserves space for the lifetime of its open service panels.
+ * Dismissing/suspending a reader must never move an item under the pointer.
+ * The panel's authored/movable seat is restored only after that panel closes. */
 export class DialogueLayout {
   private seated: HTMLElement[] = [];
+  private signature = '';
 
   constructor() {
     const style = document.createElement('style');
@@ -24,18 +26,40 @@ export class DialogueLayout {
     document.head.appendChild(style);
   }
 
+  private release(el: HTMLElement): void {
+    el.classList.remove('dialogue-companion');
+    for (const key of ['left', 'top', 'width', 'height', 'scroll-height']) el.style.removeProperty(`--dialogue-${key}`);
+  }
+
+  /** Shelving or a modal pause is not a close. Retain both geometry and
+   * scroll limits until the owning panel actually ends its visit. */
+  retain(): void {
+    this.seated = this.seated.filter(el => {
+      if (el.isConnected && !el.hidden && !el.classList.contains('hidden')) return true;
+      this.release(el); this.signature = ''; return false;
+    });
+  }
+
   clear(): void {
-    for (const el of this.seated) {
-      el.classList.remove('dialogue-companion');
-      for (const key of ['left', 'top', 'width', 'height', 'scroll-height']) el.style.removeProperty(`--dialogue-${key}`);
-    }
-    this.seated = [];
+    for (const el of this.seated) this.release(el);
+    this.seated = []; this.signature = '';
+  }
+
+  maintain(root: HTMLElement, hudTop: number | undefined, surfaces: readonly HTMLElement[]): void {
+    this.retain();
+    // Only an explicit workspace change (tabs, viewport or scale) can refit
+    // an existing reservation. Closing a reader alone changes none of these.
+    if (this.seated.length && surfaces.length) this.sync(root, hudTop, surfaces);
   }
 
   sync(root: HTMLElement, hudTop: number | undefined, surfaces: readonly HTMLElement[]): void {
-    this.clear();
+    this.retain();
     const scale = uiScaleNow(), cfg = DIALOGUE_CFG, tune = cfg.services;
     const vw = window.innerWidth, vh = window.innerHeight, edge = cfg.edge;
+    const signature = `${vw}:${vh}:${scale}:${hudTop}:${surfaces.map(el => el.id).join('|')}`;
+    if (this.signature === signature) return;
+    this.clear();
+    this.signature = signature;
     const width = Math.min(cfg.width, (vw - edge * 2) / scale);
     let bottom = Math.max(edge, vh - (hudTop ?? vh) + cfg.hudGap);
     // While services own input, their workspace may borrow the inactive HUD
@@ -49,12 +73,13 @@ export class DialogueLayout {
     root.dataset.services = String(surfaces.length > 0);
     root.style.bottom = `${bottom / scale}px`;
     root.style.maxHeight = `${available / scale}px`;
-    root.style.height = surfaces.length ? `${Math.min(available * tune.readerLimitFraction,
-      Math.max(tune.minReaderHeight * scale, Math.min(tune.readerHeight * scale, available * tune.readerMaxFraction))) / scale}px` : '';
+    const readerHeight = Math.min(available * tune.readerLimitFraction,
+      Math.max(tune.minReaderHeight * scale, Math.min(tune.readerHeight * scale, available * tune.readerMaxFraction)));
+    root.style.height = surfaces.length ? `${readerHeight / scale}px` : '';
     if (!surfaces.length) return;
 
     const ceiling = Math.min(tune.top, available * 0.15);
-    const floor = root.getBoundingClientRect().top - tune.gap;
+    const floor = vh - bottom - readerHeight - tune.gap;
     const space = Math.max(1, floor - ceiling);
     const room = vw - edge * 2;
     const natural = surfaces.map(el => Math.min(room, el.getBoundingClientRect().width));
