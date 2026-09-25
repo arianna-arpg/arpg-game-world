@@ -34994,6 +34994,9 @@ export class World {
       repeat?: number; noCooldown?: boolean; keepFacing?: boolean;
       /** Set on scheduled repeats so they don't schedule more repeats. */
       noRepeat?: boolean;
+      /** A paid parent's independent strike may start its own support repeat
+       * train without replaying the parent's cast events or resource payment. */
+      allowPayloadRepeats?: boolean;
       /** Set on follow-up fires so a payload never chains its own. */
       noFollowUp?: boolean;
       /** Set on fuse-sweep resumes so a banked resolution never re-banks. */
@@ -38151,7 +38154,7 @@ export class World {
     // exempt: an echo is already a repeat (an ancestral ghost swings ONCE,
     // never a Multistrike train), and their casts must never stamp the
     // shared instance's Unleash bank (inst.state belongs to the owner).
-    if (!opts.noRepeat && !opts.noCooldown && !caster.construct?.echo) {
+    if (((!opts.noRepeat && !opts.noCooldown) || opts.allowPayloadRepeats) && !caster.construct?.echo) {
       let repeats = Math.round(caster.sheet.get('repeatCount', tags, extra))
         // Charge-fed trains (Riftstorm): every charge burned is one more
         // beat — the Multistrike twin of projectilesPerCharge.
@@ -38168,7 +38171,9 @@ export class World {
         st.lastUseAt = this.time;
       }
       if (repeats > 0) {
-        const interval = 0.22;
+        // Independent paid components have no second windup of their own;
+        // their repeat beat carries their local attack/cast-speed investment.
+        const interval = 0.22 / (opts.allowPayloadRepeats ? caster.speedFactor(inst) : 1);
         this.pendingRepeats.push({
           caster, inst, aim: vec(aim.x, aim.y),
           n: repeats, k: 1, timer: interval, interval,

@@ -5,7 +5,9 @@ import { SUPPORTS } from '../src/data/supports';
 import { mod } from '../src/engine/stats';
 import { SIM_TAP } from '../src/engine/tap';
 import { instanceTrigger, instanceTriggerArmed, skillContextTags, skillCooldownSeconds, makeSkillInstance, supportFitsInst } from '../src/engine/skills';
-import { attackSequenceOf, attackSequenceErrors } from '../src/engine/attackSequenceSpec';
+import { attackSequenceOf, attackSequenceErrors, attackSequenceSweepInstances } from '../src/engine/attackSequenceSpec';
+import { supportCompatibilityHtml } from '../src/ui/supportCompatibility';
+import { makeSupportGemItem } from '../src/engine/gemitems';
 import { instanceDelivery } from '../src/engine/skills';
 import { skillDamageBands } from '../src/engine/damage';
 import { previewSkill } from '../src/engine/skillPreview';
@@ -145,6 +147,84 @@ try {
     const r = rig(nodes); r.target.pos = { x: r.p.pos.x + 180, y: r.p.pos.y }; r.target.brain = undefined; return r;
   };
   const markers = (r: ReturnType<typeof rig>) => r.w.actors.filter(a => !a.dead && a.construct?.kind === 'embed' && a.owner === r.p);
+  const walkTo = (r: ReturnType<typeof rig>, at: { x: number; y: number }, seconds: number) => {
+    for (let t = 0; t < seconds; t += 1 / 60) {
+      const dx = at.x - r.p.pos.x, dy = at.y - r.p.pos.y;
+      r.w.applyInputs(new Map([[r.w.localSeat.id, { dx, dy, aim: r.target.pos, held: [], edge: [] }]]), 1 / 60);
+      r.w.update(1 / 60);
+    }
+  };
+  {
+    const r = thrown(['unbound_cleave', 'long_edge', 'wide_front']);
+    r.w.executeSkill(r.p, r.cleave, r.target.pos); step(r, 0.5);
+    const marker = markers(r)[0];
+    if (marker) walkTo(r, { ...marker.pos }, 1);
+    check('normal movement enters the airborne glyph and catches the axe', !!marker && marker.dead && [...r.p.buffs.values()].some(b => b.def.label === 'Caught Rhythm'));
+    check('walking catch releases the held Cleave cooldown', !r.p.skillRecoveryLocks.has('cleave') && !r.p.cooldowns.has('cleave'));
+    const fallen = thrown(['unbound_cleave', 'long_edge']);
+    fallen.w.executeSkill(fallen.p, fallen.cleave, fallen.target.pos); step(fallen, 2.8);
+    const pickup = markers(fallen)[0];
+    if (pickup) walkTo(fallen, { ...pickup.pos }, 1);
+    check('normal movement retrieves a fallen axe and releases recovery', !!pickup && pickup.dead && !fallen.p.skillRecoveryLocks.has('cleave') && !fallen.p.cooldowns.has('cleave'));
+  }
+  {
+    const bare = thrown();
+    check('projectile-only Unbound Cleave still refuses Multistrike', !supportFitsInst(SUPPORTS.multistrike, bare.cleave));
+    for (const leaf of ['tempered_wave', 'razor_horizon']) {
+      const r = thrown(['unbound_cleave', 'heavy_wave', leaf]);
+      check(`${leaf}: melee component admits Multistrike`, supportFitsInst(SUPPORTS.multistrike, r.cleave));
+      const gem = makeSupportGemItem({ def: SUPPORTS.multistrike, level: 1 });
+      r.w.meta.items.push(gem);
+      check(`${leaf}: actual bag-to-skill socketing accepts Multistrike`, r.w.socketSupport(gem.uid, 'cleave') && r.cleave.sockets.some(s => s?.def.id === 'multistrike'));
+    }
+  }
+  {
+    const r = thrown(['unbound_cleave', 'heavy_wave', 'tempered_wave', 'razor_horizon']);
+    r.target.pos = { x: r.p.pos.x + 45, y: r.p.pos.y }; r.target.anchored = true;
+    const throwDamage = skillDamageBands(r.p, r.cleave).total.lo;
+    const sweepDamage = skillDamageBands(r.p, attackSequenceSweepInstances(r.cleave)[0]).total.lo;
+    r.cleave.sockets[0] = { def: SUPPORTS.multistrike, level: 1 };
+    check('Multistrike tooltip recognizes the invested melee components', supportCompatibilityHtml(r.cleave.sockets[0], [r.cleave], () => null).includes('data-support-fit="true"'));
+    check('Multistrike damage penalty stays on the sweeps, not the thrown axe', near(skillDamageBands(r.p, r.cleave).total.lo, throwDamage)
+      && near(skillDamageBands(r.p, attackSequenceSweepInstances(r.cleave)[0]).total.lo, sweepDamage * 0.75));
+    const execute = r.w.executeSkill.bind(r.w), sweeps = new Map<string, number>(); let throws = 0;
+    r.w.executeSkill = (...args: Parameters<typeof r.w.executeSkill>) => {
+      const [caster, inst] = args, d = instanceDelivery(inst);
+      if (caster === r.p && inst.sequenceRole === 'payload' && d.type === 'melee') sweeps.set(d.fx ?? '', (sweeps.get(d.fx ?? '') ?? 0) + 1);
+      if (caster === r.p && inst === r.cleave) throws++;
+      return execute(...args);
+    };
+    const mana = r.p.mana, cost = r.p.skillCost(r.cleave).mana;
+    r.p.sheet.setSource('no-regen', [mod('manaRegen', 'override', 0)]);
+    r.w.useSkill(r.p, r.cleave, r.target.pos, true); step(r, 1.3);
+    check('Multistrike repeats both opposed sweeps through the normal repeat queue', sweeps.get('serratedSweep') === 3 && sweeps.get('serratedBackswing') === 3 && !r.w.pendingRepeats.length);
+    check('melee repeats preserve a single axe throw and a single payment', throws === 1 && near(mana - r.p.mana, cost));
+    check('Multistrike does not retag the primary throw as melee', !skillContextTags(r.cleave).has('melee') && skillContextTags(r.cleave).has('projectile'));
+    r.cleave.treeNodes = ['unbound_cleave', 'heavy_wave'];
+    check('removing the melee leaves closes component admission again', !supportFitsInst(SUPPORTS.multistrike, r.cleave));
+  }
+  {
+    const r = thrown(['unbound_cleave', 'heavy_wave', 'tempered_wave', 'razor_horizon']);
+    const cost = r.p.skillCost(r.cleave).mana;
+    r.cleave.sockets[0] = { def: { ...SUPPORTS.multistrike, id: 'priced_melee_probe', mods: [mod('manaCost', 'more', 0.5)] }, level: 1 };
+    check('component-only support costs are charged once despite two sweeps', near(r.p.skillCost(r.cleave).mana, cost * 1.5));
+    r.cleave.sockets[0] = { def: SUPPORTS.multistrike, level: 1 };
+    r.w.useSkill(r.p, r.cleave, r.target.pos, true);
+    check('melee component creates a real repeat train', r.w.pendingRepeats.length > 0);
+    r.w.attackSequences.clear(r.p, r.cleave);
+    check('retiring the skill cancels its component repeat train', !r.w.pendingRepeats.some(p => p.inst.sequenceHost === r.cleave));
+  }
+  {
+    const clean = thrown(['unbound_cleave', 'heavy_wave', 'tempered_wave']);
+    const slow = thrown(['unbound_cleave', 'heavy_wave', 'tempered_wave']);
+    clean.cleave.sockets[0] = { def: SUPPORTS.multistrike, level: 1, rolled: { strikes: 'three', tempo: 'clean' } };
+    slow.cleave.sockets[0] = { def: SUPPORTS.multistrike, level: 1, rolled: { strikes: 'three', tempo: 'heavy' } };
+    clean.w.useSkill(clean.p, clean.cleave, clean.target.pos, true);
+    slow.w.useSkill(slow.p, slow.cleave, slow.target.pos, true);
+    const a = clean.w.pendingRepeats[0], b = slow.w.pendingRepeats[0];
+    check('rolled Multistrike count and tempo reach the melee repeat train', !!a && !!b && a.n === 3 && b.n === 3 && b.interval > a.interval);
+    check('melee tempo price does not slow the axe windup', near(clean.p.speedFactor(clean.cleave), slow.p.speedFactor(slow.cleave)));
+  }
   {
     const r = rig(['readied_cleave']), values: number[] = [];
     r.cleave.def = { ...r.cleave.def, baseDamage: { physical: [100, 100] } };

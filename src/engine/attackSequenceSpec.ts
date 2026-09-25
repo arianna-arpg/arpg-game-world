@@ -1,4 +1,6 @@
-import { treeNodeOf, type BuffEffect, type MeleeDelivery, type ProjectileDelivery, type SkillInstance } from './skills';
+import { treeNodeOf, instanceInnateMods, makeSkillInstance, skillContextTags,
+  type BuffEffect, type MeleeDelivery, type ProjectileDelivery, type SkillDef, type SkillInstance } from './skills';
+import type { SkillTag } from './stats';
 
 /** Independent, composable attack identities. No skill/node IDs in the runtime.
  * Patches own distinct fields; casting sweeps concatenate. Sorting makes sibling
@@ -40,6 +42,23 @@ export function attackSequenceOf(inst: SkillInstance): AttackSequenceSpec | unde
 export function attackSequenceDelivery(inst: SkillInstance): ProjectileDelivery | undefined {
   if (inst.sequenceRole) return undefined; // captured casts/payloads already carry their own delivery
   return attackSequenceOf(inst)?.thrown;
+}
+
+/** Socket admission and execution use the same component instance. Its own
+ * tags route support effects; the parent retains its separate delivery tags. */
+export function attackSequencePayload(host: SkillInstance, delivery: SkillDef['delivery'], tags?: SkillTag[]): SkillInstance {
+  const inst = makeSkillInstance({ ...host.def, tree: undefined, attackSequence: undefined, trigger: undefined,
+    delivery, tags: tags ?? [...skillContextTags(host)], innateMods: instanceInnateMods(host),
+    leveling: { perLevel: [] }, thresholds: undefined, cooldown: 0, manaCost: 0, useTime: 0,
+    effects: [{ type: 'damage' }], followUp: undefined, castCycle: undefined }, 1);
+  inst.sockets = [...host.sockets]; inst.grafts = host.grafts && [...host.grafts];
+  inst.sequenceHost = host.sequenceHost ?? host; inst.sequenceRole = 'payload'; inst.procChainDepth = 1;
+  return inst;
+}
+
+export function attackSequenceSweepInstances(host: SkillInstance): SkillInstance[] {
+  return (attackSequenceOf(host)?.castSweeps ?? []).map(sweep =>
+    attackSequencePayload(host, sweep.delivery, ['attack', 'melee', 'aoe', 'physical']));
 }
 
 /** Shared support/preview census, independent from socket admission. */

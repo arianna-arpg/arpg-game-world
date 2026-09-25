@@ -29,7 +29,7 @@
 // ---------------------------------------------------------------------------
 
 import { skillAbsorbAmount } from './absorb';
-import { attackSequenceOf, attackSequenceStatuses } from './attackSequenceSpec';
+import { attackSequenceOf, attackSequenceStatuses, attackSequenceSweepInstances } from './attackSequenceSpec';
 import { guardSurgePreview } from './guardSurge';
 import { instanceInvocation, makeInvocationPayload } from './invocation';
 import { resolveInvocation, RUNE_INFO, type RuneId } from '../data/invocations';
@@ -165,8 +165,9 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   if (attackSequence?.recovery) push('attackSequence_recovery', 'Recovery', 'Retrieve your axes', 'headline', `${secs(attackSequence.recovery.missCooldown)} after a missed throw.`);
   if (attackSequence?.bounce) push('attackSequence_catch', 'Airborne catch window', secs(attackSequence.bounce.seconds), 'detail', 'Catch before landing to release an axe nova.');
   if (attackSequence?.castSweeps?.length) push('attackSequence_opening', 'Casting sweeps',
-    [...attackSequence.castSweeps].sort((a, b) => a.delay - b.delay)
-      .map(s => s.delay === 0 ? 'Immediately on cast' : `${secs(s.delay / caster.speedFactor(inst))} after cast starts`).join(' · '),
+    attackSequenceSweepInstances(inst).map((component, i) => attackSequence.castSweeps![i].delay / caster.speedFactor(component))
+      .sort((a, b) => a - b)
+      .map(delay => delay === 0 ? 'Immediately on cast' : `${secs(delay)} after cast starts`).join(' · '),
     'detail', 'The throw completes after windup.');
   if (trigger?.on === 'meleeHit') push('trigger', 'Release', 'Next landed melee attack', 'headline', 'Toggle on to arm; pays this skill’s cost each release.');
   if (def.useTime > 0 && !replenishing && !(trigger && def.useTime <= instanceTriggerLimit(inst))) {

@@ -1,9 +1,9 @@
 import type { Actor } from './actor';
 import type { Projectile, World } from './world';
 import { dist, type Vec2 } from '../core/math';
-import { instanceDelivery, instanceInnateMods, instanceMods, makeSkillInstance, skillContextTags,
+import { instanceDelivery, instanceMods, skillContextTags,
   type SkillDef, type SkillInstance, type BuffEffect } from './skills';
-import { attackSequenceOf, type AttackSequenceSpec } from './attackSequenceSpec';
+import { attackSequenceOf, attackSequencePayload, type AttackSequenceSpec } from './attackSequenceSpec';
 import { mod, type Modifier, type SkillTag } from './stats';
 import { baselineStatusDps, STATUS_DEFS } from './status';
 
@@ -149,22 +149,19 @@ export class AttackSequences {
       const sweepPower = power * sweep.power;
       if (sweep.delay === 0) this.fire(s, inst, aim, sweepPower);
       else this.scheduled.push({ state: s, inst, aim: { ...aim },
-        due: this.w.time + sweep.delay / owner.speedFactor(host), power: sweepPower });
+        due: this.w.time + sweep.delay / owner.speedFactor(inst), power: sweepPower });
     }
   }
 
   private payload(s: SequenceState, host: SkillInstance, delivery: SkillDef['delivery'], tags?: SkillTag[]): SkillInstance {
-    const inst = makeSkillInstance({ ...host.def, tree: undefined, attackSequence: undefined, trigger: undefined,
-      delivery, tags: tags ?? [...skillContextTags(host)], innateMods: instanceInnateMods(host),
-      leveling: { perLevel: [] }, thresholds: undefined, cooldown: 0, manaCost: 0, useTime: 0,
-      effects: [{ type: 'damage' }], followUp: undefined, castCycle: undefined }, 1);
-    inst.sockets = [...host.sockets]; inst.grafts = host.grafts && [...host.grafts];
-    inst.sequenceHost = s.host; inst.sequenceRole = 'payload'; inst.procChainDepth = 1;
+    const inst = attackSequencePayload(host, delivery, tags);
+    inst.sequenceHost = s.host;
     return inst;
   }
   private fire(s: SequenceState, inst: SkillInstance, aim: Vec2, power: number): void {
     const facing = s.owner.facing;
-    this.w.executeSkill(s.owner, inst, aim, { noRepeat: true, noCooldown: true, dmgMult: power });
+    this.w.executeSkill(s.owner, inst, aim, { noRepeat: true, noCooldown: true, dmgMult: power,
+      allowPayloadRepeats: inst.sequenceRole === 'payload' && inst.def.delivery.type === 'melee' });
     s.owner.facing = facing;
   }
 
@@ -217,7 +214,12 @@ export class AttackSequences {
   private marker(s: SequenceState, inst: SkillInstance, at: Vec2, radius: number): Actor | undefined {
     const body = this.w.spawnConstruct(s.owner, inst, { type: 'construct', kind: 'embed',
       look: s.spec.recovery!.look, range: 0, duration: 0, maxActive: 1000, invulnerable: true, placeRange: 9999 }, at, undefined, at);
-    if (body) { body.lifespan = 0; body.radius = radius; body.untargetable = true; body.tier = s.owner.tier; }
+    if (body) {
+      body.lifespan = 0; body.radius = radius; body.untargetable = true; body.tier = s.owner.tier;
+      // A pickup is a floor marking, never an anchored body that shoulders its
+      // owner away. Use the existing shared body-pass-through stat.
+      body.sheet.setBase('phasing', 1);
+    }
     return body ?? undefined;
   }
   private lock(s: SequenceState): void {

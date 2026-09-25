@@ -1,7 +1,7 @@
 import { summonScopeTags } from './skillScopes';
 import { companionBondOf, type CompanionBondSpec } from './companionSpec';
 import { challengeDelivery, type ChallengeSpec } from './challengeSpec';
-import { attackSequenceDelivery, attackSequenceOf, attackSequenceStatuses, type AttackSequenceSpec } from './attackSequenceSpec';
+import { attackSequenceDelivery, attackSequenceOf, attackSequenceStatuses, attackSequenceSweepInstances, type AttackSequenceSpec } from './attackSequenceSpec';
 // ---------------------------------------------------------------------------
 // Skill definition schema.
 //
@@ -6503,6 +6503,12 @@ export function supportMechanismsFit(sup: SupportDef, inst: SkillInstance): bool
  * up and Alacrity — which demands 'cooldown' — fits beside it.
  */
 export function supportFitsInst(sup: SupportDef, inst: SkillInstance, rolled?: SupportRolled): boolean {
+  return supportFitsOwnInst(sup, inst, rolled)
+    || attackSequenceSweepInstances(inst).some(component => supportFitsOwnInst(sup, component, rolled));
+}
+
+/** One delivery's gate. Component admission never widens the host's tags. */
+function supportFitsOwnInst(sup: SupportDef, inst: SkillInstance, rolled?: SupportRolled): boolean {
   if (!supportFitsTags(sup, [...instanceBaseTags(inst), ...grantedTags(inst)])) return false;
   if (!supportMechanismsFit(sup, inst)) return false;
   // THE GATE READS THE CUT (the support base — her Card-D ruling): a
@@ -6712,6 +6718,19 @@ export function instanceMods(inst: SkillInstance): Modifier[] {
         out.push({ ...m, value: m.value * sl * (m.kind === 'override' ? 1 : fs) });
       }
     }
+  }
+  // Component-only supports bill their price once to the paid host. Their
+  // damage, tempo and repeat modifiers remain on their own delivery lane.
+  const castSweeps = attackSequenceSweepInstances(inst);
+  if (castSweeps.length) for (const socket of socketsWithGrafts(inst)) {
+    if (!socket || serving.includes(socket)
+      || !castSweeps.some(component => supportFitsOwnInst(socket.def, component, socket.rolled))) continue;
+    const fs = socket.forwardScale ?? 1, sl = socket.level - 1;
+    const costMods = [...socket.def.mods,
+      ...(socket.def.rollBase ? veinMods(socket.def.rollBase, socket.rolled) : []),
+      ...(sl > 0 ? (socket.def.perLevel ?? []).map(m => ({ ...m, value: m.value * sl })) : [])];
+    for (const m of costMods) if (HOST_COST_STATS.has(m.stat))
+      out.push(fs === 1 || m.kind === 'override' ? m : { ...m, value: m.value * fs });
   }
   // SELF-STACKS (SkillDef.selfStack / a Building Rhythm graft): the pile
   // this instance built by being CAST — ×stacks, and skill-local by

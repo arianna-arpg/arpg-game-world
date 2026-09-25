@@ -60,6 +60,7 @@ app.whenReady().then(async () => {
         theme:{floor:'#30343a',grid:'#353940',border:'#444b55',obstacle:'#444',obstacleEdge:'#555',accent:'#829fc2'},
         layout:[],objective:{kind:'safe'},exits:[],map:{x:9000,y:9000} };
       w.loadZone('qa_cleave'); p.pos={x:800,y:600}; __game.step(180);
+      const update = w.update.bind(w);
       w.update = () => {}; // freeze only this disposable world's sim while rendering captures
       w.actors = [p]; w.projectiles = []; w.flashes = []; w.doodads = []; w.walk=null; w.markDoodadsChanged();
       const target = w.createMonster('zombie', 1, 'enemy'); target.skills = []; target.brain = undefined;
@@ -69,7 +70,14 @@ app.whenReady().then(async () => {
       const advance = seconds => { for(let t=0;t<seconds;t+=0.02) {
         w.flashes=w.flashes.filter(f=>(f.life-=0.02)>0); w.time+=0.02; w.attackSequences.update(0.02); w.updateProjectiles(0.02);
       } };
-      window.__cleaveQA = { w,p,inst,target,advance, start:{...p.pos} };
+      const walkTo = (at, seconds) => { let nova = false;
+        for(let t=0;t<seconds;t+=1/60) {
+          w.applyInputs(new Map([[w.localSeat.id,{dx:at.x-p.pos.x,dy:at.y-p.pos.y,aim:target.pos,held:[],edge:[]}]]),1/60);
+          update(1/60); nova ||= w.projectiles.some(p=>p.inst.sequenceRole==='payload');
+        }
+        return nova;
+      };
+      window.__cleaveQA = { w,p,inst,target,advance,walkTo, start:{...p.pos} };
       inst.treeNodes=['unbound_cleave','long_edge','driving_front'];
       w.executeSkill(p,inst,target.pos); advance(0.7); __game.step(1);
     })()`);
@@ -85,6 +93,22 @@ app.whenReady().then(async () => {
     assert.ok(landed);
     await wait(300);
     fs.writeFileSync(path.join(dir, 'cleave-fallen-axe.png'), (await win.webContents.capturePage()).toPNG());
+    const recovered = await win.webContents.executeJavaScript(`(() => {
+      const q=__cleaveQA,{w,p}=q, marker=w.actors.find(a=>!a.dead&&a.look==='construct_axe_catch');
+      q.walkTo({...marker.pos},1); __game.step(1);
+      return { pickedUp:marker.dead, ready:!p.skillRecoveryLocks.has('cleave')&&!p.cooldowns.has('cleave') };
+    })()`);
+    log(recovered); assert.ok(recovered.pickedUp && recovered.ready);
+    const caught = await win.webContents.executeJavaScript(`(() => {
+      const q=__cleaveQA,{w,p,inst,target}=q;
+      w.attackSequences.clearAll();w.projectiles=[];w.flashes=[];p.pos={...q.start};p.casting=null;p.useLock=0;p.cooldowns.clear();
+      target.pos={x:p.pos.x+180,y:p.pos.y};inst.treeNodes=['unbound_cleave','long_edge','wide_front'];
+      w.executeSkill(p,inst,target.pos);q.advance(0.5);
+      const marker=w.actors.find(a=>!a.dead&&a.look==='construct_recovery_glyph');
+      const nova=q.walkTo({...marker.pos},1);__game.step(1);
+      return { caught:marker.dead, nova, buff:[...p.buffs.values()].some(b=>b.def.label==='Caught Rhythm'),ready:!p.skillRecoveryLocks.has('cleave') };
+    })()`);
+    log(caught); assert.ok(caught.caught && caught.nova && caught.buff && caught.ready);
     for (const reverse of [false, true]) {
       const sweep = await win.webContents.executeJavaScript(`(() => {
         const q=__cleaveQA, {w,p,inst,target}=q;
@@ -101,7 +125,7 @@ app.whenReady().then(async () => {
       fs.writeFileSync(path.join(dir, reverse ? 'cleave-backswing.png' : 'cleave-opening-sweep.png'), (await win.webContents.capturePage()).toPNG());
     }
     assert.deepEqual(errors, []);
-    log('PASS: Cleave tree bounds at both sizes; airborne/fallen axes and opposed opening sweeps');
+    log('PASS: Cleave tree bounds; walking airborne catches and fallen pickups; opposed opening sweeps');
     console.log('Cleave UI PASS');
   } finally {
     clearTimeout(timeout); win.destroy(); server.server.close(); app.quit();
