@@ -742,7 +742,10 @@ export function formatStatValue(stat: string, kind: ModKind, v: number): string 
     const p = Math.round(v * 1000) / 10;
     return `${p}%`;
   }
-  return `${Math.abs(v) >= 3 ? Math.round(v) : Math.round(v * 100) / 100}`;
+  // Attribute training can grant tiny flat fractions (e.g. +0.004 to a
+  // multiplier). A real nonzero bonus must never be presented as +0.
+  const rounded = Math.abs(v) >= 3 ? Math.round(v) : Math.round(v * 100) / 100;
+  return `${rounded === 0 && v !== 0 ? Number(v.toPrecision(2)) : rounded}`;
 }
 
 /** One human line for a declarative mod shape + rolled value — the shared

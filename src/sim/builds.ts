@@ -15,7 +15,7 @@ import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
 import { MONSTERS } from '../data/monsters';
 import { PASSIVE_ADJACENCY, PASSIVE_NODES, classStartNode } from '../data/passives';
-import { choiceLockReason, graftSourcesOf } from '../data/passiveChoices';
+import { choiceLockReason, graftSourcesOf, sanitizeChoices } from '../data/passiveChoices';
 import { MAIN_REALM, realmOf } from '../data/passiveRealms';
 import {
   SKILL_RARITIES, makeSkillInstance, summonCrewOf, supportFitsInstOrCrew, skillMaxLevel,
@@ -169,7 +169,7 @@ function auditChoices(
     }
     if (choices[nodeId]?.length) extraPicks--; // the first pick rode the allocation
   }
-  return { choices, extraPicks };
+  return { choices: sanitizeChoices(choices, PASSIVE_NODES, allocated), extraPicks };
 }
 
 /** Graft bindings: the source must be earned by the spec'd tree, the carrier

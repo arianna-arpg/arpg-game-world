@@ -211,11 +211,10 @@ export function mountPassiveEditor(ui: UI): void {
     for (const k of KINDS) { const o = document.createElement('option'); o.value = k; o.textContent = k; if (k === n.kind) o.selected = true; kindSel.append(o); }
     kindSel.addEventListener('change', () => {
       n.kind = kindSel.value as NodeKind;
-      // Kind and deal move together: BECOMING a choice node seeds a group ref
-      // (first registered group); LEAVING drops it — play mode deals the popup
-      // off n.choice presence, so a stale ref on a small node would still deal.
+      // Training deals may keep the smaller attr/small presentation. Other
+      // kinds drop the deal; a dedicated choice node seeds an ordinary group.
       if (n.kind === 'choice' && !n.choice) n.choice = { group: Object.keys(CHOICE_GROUPS)[0] ?? '' };
-      if (n.kind !== 'choice' && n.choice) delete n.choice;
+      if (!['choice', 'attr', 'small'].includes(n.kind) && n.choice) delete n.choice;
       ui.refreshTree();
     });
     panel.append(kindSel);
@@ -241,7 +240,10 @@ export function mountPassiveEditor(ui: UI): void {
         o.textContent = `${n.choice.group} — (unknown group!)`; o.selected = true;
         grpSel.append(o);
       }
-      grpSel.addEventListener('change', () => { n.choice = { ...n.choice, group: grpSel.value }; });
+      grpSel.addEventListener('change', () => {
+        n.choice = { ...n.choice, group: grpSel.value };
+        delete n.choice.allocatedDefault; renderPanel();
+      });
       panel.append(grpSel);
 
       panel.append(label('pick override (blank = group default)'));
@@ -254,6 +256,19 @@ export function mountPassiveEditor(ui: UI): void {
         if (Number.isFinite(v) && v >= 1) n.choice.pick = v; else delete n.choice.pick;
       });
       panel.append(pick);
+      panel.append(label('initial choice for existing allocations (blank = none)'));
+      const initial = document.createElement('select'); inputStyle(initial);
+      const none = document.createElement('option'); none.value = ''; none.textContent = 'None'; initial.append(none);
+      for (const option of CHOICE_GROUPS[n.choice?.group ?? '']?.options ?? []) {
+        const row = document.createElement('option'); row.value = option.id; row.textContent = option.name;
+        initial.append(row);
+      }
+      initial.value = n.choice?.allocatedDefault ?? '';
+      initial.addEventListener('change', () => {
+        if (!n.choice) return;
+        if (initial.value) n.choice.allocatedDefault = initial.value; else delete n.choice.allocatedDefault;
+      });
+      panel.append(initial);
     }
 
     panel.append(label('description'));
@@ -405,7 +420,7 @@ export function mountPassiveEditor(ui: UI): void {
     if (n.conduit) p.push(`conduit: ${JSON.stringify(n.conduit)}`);
     // Choice deals are a group REFERENCE (options live in passiveChoices.ts,
     // safely outside this file's overwrite) — pure JSON, trivially emitted.
-    if (n.choice) p.push(`choice: { group: ${J(n.choice.group)}${n.choice.pick !== undefined ? `, pick: ${n.choice.pick}` : ''} }`);
+    if (n.choice) p.push(`choice: { group: ${J(n.choice.group)}${n.choice.pick !== undefined ? `, pick: ${n.choice.pick}` : ''}${n.choice.allocatedDefault !== undefined ? `, allocatedDefault: ${J(n.choice.allocatedDefault)}` : ''} }`);
     // Realm + graft ride the same pure-JSON round-trip.
     if (n.realm) p.push(`realm: ${J(n.realm)}`);
     if (n.graft) p.push(`graft: { support: ${J(n.graft.support)}${n.graft.level !== undefined ? `, level: ${n.graft.level}` : ''} }`);
@@ -437,6 +452,7 @@ ${importLine}
 import { CLASSES } from './classes';
 import { VOCATIONS, VOCATION_CFG, vocationNodeId, vocationRootId } from './vocations';
 import type { GraftSpec, PassiveChoiceRef } from './passiveChoices';
+import './passiveAttributes';
 import type { ConduitSpec } from '../engine/skills';
 import './passiveCrossroads';
 import './passiveWeave';

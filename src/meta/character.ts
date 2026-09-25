@@ -434,7 +434,7 @@ export function rebuildSavedMeta(save: CharacterSave): { meta: PlayerMeta; death
   // allocation seeds choice sanitizing, both seed graft-binding sanitizing
   // (a binding whose source or carrier vanished simply drops).
   const allocated = new Set(save.allocated);
-  const choices = sanitizeChoices(save.choices, PASSIVE_NODES);
+  const choices = sanitizeChoices(save.choices, PASSIVE_NODES, allocated);
   const meta: PlayerMeta = {
     classDef,
     // THE STAMPED OPENING: the save's own; a pre-stamp save reads the base bar.

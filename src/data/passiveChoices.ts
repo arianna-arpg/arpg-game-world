@@ -100,6 +100,10 @@ export interface PassiveChoiceGroup {
    *              (A sibling's own baked node.mods, if authored, still apply
    *              — only the DEAL dies; choice nodes usually carry none.) */
   deal?: 'each' | 'sole' | 'first';
+  /** An ordinary travel investment with a selectable reward. Route audits
+   * include it even when optional mastery menus are omitted. Requires one
+   * pick, node-local options and an independent deal at every node. */
+  pathing?: boolean;
 }
 
 /** What a PassiveNode.choice field holds — a group reference plus overrides.
@@ -109,6 +113,10 @@ export interface PassiveChoiceRef {
   group: string;
   /** Override the group's pick limit for THIS node. */
   pick?: number;
+  /** Initial selection for an already allocated node with no saved picks.
+   * Preserves paid investment when content gains a choice. Fresh allocation
+   * still requires an explicit option. Only independent, single-pick deals. */
+  allocatedDefault?: string;
 }
 
 /** Every tunable of the choice fabric in one place. */
@@ -139,6 +147,13 @@ type ChoiceState = Readonly<Record<string, readonly string[]>>;
 
 export function choiceGroupOf(node: NodeLike): PassiveChoiceGroup | undefined {
   return node.choice ? CHOICE_GROUPS[node.choice.group] : undefined;
+}
+
+/** Repeatable training can safely carry a route; exclusive menus cannot. */
+export function choicePathing(node: NodeLike): boolean {
+  const group = choiceGroupOf(node);
+  return !!group?.pathing && choicePickLimit(node) === 1
+    && (group.unique ?? 'node') === 'node' && (group.deal ?? 'each') === 'each';
 }
 
 /** Search the actual deal as well as its node: a hidden graft or niche must
@@ -299,6 +314,11 @@ export function validatePassiveChoices(
     const g = CHOICE_GROUPS[n.choice.group];
     if (!g) { warn(`passive ${n.id}: unknown choice group '${n.choice.group}'`); continue; }
     const limit = choicePickLimit(n);
+    if (g.pathing && !choicePathing(n)) warn(`passive ${n.id}: pathing choices must be independent single picks`);
+    if (n.choice.allocatedDefault !== undefined && (!g.options.some(o => o.id === n.choice!.allocatedDefault)
+      || limit !== 1 || (g.unique ?? 'node') !== 'node' || (g.deal ?? 'each') !== 'each')) {
+      warn(`passive ${n.id}: allocatedDefault must name an independent single-pick option`);
+    }
     if (limit > g.options.length) {
       warn(`passive ${n.id}: pick ${limit} exceeds group '${g.id}' pool (${g.options.length} options)`);
     }
@@ -391,14 +411,15 @@ export function sanitizeGrafts(
 export function sanitizeChoices(
   raw: Record<string, string[]> | undefined,
   nodes: Record<string, NodeLike | undefined>,
+  allocated?: ReadonlySet<string>,
 ): Record<string, string[]> {
   const out: Record<string, string[]> = {};
-  if (!raw) return out;
   // THE DEAL LAW on load: a 'sole'/'first' group holds picks at ONE node —
   // a save minted before the group turned exclusive keeps its FIRST claimant
   // (record order) and later siblings' picks drop like any other stale pick.
   const claimed: Record<string, string> = {};
-  for (const [nodeId, picked] of Object.entries(raw)) {
+  for (const [nodeId, picked] of Object.entries(raw ?? {})) {
+    if (allocated && !allocated.has(nodeId)) continue;
     if (!Object.prototype.hasOwnProperty.call(nodes, nodeId)) continue;
     const node = nodes[nodeId];
     if (!node?.choice || !Array.isArray(picked)) continue;
@@ -420,6 +441,16 @@ export function sanitizeChoices(
       out[nodeId] = kept;
       if (exclusive) claimed[group.id] = nodeId;
     }
+  }
+  // Defaults are content, not a second grant. Materialize a normal saved pick
+  // only for owned nodes; later reloads retain the player's explicit choice.
+  for (const id of allocated ?? []) {
+    if (!Object.prototype.hasOwnProperty.call(nodes, id) || out[id]?.length) continue;
+    const node = nodes[id], group = node && choiceGroupOf(node);
+    const option = node?.choice?.allocatedDefault;
+    if (node && group && option !== undefined && choicePickLimit(node) === 1
+      && (group.unique ?? 'node') === 'node' && (group.deal ?? 'each') === 'each'
+      && choiceLockReason(node, option, out, nodes) === null) out[id] = [option];
   }
   return out;
 }

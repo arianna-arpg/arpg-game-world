@@ -2,6 +2,7 @@ import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { PASSIVE_NODES as N, type PassiveNode } from '../src/data/passives';
 import { auditPassiveRoutes } from '../src/data/passiveTopology';
+import { choiceGroupOf } from '../src/data/passiveChoices';
 import { validatePassiveLayout } from '../src/data/validatePassiveLayout';
 import { CROSSROADS_GROUPS } from '../src/data/passiveCrossroads';
 import { ROUTE_ACCENTS, ROUTE_PROCS } from '../src/data/passiveRoutes';
@@ -41,6 +42,7 @@ function reset(w:World,start='str_start',points=2) {
   w.meta.allocated=new Set([start]);w.meta.choices={};w.meta.grafts={};w.meta.passivePoints=points;w.recalcSeat(w.localSeat);
 }
 const graph=auditPassiveRoutes(N).graph;
+const allocateRoute=(w:World,id:string)=>w.allocateNode(id,undefined,choiceGroupOf(N[id])?.options[0].id);
 let pairs=0;
 for(const start of new Set(CLASSES.map(c=>c.startNode))) {
   const w=makeSimWorld(CLASSES.find(c=>c.startNode===start)!.id,0xf042);
@@ -49,23 +51,23 @@ for(const start of new Set(CLASSES.map(c=>c.startNode))) {
   let legal=true;
   for(const first of graph[start])for(const second of graph[first].filter(id=>id!==start)) {
     reset(w,start);
-    legal&&=w.allocateNode(first)&&w.allocateNode(second)&&w.meta.passivePoints===0&&Object.keys(w.meta.choices).length===0;
+    legal&&=allocateRoute(w,first)&&allocateRoute(w,second)&&w.meta.passivePoints===0;
     pairs++;
   }
-  check(`${start}: every ordinary two-point walk spends exactly two points without a menu`,legal);
+  check(`${start}: every ordinary two-point walk spends exactly two points including training selections`,legal);
 }
 for(const c of CLASSES) {
   const w=makeSimWorld(c.id,0xf042);w.meta.passivePoints=2;
   const first=graph[c.startNode].find(id=>id.startsWith('route_'))!;
   const next=graph[first].filter(id=>!w.meta.allocated.has(id));
-  check(`${c.name}: real starting allocation immediately opens at least two onward routes`,next.length>=2&&w.allocateNode(first)&&w.allocateNode(next[0])&&w.meta.passivePoints===0);
+  check(`${c.name}: real starting allocation immediately opens at least two onward routes`,next.length>=2&&allocateRoute(w,first)&&allocateRoute(w,next[0])&&w.meta.passivePoints===0);
 }
-// Every ordinary node is reachable through actual allocation, without choosing
-// a deal. This tests the game gates as well as the abstract graph.
+// Every ordinary node is reachable through actual allocation, including its
+// training choice. This tests game gates as well as the abstract graph.
 const w=makeSimWorld('warrior',0xf042);reset(w,'str_start',Object.keys(graph).length-1);
 const queue=['str_start'],seen=new Set(queue);let allocated=true;
 for(let i=0;i<queue.length;i++)for(const id of graph[queue[i]])if(!seen.has(id)) {
-  seen.add(id);queue.push(id);allocated&&=w.allocateNode(id);
+  seen.add(id);queue.push(id);allocated&&=allocateRoute(w,id);
 }
 check('entire ordinary tree allocates through the real shared gates',allocated&&w.meta.passivePoints===0&&seen.size===Object.keys(graph).length);
 check('every visible payload reaches the passive source',added.every(n=>(n.mods??[]).every(m=>w.player.sheet.getSourceMods('passives')?.includes(m))));

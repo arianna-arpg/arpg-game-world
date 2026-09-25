@@ -7440,7 +7440,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       // pad pointer's synthetic hover.
       circles += `<circle cx="${node.x}" cy="${node.y}" r="${RADII[node.kind]}"
         fill="${fill}" stroke="${stroke}" stroke-width="${node.kind === 'keystone' || node.kind === 'notable' || node.kind === 'vocation' || node.kind === 'choice' ? 2.5 : 1.5}"
-        ${node.kind === 'choice' && !dealSpent ? 'stroke-dasharray="4 3"' : ''}
+        ${node.choice && !dealSpent ? 'stroke-dasharray="4 3"' : ''}
         ${clusterLocked ? 'opacity="0.45"' : ''}
         data-node="${node.id}" data-tip="pnode" class="tree-node ${available ? 'available' : ''} ${allocated ? 'allocated' : ''}"/>`;
     }
@@ -7742,6 +7742,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       const support = o.graft ? SUPPORTS[o.graft.support] : undefined;
       return [o.id, o.description + (support ? ` ${support.name}: ${support.description}` : o.graft ? ' Support unavailable.' : '')];
     }));
+    const choiceAttributeBenefits = new Map(group.options.map(o => [o.id,
+      Object.entries(o.attributes ?? {}).flatMap(([id, amount]) =>
+        ATTRIBUTES[id as AttributeId]?.perPoint.map(mo => formatModLine(mo, mo.value * amount)) ?? []).join(' · '),
+    ]));
 
     const pop = document.createElement('div');
     pop.className = 'choice-popup';
@@ -7761,6 +7765,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           data-opt="${o.id}" ${locked ? 'disabled' : ''}>
           <span class="opt-name">${o.name}</span>
           <span class="opt-desc">${choiceDescriptions.get(o.id)}</span>
+          ${choiceAttributeBenefits.get(o.id) ? `<span class="opt-desc">${esc(choiceAttributeBenefits.get(o.id)!)}</span>` : ''}
           ${note ? `<span class="opt-note">${note}</span>` : ''}
         </button>`;
       }).join('')}`;

@@ -1,10 +1,12 @@
 import type { PassiveNode } from './passives';
+import { choicePathing } from './passiveChoices';
 
 /** The walking graph deliberately omits menu deals: a spent or exclusive
- *  selection must never be the only alternative that makes a route a fork. */
+ *  selection must never be the only alternative that makes a route a fork.
+ *  Independent training choices remain ordinary traversable investments. */
 export function passiveWalkingGraph(nodes: Record<string, PassiveNode>, includeChoices = false): Record<string, string[]> {
   const graph: Record<string, Set<string>> = {};
-  for (const n of Object.values(nodes)) if (!n.realm && !n.vocation && (includeChoices || !n.choice)) graph[n.id] = new Set();
+  for (const n of Object.values(nodes)) if (!n.realm && !n.vocation && (includeChoices || !n.choice || choicePathing(n))) graph[n.id] = new Set();
   for (const n of Object.values(nodes)) for (const id of n.links) {
     if (n.id !== id && graph[n.id] && graph[id]) { graph[n.id].add(id); graph[id].add(n.id); }
   }

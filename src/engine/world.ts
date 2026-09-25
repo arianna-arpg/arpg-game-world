@@ -27686,7 +27686,7 @@ export class World {
       allocated,
       // Choices survive normalization only where their node survived the
       // budget trim (a pick on a trimmed node would be a phantom grant).
-      choices: Object.fromEntries(Object.entries(sanitizeChoices(snapshot.choices, PASSIVE_NODES))
+      choices: Object.fromEntries(Object.entries(sanitizeChoices(snapshot.choices, PASSIVE_NODES, allocated))
         .filter(([id]) => allocated.has(id))),
       // Veterans field WITHOUT realm currencies or graft bindings (v1) — the
       // trim walks from the class start, so realm constellations fall away.

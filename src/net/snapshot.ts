@@ -459,7 +459,7 @@ export function applySeatMeta(world: World, seat: Seat, w: SeatMetaW): void {
   m.baseAttrs = { ...w.baseAttrs };
   m.allocated = new Set(w.allocated);
   // Untrusted wire → the same registry-tolerant rebuild the disk save gets.
-  m.choices = sanitizeChoices(w.choices, PASSIVE_NODES);
+  m.choices = sanitizeChoices(w.choices, PASSIVE_NODES, m.allocated);
   m.realmPoints = { ...(w.realmPoints ?? {}) };
   const known = new Map<string, SkillInstance>();
   for (const [id, sw] of Object.entries(w.known)) { const inst = rehydrateSkill(sw); if (inst) known.set(id, inst); }
