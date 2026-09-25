@@ -31,6 +31,7 @@ and two verbs.
 | `range()` | the seat's distance to the station, for the arrival tie-break |
 | `arrive` | Explicit `'behind'` keeps an automatic offer quiet across kinds; `'front'` takes the front among equal kinds. Absent = normal primacy/standing rules. A call's `ask` overrides either. |
 | `binding` | `'active'` joins the owner's most recently active book regardless of bay/overlap; absent = normal placement rules. Companion exclusions still apply. |
+| `selectionGroup` | Optional selection memory shared by leaves in this group, separately for each owner. Restores the last choice among equal-primacy group mates when a book reforms. |
 | `kind` | the leaf's rung on the primacy ladder: `'page'` (an always-available player page — the default), `'station'` (the world's offer: every dwell dialog), `'modal'` (a decision: the calling, the picker); any string the ladder names |
 | `reach()` | may the player still WORK this leaf from here? The departure law's read (absent = `engaged()`; absent both = never departs). A suite member declares the reach law here while `engaged` stays physical |
 | `companions` | leaves this one may stand beside un-bound (symmetric) |
@@ -209,6 +210,17 @@ drawer's seats and back; the drawer follows the bag exactly as Skills does
 (hidden with it, memory kept; the Esc sweep's unkept-bag lane hides it the
 same way). The menu's `container:<id>` page opens the bag if it is shut,
 then the drawer; fronts a shelved drawer; closes an open one.
+
+Skills and all container drawers declare `selectionGroup: 'inventory'`.
+The folio remembers ribbon, menu, tab and keyboard selections even when
+closing inventory dissolves their book. Reopening restores the selected
+drawer, independent of enrollment order. Hidden-leaf cleanup never changes
+that memory; explicitly closing the selected drawer remembers its surviving
+replacement. A reopened drawer still yields to a standing tree or station,
+and an explicit menu selection takes precedence over the remembered choice.
+Memory lasts for the UI session and is separate for each player. Verification:
+`npm run probe -- folio` and, after a build,
+`npx electron balance/inventory-tabs-ui.cjs` (hidden window, isolated saves).
 
 `ui/buildPanels.ts` owns ribbon width, page widths, screen margins and the
 unlearn target size. The default page seats follow the inventory's measured

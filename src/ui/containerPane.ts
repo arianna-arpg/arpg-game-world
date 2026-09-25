@@ -210,6 +210,11 @@ export class ContainerPane {
     if (!this.host.inventoryOpen()) {
       this.host.openInventory(seatId);
       if (!this.open.has(id)) this.toggle(id);
+      else {
+        // A menu choice explicitly selects even a remembered, shelved drawer.
+        if (!this.host.folioFront(id)) this.host.folioAdopt(id);
+        this.host.folioStripUpdate();
+      }
       return;
     }
     this.toggle(id);

@@ -645,7 +645,7 @@ export class UI {
     // close, never a fronting toggle.
     enrollLeaf: (id, el, title, isOpen, close, refresh) => {
       this.folio.enroll(this.folioLeaf(`container:${id}`, el, title, isOpen, close, {
-        kind: 'page', arrive: 'front', bay: () => this.buildPanelBay(el), refresh }));
+        kind: 'page', selectionGroup: 'inventory', bay: () => this.buildPanelBay(el), refresh }));
     },
     folioAdopt: (id) => { this.folioAsk(`container:${id}`); }, // the ribbon's press: an explicit ask
     folioFront: (id) => this.folio.front(`container:${id}`),
@@ -1411,7 +1411,7 @@ export class UI {
     // (skillTreePaneFor — the tab names the skill).
     enroll(this.folioLeaf('skills', this.buildPanel, () => 'Skills',
       () => this.inventoryOpen && this.buildFlapOpen, () => this.closeBuildPanel(), {
-        kind: 'page', arrive: 'front', bay: () => this.buildPanelBay(this.buildPanel), refresh: () => this.refreshInventory() }));
+        kind: 'page', selectionGroup: 'inventory', bay: () => this.buildPanelBay(this.buildPanel), refresh: () => this.refreshInventory() }));
     // THE TRUE CLOSE (2026-09-11): the leaf's close is closeTree, never the
     // key's toggle — toggleTree FRONTS a shelved tree (the D-pad law), so a
     // close-all routed through it fronted Passives instead of closing it

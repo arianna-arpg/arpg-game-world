@@ -186,6 +186,10 @@ export interface FolioLeafSpec {
   /** Join the owner's most recently active book regardless of placement.
    *  Absent = bind by bay/overlap. Owner and companion boundaries still hold. */
   binding?: 'active';
+  /** Remember explicit tab selection within this group for each owner, even
+   *  after its book dissolves. Automatic arrivals restore that choice among
+   *  group mates of equal primacy; other groups and stations keep their laws. */
+  selectionGroup?: string;
   /** Leaves this one may stand beside un-bound (symmetric — either side may declare). */
   companions?: readonly string[];
   /** Re-render on coming to the front (the leaf may have aged on the shelf). */
@@ -239,6 +243,8 @@ export class FolioCore {
   /** leaf id → book key while bound. */
   private readonly bookOf = new Map<string, string>();
   private serial = 0;
+  /** Owner → selection group → last chosen leaf. Independent of live books. */
+  private readonly selections = new Map<string, Map<string, string>>();
   /** Suites by anchor leaf id. */
   private readonly suites = new Map<string, FolioSuiteSpec[]>();
   /** member id → the anchor whose summons opened it (while it stays open). */
@@ -286,6 +292,7 @@ export class FolioCore {
   adopt(id: string, ask?: FolioArrive): FolioArrival {
     const leaf = this.leaves.get(id);
     if (!leaf || !leaf.isOpen() || this.bookOf.has(id)) return 'noop';
+    if (ask === 'front' && this.summoning === null) this.rememberSelection(leaf);
     const now = this.clock();
     const owner = leaf.owner();
     const bay = leaf.bay();
@@ -324,6 +331,7 @@ export class FolioCore {
     const key = this.bookOf.get(id);
     if (!key) return false;
     const book = this.books.get(key)!;
+    this.rememberSelection(this.leaves.get(id)!);
     if (book.front !== id) this.setFront(book, id);
     else book.touchedAt = this.clock();
     this.summonFor(id);
@@ -387,6 +395,7 @@ export class FolioCore {
     if (!book) return null;
     const i = book.order.indexOf(book.front);
     const next = book.order[(i + dir + book.order.length) % book.order.length]!;
+    this.rememberSelection(this.leaves.get(next)!);
     this.setFront(book, next);
     return next;
   }
@@ -450,7 +459,22 @@ export class FolioCore {
     if (leaf.arrive === 'behind') return false;
     const mine = this.primacyOf(leaf), theirs = this.primacyOf(front);
     if (mine !== theirs) return mine > theirs;
+    if (leaf.selectionGroup !== undefined && leaf.selectionGroup === front.selectionGroup) {
+      const selected = this.selections.get(leaf.owner())?.get(leaf.selectionGroup);
+      if (selected === leaf.id) return true;
+      if (selected === front.id) return false;
+    }
     return leaf.arrive === 'front' || !this.engagedOf(front) || this.nearerOnArrival(book, leaf, front, now);
+  }
+
+  private rememberSelection(leaf: FolioLeafSpec): void {
+    // Dropping several hidden drawers can briefly promote another hidden
+    // leaf. That bookkeeping must not overwrite the player's last choice.
+    if (leaf.selectionGroup === undefined || !leaf.isOpen()) return;
+    const owner = leaf.owner();
+    let selected = this.selections.get(owner);
+    if (!selected) this.selections.set(owner, selected = new Map());
+    selected.set(leaf.selectionGroup, leaf.id);
   }
 
   /** A leaf's rung on THE PRIMACY LAW's ladder (an unnamed kind is a page). */
@@ -561,6 +585,7 @@ export class FolioCore {
       }
       book.front = next ?? book.order[0]!;
       const leaf = this.leaves.get(book.front)!;
+      this.rememberSelection(leaf);
       book.fresh.delete(book.front);
       book.touchedAt = this.clock();
       leaf.present(true);

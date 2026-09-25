@@ -35,7 +35,12 @@ app.whenReady().then(async () => {
           candidates.push({ x: boardAt.pos.x + Math.cos(angle) * radius, y: boardAt.pos.y + Math.sin(angle) * radius });
       }
       w.player.tier = boardAt.tier;
-      window.boardApproach = candidates.find(p => { Object.assign(w.player.pos, p); return w.nearBountyBoard(); });
+      // The input pass still applies body collision even with world.update frozen.
+      // A reachable point may overlap scenery and get pushed out of dwell range.
+      window.boardApproach = candidates.map(p => w.findFreeSpot(p, w.player.radius, boardAt.tier)).find(p => {
+        Object.assign(w.player.pos, p);
+        return !w.pointInSolid(p.x, p.y, w.player.radius, boardAt.tier) && w.nearBountyBoard();
+      });
       if (!boardApproach) throw new Error('board has no reachable approach');
       Object.assign(w.player.pos, boardApproach);
       w.armBountyBoard('lastlight'); __game.ui.folioSync();
@@ -58,6 +63,10 @@ app.whenReady().then(async () => {
           } else {
             const skill = [...w.localSeat.meta.knownSkills.values()].find(s => s.def.tree);
             must(skill, 'starting class needs a skill tree');
+            // This focus fixture must own the current skill-tree access gates.
+            w.account.ledger.odyssey_stage_2 = 1;
+            w.account.memorySecondary.add('skill:' + skill.def.id);
+            must(!w.memorySecondaryRefusal(skill.def.id), 'fixture must awaken its selected skill');
             ui.openSkillTree(skill.def.id); id = 'skilltree:' + skill.def.id;
             el = ui.skillTreePanes.get(skill.def.id).el;
           }

@@ -119,6 +119,7 @@ interface Fake {
 interface FakeOpts {
   bay?: string; owner?: string; arrive?: FolioArrive; companions?: string[];
   binding?: 'active';
+  selectionGroup?: string;
   rect?: FolioRect | null; engaged?: boolean; range?: number | null;
   /** THE PRIMACY LAW's rung (absent = the folio's default, a page). */
   kind?: string;
@@ -148,6 +149,7 @@ function fake(core: FolioCore, id: string, o: FakeOpts = {}): Fake {
   if (o.kind !== undefined) spec.kind = o.kind;
   if (o.arrive) spec.arrive = o.arrive;
   if (o.binding) spec.binding = o.binding;
+  if (o.selectionGroup !== undefined) spec.selectionGroup = o.selectionGroup;
   if (o.companions) spec.companions = o.companions;
   f.spec = spec;
   core.enroll(spec);
@@ -460,11 +462,14 @@ console.log('O. THE ENROLLMENT CENSUS');
   // inventory-side book (the skill-tree pane's shape, derived per def).
   check('O2d every container drawer enrolls + asks per container at its minting (one leaf per open drawer)',
     panels.includes('this.folioLeaf(`container:${id}`') && panels.includes('this.folioAsk(`container:${id}`)'));
-  check('O2b the trees and the drawers arrive IN FRONT (explicit asks) with no station reads',
-    ["'passives'", '`skilltree:${skillId}`', '`container:${id}`'].every(id => {
+  check('O2b player pages explicitly ask for the front without station reads; recalled drawers share selection memory',
+    ["'skills'", "'passives'", '`skilltree:${skillId}`', '`container:${id}`'].every(id => {
       const i = panels.indexOf(`this.folioLeaf(${id}`);
       const row = i < 0 ? '' : panels.slice(i, panels.indexOf('}));', i));
-      return row.includes("arrive: 'front'") && !row.includes('engaged:') && !row.includes('range:');
+      const drawer = id === "'skills'" || id === '`container:${id}`';
+      return panels.includes(`this.folioAsk(${id})`)
+        && (drawer ? row.includes("selectionGroup: 'inventory'") && !row.includes('arrive:') : row.includes("arrive: 'front'"))
+        && !row.includes('engaged:') && !row.includes('range:');
     }));
   const showBody = (name: string): string => {
     const i = panels.indexOf(`\n  ${name}(`);
@@ -921,6 +926,55 @@ console.log('T. QUIET ACTIVE-BOOK OFFERS');
   const board = fake(core, 'bounties', { binding: 'active', arrive: 'behind' });
   show(core, companion);
   check('T7 active binding preserves companion exclusions', show(core, board) === 'solo' && core.views().length === 2);
+}
+
+console.log('U. REMEMBERED DRAWER SELECTION');
+{
+  const { core } = rig();
+  const a = fake(core, 'skills', { selectionGroup: 'inventory' });
+  const b = fake(core, 'reliquary', { selectionGroup: 'inventory' });
+  const c = fake(core, 'future-container', { selectionGroup: 'inventory' });
+  const reopen = () => {
+    a.open = b.open = c.open = false; core.sync();
+    a.open = b.open = c.open = true; core.sync();
+  };
+  show(core, b, 'front'); show(core, a, 'front'); show(core, c, 'behind');
+  reopen();
+  check('U1 Skills survives a dissolved book regardless of enrollment and open order', core.bookFor(a.id)?.front === a.id);
+  core.front(b.id); reopen();
+  check('U2 tab selection restores Reliquary too', core.bookFor(a.id)?.front === b.id);
+  const cycled = core.cycle(1); reopen();
+  check('U3 cycling remembers a future container without panel-specific code', cycled === c.id && core.bookFor(a.id)?.front === c.id);
+  core.front(b.id); core.front(c.id);
+  core.closeFront(); // history promotes b; c is actually closed, not suspended
+  a.open = b.open = false; core.sync(); a.open = b.open = true; core.sync();
+  check('U4 closing the selected drawer remembers its live replacement, never reopens the closed leaf',
+    !c.open && core.bookFor(a.id)?.front === b.id);
+  core.front(a.id); reopen();
+  check('U5 repeated restoration does not replace explicit selection with cleanup order', core.bookFor(a.id)?.front === a.id);
+  b.open = false; core.sync();
+  check('U6 an explicit opening overrides remembered selection', show(core, b, 'front') === 'front');
+  const station = fake(core, 'station', { kind: 'station' });
+  show(core, station); reopen();
+  check('U7 restored drawers stay behind a standing station', core.bookFor(a.id)?.front === station.id);
+  core.closeFront();
+  const tree = fake(core, 'tree', { kind: 'page' });
+  show(core, tree, 'front'); reopen();
+  check('U8 restored drawers do not displace an already open page outside their group', core.bookFor(a.id)?.front === tree.id);
+}
+{
+  const { core } = rig();
+  const owner = { owner: 'p0', selectionGroup: 'inventory' };
+  const a = fake(core, 'skills', owner), b = fake(core, 'container', owner);
+  show(core, a, 'front'); show(core, b, 'front'); core.front(a.id);
+  a.open = b.open = false; core.sync();
+  owner.owner = 'p1'; a.open = b.open = true; core.sync(); core.front(b.id);
+  a.open = b.open = false; core.sync();
+  owner.owner = 'p0'; a.open = b.open = true; core.sync();
+  check('U9 shared panel roots keep separate selections for each owner', core.bookFor(a.id)?.front === a.id);
+  a.open = b.open = false; core.sync();
+  owner.owner = 'p1'; a.open = b.open = true; core.sync();
+  check('U10 the second owner retains its own selection', core.bookFor(a.id)?.front === b.id);
 }
 
 console.log(`\n${fail === 0 ? 'ALL PASS' : 'FAILURES'} — ${pass} passed, ${fail} failed`);
