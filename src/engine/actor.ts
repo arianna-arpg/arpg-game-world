@@ -787,6 +787,13 @@ export class Actor {
   encounterCue?: import('./warningCues').EncounterCue;
   /** Host-derived screen pressure for render-only co-op actors; undefined on simulation actors. */
   afflictionPressure?: import('./afflictionPressure').AfflictionPressure;
+  /** Host-derived armed-status presentation; absent on simulation actors. */
+  armedCues?: import('./armedCues').ArmedCue[];
+  /** Derived combat readiness on render-only co-op actors. */
+  reactiveCue?: import('./combatReadability').ReactiveCue;
+  /** Ward sources are resolved through the snapshot actor pool. */
+  wardCueSources?: Actor[];
+  wardCueProfile?: string;
   /** Original instance brain, restored if a creature leaves its encounter allegiance. */
   encounterGroupBaseBrain?: BrainDef;
   /** Engage-token stamp: the token key held + when it was last re-asserted
@@ -875,7 +882,7 @@ export class Actor {
    *  world time — the hands stay free (runKernel zeroes movement dt). */
   aiPlantUntil = 0;
   /** WARD (the add-gate): untargetable until no live actor carries this tag;
-   *  the note is announced when the ward shatters. */
+   *  wardCue links expose those exact sources. Legacy note is no longer emitted. */
   aiWardTag?: string;
   aiWardNote?: string;
   /** Spawn anchor for arena-relative choreography (stamped on the first AI
@@ -1071,6 +1078,8 @@ export class Actor {
   /** THE LAST GASP's clock: seconds until the gasp may answer again
    *  (engine/damage.ts landLifeDamage; ticked in updateTimers). */
   lastGaspCd = 0;
+  /** Original rescue cooldown, retained for honest visual recovery progress. */
+  lastGaspSpan = 0;
   /** TRANSIENT: the last gasp answered since the world last looked (the
    *  esBroke pattern — consumed by the world's 'lastGasp' proc roll). */
   gasped = false;
@@ -1525,7 +1534,7 @@ export class Actor {
   wakeInst?: SkillInstance;
   /** VOLATILE spec (MonsterDef.volatile): the struck body ANSWERS with a
    *  free-cast payload, ICD-throttled — the poked wasp nest. */
-  volatile?: { skillId: string; chance: number; icd?: number; dmgMult?: number };
+  volatile?: import('./combatReadability').VolatileSpec;
   /** The volatile answer's next-ready clock (world seconds). */
   volatileReadyAt = 0;
   /** CONTAGION release throttle (ContagionSpec): this body may host at

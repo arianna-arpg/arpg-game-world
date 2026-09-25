@@ -81,10 +81,10 @@ const def = (p: Partial<StatusDef>): StatusDef => ({ label: 'qa', color: '#fffff
   const src = readFileSync('src/engine/world.ts', 'utf8');
   const retired = ["'chilled to the bone!'", "'sunscorched!'", "'befuddled!'", "'maddened!'", "'possessed!'", "'corrupted!'", "'SEEN!'", "'beheld…'",
     "'carried!'", "'torn free!'", "'broke free!'", "'the grip breaks!'", "'UNHORSED'", "'FRENZY!'", "'contagion!'", "'transfused!'",
-    "'swallowed by the dark!'", "'over the edge!'", "'renewing'", "'time stops!'", "'time bends!'"];
+    "'swallowed by the dark!'", "'over the edge!'", "'renewing'", "'time stops!'", "'time bends!'", "'DOOM!'", "'volatile!'", "'CULLED!'", "'capped'", "'LAST GASP!'"];
   const still = retired.filter(l => src.includes(l));
   check("D1 THE RETIREMENT CENSUS: the player-axis status captions are gone from world.ts (the landing's accent + worn face carry them)", still.length === 0, still.join(', '));
-  const kinded = ["'addled!'", "'dominated!'", "'snatched!'", "'time slips'", "'DOOM!'", "'TRANSGRESSION!'", "'undying!'", "'hex drawn'", "'hex sheathed'", "'the guise breaks!'", "'primed'", "'marked'", "'cleansed'", "'rung clean'", "'volatile!'"];
+  const kinded = ["'addled!'", "'dominated!'", "'snatched!'", "'time slips'", "'TRANSGRESSION!'", "'undying!'", "'hex drawn'", "'hex sheathed'", "'the guise breaks!'", "'primed'", "'marked'", "'cleansed'", "'rung clean'"];
   const bare = kinded.filter(l => { const i = src.indexOf(l); if (i < 0) return true; const tail = src.slice(i, src.indexOf(';', i)); return !/'combat'/.test(tail); });
   check("D2 the rule-name cries ride the `combat` float kind (the player's own mute)", bare.length === 0, bare.join(', '));
 }

@@ -1,4 +1,6 @@
 import { afflictionPressureOf } from '../engine/afflictionPressure';
+import { armedStatusCues } from '../engine/armedCues';
+import { reactiveCueOf, wardCueActive, wardGuardians } from '../engine/combatReadability';
 import { memoryAccessView } from '../meta/memoryUnlocks';
 import { castingCompletion, castingCueOf } from '../engine/castingCues';
 import { guardReleaseCue } from '../engine/warningCues';
@@ -73,6 +75,9 @@ export interface ActorW {
   encounterGroup?: Actor['encounterGroup'];
   encounterCue?: import('../engine/warningCues').EncounterCue;
   afflictionPressure?: import('../engine/afflictionPressure').AfflictionPressure;
+  armedCues?: import('../engine/armedCues').ArmedCue[];
+  reactiveCue?: import('../engine/combatReadability').ReactiveCue;
+  wardCue?: { profile?: string; sources: number[] };
   encounterOrder?: Pick<NonNullable<Actor['encounterOrder']>, 'group' | 'recipe' | 'plan' | 'leader' | 'phase' | 'until'>;
   cosmeticKind?: 'wisp';
   cosmeticLoadout?: CosmeticLoadout;
@@ -721,6 +726,10 @@ function actorToW(a: Actor, world: World): ActorW {
   if (a.magicPack) w.magicPack = { ...a.magicPack, runtime: undefined };
   w.encounterCue = encounterCueOf(a, world);
   if (a.kind === 'player' && a.statuses.length) w.afflictionPressure = afflictionPressureOf(a);
+  const armedCues = armedStatusCues(a);
+  if (armedCues.length) w.armedCues = armedCues.map(cue => ({ ...cue }));
+  w.reactiveCue = reactiveCueOf(a, world.time);
+  if (wardCueActive(a)) w.wardCue = { profile: a.wardCueProfile, sources: wardGuardians(a, world.actors).map(x => x.id) };
   if (a.encounterGroup) w.encounterGroup = { ...a.encounterGroup };
   if (a.encounterOrder) {
     const {group,recipe,plan,leader,phase,until}=a.encounterOrder;
@@ -1338,6 +1347,9 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.encounterGroup = aw.encounterGroup ? { ...aw.encounterGroup } : undefined;
     a.encounterCue = aw.encounterCue ? { ...aw.encounterCue } : undefined;
     a.afflictionPressure = aw.afflictionPressure ? { ...aw.afflictionPressure } : undefined;
+    a.armedCues = aw.armedCues?.map(cue => ({ ...cue }));
+    a.reactiveCue = aw.reactiveCue ? { ...aw.reactiveCue, volatile: aw.reactiveCue.volatile ? { ...aw.reactiveCue.volatile } : undefined } : undefined;
+    a.wardCueProfile = aw.wardCue?.profile;
     a.encounterOrder = aw.encounterOrder ? { ...aw.encounterOrder } : undefined;
     a.magicPackPower = aw.magicPackPower ?? 0;
     a.magicPackRole = aw.magicPackRole;
@@ -1431,6 +1443,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.bondHeld = held;
     a.bondFrom = held ? POOL.get(aw.bl!) : undefined;
     a.magicPackFrom = aw.magicPackFrom !== undefined ? POOL.get(aw.magicPackFrom) : undefined;
+    a.wardCueSources = aw.wardCue?.sources.map(id => POOL.get(id)).filter((x): x is Actor => !!x);
   }
   world.actors = actors;
 

@@ -3,7 +3,7 @@
 //
 //  * hitCap (the per-hit defense-texture ceiling, stats.ts): a landed hit
 //    whose post-mitigation life cut exceeds the cap CLAMPS to it and READS
-//    clamped (HitResult.clamped + the 'capped' float), on BOTH lanes —
+//    clamped (HitResult.clamped + the hit_cap cue), on BOTH lanes —
 //    the resolveHit path AND World.burstDamage, the resolveHit BYPASS the
 //    salvage pass taught us about (the cap lives in mitigateTyped, the one
 //    chokepoint both share).
@@ -55,12 +55,14 @@ const warnings = applyBuild(world, spec, 12);
 if (warnings.length) console.log('build warnings:', warnings.join(' | '));
 
 const p = world.player;
+const seenHitCues = new Set<string>();
 // The REAL loop shape: brains tick OUTSIDE world.update (main.ts drives
 // updateAI over every actor, then steps the world) — a probe that only
 // steps the world runs a brainless fight and proves nothing about beats.
 const tick = (dt: number): void => {
   for (const a of world.actors) updateAI(a, world, dt);
   world.update(dt);
+  for (const f of world.flashes) if (f.combatCue) seenHitCues.add(f.combatCue.style);
 };
 const step = (s: number): void => {
   const dt = 1 / 60;
@@ -112,7 +114,7 @@ p.cooldowns.clear();
   check('resolveHit lane: life cut == cap', Math.abs(cut - cap) < 0.75,
     `cut ${cut.toFixed(1)} vs cap ${cap.toFixed(1)}`);
   check('resolveHit lane: result reads clamped', landed.length > 0 && landed.every(h => h.clamped === true));
-  check("'capped' float printed", world.texts.some(t => t.text === 'capped'));
+  check('hit_cap cue emitted without a capped caption', seenHitCues.has('hit_cap') && !world.texts.some(t => t.text === 'capped'));
 
   // Lane 2: the burstDamage BYPASS (pre-baked area blast, no resolveHit).
   hits = [];

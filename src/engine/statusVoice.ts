@@ -20,9 +20,8 @@
 //      timeScale → ripple; hardCC → stars; the mind → spiral; by element;
 //      beneficial → wink), so a new status arrives voiced.
 //   3. NO TEXT — a landing that plays a voice speaks no caption (the player-
-//      axis lines retired: the census pins them); the rule-name floaters the
-//      genre reads by ('volatile!', 'DOOM!') stay as the `combat` float kind —
-//      the player's own mute.
+//      axis lines retired: the census pins them). Remaining gameplay captions
+//      are migration debt, not authoring guidance; Doom now wears an armed cue.
 // This is the PURE LEAF (no canvas, no World): the dials, the family
 // resolver, the frame diff law. The voices draw in render/vis/statusVoiceLayer.ts.
 // ---------------------------------------------------------------------------
@@ -47,6 +46,7 @@ export type StatusVoiceId = 'rime' | 'flare' | 'spark' | 'spatter' | 'flecks' | 
 export function statusVoiceOf(def: StatusDef | undefined): StatusVoiceId | false {
   if (!def) return false;
   if (def.voice !== undefined) return def.voice;
+  if (def.cullsAtLethal && def.armedCue !== false) return false; // armed cue owns the curse's visible presence
   // States that DRAW THEMSELVES need no accent: a concealed body vanishes,
   // a flying one lifts, a ghosted one fades.
   if (def.conceals || def.flight || def.ghostAlpha !== undefined) return false;

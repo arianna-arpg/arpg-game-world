@@ -1,10 +1,19 @@
+import { REACTIVE_CUE_CFG, WARD_CUE_STYLES } from './combatReadability';
+
 /** Shared outcome profiles, independent of skill/monster names. Geometry,
  * timing and density are presentation dials; none change combat rules. */
 export interface CombatCueStyle {
-  shape: 'cross' | 'ghost' | 'barrier' | 'scatter' | 'snap' | 'mend' | 'barbs' | 'ground' | 'fracture' | 'collapse';
+  shape: 'cross' | 'ghost' | 'barrier' | 'scatter' | 'snap' | 'mend' | 'barbs' | 'ground' | 'fracture' | 'collapse' | 'irisBurst' | 'sever' | 'flatten' | 'vent' | 'rekindle';
   life: number; color: string; pieces: number; travel: number; width: number;
 }
 export const COMBAT_CUE_STYLES: Record<string, CombatCueStyle> = {
+  culled: { shape: 'sever', life: 0.42, color: '#c8a0e8', pieces: 2, travel: 1.3, width: 3 },
+  hit_cap: { shape: 'flatten', life: 0.35, color: REACTIVE_CUE_CFG.cap.color, pieces: 4, travel: 0.8, width: 2.5 },
+  volatile_release: { shape: 'vent', life: 0.4, color: '#edb378', pieces: 5, travel: 1.4, width: 2.3 },
+  last_gasp: { shape: 'rekindle', life: 0.75, color: REACTIVE_CUE_CFG.gasp.color, pieces: 4, travel: 1.3, width: 2.8 },
+  ward_form: { shape: 'snap', life: 0.55, color: WARD_CUE_STYLES.lattice.color, pieces: 6, travel: 0.65, width: 3 },
+  ward_break: { shape: 'fracture', life: 0.65, color: WARD_CUE_STYLES.lattice.color, pieces: 6, travel: 1.2, width: 3 },
+  doom_rupture: { shape: 'irisBurst', life: 0.65, color: '#7a48c8', pieces: 8, travel: 1, width: 2.5 },
   cast_interrupt: { shape: 'fracture', life: 0.42, color: '#d05050', pieces: 5, travel: 1.3, width: 2 },
   cast_fizzle: { shape: 'collapse', life: 0.5, color: '#8a8678', pieces: 5, travel: 0.8, width: 1.7 },
   cast_ready: { shape: 'snap', life: 0.3, color: '#fff0bb', pieces: 4, travel: 0.7, width: 2.2 },

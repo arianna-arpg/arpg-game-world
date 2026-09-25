@@ -1,3 +1,5 @@
+import { IMPALE_EDGE_MOTIF } from './impaleCues';
+
 /** Independent ailment layers, restrained together without dropping a family.
  * Presentation thresholds only; actual low-life signaling remains separate. */
 export const AFFLICTION_CUE_CFG = {
@@ -11,7 +13,7 @@ export const AFFLICTION_CUE_CFG = {
 };
 
 export type AfflictionOverlayMode = 'gentle' | 'still' | 'off';
-export type AfflictionGesture = 'drip' | 'ember' | 'vignette' | 'clasp' | 'notch';
+export type AfflictionGesture = 'drip' | 'ember' | 'vignette' | 'clasp' | 'notch' | 'spike';
 export interface AfflictionMotif {
   gesture: AfflictionGesture;
   alphaFloor: number; alphaCeil: number;
@@ -22,10 +24,14 @@ export interface AfflictionMotif {
   period: number;
   /** Paint broad haze underneath localized material effects. */
   order: number;
+  /** Spike material: half-width / length, angle scatter, gentle depth motion,
+   * and root inset / reach. Counts stay fixed on all four edges. */
+  spikeWidth?: number; spikeLean?: number; spikeBreath?: number; spikeInset?: number;
 }
 /** Profiles can be extended or replaced by content. StatusDef.screenCue
  * selects a family/color/intensity; unknown profiles use the neutral fallback. */
 export const AFFLICTION_MOTIFS: Record<string, AfflictionMotif> = {
+  impale: IMPALE_EDGE_MOTIF,
   wound: { gesture: 'drip', alphaFloor: 0.13, alphaCeil: 0.65,
     reachQuiet: 0.025, reachUrgent: 0.065, count: 6, period: 7.5, order: 2 },
   fire: { gesture: 'ember', alphaFloor: 0.16, alphaCeil: 0.70,

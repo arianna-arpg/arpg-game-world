@@ -962,7 +962,7 @@ export interface MonsterDef {
    *  onDeath rattle). Composes with ambush (poke the root, learn why),
    *  shells (the answer fires even while the shell soaks), and everything
    *  the payload skill itself composes with. */
-  volatile?: { skillId: string; chance: number; icd?: number; dmgMult?: number };
+  volatile?: import('../engine/combatReadability').VolatileSpec;
   /** BODY ELEMENT RESPONSES — the reaction matrix worn as ANATOMY: what this
    *  body DOES when a landed hit CARRIES a damage type. Each row may coat the
    *  struck body with a status (fire makes wax run; cold sets it brittle;
@@ -3990,7 +3990,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
           onEnter: [
             { do: 'teleport', to: 'anchor' },
             { do: 'summon', monster: 'conclave_blood_demon', count: 4, ring: 190, tag: 'vhal_veil', announce: 'The brood answers!' },
-            { do: 'ward', tag: 'vhal_veil', announce: 'Veil Broken' },
+            { do: 'ward', tag: 'vhal_veil' },
             { do: 'wash', color: '#7a2347', intensity: 0.16 },
           ],
           goto: [{ to: 'apex', tagCleared: 'vhal_veil' }],
@@ -8294,7 +8294,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
             { do: 'summon', monster: 'lesser_brute', count: 2, ring: 240, at: 'anchor', tag: 'unmade_add' },
             { do: 'summon', monster: 'lesser_conjurer', count: 2, ring: 240, at: 'anchor', tag: 'unmade_add' },
             { do: 'summon', monster: 'lesser_herald', count: 1, ring: 240, at: 'anchor', tag: 'unmade_add' },
-            { do: 'ward', tag: 'unmade_add', announce: 'Ward Broken' },
+            { do: 'ward', tag: 'unmade_add' },
             { do: 'wash', color: '#7a2347', intensity: 0.22 },
             // THE DEVOURED HOUR, spent (the castChrono beat): the final
             // stand rises inside stopped time — its echoes seated, its ward
@@ -14142,7 +14142,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
           mods: [mod('damage', 'more', 0.35)],
           onEnter: [
             { do: 'summon', monster: 'primeval_cinder', count: 5, ring: 260, at: 'anchor', tag: 'ashvein_cinder' },
-            { do: 'ward', tag: 'ashvein_cinder', announce: 'Exposed' },
+            { do: 'ward', tag: 'ashvein_cinder' },
           ],
           cadences: [{ every: 9, actions: [{ do: 'cast', skill: 'meteor_storm', at: 'target', force: true }] }],
           goto: [{ to: 'ruin', atLifeFrac: 0.22 }],
@@ -14199,7 +14199,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
           mods: [mod('damage', 'more', 0.35)],
           onEnter: [
             { do: 'summon', monster: 'primeval_spawn', count: 4, ring: 240, at: 'anchor', tag: 'velketh_clutch' },
-            { do: 'ward', tag: 'velketh_clutch', announce: 'Exposed' },
+            { do: 'ward', tag: 'velketh_clutch' },
           ],
           goto: [{ to: 'paroxysm', atLifeFrac: 0.22 }],
         },
@@ -17945,7 +17945,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
           mods: [mod('damage', 'more', 0.35)],
           onEnter: [
             { do: 'summon', monster: 'banshee', count: 2, ring: 200, tag: 'ossuarch_choir' },
-            { do: 'ward', tag: 'ossuarch_choir', announce: 'Dirge Broken' },
+            { do: 'ward', tag: 'ossuarch_choir' },
             { do: 'wash', color: '#6a5a8a', intensity: 0.18 },
           ],
           cadences: [{ every: 3.5, actions: [{ do: 'push', radius: 220, strength: 130, from: 'self' }] }],
@@ -18007,7 +18007,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
           mods: [mod('damage', 'more', 0.3), mod('attackSpeed', 'increased', 0.2)],
           onEnter: [
             { do: 'summon', monster: 'camp_bannerman', count: 2, ring: 170, tag: 'toll_guard' },
-            { do: 'ward', tag: 'toll_guard', announce: 'Exposed' },
+            { do: 'ward', tag: 'toll_guard' },
           ],
           cadences: [{ every: 3.2, actions: [{ do: 'push', radius: 200, strength: 120, from: 'self' }] }],
           goto: [],
@@ -18127,7 +18127,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
           onEnter: [
             { do: 'summon', monster: 'tract_worm', count: 2, ring: 140, tag: 'glut_brood' },
             { do: 'summon', monster: 'lesser_ooze', count: 3, ring: 120, tag: 'glut_brood' },
-            { do: 'ward', tag: 'glut_brood', announce: 'Exposed' },
+            { do: 'ward', tag: 'glut_brood' },
           ],
           goto: [{ to: 'flood', atLifeFrac: 0.2 }],
         },
@@ -18180,7 +18180,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
           announce: 'Tribunal',
           onEnter: [
             { do: 'summon', monster: 'virtue_lance', count: 2, ring: 190, tag: 'tribunal_scales' },
-            { do: 'ward', tag: 'tribunal_scales', announce: 'Exposed' },
+            { do: 'ward', tag: 'tribunal_scales' },
             { do: 'wash', color: '#e8d090', intensity: 0.16 },
           ],
           cadences: [{ every: 4, actions: [{ do: 'nova', skill: 'antiphon', at: 'self', zoneRadius: 170, delay: 0.8 }] }],
@@ -18361,7 +18361,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
           onEnter: [
             { do: 'voidCrack', count: 3, ring: { frac: 0.3, min: 220 }, radius: 54 },
             { do: 'summon', monster: 'banshee', count: 2, ring: 210, tag: 'morthessa_choir' },
-            { do: 'ward', tag: 'morthessa_choir', announce: 'Exposed' },
+            { do: 'ward', tag: 'morthessa_choir' },
             { do: 'wash', color: '#6a4a7a', intensity: 0.18 },
           ],
           cadences: [{ every: 4, actions: [{ do: 'shake', amount: 4 }] }],
@@ -18439,7 +18439,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
           onEnter: [
             { do: 'summon', monster: 'tract_worm', count: 2, ring: 150, tag: 'maw_brood' },
             { do: 'summon', monster: 'viscous_ooze', count: 2, ring: 130, tag: 'maw_brood' },
-            { do: 'ward', tag: 'maw_brood', announce: 'the gut EMPTIES: the Maw is meat again!' },
+            { do: 'ward', tag: 'maw_brood' },
             { do: 'wash', color: '#7a3428', intensity: 0.18 },
           ],
           goto: [{ to: 'flood', atLifeFrac: 0.2 }],
@@ -18613,7 +18613,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
           onEnter: [
             { do: 'teleport', to: 'awayFromTarget', range: 460 },
             { do: 'summon', monster: 'frost_giant', count: 2, ring: 190, tag: 'winter_wall' },
-            { do: 'ward', tag: 'winter_wall', announce: 'the wall CRACKS: the Winter is touchable!' },
+            { do: 'ward', tag: 'winter_wall' },
             { do: 'wash', color: '#a8ccdf', intensity: 0.18 },
           ],
           goto: [{ to: 'no_thaw', atLifeFrac: 0.2 }],
@@ -18677,7 +18677,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
             { do: 'summon', monster: 'canopic_falcon', count: 1, ring: 200, tag: 'dynast_organ' },
             { do: 'summon', monster: 'canopic_ape', count: 1, ring: 200, tag: 'dynast_organ' },
             { do: 'summon', monster: 'canopic_vizier', count: 1, ring: 200, tag: 'dynast_organ' },
-            { do: 'ward', tag: 'dynast_organ', announce: 'the organs FAIL him: the King is mortal!' },
+            { do: 'ward', tag: 'dynast_organ' },
             { do: 'wash', color: '#a88a50', intensity: 0.16 },
           ],
           goto: [{ to: 'procession', atLifeFrac: 0.4 }],

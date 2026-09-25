@@ -3,6 +3,7 @@ import type { AfflictionPressure } from '../../engine/afflictionPressure';
 import type { ActiveFx } from '../screenFx';
 import { hexToRgb, shade } from './color';
 import { drawEdgeOverlay, qFrac } from './overlays';
+import { drawMetalSpike, metalSpikePalette } from './metalSpikes';
 
 export interface AfflictionLayer {
   key: string; family: string; color: string; sources: string[];
@@ -78,6 +79,29 @@ export function drawAfflictionLayer(ctx: CanvasRenderingContext2D, w: number, h:
     const breath = 0.96 + 0.04 * Math.sin(clock * Math.PI * 2 + seed * 6);
     drawEdgeOverlay(ctx, w, h, { key: `affliction|${f.color}|${inner}`, innerFrac: inner,
       stops: [[0, `rgba(${r},${g},${b},0)`], [0.55, `rgba(${r},${g},${b},0.38)`], [1, `rgba(${r},${g},${b},1)`]] }, f.alpha * breath);
+  } else if (P.gesture === 'spike') {
+    const palette = metalSpikePalette(f.color);
+    ctx.globalAlpha = f.alpha;
+    // Each edge has its own fixed seats. All shards point into the view;
+    // a narrow clip protects combat even with custom reach/angle settings.
+    for (let side = 0; side < 4; side++) {
+      const span = side < 2 ? h : w;
+      ctx.save();
+      if (side === 1) { ctx.translate(w, h); ctx.rotate(Math.PI); }
+      if (side === 2) { ctx.translate(w, 0); ctx.rotate(Math.PI / 2); }
+      if (side === 3) { ctx.translate(0, h); ctx.rotate(-Math.PI / 2); }
+      ctx.beginPath(); ctx.rect(0, 0, short * C.sideBand, span); ctx.clip();
+      for (let i = 0; i < P.count; i++) {
+        const scatter = fract(i * 0.618 + side * 0.27 + seed);
+        const y = span * (i + 0.3 + scatter * 0.4) / Math.max(1, P.count);
+        const motion = 1 + (P.spikeBreath ?? 0.045) * Math.sin(clock * Math.PI * 2 + i + side);
+        const length = reach * (0.65 + scatter * 0.35) * motion;
+        ctx.save(); ctx.translate(reach * (P.spikeInset ?? 0.12), y);
+        ctx.rotate((scatter - 0.5) * (P.spikeLean ?? 0.32));
+        drawMetalSpike(ctx, length, length * (P.spikeWidth ?? 0.14), palette); ctx.restore();
+      }
+      ctx.restore();
+    }
   } else if (P.gesture === 'clasp') {
     ctx.globalAlpha = f.alpha; ctx.lineWidth = 1.4 + 1.8 * f.severity;
     // Corner-bound, slowly tightening hooks: distinct from poison's fog.

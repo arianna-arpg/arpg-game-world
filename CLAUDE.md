@@ -73,9 +73,19 @@ documented in `docs/design/warning-cues.md`; verify `probe_warningcues.ts`,
 Player ailments use independent simultaneous blood drips, kindling, poison haze
 and curse layers, each scaled by its own severity with a shared clutter budget. See `docs/design/affliction-cues.md`; verify
 `probe_afflictioncues.ts` and `balance/affliction-cues-ui.cjs` after a build.
+Impale's lodged metal body spikes and player screen-edge spikes share configurable
+parts/materials in `data/impaleCues.ts`. See `docs/design/impale-cues.md`; verify
+the afflictioncues and cleave probes plus hidden `balance/impale-cues-ui.cjs`.
 GT-019 cast interruptions, concentration fizzles/refocus and held completion
 use reusable geometry documented in `docs/design/casting-cues.md`; verify
 `probe_castingcues.ts` and `balance/casting-cues-ui.cjs` after a build.
+GT-022 Doom uses a bank-driven iris, fixed-fuse arc, true blast boundary and
+pinch/tear rupture, shared across actors and co-op. See `docs/design/doom-cues.md`;
+verify `probe_doomcues.ts` and hidden `balance/doom-cues-ui.cjs` after a build.
+GT-022's other outcomes and GT-035 source-linked wards are documented in
+`docs/design/combat-threat-cues.md`. Shared readiness profiles, Last Gasp's
+life-orb spark and ward armor use `data/combatReadability.ts`; verify
+`probe_combatreadability.ts`, `probe_ironbell.ts` and `balance/combat-readability-ui.cjs`.
 Author cues as reusable, configurable data. Undead nights demonstrate this with
 disturbed soil and grasping hands at committed emergence sites (`groundRising`).
 

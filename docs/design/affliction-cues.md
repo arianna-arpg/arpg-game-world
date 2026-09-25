@@ -13,6 +13,9 @@ low-life-tinted wash and strongest-three motif selection have been removed.
   leaving the center transparent. It paints below the localized materials so
   blood and kindling keep their own colors.
 - **Doom:** violet hooks tighten at the corners according to the armed payload.
+- **Impale:** small metal spikes point inward from all four screen edges while
+  the status is present, with matching lodged steel on the affected body. This
+  presence cue does not forecast a future hit; see `impale-cues.md`.
 - **Other effects:** configurable profiles or separate colored fallback marks.
   No strongest-effect selection hides another active family.
 
@@ -96,6 +99,7 @@ at once; each effect's contribution when individually removed; transparent
 center; low-life palette independence; cure/death/downing; and options.
 Captures/logs live under ignored `balance/reports/affliction-*`.
 
-No combat captions are removed here. Doom detonation's existing caption is
-still a separate outcome-cue backlog item. Long-session comfort and dense
+No combat captions are removed by this screen-layer pass. Doom's body warning
+and caption-free detonation are covered separately in [Doom cues](doom-cues.md).
+Long-session comfort and dense
 encounter playtesting remain before declaring the pass Done.

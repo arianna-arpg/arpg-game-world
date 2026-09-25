@@ -13,6 +13,7 @@
 // ---------------------------------------------------------------------------
 
 import { drawMemoryCache } from './containers';
+import { drawMetalSpike, metalSpikePalette } from './metalSpikes';
 import { adjust, hash01, mix, shade, withAlpha } from './color';
 import { materialOf, rampOf, type Ramp } from './materials';
 
@@ -740,6 +741,23 @@ const spikes: PartPainter = (ctx, r, spec, pal) => {
       c.arc(Math.cos(ang) * R * 1.05, Math.sin(ang) * R * 1.05, R * 0.18, 0, Math.PI * 2);
       c.fill();
       outlined(c, ramp, 1);
+    }
+  });
+};
+
+/** Irregular shards seated inside the silhouette, extending past the rim.
+ * Fixed in body space; no clock, orbit, RNG or per-stack particle work. */
+const lodgedSpikes: PartPainter = (ctx, r, spec, pal) => {
+  const palette = metalSpikePalette(spec.color ?? pal.metal.base);
+  const n = Math.max(0, Math.min(32, Math.round(P(spec, 'n', 9))));
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < n; i++) {
+      const angle = i * 2.399963 + 0.35;
+      const root = R * (P(spec, 'root', 0.58) + (hash01(i, 17) - 0.5) * P(spec, 'scatter', 0.22));
+      const len = R * P(spec, 'length', 0.95) * (0.65 + hash01(i, 71) * 0.45);
+      c.save(); c.translate(Math.cos(angle) * root, Math.sin(angle) * root);
+      c.rotate(angle + (hash01(i, 39) - 0.5) * P(spec, 'lean', 0.32));
+      drawMetalSpike(c, len, R * P(spec, 'width', 0.16), palette); c.restore();
     }
   });
 };
@@ -5554,7 +5572,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   disc, blob, carapace, torso, robe, serpentHead,
   skull, ribs, spineTrail, crown,
   hood, tatters, pauldrons,
-  eyes, obolEyes, maw, snout, mandibles, horns, ears, tusks, spikes, wings,
+  eyes, obolEyes, maw, snout, mandibles, horns, ears, tusks, spikes, lodgedSpikes, wings,
   claws, scythe, staff, sword, daggers, trident, mace, axe, shield, bow, musket,
   halo, runes, wisps, flames, emberSparks, lavaCracks, puffMotes, veilSashes, soulGauze, glassFins,
   gourdHead, strawLimbs,

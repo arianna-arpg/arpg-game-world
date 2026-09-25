@@ -19,6 +19,8 @@
 // ---------------------------------------------------------------------------
 
 import { angleDiff, angleTo, dist, rand, vec, type Vec2 } from '../core/math';
+import { wardGuardians, wardCueStyle } from './combatReadability';
+import { combatCueFlash } from './combatCues';
 import { MONSTERS } from '../data/monsters';
 import { mod } from './stats';
 import { finishAIRecovery } from './handling';
@@ -627,18 +629,14 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   if (actor.leap) return; // airborne
 
   // WARD WATCHER (the add-gate): the moment no live actor carries the ward
-  // tag, the ward SHATTERS — targetable again, with the promised announce.
-  if (actor.aiWardTag && !world.actors.some(x => !x.dead && x.tag === actor.aiWardTag)) {
+  // tag, the ward SHATTERS — the visible links use this exact membership.
+  if (actor.aiWardTag && !wardGuardians(actor, world.actors).length) {
     actor.untargetable = false;
-    if (actor.aiWardNote) {
-      world.text(vec(actor.pos.x, actor.pos.y - 50), actor.aiWardNote, '#ffd060', 20);
-    }
-    world.flashes.push({
-      pos: vec(actor.pos.x, actor.pos.y), radius: 170,
-      color: '#ffd060', life: 0.7, maxLife: 0.7,
-    });
+    const cue = wardCueStyle(actor.wardCueProfile);
+    world.flashes.push(combatCueFlash(actor.pos, 'ward_break', actor.radius + cue.pad, 0, cue.color));
     actor.aiWardTag = undefined;
     actor.aiWardNote = undefined;
+    actor.wardCueProfile = undefined;
   }
 
   // A FEINT mid-flight drops its bar at the appointed beat — no payload,

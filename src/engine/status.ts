@@ -8,14 +8,18 @@
 
 import { conversionStat, mod, STAT_DEFS, type DamageType, type Modifier, type SkillTag } from './stats';
 import type { PartSpec } from '../render/vis/parts';
+import { IMPALE_BODY_CUE, IMPALE_SCREEN_CUE } from '../data/impaleCues';
 
 export interface StatusDef {
   /** Optional independent screen layer profile. False opts out; damaging/doom statuses
    * inherit a generic layer when absent. UI-only: never changes damage. */
   screenCue?: { motif?: string; color?: string; intensity?: number } | false;
+  /** Cull-bank body/rupture profile. Inherits 'doom' for cullsAtLethal;
+   * false opts out. Resolved from mechanics, never a status-name branch. */
+  armedCue?: string | false;
   /** Persistent body presentation, following actual status presence on all
    * actors. Parts use facing space; lean is a draw-only knee dip. */
-  bodyCue?: { lean?: number; parts?: PartSpec[] };
+  bodyCue?: { lean?: number; parts?: PartSpec[]; /** One shared attachment across related statuses. */ group?: string };
   label: string;
   color: string;
   /** Default duration in seconds (scaled by the caster's effectDuration). */
@@ -450,13 +454,14 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // whole bank as a separate mitigated blow (dischargeOnHit). Death and
   // expiry still pop the keg through the ordinary rupture machinery —
   // a spear never rots in the corpse.
-  impaled_physical: { label: 'Physical Impale', color: '#c8ccd8', duration: 8, element: 'physical', dischargeOnHit: true, dischargeMatchingType: true },
-  impaled_fire: { label: 'Fire Impale', color: '#ef8858', duration: 8, element: 'fire', dischargeOnHit: true, dischargeMatchingType: true },
-  impaled_cold: { label: 'Cold Impale', color: '#83cde8', duration: 8, element: 'cold', dischargeOnHit: true, dischargeMatchingType: true },
-  impaled_lightning: { label: 'Lightning Impale', color: '#e1cd69', duration: 8, element: 'lightning', dischargeOnHit: true, dischargeMatchingType: true },
-  impaled_chaos: { label: 'Chaos Impale', color: '#b285d7', duration: 8, element: 'chaos', dischargeOnHit: true, dischargeMatchingType: true },
+  impaled_physical: { label: 'Physical Impale', color: '#c8ccd8', duration: 8, element: 'physical', dischargeOnHit: true, dischargeMatchingType: true, bodyCue: IMPALE_BODY_CUE, screenCue: IMPALE_SCREEN_CUE },
+  impaled_fire: { label: 'Fire Impale', color: '#ef8858', duration: 8, element: 'fire', dischargeOnHit: true, dischargeMatchingType: true, bodyCue: IMPALE_BODY_CUE, screenCue: IMPALE_SCREEN_CUE },
+  impaled_cold: { label: 'Cold Impale', color: '#83cde8', duration: 8, element: 'cold', dischargeOnHit: true, dischargeMatchingType: true, bodyCue: IMPALE_BODY_CUE, screenCue: IMPALE_SCREEN_CUE },
+  impaled_lightning: { label: 'Lightning Impale', color: '#e1cd69', duration: 8, element: 'lightning', dischargeOnHit: true, dischargeMatchingType: true, bodyCue: IMPALE_BODY_CUE, screenCue: IMPALE_SCREEN_CUE },
+  impaled_chaos: { label: 'Chaos Impale', color: '#b285d7', duration: 8, element: 'chaos', dischargeOnHit: true, dischargeMatchingType: true, bodyCue: IMPALE_BODY_CUE, screenCue: IMPALE_SCREEN_CUE },
   impaled: {
     label: 'Impaled', color: '#c8ccd8', duration: 8,
+    bodyCue: IMPALE_BODY_CUE, screenCue: IMPALE_SCREEN_CUE,
     element: 'physical',
     dischargeOnHit: true,
   },
@@ -1911,4 +1916,9 @@ export interface ActiveStatus {
    *  the bank moves (application, rupture) — the renderer's and the wire's
    *  one derived scalar; clients carry it verbatim. */
   bankFrac?: number;
+}
+
+/** One radius read for the rupture hit test and its armed/detonating cues. */
+export function statusRuptureRadius(s: Pick<ActiveStatus, 'ruptureRadius'>): number {
+  return s.ruptureRadius ?? 90;
 }

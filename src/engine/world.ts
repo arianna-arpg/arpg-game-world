@@ -53,7 +53,9 @@ import { ActorGrid } from './actorGrid';
 import { erraticTurn, spinOffset, weaveOffset, weaveVel } from './flight';
 import { FOURTH_WALL_CFG, type ViewRect, fallbackRect, frameReflect, rectCenter } from './fourthwall';
 import { mod, type AttributeId, type Attributes, type ConditionId, type DamageType, type Modifier, type SkillTag } from './stats';
-import { baselineStatusDps, bankFracOf, STATUS_DEFS, tuneAilmentChance, type ActiveStatus } from './status';
+import { baselineStatusDps, bankFracOf, STATUS_DEFS, tuneAilmentChance, statusRuptureRadius, type ActiveStatus } from './status';
+import { armedCueProfile, armedCueStyle } from './armedCues';
+import { REACTIVE_CUE_CFG } from '../data/combatReadability';
 import { Actor, shellArcFactor, type AmbushSpec, type BrainPhase, type CastingState, type GainEvent, type MonsterPartDef, type Team } from './actor';
 import { EventBus } from './eventbus';
 import { Party } from './party';
@@ -31235,7 +31237,6 @@ export class World {
         if (s.rupture && STATUS_DEFS[s.id]?.cullsAtLethal) armed += s.rupture;
       }
       if (armed > 0 && armed >= target.life) {
-        this.text(vec(target.pos.x, target.pos.y - 16), 'DOOM!', '#7a48c8', 16, 'combat');
         for (let si = target.statuses.length - 1; si >= 0; si--) {
           const s = target.statuses[si];
           if (!s.rupture || !STATUS_DEFS[s.id]?.cullsAtLethal) continue;
@@ -41272,6 +41273,12 @@ export class World {
 
   private parryDamageWindow = new ParryDamageWindow();
 
+  /** Resolved outcomes share one picture across hits, counters and area lanes. */
+  private showCombatOutcome(a: Actor, style: 'hit_cap' | 'culled' | 'last_gasp' | 'volatile_release', source?: Vec2, color?: string): void {
+    const facing = source ? Math.atan2(a.pos.y - source.y, a.pos.x - source.x) : 0;
+    this.flashes.push(combatCueFlash(a.pos, style, a.radius + REACTIVE_CUE_CFG.eventPad, facing, color));
+  }
+
   /** Captured counters use ordinary mitigation and attribution, without
    * re-casting the original skill's statuses, summons or proc chains. */
   private resolveParryDamage(caster: Actor, target: Actor, payload: ParryDamage, scale = 1, threatPos = caster.pos): void {
@@ -41294,6 +41301,8 @@ export class World {
       this.parryDamageWindow.spend(target, this.time);
     }
     this.recordIndirectDamage(target, caster, before);
+    if (result.clamped) this.showCombatOutcome(target, 'hit_cap', threatPos);
+    if (result.culled) this.showCombatOutcome(target, 'culled', threatPos);
     if (result.total > 0) this.text(target.pos, Math.round(result.total).toString(), '#ffd700', 14);
     if (target.life <= 0 && !target.dead) this.kill(target, false, caster);
   }
@@ -41623,7 +41632,7 @@ export class World {
       color: '#c8b8a0', life: 0.22, maxLife: 0.22,
     });
     this.text(a.pos, Math.round(taken).toString(), DAMAGE_COLOR.physical, 14);
-    if (out.clamped) this.text(vec(a.pos.x, a.pos.y - 20), 'capped', '#9ab0c8', 12);
+    if (out.clamped) this.showCombatOutcome(a, 'hit_cap', caster?.pos);
     if (a.life <= 0 && !a.dead) this.kill(a, false, caster);
   }
 
@@ -41674,7 +41683,7 @@ export class World {
           b.hitFlash = 0.15;
           b.hitFlashType = 'physical';
           this.text(b.pos, Math.round(taken).toString(), DAMAGE_COLOR.physical, 13);
-          if (out.clamped) this.text(vec(b.pos.x, b.pos.y - 20), 'capped', '#9ab0c8', 12);
+          if (out.clamped) this.showCombatOutcome(b, 'hit_cap', a.pos);
           if (b.life <= 0 && !b.dead) this.kill(b, false, casterLive);
         }
         // The blocker feels a lean, the plowed inherit momentum (authority
@@ -42584,10 +42593,9 @@ export class World {
         e.hitFlashType = type;
       }
       this.text(e.pos, Math.round(taken).toString(), color, 14);
-      // The burst lane prints its own number, so it carries its own capped
-      // read — this is the resolveHit-bypassing path the cap must still
-      // speak on (cast honesty holds on every lane that prints).
-      if (out.clamped || result?.clamped) this.text(vec(e.pos.x, e.pos.y - 20), 'capped', '#9ab0c8', 12);
+      // Area wounds show the same cap/execution outcome as direct strikes.
+      if (out.clamped || result?.clamped) this.showCombatOutcome(e, 'hit_cap', pos);
+      if (result?.culled) this.showCombatOutcome(e, 'culled', pos);
       if (e.life <= 0 && !e.dead) this.kill(e, false, sourceActor);
     }
     this.flashes.push({ pos: vec(pos.x, pos.y), radius, color, life: 0.35, maxLife: 0.35 });
@@ -43401,12 +43409,12 @@ export class World {
         result.crit ? '#ffd24a' : '#ffffff', result.crit ? 18 : 13, 'dmg');
       // CULLED: the executing threshold fired inside applyHit.
       if (result.culled) {
-        this.text(vec(target.pos.x, target.pos.y - 20), 'CULLED!', '#c8a0e8', 14, 'combat');
+        this.showCombatOutcome(target, 'culled', evidence);
       }
       // CAPPED: the victim's hitCap flattened the life cut (cast honesty —
       // a clamped blow must never read as full work; the counter is DoT).
       if (result.clamped) {
-        this.text(vec(target.pos.x, target.pos.y - 20), 'capped', '#9ab0c8', 12, 'combat');
+        this.showCombatOutcome(target, 'hit_cap', evidence);
       }
       // The poise bar SHATTERED under this blow — the breaker's payoff
       // loop (poiseBreakDealt, with the breaking skill's context). The
@@ -43460,7 +43468,7 @@ export class World {
         if (vdef) {
           target.volatileReadyAt = this.time + (target.volatile.icd ?? 1.5);
           target.volatileInst ??= makeSkillInstance(vdef, Math.max(1, Math.round(target.level)));
-          this.text(vec(target.pos.x, target.pos.y - 18), 'volatile!', vdef.color, 11, 'combat');
+          if (target.volatile.cue !== false) this.showCombatOutcome(target, 'volatile_release', caster.pos, vdef.color);
           this.executeSkill(target, target.volatileInst, vec(caster.pos.x, caster.pos.y), {
             dmgMult: target.volatile.dmgMult ?? 1,
             noCooldown: true, noRepeat: true, keepFacing: true,
@@ -44683,11 +44691,7 @@ export class World {
     }
     if (a.gasped) {
       a.gasped = false;
-      this.text(vec(a.pos.x, a.pos.y - a.radius - 12), 'LAST GASP!', '#ffd890', 15, 'combat');
-      this.flashes.push({
-        pos: vec(a.pos.x, a.pos.y), radius: a.radius + 22,
-        color: '#ffd890', life: 0.4, maxLife: 0.4,
-      });
+      this.showCombatOutcome(a, 'last_gasp');
       this.rollOwnProcs(a, 'lastGasp');
     }
     // PULSE BEATS — only the pulse procs this sheet arms (the armed-list
@@ -45651,8 +45655,10 @@ export class World {
 
   private ruptureStatus(victim: Actor, s: ActiveStatus): void {
     const type: DamageType = s.ruptureType ?? 'chaos';
-    const radius = s.ruptureRadius ?? 90;
-    this.flashes.push({ pos: vec(victim.pos.x, victim.pos.y), radius, color: '#b06bd4', life: 0.3, maxLife: 0.3 });
+    const radius = statusRuptureRadius(s), armedCue = armedCueProfile(STATUS_DEFS[s.id]);
+    this.flashes.push(armedCue
+      ? combatCueFlash(victim.pos, armedCueStyle(armedCue).release, radius, 0, STATUS_DEFS[s.id].color)
+      : { pos: vec(victim.pos.x, victim.pos.y), radius, color: '#b06bd4', life: 0.3, maxLife: 0.3 });
     for (const e of this.actors) {
       if (e.dead || e.team !== victim.team || e.untargetable || !sameStory(e, victim)) continue; // (the sovereignty gate)
       if (dist(victim.pos, e.pos) - e.radius > radius) continue;
@@ -55079,7 +55085,7 @@ export class World {
         a.hitFlash = 0.15;
         a.hitFlashType = payload.hit.type;
         this.text(a.pos, Math.round(taken).toString(), DAMAGE_COLOR[payload.hit.type], 14);
-        if (out.clamped) this.text(vec(a.pos.x, a.pos.y - 20), 'capped', '#9ab0c8', 12);
+        if (out.clamped) this.showCombatOutcome(a, 'hit_cap', { x, y });
         if (a.life <= 0 && !a.dead) this.kill(a, false, owner);
       }
       if (payload.status && !a.dead && Math.random() < (payload.status.chance ?? 1)) {

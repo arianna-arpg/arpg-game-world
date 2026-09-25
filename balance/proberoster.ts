@@ -73,6 +73,8 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_uniqueaccords.ts', status: 'green', tier: 'fast', why: 'Unique grant census, item-owned sockets, live companion investment, Cinder Conductor fuel, Breach Bell cries and Unspent Reply casting costs' },
   { probe: 'probe_castingcues.ts', status: 'green', tier: 'fast', why: 'GT-019 real interruption/fizzle, held completion geometry, focus recovery, brim crossing, generic opt-out and co-op parity' },
   { probe: 'probe_afflictioncues.ts', status: 'green', tier: 'fast', why: 'Independent simultaneous blood/kindling/poison/curse layers, individual severity, quiet-presence budget without top-N selection, typed pressure, comfort and co-op cleanup' },
+  { probe: 'probe_doomcues.ts', status: 'green', tier: 'fast', why: 'GT-022 Doom: actual bank/life iris, fixed fuse, footprint, early/expiry/death rupture, cure, source credit and co-op cleanup' },
+  { probe: 'probe_combatreadability.ts', status: 'green', tier: 'fast', why: 'GT-022/035: real volatile/cull/cap/rescue outcomes, cooldown state, ward source membership, HUD and co-op' },
   { probe: 'probe_warningcues.ts', status: 'green', tier: 'fast', why: 'GT-011/012: exact guard-release geometry, live plan gestures, interruption/recovery and co-op warning cleanup' },
   { probe: 'probe_combatcues.ts', status: 'green', tier: 'fast', why: 'GT-007–010: parry opening/reflection, avoided hits, timing and critical outcome cues with exact state and co-op fidelity' },
   { probe: 'probe_defensecues.ts', status: 'green', tier: 'fast', why: 'State-driven winded, poise, guard and shell cues; profile fallback, typed overflow, recovery and co-op parity' },

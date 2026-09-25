@@ -101,6 +101,11 @@ import { encounterCueOf } from '../engine/encounterCombat';
 import { WARNING_CUE_CFG } from '../data/warningCues';
 import { drawGuardReleaseGround, drawEncounterCue, warningCueLean } from './vis/warningCueLayer';
 import { drawParryReady, drawReflectedCue } from './vis/combatCueLayer';
+import { armedStatusCues } from '../engine/armedCues';
+import { drawArmedCues } from './vis/armedCueLayer';
+import { reactiveCueOf, wardCueActive } from '../engine/combatReadability';
+import { REACTIVE_CUE_CFG } from '../data/combatReadability';
+import { drawReactiveCue, drawGaspSpark, drawWardBody, drawWardLinks, drawWardBar } from './vis/combatReadabilityLayer';
 import { drawCastingCue, drawFocusFrame } from './vis/castingCueLayer';
 import { castingCompletion } from '../engine/castingCues';
 import { COMBAT_CUE_CFG } from '../data/combatCues';
@@ -773,7 +778,10 @@ export class Renderer {
     // the bodies they bind (a link is context for a silhouette, never a
     // thing that occludes one). The sight veil composites above both, so a
     // bond behind a wall hides exactly like the wardens holding it.
-    if (!VIS_ABLATE.has('actors')) this.drawPackLinks(world);
+    if (!VIS_ABLATE.has('actors')) {
+      this.drawPackLinks(world);
+      drawWardLinks(ctx, world.actors, world.player, world.time);
+    }
     if (!VIS_ABLATE.has('actors')) {
       // THE LITE TIER (engine/lite.ts): the crowd blits UNDER real bodies —
       // one composited sprite per body, no per-body state churn.
@@ -5283,12 +5291,16 @@ export class Renderer {
     }
 
     const guardWarning = guardReleaseCue(a, world.time);
+    const armedCues = armedStatusCues(a);
+    const reactiveCue = reactiveCueOf(a, world.time), wardCue = wardCueActive(a);
     const encounterWarning = encounterCueOf(a, world);
     // Body (untouchable spirits ghostly; stealthed/invisible actors faded)
     drawMovementTether(ctx, a, world);
     ctx.save();
     ctx.translate(x, y);
     const warningGround = guardWarning ? ctx.getTransform() : undefined;
+    const armedGround = armedCues.length ? ctx.getTransform() : undefined;
+    const reactiveGround = reactiveCue || wardCue ? ctx.getTransform() : undefined;
     // A LIVE TRAVERSAL owns the traveler's pose: the geyser's rise swells the
     // body toward the camera over its pinned, thinning shadow; the fall
     // shrinks and spins it away into the hole (engine/traversal.ts eases).
@@ -5695,6 +5707,16 @@ export class Renderer {
 
     drawShellCue(ctx, a, world.time);
     drawPoiseCue(ctx, a);
+    if (reactiveGround) {
+      ctx.save(); ctx.setTransform(reactiveGround); ctx.globalAlpha = baseAlpha;
+      drawReactiveCue(ctx, a.radius, reactiveCue, world.time);
+      if (wardCue) drawWardBody(ctx, a.radius, a.wardCueProfile);
+      ctx.restore();
+    }
+    if (armedGround) {
+      ctx.save(); ctx.setTransform(armedGround); ctx.globalAlpha = baseAlpha;
+      drawArmedCues(ctx, a.radius, armedCues, world.time); ctx.restore();
+    }
     drawParryReady(ctx, a);
     drawCastingCue(ctx, a);
 
@@ -7504,6 +7526,9 @@ export class Renderer {
         -Math.PI / 2 + Math.PI * 2 * clamp(p.endurance / p.maxEndurance(), 0, 1));
       ctx.stroke();
     }
+    const gaspCue = reactiveCueOf(p, world.time)?.gasp;
+    if (gaspCue !== undefined) drawGaspSpark(ctx, lifeX,
+      orbY + orbR * REACTIVE_CUE_CFG.gasp.hudDepth, REACTIVE_CUE_CFG.gasp.hudSize, gaspCue);
     this.drawOrb(manaX, orbY, orbR, p.maxMana() > 0 ? p.mana / p.maxMana() : 0,
       '#2858b8', '#101848', `${Math.ceil(p.mana)}`, 'Mana',
       p.maxMana() > 0 ? p.reservedMana / p.maxMana() : 0);
@@ -8332,16 +8357,15 @@ export class Renderer {
       const oy = world.party.strip.length > 1 ? 20 : 0;
       const bw2 = Math.min(520, w - 200);
       const bx = w / 2 - bw2 / 2;
-      // WARDED: while the boss is untargetable (the Unmade's P4 echo-guard gate), the
-      // bar reads grey + 'WARDED' so the player KNOWS why damage isn't landing — it's
-      // a clear decision-test (kill the guard), not an arbitrary immune wall.
+      // Ward armor agrees with the body/source links; the bar retains real life.
       const warded = boss.untargetable;
       ctx.fillStyle = 'rgba(0,0,0,0.7)';
       ctx.fillRect(bx, 24 + oy, bw2, 14);
       ctx.fillStyle = warded ? '#5a5a66' : '#c03030';
-      ctx.fillRect(bx, 24 + oy, bw2 * (warded ? 1 : clamp(boss.life / boss.maxLife(), 0, 1)), 14);
+      ctx.fillRect(bx, 24 + oy, bw2 * clamp(boss.life / boss.maxLife(), 0, 1), 14);
       ctx.strokeStyle = '#3a3a52';
       ctx.strokeRect(bx, 24 + oy, bw2, 14);
+      if (warded) drawWardBar(ctx, bx, 24 + oy, bw2, 14, boss.wardCueProfile);
       // Phase pips for a multi-phase boss (info.pips = 0 draws bare). The
       // HP-ladder FILLS pips as phases are entered (one-way); a script FSM
       // HIGHLIGHTS the current phase instead (scripts loop, so "progress"
@@ -8353,7 +8377,7 @@ export class Renderer {
       ctx.textAlign = 'center';
       ctx.font = 'bold 12px Verdana';
       ctx.fillStyle = warded ? '#c0c0cc' : '#ffd0d0';
-      ctx.fillText(warded ? `${boss.name} — WARDED` : boss.name, w / 2, 52 + oy);
+      ctx.fillText(boss.name, w / 2, 52 + oy);
       // THE MARQUEE PORTRAIT — the boss itself beside its bar, through the
       // portrait fabric (the same bakes its body blits from). Subject memoed
       // per boss actor; the tile is the fabric's cached blit. Built from the

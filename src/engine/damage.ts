@@ -353,10 +353,10 @@ export interface HitResult {
   plyEaten?: boolean;
   /** This hit SHATTERED the target's poise bar (the world prints it). */
   poiseBroke?: boolean;
-  /** This hit EXECUTED via the attacker's cullThreshold (the world prints it). */
+  /** This hit EXECUTED via the attacker's cullThreshold (the culled cue shows it). */
   culled?: boolean;
   /** This hit's life cut was FLATTENED by the victim's hitCap stat — the
-   *  world prints it, so a capped blow never masquerades as full work. */
+   *  world shows a flattened impact, so a capped blow never masquerades as full work. */
   clamped?: boolean;
 }
 
@@ -679,6 +679,7 @@ export function landLifeDamage(target: Actor, total: number): number {
       const removed = Math.max(0, target.life - stood);
       target.life = stood;
       target.lastGaspCd = target.sheet.get('lastGaspCooldown');
+      target.lastGaspSpan = target.lastGaspCd;
       target.gasped = true;
       return removed;
     }

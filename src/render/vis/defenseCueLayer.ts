@@ -2,6 +2,7 @@ import { DEFENSE_CUE_CFG as C } from '../../data/defenseCues';
 import { defenseStyle } from '../../engine/defenseCues';
 import { shellArcFactor, type Actor } from '../../engine/actor';
 import { STATUS_DEFS } from '../../engine/status';
+import type { PartSpec } from './parts';
 import { registerEffectVoice } from './effectVoice';
 import { drawPartSpecs, type BodyLook } from './body';
 import { shade, withAlpha } from './color';
@@ -103,9 +104,23 @@ export function statusBodyLean(a: Actor): number {
   return Math.max(0, Math.min(1, lean));
 }
 
-export function drawStatusBodyCue(ctx: CanvasRenderingContext2D, a: Actor, look: BodyLook, time: number): void {
+/** Related statuses may share an attachment without painting it repeatedly.
+ * Ungrouped authored parts still compose, and expired/dead bodies stay clear. */
+const EMPTY_STATUS_BODY_PARTS: PartSpec[] = [];
+export function collectStatusBodyParts(a: Pick<Actor, 'statuses' | 'dead' | 'downed'>): PartSpec[] {
+  if (a.dead || a.downed || !a.statuses.length) return EMPTY_STATUS_BODY_PARTS;
+  const parts: PartSpec[] = [], groups = new Set<string>();
   for (const s of a.statuses) {
-    const parts = STATUS_DEFS[s.id]?.bodyCue?.parts;
-    if (parts) drawPartSpecs(ctx, look, parts, time);
+    if (s.remaining <= 0) continue;
+    const cue = STATUS_DEFS[s.id]?.bodyCue;
+    if (!cue?.parts || (cue.group && groups.has(cue.group))) continue;
+    if (cue.group) groups.add(cue.group);
+    parts.push(...cue.parts);
   }
+  return parts;
+}
+
+export function drawStatusBodyCue(ctx: CanvasRenderingContext2D, a: Actor, look: BodyLook, time: number): void {
+  const parts = collectStatusBodyParts(a);
+  if (parts.length) drawPartSpecs(ctx, look, parts, time);
 }

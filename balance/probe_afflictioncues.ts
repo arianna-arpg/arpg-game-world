@@ -7,10 +7,13 @@ import { applyDot } from '../src/engine/damage';
 import { afflictionPressureOf, statusDamageOver } from '../src/engine/afflictionPressure';
 import { collectActiveFx, collectFalterK } from '../src/render/screenFx';
 import { composeAfflictionEdge } from '../src/render/vis/afflictionEdge';
+import { collectStatusBodyParts } from '../src/render/vis/defenseCueLayer';
 import { AFFLICTION_CUE_CFG as C, afflictionMotif } from '../src/data/afflictionCues';
 import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 import { makeSettings, serializeSettings, deserializeSettings } from '../src/meta/settings';
 import { CLASSES } from '../src/data/classes';
+import { SKILLS } from '../src/data/skills';
+import { makeSkillInstance } from '../src/engine/skills';
 import { NullInput } from '../src/net/intent';
 
 seedGlobalRandom(0xaff1);
@@ -177,5 +180,66 @@ for (const pool of ['ward', 'absorb', 'es'] as const) {
     collectActiveFx(client.player.statuses)[0]?.def.kind === 'vignette' && client.player.statuses[0].dps === 0);
   guest.actor.statuses = []; applySnapshot(client, serializeSnapshot(w, 5));
   check('own-seat cleanse clears generic hints and pressure', !collectActiveFx(client.player.statuses).length && total(client.player) === 0);
+}
+{
+  const { w, p } = fixture();
+  const impaleCueIds = Object.keys(STATUS_DEFS).filter(id => id === 'impaled' || id.startsWith('impaled_'));
+  for (const id of impaleCueIds) {
+    p.statuses = [{ ...status(id, 0), rupture: 100, casterId: p.id }];
+    const impaleCue = composeAfflictionEdge(collectActiveFx(p.statuses), afflictionPressureOf(p), 'still', 0);
+    check(id + ' has lodged body steel and edge spikes without invented DoT pressure',
+      collectStatusBodyParts(p)[0]?.kind === 'lodgedSpikes' && impaleCue?.layers[0].profile.gesture === 'spike'
+      && impaleCue.layers[0].severity === 0 && impaleCue.layers[0].alpha > 0);
+  }
+  p.statuses = impaleCueIds.map(id => status(id, 0));
+  const impaleCueBody = JSON.stringify(collectStatusBodyParts(p));
+  check('simultaneous Impale types share one body attachment and one edge layer',
+    collectStatusBodyParts(p).length === 1 && composeAfflictionEdge(collectActiveFx(p.statuses), {}, 'still', 0)!.layers.length === 1);
+  p.statuses.reverse();
+  check('Impale attachment does not shuffle when statuses reorder', JSON.stringify(collectStatusBodyParts(p)) === impaleCueBody);
+  p.statuses.push(status('burn'), status('poison'), status('bleed'), { ...status('doom', 0), rupture: 20 });
+  const impaleCueMixed = composeAfflictionEdge(collectActiveFx(p.statuses), afflictionPressureOf(p), 'still', 0)!;
+  check('Impale coexists with all four ailment families within the shared budget', impaleCueMixed.layers.length === 5
+    && impaleCueMixed.layers.every(l => l.alpha > 0) && impaleCueMixed.layers.reduce((n, l) => n + l.alpha, 0) <= C.opacityBudget + 1e-8);
+  p.statuses = [status('impaled', 0, 0)];
+  check('expired Impale leaves neither body nor screen steel', !collectStatusBodyParts(p).length && !collectActiveFx(p.statuses).length);
+  p.statuses = [status('impaled', 0)]; p.dead = true;
+  check('dead Impale victim has no persistent body attachment', !collectStatusBodyParts(p).length); p.dead = false; p.downed = true;
+  check('downed Impale victim has no persistent body attachment', !collectStatusBodyParts(p).length); p.downed = false;
+  p.endStatus('impaled');
+  check('cleansing Impale clears both cues', !collectStatusBodyParts(p).length && !collectActiveFx(p.statuses).length);
+  const impaleCueGuest = w.addSeat('p1', CLASSES[0], new NullInput());
+  impaleCueGuest.actor.statuses = impaleCueIds.map(id => status(id, 0));
+  const impaleCueClient = fixture().w; impaleCueClient.clientSeatId = 'p1';
+  applySnapshot(impaleCueClient, serializeSnapshot(w, 10));
+  check('remote owning seat derives the same Impale body and screen from the ordinary status wire',
+    JSON.stringify(collectStatusBodyParts(impaleCueClient.player)) === JSON.stringify(collectStatusBodyParts(impaleCueGuest.actor))
+    && JSON.stringify(composeAfflictionEdge(collectActiveFx(impaleCueClient.player.statuses), {}, 'still', 0))
+    === JSON.stringify(composeAfflictionEdge(collectActiveFx(impaleCueGuest.actor.statuses), {}, 'still', 0)));
+  check('guest Impale does not prick the healthy host screen', !collectActiveFx(p.statuses).length);
+  impaleCueGuest.actor.statuses = []; applySnapshot(impaleCueClient, serializeSnapshot(w, 11));
+  check('remote Impale cure clears both cues', !collectStatusBodyParts(impaleCueClient.player).length && !collectActiveFx(impaleCueClient.player.statuses).length);
+}
+{
+  // Impale cues follow any real source, independent of an evolving skill tree.
+  const { w, p } = fixture();
+  const impaleCueTarget = w.createMonster('zombie', 1, 'enemy');
+  impaleCueTarget.pos = { x: p.pos.x + 30, y: p.pos.y }; impaleCueTarget.tier = p.tier; impaleCueTarget.skills = [];
+  impaleCueTarget.sheet.setSource('impale-cue-rig', [mod('life', 'flat', 100000), mod('evasion', 'override', 0), mod('blockChance', 'override', 0)]);
+  impaleCueTarget.fillResources(); w.actors.push(impaleCueTarget);
+  p.sheet.setSource('impale-cue-accuracy', [mod('accuracy', 'flat', 100000), mod('critChance', 'override', 0)]);
+  p.sheet.setSource('impale-cue-bank', [mod('impalePower', 'flat', 0.3)]);
+  const impaleCueHit = makeSkillInstance({ ...SKILLS.backstab, id: 'probe_impale_cue_hit', name: 'Impale cue hit',
+    tree: undefined, useTime: 0, cooldown: 0, manaCost: 0, tags: ['attack', 'melee', 'physical'],
+    baseDamage: { physical: [10, 10] }, effects: [{ type: 'damage' }] });
+  w.executeSkill(p, impaleCueHit, impaleCueTarget.pos);
+  const impaleCueBank = impaleCueTarget.statuses.find(s => s.id === 'impaled');
+  check('real Impale hit banks attributed damage and wears both cues', (impaleCueBank?.rupture ?? 0) > 0
+    && impaleCueBank?.casterId === p.id && impaleCueBank.sourceName === 'Impale cue hit'
+    && collectStatusBodyParts(impaleCueTarget).some(part => part.kind === 'lodgedSpikes')
+    && collectActiveFx(impaleCueTarget.statuses).some(f => f.def.motif === 'impale'));
+  p.sheet.removeSource('impale-cue-bank'); w.executeSkill(p, impaleCueHit, impaleCueTarget.pos);
+  check('real qualifying hit discharges Impale and removes both cues', !impaleCueTarget.statuses.some(s => s.id === 'impaled')
+    && !collectStatusBodyParts(impaleCueTarget).length && !collectActiveFx(impaleCueTarget.statuses).length);
 }
 console.log(`PASS ${count} affliction cue checks`);

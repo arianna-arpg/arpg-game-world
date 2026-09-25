@@ -10,6 +10,8 @@
 // ---------------------------------------------------------------------------
 
 import { angleTo, dist, rand, vec, type Vec2 } from '../core/math';
+import { wardCueStyle } from './combatReadability';
+import { combatCueFlash } from './combatCues';
 import { SKILLS } from '../data/skills';
 import { MONSTERS } from '../data/monsters';
 import { makeSkillInstance, type SkillInstance } from './skills';
@@ -284,16 +286,15 @@ const HANDLERS: Record<Exclude<AIAction['do'], `x_${string}`>, Handler> = {
   },
 
   // The add-gate: untargetable until no live actor carries the tag — the
-  // ward WATCHER in ai.ts shatters it (flash + the promised announce).
+  // ward WATCHER in ai.ts shatters it; both transitions share the cue profile.
   ward: (world, actor, act) => {
     if (act.do !== 'ward') return;
     actor.untargetable = true;
     actor.aiWardTag = act.tag;
-    actor.aiWardNote = act.announce;
-    world.flashes.push({
-      pos: vec(actor.pos.x, actor.pos.y), radius: 170,
-      color: '#d060e0', life: 0.7, maxLife: 0.7,
-    });
+    actor.aiWardNote = undefined;
+    actor.wardCueProfile = act.cue ?? 'lattice';
+    const cue = wardCueStyle(actor.wardCueProfile);
+    world.flashes.push(combatCueFlash(actor.pos, 'ward_form', actor.radius + cue.pad, 0, cue.color));
   },
 
   buff: (world, actor, act) => {

@@ -1000,7 +1000,7 @@ export type AIAction =
   | { do: 'teleport'; to: 'awayFromTarget' | 'behindTarget' | 'anchor' | 'nearTarget'; range?: number }
   /** Become UNTARGETABLE until no live actor carries `tag` — the add-gate
    *  (P4 Unmade, every "kill the adds" ward). Announce fires on shatter. */
-  | { do: 'ward'; tag: string; announce?: string }
+  | { do: 'ward'; tag: string; /** Legacy data accepted; ward transitions are visual. */ announce?: string; cue?: string }
   | { do: 'buff'; buff: BuffEffect }
   /** Alert + aggro kin within radius onto my current target (the callout). */
   | { do: 'shout'; radius: number; duration?: number }

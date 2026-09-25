@@ -1,6 +1,6 @@
 # Gameplay text → visual cues: migration backlog
 
-GAMEPLAY-TEXT-AUDIT · Refreshed 2026-09-20 · **13 families implemented with playtesting pending; 20 open replacement families and 7 surface reviews remain.**
+GAMEPLAY-TEXT-AUDIT · Refreshed 2026-09-24 · **15 families implemented with playtesting pending; 19 open replacement families and 6 surface reviews remain.**
 
 The player must be able to recognize a gameplay event and respond without reading a sentence or a combat label. Give a cue to the actual body, object, place and time involved. Its buildup, commitment, interruption and recovery should agree with the mechanic. Reusable, configurable visual families carry that information; captions are retired as their replacements become readable.
 
@@ -8,7 +8,7 @@ This updates the [August census](show-dont-tell.md). Its historical counts and p
 
 ## How to use this list
 
-- **Partial** means an existing visual was found, but the caption remains or the visual coverage needs work. It does not mean the visual is sufficient.
+- **Partial** means some coverage exists, but captions or uncovered events remain within the family. It does not mean the family is complete.
 - **Open** means the text path is confirmed and a replacement is proposed; visual coverage has not been fully evaluated.
 - **Review** means an information surface needs semantic review, rather than automatic removal.
 - **P1** covers immediate danger, openings and defensive outcomes; **P2** covers other combat events and environmental changes; **P3** covers broader information surfaces.
@@ -18,25 +18,32 @@ The rows group related mechanics; the generated inventory contains individual ca
 
 ## Current position and combat-first queue
 
-**Implemented, awaiting encounter acceptance:** GT-001–012 and GT-019.
+**Implemented, awaiting encounter acceptance:** GT-001–012, GT-019, GT-022 and GT-035.
 These cover exhaustion, poise/guard/shell breaks, parry/reflection, defensive
 outcomes, timing successes, critical riders, committed guard warnings,
 coordinated maneuvers, cast interruption/fizzle and held readiness. Their
 individual rows link the implementation contracts and verification harnesses.
 No row is marked Done solely because its automated checks pass.
 
+**Latest implementation:** GT-022 now has Doom's bank/fuse/rupture cues,
+volatile readiness and venting, execution strokes, flattened cap impacts,
+and Last Gasp's spent/recovering spark on the body and life orb. GT-035 links
+ward sources to the protected body and armors its health bar; the last source
+loss visibly breaks the ward. See [Doom cues](doom-cues.md) and
+[combat threat cues](combat-threat-cues.md) for profiles, checks and captures.
+
 **Additional implemented visuals:** simultaneous player bleed drips, burn
 kindling, poison vignette and Doom hooks, with per-effect severity and shared
-clutter limits ([affliction cues](affliction-cues.md)); Undead night emergence
+clutter limits ([affliction cues](affliction-cues.md)); lodged metal body spikes
+and player screen-edge spikes for all Impale variants ([Impale cues](impale-cues.md)); Undead night emergence
 and cancellation from committed scenery sites ([Odyssey](odyssey.md#undead-nights-and-scenery-risings)).
 These are existing coverage, not additional unresolved caption families.
-The Doom screen layer does **not** complete the distinct GT-022 detonation,
-execution, volatility and survival-window work.
+Last Gasp is a single rescue followed by a recovery cooldown; its visuals do
+not imply an invulnerability window.
 
 | Work remaining | IDs | Next implementation direction |
 |---|---|---|
-| Immediate combat outcomes and threats — next batch | GT-022, GT-035 | Separate Doom detonation, volatility, cull, cap and Last Gasp transitions; show boss wards and actual source links. Preserve advance warning where the mechanic allows a response. |
-| Combat resources and payloads | GT-020, GT-021, GT-023, GT-034 | Reserve depletion/venting, loaded or armed payloads, consumed proc stacks and completed combination patterns. |
+| Combat resources and payloads — next batch | GT-020, GT-021, GT-023, GT-034 | Reserve depletion/venting, loaded or armed payloads, consumed proc stacks and completed combination patterns. |
 | Body damage, feeding, companions and recovery | GT-024–029 | Lost weakpoints/parts, feeding transfers, ownership/tether changes, taming/rejection, down/reanimation and field/remnant transitions. |
 | Scripted combat and remaining action refusals | GT-013, GT-032, GT-038 | Review individual phase/summon/encounter triggers and unavailable actions. GT-038 gather-too-thin/broke-early captions are already replaced by casting fizzles; other refusals remain. |
 | World danger and discovery | GT-014–018, GT-030, GT-031, GT-033 | Messenger/siege, terrain/water, traps, challenge reset, doors/reveals and Titan trail discoverability. Undead scenery risings do not complete all emergence/trap families. |
@@ -124,7 +131,7 @@ The three Winded mechanics must not be collapsed into one new status. Similarly,
 |---|---|---|---|---|
 | GT-020 | P2 · Open | Reserve stages and vent `note`, `venting`, other depletion captions. | The consuming organ, fuel, ammunition or held object visibly empties, vents and reloads. Generalize GT-002 through reserve data; distinguish a one-time transition from sustained depletion. | [ReserveVent / ReserveStage](../../src/engine/reserves.ts), [reserve emitter](../../src/engine/world.ts#L12849), [venting](../../src/engine/world.ts#L34703) |
 | GT-021 | P2 · Open | `primed`, `armed`, `loaded`, arrow/anchor counts. | Loaded chambers, attachments, hovering payloads and a distinct ready pose. Counts become visible objects or compact resource pips where feasible; exact counters belong in the surface review. | [payloads](../../src/engine/world.ts#L34939), [armed](../../src/engine/world.ts#L35114), [loaded](../../src/engine/world.ts#L37272) |
-| GT-022 | P1 · Open | `DOOM!`, `volatile!`, `CULLED`, `capped!`, `LAST GASP`. | Separate looming threat, unstable payload, execution, limit feedback and survival-window families. First inspect each trigger: these are not interchangeable status splashes. Imminent events need a pre-event cue and attributable source. | [DOOM](../../src/engine/world.ts#L30766), [hit outcomes](../../src/engine/world.ts#L42902), [LAST GASP](../../src/engine/world.ts#L44176) |
+| GT-022 | P1 · Implemented; playtest pending | `DOOM!`, `volatile!`, `CULLED!`, all five `capped` emitters and `LAST GASP!` removed. | Doom's bank/fuse iris and rupture; volatile vent readiness/release; execution strokes; open hit-limit brackets and flattened impacts; Last Gasp's spent/refilling body and life-orb spark. Real event gates, damage/credit, lifecycle and co-op verified. | [Doom](doom-cues.md), [other outcomes and checks](combat-threat-cues.md), [profiles](../../src/data/combatReadability.ts) |
 | GT-023 | P2 · Open | Dynamic `${sdef.label} POPS!`, proc names, rider names, rule labels. | The actual consumed stack/payload releases its element/material into the effect it causes. Configure a cue on the reusable proc/rider definition; a new name must not automatically create a new caption. | [defense/proc sweep](../../src/engine/world.ts#L44577), [rider](../../src/engine/world.ts#L45020), [rule](../../src/engine/world.ts#L34729) |
 | GT-024 | P2 · Open | `spot shattered!`, `SUNDERED`, `TORN` / part-specific text. | Crack the struck weakpoint, shed its visible component and change the host silhouette/function. Preserve which part was lost. Distinguish these physical changes from temporary poise breaks. | [weakpoint](../../src/engine/world.ts#L48875), [body parts](../../src/engine/world.ts#L52197), [part text](../../src/engine/world.ts#L52250) |
 | GT-025 | P2 · Open | `feeds`, `fed`, `devours`. | A visible bite or transfer from the consumed source to the eater, then organ/body refill. No feeding effect if nothing was actually consumed. | [updateCarrion](../../src/engine/ai.ts#L2464), [fed](../../src/engine/world.ts#L36290), [devours](../../src/engine/world.ts#L56327) |
@@ -144,7 +151,7 @@ These are part of the audit, not automatic exceptions to the law. Active gamepla
 | ID | Priority / state | Surface found | Next decision / visual direction | Source |
 |---|---|---|---|---|
 | GT-034 | P2 · Review | Direct canvas `rule.name + '!'` after a combination lights. | Pulse/lock the completed pattern itself; this bypasses the floater settings. | [renderer](../../src/render/renderer.ts#L8146) |
-| GT-035 | P1 · Review | Boss name appended with `WARDED`. | Show the intact ward and its actual source links around the boss/health frame. The name is identity; the ward state is gameplay. | [boss HUD](../../src/render/renderer.ts#L8374) |
+| GT-035 | P1 · Implemented; playtest pending | Boss-name `WARDED` suffix and dynamic ward-break announcement removed, including twelve authored notes. | Armor on the body and health bar, links/rings on the exact living tagged sources, and formation/breakup at actual gate transitions. Real life remains visible; joined co-op clients resolve source actors and clear removed links. | [Contract and checks](combat-threat-cues.md), [shared membership](../../src/engine/combatReadability.ts), [painter](../../src/render/vis/combatReadabilityLayer.ts) |
 | GT-036 | P2 · Review | `Wave … in …` and `world.objectiveText()`. | Advancing arrival marks, visible objective objects/states and a nonverbal readiness/countdown shape. Trace objective variants before replacing the common renderer. | [objective HUD](../../src/render/renderer.ts#L8291), [wave HUD](../../src/render/renderer.ts#L8336) |
 | GT-037 | P3 · Review | Odyssey onboarding, operation instructions, leader fall notices, expected readiness and hunt/siege news. | Split optional journal/reference information from immediate gameplay signals. Map/faction state should show progress and changed threats. Offscreen news needs discoverable spatial cues, not just removal of the feed. | [OdysseyRuntime.tell and callers](../../src/engine/odyssey.ts#L32) |
 | GT-038 | P2 · Review; gathers implemented | Skill refusals, `cannot sustain`, `no mines`, interaction reasons. Underfilled/unfinished gather captions replaced by GT-019 fizzles. | Remaining: show the unavailable resource, absent deployables or obstructed target at the relevant control/object. Retain optional diagnostic details where useful; do not make the player read a refusal to understand action failure. | [Casting coverage](casting-cues.md), [sustain](../../src/engine/world.ts#L36353), [mines](../../src/engine/world.ts#L36977), [skill refusals](../../src/engine/world.ts#L57132) |
@@ -182,17 +189,17 @@ node scripts/audit-gameplay-text.mjs
 
 The [scanner](../../scripts/audit-gameplay-text.mjs) uses the installed TypeScript parser and scans `src/**/*.ts` / `tsx`. It writes [a navigable Markdown inventory](../../balance/reports/gameplay-text-audit/inventory.md) and [structured JSON](../../balance/reports/gameplay-text-audit/inventory.json) to the ignored reports directory. Regenerate those local artifacts after pulling the repository; this curated backlog is the durable record.
 
-Snapshot: **752 source files** scanned on 2026-09-20. These are discovery
+Snapshot: **808 source files** scanned on 2026-09-24. These are discovery
 candidates in the full current source tree, not the count of remaining effects.
 
 | Category | Candidate sites | Interpretation |
 |---|---:|---|
-| `.text(...)` | 442 | Includes dynamic messages, numbers, reference calls and the internal `cry` forwarding call. 395 omit the kind argument. These are not all combat captions. |
+| `.text(...)` | 431 | Includes dynamic messages, numbers, reference calls and the internal `cry` forwarding call. These are not all combat captions. |
 | `.cry(...)` | 0 | No current call sites; the compatibility wrapper and its downstream `.text` remain. |
-| `.notice(...)` | 148 | Includes world news and gameplay instructions; trace purpose. |
+| `.notice(...)` | 150 | Includes world news and gameplay instructions; trace purpose. |
 | `.tell(...)` | 19 | Candidate wrappers, currently Odyssey calls; overlap downstream notice output. |
-| Selected authored text fields | 530 | Literal/template `announce`, `signal(s)`, `warn`, `note`, selected `…Text`, and `text` fields; may be unused or reference-only. Generic names/labels/descriptions are deliberately excluded. |
-| Canvas `fillText` / `strokeText` | 112 | Includes rendering of the shared text stream, HUD, names, numbers and optional hover/readout surfaces. |
+| Selected authored text fields | 548 | Literal/template `announce`, `signal(s)`, `warn`, `note`, selected `…Text`, and `text` fields; may be unused or reference-only. Generic names/labels/descriptions are deliberately excluded. |
+| Canvas `fillText` / `strokeText` | 113 | Includes rendering of the shared text stream, HUD, names, numbers and optional hover/readout surfaces. |
 
 **Do not add these into a count of messages or violations.** Discovery matches call spelling, not receiver types or runtime reachability. Dynamic emitters can expand to many authored lines; data rows and consumers overlap. Aliased/computed calls, HTML/DOM templates and localization are not exhaustively traced. The first 40 families above are manually triaged entry points, not a claim that every candidate has been reviewed.
 

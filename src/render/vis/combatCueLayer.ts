@@ -17,6 +17,61 @@ registerEffectVoice('combatCue', (ctx, f, remaining) => {
   ctx.strokeStyle = withAlpha(f.color, Math.min(1, remaining * 2) * COMBAT_CUE_CFG.alpha);
   ctx.fillStyle = ctx.strokeStyle; ctx.lineWidth = cfg.width; ctx.lineCap = 'round';
   switch (cfg.shape) {
+    case 'sever': {
+      // Two opposing blades cross, then carry the severed ends apart.
+      const cut = Math.min(1, t * 4), split = Math.max(0, t - 0.25) * travel;
+      for (const sign of [-1, 1]) {
+        line(ctx, -r * cut, sign * (r * 0.7 + split), r * cut, -sign * r * 0.7 + sign * split);
+      }
+      break;
+    }
+    case 'flatten': {
+      // A rigid stop survives; excess force splays along it, never through it.
+      const x = -r * 0.55;
+      line(ctx, x, -r * 0.75, x, r * 0.75);
+      for (let i = 0; i < cfg.pieces; i++) {
+        const sign = i % 2 ? 1 : -1, y = sign * r * (0.18 + t * cfg.travel);
+        line(ctx, x - r * (0.4 * remaining), y * 0.55, x - 2, y);
+      }
+      break;
+    }
+    case 'vent':
+      for (let i = 0; i < cfg.pieces; i++) {
+        ctx.save(); ctx.rotate(i * TAU / cfg.pieces);
+        const d = r * (0.55 + t * cfg.travel);
+        ctx.beginPath(); ctx.moveTo(d * 0.6, -r * 0.12 * remaining);
+        ctx.quadraticCurveTo(d, 0, d * 0.6, r * 0.12 * remaining); ctx.stroke(); ctx.restore();
+      }
+      break;
+    case 'rekindle':
+      for (let i = 0; i < cfg.pieces; i++) {
+        ctx.save(); ctx.rotate(i * TAU / cfg.pieces);
+        const start = r * (0.05 + t * 0.6), end = start + r * cfg.travel * Math.sin(t * Math.PI);
+        line(ctx, start, 0, end, 0);
+        line(ctx, end, 0, end - r * 0.18 * remaining, -r * 0.15 * remaining); ctx.restore();
+      }
+      break;
+    case 'irisBurst': {
+      // The curse pinches shut, then tears radially across the resolved area.
+      // This is the outcome's after-image; damage never waits on this animation.
+      const pinch = Math.max(0, 1 - t / 0.22), front = Math.min(1, Math.max(0, (t - 0.12) / 0.62));
+      for (let i = 0; i < cfg.pieces; i++) {
+        ctx.save(); ctx.rotate(i * TAU / cfg.pieces);
+        if (pinch > 0) {
+          const d = r * (0.025 + 0.24 * pinch);
+          ctx.beginPath(); ctx.moveTo(d * 1.1, -d * 0.4); ctx.quadraticCurveTo(d * 0.6, -d * 0.5, d * 0.65, d * 0.15);
+          ctx.lineTo(d * 0.3, 0); ctx.stroke();
+        }
+        if (front > 0) {
+          const d = r * front, tail = d * Math.max(0.15, 1 - cfg.travel * 0.65);
+          ctx.beginPath(); ctx.moveTo(tail, -r * 0.025);
+          ctx.quadraticCurveTo(d * 0.7, r * 0.10 * remaining, d, 0);
+          ctx.lineTo(d * 0.84, -r * 0.08 * remaining); ctx.stroke();
+        }
+        ctx.restore();
+      }
+      break;
+    }
     case 'fracture':
       // Interrupted preparation tears outward into separated arc fragments.
       for (let i = 0; i < cfg.pieces; i++) {
