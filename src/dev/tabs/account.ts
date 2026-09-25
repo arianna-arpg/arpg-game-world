@@ -7,8 +7,8 @@
 // own, and the counts persist through the normal account-save cadence.
 // ---------------------------------------------------------------------------
 
-import type { DevTabDef } from '../panel';
-import { DEV_UI, btn, css, hrow, section } from '../ui';
+import type { DevTabCtx } from '../panel';
+import { DEV_UI, btn, css, disclosure, hrow } from '../ui';
 import { BESTIARY_CFG, bestiaryKey, bestiaryList, bestiaryThreshold } from '../../data/bestiary';
 import { MIMIC_CFG } from '../../engine/mimic';
 import { CLASS_LEVEL_MILESTONES, classLevelLedgerKey } from '../../meta/account';
@@ -17,13 +17,10 @@ import {
 } from '../../meta/unlocks';
 import { CLASS_TIERS } from '../../data/classTiers';
 
-export const accountTab: DevTabDef = {
-  id: 'account',
-  label: 'Account',
-  build: ({ runActive, flash }) => {
+export function buildAccountTools({ runActive, flash }: DevTabCtx): HTMLElement {
     const pane = document.createElement('div');
 
-    const head = section('Bestiary study (account ledger)');
+    const bestiary = disclosure('Bestiary study');
     const row = hrow();
     /** Rewrite every eligible kind's study count; null = forget the page. */
     const apply = (label: string, fn: (cur: number, need: number) => number | null): void => {
@@ -65,7 +62,7 @@ export const accountTab: DevTabDef = {
     // parent CLAIMED first — that is the web working, not a gap here.
     // 'Settle' runs the very claim the live sweep runs, so stamped
     // objectives land as classes on the spot.
-    const dHead = section('Class objectives + mastery (account ledger)');
+    const mastery = disclosure('Class objectives & mastery');
     const dRow = hrow();
     /** Mutate the account ledger through one save-booking gate. */
     const stamp = (label: string, fn: (l: Record<string, number>) => number): void => {
@@ -141,7 +138,8 @@ export const accountTab: DevTabDef = {
     dNote.textContent = 'Shrouded class cards read their objectives once any deed is a quarter along, and the world CLAIMS a class the moment one completes (the live sweep, or “Settle”). Mastery rungs surface in the Vault at class level 10/30/60/100. “Forget” re-shrouds every unclaimed class (claimed classes never re-lock).';
     css(dNote, { color: DEV_UI.textDim, fontSize: '10px', padding: '2px 4px' });
 
-    pane.append(head, row, note, dHead, dRow, dNote);
-    return { el: pane };
-  },
-};
+    bestiary.body.append(row, note);
+    mastery.body.append(dRow, dNote);
+    pane.append(bestiary.el, mastery.el);
+    return pane;
+}

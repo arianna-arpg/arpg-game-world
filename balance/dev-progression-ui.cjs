@@ -21,31 +21,72 @@ app.whenReady().then(async () => {
   };
   try {
     await win.loadURL(server.url + '?dev');
-    await js(`(() => {
+    await js(`(async () => {
       const button = name => [...document.querySelectorAll('button')].find(b => b.textContent === name);
-      button('🔧 Dev').click();button('Progression').click();
+      button('🔧 Dev').click();button('Account').click();
+      if(button('Progression'))throw Error('Separate Progression tab remains');
+      const memories=document.querySelector('[data-dev-memories]');
+      if(memories.open||memories.querySelector('[data-progression-grant]'))throw Error('Memories must start collapsed and lazy');
+      if(!button('Sight all')||!button('Milestones: current class'))throw Error('Existing account controls missing');
       if([...document.querySelectorAll('[data-progression-grant]')].some(b=>!b.disabled))throw Error('Grant enabled before a run');
       __game.account().ledger.prologue_lived=1;__game.account().ledger['tutorial_faction:goblin']=1;
       __game.devStartRun('warrior');__game.ui.hideAll();const w=__game.world();w.player.invulnerable=true;
-      __game.step(2);button('Progression').click();
+      __game.step(2);button('Account').click();
       const skill=[...w.meta.knownSkills.values()].find(i=>i.def.tree).def.id;
       window.progressionQA={button,skill};
       if(!w.memorySecondaryRefusal(skill))throw Error('Fresh skill tree already open');
       if(w.account.features.has('reliquary'))throw Error('Fresh Reliquary already open');
-      __game.ui.showEscapeMenu();button('Core access + learned trees').click();
+      __game.ui.showEscapeMenu();
+      w.loadZone('lastlight');const oldActors=[...w.actors],oldDoodads=[...w.doodads];
+      const yard=()=>w.actors.filter(a=>a.tag?.startsWith('training_yard:'));
+      if(yard().length)throw Error('Fresh training yard already open');
+      document.querySelector('[data-progression-grant="feature:target_dummy"]').click();
+      if(yard().length!==9||!w.account.features.has('target_dummy'))throw Error('Range did not spawn immediately');
+      if(!oldActors.every(a=>w.actors.includes(a))||!oldDoodads.every(d=>w.doodads.includes(d)))throw Error('Range grant reset town');
+      button('Refresh').click();
+      if(!document.querySelector('[data-progression-grant="feature:target_dummy"]').disabled)throw Error('Owned range still grantable');
+      button('Core access + learned trees').click();
       if(w.memorySecondaryRefusal(skill))throw Error('Core action did not open the skill tree');
       if(!w.account.features.has('reliquary')||!w.account.ledger.oracle_rescued)throw Error('Rescue access missing');
       if(w.account.credits!==0)throw Error('Action fabricated currency');
       button('Core access + learned trees').click();
-      const filter=document.querySelector('[aria-label="Filter progression"]');filter.value='Reliquary';filter.dispatchEvent(new Event('input'));
+      const filter=document.querySelector('[aria-label="Filter progression"]');
+      memories.querySelector('summary').click();await new Promise(requestAnimationFrame);
+      filter.value=skill;filter.dispatchEvent(new Event('input'));
+      if(!memories.open||!memories.querySelector('[data-progression-grant="memory:skill:'+skill+'"]').disabled)throw Error('Memory expansion/filter/granted state failed');
+      button('Items').click();button('Account').click();
+      if(!memories.open)throw Error('Tab change lost disclosure state');
+      memories.querySelector('summary').click();await new Promise(requestAnimationFrame);
+      if(memories.querySelector('[data-progression-grant]'))throw Error('Collapsed Memory rows retained');
+      filter.value='Reliquary';filter.dispatchEvent(new Event('input'));
       document.querySelector('[data-progression-grant="container:reliquary:4"]').click();
       document.querySelector('[data-progression-grant="reliquary:attunement"]').click();
       if(!w.account.features.has('reliquary_case')||!w.account.ledger.oracle_reliquary_attuned)throw Error('Reliquary grants missing');
+      filter.value='';filter.dispatchEvent(new Event('input'));
       const panel=document.querySelector('[data-dev-progression]').parentElement;
       const r=panel.getBoundingClientRect();if(r.right>innerWidth||r.top<0||panel.scrollWidth>panel.clientWidth+2)throw Error('Dev panel overflow');
       return {skill,receipt:w.account.ledger['dev_progression:power:awakening'],rows:document.querySelectorAll('[data-progression-grant]').length};
     })()`).then(log);
     await capture('controls');
+    await js(`(() => {
+      const {button}=progressionQA,w=__game.world();button('Monsters').click();
+      const pane=document.querySelector('[data-dev-monsters]');
+      const filter=pane.querySelector('[aria-label="Filter monsters"]');filter.value='zombie';filter.dispatchEvent(new Event('input'));
+      pane.querySelector('[data-dev-monster="zombie"]').click();
+      const level=pane.querySelector('[aria-label="Monster level"]');level.value='7';level.dispatchEvent(new Event('input'));
+      const rarity=pane.querySelector('[aria-label="Monster rarity"]');
+      if(rarity.options.length!==5)throw Error('Missing rarity tiers');rarity.value='crowned';
+      pane.querySelector('[aria-label="Monster quantity"]').value='2';
+      const before=new Set(w.actors);pane.querySelector('[data-dev-monster-spawn]').click();
+      const added=w.actors.filter(a=>!before.has(a));
+      if(added.length!==2||added.some(a=>a.defId!=='zombie'||a.level!==7||a.rarity!=='crowned'||!a.sheet.getSourceMods('rarity')?.length))throw Error('Monster controls did not mint selected native actors');
+      button('Items').click();button('Monsters').click();
+      if(level.value!=='7'||rarity.value!=='crowned')throw Error('Monster selection lost on tab switch');
+      const panel=pane.parentElement,r=panel.getBoundingClientRect();
+      if(r.right>innerWidth||r.top<0||panel.scrollWidth>panel.clientWidth+2)throw Error('Monster panel overflow');
+      return {spawned:added.map(a=>({id:a.defId,level:a.level,rarity:a.rarity})),fatal:__game.crash().fatal};
+    })()`).then(result => { assert.equal(result.fatal,null); log(result); });
+    await capture('monsters');
     await js(`(() => {
       const {button,skill}=progressionQA;button('🔧 Dev').click();__game.ui.hideEscapeMenu();const w=__game.world();w.loadZone('lastlight');
       if(!w.actors.some(a=>a.defId==='townsfolk_oracle'))throw Error('Oracle did not settle on return');
@@ -63,11 +104,13 @@ app.whenReady().then(async () => {
       const a=__game.account();__game.devStartRun('warrior');__game.ui.hideAll();const w=__game.world();
       const skill=[...w.meta.knownSkills.values()].find(i=>i.def.tree).def.id;
       return {rescue:a.ledger.oracle_rescued,fullCase:a.features.has('reliquary_case'),tree:w.memorySecondaryRefusal(skill),
-        receipt:a.ledger['dev_progression:power:awakening'],fatal:__game.crash().fatal};
+        receipt:a.ledger['dev_progression:power:awakening'],yard:a.features.has('target_dummy'),
+        yardReceipt:a.ledger['dev_progression:feature:target_dummy'],fatal:__game.crash().fatal};
     })()`);
     assert.equal(reload.rescue,1); assert.equal(reload.fullCase,true); assert.equal(reload.tree,null);
     assert.equal(reload.receipt,1); assert.equal(reload.fatal,null); log(reload);
-    log('PASS: fresh-account Dev clicks, filtering, wrapped tabs, real skill tree/Relic UI, residency and paused-action disk persistence across reload');
+    assert.equal(reload.yard,true); assert.equal(reload.yardReceipt,1);
+    log('PASS: combined Account tab, lazy Memory disclosure, immediate range unlock, native monster controls, real skill tree/Relic UI and paused-action disk persistence');
   } catch(error) { await capture('failure'); throw error; }
   finally { clearTimeout(timeout);win.destroy();server.server.close();app.quit(); }
 }).catch(error=>{log(error.stack??String(error));app.exit(1);});

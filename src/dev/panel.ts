@@ -22,7 +22,6 @@ import { gemsTab } from './tabs/gems';
 import { itemsTab } from './tabs/items';
 import { eventsTab } from './tabs/events';
 import { locationTab } from './tabs/location';
-import { accountTab } from './tabs/account';
 import { progressionTab } from './tabs/progression';
 import { throngTab } from './tabs/throng';
 import { comboTab } from './tabs/combo';
@@ -60,7 +59,7 @@ export interface DevTabDef {
 }
 
 /** THE TAB REGISTRY — order is display order. */
-const DEV_TABS: DevTabDef[] = [gemsTab, itemsTab, eventsTab, locationTab, progressionTab, accountTab, throngTab, comboTab, grabTab, liteTab, possessTab, entityTab, holdsTab, perfTab, watchTab, geysersTab, dissolveTab, emergeTab, ultlabTab, mapsTab, atlasTab];
+const DEV_TABS: DevTabDef[] = [gemsTab, itemsTab, entityTab, eventsTab, locationTab, progressionTab, throngTab, comboTab, grabTab, liteTab, possessTab, holdsTab, perfTab, watchTab, geysersTab, dissolveTab, emergeTab, ultlabTab, mapsTab, atlasTab];
 
 let mounted = false;
 

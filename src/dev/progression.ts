@@ -6,6 +6,9 @@ import { RELIQUARY_CFG } from '../data/reliquary';
 import { memoryCatalog, memoryKey, type MemoryCandidate } from '../meta/memoryUnlocks';
 import { QUESTS } from '../quests/defs';
 import { MONSTERS } from '../data/monsters';
+import { TRAINING_YARD } from '../data/trainingYard';
+import { syncTrainingYard } from '../engine/trainingYard';
+import { UNLOCK_CATALOG } from '../meta/unlocks';
 
 /** Developer recipes write the same durable inputs as gameplay. They never
  * fabricate kills, quest completion, currency or campaign state. */
@@ -40,6 +43,12 @@ export function devProgressionCatalog(): DevProgressionDef[] {
     rows.push({ id: `rescue:${r.ledger}`, label: `${MONSTERS[r.npc]?.name ?? r.npc}: rescue access`,
       group: 'Account milestones', core: true, description: `${r.message} Return to town to refresh its residents. Quest rewards remain unclaimed.`,
       ledger: { [r.ledger]: 1 }, features: r.features });
+  }
+  for (const feature of [TRAINING_YARD.feature]) {
+    const unlock = UNLOCK_CATALOG.find(u => u.kind === 'feature' && u.payload.flag === feature);
+    if (unlock) rows.push({ id: `feature:${feature}`, label: unlock.label, group: 'Town services',
+      description: 'Unlock the full Lastlight practice range. In town, its targets appear immediately; elsewhere, they await your return.',
+      features: [feature] });
   }
   for (const c of CONTAINER_DEFS) for (const [i, rung] of c.ladder.entries()) {
     rows.push({ id: containerId(c.id, i), label: rung.label, group: 'Containers',
@@ -109,6 +118,7 @@ export function applyDevProgression(w: World, ids: readonly string[],
     w.questRescues.reconcile();
     w.reconcileContainers(w.localSeat);
     w.recalcPlayer();
+    syncTrainingYard(w);
     for (const seat of w.seats) w.markMetaDirty(seat);
     w.accountDirty = true;
   }

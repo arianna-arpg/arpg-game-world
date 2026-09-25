@@ -11,6 +11,8 @@ import { memoryCatalog, memoryKey } from '../src/meta/memoryUnlocks';
 import { containerBoard } from '../src/engine/containers';
 import { allUnlockables, isUnlockVisible } from '../src/meta/unlocks';
 import { forgeItem } from '../src/engine/itemgen';
+import { TRAINING_YARD } from '../src/data/trainingYard';
+import { syncTrainingYard } from '../src/engine/trainingYard';
 
 const w = makeSimWorld('warrior', 27811);
 Object.assign(w.account, makeAccount());
@@ -92,3 +94,39 @@ try {
   assert.equal(dynamic.find(r => r.id === 'power:awakening')!.ledger![odysseyMilestoneKey(oldStage + 1)], 1);
 } finally { delete SKILLS[fake]; POWER_PROGRESSION.awakening.odysseyStage = oldStage; }
 console.log('PASS new Memory definitions and retuned progression stages derive automatically');
+
+// Live town grants must raise the native range without a zone reset or duplicate props.
+const yard = makeSimWorld('warrior', 27812);
+Object.assign(yard.account, makeAccount());
+yard.loadZone('lastlight');
+const targets = () => yard.actors.filter(a => a.tag?.startsWith(TRAINING_YARD.site + ':'));
+assert.equal(targets().length, 0);
+const zone = yard.zone, actors = [...yard.actors], doodads = [...yard.doodads], dropsBefore = yard.drops;
+assert(applyDevProgression(yard, [`feature:${TRAINING_YARD.feature}`]).ok);
+assert.equal(yard.zone, zone);
+assert.equal(yard.drops, dropsBefore);
+assert(actors.every(a => yard.actors.includes(a)));
+assert(doodads.every(d => yard.doodads.includes(d)));
+assert.equal(targets().length, TRAINING_YARD.targets.length);
+assert.equal(yard.doodads.length, doodads.length + TRAINING_YARD.backstops.length);
+assert.equal(yard.account.ledger[devProgressionReceipt(`feature:${TRAINING_YARD.feature}`)], 1);
+const bodies = [...targets()], sceneryCount = yard.doodads.length;
+assert.equal(syncTrainingYard(yard), 0);
+assert(applyDevProgression(yard, [`feature:${TRAINING_YARD.feature}`]).ok);
+assert.deepEqual(targets(), bodies);
+assert.equal(yard.doodads.length, sceneryCount);
+assert(deserializeAccount(serializeAccount(yard.account))!.features.has(TRAINING_YARD.feature));
+yard.loadZone('sim_arena');
+assert.equal(syncTrainingYard(yard), 0);
+assert.equal(targets().length, 0);
+yard.loadZone('lastlight');
+assert.equal(targets().length, TRAINING_YARD.targets.length);
+const returnedScenery = yard.doodads.length;
+assert.equal(syncTrainingYard(yard), 0);
+assert.equal(yard.doodads.length, returnedScenery);
+yard.loadZone('sim_arena'); yard.account.features.delete(TRAINING_YARD.feature);
+assert(applyDevProgression(yard, [`feature:${TRAINING_YARD.feature}`]).ok);
+assert.equal(targets().length, 0, 'out-of-town grant waits for the next Lastlight arrival');
+yard.loadZone('lastlight');
+assert.equal(targets().length, TRAINING_YARD.targets.length);
+console.log('PASS immediate range unlock, native arrival, no zone reset, duplicate targets or backstops, and persisted ownership');

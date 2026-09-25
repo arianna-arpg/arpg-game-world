@@ -336,8 +336,10 @@ obscure sight without granting stealth. Verify `npm run probe -- stealth`,
 watchers/canopypresence and the canopy visual harness after a build.
 
 Developer progression controls live in `dev/progression.ts` and the Dev panel's
-Progression tab. See `docs/engine/dev-progression.md` for registry-derived grants,
-account attribution and persistence; verify `probe_devprogression.ts` and
+Account tab, with collapsed Memories and live training-yard access. The Monsters
+tab and Entity Forge share `dev/monsterSpawn.ts`. See `docs/engine/dev-progression.md`
+for registry-derived grants, account attribution and persistence; verify
+`probe_devprogression.ts`, `probe_devmonsters.ts` and
 `balance/dev-progression-ui.cjs` after a build.
 
 ## Commands

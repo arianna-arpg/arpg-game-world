@@ -50,6 +50,18 @@ export function section(title: string): HTMLElement {
   return h;
 }
 
+/** Native keyboard-accessible disclosure; callers may populate its body lazily. */
+export function disclosure(title: string, open = false): { el: HTMLDetailsElement; summary: HTMLElement; body: HTMLDivElement } {
+  const el = document.createElement('details');
+  el.open = open;
+  const summary = document.createElement('summary');
+  summary.textContent = title;
+  css(summary, { color: DEV_UI.heading, fontWeight: 'bold', padding: '6px 0', cursor: 'var(--cursor-point, pointer)' });
+  const body = document.createElement('div');
+  el.append(summary, body);
+  return { el, summary, body };
+}
+
 /** A hover-highlight list row: name (colored) left, sub right. `search` feeds
  *  filter inputs via dataset. */
 export function listRow(name: string, color: string, sub: string, onClick?: () => void): HTMLElement {

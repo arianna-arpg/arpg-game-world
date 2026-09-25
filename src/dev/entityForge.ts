@@ -2,7 +2,7 @@
 // THE ENTITY FORGE — a full-screen entity creator/tweaker (config.ts
 // DEV.entityForge), the monster/entity editor in the passive-tree-editor
 // lineage. Reachable from the START MENU ("Entity Forge" button, injected via
-// UI.onStartMenuRender) and from the dev panel's Forge tab in-game.
+// UI.onStartMenuRender) and from the dev panel's Monsters tab in-game.
 //
 // THREE PANES: the ROSTER (workshop entities + every authored def — authored
 // rows open read-only with a Clone-to-Workshop banner: the tweaker flow),
@@ -16,7 +16,7 @@
 //
 // The store is THE WORKSHOP (meta/workshop.ts): Save grafts the entity into
 // the live registries under the 'custom_' namespace and persists; Spawn saves
-// first, then rides the ordinary World.devGrabSpawn + promoteMonster seams;
+// first, then rides the shared spawnDevMonsters mint/promotion seam;
 // Validate saves, re-runs the REAL validateContent() and shows the lines that
 // name this entity — the same net shipped content answers to. Export TS emits
 // promotion literals (serializeEntityTS).
@@ -32,6 +32,7 @@
 // ---------------------------------------------------------------------------
 
 import type { World } from '../engine/world';
+import { spawnDevMonsters } from './monsterSpawn';
 import type { UI } from '../ui/panels';
 import { Z_LADDER } from '../ui/zorder';
 import { MONSTERS, type MonsterDef } from '../data/monsters';
@@ -406,10 +407,7 @@ export function mountEntityForge(ui: UI, getWorld: () => World): { open: (id?: s
     const w = runActive();
     if (!w) { flash('no live run — start a game, then spawn (the forge stays available in the pause/dev flow)'); return; }
     const id = st.working.def.id;
-    if (!w.devGrabSpawn(id)) { flash(`✗ spawn refused (${id} not registered?)`); return; }
-    const a = w.actors[w.actors.length - 1];
-    if (st.rarity !== 'normal' && a && a.defId === id) w.promoteMonster(a, st.rarity);
-    flash(`spawned ${id}${st.rarity !== 'normal' ? ` (${st.rarity})` : ''} beside the hero`);
+    flash(spawnDevMonsters(w, { id, level: w.player.level, rarity: st.rarity, count: 1 }).message);
   };
 
   const openExport = (): void => {

@@ -116,6 +116,7 @@ import { STASH_DEFS } from '../data/stashes';
 import { empowerRelicMods } from './relicPower';
 import { reliquaryPower } from '../meta/reliquary';
 import { RELIQUARY_CFG } from '../data/reliquary';
+import { syncTrainingYard } from './trainingYard';
 import { nextItemUid, compileItemMods, itemLevelReq, rebuildItem, rollItem, forgeItem, describeItem, itemGridSize } from './itemgen';
 import {
   ABILITY_ESSENCE_CFG, ABILITY_ESSENCES, abilityEssenceOfTier,
@@ -7215,42 +7216,8 @@ export class World {
       // You know the way home: the town's waypoint starts attuned.
       if (def.id === START_ZONE) this.discoveredWaypoints.add(def.id);
     }
-    // TRAINING DUMMY: a town test target, once unlocked (reach character L5 →
-    // buy it in the Vault). An immortal passive enemy you pummel to test skills,
-    // effects, ailments, and modifiers. Stands at the training yard the expanded
-    // town raised for it (so the fixture + the actor line up).
-    if (def.id === START_ZONE && featureEnabled(this.account, FEATURE.TARGET_DUMMY)) {
-      const dummy = this.createMonster(FIXTURE_IDS.target_dummy, Math.max(1, this.player.level), 'enemy');
-      dummy.pos = this.clampPos(this.townSeat('training_yard'), dummy.radius);
-      this.actors.push(dummy);
-      // THE TRAINING RACK: the color-coded siblings stand in a row east of
-      // the post — one hard resistance each (watch a conversion change the
-      // number) and the heavy brother (watch vs-heavier arm). One unlock
-      // raises the whole rack; the sim probes target these same defs.
-      const rack = [FIXTURE_IDS.target_dummy_pyre, FIXTURE_IDS.target_dummy_rime, FIXTURE_IDS.target_dummy_storm,
-        FIXTURE_IDS.target_dummy_void, FIXTURE_IDS.target_dummy_colossus];
-      for (let i = 0; i < rack.length; i++) {
-        const sib = this.createMonster(rack[i], Math.max(1, this.player.level), 'enemy');
-        sib.pos = this.clampPos(
-          this.townSeat('training_yard', 52 * (i + 1), 0), sib.radius);
-        this.actors.push(sib);
-      }
-      // THE GAUNTLET (the flight range's town twin): three plain dummies
-      // spaced down a fire line east of the rack — watch a chain hop, a
-      // pierce bore through, a fork find the flanks — closed by a masonry
-      // stub for ricochet banks and unspent-end shrapnel blooms. Same
-      // unlock, same defs the sim's range formation targets.
-      for (let i = 0; i < 3; i++) {
-        const g = this.createMonster(FIXTURE_IDS.target_dummy, Math.max(1, this.player.level), 'enemy');
-        g.pos = this.clampPos(
-          this.townSeat('training_yard', 340 + 130 * i, 0), g.radius);
-        this.actors.push(g);
-      }
-      this.doodads.push(
-        { pos: this.clampPos(this.townSeat('training_yard', 690, -16), 26), radius: 26, kind: 'rock' },
-        { pos: this.clampPos(this.townSeat('training_yard', 690, 18), 26), radius: 26, kind: 'rock' },
-      );
-    }
+    // The normal arrival and developer unlock share one idempotent range mint.
+    syncTrainingYard(this);
     // THE TRACKER: the Bestiary's keeper camps at the west edge once his
     // Vault feature is bought (townBuild raised his fire; the body and the
     // fixture line up at TRACKER_SITE).
@@ -62934,7 +62901,7 @@ export class World {
    *  placement rejection and the unstuck sentinel. `tier` is the STORY the
    *  point is judged on (layer sovereignty — a surface trunk is no solid to
    *  the root duct beneath it; clampPos's own doodad gate, mirrored). */
-  private pointInSolid(x: number, y: number, margin = 0, tier = 0): Doodad | null {
+  pointInSolid(x: number, y: number, margin = 0, tier = 0): Doodad | null {
     for (const o of this.doodadsAt(x, y)) {
       if ((o.tier ?? 0) !== tier) continue; // its layer's solids only
       if (!blocksMovement(o)) continue;

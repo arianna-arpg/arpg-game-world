@@ -1,11 +1,13 @@
 import type { DevTabDef } from '../panel';
 import { applyDevProgression, devProgressionCatalog, devProgressionOwned, devProgressionReceipt } from '../progression';
 import { saveAccount } from '../../meta/persistence';
-import { DEV_UI, btn, css, hrow, section, textInput } from '../ui';
+import { DEV_UI, btn, css, disclosure, hrow, section, textInput } from '../ui';
+import { buildAccountTools } from './account';
 
 export const progressionTab: DevTabDef = {
-  id: 'progression', label: 'Progression',
-  build: ({ runActive, flash }) => {
+  id: 'progression', label: 'Account',
+  build: ctx => {
+    const { runActive, flash } = ctx;
     const pane = document.createElement('div');
     pane.dataset.devProgression = '';
     const note = document.createElement('div');
@@ -13,8 +15,12 @@ export const progressionTab: DevTabDef = {
     css(note, { color: DEV_UI.text, fontSize: '11px', marginBottom: '6px' });
     const filter = textInput('Find a milestone, container or Memory…');
     filter.setAttribute('aria-label', 'Filter progression');
-    const bar = hrow(), list = document.createElement('div');
-    css(list, { overflowY: 'auto', minHeight: '0', flex: '1' });
+    const bar = hrow(), list = document.createElement('div'), scroll = document.createElement('div');
+    css(scroll, { overflowY: 'auto', minHeight: '0', flex: '1' });
+    const memories = disclosure('Memory awakenings');
+    memories.el.dataset.devMemories = '';
+    const accountTools = buildAccountTools(ctx);
+    scroll.append(list, memories.el, accountTools);
     const apply = (ids: string[]): void => {
       const w = runActive();
       if (!w) { flash('Start a run first.'); return; }
@@ -30,14 +36,9 @@ export const progressionTab: DevTabDef = {
     bar.append(btn('Core access + learned trees', () => apply([
       ...devProgressionCatalog().filter(r => r.core).map(r => r.id), ...learned(),
     ])), btn('Awaken learned skills', () => apply(learned())), btn('Refresh', () => refresh()));
-    const refresh = (): void => {
-      list.replaceChildren();
-      const w = runActive(), query = filter.value.trim().toLowerCase();
-      let group = '';
-      const catalog = devProgressionCatalog();
-      for (const row of catalog) {
-        if (query && !`${row.label} ${row.id} ${row.group} ${row.description}`.toLowerCase().includes(query)) continue;
-        if (row.group !== group) { group = row.group; list.append(section(group)); }
+    const renderRows = (target: HTMLElement, rows: ReturnType<typeof devProgressionCatalog>, catalog: ReturnType<typeof devProgressionCatalog>): void => {
+      const w = runActive();
+      for (const row of rows) {
         const item = hrow(), label = document.createElement('span');
         const owned = !!w && devProgressionOwned(w.account, row, catalog);
         label.textContent = row.label;
@@ -48,11 +49,28 @@ export const progressionTab: DevTabDef = {
         grant.disabled = owned || !w;
         css(grant, { opacity: grant.disabled ? '0.55' : '1' });
         if (w?.account.ledger[devProgressionReceipt(row.id)]) label.textContent += ' · dev';
-        item.append(label, grant); list.append(item);
+        item.append(label, grant); target.append(item);
       }
     };
+    const refresh = (): void => {
+      list.replaceChildren();
+      memories.body.replaceChildren();
+      const query = filter.value.trim().toLowerCase();
+      let group = '';
+      const catalog = devProgressionCatalog();
+      const matches = catalog.filter(row => !query || `${row.label} ${row.id} ${row.group} ${row.description}`.toLowerCase().includes(query));
+      const memoryRows = matches.filter(row => row.memories);
+      memories.summary.textContent = `Memory awakenings (${memoryRows.length}${query ? ' matches' : ''})`;
+      memories.el.hidden = !!query && !memoryRows.length;
+      if (memories.el.open) renderRows(memories.body, memoryRows, catalog);
+      for (const row of matches.filter(row => !row.memories)) {
+        if (row.group !== group) { group = row.group; list.append(section(group)); }
+        renderRows(list, [row], catalog);
+      }
+    };
+    memories.el.addEventListener('toggle', refresh);
     filter.addEventListener('input', refresh);
-    pane.append(note, bar, filter, list);
+    pane.append(note, bar, filter, scroll);
     return { el: pane, onShow: refresh };
   },
 };
