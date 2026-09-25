@@ -1844,6 +1844,10 @@ for (const [id, def] of Object.entries(STATUS_DEFS)) {
 }
 
 export interface ActiveStatus {
+  /** Independent application lane, scoped to the originating actor/skill. */
+  sourceKey?: string;
+  /** A bank explicitly reserved for its source's finisher. Expiry still applies. */
+  holdDischarge?: boolean;
   /** Render-only wire hint for generic untyped DoTs (client DPS stays zero). */
   screenDot?: true;
   /** Aura-bound wound: separate from lasting ailments and removed with its field. */

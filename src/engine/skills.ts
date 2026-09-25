@@ -1,6 +1,7 @@
 import { summonScopeTags } from './skillScopes';
 import { companionBondOf, type CompanionBondSpec } from './companionSpec';
 import { challengeDelivery, type ChallengeSpec } from './challengeSpec';
+import { attackSequenceDelivery, attackSequenceOf, attackSequenceStatuses, type AttackSequenceSpec } from './attackSequenceSpec';
 // ---------------------------------------------------------------------------
 // Skill definition schema.
 //
@@ -435,6 +436,8 @@ export function instanceAim(inst: SkillInstance): AimSpec | undefined {
  *  untouched — byte-identical by construction, zero allocation. The cast
  *  path reads delivery through THIS view (executeSkill's one binding). */
 export function instanceDelivery(inst: SkillInstance): SkillDef['delivery'] {
+  const attackSequence = attackSequenceDelivery(inst);
+  if (attackSequence) return attackSequence;
   const challenge = challengeDelivery(inst);
   if (challenge) return challenge;
   const d = inst.def.delivery;
@@ -4298,6 +4301,7 @@ export type SkillEffect =
 // --- The skill definition ---------------------------------------------------
 
 export interface SkillDef {
+  attackSequence?: AttackSequenceSpec;
   /** Native armed-cast behavior, also available to exclusive tree trunks. */
   trigger?: TriggerSpec;
   /** Reusable casting-read profile; false omits supplemental body/outcome cues. Bars remain. */
@@ -4976,7 +4980,8 @@ function mergeTreeDomain(a: GroundDelivery['domain'], b: GroundDelivery['domain'
 }
 
 export interface SkillTreeNode {
-  /** Complete armed-cast identity; sockets override it. Author on exclusive trunks. */
+  attackSequence?: AttackSequenceSpec;
+  /** Complete armed-cast identity; sockets override it. One per exclusive limb. */
   trigger?: TriggerSpec;
   /** Increased damage per rank, applied only to this Hivecall's Sovereign body. */
   hivecallFormDamage?: number;
@@ -5863,6 +5868,9 @@ export function skillRarityFloor(weights: Partial<Record<SkillRarity, number>>):
 
 /** A skill as OWNED by an actor: definition + level + socketed supports. */
 export interface SkillInstance {
+  /** Captured attack-sequence provenance; never persisted. */
+  sequenceHost?: SkillInstance;
+  sequenceRole?: 'primary' | 'payload';
   /** Transient challenge payload ownership; never part of saved investment. */
   challengeHost?: SkillInstance;
   /** Flask follow-up provenance; transient and never serialized. */
@@ -6281,7 +6289,7 @@ export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance, param?: st
     // stays whole through the apply_ arm below: an apply_<dot> gem beside
     // the asking gem re-opens the door AND makes the wound real, since
     // bonusChance adds past the tuned zero at application.
-    return inst.def.effects.some(e => e.type === 'status'
+    return attackSequenceStatuses(inst).some(fits) || inst.def.effects.some(e => e.type === 'status'
       && (e.magnitude ?? 0) > 0 && tuneAilmentChance(e.status, e.chance) > 0
       && fits(e.status))
       || hostSockets(inst).some(s => [...s.def.mods, ...(s.def.perLevel ?? [])]
@@ -6313,7 +6321,9 @@ export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance, param?: st
    *  shrapnel graft stands beside it. */
   flight: (inst, param) => {
     if (param === 'children') {
-      const d = inst.def.delivery as { forks?: number; shatter?: unknown; emit?: unknown };
+      const attackSequence = attackSequenceOf(inst);
+      if (attackSequence?.flightRain || attackSequence?.bounce) return true;
+      const d = instanceDelivery(inst) as { forks?: number; shatter?: unknown; emit?: unknown };
       if ((d.forks ?? 0) > 0 || d.shatter !== undefined || d.emit !== undefined) return true;
       return hostSockets(inst).some(s => [...s.def.mods, ...(s.def.perLevel ?? [])]
         .some(m => CHILD_GRANTING_FLIGHT_STATS.includes(m.stat)));
@@ -6326,7 +6336,7 @@ export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance, param?: st
       // rather than ride inert (the user's call: eliminate the no-op from
       // the vocabulary, never flag it). Non-projectile deliveries pass
       // open — their sub-flights' natures are theirs to judge.
-      const d = inst.def.delivery as { type?: string; rehit?: number; noImpact?: boolean };
+      const d = instanceDelivery(inst) as { type?: string; rehit?: number; noImpact?: boolean };
       if (d.type !== 'projectile') return true;
       return !d.rehit && !d.noImpact;
     }
@@ -6342,7 +6352,7 @@ export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance, param?: st
       // promotion path, and this arm grows the day it lands. Summon
       // hosts fit through their crew (the mechanism hop runs this same
       // predicate per crew skill).
-      const d = inst.def.delivery as { type?: string; castSkillId?: string };
+      const d = instanceDelivery(inst) as { type?: string; castSkillId?: string };
       return d.type === 'projectile'
         || (d.type === 'construct' && d.castSkillId !== undefined);
     }
@@ -6433,7 +6443,7 @@ export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance, param?: st
       if (param) return id === param;
       return true;
     };
-    return inst.def.effects.some(e => e.type === 'status' && qualifies(e.status))
+    return attackSequenceStatuses(inst).some(qualifies) || inst.def.effects.some(e => e.type === 'status' && qualifies(e.status))
       || hostSockets(inst).some(s => [...s.def.mods, ...(s.def.perLevel ?? [])]
         .some(m => m.stat.startsWith('apply_') && qualifies(m.stat.slice(6))));
   },

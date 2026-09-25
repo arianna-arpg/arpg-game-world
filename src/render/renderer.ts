@@ -145,6 +145,7 @@ import { drawLakeBroil } from './vis/lakeLayer';
 import { boilRamp, drawBoilCells, groundedCellsIn } from './vis/boilLayer'; // THE GROUNDED STRIKE's telegraph (the crone's boil)
 import { drawTrapworkTells } from './vis/trapLayer';
 import { drawEffectVoice } from './vis/effectVoice';
+import './vis/attackSequenceVoice';
 import './vis/groundRising'; // Ground-born encounters signal through soil, dust and grasping hands.
 import { traceAoePath } from './vis/aoeTrace'; // THE AOE TRACER — one path builder per registered figure (drawn == tested with world.ts inAoe)
 import { AOE_SHAPE, bandSwingGeo } from '../engine/skills';

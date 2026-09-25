@@ -2902,6 +2902,7 @@ export const LOOKS: Record<string, LookDef> = {
     live: [{ kind: 'bell', scale: 1.5, params: { swing: 0.1 } }],
   },
   /** The whirlaxe CATCH SPOT: the marked circle, steel lying in it. */
+  construct_recovery_glyph: { parts: [{ kind: 'halo', scale: 1.1 }], shadowScale: 0 },
   construct_axe_catch: {
     parts: [
       { kind: 'halo', scale: 1.1 },

@@ -1394,6 +1394,8 @@ export class Actor {
   /** Skill bar. For the player, index = slot; for AI, the whole repertoire. */
   skills: (SkillInstance | null)[] = [];
   cooldowns = new Map<string, number>();
+  /** Transient equipment-in-flight gate, independent of ordinary cooldown resets. */
+  skillRecoveryLocks = new Set<string>();
   /** Time until the actor can act again (set by a skill's use time). */
   useLock = 0;
   /** Pacing between PIERCED reflex presses (REFLEX_CFG.lock) — the wrist's
@@ -2671,6 +2673,8 @@ export class Actor {
       casterId?: number;
       /** A field-bound ailment is a separate application from lasting wounds. */
       challengeField?: number;
+      sourceKey?: string;
+      holdDischarge?: boolean;
       /** BROOD clause from the applying skill's graft (BroodSpec). */
       brood?: ActiveStatus['brood'];
       /** DOT-LEECH fraction (the applier's dotLeech_<id> stat). */
@@ -2714,7 +2718,7 @@ export class Actor {
     if (banking && def.bank!.wetMul !== undefined && this.isWet()) dps *= def.bank!.wetMul;
     const baseDur = banking && def.bank!.duration !== undefined ? def.bank!.duration : def.duration;
     const duration = baseDur * durationScale / expiry;
-    const existing = this.statuses.find(s => s.id === id && s.challengeField === opts?.challengeField);
+    const existing = this.statuses.find(s => s.id === id && s.challengeField === opts?.challengeField && s.sourceKey === opts?.sourceKey);
     // ARMED (rupture-bearing) statuses run a FIXED FUSE: re-application never
     // postpones the blast — the timer set when the keg was armed runs down no
     // matter how often the victim is re-struck. Fresh rupture payloads PUMP
@@ -2778,6 +2782,7 @@ export class Actor {
     } else {
       this.statuses.push({
         id, remaining: duration, stacks: 1, dps, sourceName, challengeField: opts?.challengeField,
+        sourceKey: opts?.sourceKey, holdDischarge: opts?.holdDischarge,
         power: power !== 1 ? power : undefined,
         propagates: opts?.propagates || def.propagateOnDeath,
         rupture: opts?.rupture,
@@ -4015,6 +4020,7 @@ export class Actor {
     // lane: a gather conversion authored releaseOnCooldown fires its
     // already-paid bank through the clock (gatherReleasable holds the
     // whole law; a fresh or thin-bank press while cooling stays refused).
+    if (this.skillRecoveryLocks.has(inst.def.id)) return false;
     if (this.cooldowns.has(inst.def.id) && !this.gatherReleasable(inst)) return false;
     // Guard-locked skills (Transgression) demand a raised stance.
     if (inst.def.requiresGuard && this.casting?.mode !== 'guard') return false;

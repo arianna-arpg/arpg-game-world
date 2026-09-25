@@ -130,9 +130,10 @@ arts and forms are in `necromancerSkills.ts` / `necromancerMinions.ts`. The
 current binary mutator anatomy, comparison checkpoint and summon grammar are
 documented in `docs/design/necromancer-skill-trees.md`.
 
-Cleave’s toggled melee-release and traveling-wound trees live in
-`src/data/cleaveTree.ts`; `docs/design/cleave.md` documents native tree triggers,
-independent recovery, attribution and save/co-op state. Verify with
+Cleave’s landed-hit cycles and recoverable-axe trees live in
+`src/data/cleaveTree.ts`; reusable `AttackSequenceSpec` / `AttackSequences`
+own target rhythm, wound attribution, catch groups and opening sweeps.
+`docs/design/cleave.md` documents tuning, support inheritance and cleanup. Verify with
 `npm run probe -- cleave` and the hidden `balance/cleave-ui.cjs` harness.
 
 Fresh-account starting trees live in `src/data/starterSkillTrees.ts`. Their

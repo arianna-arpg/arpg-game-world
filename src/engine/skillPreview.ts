@@ -29,6 +29,7 @@
 // ---------------------------------------------------------------------------
 
 import { skillAbsorbAmount } from './absorb';
+import { attackSequenceOf, attackSequenceStatuses } from './attackSequenceSpec';
 import { guardSurgePreview } from './guardSurge';
 import { instanceInvocation, makeInvocationPayload } from './invocation';
 import { resolveInvocation, RUNE_INFO, type RuneId } from '../data/invocations';
@@ -158,6 +159,12 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
     push('cost', 'Cost', parts.join(' + '));
   }
   const trigger = instanceTrigger(inst);
+  const attackSequence = attackSequenceOf(inst);
+  if (attackSequence?.hitCycle) push('attackSequence_cycle', 'Landed-hit cycle', String(attackSequence.cycleMax ?? attackSequence.hitCycle.max), 'headline',
+    attackSequence.vulnerability ? 'Builds vulnerability; maximum hit clears it.' : `${pct(attackSequence.hitCycle.increasedPerStack)} increased damage per stack; resets at maximum.`);
+  if (attackSequence?.recovery) push('attackSequence_recovery', 'Recovery', 'Retrieve your axes', 'headline', `${secs(attackSequence.recovery.missCooldown)} after a missed throw.`);
+  if (attackSequence?.bounce) push('attackSequence_catch', 'Airborne catch window', secs(attackSequence.bounce.seconds), 'detail', 'Catch before landing to release an axe nova.');
+  if (attackSequence?.opening) push('attackSequence_opening', 'Opening sweep', 'Immediately on cast', 'detail', attackSequence.backswing ? 'Sweeps back after a beat; the throw completes after windup.' : 'The throw completes after windup.');
   if (trigger?.on === 'meleeHit') push('trigger', 'Release', 'Next landed melee attack', 'headline', 'Toggle on to arm; pays this skill’s cost each release.');
   if (def.useTime > 0 && !replenishing && !(trigger && def.useTime <= instanceTriggerLimit(inst))) {
     const speed = caster.speedFactor(inst);
@@ -213,6 +220,11 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   const bonusChance = get('statusChance');
   const durScale = get('effectDuration');
   const seen = new Set<string>();
+  for (const id of attackSequenceStatuses(inst)) {
+    seen.add(id);
+    push('attackSequence_status_' + id, STATUS_DEFS[id]?.label ?? id,
+      attackSequence?.rhythm ? (id === 'bleed' ? 'odd hits' : 'even hits') : 'on axe recovery or impact', 'detail');
+  }
   for (const fx of instanceEffects(inst)) {
     if (fx.type === 'guardSurge') {
       const surge = guardSurgePreview(caster, inst, fx);

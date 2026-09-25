@@ -30,6 +30,7 @@ import {
   supportFits, supportFitsInst, treeNodeOf, validTreeNodes, bandPointsAt, MAX_SKILL_LEVEL,
   type Delivery, type SkillDef, type SkillInstance, type SupportDef, type ConduitSpec, AOE_SHAPE, BASH_CFG } from '../engine/skills';
 import { treeGraph, TREE_LAYOUT_CFG } from '../engine/skilltree'; // THE SKILL-TREE GRAPH — the fold the tree laws read
+import { attackSequenceErrors } from '../engine/attackSequenceSpec';
 import { GRAFT_READ_SITES, rowUnreadBy, supportCarriesRow, type GraftReadRow } from './graftReadSites';
 import { PROCS } from './procs';
 import { COMBO_RULES } from './combos';
@@ -3159,8 +3160,11 @@ export function validateContent(): void {
             const value = n.trigger[key];
             if (value !== undefined && (!Number.isFinite(value) || value < 0)) warn(`${at}/${n.id}: invalid trigger.${key}`);
           }
-          if (!n.excludes?.length) warn(`${at}/${n.id}: trigger identity belongs on an exclusive trunk`);
+          const triggerLimb = g.nodes.get(n.id)?.limbId;
+          if (!triggerLimb) warn(`${at}/${n.id}: trigger identity belongs in an exclusive limb`);
+          if (raw.some(other => other.id !== n.id && other.trigger && g.nodes.get(other.id)?.limbId === triggerLimb)) warn(`${at}/${n.id}: conflicting trigger identities in one limb`);
         }
+        if (n.attackSequence) for (const error of attackSequenceErrors(n.attackSequence)) warn(`${at}/${n.id}: ${error}`);
         for (const error of invocationTreeErrors(def, n)) warn(`${at}/${n.id}: ${error}`);
         const constructOver = n.over?.construct;
         if (constructOver) {

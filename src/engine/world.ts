@@ -21,6 +21,7 @@ import { ensureMovementTether, landMovementTether, updateMovementTethers, refres
 import { CompanionBonds } from './companionBonds';
 import { Assaults, assaultNode } from './assault';
 import { Challenges } from './challenges';
+import { AttackSequences } from './attackSequences';
 import { challengeOf } from './challengeSpec';
 import { companionBondOf, companionRecoverySeconds, COMPANION_CFG, type CompanionSaved } from './companionSpec';
 import { companionStanceIdOf, nextStanceId } from './companionStances';
@@ -1012,7 +1013,7 @@ const HAUNT_TAGS = new Set([
   'wailing_one',   // the manifested boss
 ]);
 
-interface Projectile {
+export interface Projectile {
   orbPaint?: ProjectileDelivery['orbPaint'];
   /** A parried flight carries a captured counter payload, not a new cast. */
   parryDamage?: ParryDamage;
@@ -3582,6 +3583,7 @@ export class World {
   readonly guardians = new Guardians();
   readonly creepers = new Creepers();
   readonly challenges = new Challenges(this);
+  readonly attackSequences = new AttackSequences(this);
   /** ONE-SHOT: lingering at any REGISTERED vendor counter with stock (the
    *  data/vendors.ts registry) asks the main loop to open the Vendor screen. */
   vendorDwellRequested = false;
@@ -5762,6 +5764,7 @@ export class World {
     this.creepers.clear();
     this.assaults.clearAll();
     this.challenges.clearAll();
+    this.attackSequences.clearAll();
     this.odyssey.leaveZone();
     this.combatDeeds.reset();
     // THE POSSESSION SEAM: transit unwinds every embodiment FIRST — a
@@ -30820,6 +30823,21 @@ export class World {
     this.resolveHit(caster, inst, target, power, 1);
   }
 
+  /** Banked attackSequence status damage: attributed, mitigated, observable,
+   * without re-entering hit procs or depositing another wound bank. */
+  attackSequenceBurst(caster: Actor, inst: SkillInstance, target: Actor, amount: number): void {
+    if (target.dead || target.invulnerable || amount <= 0) return;
+    const before = target.life;
+    const taken = mitigateTyped(target, { physical: amount }, { attacker: caster, tags: skillContextTags(inst), extra: instanceMods(inst) });
+    landLifeDamage(target, taken);
+    this.recordIndirectDamage(target, caster, before);
+    SIM_TAP.current?.onDot?.(target, taken, 'physical');
+    target.hitFlash = 0.15; target.hitFlashType = 'physical';
+    this.text(target.pos, String(Math.round(taken)), '#bc4540', 14, 'combat');
+    this.flashes.push({ pos: { ...target.pos }, radius: target.radius + 18, color: '#c6453b', life: 0.25, maxLife: 0.25 });
+    if (target.life <= 0 && !target.dead) this.kill(target, false, caster);
+  }
+
   challengeBurst(caster: Actor, target: Actor, amount: number): void {
     const taken = mitigateTyped(target, { physical: amount });
     if (taken <= 0 || target.dead) return;
@@ -34711,6 +34729,7 @@ export class World {
     }
     const cc = this.consumeChargeCost(caster, inst);
     const baseMult = cc.mult * roundMult * gPower;
+    this.attackSequences.opening(caster, inst, aim, baseMult);
 
     // CONCENTRATION (the precision cast): the held bar fills only while the
     // cursor rides the QUARRY resolved at press — no quarry, no cast (the
@@ -35009,6 +35028,7 @@ export class World {
     // Replenishment is a birth clock, never an echo/trigger/proc cast.
     if (replenishingDelivery(inst)) return false;
     inst = this.challenges.prepare(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
+    inst = this.attackSequences.prepare(caster, inst, aim, opts.dmgMult ?? 1);
     const def = inst.def;
     const cosmeticPaint = cosmeticSkillPaint(this, caster, def.id);
     const cosmeticColor = cosmeticPaint.color ?? def.color;
@@ -38608,7 +38628,7 @@ export class World {
   /** The parent's resolved axes × its effective inherit fraction (the
    *  projInherit stat + the spawning spec's own `inherit`) — or undefined
    *  when nothing is passed down. */
-  private inheritedFlight(p: Projectile, specInherit?: number): InheritedFlight | undefined {
+  inheritedFlight(p: Projectile, specInherit?: number): InheritedFlight | undefined {
     const frac = Math.min(1, p.inheritFrac + (specInherit ?? 0));
     if (frac <= 0) return undefined;
     return {
@@ -42942,6 +42962,7 @@ export class World {
       this.text(vec(caster.pos.x, caster.pos.y - caster.radius - 10),
         'the guise breaks!', '#b8a8e8', 12, 'combat');
     }
+    inst = this.attackSequences.forTarget(caster, inst, target, depth);
     const extra = instanceMods(inst);
     // THE DIN (the watch fabric): a resolved blow RINGS — noiseOnHit is a
     // radius, and every hostile watcher inside hears the bang at the
@@ -43562,7 +43583,7 @@ export class World {
       if (dealt > 0 && depth === 0 && !target.dead) {
         for (let si = target.statuses.length - 1; si >= 0; si--) {
           const s = target.statuses[si];
-          if (!STATUS_DEFS[s.id]?.dischargeOnHit || !s.rupture || s.rupture <= 0) continue;
+          if (s.holdDischarge || !STATUS_DEFS[s.id]?.dischargeOnHit || !s.rupture || s.rupture <= 0) continue;
           if (STATUS_DEFS[s.id]?.dischargeMatchingType && (packet.amounts[s.ruptureType ?? 'physical'] ?? 0) <= 0) continue;
           target.statuses.splice(si, 1);
           target.sheet.removeSource('status:' + s.id);
@@ -43590,7 +43611,7 @@ export class World {
         const phys = packet.amounts.physical ?? 0;
         if (ip > 0 && phys > 0) {
           target.applyStatus('impaled', 0, 1, def.name, { casterId: caster.id });
-          const lodged = target.statuses.find(x => x.id === 'impaled');
+          const lodged = target.statuses.find(x => x.id === 'impaled' && !x.sourceKey);
           if (lodged) {
             lodged.rupture = (lodged.rupture ?? 0) + phys * ip;
             lodged.ruptureType = 'physical';
@@ -44387,6 +44408,7 @@ export class World {
     // resolution — damage, ailments and procs have all read the buff that
     // empowered this blow — and the kill stamps the ledger.
     this.challenges.afterHit(caster, inst, target, dealt, depth, dmgMult);
+    this.attackSequences.landed(caster, inst, target, dealt, packet.amounts.physical ?? 0, depth);
     if (dealt > 0) {
       if (depth === 0) this.companionBonds.onHit(caster, inst, target);
       const spentContext = [...skillContextTags(inst)];
@@ -48757,6 +48779,7 @@ export class World {
     // The same tending mends a downed COMPANION (the Hunter's bond).
     this.companionBonds.update(dt);
     this.challenges.update(dt);
+    this.attackSequences.update(dt);
     this.updateDownedCompanions(dt);
     // ALL-DOWN terminator: once no seat is left standing, the wipe concludes
     // (per mode: resurface / respawn / run over). Guarded on !gameOver so
@@ -57277,6 +57300,7 @@ export class World {
 
   /** Retire fields that captured the previous allocation. */
   private clearTreeFields(caster: Actor, inst: SkillInstance): void {
+    this.attackSequences.clear(caster, inst);
     this.challenges.clear(caster, inst);
     const ownsTreePayload = (candidate: SkillInstance) => candidate === inst || candidate.invocationHost === inst || candidate.followUpHost === inst || candidate.challengeHost === inst;
     this.pendingFollowUps = this.pendingFollowUps.filter(p => p.caster !== caster || !ownsTreePayload(p.inst));
@@ -58452,6 +58476,7 @@ export class World {
       const ptf = this.timeflow.actorScale(p.caster);
       if (ptf <= 0) continue;
       const dt = ptf === 1 ? flowDt : flowDt * ptf;
+      this.attackSequences.flight(p);
       const prev = vec(p.pos.x, p.pos.y);
       p.pos = this.advanceProjectile(p, dt);
       // Keep `dir` pointing along actual motion for rendering & chains.
@@ -58902,6 +58927,7 @@ export class World {
               }
             }
             noteBodyHit(enemy, bodyTouch.seg);
+            this.attackSequences.beforeContact(p);
             this.resolveHit(p.caster, p.inst, enemy, p.mult, 0, hitFlat, false, false, undefined, p.origin, p.tier);
             // THE HIT VOICE (engine/bodyVoices.ts): the impact speaks the blow's type — fire flares, cold crackles, lightning sparks, chaos spatters, a shaft flecks the body.
             this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: 14, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(enemy.hitFlashType ?? p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'body') });
@@ -58929,6 +58955,8 @@ export class World {
                 this.projectiles[this.projectiles.length - 1].hits.set(enemy.id, Infinity);
               }
             }
+            // A recoverable weapon lands after ordinary impact payloads fire.
+            if (this.attackSequences.contact(p, enemy)) { dead = true; diedOnBody = true; break; }
             // RECURVE (Heartchaser): a chance to whip around and strike the
             // SAME heart again — the odds decay per miracle; the victim's
             // hit-lock clears after a breath so the re-strike is legal.
