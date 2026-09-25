@@ -20,7 +20,7 @@ interface Recovery {
   elapsed: number; duration: number; marker?: Actor; dealt: number; airborne: boolean;
 }
 interface Scheduled {
-  state: SequenceState; inst: SkillInstance; aim: Vec2; due: number; power: number; fx?: string;
+  state: SequenceState; inst: SkillInstance; aim: Vec2; due: number; power: number;
 }
 
 /** Actor/instance/target-scoped cycles and recoverable weapons. All damage still
@@ -140,14 +140,17 @@ export class AttackSequences {
       color: maximum ? '#f0b475' : inst.def.color, life: maximum ? 0.3 : 0.13, maxLife: maximum ? 0.3 : 0.13, edgeFrac: 0.85 });
   }
 
-  /** The paid opening resolves now; the ordinary cast bar still governs the throw. */
+  /** Paid casting sweeps own independent beats; the cast bar governs the throw. */
   opening(owner: Actor, host: SkillInstance, aim: Vec2, power: number): void {
-    const s = this.state(owner, host), opening = s?.spec.opening;
-    if (!s || !opening || host.sequenceRole) return;
-    const inst = this.payload(s, host, opening.delivery, ['attack', 'melee', 'aoe', 'physical']);
-    this.fire(s, inst, aim, power * opening.power);
-    if (s.spec.backswing) this.scheduled.push({ state: s, inst, aim: { ...aim },
-      due: this.w.time + s.spec.backswing.delay / owner.speedFactor(host), power: power * opening.power, fx: s.spec.backswing.fx });
+    const s = this.state(owner, host);
+    if (!s || host.sequenceRole) return;
+    for (const sweep of s.spec.castSweeps ?? []) {
+      const inst = this.payload(s, host, sweep.delivery, ['attack', 'melee', 'aoe', 'physical']);
+      const sweepPower = power * sweep.power;
+      if (sweep.delay === 0) this.fire(s, inst, aim, sweepPower);
+      else this.scheduled.push({ state: s, inst, aim: { ...aim },
+        due: this.w.time + sweep.delay / owner.speedFactor(host), power: sweepPower });
+    }
   }
 
   private payload(s: SequenceState, host: SkillInstance, delivery: SkillDef['delivery'], tags?: SkillTag[]): SkillInstance {
@@ -159,11 +162,10 @@ export class AttackSequences {
     inst.sequenceHost = s.host; inst.sequenceRole = 'payload'; inst.procChainDepth = 1;
     return inst;
   }
-  private fire(s: SequenceState, inst: SkillInstance, aim: Vec2, power: number, fx?: string): void {
-    const first = this.w.flashes.length, facing = s.owner.facing;
+  private fire(s: SequenceState, inst: SkillInstance, aim: Vec2, power: number): void {
+    const facing = s.owner.facing;
     this.w.executeSkill(s.owner, inst, aim, { noRepeat: true, noCooldown: true, dmgMult: power });
     s.owner.facing = facing;
-    if (fx) for (const f of this.w.flashes.slice(first)) if (f.arc || f.shape !== undefined) f.fx = fx;
   }
 
   beforeContact(p: Projectile): void {
@@ -274,7 +276,7 @@ export class AttackSequences {
     }
     for (const job of [...this.scheduled]) if (job.due <= this.w.time) {
       this.scheduled.splice(this.scheduled.indexOf(job), 1);
-      if (!job.state.retired) this.fire(job.state, job.inst, job.aim, job.power, job.fx);
+      if (!job.state.retired) this.fire(job.state, job.inst, job.aim, job.power);
     }
     for (const r of [...this.recoveries]) {
       const s = r.cast.state, owner = s.owner, recovery = s.spec.recovery!;

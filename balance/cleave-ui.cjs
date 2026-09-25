@@ -26,7 +26,7 @@ app.whenReady().then(async () => {
       // This disposable visual fixture has already unlocked skill investment.
       w.netMemoryAccess = { progression:true, tree:null };
       inst.level = 20;
-      inst.treeNodes = ['readied_cleave','steady_cuts','close_quarters'];
+      inst.treeNodes = ['unbound_cleave','heavy_wave','tempered_wave','razor_horizon'];
       w.meta.knownSkills.set(inst.def.id, inst);
       __game.ui.openSkillTree(inst.def.id);
       __game.step(2);
@@ -44,6 +44,7 @@ app.whenReady().then(async () => {
       log(result);
       assert.equal(result.nodes, 15);
       assert.ok(result.labels.some(x => x.text.includes('Readied Cleave')));
+      assert.ok(result.labels.find(x => x.text === 'Heavy Wave').x < result.labels.find(x => x.text === 'Serrated Wave').x);
       const [x, y, w, h] = result.rect;
       assert.ok(x >= -1 && y >= -1 && x + w <= width + 1 && y + h <= height + 1);
       const overlaps = result.labels.flatMap((a, i) => result.labels.slice(i + 1).filter(b => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y));
@@ -88,7 +89,7 @@ app.whenReady().then(async () => {
       const sweep = await win.webContents.executeJavaScript(`(() => {
         const q=__cleaveQA, {w,p,inst,target}=q;
         w.attackSequences.clearAll(); w.projectiles=[]; w.flashes=[]; p.cooldowns.clear(); p.casting=null; p.useLock=0;
-        target.pos={x:p.pos.x+45,y:p.pos.y}; inst.treeNodes=['unbound_cleave','tempered_wave','razor_horizon'];
+        target.pos={x:p.pos.x+45,y:p.pos.y}; inst.treeNodes=['unbound_cleave','heavy_wave','tempered_wave','razor_horizon'];
         const before=target.life; w.useSkill(p,inst,target.pos,true);
         if (${reverse}) { w.flashes=[]; q.advance(0.3); }
         for(const f of w.flashes) f.life=f.maxLife*0.55;

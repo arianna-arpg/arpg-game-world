@@ -1,7 +1,8 @@
 import { treeNodeOf, type BuffEffect, type MeleeDelivery, type ProjectileDelivery, type SkillInstance } from './skills';
 
 /** Independent, composable attack identities. No skill/node IDs in the runtime.
- * Patches own distinct fields; sorting makes sibling allocation order irrelevant. */
+ * Patches own distinct fields; casting sweeps concatenate. Sorting makes sibling
+ * allocation order irrelevant. */
 export interface AttackSequenceSpec {
   hitCycle?: { max: number; increasedPerStack: number };
   cycleMax?: number;
@@ -16,8 +17,9 @@ export interface AttackSequenceSpec {
     nova: { count: number; power: number } };
   catchBuff?: { max: number; label: string; repeatInterval: number };
   flightRain?: { interval: number; power: number; range: number; radius: number };
-  opening?: { delivery: MeleeDelivery; power: number };
-  backswing?: { delay: number; fx?: string };
+  /** Independent cast-time strikes. A zero delay lands immediately; later
+   * beats use the same speed-scaled clock whether or not another beat exists. */
+  castSweeps?: { delay: number; delivery: MeleeDelivery; power: number }[];
   impactBleed?: { radius: number; power: number; bleed: number };
 }
 
@@ -26,7 +28,11 @@ export function attackSequenceOf(inst: SkillInstance): AttackSequenceSpec | unde
   let out = inst.def.attackSequence && { ...inst.def.attackSequence };
   for (const id of [...(inst.treeNodes ?? [])].sort()) {
     const patch = treeNodeOf(inst.def, id)?.attackSequence;
-    if (patch) Object.assign(out ??= {}, patch);
+    if (patch) {
+      const { castSweeps, ...fields } = patch;
+      Object.assign(out ??= {}, fields);
+      if (castSweeps) out.castSweeps = [...(out.castSweeps ?? []), ...castSweeps];
+    }
   }
   return out;
 }

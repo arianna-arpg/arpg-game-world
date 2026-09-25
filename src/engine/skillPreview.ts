@@ -164,7 +164,10 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
     attackSequence.vulnerability ? 'Builds vulnerability; maximum hit clears it.' : `${pct(attackSequence.hitCycle.increasedPerStack)} increased damage per stack; resets at maximum.`);
   if (attackSequence?.recovery) push('attackSequence_recovery', 'Recovery', 'Retrieve your axes', 'headline', `${secs(attackSequence.recovery.missCooldown)} after a missed throw.`);
   if (attackSequence?.bounce) push('attackSequence_catch', 'Airborne catch window', secs(attackSequence.bounce.seconds), 'detail', 'Catch before landing to release an axe nova.');
-  if (attackSequence?.opening) push('attackSequence_opening', 'Opening sweep', 'Immediately on cast', 'detail', attackSequence.backswing ? 'Sweeps back after a beat; the throw completes after windup.' : 'The throw completes after windup.');
+  if (attackSequence?.castSweeps?.length) push('attackSequence_opening', 'Casting sweeps',
+    [...attackSequence.castSweeps].sort((a, b) => a.delay - b.delay)
+      .map(s => s.delay === 0 ? 'Immediately on cast' : `${secs(s.delay / caster.speedFactor(inst))} after cast starts`).join(' · '),
+    'detail', 'The throw completes after windup.');
   if (trigger?.on === 'meleeHit') push('trigger', 'Release', 'Next landed melee attack', 'headline', 'Toggle on to arm; pays this skill’s cost each release.');
   if (def.useTime > 0 && !replenishing && !(trigger && def.useTime <= instanceTriggerLimit(inst))) {
     const speed = caster.speedFactor(inst);

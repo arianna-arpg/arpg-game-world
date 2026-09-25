@@ -62,12 +62,14 @@ an outstanding weapon.
   fallen axes retain their glyph and recovery requirement.
 - **Driving Front:** outbound and bouncing axes shed a small axe in a random
   direction every 0.25 seconds, at 18% damage.
-- **Serrated Wave:** immediately performs a broad melee strip sweep when the
-  paid cast begins. The axe launches when the normal windup completes.
-- **Spreading Wounds:** repeats that sweep from the opposite side after 0.25
-  seconds, adjusted by attack speed.
 - **Heavy Wave:** primary axe impacts burst within 75 units, dealing 35% of the
-  strike's damage and applying Bleed at 15% per second.
+  strike's damage and applying Bleed at 15% per second. This is the second fork
+  directly below Unbound Cleave, so it combines with Long Edge in three points.
+- **Serrated Wave:** a leaf below Heavy Wave. Immediately performs a broad melee
+  strip sweep when the paid cast begins. The axe launches when windup completes.
+- **Spreading Wounds:** the other Heavy Wave leaf. Independently performs the
+  opposite sweep after 0.25 seconds, adjusted by attack speed. Taking both leaves
+  gives the immediate outward sweep followed by the delayed return sweep.
 
 Serrated Wave has melee tags and normal Cleave damage; the throw's projectile
 multiplier does not amplify the sweep. Nova and rain payloads use the normal
@@ -81,7 +83,9 @@ produce these tree payloads.
 ## Shared engine contract
 
 `AttackSequenceSpec` can be authored on a skill definition or tree node.
-`attackSequenceOf` combines selected patches in a stable order.
+`attackSequenceOf` combines selected patches in a stable order. `castSweeps`
+concatenates independent, data-authored beats (delivery, damage and delay), so
+one sweep never depends on another leaf and allocation order cannot erase it.
 `AttackSequences` owns per-actor, per-skill-instance, per-target state and
 captured per-cast recovery groups. There are no Cleave or node-ID branches in
 the runtime. Delivery resolution, support mechanism admission and previews
@@ -102,13 +106,15 @@ Visual dials live in `render/vis/attackSequenceVoice.ts`.
 Respec, changed investment, unseating, owner death and zone transitions retire
 owned jobs, recoveries, wounds and payloads. Missing recovery objects release
 the lock. Stacks and weapons in flight are transient, never serialized.
-Existing tree node IDs and allocation topology remain intact.
+Existing tree node IDs remain intact. Heavy Wave and Serrated Wave exchange
+positions; the normal saved-tree validation applies the new prerequisites.
 
 ## Verification
 
-- `npx tsx balance/probe_cleave.ts`: 84 assertions for both trunks, payment,
+- `npx tsx balance/probe_cleave.ts`: 95 assertions for both trunks, payment,
   target cycles, owned wound consumption, geometry, recovery lifecycle,
-  missed/mixed catches, repetitions, delayed hits and projectile inheritance.
+  missed/mixed catches, repetitions, delayed hits and projectile inheritance,
+  plus independent/composed sweeps and Long Edge with Heavy Wave.
 - `npm run check`: game, launcher and simulation type checks.
 - `npm run sim -- run --suite smoke`: five scenarios across five seeds.
 - `npm run probe`: shared engine and content regression suite.
@@ -124,3 +130,8 @@ five-scenario/five-seed smoke suite, production build and the hidden visual
 checks passed. The final targeted Cleave run also covers missing landing-marker
 placement. Visual captures were inspected for tree labels, airborne/fallen axe
 readability and the two opposing sweeps.
+
+Branch-swap verification (2026-09-25): 95 Cleave checks, starter-tree and
+preview probes, type checks, smoke suite, production build and hidden visual
+checks pass. The two sweep leaves work independently and compose in either
+allocation order; Long Edge and Heavy Wave combine in three points.

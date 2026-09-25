@@ -234,7 +234,7 @@ try {
     check('Driving Front emits during bounce', r.w.projectiles.some(p => p.inst.sequenceRole === 'payload'));
   }
   {
-    const r = thrown(['unbound_cleave', 'tempered_wave', 'razor_horizon']); r.target.pos = { x: r.p.pos.x + 45, y: r.p.pos.y };
+    const r = thrown(['unbound_cleave', 'heavy_wave', 'tempered_wave', 'razor_horizon']); r.target.pos = { x: r.p.pos.x + 45, y: r.p.pos.y };
     const life = r.target.life;
     check('Serrated Wave press starts cast bar', r.w.useSkill(r.p, r.cleave, r.target.pos, true) && !!r.p.casting);
     const after = r.target.life;
@@ -244,11 +244,49 @@ try {
     step(r, 0.6); check('windup completes axe throw and melee retrieval', r.target.statuses.some(s => s.id === 'bleed') && !r.p.skillRecoveryLocks.has('cleave'));
   }
   {
-    const r = thrown(['unbound_cleave', 'tempered_wave', 'heavy_wave']);
+    const r = thrown(['unbound_cleave', 'heavy_wave', 'tempered_wave']);
+    r.target.pos = { x: r.p.pos.x + 45, y: r.p.pos.y };
+    const tap = SIM_TAP.current; let hits = 0;
+    SIM_TAP.current = { onHit: (a, b) => { if (a === r.p && b === r.target) hits++; } };
+    try {
+      const before = r.target.life; r.w.useSkill(r.p, r.cleave, r.target.pos, true);
+      check('Serrated Wave alone supplies an immediate sweep below Heavy Wave', r.target.life < before && hits === 1 && r.cleave.treeNodes?.includes('tempered_wave') === true);
+      step(r, 0.3);
+      check('Serrated Wave alone does not invent a return sweep', hits === 1 && !r.w.flashes.some(f => f.fx === 'serratedBackswing'));
+    } finally { SIM_TAP.current = tap; }
+  }
+  {
+    const r = thrown(['unbound_cleave', 'heavy_wave', 'razor_horizon']);
+    r.target.pos = { x: r.p.pos.x + 45, y: r.p.pos.y };
+    const before = r.target.life; r.w.useSkill(r.p, r.cleave, r.target.pos, true);
+    check('Spreading Wounds alone starts its windup without an immediate sweep', !!r.p.casting && r.target.life === before && !r.w.flashes.some(f => f.fx === 'serratedSweep'));
+    step(r, 0.1);
+    check('independent return sweep waits for its authored beat', r.target.life === before);
+    step(r, 0.2);
+    check('Spreading Wounds works without Serrated Wave', r.target.life < before && r.w.flashes.some(f => f.fx === 'serratedBackswing') && !r.w.projectiles.length);
+    const preview = previewSkill(r.p, r.cleave).rows.find(row => row.key === 'attackSequence_opening');
+    check('standalone delayed sweep preview does not promise an immediate strike', !!preview && JSON.stringify(preview).includes('after cast starts') && !JSON.stringify(preview).includes('Immediately'));
+    const saved = rebuildSkill(serializeCharacter(r.w).knownSkills.find(s => s.skillId === 'cleave')!)!;
+    check('new Heavy Wave route survives save validation', saved.treeNodes?.includes('heavy_wave') === true && saved.treeNodes.includes('razor_horizon'));
+  }
+  {
+    const r = thrown(['unbound_cleave', 'heavy_wave', 'razor_horizon', 'tempered_wave']);
+    r.target.pos = { x: r.p.pos.x + 45, y: r.p.pos.y };
+    const before = r.target.life; r.w.useSkill(r.p, r.cleave, r.target.pos, true);
+    const first = r.target.life; step(r, 0.3);
+    check('taking the two sweep leaves in either order preserves both hits', first < before && r.target.life < first && r.w.flashes.some(f => f.fx === 'serratedBackswing'));
+  }
+  {
+    const r = thrown(['unbound_cleave', 'long_edge', 'heavy_wave']);
+    check('Long Edge and Heavy Wave fit together in three points', r.cleave.treeNodes?.length === 3 && r.cleave.treeNodes.includes('heavy_wave'));
+    const before = r.target.life; r.w.useSkill(r.p, r.cleave, r.target.pos, true);
+    check('Heavy Wave no longer requires or grants a casting sweep', r.target.life === before && !r.w.flashes.some(f => f.fx === 'serratedSweep' || f.fx === 'serratedBackswing'));
+    r.p.casting = null; r.p.useLock = 0;
     const other = r.w.createMonster('zombie', 1, 'enemy'); other.skills = []; other.brain = undefined; other.pos = { x: r.target.pos.x, y: r.target.pos.y + 55 };
     other.sheet.setSource('rig', [mod('life', 'flat', 10000)]); other.fillResources(); r.w.actors.push(other);
     r.w.executeSkill(r.p, r.cleave, r.target.pos); step(r, 0.5);
     check('Heavy Wave damages and bleeds nearby bodies', other.life < other.maxLife() && other.statuses.some(s => s.id === 'bleed' && s.sourceKey?.includes(':impact')));
+    check('bleed explosion combines with Long Edge bounce and Gyre', markers(r).length === 1 && (r.p.charges.get('gyre') ?? 0) >= 1);
     r.w.fonts.push({ pos: { ...r.p.pos } }); r.w.meta.abilityEssences.ability4 = 999;
     check('respec removes recovery, wounds and payloads', r.w.fontResetTree('cleave') && !r.p.skillRecoveryLocks.has('cleave') && !other.statuses.some(s => s.sourceKey?.startsWith('sequence:')) && !r.w.projectiles.some(p => p.inst.sequenceHost === r.cleave));
     const saved = rebuildSkill(serializeCharacter(r.w).knownSkills.find(s => s.skillId === 'cleave')!)!;
