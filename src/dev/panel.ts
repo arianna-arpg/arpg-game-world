@@ -23,6 +23,7 @@ import { itemsTab } from './tabs/items';
 import { eventsTab } from './tabs/events';
 import { locationTab } from './tabs/location';
 import { accountTab } from './tabs/account';
+import { progressionTab } from './tabs/progression';
 import { throngTab } from './tabs/throng';
 import { comboTab } from './tabs/combo';
 import { grabTab } from './tabs/grab';
@@ -59,7 +60,7 @@ export interface DevTabDef {
 }
 
 /** THE TAB REGISTRY — order is display order. */
-const DEV_TABS: DevTabDef[] = [gemsTab, itemsTab, eventsTab, locationTab, accountTab, throngTab, comboTab, grabTab, liteTab, possessTab, entityTab, holdsTab, perfTab, watchTab, geysersTab, dissolveTab, emergeTab, ultlabTab, mapsTab, atlasTab];
+const DEV_TABS: DevTabDef[] = [gemsTab, itemsTab, eventsTab, locationTab, progressionTab, accountTab, throngTab, comboTab, grabTab, liteTab, possessTab, entityTab, holdsTab, perfTab, watchTab, geysersTab, dissolveTab, emergeTab, ultlabTab, mapsTab, atlasTab];
 
 let mounted = false;
 
@@ -99,7 +100,7 @@ export function mountDevPanel(getWorld: () => World): void {
   };
 
   const strip = document.createElement('div');
-  css(strip, { display: 'flex', gap: '4px', marginBottom: '6px' });
+  css(strip, { display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '6px', flexShrink: '0' });
 
   const built = DEV_TABS.map(def => {
     const { el, onShow } = def.build(ctx);

@@ -335,6 +335,11 @@ fold; tree crowns retain their art while trunks block sight, and bushes/crops
 obscure sight without granting stealth. Verify `npm run probe -- stealth`,
 watchers/canopypresence and the canopy visual harness after a build.
 
+Developer progression controls live in `dev/progression.ts` and the Dev panel's
+Progression tab. See `docs/engine/dev-progression.md` for registry-derived grants,
+account attribution and persistence; verify `probe_devprogression.ts` and
+`balance/dev-progression-ui.cjs` after a build.
+
 ## Commands
 Magic rarity's ambient encounters live in `data/magicPacks.ts` and
 `engine/magicPacks.ts`: shared recipes, level-gated size bands, attributable
