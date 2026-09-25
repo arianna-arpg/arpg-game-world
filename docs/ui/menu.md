@@ -78,6 +78,19 @@ lived-aware `World.mireilleGiftLesson` read).
 | --- | --- |
 | Menu Bar Seat | cycles `MENU_ANCHORS`: Bottom Left · Bottom Right · Beside the Bar |
 | Page Icons | **THE DOCK** — ON stands every unlocked page as an icon tile beside the button (greyed where unusable); OFF keeps the one button |
+| Town Portal Seat | Beside the Menu (default) · Above the Menu · Bottom Right |
+| Town Portal Visibility | Always Show (default during a run) · Hide While Menus Are Open (previous behavior) · Always Hide |
+
+The default Menu Bar Seat is **Beside the Bar**. The adjacent Town Portal
+button joins the bar's measured control row, to the Menu button's right
+(left at the Bottom Right seat), ahead of any page icons. It scales and moves
+with the bar and remains below the opened tray. With no HUD cluster, the bar
+uses its corner fallback so it remains accessible in scenes that veil the HUD.
+The opened tray shifts horizontally when needed to stay inside the viewport.
+Saved seat choices and dragged positions remain intact; older settings gain
+the new visibility default. These controls live under Options → Interface.
+Verify `npm run probe -- menubar` and, after a build,
+`npx electron balance/portal-button-ui.cjs`.
 
 Under the couch (`data/couch.ts`) the corner anchors lift `couchLiftPx` so
 the button stands clear of the hero's docked life orb; the `bar` anchor
@@ -96,7 +109,7 @@ with no host row; A4 fails on an icon that does not draw.
 
 | dial | default | meaning |
 | --- | --- | --- |
-| `anchorDefault` | `left` | the seat a fresh settings file starts on |
+| `anchorDefault` | `bar` | the seat a fresh settings file starts on |
 | `dockDefault` | `false` | the dock opt-in's default |
 | `syncSec` | 0.2 | fold cadence (a toggle or a page open re-folds at once) |
 | `closeOnPick` | true | the tray folds after a row opens its page |

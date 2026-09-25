@@ -26,7 +26,7 @@ import { CAMERA_CFG, CAMERA_MODES, type CameraModeId } from '../render/camera';
 import { WORLDSTATE_CFG, type ResumeSpawn } from './worldstate';
 import { MENU_ANCHORS, MENU_CFG, type MenuAnchorId } from '../ui/menuConfig';
 import { ESCAPE_CFG, ESCAPE_MODES, type EscapeCloseMode } from '../ui/escapeConfig';
-import { PORTAL_ANCHORS, PORTAL_BUTTON_CFG, type PortalAnchorId } from '../ui/portalConfig';
+import { PORTAL_ANCHORS, PORTAL_VISIBILITY, PORTAL_BUTTON_CFG, type PortalAnchorId, type PortalVisibilityId } from '../ui/portalConfig';
 
 export const SETTINGS_SCHEMA_VERSION = 1;
 
@@ -257,6 +257,7 @@ export interface MenuBarOptions {
 /** THE TOWN PORTAL BUTTON options (ui/portalConfig.ts owns the registry). */
 export interface PortalButtonOptions {
   anchor: PortalAnchorId;
+  visibility: PortalVisibilityId;
 }
 
 /** THE UI LAYOUT options (ui/panelmove.ts owns the mechanics). */
@@ -313,7 +314,7 @@ export interface SettingsSave {
   /** THE MENU BAR (additive). */
   menuBar?: { anchor?: string; dock?: boolean };
   /** THE TOWN PORTAL BUTTON (additive). */
-  portalButton?: { anchor?: string };
+  portalButton?: { anchor?: string; visibility?: string };
   /** THE SALE PROMPT (additive — a pre-dial save reads ON). */
   confirmMemorySale?: boolean;
 }
@@ -474,7 +475,7 @@ export const makeSettings = (): Settings => ({
   pickupFeedSec: PICKUP_FEED_CFG.defaultSec,
   layout: { ...DEFAULT_UI_LAYOUT, seats: {}, locked: {} },
   menuBar: { anchor: MENU_CFG.anchorDefault, dock: MENU_CFG.dockDefault },
-  portalButton: { anchor: PORTAL_BUTTON_CFG.anchorDefault },
+  portalButton: { anchor: PORTAL_BUTTON_CFG.anchorDefault, visibility: PORTAL_BUTTON_CFG.visibilityDefault },
   confirmMemorySale: true,
 });
 
@@ -653,6 +654,7 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     // a pre-dial save) falls back to the registry default.
     portalButton: {
       anchor: PORTAL_ANCHORS.some(a => a.id === s.portalButton?.anchor) ? s.portalButton!.anchor as PortalAnchorId : PORTAL_BUTTON_CFG.anchorDefault,
+      visibility: PORTAL_VISIBILITY.some(v => v.id === s.portalButton?.visibility) ? s.portalButton!.visibility as PortalVisibilityId : PORTAL_BUTTON_CFG.visibilityDefault,
     },
   };
 }

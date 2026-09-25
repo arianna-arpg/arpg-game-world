@@ -11,11 +11,23 @@ dedicated button).
 placement offsets, appearance, the HUD button's size and corner offsets, and
 return-consumption policy. The button's SEAT is the player's
 (`Settings.portalButton.anchor` over `ui/portalConfig.ts` `PORTAL_ANCHORS`,
-Options → Interface → Menu Bar → Town Portal Button; 2026-09-11): `menu`, the
-default, stacks it over the Menu button's live rect every sync — drawn ==
-seated, so a dragged or re-anchored Menu carries it — and `right` is the
-classic corner above the mana orb; with no bar drawn the button falls back to
-the corner. A new seat is one registry row.
+Options → Interface → Menu Bar → Town Portal Seat): `beside`, the default,
+joins the Menu's measured control row to its right (left at the right-corner
+anchor). The tray opens above both buttons, and page icons follow them, so
+neither overlaps the portal. The button shares the Menu's scale and dragged
+position. `menu` retains the older Above the Menu seat; `right` retains the
+classic corner. Independent anchors use screen pixels and fall back to the
+corner without a drawn Menu. Saved seat choices remain unchanged.
+
+`Settings.portalButton.visibility`, configured by `PORTAL_VISIBILITY`, defaults
+to `always`: keep the HUD button visible during a run, even with inventory or
+menus open. `menusClosed` retains the prior `UI.uiBlocking()` behavior; `hidden`
+hides the HUD button while leaving its keybind and menu action available.
+All modes hide it outside a run. Availability still reads
+`World.townPortalRefusal()` and shows a disabled button with the refusal reason.
+Visibility is independent of the cast/travel rules. Missing or invalid saved
+visibility values use the configured default. UI verification:
+`balance/portal-button-ui.cjs` after a build, plus `probe_menubar.ts` for settings.
 `World.townPortalDestination` is a saved per-run override and must resolve to a
 safe zone. The shipped destination is Lastlight. A `ZoneDef.townPortals: false`
 seals an authored zone; streamed boundless zones and off-graph passages without

@@ -128,7 +128,7 @@ import {
 // is built) folded by engine/menu.ts; menuVerbs() below is the host table.
 import { MenuBar, type CssRect, type MenuVerb } from './menubar';
 import { MENU_ANCHORS } from './menuConfig';
-import { PORTAL_ANCHORS } from './portalConfig';
+import { PORTAL_ANCHORS, PORTAL_VISIBILITY } from './portalConfig';
 import '../data/menu';
 // THE RUNESCRIPT (data/runescript.ts): the shrouded class cards are written
 // in the vestiges' runes; THE OPENING CHOOSER (meta/classkit.ts): the class
@@ -915,7 +915,8 @@ export class UI {
   ) {
     configureTooltipDetail(() => this.getSettings().tooltipDetail);
     installTooltipHints();
-    this.portalButton = new PortalButton(this.getWorld, this.getSettings, () => this.menuBar.buttonRect());
+    this.portalButton = new PortalButton(this.getWorld, this.getSettings,
+      () => this.menuBar.buttonRect(), () => this.menuBar.controls);
     window.addEventListener('pointermove', ev => { this.itemHoldPointer = { x: ev.clientX, y: ev.clientY }; });
     // Tooltips: bound ONCE on the stable panel containers (delegation survives
     // their innerHTML re-renders); content is read from live data each hover.
@@ -1545,8 +1546,9 @@ export class UI {
   }
   /** Once per frame (main.ts): the bar's visibility, seat and cadenced fold. */
   menuBarSync(dt: number, visible: boolean): void {
+    this.portalButton.sync(visible, this.uiBlocking());
     this.menuBar.sync(dt, visible);
-    this.portalButton.sync(visible && !this.uiBlocking());
+    this.portalButton.seat();
   }
   /** Is THE FOLIO's Tab walk armed (the hero's book of two+ leaves stands)?
    *  The menu's default bind is Tab; the walk wins while it is armed. */
@@ -10560,8 +10562,12 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         <button id="opt-menudock" title="ON: every unlocked page stands as an icon tile beside the Menu button, greyed where it cannot be used from here. OFF: the one button, with the pages in its tray.">${s.menuBar.dock ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
-        <span>Town Portal Button</span>
+        <span>Town Portal Seat</span>
         <button id="opt-portalanchor" title="Where the Town Portal button stands. ${PORTAL_ANCHORS.map(a => `${a.label}: ${a.blurb}`).join(' ')}">${esc(PORTAL_ANCHORS.find(a => a.id === s.portalButton.anchor)?.label ?? s.portalButton.anchor)}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Town Portal Visibility</span>
+        <button id="opt-portalvisibility" title="${esc(PORTAL_VISIBILITY.map(v => `${v.label}: ${v.blurb}`).join(' '))}">${esc(PORTAL_VISIBILITY.find(v => v.id === s.portalButton.visibility)?.label ?? s.portalButton.visibility)}</button>
       </div>
       <h1>Save Data</h1>
       <div class="acct-head">Your progress as one portable file: account, settings, and every character.
@@ -10904,6 +10910,13 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       const st = this.getSettings();
       const i = PORTAL_ANCHORS.findIndex(a => a.id === st.portalButton.anchor);
       st.portalButton.anchor = PORTAL_ANCHORS[(i + 1) % PORTAL_ANCHORS.length].id;
+      this.saveSettings();
+      this.renderOptions(root, onBack);
+    });
+    root.querySelector<HTMLElement>('#opt-portalvisibility')?.addEventListener('click', () => {
+      const st = this.getSettings();
+      const i = PORTAL_VISIBILITY.findIndex(v => v.id === st.portalButton.visibility);
+      st.portalButton.visibility = PORTAL_VISIBILITY[(i + 1) % PORTAL_VISIBILITY.length].id;
       this.saveSettings();
       this.renderOptions(root, onBack);
     });

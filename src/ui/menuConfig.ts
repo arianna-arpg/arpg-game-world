@@ -32,7 +32,7 @@ export const MENU_ANCHORS: ReadonlyArray<{ id: MenuAnchorId; label: string; blur
 
 export const MENU_CFG = {
   /** Default seat. */
-  anchorDefault: 'left' as MenuAnchorId,
+  anchorDefault: 'bar' as MenuAnchorId,
   /** Default for THE DOCK (every non-hidden page as an icon tile beside the
    *  button, Diablo-style). OFF = the single glyph button alone. */
   dockDefault: false,

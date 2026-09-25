@@ -76,6 +76,8 @@ export function installMenuBarStyles(): void {
       pointer-events: auto; user-select: none; }
     .menu-bar[data-anchor="left"] { left: ${inset}px; bottom: ${inset}px; }
     .menu-bar[data-anchor="right"] { right: ${inset}px; bottom: ${inset}px; flex-direction: row-reverse; }
+    .menu-bar[data-anchor="bar"] { right: ${inset}px; bottom: ${inset}px; }
+    .menu-controls { display: contents; }
     .menu-bar.couch[data-anchor="left"], .menu-bar.couch[data-anchor="right"] { bottom: ${MENU_CFG.couchLiftPx}px; }
     .menu-bar > h2.menu-grip { display: none; margin: 0; padding: 0; width: 12px; height: ${T}px; border: 1px solid var(--panel-border);
       border-radius: 6px; background: repeating-linear-gradient(0deg, transparent 0 3px, var(--panel-border) 3px 5px);
@@ -135,6 +137,8 @@ function foldSignature(fold: MenuFold, binds: (v: MenuEntryView) => string, dock
 
 export class MenuBar {
   readonly root: HTMLElement;
+  /** Adjacent HUD controls participate in sizing, scaling and dragging. */
+  readonly controls: HTMLElement;
   private readonly btn: HTMLButtonElement;
   private readonly dock: HTMLElement;
   private readonly tray: HTMLElement;
@@ -166,6 +170,9 @@ export class MenuBar {
     this.btn.setAttribute('aria-label', 'Menu');
     this.btn.innerHTML = `${iconSvg('menu')}<span class="menu-badge hidden"></span>`;
     root.appendChild(this.btn);
+    this.controls = document.createElement('div');
+    this.controls.className = 'menu-controls';
+    root.appendChild(this.controls);
     this.dock = document.createElement('div');
     this.dock.className = 'menu-dock hidden';
     root.appendChild(this.dock);
@@ -280,6 +287,7 @@ export class MenuBar {
       this.refold();
       this.paint();
     }
+    this.seatTray();
   }
 
   // --- the fold ----------------------------------------------------------------
@@ -418,6 +426,17 @@ export class MenuBar {
 
   // --- seating -----------------------------------------------------------------
 
+  /** A bar beside the mana orb can be closer to the edge than its tray is
+   *  wide. Keep the tray readable without moving its control row. */
+  private seatTray(): void {
+    if (!this.trayOpen) return;
+    const root = this.root.getBoundingClientRect(), tray = this.tray.getBoundingClientRect();
+    const wanted = this.root.dataset.anchor === 'right' ? root.right - tray.width : root.left;
+    const left = Math.max(MENU_CFG.insetPx, Math.min(wanted, window.innerWidth - tray.width - MENU_CFG.insetPx));
+    this.tray.style.left = `${(left - root.left) / (uiScaleNow() || 1)}px`;
+    this.tray.style.right = 'auto';
+  }
+
   private clearInlineSeat(): void {
     const st = this.root.style;
     st.left = ''; st.top = ''; st.right = ''; st.bottom = ''; st.transform = '';
@@ -429,7 +448,7 @@ export class MenuBar {
   private seatByBar(): void {
     if (panelMoved(this.root)) return;
     const c = this.host.hudCluster();
-    if (!c) return;
+    if (!c) { this.clearInlineSeat(); return; }
     const z = uiScaleNow() || 1;
     const own = this.root.getBoundingClientRect();
     // THE KEEP (ui/panelmove.ts's law): the whole bar stays on screen — a

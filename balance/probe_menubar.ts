@@ -52,7 +52,7 @@ import {
 import { MENU_ICONS } from '../src/ui/icons';
 import { MENU_ANCHORS, MENU_CFG } from '../src/ui/menuConfig';
 import { ESCAPE_CFG, ESCAPE_MODES, escapeModeOf } from '../src/ui/escapeConfig';
-import { PORTAL_ANCHORS, PORTAL_BUTTON_CFG } from '../src/ui/portalConfig';
+import { PORTAL_ANCHORS, PORTAL_VISIBILITY, PORTAL_BUTTON_CFG, portalButtonVisible } from '../src/ui/portalConfig';
 import {
   ACTION_IDS, ACTION_LABELS, DEFAULT_KEYBINDS, DEFAULT_PAD_BINDS, PAD_ACTION_IDS,
   deserializeSettings, makeSettings, serializeSettings,
@@ -275,6 +275,28 @@ console.log('D. SETTINGS');
     deserializeSettings(serializeSettings(p))?.portalButton.anchor === 'right'
     && deserializeSettings(pBad)?.portalButton.anchor === PORTAL_BUTTON_CFG.anchorDefault
     && deserializeSettings(pOld)?.portalButton.anchor === PORTAL_BUTTON_CFG.anchorDefault);
+  check('D12 fresh UI contains the Menu and portal beside the skill bar, with the portal always shown',
+    makeSettings().menuBar.anchor === 'bar' && makeSettings().portalButton.anchor === 'beside'
+    && makeSettings().portalButton.visibility === 'always');
+  check('D13 each portal visibility choice round-trips with every seat',
+    PORTAL_VISIBILITY.every(v => PORTAL_ANCHORS.every(a => {
+      const choice = makeSettings(); choice.portalButton = { anchor: a.id, visibility: v.id };
+      const restored = deserializeSettings(serializeSettings(choice));
+      return restored?.portalButton.anchor === a.id && restored.portalButton.visibility === v.id;
+    })));
+  const legacyPortal = serializeSettings(p);
+  legacyPortal.portalButton = { anchor: 'menu' };
+  const invalidPortal = serializeSettings(p);
+  invalidPortal.portalButton = { anchor: 'beside', visibility: 'sometimes' };
+  check('D14 saved seats survive; missing and invalid visibility adopt the default',
+    deserializeSettings(legacyPortal)?.portalButton.anchor === 'menu'
+    && deserializeSettings(legacyPortal)?.portalButton.visibility === PORTAL_BUTTON_CFG.visibilityDefault
+    && deserializeSettings(invalidPortal)?.portalButton.visibility === PORTAL_BUTTON_CFG.visibilityDefault);
+  check('D15 visibility separates a running game from open panels and explicit hiding',
+    portalButtonVisible('always', true, true) && portalButtonVisible('always', true, false)
+    && !portalButtonVisible('menusClosed', true, true) && portalButtonVisible('menusClosed', true, false)
+    && !portalButtonVisible('hidden', true, false) && !portalButtonVisible('hidden', true, true)
+    && PORTAL_VISIBILITY.every(v => !portalButtonVisible(v.id, false, false)));
 }
 
 // --- E. THE CENSUS ---------------------------------------------------------------
