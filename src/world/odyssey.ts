@@ -2,6 +2,8 @@ import { Rng } from '../core/rng';
 import { tutorialFactionOf } from '../data/commanders';
 import { ODYSSEY_CFG, ODYSSEY_FACTIONS, ODYSSEY_TUTORIAL_RELEASE } from '../data/odyssey';
 import { restoreRisingClocks, type OdysseyRisingClocks } from './odysseyRisings';
+import { odysseyPressureTier } from './odysseyPressure';
+import { ODYSSEY_RISINGS } from '../data/odysseyRisings';
 
 export interface OdysseyBody {
   id: string; x: number; y: number; life: number;
@@ -15,11 +17,11 @@ export interface OdysseyState {
   risings?: OdysseyRisingClocks;
   version: 1; roster: string[]; defeated: string[]; prepared: string[];
   leads: string[]; kills: Record<string, number>; surveyDone: boolean;
-  nextScoutAt: number; scout?: OdysseyScout;
+  nextScoutAt: number; scoutInterval?: number; scout?: OdysseyScout;
   report?: { zoneId: string; arrivesAt: number; remaining: string[]; bodies?: OdysseyBody[]; x: number; y: number };
   siege?: { phase: 'warning' | 'active' | 'raided'; deadline: number; wave: number;
     waves: number; remaining: string[]; nextWaveAt: number; level: number; bodies?: OdysseyBody[] };
-  nextSiegeAt: number; defenses: number; raids: number; initialized: boolean;
+  nextSiegeAt: number; siegeInterval?: number; defenses: number; raids: number; initialized: boolean;
 }
 
 export function newOdyssey(seed: number, ledger: Record<string, number>): OdysseyState {
@@ -47,6 +49,8 @@ export function restoreOdyssey(raw: OdysseyState | undefined, seed: number, ledg
   s.defeated = subset(s.defeated); s.prepared = subset(s.prepared); s.leads = subset(s.leads);
   s.kills = Object.fromEntries(Object.entries(s.kills ?? {}).filter(([id, n]) => s.roster.includes(id) && Number.isFinite(n) && n >= 0));
   for (const k of ['nextScoutAt', 'nextSiegeAt', 'defenses', 'raids'] as const) if (!Number.isFinite(s[k]) || s[k] < 0) s[k] = 0;
+  for (const k of ['scoutInterval', 'siegeInterval'] as const)
+    if (!Number.isFinite(s[k]) || s[k]! <= 0) delete s[k];
   s.initialized = s.initialized === true; s.surveyDone = s.surveyDone === true;
   if (s.scout && (s.scout.id !== 'odyssey_messenger'
     || !Number.isFinite(s.scout.x) || !Number.isFinite(s.scout.y) || !Number.isFinite(s.scout.life)
@@ -71,8 +75,7 @@ export function restoreOdyssey(raw: OdysseyState | undefined, seed: number, ledg
     s.siege.wave = Math.max(0, Math.min(s.siege.waves, Math.floor(s.siege.wave)));
     s.siege.level = Math.max(1, Math.min(100, s.siege.level));
   }
-  if (!odysseySurvives(s, 'bandit')) { delete s.scout; delete s.report; }
-  if (!odysseySurvives(s, 'goblin')) delete s.siege;
+  clearDormantOdysseyPressure(s);
   return s;
 }
 
@@ -80,11 +83,23 @@ export const odysseyAct = (s: OdysseyState): number => s.defeated.length;
 export const odysseySurvives = (s: OdysseyState, id: string): boolean => s.roster.includes(id) && !s.defeated.includes(id);
 export const odysseyReadiness = (s: OdysseyState): number => ODYSSEY_CFG.readiness[Math.min(3, odysseyAct(s))];
 
+/** Old deadlines cannot bank pressure before its unlock or after elimination.
+ * Existing ordinary night-risen enemies remain owned by zone memory. */
+export function clearDormantOdysseyPressure(s: OdysseyState): void {
+  if (odysseyPressureTier(s, ODYSSEY_CFG.bandit) === null) {
+    delete s.scout; delete s.report; delete s.scoutInterval; s.nextScoutAt = 0;
+  }
+  if (odysseyPressureTier(s, ODYSSEY_CFG.goblin) === null) {
+    delete s.siege; delete s.siegeInterval; s.nextSiegeAt = 0;
+  }
+  for (const def of ODYSSEY_RISINGS)
+    if (s.risings && odysseyPressureTier(s, def) === null) delete s.risings[def.id];
+}
+
 /** A world milestone receipt. The caller pays only when this returns true. */
 export function defeatOdysseyLeader(s: OdysseyState, id: string): boolean {
   if (!odysseySurvives(s, id)) return false;
   s.defeated.push(id);
-  if (id === 'bandit') { delete s.scout; delete s.report; }
-  if (id === 'goblin') delete s.siege;
+  clearDormantOdysseyPressure(s);
   return true;
 }

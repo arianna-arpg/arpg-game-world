@@ -31,14 +31,22 @@ app.whenReady().then(async () => {
       w.odyssey.restore({version:1,roster:['goblin','bandit','undead','beastkin'],defeated:[],
         prepared:[],leads:[],kills:{},surveyDone:false,nextScoutAt:0,nextSiegeAt:0,
         defenses:0,raids:0,initialized:true});
-      w.texts=[]; w.notices=[]; w.odyssey.update(); w.odyssey.state.risings.undead_nights.nextAt=w.time; w.odyssey.update();
+      w.texts=[]; w.notices=[]; w.odyssey.update();
+      __game.step(600);
+      const dormant = { cues:w.flashes.filter(f=>f.fx==='earth_rising' && f.life>0).length,
+        bodies:w.actors.filter(a=>a.tag==='odyssey_rising:undead_nights').length,
+        clock:!!w.odyssey.state.risings.undead_nights };
+      w.odyssey.state.defeated.push('beastkin'); w.odyssey.update();
+      const grace = w.odyssey.state.risings.undead_nights.nextAt - w.time;
+      w.odyssey.state.risings.undead_nights.nextAt=w.time; w.odyssey.update();
       __game.step(36);
-      return {fatal:__game.crash().fatal,pressure:w.odyssey.pressureText(),
+      return {dormant,grace,fatal:__game.crash().fatal,pressure:w.odyssey.pressureText(),
         cues:w.flashes.filter(f=>f.fx==='earth_rising' && f.life>0).map(f=>({pos:f.pos,life:f.life,maxLife:f.maxLife})),
         texts:w.texts.map(t=>t.text),
         bodies:w.actors.filter(a=>a.tag==='odyssey_rising:undead_nights').length,
         image:document.getElementById('game').toDataURL('image/png')};
     })()`);
+    assert.deepEqual(warned.dormant,{cues:0,bodies:0,clock:false}); assert.equal(warned.grace,8);
     assert.equal(warned.fatal, null); assert.equal(warned.bodies, 0); assert.equal(warned.pressure,null); assert.equal(warned.cues.length,2); assert.deepEqual(warned.texts,[]);
     const {image:warningImage,...warningFacts}=warned; log(warningFacts);
     fs.writeFileSync(path.join(dir,'odyssey-night-early.png'),Buffer.from(warningImage.split(',')[1],'base64'));
@@ -67,6 +75,6 @@ app.whenReady().then(async () => {
     assert(risen.bodies.every(a=>a.faction==='undead'));
     const {image:risenImage,...risenFacts}=risen; log(risenFacts);
     fs.writeFileSync(path.join(dir,'odyssey-night-risen.png'),Buffer.from(risenImage.split(',')[1],'base64'));
-    log('PASS: wordless early/middle/late emergence and two attributed Undead births');
+    log('PASS: dormant opening, first-elimination grace, wordless early/middle/late emergence and two attributed Undead births');
   } finally { clearTimeout(timeout); win.destroy(); server.server.close(); app.quit(); }
 }).catch(error => { log(error.stack ?? String(error)); app.exit(1); });

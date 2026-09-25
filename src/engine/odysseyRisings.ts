@@ -10,8 +10,9 @@ import { issueCommand } from './ai';
 import { MONSTERS } from '../data/monsters';
 import { skyOf } from '../data/zones';
 import { inPhases } from '../world/daynight';
-import { odysseyAct, odysseySurvives } from '../world/odyssey';
-import { ODYSSEY_RISINGS, risingInterval, risingTag, type OdysseyRisingDef } from '../data/odysseyRisings';
+import { odysseyPressureTier, retimeOdysseyPressure } from '../world/odysseyPressure';
+import { odysseyPressureInterval } from '../data/odysseyPressure';
+import { ODYSSEY_RISINGS, risingTag, type OdysseyRisingDef } from '../data/odysseyRisings';
 
 interface RisingWarning {
   source: Doodad; origin: Vec2; zoneId: string; tier: number; at: number; goal: Vec2;
@@ -45,9 +46,6 @@ export class OdysseyRisings {
     return w.zone.objective.kind !== 'safe' && !w.zone.special && !w.zone.boundless
       && !w.zone.id.startsWith('quest_') && !w.inCave && skyOf(w.zone) === 'open';
   }
-  private active(s: OdysseyState, def: OdysseyRisingDef): boolean {
-    return odysseySurvives(s, def.faction) && odysseyAct(s) >= def.startsAfter;
-  }
   private count(def: OdysseyRisingDef): number {
     return this.w.actors.filter(a => !a.dead && a.tag === risingTag(def.id)).length;
   }
@@ -56,11 +54,12 @@ export class OdysseyRisings {
     const entering = this.zoneId !== w.zone.id;
     this.zoneId = w.zone.id;
     for (const def of ODYSSEY_RISINGS) {
-      if (!this.active(s, def)) { this.cancel(def.id, def); delete clocks[def.id]; continue; }
-      const interval = risingInterval(def, odysseyAct(s), s.prepared.includes(def.faction));
+      const tier = odysseyPressureTier(s, def);
+      if (tier === null) { this.cancel(def.id, def); delete clocks[def.id]; continue; }
+      const interval = odysseyPressureInterval(def, tier, s.prepared.includes(def.faction));
       const clock = clocks[def.id] ??= { nextAt: w.time + def.entryGraceSec, interval };
       if (clock.interval !== interval) {
-        clock.nextAt = w.time + Math.max(0, clock.nextAt - w.time) * interval / clock.interval;
+        clock.nextAt = retimeOdysseyPressure(clock.nextAt, clock.interval, interval, w.time);
         clock.interval = interval;
       }
       if (entering || !this.field() || !inPhases(w.time, def.phases)) {

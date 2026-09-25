@@ -20,9 +20,23 @@ are undecided. Endgame follows victory.
 Each campaign has an operation in the world, discoverable leads, an approachable
 target, optional useful preparation, and consequences. Exploration and local
 work both provide routes. Campaigns never require the tutorial commander.
-Preparations persist when switching campaigns and crossing acts. Surviving
-factions change the world through their own mechanics, primarily at act changes;
+Preparations persist when switching campaigns and crossing acts. Every surviving
+faction's escalation tier equals the number of factions eliminated in this world.
+Tier zero is dormant: no Odyssey pressure starts or accumulates a hidden timer.
+Each elimination raises all survivors together; an eliminated or unselected
+faction produces no new Odyssey pressure. Ordinary inhabitants and day/night
+ecology still exist during the dormant opening. Surviving factions change the
+world through their own mechanics at authored tier thresholds;
 ambient inhabitants do not receive retroactive global stat increases.
+
+Every Odyssey faction is intended to have its own distinctive world mechanics
+and activity, including Gnolls. Each should feel like a living faction within
+the shared world, with attributable, configurable behaviors that accumulate and
+escalate through the same survival tiers. Gnolls were eliminated first in the
+illustrative sequence solely to demonstrate escalation; players may leave them
+alive through any tier, and their eventual mechanics must support that path.
+The specific Gnoll mechanics and those of other unfinished factions remain to
+be designed and implemented.
 
 Goblin pressure must interrupt expeditions: warn of attacks on Lastlight and
 give the player a reason to return and defend it. Bandit messengers must see the
@@ -59,7 +73,7 @@ player is elsewhere. Hunters march to the last sighting through the command and
 pathing systems, then acquire targets normally. Destination entrenchment is a future alternative, not a
 second punishment silently applied to the same report.
 
-Goblins surviving two victories periodically threaten Lastlight. A warning leads
+Goblins surviving one victory periodically threaten Lastlight. A warning leads
 to a timed defense of real waves at town's approaches. Unanswered or unfinished
 assaults raid supplies: town trade closes until the remaining raiders are defeated.
 Town travel remains available so expeditions can be interrupted and the recovery
@@ -82,17 +96,58 @@ signal. Four fragments unlock an actionable survey preparation, not victory.
 Faction-specific interpretations foreshadow the shared problem without deciding
 its ultimate explanation. No final boss or endgame completion is claimed here.
 
+## Shared escalation contract
+
+`data/odysseyPressure.ts` defines the shared mechanic contract: stable identity,
+owning faction, `startsAfter` unlock tier, tier-indexed cadence and preparation
+multiplier. `world/odysseyPressure.ts` derives the faction tier from world-owned
+leader receipts and supplies the common gate and cooldown adjustment. No extra
+saved tier can drift from those receipts. `startsAfter` can delay an additional
+mechanic to tier two or three; it cannot enable pressure at tier zero. Once
+unlocked, earlier mechanics remain enabled while later ones join them. Cadence
+and count tables retain their last authored value if a larger roster permits
+additional tiers.
+
+Current tuning (before optional operation relief):
+
+| Eliminated factions | Undead night warnings | Bandit messenger interval / hunters per escaped report | Goblin siege interval / waves |
+| --- | --- | --- | --- |
+| 0 | Dormant | Dormant | Dormant |
+| 1 | 32 seconds | 180 seconds / 4 | 900 seconds / 2 |
+| 2 | 20 seconds | 120 seconds / 6 | 720 seconds / 3 |
+| 3 | 10 seconds | 90 seconds / 8 | 480 seconds / 4 |
+
+Only selected surviving factions use these rows. Local eligibility still applies
+(night/exposed ground, Bandit territory and a reachable escape, and so on).
+Unlocking begins a fresh cooldown or entry grace; time spent dormant cannot
+produce an immediate event. Preparation applies to the first cooldown as well as
+later ones. A tier or preparation change rescales only the remaining cooldown,
+preserving its elapsed fraction. An already announced siege or committed rising
+keeps its warning and encounter, so escalation cannot erase a response window.
+
+Optional saved interval metadata preserves active cooldown progress on reload.
+Older active saves keep their existing deadlines; dormant or eliminated rows
+discard obsolete clocks and campaign-owned pending pressure. Previously risen
+ordinary enemies remain in zone memory. No save reset is required.
+
+This pass establishes the shared progression for existing pressures. Distinct
+mechanics for every campaign faction, including Gnolls, are part of the long-term
+direction. Their current absence records unfinished content. Corpse resurrection
+and roaming Bandit exiles are illustrative possibilities requiring further design.
+The runtime activates only mechanics that have actually been authored.
+
 ## Undead nights and scenery risings
 
-When Undead are among the selected leaders and Nhal survives, open expedition
-ground can raise small groups from nearby tombstones, bone piles/cairns, burial
+When Undead are among the selected leaders, Nhal survives and at least one other
+faction has been eliminated, open expedition ground can raise small groups from
+nearby tombstones, bone piles/cairns, burial
 urns, dead trees, stumps and rubble at night. The existing world day/night clock
 owns this gate; darkness in a sheltered cave does not count as night exposure.
 Towns, sheltered ground, side caves, special/boundless zones, quest grounds and
 scripted scenes are excluded. No terrain is generated for this mechanic.
 
 The first opportunity has an eight-second entry/nightfall grace. Subsequent
-warnings are 32/24/16/10 seconds apart after 0/1/2/3 leader victories. A surviving
+warnings are 32/20/10 seconds apart after 1/2/3 leader victories. A surviving
 Undead campaign therefore becomes more active as other leaders fall. Silencing
 the mustering crypt doubles those intervals, including the remaining portion of
 an existing cooldown. Defeating Nhal stops new risings. Existing bodies remain
@@ -120,7 +175,7 @@ old saves need no reset. Travel, reload, player incapacitation and scenes cancel
 unfinished warnings and restore an entry grace. Offline time produces no births.
 
 `src/data/odysseyRisings.ts` owns the open `ODYSSEY_RISINGS` rows: faction gate,
-phase list, onset act, intervals, preparation multiplier, scenery, roster, cap,
+phase list, unlock tier, intervals, preparation multiplier, scenery, roster, cap,
 placement and presentation. `src/engine/odysseyRisings.ts` conducts any such row;
 adding another scenery-born faction pressure needs data rather than another
 faction branch. `src/world/odysseyRisings.ts` validates its saved clocks.
@@ -143,7 +198,7 @@ the actual crypt/leader objective paths. After a build, run
 `npx electron balance/odyssey-nights-ui.cjs`) for isolated hidden real-client
 early/middle/late visual and birth assertions and screenshots in `balance/reports/`.
 These checks establish mechanics;
-the 32/24/16/10 cadence remains initial tuning for human playthroughs.
+the 32/20/10 cadence remains initial tuning for human playthroughs.
 
 ## Verification and extension
 
@@ -159,8 +214,8 @@ not count as one of the four leaders. Leader readiness advances through 23, 45,
 
 To encounter Bandit pressure, Bandits must be selected and survive at least one
 leader victory. Explore their territory and watch for the messenger warning.
-To encounter Goblin sieges, Goblins must be selected and survive two victories.
-The first siege then takes about twelve minutes of active world time to muster,
+To encounter Goblin sieges, Goblins must be selected and survive one victory.
+The first siege then takes about fifteen minutes of active world time to muster,
 followed by a ninety-second warning and a four-minute defense window. Completing
 the Goblin operation weakens attacks; defeating their leader ends them.
 
@@ -172,8 +227,10 @@ operations with feedback. These conditions explain the pressure being tested.
 
 ### Automated coverage
 
-The Odyssey probe exercises deterministic frozen selection, account release,
-run-only acts, real objective payouts, banked points, preparation persistence,
+The Odyssey probe exercises the shared dormant/1/2/3/eliminated law across every
+candidate faction, real Gnoll/Goblin/Bandit/Undead objective progression, first-tier
+sieges, cooldown adjustment, stale dormant-save cleanup, deterministic frozen
+selection, account release, run-only acts, real objective payouts, banked points, preparation persistence,
 save/reload, scout sight/escape/interception, report response, and town defense.
 Use `npm run check`, the smoke simulation, generation QA, and boot smoke alongside
 that probe. Shared world integration uses narrow Odyssey hooks; definitions,
@@ -182,10 +239,17 @@ the prototype operations and add other faction pressures through those seams.
 
 The first pass follows the existing host-owned quest reward model. Networked
 co-op journal/point distribution has not been expanded or playtested here. The
-prototype leader kits and encounter levels need human balance playthroughs;
-the automated kill probes establish milestone correctness, not fight balance.
+prototype leader kits, pressure intervals and encounter levels need human balance
+playthroughs; the automated kill probes establish milestone correctness, not fight balance.
 
-Validated in this implementation: `npm run check`; `npm run probe -- odyssey`;
+The dormant-escalation pass was verified with `npm run check`, both Odyssey
+probes (26 passing checks, retries disabled), 25 smoke simulation episodes, the
+production build and the hidden Odyssey nights client harness. The client
+confirmed zero dormant cues/bodies, a fresh first-elimination grace, and the
+existing wordless warning and emergence. Electron required an unsandboxed run
+to start its graphics process; it used isolated test saves and a hidden window.
+
+Validated in the original implementation: `npm run check`; `npm run probe -- odyssey`;
 the tutorial (`mu`, including Mu offers and murmuration) and persistence probes;
 25 smoke simulation episodes; generation QA (864 cases × 3 seeds, zero failures,
 eight warnings); production build; and desktop game smoke with an isolated profile.

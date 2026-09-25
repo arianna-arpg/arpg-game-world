@@ -10,7 +10,9 @@ import { ORACLE_RESCUED } from '../data/oracle';
 import { QUESTS } from '../quests/defs';
 import { revengeFactionOf, revengeCullId, revengeCommanderId, oracleCommanderId } from '../quests/revenge';
 import { ODYSSEY_CFG as C, ODYSSEY_SURVEY, ODYSSEY_TUTORIAL_RELEASE, odysseyFaction, odysseyQuestId } from '../data/odyssey';
-import { newOdyssey, restoreOdyssey, defeatOdysseyLeader, odysseyAct, odysseyReadiness, odysseySurvives,
+import { odysseyPressureInterval, odysseyTierValue } from '../data/odysseyPressure';
+import { odysseyPressureTier, retimeOdysseyPressure } from '../world/odysseyPressure';
+import { newOdyssey, restoreOdyssey, defeatOdysseyLeader, clearDormantOdysseyPressure, odysseyAct, odysseyReadiness, odysseySurvives,
   type OdysseyState, type OdysseyBody } from '../world/odyssey';
 
 /** Host-owned campaign state; bodies use ordinary combat, collision and flee AI.
@@ -90,6 +92,7 @@ export class OdysseyRuntime {
     for (const id of s.roster) {
       if (w.zone.id === `quest_${odysseyQuestId(id, 'operation')}`) this.reveal(id);
     }
+    clearDormantOdysseyPressure(s);
     this.updateScouts(); this.updateSiege(); this.risings.update(s); this.capture();
   }
 
@@ -149,7 +152,7 @@ export class OdysseyRuntime {
       }
       this.tell(`${odysseyFaction(id).leaderName} falls. +${C.pointsPerLeader} Vocation points${w.meta.vocations.length ? '' : ' banked for a future Vocation'}, +${C.passivePointsPerLeader} passive point, and ${C.gemsPerLeader} Memories.`);
       this.tell(odysseyFaction(id).clue);
-      if (odysseySurvives(s, 'bandit')) this.expandBanditTurf();
+      if (odysseyPressureTier(s, C.bandit) !== null) this.expandBanditTurf();
       this.reconcileGrounds();
       if (odysseyAct(s) === 4) {
         w.enrollOdysseyQuest(QUESTS[ODYSSEY_SURVEY], true);
@@ -208,9 +211,11 @@ export class OdysseyRuntime {
       .sort((a1, b) => dist(a.pos, a1.pos) - dist(a.pos, b.pos))[0];
   }
   private updateScouts(): void {
-    const w = this.w, s = this.state!, c = C.bandit, act = odysseyAct(s);
-    if (!odysseySurvives(s, 'bandit') || act < c.startsAfter) return;
-    if (!s.nextScoutAt) s.nextScoutAt = w.time + c.everySec[act];
+    const w = this.w, s = this.state!, c = C.bandit, tier = odysseyPressureTier(s, c);
+    if (tier === null) { s.nextScoutAt = 0; delete s.scoutInterval; return; }
+    const interval = odysseyPressureInterval(c, tier, s.prepared.includes(c.faction));
+    s.nextScoutAt = retimeOdysseyPressure(s.nextScoutAt, s.scoutInterval, interval, w.time);
+    s.scoutInterval = interval;
     const field = w.zone.objective.kind !== 'safe' && !w.zone.special && !w.zone.id.startsWith('quest_');
     const territory = w.sim.faction.owner(w.zone.id).faction === 'bandit'
       || w.zone.packs?.table.some(e => MONSTERS[e.id]?.faction === 'bandit')
@@ -222,7 +227,7 @@ export class OdysseyRuntime {
           w.player.pos.y + Math.sin(angleTo(w.player.pos, exit.pos)) * c.spawnDistance), 14);
         s.scout = { id: 'odyssey_messenger', zoneId: w.zone.id, x: at.x, y: at.y, life: 1, phase: 'watch' };
         this.scoutActor = undefined;
-        s.nextScoutAt = w.time + c.everySec[act] * (s.prepared.includes('bandit') ? c.preparedInterval : 1);
+        s.nextScoutAt = w.time + interval;
       }
     }
     const scout = s.scout;
@@ -263,10 +268,12 @@ export class OdysseyRuntime {
     if (a.tag !== 'odyssey_scout') return false;
     const s = this.state, scout = s?.scout;
     if (!s || !scout || scout.phase !== 'flee' || a.dead || scout.zoneId !== this.w.zone.id) return true;
+    const tier = odysseyPressureTier(s, C.bandit);
+    if (tier === null) return true;
     const exit = this.w.exits.find(e => e.to === scout.exitTo && e.to !== '?'
       && dist(e.pos, vec(scout.exitX!, scout.exitY!)) < 1);
     if (!exit || dist(a.pos, exit.pos) >= 70) return true;
-    const count = Math.max(1, C.bandit.hunters[odysseyAct(s)] - (s.prepared.includes('bandit') ? 2 : 0));
+    const count = Math.max(1, odysseyTierValue(C.bandit.hunters, tier) - (s.prepared.includes('bandit') ? 2 : 0));
     s.report = { zoneId: scout.zoneId, arrivesAt: this.w.time + C.bandit.responseDelaySec,
       x: scout.seenX ?? this.w.player.pos.x, y: scout.seenY ?? this.w.player.pos.y,
       remaining: Array.from({ length: count }, (_, i) => `odyssey_hunt:${i}`) };
@@ -277,13 +284,15 @@ export class OdysseyRuntime {
   }
 
   private updateSiege(): void {
-    const w = this.w, s = this.state!, c = C.goblin, act = odysseyAct(s);
-    if (!odysseySurvives(s, 'goblin') || act < c.startsAfter) return;
-    if (!s.nextSiegeAt) s.nextSiegeAt = w.time + c.everySec[act];
+    const w = this.w, s = this.state!, c = C.goblin, tier = odysseyPressureTier(s, c);
+    if (tier === null) { s.nextSiegeAt = 0; delete s.siegeInterval; return; }
+    const interval = odysseyPressureInterval(c, tier, s.prepared.includes(c.faction));
+    s.nextSiegeAt = retimeOdysseyPressure(s.nextSiegeAt, s.siegeInterval, interval, w.time);
+    s.siegeInterval = interval;
     if (!s.siege && w.time >= s.nextSiegeAt) {
       s.siege = { phase: 'warning', deadline: w.time + c.warningSec, wave: 0,
-        waves: Math.max(1, c.waves[act] - (s.prepared.includes('goblin') ? c.preparedWaveReduction : 0)),
-        remaining: [], nextWaveAt: 0, level: C.readiness[Math.max(0, act - 1)] };
+        waves: Math.max(1, odysseyTierValue(c.waves, tier) - (s.prepared.includes(c.faction) ? c.preparedWaveReduction : 0)),
+        remaining: [], nextWaveAt: 0, level: odysseyTierValue(C.readiness, tier - 1) };
       this.tell(`Goblins march on Lastlight! Return within ${c.warningSec} seconds to defend town. Town portals remain open.`);
     }
     const siege = s.siege;
@@ -300,7 +309,7 @@ export class OdysseyRuntime {
     if (!siege.remaining.length && w.time >= siege.nextWaveAt) {
       if (siege.wave >= siege.waves) {
         s.defenses++; delete s.siege;
-        s.nextSiegeAt = w.time + c.everySec[act] * (s.prepared.includes('goblin') ? c.preparedInterval : 1);
+        s.nextSiegeAt = w.time + interval;
         for (let i = 0; i < c.rewardGems; i++) w.dropGemAt(w.player.pos, undefined, true, 'quest');
         this.tell('Lastlight is secure. Trade resumes; the recovered supplies are yours. The Goblins withdraw for a time.');
         this.dirty(); return;

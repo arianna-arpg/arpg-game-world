@@ -6,6 +6,7 @@ export const ODYSSEY_CFG = {
   pointsPerLeader: 2, gemsPerLeader: 6, passivePointsPerLeader: 1,
   leadsFromKills: 4, escortPerAct: [2, 4, 6, 8],
   bandit: {
+    id: 'bandit_messengers', faction: 'bandit',
     startsAfter: 1, everySec: [240, 180, 120, 90], preparedInterval: 1.75,
     sightRange: 440, sightArc: Math.PI * 0.8, warningSec: 1.5,
     spawnDistance: 560, responseDelaySec: 12, hunters: [0, 4, 6, 8],
@@ -13,8 +14,9 @@ export const ODYSSEY_CFG = {
     huntRoster: ['bandit_cutthroat', 'bandit_bruiser', 'bandit_fusilier'],
   },
   goblin: {
-    startsAfter: 2, everySec: [900, 900, 720, 480], warningSec: 90,
-    defenseSec: 240, waveSize: 4, waves: [0, 0, 3, 4], waveGapSec: 8,
+    id: 'goblin_sieges', faction: 'goblin',
+    startsAfter: 1, everySec: [900, 900, 720, 480], warningSec: 90,
+    defenseSec: 240, waveSize: 4, waves: [0, 2, 3, 4], waveGapSec: 8,
     preparedInterval: 1.5, preparedWaveReduction: 1, rewardGems: 3,
     roster: ['goblin_skirmisher', 'goblin_shaman'],
   },

@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { makeSimWorld, SIM_ARENA_ID } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { serializeCharacter, applySavedCharacter } from '../src/meta/character';
-import { newOdyssey, restoreOdyssey, odysseyAct } from '../src/world/odyssey';
+import { newOdyssey, restoreOdyssey, defeatOdysseyLeader, odysseyAct } from '../src/world/odyssey';
+import { odysseyEscalationTier, odysseyPressureTier } from '../src/world/odysseyPressure';
+import { odysseyPressureInterval, odysseyTierValue } from '../src/data/odysseyPressure';
+import { ODYSSEY_RISINGS } from '../src/data/odysseyRisings';
 import { ODYSSEY_CFG as C, ODYSSEY_FACTIONS, ODYSSEY_TUTORIAL_RELEASE, ODYSSEY_SURVEY, odysseyQuestId, odysseyFaction } from '../src/data/odyssey';
 import { MONSTERS } from '../src/data/monsters';
 import { TILESETS } from '../src/data/tilesets';
@@ -30,6 +33,35 @@ assert(Array.from({ length: 100 }, (_, seed) => newOdyssey(seed, { 'tutorial_fac
   .some(s => !s.roster.includes('goblin')));
 assert.equal(odysseyAct(newOdyssey(1, { 'odyssey_leader:goblin': 100 })), 0);
 pass('selection is deterministic, tutorial obligation survives failed worlds, release affects only future worlds, acts ignore account kills');
+
+for (const faction of ODYSSEY_FACTIONS) {
+  const s = newOdyssey(1, {});
+  s.roster = [faction.id, ...ODYSSEY_FACTIONS.filter(f => f.id !== faction.id).slice(0, 3).map(f => f.id)];
+  const mechanic = { faction: faction.id, startsAfter: 1 }, later = { ...mechanic, startsAfter: 2 };
+  assert.equal(odysseyEscalationTier(s, faction.id), 0);
+  assert.equal(odysseyPressureTier(s, { ...mechanic, startsAfter: 0 }), null, 'tier zero is always dormant');
+  assert.equal(odysseyEscalationTier(s, 'absent'), null);
+  for (const [index, id] of s.roster.slice(1).reverse().entries()) {
+    assert(defeatOdysseyLeader(s, id));
+    assert(!defeatOdysseyLeader(s, id), 'duplicate leader receipts cannot escalate twice');
+    assert.equal(odysseyEscalationTier(s, id), null, 'eliminated factions have no pressure');
+    assert.equal(odysseyPressureTier(s, mechanic), index + 1);
+    assert.equal(odysseyPressureTier(s, later), index >= 1 ? index + 1 : null);
+  }
+  assert(defeatOdysseyLeader(s, faction.id));
+  assert.equal(odysseyPressureTier(s, mechanic), null);
+  assert.equal(odysseyPressureTier(s, later), null);
+}
+for (const def of [C.bandit, C.goblin, ...ODYSSEY_RISINGS]) {
+  assert.equal(def.startsAfter, 1, `${def.id} begins after one elimination`);
+  for (let tier = 1; tier < C.rosterSize; tier++) {
+    assert(Number.isFinite(odysseyPressureInterval(def, tier, false)));
+    assert(odysseyPressureInterval(def, tier, false) > 0);
+    if (tier > 1) assert(odysseyPressureInterval(def, tier, false) < odysseyPressureInterval(def, tier - 1, false));
+  }
+  assert.equal(odysseyPressureInterval(def, 99, false), def.everySec.at(-1));
+}
+pass('every faction follows the shared dormant/1/2/3/eliminated law; data rows accumulate and retain their final tuning');
 
 for (const f of ODYSSEY_FACTIONS) {
   assert(MONSTERS[f.leader]); assert(MONSTERS[f.escort]); assert(TILESETS[f.tileset]);
@@ -69,6 +101,80 @@ function clearQuest(world: World, id: string): void {
   world.update(1 / 60);
   assert(world.completedObjectives.has(`quest_${id}`), `${id} objective completes through gameplay`);
 }
+
+// The requested sequence through real objective completions, including the
+// initial quiet world even after enough time for every pressure to be overdue.
+let progressionSeed = 1;
+const example = ['undead', 'goblin', 'bandit', 'gnoll'];
+while (!example.every(id => newOdyssey(progressionSeed, {}).roster.includes(id))) progressionSeed++;
+const progression = makeSimWorld('warrior', progressionSeed);
+progression.loadZone(START_ZONE); progression.odyssey.update();
+const es = progression.odyssey.state!;
+progression.time = 10000; progression.odyssey.update();
+assert.equal(es.nextScoutAt, 0); assert.equal(es.nextSiegeAt, 0);
+assert(!es.scout && !es.report && !es.siege);
+assert.equal(Object.keys(es.risings ?? {}).length, 0);
+clearQuest(progression, odysseyQuestId('gnoll', 'operation'));
+assert.equal(odysseyEscalationTier(es, 'undead'), 0, 'optional operations never awaken other factions');
+for (const [index, id] of ['gnoll', 'goblin', 'bandit', 'undead'].entries()) {
+  clearQuest(progression, odysseyQuestId(id, 'leader'));
+  progression.odyssey.update(); // objective receipts follow the pressure tick
+  for (const f of example) assert.equal(odysseyEscalationTier(es, f), es.defeated.includes(f) ? null : index + 1);
+  if (index === 0) {
+    assert.equal(es.nextScoutAt, progression.time + C.bandit.everySec[1]);
+    assert.equal(es.nextSiegeAt, progression.time + C.goblin.everySec[1]);
+    assert(es.risings!.undead_nights);
+    assert(!es.scout && !es.siege, 'activation starts a full cooldown, never an overdue burst');
+    // First-tier sieges are real two-wave encounters, not the old zero entry.
+    es.nextSiegeAt = progression.time; progression.odyssey.update();
+    assert.equal(es.siege!.waves, 2);
+  }
+  const copy = restoreOdyssey(JSON.parse(JSON.stringify(progression.odyssey.snapshot())), progressionSeed, {});
+  assert.deepEqual(JSON.parse(JSON.stringify(copy)), JSON.parse(JSON.stringify(es)));
+}
+assert.equal(es.nextScoutAt, 0); assert.equal(es.nextSiegeAt, 0);
+assert(!es.scout && !es.report && !es.siege);
+assert.equal(Object.keys(es.risings ?? {}).length, 0);
+pass('real Gnoll/Goblin/Bandit/Undead eliminations awaken all survivors together and persist every tier');
+
+const pacing = makeSimWorld('warrior', progressionSeed);
+pacing.loadZone(START_ZONE); pacing.odyssey.update();
+const ts = pacing.odyssey.state!;
+ts.defeated = ['gnoll']; ts.prepared = ['bandit', 'goblin'];
+pacing.time = 100; pacing.odyssey.update();
+assert.equal(ts.nextScoutAt, pacing.time + C.bandit.everySec[1] * C.bandit.preparedInterval);
+assert.equal(ts.nextSiegeAt, pacing.time + C.goblin.everySec[1] * C.goblin.preparedInterval);
+ts.prepared = []; pacing.odyssey.update();
+assert.equal(ts.nextScoutAt, 280); assert.equal(ts.nextSiegeAt, 1000);
+pacing.time += 60; ts.defeated.push('undead'); pacing.odyssey.update();
+assert.equal(ts.nextScoutAt, 240, 'two-thirds of the scout cooldown remains at tier two');
+assert.equal(ts.nextSiegeAt, 832, 'remaining siege cooldown rescales at tier two');
+ts.prepared.push('bandit', 'goblin'); pacing.odyssey.update();
+assert.equal(ts.nextScoutAt, 300); assert.equal(ts.nextSiegeAt, 1168);
+const ticking = JSON.parse(JSON.stringify(pacing.odyssey.snapshot()));
+pacing.odyssey.restore(ticking); pacing.odyssey.update();
+assert.deepEqual(pacing.odyssey.snapshot(), ticking, 'reload never resets active cooldown progress');
+delete ticking.scoutInterval; delete ticking.siegeInterval;
+pacing.odyssey.restore(ticking); pacing.odyssey.update();
+assert.equal(pacing.odyssey.state!.nextScoutAt, 300, 'older active saves retain their deadlines');
+assert.equal(pacing.odyssey.state!.nextSiegeAt, 1168);
+assert.equal(odysseyTierValue(C.goblin.waves, 3), 4);
+pass('first pressure honors preparation; tier and preparation changes retime remaining cooldowns; reload preserves progress');
+
+const stale = JSON.parse(JSON.stringify(progression.odyssey.snapshot()));
+stale.defeated = []; stale.nextScoutAt = 1; stale.nextSiegeAt = 1;
+stale.scoutInterval = -1; stale.siegeInterval = 0;
+stale.scout = { id: 'odyssey_messenger', zoneId: START_ZONE, phase: 'watch', x: 1, y: 1, life: 1 };
+stale.report = { zoneId: START_ZONE, arrivesAt: 1, x: 1, y: 1, remaining: ['odyssey_hunt:0'] };
+stale.siege = { phase: 'raided', deadline: 1, wave: 1, waves: 2, remaining: [], nextWaveAt: 0, level: 23 };
+stale.risings = { undead_nights: { nextAt: 1, interval: 32 } };
+pacing.odyssey.restore(stale);
+const quiet = pacing.odyssey.state!;
+assert.equal(quiet.nextScoutAt, 0); assert.equal(quiet.nextSiegeAt, 0);
+assert(!quiet.scout && !quiet.report && !quiet.siege && !quiet.scoutInterval && !quiet.siegeInterval);
+assert.equal(Object.keys(quiet.risings!).length, 0);
+assert.equal(pacing.odyssey.tradeRefusal(), null);
+pass('restoring a dormant campaign discards stale pressure, overdue clocks and trade lockouts');
 
 clearQuest(w, revengeCommanderId('goblin'));
 assert.equal(s.defeated.length, 0);

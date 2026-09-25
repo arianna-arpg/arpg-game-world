@@ -532,6 +532,13 @@ we verify changes.
   `docs/design/cosmetics.md`; `npm run probe -- cosmetics` and the isolated
   `balance/cosmetics-ui.cjs` harness after a build.
 - Odyssey: `data/odyssey.ts` owns roster content and pressure tuning;
+  `data/odysseyPressure.ts` + `world/odysseyPressure.ts` share mechanic unlocks,
+  tier tuning and cooldown adjustments: tier zero is dormant; every surviving
+  faction gains one tier per eliminated faction. Existing pressures start at
+  tier one; later data rows can accumulate without replacing earlier mechanics.
+  Every Odyssey faction, including Gnolls, is intended to gain distinct living
+  world mechanics through this contract; unfinished faction mechanics remain
+  future design and implementation work in `docs/design/odyssey.md`.
   `world/odyssey.ts` owns frozen world selection, ordered leader receipts and
   save validation; `engine/odyssey.ts` connects quest objectives to progression,
   Bandit messenger reports and Goblin assaults on Lastlight. Prototype campaign

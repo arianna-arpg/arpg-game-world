@@ -4,7 +4,8 @@ import { seedGlobalRandom } from '../src/sim/rng';
 import { serializeCharacter, applySavedCharacter } from '../src/meta/character';
 import { newOdyssey, restoreOdyssey } from '../src/world/odyssey';
 import { restoreRisingClocks } from '../src/world/odysseyRisings';
-import { ODYSSEY_RISINGS, risingInterval, risingTag } from '../src/data/odysseyRisings';
+import { ODYSSEY_RISINGS, risingTag } from '../src/data/odysseyRisings';
+import { odysseyPressureInterval } from '../src/data/odysseyPressure';
 import { odysseyQuestId } from '../src/data/odyssey';
 import { MONSTERS } from '../src/data/monsters';
 import { START_ZONE } from '../src/data/zones';
@@ -22,10 +23,12 @@ let seed = 1;
 while (!newOdyssey(seed, {}).roster.includes(c.faction)) seed++;
 const pass = (s: string): void => console.log(`PASS ${s}`);
 const live = (w: World) => w.actors.filter(a => !a.dead && a.tag === tag);
-function field(): World {
+function field(tier = 1): World {
   const w = makeSimWorld('warrior', seed);
   w.loadZone(START_ZONE); w.odyssey.update(); w.loadZone(SIM_ARENA_ID);
   w.zone.objective = { kind: 'none' }; w.zone.level = 8;
+  const s = w.odyssey.state!;
+  s.defeated = s.roster.filter(id => id !== c.faction).slice(0, tier);
   w.time = 125;
   w.doodads = [{ kind: 'tombstone', pos: vec(1120, 600), radius: 22 }];
   w.markDoodadsChanged(); w.odyssey.update();
@@ -37,11 +40,44 @@ function warn(w: World): void {
 }
 function resolve(w: World): void { w.time += c.warningSec; w.odyssey.update(); }
 
-assert.deepEqual(c.everySec.map((_, i) => risingInterval(c, i, false)), [32, 24, 16, 10]);
-assert.equal(risingInterval(c, 3, true), 20);
+assert.deepEqual(c.everySec.map((_, i) => odysseyPressureInterval(c, i, false)), [32, 32, 20, 10]);
+assert.equal(odysseyPressureInterval(c, 3, true), 20);
 for (const id of c.roster) assert.equal(MONSTERS[id]?.faction, 'undead');
 assert(c.fieldCap >= c.batch && c.warningSec < Math.min(...c.everySec));
 pass('content resolves and cadence escalates with defeated leaders; preparation halves frequency');
+
+const dormant = field(0);
+for (let night = 0; night < 30; night++) {
+  dormant.time = 125 + night * 240; dormant.odyssey.update();
+  assert(!dormant.odyssey.state!.risings![c.id], 'dormant nights never bank a rising clock');
+  assert(!dormant.flashes.some(f => f.fx === c.cue.fx && f.life > 0));
+  assert.equal(live(dormant).length, 0);
+}
+const dormantState = dormant.odyssey.state!;
+dormantState.defeated.push(dormantState.roster.find(id => id !== c.faction)!);
+dormant.odyssey.update();
+assert.equal(dormantState.risings![c.id].nextAt, dormant.time + c.entryGraceSec);
+dormant.time += c.entryGraceSec - 0.1; dormant.odyssey.update();
+assert(!dormant.flashes.some(f => f.fx === c.cue.fx && f.life > 0));
+dormant.time += 0.1; dormant.odyssey.update();
+assert.equal(dormant.flashes.filter(f => f.fx === c.cue.fx && f.life > 0).length, c.batch);
+resolve(dormant); assert.equal(live(dormant).length, c.batch);
+pass('thirty dormant nights stay quiet; first elimination starts a fresh grace and warned births');
+
+// Additional mechanics for the SAME faction accumulate via rows, without a
+// new faction switch or a replacement of its earlier mechanic.
+const later = { ...c, id: 'probe_later_rising', startsAfter: 2 };
+ODYSSEY_RISINGS.push(later);
+try {
+  const layered = field(), s = layered.odyssey.state!;
+  assert(s.risings![c.id]); assert(!s.risings![later.id]);
+  s.defeated.push(s.roster.find(id => id !== c.faction && !s.defeated.includes(id))!);
+  layered.odyssey.update();
+  assert(s.risings![c.id]); assert(s.risings![later.id]);
+  const saved = restoreOdyssey(JSON.parse(JSON.stringify(layered.odyssey.snapshot())), seed, {});
+  assert(saved.risings![c.id]); assert(saved.risings![later.id]);
+} finally { ODYSSEY_RISINGS.pop(); }
+pass('a later-tier data row layers onto the same surviving faction and survives reload');
 
 const w = field();
 const clock = w.odyssey.state!.risings![c.id];
@@ -166,14 +202,14 @@ for (let i = 0; i < 12; i++) { warn(cap); resolve(cap); }
 assert.equal(live(cap).length, c.fieldCap);
 cap.kill(live(cap)[0], false, cap.player);
 warn(cap); resolve(cap); assert.equal(live(cap).length, c.fieldCap, 'partial batch honors the final cap slot');
-const cs = cap.odyssey.state!, other = cs.roster.find(id => id !== c.faction)!;
+const cs = cap.odyssey.state!, other = cs.roster.find(id => id !== c.faction && !cs.defeated.includes(id))!;
 cs.risings![c.id].nextAt = cap.time + 20;
 cs.defeated.push(other); cap.odyssey.update();
-assert.equal(cs.risings![c.id].interval, 24);
-assert.equal(cs.risings![c.id].nextAt, cap.time + 15, 'remaining cooldown rescales at act transition');
+assert.equal(cs.risings![c.id].interval, 20);
+assert.equal(cs.risings![c.id].nextAt, cap.time + 12.5, 'remaining cooldown rescales at tier transition');
 cs.prepared.push(c.faction); cap.odyssey.update();
-assert.equal(cs.risings![c.id].nextAt, cap.time + 30, 'preparation immediately eases remaining cooldown');
-assert.equal(cs.risings![c.id].interval, 48);
+assert.equal(cs.risings![c.id].nextAt, cap.time + 25, 'preparation immediately eases remaining cooldown');
+assert.equal(cs.risings![c.id].interval, 40);
 pass('bounded population, partial batches, live act/preparation cadence without instruction text');
 
 const campaign = field();
