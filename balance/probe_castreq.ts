@@ -43,6 +43,8 @@ import { CLASSES } from '../src/data/classes';
 import { MERC_TEMPLATES } from '../src/data/mercenaries';
 import { vec } from '../src/core/math';
 import type { World } from '../src/engine/world';
+import { applySavedCharacter, serializeCharacter } from '../src/meta/character';
+import { NullInput } from '../src/net/intent';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -259,6 +261,52 @@ w.time += 1; // past any icd
 w.bankDamageTakenTriggers(hero, hero.maxLife());
 check('H: at met attributes the same bank fires (accum spent)',
   (armed.state?.trigAccum ?? 0) === 0);
+
+// ---------------------------------------------- I. RUN-LOCAL DEV BYPASS
+{
+  const test = makeSimWorld('warrior', 0xca58), local = test.localSeat, actor = test.player;
+  for (const id of ATTRIBUTE_IDS) local.meta.baseAttrs[id] = 0;
+  test.recalcSeat(local);
+  const attrs = JSON.stringify(local.meta.attrs), requirements = JSON.stringify(SKILLS.firebolt.requirements);
+  const item = test.grantSkillGemItem(local, makeSkillInstance(SKILLS.firebolt, 1, 1))!;
+  check('I: dev bypass defaults off and ordinary learning refuses', !test.devIgnoreSkillAttributes && !test.learnSkill(item.uid));
+  test.devIgnoreSkillAttributes = true;
+  check('I: dev bypass clears the shared UI/learn gate and admits the bag gem',
+    test.reqShortfall('firebolt') === undefined && test.meetsRequirements('firebolt') && test.learnSkill(item.uid));
+  const fire = local.meta.knownSkills.get('firebolt')!;
+  const target = vec(actor.pos.x + 100, actor.pos.y);
+  actor.mana = actor.maxMana();
+  const mana = actor.mana;
+  check('I: bypass permits a real cast but still pays its resource cost', test.useSkill(actor, fire, target) && actor.mana < mana);
+  actor.casting = null; actor.cooldowns.clear(); actor.mana = 0;
+  check('I: bypass does not waive mana', !test.useSkill(actor, fire, target));
+  actor.mana = actor.maxMana(); actor.cooldowns.set('firebolt', 999);
+  check('I: bypass does not waive cooldowns', !test.useSkill(actor, fire, target));
+  actor.cooldowns.clear();
+  check('I: neither live attributes nor authored skill requirements change',
+    JSON.stringify(local.meta.attrs) === attrs && JSON.stringify(SKILLS.firebolt.requirements) === requirements && !fire.devGift);
+  const guest = test.addSeat('attribute_guest', CLASSES[0], new NullInput());
+  for (const id of ATTRIBUTE_IDS) guest.meta.baseAttrs[id] = 0;
+  test.recalcSeat(guest);
+  check('I: another seat retains its own attribute requirements', test.reqShortfall('firebolt', guest) !== undefined);
+  test.clientActionHook = () => {};
+  check('I: joined-client shells cannot bypass host rules', test.reqShortfall('firebolt') !== undefined);
+  test.clientActionHook = undefined;
+  const saved = serializeCharacter(test), reloaded = makeSimWorld('warrior', 0xca59);
+  check('I: saved testing skills return with requirements enforced on reload', applySavedCharacter(reloaded, saved)
+    && !reloaded.devIgnoreSkillAttributes && reloaded.meta.knownSkills.has('firebolt') && reloaded.reqShortfall('firebolt') !== undefined);
+  test.devIgnoreSkillAttributes = false;
+  const before = actor.mana;
+  check('I: switching off immediately blocks an unmet learned skill without charging',
+    test.castReqRefusal(actor, fire) !== undefined && !test.useSkill(actor, fire, target) && actor.mana === before);
+}
+// Existing trigger rig: the same toggle controls triggered casts as presses.
+setAll(0); settle(); w.devIgnoreSkillAttributes = true;
+w.bankDamageTakenTriggers(hero, hero.maxLife());
+check('I: dev bypass allows an unmet triggered skill', (armed.state?.trigAccum ?? 0) === 0);
+w.devIgnoreSkillAttributes = false; settle();
+w.bankDamageTakenTriggers(hero, hero.maxLife());
+check('I: turning the bypass off restores trigger requirements', (armed.state?.trigAccum ?? 0) > 0);
 
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILED`);
 process.exit(failed === 0 ? 0 : 1);

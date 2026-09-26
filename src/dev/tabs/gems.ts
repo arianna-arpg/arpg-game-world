@@ -81,6 +81,30 @@ export const gemsTab: DevTabDef = {
       btn('+1 Voc Pt', () => grantVocationPts(1)),
     );
 
+    const attributeRow = hrow();
+    const attributeBypass = btn('Ignore skill attributes: OFF', () => {
+      const w = runActive();
+      if (!w || w.clientActionHook) { syncAttributeBypass(); return; }
+      w.devIgnoreSkillAttributes = !w.devIgnoreSkillAttributes;
+      syncAttributeBypass();
+      flash(w.devIgnoreSkillAttributes
+        ? 'Local skill learning and casting ignore attributes for this run.'
+        : 'Normal skill attribute requirements restored.');
+    });
+    attributeBypass.dataset.devSkillAttributes = '';
+    const syncAttributeBypass = (): void => {
+      const w = runActive();
+      const on = !!w && !w.clientActionHook && w.devIgnoreSkillAttributes;
+      attributeBypass.textContent = `Ignore skill attributes: ${on ? 'ON' : 'OFF'}`;
+      attributeBypass.setAttribute('aria-pressed', String(on));
+      attributeBypass.disabled = !w || !!w.clientActionHook;
+      attributeBypass.title = !w ? 'Start a run first.' : w.clientActionHook
+        ? 'Available for your local character in single-player or as host.'
+        : 'Testing this run only. Learning and casting bypass attributes; costs, cooldowns and other rules still apply.';
+    };
+    syncAttributeBypass();
+    attributeRow.append(attributeBypass);
+
     // --- VOCATION playtest row: instant-grant any vocation + the LIVE spending-
     // gate toggle (VOCATION_CFG.requireGateNode is read on every check, so the
     // flip takes effect immediately — the user's A/B lever for how ascendancy
@@ -143,7 +167,7 @@ export const gemsTab: DevTabDef = {
     }
     wireFilter(filter, list);
 
-    pane.append(header, cheats, vocRow, list);
-    return { el: pane, onShow: () => filter.focus() };
+    pane.append(header, cheats, attributeRow, vocRow, list);
+    return { el: pane, onShow: () => { syncAttributeBypass(); filter.focus(); } };
   },
 };

@@ -5,6 +5,9 @@ The 136 pure attribute nodes use `data/passiveAttributes.ts` choice groups;
 owned builds retain their former attributes through `allocatedDefault`.
 Verify `probe_passiveattributes.ts`, the other passive probes and the hidden
 `balance/passive-attributes-ui.cjs` editor/click walkthrough after a build.
+Dev → Gems can ignore the local hero's skill attributes for one run via
+`World.devIgnoreSkillAttributes`. Verify `probe_castreq.ts` and the hidden
+`balance/dev-skill-attributes-ui.cjs` walkthrough; costs and cooldowns still apply.
 
 Ten-rank vendor investment, curated affixes, paged shelves and mixed writ/cash
 bounty choices are documented in `docs/design/vendor-investment.md`. Tuning

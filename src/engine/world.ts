@@ -13351,6 +13351,10 @@ export class World {
    *  still hold). Read in moveActor. */
   devNoclip = false;
 
+  /** DEV: local hero's skill attribute gates only. Run-local, never saved or
+   * wired; joined clients and other seats keep the authoritative rules. */
+  devIgnoreSkillAttributes = false;
+
   /** DEV: kill every live on-screen enemy (credited to the player → xp/loot). */
   devKillAll(): number {
     const foes = this.actors.filter(a => a.team === 'enemy' && !a.dead && !a.downed);
@@ -22624,6 +22628,7 @@ export class World {
    *  skill asks nothing). The ONE requirements read: the learn gate, the
    *  cast-time gate and the panels all fold through here. */
   reqShortfall(skillId: string, seat: Seat = this.localSeat): string | undefined {
+    if (this.devIgnoreSkillAttributes && !this.clientActionHook && seat === this.localSeat) return undefined;
     const req = SKILLS[skillId]?.requirements;
     if (!req) return undefined;
     let short = '';

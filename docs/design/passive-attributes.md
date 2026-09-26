@@ -51,6 +51,18 @@ is retained. Account and run compatibility versions stay unchanged.
 The visual editor preserves the group and initial selection through export
 and exposes both for editing. Changing a group clears its old default.
 
+## Developer skill testing
+
+For isolated skill testing, **Dev → Gems → Ignore skill attributes** toggles
+`World.devIgnoreSkillAttributes`. It defaults off, applies only to the local
+hero in single-player or on the host, and resets with a new run or reload.
+The shared `reqShortfall` read covers learning, casting, triggers and UI
+availability. Other seats and joined clients retain normal rules. Attributes,
+skill definitions, resource costs, cooldowns and other gates remain intact;
+turning the toggle off immediately restores the learned-skill requirement gate.
+Verify `probe_castreq.ts` and, after a build, the hidden isolated
+`balance/dev-skill-attributes-ui.cjs` walkthrough.
+
 ## Next experiment
 
 Core attributes with companion grants are intentionally deferred. Choice
