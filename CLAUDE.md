@@ -97,6 +97,9 @@ life-orb spark and ward armor use `data/combatReadability.ts`; verify
 `probe_combatreadability.ts`, `probe_ironbell.ts` and `balance/combat-readability-ui.cjs`.
 Author cues as reusable, configurable data. Undead nights demonstrate this with
 disturbed soil and grasping hands at committed emergence sites (`groundRising`).
+GT-034 combination completion uses matching body/HUD profiles in `data/comboCues.ts`.
+`comboReadout` shares consume-aware progress across tells, HUD and all-actor co-op;
+see `docs/design/combo-cues.md`, `probe_combocues.ts` and `balance/combo-cues-ui.cjs`.
 
 Carried satellites live in `data/satellites.ts` and `engine/satellites.ts`:
 untargetable, modifier-granted orbiting effects shared by players and monsters.

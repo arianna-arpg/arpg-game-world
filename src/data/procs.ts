@@ -153,6 +153,9 @@ export type ProcEffect =
   | { type: 'cast'; cast: ProcCastSpec };
 
 export interface ProcDef {
+  /** Migration seam for events with their own state-driven visual cues.
+   * false suppresses only this proc's legacy name caption, never its payoff. */
+  announceName?: boolean;
   id: string;
   name: string;
   /** Shown as floating text + flash color when the proc fires. */

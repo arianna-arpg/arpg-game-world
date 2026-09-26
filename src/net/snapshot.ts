@@ -61,7 +61,7 @@ import { ITEM_RARITIES, type ItemInstance } from '../engine/items';
 import { VESTIGES } from '../data/vestiges';
 import { abilityEssenceOfTier, ESSENCES } from '../data/essences';
 import type { Attributes } from '../engine/stats';
-import { COMBO_CFG, comboProgress } from '../engine/sequence';
+import { comboCueRows } from '../engine/comboCues';
 import { GRAB_VERB_LABEL } from '../engine/grab';
 import { tellSpecsOf } from '../engine/tells';
 import { fellProgress } from '../engine/rampage';
@@ -749,15 +749,15 @@ function actorToW(a: Actor, world: World): ActorW {
   // to derive pips from, and the policy must not fork): see BOSS_BAR_OF.
   const bb = BOSS_BAR_OF(a);
   if (bb) w.bb = [bb.pips, bb.lit, bb.hl ? 1 : 0];
-  // Player bar readouts the host owns: banked runes + combo-grammar chips
-  // (host-computed rows — the boss-bar idiom; clients hold no cast ring).
+  // comboCueRows also carries enemy/companion completion, with no client cast simulation.
+  const comboCues = comboCueRows(a, world.time);
+  if (comboCues.length) w.cb = comboCues.map(row => [row.id, row.lit, row.len, Math.round(row.glow * 100) / 100]);
+  // Player bar readouts the host owns: banked runes (comboCueRows lives above).
   if (a.kind === 'player') {
     if (a.runes.length) w.rn = a.runes.slice();
     // THE PRIMED POUR's glints (pourPrime) — ids only, the runes idiom.
     if (a.primedPours.length) w.pp = a.primedPours.map(e => e.skillId);
     w.fq = flaskChargeBanks(a);
-    const cb = COMBO_HUD_OF(a);
-    if (cb?.length) w.cb = cb;
     if (a.mimicBank?.length) {
       w.mk = a.mimicBank.map(e => [e.sid, e.src] as [string, string]);
       if (a.mimicSel) w.ms = a.mimicSel;
@@ -823,9 +823,6 @@ let SEAT_OF: (a: Actor) => string | undefined = () => undefined;
 // Set per-serialize so actorToW ships the host's boss-bar read (one policy —
 // World.bossBarInfo — for the local renderer and every client alike).
 let BOSS_BAR_OF: (a: Actor) => { pips: number; lit: number; hl: boolean } | null = () => null;
-// Set per-serialize: host-computed combo-grammar HUD rows for a player's own
-// bar chips (engine/sequence.ts — the ring lives host-side only).
-let COMBO_HUD_OF: (a: Actor) => [string, number, number, number][] | null = () => null;
 // Set per-serialize: the grab fabric's held-meter row for a HELD body
 // (engine/grab.ts — pair state lives host-side only; the same bar the
 // host renderer draws off the live pair).
@@ -847,19 +844,6 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     return [GRAB_VERB_LABEL[hold.verb], Math.round(Math.min(1, hold.struggle) * 100) / 100];
   };
   WATCH_V_OF = (a) => (a.watch ? watchValueOf(a, a.watch, world.time) : 0);
-  COMBO_HUD_OF = (a) => {
-    if (!a.comboRules?.length) return null;
-    const rows: [string, number, number, number][] = [];
-    for (const rule of a.comboRules) {
-      const pr = comboProgress(a.castRing ?? [], rule, world.time, a.sheet.get('comboWindow'));
-      const fire = a.comboFire?.get(rule.id);
-      const glow = fire
-        ? Math.max(0, Math.round((1 - (world.time - fire.at) / COMBO_CFG.hudGlow) * 100) / 100)
-        : 0;
-      rows.push([rule.id, pr.lit, pr.len, glow]);
-    }
-    return rows;
-  };
 
   const seats: Record<string, SeatW> = {};
   for (const s of world.seats) seats[s.id] = seatW(s, world);
@@ -1286,7 +1270,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     if (aw.pp?.length) a.primedPours = aw.pp.map(id => ({ skillId: id, chargesSpent: 0 }));
     else if (a.primedPours.length) a.primedPours = [];
     if (aw.seat) restoreFlaskChargeBanks(a, aw.fq, true);
-    a.comboHud = aw.cb?.map(([id, lit, len, glow]) => ({ id, lit, len, glow }));
+    a.comboHud = aw.cb?.map(([id, lit, len, glow]) => ({ id, lit, len, glow })) ?? [];
     // Mimic bank mirror (render/UI only — capture clocks stay host-side,
     // so mirrored entries carry at:0 and the client never prunes them).
     a.mimicBank = aw.mk ? aw.mk.map(([sid, src]) => ({ sid, src, at: 0 })) : null;

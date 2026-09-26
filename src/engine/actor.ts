@@ -1373,8 +1373,8 @@ export class Actor {
    *  updateTimers, read by refreshConditions only while comboWatch. */
   comboCondBits = 0;
   comboCondLeft = 0;
-  /** CO-OP MIRROR ONLY (net/snapshot.ts): host-computed combo HUD rows for
-   *  the bar chip. Live worlds compute from the ring directly. */
+  /** CO-OP MIRROR ONLY (net/snapshot.ts): host-computed comboHud rows for
+   *  body completion and bar chips; [] explicitly clears pooled mirrors. */
   comboHud?: { id: string; lit: number; len: number; glow: number }[];
   /** THE MIMIC BANK (engine/mimic.ts): captured enemy arts — the skill,
    *  the kind that taught it, the capture clock. Ramp state exactly like

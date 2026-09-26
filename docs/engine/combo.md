@@ -69,8 +69,9 @@ must re-form, unless `overlap: true` opts into rolling matches.
 
 **Payoffs ride THE proc pipeline** (`World.executeProc`): a rule's `effect`
 is one owner-scoped `ProcEffect` (buff / restore / heal / gainCharge /
-burst / fortify / cooldown / delayedBurst) — floating text, flash, gain
-gates, even authored proc riders (host `'combo:<id>'`) come free. The
+burst / fortify / cooldown / delayedBurst) — canonical gain gates and
+authored proc riders (host `'combo:<id>'`) remain shared. Completion uses
+`comboCues`; combo-generated procs set `announceName: false`. The
 validator refuses target-shaped effects: a grammar completes on a CAST,
 not a hit. No second payoff executor exists.
 
@@ -91,8 +92,8 @@ build axis, never ambience. Shipped consumers:
   line. Socketing one wakes the ring by itself.
 - **The cadenced kin** (deepwood/highland): `cadence_fencer` drums
   Drumbeat, `cadence_cantor` rounds the elements, `cadence_maestro` weaves
-  Blade-and-Vein — the SAME registry rules, so the payoff text over a duel
-  names a grammar the player can earn. Their `beatPips` look part (live,
+  Blade-and-Vein — the SAME registry rules, so the completion gesture over
+  a duel matches a grammar the player can earn. Their `beatPips` look part (live,
   kindling in sequence) is the at-a-glance grammar-tell.
 - **The metronome lean** (the Scald Basin, M3 coda): `tempo_drummer` drums
   the Kettle Tattoo (repeat 4 → a `cast` payoff, a scalding vent burst at
@@ -169,9 +170,12 @@ on cast history for unwatched actors.
 
 The bar draws one pip row per equipped grammar above its LEFT edge (the
 runes keep the right; circles vs diamonds): pips fill with live progress
-(`comboProgress` — presentational; firing truth is `matchComboRule`), and
-a completed measure flashes the rule's name for `COMBO_CFG.hudGlow`.
-Co-op clients get host-computed rows (`ActorW.cb`, the boss-bar idiom) and
+(`comboReadout` excludes consumed casts; firing truth is `matchComboRule`).
+A completed measure closes into a shared body/HUD signature for
+`COMBO_CFG.hudGlow`; it never relights spent casts as new progress.
+`ComboRuleDef.cue` selects a shared profile or disables the supplementary
+gesture. See [completion cues](../design/combo-cues.md) for authoring and checks.
+Co-op clients get host-computed rows for all actors (`ActorW.cb`) and
 banked runes (`ActorW.rn`) on the wire; the mirror's `Actor.comboHud` takes
 precedence in the renderer. Dev tab **Combo**: grant/clear grammars, live
 ring/condition/progress readout.

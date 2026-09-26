@@ -35,7 +35,7 @@
 //     (last n pairwise-distinct under a key), `repeat` (last n equal) —
 //     plus a timing `within`, an `icd`, and an owner-scoped ProcEffect
 //     payoff executed through THE proc pipeline (World.executeProc): no
-//     second payoff executor exists. Floating text + flash come free.
+//     second payoff executor exists. Completion uses shared comboCues profiles.
 //   · Completing a pattern CONSUMES its span per-rule (bookkeeping only —
 //     the shared ring never mutates): the same casts can't pay the same
 //     rule twice unless the rule opts into `overlap` rolling matches.
@@ -227,6 +227,9 @@ export interface ComboRuleDef {
   id: string;
   name: string;
   color: string;
+  /** Completion profile in data/comboCues; omitted/unknown selects by pattern.
+   * false opts out of supplementary gestures; functional progress pips remain. */
+  cue?: string | false;
   /** The sheet/tooltip line for the combo_<id> stat. */
   blurb: string;
   /** Ordered tail: the last steps.length casts fit these, in order. */
@@ -374,6 +377,17 @@ export function comboProgress(
     return { lit, len };
   }
   return { lit: 0, len: 1 };
+}
+
+/** Consume-aware presentation shared by tells, world cues, HUD and wire.
+ * The completed beat is a separate pulse; spent casts cannot light new pips. */
+export function comboReadout(
+  ring: readonly CastRecord[], rule: ComboRuleDef, now: number, windowScale = 1,
+  fire?: { at: number; seq: number },
+): { lit: number; len: number; glow: number } {
+  const live = fire && !rule.overlap ? ring.filter(r => r.seq > fire.seq) : ring;
+  const glow = fire && now >= fire.at ? Math.max(0, 1 - (now - fire.at) / COMBO_CFG.hudGlow) : 0;
+  return { ...comboProgress(live, rule, now, windowScale), glow };
 }
 
 // ------------------------------------------- the starter conditions -------

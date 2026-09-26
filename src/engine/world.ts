@@ -38426,8 +38426,8 @@ export class World {
     caster.comboCondLeft = varied || repeated ? COMBO_CFG.conditionWindow : 0;
     if (!caster.comboRules) return;
     // Settle equipped grammars: match → consume-fresh + icd → payoff. The
-    // payoff is an owner-scoped ProcEffect through executeProc — floating
-    // text, flash, canonical gain gates, even authored riders (host
+    // payoff is an owner-scoped ProcEffect through executeProc — comboCues
+    // read the real firing below; canonical gain gates and riders (host
     // 'combo:<id>') all ride the one pipeline.
     const windowScale = caster.sheet.get('comboWindow');
     for (const rule of caster.comboRules) {
@@ -38443,7 +38443,7 @@ export class World {
       (caster.comboFire ??= new Map()).set(rule.id, { at: this.time, seq: caster.castSeq });
       this.executeProc({
         id: 'combo:' + rule.id, name: rule.name, color: rule.color,
-        trigger: 'hit', effect: rule.effect,
+        trigger: 'hit', effect: rule.effect, announceName: false,
       }, caster, null, null, 0);
     }
   }
@@ -45101,7 +45101,7 @@ export class World {
 
   private executeProc(proc: ProcDef, caster: Actor, inst: SkillInstance | null, target: Actor | null, depth = 0, aim?: Vec2): void {
     const at = target ?? caster;
-    this.text(vec(at.pos.x, at.pos.y - 14), proc.name + '!', proc.color, 12);
+    if (proc.announceName !== false) this.text(vec(at.pos.x, at.pos.y - 14), proc.name + '!', proc.color, 12);
     // THE PROC POWER (procPower_<id>, base 1 — the magnitude dial beside
     // the chance): folded once here onto the effect's numbers, read with
     // the event's own context so a skill-scoped grant scopes like the chance.

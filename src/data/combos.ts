@@ -12,8 +12,8 @@
 // one fight IS the tutorial).
 //
 // Payoffs are OWNER-scoped ProcEffects executed through THE proc pipeline
-// (World.executeProc): the fire prints "<Name>!" and flashes like any
-// proc, buffs/restores/charges ride their canonical gates, and proc
+// (World.executeProc): comboCues replace the name caption with completion gestures;
+// buffs/restores/charges ride their canonical gates, and proc
 // RIDERS can even be authored onto a grammar (host 'combo:<id>') — no
 // second payoff executor exists. Completing a pattern consumes its casts
 // (per-rule bookkeeping; the ring never mutates) and paces on its icd;
@@ -27,7 +27,7 @@
 // To add a grammar: one entry here. No engine changes.
 // ---------------------------------------------------------------------------
 
-import { comboProgress, comboStat, type ComboRuleDef } from '../engine/sequence';
+import { comboReadout, comboStat, type ComboRuleDef } from '../engine/sequence';
 import { mod, STAT_DEFS } from '../engine/stats';
 import { registerTellSource } from '../engine/tells';
 
@@ -214,9 +214,7 @@ registerTellSource('combo', (a, w, arg) => {
   const ring = a.castRing;
   if (!rule || !ring || !ring.length) return 0;
   const fire = a.comboFire?.get(rule.id);
-  const live = fire && !rule.overlap ? ring.filter(r => r.seq > fire.seq) : ring;
-  if (!live.length) return 0;
-  const { lit, len } = comboProgress(live, rule, w.time, a.sheet?.get('comboWindow') ?? 1);
+  const { lit, len } = comboReadout(ring, rule, w.time, a.sheet?.get('comboWindow') ?? 1, fire);
   return len > 0 ? Math.max(0, Math.min(1, lit / len)) : 0;
 });
 

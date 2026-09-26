@@ -1,6 +1,6 @@
 # Gameplay text → visual cues: migration backlog
 
-GAMEPLAY-TEXT-AUDIT · Refreshed 2026-09-24 · **15 families implemented with playtesting pending; 19 open replacement families and 6 surface reviews remain.**
+GAMEPLAY-TEXT-AUDIT · Refreshed 2026-09-25 · **16 families implemented with playtesting pending; 19 open replacement families and 5 surface reviews remain.**
 
 The player must be able to recognize a gameplay event and respond without reading a sentence or a combat label. Give a cue to the actual body, object, place and time involved. Its buildup, commitment, interruption and recovery should agree with the mechanic. Reusable, configurable visual families carry that information; captions are retired as their replacements become readable.
 
@@ -18,14 +18,19 @@ The rows group related mechanics; the generated inventory contains individual ca
 
 ## Current position and combat-first queue
 
-**Implemented, awaiting encounter acceptance:** GT-001–012, GT-019, GT-022 and GT-035.
+**Implemented, awaiting encounter acceptance:** GT-001–012, GT-019, GT-022, GT-034 and GT-035.
 These cover exhaustion, poise/guard/shell breaks, parry/reflection, defensive
 outcomes, timing successes, critical riders, committed guard warnings,
 coordinated maneuvers, cast interruption/fizzle and held readiness. Their
 individual rows link the implementation contracts and verification harnesses.
 No row is marked Done solely because its automated checks pass.
 
-**Latest implementation:** GT-022 now has Doom's bank/fuse/rupture cues,
+**Latest implementation:** GT-034 closes completed combinations into matching
+body/HUD gestures, using shared profiles and consume-aware progress. Both
+floating and direct HUD name captions are retired; enemy/companion completions
+now replicate to co-op too. See [combination cues](combo-cues.md).
+
+**Previous implementation:** GT-022 now has Doom's bank/fuse/rupture cues,
 volatile readiness and venting, execution strokes, flattened cap impacts,
 and Last Gasp's spent/recovering spark on the body and life orb. GT-035 links
 ward sources to the protected body and armors its health bar; the last source
@@ -43,7 +48,7 @@ not imply an invulnerability window.
 
 | Work remaining | IDs | Next implementation direction |
 |---|---|---|
-| Combat resources and payloads — next batch | GT-020, GT-021, GT-023, GT-034 | Reserve depletion/venting, loaded or armed payloads, consumed proc stacks and completed combination patterns. |
+| Combat resources and payloads — next batch | GT-020, GT-021, GT-023 | Reserve depletion/venting, loaded or armed payloads and consumed proc stacks. |
 | Body damage, feeding, companions and recovery | GT-024–029 | Lost weakpoints/parts, feeding transfers, ownership/tether changes, taming/rejection, down/reanimation and field/remnant transitions. |
 | Scripted combat and remaining action refusals | GT-013, GT-032, GT-038 | Review individual phase/summon/encounter triggers and unavailable actions. GT-038 gather-too-thin/broke-early captions are already replaced by casting fizzles; other refusals remain. |
 | World danger and discovery | GT-014–018, GT-030, GT-031, GT-033 | Messenger/siege, terrain/water, traps, challenge reset, doors/reveals and Titan trail discoverability. Undead scenery risings do not complete all emergence/trap families. |
@@ -150,7 +155,7 @@ These are part of the audit, not automatic exceptions to the law. Active gamepla
 
 | ID | Priority / state | Surface found | Next decision / visual direction | Source |
 |---|---|---|---|---|
-| GT-034 | P2 · Review | Direct canvas `rule.name + '!'` after a combination lights. | Pulse/lock the completed pattern itself; this bypasses the floater settings. | [renderer](../../src/render/renderer.ts#L8146) |
+| GT-034 | P2 · Implemented; playtest pending | Floating combination names and direct canvas name captions removed. | Matching body/HUD beat, weave, round and gather gestures close the actual pattern. New progress excludes consumed casts; shared profiles, opt-out, lifecycle and all-actor co-op covered. | [Contract and checks](combo-cues.md), [profiles](../../src/data/comboCues.ts) |
 | GT-035 | P1 · Implemented; playtest pending | Boss-name `WARDED` suffix and dynamic ward-break announcement removed, including twelve authored notes. | Armor on the body and health bar, links/rings on the exact living tagged sources, and formation/breakup at actual gate transitions. Real life remains visible; joined co-op clients resolve source actors and clear removed links. | [Contract and checks](combat-threat-cues.md), [shared membership](../../src/engine/combatReadability.ts), [painter](../../src/render/vis/combatReadabilityLayer.ts) |
 | GT-036 | P2 · Review | `Wave … in …` and `world.objectiveText()`. | Advancing arrival marks, visible objective objects/states and a nonverbal readiness/countdown shape. Trace objective variants before replacing the common renderer. | [objective HUD](../../src/render/renderer.ts#L8291), [wave HUD](../../src/render/renderer.ts#L8336) |
 | GT-037 | P3 · Review | Odyssey onboarding, operation instructions, leader fall notices, expected readiness and hunt/siege news. | Split optional journal/reference information from immediate gameplay signals. Map/faction state should show progress and changed threats. Offscreen news needs discoverable spatial cues, not just removal of the feed. | [OdysseyRuntime.tell and callers](../../src/engine/odyssey.ts#L32) |
