@@ -12,6 +12,9 @@ app.whenReady().then(async () => {
  const shot = async name => { await wait(150); fs.writeFileSync(path.join(dir,name),(await win.webContents.capturePage()).toPNG()); };
  try {
   await win.loadURL(server.url); await wait(1200);
+  await js(`Object.defineProperty(navigator,'getGamepads',{value:()=>[]});void 0`);
+  // Use a short viewport so the inventory page must exercise its inner scroller.
+  win.setContentSize(1280, 560); await wait(100);
   await js(`__game.account().ledger.prologue_lived=1;__game.devStartRun('warrior');__game.ui.hideAll();__game.ui.toggleInventory();void 0`);
   await click('[data-buildflap]');
   const scroll = await js(`(()=>{
@@ -30,6 +33,7 @@ app.whenReady().then(async () => {
   assert.equal(await js(`document.querySelector('.build-scroll').scrollTop`),scroll.top);
   console.log('SKILLS SCROLL',scroll);
   await shot('menu-controls-skills.png');
+  win.setContentSize(1280, 720); await wait(100);
   await js(`__game.ui.hideAll();__game.ui.showEscapeMenu();void 0`);await click('#esc-keys');
   // Both Options entry points keep Back visible and return to their own menu.
   for(const root of ['#escape-menu','#start-menu']) {

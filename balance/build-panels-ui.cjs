@@ -7,10 +7,18 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 app.whenReady().then(async () => {
  const server = await startGameServer({ root: path.resolve(__dirname, '../dist'), savesDir: path.join(__dirname, 'reports', `build-panels-saves-${process.pid}`) });
  const win = new BrowserWindow({ show:false, width:1600,height:1000, webPreferences:{ offscreen:true,backgroundThrottling:false } });
- const js = s => win.webContents.executeJavaScript(s);
+ const js = async s => {
+  const result = await win.webContents.executeJavaScript(`(async()=>{try{return await (0,eval)(${JSON.stringify(s)});}catch(e){return {qaError:String(e.stack??e)};}})()`);
+  if (result?.qaError) throw Error(result.qaError);
+  return result;
+ };
  try {
   await win.loadURL(server.url); await wait(1200);
+  await js(`Object.defineProperty(navigator,'getGamepads',{value:()=>[]});void 0`);
   await js(`__game.account().ledger.prologue_lived=1; __game.devStartRun('warrior'); __game.ui.hideAll(); __game.ui.toggleInventory(); void 0`);
+  await js(`(()=>{const w=__game.world();w.update=()=>{};w.account.ledger.odyssey_stage_2=1;
+    for(const s of w.localSeat.meta.knownSkills.values())if(s.def.tree)w.account.memorySecondary.add('skill:'+s.def.id);
+    __game.ui.refreshInventory();})()`);
   await wait(300);
   const tiers = await js(`document.querySelectorAll('[data-buildflap] .build-essence').length`); assert(tiers > 0);
   await js(`document.querySelector('[data-buildflap]').click(); void 0`); await wait(150);
@@ -90,7 +98,7 @@ app.whenReady().then(async () => {
    win.setContentSize(width,height); await wait(150);
    await js(`__game.ui.refreshSkillTree(); void 0`); await wait(50);
    const dock = await js(`(()=>{
-    const pane=document.querySelector('.skill-tree.build-docked:not(.hidden):not(.folio-shelved)'),r=pane.getBoundingClientRect();
+    const pane=document.querySelector('.skill-tree.inventory-page:not(.hidden):not(.folio-shelved)'),r=pane.getBoundingClientRect();
     const rail=document.querySelector('.build-ribbons').getBoundingClientRect();
     const ribbons=['[data-buildflap]','[data-passiveflap]','[data-containerflap="reliquary"]'].map(sel=>{
      const e=document.querySelector(sel),b=e.getBoundingClientRect();return {sel,reachable:e.contains(document.elementFromPoint(b.x+b.width/2,b.y+b.height/2))};

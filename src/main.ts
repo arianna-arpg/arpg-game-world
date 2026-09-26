@@ -1111,7 +1111,7 @@ function handleLocalPanels(): void {
   //   1. the pause menu closes,
   //   2. an open DWELL dialog dismisses (their closes carry semantics —
   //      closing the vocation offer DECLINES it; one dialog per press),
-  //   3. any ordinary panels (sheet/book/tree/map/inventory) all clear —
+  //   3. ordinary windows (sheet/map/inventory with its pages) all clear —
   //      Esc here means "give me my screen back", NEVER "pause on top",
   //   4. a clear screen: NOW Esc is the pause menu.
   // THE ESCAPE POLICY (ui/escapeConfig.ts, Settings.escapeCloses) may fold
@@ -1184,6 +1184,7 @@ function handleLocalPanels(): void {
   const pb = settings.padBinds;
   if (input.justPressed(kb.panelChar) || pad.justPressed(pb.panelChar)) ui.toggleCharSheet();
   if (input.justPressed(kb.panelTree) || pad.justPressed(pb.panelTree)) ui.toggleTree();
+  if (input.justPressed(kb.panelSkills) || pad.justPressed(pb.panelSkills)) ui.toggleBuildPanel();
   if (input.justPressed(kb.panelMap) || pad.justPressed(pb.panelMap)) ui.toggleMap();
   if (input.justPressed(kb.panelInv) || pad.justPressed(pb.panelInv)) ui.toggleInventory();
   // THE MENU BAR's tray (ui/menubar.ts): the bind fans the pages. Its
@@ -1533,6 +1534,7 @@ function handleCouchPanels(): void {
     if (!g.pointer.active && g.gpad.justPressed(pb.companionStance)) world.applyAction(seat, { t: 'companionStance' });
     if (g.gpad.justPressed(pb.panelChar)) ui.toggleCharSheet(g.seatId);
     if (g.gpad.justPressed(pb.panelTree)) ui.toggleTree(g.seatId);
+    if (g.gpad.justPressed(pb.panelSkills)) ui.toggleBuildPanel(g.seatId);
     if (g.gpad.justPressed(pb.panelMap)) ui.toggleMap();
     if (g.gpad.justPressed(pb.panelInv)) ui.toggleInventory(g.seatId);
     if (g.gpad.justPressed(pb.pickup)) {

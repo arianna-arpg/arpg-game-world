@@ -89,9 +89,8 @@ Regression coverage: `balance/probe_folio.ts` and, after a build,
   bypasses these automatic fronting rules for a quiet offer.
 - **The call's word** — `adopt(id, ask)` lets a show path say how *this*
   arrival lands: `'front'` from a press, a key or a handle (an explicit ask
-  is absolute and outranks the ladder — `UI.folioAsk` is the panels' one
-  door, used by the Skills ribbon, the passive tree's key, a skill tree's
-  handle and a container drawer's ribbon), `'behind'` to land quiet. The
+  is absolute and outranks the ladder — `InventoryPages.request` uses
+  this for all development pages), `'behind'` to land quiet. The
   self-heal binds with no word, so a page that merely turned up obeys the
   ladder. Station show paths keep the bare `adopt`: a dwell is an offer.
 - **The departure law** (2026-09-16, her ask) — a bound leaf the player can
@@ -133,13 +132,8 @@ Regression coverage: `balance/probe_folio.ts` and, after a build,
   leaves stands (`bindFolioKeys`); the default focus walk is suppressed
   only then. Clicking a tab fronts it; the strip's ✕ closes every leaf
   through its own close path. The pad pointer clicks tabs like any button.
-- **A leaf's close must close** (2026-09-11). The passive tree's key,
-  `toggleTree`, FRONTS a shelved tree rather than closing it (the D-pad
-  law), so a close routed through the toggle — the strip's ✕, the couch
-  clear — fronted Passives instead of closing it and left the book standing
-  on that tab. The leaf, the close glyph and `hideAllFor` now go through
-  `closeTree()`; the probe's census (`O9`) pins it, and `M4` pins the law's
-  limit: close-all only asks.
+- Leaf closes dismiss that leaf. Inventory closes retain its page membership
+  while hiding the whole group; see [Inventory pages](inventory-pages.md).
 
 ## Enrolling a new surface
 
@@ -151,84 +145,16 @@ has a near-read (the same read the menu bar seals its page on — it is also
 the departure read), `reach` when its work is allowed from elsewhere too (a
 suite member: `World.stationReach`), `range` when it has a town site,
 `arrive: 'front'` when the player explicitly asked for it, `kind: 'modal'`
-when nothing offered may shove it aside. A player page enrolls as
-`kind: 'page'` and its PRESS path calls `folioAsk` rather than the bare
-adopt. The probe's census (`O`) pins that every enrolled leaf adopts, every
-row declares its kind, the press paths ask and no station's does, and that
-no dialog swaps the screen with `hideAll()` at its show.
+when nothing offered may shove it aside. Development pages instead register
+with InventoryPages, which supplies their common folio adapter and explicit
+selection behavior. The census probe verifies both enrollment paths.
 
-The keyed panels the bag, the sheet and the map are **not** enrolled: they
-have their own homes (left, right, full) and the bench's "the bag is the
-menu" pairing is a designed side-by-side. The two TREES are (below, ruled
-2026-09-04 — her ask): they share the centred berth with the stations and
-with each other, so overlap there is real; Esc on a tree closes that leaf
-(the front), not every keyed panel — the "clear them all" grammar stays
-the belt beneath for the un-enrolled panels.
+The bag, character sheet and map have their own homes and are not folio leaves.
 
-### Player panels enroll too (2026-09-04)
+### Inventory pages
 
-The passive tree (`passives`) and every skill-tree pane
-(`skilltree:<skillId>` — one panel root minted per skill on its first open,
-enrolled right there) are leaves as well — not stations: no engagement
-read, no range. All share the centred berth, so opening any over another
-binds them into one book (Passives | Wild Strike | Grave Tide…); each
-declares `arrive: 'front'` (a key press or a handle click is an explicit
-ask), the passive tree's key brings a shelved tree forward instead of
-closing it, and each pane's tab names its skill. Esc closes the front leaf
-through its own close, as for every leaf; a lone tree is a book of one —
-byte-identical to before, no strip.
-
-### Inventory build pages (2026-09-11)
-
-The inventory's Skills and Passives ribbons open adjacent player pages. Skills
-is a stable `skills-panel` root and a `skills` folio leaf, so it joins Passives
-and individual skill trees in the same top-tab book. Closing the inventory also
-hides Skills; reopening remembers whether that drawer was open, however the bag
-shut (the key, the couch clear, the Esc sweep — see THE ESCAPE POLICY below).
-Closing a shelved page through the book closes that page without promoting it
-instead. The ribbon's press ASKS (`folioAsk` — Skills comes forward over an
-open counter because the player pressed it); the drawer the bag merely
-remembers binds by the self-heal with no word and lands BEHIND an open
-station by the primacy law, promoting back when the station closes or
-departs — so a run that keeps Skills open at all times still meets each
-station first, and gets Skills back the moment it walks away.
-
-THE CONTAINER DRAWERS (2026-09-12, `ui/containerPane.ts`): every side board
-the account owns (`engine/containers.ts` — the Reliquary first) wears a third
-ribbon on the same rail, after PASSIVES, with its seated count. THE RAIL FIT
-LAW (`fitBuildRail`, run after every render and dock sync) keeps the whole
-rail inside the pane's height: measured, a rail that would overhang sheds the
-container count badge first (`build-rail-tight`), then the Skills wallet
-chips (`build-rail-tighter`; the drawer's header repeats them). Its press pops
-a DRAWER beside the bag: a minted `container-panel` root (the skill-tree pane
-idiom, one per container on first open) that docks through the same seat law
-(`BUILD_PANEL_CFG.containerWidth`) and enrolls as a `container:<id>` leaf of
-the inventory-side book — an explicit ask that arrives in front and closes
-through its own close — so a drawer up beside Skills or a tree tabs into the
-one book. The bag stays on screen: relics drag from their bag cells onto the
-drawer's seats and back; the drawer follows the bag exactly as Skills does
-(hidden with it, memory kept; the Esc sweep's unkept-bag lane hides it the
-same way). The menu's `container:<id>` page opens the bag if it is shut,
-then the drawer; fronts a shelved drawer; closes an open one.
-
-Skills and all container drawers declare `selectionGroup: 'inventory'`.
-The folio remembers ribbon, menu, tab and keyboard selections even when
-closing inventory dissolves their book. Reopening restores the selected
-drawer, independent of enrollment order. Hidden-leaf cleanup never changes
-that memory; explicitly closing the selected drawer remembers its surviving
-replacement. A reopened drawer still yields to a standing tree or station,
-and an explicit menu selection takes precedence over the remembered choice.
-Memory lasts for the UI session and is separate for each player. Verification:
-`npm run probe -- folio` and, after a build,
-`npx electron balance/inventory-tabs-ui.cjs` (hidden window, isolated saves).
-
-`ui/buildPanels.ts` owns ribbon width, page widths, screen margins and the
-unlearn target size. The default page seats follow the inventory's measured
-edge beyond the ribbon, flip for a left couch seat, and clamp into small
-viewports. Saved movable positions still take precedence. The Skills ribbon
-shows all registered Memory Essence tiers, including zero balances, using the
-inventory owner's wallet. Its rack reserves a 24-pixel unlearn corner; the
-remaining tile uses the ordinary drag fabric.
+[Inventory pages](inventory-pages.md) is the lifecycle, selection, layout and
+extension contract for Skills, Passives, skill trees and container boards.
 
 `installTooltipHints` in `ui/tooltip.ts` translates native `title` hints to the
 shared gold-bordered card, including dynamically rebuilt controls. Rich
@@ -251,7 +177,7 @@ over time and near screen edges.
 
 ### Moving panels (ui/panelmove.ts, 2026-09-04)
 
-Every ribboned panel drags by its `h2` (`attachPanelMove` once per root,
+Independent windows drag by their `h2` (`attachPanelMove` once per root,
 delegated — rebuilt templates stay draggable). THE ZOOM LAW converts
 screen px to the panel's own px (`.panel` rides CSS zoom); THE KEEP holds
 at least `keepPx` of the panel on screen and the ribbon never rises above
@@ -260,7 +186,8 @@ the couch dock (a guest's flank) resets it. THE BOOK MOVES AS ONE: a leaf
 coming to the front takes the seat the previous front was drawn at (the
 stylesheet's, when that front was never moved) — `folioLeaf.present` hands
 it over for one microtask — so switching or closing a tab never teleports
-the book. The strip re-seats on every move.
+the book. The strip re-seats on every move. Inventory pages inherit the
+inventory's seat and do not participate in window dragging or seat handoffs.
 
 THE LAYOUT (`Settings.layout`, Options → Interface → Layout): the whole
 fabric is an OPT-IN — "Movable UI" is OFF by default (the classic fixed
@@ -324,19 +251,9 @@ their menu-entry ids (`data/menu.ts`), so a mode that spares the map or the
 sheet is one row, no code. Probe: `probe_menubar` D6–D8 (registry sanity,
 the settings round-trip).
 
-**The bag goes first, and its drawer keeps its memory** (2026-09-11). The
-inventory's Skills page is the `skills` folio leaf, and the folio's
-close-all took it down through `closeBuildPanel`, which forgets the drawer:
-a bag swept shut by Esc reopened without Skills, while the bag key's own
-close hides the drawer and remembers it (the build-pages rule above). The
-sweep now takes an unkept bag through `toggleInventory` and syncs the folio
-BEFORE any book closes, so the `skills` leaf drops as already closed and
-reopening the bag brings Skills back where it stood: one close for the bag
-however it shuts (the key, the couch clear `hideAllFor`, the sweep). A KEPT
-bag (`sweepKeepBag` with other things up) still closes its drawer by the
-book on that press: "all but the bag" is the player's word, and Skills goes
-with the rest by intent; on the last-to-go press the bag stands alone, so
-there is no drawer to remember. Probe: `probe_folio` O10.
+Inventory closes before the book sweep, retaining all its pages for reopening.
+A keep-inventory sweep instead dismisses the pages through their folio closes.
+See [Inventory pages](inventory-pages.md) for the shared contract. Probe: O10.
 
 ## Dials (`FOLIO_CFG`)
 

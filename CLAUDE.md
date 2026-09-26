@@ -970,7 +970,7 @@ we verify changes.
   root child) names the `skill@limb` census hosts / the tooltip line /
   the bar pip / the sealed path's refusal words, THE COVER LAW replaces
   exact cover at boot validation, and the derived radial layout feeds
-  THE PULL-OUT — `ui/panels.ts openSkillTree`, one skill's tree drawn
+  the inventory skill-tree page — `ui/panels.ts openSkillTree`, drawn
   the passive tree's way (SVG nodes + edges, zoom/pan, shared tooltips,
   click-to-spend), opened from the Skills drawer's strip + the milestone
   popup; charter `docs/design/skill-modes.md` §3/§7/§8, probe
@@ -2462,7 +2462,7 @@ we verify changes.
   over the bag's always-available pages (the Skills drawer stays one tab
   away when the bench opens), a page the bag merely REMEMBERS lands behind
   an open counter, and only THE CALL'S WORD (`adopt(id, 'front')` —
-  `UI.folioAsk`, the press paths' one door) outranks the ladder; THE
+  `InventoryPages.request` for development pages) outranks the ladder; THE
   DEPARTURE LAW: a leaf the player can no longer reach (`reach()`, else
   `engaged()`, on the per-frame sync) closes through its own close — the
   tab goes down where the work is refused; suite members reach through
@@ -2475,15 +2475,18 @@ we verify changes.
   Brandt's counter gathers the bench + the stone as quiet tabs, their WORK
   allowed from the counter through the ONE reach predicate every action
   gate reads, closing with their anchor (one Esc leaves the workbench).
-  The two TREES are leaves too (the passive tree + one minted pane per
-  opened skill, `skilltree:<id>`; explicit asks arrive in front). THE PANEL
-  MOVE (`ui/panelmove.ts`): every ribboned panel drags by its `h2` — the
+  Inventory owns Skills, Passives, skill trees and container boards through
+  `ui/inventoryPages.ts`. Their canonical lifecycle, selection, layout and
+  extension contract is `docs/ui/inventory-pages.md`; verify with the hidden
+  `balance/inventory-pages-ui.cjs` and `balance/inventory-tabs-ui.cjs` harnesses.
+  THE PANEL MOVE (`ui/panelmove.ts`): independent windows drag by their `h2` — the
   zoom law (screen px ÷ the .panel zoom), THE KEEP (never fully off
   screen), double-click resets, the couch dock wins, and a folio book
   MOVES AS ONE (the new front takes the shelved front's seat); THE LAYOUT
   (`Settings.layout`, Options → Layout) is the OPT-IN — "Movable UI" OFF
   by default, seats persist as viewport fractions + per-panel 🔓/🔒 locks,
-  a reset re-homes everything (docs/ui/folio.md).
+  a reset re-homes everything. Inventory pages follow the bag's measured
+  edge and have no separate saved position (docs/ui/folio.md).
   THE MENU BAR (`ui/menubar.ts` — docs `docs/ui/menu.md`, probe
   `balance/probe_menubar.ts`): ONE Menu button on the HUD's edge (Tab /
   L3, `panelMenu`) fanning a TRAY of every page as DATA rows

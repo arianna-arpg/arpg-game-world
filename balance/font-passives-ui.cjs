@@ -22,6 +22,7 @@ app.whenReady().then(async () => {
   try {
     await win.loadURL(server.url);
     const ready = await js(`(() => {
+      Object.defineProperty(navigator,'getGamepads',{value:()=>[]});
       __game.account().ledger.prologue_lived=1;__game.devStartRun('warrior');__game.ui.hideAll();
       const w=__game.world();w.loadZone('lastlight');w.player.invulnerable=true;w.meta.passivePoints=8;
       const f=w.fonts[0];if(!f)throw Error('No Font');w.player.pos={...f.pos};w.player.tier=f.tier||0;

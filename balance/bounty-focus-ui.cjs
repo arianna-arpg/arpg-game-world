@@ -56,9 +56,9 @@ app.whenReady().then(async () => {
           Object.assign(w.player.pos, boardApproach); w.player.tier = boardAt.tier;
           ui.toggleInventory(); ui.folioSync(); // settle the remembered drawer before the next user action
           let id = ${JSON.stringify(page)}, el;
-          if (id === 'passives') { ui.toggleTree(); el = document.getElementById('passive-tree'); }
+          if (id === 'passives') { ui.inventoryPages.request('passives', w.localSeat.id, 'show'); el = document.getElementById('passive-tree'); }
           else if (id === 'skills') {
-            if (!ui.buildFlapOpen) ui.toggleBuildPanel();
+            if (!ui.skillsOpen) ui.toggleBuildPanel();
             ui.folioSync(); ui.folio.front('skills'); el = document.getElementById('skills-panel');
           } else {
             const skill = [...w.localSeat.meta.knownSkills.values()].find(s => s.def.tree);

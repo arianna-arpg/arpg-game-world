@@ -69,12 +69,12 @@ app.whenReady().then(async () => {
       check('explicit menu choice overrides remembered Skills', selected('container:reliquary'));
       click('[data-passiveflap]');
       ui.toggleInventory(); ui.folioSync(); ui.toggleInventory(); ui.folioSync();
-      check('recalled drawers preserve a standing passive tree', ui.folio.bookFor('passives')?.front === 'passives');
+      check('inventory reopen restores its selected passive page', ui.folio.bookFor('passives')?.front === 'passives');
       ui.closeTree(); ui.folioSync();
       click('[data-folio-tab="skills"]');
       click('#skills-panel [data-panel-x]');
       ui.toggleInventory(); ui.folioSync(); ui.toggleInventory(); ui.folioSync();
-      check('closing a drawer explicitly does not reopen it', !ui.buildFlapOpen
+      check('closing a drawer explicitly does not reopen it', !ui.skillsOpen
         && ui.folio.bookFor('container:reliquary')?.front === 'container:reliquary');
       ui.hideAll();
       return checks;

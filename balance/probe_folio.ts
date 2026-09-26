@@ -73,7 +73,7 @@
 //      and the calling MODALS, the trees and drawers PAGES; the crafting
 //      members carry stationReach as their reach; the harbor board, the
 //      muster horn and the parley engage on the menu bar's own reads; the
-//      four press paths ASK (folioAsk) and no station's show path does.
+//      development pages share InventoryPages and stations adopt independently.
 //
 //   npx tsx balance/probe_folio.ts
 
@@ -435,121 +435,52 @@ console.log('N. THE DIALS');
 // --- O. THE ENROLLMENT CENSUS -----------------------------------------------
 console.log('O. THE ENROLLMENT CENSUS');
 {
-  const panels = readFileSync(resolve(process.cwd(), 'src/ui/panels.ts'), 'utf8');
-  const main = readFileSync(resolve(process.cwd(), 'src/main.ts'), 'utf8');
+  const source = (file: string): string => readFileSync(resolve(process.cwd(), file), 'utf8').replace(/\r\n/g, '\n');
+  const panels = source('src/ui/panels.ts'), main = source('src/main.ts');
+  const pages = source('src/ui/inventoryPages.ts'), containers = source('src/ui/containerPane.ts');
   const EXPECTED = ['vendor', 'salvage', 'font', 'recall', 'oracle', 'bestiary', 'borough',
     'bounties', 'caravan', 'sail', 'hold', 'merc', 'vocation'];
-  // THE TREES (2026-09-04, her ask): the passive tree enrolls as a static
-  // player-panel leaf and every skill-tree pane enrolls at its minting
-  // (`skilltree:<skillId>`) — explicit asks that arrive in front, no
-  // engagement read, no range — so any of them up at once tab into one book.
-  const TREES = ['skills', 'passives'];
-  const ALL = [...EXPECTED, ...TREES];
   const enrolled = [...panels.matchAll(/this\.folioLeaf\('([a-z_]+)'/g)].map(m => m[1]!);
-  // A show path binds through the bare adopt (a station's offer) or through
-  // folioAsk (a page's press — THE CALL'S WORD); either is an adopt.
-  const adopted = [...panels.matchAll(/this\.folio(?:\.adopt|Ask)\('([a-z_]+)'\)/g)].map(m => m[1]!);
-  check('O1 the thirteen dwell dialogs + Skills and Passives enroll, once each',
-    ALL.every(id => enrolled.filter(x => x === id).length === 1) && enrolled.length === ALL.length,
-    `enrolled: ${enrolled.join(',')}`);
-  check('O2 every enrolled leaf adopts at its show path',
-    ALL.every(id => adopted.includes(id)), `adopted: ${adopted.join(',')}`);
-  check('O2c every skill-tree pane enrolls + asks per skill at its minting (one leaf per open tree)',
-    panels.includes('this.folioLeaf(`skilltree:${skillId}`') && panels.includes('this.folioAsk(`skilltree:${skillId}`)'));
-  // THE CONTAINER DRAWERS (ui/containerPane.ts): every registered side
-  // board's drawer enrolls + adopts per container at its minting through the
-  // panel's host seams — the ribbon beside SKILLS / PASSIVES joins the same
-  // inventory-side book (the skill-tree pane's shape, derived per def).
-  check('O2d every container drawer enrolls + asks per container at its minting (one leaf per open drawer)',
-    panels.includes('this.folioLeaf(`container:${id}`') && panels.includes('this.folioAsk(`container:${id}`)'));
-  check('O2b player pages explicitly ask for the front without station reads; recalled drawers share selection memory',
-    ["'skills'", "'passives'", '`skilltree:${skillId}`', '`container:${id}`'].every(id => {
-      const i = panels.indexOf(`this.folioLeaf(${id}`);
-      const row = i < 0 ? '' : panels.slice(i, panels.indexOf('}));', i));
-      const drawer = id === "'skills'" || id === '`container:${id}`';
-      return panels.includes(`this.folioAsk(${id})`)
-        && (drawer ? row.includes("selectionGroup: 'inventory'") && !row.includes('arrive:') : row.includes("arrive: 'front'"))
-        && !row.includes('engaged:') && !row.includes('range:');
-    }));
-  const showBody = (name: string): string => {
-    const i = panels.indexOf(`\n  ${name}(`);
-    const j = panels.indexOf('\n  }\n', i);
+  const adopted = [...panels.matchAll(/this\.folio\.adopt\('([a-z_]+)'\)/g)].map(m => m[1]!);
+  check('O1 the thirteen dwell dialogs enroll once each',
+    EXPECTED.every(id => enrolled.filter(x => x === id).length === 1) && enrolled.length === EXPECTED.length);
+  check('O2 every dwell dialog adopts at its show path', EXPECTED.every(id => adopted.includes(id)));
+  const body = (signature: string, end = '\n  }'): string => {
+    const i = panels.indexOf(signature), j = panels.indexOf(end, i);
     return i < 0 || j < 0 ? '' : panels.slice(i, j);
   };
+  const adapter = body('private enrollInventoryPage(');
+  check('O3 all development pages share the registry folio adapter',
+    adapter.includes('this.folioLeaf(page.id') && adapter.includes('this.inventoryPages.isOpen(page.id)')
+    && adapter.includes('this.inventoryPages.close(page.id)') && adapter.includes("selectionGroup: 'inventory'")
+    && adapter.includes("kind: 'page'") && !adapter.includes('arrive:') && !adapter.includes('engaged:'));
+  check('O4 static pages register descriptors',
+    ['skills', 'passives'].every(id => panels.includes("this.inventoryPages.register({ id: '" + id + "'")));
+  check('O5 dynamic skill trees and containers register descriptors',
+    panels.includes('this.inventoryPages.register({ id: \u0060skilltree:')
+    && containers.includes('this.host.pages.register({'));
+  check('O6 requests open the parent and explicitly select the requested leaf',
+    pages.includes('this.host.open(owner)') && pages.includes("folio.adopt(id, 'front')") && pages.includes('folio.front(id)'));
   const shows = ['showCaravan', 'showSail', 'showBounties', 'showHold', 'showMercMenu', 'showVocationMenu'];
-  check('O3 every former swap show path still exists', shows.every(n => showBody(n).length > 0));
-  const swaps = shows.filter(n => /this\.hideAll\(\)/.test(showBody(n)));
-  check('O4 no dwell dialog swaps the screen with hideAll() at its show', swaps.length === 0, swaps.join(','));
-  check('O5 the shelved class is the adapter\'s presence lever', panels.includes('FOLIO_SHELVED_CLASS'));
-  check('O6 main.ts drives the per-frame sync and the Esc hook',
-    main.includes('ui.folioSync()') && main.includes('ui.folioCloseFront()'));
-  check('O7 the couch cascade closes the seat\'s front leaf first',
-    /escCascadeFor\([\s\S]{0,900}?folio\.closeFront/.test(panels));
-  check('O8 hideAll and hideAllFor settle the books at once', (panels.match(/this\.folio\.sync\(\)/g) ?? []).length >= 2);
-  // THE TRUE CLOSE (2026-09-11, her report): a leaf whose close FRONTS
-  // instead of closing (toggleTree's shelved press — the D-pad law) broke
-  // close-all: Passives shelved behind Skills came forward, Skills closed,
-  // and the book stood on Passives. The leaf's close and every seat-scoped
-  // clear go through closeTree; only the key/menu toggle and the couch
-  // contention path may call toggleTree.
-  const passivesRow = (() => {
-    const i = panels.indexOf("this.folioLeaf('passives'");
-    return i < 0 ? '' : panels.slice(i, panels.indexOf('}));', i));
-  })();
-  check('O9 the passives leaf closes through closeTree, never the fronting toggle',
-    passivesRow.includes('this.closeTree()') && !passivesRow.includes('toggleTree'));
-  check('O9b hideAllFor and the close glyph take the tree down through closeTree',
-    /hideAllFor\([\s\S]{0,700}?this\.closeTree\(\)/.test(panels) && panels.includes('[this.passiveTree, () => this.closeTree()]'));
-  // THE BAG GOES FIRST (2026-09-11, her report): the sweep's close-all
-  // reached the Skills drawer through closeBuildPanel, which FORGETS it
-  // (buildFlapOpen = false) — a bag swept shut by Esc reopened without
-  // Skills, while the bag key's own close (toggleInventory → syncBuildPanels)
-  // hides the drawer and keeps its memory. The sweep now takes an unkept
-  // bag through toggleInventory and syncs the folio BEFORE any book closes,
-  // so the 'skills' leaf drops as already closed; a KEPT bag still closes
-  // its drawer by the book on that press (the player's "all but the bag").
-  const sweepBody = showBody('escapeSweep');
-  const sweepAt = (s: string): number => sweepBody.indexOf(s);
-  const bagAt = sweepAt("!keep.includes('inventory')"), toggleAt = sweepAt('this.toggleInventory(seatId)');
-  const syncAt = sweepAt('this.folio.sync()'), booksAt = sweepAt('this.folio.closeAll(');
-  check('O10 the sweep takes an unkept bag through its own toggle and syncs before any book closes',
-    bagAt >= 0 && toggleAt > bagAt && syncAt > toggleAt && booksAt > syncAt,
-    `bag@${bagAt} toggle@${toggleAt} sync@${syncAt} books@${booksAt}`);
-  check('O10b the sweep never forgets the drawer itself (no closeBuildPanel in its body)',
-    sweepBody.length > 0 && !sweepBody.includes('closeBuildPanel()'));
-  // THE PRIMACY LAW + THE DEPARTURE LAW (2026-09-16, her ask): every row
-  // declares its kind — the world's dwell dialogs are STATIONS (they front
-  // over the bag's always-available pages on arrival and go down when the
-  // hero walks out of reach), the picker and the calling are MODALS, the
-  // trees and the drawers PAGES; the crafting members carry THE REACH LAW
-  // as their reach read; the three host-global stations engage on the same
-  // near-reads THE MENU BAR seals their pages on; and the four PRESS paths
-  // ask through folioAsk while no station's show path does (a dwell is an
-  // offer, ranked by the ladder, never an ask).
-  const rowOf = (id: string): string => {
-    const i = panels.indexOf(`this.folioLeaf(${id}`);
-    return i < 0 ? '' : panels.slice(i, panels.indexOf('}));', i));
-  };
-  const MODALS = ['recall', 'vocation'];
-  const STATIONS = EXPECTED.filter(id => !MODALS.includes(id));
-  check('O11 every dwell dialog is a STATION and the picker + the calling are MODALS',
-    STATIONS.every(id => rowOf(`'${id}'`).includes("kind: 'station'"))
-    && MODALS.every(id => rowOf(`'${id}'`).includes("kind: 'modal'") && rowOf(`'${id}'`).includes("arrive: 'front'")),
-    STATIONS.filter(id => !rowOf(`'${id}'`).includes("kind: 'station'")).join(','));
-  check('O11b Skills, Passives, every skill-tree pane and every container drawer are PAGES',
-    ["'skills'", "'passives'", '`skilltree:${skillId}`', '`container:${id}`'].every(id => rowOf(id).includes("kind: 'page'")));
-  check('O12 the crafting members carry THE REACH LAW (stationReach) as their reach read',
-    ['salvage', 'oracle'].every(id => rowOf(`'${id}'`).includes(`reach: () => w().stationReach('${id}'`)));
-  check('O13 the harbor board, the muster horn and the parley engage on the menu bar\'s own near-reads',
-    rowOf("'sail'").includes('nearHarborBoard(') && rowOf("'hold'").includes('nearMusterHorn(')
-    && rowOf("'merc'").includes('mercParley(') && rowOf("'merc'").includes('.near'));
-  const asks = ["this.folioAsk('skills')", "this.folioAsk('passives')", 'this.folioAsk(`skilltree:${skillId}`)', 'this.folioAsk(`container:${id}`)'];
-  check('O14 the four press paths ASK (folioAsk = adopt with the front word) and no station show path does',
-    asks.every(a => panels.includes(a)) && panels.includes("this.folio.adopt(id, 'front')")
-    && EXPECTED.every(id => !panels.includes(`this.folioAsk('${id}')`)));
-  const folio = readFileSync(resolve(process.cwd(), 'src/ui/folio.ts'), 'utf8');
-  check('O14b the self-heal binds with no word (a remembered drawer obeys the ladder)',
-    folio.includes('if (open && !bound) this.adopt(id);'));
+  check('O7 station show paths never clear the whole workspace',
+    shows.every(name => body('  ' + name + '(').length > 0 && !body('  ' + name + '(').includes('this.hideAll()')));
+  check('O8 main drives folio sync and front close', main.includes('ui.folioSync()') && main.includes('ui.folioCloseFront()'));
+  check('O9 couch cascade closes its own front leaf first', /escCascadeFor\([\s\S]{0,900}?folio\.closeFront/.test(panels));
+  const sweep = body('  escapeSweep(');
+  const bagAt = sweep.indexOf("!keep.includes('inventory')"), toggleAt = sweep.indexOf('this.toggleInventory(seatId)');
+  const syncAt = sweep.indexOf('this.folio.sync()'), booksAt = sweep.indexOf('this.folio.closeAll(');
+  check('O10 parent closes and syncs before sweeping books to retain pages',
+    bagAt >= 0 && toggleAt > bagAt && syncAt > toggleAt && booksAt > syncAt);
+  const row = (id: string): string => body("this.folioLeaf('" + id + "'", '}));');
+  const modals = ['recall', 'vocation'];
+  check('O11 station and modal kinds are explicit', EXPECTED.every(id => row(id).includes(
+    modals.includes(id) ? "kind: 'modal'" : "kind: 'station'")));
+  check('O12 crafting members carry stationReach',
+    ['salvage', 'oracle'].every(id => row(id).includes("reach: () => w().stationReach('" + id + "'")));
+  check('O13 station engagement uses the live menu reads', row('sail').includes('nearHarborBoard(')
+    && row('hold').includes('nearMusterHorn(') && row('merc').includes('mercParley('));
+  check('O14 remembered pages bind without an explicit request',
+    source('src/ui/folio.ts').includes('if (open && !bound) this.adopt(id);'));
 }
 
 // --- P. THE SUITE (core) ----------------------------------------------------

@@ -360,27 +360,17 @@ standing order are untouched (the drop INDEX counts mints, not levels).
 
 ## 7. UI
 
-- **THE SKILLS DRAWER:** the inventory drawer currently labeled **"Build"
-  renames to exactly "Skills"** (ruled, wave 3 — to the player it is where
-  their skills live, not "the build"). Player-facing strings only; code
-  identifiers stay `skill*`/`build*` as they are. The handle today reads
-  `📖 Build — N pts` (panels.ts:2701) — the pts counter retires with the
-  point economy; its replacement readout is a **DIAL** (unspent tree
-  points, or the essence wallet's glyphs). Fitting closure: this drawer
-  replaced the old Skill Book (panels.ts:4451) — "Skills" completes the
-  circle.
-- **Per-skill rows** in the drawer: a level bar with band tick-marks, a
-  feed control lit when the wallet holds the current band's essence, the
-  point counter, and the miniature tree — two branches fanning from a
-  root, the sealed branch greyed with its refusal words. The tree is
-  hidden until the first point exists (level 5); a quiet **waiting-pip**
-  marks an unspent point. The pip is the milestone moment; a Calling-style
-  popup (queued to the next disciplined calm, never mid-combat) remains an
-  optional layer (**DIAL**).
+- **Skills:** the inventory's Skills page shows learned skills, rack seats
+  and the Memory Essence wallet. Labels and layout follow the shared
+  [inventory-page contract](../ui/inventory-pages.md).
+- **Per-skill rows:** level-band ticks, essence feeding, allocated points,
+  and a handle to the skill's tree page. An awakened Memory exposes its
+  tree controls; the waiting pip marks an unspent point. Tree access uses
+  the engine's Memory awakening gate.
 - **At a glance:** the bar icon wears a tiny branch pip (the beatPips look
   idiom); the tooltip's first line names the picked branch.
-- **THE PULL-OUT (built 2026-09-04):** the tree leaves the drawer row for
-  its own pane (`#skill-tree`, `openSkillTree` / `refreshSkillTree` in
+- **Skill-tree page:** each learned skill has an inventory page
+  (`#skill-tree-<id>`, `openSkillTree` / `refreshSkillTree` in
   ui/panels.ts), drawn the passive tree's way — SVG nodes and edges over
   the graph's derived layout, zoom/pan through the shared gesture helper,
   node cards through the shared tooltip (the payload in words, THE ONE
@@ -392,8 +382,8 @@ standing order are untouched (the drop INDEX counts mints, not levels).
   (level bar with band ticks, points, the committed limb, a waiting pip
   that lights the `⟡ Tree` handle gold, the Font's reset chip beside a
   font); the milestone popup grew an "Open the tree" door. The pane is
-  owned by its opener's seat (the couch lens) and clears with the
-  ordinary panels on Esc.
+  owned by Inventory's seat. Opening, closing, selection and layout follow
+  the shared [inventory-page contract](../ui/inventory-pages.md).
 - **The Font screen:** recipe tabs (Merge / Convert / Reset), drop-zones,
   deterministic preview lines ("3× Firebolt (Magic) → 1× Firebolt (Rare),
   level 7 kept"), keeper's-mark refusals in its standing words.
@@ -543,9 +533,8 @@ standing order are untouched (the drop INDEX counts mints, not levels).
   its debut reconcile, the monster-pin capability, the full wild_strike
   exemplar with per-rung A/B tables (§8's M1 as-built block carries the
   detail; ⚠ every number unblessed — the blessing pass owns them).
-- **THE GRAPH GRAMMAR + THE PANE — BUILT 2026-09-04** (her ask, the
-  same day: the tree as its own pull-out pane drawn like the passive
-  tree, over a grammar that can hold genuine branches). §3's graph
+- **THE GRAPH GRAMMAR + THE PANE — BUILT 2026-09-04** (the tree drawn
+  like Passives, over a grammar that can hold genuine branches). §3's graph
   grammar + §7's pane + §8's as-built block; probe_skillmodes grew
   section N (the sugar fold byte-identical, the graph form on a fixture,
   the layout, the census walk). Content untouched: the six trees stay

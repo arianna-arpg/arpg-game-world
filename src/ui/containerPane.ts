@@ -1,34 +1,6 @@
-// ---------------------------------------------------------------------------
-// THE CONTAINER DRAWERS — a side board's page on the inventory's ribbon rail.
-//
-// Every owned container (engine/containers.ts — the Reliquary first) wears a
-// RIBBON on the inventory's edge beside SKILLS and PASSIVES, and its press
-// pops a DRAWER out beside the bag: a minted panel root (the skill-tree
-// pane idiom — one root per container, minted on first open) that DOCKS
-// beside the inventory through the same seat law the Skills drawer rides
-// (ui/panels.ts syncBuildPanels + buildPanelSeat) and ENROLLS in THE FOLIO
-// as a leaf of the inventory-side book, so a drawer up beside Skills or a
-// tree tabs into ONE book instead of painting over it — THE MASTER LAW, the
-// front swap, the true close, the Esc sweep all arrive from the folio for
-// free. The bag stays on screen the whole time: a relic drags straight from
-// its bag cell onto an open seat, and a seated piece drags back onto any bag
-// cell (the bag's landing law routes a `c:<id>` origin to containerTake),
-// onto the drawer's RETURN strip, or unseats by the right-click TAP.
-//
-// The drawer draws the board's FULL shape (containerFullBoard): the cells the
-// account's rungs have opened are live seats, the cells a later rung opens
-// are SEALED — dim, a lock, the rung's name on hover — so the Vault ladder
-// teaches itself on the face. DRAWN == TESTED: every landing the face lights
-// is the engine's own read (containerLanding — the verdict containerPlace
-// acts on), painted through the bag's own preview box.
-//
-// The pane keeps TWO things: which drawers are OPEN (memory kept across a
-// bag close, the Skills drawer's rule — reopening the bag brings them back)
-// and the minted roots. Everything else reads live off the seat's meta and
-// the registry, so a re-render mid-carry re-earns its marks like the bag.
-// ui/panels.ts owns the panel and the folio; this module owns the drawers
-// (docs/engine/containers.md, docs/ui/folio.md).
-// ---------------------------------------------------------------------------
+/** Container boards register inventory pages on first use. InventoryPages owns
+ * their lifecycle; this module renders boards, ribbons and item gestures.
+ * See docs/ui/inventory-pages.md and docs/engine/containers.md. */
 
 import { dndCarried, registerDropTarget, type DragPayload } from './dnd';
 import { hideTooltip } from './tooltip';
@@ -47,6 +19,8 @@ import type { Seat, World } from '../engine/world';
 import { empowermentText } from './reliquary';
 import { isVaultAvailable } from '../meta/account';
 import { planRelicStorage, reliquaryExperience } from '../engine/accountReliquary';
+import { BUILD_PANEL_CFG } from './buildPanels';
+import type { InventoryPages } from './inventoryPages';
 
 /** What the drawers need from the panel that hosts them — read live, never
  *  held. The folio ids (`container:<id>`) and the docking law stay the
@@ -55,13 +29,9 @@ export interface ContainerPaneHost {
   world(): World;
   /** The inventory panel's owning seat (the couch lens). */
   seat(): Seat;
-  inventoryOpen(): boolean;
-  /** Open the inventory for a seat (the menu page's road in). */
-  openInventory(seatId?: string): void;
+  pages: InventoryPages;
   /** Re-render the inventory (which re-renders every open drawer) + the sheet. */
   refresh(): void;
-  /** Re-seat the docked panels (syncBuildPanels). */
-  sync(): void;
   /** The bag's cell size in CSS px (the tiles share it). */
   cellPx: number;
   /** A salvage lane is armed on the panel. */
@@ -69,21 +39,8 @@ export interface ContainerPaneHost {
   lockGestureText(): string;
   lockHintHtml(): string;
   closeGlyphHtml(): string;
-  /** Stamp a minted root as the inventory owner's (the couch lens). */
-  ownDocked(el: HTMLElement): void;
-  /** THE PANEL MOVE for a minted root. */
-  attachMove(el: HTMLElement): void;
   /** Item tooltips on a minted root (the inventory's resolver). */
   bindItemTooltips(el: HTMLElement): void;
-  /** THE FOLIO: enroll a drawer as a leaf of the inventory-side book. */
-  enrollLeaf(id: string, el: HTMLElement, title: () => string, isOpen: () => boolean, close: () => void, refresh: () => void): void;
-  folioAdopt(id: string): void;
-  /** Bring a shelved drawer forward; false when it is not bound. */
-  folioFront(id: string): boolean;
-  /** The front of the book holding this drawer (a bare container id), or
-   *  null when the drawer stands alone / unbound. */
-  folioFrontOf(id: string): string | null;
-  folioStripUpdate(): void;
   /** The pad's lock press (button 0 from the pad pointer under its lock bind). */
   padLock(ev: PointerEvent): boolean;
   beginLockHold(ev: PointerEvent, uid: number, pad: boolean): void;
@@ -100,8 +57,6 @@ const esc = (s: string): string => s.replace(/[&<>"']/g, ch =>
 export const containerPanelId = (id: string): string => `container-panel-${id}`;
 
 export class ContainerPane {
-  /** Which drawers stand open — memory kept across a bag close. */
-  private readonly open = new Set<string>();
   /** The minted roots, by container id. */
   private readonly panels = new Map<string, HTMLElement>();
   private readonly rendered = new WeakMap<HTMLElement, string>();
@@ -118,19 +73,7 @@ export class ContainerPane {
 
   /** A drawer stands open (its board still exists for the run). */
   isOpen(id: string): boolean {
-    return this.open.has(id) && !!CONTAINERS[id] && containerBoard(CONTAINERS[id]) !== null;
-  }
-
-  /** Is this root one of the drawers? (syncBuildPanels' width pick.) */
-  isPanel(el: HTMLElement): boolean {
-    for (const p of this.panels.values()) if (p === el) return true;
-    return false;
-  }
-
-  /** The roots of every OPEN drawer — the docking, obstruction and
-   *  open-census lists read this. */
-  dockedEls(): HTMLElement[] {
-    return [...this.panels.entries()].filter(([id]) => this.isOpen(id)).map(([, el]) => el);
+    return this.host.pages.isOpen(`container:${id}`);
   }
 
   /** The tile element carrying a uid in any drawer (the lock hold's anchor). */
@@ -171,69 +114,22 @@ export class ContainerPane {
 
   // ----------------------------------------------------------- drawers ----
 
-  /** The ribbon's press (the Skills flap's grammar): a drawer open but
-   *  SHELVED behind a book-mate comes forward; otherwise the drawer flips. */
-  toggle(id: string): void {
+  /** Ribbons and menu choices use the same inventory-page request. */
+  toggle(id: string, seatId = this.host.seat().id): void {
     const def = CONTAINERS[id];
     if (!def || !containerBoard(def)) return;
-    if (this.open.has(id)) {
-      const front = this.host.folioFrontOf(id);
-      if (front !== null && front !== id) {
-        if (this.host.folioFront(id)) { this.host.folioStripUpdate(); return; }
-      }
-      this.open.delete(id);
-    } else {
-      this.open.add(id);
-      this.paneFor(id);
-    }
-    hideTooltip();
-    this.host.refresh();
-    if (this.open.has(id)) this.host.folioAdopt(id);
-    this.host.folioStripUpdate();
+    this.paneFor(id);
+    this.host.pages.request(`container:${id}`, seatId);
   }
 
-  /** The drawer's own close (the glyph, the book, the sweep): forgets it —
-   *  the Skills drawer's exact shape. */
-  close(id: string): void {
-    if (!this.open.has(id)) return;
-    this.open.delete(id);
-    hideTooltip();
-    if (this.host.inventoryOpen()) this.host.refresh();
-    else this.host.sync();
-  }
-
-  /** The menu page's road (the tray's toggle grammar): the bag opens if it
-   *  is shut, then the drawer opens; already up and in front, the press
-   *  closes it; up but shelved, it comes forward. */
+  /** Menu requests use the local player unless a couch owner is supplied. */
   openFromMenu(id: string, seatId?: string): void {
-    if (!CONTAINERS[id] || !containerBoard(CONTAINERS[id])) return;
-    if (!this.host.inventoryOpen()) {
-      this.host.openInventory(seatId);
-      if (!this.open.has(id)) this.toggle(id);
-      else {
-        // A menu choice explicitly selects even a remembered, shelved drawer.
-        if (!this.host.folioFront(id)) this.host.folioAdopt(id);
-        this.host.folioStripUpdate();
-      }
-      return;
-    }
-    this.toggle(id);
-  }
-
-  /** Every drawer follows the bag: hidden while the inventory is shut or
-   *  the drawer is not open (memory kept either way). */
-  syncHidden(): void {
-    for (const [id, el] of this.panels) el.classList.toggle('hidden', !(this.host.inventoryOpen() && this.isOpen(id)));
-  }
-
-  /** hideAll's lane: every root hidden, memory kept. */
-  hideAll(): void {
-    for (const el of this.panels.values()) el.classList.add('hidden');
+    this.toggle(id, seatId ?? this.host.world().localSeat.id);
   }
 
   /** Re-render every open drawer (the inventory's beat). */
   renderAll(live = false): void {
-    for (const id of this.open) if (this.isOpen(id)) this.render(id, live);
+    for (const id of this.panels.keys()) if (this.isOpen(id)) this.render(id, live);
   }
 
   /** Mint a drawer's root on first open: the skill-tree pane idiom — a
@@ -250,14 +146,10 @@ export class ContainerPane {
     document.body.appendChild(el);
     this.panels.set(id, el);
     this.host.bindItemTooltips(el);
-    el.addEventListener('click', (e) => {
-      if ((e.target as Element).closest('[data-panel-x]')) this.close(id);
-    });
-    this.host.attachMove(el);
-    this.host.enrollLeaf(id, el, () => def?.label ?? id,
-      () => this.host.inventoryOpen() && this.isOpen(id),
-      () => this.close(id),
-      () => { hideTooltip(); this.render(id); });
+    this.host.pages.register({ id: `container:${id}`, el,
+      title: () => def?.label ?? id, width: BUILD_PANEL_CFG.containerWidth,
+      available: () => !!CONTAINERS[id] && containerBoard(CONTAINERS[id]) !== null,
+      refresh: () => { hideTooltip(); this.render(id); } });
     return el;
   }
 
@@ -347,7 +239,6 @@ export class ContainerPane {
       if (!pad) { ev.preventDefault(); ev.stopPropagation(); }
       this.host.beginLockHold(ev, uid, pad);
     }));
-    this.host.ownDocked(el);
   }
 
   /** One seated piece as a tile — the bag's plain gear face (rarity border,

@@ -68,6 +68,11 @@ CONTAINER_DEFS.forEach((c, i) => registerMenuEntry({
   ...sealed('inventory'),
 }));
 registerMenuEntry({
+  id: 'skills', label: 'Skills', icon: 'tree', group: 'hero', verb: 'skills', bind: 'panelSkills', order: 0.5,
+  blurb: 'Your learned skills and Memory Essences.',
+  ...sealed('inventory'),
+});
+registerMenuEntry({
   id: 'character', label: 'Character', icon: 'sheet', group: 'hero', verb: 'character', bind: 'panelChar', order: 1,
   blurb: 'Attributes, defenses, offense — the sheet every modifier folds into.',
   ...sealed('character'),

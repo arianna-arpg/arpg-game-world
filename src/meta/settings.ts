@@ -34,7 +34,7 @@ export type ActionId =
   | 'moveUp' | 'moveDown' | 'moveLeft' | 'moveRight'
   | 'skillSlot2' | 'skillSlot3' | 'skillSlot4' | 'skillSlot5' | 'skillSlot6' | 'skillSlot7'
   | 'metaModifier' | 'pickup'
-  | 'panelChar' | 'panelTree' | 'panelMap' | 'panelInv'
+  | 'panelChar' | 'panelTree' | 'panelSkills' | 'panelMap' | 'panelInv'
   | 'panelMenu' | 'townPortal' | 'itemLock' | 'companionStance' | 'dialogueAdvance';
 
 /** Pad-bindable actions: everything the keyboard binds, PLUS bar slots 0/1
@@ -324,9 +324,8 @@ export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
   skillSlot2: '1', skillSlot3: '2', skillSlot4: '3',
   skillSlot5: '4', skillSlot6: '5', skillSlot7: '6',
   metaModifier: 'shift', pickup: 'f',
-  // (The old Skill Book key retired — the build lives in the Inventory's
-  // pop-out drawer now; one panel, one key.)
-  panelChar: 'c', panelTree: 'p', panelMap: 'm', panelInv: 'i',
+  // Page shortcuts select within Inventory. Skills ships unbound.
+  panelChar: 'c', panelTree: 'p', panelSkills: '', panelMap: 'm', panelInv: 'i',
   // THE MENU BAR (ui/menubar.ts): the tray of every page — Tab, the
   // MMO habit; the folio's Tab walk wins while a book of tabs stands.
   panelMenu: 'tab',
@@ -357,7 +356,7 @@ export const DEFAULT_PAD_BINDS: Record<PadActionId, string> = {
   skillSlot2: 'pad:a', skillSlot3: 'pad:b', skillSlot4: 'pad:x', skillSlot5: 'pad:y',
   skillSlot6: 'pad:rb', skillSlot7: 'pad:lb',
   metaModifier: 'pad:select', pickup: 'pad:r3',
-  panelChar: 'pad:up', panelTree: 'pad:right', panelMap: 'pad:left', panelInv: 'pad:down',
+  panelChar: 'pad:up', panelTree: 'pad:right', panelSkills: '', panelMap: 'pad:left', panelInv: 'pad:down',
   panelMenu: 'pad:l3',
   townPortal: '', itemLock: 'pad:a',
   companionStance: '', // pad buttons are scarce — bindable, ships unbound
@@ -384,7 +383,7 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   skillSlot2: 'Skill 3', skillSlot3: 'Skill 4', skillSlot4: 'Skill 5',
   skillSlot5: 'Skill 6', skillSlot6: 'Skill 7', skillSlot7: 'Skill 8',
   metaModifier: 'Meta-Skill Modifier', pickup: 'Pick Up Item',
-  panelChar: 'Character Sheet', panelTree: 'Passive Tree', panelMap: 'World Map',
+  panelChar: 'Character Sheet', panelTree: 'Passive Tree', panelSkills: 'Skills', panelMap: 'World Map',
   panelInv: 'Inventory', panelMenu: 'Menu',
   townPortal: 'Town Portal', itemLock: 'Hold to Lock / Reserve (menus)',
   companionStance: 'Companion Stance (cycle)',

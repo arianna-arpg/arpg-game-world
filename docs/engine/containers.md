@@ -158,18 +158,11 @@ is a validated host action that rechecks readiness and giver proximity.
 
 ## The drawer (ui/containerPane.ts)
 
-Every owned container wears a **ribbon** on the inventory's rail beside
-SKILLS and PASSIVES (glyph, name, `seated/seats`). Its press pops a **drawer**
-beside the bag: a minted `container-panel` root (the skill-tree pane idiom,
-one per container on first open) that **docks** through the Skills drawer's
-own seat law (`syncBuildPanels` + `buildPanelSeat`, width
-`BUILD_PANEL_CFG.containerWidth`) and **enrolls in THE FOLIO** as a
-`container:<id>` leaf of the inventory-side book — an explicit ask that
-arrives in front and closes through its own close — so a drawer up beside
-Skills or a tree tabs into one book instead of painting over it; the master
-law, the front swap, the true close and the Esc sweep all arrive from the
-folio (docs/ui/folio.md). The drawer follows the bag as Skills does: hidden
-with it, memory kept.
+Every owned container wears a ribbon beside Skills and Passives. On first use,
+ContainerPane registers its root as an InventoryPage with its title, availability,
+width and render callback. [Inventory pages](../ui/inventory-pages.md) owns the
+shared opening, selection, closing, remembered membership and layout contract.
+The container face keeps no separate open state.
 
 The drawer draws the board's full shape (live seats as drop cells, sealed
 seats dim with the rung's name), a **return strip**, and the hints. The bag
@@ -180,8 +173,7 @@ routes a `c:<id>` origin), seated tile → another seat re-places
 (`containerMove`), and the right-click tap (the bag's use verb) seats /
 unseats first-fit; the keeper's lock hold works on a seated tile. The item
 tooltip says where a relic stands and whether it speaks. The menu's
-`container:<id>` page opens the bag if it is shut, then the drawer; fronts a
-shelved drawer; closes an open one (`openFromMenu`).
+`container:<id>` menu action selects its inventory page (`openFromMenu`).
 
 ## Adding a container
 

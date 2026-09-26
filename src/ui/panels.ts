@@ -44,6 +44,7 @@ import { bagBoard, canPlaceAt, overlappingItems, swapBlockerFits } from '../engi
 // ui/containerPane.ts; the panel only seats it, routes its gestures and
 // resolves carried pieces through the one lookup (findCarried).
 import { ContainerPane } from './containerPane';
+import { InventoryPages, type InventoryPage } from './inventoryPages';
 import { questRewardHtml, questImbueHtml } from './questRewards';
 import { containerOriginOf, findCarried, originContainerId } from '../engine/containers';
 import { CONTAINER_DEFS } from '../data/containers';
@@ -74,7 +75,7 @@ import { sceneDue } from '../engine/scenes';
 import { dndCancel, dndCarried, dndSwallowClick, registerDragSource, registerDropTarget, type DragPayload } from './dnd';
 import { PAD_POINTER_ID } from './padpointer';
 import { applyUiScale, UI_SCALE_CFG, uiScaleNow } from './uiScale';
-import { bindFolioKeys, FolioCore, FolioStrip, FOLIO_SHELVED_CLASS, installFolioStyles, type FolioArrival, type FolioLeafSpec } from './folio';
+import { bindFolioKeys, FolioCore, FolioStrip, FOLIO_SHELVED_CLASS, installFolioStyles, type FolioLeafSpec } from './folio';
 import type { TownSiteId } from '../data/townBuild';
 import type { SuiteStation } from '../data/suites';
 import { RENDER_SCALE_CFG } from '../render/renderScale';
@@ -226,7 +227,6 @@ const TREE_REACH_PX = 34;
 interface SkillTreePane {
   skillId: string;
   el: HTMLElement;
-  open: boolean;
   zoom: number;
   pan: { x: number; y: number };
   box: { minX: number; minY: number; w: number; h: number };
@@ -617,57 +617,50 @@ export class UI {
   /** The essence SATCHEL flap on the inventory panel (persists across
    *  re-renders — a satchel stays however you left it). */
   private satchelOpen = false;
+  /** All development-page lifecycle and ownership live in this registry. */
+  private readonly inventoryPages = new InventoryPages({
+    owner: () => this.panelSeat(this.inventory).id,
+    isOpen: () => this.inventoryOpen,
+    open: owner => this.openInventory(owner),
+    close: () => this.closeInventory(),
+    assign: (el, owner) => this.panelSeatIds.set(el, owner),
+    enroll: page => this.enrollInventoryPage(page),
+    changed: () => {
+      hideTooltip();
+      this.syncInventoryPages();
+      if (this.inventoryOpen) this.refreshInventory();
+      this.refreshTree();
+      this.refreshSkillTree();
+      this.folio.sync();
+      this.folioStrip.update();
+    },
+    selected: () => this.folioStrip.update(),
+    folio: () => this.folio,
+  });
   /** THE CONTAINER FABRIC's face (ui/containerPane.ts): the bag column's
    *  tab strip and every side board's face — the Reliquary first. Reads the
    *  panel live through this host; keeps only which face is showing. */
   private readonly containerPane = new ContainerPane({
     world: () => this.getWorld(),
     seat: () => this.panelSeat(this.inventory),
-    inventoryOpen: () => this.inventoryOpen,
-    openInventory: (seatId) => { if (!this.inventoryOpen) this.toggleInventory(seatId); },
+    pages: this.inventoryPages,
     refresh: () => { this.refreshInventory(); this.refreshCharSheet(); this.refreshOracle(); },
-    sync: () => this.syncBuildPanels(),
     cellPx: BAG_CELL_PX,
     breaking: () => this.salvageLaneFor(this.inventory) !== null,
     lockGestureText: () => this.lockGestureText(),
     lockHintHtml: () => this.lockHintHtml(),
     closeGlyphHtml: () => this.closeGlyphHtml(),
-    ownDocked: (el) => this.panelSeatIds.set(el, this.panelSeat(this.inventory).id),
-    attachMove: (el) => {
-      attachPanelMove(el, { onMove: () => this.folioStrip.update() });
-      el.addEventListener('pointerdown', () => this.pressHeld.add(el), { capture: true });
-    },
     bindItemTooltips: (el) => bindTooltips(el, (t, ext) =>
       t.dataset.tip === 'item' ? this.itemTooltip(Number(t.dataset.itemUid), ext, this.panelSeat(this.inventory), null) : null,
     { extend: true }),
-    // THE FOLIO: a drawer is a leaf of the inventory-side book — an explicit
-    // ask that arrives in front (the trees' shape), closing through its own
-    // close, never a fronting toggle.
-    enrollLeaf: (id, el, title, isOpen, close, refresh) => {
-      this.folio.enroll(this.folioLeaf(`container:${id}`, el, title, isOpen, close, {
-        kind: 'page', selectionGroup: 'inventory', bay: () => this.buildPanelBay(el), refresh }));
-    },
-    folioAdopt: (id) => { this.folioAsk(`container:${id}`); }, // the ribbon's press: an explicit ask
-    folioFront: (id) => this.folio.front(`container:${id}`),
-    folioFrontOf: (id) => {
-      const book = this.folio.bookFor(`container:${id}`);
-      if (!book) return null;
-      return book.front.startsWith('container:') ? book.front.slice('container:'.length) : book.front;
-    },
-    folioStripUpdate: () => this.folioStrip.update(),
     padLock: (ev) => ev.button === 0 && ev.pointerId === PAD_POINTER_ID
       && this.getSettings().padBinds.itemLock === PAD_CFG.pointer.confirm,
     beginLockHold: (ev, uid, pad) => this.beginLockHold(ev, uid, this.panelSeatIds.get(this.inventory), pad),
   });
-  /** The BUILD flap on the gear tab: the learned-skills list riding the
-   *  left edge of the inventory — the whole build in one glance. Remembers
-   *  its state across panel closes, satchel-style. */
-  private buildFlapOpen = false;
-  /** THE SKILL-TREE PANES (openSkillTree / refreshSkillTree): one minted
-   *  panel root per skill ever opened this session, each with its own open
-   *  flag and lens (zoom/pan over the graph's fitted box). */
+  private get skillsOpen(): boolean { return this.inventoryPages.isOpen('skills'); }
+  /** Skill-tree roots keep rendering state; inventoryPages owns their lifecycle. */
   private skillTreePanes = new Map<string, SkillTreePane>();
-  /** THE PANEL MOVE's static roots (the skill-tree panes join at minting). */
+  /** Independently movable windows. Inventory pages inherit the bag's seat. */
   private movableRoots: HTMLElement[] = [];
   /** THE MENU BAR (ui/menubar.ts) — built in the constructor, enrolled in
    *  the movable roots, synced per frame by main.ts (menuBarSync). */
@@ -695,7 +688,7 @@ export class UI {
   private treeRealm: string = MAIN_REALM;
   /** GRAFT bind flow: the lifted graft key awaiting its carrier skill click. */
   private liftedGraftKey: string | null = null;
-  treeOpen = false;
+  get treeOpen(): boolean { return this.inventoryPages.isOpen('passives'); }
   mapOpen = false;
   caravanOpen = false;
   mercOpen = false;
@@ -1022,12 +1015,9 @@ export class UI {
       couchActive: () => this.getWorld().couchActive(),
     });
 
-    // THE PANEL MOVE (ui/panelmove.ts): every ribboned panel drags by its
-    // h2 — one attach per root, delegated, so rebuilt templates stay
-    // draggable; a drag re-seats the folio strip on the moving front.
-    // (Skill-tree panes attach at their minting; the escape menu, the
-    // start menu and the full-screen cards deliberately stay put.)
-    this.movableRoots = [this.charSheet, this.inventory, this.buildPanel, this.passiveTree, this.worldMap,
+    // Independent windows opt into header dragging; development pages
+    // inherit Inventory's position through syncInventoryPages.
+    this.movableRoots = [this.charSheet, this.inventory, this.worldMap,
       this.vendorMenu, this.salvageMenu, this.fontMenu, this.recallMenu, this.oracleMenu,
       this.bestiaryMenu, this.boroughMenu, this.bountyMenu, this.caravanMenu, this.sailMenu,
       this.holdMenu, this.mercMenu, this.vocationMenu, this.menuBar.root];
@@ -1043,9 +1033,7 @@ export class UI {
     // with the owner's seat id IS the keyed close, byte for byte.
     const panelClosers: Array<[HTMLElement, () => void]> = [
       [this.charSheet, () => this.toggleCharSheet(this.panelSeatIds.get(this.charSheet))],
-      [this.inventory, () => this.toggleInventory(this.panelSeatIds.get(this.inventory))],
-      [this.buildPanel, () => this.closeBuildPanel()],
-      [this.passiveTree, () => this.closeTree()],
+      [this.inventory, () => this.closeInventory()],
       [this.worldMap, () => this.toggleMap()],
       [this.vendorMenu, () => this.closeVendor()],
       [this.salvageMenu, () => this.closeSalvage()],
@@ -1085,7 +1073,7 @@ export class UI {
     // auto-refresh rebuilds, capture-phase so no child handler can hide a
     // press from it. Release listens on the WINDOW — pointer captures retarget
     // events but every path still runs through here — so the hold always ends.
-    for (const el of [this.charSheet, this.worldMap, this.inventory, this.buildPanel]) {
+    for (const el of [this.charSheet, this.worldMap, this.inventory]) {
       el.addEventListener('pointerdown', () => { this.pressHeld.add(el); }, { capture: true });
     }
     const releasePress = (): void => { this.pressHeld.clear(); };
@@ -1121,7 +1109,7 @@ export class UI {
     let gestureSeat: string | null = null;
     const couchOwnerOf = (t: EventTarget | null): string | null => {
       if (!(t instanceof Node)) return null;
-      for (const el of [this.charSheet, this.inventory, this.buildPanel, this.passiveTree, ...[...this.skillTreePanes.values()].map(p => p.el), this.vendorMenu,
+      for (const el of [this.charSheet, this.inventory, ...this.inventoryPages.entries().map(p => p.el), this.vendorMenu,
         this.salvageMenu, this.oracleMenu, this.bestiaryMenu, this.caravanMenu, this.recallMenu,
         this.bountyMenu, ...(this.memorySellPopup ? [this.memorySellPopup] : [])]) {
         if (el.contains(t)) {
@@ -1157,8 +1145,7 @@ export class UI {
     document.addEventListener('pointerdown', e => {
       if (e.button !== 2 || e.defaultPrevented || dndCarried()
         || this.escapeMenuOpen || this.minigameActive || this.couchJoinOpen) return;
-      const owner = this.containerPane.dockedEls().find(el => e.target instanceof Node && el.contains(e.target));
-      const seatId = owner ? this.panelSeat(owner).id : couchOwnerOf(e.target) ?? this.getWorld().localSeat.id;
+      const seatId = couchOwnerOf(e.target) ?? this.getWorld().localSeat.id;
       if (!this.cancelSalvageMode(seatId)) return;
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -1192,52 +1179,40 @@ export class UI {
     return `<div class="panel-x-row"><button type="button" class="panel-x" data-panel-x title="${title}" aria-label="Close">✕</button></div>`;
   }
 
-  /** Inventory-side player pages share the same folio, including skill trees. */
-  private buildPanelBay(el: HTMLElement): string {
-    if (this.inventoryOpen && this.panelSeat(el).id === this.panelSeat(this.inventory).id) return 'build';
-    return el.classList.contains('couch-left') ? 'left' : el.classList.contains('couch-right') ? 'right' : 'centre';
+  /** One enrollment supplies ownership, tab memory, close and page placement. */
+  private enrollInventoryPage(page: InventoryPage): void {
+    page.el.addEventListener('pointerdown', () => this.pressHeld.add(page.el), { capture: true });
+    page.el.addEventListener('click', e => {
+      if (e.target instanceof Element && e.target.closest('[data-panel-x]')) this.inventoryPages.close(page.id);
+    });
+    this.folio.enroll(this.folioLeaf(page.id, page.el, page.title,
+      () => this.inventoryPages.isOpen(page.id), () => this.inventoryPages.close(page.id), {
+        kind: 'page', selectionGroup: 'inventory', bay: () => 'build',
+        refresh: page.refresh,
+      }));
   }
 
-  private toggleBuildPanel(): void {
-    if (this.buildFlapOpen && this.folio.bookFor('skills')?.front !== 'skills') {
-      if (this.folio.front('skills')) { this.folioStrip.update(); return; }
-    }
-    this.buildFlapOpen = !this.buildFlapOpen;
-    hideTooltip();
-    this.refreshInventory();
-    if (this.buildFlapOpen) this.folioAsk('skills'); // the ribbon's press is an explicit ask
-    this.folioStrip.update();
+  toggleBuildPanel(seatId?: string): void {
+    const owner = this.couchSeatFor(seatId).id;
+    this.inventoryPages.request('skills', owner);
   }
 
-  private closeBuildPanel(): void {
-    this.buildFlapOpen = false;
-    hideTooltip();
-    if (this.inventoryOpen) this.refreshInventory();
-    else this.syncBuildPanels();
-  }
-
-  /** Default seats follow the measured inventory edge. Saved custom positions win. */
-  private syncBuildPanels(): void {
-    this.buildPanel.classList.toggle('hidden', !this.inventoryOpen || !this.buildFlapOpen);
-    // THE CONTAINER DRAWERS follow the bag exactly as the Skills drawer does:
-    // hidden while the bag is shut, memory kept (ui/containerPane.ts).
-    this.containerPane.syncHidden();
+  /** Development pages always follow the inventory edge, including when moved. */
+  private syncInventoryPages(): void {
+    this.inventoryPages.sync();
     this.inventory.querySelector('[data-passiveflap]')?.setAttribute('aria-expanded', String(this.treeOpen));
+    if (!this.inventoryOpen) return;
     const inv = this.inventory.getBoundingClientRect();
     const scale = uiScaleNow();
-    for (const el of [this.buildPanel, this.passiveTree, ...[...this.skillTreePanes.values()].map(p => p.el),
-      ...this.containerPane.dockedEls()]) {
-      const dock = this.inventoryOpen && this.panelSeat(el).id === this.panelSeat(this.inventory).id;
-      el.classList.toggle('build-docked', dock);
-      if (!dock) continue;
-      if (!this.getSettings().layout.movable && panelMoved(el)) panelMoveReset(el);
+    for (const { el, width } of this.inventoryPages.entries()) {
+      // Older saved independent page seats no longer participate in layout.
+      if (panelMoved(el)) panelMoveReset(el);
       const at = buildPanelSeat(inv, window.innerWidth, scale, this.inventory.classList.contains('couch-left'),
-        el === this.buildPanel ? BUILD_PANEL_CFG.skillsWidth
-          : this.containerPane.isPanel(el) ? BUILD_PANEL_CFG.containerWidth
-          : BUILD_PANEL_CFG.passivesWidth);
+        width);
       el.style.setProperty('--build-left', `${at.left}px`);
       el.style.setProperty('--build-top', `${at.top}px`);
       el.style.setProperty('--build-width', `${at.width}px`);
+      el.style.setProperty('--build-height', `${Math.max(100, (window.innerHeight - inv.top) / scale - BUILD_PANEL_CFG.edge)}px`);
     }
     this.fitBuildRail();
   }
@@ -1275,6 +1250,11 @@ export class UI {
     return {
       id, title, isOpen, close,
       present: (front) => {
+        if (el.classList.contains('inventory-page')) {
+          el.classList.toggle(FOLIO_SHELVED_CLASS, !front);
+          this.folioHandoff = null;
+          return; // Inventory owns this page's position, not a station's handoff.
+        }
         // THE BOOK MOVES AS ONE (ui/panelmove.ts): a front that shelves
         // (or a closed front the book is about to replace) hands its seat
         // to the leaf that takes its place — the stylesheet's seat when it
@@ -1314,15 +1294,6 @@ export class UI {
     this.folioHandoff = { el, seat };
     queueMicrotask(() => { if (this.folioHandoff?.el === el) this.folioHandoff = null; });
   }
-
-  /** THE CALL'S WORD (ui/folio.ts adopt): a page opened by a PRESS — the
-   *  ribbon, the key, a handle — is an explicit ask and arrives in front of
-   *  whatever stands, a station included. The same page restored by memory
-   *  (the bag's remembered drawer, bound by the self-heal with no word)
-   *  obeys THE PRIMACY LAW and lands behind an open counter. Station show
-   *  paths keep the bare adopt: a dwell is the world's offer, ranked by
-   *  the ladder, never an ask. */
-  private folioAsk(id: string): FolioArrival { return this.folio.adopt(id, 'front'); }
 
   /** The thirteen dwell dialogs. `engaged` is each station's own near-read
    *  for the panel's seat (THE STANDING LAW — a master the hero walked away
@@ -1403,23 +1374,15 @@ export class UI {
       refresh: fronted(() => this.refreshMercMenu()) }));
     enroll(this.folioLeaf('vocation', this.vocationMenu, () => 'A Calling', () => this.vocationOpen, () => this.closeVocationMenu(), {
       kind: 'modal', arrive: 'front', refresh: fronted(() => this.refreshVocationMenu()) }));
-    // THE TREES (2026-09-04): the passive tree and every skill-tree pane
-    // share the centred berth, so any of them up at once bind into ONE book
-    // instead of painting over each other — each an explicit ask (a key, a
-    // handle), so each ARRIVES IN FRONT. Player panels, not stations: no
-    // engagement read, no range — the master/front laws alone. The passive
-    // tree enrolls here; each skill's pane enrolls at its minting
-    // (skillTreePaneFor — the tab names the skill).
-    enroll(this.folioLeaf('skills', this.buildPanel, () => 'Skills',
-      () => this.inventoryOpen && this.buildFlapOpen, () => this.closeBuildPanel(), {
-        kind: 'page', selectionGroup: 'inventory', bay: () => this.buildPanelBay(this.buildPanel), refresh: () => this.refreshInventory() }));
-    // THE TRUE CLOSE (2026-09-11): the leaf's close is closeTree, never the
-    // key's toggle — toggleTree FRONTS a shelved tree (the D-pad law), so a
-    // close-all routed through it fronted Passives instead of closing it
-    // and left the book standing on that one tab.
-    enroll(this.folioLeaf('passives', this.passiveTree, () => 'Passives', () => this.treeOpen,
-      () => this.closeTree(), {
-        kind: 'page', arrive: 'front', bay: () => this.buildPanelBay(this.passiveTree), refresh: () => { hideTooltip(); this.refreshTree(); } }));
+    this.inventoryPages.register({ id: 'skills', el: this.buildPanel, title: () => 'Skills',
+      width: BUILD_PANEL_CFG.skillsWidth, leave: () => this.closeMemorySellPrompt(),
+      refresh: () => this.refreshInventory() });
+    this.inventoryPages.register({ id: 'passives', el: this.passiveTree, title: () => 'Passives',
+      width: BUILD_PANEL_CFG.passivesWidth,
+      available: () => !w().panelSealed('passives'),
+      enter: (_owner, fresh) => { if (fresh) this.centerTreeOnStart(); },
+      leave: () => { this.treeRefundMode = false; this.closeChoicePopup(); this.closeTreePopup(); },
+      refresh: () => this.refreshTree() });
 
     // THE SUITE (data/suites.ts): a counter's dialog SUMMONS the station
     // dialogs that stand genuinely unlocked in this zone. The world folds
@@ -1487,13 +1450,14 @@ export class UI {
       // menu's 'container:<id>' verb opens the inventory on that face.
       ...Object.fromEntries(CONTAINER_DEFS.map(c => [`container:${c.id}`, {
         open: (id?: string) => this.containerPane.openFromMenu(c.id, id),
-        isOpen: () => this.inventoryOpen && this.containerPane.isOpen(c.id),
+        isOpen: () => this.containerPane.isOpen(c.id),
       } satisfies MenuVerb])),
       townPortal: { open: id => {
         const world = w(), previous = world.uiActionSeatId; world.uiActionSeatId = id ?? null;
         try { world.requestMeta({ t: 'townPortal' }); } finally { world.uiActionSeatId = previous; }
       }, isOpen: () => false },
       character: { open: id => this.toggleCharSheet(id), isOpen: () => this.charSheetOpen },
+      skills: { open: id => this.toggleBuildPanel(id), isOpen: () => this.skillsOpen },
       passives: { open: id => this.toggleTree(id), isOpen: () => this.treeOpen },
       map: { open: () => this.openMapTab('map'), isOpen: () => this.mapOpen && this.mapTab === 'map' },
       journal: { open: () => this.openMapTab('quests'), isOpen: () => this.mapOpen && this.mapTab === 'quests' },
@@ -1561,15 +1525,15 @@ export class UI {
    *  open flags — whatever path opened or closed them — and seat the strips. */
   folioSync(): void {
     tooltipSweep(); // THE STALE CARD: a card whose anchor left the screen comes down (ui/tooltip.ts)
-    this.syncBuildPanels();
+    panelLayoutSync(this.layoutRoots());
+    this.syncInventoryPages();
     this.folio.sync();
-    panelLayoutSync(this.layoutRoots()); // THE LAYOUT's per-frame sync (seats freshly-shown panels, keeps the lock glyphs honest)
     this.folioStrip.update();
   }
 
   /** Every root THE PANEL MOVE governs: the static panels + the minted skill-tree panes. */
   private layoutRoots(): HTMLElement[] {
-    return [...this.movableRoots, ...[...this.skillTreePanes.values()].map(p => p.el)];
+    return this.movableRoots;
   }
 
   /** Esc's dialog step: close the FRONT leaf of the hero's (or the named
@@ -1634,8 +1598,6 @@ export class UI {
       open && (this.panelSeatIds.get(el) ?? this.getWorld().localSeat.id) === seatId;
     return owned(this.charSheet, this.charSheetOpen)
       || owned(this.inventory, this.inventoryOpen)
-      || owned(this.passiveTree, this.treeOpen)
-      || this.openSkillTreePanes().some(p => owned(p.el, true))
       || owned(this.worldMap, this.mapOpen)
       || owned(this.vendorMenu, this.vendorOpen)
       || owned(this.salvageMenu, this.salvageOpen)
@@ -1652,9 +1614,6 @@ export class UI {
       open && (this.panelSeatIds.get(el) ?? this.getWorld().localSeat.id) === seatId;
     return owned(this.charSheet, this.charSheetOpen)
       || owned(this.inventory, this.inventoryOpen)
-      || owned(this.passiveTree, this.treeOpen)
-      || this.openSkillTreePanes().some(p => owned(p.el, true))
-      || (this.inventoryOpen && this.containerPane.dockedEls().some(el => owned(el, true))) // THE CONTAINER DRAWERS
       || owned(this.worldMap, this.mapOpen);
   }
   hideAllFor(seatId: string): void {
@@ -1662,8 +1621,6 @@ export class UI {
       (this.panelSeatIds.get(el) ?? this.getWorld().localSeat.id) === seatId;
     if (this.charSheetOpen && owned(this.charSheet)) this.toggleCharSheet(seatId);
     if (this.inventoryOpen && owned(this.inventory)) this.toggleInventory(seatId);
-    if (this.treeOpen && owned(this.passiveTree)) this.closeTree();
-    for (const p of this.openSkillTreePanes()) if (owned(p.el)) this.closeSkillTree(p.skillId);
     if (this.mapOpen && owned(this.worldMap)) this.toggleMap();
     if (this.vendorOpen && owned(this.vendorMenu)) this.closeVendor();
     if (this.salvageOpen && owned(this.salvageMenu)) this.closeSalvage();
@@ -1690,17 +1647,8 @@ export class UI {
       (this.panelSeatIds.get(el) ?? w.localSeat.id) === seatId;
     const hostOwned = seatId === w.localSeat.id;
     let closed = 0;
-    // THE BAG GOES FIRST (2026-09-11, her report): a mode that does not
-    // keep the inventory takes it AHEAD of the books, through its own
-    // toggle — the close the bag key and hideAllFor walk — so the Skills
-    // drawer leaves the way the bag's close takes it: hidden, its memory
-    // kept (buildFlapOpen stands; reopening the bag brings Skills back).
-    // The sync then drops the 'skills' leaf as already closed, and the book
-    // sweep below never reaches closeBuildPanel, which FORGETS. A kept bag
-    // ('sweepKeepBag' with other things up) closes its drawer by the book:
-    // that press is "all but the bag", and Skills goes with the rest by
-    // intent. On the last-to-go press the bag stands alone — no drawer up
-    // to remember — so the kept lane needs no second seam.
+    // Hide the parent before closing books so every development page keeps
+    // its session membership. A keep-inventory sweep dismisses pages first.
     if (this.inventoryOpen && mine(this.inventory) && !keep.includes('inventory')) {
       this.toggleInventory(seatId);
       this.folio.sync();
@@ -1723,12 +1671,10 @@ export class UI {
       [hostOwned && this.vocationOpen, () => this.closeVocationMenu()],
     ];
     for (const [open, close] of belt) if (open) { close(); closed++; }
-    for (const p of this.openSkillTreePanes()) if (mine(p.el)) { this.closeSkillTree(p.skillId); closed++; }
     // The hero pages, keyed by their menu ids (data/menu.ts) so a mode's
     // `keep` list names them the way the tray does.
     const pages: Array<[string, boolean, () => void]> = [
       ['character', this.charSheetOpen && mine(this.charSheet), () => this.toggleCharSheet(seatId)],
-      ['passives', this.treeOpen && mine(this.passiveTree), () => this.closeTree()],
       ['map', this.mapOpen && mine(this.worldMap), () => this.toggleMap()],
       ['inventory', this.inventoryOpen && mine(this.inventory), () => this.toggleInventory(seatId)],
     ];
@@ -2381,8 +2327,7 @@ export class UI {
   /** Any ORDINARY panel open? (Dwell dialogs and the pause menu are tracked
    *  apart — the Escape cascade treats each class differently.) */
   anyPanelOpen(ignoreInventory = false): boolean {
-    return this.charSheetOpen || this.treeOpen || this.openSkillTreePanes().length > 0
-      || this.mapOpen || (this.inventoryOpen && !ignoreInventory);
+    return this.charSheetOpen || this.mapOpen || (this.inventoryOpen && !ignoreInventory);
   }
 
   /** ANY blocking DOM surface is up — panels, dwell dialogs, the pause menu,
@@ -3789,35 +3734,42 @@ export class UI {
 
   toggleInventory(seatId?: string): void {
     const seat = this.couchSeatFor(seatId);
-    if (!this.inventoryOpen && this.pageSealed('inventory', seat)) return;
-    // Open for ANOTHER local seat → take ownership (the couch contention rule).
-    if (this.inventoryOpen && this.panelSeat(this.inventory) !== seat) {
-      this.ownPanel(this.inventory, seat);
-      this.refreshInventory();
-      return;
-    }
-    this.inventoryOpen = !this.inventoryOpen;
-    if (this.inventoryOpen) this.ownPanel(this.inventory, seat);
-    // (The lesson's old hand on the Skill Gems tab retired with the tab —
-    // the gift flasks glow as BAG TILES now, on the one face, and the
-    // SKILLS flap + empty rack seats carry the gesture the rest of the way.)
-    this.inventory.classList.toggle('hidden', !this.inventoryOpen);
-    if (!this.inventoryOpen) this.endLockHold(); // a hold never outlives its bag
-    if (this.inventoryOpen) this.refreshInventory();
-    this.syncBuildPanels();
-    if (!this.inventoryOpen) { dndCancel(); hideTooltip(); } // a ghost never outlives its surface
+    if (this.inventoryOpen && this.panelSeat(this.inventory) === seat) this.closeInventory();
+    else this.openInventory(seat.id);
+  }
+
+  /** Every page request and the inventory toggle enter through this gate. */
+  private openInventory(seatId: string): boolean {
+    const seat = this.couchSeatFor(seatId);
+    if (this.pageSealed('inventory', seat)) return false;
+    if (this.inventoryOpen && this.panelSeat(this.inventory) === seat) return true;
+    if (this.inventoryOpen) this.closeInventory(); // release the old owner's folio before reusing roots
+    this.ownPanel(this.inventory, seat);
+    this.inventoryOpen = true;
+    this.inventory.classList.remove('hidden');
+    this.syncInventoryPages();
+    this.refreshInventory();
+    this.refreshTree();
+    this.refreshSkillTree();
+    this.folio.sync();
+    this.folioStrip.update();
+    return true;
+  }
+
+  /** Parent close suspends the complete workspace; it never detaches pages. */
+  private closeInventory(): void {
+    if (!this.inventoryOpen) return;
+    this.inventoryOpen = false;
+    this.inventory.classList.add('hidden');
+    this.endLockHold();
+    dndCancel(); hideTooltip();
+    this.syncInventoryPages();
+    this.folio.sync();
+    this.folioStrip.update();
   }
 
 
-  /** THE OBSTRUCTION CENSUS — the CSS-pixel rects of every open DOM pane
-   *  standing over the canvas, read live each frame by the speech fabric's
-   *  PLACEMENT LAW (renderer.uiObstructions → vis/speech.ts dodgeSpeechBox)
-   *  so a talk bubble slides out from under an open inventory instead of
-   *  being silently swallowed. The roster is the panelClosers ledger's own
-   *  roots plus the popped-out SKILLS drawer (which overflows its root's
-   *  box, so it wears its own data-build-drawer hook); couch-flanked panels
-   *  measure wherever they dock, by construction. A hidden pane measures
-   *  zero and drops out — no state, no bookkeeping. */
+  /** Drawn window and registered page bounds for speech-bubble avoidance. */
   obstructionRects(): { x: number; y: number; w: number; h: number }[] {
     const out: { x: number; y: number; w: number; h: number }[] = [];
     const add = (el: Element | null): void => {
@@ -3827,13 +3779,11 @@ export class UI {
       out.push({ x: r.left, y: r.top, w: r.width, h: r.height });
     };
     { const tray = this.menuBar.trayRect(); if (tray) out.push(tray); } // THE MENU BAR's tray while up (ui/menubar.ts)
-    for (const el of [this.charSheet, this.inventory, this.buildPanel, this.passiveTree, ...[...this.skillTreePanes.values()].map(p => p.el),
-      ...this.containerPane.dockedEls(), // THE CONTAINER DRAWERS stand over the canvas too
+    for (const el of [this.charSheet, this.inventory, ...this.inventoryPages.entries().map(p => p.el),
       this.worldMap, this.vendorMenu, this.salvageMenu, this.fontMenu,
       this.recallMenu, this.oracleMenu, this.bestiaryMenu, this.boroughMenu,
       this.bountyMenu, this.caravanMenu, this.sailMenu, this.holdMenu, this.mercMenu,
       this.vocationMenu, this.escapeMenu]) add(el);
-    add(document.querySelector('[data-build-drawer]'));
     return out;
   }
 
@@ -4253,7 +4203,7 @@ export class UI {
   refreshInventory(live = false): void {
     if (!live) this.refreshSkillTree();
     if (!this.inventoryOpen) return;
-    if (live && [this.inventory, this.buildPanel, ...this.containerPane.dockedEls()]
+    if (live && [this.inventory, ...this.inventoryPages.entries().map(p => p.el)]
       .some(el => this.pressHeld.has(el))) return;
     // Explicit refreshes and click-lift carries still ride the drag fabric:
     // its data attributes survive rebuilds and re-earn marks on the next beat.
@@ -4471,36 +4421,16 @@ export class UI {
             </div>`;
           })()}
         </div>` : ''}`;
-    // THE BUILD DRAWER: the whole Skill Book, docked. A handle rides the
-    // panel's left edge; the drawer POPS OUT beside the panel (absolute —
-    // the gear layout never shifts an inch) with the full learned-skills
-    // management view. State persists like the satchel's.
-    // MIREILLE'S LESSON, read from its one source of truth (the world):
-    // while the one 'learn' step pends the carried flask BAG TILES glow
-    // (the per-item glow above), the flap handle glows while the drawer is
-    // CLOSED, then the rack's empty seats inside take over (learnedListHtml's
-    // teachSeat) — one mechanism, three surfaces, each live off the same
-    // read every render. The glow always marks the lesson's next click —
-    // and the lesson LATCHES LIVED in the ledgers (World.mireilleGiftLesson),
-    // so once the loop has been walked — this run, a past character, or
-    // undone again by choice (unlearn, unbind) — these stay quiet forever.
-    const lesson = this.getWorld().mireilleGiftLesson();
-    // Learn = seat = barred (the one gesture): the lesson ends at the rack —
-    // the flap is the road there, so it glows while the step pends and the
-    // drawer is shut.
-    const flapGlow = lesson !== null && !this.buildFlapOpen;
-    // THE COUCH FLANK: the drawer (and its handle) pop AWAY from the screen
-    // edge the panel docks against — a couch-LEFT guest's drawer opens
-    // rightward instead of clipping off-screen; the classic centered (and
-    // couch-right) panel keeps its leftward pop. The drawer docks with its
-    // opener wherever the opener sits.
+    // Skills shares the inventory rail with every development page.
+    // The pending gift lesson highlights the next reachable control.
+    const flapGlow = this.getWorld().mireilleGiftLesson() !== null && !this.skillsOpen;
     const walletChips = ABILITY_ESSENCES.map(d =>
       `<span class="build-essence" style="color:${d.color}" title="${d.label}: ${m.abilityEssences[d.id] ?? 0}">${d.glyph} ${m.abilityEssences[d.id] ?? 0}</span>`).join('');
     const drawerHandle = `
       <div class="build-ribbons ${this.inventory.classList.contains('couch-left') ? 'build-ribbons-right' : ''}"
         style="--build-rail:${BUILD_PANEL_CFG.railWidth}px">
         <button data-buildflap class="build-ribbon ${flapGlow ? 'tut-glow' : ''}"
-          aria-expanded="${this.buildFlapOpen}" aria-controls="skills-panel" title="Manage your learned skills and Memory Essences">
+          aria-expanded="${this.skillsOpen}" aria-controls="skills-panel" title="Manage your learned skills and Memory Essences">
           <span class="build-ribbon-label">📖 SKILLS</span><span class="build-wallet">${walletChips}</span>
         </button>
         <button data-passiveflap class="build-ribbon" aria-expanded="${this.treeOpen}" aria-controls="passive-tree" title="Open your passive tree">
@@ -4509,7 +4439,7 @@ export class UI {
         </button>
         ${this.containerPane.ribbonsHtml()}
       </div>`;
-    const drawer = this.buildFlapOpen ? `
+    const drawer = this.skillsOpen ? `
         ${this.closeGlyphHtml()}<h2>📖 Skills</h2>
         <div class="build-wallet-header">${walletChips}</div>
         ${this.learnedListHtml()}` : '';
@@ -4581,9 +4511,8 @@ export class UI {
       this.panelHtml.delete(this.buildPanel);
     }
     const buildChanged = this.setPanelHtml(this.buildPanel, drawer);
-    this.panelSeatIds.set(this.buildPanel, this.panelSeat(this.inventory).id);
     this.containerPane.renderAll(live);
-    this.syncBuildPanels();
+    this.syncInventoryPages();
     const inventoryChanged = this.setPanelHtml(this.inventory, `${drawerHandle}${satchel}${this.closeGlyphHtml()}<h2>Inventory</h2>
       <div class="inv-scroll" style="min-height:min(${frameMin}px, calc(100vh - 240px));max-height:calc(100vh - 240px);overflow-y:auto;overflow-x:hidden">${body}</div>`);
     const scrollEl = this.inventory.querySelector<HTMLElement>('.inv-scroll');
@@ -4591,7 +4520,7 @@ export class UI {
     const buildEl = this.buildPanel.querySelector<HTMLElement>('.build-scroll');
     if (buildEl) buildEl.scrollTop = prevBuildScroll;
     if (inventoryChanged) this.wireInventory();
-    if (buildChanged && this.buildFlapOpen) this.wireLearnedList(this.buildPanel, () => this.refreshInventory());
+    if (buildChanged && this.skillsOpen) this.wireLearnedList(this.buildPanel, () => this.refreshInventory());
     if (inventoryChanged) this.fitBuildRail();
     this.paintLockHold(); // a re-render mid-hold resumes the ring where the clock stands
     if (buildChanged) this.paintPortraitsIn(this.buildPanel); // the build flap's Spectre chip
@@ -4627,7 +4556,7 @@ export class UI {
     }));
     // The Build drawer (its handle hangs on the panel edge):
     // toggle + — when open — the learned list's full management wiring.
-    this.inventory.querySelector<HTMLButtonElement>('[data-buildflap]')?.addEventListener('click', () => this.toggleBuildPanel());
+    this.inventory.querySelector<HTMLButtonElement>('[data-buildflap]')?.addEventListener('click', () => this.toggleBuildPanel(this.panelSeat(this.inventory).id));
     this.inventory.querySelector<HTMLButtonElement>('[data-passiveflap]')?.addEventListener('click', () => {
       this.toggleTree(this.panelSeat(this.inventory).id);
       this.refreshInventory();
@@ -5337,7 +5266,7 @@ export class UI {
     this.fontMenu.querySelector<HTMLButtonElement>('[data-fontclose]')?.addEventListener('click', () => this.closeFont());
     this.fontMenu.querySelector<HTMLButtonElement>('[data-fontpassives]')?.addEventListener('click', () => {
       this.closeFont();
-      if (!this.treeOpen || this.panelSeat(this.passiveTree) !== seat) this.toggleTree(seat.id);
+      if (!this.inventoryPages.request('passives', seat.id, 'show')) return;
       this.treeRefundMode = true;
       this.refreshTree();
       this.folio.front('passives');
@@ -7064,9 +6993,7 @@ THE CUT (fixed at the vein): ${veinLines(s.def.rollBase, s.rolled).join(' · ')}
           ${chips || `<span style="color:#8a8678">no arts captured: take a studied kind's blow</span>`}
         </div>`;
       }
-      // THE SKILL-MODE TREE STRIP (docs/design/skill-modes.md §7): the tree
-      // itself lives in THE PULL-OUT (openSkillTree — drawn like the passive
-      // tree); this row is its handle: the level bar with band ticks, the
+      // The skill-tree strip opens its inventory page: level-band ticks, the
       // point count, the committed limb, a waiting-PIP that lights the
       // handle gold while a point is free, and the Font's reset ritual when
       // a font stands near. Chunky buttons: couch lens + pad law.
@@ -7195,8 +7122,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       world.requestMeta({ t: 'levelSupportSocket', skillId, socket: Number(sock) });
       refresh();
     }));
-    // THE PULL-OUT (skill-mode trees): the strip's handle opens this
-    // skill's tree pane, owned by the drawer's seat (the couch lens).
+    // The tree handle follows the Skills page's owner.
     q<HTMLButtonElement>('button[data-treeopen]').forEach(btn => btn.addEventListener('click', () => {
       this.openSkillTree(btn.dataset.treeopen!, this.panelSeatIds.get(container));
     }));
@@ -7227,58 +7153,17 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     }));
   }
 
-  // (The Skill Book panel is GONE — the Build drawer on the Inventory now
-  // hosts the identical learnedListHtml/wireLearnedList management view.
-  // One panel, one key; the extracted builders made the move free.)
-
   // ------------------------------------------------------------ passive tree
 
   toggleTree(seatId?: string): void {
     const seat = this.couchSeatFor(seatId);
-    if (!this.treeOpen && this.pageSealed('passives', seat)) return;
-    // Open for ANOTHER local seat → take ownership (the couch contention rule).
-    if (this.treeOpen && this.panelSeat(this.passiveTree) !== seat) {
-      this.ownPanel(this.passiveTree, seat);
-      this.closeChoicePopup();
-      this.centerTreeOnStart();
-      this.refreshTree();
-      return;
-    }
-    // Open but SHELVED behind a book-mate (the skill-tree pane in front):
-    // the key brings it forward rather than closing it — the D-pad law.
-    if (this.treeOpen && this.folio.bookFor('passives')?.front !== 'passives' && this.folio.bookFor('passives')) {
-      this.folio.front('passives');
-      this.folioStrip.update();
-      return;
-    }
-    this.treeOpen = !this.treeOpen;
-    this.closeChoicePopup(); // a popup never outlives its panel
-    this.passiveTree.classList.toggle('hidden', !this.treeOpen);
-    if (this.treeOpen) {
-      this.ownPanel(this.passiveTree, seat);
-      this.centerTreeOnStart();
-      this.refreshTree();
-      this.syncBuildPanels();
-      this.folioAsk('passives'); // the key, the ribbon, the menu: an explicit ask
-      this.folioStrip.update();
-    }
+    if (this.pageSealed('passives', seat)) return;
+    this.inventoryPages.request('passives', seat.id);
   }
 
-  /** THE TRUE CLOSE (2026-09-11): the passive tree comes DOWN wherever it
-   *  stands in a book. toggleTree is the key's grammar — a shelved tree
-   *  comes forward on a press, never closes — so every close path (the
-   *  leaf's own, the strip's ✕, the seat-scoped clears, the close glyph)
-   *  must land here: routed through the toggle, a close-all fronted
-   *  Passives instead of closing it and left the book standing on that tab. */
+  /** Explicit page dismissal; parent closes use closeInventory instead. */
   closeTree(): void {
-    if (!this.treeOpen) return;
-    this.treeOpen = false;
-    this.treeRefundMode = false;
-    this.closeChoicePopup(); // a popup never outlives its panel
-    this.closeTreePopup();
-    this.passiveTree.classList.add('hidden');
-    this.syncBuildPanels();
-    hideTooltip();
+    this.inventoryPages.close('passives');
   }
 
   /** Fit box over the ACTIVE REALM's nodes (+padding) — the zoom/pan
@@ -7896,27 +7781,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   }
 
   // ------------------------------------------------------ the skill tree panes
-  // THE PULL-OUT (skill-mode trees — docs/design/skill-modes.md §7, the pane
-  // of 2026-09-04): ONE learned skill's tree drawn the passive tree's way —
-  // an SVG of nodes and edges over the derived-or-pinned layout
-  // (engine/skilltree.ts), zoom/pan through the shared gesture helper, node
-  // cards through the shared tooltip, and a click on a lit node = the
-  // ordinary pickTreeNode intent (host-authoritative; the engine gate
-  // speaks the refusals). Opened from the Skills drawer's per-skill strip
-  // and the milestone popup; owned by its opener's seat (the couch lens).
-  // DRAWN == THE ONE SPEND PREDICATE: spent nodes wear the skill's color,
-  // spendable nodes a lit ring, SEALED nodes the lock's grey (dashed edges,
-  // refusal words on hover), locked nodes stay dark; ranked nodes print
-  // their have/ranks inside the circle.
-  // ONE PANE PER SKILL (her ask, same day): each open skill's tree is its
-  // OWN panel root, minted on first open and kept for the session, each a
-  // folio leaf `skilltree:<id>` — so Wild Strike's tree, Grave Tide's tree
-  // and the passive tree all tab into one book instead of one pane
-  // re-aiming and the others closing.
-
-  /** Get-or-mint the pane for a skill: the root (class `panel skill-tree`),
-   *  its tooltips (THE REACH's proximity), its close glyph, its ribbon drag,
-   *  and its folio leaf — once per skill for the life of the document. */
+  /** One registered inventory page per learned skill. Rendering uses the shared
+   * graph layout, pan/zoom, tooltips and host-authoritative pickTreeNode intent.
+   * Lifecycle and ownership: docs/ui/inventory-pages.md. */
   private skillTreePaneFor(skillId: string): SkillTreePane {
     const standing = this.skillTreePanes.get(skillId);
     if (standing) return standing;
@@ -7925,28 +7792,25 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     el.className = 'panel skill-tree hidden';
     document.body.appendChild(el);
     const pane: SkillTreePane = {
-      skillId, el, open: false, zoom: 1, pan: { x: 0, y: 0 },
+      skillId, el, zoom: 1, pan: { x: 0, y: 0 },
       box: { minX: -280, minY: -210, w: 560, h: 420 },
     };
     this.skillTreePanes.set(skillId, pane);
     bindTooltips(el,
-      (t) => t.dataset.tip === 'stnode' ? this.skillTreeNodeTooltip(skillId, t.dataset.node!)
+      (t) => t.dataset.tip === 'stnode' ? this.skillTreeNodeTooltip(skillId, t.dataset.node!, this.panelSeat(el))
         : t.dataset.tip === 'tree-point' ? this.skillTreePointTooltip(skillId, Number(t.dataset.point), this.panelSeat(el)) : null,
       { proximity: { selector: '.st-node', radiusPx: TREE_REACH_PX, hysteresis: 0.35 } });
-    // THE CLOSE GLYPH (the panelClosers idiom, per minted root).
-    el.addEventListener('click', (e) => {
-      if ((e.target as Element).closest('[data-panel-x]')) this.closeSkillTree(skillId);
-    });
-    attachPanelMove(el, { onMove: () => this.folioStrip.update() });
-    this.folio.enroll(this.folioLeaf(`skilltree:${skillId}`, el,
-      () => SKILLS[skillId]?.name ?? 'Skill Tree',
-      () => pane.open, () => this.closeSkillTree(skillId), {
-        kind: 'page', arrive: 'front', bay: () => this.buildPanelBay(el), refresh: () => { hideTooltip(); this.refreshSkillTree(skillId); } }));
+    this.inventoryPages.register({ id: `skilltree:${skillId}`, el,
+      title: () => SKILLS[skillId]?.name ?? 'Skill Tree', width: BUILD_PANEL_CFG.passivesWidth,
+      available: owner => !!this.couchSeatFor(owner).meta.knownSkills.get(skillId)?.def.tree
+        && !this.getWorld().memorySecondaryRefusal(skillId),
+      enter: (_owner, fresh) => { if (fresh) { pane.zoom = 1; pane.pan = { x: 0, y: 0 }; } },
+      refresh: () => { hideTooltip(); this.refreshSkillTree(skillId); } });
     return pane;
   }
 
   private openSkillTreePanes(): SkillTreePane[] {
-    return [...this.skillTreePanes.values()].filter(p => p.open);
+    return [...this.skillTreePanes.values()].filter(p => this.inventoryPages.isOpen(`skilltree:${p.skillId}`));
   }
 
   /** Open a skill's pane (a treeless or unknown skill is a no-op). Already
@@ -7955,28 +7819,15 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const seat = this.couchSeatFor(seatId);
     const inst = seat.meta.knownSkills.get(skillId);
     if (!inst?.def.tree || this.getWorld().memorySecondaryRefusal(skillId)) return;
-    const pane = this.skillTreePaneFor(skillId);
-    if (!pane.open) {
-      pane.zoom = 1;
-      pane.pan = { x: 0, y: 0 };
-    }
-    pane.open = true;
-    pane.el.classList.remove('hidden');
-    this.ownPanel(pane.el, seat);
-    this.refreshSkillTree(skillId);
-    // THE FOLIO: bind (arrives in front), or — already bound and shelved
-    // behind a book-mate — come forward.
-    this.syncBuildPanels();
-    if (this.folioAsk(`skilltree:${skillId}`) === 'noop') this.folio.front(`skilltree:${skillId}`);
-    this.folioStrip.update();
+    this.skillTreePaneFor(skillId);
+    this.inventoryPages.request(`skilltree:${skillId}`, seat.id, 'show');
   }
 
-  /** Close one skill's pane, or every open one (hideAll's lane). */
+  /** Dismiss one skill-tree page, or all currently visible skill-tree pages. */
   closeSkillTree(skillId?: string): void {
     const panes = skillId ? [this.skillTreePanes.get(skillId)].filter((p): p is SkillTreePane => !!p) : this.openSkillTreePanes();
     for (const pane of panes) {
-      pane.open = false;
-      pane.el.classList.add('hidden');
+      this.inventoryPages.close(`skilltree:${pane.skillId}`);
     }
   }
 
@@ -8019,7 +7870,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
   /** Re-render one skill's pane, or every open pane (the drawer's beat). */
   refreshSkillTree(skillId?: string): void {
-    const panes = skillId ? [this.skillTreePanes.get(skillId)].filter((p): p is SkillTreePane => !!p && p.open) : this.openSkillTreePanes();
+    const panes = this.openSkillTreePanes().filter(p => !skillId || p.skillId === skillId);
     for (const pane of panes) this.renderSkillTreePane(pane);
   }
 
@@ -8041,10 +7892,6 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const limbs = treeLimbs(def);
     const R = TREE_LAYOUT_CFG.radius;
     pane.box = graph.box;
-    // Fit the undocked graph to the viewport. Keep this as a CSS preference
-    // so the inventory dock's measured width wins beside its ribbon rail.
-    const paneWidth = Math.min(1100, Math.max(640, graph.box.w));
-    pane.el.style.setProperty('--skill-tree-width', `min(calc(72vh / var(--ui-scale) * ${(graph.box.w / graph.box.h).toFixed(3)}), ${paneWidth}px)`);
 
     // Node state through THE ONE SPEND PREDICATE (+ the field discipline).
     type NodeState = 'spent' | 'open' | 'sealed' | 'locked';
@@ -11503,12 +11350,8 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
   hideAll(): void {
     this.menuBar.closeTray();
     this.charSheetOpen = false;
-    this.inventoryOpen = false;
-    dndCancel(); // never strand a carried ghost on a closed panel
-    this.inventory.classList.add('hidden');
-    this.buildPanel.classList.add('hidden');
-    this.containerPane.hideAll(); // the drawers go with the bag, memory kept (the Skills rule)
-    this.closeSkillTree();
+    this.closeInventory();
+    dndCancel(); // also clear gestures on panels outside inventory
     this.salvageOpen = false;
     this.craftTargetUid = null;
     this.salvageMenu.classList.add('hidden');
@@ -11529,7 +11372,6 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     delete this.boroughMenu.dataset.drop;
     this.bountiesOpen = false;
     this.bountyMenu.classList.add('hidden');
-    this.treeOpen = false;
     this.closeChoicePopup();
     this.closeTreePopup();
     this.closeMemorySellPrompt();
@@ -11543,7 +11385,6 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     this.vocationOpen = false;
     this.classSelect.classList.add('hidden');
     this.charSheet.classList.add('hidden');
-    this.passiveTree.classList.add('hidden');
     this.worldMap.classList.add('hidden');
     this.caravanMenu.classList.add('hidden');
     this.sailMenu.classList.add('hidden');
