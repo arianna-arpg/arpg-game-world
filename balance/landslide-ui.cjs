@@ -18,7 +18,11 @@ app.whenReady().then(async () => {
   const errors = [];
   win.webContents.on('console-message', details => { if (details.level === 'error') errors.push(details.message); });
   const js = source => win.webContents.executeJavaScript(source);
-  const shot = async name => fs.writeFileSync(path.join(reports, name), (await win.webContents.capturePage()).toPNG());
+  const shot = async name => {
+    // The canvas has rendered synchronously, but Electron composites it later.
+    await wait(150);
+    fs.writeFileSync(path.join(reports, name), (await win.webContents.capturePage()).toPNG());
+  };
   try {
     await win.loadURL(server.url); await wait(1000);
     await js(`__game.account().ledger.prologue_lived=1; __game.account().ledger.odyssey_stage_2=1; __game.ui.hideAll(); __game.devStartRun('brawler'); __game.step(60);
