@@ -1981,8 +1981,14 @@ export interface SummonDelivery {
   grimoire?: boolean;
   count: number;
   maxActive: number;      // oldest minion is replaced beyond this
-  /** Skills sharing a poolGroup share one cap (Fire/Ice/Blood Golems). */
+  /** Capacity only: skills sharing a poolGroup count against one body limit. */
   poolGroup?: string;
+  /** Activating this summon dismisses other summon types in this group.
+   * Independent of capacity; omit to allow mixed types in a shared pool. */
+  exclusiveGroup?: string;
+  /** An owned body struck by matching melee skills releases this native art,
+   * then rebuilds in place. This is a transformation, never an allied hit or death. */
+  strikeRelease?: { skill: string; tags: SkillTag[]; reformTime: number };
   /** Minion lifespan in seconds (scaled by effectDuration). Omit = permanent. */
   duration?: number;
   /**
@@ -1996,8 +2002,10 @@ export interface SummonDelivery {
    * maxActive SLOTS × manaCost, priced when toggled ON and HELD across
    * every death — the dead golem's mana stays locked while its respawn
    * timer runs. Recasting toggles OFF: dismiss all, free the reservation.
+   * `slots` optionally requests a smaller block (plus summonCount), allowing
+   * mixed reserved types to share a pool. Omit to request its full capacity.
    */
-  persistent?: { reserve: number; respawnTime: number; toggle?: boolean };
+  persistent?: { reserve: number; respawnTime: number; toggle?: boolean; slots?: number };
   /**
    * EXPONENTIAL UNLIFE (GW1 Death Magic / LE Wraiths): after `delay`
    * seconds the minion's life drains at (spawnMaxLife × frac) × growth^t
@@ -5056,7 +5064,7 @@ export interface SkillTreeNode {
      *  replenishment and crew fit read instanceDelivery. Kits and selections union.
      *  duration: 0 explicitly removes the birth's expiry clock. */
     summon?: Partial<Pick<SummonDelivery, 'count' | 'maxActive' | 'duration' | 'replenish'
-      | 'monsterId' | 'pool' | 'selectPool' | 'crewSkills' | 'crewAuras' | 'crewMods' | 'escort' | 'shell' | 'crewRules' | 'crewInherit' | 'crewOnDeath' | 'devour' | 'placeAt'>>;
+      | 'monsterId' | 'pool' | 'selectPool' | 'crewSkills' | 'crewAuras' | 'crewMods' | 'escort' | 'shell' | 'crewRules' | 'crewInherit' | 'crewOnDeath' | 'devour' | 'placeAt' | 'strikeRelease'>>;
     /** Host tag changes. Crew skills retain their own attack/spell tags. */
     tags?: { add?: SkillTag[]; remove?: SkillTag[] };
     /** delivery.arcDeg replacement (cone/melee deliveries only). */
@@ -6537,7 +6545,7 @@ export function summonKitIds(d: SummonDelivery, monsterId: string, native: strin
   const rules = (d.crewRules ?? []).filter(r => r.monsterIds.includes(monsterId));
   // Replacements only read the original kit: ordering cannot build replacement chains.
   ids = ids.map(id => rules.flatMap(r => r.replace ?? []).reverse().find(r => r.from === id)?.to ?? id);
-  return [...new Set([...ids, ...(d.crewSkills ?? []), ...(d.crewAuras ?? []), ...rules.flatMap(r => r.skills ?? [])])];
+  return [...new Set([...ids, ...(d.strikeRelease ? [d.strikeRelease.skill] : []), ...(d.crewSkills ?? []), ...(d.crewAuras ?? []), ...rules.flatMap(r => r.skills ?? [])])];
 }
 
 /**

@@ -287,6 +287,10 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
     if (d.shell) push('minionShell', 'Attached shell', d.shell.arcDeg + '° coverage', 'headline',
       Math.round(d.shell.lifeFraction * 100) + '% of minion life × guard strength' + (d.shell.sizeScaling ? ' × minion size' : '') + '; reforms after breaking');
     if (d.escort) push('minionEscort', 'Formation', 'Shadows the keeper', 'headline', 'attacks from its guard post; does not pursue');
+    if (d.strikeRelease) {
+      push('strikeRelease', 'Melee release', SKILLS[d.strikeRelease.skill]?.name ?? d.strikeRelease.skill, 'headline', 'strike your own minion to launch it; its reserved slot remains occupied');
+      push('summonReform', 'Reconstruction after release', secs(d.strikeRelease.reformTime * get('minionRespawnTime')), 'detail');
+    }
     const shape = replenishShape(caster, inst, d);
     const cap = shape.cap;
     push('minionCap', 'Minions at once', String(cap), 'headline',

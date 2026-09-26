@@ -1,4 +1,5 @@
 import { summonReservationUnit } from './companionGrants';
+import { summonContractSlots } from './summonContracts';
 import type { AssaultPreparation } from './assault';
 import type { MovementTetherSpec, MovementTetherState } from './movementTether';
 import type { EncounterGroupState } from './encounterGroups';
@@ -1025,7 +1026,9 @@ export class Actor {
   dischargeAt = new Map<string, number>();
   /** TOGGLED SUMMON CONTRACTS by skill id (PoE2 Spirit style): the skill —
    *  not the minion — owns the reservation, held across every death. */
-  summonToggles = new Map<string, { inst: SkillInstance; reserved: number }>();
+  summonToggles = new Map<string, { inst: SkillInstance; reserved: number; slots?: number }>();
+  /** A released summon remains an owned slot while its body gathers again. */
+  summonReform?: { remaining: number; duration: number; invulnerable: boolean; untargetable: boolean };
   /** TOGGLED STROBE STANCES by skill id (GroundDelivery.strobe): the
    *  stance re-casts its placement on a world-driven beat while it burns;
    *  `reserved` max mana is locked out, refunded on release or death. */
@@ -4112,19 +4115,18 @@ export class Actor {
     // contracts price the WHOLE slot block (reserve × effective maxActive).
     const d = instanceDelivery(inst); // summon-tree cap must price the real reservation
     if (d.type === 'summon' && d.persistent) {
-      const tags2 = skillContextTags(inst);
-      const extra2 = instanceMods(inst);
       const slots = d.persistent.toggle
-        ? Math.max(1, Math.round(this.sheet.get('minionMaxCount', tags2, extra2, d.maxActive)))
+        ? summonContractSlots(this, inst, d)
         : 1;
+      if (slots <= 0) return false;
       const reserve = summonReservationUnit(this, inst, d) * slots;
-      // A one-press pool swap DISMISSES rival same-poolGroup contracts —
+      // A one-press type swap DISMISSES rival exclusiveGroup contracts —
       // count their reservation as freed, or the swap greys out forever.
       let freed = 0;
-      if (d.persistent.toggle && d.poolGroup) {
+      if (d.persistent.toggle && d.exclusiveGroup) {
         for (const t of this.summonToggles.values()) {
-          const td = t.inst.def.delivery;
-          if (td.type === 'summon' && td.poolGroup === d.poolGroup) freed += t.reserved;
+          const td = instanceDelivery(t.inst);
+          if (td.type === 'summon' && td.exclusiveGroup === d.exclusiveGroup) freed += t.reserved;
         }
       }
       if (this.reservedMana - freed + reserve > this.maxMana() && this.manaReserved === 0) {

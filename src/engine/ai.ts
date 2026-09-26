@@ -545,6 +545,7 @@ const DEFAULT_BRAIN: BrainDef = {};
 // === THE PIPELINE ==============================================================
 
 export function updateAI(actor: Actor, world: World, dt: number): void {
+  if (actor.summonReform) return;
   ensureMovementTether(actor);
   if (refreshMovementTether(actor, world)?.returning) return;
   // Skip ANY player seat (the local hero AND co-op allies) — they're driven by

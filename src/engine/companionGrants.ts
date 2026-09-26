@@ -85,7 +85,7 @@ export class CompanionGrants {
       if (row.body || owner.downed) continue;
       row.remaining = Math.max(0, row.remaining - dt);
       if (row.remaining > 0) continue;
-      row.body = spawn(row.inst, { ...d, persistent: undefined, poolGroup: undefined,
+      row.body = spawn(row.inst, { ...d, persistent: undefined, poolGroup: undefined, exclusiveGroup: undefined,
         count: 1, maxActive: 1 }) ?? undefined;
     }
   }

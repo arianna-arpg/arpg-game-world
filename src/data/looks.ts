@@ -23,8 +23,10 @@ import { WORLDBOSS_ENCOUNTER_LOOKS } from './worldBossEncounters';
 import { TITAN_LOOKS } from './titans';
 import { COSMETIC_LOOKS } from './cosmeticModels';
 import { COSMETIC_WISP_LOOKS } from './cosmeticExpansionModels';
+import { RUBBLEKIN_LOOKS } from './rubblekin';
 
 export const LOOKS: Record<string, LookDef> = {
+  ...RUBBLEKIN_LOOKS,
   ...TITAN_LOOKS,
   ...COSMETIC_LOOKS,
   ...COSMETIC_WISP_LOOKS,

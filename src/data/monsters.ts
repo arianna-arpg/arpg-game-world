@@ -19,6 +19,7 @@ import type { CurveKind } from '../engine/curves';
 import { registerPresenceBand, type PresenceSpec } from '../engine/presence';
 import { ULTIMATE_FORMS } from './ultimates';
 import { NECROMANCER_MINIONS } from './necromancerMinions';
+import { RUBBLEKIN_MONSTERS } from './rubblekin';
 import { CASTER_MONSTERS } from './casterMonsters';
 import { COURT_MONSTERS } from './courtMonsters';
 import { ABYSS_MONSTERS } from './abyssMonsters';
@@ -2172,6 +2173,7 @@ const wingCycle = (opts: {
 export const MONSTERS: Record<string, MonsterDef> = {
   ...HIVECALL_MONSTERS,
   ...NECROMANCER_MINIONS,
+  ...RUBBLEKIN_MONSTERS,
   ...CASTER_MONSTERS,
   ...COURT_MONSTERS,
   ...ABYSS_MONSTERS,

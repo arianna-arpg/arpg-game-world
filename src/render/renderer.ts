@@ -5213,6 +5213,19 @@ export class Renderer {
   }
 
   private drawActor(a: Actor, world: World): void {
+    if (a.summonReform) {
+      const { ctx } = this;
+      const progress = 1 - a.summonReform.remaining / a.summonReform.duration;
+      ctx.save(); ctx.translate(a.pos.x, a.pos.y); ctx.fillStyle = a.color;
+      // Loose pieces visibly gather toward their original body as its clock ends.
+      for (let i = 0; i < 5; i++) {
+        const angle = i * Math.PI * 2 / 5 + a.id;
+        const radius = a.radius * (1.5 - progress);
+        const size = a.radius * (0.18 + progress * 0.13);
+        ctx.beginPath(); ctx.arc(Math.cos(angle) * radius, Math.sin(angle) * radius, size, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore(); return;
+    }
     if (a.summonShell) { this.drawSummonShell(a, world.time); return; }
     const { ctx } = this;
     const { x, y } = a.pos;

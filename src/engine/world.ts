@@ -1,5 +1,6 @@
 import { concealmentActive, isConcealed, PERCEPTION_CFG } from './perception';
 import { CompanionGrants, COMPANION_GRANT_PREFIX, companionGrantStat, summonReservationUnit } from './companionGrants';
+import { summonCapacity, summonContractSlots } from './summonContracts';
 import { TitanRuntime } from './titans';
 import { resolveMinionInheritance, applyMinionPlyBonus, minionAreaAvoidanceOf } from './minionInheritance';
 import { throngEvolution, throngTravelProtected, throngClusterPlies, THRONG_EVOLUTION } from './throngEvolution';
@@ -35801,6 +35802,12 @@ export class World {
           // The wave's launch point is the sweep's area anchor.
           fieldAt = vec(caster.pos.x, caster.pos.y);
         } else {
+          this.releaseStruckSummons(caster, inst, body => {
+            if (banded) return inAoe(bandC, bandGeo!.halfWidth, AOE_SHAPE.band, caster.facing, body.pos, body.radius);
+            if (swingShape >= 1 && swingShape <= 2) return inAoe(caster.pos, reach, swingShape, caster.facing, body.pos, body.radius);
+            return dist(caster.pos, body.pos) - body.radius <= reach
+              && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, body.pos))) <= arcRad / 2;
+          });
           for (const enemy of this.enemiesOf(caster)) {
             if (!sameStory(caster, enemy)) continue; // a swing is a TOUCH: its own story, rim duels or no
             // SEGMENT FABRIC: the swing connects with the NEAREST hittable
@@ -36833,27 +36840,23 @@ export class World {
           // Already toggled = idempotent (the useSkill intercept handles the
           // OFF-press; a re-entrant ON must never overwrite-and-leak).
           if (caster.summonToggles.has(def.id)) break;
-          // RADIO-BUTTON pools FIRST: a rival toggled contract sharing the
-          // pool group is dismissed — freeing ITS reservation — before the
-          // sustain check prices the new one (a one-press golem swap).
-          if (d.poolGroup) {
-            for (const [id, t] of [...caster.summonToggles]) {
-              const td = t.inst.def.delivery;
-              if (id !== def.id && td.type === 'summon' && td.poolGroup === d.poolGroup) {
-                this.dismissSummonToggle(caster, id);
-              }
-            }
-          }
-          const slots = Math.max(1, Math.round(
-            caster.sheet.get('minionMaxCount', tags, extra, d.maxActive)));
+          // Explicit type exclusivity frees rival reservations. Capacity
+          // sharing alone never dismisses another type's contract.
+          const slots = summonContractSlots(caster, inst, d);
           const reserve = summonReservationUnit(caster, inst, d) * slots;
-          if (caster.reservedMana + reserve > caster.maxMana()) {
+          let freed = 0;
+          if (d.exclusiveGroup) for (const t of caster.summonToggles.values()) {
+            const td = instanceDelivery(t.inst);
+            if (td.type === 'summon' && td.exclusiveGroup === d.exclusiveGroup) freed += t.reserved;
+          }
+          if (slots <= 0 || caster.reservedMana - freed + reserve > caster.maxMana()) {
             this.text(caster.pos, 'cannot sustain', '#d05050', 12);
             break;
           }
+          this.dismissExclusiveSummons(caster, inst, d);
           caster.reservedMana += reserve;
           caster.mana = Math.min(caster.mana, caster.availableMaxMana());
-          caster.summonToggles.set(def.id, { inst, reserved: reserve });
+          caster.summonToggles.set(def.id, { inst, reserved: reserve, slots });
           const first = def.hivecall ? 1 : Math.min(slots, Math.max(1, Math.round(
             (d.count + Math.round(caster.sheet.get('summonCount', tags, extra))) * gPow)));
           // A sequencing gem ("scattered in sequence") holds on toggled
@@ -36876,6 +36879,7 @@ export class World {
           }
           break;
         }
+        this.dismissExclusiveSummons(caster, inst, d);
         const total = Math.max(1, Math.round(
           (d.count + Math.round(caster.sheet.get('summonCount', tags, extra))) * gPow));
         // Where the bodies emerge: the default ring around the caster, or
@@ -39313,6 +39317,29 @@ export class World {
     return d.monsterId!;
   }
 
+  private dismissExclusiveSummons(owner: Actor, inst: SkillInstance, d: SummonDelivery): void {
+    if (!d.exclusiveGroup) return;
+    for (const [id, t] of [...owner.summonToggles]) {
+      const td = instanceDelivery(t.inst);
+      if (id !== inst.def.id && td.type === 'summon' && td.exclusiveGroup === d.exclusiveGroup) this.dismissSummonToggle(owner, id);
+    }
+    for (const body of this.minionsOf(owner)) {
+      if (!body.summonInst || body.summonInst.companionGrant || body.sourceSkillId === inst.def.id) continue;
+      const other = instanceDelivery(body.summonInst);
+      if (other.type === 'summon' && other.exclusiveGroup === d.exclusiveGroup) {
+        this.releaseContract(body, false); this.kill(body, true);
+      }
+    }
+    this.pendingRespawns = this.pendingRespawns.filter(p => {
+      const other = instanceDelivery(p.inst);
+      return p.caster !== owner || p.inst.def.id === inst.def.id || other.type !== 'summon' || other.exclusiveGroup !== d.exclusiveGroup;
+    });
+    this.pendingSummons = this.pendingSummons.filter(p => {
+      const other = instanceDelivery(p.inst);
+      return p.caster !== owner || p.inst.def.id === inst.def.id || other.type !== 'summon' || other.exclusiveGroup !== d.exclusiveGroup;
+    });
+  }
+
   /** Release a minion's reservation; optionally schedule its respawn. */
   /** Toggle a summon CONTRACT off: dismiss the bodies, purge the respawn
    *  queue, free the reservation — the only way a toggled contract ends. */
@@ -39320,6 +39347,7 @@ export class World {
     const t = owner.summonToggles.get(skillId);
     if (!t) return;
     owner.summonToggles.delete(skillId);
+    this.clearSummonReleaseFields(owner, t.inst);
     for (const m of this.minionsOfSkill(owner, skillId)) {
       this.releaseContract(m, false);
       this.kill(m, true);
@@ -39548,7 +39576,7 @@ export class World {
     for (let i = 0; i < count; i++) {
       const angle = base + i / Math.max(1, count) * Math.PI * 2;
       this.spawnMinion(owner, inst, { monsterId: act.monster, offspring: shape,
-        delivery: { ...d, persistent: undefined, poolGroup: undefined, crewOnDeath: undefined,
+        delivery: { ...d, persistent: undefined, poolGroup: undefined, exclusiveGroup: undefined, crewOnDeath: undefined,
           duration: act.lifespan ?? 8, shell: undefined },
         pos: vec(parent.pos.x + Math.cos(angle) * (act.ring ?? 28), parent.pos.y + Math.sin(angle) * (act.ring ?? 28)) });
     }
@@ -39556,7 +39584,7 @@ export class World {
 
   private spawnMinion(
     caster: Actor, inst: SkillInstance,
-    overrides?: { monsterId?: string; pos?: Vec2; delivery?: SummonDelivery; dmgMult?: number; offspring?: { maxActive: number; size: number; life: number; damage: number } },
+    overrides?: { monsterId?: string; pos?: Vec2; delivery?: SummonDelivery; dmgMult?: number; noReplace?: boolean; offspring?: { maxActive: number; size: number; life: number; damage: number } },
   ): Actor | null {
     // SOVEREIGNTY: seat — the summon's story is stamped and clamped (the derived census, probe_tiers RIG T).
     // A support's summon graft (Vessel of Shadow) supplies the delivery when
@@ -39567,8 +39595,7 @@ export class World {
     const tags = skillContextTags(inst);
     const extra = instanceMods(inst);
 
-    const maxActive = Math.max(1, Math.round(
-      caster.sheet.get('minionMaxCount', tags, extra, d.maxActive)));
+    const maxActive = summonCapacity(caster, inst, d);
     // Shared pool groups (golems) cap across every skill in the group.
     const existing = inst.companionGrant ? [] : d.poolGroup
       ? this.minionsOfGroup(caster, d.poolGroup)
@@ -39579,6 +39606,7 @@ export class World {
     } else {
       for (let i = existing.length - 1; i >= 0; i--) if (existing[i].summonOffspring) existing.splice(i, 1);
     }
+    if (overrides?.noReplace && existing.length >= maxActive) return null;
     while (existing.length >= maxActive) {
       const oldest = existing.shift();
       if (oldest) {
@@ -39720,6 +39748,11 @@ export class World {
         caster.pos.x + Math.cos(ang) * 50, caster.pos.y + Math.sin(ang) * 50), minion.radius, undefined, { mover: minion });
     if (minion.summonShell) { minion.pos = { ...caster.pos }; minion.facing = caster.facing; }
     this.actors.push(minion);
+    if (d.strikeRelease) {
+      let bodies = this.strikeReleaseBodies.get(caster);
+      if (!bodies) this.strikeReleaseBodies.set(caster, bodies = new Set());
+      bodies.add(minion);
+    }
     for (const sid of d.crewAuras ?? []) {
       const auraInst = minion.skills.find(s => s?.def.id === sid);
       if (auraInst?.def.delivery.type === 'aura') this.activateAura(minion, auraInst, auraInst.def.delivery,
@@ -46210,6 +46243,7 @@ export class World {
     }
 
     actor.dead = true;
+    if (actor.owner) this.strikeReleaseBodies.get(actor.owner)?.delete(actor);
     this.satellites.retire(actor);
     this.auroras.retire(actor);
     this.guardians.retire(actor);
@@ -50155,6 +50189,7 @@ export class World {
     this.updatePendingSummons(dt);
     this.updatePendingRespawns(dt);
     this.updateSummonContracts();
+    this.updateSummonReforms(dt);
     this.updateCompanionGrants(dt);
     this.updateReplenishment(dt);
     this.updatePendingBlinks(dt);
@@ -56107,7 +56142,11 @@ export class World {
           const sc = ps.scatter ?? 60;
           const pos = base ? this.clampPos(vec(
             base.x + rand(-sc, sc), base.y + rand(-sc, sc)), 10) : undefined;
-          this.spawnMinion(ps.caster, ps.inst, { pos, dmgMult: ps.mult });
+          const d = instanceDelivery(ps.inst);
+          const contract = ps.caster.summonToggles.get(ps.inst.def.id);
+          if (d.type === 'summon' && d.persistent?.toggle && (!contract
+            || this.minionsOfSkill(ps.caster, ps.inst.def.id).filter(a => !a.summonOffspring).length >= (contract.slots ?? summonCapacity(ps.caster, ps.inst, d)))) break;
+          this.spawnMinion(ps.caster, ps.inst, { pos, dmgMult: ps.mult, noReplace: !!(d.type === 'summon' && d.persistent?.toggle) });
         }
         ps.remaining -= n;
         if (ps.remaining <= 0) this.pendingSummons.splice(i, 1);
@@ -57211,7 +57250,12 @@ export class World {
       if (pr.caster.dead) { this.pendingRespawns.splice(i, 1); continue; }
       pr.timer -= dt;
       if (pr.timer <= 0) {
-        const minion = this.spawnMinion(pr.caster, pr.inst);
+        const d = instanceDelivery(pr.inst);
+        if (d.type === 'summon' && d.persistent?.toggle && !pr.caster.summonToggles.has(pr.inst.def.id)) {
+          this.pendingRespawns.splice(i, 1);
+          continue;
+        }
+        const minion = this.spawnMinion(pr.caster, pr.inst, { noReplace: true });
         if (minion) {
           this.pendingRespawns.splice(i, 1);
           this.text(minion.pos, 'respawned', '#b8a0e0', 11);
@@ -57238,16 +57282,16 @@ export class World {
         if (d.type !== 'summon' || !d.persistent) continue;
         const tags = skillContextTags(t.inst.def);
         const extra = instanceMods(t.inst);
-        let slots = Math.max(1, Math.round(
-          a.sheet.get('minionMaxCount', tags, extra, d.maxActive)));
+        let slots = summonContractSlots(a, t.inst, d);
         // The reservation TRACKS the live slot count — a mid-contract
         // passive node re-prices the bill (no free golems), a respec
         // refunds it. Growth is capped at what the pool can sustain.
         const unit = summonReservationUnit(a, t.inst, d);
         const headroom = a.maxMana() - (a.reservedMana - t.reserved);
         if (unit * slots > headroom) {
-          slots = Math.max(1, Math.floor(headroom / Math.max(1, unit)));
+          slots = Math.max(0, Math.floor(headroom / Math.max(1, unit)));
         }
+        t.slots = slots;
         const want = unit * slots;
         if (Math.abs(want - t.reserved) > 0.01) {
           a.reservedMana = Math.max(0, a.reservedMana - t.reserved + want);
@@ -57255,9 +57299,21 @@ export class World {
           t.reserved = want;
         }
         if (t.inst.def.hivecall) continue; // Hivecall owns one serial resurrection clock.
-        const alive = (d.poolGroup
-          ? this.minionsOfGroup(a, d.poolGroup)
-          : this.minionsOfSkill(a, id)).filter(a => !a.summonOffspring).length;
+        const bodies = this.minionsOfSkill(a, id).filter(a => !a.summonOffspring);
+        while (bodies.length > slots) this.kill(bodies.pop()!, true);
+        const alive = bodies.length;
+        // A lowered cap or reservation cannot leave an old respawn debt behind.
+        let room = Math.max(0, slots - alive);
+        this.pendingSummons = this.pendingSummons.filter(ps => {
+          if (ps.caster !== a || ps.inst !== t.inst) return true;
+          ps.remaining = Math.min(ps.remaining, room);
+          room -= ps.remaining;
+          return ps.remaining > 0;
+        });
+        this.pendingRespawns = this.pendingRespawns.filter(pr => {
+          if (pr.caster !== a || pr.inst !== t.inst) return true;
+          return room-- > 0;
+        });
         let queued = 0;
         for (const pr of this.pendingRespawns) {
           if (pr.caster === a && pr.inst.def.id === id) queued++;
@@ -57288,6 +57344,49 @@ export class World {
       body.pos = { ...body.owner.pos }; body.tier = body.owner.tier;
       body.facing = body.owner.facing; body.facingPrev = body.owner.facing;
       if (body.owner.dead || body.owner.downed || body.shellGuard?.broken) body.casting = null;
+    }
+  }
+
+  private strikeReleaseBodies = new WeakMap<Actor, Set<Actor>>();
+
+  /** Friendly melee contact transforms only explicitly receptive owned summons.
+   * The same footprint as the attack is supplied by each delivery; no allied
+   * damage, on-hit reward, sacrifice event or new capacity slot is generated. */
+  private releaseStruckSummons(caster: Actor, inst: SkillInstance, touches: (body: Actor) => boolean, struck?: Set<number>, direction = caster.facing): void {
+    const receptive = this.strikeReleaseBodies.get(caster);
+    if (!receptive?.size) return; // ordinary melee pays no world-wide census
+    const tags = skillContextTags(inst);
+    for (const body of [...receptive]) {
+      if (body.dead || !this.actors.includes(body)) { receptive.delete(body); continue; }
+      if (body.owner !== caster || body.team !== caster.team || body.dead || body.downed || body.summonReform
+        || body.untargetable || body.summonOffspring || body.summonInst?.companionGrant || !sameStory(caster, body)
+        || !body.summonInst || struck?.has(body.id) || !touches(body)) continue;
+      const d = instanceDelivery(body.summonInst);
+      const release = d.type === 'summon' ? d.strikeRelease : undefined;
+      if (!release || !release.tags.every(tag => tags.has(tag))) continue;
+      const payload = body.skills.find(skill => skill?.def.id === release.skill);
+      if (!payload || payload.def.delivery.type !== 'projectile') continue;
+      struck?.add(body.id);
+      const duration = Math.max(0.1, release.reformTime * caster.sheet.get('minionRespawnTime',
+        skillContextTags(body.summonInst), instanceMods(body.summonInst)));
+      body.summonReform = { remaining: duration, duration, invulnerable: body.invulnerable, untargetable: body.untargetable };
+      body.invulnerable = true; body.untargetable = true; body.casting = null;
+      body.sheet.setSource('summon:reform', [mod('moveSpeed', 'more', -1)]);
+      body.facing = direction;
+      this.executeSkill(body, payload, vec(body.pos.x + Math.cos(direction) * 800, body.pos.y + Math.sin(direction) * 800),
+        { keepFacing: true, noCooldown: true, noRepeat: true, componentUse: true });
+    }
+  }
+
+  private updateSummonReforms(dt: number): void {
+    for (const body of this.actors) {
+      const state = body.summonReform;
+      if (!state || body.dead) continue;
+      state.remaining -= dt * this.timeflow.actorScale(body);
+      if (state.remaining > 0) continue;
+      body.invulnerable = state.invulnerable; body.untargetable = state.untargetable;
+      body.sheet.removeSource('summon:reform'); body.summonReform = undefined;
+      this.flashes.push({ pos: { ...body.pos }, radius: body.radius * 2, color: body.color, life: 0.25, maxLife: 0.25 });
     }
   }
 
@@ -57347,6 +57446,8 @@ export class World {
     this.pendingBlinks = this.pendingBlinks.filter(b => b.actor !== caster || !b.inst || !ownsTreePayload(b.inst));
     // Scheduled repeats capture the old tree just as delayed fields do.
     this.pendingRepeats = this.pendingRepeats.filter(r => r.caster !== caster || !ownsTreePayload(r.inst));
+    this.pendingSalvos = this.pendingSalvos.filter(r => r.caster !== caster || !ownsTreePayload(r.inst));
+    this.pendingSteps = this.pendingSteps.filter(r => r.caster !== caster || !ownsTreePayload(r.inst));
     // Flights and their carried ground can outlive the allocation too.
     this.projectiles = this.projectiles.filter(p => p.caster !== caster || (!ownsTreePayload(p.inst) && this.recallTreeSpears.get(p.inst) !== inst));
     for (const p of this.projectiles) if (p.caster === caster && p.suffuse?.inst === inst) delete p.suffuse;
@@ -57389,12 +57490,28 @@ export class World {
   private clearSummonTreeBodies(caster: Actor, inst: SkillInstance): void {
     if (inst.def.delivery.type !== 'summon' || !inst.def.tree) return;
     this.replenishment.forget(caster, inst);
+    this.clearSummonReleaseFields(caster, inst);
     for (const body of [...this.actors]) if (!body.dead && body.owner === caster && body.summonInst === inst) {
       this.releaseContract(body, false);
       this.kill(body, true);
     }
     this.pendingSummons = this.pendingSummons.filter(p => p.caster !== caster || p.inst !== inst);
     this.pendingRespawns = this.pendingRespawns.filter(p => p.caster !== caster || p.inst !== inst);
+  }
+
+  /** Released arts can outlive their body. Retire captured descendants on
+   * dismissal or respec, including flights whose body has already died. */
+  private clearSummonReleaseFields(owner: Actor, inst: SkillInstance): void {
+    const d = instanceDelivery(inst);
+    if (d.type !== 'summon' || !d.strikeRelease) return;
+    const payloads = [...this.projectiles, ...this.zones, ...this.pendingRepeats, ...this.pendingFuses,
+      ...this.pendingSalvos, ...this.pendingSteps, ...this.pendingFollowUps];
+    const bodies = new Set([...this.actors, ...payloads.map(p => p.caster)]);
+    for (const body of bodies) if (body.owner === owner && body.summonInst === inst) {
+      const skills = new Set([...body.skills.filter((s): s is SkillInstance => !!s),
+        ...payloads.filter(p => p.caster === body).map(p => p.inst)]);
+      for (const skill of skills) this.clearTreeFields(body, skill);
+    }
   }
 
   /** Replenish only bar-seated skills, using the ordinary owned-minion birth.
@@ -59821,6 +59938,9 @@ export class World {
               if (got > 0.5) this.text(ally.pos, '+' + Math.round(got), '#8ae0a8', 10);
             }
           } else {
+          if (z.struck && instanceDelivery(z.inst).type === 'melee') {
+            this.releaseStruckSummons(z.caster, z.inst, body => this.zoneHas(z, body.pos, body.radius), z.struck, z.facing);
+          }
           for (const victim of this.zoneVictims(z)) {
             // SEGMENT FABRIC: the ground catches whichever hittable body
             // stands on it — a coil parked in the fire burns as honestly
@@ -61104,7 +61224,7 @@ export class World {
 
   private separateActors(): void {
     // Flat constructs are floor markings — you walk OVER them, not into them.
-    const flat = (a: Actor): boolean => !!a.summonShell || !!a.construct
+    const flat = (a: Actor): boolean => !!a.summonReform || !!a.summonShell || !!a.construct
       && (a.construct.kind === 'pad' || a.construct.kind === 'gate'
         || a.construct.kind === 'trap' || a.construct.kind === 'mine'
         // Hover/strike echoes are GHOSTS glued to their owner — a solid one

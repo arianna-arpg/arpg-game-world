@@ -15,6 +15,7 @@ import { WORKSHOP_SKILLS } from './workshopSkills';
 import { IMPACT_STARTER_TREES } from './impactStarterTrees';
 import { CONTROL_STARTER_TREES } from './controlStarterTrees';
 import { PRECISION_STARTER_TREES } from './precisionStarterTrees';
+import { RUBBLEKIN_SKILLS } from './rubblekin';
 import { PACT_STEEL_STARTER_TREES } from './pactSteelStarterTrees';
 import { PACT_SKILLS } from './pactSkills';
 import { DEVOTED_STARTER_TREES } from './devotedStarterTrees';
@@ -56,6 +57,7 @@ export const SKILLS: Record<string, SkillDef> = {
   ...GOAD_SKILLS,
   town_portal: TOWN_PORTAL_SKILL,
   ...NECROMANCER_SKILLS,
+  ...RUBBLEKIN_SKILLS,
   ...PACT_SKILLS,
   ...ROOTWILD_SKILLS,
   ...ARENA_BOSS_SKILLS,
@@ -2191,12 +2193,13 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'summon_stone_golem', name: 'Summon Stone Golem',
     description: 'TOGGLE a binding contract: mana is reserved per golem slot and stays locked'
       + ' while the contract holds, even while a golem lies in rubble awaiting its 8 second'
-      + ' reassembly. Recast to dismiss and reclaim the reserve.',
+      + ' reassembly. Only one kind of major golem can be bound at a time; binding another'
+      + ' replaces this contract. Recast to dismiss and reclaim the reserve.',
     tags: ['spell', 'summon', 'minion', 'persistent'], color: '#a8a090',
     manaCost: 15, cooldown: 4, useTime: 1,
     delivery: {
       type: 'summon', monsterId: 'stone_golem',
-      count: 1, maxActive: 1,
+      count: 1, maxActive: 1, poolGroup: 'golem', exclusiveGroup: 'golem',
       persistent: { reserve: 35, respawnTime: 8, toggle: true },
     },
     effects: [],
@@ -2219,7 +2222,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 14, cooldown: 4, useTime: 1,
     delivery: {
       type: 'summon', monsterId: 'bone_golem',
-      count: 1, maxActive: 1, poolGroup: 'golem',
+      count: 1, maxActive: 1, poolGroup: 'golem', exclusiveGroup: 'golem',
       persistent: { reserve: 32, respawnTime: 8, toggle: true },
     },
     effects: [],
@@ -2244,7 +2247,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 12, cooldown: 3, useTime: 0.8,
     delivery: {
       type: 'summon', monsterId: 'arcane_familiar',
-      count: 1, maxActive: 1, poolGroup: 'familiar',
+      count: 1, maxActive: 1, poolGroup: 'familiar', exclusiveGroup: 'familiar',
       persistent: { reserve: 24, respawnTime: 5, toggle: true },
     },
     effects: [],
@@ -3453,7 +3456,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'summon', 'minion', 'fire', 'persistent'], color: '#e86a3a',
     manaCost: 28, cooldown: 3, useTime: 1,
     delivery: {
-      type: 'summon', monsterId: 'fire_golem', count: 1, maxActive: 1, poolGroup: 'golem',
+      type: 'summon', monsterId: 'fire_golem', count: 1, maxActive: 1, poolGroup: 'golem', exclusiveGroup: 'golem',
       persistent: { reserve: 30, respawnTime: 6, toggle: true },
     },
     effects: [],
@@ -3470,7 +3473,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'summon', 'minion', 'cold', 'persistent'], color: '#7ac8e8',
     manaCost: 28, cooldown: 3, useTime: 1,
     delivery: {
-      type: 'summon', monsterId: 'ice_golem', count: 1, maxActive: 1, poolGroup: 'golem',
+      type: 'summon', monsterId: 'ice_golem', count: 1, maxActive: 1, poolGroup: 'golem', exclusiveGroup: 'golem',
       persistent: { reserve: 30, respawnTime: 6, toggle: true },
     },
     effects: [],
@@ -3487,7 +3490,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'summon', 'minion', 'physical', 'persistent'], color: '#b03848',
     manaCost: 28, cooldown: 3, useTime: 1,
     delivery: {
-      type: 'summon', monsterId: 'blood_golem', count: 1, maxActive: 1, poolGroup: 'golem',
+      type: 'summon', monsterId: 'blood_golem', count: 1, maxActive: 1, poolGroup: 'golem', exclusiveGroup: 'golem',
       persistent: { reserve: 30, respawnTime: 6, toggle: true },
     },
     effects: [],

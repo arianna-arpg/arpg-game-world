@@ -132,7 +132,7 @@ check('A: deepening routes inherit their complete identity from the exclusive tr
 // (each limb's terminal walk + the lock-free ground absorbs the cap
 // budget), and the payload whitelist on every graph node.
 const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags', 'chargeCost', 'ground', 'castCycle', 'construct', 'reduceCooldowns', 'recallImpales', 'aura', 'invocation']);
-const SUMMON_KEYS = new Set(['count', 'maxActive', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell', 'crewRules', 'crewInherit', 'crewOnDeath', 'devour', 'placeAt']);
+const SUMMON_KEYS = new Set(['count', 'maxActive', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell', 'crewRules', 'crewInherit', 'crewOnDeath', 'devour', 'placeAt', 'strikeRelease']);
 const OVER_CHANNEL_KEYS = new Set(['ramp', 'rampMove']);
 let censusBad = '';
 let treeWearers = 0;

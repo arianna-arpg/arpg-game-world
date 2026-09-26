@@ -90,6 +90,7 @@ export interface ActorW {
   mn: boolean;                 // isMinion() (purple outline)
   passive: boolean;
   ut: boolean;                 // untargetable (ghostly alpha)
+  summonReform?: [number, number]; // remaining / full reconstruction time
   thu?: number; // throngUnits: constituent count in a cluster
   the?: number; // throngEgg: batch held by a find
   thg?: Record<string, number>; // native hatch gauges by equipped skill
@@ -661,6 +662,7 @@ function actorToW(a: Actor, world: World): ActorW {
     life: Math.max(0, Math.round(a.life)), maxLife: Math.round(a.maxLife()),
     es: Math.round(a.es), maxEs: Math.round(a.maxEs()),
     hf: a.hitFlash, downed: a.downed, dead: a.dead, mn: a.isMinion(), passive: a.passive, ut: a.untargetable,
+    summonReform: a.summonReform ? [a.summonReform.remaining, a.summonReform.duration] : undefined,
   };
   if (inv > 0) w.inv = inv;
   if (a.movementTether && !a.movementTether.released) w.movementTether = {
@@ -1254,6 +1256,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.life = aw.life; a.es = aw.es; a.absorb = aw.ab ?? 0;
     a.hitFlash = aw.hf; a.downed = aw.downed; a.dead = aw.dead;
     a.passive = aw.passive; a.untargetable = aw.ut;
+    a.summonReform = aw.summonReform ? { remaining: aw.summonReform[0], duration: aw.summonReform[1], invulnerable: false, untargetable: false } : undefined;
     a.movementTether = aw.movementTether ? { ...aw.movementTether,
       point: { ...aw.movementTether.point }, safe: { ...aw.movementTether.safe } } : undefined;
     a.throngUnits = aw.thu; a.throngEgg = aw.the; a.throngRosterHud = aw.thr; a.hivecallHud = aw.hive; a.assaultHud = aw.assault; a.assaultOrbit = !!aw.assaultOrbit; a.assaultAura = !!aw.assaultAura;
