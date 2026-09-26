@@ -8,6 +8,7 @@ import { ASSAULT, assaultOrbitPositions } from '../engine/assault';
 import { cosmeticPortalColor, drawCosmeticPortal, cosmeticProjectileExtent, drawCosmeticProjectile, cosmeticHotbar, drawCosmeticHotbar } from './vis/cosmeticEffects';
 import { HIVECALL } from '../engine/hivecall';
 import { CosmeticTrails, cosmeticBody, cosmeticLoadoutFor, cosmeticPick, drawCosmeticMotif, drawCosmeticOrbit } from './vis/cosmetics';
+import { cosmeticSummonSkill } from '../meta/cosmetics';
 import { COSMETIC_CFG } from '../data/cosmetics';
 // ---------------------------------------------------------------------------
 // Canvas renderer: world (camera-following) + HUD. Placeholder geometry art —
@@ -5439,7 +5440,7 @@ export class Renderer {
       outline: a.isMinion() ? '#b06bd4' : undefined,
       demonHorns: !!FACTIONS[a.faction ?? '']?.nubHorns,
       extraParts: a.extraParts,
-    }, cosmeticLoadout, a.isMinion(), a.cosmeticKind === 'wisp');
+    }, cosmeticLoadout, a.isMinion(), a.cosmeticKind === 'wisp', { defId: a.defId, skill: cosmeticSummonSkill(a) });
     const cosmeticAvatar = !a.owner ? cosmeticPick(cosmeticLoadout, 'avatar')?.paint : undefined;
     if (cosmeticAvatar?.motif) drawCosmeticMotif(ctx, cosmeticAvatar.motif, cosmeticAvatar.color ?? '#c4b2f2',
       a.radius + 8, -a.radius - 8, 5);

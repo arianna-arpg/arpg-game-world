@@ -66,6 +66,12 @@ export function cosmeticLoadoutFor(world: World, actor: Actor): CosmeticLoadout 
     ? world.account.cosmetics.loadout : undefined;
 }
 
+/** The instance preserves the real skill even for item-granted companions whose
+ * cap marker is sourceSkillId. Peers receive this resolved identity. */
+export function cosmeticSummonSkill(actor: Actor): string | undefined {
+  return actor.summonInst?.def.id ?? actor.cosmeticSourceSkill ?? actor.sourceSkillId;
+}
+
 export function cosmeticSkillPaint(world: World, actor: Actor, skill: string) {
   const loadout = cosmeticLoadoutFor(world, actor);
   return { color: cosmeticSkillColor(loadout, skill),

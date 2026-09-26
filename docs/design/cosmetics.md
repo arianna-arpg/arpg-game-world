@@ -69,7 +69,17 @@ possession keeps the foreign body's identity.
 For example a Warrior can wear `model_necromancer` and Moonglass together;
 the original actor's class, look, radius, anatomy, skills and stats stay intact.
 The renderer resolves both baked and live parts from the selected model.
-Summons retain their own bodies and use their separate summon-skin slot.
+Summons use their separate summon-skin slot for palettes. Skill skins may also
+replace particular summoned bodies through `paint.summonBodies`, keyed by
+monster definition ID and resolved against the actual summoning skill. Legacy
+Golems debuts this with the five original golem designs, freely included for
+every account. Their existing looks and animations are preserved; the selected
+summon appears in the Wardrobe preview. See [the golem contract](../render/golems.md)
+for composition, attribution, co-op and extension details.
+Legacy Amalgamation and Legacy Spirit Companions extend this to six more
+summons, including Spirit Pyre's Raging Spirits. Channel-release summons also
+preview their authored body. Their reusable anatomy and retained originals
+are documented in [the summon contract](../render/summons.md).
 Clearing the skin reveals the chosen model's palette; clearing the model
 restores the current character's silhouette. These slots persist across runs.
 

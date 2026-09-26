@@ -18,8 +18,12 @@ import { ABYSS_GLYPHS } from './abyssGlyphs';
 import { KINSHIP_GLYPHS } from './kinshipGlyphs';
 import { ROOTWILD_GLYPHS } from './rootwildGlyphs';
 import { COSMETIC_GLYPHS } from './cosmeticGlyphs';
+import { GOLEM_GLYPHS } from './golemGlyphs';
+import { SUMMON_GLYPHS } from './summonGlyphs';
 
 export const GLYPH_PARTS: Record<string, GlyphDef> = {
+  ...GOLEM_GLYPHS,
+  ...SUMMON_GLYPHS,
   ...COSMETIC_GLYPHS,
   ...CASTER_GLYPHS,
   ...DEMON_GLYPHS,

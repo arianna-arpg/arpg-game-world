@@ -2,17 +2,33 @@ import { registerCosmetic, type CosmeticDef, type CosmeticSlot, type CosmeticPai
 import { CLASSES } from './classes';
 import { COSMETIC_MODELS } from './cosmeticModels';
 import { COSMETIC_WISPS } from './cosmeticExpansionModels';
+import { SUMMON_LEGACY_COSMETICS } from './summonCosmetics';
+
+for (const cosmetic of SUMMON_LEGACY_COSMETICS) registerCosmetic(cosmetic);
 
 export const COSMETIC_CFG = {
   footprints: { spacing: 15, lifetime: 2.4, maxPerActor: 24, teleportDistance: 110 },
   effect: { radiusScale: 1.35, orbitCount: 5, opacity: 0.65 },
   cast: { radiusScale: 1.8, lifetime: 0.35, count: 5, opacity: 0.75, glintRadius: 3.5 },
-  preview: { width: 360, height: 230 },
+  preview: { width: 360, height: 230, summonRadius: 38 },
 };
 
 const add = (id: string, name: string, slot: CosmeticSlot, paint: CosmeticPaint,
   description: string, acquire: CosmeticDef['acquire'] = { kind: 'starter' }, collection = 'First Light'): void =>
   registerCosmetic({ id, name, slot, paint, description, acquire, collection, author: 'Hollow Wake' });
+
+registerCosmetic({ id: 'legacy_golems', name: 'Legacy Golems', slot: 'skillSkin',
+  description: 'The original stone, fire, ice, blood and bone golem designs. Wear them together, or keep a favorite on one summoning skill.',
+  collection: 'Legacy Wardrobe', author: 'Hollow Wake', acquire: { kind: 'starter' },
+  skills: ['summon_stone_golem', 'summon_fire_golem', 'summon_ice_golem', 'summon_blood_golem', 'summon_bone_golem'],
+  paint: { summonBodies: {
+    stone_golem: { look: 'golem', color: '#a8a090', material: 'stone' },
+    fire_golem: { look: 'golem', color: '#e86a3a', material: 'ember' },
+    ice_golem: { look: 'golem_ice', color: '#7ac8e8', material: 'ice' },
+    blood_golem: { look: 'golem', color: '#b03848', material: 'flesh' },
+    bone_golem: { look: 'bone_colossus', color: '#d8d0c0', material: 'bone' },
+  } },
+});
 
 // Every class look participates automatically; wearing one grants no class progression.
 for (const c of CLASSES) if (c.look) add(`model_${c.id}`, c.name, 'playerModel', { look: c.look, color: c.color },

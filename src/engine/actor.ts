@@ -1460,6 +1460,8 @@ export class Actor {
   owner?: Actor;          // set for minions
   /** Render-only co-op appearance; never equipment, ownership or stat authority. */
   cosmeticLoadout?: CosmeticLoadout;
+  /** Resolved summon-skin attribution on peers; never a gameplay cap marker. */
+  cosmeticSourceSkill?: string;
   /** Presentation identity independent of the provisional class under a Mu spirit. */
   cosmeticKind?: 'wisp';
   aiCooldown = 0;         // small delay between AI decisions

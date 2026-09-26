@@ -1,5 +1,7 @@
 import { drawCosmeticMotif, drawCosmeticPortal, drawCosmeticProjectile, drawCosmeticHotbar, cosmeticHotbar } from './cosmeticEffects';
 import { MU_CFG } from '../../data/mu';
+import { SKILLS } from '../../data/skills';
+import { MONSTERS } from '../../data/monsters';
 import type { Actor } from '../../engine/actor';
 import type { World } from '../../engine/world';
 import type { CosmeticLoadout, CosmeticPaint, CosmeticSlot } from '../../engine/cosmetics';
@@ -7,11 +9,18 @@ import { COSMETIC_CFG } from '../../data/cosmetics';
 import { cosmeticLoadoutFor, cosmeticPick, cosmeticSkillColor } from '../../meta/cosmetics';
 import { bodySprite, adornSprite, spriteHalf, drawLiveParts, lookOf, type BodyLook } from './body';
 
-export function cosmeticBody(look: BodyLook, loadout: CosmeticLoadout | undefined, summon = false, wisp = false): BodyLook {
+export function cosmeticBody(look: BodyLook, loadout: CosmeticLoadout | undefined, summon = false, wisp = false,
+  source?: { defId?: string; skill?: string }): BodyLook {
   if (wisp) {
     const paint = cosmeticPick(loadout, 'wispSkin')?.paint;
     return paint ? { ...look, look: paint.look ?? look.look, color: paint.color ?? look.color,
       material: paint.material ?? look.material, adorn: paint.adorn } : look;
+  }
+  if (summon && source?.defId) {
+    const bodies = cosmeticPick(loadout, 'skillSkin', source.skill)?.paint.summonBodies;
+    const body = bodies && Object.prototype.hasOwnProperty.call(bodies, source.defId) ? bodies[source.defId] : undefined;
+    if (body && lookOf(body.look)) look = { ...look, look: body.look,
+      color: body.color ?? look.color, material: body.material ?? look.material };
   }
   const model = !summon ? cosmeticPick(loadout, 'playerModel')?.paint : undefined;
   if (model?.look) look = { ...look, look: model.look, color: model.color ?? look.color, material: model.material ?? look.material };
@@ -69,7 +78,8 @@ export function drawCosmeticPreview(canvas: HTMLCanvasElement, base: BodyLook, l
   const ctx = canvas.getContext('2d'); if (!ctx) return;
   const { width, height } = canvas;
   const wisp = focus === 'wispSkin', portal = focus === 'portalSkin' || focus === 'portalRecolor';
-  const isolated = wisp || portal;
+  const summon = focus === 'skillSkin' ? cosmeticPreviewSummon(skill) : undefined;
+  const isolated = wisp || portal || !!summon;
   ctx.clearRect(0, 0, width, height);
   const bg = ctx.createRadialGradient(width * 0.5, height * 0.48, 8, width * 0.5, height * 0.48, width * 0.65);
   bg.addColorStop(0, '#283542'); bg.addColorStop(1, '#0d141c'); ctx.fillStyle = bg; ctx.fillRect(0, 0, width, height);
@@ -82,13 +92,14 @@ export function drawCosmeticPreview(canvas: HTMLCanvasElement, base: BodyLook, l
     drawCosmeticMotif(ctx, steps.motif, steps.color ?? '#d8b8d3', width * 0.25 + i * 15, height * 0.8 - i * 7, 4, i);
   }
   ctx.globalAlpha = 1; ctx.save(); ctx.translate(width * 0.48, height * 0.53);
-  const look = cosmeticBody(wisp ? { shape: 'circle', ...MU_CFG.wisp, radius: 22 } : { ...base, radius: 24 }, loadout, false, wisp);
+  const look = summon ? cosmeticBody({ ...summon, radius: COSMETIC_CFG.preview.summonRadius }, loadout, true, false, { defId: summon.id, skill })
+    : cosmeticBody(wisp ? { shape: 'circle', ...MU_CFG.wisp, radius: 22 } : { ...base, radius: 24 }, loadout, false, wisp);
   if (portal) { ctx.save(); ctx.translate(0, 13); ctx.scale(1.35, 1.35); drawCosmeticPortal(ctx, loadout, time); ctx.restore(); }
-  if (!wisp && !portal) drawCosmeticOrbit(ctx, cosmeticPick(loadout, 'playerEffect')?.paint, 30, time);
+  if (!isolated) drawCosmeticOrbit(ctx, cosmeticPick(loadout, 'playerEffect')?.paint, 30, time);
   const half = spriteHalf(look.radius);
   ctx.rotate(-Math.PI / 2);
   if (!portal) { ctx.drawImage(bodySprite(look), -half, -half); const live = lookOf(look.look); if (live) drawLiveParts(ctx, look, live, time); }
-  const cosmeticAdorn = !portal ? cosmeticPick(loadout, wisp ? 'wispSkin' : 'playerSkin')?.paint.adorn : undefined;
+  const cosmeticAdorn = !portal ? cosmeticPick(loadout, wisp ? 'wispSkin' : summon ? 'summonSkin' : 'playerSkin')?.paint.adorn : undefined;
   const adorn = adornSprite(cosmeticAdorn ? { ...look, look: undefined } : look); if (!portal && adorn) ctx.drawImage(adorn, -half, -half);
   ctx.restore();
   const kin = cosmeticBody({ shape: 'circle', color: '#a3a5bc', radius: 12, material: 'bone' }, loadout, true);
@@ -114,6 +125,25 @@ export function drawCosmeticPreview(canvas: HTMLCanvasElement, base: BodyLook, l
       drawCosmeticMotif(ctx, 'stars', style?.trim ?? '#e2d4b2', x + i * 34 + 14, y + 14, 5);
     }
   }
+}
+
+/** Preview a skill's authored body through the same resolver as its live summon. */
+export function cosmeticPreviewSummon(skill?: string) {
+  const def = skill ? SKILLS[skill] : undefined;
+  const monsterId = def?.delivery.type === 'summon' ? def.delivery.monsterId : def?.amalgam?.monsterId;
+  return monsterId ? MONSTERS[monsterId] : undefined;
+}
+
+export function drawCosmeticSummonTile(canvas: HTMLCanvasElement, id: string, skill?: string): void {
+  const ctx = canvas.getContext('2d'), def = cosmeticPreviewSummon(skill);
+  if (!ctx || !def) return;
+  const look = cosmeticBody({ ...def, radius: 24 }, { slots: { skillSkin: id }, skills: {} }, true, false, { defId: def.id, skill });
+  const half = spriteHalf(look.radius);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save(); ctx.translate(canvas.width / 2, canvas.height / 2); ctx.rotate(-Math.PI / 2);
+  ctx.drawImage(bodySprite(look), -half, -half);
+  const live = lookOf(look.look); if (live) drawLiveParts(ctx, look, live, 0);
+  ctx.restore();
 }
 
 /** Catalogue portraits use the very same resolved body and bake as the world. */

@@ -2563,7 +2563,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   mender_sprite: {
     id: 'mender_sprite', name: 'Mender Sprite',
-    color: '#a8f0c8', shape: 'diamond', radius: 8, material: 'ethereal', look: 'spirit',
+    color: '#a8f0c8', shape: 'diamond', radius: 8, material: 'ethereal', look: 'mender_cradle',
     base: { life: 14, moveSpeed: 190, mana: 999, manaRegen: 20 },
     skills: ['soothing_touch'],
     xp: 0,
@@ -2573,7 +2573,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // given wings and a hire clock).
   cherub: {
     id: 'cherub', name: 'Cherub',
-    color: '#f8e8c8', shape: 'diamond', radius: 9, material: 'ethereal', look: 'spirit',
+    color: '#f8e8c8', shape: 'diamond', radius: 9, material: 'ethereal', look: 'cherub_feathered',
     base: { life: 20, moveSpeed: 185, mana: 999, manaRegen: 18, weight: 0.3 },
     skills: ['soothing_touch'],
     xp: 0,
@@ -2873,7 +2873,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // Raging Spirit swarm body (Summon Raging Spirit / Spirit Pyre).
   raging_spirit: {
     id: 'raging_spirit', name: 'Raging Spirit',
-    color: '#ff8a4a', shape: 'circle', radius: 8, material: 'ethereal', look: 'spirit',
+    color: '#ff8a4a', shape: 'circle', radius: 8, material: 'ethereal', look: 'raging_deathmask',
     base: { life: 18, moveSpeed: 230, accuracy: 90, mana: 0 },
     skills: ['claw'],
     xp: 0,
@@ -3126,7 +3126,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // and Crowns it. Deliberately a modest base so the PARTS define its threat + spoils.
   amalgam_horror: {
     id: 'amalgam_horror', name: 'Amalgamation',
-    color: '#8ac0a0', shape: 'star', radius: 24, look: 'gravemaw',
+    color: '#8ac0a0', shape: 'star', radius: 24, look: 'amalgam_stitched',
     base: { life: 240, moveSpeed: 122, accuracy: 115, mana: 140, manaRegen: 8, armor: 20 },
     mods: [mod('chaosRes', 'flat', 0.4)],
     skills: ['claw', 'pestilent_nova'],
@@ -7441,7 +7441,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   flame_sprite: {
     id: 'flame_sprite', name: 'Flame Sprite',
-    color: '#ffb05a', shape: 'diamond', radius: 10, material: 'ember', look: 'flame_elemental',
+    color: '#ffb05a', shape: 'diamond', radius: 10, material: 'ember', look: 'sprite_kindled',
     base: { life: 22, moveSpeed: 170, mana: 999, manaRegen: 20 },
     mods: [mod('fireRes', 'flat', 0.75)],
     skills: ['firebolt'],
@@ -7450,7 +7450,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   stone_golem: {
     id: 'stone_golem', name: 'Stone Golem',
-    color: '#a8a090', shape: 'circle', radius: 19, material: 'stone', look: 'golem',
+    color: '#a8a090', shape: 'circle', radius: 19, material: 'stone', look: 'golem_stone_assembled',
     base: { life: 130, moveSpeed: 110, accuracy: 95, armor: 50, mana: 40, manaRegen: 4 },
     mods: [mod('damageTaken', 'more', -0.1)],
     skills: ['ground_slam', 'claw'],
@@ -7461,7 +7461,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   fire_golem: {
     id: 'fire_golem', name: 'Fire Golem',
-    color: '#e86a3a', shape: 'circle', radius: 16, material: 'ember', look: 'golem',
+    color: '#e86a3a', shape: 'circle', radius: 16, material: 'ember', look: 'golem_fire_assembled',
     base: { life: 95, moveSpeed: 130, mana: 200, manaRegen: 10, armor: 20 },
     mods: [mod('fireRes', 'flat', 0.75), mod('damage', 'increased', 0.15, ['fire'])],
     skills: ['firebolt', 'flame_wave'],
@@ -7477,7 +7477,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // slot, the same contract. Minion-only (xp 0), never fielded wild.
   bone_golem: {
     id: 'bone_golem', name: 'Bone Golem',
-    color: '#d8d0c0', shape: 'octagon', radius: 18, material: 'bone', look: 'bone_colossus',
+    color: '#d8d0c0', shape: 'octagon', radius: 18, material: 'bone', look: 'golem_bone_assembled',
     base: { life: 140, moveSpeed: 105, accuracy: 95, armor: 40, mana: 40, manaRegen: 4, poise: 60 },
     mods: [mod('chaosRes', 'flat', 0.5), mod('damageTaken', 'more', -0.1)],
     skills: ['ground_slam', 'claw'],
@@ -7486,7 +7486,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   ice_golem: {
     id: 'ice_golem', name: 'Ice Golem',
-    color: '#7ac8e8', shape: 'circle', radius: 16, material: 'ice', look: 'golem_ice',
+    color: '#7ac8e8', shape: 'circle', radius: 16, material: 'ice', look: 'golem_ice_assembled',
     base: { life: 110, moveSpeed: 120, mana: 200, manaRegen: 10, armor: 30 },
     mods: [mod('coldRes', 'flat', 0.75)],
     skills: ['frostbolt', 'frost_nova'],
@@ -7495,7 +7495,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   blood_golem: {
     id: 'blood_golem', name: 'Blood Golem',
-    color: '#b03848', shape: 'circle', radius: 17, look: 'golem',
+    color: '#b03848', shape: 'circle', radius: 17, look: 'golem_blood_assembled',
     base: { life: 150, moveSpeed: 125, accuracy: 100, mana: 40, manaRegen: 5 },
     mods: [mod('lifeLeech', 'flat', 0.05), mod('chaosRes', 'flat', 0.4)],
     skills: ['claw', 'heavy_strike'],
@@ -7522,7 +7522,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // only (xp 0), never fielded wild.
   arcane_familiar: {
     id: 'arcane_familiar', name: 'Arcane Familiar',
-    color: '#b08ae8', shape: 'diamond', radius: 10, material: 'ethereal', look: 'spirit',
+    color: '#b08ae8', shape: 'diamond', radius: 10, material: 'ethereal', look: 'familiar_pactbeast',
     base: { life: 55, moveSpeed: 170, accuracy: 100, mana: 80, manaRegen: 8 },
     mods: [mod('chaosRes', 'flat', 0.5)],
     skills: ['unmaking_bolt'],

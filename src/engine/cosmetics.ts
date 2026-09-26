@@ -20,6 +20,9 @@ export interface CosmeticPaint {
   material?: string;
   adorn?: ActorAdorn;
   motif?: CosmeticMotif;
+  /** Summoned body replacements keyed by monster def, resolved through the
+   * summoning skill's skin. Never replaces combat anatomy or collision data. */
+  summonBodies?: Record<string, { look: string; color?: string; material?: string }>;
 }
 export interface CosmeticDef {
   id: string; name: string; description: string; slot: CosmeticSlot;
@@ -53,6 +56,13 @@ export function registerCosmetic(def: CosmeticDef): void {
   if (def.paint.projectile && def.slot !== 'skillSkin') throw new Error(`Projectile art requires a skill skin: ${def.id}`);
   if (def.paint.portal && def.slot !== 'portalSkin') throw new Error(`Portal art requires a portal skin: ${def.id}`);
   if (def.paint.hotbar && def.slot !== 'hotbarSkin') throw new Error(`Hotbar art requires a hotbar skin: ${def.id}`);
+  if (def.paint.summonBodies) {
+    const bodies = Object.entries(def.paint.summonBodies);
+    if (def.slot !== 'skillSkin' || !bodies.length || bodies.some(([id, p]) =>
+      !/^[a-z][a-z0-9_.:-]*$/.test(id) || !p.look || (p.color && !/^#[0-9a-f]{6}$/i.test(p.color)))) {
+      throw new Error(`Invalid summon body skin: ${def.id}`);
+    }
+  }
   if (def.consume && (def.slot !== 'skillRecolor' || def.consume.target !== 'skillColor'
     || !Number.isSafeInteger(def.consume.starterCharges) || def.consume.starterCharges < 0 || def.consume.starterCharges > 100)) throw new Error(`Invalid cosmetic consumable: ${def.id}`);
   if (def.acquire.kind === 'credits' && (!Number.isSafeInteger(def.acquire.cost) || def.acquire.cost <= 0)) throw new Error(`Invalid cosmetic cost: ${def.id}`);

@@ -4,11 +4,11 @@ import { seedGlobalRandom } from '../src/sim/rng';
 import { makeAccount, serializeAccount, deserializeAccount } from '../src/meta/account';
 import { COSMETICS, COSMETIC_SLOTS, registerCosmetic, type CosmeticSlot } from '../src/engine/cosmetics';
 import { applySkillColorCosmetic, cosmeticCharges, cosmeticSkillColor, grantCosmetic, setSkillCosmeticColor, skillColorUnlocked,
-  buyCosmetic, cosmeticLoadoutFor, cosmeticPick, cosmeticSkillPaint, equipCosmetic,
+  buyCosmetic, cosmeticLoadoutFor, cosmeticSummonSkill, cosmeticPick, cosmeticSkillPaint, equipCosmetic,
   ownsCosmetic, reconcileCosmeticEntitlements, sanitizeCosmetics, sanitizeCosmeticLoadout, settleCosmetics } from '../src/meta/cosmetics';
 import { SKILLS } from '../src/data/skills';
 import { MATERIALS } from '../src/render/vis/materials';
-import { cosmeticBody, CosmeticTrails } from '../src/render/vis/cosmetics';
+import { cosmeticBody, CosmeticTrails, cosmeticPreviewSummon } from '../src/render/vis/cosmetics';
 import { makeSkillInstance } from '../src/engine/skills';
 import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 import { NullInput } from '../src/net/intent';
@@ -26,6 +26,11 @@ import { sceneBegin } from '../src/engine/scenes';
 import { menuFold } from '../src/engine/menu';
 import { TOWN_PORTAL_CFG } from '../src/data/townportals';
 import '../src/data/menu';
+import { MONSTERS } from '../src/data/monsters';
+import { GOLEM_LOOKS } from '../src/data/golemLooks';
+import { GLYPH_PARTS } from '../src/data/glyphParts';
+import { SUMMON_LOOKS } from '../src/data/summonLooks';
+import { SUMMON_LEGACY_COSMETICS } from '../src/data/summonCosmetics';
 
 let checks = 0;
 const test = (label: string, run: () => void): void => { run(); checks++; console.log(`PASS ${label}`); };
@@ -54,6 +59,76 @@ test('Exclusive projectile skins cannot be worn by incompatible skills, includin
   assert.deepEqual(sanitizeCosmeticLoadout(raw).skills, { flame_arrow: { skillSkin: 'flame_fletching' } });
   assert(equipCosmetic(a, 'skillSkin', 'crystal_projectiles', 'fireball'));
   assert.equal(cosmeticPick(deserializeAccount(serializeAccount(a))!.cosmetics.loadout, 'skillSkin', 'fireball')?.paint.projectile, 'crystal_bolt');
+});
+
+test('Golem material bodies and free legacy skill skins preserve identity, inheritance and save choices', () => {
+  const a = makeAccount(), skin = COSMETICS.legacy_golems;
+  assert(ownsCosmetic(a.cosmetics, skin.id));
+  assert(equipCosmetic(a, 'skillSkin', skin.id));
+  const looks = new Set<string>();
+  for (const skill of skin.skills!) {
+    const delivery = SKILLS[skill].delivery; assert(delivery.type === 'summon');
+    assert(delivery.monsterId);
+    const def = MONSTERS[delivery.monsterId], native = { ...def }, before = JSON.stringify(def);
+    const authored = GOLEM_LOOKS[def.look!]; assert(authored); looks.add(def.look!);
+    for (const part of [...authored.parts, ...authored.live ?? []]) assert(PART_PAINTERS[part.kind] || GLYPH_PARTS[part.kind], part.kind);
+    const source = { defId: def.id, skill };
+    const painted = cosmeticBody(native, a.cosmetics.loadout, true, false, source);
+    assert.equal(painted.look, skin.paint.summonBodies![def.id].look);
+    assert.equal(painted.radius, native.radius); assert.equal(painted.shape, native.shape);
+    assert.equal(painted.color, native.color);
+    assert.equal(JSON.stringify(def), before);
+    assert.equal(cosmeticBody(native, a.cosmetics.loadout, false, false, source).look, native.look, 'unowned bodies keep native art');
+    assert(equipCosmetic(a, 'skillSkin', null, skill));
+    const loaded = deserializeAccount(serializeAccount(a))!;
+    assert.equal(cosmeticBody(native, loaded.cosmetics.loadout, true, false, source).look, native.look, 'explicit original survives reload');
+    assert(equipCosmetic(a, 'skillSkin', undefined, skill));
+    assert.equal(cosmeticBody(native, a.cosmetics.loadout, true, false, source).look, painted.look, 'inherit restores legacy');
+  }
+  assert.equal(looks.size, 5);
+  assert.equal(equipCosmetic(a, 'skillSkin', skin.id, 'fireball'), false);
+  assert.equal(cosmeticPick(a.cosmetics.loadout, 'skillSkin', 'raise_skeleton'), undefined);
+  assert.equal(cosmeticBody(MONSTERS.skeleton_warrior, a.cosmetics.loadout, true, false,
+    { defId: 'skeleton_warrior', skill: 'summon_bone_golem' }).look, MONSTERS.skeleton_warrior.look, 'offspring of another body are never replaced');
+  equipCosmetic(a, 'summonSkin', 'verdant_kin');
+  const layered = cosmeticBody(MONSTERS.stone_golem, a.cosmetics.loadout, true, false,
+    { defId: 'stone_golem', skill: 'summon_stone_golem' });
+  assert.equal(layered.look, 'golem'); assert.equal(layered.color, '#89bc82');
+});
+
+test('Summon body skins follow actual skill attribution through real casting, nested heirs and co-op', () => {
+  const host = makeSimWorld('magician', 719), p = host.player;
+  equipCosmetic(host.account, 'skillSkin', 'legacy_golems', 'summon_stone_golem');
+  const inst = makeSkillInstance(SKILLS.summon_stone_golem);
+  p.skills[0] = inst;
+  assert(host.useSkill(p, inst, p.pos));
+  for (let i = 0; i < 90; i++) host.update(1 / 60);
+  const summoned = host.actors.find(a => a.owner === p && a.defId === 'stone_golem'); assert(summoned);
+  const paint = (world: typeof host, actor: typeof p) => cosmeticBody(actor, cosmeticLoadoutFor(world, actor), actor.isMinion(), false,
+    { defId: actor.defId, skill: cosmeticSummonSkill(actor) });
+  assert.equal(paint(host, summoned).look, 'golem');
+  assert.equal(summoned.look, 'golem_stone_assembled');
+  // Item followers use a private cap marker; their instance remains authoritative.
+  summoned.sourceSkillId = '__companion:summon_stone_golem';
+  assert.equal(cosmeticSummonSkill(summoned), 'summon_stone_golem');
+  const heir = host.createMonster('stone_golem', 1, 'player', summoned);
+  heir.summonInst = inst; host.actors.push(heir);
+  assert.equal(paint(host, heir).look, 'golem');
+  const client = makeSimWorld('magician', 719);
+  equipCosmetic(client.account, 'summonSkin', 'verdant_kin');
+  const snapshot = serializeSnapshot(host, 1); applySnapshot(client, snapshot);
+  for (const actor of [summoned, heir]) {
+    const replica = client.actors[snapshot.actors.findIndex(a => a.id === actor.id)]; assert(replica);
+    assert.equal(cosmeticSummonSkill(replica), 'summon_stone_golem');
+    assert.equal(replica.sourceSkillId, undefined, 'presentation attribution does not overwrite gameplay cap markers');
+    assert.equal(paint(client, replica).look, 'golem');
+    assert.equal(paint(client, replica).color, actor.color, 'viewers do not lend their own outfit');
+  }
+  const wire = snapshot.actors.find(a => a.id === summoned.id); assert(wire);
+  delete wire.cosmeticSourceSkill; applySnapshot(client, snapshot);
+  const replica = client.actors[snapshot.actors.findIndex(a => a.id === summoned.id)];
+  assert.equal(cosmeticSummonSkill(replica), undefined, 'older peer data clears previous source');
+  assert.equal(paint(client, replica).look, 'golem_stone_assembled');
 });
 
 test('Mu spirits have independent silhouettes; character cosmetics and scene seals do not override them', () => {
@@ -409,6 +484,77 @@ test('Footprint sampling is bounded, paused, reset on teleports and cleared on r
   w.player.pos.x += 500; trail.draw(ctx, w, w.player, loadout); assert.equal(inspect.trails.get(w.player)!.steps.length, 0);
   equipCosmetic(w.account, 'footprints', null); trail.draw(ctx, w, w.player, loadout);
   assert.equal(inspect.trails.get(w.player), undefined);
+});
+
+test('Summon refresh: complete native bodies, preserved legacy art and source-aware previews', () => {
+  const account = makeAccount(), distinct = new Set<string>();
+  for (const skin of SUMMON_LEGACY_COSMETICS) {
+    assert(ownsCosmetic(account.cosmetics, skin.id));
+    assert(equipCosmetic(account, 'skillSkin', skin.id));
+    for (const skill of skin.skills!) {
+      const def = cosmeticPreviewSummon(skill); assert(def, skill);
+      const legacy = skin.paint.summonBodies![def.id]; assert(legacy, skill);
+      assert(LOOKS[legacy.look]); assert(MATERIALS[legacy.material!]);
+      const look = SUMMON_LOOKS[def.look!]; assert(look, def.id); distinct.add(def.look!);
+      for (const p of [...look.parts, ...look.live ?? []]) assert(PART_PAINTERS[p.kind], p.kind);
+      const source = { defId: def.id, skill }, old = JSON.stringify(def);
+      const painted = cosmeticBody(def, account.cosmetics.loadout, true, false, source);
+      assert.equal(painted.look, legacy.look); assert.equal(painted.color, def.color);
+      assert.equal(painted.radius, def.radius); assert.equal(painted.shape, def.shape);
+      assert.equal(JSON.stringify(def), old);
+      assert.equal(cosmeticBody(def, account.cosmetics.loadout, false, false, source).look, def.look, 'boss/enemy keeps native anatomy');
+      assert(equipCosmetic(account, 'skillSkin', null, skill));
+      const restored = deserializeAccount(serializeAccount(account))!;
+      assert.equal(cosmeticBody(def, restored.cosmetics.loadout, true, false, source).look, def.look);
+      assert(equipCosmetic(account, 'skillSkin', undefined, skill));
+    }
+    assert.equal(equipCosmetic(account, 'skillSkin', skin.id, 'fireball'), false);
+  }
+  assert.equal(distinct.size, 6);
+  assert.equal(cosmeticPreviewSummon('the_amalgam'), MONSTERS.amalgam_horror, 'channel-release summon uses its authored body');
+  assert.equal(cosmeticPreviewSummon('fireball'), undefined);
+  assert.equal(MONSTERS.spirit_wisp.look, 'spirit', 'shared source looks remain available to other bodies');
+});
+
+test('Summon refresh: real Amalgam consumption, growth, legacy selection and peer attribution preserve gameplay', () => {
+  const run = (legacy: boolean) => {
+    const reset = seedGlobalRandom(82190);
+    try {
+      const w = makeSimWorld('necromancer', 82190), p = w.player;
+      if (legacy) equipCosmetic(w.account, 'skillSkin', 'legacy_amalgam', 'the_amalgam');
+      p.sheet.setSource('summon-refresh-rig', [{ stat: 'mana', kind: 'flat', value: 1000 },
+        { stat: 'willpower', kind: 'flat', value: 100 }, { stat: 'intelligence', kind: 'flat', value: 100 }]);
+      p.fillResources(); p.invulnerable = true;
+      const inst = makeSkillInstance(SKILLS.the_amalgam); p.skills[0] = inst;
+      const meals = [0,1].map(i => {
+        const a = w.createMonster('skeleton_warrior', 1, 'player', p);
+        a.pos = { x: p.pos.x + 22 + i * 18, y: p.pos.y }; a.anchored = true; w.actors.push(a); return a;
+      });
+      assert(w.useSkill(p, inst, p.pos));
+      for (let i = 0; i < 100 && (p.casting?.amalgamFed ?? 0) < 2; i++) {
+        assert(p.casting, 'channel stays active while held'); p.casting.held = true; w.update(1 / 60);
+      }
+      assert.equal(p.casting?.amalgamFed, 2); assert(meals.every(a => a.dead));
+      p.casting!.held = false; w.update(1 / 60);
+      const body = w.actors.find(a => a.owner === p && a.defId === 'amalgam_horror'); assert(body);
+      assert.equal(body.look, 'amalgam_stitched'); assert.equal(cosmeticSummonSkill(body), 'the_amalgam');
+      assert.equal(body.radius, MONSTERS.amalgam_horror.radius * (1 + SKILLS.the_amalgam.amalgam!.perMinion.size * 2));
+      const paint = cosmeticBody(body, cosmeticLoadoutFor(w, body), true, false, { defId: body.defId, skill: cosmeticSummonSkill(body) });
+      assert.equal(paint.look, legacy ? 'gravemaw' : 'amalgam_stitched');
+      const metrics = { radius: body.radius, shape: body.shape, life: body.life, lifespan: body.lifespan,
+        damage: body.sheet.get('damage'), skills: body.skills.map(s => s?.def.id), mana: p.mana, rng: Math.random() };
+      if (legacy) {
+        const client = makeSimWorld('necromancer', 82190), snap = serializeSnapshot(w, 1);
+        applySnapshot(client, snap);
+        const replica = client.actors[snap.actors.findIndex(a => a.id === body.id)]; assert(replica);
+        assert.equal(cosmeticSummonSkill(replica), 'the_amalgam');
+        assert.equal(cosmeticBody(replica, cosmeticLoadoutFor(client, replica), true, false,
+          { defId: replica.defId, skill: cosmeticSummonSkill(replica) }).look, 'gravemaw');
+      }
+      return metrics;
+    } finally { reset(); }
+  };
+  assert.deepEqual(run(true), run(false));
 });
 
 console.log(`COSMETICS: ${checks} checks passed`);

@@ -8,7 +8,7 @@ import { encounterCueOf } from '../engine/encounterCombat';
 import { parryCueStrength } from '../engine/combatCues';
 import type { TitanScenePiece } from '../engine/titans';
 import { cosmeticStyle, COSMETIC_PROJECTILES } from '../data/cosmeticStyles';
-import { cosmeticLoadoutFor, sanitizeCosmeticLoadout } from '../meta/cosmetics';
+import { cosmeticLoadoutFor, cosmeticSummonSkill, sanitizeCosmeticLoadout } from '../meta/cosmetics';
 import type { CosmeticLoadout, CosmeticMotif } from '../engine/cosmetics';
 const EMPTY_COSMETIC_LOADOUT: CosmeticLoadout = { slots: {}, skills: {} };
 import { flaskChargeBanks, restoreFlaskChargeBanks } from '../engine/flaskState';
@@ -150,6 +150,7 @@ export interface ActorW {
   magicPackDonors?: number;
   magicPackPending?: number;
   defId?: string;
+  cosmeticSourceSkill?: string; // resolved cosmeticSummonSkill; no skill instance or combat payload
   ss?: Actor['summonShell'];
   sg?: Actor['shellGuard'];
   pb?: true; // persistent broken-poise cue, cleared on rearm/removal
@@ -743,6 +744,7 @@ function actorToW(a: Actor, world: World): ActorW {
   if (a.magicPackFrom && !a.magicPackFrom.dead) w.magicPackFrom = a.magicPackFrom.id;
   if (a.magicPackPower) w.magicPackPower = a.magicPackPower;
   if (a.defId) w.defId = a.defId;
+  if (a.isMinion()) w.cosmeticSourceSkill = cosmeticSummonSkill(a);
   if (a.summonShell) w.ss = { ...a.summonShell };
   if (a.shellGuard) w.sg = { ...a.shellGuard, breathe: a.shellGuard.breathe ? { ...a.shellGuard.breathe } : undefined };
   if (a.poiseBroken) w.pb = true;
@@ -1343,6 +1345,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.magicPackDonors = aw.magicPackDonors ?? 0;
     a.magicPackPending = aw.magicPackPending ?? 0;
     a.defId = aw.defId;
+    a.cosmeticSourceSkill = aw.cosmeticSourceSkill; // absent fields clear a previous cosmeticSummonSkill
     a.faction = aw.faction;
     // Host-computed boss-bar row (cleared when absent — pooled actors never
     // wear a stale marquee).

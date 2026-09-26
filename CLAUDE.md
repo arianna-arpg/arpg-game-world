@@ -556,6 +556,14 @@ checks, the balance harness's smoke suite, and the generation QA sweep are how
 we verify changes.
 
 ## Layout
+- Amalgamation and spirit companion anatomy, reusable kits and free legacy
+  skins are documented in `docs/render/summons.md`. Data lives in
+  `summonLooks.ts`, `summonGlyphs.ts` and `summonCosmetics.ts`; verify the
+  cosmetics probe and hidden `balance/summons-ui.cjs` after a build.
+- Golem material anatomy and the free Legacy Golems skill skin are documented
+  in `docs/render/golems.md`. Parts/looks are ordinary visual data; summoned
+  body skins use source-skill attribution and preserve gameplay cap markers.
+  Verify the cosmetics probe and hidden `balance/golems-ui.cjs` after a build.
 - Account cosmetics: `data/cosmetics.ts` defines the Wardrobe's skins, effects,
   footprints, avatars and acquisition rules; `meta/cosmetics.ts` owns durable
   grants, per-skill choices and the future verified-entitlement adapter seam.
