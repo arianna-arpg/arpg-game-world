@@ -19,6 +19,9 @@ app.whenReady().then(async () => {
   };
   try {
     await win.loadURL(server.url);
+    // Let boot's asynchronous account/save hydration settle before authoring
+    // the isolated town fixture (otherwise it can lose its unlocked board).
+    await new Promise(resolve => setTimeout(resolve, 1000));
     await run(`(() => {
       Object.defineProperty(navigator, 'getGamepads', { value: () => [] });
       __game.account().ledger.prologue_lived = 1;
@@ -75,6 +78,7 @@ app.whenReady().then(async () => {
           const before = el.innerHTML, rect = el.getBoundingClientRect().toJSON();
           el.scrollTop = 40; const scroll = el.scrollTop;
           const focus = el.querySelector('button'); focus?.focus();
+          must(w.nearBountyBoard(), 'fixture reach before dwell: '+JSON.stringify({pos:w.player.pos,tier:w.player.tier,approach:boardApproach,board:boardAt,live:w.bountyBoardsHere()}));
           w.bountyDwellSeatId = w.localSeat.id; w.bountyDwellBoardId = 'lastlight';
           w.bountyDwellRequested = true; __game.step(2);
           const book = ui.folio.bookFor('bounties');

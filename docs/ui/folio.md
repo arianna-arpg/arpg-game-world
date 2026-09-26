@@ -1,18 +1,13 @@
 # The Folio — overlapping UI surfaces bind into one tabbed book
 
-Every dwell dialog in the game — the vendor counter, the salvage bench, the
-font, the oracle, the bestiary, the bounty board, the caravan, the harbor,
-the hold, the captain's parley, the calling — shares **one centred berth**
-in `index.html`. A hero standing where two stations' reaches cross (Brandt's
-counter and the bench beside it in the smith's yard) opened **both**, one
-painted over the other, and Escape closed whichever the fixed cascade named
-first rather than the one on screen. Six of the dialogs papered over this by
-calling `hideAll()` when they opened — a **swap** that threw away whatever
-the player was reading.
+Station dialogs share the stable berth described in
+[Services, Inventory and dialogue](service-workspace.md). Folio owns their tab
+membership, selection, priority and reach, and also folds other enrolled
+surfaces when their measured bounds overlap. Modal decisions retain their own
+authored positions. Inventory keeps its normal or customized home.
 
 The ideal is that no two surfaces ever overlap. The folio is the **fallback
-that makes overlap moot** when they do — for the thirteen dialogs today and
-for any surface enrolled tomorrow. It is `src/ui/folio.ts`, probed by
+that makes overlap moot** when they do, for any enrolled surface. It is `src/ui/folio.ts`, probed by
 `balance/probe_folio.ts`, dialed by `FOLIO_CFG`.
 
 ## The shape
@@ -117,8 +112,8 @@ Regression coverage: `balance/probe_folio.ts` and, after a build,
 - **The promotion** — closing the front promotes the leaf the player last
   looked at (the book's history), else the first in tab order. Tab order is
   binding order and never reshuffles on activation.
-- **The solo invariant** — one open leaf is byte-identical to before: its
-  own show, its own close, its own position, no chrome.
+- **The solo invariant** — one open leaf keeps its own show/close lifecycle
+  and its layout owner's position, without a tab strip.
 
 ## Closing, Esc, and the keyboard
 

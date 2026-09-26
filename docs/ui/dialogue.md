@@ -83,24 +83,17 @@ renderer's existing text seam. Full text is announced once per page, rather
 than once per typed glyph. UI scaling and stack order use the shared fabrics;
 compact layouts remain within the viewport and can scroll at high UI scales.
 
-`UI.dialogueContext` derives coexistence from the same enrolled folio leaves
-that own station open/close, reach and tab selection. Every `kind: 'station'`
-joins automatically; modal/page leaves suspend only while drawn. Inventory
-joins only with a local service. Gameplay and controller menu-pointer gates
-remain unchanged. Keyboard advance does not steal native activation from
-focused service controls; controller A uses the service pointer to operate
-either surface, and Escape dismisses dialogue before closing services.
+The canonical placement and coexistence contract is
+[Services, Inventory and dialogue](service-workspace.md). `UI.dialogueContext`
+derives admission from the same enrolled folio leaves that own station lifecycle;
+`ServiceWorkspace` owns service placement and compact tabs. The reader never
+repositions Inventory or stations. `ui/dialogueLayout.ts` supplies one reading
+band with continuously reachable advance/close controls, independent of content
+or service visibility. Font size follows the user's scale.
 
-`ui/dialogueLayout.ts` reserves a stable reading band beneath the services,
-with the animated portrait and continuously reachable advance/close controls.
-Services and inventory fit beside one another, or stack when too narrow, with
-scrolling content. On a short/high-scale screen they may borrow the inactive
-HUD space while services own input. Font size continues to follow the user's
-scale. The layout reserves its CSS geometry until each service panel actually
-closes. Dismissal, finishing a page and modal suspension preserve panel bounds,
-scroll limits and purchase/sale targets. Folio tabs measure those same retained
-seats; explicit tab, viewport and scale changes may refit the workspace. Saved
-positions remain untouched, and closing a panel releases its reservation.
+Keyboard advance does not steal native activation from focused service controls;
+controller A uses the service pointer to operate either surface, and Escape
+dismisses dialogue before closing services.
 
 The renderer batches selection once before actors, then delivers dialogue
 through the same actor and room visibility gates as bubbles for initial

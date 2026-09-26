@@ -37,7 +37,8 @@ app.whenReady().then(async () => {
     await js(`(async () => {
       __game.account().ledger.prologue_lived=1; __game.devStartRun('warrior'); __game.ui.hideAll();
       await new Promise(resolve=>setTimeout(resolve,700));
-      __game.settings().speechTyping=false;
+      Object.defineProperty(navigator,'getGamepads',{value:()=>[],configurable:true});
+      __game.settings().speechTyping=false; __game.settings().renderScale=1;
       const w=__game.world(); w.account.features.add('salvage_station'); w.account.features.add('oracle_stone');
       w.loadZone('lastlight'); w.account.features.add('salvage_station'); w.account.features.add('oracle_stone'); w.player.invulnerable=true;
       const smith=w.actors.find(a=>a.defId==='townsfolk_smith');
@@ -48,7 +49,8 @@ app.whenReady().then(async () => {
         reader:q.rect(root),next:q.rect(root.querySelector('.dialogue-next')),close:q.rect(root.querySelector('.dialogue-close')),
         readingHeight:root.querySelector('.dialogue-layout').clientHeight,nameHeight:root.querySelector('h2').offsetHeight+5,
         lineHeight:parseFloat(getComputedStyle(root.querySelector('.dialogue-page')).lineHeight),
-        panels:[...document.querySelectorAll('.dialogue-companion')].map(q.rect),width:innerWidth,height:innerHeight,
+        panels:[...document.querySelectorAll('.service-workspace,.service-inventory')].filter(el=>el.getBoundingClientRect().width>0).map(q.rect),width:innerWidth,height:innerHeight,
+        compact:!document.getElementById('service-workspace-tabs').hidden,
         vendor:__game.ui.vendorOpen,salvage:__game.ui.salvageOpen,oracle:__game.ui.oracleOpen,inventory:__game.ui.inventoryOpen};};
       q.run=(n,pos=q.home)=>{for(let i=0;i<n;i++){w.player.pos={...pos};w.player.tier=0;w.mireilleCd=999;__game.step(1);
         q.trace.push({open:!document.getElementById('npc-dialogue').hidden,vendor:__game.ui.vendorOpen,near:w.nearSmith(),focus:w.speechFocusTarget()?.id});}return q.box();};
@@ -58,6 +60,10 @@ app.whenReady().then(async () => {
       q.tab=id=>{const tab=document.querySelector('[data-folio-tab="'+id+'"]');if(!tab)throw Error('Missing tab '+id);tab.click();return q.run(3);};
       q.scale=value=>{__game.ui.showEscapeMenu();document.getElementById('esc-keys').click();document.querySelector('[data-opttab="interface"]').click();
         const slider=document.getElementById('opt-uiscale');slider.value=String(value);slider.dispatchEvent(new Event('input',{bubbles:true}));__game.ui.hideEscapeMenu();return q.run(3);};
+      q.workspace=tab=>{document.querySelector('[data-workspace-tab="'+tab+'"]').click();return q.run(3);};
+      __game.ui.toggleInventory(); __game.ui.folioSync();
+      q.bagHome=q.rect(document.getElementById('inventory'));
+      __game.ui.toggleInventory();
     })()`);
     let box = await js('serviceQA.run(110)'); log({stage:'dwell',...box}); fits(box);
     const trace = await js('serviceQA.trace');
@@ -66,6 +72,11 @@ app.whenReady().then(async () => {
     assert.ok(trace.slice(began).every(f=>f.open), 'no single-frame dismissal during actual vendor/suite dwell');
     log(await js('({features:[...serviceQA.w.account.features],salvage:serviceQA.w.hasSalvage(),oracle:serviceQA.w.hasOracle(),summons:serviceQA.w.suiteSummons()})'));
     assert.ok(box.vendor && box.salvage && box.oracle && box.inventory, 'actual dwell opens stocked shop, bag and summoned suite');
+    const bagHome=await js('serviceQA.bagHome');
+    const bag=box.panels.find(p=>p.id==='inventory');
+    assert.equal(bag.left,bagHome.left,'vendor leaves Inventory at its ordinary horizontal anchor');
+    assert.equal(bag.top,bagHome.top,'vendor leaves Inventory at its ordinary vertical anchor');
+    const berth=box.panels.find(p=>p.id==='vendor-menu'), reader=box.reader;
     assert.match(box.name, /Brandt/); assert.match(box.text, /hammer/);
     const first = box.text; await capture('brandt');
     // Roof/label visibility admits an offer, but cannot revoke an admitted
@@ -83,7 +94,15 @@ app.whenReady().then(async () => {
     assert.ok(edges>100); log({stage:'roof-reach',samples:edges});
     for (const id of ['salvage','oracle','vendor']) {
       box = await js(`serviceQA.tab('${id}')`); fits(box); assert.equal(box.text, first, 'tab switches preserve page');
+      const panel=box.panels.find(p=>p.id!=='inventory');
+      assert.equal(panel.left,berth.left); assert.equal(panel.top,berth.top,'all service tabs use the same berth');
+      assert.deepEqual(box.reader,reader,'service tabs do not move the reader');
     }
+    const bagToggle=await js(`(()=>{const q=serviceQA,before=q.box();__game.ui.toggleInventory();const closed=q.run(3);
+      __game.ui.toggleInventory();return {before,closed,after:q.run(3)};})()`);
+    assert.equal(bagToggle.closed.open,true,'closing Inventory does not dismiss the conversation');
+    assert.deepEqual(bagToggle.closed.panels.find(p=>p.id==='vendor-menu'),berth,'closing Inventory does not move the vendor');
+    assert.deepEqual(bagToggle.after.reader,reader);fits(bagToggle.after);
     // A real buy action remains available while the same page is being read.
     const bought = await js(`(() => {const q=serviceQA,w=q.w;for(const id of Object.keys(w.meta.essences))w.meta.essences[id]=10000;__game.ui.refreshVendor();
       const before=w.meta.items.length,button=document.querySelector('[data-vbuy^="brandt:"]:not([disabled])');
@@ -114,11 +133,28 @@ app.whenReady().then(async () => {
     const page = await js(`(() => {const q=serviceQA,before=q.box().text;__game.ui.toggleBuildPanel();const hidden=q.run(2);
       q.tab('vendor');return {before,hidden,after:q.box()};})()`);
     assert.equal(page.hidden.open,false); assert.equal(page.after.text,page.before); fits(page.after);
-    await win.setSize(820, 650); box = await js('serviceQA.run(3)'); fits(box); await capture('compact');
+    win.setContentSize(820, 650); await new Promise(resolve=>setTimeout(resolve,150));
+    box = await js('serviceQA.run(5)'); fits(box); await capture('compact');
+    assert.equal(box.compact,true,'narrow screens offer Inventory/Services tabs');
+    box=await js('serviceQA.run(5)');
+    const narrowReader=box.reader; log({stage:'compact-before-tab',...box,hud:await js('__game.ui.hudCluster()')});
+    box=await js("serviceQA.workspace('inventory')");fits(box);
+    log({stage:'compact-after-tab',...box,hud:await js('__game.ui.hudCluster()')});
+    assert.deepEqual(box.panels.map(p=>p.id),['inventory'],'Inventory tab shows the full-width bag alone');
+    assert.deepEqual(box.reader,narrowReader,'compact tab switch keeps dialogue anchored');
+    box=await js("serviceQA.workspace('services')");fits(box);
+    assert.ok(box.panels.every(p=>p.id!=='inventory'),'Services tab hides the bag without closing it');
+    box=await js("serviceQA.key('i')");fits(box);
+    assert.deepEqual(box.panels.map(p=>p.id),['inventory'],'Inventory key reveals its hidden compact tab');
+    const sellLane=await js(`(()=>{__game.ui.scrapMode=true;__game.ui.refreshInventory();
+      return __game.ui.salvageLaneFor(document.getElementById('inventory'));})()`);
+    assert.equal(sellLane,'sell','compact Inventory retains the selected counter sell action');
+    box=await js("__game.ui.menuVerbs().vendor.open();serviceQA.run(3)");fits(box);
+    assert.ok(box.panels.some(p=>p.id==='vendor-menu'),'explicit menu request reveals the hidden service');
     box = await js('serviceQA.scale(175)'); log({stage:'scaled',...box}); fits(box); await capture('scaled');
     log(await js('__game.crash()'));
     assert.equal(await js('__game.crash().fatal'), null);
-    // Controller A hits the displaced service tabs, without also advancing.
+    // Controller A hits the service tabs, without also advancing.
     const pad = await js(`(() => {const q=serviceQA;window.qaPad={id:'QA pad',index:0,connected:true,mapping:'standard',timestamp:performance.now(),axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false,touched:false,value:0}))};
       Object.defineProperty(navigator,'getGamepads',{value:()=>qaPad?[qaPad]:[]});q.run(2);
       const r=document.querySelector('[data-folio-tab="salvage"]').getBoundingClientRect();__game.padPointer().place(r.left+r.width/2,r.top+r.height/2);const text=q.box().text;
@@ -126,7 +162,7 @@ app.whenReady().then(async () => {
       qaPad.buttons[0]={pressed:true,touched:true,value:1};q.run(3);qaPad.buttons[0]={pressed:false,touched:false,value:0};q.run(2);window.qaPad=null;
       return {before:text,after:q.box().text,open:q.box().open,hit,pointer:__game.padPointer().position(),tab:q.rect(document.querySelector('[data-folio-tab="salvage"]')),front:!document.getElementById('salvage-menu').classList.contains('folio-shelved')};})()`);
     log({stage:'controller',...pad});
-    assert.equal(pad.before, pad.after); assert.equal(pad.open, true); assert.equal(pad.front,true,'controller hits the drawn displaced tab');
+    assert.equal(pad.before, pad.after); assert.equal(pad.open, true); assert.equal(pad.front,true,'controller hits the drawn service tab');
     // Both pointer close and finishing the last page preserve the controls,
     // including at accessibility scale. Neither gesture performs a trade.
     for (const mode of ['close','finish']) {
@@ -138,11 +174,32 @@ app.whenReady().then(async () => {
       assert.equal(stable.after.open,false); assert.deepEqual(stable.after.panels,stable.before);
       assert.deepEqual(stable.afterTargets,stable.targets);assert.equal(stable.afterItems,stable.items);
     }
-    await win.setSize(1400, 1000); await js('serviceQA.scale(100)');
+    win.setContentSize(1400, 1000); await new Promise(resolve=>setTimeout(resolve,150)); await js('serviceQA.scale(100)');
     box = await js(`(() => {const q=serviceQA;const dwell=q.w.npcDialogues.dwell,quest=q.w.questGiverPrompt;
       q.w.npcDialogues.dwell=()=>null;q.w.questGiverPrompt=()=>null;q.w.dialogueScene++;const box=q.run(5);
       q.w.npcDialogues.dwell=dwell;q.w.questGiverPrompt=quest;return box;})()`);
     assert.equal(box.open,false,'service alone never manufactures dialogue');assert.ok(box.vendor && box.inventory);
+    const unspoken=box.panels.find(p=>p.id==='vendor-menu');
+    box=await js('serviceQA.run(4)');fits(box);
+    assert.deepEqual(box.panels.find(p=>p.id==='vendor-menu'),unspoken,'admitting dialogue cannot reseat a service');
+    // Authored positions remain player-owned through refreshes and dialogue.
+    const custom=await js(`(()=>{const q=serviceQA,s=__game.settings();__game.ui.hideAll();__game.ui.folioSync();
+      s.layout.movable=true;s.layout.seats.inventory={fx:0.48,fy:0.08};s.layout.seats['vendor-menu']={fx:0.06,fy:0.1};
+      __game.ui.showVendor();q.run(4);const before=q.box(),saved=JSON.stringify(s.layout.seats);
+      __game.ui.refreshVendor();__game.ui.refreshInventory();q.run(4);
+      document.querySelector('.dialogue-close').click();q.run(3);
+      return {before,after:q.box(),saved,afterSaved:JSON.stringify(s.layout.seats)};})()`);
+    for(const [id,x,y] of [['inventory',672,80],['vendor-menu',84,100]]) {
+      const before=custom.before.panels.find(p=>p.id===id),after=custom.after.panels.find(p=>p.id===id);
+      assert.equal(before.left,x);assert.equal(before.top,y);assert.deepEqual(after,before,'custom window remains fixed');
+    }
+    assert.equal(custom.afterSaved,custom.saved,'workspace never rewrites saved positions');
+    const guest=await js(`(()=>{const ui=__game.ui,w=serviceQA.w;__game.addAlly();
+      const guest=w.seats.find(s=>s!==w.localSeat);guest.couch={side:'left',pad:1};
+      ui.toggleInventory(guest.id);ui.folioSync();
+      const bag=document.getElementById('inventory');return {owner:ui.panelSeat(bag).id,guest:guest.id,
+        width:bag.getBoundingClientRect().width,captured:bag.classList.contains('service-inventory')||bag.classList.contains('workspace-shelved')};})()`);
+    assert.equal(guest.owner,guest.guest);assert.ok(guest.width>0);assert.equal(guest.captured,false,'local services cannot capture the guest inventory');
     box = await js('serviceQA.run(4,{x:serviceQA.home.x+700,y:serviceQA.home.y})');
     assert.equal(box.open, false); assert.equal(box.vendor, false);
     await js('__game.ui.hideAll();serviceQA.run(2,{x:serviceQA.home.x+700,y:serviceQA.home.y})');

@@ -1,6 +1,10 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('node:path'), fs = require('node:fs'), assert = require('node:assert/strict');
+const { execFileSync } = require('node:child_process');
 const { startGameServer } = require('../launcher/server.cjs');
+const fullRack = JSON.parse(execFileSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e',
+ "import { SKILLS } from './src/data/skills.ts'; import { makeSkillGem } from './src/engine/skills.ts'; console.log(JSON.stringify(Object.values(SKILLS).filter(s=>s.tree).slice(0,8).map(s=>makeSkillGem(s,20,'rare'))));"],
+ { cwd: path.resolve(__dirname, '..'), env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, encoding: 'utf8' }));
 app.setPath('userData', path.join(__dirname, 'reports', `build-panels-profile-${process.pid}`));
 const dir = path.join(__dirname, 'reports');
 const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -138,6 +142,45 @@ app.whenReady().then(async () => {
   }
   await js(`__game.ui.hideAll(); void 0`);
   assert(await js(`document.querySelector('#skills-panel').classList.contains('hidden')`));
+  // A full rack must scroll inside the page, leaving the drawn HUD and its
+  // adjacent controls clear at fullscreen, compact and enlarged UI sizes.
+  await js(`(()=>{const w=__game.world(); w.devIgnoreSkillAttributes=true;
+   for(const id of [...w.meta.knownSkills.keys()]) w.unlearnSkill(id);
+   for(const [slot,gem] of ${JSON.stringify(fullRack)}.entries()) {
+    const item=w.grantSkillGemItem(w.localSeat,gem,true);
+    if(!item||!w.learnSkill(item.uid,w.localSeat,slot)) throw Error('Full rack fixture: '+gem.def.id);
+   }
+   __game.ui.toggleBuildPanel(); __game.step(3);
+  })()`);
+  for(const [width,height,scale] of [[1920,1080,1],[1366,768,1],[1280,720,1],[1920,1080,1.5]]) {
+   win.setContentSize(width,height); await wait(150);
+   await js(`__game.ui.showEscapeMenu(); document.getElementById('esc-keys').click();
+    document.querySelector('[data-opttab="interface"]').click();
+    const slider=document.getElementById('opt-uiscale'); slider.value=${scale*100};
+    slider.dispatchEvent(new Event('input',{bubbles:true})); __game.ui.hideEscapeMenu(); __game.step(3); void 0`);
+   const layout=await js(`(()=>{
+    const ui=__game.ui, pane=document.getElementById('skills-panel'),p=pane.getBoundingClientRect();
+    const list=pane.querySelector('.build-scroll'),rack=pane.querySelector('.build-rack').getBoundingClientRect();
+    const menu=document.querySelector('[data-menu-toggle]').getBoundingClientRect();
+    const portal=document.getElementById('town-portal-button').getBoundingClientRect();
+    list.scrollTop=list.scrollHeight;
+    const last=list.querySelector('.skill-entry:last-child'),r=last.getBoundingClientRect(),clip=list.getBoundingClientRect();
+    const point={x:r.x+r.width/2,y:Math.min(r.bottom,clip.bottom)-4};
+    return {bottom:p.bottom,hudTop:ui.hudCluster().y,menuTop:menu.top,portalTop:portal.top,
+     rows:pane.querySelectorAll('.skill-entry').length,scrolls:list.scrollHeight>list.clientHeight,
+     lastReachable:last.contains(document.elementFromPoint(point.x,point.y)),
+     rackVisible:rack.top>=p.top&&rack.bottom<=clip.top,scrollTop:list.scrollTop};
+   })()`);
+   console.log('FULL SKILLS HUD CLEARANCE',width,height,scale,layout);
+   assert.equal(layout.rows,8); assert(layout.scrolls&&layout.scrollTop>0);
+   assert(layout.bottom<layout.hudTop,'Skills must end above the hotbar and orbs');
+   assert(layout.bottom<layout.menuTop&&layout.bottom<layout.portalTop,'HUD controls must not cover Skills');
+   assert(layout.lastReachable&&layout.rackVisible,'Last skill stays reachable while the rack stays visible');
+   if(width===1920&&scale===1) {
+    await js(`document.querySelector('.build-scroll').scrollTop=0; void 0`); await wait(100);
+    fs.writeFileSync(path.join(dir,'build-panels-full-skills.png'),(await win.webContents.capturePage()).toPNG());
+   }
+  }
   console.log('BUILD PANELS UI PASS');
  } catch(e) { console.error(e); process.exitCode=1; }
  finally { win.destroy();server.server.close();app.exit(process.exitCode||0); }

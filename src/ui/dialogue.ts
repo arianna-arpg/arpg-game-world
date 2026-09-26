@@ -10,15 +10,13 @@ import { drawPortraitInto } from '../render/vis/portrait';
 import { resolveSpeech, revealedChars } from '../render/vis/speech';
 import { VIS_CFG } from '../render/vis/visConfig';
 import { UI_SCALE_CFG } from './uiScale';
-import { DialogueLayout } from './dialogueLayout';
+import { seatDialogue } from './dialogueLayout';
 import { Z_LADDER } from './zorder';
 
 interface DialogueHost {
   settings: () => Settings;
   padActive: () => boolean;
   hudTop: () => number | undefined;
-  surfaces: () => HTMLElement[];
-  seated: () => void;
 }
 
 /** A non-modal reader. Movement stays live; leaving focus ends the exchange.
@@ -27,7 +25,6 @@ interface DialogueHost {
 export class DialogueUI {
   readonly root: HTMLElement;
   readonly session = new DialogueSession();
-  readonly layout = new DialogueLayout();
   private readonly portrait: HTMLCanvasElement;
   private readonly title: HTMLElement;
   private readonly ink: HTMLElement;
@@ -50,36 +47,30 @@ export class DialogueUI {
     style.textContent = `
       .npc-dialogue { position:fixed; box-sizing:border-box; left:50%; transform:translateX(-50%);
         display:flex; flex-direction:column;
-        z-index:${Z_LADDER.panel}; color:#eee0c4; padding:20px 24px 16px;
+        z-index:${Z_LADDER.panel}; color:#eee0c4; padding:12px 18px 10px;
         border:1px solid #b29762; border-radius:5px; background:linear-gradient(120deg,#28251ff7,#17191ffb);
         box-shadow:0 12px 48px #000b,inset 0 0 0 4px #111319,inset 0 0 0 5px #74634466;
         font-family:Verdana,sans-serif; }
       .npc-dialogue[hidden] { display:none; }
       .npc-dialogue::before { content:''; position:absolute; inset:9px; border:1px solid #b297622a; pointer-events:none; }
-      .dialogue-layout { display:grid; grid-template-columns:minmax(0,1fr) ${DIALOGUE_CFG.portraitSize}px; gap:24px; min-height:0; overflow-y:auto; }
-      .dialogue-name { position:relative; margin:0 32px 12px 0; color:var(--speaker-ink,#d8b87a);
+      .dialogue-layout { display:grid; grid-template-columns:minmax(0,1fr) ${DIALOGUE_CFG.portraitSize}px; gap:16px; flex:1; min-height:0; overflow-y:auto; }
+      .dialogue-name { position:relative; margin:0 32px 5px 0; color:var(--speaker-ink,#d8b87a);
         font:600 15px/1.4 Verdana,sans-serif; letter-spacing:.3px; flex-shrink:0; }
-      .dialogue-page { margin:0; min-height:5em; font:${DIALOGUE_CFG.fontSize}px/${DIALOGUE_CFG.lineHeight} Georgia,serif;
+      .dialogue-page { margin:0; min-height:0; font:${DIALOGUE_CFG.fontSize}px/${DIALOGUE_CFG.lineHeight} Georgia,serif;
         overflow-wrap:anywhere; white-space:pre-wrap; cursor:var(--cursor-point,pointer); }
       .dialogue-unread { visibility:hidden; }
       .dialogue-portrait { align-self:center; border:1px solid #a58a535e; padding:5px; border-radius:3px;
         background:radial-gradient(ellipse at 50% 55%,#60513255,#11151ccc 73%); box-shadow:inset 0 0 0 3px #14151a; }
       .dialogue-portrait canvas { display:block; width:100%; height:auto; }
-      .dialogue-footer { display:flex; gap:16px; align-items:center; margin-top:12px; min-height:28px; flex-shrink:0; }
+      .dialogue-footer { display:flex; gap:16px; align-items:center; margin-top:6px; min-height:28px; flex-shrink:0; }
       .dialogue-progress { color:#b5a68a; font:11px Verdana,sans-serif; flex:1; }
       .npc-dialogue button { font:12px Verdana,sans-serif; color:#eee0c4; cursor:var(--cursor-point,pointer);
         background:#74603b33; border:1px solid #9d845377; border-radius:3px; padding:7px 12px; }
       .npc-dialogue button:hover,.npc-dialogue button:focus-visible { background:#a58a5350; border-color:#d6bc7b; outline:1px solid #d6bc7b; }
       .npc-dialogue .dialogue-close { position:absolute; right:17px; top:14px; padding:2px 7px; color:#c4b697; background:transparent; border-color:transparent; }
       .dialogue-accessible { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip-path:inset(50%); }
-      .npc-dialogue[data-compact=true] { padding:16px; }
       .npc-dialogue[data-compact=true] .dialogue-layout { grid-template-columns:minmax(0,1fr) 80px; gap:12px; }
-      .npc-dialogue[data-compact=true] .dialogue-page { font-size:16px; min-height:4em; }
-      .npc-dialogue[data-services=true] { padding:12px 18px 10px; }
-      .npc-dialogue[data-services=true] .dialogue-layout { grid-template-columns:minmax(0,1fr) ${DIALOGUE_CFG.services.portraitSize}px; gap:16px; flex:1; }
-      .npc-dialogue[data-services=true] .dialogue-name { margin-bottom:5px; }
-      .npc-dialogue[data-services=true] .dialogue-page { min-height:0; }
-      .npc-dialogue[data-services=true] .dialogue-footer { margin-top:6px; }
+      .npc-dialogue[data-compact=true] .dialogue-page { font-size:16px; }
     `;
     document.head.appendChild(style);
     this.root = document.createElement('section');
@@ -130,15 +121,12 @@ export class DialogueUI {
 
   /** Seat before DOM hit-testing as well as after rendering a new page. */
   syncLayout(): void {
-    if (this.open) this.layout.sync(this.root, this.host.hudTop(), this.host.surfaces());
-    else this.layout.maintain(this.root, this.host.hudTop(), this.host.surfaces());
-    this.host.seated();
+    seatDialogue(this.root, this.host.hudTop());
   }
 
   setAvailable(available: boolean): void {
     this.available = available;
     this.root.hidden = !available || !this.session.reading;
-    if (this.root.hidden) this.layout.retain();
   }
 
   private finish(offer: DialogueOffer | null): void {
@@ -148,7 +136,6 @@ export class DialogueUI {
   reset(): void {
     this.session.reset(); this.world = null; this.scene = -1; this.pageKey = '';
     this.root.hidden = true;
-    this.layout.clear();
   }
 
   sync(world: World, line: NpcSpeechLine | null, focusId: number | null): void {
@@ -199,7 +186,6 @@ export class DialogueUI {
   close(): boolean {
     if (!this.session.reading) return false;
     this.finish(this.session.close()); this.pageKey = ''; this.root.hidden = true;
-    this.layout.retain(); this.host.seated();
     return true;
   }
 }

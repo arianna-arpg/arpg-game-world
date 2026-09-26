@@ -49,10 +49,16 @@ assigning shared DOM roots. Missing or sealed pages cannot become visible or
 block another player's controls.
 
 Pages use Inventory's measured edge beyond the ribbon rail, flip for the left
-couch seat, and fit the available viewport. Moving Inventory moves all its pages.
+couch seat, and fit the available viewport above the drawn HUD cluster. The
+shared height limit reserves the hotbar and resource orbs at the current UI
+scale, with `BUILD_PANEL_CFG.edge` as clearance; long skill lists scroll inside
+the page below the fixed skill rack. Moving Inventory moves all its pages.
 On narrow screens pages clamp into the screen. The rail drops count badges, then
 wallet chips if needed to fit Inventory's height. Widths and margins remain
 configurable in `BUILD_PANEL_CFG`. Historical saved page positions are ignored.
+During a station visit, [Service workspace](service-workspace.md) supplies the
+reading-band ceiling and compact tab visibility. Inventory's anchor and this
+registry's page lifecycle remain unchanged.
 
 ## Verification
 

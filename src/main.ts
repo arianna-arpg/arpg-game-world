@@ -433,8 +433,6 @@ let running = false;
 const dialogue = new DialogueUI({
   settings: () => settings, padActive: padActiveNow,
   hudTop: () => ui.hudCluster?.()?.y,
-  surfaces: () => ui.dialogueContext().surfaces,
-  seated: () => ui.dialogueSurfacesSeated(),
 });
 renderer.npcDialogueAvailable = () => running && !world.player?.dead && !world.player?.downed && ui.dialogueContext().available;
 renderer.onNpcDialogue = (w, line, focusId) => {
@@ -1777,10 +1775,9 @@ function tick(now: number): void {
   // the classic any-surface gate byte-identically.
   // THE FOLIO (ui/folio.ts): reconcile the books to every dialog's own open
   // flag — whatever path opened or closed it — and seat the thumb indexes.
-  dialogue.layout.retain(); // open services keep their drawn seats through reader dismissal and suspension
   ui.folioSync();
   dialogue.setAvailable(renderer.npcDialogueAvailable());
-  dialogue.syncLayout(); // controller hit-testing must see the same displaced panels the player sees
+  dialogue.syncLayout(); // only the reader; serviceWorkspace owns service geometry
   // THE MENU BAR (ui/menubar.ts): shown for a live run — never over the
   // flow screens, never under the Mu hub's HUD veil.
   // THE MENU BUTTON IS THE SHELL'S DOOR (2026-09-11, her ask): it stands

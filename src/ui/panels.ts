@@ -5,6 +5,7 @@ import { emptyStash, personalStashEntries, planStashMove } from '../engine/stash
 import { STASH_DEFS } from '../data/stashes';
 import { renderWardrobe } from './wardrobe';
 import { BUILD_PANEL_CFG, buildPanelSeat } from './buildPanels';
+import { ServiceWorkspace } from './serviceWorkspace';
 import { supportCompatibilityHtml } from './supportCompatibility';
 // ---------------------------------------------------------------------------
 // DOM panels: class selection, character sheet, skill book (unlock / level /
@@ -621,7 +622,11 @@ export class UI {
   private readonly inventoryPages = new InventoryPages({
     owner: () => this.panelSeat(this.inventory).id,
     isOpen: () => this.inventoryOpen,
-    open: owner => this.openInventory(owner),
+    open: owner => {
+      const opened = this.openInventory(owner);
+      if (opened) this.serviceWorkspace.select('inventory');
+      return opened;
+    },
     close: () => this.closeInventory(),
     assign: (el, owner) => this.panelSeatIds.set(el, owner),
     enroll: page => this.enrollInventoryPage(page),
@@ -634,7 +639,7 @@ export class UI {
       this.folio.sync();
       this.folioStrip.update();
     },
-    selected: () => this.folioStrip.update(),
+    selected: () => { this.serviceWorkspace.select('inventory'); this.folioStrip.update(); },
     folio: () => this.folio,
   });
   /** THE CONTAINER FABRIC's face (ui/containerPane.ts): the bag column's
@@ -850,7 +855,27 @@ export class UI {
    *  through the panel's own close path. One dialog up is byte-identical. */
   private readonly folio = new FolioCore(() => performance.now() / 1000);
   private readonly folioStrip = new FolioStrip(this.folio);
-  private readonly dialogueSurfaces = new Map<HTMLElement, { isOpen: () => boolean; kind: string }>();
+  private readonly folioSurfaces = new Map<HTMLElement, { id: string; isOpen: () => boolean; kind: string }>();
+  private readonly serviceWorkspace = new ServiceWorkspace({
+    inventory: this.inventory,
+    inventoryOpen: () => this.inventoryOpen && this.panelSeat(this.inventory) === this.getWorld().localSeat,
+    inventoryOwned: () => this.panelSeat(this.inventory) === this.getWorld().localSeat,
+    services: () => [...this.folioSurfaces].filter(([el, row]) => row.kind === 'station'
+      && row.isOpen() && this.panelSeat(el) === this.getWorld().localSeat).map(([el]) => el),
+    front: el => {
+      const id = this.folioSurfaces.get(el)?.id;
+      return !!id && this.folio.bookFor(id)?.front === id;
+    },
+    pages: () => this.inventoryPages.entries().map(page => page.el),
+    hudTop: () => this.hudCluster?.()?.y,
+    frontService: () => {
+      const rows = [...this.folioSurfaces].filter(([el, row]) => row.kind === 'station'
+        && row.isOpen() && this.panelSeat(el) === this.getWorld().localSeat);
+      const row = rows.find(([el]) => this.folioDrawn(el)) ?? rows[0];
+      if (row) this.folio.front(row[1].id);
+    },
+    changed: () => { this.syncInventoryPages(); this.folioStrip.update(); },
+  });
   /** True while the couch JOIN overlay is up (main.ts owns the claim scan). */
   couchJoinOpen = false;
   /** The escape menu's MAIN view re-renderer, live only while the menu is up
@@ -1203,7 +1228,13 @@ export class UI {
     this.inventory.querySelector('[data-passiveflap]')?.setAttribute('aria-expanded', String(this.treeOpen));
     if (!this.inventoryOpen) return;
     const inv = this.inventory.getBoundingClientRect();
+    if (!inv.width) return; // compact service tab temporarily hides the bag and its pages
     const scale = uiScaleNow();
+    // Reserve the drawn HUD's band, including its resource orbs. Long pages
+    // scroll within this shared limit instead of growing behind HUD controls.
+    const pageBottom = Math.min(window.innerHeight, this.hudCluster?.()?.y ?? window.innerHeight,
+      this.panelSeat(this.inventory) === this.getWorld().localSeat
+        ? this.serviceWorkspace.contentBottom ?? window.innerHeight : window.innerHeight);
     for (const { el, width } of this.inventoryPages.entries()) {
       // Older saved independent page seats no longer participate in layout.
       if (panelMoved(el)) panelMoveReset(el);
@@ -1212,7 +1243,7 @@ export class UI {
       el.style.setProperty('--build-left', `${at.left}px`);
       el.style.setProperty('--build-top', `${at.top}px`);
       el.style.setProperty('--build-width', `${at.width}px`);
-      el.style.setProperty('--build-height', `${Math.max(100, (window.innerHeight - inv.top) / scale - BUILD_PANEL_CFG.edge)}px`);
+      el.style.setProperty('--build-height', `${Math.max(100, (pageBottom - inv.top) / scale - BUILD_PANEL_CFG.edge)}px`);
     }
     this.fitBuildRail();
   }
@@ -1246,10 +1277,11 @@ export class UI {
    *  the arrival policy and the front refresh. */
   private folioLeaf(id: string, el: HTMLElement, title: () => string, isOpen: () => boolean,
     close: () => void, extra: Partial<FolioLeafSpec> = {}): FolioLeafSpec {
-    this.dialogueSurfaces.set(el, { isOpen, kind: extra.kind ?? 'page' });
+    this.folioSurfaces.set(el, { id, isOpen, kind: extra.kind ?? 'page' });
     return {
       id, title, isOpen, close,
       present: (front) => {
+        this.serviceWorkspace.sync();
         if (el.classList.contains('inventory-page')) {
           el.classList.toggle(FOLIO_SHELVED_CLASS, !front);
           this.folioHandoff = null;
@@ -1269,9 +1301,14 @@ export class UI {
             const from = this.folioHandoff;
             this.folioHandoff = null;
             if (from && from.el !== el) {
-              if (from.seat) panelMoveTo(el, from.seat.left, from.seat.top);
-              else if (panelMoved(el)) panelMoveReset(el);
-              persistPanelSeat(el); // the book's seat is a settled seat
+              if (from.seat) {
+                panelMoveTo(el, from.seat.left, from.seat.top);
+                persistPanelSeat(el);
+              } else if (panelMoved(el)) {
+                panelMoveReset(el); persistPanelSeat(el);
+              }
+              // A default berth is not a user edit. In particular, do not
+              // erase a saved seat before the freshly opened panel loads it.
             }
           }
         } else {
@@ -1443,6 +1480,14 @@ export class UI {
 
   private menuVerbs(): Record<string, MenuVerb> {
     const w = (): World => this.getWorld();
+    const service = (id: string, show: (seatId?: string) => void): MenuVerb => ({
+      open: seatId => {
+        show(seatId);
+        this.serviceWorkspace.select('services');
+        this.folio.front(id); this.folioStrip.update();
+      },
+      isOpen: () => this.folio.leaf(id)?.isOpen() ?? false,
+    });
     return {
       wardrobe: { open: () => this.showWardrobe(), isOpen: () => this.escapeMenuOpen && !!this.escapeMenu.querySelector('.wardrobe') },
       inventory: { open: id => this.toggleInventory(id), isOpen: () => this.inventoryOpen },
@@ -1461,27 +1506,21 @@ export class UI {
       passives: { open: id => this.toggleTree(id), isOpen: () => this.treeOpen },
       map: { open: () => this.openMapTab('map'), isOpen: () => this.mapOpen && this.mapTab === 'map' },
       journal: { open: () => this.openMapTab('quests'), isOpen: () => this.mapOpen && this.mapTab === 'quests' },
-      vendor: { open: id => this.showVendor(id), isOpen: () => this.vendorOpen },
-      salvage: { open: id => this.showSalvage(id), isOpen: () => this.salvageOpen },
-      font: { open: id => this.showFont(id), isOpen: () => this.fontOpen },
-      oracle: { open: id => this.showOracle(id), isOpen: () => this.oracleOpen },
-      bestiary: { open: id => this.showBestiary(id), isOpen: () => this.bestiaryOpen },
-      bounties: {
+      vendor: service('vendor', id => this.showVendor(id)),
+      salvage: service('salvage', id => this.showSalvage(id)),
+      font: service('font', id => this.showFont(id)),
+      oracle: service('oracle', id => this.showOracle(id)),
+      bestiary: service('bestiary', id => this.showBestiary(id)),
+      bounties: service('bounties', id => {
         // The board under the seat's feet, never the last dwell's.
-        open: id => {
-          const seat = this.couchSeatFor(id);
-          const b = w().bountyBoardsHere().find(x => w().nearBountyBoard(seat, x.id));
-          if (b) {
-            this.showBounties(id, b.id);
-            this.folio.front('bounties'); // a menu press explicitly chooses the board
-          }
-        },
-        isOpen: () => this.bountiesOpen,
-      },
-      caravan: { open: id => this.showCaravan(id), isOpen: () => this.caravanOpen },
-      harbor: { open: () => this.showSail(), isOpen: () => this.sailOpen },
-      hold: { open: () => this.showHold(), isOpen: () => this.holdOpen },
-      mercs: { open: () => this.showMercMenu(), isOpen: () => this.mercOpen },
+        const seat = this.couchSeatFor(id);
+        const b = w().bountyBoardsHere().find(x => w().nearBountyBoard(seat, x.id));
+        if (b) this.showBounties(id, b.id);
+      }),
+      caravan: service('caravan', id => this.showCaravan(id)),
+      harbor: service('sail', () => this.showSail()),
+      hold: service('hold', () => this.showHold()),
+      mercs: service('merc', () => this.showMercMenu()),
       pause: { open: () => this.showEscapeMenu(), isOpen: () => this.escapeMenuOpen },
     };
   }
@@ -1526,8 +1565,10 @@ export class UI {
   folioSync(): void {
     tooltipSweep(); // THE STALE CARD: a card whose anchor left the screen comes down (ui/tooltip.ts)
     panelLayoutSync(this.layoutRoots());
+    this.serviceWorkspace.sync();
     this.syncInventoryPages();
     this.folio.sync();
+    this.serviceWorkspace.sync();
     this.folioStrip.update();
   }
 
@@ -1554,8 +1595,8 @@ export class UI {
     return moved;
   }
 
-  /** Is a panel DRAWN — not shelved behind a folio tab? The bag's verbs and
-   *  the cursor dress read the front station, never a shelved one. */
+  /** Logical front of a folio book. A compact workspace can show the bag
+   * instead while retaining this service's sell/break verbs. */
   private folioDrawn(el: HTMLElement): boolean {
     return !el.classList.contains(FOLIO_SHELVED_CLASS);
   }
@@ -2347,23 +2388,22 @@ export class UI {
   /** One enrollment governs service coexistence as well as folio membership.
    * Shelved leaves cannot suppress a conversation; visible modals/pages can.
    * Inventory accompanies a service only for that service's local owner. */
-  dialogueContext(): { available: boolean; surfaces: HTMLElement[] } {
+  dialogueContext(): { available: boolean } {
     const local = this.getWorld().localSeat?.id;
-    if (!local) return { available: false, surfaces: [] }; // no dialogue workspace before a hero exists
-    const drawn = [...this.dialogueSurfaces].filter(([el, row]) => row.isOpen()
-      && !el.classList.contains('hidden') && this.folioDrawn(el));
-    const services = drawn.filter(([el, row]) => row.kind === 'station' && this.panelSeat(el).id === local).map(([el]) => el);
+    if (!local) return { available: false };
+    const open = [...this.folioSurfaces].filter(([, row]) => row.isOpen());
+    const drawn = open.filter(([el]) => !el.classList.contains('hidden') && this.folioDrawn(el)
+      && el.getBoundingClientRect().width > 0);
+    // A service visit survives shelving and compact Inventory selection.
+    // Admission must not oscillate when only its presentation changes.
+    const services = open.filter(([el, row]) => row.kind === 'station' && this.panelSeat(el).id === local);
     const blocked = this.escapeMenuOpen || this.minigameActive || this.menuBar.isTrayOpen()
       || this.couchJoinOpen || this.muCardOpen || this.storyCardOpen()
       || !this.startMenu.classList.contains('hidden') || this.charSheetOpen || this.mapOpen
       || drawn.some(([el, row]) => row.kind !== 'station' || this.panelSeat(el).id !== local)
       || (this.inventoryOpen && (!services.length || this.panelSeat(this.inventory).id !== local));
-    return { available: !blocked, surfaces: blocked ? [] : [
-      ...services, ...(this.inventoryOpen ? [this.inventory] : []),
-    ] };
+    return { available: !blocked };
   }
-
-  dialogueSurfacesSeated(): void { this.folioStrip.update(); }
 
   /** A crafting minigame overlay is live (Escape and panels hold still). */
   minigameRunning(): boolean { return this.minigameActive; }
@@ -3734,8 +3774,9 @@ export class UI {
 
   toggleInventory(seatId?: string): void {
     const seat = this.couchSeatFor(seatId);
+    if (this.inventoryOpen && this.panelSeat(this.inventory) === seat && this.serviceWorkspace.revealInventory()) return;
     if (this.inventoryOpen && this.panelSeat(this.inventory) === seat) this.closeInventory();
-    else this.openInventory(seat.id);
+    else if (this.openInventory(seat.id)) this.serviceWorkspace.select('inventory');
   }
 
   /** Every page request and the inventory toggle enter through this gate. */
@@ -3779,6 +3820,7 @@ export class UI {
       out.push({ x: r.left, y: r.top, w: r.width, h: r.height });
     };
     { const tray = this.menuBar.trayRect(); if (tray) out.push(tray); } // THE MENU BAR's tray while up (ui/menubar.ts)
+    add(this.serviceWorkspace.tabs);
     for (const el of [this.charSheet, this.inventory, ...this.inventoryPages.entries().map(p => p.el),
       this.worldMap, this.vendorMenu, this.salvageMenu, this.fontMenu,
       this.recallMenu, this.oracleMenu, this.bestiaryMenu, this.boroughMenu,
@@ -4912,7 +4954,7 @@ export class UI {
     // Never steal a bag another couch seat is browsing — the seat-match gate
     // (salvageLaneFor) keeps the hammer off a borrowed panel anyway.
     if (SALVAGE_STATION.autoArm) this.benchBreakMode = true;
-    if (SALVAGE_STATION.openBag && !this.inventoryOpen) this.toggleInventory(seatId);
+    if (SALVAGE_STATION.openBag && !this.inventoryOpen) this.openInventory(this.panelSeat(this.salvageMenu).id);
     this.salvageMenu.classList.remove('hidden');
     this.refreshSalvage();
     this.refreshInventory(); // re-render the bag with benchBreakMode's verbs armed
@@ -6071,7 +6113,7 @@ export class UI {
 
   showOracle(seatId?: string): void {
     this.ownPanel(this.oracleMenu, this.couchSeatFor(seatId));
-    if (!this.inventoryOpen) this.toggleInventory(seatId);
+    if (!this.inventoryOpen) this.openInventory(this.panelSeat(this.oracleMenu).id);
     this.oracleOpen = true;
     this.oracleMenu.classList.remove('hidden');
     this.refreshOracle();
@@ -6200,7 +6242,7 @@ export class UI {
     // host's own nearScrapVendor read keeps both honest).
     const scrapHere = this.getWorld().nearScrapVendor(this.panelSeat(this.vendorMenu));
     if (SALVAGE_STATION.autoArm && scrapHere) this.scrapMode = true;
-    if (SALVAGE_STATION.openBag && scrapHere && !this.inventoryOpen) this.toggleInventory(seatId);
+    if (SALVAGE_STATION.openBag && scrapHere && !this.inventoryOpen) this.openInventory(this.panelSeat(this.vendorMenu).id);
     this.vendorMenu.classList.remove('hidden');
     this.refreshVendor();
     this.refreshInventory(); // re-render the bag with the wheel's verbs armed

@@ -314,8 +314,10 @@ console.log('E. THE CENSUS');
   // spread over the registered containers (`container:${c.id}`) hosts every
   // board's page by construction; the census accepts the derivation itself.
   const derivedHost = (v: string): boolean => v.startsWith('container:') && verbsTable.includes('`container:${c.id}`');
-  const missing = [...new Set(MENU_ENTRIES.map(e => e.verb))].filter(v => !derivedHost(v) && !new RegExp(`\\n      ${v}: \\{`).test(verbsTable));
+  const missing = [...new Set(MENU_ENTRIES.map(e => e.verb))].filter(v => !derivedHost(v) && !new RegExp(`\\n      ${v}: (?:\\{|service\\()`).test(verbsTable));
   check('E1 every entry\'s verb has a host row in ui/panels.ts menuVerbs', missing.length === 0, missing.join(','));
+  check('E1b service menu routes name enrolled folio leaves',
+    [...verbsTable.matchAll(/\n      \w+: service\('([^']+)'/g)].every(([, id]) => panels.includes(`this.folioLeaf('${id}',`)));
   check('E2 the bar is built with the host table and enrolled in the movable roots',
     panels.includes('this.menuBar = new MenuBar({') && panels.includes('this.vocationMenu, this.menuBar.root];'));
   check('E3 the tray blocks the hero\'s hands and folds under hideAll',
