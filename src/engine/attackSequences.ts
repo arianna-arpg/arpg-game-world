@@ -3,7 +3,7 @@ import type { Projectile, World } from './world';
 import { dist, type Vec2 } from '../core/math';
 import { instanceDelivery, instanceMods, skillContextTags,
   type SkillDef, type SkillInstance, type BuffEffect } from './skills';
-import { attackSequenceOf, attackSequencePayload, type AttackSequenceSpec } from './attackSequenceSpec';
+import { attackSequenceOf, attackSequencePayload, attackSequenceSweepInstance, type AttackSequenceSpec } from './attackSequenceSpec';
 import { mod, type Modifier, type SkillTag } from './stats';
 import { baselineStatusDps, STATUS_DEFS } from './status';
 
@@ -145,7 +145,7 @@ export class AttackSequences {
     const s = this.state(owner, host);
     if (!s || host.sequenceRole) return;
     for (const sweep of s.spec.castSweeps ?? []) {
-      const inst = this.payload(s, host, sweep.delivery, ['attack', 'melee', 'aoe', 'physical']);
+      const inst = attackSequenceSweepInstance(host, sweep.delivery);
       const sweepPower = power * sweep.power;
       if (sweep.delay === 0) this.fire(s, inst, aim, sweepPower);
       else this.scheduled.push({ state: s, inst, aim: { ...aim },
@@ -161,7 +161,7 @@ export class AttackSequences {
   private fire(s: SequenceState, inst: SkillInstance, aim: Vec2, power: number): void {
     const facing = s.owner.facing;
     this.w.executeSkill(s.owner, inst, aim, { noRepeat: true, noCooldown: true, dmgMult: power,
-      allowPayloadRepeats: inst.sequenceRole === 'payload' && inst.def.delivery.type === 'melee' });
+      componentUse: inst.sequenceRole === 'payload' && inst.def.delivery.type === 'melee' });
     s.owner.facing = facing;
   }
 
@@ -371,9 +371,13 @@ export class AttackSequences {
       const owned = (inst: SkillInstance) => inst.sequenceHost === host;
       this.w.projectiles = this.w.projectiles.filter(p => p.caster !== owner || !owned(p.inst));
       this.w.pendingRepeats = this.w.pendingRepeats.filter(p => p.caster !== owner || !owned(p.inst));
+      this.w.pendingSteps = this.w.pendingSteps.filter(p => p.caster !== owner || !owned(p.inst));
+      this.w.pendingFollowUps = this.w.pendingFollowUps.filter(p => p.caster !== owner || !owned(p.inst));
       this.w.pendingSalvos = this.w.pendingSalvos.filter(p => p.caster !== owner || !owned(p.inst));
       this.w.pendingFuses = this.w.pendingFuses.filter(p => p.caster !== owner || !owned(p.inst));
       for (const z of [...this.w.zones]) if (z.caster === owner && owned(z.inst)) this.w.retireOwnedZone(z);
+      for (const a of this.w.actors) if (a.owner === owner && a.construct?.echo
+        && a.construct.castInst && owned(a.construct.castInst)) this.w.kill(a, true);
     }
   }
   clearAll(): void { for (const s of [...this.states]) this.clear(s.owner, s.host); }

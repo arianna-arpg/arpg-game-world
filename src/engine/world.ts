@@ -34994,9 +34994,10 @@ export class World {
       repeat?: number; noCooldown?: boolean; keepFacing?: boolean;
       /** Set on scheduled repeats so they don't schedule more repeats. */
       noRepeat?: boolean;
-      /** A paid parent's independent strike may start its own support repeat
-       * train without replaying the parent's cast events or resource payment. */
-      allowPayloadRepeats?: boolean;
+      /** An authored component of a paid cast owns its support repeat train,
+       * fissures, echoes and follow-throughs. It does not repay resources or
+       * replay the parent's cast events. Generated descendants omit this. */
+      componentUse?: boolean;
       /** Set on follow-up fires so a payload never chains its own. */
       noFollowUp?: boolean;
       /** Set on fuse-sweep resumes so a banked resolution never re-banks. */
@@ -35468,7 +35469,7 @@ export class World {
     // emitted payloads never roll (opts.noRepeat).
     {
       const lash = socketSpec(inst, 'meleeFissure');
-      if (lash && !opts.noRepeat && chance(lash.chance)) {
+      if (lash && (!opts.noRepeat || opts.componentUse) && chance(lash.chance)) {
         const lashD: GroundDelivery = {
           type: 'ground', radius: lash.radius, castRange: 0,
           lingerDuration: lash.linger, tickInterval: lash.tickInterval ?? 0.5,
@@ -38154,7 +38155,7 @@ export class World {
     // exempt: an echo is already a repeat (an ancestral ghost swings ONCE,
     // never a Multistrike train), and their casts must never stamp the
     // shared instance's Unleash bank (inst.state belongs to the owner).
-    if (((!opts.noRepeat && !opts.noCooldown) || opts.allowPayloadRepeats) && !caster.construct?.echo) {
+    if (((!opts.noRepeat && !opts.noCooldown) || opts.componentUse) && !caster.construct?.echo) {
       let repeats = Math.round(caster.sheet.get('repeatCount', tags, extra))
         // Charge-fed trains (Riftstorm): every charge burned is one more
         // beat — the Multistrike twin of projectilesPerCharge.
@@ -38173,7 +38174,7 @@ export class World {
       if (repeats > 0) {
         // Independent paid components have no second windup of their own;
         // their repeat beat carries their local attack/cast-speed investment.
-        const interval = 0.22 / (opts.allowPayloadRepeats ? caster.speedFactor(inst) : 1);
+        const interval = 0.22 / (opts.componentUse ? caster.speedFactor(inst) : 1);
         this.pendingRepeats.push({
           caster, inst, aim: vec(aim.x, aim.y),
           n: repeats, k: 1, timer: interval, interval,
@@ -38304,7 +38305,7 @@ export class World {
     // ghosts never mint ghosts (the Spirit-Totem recursion guard). Echo
     // SKILLS route through their construct case — a gem socketed into one
     // contributes only its flat +1 mirageCount (the two-archer rule).
-    if (!opts.noRepeat && !opts.noCooldown && !caster.construct
+    if (((!opts.noRepeat && !opts.noCooldown) || opts.componentUse) && !caster.construct
       && def.delivery.type !== 'construct') {
       for (const e of instanceEchoes(inst)) {
         this.spawnEchoRiders(caster, inst, e.spec, e.key, aim, inst);
@@ -38331,7 +38332,7 @@ export class World {
     // (the meta-instance rule). Repeats, echo replays and channel pulses
     // never follow through (the standard real-use gate), and a follow-up
     // never chains follow-ups of its own (noFollowUp rides the fire).
-    if (!opts.noRepeat && !opts.noCooldown && !opts.noFollowUp && !caster.construct) {
+    if (((!opts.noRepeat && !opts.noCooldown) || opts.componentUse) && !opts.noFollowUp && !caster.construct) {
       this.queueFollowUps(caster, inst, aim, opts.chargesSpent ?? 0);
     }
     // SHADOW MIMIC: living clones replay this use from where they stand.
@@ -56035,6 +56036,12 @@ export class World {
     for (const fu of instanceFollowUps(host)) {
       if (!SKILLS[fu.skillId] || (fu.chance !== undefined && !chance(fu.chance))) continue;
       let payload = this.mintMetaInstance(caster, host, fu.skillId);
+      if (host.sequenceHost) {
+        // Component follow-throughs stay attributable to the paid skill for
+        // respec/death cleanup, without becoming another authored component.
+        payload = { ...payload, sequenceHost: host.sequenceHost, sequenceRole: 'payload',
+          followUpHost: host.sequenceHost, procChainDepth: Math.max(1, (host.procChainDepth ?? 0) + 1) };
+      }
       if (host.def.tags.includes('flask')) {
         // Snapshot this drink's investment, once. No sockets/clock/trigger cargo
         // boards the child. Generated hits cannot shed orbs or retap hit fuel.

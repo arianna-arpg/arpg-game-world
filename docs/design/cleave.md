@@ -82,6 +82,15 @@ speed. Component-only support costs are charged once with the paid parent cast,
 even when both leaves are selected. Bare projectile-only Unbound Cleave cannot
 socket Multistrike, and removing both leaves closes that admission again.
 
+This admission is shared by applicable melee supports, not keyed to Multistrike.
+The authored waves are real melee hits: ailments, knockback, collision effects,
+hit/miss procs, impale, splash, reverberation and geometric modifiers run through
+the normal hit and delivery paths. Faultfinder can project fissures (including
+fissure supports socketed beside it); Ancestral Call can raise an ancestor for
+each wave; Reaper's Encore can schedule each wave's follow-through. Their normal
+chances and restrictions remain in force. Repeats do not re-mint these cast-time
+extras, and ghosts cannot mint further ghosts.
+
 Nova and rain payloads use the normal
 projectile damage, speed, trajectory and support machinery. The nova honors
 projectile count. Standard impact shards fire before the primary axe lodges.
@@ -103,10 +112,15 @@ read the same authored spec.
 
 `attackSequencePayload` constructs the shared component view used for socket
 admission, timing previews and live payloads. Component tags stay local rather
-than widening the parent delivery's tags. Independent melee payloads opt into
-the existing repeat scheduler without repaying resources or replaying parent
-cast events; their scheduled repeats cannot recursively start repeat trains.
-Projectile nova/rain payloads do not receive that opt-in.
+than widening the parent delivery's tags. `attackSequenceSweepInstance` retains
+the parent's hit/trigger depth and invested level; its numeric growth is already
+baked, so metadata does not double-apply growth. An authored wave starts at normal
+hit depth, while generated nova/rain/follow-through hits retain descendant depth.
+The `componentUse` execution option enables local support repeats, fissures,
+echoes and follow-throughs without repaying resources or replaying parent cast
+events. Scheduled repeats, aim-sequence beats, ghosts and follow-throughs never
+inherit this option. Cleanup retires component aim beats, follow-through jobs,
+their fields, and the associated ancestor ghosts with their parent skill.
 
 Primary casts and secondary payloads retain explicit transient provenance.
 Owned statuses use a separate `sourceKey`; `holdDischarge` lets a finisher
@@ -135,6 +149,10 @@ positions; the normal saved-tree validation applies the new prerequisites.
   cases drive real movement into airborne/fallen markers, socket real gems
   through the inventory API, and check component repeat/damage/tempo/cost
   routing, rollback on respec and repeat cleanup.
+- `npx tsx balance/probe_cleavecomponents.ts`: 73 checks covering all 19 catalog
+  supports listing melee eligibility on both wave leaves, actual support
+  effects, composed support grants, invested follow-through levels, combined
+  ghosts/repeats/follow-throughs, single payment/throw and descendant cleanup.
 - `npm run check`: game, launcher and simulation type checks.
 - `npm run sim -- run --suite smoke`: five scenarios across five seeds.
 - `npm run probe`: shared engine and content regression suite.
@@ -164,3 +182,8 @@ into both airborne and fallen pickup circles. A clean verification copy of
 the Cleave changes also passes all three type checks and the production build.
 The new movement regressions reproduced the solid-marker bug before the fix;
 component admission regressions likewise reproduced Multistrike's refusal.
+
+Broader support QA (2026-09-25): the first support pass admitted melee gems
+generically, but focused on Multistrike's execution. The catalog-wide follow-up
+exposed suppressed hit procs/impale/splash and cast-time fissures/ghosts/encores.
+The 73 component checks now pass alongside all 114 existing Cleave checks.

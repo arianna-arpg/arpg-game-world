@@ -58,7 +58,18 @@ export function attackSequencePayload(host: SkillInstance, delivery: SkillDef['d
 
 export function attackSequenceSweepInstances(host: SkillInstance): SkillInstance[] {
   return (attackSequenceOf(host)?.castSweeps ?? []).map(sweep =>
-    attackSequencePayload(host, sweep.delivery, ['attack', 'melee', 'aoe', 'physical']));
+    attackSequenceSweepInstance(host, sweep.delivery));
+}
+
+/** An authored strike is part of the paid attack, not a generated proc.
+ * Preserve inherited depth when the parent itself came from a proc. */
+export function attackSequenceSweepInstance(host: SkillInstance, delivery: MeleeDelivery): SkillInstance {
+  const inst = attackSequencePayload(host, delivery, ['attack', 'melee', 'aoe', 'physical']);
+  // Growth is already baked into innateMods; retain the real level for
+  // downstream catalog follow-throughs without folding that growth twice.
+  inst.level = host.level; inst.bonusLevels = host.bonusLevels;
+  inst.procChainDepth = Math.max(host.procChainDepth ?? 0, host.state?.trigDepth ?? 0);
+  return inst;
 }
 
 /** Shared support/preview census, independent from socket admission. */
