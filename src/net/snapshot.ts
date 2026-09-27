@@ -66,6 +66,7 @@ import { poolCueRows } from '../engine/reserveCues';
 import { payloadCueRows } from '../engine/payloadCues';
 import { procCueRows } from '../engine/procCues';
 import { anatomyCueState, cloneAnatomyCues } from '../engine/anatomyCues';
+import { feedingCueState, cloneFeedingCues } from '../engine/feedingCues';
 import { GRAB_VERB_LABEL } from '../engine/grab';
 import { tellSpecsOf } from '../engine/tells';
 import { fellProgress } from '../engine/rampage';
@@ -85,6 +86,7 @@ export interface ActorW {
   payloadCues?: import('../engine/payloadCues').PayloadCueRow[];
   procCues?: import('../engine/procCues').ProcCueRow[];
   anatomyCues?: import('../engine/anatomyCues').AnatomyCueState;
+  feedingCues?: import('../engine/feedingCues').FeedingCueState;
   wardCue?: { profile?: string; sources: number[] };
   encounterOrder?: Pick<NonNullable<Actor['encounterOrder']>, 'group' | 'recipe' | 'plan' | 'leader' | 'phase' | 'until'>;
   cosmeticKind?: 'wisp';
@@ -255,6 +257,7 @@ export interface PickupW { s: string; l: string; c: string; n: number; born: num
  *  identical to the pre-wire client. Other flash costumes (beam, haze, arc,
  *  shapes) remain deliberately unshipped — MVP fidelity, renderer-guarded. */
 export interface FlashW { combatCue?: import('../engine/combatCues').CombatCue; defenseCue?: import('../engine/defenseCues').DefenseCue; cosmeticMotif?: CosmeticMotif; p: Vec2W; radius: number; color: string; life: number; maxLife: number;
+  feedingCue?: import('../engine/feedingCues').FeedingTransfer;
   fx?: string; bolt?: boolean; meteor?: boolean; departure?: RefugeDeparture; }
 /** A death-burst telegraph (coalesce gather → tracking orb). RENDER-ONLY: the client
  *  never simulates these (homing is host-authoritative via nearestSeatPos over the seats);
@@ -747,6 +750,8 @@ function actorToW(a: Actor, world: World): ActorW {
   const procCues = procCueRows(a);
   if (procCues.length) w.procCues = procCues.map(row => ({ ...row }));
   const anatomyState = anatomyCueState(a);
+  const feedingCues = feedingCueState(a);
+  if (feedingCues.gains.length || feedingCues.meal || feedingCues.mass) w.feedingCues = cloneFeedingCues(feedingCues);
   if (anatomyState.weakpoints.length || anatomyState.parts.length || anatomyState.segments.length || anatomyState.part)
     w.anatomyCues = cloneAnatomyCues(anatomyState);
   if (wardCueActive(a)) w.wardCue = { profile: a.wardCueProfile, sources: wardGuardians(a, world.actors).map(x => x.id) };
@@ -933,6 +938,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     no: world.notices.map(n => ({ text: n.text, color: n.color, size: n.size, ch: n.channel, born: n.bornAt })),
     pfd: world.pickupFeed.map(e => ({ s: e.seatId, l: e.label, c: e.color, n: e.count, born: e.bornAt })),
     flashes: world.flashes.map(f => ({ combatCue: f.combatCue ? { ...f.combatCue } : undefined, p: v2(f.pos), radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
+      feedingCue: f.feedingCue ? { ...f.feedingCue, to: { ...f.feedingCue.to } } : undefined,
       defenseCue: f.defenseCue ? { ...f.defenseCue } : undefined, fx: f.fx, cosmeticMotif: f.cosmeticMotif, departure: f.departure, bolt: f.bolt || undefined, meteor: f.meteor || undefined })),
     ec: world.eyecatch
       && eyecatchElapsed(world.eyecatch, world.timeflow.age) < world.eyecatch.paneSec
@@ -1359,6 +1365,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.payloadCues = aw.payloadCues?.map(row => ({ ...row, points: row.points?.map(p => ({ ...p })) })) ?? [];
     a.procCues = aw.procCues?.map(row => ({ ...row })) ?? [];
     a.anatomyCues = aw.anatomyCues ? cloneAnatomyCues(aw.anatomyCues) : { weakpoints: [], parts: [], segments: [] };
+    a.feedingCues = aw.feedingCues ? cloneFeedingCues(aw.feedingCues) : { gains: [] };
     a.wardCueProfile = aw.wardCue?.profile;
     a.encounterOrder = aw.encounterOrder ? { ...aw.encounterOrder } : undefined;
     a.magicPackPower = aw.magicPackPower ?? 0;
@@ -1495,6 +1502,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   world.notices = (snap.no ?? []).map(n => ({ text: n.text, color: n.color, size: n.size, channel: n.ch, bornAt: n.born }));
   world.pickupFeed = (snap.pfd ?? []).map(e => ({ seatId: e.s, label: e.l, color: e.c, count: e.n, bornAt: e.born }));
   world.flashes = snap.flashes.map(f => ({ combatCue: f.combatCue ? { ...f.combatCue } : undefined, pos: { x: f.p[0], y: f.p[1] }, radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
+    feedingCue: f.feedingCue ? { ...f.feedingCue, to: { ...f.feedingCue.to } } : undefined,
     defenseCue: f.defenseCue ? { ...f.defenseCue } : undefined, fx: f.fx, cosmeticMotif: f.cosmeticMotif, departure: f.departure, bolt: f.bolt, meteor: f.meteor })) as unknown as World['flashes'];
   // THE EYECATCH — re-stamped against the CLIENT's own raw clock (elapsed →
   // local t0); an absent row clears the pane with the host's (engine/ultimates.ts).

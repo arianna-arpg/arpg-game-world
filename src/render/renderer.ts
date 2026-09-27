@@ -1,5 +1,7 @@
 import { concealmentActive } from '../engine/perception';
 import { anatomyCueState, anatomyOverheadRise } from '../engine/anatomyCues';
+import { feedingCueState, type FeedingTransfer } from '../engine/feedingCues';
+import { drawFeedingBody, drawFeedingTransfer, drawRestoreHud } from './vis/feedingCueLayer';
 import { ANATOMY_CUE_CFG } from '../data/anatomyCues';
 import { drawAnatomyBody, drawAnatomyMeters, drawWeakPointBar, drawWeakPointOrb, drawSegmentWound } from './vis/anatomyCueLayer';
 import { drawSatellites } from './vis/satelliteLayer';
@@ -782,7 +784,7 @@ export class Renderer {
     this.drawDrops(world);
     this.drawResourceOrbs(world);
     this.drawRemnants(world);
-    for (const f of world.flashes) this.drawFlash(f);
+    for (const f of world.flashes) if (!f.feedingCue || this.feedingTransferVisible(f.pos, f.feedingCue, world)) this.drawFlash(f);
     // THE PACK LAYER's drawn bonds (engine/pack.ts): the warden's lines to
     // every body it is actually empowering — over the ground reads, UNDER
     // the bodies they bind (a link is context for a silhouette, never a
@@ -4867,7 +4869,16 @@ export class Renderer {
     }
   }
 
-  private drawFlash(f: { pos: Vec2; radius: number; color: string; life: number; maxLife: number; arc?: { facing: number; arcRad: number }; shape?: number; facing?: number; edgeFrac?: number; bolt?: boolean; meteor?: boolean; beam?: boolean; haze?: number; fx?: string; cosmeticMotif?: import('../engine/cosmetics').CosmeticMotif }): void {
+  private feedingTransferVisible(from: Vec2, cue: FeedingTransfer, world: World): boolean {
+    return [[from, cue.fromTier], [cue.to, cue.toTier]].every(([p, tier]) => {
+      const at = p as Vec2;
+      return tier === (world.player.tier ?? 0)
+        || (!(world.zone.tiers?.exposure === 'covered' || (this.stacked.length && this.inStack(at)))
+          || !!(world.walk?.regionAt && tierLinkOf(world.walk.regionAt(at.x, at.y))));
+    });
+  }
+
+  private drawFlash(f: { feedingCue?: FeedingTransfer; pos: Vec2; radius: number; color: string; life: number; maxLife: number; arc?: { facing: number; arcRad: number }; shape?: number; facing?: number; edgeFrac?: number; bolt?: boolean; meteor?: boolean; beam?: boolean; haze?: number; fx?: string; cosmeticMotif?: import('../engine/cosmetics').CosmeticMotif }): void {
     const { ctx } = this;
     // A big synchronous sim step (headless probes, background-tab catch-up)
     // can overshoot a flash's life below zero before the prune sweeps it —
@@ -4881,6 +4892,7 @@ export class Renderer {
     if (!Number.isFinite(f.pos.x + f.pos.y + f.radius + f.life + f.maxLife)) return;
     const t = f.maxLife > 0 ? Math.max(0, Math.min(1, f.life / f.maxLife)) : 0;
     if (t <= 0 || f.radius <= 0) return;
+    if (f.feedingCue) { drawFeedingTransfer(ctx, { ...f, feedingCue: f.feedingCue }); return; }
     if (f.cosmeticMotif) {
       ctx.save(); ctx.globalAlpha *= t * COSMETIC_CFG.cast.opacity;
       for (let i = 0; i < COSMETIC_CFG.cast.count; i++) {
@@ -5760,6 +5772,8 @@ export class Renderer {
     const anatomyState = anatomyCueState(a);
     ctx.save(); ctx.globalAlpha = baseAlpha;
     drawAnatomyBody(ctx, anatomyState, a.radius, a.facing); ctx.restore();
+    ctx.save(); ctx.globalAlpha = baseAlpha;
+    drawFeedingBody(ctx, feedingCueState(a), a.radius, a.pos, world.time); ctx.restore();
     if (poolCueGround) {
       ctx.save(); ctx.setTransform(poolCueGround); ctx.globalAlpha = baseAlpha;
       drawPoolVents(ctx, poolCues, world.time); ctx.restore();
@@ -7595,6 +7609,9 @@ export class Renderer {
     this.drawOrb(manaX, orbY, orbR, p.maxMana() > 0 ? p.mana / p.maxMana() : 0,
       '#2858b8', '#101848', `${Math.ceil(p.mana)}`, 'Mana',
       p.maxMana() > 0 ? p.reservedMana / p.maxMana() : 0);
+    const feedingCues = feedingCueState(p);
+    drawRestoreHud(ctx, feedingCues.gains, 'life', lifeX, orbY, orbR, world.time);
+    drawRestoreHud(ctx, feedingCues.gains, 'mana', manaX, orbY, orbR, world.time);
 
     // Environmental-survival meters (breath underwater; future heat/cold) — tucked
     // under the mana orb, shown only while a resource is below max (i.e. active)

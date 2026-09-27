@@ -64,6 +64,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_payloadcues.ts', status: 'green', tier: 'fast', why: 'Prepared drinks, ammunition and placed routes: paid state, true arming reach, scoped capacity, release/expiry/unequip, co-op mirrors and caption-free painters' },
   { probe: 'probe_proccues.ts', status: 'green', tier: 'fast', why: 'Consumed proc/rider material, actual wound-pop payout, quiet no-ops, invocation releases, bounded body/HUD geometry and all-actor co-op' },
   { probe: 'probe_anatomycues.ts', status: 'green', tier: 'fast', why: 'Exact weakpoint windows and hit/DoT timing, separate part pools and scars, long-segment wounds, quiet removal, body/bar geometry and co-op' },
+  { probe: 'probe_feedingcues.ts', status: 'green', tier: 'fast', why: 'Real meal transfers, carrion chewing, Amalgam mass, measured resource and overmend gains, quiet full pools, bounded body/HUD cues and co-op' },
   { probe: 'probe_devmonsters.ts', status: 'green', tier: 'fast', why: 'Developer monster spawning: native levels/rarities, registry additions, authority, bounded inputs and non-overlapping floor-aware placement.' },
   { probe: 'probe_devprogression.ts', status: 'green', tier: 'fast', why: 'Developer progression recipes, actual access gates, authority, prerequisites, attribution, idempotence and account persistence.' },
   { probe: 'probe_accountreliquary.ts', status: 'green', tier: 'fast', why: 'Account Relic ownership, migration, investment and attributable followers.' },

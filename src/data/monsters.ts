@@ -1185,6 +1185,7 @@ export interface MonsterDef {
    *  FIRE (the meal owns its whole attention — the open window is the
    *  meal's price; summoned copies stay obedient and eat on idle). */
   carrion?: {
+    feedingCue?: import('./feedingCues').FeedingCueSpec | false;
     radius?: number; rate?: number; time?: number;
     drive?: { id: string; add: number }; combat?: boolean;
   };

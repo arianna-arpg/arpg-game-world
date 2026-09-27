@@ -1,5 +1,6 @@
 import { summonReservationUnit } from './companionGrants';
 import { buffProcCue, noteProcCue, noteProcPop, tickProcCues } from './procCues';
+import { noteRestoreGain, tickRestoreGains } from './feedingCues';
 import { summonContractSlots } from './summonContracts';
 import type { AssaultPreparation } from './assault';
 import type { MovementTetherSpec, MovementTetherState } from './movementTether';
@@ -1029,6 +1030,9 @@ export class Actor {
   payloadCues?: import('./payloadCues').PayloadCueRow[];
   /** Host-derived stored payloads and actual releases (all actor kinds). */
   procCues?: import('./procCues').ProcCueRow[];
+  feedingCues?: import('./feedingCues').FeedingCueState;
+  feedingMeal?: import('./feedingCues').FeedingMealCue;
+  restoreGains: import('./feedingCues').RestoreGainCue[] = [];
   anatomyCues?: import('./anatomyCues').AnatomyCueState;
   partScars: import('./anatomyCues').AnatomyPartCue[] = [];
   procCuePulses: import('./procCues').ProcCuePulse[] = [];
@@ -1347,7 +1351,8 @@ export class Actor {
   stagger?: { amount: number; perSec: number };
   /** RESTORE STREAMS (restoreOverTime — the flask pours): each entry
    *  trickles a resource until spent. Life flows through healBy. */
-  restoreStreams: { resource: 'life' | 'mana' | 'es'; perSec: number; remaining: number }[] = [];
+  restoreStreams: { resource: 'life' | 'mana' | 'es'; perSec: number; remaining: number;
+    feedingCue?: import('../data/feedingCues').FeedingCueSpec | false }[] = [];
   /** THE PRIMED POUR (pourPrime): full-pool sips BANKED at press — every
    *  cost paid, the self-payload deferred — released whole by the first
    *  life-damage event (World.releasePrimedPours). One entry per banked
@@ -3130,6 +3135,7 @@ export class Actor {
     onDotTick?: (status: ActiveStatus, amount: number, type: DamageType | 'untyped') => void,
   ): Partial<Record<DamageType | 'untyped', number>> | null {
     tickProcCues(this, chronoDt);
+    tickRestoreGains(this, chronoDt);
     // THE STRIDE's spend (a landed blow read 'strided' last frame): the
     // reset lands here, BEFORE the mask refolds, so one swing's contacts
     // all saw the stride and the next frame starts the walk afresh.
@@ -3331,6 +3337,7 @@ export class Actor {
       st.remaining -= step;
       if (st.resource === 'life') {
         const landed = this.healBy(step);
+        noteRestoreGain(this, 'life', landed, st.feedingCue);
         // STREAM OVERMEND (2026-08-08, the pre-emptive drinker's lane):
         // pour past a full pool HARDENS instead of evaporating — ceiling
         // spill × the drinker's overheal stat accrues into the absorb
@@ -3343,14 +3350,18 @@ export class Actor {
         if (spill > 0.0001) {
           const oh = this.sheet.get('overheal');
           if (oh > 0) {
+            const restoreGainBefore = this.absorb;
             this.absorb = Math.min(this.maxLife() * 0.5, this.absorb + spill * oh);
             this.absorbTimer = Math.max(this.absorbTimer, 6);
+            noteRestoreGain(this, 'absorb', this.absorb - restoreGainBefore, st.feedingCue);
           }
         }
       } else if (st.resource === 'mana') {
+        const restoreGainBefore = this.mana;
         this.mana = Math.min(this.availableMaxMana(), this.mana + step);
+        noteRestoreGain(this, 'mana', this.mana - restoreGainBefore, st.feedingCue);
       } else {
-        this.gainEs(step);
+        noteRestoreGain(this, 'es', this.gainEs(step), st.feedingCue);
       }
       if (st.remaining <= 0) this.restoreStreams.splice(i, 1);
     }

@@ -2047,6 +2047,8 @@ export interface SummonDelivery {
  * delivery (the Harvester) or grafted by a support (Ravenous Pact).
  */
 export interface DevourSpec {
+  /** Consumption material; inherited by grafted devouring as well. */
+  feedingCue?: import('../data/feedingCues').FeedingCueSpec | false;
   /** Seconds between meals. */
   interval: number;
   /** Reach of the feeding lunge, units (default 220). */
@@ -4128,6 +4130,8 @@ export interface GuardSurgeEffect {
  *  'flask' investment is an ordinary modifier). Streams stack; life flows
  *  through healBy (seared wounds slow the flask too). */
 export interface RestoreOverTimeEffect {
+  /** Material for actual landed ticks (including overmend); false silences it. */
+  feedingCue?: import('../data/feedingCues').FeedingCueSpec | false;
   type: 'restoreOverTime';
   resource: 'life' | 'mana' | 'es';
   /** Total restored across the stream (× perCharge count when set). */
@@ -4331,6 +4335,8 @@ export type SkillEffect =
 // --- The skill definition ---------------------------------------------------
 
 export interface SkillDef {
+  /** Source-to-recipient consumption material for feasts, sacrifices and Amalgam. */
+  feedingCue?: import('../data/feedingCues').FeedingCueSpec | false;
   /** Configurable prepared-payload shapes; false opts out of supplementary
    * body/HUD cues while functional ammunition pips remain. */
   payloadCues?: Partial<Record<import('../data/payloadCues').PayloadCueKind, string | false>>;

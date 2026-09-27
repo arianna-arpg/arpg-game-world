@@ -123,6 +123,11 @@ GT-024 weakpoint windows, independent part pools and segment wounds share
 and permanent break scars follow authoritative state, including co-op. See
 `docs/design/anatomy-cues.md`, `probe_anatomycues.ts` and hidden
 `balance/anatomy-cues-ui.cjs` (run the probe and build first).
+GT-025 feeding, consumed mass and actual restoration ticks share
+`data/feedingCues.ts` profiles. Corpse/summon transfers, chewing and resource
+orb drops follow real outcomes, including overmend and co-op. See
+`docs/design/feeding-cues.md`, `probe_feedingcues.ts` and hidden
+`balance/feeding-cues-ui.cjs` (run the probe and build first).
 
 Carried satellites live in `data/satellites.ts` and `engine/satellites.ts`:
 untargetable, modifier-granted orbiting effects shared by players and monsters.

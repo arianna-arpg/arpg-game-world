@@ -1,3 +1,4 @@
+import { feedingCueFlash, feedingMaterial, noteRestoreGain } from './feedingCues';
 // ---------------------------------------------------------------------------
 // AI RUNTIME — drives monsters AND player minions through the same skill
 // pipeline the player uses. Conduct is DATA (see brain.ts): a BrainDef bundles
@@ -545,6 +546,7 @@ const DEFAULT_BRAIN: BrainDef = {};
 // === THE PIPELINE ==============================================================
 
 export function updateAI(actor: Actor, world: World, dt: number): void {
+  actor.feedingMeal = undefined; // feedingCue posture ends even on an early AI refusal.
   if (actor.summonReform) return;
   ensureMovementTether(actor);
   if (refreshMovementTether(actor, world)?.returning) return;
@@ -2395,7 +2397,7 @@ function updateCarrion(actor: Actor, world: World, dt: number, inCombat = false)
   // enough for ordinary idle life to move the body somewhere new.
   if (world.time < actor.carrionSnubUntil) return false;
   const reach = spec.radius ?? CARRION_CFG.radius;
-  let best: { pos: Vec2 } | null = null;
+  let best: { pos: Vec2; tier?: number } | null = null; // feedingCue source story.
   let bd = reach;
   for (const c of world.corpses) {
     const d = dist(actor.pos, c.pos);
@@ -2426,8 +2428,13 @@ function updateCarrion(actor: Actor, world: World, dt: number, inCombat = false)
   actor.carrionStallT = 0;
   actor.carrionStallD = Infinity;
   actor.carrionEatT += dt;
+  const restoreGainBefore = actor.life;
   actor.life = Math.min(actor.maxLife(),
     actor.life + (spec.rate ?? CARRION_CFG.rate) * actor.maxLife() * dt);
+  noteRestoreGain(actor, 'life', actor.life - restoreGainBefore, spec.feedingCue);
+  if (spec.feedingCue !== false) actor.feedingMeal = { from: { ...best.pos },
+    progress: Math.min(1, actor.carrionEatT / (spec.time ?? CARRION_CFG.time)),
+    ...feedingMaterial(spec.feedingCue, 'carrion') };
   if (actor.carrionEatT >= (spec.time ?? CARRION_CFG.time)) {
     const i = world.corpses.indexOf(best as (typeof world.corpses)[number]);
     if (i !== -1) world.corpses.splice(i, 1);
@@ -2438,7 +2445,11 @@ function updateCarrion(actor: Actor, world: World, dt: number, inCombat = false)
       const v = (actor.drives.get(spec.drive.id) ?? 0) + spec.drive.add;
       actor.drives.set(spec.drive.id, Math.max(0, Math.min(1, v)));
     }
-    world.text(vec(actor.pos.x, actor.pos.y - 16), 'feeds', '#a8c87a', 11);
+    actor.feedingMeal = undefined;
+    if (i !== -1) {
+      const feedingCue = feedingCueFlash(best.pos, actor, spec.feedingCue, 'carrion', best.tier);
+      if (feedingCue) world.flashes.push(feedingCue);
+    }
   }
   return true;
 }

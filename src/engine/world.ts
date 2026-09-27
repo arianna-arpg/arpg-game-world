@@ -1,6 +1,7 @@
 import { concealmentActive, isConcealed, PERCEPTION_CFG } from './perception';
 import { anatomyCueState, anatomyFlash, notePartScar, clearPartScar } from './anatomyCues';
 import { takeWeakPointBreaks } from './weakpoints';
+import { feedingCueFlash, noteRestoreGain } from './feedingCues';
 import { CompanionGrants, COMPANION_GRANT_PREFIX, companionGrantStat, summonReservationUnit } from './companionGrants';
 import { summonCapacity, summonContractSlots } from './summonContracts';
 import { TitanRuntime } from './titans';
@@ -1514,6 +1515,7 @@ export interface EmergeRecord {
 type ComboCursor = { comboIdx?: number; comboAt?: number; comboSelf?: number };
 
 interface Flash {
+  feedingCue?: import('./feedingCues').FeedingTransfer;
   combatCue?: import('./combatCues').CombatCue;
   defenseCue?: import('./defenseCues').DefenseCue;
   cosmeticMotif?: import('./cosmetics').CosmeticMotif;
@@ -5874,6 +5876,7 @@ export class World {
     this.flashes = [];
     for (const a of this.actors) {
       a.procCuePulses.length = 0; a.procPopEvents.length = 0;
+      a.restoreGains.length = 0; a.feedingMeal = undefined;
     }
     this.dissolves = []; // THE DISSOLUTION GRAMMAR: motions are zone-local after-images
     this.emergences = []; // THE EMERGENCE GRAMMAR: arrivals are zone-local too
@@ -35148,12 +35151,9 @@ export class World {
         }
         if (pick2) {
           useMult *= 1 + pick2.life * sac.dmgPerLife;
-          this.text(pick2.pos, 'consumed!', '#c45ae0', 12);
-          this.flashes.push({
-            pos: vec(pick2.pos.x, pick2.pos.y), radius: pick2.radius + 12,
-            color: '#c45ae0', life: 0.3, maxLife: 0.3,
-          });
           this.kill(pick2, true);
+          const feedingCue = pick2.dead ? feedingCueFlash(pick2.pos, caster, def.feedingCue, 'ritual', pick2.tier, pick2.radius) : undefined;
+          if (feedingCue) this.flashes.push(feedingCue);
         }
       }
     }
@@ -35357,8 +35357,12 @@ export class World {
             const rr = t.corpseLifeRestore;
             let meat = 0;
             for (const c of feast) meat += c.maxLife;
-            if (rr.life) this.applyRestore(caster, { resource: 'life', amount: meat * rr.life }, { tags: def.tags });
-            if (rr.mana) this.applyRestore(caster, { resource: 'mana', amount: meat * rr.mana }, { tags: def.tags });
+            if (rr.life) noteRestoreGain(caster, 'life', this.applyRestore(caster, { resource: 'life', amount: meat * rr.life }, { tags: def.tags }), def.feedingCue);
+            if (rr.mana) noteRestoreGain(caster, 'mana', this.applyRestore(caster, { resource: 'mana', amount: meat * rr.mana }, { tags: def.tags }), def.feedingCue);
+            for (const corpse of feast) {
+              const feedingCue = feedingCueFlash(corpse.pos, caster, def.feedingCue, 'flesh', corpse.tier);
+              if (feedingCue) this.flashes.push(feedingCue);
+            }
           }
           // HIVEBORN (corpseSpawn graft): the bodies eaten by this offering
           // crawl back out changed — one crawler per corpse consumed.
@@ -36794,12 +36798,9 @@ export class World {
             }
             if (meal) {
               cs2.amalgamFed = (cs2.amalgamFed ?? 0) + 1;
-              this.flashes.push({
-                pos: vec(meal.pos.x, meal.pos.y), radius: meal.radius + 10,
-                color: cosmeticColor, life: 0.25, maxLife: 0.25,
-              });
               this.kill(meal, true);
-              this.text(caster.pos, `fed ${cs2.amalgamFed}/${def.amalgam.cap}`, def.color, 11);
+              const feedingCue = meal.dead ? feedingCueFlash(meal.pos, caster, def.feedingCue, 'ritual', meal.tier, meal.radius) : undefined;
+              if (feedingCue) this.flashes.push(feedingCue);
             }
           }
         }
@@ -42312,10 +42313,10 @@ export class World {
       resource: 'life' | 'mana' | 'es'; amount: number; duration: number;
       amountPerLevel?: number; amountPctMax?: number; perCharge?: boolean;
       lane?: 'surge' | 'settle';
+      feedingCue?: import('../data/feedingCues').FeedingCueSpec | false;
     },
     chargesSpent: number,
     critMult?: number,
-    payloadCueHandled = false,
   ): void {
     const tags = skillContextTags(inst);
     const extra = instanceMods(inst);
@@ -42338,6 +42339,7 @@ export class World {
       * caster.sheet.get('effectDuration', tags, extra));
     target.restoreStreams.push({
       resource: fx.resource, perSec: total / dur, remaining: total,
+      feedingCue: fx.feedingCue ?? inst.def.feedingCue,
     });
     // The pour is a GAIN EVENT (depth 0 — a drink is real play): sympathy
     // links replay it on kin (the tamed-beast flask bond). Echo streams are
@@ -42348,9 +42350,7 @@ export class World {
         n: total, dur, tags: inst.def.tags,
       });
     }
-    // A banked drink already opened through payloadTransition once per drink.
-    if (!payloadCueHandled) this.text(target.pos, fx.resource === 'life' ? 'drinking...' :
-      fx.resource === 'mana' ? 'sipping...' : 'charging...', inst.def.color, 11);
+    // feedingCue gains are emitted by actual ticks, including primed releases.
   }
 
   /** THE PRIMED POUR's release (pourPrime): the first LIFE-DAMAGE event
@@ -42378,7 +42378,7 @@ export class World {
       const pourCrit = this.critMendMult(a, inst, a.pos);
       for (const fx of instanceEffects(inst)) {
         if (fx.type === 'restoreOverTime') {
-          this.startRestoreStream(a, a, inst, fx, b.chargesSpent, pourCrit, true);
+          this.startRestoreStream(a, a, inst, fx, b.chargesSpent, pourCrit);
         } else if (fx.type === 'buff') {
           this.applyBuffEffect(a, inst, fx, durScale, 1);
         } else if (fx.type === 'cleanse') {
@@ -42436,6 +42436,7 @@ export class World {
       const total = raw * hot.factor;
       target.restoreStreams.push({
         resource: 'life', perSec: total / hot.seconds, remaining: total,
+        feedingCue: inst.def.feedingCue,
       });
       return 0;
     }
@@ -57165,19 +57166,16 @@ export class World {
       }
       if (!meal) continue; // the beat holds until food exists
       eater.devour.next = this.time + spec.interval;
-      if (spec.heal) eater.healBy(meal.maxLife() * spec.heal);
+      if (spec.heal) noteRestoreGain(eater, 'life', eater.healBy(meal.maxLife() * spec.heal), spec.feedingCue);
       if (spec.mods?.length) {
         eater.addBuff({
           type: 'buff', id: 'devour_feast', duration: spec.duration ?? 15,
           mods: spec.mods, maxStacks: spec.maxStacks ?? 5,
         });
       }
-      this.flashes.push({
-        pos: vec(meal.pos.x, meal.pos.y), radius: meal.radius + 12,
-        color: '#b04868', life: 0.3, maxLife: 0.3,
-      });
-      this.text(eater.pos, 'devours', '#b04868', 11);
       this.kill(meal, false, eater); // devour is an attributed REAL death — Martyrdom, contracts, Deadwake apply
+      const feedingCue = meal.dead ? feedingCueFlash(meal.pos, eater, spec.feedingCue, 'flesh', meal.tier, meal.radius) : undefined;
+      if (feedingCue) this.flashes.push(feedingCue);
     }
   }
 
