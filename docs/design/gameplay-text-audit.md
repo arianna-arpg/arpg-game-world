@@ -1,6 +1,6 @@
 # Gameplay text → visual cues: migration backlog
 
-GAMEPLAY-TEXT-AUDIT · Refreshed 2026-09-26 · **18 families implemented with playtesting pending; 17 open replacement families and 5 surface reviews remain.**
+GAMEPLAY-TEXT-AUDIT · Refreshed 2026-09-26 · **19 families implemented with playtesting pending; 16 open replacement families and 5 surface reviews remain.**
 
 The player must be able to recognize a gameplay event and respond without reading a sentence or a combat label. Give a cue to the actual body, object, place and time involved. Its buildup, commitment, interruption and recovery should agree with the mechanic. Reusable, configurable visual families carry that information; captions are retired as their replacements become readable.
 
@@ -18,15 +18,22 @@ The rows group related mechanics; the generated inventory contains individual ca
 
 ## Current position and combat-first queue
 
-**Implemented, awaiting encounter acceptance:** GT-001–012, GT-019–022, GT-034 and GT-035.
+**Implemented, awaiting encounter acceptance:** GT-001–012, GT-019–023, GT-034 and GT-035.
 These cover exhaustion, poise/guard/shell breaks, parry/reflection, defensive
 outcomes, timing successes, critical riders, committed guard warnings,
 coordinated maneuvers, cast interruption/fizzle, held readiness, reserve
-depletion/venting, prepared payloads, armed outcomes, combination completion and source-linked wards. Their
+depletion/venting, prepared payloads, consumed proc/rider material, armed outcomes, combination completion and source-linked wards. Their
 individual rows link the implementation contracts and verification harnesses.
 No row is marked Done solely because its automated checks pass.
 
-**Latest implementation:** GT-021 gives banked drinks corked vessels, ammunition
+**Latest implementation:** GT-023 gives stored buffs and consumed riders material
+charges and matching HUD gestures. Real stack spends release their material;
+wound pops signal the actual bank payout, and invocation runes fold into their
+delivered spell. Proc, rider, invocation and sequel name captions are retired;
+recovery gestures require an actual gain. All actor kinds mirror the same
+resolved banks/releases in co-op. See [proc cues](proc-cues.md).
+
+**Previous implementation:** GT-021 gives banked drinks corked vessels, ammunition
 loaded chambers, and placed anchors/arrows persistent route markers. Completed
 arrow sets expose their real trigger reach and committed path; HUD shapes match
 the world state. Captions for priming, loading, arming and placement counts are
@@ -34,7 +41,7 @@ retired, along with redundant stream-start captions on primed releases. Co-op
 mirrors paid ammunition and prepared geometry for all actor kinds. See
 [prepared payload cues](payload-cues.md).
 
-**Previous implementation:** GT-020 replaces reserve-stage and vent captions with
+**Earlier implementation:** GT-020 replaces reserve-stage and vent captions with
 one-time depletion collapses, continuous fuel anatomy and material recovery
 vents. Damage-pool vents show their actual damage footprint and fuel-strip
 exhaust on the player's HUD, including host-derived co-op state. No invented
@@ -64,8 +71,8 @@ not imply an invulnerability window.
 
 | Work remaining | IDs | Next implementation direction |
 |---|---|---|
-| Consumed combat payloads — next batch | GT-023 | Proc-stack releases, proc/rider names and rule labels; loaded/armed preparation and reserve depletion/venting are implemented. |
-| Body damage, feeding, companions and recovery | GT-024–029 | Lost weakpoints/parts, feeding transfers, ownership/tether changes, taming/rejection, down/reanimation and field/remnant transitions. |
+| Body damage — next batch | GT-024 | Lost weakpoints and parts, tied to the actual damaged anatomy. |
+| Feeding, companions and recovery | GT-025–029 | Feeding transfers, ownership/tether changes, taming/rejection, down/reanimation and field/remnant transitions. |
 | Scripted combat and remaining action refusals | GT-013, GT-032, GT-038 | Review individual phase/summon/encounter triggers and unavailable actions. GT-038 gather-too-thin/broke-early captions are already replaced by casting fizzles; other refusals remain. |
 | World danger and discovery | GT-014–018, GT-030, GT-031, GT-033 | Messenger/siege, terrain/water, traps, challenge reset, doors/reveals and Titan trail discoverability. Undead scenery risings do not complete all emergence/trap families. |
 | Broader UI/reference decisions | GT-036, GT-037, GT-039, GT-040 | Objective/wave progress, Odyssey news, numbers/identity, optional reference and operational messages. Trace meaning before changing these surfaces. |
@@ -153,7 +160,7 @@ The three Winded mechanics must not be collapsed into one new status. Similarly,
 | GT-020 | P2 · Implemented; playtest pending | Reserve-stage/vent `note` emitters and damage-pool `venting!` removed. Legacy note fields remain silent. | One-time collapse on entering a depletion band; existing organs retain the continuous fuel read. Inherited steam/sap recovery tells follow the real vent window. Damage-pool flow shows its exact scoped radius and fuel-strip exhaust; co-op mirrors fuel, limits and footprint. Shared profiles, opt-out, refill/cleanse, partial ticks, downed hazards and cleanup covered. | [Contract and checks](reserve-cues.md), [profiles](../../src/data/reserveCues.ts), [shared resource read](../../src/engine/reserveCues.ts) |
 | GT-021 | P2 · Implemented; playtest pending | `primed`, payload `armed`, `loaded`, arrow/anchor captions and primed-release stream captions removed. | Corked body/HUD vessels follow paid drinks; loaded chambers and functional pips follow actual ammunition. Placed diamonds/arrows retain preparation, expose the real window/trigger reach, and clear at release/expiry. Shared profiles and opt-out, socket-granted ammo, committed ambushes after unequip, all-actor co-op and cleanup covered. Borough villagers' unrelated `armed!` remains within the siege/encounter review. | [Contract and checks](payload-cues.md), [profiles](../../src/data/payloadCues.ts), [shared state read](../../src/engine/payloadCues.ts) |
 | GT-022 | P1 · Implemented; playtest pending | `DOOM!`, `volatile!`, `CULLED!`, all five `capped` emitters and `LAST GASP!` removed. | Doom's bank/fuse iris and rupture; volatile vent readiness/release; execution strokes; open hit-limit brackets and flattened impacts; Last Gasp's spent/refilling body and life-orb spark. Real event gates, damage/credit, lifecycle and co-op verified. | [Doom](doom-cues.md), [other outcomes and checks](combat-threat-cues.md), [profiles](../../src/data/combatReadability.ts) |
-| GT-023 | P2 · Open | Dynamic `${sdef.label} POPS!`, proc names, rider names, rule labels. | The actual consumed stack/payload releases its element/material into the effect it causes. Configure a cue on the reusable proc/rider definition; a new name must not automatically create a new caption. | [defense/proc sweep](../../src/engine/world.ts#L44577), [rider](../../src/engine/world.ts#L45020), [rule](../../src/engine/world.ts#L34729) |
+| GT-023 | P2 · Implemented; playtest pending | Retired `${sdef.label} POPS!`, proc/rider names, invocation rule labels and terminal-sequel names. | Material-shaped stored buffs, consumed-stack and next-hit releases, matching HUD gestures and body runes. Pop cues occur at actual payout; recovery gestures follow real gains. Delivered skills retain their own visuals; all-actor co-op carries resolved banks/releases. | [proc cue contract](proc-cues.md), [profiles](../../src/data/procCues.ts), [shared read](../../src/engine/procCues.ts), [probe](../../balance/probe_proccues.ts) |
 | GT-024 | P2 · Open | `spot shattered!`, `SUNDERED`, `TORN` / part-specific text. | Crack the struck weakpoint, shed its visible component and change the host silhouette/function. Preserve which part was lost. Distinguish these physical changes from temporary poise breaks. | [weakpoint](../../src/engine/world.ts#L48875), [body parts](../../src/engine/world.ts#L52197), [part text](../../src/engine/world.ts#L52250) |
 | GT-025 | P2 · Open | `feeds`, `fed`, `devours`; ordinary restoration-stream `drinking...`, `sipping...`, `charging...` captions confirmed during GT-021. | A visible bite, drink or transfer from the consumed source to the recipient, then organ/body refill. No feeding effect if nothing was actually consumed. Primed releases already have GT-021 vessel/release cues; ordinary stream starts remain. | [updateCarrion](../../src/engine/ai.ts#L2464), [fed/devours/startRestoreStream](../../src/engine/world.ts) |
 | GT-026 | P2 · Open | `marked`, `dominated`, `bond broken`, stance label and bond-response lines. | Persistent owner/target marks, tether changes and companion posture; make severing or changing allegiance readable. Retain attribution through shape/placement, not faction color alone. | [mark](../../src/engine/world.ts#L36852), [domination](../../src/engine/world.ts#L43145), [bond break](../../src/engine/world.ts#L48657), [stanceShift](../../src/engine/companionBonds.ts#L337) |
@@ -210,17 +217,17 @@ node scripts/audit-gameplay-text.mjs
 
 The [scanner](../../scripts/audit-gameplay-text.mjs) uses the installed TypeScript parser and scans `src/**/*.ts` / `tsx`. It writes [a navigable Markdown inventory](../../balance/reports/gameplay-text-audit/inventory.md) and [structured JSON](../../balance/reports/gameplay-text-audit/inventory.json) to the ignored reports directory. Regenerate those local artifacts after pulling the repository; this curated backlog is the durable record.
 
-Snapshot: **828 source files** scanned on 2026-09-26 from this pass's isolated
+Snapshot: **831 source files** scanned on 2026-09-26 from this pass's isolated
 commit contents. These are discovery candidates, not the count of remaining effects.
 
 | Category | Candidate sites | Interpretation |
 |---|---:|---|
-| `.text(...)` | 423 | Includes dynamic messages, numbers, reference calls and the internal `cry` forwarding call. These are not all combat captions. |
+| `.text(...)` | 418 | Includes dynamic messages, numbers, reference calls and the internal `cry` forwarding call. These are not all combat captions. |
 | `.cry(...)` | 0 | No current call sites; the compatibility wrapper and its downstream `.text` remain. |
 | `.notice(...)` | 150 | Includes world news and gameplay instructions; trace purpose. |
 | `.tell(...)` | 19 | Candidate wrappers, currently Odyssey calls; overlap downstream notice output. |
 | Selected authored text fields | 544 | Literal/template `announce`, `signal(s)`, `warn`, `note`, selected `…Text`, and `text` fields; may be unused or reference-only. Generic names/labels/descriptions are deliberately excluded. |
-| Canvas `fillText` / `strokeText` | 111 | Includes rendering of the shared text stream, HUD, names, numbers and optional hover/readout surfaces. |
+| Canvas `fillText` / `strokeText` | 112 | Includes rendering of the shared text stream, HUD, names, numbers and optional hover/readout surfaces; GT-023 adds the functional stack count for mirrored buff banks. |
 
 **Do not add these into a count of messages or violations.** Discovery matches call spelling, not receiver types or runtime reachability. Dynamic emitters can expand to many authored lines; data rows and consumers overlap. Aliased/computed calls, HTML/DOM templates and localization are not exhaustively traced. The first 40 families above are manually triaged entry points, not a claim that every candidate has been reviewed.
 

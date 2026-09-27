@@ -153,12 +153,15 @@ export type ProcEffect =
   | { type: 'cast'; cast: ProcCastSpec };
 
 export interface ProcDef {
-  /** Migration seam for events with their own state-driven visual cues.
-   * false suppresses only this proc's legacy name caption, never its payoff. */
+  /** Compatibility opt-out for supplementary procCue gestures. Names are
+   * reference metadata and never become automatic combat captions. */
   announceName?: boolean;
+  /** Self-side state-change material. Delivered skills/areas retain their
+   * own visuals. False opts out without suppressing the actual payload. */
+  procCue?: import('./procCues').ProcCueSpec | false;
   id: string;
   name: string;
-  /** Shown as floating text + flash color when the proc fires. */
+  /** Payload and procCue color. */
   color: string;
   /** When the proc rolls:
    *   'hit'             any damaging hit you land
@@ -890,6 +893,7 @@ export const PROCS: Record<string, ProcDef> = {
     effect: {
       type: 'buff', buff: {
         type: 'buff', id: 'hot_streak', duration: 10,
+        storedCue: { profile: 'fire' },
         mods: [mod('damage', 'more', 0.5, ['spell']), mod('critChance', 'flat', 1, ['spell'])],
         consumeOn: { on: 'hit', tags: ['spell'] },
       },
@@ -901,6 +905,7 @@ export const PROCS: Record<string, ProcDef> = {
     effect: {
       type: 'buff', buff: {
         type: 'buff', id: 'heating_up', duration: 6,
+        storedCue: { profile: 'fire' },
         mods: [mod('castSpeed', 'increased', 0.1, ['spell'])],
         consumeOn: { on: 'crit', tags: ['spell'] },
       },
@@ -1107,7 +1112,7 @@ export interface ProcCastSpec {
 export interface ProcRiderDef {
   id: string;
   name: string;
-  /** Floating-text color when the rider fires. */
+  /** procCue reference color; the rider's cast skill owns its visible payload. */
   color: string;
   /** The host proc(s) whose firings this rider follows. */
   proc: string | string[];

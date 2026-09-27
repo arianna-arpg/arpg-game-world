@@ -343,6 +343,8 @@ import {
 import { resolveTell, TELL_CFG, tellSpecsOf } from './tells';
 import { reserveStageCue } from './reserveCues';
 import { caromCapacity, payloadTransition } from './payloadCues';
+import { buffProcCue, noteProcCue, procCueStyle } from './procCues';
+import { PROC_CUE_CFG } from '../data/procCues';
 import { poolVentRead } from './skills';
 import { RESERVE_CUE_CFG } from '../data/reserveCues';
 import { defenseCueFlash } from './defenseCues';
@@ -5868,6 +5870,9 @@ export class World {
     this.tethers = [];
     this.texts = [];
     this.flashes = [];
+    for (const a of this.actors) {
+      a.procCuePulses.length = 0; a.procPopEvents.length = 0;
+    }
     this.dissolves = []; // THE DISSOLUTION GRAMMAR: motions are zone-local after-images
     this.emergences = []; // THE EMERGENCE GRAMMAR: arrivals are zone-local too
     this.dissolveFloorCracks = []; // … and so is a failing floor's telegraph
@@ -35228,8 +35233,9 @@ export class World {
       const last = runes[runes.length - 1] as RuneId;
       caster.runes = [];
       const payload = makeInvocationPayload(inst, SKILLS[rule.skillId], last);
-      this.text(vec(caster.pos.x, caster.pos.y - 18), rule.label + '!',
-        RUNE_INFO[last]?.color ?? def.color, 14);
+      noteProcCue(caster, rule.releaseCue === false ? false : {
+        profile: 'rune', color: RUNE_INFO[last]?.color ?? def.color, ...rule.releaseCue,
+      }, 'invoke', rule.id, count);
       this.executeSkill(caster, payload, aim, {
         dmgMult: (1 + (instanceInvocation(inst)?.damagePerRune ?? rule.dmgPerRune ?? 0.15) * count) * useMult,
         noCooldown: true, noRepeat: true,
@@ -43883,10 +43889,8 @@ export class World {
           this.executeProc(PROCS[rider.procId], caster, inst, target, 1);
         }
         caster.consumeBuffStacks(bid, 1);
-        this.flashes.push({
-          pos: vec(target.pos.x, target.pos.y), radius: target.radius + 10,
-          color: '#e8d44a', life: 0.2, maxLife: 0.2,
-        });
+        // The procCue material follows the actually consumed rider to its victim.
+        noteProcCue(target, buffProcCue(b.def), 'release', 'rider:' + bid);
       }
     }
     // Delivery-specific hitEffects share every refusal, scaling and
@@ -43998,7 +44002,6 @@ export class World {
               this.flashes.push(combatCueFlash(target.pos, 'affliction', target.radius + 7, angleTo(target.pos, caster.pos), sdef?.color));
             }
           }
-          this.notePopFx(target, fx.status);
           target.applyStatus(fx.status, dpsOut, fxScale, caster.name, {
             // Propagation is a CHANCE rolled once at application (1 = the
             // old always-spreads flag).
@@ -44230,7 +44233,6 @@ export class World {
             }
           }
         }
-        this.notePopFx(target, sid);
         target.applyStatus(sid, dpsOut2, durScale, caster.name, {
           propagates: chance(caster.sheet.get('dotPropagates', tags, extra)) || undefined,
           stacksBonus: stacksBonusFor(sid),
@@ -45122,37 +45124,32 @@ export class World {
    *  that fired it — everything this payload causes (hits, charge/buff
    *  gains, scheduled bursts) is stamped depth + 1, so the one depth rule
    *  governs hit chains and gain chains identically (no bespoke paths). */
-  /** The POP flourish: a reapplication of a pop-bearing status (StatusDef.pop)
-   *  is about to detonate the wound — flash it before applyStatus banks the
-   *  burst (the damage itself pays out through the DoT pipeline next tick). */
-  private notePopFx(target: Actor, sid: string): void {
-    const sdef = STATUS_DEFS[sid];
-    if (!sdef?.pop) return;
-    const live = target.statuses.find(s => s.id === sid && s.dps > 0 && s.remaining > 0);
-    if (!live) return;
-    this.text(vec(target.pos.x, target.pos.y - 20), `${sdef.label} POPS!`, sdef.color ?? '#e04858', 14);
-    this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: target.radius + 14, color: sdef.color ?? '#e04858', life: 0.2, maxLife: 0.2 });
-  }
-
   private executeProc(proc: ProcDef, caster: Actor, inst: SkillInstance | null, target: Actor | null, depth = 0, aim?: Vec2): void {
-    const at = target ?? caster;
-    if (proc.announceName !== false) this.text(vec(at.pos.x, at.pos.y - 14), proc.name + '!', proc.color, 12);
     // THE PROC POWER (procPower_<id>, base 1 — the magnitude dial beside
     // the chance): folded once here onto the effect's numbers, read with
     // the event's own context so a skill-scoped grant scopes like the chance.
     const pw = caster.sheet.get(procPowerStat(proc.id),
       inst ? skillContextTags(inst) : undefined, inst ? instanceMods(inst) : undefined);
     const fx = scaleProcEffect(proc.effect, pw);
+    const procCue = proc.procCue === false || proc.announceName === false ? false : {
+      profile: 'mend', color: proc.color, ...proc.procCue,
+    };
     switch (fx.type) {
       case 'gainCharge': {
+        const procCueBefore = caster.charges.get(fx.charge) ?? 0;
         caster.gainCharge(fx.charge, fx.amount, fx.max, inst ?? undefined, depth + 1);
+        if ((caster.charges.get(fx.charge) ?? 0) > procCueBefore) noteProcCue(caster, procCue, 'gain', proc.id);
         break;
       }
-      case 'buff':
-        caster.addBuff(fx.buff, caster.sheet.get('effectDuration',
+      case 'buff': {
+        const storedCue = fx.buff.storedCue ?? (procCue === false ? false
+          : { ...(buffProcCue(fx.buff) || {}), color: proc.color, ...proc.procCue });
+        caster.addBuff({ ...fx.buff, storedCue }, caster.sheet.get('effectDuration',
           inst ? skillContextTags(inst) : undefined,
           inst ? instanceMods(inst) : undefined), depth + 1);
+        if (caster.buffs.has(fx.buff.id)) noteProcCue(caster, storedCue, 'gain', proc.id);
         break;
+      } // Keep storedCue local to this grant; the shared proc definition is immutable.
       // Applies a status to the STRUCK target — DoT power from the status's
       // caster-less baseline × magnitude (golden rule 4), pop/potency
       // investment honored exactly like a stat-granted application.
@@ -45167,7 +45164,6 @@ export class World {
             * caster.sheet.get('statusMagnitude',
               sdef.dotType && inst ? skillContextTags(inst, [sdef.dotType]) : tags, extra)
           : 0;
-        this.notePopFx(target, fx.status);
         target.applyStatus(fx.status, dps,
           caster.sheet.get('effectDuration', tags, extra), proc.name, {
             casterId: caster.id,
@@ -45181,9 +45177,10 @@ export class World {
       // The proc's OWNER mends — through healBy, so healTaken gates it
       // like every heal (golden rule 5).
       case 'heal':
-        caster.healBy((fx.flat ?? 0) + (fx.pctMax ?? 0) * caster.maxLife());
+        if (caster.healBy((fx.flat ?? 0) + (fx.pctMax ?? 0) * caster.maxLife()) > 0) noteProcCue(caster, procCue, 'gain', proc.id);
         break;
       case 'restore': {
+        const procCueBefore = fx.resource === 'mana' ? caster.mana : fx.resource === 'poise' ? caster.poise : caster.es;
         const amount = (fx.flat ?? 0) + (fx.pctMax ?? 0)
           * (fx.resource === 'mana' ? caster.maxMana()
             : fx.resource === 'poise' ? caster.maxPoise() : caster.maxEs());
@@ -45199,6 +45196,8 @@ export class World {
           // recharge flowing NOW instead of waiting out the delay.
           if (fx.resetEsDelay) caster.esDelay = 0;
         }
+        const procCueAfter = fx.resource === 'mana' ? caster.mana : fx.resource === 'poise' ? caster.poise : caster.es;
+        if (procCueAfter > procCueBefore) noteProcCue(caster, procCue, 'gain', proc.id);
         break;
       }
       // A typed burst around the OWNER — baseline-scaled (flat + perLevel),
@@ -45255,6 +45254,7 @@ export class World {
         break;
       }
       case 'cooldown': {
+        let procCueChanged = false;
         // Every clock by default; `skills` / `tags` narrow it to the named
         // arts (a bar instance answers the id — an unslotted clock has no
         // tags and matches only an unfiltered effect); `exceptSelf` spares
@@ -45267,9 +45267,11 @@ export class World {
             if (!bar || !fx.tags.every(tg => bar.def.tags.includes(tg))) continue;
           }
           const left = fx.reset ? 0 : t - (fx.seconds ?? 0) - t * (fx.fraction ?? 0);
+          if (left < t) procCueChanged = true;
           if (left <= 0) caster.cooldowns.delete(id);
           else caster.cooldowns.set(id, left);
         }
+        if (procCueChanged) noteProcCue(caster, procCue, 'gain', proc.id);
         break;
       }
       // THE GRAMMAR'S ERASER: strip named buffs from the owner.
@@ -45281,11 +45283,14 @@ export class World {
       // WARD on the owner — through gainWard (wardGain scales, wardDecay bounds).
       case 'ward': {
         const amount = (fx.flat ?? 0) + (fx.pctMaxLife ?? 0) * caster.maxLife();
+        const procCueBefore = caster.ward;
         if (amount > 0) caster.gainWard(amount);
+        if (caster.ward > procCueBefore) noteProcCue(caster, procCue, 'gain', proc.id);
         break;
       }
       // CLEANSE the owner: named statuses, every hard CC, every damaging ailment.
       case 'cleanse': {
+        const procCueBefore = caster.statuses.length;
         const ids = new Set<string>(fx.statuses ?? []);
         for (const st of caster.statuses) {
           const sd = STATUS_DEFS[st.id];
@@ -45293,6 +45298,7 @@ export class World {
           if ((fx.hardCC && sd.hardCC) || (fx.afflictions && sd.dotType)) ids.add(st.id);
         }
         for (const id of ids) caster.endStatus(id);
+        if (caster.statuses.length < procCueBefore) noteProcCue(caster, procCue, 'release', proc.id);
         break;
       }
       // KINDLE: plant a registered lightwell where the trigger landed (the
@@ -45572,10 +45578,8 @@ export class World {
       // Luck multiplies rider rates exactly as it does proc rates.
       c *= 1 + caster.sheet.get('luck', tags, extra);
       if (!chance(Math.min(0.95, c))) continue;
-      const site = rider.cast.at === 'self' || !target ? caster : target;
-      if (this.castProcPayload(caster, inst, target, depth + 1, rider.cast)) {
-        this.text(vec(site.pos.x, site.pos.y - 26), rider.name + '!', rider.color, 11);
-      }
+      // procCue: the actual cast's sparks/bolts/body carry the rider's identity.
+      this.castProcPayload(caster, inst, target, depth + 1, rider.cast);
     }
   }
 
@@ -49326,6 +49330,12 @@ export class World {
       const trackDeedDot = this.metaProgressionActive() && !a.dead && a.life > 0
         && (this.deedEnemy(a) || (a === this.player && this.hasDeedEnemyNearby()));
       const dot = a.updateTimers(dt, rawDt, trackDeedDot ? this.collectDeedDot : undefined);
+      // World-space procPopEvents survive a lethal payout and replicate as flashes.
+      for (const procCue of a.procPopEvents) {
+        const style = procCueStyle(procCue.profile ?? 'blood');
+        this.flashes.push(combatCueFlash(a.pos, style.pop ?? 'proc_pop', a.radius + PROC_CUE_CFG.popPad, a.facing, procCue.color ?? style.color));
+      }
+      a.procPopEvents.length = 0;
       // THE LANDING RE-SEAT (engine/tiers.ts landingTier): wings folded —
       // the story re-derives from the floor under the body, so a
       // bench-spawned condor that settles over the valley is the valley's
@@ -59381,7 +59391,7 @@ export class World {
             const sdef = SKILLS[sq.skillId];
             const minted = makeSkillInstance(sdef, effectiveSkillLevel(p.inst));
             (minted.state ??= {}).seqDepth = seqDepth + 1;
-            this.text(vec(p.pos.x, p.pos.y - 12), sdef.name + '!', sdef.color, 11);
+            // procCue: the terminal payload appears at its real landing site.
             this.executeSkill(p.caster, minted, vec(
               p.pos.x + Math.cos(p.dir) * 60, p.pos.y + Math.sin(p.dir) * 60), {
               targetInfo: { pos: vec(p.pos.x, p.pos.y) },

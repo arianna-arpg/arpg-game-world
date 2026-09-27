@@ -114,6 +114,10 @@ GT-021 prepared drinks, ammunition and placed routes share `data/payloadCues.ts`
 profiles. `payloadCueRows` mirrors paid banks and committed ambush geometry;
 see `docs/design/payload-cues.md`, `probe_payloadcues.ts` and the hidden
 `balance/payload-cues-ui.cjs` harness (run the probe and build first).
+GT-023 stored and consumed payloads use `data/procCues.ts` material profiles.
+`procCueRows` shares real stack/rune banks and releases across body, HUD and co-op;
+see `docs/design/proc-cues.md`, `probe_proccues.ts` and hidden
+`balance/proc-cues-ui.cjs` (run the probe and build first).
 
 Carried satellites live in `data/satellites.ts` and `engine/satellites.ts`:
 untargetable, modifier-granted orbiting effects shared by players and monsters.

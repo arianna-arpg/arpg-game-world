@@ -7,6 +7,7 @@ export interface CombatCueStyle {
   life: number; color: string; pieces: number; travel: number; width: number;
 }
 export const COMBAT_CUE_STYLES: Record<string, CombatCueStyle> = {
+  proc_pop: { shape: 'irisBurst', life: 0.5, color: '#ed6676', pieces: 6, travel: 0.8, width: 2 },
   payload_load: { shape: 'snap', life: 0.32, color: '#dcc49b', pieces: 3, travel: 0.7, width: 2 },
   payload_prime: { shape: 'snap', life: 0.4, color: '#dc9696', pieces: 4, travel: 0.7, width: 2 },
   payload_release: { shape: 'mend', life: 0.45, color: '#dc9696', pieces: 4, travel: 0.8, width: 2 },

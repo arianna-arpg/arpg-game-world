@@ -203,7 +203,7 @@ export interface StatusDef {
    *  not max). The applier's generated popPower_<id> stat scales the
    *  fraction, so the pop is as investable as everything else. Best on long,
    *  non-stacking DoTs — the whole loop is "load the wound, then strike it". */
-  pop?: { fraction: number };
+  pop?: { fraction: number; /** Actual payout material; false disables the flourish. */ procCue?: import('../data/procCues').ProcCueSpec | false };
   /** CHRONOMANCY (engine/timeflow.ts): the victim's OWN clock runs at this
    *  rate while afflicted — 0 is stasis (timers, DoTs, casting, cooldowns,
    *  regen, movement and thought all suspend; the body stays a targetable

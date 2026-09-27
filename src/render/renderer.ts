@@ -44,6 +44,8 @@ import { comboCueRows } from '../engine/comboCues';
 import { drawComboBody, drawComboHud } from './vis/comboCueLayer';
 import { poolCueRows } from '../engine/reserveCues';
 import { payloadCueRows } from '../engine/payloadCues';
+import { procCueRows } from '../engine/procCues';
+import { drawProcBody, drawProcHud, drawProcBuff } from './vis/procCueLayer';
 import { drawPayloadBody, drawPayloadHud, drawPayloadPlacements } from './vis/payloadCueLayer';
 import { drawPoolVents, drawPoolVentHud } from './vis/reserveCueLayer';
 import { CORPSE_CFG, LOW_LIFE_FLASH_SEC, SNOW_CFG } from '../engine/world';
@@ -5736,6 +5738,8 @@ export class Renderer {
     drawShellCue(ctx, a, world.time);
     ctx.save(); ctx.globalAlpha = baseAlpha;
     drawPayloadBody(ctx, payloadCueRows(a, world), a.radius); ctx.restore();
+    ctx.save(); ctx.globalAlpha = baseAlpha;
+    drawProcBody(ctx, procCueRows(a), a.radius); ctx.restore();
     if (poolCueGround) {
       ctx.save(); ctx.setTransform(poolCueGround); ctx.globalAlpha = baseAlpha;
       drawPoolVents(ctx, poolCues, world.time); ctx.restore();
@@ -8050,11 +8054,13 @@ export class Renderer {
     // Buff pips — RAISED above the meta-button row so both always read;
     // hovering a pip names it (one small label, never a wall of text).
     const buffY = by - 40;
+    const procCues = procCueRows(p);
     let bpx = bx;
     let hoverLabel: { x: number; text: string } | null = null;
     for (const [id, buff] of p.buffs) {
-      ctx.fillStyle = '#c8a84b';
-      ctx.fillRect(bpx, buffY, 10, 10);
+      const procCue = procCues.find(row => row.id === id && row.phase === 'stored');
+      if (procCue) drawProcBuff(ctx, procCue, bpx + 5, buffY + 5);
+      else { ctx.fillStyle = '#c8a84b'; ctx.fillRect(bpx, buffY, 10, 10); }
       if (buff.stacks > 1) {
         ctx.fillStyle = '#fff';
         ctx.font = 'bold 9px Verdana';
@@ -8064,6 +8070,17 @@ export class Renderer {
       if (mx >= bpx - 2 && mx <= bpx + 12 && myv >= buffY - 2 && myv <= buffY + 12) {
         const rem = Math.max(...buff.expiries ?? [buff.remaining ?? 0]);
         hoverLabel = { x: bpx + 5, text: `${buff.def.label ?? id.replace(/_/g, ' ')} ${rem > 0 && rem < 900 ? Math.ceil(rem) + 's' : ''}`.trim() };
+      }
+      bpx += 14;
+    }
+    // Host-resolved procCues also populate the bank row on a co-op mirror,
+    // whose stripped-down actor does not reconstruct the host's buff definitions.
+    for (const procCue of procCues) {
+      if (procCue.phase !== 'stored' || procCue.id.startsWith('rune:') || p.buffs.has(procCue.id)) continue;
+      drawProcBuff(ctx, procCue, bpx + 5, buffY + 5);
+      if (procCue.count > 1) {
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 9px Verdana';
+        ctx.fillText(String(procCue.count), bpx + 5, buffY - 2);
       }
       bpx += 14;
     }
@@ -8124,6 +8141,7 @@ export class Renderer {
     // comboCueRows shares consumed progress with body tells and the host wire;
     // completion closes the pattern into its body-matched signature.
     drawComboHud(ctx, bx + 8, by - 54, comboCueRows(p, world.time));
+    drawProcHud(ctx, procCues, bx + totalW / 2, by - (seat.home && p.possession ? 108 : 78));
 
     // THE POSSESSION STRIP (the possession seam, engine/possess.ts): while
     // the local seat rides a foreign body, one centered chip above the bar

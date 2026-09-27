@@ -3551,6 +3551,9 @@ export interface StatusEffect {
 
 /** Grants the caster a temporary named bundle of modifiers. */
 export interface BuffEffect {
+  /** Stored payload body/HUD material. Consumable buffs inherit a profile;
+   * other buffs opt in. False hides only this supplementary presentation. */
+  storedCue?: import('../data/procCues').ProcCueSpec | false;
   /** Player-facing name for dynamically scoped buffs such as companion bonds. */
   label?: string;
   type: 'buff';

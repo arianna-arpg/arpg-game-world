@@ -1,4 +1,5 @@
 import { summonReservationUnit } from './companionGrants';
+import { buffProcCue, noteProcCue, noteProcPop, tickProcCues } from './procCues';
 import { summonContractSlots } from './summonContracts';
 import type { AssaultPreparation } from './assault';
 import type { MovementTetherSpec, MovementTetherState } from './movementTether';
@@ -1024,6 +1025,10 @@ export class Actor {
   poolCues?: import('./reserveCues').PoolCueRow[];
   /** Host-derived prepared payloads on co-op mirrors; [] clears stale rows. */
   payloadCues?: import('./payloadCues').PayloadCueRow[];
+  /** Host-derived stored payloads and actual releases (all actor kinds). */
+  procCues?: import('./procCues').ProcCueRow[];
+  procCuePulses: import('./procCues').ProcCuePulse[] = [];
+  procPopEvents: import('../data/procCues').ProcCueSpec[] = [];
   /** Vent damage-tick accumulator (chunked like tethers). */
   ventTick = 0;
   /** STATIC DISCHARGE clocks per skill id (DischargeSpec — next zap time). */
@@ -2350,6 +2355,7 @@ export class Actor {
   consumeBuffStacks(id: string, n = 1): void {
     const buff = this.buffs.get(id);
     if (!buff) return;
+    noteProcCue(this, buffProcCue(buff.def), 'release', id, Math.min(n, buff.stacks));
     buff.stacks -= n;
     if (buff.stacks <= 0) this.buffs.delete(id);
     this.syncBuffSource(id);
@@ -3119,6 +3125,7 @@ export class Actor {
   updateTimers(dt: number, chronoDt = dt,
     onDotTick?: (status: ActiveStatus, amount: number, type: DamageType | 'untyped') => void,
   ): Partial<Record<DamageType | 'untyped', number>> | null {
+    tickProcCues(this, chronoDt);
     // THE STRIDE's spend (a landed blow read 'strided' last frame): the
     // reset lands here, BEFORE the mask refolds, so one swing's contacts
     // all saw the stride and the next frame starts the walk afresh.
@@ -3246,6 +3253,11 @@ export class Actor {
       // POP payout (StatusDef.pop): a reapplication's banked burst lands NOW,
       // one-shot, through the same typed pool as the ticks themselves.
       if (s.popAcc) {
+        const procCue = STATUS_DEFS[s.id];
+        noteProcPop(this, procCue?.pop?.procCue === false ? false : {
+          profile: procCue?.dotType === 'physical' ? 'blood' : procCue?.dotType,
+          color: procCue?.color, ...procCue?.pop?.procCue,
+        }, s.id);
         const key = STATUS_DEFS[s.id]?.dotType ?? 'untyped';
         dot ??= {};
         dot[key] = (dot[key] ?? 0) + s.popAcc;

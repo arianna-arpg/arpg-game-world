@@ -33,6 +33,8 @@ export const RUNE_OF_ELEMENT: Record<string, RuneId> = {
 };
 
 export interface InvocationRule {
+  /** Consumed-rune gesture. Inherits the last rune's material and color. */
+  releaseCue?: import('./procCues').ProcCueSpec | false;
   id: string;
   label: string;
   /** Matches when the sequence ENDS with exactly these runes, in order. */
