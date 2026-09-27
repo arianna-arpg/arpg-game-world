@@ -62,6 +62,7 @@ import { VESTIGES } from '../data/vestiges';
 import { abilityEssenceOfTier, ESSENCES } from '../data/essences';
 import type { Attributes } from '../engine/stats';
 import { comboCueRows } from '../engine/comboCues';
+import { poolCueRows } from '../engine/reserveCues';
 import { GRAB_VERB_LABEL } from '../engine/grab';
 import { tellSpecsOf } from '../engine/tells';
 import { fellProgress } from '../engine/rampage';
@@ -77,6 +78,7 @@ export interface ActorW {
   afflictionPressure?: import('../engine/afflictionPressure').AfflictionPressure;
   armedCues?: import('../engine/armedCues').ArmedCue[];
   reactiveCue?: import('../engine/combatReadability').ReactiveCue;
+  poolCues?: import('../engine/reserveCues').PoolCueRow[];
   wardCue?: { profile?: string; sources: number[] };
   encounterOrder?: Pick<NonNullable<Actor['encounterOrder']>, 'group' | 'recipe' | 'plan' | 'leader' | 'phase' | 'until'>;
   cosmeticKind?: 'wisp';
@@ -732,6 +734,8 @@ function actorToW(a: Actor, world: World): ActorW {
   const armedCues = armedStatusCues(a);
   if (armedCues.length) w.armedCues = armedCues.map(cue => ({ ...cue }));
   w.reactiveCue = reactiveCueOf(a, world.time);
+  const poolCues = poolCueRows(a);
+  if (poolCues.length) w.poolCues = poolCues;
   if (wardCueActive(a)) w.wardCue = { profile: a.wardCueProfile, sources: wardGuardians(a, world.actors).map(x => x.id) };
   if (a.encounterGroup) w.encounterGroup = { ...a.encounterGroup };
   if (a.encounterOrder) {
@@ -1338,6 +1342,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.afflictionPressure = aw.afflictionPressure ? { ...aw.afflictionPressure } : undefined;
     a.armedCues = aw.armedCues?.map(cue => ({ ...cue }));
     a.reactiveCue = aw.reactiveCue ? { ...aw.reactiveCue, volatile: aw.reactiveCue.volatile ? { ...aw.reactiveCue.volatile } : undefined } : undefined;
+    a.poolCues = aw.poolCues?.map(row => ({ ...row })) ?? [];
     a.wardCueProfile = aw.wardCue?.profile;
     a.encounterOrder = aw.encounterOrder ? { ...aw.encounterOrder } : undefined;
     a.magicPackPower = aw.magicPackPower ?? 0;

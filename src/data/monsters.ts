@@ -20134,7 +20134,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
       regen: 0.22, regenDelay: 3.2,
       vent: {
         forSec: 2.6, status: 'winded_gasp', skillId: 'fume_vent',
-        refill: 1, // VENT_GASP and the collapsed bellows carry the opening.
+        refill: 1, cue: false, // VENT_GASP and the collapsed bellows carry the opening.
       },
     }],
     tells: [
@@ -20214,7 +20214,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
       drain: 0.2, drainWhile: 'aggroed',
       costs: { ember_breath: 1 },
       spentAt: 0.1,
-      stages: [{ below: 0.25, status: 'guttered', note: 'guttering...', color: '#8a8070' }],
+      stages: [{ below: 0.25, status: 'guttered', cue: 'reserve_spent', color: '#8a8070' }],
     }],
     tells: [
       // THE TAPER: length, flame and ash all ride the fuel.
@@ -20270,8 +20270,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
       // and it never refills — the purest denial dial in the fabric.
       regen: 0.5, regenDelay: 2, regenWhile: 'calm',
       spentAt: 0.02,
-      stages: [{ below: 0.34, status: 'sap_starved', note: 'running dry', color: '#b8a068' }],
-      vent: { forSec: 3.2, status: 'wilted', note: 'bled out!', refill: 0.35, color: '#c8a878' },
+      stages: [{ below: 0.34, status: 'sap_starved', cue: 'reserve_spent', color: '#b8a068' }],
+      vent: { forSec: 3.2, status: 'wilted', cue: 'sap', refill: 0.35, color: '#c8a878' },
     }],
     tells: [
       // The reservoir, draining — the accumulator family's sac read
@@ -20473,7 +20473,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
       drain: 0.12, drainWhile: 'aggroed',
       regen: 0.14, regenDelay: 4, regenWhile: 'calm',
       spentAt: 0.1,
-      stages: [{ below: 0.3, status: 'guttered', note: 'the furnace gutters...', color: '#8a8070' }],
+      stages: [{ below: 0.3, status: 'guttered', cue: 'reserve_spent', color: '#8a8070' }],
     }],
     tells: [
       // THE FURNACE GLOW: the whole body reads as its fuel — banked high it

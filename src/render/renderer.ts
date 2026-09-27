@@ -42,6 +42,8 @@ import { ORB_DEFS } from '../data/orbs';
 import { RUNE_INFO } from '../data/invocations';
 import { comboCueRows } from '../engine/comboCues';
 import { drawComboBody, drawComboHud } from './vis/comboCueLayer';
+import { poolCueRows } from '../engine/reserveCues';
+import { drawPoolVents, drawPoolVentHud } from './vis/reserveCueLayer';
 import { CORPSE_CFG, LOW_LIFE_FLASH_SEC, SNOW_CFG } from '../engine/world';
 import type { NpcSpeechLine, Seat, World } from '../engine/world';
 import { DIALOGUE_CFG } from '../data/dialogue';
@@ -5317,6 +5319,8 @@ export class Renderer {
     const reactiveGround = reactiveCue || wardCue ? ctx.getTransform() : undefined;
     const comboCues = a.comboFire?.size || a.comboHud?.length ? comboCueRows(a, world.time) : [];
     const comboCueGround = comboCues.some(row => row.glow > 0) ? ctx.getTransform() : undefined;
+    const poolCues = a.venting.size || a.poolCues?.length ? poolCueRows(a) : [];
+    const poolCueGround = poolCues.some(row => row.venting) ? ctx.getTransform() : undefined;
     // A LIVE TRAVERSAL owns the traveler's pose: the geyser's rise swells the
     // body toward the camera over its pinned, thinning shadow; the fall
     // shrinks and spins it away into the hole (engine/traversal.ts eases).
@@ -5722,6 +5726,10 @@ export class Renderer {
     }
 
     drawShellCue(ctx, a, world.time);
+    if (poolCueGround) {
+      ctx.save(); ctx.setTransform(poolCueGround); ctx.globalAlpha = baseAlpha;
+      drawPoolVents(ctx, poolCues, world.time); ctx.restore();
+    }
     drawPoiseCue(ctx, a);
     if (reactiveGround) {
       ctx.save(); ctx.setTransform(reactiveGround); ctx.globalAlpha = baseAlpha;
@@ -7577,7 +7585,7 @@ export class Renderer {
         // ARMED trigger gems (the "Cast on X" family): the slot itself is
         // greyed (never hand-castable), but the border glow says "live".
         || instanceTriggerArmed(inst)
-        || (inst.def.pool !== undefined && p.venting.has(inst.def.pool.id))
+        || (inst.def.pool !== undefined && poolReadOf(p, inst)?.venting === true)
         || world.zones.some(z => z.caster === p && z.toggled && z.inst.def.id === inst.def.id)
       ) : false;
       ctx.fillStyle = cosmeticHotbarStyle?.fill ?? 'rgba(10,10,16,0.85)';
@@ -7889,6 +7897,7 @@ export class Renderer {
           const pr = poolReadOf(p, inst);
           if (pr && pr.cap > 0) {
             const px0 = x + 3, pw = slot - 6, py0 = by + slot - 12;
+            drawPoolVentHud(ctx, px0, py0 - 1, pw, poolCueRows(p).find(row => row.skillId === inst.def.id), world.time);
             ctx.fillStyle = 'rgba(0,0,0,0.7)';
             ctx.fillRect(px0, py0, pw, 4);
             const frac = clamp(pr.banked / pr.cap, 0, 1);

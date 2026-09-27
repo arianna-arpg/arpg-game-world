@@ -1020,6 +1020,8 @@ export class Actor {
   pools = new Map<string, number>();
   /** Pool ids currently VENTING (the leaking aura); ticked by the world. */
   venting = new Set<string>();
+  /** Host-derived poolCues on co-op mirrors only; [] clears pooled actors. */
+  poolCues?: import('./reserveCues').PoolCueRow[];
   /** Vent damage-tick accumulator (chunked like tethers). */
   ventTick = 0;
   /** STATIC DISCHARGE clocks per skill id (DischargeSpec — next zap time). */

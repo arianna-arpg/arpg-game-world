@@ -106,6 +106,10 @@ disturbed soil and grasping hands at committed emergence sites (`groundRising`).
 GT-034 combination completion uses matching body/HUD profiles in `data/comboCues.ts`.
 `comboReadout` shares consume-aware progress across tells, HUD and all-actor co-op;
 see `docs/design/combo-cues.md`, `probe_combocues.ts` and `balance/combo-cues-ui.cjs`.
+GT-020 reserve depletion and sustained vents use `data/reserveCues.ts` profiles.
+Body recovery windows and damage-pool footprints/HUD exhaust follow actual fuel;
+see `docs/design/reserve-cues.md`, `probe_reservecues.ts` and
+`balance/reserve-cues-ui.cjs` after a build.
 
 Carried satellites live in `data/satellites.ts` and `engine/satellites.ts`:
 untargetable, modifier-granted orbiting effects shared by players and monsters.

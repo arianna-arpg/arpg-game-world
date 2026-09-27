@@ -3228,6 +3228,13 @@ const breathPuff: PartPainter = (ctx, r, spec, pal, t = 0) => {
     const size = R * (0.1 + k * 0.22);
     c.globalAlpha *= (1 - k) * Math.max(0, Math.min(1, P(spec, 'opacity', 0.4)));
     c.fillStyle = col;
+    if (PB(spec, 'liquid', false)) {
+      // reserveVent's liquid profile: material beads taper from their outlet.
+      c.beginPath(); c.moveTo(x - size * 1.8, 0);
+      c.bezierCurveTo(x, -size, x + size, -size, x + size, 0);
+      c.bezierCurveTo(x + size, size, x, size, x - size * 1.8, 0);
+      c.fill(); return;
+    }
     c.beginPath();
     c.arc(x, R * 0.06 * Math.sin(t * 2), size, 0, Math.PI * 2);
     c.arc(x - size * 0.7, -R * 0.05, size * 0.7, 0, Math.PI * 2);

@@ -125,6 +125,25 @@ Two genuinely new painters, both `params.fill`-driven like `fillSac`:
 empties) and `wickTaper` (a taper whose length, flame and pooled ash are the
 clock). Every debut look keeps THE GAUGE'S SEAT BARE (the accumulator law).
 
+## Depletion and recovery visuals (GT-020)
+
+`ReserveStage.cue` names a combat-cue profile; omitted or unknown profiles use
+`reserve_spent`, a single collapse on entering the band. Existing continuous
+reserve tells still show the actual fuel. `ReserveVent.cue` names a worn
+recovery profile in `data/reserveCues.ts` (`steam` fallback, `sap` liquid beads).
+`reserveVent:<id>` reads the real `ventUntil` window; curing a vulnerability
+status does not refill the pool or close that window. `false` opts out of the
+supplementary cue. Fumelung uses it to keep its existing status-driven gasps
+and collapsed bellows without a second vent layer. Legacy `note` fields no
+longer emit combat captions.
+
+The separate player damage-pool economy now shares one `poolVentRead` for its
+damage tick and visible radius. World flow and HUD-strip exhaust follow actual
+fuel and vent state, replicated for co-op. This does not add `ReserveSpec` to
+players. See [reserve cue contract](../design/reserve-cues.md); verify
+`probe_reservecues.ts`, `probe_spent.ts`, `probe_exhaustioncues.ts`, `probe_tells.ts`
+and the hidden `balance/reserve-cues-ui.cjs` renderer harness after a build.
+
 ## Player-side levers
 
 `spentbane` / `uprooter` support gems (`data/supports.ts`, the slayer-lane

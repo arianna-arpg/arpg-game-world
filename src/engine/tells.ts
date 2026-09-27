@@ -41,6 +41,8 @@ import { packDriveOf } from './pack';
 import type { CastRecord } from './sequence';
 import { STATUS_DEFS } from './status';
 import { WIND_PUFF } from '../data/exhaustionCues';
+import { reserveVentTells } from '../data/reserveCues';
+import type { ReserveSpec } from './reserves';
 
 // --- config ----------------------------------------------------------------
 
@@ -172,7 +174,7 @@ export interface TellBody {
   // --- THE DEPLETION LANES (the Spent's school) — all OPTIONAL, so a
   // hand-built probe body stays three lines; absent fields read 0.
   /** Live reserve pools by id (Actor.reserves — engine/reserves.ts). */
-  reserves?: Map<string, { cur: number; max: number }>;
+  reserves?: Map<string, { cur: number; max: number; ventUntil?: number }>;
   /** The one SPENT boolean (Actor.spent) the slayer axis arms off. */
   spent?: boolean;
   /** THE WIND: the kite budget's live spend + its effective cap, exactly
@@ -416,6 +418,9 @@ export const TELL_SOURCES: Record<string, TellSource> = {
     if (!r) return 0;
     return r.max > 0 ? Math.max(0, Math.min(1, r.cur / r.max)) : 0;
   },
+  /** reserveVent follows the actual recovery window, separately from its
+   * optional vulnerability status (cleansing that status does not refill fuel). */
+  reserveVent: (a, w, arg) => arg && (a.reserves?.get(arg)?.ventUntil ?? 0) > w.time ? 1 : 0,
   /** IS THIS BODY SPENT — any reserve at/below its threshold, or a vent
    *  window standing open. The one boolean the slayer lane's `spentbane`
    *  arms off, so the punish window and the tell that advertises it can
@@ -509,12 +514,14 @@ export function resolveTell(spec: TellSpec, a: TellBody, w: TellWorld): number {
  * zero, so tireless bodies stay visually quiet. No per-frame allocation. */
 export function tellSpecsOf(
   def: { tells?: TellSpec[]; brainVariants?: { tells?: TellSpec[] }[];
-    retreatTells?: TellSpec[] } | undefined,
+    retreatTells?: TellSpec[]; reserves?: ReserveSpec[] } | undefined,
   variantIdx?: number,
 ): TellSpec[] | undefined {
   if (!def) return undefined;
   const vt = variantIdx !== undefined ? def.brainVariants?.[variantIdx]?.tells : undefined;
   const retreat = def.retreatTells ?? WIND_PUFF;
+  const reserveCues = reserveVentTells(def.reserves);
+  if (reserveCues.length) return [...(def.tells ?? []), ...(vt ?? []), ...retreat, ...reserveCues];
   if (!vt?.length && !def.tells?.length) return retreat.length ? retreat : undefined;
   if (!vt?.length && !retreat.length) return def.tells?.length ? def.tells : undefined;
   return [...(def.tells ?? []), ...(vt ?? []), ...retreat];

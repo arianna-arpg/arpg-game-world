@@ -60,8 +60,6 @@ export const RESERVE_CFG = {
   regenDelay: 1.2,
   /** Default fraction refilled when a vent window closes. */
   ventRefill: 1,
-  /** Default vent floater tint (the beat the player is waiting for). */
-  ventColor: '#ffd9a0',
   /** Fraction at/below which a body reads SPENT (Actor.spent — the slayer
    *  lane's `spentbane` arming, the `spent` tell source, AI conditions).
    *  A venting body reads spent regardless. */
@@ -95,8 +93,11 @@ export interface ReserveStage {
   above?: number;
   /** STATUS_DEFS row worn while the band holds (refreshed by the sweep). */
   status: string;
-  /** One floater on ENTRY (the beat reads once, never per sweep). */
+  /** Legacy data accepted without emitting a gameplay caption. */
   note?: string;
+  /** Combat cue profile on entry; unknown/omitted uses reserve_spent.
+   * Continuous reserve tells retain the actual fill read. false opts out. */
+  cue?: string | false;
   color?: string;
 }
 
@@ -115,8 +116,11 @@ export interface ReserveVent {
   /** Fraction refilled when the window closes (default
    *  RESERVE_CFG.ventRefill — a full breath). */
   refill?: number;
-  /** Floater printed as the window opens. */
+  /** Legacy data accepted without emitting a gameplay caption. */
   note?: string;
+  /** Worn vent profile in data/reserveCues. Unknown/omitted uses steam;
+   * false leaves an existing anatomy/status cue in charge. */
+  cue?: string | false;
   color?: string;
 }
 

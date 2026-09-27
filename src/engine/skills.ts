@@ -1096,6 +1096,9 @@ export function instanceTethers(inst: SkillInstance): TetherSpec[] {
  * the poolCap stat — investable like everything else.
  */
 export interface DamagePoolSpec {
+  /** Shared world/HUD vent material; unknown/omitted uses mist. false omits
+   * supplementary cues while retaining the functional fuel strip. */
+  ventCue?: string | false;
   /** The bank's key — SHARED ids share fuel, distinct ids don't. */
   id: string;
   /** Banked fraction per point of HIT damage dealt, by type. */
@@ -3334,11 +3337,17 @@ export function poolReadOf(
     sheet: { get(stat: string, tags?: ReadonlySet<SkillTag>, extra?: readonly Modifier[]): number };
     pools: Map<string, number>;
     venting: Set<string>;
+    poolCues?: readonly import('./reserveCues').PoolCueRow[];
   },
   inst: SkillInstance,
 ): { spec: DamagePoolSpec; banked: number; min: number; cap: number; venting: boolean } | null {
   const pl = inst.def.pool;
   if (!pl) return null;
+  // poolCues is a host-derived mirror, including cap/minimum/socket scaling.
+  if (caster.poolCues) {
+    const row = caster.poolCues.find(r => r.skillId === inst.def.id);
+    return row ? { spec: pl, banked: row.banked, min: row.min, cap: row.cap, venting: row.venting } : null;
+  }
   const cap = pl.cap * caster.sheet.get('poolCap',
     skillContextTags(inst), instanceMods(inst));
   return {
@@ -3348,6 +3357,16 @@ export function poolReadOf(
     cap,
     venting: caster.venting.has(pl.id),
   };
+}
+
+/** poolVentRead owns the existing damage-context fold for BOTH the tick and
+ * its footprint. Do not use the bank-cap tag query for damage/radius. */
+export function poolVentRead(caster: Pick<import('./actor').Actor, 'sheet'>, inst: SkillInstance): { rate: number; radius: number } | null {
+  const pl = inst.def.pool;
+  if (!pl || pl.release.mode !== 'vent') return null;
+  const tags = skillContextTags(inst.def, [pl.damageType]), extra = instanceMods(inst);
+  return { rate: pl.release.dps * caster.sheet.get('damage', tags, extra),
+    radius: pl.release.radius * caster.sheet.get('aoeRadius', tags, extra) };
 }
 
 // --- THE MUNITION CONVERSION (SupportDef.munition) ---------------------------

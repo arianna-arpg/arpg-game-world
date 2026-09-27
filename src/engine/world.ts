@@ -341,6 +341,9 @@ import {
   MOUNT_CFG, seatCount, seatPos, type MountSlotSpec,
 } from './mounts';
 import { resolveTell, TELL_CFG, tellSpecsOf } from './tells';
+import { reserveStageCue } from './reserveCues';
+import { poolVentRead } from './skills';
+import { RESERVE_CUE_CFG } from '../data/reserveCues';
 import { defenseCueFlash } from './defenseCues';
 import { combatCueFlash, timingCueFlash } from './combatCues';
 import { castingEventFlash } from './castingCues';
@@ -12906,9 +12909,9 @@ export class World {
         if (want?.status !== st.stage) {
           if (st.stage) a.endStatus(st.stage);
           st.stage = want?.status;
-          if (want?.note) {
-            this.text(vec(a.pos.x, a.pos.y - 20), want.note, want.color ?? '#d0c090', 11);
-          }
+          const reserveCues = want ? reserveStageCue(want) : undefined;
+          if (reserveCues) this.flashes.push(combatCueFlash(a.pos, reserveCues,
+            a.radius + RESERVE_CUE_CFG.stagePad, a.facing, want?.color));
         }
         if (st.stage) a.applyStatus(st.stage, 0, 1, 'its own burning');
         // (6) THE PIPS — integer fuel published to the sheet (the quanta
@@ -12936,9 +12939,8 @@ export class World {
       const base = STATUS_DEFS[v.status]?.duration || 1;
       a.applyStatus(v.status, 0, v.forSec / base, 'spent');
     }
-    if (v.note) {
-      this.text(vec(a.pos.x, a.pos.y - 22), v.note, v.color ?? RESERVE_CFG.ventColor, 12);
-    }
+    // reserveVent tells wear the actual window; the free-cast below remains
+    // the real payload. Legacy note data never creates a combat caption.
     const sd = v.skillId ? SKILLS[v.skillId] : undefined;
     if (sd) {
       const inst = makeSkillInstance(sd, Math.max(1, Math.round(a.level)));
@@ -35199,7 +35201,7 @@ export class World {
           caster.venting.delete(def.pool.id);
         } else if (banked > 0) {
           caster.venting.add(def.pool.id);
-          this.text(caster.pos, 'venting!', def.color, 12);
+          // poolCues follows this held flag and its real bank/footprint.
         }
       } else {
         caster.pools.set(def.pool.id, 0);
@@ -57993,14 +57995,11 @@ export class World {
         const inst = a.skills.find(s => s?.def.pool?.id === id);
         const pl = inst?.def.pool;
         if (!pl || pl.release.mode !== 'vent') { a.venting.delete(id); continue; }
-        const tags = skillContextTags(inst!.def, [pl.damageType]);
-        const extra = instanceMods(inst!);
-        const rate = pl.release.dps * a.sheet.get('damage', tags, extra);
+        const { rate, radius } = poolVentRead(a, inst!)!;
         const banked = a.pools.get(id) ?? 0;
         const drain = Math.min(banked, rate * TETHER_TICK);
         if (drain <= 0) { a.venting.delete(id); continue; }
         a.pools.set(id, banked - drain);
-        const radius = pl.release.radius * a.sheet.get('aoeRadius', tags, extra);
         for (const e of this.actors) {
           if (!this.isBurstTarget(e, a.team, a.tier)) continue;
           if (dist(a.pos, e.pos) - e.radius > radius) continue;
@@ -58011,10 +58010,7 @@ export class World {
             if (e.life <= 0 && !e.dead) this.kill(e, false, a);
           }
         }
-        this.flashes.push({
-          pos: vec(a.pos.x, a.pos.y), radius,
-          color: inst!.def.color, life: 0.18, maxLife: 0.18,
-        });
+        // Sustained poolCues remain visible between ticks and cease at zero.
       }
     }
   }

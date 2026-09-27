@@ -7,6 +7,7 @@ export interface CombatCueStyle {
   life: number; color: string; pieces: number; travel: number; width: number;
 }
 export const COMBAT_CUE_STYLES: Record<string, CombatCueStyle> = {
+  reserve_spent: { shape: 'collapse', life: 0.65, color: '#b6a27e', pieces: 6, travel: 0.9, width: 2 },
   culled: { shape: 'sever', life: 0.42, color: '#c8a0e8', pieces: 2, travel: 1.3, width: 3 },
   hit_cap: { shape: 'flatten', life: 0.35, color: REACTIVE_CUE_CFG.cap.color, pieces: 4, travel: 0.8, width: 2.5 },
   volatile_release: { shape: 'vent', life: 0.4, color: '#edb378', pieces: 5, travel: 1.4, width: 2.3 },
