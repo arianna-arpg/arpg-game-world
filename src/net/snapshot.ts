@@ -65,6 +65,7 @@ import { comboCueRows } from '../engine/comboCues';
 import { poolCueRows } from '../engine/reserveCues';
 import { payloadCueRows } from '../engine/payloadCues';
 import { procCueRows } from '../engine/procCues';
+import { anatomyCueState, cloneAnatomyCues } from '../engine/anatomyCues';
 import { GRAB_VERB_LABEL } from '../engine/grab';
 import { tellSpecsOf } from '../engine/tells';
 import { fellProgress } from '../engine/rampage';
@@ -83,6 +84,7 @@ export interface ActorW {
   poolCues?: import('../engine/reserveCues').PoolCueRow[];
   payloadCues?: import('../engine/payloadCues').PayloadCueRow[];
   procCues?: import('../engine/procCues').ProcCueRow[];
+  anatomyCues?: import('../engine/anatomyCues').AnatomyCueState;
   wardCue?: { profile?: string; sources: number[] };
   encounterOrder?: Pick<NonNullable<Actor['encounterOrder']>, 'group' | 'recipe' | 'plan' | 'leader' | 'phase' | 'until'>;
   cosmeticKind?: 'wisp';
@@ -744,6 +746,9 @@ function actorToW(a: Actor, world: World): ActorW {
   if (payloadCues.length) w.payloadCues = payloadCues;
   const procCues = procCueRows(a);
   if (procCues.length) w.procCues = procCues.map(row => ({ ...row }));
+  const anatomyState = anatomyCueState(a);
+  if (anatomyState.weakpoints.length || anatomyState.parts.length || anatomyState.segments.length || anatomyState.part)
+    w.anatomyCues = cloneAnatomyCues(anatomyState);
   if (wardCueActive(a)) w.wardCue = { profile: a.wardCueProfile, sources: wardGuardians(a, world.actors).map(x => x.id) };
   if (a.encounterGroup) w.encounterGroup = { ...a.encounterGroup };
   if (a.encounterOrder) {
@@ -1353,6 +1358,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.poolCues = aw.poolCues?.map(row => ({ ...row })) ?? [];
     a.payloadCues = aw.payloadCues?.map(row => ({ ...row, points: row.points?.map(p => ({ ...p })) })) ?? [];
     a.procCues = aw.procCues?.map(row => ({ ...row })) ?? [];
+    a.anatomyCues = aw.anatomyCues ? cloneAnatomyCues(aw.anatomyCues) : { weakpoints: [], parts: [], segments: [] };
     a.wardCueProfile = aw.wardCue?.profile;
     a.encounterOrder = aw.encounterOrder ? { ...aw.encounterOrder } : undefined;
     a.magicPackPower = aw.magicPackPower ?? 0;

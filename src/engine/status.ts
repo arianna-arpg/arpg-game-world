@@ -182,7 +182,7 @@ export interface StatusDef {
    *  window they take `bonus` MORE damage; driving them BELOW it DESTROYS
    *  the spot (the status ends in a flash). Timing damage into the band
    *  is the whole game. */
-  weakSpot?: { size: number; gap: number; bonus: number };
+  weakSpot?: { size: number; gap: number; bonus: number; cue?: import('../data/anatomyCues').AnatomyCueSpec | false };
   /** BRAND ZAPS (Fulgurweb): while the status rides its victim, every
    *  `interval` seconds a bolt lashes the victim's ALLIES within `radius`
    *  for the status's caster-less baseline × `factor` — the mark that

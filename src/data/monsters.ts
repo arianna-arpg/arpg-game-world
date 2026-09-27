@@ -510,11 +510,13 @@ export interface WormLookSpec {
  *  optional retaliation `burst` at the torn coil. Rewards spreading damage
  *  along the body without ever double-counting a hit. */
 export interface WormWoundSpec {
+  /** Shared anatomyCues material for partial cracks and the actual tear. */
+  cue?: import('./anatomyCues').AnatomyCueSpec | false;
   /** Wound pool per segment, as a fraction of the root's max life. */
   frac: number;
   /** Mods laid on the root PER torn segment (stacking source). */
   mods?: Modifier[];
-  /** Floating text at the tear (default 'TORN'). */
+  /** Legacy reference label; anatomyCues replaces combat tear captions. */
   text?: string;
   /** Retaliation pop at the torn segment: typed damage to enemies-of-the-
    *  worm within `radius`, as `damageFrac` × the root's max life. */
@@ -13930,7 +13932,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
       wounds: {
         frac: 0.05,
         mods: [mod('damageTaken', 'increased', 0.015)],
-        text: 'SCALE TORN',
+        cue: { profile: 'armor' }, // anatomyCues: plates fracture at the struck coil.
         burst: { radius: 95, damageFrac: 0.035, type: 'chaos', color: '#9fe07a' },
       },
     },
@@ -15794,7 +15796,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
       looks: { body: 'serpent_coil', tail: 'serpent_rattle' },
       wounds: {
         frac: 0.07, mods: [mod('damageTaken', 'increased', 0.02)],
-        text: 'COIL TORN',
+        cue: { profile: 'flesh' }, // anatomyCues: exposed tissue follows the coil.
         burst: { radius: 50, damageFrac: 0.03, type: 'chaos', color: '#7fd0a8' },
       },
     },

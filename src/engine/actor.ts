@@ -393,6 +393,8 @@ export type ActorAdorn = 'ears' | 'horns' | 'spikes' | 'wings' | 'tentacles';
  *  in ROOT RADII (+x = ahead of the root), so one part list scales with any
  *  body size. */
 export interface MonsterPartDef {
+  /** Shared fracture/stump material; false opts out of anatomy cues. */
+  breakCue?: import('../data/anatomyCues').AnatomyCueSpec | false;
   /** The part's own monster def id — parts are full actors (skills, brains,
    *  statuses all work), so a claw can swing and a head can spit. */
   monster: string;
@@ -1027,6 +1029,8 @@ export class Actor {
   payloadCues?: import('./payloadCues').PayloadCueRow[];
   /** Host-derived stored payloads and actual releases (all actor kinds). */
   procCues?: import('./procCues').ProcCueRow[];
+  anatomyCues?: import('./anatomyCues').AnatomyCueState;
+  partScars: import('./anatomyCues').AnatomyPartCue[] = [];
   procCuePulses: import('./procCues').ProcCuePulse[] = [];
   procPopEvents: import('../data/procCues').ProcCueSpec[] = [];
   /** Vent damage-tick accumulator (chunked like tethers). */

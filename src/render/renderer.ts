@@ -1,4 +1,7 @@
 import { concealmentActive } from '../engine/perception';
+import { anatomyCueState, anatomyOverheadRise } from '../engine/anatomyCues';
+import { ANATOMY_CUE_CFG } from '../data/anatomyCues';
+import { drawAnatomyBody, drawAnatomyMeters, drawWeakPointBar, drawWeakPointOrb, drawSegmentWound } from './vis/anatomyCueLayer';
 import { drawSatellites } from './vis/satelliteLayer';
 import { drawAuroras } from './vis/auroraLayer';
 import { drawGuardians } from './vis/guardianLayer';
@@ -799,7 +802,7 @@ export class Renderer {
       // THE LITE TIER (engine/lite.ts): the crowd blits UNDER real bodies —
       // one composited sprite per body, no per-body state churn.
       this.drawLite(world, vw, vh);
-      for (const a of world.actors) if (!a.dead && a.worm) this.drawWormTail(a, world.time);
+      for (const a of world.actors) if (!a.dead && a.worm) this.drawWormTail(a, world.time, world);
       for (const a of world.actors) if (!a.dead) this.drawActor(a, world);
       if (world.deathPresentation) drawPlayerDeath(this.ctx, world.player, world.deathPresentation, world.time);
       // THE STATUS VOICE (vis/statusVoiceLayer.ts): what just LANDED on a
@@ -5049,9 +5052,11 @@ export class Renderer {
    *  chains draw SOLID (they are real bodies — drawn = tested via the one
    *  segR radius law), flash per struck segment, and wear their tears
    *  (torn segments draw smaller and dimmer, exactly as they test). */
-  private drawWormTail(a: Actor, timeSec: number): void {
+  private drawWormTail(a: Actor, timeSec: number, world: World): void {
+    if (!this.anatomyCueVisible(a, world)) return;
     const { ctx } = this;
     const w = a.worm!;
+    const anatomyState = anatomyCueState(a);
     const solid = !!w.hittable;
     const baseLook: BodyLook = { shape: 'circle', radius: a.radius, color: a.color, material: a.material };
     // A drift-bound root drifts its whole spine — the head (drawActor) and
@@ -5086,8 +5091,20 @@ export class Renderer {
       } else {
         ctx.drawImage(img, seg.x - half * k, seg.y - half * k, half * 2 * k, half * 2 * k);
       }
+      const ahead = i === 0 ? a.pos : w.segments[i - 1];
+      drawSegmentWound(ctx, anatomyState.segments.find(s => s.index === i), seg.x, seg.y, r,
+        Math.atan2(ahead.y - seg.y, ahead.x - seg.x));
     }
     ctx.globalAlpha = 1;
+  }
+
+  /** A wounded tail must obey the head's concealment and covered-storey gates. */
+  private anatomyCueVisible(a: Actor, world: World): boolean {
+    if (a.burrow || a.summonReform || a.statuses.some(s => STATUS_DEFS[s.id]?.conceals)) return false;
+    if ((a.tier ?? 0) !== (world.player.tier ?? 0)
+      && (world.zone.tiers?.exposure === 'covered' || (this.stacked.length && this.inStack(a.pos)))
+      && !(world.walk?.regionAt && tierLinkOf(world.walk.regionAt(a.pos.x, a.pos.y)))) return false;
+    return a.throngWild === undefined || this.throngSightOf(world).has(a.throngWild);
   }
 
   /** THE LITE TIER's per-kind composite bakes (shadow + body in ONE
@@ -5740,6 +5757,9 @@ export class Renderer {
     drawPayloadBody(ctx, payloadCueRows(a, world), a.radius); ctx.restore();
     ctx.save(); ctx.globalAlpha = baseAlpha;
     drawProcBody(ctx, procCueRows(a), a.radius); ctx.restore();
+    const anatomyState = anatomyCueState(a);
+    ctx.save(); ctx.globalAlpha = baseAlpha;
+    drawAnatomyBody(ctx, anatomyState, a.radius, a.facing); ctx.restore();
     if (poolCueGround) {
       ctx.save(); ctx.setTransform(poolCueGround); ctx.globalAlpha = baseAlpha;
       drawPoolVents(ctx, poolCues, world.time); ctx.restore();
@@ -5920,18 +5940,17 @@ export class Renderer {
     }
     ctx.restore();
 
-    // Health bar (enemies + minions; the player has the orb) — drawn only
-    // once the pool is DENTED. What was the composite-part rule (a pristine
-    // part stays bar-less) is now the whole stack's: an untouched body wears
-    // no overlay at all, so "no bar" itself reads as "at full life" — the
-    // signal any full-life-keyed mechanic (yours or theirs) hangs off.
-    if (a !== world.player && a.life < a.maxLife() - 0.5) {
-      const bw = a.radius * 2.2;
+    // anatomyState keeps painted windows and independent part pools readable
+    // even before the first hit; ordinary full-life actors remain bar-less.
+    if (a !== world.player && (a.life < a.maxLife() - 0.5 || anatomyState.weakpoints.length || anatomyState.parts.length || anatomyState.part)) {
+      const bw = Math.max(a.radius * 2.2, anatomyState.weakpoints.length ? ANATOMY_CUE_CFG.overheadWidth : 0);
       const frac = clamp(a.life / a.maxLife(), 0, 1);
       ctx.fillStyle = 'rgba(0,0,0,0.6)';
       ctx.fillRect(x - bw / 2, y - a.radius - 9, bw, 4);
       ctx.fillStyle = a.team === 'enemy' ? '#c03030' : '#40b050';
       ctx.fillRect(x - bw / 2, y - a.radius - 9, bw * frac, 4);
+      drawWeakPointBar(ctx, anatomyState.weakpoints, x - bw / 2, y - a.radius - 9, bw, 4, frac);
+      drawAnatomyMeters(ctx, anatomyState, x, y - anatomyOverheadRise(anatomyState, a.radius, a.facing) - 29, Math.max(bw, 90));
     }
     if (a.assaultAura) {
       ctx.save(); ctx.strokeStyle = 'rgba(216,198,124,0.28)'; ctx.fillStyle = 'rgba(216,198,124,0.025)';
@@ -7454,6 +7473,7 @@ export class Renderer {
       `${Math.max(0, Math.ceil(p.life))}`, 'Life',
       // The blood mortgage: the borrowed ceiling shows as a reserved band.
       p.maxLife() > 0 ? p.reservedLife / p.maxLife() : 0);
+    drawWeakPointOrb(ctx, anatomyCueState(p).weakpoints, lifeX, orbY, orbR);
     // WARD (the decaying shield): a translucent BLUE film rising over the
     // health orb — covering more of it as the ward-to-life ratio climbs, so
     // ward reads as a layer OVER blood, distinct from the ES/absorb arcs.
@@ -8349,6 +8369,9 @@ export class Renderer {
       ctx.fillRect(bx, 24 + oy, bw2 * clamp(boss.life / boss.maxLife(), 0, 1), 14);
       ctx.strokeStyle = '#3a3a52';
       ctx.strokeRect(bx, 24 + oy, bw2, 14);
+      const anatomyState = anatomyCueState(boss);
+      drawWeakPointBar(ctx, anatomyState.weakpoints, bx, 24 + oy, bw2, 14, boss.life / boss.maxLife());
+      drawAnatomyMeters(ctx, anatomyState, w / 2, 13 + oy, bw2, true);
       if (warded) drawWardBar(ctx, bx, 24 + oy, bw2, 14, boss.wardCueProfile);
       // Phase pips for a multi-phase boss (info.pips = 0 draws bare). The
       // HP-ladder FILLS pips as phases are entered (one-way); a script FSM

@@ -118,6 +118,11 @@ GT-023 stored and consumed payloads use `data/procCues.ts` material profiles.
 `procCueRows` shares real stack/rune banks and releases across body, HUD and co-op;
 see `docs/design/proc-cues.md`, `probe_proccues.ts` and hidden
 `balance/proc-cues-ui.cjs` (run the probe and build first).
+GT-024 weakpoint windows, independent part pools and segment wounds share
+`data/anatomyCues.ts` materials. Body seams, exact bar bands, life-orb rim marks
+and permanent break scars follow authoritative state, including co-op. See
+`docs/design/anatomy-cues.md`, `probe_anatomycues.ts` and hidden
+`balance/anatomy-cues-ui.cjs` (run the probe and build first).
 
 Carried satellites live in `data/satellites.ts` and `engine/satellites.ts`:
 untargetable, modifier-granted orbiting effects shared by players and monsters.

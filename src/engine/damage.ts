@@ -1,4 +1,5 @@
 import { throngTravelProtected } from './throngEvolution';
+import { weakPointBonus } from './weakpoints';
 // ---------------------------------------------------------------------------
 // The damage pipeline. One path for everyone — player, monsters, minions.
 //
@@ -534,7 +535,7 @@ function mitigateWound(
       if (v > 0) total *= 1 + v;
     }
   }
-  total *= target.sheet.get('damageTaken');
+  total *= target.sheet.get('damageTaken') * (1 + weakPointBonus(target));
   return total;
 }
 
@@ -1057,7 +1058,7 @@ export function applyDot(target: Actor, amount: number, type?: DamageType): numb
 function applyDotCore(target: Actor, amount: number, type?: DamageType): number {
   if (target.invulnerable || throngTravelProtected(target)) return 0;
   const tags = type ? new Set<SkillTag>([type]) : undefined;
-  let total = amount * target.sheet.get('damageTaken', tags);
+  let total = amount * target.sheet.get('damageTaken', tags) * (1 + weakPointBonus(target));
   if (total <= 0) return 0;
   if (target.es > 0.5) {
     const resist = target.sheet.get('esDotResist', tags);

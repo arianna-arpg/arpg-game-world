@@ -7,6 +7,9 @@ export interface CombatCueStyle {
   life: number; color: string; pieces: number; travel: number; width: number;
 }
 export const COMBAT_CUE_STYLES: Record<string, CombatCueStyle> = {
+  anatomy_weak_break: { shape: 'fracture', life: 0.4, color: '#f29cce', pieces: 4, travel: 0.85, width: 2 },
+  anatomy_part_break: { shape: 'fracture', life: 0.6, color: '#d9b978', pieces: 6, travel: 1.2, width: 2.7 },
+  anatomy_segment_tear: { shape: 'sever', life: 0.5, color: '#ed8580', pieces: 3, travel: 0.9, width: 2.5 },
   proc_pop: { shape: 'irisBurst', life: 0.5, color: '#ed6676', pieces: 6, travel: 0.8, width: 2 },
   payload_load: { shape: 'snap', life: 0.32, color: '#dcc49b', pieces: 3, travel: 0.7, width: 2 },
   payload_prime: { shape: 'snap', life: 0.4, color: '#dc9696', pieces: 4, travel: 0.7, width: 2 },

@@ -1,4 +1,6 @@
 import { concealmentActive, isConcealed, PERCEPTION_CFG } from './perception';
+import { anatomyCueState, anatomyFlash, notePartScar, clearPartScar } from './anatomyCues';
+import { takeWeakPointBreaks } from './weakpoints';
 import { CompanionGrants, COMPANION_GRANT_PREFIX, companionGrantStat, summonReservationUnit } from './companionGrants';
 import { summonCapacity, summonContractSlots } from './summonContracts';
 import { TitanRuntime } from './titans';
@@ -46043,6 +46045,8 @@ export class World {
     // A DOWNED co-op seat is already out of the fight — stray AoE/DoT must not
     // re-enter the death path (which would fire onPlayerDown twice).
     if (actor.downed) return;
+    if (!silent) for (const cue of takeWeakPointBreaks(actor))
+      this.flashes.push(anatomyFlash(actor.pos, actor.radius, actor.facing, cue));
     if (actor === this.player) this.combatDeeds.reset();
     // THE ANSWERING WALL BREAKS (guardBash beyond the stance, 2026-07-22):
     // a construct minted by a bash-carrying working answers when it DIES —
@@ -49719,35 +49723,9 @@ export class World {
             'physical', '#c8c0a8', a.team);
         }
       }
-      // WEAK SPOTS (Expose Weakness): while the victim's life sits inside
-      // a painted window they take MORE; driven below its floor, the spot
-      // SHATTERS and the status ends. The bonus rides a dedicated source.
-      {
-        let spotBonus = 0;
-        const frac = a.life / Math.max(1, a.maxLife());
-        for (let si = a.statuses.length - 1; si >= 0; si--) {
-          const s = a.statuses[si];
-          if (!s.window) continue;
-          if (frac < s.window.lo) {
-            a.statuses.splice(si, 1);
-            if (!a.statuses.some(o => o.id === s.id)) a.sheet.removeSource('status:' + s.id);
-            this.flashes.push({
-              pos: vec(a.pos.x, a.pos.y), radius: a.radius + 14,
-              color: '#f0c8d8', life: 0.3, maxLife: 0.3,
-            });
-            this.text(a.pos, 'spot shattered!', '#f0c8d8', 13);
-          } else if (frac <= s.window.hi) {
-            spotBonus = Math.max(spotBonus, STATUS_DEFS[s.id]?.weakSpot?.bonus ?? 0);
-          }
-        }
-        if (spotBonus > 0) {
-          if (!a.sheet.hasSource('weakspot')) {
-            a.sheet.setSource('weakspot', [mod('damageTaken', 'more', spotBonus)]);
-          }
-        } else if (a.sheet.hasSource('weakspot')) {
-          a.sheet.removeSource('weakspot');
-        }
-      }
+      // weakPointBonus reads the live interval at each damage resolution; this
+      // sweep retires spent windows and leaves an attributable body fracture.
+      for (const cue of takeWeakPointBreaks(a)) this.flashes.push(anatomyFlash(a.pos, a.radius, a.facing, cue));
       if (a.casting) {
         const cast = a.casting;
         const castFacing = a.facing;
@@ -52957,6 +52935,7 @@ export class World {
     part.xpValue = 0;              // the HOST pays any bounty
     part.fromZoneGen = false;      // never snapshotted apart from it
     part.partLink = { root: host, def: pd };
+    clearPartScar(host, pd);
     part.graftKey = opts?.key;
     if (pd.lifeFrac) {
       // Aim the FINAL pool at frac × host max: set the base, measure what
@@ -53052,14 +53031,12 @@ export class World {
     if (!link || link.root.dead) return;
     const root = link.root;
     const pd = link.def;
+    notePartScar(part, root, pd);
     root.partActors = root.partActors?.filter(p => p !== part);
-    this.flashes.push({
-      pos: vec(part.pos.x, part.pos.y), radius: part.radius * 1.7,
-      color: part.color, life: 0.35, maxLife: 0.35,
-    });
+    const scar = root.partScars.find(s => s.id === part.id);
+    if (scar) this.flashes.push(anatomyFlash(part.pos, part.radius, root.facing, scar));
     this.shake = Math.max(this.shake, 5);
     if (pd.breakDamage) {
-      this.text(vec(root.pos.x, root.pos.y - root.radius), 'SUNDERED', '#ffd24a', 15);
       root.life -= root.maxLife() * pd.breakDamage;
       if (root.life <= 0 && !root.dead) {
         this.kill(root, false, killer);
@@ -53112,11 +53089,8 @@ export class World {
           const at = w.segments[seg];
           if (!at || !spec) continue;
           const r = segR(a, seg);
-          this.text(vec(at.x, at.y - r - 6), spec.text ?? 'TORN', '#ffd24a', 13);
-          this.flashes.push({
-            pos: vec(at.x, at.y), radius: r + 10,
-            color: spec.burst?.color ?? '#ffd24a', life: 0.25, maxLife: 0.25,
-          });
+          const anatomyState = anatomyCueState(a).segments.find(s => s.index === seg);
+          if (anatomyState) this.flashes.push(anatomyFlash(at, r, a.facing, anatomyState));
           // The retaliation pop: the torn coil bites back — typed damage to
           // the worm's enemies around the wound (environmental idiom, the
           // worm credited as killer so a death here reads honestly).
