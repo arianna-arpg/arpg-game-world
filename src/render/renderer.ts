@@ -43,6 +43,8 @@ import { RUNE_INFO } from '../data/invocations';
 import { comboCueRows } from '../engine/comboCues';
 import { drawComboBody, drawComboHud } from './vis/comboCueLayer';
 import { poolCueRows } from '../engine/reserveCues';
+import { payloadCueRows } from '../engine/payloadCues';
+import { drawPayloadBody, drawPayloadHud, drawPayloadPlacements } from './vis/payloadCueLayer';
 import { drawPoolVents, drawPoolVentHud } from './vis/reserveCueLayer';
 import { CORPSE_CFG, LOW_LIFE_FLASH_SEC, SNOW_CFG } from '../engine/world';
 import type { NpcSpeechLine, Seat, World } from '../engine/world';
@@ -784,6 +786,12 @@ export class Renderer {
     if (!VIS_ABLATE.has('actors')) {
       this.drawPackLinks(world);
       drawWardLinks(ctx, world.actors, world.player, world.time);
+      for (const a of world.actors) if (!a.dead) {
+        drawPayloadPlacements(ctx, payloadCueRows(a, world), p =>
+          p.tier === (world.player.tier ?? 0)
+          || (world.zone.tiers?.exposure !== 'covered' && !(this.stacked.length && this.inStack(p)))
+          || !!(world.walk?.regionAt && tierLinkOf(world.walk.regionAt(p.x, p.y))));
+      }
     }
     if (!VIS_ABLATE.has('actors')) {
       // THE LITE TIER (engine/lite.ts): the crowd blits UNDER real bodies —
@@ -5726,6 +5734,8 @@ export class Renderer {
     }
 
     drawShellCue(ctx, a, world.time);
+    ctx.save(); ctx.globalAlpha = baseAlpha;
+    drawPayloadBody(ctx, payloadCueRows(a, world), a.radius); ctx.restore();
     if (poolCueGround) {
       ctx.save(); ctx.setTransform(poolCueGround); ctx.globalAlpha = baseAlpha;
       drawPoolVents(ctx, poolCues, world.time); ctx.restore();
@@ -7403,6 +7413,7 @@ export class Renderer {
     const w = this.uiW, h = this.uiH;
     const p = seat.actor;
     const m = seat.meta;
+    const payloadCues = payloadCueRows(p, world);
 
     // Skill-bar geometry — computed FIRST so the resource orbs can flank it.
     // The cluster sits high enough that its three text strips stay distinct:
@@ -7661,8 +7672,9 @@ export class Renderer {
         // cooldown would — UNLESS the slot converted (the reload face is
         // the live button; hollow pips already say why).
         if (instanceUseCharges(inst)) {
-          const bank = p.skillChargeBank(inst);
-          const cap = p.skillChargeCap(inst);
+          const payloadBank = payloadCues.find(row => row.kind === 'ammo' && row.skillId === inst.def.id);
+          const bank = payloadBank ?? p.skillChargeBank(inst);
+          const cap = payloadBank?.cap ?? p.skillChargeCap(inst);
           if (bank.count <= 0 && face === def) {
             ctx.fillStyle = 'rgba(0,0,0,0.6)';
             ctx.fillRect(x + 4, by + 4, slot - 8, slot - 8);
@@ -7684,8 +7696,11 @@ export class Renderer {
             }
           }
           for (let c = 0; c < Math.min(cap, 8); c++) {
-            ctx.fillStyle = c < bank.count ? '#ffe86a' : 'rgba(90,90,110,0.8)';
+            const payloadFill = clamp(bank.count / Math.max(1, cap) * Math.min(cap, 8) - c, 0, 1);
+            ctx.fillStyle = 'rgba(90,90,110,0.8)';
             ctx.fillRect(x + 5 + c * 6, by + 5, 4, 4);
+            ctx.fillStyle = '#ffe86a';
+            ctx.fillRect(x + 5 + c * 6, by + 9 - 4 * payloadFill, 4, 4 * payloadFill);
             // A hairline dark rim so the loaded count reads against any
             // slot art — the fill colors carry the meaning, the rim the edge.
             ctx.strokeStyle = 'rgba(0,0,0,0.85)';
@@ -7836,35 +7851,8 @@ export class Renderer {
             }
           }
         }
-        // THE PRIMED GLINT (pourPrime): banked full-pool sips waiting on
-        // the first wound — a small bright diamond at the slot's top-right
-        // corner beside the fount pips, the count beneath it when more
-        // than one is held. Reads the same primedPours the release drains
-        // (mirrors adopt ids off the wire), so the glint can never
-        // outlive its bank. Shape/color FLAGGED for Arianna's word.
-        {
-          let primedN = 0;
-          for (const e of p.primedPours) if (e.skillId === def.id) primedN++;
-          if (primedN > 0) {
-            const gx = x + slot - 9, gy = by + 9;
-            ctx.fillStyle = '#ffe9a8';
-            ctx.beginPath();
-            ctx.moveTo(gx, gy - 4.5);
-            ctx.lineTo(gx + 4.5, gy);
-            ctx.lineTo(gx, gy + 4.5);
-            ctx.lineTo(gx - 4.5, gy);
-            ctx.closePath();
-            ctx.fill();
-            ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-            ctx.lineWidth = 1;
-            ctx.stroke();
-            if (primedN > 1) {
-              ctx.fillStyle = '#ffe9a8';
-              ctx.font = 'bold 9px Verdana';
-              ctx.fillText(String(primedN), gx, gy + 14);
-            }
-          }
-        }
+        // Matching payloadCues vessels/arrow sockets, following the real bank.
+        drawPayloadHud(ctx, payloadCues.filter(row => row.skillId === def.id), x + 5, by + 15, slot - 10);
         if (throngEvolution(inst).hitFill) {
           ctx.fillStyle = '#334021';
           ctx.fillRect(x + 4, by + slot - 7, slot - 8, 3);

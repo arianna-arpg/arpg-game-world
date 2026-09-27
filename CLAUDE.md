@@ -110,6 +110,10 @@ GT-020 reserve depletion and sustained vents use `data/reserveCues.ts` profiles.
 Body recovery windows and damage-pool footprints/HUD exhaust follow actual fuel;
 see `docs/design/reserve-cues.md`, `probe_reservecues.ts` and
 `balance/reserve-cues-ui.cjs` after a build.
+GT-021 prepared drinks, ammunition and placed routes share `data/payloadCues.ts`
+profiles. `payloadCueRows` mirrors paid banks and committed ambush geometry;
+see `docs/design/payload-cues.md`, `probe_payloadcues.ts` and the hidden
+`balance/payload-cues-ui.cjs` harness (run the probe and build first).
 
 Carried satellites live in `data/satellites.ts` and `engine/satellites.ts`:
 untargetable, modifier-granted orbiting effects shared by players and monsters.

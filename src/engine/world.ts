@@ -342,6 +342,7 @@ import {
 } from './mounts';
 import { resolveTell, TELL_CFG, tellSpecsOf } from './tells';
 import { reserveStageCue } from './reserveCues';
+import { caromCapacity, payloadTransition } from './payloadCues';
 import { poolVentRead } from './skills';
 import { RESERVE_CUE_CFG } from '../data/reserveCues';
 import { defenseCueFlash } from './defenseCues';
@@ -35436,8 +35437,8 @@ export class World {
     // banks, it never spills.
     if (opts.primed) {
       caster.primedPours.push({ skillId: def.id, chargesSpent: opts.chargesSpent ?? 0, aim: vec(aim.x, aim.y) });
-      // Copy FLAGGED for Arianna's word (the smallest honest float).
-      this.text(caster.pos, 'primed', def.color, 11, 'combat');
+      const payloadCues = payloadTransition(caster, inst, 'prime');
+      if (payloadCues) this.flashes.push(payloadCues);
       return true;
     }
 
@@ -35582,9 +35583,7 @@ export class World {
         // — a ricochet gem on a carom volley plants MORE anchors (a longer
         // killing line), and the patrol claims the stat whole: the shuttle
         // never wall-bounces on top (see spawnProjectile's bounce read).
-        const caromCap = d.caroms
-          ? d.caroms.anchors + Math.max(0, Math.round(caster.sheet.get('projBounce', tags, extra)))
-          : 0;
+        const caromCap = caromCapacity(caster, inst);
         if (d.caroms?.hang) {
           // HANGING VOLLEY: presses hang PASSIVE ETHEREAL ARROWS (embed
           // constructs — visible, waiting) instead of bare anchors. A full
@@ -35612,9 +35611,7 @@ export class World {
               triggerRadius: d.caroms.hang.triggerRadius ?? 90,
               deadline: this.time + (d.caroms.hang.duration ?? 24),
             });
-            this.text(arrow.pos, 'armed', def.color, 12);
-          } else if (arrow) {
-            this.text(arrow.pos, `arrow ${arrows.length}/${caromCap}`, def.color, 11);
+            // payloadCueRows draws the now-armed arrows and true trigger reach.
           }
           fieldAt = vec(aim.x, aim.y);
           break;
@@ -35629,7 +35626,7 @@ export class World {
           st.anchors.push({ x: anchorAt.x, y: anchorAt.y });
           this.flashes.push({ pos: vec(anchorAt.x, anchorAt.y), radius: 16, color: cosmeticColor, life: 0.35, maxLife: 0.35 });
           if (st.anchors.length < caromCap) {
-            this.text(anchorAt, `anchor ${st.anchors.length}/${caromCap}`, def.color, 11);
+            // payloadCueRows retains the placed point and remaining window.
             break;
           }
           const pts = st.anchors.map(a2 => vec(a2.x, a2.y));
@@ -37769,12 +37766,11 @@ export class World {
           bank.reloading = false; // the hands beat the clock
           this.refundCooldown(caster, b.def.id);
           loaded += add;
+          const payloadCues = fx.scope === 'still' ? undefined : payloadTransition(caster, b, 'ammo');
+          if (payloadCues) this.flashes.push(payloadCues);
         }
         if (loaded > 0) {
-          // (A PATIENT pour says nothing: the bank's own pips and the
-          // pressure gauge ARE the read — show, don't tell. Every other
-          // rack still announces itself.)
-          if (fx.scope !== 'still') this.text(vec(caster.pos.x, caster.pos.y - 20), 'loaded', def.color, 11);
+          // payloadCues and the bank's pips show the rounds actually restored.
           // A per-beat CHANNEL reload that tops its (single) host releases
           // the hands — the drum is full, the pulses stop themselves.
           const cs = caster.casting;
@@ -42311,6 +42307,7 @@ export class World {
     },
     chargesSpent: number,
     critMult?: number,
+    payloadCueHandled = false,
   ): void {
     const tags = skillContextTags(inst);
     const extra = instanceMods(inst);
@@ -42343,7 +42340,8 @@ export class World {
         n: total, dur, tags: inst.def.tags,
       });
     }
-    this.text(target.pos, fx.resource === 'life' ? 'drinking...' :
+    // A banked drink already opened through payloadTransition once per drink.
+    if (!payloadCueHandled) this.text(target.pos, fx.resource === 'life' ? 'drinking...' :
       fx.resource === 'mana' ? 'sipping...' : 'charging...', inst.def.color, 11);
   }
 
@@ -42365,12 +42363,14 @@ export class World {
     for (const b of banked) {
       const inst = a.skills.find(s => s?.def.id === b.skillId);
       if (!inst) continue;
+      const payloadCues = payloadTransition(a, inst, 'prime', true);
+      if (payloadCues) this.flashes.push(payloadCues);
       const durScale = a.sheet.get('effectDuration',
         skillContextTags(inst), instanceMods(inst));
       const pourCrit = this.critMendMult(a, inst, a.pos);
       for (const fx of instanceEffects(inst)) {
         if (fx.type === 'restoreOverTime') {
-          this.startRestoreStream(a, a, inst, fx, b.chargesSpent, pourCrit);
+          this.startRestoreStream(a, a, inst, fx, b.chargesSpent, pourCrit, true);
         } else if (fx.type === 'buff') {
           this.applyBuffEffect(a, inst, fx, durScale, 1);
         } else if (fx.type === 'cleanse') {

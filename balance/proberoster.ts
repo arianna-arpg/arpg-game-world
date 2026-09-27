@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_payloadcues.ts', status: 'green', tier: 'fast', why: 'Prepared drinks, ammunition and placed routes: paid state, true arming reach, scoped capacity, release/expiry/unequip, co-op mirrors and caption-free painters' },
   { probe: 'probe_devmonsters.ts', status: 'green', tier: 'fast', why: 'Developer monster spawning: native levels/rarities, registry additions, authority, bounded inputs and non-overlapping floor-aware placement.' },
   { probe: 'probe_devprogression.ts', status: 'green', tier: 'fast', why: 'Developer progression recipes, actual access gates, authority, prerequisites, attribution, idempotence and account persistence.' },
   { probe: 'probe_accountreliquary.ts', status: 'green', tier: 'fast', why: 'Account Relic ownership, migration, investment and attributable followers.' },

@@ -4328,6 +4328,9 @@ export type SkillEffect =
 // --- The skill definition ---------------------------------------------------
 
 export interface SkillDef {
+  /** Configurable prepared-payload shapes; false opts out of supplementary
+   * body/HUD cues while functional ammunition pips remain. */
+  payloadCues?: Partial<Record<import('../data/payloadCues').PayloadCueKind, string | false>>;
   attackSequence?: AttackSequenceSpec;
   /** Native armed-cast behavior, also available to exclusive tree trunks. */
   trigger?: TriggerSpec;

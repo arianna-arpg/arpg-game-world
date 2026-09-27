@@ -1022,6 +1022,8 @@ export class Actor {
   venting = new Set<string>();
   /** Host-derived poolCues on co-op mirrors only; [] clears pooled actors. */
   poolCues?: import('./reserveCues').PoolCueRow[];
+  /** Host-derived prepared payloads on co-op mirrors; [] clears stale rows. */
+  payloadCues?: import('./payloadCues').PayloadCueRow[];
   /** Vent damage-tick accumulator (chunked like tethers). */
   ventTick = 0;
   /** STATIC DISCHARGE clocks per skill id (DischargeSpec — next zap time). */
