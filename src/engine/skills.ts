@@ -4335,6 +4335,10 @@ export type SkillEffect =
 // --- The skill definition ---------------------------------------------------
 
 export interface SkillDef {
+  companionCue?: import('../data/companionCues').CompanionCueSpec | false;
+  recoveryCues?: Partial<Record<import('../data/companionCues').RecoveryCueKind, import('../data/companionCues').RecoveryCueSpec | false>>;
+  /** Curse-field creation/retirement material; false silences only its transition. */
+  fieldCue?: import('../data/companionCues').FieldCueSpec | false;
   /** Source-to-recipient consumption material for feasts, sacrifices and Amalgam. */
   feedingCue?: import('../data/feedingCues').FeedingCueSpec | false;
   /** Configurable prepared-payload shapes; false opts out of supplementary

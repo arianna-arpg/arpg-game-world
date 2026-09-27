@@ -1,7 +1,7 @@
 import type { Actor } from './actor';
 import type { World } from './world';
 import type { Vec2 } from '../core/math';
-import { dist, vec } from '../core/math';
+import { dist } from '../core/math';
 import { mod } from './stats';
 import { makeSkillInstance, type SkillInstance } from './skills';
 import { resolveMinionInheritance, applyMinionPlyBonus } from './minionInheritance';
@@ -328,7 +328,7 @@ export class CompanionBonds {
     return this.states.get(beast)?.spec.reviveSeconds;
   }
 
-  /** THE SHIFT SHOWS: each living beast of the bond speaks the stance and
+  /** THE SHIFT SHOWS: each living beast of the bond wears the stance and
    *  casts the tree's stance art (CompanionBondSpec.stanceArt) at its own
    *  feet — the hook a tree node hangs on a behavioral change. Returns the
    *  beasts reached. */
@@ -339,7 +339,7 @@ export class CompanionBonds {
       if (beast.owner !== owner || state.inst.def.id !== skillId
         || beast.dead || beast.downed || beast.companionDormant) continue;
       reached++;
-      this.w.text(vec(beast.pos.x, beast.pos.y - 22), st.label.toLowerCase(), st.color, 11);
+      this.w.showCompanionCue(beast, 'answer', owner, st.cue);
       const artId = state.spec.stanceArt;
       if (artId && SKILLS[artId]) {
         const art = makeSkillInstance(SKILLS[artId], Math.max(1, beast.level));

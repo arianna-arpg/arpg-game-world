@@ -36,12 +36,13 @@ export function emergePoseOf(world: World, a: Actor): EmergePose | null {
 /** Draw every live arrival's ground share (slit + grains). Zero cost when
  *  World.emergences is empty. */
 export function drawEmergences(ctx: CanvasRenderingContext2D, world: World,
-  camX: number, camY: number, vw: number, vh: number): void {
+  camX: number, camY: number, vw: number, vh: number, emergeVisibility?: (rec: EmergeRecord) => boolean): void {
   const recs = world.emergences;
   if (!recs.length) return;
   const cfg = VIS_CFG.emerge;
   const L = camX - 80, T = camY - 80, R = camX + vw + 80, B = camY + vh + 80;
   for (const rec of recs) {
+    if (emergeVisibility && !emergeVisibility(rec)) continue;
     const r = rec.radius;
     const reach = r * (rec.spec.fling + 2);
     if (rec.pos.x + reach < L || rec.pos.x - reach > R || rec.pos.y + reach < T || rec.pos.y - reach > B) continue;

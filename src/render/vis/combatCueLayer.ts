@@ -81,6 +81,18 @@ registerEffectVoice('combatCue', (ctx, f, remaining) => {
         ctx.beginPath(); ctx.arc(0, 0, r, -0.22, 0.22); ctx.stroke(); ctx.restore();
       }
       break;
+    case 'ringCollapse': {
+      // An ended field unweaves from its true rim, then contracts into fine threads.
+      const front = r * remaining, span = TAU / Math.max(1, cfg.pieces);
+      for (let i = 0; i < cfg.pieces; i++) {
+        const angle = i * span + t * cfg.travel;
+        ctx.beginPath(); ctx.arc(0, 0, front, angle, angle + span * .65 * remaining); ctx.stroke();
+        const tail = Math.min(r, front + r * cfg.travel * Math.sin(t * Math.PI));
+        line(ctx, Math.cos(angle) * front, Math.sin(angle) * front,
+          Math.cos(angle - .04) * tail, Math.sin(angle - .04) * tail);
+      }
+      break;
+    }
     case 'collapse':
       // Lost concentration collapses inward and falls; it never looks like a fired bolt.
       ctx.rotate(-f.combatCue.facing);

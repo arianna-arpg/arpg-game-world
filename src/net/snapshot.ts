@@ -67,6 +67,7 @@ import { payloadCueRows } from '../engine/payloadCues';
 import { procCueRows } from '../engine/procCues';
 import { anatomyCueState, cloneAnatomyCues } from '../engine/anatomyCues';
 import { feedingCueState, cloneFeedingCues } from '../engine/feedingCues';
+import { companionCueState, cloneCompanionCues, cloneRecoveryCue } from '../engine/companionCues';
 import { GRAB_VERB_LABEL } from '../engine/grab';
 import { tellSpecsOf } from '../engine/tells';
 import { fellProgress } from '../engine/rampage';
@@ -87,6 +88,7 @@ export interface ActorW {
   procCues?: import('../engine/procCues').ProcCueRow[];
   anatomyCues?: import('../engine/anatomyCues').AnatomyCueState;
   feedingCues?: import('../engine/feedingCues').FeedingCueState;
+  companionCues?: import('../engine/companionCues').CompanionCueState;
   wardCue?: { profile?: string; sources: number[] };
   encounterOrder?: Pick<NonNullable<Actor['encounterOrder']>, 'group' | 'recipe' | 'plan' | 'leader' | 'phase' | 'until'>;
   cosmeticKind?: 'wisp';
@@ -258,6 +260,8 @@ export interface PickupW { s: string; l: string; c: string; n: number; born: num
  *  shapes) remain deliberately unshipped — MVP fidelity, renderer-guarded. */
 export interface FlashW { combatCue?: import('../engine/combatCues').CombatCue; defenseCue?: import('../engine/defenseCues').DefenseCue; cosmeticMotif?: CosmeticMotif; p: Vec2W; radius: number; color: string; life: number; maxLife: number;
   feedingCue?: import('../engine/feedingCues').FeedingTransfer;
+  companionCue?: import('../engine/companionCues').CompanionCueFlash;
+  recoveryCueTier?: number;
   fx?: string; bolt?: boolean; meteor?: boolean; departure?: RefugeDeparture; }
 /** A death-burst telegraph (coalesce gather → tracking orb). RENDER-ONLY: the client
  *  never simulates these (homing is host-authoritative via nearestSeatPos over the seats);
@@ -566,6 +570,7 @@ export interface StateSnapshot {
   no?: NoticeW[];
   pfd?: PickupW[];
   flashes: FlashW[];
+  recoveryCues?: import('../engine/world').EmergeRecord[];
   /** THE EYECATCH (engine/ultimates.ts) — the live super-art pane, shipped
    *  as ELAPSED seconds (`el`) so client clocks need no shared epoch: the
    *  client re-stamps t0 against its own timeflow age (the tell-wire idiom
@@ -751,6 +756,8 @@ function actorToW(a: Actor, world: World): ActorW {
   if (procCues.length) w.procCues = procCues.map(row => ({ ...row }));
   const anatomyState = anatomyCueState(a);
   const feedingCues = feedingCueState(a);
+  const companionCues = companionCueState(a, world);
+  if (companionCues.links.length || companionCues.marks.length || companionCues.stance) w.companionCues = cloneCompanionCues(companionCues);
   if (feedingCues.gains.length || feedingCues.meal || feedingCues.mass) w.feedingCues = cloneFeedingCues(feedingCues);
   if (anatomyState.weakpoints.length || anatomyState.parts.length || anatomyState.segments.length || anatomyState.part)
     w.anatomyCues = cloneAnatomyCues(anatomyState);
@@ -937,8 +944,11 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     texts: world.texts.map(t => ({ p: v2(t.pos), life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, k: t.kind })),
     no: world.notices.map(n => ({ text: n.text, color: n.color, size: n.size, ch: n.channel, born: n.bornAt })),
     pfd: world.pickupFeed.map(e => ({ s: e.seatId, l: e.label, c: e.color, n: e.count, born: e.bornAt })),
+    recoveryCues: world.emergences.filter(e => e.recoveryCueTier !== undefined && e.life > 0).map(cloneRecoveryCue),
     flashes: world.flashes.map(f => ({ combatCue: f.combatCue ? { ...f.combatCue } : undefined, p: v2(f.pos), radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
       feedingCue: f.feedingCue ? { ...f.feedingCue, to: { ...f.feedingCue.to } } : undefined,
+      companionCue: f.companionCue ? { ...f.companionCue, from: f.companionCue.from && { ...f.companionCue.from } } : undefined,
+      recoveryCueTier: f.recoveryCueTier,
       defenseCue: f.defenseCue ? { ...f.defenseCue } : undefined, fx: f.fx, cosmeticMotif: f.cosmeticMotif, departure: f.departure, bolt: f.bolt || undefined, meteor: f.meteor || undefined })),
     ec: world.eyecatch
       && eyecatchElapsed(world.eyecatch, world.timeflow.age) < world.eyecatch.paneSec
@@ -1366,6 +1376,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.procCues = aw.procCues?.map(row => ({ ...row })) ?? [];
     a.anatomyCues = aw.anatomyCues ? cloneAnatomyCues(aw.anatomyCues) : { weakpoints: [], parts: [], segments: [] };
     a.feedingCues = aw.feedingCues ? cloneFeedingCues(aw.feedingCues) : { gains: [] };
+    a.companionCues = aw.companionCues ? cloneCompanionCues(aw.companionCues) : { links: [], marks: [] };
     a.wardCueProfile = aw.wardCue?.profile;
     a.encounterOrder = aw.encounterOrder ? { ...aw.encounterOrder } : undefined;
     a.magicPackPower = aw.magicPackPower ?? 0;
@@ -1462,8 +1473,14 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.bondFrom = held ? POOL.get(aw.bl!) : undefined;
     a.magicPackFrom = aw.magicPackFrom !== undefined ? POOL.get(aw.magicPackFrom) : undefined;
     a.wardCueSources = aw.wardCue?.sources.map(id => POOL.get(id)).filter((x): x is Actor => !!x);
+    // companionCue endpoints follow the client's interpolated actors, not host IDs.
+    if (a.companionCues) for (const link of a.companionCues.links) link.to.id = POOL.get(link.to.id)?.id ?? -1;
   }
   world.actors = actors;
+  world.emergences = (snap.recoveryCues ?? []).flatMap(row => {
+    const actor = POOL.get(row.actorId);
+    return actor && actors.includes(actor) ? [{ ...cloneRecoveryCue(row), actorId: actor.id, held: false }] : [];
+  });
 
   // Lightweight entities — plain render structs the renderer reads positionally.
   world.projectiles = snap.projectiles.map(p => ({ reflectedCue: p.reflectedCue,
@@ -1503,6 +1520,8 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   world.pickupFeed = (snap.pfd ?? []).map(e => ({ seatId: e.s, label: e.l, color: e.c, count: e.n, bornAt: e.born }));
   world.flashes = snap.flashes.map(f => ({ combatCue: f.combatCue ? { ...f.combatCue } : undefined, pos: { x: f.p[0], y: f.p[1] }, radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
     feedingCue: f.feedingCue ? { ...f.feedingCue, to: { ...f.feedingCue.to } } : undefined,
+    companionCue: f.companionCue ? { ...f.companionCue, from: f.companionCue.from && { ...f.companionCue.from } } : undefined,
+    recoveryCueTier: f.recoveryCueTier,
     defenseCue: f.defenseCue ? { ...f.defenseCue } : undefined, fx: f.fx, cosmeticMotif: f.cosmeticMotif, departure: f.departure, bolt: f.bolt, meteor: f.meteor })) as unknown as World['flashes'];
   // THE EYECATCH — re-stamped against the CLIENT's own raw clock (elapsed →
   // local t0); an absent row clears the pane with the host's (engine/ultimates.ts).

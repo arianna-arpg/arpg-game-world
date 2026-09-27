@@ -16,8 +16,9 @@
 export interface CompanionStanceDef {
   id: string;
   label: string;
-  /** The one-glyph face on the meta button and the beast's floater. */
+  /** The one-glyph face on the meta button. */
   glyph: string;
+  cue?: import('./companionCues').CompanionCueSpec | false;
   color: string;
   /** Position in the shift cycle (ascending). */
   order: number;
@@ -32,15 +33,15 @@ export interface CompanionStanceDef {
 
 export const COMPANION_STANCES: Record<string, CompanionStanceDef> = {
   aggressive: {
-    id: 'aggressive', label: 'Aggressive', glyph: '⚔', color: '#d07a5a', order: 0, conduct: 'aggressive', lunges: true,
+    id: 'aggressive', label: 'Aggressive', glyph: '⚔', color: '#d07a5a', order: 0, conduct: 'aggressive', lunges: true, cue: { profile: 'hunt' },
     blurb: 'The beast hunts on its own: it takes the nearest foe in sight and heels back only when nothing is left to fight.',
   },
   defensive: {
-    id: 'defensive', label: 'Defensive', glyph: '⛨', color: '#c8a84b', order: 1, conduct: 'defensive', lunges: true,
+    id: 'defensive', label: 'Defensive', glyph: '⛨', color: '#c8a84b', order: 1, conduct: 'defensive', lunges: true, cue: { profile: 'guard' },
     blurb: 'The beast keeps to your side and answers only your fights: whatever wounds you, whatever you wound, or whatever bites it.',
   },
   passive: {
-    id: 'passive', label: 'Passive', glyph: '◌', color: '#8fa8d8', order: 2, conduct: 'passive', lunges: false,
+    id: 'passive', label: 'Passive', glyph: '◌', color: '#8fa8d8', order: 2, conduct: 'passive', lunges: false, cue: { profile: 'heel' },
     blurb: 'The beast heels and never strikes of its own accord. Only a direct order sends it in.',
   },
 };

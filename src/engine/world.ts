@@ -2,6 +2,8 @@ import { concealmentActive, isConcealed, PERCEPTION_CFG } from './perception';
 import { anatomyCueState, anatomyFlash, notePartScar, clearPartScar } from './anatomyCues';
 import { takeWeakPointBreaks } from './weakpoints';
 import { feedingCueFlash, noteRestoreGain } from './feedingCues';
+import { companionCueFlash, companionCueSpec, type CompanionCueEvent } from './companionCues';
+import { RECOVERY_CUES, type RecoveryCueKind } from '../data/companionCues';
 import { CompanionGrants, COMPANION_GRANT_PREFIX, companionGrantStat, summonReservationUnit } from './companionGrants';
 import { summonCapacity, summonContractSlots } from './summonContracts';
 import { TitanRuntime } from './titans';
@@ -1257,6 +1259,7 @@ const PUSH_MAX_SPEED = 1500;
 export type AoeShape = number;
 
 interface Zone {
+  fieldCue?: import('../data/companionCues').FieldCueSpec;
   /** Source-maintained choreography: breaking its skill or killing its
    * caster clears both pending warnings and lingering ground. */
   attackPattern?: boolean;
@@ -1500,9 +1503,11 @@ export interface DissolveBreak {
  *  pruned by life): which body arrives, where it was at the instant, the
  *  folded spec and the seat-hash seed. The renderer poses the body and
  *  scatters the grains off (seed, age) alone; nothing here is tested state
- *  beyond the hold it names on the actor; it never persists or rides the
- *  wire. */
+ *  beyond the hold it names on the actor. It never persists; records marked
+ *  recoveryCueTier also ride the presentation wire. */
 export interface EmergeRecord {
+  /** Presentation-only recovery: retained on the wire and culled by its story. */
+  recoveryCueTier?: number;
   actorId: number; pos: Vec2; radius: number; seed: number; spec: ResolvedEmerge;
   at: number; life: number; maxLife: number;
   /** The hold was taken (untargetable + unthinking) — released at expiry. */
@@ -1515,6 +1520,8 @@ export interface EmergeRecord {
 type ComboCursor = { comboIdx?: number; comboAt?: number; comboSelf?: number };
 
 interface Flash {
+  companionCue?: import('./companionCues').CompanionCueFlash;
+  recoveryCueTier?: number;
   feedingCue?: import('./feedingCues').FeedingTransfer;
   combatCue?: import('./combatCues').CombatCue;
   defenseCue?: import('./defenseCues').DefenseCue;
@@ -5268,8 +5275,7 @@ export class World {
       this.sagaDirty(true);
     }
     this.events.emit('player/downed', { actor, killer });
-    this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * 2, color: '#d05050', life: 0.4, maxLife: 0.4 });
-    this.text(actor.pos, 'Downed', '#e88080', 14);
+    this.showCompanionCue(actor, 'down');
   }
 
   /** Dwell-revive a downed seat: back on its feet at a FRACTION of life (no grace
@@ -5282,8 +5288,7 @@ export class World {
     a.mana = a.maxMana();
     seat.reviveDwellBy.clear();
     this.events.emit('player/revived', { actor: a, seat: seat.id });
-    this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: a.radius * 2.2, color: '#7ec850', life: 0.45, maxLife: 0.45 });
-    this.text(a.pos, 'revived!', '#7ec850', 16);
+    this.showRecoveryCue(a, 'revive');
   }
 
   /** Co-op revive tick: a STANDING, IDLE ally lingering within REVIVE_RADIUS of a
@@ -23012,7 +23017,7 @@ export class World {
     // and the companion returns DOWNED, owed its revival.
     for (const c of this.companionsOfSkill(p, skillId)) {
       if (c.defId) this.stashedCompanions.push(this.companionBonds.saved(c));
-      this.text(vec(c.pos.x, c.pos.y - 22), 'the bond breaks', '#c08a68', 12);
+      this.showCompanionCue(c, 'sever', p);
       c.companion = false; // past the down-intercept: this death is real
       this.kill(c, true);
     }
@@ -30487,7 +30492,7 @@ export class World {
 
   /** Set one bond's stance: the keeper's choice lands on the seat (saved,
    *  wired), the bond rebuilds the beasts' standing orders on its next
-   *  refresh, and the shift SHOWS — each living beast speaks the stance
+   *  refresh, and the shift SHOWS — each living beast wears its companionCue
    *  and casts the tree's stance art. False when nothing changed, the id
    *  is unknown, or the seat holds no such skill. */
   setCompanionStance(seat: Seat, skillId: string, stanceId: string): boolean {
@@ -30703,8 +30708,7 @@ export class World {
     const tm = instanceTameMod(inst);
     const companionClaim = companionBondOf(inst);
     if (this.companionBondsOfSkill(caster, def.id) >= this.companionCapOf(inst)) {
-      this.failNote(caster, def.id + ':bonded',
-        this.companionCapOf(inst) > 1 ? 'every bond is held' : 'the bond holds one already');
+      this.showCompanionCue(target, 'reject', caster, def.companionCue);
       return;
     }
     if (!mdef || target.owner || target.companion || target.team === caster.team || !sameStory(target, caster)
@@ -30713,7 +30717,7 @@ export class World {
       // Belt to targeting's taxonomy gate — future callers may not route
       // through resolveTargeting.
       || !(mdef.tags ?? []).some(tg => fx.tags.includes(tg))) {
-      this.failNote(caster, def.id + ':willful', 'it will not be tamed');
+      this.showCompanionCue(target, 'reject', caster, def.companionCue);
       return;
     }
     // THE CLAIM ROLL: weakened to `sureBelow` the bond is CERTAIN; above it
@@ -30731,13 +30735,13 @@ export class World {
     if (sure !== undefined && frac > sure) {
       const wild = mdef.boss ? 0 : clamp((fx.wildChance ?? 0) + tm.wildChanceAdd, 0, 1);
       if (wild <= 0) {
-        this.failNote(caster, def.id + ':unbroken', 'weaken it first');
+        this.showCompanionCue(target, 'reject', caster, def.companionCue);
         return;
       }
       const p = wild + (1 - wild)
         * Math.max(0, Math.min(1, (1 - frac) / Math.max(0.001, 1 - sure)));
       if (!chance(p)) {
-        this.text(vec(target.pos.x, target.pos.y - 20), 'resisted!', '#c08a68', 13);
+        this.showCompanionCue(target, 'reject', caster, def.companionCue);
         return;
       }
     }
@@ -30792,15 +30796,26 @@ export class World {
         ...TAME_CFG.claimParts.filter(p => !worn.some(w => w.kind === p.kind)),
       ];
     }
-    this.text(vec(beast.pos.x, beast.pos.y - 26), `TAMED: ${beast.name}`, '#a8d8a0', 16);
-    this.flashes.push({
-      pos: vec(beast.pos.x, beast.pos.y), radius: beast.radius + 20,
-      color: '#a8d8a0', life: 0.4, maxLife: 0.4,
-    });
+    this.showCompanionCue(beast, 'bind', keeper);
   }
 
-  /** Bring a downed companion back on its feet (the dwell path and the
-   *  whistle both land here). */
+  showCompanionCue(a: Actor, event: CompanionCueEvent, from?: Actor, spec = companionCueSpec(a)): void {
+    const companionCue = companionCueFlash(a, event, from, spec);
+    if (companionCue) this.flashes.push(companionCue);
+  }
+
+  /** Presentation only: reuse emergence poses without adding a gameplay hold. */
+  showRecoveryCue(a: Actor, kind: RecoveryCueKind, inst?: SkillInstance): void {
+    const recoveryCue = (inst ?? a.summonInst)?.def.recoveryCues?.[kind]
+      ?? (a.defId ? MONSTERS[a.defId]?.recoveryCues?.[kind] : undefined);
+    if (recoveryCue === false) return;
+    const recoveryCueFlashAt = this.flashes.length;
+    const recoveryCueBody = this.emergeBody(a, { spec: { ...RECOVERY_CUES[kind], ...recoveryCue, hold: false } });
+    if (recoveryCueBody) recoveryCueBody.recoveryCueTier = a.tier ?? 0;
+    if (this.flashes[recoveryCueFlashAt]) this.flashes[recoveryCueFlashAt].recoveryCueTier = a.tier ?? 0;
+  }
+
+  /** Bring a downed companion back on its feet (the dwell path and whistle). */
   reviveCompanion(a: Actor, frac = 0.5): void {
     if (!a.companion || a.dead || !a.downed || a.companionDormant) return;
     a.downed = false;
@@ -30808,11 +30823,7 @@ export class World {
     a.companionReviveDwell = 0;
     this.recoverCompanion(a);
     a.life = Math.max(1, a.maxLife() * frac);
-    this.text(vec(a.pos.x, a.pos.y - 22), `${a.name} rises!`, '#a8d8a0', 14);
-    this.flashes.push({
-      pos: vec(a.pos.x, a.pos.y), radius: a.radius + 16,
-      color: '#a8d8a0', life: 0.35, maxLife: 0.35,
-    });
+    this.showRecoveryCue(a, 'revive', this.companionBonds.host(a));
   }
 
   /** Shared revival/Whistle recovery, equally useful on a living beast.
@@ -30930,7 +30941,7 @@ export class World {
   releaseCompanion(actorId: number, seat: Seat = this.localSeat): void {
     const a = this.actorById(actorId);
     if (!a || !a.companion || a.dead || a.owner !== seat.actor) return;
-    this.text(vec(a.pos.x, a.pos.y - 22), `${a.name} returns to the wild`, '#c8b048', 13);
+    this.showCompanionCue(a, 'sever', a.owner);
     // The bond ends FIRST — else kill()'s companion intercept would merely
     // down it (and a downed body's kill() no-ops outright).
     a.companion = false;
@@ -35535,7 +35546,6 @@ export class World {
             follow: true, toggled: true, reserved: reserve,
             flatBonus,
           });
-          this.text(caster.pos, 'miasma rises', def.color, 12);
         } else {
           for (let zi = this.zones.length - 1; zi >= 0; zi--) {
             const z = this.zones[zi];
@@ -35560,6 +35570,12 @@ export class World {
             flatBonus,
           });
           fieldAt = at;
+        }
+        const fieldCueZone = this.zones[this.zones.length - 1];
+        if (def.fieldCue !== false) {
+          fieldCueZone.fieldCue = def.fieldCue ?? {};
+          fieldCueZone.tier = caster.tier ?? 0;
+          this.flashes.push({ ...combatCueFlash(fieldCueZone.pos, fieldCueZone.fieldCue.form ?? 'field_form', fieldCueZone.radius, 0, def.fieldCue?.color ?? cosmeticColor), recoveryCueTier: fieldCueZone.tier });
         }
         return true;
       }
@@ -37359,7 +37375,6 @@ export class World {
             caster.pos.y + Math.sin(caster.facing) * dd), 10);
           st.markPos = { x: at.x, y: at.y };
           this.flashes.push({ pos: vec(at.x, at.y), radius: 20, color: cosmeticColor, life: 0.4, maxLife: 0.4 });
-          this.text(at, 'marked', def.color, 11, 'combat');
         }
         break;
       }
@@ -37726,9 +37741,9 @@ export class World {
             this.teleportActor(comp, vec(
               caster.pos.x + Math.cos(ang) * 40,
               caster.pos.y + Math.sin(ang) * 40), '#a8d8a0');
+            this.showCompanionCue(comp, 'answer', caster);
           });
           this.companionBonds.whistle(caster, inst, aim);
-          this.text(vec(caster.pos.x, caster.pos.y - 24), 'the bond answers', '#a8d8a0', 12);
         }
       }
       // THE STANCE SHIFT (the tame skill's meta payload — engine/
@@ -42615,12 +42630,12 @@ export class World {
    * A minion detonates (Martyrdom passive / Unstable Flesh support),
    * dealing a fraction of its max life as fire damage to nearby enemies.
    */
-  explodeActor(minion: Actor, fraction: number, opts?: { type?: DamageType; color?: string }): void {
+  explodeActor(minion: Actor, fraction: number, opts?: { type?: DamageType; color?: string; recoveryCue?: string }): void {
     // The sourceActor carries minion damage, conversion and kill credit.
     const type = opts?.type ?? 'fire';
     const dmg = minion.maxLife() * fraction * minion.sheet.get('damage', new Set<SkillTag>(['aoe', type]));
     const radius = 45 + minion.radius * 2;
-    this.burstDamage(vec(minion.pos.x, minion.pos.y), radius, dmg, type, opts?.color ?? DAMAGE_COLOR[type], minion.team, minion.tier, minion);
+    this.burstDamage(vec(minion.pos.x, minion.pos.y), radius, dmg, type, opts?.color ?? DAMAGE_COLOR[type], minion.team, minion.tier, minion, opts?.recoveryCue);
   }
 
   /** Direct radial BLAST (the shared payload for explodeActor + the death-burst detonations).
@@ -42629,7 +42644,7 @@ export class World {
    *  damageTaken, and the shield-soak chain) — never true damage, so the player can dress
    *  resistances/armor against it. State is pre-baked (pos/dmg/team) so it works after the
    *  source actor is gone; the colour IS the damage-type tell (DAMAGE_COLOR). */
-  private burstDamage(pos: Vec2, radius: number, dmg: number, type: DamageType, color: string, sourceTeam: Team, sourceTier = 0, sourceActor?: Actor): void {
+  private burstDamage(pos: Vec2, radius: number, dmg: number, type: DamageType, color: string, sourceTeam: Team, sourceTier = 0, sourceActor?: Actor, recoveryCue?: string): void {
     for (const e of this.actors) {
       if (!this.isBurstTarget(e, sourceTeam, sourceTier)) continue;
       if (sourceActor && !this.hostileTo(sourceActor, e)) continue;
@@ -42653,7 +42668,8 @@ export class World {
       if (result?.culled) this.showCombatOutcome(e, 'culled', pos);
       if (e.life <= 0 && !e.dead) this.kill(e, false, sourceActor);
     }
-    this.flashes.push({ pos: vec(pos.x, pos.y), radius, color, life: 0.35, maxLife: 0.35 });
+    this.flashes.push(recoveryCue ? { ...combatCueFlash(pos, recoveryCue, radius, 0, color), recoveryCueTier: sourceTier }
+      : { pos: vec(pos.x, pos.y), radius, color, life: 0.35, maxLife: 0.35 });
     // THE MALLET, ownerless: a baked blast rings EVERY side's bells and
     // pops brittle scenery — the exploding corpse beside the bell already
     // damaged it without a toll; now the blast answers too.
@@ -43707,11 +43723,8 @@ export class World {
             thrall.lifespan = dom.duration;
             thrall.pos = this.clampPos(vec(target.pos.x, target.pos.y), thrall.radius);
             this.actors.push(thrall);
-            this.text(thrall.pos, 'dominated!', '#e8d44a', 13, 'combat');
-            this.flashes.push({
-              pos: vec(thrall.pos.x, thrall.pos.y), radius: thrall.radius + 14,
-              color: '#e8d44a', life: 0.35, maxLife: 0.35,
-            });
+            this.showCompanionCue(thrall, 'bind', caster, def.companionCue);
+            this.showRecoveryCue(thrall, 'arrive', inst);
           }
         }
       }
@@ -46093,7 +46106,7 @@ export class World {
       actor.aiCommand = undefined;
       actor.companionReviveDwell = 0;
       this.companionBonds.down(actor);
-      this.text(vec(actor.pos.x, actor.pos.y - 22), `${actor.name} is DOWN`, '#e8a860', 14);
+      this.showCompanionCue(actor, 'down', actor.owner);
       return;
     }
     // A COMPOSITE MONSTER'S PART: its death is a BREAK on the root (damage
@@ -46248,8 +46261,7 @@ export class World {
       }
       actor.life = Math.max(1, actor.maxLife() * 0.25);
       actor.lifespan = actor.undyingTime;
-      this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * 1.5, color: '#b8a0e0', life: 0.35, maxLife: 0.35 });
-      this.text(actor.pos, 'undying!', '#b8a0e0', 12, 'combat');
+      this.showRecoveryCue(actor, 'undying');
       return;
     }
 
@@ -49254,8 +49266,8 @@ export class World {
         if (a.decay.t > 0) {
           a.life -= a.decay.dps0 * Math.pow(a.decay.growth, a.decay.t) * dt;
           if (a.life <= 0) {
-            this.text(a.pos, 'unraveled', '#9a86c8', 11);
             this.kill(a);
+            if (a.dead) this.showCompanionCue(a, 'unravel');
             continue;
           }
         }
@@ -49277,8 +49289,7 @@ export class World {
               a.summonInst ? skillContextTags(a.summonInst.def) : undefined,
               a.summonInst ? instanceMods(a.summonInst) : undefined)
             : 0;
-          this.text(vec(a.pos.x, a.pos.y - a.radius - 8), 'BLOOM', BLOOM_CFG.color, 12);
-          if (power > 0) this.explodeActor(a, power, { type: BLOOM_CFG.type, color: BLOOM_CFG.color });
+          if (power > 0) this.explodeActor(a, power, { type: BLOOM_CFG.type, color: BLOOM_CFG.color, recoveryCue: 'companion_bloom' });
           this.releaseContract(a, true);
           this.kill(a, !a.expiryTriggersDeath);
           continue;
@@ -49516,11 +49527,12 @@ export class World {
             bd = d2; from = o;
           }
           const held = !!from;
+          const companionCueFrom = a.bondFrom;
           a.bondFrom = from;
           if (held !== a.bondHeld) {
             a.bondHeld = held;
             a.sheet.setSource('bond', held ? bond.mods : []);
-            if (!held) this.text(vec(a.pos.x, a.pos.y - 18), 'bond broken!', '#d88a8a', 11);
+            if (!held) this.showCompanionCue(a, 'sever', companionCueFrom);
           }
         }
       }
@@ -56540,11 +56552,7 @@ export class World {
               * lord.sheet.get('effectDuration', skillContextTags(def), instanceMods(cs.inst));
             big.pos = this.clampPos(vec(a.pos.x + 34, a.pos.y), big.radius);
             this.actors.push(big);
-            this.flashes.push({
-              pos: vec(big.pos.x, big.pos.y), radius: big.radius + 26,
-              color: def.color, life: 0.45, maxLife: 0.45,
-            });
-            this.text(big.pos, 'THE AMALGAM RISES', def.color, 15);
+            this.showRecoveryCue(big, 'arrive', cs.inst);
           }
           // RELEASE payload (Flame Blast): the gather resolves ONE final
           // time — scaled by held time through the pulse ramp vocabulary,
@@ -57242,7 +57250,7 @@ export class World {
         const minion = this.spawnMinion(pr.caster, pr.inst, { noReplace: true });
         if (minion) {
           this.pendingRespawns.splice(i, 1);
-          this.text(minion.pos, 'respawned', '#b8a0e0', 11);
+          this.showRecoveryCue(minion, 'arrive', pr.inst);
         } else {
           // A bad moment ('cannot sustain', a full shared pool) must not
           // EAT the contract — retry shortly instead of dropping it.
@@ -57560,20 +57568,28 @@ export class World {
       if (r.kind) {
         const def = REMNANT_KINDS[r.kind];
         if (def) {
-          if (def.buff) p.addBuff(def.buff);
-          if (def.charge) p.gainCharge(def.charge.charge, def.charge.amount, def.charge.max);
-          this.text(p.pos, `${def.label}!`, def.color, 13);
+          const remnantCue = def.cue ?? { profile: 'physical', color: def.color };
+          if (def.buff) {
+            p.addBuff({ ...def.buff, storedCue: def.buff.storedCue ?? remnantCue });
+            if (p.buffs.has(def.buff.id)) noteProcCue(p, remnantCue, 'gain', 'remnant:' + def.id);
+          }
+          if (def.charge) {
+            const remnantCueBefore = p.charges.get(def.charge.charge) ?? 0;
+            p.gainCharge(def.charge.charge, def.charge.amount, def.charge.max);
+            const remnantCueGain = (p.charges.get(def.charge.charge) ?? 0) - remnantCueBefore;
+            if (remnantCueGain > 0) noteProcCue(p, remnantCue, 'gain', 'remnant:' + def.id, remnantCueGain);
+          }
         }
       } else if (r.element) {
         p.addBuff({
-          type: 'buff', id: 'remnant_' + r.element, duration: 10,
+          type: 'buff', id: 'remnant_' + r.element, duration: 10, storedCue: { profile: r.element },
           mods: [
             mod('damage', 'more', 0.4, [r.element]),
             mod('projectileCount', 'flat', 1, [r.element]),
             mod('aoeRadius', 'increased', 0.3, [r.element]),
           ],
         });
-        this.text(p.pos, `${r.element} remnant!`, REMNANT_COLORS[r.element], 13);
+        if (p.buffs.has('remnant_' + r.element)) noteProcCue(p, { profile: r.element }, 'gain', 'remnant:' + r.element);
       }
       this.remnants.splice(i, 1);
     }
@@ -57583,6 +57599,7 @@ export class World {
   private consumeRemnants(caster: Actor, def: SkillDef): void {
     for (const el of ELEMENTAL_TYPES) {
       if (def.tags.includes(el) && caster.buffs.has('remnant_' + el)) {
+        noteProcCue(caster, caster.buffs.get('remnant_' + el)!.def.storedCue, 'release', 'remnant:' + el);
         caster.removeBuff('remnant_' + el);
       }
     }
@@ -60041,6 +60058,10 @@ export class World {
 
   /** A zone leaves play: strip every occupant its domain dressed. */
   private expireZone(z: Zone): void {
+    if (z.fieldCue) {
+      this.flashes.push({ ...combatCueFlash(z.pos, z.fieldCue.release ?? 'field_release', z.radius, 0, z.fieldCue.color ?? z.color), recoveryCueTier: z.tier ?? z.caster.tier ?? 0 });
+      z.fieldCue = undefined; // One retirement, even when cleanup paths converge.
+    }
     // A toggled field's reservation refunds here — expireZone runs on all
     // three cleanup paths (expiry/toggle, caster death, zone load).
     if (z.reserved && z.reserved > 0) {

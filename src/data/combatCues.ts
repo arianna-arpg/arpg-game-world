@@ -3,10 +3,19 @@ import { REACTIVE_CUE_CFG, WARD_CUE_STYLES } from './combatReadability';
 /** Shared outcome profiles, independent of skill/monster names. Geometry,
  * timing and density are presentation dials; none change combat rules. */
 export interface CombatCueStyle {
-  shape: 'cross' | 'ghost' | 'barrier' | 'scatter' | 'snap' | 'mend' | 'barbs' | 'ground' | 'fracture' | 'collapse' | 'irisBurst' | 'sever' | 'flatten' | 'vent' | 'rekindle';
+  shape: 'cross' | 'ghost' | 'barrier' | 'scatter' | 'snap' | 'mend' | 'barbs' | 'ground' | 'fracture' | 'collapse' | 'irisBurst' | 'sever' | 'flatten' | 'vent' | 'rekindle' | 'ringCollapse';
   life: number; color: string; pieces: number; travel: number; width: number;
 }
 export const COMBAT_CUE_STYLES: Record<string, CombatCueStyle> = {
+  companion_bind: { shape: 'snap', life: .6, color: '#afd7aa', pieces: 3, travel: .7, width: 2.2 },
+  companion_reject: { shape: 'fracture', life: .5, color: '#d29679', pieces: 3, travel: 1.1, width: 2 },
+  companion_sever: { shape: 'fracture', life: .6, color: '#d5ab87', pieces: 3, travel: 1.2, width: 2 },
+  companion_answer: { shape: 'mend', life: .45, color: '#afd7aa', pieces: 3, travel: .6, width: 2 },
+  companion_down: { shape: 'collapse', life: .55, color: '#d9a17a', pieces: 4, travel: .7, width: 2 },
+  companion_unravel: { shape: 'collapse', life: .65, color: '#aa91c7', pieces: 7, travel: 1.2, width: 2 },
+  companion_bloom: { shape: 'irisBurst', life: .55, color: '#bd87cc', pieces: 7, travel: .9, width: 2.4 },
+  field_form: { shape: 'irisBurst', life: .6, color: '#a68cc9', pieces: 8, travel: .6, width: 2 },
+  field_release: { shape: 'ringCollapse', life: .5, color: '#a68cc9', pieces: 8, travel: .15, width: 2 },
   anatomy_weak_break: { shape: 'fracture', life: 0.4, color: '#f29cce', pieces: 4, travel: 0.85, width: 2 },
   anatomy_part_break: { shape: 'fracture', life: 0.6, color: '#d9b978', pieces: 6, travel: 1.2, width: 2.7 },
   anatomy_segment_tear: { shape: 'sever', life: 0.5, color: '#ed8580', pieces: 3, travel: 0.9, width: 2.5 },

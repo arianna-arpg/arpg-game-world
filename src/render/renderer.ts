@@ -2,6 +2,9 @@ import { concealmentActive } from '../engine/perception';
 import { anatomyCueState, anatomyOverheadRise } from '../engine/anatomyCues';
 import { feedingCueState, type FeedingTransfer } from '../engine/feedingCues';
 import { drawFeedingBody, drawFeedingTransfer, drawRestoreHud } from './vis/feedingCueLayer';
+import { companionCueState, type CompanionCueFlash } from '../engine/companionCues';
+import { COMPANION_CUE_CFG } from '../data/companionCues';
+import { drawCompanionCueBody, drawCompanionCueLinks, drawCompanionCueFlash } from './vis/companionCueLayer';
 import { ANATOMY_CUE_CFG } from '../data/anatomyCues';
 import { drawAnatomyBody, drawAnatomyMeters, drawWeakPointBar, drawWeakPointOrb, drawSegmentWound } from './vis/anatomyCueLayer';
 import { drawSatellites } from './vis/satelliteLayer';
@@ -706,7 +709,12 @@ export class Renderer {
     if (!VIS_ABLATE.has('doodads')) {
       drawDissolves(this.ctx, world, this.cam.x, this.cam.y, vw, vh); // sweeps its set cache, then returns on an empty list
       drawDissolveCracks(this.ctx, world);
-      drawEmergences(this.ctx, world, this.cam.x, this.cam.y, vw, vh); // THE EMERGENCE GRAMMAR: slits + flung grains under the arriving bodies
+      drawEmergences(this.ctx, world, this.cam.x, this.cam.y, vw, vh, rec => {
+        if (rec.recoveryCueTier === undefined) return true;
+        const body = world.actorById(rec.actorId);
+        return !!body && !body.dead && this.anatomyCueVisible(body, world)
+          && this.companionCuePointVisible(rec.pos, rec.recoveryCueTier, world);
+      }); // Recovery ground shares obey the same body and story gates.
     }
     // TRACK RIDERS: the moving hazards, posed from the shared clock through
     // the one painter registry — over the ground and grooves, under actors.
@@ -784,7 +792,14 @@ export class Renderer {
     this.drawDrops(world);
     this.drawResourceOrbs(world);
     this.drawRemnants(world);
-    for (const f of world.flashes) if (!f.feedingCue || this.feedingTransferVisible(f.pos, f.feedingCue, world)) this.drawFlash(f);
+    for (const f of world.flashes) {
+      if (f.feedingCue && !this.feedingTransferVisible(f.pos, f.feedingCue, world)) continue;
+      const recoveryCueTier = f.recoveryCueTier ?? f.companionCue?.tier;
+      if (recoveryCueTier !== undefined && !this.companionCuePointVisible(f.pos, recoveryCueTier, world)) continue;
+      if (f.companionCue?.from && !this.companionCuePointVisible(f.companionCue.from, f.companionCue.from.tier, world)) continue;
+      this.drawFlash(f);
+    }
+    this.drawCompanionCues(world);
     // THE PACK LAYER's drawn bonds (engine/pack.ts): the warden's lines to
     // every body it is actually empowering — over the ground reads, UNDER
     // the bodies they bind (a link is context for a silhouette, never a
@@ -4878,7 +4893,7 @@ export class Renderer {
     });
   }
 
-  private drawFlash(f: { feedingCue?: FeedingTransfer; pos: Vec2; radius: number; color: string; life: number; maxLife: number; arc?: { facing: number; arcRad: number }; shape?: number; facing?: number; edgeFrac?: number; bolt?: boolean; meteor?: boolean; beam?: boolean; haze?: number; fx?: string; cosmeticMotif?: import('../engine/cosmetics').CosmeticMotif }): void {
+  private drawFlash(f: { companionCue?: CompanionCueFlash; feedingCue?: FeedingTransfer; pos: Vec2; radius: number; color: string; life: number; maxLife: number; arc?: { facing: number; arcRad: number }; shape?: number; facing?: number; edgeFrac?: number; bolt?: boolean; meteor?: boolean; beam?: boolean; haze?: number; fx?: string; cosmeticMotif?: import('../engine/cosmetics').CosmeticMotif }): void {
     const { ctx } = this;
     // A big synchronous sim step (headless probes, background-tab catch-up)
     // can overshoot a flash's life below zero before the prune sweeps it —
@@ -4892,6 +4907,7 @@ export class Renderer {
     if (!Number.isFinite(f.pos.x + f.pos.y + f.radius + f.life + f.maxLife)) return;
     const t = f.maxLife > 0 ? Math.max(0, Math.min(1, f.life / f.maxLife)) : 0;
     if (t <= 0 || f.radius <= 0) return;
+    if (f.companionCue) drawCompanionCueFlash(ctx, { ...f, companionCue: f.companionCue });
     if (f.feedingCue) { drawFeedingTransfer(ctx, { ...f, feedingCue: f.feedingCue }); return; }
     if (f.cosmeticMotif) {
       ctx.save(); ctx.globalAlpha *= t * COSMETIC_CFG.cast.opacity;
@@ -5774,6 +5790,8 @@ export class Renderer {
     drawAnatomyBody(ctx, anatomyState, a.radius, a.facing); ctx.restore();
     ctx.save(); ctx.globalAlpha = baseAlpha;
     drawFeedingBody(ctx, feedingCueState(a), a.radius, a.pos, world.time); ctx.restore();
+    ctx.save(); ctx.globalAlpha = baseAlpha;
+    drawCompanionCueBody(ctx, companionCueState(a, world), a.radius, a.facing); ctx.restore();
     if (poolCueGround) {
       ctx.save(); ctx.setTransform(poolCueGround); ctx.globalAlpha = baseAlpha;
       drawPoolVents(ctx, poolCues, world.time); ctx.restore();
@@ -6409,23 +6427,38 @@ export class Renderer {
   }
 
   /** Mark runes and gate tethers. */
+  private companionCuePointVisible(p: Vec2, tier: number, world: World): boolean {
+    return tier === (world.player.tier ?? 0)
+      || (!(world.zone.tiers?.exposure === 'covered' || (this.stacked.length && this.inStack(p)))
+        || !!(world.walk?.regionAt && tierLinkOf(world.walk.regionAt(p.x, p.y))));
+  }
+
+  private drawCompanionCues(world: World): void {
+    const ctx = this.ctx; let links = 0;
+    for (const a of world.actors) {
+      if (a.dead || !this.anatomyCueVisible(a, world)) continue;
+      const row = companionCueState(a, world);
+      for (const l of row.links) {
+        const target = world.actorById(l.to.id);
+        if (links >= COMPANION_CUE_CFG.links || !target || !this.anatomyCueVisible(target, world)) continue;
+        links++; ctx.save();
+        ctx.globalAlpha *= Math.min(1 - this.sightVeil.actorShade(a, this.frameDt), 1 - this.sightVeil.actorShade(target, this.frameDt));
+        drawCompanionCueLinks(ctx, { ...a.pos, radius: a.radius }, l, world.time); ctx.restore();
+      }
+      for (const m of row.marks) {
+        if (!this.companionCuePointVisible(m, m.tier, world)) continue;
+        ctx.save(); ctx.strokeStyle = m.color; ctx.lineWidth = 2; ctx.globalAlpha = .7;
+        const r = COMPANION_CUE_CFG.markRadius;
+        ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2);
+        ctx.moveTo(m.x - r * .5, m.y); ctx.lineTo(m.x + r * .5, m.y);
+        ctx.moveTo(m.x, m.y - r * .5); ctx.lineTo(m.x, m.y + r * .5); ctx.stroke(); ctx.restore();
+      }
+    }
+  }
+
   private drawMovementMarkers(world: World): void {
     const { ctx } = this;
-    const t = world.time;
-    // Mark/Recall runes on the player's bar
-    for (const inst of world.player.skills) {
-      const mp = inst?.state?.markPos;
-      if (!mp) continue;
-      ctx.strokeStyle = inst!.def.color;
-      ctx.globalAlpha = 0.6 + 0.2 * Math.sin(t * 4);
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(mp.x, mp.y, 14 + Math.sin(t * 4) * 2, 0, Math.PI * 2);
-      ctx.moveTo(mp.x - 8, mp.y); ctx.lineTo(mp.x + 8, mp.y);
-      ctx.moveTo(mp.x, mp.y - 8); ctx.lineTo(mp.x, mp.y + 8);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
+    // companionCueState carries Mark/Recall runes for every actor, including co-op.
     // Gate tethers between paired portals
     for (const a of world.actors) {
       if (a.dead || a.construct?.kind !== 'gate' || a.gateLink === undefined) continue;

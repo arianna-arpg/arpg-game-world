@@ -10535,6 +10535,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   the_amalgam: {
+    recoveryCues: { arrive: { motion: 'condense', ground: 'flesh' } },
     id: 'the_amalgam', name: 'The Amalgam',
     description: 'CHANNELED: you stand rooted while every beat consumes one of your minions'
       + ' nearby. On release the eaten fuse into a towering horror that fights for 22 seconds,'

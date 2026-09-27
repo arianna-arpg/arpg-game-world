@@ -1,6 +1,6 @@
 # Gameplay text → visual cues: migration backlog
 
-GAMEPLAY-TEXT-AUDIT · Refreshed 2026-09-26 · **21 families implemented with playtesting pending; 14 open replacement families and 5 surface reviews remain.**
+GAMEPLAY-TEXT-AUDIT · Refreshed 2026-09-27 · **25 families implemented with playtesting pending; 10 open replacement families and 5 surface reviews remain.**
 
 The player must be able to recognize a gameplay event and respond without reading a sentence or a combat label. Give a cue to the actual body, object, place and time involved. Its buildup, commitment, interruption and recovery should agree with the mechanic. Reusable, configurable visual families carry that information; captions are retired as their replacements become readable.
 
@@ -18,22 +18,31 @@ The rows group related mechanics; the generated inventory contains individual ca
 
 ## Current position and combat-first queue
 
-**Implemented, awaiting encounter acceptance:** GT-001–012, GT-019–025, GT-034 and GT-035.
+**Implemented, awaiting encounter acceptance:** GT-001–012, GT-019–029, GT-034 and GT-035.
 These cover exhaustion, poise/guard/shell breaks, parry/reflection, defensive
 outcomes, timing successes, critical riders, committed guard warnings,
 coordinated maneuvers, cast interruption/fizzle, held readiness, reserve
-depletion/venting, prepared payloads, consumed proc/rider material, weakpoints and breakable anatomy, feeding and restoration, armed outcomes, combination completion and source-linked wards. Their
+depletion/venting, prepared payloads, consumed proc/rider material, weakpoints and breakable anatomy, feeding and restoration, companion ownership/taming/recovery, fields and remnants, armed outcomes, combination completion and source-linked wards. Their
 individual rows link the implementation contracts and verification harnesses.
 No row is marked Done solely because its automated checks pass.
 
-**Latest implementation:** GT-025 gives scavengers a real chewing posture,
+**Latest implementation:** GT-026–029 gives companions attributable keeper
+links and stance shapes, real taming preparation/outcomes, down/revival and
+replacement motions, field creation/retirement and remnant body/HUD banks.
+Existing collapsed bodies, revival clocks and emergence geometry are reused;
+new recovery animations add no immunity or gameplay hold. Co-op endpoints
+follow interpolated actors. Scripted boss arrivals remain in GT-013, and
+general unavailable-action feedback remains in GT-038. See
+[companion and recovery cues](companion-cues.md).
+
+**Previous implementation:** GT-025 gives scavengers a real chewing posture,
 consumed corpses/summons short source-to-recipient transfers, and Amalgam a
 gathering mass. Actual resource ticks draw inward body and matching orb drops;
 overmend uses shield diamonds. Full pools invent no refill, and failed/absent
 meals invent no transfer. Shared profiles and all-actor co-op are covered;
 encounter acceptance remains open. See [feeding cues](feeding-cues.md).
 
-**Previous implementation:** GT-024 gives health-window weakpoints matching body
+**Earlier implementation:** GT-024 gives health-window weakpoints matching body
 seams and exact marked intervals on overhead/boss bars, plus life-orb rim marks.
 Independent parts develop cracks, lose their component on a real break and leave
 attachment scars; segment wounds remain on the struck coil. Separate component
@@ -87,9 +96,7 @@ not imply an invulnerability window.
 
 | Work remaining | IDs | Next implementation direction |
 |---|---|---|
-| Companion ownership — next batch | GT-026 | Visible ownership/tether changes tied to actual bonds. |
-| Companions and recovery | GT-027–029 | Taming/rejection, down/reanimation and field/remnant transitions. |
-| Scripted combat and remaining action refusals | GT-013, GT-032, GT-038 | Review individual phase/summon/encounter triggers and unavailable actions. GT-038 gather-too-thin/broke-early captions are already replaced by casting fizzles; other refusals remain. |
+| Scripted combat and remaining action refusals — next gameplay review | GT-013, GT-032, GT-038 | Review individual phase/summon/encounter triggers and unavailable actions. GT-038 gather-too-thin/broke-early captions are already replaced by casting fizzles; tame-outcome refusals now fracture their binding. Other refusals remain. |
 | World danger and discovery | GT-014–018, GT-030, GT-031, GT-033 | Messenger/siege, terrain/water, traps, challenge reset, doors/reveals and Titan trail discoverability. Undead scenery risings do not complete all emergence/trap families. |
 | Broader UI/reference decisions | GT-036, GT-037, GT-039, GT-040 | Objective/wave progress, Odyssey news, numbers/identity, optional reference and operational messages. Trace meaning before changing these surfaces. |
 
@@ -179,10 +186,10 @@ The three Winded mechanics must not be collapsed into one new status. Similarly,
 | GT-023 | P2 · Implemented; playtest pending | Retired `${sdef.label} POPS!`, proc/rider names, invocation rule labels and terminal-sequel names. | Material-shaped stored buffs, consumed-stack and next-hit releases, matching HUD gestures and body runes. Pop cues occur at actual payout; recovery gestures follow real gains. Delivered skills retain their own visuals; all-actor co-op carries resolved banks/releases. | [proc cue contract](proc-cues.md), [profiles](../../src/data/procCues.ts), [shared read](../../src/engine/procCues.ts), [probe](../../balance/probe_proccues.ts) |
 | GT-024 | P2 · Implemented; playtest pending | Retired `spot shattered!`, `SUNDERED`, `TORN`, `SCALE TORN` and `COIL TORN` emitters. | Stamped weakpoint intervals on overhead/boss bars and life-orb rims; active body clefts agree with live damage. Independent part pools, branching cracks, genuine break fragments and attachment scars; indexed segment wound pools/scars and existing hitbox shrink. Separate component meters retain order and distinguish anatomy loss from temporary poise breaks. Shared profiles, quiet removal, skill bans and all-actor co-op covered. | [Contract and checks](anatomy-cues.md), [profiles](../../src/data/anatomyCues.ts), [shared anatomy read](../../src/engine/anatomyCues.ts), [weakpoint semantics](../../src/engine/weakpoints.ts) |
 | GT-025 | P2 · Implemented; playtest pending | `feeds`, `fed`, `devours`, `consumed!` and ordinary restoration-stream captions retired. | Real chewing, consumed-source transfers, held Amalgam mass and measured refill drops on body/resource orbs. Full pools, failed consumption and capped shields invent no gain. Primed releases retain GT-021 preparation cues; all streams show actual ticks. Shared profiles, opt-outs, co-op and hidden renderer checks are covered; crowded encounter readability remains open. | [Feeding contract and verification](feeding-cues.md), [feeding state](../../src/engine/feedingCues.ts) |
-| GT-026 | P2 · Open | `marked`, `dominated`, `bond broken`, stance label and bond-response lines. | Persistent owner/target marks, tether changes and companion posture; make severing or changing allegiance readable. Retain attribution through shape/placement, not faction color alone. | [mark](../../src/engine/world.ts#L36852), [domination](../../src/engine/world.ts#L43145), [bond break](../../src/engine/world.ts#L48657), [stanceShift](../../src/engine/companionBonds.ts#L337) |
-| GT-027 | P2 · Open | `TAMED: …`, `resisted!` during taming, `returns wild`, raised companions. | Taming effort visibly binds and settles the creature; rejection strains/snaps the binding; release restores wild posture. The taming `resisted!` must not inherit a damage-resistance cue simply because the word matches. | [taming outcomes](../../src/engine/world.ts#L30283) |
-| GT-028 | P2 · Open | `DOWN`, `undying`, `respawned`, `THE AMALGAM RISES`, other arrival lines. | Collapse/kneel, stubborn reanimation, reconstruction or emergence appropriate to the body/material. Separate incapacitation, avoided death and new arrival. | [down/death](../../src/engine/world.ts#L45528), [amalgam](../../src/engine/world.ts#L55694), [respawn](../../src/engine/world.ts#L56390) |
-| GT-029 | P2 · Open | `unraveled`, `BLOOM`, `miasma rises`, remnant captions. | The field contracts, blooms, thickens or deposits a visible residue at its true footprint. Reuse element/material families with distinct motion for creation vs destruction. | [miasma](../../src/engine/world.ts#L35024), [field changes](../../src/engine/world.ts#L48397), [remnant](../../src/engine/world.ts#L56647) |
+| GT-026 | P2 · Implemented; playtest pending | `marked`, `dominated!`, bond-break, stance and bond-response captions retired. | Actual keeper/life-bond links, chained thralls, distinct hunt/guard/heel shapes and paired outcome gestures. Pack links retain their authoritative source; Mark/Recall runes now mirror every actor. | [Relationships and verification](companion-cues.md) |
+| GT-027 | P2 · Implemented; playtest pending | Claim, rejection and release captions retired. | Taming collar follows actual cast target/progress; lost focus strains it, rejection fractures it, success settles it. Release severs before existing quiet removal; it does not spawn a wild replacement. | [Taming contract](companion-cues.md) |
+| GT-028 | P2 · Implemented; playtest pending | Companion/seat down/revive, Undying, respawn and Amalgam arrival captions retired. | Existing collapse/revive rings plus stir/rise/condense motions at real outcomes, with no added gameplay hold. Existing recovery immunity remains unchanged. Scripted boss introductions are tracked by GT-013. | [Recovery contract](companion-cues.md) |
+| GT-029 | P2 · Implemented; playtest pending | `unraveled`, `BLOOM`, `miasma rises` and remnant captions retired. | Decay collapses the actual dying body; real Bloom and curse fields use resolved footprints. Retirement contracts once; remnant material banks and releases share body/HUD proc cues. | [Fields, remnants and verification](companion-cues.md) |
 | GT-030 | P2 · Open | Challenge `Goad reset — reopen the wound`. | Visible wound reopening/closing or challenge emblem resetting at the affected target. The optional challenge description can explain rules outside active play. | [Challenges.completed](../../src/engine/challenges.ts#L64) |
 | GT-031 | P2 · Open | Door splinters/swings, hidden cache/passage/stair announcements. | Door and wall motion, falling material, revealed light and visible traversal/access state. Preserve orientation and the new usable opening. | [door events](../../src/engine/world.ts#L50573), [hollow reveals](../../src/data/hollows.ts) |
 | GT-032 | P2 · Open | Scene start/step `announce`, summon `announce`, brood/nest/lattice outcome prose. | Author scene/encounter cue rows: arrival, rupture, scatter, silence and release at the actual actors/objects. Keep dramatic names separate from instructions. | [scenes](../../src/engine/scenes.ts#L675), [summon](../../src/engine/aiActions.ts#L186), [lattice](../../src/engine/killHandlers.ts#L286), [swarming](../../src/packages/defs/swarming.ts#L107), [verminfall](../../src/packages/defs/verminfall.ts#L113) |
@@ -233,12 +240,12 @@ node scripts/audit-gameplay-text.mjs
 
 The [scanner](../../scripts/audit-gameplay-text.mjs) uses the installed TypeScript parser and scans `src/**/*.ts` / `tsx`. It writes [a navigable Markdown inventory](../../balance/reports/gameplay-text-audit/inventory.md) and [structured JSON](../../balance/reports/gameplay-text-audit/inventory.json) to the ignored reports directory. Regenerate those local artifacts after pulling the repository; this curated backlog is the durable record.
 
-Snapshot: **838 source files** scanned on 2026-09-26 from this pass's isolated
+Snapshot: **841 source files** scanned on 2026-09-27 from this pass's isolated
 commit contents. These are discovery candidates, not the count of remaining effects.
 
 | Category | Candidate sites | Interpretation |
 |---|---:|---|
-| `.text(...)` | 410 | Includes dynamic messages, numbers, reference calls and the internal `cry` forwarding call. These are not all combat captions. |
+| `.text(...)` | 389 | Includes dynamic messages, numbers, reference calls and the internal `cry` forwarding call. These are not all combat captions. |
 | `.cry(...)` | 0 | No current call sites; the compatibility wrapper and its downstream `.text` remain. |
 | `.notice(...)` | 150 | Includes world news and gameplay instructions; trace purpose. |
 | `.tell(...)` | 19 | Candidate wrappers, currently Odyssey calls; overlap downstream notice output. |

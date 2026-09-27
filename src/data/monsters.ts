@@ -1064,6 +1064,8 @@ export interface MonsterDef {
    *  ground. Absent = derived (the sand rises, the water surfaces, a host
    *  bursts out). An AmbushSpec.emerge row wins over this one. */
   emerge?: EmergeSpec;
+  companionCue?: import('./companionCues').CompanionCueSpec | false;
+  recoveryCues?: Partial<Record<import('./companionCues').RecoveryCueKind, import('./companionCues').RecoveryCueSpec | false>>;
   /** SHELL GUARD — a directional ABSORB worn as anatomy (the entity's own
    *  guard, not a skill): hits arriving through the covered arc soak into a
    *  breakable pool that REGROWS after `regenDelay` quiet seconds. side

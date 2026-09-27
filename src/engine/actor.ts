@@ -1031,6 +1031,7 @@ export class Actor {
   /** Host-derived stored payloads and actual releases (all actor kinds). */
   procCues?: import('./procCues').ProcCueRow[];
   feedingCues?: import('./feedingCues').FeedingCueState;
+  companionCues?: import('./companionCues').CompanionCueState;
   feedingMeal?: import('./feedingCues').FeedingMealCue;
   restoreGains: import('./feedingCues').RestoreGainCue[] = [];
   anatomyCues?: import('./anatomyCues').AnatomyCueState;

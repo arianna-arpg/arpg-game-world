@@ -20,6 +20,8 @@ export interface RemnantKindDef {
   id: string;
   label: string;
   color: string;
+  /** Shared stored-payload material for pickup and bank/release cues. */
+  cue?: import('./procCues').ProcCueSpec | false;
   /** Pickup grants this buff (stacks per pickup when maxStacks > 1). */
   buff?: BuffEffect;
   /** Pickup banks these charges (registry personalities apply). */
@@ -29,7 +31,7 @@ export interface RemnantKindDef {
 export const REMNANT_KINDS: Record<string, RemnantKindDef> = {
   // The OFFENSIVE fragment: each one scooped stokes the next few seconds.
   ferocity: {
-    id: 'ferocity', label: 'Ferocity', color: '#e8784a',
+    id: 'ferocity', label: 'Ferocity', color: '#e8784a', cue: { profile: 'physical', color: '#e8784a' },
     buff: {
       type: 'buff', id: 'frag_ferocity', duration: 12, maxStacks: 5,
       mods: [mod('damage', 'increased', 0.08)],
@@ -37,7 +39,7 @@ export const REMNANT_KINDS: Record<string, RemnantKindDef> = {
   },
   // The DEFENSIVE shard: armor plating you pick up off the floor.
   bulwark: {
-    id: 'bulwark', label: 'Bulwark', color: '#8aa8c8',
+    id: 'bulwark', label: 'Bulwark', color: '#8aa8c8', cue: { profile: 'cold', color: '#8aa8c8' },
     buff: {
       type: 'buff', id: 'frag_bulwark', duration: 12, maxStacks: 5,
       mods: [mod('armor', 'flat', 30), mod('damageTaken', 'more', -0.03)],
@@ -45,7 +47,7 @@ export const REMNANT_KINDS: Record<string, RemnantKindDef> = {
   },
   // The RAGE mote: raw fuel for the Berserk economy (see CHARGE_DEFS.rage).
   rage: {
-    id: 'rage', label: 'Rage', color: '#e04030',
+    id: 'rage', label: 'Rage', color: '#e04030', cue: { profile: 'blood' },
     charge: { charge: 'rage', amount: 2, max: 10 },
   },
 };

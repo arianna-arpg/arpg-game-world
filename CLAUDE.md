@@ -128,6 +128,11 @@ GT-025 feeding, consumed mass and actual restoration ticks share
 orb drops follow real outcomes, including overmend and co-op. See
 `docs/design/feeding-cues.md`, `probe_feedingcues.ts` and hidden
 `balance/feeding-cues-ui.cjs` (run the probe and build first).
+GT-026–029 companion relationships, stances, taming, recovery, curse fields and
+remnant banks are documented in `docs/design/companion-cues.md`. Shared
+`data/companionCues.ts` profiles reuse emergence without adding gameplay holds;
+verify `probe_companioncues.ts`, companion/revival regressions and hidden
+`balance/companion-cues-ui.cjs` after the probe and build.
 
 Carried satellites live in `data/satellites.ts` and `engine/satellites.ts`:
 untargetable, modifier-granted orbiting effects shared by players and monsters.
