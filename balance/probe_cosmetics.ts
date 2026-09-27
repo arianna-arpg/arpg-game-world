@@ -8,7 +8,7 @@ import { applySkillColorCosmetic, cosmeticCharges, cosmeticSkillColor, grantCosm
   ownsCosmetic, reconcileCosmeticEntitlements, sanitizeCosmetics, sanitizeCosmeticLoadout, settleCosmetics } from '../src/meta/cosmetics';
 import { SKILLS } from '../src/data/skills';
 import { MATERIALS } from '../src/render/vis/materials';
-import { cosmeticBody, CosmeticTrails, cosmeticPreviewSummon } from '../src/render/vis/cosmetics';
+import { cosmeticBody, CosmeticTrails, cosmeticPreviewSummon, cosmeticPreviewSummons } from '../src/render/vis/cosmetics';
 import { makeSkillInstance } from '../src/engine/skills';
 import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 import { NullInput } from '../src/net/intent';
@@ -17,7 +17,8 @@ import { SIM_TAP } from '../src/engine/tap';
 import { CLASSES } from '../src/data/classes';
 import { COSMETIC_MODELS } from '../src/data/cosmeticModels';
 import { LOOKS } from '../src/data/looks';
-import { PART_PAINTERS } from '../src/render/vis/parts';
+import { PART_PAINTERS, paintGlyph, lookPalette, type GlyphDef, type PartSpec } from '../src/render/vis/parts';
+import { withAlpha } from '../src/render/vis/color';
 import { COSMETIC_WISPS } from '../src/data/cosmeticExpansionModels';
 import { COSMETIC_PROJECTILES, COSMETIC_PORTALS, COSMETIC_HOTBARS, cosmeticStyle } from '../src/data/cosmeticStyles';
 import { cosmeticPortalColor, drawCosmeticPortal, drawCosmeticProjectile, cosmeticProjectileExtent, cosmeticHotbar, drawCosmeticHotbar } from '../src/render/vis/cosmeticEffects';
@@ -31,6 +32,19 @@ import { GOLEM_LOOKS } from '../src/data/golemLooks';
 import { GLYPH_PARTS } from '../src/data/glyphParts';
 import { SUMMON_LOOKS } from '../src/data/summonLooks';
 import { SUMMON_LEGACY_COSMETICS } from '../src/data/summonCosmetics';
+import { SKELETAL_MAGE_LOOKS } from '../src/data/skeletalMageLooks';
+import { SKELETAL_MAGE_LEGACY } from '../src/data/skeletalMageCosmetics';
+import { UNDEAD_COURT_LOOKS } from '../src/data/undeadCourtLooks';
+import { UNDEAD_COURT_LEGACY } from '../src/data/undeadCourtCosmetics';
+import { AVIAN_LOOKS } from '../src/data/avianLooks';
+import { AVIAN_LEGACY } from '../src/data/avianCosmetics';
+import { CANINE_LOOKS } from '../src/data/canineLooks';
+import { CANINE_LEGACY } from '../src/data/canineCosmetics';
+import { ARACHNID_LOOKS } from '../src/data/arachnidLooks';
+import { ARACHNID_LEGACY } from '../src/data/arachnidCosmetics';
+import { STALKER_LOOKS } from '../src/data/stalkerLooks';
+import { STALKER_LEGACY } from '../src/data/stalkerCosmetics';
+import { updateAI } from '../src/engine/ai';
 
 let checks = 0;
 const test = (label: string, run: () => void): void => { run(); checks++; console.log(`PASS ${label}`); };
@@ -555,6 +569,565 @@ test('Summon refresh: real Amalgam consumption, growth, legacy selection and pee
     } finally { reset(); }
   };
   assert.deepEqual(run(true), run(false));
+});
+
+test('Skeletal mage visuals: pool and tree previews retain source identity, native defaults and legacy palettes', () => {
+  const ids = Object.keys(SKELETAL_MAGE_LEGACY.paint.summonBodies!), a = makeAccount();
+  assert(ownsCosmetic(a.cosmetics, SKELETAL_MAGE_LEGACY.id));
+  assert.deepEqual(cosmeticPreviewSummons('summon_skeleton_mage').map(m => m.id), ids);
+  assert.deepEqual(cosmeticPreviewSummons('summon_skeleton_archer').map(m => m.id), ['skeleton_archer', ...ids.slice(0, 4)]);
+  assert.deepEqual(cosmeticPreviewSummons('raise_dead').map(m => m.id), ['skeleton_warrior', 'zombie', 'court_abomination']);
+  assert.deepEqual(cosmeticPreviewSummons('fireball'), []);
+  assert.deepEqual(cosmeticPreviewSummons('missing_skill'), []);
+  assert.equal(cosmeticPreviewSummon('summon_skeleton_mage', 'stone_golem')?.id, ids[0]);
+  assert.equal(cosmeticPreviewSummon('summon_skeleton_archer', 'ossuary_lich')?.id, 'skeleton_archer');
+  const nativeLooks = new Set<string>();
+  for (const id of ids) {
+    const m = MONSTERS[id], before = JSON.stringify(m), native = SKELETAL_MAGE_LOOKS[m.look!];
+    assert(native, id); nativeLooks.add(m.look!);
+    for (const part of [...native.parts, ...native.live ?? []]) assert(PART_PAINTERS[part.kind], part.kind);
+    assert.equal(cosmeticPreviewSummon('summon_skeleton_mage', id), m);
+    assert(equipCosmetic(a, 'skillSkin', SKELETAL_MAGE_LEGACY.id, 'summon_skeleton_mage'));
+    const source = { defId: id, skill: 'summon_skeleton_mage' };
+    const painted = cosmeticBody(m, a.cosmetics.loadout, true, false, source);
+    assert.deepEqual(painted, { ...m, look: 'lich' });
+    assert.equal(JSON.stringify(m), before);
+    assert.equal(cosmeticBody(m, a.cosmetics.loadout, false, false, source).look, m.look);
+    assert(equipCosmetic(a, 'skillSkin', null, 'summon_skeleton_mage'));
+    const reloaded = deserializeAccount(serializeAccount(a))!;
+    assert.equal(cosmeticBody(m, reloaded.cosmetics.loadout, true, false, source).look, m.look);
+  }
+  assert.equal(nativeLooks.size, 5);
+  assert(equipCosmetic(a, 'skillSkin', SKELETAL_MAGE_LEGACY.id, 'summon_skeleton_archer'));
+  const archer = MONSTERS.skeleton_archer;
+  assert.equal(cosmeticBody(archer, a.cosmetics.loadout, true, false,
+    { defId: archer.id, skill: 'summon_skeleton_archer' }).look, archer.look, 'unmapped archer stays an archer');
+  assert.equal(equipCosmetic(a, 'skillSkin', SKELETAL_MAGE_LEGACY.id, 'fireball'), false);
+});
+
+test('Skeletal mage visuals: real random, ascendant and archer-tree casts preserve gameplay and peer appearances', () => {
+  const run = (skill: string, nodes: string[], legacy: boolean) => {
+    const reset = seedGlobalRandom(93821);
+    try {
+      const w = makeSimWorld('necromancer', 93821), p = w.player;
+      if (legacy) assert(equipCosmetic(w.account, 'skillSkin', SKELETAL_MAGE_LEGACY.id, skill));
+      const inst = makeSkillInstance(SKILLS[skill], 20, 1);
+      w.meta.knownSkills.set(skill, inst); p.skills.fill(null); p.skills[0] = inst;
+      for (const node of nodes) w.pickTreeNode(skill, node);
+      assert.deepEqual(inst.treeNodes ?? [], nodes);
+      // Learned skills read the seat's real attributes; tree allocation also rebuilds the sheet.
+      for (const attr of Object.keys(w.meta.baseAttrs) as (keyof typeof w.meta.baseAttrs)[]) w.meta.baseAttrs[attr] = 100;
+      w.recalcSeat(w.localSeat);
+      p.sheet.setSource('mage-visual-rig', [{ stat: 'mana', kind: 'flat', value: 1000 }]);
+      p.fillResources(); p.invulnerable = true;
+      assert(w.useSkill(p, inst, p.pos), `${skill}/${nodes.join(',')}: real cast starts`);
+      for (let i = 0; i < 100; i++) w.update(1 / 60);
+      const bodies = w.actors.filter(b => b.owner === p && !b.dead);
+      assert(bodies.length > 0);
+      assert(bodies.every(b => !!SKELETAL_MAGE_LOOKS[b.look!]));
+      if (nodes.includes('lich_ascendant')) assert.deepEqual(bodies.map(b => b.defId), ['ossuary_lich']);
+      const metrics = { mana: p.mana, rng: Math.random(), bodies: bodies.map(b => ({
+        id: b.defId, radius: b.radius, shape: b.shape, life: b.life, lifespan: b.lifespan,
+        damage: b.sheet.get('damage'), skills: b.skills.map(s => s?.def.id), source: cosmeticSummonSkill(b),
+      })) };
+      const client = makeSimWorld('necromancer', 93821), snapshot = serializeSnapshot(w, 1);
+      applySnapshot(client, snapshot);
+      for (const body of bodies) {
+        const replica = client.actors[snapshot.actors.findIndex(a => a.id === body.id)]; assert(replica);
+        assert.equal(cosmeticSummonSkill(body), skill); assert.equal(cosmeticSummonSkill(replica), skill);
+        for (const [world, b] of [[w, body], [client, replica]] as const) {
+          assert.equal(cosmeticBody(b, cosmeticLoadoutFor(world, b), true, false,
+            { defId: b.defId, skill: cosmeticSummonSkill(b) }).look, legacy ? 'lich' : body.look);
+        }
+      }
+      return metrics;
+    } finally { reset(); }
+  };
+  for (const [skill, nodes] of [['summon_skeleton_mage', []], ['summon_skeleton_mage', ['lich_ascendant']],
+    ['summon_skeleton_archer', ['unstrung_sorcery']]] as [string, string[]][]) {
+    assert.deepEqual(run(skill, nodes, true), run(skill, nodes, false));
+  }
+});
+
+test('Undead court visuals: all branch bodies preserve legacy art, source isolation and saved overrides', () => {
+  const a = makeAccount(), skin = UNDEAD_COURT_LEGACY, nativeLooks = new Set<string>();
+  assert(ownsCosmetic(a.cosmetics, skin.id));
+  assert(equipCosmetic(a, 'skillSkin', skin.id));
+  const visited = new Set<string>();
+  for (const skill of skin.skills!) for (const m of cosmeticPreviewSummons(skill)) {
+    const old = skin.paint.summonBodies![m.id], source = { defId: m.id, skill };
+    if (!old) {
+      assert.deepEqual(cosmeticBody(m, a.cosmetics.loadout, true, false, source), m, 'base form keeps its own appearance');
+      continue;
+    }
+    visited.add(m.id); nativeLooks.add(m.look!);
+    const look = UNDEAD_COURT_LOOKS[m.look!]; assert(look, m.id);
+    for (const p of [...look.parts, ...look.live ?? []]) assert(PART_PAINTERS[p.kind], p.kind);
+    assert(LOOKS[old.look]); assert(MATERIALS[old.material!]);
+    assert.equal(old.color, m.color); assert.equal(old.material, m.material);
+    const before = JSON.stringify(m);
+    assert.deepEqual(cosmeticBody(m, a.cosmetics.loadout, true, false, source), { ...m, ...old });
+    assert.equal(JSON.stringify(m), before, 'shared monster data is immutable');
+    assert.deepEqual(cosmeticBody(m, a.cosmetics.loadout, false, false, source), m, 'enemy body is not dressed');
+    assert.deepEqual(cosmeticBody(m, a.cosmetics.loadout, true, false, { ...source, skill: 'fireball' }), m);
+    assert(equipCosmetic(a, 'skillSkin', null, skill));
+    const restored = deserializeAccount(serializeAccount(a))!;
+    assert.deepEqual(cosmeticBody(m, restored.cosmetics.loadout, true, false, source), m);
+    assert(equipCosmetic(a, 'skillSkin', undefined, skill));
+  }
+  assert.deepEqual([...visited].sort(), Object.keys(skin.paint.summonBodies!).sort());
+  assert.equal(nativeLooks.size, 7);
+  assert.equal(equipCosmetic(a, 'skillSkin', skin.id, 'summon_stone_golem'), false);
+});
+
+test('Undead court visuals: real branch casts and both Pyres preserve gameplay, RNG and peer appearances', () => {
+  const run = (skill: string, node: string, expected: string, legacy: boolean) => {
+    const reset = seedGlobalRandom(71382);
+    try {
+      const w = makeSimWorld('necromancer', 71382), p = w.player;
+      if (legacy) assert(equipCosmetic(w.account, 'skillSkin', UNDEAD_COURT_LEGACY.id, skill));
+      const inst = makeSkillInstance(SKILLS[skill], 20, 1);
+      w.meta.knownSkills.set(skill, inst); p.skills.fill(null); p.skills[0] = inst;
+      w.pickTreeNode(skill, node); assert.deepEqual(inst.treeNodes, [node]);
+      for (const attr of Object.keys(w.meta.baseAttrs) as (keyof typeof w.meta.baseAttrs)[]) w.meta.baseAttrs[attr] = 100;
+      w.recalcSeat(w.localSeat);
+      p.sheet.setSource('court-visual-rig', [{ stat: 'mana', kind: 'flat', value: 1000 }]);
+      p.fillResources(); p.invulnerable = true;
+      assert(w.useSkill(p, inst, { x: p.pos.x + 70, y: p.pos.y }), `${skill}/${node}: real cast starts`);
+      for (let i = 0; i < 100; i++) { if (p.casting) p.casting.held = true; w.update(1 / 60); }
+      const bodies = w.actors.filter(b => b.owner === p && !b.dead);
+      assert(bodies.length > 0, node); assert(bodies.every(b => b.defId === expected), node);
+      const metrics = { mana: p.mana, rng: Math.random(), bodies: bodies.map(b => ({
+        id: b.defId, radius: b.radius, shape: b.shape, life: b.life, lifespan: b.lifespan,
+        speed: b.sheet.get('moveSpeed'), damage: b.sheet.get('damage'), skills: b.skills.map(s => s?.def.id),
+        source: cosmeticSummonSkill(b), pos: b.pos,
+      })) };
+      const client = makeSimWorld('necromancer', 71382), snapshot = serializeSnapshot(w, 1);
+      applySnapshot(client, snapshot);
+      for (const body of bodies) {
+        const replica = client.actors[snapshot.actors.findIndex(a => a.id === body.id)]; assert(replica);
+        for (const [world, b] of [[w, body], [client, replica]] as const) {
+          assert.equal(cosmeticSummonSkill(b), skill);
+          assert.equal(cosmeticBody(b, cosmeticLoadoutFor(world, b), true, false,
+            { defId: b.defId, skill: cosmeticSummonSkill(b) }).look,
+          legacy ? UNDEAD_COURT_LEGACY.paint.summonBodies![expected].look : MONSTERS[expected].look);
+        }
+      }
+      return metrics;
+    } finally { reset(); }
+  };
+  for (const [skill, node, expected] of [
+    ['summon_skeleton', 'grave_phalanx', 'skeletal_sentinel'],
+    ['summon_skeleton', 'ossuary_duelists', 'skeletal_duelist'],
+    ['raise_dead', 'flesh_assembly', 'court_abomination'],
+    ['summon_raging_spirit', 'frenzied_embers', 'court_ember'],
+    ['summon_raging_spirit', 'vigil_flames', 'court_vigil_flame'],
+    ['summon_wraith', 'hexwoven_shades', 'court_hex_wraith'],
+    ['summon_wraith', 'soul_reavers', 'court_reaper_wraith'],
+    ['spirit_pyre', 'running_wildfire', 'court_ember'],
+    ['spirit_pyre', 'banked_pyre', 'court_ember'],
+  ]) assert.deepEqual(run(skill, node, expected, true), run(skill, node, expected, false));
+});
+
+test('Avian visuals: native birds resolve, the falcon legacy is exact, and wild birds stay independent', () => {
+  const account = makeAccount(), skin = AVIAN_LEGACY;
+  assert(ownsCosmetic(account.cosmetics, skin.id));
+  assert(equipCosmetic(account, 'skillSkin', skin.id));
+  assert.deepEqual(cosmeticPreviewSummons('cast_falcon').map(m => m.id), ['hunting_falcon']);
+  const ids = ['hunting_falcon', 'dune_vulture', 'carrion_shrike'];
+  assert.equal(new Set(ids.map(id => MONSTERS[id].look)).size, 3);
+  for (const id of ids) {
+    const def = MONSTERS[id], look = AVIAN_LOOKS[def.look!]; assert(look);
+    for (const p of [...look.parts, ...look.live ?? []]) assert(PART_PAINTERS[p.kind], p.kind);
+    const source = { defId: id, skill: 'cast_falcon' }, before = JSON.stringify(def);
+    const dressed = cosmeticBody(def, account.cosmetics.loadout, true, false, source);
+    assert.deepEqual(dressed, id === 'hunting_falcon' ? { ...def, look: 'vulture' } : def);
+    assert.deepEqual(cosmeticBody(def, account.cosmetics.loadout, false, false, source), def);
+    assert.equal(JSON.stringify(def), before);
+  }
+  assert(equipCosmetic(account, 'skillSkin', null, 'cast_falcon'));
+  const restored = deserializeAccount(serializeAccount(account))!, falcon = MONSTERS.hunting_falcon;
+  assert.equal(cosmeticBody(falcon, restored.cosmetics.loadout, true, false,
+    { defId: falcon.id, skill: 'cast_falcon' }).look, falcon.look);
+  assert.equal(equipCosmetic(account, 'skillSkin', skin.id, 'summon_swarmlings'), false);
+  assert(LOOKS.vulture, 'the original shared bird composition remains available');
+});
+
+test('Avian visuals: real falcon cast, latch, vulnerability, rebirth and peers preserve gameplay under either skin', () => {
+  const run = (legacy: boolean) => {
+    const reset = seedGlobalRandom(62171);
+    try {
+      const w = makeSimWorld('falconer', 62171), p = w.player;
+      p.skills.fill(null);
+      const inst = makeSkillInstance(SKILLS.cast_falcon, 1, 1);
+      p.skills[0] = inst; w.meta.knownSkills.set(inst.def.id, inst);
+      for (const attr of Object.keys(w.meta.baseAttrs) as (keyof typeof w.meta.baseAttrs)[]) w.meta.baseAttrs[attr] = 100;
+      w.recalcSeat(w.localSeat);
+      p.sheet.setSource('avian-rig', [{ stat: 'mana', kind: 'flat', value: 1000 }]);
+      p.fillResources(); p.invulnerable = true;
+      if (legacy) assert(equipCosmetic(w.account, 'skillSkin', AVIAN_LEGACY.id, inst.def.id));
+      assert(w.useSkill(p, inst, p.pos));
+      for (let i = 0; i < 60; i++) w.update(1 / 60);
+      const bird = w.actors.find(a => a.owner === p && a.defId === 'hunting_falcon' && !a.dead); assert(bird);
+      assert.equal(p.reservedMana, 9);
+      const prey = w.createMonster('plains_wolf', 1, 'enemy');
+      prey.pos = { x: p.pos.x + 80, y: p.pos.y }; prey.tier = p.tier; prey.skills = [];
+      prey.sheet.setSource('avian-rig', [{ stat: 'life', kind: 'override', value: 100000 },
+        { stat: 'moveSpeed', kind: 'override', value: 0 }]); prey.fillResources();
+      w.actors.push(prey);
+      let latchedAt = -1;
+      for (let i = 0; i < 360; i++) {
+        for (const a of w.actors) updateAI(a, w, 1 / 60);
+        w.update(1 / 60);
+        if (latchedAt < 0 && bird.clingTo?.id === prey.id && prey.statuses.some(s => s.id === 'vulnerable')) latchedAt = i;
+      }
+      assert(latchedAt >= 0, `the actual bird reaches, latches and marks prey: ${JSON.stringify({ bird: bird.pos, prey: prey.pos, target: bird.aiTargetId, tier: [bird.tier, prey.tier], cling: bird.clingTo, statuses: prey.statuses.map(s => s.id) })}`);
+      w.kill(bird);
+      for (let i = 0; i < 320; i++) w.update(1 / 60);
+      const reborn = w.actors.find(a => a.owner === p && a.defId === 'hunting_falcon' && !a.dead); assert(reborn);
+      assert.notEqual(reborn.id, bird.id); assert.equal(p.reservedMana, 9);
+      const wild = ['dune_vulture', 'carrion_shrike'].map(id => {
+        const a = w.createMonster(id, 1, 'enemy'); a.pos = { ...p.pos }; w.actors.push(a); return a;
+      });
+      const metrics = { latchedAt, damage: prey.maxLife() - prey.life, mana: p.mana, reserved: p.reservedMana,
+        radius: reborn.radius, life: reborn.life, flying: reborn.flying, cling: reborn.cling,
+        skills: reborn.skills.map(s => s?.def.id), rng: Math.random() };
+      const client = makeSimWorld('falconer', 62171), snap = serializeSnapshot(w, 1); applySnapshot(client, snap);
+      for (const body of [reborn, ...wild]) {
+        const peer = client.actors[snap.actors.findIndex(a => a.id === body.id)]; assert(peer);
+        assert.equal(peer.look, body.look); assert.equal(peer.radius, body.radius);
+        if (body === reborn) assert.equal(cosmeticSummonSkill(peer), 'cast_falcon');
+        for (const [world, a] of [[w, body], [client, peer]] as const) {
+          const paint = cosmeticBody(a, cosmeticLoadoutFor(world, a), a.isMinion(), false,
+            { defId: a.defId, skill: cosmeticSummonSkill(a) });
+          assert.equal(paint.look, body === reborn && legacy ? 'vulture' : body.look);
+        }
+      }
+      return metrics;
+    } finally { reset(); }
+  };
+  assert.deepEqual(run(true), run(false));
+});
+
+test('Canine visuals: five distinct bodies, retained originals and data-derived retaliation/tame previews', () => {
+  const account = makeAccount(), skin = CANINE_LEGACY;
+  assert(ownsCosmetic(account.cosmetics, skin.id));
+  assert(equipCosmetic(account, 'skillSkin', skin.id));
+  assert.deepEqual(cosmeticPreviewSummons('pain_hounds').map(m => m.id), ['pain_hound']);
+  assert.deepEqual(cosmeticPreviewSummons('tame_beast').filter(m => skin.paint.summonBodies?.[m.id]).map(m => m.id).sort(), ['gravemaw_hound', 'plains_wolf', 'shepherds_hound']);
+  const claim = SKILLS.tame_beast.effects.find(effect => effect.type === 'tame')!;
+  const tags = claim.tags;
+  try {
+    claim.tags = ['future_family', 'beast'];
+    assert.equal(cosmeticPreviewSummons('tame_beast').filter(m => skin.paint.summonBodies?.[m.id]).length, 3, 'tame tags are alternatives, as in the real claim gate');
+    claim.tags = [];
+    assert.equal(cosmeticPreviewSummons('tame_beast').length, 0, 'an empty taxonomy admits no captured bodies');
+  } finally { claim.tags = tags; }
+  const ids = ['pain_hound', 'plains_wolf', 'fen_hound', 'shepherds_hound', 'gravemaw_hound'];
+  assert.equal(new Set(ids.map(id => MONSTERS[id].look)).size, 5);
+  for (const id of ids) {
+    const def = MONSTERS[id], look = CANINE_LOOKS[def.look!]; assert(look);
+    for (const part of [...look.parts, ...look.live ?? []]) assert(PART_PAINTERS[part.kind], part.kind);
+    const skill = id === 'pain_hound' ? 'pain_hounds' : 'tame_beast', before = JSON.stringify(def);
+    const source = { defId: id, skill };
+    assert.deepEqual(cosmeticBody(def, account.cosmetics.loadout, true, false, source),
+      id === 'fen_hound' ? def : { ...def, look: 'hound', material: def.material });
+    assert.deepEqual(cosmeticBody(def, account.cosmetics.loadout, false, false, source), def);
+    assert.equal(JSON.stringify(def), before);
+  }
+  const other = MONSTERS.warg;
+  assert.equal(cosmeticBody(other, account.cosmetics.loadout, true, false, { defId: other.id, skill: 'tame_beast' }), other);
+  assert.equal(equipCosmetic(account, 'skillSkin', skin.id, 'cast_falcon'), false);
+  assert(equipCosmetic(account, 'skillSkin', null, 'tame_beast'));
+  const loaded = deserializeAccount(serializeAccount(account))!;
+  assert.equal(cosmeticPick(loaded.cosmetics.loadout, 'skillSkin', 'tame_beast'), undefined);
+  assert.equal(cosmeticPick(loaded.cosmetics.loadout, 'skillSkin', 'pain_hounds')?.id, skin.id);
+  assert(LOOKS.hound, 'the original composition remains intact');
+});
+
+test('Canine visuals: real Pain Hounds cast, retaliation, source attribution and expiry preserve gameplay', () => {
+  const run = (legacy: boolean) => {
+    const reset = seedGlobalRandom(62919);
+    try {
+      const w = makeSimWorld('warrior', 62919), p = w.player;
+      p.skills.fill(null); const inst = makeSkillInstance(SKILLS.pain_hounds, 1, 1);
+      p.skills[0] = inst; w.meta.knownSkills.set(inst.def.id, inst);
+      for (const attr of Object.keys(w.meta.baseAttrs) as (keyof typeof w.meta.baseAttrs)[]) w.meta.baseAttrs[attr] = 100;
+      w.recalcSeat(w.localSeat);
+      p.sheet.setSource('canine-rig', [{ stat: 'mana', kind: 'flat', value: 1000 },
+        { stat: 'life', kind: 'flat', value: 10000 }, { stat: 'evasion', kind: 'override', value: 0 },
+        { stat: 'blockChance', kind: 'override', value: 0 }]); p.fillResources();
+      if (legacy) assert(equipCosmetic(w.account, 'skillSkin', CANINE_LEGACY.id, 'pain_hounds'));
+      assert(w.useSkill(p, inst, p.pos));
+      for (let i = 0; i < 60; i++) w.update(1 / 60);
+      assert.equal(p.charges.get('shard'), 3);
+      const enemy = w.createMonster('plains_wolf', 1, 'enemy'); enemy.pos = { x: p.pos.x + 30, y: p.pos.y };
+      enemy.tier = p.tier; enemy.skills = []; w.actors.push(enemy);
+      enemy.sheet.setSource('canine-rig', [{ stat: 'accuracy', kind: 'override', value: 100000 }]);
+      const hit = makeSkillInstance(SKILLS.claw, 1);
+      // A direct strike has depth zero; challenge payloads intentionally suppress retaliation.
+      for (let i = 0; i < 20 && p.charges.get('shard') === 3; i++) (w as any).resolveHit(enemy, hit, p, 1, 0);
+      assert.equal(p.charges.get('shard'), 2);
+      const hound = w.actors.find(a => a.owner === p && a.defId === 'pain_hound'); assert(hound);
+      assert.equal(hound.lifespan, 8); assert.equal(cosmeticSummonSkill(hound), 'pain_hounds');
+      const client = makeSimWorld('warrior', 62919), snap = serializeSnapshot(w, 1); applySnapshot(client, snap);
+      const peer = client.actors[snap.actors.findIndex(a => a.id === hound.id)]; assert(peer);
+      for (const [world, a] of [[w, hound], [client, peer]] as const) {
+        assert.equal(cosmeticSummonSkill(a), 'pain_hounds');
+        assert.equal(cosmeticBody(a, cosmeticLoadoutFor(world, a), true, false,
+          { defId: a.defId, skill: cosmeticSummonSkill(a) }).look, legacy ? 'hound' : 'hound_painthorn');
+      }
+      const metrics = { damage: p.maxLife() - p.life, mana: p.mana, charge: p.charges.get('shard'),
+        pos: { ...hound.pos }, radius: hound.radius, life: hound.life, skills: hound.skills.map(s => s?.def.id) };
+      for (let i = 0; i < 510; i++) w.update(1 / 60);
+      assert(hound.dead || !w.actors.includes(hound));
+      return { ...metrics, rng: Math.random() };
+    } finally { reset(); }
+  };
+  assert.deepEqual(run(true), run(false));
+});
+
+test('Canine visuals: starting and restored bonds keep legacy source identity through downing, revival and peers', () => {
+  const w = makeSimWorld('tamer', 62920), p = w.player;
+  assert(equipCosmetic(w.account, 'skillSkin', CANINE_LEGACY.id, 'tame_beast'));
+  w.grantStartingCompanions();
+  let pet = w.actors.find(a => a.companion && a.owner === p)!; assert(pet);
+  assert.equal(pet.defId, 'shepherds_hound');
+  assert.equal(pet.sourceSkillId, '__companion:tame_beast');
+  const paint = () => cosmeticBody(pet, cosmeticLoadoutFor(w, pet), true, false,
+    { defId: pet.defId, skill: cosmeticSummonSkill(pet) });
+  assert.equal(cosmeticSummonSkill(pet), 'tame_beast'); assert.equal(paint().look, 'hound');
+  const saved = w.companionBonds.saved(pet), native = { radius: pet.radius, life: pet.maxLife(), skills: pet.skills.map(s => s?.def.id) };
+  w.actors = w.actors.filter(a => a !== pet); w.companionBonds.refresh(); w.restoreCompanions([saved]);
+  pet = w.actors.find(a => a.companion && a.owner === p)!; assert(pet);
+  assert.equal(paint().look, 'hound');
+  w.kill(pet); assert(pet.downed && !pet.dead); assert.equal(paint().look, 'hound');
+  w.reviveCompanion(pet); assert(!pet.downed && !pet.dead);
+  assert.deepEqual({ radius: pet.radius, life: pet.maxLife(), skills: pet.skills.map(s => s?.def.id) }, native);
+  const guest = w.addSeat('canine_guest', classById('tamer'), new NullInput());
+  guest.actor.cosmeticLoadout = { slots: {}, skills: {} };
+  const guestPet = w.actors.find(a => a.companion && a.owner === guest.actor)!; assert(guestPet);
+  const client = makeSimWorld('tamer', 62920), snap = serializeSnapshot(w, 1); applySnapshot(client, snap);
+  for (const body of [pet, guestPet]) {
+    const peer = client.actors[snap.actors.findIndex(a => a.id === body.id)]; assert(peer);
+    assert.equal(cosmeticSummonSkill(peer), 'tame_beast');
+    assert.equal(cosmeticBody(peer, cosmeticLoadoutFor(client, peer), true, false,
+      { defId: peer.defId, skill: cosmeticSummonSkill(peer) }).look, body === pet ? 'hound' : 'hound_drover');
+  }
+  assert(equipCosmetic(w.account, 'skillSkin', null, 'tame_beast')); assert.equal(paint().look, 'hound_drover');
+  assert.equal(pet.sourceSkillId, '__companion:tame_beast', 'cosmetic resolution never rewrites the gameplay cap marker');
+});
+
+test('Glyph placement colors and roles recolor base strokes while preserving authored accents', () => {
+  const pal = lookPalette('#654321', 'chitin'), colors: string[] = [];
+  const ctx = new Proxy({ fillStyle: '', fill() { colors.push(this.fillStyle); } }, {
+    get(target, key) { return key in target ? target[key as keyof typeof target] : () => {}; },
+  }) as unknown as CanvasRenderingContext2D;
+  const glyph: GlyphDef = { ops: [
+    { kind: 'disc', rx: .5 }, { kind: 'disc', rx: .3, role: 'bone' },
+    { kind: 'disc', rx: .2, color: '#123456', role: 'glow' },
+  ] };
+  const draw = (spec: PartSpec) => { colors.length = 0; paintGlyph(ctx, 20, spec, pal, glyph); return [...colors]; };
+  const plain = draw({ kind: 'custom_color_check' });
+  assert.equal(plain[0], withAlpha(pal.base.base, 1));
+  assert.deepEqual(draw({ kind: 'custom_color_check', color: '#e04848', role: 'dark' }),
+    [withAlpha('#e04848', 1), plain[1], withAlpha('#123456', 1)]);
+  assert.deepEqual(draw({ kind: 'custom_color_check', role: 'dark' }),
+    [withAlpha(pal.dark, 1), plain[1], plain[2]]);
+  assert.deepEqual(draw({ kind: 'custom_color_check', role: 'metal' }),
+    [withAlpha(pal.metal.base, 1), plain[1], plain[2]]);
+});
+
+test('Arachnid visuals: five modular bodies, exact free legacy mappings and skin-aware family previews', () => {
+  const a = makeAccount(), skin = ARACHNID_LEGACY, ids = Object.keys(skin.paint.summonBodies!);
+  assert(ownsCosmetic(a.cosmetics, skin.id)); assert(equipCosmetic(a, 'skillSkin', skin.id));
+  assert.equal(new Set(ids.map(id => MONSTERS[id].look)).size, 5);
+  for (const id of ids) {
+    const body = MONSTERS[id], look = ARACHNID_LOOKS[body.look!], old = skin.paint.summonBodies![id];
+    assert(look); assert(LOOKS[old.look]);
+    for (const part of [...look.parts, ...look.live ?? []]) assert(PART_PAINTERS[part.kind], part.kind);
+    const before = JSON.stringify(body), source = { defId: id, skill: 'tame_beast' };
+    assert.deepEqual(cosmeticBody(body, a.cosmetics.loadout, true, false, source), { ...body, ...old, material: body.material });
+    assert.equal(cosmeticBody(body, a.cosmetics.loadout, false, false, source), body);
+    assert.equal(JSON.stringify(body), before);
+  }
+  assert.deepEqual(cosmeticPreviewSummons('lay_brood_egg').map(m => m.id), ['spiderling']);
+  assert.deepEqual(cosmeticPreviewSummons('tame_beast').filter(m => skin.paint.summonBodies?.[m.id]).map(m => m.id).sort(), ids.sort());
+  assert.equal(cosmeticPreviewSummon('tame_beast', 'plains_wolf', skin.id)?.id, 'spiderling');
+  assert.equal(cosmeticPreviewSummon('tame_beast', 'orb_weaver', skin.id)?.id, 'orb_weaver');
+  assert.equal(cosmeticPreviewSummon('tame_beast', 'orb_weaver', CANINE_LEGACY.id)?.id, 'plains_wolf');
+  assert.equal(cosmeticPreviewSummon('tame_beast', 'plains_wolf')?.id, 'plains_wolf', 'explicit unmapped forms remain browsable');
+  const d = SKILLS.lay_brood_egg.delivery; assert(d.type === 'construct' && d.hatch);
+  const payload = d.hatch.skillId;
+  try { d.hatch.skillId = 'lay_brood_egg'; assert.deepEqual(cosmeticPreviewSummons('lay_brood_egg'), []); }
+  finally { d.hatch.skillId = payload; }
+  assert.equal(equipCosmetic(a, 'skillSkin', skin.id, 'cast_falcon'), false);
+  assert(equipCosmetic(a, 'skillSkin', null, 'tame_beast'));
+  const loaded = deserializeAccount(serializeAccount(a))!;
+  assert.equal(cosmeticPick(loaded.cosmetics.loadout, 'skillSkin', 'tame_beast'), undefined);
+  assert.equal(cosmeticPick(loaded.cosmetics.loadout, 'skillSkin', 'lay_brood_egg')?.id, skin.id);
+});
+
+test('Arachnid visuals: real egg casts hatch source-aware spiders with identical gameplay and peer appearances', () => {
+  const run = (legacy: boolean, broken: boolean) => {
+    const reset = seedGlobalRandom(63017);
+    try {
+      const w = makeSimWorld('warrior', 63017), p = w.player;
+      p.skills.fill(null); const inst = makeSkillInstance(SKILLS.lay_brood_egg, 1, 1);
+      p.skills[0] = inst; w.meta.knownSkills.set(inst.def.id, inst);
+      for (const attr of Object.keys(w.meta.baseAttrs) as (keyof typeof w.meta.baseAttrs)[]) w.meta.baseAttrs[attr] = 100;
+      w.recalcSeat(w.localSeat);
+      p.sheet.setSource('arachnid-rig', [{ stat: 'mana', kind: 'flat', value: 1000 }]); p.fillResources();
+      if (legacy) assert(equipCosmetic(w.account, 'skillSkin', ARACHNID_LEGACY.id, inst.def.id));
+      assert(w.useSkill(p, inst, { x: p.pos.x + 50, y: p.pos.y }));
+      for (let i = 0; i < 60; i++) w.update(1 / 60);
+      const egg = w.actors.find(a => a.owner === p && a.construct?.kind === 'pod' && !a.dead); assert(egg);
+      assert.equal(egg.look, 'brood_egg');
+      const hatchTicks = Math.ceil(egg.lifespan! * 60) + 2; assert(hatchTicks > 0 && hatchTicks < 1800);
+      if (broken) w.kill(egg);
+      for (let i = 0; i < hatchTicks; i++) w.update(1 / 60);
+      assert(egg.dead || !w.actors.includes(egg));
+      const brood = w.actors.filter(a => a.owner === p && a.defId === 'spiderling' && !a.dead);
+      assert.equal(brood.length, broken ? 0 : 2);
+      const client = makeSimWorld('warrior', 63017), snap = serializeSnapshot(w, 1); applySnapshot(client, snap);
+      for (const body of brood) {
+        assert.equal(body.summonInst?.def.id, 'egg_hatch_spiders'); assert.equal(body.sourceSkillId, 'egg_hatch_spiders');
+        const peer = client.actors[snap.actors.findIndex(a => a.id === body.id)]; assert(peer);
+        for (const [world, a] of [[w, body], [client, peer]] as const) {
+          assert.equal(cosmeticSummonSkill(a), 'lay_brood_egg');
+          assert.equal(cosmeticBody(a, cosmeticLoadoutFor(world, a), true, false,
+            { defId: a.defId, skill: cosmeticSummonSkill(a) }).look, legacy ? 'spider_small' : 'spider_skitterling');
+        }
+      }
+      return { mana: p.mana, cooldown: p.cooldowns.get(inst.def.id), brood: brood.map(a => ({ radius: a.radius, pos: a.pos,
+        life: a.life, maxLife: a.maxLife(), skills: a.skills.map(s => s?.def.id), lifespan: a.lifespan })), rng: Math.random() };
+    } finally { reset(); }
+  };
+  assert.deepEqual(run(true, false), run(false, false));
+  assert.deepEqual(run(true, true), run(false, true));
+});
+
+test('Arachnid visuals: all five bonded bodies retain their saved form and resolve independently of wild spiders', () => {
+  for (const [id, old] of Object.entries(ARACHNID_LEGACY.paint.summonBodies!)) {
+    const w = makeSimWorld('tamer', 63018), p = w.player;
+    assert(equipCosmetic(w.account, 'skillSkin', ARACHNID_LEGACY.id, 'tame_beast'));
+    let pet = w.createMonster(id, 1, 'enemy'); pet.pos = { ...p.pos }; w.actors.push(pet);
+    w.tameCompanion(p, pet, 'tame_beast'); assert(pet.companion && pet.owner === p);
+    const saved = w.companionBonds.saved(pet), radius = pet.radius;
+    w.actors = w.actors.filter(a => a !== pet); w.companionBonds.refresh(); w.restoreCompanions([saved]);
+    pet = w.actors.find(a => a.companion && a.defId === id)!; assert(pet); assert.equal(pet.radius, radius);
+    const wild = w.createMonster(id, 1, 'enemy'); wild.pos = { ...p.pos }; w.actors.push(wild);
+    const client = makeSimWorld('tamer', 63018), snap = serializeSnapshot(w, 1); applySnapshot(client, snap);
+    for (const body of [pet, wild]) {
+      const peer = client.actors[snap.actors.findIndex(a => a.id === body.id)]; assert(peer);
+      for (const [world, a] of [[w, body], [client, peer]] as const) {
+        assert.equal(cosmeticBody(a, cosmeticLoadoutFor(world, a), a.isMinion(), false,
+          { defId: a.defId, skill: cosmeticSummonSkill(a) }).look, body === pet ? old.look : MONSTERS[id].look);
+      }
+    }
+    assert(equipCosmetic(w.account, 'skillSkin', null, 'tame_beast'));
+    assert.equal(cosmeticBody(pet, cosmeticLoadoutFor(w, pet), true, false,
+      { defId: pet.defId, skill: cosmeticSummonSkill(pet) }).look, MONSTERS[id].look);
+  }
+});
+
+test('Stalker visuals: distinct modular builds, canine part reuse and exact legacy choices for eligible bonds', () => {
+  const a = makeAccount(), skin = STALKER_LEGACY;
+  assert(ownsCosmetic(a.cosmetics, skin.id)); assert(equipCosmetic(a, 'skillSkin', skin.id));
+  const ids = ['gloom_stalker', 'migration_strider', 'veilstalker', 'alpha_stalker'];
+  assert.equal(new Set(ids.map(id => MONSTERS[id].look)).size, 4);
+  for (const id of ids) {
+    const def = MONSTERS[id], before = JSON.stringify(def), look = STALKER_LOOKS[def.look!]; assert(look);
+    for (const part of [...look.parts, ...look.live ?? []]) assert(PART_PAINTERS[part.kind], part.kind);
+    const source = { defId: id, skill: 'tame_beast' }, old = skin.paint.summonBodies?.[id];
+    assert.deepEqual(cosmeticBody(def, a.cosmetics.loadout, true, false, source), old ? { ...def, ...old } : def);
+    assert.equal(cosmeticBody(def, a.cosmetics.loadout, false, false, source), def);
+    assert.equal(JSON.stringify(def), before);
+  }
+  assert(STALKER_LOOKS.stalker_packalpha.parts.some(p => p.kind === 'scavengerJaw'));
+  assert(STALKER_LOOKS.strider_longstep.parts.some(p => p.kind === 'shaggyRuff'));
+  assert.deepEqual(cosmeticPreviewSummons('tame_beast').filter(m => skin.paint.summonBodies?.[m.id]).map(m => m.id), ['migration_strider', 'veilstalker']);
+  assert.equal(cosmeticPreviewSummon('tame_beast', 'spiderling', skin.id)?.id, 'migration_strider');
+  assert.equal(cosmeticPreviewSummon('tame_beast', 'veilstalker', skin.id)?.id, 'veilstalker');
+  assert.equal(equipCosmetic(a, 'skillSkin', skin.id, 'pain_hounds'), false);
+  assert(equipCosmetic(a, 'skillSkin', null, 'tame_beast'));
+  assert.equal(cosmeticPick(deserializeAccount(serializeAccount(a))!.cosmetics.loadout, 'skillSkin', 'tame_beast'), undefined);
+  assert(LOOKS.stalker, 'all former compositions remain available');
+});
+
+test('Stalker visuals: actual tame casts, restored bonds, downing/revival and independent peers preserve gameplay', () => {
+  const run = (id: string, legacy: boolean) => {
+    const reset = seedGlobalRandom(63103);
+    try {
+      const w = makeSimWorld('tamer', 63103), p = w.player;
+      const inst = p.skills.find(s => s?.def.id === 'tame_beast')!; assert(inst);
+      for (const attr of Object.keys(w.meta.baseAttrs) as (keyof typeof w.meta.baseAttrs)[]) w.meta.baseAttrs[attr] = 100;
+      w.recalcSeat(w.localSeat); p.invulnerable = true;
+      p.sheet.setSource('stalker-rig', [{ stat: 'mana', kind: 'flat', value: 1000 }]); p.fillResources();
+      if (legacy) assert(equipCosmetic(w.account, 'skillSkin', STALKER_LEGACY.id, 'tame_beast'));
+      let pet = w.createMonster(id, 1, 'enemy'); pet.pos = { x: p.pos.x + 55, y: p.pos.y }; pet.tier = p.tier;
+      pet.life = pet.maxLife() * .1; w.actors.push(pet);
+      assert(w.useSkill(p, inst, pet.pos));
+      for (let i = 0; i < 420 && !pet.companion; i++) w.update(1 / 60);
+      assert(pet.companion && pet.owner === p, `real claim: ${id}`);
+      assert.equal(cosmeticSummonSkill(pet), 'tame_beast');
+      const bodyState = () => ({ radius: pet.radius, maxLife: pet.maxLife(), damage: pet.sheet.get('damage'),
+        weight: pet.sheet.get('weight'), juvenile: pet.juvenile, spawnScale: pet.spawnScale });
+      const saved = w.companionBonds.saved(pet), captured = bodyState();
+      w.actors = w.actors.filter(a => a !== pet); w.companionBonds.refresh(); w.restoreCompanions([saved]);
+      pet = w.actors.find(a => a.companion && a.defId === id)!; assert(pet); assert.deepEqual(bodyState(), captured);
+      w.kill(pet); assert(pet.downed && !pet.dead); w.reviveCompanion(pet); assert(!pet.downed && !pet.dead);
+      assert.deepEqual(pet.skills.map(s => s?.def.id), MONSTERS[id].skills);
+      const wild = w.createMonster(id, 1, 'enemy'); wild.pos = { ...p.pos }; w.actors.push(wild);
+      const guest = w.addSeat('stalker_guest', classById('tamer'), new NullInput(), { startingCompanions: false });
+      guest.actor.cosmeticLoadout = { slots: {}, skills: {} };
+      const guestPet = w.createMonster(id, 1, 'enemy'); guestPet.pos = { ...guest.actor.pos }; w.actors.push(guestPet);
+      w.tameCompanion(guest.actor, guestPet, 'tame_beast');
+      const client = makeSimWorld('tamer', 63103), snap = serializeSnapshot(w, 1); applySnapshot(client, snap);
+      for (const body of [pet, wild, guestPet]) {
+        const peer = client.actors[snap.actors.findIndex(a => a.id === body.id)]; assert(peer);
+        for (const [world, a] of [[w, body], [client, peer]] as const) {
+          assert.equal(cosmeticBody(a, cosmeticLoadoutFor(world, a), a.isMinion(), false,
+            { defId: a.defId, skill: cosmeticSummonSkill(a) }).look, body === pet && legacy ? 'stalker' : MONSTERS[id].look);
+        }
+      }
+      const metrics = { mana: p.mana, cooldown: p.cooldowns.get(inst.def.id), radius: pet.radius,
+        life: pet.life, maxLife: pet.maxLife(), skills: pet.skills.map(s => s?.def.id), rng: Math.random() };
+      assert(equipCosmetic(w.account, 'skillSkin', null, 'tame_beast'));
+      assert.equal(cosmeticBody(pet, cosmeticLoadoutFor(w, pet), true, false,
+        { defId: pet.defId, skill: cosmeticSummonSkill(pet) }).look, MONSTERS[id].look);
+      return metrics;
+    } finally { reset(); }
+  };
+  for (const id of ['migration_strider', 'veilstalker']) assert.deepEqual(run(id, true), run(id, false));
+});
+
+test('Stalker visuals: captured spawnScale survives rarity and owner size, and older saves still restore', () => {
+  for (const scale of [.84, 1.3]) for (const rare of [false, true]) {
+    const w = makeSimWorld('tamer', 63104), p = w.player;
+    p.sheet.setSource('stalker-size-rig', [{ stat: 'minionSize', kind: 'increased', value: .4 }]);
+    let pet = w.createMonster('migration_strider', 1, 'enemy', undefined, { scale });
+    if (rare) { pet.rarity = 'rare'; pet.radius *= 1.4; pet.sheet.setSource('rarity', [{ stat: 'life', kind: 'more', value: .5 }]); }
+    w.actors.push(pet); w.tameCompanion(p, pet, 'tame_beast');
+    const state = () => ({ radius: pet.radius, life: pet.maxLife(), weight: pet.sheet.get('weight'),
+      damage: pet.sheet.get('damage'), juvenile: pet.juvenile, rarity: pet.rarity, scale: pet.spawnScale });
+    const before = state(); assert.equal(pet.juvenile, scale <= .95);
+    for (let cycle = 0; cycle < 3; cycle++) {
+      const saved = JSON.parse(JSON.stringify(w.companionBonds.saved(pet)));
+      assert.equal(saved.spawnScale, scale);
+      assert(Math.abs(saved.radius * 1.4 - pet.radius) < 1e-8, 'owner size is applied once');
+      w.actors = w.actors.filter(a => a !== pet); w.companionBonds.refresh(); w.restoreCompanions([saved]);
+      pet = w.actors.find(a => a.companion)!; assert.deepEqual(state(), before);
+    }
+  }
+  const w = makeSimWorld('tamer', 63105);
+  w.restoreCompanions([{ defId: 'migration_strider', level: 1, skillId: 'tame_beast' }]);
+  const old = w.actors.find(a => a.companion)!; assert(old && Number.isFinite(old.radius));
+  assert(old.spawnScale! >= .82 && old.spawnScale! <= 1.34, 'old saves roll missing variance once, then retain it');
+  for (const scale of [0, -1, NaN, Infinity]) {
+    const fallback = w.createMonster('migration_strider', 1, 'enemy', undefined, { scale });
+    assert(Number.isFinite(fallback.radius) && fallback.spawnScale! >= .82 && fallback.spawnScale! <= 1.34);
+  }
 });
 
 console.log(`COSMETICS: ${checks} checks passed`);

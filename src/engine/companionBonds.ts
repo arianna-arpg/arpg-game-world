@@ -352,7 +352,9 @@ export class CompanionBonds {
 
   saved(beast: Actor): CompanionSaved {
     return { defId: beast.defId!, level: beast.level, skillId: beast.sourceSkillId!.replace('__companion:', ''),
-      ...(beast.downed ? { downed: true } : {}), ...(beast.rarity ? { rarity: beast.rarity, name: beast.name, radius: this.states.get(beast)?.baseRadius ?? beast.radius,
+      radius: this.states.get(beast)?.baseRadius ?? beast.radius,
+      ...(beast.spawnScale !== undefined ? { spawnScale: beast.spawnScale } : {}),
+      ...(beast.downed ? { downed: true } : {}), ...(beast.rarity ? { rarity: beast.rarity, name: beast.name,
         raritySources: beast.sheet.sourceNames().filter(s => s === 'rarity' || s.startsWith('rarityStack')).map(s => [s, beast.sheet.getSourceMods(s)!] as [string, import('./stats').Modifier[]]) } : {}),
       ...(beast.companionReviveRemaining !== undefined ? { reviveRemaining: beast.companionReviveRemaining } : {}) };
   }

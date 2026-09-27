@@ -158,31 +158,31 @@ export const UNDEAD_COURT_SKILLS: Record<string, SkillDef> = {
 
 export const UNDEAD_COURT_MINIONS: Record<string, MonsterDef> = {
   skeletal_sentinel: {
-    id: 'skeletal_sentinel', name: 'Skeletal Sentinel', color: '#bfc9be', shape: 'ribcage', look: 'skeleton_warrior', material: 'bone', radius: 15, faction: 'undead', xp: 0,
+    id: 'skeletal_sentinel', name: 'Skeletal Sentinel', color: '#bfc9be', shape: 'ribcage', look: 'sentinel_ossuary_guard', material: 'bone', radius: 15, faction: 'undead', xp: 0,
     base: { life: 42, moveSpeed: 130, armor: 15, accuracy: 90, mana: 30, manaRegen: 4 }, skills: ['cleave', 'court_challenge'],
   },
   skeletal_duelist: {
-    id: 'skeletal_duelist', name: 'Skeletal Duelist', color: '#dfd7c8', shape: 'ribcage', look: 'skeleton_warrior', material: 'bone', radius: 12, faction: 'undead', xp: 0,
+    id: 'skeletal_duelist', name: 'Skeletal Duelist', color: '#dfd7c8', shape: 'ribcage', look: 'duelist_boneblades', material: 'bone', radius: 12, faction: 'undead', xp: 0,
     base: { life: 30, moveSpeed: 175, accuracy: 100, evasion: 50, mana: 20, manaRegen: 3 }, skills: ['court_twin_cut'], brain: { type: 'flanker' },
   },
   court_abomination: {
-    id: 'court_abomination', name: 'Stitched Abomination', color: '#aa8475', shape: 'circle', look: 'zombie', material: 'flesh', radius: 26, faction: 'undead', xp: 0,
+    id: 'court_abomination', name: 'Stitched Abomination', color: '#aa8475', shape: 'circle', look: 'abomination_stitched_brute', material: 'flesh', radius: 26, faction: 'undead', xp: 0,
     base: { life: 220, moveSpeed: 95, armor: 20, accuracy: 90, mana: 30, manaRegen: 4 }, skills: ['claw', 'court_abomination_slam'],
   },
   court_ember: {
-    id: 'court_ember', name: 'Frenzied Ember', color: '#ff8a4a', shape: 'circle', look: 'spirit', material: 'ethereal', radius: 8, xp: 0,
+    id: 'court_ember', name: 'Frenzied Ember', color: '#ff8a4a', shape: 'circle', look: 'ember_frenzied', material: 'ethereal', radius: 8, xp: 0,
     base: { life: 18, moveSpeed: 230, accuracy: 95, mana: 0 }, skills: ['court_searing_bite'], untargetable: true, detection: 1.2, brain: { type: 'swarm' },
   },
   court_vigil_flame: {
-    id: 'court_vigil_flame', name: 'Vigil Flame', color: '#ffb46a', shape: 'kite', look: 'spirit', material: 'ethereal', radius: 12, xp: 0,
+    id: 'court_vigil_flame', name: 'Vigil Flame', color: '#ffb46a', shape: 'kite', look: 'vigil_censer', material: 'ethereal', radius: 12, xp: 0,
     base: { life: 48, moveSpeed: 0, accuracy: 100, mana: 0 }, skills: ['court_vigil_bolt'], noRecall: true, detection: 1.3,
   },
   court_hex_wraith: {
-    id: 'court_hex_wraith', name: 'Hexwoven Shade', color: '#9a7ac8', shape: 'kite', look: 'wraith', material: 'ethereal', radius: 12, faction: 'undead', xp: 0,
+    id: 'court_hex_wraith', name: 'Hexwoven Shade', color: '#9a7ac8', shape: 'kite', look: 'shade_hexwoven', material: 'ethereal', radius: 12, faction: 'undead', xp: 0,
     base: { life: 85, moveSpeed: 145, accuracy: 95, mana: 60, manaRegen: 8 }, skills: ['venom_bolt'], detection: 1.1,
   },
   court_reaper_wraith: {
-    id: 'court_reaper_wraith', name: 'Soul Reaver', color: '#b296da', shape: 'diamond', look: 'blade_wraith', material: 'ethereal', radius: 13, faction: 'undead', xp: 0,
+    id: 'court_reaper_wraith', name: 'Soul Reaver', color: '#b296da', shape: 'diamond', look: 'reaver_soulscythe', material: 'ethereal', radius: 13, faction: 'undead', xp: 0,
     base: { life: 65, moveSpeed: 175, accuracy: 100, evasion: 45, mana: 20, manaRegen: 3 }, skills: ['court_reaping_edge'], brain: { type: 'flanker' },
   },
 };

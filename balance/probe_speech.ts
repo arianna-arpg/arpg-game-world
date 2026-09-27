@@ -65,6 +65,7 @@ import { SPEECH_ATTENTION_CFG, speechAttentionFor } from '../src/data/speechAtte
 import { makeSpeakerRow, type SpeechSpeakerRow } from '../src/engine/speechGrammar';
 import { MONSTERS } from '../src/data/monsters';
 import { DialogueSession, dialoguePages, type DialogueOffer } from '../src/engine/dialogue';
+import { DialogueActions } from '../src/engine/dialogueActions';
 import { resetActorIdCounter } from '../src/engine/actor';
 import { buildManifest } from '../src/packages/manifest';
 import { makeAccount } from '../src/meta/account';
@@ -945,6 +946,51 @@ console.log('L. THE DIALOGUE READER (pages, explicit advance, pending state and 
   check('L18 dismissal includes the pending state, so it cannot immediately reopen', !d.reading);
   d.sync(2, null);
   check('L19 a silent service never invents a conversation', !d.reading);
+}
+
+console.log('M. EXPLICIT DIALOGUE RESPONSES');
+{
+  const d = new DialogueSession(), actions = new DialogueActions<{ allowed: boolean }>();
+  const context = { allowed: true }; let effects = 0;
+  actions.register('deed', { refusal: c => c.allowed ? null : 'Unavailable now', run: () => { effects++; return true; } });
+  let duplicate = false;
+  try { actions.register('deed', { refusal: () => null, run: () => true }); } catch { duplicate = true; }
+  check('M1 action registrations are unambiguous', duplicate);
+  const offer: DialogueOffer = { speakerId: 1, key: 'responses', pages: ['Opening.', 'Your answer?'], choices: [
+    { id: 'kind', label: 'I will help.', next: 'thanks', action: { type: 'deed', target: 'help' } },
+    { id: 'sealed', label: 'An unavailable reply', disabledReason: 'Not yet' },
+    { id: 'broken', label: 'Broken branch', next: 'missing', action: { type: 'deed', target: 'help' } },
+    { id: 'unsupported', label: 'Future action', action: { type: 'missing', target: 'x' } },
+  ], nodes: { thanks: { pages: ['Thank you.'] } } };
+  const perform = (action: Parameters<typeof actions.run>[1]) => actions.run(context, action);
+  d.sync(1, offer);
+  check('M2 choices cannot be answered before the final page', !d.choose('kind', d.revision, perform) && effects === 0);
+  d.advance(); const revision = d.revision;
+  d.advance();
+  check('M3 advance never chooses or skips a response', d.awaitingChoice && d.revision === revision && effects === 0);
+  check('M4 disabled, unknown and malformed branches cannot execute',
+    !d.choose('sealed', revision, perform) && !d.choose('absent', revision, perform)
+    && !d.choose('broken', revision, perform) && !d.choose('unsupported', revision, perform) && effects === 0);
+  context.allowed = false;
+  check('M5 execution rechecks live admission', !d.choose('kind', revision, perform) && effects === 0 && d.awaitingChoice);
+  context.allowed = true;
+  d.sync(1, { speakerId: 1, key: 'changed', pages: ['A later update.'] });
+  check('M6 pending updates cannot bypass unanswered choices', !d.hasNext() && d.awaitingChoice);
+  const picked = d.choose('kind', revision, perform);
+  check('M7 accepted response executes once and follows its branch', !!picked && effects === 1 && d.node?.pages[0] === 'Thank you.');
+  check('M8 stale/double selections cannot execute again', !d.choose('kind', revision, perform) && effects === 1);
+  d.sync(1, offer);
+  check('M9 the repeated introductory offer cannot overwrite a branch', d.node?.pages[0] === 'Thank you.');
+  d.sync(1, { speakerId: 1, key: 'changed', pages: ['A later update.'] }); d.advance();
+  check('M10 queued updates follow the completed branch', d.node?.pages[0] === 'A later update.');
+  d.reset(); d.sync(1, offer); d.advance(); const stale = d.revision; d.close();
+  check('M11 cancellation performs no response effects', !d.choose('kind', stale, perform) && effects === 1);
+  d.sync(1, offer); check('M12 dismissed choices stay dismissed during the visit', !d.reading);
+  d.reset(); d.sync(1, offer); d.advance();
+  const departed = d.revision; d.sync(2, null);
+  check('M13 departure invalidates responses', !d.choose('kind', departed, perform) && effects === 1);
+  d.sync(1, { ...offer, pages: ['Answer?'], choices: [{ id: 'same', label: 'A' }, { id: 'same', label: 'B' }] });
+  check('M14 ambiguous response ids are refused', !d.choose('same', d.revision, perform));
 }
 
 console.log(`\n${fail === 0 ? 'ALL PASS' : 'FAILURES'} — ${pass} passed, ${fail} failed`);

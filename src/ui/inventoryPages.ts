@@ -26,6 +26,10 @@ export interface InventoryPagesHost {
   folio(): FolioCore;
 }
 
+/** Shortcut/menu toggles close the workspace; ribbon toggles close one page.
+ * Navigation requests only show. The caller supplies intent, not device type. */
+export type InventoryPageRequest = 'toggle' | 'toggle-page' | 'show';
+
 export class InventoryPages {
   private readonly pages = new Map<string, InventoryPage>();
   private readonly retained = new Map<string, Set<string>>();
@@ -49,15 +53,16 @@ export class InventoryPages {
       && (page.available?.(owner) ?? true);
   }
 
-  /** Direct requests select their page. Only a toggle on the already
-   * selected page closes the inventory; a show request always keeps it up.
+  /** Direct requests select their page. Repeating the selected page follows
+   * the caller's close scope; a show request always keeps it up.
    * Returns true when the requested page is shown. */
-  request(id: string, owner: string, mode: 'toggle' | 'show' = 'toggle'): boolean {
+  request(id: string, owner: string, mode: InventoryPageRequest = 'toggle'): boolean {
     const page = this.pages.get(id);
     if (!page || !(page.available?.(owner) ?? true)) return false;
-    if (mode === 'toggle' && owner === this.host.owner() && this.isOpen(id)
+    if (mode !== 'show' && owner === this.host.owner() && this.isOpen(id)
       && this.host.folio().bookFor(id)?.front === id) {
-      this.host.close();
+      if (mode === 'toggle-page') this.close(id);
+      else this.host.close();
       return false;
     }
     if (!this.host.open(owner)) return false;
@@ -74,7 +79,7 @@ export class InventoryPages {
     return true;
   }
 
-  /** Page close glyphs and folio closes forget just that page. */
+  /** Active ribbons, page close glyphs and folio closes forget just that page. */
   close(id: string): void {
     if (!this.retained.get(this.host.owner())?.delete(id)) return;
     this.host.changed();

@@ -11,7 +11,7 @@
 //   C. THE FRAME DIFF LAW — first sight seeds silently; a fresh id is reported
 //      once; an id that left and returns speaks again; duplicates collapse.
 //   D. THE RETIREMENT CENSUS (source-lint) — the player-axis captions are gone
-//      from world.ts, and the rule-name cries ride the `combat` float kind.
+//      from world.ts; remaining, unmigrated cries ride the `combat` float kind.
 // Run: npx tsx balance/probe_statusvoice.ts
 // ---------------------------------------------------------------------------
 
@@ -81,12 +81,13 @@ const def = (p: Partial<StatusDef>): StatusDef => ({ label: 'qa', color: '#fffff
   const src = readFileSync('src/engine/world.ts', 'utf8');
   const retired = ["'chilled to the bone!'", "'sunscorched!'", "'befuddled!'", "'maddened!'", "'possessed!'", "'corrupted!'", "'SEEN!'", "'beheld…'",
     "'carried!'", "'torn free!'", "'broke free!'", "'the grip breaks!'", "'UNHORSED'", "'FRENZY!'", "'contagion!'", "'transfused!'",
-    "'swallowed by the dark!'", "'over the edge!'", "'renewing'", "'time stops!'", "'time bends!'", "'DOOM!'", "'volatile!'", "'CULLED!'", "'capped'", "'LAST GASP!'"];
+    "'swallowed by the dark!'", "'over the edge!'", "'renewing'", "'time stops!'", "'time bends!'", "'DOOM!'", "'volatile!'", "'CULLED!'", "'capped'", "'LAST GASP!'", "'primed'",
+    "'dominated!'", "'undying!'", "'marked'"];
   const still = retired.filter(l => src.includes(l));
   check("D1 THE RETIREMENT CENSUS: the player-axis status captions are gone from world.ts (the landing's accent + worn face carry them)", still.length === 0, still.join(', '));
-  const kinded = ["'addled!'", "'dominated!'", "'snatched!'", "'time slips'", "'TRANSGRESSION!'", "'undying!'", "'hex drawn'", "'hex sheathed'", "'the guise breaks!'", "'primed'", "'marked'", "'cleansed'", "'rung clean'"];
+  const kinded = ["'addled!'", "'snatched!'", "'time slips'", "'TRANSGRESSION!'", "'hex drawn'", "'hex sheathed'", "'the guise breaks!'", "'cleansed'", "'rung clean'"];
   const bare = kinded.filter(l => { const i = src.indexOf(l); if (i < 0) return true; const tail = src.slice(i, src.indexOf(';', i)); return !/'combat'/.test(tail); });
-  check("D2 the rule-name cries ride the `combat` float kind (the player's own mute)", bare.length === 0, bare.join(', '));
+  check("D2 remaining unmigrated cries ride the `combat` float kind (the player's own mute)", bare.length === 0, bare.join(', '));
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

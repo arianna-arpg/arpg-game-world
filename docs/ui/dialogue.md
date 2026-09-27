@@ -3,7 +3,8 @@
 Dwelling on a selected speaker now opens a framed reader above the action bar.
 It shows the speaker's name, their animated in-game model, and paged text.
 This is a client presentation over the existing speech grammar and functional
-prompt reads; it does not execute quests, award items, or replace station gates.
+prompt reads. Optional responses dispatch registered actions through their
+owning systems; the reader does not award items or replace station/quest gates.
 
 ## Reading and controls
 
@@ -20,9 +21,16 @@ prompt reads; it does not execute quests, award items, or replace station gates.
   Functional bodies retain rings tied to their independent service clocks.
 - Mireille offers a resting response when her care is unlocked and no gift or
   lesson takes precedence, including when the hero needs no replenishment.
-- Enter, controller A, the text area or the advance button reveals the page
+- Enter, controller A, the dialogue surface or the advance button reveals the page
   first; the next press continues, or finishes on the last page. Keyboard and
   pad advance are rebindable as **Advance Dialogue** in Options.
+- Surface clicks include the text, name, portrait and margins. Buttons own their
+  click, so choosing a response or closing cannot also advance. Selecting text
+  does not advance. All routes call the same `DialogueUI.advance` transition.
+- Optional response prompts wait for an explicit answer after the final page
+  is revealed. Advance never picks an answer. Up/Down/Home/End focuses available
+  responses; Enter/Space activates the focused button. The controller pointer
+  can operate response prompts even without an accompanying service.
 - Escape, controller B or the close button dismisses. Escape closes a visible dialogue
   before reaching the pause menu. The reader does not pause the world or lock
   movement; leaving the speaker's focus closes the exchange.
@@ -55,9 +63,14 @@ Nothing is saved or added to the network protocol.
 
 `src/engine/dialogue.ts` is the DOM-free reader state: a `DialogueOffer` names
 its speaker, stable content key, and ordered pages. Current NPC offers are
-adapted from `World.npcSpeechView`; another content system can supply authored
+adapted from `World.npcSpeechView` through `NpcDialogueDirector.readerOffer`; another content system can supply authored
 pages through the same reader. `dialoguePages` treats blank lines as explicit
 page breaks and otherwise splits at word boundaries.
+
+[Dialogue choices](dialogue-choices.md) defines response authoring, branches,
+action registration, live validation and future progression integration.
+`NpcDialogueDef.responses` is the authored entry point. Existing NPCs keep their
+current behavior unless their content explicitly adds responses.
 
 `src/data/dialogue.ts` owns presentation mode, page budget, reader width,
 portrait size, font, spacing, HUD clearance and service workspace dials.

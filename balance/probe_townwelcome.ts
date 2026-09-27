@@ -227,6 +227,24 @@ check('Brandt selects run quests, account quests, milestones and stable weighted
   assert.equal(dialogueConditionMet(w, { ledger: `quest_done:${BRANDT_HAMMER_QUEST}`, scope: 'either', atLeast: 2 }), false);
   assert.equal(dialogueConditionMet(w, { fact: 'missing' }), false);
 });
+check('Authored responses use stable script identity and the shared text/pagination seam', () => {
+  const w = makeSimWorld('warrior', 333);
+  const smith = w.createMonster('townsfolk_smith', 1, 'player'); smith.pos = { ...w.player.pos };
+  NPC_DIALOGUES.push({ id: 'qa_responses', speaker: { defId: smith.defId }, priority: 999,
+    trigger: { kind: 'dwell', radius: 100, seconds: 0 }, lines: [{ text: 'Hello {name}.' }],
+    responses: { choices: [{ id: 'help', label: 'I am {name}.', next: 'answer' }],
+      nodes: { answer: { pages: ['Welcome {name}.\n\nLet us talk.'], choices: [{ id: 'leave', label: 'Goodbye.' }] } } } });
+  try {
+    const resolve = (text: string) => text.replaceAll('{name}', 'Traveller');
+    const selected = w.npcDialogues.dwell(smith)!;
+    const offer = w.npcDialogues.readerOffer(smith, resolve(selected.text), 210, resolve);
+    assert.ok(offer.key.includes('qa_responses'));
+    assert.equal(offer.choices?.[0].label, 'I am Traveller.');
+    assert.deepEqual(offer.nodes?.answer.pages, ['Welcome Traveller.', 'Let us talk.']);
+    assert.equal(w.npcDialogues.readerOffer(smith, 'Unrelated speech.', 210, resolve).choices, undefined);
+    assert.equal(w.ledger[npcDialogueReceipt('qa_responses')], undefined, 'preview does not record progression');
+  } finally { NPC_DIALOGUES.pop(); }
+});
 check('Once-only dwell stays available during its admitted visit, retires after departure', () => {
   const w = makeSimWorld('warrior', 333);
   const smith = w.createMonster('townsfolk_smith', 1, 'player'); smith.pos = { ...w.player.pos };

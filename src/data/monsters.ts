@@ -2440,7 +2440,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // The broken shard's teeth (Pain Hounds): fast, burning, briefly alive.
   pain_hound: {
     id: 'pain_hound', name: 'Pain Hound',
-    color: '#d05a3a', shape: 'rhombus', radius: 10, material: 'fur', look: 'hound',
+    color: '#d05a3a', shape: 'rhombus', radius: 10, material: 'fur', look: 'hound_painthorn',
     base: { life: 24, moveSpeed: 210, accuracy: 85, mana: 0 },
     mods: [mod('fireRes', 'flat', 0.5), mod('addedFire', 'flat', 3, ['melee'])],
     skills: ['claw'],
@@ -2500,7 +2500,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // raptor scale; talon_rake from the bestiary arsenal.
   hunting_falcon: {
     id: 'hunting_falcon', name: 'Hunting Falcon',
-    color: '#c8a86a', shape: 'kite', radius: 7, material: 'flesh', look: 'vulture',
+    color: '#c8a86a', shape: 'kite', radius: 7, material: 'flesh', look: 'falcon_huntress',
     base: { life: 34, moveSpeed: 280, accuracy: 110, evasion: 120, mana: 20, manaRegen: 4 },
     skills: ['talon_rake'],
     xp: 0,
@@ -3578,7 +3578,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   gloom_stalker: {
     id: 'gloom_stalker', name: 'Gloom Stalker',
-    color: '#9080c8', shape: 'star', radius: 12, material: 'fur', look: 'stalker',
+    color: '#9080c8', shape: 'star', radius: 12, material: 'fur', look: 'stalker_gloomblade',
     base: { life: 45, moveSpeed: 195, accuracy: 115, evasion: 110, mana: 50, manaRegen: 8 },
     skills: ['backstab'],
     xp: 24,
@@ -4081,7 +4081,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   migration_strider: {
     id: 'migration_strider', name: 'Steppe Strider',
-    color: '#c8a85e', shape: 'trapezoid', radius: 13, material: 'fur', look: 'stalker',
+    color: '#c8a85e', shape: 'trapezoid', radius: 13, material: 'fur', look: 'strider_longstep',
     base: { life: 46, moveSpeed: 176, accuracy: 100, mana: 30, manaRegen: 2 },
     skills: ['claw', 'crushing_leap'],
     xp: 14, faction: 'beast', tags: ['beast'],
@@ -5318,7 +5318,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // falls. Keen-nosed (high detection beats the hare's low detectability).
   plains_wolf: {
     id: 'plains_wolf', name: 'Plains Wolf',
-    color: '#9a9088', shape: 'kite', radius: 12, look: 'hound',
+    color: '#9a9088', shape: 'kite', radius: 12, look: 'wolf_coursing',
     base: { life: 34, moveSpeed: 188, accuracy: 95, evasion: 40, mana: 0 },
     skills: ['claw'],
     xp: 12,
@@ -5507,7 +5507,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // it rules aiming one data skill. It also stoops on hares.
   dune_vulture: {
     id: 'dune_vulture', name: 'Dune Vulture',
-    color: '#b09a80', shape: 'kite', radius: 13, look: 'vulture',
+    color: '#b09a80', shape: 'kite', radius: 13, look: 'vulture_carrion',
     base: { life: 38, moveSpeed: 170, accuracy: 95, evasion: 60, mana: 0 },
     skills: ['claw', 'take_wing'],
     xp: 14,
@@ -5719,7 +5719,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // is emergent, not scripted. All ambient ('predator') wildlife.
   spiderling: {
     id: 'spiderling', name: 'Spiderling',
-    color: '#6a5a48', shape: 'cross', radius: 6, look: 'spider_small',
+    color: '#6a5a48', shape: 'cross', radius: 6, look: 'spider_skitterling',
     base: { life: 10, moveSpeed: 195, accuracy: 75, evasion: 50, mana: 0 },
     skills: ['claw'],
     xp: 2,
@@ -5730,7 +5730,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   spider_nest: {
     id: 'spider_nest', name: 'Spider Nest',
-    color: '#9a8a70', shape: 'oval', radius: 14, look: 'spider_nest',
+    color: '#9a8a70', shape: 'oval', radius: 14, look: 'spider_silkcradle',
     base: { life: 55, moveSpeed: 0, armor: 20, mana: 0 },
     skills: [],
     xp: 8,
@@ -5747,7 +5747,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   broodmother: {
     id: 'broodmother', name: 'Broodmother',
-    color: '#7a6a52', shape: 'cross', radius: 17, look: 'spider_big',
+    color: '#7a6a52', shape: 'cross', radius: 17, look: 'spider_broodcarrier',
     base: { life: 130, moveSpeed: 120, accuracy: 95, armor: 25, mana: 40, manaRegen: 5 },
     mods: [mod('chaosRes', 'flat', 0.4)],
     // THE SNARE: the matron's verb over her spiderlings — she roots you and
@@ -5998,7 +5998,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // quarry REELING — the runner's rhythm taken away, then run down.
   veilstalker: {
     id: 'veilstalker', name: 'Veilstalker',
-    color: '#9a86c8', shape: 'trapezoid', radius: 13, material: 'fur', look: 'stalker',
+    color: '#9a86c8', shape: 'trapezoid', radius: 13, material: 'fur', look: 'stalker_veilmantle',
     base: { life: 58, moveSpeed: 172, accuracy: 118, evasion: 60, insight: 40, mana: 40, manaRegen: 5 },
     skills: ['severing_lash', 'claw'],
     xp: 26, faction: 'predator', tags: ['beast'],
@@ -6166,7 +6166,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   fen_hound: {
     id: 'fen_hound', name: 'Fen Hound',
-    color: '#988a68', shape: 'kite', radius: 12, material: 'fur', look: 'hound',
+    color: '#988a68', shape: 'kite', radius: 12, material: 'fur', look: 'hound_reedcoat',
     base: { life: 34, moveSpeed: 180, accuracy: 90, evasion: 50, mana: 0 },
     skills: ['claw'],
     xp: 12,
@@ -6177,7 +6177,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   alpha_stalker: {
     id: 'alpha_stalker', name: 'Alpha Stalker',
-    color: '#b8a070', shape: 'oval', radius: 16, material: 'fur', look: 'stalker',
+    color: '#b8a070', shape: 'oval', radius: 16, material: 'fur', look: 'stalker_packalpha',
     base: { life: 110, moveSpeed: 165, accuracy: 105, evasion: 60, mana: 80, manaRegen: 6 },
     skills: ['rallying_howl', 'claw', 'heavy_strike'],
     xp: 36,
@@ -10772,7 +10772,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // what the flock needs working away.
   shepherds_hound: {
     id: 'shepherds_hound', name: 'Hound That Was Never Wild',
-    color: '#7a6a55', shape: 'kite', radius: 12, material: 'fur', look: 'hound',
+    color: '#7a6a55', shape: 'kite', radius: 12, material: 'fur', look: 'hound_drover',
     base: { life: 45, moveSpeed: 195, accuracy: 100, evasion: 45, mana: 0 },
     skills: ['claw'],
     xp: 18,
@@ -12011,7 +12011,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // The orb-weaver: silk first — a rooting line, then the long legs arrive.
   orb_weaver: {
     id: 'orb_weaver', name: 'Orb Weaver',
-    color: '#b0a878', shape: 'cross', radius: 13, material: 'chitin', look: 'orb_weaver',
+    color: '#b0a878', shape: 'cross', radius: 13, material: 'chitin', look: 'spider_orbweaver',
     base: { life: 55, moveSpeed: 155, accuracy: 110, evasion: 55, mana: 80, manaRegen: 7 },
     skills: ['web_shot', 'claw'], xp: 26, tag: 'predator', faction: 'beast', tags: ['beast'],
     detection: 1.3,
@@ -12021,7 +12021,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // that hatch spiderlings if ignored (lay_brood_egg, the user's D2 fantasy).
   widow_matron: {
     id: 'widow_matron', name: 'Widow Matron',
-    color: '#4a3a48', shape: 'cross', radius: 16, material: 'chitin', look: 'widow_matron',
+    color: '#4a3a48', shape: 'cross', radius: 16, material: 'chitin', look: 'spider_redwidow',
     base: { life: 110, moveSpeed: 130, accuracy: 110, armor: 25, mana: 120, manaRegen: 9 },
     mods: [mod('chaosRes', 'flat', 0.4)],
     skills: ['lay_brood_egg', 'web_shot', 'claw'], xp: 42, tag: 'predator', faction: 'beast', tags: ['beast'],
@@ -13201,7 +13201,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // The larder-thief: it heals off the same corpses your grimoire wants.
   carrion_shrike: {
     id: 'carrion_shrike', name: 'Carrion Shrike',
-    color: '#8a7f9c', shape: 'kite', radius: 12, look: 'vulture',
+    color: '#8a7f9c', shape: 'kite', radius: 12, look: 'shrike_masked',
     base: { life: 40, moveSpeed: 185, accuracy: 96, evasion: 60, mana: 0 },
     skills: ['claw', 'take_wing'], xp: 16,
     tag: 'predator', faction: 'beast', tags: ['beast'],
@@ -13215,7 +13215,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   gravemaw_hound: {
     id: 'gravemaw_hound', name: 'Gravemaw Hound',
-    color: '#6d6a58', shape: 'kite', radius: 13, look: 'hound',
+    color: '#6d6a58', shape: 'kite', radius: 13, look: 'hound_gravemaw',
     base: { life: 58, moveSpeed: 182, accuracy: 98, evasion: 35, mana: 15, manaRegen: 2 },
     skills: ['claw', 'gorge_carrion'], xp: 22,
     tag: 'predator', faction: 'beast', tags: ['beast'],

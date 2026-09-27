@@ -109,6 +109,13 @@ Rare captures retain their exact rarity sources, stacked rarity, name and
 size through character saving, unlearning and relearning. Additional save
 fields are optional, so existing companion saves remain readable.
 
+Captured body scale also persists for normal beasts. `spawnScale` records the
+original natural variance roll; restoration rebuilds its life/damage modifiers,
+weight and juvenile identity through the usual monster factory. Saved radius
+is the claimed size before owner investment for both normal and rare bonds.
+An older save without the original scale rolls once and preserves that value
+on its next save. See [the longlimb validation](../render/stalkers.md).
+
 ### Shared minion inheritance (2026-09-18)
 
 `engine/minionInheritance.ts` is the shared owner-investment resolver for

@@ -1699,6 +1699,9 @@ export class Actor {
    *  rules and the den's tells both read — before it, "juvenile" was a
    *  brain swap nothing could ever ask about again. */
   juvenile = false;
+  /** Captured body scale: the original variance roll, before rarity/owner size.
+   * Companions persist it so restoration rebuilds the same size-derived stats. */
+  spawnScale?: number;
   /** PHASE-WORN MODS transition tracker (MonsterDef.nocturne) — the sheet
    *  source only moves when the day wheel crosses the def's hours. */
   nocturneHeld = false;

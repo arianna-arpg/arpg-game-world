@@ -29836,7 +29836,7 @@ export class World {
     for (const s of a.skills) if (s) s.level = skillLevel;
   }
 
-  createMonster(defId: string, level: number, team: Team, owner?: Actor): Actor {
+  createMonster(defId: string, level: number, team: Team, owner?: Actor, spawn?: { scale?: number }): Actor {
     const def: MonsterDef = MONSTERS[defId];
     const a = new Actor(def.name, team, vec(0, 0));
     a.statusRelay = this.relayStatus;
@@ -29936,7 +29936,9 @@ export class World {
     // and below the juvenile cut SWAP to the juvenile brain (the young flee, never
     // gore). Harmless on any monster without the lever (no source set).
     if (def.scaleVariance) {
-      const s = rand(def.scaleVariance[0], def.scaleVariance[1]);
+      const s = spawn?.scale !== undefined && Number.isFinite(spawn.scale) && spawn.scale > 0
+        ? spawn.scale : rand(def.scaleVariance[0], def.scaleVariance[1]);
+      a.spawnScale = s;
       a.radius = def.radius * s;
       if (def.scaleStats) a.sheet.setSource('scaleVar', [mod('life', 'more', s - 1), mod('damage', 'more', s - 1)]);
       // THE YOUNG (engine/pack.ts): the roll is RECORDED, not merely acted
@@ -30918,10 +30920,13 @@ export class World {
         this.stashedCompanions.push({ ...c });
         continue;
       }
-      const beast = this.createMonster(c.defId, Math.max(1, c.level), keeper.team, keeper);
+      const beast = this.createMonster(c.defId, Math.max(1, c.level), keeper.team, keeper, { scale: c.spawnScale });
+      // Apply saved companion size for ordinary bonds too, before owner scaling.
+      const savedRadius = c.radius !== undefined && Number.isFinite(c.radius) && c.radius > 0 ? c.radius : undefined;
+      if (savedRadius !== undefined) beast.radius = savedRadius;
       if (c.rarity) {
         beast.rarity = c.rarity;
-        beast.radius = c.radius ?? beast.radius * RARITY_DEFS[c.rarity].sizeMul;
+        if (savedRadius === undefined) beast.radius *= RARITY_DEFS[c.rarity].sizeMul;
         if (c.raritySources) for (const [name, mods] of c.raritySources) beast.sheet.setSource(name, mods);
         else beast.sheet.setSource('rarity', rarityMods(c.rarity));
         beast.name = c.name ?? beast.name;

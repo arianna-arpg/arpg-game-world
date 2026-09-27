@@ -66,6 +66,8 @@ export interface CompanionSaved {
   rarity?: MonsterRarity;
   name?: string;
   radius?: number;
+  /** Original per-spawn variance; omitted by older saves. */
+  spawnScale?: number;
   raritySources?: [string, Modifier[]][];
 }
 

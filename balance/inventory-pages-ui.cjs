@@ -59,6 +59,26 @@ app.whenReady().then(async () => {
       ui.openSkillTree(skill); check('Skill handle respects the parent inventory gate', closed());
       check('Unknown page requests are harmless', !ui.inventoryPages.request('missing-page', w.localSeat.id) && closed());
       w.panelSealed = panelSealed;
+      const ribbons = [
+        ['skills', '[data-buildflap]'],
+        ['passives', '[data-passiveflap]'],
+        ['container:reliquary', '[data-containerflap="reliquary"]'],
+      ];
+      key('i');
+      for (const [id, selector] of ribbons) {
+        click(selector); check(id + ' ribbon opens its page', front(id));
+        click(selector);
+        check(id + ' active ribbon collapses to Inventory', ui.inventoryOpen
+          && ui.inventoryPages.entries().every(p => !ui.inventoryPages.isOpen(p.id)));
+        key('i'); key('i');
+        check(id + ' ribbon dismissal stays dismissed on Inventory reopen', ui.inventoryOpen && !ui.inventoryPages.isOpen(id));
+      }
+      click('[data-buildflap]'); click('[data-passiveflap]');
+      click('[data-buildflap]'); check('Shelved Skills ribbon selects rather than dismisses', front('skills'));
+      click('[data-buildflap]');
+      check('Ribbon dismisses only its page, retaining other pages and Inventory', ui.inventoryOpen
+        && !ui.inventoryPages.isOpen('skills') && front('passives'));
+      click('[data-passiveflap]'); key('i');
       key('p'); check('Passive key opens Inventory on Passives', front('passives'));
       key('i'); check('Inventory key hides the whole workspace', closed());
       key('i'); check('Inventory restores Passives', front('passives'));
@@ -101,6 +121,11 @@ app.whenReady().then(async () => {
       check('Guest request opens the guest inventory', front('passives') && ui.panelSeat(ui.inventory).id === guest.id);
       check('Guest pages do not block the host', !ui.anyPanelOpenFor(w.localSeat.id) && ui.anyPanelOpenFor(guest.id));
       check('Shared roots do not leave a host book behind', ui.folio.views().every(v => v.owner === guest.id));
+      click('[data-passiveflap]');
+      check('Guest ribbon collapses its page without closing or changing Inventory owner', ui.inventoryOpen
+        && !ui.treeOpen && ui.panelSeat(ui.inventory).id === guest.id);
+      click('[data-passiveflap]'); check('Guest ribbon reopens for the same owner', front('passives')
+        && ui.panelSeat(ui.inventory).id === guest.id);
       ui.toggleBuildPanel(); ui.folioSync();
       check('Unqualified key action returns to the local player', front('skills') && ui.panelSeat(ui.inventory).id === w.localSeat.id);
       ui.hideAllFor(guest.id); check('Guest clear leaves host Inventory open', front('skills'));
@@ -125,6 +150,11 @@ app.whenReady().then(async () => {
       key('i'); check('Registered extension restores without a separate visibility flag', front('qa-page'));
       click('#qa-inventory-page [data-panel-x]');
       check('Registered extension inherits page close', ui.inventoryOpen && !ui.inventoryPages.isOpen('qa-page') && leaves === 2);
+      ui.inventoryPages.request('qa-page', w.localSeat.id, 'toggle-page');
+      check('Registered extension inherits ribbon selection', front('qa-page'));
+      ui.inventoryPages.request('qa-page', w.localSeat.id, 'toggle-page');
+      check('Registered extension inherits page-only ribbon dismissal', ui.inventoryOpen
+        && !ui.inventoryPages.isOpen('qa-page') && leaves === 3);
       ui.inventoryPages.request('passives', w.localSeat.id, 'show');
       ui.treeRefundMode = true; key('i');
       check('Parent close clears passive transient refund state', !ui.treeRefundMode && closed());
@@ -150,6 +180,40 @@ app.whenReady().then(async () => {
         q.check(innerWidth + 'px: page fits viewport', r.left >= 0 && r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1);
         q.check(innerWidth + 'px: page has no independent move controls', !el.classList.contains('panel-movable') && !el.querySelector('.panel-lock'));
       });
+    }
+    // Exercise actual pointer dispatch as well as DOM activation above.
+    await run(function () {
+      const ui = __game.ui;
+      for (const page of ui.inventoryPages.entries()) ui.inventoryPages.close(page.id);
+      ui.folioSync();
+    });
+    for (const [id, selector] of [['skills', '[data-buildflap]'], ['passives', '[data-passiveflap]'],
+      ['container:reliquary', '[data-containerflap="reliquary"]']]) {
+      for (const opened of [true, false]) {
+        const point = await win.webContents.executeJavaScript(`(() => {
+          const r = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();
+          return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+        })()`);
+        win.webContents.sendInputEvent({ type: 'mouseDown', button: 'left', clickCount: 1, ...point });
+        win.webContents.sendInputEvent({ type: 'mouseUp', button: 'left', clickCount: 1, ...point });
+        await new Promise(resolve => setTimeout(resolve, 60));
+        const ok = await win.webContents.executeJavaScript(`(() => {
+          const ui = __game.ui; ui.folioSync();
+          return ui.inventoryOpen && ui.inventoryPages.isOpen(${JSON.stringify(id)}) === ${opened};
+        })()`);
+        if (!ok) throw Error('Native mouse ribbon ' + id + ' opened=' + opened);
+        console.log('PASS Native mouse ribbon ' + id + ' opened=' + opened);
+      }
+    }
+    for (const opened of [true, false]) {
+      await run(function () { document.querySelector('[data-buildflap]').focus(); });
+      win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
+      win.webContents.sendInputEvent({ type: 'char', keyCode: '\r' });
+      win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
+      await new Promise(resolve => setTimeout(resolve, 60));
+      const ok = await win.webContents.executeJavaScript(`__game.ui.inventoryOpen && __game.ui.skillsOpen === ${opened}`);
+      if (!ok) throw Error('Focused ribbon Enter opened=' + opened);
+      console.log('PASS Focused ribbon Enter opened=' + opened);
     }
     const checks = await run(function () {
       inventoryQA.check('No fatal renderer error', __game.crash().fatal === null);

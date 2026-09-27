@@ -46,6 +46,7 @@ import type { ModLineDef } from '../src/engine/items';
 import { sheetFamilyOf } from '../src/data/sheet';
 import { uniqueDefinitionLines } from '../src/engine/itemchoices';
 import { serializeCharacter, applySavedCharacter } from '../src/meta/character';
+import { SIM_TAP } from '../src/engine/tap';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -263,33 +264,42 @@ w.recalcSeat(seat);
   // A forced 100% answer: a lightning bolt rings it, a physical cleave does not.
   hero.sheet.setSource('probe', [mod(procStat('stormcall_answer'), 'flat', 1)]);
   const z = dummy(w, hero.pos.x + 44, hero.pos.y);
-  const answered = () => w.texts.filter(t => t.text === 'Stormcall!').length;
-  const t0 = answered();
-  // A STRAIGHT lightning bolt (chain_lightning — spark_bolt wobbles and can
-  // miss a small body). Cast bar + flight; capped 95% — two bolts so a
-  // seeded miss is no law. The blow must LAND for the gate to be tested.
-  hero.skills[6] = makeSkillInstance(SKILLS.chain_lightning, 1);
-  const zLife = z.life;
-  for (let i = 0; i < 2 && answered() === t0; i++) {
-    hero.mana = hero.maxMana();
-    w.useSkill(hero, hero.skills[6]!, vec(z.pos.x, z.pos.y));
-    until(w, () => answered() > t0, 0.05, 24);
-  }
-  check('D6 a lightning blow calls the answer', z.life < zLife && answered() > t0,
-    `landed=${z.life < zLife}, ${t0} → ${answered()}`);
-  const t1 = answered();
-  const cleave = hero.skills.find(s => s?.def.id === 'cleave')!;
-  const z2 = dummy(w, hero.pos.x + 30, hero.pos.y);
-  const z2Life = z2.life;
-  for (let i = 0; i < 2 && z2.life >= z2Life; i++) {
-    hero.mana = hero.maxMana();
-    w.useSkill(hero, cleave, vec(z2.pos.x, z2.pos.y));
-    until(w, () => z2.life < z2Life, 0.05, 24);
-  }
-  check('D7 a physical blow does not', z2.life < z2Life && answered() === t1, `landed=${z2.life < z2Life}, ${t1} → ${answered()}`);
+  // Count the actual payload cast; the retired proc-name caption is no outcome.
+  let stormcallCasts = 0;
+  const priorTap = SIM_TAP.current;
+  SIM_TAP.current = { ...priorTap, onCast: (caster, inst, repeated) => {
+    priorTap?.onCast?.(caster, inst, repeated);
+    if (caster === hero && inst.def.id === 'stormcall_strike') stormcallCasts++;
+  } };
+  try {
+    const answered = () => stormcallCasts;
+    const t0 = answered();
+    // A STRAIGHT lightning bolt (chain_lightning — spark_bolt wobbles and can
+    // miss a small body). Cast bar + flight; capped 95% — two bolts so a
+    // seeded miss is no law. The blow must LAND for the gate to be tested.
+    hero.skills[6] = makeSkillInstance(SKILLS.chain_lightning, 1);
+    const zLife = z.life;
+    for (let i = 0; i < 2 && answered() === t0; i++) {
+      hero.mana = hero.maxMana();
+      w.useSkill(hero, hero.skills[6]!, vec(z.pos.x, z.pos.y));
+      until(w, () => answered() > t0, 0.05, 24);
+    }
+    check('D6 a lightning blow calls the answer', z.life < zLife && answered() > t0,
+      `landed=${z.life < zLife}, ${t0} → ${answered()}`);
+    const t1 = answered();
+    const cleave = hero.skills.find(s => s?.def.id === 'cleave')!;
+    const z2 = dummy(w, hero.pos.x + 30, hero.pos.y);
+    const z2Life = z2.life;
+    for (let i = 0; i < 2 && z2.life >= z2Life; i++) {
+      hero.mana = hero.maxMana();
+      w.useSkill(hero, cleave, vec(z2.pos.x, z2.pos.y));
+      until(w, () => z2.life < z2Life, 0.05, 24);
+    }
+    check('D7 a physical blow does not', z2.life < z2Life && answered() === t1, `landed=${z2.life < z2Life}, ${t1} → ${answered()}`);
+    for (const a of [z, z2]) if (!a.dead) w.kill(a, true);
+  } finally { SIM_TAP.current = priorTap; }
   hero.sheet.removeSource('probe');
   hero.skills[6] = null;
-  for (const a of [z, z2]) if (!a.dead) w.kill(a, true);
 }
 
 // ------------------------------------------------------ E. THE STRIDE

@@ -10,7 +10,8 @@ workspace, with Inventory's ribbons and the folio's tabs selecting the page.
 | --- | --- |
 | Open Inventory | Restore this player's retained pages and last selected page. |
 | Request a page through a key, menu or ribbon | Open Inventory for the requesting player and select that page, overriding the remembered selection. |
-| Repeat a toggle for the currently selected page | Close Inventory and hide all its pages. |
+| Repeat a keybind or menu toggle for the currently selected page | Close Inventory and hide all its pages. |
+| Activate the currently selected page's Inventory ribbon | Dismiss only that page, keeping Inventory open. With no remaining pages, return to Inventory alone; otherwise the folio promotes a remaining page. |
 | Follow a skill-tree handle or Font's refund action | Show the requested page; repeated show requests keep it open. |
 | Close Inventory by key, glyph, full sweep or owner clear | Hide every page and dismiss transient controls, retaining page membership and selection for the session. |
 | Close a page's glyph or folio tab | Dismiss that page and forget its membership; the folio promotes a remaining page. |
@@ -36,7 +37,10 @@ does not displace an active station; explicitly requesting a page does.
 To add a development page, register its stable id, root, title, preferred width,
 availability predicate and renderer. Optional `enter(owner, fresh)` initializes
 the owner's view; `leave()` clears transient interactions. Call `request(id,
-owner)` from direct toggles or use mode `show` for navigation within the workspace.
+owner)` from keybind/menu toggles, use mode `toggle-page` for ribbons, or use
+mode `show` for navigation within the workspace. This is the control's intent,
+not a device check: mouse, touch, controller confirmation and keyboard activation
+of a ribbon all dismiss only its page; dedicated shortcuts close the workspace.
 Registration supplies the folio adapter and the `inventory-page` layout class.
 Keep page-specific zoom, filters and selection data on the renderer; do not add
 independent visibility flags, seat lists or close sweeps. Availability must read

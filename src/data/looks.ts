@@ -25,11 +25,23 @@ import { COSMETIC_LOOKS } from './cosmeticModels';
 import { COSMETIC_WISP_LOOKS } from './cosmeticExpansionModels';
 import { GOLEM_LOOKS } from './golemLooks';
 import { SUMMON_LOOKS } from './summonLooks';
+import { SKELETAL_MAGE_LOOKS } from './skeletalMageLooks';
+import { UNDEAD_COURT_LOOKS } from './undeadCourtLooks';
+import { AVIAN_LOOKS } from './avianLooks';
+import { CANINE_LOOKS } from './canineLooks';
+import { ARACHNID_LOOKS } from './arachnidLooks';
+import { STALKER_LOOKS } from './stalkerLooks';
 import { RUBBLEKIN_LOOKS } from './rubblekin';
 
 export const LOOKS: Record<string, LookDef> = {
   ...GOLEM_LOOKS,
   ...SUMMON_LOOKS,
+  ...SKELETAL_MAGE_LOOKS,
+  ...UNDEAD_COURT_LOOKS,
+  ...AVIAN_LOOKS,
+  ...CANINE_LOOKS,
+  ...ARACHNID_LOOKS,
+  ...STALKER_LOOKS,
   ...RUBBLEKIN_LOOKS,
   ...TITAN_LOOKS,
   ...COSMETIC_LOOKS,

@@ -399,7 +399,7 @@ export class Renderer {
    *  so no hint can name a key the player rebound away or a device they put
    *  down, and an NPC line can address the hero with no import anywhere:
    *  the token is plain text; only this display seam expands it. */
-  private resolveText(text: string): string {
+  resolveText(text: string): string {
     const s = this.getSettings?.();
     const bound = s ? resolveBindTokens(text, s, this.getPadActive?.() ?? false) : text;
     return resolveNameTokens(bound, this.getPlayerName?.());

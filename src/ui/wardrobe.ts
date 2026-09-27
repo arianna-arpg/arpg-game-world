@@ -4,7 +4,7 @@ import { COSMETIC_CFG } from '../data/cosmetics';
 import type { Account } from '../meta/account';
 import { applySkillColorCosmetic, buyCosmetic, cosmeticAcquisition, cosmeticCharges, cosmeticPick,
   equipCosmetic, ownsCosmetic, setSkillCosmeticColor, settleCosmetics, skillColorUnlocked } from '../meta/cosmetics';
-import { drawCosmeticModelTile, drawCosmeticPreview, drawCosmeticSummonTile, cosmeticPreviewSummon } from '../render/vis/cosmetics';
+import { drawCosmeticModelTile, drawCosmeticPreview, drawCosmeticSummonTile, cosmeticPreviewSummon, cosmeticPreviewSummons } from '../render/vis/cosmetics';
 import { drawCosmeticStyleTile } from '../render/vis/cosmeticEffects';
 import type { BodyLook } from '../render/vis/body';
 
@@ -65,6 +65,7 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
   if (settleCosmetics(account).length) opts.save();
   let slot: CosmeticSlot = 'playerSkin', selected: string | null = null, skill = '', query = '', ownedOnly = false;
   let note = '', frame = 0;
+  let previewBody = '';
   const save = (): void => { opts.save(); };
   // A restricted default is still equipped even without a specific skill in view.
   const effectiveId = (): string | null => skill ? cosmeticPick(account.cosmetics.loadout, slot, skill)?.id ?? null
@@ -77,7 +78,10 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
       && (!ownedOnly || ownsCosmetic(account.cosmetics, d.id))
       && `${d.name} ${d.collection}`.toLowerCase().includes(query.toLowerCase()));
     const def = selected ? COSMETICS[selected] : undefined;
-    const previewSummon = slot === 'skillSkin' ? cosmeticPreviewSummon(skill || def?.skills?.[0]) : undefined;
+    const previewBodies = slot === 'skillSkin' ? cosmeticPreviewSummons(skill || def?.skills?.[0]) : [];
+    const previewSummon = previewBodies.find(body => body.id === previewBody)
+      ?? (slot === 'skillSkin' ? cosmeticPreviewSummon(skill || def?.skills?.[0], undefined, selected ?? undefined) : undefined);
+    previewBody = previewSummon?.id ?? '';
     const bound = !!def?.consume && !!skill && skillColorUnlocked(account.cosmetics, def.id, skill);
     const owned = !!def && (def.consume ? bound : ownsCosmetic(account.cosmetics, def.id));
     const charges = def?.consume ? cosmeticCharges(account.cosmetics, def.id) : 0;
@@ -95,6 +99,7 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
       <div class="wd-layout"><aside>
         <canvas width="${COSMETIC_CFG.preview.width}" height="${COSMETIC_CFG.preview.height}" aria-label="Appearance preview"></canvas>
         <p class="wd-muted">Preview · ${previewSummon ? esc(previewSummon.name) : slot === 'wispSkin' ? 'your Mu vessel' : slot === 'portalSkin' || slot === 'portalRecolor' ? 'your Town Portal' : slot === 'hotbarSkin' ? 'your skill bar' : 'character, companion &amp; skill effects'}</p>
+        ${previewBodies.length > 1 ? `<div class="wd-tools"><label>Preview form <select data-wd-body>${previewBodies.map(body => `<option value="${esc(body.id)}" ${previewBody === body.id ? 'selected' : ''}>${esc(body.name)}</option>`).join('')}</select></label><small>Your skill determines which form appears in play.</small></div>` : ''}
         <div class="wd-outfit">${Object.values(account.cosmetics.loadout.slots).map(id => `<span>${esc(COSMETICS[id]?.name ?? id)}</span>`).join('') || '<span>Original appearance</span>'}</div>
         <p>Owned choices stay with your account through every run. Wear them freely, in any combination.</p>
         <p class="wd-muted">Models change your silhouette; skins layer color and texture over it. Mu wisps have their own silhouettes. Your class, skills and attributes remain your own.</p>
@@ -134,15 +139,21 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
     root.querySelectorAll<HTMLElement>('[data-wd-slot]').forEach(btn => btn.addEventListener('click', () => {
       slot = btn.dataset.wdSlot as CosmeticSlot;
       if (slot !== 'skillSkin' && slot !== 'skillRecolor') skill = '';
-      query = ''; selected = effectiveId(); note = ''; draw();
+      query = ''; previewBody = ''; selected = effectiveId(); note = ''; draw();
     }));
-    root.querySelectorAll<HTMLElement>('[data-wd-id]').forEach(btn => btn.addEventListener('click', () => { selected = btn.dataset.wdId || null; draw(); }));
+    root.querySelectorAll<HTMLElement>('[data-wd-id]').forEach(btn => btn.addEventListener('click', () => {
+      selected = btn.dataset.wdId || null;
+      const mappings = selected ? COSMETICS[selected]?.paint.summonBodies : undefined;
+      if (mappings && !Object.prototype.hasOwnProperty.call(mappings, previewBody)) previewBody = '';
+      draw();
+    }));
     root.querySelector<HTMLInputElement>('[data-wd-search]')!.addEventListener('input', e => {
       const input = e.target as HTMLInputElement; query = input.value; draw();
       const next = root.querySelector<HTMLInputElement>('[data-wd-search]')!; next.focus();
     });
     root.querySelector('[data-wd-owned]')!.addEventListener('click', () => { ownedOnly = !ownedOnly; draw(); });
-    root.querySelector<HTMLSelectElement>('[data-wd-skill]')?.addEventListener('change', e => { skill = (e.target as HTMLSelectElement).value; selected = effectiveId(); draw(); });
+    root.querySelector<HTMLSelectElement>('[data-wd-skill]')?.addEventListener('change', e => { skill = (e.target as HTMLSelectElement).value; previewBody = ''; selected = effectiveId(); draw(); });
+    root.querySelector<HTMLSelectElement>('[data-wd-body]')?.addEventListener('change', e => { previewBody = (e.target as HTMLSelectElement).value; draw(); });
     root.querySelector('[data-wd-equip]')?.addEventListener('click', () => {
       const ok = def?.consume ? setSkillCosmeticColor(account, def.id, skill, draftColor) : equipCosmetic(account, slot, selected, skill || undefined);
       if (ok) { note = `${def?.name ?? 'Original appearance'} equipped. Saved to your account.`; save(); draw(); }
@@ -181,7 +192,7 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
     root.querySelectorAll<HTMLCanvasElement>('[data-wd-model]').forEach(tile => drawCosmeticModelTile(tile, opts.body, tile.dataset.wdModel!, slot === 'wispSkin'));
     root.querySelectorAll<HTMLCanvasElement>('[data-wd-summon]').forEach(tile => {
       const def = COSMETICS[tile.dataset.wdSummon!];
-      drawCosmeticSummonTile(tile, def.id, skill || def.skills?.[0]);
+      drawCosmeticSummonTile(tile, def.id, skill || def.skills?.[0], previewBody);
     });
     root.querySelectorAll<HTMLCanvasElement>('[data-wd-effect]').forEach(tile => {
       const effect = COSMETICS[tile.dataset.wdEffect!];
@@ -189,7 +200,7 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
     });
     const animate = (ms: number): void => {
       if (!canvas.isConnected || !root.contains(canvas) || root.classList.contains('hidden')) return;
-      drawCosmeticPreview(canvas, opts.body, preview, ms / 1000, skill || def?.skills?.[0], slot);
+      drawCosmeticPreview(canvas, opts.body, preview, ms / 1000, skill || def?.skills?.[0], slot, previewBody);
       frame = requestAnimationFrame(animate);
     };
     frame = requestAnimationFrame(animate);

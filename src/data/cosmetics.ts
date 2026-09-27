@@ -3,8 +3,20 @@ import { CLASSES } from './classes';
 import { COSMETIC_MODELS } from './cosmeticModels';
 import { COSMETIC_WISPS } from './cosmeticExpansionModels';
 import { SUMMON_LEGACY_COSMETICS } from './summonCosmetics';
+import { SKELETAL_MAGE_LEGACY } from './skeletalMageCosmetics';
+import { UNDEAD_COURT_LEGACY } from './undeadCourtCosmetics';
+import { AVIAN_LEGACY } from './avianCosmetics';
+import { CANINE_LEGACY } from './canineCosmetics';
+import { ARACHNID_LEGACY } from './arachnidCosmetics';
+import { STALKER_LEGACY } from './stalkerCosmetics';
 
 for (const cosmetic of SUMMON_LEGACY_COSMETICS) registerCosmetic(cosmetic);
+registerCosmetic(SKELETAL_MAGE_LEGACY);
+registerCosmetic(UNDEAD_COURT_LEGACY);
+registerCosmetic(AVIAN_LEGACY);
+registerCosmetic(CANINE_LEGACY);
+registerCosmetic(ARACHNID_LEGACY);
+registerCosmetic(STALKER_LEGACY);
 
 export const COSMETIC_CFG = {
   footprints: { spacing: 15, lifetime: 2.4, maxPerActor: 24, teleportDistance: 110 },

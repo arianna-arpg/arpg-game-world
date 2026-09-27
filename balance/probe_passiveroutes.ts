@@ -134,6 +134,8 @@ for(const proc of ROUTE_PROCS) {
 // Real play seams: no direct dispatch calls for these compound loops.
 {
   const sim=makeSimWorld('warrior',0xf044),p=sim.player;reset(sim);
+  // Learnable Dash still enforces its ordinary Dexterity requirement.
+  sim.meta.baseAttrs.dexterity = Math.max(sim.meta.baseAttrs.dexterity, SKILLS.dash.requirements!.dexterity!);
   for(const stat of ['proc_route_heal_clock','proc_route_funeral_clock','proc_route_move_needle'])sim.meta.allocated.add(added.find(n=>n.mods?.some(m=>m.stat===stat))!.id);
   sim.recalcSeat(sim.localSeat);
   const dash=makeSkillInstance(SKILLS.dash),summon=makeSkillInstance(SKILLS.raise_zombie??Object.values(SKILLS).find(s=>s.tags.includes('summon'))!);
@@ -142,9 +144,14 @@ for(const proc of ROUTE_PROCS) {
   p.cooldowns.set(summon.def.id,10);
   const pet=sim.createMonster('zombie',1,'player',p);sim.actors.push(pet);sim.kill(pet);
   check('actual summon death recovers summon cooldown',near(p.cooldowns.get(summon.def.id)!,9.6));
-  p.cooldowns.delete('dash');p.mana=p.maxMana();const used=sim.useSkill(p,dash,{x:p.pos.x+80,y:p.pos.y});
-  for(let i=0;i<8;i++)sim.update(.05);
-  check('actual movement cast prepares the projectile follow-up',used&&p.buffs.has('route_move_needle'));
+  p.cooldowns.delete('dash');p.mana=p.maxMana();
+  // Route powers cap at 95%: isolate this successful cast from prior spawn rolls.
+  const restoreMovement=seedGlobalRandom(1234);
+  try {
+    const used=sim.useSkill(p,dash,{x:p.pos.x+80,y:p.pos.y});
+    for(let i=0;i<8;i++)sim.update(.05);
+    check('actual movement cast prepares the projectile follow-up',used&&p.buffs.has('route_move_needle'));
+  } finally { restoreMovement(); }
 }
 {
   const node=added.find(n=>n.conduit?.from==='mana'&&n.conduit.to==='poise')!;

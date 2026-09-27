@@ -5,6 +5,7 @@ import { dist } from '../core/math';
 import { Rng } from '../core/rng';
 import type { Actor } from './actor';
 import type { NpcSpeechLine, World } from './world';
+import { dialoguePages, type DialogueOffer, type DialogueChoice } from './dialogue';
 
 export const npcDialogueReceipt = (id: string): string => `dialogue_seen:${id}`;
 const hashStr = (s: string): number => {
@@ -99,6 +100,22 @@ export class NpcDialogueDirector {
 
   finish(actorId: number): void {
     if (this.calling?.line.a.id === actorId) this.calling = undefined;
+  }
+
+  /** Adapt the selected authored script through the same text resolver as its
+   * introductory line. Plain/ambient speech remains a simple paged offer. */
+  readerOffer(a: Actor, text: string, pageChars: number, resolve: (text: string) => string): DialogueOffer {
+    const selected = this.choices.get(a.id);
+    const def = selected && resolve(selected.text) === text
+      ? NPC_DIALOGUES.find(d => d.id === selected.id) : undefined;
+    const responses = def?.responses;
+    const choices = (rows?: readonly DialogueChoice[]) => rows?.map(c => ({ ...c,
+      label: resolve(c.label), disabledReason: c.disabledReason ? resolve(c.disabledReason) : undefined }));
+    return { speakerId: a.id, key: `${a.id}:${def?.id ?? ''}:${text}`, pages: dialoguePages(text, pageChars),
+      choices: choices(responses?.choices),
+      nodes: responses?.nodes && Object.fromEntries(Object.entries(responses.nodes).map(([id, node]) => [id, {
+        pages: node.pages.flatMap(page => dialoguePages(resolve(page), pageChars)), choices: choices(node.choices),
+      }])) };
   }
 
   callout(admit: boolean): NpcSpeechLine | null {

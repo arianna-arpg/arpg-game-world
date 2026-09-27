@@ -18,8 +18,27 @@ app.whenReady().then(async () => {
     return result;
   };
   const capture = async name => {
-    await js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
-    fs.writeFileSync(path.join(dir, `dialogue-${name}.png`), (await win.webContents.capturePage()).toPNG());
+    // Resizing an offscreen window can briefly leave Chromium without a surface.
+    // Retry that capture error only; all game and input assertions still fail immediately.
+    for (let attempt=0; attempt<3; attempt++) {
+      await js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+      try {
+        fs.writeFileSync(path.join(dir, `dialogue-${name}.png`), (await win.webContents.capturePage()).toPNG());
+        return;
+      } catch (error) {
+        if (!String(error).includes('UnknownVizError') || attempt===2) throw error;
+        await new Promise(resolve=>setTimeout(resolve,100));
+      }
+    }
+  };
+  const click = async selector => {
+    const point = await js(`(() => { const el=document.querySelector(${JSON.stringify(selector)});
+      el.scrollIntoView({block:'nearest'}); const r=el.getBoundingClientRect();
+      return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)}; })()`);
+    win.webContents.sendInputEvent({type:'mouseDown',button:'left',clickCount:1,...point});
+    win.webContents.sendInputEvent({type:'mouseUp',button:'left',clickCount:1,...point});
+    await new Promise(resolve=>setTimeout(resolve,40));
+    return js('dialogueQA.run(1)');
   };
   try {
     await win.loadURL(server.url);
@@ -72,7 +91,7 @@ app.whenReady().then(async () => {
     let box = await js('dialogueQA.run(55)'); log({ stage: 'opened', ...box });
     assert.equal(box.open, true); assert.match(box.name, /Mireille/); assert.equal(box.portraitPainted, true);
     assert.ok(box.shown.length < box.full.length, 'typewriter begins gradually');
-    box = await js('dialogueQA.key("Enter")');
+    box = await click('#npc-dialogue .dialogue-name');
     assert.equal(box.shown, box.full, 'first advance reveals without closing');
     await js('dialogueQA.wait((__game.settings().noticeSec ?? 8)+1)');
     await capture('mireille');
@@ -90,6 +109,74 @@ app.whenReady().then(async () => {
     assert.equal(box.full, previous, 'new state cannot replace the page being read');
     const latest = await js(`(() => { let seen=false; for(let i=0;i<24;i++){const b=dialogueQA.key('Enter'); seen ||= b.full==='The next lesson waits until you finish reading.'; if(!b.open)break;}return {seen,box:dialogueQA.box()};})()`);
     assert.equal(latest.seen, true); assert.equal(latest.box.open, false);
+    // Response fixtures travel through the real reader and registered menu action.
+    await js(`(() => {
+      const q=dialogueQA;
+      q.originalReaderOffer=q.w.npcDialogues.readerOffer.bind(q.w.npcDialogues);
+      q.w.innkeepPrompt=()=> 'How would you answer this request?';
+      q.w.npcDialogues.readerOffer=(...args)=>{
+        const offer=q.originalReaderOffer(...args);
+        if(args[0]!==q.keeper)return offer;
+        return {...offer,choices:[
+          {id:'help',label:'I will listen.',next:'reply'},
+          {id:'journal',label:'Show my quests.',action:{type:'menu',target:'journal'}},
+          {id:'vendor',label:'Show a distant shop.',action:{type:'menu',target:'vendor'}},
+          {id:'future',label:'An unregistered action.',action:{type:'future',target:'test'}},
+          {id:'leave',label:'Farewell.'}
+        ],nodes:{reply:{pages:['Thank you for hearing me.']}}};
+      };
+      q.approach();
+    })()`);
+    box=await click('#npc-dialogue .dialogue-portrait');
+    assert.equal(box.open,true);assert.equal(box.shown,box.full,'portrait click reveals');
+    assert.equal(await js('document.querySelectorAll(".dialogue-choices button").length'),5);
+    assert.equal(await js('document.querySelector(".dialogue-next").hidden'),true,'no implicit answer button');
+    box=await click('#npc-dialogue .dialogue-name');
+    assert.equal(box.open,true,'surface advance waits for an explicit response');
+    box=await js('dialogueQA.key("Enter")');assert.equal(box.open,true,'advance key cannot select a response');
+    assert.equal(await js('document.querySelector("[data-dialogue-choice=vendor]").disabled'),true,'station reach is shared with menu');
+    assert.equal(await js('document.querySelector("[data-dialogue-choice=future]").disabled'),true,'unregistered actions are disabled');
+    // A valid preview is not permission to execute after its gate changes.
+    const stale=await js(`(() => {
+      const q=dialogueQA,seal=q.w.panelSealed;
+      q.w.panelSealed=id=>id==='journal'?'Quest view sealed':seal.call(q.w,id);
+      document.querySelector('[data-dialogue-choice=journal]').click();
+      const blocked=!__game.ui.mapOpen&&!document.getElementById('npc-dialogue').hidden;
+      q.w.panelSealed=seal;q.run(1);return blocked;
+    })()`);
+    assert.equal(stale,true,'choice actions recheck admission at click time');
+    await capture('choices');
+    box=await click('[data-dialogue-choice=help]');
+    assert.equal(box.full,'Thank you for hearing me.','selected reply branches without also advancing');
+    assert.equal(box.open,true);
+    box=await click('#npc-dialogue .dialogue-portrait');assert.equal(box.shown,box.full);
+    box=await click('#npc-dialogue .dialogue-name');assert.equal(box.open,false,'surface click finishes the final revealed page');
+    await js('dialogueQA.approach();dialogueQA.key("Enter");');
+    // Native Enter belongs to the focused response, not generic advance.
+    await js('dialogueQA.key("ArrowDown");dialogueQA.key("ArrowDown");');
+    assert.equal(await js('document.activeElement.dataset.dialogueChoice'),'journal','keyboard navigates responses');
+    win.webContents.sendInputEvent({type:'keyDown',keyCode:'Return'});
+    win.webContents.sendInputEvent({type:'char',keyCode:'\r'});
+    win.webContents.sendInputEvent({type:'keyUp',keyCode:'Return'});
+    await js('dialogueQA.run(2);');
+    assert.equal(await js('__game.ui.mapOpen&&__game.ui.mapTab==="quests"'),true,'response activates the existing quest journal');
+    assert.equal((await js('dialogueQA.box()')).open,false);
+    await js('__game.ui.hideAll();dialogueQA.approach();dialogueQA.key("Enter");');
+    // Choices turn on the existing controller pointer even without services.
+    const choicePad=await js(`(() => {
+      const q=dialogueQA;
+      qaPad={id:'QA pad',index:0,connected:true,mapping:'standard',timestamp:performance.now(),axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false,touched:false,value:0}))};
+      q.run(2);qaPad.axes[0]=0.6;q.run(1);qaPad.axes[0]=0;q.run(1);
+      const pointer=__game.padPointer(),button=document.querySelector('[data-dialogue-choice=leave]');
+      button.scrollIntoView({block:'nearest'});const r=button.getBoundingClientRect();pointer.place(r.left+r.width/2,r.top+r.height/2);
+      const active=pointer.active;qaPad.buttons[0]={pressed:true,touched:true,value:1};q.run(1);
+      qaPad.buttons[0]={pressed:false,touched:false,value:0};q.run(2);qaPad=null;
+      return {active,open:q.box().open};
+    })()`);
+    assert.equal(choicePad.active,true,'controller can point at standalone responses');
+    assert.equal(choicePad.open,false,'controller confirms its chosen response');
+    await js(`void (dialogueQA.w.npcDialogues.readerOffer=dialogueQA.originalReaderOffer);`);
+    log('PASS response branches, surface clicks, live gates, keyboard and controller selection');
     // An ambient reader outlives the old bubble window; cooldown starts at close.
     await js('dialogueQA.keeperHere=false; dialogueQA.run(60);');
     box = await js('dialogueQA.wait(20)'); log({ stage: 'ambient-held', ...box });

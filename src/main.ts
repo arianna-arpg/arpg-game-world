@@ -20,7 +20,8 @@ import { CouchJoinOverlay, type CouchJoinChoice, type CouchJoinView } from './ui
 import { applyCursor } from './core/cursor';
 import { assistAim, AIM_ASSIST } from './engine/aimassist';
 import { PadPointer } from './ui/padpointer';
-import { DialogueUI } from './ui/dialogue';
+import { DialogueUI, type DialogueActionContext } from './ui/dialogue';
+import { DialogueActions } from './engine/dialogueActions';
 import { applyUiScale, installUiScaleStyles } from './ui/uiScale';
 import { installUiStack } from './ui/zorder';
 import { escapeModeOf } from './ui/escapeConfig';
@@ -430,9 +431,19 @@ renderer.getPlayerName = () => world.heroKnown() ? world.meta.name : '';
 renderer.uiObstructions = () => ui.obstructionRects();
 
 let running = false;
+// Local navigation only. Future progression actions register validated engine
+// commands here; the reader never writes quest, reward or alignment state.
+const dialogueActions = new DialogueActions<DialogueActionContext>();
+dialogueActions.register('menu', {
+  refusal: (context, action) => context.world === world ? ui.dialogueMenuRefusal(action.target) : 'This conversation has ended.',
+  run: (_context, action) => ui.activateDialogueMenu(action.target),
+});
 const dialogue = new DialogueUI({
   settings: () => settings, padActive: padActiveNow,
   hudTop: () => ui.hudCluster?.()?.y,
+  resolveText: text => renderer.resolveText(text),
+  actions: dialogueActions,
+  available: () => renderer.npcDialogueAvailable(),
 });
 renderer.npcDialogueAvailable = () => running && !world.player?.dead && !world.player?.downed && ui.dialogueContext().available;
 renderer.onNpcDialogue = (w, line, focusId) => {
@@ -1787,7 +1798,7 @@ function tick(now: number): void {
   // cluster; this button was never part of it.
   ui.menuBarSync(dt, running);
   padPointer.update(dt,
-    (couchActive() ? ui.blockingFor(world.localSeat.id) : ui.uiBlocking()) || !running, nowSec);
+    (couchActive() ? ui.blockingFor(world.localSeat.id) : ui.uiBlocking()) || dialogue.choosing || !running, nowSec);
   couchTick(dt, nowSec);
   const lockPad = [...couchGuests.values()].find(g => g.pointer.active && g.gpad.isDown(settings.padBinds.itemLock));
   const boundLockPad = settings.padBinds.itemLock !== PAD_CFG.pointer.confirm;

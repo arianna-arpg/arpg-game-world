@@ -20,7 +20,7 @@ import { empowermentText } from './reliquary';
 import { isVaultAvailable } from '../meta/account';
 import { planRelicStorage, reliquaryExperience } from '../engine/accountReliquary';
 import { BUILD_PANEL_CFG } from './buildPanels';
-import type { InventoryPages } from './inventoryPages';
+import type { InventoryPages, InventoryPageRequest } from './inventoryPages';
 
 /** What the drawers need from the panel that hosts them — read live, never
  *  held. The folio ids (`container:<id>`) and the docking law stay the
@@ -109,17 +109,17 @@ export class ContainerPane {
   /** Wire the ribbons after an inventory render. */
   wireRibbons(root: HTMLElement): void {
     root.querySelectorAll<HTMLButtonElement>('button[data-containerflap]').forEach(btn =>
-      btn.addEventListener('click', () => this.toggle(btn.dataset.containerflap!)));
+      btn.addEventListener('click', () => this.toggle(btn.dataset.containerflap!, this.host.seat().id, 'toggle-page')));
   }
 
   // ----------------------------------------------------------- drawers ----
 
-  /** Ribbons and menu choices use the same inventory-page request. */
-  toggle(id: string, seatId = this.host.seat().id): void {
+  /** The shared request distinguishes page-only ribbons from workspace toggles. */
+  toggle(id: string, seatId = this.host.seat().id, mode: InventoryPageRequest = 'toggle'): void {
     const def = CONTAINERS[id];
     if (!def || !containerBoard(def)) return;
     this.paneFor(id);
-    this.host.pages.request(`container:${id}`, seatId);
+    this.host.pages.request(`container:${id}`, seatId, mode);
   }
 
   /** Menu requests use the local player unless a couch owner is supplied. */

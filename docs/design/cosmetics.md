@@ -80,6 +80,27 @@ Legacy Amalgamation and Legacy Spirit Companions extend this to six more
 summons, including Spirit Pyre's Raging Spirits. Channel-release summons also
 preview their authored body. Their reusable anatomy and retained originals
 are documented in [the summon contract](../render/summons.md).
+Legacy Skeletal Mages preserves the four mage schools and Ossuary Lich, including
+the Skeleton Archer tree's mage forms. Skills with multiple authored bodies
+offer a preview-only form selector derived from their pools and trees;
+see [skeletal mage anatomy and previews](../render/skeletal-mages.md).
+Legacy Undead Courts preserves seven advanced skeleton, abomination, flame and
+wraith forms across five summoning skills, including both Spirit Pyre branches.
+It leaves unmapped base forms unchanged. See [undead court anatomy](../render/undead-courts.md).
+Legacy Hunting Falcon restores Cast the Falcon's original shared bird look.
+The new [avian kit](../render/avians.md) also distinguishes wild vultures and
+shrikes; their native appearances are independent of player Wardrobe choices.
+Legacy Hounds retains Pain Hounds and three bonded breeds. Retaliation
+references and compatible tame-body mappings now feed the shared preview list;
+bond markers resolve to their owning skill. See [canine anatomy](../render/canines.md).
+Legacy Spiders retains five bonded spider/nest forms and Lay Brood Egg's
+hatchlings. Payload instances resolve their existing host skill for cosmetic
+selection; previews follow authored hatch references. Shared capture skills
+offer multiple families while each skin's card starts on a relevant body.
+See [spider anatomy and silk structures](../render/arachnids.md).
+Legacy Stalkers retains bonded Steppe Strider and Veilstalker appearances.
+Their [longlimb anatomy](../render/stalkers.md) mixes new parts with the canine
+kit and uses the same family-aware previews without additional UI rules.
 Clearing the skin reveals the chosen model's palette; clearing the model
 restores the current character's silhouette. These slots persist across runs.
 

@@ -235,7 +235,9 @@ try {
     check('size grows Warding and Stand strike reach', b.sheet.get('aoeRadius',skillContextTags(sw),instanceMods(sw)) > a.sheet.get('aoeRadius',skillContextTags(sw),instanceMods(sw)) * 1.6);
     check('Close Guard inherits half keeper Thorns plus splinters', b.sheet.get('thorns') === 28 && a.sheet.get('thorns') === 8);
     const foe=big.w.createMonster('zombie',1,'enemy'); foe.pos={x:big.p.pos.x+250,y:big.p.pos.y};
-    foe.sheet.setSource('probe',[mod('life','flat',10000),mod('moveSpeed','more',-1),mod('critChance','more',-1)]);foe.fillResources(); big.w.actors.push(foe);
+    // This fixture checks payloads on a landed sweep, independently of evasion/block.
+    foe.sheet.setSource('probe',[mod('life','flat',10000),mod('moveSpeed','more',-1),mod('critChance','more',-1),
+      mod('evasion','override',0),mod('blockChance','override',0)]);foe.fillResources(); big.w.actors.push(foe);
     const hit=makeSkillInstance({...SKILLS.skeletal_grave_thunder,id:'thorns_probe',cooldown:0,useTime:0,delivery:{type:'nova',radius:600}},1,0);
     big.p.facing=0; const life=foe.life;
     big.w.useSkill(foe,hit,big.p.pos); check('absorbed hit retaliates from attached shell', foe.life < life);

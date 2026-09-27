@@ -4,7 +4,9 @@ import { SKILLS } from '../../data/skills';
 import { MONSTERS } from '../../data/monsters';
 import type { Actor } from '../../engine/actor';
 import type { World } from '../../engine/world';
-import type { CosmeticLoadout, CosmeticPaint, CosmeticSlot } from '../../engine/cosmetics';
+import type { SummonDelivery } from '../../engine/skills';
+import { treeGraph } from '../../engine/skilltree';
+import { COSMETICS, type CosmeticLoadout, type CosmeticPaint, type CosmeticSlot } from '../../engine/cosmetics';
 import { COSMETIC_CFG } from '../../data/cosmetics';
 import { cosmeticLoadoutFor, cosmeticPick, cosmeticSkillColor } from '../../meta/cosmetics';
 import { bodySprite, adornSprite, spriteHalf, drawLiveParts, lookOf, type BodyLook } from './body';
@@ -74,11 +76,11 @@ export class CosmeticTrails {
   }
 }
 
-export function drawCosmeticPreview(canvas: HTMLCanvasElement, base: BodyLook, loadout: CosmeticLoadout, time: number, skill?: string, focus?: CosmeticSlot): void {
+export function drawCosmeticPreview(canvas: HTMLCanvasElement, base: BodyLook, loadout: CosmeticLoadout, time: number, skill?: string, focus?: CosmeticSlot, previewBody?: string): void {
   const ctx = canvas.getContext('2d'); if (!ctx) return;
   const { width, height } = canvas;
   const wisp = focus === 'wispSkin', portal = focus === 'portalSkin' || focus === 'portalRecolor';
-  const summon = focus === 'skillSkin' ? cosmeticPreviewSummon(skill) : undefined;
+  const summon = focus === 'skillSkin' ? cosmeticPreviewSummon(skill, previewBody) : undefined;
   const isolated = wisp || portal || !!summon;
   ctx.clearRect(0, 0, width, height);
   const bg = ctx.createRadialGradient(width * 0.5, height * 0.48, 8, width * 0.5, height * 0.48, width * 0.65);
@@ -127,15 +129,53 @@ export function drawCosmeticPreview(canvas: HTMLCanvasElement, base: BodyLook, l
   }
 }
 
-/** Preview a skill's authored body through the same resolver as its live summon. */
-export function cosmeticPreviewSummon(skill?: string) {
+/** All authored base/pool/tree forms, for browsing appearances without picking a
+ * gameplay form. The shared graph fold covers graph and sugar-form trees alike. */
+export function cosmeticPreviewSummons(skill?: string) {
   const def = skill ? SKILLS[skill] : undefined;
-  const monsterId = def?.delivery.type === 'summon' ? def.delivery.monsterId : def?.amalgam?.monsterId;
-  return monsterId ? MONSTERS[monsterId] : undefined;
+  if (!def) return [];
+  const ids = new Set<string>();
+  const add = (d: Pick<SummonDelivery, 'monsterId' | 'pool'> | undefined): void => {
+    if (d?.monsterId) ids.add(d.monsterId);
+    for (const row of d?.pool ?? []) ids.add(row.id);
+  };
+  const visited = new Set<string>();
+  const collect = (id: string): void => {
+    const source = SKILLS[id];
+    if (!source || visited.has(id)) return;
+    visited.add(id);
+    if (source.delivery.type === 'summon') add(source.delivery);
+    if (source.amalgam?.monsterId) ids.add(source.amalgam.monsterId);
+    if (source.retaliate?.monsterId) ids.add(source.retaliate.monsterId);
+    for (const row of treeGraph(source)?.nodes.values() ?? []) add(row.node.over?.summon);
+    if (source.delivery.type === 'construct' && source.delivery.hatch) collect(source.delivery.hatch.skillId);
+  };
+  collect(def.id);
+  // Canine preview: captured bodies have no summon delivery. Browse compatible
+  // cosmetic mappings that satisfy a tame effect's tags, without picking a pet.
+  const claims = def.effects.filter(effect => effect.type === 'tame');
+  if (claims.length) for (const cosmetic of Object.values(COSMETICS)) {
+    if (cosmetic.slot !== 'skillSkin' || (cosmetic.skills && !cosmetic.skills.includes(def.id))) continue;
+    for (const id of Object.keys(cosmetic.paint.summonBodies ?? {})) {
+      const body = MONSTERS[id];
+      if (body && claims.some(claim => claim.tags.some(tag => body.tags?.includes(tag)))) ids.add(id);
+    }
+  }
+  return [...ids].flatMap(id => MONSTERS[id] ? [MONSTERS[id]] : []);
 }
 
-export function drawCosmeticSummonTile(canvas: HTMLCanvasElement, id: string, skill?: string): void {
-  const ctx = canvas.getContext('2d'), def = cosmeticPreviewSummon(skill);
+/** Optionally focus a skin's mapped bodies, so different tame families each get
+ * relevant catalogue portraits. A foreign/stale ID uses the first valid body. */
+export function cosmeticPreviewSummon(skill?: string, previewBody?: string, cosmetic?: string) {
+  const bodies = cosmeticPreviewSummons(skill);
+  const mappings = cosmetic ? COSMETICS[cosmetic]?.paint.summonBodies : undefined;
+  const mapped = mappings ? bodies.filter(body => Object.prototype.hasOwnProperty.call(mappings, body.id)) : [];
+  const choices = mapped.length ? mapped : bodies;
+  return choices.find(body => body.id === previewBody) ?? choices[0];
+}
+
+export function drawCosmeticSummonTile(canvas: HTMLCanvasElement, id: string, skill?: string, previewBody?: string): void {
+  const ctx = canvas.getContext('2d'), def = cosmeticPreviewSummon(skill, previewBody, id);
   if (!ctx || !def) return;
   const look = cosmeticBody({ ...def, radius: 24 }, { slots: { skillSkin: id }, skills: {} }, true, false, { defId: def.id, skill });
   const half = spriteHalf(look.radius);

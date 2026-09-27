@@ -6,6 +6,7 @@ import { RELIQUARY_CFG } from './reliquary';
 import { ORACLE_RESCUED } from './oracle';
 export { BRANDT_HAMMER_QUEST } from './brandt';
 import type { World } from '../engine/world';
+import type { DialogueResponses } from '../engine/dialogue';
 
 export type DialogueCondition =
   | { ledger: string; scope: 'account' | 'run' | 'either'; atLeast?: number }
@@ -30,6 +31,8 @@ export interface NpcDialogueDef {
   /** Receipt is stamped on admission, never on a mere condition/preview read. */
   once?: 'run' | 'account';
   lines: readonly { text: string; weight?: number }[];
+  /** Optional responses/branches. No choices are selected by ordinary advance. */
+  responses?: DialogueResponses;
   color?: string;
 }
 

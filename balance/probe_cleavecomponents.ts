@@ -74,8 +74,14 @@ try {
     const r = rig(['answered_dodge']);
     r.p.sheet.setSource('miss-qa', [mod('accuracy', 'override', 0)]);
     r.target.sheet.setSource('miss-qa', [mod('evasion', 'override', 100000)]);
-    for (let i = 0; i < 20; i++) r.fire();
-    check('Answered Dodge grants Overpower when a wave is evaded', r.p.buffs.has('overpower'));
+    // Observe the refused blow itself: a later hit legitimately consumes its bank.
+    const before = r.target.life;
+    r.target.evadeEntropy = 0; r.target.evadeWindow = 1;
+    r.fire();
+    check('Answered Dodge grants Overpower when a wave is evaded', r.target.life === before && r.p.buffs.has('overpower'));
+    r.p.sheet.removeSource('miss-qa'); r.target.sheet.removeSource('miss-qa');
+    r.fire();
+    check('The next landed wave consumes its actual Overpower bank', r.target.life < before && !r.p.buffs.has('overpower'));
   }
   {
     const r = rig(['skewering_blows']); r.fire();

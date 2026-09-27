@@ -1,0 +1,61 @@
+import type { LookDef } from '../render/vis/parts';
+
+/** Four mobile builds and a rooted silk nursery. Each leg pair is independently
+ * placed; abdomen, brood, markings and mouthparts can be borrowed separately. */
+export const ARACHNID_LOOKS: Record<string, LookDef> = {
+  spider_skitterling: { parts: [
+    { kind: 'arachnidLeg', x: .32, rot: .63, scale: .91, mirror: true },
+    { kind: 'arachnidLeg', x: .12, rot: .13, scale: .86, mirror: true },
+    { kind: 'arachnidLeg', x: -.06, rot: -.4, scale: .8, mirror: true },
+    { kind: 'arachnidLeg', x: -.22, rot: -.88, scale: .74, mirror: true },
+    { kind: 'spinneretFan', x: -1.04, scale: .36 },
+    { kind: 'pearAbdomen', x: -.54, scale: .74 },
+    { kind: 'spiderFangs', x: .65, scale: .5, mirror: true },
+    { kind: 'spiderThorax', x: .26, scale: .77 },
+    { kind: 'eyes', x: .18, scale: .67, params: { n: 4, spread: .65, dist: .62, size: .075 } },
+  ], shadowScale: .84 },
+  spider_broodcarrier: { parts: [
+    { kind: 'bracedSpiderLeg', x: .42, rot: .62, scale: 1.05, mirror: true },
+    { kind: 'bracedSpiderLeg', x: .2, rot: .13, scale: 1.02, mirror: true },
+    { kind: 'bracedSpiderLeg', x: -.02, rot: -.39, scale: .98, mirror: true },
+    { kind: 'bracedSpiderLeg', x: -.3, rot: -.92, scale: .96, mirror: true },
+    { kind: 'spinneretFan', x: -1.32, scale: .62 },
+    { kind: 'pearAbdomen', x: -.59, scale: 1.1 },
+    { kind: 'silkBrood', x: -.66, scale: .89 },
+    { kind: 'silkBrood', x: -.23, y: -.63, scale: .39, mirror: true },
+    { kind: 'spiderFangs', x: .72, scale: .82, mirror: true },
+    { kind: 'spiderThorax', x: .33, scale: .99 },
+    { kind: 'eyes', x: .31, scale: .8, params: { n: 6, spread: .87, dist: .57, size: .055 } },
+  ], shadowScale: 1.17 },
+  spider_orbweaver: { parts: [
+    { kind: 'arachnidLeg', x: .41, rot: .74, scale: 1.19, mirror: true },
+    { kind: 'arachnidLeg', x: .22, rot: .23, scale: 1.1, mirror: true },
+    { kind: 'arachnidLeg', x: .01, rot: -.4, scale: 1.01, mirror: true },
+    { kind: 'arachnidLeg', x: -.19, rot: -.93, scale: .96, mirror: true },
+    { kind: 'spinneretFan', x: -1.28, scale: .53 },
+    { kind: 'orbAbdomen', x: -.65, scale: .92 },
+    { kind: 'dorsalChevron', x: -.63, scale: .82 },
+    { kind: 'spiderFangs', x: .66, scale: .56, mirror: true },
+    { kind: 'spiderThorax', x: .3, scale: .77 },
+    { kind: 'eyes', x: .27, color: '#d8d8b0', scale: .66, params: { n: 4, spread: .65, dist: .56, size: .06 } },
+  ], shadowScale: 1.04 },
+  spider_redwidow: { parts: [
+    { kind: 'arachnidLeg', x: .5, rot: .78, scale: 1.12, mirror: true },
+    { kind: 'arachnidLeg', x: .26, rot: .22, scale: 1.15, mirror: true },
+    { kind: 'arachnidLeg', x: .06, rot: -.48, scale: 1.03, mirror: true },
+    { kind: 'arachnidLeg', x: -.12, rot: -.99, scale: 1, mirror: true },
+    { kind: 'spinneretFan', x: -1.3, scale: .41 },
+    { kind: 'orbAbdomen', x: -.62, scale: 1.09, role: 'dark' },
+    { kind: 'widowMark', x: -.61, scale: .87, color: '#e04848' },
+    { kind: 'spiderFangs', x: .76, scale: .8, mirror: true },
+    { kind: 'spiderThorax', x: .38, scale: .84 },
+    { kind: 'eyes', x: .33, color: '#ffb0b0', scale: .79, params: { n: 6, spread: .78, dist: .6, size: .055 } },
+  ], shadowScale: 1.1 },
+  spider_silkcradle: { parts: [
+    { kind: 'silkAnchors', scale: 1.12 },
+    { kind: 'silkCradle', scale: 1.06 },
+    { kind: 'silkBrood', x: -.24, y: -.18, scale: .94, rot: -.32 },
+    { kind: 'silkBrood', x: .29, y: .27, scale: .65, rot: 1.1 },
+    { kind: 'silkCradle', scale: .91, alpha: .22 },
+  ], shadowScale: .96 },
+};

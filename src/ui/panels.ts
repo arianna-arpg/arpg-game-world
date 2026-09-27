@@ -45,7 +45,7 @@ import { bagBoard, canPlaceAt, overlappingItems, swapBlockerFits } from '../engi
 // ui/containerPane.ts; the panel only seats it, routes its gestures and
 // resolves carried pieces through the one lookup (findCarried).
 import { ContainerPane } from './containerPane';
-import { InventoryPages, type InventoryPage } from './inventoryPages';
+import { InventoryPages, type InventoryPage, type InventoryPageRequest } from './inventoryPages';
 import { questRewardHtml, questImbueHtml } from './questRewards';
 import { containerOriginOf, findCarried, originContainerId } from '../engine/containers';
 import { CONTAINER_DEFS } from '../data/containers';
@@ -1217,9 +1217,9 @@ export class UI {
       }));
   }
 
-  toggleBuildPanel(seatId?: string): void {
+  toggleBuildPanel(seatId?: string, mode: InventoryPageRequest = 'toggle'): void {
     const owner = this.couchSeatFor(seatId).id;
-    this.inventoryPages.request('skills', owner);
+    this.inventoryPages.request('skills', owner, mode);
   }
 
   /** Development pages always follow the inventory edge, including when moved. */
@@ -1541,6 +1541,9 @@ export class UI {
   /** The bind's toggle (main.ts handleLocalPanels). */
   toggleMenu(): void { this.menuBar.toggleTray(); }
   menuTrayOpen(): boolean { return this.menuBar.isTrayOpen(); }
+  /** Dialogue uses the menu's registry and live gates, never a second station list. */
+  dialogueMenuRefusal(entryId: string): string | null { return this.menuBar.refusal(entryId); }
+  activateDialogueMenu(entryId: string): boolean { return this.menuBar.pick(entryId); }
   /** Esc's first step: fold the tray. True = the press was consumed. */
   menuTrayClose(): boolean {
     if (!this.menuBar.isTrayOpen()) return false;
@@ -4598,9 +4601,9 @@ export class UI {
     }));
     // The Build drawer (its handle hangs on the panel edge):
     // toggle + — when open — the learned list's full management wiring.
-    this.inventory.querySelector<HTMLButtonElement>('[data-buildflap]')?.addEventListener('click', () => this.toggleBuildPanel(this.panelSeat(this.inventory).id));
+    this.inventory.querySelector<HTMLButtonElement>('[data-buildflap]')?.addEventListener('click', () => this.toggleBuildPanel(this.panelSeat(this.inventory).id, 'toggle-page'));
     this.inventory.querySelector<HTMLButtonElement>('[data-passiveflap]')?.addEventListener('click', () => {
-      this.toggleTree(this.panelSeat(this.inventory).id);
+      this.toggleTree(this.panelSeat(this.inventory).id, 'toggle-page');
       this.refreshInventory();
     });
     const salv = this.salvageLaneFor(this.inventory);
@@ -7197,10 +7200,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
   // ------------------------------------------------------------ passive tree
 
-  toggleTree(seatId?: string): void {
+  toggleTree(seatId?: string, mode: InventoryPageRequest = 'toggle'): void {
     const seat = this.couchSeatFor(seatId);
     if (this.pageSealed('passives', seat)) return;
-    this.inventoryPages.request('passives', seat.id);
+    this.inventoryPages.request('passives', seat.id, mode);
   }
 
   /** Explicit page dismissal; parent closes use closeInventory instead. */

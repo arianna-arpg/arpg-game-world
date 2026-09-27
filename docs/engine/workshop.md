@@ -123,6 +123,11 @@ the `outlined()` edge, and a `sway` sine drift that animates wherever a
 clock flows. The long tail (volume() gradients, expression loops) stays
 hand-written code, on purpose.
 
+Placement colors and roles apply to glyph operations without an explicit role.
+An operation's own role keeps its authored accent palette, and its explicit
+color takes precedence. Thus a reusable mark can change color in each look
+while a multi-material part retains separately authored bone or metal details.
+
 - `registerGlyphPart(kind, glyph)` — runtime registration under the same
   `custom_` namespace law (shipped painters unshadowable/untouchable);
   every dispatch site already guards unknown kinds, so deletion degrades to

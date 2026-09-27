@@ -11,6 +11,7 @@ import { MONSTERS } from '../src/data/monsters';
 import { SUPPORTS } from '../src/data/supports';
 import { BEAST_FAMILIES, BEAST_FAMILY_BY_ID } from '../src/data/beastFamilies';
 import { COMPANION_SKILLS } from '../src/data/companionSkills';
+import { SIM_TAP } from '../src/engine/tap';
 import { serializeCharacter, rebuildSkill } from '../src/meta/character';
 import type { Actor } from '../src/engine/actor';
 import type { World } from '../src/engine/world';
@@ -202,9 +203,15 @@ try {
     s.w.setCompanionStance(s.w.localSeat, 'tame_beast', 'aggressive');
     const special = a.skills.find(i => i?.def.id === family.skillId)!;
     check(`${family.name}: family art is granted to a real beast`, special);
-    a.skills = [special]; a.useLock = 0; a.pos = { x: target.pos.x - 45, y: target.pos.y };
-    tick(s.w, 2, true);
-    check(`${family.name}: companion AI autonomously uses its art`, a.cooldowns.has(family.skillId) || a.casting?.inst === special);
+    // Pin family art priority through the real AI policy: bond refresh rebuilds
+    // the skill bar, so replacing a.skills cannot isolate this fixture's art.
+    a.brain = { ...a.brain, skillUse: { mode: 'priority', order: [family.skillId] } };
+    a.useLock = 0; a.pos = { x: target.pos.x - 45, y: target.pos.y };
+    let artExecutions = 0;
+    const priorTap = SIM_TAP.current;
+    SIM_TAP.current = { onCast: (caster, inst) => { if (caster === a && inst.def.id === family.skillId) artExecutions++; } };
+    try { tick(s.w, 2, true); } finally { SIM_TAP.current = priorTap; }
+    check(`${family.name}: companion AI autonomously uses its art`, artExecutions > 0);
   }
   {
     const s = setup(['claim_practice', 'claim_practice', 'claim_practice', 'claim_practice']), a = pet(s), plain = setup(), b = pet(plain);

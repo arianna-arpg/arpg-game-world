@@ -583,6 +583,30 @@ checks, the balance harness's smoke suite, and the generation QA sweep are how
 we verify changes.
 
 ## Layout
+- Longlimb silhouettes, Legacy Stalkers and captured body-scale persistence are
+  documented in `docs/render/stalkers.md`. Reusable parts/looks live in
+  `stalkerGlyphs.ts` / `stalkerLooks.ts`; verify cosmetics, companion and tamebeast
+  probes plus hidden `balance/stalkers-ui.cjs` after a build.
+- Spider anatomy, silk nests and retained bonded/hatchling appearances are
+  documented in `docs/render/arachnids.md`. Parts and looks live in
+  `arachnidGlyphs.ts` / `arachnidLooks.ts`; verify the cosmetics probe and
+  hidden `balance/arachnids-ui.cjs` after a build.
+- Canine anatomy and legacy bonded/retaliating bodies are documented in
+  `docs/render/canines.md`. Reusable parts and looks live in `canineGlyphs.ts`
+  / `canineLooks.ts`; verify the cosmetics probe and hidden
+  `balance/canines-ui.cjs` after a build.
+- Companion and wild bird anatomy is documented in `docs/render/avians.md`.
+  `avianGlyphs.ts` / `avianLooks.ts` provide reusable feathered anatomy;
+  Legacy Hunting Falcon retains the companion's former appearance. Verify
+  the cosmetics probe and hidden `balance/avians-ui.cjs` after a build.
+- Advanced undead court anatomy and the free legacy skin are documented in
+  `docs/render/undead-courts.md`. Reusable kits/compositions live in
+  `undeadCourtGlyphs.ts` / `undeadCourtLooks.ts`; verify the cosmetics probe
+  and hidden `balance/undead-courts-ui.cjs` after a build.
+- Skeletal mage school anatomy, the free legacy skin and pool/tree form previews
+  are documented in `docs/render/skeletal-mages.md`. Parts and compositions live
+  in `skeletalMageGlyphs.ts` / `skeletalMageLooks.ts`; verify the cosmetics probe
+  and hidden `balance/skeletal-mages-ui.cjs` after a build.
 - Amalgamation and spirit companion anatomy, reusable kits and free legacy
   skins are documented in `docs/render/summons.md`. Data lives in
   `summonLooks.ts`, `summonGlyphs.ts` and `summonCosmetics.ts`; verify the

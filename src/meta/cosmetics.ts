@@ -69,7 +69,10 @@ export function cosmeticLoadoutFor(world: World, actor: Actor): CosmeticLoadout 
 /** The instance preserves the real skill even for item-granted companions whose
  * cap marker is sourceSkillId. Peers receive this resolved identity. */
 export function cosmeticSummonSkill(actor: Actor): string | undefined {
-  return actor.summonInst?.def.id ?? actor.cosmeticSourceSkill ?? actor.sourceSkillId;
+  // Minted payloads (including pod hatchlings) belong to the host skill's wardrobe.
+  const source = actor.summonInst?.hostSkillId ?? actor.summonInst?.def.id ?? actor.cosmeticSourceSkill ?? actor.sourceSkillId;
+  // Bonded companions store a cap marker; Wardrobe choices belong to the skill.
+  return actor.companion && source?.startsWith('__companion:') ? source.slice('__companion:'.length) : source;
 }
 
 export function cosmeticSkillPaint(world: World, actor: Actor, skill: string) {

@@ -5757,8 +5757,11 @@ function traceGlyphOp(c: CanvasRenderingContext2D, R: number, op: GlyphOp): void
 }
 
 function drawGlyphOp(c: CanvasRenderingContext2D, R: number, op: GlyphOp,
-  pal: LookPalette, t: number | undefined): void {
-  const ramp = rampFor({ kind: '', color: op.color, role: op.role } as PartSpec, pal, 'base');
+  spec: PartSpec, pal: LookPalette, t: number | undefined): void {
+  // Glyph placement colors/roles tint the unassigned base strokes. Explicit
+  // operation accents keep their own bone/metal/glow palette or literal color.
+  const ramp = rampFor({ kind: '', color: op.color ?? (op.role ? undefined : spec.color),
+    role: op.role ?? spec.role }, pal, 'base');
   const tone = withAlpha(shade(ramp.base, op.shade ?? 0), op.alpha ?? 1);
   const sw = op.sway;
   const dx = sw ? Math.sin((t ?? 0) * (sw.freq ?? 2) + (sw.phase ?? 0)) * (sw.ax ?? 0) * R : 0;
@@ -5794,7 +5797,7 @@ export function paintGlyph(ctx: CanvasRenderingContext2D, r: number, spec: PartS
       for (const m of passes) {
         c.save();
         if (m < 0) c.scale(1, -1);
-        drawGlyphOp(c, R, op, pal, t);
+        drawGlyphOp(c, R, op, spec, pal, t);
         c.restore();
       }
     }

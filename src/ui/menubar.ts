@@ -413,15 +413,23 @@ export class MenuBar {
 
   // --- verbs -------------------------------------------------------------------
 
-  private pick(entryId: string): void {
-    const v = this.fold?.entries.find(e => e.def.id === entryId);
-    if (!v || v.state !== 'open') return;
-    const verb = this.host.verbs[v.def.verb];
-    if (!verb) return;
+  /** Shared live gate for menu tiles and dialogue actions; cached paint is
+   * never permission to use a station after walking away. */
+  refusal(entryId: string): string | null {
+    const v = menuFold(this.reads()).entries.find(e => e.def.id === entryId);
+    if (!v || !this.host.verbs[v.def.verb]) return 'This feature is unavailable.';
+    return v.state === 'open' ? null : v.sealedHint || 'This feature is unavailable here.';
+  }
+
+  pick(entryId: string): boolean {
+    if (this.refusal(entryId) !== null) return false;
+    const v = MENU_ENTRIES.find(e => e.id === entryId)!;
+    const verb = this.host.verbs[v.verb];
     hideTooltip();
     verb.open();
     if (MENU_CFG.closeOnPick) this.closeTray();
     this.force = true;
+    return true;
   }
 
   // --- seating -----------------------------------------------------------------

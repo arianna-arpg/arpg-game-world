@@ -1,6 +1,7 @@
 import { DIALOGUE_CFG } from '../data/dialogue';
 import { MONSTERS } from '../data/monsters';
-import { DialogueSession, dialoguePages, type DialogueOffer } from '../engine/dialogue';
+import { DialogueSession, type DialogueOffer } from '../engine/dialogue';
+import type { DialogueActions } from '../engine/dialogueActions';
 import type { NpcSpeechLine, World } from '../engine/world';
 import { isTypingTarget } from '../core/input';
 import { keyDisplay, type Settings } from '../meta/settings';
@@ -13,10 +14,23 @@ import { UI_SCALE_CFG } from './uiScale';
 import { seatDialogue } from './dialogueLayout';
 import { Z_LADDER } from './zorder';
 
+/** Provenance accompanies commands so future outcomes can attribute the answer. */
+export interface DialogueActionContext {
+  world: World;
+  ownerId: string;
+  speakerId: number;
+  offerKey: string;
+  nodeId?: string;
+  choiceId: string;
+}
+
 interface DialogueHost {
   settings: () => Settings;
   padActive: () => boolean;
   hudTop: () => number | undefined;
+  resolveText: (text: string) => string;
+  actions: DialogueActions<DialogueActionContext>;
+  available: () => boolean;
 }
 
 /** A non-modal reader. Movement stays live; leaving focus ends the exchange.
@@ -32,6 +46,9 @@ export class DialogueUI {
   private readonly accessible: HTMLElement;
   private readonly next: HTMLButtonElement;
   private readonly progress: HTMLElement;
+  private readonly choices: HTMLElement;
+  private readonly status: HTMLElement;
+  private choiceSignature = '';
   private world: World | null = null;
   private scene = -1;
   private available = false;
@@ -50,7 +67,7 @@ export class DialogueUI {
         z-index:${Z_LADDER.panel}; color:#eee0c4; padding:12px 18px 10px;
         border:1px solid #b29762; border-radius:5px; background:linear-gradient(120deg,#28251ff7,#17191ffb);
         box-shadow:0 12px 48px #000b,inset 0 0 0 4px #111319,inset 0 0 0 5px #74634466;
-        font-family:Verdana,sans-serif; }
+        font-family:Verdana,sans-serif; cursor:var(--cursor-point,pointer); }
       .npc-dialogue[hidden] { display:none; }
       .npc-dialogue::before { content:''; position:absolute; inset:9px; border:1px solid #b297622a; pointer-events:none; }
       .dialogue-layout { display:grid; grid-template-columns:minmax(0,1fr) ${DIALOGUE_CFG.portraitSize}px; gap:16px; flex:1; min-height:0; overflow-y:auto; }
@@ -62,6 +79,7 @@ export class DialogueUI {
       .dialogue-portrait { align-self:center; border:1px solid #a58a535e; padding:5px; border-radius:3px;
         background:radial-gradient(ellipse at 50% 55%,#60513255,#11151ccc 73%); box-shadow:inset 0 0 0 3px #14151a; }
       .dialogue-portrait canvas { display:block; width:100%; height:auto; }
+      .npc-dialogue[data-choosing=true] .dialogue-portrait { align-self:start; position:sticky; top:0; }
       .dialogue-footer { display:flex; gap:16px; align-items:center; margin-top:6px; min-height:28px; flex-shrink:0; }
       .dialogue-progress { color:#b5a68a; font:11px Verdana,sans-serif; flex:1; }
       .npc-dialogue button { font:12px Verdana,sans-serif; color:#eee0c4; cursor:var(--cursor-point,pointer);
@@ -69,6 +87,12 @@ export class DialogueUI {
       .npc-dialogue button:hover,.npc-dialogue button:focus-visible { background:#a58a5350; border-color:#d6bc7b; outline:1px solid #d6bc7b; }
       .npc-dialogue .dialogue-close { position:absolute; right:17px; top:14px; padding:2px 7px; color:#c4b697; background:transparent; border-color:transparent; }
       .dialogue-accessible { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip-path:inset(50%); }
+      .dialogue-choices { display:flex; flex-direction:column; gap:6px; margin-top:8px; }
+      .dialogue-choices[hidden], .dialogue-next[hidden] { display:none; }
+      .dialogue-choices button { text-align:left; white-space:normal; overflow-wrap:anywhere; }
+      .dialogue-choices button:disabled { opacity:.6; cursor:default; }
+      .dialogue-status { color:#e0be8a; font:11px/1.4 Verdana,sans-serif; }
+      .dialogue-status:empty { display:none; }
       .npc-dialogue[data-compact=true] .dialogue-layout { grid-template-columns:minmax(0,1fr) 80px; gap:12px; }
       .npc-dialogue[data-compact=true] .dialogue-page { font-size:16px; }
     `;
@@ -83,7 +107,9 @@ export class DialogueUI {
     this.root.innerHTML = `<button class="dialogue-close" type="button" aria-label="Close dialogue (Escape)">×</button>
       <h2 class="dialogue-name" id="npc-dialogue-title"></h2><div class="dialogue-layout"><div>
       <p class="dialogue-page" aria-hidden="true"><span class="dialogue-ink"></span><span class="dialogue-unread"></span></p>
-      <div class="dialogue-accessible" aria-live="polite" aria-atomic="true"></div></div>
+      <div class="dialogue-accessible" aria-live="polite" aria-atomic="true"></div>
+      <div class="dialogue-choices" role="group" aria-label="Responses" hidden></div>
+      <div class="dialogue-status" role="status"></div></div>
       <div class="dialogue-portrait"><canvas aria-hidden="true"></canvas></div></div>
       <div class="dialogue-footer"><span class="dialogue-progress"></span><button class="dialogue-next" type="button"></button></div>`;
     document.body.appendChild(this.root);
@@ -92,25 +118,52 @@ export class DialogueUI {
     this.ink = get('.dialogue-ink'); this.rest = get('.dialogue-unread');
     this.accessible = get('.dialogue-accessible'); this.next = get('.dialogue-next');
     this.progress = get('.dialogue-progress');
+    this.choices = get('.dialogue-choices'); this.status = get('.dialogue-status');
     this.next.onclick = () => this.advance();
     get<HTMLButtonElement>('.dialogue-close').onclick = () => this.close();
-    get<HTMLElement>('.dialogue-page').onclick = () => this.advance();
+    // One surface gesture, including portrait, heading and margins. Nested
+    // controls own their click; it must never also advance the conversation.
+    this.root.addEventListener('click', event => {
+      if (event.button !== 0 || !(event.target instanceof Element)
+        || event.target.closest('button,a,input,select,textarea,[role="button"],.dialogue-choices')) return;
+      const selection = window.getSelection();
+      if (selection && !selection.isCollapsed && this.root.contains(selection.anchorNode)) return;
+      this.advance();
+    });
     this.root.addEventListener('pointerdown', event => event.stopPropagation());
     // Capture the bound advance before gameplay sees it. Autorepeat stays
     // consumed through keyup even if the final press closed the dialogue.
     window.addEventListener('keydown', event => {
       const code = event.code || event.key;
       if (isTypingTarget(event.target)) return;
-      // A service button keeps native keyboard activation; the reader's own
-      // controls and canvas retain the rebindable advance gesture.
+      if (this.choosing && ['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)
+        && (!(event.target instanceof Element) || this.root.contains(event.target)
+          || !event.target.closest('button,a,select,[role="button"]'))) {
+        const buttons = [...this.choices.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
+        const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
+        const index = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1
+          : at < 0 ? (event.key === 'ArrowUp' ? buttons.length - 1 : 0)
+          : (at + (event.key === 'ArrowUp' ? -1 : 1) + buttons.length) % buttons.length;
+        event.preventDefault(); event.stopImmediatePropagation(); this.heldKeys.add(code);
+        buttons[index]?.focus(); return;
+      }
+      const control = event.target instanceof Element ? event.target.closest<HTMLButtonElement>('button') : null;
+      if (!this.heldKeys.has(code) && this.open && control && this.root.contains(control)
+        && (event.key === 'Enter' || event.key === ' ')) {
+        event.preventDefault(); event.stopImmediatePropagation();
+        if (!event.repeat) { this.heldKeys.add(code); control.click(); }
+        return;
+      }
+      // Focused controls own native activation, including explicit response
+      // choices. The advance button alone shares the bound advance gesture.
       if (!this.heldKeys.has(code) && event.target instanceof Element
-        && !this.root.contains(event.target) && event.target.closest('button, a, select, [role="button"]')) return;
+        && event.target.closest('button,a,select,[role="button"]')
+        && !event.target.closest('.dialogue-next')) return;
       if (!this.heldKeys.has(code) && (!this.open || event.key.toLowerCase() !== this.host.settings().keybinds.dialogueAdvance)) return;
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat && !this.heldKeys.has(code)) {
         this.heldKeys.add(code);
-        if (event.key === 'Enter' && event.target instanceof Element && event.target.closest('.dialogue-close')) this.close();
-        else this.advance();
+        this.advance();
       }
     }, true);
     window.addEventListener('keyup', event => this.heldKeys.delete(event.code || event.key), true);
@@ -118,6 +171,7 @@ export class DialogueUI {
   }
 
   get open(): boolean { return !this.root.hidden; }
+  get choosing(): boolean { return this.open && this.revealed && this.session.awaitingChoice; }
 
   /** Seat before DOM hit-testing as well as after rendering a new page. */
   syncLayout(): void {
@@ -136,14 +190,15 @@ export class DialogueUI {
   reset(): void {
     this.session.reset(); this.world = null; this.scene = -1; this.pageKey = '';
     this.root.hidden = true;
+    this.choiceSignature = ''; this.choices.replaceChildren(); this.status.textContent = '';
   }
 
   sync(world: World, line: NpcSpeechLine | null, focusId: number | null): void {
     if (world !== this.world || this.scene !== world.dialogueScene) {
       this.reset(); this.world = world; this.scene = world.dialogueScene; this.lastTime = world.time;
     }
-    const offer = this.available && line ? { speakerId: line.a.id, key: `${line.a.id}:${line.text}`,
-      pages: dialoguePages(line.text, DIALOGUE_CFG.pageChars) } : null;
+    const offer = this.available && line
+      ? world.npcDialogues.readerOffer(line.a, line.text, DIALOGUE_CFG.pageChars, this.host.resolveText) : null;
     this.finish(this.session.sync(focusId, offer));
     const dt = Math.max(0, Math.min(0.1, world.time - this.lastTime));
     this.lastTime = world.time;
@@ -152,11 +207,12 @@ export class DialogueUI {
     const reading = this.session.reading!;
     const actor = world.actors.find(a => a.id === reading.offer.speakerId && !a.dead);
     if (!actor) { this.close(); return; }
-    const key = `${reading.offer.key}:${reading.page}`;
+    const key = String(this.session.revision);
     if (this.pageKey !== key) {
       this.pageKey = key; this.elapsed = 0; this.revealed = false;
-      this.fullPage = reading.offer.pages[reading.page];
+      this.fullPage = this.session.node!.pages[reading.page];
       this.accessible.textContent = this.fullPage;
+      this.status.textContent = '';
     } else this.elapsed += dt;
     this.title.textContent = actor.name;
     this.root.dataset.speakerId = String(actor.id);
@@ -167,10 +223,7 @@ export class DialogueUI {
     this.revealed = count >= this.fullPage.length;
     this.ink.textContent = this.fullPage.slice(0, count);
     this.rest.textContent = this.fullPage.slice(count);
-    const settings = this.host.settings();
-    const bind = this.host.padActive() ? padDisplay(settings.padBinds.dialogueAdvance) : keyDisplay(settings.keybinds.dialogueAdvance);
-    this.next.textContent = `${this.revealed ? this.session.hasNext() ? 'Continue' : 'Finish' : 'Reveal'}  ›${bind ? `  ${bind}` : ''}`;
-    this.progress.textContent = reading.offer.pages.length > 1 ? `${reading.page + 1} / ${reading.offer.pages.length}` : '';
+    this.renderControls();
     this.syncLayout();
     const px = Math.round(DIALOGUE_CFG.portraitSize * VIS_CFG.portrait.oversample);
     if (this.portrait.width !== px) this.portrait.width = this.portrait.height = px;
@@ -179,8 +232,65 @@ export class DialogueUI {
 
   advance(): void {
     if (!this.open || !this.pageKey) return;
-    if (!this.revealed) { this.revealed = true; this.ink.textContent = this.fullPage; this.rest.textContent = ''; }
-    else { this.finish(this.session.advance()); this.pageKey = ''; this.setAvailable(this.available); }
+    if (!this.revealed) {
+      this.revealed = true; this.ink.textContent = this.fullPage; this.rest.textContent = ''; this.renderControls();
+    } else if (!this.session.awaitingChoice) {
+      this.finish(this.session.advance()); this.pageKey = ''; this.setAvailable(this.available);
+    }
+  }
+
+  private renderControls(): void {
+    const reading = this.session.reading, node = this.session.node;
+    if (!reading || !node || !this.world) return;
+    const settings = this.host.settings();
+    const bind = this.host.padActive() ? padDisplay(settings.padBinds.dialogueAdvance) : keyDisplay(settings.keybinds.dialogueAdvance);
+    const choosing = this.revealed && this.session.awaitingChoice;
+    this.root.dataset.choosing = String(choosing);
+    this.next.hidden = choosing;
+    this.next.textContent = `${this.revealed ? this.session.hasNext() ? 'Continue' : 'Finish' : 'Reveal'}  ›${bind ? `  ${bind}` : ''}`;
+    this.progress.textContent = choosing ? 'Choose a response' : node.pages.length > 1 ? `${reading.page + 1} / ${node.pages.length}` : '';
+    this.choices.hidden = !choosing;
+    const rows = choosing ? (node.choices ?? []).map(choice => ({ choice,
+      reason: this.session.choiceRefusal(choice.id) ?? (choice.action ? this.host.actions.refusal(this.actionContext(choice.id), choice.action) : null),
+    })) : [];
+    const revision = this.session.revision;
+    const signature = JSON.stringify([revision, rows]);
+    if (signature === this.choiceSignature) return;
+    this.choiceSignature = signature;
+    const focused = this.choices.contains(document.activeElement)
+      ? (document.activeElement as HTMLElement).dataset.dialogueChoice : undefined;
+    this.choices.replaceChildren();
+    for (const { choice, reason } of rows) {
+      const button = document.createElement('button'); button.type = 'button';
+      button.dataset.dialogueChoice = choice.id;
+      button.textContent = choice.label + (reason ? ` — ${reason}` : '');
+      button.disabled = reason !== null;
+      button.addEventListener('click', () => this.choose(choice.id, revision));
+      this.choices.appendChild(button);
+      if (focused === choice.id && !button.disabled) button.focus({ preventScroll: true });
+    }
+  }
+
+  private actionContext(choiceId: string): DialogueActionContext {
+    const reading = this.session.reading!;
+    return { world: this.world!, ownerId: this.world!.localSeat.id,
+      speakerId: reading.offer.speakerId, offerKey: reading.offer.key, nodeId: reading.node, choiceId };
+  }
+
+  private choose(id: string, revision: number): void {
+    const world = this.world, reading = this.session.reading;
+    if (!this.open || !this.revealed || !world || !reading || !this.host.available()
+      || this.scene !== world.dialogueScene || world.player.dead || world.player.downed
+      || !world.actors.some(actor => actor.id === reading.offer.speakerId && !actor.dead)) return;
+    const context = this.actionContext(id);
+    const result = this.session.choose(id, revision, action => this.host.actions.run(context, action));
+    if (!result) {
+      this.status.textContent = 'That response is no longer available.';
+      this.renderControls(); return;
+    }
+    this.finish(result.ended); this.pageKey = ''; this.setAvailable(this.host.available());
+    // Retire old response buttons immediately, including two clicks in one frame.
+    this.choices.replaceChildren(); this.choiceSignature = '';
   }
 
   close(): boolean {

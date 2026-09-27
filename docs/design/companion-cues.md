@@ -91,8 +91,9 @@ recognize a newly returned body without mistaking its animation for protection;
 and read field removal and material banks during crowded combat. Tune shared
 profiles and density after playing these situations.
 
-Validation note (2026-09-27): the existing `tamebeast` probe reports 93 passing
-checks and one failing Hounds autonomous-art assertion both on baseline
-`b91db187` and with this batch. It remains an unrelated baseline issue, not a
-passing check. The focused cue probe separately verifies real claim/stance,
-domination, pack-bond loss, downing and both companion/co-op recovery outcomes.
+Validation note (2026-09-27): the isolated cue batch reproduced the existing
+Hounds autonomous-art test failure on baseline `b91db187`. The combined creature
+appearance batch fixes that fixture by using the existing AI priority policy;
+all 94 Tame Beast checks now pass. See [the fixture explanation](../render/stalkers.md).
+The 63 focused cue checks separately verify real claim/stance, domination,
+pack-bond loss, downing and both companion/co-op recovery outcomes.
