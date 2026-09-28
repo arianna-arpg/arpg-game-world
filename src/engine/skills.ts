@@ -1,4 +1,5 @@
 import { summonScopeTags } from './skillScopes';
+import { guardArtsOf, type GuardArtsSpec } from './guardArtsSpec';
 import { companionBondOf, type CompanionBondSpec } from './companionSpec';
 import { challengeDelivery, type ChallengeSpec } from './challengeSpec';
 import { attackSequenceDelivery, attackSequenceOf, attackSequenceStatuses, attackSequenceSweepInstances, type AttackSequenceSpec } from './attackSequenceSpec';
@@ -4483,6 +4484,7 @@ export interface SkillDef {
   fuse?: FuseSpec;
   /** Frontal-block behavior (castMode 'guard'). */
   guard?: GuardSpec;
+  guardArts?: GuardArtsSpec;
   /** Stage-banked hold behavior (castMode 'overcharge' — or grafted onto
    *  any bar-cast skill by a support's OverchargeSpec). */
   overcharge?: OverchargeSpec;
@@ -5023,6 +5025,7 @@ function mergeTreeDomain(a: GroundDelivery['domain'], b: GroundDelivery['domain'
 }
 
 export interface SkillTreeNode {
+  guardArts?: GuardArtsSpec;
   attackSequence?: AttackSequenceSpec;
   /** Complete armed-cast identity; sockets override it. One per exclusive limb. */
   trigger?: TriggerSpec;
@@ -5911,6 +5914,8 @@ export function skillRarityFloor(weights: Partial<Record<SkillRarity, number>>):
 
 /** A skill as OWNED by an actor: definition + level + socketed supports. */
 export interface SkillInstance {
+  guardArtsHost?: SkillInstance;
+  guardArtsPayload?: true;
   /** Captured attack-sequence provenance; never persisted. */
   sequenceHost?: SkillInstance;
   sequenceRole?: 'primary' | 'payload';
@@ -6305,7 +6310,7 @@ export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance, param?: st
   engagement: inst =>
     inst.def.delivery.type === 'aura'
     || inst.def.delivery.type === 'summon'
-    || inst.def.castMode === 'guard'
+    || instanceCastMode(inst) === 'guard'
     || inst.def.tags.includes('minion'),
   /** A DAMAGING AFFLICTION source: the host itself festers (a dot-typed
    *  status with hit-derived magnitude) or a socketed gem grants an
@@ -6432,7 +6437,7 @@ export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance, param?: st
    *  grows a real stance or shell — no gem mints one today, so the lift
    *  is def-side by construction. */
   guard: inst =>
-    inst.def.castMode === 'guard'
+    instanceCastMode(inst) === 'guard'
     || inst.def.delivery.type === 'dash'
     || inst.def.delivery.type === 'leap'
     || inst.def.delivery.type === 'construct'
@@ -6836,7 +6841,7 @@ export function skillContextTags(def: SkillDef | SkillInstance, extra?: SkillTag
 export function castScopeTag(skill: SkillDef | SkillInstance): SkillTag {
   const inst = 'def' in skill ? skill : undefined, def = inst ? inst.def : skill as SkillDef;
   if (inst && socketSpec(inst, 'guardCast')) return 'cast:instant';
-  const mode = def.castMode ?? 'cast';
+  const mode = inst ? instanceCastMode(inst) : def.castMode ?? 'cast';
   if (mode === 'channel' || (inst && mode === 'cast' && !def.concentration && def.useTime >= .3 && socketSpec(inst, 'gather'))) return 'cast:channel';
   if (def.concentration || mode === 'guard' || mode === 'charge' || mode === 'overcharge'
     || (inst && ['cast', 'perfect', 'timed'].includes(mode) && instanceOvercharge(inst))) return 'cast:held';
@@ -6860,8 +6865,13 @@ export function skillCooldownSeconds(
 ): number {
   const tags = skillContextTags(inst);
   const extra = instanceMods(inst);
-  const cdBase = base + caster.sheet.get('addedCooldown', tags, extra);
+  const cdBase = (guardArtsOf(inst)?.absorb?.cooldown ?? base) + caster.sheet.get('addedCooldown', tags, extra);
   if (cdBase <= 0) return 0;
   return cdBase / Math.max(0.1,
     caster.sheet.get('cooldownRecovery', tags, extra) / caster.sheet.get('cooldownRecovery'));
+}
+
+/** Native absorb discipline changes commitment without rewriting catalog data. */
+export function instanceCastMode(inst: SkillInstance): CastMode {
+  return guardArtsOf(inst)?.absorb ? 'cast' : inst.def.castMode ?? 'cast';
 }

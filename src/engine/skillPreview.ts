@@ -29,6 +29,7 @@
 // ---------------------------------------------------------------------------
 
 import { skillAbsorbAmount } from './absorb';
+import { guardArtsOf, guardCapacity, guardArtAbsorb } from './guardArtsSpec';
 import { attackSequenceOf, attackSequenceStatuses, attackSequenceSweepInstances } from './attackSequenceSpec';
 import { guardSurgePreview } from './guardSurge';
 import { instanceInvocation, makeInvocationPayload } from './invocation';
@@ -159,6 +160,15 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
     push('cost', 'Cost', parts.join(' + '));
   }
   const trigger = instanceTrigger(inst);
+  const guardArt = guardArtsOf(inst), guardArtShield = guardArtAbsorb(caster, inst);
+  if (guardArtShield) {
+    push('guardArtMode', 'Mode', 'Instant absorb cast', 'headline');
+    push('guardArtAbsorb', 'Absorb shield', `${Math.round(guardArtShield.amount)} for ${secs(guardArtShield.duration)}`, 'headline');
+    if (guardArt?.patience) {
+      const empowered = guardArtAbsorb(caster, inst, guardArt.patience.multiplier)!;
+      push('guardArtPatience', 'Patient shield', `${Math.round(empowered.amount)} for ${secs(empowered.duration)}`, 'detail', `After ${secs(guardArt.patience.seconds)} without casting.`);
+    }
+  } else if (inst.def.guard) push('guardArtCapacity', 'Guard health', String(Math.round(guardCapacity(caster, inst))), 'headline');
   const attackSequence = attackSequenceOf(inst);
   if (attackSequence?.hitCycle) push('attackSequence_cycle', 'Landed-hit cycle', String(attackSequence.cycleMax ?? attackSequence.hitCycle.max), 'headline',
     attackSequence.vulnerability ? 'Builds vulnerability; maximum hit clears it.' : `${pct(attackSequence.hitCycle.increasedPerStack)} increased damage per stack; resets at maximum.`);
@@ -178,8 +188,9 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   }
   if (skillCooldownSeconds(caster, inst) > 0 && !replenishing) {
     const cd = skillCooldownSeconds(caster, inst);
+    const guardArtCooldown = guardArt?.absorb?.cooldown ?? def.cooldown;
     push('cooldown', 'Cooldown', secs(cd), 'headline',
-      def.cooldown > 0 && Math.abs(cd - def.cooldown) > 0.005 ? `base ${secs(def.cooldown)}` : undefined);
+      guardArtCooldown > 0 && Math.abs(cd - guardArtCooldown) > 0.005 ? `base ${secs(guardArtCooldown)}` : undefined);
   }
 
   // ---- how many things this cast puts in the world -------------------------

@@ -1,4 +1,5 @@
 import { summonReservationUnit } from './companionGrants';
+import { tickAbsorbLayers, type AbsorbLayer } from './absorb';
 import { buffProcCue, noteProcCue, noteProcPop, tickProcCues } from './procCues';
 import { noteRestoreGain, tickRestoreGains } from './feedingCues';
 import { summonContractSlots } from './summonContracts';
@@ -23,7 +24,7 @@ import { RECENT_CONDITIONS, RECENT_KINDS, RECENT_NEVER, recentIndex, recentWindo
 import { DEFENSE_CFG } from './defense';
 import { SIM_TAP } from './tap';
 import {
-  hostSockets, instanceMods, skillContextTags, instanceGates, instanceChargeCost, instanceChargeGain,
+  hostSockets, instanceMods, skillContextTags, instanceGates, instanceChargeCost, instanceChargeGain, instanceCastMode,
   instanceUseCharges, socketSpec, instanceSelfStack, instanceConduits, supportGlobalMods,
   CONDUIT_CFG, REFLEX_CFG,
   type SkillInstance, type BuffEffect, type CastMode, type ConstructKind, type AuraSpec,
@@ -1341,6 +1342,14 @@ export class Actor {
   esJustFilled = false;
   /** Absorption shield: temporary pool eaten before EVERYTHING else. */
   absorb = 0;
+  absorbLayers = new Map<string, AbsorbLayer>();
+  get absorbTotal(): number {
+    let total = this.absorb;
+    for (const layer of this.absorbLayers.values()) total += layer.amount;
+    return total;
+  }
+  /** Paid emergency recovery survives respec, unequipping and zone changes. */
+  guardIntervention: Record<string, number> = {};
   absorbTimer = 0;
   /** WARD: the DECAYING shield — soaked before even absorb, uncapped, and
    *  held down only by its own decay (wardDecay/wardGain stats). Balance
@@ -3305,6 +3314,11 @@ export class Actor {
     if (this.flying && !fly) this.touchdown = true;
     this.flying = fly;
 
+    tickAbsorbLayers(this, dt);
+    for (const key of Object.keys(this.guardIntervention)) {
+      this.guardIntervention[key] = Math.max(0, this.guardIntervention[key] - dt);
+      if (this.guardIntervention[key] === 0) delete this.guardIntervention[key];
+    }
     // Absorption shield expiry
     if (this.absorb > 0) {
       this.absorbTimer -= dt;
@@ -3997,7 +4011,7 @@ export class Actor {
    *  a hold of its own can never ride the wrist. */
   isReflex(inst: SkillInstance): boolean {
     const def = inst.def;
-    if ((def.castMode ?? 'cast') !== 'cast' || def.channel || def.concentration) return false;
+    if (instanceCastMode(inst) !== 'cast' || def.channel || def.concentration) return false;
     if (this.skillUseTime(inst) > 0.001) return false;
     return def.reflex === true
       || this.sheet.get('reflex', skillContextTags(def), instanceMods(inst)) > 0;
@@ -4030,7 +4044,7 @@ export class Actor {
     const g = socketSpec(inst, 'gather');
     if (!g?.releaseOnCooldown) return false;
     const def = inst.def;
-    if ((def.castMode ?? 'cast') !== 'cast' || def.concentration || def.useTime < 0.3) return false;
+    if (instanceCastMode(inst) !== 'cast' || def.concentration || def.useTime < 0.3) return false;
     const fill = this.brims?.get(def.id)?.fill ?? 0;
     return fill >= (g.minRelease ?? 0.15);
   }

@@ -62,7 +62,7 @@ try {
         cast(s.w, makeSkillInstance(SKILLS.backstab), a.pos);
       }
       step(s.w, 0.8);
-      const worked = id === 'shield_up' ? s.p.casting?.mode === 'guard'
+      const worked = id === 'shield_up' ? (mid.links![0] === 'measured_riposte' ? s.p.absorbTotal > 0 && !s.p.casting : s.p.casting?.mode === 'guard')
         : id === 'war_cry' || id === 'cloak' ? s.p.buffs.has(id)
         : id === 'shadow_step' ? s.p.pos.x !== a.pos.x && s.p.buffs.size > 0
         : a.life < a.maxLife();
@@ -131,15 +131,15 @@ try {
   {
     const { w, p, inst } = setup('shield_up', ['iron_shelter', 'reinforced_plate', 'broad_shelter']);
     cast(w, inst); step(w, 0.05);
-    check('iron shelter creates a real rear shell scaled by guard strength', !!p.shellGuard && p.shellGuard.pool > 55 && p.shellGuard.arcDeg === 200);
-    check('respec retires a held stance and its captured shell', reset(w, inst) && !p.casting && !p.shellGuard);
+    check('shield_up iron shelter strengthens the native guard without a rear shell graft', !p.shellGuard && (p.casting?.maxShield ?? 0) > 60 && !inst.grafts?.length);
+    check('shield_up respec retires the held stance', reset(w, inst) && !p.casting);
   }
   {
     const { w, p, inst } = setup('shield_up', ['measured_riposte', 'patient_hand', 'punishing_reply']); const a = body(w);
     cast(w, inst); step(w, 0.35);
-    const shield = p.casting?.shield, life = p.life, enemyLife = a.life;
+    const shield = p.absorbTotal, life = p.life;
     w.executeSkill(a, makeSkillInstance({ ...SKILLS.frost_nova, effects: [{ type: 'damage' }], baseDamage: { chaos: [20, 20] }, innateMods: [mod('critChance', 'override', 0)] }), p.pos);
-    check('invested parry window counters a real hit without spending shield', a.life < enemyLife && p.casting?.shield === shield && p.life === life);
+    check('shield_up cast shield absorbs a real hit while leaving the caster free', !p.casting && p.absorbTotal < shield && p.absorbTotal > 0 && p.life === life);
   }
   {
     const { w, inst } = setup('frost_nova', ['winter_footprint', 'winter_borders', 'lingering_winter']); const a = body(w);

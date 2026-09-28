@@ -1,3 +1,4 @@
+import { SHIELD_UP_TREE } from './shieldUpTree';
 import { CLEAVE_TREE } from './cleaveTree';
 import type { SkillTreeSpec, TreeBuffPatch } from '../engine/skills';
 import { mod, conversionStat } from '../engine/stats';
@@ -10,23 +11,7 @@ const buff = (node: Node, id: string, patch: Omit<TreeBuffPatch, 'id'>): Node =>
 export const STARTER_SKILL_TREES: Record<string, SkillTreeSpec> = {
   cleave: CLEAVE_TREE,
 
-  shield_up: tree([
-    graft(n('iron_shelter', 'Iron Shelter', 'While guarding, a separate 200-degree rear shell covers your blind side. Its 55 base pool scales with guard strength; after breaking it begins to reform after 4 seconds. Dropping the guard removes it.'), 'grafted_carapace'),
-    [n('reinforced_plate', 'Reinforced Plate', '35% increased guard strength.', [mod('guardStrength', 'increased', 0.35)]),
-      n('broad_shelter', 'Broad Shelter', '30% increased area radius widens the frontal guard.', [mod('aoeRadius', 'increased', 0.3)]),
-      n('shared_shelter', 'Shared Shelter', 'Nearby minions can shelter behind your frontal guard; their intercepted hits drain your guard instead.', [mod('guardAegis', 'flat', 1)])],
-    [n('ready_watch', 'Ready Watch', '30% increased cooldown recovery.', [mod('cooldownRecovery', 'increased', 0.3)]),
-      graft(n('shield_pump', 'Shield Pump', 'While holding the guard, drain 8% of maximum poise per second to rebuild 2 guard per point. Stops at 25% poise and when the guard is full.'), 'stoneblood_conduit'),
-      graft(n('sheltered_thrust', 'Sheltered Thrust', 'Gain the Thrust secondary action while the guard is held.'), 'phalanx')],
-  ], [
-    n('measured_riposte', 'Measured Riposte', 'The first 0.3 seconds of each guard can parry, reflecting incoming damage at 150% power without spending shield.', [mod('guardParry', 'flat', 0.3)]),
-    [n('patient_hand', 'Patient Hand', 'The parry window lasts 0.15 seconds longer.', [mod('guardParry', 'flat', 0.15)]),
-      n('punishing_reply', 'Punishing Reply', 'Parry damage gains 50 percentage points of incoming damage.', [mod('guardParryPower', 'flat', 0.5)]),
-      n('resetting_stance', 'Resetting Stance', '45% increased cooldown recovery.', [mod('cooldownRecovery', 'increased', 0.45)])],
-    [n('loaded_bash', 'Loaded Bash', '40% increased bash power; lower the bash arming line by 20%.', [mod('bashPower', 'increased', 0.4), mod('bashFloor', 'increased', -0.2)]),
-      n('unbroken_answer', 'Unbroken Answer', '30% increased guard strength and 20% increased bash power.', [mod('guardStrength', 'increased', 0.3), mod('bashPower', 'increased', 0.2)]),
-      n('hollow_counter', 'Hollow Counter', 'Invert the bash: release when the guard is sufficiently depleted, dealing damage from shield lost rather than shield remaining. 25% increased bash power.', [mod('bashInvert', 'flat', 1), mod('bashPower', 'increased', 0.25)])],
-  ], n('shield_drill', 'Shield Drill', '15% increased guard strength.', [mod('guardStrength', 'increased', 0.15)])),
+  shield_up: SHIELD_UP_TREE,
 
   war_cry: tree([
     buff(n('warband_call', 'Warband Call', 'Your battle blessing reaches you and allies within 180 base radius, including minions. It is granted once when you shout.', undefined, { tags: { add: ['aoe'] } }), 'war_cry', { affects: 'allies', radius: 180 }),

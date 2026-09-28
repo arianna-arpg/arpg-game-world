@@ -70,6 +70,7 @@ interface SavedSkill {
   replenishmentPaused?: true;
 }
 export interface CharacterSave {
+  guardIntervention?: Record<string, number>;
   stash?: PersonalStash;
   accountRelics?: 1;
   relicScope?: string;
@@ -232,6 +233,7 @@ export function serializeCharacter(world: World): CharacterSave {
   const keptZones = new Set(ws.zones.map(z => z.id));
   return {
     relicScope: m.relicScope ?? (m.charId || 'run:' + world.manifest.seed),
+    guardIntervention: { ...hero.guardIntervention },
     accountRelics: 1,
     stash: m.stash ? structuredClone(m.stash) : undefined,
     schemaVersion: CHAR_SCHEMA_VERSION,
@@ -497,6 +499,8 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
     if (free >= 0) bar[free] = id;
   }
   world.adoptSavedMeta(built.meta, bar, save.level);
+  world.seatHero(world.localSeat).guardIntervention = Object.fromEntries(Object.entries(save.guardIntervention ?? {})
+    .filter(([, remaining]) => Number.isFinite(remaining) && remaining > 0));
   // Seed pre-memory saves without replacing preferences from a newer life.
   world.rememberSkillSlots(world.localSeat, undefined, false);
   restoreFlaskChargeBanks(world.seatHero(world.localSeat), save.flaskCharges);

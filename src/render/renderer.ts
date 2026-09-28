@@ -8,6 +8,7 @@ import { drawCompanionCueBody, drawCompanionCueLinks, drawCompanionCueFlash } fr
 import { ANATOMY_CUE_CFG } from '../data/anatomyCues';
 import { drawAnatomyBody, drawAnatomyMeters, drawWeakPointBar, drawWeakPointOrb, drawSegmentWound } from './vis/anatomyCueLayer';
 import { drawSatellites } from './vis/satelliteLayer';
+import { drawGuardArts } from './vis/guardArtsLayer';
 import { drawAuroras } from './vis/auroraLayer';
 import { drawGuardians } from './vis/guardianLayer';
 import { drawCreepers } from './vis/creeperLayer';
@@ -830,6 +831,7 @@ export class Renderer {
     }
     drawCreepers(this.ctx, world);
     drawSatellites(this.ctx, world);
+    drawGuardArts(this.ctx, world);
     drawAuroras(this.ctx, world);
     drawGuardians(this.ctx, world);
     this.drawProjectiles(world);
@@ -6027,10 +6029,10 @@ export class Renderer {
       ctx.fillStyle = '#5ad8d8';
       ctx.fillRect(x - bw / 2, y - a.radius - 13, bw * clamp(a.es / a.maxEs(), 0, 1), 3);
     }
-    if (a.absorb > 0) {
+    if (a.absorbTotal > 0) {
       const bw = a.radius * 2.2;
       ctx.fillStyle = '#e8f0f8';
-      ctx.fillRect(x - bw / 2, y - a.radius - 16, bw * Math.min(1, a.absorb / 60), 2.5);
+      ctx.fillRect(x - bw / 2, y - a.radius - 16, bw * Math.min(1, a.absorbTotal / 60), 2.5);
     }
     // POISE sliver (bronze): shown once the break-bar is DENTED — full bars
     // stay invisible so ordinary mobs read clean. A broken bar dims while
@@ -7580,11 +7582,11 @@ export class Renderer {
       ctx.arc(lifeX, orbY, orbR + ORB_ARCS.es, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * clamp(p.es / p.maxEs(), 0, 1));
       ctx.stroke();
     }
-    if (p.absorb > 0) {
+    if (p.absorbTotal > 0) {
       ctx.strokeStyle = '#e8f0f8';
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(lifeX, orbY, orbR + ORB_ARCS.absorb, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, p.absorb / 60));
+      ctx.arc(lifeX, orbY, orbR + ORB_ARCS.absorb, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, p.absorbTotal / 60));
       ctx.stroke();
     }
     // INSIGHT rides the LIFE orb with the other tank layers — it slips

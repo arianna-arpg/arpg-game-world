@@ -178,8 +178,8 @@ left level until the feel of the shared value is settled.
 - **Per-skill clocks.** Marching Bulwark (mobile, thinner) and Ice Shield
   (rooted, 360°) are the obvious candidates for a different `armTime`.
 - **Granters of `bashArmTime`.** The stat is registered, seated and probed
-  but no catalog row grants it yet. Natural homes: Shield Up's *Loaded
-  Bash* / Lancer's *Easy Answer* (the "readies sooner" nodes), Answering
+  but no catalog row grants it yet. Natural homes: Lancer's *Easy Answer*
+  (the "readies sooner" node), Answering
   Wall's mods, or an "of Readiness" affix family.
 - **Monster dials.** Every guard-bearing monster wears the default
   (wait-to-arm on the generic roll). `guardRelease.hold` / `waitToArm` are

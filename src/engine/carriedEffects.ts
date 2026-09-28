@@ -9,7 +9,7 @@ export interface CarriedEffectContext {
   enemies(a: Actor, reach: number, at?: Vec2): Actor[];
   hostile(a: Actor, b: Actor): boolean;
   clear(a: Vec2, b: Vec2, tier: number): boolean;
-  instance(a: Actor, skill: string): SkillInstance | undefined;
+  instance(a: Actor, skill: string, slot?: number): SkillInstance | undefined;
   hit(a: Actor, inst: SkillInstance, victim: Actor): void;
   radius(a: Actor, inst: SkillInstance): number;
   launch(a: Actor, inst: SkillInstance, from: Vec2, dir: number): void;

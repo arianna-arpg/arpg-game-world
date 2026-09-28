@@ -520,6 +520,7 @@ export function applySeatMeta(world: World, seat: Seat, w: SeatMetaW): void {
 /** The full render-state replace a client draws each frame. */
 export interface StateSnapshot {
   satellites?: import('../engine/satellites').SatelliteVisual[];
+  guardArts?: import('../engine/guardArts').GuardArtVisual[];
   satelliteFlights?: import('../engine/satelliteFlights').SatelliteFlightVisual[];
   auroras?: import('../engine/auroras').AuroraVisual[];
   guardians?: import('../engine/guardians').GuardianVisual[];
@@ -796,7 +797,7 @@ function actorToW(a: Actor, world: World): ActorW {
       if (a.mimicSel) w.ms = a.mimicSel;
     }
   }
-  if (a.absorb > 0) w.ab = Math.round(a.absorb);
+  if (a.absorbTotal > 0) w.ab = Math.round(a.absorbTotal);
   if (a.statuses.length) {
     w.st = a.statuses.map(s => ({ id: s.id, stacks: s.stacks,
       ...(s.dps > 0 ? { dot: 1 as const } : {}),
@@ -893,6 +894,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     tick, time: world.time, zoneId: world.zone.id,
     magicPackEffects: world.magicPackEffects.map(v => ({ ...v })),
     satellites: world.satellites.visuals.map(v => ({ ...v })),
+    guardArts: world.guardArts.visuals.map(v => ({ ...v })),
     auroras: world.auroras.visuals.map(v => ({ ...v })),
     guardians: world.guardians.visuals.map(v => ({ ...v })),
     creepers: world.creepers.visuals.map(v => ({ ...v, trail: v.trail.map(p => ({ ...p })) })),
@@ -1288,7 +1290,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.cosmeticLoadout = aw.cosmeticLoadout ? sanitizeCosmeticLoadout(aw.cosmeticLoadout) : EMPTY_COSMETIC_LOADOUT;
     a.cosmeticKind = aw.cosmeticKind === 'wisp' ? 'wisp' : undefined;
     a.team = aw.team; a.name = aw.name;
-    a.life = aw.life; a.es = aw.es; a.absorb = aw.ab ?? 0;
+    a.life = aw.life; a.es = aw.es; a.absorbLayers.clear(); a.absorb = aw.ab ?? 0;
     a.hitFlash = aw.hf; a.downed = aw.downed; a.dead = aw.dead;
     a.passive = aw.passive; a.untargetable = aw.ut;
     a.summonReform = aw.summonReform ? { remaining: aw.summonReform[0], duration: aw.summonReform[1], invulnerable: false, untargetable: false } : undefined;
@@ -1510,6 +1512,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   })) as unknown as World['drops'];
   world.magicPackEffects = (snap.magicPackEffects ?? []).map(v => ({ ...v }));
   world.satellites.visuals = (snap.satellites ?? []).map(v => ({ ...v }));
+  world.guardArts.visuals = (snap.guardArts ?? []).map(v => ({ ...v }));
   world.auroras.visuals = (snap.auroras ?? []).map(v => ({ ...v }));
   world.guardians.visuals = (snap.guardians ?? []).map(v => ({ ...v }));
   world.creepers.visuals = (snap.creepers ?? []).map(v => ({ ...v, trail: v.trail.map(p => ({ ...p })) }));

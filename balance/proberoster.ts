@@ -156,6 +156,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_cleave.ts', status: 'green', tier: 'fast', why: 'Cleave armed melee release, cost and recovery, direct-hit exclusions, attribution, tree investment, respec and save/wire state' },
   { probe: 'probe_cleavecomponents.ts', status: 'green', tier: 'fast', why: 'Catalog melee-support admission on both waves, actual hit/proc/geometry/fissure/echo/follow-through effects, level and cost inheritance, bounded combinations and cleanup' },
   { probe: 'probe_startertrees.ts', status: 'green', tier: 'fast', why: 'Nine opening skill trees, buff mutation recipients and consumption, source-specific respec cleanup, real casts and save round trips' },
+  { probe: 'probe_shieldup.ts', status: 'green', tier: 'fast', why: 'Native Shield Up guard/absorb disciplines, finite contact damage, shield outcomes, reflection, emergency recovery and cleanup' },
   { probe: 'probe_necromancersacraments.ts', status: 'green', tier: 'fast', why: 'Necromancer blood and pyre trees, paid-resource wards, and saved edge-triggered horde toggles' },
   { probe: 'probe_necromancerrites.ts', status: 'green', tier: 'fast', why: 'Plague and scythe binary trees, real return/propagation/curse fields/waves, derived support identity, save repair and respec cleanup' },
   { probe: 'probe_necromancertrees.ts', status: 'green', tier: 'fast', why: 'Shambling Horde paths, passive replenishment, caps, lifespan, cleanup, support scaling, attribution and tree persistence' },

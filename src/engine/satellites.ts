@@ -31,6 +31,24 @@ export class Satellites {
   readonly flights = new SatelliteFlights();
   private states = new Map<Actor, Map<string, OrbitState>>();
 
+  /** Swept incoming paths meet the same armed discs that the renderer draws. */
+  reflectProjectiles(caster: Actor, tier: number, from: Vec2, to: Vec2, radius: number, ctx: CarriedEffectContext): { owner: Actor; power: number; at: Vec2; color: string; radius: number } | undefined {
+    let nearest: { owner: Actor; power: number; at: Vec2; along: number; color: string; radius: number } | undefined;
+    const dx = to.x - from.x, dy = to.y - from.y, len2 = dx * dx + dy * dy;
+    for (const v of this.visuals) {
+      const power = SATELLITES[v.family]?.projectileReflect;
+      if (!power || !v.armed || v.blocked || v.tier !== tier) continue;
+      const owner = [...this.states.keys()].find(a => a.id === v.owner);
+      if (!owner || !alive(owner) || !ctx.active(owner) || !ctx.hostile(owner, caster)
+        || owner.sheet.get(satelliteCountStat(v.family)) <= 0) continue;
+      const along = len2 > 0 ? Math.max(0, Math.min(1, ((v.x - from.x) * dx + (v.y - from.y) * dy) / len2)) : 0;
+      const at = { x: from.x + along * dx, y: from.y + along * dy };
+      if (gap(at, v) > radius + v.radius || !ctx.clear(from, at, tier) || !ctx.clear(owner.pos, at, tier)) continue;
+      if (!nearest || along < nearest.along) nearest = { owner, power, at, along, color: SATELLITES[v.family].color, radius: v.radius };
+    }
+    return nearest;
+  }
+
   clear(): void { this.states.clear(); this.visuals = []; this.flights.clear(); }
   retire(a: Actor): void {
     this.states.delete(a);
@@ -62,7 +80,7 @@ export class Satellites {
         budget -= count; kept.add(id);
         const radius = a.radius + def.orbit * a.sheet.get('satelliteOrbit', tags);
         let state = families.get(id);
-        const inst = state?.level === a.level && state.def === def ? state.inst : ctx.instance(a, def.skill);
+        const inst = !def.sourcePayload && state?.level === a.level && state.def === def ? state.inst : ctx.instance(a, def.skill);
         if (!inst) continue;
         if (!state) {
           state = { def, count, angle: (a.id * 2.399963229728653) % tau, age: 0,
@@ -93,6 +111,7 @@ export class Satellites {
         const enemies = stepDt > 0 && startAge + stepDt + 1e-9 >= def.armTime
           ? ctx.enemies(a, reach).filter(e => e.tier === a.tier && gap(a.pos, e.pos) <= reach + e.radius) : [];
         for (let slot = 0; slot < count; slot++) {
+          const sourcePayload = def.sourcePayload ? ctx.instance(a, def.skill, slot) ?? inst : inst;
           const hits = state.hits[slot], offset = slot * tau / count;
           let previous = { x: state.center.x + Math.cos(startAngle + offset) * radius,
             y: state.center.y + Math.sin(startAngle + offset) * radius };
@@ -110,7 +129,7 @@ export class Satellites {
                   || pointSegDist(e.pos.x, e.pos.y, previous.x, previous.y, p.x, p.y) > def.radius + e.radius
                   || !ctx.clear(previous, p, a.tier) || !ctx.clear(p, e.pos, a.tier)) continue;
                 hits.set(e.id, age + def.rehit);
-                ctx.hit(a, inst, e);
+                ctx.hit(a, sourcePayload, e);
               }
             }
             previous = p;

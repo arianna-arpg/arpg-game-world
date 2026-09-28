@@ -20,6 +20,10 @@ export interface SatelliteDef {
   armTime: number;
   /** Each orb may hit a given victim at most once per interval. */
   rehit?: number;
+  /** Moving contact discs can return hostile projectile paths. */
+  projectileReflect?: number;
+  /** Resolve source-owned skill context each update, rather than a level cache. */
+  sourcePayload?: boolean;
   /** Autonomous skill delivery. Range is measured from the orb. */
   emit?: SatelliteEmission;
   orbPaint?: OrbPaint;
@@ -61,7 +65,8 @@ export function satelliteErrors(skillExists: (id: string) => boolean, deliveryTy
   for (const [id, d] of Object.entries(SATELLITES)) {
     if (d.id !== id || !d.name || !d.description || !d.color || !d.core || !d.tags.includes('satellite')
       || ![d.orbit, d.radius, d.armTime].every(v => Number.isFinite(v) && v > 0)
-      || (!d.rehit && !d.emit)
+      || (!d.rehit && !d.emit && !d.projectileReflect)
+      || (d.projectileReflect !== undefined && (!Number.isFinite(d.projectileReflect) || d.projectileReflect <= 0))
       || (d.emit && d.emit.mode !== 'lob' && d.emit.mode !== 'projectile')
       || (d.emit && deliveryType && deliveryType(d.skill) !== (d.emit.mode === 'lob' ? 'ground' : 'projectile'))
       || (d.orbPaint && ![d.orbPaint.fill, d.orbPaint.rim].every(v => Number.isFinite(v) && v >= 0 && v <= 1))

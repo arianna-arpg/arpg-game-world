@@ -2,6 +2,19 @@ import { registerSatellite } from '../engine/satelliteSpec';
 import type { SkillDef } from '../engine/skills';
 
 registerSatellite({
+  id: 'shelter_barrier', name: 'Unbroken Orbit', description: 'An intact guard remnant reflects projectiles that touch its armed surface.',
+  skill: 'satellite_shelter_barrier', tags: ['satellite', 'satellite:shelter_barrier', 'guard'],
+  orbit: 42, radius: 12, turnSpeed: 1.3, armTime: 0.35, projectileReflect: 1,
+  color: '#9cd5ee', core: '#eefaff',
+});
+registerSatellite({
+  id: 'shelter_thorns', name: 'Splinter Orbit', description: 'A broken guard remnant deals a share of its source shield bash on contact.',
+  skill: 'satellite_shelter_thorns', tags: ['satellite', 'satellite:shelter_thorns', 'physical'],
+  orbit: 42, radius: 9, turnSpeed: -1.6, armTime: 0.35, rehit: 0.65, sourcePayload: true,
+  color: '#c1b19b', core: '#786451',
+});
+
+registerSatellite({
   id: 'iron_wake', name: 'Iron Wake',
   description: 'An untargetable hollow iron orb revolves around you, striking enemies on contact. Additional grants add orbs. Scales with physical and satellite damage, not minion damage.',
   skill: 'satellite_iron_wake', tags: ['satellite', 'satellite:iron_wake', 'physical'],
@@ -38,6 +51,18 @@ registerSatellite({
 
 /** The ordinary damage/effect pipeline owns scaling, mitigation, procs and credit. */
 export const SATELLITE_SKILLS: Record<string, SkillDef> = {
+  satellite_shelter_barrier: {
+    id: 'satellite_shelter_barrier', name: 'Unbroken Orbit', noDrop: true,
+    description: 'An orbiting guard remnant returns incoming projectiles.', color: '#9cd5ee',
+    tags: ['satellite', 'guard'], manaCost: 0, cooldown: 0, useTime: 0,
+    delivery: { type: 'self' }, effects: [],
+  },
+  satellite_shelter_thorns: {
+    id: 'satellite_shelter_thorns', name: 'Splinter Orbit', noDrop: true,
+    description: 'An orbiting guard splinter carries its source bash damage.', color: '#c1b19b',
+    tags: ['satellite', 'physical'], manaCost: 0, cooldown: 0, useTime: 0,
+    delivery: { type: 'ground', radius: 9, castRange: 0, delay: 0 }, effects: [{ type: 'damage' }],
+  },
   satellite_rime_wake: {
     id: 'satellite_rime_wake', name: 'Rime Wake', noDrop: true,
     description: 'A fine cold needle pierces one additional enemy along its firing line.', color: '#b7e8f2',

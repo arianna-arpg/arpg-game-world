@@ -28,6 +28,9 @@ import { CompanionBonds } from './companionBonds';
 import { Assaults, assaultNode } from './assault';
 import { Challenges } from './challenges';
 import { AttackSequences } from './attackSequences';
+import { GuardArts } from './guardArts';
+import { guardCapacity } from './guardArtsSpec';
+import { instanceCastMode } from './skills';
 import { challengeOf } from './challengeSpec';
 import { companionBondOf, companionRecoverySeconds, COMPANION_CFG, type CompanionSaved } from './companionSpec';
 import { companionStanceIdOf, nextStanceId } from './companionStances';
@@ -3604,6 +3607,7 @@ export class World {
   readonly creepers = new Creepers();
   readonly challenges = new Challenges(this);
   readonly attackSequences = new AttackSequences(this);
+  readonly guardArts = new GuardArts(this);
   /** ONE-SHOT: lingering at any REGISTERED vendor counter with stock (the
    *  data/vendors.ts registry) asks the main loop to open the Vendor screen. */
   vendorDwellRequested = false;
@@ -5783,6 +5787,8 @@ export class World {
     this.assaults.clearAll();
     this.challenges.clearAll();
     this.attackSequences.clearAll();
+    this.guardArts.clearAll();
+    this.guardArts.rebind();
     this.odyssey.leaveZone();
     this.combatDeeds.reset();
     // THE POSSESSION SEAM: transit unwinds every embodiment FIRST — a
@@ -12348,6 +12354,7 @@ export class World {
   private magicPackRefreshPending = false;
   /** Carried satellite geometry and hits share this host-only update. */
   refreshSatellites(dt = 0): void {
+    this.guardArts.refreshVisuals();
     this.satellites.update(this.actors, dt, this.carriedEffectContext());
   }
   refreshAuroras(dt = 0): void {
@@ -12388,7 +12395,8 @@ export class World {
       },
       hostile: (a, b) => this.hostileTo(a, b) && !isDormant(b),
       clear: (a, b, tier) => this.lineOfSight(a, b, tier, tier),
-      instance: (a, id) => SKILLS[id] ? makeSkillInstance(SKILLS[id], monsterSkillLevelOf(a.level)) : undefined,
+      instance: (a, id, slot) => this.guardArts.satellitePayload(a, id, slot)
+        ?? (SKILLS[id] ? makeSkillInstance(SKILLS[id], monsterSkillLevelOf(a.level)) : undefined),
       hit: (a, inst, b) => this.resolveHit(a, inst, b, 1, 1),
       launch: (a, inst, from, dir) => this.spawnProjectile(a, inst, from, dir, { depth: 1 }),
       radius: (a, inst) => {
@@ -22536,6 +22544,7 @@ export class World {
     ]);
     p.life = Math.min(p.life, p.maxLife());
     p.mana = Math.min(p.mana, p.maxMana());
+    this.guardArts.sync(p);
     this.companionBonds.refresh();
   }
 
@@ -34543,7 +34552,7 @@ export class World {
     {
       const dt0 = def.delivery.type;
       const totemable = !['construct', 'aura', 'detonate', 'summon', 'mark', 'dash', 'blink', 'leap'].includes(dt0)
-        && !(dt0 === 'self' && def.castMode !== 'guard');
+        && !(dt0 === 'self' && instanceCastMode(inst) !== 'guard');
       // Pierced presses refuse the conversion: the plant needs a bar of its
       // own, and a reflex must never clobber the cast already on the spine.
       if (!caster.construct && totemable && !pierced
@@ -34595,9 +34604,8 @@ export class World {
     // A pierced press leaves the body alone: the shoulders stay square to
     // the cast/dash they belong to — only the wrist moves.
     if (!pierced) caster.facing = angleTo(caster.pos, aim);
-    // (Skill-mode audit: castMode is deliberately OFF the tree whitelist —
-    // this def read is exempt until the heavy_strike wave adopts it.)
-    const mode = def.castMode ?? 'cast';
+    // GuardArts cast conversion shares this commitment read with scopes and fit.
+    const mode = instanceCastMode(inst);
 
     // USE-CHARGES: the press spends one round off the bank (canUse already
     // refused an empty one) — the pacing device for the cadence family.
@@ -34791,8 +34799,7 @@ export class World {
 
     // Guard: raise the shield and hold it — its health IS the cast state.
     if (mode === 'guard' && def.guard) {
-      const maxShield = def.guard.shieldLife
-        * caster.sheet.get('guardStrength', skillContextTags(def), instanceMods(inst));
+      const maxShield = guardCapacity(caster, inst);
       caster.casting = {
         inst, mode, aim: vec(aim.x, aim.y),
         elapsed: 0, total: 1, held: true, baseMult,
@@ -34801,6 +34808,7 @@ export class World {
       };
       // The bash tic is live from the first frame the wall is up.
       this.refreshGuardBash(caster, caster.casting);
+      this.guardArts.raised(caster, inst);
       // GRAFTED CARAPACE (SupportDef.shellGraft): the raised stance ALSO
       // wears a directional shell — the shield's blind side, armored.
       // Priced by guardStrength like the shield itself; stripped when the
@@ -35454,6 +35462,7 @@ export class World {
       && def.cooldownAt !== 'press') {
       this.stampSkillCooldown(caster, inst, def.cooldown);
     }
+    this.guardArts.cast(caster, inst);
 
     // THE PRIMED POUR (pourPrime): everything above paid — mana at press,
     // charges at press, the clock just now ("a use is a use") — and here
@@ -41412,6 +41421,12 @@ export class World {
     if (p.maxAge !== undefined) p.maxAge = p.age + p.range / Math.max(1, p.speed);
   }
 
+  guardArtHit(a: Actor, inst: SkillInstance, target: Actor, flat: Partial<Record<DamageType, number>>, push = 0): void {
+    this.resolveHit(a, inst, target, 1, 1, flat, true, false,
+      push > 0 ? [{ type: 'knockback', strength: push }] : []);
+  }
+  guardArtCooldown(a: Actor, inst: SkillInstance): void { this.stampSkillCooldown(a, inst, inst.def.cooldown); }
+
   private tryGuardBlock(victim: Actor, attacker: Actor, threatPos: Vec2, rawDamage: number, parryProjectile?: Projectile, parryPacket?: DamagePacket): boolean {
     const guardian = this.guardianFor(victim);
     if (!guardian) return false;
@@ -41478,7 +41493,9 @@ export class World {
       return true;
     }
 
-    cs.shield = (cs.shield ?? 0) - rawDamage;
+    const guardArtHit = this.guardArts.guardHit(guardian, cs.inst, rawDamage);
+    cs.shield = Math.max(0, (cs.shield ?? 0) - guardArtHit.damage);
+    if (cs.shield > 0 && guardArtHit.restore > 0) cs.shield += ((cs.maxShield ?? cs.shield) - cs.shield) * guardArtHit.restore;
     this.flashes.push(defenseCueFlash(guardian, 'guard', 'impact', cs.inst.def.color,
       { facing: angleTo(guardian.pos, threatPos), arc: spec.arcDeg * Math.PI / 180 }));
     this.applyThorns(guardian, attacker);
@@ -41486,6 +41503,7 @@ export class World {
     // CAST-ON-BLOCK trigger gems answer the raised-shield block too.
     this.rollTriggers(guardian, 'block', { aim: vec(attacker.pos.x, attacker.pos.y) });
     if ((cs.shield ?? 0) <= 0) {
+      this.guardArts.lower(guardian, cs.inst);
       guardian.casting = null;
       guardian.useLock = 0.3;
       if (cs.inst.def.cooldown > 0) this.stampSkillCooldown(guardian, cs.inst, cs.inst.def.cooldown);
@@ -41564,7 +41582,7 @@ export class World {
    * it. Nothing about the blow is bespoke: payload × spec.mult × the
    * bashPower stat, then the pipeline.
    */
-  private guardBash(a: Actor, inst: SkillInstance, bash: GuardBashSpec, payloadShield: number): void {
+  guardBash(a: Actor, inst: SkillInstance, bash: GuardBashSpec, payloadShield: number): void {
     if (a.dead || payloadShield <= 0) return;
     const { radius: reach, arc: arcRad, fullCircle } = guardBashGeometry(a, bash);
     const elem = (['fire', 'cold', 'lightning'] as const)
@@ -41575,6 +41593,7 @@ export class World {
       skillContextTags(inst, grantedTags(inst)), instanceMods(inst));
     const flat: Partial<Record<DamageType, number>> =
       { [elem ?? 'physical']: payloadShield * bash.mult * power };
+    this.guardArts.bashWave(a, inst, flat);
     // The bash contact is one hit: a shield/dodge refuses its control as
     // well as its damage, and a fuse carries the whole payload together.
     const hitEffects: SkillEffect[] = [];
@@ -46271,6 +46290,7 @@ export class World {
     }
 
     actor.dead = true;
+    this.guardArts.clear(actor);
     if (actor.owner) this.strikeReleaseBodies.get(actor.owner)?.delete(actor);
     this.satellites.retire(actor);
     this.auroras.retire(actor);
@@ -48859,6 +48879,7 @@ export class World {
     this.companionBonds.update(dt);
     this.challenges.update(dt);
     this.attackSequences.update(dt);
+    this.guardArts.update(dt);
     this.updateDownedCompanions(dt);
     // ALL-DOWN terminator: once no seat is left standing, the wipe concludes
     // (per mode: resurface / respawn / run over). Guarded on !gameOver so
@@ -56177,6 +56198,7 @@ export class World {
     const cs = a.casting;
     if (!cs) return;
     if (a.isStunned()) {
+      if (cs.mode === 'guard') this.guardArts.lower(a, cs.inst);
       // A stance-grafted shell (Grafted Carapace) drops with the stance —
       // the interrupt strips both, or the carapace would outlive its guard.
       if (a.shellGuard?.fromAura === cs.inst.def.id) a.shellGuard = undefined;
@@ -56397,6 +56419,7 @@ export class World {
           if (cs.aiGuardReleaseAt !== undefined) cs.held = this.time + 1e-9 < cs.aiGuardReleaseAt;
         }
         if (!cs.held || a.dead) {
+          this.guardArts.lower(a, cs.inst);
           // SHIELD BASH: releasing at/past the arming line converts the
           // stance into a blow. Everything here is the data the tic
           // showed: cs.bashAt/bashLow are refreshGuardBash's (the one
@@ -57419,9 +57442,10 @@ export class World {
 
   /** Retire fields that captured the previous allocation. */
   private clearTreeFields(caster: Actor, inst: SkillInstance): void {
+    this.guardArts.clear(caster, inst);
     this.attackSequences.clear(caster, inst);
     this.challenges.clear(caster, inst);
-    const ownsTreePayload = (candidate: SkillInstance) => candidate === inst || candidate.invocationHost === inst || candidate.followUpHost === inst || candidate.challengeHost === inst;
+    const ownsTreePayload = (candidate: SkillInstance) => candidate === inst || candidate.invocationHost === inst || candidate.followUpHost === inst || candidate.challengeHost === inst || candidate.guardArtsHost === inst;
     this.pendingFollowUps = this.pendingFollowUps.filter(p => p.caster !== caster || !ownsTreePayload(p.inst));
     caster.primedPours = caster.primedPours.filter(p => p.skillId !== inst.def.id);
     caster.clearTreeChargeClocks(inst);
@@ -58168,7 +58192,7 @@ export class World {
   private triggerEligible(owner: Actor, inst: SkillInstance): boolean {
     if (replenishingDelivery(inst)) return false;
     const def = inst.def;
-    if (def.channel || def.castMode === 'guard'
+    if (def.channel || instanceCastMode(inst) === 'guard'
       || def.delivery.type === 'aura' || def.delivery.type === 'dash'
       || def.delivery.type === 'blink' || def.delivery.type === 'leap'
       || def.delivery.type === 'carom'
@@ -58832,6 +58856,16 @@ export class World {
         }
       }
 
+      if (!dead && this.satellites.visuals.length) {
+        const reflected = this.satellites.reflectProjectiles(p.caster, p.tier ?? 0, prev, p.pos, p.radius, this.carriedEffectContext());
+        if (reflected) {
+          p.pos = reflected.at;
+          this.reflectParriedProjectile(p, reflected.owner, reflected.power);
+          this.flashes.push({ pos: { ...p.pos }, radius: reflected.radius, color: reflected.color, life: 0.18, maxLife: 0.18 });
+          if (p.dissolved) this.projectiles.splice(i, 1);
+          continue;
+        }
+      }
       // A charged guardian catches an incoming path before its body hit or
       // auxiliary payload. Dissolution uses the existing no-explosion ending.
       if (!dead && guardianContext) {
@@ -64113,6 +64147,7 @@ export class World {
     }
     const len = Math.hypot(dx, dy);
     if (len < 0.001) return;
+    if (dt > 0 && channelFactor > 0) this.guardArts.ram(a, dx, dy);
     // REGION move-scale: a road speeds you up, a future tar-pit could slow — a direct
     // multiplier (NOT a status) from the terrain underfoot last frame (doodad ground +
     // grid region). Defaults to 1 when the kind has no moveScale. The first user is 'road'.

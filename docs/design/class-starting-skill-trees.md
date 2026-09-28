@@ -16,7 +16,7 @@ passive with a branch, or specialize entirely within one identity.
 | Class | Skill | First identity | Second identity |
 |---|---|---|---|
 | Warrior | Cleave | A toggled next-melee release with independent recovery, impales and sustain | A traveling crescent with reach, knockback and spreading bleeds |
-| Warrior | Shield Up | A rear shell, minion shelter and guarded utility | Timed parries and an investable release bash |
+| Warrior | Shield Up | Armor-scaled guard, regenerative plates, battering contact and bash waves | A cast absorb shield with patient empowerment, outcome satellites and lethal intervention |
 | Warrior | War Cry | A blessing shared with nearby allies and minions | Preparation consumed by one landed attack hit |
 | Magician | Firebolt | Orbiting flames, additional orbs and spreading burns | Faster piercing bolts with penetration and prolonged burning |
 | Magician | Frost Nova | Persistent cold ground and stack capacity | Deep Freeze procs and damage against frozen targets |
@@ -32,6 +32,9 @@ it does not guarantee the target is facing away after arrival.
 
 Cleave's expanded identities and reusable native trigger contract are documented
 in [Cleave](cleave.md); its data now lives in `src/data/cleaveTree.ts`.
+
+Shield Up's replacement branches and the reserved minion-shelter mutation are
+documented in [Shield Up](shield-up.md); tuning lives in `src/data/shieldUpTree.ts`.
 
 ## Reusable temporary buff mutations
 

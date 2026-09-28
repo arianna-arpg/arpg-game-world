@@ -1,4 +1,5 @@
 import { throngTravelProtected } from './throngEvolution';
+import { spendAbsorbLayers } from './absorb';
 import { weakPointBonus } from './weakpoints';
 // ---------------------------------------------------------------------------
 // The damage pipeline. One path for everyone — player, monsters, minions.
@@ -972,19 +973,21 @@ function soakDamage(
     target.ward -= w;
     total -= w;
   }
+  const hadAbsorbLayers = target.absorbTotal > 0;
+  total = spendAbsorbLayers(target, total);
   // 1) Absorption shield — the proactive buffer.
   if (target.absorb > 0) {
     const a = Math.min(target.absorb, total);
     target.absorb -= a;
     total -= a;
-    if (target.absorb <= 0) {
-      // Absorb-bound statuses shatter with the pool (Warded armor goes with it).
-      for (let i = target.statuses.length - 1; i >= 0; i--) {
-        const s = target.statuses[i];
-        if (!STATUS_DEFS[s.id]?.boundToAbsorb) continue;
-        target.statuses.splice(i, 1);
-        target.sheet.removeSource('status:' + s.id);
-      }
+  }
+  if (hadAbsorbLayers && target.absorbTotal <= 0) {
+    // Absorb-bound statuses shatter with the last pool or attributable layer.
+    for (let i = target.statuses.length - 1; i >= 0; i--) {
+      const s = target.statuses[i];
+      if (!STATUS_DEFS[s.id]?.boundToAbsorb) continue;
+      target.statuses.splice(i, 1);
+      target.sheet.removeSource('status:' + s.id);
     }
   }
   // 2) Energy shield — a second life pool. A bypass fraction of what

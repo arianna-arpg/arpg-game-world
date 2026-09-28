@@ -44,7 +44,7 @@ export function afflictionPressureOf(a: Actor): AfflictionPressure {
   }
   const dots = active.filter(s => s.dps > 0 || (s.popAcc ?? 0) > 0);
   if (!dots.length) return out;
-  let ward = Math.max(0, a.ward), absorb = Math.max(0, a.absorb);
+  let ward = Math.max(0, a.ward), absorb = Math.max(0, a.absorbTotal);
   let es = Math.max(0, a.es), mana = Math.max(0, a.mana);
   const manaShare = clamp01(a.sheet.get('manaShield'));
   // Stable id order: the visual does not flicker when status arrays

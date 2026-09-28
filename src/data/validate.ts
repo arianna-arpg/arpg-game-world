@@ -14,6 +14,8 @@ import { MEMORY_UNLOCKS } from './memoryUnlocks';
 import { invocationTreeErrors } from '../engine/invocation';
 import { magicPackErrors } from '../engine/magicPacks';
 import { satelliteErrors } from '../engine/satelliteSpec';
+import { SATELLITES } from '../engine/satelliteSpec';
+import { guardArtsErrors } from '../engine/guardArtsSpec';
 import { auroraErrors } from '../engine/auroraSpec';
 import { guardianErrors } from '../engine/guardianSpec';
 import './guardians';
@@ -2319,6 +2321,13 @@ export function validateContent(): void {
     if (s.meta && !SKILLS[s.meta.skillId]) {
       warn(`skill ${s.id}: meta payload '${s.meta.skillId}' is not a catalog skill`);
     }
+    if (s.guardArts) {
+      for (const error of guardArtsErrors(s.guardArts)) warn(`skill ${s.id}: ${error}`);
+      if (!s.guard) warn(`skill ${s.id}: guardArts requires native guard capacity`);
+      for (const rule of [s.guardArts.intactSatellite, s.guardArts.brokenSatellite]) {
+        if (rule && !SATELLITES[rule.family]) warn(`skill ${s.id}: guardArts references unknown satellite ${rule.family}`);
+      }
+    }
     // GUARD PULSE: a typo'd component never tolls; a pulse-bearing skill
     // that isn't a guard stance never ticks the clock at all.
     if (s.guard?.pulse) {
@@ -3160,6 +3169,13 @@ export function validateContent(): void {
         }
         for (const error of impactTreeOverrideErrors(def, n)) warn(`${at}/${n.id}: ${error}`);
         for (const error of treeAuraOverrideErrors(def, n)) warn(`${at}/${n.id}: ${error}`);
+        if (n.guardArts) {
+          for (const error of guardArtsErrors(n.guardArts)) warn(`${at}/${n.id}: ${error}`);
+          if (!def.guard) warn(`${at}/${n.id}: guardArts requires native guard capacity`);
+          for (const rule of [n.guardArts.intactSatellite, n.guardArts.brokenSatellite]) {
+            if (rule && !SATELLITES[rule.family]) warn(`${at}/${n.id}: guardArts references unknown satellite ${rule.family}`);
+          }
+        }
         if (n.trigger) {
           if (!(n.trigger.on in TRIGGER_CFG.icd)) warn(`${at}/${n.id}: invalid trigger event`);
           for (const key of ['icd', 'maxUseTime', 'chance'] as const) {

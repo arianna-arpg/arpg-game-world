@@ -1,5 +1,12 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Shield Up's native guard and cast-absorb disciplines live in
+`data/shieldUpTree.ts`, with configurable contracts in `engine/guardArtsSpec.ts`.
+`docs/design/shield-up.md` covers plates, voluntary ram contact, bash waves,
+owned absorb layers, outcome satellites and saved lethal-intervention recovery.
+Verify `probe_shieldup.ts`, guard/bash/parry/satellite regressions and the hidden
+`balance/shield-up-ui.cjs` harness after a build.
+
 Golem capacity and type exclusivity are independent summon settings in
 `engine/summonContracts.ts`. All major golems, including Stone, remain reserved;
 Gather Rubblekin adds a separate flock with melee-triggered projectile releases.

@@ -1,4 +1,5 @@
 import type { Actor } from './actor';
+import { guardArtsOf } from './guardArtsSpec';
 import { SKILLS } from '../data/skills';
 import { VOLATILE_CUE_STYLES, WARD_CUE_STYLES } from '../data/combatReadability';
 
@@ -23,6 +24,11 @@ export function reactiveCueOf(a: Actor, time: number): ReactiveCue | undefined {
   if (a.sheet.get('hitCap') > 0) cue.cap = true;
   if (a.sheet.get('lastGasp') > 0) cue.gasp = a.lastGaspCd <= 0 ? 1
     : clamp(1 - a.lastGaspCd / Math.max(0.001, a.lastGaspSpan || a.sheet.get('lastGaspCooldown')));
+  for (const inst of a.skills) {
+    const guardArt = inst && guardArtsOf(inst)?.intervention;
+    if (inst && guardArt) cue.gasp = Math.max(cue.gasp ?? 0,
+      clamp(1 - (a.guardIntervention[inst.def.id] ?? 0) / guardArt.cooldown));
+  }
   const v = a.volatile, skill = v && SKILLS[v.skillId];
   if (v && v.chance > 0 && v.cue !== false && skill && !a.untargetable) {
     cue.volatile = { profile: v.cue ?? 'vents', color: skill.color,
