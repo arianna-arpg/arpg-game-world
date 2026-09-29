@@ -1,4 +1,5 @@
 import { relicUniqueValue } from './relicPower';
+import { uniqueContainerLimit } from './itemLimits';
 // ---------------------------------------------------------------------------
 // ITEM GENERATOR — the one roller every drop source shares.
 //
@@ -812,6 +813,8 @@ export function describeItem(item: ItemInstance): ItemDescription {
       d.unique.push(line.text ? speakLineText(line.text, line.stat, line.kind, v) : formatModLine(line, v));
     });
     d.flavor = u?.flavor;
+    const limit = uniqueContainerLimit(item);
+    if (limit !== undefined) d.unique.push(`Limited to ${limit} equipped ${limit === 1 ? 'copy' : 'copies'}.`);
   }
   if (item.sockets) {
     d.sockets = item.sockets.map(vid => {

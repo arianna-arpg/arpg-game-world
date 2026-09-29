@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // ONE-OFF PROBE — THE RELIC LEGENDS + THE SEAT LAW (docs/engine/containers.md;
 // data/uniques/relics.ts; engine/seatlaw.ts). Pins:
-//   A. THE CENSUS — six legends on relic bases; every line a known stat, the
+//   A. THE CENSUS — eighteen legends on relic bases; every line a known stat, the
 //      grant a real skill, the gauge a registered derived gauge; THE DEFINING
 //      LAW (a signature line no affix rolls); the amplifier stats registered,
 //      family-seated on the sheet, blurbed; the describer's words; the roller
@@ -19,9 +19,10 @@
 //   F. THE CASE GAUGE — 'seated:reliquary' publishes the seated count and the
 //      Tally Idol's damage climbs with it.
 //   G. THE UNQUARRIED IDOL — independent companion, manual golem coexistence,
-//      free reservation, death/reform, clean removal, stacking and save/load.
+//      free reservation, death/reform, clean removal, copy limits and save/load.
 //   H. SUNDERSTONE — a rolled element; its penetration and price on the
 //      sheet; the choice survives a save.
+//   Expansion coverage and identity-limit checks: relicExpansionChecks.ts.
 // The boards are found by SEAT COUNT (ring 8 / shelves 20 / heart 21 / case
 // 25), never by rung index — however the ladder is cut, the census holds.
 // Run: npx tsx balance/probe_relicuniques.ts
@@ -51,6 +52,7 @@ import { applySavedCharacter, serializeCharacter } from '../src/meta/character';
 import { CLASSES } from '../src/data/classes';
 import type { ItemInstance, ModLineDef } from '../src/engine/items';
 import type { World } from '../src/engine/world';
+import { checkRelicExpansion } from './relicExpansionChecks';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -88,7 +90,7 @@ const legend = (id: string, ilvl = 20): ItemInstance => forgeItem({ ilvl, unique
 const charm = (affix: string): ItemInstance =>
   forgeItem({ ilvl: 1, baseId: 'relic_charm', rarity: 'magic', affixes: [{ id: affix }], quality: 1 })!;
 const lineOf = (it: ItemInstance, stat: string): number => compileItemMods(it).find(m => m.stat === stat)?.value ?? 0;
-const IDS = ['hermits_bead', 'sunderstone', 'lodestone', 'unquarried_idol', 'tally_idol', 'reliquary_crown'];
+const IDS = RELIC_UNIQUES.map(u => u.id);
 const place = (w: World, it: ItemInstance, x: number, y: number): void => {
   if (!it.relicKey) autoPlace(w.localSeat.meta.items, it);
   w.applyAction(w.localSeat, { t: 'containerPlace', container: RELIQUARY_ID, uid: it.uid, x, y });
@@ -98,9 +100,9 @@ const take = (w: World, it: ItemInstance): void => { w.applyAction(w.localSeat, 
 // ------------------------------------------------------------ A. THE CENSUS
 {
   const byId = Object.fromEntries(RELIC_UNIQUES.map(u => [u.id, u]));
-  check('A1 six relic legends, each on a relic base, all on the live roster',
+  check('A1 eighteen relic legends, each on a relic base, all on the live roster',
     IDS.every(id => byId[id] && ITEM_BASES[byId[id].baseId]?.category === 'relic' && UNIQUE_LIST.includes(byId[id]))
-    && RELIC_UNIQUES.length === 6, RELIC_UNIQUES.map(u => `${u.id}@${u.baseId}`).join(' '));
+    && RELIC_UNIQUES.length === 18, RELIC_UNIQUES.map(u => `${u.id}@${u.baseId}`).join(' '));
   check('A1b the four footprints each carry a legend',
     ['relic_charm', 'relic_talisman', 'relic_idol', 'relic_effigy'].every(b => RELIC_UNIQUES.some(u => u.baseId === b)));
   const unknown: string[] = [];
@@ -129,13 +131,13 @@ const take = (w: World, it: ItemInstance): void => { w.applyAction(w.localSeat, 
   const rng = lcg(0xbead);
   const seen = new Set<string>();
   let foreign = 0;
-  for (let i = 0; i < 300; i++) {
-    const it = rollItem({ ilvl: 20, rng, rarity: 'unique', category: 'relic' });
+  for (let i = 0; i < 600; i++) {
+    const it = rollItem({ ilvl: 80, rng, rarity: 'unique', category: 'relic' });
     if (!it || !it.uniqueId) { foreign++; continue; }
     if (ITEM_BASES[it.baseId]?.category !== 'relic') foreign++;
     seen.add(it.uniqueId);
   }
-  check('A6 rarity unique + category relic rolls only relic legends, and every one of the six', foreign === 0 && IDS.every(id => seen.has(id)), [...seen].join(' '));
+  check('A6 rarity unique + category relic rolls only relic legends, and every registered identity', foreign === 0 && IDS.every(id => seen.has(id)), [...seen].join(' '));
   const shallow = rollItem({ ilvl: 3, rng, rarity: 'unique', category: 'relic' });
   check('A6b below every minIlvl the ask degrades to a rare relic', shallow?.rarity === 'rare' && ITEM_BASES[shallow.baseId]?.category === 'relic');
   let legends = 0, others = 0;
@@ -368,9 +370,10 @@ const take = (w: World, it: ItemInstance): void => { w.applyAction(w.localSeat, 
   const beforeStack = followers()[0];
   beforeStack.life = beforeStack.maxLife() * 0.4;
   place(w, second, 3, 1); step();
-  check('G14 duplicate idols add levels to one follower without healing or consuming the manual pool',
+  check('G14 duplicate idols are refused without changing the follower, its life or the manual pool',
     followers().length === 1 && followers()[0] === beforeStack
-    && followers()[0].summonInst!.level === level + Math.floor(lineOf(second, 'companiongrant_summon_stone_golem'))
+    && followers()[0].summonInst!.level === level && seat.meta.items.includes(second)
+    && !seat.meta.containers[RELIQUARY_ID].includes(second)
     && followers()[0].life / followers()[0].maxLife() < 0.41
     && hero.reservedMana === 0 && w.minionsOfSkill(hero, manual.def.id).length === 1);
   hero.dead = true; step();
@@ -400,5 +403,6 @@ const take = (w: World, it: ItemInstance): void => { w.applyAction(w.localSeat, 
   check('H5 the describer names the element', describeItem(stone).unique.join(' ').includes(`${el[0].toUpperCase()}${el.slice(1)} damage penetrates`));
 }
 
+checkRelicExpansion();
 console.log(failed ? `\nFAIL — ${failed} check(s) failed` : '\nPASS — THE RELIC LEGENDS');
 process.exit(failed ? 1 : 0);

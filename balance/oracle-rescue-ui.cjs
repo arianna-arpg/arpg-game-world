@@ -63,6 +63,9 @@ app.whenReady().then(async () => {
       const toggle=document.querySelector('[data-reliquary-toggle]');if(!toggle||toggle.disabled)throw Error('No enabled inventory toggle');toggle.click();
       if(w.meta.relicEnabled!==false)throw Error('Reliquary did not disable');
       document.querySelector('[data-reliquary-toggle]').click();if(w.meta.relicEnabled!==true)throw Error('Reliquary did not enable');
+      // The inventory drawer fronts its leaf; return to the storage tab before
+      // exercising gestures against the Oracle's visible grid.
+      document.querySelector('[data-folio-tab="oracle"]').click();
       if(document.querySelector('[data-drop^="relicSeat:"]'))throw Error('Oracle still exposes equipped board');
       const loose=JSON.parse(JSON.stringify(relic));delete loose.relicKey;loose.uid=900001;loose.x=0;loose.y=0;loose.name='Reserve test charm';w.meta.items.push(loose);
       __game.ui.refreshOracle();document.querySelector('[data-relic-operation="store"]').click();

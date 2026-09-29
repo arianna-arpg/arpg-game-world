@@ -105,10 +105,10 @@ function fam(o: FamOpts): AffixDef {
     stat: o.stat!, kind: o.modKind ?? 'flat', tags: o.tags, when: o.when,
     ...(o.local ? { local: true } : {}),
   }];
-  const tops = Array.isArray(o.top) ? o.top : lines.map(() => o.top as number);
+  const tops = Array.isArray(o.top) ? [...o.top] : lines.map(() => o.top as number);
   const relic = o.baseTags?.includes('relic');
   if (relic) for (let i = 0; i < tops.length; i++) tops[i] *= RELIQUARY_CFG.baseline;
-  const floor = relic ? RELIQUARY_CFG.affixFloor : o.floor ?? DEFAULT_FLOOR;
+  const floor = o.floor ?? DEFAULT_FLOOR;
   const count = o.count ?? DEFAULT_COUNT;
   const maxIlvl = o.maxIlvl ?? ITEM_CFG.tierBreaks[Math.max(0, ITEM_CFG.tierBreaks.length - 2)];
 
@@ -131,8 +131,17 @@ function fam(o: FamOpts): AffixDef {
   // and rollIntoSpan reads it off the ladder itself; see crafting.ts.)
   const ordered = (a: number, b: number): [number, number] => (a <= b ? [a, b] : [b, a]);
 
-  const tiers: AffixTierDef[] = [];
-  for (let t = 0; t < count; t++) {
+  // Relics use account-scale windows, all available at the family's debut.
+  // The same AffixDef feeds drops, crafting, Oracle rerolls and tooltips.
+  const tiers: AffixTierDef[] = relic ? RELIQUARY_CFG.affixTiers
+    .filter(t => !t.magicOnly || o.exquisite !== false)
+    .map(t => ({
+      ilvl: RELIQUARY_CFG.affixDebut[o.id] ?? 1,
+      ranges: tops.map(top => ordered(top * t.floor, top * t.ceiling)),
+      weight: t.weight,
+      ...((t.magicOnly || o.magicOnly) ? { magicOnly: true } : {}),
+    })) : [];
+  for (let t = 0; !relic && t < count; t++) {
     // t = 0 is the BEST tier (window count-1..count of the fence).
     const k = count - t;
     tiers.push({
@@ -142,18 +151,18 @@ function fam(o: FamOpts): AffixDef {
       ...(o.magicOnly ? { magicOnly: true } : {}),
     });
   }
-  if (o.exquisite !== false) {
+  if (!relic && o.exquisite !== false) {
     const ex = ITEM_CFG.exquisite;
     tiers.unshift({
       ilvl: tiers[0].ilvl + ex.ilvlPad,
-      ranges: tops.map(top => ordered(top, top * (1 + (relic ? 0.03 : ex.rangeLift)))),
+      ranges: tops.map(top => ordered(top, top * (1 + ex.rangeLift))),
       weight: Math.round(100 * ex.weightFrac),
       magicOnly: true,
     });
   }
   return {
     id: o.id, kind: o.kind, family: o.id, names: o.names, lines,
-    tiers: relic ? tiers.map(t => ({ ...t, ilvl: Math.max(t.ilvl, RELIQUARY_CFG.affixDebut[o.id] ?? 1) })) : tiers,
+    tiers,
     weight: o.weight ?? 100, tags: o.baseTags, excludeTags: o.excludeTags,
     themes: o.themes,
   };
@@ -498,10 +507,10 @@ const SLOTGRAFT_AFFIXES: AffixDef[] = SLOTGRAFT_GEMS.flatMap(d =>
 // data/itembases.ts relic families — docs/engine/containers.md). Relic
 // bases roll under THE POOL LAW 'explicit' (ItemBaseDef.affixPool): only a
 // family that NAMES the 'relic' tag reaches them, so this register is the
-// whole relic gamut and the armour wardrobe never leaks in. Values run at
-// roughly a third to a half of the gear families' tops — a case seats
-// many relics and the case grows, so each seat is a small, sure thing; the
-// footprint (ItemBaseDef.affixCap) prices how many words one piece may
+// whole relic gamut and the armour wardrobe never leaks in. Authored tops
+// receive RELIQUARY_CFG.baseline once. The account's narrow value windows
+// replace the gear ladder; levels unlock families, the Vault grows power.
+// The footprint (ItemBaseDef.affixCap) prices how many words one piece may
 // carry. The elemental damage lanes reuse DAMAGE_LANES (a 'Pyric Charm'
 // speaks the same word a 'Pyric Casque' does — one vocabulary).
 const RELIC_TAGS = ['relic'];
@@ -512,105 +521,137 @@ export const RELIC_PREFIXES: AffixDef[] = [
   fam({
     id: 'relic_life', kind: 'prefix',
     names: ['Stalwart', 'Hardy', 'Sound'],
-    stat: 'life', top: 32, floor: 0.12, baseTags: RELIC_TAGS, weight: 110,
+    stat: 'life', top: 32, baseTags: RELIC_TAGS, weight: 110,
   }),
   fam({
     id: 'relic_mana', kind: 'prefix', themes: [CASTER],
     names: ['Lucid', 'Clear'],
-    stat: 'mana', top: 24, floor: 0.12, baseTags: RELIC_TAGS, weight: 80,
+    stat: 'mana', top: 24, baseTags: RELIC_TAGS, weight: 80,
   }),
   fam({
     id: 'relic_es', kind: 'prefix', themes: [CASTER],
     names: ['Veiled', 'Shrouded'],
-    stat: 'energyShield', top: 18, floor: 0.12, baseTags: RELIC_TAGS, weight: 60,
+    stat: 'energyShield', top: 18, baseTags: RELIC_TAGS, weight: 60,
   }),
   fam({
     id: 'relic_armor', kind: 'prefix', themes: [DEFENSE],
     names: ['Ironbound', 'Studded'],
-    stat: 'armor', modKind: 'increased', top: 0.12, floor: 0.2, count: 4, baseTags: RELIC_TAGS, weight: 60,
+    stat: 'armor', modKind: 'increased', top: 0.12, baseTags: RELIC_TAGS, weight: 60,
   }),
   fam({
     id: 'relic_evasion', kind: 'prefix', themes: [RANGER],
     names: ['Fleet', 'Nimble'],
-    stat: 'evasion', modKind: 'increased', top: 0.12, floor: 0.2, count: 4, baseTags: RELIC_TAGS, weight: 60,
+    stat: 'evasion', modKind: 'increased', top: 0.12, baseTags: RELIC_TAGS, weight: 60,
   }),
   fam({
     id: 'relic_damage', kind: 'prefix',
     names: ['Fierce', 'Keen'],
-    stat: 'damage', modKind: 'increased', top: 0.08, floor: 0.25, count: 4, baseTags: RELIC_TAGS, weight: 70,
+    stat: 'damage', modKind: 'increased', top: 0.08, baseTags: RELIC_TAGS, weight: 70,
   }),
   ...DAMAGE_LANES.map(l => fam({
     id: `relic_dmg_${l.key}`, kind: 'prefix', themes: LANE_THEME[l.key],
     names: [l.name],
     stat: 'damage', modKind: 'increased', tags: [l.tag],
-    top: 0.11, floor: 0.2, count: 4, baseTags: RELIC_TAGS, weight: Math.round((l.weight ?? 70) * 0.7),
+    top: 0.11, baseTags: RELIC_TAGS, weight: Math.round((l.weight ?? 70) * 0.7),
   })),
   fam({
     id: 'relic_minion_damage', kind: 'prefix', themes: [SUMMONER],
     names: ["Overseer's", "Herder's"],
-    stat: 'minionDamage', modKind: 'increased', top: 0.14, floor: 0.2, count: 4, baseTags: RELIC_TAGS, weight: 50,
+    stat: 'minionDamage', modKind: 'increased', top: 0.14, baseTags: RELIC_TAGS, weight: 50,
   }),
   fam({
     id: 'relic_minion_life', kind: 'prefix', themes: [SUMMONER],
     names: ["Shepherd's", "Keeper's"],
-    stat: 'minionLife', modKind: 'increased', top: 0.16, floor: 0.2, count: 4, baseTags: RELIC_TAGS, weight: 50,
+    stat: 'minionLife', modKind: 'increased', top: 0.16, baseTags: RELIC_TAGS, weight: 50,
   }),
   fam({
     id: 'relic_area', kind: 'prefix',
     names: ['Sweeping', 'Broad'],
-    stat: 'aoeRadius', modKind: 'increased', top: 0.08, floor: 0.25, count: 3, baseTags: RELIC_TAGS, weight: 45,
+    stat: 'aoeRadius', modKind: 'increased', top: 0.08, baseTags: RELIC_TAGS, weight: 45,
   }),
   fam({
     id: 'relic_projectile_speed', kind: 'prefix', themes: [RANGER],
     names: ['Swift', 'Darting'],
-    stat: 'projectileSpeed', modKind: 'increased', top: 0.12, floor: 0.25, count: 3, baseTags: RELIC_TAGS, weight: 45,
+    stat: 'projectileSpeed', modKind: 'increased', top: 0.12, baseTags: RELIC_TAGS, weight: 45,
   }),
   fam({
     id: 'relic_duration', kind: 'prefix',
     names: ['Lasting', 'Lingering'],
-    stat: 'effectDuration', modKind: 'increased', top: 0.1, floor: 0.25, count: 3, baseTags: RELIC_TAGS, weight: 45,
+    stat: 'effectDuration', modKind: 'increased', top: 0.1, baseTags: RELIC_TAGS, weight: 45,
+  }),
+  // Conditional budgets reward a narrower play style, using ordinary actor
+  // conditions and victim tags. Their discovery levels live in reliquary.ts.
+  fam({
+    id: 'relic_planted', kind: 'prefix', names: ['Rooted', 'Settled'],
+    stat: 'damage', modKind: 'increased', when: 'stationary',
+    top: 0.18, baseTags: RELIC_TAGS, weight: 40,
+  }),
+  fam({
+    id: 'relic_reprisal', kind: 'prefix', names: ['Retaliatory', 'Defiant'], themes: [DEFENSE, MARTIAL],
+    stat: 'damage', modKind: 'increased', when: 'recentlyBlocked',
+    top: 0.22, baseTags: RELIC_TAGS, weight: 35,
+  }),
+  fam({
+    id: 'relic_execution', kind: 'prefix', names: ["Headsman's", "Executioner's"],
+    stat: 'damage', modKind: 'increased', tags: ['vs:lowLife'],
+    top: 0.2, baseTags: RELIC_TAGS, weight: 35,
+  }),
+  fam({
+    id: 'relic_opportunist', kind: 'prefix', names: ['Opportunistic', 'Watchful'],
+    stat: 'damage', modKind: 'increased', tags: ['vs:hardCC'],
+    top: 0.24, baseTags: RELIC_TAGS, weight: 30,
+  }),
+  fam({
+    id: 'relic_variety', kind: 'prefix', names: ['Manyvoiced', 'Versatile'],
+    stat: 'damage', modKind: 'increased', when: 'comboVaried',
+    top: 0.26, baseTags: RELIC_TAGS, weight: 30,
+  }),
+  fam({
+    id: 'relic_repetition', kind: 'prefix', names: ['Unwavering', 'Practiced'],
+    stat: 'damage', modKind: 'increased', when: 'comboRepeated',
+    top: 0.22, baseTags: RELIC_TAGS, weight: 30,
   }),
 ];
 export const RELIC_SUFFIXES: AffixDef[] = [
   fam({
     id: 'relic_attack_speed', kind: 'suffix', themes: [MARTIAL, RANGER],
     names: ['of Haste', 'of Quickness'],
-    stat: 'attackSpeed', modKind: 'increased', top: 0.05, floor: 0.3, count: 3, baseTags: RELIC_TAGS, weight: 60,
+    stat: 'attackSpeed', modKind: 'increased', top: 0.05, baseTags: RELIC_TAGS, weight: 60,
   }),
   fam({
     id: 'relic_cast_speed', kind: 'suffix', themes: [CASTER],
     names: ['of Fluency', 'of Cadence'],
-    stat: 'castSpeed', modKind: 'increased', top: 0.05, floor: 0.3, count: 3, baseTags: RELIC_TAGS, weight: 60,
+    stat: 'castSpeed', modKind: 'increased', top: 0.05, baseTags: RELIC_TAGS, weight: 60,
   }),
   fam({
     id: 'relic_move', kind: 'suffix',
     names: ['of the Stride', 'of the Step'],
-    stat: 'moveSpeed', modKind: 'increased', top: 0.04, floor: 0.35, count: 3, baseTags: RELIC_TAGS, weight: 40,
+    stat: 'moveSpeed', modKind: 'increased', top: 0.04, baseTags: RELIC_TAGS, weight: 40,
   }),
   fam({
     id: 'relic_crit', kind: 'suffix',
     names: ['of Precision', 'of the Eye'],
-    stat: 'critChance', top: 0.02, floor: 0.3, count: 3, baseTags: RELIC_TAGS, weight: 50,
+    stat: 'critChance', top: 0.02, baseTags: RELIC_TAGS, weight: 50,
   }),
   fam({
     id: 'relic_crit_multi', kind: 'suffix',
     names: ['of Ruin', 'of Wounding'],
-    stat: 'critMulti', top: 0.12, floor: 0.3, count: 3, baseTags: RELIC_TAGS, weight: 45,
+    stat: 'critMulti', top: 0.12, baseTags: RELIC_TAGS, weight: 45,
   }),
   fam({
     id: 'relic_regen', kind: 'suffix', themes: [SUSTAIN],
     names: ['of Mending', 'of Knitting'],
-    stat: 'lifeRegen', top: 2.4, floor: 0.2, count: 4, baseTags: RELIC_TAGS, weight: 60,
+    stat: 'lifeRegen', top: 2.4, baseTags: RELIC_TAGS, weight: 60,
   }),
   fam({
     id: 'relic_mana_regen', kind: 'suffix', themes: [CASTER],
     names: ['of Clarity', 'of Focus'],
-    stat: 'manaRegen', top: 1.6, floor: 0.2, count: 4, baseTags: RELIC_TAGS, weight: 55,
+    stat: 'manaRegen', top: 1.6, baseTags: RELIC_TAGS, weight: 55,
   }),
   ...(['fire', 'cold', 'lightning', 'chaos'] as const).map(t => fam({
     id: `relic_res_${t}`, kind: 'suffix', themes: [DEFENSE],
     names: [RELIC_RES_NAMES[t]],
-    stat: `${t}Res`, top: 0.12, floor: 0.25, count: 4, baseTags: RELIC_TAGS, weight: t === 'chaos' ? 35 : 55,
+    stat: `${t}Res`, top: 0.12, baseTags: RELIC_TAGS, weight: t === 'chaos' ? 35 : 55,
   })),
   fam({
     id: 'relic_all_res', kind: 'suffix', themes: [DEFENSE],
@@ -620,27 +661,47 @@ export const RELIC_SUFFIXES: AffixDef[] = [
       { stat: 'coldRes', kind: 'flat', sharedRoll: true },
       { stat: 'lightningRes', kind: 'flat', sharedRoll: true },
     ],
-    top: 0.05, floor: 0.3, count: 3, baseTags: RELIC_TAGS, weight: 35,
+    top: 0.05, baseTags: RELIC_TAGS, weight: 35,
   }),
   fam({
     id: 'relic_cooldown', kind: 'suffix',
     names: ['of Readiness', 'of Recall'],
-    stat: 'cooldownRecovery', modKind: 'increased', top: 0.06, floor: 0.3, count: 3, baseTags: RELIC_TAGS, weight: 40,
+    stat: 'cooldownRecovery', modKind: 'increased', top: 0.06, baseTags: RELIC_TAGS, weight: 40,
   }),
   fam({
     id: 'relic_leech', kind: 'suffix', themes: [SUSTAIN],
     names: ['of the Leech', 'of the Tick'],
-    stat: 'lifeLeech', top: 0.008, floor: 0.4, count: 3, baseTags: RELIC_TAGS, weight: 35, exquisite: false,
+    stat: 'lifeLeech', top: 0.008, baseTags: RELIC_TAGS, weight: 35, exquisite: false,
   }),
   fam({
     id: 'relic_luck', kind: 'suffix',
     names: ['of Fortune', 'of Chance'],
-    stat: 'luck', top: 0.04, floor: 0.35, count: 3, baseTags: RELIC_TAGS, weight: 30,
+    stat: 'luck', top: 0.04, baseTags: RELIC_TAGS, weight: 30,
   }),
   fam({
     id: 'relic_accuracy', kind: 'suffix', themes: [MARTIAL, RANGER],
     names: ['of Aim', 'of the Mark'],
-    stat: 'accuracy', top: 36, floor: 0.2, count: 4, baseTags: RELIC_TAGS, weight: 50,
+    stat: 'accuracy', top: 36, baseTags: RELIC_TAGS, weight: 50,
+  }),
+  fam({
+    id: 'relic_recovery', kind: 'suffix', names: ['of the Second Breath', 'of Endurance'], themes: [SUSTAIN],
+    stat: 'lifeRegen', when: 'lowLife',
+    top: 5, baseTags: RELIC_TAGS, weight: 40,
+  }),
+  fam({
+    id: 'relic_escape', kind: 'suffix', names: ['of the Narrow Escape', 'of Escape'], themes: [RANGER],
+    stat: 'moveSpeed', modKind: 'increased', when: 'recentlyEvaded',
+    top: 0.1, baseTags: RELIC_TAGS, weight: 35,
+  }),
+  fam({
+    id: 'relic_recharge', kind: 'suffix', names: ['of the Flowing Veil', 'of the Veil'], themes: [CASTER],
+    stat: 'castSpeed', modKind: 'increased', when: 'esRecharging',
+    top: 0.12, baseTags: RELIC_TAGS, weight: 30,
+  }),
+  fam({
+    id: 'relic_pursuit', kind: 'suffix', names: ['of Relentless Pursuit', 'of Pursuit'], themes: [MARTIAL, RANGER],
+    stat: 'attackSpeed', modKind: 'increased', when: 'recentlyMoved',
+    top: 0.12, baseTags: RELIC_TAGS, weight: 35,
   }),
 ];
 /** The whole register, prefix and suffix — the census the probe and any

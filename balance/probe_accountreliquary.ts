@@ -5,13 +5,17 @@ import { RELIQUARY_CFG } from '../src/data/reliquary';
 import { reliquaryCost, reliquaryPower, investReliquary } from '../src/meta/reliquary';
 import { empowerRelicMods } from '../src/engine/relicPower';
 import { migrateRelicCarry } from '../src/engine/accountReliquary';
-import { forgeItem, compileItemMods, itemLevelReq } from '../src/engine/itemgen';
+import { forgeItem, compileItemMods, itemLevelReq, rollItem, rebuildItem, describeItem } from '../src/engine/itemgen';
+import { rollRerolledAffix } from '../src/engine/crafting';
+import { ITEM_AFFIXES, RELIC_AFFIXES } from '../src/data/itemaffixes';
+import { RELIC_UNIQUES } from '../src/data/uniques/relics';
+import { mulberry32 } from '../src/sim/rng';
 import { autoPlace } from '../src/engine/inventory';
 import { serializeCharacter, applySavedCharacter } from '../src/meta/character';
 import { captureLoot } from '../src/meta/death';
 import { RELIQUARY } from '../src/data/containers';
 import type { World } from '../src/engine/world';
-import { mod } from '../src/engine/stats';
+import { mod, StatSheet } from '../src/engine/stats';
 import { serializeSeatMeta, applySeatMeta } from '../src/net/snapshot';
 import { migrateRelicCorpses } from '../src/engine/accountReliquary';
 import { DEATH_SCHEMA, type DeathRecord } from '../src/meta/death';
@@ -49,8 +53,114 @@ assert.equal(raw[0].value, 6); assert.equal(empowerRelicMods(raw, 1e9)[5].value,
 const low = charm(), high = charm(80);
 assert.equal(itemLevelReq(high), 1);
 const lowValue = compileItemMods(low)[0].value, highValue = compileItemMods(high)[0].value;
-assert(highValue / lowValue <= 1.25); assert(highValue <= 8);
-console.log('PASS reduced baseline, shallow level scaling, numeric allowlist, caps and immutable grants/tradeoffs');
+assert.equal(highValue, lowValue); assert(highValue <= 8);
+console.log('PASS reduced baseline, level-independent power, numeric allowlist, caps and immutable grants/tradeoffs');
+
+// Discovery and value are separate: every family has its complete budget on
+// debut, for both natural drops and the Oracle's existing reroll path.
+for (const def of RELIC_AFFIXES) {
+  const debut = RELIQUARY_CFG.affixDebut[def.id] ?? 1;
+  assert(def.tiers.length >= 1 && def.tiers.length <= 2, def.id);
+  assert.equal(def.tiers.filter(t => !t.magicOnly).length, 1, def.id);
+  assert(def.tiers.every(t => t.ilvl === debut), def.id);
+  for (const rarity of ['magic', 'rare'] as const) {
+    for (const quality of [0, 0.5, 1]) {
+      const opts = { baseId: 'relic_charm', rarity, affixes: [{ id: def.id }], quality };
+      const first = forgeItem({ ...opts, ilvl: debut })!;
+      const late = forgeItem({ ...opts, ilvl: 80 })!;
+      assert.deepEqual(compileItemMods(first), compileItemMods(late), def.id);
+      assert.deepEqual(describeItem(first).affix, describeItem(late).affix, def.id);
+      assert.equal(itemLevelReq(late), 1);
+      assert.equal(first.affixes[0].tier, rarity === 'magic' ? 0 : def.tiers.length - 1);
+      assert.deepEqual(rollRerolledAffix(def, first, mulberry32(41)),
+        rollRerolledAffix(def, late, mulberry32(41)), def.id);
+    }
+    for (let seed = 1; seed <= 16; seed++) {
+      const opts = { baseId: 'relic_charm', rarity, withFamily: def.family, rng: mulberry32(seed) };
+      const at = rollItem({ ...opts, ilvl: debut })!;
+      const landed = at.affixes.find(a => a.id === def.id);
+      assert(landed, `${def.id} available on debut`);
+      assert(rarity === 'magic' || !def.tiers[landed.tier].magicOnly);
+      if (debut > 1) {
+        const before = rollItem({ ...opts, ilvl: debut - 1 })!;
+        assert(!before.affixes.some(a => a.id === def.id), `${def.id} stays gated even on a themed drop`);
+        assert.equal(rollRerolledAffix(def, before), null, `${def.id} reroll stays gated`);
+      }
+    }
+  }
+}
+const dropRng = mulberry32(0xa771);
+const discoveryLevels = [1, 4, 5, 8, 9, 11, 12, 15, 16, 19, 20, 23, 24, 80];
+for (const ilvl of discoveryLevels) for (const rarity of ['magic', 'rare'] as const) {
+  for (let i = 0; i < 100; i++) {
+    const item = rollItem({ ilvl, rarity, baseId: 'relic_effigy', rng: dropRng })!;
+    for (const a of item.affixes) {
+      const def = ITEM_AFFIXES[a.id];
+      assert((RELIQUARY_CFG.affixDebut[a.id] ?? 1) <= ilvl, `${a.id} dropped too early`);
+      assert(def.tiers[a.tier] && (rarity === 'magic' || !def.tiers[a.tier].magicOnly));
+    }
+  }
+}
+const lifeDef = ITEM_AFFIXES.relic_life;
+near(lifeDef.tiers[1].ranges[0][0], 5.44);
+near(lifeDef.tiers[1].ranges[0][1], 6.4);
+near(lifeDef.tiers[0].ranges[0][1], 6.592);
+assert(ITEM_AFFIXES.relic_leech.tiers.every(t => !t.magicOnly));
+assert(Object.values(ITEM_AFFIXES).some(d => !d.tags?.includes('relic') && d.tiers.length > 2
+  && d.tiers[0].ilvl > d.tiers[d.tiers.length - 1].ilvl), 'ordinary equipment retains its level ladder');
+console.log('PASS complete budgets at debut, all family boundaries, 2800 natural drops, rarity gates and Oracle parity');
+
+// Retuned saved indices use the existing restore clamp. Identity, roll heat,
+// locks and crafted flags survive; an old lower tier never disappears or
+// becomes magic-exclusive on a rare. Already-owned late families remain usable.
+for (const rarity of ['magic', 'rare'] as const) for (const tier of [1, 2, 3, 4, 5]) {
+  const saved = forgeItem({ ilvl: 1, baseId: 'relic_charm', rarity,
+    affixes: [{ id: 'relic_life' }], quality: 0.37 })!;
+  saved.relicKey = 'probe:legacy'; saved.affixes[0].tier = tier;
+  saved.affixes[0].locked = true; saved.affixes[0].crafted = true;
+  const restored = rebuildItem(JSON.parse(JSON.stringify(saved)))!;
+  assert.equal(restored.affixes[0].tier, 1);
+  assert.equal(restored.relicKey, saved.relicKey);
+  assert.deepEqual(restored.affixes[0].rolls, saved.affixes[0].rolls);
+  assert(restored.affixes[0].locked && restored.affixes[0].crafted);
+  assert.equal(compileItemMods(restored).length, 1);
+  assert.equal(describeItem(restored).affix.length, 1);
+  assert.deepEqual(rebuildItem(structuredClone(restored)), restored);
+}
+const legacyFamily = forgeItem({ ilvl: 1, baseId: 'relic_charm', rarity: 'rare',
+  affixes: [{ id: 'relic_dmg_conjure', tier: 4 }], quality: 0.37 })!;
+assert.equal(compileItemMods(rebuildItem(legacyFamily)!).length, 1);
+for (const unique of RELIC_UNIQUES) for (const quality of [0, 0.5, 1]) {
+  const opts = { uniqueId: unique.id, quality };
+  const first = forgeItem({ ...opts, ilvl: unique.minIlvl ?? 1, rng: mulberry32(71) })!;
+  const late = forgeItem({ ...opts, ilvl: 80, rng: mulberry32(71) })!;
+  assert.deepEqual(compileItemMods(first), compileItemMods(late), unique.id);
+}
+console.log('PASS saved tiers retain rolls/identity/flags and all unique budgets stay independent of item level');
+
+// Compiled, empowered conditional lines keep their predicates through the
+// real stat fold. They must not leak into an unrelated condition or target.
+for (const def of RELIC_AFFIXES.filter(d => d.lines.some(l => l.when || l.tags?.some(t => t.startsWith('vs:'))))) {
+  const item = forgeItem({ ilvl: 80, baseId: 'relic_charm', rarity: 'rare',
+    affixes: [{ id: def.id }], quality: 1 })!;
+  const mods = compileItemMods(item), line = mods[0];
+  assert(mods.length === 1 && line.value > 0);
+  const sheet = new StatSheet();
+  const tags = new Set(line.tags);
+  const bare = sheet.get(line.stat, tags);
+  sheet.setSource('container:reliquary', empowerRelicMods(mods, 1));
+  near(sheet.get(line.stat), bare);
+  if (line.when) sheet.setConditions([line.when]);
+  const active = sheet.get(line.stat, tags);
+  assert(active > bare, def.id);
+  sheet.setSource('container:reliquary', mods);
+  near(active - bare, (sheet.get(line.stat, tags) - bare) * 2);
+  if (line.when) { sheet.setConditions([]); near(sheet.get(line.stat, tags), bare); }
+  else near(sheet.get(line.stat), bare);
+  sheet.removeSource('container:reliquary'); near(sheet.get(line.stat, tags), bare);
+  assert(describeItem(item).affix[0].text.length > 0);
+}
+console.log('PASS specialized conditions/target scopes, attributable modifiers, empowerment and removal');
 
 const w = makeSimWorld('warrior', 27180); home(w);
 autoPlace(w.meta.items, low); const original = structuredClone(low);

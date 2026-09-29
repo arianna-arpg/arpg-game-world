@@ -50,6 +50,12 @@ one mechanism the engine already had: a grid, an item, a stat source.
 - **Active means seated.** Only a piece on an open cell of a board the account
   owns *today* folds (`containerMisfits` is the fold's read as well as the
   adoption law's) — a retuned frame can never leave a ghost line folding.
+- **Unique copy limits.** `UniqueDef.maxPerContainer` limits a stable identity
+  per equipped board. `engine/itemLimits.ts` supplies the shared check for
+  landing previews, first-fit actions and misfits. Replacement excludes the
+  departing copy; moving the current copy is legal. Relics default to one;
+  differently rolled choices still share the identity. Surplus account Relics
+  from older boards return to Oracle stash/recovery without losing their rolls.
 - **Slotless carry.** `registerContainer` adds the accepted categories to
   `items.ts CONTAINER_CATEGORIES`; the drop roller's droppable census
   (`isCarriableCategory`) carries them without a doll slot, and the bag sort's
@@ -145,8 +151,9 @@ is a validated host action that rechecks readiness and giver proximity.
   lanes (the same `DAMAGE_LANES` words gear speaks), minion damage/life, area,
   projectile speed, duration; attack/cast/move speed, crit chance/multi, life
   and mana regen, the four resists and all-res, cooldown recovery, leech, luck,
-  accuracy — at a third to a half of the wardrobe's tops, because a case seats
-  many.
+  accuracy, plus conditional and target-scoped bonuses. The account baseline,
+  one normal/optional exquisite tier and level-gated discoveries are configured
+  in `data/reliquary.ts`; see [account Relic values](../design/account-reliquary.md#relic-values-and-safe-scaling).
 - Drops: the four families carry world-pool weights (about 1% of gear at a
   find's share) and the `relic_cache` table pays one deliberately (seeded into
   `jewelry_cache`). Any cache, chest or boss table names `relic_cache`.
@@ -219,10 +226,11 @@ neighbours, never invert them). The laws:
   other's damage, not its crown; chains are impossible by construction (the
   conversion fabric's golden rule, worn by the board). Only FLAT amplifier
   lines count.
-- **Everything else scales.** Every other line of the piece — flat, increased,
-  more, links, gauge lines, attribute lines — multiplies its value by the
-  factor before it joins the fold (`amplifySeatMods`). Author relic lines so
-  that bigger is better; the register already is.
+- **Relic scaling is explicit.** The generic `amplifySeatMods` scales other
+  lines, but the account Relic fold uses `empowerRelicMods` and its numeric
+  allowlist. Counts, proc chances, grants, negative tradeoffs and feedback
+  links stay fixed; eligible positive numeric bonuses gain board and Vault
+  power once. See the account Reliquary contract for caps.
 - **The sheet never sees the amplifiers.** They seat on the sheet's `misc` tab
   as the `seatPower_` family only so the registry stays honest; a sheet total
   of "outward power" would mean nothing.
@@ -240,19 +248,27 @@ relic (`ItemInstance.grantState`), gone when it leaves the case.
 
 ## The relic legends (data/uniques/relics.ts — probe `balance/probe_relicuniques.ts`)
 
-Six chase pieces, one per lever, all of them BUILDS under THE DEFINING LAW
-(docs/engine/legends.md); every number is a dial.
+Eighteen chase pieces, all carrying a signature under THE DEFINING LAW
+(docs/engine/legends.md); every number is a dial. The original six below focus
+on board placement and followers. Twelve additional playstyle identities,
+rolled family choices and copy limits are cataloged in
+[Unique Relic pool](../design/relic-unique-pool.md).
 
 | legend | base | signature |
 | --- | --- | --- |
 | The Hermit's Bead | charm 1×1 | SOLITUDE: 25–35% stronger lines per empty seat touching it — give it the corner and the room |
 | Sunderstone | charm 1×1 | a rolled ELEMENT (fire/cold/lightning/chaos, one identity forever): its penetration and tagged damage, paid in your own resistance to it |
 | The Lodestone | talisman 2×1 | COMMUNION: 6–9% stronger lines per relic touching it — crowd it |
-| The Unquarried Idol | idol 1×2 | GRANTS Summon Stone Golem (level deepens with tier); the golem's stones live on the idol |
-| The Tally Idol | idol 1×2 | THE CASE GAUGE: 1.5–2.5% increased damage per relic seated in the Reliquary, itself among them |
+| The Unquarried Idol | idol 1×2 | An independent Stone Golem follower, scaled by the account Relic policy; zero reservation for manually equipped Stone Golems |
+| The Tally Idol | idol 1×2 | THE CASE GAUGE: 0.3–0.5% baseline increased damage per relic seated in the Reliquary, itself among them |
 | The Reliquary Crown | effigy 2×2 | OUTWARD: relics touching it have 15–22% stronger lines — seats only once the heart opens, and touches eight from there |
 
-Drops: the legends share the world unique pool by weight (about 8% of it,
+Unique numeric lines use the account baseline at tier 1, independent of item
+level. Empowerment scales eligible bonuses; board amplifiers, grants and
+tradeoffs keep their authored values. The [account Reliquary contract](../design/account-reliquary.md)
+owns the current value, follower and persistence rules.
+
+Drops: the legends share the world unique pool by weight (about 14% of it,
 `minIlvl` walking the case's own ladder) and the `relic_cache` table pours one
 at a small share (`rarity: 'unique'` rows degrade to rare below every legend's
 floor). The lodestone, the hermit and the crown are the seat law's three

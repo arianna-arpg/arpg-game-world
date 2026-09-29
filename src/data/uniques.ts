@@ -47,6 +47,7 @@ import { borrowedRefugeLine, GLEANER_CHOICES, LIVING_UNIQUES } from './uniques/l
 import { ROTE_CHOICES, CUP_MINION_LINES, LATTICE_LINES, GALEWRIGHT_LINES, REACTIVE_PROCS, REACTIVE_UNIQUES } from './uniques/reactive';
 import { ACCORD_PROCS, ACCORD_UNIQUES } from './uniques/accords';
 import { RELIC_UNIQUES } from './uniques/relics';
+import { RELIC_PATH_PROCS } from './uniques/relicPaths';
 
 // ---------------------------------------------------------------------------
 // THE LEGEND PROCS — triggers authored beside the legends that wear them,
@@ -110,6 +111,7 @@ export const LEGEND_PROCS: ProcDef[] = [
 LEGEND_PROCS.push(...EMERGENT_PROCS);
 LEGEND_PROCS.push(...REACTIVE_PROCS);
 LEGEND_PROCS.push(...ACCORD_PROCS);
+LEGEND_PROCS.push(...RELIC_PATH_PROCS);
 for (const def of LEGEND_PROCS) registerProc(def);
 
 export const UNIQUE_LIST: UniqueDef[] = [

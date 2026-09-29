@@ -323,6 +323,9 @@ export interface UniqueDef {
   weight: number;
   /** Never drops below this item level. */
   minIlvl?: number;
+  /** Maximum copies of this identity seated in one container. Omit for no
+   * limit. Rolled choices and instance names never change the identity. */
+  maxPerContainer?: number;
 }
 
 // -------------------------------------------------------------- instance ---

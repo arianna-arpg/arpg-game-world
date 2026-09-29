@@ -8,6 +8,7 @@ import { companionCueFlash, companionCueSpec, type CompanionCueEvent } from './c
 import { RECOVERY_CUES, type RecoveryCueKind } from '../data/companionCues';
 import { CompanionGrants, COMPANION_GRANT_PREFIX, companionGrantStat, summonReservationUnit } from './companionGrants';
 import { summonCapacity, summonContractSlots } from './summonContracts';
+import { uniqueContainerRefusal } from './itemLimits';
 import { TitanRuntime } from './titans';
 import { resolveMinionInheritance, applyMinionPlyBonus, minionAreaAvoidanceOf } from './minionInheritance';
 import { throngEvolution, throngTravelProtected, throngClusterPlies, THRONG_EVOLUTION } from './throngEvolution';
@@ -47248,8 +47249,13 @@ export class World {
     let displaced: ItemInstance | undefined;
     if (x !== undefined && y !== undefined) {
       const landing = containerLanding(def, board, held, item, 'bag', x, y, this.seatHero(seat).level);
-      if (landing.verdict === 'blocked') return;
+      if (landing.verdict === 'blocked') {
+        if (landing.why) this.failNote(seat.actor, 'seat:' + uid, landing.why);
+        return;
+      }
       displaced = landing.with; candidate.x = x; candidate.y = y;
+    } else if (uniqueContainerRefusal(held, item)) {
+      this.failNote(seat.actor, 'seat:' + uid, uniqueContainerRefusal(held, item)!); return;
     } else if (!autoPlace(trial, candidate, boardDims(board))) {
       this.failNote(seat.actor, 'seat:' + uid, 'No open seat. Return a Relic to your pack first.'); return;
     }
@@ -47297,6 +47303,9 @@ export class World {
     if (refusal || !board) { this.failNote(seat.actor, 'seat:' + uid, refusal ?? 'refused'); return; }
     const held = this.containerHeld(seat, def.id);
     const dims = boardDims(board);
+    if ((x === undefined || y === undefined) && uniqueContainerRefusal(held, item)) {
+      this.failNote(seat.actor, 'seat:' + uid, uniqueContainerRefusal(held, item)!); return;
+    }
     const from = { x: item.x, y: item.y };
     const restore = (): void => {
       if (!(from.x !== undefined && from.y !== undefined && placeAt(m.items, item, from.x, from.y))) autoPlace(m.items, item);

@@ -21,7 +21,7 @@
 //     has stronger lines; it seats only once THE HEART opens, and touches
 //     eight seats from there.
 // The amplifier lines are PINNED (tierScale 0): the seat law is a constant,
-// and the lines it amplifies already grow with depth.
+// and numeric lines grow through account empowerment, never item level.
 // Weights are the world unique pool's share (chase, not floor — a rare
 // relic pays the daily wage); minIlvl walks the ladder the case grows on.
 // Every number is a dial.
@@ -31,6 +31,8 @@ import type { RangedLineDef, UniqueDef } from '../../engine/items';
 import type { UniqueChoiceGroup } from '../../engine/itemchoices';
 import { companionGrantStat, summonReservationStat } from '../../engine/companionGrants';
 import { seatPowerStat, seatedGaugeId } from '../../engine/seatlaw';
+import { RELIQUARY_CFG } from '../reliquary';
+import { RELIC_PATH_UNIQUES } from './relicPaths';
 
 /** The container the Tally Idol counts (data/containers.ts RELIQUARY_ID —
  *  named by literal here so the legends never import the fabric's data
@@ -61,7 +63,7 @@ export const SUNDER_CHOICES: UniqueChoiceGroup[] = [{
   })),
 }];
 
-export const RELIC_UNIQUES: UniqueDef[] = [
+const relicUniques: UniqueDef[] = [
   // THE HERMIT'S BEAD — SOLITUDE (seatPower_solitude): the bead's own lines
   // grow for every open seat touching it that stands empty. A 1×1 touches
   // four seats at most; in the ring's corner it touches two until the
@@ -145,4 +147,10 @@ export const RELIC_UNIQUES: UniqueDef[] = [
       { stat: 'chaosRes', kind: 'flat', range: [0.06, 0.09], sharedRoll: true },
     ],
   },
+  ...RELIC_PATH_UNIQUES,
 ];
+
+/** One default policy for the pool; an individual definition may override it. */
+export const RELIC_UNIQUES: UniqueDef[] = relicUniques.map(u => ({
+  maxPerContainer: RELIQUARY_CFG.uniqueEquipLimit, ...u,
+}));

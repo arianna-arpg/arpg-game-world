@@ -52,6 +52,20 @@ equipped/stored Relics persist. Verify `probe_relicdeath.ts`, `probe_relicflow.t
 `probe_accountreliquary.ts`, `probe_reliquary.ts`,
 `probe_relicuniques.ts` and `balance/oracle-rescue-ui.cjs`.
 
+Relic affix progression uses one normal tier and an optional magic-only
+exquisite tier, both available at each family's debut. `RELIQUARY_CFG.affixTiers`
+and `affixDebut` separate fixed budgets from discoveries through level 24;
+conditional play styles use existing actor conditions and victim tags.
+See `docs/design/account-reliquary.md`; verify `probe_accountreliquary.ts`
+for debut gates, level-independent values, saved tiers and scoped empowerment.
+
+Unique Relic pool: eighteen identities, rolled summon/construct families and
+configurable equipped-copy limits are documented in `docs/design/relic-unique-pool.md`.
+Content lives in `data/uniques/relicPaths.ts`; `engine/itemLimits.ts` shares
+identity checks across landing, first-fit actions and saved-board repair.
+Verify `probe_relicuniques.ts` (including `relicExpansionChecks.ts`), the
+account/reliquary probes, legends and the hidden Oracle UI harness after a build.
+
 Oracle rescue and account-wide relic access are documented in
 `docs/design/oracle-rescue.md`. `data/oracle.ts` and `QuestDef.rescue` configure
 captivity, residency and grants; `engine/questRescues.ts` validates completion.

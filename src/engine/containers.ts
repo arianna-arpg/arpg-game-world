@@ -46,6 +46,7 @@ import type { GateRow } from '../meta/gates';
 import { DERIVED_GAUGES, registerDerivedGauge } from './gauges';
 import type { Modifier } from './stats';
 import { seatPowerOf, seatedGaugeId } from './seatlaw';
+import { uniqueContainerRefusal } from './itemLimits';
 
 // ------------------------------------------------------------------- defs ---
 
@@ -389,8 +390,13 @@ export function containerLanding(
   if (refusal || !board) return { ...base, why: refusal ?? undefined };
   if (from === 'other') return { ...base, why: 'move it to the bag first' };
   const dims = boardDims(board);
-  if (canPlaceAt(held, item, x, y, dims)) return { ...base, verdict: 'place' };
+  if (canPlaceAt(held, item, x, y, dims)) {
+    const why = uniqueContainerRefusal(held, item);
+    return why ? { ...base, why } : { ...base, verdict: 'place' };
+  }
   if (from === 'self') {
+    const why = uniqueContainerRefusal(held, item);
+    if (why) return { ...base, why };
     const other = swapBlockerFits(held, item, x, y, dims);
     return other ? { ...base, verdict: 'swap', with: other } : base;
   }
@@ -404,6 +410,8 @@ export function containerLanding(
     && h.x < x + s.w && x < h.x + itemGridSize(h).w && h.y < y + s.h && y < h.y + itemGridSize(h).h);
   if (blockers.length !== 1) return base;
   const other = blockers[0];
+  const why = uniqueContainerRefusal(held, item, other);
+  if (why) return { ...base, why };
   if (def.accountStorage) return { ...base, verdict: 'swap', with: other };
   const rest = bag!.filter(i => i.uid !== item.uid);
   if (!containerAccepts(def, other)) return base; // (a foreign occupant can never be there; belt to suspenders)
@@ -419,6 +427,7 @@ export function containerMisfits(board: ContainerBoard | null, held: readonly It
   const out: ItemInstance[] = [];
   const placed: ItemInstance[] = [];
   for (const it of held) {
+    if (uniqueContainerRefusal(placed, it)) { out.push(it); continue; }
     if (it.x === undefined || it.y === undefined) { out.push(it); continue; }
     const s = itemGridSize(it);
     let ok = true;
