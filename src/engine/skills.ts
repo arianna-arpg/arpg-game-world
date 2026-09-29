@@ -1,4 +1,5 @@
 import { summonScopeTags } from './skillScopes';
+import { empowermentPassive, treeInstanceNodeRanks, treePointBudget } from './skillEmpowerment';
 import { guardArtsOf, type GuardArtsSpec } from './guardArtsSpec';
 import { companionBondOf, type CompanionBondSpec } from './companionSpec';
 import { challengeDelivery, type ChallengeSpec } from './challengeSpec';
@@ -5056,6 +5057,8 @@ export interface SkillTreeNode {
    *  payload (mods and TreeAuraPatch arrays stack per rank; scalar `over` fields are idempotent); a rank
    *  persists as a repeated id in treeNodes. */
   ranks?: number;
+  /** Legendary empowerment points may fund this passive and extend its ranks. */
+  empowermentPassive?: boolean;
   /** Layout pins in tree units (root at 0,0, y down) — absent = the derived
    *  radial layout (TREE_LAYOUT_CFG). Pin both or neither. */
   x?: number;
@@ -5205,7 +5208,10 @@ export function treeNodeRefusal(inst: SkillInstance, nodeId: string): string | n
   }
   const missing = treePrereqMissing(inst.def, spent, nodeId);
   if (missing) return `${missing} comes first`;
-  if (treePointsSpent(inst) >= bandPointsAt(inst.level)) {
+  const empowermentBudget = treePointBudget(inst);
+  if (empowermentBudget.abilityFree === 0
+    && !(empowermentPassive(inst.def, nodeId) && empowermentBudget.passiveFree > 0)) {
+    if (empowermentBudget.passiveFree > 0) return 'empowerment points can only deepen passive slots';
     const next = SKILL_LEVEL_BANDS.find(b => b > inst.level);
     return next !== undefined
       ? `no Ability point free — the next comes at level ${next}`
@@ -5221,24 +5227,28 @@ export function treeNodeRefusal(inst: SkillInstance, nodeId: string): string | n
  *  node's ranks drops), the lock (an id sealed by the kept set drops —
  *  rival forks, and everything only reachable through them), the
  *  prerequisite chain (a node none of whose links is kept drops), and —
- *  when `level` is given — the point budget (bandPointsAt trims the
- *  tail). The sim's hypothesis lever passes no level: structure is
- *  grammar, budget is economy. `quiet` mutes the notes (the census's
+ *  when `level` is given — the ordinary and empowerment point budgets.
+ *  The sim's hypothesis lever passes no level: structure is grammar,
+ *  budget is economy. `quiet` mutes the notes (the census's
  *  terminal walks, which trim by design). */
 export function validTreeNodes(
-  def: SkillDef, ids: readonly string[], level?: number, opts?: { quiet?: boolean },
+  def: SkillDef, ids: readonly string[], level?: number,
+  opts?: { quiet?: boolean; empowermentRank?: number; rarity?: SkillRarity },
 ): string[] | undefined {
   const note = (id: string, why: string): void => {
     if (!opts?.quiet) console.warn(`[skill tree] '${def.id}': dropped pick '${id}' (${why})`);
   };
   const g = treeGraph(def);
   const kept: string[] = [];
+  const empowermentInst = { def, level: level ?? MAX_SKILL_LEVEL, sockets: [], treeNodes: kept,
+    rarity: opts?.rarity, empowermentRank: opts?.empowermentRank } as SkillInstance;
   for (const id of ids) {
     const gn = g?.nodes.get(id);
     if (!gn) { note(id, 'no such node'); continue; }
     const have = treeSpentCount(kept, id);
-    if (have >= gn.ranks) {
-      note(id, gn.ranks === 1 ? 'duplicate' : `beyond its ${gn.ranks} ranks`); continue;
+    const empowermentRanks = treeInstanceNodeRanks(empowermentInst, id);
+    if (have >= empowermentRanks) {
+      note(id, empowermentRanks === 1 ? 'duplicate' : `beyond its ${empowermentRanks} ranks`); continue;
     }
     if (have === 0) {
       if (treeSealedSet(def, kept).has(id)) {
@@ -5248,11 +5258,14 @@ export function validTreeNodes(
         note(id, 'rung chain broken — a predecessor is missing'); continue;
       }
     }
+    if (level !== undefined) {
+      const empowermentBudget = treePointBudget(empowermentInst);
+      if (empowermentBudget.abilityFree === 0
+        && !(empowermentPassive(def, id) && empowermentBudget.passiveFree > 0)) {
+        note(id, `over budget at level ${level}`); continue;
+      }
+    }
     kept.push(id);
-  }
-  if (level !== undefined) {
-    const budget = bandPointsAt(level);
-    while (kept.length > budget) note(kept.pop()!, `over budget (${budget} point${budget === 1 ? '' : 's'} at level ${level})`);
   }
   return kept.length ? kept : undefined;
 }
@@ -5932,6 +5945,8 @@ export interface SkillInstance {
   sockets: (SupportInstance | null)[];
   /** Dropped gems carry a rarity (it set their socket count). */
   rarity?: SkillRarity;
+  /** Saved legendary merge investment; omitted means rank zero. */
+  empowermentRank?: number;
   /** INSTANCE-LOCAL modifiers stamped by the minting context (an
    *  Invocation's last-rune conversion, future item affixes) — merged into
    *  instanceMods for this instance's whole life, zones and all. */

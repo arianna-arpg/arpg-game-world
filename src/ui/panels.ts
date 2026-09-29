@@ -1,3 +1,6 @@
+import { empowermentPassive, empowermentPoints, empowermentRank, hasEmpowermentPassive, skillInstanceName, treeAbilityNodes, treeInstanceNodeRanks, treePointBudget } from '../engine/skillEmpowerment';
+import { skillMergePlan } from '../engine/skillMerge';
+import { SKILL_EMPOWERMENT } from '../data/skillEmpowerment';
 import { oracleReliquaryHtml } from './reliquary';
 import { planRelicStorage } from '../engine/accountReliquary';
 import { personalStashHtml, STASH_CELL_PX } from './stash';
@@ -28,7 +31,7 @@ import { SHEET_VITALS, sheetTabs, statBlurbOf } from '../data/sheet';
 import { resistValue } from '../engine/damage';
 import { chargeLabel } from '../engine/charges';
 import {
-  bandPointsAt, crewBoardingOpen, crewSkillsServed, effectiveSkillLevel, essenceTierForLevel, instanceChargeCost, SKILL_LEVEL_BANDS, SKILL_RARITIES, skillMaxLevel,
+  crewBoardingOpen, crewSkillsServed, effectiveSkillLevel, essenceTierForLevel, instanceChargeCost, SKILL_LEVEL_BANDS, SKILL_RARITIES, skillMaxLevel,
   supportFitsInstOrCrew, supportMaxLevel, treeNodeRefusal, treeSpentBranch,
   type SkillDef, type SkillInstance, type SkillRarity, type SkillTreeNode, type SupportInstance,
 } from '../engine/skills';
@@ -169,7 +172,7 @@ import { BOUNTY_BOARD_CFG } from '../data/bountyboard';
 import { oracleRerollCost } from '../data/essences';
 import { ITEM_AFFIXES } from '../data/itemaffixes';
 import { formatModLine, lerpRange, roundStatValue } from '../engine/items';
-import { treeGraph, treeLimbOfNode, treeLimbs, treeNodeRanks, treeSealedSet, treeSpentCount, TREE_LAYOUT_CFG, type TreeGraphNode } from '../engine/skilltree'; // THE SKILL-TREE PANE reads the one graph
+import { treeGraph, treeLimbOfNode, treeLimbs, treeSealedSet, treeSpentCount, TREE_LAYOUT_CFG, type TreeGraphNode } from '../engine/skilltree'; // THE SKILL-TREE PANE reads the one graph
 import { memoryCommissionReady, memoryProgressionOpen, memoryUnlockCandidates, memoryUnlockDef } from '../meta/memoryUnlocks';
 import { attachPanZoom, clampZoom, PANZOOM_DEFAULTS } from './panzoom';
 import { attachPanelMove, configurePanelLayout, panelLayoutRefresh, panelLayoutSync, panelMoved, panelMoveReset, panelMoveTo, panelSeatOf, persistPanelSeat, resetPanelLayout } from './panelmove'; // THE PANEL MOVE — ribbons drag their panels; THE LAYOUT remembers
@@ -2083,7 +2086,7 @@ export class UI {
         if (!inst) return null;
         return {
           kind: 'rackSeat', arg, label: inst.def.name, data: { defId: inst.def.id },
-          ghostHtml: `<span style="color:${inst.def.color}">◆ ${inst.def.name}</span>`,
+          ghostHtml: `<span style="color:${inst.def.color}">◆ ${skillInstanceName(inst)}</span>`,
         };
       },
     });
@@ -2296,10 +2299,11 @@ export class UI {
     const branch = treeSpentBranch(inst);
     const granted = inst.grantedBy ? ` · granted by ${inst.grantedBy}` : '';
     return {
-      title: `${d.name} — Lv ${inst.level}${branch ? ` · ${branch.name}` : ''}`,
+      title: `${skillInstanceName(inst)} — Lv ${inst.level}${branch ? ` · ${branch.name}` : ''}`,
       description: d.description
         + this.previewRowsHtml(preview.rows, extended),
-      meta: instanceBaseTags(inst).join(' · ') + (charge ? ` · ${charge}` : '') + granted,
+      meta: instanceBaseTags(inst).join(' · ') + (charge ? ` · ${charge}` : '') + granted
+        + (empowermentRank(inst) ? ` · ${empowermentPoints(inst)} empowerment passive-only points` : ''),
       wide: extended && preview.hasDetail,
     };
   }
@@ -4106,7 +4110,7 @@ export class UI {
       lines.push(supportCompatibilityHtml(e.gem, world.seatHero(buyer).skills, inst => world.summonCrewSkills(inst)));
     }
     lines.push(...this.vendorWareFooter(key));
-    const name = e.kind === 'skill' ? e.inst.def.name : e.gem.def.name;
+    const name = e.kind === 'skill' ? skillInstanceName(e.inst) : e.gem.def.name;
     const col = e.kind === 'skill' ? SKILL_RARITIES[e.inst.rarity ?? 'common'].color : e.gem.def.color;
     return {
       title: `<span style="color:${col}">${name}</span>`,
@@ -4176,6 +4180,7 @@ export class UI {
       lines.push(`<div style="color:#9a94a8;font-size:10px">Skill Memory · <span style="color:${r.color};font-weight:bold">${r.label}</span> · ${sp.sockets.length} socket${sp.sockets.length === 1 ? '' : 's'}${sp.granted ? ' · <span style="color:#8a8678">granted</span>' : ''}</div>`);
       lines.push(`<div style="color:#8a8678;font-size:10px">${def.tags.join(' · ')}</div>`);
       lines.push(`<div>${def.description}</div>`);
+      if (empowermentRank(sp)) lines.push(`<div style="color:#e8b878">${empowermentPoints(sp)} passive-only point${empowermentPoints(sp) === 1 ? '' : 's'} from empowerment${hasEmpowermentPassive(def) ? '' : ' · banked until this skill has a passive slot'}</div>`);
       const socketed = sp.sockets.filter((s): s is NonNullable<typeof s> => !!s);
       if (socketed.length) {
         lines.push(`<div style="color:#b8a2e8;font-size:10px">Socketed: ${socketed
@@ -4189,7 +4194,7 @@ export class UI {
         lines.push('<div style="color:#c8a84b;font-size:10px;margin-top:3px">drag onto a rack seat (SKILLS flap) to learn · right-click or double-click = first free seat</div>');
       }
       return {
-        title: `<span style="color:${r.color}">${def.name}</span> <span style="color:#ffd700;font-size:11px">Lv ${sp.level}</span>`,
+        title: `<span style="color:${r.color}">${skillInstanceName({ def, ...sp })}</span> <span style="color:#ffd700;font-size:11px">Lv ${sp.level}</span>`,
         description: lines.join(''),
         meta: `Skill Memory · ${r.label}`,
       };
@@ -5190,46 +5195,36 @@ export class UI {
 
     let body = '';
     if (this.fontTab === 'merge') {
-      // Eligible copies per (skill × rarity) among the BAG's gem wrappers
-      // (THE RESIDENCE) — the engine recipe's own filters (locked/granted
-      // never count), highest level first so the preview names the level
-      // the merge will KEEP.
-      const groups = new Map<string, { def: SkillDef; rarity: SkillRarity; levels: number[]; barred: number }>();
+      const groups = new Map<string, { def: SkillDef; rarity: SkillRarity }>();
       for (const item of m.items) {
-        const p = skillGemPayloadOf(item);
-        const def = p ? SKILLS[p.skillId] : null;
-        if (!p || !def) continue;
-        const k = `${p.skillId}:${p.rarity}`;
-        const row = groups.get(k) ?? { def, rarity: p.rarity, levels: [], barred: 0 };
-        if (item.locked || p.granted) row.barred++;
-        else row.levels.push(p.level);
-        groups.set(k, row);
+        const p = skillGemPayloadOf(item), def = p && SKILLS[p.skillId];
+        if (p && def) groups.set(p.skillId + ':' + p.rarity, { def, rarity: p.rarity });
       }
-      const ladder = Object.keys(SKILL_RARITIES) as SkillRarity[];
       const rows = [...groups.values()]
-        .filter(g => FONT_CFG.merge[g.rarity] !== undefined && ladder.indexOf(g.rarity) < ladder.length - 1)
-        .sort((a, b) => b.levels.length - a.levels.length || a.def.name.localeCompare(b.def.name))
+        .filter(g => g.rarity === 'legendary' ? SKILL_EMPOWERMENT.enabled : FONT_CFG.merge[g.rarity] !== undefined)
+        .sort((a, b) => a.def.name.localeCompare(b.def.name))
         .map(g => {
-          const need = FONT_CFG.merge[g.rarity]!;
-          const next = ladder[ladder.indexOf(g.rarity) + 1];
-          const kept = g.levels.length ? Math.max(...g.levels.slice(0, need)) : 0;
-          const ready = g.levels.length >= need;
-          const preview = ready
-            ? `${need}× ${g.def.name} (${SKILL_RARITIES[g.rarity].label}) → 1× ${g.def.name} (${SKILL_RARITIES[next].label}), level ${kept} kept`
-            : `${g.levels.length}/${need} carried — the font asks ${need} alike`;
-          const barredNote = g.barred
-            ? ` <span style="color:#8a8678">(+${g.barred} under the keeper's mark 🔒 — the font refuses them)</span>` : '';
-          return `<div class="skill-entry" style="border-left:3px solid ${SKILL_RARITIES[g.rarity].color}">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-              <span style="font-size:11px;color:${ready ? '#e8dcc8' : '#8a8678'}">${preview}${barredNote}</span>
-              <button data-fontmerge="${g.def.id}:${g.rarity}" ${ready ? '' : 'disabled'}>Reforge</button>
-            </div>
-            <div style="font-size:9px;color:#6a6478">socketed supports return to the bag before the inputs burn; the highest input level is kept.</div>
-          </div>`;
+          const plan = skillMergePlan(m.items, g.def.id, g.rarity);
+          const result = plan.result;
+          const ready = !plan.refusal && !!result;
+          const preview = result
+            ? plan.need + '× ' + g.def.name + ' (' + SKILL_RARITIES[g.rarity].label + ') → ' + skillInstanceName(result)
+              + ' (' + SKILL_RARITIES[result.rarity!].label + '), level ' + result.level
+            : plan.available + '/' + plan.need + ' carried — ' + plan.refusal;
+          const barred = plan.barred ? ' · ' + plan.barred + ' locked or granted' : '';
+          const reward = result && empowermentRank(result)
+            ? '<div style="color:#e8b878;font-size:10px">' + empowermentPoints(result) + ' passive-only point' + (empowermentPoints(result) === 1 ? '' : 's') + ' from empowerment'
+              + (hasEmpowermentPassive(result.def) ? '' : ' · banked until this skill has a passive slot') + '</div>' : '';
+          return '<div class="skill-entry" style="border-left:3px solid ' + SKILL_RARITIES[g.rarity].color + '">'
+            + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+            + '<span style="font-size:11px">' + esc(preview + barred) + '</span>'
+            + '<button data-fontmerge="' + g.def.id + ':' + g.rarity + '" ' + (ready ? '' : 'disabled') + '>'
+            + (g.rarity === 'legendary' ? 'Empower' : 'Reforge') + '</button></div>' + reward
+            + '<div style="font-size:9px;color:#8a8678">' + (g.rarity === 'legendary'
+              ? 'Keeps the highest-rank copy’s tree, sockets and attunement. Donor supports return to your bag; overflow drops at your feet.'
+              : 'Keeps the highest input level. Supports return to your bag; overflow drops at your feet.') + '</div></div>';
         }).join('');
-      body = rows || `<div style="color:#8a8678;font-size:11px">Nothing fusible carried. The font fuses
-        ${Object.entries(FONT_CFG.merge).map(([r, n]) => `${n}× ${SKILL_RARITIES[r as SkillRarity].label}`).join(' · ')}
-        copies of the SAME skill into one of the next rarity.</div>`;
+      body = rows || '<div style="color:#8a8678;font-size:11px">Carry matching Skill Memories to reforge them. Matching legendary copies can be empowered.</div>';
     } else if (this.fontTab === 'convert') {
       body = ABILITY_ESSENCES.slice(0, -1).map((lo, i) => {
         const hi = ABILITY_ESSENCES[i + 1];
@@ -5259,7 +5254,7 @@ export class UI {
           const afford = world.canAffordAbilityEssence(seat, cost);
           const branch = treeSpentBranch(inst);
           const n = inst.treeNodes!.length;
-          const preview = `${inst.def.name} — ${branch ? `the ${branch.name} path, ` : ''}${n} spent point${n === 1 ? '' : 's'} refunded for ${cost.count}× ${dd.label}`;
+          const preview = `${skillInstanceName(inst)} — ${branch ? `the ${branch.name} path, ` : ''}${n} spent point${n === 1 ? '' : 's'} refunded for ${cost.count}× ${dd.label}`;
           const refusal = why ?? (afford ? null : `the ritual asks ${cost.count}× ${dd.label}`);
           return `<div class="skill-entry" style="border-left:3px solid ${inst.def.color}">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
@@ -5417,10 +5412,10 @@ export class UI {
     const tree = inst?.def.tree;
     if (!inst || !tree || world.memorySecondaryRefusal(skillId)) return;
     const spent = inst.treeNodes ?? [];
-    const free = Math.max(0, bandPointsAt(inst.level) - spent.length);
+    const free = treePointBudget(inst).free;
     if (!free) return;
     const chip = (node: SkillTreeNode, branchName?: string): string => {
-      if (treeSpentCount(spent, node.id) >= treeNodeRanks(inst.def, node.id) || treeNodeRefusal(inst, node.id) !== null) return '';
+      if (treeSpentCount(spent, node.id) >= treeInstanceNodeRanks(inst, node.id) || treeNodeRefusal(inst, node.id) !== null) return '';
       return `<button data-poppick="${node.id}" class="gem-chip"
         style="display:block;width:100%;margin:4px 0;padding:8px 10px;text-align:left;border-color:${inst.def.color}"
         title="${node.description ?? node.name}">
@@ -5442,8 +5437,8 @@ export class UI {
     pop.innerHTML = `
       ${this.closeGlyphHtml('Later')}<h2 style="color:#d8b86a">An Ability Point Awakens</h2>
       <div style="font-size:11px;color:#a8a494;margin-bottom:6px">
-        <b style="color:${inst.def.color}">${inst.def.name}</b> has grown into a choice
-        (${spent.length}/${bandPointsAt(inst.level)} points placed).
+        <b style="color:${inst.def.color}">${skillInstanceName(inst)}</b> has grown into a choice
+        (${spent.length}/${treePointBudget(inst).total} points placed).
         ${treeSpentBranch(inst) || treeLimbs(inst.def).length < 2 ? '' : 'The first point into a limb SEALS its rivals.'}</div>
       ${chips}
       <div style="margin-top:8px;display:flex;gap:8px;justify-content:flex-end">
@@ -6058,7 +6053,7 @@ export class UI {
         ${grimSkills.map(inst => {
           const form = inst.attunedForm ? MONSTERS[inst.attunedForm] : undefined;
           return `<span class="spec-slot" data-drop="spectreSlot:${inst.def.id}">
-            <span style="color:${inst.def.color};font-size:10px">${inst.def.name} Lv ${inst.level}</span>
+            <span style="color:${inst.def.color};font-size:10px">${skillInstanceName(inst)} Lv ${inst.level}</span>
             ${form
               ? `${this.monsterPortraitHtml(form, false, BESTIARY_CFG.portrait.grimoire)} <span style="color:#a8d8a0">${form.name}</span>
                  <button data-slot-release="${inst.def.id}" title="Release the attunement (back to corpse-reading)">✕</button>`
@@ -6546,7 +6541,7 @@ export class UI {
             // A GEM find: a 1×1 tile wearing the gem's own color + initials
             // (THE ICON LAW's counter face); the rich card rides the vgem
             // tooltip lane off the LIVE stock entry.
-            const name = e.kind === 'skill' ? e.inst.def.name : e.gem.def.name;
+            const name = e.kind === 'skill' ? skillInstanceName(e.inst) : e.gem.def.name;
             const col = e.kind === 'skill' ? SKILL_RARITIES[e.inst.rarity ?? 'common'].color : e.gem.def.color;
             const at = pack.gemCells.get(idx);
             if (!at) {
@@ -6928,8 +6923,8 @@ ${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its sup
           ${seated.grantedBy
             ? `<span title="Granted by ${seated.grantedBy} — take the piece off to unseat it; there is no gem to unlearn"
                 style="font-size:9px;color:#e8a860;padding:0 1px;line-height:1">◆</span>`
-            : `<button data-rackunbind="${slot}" class="rack-unlearn" aria-label="Unlearn ${sd.name}"
-              title="Unlearn ${sd.name}"
+            : `<button data-rackunbind="${slot}" class="rack-unlearn" aria-label="Unlearn ${skillInstanceName(seated)}"
+              title="Unlearn ${skillInstanceName(seated)}"
               style="--unlearn-size:${BUILD_PANEL_CFG.unlearnSize}px">✕</button>`}
         </div>
         <div style="display:flex;align-items:center;gap:4px">
@@ -6937,7 +6932,7 @@ ${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its sup
             width:15px;height:15px;border-radius:2px;background:${sd.color};opacity:0.9;
             color:#0a0a0e;font-weight:bold;font-size:7px;font-family:Verdana">${gemInitials(sd.name)}</span>
           <span style="min-width:0">
-            <span style="display:block;font-size:10px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sd.name}</span>
+            <span style="display:block;font-size:10px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${skillInstanceName(seated)}</span>
             <span style="display:block;font-size:8px;color:#8a8678">Lv ${seated.level}</span>
           </span>
         </div>
@@ -7042,24 +7037,25 @@ THE CUT (fixed at the vein): ${veinLines(s.def.rollBase, s.rolled).join(' · ')}
       // point count, the committed limb, a waiting-PIP that lights the
       // handle gold while a point is free, and the Font's reset ritual when
       // a font stands near. Chunky buttons: couch lens + pad law.
-      let modeRow = '';
+      let modeRow = empowermentRank(inst) && !hasEmpowermentPassive(def)
+        ? this.empowermentBudgetHtml(inst) + '<span style="color:#8a8678"> · banked until this skill has a passive slot</span>' : '';
       if (def.tree && !world.memorySecondaryRefusal(def.id)) {
         const tree = def.tree;
         const memoryWhy = world.memorySecondaryRefusal(def.id);
         const open = inst.level >= tree.level;
         const spent = inst.treeNodes ?? [];
-        const budget = bandPointsAt(inst.level);
+        const budget = treePointBudget(inst).total;
         const free = Math.max(0, budget - spent.length);
         const committed = treeSpentBranch(inst);
         const pip = free > 0 && !memoryWhy
-          ? `<span title="${free} Ability point${free === 1 ? '' : 's'} waiting" style="color:#ffd700">◉ ${free}</span>`
+          ? `<span title="${free} tree point${free === 1 ? '' : 's'} waiting" style="color:#ffd700">◉ ${free}</span>`
           : '';
         modeRow = `
           <div style="margin-top:3px;font-size:10px;color:#d8b86a;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
             <span>Tree:</span>
             ${memoryWhy ? `<span style="color:var(--text-dim)">${esc(memoryWhy)}</span>` : ''}
             ${committed ? `<span style="color:${def.color}">${committed.name}</span>` : open ? '<span style="color:#8a8678">unchosen</span>' : ''}
-            ${this.treeLevelBarHtml(inst)}<span style="color:#8a8678">${spent.length}/${budget} pt${budget === 1 ? '' : 's'}</span> ${pip}
+            ${this.treeLevelBarHtml(inst)}<span style="color:#8a8678">${spent.length}/${budget} pt${budget === 1 ? '' : 's'}</span> ${pip}${this.empowermentBudgetHtml(inst)}
             ${open
               ? `<button class="gem-chip" data-treeopen="${def.id}"
                   style="border-color:${free > 0 && !memoryWhy ? '#ffd700' : '#d8b86a'};${free > 0 && !memoryWhy ? 'color:#ffd700;' : ''}"
@@ -7101,7 +7097,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
             title="Learned but not on the bar — drag it from the strip onto a rack seat above">unseated</span>`;
       return `
         <div class="skill-entry" data-tip="skill" data-skill-id="${def.id}" data-drop="gemSock:${def.id}" style="border-left:3px solid ${def.color}">
-          <div class="name">${def.name} <span style="color:#ffd700">Lv ${inst.level}${eff > inst.level ? ` <span style="color:#8ad0ff">(+${eff - inst.level} → ${eff})</span>` : inst.level >= maxLv ? ' (max)' : ''}</span>
+          <div class="name">${skillInstanceName(inst)} <span style="color:#ffd700">Lv ${inst.level}${eff > inst.level ? ` <span style="color:#8ad0ff">(+${eff - inst.level} → ${eff})</span>` : inst.level >= maxLv ? ' (max)' : ''}</span>
             ${reached.map(t => `<span style="font-size:9px;padding:1px 6px;border-radius:7px;background:#2a2438;color:#c8a8ff;margin-left:4px" title="Lv ${t.level} threshold">${t.label}</span>`).join('')}
             ${nextThresh ? `<span style="font-size:9px;color:#6a6478;margin-left:4px">Lv ${nextThresh.level}: ${nextThresh.label}</span>` : ''}
             ${this.rarityTagHtml(inst)}${rackSeatTag}
@@ -7846,7 +7842,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         : t.dataset.tip === 'tree-point' ? this.skillTreePointTooltip(skillId, Number(t.dataset.point), this.panelSeat(el)) : null,
       { proximity: { selector: '.st-node', radiusPx: TREE_REACH_PX, hysteresis: 0.35 } });
     this.inventoryPages.register({ id: `skilltree:${skillId}`, el,
-      title: () => SKILLS[skillId]?.name ?? 'Skill Tree', width: BUILD_PANEL_CFG.passivesWidth,
+      title: () => {
+        const empowermentInst = this.panelSeat(el).meta.knownSkills.get(skillId);
+        return empowermentInst ? skillInstanceName(empowermentInst) : SKILLS[skillId]?.name ?? 'Skill Tree';
+      }, width: BUILD_PANEL_CFG.passivesWidth,
       available: owner => !!this.couchSeatFor(owner).meta.knownSkills.get(skillId)?.def.tree
         && !this.getWorld().memorySecondaryRefusal(skillId),
       enter: (_owner, fresh) => { if (fresh) { pane.zoom = 1; pane.pan = { x: 0, y: 0 }; } },
@@ -7878,11 +7877,17 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
   /** One hoverable segment per earned point, in allocation order. Partial
    *  fill shows level progress; the number below each tick is its unlock. */
+  private empowermentBudgetHtml(inst: SkillInstance): string {
+    const b = treePointBudget(inst);
+    return empowermentRank(inst) ? '<span style="color:#e8b878">Ability: ' + b.abilityFree + ' free · '
+      + 'Empowerment: ' + b.passiveFree + '/' + b.passive + ' free (passive only)</span>' : '';
+  }
+
   private treeLevelBarHtml(inst: SkillInstance, width = 110): string {
     const segments = SKILL_LEVEL_BANDS.map((level, point) => {
       const start = SKILL_LEVEL_BANDS[point - 1] ?? 0;
       const fill = Math.max(0, Math.min(100, (inst.level - start) / (level - start) * 100));
-      const allocated = !!inst.treeNodes?.[point];
+      const allocated = !!treeAbilityNodes(inst)[point];
       return `<span class="tree-point${allocated ? ' allocated' : inst.level >= level ? ' earned' : ''}"
         data-tip="tree-point" data-skill-id="${inst.def.id}" data-point="${point}">
         <span class="tree-point-track"><span style="width:${fill}%;background:${inst.def.color}"></span></span>
@@ -7896,16 +7901,16 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const inst = seat.meta.knownSkills.get(skillId) ?? seat.grantedInsts?.get(skillId);
     const level = SKILL_LEVEL_BANDS[point];
     if (!inst || level === undefined) return null;
-    const nodeId = inst.treeNodes?.[point];
+    const nodeId = treeAbilityNodes(inst)[point];
     if (nodeId) {
       const tip = this.skillTreeNodeTooltip(skillId, nodeId, seat);
       if (!tip) return null;
-      const rank = inst.treeNodes!.slice(0, point + 1).filter(id => id === nodeId).length;
-      const ranks = treeGraph(inst.def)?.nodes.get(nodeId)?.ranks ?? 1;
+      const rank = treeSpentCount(inst.treeNodes, nodeId); // includes empowerment-funded ranks
+      const ranks = treeInstanceNodeRanks(inst, nodeId);
       return { ...tip, meta: `Point ${point + 1} · unlocked at Lv ${level} · allocated${ranks > 1 ? ` · rank ${rank}/${ranks}` : ''}` };
     }
     return {
-      title: `${inst.def.name} · Tree point ${point + 1}`,
+      title: `${skillInstanceName(inst)} · Tree point ${point + 1}`,
       description: this.getWorld().memorySecondaryRefusal(skillId)
         ?? (inst.level >= level ? 'An Ability point is ready. Open the tree to choose an upgrade.'
           : `Unlocks at skill level ${level}.`),
@@ -7929,7 +7934,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const tree = def.tree!;
     const open = inst.level >= tree.level;
     const spent = inst.treeNodes ?? [];
-    const budget = bandPointsAt(inst.level);
+    const budget = treePointBudget(inst).total;
     const free = Math.max(0, budget - spent.length);
     const discipline = world.memorySecondaryRefusal(def.id) ?? world.swapRefusal(seat, 'socket');
     const committed = treeSpentBranch(inst);
@@ -7941,12 +7946,12 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // Node state through THE ONE SPEND PREDICATE (+ the field discipline).
     type NodeState = 'spent' | 'open' | 'sealed' | 'locked';
     const stateOf = (id: string): { state: NodeState; have: number; ranks: number } => {
-      const gn = graph.nodes.get(id)!;
       const have = treeSpentCount(spent, id);
-      if (have >= gn.ranks) return { state: 'spent', have, ranks: gn.ranks };
+      const ranks = treeInstanceNodeRanks(inst, id);
+      if (have >= ranks) return { state: 'spent', have, ranks: ranks };
       const why = treeNodeRefusal(inst, id) ?? discipline;
-      if (why === null) return { state: 'open', have, ranks: gn.ranks };
-      return { state: sealed.has(id) ? 'sealed' : 'locked', have, ranks: gn.ranks };
+      if (why === null) return { state: 'open', have, ranks: ranks };
+      return { state: sealed.has(id) ? 'sealed' : 'locked', have, ranks: ranks };
     };
 
     // EDGES: every link (cross-links included); a root child hangs on a
@@ -7969,7 +7974,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     }
     // THE ROOT: the skill itself — always walked, dim below the milestone.
     let circles = `<circle cx="0" cy="0" r="${R.root}" fill="${def.color}" stroke="#ffe9a0" stroke-width="2.5" opacity="${open ? 1 : 0.55}"/>
-      <text class="st-label" x="0" y="${R.root + 14}" text-anchor="middle" fill="#ffe9a0">${esc(def.name)}</text>`;
+      <text class="st-label" x="0" y="${R.root + 14}" text-anchor="middle" fill="#ffe9a0">${esc(skillInstanceName(inst))}</text>`;
     for (const id of graph.order) {
       const gn = graph.nodes.get(id)!;
       const st = stateOf(id);
@@ -7989,16 +7994,16 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         data-node="${id}" data-tip="stnode"/>`;
       if (st.state === 'sealed') {
         circles += `<text x="${gn.x}" y="${gn.y + r * 0.42}" text-anchor="middle" font-size="${Math.max(9, r * 1.1)}" fill="#6a6478" style="pointer-events:none">🔒</text>`;
-      } else if (gn.ranks > 1) {
+      } else if (st.ranks > 1) {
         circles += `<text x="${gn.x}" y="${gn.y + 3}" text-anchor="middle" font-size="8" font-weight="bold"
-          fill="${st.have > 0 ? '#0a0a0e' : '#8a8678'}" style="pointer-events:none">${st.have}/${gn.ranks}</text>`;
+          fill="${st.have > 0 ? '#0a0a0e' : '#8a8678'}" style="pointer-events:none">${st.have}/${st.ranks}</text>`;
       }
       const labelFill = st.have > 0 ? '#ffffff' : st.state === 'open' ? '#e8dcc0' : '#6a6478';
       circles += `<text class="st-label" x="${gn.x}" y="${gn.y + r + 12}" text-anchor="middle" fill="${labelFill}">${esc(gn.node.name)}</text>`;
     }
 
     const pip = free > 0 && !discipline
-      ? `<span style="color:#ffd700" title="${free} Ability point${free === 1 ? '' : 's'} waiting — click a lit node">◉ ${free} waiting</span>`
+      ? `<span style="color:#ffd700" title="${free} tree point${free === 1 ? '' : 's'} waiting — click a lit node">◉ ${free} waiting</span>`
       : '';
     const status = committed
       ? `<span style="color:${def.color}" title="${esc(committed.description ?? committed.name)}">${esc(committed.name)}</span>`
@@ -8007,7 +8012,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         : `<span style="color:#6a6478">the path opens at Lv ${tree.level}</span>`;
     const zPct = Math.round(pane.zoom * 100);
     pane.el.innerHTML = `
-      ${this.closeGlyphHtml()}<h2 style="color:${def.color}">${esc(def.name)}
+      ${this.closeGlyphHtml()}<h2 style="color:${def.color}">${esc(skillInstanceName(inst))}
         <span style="color:var(--gold);font-size:12px;letter-spacing:0">— skill tree</span>
         <span style="float:right;color:#8a8678;font-size:11px;font-weight:normal;text-transform:none;letter-spacing:0">
           <span class="tree-zoom-grp">
@@ -8017,7 +8022,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           </span></span></h2>
       <div style="font-size:11px;color:#d8b86a;margin:-4px 0 6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
         <span>Lv ${inst.level}</span>${this.treeLevelBarHtml(inst, 140)}
-        <span style="color:#8a8678">${spent.length}/${budget} pt${budget === 1 ? '' : 's'}</span>${pip}
+        <span style="color:#8a8678">${spent.length}/${budget} pt${budget === 1 ? '' : 's'}</span>${pip}${this.empowermentBudgetHtml(inst)}
         <span style="color:#5a5668">·</span>${status}
       </div>
       <svg viewBox="${this.skillTreeViewBox(pane)}" class="st-svg"
@@ -8101,8 +8106,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const gn = graph?.nodes.get(nodeId);
     if (!inst || !graph || !gn) return null;
     const node = gn.node;
+    const ranks = treeInstanceNodeRanks(inst, nodeId);
     const have = treeSpentCount(inst.treeNodes, nodeId);
     const lines: string[] = [];
+    if (empowermentPassive(inst.def, nodeId)) lines.push('Accepts passive-only empowerment points; each adds rank capacity.');
     if (node.description) lines.push(node.description);
     const over = node.over;
     const summonTree = over?.summon;
@@ -8127,20 +8134,20 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       const s = SUPPORTS[node.graft.support];
       lines.push(`grafts ${s?.name ?? node.graft.support} L${node.graft.level ?? 1} — socket-free`);
     }
-    if (gn.ranks > 1) lines.push(`<span style="color:#8a8678">${gn.ranks} ranks — each point applies the payload again</span>`);
+    if (ranks > 1) lines.push(`<span style="color:#8a8678">${ranks} ranks — each point applies the payload again</span>`);
     const limb = treeLimbOfNode(inst.def, nodeId);
     const isLimbRoot = limb ? graph.limbRoots.get(limb.id) === nodeId : false;
     const kindLabel = gn.kind === 'keystone' ? 'capstone'
       : gn.kind === 'major' ? (isLimbRoot ? 'identity' : 'major')
       : 'node';
     let meta: string;
-    if (have >= gn.ranks) {
-      meta = gn.ranks > 1 ? `walked — ${have}/${gn.ranks} ranks` : 'walked';
+    if (have >= ranks) {
+      meta = ranks > 1 ? `walked — ${have}/${ranks} ranks` : 'walked';
     } else {
       const why = this.getWorld().memorySecondaryRefusal(skillId) ?? treeNodeRefusal(inst, nodeId) ?? this.getWorld().swapRefusal(seat, 'socket');
       meta = why ? why
-        : have > 0 ? `${have}/${gn.ranks} ranks — click to deepen`
-        : gn.ranks > 1 ? `click to spend a point (${gn.ranks} ranks)` : 'click to spend a point';
+        : have > 0 ? `${have}/${ranks} ranks — click to deepen`
+        : ranks > 1 ? `click to spend a point (${ranks} ranks)` : 'click to spend a point';
     }
     if (gn.excludes.size) {
       meta += `<br><span style="color:#a08a6a">seals: ${[...gn.excludes].map(e => graph.nodes.get(e)?.node.name ?? e).join(', ')}</span>`;

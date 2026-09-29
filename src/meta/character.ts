@@ -1,3 +1,4 @@
+import { empowermentRank } from '../engine/skillEmpowerment';
 // ---------------------------------------------------------------------------
 // CHARACTER PERSISTENCE — the active-run half of localStorage.
 //
@@ -53,6 +54,7 @@ interface SavedSocket {
   rolled?: Record<string, string>;
 }
 interface SavedSkill {
+  empowermentRank?: number;
   skillId: string; level: number; rarity: SkillRarity;
   sockets: (SavedSocket | null)[];
   /** GRANTED (reacquired starter — worthless everywhere value is minted).
@@ -199,6 +201,7 @@ export interface CharacterSave {
 }
 
 const saveSkill = (i: SkillInstance): SavedSkill => ({
+  ...(empowermentRank(i) ? { empowermentRank: empowermentRank(i) } : {}),
   skillId: i.def.id, level: i.level, rarity: i.rarity ?? 'common',
   sockets: i.sockets.map(s => s ? saveSocket(s) : null),
   ...(i.granted ? { granted: true } : {}),
@@ -345,6 +348,7 @@ export function rebuildSkill(s: SavedSkill): SkillInstance | null {
   if (!def) return null;
   const inst = makeSkillInstance(def, s.level, Math.max(1, s.sockets.length));
   inst.rarity = s.rarity;
+  if (empowermentRank(s)) inst.empowermentRank = empowermentRank(s);
   if (s.granted) inst.granted = true;
   if (s.attunedForm && MONSTERS[s.attunedForm]) inst.attunedForm = s.attunedForm;
   // THE SKILL-MODE TREES: picks survive the round trip; orphans (a renamed
@@ -352,7 +356,7 @@ export function rebuildSkill(s: SavedSkill): SkillInstance | null {
   // rung chain) and over-budget tails (the level carries the bandPointsAt
   // trim) drop with a console note — the attunedForm law. An M0-era save's
   // single rung-1 pick loads as a 1-point spend, costless by construction.
-  if (s.treeNodes?.length) inst.treeNodes = validTreeNodes(def, s.treeNodes, s.level);
+  if (s.treeNodes?.length) inst.treeNodes = validTreeNodes(def, s.treeNodes, s.level, inst);
   if (s.replenishmentPaused === true && replenishingDelivery(inst)?.replenish?.toggle) inst.replenishmentPaused = true;
   if (s.locked) inst.locked = true; // the keeper's mark (salvageLock) survives
   inst.sockets = s.sockets.map(sock => {

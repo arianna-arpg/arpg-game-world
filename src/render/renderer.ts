@@ -1,3 +1,4 @@
+import { treePointBudget } from '../engine/skillEmpowerment';
 import { concealmentActive } from '../engine/perception';
 import { anatomyCueState, anatomyOverheadRise } from '../engine/anatomyCues';
 import { feedingCueState, type FeedingTransfer } from '../engine/feedingCues';
@@ -31,7 +32,7 @@ import { replenishmentActive } from '../engine/replenishment';
 import { clamp, dist, mixHex, type Vec2 } from '../core/math';
 import { RENDER_SCALE_CFG } from './renderScale';
 import { DEFAULT_CURSOR_OPTIONS, drawAimReticle } from '../core/cursor';
-import { bandPointsAt, guardBashReady, instanceChargeCost, instanceDelivery, instanceMeta, instanceMods, metaFaceOf, instanceStrikeTiming, instanceTriggerArmed, instanceUseCharges, poolReadOf, skillContextTags, SKILL_RARITIES, treePointsSpent, treeSpentBranch } from '../engine/skills';
+import { guardBashReady, instanceChargeCost, instanceDelivery, instanceMeta, instanceMods, metaFaceOf, instanceStrikeTiming, instanceTriggerArmed, instanceUseCharges, poolReadOf, skillContextTags, SKILL_RARITIES, treeSpentBranch } from '../engine/skills';
 import { ITEM_RARITIES } from '../engine/items';
 import { drawGroundItem } from './groundItems';
 import { TOWN_PORTAL_CFG } from '../data/townportals';
@@ -7825,7 +7826,7 @@ export class Renderer {
         // tooltip's first line names the branch — this pip only flags it.
         if (def.tree && inst.level >= def.tree.level) {
           const px2 = x + slot - 8, py2 = by + slot - 8;
-          if (!world.memorySecondaryRefusal(inst.def.id) && treePointsSpent(inst) < bandPointsAt(inst.level)) {
+          if (!world.memorySecondaryRefusal(inst.def.id) && treePointBudget(inst).free > 0) {
             // THE AWAKENING, SHOWN (2026-09-11, her law): a freshly minted
             // point BLOOMS — a gold ring breathing out of the corner for
             // bloomSec (inst.state.treeAwokeAt, stamped at the band) — and

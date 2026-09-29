@@ -363,6 +363,9 @@ export interface GemSocketRow {
 }
 
 export interface SkillGemPayload {
+  /** Legendary empowerment investment, independent of normal skill level. */
+  empowermentRank?: number;
+  replenishmentPaused?: true;
   kind: 'skill';
   skillId: string;
   level: number;

@@ -1,3 +1,4 @@
+import { empowermentRank } from '../engine/skillEmpowerment';
 // ---------------------------------------------------------------------------
 // MERCENARIES — hired blades and retired heroes, as data.
 //
@@ -84,6 +85,8 @@ export const LEDGER_MERC_OUTPOST_FOUND = 'merc_outpost_found';
 /** A socketed support, captured by id+level (character.ts shape). */
 export interface MercSavedSocket { supportId: string; level: number; }
 export interface MercSavedSkill {
+  empowermentRank?: number;
+  treeNodes?: string[];
   skillId: string; level: number; rarity: SkillRarity;
   sockets: (MercSavedSocket | null)[];
 }
@@ -288,6 +291,7 @@ export function snapshotBuild(
   const skills: MercSavedSkill[] = [];
   for (const inst of knownSkills) {
     skills.push({
+      ...(empowermentRank(inst) ? { empowermentRank: empowermentRank(inst), treeNodes: inst.treeNodes && [...inst.treeNodes] } : {}),
       skillId: inst.def.id, level: inst.level, rarity: inst.rarity ?? 'common',
       sockets: inst.sockets.map(s => s ? { supportId: s.def.id, level: s.level } : null),
     });

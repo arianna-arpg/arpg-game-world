@@ -5,7 +5,7 @@ export type Limb = [Node, [Node, Node, Node], [Node, Node, Node]];
 /** Shared binary anatomy: only trunks exclude. Descendants add to the chosen
  * identity, so sibling routes can be mixed without last-pick-wins overrides. */
 export function tree(left: Limb, right: Limb, passive: Node): SkillTreeSpec {
-  const nodes: SkillTreeNode[] = [{ ...passive, ranks: 4, description: passive.description + ' Bonuses apply per rank; up to 4 ranks.', x: 0, y: 150 }];
+  const nodes: SkillTreeNode[] = [{ ...passive, empowermentPassive: passive.empowermentPassive ?? true, ranks: 4, description: passive.description + ' Bonuses apply per rank.', x: 0, y: 150 }];
   for (const [side, limb, other] of [[-1, left, right], [1, right, left]] as const) {
     nodes.push({ ...limb[0], kind: 'keystone', excludes: [other[0].id], x: side * 170, y: -50 });
     [limb[1], limb[2]].forEach(([fork, ...leaves], i) => {

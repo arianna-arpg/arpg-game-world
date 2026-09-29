@@ -1,3 +1,4 @@
+import { packSkillGemPayload } from '../engine/gemitems';
 // ---------------------------------------------------------------------------
 // DEATH RECORDS — the corpse-run layer that COMPOUNDS on permadeath.
 //
@@ -18,11 +19,11 @@
 //      future "Retire" event (corpse → mercenary) or re-including forfeit is just
 //      another reason, not a rewrite.
 //
-// Pure data + a pure capture helper. Type-only imports keep it acyclic.
+// Pure policy and capture; skill cargo shares the gem packer, including empowerment.
 // ---------------------------------------------------------------------------
 
-import type { ItemInstance } from '../engine/items';
-import type { SkillInstance, SkillRarity } from '../engine/skills';
+import type { ItemInstance, SkillGemPayload } from '../engine/items';
+import type { SkillInstance } from '../engine/skills';
 import type { PlayerMeta } from '../engine/world';
 import { ITEM_BASES } from '../data/itembases';
 
@@ -44,7 +45,7 @@ export interface SavedSocket { supportId: string; level: number; locked?: boolea
  *  currency, flasks…) are PURELY ADDITIVE — one arm here, one branch in
  *  captureLoot, one branch in the engine's drop rebuild. */
 export type SavedLoot =
-  | { kind: 'skill'; skillId: string; level: number; rarity: SkillRarity; sockets: (SavedSocket | null)[] }
+  | (SkillGemPayload & { locked?: boolean }) // empowerment and its passive allocations travel together
   | { kind: 'support'; supportId: string; level: number; rolled?: Record<string, string> }
   // Equipped gear rides VERBATIM (ItemInstance is already pure JSON — ids +
   // 0..1 rolls); the reclaim rebuilds it through rebuildItem, so a data patch
@@ -107,12 +108,7 @@ export interface DeathRecord {
  *  Exported: THE PATRON'S HOLD serializes reserved counter rows through the
  *  same one packer (one spelling of "a skill, saved"). */
 export function skillToLoot(inst: SkillInstance): SavedLoot {
-  return {
-    kind: 'skill', skillId: inst.def.id, level: inst.level, rarity: inst.rarity ?? 'common',
-    sockets: inst.sockets.map(s => s
-      ? { supportId: s.def.id, level: s.level, ...(s.rolled ? { rolled: { ...s.rolled } } : {}) }
-      : null),
-  };
+  return { ...packSkillGemPayload(inst), ...(inst.locked ? { locked: true } : {}) };
 }
 
 /** Snapshot the character's carried loot per the policy. Empty if nothing

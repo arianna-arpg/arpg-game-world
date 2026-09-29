@@ -1,3 +1,4 @@
+import { empowermentRank, skillInstanceName } from '../engine/skillEmpowerment';
 import { afflictionPressureOf } from '../engine/afflictionPressure';
 import { armedStatusCues } from '../engine/armedCues';
 import { reactiveCueOf, wardCueActive, wardGuardians } from '../engine/combatReadability';
@@ -304,7 +305,7 @@ export interface SupportInstW { id: string; lvl: number; lk?: 1; }
  *  when unpicked (the sparse idiom); the client rehydrates through
  *  validTreeNodes so its tooltip/pip/panel read the same truth the host
  *  spends (orphans from a version-skewed host drop with a note). */
-export interface SkillInstW { id: string; lvl: number; rarity?: string; sockets: (SupportInstW | null)[]; mark?: { x: number; y: number } | null; g?: boolean; lk?: 1; tn?: string[]; rp?: 1; triggerOff?: boolean; }
+export interface SkillInstW { id: string; lvl: number; rarity?: string; sockets: (SupportInstW | null)[]; mark?: { x: number; y: number } | null; g?: boolean; lk?: 1; tn?: string[]; rp?: 1; triggerOff?: boolean; empowermentRank?: number; }
 /** The client OWN-seat build: enough to render the char-sheet / skill-book / tree
  *  and re-derive the stat sheet (recalcSeat) on the client. */
 export interface SeatMetaW {
@@ -357,6 +358,7 @@ export interface SeatMetaW {
 const supW = (s: SupportInstance): SupportInstW =>
   ({ id: s.def.id, lvl: s.level, lk: s.locked ? 1 : undefined });
 const skillInstW = (s: SkillInstance): SkillInstW => ({
+  empowermentRank: empowermentRank(s) || undefined,
   id: s.def.id, lvl: s.level, rarity: s.rarity,
   sockets: s.sockets.map(x => (x ? supW(x) : null)),
   mark: s.state?.markPos ?? undefined,
@@ -415,13 +417,14 @@ const rehydrateSkill = (w: SkillInstW): SkillInstance | null => {
   if (!def) return null;
   const inst = makeSkillInstance(def, w.lvl, w.sockets.length);
   inst.rarity = w.rarity as SkillRarity | undefined;
+  if (empowermentRank(w)) inst.empowermentRank = empowermentRank(w);
   inst.sockets = w.sockets.map(s => (s ? rehydrateSupport(s) : null));
   if (w.mark) inst.state = { markPos: w.mark };
   if (w.g) inst.granted = true;
   if (w.lk) inst.locked = true; // the keeper's mark (salvageLock)
   // Untrusted wire → the one validation seam (structure + budget), so the
   // client's panels can never render a state the host would refuse.
-  if (w.tn?.length) inst.treeNodes = validTreeNodes(def, w.tn, w.lvl);
+  if (w.tn?.length) inst.treeNodes = validTreeNodes(def, w.tn, w.lvl, inst);
   if (typeof w.triggerOff === 'boolean') (inst.state ??= {}).triggerOff = w.triggerOff;
   if (w.rp === 1 && replenishingDelivery(inst)?.replenish?.toggle) inst.replenishmentPaused = true;
   return inst;
@@ -934,7 +937,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
       rarity: d.item.kind === 'skill' ? (d.item.inst.rarity ?? 'common')
         : d.item.kind === 'gear' ? d.item.item.rarity : undefined,
       name: d.item.kind === 'gear' ? d.item.item.name
-        : d.item.kind === 'skill' ? d.item.inst.def.name
+        : d.item.kind === 'skill' ? skillInstanceName(d.item.inst)
         : d.item.kind === 'support' ? d.item.gem.def.name : undefined,
       baseId: d.item.kind === 'gear' ? d.item.item.baseId : undefined,
       vid: d.item.kind === 'vestige' ? d.item.id : undefined,

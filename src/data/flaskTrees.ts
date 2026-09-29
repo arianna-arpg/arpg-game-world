@@ -5,8 +5,8 @@ import { n, type Node, type Limb } from './skillTreeBuilder';
 // Three exclusive trunks, two additive branches per trunk, two terminal
 // choices per branch. Two independent practice nodes keep ordinary drinks useful.
 const flaskTree = (limbs: Limb[], passives: Node[]): SkillTreeSpec => {
-  const nodes: SkillTreeNode[] = passives.map((p, i) => ({ ...p, ranks: 3,
-    description: p.description + ' Per rank; 3 ranks.', x: -85 + i * 170, y: 100 }));
+  const nodes: SkillTreeNode[] = passives.map((p, i) => ({ ...p, empowermentPassive: p.empowermentPassive ?? true, ranks: 3,
+    description: p.description + ' Bonuses apply per rank.', x: -85 + i * 170, y: 100 }));
   limbs.forEach((limb, i) => {
     const x = (i - 1) * 340;
     nodes.push({ ...limb[0], kind: 'keystone', excludes: limbs.filter(l => l !== limb).map(l => l[0].id), x, y: -100 });

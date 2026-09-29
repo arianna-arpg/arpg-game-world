@@ -1,5 +1,11 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Legendary skill empowerment is documented in `docs/design/legendary-skill-empowerment.md`.
+`data/skillEmpowerment.ts` configures duplicate merges and passive-only rewards;
+`engine/skillMerge.ts` shares the Font preview/action plan. Saved ranks extend
+explicit passive slots without expanding branch budgets. Verify `probe_skillempowerment.ts`,
+skill/ability-economy regressions and hidden `balance/skill-empowerment-ui.cjs` after a build.
+
 Shield Up's native guard and cast-absorb disciplines live in
 `data/shieldUpTree.ts`, with configurable contracts in `engine/guardArtsSpec.ts`.
 `docs/design/shield-up.md` covers plates, voluntary ram contact, bash waves,

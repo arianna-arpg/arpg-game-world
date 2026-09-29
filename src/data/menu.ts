@@ -1,3 +1,4 @@
+import { treePointBudget } from '../engine/skillEmpowerment';
 // ---------------------------------------------------------------------------
 // THE MENU'S PAGES — every page the HUD's Menu button can name, as data.
 //
@@ -28,7 +29,7 @@
 // ---------------------------------------------------------------------------
 
 import { registerMenuAttention, registerMenuEntry, registerMenuGroup, type MenuReads } from '../engine/menu';
-import { bandPointsAt, treePointsSpent } from '../engine/skills';
+
 import { FEATURE } from '../meta/account';
 import { LEDGER_MERC_OUTPOST_FOUND } from '../meta/mercs';
 import { VENDORS } from './vendors';
@@ -205,7 +206,7 @@ export function bankedTreePoints(r: MenuReads): number {
   let n = 0;
   for (const inst of r.seat.meta.knownSkills.values()) {
     if (!inst.def.tree || r.world.memorySecondaryRefusal(inst.def.id)) continue;
-    n += Math.max(0, bandPointsAt(inst.level) - treePointsSpent(inst));
+    n += treePointBudget(inst).free;
   }
   return n;
 }

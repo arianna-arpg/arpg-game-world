@@ -1,3 +1,4 @@
+import { empowermentRank } from '../engine/skillEmpowerment';
 // ---------------------------------------------------------------------------
 // WORLDSTATE PERSISTENCE — the world half of a saved run.
 //
@@ -565,6 +566,12 @@ function sanitizeHoldLoot(raw: unknown): SavedLoot | null {
     if (!isFiniteNum(l.level) || !Array.isArray(l.sockets)) return null;
     return {
       kind: 'skill', skillId: l.skillId, level: Math.max(1, Math.floor(l.level)),
+      ...(empowermentRank(l) ? { empowermentRank: empowermentRank(l) } : {}),
+      ...(Array.isArray(l.treeNodes) ? { treeNodes: l.treeNodes.filter(id => typeof id === 'string') } : {}),
+      ...(typeof l.attunedForm === 'string' ? { attunedForm: l.attunedForm } : {}),
+      ...(l.granted === true ? { granted: true } : {}),
+      ...(l.locked === true ? { locked: true } : {}),
+      ...(l.replenishmentPaused === true ? { replenishmentPaused: true as const } : {}),
       rarity: SKILL_RARITIES[l.rarity] ? l.rarity : 'common', sockets: l.sockets.map(s =>
         s && typeof s === 'object' && typeof s.supportId === 'string' && isFiniteNum(s.level)
           ? { supportId: s.supportId, level: Math.max(1, Math.floor(s.level)) } : null),

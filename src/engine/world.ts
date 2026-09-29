@@ -1,3 +1,5 @@
+import { skillInstanceName, treeInstanceNodeRanks, treePointBudget } from './skillEmpowerment';
+import { skillMergePlan } from './skillMerge';
 import { concealmentActive, isConcealed, PERCEPTION_CFG } from './perception';
 import { anatomyCueState, anatomyFlash, notePartScar, clearPartScar } from './anatomyCues';
 import { takeWeakPointBreaks } from './weakpoints';
@@ -82,7 +84,7 @@ import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, ob
 import { alertScale, BEHAVIOR_CFG, BEHAVIOR_STATS, normalizeBrain, type ArenaRadius, type CommandState } from './brain';
 import { aiKitInstance, runAIActions } from './aiActions';
 import {
-  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, guardBashReady, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceBirth, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerArmed, instanceTriggerLimit, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, rollSkillRarityWeighted, socketSpec, treeNodeOf, treeNodeRefusal, treePointsSpent, validTreeNodes, instanceChannel, bandPointsAt, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
+  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, guardBashReady, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceBirth, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerArmed, instanceTriggerLimit, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, rollSkillRarityWeighted, socketSpec, treeNodeOf, treeNodeRefusal, validTreeNodes, instanceChannel, bandPointsAt, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
   CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE, AOE_BAND_DEPTH, bandSwingGeo,
   skillContextTags, skillCooldownSeconds, skillMaxLevel, SKILL_RARITIES, essenceTierForLevel, summonCrewOf, supportFitsInst,
   type SkillRarity,
@@ -145,7 +147,7 @@ import { epitaphFor, VESTIGES } from '../data/vestiges';
 import { MONSTER_THEMES } from '../data/infrequents';
 import { VENDORS, VENDOR_CFG, type VendorDef } from '../data/vendors';
 import { ITEM_BASES } from '../data/itembases';
-import { treeNodeRanks, treeSpentCount } from './skilltree'; // THE SKILL-TREE GRAPH — ranked spends (pickTreeNode)
+import { treeSpentCount } from './skilltree'; // THE SKILL-TREE GRAPH — ranked spends (pickTreeNode)
 import { awakenMemoryFromDrop, memoryCommissionReady, memoryProgressionOpen, memorySecondaryOpen, type MemoryAccess } from '../meta/memoryUnlocks';
 import { MEMORY_UNLOCK_CFG, type MemorySecondaryMechanic } from '../data/memoryUnlocks';
 import { powerProgressionRefusal } from '../data/powerProgression';
@@ -16073,7 +16075,7 @@ export class World {
     this.descentStock.splice(index, 1); // the map holds this same array — the purchase persists
     this.vendorBought('delver', entry, seat, this.descentStock); // holdless — the market stamp alone
     if (entry.kind === 'skill') {
-      this.text(seat.actor.pos, `bought ${entry.inst.def.name}`, '#7fe0d8', 13);
+      this.text(seat.actor.pos, `bought ${skillInstanceName(entry.inst)}`, '#7fe0d8', 13);
     } else if (entry.kind === 'support') {
       this.text(seat.actor.pos, `bought ${entry.gem.def.name}`, '#7fe0d8', 13);
     } else {
@@ -23046,56 +23048,33 @@ export class World {
   // old gems→points lane died with the point economy. Station grammar:
   // proximity (nearFont) → deterministic recipes, no restock clock.
 
-  /** MERGE (FONT_CFG.merge): N carried copies of the SAME skill at the SAME
-   *  rarity fuse into ONE at the next rarity rung. The laws, all engine-
-   *  enforced: the merged gem keeps the HIGHEST input level (investment
-   *  never silently vaporizes — the N highest-leveled eligible copies are
-   *  the ones consumed); socketed supports are pried back into the bag
-   *  BEFORE the inputs burn; THE KEEPER'S MARK (locked) refuses exactly as
-   *  it refuses salvage; granted sparks never count (the rescue hatch is
-   *  not a mint); strict same-skill. */
+  /** Shared skillMergePlan: ordinary copies advance rarity; legendary copies
+   * preserve the keeper's build and combine empowerment investment. Locks and
+   * granted sparks refuse; returned donor supports spill safely if the bag fills. */
   fontMergeSkill(skillId: string, rarity: SkillRarity, seat: Seat = this.localSeat): boolean {
     const m = seat.meta;
     const p = seat.actor;
     if (!this.nearFont(seat)) return false;
-    const need = FONT_CFG.merge[rarity];
-    if (!need) return false; // the top rung has no next step
-    const ladder = Object.keys(SKILL_RARITIES) as SkillRarity[];
-    const next = ladder[ladder.indexOf(rarity) + 1];
-    if (!next) return false;
-    // Eligible copies among the bag's gem items, highest level first
-    // (stable: ties keep bag order). THE RESIDENCE: fodder occupies real
-    // cells until this very moment — the pressure the charter priced in.
-    const pool = bagGemItems(m.items)
-      .map((item, idx) => ({ item, p: skillGemPayloadOf(item), idx }))
-      .filter(r => r.p && r.p.skillId === skillId && r.p.rarity === rarity
-        && !r.item.locked && !r.p.granted)
-      .sort((a, b) => b.p!.level - a.p!.level || a.idx - b.idx);
-    if (pool.length < need) {
-      this.failNote(p, 'fontmerge:' + skillId, `the font asks ${need} alike`);
+    const plan = skillMergePlan(m.items, skillId, rarity);
+    if (plan.refusal || !plan.result) {
+      this.failNote(p, 'fontmerge:' + skillId, plan.refusal ?? 'Merging is unavailable.');
       return false;
     }
-    const taken = pool.slice(0, need);
-    const kept = Math.max(...taken.map(r => r.p!.level));
-    // Burn the inputs FIRST (frees `need` cells — the merged gem and most
-    // pried supports are guaranteed ground to land on), then pry each
-    // input's socketed supports back into the bag; whatever the pack
-    // cannot hold spills at your feet (owed — never lost, never silent).
+    // Preflight every returned support before consuming any input. The keeper's
+    // sockets and tree stay on the legendary result; only donor cargo is pried.
     const pried: SupportInstance[] = [];
-    for (const r of taken) {
-      const inst = skillOfGemItem(r.item);
-      if (inst) for (const s of inst.sockets) if (s) pried.push(s);
-      removeFromBag(m.items, r.item.uid);
+    for (const item of plan.returnSockets) {
+      const inst = skillOfGemItem(item);
+      if (!inst) return false;
+      for (const support of inst.sockets) if (support) pried.push(support);
     }
-    const def = SKILLS[skillId];
-    if (!def) return false;
-    const merged = makeSkillGem(def, kept, next);
-    this.grantSkillGemItem(seat, merged, true);
-    for (const s of pried) this.grantSupportGemItem(seat, s, true);
+    for (const item of plan.taken) removeFromBag(m.items, item.uid);
+    this.grantSkillGemItem(seat, plan.result, true);
+    for (const support of pried) this.grantSupportGemItem(seat, support, true);
     this.charDirty = true;
     this.text(vec(p.pos.x, p.pos.y - 40),
-      `${def.name} reforged — ${SKILL_RARITIES[next].label}, level ${kept} kept`,
-      SKILL_RARITIES[next].color, 14);
+      skillInstanceName(plan.result) + ' reforged — ' + SKILL_RARITIES[plan.result.rarity!].label,
+      SKILL_RARITIES[plan.result.rarity!].color, 14);
     return true;
   }
 
@@ -23436,7 +23415,7 @@ export class World {
     this.vendorStock.splice(index, 1);
     this.vendorBought('brandt', entry, seat, this.vendorStock);
     if (entry.kind === 'skill') {
-      this.text(seat.actor.pos, `bought ${entry.inst.def.name}`, '#e8c87a', 13);
+      this.text(seat.actor.pos, `bought ${skillInstanceName(entry.inst)}`, '#e8c87a', 13);
     } else if (entry.kind === 'support') {
       this.text(seat.actor.pos, `bought ${entry.gem.def.name}`, '#e8c87a', 13);
     } else {
@@ -25512,7 +25491,7 @@ export class World {
       // drawer) while the pip waited — offer only what still has an
       // unspent point to place.
       const inst = seat.meta.knownSkills.get(skillId);
-      if (!inst?.def.tree || this.memorySecondaryRefusal(skillId) || treePointsSpent(inst) >= bandPointsAt(inst.level)) continue;
+      if (!inst?.def.tree || this.memorySecondaryRefusal(skillId) || treePointBudget(inst).free === 0) continue;
       this.treePopupRequested = true;
       this.treePopupSeatId = seat.id;
       this.treePopupSkillId = skillId;
@@ -27691,6 +27670,7 @@ export class World {
     for (const ss of snapshot.knownSkills) {
       const inst = rebuildSkill({
         skillId: ss.skillId, level: gemLevel(ss.level), rarity: ss.rarity,
+        empowermentRank: ss.empowermentRank, treeNodes: ss.treeNodes,
         sockets: ss.sockets.map(s => s ? { supportId: s.supportId, level: gemLevel(s.level) } : null),
       });
       if (inst) knownSkills.set(inst.def.id, inst);
@@ -29214,7 +29194,7 @@ export class World {
       return;
     }
     if (it.kind === 'skill') {
-      const inst = rebuildSkill({ skillId: it.skillId, level: it.level, rarity: it.rarity, sockets: it.sockets });
+      const inst = rebuildSkill(it) /* preserve empowerment cargo on reclaim */;
       if (inst) this.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2) });
     } else {
       const def = SUPPORTS[it.supportId];
@@ -34007,7 +33987,7 @@ export class World {
     if (!node) return;
     // A RANKED node takes several points (repeated ids); walked to its
     // full rank = the silent no-op a single-rank node always was.
-    if (treeSpentCount(inst.treeNodes, nodeId) >= treeNodeRanks(inst.def, nodeId)) return;
+    if (treeSpentCount(inst.treeNodes, nodeId) >= treeInstanceNodeRanks(inst, nodeId)) return;
     const at = seat.actor.pos;
     const sealed = this.memorySecondaryRefusal(skillId) ?? treeNodeRefusal(inst, nodeId);
     if (sealed) {
@@ -34022,7 +34002,7 @@ export class World {
     // A spent point may carry a graft — the derived lane rebuilds now.
     this.recalcSeat(seat);
     this.charDirty = true;
-    const ranks = treeNodeRanks(inst.def, nodeId);
+    const ranks = treeInstanceNodeRanks(inst, nodeId);
     this.text(vec(at.x, at.y - 20),
       ranks > 1 ? `${node.name} ${treeSpentCount(inst.treeNodes, nodeId)}/${ranks}` : node.name,
       inst.def.color, 12);
@@ -46762,7 +46742,7 @@ export class World {
       land(bobF, () => {
         this.noteGemDrop(inst.def.id, inst.rarity);
         this.drops.push({ pos, item: { kind: 'skill', inst }, bob: bobF * Math.PI * 2, tier: this.spoilStory });
-        this.text(at, `${inst.def.name}!`, SKILL_RARITIES[inst.rarity ?? 'common'].color, 15,
+        this.text(at, `${skillInstanceName(inst)}!`, SKILL_RARITIES[inst.rarity ?? 'common'].color, 15,
           'drop', FLOAT_CFG.dropNameSec);
       });
     };
@@ -46791,7 +46771,7 @@ export class World {
       const inst = makeSkillGem(def, pin.l ?? 1, pin.r ?? rollSkillRarity(seedLaneFrac(seed, 'rarity')));
       this.noteGemDrop(inst.def.id, inst.rarity); // a BUILT spoil is a genuine mint too — the drop index sees it
       this.drops.push({ pos, item: { kind: 'skill', inst }, bob: bobF * Math.PI * 2, tier: this.spoilStory });
-      this.text(at, `${inst.def.name}!`, SKILL_RARITIES[inst.rarity ?? 'common'].color, 15, 'drop', FLOAT_CFG.dropNameSec);
+      this.text(at, `${skillInstanceName(inst)}!`, SKILL_RARITIES[inst.rarity ?? 'common'].color, 15, 'drop', FLOAT_CFG.dropNameSec);
       return;
     }
     const def = SUPPORTS[pin.id];
@@ -47081,7 +47061,7 @@ export class World {
       const inst = skillOfGemItem(wrapped);
       if (!inst) return null;
       item = { kind: 'skill', inst };
-      this.text(p.pos, `dropped ${inst.def.name}`, SKILL_RARITIES[inst.rarity ?? 'common'].color, 13, 'pickup');
+      this.text(p.pos, `dropped ${skillInstanceName(inst)}`, SKILL_RARITIES[inst.rarity ?? 'common'].color, 13, 'pickup');
     } else {
       const gem = supportOfGemItem(wrapped);
       if (!gem) return null;
@@ -48646,7 +48626,7 @@ export class World {
     this.chandlerStock.splice(index, 1);
     this.vendorBought('chandler', entry, seat, this.chandlerStock);
     if (entry.kind === 'skill') {
-      this.text(seat.actor.pos, `bought ${entry.inst.def.name}`, '#e8c87a', 13);
+      this.text(seat.actor.pos, `bought ${skillInstanceName(entry.inst)}`, '#e8c87a', 13);
     } else if (entry.kind === 'support') {
       this.text(seat.actor.pos, `bought ${entry.gem.def.name}`, '#e8c87a', 13);
     } else {
@@ -57931,9 +57911,9 @@ export class World {
         }
         const rarity = SKILL_RARITIES[item.inst.rarity ?? 'common'];
         this.text(seat.actor.pos,
-          `${item.inst.def.name} (${rarity.label.toLowerCase()} skill)`, rarity.color, 14, 'pickup');
+          `${skillInstanceName(item.inst)} (${rarity.label.toLowerCase()} skill)`, rarity.color, 14, 'pickup');
         notePickup(this.pickupFeed, seat.id,
-          `${item.inst.def.name} (${rarity.label})`, rarity.color, this.time);
+          `${skillInstanceName(item.inst)} (${rarity.label})`, rarity.color, this.time);
       }
       // CO-OP: the picked-up gem entered this seat's bag → re-replicate it.
       this.markMetaDirty(seat);

@@ -26,6 +26,7 @@
 // ---------------------------------------------------------------------------
 
 import { MONSTERS } from '../data/monsters';
+import { empowermentRank, skillInstanceName } from './skillEmpowerment';
 import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
 import {
@@ -104,6 +105,8 @@ export function packSkillGemPayload(inst: SkillInstance): SkillGemPayload {
     skillId: inst.def.id,
     level: inst.level,
     rarity: inst.rarity ?? 'common',
+    ...(empowermentRank(inst) ? { empowermentRank: empowermentRank(inst) } : {}),
+    ...(inst.replenishmentPaused ? { replenishmentPaused: true as const } : {}),
     sockets: inst.sockets.map(packSocketRow),
     ...(inst.granted ? { granted: true } : {}),
     ...(inst.attunedForm ? { attunedForm: inst.attunedForm } : {}),
@@ -160,7 +163,7 @@ export function makeSkillGemItem(inst: SkillInstance): ItemInstance {
     baseId: SKILL_GEM_BASE,
     ilvl: 1, tier: 1,
     rarity: gemItemRarityOf(gem),
-    name: inst.def.name,
+    name: skillInstanceName(inst),
     baseRoll: 0, implicitRolls: [], affixes: [],
     ...(inst.locked ? { locked: true } : {}),
     gem,
@@ -194,9 +197,11 @@ export function skillOfGemItem(item: ItemInstance): SkillInstance | null {
   if (!def) return null;
   const inst = makeSkillInstance(def, p.level, Math.max(1, p.sockets.length));
   inst.rarity = p.rarity;
+  if (empowermentRank(p)) inst.empowermentRank = empowermentRank(p);
+  if (p.replenishmentPaused === true) inst.replenishmentPaused = true;
   if (p.granted) inst.granted = true;
   if (p.attunedForm && MONSTERS[p.attunedForm]) inst.attunedForm = p.attunedForm;
-  if (p.treeNodes?.length) inst.treeNodes = validTreeNodes(def, p.treeNodes, p.level);
+  if (p.treeNodes?.length) inst.treeNodes = validTreeNodes(def, p.treeNodes, p.level, inst);
   if (item.locked) inst.locked = true;
   inst.sockets = p.sockets.map(row => {
     if (!row) return null;
@@ -247,7 +252,9 @@ export function rebuildAnyItem(saved: ItemInstance): ItemInstance | null {
   if (!item.gem) return item;
   if (item.gem.kind === 'skill') {
     if (!SKILLS[item.gem.skillId]) return null;
-    item.name = SKILLS[item.gem.skillId].name;
+    const rank = empowermentRank(item.gem);
+    if (rank) item.gem.empowermentRank = rank; else delete item.gem.empowermentRank;
+    item.name = skillInstanceName({ def: SKILLS[item.gem.skillId], ...item.gem });
   } else {
     if (!SUPPORTS[item.gem.supportId]) return null;
     item.name = SUPPORTS[item.gem.supportId].name;

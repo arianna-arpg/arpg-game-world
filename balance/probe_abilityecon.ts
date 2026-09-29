@@ -206,7 +206,8 @@ const bagIds = (): string => skillPays().map(({ item, p }) =>
   }
   const withLeg = bagIds();
   w.applyAction(seat, { t: 'fontMerge', skillId: 'fireball', rarity: 'legendary' });
-  check('C: the top rung has no next step', bagIds() === withLeg);
+  check('C: legendary empowerment consumes two copies and advances the survivor', bagIds() !== withLeg
+    && m.items.some(i => i.gem?.kind === 'skill' && i.gem.empowermentRank === 1));
   check('C: the rarity ladder reads from the registry',
     ladder[ladder.indexOf('common') + 1] === 'magic' && ladder[ladder.length - 1] === 'legendary');
 }
