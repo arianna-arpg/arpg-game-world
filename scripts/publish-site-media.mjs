@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 
 const argv = process.argv.slice(2);
 const opt = (k) => { const i = argv.indexOf('--' + k); return i >= 0 ? argv[i + 1] : null; };
-const DRY = argv.includes('--dry'), ONLY = opt('only');
+const DRY = argv.includes('--dry'), ONLY = opt('only'), PACK = opt('pack');
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MEDIA = path.join(ROOT, 'site', 'media');
 const manifest = JSON.parse(fs.readFileSync(path.join(MEDIA, 'manifest.json'), 'utf8'));
@@ -32,6 +32,35 @@ const { repo, tag } = manifest.release;
 const gh = (args, opts) => execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...(opts || {}) });
 
 const sha = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+
+// 0. --pack <name>: a set regenerated whole (the skill clips) travels as ONE
+//    archive asset. Tar site/media/<into>/ (sorted, so a set packs the same
+//    way twice), name the asset by its content, record it, stamp the folder.
+if (PACK) {
+  manifest.archives = manifest.archives || {};
+  const into = (manifest.archives[PACK] && manifest.archives[PACK].into) || PACK;
+  const dir = path.join(MEDIA, ...into.split('/'));
+  if (!fs.existsSync(dir)) { console.error(`nothing to pack: site/media/${into}/ does not exist`); process.exit(1); }
+  const files = [];
+  (function walk(rel) {
+    for (const ent of fs.readdirSync(path.join(dir, rel), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const r = rel ? rel + '/' + ent.name : ent.name;
+      if (ent.isDirectory()) walk(r); else if (ent.name !== '.archive') files.push(r);
+    }
+  })('');
+  const packDir = path.join(MEDIA, '.pack');
+  fs.mkdirSync(packDir, { recursive: true });
+  const tmp = path.join(packDir, `${PACK}.building.tar`);
+  fs.rmSync(tmp, { force: true });
+  execFileSync('tar', ['-cf', path.relative(dir, tmp).split(path.sep).join('/'), ...files], { cwd: dir, stdio: 'inherit' });
+  const sum = sha(tmp), bytes = fs.statSync(tmp).size;
+  const asset = `site-${PACK}-${sum.slice(0, 12)}.tar`;
+  fs.renameSync(tmp, path.join(packDir, asset));
+  manifest.archives[PACK] = { asset, bytes, sha256: sum, into };
+  fs.writeFileSync(path.join(MEDIA, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
+  fs.writeFileSync(path.join(dir, '.archive'), sum + '\n');
+  console.log(`packed   ${files.length} files → ${asset}  ${(bytes / 1048576).toFixed(1)} MB (recorded in site/media/manifest.json)`);
+}
 
 // 1. every local file must be the one the manifest names (the manifest is the truth)
 const plan = [];
@@ -45,6 +74,16 @@ for (const [rel, want] of Object.entries(manifest.files)) {
     process.exit(1);
   }
   plan.push({ rel, file, asset: want.asset || path.basename(rel), sha256: sum, bytes });
+}
+for (const [name, want] of Object.entries(manifest.archives || {})) {
+  if (ONLY && !name.includes(ONLY) && PACK !== name) continue;
+  const file = path.join(MEDIA, '.pack', want.asset);
+  if (!fs.existsSync(file)) { console.log(`absent   archive ${name} (${want.asset}): pack it with --pack ${name}, or it is already published`); continue; }
+  if (fs.statSync(file).size !== want.bytes || sha(file) !== want.sha256) {
+    console.error(`REFUSED  archive ${name}: ${want.asset} is not the one the manifest names`);
+    process.exit(1);
+  }
+  plan.push({ rel: `archive ${name}`, file, asset: want.asset, sha256: want.sha256, bytes: want.bytes });
 }
 
 // 2. the release: find it, or found it as a prerelease that is never "latest"

@@ -4,7 +4,9 @@
 // policy, and walks every door of the cinema: the arrival splash (muted
 // fallback, captions, the sound pill), the shatter stepped frame by frame,
 // the returning visitor, the week away, the banner click (a trusted input
-// event), reduced motion, and a film that fails to load.
+// event), reduced motion, a film that fails to load, and a skill clip opened
+// from the Database drawer (a planted clip index, so no generated clips are
+// needed).
 // Frames land in balance/reports/site-cinema/ (gitignored).
 //
 // usage: npx electron balance/site-cinema-ui.cjs [--w 1440 --h 810] [--out dir] [--keep]
@@ -23,8 +25,13 @@ app.commandLine.appendSwitch('ignore-gpu-blocklist');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
   '.mp4': 'video/mp4', '.vtt': 'text/vtt', '.webp': 'image/webp', '.png': 'image/png', '.ico': 'image/x-icon', '.svg': 'image/svg+xml' };
 const missing = [];
+/* THE PLANTED CLIP: the Database reads media/clips/index.json; the walkthrough
+   answers it with one clip that reuses the announcement's 720p rendition */
+const CLIP_INDEX = JSON.stringify({ generated: 'qa', aspect: 16 / 9, clips: { cleave: { name: 'Cleave', duration: 6, sources: [
+  { family: 'h264', height: 720, src: 'media/announcement/announcement-720.h264.mp4', type: 'video/mp4; codecs="avc1.64001F"' }] } } });
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]);
+  if (p === '/media/clips/index.json') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); return res.end(CLIP_INDEX); }
   if (p.endsWith('/')) p += 'index.html';
   const f = path.join(ROOT, p);
   if (!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { missing.push(p); res.writeHead(404); return res.end(); }
@@ -215,6 +222,22 @@ app.whenReady().then(async () => {
     return { ok, gone: !document.querySelector('.hwcine'), fail: HWCinema.record().fail > 0, arming: document.documentElement.classList.contains('hwcine-arming') };
   })()`);
   check('a missing film closes quietly and records the failure', !broke.ok && broke.gone && broke.fail && !broke.arming, JSON.stringify(broke));
+
+  // ── 8. a skill clip: the Database drawer's loop opens in the theater ─────
+  await load('database/?type=skill&id=cleave');
+  check('the drawer plays the skill clip, muted and looping', await waitFor(`(() => { const v = document.querySelector('.dclip video'); return v && !v.paused && v.muted && v.loop && v.currentTime > 0.2; })()`, 10000));
+  const seen0 = await js('JSON.stringify(HWCinema.record())');
+  const clipBox = await js(`(() => { const r = document.querySelector('.dclip-v').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+  await clickAt(clipBox.x, clipBox.y);
+  check('a click opens the clip in the theater', await waitFor(`(${theater}) && (${theater}).state === 'playing' && (${theater}).f.loop === true`, 8000));
+  const cl = await js(`(() => { const t = ${theater}; return { muted: t.video.muted, loop: t.video.loop, pill: getComputedStyle(t.audio).display, t: t.video.currentTime }; })()`);
+  check('a silent clip plays muted with no sound pill', cl.muted && cl.loop && cl.pill === 'none', JSON.stringify(cl));
+  await shot('clip-theater');
+  await clickAt(Math.round(W / 2), Math.round(H / 2));
+  const faded = await waitFor(`!!document.querySelector('.hwcine-fade')`, 3000);
+  const broke8 = await js(`!!document.querySelector('.hwcine-gl')`);
+  check('the clip leaves by a fade, never a break', faded && !broke8 && await waitFor(`!document.querySelector('.hwcine')`, 6000));
+  check('a clip never touches the visitor record', (await js('JSON.stringify(HWCinema.record())')) === seen0);
 
   // ── the ledger ─────────────────────────────────────────────────────────────
   const media = missing.filter((p) => !/favicon|qa\/missing/.test(p));

@@ -41,6 +41,10 @@ build/build-info.json
 /site/media/**/*.mp4
 /site/media/**/*.webm
 /site/media/**/*.part
+# Generated sets (the skill clips) unpack here from their release archive;
+# .pack/ holds archives being built or fetched.
+/site/media/clips/
+/site/media/.pack/
 
 # ── Game saves ───────────────────────────────────────────────
 # Personal runtime state that changes every session. Ignored so

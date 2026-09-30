@@ -17,6 +17,7 @@ import crypto from 'node:crypto';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 const argv = process.argv.slice(2);
 const opt = (k) => { const i = argv.indexOf('--' + k); return i >= 0 ? argv[i + 1] : null; };
@@ -76,5 +77,36 @@ for (const [rel, want] of Object.entries(manifest.files)) {
   }
   if (lastErr) { console.error(`FAILED   ${rel} ← ${url}\n         ${lastErr.message}`); missing++; }
 }
+/* ARCHIVES: a set regenerated whole (the skill clips) travels as ONE release
+   asset and unpacks into its folder; the folder is stamped with the archive's
+   SHA-256, so an unchanged set is never fetched twice. tar runs from inside
+   the folder on a relative path (GNU tar reads "D:" as a remote host). */
+for (const [name, want] of Object.entries(manifest.archives || {})) {
+  if (ONLY && !name.includes(ONLY)) continue;
+  const into = path.join(MEDIA, ...want.into.split('/'));
+  const stampFile = path.join(into, '.archive');
+  const stamp = fs.existsSync(stampFile) ? fs.readFileSync(stampFile, 'utf8').trim() : '';
+  if (stamp === want.sha256) { present++; continue; }
+  if (CHECK) { console.log(`missing  archive ${name} → ${want.into}/`); missing++; continue; }
+  const url = `https://github.com/${repo}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(want.asset)}`;
+  const tmp = path.join(MEDIA, '.pack');
+  fs.mkdirSync(tmp, { recursive: true });
+  const tar = path.join(tmp, want.asset);
+  fs.rmSync(tar, { force: true });
+  let lastErr = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try { await download(url, tar, want); lastErr = null; break; }
+    catch (e) { lastErr = e; if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * 1500)); }
+  }
+  if (lastErr) { console.error(`FAILED   archive ${name} ← ${url}\n         ${lastErr.message}`); missing++; continue; }
+  fs.rmSync(into, { recursive: true, force: true });
+  fs.mkdirSync(into, { recursive: true });
+  execFileSync('tar', ['-xf', path.relative(into, tar).split(path.sep).join('/')], { cwd: into, stdio: 'inherit' });
+  fs.writeFileSync(stampFile, want.sha256 + '\n');
+  fs.rmSync(tar, { force: true });
+  console.log(`unpacked archive ${name} → ${want.into}/  ${(want.bytes / 1048576).toFixed(1)} MB`);
+  fetched++;
+}
+
 console.log(`site media: ${present} present, ${fetched} fetched, ${missing} ${CHECK ? 'missing' : 'failed'} (release ${repo}@${tag})`);
 process.exit(missing ? 1 : 0);

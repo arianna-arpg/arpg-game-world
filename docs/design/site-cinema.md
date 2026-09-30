@@ -22,7 +22,8 @@ that button holds keyboard focus.
 | `site/media/manifest.json` | Every film file the site serves, with its size and SHA-256, and the release that holds it. |
 | `scripts/encode-film.mjs` | Any master video → the rendition ladder. Records the files in the manifest and prints the `sources` block to paste. |
 | `scripts/publish-site-media.mjs` | Uploads manifest files to the `site-media` release (creates it on first use). |
-| `scripts/fetch-site-media.mjs` | Pulls and verifies manifest files into `site/media/` (every Pages deploy; local previews). |
+| `scripts/fetch-site-media.mjs` | Pulls and verifies manifest files into `site/media/` (every Pages deploy; local previews), unpacking archives. |
+| `scripts/capture-skill-clips.cjs` | Films each skill in the game → `site/media/clips/` (see Skill clips). |
 | `balance/site-cinema-ui.cjs` | The hidden walkthrough (27 checks, frames in `balance/reports/site-cinema/`). |
 
 A page opts in with one tag: `<script src="assets/cinema.js?v=…"></script>` in
@@ -150,19 +151,69 @@ Reduced motion (or no WebGL2) swaps the break for a fade and a soft wash.
 6. **Runtime films:** `HWCinema.register(id, def)`, then `HWCinema.play(id, opts)`
    (returns a promise that resolves when the theater closes).
 
-### Toward skill clips
+## Skill clips
 
-The seams for in-game skill previews are in place:
+Every player skill can carry a short looping clip of itself, cast in the game
+by the game. The Database drawer plays it muted beside the skill's facts, and a
+click opens it in the theater.
 
-- films registered at runtime;
-- `data-cinema` triggers, delegated so they work on elements created later
-  (for example, a Database drawer);
-- `loop`, and `exit: { kind: 'fade' }`.
+**The capture** is `scripts/capture-skill-clips.cjs`, an Electron script that
+boots a built game (`dist/`, or `--root`) and films one skill at a time:
 
-What remains is a capture harness. It would boot the real game headless, stage
-the skill against dummies, step the world deterministically and encode each
-clip with `--grain 0`. It would also write a generated manifest (for example
-`site/data/clips.json`) that the Database registers on load.
+```
+npm run build
+npx electron scripts/capture-skill-clips.cjs -- --skills glass_lance,frost_nova
+npx electron scripts/capture-skill-clips.cjs -- --all --skip-existing
+npx electron scripts/capture-skill-clips.cjs -- --list
+```
+
+- **The stage** is a bare runtime zone in one of the `STAGES` looks (a cool
+  slate by default), lit at the day's brightest hour, with no weather, props
+  or HUD. The hero is the class whose opening bar carries the skill, else one
+  chosen by its tags (minions, spells, bow attacks, the rest).
+- **The skill** is seated with `__game.devGrantSkill` as a dev gift at
+  `--level` (10). Attribute requirements are waived for the run, and costs
+  are paid from a deep pool.
+- **The dummies** are the training yard's own, made targetable (a passive body
+  is scenery to AI, homing shots and shoves). They are kept whole before each
+  render, so no life bar flickers, and a shoved dummy walks slowly back to its
+  post once the shove is spent.
+- **The staging** follows the skill's delivery and its `ai.range`: a firing
+  line for projectiles and ground casts, melee reach for strikes and cones, a
+  ring for novas, auras and self casts, out-and-home runs for dashes, leaps and
+  blinks. The frame fits the scene near the game's own zoom, which the sprite
+  bakes are drawn for.
+- **The hand** is scripted through `__game.devInput` into the real frame, so
+  every cast takes the same path as a player's. It holds the button for
+  ordinary casts, presses and holds for channels, guards and overcharges,
+  holds a charge until the bar is full, presses perfect and timed casts inside
+  their windows, and mashes multitudes. Cooldowns longer than a second are
+  cut to one, so a clip shows the skill more than once.
+- **The clock** is pinned: the rAF pump stops (`__game.step` drives every
+  frame), `Math.random` is seeded and `performance.now` advances with the
+  frames. The same skill and build film the same clip.
+- **The encode**: canvas pixels (1920×1080) pipe to ffmpeg, which writes 720p
+  AV1 and H.264 with a soft fade across the loop seam, and a WebP poster on
+  the clip's busiest beat. `index.json` is rewritten after every clip, so an
+  interrupted sweep resumes with `--skip-existing` (or `--from <id>`).
+
+Output lands in `site/media/clips/` (gitignored): `<id>.av1.mp4`,
+`<id>.h264.mp4`, `<id>.webp` and `index.json`, the list the Database reads.
+Each clip runs about 100 to 250 KB in all. `--sheets <dir>` writes a contact
+sheet per clip for review. The dials (length, frame rate, lead-in, tail, fades,
+cooldown cut, framing, stage looks) are `CFG` and `STAGES` at the top of the
+script.
+
+**The Database** (`site/assets/database.js`) fetches
+`media/clips/index.json` and registers each clip as the film `skill:<id>`
+(`loop`, `silent`, `record: false`, a fade exit). `silent` hides the sound
+pill, and `record: false` keeps a clip out of the visitor record, so it never
+touches the splash. No index, no clips: the drawer shows the facts alone.
+
+**The game hooks** it needs live on `window.__game` (`src/main.ts`):
+`devGrantSkill`, `devInput`, `clipCatalog` (player skills, class bars, the
+brightest hour) and `hydrated` (resolves once the boot's disk reconcile lands,
+so a run never starts under it).
 
 ## Hosting the media
 
@@ -187,6 +238,15 @@ The release is **not a game build**, and three laws keep it that way:
 The announcement ladder totals about 66 MB. A desktop visitor streams one
 rendition, usually the 11 MB AV1 1080p. Locally, run
 `node scripts/fetch-site-media.mjs` once before previewing the site.
+
+**Generated sets travel as one archive.** A release holds at most 1000 assets,
+and the skill clips are three files per skill, regenerated together.
+`node scripts/publish-site-media.mjs --pack clips` tars `site/media/clips/`
+(sorted, so identical clips make an identical archive), names it by its
+content hash, records it under `archives` in the manifest and uploads it. The
+fetch downloads, verifies and unpacks it into `site/media/clips/`, and a stamp
+file there skips the unpack while the archive is unchanged. Commit the
+manifest after a pack, like any film.
 
 ## Verification
 

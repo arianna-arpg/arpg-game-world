@@ -131,11 +131,18 @@
   }
   var P = Theater.prototype;
 
+  /* the theater's words, with a film's own words over them (a clip closes, a trailer continues) */
+  P.words = function () {
+    var out = {}, k, base = this.T.words || {}, own = this.f.words || {};
+    for (k in base) if (Object.prototype.hasOwnProperty.call(base, k)) out[k] = base[k];
+    for (k in own) if (Object.prototype.hasOwnProperty.call(own, k)) out[k] = own[k];
+    return out;
+  };
   P.later = function (fn, sec) { var id = setTimeout(fn, sec * 1000); this.timers.push(id); return id; };
   P.on = function (target, type, fn, o) { target.addEventListener(type, fn, o || false); this.listeners.push([target, type, fn, o || false]); };
 
   P.build = function () {
-    var f = this.f, T = this.T, W = T.words || {};
+    var f = this.f, T = this.T, W = this.words();
     injectCSS(T);
     var el = this.el = document.createElement('div');
     el.className = 'hwcine' + (this.splash ? ' hwcine-splash' : '');
@@ -171,10 +178,13 @@
     this.volEl.setAttribute('aria-label', W.volume || 'Volume');
     /* the viewer's own level, remembered between visits */
     this.level = typeof this.api.volume === 'function' ? this.api.volume() : 0.8;
-    this.video.muted = false;
+    this.video.muted = !!f.silent;
     this.video.volume = this.level;
-    /* a looping film (a skill clip) plays until the viewer leaves */
+    /* a looping film (a skill clip) plays until the viewer leaves; a silent
+       one wears no sound pill at all, and plays muted, so no browser ever
+       holds it for a gesture */
     if (f.loop) this.video.loop = true;
+    if (f.silent) this.audio.style.display = 'none';
     if (f.cors) this.video.crossOrigin = 'anonymous';
     if (f.poster) this.video.poster = this.api.url(f.poster);
     /* the darkness spills from the place the viewer clicked */
@@ -249,7 +259,7 @@
 
   P.tryPlay = function () {
     var self = this, v = this.video, p;
-    v.muted = false;
+    v.muted = !!this.f.silent;
     try { p = v.play(); } catch (e) { p = null; }
     if (!p || !p.then) return;
     p.then(null, function (err) {
@@ -303,7 +313,7 @@
     this.later(function () { a.classList.remove('pulse'); }, 7);
   };
   P.syncSound = function () {
-    var W = this.T.words || {}, v = this.video, silent = v.muted || v.volume < 0.005;
+    var W = this.words(), v = this.video, silent = v.muted || v.volume < 0.005;
     this.sound.querySelector('.ico').innerHTML = silent ? ICON_OFF : v.volume < 0.4 ? ICON_LOW : ICON_ON;
     this.sound.setAttribute('aria-pressed', silent ? 'false' : 'true');
     this.sound.setAttribute('aria-label', silent ? (W.unmute || 'Unmute') : (W.mute || 'Mute'));
@@ -364,7 +374,8 @@
       self.started = true;
       self.state = 'playing';
       el.classList.add('hwcine-live');
-      if (!self.preview) self.api.seen(self.f.id);
+      /* a film marked record: false (a skill clip) never touches the splash's memory */
+      if (!self.preview && self.f.record !== false) self.api.seen(self.f.id);
       self.syncSound();
       self.showCaption();
       self.later(function () { if (self.state === 'playing') self.next.classList.add('on'); }, self.T.hintSeconds || 1.8);

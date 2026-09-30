@@ -82,6 +82,9 @@ import { RemoteInput } from './net/remote';
 import { WebRtcTransport } from './net/webrtc';
 import { openCoopLobby } from './ui/lobby';
 import { CLASSES, type ClassDef } from './data/classes';
+import { SKILLS as CLIP_SKILLS } from './data/skills';
+import { makeSkillGem as clipSkillGem } from './engine/skills';
+import { dayCycle as clipDayCycle, DAY_LENGTH as CLIP_DAY_LENGTH } from './world/daynight';
 import { DEV, GAME_TITLE } from './config';
 import { mountDevPanel } from './dev/panel';
 import { mountPassiveEditor } from './dev/passiveEditor';
@@ -726,6 +729,17 @@ declare global {
       fakePad: (p: FakePad | null) => void;
       step: (frames?: number, dtMs?: number) => void;
       devStartRun: (classId?: string) => string;
+      devGrantSkill: (skillId: string, level?: number, slot?: number) => number;
+      devInput: (source: ((dt: number) => PlayerInput | null) | null) => void;
+      clipCatalog: () => {
+        skills: {
+          id: string; name: string; tags: string[]; castMode: string; aiRange?: number;
+          concentration: boolean; delivery: unknown; targeting?: unknown;
+        }[];
+        classes: { id: string; bar: string[] }[];
+        noon: number;
+      };
+      hydrated: () => Promise<void>;
       perfFrames: (reset?: boolean) => {
         gap: number[]; sim: number[]; ren: number[];
         /** Pushes since last reset — pushed > gap.length = the ring wrapped. */
@@ -791,6 +805,47 @@ window.__game = {
     startGame(cls);
     return cls.id;
   },
+  // DEV/QA: seat any catalog skill by id straight onto a bar slot as THE DEV
+  // GIFT (devThrongGrant's shape: past the learn gate, transient, never
+  // saved), replacing whatever sat there, so a harness can walk the whole
+  // catalog without filling the pack: the skill-clip capture's door
+  // (scripts/capture-skill-clips.cjs). Returns the slot, or -1.
+  devGrantSkill: (skillId: string, level = 1, slot = 2) => {
+    const def = CLIP_SKILLS[skillId];
+    const p = world.player, known = world.localSeat.meta.knownSkills;
+    if (!def || slot < 0 || slot >= p.skills.length) return -1;
+    const prev = p.skills[slot];
+    if (prev) known.delete(prev.def.id);
+    const inst = clipSkillGem(def, level, 'rare');
+    inst.granted = true;
+    inst.devGift = true;
+    known.set(skillId, inst);
+    p.skills[slot] = inst;
+    world.charDirty = true;
+    world.recalcPlayer();
+    return slot;
+  },
+  devInput: (source) => { devInputSource = source; },
+  // DEV/QA: the skill-clip capture's catalog: every player skill (the
+  // database page's list; noDrop rows are monster kit), each class's
+  // opening bar (the body that films a skill) and the brightest hour.
+  clipCatalog: () => {
+    let noon = 0;
+    for (let t = 0; t < CLIP_DAY_LENGTH; t++) if (clipDayCycle(t).light > clipDayCycle(noon).light) noon = t;
+    return {
+      skills: Object.values(CLIP_SKILLS).filter(d => !d.noDrop).map(d => ({
+        id: d.id, name: d.name, tags: [...d.tags], castMode: d.castMode ?? 'cast',
+        aiRange: d.ai?.range, concentration: !!d.concentration,
+        delivery: JSON.parse(JSON.stringify(d.delivery)) as unknown,
+        targeting: d.targeting ? JSON.parse(JSON.stringify(d.targeting)) as unknown : undefined,
+      })),
+      classes: CLASSES.map(c => ({ id: c.id, bar: c.bar.filter((b): b is string => !!b) })),
+      noon,
+    };
+  },
+  // Resolves once the boot's disk reconcile below has landed: a harness
+  // starts its run after it, or the reconcile re-seats the account under it.
+  hydrated: () => diskHydrated,
   // FRAME TELEMETRY readout: the ring buffers as plain arrays, oldest-first
   // (rAF gap = true pacing, sim ms, render ms). reset=true also clears —
   // how the perf sweep separates a zone's entry burst from its steady state.
@@ -869,7 +924,7 @@ if (DEV.mapForge || devPanelOptIn) mountMapForge(ui, () => world);
 // shared account/settings refs and enable Continue if a disk character exists.
 ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
 ui.setContinueSave(loadCharacter());          // instant: localStorage cache
-void (async (): Promise<void> => {
+const diskHydrated = (async (): Promise<void> => {
   const [a, s, c] = await Promise.all([loadAccountAsync(), loadSettingsAsync(), loadCharacterAsync()]);
   Object.assign(account, a);                  // mutate-in-place: shared refs stay valid
   reconcileClassBundleGems(account);
@@ -895,7 +950,13 @@ void (async (): Promise<void> => {
  *  it no longer touches the world directly — World.applyInputs does that, for
  *  every seat uniformly. `aim` is converted to WORLD space here so it's
  *  camera-independent (the one value that must survive the wire). */
+/** DEV/QA: a scripted source for the LOCAL seat's intent (__game.devInput).
+ *  While set it replaces the device read wholesale, so a harness drives
+ *  casts through the real frame (the skill-clip capture's hands); null
+ *  restores the devices. */
+let devInputSource: ((dt: number) => PlayerInput | null) | null = null;
 function readLocalInput(dt: number): PlayerInput | null {
+  if (devInputSource) return devInputSource(dt);
   const p = world.player;
   if (p.dead || p.downed) return null;
   // The pause menu AND the couch join ceremony both take the hero's hands
