@@ -1,5 +1,10 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Browser branch previews: `docs/engine/browser-previews.md` documents the Pages
+deployment. `scripts/browser-previews.json` configures isolated builds beside
+`/play/`; `scripts/build-browser-previews.mjs` pins their commits and refuses
+shared save namespaces. Verify `node --test scripts/test-browser-previews.mjs`.
+
 Legendary skill empowerment is documented in `docs/design/legendary-skill-empowerment.md`.
 `data/skillEmpowerment.ts` configures duplicate merges and passive-only rewards;
 `engine/skillMerge.ts` shares the Font preview/action plan. Saved ranks extend

@@ -1,0 +1,8 @@
+[
+  {
+    "id": "seamless-world",
+    "ref": "codex/seamless-world-foundation",
+    "storageScope": "preview:seamless-world",
+    "worldmass": true
+  }
+]
