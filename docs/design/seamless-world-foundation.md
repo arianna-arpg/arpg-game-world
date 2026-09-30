@@ -1,0 +1,420 @@
+# Seamless world: terrain, places, and a fresh journey each run
+
+Status: source audit and implementation proposal, 2026-09-29. This document
+does not describe a shipped seamless mode. This commit changes documentation
+only; the game still uses its existing zone runtime.
+
+Experiment branch: `codex/seamless-world-foundation`, starting at
+`a4c8d08c179065655f5e1fa22dfb5f0fd199bef4` on `main`.
+Historical reference: `seamless-world` at `75333fd2`, read without merging it.
+The existing Git remote is `https://github.com/arianna-arpg/arpg-game-world.git`.
+
+## The commission and the decided run policy
+
+Build a continuous, procedurally expanding exploration-adventure ARPG. The
+player can leave a road, travel through countryside, discover places, approach
+danger from different directions, and return to recognizable land. Skyrim and
+Minecraft describe the freedom of exploration; they do not mandate 3D, voxels,
+construction, survival meters, or a replacement combat model.
+
+The governing values are extensibility, flexibility, customization,
+modifiability, attribution, and configuration. Preserve Hollow Wake's shared
+actor/skill/modifier pipeline, deep builds, faction relationships, companions,
+world events, and account progression. Rebuild the spatial foundation around
+continuous land instead of treating the old zone arrangement as a constraint.
+
+**User decision: generate a fresh world each run.** A continuing run retains its
+seed, discovered geography, and durable consequences across save/reload. A new
+run gets a new world identity and seed. Death follows the selected character
+mode; when that mode ends the run, its world ends with it. A mode's intermediate
+death stage must not accidentally start another world. Account unlocks remain
+account-owned. Lastlight can retain an authored, familiar core while its
+surrounding country changes with the run.
+
+This decision belongs in run policy, not terrain generation. A future persistent
+world mode should not require rewriting the generator, but is not this branch's
+default or an additional feature to implement now.
+
+## What the source actually supports
+
+The audit follows executable code where older documentation describes an earlier
+state. In particular, current zone contents persist and zone-memory TTL defaults
+to `Infinity`; an old comment about discarding drops on travel is not the full
+current behavior.
+
+| Area | Inspected source | What can carry forward; what must change |
+| --- | --- | --- |
+| Shared gameplay | `src/engine/world.ts`, `src/engine/actor.ts`, `src/engine/ai.ts` | Keep the actor and skill systems. Many consumers currently read the hero's single `World.zone`; remote actors need their own place context. |
+| Geography | `src/world/continents.ts`, `climate.ts`, `biomes.ts`, `relief.ts`, `courses.ts` | Reuse geography, climate, and course vocabulary. Adapt sampling to one explicit run context and physical projection; audit numeric ranges and bounded query costs. |
+| Meaningful destinations | `src/world/atlas.ts`, `locales.ts`, `landmarkComplexes.ts`, `escarpments.ts` | Reuse geographic features, locale programs, footprints, and access constraints. They become places within terrain, potentially spanning many streaming chunks. |
+| Graph generation | `src/engine/worldgen.ts`: `placeZoneAt`, `generateZone`, `settleWeb` | Current frontier generation depends on existing neighbors and sometimes fresh randomness; settling moves some map coordinates. This graph cannot author immutable physical ground. |
+| Local generation | `src/engine/levelgen.ts`: `generateLayout`, `GenCtx`; `src/data/zones.ts`: `ZoneDef` | Retain builders and authored content where their assumptions fit. Whole-zone layouts receive arena, entry, and exits; they cannot all be called unchanged for arbitrary land slices. |
+| Terrain rules | `src/world/walk.ts`, `gridWalk.ts`, `regions.ts`; `src/engine/los.ts`, `spatial.ts` | Preserve movement costs and separate movement, shot, and sight channels. Add queries spanning resident terrain pages. Current spatial keys have a documented finite coordinate range. |
+| Consequences | `src/engine/world.ts`: `zoneMemorySnapshot`, `captureZoneMemory`, `restoreZoneEnemies`; `src/engine/zonecontents.ts` | Existing memory covers survivors, doors, fixtures, contents, and drops. Reuse serializers where appropriate, but a partial enemy memo is insufficient for freezing an ongoing fight. |
+| Save ownership | `src/meta/worldstate.ts`, `character.ts`, `saveCompatibility.ts` | World state already belongs to the character's run. Replace graph/local-position assumptions deliberately, and use the central compatibility policy for an incompatible experimental format. |
+| World activity | `src/world/overlay.ts`, `sim.ts`; `src/packages/types.ts`, `registry.ts` | Preserve registered overlays, packages, and explicit durable/transient pledges. Current views are node-based; migrate to spatial places and bounded regional queries. |
+| Progression | `src/world/levelField.ts`, `openingProgression.ts`; `docs/design/world-progression.md` | Keep geographic danger and protected opening intent. Validate reachable terrain and opportunity density instead of a count of graph nodes. |
+| Rendering and map | `src/render/vis/ground.ts`, `canopy.ts`; `src/ui/atlasPaint.ts` | Reuse art and cache machinery. Ground currently clears caches when `world.zone` changes. Use spatial keys/revisions; map geometry must project actual terrain. |
+| Multiplayer | `src/net/snapshot.ts`: `StateSnapshot`, `ZoneMsg`, `serializeZone`, `applyZone` | Current transport describes one current zone. Future peers need region subscriptions, stable identities, revisions, and authoritative entity transfer. |
+
+The decisive lifecycle issue is `World.loadZone`: it clears projectiles and many
+effect controllers, captures the departed zone, assigns a new arena, resets
+local objectives, and rebuilds local content. Hiding a portal while still doing
+this at a boundary cannot deliver continuous combat or continuous consequences.
+
+Geography has a good foundation, but seeded sampling alone does not make the
+whole game discovery-order independent. `placeZoneAt` uses
+`spec.seed ?? rollSeed()` and neighborhood-dependent placement; explicitly
+seeded identity rolls already have a separate stream. Preserve that lesson and
+extend the guarantee through placement, names, ownership, and realization.
+
+## Lessons from the earlier experiment
+
+The old branch provides useful examples of resident terrain, cross-border sight,
+world-relative rendering, shared crossing geometry, and regression probes. Its
+charter also records crossing stalls and repeated work during threshold rebases.
+Those timings are historical reports, not measurements of this checkout.
+
+Its later design deliberately enclosed zone cells and made the intervening land
+solid except for connecting passages. `src/world/cells.ts` fitted cells to the
+current node roster; `src/world/tissue.ts` filled/blended the remainder.
+That was a different traversal goal. This commission calls for navigable
+countryside and physical obstacles independent of bookkeeping boundaries.
+
+Use the old tests as failure scenarios, particularly sight, collision, movement,
+and continuity. Do not inherit the old charter's priorities, its 32 px/map-unit
+scale, its fitted-cell geometry, or its zone-centered rebase as new requirements.
+The old `src/meta/character.ts` explicitly refuses seamless persistence and
+`src/main.ts` gates remote co-op. They are unfinished migration areas, not solved
+features to copy forward. No old branch code has been imported by this commit.
+
+## Spatial model
+
+**The land exists first. Places inhabit it. Chunks are implementation details.**
+
+```mermaid
+flowchart TD
+    Run[Run seed, generator version, content manifest] --> Geo[Geography and regional plans]
+    Geo --> Ground[Continuous terrain]
+    Geo --> Places[Settlements, ruins, habitats, routes]
+    Places --> Ground
+    Ground --> Stream[Resident terrain and spatial queries]
+    Places --> Activity[Encounters and persistent activity]
+    Stream --> Play[Shared actor, skill, and combat engine]
+    Activity --> Play
+    Play --> Delta[Run-owned changes and discovery]
+    Delta --> Stream
+    Delta --> Activity
+    Ground --> Map[Knowledge-limited world map]
+    Delta --> Map
+```
+
+There are four distinct concepts:
+
+1. **World geography:** continuous terrain fields and regional features. A river,
+   coast, forest, or cliff is independent of how many pages are loaded.
+2. **Place:** a semantic identity with a footprint, sites, occupants, activities,
+   access rules, and consequences. A fortress can span several pages; wilderness
+   can exist without belonging to an encounter objective.
+3. **Streaming chunk:** a fixed spatial page for loading, rendering, and storage.
+   Crossing its edge does not emit a gameplay departure or clear anything.
+4. **Simulation neighborhood:** the area needing detailed simulation, including
+   player reach, sight, moving threats, and active relationships. It need not
+   match chunk borders or place footprints.
+
+Keep meaningful road, settlement, and quest graphs as relationships among
+places. Derive them from committed regional plans. They do not partition all
+land, and road membership does not determine whether the player may walk there.
+
+### Coordinates and scale
+
+Introduce an explicit address containing dimension, integer spatial cell, and
+normalized local offset. Use a versioned, serializable large-integer address
+representation for durable identity; keep collision/render coordinates small
+within a local simulation frame. Exact encoding and supported bounds must be
+settled in the first implementation commit, with negative-coordinate tests.
+
+A local origin shift is a coordinate conversion, never a place departure. Every
+position-bearing subsystem must either use the shared transform or be registered
+for rebasing, including camera, interpolation history, effects, telegraphs,
+projectiles, tethers, pending casts, and sound anchors. Test a round trip before
+using this with combat. Spatial indices are rebuilt or translated consistently.
+
+Do not use existing 16-bit packed spatial buckets with ever-growing absolute
+coordinates. Existing 32-bit field hashes also require an explicit large-world
+policy. Numerically finite computers support an effectively unbounded world,
+not a promise of mathematical infinity without precision or storage limits.
+
+One projection converts physical land to atlas coordinates. Choose its scale by
+walking the prototype and measuring travel time, visibility, encounter spacing,
+and landmark size. Save geometry-affecting settings with the generation version.
+Runtime cache budgets may vary by machine without changing the world's content.
+
+### Deterministic generation and shared edges
+
+Build generation as bounded stages with explicit inputs and outputs:
+
+1. Sample existing geographic vocabulary through a run-owned context.
+2. Plan regional feature geometry, drainage, routes, and candidate places.
+3. Resolve place footprints and approach constraints before fine decoration.
+4. Realize terrain, structures, and ecology from those plans.
+5. Validate geometry and content promises; record any named repair or fallback.
+6. Apply persistent run deltas and current, reversible event overlays.
+
+Each stage gets an independent random stream derived from run seed, dimension,
+stable feature/address, generator version, and rule ID. Rendering and background
+prefetch never consume gameplay random draws. Query/arrival order does not choose
+place IDs, footprints, chest identities, or spawn opportunities. Runtime combat
+outcomes may depend on player actions; generated base geography may not.
+
+Regional planners need finite dependency envelopes. Candidate conflicts use a
+canonical priority and tie-break over all relevant candidates, not whichever
+neighbor happened to load first. Features crossing regional boundaries have one
+owner/identity and shared geometry; realization clips them into chunks without
+duplicating them. Do not require an unbounded flood-fill to find a coastline,
+road network, or drainage answer. Existing sea filling is capped and relief
+tracing is step-bounded; their truncation behavior needs explicit evaluation
+before either becomes a physical continuity guarantee.
+
+Neighbors read the same boundary samples, river centerlines, bridge footprints,
+cliff faces, and road splines. Generate with a halo sufficient for each rule's
+dependency radius and publish only the owned interior. Noise continuity alone
+does not guarantee matching bridges, trees, structures, navigation, or rivers.
+
+Spawn and decoration candidates use a stable generation lattice or feature-local
+identity independent of runtime streaming partitions. A cache/chunk-size tuning
+change must not multiply encounter density or duplicate a site.
+
+Required content cannot silently vanish after a failed placement. A planned
+destination is published only after its required access/sites validate. Repairs
+must be bounded, deterministic, and attributed; optional content can be omitted
+with a recorded reason. Never move previously discovered land to fit a new site.
+
+## Preserve depth through reusable contracts
+
+These are proposed responsibilities, not types already implemented in `src/`:
+
+| Contract | Responsibility and authoring controls |
+| --- | --- |
+| Run descriptor | Seed, identity, generation revision, content manifest, geometry settings, run lifecycle policy. |
+| Terrain provider | Position/bounds queries for materials, elevation, water, movement, shots, and sight; shared revision/invalidation. |
+| Place recipe and instance | Eligibility, footprint, approaches, sites, builder ID/version, encounter tables, local activities, provenance. |
+| Activity instance | Location/region, actor/event ownership, objectives, finite state, rewards, persistence policy, simulation cadence. |
+| Entity lifecycle | Stable ID, source place/spawner, current location, player/skill credit, serialization, expiry and dependency rules. |
+| Stream scheduler | View/reach requests, dependency pins, preparation/publish stages, eviction hysteresis, CPU/memory budgets. |
+| Content contribution | Namespaced definition IDs, reference/schema validation, dependency order, explicit overrides, manifest digest. |
+| Generation trace | Parent feature, source package/rule/version, chosen option, stream key, constraints, repairs, resulting IDs. |
+
+Use the existing registries where they fit. New content should normally add data
+and select existing builders/behaviors. A genuinely new behavior can add one
+registered implementation with a validated contract; it should not require
+name checks scattered across terrain, combat, save, rendering, and networking.
+
+Configuration does not mean making correctness optional. Unique ownership,
+single reward credit, matching boundaries, and valid references are invariants.
+Density, spacing, biome influence, danger, persistence, and activity policies are
+authoring controls. Geometry changes are versioned; live event changes are
+attributable overlays. Arbitrary mid-run mod hot-swapping is out of initial scope.
+
+Attribution has three separate jobs: explain generated content, retain gameplay
+credit through actors/effects, and identify which package supplied a definition.
+Store compact durable provenance; keep verbose decision traces on demand for
+development. Never make the player read a generator explanation to understand
+combat. Preserve the project's visible cues and sound-based readability rule.
+
+### Translate the zone vocabulary
+
+| Existing idea | Continuous-world form |
+| --- | --- |
+| Zone biome, tileset, palette | Geographic habitat and local art recipe, blended across actual ecological transitions. |
+| Zone layout | Optional place/locale builder constrained by its physical footprint and approaches. |
+| Exit to the next surface zone | Ordinary traversable ground; roads are routes through it. |
+| Objective seals all exits | A local activity or a visible, physically bounded sealed arena; no seal around an administrative region. |
+| Clear objective | Defeat a specified camp/cohort or resolve a local threat, with explicit membership and one reward. |
+| Wave arena | An optional bounded encounter with its own commitment and retreat rules. |
+| Cave or dimension entrance | A persistent connection between spaces, with stable arrival/return anchors and explicit transfer policy. |
+| Waypoint | A discovered fast-travel site, independent of chunk residency. |
+| Zone memory | Place/entity/terrain deltas keyed by stable identity, owned by the run. |
+| Zone-level spawn/loot policy | The responsible place/activity context, resolved at the event's location and retained on its source. |
+| Forechart and map discovery | Background planning distinct from knowledge; generating terrain never reveals it automatically. |
+
+Do not automatically stretch every arena across a chunk or force every location
+through the same layout generator. Lastlight, fortresses, caves, and open wilds
+retain different spatial intentions. Interiors can initially be separate spaces;
+continuous overland travel is the first promise. This does not commit to removing
+every dungeon door or implementing a new vertical traversal model.
+
+## Runtime continuity and bounded cost
+
+Prepare resident terrain before it can be seen or reached. Separate sampling,
+realization, collision preparation, entity hydration, and render baking into
+budgeted jobs. A quota of one whole synchronous layout per frame is insufficient
+if that layout itself exceeds the frame budget. Pure planning can move to a
+worker after inputs stop depending on mutable global state.
+
+Publish a ready terrain revision atomically so drawing and collision agree.
+Prioritize readiness over cosmetic detail. Never let actors walk through missing
+collision; a readiness stall is an observable development failure, not an
+invisible wall accepted as normal geography. Teleports prepare their destination
+before transfer. Prefetch must cover maximum supported movement speed times
+measured preparation latency, plus camera and interaction reach.
+
+Use three execution tiers initially: detailed local simulation, coarse regional
+activity, and stored consequences. Pin ongoing interactions in detailed
+simulation until a defined safe handoff: enemy pursuit, projectiles in flight,
+owned companions, tethers, timed objectives, and pending rewards cannot disappear
+because the hero crossed a page edge. Bound these dependencies through authored
+lifetimes/ranges and explicit gameplay disengagement rules, not a hidden chunk
+despawn. Far travel does not imply simulating every monster every frame.
+
+Dormancy is a system contract. Define for each state whether time advances,
+freezes, expires, or updates coarsely. Keep actors with unresolved combat active;
+do not reuse zone travel's loss of aggro/statuses as the streaming default.
+Cold snapshots need stable IDs, ownership, positions, health, relevant state,
+absolute expiry times, and spawn/death tombstones. Cohorts, leaders, followers,
+and movement tethers require referential integrity across pages.
+
+Separate place-owned state from the hero's currently highlighted place. Objectives,
+weather/roof exposure, spawns, loot, rescue logic, and event activity must resolve
+at the relevant actor/action position. A presentation-focused `World.zone`
+compatibility view cannot remain the authority for a fight in a neighboring place.
+
+Likewise, pathfinding needs a coarse connection graph plus local terrain queries,
+not a BFS over all explored land. Movement, sight rays, projectile sweeps, and
+ground effects must query every crossed resident page through shared interfaces.
+Biome transitions blend terrain and vegetation as well as color; cliffs and
+water retain their physical shape through that blending.
+
+Rendering keys include run, dimension, spatial page, content/terrain revision,
+and presentation settings. Walking between named places does not flush unrelated
+ground/canopy caches. The atlas reads the same committed geography, subject to
+knowledge; presentation-only graph settling or seam warping cannot move physical
+land. Rumors can indicate a bearing without exposing unexplored terrain.
+
+## Saves, storage, and multiplayer
+
+Persist the run descriptor plus sparse changes over regenerable base terrain:
+discovery, looted/defeated IDs, placed or broken objects, durable actor state,
+activity state, and player addresses. Crossing a streaming boundary is neither
+a save reset nor a respawn trigger. Explicit camp/reset mechanics keep their own
+policy and must state which nearby populations they reset.
+
+Make region/entity ownership transfers and reward claims idempotent. A coherent
+save snapshot records one authoritative revision; restore cannot leave an entity
+in both its previous and current region. Use recoverable writes through the
+save service and test interruption/retry. Seed replay alone is insufficient
+across generator or content changes: retain compatible versions or explicitly
+reset experimental runs through `SAVE_COMPATIBILITY` with a truthful reason.
+Do not silently rewrite incompatible geography underneath saved coordinates.
+
+Existing whole-run JSON is useful for the first bounded prototype, but is not a
+long-term storage strategy for indefinite exploration. Introduce paged region
+records, dirty-page writes, compacted deltas, and bounded in-memory metadata.
+Storage grows with meaningful explored changes; it cannot be both lossless and
+strictly constant forever. Background event processing and map queries must also
+be spatially bounded rather than scanning every recorded place.
+
+Design stable IDs and address/manifest encoding before the first save. Deliver
+solo first, but do not declare the project complete until co-op has been handled.
+Host authority should publish region revisions and entities to each player's
+interest area, carry cross-region effects, and reconcile join/reconnect against
+the same content manifest. Separate players can occupy separate active areas.
+The current `ZoneMsg` cannot express this simply by changing `zoneId` to `chunkId`.
+
+## Adventure, pacing, and emergence
+
+Free travel still needs purposeful opportunities. Separate biome scale, landmark
+spacing, ambient encounter density, encounter difficulty, and reward budget.
+Do not reproduce today's whole-zone monster population in every streaming page.
+Allow quiet stretches, optional danger, alternate approaches, refuges, and
+recognizable silhouettes. Players may bypass an encounter without losing all
+forward progression. The opening must contain multiple reachable viable choices
+on actual terrain, not merely several low-level markers across impassable water.
+
+Start with the existing geographic danger field and fixed encounter identities.
+Do not silently level every foe to the hero when terrain is loaded. Validate
+travel time and XP/reward opportunity against the current progression baseline;
+later danger can be shaped by attributed regional activity. Infinite generation
+does not require infinitely increasing enemy levels. The late-world difficulty
+ceiling/variety policy remains an explicit balance decision.
+
+An example composition to aim for: a road follows a river past a farm and a
+ruined watchtower. The player can follow the road, cross at a ford, or approach
+the tower through forest. Existing predator/faction behavior can threaten farm
+occupants; an encounter group can occupy the tower; weather can alter traversal
+through registered terrain effects. Rescue, fighting, or avoidance changes local
+state and supplies existing quest/reward systems. Each interaction must arise
+from reusable rules with traceable sources. This is an illustrative target, not
+a claim that all these cross-system interactions currently work on continuous land.
+
+## Implementation order and acceptance gates
+
+Keep the stable game available while the experimental runtime develops in
+separate modules. Route through an explicit world-mode boundary; avoid scattering
+a new boolean through every system. Fresh implementation applies to the spatial
+foundation, not a second damage, skills, inventory, or account engine. Do not
+merge the old seamless branch as the starting implementation.
+
+| Step | Concrete deliverable | Required evidence before expanding |
+| --- | --- | --- |
+| 0. Audit and charter | This branch/document; identified source boundaries and run policy. | Baseline type checks, geography and persistence probes; no gameplay change claimed. |
+| 1. Spatial kernel | Address/projection rules, run context, independent seed streams, terrain-query contract, shared-edge regional planning, trace schema. Proposed home: `src/worldmass/`, delegating geography to existing `src/world/` vocabulary. | Same features when generated in different orders; negative/large addresses; coordinate round trips; adjacent samples/ownership; bounded dependency envelope and cancellation. |
+| 2. Terrain walk | A development entry route from Lastlight into continuously generated field/forest/river terrain; working collision, sight, camera, map, prefetch, and cache eviction. | Off-road and diagonal travel over at least 20 page boundaries; revisit geometry unchanged; cross-edge rivers/roads; no routine loadZone call at page edges; recorded frame/memory costs. |
+| 3. First playable slice | Existing hero, skills, companions, ambient encounter groups, one camp activity, drops/rewards, and run save/reload on that land. | Chase, cast, hit, die, summon, loot, disengage, evict, reload, and return across boundaries with continuous state and single credit. A fresh run changes the surrounding world. |
+| 4. Places and adventure | Reusable settlement/ruin/cave recipes, contextual objectives and quests, opening progression, geographic discovery. | Several valid approaches; physically reachable promised destinations; saveable interior return; new place content added through data/registered builders. |
+| 5. Living world | Migrate package/event families through spatial activity contexts and durable/coarse lifecycle contracts. | Explicit compatibility inventory; each included family has lifecycle, attribution, save, and off-screen tests. Unsupported families are visible development scope, never silently dropped gameplay. |
+| 6. Long runs and company | Paged storage, long-distance precision, bounded regional simulation, remote/couch co-op, reconnection, full performance and content coverage. | Long out-and-back soak, save interruption recovery, two players separating/rejoining, all relevant existing harnesses and real playtesting. |
+
+Steps 1 and 2 are technical prototypes. **Step 3 is the first playable verdict**:
+walk out of Lastlight, leave the road, follow a river, approach a camp from two
+directions, fight while crossing hidden page boundaries, save away from town,
+resume, and return to the same consequences. Expand the biome/event roster only
+after that journey works. A smooth empty landscape alone is not sufficient.
+
+### Failure cases to pin from the beginning
+
+- Generate A then B, B then A, and both after unrelated C; compare shared
+  geometry, place ownership, and initial content identities.
+- Inspect four-page corners, coastlines, bridges, wide structures, diagonals,
+  narrow passes, large bodies, fastest travel, and long-range projectiles.
+- Chase across a boundary and back; cross with an active shield, tether, summon,
+  possession, ground effect, charged cast, delayed payload, and return projectile.
+  Exercise these families as they are admitted to the playable slice.
+- Kill/loot once, evict, reload, and return; reward and entity duplication are
+  failures. Open a door, wound a survivor, abandon an activity, and verify policy.
+- Cancel generation, teleport during preparation, change run, and switch
+  dimensions. Stale jobs must not publish into the next run or space.
+- Explore the same seed in different directions, return after a long walk, and
+  resume with a compatible manifest. A mismatched manifest follows explicit
+  compatibility policy and never masquerades as a valid replay.
+- Track resident actors, terrain/canopy pages, jobs, metadata, and memory during
+  out-and-back travel. Counts should plateau for a fixed active workload; durable
+  save growth is measured separately. Streaming must not create reward exploits.
+
+Performance acceptance must use the real client on the target machine, with
+frame-time percentiles and boundary-correlated hitch counts against a comparable
+non-streaming control. Establish a crossing-specific budget; the current
+`balance/perf.config.json` allows a 250 ms zone-entry burst, which is inappropriate
+as a normal seamless crossing target. Record generation job time, sim/render
+cost, queue backlog, and memory. No frame-rate or memory claim is established by
+this documentation pass.
+
+Automated probes establish invariants. Repeated player walks judge whether the
+world feels coherent, readable, and worth exploring. Neither alone guarantees
+that the transformation will be mistake-free.
+
+## Verification of this starting point
+
+At the pinned base in the isolated checkout:
+
+- `npm run check`: passed game, launcher, and simulation type checks.
+- `npm run probe -- geography --retries 0`: passed, 5 checks, no failures.
+- `npm run probe -- persistence --retries 0`: passed, 84 checks, no failures.
+
+These establish the existing baseline, not implementation of the proposed
+runtime. No generation algorithm, gameplay behavior, save format, or boot path
+changes in this commit. Future source changes require the touched harnesses from
+`AGENTS.md`/`CLAUDE.md`: generation QA for generation, balance smoke for data,
+appropriate focused probes, real-client checks for boot/render, and the new
+continuous-world acceptance cases above. Keep the source map in `CLAUDE.md` and
+this contract current as each step becomes implemented.

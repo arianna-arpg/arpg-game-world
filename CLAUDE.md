@@ -1,5 +1,7 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+The new continuous-world experiment is specified in `docs/design/seamless-world-foundation.md` (branch `codex/seamless-world-foundation`). This is an audited design, not an implemented mode: terrain precedes places, streaming boundaries have no gameplay lifecycle, and each new run gets a fresh world while save/resume retains that run's consequences. The contract records the current source boundaries, lessons from the separate historical `seamless-world` branch, implementation stages, and acceptance gates.
+
 Legendary skill empowerment is documented in `docs/design/legendary-skill-empowerment.md`.
 `data/skillEmpowerment.ts` configures duplicate merges and passive-only rewards;
 `engine/skillMerge.ts` shares the Font preview/action plan. Saved ranks extend
