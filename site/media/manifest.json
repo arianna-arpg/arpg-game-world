@@ -1,0 +1,11 @@
+{
+  "note": "The website's films live on the site-media GitHub Release, never in git, so the repo and every checkout install stay lean. scripts/fetch-site-media.mjs pulls them into site/media/ (pages.yml runs it on every deploy; run it locally before a preview). scripts/encode-film.mjs records new files here and scripts/publish-site-media.mjs uploads them. Release assets are named by each file's basename. Contract: docs/design/site-cinema.md",
+  "release": { "repo": "arianna-arpg/arpg-game-world", "tag": "site-media" },
+  "files": {
+    "announcement/announcement-1440.av1.mp4": { "bytes": 16958219, "sha256": "08c6ec6707e25a5c097f31ecc5aa179db9b0d8283d0259b0b119cf24ce731e55" },
+    "announcement/announcement-1080.av1.mp4": { "bytes": 11273921, "sha256": "bd8e5392b3212a5ce16c0a5475cf9ed23c45b74bb6421f6dbc53b21190461dcb" },
+    "announcement/announcement-720.av1.mp4": { "bytes": 6516926, "sha256": "6514fce780d5ac89fb6242be8756f0340704e61aa768a5dfd971152ed9f7dcf8" },
+    "announcement/announcement-1080.hevc.mp4": { "bytes": 18750747, "sha256": "fa27c6f118550ae45a2e74f7bb1c22ea04bb8b3791d46932ba423334bdd6ef0e" },
+    "announcement/announcement-720.h264.mp4": { "bytes": 12336985, "sha256": "637e4ab66cc129f6cd761fe060b76a1213bca9d5a6ea264bef3f25da6e93ff11" }
+  }
+}

@@ -33,6 +33,15 @@ build/build-info.json
 # site pixels regenerate from src/ exactly like site/data JSON.
 /site/assets/portraits.js
 
+# ── Website films ────────────────────────────────────────────
+# The site cinema's videos live on the `site-media` GitHub Release,
+# never in git (the repo and every checkout install stay lean).
+# site/media/manifest.json names them; CI pulls them in on every
+# deploy and `node scripts/fetch-site-media.mjs` does it locally.
+/site/media/**/*.mp4
+/site/media/**/*.webm
+/site/media/**/*.part
+
 # ── Game saves ───────────────────────────────────────────────
 # Personal runtime state that changes every session. Ignored so
 # your play history doesn't bloat the repo. To keep ONE sample

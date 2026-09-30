@@ -64,6 +64,12 @@ jobs:
       - name: Build the in-browser demo → site/play
         run: npx vite build --base=./ --outDir site/play --emptyOutDir
 
+      # The site cinema's films live on the `site-media` release, never in
+      # git; pull them in beside the pages (verified against
+      # site/media/manifest.json) so they serve from the site's own origin.
+      - name: Fetch the site's films → site/media
+        run: node scripts/fetch-site-media.mjs
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

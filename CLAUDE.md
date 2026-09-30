@@ -79,6 +79,13 @@ Brandt's hammer/trophy quests and deferred, level-fixed imbues are documented in
 and `quests/brandt.ts`; `engine/questImbue.ts` owns saved affix offers. Verify
 with `probe_brandtquest.ts` and the hidden `balance/brandt-quest-ui.cjs` harness.
 
+The website cinema (the banner's trailer, the first-arrival/weekly splash and the
+shatter exit) is a registry at the top of `site/assets/cinema.js`; the theater is
+`site/assets/cinema-theater.js`, films live in `site/media/<film>/` and
+`scripts/encode-film.mjs` builds their rendition ladder. Re-point, schedule or
+split films there; bump the page's `?v=` stamp when either file changes. See
+`docs/design/site-cinema.md`; verify with the hidden `balance/site-cinema-ui.cjs`.
+
 Guidance for Claude Code working in this repository. This file is committed and
 shared with everyone who clones the repo.
 
