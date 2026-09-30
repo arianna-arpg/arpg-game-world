@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_worldmass.ts', status: 'green', tier: 'fast', why: 'worldmass addresses, deterministic terrain/places, bounded streaming, saved deltas and single claims' },
   { probe: 'probe_skillempowerment.ts', status: 'green', tier: 'fast', why: 'Legendary empowerment: conserved merges, restricted passive budgets, expanded ranks, save/wire identity and real modifier scaling' },
   { probe: 'probe_payloadcues.ts', status: 'green', tier: 'fast', why: 'Prepared drinks, ammunition and placed routes: paid state, true arming reach, scoped capacity, release/expiry/unequip, co-op mirrors and caption-free painters' },
   { probe: 'probe_proccues.ts', status: 'green', tier: 'fast', why: 'Consumed proc/rider material, actual wound-pop payout, quiet no-ops, invocation releases, bounded body/HUD geometry and all-actor co-op' },

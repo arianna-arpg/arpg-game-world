@@ -1,13 +1,42 @@
 # Seamless world: terrain, places, and a fresh journey each run
 
-Status: source audit and implementation proposal, 2026-09-29. This document
-does not describe a shipped seamless mode. This commit changes documentation
-only; the game still uses its existing zone runtime.
+Status: implementation in progress, started 2026-09-29. The spatial kernel below
+is implemented; the game still uses its existing zone runtime. The later stages
+in this document are requirements, not shipped features.
 
 Experiment branch: `codex/seamless-world-foundation`, starting at
 `a4c8d08c179065655f5e1fa22dfb5f0fd199bef4` on `main`.
 Historical reference: `seamless-world` at `75333fd2`, read without merging it.
 The existing Git remote is `https://github.com/arianna-arpg/arpg-game-world.git`.
+
+## Implementation ledger
+
+`src/worldmass/` now contains the first independent spatial contracts:
+
+- `address.ts`: signed 64-bit decimal cell addresses, exact negative normalization,
+  bounded local-frame subtraction, and a generation lattice separate from pages.
+- `random.ts`: canonical finite JSON manifests and named independent seeded streams.
+- `generator.ts`: immutable per-run field/surface recipes and bounded place
+  footprint competition. Neighboring queries share stable place identities.
+- `state.ts`: sparse terrain changes with causes, one-time identity claims, and
+  validated atomic restore. This is a persistence primitive, not yet the game's
+  character-save integration or a complete actor serializer.
+- `stream.ts`: sample-budgeted page preparation, atomic publication, cancellation,
+  bounded resident/sample caches, and regeneration from seed plus durable changes.
+
+The kernel takes authored recipes; it does not yet replace or sample the existing
+atlas. Continuous seeded noise and matching samples are implemented. Drainage,
+roads, geography-to-content adaptation, a terrain walk, live entity residency,
+and combat/save integration remain the next implementation work. The prototype
+conservatively invalidates resident terrain on a state revision; finer per-page
+invalidation is a performance follow-up, not a correctness shortcut.
+
+Verification: `npm run check`; `npm run probe -- worldmass --retries 0`
+(eight passing reported checks including the summary); `npm run genqa`
+(869 cases times three seeds, zero failures, four nonfatal spacing warnings).
+The worldmass probe covers coordinate limits, independent worlds and streams,
+discovery permutations, non-overlapping place claims, cancelled partial jobs,
+bounded residency, terrain replay, one-time claims, and failed restore atomicity.
 
 ## The commission and the decided run policy
 
