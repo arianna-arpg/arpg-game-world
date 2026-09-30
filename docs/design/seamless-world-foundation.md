@@ -8,6 +8,18 @@ document are requirements, not shipped features.
 Experiment branch: `codex/seamless-world-foundation`, starting at
 `a4c8d08c179065655f5e1fa22dfb5f0fd199bef4` on `main`.
 Historical reference: `seamless-world` at `75333fd2`, read without merging it.
+
+Browser preview: `/arpg-game-world/dev/seamless-world/`. The deployment builds
+this branch with `HOLLOW_WAKE_WORLDMASS=1` and
+`HOLLOW_WAKE_STORAGE_SCOPE=preview:seamless-world`. `src/buildProfile.ts`
+keeps account, character/roster, settings, workshop, atlas and developer
+preferences under separate browser keys. Scoped builds never call the shared
+disk-save endpoints. Ordinary builds retain their existing keys and disk lane.
+Save import/export uses the same scoped keys. No production saves are copied.
+Verify with `balance/browser-preview-ui.cjs` after building `dist-preview` with
+those variables; an optional URL argument checks the published preview too.
+Publishing configuration lives on main so ordinary site updates retain the
+separate preview; gameplay changes remain on this experiment branch.
 The existing Git remote is `https://github.com/arianna-arpg/arpg-game-world.git`.
 
 ## Implementation ledger

@@ -130,6 +130,10 @@ function reloadTreesPlugin() {
 }
 
 export default defineConfig({
+  define: {
+    __HOLLOW_WAKE_STORAGE_SCOPE__: JSON.stringify(process.env.HOLLOW_WAKE_STORAGE_SCOPE ?? ''),
+    __HOLLOW_WAKE_WORLDMASS__: process.env.HOLLOW_WAKE_WORLDMASS === '1',
+  },
   plugins: [diskSavePlugin(), reloadTreesPlugin()],
   // saves/ writes are DATA, not source — without this ignore, every zone-hop's
   // autosave tripped the watcher into a FULL RELOAD (killing the live world

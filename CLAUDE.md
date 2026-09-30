@@ -1,5 +1,12 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Browser previews use `src/buildProfile.ts`: `HOLLOW_WAKE_STORAGE_SCOPE` isolates
+all browser saves/preferences and disables shared disk endpoints; an empty
+scope preserves normal persistence. `HOLLOW_WAKE_WORLDMASS=1` starts new runs
+in the experiment without a query parameter. Build `dist-preview` with both
+variables and run `electron balance/browser-preview-ui.cjs` to verify save
+isolation and Continue. See `docs/design/seamless-world-foundation.md`.
+
 The continuous-world experiment is specified in `docs/design/seamless-world-foundation.md` (branch `codex/seamless-world-foundation`). `src/worldmass/` implements durable addresses, seeded fields/place claims, sparse consequences, bounded terrain residency and an opt-in `/?worldmass` terrain/combat prototype. It uses native movement, skills, region effects, cell-ray occlusion and character saves. Verify `npm run probe -- worldmass` plus persistence/sightveil/cistern; after a build, `balance/worldmass-ui.cjs` checks the hidden real client with isolated saves. Each new run gets fresh land. Live frame rebasing, distant simulation, native place/campaign migration and full consequence paging remain unfinished; read the document's implementation ledger before extending or describing the mode.
 
 Legendary skill empowerment is documented in `docs/design/legendary-skill-empowerment.md`.

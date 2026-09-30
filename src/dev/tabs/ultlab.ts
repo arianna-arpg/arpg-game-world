@@ -28,7 +28,8 @@ import { SKILLS } from '../../data/skills';
 import type { DevTabDef } from '../panel';
 import { DEV_UI, btn, check, css, hrow, numInput, option, section, selectEl } from '../ui';
 
-const LAB_KEY = 'dev_ultlab';
+import { storageKey } from '../../buildProfile';
+const LAB_KEY = storageKey('dev_ultlab');
 
 function persist(): void {
   try { localStorage.setItem(LAB_KEY, JSON.stringify(labSnapshot())); } catch { /* ignore */ }

@@ -27,7 +27,8 @@ export interface MapLens {
 
 export const MAP_LENS: MapLens = { omniscient: false, cursorRead: false };
 
-const KEY = 'dev_maplens';
+import { storageKey } from '../buildProfile';
+const KEY = storageKey('dev_maplens');
 
 export function setMapLens(patch: Partial<MapLens>): void {
   Object.assign(MAP_LENS, patch);

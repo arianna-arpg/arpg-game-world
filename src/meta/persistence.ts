@@ -10,6 +10,7 @@
 // ---------------------------------------------------------------------------
 
 import { SAVE_COMPATIBILITY, noteSaveReset } from './saveCompatibility';
+import { BUILD_PROFILE, storageKey } from '../buildProfile';
 import {
   deserializeAccount, makeAccount, serializeAccount,
   type Account, type AccountSave,
@@ -19,8 +20,8 @@ import {
   type Settings, type SettingsSave,
 } from './settings';
 
-const KEY = 'arpg_account_v1';
-const SETTINGS_KEY = 'arpg_settings_v1';
+const KEY = storageKey('arpg_account_v1');
+const SETTINGS_KEY = storageKey('arpg_settings_v1');
 
 // --- THE SAVE STAND-DOWN (the crash trap's fatal latch) ----------------------
 // One page-lifetime latch: after main.ts's crash trap reports a FATAL error,
@@ -70,6 +71,7 @@ export type SaveSlot = number | string;
 
 /** Read a save slot from disk; null on 404 / network error / no endpoint. */
 export async function diskGet<T>(slot: SaveSlot): Promise<T | null> {
+  if (BUILD_PROFILE.storageScope) return null; // preview builds use their browser namespace only
   try {
     const res = await fetch(`/__save/${slot}`, { method: 'GET' });
     if (!res.ok) return null;
@@ -90,6 +92,7 @@ export function diskPut(slot: SaveSlot, body: string): void {
  *  resurrect the pre-import state from a POST the reload dropped. Nothing
  *  else should route here: the stand-down latch exists for a reason. */
 export function diskPutRaw(slot: SaveSlot, body: string): Promise<void> {
+  if (BUILD_PROFILE.storageScope) return Promise.resolve();
   return fetch(`/__save/${slot}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body })
     .then(() => undefined)
     .catch(() => { /* endpoint absent — localStorage is the fallback */ });
@@ -101,6 +104,7 @@ export function diskPutRaw(slot: SaveSlot, body: string): Promise<void> {
  *  would then resurrect the dead character). sendBeacon is queued by the browser
  *  and flushed even on unload; we fall back to the plain POST when it's absent. */
 export function diskBeacon(slot: SaveSlot, body: string): void {
+  if (BUILD_PROFILE.storageScope) return;
   if (saveRefused(`disk slot ${slot}`)) return; // stand-down: the durable lane refuses too
   try {
     if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {

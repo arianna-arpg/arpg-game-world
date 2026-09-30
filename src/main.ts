@@ -1,4 +1,5 @@
 import { sanitizeCosmeticLoadout } from './meta/cosmetics';
+import { BUILD_PROFILE, storageKey } from './buildProfile';
 // ---------------------------------------------------------------------------
 // Entry point: boots the world, runs the loop, and routes player input into
 // the same skill pipeline the AI uses.
@@ -474,7 +475,7 @@ function startGame(
   // at the bedside as always. `?prologue` re-runs it deliberately for this
   // page load (the ?couchpads lever precedent) — a veteran re-watching the
   // opening, or a dev testing it, without touching the account gate.
-  const massExpedition = new URLSearchParams(location.search).has('worldmass') && !COOP_ALLY;
+  const massExpedition = (BUILD_PROFILE.worldmass || new URLSearchParams(location.search).has('worldmass')) && !COOP_ALLY;
   const prologueDue = !massExpedition && (sceneDue(account, 'prologue')
     || new URLSearchParams(location.search).has('prologue'));
   // The LIFE-CONTRACT (meta/modes.ts): class select passes the sworn mode.
@@ -849,7 +850,7 @@ validateContent();
 const devPanelOptIn = ((): boolean => {
   try {
     return new URLSearchParams(location.search).has('dev')
-      || localStorage.getItem('dev_panel') === '1';
+      || localStorage.getItem(storageKey('dev_panel')) === '1';
   } catch { return false; }
 })();
 if (DEV.panel || devPanelOptIn) mountDevPanel(() => world);

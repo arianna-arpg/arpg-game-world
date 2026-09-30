@@ -1,4 +1,5 @@
 import { empowermentRank } from '../engine/skillEmpowerment';
+import { storageKey } from '../buildProfile';
 // ---------------------------------------------------------------------------
 // CHARACTER PERSISTENCE — the active-run half of localStorage.
 //
@@ -41,7 +42,7 @@ import { personalStashEntries, restoreStash, type PersonalStash } from '../engin
 import { STASH_DEFS } from '../data/stashes';
 
 export const CHAR_SCHEMA_VERSION = SAVE_COMPATIBILITY.run;
-const CHAR_KEY = 'arpg_character_v1';
+const CHAR_KEY = storageKey('arpg_character_v1');
 export const CHAR_SLOT = 1; // disk save slot (saves/save_1.json; exported for meta/portage.ts)
 
 interface SavedSocket {
