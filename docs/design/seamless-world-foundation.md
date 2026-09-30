@@ -1,8 +1,9 @@
 # Seamless world: terrain, places, and a fresh journey each run
 
-Status: implementation in progress, started 2026-09-29. The spatial kernel below
-is implemented; the game still uses its existing zone runtime. The later stages
-in this document are requirements, not shipped features.
+Status: implementation in progress, started 2026-09-29. An opt-in playable terrain
+and combat prototype now uses the existing engine. It is a first integration
+milestone, not the completed seamless-world overhaul. The later stages in this
+document are requirements, not shipped features.
 
 Experiment branch: `codex/seamless-world-foundation`, starting at
 `a4c8d08c179065655f5e1fa22dfb5f0fd199bef4` on `main`.
@@ -19,24 +20,80 @@ The existing Git remote is `https://github.com/arianna-arpg/arpg-game-world.git`
 - `generator.ts`: immutable per-run field/surface recipes and bounded place
   footprint competition. Neighboring queries share stable place identities.
 - `state.ts`: sparse terrain changes with causes, one-time identity claims, and
-  validated atomic restore. This is a persistence primitive, not yet the game's
-  character-save integration or a complete actor serializer.
+  validated atomic restore. Terrain invalidation is separate from discovery and
+  reward claims, so finding a place does not throw out the floor cache.
 - `stream.ts`: sample-budgeted page preparation, atomic publication, cancellation,
   bounded resident/sample caches, and regeneration from seed plus durable changes.
 
-The kernel takes authored recipes; it does not yet replace or sample the existing
-atlas. Continuous seeded noise and matching samples are implemented. Drainage,
-roads, geography-to-content adaptation, a terrain walk, live entity residency,
-and combat/save integration remain the next implementation work. The prototype
-conservatively invalidates resident terrain on a state revision; finer per-page
-invalidation is a performance follow-up, not a correctness shortcut.
+- `walk.ts`: the native WalkField contract over streaming terrain, bounded local
+  path searches, per-actor travel prices, and collision queries before residency.
+- `preset.ts`: one replaceable expedition descriptor. Snapshots palette and
+  level-appropriate native rosters from existing tilesets with source attribution;
+  controls field scales, place density, starting reservation and resource budgets.
+- `runtime.ts`: one initial arrival, then continuous movement without loadZone.
+  Native actors, skills, projectiles and companions remain in the same World.
+  Character saves include the run descriptor, configuration, exploration claims,
+  explicit worldmass terrain edits, killed native identities, surviving natives'
+  positions/health/scale, and ordinary persistent loot/contents. A survived-mode
+  death returns to this run's clearing; creating a new run rolls another seed.
+- `paint.ts`: bounded renderer-owned floor textures and a local explored-terrain
+  map. The map samples the physical terrain rather than displaying the old graph.
 
-Verification: `npm run check`; `npm run probe -- worldmass --retries 0`
-(eight passing reported checks including the summary); `npm run genqa`
-(869 cases times three seeds, zero failures, four nonfatal spacing warnings).
-The worldmass probe covers coordinate limits, independent worlds and streams,
-discovery permutations, non-overlapping place claims, cancelled partial jobs,
-bounded residency, terrain replay, one-time claims, and failed restore atomicity.
+The shared cell-ray and sight-veil interface now accepts finite grids and
+worldmass. Moving projectiles (including terrain bounce) use it too. Native
+region effects and grounded spell telegraphs operate on the same sampled cells.
+
+### Trying the prototype
+
+Run the development server from this worktree and open `/?worldmass`, then begin
+a new character. Without the query parameter, the existing game remains the
+default. `M` shows the surveyed terrain. This is presently a solo terrain/combat
+test; it starts in a clearing, not a rebuilt Lastlight. The old campaign's graph
+directions and legacy zone travel stand down in this mode.
+
+`npm run build` followed by `node_modules/.bin/electron.cmd balance/worldmass-ui.cjs`
+runs a hidden real-client check with disposable, isolated saves. Screenshots and
+the log go to ignored `balance/reports/worldmass-*` files.
+
+### Current limits (do not call these completed)
+
+- The geographic kernel supports very large addresses. The live engine still
+  uses a local numeric frame; automatic rebasing of **all** combat/scene state
+  is not implemented. Do not claim indefinitely traversable live-world support.
+- Native bodies remain resident to avoid losing combat state at page edges.
+  The default cap is 96: when full, additional habitat populations wait. This
+  is a temporary test budget, not distant simulation or a complete ecology.
+- Checkpointed natives use the existing game's kind of position/health restore,
+  not an exact serialization of buffs, threat, cooldowns or every spawned child.
+  Streaming itself does not recreate actors. Native doodad mutations, arbitrary
+  summoned/event actors, and all other world packages have not been given durable
+  feature ownership yet. Terrain edits here mean MassState edits specifically.
+- Terrain sampling is budgeted, but an uncached visible texture can still bake
+  synchronously. Terrain edits invalidate all floor pages. There is no proven
+  crossing frame-time bound yet; the UI harness logs batch timings, not FPS.
+- The local map records entered pages, not detailed line-of-sight exploration.
+  Saves remain whole-run JSON; paging long-run consequences is still required.
+- Terrain currently provides open ground, soil/climate variation, lakes/shores
+  and outcrops. Drainage, road networks, canopy ecology, towns, services, authored
+  structures, caves and biome-specific per-actor simulation contexts remain.
+  Co-op replication and the old campaign are not integrated into this mode.
+
+Verification includes `npm run check`, the worldmass contract and real-engine
+probes, existing persistence/sight-veil/cistern probes, generation QA, and the
+hidden real client. The engine probe proves a hero's native attack across a page
+seam, moving-projectile wall occlusion, water status effects, negative-coordinate
+spell telegraphs, save/reload consequences and same-run mode wakes. These are
+bounded integration tests, not a full campaign playthrough.
+
+Latest verification (2026-09-30 UTC): game/launcher/sim types and production
+build passed; worldmass probes reported 12 PASS lines (including their summary),
+existing persistence 84, cistern 60 and sight-veil passed; genqa reported 869
+cases × 3 seeds, zero failures and the four baseline spacing warnings. The
+hidden client confirmed viewport coverage, unchanged hero/skills at crossings,
+the surveyed map, and actual Continue after reload preserving the seed, a wall
+edit and a defeated native. Launcher smoke passed. Normal game smoke initially
+reported a missing menu when run alongside the other Electron checks; its
+isolated retry passed. This intermittent menu result is recorded, not hidden.
 
 ## The commission and the decided run policy
 

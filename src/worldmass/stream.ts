@@ -24,10 +24,10 @@ export class MassStream {
     this.cols = generator.spec.addressSpan / generator.spec.terrainCell;
   }
   private syncChanges(): void {
-    if (this.stateRevision === this.state.revision) return;
+    if (this.stateRevision === this.state.terrainRevision) return;
     // Correct conservative invalidation; page-level dirty indexing can refine it.
     this.pages.clear(); this.pending.clear(); this.samples.clear();
-    this.stateRevision = this.state.revision;
+    this.stateRevision = this.state.terrainRevision;
     for (const [key, cell] of this.needed) this.pending.set(key, { key, cell, samples: [], revision: this.stateRevision });
   }
   request(cells: readonly MassCell[]): void {

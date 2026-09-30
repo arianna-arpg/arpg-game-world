@@ -1,5 +1,6 @@
 import { empowermentPassive, empowermentPoints, empowermentRank, hasEmpowermentPassive, skillInstanceName, treeAbilityNodes, treeInstanceNodeRanks, treePointBudget } from '../engine/skillEmpowerment';
 import { skillMergePlan } from '../engine/skillMerge';
+import { massMap } from '../worldmass/paint';
 import { SKILL_EMPOWERMENT } from '../data/skillEmpowerment';
 import { oracleReliquaryHtml } from './reliquary';
 import { planRelicStorage } from '../engine/accountReliquary';
@@ -8752,6 +8753,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // clicks"); deliberate refreshes fire on click, after release, unharmed.
     if (this.mapDragging || this.mapWashDragging || this.pressHeld.has(this.worldMap)) return;
     const world = this.getWorld();
+    if (world.massRuntime) { this.setPanelHtml(this.worldMap, massMap(world.massRuntime, world.player.pos)); return; }
     if (this.mapTab === 'quests') { this.renderQuestsTab(world); return; }
     const visited = world.visited;
     // ONE DIMENSION PER VIEW: the map shows the active dimension's worldmass;

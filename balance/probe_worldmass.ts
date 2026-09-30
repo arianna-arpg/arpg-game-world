@@ -5,6 +5,8 @@ import type { MassSpec } from '../src/worldmass/contracts';
 import { MassGenerator, makeMassRun } from '../src/worldmass/generator';
 import { MassState } from '../src/worldmass/state';
 import { MassStream } from '../src/worldmass/stream';
+import { MassWalk } from '../src/worldmass/walk';
+import { castRay } from '../src/engine/los';
 
 let passed = 0;
 function test(name: string, fn: () => void): void { fn(); passed++; console.log('PASS ' + name); }
@@ -120,5 +122,28 @@ test('saved changes and single claims survive eviction; failed restore is atomic
   assert.throws(() => restored.restore({ ...save, run: { ...save.run, seed: 7 } }));
   assert.equal(canonical(restored.snapshot()), before);
   save.terrain[0].color = '#ffffff'; assert.equal(restored.patchAt(at(1, 1))?.color, '#123456');
+});
+test('worldmass movement, weighted routes, and shared rays cross negative page boundaries', () => {
+  const flat: MassSpec = { ...spec, surfaces: [{ id: 'land', priority: 0, when: [], region: 'ground', color: '#557744', biome: 'field' }] };
+  const g = new MassGenerator(makeMassRun(123, 'navigation', flat), flat), state = new MassState(g.run, 30);
+  const stream = new MassStream(g, state, { maxPages: 4, maxSamples: 4096 });
+  const walk = new MassWalk(stream, origin);
+  const paint = (x: number, y: number, region: string): void => state.paint({ address: at(x, y), region, color: '#334455', cause: 'probe' });
+  for (let y = -90; y <= 60; y += 30) paint(-30, y, 'wall');
+  const from = { x: -75, y: -15 }, to = { x: 45, y: -15 };
+  assert.equal(walk.lineWalkable(from, to), false);
+  const step = walk.pathStep(from, to); assert.ok(step); assert.ok(walk.isWalkable(step.x, step.y));
+  assert.ok(walk.reachable(from, to), 'can route around the finite outcrop');
+  const hit = castRay({ walk, doodadsAt: () => [] }, from, to, 'shot');
+  assert.ok(hit); assert.equal(hit.x, -30); assert.equal(hit.kind, 'region');
+  assert.ok(castRay({ walk, doodadsAt: () => [] }, from, to, 'sight'));
+  paint(-30, -30, 'ground'); walk.beginFrame();
+  assert.equal(walk.lineWalkable(from, to), true);
+  assert.equal(castRay({ walk, doodadsAt: () => [] }, from, to, 'shot'), null, 'terrain edits update rays immediately');
+  paint(-30, -30, 'mud');
+  assert.equal(walk.linePreferred(from, to, { key: 'dry', costOf: id => id === 'mud' ? 8 : 1 }), false);
+  assert.equal(walk.linePreferred(from, to, { key: 'mud-lover', costOf: () => 1 }), true);
+  const ready = state.terrainRevision; state.claim('explored', 'test'); assert.equal(state.terrainRevision, ready);
+  assert.ok(walk.isWalkable(-15, -15), 'mud keeps native walkability');
 });
 console.log(`PASS worldmass: ${passed} contract groups`);

@@ -290,6 +290,7 @@ export interface SavedPlayerSpot {
 }
 
 export interface WorldStateSave {
+  worldmass?: import('../worldmass/runtime').MassAdventureSave;
   odyssey?: import('../world/odyssey').OdysseyState;
   townPortals?: import('../engine/townportal').TownPortal[];
   townPortalDestination?: string;

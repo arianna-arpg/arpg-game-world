@@ -13,8 +13,11 @@ export class MassState {
   private patches = new Map<string, MassTerrainPatch>();
   private claims = new Map<string, [string, string]>();
   revision = 0;
+  /** Terrain consumers need not rebuild when discovery/reward claims change. */
+  terrainRevision = 0;
   constructor(readonly run: Readonly<MassRun>, readonly cell: number) {
     if (!Number.isSafeInteger(cell) || cell <= 0 || run.addressSpan % cell) throw new Error('Invalid change lattice');
+    this.run = freezeData({ ...run });
   }
   atCell(at: MassAddress): MassAddress {
     const p = address(at.dimension, at.cx, at.cy, at.x, at.y, this.run.addressSpan);
@@ -31,7 +34,7 @@ export class MassState {
     const normalized = freezeData({ region: patch.region, color: patch.color, cause: patch.cause, address: this.atCell(patch.address) });
     const key = this.key(normalized.address), before = this.patches.get(key);
     if (before && canonical(before) === canonical(normalized)) return;
-    this.patches.set(key, normalized); this.revision++;
+    this.patches.set(key, normalized); this.revision++; this.terrainRevision++;
   }
   /** Returns true exactly once, allowing caller-owned reward/loot semantics. */
   claim(kind: string, id: string): boolean {
@@ -67,5 +70,6 @@ export class MassState {
     this.patches = next.patches; this.claims = next.claims;
     // Revision is local invalidation, monotonic even when loading an earlier save.
     this.revision = Math.max(this.revision + 1, data.revision);
+    this.terrainRevision++;
   }
 }

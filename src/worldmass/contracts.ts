@@ -4,6 +4,8 @@ export interface MassNoiseLayer { id: string; period: number; amplitude: number;
 export interface MassFieldDef { id: string; base: number; layers: readonly MassNoiseLayer[] }
 export interface MassRange { field: string; min?: number; max?: number }
 export interface MassSurfaceRule {
+  /** Content registry/package that contributed this rule. */
+  source?: string;
   id: string; priority: number; when: readonly MassRange[];
   region: string; color: string; biome: string;
 }

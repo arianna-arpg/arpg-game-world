@@ -101,7 +101,7 @@ export class MassGenerator {
     const fields = this.fieldsAt(at), s = this.surfaces.find(row => matches(row.when, fields))!;
     return Object.freeze({ region: s.region, color: s.color, biome: s.biome, fields,
       source: Object.freeze({ generator: this.spec.id, version: this.spec.version, rule: s.id,
-        source: s.biome, stream: canonical([this.run.seed, 'terrain', cellKey(at)]) }) });
+        source: s.source ?? s.biome, stream: canonical([this.run.seed, 'terrain', cellKey(at)]) }) });
   }
   private candidate(recipe: MassPlaceRecipe, dimension: string, gx: bigint, gy: bigint): MassPlace | null {
     const namespace = [this.spec.id, this.spec.version, 'place', recipe.id, recipe.version, dimension, gx.toString(), gy.toString()];

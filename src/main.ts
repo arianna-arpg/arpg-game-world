@@ -474,8 +474,9 @@ function startGame(
   // at the bedside as always. `?prologue` re-runs it deliberately for this
   // page load (the ?couchpads lever precedent) — a veteran re-watching the
   // opening, or a dev testing it, without touching the account gate.
-  const prologueDue = sceneDue(account, 'prologue')
-    || new URLSearchParams(location.search).has('prologue');
+  const massExpedition = new URLSearchParams(location.search).has('worldmass') && !COOP_ALLY;
+  const prologueDue = !massExpedition && (sceneDue(account, 'prologue')
+    || new URLSearchParams(location.search).has('prologue'));
   // The LIFE-CONTRACT (meta/modes.ts): class select passes the sworn mode.
   // A roster mode binds an account VESSEL at creation — the character saves
   // cross-session into its own slot from its first breath.
@@ -519,6 +520,7 @@ function startGame(
   // THE LAB KIT (ULT_QA.grantArts — engine/ultimates.ts): iteration builds
   // deal the ultimate + gauge debuts into the fresh bag, unlearned.
   world.dealLabArts();
+  if (massExpedition) world.startWorldMass();
   // THE SKILL GRAFT (meta/unlocks.ts kind 'graft'): the armed charge spends
   // HERE — where the run truly begins — before the baseline save, so the
   // snapshot carries the grafted gem from the first breath. A pick without
@@ -605,6 +607,11 @@ ui.onBeginRun = beginPressed;
 function restoreWorldState(world: World, save: CharacterSave): void {
   if (!save.world || !world.adoptWorldState(save.world)) {
     world.scrubStaleObjectives(); // fresh reroll — createPlayer already stood us in town
+    return;
+  }
+  if (save.world.worldmass) {
+    world.startWorldMass(save.world.worldmass.state.run.seed, save.world.worldmass);
+    world.resumeSpawn('exact', save.world.player);
     return;
   }
   // THE SEALED SHORES reconcile: restored rivers rebuild their exits to the

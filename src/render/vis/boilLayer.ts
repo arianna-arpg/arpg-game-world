@@ -20,7 +20,7 @@
 // (a surface walker over the cistern sees a lid, never the water below).
 // ---------------------------------------------------------------------------
 
-import type { GridWalkField } from '../../world/gridWalk';
+import type { RegionGrid } from '../../world/walk'; // worldmass shares the region-aware telegraph
 import { drawRoil } from './geyserLayer';
 
 export const BOIL_CFG = {
@@ -55,17 +55,20 @@ function h01(a: number, b: number): number {
  *  own cell through the same `regionAt`; a body's centre decides its cell
  *  there too). Clipped to an optional world rect for the renderer. */
 export function groundedCellsIn(
-  wf: GridWalkField, pos: { x: number; y: number }, radius: number, kinds: readonly string[],
+  wf: RegionGrid, pos: { x: number; y: number }, radius: number, kinds: readonly string[],
   clip?: { x0: number; y0: number; x1: number; y1: number },
 ): BoilCell[] {
-  const cell = wf.cell;
+  const cell = wf.cellSize;
   const out: BoilCell[] = [];
   const x0 = Math.max(pos.x - radius, clip?.x0 ?? -Infinity);
   const y0 = Math.max(pos.y - radius, clip?.y0 ?? -Infinity);
   const x1 = Math.min(pos.x + radius, clip?.x1 ?? Infinity);
   const y1 = Math.min(pos.y + radius, clip?.y1 ?? Infinity);
-  const gx0 = Math.max(0, Math.floor(x0 / cell)), gx1 = Math.min(wf.cols - 1, Math.floor(x1 / cell));
-  const gy0 = Math.max(0, Math.floor(y0 / cell)), gy1 = Math.min(wf.rows - 1, Math.floor(y1 / cell));
+  // worldmass bounds the spell/viewport query, never the extent of the country.
+  const gx0 = Math.max(wf.cols === undefined ? -Infinity : 0, Math.floor(x0 / cell));
+  const gx1 = Math.min(wf.cols === undefined ? Infinity : wf.cols - 1, Math.floor(x1 / cell));
+  const gy0 = Math.max(wf.rows === undefined ? -Infinity : 0, Math.floor(y0 / cell));
+  const gy1 = Math.min(wf.rows === undefined ? Infinity : wf.rows - 1, Math.floor(y1 / cell));
   const r2 = radius * radius;
   for (let gy = gy0; gy <= gy1; gy++) {
     for (let gx = gx0; gx <= gx1; gx++) {

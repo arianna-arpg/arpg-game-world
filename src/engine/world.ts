@@ -73,6 +73,8 @@ import { EventBus } from './eventbus';
 import { Party } from './party';
 import { NullInput, SPENT_PRESS_CFG, type PlayerInput, type PlayerInputSource, type MetaAction } from '../net/intent';
 import { ZONE_MEMORY_CFG, captureZoneContents, restoreZoneContents, savedZoneContents, type ZoneContents } from './zonecontents';
+import { WorldMassRuntime, type MassAdventureSave } from '../worldmass/runtime';
+import { MASS_ZONE } from '../worldmass/preset';
 import { TOWN_PORTAL_CFG } from '../data/townportals';
 import { readTownPortals, type TownPortal, type TownPortalView } from './townportal';
 import { applyConversion, applyDot, applyHit, landLifeDamage, mitigateTyped, resistValue, rollSkillDamage, type DamagePacket } from './damage';
@@ -298,7 +300,7 @@ import { HUB_ZONE, OPENING_PROGRESSION, tuneOpeningProgression } from '../world/
 import { bountyRoutes } from '../world/bountyRoutes';
 import type { TravelRoute } from '../world/travelRoutes';
 import { factionAllowed } from '../world/zonePolicy';
-import type { WalkField, PathProfile } from '../world/walk';
+import { regionGrid, type WalkField, type PathProfile } from '../world/walk'; // worldmass cell geometry
 import { GridWalkField, WALK_CFG } from '../world/gridWalk';
 import { regionKind, survivalResource, survivalEaseStat, survivalBandMeter, SURVIVAL_EASE_CAP, isDoodadGround, LIQUID_CFG, regionPathCost, DOUSE_CFG, type DouseSpec, type SurvivalResourceDef } from '../world/regions';
 import { continentAt, continentSeedFrom, type ContinentInfo } from '../world/continents';
@@ -3738,6 +3740,14 @@ export class World {
    *  the spawn samplers take the untouched convex path (zero regression). When
    *  present, they consult it so actors stay on walkable ground and AI paths. */
   walk: WalkField | null = null;
+  /** Opt-in worldmass expedition; page residency does not own combat lifetime. */
+  massRuntime: WorldMassRuntime | null = null;
+  startWorldMass(seed = rollSeed(), save?: MassAdventureSave): void {
+    const runtime = new WorldMassRuntime(seed, 'expedition:' + seed, save?.config, save);
+    this.massRuntime = null;
+    runtime.attach(this, save);
+    this.grounds = []; this.bridges = []; // worldmass terrain owns the surface
+  }
   /** THE TIER FABRIC (engine/tiers.ts): one stateless walk view per elevated
    *  STORY over the SAME grid (index k = tier k; [0] unused; null in
    *  flat/convex zones). Multi-story summits carry several; the classic
@@ -5779,6 +5789,12 @@ export class World {
    * visit (constructs, drops, and corpses stay behind).
    */
   loadZone(zoneId: string, from?: string): void {
+    if (this.massRuntime) {
+      // worldmass has no legacy graph travel. A survived death wakes in this
+      // run's clearing; an exact resume below supplies its saved position.
+      if (zoneId === START_ZONE) this.massRuntime.wake(this);
+      return;
+    }
     this.townLayoutChangedOnLoad = false;
     // Legacy rescue evidence must arrive before the town layout is generated.
     this.questRescues.reconcile();
@@ -5961,7 +5977,7 @@ export class World {
     // is merely FOUND. On sweep-filled ground this is one no-op scan; real
     // work only follows a long teleport/sail into thin chart, at a zone-load
     // boundary that is already paying for a layout build.
-    if (!isCave && FORECHART_CFG.enabled && def.objective.kind !== 'safe') {
+    if (!isCave && FORECHART_CFG.enabled && def.objective.kind !== 'safe' && def.id !== MASS_ZONE) {
       this.chartWithin(def.map, FORECHART_CFG.horizon, def.dimension ?? 'surface');
     }
 
@@ -17915,6 +17931,7 @@ export class World {
     const vfrac = (cur: number, max: number): number => max > 0 ? clamp(cur / max, 0, 1) : 1;
     return {
       schemaVersion: WORLD_SCHEMA_VERSION,
+      ...(this.massRuntime ? { worldmass: this.massRuntime.snapshot(this) } : {}),
       odyssey: this.odyssey.snapshot(),
       zones,
       nextGenId: this.nextGenId,
@@ -48794,6 +48811,7 @@ export class World {
     // path-field refresh budget on whichever grid is steering feet this zone
     // (the layout's own, or the convex nav rake).
     this.walk?.beginFrame?.();
+    this.massRuntime?.update(this);
     this.convexNav?.beginFrame?.();
     // A survived death's fade/wake sequence (character modes). The world keeps
     // simulating beneath the dark — the death itself was already banked.
@@ -48892,11 +48910,11 @@ export class World {
     this.feedMyceliaActivity();
     // Advance the living world (day/night, weather drift, faction territory).
     this.sim.update(dt, this.simView());
-    this.odyssey.update();
+    if (!this.massRuntime) this.odyssey.update(); // worldmass places have not adopted graph campaign targets yet
     this.questRescues.update();
     // THE FORECHART: keep the veiled halo minted ahead of the walker, and grow
     // any far soundings the overlays have requested (world/forechart.ts).
-    this.updateForechart();
+    if (!this.massRuntime) this.updateForechart();
     // THE SETTLE SWEEP: mint-time settles are local — chained displacement
     // can leave a pair past the hover floor across a pool edge; the slow
     // whole-chart pass self-heals it (no-op scan on a clean chart).
@@ -53811,7 +53829,7 @@ export class World {
       // watch too. A coarse ring sample around the seat — proximity-honest,
       // like the doodad eyes; walls never flinch shut (they cannot be
       // pressed closed or burst — the counterplay is not lingering).
-      if (!watched && spec.wallKinds?.length && this.walk instanceof GridWalkField) {
+      if (!watched && spec.wallKinds?.length && this.walk?.regionAt) { // worldmass region queries need no finite array
         const wk = spec.wallKinds;
         const step = Math.PI / 6;
         outer: for (const rr of [reach * 0.5, reach]) {
@@ -58800,10 +58818,11 @@ export class World {
       // Grid masonry uses the same exact traversal as lineOfFire: fast
       // flights and thin corner crossings cannot fall between samples.
       // Region flags, deck heights and hanging partitions share one law.
-      if (!dead && !p.phase && this.walk instanceof GridWalkField) {
+      const flightGrid = regionGrid(this.walk); // worldmass projectiles share the same wall/bounce law
+      if (!dead && !p.phase && flightGrid) {
         const sdx = p.pos.x - prev.x, sdy = p.pos.y - prev.y;
         const elev = this.shotElev(prev, p.tier ?? 0);
-        const hitT = castGridRay(this.walk, prev, p.pos, 'shot', elev);
+        const hitT = castGridRay(flightGrid, prev, p.pos, 'shot', elev);
         if (hitT !== null) {
           const sx = prev.x + sdx * hitT, sy = prev.y + sdy * hitT;
           this.flashes.push({ pos: vec(sx, sy), radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'wall') });
@@ -58812,12 +58831,12 @@ export class World {
             // Back off by at most half a cell, then test the two axes with
             // the same height-aware ray. A hanging partition can bank a shot
             // upstairs while leaving ground-floor flight untouched.
-            const step = this.walk.cellSize / 2;
+            const step = flightGrid.cellSize / 2;
             const safeT = Math.max(0, hitT - 1 / Math.max(1, Math.ceil(Math.hypot(sdx, sdy) / step)));
             const safe = vec(prev.x + sdx * safeT, prev.y + sdy * safeT);
-            const blockedX = castGridRay(this.walk, safe,
+            const blockedX = castGridRay(flightGrid, safe,
               vec(safe.x + Math.sign(sdx) * step, safe.y), 'shot', elev) !== null;
-            const blockedY = castGridRay(this.walk, safe,
+            const blockedY = castGridRay(flightGrid, safe,
               vec(safe.x, safe.y + Math.sign(sdy) * step), 'shot', elev) !== null;
             const dx = Math.cos(p.guideDir), dy = Math.sin(p.guideDir);
             p.guideDir = p.dir = Math.atan2(blockedY || !blockedX ? -dy : dy,

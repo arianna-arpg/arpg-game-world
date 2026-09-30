@@ -63,6 +63,7 @@ export const WALK_CFG = {
 export interface PackedWalk { cols: number; rows: number; cell: number; kinds: string[]; kbits: string; }
 
 export class GridWalkField implements WalkField {
+  readonly cellOcclusion = true; // shared finite-grid / worldmass ray contract
   readonly cols: number;
   readonly rows: number;
   readonly cell: number;

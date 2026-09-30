@@ -1,4 +1,6 @@
 import { treePointBudget } from '../engine/skillEmpowerment';
+import { MassPainter } from '../worldmass/paint';
+import { regionGrid } from '../world/walk'; // worldmass shares native grounded telegraphs
 import { concealmentActive } from '../engine/perception';
 import { anatomyCueState, anatomyOverheadRise } from '../engine/anatomyCues';
 import { feedingCueState, type FeedingTransfer } from '../engine/feedingCues';
@@ -243,6 +245,7 @@ function blendRgb(from: string, to: string, k: number): string {
 }
 
 export class Renderer {
+  private massPainter = new MassPainter();
   private cosmeticTrails = new CosmeticTrails();
   ctx: CanvasRenderingContext2D;
   cam = { x: 0, y: 0 };
@@ -2559,6 +2562,7 @@ export class Renderer {
     const { w, h } = world.arena;
     const theme = world.zone.theme;
     const vw = this.canvas.width / this.zoom, vh = this.canvas.height / this.zoom;
+    if (world.massRuntime) { this.massPainter.draw(ctx, world.massRuntime, this.cam.x, this.cam.y, vw, vh); return; }
     // BOUNDLESS (the Descent): no edges — stream baked chunks around the
     // camera forever, and draw NO border.
     if (world.arena.boundless) {
@@ -4685,14 +4689,14 @@ export class Renderer {
           // up as the countdown runs out. Drawn on the caster's own story only
           // — the lid over a cistern shows a surface walker nothing of the
           // water below.
-          if (world.walk instanceof GridWalkField && (world.player?.tier ?? 0) === (z.caster.tier ?? 0)) {
-            const wfz = world.walk;
+          const wfz = regionGrid(world.walk); // worldmass uses the same spell painter
+          if (wfz && (world.player?.tier ?? 0) === (z.caster.tier ?? 0)) {
             const vw = this.canvas.width / this.zoom, vh = this.canvas.height / this.zoom;
             const cells = groundedCellsIn(wfz, z.pos, z.radius, z.onGround,
-              { x0: this.cam.x - wfz.cell, y0: this.cam.y - wfz.cell, x1: this.cam.x + vw + wfz.cell, y1: this.cam.y + vh + wfz.cell });
+              { x0: this.cam.x - wfz.cellSize, y0: this.cam.y - wfz.cellSize, x1: this.cam.x + vw + wfz.cellSize, y1: this.cam.y + vh + wfz.cellSize });
             const fuse = (z.inst.def.delivery as { telegraph?: number }).telegraph ?? 1;
             ctx.save();
-            drawBoilCells(ctx, cells, wfz.cell, boilRamp(z.delay, fuse), world.time);
+            drawBoilCells(ctx, cells, wfz.cellSize, boilRamp(z.delay, fuse), world.time);
             ctx.restore();
             ctx.globalAlpha = 1;
           }
