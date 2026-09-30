@@ -9,6 +9,11 @@ isolation and Continue. See `docs/design/seamless-world-foundation.md`.
 
 The continuous-world experiment is specified in `docs/design/seamless-world-foundation.md` (branch `codex/seamless-world-foundation`). `src/worldmass/` implements durable addresses, seeded fields/place claims, sparse consequences, bounded terrain residency and an opt-in `/?worldmass` terrain/combat prototype. It uses native movement, skills, region effects, cell-ray occlusion and character saves. Verify `npm run probe -- worldmass` plus persistence/sightveil/cistern; after a build, `balance/worldmass-ui.cjs` checks the hidden real client with isolated saves. Each new run gets fresh land. Live frame rebasing, distant simulation, native place/campaign migration and full consequence paging remain unfinished; read the document's implementation ledger before extending or describing the mode.
 
+Browser branch previews: `docs/engine/browser-previews.md` documents the Pages
+deployment. `scripts/browser-previews.json` configures isolated builds beside
+`/play/`; `scripts/build-browser-previews.mjs` pins their commits and refuses
+shared save namespaces. Verify `node --test scripts/test-browser-previews.mjs`.
+
 Legendary skill empowerment is documented in `docs/design/legendary-skill-empowerment.md`.
 `data/skillEmpowerment.ts` configures duplicate merges and passive-only rewards;
 `engine/skillMerge.ts` shares the Font preview/action plan. Saved ranks extend

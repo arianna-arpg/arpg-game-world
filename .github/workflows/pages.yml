@@ -15,10 +15,17 @@ on:
       - 'vite.portraits.config.ts'
       - 'site/**'
       - 'scripts/export-web-data.ts'
+      - 'scripts/*browser-previews*'
       - '.github/workflows/pages.yml'
       - 'package.json'
       - 'package-lock.json'
   workflow_dispatch: {}
+  # Only the configured, same-repository experiment can refresh the preview.
+  # This workflow runs from main, so the Pages environment remains main-only.
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [codex/seamless-world-foundation]
 
 permissions:
   contents: read
@@ -32,9 +39,12 @@ concurrency:
 
 jobs:
   build:
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - uses: actions/setup-node@v4
         with:
@@ -63,6 +73,12 @@ jobs:
       # host (no /__save endpoint) — see src/meta/persistence.ts.
       - name: Build the in-browser demo → site/play
         run: npx vite build --base=./ --outDir site/play --emptyOutDir
+
+      - name: Validate browser-preview configuration
+        run: node --test scripts/test-browser-previews.mjs
+
+      - name: Build isolated branch previews → site/dev
+        run: node scripts/build-browser-previews.mjs
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
