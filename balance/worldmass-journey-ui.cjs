@@ -32,6 +32,24 @@ app.whenReady().then(async()=>{
       return {version:w.massRuntime.generator.run.version,fatal:__game.crash().fatal};
     });
     log({boot});assert.equal(boot.version,5);assert.equal(boot.fatal,null);
+    const welcome=await run(()=>{
+      const w=__game.world(),town=w.massRuntime.settlement,start=w.massRuntime.journey.departurePoints[0];
+      const dx=town.zone.size.w/2-start.x,dy=town.zone.size.h/2-start.y,len=Math.hypot(dx,dy);
+      const point=d=>({x:start.x+dx/len*d,y:start.y+dy/len*d});
+      __game.settings().speechTyping=false;w.landPartyAt(point(410));__game.step(3);
+      w.landPartyAt(point(120));__game.step(3);
+      const panel=document.getElementById('npc-dialogue');
+      return {open:!panel.hidden,name:panel.querySelector('h2').textContent,
+        blocking:__game.ui.uiBlocking(),receipt:w.ledger['dialogue_seen:mireille_frontier_welcome'],
+        scene:w.zone.id,exits:w.exits.length};
+    });
+    log({welcome});assert.ok(welcome.open);assert.match(welcome.name,/Mireille/);
+    assert.equal(welcome.blocking,false);assert.equal(welcome.receipt,1);assert.equal(welcome.exits,0);
+    await shot('welcome');
+    await run(()=>{
+      window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',bubbles:true}));__game.step(1);
+      window.dispatchEvent(new KeyboardEvent('keyup',{key:'Escape',code:'Escape',bubbles:true}));
+    });
     const walk=await run(()=>{
       const w=__game.world(),m=w.massRuntime,trail=m.journey.trails[0];
       // One controlled placement at the native edge, then actual input along the
@@ -126,7 +144,27 @@ app.whenReady().then(async()=>{
     });
     log({cohortResume});assert.deepEqual(cohortResume.names,cohortSave);assert.ok(cohortResume.magic&&!cohortResume.firing);
     assert.equal(cohortResume.fatal,null);await shot('cohort-continued');
-    log('PASS actual-input trail, native encounters/cache, surveyed circuit, coordinated warnings and durable Continue');
+    // Controlled reward fixture exercises actual bag/recall UI, separate from
+    // the critic's unassisted run and its naturally earned rewards.
+    const memory=await run(()=>{
+      const w=__game.world();w.dropMemoryUnit({...w.player.pos},w.player.pos,{d:'chest'},720,'rough',0,
+        {k:'skill',id:'cleave',l:1,r:'magic'});
+      w.pickupNearestGear(w.localSeat);__game.ui.toggleInventory();__game.step(2);
+      const item=w.meta.items.find(i=>i.mem?.some(u=>u.s===720));if(!item)throw Error('No Memory pickup');
+      journeyQA={memoryUid:item.uid};
+      const tile=document.querySelector('[data-bag-item][data-item-uid="'+item.uid+'"]');
+      const glow=tile.classList.contains('tut-glow');
+      tile.dispatchEvent(new MouseEvent('dblclick',{bubbles:true}));__game.step(2);
+      return {glow,choice:!!document.querySelector('[data-mem-recall]:not([disabled])')};
+    });
+    log({memory});assert.ok(memory.glow&&memory.choice);await shot('first-memory');
+    const recalled=await run(()=>{
+      document.querySelector('[data-mem-recall]:not([disabled])').click();__game.step(2);
+      const w=__game.world();return {receipt:w.account.ledger.memory_recall_lived,lesson:w.memoryRecallLesson(),
+        result:w.memoryRecallLast?.id,fatal:__game.crash().fatal};
+    });
+    log({recalled});assert.equal(recalled.receipt,1);assert.equal(recalled.lesson,false);assert.equal(recalled.fatal,null);
+    log('PASS actual-input trail, native encounters/cache, surveyed circuit, coordinated warnings, durable Continue and first Memory UI');
   }catch(error){log(error.stack||String(error));process.exitCode=1;}
   finally{clearTimeout(timeout);win.destroy();server.close();app.exit(process.exitCode||0);}
 });

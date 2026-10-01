@@ -66,7 +66,9 @@ function paint(w: World, drops = w.drops): { text: string[]; shapes: unknown[][]
     : (...args: unknown[]) => shapes.push([String(key), ...args]) });
   const renderer = Object.create(Renderer.prototype) as { ctx: unknown; drawDrops(w: World): void };
   renderer.ctx = ctx;
-  renderer.drawDrops({ drops } as World);
+  // rewardLabelCovered now reads real combat context; preserve the actual
+  // world in this recording painter just as the live renderer does.
+  renderer.drawDrops(Object.assign(Object.create(w), { drops }) as World);
   return { text, shapes };
 }
 const hostPaint = paint(host);

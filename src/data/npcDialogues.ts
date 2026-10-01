@@ -27,7 +27,8 @@ export interface NpcDialogueDef {
     | { kind: 'exitApproach'; to: string; radius: number; holdSec: number;
         /** Require an on-screen exit with an unobstructed sight ray. Hidden
          * approaches arm the trigger, even when already inside its radius. */
-        visible?: boolean };
+        visible?: boolean }
+    | { kind: 'boundaryApproach'; radius: number; holdSec: number; visible?: boolean };
   /** Receipt is stamped on admission, never on a mere condition/preview read. */
   once?: 'run' | 'account';
   lines: readonly { text: string; weight?: number }[];
@@ -40,7 +41,7 @@ export interface NpcDialogueDef {
  * the director. New systems can register their own facts here. */
 export const NPC_DIALOGUE_FACTS: Record<string, (w: World) => boolean> = {
   oracleAttuned: w => !!w.account.ledger[RELIQUARY_CFG.attunement],
-  oracleAtHome: w => w.zone.id === START_ZONE,
+  oracleAtHome: w => w.localZoneAt(w.player.pos).id === START_ZONE,
   oracleRelicWaiting: w => w.activeQuests.some(a => w.questStanding(a) === 'ready'
     && w.questDefOf(a.questId)?.reward.choices?.some(c => c.baseId === 'relic_charm')),
   oracleMemoryWaiting: w => w.activeQuests.some(a => w.questStanding(a) === 'ready' && !!w.questDefOf(a.questId)?.reward.skillChoice),
@@ -122,6 +123,12 @@ export const NPC_DIALOGUES: NpcDialogueDef[] = [
     all: [{ quest: BRANDT_TROPHY_QUEST, state: 'active' }],
     trigger: { kind: 'dwell', radius: 150, seconds: 0.4 },
     lines: [{ text: 'My hammer is home, and here it stays. But Cindermaw has stirred at the Cold Cinder Forge again. Bring me its iron fang. There is a heat in that old beast that an honest anvil can put to better use.\n\nOne trophy, one piece made finer. I will keep the fire for you.' }],
+  },
+  {
+    id: 'mireille_frontier_welcome', speaker: { defId: 'townsfolk_innkeep' }, zone: START_ZONE,
+    priority: 200, all: [{ fact: 'mireilleLessonComplete', is: false }], once: 'run',
+    trigger: { kind: 'boundaryApproach', radius: 300, holdSec: 16, visible: true },
+    lines: [{ text: 'Off into the wilds already, love? Come find me by the fire before you go. Let us see those two little flasks settled where you can reach them.\n\nNo hurry. Stay beside me a moment when you are ready. The road can spare you that much kindness.' }],
   },
   {
     id: 'mireille_road_welcome', speaker: { defId: 'townsfolk_innkeep' }, zone: START_ZONE,

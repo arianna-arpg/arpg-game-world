@@ -3783,6 +3783,11 @@ export class World {
     this.massRewardLevel = level;
     try { return action(); } finally { this.massRewardLevel = previous; }
   }
+  /** Embedded places supply local context without changing the shared scene. */
+  localZoneAt(pos: Vec2): ZoneDef {
+    const town = this.massRuntime?.settlement;
+    return town?.contains(pos.x, pos.y) ? town.zone : this.zone;
+  }
   townPresent(): boolean { return this.zone.id === START_ZONE || !!this.massRuntime?.settlement; }
   isSafeAt(pos: Vec2): boolean {
     return this.massRuntime ? !!this.massRuntime.settlement?.contains(pos.x, pos.y) : this.zone.objective.kind === 'safe';
@@ -47003,6 +47008,13 @@ export class World {
     return { kind: 'skill', def, rarity, level: 1 };
   }
 
+  /** Optional first-reward invitation; selection and reward odds stay native. */
+  memoryRecallLesson(seat: Seat = this.localSeat): boolean {
+    return seat === this.localSeat && !this.account.ledger[MEMORY_CFG.lessonReceipt]
+      && !this.ledger[MEMORY_CFG.lessonReceipt] && !this.spoilsSealed()
+      && seat.meta.items.some(item => !!memoryUnitsOf(item)?.length);
+  }
+
   /** THE RECALL (skill-items M2/M3, §3b): consume ONE unit of the GROUP
    *  `dropperId` names (memoryGroupKey — the bare dropper id for wild units,
    *  a pinned promise's own key beside it; every pre-law caller's spelling
@@ -47073,6 +47085,12 @@ export class World {
       ...(cut.kind === 'skill' ? { rarity: cut.rarity } : {}),
     };
     this.memoryRecallLast = { ...res, seat: seat.id };
+    if (seat === this.localSeat) {
+      this.ledger[MEMORY_CFG.lessonReceipt] = 1;
+      if (this.metaProgressionActive()) {
+        this.account.ledger[MEMORY_CFG.lessonReceipt] = 1; this.accountDirty = true;
+      }
+    }
     return res;
   }
 

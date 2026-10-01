@@ -9,7 +9,11 @@ export interface MassProgressionSpec {
   stops: { distance: number; level: number }[];
   variation?: { field: string; levels: number; start: number; span: number };
 }
-export interface MassPopulation { level: number; table: { id: string; weight: number }[] }
+export interface MassPopulation {
+  level: number; table: { id: string; weight: number }[];
+  /** Optional saved quotas over explicit native identities, independent of the hero. */
+  limits?: { source: string; ids: string[]; max: number }[];
+}
 export function validateMassProgression(spec: MassProgressionSpec, terrain: MassSpec): void {
   const level = (n: number) => Number.isSafeInteger(n) && n >= 1 && n <= 100;
   if (!spec.source || !level(spec.minLevel) || !level(spec.maxLevel) || spec.minLevel > spec.maxLevel

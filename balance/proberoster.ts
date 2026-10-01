@@ -61,6 +61,9 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_worldmass_welcome.ts', status: 'green', tier: 'fast', why: 'worldmass spatial dialogue, native departure invitations, visibility, dismissal and saved receipts' },
+  { probe: 'probe_worldmass_population.ts', status: 'green', tier: 'fast', why: 'worldmass saved composition quotas, native roster preservation, seeded slots and legacy encounter identity' },
+  { probe: 'probe_memorylesson.ts', status: 'green', tier: 'fast', why: 'first Memory menu/item attention, failed recall, successful graduation and account persistence' },
   { probe: 'probe_combatfocus.ts', status: 'green', tier: 'fast', why: 'combatFocus numeric crowd clearance, stable offsets and unchanged host text' },
   { probe: 'probe_worldmass_cohorts.ts', status: 'green', tier: 'fast', why: 'native coordinated landmark encounters, warning-safe Continue, wounds/casualties, complete admission and legacy populations' },
   { probe: 'probe_worldmass_journey.ts', status: 'green', tier: 'fast', why: 'connected frontier routes, reachability, native scenery consequences, surveyed paths and legacy worlds' },

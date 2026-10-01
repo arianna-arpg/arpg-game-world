@@ -19,6 +19,7 @@ import { MassSettlement, type MassSettlementSave } from './settlement';
 import { geographicLevel, validateMassProgression, type MassPopulation } from './progression';
 import type { MassPlace } from './contracts';
 import { MassJourney } from './journey';
+import { populationChoices, validatePopulationLimits } from './population';
 import { MassEcology, validateMassEcology, type MassEcologySave } from './ecology';
 
 interface MassEnemySave {
@@ -88,6 +89,7 @@ export class WorldMassRuntime {
         || c.table.some(r => !MONSTERS[r.id] || !Number.isFinite(r.weight) || r.weight <= 0)) throw new Error('Invalid worldmass population');
     }
     for (const c of config.content) {
+      for (const row of [c, ...(c.levels ?? [])]) validatePopulationLimits(row);
       if (c.magicPack) {
         const def = Object.hasOwn(MAGIC_PACKS,c.magicPack.mechanic) ? MAGIC_PACKS[c.magicPack.mechanic] : undefined;
         const factions = new Set([c.table,...(c.levels?.map(l=>l.table) ?? [])].flat().map(r=>MONSTERS[r.id]?.faction));
@@ -340,9 +342,11 @@ export class WorldMassRuntime {
       // Bodies remain alive across EVERY page boundary. Do not replace a battle
       // with a lossy zone-enemy memo just to meet a streaming quota.
       const rng = massRandom(this.generator.run.seed, ['population', p.id, content.source]);
+      const selected: string[] = [];
       for (let i = 0; i < content.count; i++) {
         const id = canonical([p.id, i]);
-        const monster = rng.weighted(population.table).id;
+        const monster = rng.weighted(populationChoices(population, selected)).id;
+        selected.push(monster);
         const angle = rng.range(0, Math.PI * 2), radius = rng.range(30, p.radius * .65);
         const def = MONSTERS[monster];
         const scale = def.scaleVariance ? rng.range(...def.scaleVariance) : 1;

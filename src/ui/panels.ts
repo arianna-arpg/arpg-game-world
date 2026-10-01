@@ -4393,7 +4393,8 @@ export class UI {
       // it (the engine refuses too), and a locked tile keeps still.
       if (i.mem) {
         const mk = MEMORY_KINDS[memoryKindOf(i) ?? 'rough'];
-        return `<div data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
+        const memoryRecallLesson = !breaking && world.memoryRecallLesson(invSeat);
+        return `<div class="${memoryRecallLesson ? 'tut-glow' : ''}" data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
           ${breaking ? (salv === 'sell' && !i.locked ? `data-salv-uid="${i.uid}"` : '') : `data-drag="gearItem:${i.uid}"`} data-drop="gearTile:${i.uid}"
           style="position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
           width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#1c1626;

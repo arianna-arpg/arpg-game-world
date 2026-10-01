@@ -24,6 +24,12 @@ and places damage values clear of visible bodies; `VIS_CFG.combatFocus` owns
 its presentation dials. Verify `probe_combatfocus.ts` and the isolated real
 renderer in `balance/combat-focus-ui.cjs`.
 This is an opening network, not global roads, campaign migration or distant AI.
+Worldmass opening population quotas live in `population.ts` and are saved per
+run; omitted quotas retain legacy encounters. Continuous Lastlight supplies
+spatial dialogue and physical departure invitations through `localZoneAt` and
+`boundaryApproach`. First Memory menu/item attention ends on successful recall.
+Verify worldmass_population, worldmass_welcome, memorylesson and the scoped
+journey client harness; native memory/menu/town-welcome probes remain applicable.
 
 Worldmass version 4 adds geographic progression through
 `src/worldmass/progression.ts`: saved distance/field rules and native presence

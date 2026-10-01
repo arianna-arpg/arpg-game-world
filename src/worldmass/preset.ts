@@ -6,6 +6,7 @@ import type { MassSpec } from './contracts';
 import type { MassProgressionSpec, MassPopulation } from './progression';
 import { freezeData } from './random';
 import { frontierLandmarks } from './landmarks';
+import { openingPopulation } from './population';
 import { nativeMassSite, type MassSiteSpec } from './sites';
 
 export const MASS_ZONE = 'worldmass_expedition';
@@ -84,11 +85,10 @@ export function massAdventure(): MassAdventure {
     variation: { field: 'danger', levels: 2, start: 1600, span: 4000 },
   };
   const populations = (table: Parameters<typeof presenceTable>[0]): MassPopulation[] =>
-    Array.from({ length: progression.maxLevel }, (_, i) => ({
-      level: i + 1, table: presenceTable(table, i + 1, id => MONSTERS[id]?.presence)
+    Array.from({ length: progression.maxLevel }, (_, i) => openingPopulation(i + 1,
+      presenceTable(table, i + 1, id => MONSTERS[id]?.presence)
         .filter(r => MONSTERS[r.id] && !MONSTERS[r.id].habitat)
-        .map(r => ({ id: r.id, weight: r.weight })),
-    }));
+        .map(r => ({ id: r.id, weight: r.weight }))));
   return freezeData({ terrain, progression, theme: JSON.parse(JSON.stringify(TILESETS.downs.theme)) as ZoneDef['theme'],
     content: [...families.map(f => ({ id: f.id, source: 'tilesets/' + f.id + '/packs', level: 1, count: 3,
       levels: populations(TILESETS[f.id].packs.table),

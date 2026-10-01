@@ -28,7 +28,7 @@ export function dialogueConditionMet(w: World, c: DialogueCondition): boolean {
 }
 
 export function npcDialogueEligible(w: World, def: NpcDialogueDef): boolean {
-  if (def.zone && w.zone.id !== def.zone) return false;
+  if (def.zone && w.localZoneAt(w.player.pos).id !== def.zone) return false;
   if (def.once && (def.once === 'account' ? w.account.ledger : w.ledger)[npcDialogueReceipt(def.id)]) return false;
   return (def.all ?? []).every(c => dialogueConditionMet(w, c))
     && (!def.any?.length || def.any.some(c => dialogueConditionMet(w, c)))
@@ -130,14 +130,18 @@ export class NpcDialogueDirector {
       this.calling = undefined;
     }
     for (const def of [...NPC_DIALOGUES].sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id))) {
-      if (def.trigger.kind !== 'exitApproach' || !npcDialogueEligible(w, def)) continue;
+      if (def.trigger.kind === 'dwell' || !npcDialogueEligible(w, def)) continue;
       const trigger = def.trigger;
-      const exits = w.exits.filter(e => e.to === trigger.to && (w.player.tier ?? 0) === 0);
+      // boundaryApproach shares native visibility/admission/receipt rules with
+      // graph exits, but refers to physical routes rather than a loading gate.
+      const approaches = (w.player.tier ?? 0) !== 0 ? [] : trigger.kind === 'exitApproach'
+        ? w.exits.filter(e => e.to === trigger.to).map(e => e.pos)
+        : w.massRuntime?.journey?.departurePoints ?? [];
       const frame = w.viewRectFor(w.player);
-      const approached = exits.some(e => dist(w.player.pos, e.pos) <= trigger.radius
-        && (!trigger.visible || (e.pos.x >= frame.x && e.pos.x <= frame.x + frame.w
-          && e.pos.y >= frame.y && e.pos.y <= frame.y + frame.h
-          && w.lineOfSight(w.player.pos, e.pos, w.player.tier ?? 0, 0))));
+      const approached = approaches.some(pos => dist(w.player.pos, pos) <= trigger.radius
+        && (!trigger.visible || (pos.x >= frame.x && pos.x <= frame.x + frame.w
+          && pos.y >= frame.y && pos.y <= frame.y + frame.h
+          && w.lineOfSight(w.player.pos, pos, w.player.tier ?? 0, 0))));
       if (!approached) { this.armed.add(def.id); continue; }
       if (!admit || !this.armed.has(def.id)) continue;
       const a = w.actors.find(a => this.matches(a, def));

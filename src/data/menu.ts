@@ -212,6 +212,12 @@ export function bankedTreePoints(r: MenuReads): number {
 }
 registerMenuAttention({ id: 'tree_points', entry: 'inventory', kind: 'pip', read: bankedTreePoints });
 
+/** First Memory uses the same optional menu-to-item invitation as flask gifts. */
+registerMenuAttention({
+  id: 'memory_recall_lesson', entry: 'inventory', kind: 'lesson',
+  read: r => r.world.memoryRecallLesson(r.seat),
+});
+
 /** Mireille's flask lesson: her gift waits unseated in the pack. The engine
  *  read is latched and lived-aware (World.mireilleGiftLesson), so the glow
  *  can never outlive the lesson; the fold quiets it once the bag is open. */

@@ -758,3 +758,29 @@ changes in this commit. Future source changes require the touched harnesses from
 appropriate focused probes, real-client checks for boot/render, and the new
 continuous-world acceptance cases above. Keep the source map in `CLAUDE.md` and
 this contract current as each step becomes implemented.
+
+## Opening playtest follow-up
+
+New run population rows at levels 1–2 resolve native standoff skills into a
+saved composition quota (at most one ranged body per group). The manifest owns
+concrete species IDs and provenance; later levels and native AI/stats remain
+unchanged. Every seeded slot counts, including dead or resident members, so a
+revisit cannot reroll the survivors. Old manifests without limits preserve
+their exact random stream. This limits one group, not simultaneous pressure
+from distinct neighbouring encounters.
+
+Continuous Lastlight now supplies spatial dialogue context. Its physical
+departure points use the native visibility, portrait reader, dismissal and
+once-per-run admission rules for Mireille's optional invitation. The Oracle's
+home dialogue uses the same local context. No loading gate is introduced.
+
+The first carried Memory borrows the existing menu-to-inventory-to-item glow.
+A successful native recall stamps MEMORY_CFG.lessonReceipt; invalid attempts
+do not. The account remembers graduation across lives, while ongoing unspent
+Memories remain available without repeated instruction. This adds no caption
+or forced action and changes neither reward odds nor skill grants.
+
+Checks: worldmass_population, worldmass_welcome, memorylesson, memories,
+menubar, townwelcome, mireille_lesson, speech, itemreadability, full worldmass
+probes, check, generation QA, sim smoke, and the scoped real-client journey
+harness (portrait, dismissal, recall UI, Continue).

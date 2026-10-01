@@ -38,6 +38,8 @@ export function segmentDistance(p: Vec2, a: Vec2, b: Vec2): number {
 export class MassJourney {
   readonly places: readonly MassPlace[];
   readonly trails: readonly MassTrail[];
+  /** Physical departures resolved from this run's native settlement footprint. */
+  readonly departurePoints: readonly Vec2[];
   constructor(readonly spec: MassJourneySpec, readonly town: MassSettlement, private readonly generator: MassGenerator, private readonly walk: MassWalk) {
     if (!spec.source || !Number.isFinite(spec.width) || spec.width < 90 || spec.width > 240
       || !/^#[0-9a-f]{6}$/i.test(spec.color) || !/^#[0-9a-f]{6}$/i.test(spec.clearingColor)
@@ -91,6 +93,7 @@ export class MassJourney {
           rule: d.id, source: spec.source, stream: canonical([spec.source, d.id]) } });
       trails.push({ id: id + '/approach', points, width: spec.width });
     }
+    this.departurePoints = freezeData(trails.map(t => ({ ...t.points[0] })));
     // Neighbouring destinations connect outside the town, providing a return
     // circuit and alternate approaches instead of four disconnected dead ends.
     const cx = w / 2, cy = h / 2, ordered = places.map(p => ({ p, q: this.local(p) }))

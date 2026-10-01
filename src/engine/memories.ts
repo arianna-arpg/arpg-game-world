@@ -160,6 +160,8 @@ export interface MemoryProvenance { d: string; e?: MonsterRarity }
  *  her standing word: numbers bless through playthroughs). Strings are
  *  data here so iteration never hunts literals. */
 export const MEMORY_CFG = {
+  /** First successful recall ends the native menu/item invitation across lives. */
+  lessonReceipt: 'memory_recall_lived',
   /** THE KIT LEAN (§4 rung 1): weight multiplier on the dropper's own
    *  droppable-and-unlocked kit skills. The headline promise should be
    *  FELT — order 5–10×, well above gemBias's 2.5. */
