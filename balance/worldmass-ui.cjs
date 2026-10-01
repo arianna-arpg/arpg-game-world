@@ -52,7 +52,7 @@ app.whenReady().then(async () => {
     const checkpoint = await win.webContents.executeJavaScript(`(async () => {
       const w=__game.world(),m=w.massRuntime;
       const victim=w.actors.find(a=>a.team==='enemy'&&!a.dead); if(victim) w.kill(victim,true);
-      m.state.paint({address:m.walk.at(48,48),region:'wall',color:'#667788',cause:'ui-check'});
+      m.state.paint({address:m.walk.at(-48,-48),region:'wall',color:'#667788',cause:'ui-check'});
       __game.save(); await new Promise(r=>setTimeout(r,500));
       return {seed:m.generator.run.seed,fallen:m.state.snapshot().claims.filter(r=>r[0]==='fallen').length,pos:{...w.player.pos}};
     })()`);
@@ -62,7 +62,7 @@ app.whenReady().then(async () => {
       document.querySelector('#sm-continue:not([disabled])')?.click();
       for(let i=0;i<60&&!__game.world().massRuntime;i++) await new Promise(r=>setTimeout(r,100));
       const w=__game.world(),m=w.massRuntime;
-      return {fatal:__game.crash().fatal,seed:m?.generator.run.seed,region:w.walk?.regionAt(50,50),
+      return {fatal:__game.crash().fatal,seed:m?.generator.run.seed,region:w.walk?.regionAt(-45,-45),
         fallen:m?.state.snapshot().claims.filter(r=>r[0]==='fallen').length,pos:{...w.player.pos}};
     })()`);
     log({checkpoint,reload}); assert.equal(reload.fatal,null); assert.equal(reload.seed,checkpoint.seed);

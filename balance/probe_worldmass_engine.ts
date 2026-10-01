@@ -15,6 +15,8 @@ import { groundedCellsIn } from '../src/render/vis/boilLayer';
 
 const restore = seedGlobalRandom(812735);
 const w = makeSimWorld('warrior', 812735), config = JSON.parse(JSON.stringify(massAdventure()));
+delete config.settlement; // this probe isolates the wilderness adapter
+config.terrain.addressSpan = 768; config.terrain.terrainCell = 24;
 config.terrain.fields = [];
 config.terrain.surfaces = [{ id: 'test-land', priority: 0, when: [], region: 'ground', color: '#445522', biome: 'downs' }];
 config.terrain.places = [{ id: 'patrol', version: 1, content: 'native', period: 600, radius: 150, jitter: 0, chance: 1, when: [], priority: 1 }];
@@ -62,7 +64,7 @@ resumed.resumeSpawn('exact', save.world!.player);
 const replay = resumed.massRuntime!.snapshot(resumed);
 assert.deepEqual(replay.enemies.map(e => [e.id, e.life]).sort(), expected);
 assert.equal(resumed.walk?.regionAt?.(-795, 35), 'wall');
-assert.deepEqual(resumed.player.pos, stored.player);
+assert.deepEqual(resumed.player.pos, { x: stored.player.x, y: stored.player.y });
 assert.equal(replay.state.run.seed, 345);
 assert.deepEqual(replay.state.claims, stored.state.claims);
 const before = canonical(replay.state);

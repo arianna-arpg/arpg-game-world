@@ -14,7 +14,7 @@ export interface MassSiteSpec {
   cache?: { x: number; y: number; holdSeconds: number };
 }
 export interface MassSiteDiscovery { id: string; content: string; center: MassAddress }
-type PieceState = Pick<Doodad, 'pos' | 'kind' | 'radius' | 'rot' | 'adorn' | 'gone' | 'felled' | 'hitbox'>;
+export type PieceState = Pick<Doodad, 'pos' | 'kind' | 'radius' | 'rot' | 'adorn' | 'gone' | 'felled' | 'hitbox'>;
 export interface MassSiteSave {
   clock: number;
   found: MassSiteDiscovery[];
@@ -57,7 +57,7 @@ export function siteOffset(place: MassPlace, x: number, y: number): { x: number;
   for (let i = 0; i < turns; i++) [x, y] = [-y, x];
   return { x, y, angle: turns * Math.PI / 2 };
 }
-function pieceState(d: Doodad): PieceState {
+export function pieceState(d: Doodad): PieceState {
   // Deliberate static-scenery contract, not a serializer for actor-owned hazards.
   // The engine owns felling/regrowth; its clocks are translated on checkpoint load.
   return JSON.parse(JSON.stringify({ pos: d.pos, kind: d.kind, radius: d.radius,

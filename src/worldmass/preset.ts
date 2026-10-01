@@ -12,6 +12,7 @@ export interface MassContent {
   site?: MassSiteSpec;
 }
 export interface MassAdventure {
+  settlement?: import('./settlement').MassSettlementSpec;
   terrain: MassSpec;
   theme: ZoneDef['theme'];
   content: MassContent[];
@@ -30,7 +31,7 @@ export function massAdventure(): MassAdventure {
     { id: 'desert', field: 'moisture', min: -2, max: -.3 },
   ];
   const terrain: MassSpec = {
-    id: 'hollow-wake-country', version: 2, addressSpan: 768, terrainCell: 24,
+    id: 'hollow-wake-country', version: 3, addressSpan: 960, terrainCell: 30,
     fields: [
       { id: 'elevation', base: .15, layers: [
         { id: 'continent', period: 18000, amplitude: .7 },
@@ -78,6 +79,7 @@ export function massAdventure(): MassAdventure {
           .filter(r => MONSTERS[r.id] && !MONSTERS[r.id].habitat).map(r => ({ id: r.id, weight: r.weight })),
         site: nativeMassSite('pillaged_township', 'Pillaged Ruin', { x: 60, y: 80, holdSeconds: 5 }) },
     ],
+    settlement: { zone: 'lastlight', source: 'zones/lastlight', apron: 192, blend: 144 },
     startRadius: 288, populationRadius: 1300, maxPopulation: 96, pageRadius: 2, samplesPerTick: 512,
   });
 }

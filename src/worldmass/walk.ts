@@ -17,7 +17,14 @@ interface Node { x: number; y: number; cost: number; first: Vec2 }
  * even before a render page arrives; page residency never means solid/empty. */
 export class MassWalk implements RegionGrid {
   readonly cellOcclusion = true;
-  readonly cellSize: number;
+  /** The common lattice keeps native 30-unit walls and geographic 24-unit
+   * cells exact for rays/sweeps; path search keeps its bounded coarse lattice. */
+  get cellSize(): number {
+    let a = this.stream.generator.spec.terrainCell, b = this.overlay?.grid.cellSize ?? a;
+    while (b) { const r = a % b; a = b; b = r; }
+    return a;
+  }
+  overlay?: { grid: RegionGrid; contains(x: number, y: number): boolean };
   private cache = new Map<string, Vec2 | null>();
   private cacheVersion = '';
   /** Native scenery joins navigation without repainting physical region cells. */
@@ -29,13 +36,14 @@ export class MassWalk implements RegionGrid {
     this.origin = Object.freeze({ ...origin });
     this.config = Object.freeze({ ...config });
     for (const n of Object.values(config)) if (!Number.isSafeInteger(n) || n < 1) throw new Error('Invalid navigation budget');
-    this.cellSize = stream.generator.spec.terrainCell;
   }
-  get version(): number { return this.stream.state.terrainRevision; }
+  get version(): number { return this.stream.state.terrainRevision + (this.overlay?.grid.version ?? 0); }
   at(x: number, y: number): MassAddress {
     return address(this.origin.dimension, this.origin.cx, this.origin.cy, x, y, this.stream.generator.spec.addressSpan);
   }
-  regionAt(x: number, y: number): string { return this.stream.sample(this.at(x, y)).region; }
+  regionAt(x: number, y: number): string {
+    return this.overlay?.contains(x, y) ? this.overlay.grid.regionAt(x, y) : this.stream.sample(this.at(x, y)).region;
+  }
   isWalkable(x: number, y: number): boolean { return regionKind(this.regionAt(x, y))?.walkable ?? false; }
   supportedAt(x: number, y: number, r: number): boolean {
     for (const [dx, dy] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]]) {
@@ -85,7 +93,7 @@ export class MassWalk implements RegionGrid {
   }
   lineWalkable(from: Vec2, to: Vec2): boolean { return this.line(from, to); }
   linePreferred(from: Vec2, to: Vec2, profile: PathProfile): boolean { return this.line(from, to, profile); }
-  beginFrame(): void { this.searches = 0; }
+  beginFrame(): void { this.searches = 0; this.overlay?.grid.beginFrame?.(); }
   reachable(from: Vec2, to: Vec2): boolean {
     return this.line(from, to) || this.search(from, to, undefined) !== null;
   }
@@ -96,7 +104,9 @@ export class MassWalk implements RegionGrid {
   private search(from: Vec2, to: Vec2, profile: PathProfile | undefined): Vec2 | null {
     const version = this.version + ':' + (this.obstacles?.revision() ?? '');
     if (this.cacheVersion !== version) { this.cache.clear(); this.cacheVersion = version; }
-    const cs = this.cellSize, fx = Math.floor(from.x / cs), fy = Math.floor(from.y / cs);
+    if (this.overlay?.contains(from.x, from.y) && this.overlay.contains(to.x, to.y))
+      return this.overlay.grid.pathStep?.(from, to, profile) ?? null;
+    const cs = this.stream.generator.spec.terrainCell, fx = Math.floor(from.x / cs), fy = Math.floor(from.y / cs);
     const tx = Math.floor(to.x / cs), ty = Math.floor(to.y / cs);
     if (Math.max(Math.abs(tx - fx), Math.abs(ty - fy)) > this.config.searchRadius) return null;
     const key = JSON.stringify([fx, fy, tx, ty, profile?.key ?? '']);

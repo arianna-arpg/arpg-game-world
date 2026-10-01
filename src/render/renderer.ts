@@ -2564,7 +2564,22 @@ export class Renderer {
     const { w, h } = world.arena;
     const theme = world.zone.theme;
     const vw = this.canvas.width / this.zoom, vh = this.canvas.height / this.zoom;
-    if (world.massRuntime) { this.massPainter.draw(ctx, world.massRuntime, this.cam.x, this.cam.y, vw, vh); return; }
+    if (world.massRuntime) {
+      const mass = world.massRuntime;
+      this.massPainter.draw(ctx, mass, this.cam.x, this.cam.y, vw, vh);
+      this.massPainter.drawSettlement(ctx, mass, this.cam.x, this.cam.y, vw, vh, layer => {
+        const walk = world.walk, zone = world.zone;
+        // Native floor baking is synchronous; asynchronous uploads capture pixels
+        // only. The simulation and every other draw pass keep the composite field.
+        try {
+          world.walk = mass.settlement!.grid; world.zone = mass.settlement!.zone;
+          this.ground.draw(layer, world, Math.max(0, this.cam.x), Math.max(0, this.cam.y),
+            Math.min(vw, world.zone.size.w), Math.min(vh, world.zone.size.h));
+          this.drawAnimatedRegions(world, layer);
+        } finally { world.walk = walk; world.zone = zone; }
+      });
+      return;
+    }
     // BOUNDLESS (the Descent): no edges — stream baked chunks around the
     // camera forever, and draw NO border.
     if (world.arena.boundless) {
@@ -2764,11 +2779,10 @@ export class Renderer {
   /** ANIMATED region visuals (flesh throb, water drift) — the only per-frame
    *  cell painting left. Every STATIC cell (walls, still visuals, bevels,
    *  contact AO) bakes into the ground chunks; see vis/ground.ts. */
-  private drawAnimatedRegions(world: World): void {
+  private drawAnimatedRegions(world: World, ctx = this.ctx): void {
     if (VIS_ABLATE.has('animregions')) return; // perf forensics (visConfig)
     const wf = world.walk;
     if (!(wf instanceof GridWalkField)) return;
-    const { ctx } = this;
     const tMs = world.time * 1000;
     const vw = this.canvas.width / this.zoom, vh = this.canvas.height / this.zoom;
     const cell = wf.cell;
@@ -8348,7 +8362,9 @@ export class Renderer {
       // (applyZone patches only name/level/theme), so the id of the terrain it
       // MIRRORS is the honest tell for a client — hence both reads.
       const atSea = world.sailing || world.appliedZoneId === VOYAGE_ZONE_ID;
-      const lvText = !atSea && world.zone.level > 0 ? ` — Monster Lv ${world.zone.level}` : '';
+      const massSettlement = world.massRuntime?.settlement;
+      const locality = massSettlement?.contains(p.pos.x, p.pos.y) ? massSettlement.zone : world.zone;
+      const lvText = !atSea && locality.level > 0 ? ` — Monster Lv ${world.zone.level}` : '';
       // Underground, the banner names the BAND (the strata fabric) AND the rung
       // standing on it: where you are on the world's vertical ladder, and how
       // far down that is. Both read the ONE caveDepth datum — the number IS the
@@ -8357,7 +8373,7 @@ export class Renderer {
       const caveD = sceneGround ? undefined : world.zone.caveDepth;
       const stratText = caveD != null
         ? ` · ${stratumOf(caveD).name} · Depth ${caveD}` : '';
-      ctx.fillText(`${world.zone.name}${lvText}${stratText}`, x, 46);
+      ctx.fillText(`${locality.name}${lvText}${stratText}`, x, 46);
       // Living-world status: time of day · weather · who holds this ground.
       ctx.font = '11px Verdana';
       ctx.fillStyle = '#9ab0c8';

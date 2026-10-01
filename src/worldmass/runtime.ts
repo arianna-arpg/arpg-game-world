@@ -12,11 +12,14 @@ import { MassWalk } from './walk';
 import { MassSites, siteOffset, validateMassSite, type MassSiteSave } from './sites';
 import { MASS_ZONE, massAdventure, type MassAdventure } from './preset';
 
+import { MassSettlement, type MassSettlementSave } from './settlement';
+
 interface MassEnemySave { id: string; monster: string; level: number; x: number; y: number; life: number; scale: number }
 export interface MassAdventureSave {
   schema: 1; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
-  player: { x: number; y: number }; enemies: MassEnemySave[]; contents: ZoneContents;
+  player: { x: number; y: number; tier?: number }; enemies: MassEnemySave[]; contents: ZoneContents;
   sites?: MassSiteSave;
+  settlement?: MassSettlementSave;
 }
 /** First engine adapter. Residency NEVER tears down the World, its actors, or
  * in-flight skills. The population cap is deliberately conservative until full
@@ -27,13 +30,17 @@ export class WorldMassRuntime {
   readonly stream: MassStream;
   readonly walk: MassWalk;
   readonly sites: MassSites;
+  settlement: MassSettlement | null = null;
   readonly config: Readonly<MassAdventure>;
   private natives = new Map<string, Actor>();
   private nearKey = '';
   private nextPopulation = 0;
   private places = new Map<string, ReturnType<MassGenerator['placesInCell']>>();
   readonly origin: MassCell;
+  readonly resumeTier: number;
   constructor(seed: number, runId: string, config: MassAdventure = massAdventure(), save?: MassAdventureSave) {
+    this.resumeTier = save?.player.tier ?? 0;
+    if (!Number.isInteger(this.resumeTier) || this.resumeTier < 0 || this.resumeTier > 6) throw new Error('Invalid worldmass player story');
     this.config = freezeData(JSON.parse(canonical(config)) as MassAdventure);
     this.origin = Object.freeze(save ? { ...save.origin } : { dimension: 'surface', cx: '0', cy: '0' });
     address(this.origin.dimension, this.origin.cx, this.origin.cy, 0, 0, config.terrain.addressSpan);
@@ -78,7 +85,7 @@ export class WorldMassRuntime {
         throw new Error('Invalid worldmass survivor');
       this.state.restore(save.state);
       if (save.state.terrain.some(p => !regionKind(p.region))) throw new Error('Unresolved saved worldmass terrain');
-    } else {
+    } else if (!config.settlement) {
       // An explicit, attributable run-start reservation, saved like any terrain edit.
       const cs = config.terrain.terrainCell, r = config.startRadius;
       const start = this.generator.terrainAt(this.walk.at(0, 0));
@@ -94,19 +101,33 @@ export class WorldMassRuntime {
       layout: [], objective: { kind: 'none', label: 'Explore the wilds' }, exits: [], map: { x: 0, y: 0 },
       biome: 'downs', sky: 'open', boundless: true, special: true, cohort: 'authored', townPortals: false,
       seed: this.generator.run.seed };
-    // Exactly one conventional arrival. Future terrain pages never invoke it.
-    world.loadZone(MASS_ZONE);
+    // A native settlement is built only at run creation/Continue. Its buildings,
+    // population, interiors and service controllers remain the live scene.
+    world.massRuntime = null;
+    if (this.config.settlement) {
+      if (save && !save.settlement) throw new Error('Missing native settlement checkpoint');
+      this.settlement = new MassSettlement(this.config.settlement, world, this.generator.run.seed, save?.settlement);
+      this.walk.overlay = { grid: this.settlement.grid, contains: (x, y) => this.settlement!.contains(x, y) };
+      if (!save) this.settlement.reserve(this.state, this.walk);
+      const def = world.zoneMap[MASS_ZONE];
+      def.tiers = this.settlement.zone.tiers;
+      world.zone = def;
+      world.arena = { ...world.arena, boundless: true };
+    } else {
+      world.loadZone(MASS_ZONE);
+      world.doodads = [];
+      world.rebuildClientTerrain();
+      world.actors = world.actors.filter(a => a.team !== 'enemy');
+    }
     world.massRuntime = this;
     world.walk = this.walk;
-    world.doodads = [];
     this.walk.obstacles = { blocked: (x, y) => !!world.pointInSolid(x, y, this.walk.cellSize / 2),
       revision: () => world.doodadRev + ':' + world.doodads.length };
     this.sites.restore(save?.sites, world.time);
     world.exits = [];
+    world.waypointPos = null; // worldmass has no graph fast-travel destinations
     world.notices = []; world.texts = []; // obsolete graph directions do not describe this expedition
-    // The authored surface owns its population; keep the existing carried party.
-    world.actors = world.actors.filter(a => a.team !== 'enemy');
-    world.landPartyAt(save?.player ?? { x: 12, y: 12 });
+    world.landPartyAt(save?.player ?? this.settlement?.spawn ?? { x: 12, y: 12 }, { tier: this.resumeTier });
     if (save) {
       for (const e of save.enemies) {
         const a = world.createMonster(e.monster, e.level, 'enemy', undefined, { scale: e.scale });
@@ -118,7 +139,7 @@ export class WorldMassRuntime {
     this.update(world, true);
   }
   /** Survived-death wakes retain the run's land and consequences. */
-  wake(world: World): void { world.landPartyAt({ x: 12, y: 12 }); this.nearKey = ''; }
+  wake(world: World): void { world.landPartyAt(this.settlement?.spawn ?? { x: 12, y: 12 }); this.nearKey = ''; }
   update(world: World, boot = false): void {
     if (world.zone.id !== MASS_ZONE) return;
     const at = this.walk.at(world.player.pos.x, world.player.pos.y), key = cellKey(at);
@@ -153,7 +174,8 @@ export class WorldMassRuntime {
     }
     const eligible = [...this.places.values(), ...dependencies.values()].flat().filter(p => {
       const q = localOffset(p.center, { ...this.origin, x: 0, y: 0 }, this.config.terrain.addressSpan);
-      return Math.hypot(q.x, q.y) >= this.config.startRadius + p.radius;
+      return this.settlement ? !this.settlement.reserves(q.x, q.y, p.radius)
+        : Math.hypot(q.x, q.y) >= this.config.startRadius + p.radius;
     });
     this.sites.sync(world, eligible);
     this.sites.discover(world.player.pos);
@@ -161,7 +183,8 @@ export class WorldMassRuntime {
     for (const places of this.places.values()) for (const p of places) {
       if (seen.has(p.id)) continue; seen.add(p.id);
       const q = localOffset(p.center, { ...this.origin, x: 0, y: 0 }, this.config.terrain.addressSpan);
-      if (!q || Math.hypot(q.x, q.y) < this.config.startRadius + p.radius
+      if (!q || (this.settlement ? this.settlement.reserves(q.x, q.y, p.radius)
+        : Math.hypot(q.x, q.y) < this.config.startRadius + p.radius)
         || Math.hypot(q.x - world.player.pos.x, q.y - world.player.pos.y) > this.config.populationRadius) continue;
       const content = this.config.content.find(c => c.id === p.content)!;
       if (content.site) {
@@ -225,7 +248,8 @@ export class WorldMassRuntime {
       enemies.push({ id, monster: a.defId!, level: a.level, x: a.pos.x, y: a.pos.y, life: a.life, scale: a.spawnScale ?? 1 });
     }
     return JSON.parse(canonical({ schema: 1, config: this.config, configHash: massDigest(this.config), state: this.state.snapshot(),
-      origin: this.origin, player: { ...world.player.pos }, enemies, sites: this.sites.snapshot(world), contents: captureZoneContents(world) })) as MassAdventureSave;
+      origin: this.origin, player: { ...world.player.pos, tier: world.player.tier ?? 0 }, enemies,
+      ...(this.settlement ? { settlement: this.settlement.snapshot(world) } : {}), sites: this.sites.snapshot(world), contents: captureZoneContents(world) })) as MassAdventureSave;
   }
   get population(): number { return this.natives.size; }
 }

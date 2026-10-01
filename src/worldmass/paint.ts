@@ -7,6 +7,34 @@ interface Baked { canvas: HTMLCanvasElement; revision: number }
 /** Canvas assets are renderer-owned, disposable, and bounded independently of
  * persistent exploration. No camera-relative randomness or page-edge terrain. */
 export class MassPainter {
+  private settlementLayer: HTMLCanvasElement | null = null;
+  /** Composite native floors through a feathered verge, with neither an arena
+   * rim nor a hard rectangle where the procedural country begins. */
+  drawSettlement(ctx: CanvasRenderingContext2D, mass: WorldMassRuntime,
+    x: number, y: number, w: number, h: number, draw: (layer: CanvasRenderingContext2D) => void): void {
+    const town = mass.settlement;
+    if (!town || x > town.zone.size.w || y > town.zone.size.h || x + w < 0 || y + h < 0) return;
+    const canvas = this.settlementLayer ?? (this.settlementLayer = document.createElement('canvas'));
+    const width = Math.ceil(w), height = Math.ceil(h);
+    if (canvas.width !== width) canvas.width = width;
+    if (canvas.height !== height) canvas.height = height;
+    const g = canvas.getContext('2d')!;
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, width, height);
+    g.save(); g.translate(-x, -y);
+    g.beginPath(); g.rect(0, 0, town.zone.size.w, town.zone.size.h); g.clip();
+    draw(g);
+    g.globalCompositeOperation = 'destination-in';
+    const tw = town.zone.size.w, th = town.zone.size.h, fade = town.spec.blend;
+    const mask = (x0: number, y0: number, x1: number, y1: number, length: number) => {
+      const gradient = g.createLinearGradient(x0, y0, x1, y1);
+      gradient.addColorStop(0, 'transparent'); gradient.addColorStop(fade / length, '#000');
+      gradient.addColorStop(1 - fade / length, '#000'); gradient.addColorStop(1, 'transparent');
+      g.fillStyle = gradient; g.fillRect(0, 0, tw, th);
+    };
+    mask(0, 0, tw, 0, tw); mask(0, 0, 0, th, th);
+    g.restore();
+    ctx.drawImage(canvas, x, y);
+  }
   private runtime: WorldMassRuntime | null = null;
   private baked = new Map<string, Baked>();
   draw(ctx: CanvasRenderingContext2D, mass: WorldMassRuntime, x: number, y: number, w: number, h: number): void {
@@ -104,6 +132,12 @@ export function massMap(mass: WorldMassRuntime, player: { x: number; y: number }
     parts.push(`<rect x="${x * scale}" y="${y * scale}" width="10" height="10" fill="${t.color}"/>`);
   }
   const escape = (s: string): string => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+  if (mass.settlement) {
+    const town = mass.settlement, x = (town.zone.size.w / 2 / grain - left) * scale;
+    const y = (town.zone.size.h / 2 / grain - top) * scale;
+    if (x >= 0 && y >= 0 && x <= cols * scale && y <= rows * scale)
+      parts.push(`<g><title>${escape(town.zone.name)}</title><path d="M${x-5},${y+4}v-8l5,-4 5,4v8Z" fill="#edd3a0"/><text x="${x+8}" y="${y+4}" fill="#eee0bc" font-size="11">${escape(town.zone.name)}</text></g>`);
+  }
   for (const found of mass.sites.discovered) {
     const q = localOffset(found.center, { ...mass.origin, x: 0, y: 0 }, mass.config.terrain.addressSpan);
     const x = (q.x / grain - left) * scale, y = (q.y / grain - top) * scale;

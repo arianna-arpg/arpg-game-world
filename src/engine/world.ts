@@ -3749,7 +3749,31 @@ export class World {
     const runtime = new WorldMassRuntime(seed, 'expedition:' + seed, save?.config, save);
     this.massRuntime = null;
     runtime.attach(this, save);
-    this.grounds = []; this.bridges = []; // worldmass terrain owns the surface
+    if (!runtime.settlement) { this.grounds = []; this.bridges = []; }
+  }
+  private massSettlementLoading = false;
+  private massSettlementDay: number | null = null;
+  /** Pin native town geometry across a worldmass Continue, independently of
+   * account growth. No call to this method occurs at a geographic boundary. */
+  loadMassSettlement(seed: number, bornAt: number, saved?: ZoneDef, tier?: number): void {
+    if (saved) {
+      this.zoneMap[START_ZONE] = JSON.parse(JSON.stringify(saved));
+      this.townTierIdx = tier!;
+    }
+    this.massSettlementLoading = !!saved;
+    this.massSettlementDay = Math.floor(bornAt / DAY_LENGTH);
+    this.zoneMemory.delete(START_ZONE);
+    this.adoptedZonePending = true;
+    try { withSeededRandom(seed, () => this.loadZone(START_ZONE)); } finally { this.massSettlementLoading = false; this.massSettlementDay = null; }
+  }
+  /** Native region mutations must reach their original plan grid while the
+   * encompassing navigation field spans the infinite country. */
+  nativeSettlementGrid(): GridWalkField | null {
+    return this.massRuntime?.settlement?.grid ?? (this.walk instanceof GridWalkField ? this.walk : null);
+  }
+  townPresent(): boolean { return this.zone.id === START_ZONE || !!this.massRuntime?.settlement; }
+  isSafeAt(pos: Vec2): boolean {
+    return this.massRuntime ? !!this.massRuntime.settlement?.contains(pos.x, pos.y) : this.zone.objective.kind === 'safe';
   }
   /** THE TIER FABRIC (engine/tiers.ts): one stateless walk view per elevated
    *  STORY over the SAME grid (index k = tier k; [0] unused; null in
@@ -5793,8 +5817,8 @@ export class World {
    */
   loadZone(zoneId: string, from?: string): void {
     if (this.massRuntime) {
-      // worldmass has no legacy graph travel. A survived death wakes in this
-      // run's clearing; an exact resume below supplies its saved position.
+      // worldmass has no legacy graph travel. A survived death wakes at this
+      // run's native bedside/clearing; exact resume supplies its saved position.
       if (zoneId === START_ZONE) this.massRuntime.wake(this);
       return;
     }
@@ -5833,7 +5857,7 @@ export class World {
     // FIRST VISIT (captured BEFORE visited.add below) — gates the once-per-zone Holdfast
     // roll: a fortified bonus exit is raised only the first time you stumble in uncharted.
     const firstVisit = !isCave && !this.visited.has(zoneId);
-    if (zoneId === START_ZONE) this.refoldTownStations(); // THE STATION FOLD
+    if (zoneId === START_ZONE && !this.massSettlementLoading) this.refoldTownStations(); // THE STATION FOLD
     const def = this.zoneMap[zoneId] ?? this.caveMap[zoneId];
     this.zone = def;
     // The zone's own entry beat: the renderer exempts LOAD-time population
@@ -6567,7 +6591,7 @@ export class World {
     // wears a rolled name, colour and line and its row's haunt.
     const seated = new Set<string>(); // THE COMPANY LAW: no two seats deal the same guest in one house
     for (const fk of layout.folk ?? []) {
-      const day = Math.floor(this.time / DAY_LENGTH);
+      const day = this.massSettlementDay ?? Math.floor(this.time / DAY_LENGTH);
       let roll: ReturnType<typeof rollFolk> = null;
       for (let salt = 0; salt < 4; salt++) {
         // THE COMPANY IS THE DAY'S, NOT THE RUN'S: seeded off the ZONE's own seed
@@ -18255,7 +18279,8 @@ export class World {
     // A newly expanded town has moved its buildings. Keep the safe arrival
     // chosen by loadZone instead of placing an old coordinate inside a new wall.
     this.landPartyAt(below ?? (exact.zoneId === START_ZONE && this.townLayoutChangedOnLoad
-      ? { ...p.pos } : vec(exact.x, exact.y)), { spread: 80, band: [-80, 80] });
+      ? { ...p.pos } : vec(exact.x, exact.y)), { spread: 80, band: [-80, 80],
+        ...(this.massRuntime ? { tier: this.massRuntime.resumeTier } : {}) });
     // Vitals: proportional restore with a reaction floor — an exact wake is
     // honest about how hurt you were, not a free refill.
     const v = exact.vitals;
@@ -18423,7 +18448,11 @@ export class World {
   /** Telegraph one bolt at a random point in the arena; the zone pipeline lands
    *  it a moment later, frying the player and the monsters caught beneath. */
   private fireLightning(strike: WeatherStrike): void {
-    this.fireStrikeAt(strike, vec(rand(70, this.arena.w - 70), rand(70, this.arena.h - 70)));
+    const reach = this.massRuntime?.config.populationRadius ?? 0;
+    const at = this.massRuntime ? vec(this.player.pos.x + rand(-reach, reach), this.player.pos.y + rand(-reach, reach))
+      : vec(rand(70, this.arena.w - 70), rand(70, this.arena.h - 70));
+    if (this.massRuntime?.settlement?.reserves(at.x, at.y, strike.radius)) return;
+    this.fireStrikeAt(strike, at);
   }
 
   /** Telegraph one strike AT a point — the shared sky-hazard verb (weather
@@ -23880,9 +23909,10 @@ export class World {
   /** Is the player resting by the town campfire? (Feature owned + in town + near
    *  CAMPFIRE_SITE.) Drives the dwell-refresh and the renderer prompt. */
   nearCampfire(): boolean {
+    if (this.massRuntime) return false; // worldmass keeps run consequences; refresh migration is pending
     const a = this.stationAnchor('campfire'); // THE ANCHORED DWELL: the fire itself
     return featureEnabled(this.account, FEATURE.CAMPFIRE)
-      && this.zone.id === START_ZONE && !!a
+      && this.townPresent() && !!a
       && dist(this.player.pos, a.pos) <= CAMPFIRE_RADIUS
       && this.dwellReachable(this.player.pos, a.pos, DWELL_CFG.reach, { from: this.player.tier ?? 0, to: a.tier });
   }
@@ -23961,7 +23991,7 @@ export class World {
    *  DWELL_CFG.anchorReach of the site's seat. The seat coordinate keeps
    *  its other duties (spawns, the apron law, the ways) untouched. */
   stationAnchor(site: TownSiteId): { pos: Vec2; tier: number; doodad: Doodad } | null {
-    if (this.zone.id !== START_ZONE) return null;
+    if (!this.townPresent()) return null;
     const seat = this.townSite(site);
     const sid = townSiteStructure(site);
     if (!seat || !sid) return null;
@@ -24259,7 +24289,7 @@ export class World {
   /** THE BENCH STANDS: owned + raised in this zone (the town), proximity
    *  aside — the suite's "genuinely unlocked" read (stationStands). */
   hasSalvage(): boolean {
-    return this.salvageUnlocked() && this.zone.id === START_ZONE;
+    return this.salvageUnlocked() && this.townPresent();
   }
 
   /** At the breaker's bench? (The bench stands + near SALVAGE_SITE.) */
@@ -24324,7 +24354,7 @@ export class World {
    *  service ladder seats). Board ids ARE home zone ids. */
   bountyBoardsHere(): { id: string; pos: Vec2; tier: number }[] {
     const out: { id: string; pos: Vec2; tier: number }[] = [];
-    if (this.bountyBoardUnlocked() && this.zone.id === START_ZONE) {
+    if (this.bountyBoardUnlocked() && this.townPresent()) {
       // THE ANCHORED DWELL: Lastlight's counter is the BOARD (the front's
       // N cell wears the anchor) — its live seat, and no board while none
       // stands.
@@ -24510,7 +24540,7 @@ export class World {
     }
     if (!this.forgeBases(writUid, seat).some(b => b.id === baseId)) return false;
     // The rite's own calm law: no forging with the blood hot or teeth near.
-    if (this.time - this.lastCombatAt < SWAP_DISCIPLINE_CFG.calmSec && this.zone.objective.kind !== 'safe') {
+    if (this.time - this.lastCombatAt < SWAP_DISCIPLINE_CFG.calmSec && !this.isSafeAt(seat.actor.pos)) {
       this.notice('The hand is not steady yet — let the blood cool.', BOUNTY_BOARD_CFG.accent, 13, 'civic');
       return false;
     }
@@ -25526,7 +25556,7 @@ export class World {
   nearTracker(seat: Seat = this.localSeat): boolean {
     const a = this.stationAnchor('tracker'); // THE ANCHORED DWELL: the Tracker's fire
     return featureEnabled(this.account, FEATURE.TRACKER)
-      && this.zone.id === START_ZONE && !!a
+      && this.townPresent() && !!a
       && dist(seat.actor.pos, a.pos) <= SALVAGE_CFG.stationRadius
       && this.dwellReachable(seat.actor.pos, a.pos, DWELL_CFG.reach, { from: seat.actor.tier ?? 0, to: a.tier });
   }
@@ -25556,7 +25586,7 @@ export class World {
   /** Among the standing stones? (Feature owned + in town + near ORACLE_SITE.) */
   /** THE STONE STANDS: owned + raised in this zone, proximity aside. */
   hasOracle(): boolean {
-    return featureEnabled(this.account, FEATURE.ORACLE_STONE) && this.zone.id === START_ZONE;
+    return featureEnabled(this.account, FEATURE.ORACLE_STONE) && this.townPresent();
   }
 
   nearOracle(seat: Seat = this.localSeat): boolean {
@@ -25702,6 +25732,7 @@ export class World {
 
   /** Is the seat's hero standing at a Caravanner (town OR a minted destination)? */
   nearCaravan(seat: Seat = this.localSeat): boolean {
+    if (this.massRuntime) return false; // worldmass travel is on foot until campaign routes have places
     if (!featureEnabled(this.account, FEATURE.CARAVAN)) return false;
     return this.actors.some(a => this.hasNpcRole(a, 'caravanner')
       && dist(a.pos, seat.actor.pos) <= CARAVAN_RADIUS
@@ -26128,9 +26159,10 @@ export class World {
     const d = this.doodads.find(x => x.door?.id === id);
     if (!d?.door || d.door.broken || !d.door.open) return;
     d.door.open = false;
-    if (this.walk instanceof GridWalkField && d.door.cells) {
+    const nativeSettlementGrid = this.nativeSettlementGrid();
+    if (nativeSettlementGrid && d.door.cells) {
       const c = d.door.cells;
-      this.walk.fillRegion(c.x, c.y, c.x + c.w - 0.01, c.y + c.h - 0.01, 'rampart');
+      nativeSettlementGrid.fillRegion(c.x, c.y, c.x + c.w - 0.01, c.y + c.h - 0.01, 'rampart');
     }
     this.markDoodadsChanged();
   }
@@ -51457,9 +51489,10 @@ export class World {
     if (state === 'open' ? (d.door.open || d.door.broken) : d.door.broken) return;
     if (state === 'open') d.door.open = true;
     else { d.door.broken = true; d.door.open = true; }
-    if (this.walk instanceof GridWalkField && d.door.cells) {
+    const nativeSettlementGrid = this.nativeSettlementGrid();
+    if (nativeSettlementGrid && d.door.cells) {
       const c = d.door.cells;
-      this.walk.fillRegion(c.x, c.y, c.x + c.w - 0.01, c.y + c.h - 0.01, 'ground');
+      nativeSettlementGrid.fillRegion(c.x, c.y, c.x + c.w - 0.01, c.y + c.h - 0.01, 'ground');
     }
     // The breakable's guard-actor is moot once the way is open — retire it by
     // MARKING dead (no loot/credit/burst: kill() never ran for a dwell-open).
@@ -60621,19 +60654,20 @@ export class World {
       this.doodads.push(remainsDoodad);
       this.markDoodadsChanged();
     }
-    if (br.carve && this.walk instanceof GridWalkField) {
+    const nativeSettlementGrid = this.nativeSettlementGrid();
+    if (br.carve && nativeSettlementGrid) {
       // A wall face beside it? Carve INTO it — that's where the passage goes.
-      const cs = this.walk.cell;
+      const cs = nativeSettlementGrid.cell;
       let cx = d.pos.x, cy = d.pos.y;
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
-        if (!this.walk.isWalkable(d.pos.x + dx * cs, d.pos.y + dy * cs)) {
+        if (!nativeSettlementGrid.isWalkable(d.pos.x + dx * cs, d.pos.y + dy * cs)) {
           cx = d.pos.x + dx * br.carve * 0.7;
           cy = d.pos.y + dy * br.carve * 0.7;
           break;
         }
       }
-      this.walk.fillDisc(d.pos.x, d.pos.y, Math.max(24, d.radius + 8), 'ground');
-      this.walk.fillDisc(cx, cy, br.carve, 'ground');
+      nativeSettlementGrid.fillDisc(d.pos.x, d.pos.y, Math.max(24, d.radius + 8), 'ground');
+      nativeSettlementGrid.fillDisc(cx, cy, br.carve, 'ground');
     }
     // A popped SPAN stops negating its chasm (the bridges index is the physics).
     const bi = this.bridges.indexOf(d);
@@ -62889,8 +62923,8 @@ export class World {
    *  the zone's stack clamps to the top (the clampPos discipline); a
    *  non-grid walk model degrades to the flat field it always had. */
   private tierPathField(story: number): WalkField {
-    const base = this.walk!;
-    if (!(base instanceof GridWalkField)) return base;
+    const base = this.nativeSettlementGrid();
+    if (!base) return this.walk!;
     const t = Math.max(1, Math.min(story, this.tierViews!.length - 1));
     const hit = this.tierNavs.get(t);
     if (hit && hit.walk === base && hit.v === base.version) return hit.g;
@@ -62905,8 +62939,8 @@ export class World {
    *  Cached on the base grid's identity + version; tier-less zones and
    *  non-grid models answer the shared empty list without scanning. */
   private tierLinkSeats(): readonly Vec2[] {
-    if (!this.zone.tiers || !(this.walk instanceof GridWalkField)) return World.NO_SEATS;
-    const base = this.walk;
+    const base = this.nativeSettlementGrid();
+    if (!this.zone.tiers || !base) return World.NO_SEATS;
     if (this.tierSeats && this.tierSeats.walk === base && this.tierSeats.v === base.version) {
       return this.tierSeats.arr;
     }
@@ -63836,6 +63870,7 @@ export class World {
 
   /** The HUD's one-line description of what this zone wants from you. */
   objectiveText(): string {
+    if (this.massRuntime && this.isSafeAt(this.player.pos)) return 'Sanctuary';
     const odysseyPressure = this.odyssey.pressureText();
     if (odysseyPressure) return odysseyPressure;
     const o = this.zone.objective;

@@ -35,7 +35,7 @@ app.whenReady().then(async () => {
           const row=m.config.content.find(c=>c.id===p.content);
           if(!row?.site) continue;
           const q={x:Number(p.center.cx)*m.config.terrain.addressSpan+p.center.x,y:Number(p.center.cy)*m.config.terrain.addressSpan+p.center.y};
-          if(Math.hypot(q.x,q.y)<m.config.startRadius+p.radius) continue;
+          if(m.settlement ? m.settlement.reserves(q.x,q.y,p.radius) : Math.hypot(q.x,q.y)<m.config.startRadius+p.radius) continue;
           places.set(p.id,{id:p.id,content:p.content,center:q,name:row.site.name});
         }
       window.__siteChecks=['wayside-camp','pillaged-ruin'].map(kind=>[...places.values()]
@@ -43,7 +43,7 @@ app.whenReady().then(async () => {
       return {fatal:__game.crash().fatal,version:m.generator.run.version,places:window.__siteChecks,
         planningMs:performance.now()-started,population:m.population};
     });
-    log({boot}); assert.equal(boot.fatal,null); assert.equal(boot.version,2); assert.ok(boot.places.every(Boolean));
+    log({boot}); assert.equal(boot.fatal,null); assert.equal(boot.version,3); assert.ok(boot.places.every(Boolean));
     for (const content of ['wayside-camp','pillaged-ruin']) {
       const result = await run(content => {
         const w=__game.world(), m=w.massRuntime, site=__siteChecks.find(p=>p.content===content);

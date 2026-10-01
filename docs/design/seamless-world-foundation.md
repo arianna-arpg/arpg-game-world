@@ -53,7 +53,16 @@ The existing Git remote is `https://github.com/arianna-arpg/arpg-game-world.git`
   Character saves include the run descriptor, configuration, exploration claims,
   explicit worldmass terrain edits, killed native identities, surviving natives'
   positions/health/scale, and ordinary persistent loot/contents. A survived-mode
-  death returns to this run's clearing; creating a new run rolls another seed.
+  death returns to its native bedside (legacy descriptors retain the clearing);
+  creating a new run rolls another seed.
+- `settlement.ts`: a native Lastlight scene embedded directly into the same
+  continuous World. Its original plan grid remains authoritative inside the
+  footprint, with a common cell lattice for geographic collision and sight.
+  The native generator supplies buildings, upstairs rooms, doors, residents and
+  account-owned counters. A saved settlement descriptor pins geometry and tier;
+  native region edits, doors, removed/felled scenery and resident bodies persist.
+  A reserved, attributed verge excludes wilderness sites/populations from the
+  whole town footprint. Ground textures blend at the old arena rim.
 - `paint.ts`: bounded renderer-owned floor textures and a local explored-terrain
   map, with named markers for discovered sites. The map samples the physical
   terrain rather than displaying the old graph. Native solid scenery also informs
@@ -67,12 +76,16 @@ region effects and grounded spell telegraphs operate on the same sampled cells.
 
 Run the development server from this worktree and open `/?worldmass`, then begin
 a new character. Without the query parameter, the existing game remains the
-default. `M` shows the surveyed terrain. This is presently a solo terrain/combat
-test; it starts in a clearing, not a rebuilt Lastlight. The old campaign's graph
-directions and legacy zone travel stand down in this mode.
+default. `M` shows the surveyed terrain and Lastlight marker; the journal remains
+available separately. New version-3 expeditions wake in native Lastlight. Walk
+through its native doors, use unlocked counters, explore the inn's upper floor,
+then walk into the country on any side. No gateway, loading call, coordinate
+jump, hero replacement or scene reset occurs at the town boundary.
 
-**New site recipes require a new run.** Default generator version 2 includes camps
-and ruins. Continue preserves the saved descriptor, including version 1 land;
+**New places require a new run.** Default generator version 3 adds Lastlight
+and aligns geographic cells to the native 30-unit floor lattice (960-unit
+terrain pages). Version 2 introduced camps and ruins. Continue preserves the
+saved descriptor, including version 1/2 land without Lastlight;
 updating the game never inserts new structures into an existing expedition.
 Caches use the ordinary hold-nearby interaction, native reward policy and the
 site's configured level. Destroyed supplies and claimed caches do not regenerate
@@ -81,9 +94,10 @@ a cache; saturation delays the encounter rather than furnishing free rewards.
 
 Site descriptors snapshot native legacy structure scenery and breakable fixtures.
 Population tables/counts and cache placement/time remain explicit content data.
-They deliberately do not adapt plan floors, doors, scripted effects, town
-stations, NPC services or folk; the adapter rejects the unsupported structure
-families rather than implying that those systems work here. The sparse scenery
+This repeated-site adapter still rejects plan floors, doors, scripted effects,
+town stations, NPC services and folk. Lastlight uses the separate native scene
+adapter, preserving those systems through their existing generator and service
+controllers. It is not a promise that arbitrary repeated settlements are ready. The sparse scenery
 checkpoint covers position, kind, radius, rotation, adornment, hitbox, removal
 and felling state. It is not a general effect/actor serializer.
 
@@ -112,10 +126,23 @@ the log go to ignored `balance/reports/worldmass-*` files.
 - The local map records entered pages, not detailed line-of-sight exploration.
   Saves remain whole-run JSON; paging long-run consequences is still required.
 - Terrain currently provides open ground, soil/climate variation, lakes/shores
-  and outcrops. Drainage, road networks, canopy ecology, towns, services, authored
-  plan-based structures, caves and biome-specific per-actor simulation contexts
-  remain. Camps and ruins are the first native place family, not a migrated campaign.
+  and outcrops, with one resident native Lastlight. Drainage, road networks,
+  canopy ecology, additional settlements, caves and biome-specific per-actor
+  simulation contexts remain. Camps, ruins and Lastlight are not a migrated campaign.
   Co-op replication and the old campaign are not integrated into this mode.
+- Lastlight's geometry/tier and original resident roster are pinned for each run.
+  New account additions appear in the next expedition, preventing buildings from
+  shifting under live or saved characters. Safe in-world construction is still
+  required for growth within one expedition. The one town stays resident; this
+  does not implement arbitrary settlement paging or distant civic simulation.
+- Native counter rules remain authoritative: Brandt, Mireille, Font, unlocked
+  salvage/Oracle/Tracker/board/recruiter facilities retain their existing gates
+  and proximity checks. Campaign quests still reference the old graph, whose
+  destinations are not yet geographic places. Caravan departure, waypoint travel
+  and the old campfire population reset are inactive; the prototype must not
+  charge for a trip or claim a reset it cannot perform. Native cellar/campaign
+  travel needs a durable interior/return adapter. Actual upstairs inn rooms use
+  native tiers in the same scene and are included, including upstairs Continue.
 
 Verification includes `npm run check`, the worldmass contract and real-engine
 probes, existing persistence/sight-veil/cistern probes, generation QA, and the
@@ -148,6 +175,28 @@ preserved it through real browser Continue. Preview isolation retained ordinary
 save sentinels unchanged. Forced-teleport/render batches took roughly 460–600 ms
 in the software-rendered test client; these batches are not frame-rate evidence
 or a seamless-crossing performance guarantee.
+
+Lastlight milestone verification (2026-10-01 UTC): all four worldmass probes
+passed, including native hamlet/township layouts, both-way crossings of all four
+town edges, spatial services, doors, damaged scenery and pinned-town Continue.
+Game/launcher/sim types, normal and scoped preview builds, native town growth
+(136 checks), persistence (84), visibility stability and sightveil passed.
+Generation QA reported 869 cases × 3 seeds, zero failures and 20 warnings:
+four baseline spacing warnings and sixteen slow-generation warnings under
+local load. The real client walked out of Lastlight and back using PlayerInput
+with zero loadZone calls and unchanged hero/skill objects; it opened the native
+Font and resumed upstairs with the saved door open. Separate browser checks
+passed camps/ruins, cache consequences, full viewport terrain coverage and save
+isolation; ordinary game smoke passed. The site harness initially expected
+generator version 2; its default-version assertion now correctly expects 3.
+
+The software-rendered Lastlight walk measured approximately 31–32 ms median,
+302–310 ms p95 and 329–341 ms maximum per forced client step. Those hitches
+remain a performance limitation, not a smooth-frame acceptance result. The
+checkpoint measured approximately 529 KB for the hamlet and 1.26 MB for the
+township in the fixture; town foundation deltas and resident bodies remain
+whole-run data. Boundary-correlated profiling and consequence paging are still
+required before claiming long-run seamless performance.
 
 ## The commission and the decided run policy
 
