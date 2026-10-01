@@ -63,15 +63,15 @@ sockets), never a skill list:
 Flash grounds refuse: curse rings, conjures, strikes with no linger. Bare
 `surface`, the gate of the sibling surface gems, is unchanged.
 
+The matrix census gates the same resolved instance: a `skill@branch` host
+derives its tree-node grafts as `recalcSeat` does (`pinHostTree` in
+`sim/compat.ts`), so Despair's Profane Ground and Worn Grief branches, whose
+grafts stand curse fields, fit there as the game admits them.
+
 Known limits:
 
 - Character-sheet lifts (a passive's `lingerField` or `pulseCount`) are
   invisible to a socket gate, exactly as for bare `surface`.
-- Tree-node grafts are derived onto the seat's instances by `recalcSeat`, so
-  the live socket gate sees them but the matrix census's bare instances do not.
-  Despair's Profane Ground and Worn Grief branches read refused in the census
-  while the game admits the gem. This census gap predates the bank and also
-  hides seven other supports on Whirling Reap's Unbound Wheel branch.
 
 ## The held lane
 

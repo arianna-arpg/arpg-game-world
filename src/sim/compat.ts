@@ -36,7 +36,7 @@
 
 import { MONSTERS } from '../data/monsters';
 import { SKILLS } from '../data/skills';
-import { MAX_SKILL_LEVEL, validTreeNodes, instanceDelivery } from '../engine/skills';
+import { MAX_SKILL_LEVEL, validTreeNodes, instanceDelivery, treeNodeOf } from '../engine/skills';
 import { treeLimbs, treeNodeRanks, treeRootChildren } from '../engine/skilltree'; // THE SKILL-TREE GRAPH — the limb axis
 import { SUPPORTS } from '../data/supports';
 import { PROCS } from '../data/procs';
@@ -46,6 +46,7 @@ import {
   makeSkillInstance, minionSeatBoundFields, summonCrewOf, supportFitsInst,
   supportRidesMinions, instanceBaseTags, grantedTags,
   type SkillDef, type SupportDef,
+  type SkillInstance,
 } from '../engine/skills';
 import { veinMechanisms } from '../engine/supportbase';
 import { LOW_MANA_FRAC, type Modifier, type SkillTag } from '../engine/stats';
@@ -260,6 +261,29 @@ export function hostTreeNodes(hostId: string): string[] | undefined {
   return validTreeNodes(def, ids, MAX_SKILL_LEVEL, { quiet: true });
 }
 
+/** Pin a host's terminal allocation (hostTreeNodes) onto a census/explain
+ *  instance AND derive the grafts its spent nodes inject, exactly as
+ *  World.recalcSeat's skill-mode-tree lane derives them onto the seat's
+ *  instances: an unknown support grants silence, and the no-second-copy
+ *  law yields to a socketed or earlier-grafted twin. hostSockets reads
+ *  grafts beside sockets, so a node graft's tag grant or mechanism (a
+ *  curse-field gem's standing ground) opens sockets on the host's rows as
+ *  the live socket gate does; pinning the nodes alone read those pairs
+ *  refused. No nodes = the instance untouched. */
+export function pinHostTree(inst: SkillInstance, treeNodes: string[] | undefined): SkillInstance {
+  if (!treeNodes?.length) return inst;
+  inst.treeNodes = treeNodes;
+  for (const nid of treeNodes) {
+    const g = treeNodeOf(inst.def, nid)?.graft;
+    const def = g ? SUPPORTS[g.support] : undefined;
+    if (!def) continue;
+    if (inst.sockets.some(s => s?.def.id === def.id)
+      || inst.grafts?.some(r => r.def.id === def.id)) continue;
+    (inst.grafts ??= []).push({ def, level: g!.level ?? 1 });
+  }
+  return inst;
+}
+
 /** Refused-pair mechanical-affinity screen. Exclusion-tag refusals are
  *  deliberate design; only tag-ABSENCE refusals with mechanical proof are
  *  suspects. Shared by the census and the pair dossier — one truth. */
@@ -300,11 +324,10 @@ export function compatCensus(skillFilter = '', supportFilter = ''): CensusResult
       // A bare instance — pairs that only fit through ANOTHER gem's grants
       // are loadout-time compositions, deliberately out of census scope
       // (same stance as the boot validator). A @branch host gates on the
-      // ALLOCATED instance — a tree graft/mod that opens a mechanism opens
-      // its sockets on that host's rows.
-      const inst = makeSkillInstance(def, 1, 3);
-      const pinned = hostTreeNodes(skillId);
-      if (pinned) inst.treeNodes = pinned;
+      // ALLOCATED instance (pinHostTree: the spends and the grafts they
+      // inject) — a tree graft/mod that opens a mechanism opens its sockets
+      // on that host's rows.
+      const inst = pinHostTree(makeSkillInstance(def, 1, 3), hostTreeNodes(skillId));
       const resolved = instanceDelivery(inst);
       const crew = summonCrewOf(resolved.type === 'summon' ? resolved : undefined,
         id => MONSTERS[id], id => SKILLS[id]);
@@ -2552,8 +2575,7 @@ export interface FitExplain {
 }
 
 export function explainFit(def: SkillDef, sup: SupportDef, treeNodes?: string[]): FitExplain {
-  const inst = makeSkillInstance(def, 1, 3);
-  if (treeNodes?.length) inst.treeNodes = treeNodes; // @branch hosts explain allocated
+  const inst = pinHostTree(makeSkillInstance(def, 1, 3), treeNodes); // @branch hosts explain allocated
   const host = supportFitsInst(sup, inst);
   const tags: readonly string[] = [...instanceBaseTags(inst), ...grantedTags(inst)];
   const requires = (sup.requiresTags ?? []).map(t => ({ tag: t as string, present: tags.includes(t) }));

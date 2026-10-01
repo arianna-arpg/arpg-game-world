@@ -47,7 +47,9 @@
 //      serializeSeatMeta → applySeatMeta round trip; hostile tn sanitizes.
 //   L. THE CENSUS BRANCH AXIS: compatCensus enumerates `skill@branch`
 //      terminal hosts (exactly two per moded skill), hostTreeNodes answers
-//      the exact-cover allocation, parseHostId round-trips.
+//      the exact-cover allocation, parseHostId round-trips, and pinHostTree
+//      derives the node grafts recalcSeat derives (every grafting host's
+//      census row agrees with the live socket gate).
 //   M. THE GATHER'S STRIDE (ruled 2026-08-20): a Gathered Casting
 //      conversion's synthesized spec binds movement (slowed ≈ 0.5×).
 //   N. THE GRAPH GRAMMAR (2026-09-04, engine/skilltree.ts): the sugar fold
@@ -75,7 +77,7 @@ import { STAT_DEFS } from '../src/engine/stats';
 import {
   bandPointsAt, instanceAim, instanceChannel, instanceDelivery, impactTreeOverrideErrors, treeAuraOverrideErrors, instanceMods,
   instanceTreeMods, makeSkillInstance, MAX_SKILL_LEVEL,
-  skillContextTags, treeNodeOf, treeNodeRefusal,
+  skillContextTags, supportFitsInstOrCrew, treeNodeOf, treeNodeRefusal,
   treePickOpen, treePointsSpent, treeSpentBranch, validTreeNodes,
   type SkillDef, type SkillTreeSpec,
 } from '../src/engine/skills';
@@ -85,7 +87,7 @@ import {
 } from '../src/engine/skilltree';
 import { serializeCharacter, rebuildSkill } from '../src/meta/character';
 import { serializeSeatMeta, applySeatMeta } from '../src/net/snapshot';
-import { compatCensus, hostIdOf, hostTreeNodes, ledgerSkillIds, parseHostId } from '../src/sim/compat';
+import { compatCensus, hostIdOf, hostTreeNodes, ledgerSkillIds, parseHostId, pinHostTree } from '../src/sim/compat';
 import { emptyLedger, reconcileLedger } from '../src/sim/ledger';
 import { setSimTap } from '../src/engine/tap';
 import { updateAI } from '../src/engine/ai';
@@ -740,6 +742,49 @@ inst.level = 10;
     rec.ledger.pairs.some(r => r.skill === 'wild_strike@ws_sprinkler')
     && !rec.ledger.pairs.some(r => r.skill === 'retired_skill_xyz')
     && rec.removed.length === 1);
+
+  // THE ALLOCATED HOST'S GRAFTS (2026-10-01): pinHostTree pins a terminal
+  // allocation AND derives the grafts its spent nodes inject. Every authored
+  // grafting host, learned onto the seat with the same spends: recalcSeat
+  // must derive the same grafts, and the census's verdict on every support
+  // must equal the live socket gate's. Pinning the nodes alone read
+  // Despair's curse-field branches and Unbound Wheel's duration gems
+  // refused while the game admitted them.
+  const known = seat.meta.knownSkills;
+  const graftSig = (i: { grafts?: { def: { id: string }; level: number }[] }): string =>
+    (i.grafts ?? []).map(g => `${g.def.id}@${g.level}`).join(',');
+  let graftHosts = 0, graftDrift = '', fitDrift = '';
+  for (const def of Object.values(SKILLS)) {
+    for (const limb of treeLimbs(def)) {
+      const host = hostIdOf(def.id, limb.id);
+      const nodes = hostTreeNodes(host);
+      if (!nodes?.some(n => treeNodeOf(def, n)?.graft)) continue;
+      graftHosts++;
+      const pinned = pinHostTree(makeSkillInstance(def, 1, 3), nodes);
+      const live = makeSkillInstance(def, 1, 3);
+      live.treeNodes = [...nodes];
+      const prev = known.get(def.id);
+      known.set(def.id, live);
+      try {
+        w.recalcSeat(seat);
+        if (graftSig(pinned) !== graftSig(live)) {
+          graftDrift += ` ${host}(${graftSig(pinned) || 'none'} vs ${graftSig(live) || 'none'})`;
+        }
+        for (const row of compatCensus(def.id).rows) {
+          if (row.skillId !== host) continue;
+          const admits = supportFitsInstOrCrew(SUPPORTS[row.supportId], live, w.summonCrewSkills(live));
+          if ((row.fit !== 'refused') !== admits) fitDrift += ` ${host}+${row.supportId}`;
+        }
+      } finally {
+        if (prev) known.set(def.id, prev); else known.delete(def.id);
+      }
+    }
+  }
+  w.recalcSeat(seat);
+  check('L: pinHostTree derives the node grafts recalcSeat derives, on every grafting host',
+    graftHosts > 0 && graftDrift === '', graftDrift || `${graftHosts} grafting host(s)`);
+  check('L: every grafting host\'s census row agrees with the live socket gate',
+    graftHosts > 0 && fitDrift === '', fitDrift.slice(0, 400) || `${graftHosts} host(s) × ${Object.keys(SUPPORTS).length} support(s)`);
 }
 
 // --------------------------- M. THE GATHER'S STRIDE -----------------------
