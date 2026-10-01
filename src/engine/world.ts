@@ -23011,7 +23011,7 @@ export class World {
 
   swapRefusal(seat: Seat, kind: 'unlearn' | 'socket' | 'unsocket', skillId?: string): string | null {
     const cfg = SWAP_DISCIPLINE_CFG;
-    if (cfg.sanctuaryWaives && this.zone.objective?.kind === 'safe') return null;
+    if (cfg.sanctuaryWaives && this.isSafeAt(seat.actor.pos)) return null;
     if (this.time - this.lastCombatAt < cfg.calmSec) return 'the blood is still hot';
     if (this.pressingFoeNear(seat.actor.pos, seat.actor.tier)) return 'foes press too near';
     if (kind === 'unlearn' && skillId) {

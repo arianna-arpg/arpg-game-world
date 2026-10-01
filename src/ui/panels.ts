@@ -6956,6 +6956,7 @@ ${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its sup
     // THE FIELD DISCIPLINE, spoken at the button (the engine gate's words):
     // unsocket shares one verdict; unlearn adds its per-skill clock below.
     const unsocketWhy = world.swapRefusal(seat, 'unsocket');
+    const socketWhy = world.swapRefusal(seat, 'socket');
     // The book lists what the seat WIELDS: the learned residence plus the
     // GRANTED lane (THE LEGEND FABRIC) — a granted row sockets and picks
     // its tree like any other, but carries no level-up and no unlearn.
@@ -6991,7 +6992,7 @@ THE CUT (fixed at the vein): ${veinLines(s.def.rollBase, s.rolled).join(' · ')}
             title="Level up for ${supportLevelAbilityCost(s.level + 1).count}× ${abilityEssenceOfTier(supportLevelAbilityCost(s.level + 1).tier).label}">+${abilityEssenceOfTier(supportLevelAbilityCost(s.level + 1).tier).glyph}</button>
           <button data-unsocket="${def.id}:${i}" ${unsocketWhy ? `disabled title="${unsocketWhy}"` : ''}>✕</button>
         </span>` : `<span class="gem-chip empty support-slot" aria-label="Empty support socket"
-          title="Socket a support here by dragging a Support Memory onto this skill.">
+          title="${esc(socketWhy ?? 'Socket a support here by dragging a Support Memory onto this skill.')}">
           <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 2 22 12 12 22 2 12Z M12 6 18 12 12 18 6 12Z M12 2V6 M22 12H18 M12 22V18 M2 12H6"
               fill="none" stroke="currentColor" stroke-width="1"/>
@@ -7120,7 +7121,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           ${modeRow}
         </div>`;
     }).join('');
-    return `<div class="build-rack">${rackHtml}</div><div class="build-scroll">${graftBank}${rows
+    return `<div class="build-rack">${rackHtml}</div><div class="build-scroll">${socketWhy
+      ? `<div data-socket-refusal role="status" style="color:#e4b58b;font-size:11px;line-height:1.5;padding:8px">Socket changes unavailable: ${esc(socketWhy)}.</div>` : ''}${graftBank}${rows
       || '<div style="color:#8a8678;font-size:11px">Nothing seated. Skill Memories drop from monsters — press one from your pack into an empty seat above.</div>'}</div>`;
   }
 

@@ -823,3 +823,10 @@ and the real-client reward harness (pending and claimed Continue, actual journal
 click, native bag drag/socket). Independent playtest findings remain evidence
 about the tested routes and builds, not a blind AAA comparison or universal
 performance guarantee.
+
+Socket surgery uses the shared spatial sanctuary read, so continuous Lastlight
+waives the same field restrictions as native town scenes. The Skills panel and
+empty-socket tooltip show the existing refusal while combat prevents a change;
+the floating world note is no longer its only visible explanation. Verify
+fielddiscipline, worldmass_rewards and the reward client harness (hot field
+refusal followed by immediate native town socketing).

@@ -61,15 +61,24 @@ app.whenReady().then(async()=>{
       const w=__game.world(),item=w.meta.items.find(i=>i.gem?.supportId==='concentrated');
       if(!item)throw Error('Reward did not reach native inventory');
       __game.ui.hideAll();
+      w.lastCombatAt=w.time;__game.ui.toggleInventory();
+      if(getComputedStyle(document.getElementById('skills-panel')).display==='none')document.querySelector('[data-buildflap]').click();
+      __game.step(2);
+      const refusal=document.querySelector('[data-socket-refusal]');
+      if(!refusal || !refusal.textContent.includes('the blood is still hot'))throw Error('Socket reason hidden from the Skills panel');
+      __game.ui.hideAll();
       // The fixture has live enemies: return to sanctuary for native cold-blades socket discipline.
       w.landPartyAt(w.massRuntime.settlement.spawn);__game.step(3);
-      __game.ui.toggleInventory();document.querySelector('[data-buildflap]').click();__game.step(2);
+      __game.ui.toggleInventory();
+      if(getComputedStyle(document.getElementById('skills-panel')).display==='none')document.querySelector('[data-buildflap]').click();
+      __game.step(2);
       window.rewardQA={uid:item.uid};
       return {pending:w.massRuntime.rewards.pending,uid:item.uid,
+        sanctuary:w.swapRefusal(w.localSeat,'socket'),
         source:!!document.querySelector('[data-drag="gearItem:'+item.uid+'"]'),
         target:!!document.querySelector('[data-drop="gemSock:cleave"]')};
     });
-    log({claimed});assert.ok(claimed.source&&claimed.target&&!claimed.pending);await shot('bag');
+    log({claimed});assert.ok(claimed.source&&claimed.target&&!claimed.pending);assert.equal(claimed.sanctuary,null);await shot('bag');
     const socket=await run(()=>{
       const source=document.querySelector('[data-drag="gearItem:'+rewardQA.uid+'"]'),target=document.querySelector('[data-drop="gemSock:cleave"]');
       source.scrollIntoView({block:'center',behavior:'instant'});const a=source.getBoundingClientRect();
