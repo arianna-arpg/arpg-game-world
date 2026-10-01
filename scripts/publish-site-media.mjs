@@ -52,7 +52,11 @@ if (PACK) {
   fs.mkdirSync(packDir, { recursive: true });
   const tmp = path.join(packDir, `${PACK}.building.tar`);
   fs.rmSync(tmp, { force: true });
-  execFileSync('tar', ['-cf', path.relative(dir, tmp).split(path.sep).join('/'), ...files], { cwd: dir, stdio: 'inherit' });
+  /* the names ride a list file (-T): a whole set's names overflow a Windows command line */
+  const list = path.join(packDir, `${PACK}.files`);
+  fs.writeFileSync(list, files.join('\n') + '\n');
+  execFileSync('tar', ['-cf', path.relative(dir, tmp).split(path.sep).join('/'), '-T', path.relative(dir, list).split(path.sep).join('/')], { cwd: dir, stdio: 'inherit' });
+  fs.rmSync(list, { force: true });
   const sum = sha(tmp), bytes = fs.statSync(tmp).size;
   const asset = `site-${PACK}-${sum.slice(0, 12)}.tar`;
   fs.renameSync(tmp, path.join(packDir, asset));
