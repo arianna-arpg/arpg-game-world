@@ -32,7 +32,7 @@ import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
 import { MONSTERS } from '../src/data/monsters';
 import { unreadPayloadRows } from '../src/data/graftReadSites';
-import { mod } from '../src/engine/stats';
+import { LOW_MANA_FRAC, mod } from '../src/engine/stats';
 import { skillDamageBands } from '../src/engine/damage';
 import {
   SUPPORT_PAYLOAD_FIELDS, instanceMods, makeSkillInstance, mechanismHolds,
@@ -40,6 +40,7 @@ import {
 } from '../src/engine/skills';
 import type { SkillDef, SupportDef } from '../src/engine/skills';
 import {
+  BLINDNESS_RULES, KILL_RECENCY_CONDITIONS, chargeGaugeUnfed, costFunctionProc, supVictimStatusScope,
   RESIST_DUMMY_BY_TYPE, ablationUnits, classifyExpression, compatCensus, costFunctionSupport,
   deepProbePair, explainFit, explainPair, fieldReferenceId, hostExpressionCensus,
   hostDefOf, hostTreeNodes, makeProbeSession, pairKey, pairShapeFor, maskSupportUnit, probeKindFor, probeOrder,
@@ -1127,6 +1128,87 @@ check('E14 synthetic fixtures cleaned out of the registry',
       !!field && r1 > 0 && Math.abs(r2 - r1) / r1 > 0.08,
       field ? `r ${r1.toFixed(1)} → ${r2.toFixed(1)}` : 'no lifted field with sizeOver found');
   }
+}
+
+// === RIG M — THE TALENT LANES (2026-10-01, the talent-gem pass) ============
+// The talent fabric's conditions (docs/engine/talents.md) as probe
+// treatments. What a rig CAN raise routes there: kill recency and
+// vs:lowLife to the fodder pack, foes:near to live bodies, life:missing to
+// the bled rig, lowMana to the drained rig, crit-gated procs to the
+// crit_proc policy. What no rig raises on a given host blinds on THAT host
+// only (the victim-status scope, the charge-gauge gate) — the hosts that
+// feed the condition stay measured.
+
+{
+  const shape = (skill: string, gem: string) => pairShapeFor(SKILLS[skill], SUPPORTS[gem], 'host');
+  const hm = shape('cleave', 'hunters_momentum');
+  const ee = shape('firebolt', 'executioners_edge');
+  const cf = shape('firebolt', 'crowd_favor');
+  check('M1 kill recency and vs:lowLife ride the fodder pack; foes:near rides the wounding pack',
+    KILL_RECENCY_CONDITIONS.includes('recentlyKilled')
+    && hm.probe === 'live' && hm.pack === 'fodder'
+    && ee.probe === 'live' && ee.pack === 'fodder'
+    && cf.probe === 'live' && cf.pack === undefined,
+    `${hm.probe}+${hm.pack} · ${ee.probe}+${ee.pack} · ${cf.probe}+${cf.pack}`);
+  check('M2 life:missing joins the bled rig; plain damage stays at full vitals',
+    shape('cleave', 'deaths_door').bled === true && shape('cleave', 'brutality').bled === undefined);
+  const drScen = probeScenario('firebolt', { id: 'desperate_measures', level: 1 }, {});
+  const drBled = (drScen.build as BuildSpec).bled;
+  check('M3 the drained rig: a lowMana proc starts the pool UNDER the low-mana line, life untouched',
+    shape('firebolt', 'desperate_measures').drained === true
+    && shape('firebolt', 'brutality').drained === undefined
+    && drBled?.manaFrac !== undefined && drBled.manaFrac < LOW_MANA_FRAC && drBled.lifeFrac === undefined
+    && drScen.id.includes('_drained'),
+    `manaFrac ${drBled?.manaFrac} vs line ${LOW_MANA_FRAC}; ${drScen.id}`);
+  check('M4 policies: crit-gated procs escalate (fevered_hands, wrathful_edge); condition/victim-gated procs ride gated_proc',
+    probePolicyFor(SUPPORTS.fevered_hands)?.name === 'crit_proc'
+    && probePolicyFor(SUPPORTS.wrathful_edge)?.name === 'crit_proc'
+    && probePolicyFor(SUPPORTS.frostbite_grip)?.name === 'gated_proc'
+    && probePolicyFor(SUPPORTS.desperate_measures)?.name === 'gated_proc'
+    && probePolicyFor(SUPPORTS.hunters_momentum)?.name === 'whittle'
+    && probePolicyFor(SUPPORTS.executioners_edge)?.name === 'whittle'
+    && probePolicyFor(SUPPORTS.crowd_favor) === undefined);
+  const scope = (gem: string): string[] => [...(supVictimStatusScope(SUPPORTS[gem]) ?? [])].sort();
+  check('M5 victim-status scopes: chill/frozen, hardCC through its status test, a proc vs gate; life and facing are not status-armed',
+    scope('shatterglass').join(',') === 'chill,frozen'
+    && scope('opportunists_blade').includes('frozen') && scope('opportunists_blade').includes('stun')
+    && scope('frostbite_grip').join(',') === 'chill'
+    && supVictimStatusScope(SUPPORTS.executioners_edge) === null
+    && supVictimStatusScope(SUPPORTS.assassins_angle) === null);
+  const statusRow = BLINDNESS_RULES.find(r => r.note.startsWith('victim-status scope'));
+  const blindOn = (skill: string, gem: string): boolean => !!statusRow?.when(SKILLS[skill], SUPPORTS[gem]);
+  check('M6 the status row is host-scoped: blind where the rig lays nothing, measured where the host chills or stuns (chill builds into frozen)',
+    !!statusRow
+    && blindOn('firebolt', 'shatterglass') && !blindOn('frostbolt', 'shatterglass')
+    && blindOn('firebolt', 'opportunists_blade') && !blindOn('heavy_strike', 'opportunists_blade')
+    && !blindOn('frostbolt', 'opportunists_blade')
+    && blindOn('firebolt', 'frostbite_grip') && !blindOn('ice_spear', 'frostbite_grip'));
+  check('M7 the charge-gauge row: At the Brink blind on a fury-less host, measured on a fury tap reaching five; a self-banking gem is never this class',
+    chargeGaugeUnfed(SKILLS.firebolt, SUPPORTS.at_the_brink)
+    && !chargeGaugeUnfed(SKILLS.frenzy, SUPPORTS.at_the_brink)
+    && !chargeGaugeUnfed(SKILLS.firebolt, SUPPORTS.rising_chorus));
+  // M8 — the lanes measure end to end on shipped pairs that read byte-INERT
+  // under the plain dummy before this pass.
+  const mSess = makeProbeSession({ seeds: 2 });
+  const verdictOf = (skill: string, gem: string) =>
+    probePair(mSess, { skillId: skill, supportId: gem, fit: 'host' }).result.verdict;
+  const door = verdictOf('cleave', 'deaths_door');
+  const desp = verdictOf('firebolt', 'desperate_measures');
+  const hunt = verdictOf('cleave', 'hunters_momentum');
+  check("M8 the lanes measure: Death's Door bled, Desperate Measures drained, Hunter's Momentum on fodder — all EFFECTIVE",
+    door === 'effective' && desp === 'effective' && hunt === 'effective',
+    `${door} · ${desp} · ${hunt}`);
+  // M9 — the mana refill IS the cost lane's function: a gem whose whole
+  // payload is a mana-restoring proc is cost-shaped (its cost_only = working).
+  check('M9 a mana-refill proc gem is cost-shaped; a damage gem and a poise-refill proc are not',
+    costFunctionSupport(SUPPORTS.desperate_measures)
+    && costFunctionProc('proc_desperate_reserves') && !costFunctionProc('proc_shield_lesson')
+    && !costFunctionSupport(SUPPORTS.brutality) && !costFunctionSupport(SUPPORTS.hunters_momentum));
+  const refillRow = BLINDNESS_RULES.find(r => r.note.startsWith('mana refill'));
+  check('M10 the unseen-refill row claims the mana-refill gem alone (a damage gem and a poise-refill gem stay measured)',
+    !!refillRow && refillRow.when(SKILLS.teleport, SUPPORTS.desperate_measures)
+    && !refillRow.when(SKILLS.teleport, SUPPORTS.brutality)
+    && !refillRow.when(SKILLS.cleave, SUPPORTS.hunters_momentum));
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');
