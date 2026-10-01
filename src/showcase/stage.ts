@@ -199,7 +199,9 @@ export function buildStage(world: World, plan: StagePlan, spec: ShowcaseSpec): S
       // prep × presses → `then` after the last one leaves the hand → the
       // skill → wait for the body → again
       if (phase === 'prep' && idle() && prepDone < plan.prep.presses) {
-        press(prepSlot, plan.aimMode === 'grave' ? aimOf() : cluster);
+        // a prep aims where the work is: the grave, else the primary target
+        // (a ring's centre is the hero's own feet)
+        press(prepSlot, plan.aimMode === 'grave' ? aimOf() : primary && !primary.dead ? { x: primary.pos.x, y: primary.pos.y } : cluster);
         prepDone++; lastPress = t; prepGone = -1;
       } else if (phase === 'prep' && prepDone >= plan.prep.presses) {
         if (prepGone < 0 && idle()) prepGone = t;
