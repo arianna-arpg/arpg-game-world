@@ -14,6 +14,7 @@ import { serializeCharacter } from '../src/meta/character';
 const restore = seedGlobalRandom(51342);
 function fixture(kind: 'wayside-camp' | 'pillaged-ruin'): MassAdventure {
   const config: MassAdventure = JSON.parse(canonical(massAdventure()));
+  delete config.progression;
   delete config.settlement; // native-town lifecycle has its own probe
   config.terrain.addressSpan = 768; config.terrain.terrainCell = 24;
   const row = config.content.find(c => c.id === kind)!;

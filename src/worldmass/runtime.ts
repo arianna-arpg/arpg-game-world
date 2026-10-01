@@ -13,6 +13,8 @@ import { MassSites, siteOffset, validateMassSite, type MassSiteSave } from './si
 import { MASS_ZONE, massAdventure, type MassAdventure } from './preset';
 
 import { MassSettlement, type MassSettlementSave } from './settlement';
+import { geographicLevel, validateMassProgression, type MassPopulation } from './progression';
+import type { MassPlace } from './contracts';
 
 interface MassEnemySave { id: string; monster: string; level: number; x: number; y: number; life: number; scale: number }
 export interface MassAdventureSave {
@@ -34,6 +36,7 @@ export class WorldMassRuntime {
   readonly config: Readonly<MassAdventure>;
   private natives = new Map<string, Actor>();
   private nearKey = '';
+  private dangerCache = new Map<string, number>();
   private nextPopulation = 0;
   private places = new Map<string, ReturnType<MassGenerator['placesInCell']>>();
   readonly origin: MassCell;
@@ -56,11 +59,24 @@ export class WorldMassRuntime {
       || config.terrain.addressSpan % 4
       || (config.pageRadius * 2 + 1) ** 2 * config.terrain.addressSpan ** 2 > 33554432)
       throw new Error('Worldmass render residency exceeds its texture budget');
+    if (config.progression) validateMassProgression(config.progression, config.terrain);
     if (new Set(config.content.map(c => c.id)).size !== config.content.length) throw new Error('Duplicate worldmass content');
     for (const c of config.content) {
       if (!c.id || !c.source || !Number.isSafeInteger(c.level) || c.level < 1 || c.level > 100
         || !Number.isSafeInteger(c.count) || c.count < 1 || c.count > 16 || !c.table.length
         || c.table.some(r => !MONSTERS[r.id] || !Number.isFinite(r.weight) || r.weight <= 0)) throw new Error('Invalid worldmass population');
+    }
+    for (const c of config.content) {
+      if (c.levelOffset !== undefined && (!Number.isSafeInteger(c.levelOffset) || Math.abs(c.levelOffset) > 100))
+        throw new Error('Invalid worldmass content level offset');
+      if (!c.levels) continue;
+      if (c.levels.length > 100 || new Set(c.levels.map(r => r.level)).size !== c.levels.length
+        || c.levels.some(r => !Number.isSafeInteger(r.level) || r.level < 1 || r.level > 100 || !r.table.length
+          || r.table.some(e => !MONSTERS[e.id] || !Number.isFinite(e.weight) || e.weight <= 0)))
+        throw new Error('Invalid worldmass native level roster');
+      const range = config.progression;
+      if (range) for (let level = range.minLevel; level <= range.maxLevel; level++)
+        if (!c.levels.some(r => r.level === level)) throw new Error('Missing worldmass native level roster');
     }
     for (const p of config.terrain.places) {
       const site = config.content.find(c => c.id === p.content)?.site;
@@ -138,6 +154,30 @@ export class WorldMassRuntime {
     }
     this.update(world, true);
   }
+  /** Physical cell centres keep cache/order/frame rate out of a place's danger.
+   * The native settlement is the refuge footprint, not a point. */
+  levelAt(pos: { x: number; y: number }): number {
+    const spec = this.config.progression;
+    if (!spec) return 1;
+    const cs = this.config.terrain.terrainCell;
+    const x = (Math.floor(pos.x / cs) + .5) * cs, y = (Math.floor(pos.y / cs) + .5) * cs;
+    const key = x + ',' + y, hit = this.dangerCache.get(key);
+    if (hit !== undefined) return hit;
+    const distance = this.settlement?.distance(x, y) ?? Math.hypot(x, y);
+    const level = geographicLevel(spec, distance, this.generator.fieldsAt(this.walk.at(x, y)));
+    this.dangerCache.set(key, level);
+    if (this.dangerCache.size > 512) this.dangerCache.delete(this.dangerCache.keys().next().value!);
+    return level;
+  }
+  populationFor(place: Pick<MassPlace, 'content' | 'center'>): MassPopulation {
+    const content = this.config.content.find(c => c.id === place.content);
+    if (!content) throw new Error('Unresolved worldmass population');
+    const spec = this.config.progression;
+    if (!spec || !content.levels) return content;
+    const pos = localOffset(place.center, { ...this.origin, x: 0, y: 0 }, this.config.terrain.addressSpan);
+    const level = Math.max(spec.minLevel, Math.min(spec.maxLevel, this.levelAt(pos) + (content.levelOffset ?? 0)));
+    return content.levels.find(row => row.level === level)!;
+  }
   /** Survived-death wakes retain the run's land and consequences. */
   wake(world: World): void { world.landPartyAt(this.settlement?.spawn ?? { x: 12, y: 12 }); this.nearKey = ''; }
   update(world: World, boot = false): void {
@@ -187,6 +227,7 @@ export class WorldMassRuntime {
         : Math.hypot(q.x, q.y) < this.config.startRadius + p.radius)
         || Math.hypot(q.x - world.player.pos.x, q.y - world.player.pos.y) > this.config.populationRadius) continue;
       const content = this.config.content.find(c => c.id === p.content)!;
+      const population = this.populationFor(p);
       if (content.site) {
         // Reserve the whole site's native population before introducing loot.
         // Saturation delays an encounter instead of furnishing free rewards.
@@ -198,7 +239,7 @@ export class WorldMassRuntime {
           const id = canonical([p.id, 'fixture', index]);
           if (this.natives.has(id) || this.state.claimed('fallen', id) || this.natives.size >= this.config.maxPopulation) continue;
           const offset = siteOffset(p, fixture.x, fixture.y);
-          const a = world.createMonster(fixture.monster, content.level, 'enemy');
+          const a = world.createMonster(fixture.monster, population.level, 'enemy');
           const spot = world.findFreeSpot({ x: q.x + offset.x, y: q.y + offset.y }, a.radius);
           if (!this.walk.isWalkable(spot.x, spot.y) || world.pointInSolid(spot.x, spot.y, a.radius)
             || Math.hypot(spot.x - q.x, spot.y - q.y) > p.radius) continue;
@@ -211,14 +252,14 @@ export class WorldMassRuntime {
       const rng = massRandom(this.generator.run.seed, ['population', p.id, content.source]);
       for (let i = 0; i < content.count; i++) {
         const id = canonical([p.id, i]);
-        const monster = rng.weighted(content.table).id;
+        const monster = rng.weighted(population.table).id;
         const angle = rng.range(0, Math.PI * 2), radius = rng.range(30, p.radius * .65);
         const def = MONSTERS[monster];
         const scale = def.scaleVariance ? rng.range(...def.scaleVariance) : 1;
         if (this.natives.has(id) || this.state.claimed('fallen', id) || this.natives.size >= this.config.maxPopulation) continue;
         const spot = this.walk.snapToWalkable({ x: q.x + Math.cos(angle) * radius, y: q.y + Math.sin(angle) * radius });
         if (!this.walk.isWalkable(spot.x, spot.y) || Math.hypot(spot.x - q.x, spot.y - q.y) > p.radius) continue;
-        const a = world.createMonster(monster, content.level, 'enemy', undefined, { scale });
+        const a = world.createMonster(monster, population.level, 'enemy', undefined, { scale });
         const free = world.findFreeSpot(spot, a.radius);
         if (!this.walk.isWalkable(free.x, free.y) || world.pointInSolid(free.x, free.y, a.radius)
           || Math.hypot(free.x - q.x, free.y - q.y) > p.radius) continue;
@@ -235,7 +276,7 @@ export class WorldMassRuntime {
           if (this.walk.isWalkable(spot.x, spot.y) && !world.pointInSolid(spot.x, spot.y, 20)
             && Math.hypot(spot.x - q.x, spot.y - q.y) < p.radius && this.state.claim('site-cache', p.id))
             world.chests.push({ pos: spot, kind: 'timed', mimic: false, opened: false,
-              lockTime: cache.holdSeconds, maxLock: cache.holdSeconds, rewardLevel: content.level,
+              lockTime: cache.holdSeconds, maxLock: cache.holdSeconds, rewardLevel: population.level,
               rewardSource: canonical([p.id, 'cache']) });
         }
       }

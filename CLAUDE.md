@@ -9,6 +9,15 @@ isolation and Continue. See `docs/design/seamless-world-foundation.md`.
 
 The continuous-world experiment is specified in `docs/design/seamless-world-foundation.md` (branch `codex/seamless-world-foundation`). `src/worldmass/` implements durable addresses, seeded fields/place claims, sparse consequences, bounded terrain residency and an opt-in `/?worldmass` terrain/combat prototype. It uses native movement, skills, region effects, cell-ray occlusion and character saves. Verify `npm run probe -- worldmass` plus persistence/sightveil/cistern; after a build, `balance/worldmass-ui.cjs` checks the hidden real client with isolated saves. Each new run gets fresh land. Live frame rebasing, distant simulation, native place/campaign migration and full consequence paging remain unfinished; read the document's implementation ledger before extending or describing the mode.
 
+Worldmass version 4 adds geographic progression through
+`src/worldmass/progression.ts`: saved distance/field rules and native presence
+rosters choose fixed encounter levels, independent of the hero. Reward scopes
+keep a killed body or opened cache's level through nested loot delivery.
+The HUD reports country level; discovered map sites report their own level.
+Version 1–3 saves retain fixed populations. Verify `probe_worldmass_progression.ts`
+and hidden `balance/worldmass-progression-ui.cjs`, plus native container loot,
+memories, ability economy, persistence and environmental probes.
+
 Worldmass version 3 starts inside native Lastlight and extends its live scene
 into the country on every side. `src/worldmass/settlement.ts` pins per-run town
 geometry, residents, doors, region edits and scenery; `MassWalk` overlays its

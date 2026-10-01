@@ -110,7 +110,7 @@ for (const grown of [false, true]) {
   console.log('PASS exact Continue preserves doors, broken bodies/scenery, town tier and native wake', JSON.stringify(stored).length);
 }
 // Old descriptors deliberately retain their old clearing and land.
-const legacy = JSON.parse(canonical(massAdventure())); delete legacy.settlement;
+const legacy = JSON.parse(canonical(massAdventure())); delete legacy.settlement; delete legacy.progression;
 legacy.terrain.version = 2; legacy.terrain.addressSpan = 768; legacy.terrain.terrainCell = 24;
 const old = makeSimWorld('warrior', 531);
 new WorldMassRuntime(42, 'legacy', legacy).attach(old);

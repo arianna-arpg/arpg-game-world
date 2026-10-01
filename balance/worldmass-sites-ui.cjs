@@ -43,7 +43,7 @@ app.whenReady().then(async () => {
       return {fatal:__game.crash().fatal,version:m.generator.run.version,places:window.__siteChecks,
         planningMs:performance.now()-started,population:m.population};
     });
-    log({boot}); assert.equal(boot.fatal,null); assert.equal(boot.version,3); assert.ok(boot.places.every(Boolean));
+    log({boot}); assert.equal(boot.fatal,null); assert.equal(boot.version,4); assert.ok(boot.places.every(Boolean));
     for (const content of ['wayside-camp','pillaged-ruin']) {
       const result = await run(content => {
         const w=__game.world(), m=w.massRuntime, site=__siteChecks.find(p=>p.content===content);

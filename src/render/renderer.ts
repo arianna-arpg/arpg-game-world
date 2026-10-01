@@ -8364,7 +8364,7 @@ export class Renderer {
       const atSea = world.sailing || world.appliedZoneId === VOYAGE_ZONE_ID;
       const massSettlement = world.massRuntime?.settlement;
       const locality = massSettlement?.contains(p.pos.x, p.pos.y) ? massSettlement.zone : world.zone;
-      const lvText = !atSea && locality.level > 0 ? ` — Monster Lv ${world.zone.level}` : '';
+      const lvText = !atSea && locality.level > 0 ? ` — ${world.massRuntime ? 'Country' : 'Monster'} Lv ${world.levelAt(p.pos)}` : '';
       // Underground, the banner names the BAND (the strata fabric) AND the rung
       // standing on it: where you are on the world's vertical ladder, and how
       // far down that is. Both read the ONE caveDepth datum — the number IS the

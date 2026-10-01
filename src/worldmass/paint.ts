@@ -142,7 +142,8 @@ export function massMap(mass: WorldMassRuntime, player: { x: number; y: number }
     const q = localOffset(found.center, { ...mass.origin, x: 0, y: 0 }, mass.config.terrain.addressSpan);
     const x = (q.x / grain - left) * scale, y = (q.y / grain - top) * scale;
     if (x < 0 || y < 0 || x > cols * scale || y > rows * scale) continue;
-    const name = mass.config.content.find(c => c.id === found.content)?.site?.name ?? 'Discovered place';
+    const title = mass.config.content.find(c => c.id === found.content)?.site?.name ?? 'Discovered place';
+    const name = mass.config.progression ? title + ' · Lv ' + mass.populationFor(found).level : title;
     parts.push(`<g><title>${escape(name)}</title><path d="M${x},${y - 5}l5,5 -5,5 -5,-5Z" fill="#d1b685" stroke="#302d23"/><text x="${x + 8}" y="${y + 4}" fill="#eee0bc" font-size="10">${escape(name)}</text></g>`);
   }
   const px = (player.x / grain - left) * scale, py = (player.y / grain - top) * scale;

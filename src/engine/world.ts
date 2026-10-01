@@ -3771,6 +3771,18 @@ export class World {
   nativeSettlementGrid(): GridWalkField | null {
     return this.massRuntime?.settlement?.grid ?? (this.walk instanceof GridWalkField ? this.walk : null);
   }
+  /** Spatial encounter context never rewrites the shared zone for one player. */
+  levelAt(pos: Vec2): number { return this.massRuntime?.levelAt(pos) ?? this.zone.level; }
+  private massRewardLevel: number | undefined;
+  private lootLevelAt(pos: Vec2): number {
+    return this.massRuntime?.config.progression ? this.massRewardLevel ?? this.levelAt(pos) : this.zone.level;
+  }
+  private withMassReward<T>(level: number, action: () => T): T {
+    if (!this.massRuntime?.config.progression) return action();
+    const previous = this.massRewardLevel;
+    this.massRewardLevel = level;
+    try { return action(); } finally { this.massRewardLevel = previous; }
+  }
   townPresent(): boolean { return this.zone.id === START_ZONE || !!this.massRuntime?.settlement; }
   isSafeAt(pos: Vec2): boolean {
     return this.massRuntime ? !!this.massRuntime.settlement?.contains(pos.x, pos.y) : this.zone.objective.kind === 'safe';
@@ -18470,11 +18482,13 @@ export class World {
       c.invulnerable = true;
       this.stormCaster = c;
     }
-    const caster = this.stormCaster;
-    caster.level = Math.max(1, this.zone.level);
+    const caster = this.massRuntime ? new Actor('Storm', 'player', vec(at.x, at.y)) : this.stormCaster;
+    caster.untargetable = true; caster.invulnerable = true;
+    const level = this.levelAt(at);
+    caster.level = Math.max(1, level);
     caster.pos = vec(at.x, at.y); // so a raised guard can still block it fairly
-    // The bolt scales with the zone the way a monster's own skills do.
-    const inst = makeSkillInstance(skill, 1 + Math.floor(this.zone.level / 3));
+    // Geographic sky hazards use their impact location, not the hero's level.
+    const inst = makeSkillInstance(skill, 1 + Math.floor(level / 3));
     this.zones.push({
       pos: vec(at.x, at.y), radius: strike.radius, caster, inst, color: skill.color,
       delay: strike.telegraph, exploded: false, linger: 0,
@@ -23360,7 +23374,7 @@ export class World {
     const cfg = ABILITY_ESSENCE_CFG;
     const rng = this.abilityDropRng ??= new Rng((this.manifest.seed ^ hashStr('abilitytrickle')) >>> 0);
     if (!rng.chance(cfg.killChance * bounty)) return;
-    const tier = rollMemoryEssenceTier(this.zone.level, () => rng.next());
+    const tier = rollMemoryEssenceTier(this.lootLevelAt(at), () => rng.next());
     if (tier !== null) this.dropAbilityEssenceAt(at, tier, rng.int(cfg.count[0], cfg.count[1]), () => rng.next());
   }
 
@@ -45811,7 +45825,8 @@ export class World {
    *  only window a row gets onto this World. */
   private killCtx(actor: Actor, killer: Actor | null, credit: boolean): KillCtx {
     return {
-      actor, killer, credit, zone: this.zone, sim: this.sim, time: this.time,
+      actor, killer, credit, zone: this.massRuntime?.config.progression ? { ...this.zone, level: actor.level } : this.zone,
+      sim: this.sim, time: this.time,
       grantXp: n => this.grantXp(n),
       // THE MEMORY LAW: a row's gem drop wears the SLAIN BODY's provenance.
       dropGemAt: at => this.dropGemAt(at, undefined, false, this.provenanceOf(actor)),
@@ -45827,7 +45842,7 @@ export class World {
         const miTheme = kdef?.infrequentTheme ?? (actor.defId ? MONSTER_THEMES[actor.defId] : undefined);
         // THE MEMORY LAW: the table's gems (and its authored pouches) wear the
         // SLAIN BODY's provenance — a row's payout leans toward what fell.
-        for (const res of resolveLootTable(tableId, { ilvl: this.zone.level, miTheme, sourceId: actor.defId })) {
+        for (const res of resolveLootTable(tableId, { ilvl: this.lootLevelAt(actor.pos), miTheme, sourceId: actor.defId })) {
           this.mintLootResult(at, res, false, this.provenanceOf(actor));
         }
       },
@@ -46483,91 +46498,93 @@ export class World {
       const spoilD0 = this.drops.length, spoilO0 = this.orbs.length;
       const prevSpoil = this.spoilStory;
       this.spoilStory = actor.tier;
-      if (credit) {
-        this.kills++;
-        // THE WORLD'S MEMORY: grudges accrue to the name; a manifested
-        // nemesis meets its fate (cheat death or the grudge ends).
-        this.noteNemesisKill(actor);
-        // Kill-fed encounters: a foe slain inside an open breach extends it.
-        if (this.encounters.length) this.feedEncounters(actor);
-        // THE THRONG's onKill sources: credited kills may raise a husk at
-        // the corpse (engine/throng.ts — conjured victims never feed it).
-        this.throngOnKill(actor, killer);
-        // CONJURED bodies (Actor.noBounty) pay nothing — no xp, no loot, no
-        // elite spill, no orbs. The summoner is the prize; endlessly farming
-        // its spawn is a closed door.
-        if (!actor.noBounty) {
-          this.grantXp(actor.xpValue);
-          this.text(actor.pos, `+${actor.xpValue} xp`, '#b8a0e0', 11, 'xp');
-          this.rollDrops(actor);
-          // Elites spill extra gems on top of the base roll (bias rides along).
-          if (actor.rarity) {
-            const bias = actor.defId ? MONSTERS[actor.defId]?.gemBias : undefined;
-            // THE MEMORY LAW: the spill lands as Memories of THIS body — its
-            // rolled tier rides the unit (the tier lean at the recall).
-            for (let i = 0; i < RARITY_DEFS[actor.rarity].drops; i++) this.dropGemAt(actor.pos, bias, false, this.provenanceOf(actor));
-          }
-          // Breakables can spill something drinkable.
-          const mdef = actor.defId ? MONSTERS[actor.defId] : undefined;
-          if (mdef?.orbDrops && chance(mdef.orbDrops)) {
-            this.shedOrb(chance(0.5) ? 'life' : 'mana', actor.pos);
+      this.withMassReward(actor.level, () => {
+        if (credit) {
+          this.kills++;
+          // THE WORLD'S MEMORY: grudges accrue to the name; a manifested
+          // nemesis meets its fate (cheat death or the grudge ends).
+          this.noteNemesisKill(actor);
+          // Kill-fed encounters: a foe slain inside an open breach extends it.
+          if (this.encounters.length) this.feedEncounters(actor);
+          // THE THRONG's onKill sources: credited kills may raise a husk at
+          // the corpse (engine/throng.ts — conjured victims never feed it).
+          this.throngOnKill(actor, killer);
+          // CONJURED bodies (Actor.noBounty) pay nothing — no xp, no loot, no
+          // elite spill, no orbs. The summoner is the prize; endlessly farming
+          // its spawn is a closed door.
+          if (!actor.noBounty) {
+            this.grantXp(actor.xpValue);
+            this.text(actor.pos, `+${actor.xpValue} xp`, '#b8a0e0', 11, 'xp');
+            this.rollDrops(actor);
+            // Elites spill extra gems on top of the base roll (bias rides along).
+            if (actor.rarity) {
+              const bias = actor.defId ? MONSTERS[actor.defId]?.gemBias : undefined;
+              // THE MEMORY LAW: the spill lands as Memories of THIS body — its
+              // rolled tier rides the unit (the tier lean at the recall).
+              for (let i = 0; i < RARITY_DEFS[actor.rarity].drops; i++) this.dropGemAt(actor.pos, bias, false, this.provenanceOf(actor));
+            }
+            // Breakables can spill something drinkable.
+            const mdef = actor.defId ? MONSTERS[actor.defId] : undefined;
+            if (mdef?.orbDrops && chance(mdef.orbDrops)) {
+              this.shedOrb(chance(0.5) ? 'life' : 'mana', actor.pos);
+            }
           }
         }
-      }
-      // PER-KIND KILL BOUNTIES — the open registry (engine/killHandlers.ts).
-      // Core rows (the warlord pair, the Crowned, the Eldritch cleanse)
-      // self-seed there and package rows register from their def files;
-      // worldKillRules holds the rows that close over this World's run-state
-      // (realm contexts, the dive, the hunt, the built-boss site). Every
-      // matching row runs; rows are independent by contract. Ledger keys
-      // inside rows are cross-file contracts consumed by unlock predicates.
-      const kctx = this.killCtx(actor, killer ?? null, credit);
-      for (const r of killRules()) if (killRuleMatches(r, kctx)) r.run(kctx);
-      for (const r of this.worldKillRules) if (killRuleMatches(r, kctx)) r.run(kctx);
-      // THE MEAL (BrainDef.drives): a landed kill jumps the killer's wants —
-      // the hunt sates the hunger that drove it.
-      this.bumpDrives(killer ?? null, 'onKill');
-      // THE PURSE PAYS IN FULL (essenceSpill.deathBurst): whatever the chase
-      // didn't shake loose lands in one pile — trail + pile always sum the
-      // fixed budget, regardless of who landed the kill or how.
-      // (Sealed ground skips the whole burst — the packets would refuse at
-      // dropEssenceAt anyway, and "the purse bursts!" must never announce
-      // wealth that cannot land. THE SPOILS LAW stays honest at the float.)
-      const spillDef = actor.defId ? MONSTERS[actor.defId]?.essenceSpill : undefined;
-      if (spillDef && spillDef.deathBurst !== false && !this.spoilsSealed()) {
-        const owed = spillBudget(spillDef) - actor.essenceSpilled;
-        for (let k = 0; k < owed; k++) this.dropEssenceAt(actor.pos, rollSpillPacket(actor.level, spillDef));
-        if (owed > 0) {
-          actor.essenceSpilled += owed;
+        // PER-KIND KILL BOUNTIES — the open registry (engine/killHandlers.ts).
+        // Core rows (the warlord pair, the Crowned, the Eldritch cleanse)
+        // self-seed there and package rows register from their def files;
+        // worldKillRules holds the rows that close over this World's run-state
+        // (realm contexts, the dive, the hunt, the built-boss site). Every
+        // matching row runs; rows are independent by contract. Ledger keys
+        // inside rows are cross-file contracts consumed by unlock predicates.
+        const kctx = this.killCtx(actor, killer ?? null, credit);
+        for (const r of killRules()) if (killRuleMatches(r, kctx)) r.run(kctx);
+        for (const r of this.worldKillRules) if (killRuleMatches(r, kctx)) r.run(kctx);
+        // THE MEAL (BrainDef.drives): a landed kill jumps the killer's wants —
+        // the hunt sates the hunger that drove it.
+        this.bumpDrives(killer ?? null, 'onKill');
+        // THE PURSE PAYS IN FULL (essenceSpill.deathBurst): whatever the chase
+        // didn't shake loose lands in one pile — trail + pile always sum the
+        // fixed budget, regardless of who landed the kill or how.
+        // (Sealed ground skips the whole burst — the packets would refuse at
+        // dropEssenceAt anyway, and "the purse bursts!" must never announce
+        // wealth that cannot land. THE SPOILS LAW stays honest at the float.)
+        const spillDef = actor.defId ? MONSTERS[actor.defId]?.essenceSpill : undefined;
+        if (spillDef && spillDef.deathBurst !== false && !this.spoilsSealed()) {
+          const owed = spillBudget(spillDef) - actor.essenceSpilled;
+          for (let k = 0; k < owed; k++) this.dropEssenceAt(actor.pos, rollSpillPacket(actor.level, spillDef));
+          if (owed > 0) {
+            actor.essenceSpilled += owed;
+            }
+        }
+        // A dead looter's sack SPILLS in full — nothing it snatched is ever
+        // lost; the chase always pays out (grief-proof by construction).
+        if (actor.lootSack?.length) {
+          for (const item of actor.lootSack) {
+            this.drops.push({
+              pos: vec(actor.pos.x + rand(-26, 26), actor.pos.y + rand(-26, 26)),
+              item, bob: rand(0, Math.PI * 2),
+            });
           }
-      }
-      // A dead looter's sack SPILLS in full — nothing it snatched is ever
-      // lost; the chase always pays out (grief-proof by construction).
-      if (actor.lootSack?.length) {
-        for (const item of actor.lootSack) {
-          this.drops.push({
-            pos: vec(actor.pos.x + rand(-26, 26), actor.pos.y + rand(-26, 26)),
-            item, bob: rand(0, Math.PI * 2),
+          actor.lootSack = undefined;
+        }
+        // The ephemeral remnant of their passing — briefly usable (corpses
+        // drop regardless of who did the killing; necromancy isn't picky —
+        // but only the ORGANIC leave one: timber splinters, stone rubbles,
+        // ghost-stuff dissipates. MATERIAL_NATURE decides; a def's own
+        // `remains:` overrides either way (data/monsters.ts).
+        const remDef = actor.defId ? MONSTERS[actor.defId] : undefined;
+        if (actor.defId && (!remDef || defLeavesRemains(remDef))) {
+          this.corpses.push({
+            pos: vec(actor.pos.x, actor.pos.y),
+            defId: actor.defId, level: actor.level,
+            maxLife: actor.maxLife(), remaining: CORPSE_CFG.duration,
+            tier: actor.tier, // THE SPOILS STORY: the body lies where it died
           });
+          if (this.corpses.length > CORPSE_CFG.max) this.corpses.shift();
         }
-        actor.lootSack = undefined;
-      }
-      // The ephemeral remnant of their passing — briefly usable (corpses
-      // drop regardless of who did the killing; necromancy isn't picky —
-      // but only the ORGANIC leave one: timber splinters, stone rubbles,
-      // ghost-stuff dissipates. MATERIAL_NATURE decides; a def's own
-      // `remains:` overrides either way (data/monsters.ts).
-      const remDef = actor.defId ? MONSTERS[actor.defId] : undefined;
-      if (actor.defId && (!remDef || defLeavesRemains(remDef))) {
-        this.corpses.push({
-          pos: vec(actor.pos.x, actor.pos.y),
-          defId: actor.defId, level: actor.level,
-          maxLife: actor.maxLife(), remaining: CORPSE_CFG.duration,
-          tier: actor.tier, // THE SPOILS STORY: the body lies where it died
-        });
-        if (this.corpses.length > CORPSE_CFG.max) this.corpses.shift();
-      }
-      this.stampSpoils(spoilD0, spoilO0, actor.tier);
+        this.stampSpoils(spoilD0, spoilO0, actor.tier);
+      });
       this.spoilStory = prevSpoil;
     }
     // THE DEATH VOICE (engine/bodyVoices.ts): a body dies as what it is made
@@ -46799,7 +46816,7 @@ export class World {
       return;
     }
     const dropSkill = (): void => {
-      const inst = this.rollSkillGem(bias, this.zone.level, floor);
+      const inst = this.rollSkillGem(bias, this.lootLevelAt(at), floor);
       const bobF = Math.random(); // rand(0, 2π)'s own draw, raw — the seed site
       land(bobF, () => {
         this.noteGemDrop(inst.def.id, inst.rarity);
@@ -46809,7 +46826,7 @@ export class World {
       });
     };
     if (chance(GEM_DROP_CFG.skillShare)) { dropSkill(); return; }
-    const gemDef = this.rollSupportDropGated(bias, this.zone.level, floor);
+    const gemDef = this.rollSupportDropGated(bias, this.lootLevelAt(at), floor);
     if (!gemDef) { dropSkill(); return; } // no supports unlocked → a skill gem instead
     const bobF = Math.random();
     land(bobF, () => {
@@ -48737,9 +48754,11 @@ export class World {
     // kill(); the primitives below each re-check, this is the cheap out).
     if (this.spoilsSealed()) return;
     const def = actor.defId ? MONSTERS[actor.defId] : undefined;
+    const rewardLevel = this.lootLevelAt(actor.pos);
+    const lootZone = this.massRuntime?.config.progression ? { ...this.zone, level: rewardLevel } : this.zone;
     if (def?.containerLoot) {
-      const table = def.loot ?? selectContainerLoot(def.containerLoot, this.zone);
-      for (const result of resolveLootTable(table, { ilvl: this.zone.level, sourceId: actor.defId })) {
+      const table = def.loot ?? selectContainerLoot(def.containerLoot, lootZone);
+      for (const result of resolveLootTable(table, { ilvl: rewardLevel, sourceId: actor.defId })) {
         this.mintLootResult(actor.pos, result, false, this.provenanceOf(actor));
       }
       return; // the declared container recipe replaces all ordinary kill trickles
@@ -48784,7 +48803,7 @@ export class World {
     // MONSTER INFREQUENT theme: per-def declaration wins, else the registry.
     const miTheme = def?.infrequentTheme ?? (actor.defId ? MONSTER_THEMES[actor.defId] : undefined);
     for (const t of tables) {
-      for (const res of resolveLootTable(t, { ilvl: this.zone.level, miTheme })) {
+      for (const res of resolveLootTable(t, { ilvl: rewardLevel, miTheme })) {
         this.mintLootResult(actor.pos, res, false, this.provenanceOf(actor));
       }
     }
@@ -55902,7 +55921,7 @@ export class World {
     // old switch (stand, then enter) so behaviour is byte-identical.
     if (entered) {
       const es = def.enterStatus;
-      if (es) a.applyStatus(es.id, (es.amount ?? 0) + (es.amountPerLevel ?? 0) * this.zone.level, es.duration, src);
+      if (es) a.applyStatus(es.id, (es.amount ?? 0) + (es.amountPerLevel ?? 0) * this.levelAt(a.pos), es.duration, src);
       if (def.enterText) this.text(a.pos, def.enterText.text, def.enterText.color, 11);
       def.onEnter?.(a, this);
     }
@@ -55913,7 +55932,7 @@ export class World {
     if (def.standDamage && !a.invulnerable) {
       const sd = def.standDamage;
       const res = resistValue(a, sd.type);
-      const dmg = (sd.dps + (sd.dpsPerLevel ?? 0) * this.zone.level) * (1 - res) * dt;
+      const dmg = (sd.dps + (sd.dpsPerLevel ?? 0) * this.levelAt(a.pos)) * (1 - res) * dt;
       if (dmg > 0) {
         a.life -= dmg;
         if (chance(dt * 2.5)) { a.hitFlash = 0.12; a.hitFlashType = sd.type; }
@@ -56009,26 +56028,28 @@ export class World {
     if (c.opened) return;
     c.opened = true;
     c.openedAt = this.time; // M-SPILL: the lid swings (the renderer's own clock read)
-    const rewardLevel = c.rewardLevel ?? this.zone.level;
-    const rewardSource = c.rewardSource ?? 'chest';
-    const lootZone = c.rewardLevel === undefined ? this.zone : { ...this.zone, level: rewardLevel };
-    if (!this.spoilsSealed()) {
-      for (const result of resolveLootTable(selectContainerLoot('chest', lootZone), { ilvl: rewardLevel, sourceId: rewardSource })) {
-        this.mintLootResult(c.pos, result, false, 'chest'); // THE MEMORY LAW: the chest is the provenance
+    const rewardLevel = c.rewardLevel ?? this.levelAt(c.pos);
+    this.withMassReward(rewardLevel, () => {
+      const rewardSource = c.rewardSource ?? 'chest';
+      const lootZone = c.rewardLevel === undefined && !this.massRuntime ? this.zone : { ...this.zone, level: rewardLevel };
+      if (!this.spoilsSealed()) {
+        for (const result of resolveLootTable(selectContainerLoot('chest', lootZone), { ilvl: rewardLevel, sourceId: rewardSource })) {
+          this.mintLootResult(c.pos, result, false, 'chest'); // THE MEMORY LAW: the chest is the provenance
+        }
       }
-    }
-    // THE THEMED CACHE (Chest.rarity — a tinted toll's promise): one rolled
-    // GEAR piece at exactly that rarity, on top of the ordinary container pay.
-    // Spoils-sealed ground still seals it (dropGearAt rides the same law).
-    if (c.rarity) {
-      const item = rollItem({ ilvl: Math.max(1, rewardLevel), rarityWeights: { [c.rarity]: 1 } });
-      if (item) {
-        this.dropGearAt(vec(c.pos.x, c.pos.y + 8), item); // the glyph's own rarity color is the read (M-SPILL: no caption)
+      // THE THEMED CACHE (Chest.rarity — a tinted toll's promise): one rolled
+      // GEAR piece at exactly that rarity, on top of the ordinary container pay.
+      // Spoils-sealed ground still seals it (dropGearAt rides the same law).
+      if (c.rarity) {
+        const item = rollItem({ ilvl: Math.max(1, rewardLevel), rarityWeights: { [c.rarity]: 1 } });
+        if (item) {
+          this.dropGearAt(vec(c.pos.x, c.pos.y + 8), item); // the glyph's own rarity color is the read (M-SPILL: no caption)
+        }
       }
-    }
-    for (let i = 0; i < 2; i++) {
-      this.shedOrb(chance(0.5) ? 'life' : 'mana', c.pos, { scatter: 22, life: 14 });
-    }
+      for (let i = 0; i < 2; i++) {
+        this.shedOrb(chance(0.5) ? 'life' : 'mana', c.pos, { scatter: 22, life: 14 });
+      }
+    });
     this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 50, color: '#e8c87a', life: 0.4, maxLife: 0.4, fx: 'sparkle' }); // M-SPILL: the lid + the glints, no caption
   }
 
@@ -57771,7 +57792,7 @@ export class World {
     this.orbs.push({
       pos: opts?.clamp === false ? p
         : this.clampPos(p, 8, undefined, story !== undefined && story >= 1 ? { tier: story } : undefined),
-      kind, amount: opts?.amount ?? orbAmount(def, this.zone.level),
+      kind, amount: opts?.amount ?? orbAmount(def, this.lootLevelAt(at)),
       bob: rand(0, Math.PI * 2), life: opts?.life ?? def.life ?? 12,
       homeTo: opts?.homeTo,
       tier: story,

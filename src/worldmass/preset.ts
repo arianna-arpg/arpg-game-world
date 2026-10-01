@@ -3,15 +3,20 @@ import { FACTIONS, MONSTERS } from '../data/monsters';
 import { presenceTable } from '../engine/presence';
 import type { ZoneDef } from '../data/zones';
 import type { MassSpec } from './contracts';
+import type { MassProgressionSpec, MassPopulation } from './progression';
 import { freezeData } from './random';
 import { nativeMassSite, type MassSiteSpec } from './sites';
 
 export const MASS_ZONE = 'worldmass_expedition';
-export interface MassContent {
-  id: string; source: string; level: number; count: number; table: { id: string; weight: number }[];
+export interface MassContent extends MassPopulation {
+  id: string; source: string; count: number;
+  /** Omitted = authored fixed population. Rows snapshot the native level envelopes. */
+  levels?: MassPopulation[];
+  levelOffset?: number;
   site?: MassSiteSpec;
 }
 export interface MassAdventure {
+  progression?: MassProgressionSpec;
   settlement?: import('./settlement').MassSettlementSpec;
   terrain: MassSpec;
   theme: ZoneDef['theme'];
@@ -31,7 +36,7 @@ export function massAdventure(): MassAdventure {
     { id: 'desert', field: 'moisture', min: -2, max: -.3 },
   ];
   const terrain: MassSpec = {
-    id: 'hollow-wake-country', version: 3, addressSpan: 960, terrainCell: 30,
+    id: 'hollow-wake-country', version: 4, addressSpan: 960, terrainCell: 30,
     fields: [
       { id: 'elevation', base: .15, layers: [
         { id: 'continent', period: 18000, amplitude: .7 },
@@ -43,6 +48,7 @@ export function massAdventure(): MassAdventure {
         { id: 'local', period: 1700, amplitude: .25 },
       ] },
       { id: 'rock', base: 0, layers: [{ id: 'outcrops', period: 540, amplitude: 1 }] },
+      { id: 'danger', base: 0, layers: [{ id: 'country', period: 7000, amplitude: 1 }] },
     ],
     surfaces: [
       { id: 'lake', source: 'regions/water', priority: 100, when: [{ field: 'elevation', max: -.25 }], region: 'water', color: '#223c45', biome: 'downs' },
@@ -65,16 +71,32 @@ export function massAdventure(): MassAdventure {
         surface: { region: 'ground', color: '#42433a' } },
     ],
   };
-  return freezeData({ terrain, theme: JSON.parse(JSON.stringify(TILESETS.downs.theme)) as ZoneDef['theme'],
+  const progression: MassProgressionSpec = {
+    source: 'worldmass/expedition-progression', minLevel: 1, maxLevel: 24,
+    stops: [{ distance: 0, level: 1 }, { distance: 1600, level: 1 },
+      { distance: 5800, level: 4 }, { distance: 13200, level: 9 },
+      { distance: 26800, level: 18 }, { distance: 40000, level: 24 }],
+    variation: { field: 'danger', levels: 2, start: 1600, span: 4000 },
+  };
+  const populations = (table: Parameters<typeof presenceTable>[0]): MassPopulation[] =>
+    Array.from({ length: progression.maxLevel }, (_, i) => ({
+      level: i + 1, table: presenceTable(table, i + 1, id => MONSTERS[id]?.presence)
+        .filter(r => MONSTERS[r.id] && !MONSTERS[r.id].habitat)
+        .map(r => ({ id: r.id, weight: r.weight })),
+    }));
+  return freezeData({ terrain, progression, theme: JSON.parse(JSON.stringify(TILESETS.downs.theme)) as ZoneDef['theme'],
     content: [...families.map(f => ({ id: f.id, source: 'tilesets/' + f.id + '/packs', level: 1, count: 3,
+      levels: populations(TILESETS[f.id].packs.table),
       table: presenceTable(TILESETS[f.id].packs.table, 1, id => MONSTERS[id]?.presence)
         .filter(r => MONSTERS[r.id] && !MONSTERS[r.id].habitat)
         .map(r => ({ id: r.id, weight: r.weight })) })),
       { id: 'wayside-camp', source: 'structures/wayside_camp', level: 1, count: 2,
+        levels: populations(TILESETS.downs.packs.table),
         table: presenceTable(TILESETS.downs.packs.table, 1, id => MONSTERS[id]?.presence)
           .filter(r => MONSTERS[r.id] && !MONSTERS[r.id].habitat).map(r => ({ id: r.id, weight: r.weight })),
         site: nativeMassSite('wayside_camp', 'Wayside Camp', { x: 0, y: 66, holdSeconds: 4 }) },
       { id: 'pillaged-ruin', source: 'structures/pillaged_township', level: 1, count: 4,
+        levels: populations(FACTIONS.undead.table), levelOffset: 1,
         table: presenceTable(FACTIONS.undead.table, 1, id => MONSTERS[id]?.presence)
           .filter(r => MONSTERS[r.id] && !MONSTERS[r.id].habitat).map(r => ({ id: r.id, weight: r.weight })),
         site: nativeMassSite('pillaged_township', 'Pillaged Ruin', { x: 60, y: 80, holdSeconds: 5 }) },

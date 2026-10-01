@@ -43,6 +43,12 @@ The existing Git remote is `https://github.com/arianna-arpg/arpg-game-world.git`
 - `preset.ts`: one replaceable expedition descriptor. Snapshots palette and
   level-appropriate native rosters from existing tilesets with source attribution;
   controls field scales, place density, starting reservation and resource budgets.
+- `progression.ts`: configurable distance stops, bounded levels and a seeded
+  regional danger field. The refuge is the pinned Lastlight footprint, so a
+  larger town does not start inside harder country. Version 4 snapshots native
+  presence tables for levels 1–24; fixed-level content remains supported.
+  Each encounter resolves from its own place centre and keeps its level while
+  chasing, fighting, revisiting or resuming. No hero-level scaling is applied.
 - `sites.ts`: a reusable native-structure adapter with deterministic orientation,
   persistent discovery and sparse scenery mutations. The first recipes are
   Wayside Camp and Pillaged Ruin, reusing native scenery, breakables, guards and
@@ -77,20 +83,40 @@ region effects and grounded spell telegraphs operate on the same sampled cells.
 Run the development server from this worktree and open `/?worldmass`, then begin
 a new character. Without the query parameter, the existing game remains the
 default. `M` shows the surveyed terrain and Lastlight marker; the journal remains
-available separately. New version-3 expeditions wake in native Lastlight. Walk
+available separately. New expeditions wake in native Lastlight. Walk
 through its native doors, use unlocked counters, explore the inn's upper floor,
 then walk into the country on any side. No gateway, loading call, coordinate
 jump, hero replacement or scene reset occurs at the town boundary.
 
-**New places require a new run.** Default generator version 3 adds Lastlight
-and aligns geographic cells to the native 30-unit floor lattice (960-unit
-terrain pages). Version 2 introduced camps and ruins. Continue preserves the
-saved descriptor, including version 1/2 land without Lastlight;
+**New generation features require a new run.** Default generator version 4
+adds geographic danger and native level rosters. Version 3 added Lastlight and
+aligned geographic cells to the native 30-unit floor lattice (960-unit terrain
+pages). Version 2 introduced camps and ruins. Continue preserves the saved
+descriptor, including version 1/2 land without Lastlight and version 1–3's
+fixed encounter levels;
 updating the game never inserts new structures into an existing expedition.
 Caches use the ordinary hold-nearby interaction, native reward policy and the
 site's configured level. Destroyed supplies and claimed caches do not regenerate
 on page reload. A site's whole native population must fit before it can introduce
 a cache; saturation delays the encounter rather than furnishing free rewards.
+
+The expedition progression policy currently keeps the first 1,600 units beyond
+Lastlight's footprint at country level 1, then follows configurable distance
+stops with smooth seeded regional variation and a level-24 ceiling. Ruins
+have a configurable +1 encounter offset within that ceiling. This is initial
+pacing data, not a completed balance pass. The HUD's country level describes
+the local geography; discovered map markers give each site's encounter level.
+A pursuing enemy keeps its original level across both places.
+
+Native kill rewards use the slain body's level, including gear, gem-pool
+eligibility, ability-essence tiers, resource orbs and kill-handler context.
+Caches retain their saved site reward level. Scoped payout context restores
+after nested calls or exceptions and never mutates the shared zone's level.
+Region damage and sky strikes sample the affected position; simultaneous
+strikes retain independent source actors. Ordinary game reward semantics and
+older fixed-level expedition descriptors retain their prior behavior.
+This admits the current population/cache/terrain paths; it does not migrate
+every event package, summoned child or quest reward to a spatial context.
 
 Site descriptors snapshot native legacy structure scenery and breakable fixtures.
 Population tables/counts and cache placement/time remain explicit content data.
@@ -197,6 +223,18 @@ checkpoint measured approximately 529 KB for the hamlet and 1.26 MB for the
 township in the fixture; town foundation deltas and resident bodies remain
 whole-run data. Boundary-correlated profiling and consequence paging are still
 required before claiming long-run seamless performance.
+
+Progression milestone verification (2026-10-01): all five worldmass probes,
+game/launcher/sim type checks, native container loot, memories, ability economy,
+persistence, sightveil and cistern checks passed. Generation QA reported 869
+cases × 3 seeds with zero failures and four baseline spacing warnings.
+The scoped browser client visited a level-7 Wayside Camp with native level-7/8
+populations nearby, rendered country/site levels, retained the site's reward
+after a hero-level change and travel, and preserved native identities/levels
+and an opened cache through real Continue. Separate camps/ruins and preview
+save-isolation checks passed. Normal/scoped builds and ordinary game smoke
+passed too. This is a bounded integration journey, not a
+full level-1-to-24 playthrough or performance acceptance.
 
 ## The commission and the decided run policy
 
