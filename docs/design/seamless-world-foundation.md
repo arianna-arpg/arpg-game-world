@@ -419,6 +419,50 @@ interest area, carry cross-region effects, and reconcile join/reconnect against
 the same content manifest. Separate players can occupy separate active areas.
 The current `ZoneMsg` cannot express this simply by changing `zoneId` to `chunkId`.
 
+### Future persistent shared worlds
+
+Long-term direction (2026-09-30): this foundation should also support a separate
+online, MMORPG-style mode in which multiple characters log into the same durable
+world. This is a future architectural requirement, not implemented networking
+or a change to the prototype's fresh-world-per-run default. New terrain/location
+work should preserve the boundaries below; multiplayer scale and production
+operations need their own later design and acceptance gates.
+
+- **World lifetime is independent of character lifetime.** A persistent world
+  owns its identity, seed, generator/content manifest, clock and regional
+  consequences. Characters own their progression, inventory, discovery policy
+  and current world address. Death, deletion, logout and replacement characters
+  must not implicitly reroll that world's land or clear its consequences.
+  A mode's lifecycle policy chooses fresh expedition or persistent world;
+  respawn, population renewal and world reset each have explicit policies.
+- **Keep identity and attribution durable.** Place/entity IDs are scoped to the
+  world, with stable account/character/actor ownership and causal records for
+  changes. The prototype currently encodes `MassRun.runId` into generated IDs
+  and embeds the descriptor in character saves. A persistent-world mode must
+  migrate that ownership into an independent world record; simply reusing a
+  seed or renaming `runId` is not a persistence implementation.
+- **Make shared state authoritative.** A server or authoritative host validates
+  movement, combat, world edits, ownership transfers and reward claims. Clients
+  subscribe to relevant regions and receive snapshots plus ordered revisions.
+  Different players may keep distant areas active. Reconnect and retried
+  commands must not duplicate actors, items, rewards or irreversible actions.
+  Authentication, authorization and abuse controls belong at this boundary.
+- **Separate residency from existence.** Logging out or unloading a region does
+  not delete its state. Region records need transactional changes, recoverable
+  writes, versioned manifests and explicit off-screen clock policies. Durable
+  consequences must survive process restarts and content upgrades. Generator
+  changes require compatibility handling for already inhabited geography.
+- **Extend through contracts and policies.** World lifetime, character death,
+  discovery sharing, interaction permissions, simulation interest and population
+  renewal remain configurable services with attributable effects. The existing
+  combat, skill and item systems remain shared; a persistent mode should not
+  acquire bespoke copies of those rules.
+
+The current milestone remains a coherent solo adventure on continuous terrain.
+Prove independent world/character save ownership and two-player separation,
+reconnection and simultaneous interactions before expanding toward persistent
+realms or making any MMO capacity claim.
+
 ## Adventure, pacing, and emergence
 
 Free travel still needs purposeful opportunities. Separate biome scale, landmark
