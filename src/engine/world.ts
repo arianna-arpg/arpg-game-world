@@ -38208,10 +38208,10 @@ export class World {
         // their repeat beat carries their local attack/cast-speed investment.
         const interval = 0.22 / (opts.componentUse ? caster.speedFactor(inst) : 1);
         // THE ECHO'S MARK: a targeted strike or mend re-finds its body at the
-        // drain through the skill's own spec. Corpse specs stay out (the press
-        // spent its find, as on the retarget lane), engine-handed spec-less
-        // payloads have no spec to ask, and a CLAIM keeps one roll per press
-        // (the cooldown is tryTame's retry economy).
+        // drain through the skill's own spec. Corpse specs stay out (their
+        // beats already re-seek a fresh load inside executeSkill), engine-
+        // handed spec-less payloads have no spec to ask, and a CLAIM keeps one
+        // roll per press (the cooldown is tryTame's retry economy).
         const echoSpec = instanceTargeting(inst);
         const echoMark = instanceDelivery(inst).type === 'target' && targetInfo
           && echoSpec && echoSpec.target !== 'corpse' && !def.effects.some(f => f.type === 'tame')
