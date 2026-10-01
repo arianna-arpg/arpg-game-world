@@ -150,6 +150,11 @@ Reduced motion (or no WebGL2) swaps the break for a fade and a soft wash.
    selector row.
 6. **Runtime films:** `HWCinema.register(id, def)`, then `HWCinema.play(id, opts)`
    (returns a promise that resolves when the theater closes).
+7. **A re-cut of a film:** encode it under a new id (`--id announcement-v2`),
+   point the film's `sources` at the new folder and drop the old files from
+   the manifest. The old assets stay on the release, so a deploy of an earlier
+   commit still finds the files its own manifest names. Raise `cut` only if
+   every visitor should see the new cut once.
 
 ## Skill clips
 
@@ -235,8 +240,9 @@ The release is **not a game build**, and three laws keep it that way:
   only (`electron-builder.yml`), and the videos are gitignored, so checkout
   installs stay lean too.
 
-The announcement ladder totals about 66 MB. A desktop visitor streams one
-rendition, usually the 11 MB AV1 1080p. Locally, run
+The announcement ladder (`announcement-v2`, the centered-title cut) totals
+about 61 MB. A desktop visitor streams one rendition, usually the 10.5 MB AV1
+1080p. Locally, run
 `node scripts/fetch-site-media.mjs` once before previewing the site.
 
 **Generated sets travel as one archive.** A release holds at most 1000 assets,

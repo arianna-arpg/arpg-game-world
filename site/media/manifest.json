@@ -1,11 +1,29 @@
 {
   "note": "The website's films live on the site-media GitHub Release, never in git, so the repo and every checkout install stay lean. scripts/fetch-site-media.mjs pulls them into site/media/ (pages.yml runs it on every deploy; run it locally before a preview). scripts/encode-film.mjs records new files here and scripts/publish-site-media.mjs uploads them. Release assets are named by each file's basename. Contract: docs/design/site-cinema.md",
-  "release": { "repo": "arianna-arpg/arpg-game-world", "tag": "site-media" },
+  "release": {
+    "repo": "arianna-arpg/arpg-game-world",
+    "tag": "site-media"
+  },
   "files": {
-    "announcement/announcement-1440.av1.mp4": { "bytes": 16958219, "sha256": "08c6ec6707e25a5c097f31ecc5aa179db9b0d8283d0259b0b119cf24ce731e55" },
-    "announcement/announcement-1080.av1.mp4": { "bytes": 11273921, "sha256": "bd8e5392b3212a5ce16c0a5475cf9ed23c45b74bb6421f6dbc53b21190461dcb" },
-    "announcement/announcement-720.av1.mp4": { "bytes": 6516926, "sha256": "6514fce780d5ac89fb6242be8756f0340704e61aa768a5dfd971152ed9f7dcf8" },
-    "announcement/announcement-1080.hevc.mp4": { "bytes": 18750747, "sha256": "fa27c6f118550ae45a2e74f7bb1c22ea04bb8b3791d46932ba423334bdd6ef0e" },
-    "announcement/announcement-720.h264.mp4": { "bytes": 12336985, "sha256": "637e4ab66cc129f6cd761fe060b76a1213bca9d5a6ea264bef3f25da6e93ff11" }
+    "announcement-v2/announcement-v2-1440.av1.mp4": {
+      "bytes": 16363821,
+      "sha256": "e07af69dd7165de277be2d15ad3860e6ed592326349b46a37f840f3a9b171ae9"
+    },
+    "announcement-v2/announcement-v2-1080.av1.mp4": {
+      "bytes": 11052274,
+      "sha256": "e6e126729193536c4d8edc051f82342c9f69bf8cbf6cfa0b17f7f4db678966f4"
+    },
+    "announcement-v2/announcement-v2-720.av1.mp4": {
+      "bytes": 6430807,
+      "sha256": "a18148af7c3fd16ce7b0db093b282177689d223081e30e1c6a4f5c132767f849"
+    },
+    "announcement-v2/announcement-v2-1080.hevc.mp4": {
+      "bytes": 18331226,
+      "sha256": "ed8e7f03859b7b7eaf3f6e4462b1c67c58f021553eac705eb1b5aa1bc538cf41"
+    },
+    "announcement-v2/announcement-v2-720.h264.mp4": {
+      "bytes": 12126768,
+      "sha256": "925cae05a5698ee9b508b71b007a107c09390c55643aa775ffb13dc0f09d16c6"
+    }
   }
 }

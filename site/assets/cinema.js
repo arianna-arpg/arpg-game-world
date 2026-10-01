@@ -55,11 +55,11 @@
         aspect: 16 / 9,
         duration: 60,
         sources: [
-          { family: 'av1',  height: 1440, src: 'media/announcement/announcement-1440.av1.mp4',  type: 'video/mp4; codecs="av01.0.12M.10"' },
-          { family: 'av1',  height: 1080, src: 'media/announcement/announcement-1080.av1.mp4',  type: 'video/mp4; codecs="av01.0.08M.10"' },
-          { family: 'av1',  height: 720,  src: 'media/announcement/announcement-720.av1.mp4',   type: 'video/mp4; codecs="av01.0.05M.10"' },
-          { family: 'hevc', height: 1080, src: 'media/announcement/announcement-1080.hevc.mp4', type: 'video/mp4; codecs="hvc1.2.4.L120.B0"' },
-          { family: 'h264', height: 720,  src: 'media/announcement/announcement-720.h264.mp4',  type: 'video/mp4; codecs="avc1.64001F"' },
+          { family: 'av1',  height: 1440, src: 'media/announcement-v2/announcement-v2-1440.av1.mp4',  type: 'video/mp4; codecs="av01.0.12M.10"' },
+          { family: 'av1',  height: 1080, src: 'media/announcement-v2/announcement-v2-1080.av1.mp4',  type: 'video/mp4; codecs="av01.0.08M.10"' },
+          { family: 'av1',  height: 720,  src: 'media/announcement-v2/announcement-v2-720.av1.mp4',   type: 'video/mp4; codecs="av01.0.05M.10"' },
+          { family: 'hevc', height: 1080, src: 'media/announcement-v2/announcement-v2-1080.hevc.mp4', type: 'video/mp4; codecs="hvc1.2.4.L120.B0"' },
+          { family: 'h264', height: 720,  src: 'media/announcement-v2/announcement-v2-720.h264.mp4',  type: 'video/mp4; codecs="avc1.64001F"' },
         ],
         /* narration text, shown while the film plays muted (show: 'muted' |
            'always' | 'never'); band: the picture rows it sits in, here the
@@ -68,7 +68,7 @@
         /* the exit: 'shatter' breaks the screen from the viewer's click (or
            from at, as a share of the picture, when the film ends); 'fade'
            lifts the darkness instead */
-        exit: { kind: 'shatter', at: [0.5, 0.56], pace: 1 },
+        exit: { kind: 'shatter', at: [0.5, 0.44], pace: 1 },   // the insignia's eye, under the title
       },
     },
 

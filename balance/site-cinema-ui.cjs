@@ -28,7 +28,7 @@ const missing = [];
 /* THE PLANTED CLIP: the Database reads media/clips/index.json; the walkthrough
    answers it with one clip that reuses the announcement's 720p rendition */
 const CLIP_INDEX = JSON.stringify({ generated: 'qa', aspect: 16 / 9, clips: { cleave: { name: 'Cleave', duration: 6, sources: [
-  { family: 'h264', height: 720, src: 'media/announcement/announcement-720.h264.mp4', type: 'video/mp4; codecs="avc1.64001F"' }] } } });
+  { family: 'h264', height: 720, src: 'media/announcement-v2/announcement-v2-720.h264.mp4', type: 'video/mp4; codecs="avc1.64001F"' }] } } });
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]);
   if (p === '/media/clips/index.json') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); return res.end(CLIP_INDEX); }
