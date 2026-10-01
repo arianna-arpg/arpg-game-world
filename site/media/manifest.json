@@ -25,5 +25,13 @@
       "bytes": 12126768,
       "sha256": "925cae05a5698ee9b508b71b007a107c09390c55643aa775ffb13dc0f09d16c6"
     }
+  },
+  "archives": {
+    "clips": {
+      "asset": "site-clips-6e36470633ca.tar",
+      "bytes": 122286080,
+      "sha256": "6e36470633ca8394fd1e94ceecadbe376bb8e8eba90742debffa1a1035b2815a",
+      "into": "clips"
+    }
   }
 }
