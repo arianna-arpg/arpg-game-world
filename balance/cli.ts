@@ -1635,6 +1635,10 @@ export const GATE_TOLERANCES: GateTolerance[] = [
     scenario: 'ttk_parity_magician_', metric: 'ttk_wave_mean', tolerance: 0.50,
     note: 'THE NOISE-DOMINATED LEG. 10.26 baseline → 14.12 / 11.89 on two bare re-rolls (+38% / +16%), all three sets the same code. At 10 seeds this leg cannot tell a real 40% balance change from the dice; the row is sized to stop the false alarms, and the honest fix is more seeds. See the ttk_parity_ adjudication in src/sim/data/targets.ts.',
   },
+  {
+    scenario: 'skillmode_', tolerance: 0.5,
+    note: 'LOOSE BY RULING (2026-09-30): the wild_strike sprinkler/duelist trees are a preliminary pass whose mechanics will be reworked, so this band trips only past a halving or a 1.5× jump (a broken branch), never on iteration; a deliberate rework past it is answered with a re-bake, not a claw-back. Measured at 1e8321cc: three fresh seed re-rolls moved the sprinkler up to 15% and the duelist up to 3%, and passive-tree edits beside the Swashbuckler start moved the duelist up to +21% through greedyPassives alone (ca529808..a5d3d1b1, re-baked at 269c2e1c). The hard pins live in balance/probe_skillmodes.ts.',
+  },
 ];
 
 /** Which row governs a (scenario, metric) cell — least specific first, so the

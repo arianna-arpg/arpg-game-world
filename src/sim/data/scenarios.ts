@@ -388,11 +388,16 @@ add(matchupDuel('ironbell_burst_l12', 'primeval_ironbell',
 //   base      (arc 30/spread  90): solo  54.4 · pack 193.9 — 5/5 victims
 //   sprinkler (arc 30/spread 130): solo  32.2 · pack 171.3 — 5/5 victims
 //   duelist   (arc 16/spread  24): solo 108.7 · pack 108.7 — 1 victim
-// These rows exist for VISIBILITY (`run --suite smoke` prints them); the
-// hard pins live in balance/probe_skillmodes.ts (arc + sector measured
-// through the real engine), and the committed smoke BASELINE deliberately
-// does NOT know these ids — compareSuites skips unbaselined rows, so THE
-// TRANSPARENCY LAW stays gated on the standing scenarios alone.
+// These rows GATE, loosely. The 2026-09-16 `baseline write` baked them into
+// the committed smoke BASELINE (write has no exclusion), and the 2026-09-30
+// ruling kept them there under their own wide band: the 'skillmode_' row of
+// GATE_TOLERANCES in balance/cli.ts. The trees are a preliminary pass whose
+// mechanics will change, so the band trips on a broken branch, not on
+// iteration; THE TRANSPARENCY LAW stays on the standing scenarios' own
+// bands. Their passives come from greedyPassives, so tree edits beside the
+// Swashbuckler start move these rows too (the duelist rose 16% on passive
+// commits alone, 09-17..09-25). The hard pins live in
+// balance/probe_skillmodes.ts (arc + sector measured through the real engine).
 // M1 RE-PIN (2026-08-20): the rows now carry the FULL-TREE terminal
 // allocations (three rungs + the neutral — the exact cover's end state) at
 // gem level 20, the budget-true seat (bandPointsAt(20) = 4). The M0-era
@@ -449,8 +454,8 @@ export const SUITES: Record<string, string[]> = {
     'dummy_dps_warrior_l1',
     'ttk_parity_warrior_l5',
     'ttk_parity_magician_l5',
-    // THE SKILL-MODE SPIKE rows (M0): visibility, not gate — the committed
-    // baseline predates them and compareSuites skips unbaselined ids.
+    // THE SKILL-MODE SPIKE rows (M0): baselined and gated LOOSELY by the
+    // 'skillmode_' row of GATE_TOLERANCES (balance/cli.ts).
     'skillmode_sprinkler_pack_l20',
     'skillmode_duelist_solo_l20',
   ],
