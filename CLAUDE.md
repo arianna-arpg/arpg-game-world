@@ -9,6 +9,22 @@ isolation and Continue. See `docs/design/seamless-world-foundation.md`.
 
 The continuous-world experiment is specified in `docs/design/seamless-world-foundation.md` (branch `codex/seamless-world-foundation`). `src/worldmass/` implements durable addresses, seeded fields/place claims, sparse consequences, bounded terrain residency and an opt-in `/?worldmass` terrain/combat prototype. It uses native movement, skills, region effects, cell-ray occlusion and character saves. Verify `npm run probe -- worldmass` plus persistence/sightveil/cistern; after a build, `balance/worldmass-ui.cjs` checks the hidden real client with isolated saves. Each new run gets fresh land. Live frame rebasing, distant simulation, native place/campaign migration and full consequence paging remain unfinished; read the document's implementation ledger before extending or describing the mode.
 
+Worldmass version 5 adds a finite opening circuit through `src/worldmass/journey.ts`,
+four native landmark compositions and seeded biome scenery through `ecology.ts`.
+Routes, clearings, cluster recipes and props are snapshotted per run; Continue
+retains old terrain and sparse changes. The explored map has town footprints,
+zoom, a home bearing and searched-cache state. Verify `probe_worldmass_journey.ts`
+and hidden `balance/worldmass-journey-ui.cjs` against the scoped preview build.
+Optional `MassContent.magicPack` uses native coordinated encounters; admission
+is atomic and saved members retain wounds, cohort identity and casualties.
+Continue re-arms attacks through native warning policy. Verify
+`probe_worldmass_cohorts.ts` and native magic-pack probes as well.
+The shared `vis/combatFocus.ts` keeps the local player identifiable in crowds
+and places damage values clear of visible bodies; `VIS_CFG.combatFocus` owns
+its presentation dials. Verify `probe_combatfocus.ts` and the isolated real
+renderer in `balance/combat-focus-ui.cjs`.
+This is an opening network, not global roads, campaign migration or distant AI.
+
 Worldmass version 4 adds geographic progression through
 `src/worldmass/progression.ts`: saved distance/field rules and native presence
 rosters choose fixed encounter levels, independent of the hero. Reward scopes

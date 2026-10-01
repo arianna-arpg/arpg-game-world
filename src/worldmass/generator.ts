@@ -69,7 +69,9 @@ export class MassGenerator {
   readonly spec: Readonly<MassSpec>;
   readonly run: Readonly<MassRun>;
   private readonly surfaces: MassSpec['surfaces'];
-  private readonly salts = new Map<string, number>();
+  private readonly salts = new Map<MassSpec['fields'][number]['layers'][number], number>();
+  private readonly candidates = new Map<string, MassPlace | null>();
+  private readonly decisions = new Map<string, boolean>();
   private readonly placePages = new Map<string, readonly MassPlace[]>();
   constructor(run: MassRun, spec: MassSpec) {
     const expected = makeMassRun(run.seed, run.runId, spec);
@@ -78,7 +80,7 @@ export class MassGenerator {
     this.run = freezeData({ ...run });
     this.surfaces = [...this.spec.surfaces].sort((a, b) => b.priority - a.priority || compare(a.id, b.id));
     for (const f of this.spec.fields) for (const l of f.layers)
-      this.salts.set(canonical([f.id, l.id]), streamSeed(run.seed, [spec.id, spec.version, f.id, l.id]));
+      this.salts.set(l, streamSeed(run.seed, [spec.id, spec.version, f.id, l.id]));
   }
   private noise(at: MassAddress, period: number, salt: number): number {
     const { gx, gy, fx, fy } = latticeAt(at, this.spec.addressSpan, period);
@@ -92,7 +94,7 @@ export class MassGenerator {
     for (const f of this.spec.fields) {
       let value = f.base;
       for (const l of f.layers) {
-        const n = this.noise(at, l.period, this.salts.get(canonical([f.id, l.id]))!);
+        const n = this.noise(at, l.period, this.salts.get(l)!);
         value += (l.ridge ? (1 - Math.abs(n * 2 - 1)) ** 2 : n * 2 - 1) * l.amplitude;
       }
       result[f.id] = value;
@@ -115,6 +117,14 @@ export class MassGenerator {
         source: s.source ?? s.biome, stream: canonical([this.run.seed, 'terrain', cellKey(at)]) }) });
   }
   private candidate(recipe: MassPlaceRecipe, dimension: string, gx: bigint, gy: bigint): MassPlace | null {
+    const key = JSON.stringify([recipe.id, dimension, gx.toString(), gy.toString()]);
+    if (this.candidates.has(key)) return this.candidates.get(key)!;
+    const result = this.makeCandidate(recipe, dimension, gx, gy);
+    this.candidates.set(key, result);
+    if (this.candidates.size > 8192) this.candidates.delete(this.candidates.keys().next().value!);
+    return result;
+  }
+  private makeCandidate(recipe: MassPlaceRecipe, dimension: string, gx: bigint, gy: bigint): MassPlace | null {
     const namespace = [this.spec.id, this.spec.version, 'place', recipe.id, recipe.version, dimension, gx.toString(), gy.toString()];
     const rng = massRandom(this.run.seed, namespace);
     if (!rng.chance(recipe.chance)) return null;
@@ -134,7 +144,16 @@ export class MassGenerator {
   /** Local inhibition: no higher-ranked candidate may intersect this footprint.
    * Finite dependencies, no recursive packing, no late movement of existing sites. */
   private accepted(p: MassPlace, recipe: MassPlaceRecipe): boolean {
+    const hit = this.decisions.get(p.id);
+    if (hit !== undefined) return hit;
+    const result = this.acceptCandidate(p, recipe);
+    this.decisions.set(p.id, result);
+    if (this.decisions.size > 4096) this.decisions.delete(this.decisions.keys().next().value!);
+    return result;
+  }
+  private acceptCandidate(p: MassPlace, recipe: MassPlaceRecipe): boolean {
     for (const other of this.spec.places) {
+      if (other.priority < recipe.priority) continue;
       const l = latticeAt(p.center, this.spec.addressSpan, other.period);
       const reach = Math.ceil((recipe.radius + other.radius) / other.period) + 2;
       for (let dy = -reach; dy <= reach; dy++) for (let dx = -reach; dx <= reach; dx++) {

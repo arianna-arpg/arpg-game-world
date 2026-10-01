@@ -61,6 +61,9 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_combatfocus.ts', status: 'green', tier: 'fast', why: 'combatFocus numeric crowd clearance, stable offsets and unchanged host text' },
+  { probe: 'probe_worldmass_cohorts.ts', status: 'green', tier: 'fast', why: 'native coordinated landmark encounters, warning-safe Continue, wounds/casualties, complete admission and legacy populations' },
+  { probe: 'probe_worldmass_journey.ts', status: 'green', tier: 'fast', why: 'connected frontier routes, reachability, native scenery consequences, surveyed paths and legacy worlds' },
   { probe: 'probe_worldmass_progression.ts', status: 'green', tier: 'fast', why: 'geographic danger, native level envelopes, stable encounter rewards and legacy expedition compatibility' },
   { probe: 'probe_worldmass_haven.ts', status: 'green', tier: 'fast', why: 'continuous native Lastlight, spatial services, plan doors, interiors, town growth snapshots and resume' },
   { probe: 'probe_worldmass_sites.ts', status: 'green', tier: 'fast', why: 'worldmass native camps and ruins, cross-page discovery, durable loot and scenery, dependency residency and legacy saves' },

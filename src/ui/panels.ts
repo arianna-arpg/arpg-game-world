@@ -772,6 +772,7 @@ export class UI {
    *  the fitted centre). Persist across opens; reset via the map's % button. As
    *  the charted map grows and the fixed-size text shrinks, zoom in to read it. */
   private mapZoom = 1;
+  private massSurveyGrain = 48;
   private mapPan = { x: 0, y: 0 };
   /** Which view the world-map panel shows: the map, or the quest journal. */
   private mapTab: 'map' | 'quests' = 'map';
@@ -8753,7 +8754,18 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // clicks"); deliberate refreshes fire on click, after release, unharmed.
     if (this.mapDragging || this.mapWashDragging || this.pressHeld.has(this.worldMap)) return;
     const world = this.getWorld();
-    if (world.massRuntime && this.mapTab !== 'quests') { this.setPanelHtml(this.worldMap, massMap(world.massRuntime, world.player.pos)); return; }
+    if (world.massRuntime && this.mapTab !== 'quests') {
+      if (this.setPanelHtml(this.worldMap, this.closeGlyphHtml() + this.mapTabsHtml() + massMap(world.massRuntime, world.player.pos, this.massSurveyGrain))) {
+        this.wireMapTabs();
+        this.worldMap.querySelectorAll<HTMLButtonElement>('[data-mass-zoom]').forEach(button => {
+          button.addEventListener('click', () => {
+            this.massSurveyGrain = Math.max(24, Math.min(192, this.massSurveyGrain * (button.dataset.massZoom === 'in' ? .5 : 2)));
+            this.refreshMap();
+          });
+        });
+      }
+      return;
+    }
     if (this.mapTab === 'quests') { this.renderQuestsTab(world); return; }
     const visited = world.visited;
     // ONE DIMENSION PER VIEW: the map shows the active dimension's worldmass;

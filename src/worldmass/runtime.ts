@@ -1,6 +1,9 @@
 import type { World } from '../engine/world';
 import type { Actor } from '../engine/actor';
 import { MONSTERS } from '../data/monsters';
+import { MAGIC_PACK_CFG, MAGIC_PACKS } from '../data/magicPacks';
+import { magicPackMinimum, readMagicPack, type MagicPackState } from '../engine/magicPacks';
+import { RARITY_DEFS } from '../engine/rarity';
 import { regionKind } from '../world/regions';
 import { captureZoneContents, restoreZoneContents, savedZoneContents, type ZoneContents } from '../engine/zonecontents';
 import { address, cellKey, localOffset, neighborCell, type MassCell } from './address';
@@ -15,12 +18,18 @@ import { MASS_ZONE, massAdventure, type MassAdventure } from './preset';
 import { MassSettlement, type MassSettlementSave } from './settlement';
 import { geographicLevel, validateMassProgression, type MassPopulation } from './progression';
 import type { MassPlace } from './contracts';
+import { MassJourney } from './journey';
+import { MassEcology, validateMassEcology, type MassEcologySave } from './ecology';
 
-interface MassEnemySave { id: string; monster: string; level: number; x: number; y: number; life: number; scale: number }
+interface MassEnemySave {
+  id: string; monster: string; level: number; x: number; y: number; life: number; scale: number;
+  magicPack?: MagicPackState; name?: string;
+}
 export interface MassAdventureSave {
   schema: 1; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
   player: { x: number; y: number; tier?: number }; enemies: MassEnemySave[]; contents: ZoneContents;
   sites?: MassSiteSave;
+  ecology?: MassEcologySave;
   settlement?: MassSettlementSave;
 }
 /** First engine adapter. Residency NEVER tears down the World, its actors, or
@@ -33,8 +42,12 @@ export class WorldMassRuntime {
   readonly walk: MassWalk;
   readonly sites: MassSites;
   settlement: MassSettlement | null = null;
+  journey: MassJourney | null = null;
+  ecology: MassEcology | null = null;
   readonly config: Readonly<MassAdventure>;
+  private readonly configHash: string;
   private natives = new Map<string, Actor>();
+  private cacheOpened: (source: string) => boolean = () => false;
   private nearKey = '';
   private dangerCache = new Map<string, number>();
   private nextPopulation = 0;
@@ -45,6 +58,7 @@ export class WorldMassRuntime {
     this.resumeTier = save?.player.tier ?? 0;
     if (!Number.isInteger(this.resumeTier) || this.resumeTier < 0 || this.resumeTier > 6) throw new Error('Invalid worldmass player story');
     this.config = freezeData(JSON.parse(canonical(config)) as MassAdventure);
+    this.configHash = massDigest(this.config);
     this.origin = Object.freeze(save ? { ...save.origin } : { dimension: 'surface', cx: '0', cy: '0' });
     address(this.origin.dimension, this.origin.cx, this.origin.cy, 0, 0, config.terrain.addressSpan);
     this.generator = new MassGenerator(save?.state.run ?? makeMassRun(seed, runId, config.terrain), config.terrain);
@@ -60,6 +74,13 @@ export class WorldMassRuntime {
       || (config.pageRadius * 2 + 1) ** 2 * config.terrain.addressSpan ** 2 > 33554432)
       throw new Error('Worldmass render residency exceeds its texture budget');
     if (config.progression) validateMassProgression(config.progression, config.terrain);
+    if (config.ecology) validateMassEcology(config.ecology, config.terrain.addressSpan);
+    if (config.journey && !config.settlement) throw new Error('Frontier routes require a settlement');
+    for (const d of config.journey?.destinations ?? []) {
+      const site = config.content.find(c => c.id === d.content)?.site;
+      if (!site) throw new Error('Unresolved frontier destination');
+      validateMassSite(site, d.radius);
+    }
     if (new Set(config.content.map(c => c.id)).size !== config.content.length) throw new Error('Duplicate worldmass content');
     for (const c of config.content) {
       if (!c.id || !c.source || !Number.isSafeInteger(c.level) || c.level < 1 || c.level > 100
@@ -67,6 +88,12 @@ export class WorldMassRuntime {
         || c.table.some(r => !MONSTERS[r.id] || !Number.isFinite(r.weight) || r.weight <= 0)) throw new Error('Invalid worldmass population');
     }
     for (const c of config.content) {
+      if (c.magicPack) {
+        const def = Object.hasOwn(MAGIC_PACKS,c.magicPack.mechanic) ? MAGIC_PACKS[c.magicPack.mechanic] : undefined;
+        const factions = new Set([c.table,...(c.levels?.map(l=>l.table) ?? [])].flat().map(r=>MONSTERS[r.id]?.faction));
+        if (!c.magicPack.source || !def || c.count < magicPackMinimum(def) || c.count > MAGIC_PACK_CFG.maxMembers
+          || factions.size !== 1) throw new Error('Invalid native worldmass cohort');
+      }
       if (c.levelOffset !== undefined && (!Number.isSafeInteger(c.levelOffset) || Math.abs(c.levelOffset) > 100))
         throw new Error('Invalid worldmass content level offset');
       if (!c.levels) continue;
@@ -97,7 +124,8 @@ export class WorldMassRuntime {
         || new Set(save.enemies.map(e => e.id)).size !== save.enemies.length)
         throw new Error('Invalid worldmass checkpoint');
       for (const e of save.enemies) if (!e.id || !MONSTERS[e.monster] || !Number.isSafeInteger(e.level) || e.level < 1
-        || ![e.x, e.y, e.life, e.scale].every(Number.isFinite) || e.life <= 0 || e.scale <= 0)
+        || ![e.x, e.y, e.life, e.scale].every(Number.isFinite) || e.life <= 0 || e.scale <= 0
+        || e.magicPack && (!readMagicPack(e.magicPack) || typeof e.name !== 'string'))
         throw new Error('Invalid worldmass survivor');
       this.state.restore(save.state);
       if (save.state.terrain.some(p => !regionKind(p.region))) throw new Error('Unresolved saved worldmass terrain');
@@ -112,6 +140,7 @@ export class WorldMassRuntime {
     }
   }
   attach(world: World, save?: MassAdventureSave): void {
+    this.cacheOpened = source => world.chests.some(c => c.rewardSource === source && c.opened);
     world.zoneMap[MASS_ZONE] = { id: MASS_ZONE, name: 'The Unbroken Wilds', level: 1,
       size: { w: 1536, h: 1536 }, theme: JSON.parse(canonical(this.config.theme)),
       layout: [], objective: { kind: 'none', label: 'Explore the wilds' }, exits: [], map: { x: 0, y: 0 },
@@ -140,19 +169,63 @@ export class WorldMassRuntime {
     this.walk.obstacles = { blocked: (x, y) => !!world.pointInSolid(x, y, this.walk.cellSize / 2),
       revision: () => world.doodadRev + ':' + world.doodads.length };
     this.sites.restore(save?.sites, world.time);
+    if (this.config.journey && this.settlement) {
+      this.journey = new MassJourney(this.config.journey, this.settlement, this.generator, this.walk);
+      if (!save) this.journey.establish(this.state);
+    }
+    if (this.config.ecology) {
+      this.ecology = new MassEcology(this.config.ecology, this);
+      this.ecology.restore(save?.ecology, world.time);
+    }
     world.exits = [];
     world.waypointPos = null; // worldmass has no graph fast-travel destinations
     world.notices = []; world.texts = []; // obsolete graph directions do not describe this expedition
     world.landPartyAt(save?.player ?? this.settlement?.spawn ?? { x: 12, y: 12 }, { tier: this.resumeTier });
     if (save) {
+      const groups = new Map<number,number>();
       for (const e of save.enemies) {
         const a = world.createMonster(e.monster, e.level, 'enemy', undefined, { scale: e.scale });
+        const pack = readMagicPack(e.magicPack);
+        if (pack) {
+          if (!groups.has(pack.id)) groups.set(pack.id,world.nextSquadId());
+          a.magicPack = { ...pack, id: groups.get(pack.id)! };
+          a.squadId = a.magicPack.id; a.squadLeader = a.magicPack.leader === 1;
+          world.promoteMonster(a,'magic',1,{distinctName:e.name});
+        }
         a.pos = { x: e.x, y: e.y }; a.fromZoneGen = true; a.fillResources();
         a.life = Math.min(a.maxLife(), e.life); this.natives.set(e.id, a); world.actors.push(a);
       }
       restoreZoneContents(world, save.contents);
+      world.refreshMagicPacks();
     }
     this.update(world, true);
+  }
+  siteSearched(id: string): boolean {
+    return this.state.claimed('site-looted', id) || this.cacheOpened(canonical([id, 'cache']));
+  }
+  /** The location read uses the same admitted footprint/identity as the map.
+   * Entering a site never mutates the shared zone or its reward context. */
+  localSite(pos: { x: number; y: number }): { id: string; name: string; level: number } | null {
+    if (this.settlement?.contains(pos.x,pos.y)) return null;
+    const at = this.walk.at(pos.x,pos.y);
+    for (const place of this.places.get(cellKey(at)) ?? []) {
+      const site = this.config.content.find(c => c.id === place.content)?.site;
+      if (!site) continue;
+      const q = localOffset(place.center,{...this.origin,x:0,y:0},this.config.terrain.addressSpan);
+      if (Math.hypot(q.x-pos.x,q.y-pos.y) <= place.radius)
+        return { id: place.id, name: site.name, level: this.populationFor(place).level };
+    }
+    return null;
+  }
+  /** One query composes planned openings and free country. Neither placement
+   * order nor later residency can introduce another site across a reserved trail. */
+  placesInCell(cell: MassCell): readonly MassPlace[] {
+    const planned = this.journey?.inCell(cell) ?? [];
+    const country = this.generator.placesInCell(cell).filter(p => {
+      const q = localOffset(p.center, { ...this.origin, x: 0, y: 0 }, this.config.terrain.addressSpan);
+      return !this.journey?.reserves(q, p.radius);
+    });
+    return [...planned, ...country];
   }
   /** Physical cell centres keep cache/order/frame rate out of a place's danger.
    * The native settlement is the refuge footprint, not a point. */
@@ -194,7 +267,7 @@ export class WorldMassRuntime {
       for (const k of this.places.keys()) if (!cells.some(c => cellKey(c.cell) === k)) this.places.delete(k);
       for (const { cell } of cells) {
         const k = cellKey(cell);
-        if (!this.places.has(k)) this.places.set(k, this.generator.placesInCell(cell));
+        if (!this.places.has(k)) this.places.set(k, this.placesInCell(cell));
       }
       this.state.claim('explored', key);
     }
@@ -203,6 +276,10 @@ export class WorldMassRuntime {
       this.state.claim('fallen', id); this.natives.delete(id);
     }
     this.sites.discover(world.player.pos);
+    for (const found of this.sites.discovered) {
+      if (this.state.claimed('site-looted', found.id)) continue;
+      if (this.siteSearched(found.id)) this.state.claim('site-looted', found.id);
+    }
     if (!boot && world.time < this.nextPopulation) return;
     this.nextPopulation = world.time + .5;
     // Retained actors still need their original solid scenery after a reload,
@@ -210,7 +287,7 @@ export class WorldMassRuntime {
     const dependencies = new Map<string, ReturnType<MassGenerator['placesInCell']>>();
     for (const actor of this.natives.values()) {
       const cell = this.walk.at(actor.pos.x, actor.pos.y), key = cellKey(cell);
-      if (!dependencies.has(key)) dependencies.set(key, this.generator.placesInCell(cell));
+      if (!dependencies.has(key)) dependencies.set(key, this.placesInCell(cell));
     }
     const eligible = [...this.places.values(), ...dependencies.values()].flat().filter(p => {
       const q = localOffset(p.center, { ...this.origin, x: 0, y: 0 }, this.config.terrain.addressSpan);
@@ -218,6 +295,16 @@ export class WorldMassRuntime {
         : Math.hypot(q.x, q.y) >= this.config.startRadius + p.radius;
     });
     this.sites.sync(world, eligible);
+    // Prepare scenery before bodies so native spawn collision sees tree trunks.
+    const sceneryCells = new Map<string, MassCell>();
+    const radius = this.config.pageRadius;
+    for (let y = -radius; y <= radius; y++) for (let x = -radius; x <= radius; x++) {
+      const cell = neighborCell(at, x, y); sceneryCells.set(cellKey(cell), cell);
+    }
+    for (const actor of this.natives.values()) {
+      const cell = this.walk.at(actor.pos.x, actor.pos.y); sceneryCells.set(cellKey(cell), cell);
+    }
+    this.ecology?.sync(world, [...sceneryCells.values()]);
     this.sites.discover(world.player.pos);
     const seen = new Set<string>();
     for (const places of this.places.values()) for (const p of places) {
@@ -228,14 +315,17 @@ export class WorldMassRuntime {
         || Math.hypot(q.x - world.player.pos.x, q.y - world.player.pos.y) > this.config.populationRadius) continue;
       const content = this.config.content.find(c => c.id === p.content)!;
       const population = this.populationFor(p);
-      if (content.site) {
-        // Reserve the whole site's native population before introducing loot.
+      const coordinated = content.magicPack && population.level >= MAGIC_PACKS[content.magicPack.mechanic].minLevel;
+      const staging = coordinated && !this.state.claimed('native-cohort',p.id);
+      const staged: { id: string; actor: Actor }[] = [];
+      if (content.site || coordinated) {
+        // Reserve the whole site's/cohort's native population before introducing loot.
         // Saturation delays an encounter instead of furnishing free rewards.
         const identities = [...Array.from({ length: content.count }, (_, i) => canonical([p.id, i])),
-          ...content.site.fixtures.map((_, i) => canonical([p.id, 'fixture', i]))];
+          ...(content.site?.fixtures ?? []).map((_, i) => canonical([p.id, 'fixture', i]))];
         const missing = identities.filter(id => !this.natives.has(id) && !this.state.claimed('fallen', id)).length;
         if (this.natives.size + missing > this.config.maxPopulation) continue;
-        for (const [index, fixture] of content.site.fixtures.entries()) {
+        for (const [index, fixture] of (content.site?.fixtures ?? []).entries()) {
           const id = canonical([p.id, 'fixture', index]);
           if (this.natives.has(id) || this.state.claimed('fallen', id) || this.natives.size >= this.config.maxPopulation) continue;
           const offset = siteOffset(p, fixture.x, fixture.y);
@@ -260,11 +350,21 @@ export class WorldMassRuntime {
         const spot = this.walk.snapToWalkable({ x: q.x + Math.cos(angle) * radius, y: q.y + Math.sin(angle) * radius });
         if (!this.walk.isWalkable(spot.x, spot.y) || Math.hypot(spot.x - q.x, spot.y - q.y) > p.radius) continue;
         const a = world.createMonster(monster, population.level, 'enemy', undefined, { scale });
-        const free = world.findFreeSpot(spot, a.radius);
-        if (!this.walk.isWalkable(free.x, free.y) || world.pointInSolid(free.x, free.y, a.radius)
+        const bodyRadius = a.radius * (coordinated ? RARITY_DEFS.magic.sizeMul : 1);
+        const free = world.findFreeSpot(spot, bodyRadius);
+        if (!this.walk.isWalkable(free.x, free.y) || world.pointInSolid(free.x, free.y, bodyRadius)
           || Math.hypot(free.x - q.x, free.y - q.y) > p.radius) continue;
         a.pos = free; a.fromZoneGen = true; a.fillResources();
-        this.natives.set(id, a); world.actors.push(a);
+        if (staging) staged.push({id,actor:a});
+        else { this.natives.set(id, a); world.actors.push(a); }
+      }
+      // Admission is atomic: never expose half a cohort, then heal/promote
+      // its wounded survivors when a later placement finally succeeds.
+      if (staging && staged.length === content.count
+        && world.promoteMagicPack(staged.map(s=>s.actor),content.magicPack!.mechanic)) {
+        for (const {id,actor} of staged) { this.natives.set(id,actor); world.actors.push(actor); }
+        this.state.claim('native-cohort',p.id);
+        world.refreshMagicPacks();
       }
       if (content.site) {
         const ready = Array.from({ length: content.count }, (_, i) => canonical([p.id, i]))
@@ -286,11 +386,13 @@ export class WorldMassRuntime {
     const enemies: MassEnemySave[] = [];
     for (const [id, a] of this.natives) {
       if (a.dead) { this.state.claim('fallen', id); continue; }
-      enemies.push({ id, monster: a.defId!, level: a.level, x: a.pos.x, y: a.pos.y, life: a.life, scale: a.spawnScale ?? 1 });
+      enemies.push({ id, monster: a.defId!, level: a.level, x: a.pos.x, y: a.pos.y, life: a.life, scale: a.spawnScale ?? 1,
+        ...(a.magicPack ? { magicPack: a.magicPack, name: a.name } : {}) });
     }
-    return JSON.parse(canonical({ schema: 1, config: this.config, configHash: massDigest(this.config), state: this.state.snapshot(),
+    return JSON.parse(JSON.stringify({ schema: 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
       origin: this.origin, player: { ...world.player.pos, tier: world.player.tier ?? 0 }, enemies,
-      ...(this.settlement ? { settlement: this.settlement.snapshot(world) } : {}), sites: this.sites.snapshot(world), contents: captureZoneContents(world) })) as MassAdventureSave;
+      ...(this.settlement ? { settlement: this.settlement.snapshot(world) } : {}),
+      ...(this.ecology ? { ecology: this.ecology.snapshot(world) } : {}), sites: this.sites.snapshot(world), contents: captureZoneContents(world) })) as MassAdventureSave;
   }
   get population(): number { return this.natives.size; }
 }

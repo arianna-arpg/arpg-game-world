@@ -1,4 +1,5 @@
 import { treePointBudget } from '../engine/skillEmpowerment';
+import { CombatTextLayout, combatBodyRect, drawPlayerFocus } from './vis/combatFocus';
 import { MassPainter } from '../worldmass/paint';
 import { regionGrid } from '../world/walk'; // worldmass shares native grounded telegraphs
 import { concealmentActive } from '../engine/perception';
@@ -3485,6 +3486,11 @@ export class Renderer {
     const wf = world.walk;
     for (const st of this.stacked) {
       const r0 = st.rect;
+      // The worldmass keeps distant native buildings alive. Floor rendering
+      // only needs structures that intersect this view, even on the ground tier.
+      if (r0.x + r0.w < this.cam.x || r0.y + r0.h < this.cam.y
+        || r0.x > this.cam.x + this.canvas.width / this.zoom
+        || r0.y > this.cam.y + this.canvas.height / this.zoom) continue;
       const inside = hero.pos.x > r0.x && hero.pos.x < r0.x + r0.w && hero.pos.y > r0.y && hero.pos.y < r0.y + r0.h;
       if (hT === 0) {
         // THE UNDERSTAIR: every landing cell is a closet downstairs.
@@ -6596,9 +6602,18 @@ export class Renderer {
     }
   }
 
+  /** Reward text yields the immediate fighting space; it returns as soon as
+   * the threat moves away. Damage readouts and item glyphs keep their own rules. */
+  private rewardLabelCovered(world: World, x: number, y: number, width: number, height: number): boolean {
+    const pad = VIS_CFG.drops.rewardClearance;
+    if (pad <= 0) return false;
+    return world.actors.some(a => !a.dead && a.skills.some(Boolean) && world.hostileTo(world.player, a)
+      && Math.hypot(Math.max(0, Math.abs(a.pos.x-x)-width/2), Math.max(0, Math.abs(a.pos.y-y)-height/2)) < a.radius+pad
+      && this.labelRevealAt(world, a.pos) > .05);
+  }
   /** World drops use the inventory's category glyphs / gem initials and
-   *  support badge. Rarity outlines, bobbing and gear name labels remain;
-   *  co-op shells carry the base id and gem name needed by the same reads. */
+   * support badge. rewardLabelCovered reserves the fighting space; rarity
+   * outlines and bobbing remain. Co-op shells carry the same base id and gem name. */
   private drawDrops(world: World): void {
     const { ctx } = this;
     const D = VIS_CFG.drops; // every size below is a lever, never a literal
@@ -6654,6 +6669,7 @@ export class Renderer {
         ctx.textAlign = 'center';
         const label = item.item.name;
         const w = ctx.measureText(label).width;
+        if (this.rewardLabelCovered(world, d.pos.x, y-D.labelLift+D.labelPillH/2, w, D.labelPillH)) continue;
         ctx.fillStyle = 'rgba(10,8,14,0.78)';
         ctx.fillRect(d.pos.x - w / 2 - D.labelPadX, y - D.labelLift, w + D.labelPadX * 2, D.labelPillH);
         ctx.fillStyle = rc.color;
@@ -7330,12 +7346,21 @@ export class Renderer {
     ctx.restore();
   }
 
+  private readonly combatTextLayout = new CombatTextLayout();
   private drawTexts(world: World): void {
     const { ctx } = this;
     ctx.textAlign = 'center';
     // THE INFO STREAM's per-kind curation: each client gates kinds by its
     // OWN settings (the host mints one truth; every seat curates its view).
     const kindPrefs = this.getSettings?.().floatKinds;
+    const focus = VIS_CFG.combatFocus;
+    const visible = world.actors.filter(a => !a.dead && !a.burrow && !a.statuses.some(s => STATUS_DEFS[s.id]?.conceals)
+      && a.pos.x+a.radius > this.cam.x && a.pos.y+a.radius > this.cam.y
+      && a.pos.x-a.radius < this.cam.x+this.canvas.width/this.zoom
+      && a.pos.y-a.radius < this.cam.y+this.canvas.height/this.zoom
+      && this.labelRevealAt(world,a.pos) > .05);
+    this.combatTextLayout.begin(visible.map(a=>combatBodyRect(a.pos,a.radius)),
+      {x:this.cam.x,y:this.cam.y,w:this.canvas.width/this.zoom,h:this.canvas.height/this.zoom});
     for (const t of world.texts) {
       if (t.kind && !floatKindOn(kindPrefs, t.kind)) continue;
       // Bind tokens resolve at DRAW, not at spawn — a float naming a key
@@ -7343,13 +7368,22 @@ export class Renderer {
       const txt = this.resolveText(t.text);
       ctx.globalAlpha = clamp(t.life / t.maxLife, 0, 1);
       ctx.font = `bold ${t.size}px Verdana`;
+      if ((t.kind === 'drop' || t.kind === 'pickup')
+        && this.rewardLabelCovered(world, t.pos.x, t.pos.y-t.size/2, ctx.measureText(txt).width, t.size)) continue;
       ctx.fillStyle = t.color;
       ctx.strokeStyle = 'rgba(0,0,0,0.7)';
       ctx.lineWidth = 3;
-      ctx.strokeText(txt, t.pos.x, t.pos.y);
-      ctx.fillText(txt, t.pos.x, t.pos.y);
+      const pos = t.kind === 'dmg'
+        ? this.combatTextLayout.place(t,t.pos,ctx.measureText(txt).width,t.size) : t.pos;
+      ctx.strokeText(txt, pos.x, pos.y);
+      ctx.fillText(txt, pos.x, pos.y);
     }
     ctx.globalAlpha = 1;
+    const hero=world.player;
+    if(!hero.dead && !hero.burrow && !hero.statuses.some(s=>STATUS_DEFS[s.id]?.conceals)) {
+      drawPlayerFocus(ctx,hero.pos,hero.radius,hero.facing,visible.some(a=>a!==hero
+        && world.hostileTo(hero,a) && Math.hypot(a.pos.x-hero.pos.x,a.pos.y-hero.pos.y)<focus.player.crowdReach));
+    }
   }
 
   /** THE NOTICE FEED (world/bulletins.ts): world news as a screen-anchored
@@ -8363,8 +8397,9 @@ export class Renderer {
       // MIRRORS is the honest tell for a client — hence both reads.
       const atSea = world.sailing || world.appliedZoneId === VOYAGE_ZONE_ID;
       const massSettlement = world.massRuntime?.settlement;
-      const locality = massSettlement?.contains(p.pos.x, p.pos.y) ? massSettlement.zone : world.zone;
-      const lvText = !atSea && locality.level > 0 ? ` — ${world.massRuntime ? 'Country' : 'Monster'} Lv ${world.levelAt(p.pos)}` : '';
+      const massSite = world.massRuntime?.localSite(p.pos);
+      const locality = massSettlement?.contains(p.pos.x, p.pos.y) ? massSettlement.zone : massSite ?? world.zone;
+      const lvText = !atSea && locality.level > 0 ? ` — ${massSite ? 'Site' : world.massRuntime ? 'Country' : 'Monster'} Lv ${massSite?.level ?? world.levelAt(p.pos)}` : '';
       // Underground, the banner names the BAND (the strata fabric) AND the rung
       // standing on it: where you are on the world's vertical ladder, and how
       // far down that is. Both read the ONE caveDepth datum — the number IS the

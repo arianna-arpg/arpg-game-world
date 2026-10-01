@@ -31,7 +31,7 @@ app.whenReady().then(async () => {
       const w=__game.world(); w.startWorldMass(42); w.player.invulnerable=true; __game.step(2);
       const m=w.massRuntime, places=new Map(), started=performance.now();
       for(let y=-4;y<=4;y++) for(let x=-4;x<=4;x++)
-        for(const p of m.generator.placesInCell({dimension:'surface',cx:String(x),cy:String(y)})) {
+        for(const p of m.placesInCell({dimension:'surface',cx:String(x),cy:String(y)})) {
           const row=m.config.content.find(c=>c.id===p.content);
           if(!row?.site) continue;
           const q={x:Number(p.center.cx)*m.config.terrain.addressSpan+p.center.x,y:Number(p.center.cy)*m.config.terrain.addressSpan+p.center.y};
@@ -43,7 +43,7 @@ app.whenReady().then(async () => {
       return {fatal:__game.crash().fatal,version:m.generator.run.version,places:window.__siteChecks,
         planningMs:performance.now()-started,population:m.population};
     });
-    log({boot}); assert.equal(boot.fatal,null); assert.equal(boot.version,4); assert.ok(boot.places.every(Boolean));
+    log({boot}); assert.equal(boot.fatal,null); assert.equal(boot.version,5); assert.ok(boot.places.every(Boolean));
     for (const content of ['wayside-camp','pillaged-ruin']) {
       const result = await run(content => {
         const w=__game.world(), m=w.massRuntime, site=__siteChecks.find(p=>p.content===content);

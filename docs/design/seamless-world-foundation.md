@@ -54,6 +54,28 @@ The existing Git remote is `https://github.com/arianna-arpg/arpg-game-world.git`
   Wayside Camp and Pillaged Ruin, reusing native scenery, breakables, guards and
   timed caches. Scenery residency respects nearby actors/projectiles and ongoing
   native felling; restored felling rejoins native regrowth with its remaining delay.
+- `journey.ts`: a saved finite opening circuit, with four native town-edge
+  approaches and four country links. Seeded bends grade ground around the pinned
+  town, reserve scenery-free lanes and connect defended destinations. It never
+  repaints native town cells or reestablishes roads on Continue. Immutable town
+  foundation cells choose the exits, so later edits cannot move the network.
+- `landmarks.ts`: four data compositions of native scenery: Cinderwatch Camp,
+  The Broken Gate, Memorial Grove and The Fallen Court. Their complete props,
+  guards, fixtures and caches are copied into the descriptor. Optional
+  `MassContent.magicPack` selects an attributed native coordinated recipe:
+  Footfall at the gate and Bloodfont at the court. Atomic placement admits a
+  complete cohort; below the recipe's native level gate, ordinary populations
+  remain supported. Native promotion owns stats, visual warnings, combat and
+  rewards. Continue remaps group IDs while retaining names, wounds, slots and
+  casualties; native resume policy re-arms dangerous actions with a full warning.
+  Existing descriptors remain ordinary encounters. Random camps and ruins
+  continue farther out. These compositions introduce no separate combat rules.
+- `ecology.ts`: biome-selected clusters of native trees, rocks, brush, flowers
+  and desert vegetation. Saved recipes control chance, members, spread, radii
+  and weights. Paths, sites and Lastlight retain clear reservations; trunk
+  spacing uses native body sizes. Page ownership and sparse removal/felling
+  consequences survive eviction and Continue. Saved changes to one member
+  cannot change which neighboring members the seed generates.
 - `runtime.ts`: one initial arrival, then continuous movement without loadZone.
   Native actors, skills, projectiles and companions remain in the same World.
   Character saves include the run descriptor, configuration, exploration claims,
@@ -70,8 +92,9 @@ The existing Git remote is `https://github.com/arianna-arpg/arpg-game-world.git`
   A reserved, attributed verge excludes wilderness sites/populations from the
   whole town footprint. Ground textures blend at the old arena rim.
 - `paint.ts`: bounded renderer-owned floor textures and a local explored-terrain
-  map, with named markers for discovered sites. The map samples the physical
-  terrain rather than displaying the old graph. Native solid scenery also informs
+  map, with native town footprints/doors, zoom, surveyed paths, a directional
+  home marker and named/levelled discovered sites with searched-cache state.
+  The map samples the physical terrain rather than displaying the old graph. Native solid scenery also informs
   path searches; mutation revisions invalidate cached routes.
 
 The shared cell-ray and sight-veil interface now accepts finite grids and
@@ -88,8 +111,9 @@ through its native doors, use unlocked counters, explore the inn's upper floor,
 then walk into the country on any side. No gateway, loading call, coordinate
 jump, hero replacement or scene reset occurs at the town boundary.
 
-**New generation features require a new run.** Default generator version 4
-adds geographic danger and native level rosters. Version 3 added Lastlight and
+**New generation features require a new run.** Default generator version 5
+adds the opening circuit, distinct landmarks and persistent biome scenery.
+Version 4 added geographic danger and native level rosters. Version 3 added Lastlight and
 aligned geographic cells to the native 30-unit floor lattice (960-unit terrain
 pages). Version 2 introduced camps and ruins. Continue preserves the saved
 descriptor, including version 1/2 land without Lastlight and version 1–3's
@@ -106,7 +130,18 @@ stops with smooth seeded regional variation and a level-24 ceiling. Ruins
 have a configurable +1 encounter offset within that ceiling. This is initial
 pacing data, not a completed balance pass. The HUD's country level describes
 the local geography; discovered map markers give each site's encounter level.
-A pursuing enemy keeps its original level across both places.
+A pursuing enemy keeps its original level across both places. Inside a site,
+the existing HUD location line names that landmark and its encounter level;
+the read does not change the shared zone or its reward context.
+
+Shared combat presentation uses `VIS_CFG.combatFocus`: pale corners identify
+the local controlled body, while damage values receive stable nearby positions
+clear of visible bodies and overhead bars. Values, lifetimes, native warning
+geometry and saved state are unchanged. Concealed/burrowed/dead heroes do not
+gain a marker. Placement has a bounded search and retains the original value
+if a completely saturated screen offers no free seat; it is not a general
+label/telegraph layout solver. Ground reward labels yield to nearby visible
+hostiles while item glyphs and the separate pickup ledger remain available.
 
 Native kill rewards use the slain body's level, including gear, gem-pool
 eligibility, ability-essence tiers, resource orbs and kill-handler context.
@@ -141,20 +176,23 @@ the log go to ignored `balance/reports/worldmass-*` files.
   is a temporary test budget, not distant simulation or a complete ecology.
 - Checkpointed natives use the existing game's kind of position/health restore,
   not an exact serialization of buffs, threat, cooldowns or every spawned child.
-  Streaming itself does not recreate actors. Only admitted site scenery has
-  sparse mutation ownership; arbitrary summoned/event actors, actor-owned hazards
+  Streaming itself does not recreate actors. Admitted site and biome scenery
+  have sparse mutation ownership; arbitrary summoned/event actors, actor-owned hazards
   and other world packages still need lifecycle adapters. Terrain edits here mean
   MassState edits specifically. Retained native actors keep required site scenery
   after a reload; dependency residency is still conservative, not full dormancy.
+  Ecology pages near retained actors/effects also remain resident, so their
+  count can exceed the terrain page budget.
 - Terrain sampling is budgeted, but an uncached visible texture can still bake
   synchronously. Terrain edits invalidate all floor pages. There is no proven
   crossing frame-time bound yet; the UI harness logs batch timings, not FPS.
 - The local map records entered pages, not detailed line-of-sight exploration.
   Saves remain whole-run JSON; paging long-run consequences is still required.
-- Terrain currently provides open ground, soil/climate variation, lakes/shores
-  and outcrops, with one resident native Lastlight. Drainage, road networks,
-  canopy ecology, additional settlements, caves and biome-specific per-actor
-  simulation contexts remain. Camps, ruins and Lastlight are not a migrated campaign.
+- Terrain currently provides open ground, soil/climate variation, lakes/shores,
+  outcrops and native biome scenery, with one resident native Lastlight and a
+  finite opening circuit. Global roads, drainage, bridges, additional settlements,
+  caves and biome-specific per-actor simulation contexts remain. The opening
+  routes grade ground; they do not implement a river-crossing or earthworks simulation. Camps, ruins and Lastlight are not a migrated campaign.
   Co-op replication and the old campaign are not integrated into this mode.
 - Lastlight's geometry/tier and original resident roster are pinned for each run.
   New account additions appear in the next expedition, preventing buildings from
@@ -235,6 +273,37 @@ and an opened cache through real Continue. Separate camps/ruins and preview
 save-isolation checks passed. Normal/scoped builds and ordinary game smoke
 passed too. This is a bounded integration journey, not a
 full level-1-to-24 playthrough or performance acceptance.
+
+Opening-circuit milestone verification (2026-10-01): all seven worldmass probes
+passed (45 named checks across kernel, progression, engine, sites, haven,
+journey and cohorts). The journey probe covers five seeds, connected physical trails,
+native cache approaches, scenery eviction/felling, edited-road Continue,
+immutable route topology, modified cluster peers and version-4 compatibility.
+The cohort probe covers complete placement, a failed-seat retry, native attack
+warnings, wounded survivors/casualties, distinct groups and legacy encounters;
+37 native magic-pack checks also passed.
+Game/launcher/sim types, normal/scoped builds, ordinary game smoke, persistence,
+sightveil, visibility stability and cistern checks passed. Generation QA
+reported 869 cases × 3 seeds, zero failures and four baseline warnings.
+The hidden client walked a full trail with actual input and no scene load,
+opened the native cache, used map zoom/home/search state and resumed through
+browser Continue. It also saved during a native Footfall warning and resumed
+with the same cohort, without an unannounced firing attack. The combat-focus
+probe passed three checks; its real renderer check placed twelve simultaneous
+damage values outside a controlled crowd and retained the local-player marker.
+Other client checks covered native Lastlight services and
+upstairs rooms, camps/ruins, geographic encounter levels and save isolation.
+
+The seed-42 sparse terrain snapshot fell from approximately 180 ms to 12 ms
+after sorting stored address keys instead of reconstructing them per comparison;
+whole expedition snapshot time fell from approximately 190 ms to 20 ms in the
+same fixture. Bounded generation/navigation memoization avoids repeated
+geographic work without changing the saved truth. Software-rendered forced
+steps still show long frames (latest trail median 10.1 ms, p95 132 ms, maximum
+518 ms). A separate 30-second live requestAnimationFrame sample with GPU
+compositing enabled measured 16.7 ms median/p95 and two frames over 100 ms,
+both within the first second; this is one machine/scene, not a general FPS
+guarantee. Startup and wider-scene performance remain unfinished work.
 
 ## The commission and the decided run policy
 

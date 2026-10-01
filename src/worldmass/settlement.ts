@@ -1,6 +1,6 @@
 import type { World } from '../engine/world';
 import type { Actor } from '../engine/actor';
-import type { Doodad } from '../engine/levelgen';
+import type { Doodad, PlacedStructure } from '../engine/levelgen';
 import { hasDoodadRule } from '../engine/levelgen';
 import { START_ZONE, type ZoneDef } from '../data/zones';
 import { MONSTERS } from '../data/monsters';
@@ -34,6 +34,7 @@ export class MassSettlement {
   readonly zone: ZoneDef;
   readonly grid: GridWalkField;
   readonly spawn: { x: number; y: number };
+  readonly structures: readonly PlacedStructure[];
   readonly tier: number;
   readonly bornAt: number;
   private baseRegions: string[];
@@ -52,6 +53,7 @@ export class MassSettlement {
     if (!(world.walk instanceof GridWalkField)) throw new Error('Native settlement requires a region grid');
     this.zone = JSON.parse(JSON.stringify(world.zone));
     this.grid = world.walk;
+    this.structures = [...world.structures];
     this.baseRegions = Array.from(this.grid.kind, (_, i) => this.cellRegion(i));
     this.spawn = { ...world.player.pos };
     this.tier = world.townTierIndex();
@@ -65,6 +67,13 @@ export class MassSettlement {
   }
   contains(x: number, y: number): boolean {
     return x >= 0 && y >= 0 && x < this.zone.size.w && y < this.zone.size.h;
+  }
+  /** Immutable native foundation used by generation planners. Live floor edits
+   * must not move a seeded destination when Continue rebuilds its route plan. */
+  foundationRegion(x: number, y: number): string | undefined {
+    if (!this.contains(x, y)) return undefined;
+    const index = Math.floor(y / this.grid.cell) * this.grid.cols + Math.floor(x / this.grid.cell);
+    return this.baseRegions[index];
   }
   distance(x: number, y: number): number {
     return Math.hypot(Math.max(0, -x, x - this.zone.size.w), Math.max(0, -y, y - this.zone.size.h));

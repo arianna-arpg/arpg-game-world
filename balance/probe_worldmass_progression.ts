@@ -43,7 +43,7 @@ console.log('PASS configurable geographic bands, regional variation, caps, valid
 
 // A flat deterministic field isolates encounter attribution from terrain placement.
 const fixture: MassAdventure = JSON.parse(canonical(cfg));
-delete fixture.settlement;
+delete fixture.settlement; delete fixture.journey; delete fixture.ecology;
 fixture.progression = { source: 'probe/progression', minLevel: 1, maxLevel: 12,
   stops: [{ distance: 0, level: 1 }, { distance: 2000, level: 1 }, { distance: 9000, level: 12 }] };
 fixture.terrain.fields = [];
@@ -121,7 +121,7 @@ assert.equal(replay.populationFor(b).level, 12);
 assert.ok(replayWorld.chests.find(c => c.rewardSource === chest.rewardSource)?.opened);
 for (let i = 0; i < 600; i++) replay.levelAt({ x: -i * 60, y: i * 30 });
 assert.equal(replay.levelAt(far), 12); assert.equal(replay.levelAt(near), 1);
-assert.equal(replay.snapshot(replayWorld).state.run.version, 4);
+assert.equal(replay.snapshot(replayWorld).state.run.version, 5);
 const legacy: MassAdventure = JSON.parse(canonical(fixture)); delete legacy.progression;
 for (const c of legacy.content) { delete c.levels; delete c.levelOffset; }
 legacy.terrain.version = 3;

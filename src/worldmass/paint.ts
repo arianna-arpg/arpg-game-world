@@ -84,6 +84,7 @@ export class MassPainter {
     }
     sc.putImageData(pixels, 0, 0);
     ctx.drawImage(small, 0, 0, span, span);
+    const solid = new Path2D();
     for (let y = 0; y < cols; y++) for (let x = 0; x < cols; x++) {
       const at = { ...cell, x: x * cs, y: y * cs };
       const t = page?.samples[y * cols + x] ?? mass.stream.sample(at);
@@ -105,6 +106,7 @@ export class MassPainter {
       if (regionKind(t.region)?.blocks) {
         // The solid silhouette remains exact, unlike soft soil-color joins.
         ctx.fillStyle = t.color; ctx.fillRect(x * cs, y * cs, cs, cs);
+        solid.rect(x * cs, y * cs, cs, cs);
         const here = localOffset(at, { ...mass.origin, x: 0, y: 0 }, span)!;
         ctx.strokeStyle = 'rgba(215,210,188,.42)'; ctx.lineWidth = 3;
         for (const [dx, dy] of [[0, -1], [-1, 0], [1, 0], [0, 1]]) {
@@ -116,36 +118,83 @@ export class MassPainter {
         }
       }
     }
+    // Fractured stone has its own larger geographic lattice. Planes cross
+    // physical tile/page joins; clipping preserves the exact collision contour.
+    const origin = localOffset({ ...cell, x: 0, y: 0 }, { ...mass.origin, x: 0, y: 0 }, span), grain = cs * 4;
+    const vertex = (gx: number, gy: number): { x: number; y: number } => {
+      const h = massHash('stone/'+gx+','+gy,mass.generator.run.seed);
+      return { x: (gx+.15+(h&255)/255*.7)*grain-origin.x,
+        y: (gy+.15+((h>>>8)&255)/255*.7)*grain-origin.y };
+    };
+    ctx.save(); ctx.clip(solid);
+    for (let gy=Math.floor(origin.y/grain)-1;gy<=Math.ceil((origin.y+span)/grain);gy++)
+      for (let gx=Math.floor(origin.x/grain)-1;gx<=Math.ceil((origin.x+span)/grain);gx++) {
+        const a=vertex(gx,gy),b=vertex(gx+1,gy),c=vertex(gx+1,gy+1),d=vertex(gx,gy+1);
+        const shade=massHash('plane/'+gx+','+gy,mass.generator.run.seed);
+        for (const [index,triangle] of [[a,b,c],[a,c,d]].entries()) {
+          ctx.fillStyle=index?'rgba(8,15,16,'+(.08+(shade%13)/100)+')':'rgba(225,222,199,'+(.04+(shade%9)/100)+')';
+          ctx.beginPath();ctx.moveTo(triangle[0].x,triangle[0].y);
+          ctx.lineTo(triangle[1].x,triangle[1].y);ctx.lineTo(triangle[2].x,triangle[2].y);ctx.closePath();ctx.fill();
+        }
+      }
+    ctx.restore();
     return canvas;
   }
 }
 
 /** Small moving survey, sampled from the very same physical terrain. */
-export function massMap(mass: WorldMassRuntime, player: { x: number; y: number }): string {
-  const grain = 96, cols = 64, rows = 40, scale = 10;
+export function massMap(mass: WorldMassRuntime, player: { x: number; y: number }, grain = 48): string {
+  const cols = 64, rows = 40, scale = 10;
   const left = Math.floor(player.x / grain) - cols / 2, top = Math.floor(player.y / grain) - rows / 2;
   const parts: string[] = [];
   for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
     const at = mass.walk.at((left + x + .5) * grain, (top + y + .5) * grain);
     if (!mass.state.claimed('explored', cellKey(at))) continue;
     const t = mass.stream.sample(at);
-    parts.push(`<rect x="${x * scale}" y="${y * scale}" width="10" height="10" fill="${t.color}"/>`);
+    const px = (left+x+.5)*grain, py = (top+y+.5)*grain;
+    const native = mass.settlement?.contains(px,py) ? mass.settlement.grid.regionAt(px,py) : undefined;
+    const kind = regionKind(native);
+    const color = kind?.blocks ? '#777568' : kind?.standStatusDeep ? '#365d68'
+      : native === 'road' ? '#a19271' : kind?.laid === 'built' ? '#837358' : t.color;
+    parts.push(`<rect x="${x * scale}" y="${y * scale}" width="10" height="10" fill="${color}"/>`);
   }
   const escape = (s: string): string => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
   if (mass.settlement) {
-    const town = mass.settlement, x = (town.zone.size.w / 2 / grain - left) * scale;
-    const y = (town.zone.size.h / 2 / grain - top) * scale;
-    if (x >= 0 && y >= 0 && x <= cols * scale && y <= rows * scale)
-      parts.push(`<g><title>${escape(town.zone.name)}</title><path d="M${x-5},${y+4}v-8l5,-4 5,4v8Z" fill="#edd3a0"/><text x="${x+8}" y="${y+4}" fill="#eee0bc" font-size="11">${escape(town.zone.name)}</text></g>`);
+    const town = mass.settlement;
+    for (const st of town.structures) {
+      const center = mass.walk.at(st.rect.x+st.rect.w/2,st.rect.y+st.rect.h/2);
+      if (!mass.state.claimed('explored',cellKey(center))) continue;
+      const x = (st.rect.x/grain-left)*scale, y = (st.rect.y/grain-top)*scale;
+      parts.push(`<rect x="${x}" y="${y}" width="${st.rect.w/grain*scale}" height="${st.rect.h/grain*scale}" rx="1" fill="#4c4336" stroke="#bdab87" stroke-width="1"><title>${escape(st.defId.replace(/_/g,' '))}</title></rect>`);
+      for (const door of st.doors) parts.push(`<circle cx="${(door.pos.x/grain-left)*scale}" cy="${(door.pos.y/grain-top)*scale}" r="1.5" fill="#f1d8a2"/>`);
+    }
+    const rawX = (town.zone.size.w/2/grain-left)*scale, rawY = (town.zone.size.h/2/grain-top)*scale;
+    const x = Math.max(20,Math.min(cols*scale-90,rawX)), y = Math.max(35,Math.min(rows*scale-20,rawY));
+    const bearing = ['→','↘','↓','↙','←','↖','↑','↗'][(Math.round(Math.atan2(rawY-rows*scale/2,rawX-cols*scale/2)/(Math.PI/4))+8)%8];
+    parts.push(`<g><title>${escape(town.zone.name)}</title><path d="M${x-5},${y+4}v-8l5,-4 5,4v8Z" fill="#edd3a0"/><text x="${x+8}" y="${y+4}" fill="#eee0bc" font-size="11">${escape(town.zone.name)}${x!==rawX||y!==rawY?' '+bearing:''}</text></g>`);
+  }
+  // A surveyed path keeps its shape at map scale; only entered pages reveal it.
+  if (mass.journey) {
+    const clips: string[] = [];
+    const span = mass.config.terrain.addressSpan;
+    for (let cy = Math.floor(top*grain/span); cy <= Math.floor((top+rows)*grain/span); cy++)
+      for (let cx = Math.floor(left*grain/span); cx <= Math.floor((left+cols)*grain/span); cx++) {
+        if (!mass.state.claimed('explored',cellKey(mass.walk.at(cx*span,cy*span)))) continue;
+        clips.push(`<rect x="${(cx*span/grain-left)*scale}" y="${(cy*span/grain-top)*scale}" width="${span/grain*scale}" height="${span/grain*scale}"/>`);
+      }
+    parts.push('<defs><clipPath id="mass-surveyed-trails">'+clips.join('')+'</clipPath></defs>');
+    for (const trail of mass.journey.trails) parts.push(`<polyline points="${trail.points.map(p=>[(p.x/grain-left)*scale,(p.y/grain-top)*scale].join(',')).join(' ')}" fill="none" stroke="#b3a17b" stroke-width="2" stroke-linejoin="round" clip-path="url(#mass-surveyed-trails)"/>`);
   }
   for (const found of mass.sites.discovered) {
     const q = localOffset(found.center, { ...mass.origin, x: 0, y: 0 }, mass.config.terrain.addressSpan);
     const x = (q.x / grain - left) * scale, y = (q.y / grain - top) * scale;
     if (x < 0 || y < 0 || x > cols * scale || y > rows * scale) continue;
     const title = mass.config.content.find(c => c.id === found.content)?.site?.name ?? 'Discovered place';
-    const name = mass.config.progression ? title + ' · Lv ' + mass.populationFor(found).level : title;
+    const opened = mass.siteSearched(found.id);
+    const label = mass.config.progression ? title + ' · Lv ' + mass.populationFor(found).level : title;
+    const name = label + (opened ? ' · Searched' : '');
     parts.push(`<g><title>${escape(name)}</title><path d="M${x},${y - 5}l5,5 -5,5 -5,-5Z" fill="#d1b685" stroke="#302d23"/><text x="${x + 8}" y="${y + 4}" fill="#eee0bc" font-size="10">${escape(name)}</text></g>`);
   }
   const px = (player.x / grain - left) * scale, py = (player.y / grain - top) * scale;
-  return `<h2>The Unbroken Wilds</h2><svg viewBox="0 0 640 400" style="width:100%;max-height:65vh;background:#0b1112" aria-label="Survey of explored terrain">${parts.join('')}<circle cx="${px}" cy="${py}" r="4" fill="#f5dc98" stroke="#fff"/><text x="320" y="20" fill="#eadab7" text-anchor="middle">N</text></svg><p>Explored country · your position in gold</p>`;
+  return `<h2>The Unbroken Wilds</h2><div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><button data-mass-zoom="in" aria-label="Zoom in" ${grain<=24?'disabled':''}>+</button><button data-mass-zoom="out" aria-label="Zoom out" ${grain>=192?'disabled':''}>−</button><span>${grain===24?'Close detail':grain===48?'Nearby country':'Regional survey'}</span></div><svg viewBox="0 0 640 400" style="width:100%;max-height:65vh;background:#0b1112" aria-label="Survey of explored terrain">${parts.join('')}<circle cx="${px}" cy="${py}" r="4" fill="#f5dc98" stroke="#fff"/><text x="320" y="20" fill="#eadab7" text-anchor="middle">N</text></svg><p>Explored country · your position in gold</p>`;
 }

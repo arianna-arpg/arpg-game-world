@@ -46,9 +46,12 @@ export class MassState {
   }
   claimed(kind: string, id: string): boolean { return this.claims.has(canonical([kind, id])); }
   snapshot(): MassStateSave {
-    return JSON.parse(canonical({ run: this.run, revision: this.revision,
-      terrain: [...this.patches.values()].sort((a, b) => this.key(a.address) < this.key(b.address) ? -1 : 1),
-      claims: [...this.claims.values()].sort((a, b) => canonical(a) < canonical(b) ? -1 : 1) })) as MassStateSave;
+    // Keys were normalized when the records entered the maps. Sorting those
+    // keys once avoids rebuilding addresses/JSON on every comparator call.
+    const byKey = ([a]: [string, unknown], [b]: [string, unknown]): number => a < b ? -1 : a > b ? 1 : 0;
+    return JSON.parse(JSON.stringify({ run: this.run, revision: this.revision,
+      terrain: [...this.patches.entries()].sort(byKey).map(([, value]) => value),
+      claims: [...this.claims.entries()].sort(byKey).map(([, value]) => value) })) as MassStateSave;
   }
   /** Validate into a replacement before touching live state: failed import is atomic. */
   restore(raw: unknown): void {

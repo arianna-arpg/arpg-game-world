@@ -6,6 +6,13 @@
 // ---------------------------------------------------------------------------
 
 export const VIS_CFG = {
+  /** Local body identity and numeric clutter share one configurable presentation
+   * contract. Neither changes damage, attack geometry or saved actor state. */
+  combatFocus: {
+    player: { enabled: true, pad: 7, corner: 6, nose: 7, width: 1.5, outline: 1.25,
+      color: '#edf9e9', edge: '#18201f', crowdAlpha: .95, restAlpha: .4, crowdReach: 130 },
+    numbers: { enabled: true, bodyPad: 12, barRise: 34, gap: 3, step: 16, rings: 12 },
+  },
   /** Where the key light sits (radians, screen space). Volume shading, gloss
    *  bands and long doodad shadows all agree on this one sun. */
   lightAngle: -2.35, // up-left
@@ -375,6 +382,9 @@ export const VIS_CFG = {
     labelPadX: 4,
     labelPillH: 14,
     labelLift: 30,
+    /** Keep reward names clear of hostile bodies and their immediate action.
+     * Zero restores unconditional labels. Item glyphs and the pickup feed stay. */
+    rewardClearance: 52,
     /** Currency glyph type sizes (vestige sigils, essence trail). */
     vestigeFont: 13,
     essenceFont: 11,

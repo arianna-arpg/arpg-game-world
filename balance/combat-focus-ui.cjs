@@ -1,0 +1,60 @@
+// Actual renderer acceptance in an isolated preview profile. Controlled crowd
+// placement is integration QA, separate from the critic's ordinary-input play.
+const {app,BrowserWindow}=require('electron');
+const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
+const dir=path.join(__dirname,'reports');fs.mkdirSync(dir,{recursive:true});
+app.setPath('userData',path.join(dir,'combat-focus-'+process.pid));app.disableHardwareAcceleration();
+app.whenReady().then(async()=>{
+  const root=path.resolve(__dirname,'../dist-preview'),server=http.createServer((req,res)=>{
+    const p=new URL(req.url,'http://localhost').pathname,f=path.resolve(root,'.'+(p==='/'?'/index.html':p));
+    if(!f.startsWith(root+path.sep)||!fs.existsSync(f)){res.writeHead(404);return res.end();}
+    res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.css')?'text/css':'text/html');
+    fs.createReadStream(f).pipe(res);
+  });
+  await new Promise(r=>server.listen(0,'127.0.0.1',r));
+  const win=new BrowserWindow({show:false,width:1280,height:850,webPreferences:{offscreen:true,backgroundThrottling:false}});
+  const run=async(fn,...args)=>{
+    const result=await win.webContents.executeJavaScript('(async()=>{try{return {ok:true,value:await ('+fn+')('+args.map(a=>JSON.stringify(a)).join(',')+')}}catch(error){return {ok:false,error:error.stack||String(error)}}})()');
+    if(!result.ok)throw Error(result.error);return result.value;
+  };
+  const shot=async name=>{win.webContents.invalidate();await new Promise(r=>setTimeout(r,300));fs.writeFileSync(path.join(dir,'combat-focus-'+name+'.png'),(await win.webContents.capturePage()).toPNG());};
+  const timer=setTimeout(()=>app.exit(1),180000);
+  try {
+    await win.loadURL('http://127.0.0.1:'+server.address().port);
+    await run(()=>{
+      window.requestAnimationFrame=()=>0;Object.defineProperty(navigator,'getGamepads',{value:()=>[]});
+      __game.devStartRun('warrior');__game.ui.hideAll();
+      const w=__game.world();w.startWorldMass(42);w.player.invulnerable=true;
+      const m=w.massRuntime,p=m.journey.places.find(p=>p.content==='fallen-court');
+      w.landPartyAt(m.journey.local(p));m.update(w,true);__game.step(2);
+      const enemies=w.actors.filter(a=>a.magicPack?.mechanic==='bloodfont'),h=w.player;
+      for(const [i,a] of enemies.entries()){a.pos={x:h.pos.x+(i%2?25:-23),y:h.pos.y-32-Math.floor(i/2)*32};a.life=a.maxLife()*.6;}
+      w.texts=[];window.focusQA={enemies};
+      for(let i=0;i<12;i++)w.text({x:h.pos.x+(i%3)*9-9,y:h.pos.y-20},String(111+i),'#f2ebcf',15,'dmg',2);
+      __game.step(1);
+    });
+    const result=await run(()=>{
+      const w=__game.world(),ctx=__game.renderer.ctx,fill=ctx.fillText,stroke=ctx.stroke,rows=[];
+      let markers=0;
+      ctx.fillText=function(text,x,y,...rest){if(/^1(1[1-9]|2[0-2])$/.test(String(text)))rows.push({text:String(text),x,y,width:ctx.measureText(String(text)).width});return fill.call(this,text,x,y,...rest);};
+      ctx.stroke=function(...args){if(ctx.strokeStyle==='#edf9e9')markers++;return stroke.apply(this,args);};
+      try{__game.step(1);}finally{ctx.fillText=fill;ctx.stroke=stroke;}
+      return {rows,markers,bodies:[w.player,...focusQA.enemies].map(a=>({x:a.pos.x,y:a.pos.y,r:a.radius})),fatal:__game.crash().fatal};
+    });
+    assert.equal(result.fatal,null);assert.equal(result.rows.length,12);assert.ok(result.markers>0);
+    for(const t of result.rows)for(const b of result.bodies){
+      assert.ok(!(t.x+t.width/2>b.x-b.r&&t.x-t.width/2<b.x+b.r&&t.y>b.y-b.r&&t.y-15<b.y+b.r),'damage text covers a body');
+    }
+    await shot('crowd');
+    const alive=await run(()=>{
+      const w=__game.world(),e=focusQA.enemies[0];
+      __game.devInput(()=>({dx:0,dy:0,aim:{...e.pos},held:[true],edge:[]}));
+      __game.step(80);__game.devInput(null);
+      return {fatal:__game.crash().fatal,life:w.player.life,dead:w.player.dead};
+    });
+    assert.equal(alive.fatal,null);await shot('fight');
+    fs.writeFileSync(path.join(dir,'combat-focus-ui.json'),JSON.stringify({result,alive},null,2));
+    console.log('PASS real renderer retains 12 damage values outside the crowd and draws the local-player marker above combat');
+  }catch(e){console.error(e.stack||String(e));process.exitCode=1;}
+  finally{clearTimeout(timer);win.destroy();server.close();app.exit(process.exitCode||0);}
+});

@@ -15,7 +15,7 @@ import { groundedCellsIn } from '../src/render/vis/boilLayer';
 
 const restore = seedGlobalRandom(812735);
 const w = makeSimWorld('warrior', 812735), config = JSON.parse(JSON.stringify(massAdventure()));
-delete config.progression;
+delete config.progression; delete config.journey; delete config.ecology;
 delete config.settlement; // this probe isolates the wilderness adapter
 config.terrain.addressSpan = 768; config.terrain.terrainCell = 24;
 config.terrain.fields = [];

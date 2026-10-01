@@ -35,12 +35,12 @@ app.whenReady().then(async () => {
       window.progressionQA = { home: { ...w.player.pos }, homeLevel: m.levelAt(w.player.pos) };
       return { fatal: __game.crash().fatal, town: m.settlement.zone.name, version: m.generator.run.version, level: progressionQA.homeLevel };
     });
-    log({ boot }); assert.equal(boot.fatal, null); assert.equal(boot.version, 4); assert.equal(boot.level, 1);
+    log({ boot }); assert.equal(boot.fatal, null); assert.equal(boot.version, 5); assert.equal(boot.level, 1);
     await shot('lastlight');
     const journey = await run(() => {
       const w = __game.world(), m = w.massRuntime, candidates = new Map(), span = m.config.terrain.addressSpan;
       for (let y = -3; y <= 3; y++) for (let x = 10; x <= 16; x++)
-        for (const p of m.generator.placesInCell({ dimension: 'surface', cx: String(x), cy: String(y) })) {
+        for (const p of m.placesInCell({ dimension: 'surface', cx: String(x), cy: String(y) })) {
           const content = m.config.content.find(c => c.id === p.content);
           if (!content?.site) continue;
           const pos = { x: Number(p.center.cx) * span + p.center.x, y: Number(p.center.cy) * span + p.center.y };

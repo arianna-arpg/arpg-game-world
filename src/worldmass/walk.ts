@@ -6,11 +6,11 @@ import { MassStream } from './stream';
 
 export interface MassNavigationConfig {
   maxNodes: number; searchRadius: number; snapRadius: number; maxLineCells: number;
-  cacheEntries: number; searchesPerFrame: number;
+  cacheEntries: number; searchesPerFrame: number; regionCacheEntries: number;
 }
 export const MASS_NAVIGATION: Readonly<MassNavigationConfig> = Object.freeze({
   maxNodes: 2048, searchRadius: 32, snapRadius: 16, maxLineCells: 256,
-  cacheEntries: 128, searchesPerFrame: 4,
+  cacheEntries: 128, searchesPerFrame: 4, regionCacheEntries: 32768,
 });
 interface Node { x: number; y: number; cost: number; first: Vec2 }
 /** A local simulation view onto durable world addresses. Physics queries truth
@@ -26,6 +26,8 @@ export class MassWalk implements RegionGrid {
   }
   overlay?: { grid: RegionGrid; contains(x: number, y: number): boolean };
   private cache = new Map<string, Vec2 | null>();
+  private regions = new Map<string, string>();
+  private regionRevision = -1;
   private cacheVersion = '';
   /** Native scenery joins navigation without repainting physical region cells. */
   obstacles?: { blocked(x: number, y: number): boolean; revision(): string };
@@ -42,7 +44,20 @@ export class MassWalk implements RegionGrid {
     return address(this.origin.dimension, this.origin.cx, this.origin.cy, x, y, this.stream.generator.spec.addressSpan);
   }
   regionAt(x: number, y: number): string {
-    return this.overlay?.contains(x, y) ? this.overlay.grid.regionAt(x, y) : this.stream.sample(this.at(x, y)).region;
+    if (this.overlay?.contains(x, y)) return this.overlay.grid.regionAt(x, y);
+    const revision = this.stream.state.terrainRevision;
+    if (revision !== this.regionRevision) { this.regions.clear(); this.regionRevision = revision; }
+    // A ray can visit the same physical cell thousands of times per frame.
+    // Keep this local read numeric; durable address normalization is only needed
+    // on a miss. Sparse edits invalidate before the next query, never next frame.
+    const cs = this.stream.generator.spec.terrainCell;
+    const gx = Math.floor(x/cs), gy = Math.floor(y/cs), key = gx+','+gy;
+    const hit = this.regions.get(key);
+    if (hit !== undefined) return hit;
+    const region = this.stream.sample(this.at((gx+.5)*cs,(gy+.5)*cs)).region;
+    this.regions.set(key,region);
+    if (this.regions.size > this.config.regionCacheEntries) this.regions.delete(this.regions.keys().next().value!);
+    return region;
   }
   isWalkable(x: number, y: number): boolean { return regionKind(this.regionAt(x, y))?.walkable ?? false; }
   supportedAt(x: number, y: number, r: number): boolean {

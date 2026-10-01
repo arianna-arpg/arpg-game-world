@@ -5,6 +5,7 @@ import type { ZoneDef } from '../data/zones';
 import type { MassSpec } from './contracts';
 import type { MassProgressionSpec, MassPopulation } from './progression';
 import { freezeData } from './random';
+import { frontierLandmarks } from './landmarks';
 import { nativeMassSite, type MassSiteSpec } from './sites';
 
 export const MASS_ZONE = 'worldmass_expedition';
@@ -14,8 +15,12 @@ export interface MassContent extends MassPopulation {
   levels?: MassPopulation[];
   levelOffset?: number;
   site?: MassSiteSpec;
+  /** Optional native coordinated cohort; no separate attack or reward pipeline. */
+  magicPack?: { source: string; mechanic: string };
 }
 export interface MassAdventure {
+  journey?: import('./journey').MassJourneySpec;
+  ecology?: import('./ecology').MassEcologySpec;
   progression?: MassProgressionSpec;
   settlement?: import('./settlement').MassSettlementSpec;
   terrain: MassSpec;
@@ -36,7 +41,7 @@ export function massAdventure(): MassAdventure {
     { id: 'desert', field: 'moisture', min: -2, max: -.3 },
   ];
   const terrain: MassSpec = {
-    id: 'hollow-wake-country', version: 4, addressSpan: 960, terrainCell: 30,
+    id: 'hollow-wake-country', version: 5, addressSpan: 960, terrainCell: 30,
     fields: [
       { id: 'elevation', base: .15, layers: [
         { id: 'continent', period: 18000, amplitude: .7 },
@@ -100,7 +105,35 @@ export function massAdventure(): MassAdventure {
         table: presenceTable(FACTIONS.undead.table, 1, id => MONSTERS[id]?.presence)
           .filter(r => MONSTERS[r.id] && !MONSTERS[r.id].habitat).map(r => ({ id: r.id, weight: r.weight })),
         site: nativeMassSite('pillaged_township', 'Pillaged Ruin', { x: 60, y: 80, holdSeconds: 5 }) },
+      ...frontierLandmarks().map(landmark => ({ id: landmark.id, source: landmark.site.source,
+        level: 1, count: landmark.count, levelOffset: landmark.undead ? 1 : 0,
+        levels: populations(landmark.undead ? FACTIONS.undead.table : TILESETS.downs.packs.table),
+        table: presenceTable(landmark.undead ? FACTIONS.undead.table : TILESETS.downs.packs.table, 1, id => MONSTERS[id]?.presence)
+          .filter(r => MONSTERS[r.id] && !MONSTERS[r.id].habitat).map(r => ({ id: r.id, weight: r.weight })),
+        site: landmark.site, ...(landmark.magicPack ? { magicPack: landmark.magicPack } : {}) })),
     ],
+    journey: { source: 'worldmass/frontier-circuit', width: 120, color: '#62573e', clearingColor: '#454331',
+      destinations: [
+        { id: 'west-camp', content: 'cinderwatch', edge: 'west', distance: 1050, radius: 310, jitter: .12 },
+        { id: 'north-ruin', content: 'broken-gate', edge: 'north', distance: 1550, radius: 330, jitter: .16 },
+        { id: 'east-camp', content: 'memorial-grove', edge: 'east', distance: 1350, radius: 330, jitter: .16 },
+        { id: 'south-ruin', content: 'fallen-court', edge: 'south', distance: 1850, radius: 330, jitter: .12 },
+      ] },
+    ecology: { source: 'worldmass/country-scenery', spacing: 192, rules: [
+      { id: 'downs', biomes: ['downs'], chance: .62, cluster: { count: [2, 4], spread: 46 }, pieces: [
+        { kind: 'tree', weight: 4, radius: [28, 48] }, { kind: 'rock', weight: 2, radius: [14, 24] },
+        { kind: 'grass', weight: 4, radius: [24, 44] }, { kind: 'berry_bush', weight: 1, radius: [24, 36] },
+        { kind: 'flowers', weight: 2, radius: [18, 30] }, { kind: 'brush', weight: 2, radius: [24, 40] },
+      ] },
+      { id: 'forest', biomes: ['forest'], chance: .88, cluster: { count: [3, 5], spread: 46 }, pieces: [
+        { kind: 'forest_oak', weight: 5, radius: [44, 72] }, { kind: 'conifer', weight: 2, radius: [34, 55] },
+        { kind: 'fern', weight: 2, radius: [18, 30] }, { kind: 'rock', weight: 1, radius: [16, 26] },
+      ] },
+      { id: 'desert', biomes: ['desert'], chance: .62, cluster: { count: [2, 4], spread: 46 }, pieces: [
+        { kind: 'dead_tree', weight: 2, radius: [34, 54] }, { kind: 'rock', weight: 3, radius: [22, 38] },
+        { kind: 'cactus', weight: 3, radius: [22, 40] }, { kind: 'brush', weight: 2, radius: [22, 38] },
+      ] },
+    ] },
     settlement: { zone: 'lastlight', source: 'zones/lastlight', apron: 192, blend: 144 },
     startRadius: 288, populationRadius: 1300, maxPopulation: 96, pageRadius: 2, samplesPerTick: 512,
   });
