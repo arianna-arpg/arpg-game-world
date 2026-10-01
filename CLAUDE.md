@@ -19,6 +19,12 @@ Optional `MassContent.magicPack` uses native coordinated encounters; admission
 is atomic and saved members retain wounds, cohort identity and casualties.
 Continue re-arms attacks through native warning policy. Verify
 `probe_worldmass_cohorts.ts` and native magic-pack probes as well.
+`ui/passiveFrontier.ts` presents the current realm's affordable, reachable native
+passive choices above its graph, using the same panel predicate, tooltip content
+and allocation/choice intents. The graph and search remain available. Verify the
+native passive probes and hidden `balance/passive-frontier-ui.cjs` for all starter
+classes, exact one-point spending, Continue and viewport layout.
+
 The shared `vis/combatFocus.ts` keeps the local player identifiable in crowds
 and places damage values clear of visible bodies; `VIS_CFG.combatFocus` owns
 its presentation dials. Verify `probe_combatfocus.ts` and the isolated real

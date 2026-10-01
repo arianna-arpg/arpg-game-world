@@ -22,6 +22,7 @@ for(const p of limited) for(let seed=0;seed<256;seed++){
   assert.equal(picked.length,16);
 }
 assert.ok(limited.some(p=>p.limits![0].ids.length),'native ranged species remain eligible');
+assert.ok(limited.some(p=>p.limits!.some(l=>l.source.endsWith('/small-bodies'))),'small bodies remain an accent in opening groups, with larger native bodies carrying the fight');
 console.log('PASS bounded opening composition across 256 seeds per native roster; later levels retain native variety');
 
 const table=limited[0].table;

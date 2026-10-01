@@ -7,12 +7,20 @@ import type { MassPopulation } from './progression';
 export const MASS_OPENING_COMPOSITION = Object.freeze({
   source: 'worldmass/opening-composition', throughLevel: 2,
   rangedKeepDistance: 120, maxRanged: 1,
+  smallBodyBelow: 12, maxSmallBodies: 1,
 });
 export function openingPopulation(level: number, table: MassPopulation['table']): MassPopulation {
   const c=MASS_OPENING_COMPOSITION;
   const ids=table.filter(row=>MONSTERS[row.id]?.skills.some(id=>(SKILLS[id]?.ai?.keepDistance??0)>=c.rangedKeepDistance)).map(row=>row.id);
-  return {level,table,...(level<=c.throughLevel&&ids.length&&ids.length<table.length
-    ? {limits:[{source:c.source,ids,max:c.maxRanged}]}:{})};
+  if(level>c.throughLevel)return {level,table};
+  const limits:NonNullable<MassPopulation['limits']>=[];
+  if(ids.length&&ids.length<table.length)limits.push({source:c.source,ids,max:c.maxRanged});
+  const small=table.filter(row=>(MONSTERS[row.id]?.radius??Infinity)<c.smallBodyBelow).map(row=>row.id);
+  // Small native creatures remain present, with a readable larger body available
+  // after every quota is spent. Never resize art independently of hit geometry.
+  if(small.length&&table.some(row=>!small.includes(row.id)&&limits.every(l=>!l.ids.includes(row.id))))
+    limits.push({source:c.source+'/small-bodies',ids:small,max:c.maxSmallBodies});
+  return {level,table,...(limits.length?{limits}:{})};
 }
 export function validatePopulationLimits(population: MassPopulation): void {
   const limits=population.limits;

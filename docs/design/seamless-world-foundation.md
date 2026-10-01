@@ -830,3 +830,17 @@ empty-socket tooltip show the existing refusal while combat prevents a change;
 the floating world note is no longer its only visible explanation. Verify
 fielddiscipline, worldmass_rewards and the reward client harness (hot field
 refusal followed by immediate native town socketing).
+
+The next review pass exposes native reachable passive choices as readable cards
+above the full tree. Card eligibility, choice popups and point spending are the
+same as graph nodes; no progression gate, point grant or account unlock changes.
+The optional panel presentation is owned by PASSIVE_FRONTIER_VIEW. Search filters
+the cards and graph together, and the cards can be collapsed.
+
+Fresh landmark descriptors now distinguish Memorial Grove through a processional
+monument and paired graves, Cinderwatch through abandoned timber work, and the
+Broken Gate through a wrecked approach. Native scenery remains solid/fellable by
+its existing rules; layouts retain open approaches and are frozen into each run.
+New opening populations limit tiny bodies where larger native species are already
+eligible; this changes composition, never actor size or hit geometry. Saved and
+higher-level populations keep their existing rules.

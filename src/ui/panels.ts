@@ -24,6 +24,7 @@ import { tellPortraitDress } from '../engine/tells';
 import { replenishingDelivery } from '../engine/replenishment';
 import { instanceBaseTags } from '../engine/skills';
 import { DEV, GAME_TITLE } from '../config';
+import { passiveFrontierHtml } from './passiveFrontier';
 import {
   ATTRIBUTES, ATTRIBUTE_IDS, STAT_DEFS,
   type AttributeId, type DamageType,
@@ -7409,6 +7410,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // search, zoom, the tips) in a tools row beneath it.
     const realmChip = activeRealm && this.treeRealm !== MAIN_REALM
       ? `<b style="color:${activeRealm.color ?? '#c8a84b'}">${activeRealm.label}</b> · ` : '';
+    const passiveFrontier = refundMode || DEV.passiveTreeEditor ? '' : passiveFrontierHtml(
+      Object.values(PASSIVE_NODES).filter(n => visibleNode(n) && this.nodeAllocatable(n, m))
+        .map(n => ({ id: n.id, title: n.name, description: this.passiveNodeTooltip(n.id)?.description ?? esc(n.description),
+          action: n.choice && !choiceDealSpent(n, m.choices, PASSIVE_NODES) ? 'Review choices' : 'Allocate · 1 ' + (n.vocation ? 'vocation' : realmOf(n)?.currency ?? 'passive') + ' point' })));
     this.passiveTree.innerHTML = `
       ${this.closeGlyphHtml()}<h2>✧ Passive Tree</h2>
       ${realmTabs}
@@ -7430,6 +7435,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           : refundMode ? 'Refund mode · click a lit node · choices refund together · keep every path connected'
           : `${m.allocated.size} allocated · click to allocate · scroll to zoom, drag to pan`}</span>
       </div>
+      ${passiveFrontier}
       <svg viewBox="${viewBox}" id="tree-svg" style="cursor:var(--cursor-grab, grab);touch-action:none">${edges}${circles}</svg>`;
 
     // THE TREE LENS: typing filters LIVE via class toggles on the standing
@@ -7459,11 +7465,12 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       });
     });
     if (!DEV.passiveTreeEditor) {
-      this.passiveTree.querySelectorAll<SVGCircleElement>(refundMode ? '.tree-node.allocated' : '.tree-node.available').forEach(el => {
+      this.passiveTree.querySelectorAll<SVGCircleElement | HTMLButtonElement>(refundMode ? '.tree-node.allocated' : '.tree-node.available, [data-passive-choice]').forEach(el => {
         el.addEventListener('click', () => {
-          const node = PASSIVE_NODES[el.dataset.node!];
+          const frontierNodeId = el.dataset.node ?? el.dataset.passiveChoice!;
+          const node = PASSIVE_NODES[frontierNodeId];
           if (refundMode) {
-            world.requestMeta({ t: 'refundPassive', nodeId: el.dataset.node! });
+            world.requestMeta({ t: 'refundPassive', nodeId: frontierNodeId });
             this.refreshTree();
             this.refreshCharSheet();
             hideTooltip();
@@ -7474,7 +7481,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           // THE DEAL LAW: a 'first' group spent at a sibling leaves this a
           // grant-less shortcut — no popup, the plain allocate intent below.
           if (node?.choice && !choiceDealSpent(node, m.choices, PASSIVE_NODES)) { this.openChoicePopup(node, el); return; }
-          world.requestMeta({ t: 'allocate', nodeId: el.dataset.node! });
+          world.requestMeta({ t: 'allocate', nodeId: frontierNodeId });
           this.refreshTree();
           this.refreshCharSheet();
         });
@@ -7513,6 +7520,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (!svg) return;
     const q = this.treeSearch.trim().toLowerCase();
     svg.classList.toggle('tree-searching', q.length > 0);
+    this.passiveTree.querySelectorAll<HTMLButtonElement>('[data-passive-choice]').forEach(frontierNode => {
+      const node = PASSIVE_NODES[frontierNode.dataset.passiveChoice ?? ''];
+      frontierNode.hidden = !!q && (!node || !this.passiveNodeSearchText(node).includes(q));
+    });
     let hits = 0;
     const searchRouteIds = new Set<string>();
     svg.querySelectorAll<SVGCircleElement>('.tree-node').forEach(el => {
@@ -7657,7 +7668,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
    *  legality labels come from the SAME rule the engine enforces
    *  (choiceLockReason), so the popup can never promise what the host would
    *  refuse. Multi-pick nodes re-open until their deal is spent. */
-  private openChoicePopup(node: PassiveNode, el: SVGCircleElement): void {
+  private openChoicePopup(node: PassiveNode, el: SVGCircleElement | HTMLButtonElement): void {
     this.closeChoicePopup();
     const world = this.getWorld();
     const m = this.panelSeat(this.passiveTree).meta;
