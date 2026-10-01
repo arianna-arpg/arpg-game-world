@@ -7368,7 +7368,7 @@ export class Renderer {
       const txt = this.resolveText(t.text);
       ctx.globalAlpha = clamp(t.life / t.maxLife, 0, 1);
       ctx.font = `bold ${t.size}px Verdana`;
-      if ((t.kind === 'drop' || t.kind === 'pickup')
+      if ((t.kind === 'drop' || t.kind === 'pickup' || t.yieldToCombat)
         && this.rewardLabelCovered(world, t.pos.x, t.pos.y-t.size/2, ctx.measureText(txt).width, t.size)) continue;
       ctx.fillStyle = t.color;
       ctx.strokeStyle = 'rgba(0,0,0,0.7)';

@@ -1491,6 +1491,8 @@ interface FloatingText {
    *  gates the draw per-kind off the player's own Settings.floatKinds.
    *  Absent = unkinded, always drawn (story beats need no enrollment). */
   kind?: string;
+  /** Non-urgent reward feedback yields to nearby visible combat; healing does not. */
+  yieldToCombat?: boolean;
 }
 
 /** THE DISSOLUTION GRAMMAR's live break record (World.dissolves — the flash
@@ -23290,16 +23292,15 @@ export class World {
     seat.meta.essences[gain.essence] = (seat.meta.essences[gain.essence] ?? 0) + gain.count;
     // DISCOVERY — the first essence a line ever touches surfaces the Salvage
     // Station in the Vault (unlocks.ts reads the banked key, the same *_seen
-    // idiom every package uses). The nudge floats once per run while the
-    // station is still unowned, so the drop explains itself.
+    // idiom every package uses). LEDGER_ESSENCE_TOUCHED permits one civic-feed
+    // nudge per run while unowned, outside the fighting area.
     if ((this.ledger[LEDGER_ESSENCE_TOUCHED] ?? 0) === 0
       && !featureEnabled(this.account, FEATURE.SALVAGE_STATION)) {
-      this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 26),
-        'strange residue — the Vault could put this to use…', '#e8c87a', 12);
+      this.notice('strange residue — the Vault could put this to use…', '#e8c87a', 12, 'civic');
     }
     bumpLedger(this.ledger, LEDGER_ESSENCE_TOUCHED, gain.count);
     const def = ESSENCES[gain.essence];
-    this.text(seat.actor.pos, `+${gain.count} ${def.label}`, def.color, 12, 'gains');
+    this.text(seat.actor.pos, `+${gain.count} ${def.label}`, def.color, 12, 'gains', 1, true);
     // The PICKUP FEED keeps the ledger (coalesced — a spill trail reads as one row).
     notePickup(this.pickupFeed, seat.id, def.label, def.color, this.time, gain.count);
     this.markMetaDirty(seat); // the wallet rides seatMeta — replicate every gain
@@ -23345,7 +23346,7 @@ export class World {
     if (count <= 0) return;
     const def = abilityEssenceOfTier(tier);
     seat.meta.abilityEssences[def.id] = (seat.meta.abilityEssences[def.id] ?? 0) + count;
-    this.text(seat.actor.pos, `+${count} ${def.label}`, def.color, 12, 'gains');
+    this.text(seat.actor.pos, `+${count} ${def.label}`, def.color, 12, 'gains', 1, true);
     notePickup(this.pickupFeed, seat.id, def.label, def.color, this.time, count);
     this.markMetaDirty(seat);
   }
@@ -64109,10 +64110,10 @@ export class World {
     if (fx) this.flashes.push({ pos: vec(at.x, at.y), radius, color, life: 0.22, maxLife: 0.22, fx, ...(facing === undefined ? {} : { facing }) });
   }
 
-  text(at: Vec2, text: string, color: string, size = 13, kind?: string, life = 1): void {
+  text(at: Vec2, text: string, color: string, size = 13, kind?: string, life = 1, yieldToCombat = false): void {
     this.texts.push({
       pos: vec(at.x + rand(-10, 10), at.y - 16), text, color,
-      life, maxLife: life, size, kind,
+      life, maxLife: life, size, kind, ...(yieldToCombat ? { yieldToCombat: true } : {}),
     });
   }
 

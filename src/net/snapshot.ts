@@ -245,7 +245,9 @@ export interface OrbW { p: Vec2W; bob: number; life: number; kind: string; }
 export interface TextW { p: Vec2W; life: number; maxLife: number; size: number; color: string; text: string;
   /** INFO-STREAM float kind — ships so each CLIENT gates the draw by its own
    *  Settings.floatKinds (the host mints one truth; every seat curates). */
-  k?: string; }
+  k?: string;
+  /** Reward feedback uses each client's visible-combat clearance. */
+  yieldToCombat?: boolean; }
 /** A notice-feed line (screen-anchored world news) — the client filters by
  *  its own channel mutes and draws at its own anchor/duration. */
 export interface NoticeW { text: string; color: string; size: number; ch: string; born: number; }
@@ -946,7 +948,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
       cnt: d.item.kind === 'essence' || d.item.kind === 'abilityEssence' ? d.item.count : undefined,
     })),
     orbs: world.orbs.map(o => ({ p: v2(o.pos), bob: o.bob, life: o.life, kind: o.kind })),
-    texts: world.texts.map(t => ({ p: v2(t.pos), life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, k: t.kind })),
+    texts: world.texts.map(t => ({ p: v2(t.pos), life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, k: t.kind, ...(t.yieldToCombat ? { yieldToCombat: true } : {}) })),
     no: world.notices.map(n => ({ text: n.text, color: n.color, size: n.size, ch: n.channel, born: n.bornAt })),
     pfd: world.pickupFeed.map(e => ({ s: e.seatId, l: e.label, c: e.color, n: e.count, born: e.bornAt })),
     recoveryCues: world.emergences.filter(e => e.recoveryCueTier !== undefined && e.life > 0).map(cloneRecoveryCue),
@@ -1521,7 +1523,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   world.creepers.visuals = (snap.creepers ?? []).map(v => ({ ...v, trail: v.trail.map(p => ({ ...p })) }));
   world.satellites.flights.visuals = (snap.satelliteFlights ?? []).map(v => ({ ...v, from: { ...v.from }, to: { ...v.to } }));
   world.orbs = snap.orbs.map(o => ({ pos: { x: o.p[0], y: o.p[1] }, bob: o.bob, life: o.life, kind: o.kind, amount: 0 })) as unknown as World['orbs'];
-  world.texts = snap.texts.map(t => ({ pos: { x: t.p[0], y: t.p[1] }, life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, kind: t.k })) as unknown as World['texts'];
+  world.texts = snap.texts.map(t => ({ pos: { x: t.p[0], y: t.p[1] }, life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, kind: t.k, ...(t.yieldToCombat ? { yieldToCombat: true } : {}) })) as unknown as World['texts'];
   world.notices = (snap.no ?? []).map(n => ({ text: n.text, color: n.color, size: n.size, channel: n.ch, bornAt: n.born }));
   world.pickupFeed = (snap.pfd ?? []).map(e => ({ seatId: e.s, label: e.l, color: e.c, count: e.n, bornAt: e.born }));
   world.flashes = snap.flashes.map(f => ({ combatCue: f.combatCue ? { ...f.combatCue } : undefined, pos: { x: f.p[0], y: f.p[1] }, radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,

@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { makeSimWorld } from '../src/sim/arena';
+import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
+import { ESSENCES, abilityEssenceOfTier, LEDGER_ESSENCE_TOUCHED } from '../src/data/essences';
 import { CombatTextLayout, combatBodyRect, combatRectsOverlap } from '../src/render/vis/combatFocus';
 import { VIS_CFG } from '../src/render/vis/visConfig';
 const cfg=VIS_CFG.combatFocus.numbers, layout=new CombatTextLayout();
@@ -31,3 +34,27 @@ const shifted=layout.place({},edge,22,13);
 assert.ok(shifted.x-11-cfg.gap>=0 && shifted.x+11+cfg.gap<=bounds.w
   && shifted.y-13-cfg.gap>=0 && shifted.y+cfg.gap<=bounds.h,'displacement must remain on screen');
 console.log('PASS quiet/disabled text preserves native placement and edge displacement stays inside the viewport');
+
+const w=makeSimWorld('warrior',73);
+w.texts=[];w.notices=[];w.pickupFeed=[];delete w.ledger[LEDGER_ESSENCE_TOUCHED];
+const wallet=w.meta.essences.coarse, essence=abilityEssenceOfTier(1), ability=w.meta.abilityEssences[essence.id]??0;
+w.grantEssence(w.localSeat,{essence:'coarse',count:2});
+w.grantEssence(w.localSeat,{essence:'coarse',count:1});
+w.grantAbilityEssence(w.localSeat,1,3);
+w.text(w.player.pos,'+7 Life','#00ff00',12,'gains');
+assert.equal(w.meta.essences.coarse,wallet+3);
+assert.equal(w.meta.abilityEssences[essence.id],ability+3);
+assert.equal(w.ledger[LEDGER_ESSENCE_TOUCHED],3);
+assert.equal(w.notices.filter(n=>n.text.includes('strange residue')&&n.channel==='civic').length,1);
+assert.equal(w.texts.filter(t=>t.yieldToCombat).length,3);
+assert.ok(!w.texts.some(t=>t.text.includes('strange residue')));
+assert.ok(!w.texts.find(t=>t.text==='+7 Life')!.yieldToCombat);
+assert.equal(w.pickupFeed.find(p=>p.label===ESSENCES.coarse.label)!.count,3);
+assert.equal(w.pickupFeed.find(p=>p.label===essence.label)!.count,3);
+const snapshot=serializeSnapshot(w,1), client=makeSimWorld('warrior',74);
+applySnapshot(client,snapshot);
+assert.deepEqual(client.texts.map(({pos,...t})=>t),w.texts.map(({pos,...t})=>t),'remote clients receive the same presentation policy; native wire position quantization is unchanged');
+for(const t of snapshot.texts)delete t.yieldToCombat;
+applySnapshot(client,snapshot);
+assert.ok(client.texts.every(t=>!t.yieldToCombat),'legacy wire packets retain their former presentation');
+console.log('PASS resource feedback yields independently of healing; wallets, discovery ledger, pickup feed and old/new network text roundtrips are preserved');
