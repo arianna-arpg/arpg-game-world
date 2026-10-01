@@ -5631,9 +5631,11 @@ export interface SupportDef {
    *  three gems of one shape). `bearing` aims projectile payloads (see
    *  GroundDelivery.emit). */
   zoneEmit?: { skillId: string; interval: number; at?: 'point' | 'enemy'; bearing?: 'random' | 'out' };
-  /** MADDENING GROUND: anything standing in the host's lingering field for
+  /** MADDENING GROUND: anything standing in the host's lingering ground for
    *  `after` accumulated seconds is driven MAD (the `maddened` status —
-   *  it lashes at whatever is nearest, friend or foe). */
+   *  it lashes at whatever is nearest, friend or foe). The seconds bank in
+   *  the skill's ONE madness bank (World MaddenBank): per frame, across
+   *  every placement and every cast, spent by each madness. */
   madden?: { after: number };
   /** SPARK RELEASE ORDER flip (Chaotic Discharge): armed await-release
    *  sparks detonate SHUFFLED instead of in placement order. */
@@ -6290,6 +6292,34 @@ export const STRIKE_GRANTING_GRAFTS: (keyof SupportDef)[] = ['constructFx', 'zon
  *  lift is honest end to end. */
 export const SURFACE_GRANTING_STATS: string[] = ['lingerField'];
 
+/** THE STANDING SURFACE — 'surface:standing' (SupportDef.madden's gate,
+ *  2026-09-30, docs/engine/madden.md): a surface whose placements STAND
+ *  long enough to bank seconds. Read off the RESOLVED instance (tree
+ *  overrides, grafts and sockets; never a skill list), naming the very
+ *  mints that stand ground: the ground delivery's own linger; pulse beats
+ *  (innate, a pulse gem, a pulseCount mod) imposing theirs on a disc or
+ *  wall; a fissure texture gem imposing its crack; a curse-field gem
+ *  (Miasma's haze, Miasmic Ground's patch); a surface-granting lift
+ *  (lingerField, healField). Flash grounds (curse rings, conjures, strikes
+ *  with no linger) refuse. A character-sheet lift (a passive's lingerField
+ *  or pulseCount) is invisible to a socket gate, as for bare 'surface'. */
+export function standingSurface(inst: SkillInstance): boolean {
+  const d = instanceDelivery(inst);
+  const socks = hostSockets(inst);
+  const mods = instanceMods(inst);
+  const modded = (stat: string): boolean => mods.some(m => m.stat === stat && m.value > 0);
+  if (d.type === 'ground') {
+    if ((d.lingerDuration ?? 0) > 0) return true;
+    if (d.fissure) {
+      if (socks.some(s => s.def.fissureVolatile || s.def.fissureAftershock || s.def.fissureRoulette)) return true;
+    } else if (d.pulse || socks.some(s => s.def.pulse) || modded('pulseCount')) {
+      return true;
+    }
+  }
+  if (instanceCurseField(inst)) return true;
+  return socks.some(s => s.def.healField !== undefined) || SURFACE_GRANTING_STATS.some(modded);
+}
+
 /** Stats whose grant means the flight MINTS CHILDREN mid-air (fork counts,
  *  chain-leg shatters, shrapnel blooms) — the 'flight:children' mechanism's
  *  socketed half; the native half is the delivery's own shatter/emit/fork
@@ -6467,11 +6497,15 @@ export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance, param?: st
    *  ticking field up on any AoE host — and dropLingerField stamps the
    *  evolution payloads onto that field, so the lift is HONEST (the gate
    *  never admits what cannot ride). Storms stay out by the imposed-
-   *  surface law: strike craters are transient, never breathing ground. */
-  surface: inst => inst.def.delivery.type === 'ground'
-    || hostSockets(inst).some(s => s.def.healField !== undefined
-      || [...s.def.mods, ...(s.def.perLevel ?? [])]
-        .some(m => SURFACE_GRANTING_STATS.includes(m.stat) && m.value > 0)),
+   *  surface law: strike craters are transient, never breathing ground.
+   *  'surface:standing' (the dwell payloads — Maddening Miasma's bank,
+   *  2026-09-30) further demands the surface STAND for some time:
+   *  standingSurface below; a flash ground has no seconds to bank. */
+  surface: (inst, param) => (param === 'standing' ? standingSurface(inst)
+    : inst.def.delivery.type === 'ground'
+      || hostSockets(inst).some(s => s.def.healField !== undefined
+        || [...s.def.mods, ...(s.def.perLevel ?? [])]
+          .some(m => SURFACE_GRANTING_STATS.includes(m.stat) && m.value > 0))),
   /** A CONSTRUCT host — bare 'construct' is the delivery itself;
    *  'construct:massed' additionally demands the body be a mass-fabric
    *  citizen (the Unmoored graft beside it — the self-lifting gate for

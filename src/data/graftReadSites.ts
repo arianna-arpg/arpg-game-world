@@ -245,13 +245,15 @@ export const GRAFT_READ_SITES: GraftReadRow[] = [
   {
     kind: 'graft', key: 'madden',
     deliveries: ['ground'],
-    // The dwell ledger is stamped only where a surface STANDS: the ground
-    // placement (its clap twin and re-cast clones inherit it) and the
-    // lifted linger field. Measured 2026-09-30: Solar Brand, a 'duration'
-    // mark that lays no ground, took the gem and maddened no one — the
-    // carrier now gates on the 'surface' mechanism like its siblings.
+    // THE MADNESS BANK (World MaddenBank, docs/engine/madden.md): every
+    // placement that STANDS wears the skill instance's one bank. Measured
+    // 2026-09-30: Solar Brand, a 'duration' mark that lays no ground, took
+    // the gem and maddened no one (now 'surface' gated), and four standing
+    // mints carried no bank at all — fissure segments, wall segments,
+    // march ripples and curse fields; all four wear it now, and the gate
+    // tightened to 'surface:standing' so flash grounds refuse.
     defReads: def => defCarriesStat(def, 'lingerField'),
-    site: 'the ground placement mint (+ clap twin, re-cast clones) and the lifted linger field (dropLingerField); dwell accrues per zone tick',
+    site: 'every standing placement of the skill (ground discs, wall and fissure segments, march ripples, clap twin, re-cast clones, curse fields, the lifted linger field) wears the instance\'s one bank (World.maddenBankOf); dwell banks per frame in updateZones',
   },
   {
     kind: 'stat', key: 'projFrameBounce',
@@ -289,7 +291,7 @@ export const GRAFT_READ_SITES: GraftReadRow[] = [
 // a supports.ts change left for its own pass (a support edit owes a
 // `matrix check --support` slice this chip does not run). madden got that
 // measured treatment on 2026-09-30 (rowed above, its carrier now
-// 'surface'-gated); zoneEmit stays unrowed, its one carrier (pulsing_hex)
+// 'surface:standing'-gated); zoneEmit stays unrowed, its one carrier (pulsing_hex)
 // having gated on 'surface' since the standing-surface law.
 // The brim*/fuse* stats stay unrowed: Stillwater/Overbrim gate on
 // 'channel' (brim-less channels are a legitimate socket), and Slow

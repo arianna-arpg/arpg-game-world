@@ -1294,8 +1294,12 @@ export const SUPPORTS: Record<string, SupportDef> = {
   maddening_miasma: {
     id: 'maddening_miasma', name: 'Maddening Miasma',
     description: 'Anything that stands in this skill\'s lingering ground for 6 accumulated'
-      + ' seconds is driven MAD, turning to lash at whatever is nearest, friend or foe.',
-    color: '#d84a9a', requiresTags: ['duration'], requiresMechanisms: ['surface'],
+      + ' seconds, counted across every cast, is driven MAD, turning to lash at whatever is'
+      + ' nearest, friend or foe. Each madness spends the seconds; the next takes 6 more.',
+    // 'surface:standing': the seconds need ground that STANDS — flash grounds
+    // (curse rings, conjures, linger-less strikes) refuse (engine/skills.ts
+    // standingSurface; the bank itself is World MaddenBank).
+    color: '#d84a9a', requiresTags: ['duration'], requiresMechanisms: ['surface:standing'],
     madden: { after: 6 },
     mods: [],
     weight: 4,
