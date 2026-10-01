@@ -9,6 +9,11 @@ isolation and Continue. See `docs/design/seamless-world-foundation.md`.
 
 The continuous-world experiment is specified in `docs/design/seamless-world-foundation.md` (branch `codex/seamless-world-foundation`). `src/worldmass/` implements durable addresses, seeded fields/place claims, sparse consequences, bounded terrain residency and an opt-in `/?worldmass` terrain/combat prototype. It uses native movement, skills, region effects, cell-ray occlusion and character saves. Verify `npm run probe -- worldmass` plus persistence/sightveil/cistern; after a build, `balance/worldmass-ui.cjs` checks the hidden real client with isolated saves. Each new run gets fresh land. Live frame rebasing, distant simulation, native place/campaign migration and full consequence paging remain unfinished; read the document's implementation ledger before extending or describing the mode.
 
+Shared sight/fog rendering fixes are documented in `docs/engine/visibility-stability.md`.
+Resolve visibility before drawing bodies; wall queries and pixels share one contact
+resolver. Verify the sightveil/visibility_stability probes and hidden
+`balance/visibility-ui.cjs` (including its old-code negative control).
+
 Browser branch previews: `docs/engine/browser-previews.md` documents the Pages
 deployment. `scripts/browser-previews.json` configures isolated builds beside
 `/play/`; `scripts/build-browser-previews.mjs` pins their commits and refuses
