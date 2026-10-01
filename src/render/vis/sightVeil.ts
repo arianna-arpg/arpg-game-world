@@ -241,6 +241,8 @@ export class SightVeil {
   private regionF = 0;   // hide-fraction of a true-wall shadow (0..1)
   private doodadF = 0;   // hide-fraction of a full-strength body shadow (0..1)
   private px = 0; private py = 0;
+  /** Match the raster path at subpixel wall contact. Doodads keep the physical eye. */
+  private wallEye: Pt = { x: 0, y: 0 };
   /** The eye's STORY (THE ELEVATION LAW) — part of every occluder cache key. */
   private heroT = 0;
   /** THE SETTLE DEBOUNCE (VIS_CFG.sightVeil.tierSettleFrames): a candidate
@@ -359,6 +361,7 @@ export class SightVeil {
       this.gridRef = null;
       this.edges.length = 0;
     }
+    this.wallEye = wallContactEye(this.edges, p.x, p.y);
   }
 
   /** Is this WORLD point under a standing roof (THE HULL LAW)? Solid to the
@@ -549,14 +552,15 @@ export class SightVeil {
       }
     }
     if (this.regionF > f && this.gridRef) {
-      // One cell-crossing resolver with the gameplay ray: corner slivers,
-      // hanging walls and lerped elevations cannot drift between consumers.
+      // Share gameplay's cell-crossing/elevation rules, but originate the
+      // visual query at the same contact-adjusted eye as the painted walls.
+      // Near stair-step corners the raw eye can hide visibly clear ground.
       const g = this.gridRef;
-      const len = Math.sqrt(len2);
+      const len = Math.hypot(pos.x - this.wallEye.x, pos.y - this.wallEye.y);
       const eye = LOS_CFG.elev.eye;
       const hFrom = this.heroT + eye;
       const hTo = (targetElev ?? (tierElevOf(g.regionAt(pos.x, pos.y)) ?? 0)) + eye;
-      if (castGridRay(g, { x: px, y: py }, pos, 'sight', { from: hFrom, to: hTo },
+      if (castGridRay(g, this.wallEye, pos, 'sight', { from: hFrom, to: hTo },
         Math.min(1, this.radius / len),
         this.concealed.length ? (x, y) => this.concealedAt(x, y) : undefined) !== null) f = this.regionF;
     }
@@ -805,13 +809,12 @@ export function edgeShadowPath(sink: PathSink, ax: number, ay: number,
   return 1;
 }
 
-/** Build the wall union from one contact-adjusted eye. At joined faces,
+/** Resolve one contact-adjusted eye for wall pixels and visual queries. At joined faces,
  *  independent normal nudges give their shared endpoint DIFFERENT bearing
  *  angles and open a bright wedge through the corner. Resolve the nearby
  *  axis-aligned face constraints together before casting either shadow.
  *  Finite segment bounds keep distant collinear walls from moving the eye. */
-export function wallShadowPath(sink: PathSink, edges: readonly OccEdge[], px: number,
-  py: number, far: number, ox: number, oy: number, k: number): number {
+export function wallContactEye(edges: readonly OccEdge[], px: number, py: number): Pt {
   const slack = SIGHT_VEIL_GEO.faceSlack, offset = SIGHT_VEIL_GEO.faceOffset;
   let minX = -Infinity, maxX = Infinity, minY = -Infinity, maxY = Infinity;
   for (const e of edges) {
@@ -832,8 +835,15 @@ export function wallShadowPath(sink: PathSink, edges: readonly OccEdge[], px: nu
   // is independent of cache ordering and carries no previous-frame state.
   if (minX <= maxX) px = Math.max(minX, Math.min(maxX, px));
   if (minY <= maxY) py = Math.max(minY, Math.min(maxY, py));
+  return { x: px, y: py };
+}
+
+/** Draw and visibility queries share one contact resolver. */
+export function wallShadowPath(sink: PathSink, edges: readonly OccEdge[], px: number,
+  py: number, far: number, ox: number, oy: number, k: number): number {
+  const eye = wallContactEye(edges, px, py);
   let n = 0;
-  for (const e of edges) n += edgeShadowForEye(sink, e, px, py, far, ox, oy, k);
+  for (const e of edges) n += edgeShadowForEye(sink, e, eye.x, eye.y, far, ox, oy, k);
   return n;
 }
 
