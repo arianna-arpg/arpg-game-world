@@ -243,6 +243,17 @@ export const GRAFT_READ_SITES: GraftReadRow[] = [
     site: 'instanceSizeOver (ground discs + fissure half-width walks + the lifted linger field; spawnZone pools read no envelope)',
   },
   {
+    kind: 'graft', key: 'madden',
+    deliveries: ['ground'],
+    // The dwell ledger is stamped only where a surface STANDS: the ground
+    // placement (its clap twin and re-cast clones inherit it) and the
+    // lifted linger field. Measured 2026-09-30: Solar Brand, a 'duration'
+    // mark that lays no ground, took the gem and maddened no one — the
+    // carrier now gates on the 'surface' mechanism like its siblings.
+    defReads: def => defCarriesStat(def, 'lingerField'),
+    site: 'the ground placement mint (+ clap twin, re-cast clones) and the lifted linger field (dropLingerField); dwell accrues per zone tick',
+  },
+  {
     kind: 'stat', key: 'projFrameBounce',
     // THE FOURTH WALL fabric (engine/fourthwall.ts): frame-rebound flight
     // payloads (projFrameBounce) fire only when a projectile CROSSES the
@@ -276,9 +287,10 @@ export const GRAFT_READ_SITES: GraftReadRow[] = [
 // 'duration' ALONE, so its breadth is real and adjudicated on the row; the
 // candidate structural fix — requiresMechanisms ['surface'] on the gem — is
 // a supports.ts change left for its own pass (a support edit owes a
-// `matrix check --support` slice this chip does not run). madden/zoneEmit
-// keep the same 'duration' breadth and stay unrowed for now — candidates
-// for the same measured treatment, nothing more claimed here.
+// `matrix check --support` slice this chip does not run). madden got that
+// measured treatment on 2026-09-30 (rowed above, its carrier now
+// 'surface'-gated); zoneEmit stays unrowed, its one carrier (pulsing_hex)
+// having gated on 'surface' since the standing-surface law.
 // The brim*/fuse* stats stay unrowed: Stillwater/Overbrim gate on
 // 'channel' (brim-less channels are a legitimate socket), and Slow
 // Match's whole point is riding a Time Fuse graft — the loadout-time

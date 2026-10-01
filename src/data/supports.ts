@@ -1295,7 +1295,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
     id: 'maddening_miasma', name: 'Maddening Miasma',
     description: 'Anything that stands in this skill\'s lingering ground for 6 accumulated'
       + ' seconds is driven MAD, turning to lash at whatever is nearest, friend or foe.',
-    color: '#d84a9a', requiresTags: ['duration'],
+    color: '#d84a9a', requiresTags: ['duration'], requiresMechanisms: ['surface'],
     madden: { after: 6 },
     mods: [],
     weight: 4,
