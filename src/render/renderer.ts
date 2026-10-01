@@ -663,6 +663,17 @@ export class Renderer {
     // layer (empty everywhere a plan raised no floor above).
     this.stacked = world.zone.tiers ? world.storeyedStructures() : [];
     this.roomVeil.update(world, this.frameDt);
+    // Resolve visibility ONCE before any body, link or label queries it.
+    // Previously bodies read last frame's eye while the veil/labels read this
+    // frame's eye, flashing at corners and on zone or darkness changes.
+    this.updateRoofFades(world);
+    this.hullRects.length = 0;
+    for (const st of world.structures) {
+      if ((this.roofFade.get(st.id) ?? 1) <= VIS_CFG.sightVeil.hullGate) continue;
+      for (const r of st.roofs) this.hullRects.push(r);
+    }
+    this.sightVeil.userMul = this.getSettings?.().veilDarkness ?? 1;
+    this.sightVeil.update(world, this.roomVeil.frac(), vw, vh, this.hullRects);
 
     ctx.save();
     ctx.scale(z, z);
@@ -857,16 +868,7 @@ export class Renderer {
     // drawRoofs re-composites the sheet over its own pixels (roofMul) so an
     // occluded structure reads as ONE contiguous dark mass. Composites at
     // identity through the same effective camera as the light layer.
-    this.hullRects.length = 0;
-    for (const st of world.structures) {
-      if (!st.roofs.length) continue;
-      if ((this.roofFade.get(st.id) ?? 1) <= VIS_CFG.sightVeil.hullGate) continue;
-      for (const r of st.roofs) this.hullRects.push(r);
-    }
-    // The player's shade dial (Settings.veilDarkness) — read live, so the
-    // options slider previews on the battlefield behind the menu.
-    this.sightVeil.userMul = this.getSettings?.().veilDarkness ?? 1;
-    this.sightVeil.update(world, this.roomVeil.frac(), vw, vh, this.hullRects);
+    // Visibility was resolved before the world pass; only pixels composite here.
     this.sightVeil.draw(this.ctx, this.cam.x - shx, this.cam.y - shy, z, w, h);
     if (!VIS_ABLATE.has('doodads')) this.drawCanopies(world); // fake-2D depth: crowns above actors, faded near the hero
     if (!VIS_ABLATE.has('doodads')) this.drawCanopyEyes(world); // the roof's regard — gone wherever you're near
@@ -4086,9 +4088,7 @@ export class Renderer {
    *  sight veil so their coverage reads solid from outside). Reused. */
   private hullRects: { x: number; y: number; w: number; h: number }[] = [];
 
-  private drawRoofs(world: World): void {
-    if (!world.structures.length) return;
-    const { ctx } = this;
+  private updateRoofFades(world: World): void {
     // Reset the fades on ARRAY IDENTITY, not zone id: a co-op client's
     // world.zone.id never changes on applyZone, and structure ids repeat
     // across zones (grand_castle#0) — but both loadZone and applyZone replace
@@ -4107,6 +4107,15 @@ export class Renderer {
       const cur = this.roofFade.get(st.id) ?? style.alpha;
       const fade = cur + (target - cur) * Math.min(1, dt * 8);
       this.roofFade.set(st.id, fade);
+    }
+  }
+
+  private drawRoofs(world: World): void {
+    const { ctx } = this;
+    for (const st of world.structures) {
+      if (!st.roofs.length) continue;
+      const style = roofStyle(st.roofStyle);
+      const fade = this.roofFade.get(st.id) ?? style.alpha;
       if (fade < 0.03) continue;
       ctx.globalAlpha = fade;
       for (const r of st.roofs) {

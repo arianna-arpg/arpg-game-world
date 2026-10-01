@@ -1,5 +1,10 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Shared sight/fog rendering fixes are documented in `docs/engine/visibility-stability.md`.
+Resolve visibility before drawing bodies; wall queries and pixels share one contact
+resolver. Verify the sightveil/visibility_stability probes and hidden
+`balance/visibility-ui.cjs` (including its old-code negative control).
+
 Browser branch previews: `docs/engine/browser-previews.md` documents the Pages
 deployment. `scripts/browser-previews.json` configures isolated builds beside
 `/play/`; `scripts/build-browser-previews.mjs` pins their commits and refuses
