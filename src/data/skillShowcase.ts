@@ -85,5 +85,9 @@ export const SHOWCASE_SETUPS: Record<string, ShowcaseSetup> = {
   possession: { foe: { id: 'zombie', lifeFrac: 0.25 } },
   detonate_mines: { prep: { skill: 'fire_mine', presses: 3, then: 0.5 } },
   cold_snap: { prep: { skill: 'frostbolt', presses: 1, then: 0.15 } },
+  // a throw needs a catch: Seize takes a zombie, Heave sends it
+  heave: { foe: { id: 'zombie' }, prep: { skill: 'seize', presses: 1, then: 0.3 } },
+  // the weave spends banked runes: three Embers, then the working
+  invocation: { prep: { skill: 'firebolt', presses: 3, then: 0.2 } },
   mimicry: { skip: 'casts only enemy arts captured through the bestiary' },
 };

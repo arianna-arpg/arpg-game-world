@@ -94,6 +94,8 @@ const staged: [string, string, (r: StageReport) => boolean][] = [
   ['flash_freeze', 'a status the targeting needs is kept on the dummies', r => r.casts >= 1 && r.dealt > 0],
   ['eviscerate', 'a short cast range pulls the dummies in (a bleed kept on them)', r => r.casts >= 1 && r.dealt > 0],
   ['reprisal', 'an answering art finds its fresh wound', r => r.casts >= 1 && r.dealt > 0],
+  ['heave', 'a throw is fed a catch by its prep', r => r.casts >= 1],
+  ['invocation', 'the weave is fed runes by its prep', r => r.casts >= 1 && r.dealt > 0],
   ['raise_gnatveil', 'a gathered swarm arrives claimed and goes to work', r => r.casts >= 1 && r.dealt > 0],
   ['verdict_release', 'a charge bank refills at the demo pace', r => r.casts >= 2 && r.casts <= 8],
   ['reapers_toll', 'a gauge refills at the demo pace', r => r.casts >= 2 && r.casts <= 8],
