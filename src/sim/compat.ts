@@ -48,7 +48,10 @@ import {
   type SkillDef, type SupportDef,
 } from '../engine/skills';
 import { veinMechanisms } from '../engine/supportbase';
-import type { Modifier, SkillTag } from '../engine/stats';
+import { LOW_MANA_FRAC, type Modifier, type SkillTag } from '../engine/stats';
+import { STATUS_DEFS, WET_STAND_STATUSES } from '../engine/status';
+import { RECENT_CONDITIONS } from '../engine/recency';
+import { CHARGE_DEFS } from '../engine/charges';
 import { CLASSES } from '../data/classes';
 import { gemLevelAt } from './data/builds';
 import { runScenario } from './runner';
@@ -95,6 +98,15 @@ export const COMPAT_CFG = {
    *  enough that a multi-corpse appetite (corpseBatch) has a pile to
    *  distinguish itself on. */
   corpseFeed: { everySec: 1.5, count: 2 },
+  /** THE DRAINED RIG (2026-10-01, the talent-gem pass): low-mana payloads
+   *  (a lowMana `when`, a lowMana-gated proc) start the hero at this
+   *  fraction OF the low-mana line (engine LOW_MANA_FRAC), in the bare and
+   *  socketed runs alike. The bled rig's half pool sits above the line, and
+   *  a full start dips under it only where the host's spend outruns regen —
+   *  measured: Desperate Measures read inert at full AND half mana on 7/7
+   *  hosts, effective on 7/7 once the pool started under the line. Derived
+   *  from the engine constant, so moving the line moves the rig. */
+  drainedManaDepth: 0.8,
   /** A channel "moved" when |Δ| > noiseAbs AND |Δ|/max(|bare|,1) > noiseRel.
    *  Fraction-valued channels carry their own abs floor (CHANNEL_NOISE_ABS)
    *  — the global one is sized for raw damage/count lanes and would squash
@@ -485,7 +497,42 @@ export const LIVE_PROBE_SUPPORT_RULES: {
     when: sup => [...sup.mods, ...(sup.perLevel ?? [])].some(m =>
       m.stat === 'statusMagnitude' || m.stat === 'ailmentStacks'),
   },
+  // ---- THE TALENT LANES (2026-10-01): the talent fabric's conditions
+  // (docs/engine/talents.md) the dummy can never raise but bodies can.
+  {
+    // The recency ledger's kill counter (engine/recency.ts): the immortal
+    // dummy never dies, so "if you have killed recently" never opens.
+    why: 'kill-recency condition (recentlyKilled) needs kills — the fodder pack keeps the window open',
+    pack: 'fodder',
+    when: sup => [...sup.mods, ...(sup.perLevel ?? [])].some(m =>
+      m.when !== undefined && KILL_RECENCY_CONDITIONS.includes(m.when)),
+  },
+  {
+    // The victim scope's life reads (engine/victim.ts): the dummy's regen
+    // holds it far above its low-life line, while every fodder body a host
+    // whittles down crosses the band on its way to the kill.
+    why: 'life-scoped victim payload (vs:lowLife) needs bodies whittled past their low-life line — the regenerating dummy never drops there; fodder bodies cross it on every kill',
+    pack: 'fodder',
+    when: sup => [...sup.mods, ...(sup.perLevel ?? [])].some(m =>
+      (m.tags ?? []).some(t => FODDER_VICTIM_SCOPES.includes(t))),
+  },
+  {
+    // The derived proximity gauges (engine/gauges.ts countNear) skip
+    // passive bodies, so the dummy reads as nobody at all.
+    why: 'proximity gauge (foes:near) counts LIVING non-passive hostiles — the sampler skips the passive dummy',
+    when: sup => [...sup.mods, ...(sup.perLevel ?? [])].some(m =>
+      m.gauge !== undefined && LIVE_GAUGES.includes(m.gauge)),
+  },
 ];
+
+/** The recency conditions that open on a KILL — derived from the ledger's
+ *  own condition table, never listed here. */
+export const KILL_RECENCY_CONDITIONS: readonly string[] = RECENT_CONDITIONS
+  .filter(c => c.kind === 'kill' && c.within).map(c => c.id);
+/** Victim-scope tags that read a body's LIFE line — fodder-routed. */
+export const FODDER_VICTIM_SCOPES: readonly string[] = ['vs:lowLife'];
+/** Derived gauges that count bodies around the hero — live-routed. */
+export const LIVE_GAUGES: readonly string[] = ['foes:near'];
 
 export function probeKindFor(def: SkillDef, sup?: SupportDef): { kind: 'dummy' | 'live'; why?: string; pack?: 'fodder' } {
   // THE HELD LANE outranks a host rule that only guards the host's value
@@ -631,6 +678,47 @@ export const PROBE_POLICIES: {
     when: sup => [...sup.mods, ...(sup.perLevel ?? [])].some(m => m.stat.startsWith('apply_')),
     seeds: 5, durationMult: 2,
   },
+  {
+    // THE CRIT-GATED PROCS (2026-10-01, the talent-gem pass): a proc that
+    // fires only on a CRITICAL hit (ProcDef.crit) rolls inside the host's
+    // crit band — a few percent a hit — and a streak grammar (Fevered
+    // Hands: heating_up → hot_streak) needs consecutive ones. Measured:
+    // solar_brand × fevered_hands rolled zero crits at 2 seeds × 10s,
+    // effective at 5 × 30s. small_chance's law, keyed on the proc.
+    name: 'crit_proc',
+    when: sup => [...sup.mods, ...(sup.perLevel ?? [])].some(m =>
+      m.stat.startsWith('proc_') && !!PROCS[m.stat.slice('proc_'.length)]?.crit),
+    seeds: 5, durationMult: 3,
+  },
+  {
+    // THE GATED PROCS (2026-10-01): a proc gated on an actor condition
+    // (ProcDef.when) or a victim scope (ProcDef.vs) fires only where the
+    // gate and its chance coincide — a coin flip per press on a low-cadence
+    // host. Measured: Frostbite Grip's 30% Deep Freeze vs chill read
+    // negligible at 2 seeds on creeping_frost, effective at 5; Desperate
+    // Measures' 40% refill rolled once or twice on teleport (cd 8) before
+    // regen lifted the pool off the line. chance_apply's law, on the proc.
+    name: 'gated_proc',
+    when: sup => [...sup.mods, ...(sup.perLevel ?? [])].some(m => {
+      const p = m.stat.startsWith('proc_') ? PROCS[m.stat.slice('proc_'.length)] : undefined;
+      return !!p && (p.when !== undefined || !!p.vs?.length);
+    }),
+    seeds: 5, durationMult: 2,
+  },
+  {
+    // THE WHITTLE WINDOW (2026-10-01): kill-recency and vs:lowLife payloads
+    // ride the fodder pack, but a modest host spreads its damage across the
+    // respawning bodies and may finish NONE inside the standard window —
+    // the condition needs a body worn down (or a kill and a cast after it),
+    // not just one landed blow. Measured: 33 of Executioner's Edge's 126
+    // inert fodder hosts (kills 0 in 20s — frozen_orb, levinfall,
+    // bolt_repeater) read effective at 40s; the wounding pack flipped 10.
+    name: 'whittle',
+    when: sup => [...sup.mods, ...(sup.perLevel ?? [])].some(m =>
+      (m.when !== undefined && KILL_RECENCY_CONDITIONS.includes(m.when))
+      || (m.tags ?? []).some(t => FODDER_VICTIM_SCOPES.includes(t))),
+    durationMult: 2,
+  },
 ];
 export function probePolicyFor(sup: SupportDef | undefined): (typeof PROBE_POLICIES)[number] | undefined {
   return sup ? PROBE_POLICIES.find(p => p.when(sup)) : undefined;
@@ -766,7 +854,7 @@ export function probeScenario(
     probe?: 'dummy' | 'live'; rig?: 'solo' | 'escort'; withKey?: boolean; pack?: 'fodder';
     held?: boolean; // THE HELD LANE (dwell payloads): the stand-still pilot
     dummyId?: string; bled?: boolean; range?: boolean; aimWall?: boolean; fieldRef?: boolean;
-    graze?: boolean; comboDiet?: boolean;
+    graze?: boolean; comboDiet?: boolean; drained?: boolean;
   },
 ): ScenarioDef {
   // THE BRANCH AXIS: shape decisions read the BASE def (tags/delivery — an
@@ -783,8 +871,8 @@ export function probeScenario(
     : fieldRef ? { mode: 'escort' } as ReturnType<typeof rigModeFor>
       : rigModeFor(def, sup);
   const dummyId = forced?.dummyId ?? rackDummyFor(sup)?.id ?? 'target_dummy';
-  const bled = forced?.bled
-    ?? ((sup ? supModsStat(sup, BLED_RIG_STATS) : false) || def.tags.includes('heal'));
+  const bled = forced?.bled ?? bledRigFor(def, sup);
+  const drained = forced?.drained ?? drainedRigFor(sup);
   const held = forced?.held ?? (probe.kind === 'dummy' && heldLaneFor(sup));
   const comboDiet = forced?.comboDiet
     ?? (sup ? [...sup.mods, ...(sup.perLevel ?? [])].some(m => m.when === 'comboVaried') : false);
@@ -807,7 +895,14 @@ export function probeScenario(
   // The live wave: the standard WOUNDING pack, or the KILLABLE fodder pack
   // for kill-scoped payloads (probe.pack 'fodder' — kills must flow).
   const pack = probe.pack === 'fodder' ? COMPAT_CFG.fodderPack : COMPAT_CFG.livePack;
-  if (bled) build.bled = { lifeFrac: 0.5, manaFrac: 0.5 };
+  // THE DRAINED RIG deepens only the MANA wound (under the low-mana line);
+  // beside the bled rig, the life half stays bled.
+  if (bled || drained) {
+    build.bled = {
+      ...(bled ? { lifeFrac: 0.5, manaFrac: 0.5 } : {}),
+      ...(drained ? { manaFrac: LOW_MANA_FRAC * COMPAT_CFG.drainedManaDepth } : {}),
+    };
+  }
   // THE MIXED-DIET RIG: two derived fillers join the bar (both runs — the
   // shape-keyed bare shares the world) and the combo pilot round-robins
   // host + fillers so comboVaried can arm on the host's own press.
@@ -869,6 +964,7 @@ export function probeScenario(
     id: `${build.id}__${probe.kind}${probe.pack ? '_' + probe.pack : ''}_${rig.mode}`
       + (dummyId !== 'target_dummy' ? `_${dummyId.replace('target_dummy_', '')}` : '')
       + (bled ? '_bled' : '')
+      + (drained ? '_drained' : '')
       + (rr.range ? (rr.aimWall ? '_rangewall' : rr.graze ? '_rangegraze' : '_range') : '')
       + (fieldRef ? '_fieldref' : '')
       + (comboDiet ? '_combodiet' : '')
@@ -970,12 +1066,24 @@ export const COST_FUNCTION_STATS: ReadonlySet<string> = new Set([
   'manaCost', 'addedManaCost', 'addedCooldown', 'cooldownRecovery',
 ]);
 
-/** Is this gem cost-shaped — every mod on a cost-function stat and no graft
- *  field beside them? (Mana Feeder fails: costDamage_mana is output payload;
- *  Buried Charge fails: the pulse field is the function.) */
+/** COST-FUNCTION PROCS (2026-10-01, the talent-gem pass): a granted proc
+ *  whose whole effect REFILLS MANA moves the cost lane by design — Desperate
+ *  Measures' low-mana refill lifts mana_floor whether or not the host was
+ *  mana-starved, so its cost_only verdict is the refill WORKING (measured:
+ *  detonate_mines, umbral_lance), the stats' law carried to the proc. */
+export function costFunctionProc(stat: string): boolean {
+  if (!stat.startsWith('proc_')) return false;
+  const e = PROCS[stat.slice('proc_'.length)]?.effect;
+  return e?.type === 'restore' && e.resource === 'mana';
+}
+
+/** Is this gem cost-shaped — every mod on a cost-function stat (or a
+ *  cost-function proc) and no graft field beside them? (Mana Feeder fails:
+ *  costDamage_mana is output payload; Buried Charge fails: the pulse field
+ *  is the function.) */
 export function costFunctionSupport(sup: SupportDef): boolean {
   const all = [...sup.mods, ...(sup.perLevel ?? [])];
-  if (!all.length || !all.every(m => COST_FUNCTION_STATS.has(m.stat))) return false;
+  if (!all.length || !all.every(m => COST_FUNCTION_STATS.has(m.stat) || costFunctionProc(m.stat))) return false;
   for (const k of Object.keys(sup)) {
     if (k === 'mods' || k === 'perLevel' || !SUPPORT_PAYLOAD_FIELDS.has(k)) continue;
     if ((sup as unknown as Record<string, unknown>)[k] !== undefined) return false;
@@ -1241,6 +1349,58 @@ export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: Support
     note: "condition 'lowLife' is unarmable — the dummy never wounds, and the pack seldom presses the rig past its low-life line",
     when: (_def, sup) => supHasOnlyCondPayload(sup, ['lowLife']),
   },
+  // ---- THE TALENT LANES (2026-10-01, the talent-gem pass): the conditions
+  // the talent fabric's gems read that NO standard rig can supply on a given
+  // host. (The ones a rig CAN supply route instead: kill recency and
+  // vs:lowLife to the fodder pack, foes:near live, life:missing to the bled
+  // rig, lowMana to the drained rig, crit-gated and condition-gated procs
+  // to the crit_proc / gated_proc policies.) Both rows are host-scoped —
+  // the hosts that DO feed the condition stay measured, and an inert
+  // reading there is a finding.
+  {
+    // THE VICTIM-STATUS SCOPE: 'vs:<status>' mods (Shatterglass,
+    // Opportunist's Blade through the hardCC scope) and procs gated by
+    // ProcDef.vs (Frostbite Grip's Deep Freeze) read only when the struck
+    // body already WEARS the status. The rig's only appliers are its own
+    // skills — host, escort reference, crew, the gem's own riders — so a
+    // rig whose whole reach lays none of the scoped statuses (nor a buildup
+    // into one: chill stacks into frozen) can never arm it. Real play wears
+    // these beside a second source; frostbolt, which chills, measures.
+    note: 'victim-status scope (vs:<status>, or a proc gated on one) — the rig lays none of the scoped statuses (host, escort, crew and gem reach checked, buildups included), and a solo probe fields no second source',
+    when: (def, sup) => {
+      const scope = supVictimStatusScope(sup);
+      if (!scope) return false;
+      const reach = rigStatusReach(def, sup);
+      return ![...scope].some(s => reach.has(s));
+    },
+  },
+  {
+    // THE CHARGE-GAUGE GATE: a payload scaled or gated by a CHARGE gauge
+    // ('charge:<id>' — At the Brink's five Fury) reads a bank the solo rig
+    // fills only when the host (or the gem) taps that charge up to the
+    // gate; Fury's skill-less baseCap (3) stops short of five. Real play
+    // banks it across the bar. The Ravening row's mirror on the reading
+    // side; fury-tapping hosts (frenzy, one_two, piledriver) stay measured.
+    note: "charge-gauge payload ('charge:<id>') — no in-rig source banks the charge to the gauge's threshold (host, escort and gem taps checked; the skill-less baseCap stops short)",
+    when: (def, sup) => chargeGaugeUnfed(def, sup),
+  },
+  {
+    // THE UNSEEN REFILL: a gem whose whole payload is a cost-function proc
+    // (a mana refill — Desperate Measures) shows in the fingerprint only
+    // where the host runs DRY. mana_floor is the pool's minimum; on a host
+    // that is not mana-starved the refill lands after the floor while the
+    // presses stay cooldown-bound, so a working refill hashes identical.
+    // Verified by direct execution under the drained rig: the refill fired
+    // on 48 of the 56 hosts whose pairs read inert (teleport 13/25, warp
+    // 10/25); the other 8 never reach the 'cast' roll (invocation's rune
+    // gate, a replenishing delivery, a toggled aura). The leech row's
+    // shape: a mana-gained or mana-level fingerprint channel retires it.
+    note: "mana refill (cost-function proc) on a host that never runs dry — the refill lands after the pool's floor, and no fingerprint channel records mana gained",
+    when: (_def, sup) => {
+      const units = [...sup.mods, ...(sup.perLevel ?? [])];
+      return units.length > 0 && units.every(m => costFunctionProc(m.stat)) && !supHasGraftField(sup);
+    },
+  },
   // (2026-07-22, the user's (A) call: the combo-cadence blindness row is
   // RETIRED — comboVaried pairs ride the mixed-diet rig now, and
   // comboRepeated always armed under the mono-diet solo pilot.)
@@ -1503,6 +1663,166 @@ function supHasOnlyCondPayload(sup: SupportDef, conds: string[]): boolean {
   return true;
 }
 
+/** Does the gem carry a graft FIELD beside its mods (payload that is not a
+ *  modifier row — trigger, pulse, chargeGain…)? The talent-lane reads'
+ *  twin of the check closing supHasOnlyCondPayload. */
+function supHasGraftField(sup: SupportDef): boolean {
+  for (const k of Object.keys(sup)) {
+    if (k === 'mods' || k === 'perLevel' || !SUPPORT_PAYLOAD_FIELDS.has(k)) continue;
+    if ((sup as unknown as Record<string, unknown>)[k] !== undefined) return true;
+  }
+  return false;
+}
+
+// ---- THE TALENT LANES' reach reads (the two talent blindness rows) --------
+
+/** Victim conditions (engine/victim.ts) that are pure reads of the statuses
+ *  a body WEARS, mirrored as status tests so the blindness screen can ask
+ *  which statuses would arm a scope. A bare 'vs:<statusId>' names itself
+ *  and needs no row; non-status conditions (lowLife, behind…) have none on
+ *  purpose — they are not status-armed. Keep in step with victim.ts. */
+export const VICTIM_STATUS_SCOPES: Record<string, (statusId: string) => boolean> = {
+  hardCC: id => !!STATUS_DEFS[id]?.hardCC,
+  afflicted: id => !!STATUS_DEFS[id]?.dotType,
+  fleeing: id => !!STATUS_DEFS[id]?.panic,
+  wet: id => WET_STAND_STATUSES.includes(id),
+};
+
+/** The statuses that arm one victim scope, or null for a scope no status
+ *  arms. */
+function victimScopeStatuses(scope: string): string[] | null {
+  if (STATUS_DEFS[scope]) return [scope];
+  const test = VICTIM_STATUS_SCOPES[scope];
+  return test ? Object.keys(STATUS_DEFS).filter(test) : null;
+}
+
+/** The statuses a gem's WHOLE payload is victim-scoped to: every payload
+ *  unit is a 'vs:' mod or a proc gated by ProcDef.vs, and every scope is
+ *  status-armed. Null when anything reads otherwise (an unconditioned mod,
+ *  a non-status victim condition, a graft field) — those gems are not this
+ *  class, whatever the host. */
+export function supVictimStatusScope(sup: SupportDef): Set<string> | null {
+  const units = [...sup.mods, ...(sup.perLevel ?? [])].filter(m => !COST_FUNCTION_STATS.has(m.stat));
+  if (!units.length || supHasGraftField(sup)) return null;
+  const out = new Set<string>();
+  for (const m of units) {
+    const tagged = (m.tags ?? []).filter(t => t.startsWith('vs:')).map(t => t.slice('vs:'.length));
+    const gates = tagged.length ? tagged
+      : m.stat.startsWith('proc_') ? (PROCS[m.stat.slice('proc_'.length)]?.vs ?? []) : [];
+    if (!gates.length) return null;
+    for (const g of gates) {
+      const ids = victimScopeStatuses(g);
+      if (!ids) return null;
+      for (const id of ids) out.add(id);
+    }
+  }
+  return out.size ? out : null;
+}
+
+/** Every status a def can lay on its victims by itself — a generic walk of
+ *  the plain data (status effects, a pull's stun, a bash's stunChance,
+ *  apply_<status> mods, status-laying procs its own rows grant), closed
+ *  over buildups (chill's stacks build into frozen). Generic on purpose,
+ *  like the radius walk: a new status-bearing surface joins without a
+ *  compat edit. Conservative by construction — a status a threshold or a
+ *  tree node lays counts as reach. */
+export function statusReachOf(root: unknown): Set<string> {
+  const out = new Set<string>();
+  const seen = new Set<unknown>();
+  const walk = (o: unknown): void => {
+    if (o === null || typeof o !== 'object' || seen.has(o)) return;
+    seen.add(o);
+    const r = o as Record<string, unknown>;
+    if (r.type === 'status' && typeof r.status === 'string') out.add(r.status);
+    if (r.type === 'pull' && typeof r.stun === 'number' && r.stun > 0) out.add('stun');
+    if (typeof r.stunChance === 'number' && r.stunChance > 0) out.add('stun');
+    if (typeof r.stat === 'string') {
+      if (r.stat.startsWith('apply_')) out.add(r.stat.slice('apply_'.length));
+      else if (r.stat.startsWith('proc_')) walk(PROCS[r.stat.slice('proc_'.length)]?.effect);
+    }
+    for (const v of Object.values(r)) walk(v);
+  };
+  walk(root);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const s of [...out]) {
+      const into = STATUS_DEFS[s]?.buildup?.into;
+      if (into && !out.has(into)) { out.add(into); grew = true; }
+    }
+  }
+  return out;
+}
+
+/** The skills a pair's rig fields beside the host: the escort reference
+ *  (the field layer on the field escort) and a known summon crew's kits. */
+function rigCompanionDefs(def: SkillDef, sup: SupportDef): SkillDef[] {
+  const out: SkillDef[] = [];
+  if (fieldEscortFor(sup)) {
+    const ref = fieldReferenceId();
+    if (ref) out.push(SKILLS[ref]);
+  } else if (rigModeFor(def, sup).mode === 'escort') {
+    out.push(SKILLS[referenceAttackId()]);
+  }
+  if (def.delivery.type === 'summon') {
+    const crew = summonCrewOf(def.delivery, id => MONSTERS[id], id => SKILLS[id]);
+    if (Array.isArray(crew)) out.push(...crew);
+  }
+  return out.filter(Boolean);
+}
+
+/** Every status the probe rig can lay for this pair: the host's reach, its
+ *  escort's and crew's, plus the gem's own UNGATED appliers (a vs-gated
+ *  rider is the payload itself, never its own source). */
+export function rigStatusReach(def: SkillDef, sup: SupportDef): Set<string> {
+  const out = statusReachOf(def);
+  for (const c of rigCompanionDefs(def, sup)) for (const s of statusReachOf(c)) out.add(s);
+  const ungated = [...sup.mods, ...(sup.perLevel ?? [])].filter(m =>
+    !(m.tags ?? []).some(t => t.startsWith('vs:'))
+    && !(m.stat.startsWith('proc_') && PROCS[m.stat.slice('proc_'.length)]?.vs?.length));
+  for (const s of statusReachOf(ungated)) out.add(s);
+  return out;
+}
+
+/** The deepest bank of `charge` a def can fill by itself: any object in its
+ *  plain data naming the charge with a numeric `max` (gainCharge effects,
+ *  chargeGain taps), including the effects of procs its rows grant. 0 when
+ *  nothing taps it. */
+export function chargeReachOf(root: unknown, charge: string): number {
+  let best = 0;
+  const seen = new Set<unknown>();
+  const walk = (o: unknown): void => {
+    if (o === null || typeof o !== 'object' || seen.has(o)) return;
+    seen.add(o);
+    const r = o as Record<string, unknown>;
+    if (r.charge === charge && typeof r.max === 'number') best = Math.max(best, r.max);
+    if (typeof r.stat === 'string' && r.stat.startsWith('proc_')) walk(PROCS[r.stat.slice('proc_'.length)]?.effect);
+    for (const v of Object.values(r)) walk(v);
+  };
+  walk(root);
+  return best;
+}
+
+/** THE CHARGE-GAUGE GATE's predicate: every payload unit is a 'charge:<id>'
+ *  gauge mod, and no in-rig source can bank its charge to the unit's
+ *  threshold (gaugeAt, else 1) — not the host, its escort/crew, the gem's
+ *  own taps, nor the registry's own clock (ChargeDef.regen to baseCap; a
+ *  spender-gated clock only when the host spends that charge). */
+export function chargeGaugeUnfed(def: SkillDef, sup: SupportDef): boolean {
+  const units = [...sup.mods, ...(sup.perLevel ?? [])].filter(m => !COST_FUNCTION_STATS.has(m.stat));
+  if (!units.length || supHasGraftField(sup)) return false;
+  if (!units.every(m => m.gauge?.startsWith('charge:'))) return false;
+  return units.every(m => {
+    const charge = m.gauge!.slice('charge:'.length);
+    const need = m.gaugeAt ?? 1;
+    const cdef = CHARGE_DEFS[charge];
+    const clock = cdef?.regen && (!cdef.regenNeedsSpender || def.chargeCost?.charge === charge)
+      ? cdef.baseCap ?? 0 : 0;
+    const reach = Math.max(clock, chargeReachOf(def, charge), chargeReachOf(units, charge),
+      ...rigCompanionDefs(def, sup).map(c => chargeReachOf(c, charge)));
+    return reach < need;
+  });
+}
+
 export interface ChannelDelta { key: string; bare: number | string; pair: number | string; rel: number }
 
 export interface PairProbeResult {
@@ -1703,7 +2023,7 @@ export function bareEpisodesFor(
     const opts = policy?.duration !== undefined ? { ...sess.opts, duration: policy.duration } : sess.opts;
     const scen = probeScenario(skillId, null, opts, {
       probe: shape.probe, rig: shape.rig, withKey: shape.withKey, pack: shape.pack,
-      dummyId: shape.dummyId, bled: !!shape.bled,
+      dummyId: shape.dummyId, bled: !!shape.bled, drained: !!shape.drained,
       range: !!shape.range, aimWall: !!shape.aimWall, fieldRef: !!shape.fieldRef, graze: !!shape.graze,
       held: !!shape.held,
     });
@@ -1750,6 +2070,9 @@ export interface PairShape {
    *  the bar and the combo pilot round-robins all three — the cast ring's
    *  3-window goes distinct, the condition arms on the host's own press. */
   comboDiet?: true;
+  /** THE DRAINED RIG (low-mana payloads): both runs start with the mana
+   *  pool under the low-mana line (COMPAT_CFG.drainedManaDepth). */
+  drained?: true;
 }
 
 /** The census-comparable shape signature: probe kind + pack + rig + key.
@@ -1802,7 +2125,9 @@ export function pairShapeFor(def: SkillDef, sup: SupportDef, fit: 'host' | 'crew
   // the user's (B) call): a full pool clips every pour to zero landed, so a
   // salvo of mends read as a false no-op; half vitals give the pour
   // headroom and the host's own heals price through life_gain.
-  if (supModsStat(sup, BLED_RIG_STATS) || def.tags.includes('heal')) shape.bled = true;
+  if (bledRigFor(def, sup)) shape.bled = true;
+  // THE DRAINED RIG (2026-10-01): low-mana payloads start under the line.
+  if (drainedRigFor(sup)) shape.drained = true;
   // THE MIXED-DIET RIG (2026-07-22, the user's (A) call): a comboVaried
   // payload can never arm on a mono-skill bar (conditionRun demands three
   // DISTINCT casts) — the diet rig fields two derived fillers and the
@@ -1828,13 +2153,40 @@ export const shapeCacheKey = (s: PairShape): string => [
   s.probe, s.pack ?? '', s.rig, s.withKey ? 'k' : '', s.dummyId ?? '',
   s.held ? 'h' : '',
   s.bled ? 'b' : '', s.range ? 'r' : '', s.aimWall ? 'w' : '', s.fieldRef ? 'f' : '',
-  s.graze ? 'g' : '', s.comboDiet ? 'c' : '',
+  s.graze ? 'g' : '', s.comboDiet ? 'c' : '', s.drained ? 'd' : '',
 ].join(':');
 
 /** Sustain stats that need HEADROOM to express — their pairs run the bled
  *  rig (BuildSpec.bled, half vitals both runs). ES/ward leeches stay out:
  *  those pools ship EMPTY by doctrine and gate on their own bases. */
 export const BLED_RIG_STATS = ['lifeLeech', 'lifeOnHit', 'manaLeech'];
+/** Derived gauges that read a MISSING share of a pool (engine/gauges.ts) —
+ *  at full vitals they read zero, so their pairs run the bled rig too
+ *  (2026-10-01: Death's Door read inert on every full-vitals host,
+ *  effective on 5/5 bled). */
+export const BLED_RIG_GAUGES = ['life:missing', 'mana:missing'];
+
+/** THE BLED RIG's one predicate — sustain stats, missing-pool gauges, and
+ *  heal-tagged hosts. probeScenario and pairShapeFor both read it, so the
+ *  shape and the scenario can never disagree. */
+export function bledRigFor(def: SkillDef, sup?: SupportDef): boolean {
+  if (def.tags.includes('heal')) return true;
+  if (!sup) return false;
+  return supModsStat(sup, BLED_RIG_STATS)
+    || [...sup.mods, ...(sup.perLevel ?? [])].some(m => m.gauge !== undefined && BLED_RIG_GAUGES.includes(m.gauge));
+}
+
+/** Actor conditions THE DRAINED RIG arms — read off a mod's `when` or a
+ *  granted proc's ProcDef.when. */
+export const DRAINED_RIG_CONDITIONS = ['lowMana'];
+
+export function drainedRigFor(sup?: SupportDef): boolean {
+  if (!sup) return false;
+  return [...sup.mods, ...(sup.perLevel ?? [])].some(m =>
+    (m.when !== undefined && DRAINED_RIG_CONDITIONS.includes(m.when))
+    || (m.stat.startsWith('proc_')
+      && DRAINED_RIG_CONDITIONS.includes(PROCS[m.stat.slice('proc_'.length)]?.when ?? '')));
+}
 
 export interface PairProbeRun {
   result: PairProbeResult;
@@ -1868,7 +2220,7 @@ export function probePair(sess: ProbeSession, row: CensusRow): PairProbeRun {
   const pairScen = probeScenario(row.skillId,
     { id: row.supportId, level: sess.supportLevel }, pairOpts, {
       probe: shape.probe, rig: shape.rig, withKey: shape.withKey, pack: shape.pack,
-      dummyId: shape.dummyId ?? 'target_dummy', bled: !!shape.bled,
+      dummyId: shape.dummyId ?? 'target_dummy', bled: !!shape.bled, drained: !!shape.drained,
       range: !!shape.range, aimWall: !!shape.aimWall, fieldRef: !!shape.fieldRef, graze: !!shape.graze,
       held: !!shape.held,
     });
@@ -2275,7 +2627,7 @@ export const unitLevelScaled = (u: AblationUnit): boolean =>
 const describeMod = (m: Modifier): string =>
   `${m.kind} ${m.value} ${m.stat}`
   + (m.fromStat ? ` from ${m.fromStat}` : '')
-  + (m.gauge ? ` per '${m.gauge}'` : '')
+  + (m.gauge ? (m.gaugeAt !== undefined ? ` while '${m.gauge}' ≥ ${m.gaugeAt}` : ` per '${m.gauge}'`) : '')
   + (m.when ? ` when '${m.when}'` : '')
   + (m.tags?.length ? ` [${m.tags.join(',')}]` : '');
 

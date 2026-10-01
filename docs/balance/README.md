@@ -218,7 +218,9 @@ wrong; baselines express "don't move things by accident" and are exact.
   Austerity's long clock). The defect distiller (`observedDefects`) never
   mints a cost_only defect for a cost-shaped gem — its cost_only verdict
   means WORKING. A cost-shaped gem reading fully INERT (a free skill it
-  cannot cheapen) is still a finding.
+  cannot cheapen) is still a finding. A granted proc whose whole effect
+  refills MANA counts as a cost-function unit too (`costFunctionProc` —
+  Desperate Measures' low-mana refill lifts mana_floor by design).
 - **blind** = the standard probes cannot raise this pairing's condition
   (`BLINDNESS_RULES`, data): cursor-origin travel payloads, companion gems
   without their mechanism (fuse/tether riders, trigger-permits with no
@@ -262,6 +264,29 @@ wrong; baselines express "don't move things by accident" and are exact.
   the pack leans physical (pure elemental-resist readings are guarded by a
   blindness rule), and weak sustain (a 2% leech) may read NEGLIGIBLE until
   escalated — that is a magnitude finding, not a probe gap.
+- THE TALENT LANES (2026-10-01): the talent fabric's conditions
+  (`docs/engine/talents.md`) route to the rig that can raise them. Kill
+  recency (`recentlyKilled`, derived from the recency ledger's table) and
+  `vs:lowLife` ride the fodder pack under the `whittle` policy (duration ×2:
+  a modest host must wear a body down, not just land one blow); the
+  `foes:near` gauge rides the
+  wounding pack (its sampler skips the passive dummy); the `life:missing`
+  and `mana:missing` gauges join THE BLED RIG; a `lowMana` payload (a
+  `when`, or a lowMana-gated proc) rides THE DRAINED RIG, which starts both
+  runs with the mana pool under the low-mana line
+  (`COMPAT_CFG.drainedManaDepth` × the engine's `LOW_MANA_FRAC`); crit-gated
+  procs (`ProcDef.crit`) take the `crit_proc` policy (5 seeds × 3 duration,
+  small_chance's law) and procs gated on a condition or victim scope
+  (`ProcDef.when` / `ProcDef.vs`) take `gated_proc` (5 seeds × 2). Two
+  conditions no rig can raise on a given host blind on THAT host only:
+  the VICTIM-STATUS SCOPE (`vs:<status>` mods and `ProcDef.vs` gates,
+  hardCC read through its status test) blinds where the rig's whole reach
+  (host, escort reference, crew kits, the gem's own ungated riders, chill's
+  buildup into frozen) lays none of the scoped statuses; the CHARGE-GAUGE
+  GATE (`charge:<id>` payloads) blinds where no in-rig source banks the
+  charge to the gauge's threshold. Hosts that feed the condition stay
+  measured, so an inert reading there is a finding. Pinned by
+  probe_supportmatrix rig M.
 - Reading INERT rows: the row often carries a static annotation
   (`data/graftReadSites.ts` — "'trail' is read only at spawnProjectile"),
   which is the fix-it trail. An inert pair resolves ONE of two ways, both
