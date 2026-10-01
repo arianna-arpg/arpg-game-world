@@ -4124,6 +4124,12 @@ export class World {
     caster: Actor; inst: SkillInstance; aim: Vec2;
     n: number; k: number; timer: number; interval: number;
     dmgMult: number; aoeMult: number; scaleStep: number; retarget: boolean;
+    /** THE ECHO'S MARK (2026-09-30): a 'target' delivery strikes only what
+     *  targeting RESOLVED, and the train kept only the aim point, so every
+     *  echo of a targeted strike or mend landed on nobody. The press's
+     *  resolved body rides along (the caster for a self-fallback mend);
+     *  the drain re-resolves through the skill's own spec, anchored on it. */
+    mark?: Actor;
   }[] = [];
   /** Scheduled SEQUENCE steps (AimSpec.sequence): each carries its ABSOLUTE
    *  strike bearing, baked at cast time — the figure holds even as the
@@ -38201,12 +38207,22 @@ export class World {
         // Independent paid components have no second windup of their own;
         // their repeat beat carries their local attack/cast-speed investment.
         const interval = 0.22 / (opts.componentUse ? caster.speedFactor(inst) : 1);
+        // THE ECHO'S MARK: a targeted strike or mend re-finds its body at the
+        // drain through the skill's own spec. Corpse specs stay out (the press
+        // spent its find, as on the retarget lane), engine-handed spec-less
+        // payloads have no spec to ask, and a CLAIM keeps one roll per press
+        // (the cooldown is tryTame's retry economy).
+        const echoSpec = instanceTargeting(inst);
+        const echoMark = instanceDelivery(inst).type === 'target' && targetInfo
+          && echoSpec && echoSpec.target !== 'corpse' && !def.effects.some(f => f.type === 'tame')
+          ? targetInfo.actor ?? (targetInfo.self ? caster : undefined) : undefined;
         this.pendingRepeats.push({
           caster, inst, aim: vec(aim.x, aim.y),
           n: repeats, k: 1, timer: interval, interval,
           dmgMult: useMult, aoeMult: opts.aoeMult ?? 1,
           scaleStep: caster.sheet.get('repeatScale', tags, extra),
           retarget: caster.sheet.get('repeatRetarget', tags, extra) > 0,
+          mark: echoMark,
           // THE FEEDER LOCALITY (2026-07-22, the user's ruling): the train
           // carries NO payment — cost-as-damage mints once, on the pressed
           // cast, as if the skill wore the feeder alone. Echo riders were
@@ -57007,6 +57023,14 @@ export class World {
           }
           if (best) aim = best.pos;
         }
+      }
+      // THE ECHO'S MARK: an echo of a targeted strike or mend re-resolves
+      // through the skill's own spec, anchored on the press's body: the same
+      // victim while it still qualifies (status gates, line of fire, reach),
+      // else whatever a fresh press would find. Nothing found, nothing struck.
+      if (!targetInfo && r.mark) {
+        const found = this.resolveTargeting(r.caster, r.inst, r.mark.dead ? r.aim : r.mark.pos);
+        if (found) { aim = vec(found.pos.x, found.pos.y); targetInfo = found; }
       }
       const factor = Math.max(0.2, 1 + r.scaleStep * r.k);
       this.executeSkill(r.caster, r.inst, aim, {
