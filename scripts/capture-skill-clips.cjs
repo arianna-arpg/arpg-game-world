@@ -69,6 +69,10 @@ const CFG = {
   floor: opt('floor', 'slate'),
   /** The body a corpse-fed skill finds waiting before each dummy. */
   corpse: 'zombie',
+  /** The companion an ally-targeted skill (a heal, a bond) is cast on. */
+  ally: 'dire_wolf',
+  /** Bodies a gathered swarm skill starts with. */
+  throng: 10,
   seed: 20260930,
 };
 
@@ -86,9 +90,13 @@ const STAGES = {
  *         bled to lifeFrac so a claim or an execute can land;
  *  prep:  another skill cast first, `presses` times, the main press `then`
  *         seconds after the last one (mines to detonate, a bolt to snap);
- *  hold:  seconds each press is held (claims, long channels). */
+ *  hold:  seconds each press is held (claims, long channels);
+ *  skip:  why no clip is filmed (a scene the stage cannot hold). */
 const SETUPS = {
   tame_beast: { foe: { id: 'dire_wolf', lifeFrac: 0.4 }, hold: 3.0 },
+  seize: { foe: { id: 'zombie' } },
+  possession: { foe: { id: 'zombie', lifeFrac: 0.25 } },
+  mimicry: { skip: 'casts only enemy arts captured through the bestiary' },
   detonate_mines: { prep: { skill: 'fire_mine', presses: 3, then: 0.5 } },
   cold_snap: { prep: { skill: 'frostbolt', presses: 1, then: 0.15 } },
 };
@@ -152,6 +160,8 @@ async function pageBoot(spec) {
     if (prepSlot < 0) throw new Error('prep grant refused: ' + spec.plan.prep.skill);
   }
   const prepInst = prepSlot >= 0 ? p.skills[prepSlot] : null;
+  // A gathered swarm (THE THRONG) arrives already claimed, ready to send.
+  if (inst.def.throng && typeof w.devThrongMint === 'function') w.devThrongMint(inst.def.id, spec.throng);
   p.sheet.setSource('clip', [
     { stat: 'accuracy', kind: 'flat', value: 100000 },
     { stat: 'mana', kind: 'flat', value: 100000 }, { stat: 'manaRegen', kind: 'flat', value: 10000 },
@@ -180,7 +190,19 @@ async function pageBoot(spec) {
     w.actors.push(m);
     return m;
   });
-  const primary = foes[0];
+  // An ally-targeted skill (a heal, a bond) finds a wounded companion at
+  // the hero's side: still, so the cast reads on it.
+  let ally = null;
+  if (spec.ally) {
+    ally = w.createMonster(spec.ally.id, spec.level, 'player');
+    ally.skills = []; ally.brain = undefined;
+    ally.pos = at(spec.ally);
+    ally.tier = p.tier; ally.spawnedAt = -1;
+    ally.fillResources();
+    ally.life = ally.maxLife() * 0.4;
+    w.actors.push(ally);
+  }
+  const primary = ally || foes[0];
   const focus = at(spec.focus);
   w.frameLockFocus = () => focus;
 
@@ -200,7 +222,8 @@ async function pageBoot(spec) {
   };
   const home = { x: p.pos.x, y: p.pos.y };
   const cluster = at(plan.cluster);
-  const aimOf = () => plan.aimMode === 'foe' && primary && !primary.dead ? { x: primary.pos.x, y: primary.pos.y }
+  const aimOf = () => plan.aimMode === 'grave' && graves.length ? { x: graves[0].x, y: graves[0].y }
+    : plan.aimMode === 'foe' && primary && !primary.dead ? { x: primary.pos.x, y: primary.pos.y }
     : plan.aimMode === 'cluster' ? cluster : at(plan.aim);
   const idle = () => !p.casting && p.useLock <= 0;
   const nSlots = p.skills.length;
@@ -277,8 +300,44 @@ async function pageBoot(spec) {
   let layAt = 0;
   const posts = dummies.map((m) => ({ x: m.pos.x, y: m.pos.y, last: { x: m.pos.x, y: m.pos.y } }));
   const update = w.update.bind(w);
+  // THE GATEKEEPER: whatever a cast spends or waits on (a damage pool, a
+  // gauge, a charge bank, a thirst for missing life) is kept ready, so the
+  // clip shows the skill rather than its empty bar.
+  let refillAt = -9;
+  const keep = (i) => {
+    if (!i || clip.t - refillAt < spec.cooldownCap) return;
+    const d = i.def;
+    const before = JSON.stringify([p.pools.get(d.pool && d.pool.id), i.state && i.state.gauge, d.chargeCost && p.charges.get(d.chargeCost.charge)]);
+    if (d.pool) {
+      const want = Math.max(d.pool.min || 1, 1) * 4;
+      if ((p.pools.get(d.pool.id) || 0) < want) p.pools.set(d.pool.id, want);
+    }
+    if (d.gauge && typeof p.gaugeEff === 'function') {
+      const eff = p.gaugeEff(i);
+      if (eff) {
+        i.state = i.state || {};
+        if ((i.state.gauge || 0) < eff.need) i.state.gauge = eff.need;
+        if ((i.state.gaugeLock || 0) > spec.cooldownCap) i.state.gaugeLock = spec.cooldownCap;
+      }
+    }
+    const cc = d.chargeCost;
+    if (cc && cc.charge) {
+      const need = cc.amount === 'all' ? Math.max(cc.minimum || 0, 3) : Math.max(cc.amount || 1, cc.minimum || 0);
+      if ((p.charges.get(cc.charge) || 0) < need) p.charges.set(cc.charge, need);
+    }
+    const g = p.unmetGate(i);
+    if (g && g.charge) p.charges.set(g.charge.id, Math.max(g.charge.amount, p.charges.get(g.charge.id) || 0));
+    if (g && g.missing) {
+      p.life = Math.min(p.life, p.maxLife() * 0.5);
+      p.mana = Math.min(p.mana, p.availableMaxMana() * 0.5);
+    }
+    const after = JSON.stringify([p.pools.get(d.pool && d.pool.id), i.state && i.state.gauge, d.chargeCost && p.charges.get(d.chargeCost.charge)]);
+    if (after !== before || g) refillAt = clip.t;
+  };
   w.update = (dt) => {
     update(dt);
+    keep(inst); keep(prepInst);
+    if (ally && !ally.dead && ally.life >= ally.maxLife() * 0.98) ally.life = ally.maxLife() * 0.4;
     if (graves.length && (layAt += dt) >= 0.6) { layAt = 0; lay(); }
     dummies.forEach((m, k) => {
       if (m.dead) return;
@@ -447,10 +506,13 @@ function stageFor(row) {
   const act = CFG.seconds - CFG.lead - CFG.tail;
   const req = row.targeting && row.targeting.requiresStatus;
   const corpseFed = !!(row.targeting && row.targeting.target === 'corpse');
+  const allyFed = !!(row.targeting && row.targeting.target === 'ally');
+  if (corpseFed) aimMode = 'grave';
   return {
     hero, foes, focus, zoom: CFG.render.w / span,
     keepStatus: Array.isArray(req) ? req[0] : req || null,
     corpse: corpseFed ? CFG.corpse : null,
+    ally: allyFed ? { id: CFG.ally, x: 70, y: 46 } : null,
     plan: { kind, aim, aimMode, cluster, start: CFG.lead, stop: CFG.lead + act, everySec, holdSec, mash, maxHold: 3, prep },
   };
 }
@@ -572,9 +634,16 @@ async function main() {
   for (const row of rows) {
     if (row.missing) { console.log(`✗ ${row.id}: not in the catalog`); summary.push({ id: row.id, ok: false }); continue; }
     if (skipExisting && index.clips[row.id]) { console.log(`· ${row.id}: kept`); continue; }
+    const skip = SETUPS[row.id] && SETUPS[row.id].skip;
+    if (skip) {
+      console.log(`· ${row.id}: skipped (${skip})`);
+      report.clips[row.id] = { skipped: skip };
+      if (index.clips[row.id]) { delete index.clips[row.id]; writeJson(indexFile, index); }
+      continue;
+    }
     const spec = {
       skill: row.id, level: CFG.level, fps: CFG.fps, seed: CFG.seed, noon: catalog.noon,
-      classId: classFor(row, catalog.classes), cooldownCap: CFG.cooldownCap, hudDraws: HUD_DRAWS,
+      classId: classFor(row, catalog.classes), cooldownCap: CFG.cooldownCap, hudDraws: HUD_DRAWS, throng: CFG.throng,
       stage: { theme: STAGES[CFG.floor] }, ...stageFor(row),
     };
     const started = Date.now();
