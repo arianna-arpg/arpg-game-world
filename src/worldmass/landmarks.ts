@@ -1,5 +1,6 @@
 import type { Doodad, DoodadKind } from '../engine/levelgen';
 import { nativeMassSite, type MassSiteSpec } from './sites';
+import { nativeMassAltar } from './fields';
 
 interface Landmark {
   id: string;
@@ -15,11 +16,12 @@ export function frontierLandmarks(): Landmark[] {
   const prop = (kind: DoodadKind, x: number, y: number, radius: number, rot = 0): Doodad =>
     ({ kind, pos: { x, y }, radius, rot });
   const compose = (id: string, native: string | null, name: string, cache: MassSiteSpec['cache'],
-    undead: boolean, count: number, additions: Doodad[], mechanic?: string): Landmark => {
+    undead: boolean, count: number, additions: Doodad[], mechanic?: string, altars?: MassSiteSpec['altars']): Landmark => {
     const site: MassSiteSpec = native ? nativeMassSite(native, name, cache)
       : { name, source: 'native/scenery', doodads: [], fixtures: [], ...(cache ? { cache } : {}) };
     site.source += '+worldmass/landmarks/' + id;
     site.doodads.push(...additions);
+    if (altars?.length) site.altars = altars;
     return { id, undead, count, site, ...(mechanic ? { magicPack: { source: 'magicPacks/'+mechanic, mechanic } } : {}) };
   };
   return [
@@ -51,7 +53,7 @@ export function frontierLandmarks(): Landmark[] {
         prop('standing_stone', side * 52, 220, 25), prop('fern', side * 205, 25, 35),
       ]),
       prop('flowers', 0, -215, 32),
-    ]),
+    ], undefined, [nativeMassAltar('mending_altar', 0, -95)]),
     compose('fallen-court', 'pillaged_township', 'The Fallen Court', { x: 60, y: 80, holdSeconds: 5 }, true, 4, [
       prop('weathered_statue', -75, -185, 44), prop('dead_tree', 185, 55, 65),
       prop('dead_tree', -175, 120, 60), prop('standing_stone', 135, 160, 30),

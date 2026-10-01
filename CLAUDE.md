@@ -25,6 +25,16 @@ and allocation/choice intents. The graph and search remain available. Verify the
 native passive probes and hidden `balance/passive-frontier-ui.cjs` for all starter
 classes, exact one-point spending, Continue and viewport layout.
 
+Finite journey landmarks may declare snapshotted native altar fields through
+`worldmass/fields.ts`. Memorial Grove uses the native shared Mending field;
+native modifiers/healing remain authoritative, with fixed place levels, stable
+sources and saved pulse clocks. The first adapter admits modifiers and mending
+only, on finite journey sites; repeated-field paging, storm and kill-reward verbs
+remain pending. Verify `probe_worldmass_fields.ts`, persistence/worldmass probes
+and hidden `balance/worldmass-fields-ui.cjs`. Owned native passive names/effects
+remain visible after allocation through `ui/passiveFrontier.ts`; its client
+harness checks that confirmation alongside single spending and Continue.
+
 The shared `vis/combatFocus.ts` keeps the local player identifiable in crowds
 and places damage values clear of visible bodies; `VIS_CFG.combatFocus` owns
 its presentation dials. Verify `probe_combatfocus.ts` and the isolated real

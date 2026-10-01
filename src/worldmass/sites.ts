@@ -5,6 +5,7 @@ import { MONSTERS } from '../data/monsters';
 import { address, type MassAddress } from './address';
 import type { MassPlace } from './contracts';
 import { canonical, massHash } from './random';
+import { validateMassAltar, type MassAltarSpec } from './fields';
 
 export interface MassSiteSpec {
   name: string; source: string;
@@ -12,6 +13,8 @@ export interface MassSiteSpec {
   doodads: Doodad[];
   fixtures: { monster: string; x: number; y: number }[];
   cache?: { x: number; y: number; holdSeconds: number };
+  /** Finite journey fields use native altar rules, snapshotted per expedition. */
+  altars?: MassAltarSpec[];
 }
 export interface MassSiteDiscovery { id: string; content: string; center: MassAddress }
 export type PieceState = Pick<Doodad, 'pos' | 'kind' | 'radius' | 'rot' | 'adorn' | 'gone' | 'felled' | 'hitbox'>;
@@ -45,6 +48,9 @@ export function validateMassSite(site: MassSiteSpec, radius: number): void {
       || d.contactSource || d.effect || d.door || d.well || d.hitbox || d.anchor)
       throw new Error('Unsupported worldmass scenery or footprint');
   }
+  if (site.altars && (!Array.isArray(site.altars) || site.altars.length > 4
+    || new Set(site.altars.map(a=>a.id)).size !== site.altars.length)) throw new Error('Invalid worldmass site fields');
+  for (const altar of site.altars ?? []) validateMassAltar(altar, radius);
   for (const f of site.fixtures) if (!MONSTERS[f.monster] || !within(f.x, f.y, 32))
     throw new Error('Invalid worldmass site fixture');
   if (site.cache && (!within(site.cache.x, site.cache.y, 32)

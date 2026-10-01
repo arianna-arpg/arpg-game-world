@@ -25,7 +25,7 @@ export function captureZoneContents(w: World): ZoneContents {
   return copy({
     chests: w.chests,
     shrines: w.shrines.map(s => ({ pos: s.pos, id: s.def.id, used: s.used })),
-    altars: w.altars.map(a => ({ pos: a.pos, id: a.def.id, tier: a.tier, objective: a.objective })),
+    altars: w.altars.filter(a => !a.massSource).map(a => ({ pos: a.pos, id: a.def.id, tier: a.tier, objective: a.objective })),
     drops: w.drops.map(d => ({ ...d, item: d.item.kind === 'skill'
       ? { kind: 'gem' as const, gem: packSkillGemPayload(d.item.inst), locked: d.item.inst.locked }
       : d.item.kind === 'support'

@@ -23,6 +23,7 @@ import { populationChoices, validatePopulationLimits } from './population';
 import { MassEcology, validateMassEcology, type MassEcologySave } from './ecology';
 
 import { MassRewards, type MassRewardSave } from './rewards';
+import { MassFields, type MassFieldSave } from './fields';
 
 interface MassEnemySave {
   id: string; monster: string; level: number; x: number; y: number; life: number; scale: number;
@@ -32,6 +33,7 @@ export interface MassAdventureSave {
   schema: 1; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
   player: { x: number; y: number; tier?: number }; enemies: MassEnemySave[]; contents: ZoneContents;
   rewards?: MassRewardSave[];
+  fields?: MassFieldSave[];
   sites?: MassSiteSave;
   ecology?: MassEcologySave;
   settlement?: MassSettlementSave;
@@ -41,6 +43,7 @@ export interface MassAdventureSave {
  * dependency-aware dormancy exists: wounded/engaged bodies are never discarded. */
 export class WorldMassRuntime {
   readonly rewards: MassRewards;
+  readonly fields: MassFields;
   readonly generator: MassGenerator;
   readonly state: MassState;
   readonly stream: MassStream;
@@ -65,6 +68,7 @@ export class WorldMassRuntime {
     this.config = freezeData(JSON.parse(canonical(config)) as MassAdventure);
     this.configHash = massDigest(this.config);
     this.rewards = new MassRewards(this.config.rewards, seed, save?.rewards);
+    this.fields = new MassFields(save?.fields);
     this.origin = Object.freeze(save ? { ...save.origin } : { dimension: 'surface', cx: '0', cy: '0' });
     address(this.origin.dimension, this.origin.cx, this.origin.cy, 0, 0, config.terrain.addressSpan);
     this.generator = new MassGenerator(save?.state.run ?? makeMassRun(seed, runId, config.terrain), config.terrain);
@@ -94,6 +98,8 @@ export class WorldMassRuntime {
         || c.table.some(r => !MONSTERS[r.id] || !Number.isFinite(r.weight) || r.weight <= 0)) throw new Error('Invalid worldmass population');
     }
     for (const c of config.content) {
+      if (c.site?.altars?.length && config.terrain.places.some(p=>p.content===c.id))
+        throw new Error('Worldmass altar fields require a finite journey owner');
       for (const row of [c, ...(c.levels ?? [])]) validatePopulationLimits(row);
       if (c.magicPack) {
         const def = Object.hasOwn(MAGIC_PACKS,c.magicPack.mechanic) ? MAGIC_PACKS[c.magicPack.mechanic] : undefined;
@@ -205,6 +211,11 @@ export class WorldMassRuntime {
       restoreZoneContents(world, save.contents);
       world.refreshMagicPacks();
     }
+    this.fields.restoreAdmitted(world, this.journey?.places ?? [], place=>({
+      rows:this.config.content.find(c=>c.id===place.content)?.site?.altars ?? [],
+      center:localOffset(place.center,{...this.origin,x:0,y:0},this.config.terrain.addressSpan),
+      level:this.populationFor(place).level,
+    }));
     this.update(world, true);
   }
   /** Only a generated, admitted physical cache can earn its configured choice. */
@@ -386,6 +397,7 @@ export class WorldMassRuntime {
       if (content.site) {
         const ready = Array.from({ length: content.count }, (_, i) => canonical([p.id, i]))
           .every(id => this.natives.has(id) || this.state.claimed('fallen', id));
+        if (ready) this.fields.admit(world,p,content.site.altars ?? [],q,population.level);
         const cache = content.site.cache;
         if (ready && cache && !this.state.claimed('site-cache', p.id)) {
           const offset = siteOffset(p, cache.x, cache.y);
@@ -408,6 +420,7 @@ export class WorldMassRuntime {
     }
     return JSON.parse(JSON.stringify({ schema: 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
       ...(this.config.rewards ? { rewards: this.rewards.snapshot() } : {}),
+      ...(this.fields.snapshot().length ? { fields: this.fields.snapshot() } : {}),
       origin: this.origin, player: { ...world.player.pos, tier: world.player.tier ?? 0 }, enemies,
       ...(this.settlement ? { settlement: this.settlement.snapshot(world) } : {}),
       ...(this.ecology ? { ecology: this.ecology.snapshot(world) } : {}), sites: this.sites.snapshot(world), contents: captureZoneContents(world) })) as MassAdventureSave;

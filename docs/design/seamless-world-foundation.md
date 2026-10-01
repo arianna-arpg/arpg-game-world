@@ -844,3 +844,27 @@ its existing rules; layouts retain open approaches and are frozen into each run.
 New opening populations limit tiny bodies where larger native species are already
 eligible; this changes composition, never actor size or hit geometry. Saved and
 higher-level populations keep their existing rules.
+
+The next encounter pass admits optional native altar fields at finite journey
+landmarks. `MassAltarSpec` copies the native recipe, position and provenance into
+the run descriptor. Memorial Grove's Altar of Mending heals every living body
+inside its native boundary, including enemies. It gives the cemetery a spatial
+combat choice; no encounter-specific damage or AI code is added.
+
+The adapter admits a field only after the site's population is seated. Its
+geographic source is stable; its level belongs to the place, not the hero or the
+shared enclosing zone. Admitted fields remain resident on the native simulation
+clock, with their remaining pulse delay checkpointed separately from ordinary
+zone furniture. Continue restores each once even from far away. Old descriptors
+without fields retain their former encounters. Modifiers and mending are the
+admitted verbs; storm hazards and kill-reward fields need additional lifecycle
+adapters. Repeated procedural fields are rejected until their paging exists.
+The finite opening circuit and per-site limits bound this first adapter.
+
+Verification: real native shared healing and modifier entry/exit, level-seven
+field inside the level-one encompassing world, exact remaining pulse across an
+actual character save, duplicate prevention, full-population admission, legacy
+recipes and malformed-field refusal. The real client checks visible field/pulse
+and browser Continue. Passive choices now keep their allocated names and native
+granted/selected text visible in a collapsible owned list after points are spent.
+This is purchase feedback; broader graph-route planning is still unfinished.

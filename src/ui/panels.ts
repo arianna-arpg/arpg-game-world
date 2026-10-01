@@ -24,7 +24,7 @@ import { tellPortraitDress } from '../engine/tells';
 import { replenishingDelivery } from '../engine/replenishment';
 import { instanceBaseTags } from '../engine/skills';
 import { DEV, GAME_TITLE } from '../config';
-import { passiveFrontierHtml } from './passiveFrontier';
+import { passiveFrontierHtml, passiveOwnedHtml } from './passiveFrontier';
 import {
   ATTRIBUTES, ATTRIBUTE_IDS, STAT_DEFS,
   type AttributeId, type DamageType,
@@ -7410,6 +7410,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // search, zoom, the tips) in a tools row beneath it.
     const realmChip = activeRealm && this.treeRealm !== MAIN_REALM
       ? `<b style="color:${activeRealm.color ?? '#c8a84b'}">${activeRealm.label}</b> · ` : '';
+    const passiveOwned = refundMode || DEV.passiveTreeEditor ? '' : passiveOwnedHtml(
+      [...m.allocated].reverse().map(id=>PASSIVE_NODES[id]).filter(n=>n && visibleNode(n) && n.kind!=='start')
+        .map(n=>({id:n.id,title:n.name,description:this.passiveNodeTooltip(n.id)?.description ?? esc(n.description),action:''})));
     const passiveFrontier = refundMode || DEV.passiveTreeEditor ? '' : passiveFrontierHtml(
       Object.values(PASSIVE_NODES).filter(n => visibleNode(n) && this.nodeAllocatable(n, m))
         .map(n => ({ id: n.id, title: n.name, description: this.passiveNodeTooltip(n.id)?.description ?? esc(n.description),
@@ -7435,7 +7438,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           : refundMode ? 'Refund mode · click a lit node · choices refund together · keep every path connected'
           : `${m.allocated.size} allocated · click to allocate · scroll to zoom, drag to pan`}</span>
       </div>
-      ${passiveFrontier}
+      ${passiveFrontier}${passiveOwned}
       <svg viewBox="${viewBox}" id="tree-svg" style="cursor:var(--cursor-grab, grab);touch-action:none">${edges}${circles}</svg>`;
 
     // THE TREE LENS: typing filters LIVE via class toggles on the standing
@@ -7520,8 +7523,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (!svg) return;
     const q = this.treeSearch.trim().toLowerCase();
     svg.classList.toggle('tree-searching', q.length > 0);
-    this.passiveTree.querySelectorAll<HTMLButtonElement>('[data-passive-choice]').forEach(frontierNode => {
-      const node = PASSIVE_NODES[frontierNode.dataset.passiveChoice ?? ''];
+    this.passiveTree.querySelectorAll<HTMLElement>('[data-passive-choice], [data-passive-owned-node]').forEach(frontierNode => {
+      const node = PASSIVE_NODES[frontierNode.dataset.passiveChoice ?? frontierNode.dataset.passiveOwnedNode ?? ''];
       frontierNode.hidden = !!q && (!node || !this.passiveNodeSearchText(node).includes(q));
     });
     let hits = 0;

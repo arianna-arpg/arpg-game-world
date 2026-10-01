@@ -592,6 +592,10 @@ export interface Shrine {
  *  verbs (bolts / mend) keep their clocks here; `objective` marks the
  *  OFFERING objective's hungering centerpiece (its kills-inside feed it). */
 export interface Altar {
+  /** Geographic owner checkpoints this native field separately from zone contents. */
+  massSource?: string;
+  /** Fixed encounter context; ordinary zone fields use the zone's level. */
+  level?: number;
   /** The STORY the altar stands on (the sovereignty gate): its ring reaches
    *  only bodies on this story. Absent = the ground. */
   tier?: number;
@@ -56143,7 +56147,7 @@ export class World {
    *  the offering feed) live on worldKillRules — deaths report there. */
   private updateAltars(dt: number): void {
     this.altars.forEach((al, i) => {
-      const src = 'altar:' + i;
+      const src = 'altar:' + (al.massSource ?? i);
       const inside = new Set<number>();
       for (const a of this.actors) {
         if (a.dead) continue;
@@ -56176,7 +56180,7 @@ export class World {
         al.mendTimer = (al.mendTimer ?? mend.every) - dt;
         if (al.mendTimer <= 0) {
           al.mendTimer = mend.every;
-          const heal = mend.base + mend.perLevel * Math.max(1, this.zone.level);
+          const heal = mend.base + mend.perLevel * Math.max(1, al.level ?? this.zone.level);
           let touched = 0;
           for (const a of this.actors) {
             if (a.dead || !inside.has(a.id)) continue;

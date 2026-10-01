@@ -41,9 +41,9 @@ app.whenReady().then(async()=>{
     if(!filtered.length||!filtered.every(t=>t.toLowerCase().includes(name.toLowerCase())))throw Error('Choice search did not filter');
     input.value='';input.dispatchEvent(new Event('input',{bubbles:true}));
     card.click();__game.step(2);card.click();__game.step(1);
-    return {id,owned:w.meta.allocated.has(id),points:w.meta.passivePoints,pending:root.querySelectorAll('[data-passive-choice]').length,fatal:__game.crash().fatal};
+    return {id,owned:w.meta.allocated.has(id),named:!!root.querySelector('[data-passive-owned-node="'+id+'"]')?.textContent.includes(name),points:w.meta.passivePoints,pending:root.querySelectorAll('[data-passive-choice]').length,fatal:__game.crash().fatal};
    });
-   assert.ok(after.owned);assert.equal(after.points,0);assert.equal(after.pending,0);assert.equal(after.fatal,null);
+   assert.ok(after.owned&&after.named,'purchased passive remains named after the point is spent');assert.equal(after.points,0);assert.equal(after.pending,0);assert.equal(after.fatal,null);
    results.push({id,before,after});last=after;
   }
   await run(async()=>{__game.ui.hideAll();__game.save();await new Promise(r=>setTimeout(r,250));});
