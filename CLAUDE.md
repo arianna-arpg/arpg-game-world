@@ -120,6 +120,12 @@ Parry retaliation windows and actual projectile reflection are documented in
 `docs/engine/parry.md`; `balance/probe_parry.ts` pins the shared recipient cooldown,
 typed returning damage, defensive preservation and symmetric ownership transfer.
 
+Maddening Miasma's madness bank is documented in `docs/engine/madden.md`: one
+per-frame dwell ledger per skill instance (`MaddenBank`), worn by every standing
+placement and spent by each madness. The gem gates on `surface:standing`; the
+matrix measures dwell payloads on the held lane (`DWELL_SUPPORT_FIELDS`). Verify
+`probe_madden.ts` and `matrix check --support maddening_miasma`.
+
 ## What this is
 **SHOW, DON'T TELL — absolute gameplay-signaling law.** Convey mechanics,
 danger, escalation and counterplay through visible world behavior, animation,

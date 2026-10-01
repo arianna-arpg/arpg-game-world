@@ -320,13 +320,18 @@ export function compatCensus(skillFilter = '', supportFilter = ''): CensusResult
 /** When a pair needs LIVE bodies instead of the immortal dummy: the host's
  *  shape demands kills/corpses/incoming-hits, or the support's payload does.
  *  Open registries — one entry per reason, each naming itself for reports. */
-export const LIVE_PROBE_HOST_RULES: { why: string; when: (def: SkillDef) => boolean }[] = [
+export const LIVE_PROBE_HOST_RULES: { why: string; when: (def: SkillDef) => boolean; yieldsToHeld?: true }[] = [
   { why: 'summon host (minion AI ignores passive dummies)', when: d => d.delivery.type === 'summon' },
   { why: 'minion-tagged host', when: d => d.tags.includes('minion') },
-  { why: 'corpse-consuming host', when: d => d.tags.includes('corpse') },
-  { why: 'guard host (value shows against incoming hits)', when: d => d.castMode === 'guard' || d.tags.includes('guard') },
-  { why: 'heal host (value shows under damage)', when: d => d.tags.includes('heal') },
-  { why: 'buff host (defensive value shows under damage)', when: d => d.tags.includes('buff') },
+  // yieldsToHeld (THE HELD LANE, 2026-09-30): these rules guard the HOST's
+  // own value or fuel, which the held lane keeps (the bled rig, the escort,
+  // the corpse feeder), so a dwell payload's held lane outranks them. Agent
+  // hosts (summons, minions, grabs) never yield: their bodies ignore or
+  // refuse the passive dummy.
+  { why: 'corpse-consuming host', when: d => d.tags.includes('corpse'), yieldsToHeld: true },
+  { why: 'guard host (value shows against incoming hits)', when: d => d.castMode === 'guard' || d.tags.includes('guard'), yieldsToHeld: true },
+  { why: 'heal host (value shows under damage)', when: d => d.tags.includes('heal'), yieldsToHeld: true },
+  { why: 'buff host (defensive value shows under damage)', when: d => d.tags.includes('buff'), yieldsToHeld: true },
   // 2026-07-24 (the grab support round — the iron_grip|seize ledger row's
   // root): grabRefusal refuses passive bodies outright ('no purchase'), so
   // on the dummy a seize host never forms a hold and every hold-scoped
@@ -382,8 +387,23 @@ export function soloPilotFor(def: SkillDef): { kind: 'caster' } | { kind: 'brawl
 export const LIVE_PROBE_SUPPORT_FIELDS: (keyof SupportDef)[] = [
   'dominate', 'corpseSpawn', 'brood', 'devour', 'sacrifice', 'minionAura',
   'minionAuraPool', 'spawnBuff', 'summon', 'turret', 'spreadOnHit',
-  'contagion', 'madden', 'healField', 'resonance',
+  'contagion', 'healField', 'resonance',
 ];
+
+/** THE HELD LANE (2026-09-30, docs/engine/madden.md): DWELL payloads bank
+ *  seconds while a body STANDS in the host's ground, so they probe on the
+ *  stationary dummy with a pilot that stands still: the dummy keeps every
+ *  placement aimed at it (and a ring that follows the caster) for as long
+ *  as the ground lives. The chasing live pack crosses placements and banks
+ *  nothing (nine false INERT rows, measured against pinned bodies), and
+ *  the fingerprint already carries the payload's status (`status_ids`), so
+ *  no new channel is needed. Escorted hosts keep their pair pilot. Open
+ *  registry: one SupportDef field per dwell payload. */
+export const DWELL_SUPPORT_FIELDS: (keyof SupportDef)[] = ['madden'];
+
+export function heldLaneFor(sup: SupportDef | undefined): boolean {
+  return !!sup && DWELL_SUPPORT_FIELDS.some(k => sup[k] !== undefined);
+}
 
 /** THE DEFENSIVE/SUSTAIN STAT LANE — the dummy never swings back, so a gem
  *  whose mods touch these stats can only show its worth under INCOMING
@@ -468,7 +488,10 @@ export const LIVE_PROBE_SUPPORT_RULES: {
 ];
 
 export function probeKindFor(def: SkillDef, sup?: SupportDef): { kind: 'dummy' | 'live'; why?: string; pack?: 'fodder' } {
-  const hostRule = LIVE_PROBE_HOST_RULES.find(r => r.when(def));
+  // THE HELD LANE outranks a host rule that only guards the host's value
+  // or fuel (yieldsToHeld); any other matching rule still routes live.
+  const hostRule = LIVE_PROBE_HOST_RULES.filter(r => r.when(def))
+    .find(r => !(r.yieldsToHeld && heldLaneFor(sup)));
   if (hostRule) return { kind: 'live', why: hostRule.why };
   if (sup) {
     const f = LIVE_PROBE_SUPPORT_FIELDS.find(k => sup[k] !== undefined);
@@ -583,6 +606,15 @@ export const PROBE_POLICIES: {
   name: string; when: (sup: SupportDef) => boolean;
   seeds?: number; durationMult?: number;
 }[] = [
+  {
+    // THE HELD LANE's window (2026-09-30): a dwell bank fills across CASTS
+    // on short grounds (Pillar of Flame re-casts ~13s to bank six seconds
+    // on a held body), so the dummy lane's window doubles; the bare
+    // baseline runs the same window (policy-keyed).
+    name: 'dwell',
+    when: sup => heldLaneFor(sup),
+    durationMult: 2,
+  },
   {
     name: 'small_chance',
     when: sup => supModsStat(sup, ['critChance', 'critMulti', 'luckyChance', 'dotCrit']),
@@ -732,6 +764,7 @@ export function probeScenario(
    *  rack-routed pair diffs against a bare aimed at the SAME rack dummy). */
   forced?: {
     probe?: 'dummy' | 'live'; rig?: 'solo' | 'escort'; withKey?: boolean; pack?: 'fodder';
+    held?: boolean; // THE HELD LANE (dwell payloads): the stand-still pilot
     dummyId?: string; bled?: boolean; range?: boolean; aimWall?: boolean; fieldRef?: boolean;
     graze?: boolean; comboDiet?: boolean;
   },
@@ -752,6 +785,7 @@ export function probeScenario(
   const dummyId = forced?.dummyId ?? rackDummyFor(sup)?.id ?? 'target_dummy';
   const bled = forced?.bled
     ?? ((sup ? supModsStat(sup, BLED_RIG_STATS) : false) || def.tags.includes('heal'));
+  const held = forced?.held ?? (probe.kind === 'dummy' && heldLaneFor(sup));
   const comboDiet = forced?.comboDiet
     ?? (sup ? [...sup.mods, ...(sup.perLevel ?? [])].some(m => m.when === 'comboVaried') : false);
   const rr = forced?.range !== undefined
@@ -817,6 +851,9 @@ export function probeScenario(
   // and the pinned-ahead shot on the graze lane (a re-targeting pilot
   // would aim AT the graze body and hit it dead-on in both runs).
   const soloPilot = ((): ScenarioDef['pilot'] => {
+    // THE HELD LANE: a dwell payload needs the body to STAY in the ground
+    // (and a ring that follows the caster to stay on the body).
+    if (held) return { kind: 'turret' };
     // A tethered ORBITER grinds its wheel at the body — the caster band
     // would hold its blades a hundred pixels short of everything (a
     // host-shape truth: bare and socketed close in alike).
@@ -834,7 +871,8 @@ export function probeScenario(
       + (bled ? '_bled' : '')
       + (rr.range ? (rr.aimWall ? '_rangewall' : rr.graze ? '_rangegraze' : '_range') : '')
       + (fieldRef ? '_fieldref' : '')
-      + (comboDiet ? '_combodiet' : ''),
+      + (comboDiet ? '_combodiet' : '')
+      + (held ? '_held' : ''),
     label: build.label,
     build,
     // THE FIELD ESCORT inverts the metronome: the FIELD skill (slot 1) is
@@ -1667,6 +1705,7 @@ export function bareEpisodesFor(
       probe: shape.probe, rig: shape.rig, withKey: shape.withKey, pack: shape.pack,
       dummyId: shape.dummyId, bled: !!shape.bled,
       range: !!shape.range, aimWall: !!shape.aimWall, fieldRef: !!shape.fieldRef, graze: !!shape.graze,
+      held: !!shape.held,
     });
     eps = runScenario(scen, { seeds: policy?.seeds ?? sess.seeds, baseSeed: sess.baseSeed }).episodes;
     sess.episodesRun += eps.length;
@@ -1685,6 +1724,9 @@ export interface PairShape {
   rig: 'solo' | 'escort';
   rigWhy?: string;
   withKey: boolean;
+  /** THE HELD LANE (dwell payloads, heldLaneFor): the dummy lane with a
+   *  stand-still solo pilot, so seconds bank on a body that stays put. */
+  held?: true;
   /** Rack-routed dummy target (RESIST_DUMMY_BY_TYPE / the colossus) — the
    *  bare baseline aims at the SAME sibling so the delta is the gem. */
   dummyId?: string;
@@ -1728,6 +1770,11 @@ export function pairShapeFor(def: SkillDef, sup: SupportDef, fit: 'host' | 'crew
   if (probe.why) shape.probeWhy = probe.why;
   if (probe.pack) shape.pack = probe.pack;
   if (rig.why) shape.rigWhy = rig.why;
+  if (probe.kind === 'dummy' && heldLaneFor(sup)) {
+    shape.held = true;
+    const why = 'dwell payload — the held lane (stationary dummy, stand-still pilot)';
+    shape.probeWhy = shape.probeWhy ? `${shape.probeWhy}; ${why}` : why;
+  }
   if (probe.kind === 'dummy') {
     const rack = rackDummyFor(sup);
     if (rack) {
@@ -1779,6 +1826,7 @@ export function pairShapeFor(def: SkillDef, sup: SupportDef, fit: 'host' | 'crew
  *  bare of the SAME world. */
 export const shapeCacheKey = (s: PairShape): string => [
   s.probe, s.pack ?? '', s.rig, s.withKey ? 'k' : '', s.dummyId ?? '',
+  s.held ? 'h' : '',
   s.bled ? 'b' : '', s.range ? 'r' : '', s.aimWall ? 'w' : '', s.fieldRef ? 'f' : '',
   s.graze ? 'g' : '', s.comboDiet ? 'c' : '',
 ].join(':');
@@ -1822,6 +1870,7 @@ export function probePair(sess: ProbeSession, row: CensusRow): PairProbeRun {
       probe: shape.probe, rig: shape.rig, withKey: shape.withKey, pack: shape.pack,
       dummyId: shape.dummyId ?? 'target_dummy', bled: !!shape.bled,
       range: !!shape.range, aimWall: !!shape.aimWall, fieldRef: !!shape.fieldRef, graze: !!shape.graze,
+      held: !!shape.held,
     });
   const { episodes: pairEps } = runScenario(pairScen,
     { seeds: policy?.seeds ?? sess.seeds, baseSeed: sess.baseSeed });
@@ -2342,7 +2391,8 @@ export function deepProbePair(sess: ProbeSession, row: CensusRow, base?: PairPro
     SUPPORTS[maskedId] = maskSupportUnit(sup, unit, maskedId);
     try {
       const scen = probeScenario(row.skillId, { id: maskedId, level: sess.supportLevel }, sess.opts,
-        { probe: run.shape.probe, rig: run.shape.rig, withKey: run.shape.withKey, pack: run.shape.pack });
+        { probe: run.shape.probe, rig: run.shape.rig, withKey: run.shape.withKey, pack: run.shape.pack,
+          held: !!run.shape.held });
       const { episodes: maskedEps } = runScenario(scen, { seeds: sess.seeds, baseSeed: sess.baseSeed });
       sess.episodesRun += maskedEps.length;
       for (const w of new Set(maskedEps.flatMap(e => e.warnings))) {
