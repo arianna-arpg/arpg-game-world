@@ -607,6 +607,8 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'fire', 'duration'], color: '#ffd870',
     manaCost: 11, cooldown: 8, useTime: 0.5,
     baseDamage: { fire: [5, 8] },
+    // The brand strikes only what this spec resolves (probe_targetstrike).
+    targeting: { target: 'enemy', castRange: 420 },
     delivery: { type: 'target', splash: 40 },
     effects: [
       { type: 'damage' },
