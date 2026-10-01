@@ -17,6 +17,7 @@
 //     --floor slate       the stage's ground (a look in STAGES)
 //     --sheets <dir>      also write a contact sheet per clip (QA)
 //     --list              print the catalog by delivery and cast mode, then exit
+//     --catalog <file>    write the catalog (with each skill's staged span) as JSON, then exit
 //     --show              show the capture window on screen
 //
 // Output: <out>/<id>.av1.mp4, <id>.h264.mp4, <id>.webp poster and
@@ -66,6 +67,9 @@ const CFG = {
   /** Close work (melee, cones) frames closer still. */
   minSpanClose: 400,
   maxSpan: 1250,
+  /** An area around the hero widens the frame at most this far (radius):
+   *  a vast aura reads from its ring of dummies, never as a speck. */
+  areaFit: Number(opt('area-fit', '240')),
   floor: opt('floor', 'slate'),
   /** The body a corpse-fed skill finds waiting before each dummy. */
   corpse: 'zombie',
@@ -433,13 +437,16 @@ function stageFor(row) {
     || (type === 'ground' && (d.castRange === 0 || d.follow));
 
   if (type === 'melee' || type === 'cone') {
-    const r = clamp((d.range || d.length || reach || 60) * 0.8, 38, 150);
+    // the swing or the beam reaches forward: frame its far end, not a circle
+    const length = d.range || d.length || reach || 60;
+    const r = clamp(length * 0.8, 38, 150);
     foes = trio(r + 12, 44);
-    areas.push({ x: 0, y: 0, r: (d.range || d.length || 60) + 20 });
+    areas.push({ x: Math.min(length, 420), y: 0, r: 24 });
   } else if (aroundHero) {
-    const rad = (d.radius || reach || 120) + (d.grow || 0);
-    foes = ring(clamp(rad * 0.62, 56, 200));
-    areas.push({ x: 0, y: 0, r: Math.min(rad, 520) });
+    // only a real radius widens the frame; the AI's reach just spaces the ring
+    const rad = (d.radius || 0) + (d.grow || 0);
+    foes = ring(clamp((rad || reach || 120) * 0.62, 56, 200));
+    if (rad) areas.push({ x: 0, y: 0, r: Math.min(rad, CFG.areaFit) });
     aimMode = 'point';
     if (type === 'aura' && d.mode === 'toggle') kind = 'toggle';
   } else if (type === 'dash' || type === 'leap' || type === 'blink' || type === 'carom') {
@@ -461,7 +468,7 @@ function stageFor(row) {
     const lies = d.kind === 'trap' || d.kind === 'mine';
     aimMode = lies ? 'cluster' : 'point';
     aim = { x: dist * 0.55, y: 0 };
-    areas.push({ x: lies ? dist : dist * 0.55, y: 0, r: (d.range || 80) });
+    areas.push({ x: lies ? dist : dist * 0.55, y: 0, r: Math.min(d.range || 80, 110) });
   } else {
     // projectile, ground, storm, target, mark, detonate…: a firing line
     const dist = clamp((reach || d.range || 300) * 0.5, 170, 300);
@@ -604,6 +611,13 @@ async function main() {
     return window.__game.clipCatalog();
   })()`);
   let rows = catalog.skills;
+  if (opt('catalog')) {
+    const out = rows.map((r) => ({ ...r, span: Math.round(CFG.render.w / stageFor(r).zoom) }));
+    writeJson(path.resolve(REPO, opt('catalog')), { noon: catalog.noon, classes: catalog.classes, skills: out });
+    console.log(`catalog: ${out.length} skills → ${opt('catalog')}`);
+    server.server.close();
+    return 0;
+  }
   if (flag('list')) {
     const by = {};
     for (const r of rows) (by[(r.delivery && r.delivery.type) + '/' + r.castMode] ||= []).push(r.id);
@@ -708,7 +722,7 @@ async function main() {
       if (res.errors.length) warn.push('errors: ' + res.errors.join(' | '));
       if (pageErrors.length) warn.push('console: ' + pageErrors.slice(0, 2).join(' | '));
       report.clips[row.id] = {
-        delivery: info.delivery, castMode: info.castMode, cls: info.cls, casts: res.casts, dealt: res.dealt,
+        delivery: info.delivery, castMode: info.castMode, cls: info.cls, span: Math.round(CFG.render.w / spec.zoom), casts: res.casts, dealt: res.dealt,
         statuses: res.statuses, actors: res.actors, peak: Math.round(peak * 100) / 100, kb: kb(enc.av1) + kb(enc.h264) + kb(poster), warn,
       };
       console.log(`✓ ${row.id} [${info.delivery}/${info.castMode}, ${info.cls}] casts ${res.casts} dealt ${res.dealt} peak ${peak.toFixed(2)} · av1 ${kb(enc.av1)}K h264 ${kb(enc.h264)}K · ${((Date.now() - started) / 1000).toFixed(1)}s${warn.length ? '  ⚠ ' + warn.join('; ') : ''}`);
