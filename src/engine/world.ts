@@ -23296,6 +23296,9 @@ export class World {
     // nudge per run while unowned, outside the fighting area.
     if ((this.ledger[LEDGER_ESSENCE_TOUCHED] ?? 0) === 0
       && !featureEnabled(this.account, FEATURE.SALVAGE_STATION)) {
+      // Preserve the former residue float's cosmetic jitter draw: presentation
+      // must not shift subsequent native simulation/reward randomness.
+      rand(-10, 10);
       this.notice('strange residue — the Vault could put this to use…', '#e8c87a', 12, 'civic');
     }
     bumpLedger(this.ledger, LEDGER_ESSENCE_TOUCHED, gain.count);

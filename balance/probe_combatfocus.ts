@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
+import { seedGlobalRandom } from '../src/sim/rng';
 import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 import { ESSENCES, abilityEssenceOfTier, LEDGER_ESSENCE_TOUCHED } from '../src/data/essences';
 import { CombatTextLayout, combatBodyRect, combatRectsOverlap } from '../src/render/vis/combatFocus';
@@ -57,4 +58,12 @@ assert.deepEqual(client.texts.map(({pos,...t})=>t),w.texts.map(({pos,...t})=>t),
 for(const t of snapshot.texts)delete t.yieldToCombat;
 applySnapshot(client,snapshot);
 assert.ok(client.texts.every(t=>!t.yieldToCombat),'legacy wire packets retain their former presentation');
+delete w.ledger[LEDGER_ESSENCE_TOUCHED];
+const restoreRandom=seedGlobalRandom(438);
+try{
+  Math.random();Math.random();const nativeNext=Math.random();
+  seedGlobalRandom(438);
+  w.grantEssence(w.localSeat,{essence:'coarse',count:1});
+  assert.equal(Math.random(),nativeNext,'moving the discovery note cannot shift native reward/simulation randomness');
+}finally{restoreRandom();}
 console.log('PASS resource feedback yields independently of healing; wallets, discovery ledger, pickup feed and old/new network text roundtrips are preserved');
