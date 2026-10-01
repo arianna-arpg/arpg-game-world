@@ -2882,6 +2882,27 @@ export function validateContent(): void {
     }
   }
 
+  // THE TARGET-STRIKE NET (the Solar Brand lesson): a 'target' delivery
+  // strikes only what the press RESOLVED, and useSkill resolves a victim
+  // only through a targeting spec. Without one, every press pays its mana and
+  // cooldown and lands nothing. Checked on the lanes that PRESS a skill:
+  // droppable gems (class bars and kit rungs must drop, by the class-kit law)
+  // and monster kits, level grants included, since the AI presses through
+  // the same door. An engine-minted payload handed its victim directly (Pack
+  // Dread through companionPulseHit) sits in neither lane, so it passes.
+  {
+    const targetPressLanes = new Set<string>();
+    for (const m of Object.values(MONSTERS)) {
+      for (const sid of m.skills) targetPressLanes.add(sid);
+      for (const g of m.grants ?? []) if (g.skill) targetPressLanes.add(g.skill);
+    }
+    for (const s of Object.values(SKILLS)) {
+      if (s.delivery.type !== 'target' || s.targeting) continue;
+      if (s.noDrop && !targetPressLanes.has(s.id)) continue;
+      warn(`skill ${s.id}: 'target' delivery without a targeting spec — the press resolves no victim, so every cast pays its costs and strikes nothing`);
+    }
+  }
+
   // THE MIMIC POOL is TAUGHT, never dropped: a mimicable art reaches the
   // player only through a monster that actually casts it. An explicit
   // mimicable:true on a skill NO kit carries is a dead allow — flag it
