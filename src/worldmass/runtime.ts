@@ -9,12 +9,14 @@ import { canonical, freezeData, massDigest, massRandom } from './random';
 import { MassState, type MassStateSave } from './state';
 import { MassStream } from './stream';
 import { MassWalk } from './walk';
+import { MassSites, siteOffset, validateMassSite, type MassSiteSave } from './sites';
 import { MASS_ZONE, massAdventure, type MassAdventure } from './preset';
 
 interface MassEnemySave { id: string; monster: string; level: number; x: number; y: number; life: number; scale: number }
 export interface MassAdventureSave {
   schema: 1; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
   player: { x: number; y: number }; enemies: MassEnemySave[]; contents: ZoneContents;
+  sites?: MassSiteSave;
 }
 /** First engine adapter. Residency NEVER tears down the World, its actors, or
  * in-flight skills. The population cap is deliberately conservative until full
@@ -24,6 +26,7 @@ export class WorldMassRuntime {
   readonly state: MassState;
   readonly stream: MassStream;
   readonly walk: MassWalk;
+  readonly sites: MassSites;
   readonly config: Readonly<MassAdventure>;
   private natives = new Map<string, Actor>();
   private nearKey = '';
@@ -52,11 +55,18 @@ export class WorldMassRuntime {
         || !Number.isSafeInteger(c.count) || c.count < 1 || c.count > 16 || !c.table.length
         || c.table.some(r => !MONSTERS[r.id] || !Number.isFinite(r.weight) || r.weight <= 0)) throw new Error('Invalid worldmass population');
     }
+    for (const p of config.terrain.places) {
+      const site = config.content.find(c => c.id === p.content)?.site;
+      if (site) validateMassSite(site, p.radius);
+      if (p.surface && !regionKind(p.surface.region)) throw new Error('Unresolved site surface');
+    }
     if (config.terrain.places.some(p => !config.content.some(c => c.id === p.content))
       || config.terrain.surfaces.some(s => !regionKind(s.region))) throw new Error('Unresolved worldmass content');
     this.state = new MassState(this.generator.run, config.terrain.terrainCell);
     this.stream = new MassStream(this.generator, this.state, { maxPages: (config.pageRadius * 2 + 1) ** 2, maxSamples: 32768 });
     this.walk = new MassWalk(this.stream, this.origin);
+    this.sites = new MassSites(id => this.config.content.find(c => c.id === id)?.site,
+      center => localOffset(center, { ...this.origin, x: 0, y: 0 }, config.terrain.addressSpan), config.terrain.addressSpan);
     if (save) {
       if (save.schema !== 1 || save.configHash !== massDigest(config) || !Array.isArray(save.enemies)
         || save.enemies.length > config.maxPopulation || !savedZoneContents(save.contents)
@@ -89,6 +99,9 @@ export class WorldMassRuntime {
     world.massRuntime = this;
     world.walk = this.walk;
     world.doodads = [];
+    this.walk.obstacles = { blocked: (x, y) => !!world.pointInSolid(x, y, this.walk.cellSize / 2),
+      revision: () => world.doodadRev + ':' + world.doodads.length };
+    this.sites.restore(save?.sites, world.time);
     world.exits = [];
     world.notices = []; world.texts = []; // obsolete graph directions do not describe this expedition
     // The authored surface owns its population; keep the existing carried party.
@@ -128,8 +141,22 @@ export class WorldMassRuntime {
     for (const [id, actor] of this.natives) if (actor.dead) {
       this.state.claim('fallen', id); this.natives.delete(id);
     }
+    this.sites.discover(world.player.pos);
     if (!boot && world.time < this.nextPopulation) return;
     this.nextPopulation = world.time + .5;
+    // Retained actors still need their original solid scenery after a reload,
+    // even when the hero saved far away. Dependency pages do not spawn content.
+    const dependencies = new Map<string, ReturnType<MassGenerator['placesInCell']>>();
+    for (const actor of this.natives.values()) {
+      const cell = this.walk.at(actor.pos.x, actor.pos.y), key = cellKey(cell);
+      if (!dependencies.has(key)) dependencies.set(key, this.generator.placesInCell(cell));
+    }
+    const eligible = [...this.places.values(), ...dependencies.values()].flat().filter(p => {
+      const q = localOffset(p.center, { ...this.origin, x: 0, y: 0 }, this.config.terrain.addressSpan);
+      return Math.hypot(q.x, q.y) >= this.config.startRadius + p.radius;
+    });
+    this.sites.sync(world, eligible);
+    this.sites.discover(world.player.pos);
     const seen = new Set<string>();
     for (const places of this.places.values()) for (const p of places) {
       if (seen.has(p.id)) continue; seen.add(p.id);
@@ -137,6 +164,25 @@ export class WorldMassRuntime {
       if (!q || Math.hypot(q.x, q.y) < this.config.startRadius + p.radius
         || Math.hypot(q.x - world.player.pos.x, q.y - world.player.pos.y) > this.config.populationRadius) continue;
       const content = this.config.content.find(c => c.id === p.content)!;
+      if (content.site) {
+        // Reserve the whole site's native population before introducing loot.
+        // Saturation delays an encounter instead of furnishing free rewards.
+        const identities = [...Array.from({ length: content.count }, (_, i) => canonical([p.id, i])),
+          ...content.site.fixtures.map((_, i) => canonical([p.id, 'fixture', i]))];
+        const missing = identities.filter(id => !this.natives.has(id) && !this.state.claimed('fallen', id)).length;
+        if (this.natives.size + missing > this.config.maxPopulation) continue;
+        for (const [index, fixture] of content.site.fixtures.entries()) {
+          const id = canonical([p.id, 'fixture', index]);
+          if (this.natives.has(id) || this.state.claimed('fallen', id) || this.natives.size >= this.config.maxPopulation) continue;
+          const offset = siteOffset(p, fixture.x, fixture.y);
+          const a = world.createMonster(fixture.monster, content.level, 'enemy');
+          const spot = world.findFreeSpot({ x: q.x + offset.x, y: q.y + offset.y }, a.radius);
+          if (!this.walk.isWalkable(spot.x, spot.y) || world.pointInSolid(spot.x, spot.y, a.radius)
+            || Math.hypot(spot.x - q.x, spot.y - q.y) > p.radius) continue;
+          a.pos = spot; a.fromZoneGen = true; a.fillResources();
+          this.natives.set(id, a); world.actors.push(a);
+        }
+      }
       // Bodies remain alive across EVERY page boundary. Do not replace a battle
       // with a lossy zone-enemy memo just to meet a streaming quota.
       const rng = massRandom(this.generator.run.seed, ['population', p.id, content.source]);
@@ -150,8 +196,25 @@ export class WorldMassRuntime {
         const spot = this.walk.snapToWalkable({ x: q.x + Math.cos(angle) * radius, y: q.y + Math.sin(angle) * radius });
         if (!this.walk.isWalkable(spot.x, spot.y) || Math.hypot(spot.x - q.x, spot.y - q.y) > p.radius) continue;
         const a = world.createMonster(monster, content.level, 'enemy', undefined, { scale });
-        a.pos = world.clampPos(spot, a.radius); a.fromZoneGen = true; a.fillResources();
+        const free = world.findFreeSpot(spot, a.radius);
+        if (!this.walk.isWalkable(free.x, free.y) || world.pointInSolid(free.x, free.y, a.radius)
+          || Math.hypot(free.x - q.x, free.y - q.y) > p.radius) continue;
+        a.pos = free; a.fromZoneGen = true; a.fillResources();
         this.natives.set(id, a); world.actors.push(a);
+      }
+      if (content.site) {
+        const ready = Array.from({ length: content.count }, (_, i) => canonical([p.id, i]))
+          .every(id => this.natives.has(id) || this.state.claimed('fallen', id));
+        const cache = content.site.cache;
+        if (ready && cache && !this.state.claimed('site-cache', p.id)) {
+          const offset = siteOffset(p, cache.x, cache.y);
+          const spot = world.findFreeSpot({ x: q.x + offset.x, y: q.y + offset.y }, 20);
+          if (this.walk.isWalkable(spot.x, spot.y) && !world.pointInSolid(spot.x, spot.y, 20)
+            && Math.hypot(spot.x - q.x, spot.y - q.y) < p.radius && this.state.claim('site-cache', p.id))
+            world.chests.push({ pos: spot, kind: 'timed', mimic: false, opened: false,
+              lockTime: cache.holdSeconds, maxLock: cache.holdSeconds, rewardLevel: content.level,
+              rewardSource: canonical([p.id, 'cache']) });
+        }
       }
     }
   }
@@ -162,7 +225,7 @@ export class WorldMassRuntime {
       enemies.push({ id, monster: a.defId!, level: a.level, x: a.pos.x, y: a.pos.y, life: a.life, scale: a.spawnScale ?? 1 });
     }
     return JSON.parse(canonical({ schema: 1, config: this.config, configHash: massDigest(this.config), state: this.state.snapshot(),
-      origin: this.origin, player: { ...world.player.pos }, enemies, contents: captureZoneContents(world) })) as MassAdventureSave;
+      origin: this.origin, player: { ...world.player.pos }, enemies, sites: this.sites.snapshot(world), contents: captureZoneContents(world) })) as MassAdventureSave;
   }
   get population(): number { return this.natives.size; }
 }

@@ -43,6 +43,7 @@ export function validateMassSpec(spec: MassSpec): void {
       || !Number.isFinite(p.chance) || p.chance < 0 || p.chance > 1
       || !Number.isFinite(p.radius) || p.radius <= 0 || p.radius > p.period / 2
       || !Number.isFinite(p.jitter) || p.jitter < 0 || p.jitter > 0.8) throw new Error('Invalid place recipe: ' + p.id);
+    if (p.surface && (!p.surface.region || !/^#[0-9a-f]{6}$/i.test(p.surface.color))) throw new Error('Invalid place surface');
     if ((Math.ceil(spec.addressSpan / p.period) + 5) ** 2 > 4096) throw new Error('Place page query exceeds candidate budget');
   }
   if (spec.places.length > 64) throw new Error('Regional planner exceeds 64 place families');
@@ -69,6 +70,7 @@ export class MassGenerator {
   readonly run: Readonly<MassRun>;
   private readonly surfaces: MassSpec['surfaces'];
   private readonly salts = new Map<string, number>();
+  private readonly placePages = new Map<string, readonly MassPlace[]>();
   constructor(run: MassRun, spec: MassSpec) {
     const expected = makeMassRun(run.seed, run.runId, spec);
     if (canonical(run) !== canonical(expected)) throw new Error('World generator/content manifest mismatch');
@@ -99,6 +101,15 @@ export class MassGenerator {
   }
   terrainAt(at: MassAddress): MassTerrain {
     const fields = this.fieldsAt(at), s = this.surfaces.find(row => matches(row.when, fields))!;
+    for (const place of this.spec.places.some(p => p.surface) ? this.placesInCell(at) : []) {
+      const recipe = this.spec.places.find(p => p.id === place.recipe)!;
+      if (!recipe.surface) continue;
+      const offset = localOffset(at, place.center, this.spec.addressSpan);
+      if (Math.hypot(offset.x, offset.y) <= place.radius) return Object.freeze({
+        ...recipe.surface, biome: s.biome, fields,
+        source: Object.freeze({ ...place.source, rule: recipe.id + '/surface' }),
+      });
+    }
     return Object.freeze({ region: s.region, color: s.color, biome: s.biome, fields,
       source: Object.freeze({ generator: this.spec.id, version: this.spec.version, rule: s.id,
         source: s.source ?? s.biome, stream: canonical([this.run.seed, 'terrain', cellKey(at)]) }) });
@@ -138,6 +149,8 @@ export class MassGenerator {
   }
   /** Footprints can span pages; their identity/owner never depends on the query. */
   placesInCell(cell: MassCell): readonly MassPlace[] {
+    const key = cellKey(cell), cached = this.placePages.get(key);
+    if (cached) { this.placePages.delete(key); this.placePages.set(key, cached); return cached; }
     const s = this.spec.addressSpan, origin = address(cell.dimension, cell.cx, cell.cy, 0, 0, s);
     const result = new Map<string, MassPlace>();
     for (const recipe of this.spec.places) {
@@ -153,6 +166,9 @@ export class MassGenerator {
         if (Math.hypot(dx, dy) <= p.radius && this.accepted(p, recipe)) result.set(p.id, freezeData(p));
       }
     }
-    return Object.freeze([...result.values()].sort((a, b) => compare(a.id, b.id)));
+    const page = Object.freeze([...result.values()].sort((a, b) => compare(a.id, b.id)));
+    this.placePages.set(key, page);
+    if (this.placePages.size > 128) this.placePages.delete(this.placePages.keys().next().value!);
+    return page;
   }
 }

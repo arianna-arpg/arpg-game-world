@@ -1,15 +1,20 @@
 import { TILESETS } from '../data/tilesets';
-import { MONSTERS } from '../data/monsters';
+import { FACTIONS, MONSTERS } from '../data/monsters';
 import { presenceTable } from '../engine/presence';
 import type { ZoneDef } from '../data/zones';
 import type { MassSpec } from './contracts';
 import { freezeData } from './random';
+import { nativeMassSite, type MassSiteSpec } from './sites';
 
 export const MASS_ZONE = 'worldmass_expedition';
+export interface MassContent {
+  id: string; source: string; level: number; count: number; table: { id: string; weight: number }[];
+  site?: MassSiteSpec;
+}
 export interface MassAdventure {
   terrain: MassSpec;
   theme: ZoneDef['theme'];
-  content: { id: string; source: string; level: number; count: number; table: { id: string; weight: number }[] }[];
+  content: MassContent[];
   startRadius: number;
   populationRadius: number;
   maxPopulation: number;
@@ -25,7 +30,7 @@ export function massAdventure(): MassAdventure {
     { id: 'desert', field: 'moisture', min: -2, max: -.3 },
   ];
   const terrain: MassSpec = {
-    id: 'hollow-wake-country', version: 1, addressSpan: 768, terrainCell: 24,
+    id: 'hollow-wake-country', version: 2, addressSpan: 768, terrainCell: 24,
     fields: [
       { id: 'elevation', base: .15, layers: [
         { id: 'continent', period: 18000, amplitude: .7 },
@@ -48,15 +53,31 @@ export function massAdventure(): MassAdventure {
         biome: TILESETS[f.id].biome ?? f.id })),
       { id: 'fallback', source: 'tilesets/downs', priority: 0, when: [], region: 'ground', color: '#31391c', biome: 'downs' },
     ],
-    places: families.map(f => ({ id: f.id + '-habitat', version: 1, content: f.id,
+    places: [...families.map(f => ({ id: f.id + '-habitat', version: 1, content: f.id,
       period: 1100, chance: .7, radius: 180, jitter: .7, priority: 1,
       when: [{ field: 'elevation', min: -.1 }, { field: f.field, min: f.min, max: f.max }] })),
+      { id: 'wayside-camp', version: 1, content: 'wayside-camp', period: 1600, chance: .65,
+        radius: 180, jitter: .65, priority: 3, when: [{ field: 'elevation', min: 0 }],
+        surface: { region: 'ground', color: '#45412c' } },
+      { id: 'pillaged-ruin', version: 1, content: 'pillaged-ruin', period: 2700, chance: .65,
+        radius: 300, jitter: .6, priority: 4, when: [{ field: 'elevation', min: .05 }],
+        surface: { region: 'ground', color: '#42433a' } },
+    ],
   };
   return freezeData({ terrain, theme: JSON.parse(JSON.stringify(TILESETS.downs.theme)) as ZoneDef['theme'],
-    content: families.map(f => ({ id: f.id, source: 'tilesets/' + f.id + '/packs', level: 1, count: 3,
+    content: [...families.map(f => ({ id: f.id, source: 'tilesets/' + f.id + '/packs', level: 1, count: 3,
       table: presenceTable(TILESETS[f.id].packs.table, 1, id => MONSTERS[id]?.presence)
         .filter(r => MONSTERS[r.id] && !MONSTERS[r.id].habitat)
         .map(r => ({ id: r.id, weight: r.weight })) })),
+      { id: 'wayside-camp', source: 'structures/wayside_camp', level: 1, count: 2,
+        table: presenceTable(TILESETS.downs.packs.table, 1, id => MONSTERS[id]?.presence)
+          .filter(r => MONSTERS[r.id] && !MONSTERS[r.id].habitat).map(r => ({ id: r.id, weight: r.weight })),
+        site: nativeMassSite('wayside_camp', 'Wayside Camp', { x: 0, y: 66, holdSeconds: 4 }) },
+      { id: 'pillaged-ruin', source: 'structures/pillaged_township', level: 1, count: 4,
+        table: presenceTable(FACTIONS.undead.table, 1, id => MONSTERS[id]?.presence)
+          .filter(r => MONSTERS[r.id] && !MONSTERS[r.id].habitat).map(r => ({ id: r.id, weight: r.weight })),
+        site: nativeMassSite('pillaged_township', 'Pillaged Ruin', { x: 60, y: 80, holdSeconds: 5 }) },
+    ],
     startRadius: 288, populationRadius: 1300, maxPopulation: 96, pageRadius: 2, samplesPerTick: 512,
   });
 }

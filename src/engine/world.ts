@@ -562,6 +562,9 @@ export type { Doodad } from './levelgen';
  * off and the lock re-sets). Some chests are not chests.
  */
 export interface Chest {
+  /** Optional place/event-owned loot context; ordinary chests inherit the zone. */
+  rewardLevel?: number;
+  rewardSource?: string;
   pos: Vec2;
   kind: 'objective' | 'timed';
   /** It was never a chest. Revealed (and removed) at the moment of truth. */
@@ -41918,6 +41921,15 @@ export class World {
     return true;
   }
 
+  /** Rejoin native regrowth after a spatial owner restores a scenery checkpoint.
+   * The caller translates the saved clock; no new felling delay is rolled. */
+  restoreDoodadFelling(d: Doodad, state: NonNullable<Doodad['felled']>): void {
+    if (![state.at, state.wake].every(Number.isFinite)) throw new Error('Invalid saved felling clock');
+    d.felled = { ...state };
+    if (!this.regrowing.includes(d)) this.regrowing.push(d);
+    this.markDoodadsChanged(d);
+  }
+
   /** The cause key THE HOLD matches: the event instance a sovereign carries
    *  (eventKey — the vendetta pattern), else the def itself. */
   private rampageCauseOf(a: Actor): string {
@@ -55964,8 +55976,11 @@ export class World {
     if (c.opened) return;
     c.opened = true;
     c.openedAt = this.time; // M-SPILL: the lid swings (the renderer's own clock read)
+    const rewardLevel = c.rewardLevel ?? this.zone.level;
+    const rewardSource = c.rewardSource ?? 'chest';
+    const lootZone = c.rewardLevel === undefined ? this.zone : { ...this.zone, level: rewardLevel };
     if (!this.spoilsSealed()) {
-      for (const result of resolveLootTable(selectContainerLoot('chest', this.zone), { ilvl: this.zone.level, sourceId: 'chest' })) {
+      for (const result of resolveLootTable(selectContainerLoot('chest', lootZone), { ilvl: rewardLevel, sourceId: rewardSource })) {
         this.mintLootResult(c.pos, result, false, 'chest'); // THE MEMORY LAW: the chest is the provenance
       }
     }
@@ -55973,7 +55988,7 @@ export class World {
     // GEAR piece at exactly that rarity, on top of the ordinary container pay.
     // Spoils-sealed ground still seals it (dropGearAt rides the same law).
     if (c.rarity) {
-      const item = rollItem({ ilvl: Math.max(1, this.zone.level), rarityWeights: { [c.rarity]: 1 } });
+      const item = rollItem({ ilvl: Math.max(1, rewardLevel), rarityWeights: { [c.rarity]: 1 } });
       if (item) {
         this.dropGearAt(vec(c.pos.x, c.pos.y + 8), item); // the glyph's own rarity color is the read (M-SPILL: no caption)
       }

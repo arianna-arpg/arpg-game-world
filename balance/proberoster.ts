@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_worldmass_sites.ts', status: 'green', tier: 'fast', why: 'worldmass native camps and ruins, cross-page discovery, durable loot and scenery, dependency residency and legacy saves' },
   { probe: 'probe_worldmass_engine.ts', status: 'green', tier: 'fast', why: 'worldmass real combat crossings, character saves, terrain changes, killed populations and run lifecycle' },
   { probe: 'probe_worldmass.ts', status: 'green', tier: 'fast', why: 'worldmass addresses, deterministic terrain/places, bounded streaming, saved deltas and single claims' },
   { probe: 'probe_skillempowerment.ts', status: 'green', tier: 'fast', why: 'Legendary empowerment: conserved merges, restricted passive budgets, expanded ranks, save/wire identity and real modifier scaling' },

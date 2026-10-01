@@ -30,7 +30,8 @@ The existing Git remote is `https://github.com/arianna-arpg/arpg-game-world.git`
   bounded local-frame subtraction, and a generation lattice separate from pages.
 - `random.ts`: canonical finite JSON manifests and named independent seeded streams.
 - `generator.ts`: immutable per-run field/surface recipes and bounded place
-  footprint competition. Neighboring queries share stable place identities.
+  footprint competition. Neighboring queries share stable place identities and
+  reserved site surfaces before the scenery loads. Place-page query caching is bounded.
 - `state.ts`: sparse terrain changes with causes, one-time identity claims, and
   validated atomic restore. Terrain invalidation is separate from discovery and
   reward claims, so finding a place does not throw out the floor cache.
@@ -42,6 +43,11 @@ The existing Git remote is `https://github.com/arianna-arpg/arpg-game-world.git`
 - `preset.ts`: one replaceable expedition descriptor. Snapshots palette and
   level-appropriate native rosters from existing tilesets with source attribution;
   controls field scales, place density, starting reservation and resource budgets.
+- `sites.ts`: a reusable native-structure adapter with deterministic orientation,
+  persistent discovery and sparse scenery mutations. The first recipes are
+  Wayside Camp and Pillaged Ruin, reusing native scenery, breakables, guards and
+  timed caches. Scenery residency respects nearby actors/projectiles and ongoing
+  native felling; restored felling rejoins native regrowth with its remaining delay.
 - `runtime.ts`: one initial arrival, then continuous movement without loadZone.
   Native actors, skills, projectiles and companions remain in the same World.
   Character saves include the run descriptor, configuration, exploration claims,
@@ -49,7 +55,9 @@ The existing Git remote is `https://github.com/arianna-arpg/arpg-game-world.git`
   positions/health/scale, and ordinary persistent loot/contents. A survived-mode
   death returns to this run's clearing; creating a new run rolls another seed.
 - `paint.ts`: bounded renderer-owned floor textures and a local explored-terrain
-  map. The map samples the physical terrain rather than displaying the old graph.
+  map, with named markers for discovered sites. The map samples the physical
+  terrain rather than displaying the old graph. Native solid scenery also informs
+  path searches; mutation revisions invalidate cached routes.
 
 The shared cell-ray and sight-veil interface now accepts finite grids and
 worldmass. Moving projectiles (including terrain bounce) use it too. Native
@@ -62,6 +70,22 @@ a new character. Without the query parameter, the existing game remains the
 default. `M` shows the surveyed terrain. This is presently a solo terrain/combat
 test; it starts in a clearing, not a rebuilt Lastlight. The old campaign's graph
 directions and legacy zone travel stand down in this mode.
+
+**New site recipes require a new run.** Default generator version 2 includes camps
+and ruins. Continue preserves the saved descriptor, including version 1 land;
+updating the game never inserts new structures into an existing expedition.
+Caches use the ordinary hold-nearby interaction, native reward policy and the
+site's configured level. Destroyed supplies and claimed caches do not regenerate
+on page reload. A site's whole native population must fit before it can introduce
+a cache; saturation delays the encounter rather than furnishing free rewards.
+
+Site descriptors snapshot native legacy structure scenery and breakable fixtures.
+Population tables/counts and cache placement/time remain explicit content data.
+They deliberately do not adapt plan floors, doors, scripted effects, town
+stations, NPC services or folk; the adapter rejects the unsupported structure
+families rather than implying that those systems work here. The sparse scenery
+checkpoint covers position, kind, radius, rotation, adornment, hitbox, removal
+and felling state. It is not a general effect/actor serializer.
 
 `npm run build` followed by `node_modules/.bin/electron.cmd balance/worldmass-ui.cjs`
 runs a hidden real-client check with disposable, isolated saves. Screenshots and
@@ -77,9 +101,11 @@ the log go to ignored `balance/reports/worldmass-*` files.
   is a temporary test budget, not distant simulation or a complete ecology.
 - Checkpointed natives use the existing game's kind of position/health restore,
   not an exact serialization of buffs, threat, cooldowns or every spawned child.
-  Streaming itself does not recreate actors. Native doodad mutations, arbitrary
-  summoned/event actors, and all other world packages have not been given durable
-  feature ownership yet. Terrain edits here mean MassState edits specifically.
+  Streaming itself does not recreate actors. Only admitted site scenery has
+  sparse mutation ownership; arbitrary summoned/event actors, actor-owned hazards
+  and other world packages still need lifecycle adapters. Terrain edits here mean
+  MassState edits specifically. Retained native actors keep required site scenery
+  after a reload; dependency residency is still conservative, not full dormancy.
 - Terrain sampling is budgeted, but an uncached visible texture can still bake
   synchronously. Terrain edits invalidate all floor pages. There is no proven
   crossing frame-time bound yet; the UI harness logs batch timings, not FPS.
@@ -87,12 +113,18 @@ the log go to ignored `balance/reports/worldmass-*` files.
   Saves remain whole-run JSON; paging long-run consequences is still required.
 - Terrain currently provides open ground, soil/climate variation, lakes/shores
   and outcrops. Drainage, road networks, canopy ecology, towns, services, authored
-  structures, caves and biome-specific per-actor simulation contexts remain.
+  plan-based structures, caves and biome-specific per-actor simulation contexts
+  remain. Camps and ruins are the first native place family, not a migrated campaign.
   Co-op replication and the old campaign are not integrated into this mode.
 
 Verification includes `npm run check`, the worldmass contract and real-engine
 probes, existing persistence/sight-veil/cistern probes, generation QA, and the
-hidden real client. The engine probe proves a hero's native attack across a page
+hidden real client. `probe_worldmass_sites.ts` covers cross-page identity, opposing
+approaches, native loot, scenery removal/regrowth, discovery, dependency residency,
+real character reload and version-1 compatibility. After a scoped preview build,
+`balance/worldmass-sites-ui.cjs` exercises both default site types, their map and
+cache interaction, and browser Continue with isolated saves (optional published
+URL argument). The engine probe proves a hero's native attack across a page
 seam, moving-projectile wall occlusion, water status effects, negative-coordinate
 spell telegraphs, save/reload consequences and same-run mode wakes. These are
 bounded integration tests, not a full campaign playthrough.
@@ -106,6 +138,16 @@ the surveyed map, and actual Continue after reload preserving the seed, a wall
 edit and a defeated native. Launcher smoke passed. Normal game smoke initially
 reported a missing menu when run alongside the other Electron checks; its
 isolated retry passed. This intermittent menu result is recorded, not hidden.
+
+Site milestone verification (2026-10-01 UTC): all three worldmass probes,
+visibility-stability/sightveil, persistence (84 checks) and rampage (64 checks)
+passed. Generation QA again reported 869 cases × 3 seeds, zero failures and the
+same four spacing warnings. The isolated client rendered both default locations
+(seed 42), displayed their discovered map markers, opened a native cache and
+preserved it through real browser Continue. Preview isolation retained ordinary
+save sentinels unchanged. Forced-teleport/render batches took roughly 460–600 ms
+in the software-rendered test client; these batches are not frame-rate evidence
+or a seamless-crossing performance guarantee.
 
 ## The commission and the decided run policy
 

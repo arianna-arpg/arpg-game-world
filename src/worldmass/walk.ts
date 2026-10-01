@@ -19,7 +19,10 @@ export class MassWalk implements RegionGrid {
   readonly cellOcclusion = true;
   readonly cellSize: number;
   private cache = new Map<string, Vec2 | null>();
-  private cacheVersion = -1;
+  private cacheVersion = '';
+  /** Native scenery joins navigation without repainting physical region cells. */
+  obstacles?: { blocked(x: number, y: number): boolean; revision(): string };
+  private navigable(x: number, y: number): boolean { return this.isWalkable(x, y) && !this.obstacles?.blocked(x, y); }
   private searches = 0;
   constructor(readonly stream: MassStream, readonly origin: MassCell,
     readonly config: Readonly<MassNavigationConfig> = MASS_NAVIGATION) {
@@ -42,7 +45,7 @@ export class MassWalk implements RegionGrid {
     return false;
   }
   snapToWalkable(p: Vec2): Vec2 {
-    if (this.isWalkable(p.x, p.y)) return { ...p };
+    if (this.navigable(p.x, p.y)) return { ...p };
     const cs = this.cellSize, x = Math.floor(p.x / cs), y = Math.floor(p.y / cs);
     let best: Vec2 | null = null, distance = Infinity;
     for (let r = 1; r <= this.config.snapRadius; r++) {
@@ -50,7 +53,7 @@ export class MassWalk implements RegionGrid {
         if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
         const q = { x: (x + dx + .5) * cs, y: (y + dy + .5) * cs };
         const d = Math.hypot(q.x - p.x, q.y - p.y);
-        if (d < distance && this.isWalkable(q.x, q.y)) { best = q; distance = d; }
+        if (d < distance && this.navigable(q.x, q.y)) { best = q; distance = d; }
       }
       // No later ring can contain a closer centre.
       if (best && distance <= (r - .5) * cs) break;
@@ -67,7 +70,7 @@ export class MassWalk implements RegionGrid {
     let ty = sy ? ((y + (sy > 0 ? 1 : 0)) * cs - from.y) / dy : Infinity;
     const ok = (cx: number, cy: number): boolean => {
       const id = this.regionAt((cx + .5) * cs, (cy + .5) * cs);
-      return !!regionKind(id)?.walkable && (!profile || profile.costOf(id) <= 1);
+      return !!regionKind(id)?.walkable && !this.obstacles?.blocked((cx + .5) * cs, (cy + .5) * cs) && (!profile || profile.costOf(id) <= 1);
     };
     for (let i = 0; i < this.config.maxLineCells; i++) {
       if (!ok(x, y)) return false;
@@ -91,7 +94,8 @@ export class MassWalk implements RegionGrid {
     return this.search(from, to, profile);
   }
   private search(from: Vec2, to: Vec2, profile: PathProfile | undefined): Vec2 | null {
-    if (this.cacheVersion !== this.version) { this.cache.clear(); this.cacheVersion = this.version; }
+    const version = this.version + ':' + (this.obstacles?.revision() ?? '');
+    if (this.cacheVersion !== version) { this.cache.clear(); this.cacheVersion = version; }
     const cs = this.cellSize, fx = Math.floor(from.x / cs), fy = Math.floor(from.y / cs);
     const tx = Math.floor(to.x / cs), ty = Math.floor(to.y / cs);
     if (Math.max(Math.abs(tx - fx), Math.abs(ty - fy)) > this.config.searchRadius) return null;
@@ -131,7 +135,7 @@ export class MassWalk implements RegionGrid {
         const x = n.x + dx, y = n.y + dy;
         if (Math.max(Math.abs(x - fx), Math.abs(y - fy)) > this.config.searchRadius) continue;
         const q = { x: (x + .5) * cs, y: (y + .5) * cs }, id = this.regionAt(q.x, q.y);
-        if (!regionKind(id)?.walkable) continue;
+        if (!regionKind(id)?.walkable || this.obstacles?.blocked(q.x, q.y)) continue;
         const price = profile?.costOf(id) ?? 1;
         if (!Number.isFinite(price) || price <= 0) continue;
         const cost = n.cost + price, k = x + ',' + y;

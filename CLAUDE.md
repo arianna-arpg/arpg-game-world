@@ -9,6 +9,12 @@ isolation and Continue. See `docs/design/seamless-world-foundation.md`.
 
 The continuous-world experiment is specified in `docs/design/seamless-world-foundation.md` (branch `codex/seamless-world-foundation`). `src/worldmass/` implements durable addresses, seeded fields/place claims, sparse consequences, bounded terrain residency and an opt-in `/?worldmass` terrain/combat prototype. It uses native movement, skills, region effects, cell-ray occlusion and character saves. Verify `npm run probe -- worldmass` plus persistence/sightveil/cistern; after a build, `balance/worldmass-ui.cjs` checks the hidden real client with isolated saves. Each new run gets fresh land. Live frame rebasing, distant simulation, native place/campaign migration and full consequence paging remain unfinished; read the document's implementation ledger before extending or describing the mode.
 
+Worldmass camps and ruins reuse native structures through `src/worldmass/sites.ts`;
+version 2 adds persistent discovery, supplies, caches and scenery consequences.
+Continue retains older terrain descriptors. Verify `probe_worldmass_sites.ts` and
+hidden `balance/worldmass-sites-ui.cjs` against a scoped preview build. See
+`docs/design/seamless-world-foundation.md` for the admitted lifecycle and limits.
+
 Shared sight/fog rendering fixes are documented in `docs/engine/visibility-stability.md`.
 Resolve visibility before drawing bodies; wall queries and pixels share one contact
 resolver. Verify the sightveil/visibility_stability probes and hidden

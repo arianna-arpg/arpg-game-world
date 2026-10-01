@@ -15,6 +15,8 @@ export interface MassPlaceRecipe {
   content: string;
   period: number; chance: number; radius: number; jitter: number;
   when: readonly MassRange[]; priority: number;
+  /** Deterministic site ground, sampled before residency and before player edits. */
+  surface?: { region: string; color: string };
 }
 export interface MassSpec {
   id: string; version: number;
