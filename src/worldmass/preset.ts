@@ -7,6 +7,7 @@ import type { MassProgressionSpec, MassPopulation } from './progression';
 import { freezeData } from './random';
 import { frontierLandmarks } from './landmarks';
 import { openingPopulation } from './population';
+import { STARTER_SUPPORTS } from '../meta/account';
 import { nativeMassSite, type MassSiteSpec } from './sites';
 
 export const MASS_ZONE = 'worldmass_expedition';
@@ -20,6 +21,7 @@ export interface MassContent extends MassPopulation {
   magicPack?: { source: string; mechanic: string };
 }
 export interface MassAdventure {
+  rewards?: import('./rewards').MassRewardSpec;
   journey?: import('./journey').MassJourneySpec;
   ecology?: import('./ecology').MassEcologySpec;
   progression?: MassProgressionSpec;
@@ -112,6 +114,7 @@ export function massAdventure(): MassAdventure {
           .filter(r => MONSTERS[r.id] && !MONSTERS[r.id].habitat).map(r => ({ id: r.id, weight: r.weight })),
         site: landmark.site, ...(landmark.magicPack ? { magicPack: landmark.magicPack } : {}) })),
     ],
+    rewards: { source: 'worldmass/first-cache-support', supports: [...STARTER_SUPPORTS], level: 1, maxRewards: 1 },
     journey: { source: 'worldmass/frontier-circuit', width: 120, color: '#62573e', clearingColor: '#454331',
       destinations: [
         { id: 'west-camp', content: 'cinderwatch', edge: 'west', distance: 1050, radius: 310, jitter: .12 },

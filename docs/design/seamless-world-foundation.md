@@ -784,3 +784,42 @@ Checks: worldmass_population, worldmass_welcome, memorylesson, memories,
 menubar, townwelcome, mireille_lesson, speech, itemreadability, full worldmass
 probes, check, generation QA, sim smoke, and the scoped real-client journey
 harness (portrait, dismissal, recall UI, Continue).
+
+## First discovery payoff
+
+A fresh descriptor snapshots `MassRewardSpec`: an attributed support pool,
+gem level and per-run reward budget. The first eligible opened native cache
+earns a journal choice alongside its ordinary loot. Eligibility uses actual
+equipped skills, available sockets, native crew-aware compatibility and current
+attribute/account gates. The initial policy draws from the existing starter
+support pool; it creates no new unlock or combat rule. A kit with no compatible
+option leaves the budget available for a later discovery.
+
+Choice payloads, compatible skill identities at discovery, cache source and
+claim receipt are saved. Changing a build, reopening the journal or Continue
+does not reroll them. The journal shows current compatible open sockets and
+retains the original host names if the build changed. A full pack refuses
+before consuming the choice; repeats and foreign seats cannot receive a second
+item. Socketing still follows native field discipline and requires the player's
+inventory gesture. The optional policy is absent from older descriptors, which
+retain their old rewards.
+
+The journal uses its existing attention glow for pending exploration rewards.
+It does not open during combat. Graph-campaign leader summaries and directions
+are omitted in this mode until that campaign is admitted. Native quest ledgers
+are not repurposed as discovery receipts.
+
+Cache Memories now mint with registered Chest provenance. Previously saved
+cache-address Memories keep their original source/recall key and roll behavior,
+but their inventory, live recall and spent row present a readable label.
+Unknown provenance presents the ordinary Found label instead of internal IDs.
+
+Verified: worldmass_rewards (all three starter kits, account/fit gates, native
+Cleave socket effect, capacity retry, duplicates, actual cache timer, ordinary
+spoils, attention, character-save round trips and legacy labels), all ten
+worldmass probes, native Memories/menu/container/Oracle reward regressions,
+check, generation QA (869 × 3, zero failures; four baseline warnings), sim smoke,
+and the real-client reward harness (pending and claimed Continue, actual journal
+click, native bag drag/socket). Independent playtest findings remain evidence
+about the tested routes and builds, not a blind AAA comparison or universal
+performance guarantee.

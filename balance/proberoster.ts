@@ -62,6 +62,7 @@ export type ProbeRow =
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_worldmass_welcome.ts', status: 'green', tier: 'fast', why: 'worldmass spatial dialogue, native departure invitations, visibility, dismissal and saved receipts' },
+  { probe: 'probe_worldmass_rewards.ts', status: 'green', tier: 'fast', why: 'earned native support choices, account/fit gates, capacity retries, persistence and legacy provenance labels' },
   { probe: 'probe_worldmass_population.ts', status: 'green', tier: 'fast', why: 'worldmass saved composition quotas, native roster preservation, seeded slots and legacy encounter identity' },
   { probe: 'probe_memorylesson.ts', status: 'green', tier: 'fast', why: 'first Memory menu/item attention, failed recall, successful graduation and account persistence' },
   { probe: 'probe_combatfocus.ts', status: 'green', tier: 'fast', why: 'combatFocus numeric crowd clearance, stable offsets and unchanged host text' },

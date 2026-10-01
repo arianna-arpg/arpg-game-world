@@ -214,6 +214,10 @@ registerMenuAttention({ id: 'tree_points', entry: 'inventory', kind: 'pip', read
 
 /** First Memory uses the same optional menu-to-item invitation as flask gifts. */
 registerMenuAttention({
+  id: 'exploration_reward', entry: 'journal', kind: 'lesson',
+  read: r => r.seat === r.world.localSeat && !!r.world.massRuntime?.rewards.pending,
+});
+registerMenuAttention({
   id: 'memory_recall_lesson', entry: 'inventory', kind: 'lesson',
   read: r => r.world.memoryRecallLesson(r.seat),
 });

@@ -120,7 +120,7 @@ import {
   supportOfGemItem, writeBackSupportGem,
 } from './gemitems';
 import {
-  MEMORY_FOUND_SOURCES, MEMORY_CFG, MEMORY_KIND_IDS, MEMORY_KINDS, MEMORY_TRADED_PROVENANCE,
+  memoryProvenanceLabel, MEMORY_CFG, MEMORY_KIND_IDS, MEMORY_KINDS, MEMORY_TRADED_PROVENANCE,
   facetRng, findMemoryItem, makeMemoryItem, memoryFacetAttrs, memoryFormOf, memoryGroupKey, memoryGroups,
   memoryKindForSeed, memoryKindOf, memoryRarityLean, memoryUnitsOf, mergeMemory, pickSeeded, rollSeededRarity,
   seedLaneFrac,
@@ -1821,6 +1821,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'bindGraft': return isStr(a.key) && (a.skillId === null || isStr(a.skillId));
     case 'vocationQuest': return isStr(a.questId); // menu-accept a vocation chain step
     case 'questReward': return isStr(a.questId) && isStr(a.choiceId);
+    case 'explorationReward': return isStr(a.source) && isStr(a.choiceId);
     case 'questImbue': return isStr(a.questId) && isIdx(a.uid) && isStr(a.affixId);
     case 'bindSkill': return isIdx(a.slot) && (a.skillId === null || isStr(a.skillId));
     case 'swapSkillSlots': return isIdx(a.a) && isIdx(a.b);
@@ -29041,6 +29042,19 @@ export class World {
     }
   }
 
+  explorationRewardOffers() { return this.massRuntime?.rewards.offers(this) ?? []; }
+
+  claimExplorationReward(source: string, choiceId: string, seat: Seat = this.localSeat): boolean {
+    if (seat !== this.localSeat || this.clientActionHook || seat.actor.dead || seat.actor.downed
+      || this.panelSealed('inventory') || !this.massRuntime) return false;
+    const result = this.massRuntime.rewards.claim(this, source, choiceId);
+    if (result === 'full') this.failNote(seat.actor, 'explorationReward', 'Make room in your pack, then choose your gem again.');
+    if (result !== 'claimed') return false;
+    this.markMetaDirty(seat);
+    saveCharacter(this);
+    return true;
+  }
+
   /** The journal shows choices only at the giver, from live ready quests. */
   questRewardOffers(): { questId: string; label: string; prompt: string; xp: number;
     choices: (NonNullable<QuestDef['reward']['choices']>[number] & { lines: string[]; footprint: string })[] }[] {
@@ -29800,6 +29814,7 @@ export class World {
       case 'payToll': this.payHoldfastToll(action.index, seat); break;
       case 'vocationQuest': this.acceptVocationQuest(action.questId, seat); break;
       case 'questReward': this.claimQuestReward(action.questId, action.choiceId, seat); break;
+      case 'explorationReward': this.claimExplorationReward(action.source, action.choiceId, seat); break;
       case 'questImbue': this.claimQuestImbue(action.questId, action.uid, action.affixId, seat); break;
       case 'equipItem': this.equipItem(seat, action.uid, action.slot); break;
       case 'unequipItem': this.unequipItem(seat, action.slot, action.x, action.y); break;
@@ -47118,8 +47133,7 @@ export class World {
       : null;
     const groups = memoryGroups(units).map((g): MemoryRecallGroup => {
       const def = MONSTERS[g.d];
-      const name = def?.name
-        ?? (g.d === MEMORY_TRADED_PROVENANCE ? MEMORY_CFG.strings.tradedName : MEMORY_FOUND_SOURCES[g.d] ?? g.d);
+      const name = memoryProvenanceLabel(g.d, def?.name);
       // THE PROMISE's row wears no lean chips — the sealed gem IS its odds
       // face (a vanished id degrades to the wild rung, exactly as the cut
       // falls: drawn == rolled).
@@ -56048,13 +56062,14 @@ export class World {
     c.openedAt = this.time; // M-SPILL: the lid swings (the renderer's own clock read)
     const rewardLevel = c.rewardLevel ?? this.levelAt(c.pos);
     this.withMassReward(rewardLevel, () => {
-      const rewardSource = c.rewardSource ?? 'chest';
+      const memoryProvenance = 'chest'; // Durable cache identity stays on the chest; Memories name their registered source.
       const lootZone = c.rewardLevel === undefined && !this.massRuntime ? this.zone : { ...this.zone, level: rewardLevel };
       if (!this.spoilsSealed()) {
-        for (const result of resolveLootTable(selectContainerLoot('chest', lootZone), { ilvl: rewardLevel, sourceId: rewardSource })) {
-          this.mintLootResult(c.pos, result, false, 'chest'); // THE MEMORY LAW: the chest is the provenance
+        for (const result of resolveLootTable(selectContainerLoot('chest', lootZone), { ilvl: rewardLevel, sourceId: memoryProvenance })) {
+          this.mintLootResult(c.pos, result, false, memoryProvenance); // THE MEMORY LAW: the chest is the provenance
         }
       }
+      if (!this.spoilsSealed()) this.massRuntime?.earnCacheReward(this, c.rewardSource, c.pos);
       // THE THEMED CACHE (Chest.rarity — a tinted toll's promise): one rolled
       // GEAR piece at exactly that rarity, on top of the ordinary container pay.
       // Spoils-sealed ground still seals it (dropGearAt rides the same law).

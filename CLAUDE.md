@@ -31,6 +31,15 @@ spatial dialogue and physical departure invitations through `localZoneAt` and
 Verify worldmass_population, worldmass_welcome, memorylesson and the scoped
 journey client harness; native memory/menu/town-welcome probes remain applicable.
 
+New expedition descriptors also snapshot a first-cache support choice through
+`worldmass/rewards.ts`: existing account unlocks and native equipped-skill socket
+gates choose the offers. Journal cards retain exact payloads and a once-only
+receipt across Continue; full packs keep the offer. Ordinary loot remains.
+Verify worldmass_rewards and hidden `balance/worldmass-rewards-ui.cjs` against
+the scoped build (cache → pending Continue → choice → pointer socket → Continue).
+Old manifests keep their former rewards. Memory provenance labels preserve old
+cache identities internally while presenting a registered Chest/Found name.
+
 Worldmass version 4 adds geographic progression through
 `src/worldmass/progression.ts`: saved distance/field rules and native presence
 rosters choose fixed encounter levels, independent of the hero. Reward scopes

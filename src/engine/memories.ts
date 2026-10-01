@@ -144,12 +144,29 @@ export const MEMORY_TRADED_PROVENANCE = 'traded';
 /** Non-creature provenance remains explicit without forging a monster
  *  identity — the registered PROVENANCE WORDS a drop lane may seal into a
  *  unit in place of a dropper def id (the recall panel names them through
- *  this table; an unregistered word prints raw). 'found' is the default
+ *  this table; an unregistered word wears the found label). 'found' is the default
  *  every unforged drop wears (MEMORY_CFG.foundProvenance); 'chest' rides
  *  the container lane's LootCtx.sourceId; 'quest' is a writ's owed pay. */
 export const MEMORY_FOUND_SOURCES: Record<string, string> = {
   chest: 'Chest', found: 'Found in the world', quest: 'Quest pay',
 };
+
+/** Present registered names without exposing durable addresses from older saves. */
+export function memoryProvenanceLabel(id: string, monsterName?: string): string {
+  if (monsterName) return monsterName;
+  if (id === MEMORY_TRADED_PROVENANCE) return MEMORY_CFG.strings.tradedName;
+  if (Object.hasOwn(MEMORY_FOUND_SOURCES, id)) return MEMORY_FOUND_SOURCES[id];
+  // Early continuous-world caches stamped their durable address into the unit.
+  // Keep that recall identity intact; only its player-facing name is normalized.
+  if (id.startsWith('[')) {
+    try {
+      const address: unknown = JSON.parse(id);
+      if (Array.isArray(address) && address.length === 2 && typeof address[0] === 'string' && address[1] === 'cache')
+        return MEMORY_FOUND_SOURCES.chest;
+    } catch { /* Unknown provenance still has the ordinary found face. */ }
+  }
+  return MEMORY_FOUND_SOURCES[MEMORY_CFG.foundProvenance];
+}
 
 /** THE PROVENANCE a drop lane hands dropGemAt: WHO forged the drop (a def
  *  id or a registered word) and — an event fact the def cannot recover —

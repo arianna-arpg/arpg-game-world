@@ -22,6 +22,8 @@ import { MassJourney } from './journey';
 import { populationChoices, validatePopulationLimits } from './population';
 import { MassEcology, validateMassEcology, type MassEcologySave } from './ecology';
 
+import { MassRewards, type MassRewardSave } from './rewards';
+
 interface MassEnemySave {
   id: string; monster: string; level: number; x: number; y: number; life: number; scale: number;
   magicPack?: MagicPackState; name?: string;
@@ -29,6 +31,7 @@ interface MassEnemySave {
 export interface MassAdventureSave {
   schema: 1; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
   player: { x: number; y: number; tier?: number }; enemies: MassEnemySave[]; contents: ZoneContents;
+  rewards?: MassRewardSave[];
   sites?: MassSiteSave;
   ecology?: MassEcologySave;
   settlement?: MassSettlementSave;
@@ -37,6 +40,7 @@ export interface MassAdventureSave {
  * in-flight skills. The population cap is deliberately conservative until full
  * dependency-aware dormancy exists: wounded/engaged bodies are never discarded. */
 export class WorldMassRuntime {
+  readonly rewards: MassRewards;
   readonly generator: MassGenerator;
   readonly state: MassState;
   readonly stream: MassStream;
@@ -60,6 +64,7 @@ export class WorldMassRuntime {
     if (!Number.isInteger(this.resumeTier) || this.resumeTier < 0 || this.resumeTier > 6) throw new Error('Invalid worldmass player story');
     this.config = freezeData(JSON.parse(canonical(config)) as MassAdventure);
     this.configHash = massDigest(this.config);
+    this.rewards = new MassRewards(this.config.rewards, seed, save?.rewards);
     this.origin = Object.freeze(save ? { ...save.origin } : { dimension: 'surface', cx: '0', cy: '0' });
     address(this.origin.dimension, this.origin.cx, this.origin.cy, 0, 0, config.terrain.addressSpan);
     this.generator = new MassGenerator(save?.state.run ?? makeMassRun(seed, runId, config.terrain), config.terrain);
@@ -201,6 +206,14 @@ export class WorldMassRuntime {
       world.refreshMagicPacks();
     }
     this.update(world, true);
+  }
+  /** Only a generated, admitted physical cache can earn its configured choice. */
+  earnCacheReward(world: World, source: string | undefined, pos: { x: number; y: number }): void {
+    if (!source || !this.config.rewards) return;
+    const place = this.placesInCell(this.walk.at(pos.x, pos.y))
+      .find(p => canonical([p.id, 'cache']) === source && this.state.claimed('site-cache', p.id));
+    const site = place && this.config.content.find(c => c.id === place.content)?.site;
+    if (site?.cache) this.rewards.earn(world, source, site.name);
   }
   siteSearched(id: string): boolean {
     return this.state.claimed('site-looted', id) || this.cacheOpened(canonical([id, 'cache']));
@@ -394,6 +407,7 @@ export class WorldMassRuntime {
         ...(a.magicPack ? { magicPack: a.magicPack, name: a.name } : {}) });
     }
     return JSON.parse(JSON.stringify({ schema: 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
+      ...(this.config.rewards ? { rewards: this.rewards.snapshot() } : {}),
       origin: this.origin, player: { ...world.player.pos, tier: world.player.tier ?? 0 }, enemies,
       ...(this.settlement ? { settlement: this.settlement.snapshot(world) } : {}),
       ...(this.ecology ? { ecology: this.ecology.snapshot(world) } : {}), sites: this.sites.snapshot(world), contents: captureZoneContents(world) })) as MassAdventureSave;

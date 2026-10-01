@@ -40,7 +40,7 @@ import { EQUIP_SLOTS, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, ty
 import { findBagGem, gemInitials, packSkillGemPayload, packSupportGemPayload, skillGemPayloadOf, skillOfGemItem, supportGemPayloadOf, supportOfGemItem } from '../engine/gemitems';
 import { veinLines } from '../engine/supportbase';
 import {
-  MEMORY_FOUND_SOURCES, MEMORY_CFG, MEMORY_KINDS, MEMORY_TRADED_PROVENANCE, memoryFacets,
+  memoryProvenanceLabel, MEMORY_CFG, MEMORY_KINDS, memoryFacets,
   memoryGroups, memoryKindOf, type MemoryKind, type MemoryRecallResult,
 } from '../engine/memories';
 import { GEM_DROP_CFG } from '../engine/loot';
@@ -51,6 +51,7 @@ import { bagBoard, canPlaceAt, overlappingItems, swapBlockerFits } from '../engi
 import { ContainerPane } from './containerPane';
 import { InventoryPages, type InventoryPage, type InventoryPageRequest } from './inventoryPages';
 import { questRewardHtml, questImbueHtml } from './questRewards';
+import { explorationRewardHtml } from './explorationRewards';
 import { containerOriginOf, findCarried, originContainerId } from '../engine/containers';
 import { CONTAINER_DEFS } from '../data/containers';
 import { BAG_SORT_MODES, type BagSortDir } from '../engine/bagsort';
@@ -3990,7 +3991,7 @@ export class UI {
     const k = MEMORY_KINDS[kind];
     const groups = memoryGroups(units);
     const dropperName = (d: string): string =>
-      MONSTERS[d]?.name ?? (d === MEMORY_TRADED_PROVENANCE ? MEMORY_CFG.strings.tradedName : MEMORY_FOUND_SOURCES[d] ?? d);
+      memoryProvenanceLabel(d, MONSTERS[d]?.name);
     const lines: string[] = [];
     if (item.locked) {
       lines.push(`<div style="color:#c8a84b">🔒 Locked — it stays: no salvage, no drop, no sort (${this.lockGestureText()} to unlock)</div>`);
@@ -5113,7 +5114,7 @@ export class UI {
       return `<div style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid #2a2634">
         ${portraitOf(def)}
         <div style="flex:1;min-width:0">
-          <div style="font-size:11px;color:#e0d8c8">${g.name} <span style="color:#9a94a8">×${g.count}</span></div>
+          <div style="font-size:11px;color:#e0d8c8">${esc(g.name)} <span style="color:#9a94a8">×${g.count}</span></div>
           <div>${chips}</div>${revealLine}
         </div>
         <button data-mem-recall="${esc(g.key)}" ${canRecall ? '' : 'disabled'}
@@ -5136,7 +5137,7 @@ export class UI {
         return `<div style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid #2a2634;opacity:0.8">
           ${portraitOf(def)}
           <div style="flex:1;min-width:0">
-            <div style="font-size:11px;color:#8a8678">${def?.name ?? d} <span style="color:#5a5668">— spent</span></div>
+            <div style="font-size:11px;color:#8a8678">${esc(memoryProvenanceLabel(d, def?.name))} <span style="color:#5a5668">— spent</span></div>
             ${revealHtml(reveal)}
           </div>
         </div>`;
@@ -9531,7 +9532,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           <div style="font-size:12px;color:#d8d4c8">${esc(e.label)}${badge(e.category)}</div>
           <div style="font-size:10px;color:${ink};margin-top:2px">${sub}</div></div>`;
       }).join('')
-      : '<div style="color:#8a8678;font-size:11px;padding:6px 2px">No active quests. Linger by the quartermaster for work.</div>';
+      : `<div style="color:#8a8678;font-size:11px;padding:6px 2px">No active quests.${world.massRuntime ? '' : ' Linger by the quartermaster for work.'}</div>`;
     const doneHtml = log.completed.length
       ? log.completed.map(e => `<div style="padding:6px 9px;margin:0 0 4px 0;background:#13130f;border-left:3px solid #4a4a40;border-radius:4px;opacity:0.7">
           <div style="font-size:12px;color:#9a968a;text-decoration:line-through">${esc(e.label)}${badge(e.category)}</div></div>`).join('')
@@ -9542,20 +9543,27 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const html = `
       ${this.closeGlyphHtml()}<h2>Quest Journal</h2>
       ${this.mapTabsHtml()}
-      <div style="color:#6ad8c0;font-size:12px;padding:8px">${esc(world.odyssey.status())}</div>
+      ${world.massRuntime ? '' : `<div style="color:#6ad8c0;font-size:12px;padding:8px">${esc(world.odyssey.status())}</div>`}
       <div id="quest-scroll" style="overflow-y:auto;max-height:64vh;padding:2px 4px 8px 2px">
+        ${explorationRewardHtml(world)}
         ${questRewardHtml(world)}
         ${questImbueHtml(world)}
         <h3 style="font-size:12px;color:#c8a8e8;margin:4px 0 6px 0">Active (${log.active.length})</h3>
         ${activeHtml}
         <h3 style="font-size:12px;color:#8a8678;margin:14px 0 6px 0">Completed (${log.completed.length})</h3>
         ${doneHtml}
-        ${world.odyssey.clues().map(line => `<p style="color:#9ebdb5;font-size:11px">${esc(line)}</p>`).join('')}
+        ${(world.massRuntime ? [] : world.odyssey.clues()).map(line => `<p style="color:#9ebdb5;font-size:11px">${esc(line)}</p>`).join('')}
       </div>`;
     // Same skip-if-unchanged discipline as the map view (setPanelHtml).
     if (!this.setPanelHtml(this.worldMap, html)) return;
     const qs = this.worldMap.querySelector<HTMLElement>('#quest-scroll');
     if (qs) qs.scrollTop = prevScroll;
+    this.worldMap.querySelectorAll<HTMLButtonElement>('[data-exploration-reward]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        world.requestMeta({ t: 'explorationReward', source: btn.dataset.explorationReward!, choiceId: btn.dataset.rewardChoice! });
+        this.refreshMap();
+      });
+    });
     this.worldMap.querySelectorAll<HTMLButtonElement>('[data-quest-reward]').forEach(btn => {
       btn.addEventListener('click', () => {
         world.requestMeta({ t: 'questReward', questId: btn.dataset.questReward!, choiceId: btn.dataset.rewardChoice! });
