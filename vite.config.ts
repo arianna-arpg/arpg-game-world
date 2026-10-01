@@ -19,6 +19,7 @@ import { defineConfig } from 'vite';
 import type { Connect, HmrContext, ViteDevServer, PreviewServer } from 'vite';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // ---------------------------------------------------------------------------
 // THE RELOAD TREES — source trees that may NEVER take a partial HMR update.
@@ -131,6 +132,20 @@ function reloadTreesPlugin() {
 
 export default defineConfig({
   plugins: [diskSavePlugin(), reloadTreesPlugin()],
+  // Two pages: the game, and THE SKILL SHOWCASE ENGINE (showcase.html — the
+  // sandboxed stage the game's showcases and the clip recorder play through;
+  // docs/engine/skill-showcases.md). They share chunks, so the engine adds
+  // only its own entry to every build (dist/, site/play/).
+  build: {
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        showcase: fileURLToPath(new URL('./showcase.html', import.meta.url)),
+      },
+      // the code both pages share (nearly all of it) is named for what it is
+      output: { chunkFileNames: 'assets/shared-[hash].js' },
+    },
+  },
   // saves/ writes are DATA, not source — without this ignore, every zone-hop's
   // autosave tripped the watcher into a FULL RELOAD (killing the live world
   // mid-play and mid-QA; the long-standing "reload ate my test" gotcha).

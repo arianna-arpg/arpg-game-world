@@ -95,9 +95,14 @@ shatter exit) is a registry at the top of `site/assets/cinema.js`; the theater i
 `scripts/encode-film.mjs` builds their rendition ladder. Re-point, schedule or
 split films there; bump the page's `?v=` stamp when either file changes. See
 `docs/design/site-cinema.md`; verify with the hidden `balance/site-cinema-ui.cjs`.
-Skill clips: `scripts/capture-skill-clips.cjs` films each skill in a built game
-(`__game.devGrantSkill` / `devInput`) into `site/media/clips/` for the Database
-drawer; `publish-site-media.mjs --pack clips` ships them as one release archive.
+Skill showcases: any element wearing `data-skill-showcase` plays that skill live,
+always matching the build; where showcases appear is each surface's choice
+(today one temporary seat, the bag gem tooltip). `src/showcase/` + `showcase.html`
+(a sandboxed engine realm that never saves) + `data/skillShowcase.ts`; see
+`docs/engine/skill-showcases.md`, verify `probe_skillshowcase.ts` and the hidden
+`balance/skill-showcase-ui.cjs` after a build. The site's skill clips
+(`scripts/capture-skill-clips.cjs`) film the same stages into `site/media/clips/`;
+`publish-site-media.mjs --pack clips` ships them as one release archive.
 
 Guidance for Claude Code working in this repository. This file is committed and
 shared with everyone who clones the repo.

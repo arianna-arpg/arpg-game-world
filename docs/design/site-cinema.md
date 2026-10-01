@@ -162,8 +162,11 @@ Every player skill can carry a short looping clip of itself, cast in the game
 by the game. The Database drawer plays it muted beside the skill's facts, and a
 click opens it in the theater.
 
-**The capture** is `scripts/capture-skill-clips.cjs`, an Electron script that
-boots a built game (`dist/`, or `--root`) and films one skill at a time:
+**The recorder** is `scripts/capture-skill-clips.cjs`, an Electron script
+that films each skill through **the skill showcase engine**
+(`showcase.html`, `docs/engine/skill-showcases.md`): the same stages, hands and
+dials the game's live showcases play, so the site and the game show one
+choreography. It boots a built game (`dist/`, or `--root`):
 
 ```
 npm run build
@@ -172,31 +175,13 @@ npx electron scripts/capture-skill-clips.cjs -- --all --skip-existing
 npx electron scripts/capture-skill-clips.cjs -- --list
 ```
 
-- **The stage** is a bare runtime zone in one of the `STAGES` looks (a cool
-  slate by default), lit at the day's brightest hour, with no weather, props
-  or HUD. The hero is the class whose opening bar carries the skill, else one
-  chosen by its tags (minions, spells, bow attacks, the rest).
-- **The skill** is seated with `__game.devGrantSkill` as a dev gift at
-  `--level` (10). Attribute requirements are waived for the run, and costs
-  are paid from a deep pool.
-- **The dummies** are the training yard's own, made targetable (a passive body
-  is scenery to AI, homing shots and shoves). They are kept whole before each
-  render, so no life bar flickers, and a shoved dummy walks slowly back to its
-  post once the shove is spent.
-- **The staging** follows the skill's delivery and its `ai.range`: a firing
-  line for projectiles and ground casts, melee reach for strikes and cones, a
-  ring for novas, auras and self casts, out-and-home runs for dashes, leaps and
-  blinks. The frame fits the scene near the game's own zoom, which the sprite
-  bakes are drawn for.
-- **The hand** is scripted through `__game.devInput` into the real frame, so
-  every cast takes the same path as a player's. It holds the button for
-  ordinary casts, presses and holds for channels, guards and overcharges,
-  holds a charge until the bar is full, presses perfect and timed casts inside
-  their windows, and mashes multitudes. Cooldowns longer than a second are
-  cut to one, so a clip shows the skill more than once.
-- **The clock** is pinned: the rAF pump stops (`__game.step` drives every
-  frame), `Math.random` is seeded and `performance.now` advances with the
-  frames. The same skill and build film the same clip.
+- **The stage** is the showcase's (`src/data/skillShowcase.ts`): a bare slate
+  ground at the day's brightest hour, the class whose opening bar carries the
+  skill, training dummies kept whole, staging by delivery and `ai.range`, the
+  scripted hand, the gatekeeper and the setup rows.
+- **The clock** is pinned for a recording: the engine seeds `Math.random` and
+  advances `performance.now` with the frames, so the same skill and build
+  film the same clip. Each skill plays one cycle (`once`) in a fresh world.
 - **The encode**: canvas pixels (1920×1080) pipe to ffmpeg, which writes 720p
   AV1 and H.264 with a soft fade across the loop seam, and a WebP poster on
   the clip's busiest beat. `index.json` is rewritten after every clip, so an
@@ -205,9 +190,10 @@ npx electron scripts/capture-skill-clips.cjs -- --list
 Output lands in `site/media/clips/` (gitignored): `<id>.av1.mp4`,
 `<id>.h264.mp4`, `<id>.webp` and `index.json`, the list the Database reads.
 Each clip runs about 100 to 250 KB in all. `--sheets <dir>` writes a contact
-sheet per clip for review. The dials (length, frame rate, lead-in, tail, fades,
-cooldown cut, framing, stage looks) are `CFG` and `STAGES` at the top of the
-script.
+sheet per clip for review, and `balance/reports/skill-clips.json` records
+each clip's casts, damage and activity (`--report` moves it). The stage's
+dials are `SHOWCASE_CFG`; the recorder's own (frame rate, render size,
+encode) sit at the top of the script.
 
 **The Database** (`site/assets/database.js`) fetches
 `media/clips/index.json` and registers each clip as the film `skill:<id>`
@@ -215,10 +201,6 @@ script.
 pill, and `record: false` keeps a clip out of the visitor record, so it never
 touches the splash. No index, no clips: the drawer shows the facts alone.
 
-**The game hooks** it needs live on `window.__game` (`src/main.ts`):
-`devGrantSkill`, `devInput`, `clipCatalog` (player skills, class bars, the
-brightest hour) and `hydrated` (resolves once the boot's disk reconcile lands,
-so a run never starts under it).
 
 ## Hosting the media
 

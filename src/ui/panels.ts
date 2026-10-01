@@ -166,6 +166,7 @@ import { underSpanPolicyOf } from '../data/underspans';
 import { zoneKindOf } from '../data/zoneKinds';
 import { esc } from './dom';
 import { bindTooltips, configureTooltipDetail, installTooltipHints, hideTooltip, tooltipSweep, TIP_ANCHOR_CLASS, TIP_CFG, type TooltipContent } from './tooltip';
+import { skillShowcaseMarkup } from '../showcase/host';
 import { runRuneMinigame, runSmithMinigame } from './minigames';
 import { VENDORS, VENDOR_CFG, fmtRestock, type VendorDef } from '../data/vendors';
 import { BOUNTY_BOARD_CFG } from '../data/bountyboard';
@@ -4177,6 +4178,10 @@ export class UI {
           ? `Click to ${salv === 'sell' ? 'sell for' : 'break into'} ${this.essCostText(y)}`
           : `the granted spark ${salv === 'sell' ? 'sells for' : 'breaks into'} NOTHING — a click still deletes it`}</div>`);
       }
+      // THE SKILL SHOWCASE (src/showcase/host.ts), seated here for now: this gem
+      // as it would cast, at its own level with its own supports.
+      lines.push(skillShowcaseMarkup({ skillId: sp.skillId, level: sp.level,
+        supports: sp.sockets.flatMap(s => s ? [{ id: s.supportId, level: s.level }] : []) }, { width: 258 }));
       lines.push(`<div style="color:#9a94a8;font-size:10px">Skill Memory · <span style="color:${r.color};font-weight:bold">${r.label}</span> · ${sp.sockets.length} socket${sp.sockets.length === 1 ? '' : 's'}${sp.granted ? ' · <span style="color:#8a8678">granted</span>' : ''}</div>`);
       lines.push(`<div style="color:#8a8678;font-size:10px">${def.tags.join(' · ')}</div>`);
       lines.push(`<div>${def.description}</div>`);

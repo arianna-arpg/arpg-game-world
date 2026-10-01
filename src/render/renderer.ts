@@ -298,8 +298,15 @@ export class Renderer {
    *  live value by couchStretch — smoothed toward couchFit each frame, hard-
    *  floored at the stretch cap. Solo keeps couchStretch pinned at exactly 1,
    *  so every consumer of `zoom` reads the byte-identical classic 1.3. */
-  private readonly baseZoom = 1.3;
+  private baseZoom = 1.3;
   private couchStretch = 1;
+  /** THE SHOWCASE ZOOM (src/showcase/engine.ts): a skill showcase stage frames
+   *  its own span; the live game never calls this and keeps the classic 1.3. */
+  setBaseZoom(z: number): void { this.baseZoom = z; }
+  /** WORLD ONLY (the skill showcase engine): draw the world and its light,
+   *  nothing that speaks to a player — no labels, speech, floating text,
+   *  reticle, screen overlays or HUD. The live game leaves it false. */
+  worldOnly = false;
   private get zoom(): number { return this.baseZoom * this.couchStretch * this.pixelScale; }
   /** Frame delta off the sim clock (canopy/roof fade smoothing). */
   private frameDt = 0;
@@ -910,7 +917,7 @@ export class Renderer {
       z: crest ? wordZ : wordZ * (window.innerWidth / Math.max(1, this.canvas.width)),
       ox: this.cam.x - shx, oy: this.cam.y - shy,
     };
-    this.onCrest(crest, () => {
+    if (!this.worldOnly) this.onCrest(crest, () => {
       const wc = this.ctx;
       wc.save();
       wc.scale(wordZ, wordZ);
@@ -936,6 +943,7 @@ export class Renderer {
     }
 
     this.drawAtmosphere(world);
+    if (this.worldOnly) return;   // a showcase stage: no screen overlays, no HUD
     this.drawStatusFx();          // status ailment overlays (edge vignettes/frost/stars)
     this.drawSurvivalVignette(world); // THE SURVIVAL VEIL: per-row meter washes (breath's asphyxiation blue)
     this.drawLowLifeGlow(world);  // low-life blood vignette + heartbeat + hit surge — over the veil: death keeps the last word
