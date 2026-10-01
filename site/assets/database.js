@@ -94,6 +94,40 @@
 
   function tag(e, type) { e.type = type; return e; }
 
+  // ---- skill clips: the skill itself, cast in the game by the game ---------
+  // A generated index (media/clips/index.json: built by the capture harness,
+  // pulled in at deploy beside the site's films) names every skill that has a
+  // clip. Each registers with the site cinema as `skill:<id>`, so the drawer's
+  // loop opens in the theater with one click. No index, no clips: the drawer
+  // leads with the facts, as it always has.
+  var CLIPS = {};
+  function clipURL(p) { return window.HWCinema ? window.HWCinema.url(p) : '../' + p; }
+  fetch('../media/clips/index.json', { cache: 'no-cache' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .catch(function () { return null; })
+    .then(function (ix) {
+      if (!ix || !ix.clips) return;
+      Object.keys(ix.clips).forEach(function (id) {
+        var c = ix.clips[id];
+        CLIPS[id] = c;
+        if (window.HWCinema) window.HWCinema.register('skill:' + id, {
+          title: (c.name || id) + ' · in the game', aspect: c.aspect || ix.aspect || 16 / 9, duration: c.duration,
+          sources: c.sources, poster: c.poster, loop: true, silent: true, record: false,
+          exit: { kind: 'fade' }, words: { next: 'Click to close', nextTouch: 'Tap to close' },
+        });
+      });
+      /* a drawer opened before the index landed learns its clip now */
+      if (selType === 'skill' && selId && CLIPS[selId] && !el.drawer.hidden) openDetail(selType, selId, true);
+    });
+  function clipHTML(e) {
+    var c = CLIPS[e.id];
+    if (!c || !c.sources || !c.sources.length) return '';
+    return '<div class="dclip"><button class="dclip-v" type="button" data-cinema="skill:' + esc(e.id) + '" aria-label="Watch ' + esc(e.name) + ' in the theater">' +
+      '<video muted loop playsinline autoplay preload="metadata"' + (c.poster ? ' poster="' + esc(clipURL(c.poster)) + '"' : '') + '>' +
+      c.sources.map(function (s) { return '<source src="' + esc(clipURL(s.src)) + '"' + (s.type ? ' type="' + esc(s.type) + '"' : '') + '>'; }).join('') +
+      '</video></button><div class="dportcap">cast in the game, by the game</div></div>';
+  }
+
   // ---- URL state ----------------------------------------------------------
   function initFromURL() {
     var p = new URLSearchParams(location.search);
@@ -346,7 +380,7 @@
       '<div class="idline">' + esc(e.id) + '</div></div>' +
       '<button class="close" aria-label="Close">✕</button></div>' +
       '<div class="dbody">' +
-      portrait +
+      portrait + (e.type === 'skill' ? clipHTML(e) : '') +
       (e.description ? '<p class="desc">' + esc(e.description) + '</p>' : '') +
       '<dl class="kv">' + kv.join('') + '</dl>' +
       '<div class="dsub">Full entry</div>' +
