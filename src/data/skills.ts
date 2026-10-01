@@ -604,7 +604,7 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'solar_brand', name: 'Solar Brand',
     description: 'Mark a single target with the sun\'s regard: fire damage that applies two'
       + ' sunscorch stacks at once, with a 60% chance of a third.',
-    tags: ['spell', 'fire', 'duration'], color: '#ffd870',
+    tags: ['spell', 'fire', 'targeted', 'duration'], color: '#ffd870',
     manaCost: 11, cooldown: 8, useTime: 0.5,
     baseDamage: { fire: [5, 8] },
     // The brand strikes only what this spec resolves (probe_targetstrike).
