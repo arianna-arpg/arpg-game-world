@@ -25,6 +25,8 @@ build/build-info.json
 # Like dist/, it's generated output — never committed. CI rebuilds
 # it on every deploy, so the live /play/ always matches the source.
 /site/play/
+/site/dev/
+/site/build.json
 
 # ── Website portrait bundle ──────────────────────────────────
 # The database page's monster-portrait renderer (the game's own
