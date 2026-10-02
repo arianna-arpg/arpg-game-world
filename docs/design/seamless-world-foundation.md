@@ -1800,3 +1800,31 @@ voluntarily continue that expedition. This remains an unmet acceptance bar.
 The hotbar commit passed 336 remote probes and Pages publication; exact live
 metadata identified 066fd1ce, and remote QA retained seed 2171026257 and all six
 ordinary-save sentinels. Broadleaf publication is in progress separately.
+
+### Role silhouettes from native body parts
+
+Warrior, Magician and Rogue compositions now separate heads, shoulders, cloaks
+and carried equipment at gameplay scale. Four goblin looks use the existing
+humanoid core and distinguish robes, heavy shoulders and the crowned leader.
+Sylvan Warden uses bark shoulders; Grove Singer retains its leafy, cowled robe.
+These are ordinary `LookDef.parts` compositions with palette roles and scales;
+no new painter, combat rule, body radius or asset dependency was introduced.
+
+The before/after gallery was inspected at native and enlarged radii. Actual
+Warrior Cleave and Rogue Backstab retain their native body/weapon preparation,
+release and settling, with unchanged ground anchors and gameplay state. The
+paired-dagger comparison now keeps the current body instead of assuming fixed
+part indices. Native Warden guard absorption, exposed rear and break pass; the
+formation client still executes native skills and restores wounded survivors
+through Continue. World images were inspected, all three type checks and the
+25 combat smoke episodes pass. This is a presentation revision, not evidence
+of better encounter balance or a positive independent play verdict.
+
+The broadleaf critic completed two sites to level three, used earned Splitting,
+gear and a passive, and verified native Save & Exit/Continue across 124 paired
+captures. The critic would not choose extended leisure play yet: rewards were
+more compelling than sparse scenery and forgiving combat. The acceptance bar
+remains unmet. Broadleaf commit 9c08057b passed 336 remote probes and Pages run
+37063271887; exact live metadata reports build 2026-10-02T20:53:21.590Z. Isolated
+remote QA retained seed 472598626 and all six ordinary-save sentinels. Formation
+commit a967559b is pushed and its remote checks are in progress.

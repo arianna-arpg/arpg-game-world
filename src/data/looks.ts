@@ -268,35 +268,39 @@ export const LOOKS: Record<string, LookDef> = {
   // ============================================================ GREENSKINS
   goblin: {
     parts: [
-      { kind: 'disc' },
-      { kind: 'ears' },
+      { kind: 'torso', scale: .9, params: { head: .46 } },
+      { kind: 'ears', x: .28, scale: .8 },
       { kind: 'daggers', params: { len: 0.45 } },
       { kind: 'eyes', params: { spread: 0.42, dist: 0.55, size: 0.09 } },
     ],
   },
   goblin_shaman: {
     parts: [
-      { kind: 'robe', scale: 0.95 },
-      { kind: 'ears' },
-      { kind: 'staff', params: { orb: 'glow' } },
+      { kind: 'tatters', scale: .85, params: { n: 3 } },
+      { kind: 'robe', scale: .85 },
+      { kind: 'torso', scale: .8 },
+      { kind: 'ears', x: .28, scale: .8 },
+      { kind: 'staff', scale: 1.15, params: { orb: 'glow' } },
       { kind: 'eyes', params: { spread: 0.42, dist: 0.5, size: 0.09 } },
     ],
   },
   goblin_brute: {
     parts: [
-      { kind: 'disc' },
-      { kind: 'ears' },
-      { kind: 'mace' },
-      { kind: 'pauldrons', scale: 0.85, role: 'wood' },
+      { kind: 'torso', scale: 1.02 },
+      { kind: 'ears', x: .3, scale: .82 },
+      { kind: 'mace', scale: 1.1 },
+      { kind: 'pauldrons', scale: .95, role: 'wood' },
       { kind: 'eyes', params: { spread: 0.4, dist: 0.55, size: 0.08 } },
     ],
   },
   goblin_chief: {
     parts: [
-      { kind: 'disc' },
-      { kind: 'ears' },
-      { kind: 'sword' },
-      { kind: 'crown', x: 0.1, scale: 0.7 },
+      { kind: 'cape', scale: .95, role: 'cloth' },
+      { kind: 'torso' },
+      { kind: 'ears', x: .3, scale: .8 },
+      { kind: 'pauldrons', scale: .7, role: 'wood' },
+      { kind: 'sword', scale: 1.1 },
+      { kind: 'crown', x: .38, scale: .7 },
       { kind: 'eyes', params: { spread: 0.4, dist: 0.55, size: 0.08 } },
     ],
   },
@@ -1524,29 +1528,37 @@ export const LOOKS: Record<string, LookDef> = {
   // ========================================================= PLAYER CLASSES
   class_warrior: {
     parts: [
-      { kind: 'torso' },
+      { kind: 'cape', scale: .95, role: 'cloth' },
+      { kind: 'torso', role: 'cloth' },
+      { kind: 'armorPlates', scale: .6, params: { n: 2 } },
       { kind: 'pauldrons' },
+      { kind: 'helm', scale: .85 },
       { kind: 'sword', action: { pivotX: .1, pivotY: .62, windTurn: -1.05, strikeTurn: .95, reach: .12 } },
       { kind: 'shield' },
     ],
   },
   class_magician: {
     parts: [
-      { kind: 'robe' },
-      { kind: 'staff', params: { orb: 'glow' },
+      { kind: 'cape', scale: .95, role: 'cloth' },
+      { kind: 'robe', scale: .85 },
+      { kind: 'torso', scale: .75, role: 'cloth' },
+      { kind: 'hood', x: .38, scale: .78, role: 'accent' },
+      { kind: 'book', y: -1, scale: .65 },
+      { kind: 'staff', scale: 1.15, params: { orb: 'glow' },
         action: { pivotX: 0, pivotY: .62, windTurn: -.4, strikeTurn: .35, reach: .18 } },
       { kind: 'runes', params: { n: 3 } },
     ],
   },
   class_rogue: {
     parts: [
-      { kind: 'torso' },
-      { kind: 'hood', x: 0.32, scale: 0.9 },
+      { kind: 'tatters', scale: .6, params: { n: 3 } },
+      { kind: 'cape', scale: .8, role: 'dark' },
+      { kind: 'torso', scale: .9, role: 'cloth' },
+      { kind: 'hood', x: .32, scale: .8 },
       { kind: 'daggers', params: { len: 0.5, side: 1 },
         action: { pivotX: .1, pivotY: .62, windTurn: -.7, strikeTurn: .22, reach: .26 } },
       { kind: 'daggers', params: { len: 0.5, side: -1 },
         action: { pivotX: .1, pivotY: -.62, windTurn: .7, strikeTurn: -.22, reach: .26 } },
-      { kind: 'tatters', scale: 0.6, params: { n: 3 } },
     ],
   },
   class_cleric: {
@@ -2086,9 +2098,10 @@ export const LOOKS: Record<string, LookDef> = {
   },
   sylvan_warden: {
     parts: [
-      { kind: 'disc', scale: 0.95 },
       { kind: 'fronds', params: { n: 5 } },
-      { kind: 'staff', params: { orb: '#9fe07a' } },
+      { kind: 'torso', scale: .95, role: 'wood' },
+      { kind: 'pauldrons', scale: .85, role: 'wood' },
+      { kind: 'staff', scale: 1.15, params: { orb: '#9fe07a' } },
       { kind: 'eyes', params: { spread: 0.45, dist: 0.55, size: 0.08 } },
     ],
   },
@@ -2102,8 +2115,9 @@ export const LOOKS: Record<string, LookDef> = {
   },
   grove_singer: {
     parts: [
-      { kind: 'robe' },
-      { kind: 'fronds', scale: 0.8, params: { n: 4 } },
+      { kind: 'fronds', scale: 1.1, params: { n: 4 } },
+      { kind: 'robe', scale: .85 },
+      { kind: 'hood', x: .35, scale: .7, role: 'wood' },
       { kind: 'halo', scale: 0.9, alpha: 0.5 },
     ],
   },

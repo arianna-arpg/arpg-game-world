@@ -168,6 +168,10 @@ controls its panels and wear. Facing, coverage and strength read the actual guar
 body visibility also applies to its existing arc. Verify defensecues,
 `balance/guard-coverage-ui.cjs`, `balance/raised-guard-ui.cjs` and
 `balance/raised-guard-world-ui.cjs` for real raise/absorb/rear/break behavior.
+Starter Warrior/Magician/Rogue, goblin roles and Sylvan Warden/Grove Singer
+compose their silhouettes from the native `LookDef.parts` grammar. Body radius,
+combat ownership and action clocks remain native. After changing these looks,
+inspect the actual class action/guard clients, plus the neutral dagger comparison.
 The Rogue's paired blades expose separate sides of the same native dagger part.
 Verify castingcues and `balance/body-action-ui.cjs` (default Warrior;
 `HOLLOW_WAKE_QA_CLASS=rogue` exercises actual Backstab and both joints).
