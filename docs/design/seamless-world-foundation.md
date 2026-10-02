@@ -1623,3 +1623,29 @@ configuration, location, seed and terrain when continued by the new build.
 Screenshots were inspected. These controlled fixtures do not demonstrate a
 naturally earned distant journey or establish that the critic's concerns about
 travel and encounter pacing have been resolved.
+
+### Physical surface detail
+
+Native ice, swamp and mud now select configurable geographic surface motifs in
+worldmass/surfaceDetail.ts: fractures for ice, irregular shallow pools for wet
+ground. The terrain baker clips each to the actual surviving physical cells.
+Changing a cell to ground removes the relevant motif even when the base color
+is identical. Geometry, density, extent and colors belong to MASS_SURFACE_VIEW;
+the pass consumes no simulation randomness and uses the existing bounded bake.
+
+The first pool artwork resembled leaves and its curved rasterization exceeded
+the initial page-comparison tolerance. Irregular quarter-pixel geographic
+vertices and broken horizontal reflections improved both the read and the
+page agreement; the tolerance was not relaxed. Final full-versus-tiled checks
+across negative coordinates differ by at most three channel levels (mean below
+0.0014). Repeat, seed/config changes, disabled/unknown/invalid inputs, canvas
+state and random-stream isolation pass.
+
+All three type checks, the scoped build and both painter/actual-world clients
+pass. Warm draws perform zero new bakes and preserve gameplay state. Drying a
+300-unit square removes the corresponding details; ice and swamp have no pixel
+changes outside it, and mud has thirteen outside pixels differing by one
+channel level (27 total), within the recorded clipping tolerance. Cache size is
+two of twenty-five pages. Gallery and generated cold/wet country screenshots
+were inspected. This does not change physics, danger, population or weather.
+A new independent reviewer uses this fixed build and chooses its own route.

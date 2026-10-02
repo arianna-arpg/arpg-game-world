@@ -4,6 +4,7 @@ import type { WorldMassRuntime } from './runtime';
 import { regionKind } from '../world/regions';
 import { MASS_CLEARANCE_VIEW } from './clearance';
 import { paintMassTrailWear } from './trailWear';
+import { MASS_SURFACE_VIEW, paintMassSurfaceDetail } from './surfaceDetail';
 
 interface Baked { canvas: HTMLCanvasElement; revision: number }
 /** Canvas assets are renderer-owned, disposable, and bounded independently of
@@ -87,10 +88,16 @@ export class MassPainter {
     sc.putImageData(pixels, 0, 0);
     ctx.drawImage(small, 0, 0, span, span);
     const solid = new Path2D(), trailSurface = new Path2D();
+    const detailSurfaces = new Map<string,Path2D>();
     for (let y = 0; y < cols; y++) for (let x = 0; x < cols; x++) {
       const at = { ...cell, x: x * cs, y: y * cs };
       const t = page?.samples[y * cols + x] ?? mass.stream.sample(at);
       const noise = massHash(x + ',' + y, salt);
+      if(MASS_SURFACE_VIEW.enabled && MASS_SURFACE_VIEW.regions[t.region]){
+        let surface=detailSurfaces.get(t.region);
+        if(!surface){surface=new Path2D();detailSurfaces.set(t.region,surface);}
+        surface.rect(x*cs,y*cs,cs,cs);
+      }
       // Only the surviving route's attributed ground receives wear. A later
       // terrain consequence, clearing or native town floor owns its own face.
       if (t.region === 'ground' && mass.journey
@@ -128,6 +135,11 @@ export class MassPainter {
     // Fractured stone has its own larger geographic lattice. Planes cross
     // physical tile/page joins; clipping preserves the exact collision contour.
     const origin = localOffset({ ...cell, x: 0, y: 0 }, { ...mass.origin, x: 0, y: 0 }, span), grain = cs * 4;
+    for(const [region,surface] of detailSurfaces){
+      ctx.save();ctx.clip(surface);ctx.translate(-origin.x,-origin.y);
+      paintMassSurfaceDetail(ctx,{x:origin.x,y:origin.y,w:span,h:span},mass.generator.run.seed,region);
+      ctx.restore();
+    }
     if (mass.journey) {
       ctx.save(); ctx.clip(trailSurface); ctx.translate(-origin.x, -origin.y);
       paintMassTrailWear(ctx, mass.journey.trails, {x:origin.x,y:origin.y,w:span,h:span}, mass.generator.run.seed);
