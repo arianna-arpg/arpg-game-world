@@ -65,7 +65,7 @@ export function frontierLandmarks(): Landmark[] {
       prop('dead_tree', -175, 120, 60), prop('standing_stone', 135, 160, 30),
       prop('bone_pile', -95, 90, 30), prop('tombstone', 140, -35, 20),
       prop('brush', 10, -195, 38),
-    ], 'bloodfont'),
+    ], 'bloodfont', [nativeMassAltar('storm_altar',0,-90)]),
     { ...compose('stoneward', null, 'The Stoneward', { x: 0, y: -130, holdSeconds: 5 }, false, 1, [
       // Broken colonnades leave wide approaches; the living guardian owns
       // its native shield, turning, recovery and return-to-post behavior.

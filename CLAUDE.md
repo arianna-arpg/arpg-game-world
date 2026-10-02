@@ -52,9 +52,14 @@ classes, exact one-point spending, Continue and viewport layout.
 Finite journey landmarks may declare snapshotted native altar fields through
 `worldmass/fields.ts`. Memorial Grove uses the native shared Mending field;
 native modifiers/healing remain authoritative, with fixed place levels, stable
-sources and saved pulse clocks. The first adapter admits modifiers and mending
-only, on finite journey sites; repeated-field paging, storm and kill-reward verbs
-remain pending. Verify `probe_worldmass_fields.ts`, persistence/worldmass probes
+sources and saved pulse clocks. Finite journey fields admit modifiers, mending
+and localized storms; repeated-field paging and kill-reward verbs remain pending.
+New Fallen Court encounters carry the native Gathering Storm. `MassFieldSave`
+retains its bolt cadence; new post-Continue strikes receive a full native warning.
+`fireStrikeAt` takes an optional fixed encounter level for placed fields, while
+weather keeps impact geography. Verify fields and `balance/storm-fields-ui.cjs`
+for real movement evasion, friend/foe impact and browser Continue.
+Verify `probe_worldmass_fields.ts`, persistence/worldmass probes
 and hidden `balance/worldmass-fields-ui.cjs`. Owned native passive names/effects
 remain visible after allocation through `ui/passiveFrontier.ts`; its client
 harness checks that confirmation alongside single spending and Continue.

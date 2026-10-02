@@ -1,12 +1,13 @@
 import type { Altar, World } from '../engine/world';
 import { ALTARS, type AltarDef } from '../data/shrines';
 import { STAT_DEFS } from '../engine/stats';
+import { SKILLS } from '../data/skills';
 import type { MassPlace } from './contracts';
 import { canonical } from './random';
 import { siteOffset } from './sites';
 
 export interface MassAltarSpec { id: string; source: string; x: number; y: number; def: AltarDef }
-export interface MassFieldSave { id: string; mendTimer?: number }
+export interface MassFieldSave { id: string; mendTimer?: number; boltTimer?: number }
 /** Copy the native rule into the expedition; later registry edits cannot move or
  * retune an already saved place. Native updateAltars remains its sole simulation. */
 export function nativeMassAltar(id: string, x: number, y: number): MassAltarSpec {
@@ -22,7 +23,14 @@ export function validateMassAltar(row: MassAltarSpec, radius: number): void {
     || !Array.isArray(d.mods) || d.mods.length>16
     || d.mods.some(m=>!STAT_DEFS[m.stat] || !['flat','increased','more','override'].includes(m.kind) || !Number.isFinite(m.value))
     || d.influenceCue!==undefined && typeof d.influenceCue!=='boolean'
-    || d.bolts || d.killGems
+    || d.killGems
+    || d.bolts && (!Object.hasOwn(SKILLS,d.bolts.skillId)
+      || ![d.bolts.radius,d.bolts.telegraph,d.bolts.ratePerSec].every(Number.isFinite)
+      || d.bolts.radius<=0 || d.bolts.radius>d.radius
+      || d.bolts.telegraph<=0 || d.bolts.telegraph>10
+      || d.bolts.ratePerSec<=0 || d.bolts.ratePerSec>10
+      || d.bolts.throughRoofs!==undefined && typeof d.bolts.throughRoofs!=='boolean'
+      || d.bolts.fx!==undefined && (typeof d.bolts.fx!=='string' || !d.bolts.fx || d.bolts.fx.length>128))
     || d.mend && (![d.mend.every,d.mend.base,d.mend.perLevel].every(Number.isFinite)
       || d.mend.every<=0 || d.mend.base<0 || d.mend.perLevel<0))
     throw new Error('Unsupported worldmass altar field');
@@ -36,7 +44,8 @@ export class MassFields {
     if(!Array.isArray(saved) || saved.length>16)throw new Error('Invalid worldmass field count');
     for(const row of saved) {
       if(!row.id || this.saved.has(row.id) || row.mendTimer!==undefined
-        && (!Number.isFinite(row.mendTimer) || row.mendTimer<0))
+        && (!Number.isFinite(row.mendTimer) || row.mendTimer<0)
+        || row.boltTimer!==undefined && (!Number.isFinite(row.boltTimer) || row.boltTimer<0))
         throw new Error('Invalid worldmass field checkpoint');
       this.saved.set(row.id,{...row});
     }
@@ -51,6 +60,8 @@ export class MassFields {
       const saved=this.saved.get(id);
       if(saved?.mendTimer!==undefined && row.def.mend)
         altar.mendTimer=Math.min(saved.mendTimer,row.def.mend.every);
+      if(saved?.boltTimer!==undefined && row.def.bolts)
+        altar.boltTimer=Math.min(saved.boltTimer,1/row.def.bolts.ratePerSec);
       this.live.set(id,altar);world.altars.push(altar);
     }
   }
@@ -67,7 +78,8 @@ export class MassFields {
     if([...this.saved.keys()].some(id=>!known.has(id)))throw new Error('Unknown saved worldmass field');
   }
   snapshot(): MassFieldSave[] {
-    return [...this.live].map(([id,a])=>({id,...(a.mendTimer!==undefined?{mendTimer:Math.max(0,a.mendTimer)}:{})}))
+    return [...this.live].map(([id,a])=>({id,...(a.mendTimer!==undefined?{mendTimer:Math.max(0,a.mendTimer)}:{}),
+      ...(a.boltTimer!==undefined?{boltTimer:Math.max(0,a.boltTimer)}:{})}))
       .sort((a,b)=>a.id.localeCompare(b.id));
   }
 }

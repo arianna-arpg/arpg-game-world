@@ -856,9 +856,9 @@ geographic source is stable; its level belongs to the place, not the hero or the
 shared enclosing zone. Admitted fields remain resident on the native simulation
 clock, with their remaining pulse delay checkpointed separately from ordinary
 zone furniture. Continue restores each once even from far away. Old descriptors
-without fields retain their former encounters. Modifiers and mending are the
-admitted verbs; storm hazards and kill-reward fields need additional lifecycle
-adapters. Repeated procedural fields are rejected until their paging exists.
+without fields retain their former encounters. Modifiers, mending and localized
+storms are admitted; kill-reward fields still need a lifecycle adapter. Repeated
+procedural fields are rejected until their paging exists.
 The finite opening circuit and per-site limits bound this first adapter.
 
 Verification: real native shared healing and modifier entry/exit, level-seven
@@ -1340,3 +1340,31 @@ Skills, checks the native combat restriction, then returns to Lastlight and
 drags the earned gem into Cleave. The fitted gem and receipt survive Continue;
 the receipt screenshot was inspected. All three type checks pass. This addresses
 a repeated navigation criticism without changing the independent verdicts.
+
+### Localized storm encounters
+
+New Fallen Court descriptors include the native Gathering Storm altar alongside
+its existing native garrison. Both sides can use its damage field and both can
+be struck by its announced bolts. The adapter accepts the existing WeatherStrike
+payload with finite bounds and registered skills; no new hazard damage or AI
+pipeline is introduced. A placed field supplies its fixed encounter level to
+the shared strike verb, while weather retains impact geography.
+
+The remaining bolt cadence joins the field checkpoint. Continue discards old
+transient strikes like other native in-flight effects; every subsequent beat
+starts a full warning, including one due at the saved instant. Continued older
+expeditions do not acquire the new field. Repeated-field paging and kill-reward
+altar verbs remain unfinished.
+
+Verification includes all fifteen worldmass probes, all three type checks,
+25 native combat smoke episodes and 869 generation cases across three seeds
+(zero failures, four existing warnings). The field probe checks exact cadence,
+fixed level, independent in-flight casters, native friend/foe damage, a safe
+outside, complete re-warning and malformed data. The isolated real client moves
+out of a native warning before impact, observes the remaining enemy struck,
+then verifies a player hit when staying and the field timer through Continue.
+Screenshots were inspected. Its first stand-in fixture failed an impact assertion;
+that attempt lacked position diagnostics and is not counted as successful QA.
+The fixture now requires a clear sampled impact point and verifies that native
+landing did not displace the player. The revised run passed. This is controlled
+mechanics evidence, not a positive independent gameplay verdict.

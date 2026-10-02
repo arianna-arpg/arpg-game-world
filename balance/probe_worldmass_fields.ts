@@ -115,6 +115,70 @@ assert.equal(altarInfluences(w.player,w.altars).length,0,'pulse-only Mending kee
 console.log('PASS actual native modifier membership cues enter/leave both teams, honor contact, story, death, source and opt-out');
 console.log('PASS a second native rule composes without bespoke combat code; modifiers enter and leave both teams exactly');
 
+// Native localized storms keep their encounter level and remaining cadence.
+const stormCfg=JSON.parse(canonical(massAdventure()));
+delete stormCfg.progression;
+stormCfg.content.find((c:{id:string})=>c.id==='fallen-court').level=7;
+const stormWorld=makeSimWorld('warrior',923),stormRuntime=new WorldMassRuntime(431,'storm-field',stormCfg);
+stormRuntime.attach(stormWorld);
+const court=stormRuntime.journey!.places.find(p=>p.content==='fallen-court')!;
+stormWorld.player.pos=stormRuntime.journey!.local(court);stormRuntime.update(stormWorld,true);
+const storm=stormWorld.altars.find(a=>a.def.bolts)!;
+assert.ok(storm?.massSource);assert.equal(storm.level,7);
+const bolts=storm.def.bolts!;
+stormWorld.player.level=40;
+storm.boltTimer=.2;stormWorld.zones=[];
+pulse(stormWorld,.19);assert.equal(stormWorld.zones.length,0);
+pulse(stormWorld,.02);
+const strike=stormWorld.zones[0];assert.ok(strike);
+assert.equal(strike.delay,bolts.telegraph,'the native warning always precedes impact');
+assert.equal(strike.caster.level,7);assert.equal(strike.inst.level,3);
+assert.equal(strike.radius,bolts.radius);assert.ok(strike.hitAll&&strike.spareDormant&&strike.spareRoofed);
+assert.ok(Math.hypot(strike.pos.x-storm.pos.x,strike.pos.y-storm.pos.y)<=storm.def.radius);
+const originalCaster=strike.caster,originalPosition={...originalCaster.pos};
+storm.boltTimer=0;pulse(stormWorld,.01);
+assert.notEqual(stormWorld.zones[1].caster,originalCaster,'a later strike cannot move an in-flight source');
+assert.deepEqual(originalCaster.pos,originalPosition);
+stormWorld.zones=[strike];
+const struck=stormWorld.createMonster('zombie',7,'enemy'),escaped=stormWorld.createMonster('zombie',7,'enemy');
+stormWorld.actors=[stormWorld.player,struck,escaped];
+stormWorld.player.pos={...strike.pos};struck.pos={...strike.pos};
+escaped.pos={x:strike.pos.x+strike.radius+escaped.radius+20,y:strike.pos.y};
+const lifeBefore=[stormWorld.player.life,struck.life,escaped.life];
+const advanceZones=(dt:number)=>(stormWorld as unknown as {updateZones(dt:number):void}).updateZones(dt);
+advanceZones(bolts.telegraph-.01);
+assert.deepEqual([stormWorld.player.life,struck.life,escaped.life],lifeBefore,'no damage while warning remains');
+advanceZones(.02);
+assert.ok(stormWorld.player.life<lifeBefore[0]&&struck.life<lifeBefore[1],'native impact reaches both sides');
+assert.equal(escaped.life,lifeBefore[2],'leaving the native strike radius avoids impact');
+console.log('PASS native storm warning, fixed level, source isolation, friend/foe impact and spatial avoidance');
+
+storm.boltTimer=.43;
+const stormSave=stormRuntime.snapshot(stormWorld);
+const stormNext=makeSimWorld('warrior',924),stormResume=new WorldMassRuntime(431,'storm-field',stormCfg,stormSave);
+stormResume.attach(stormNext,stormSave);
+const returnedStorm=stormNext.altars.find(a=>a.massSource===storm.massSource)!;
+assert.equal(returnedStorm.boltTimer,.43);assert.equal(returnedStorm.level,7);
+assert.equal(stormNext.zones.length,0,'Continue does not restore a partially elapsed damaging strike');
+pulse(stormNext,.42);assert.equal(stormNext.zones.length,0);
+pulse(stormNext,.02);
+assert.equal(stormNext.zones[0].delay,bolts.telegraph,'the next restored beat starts a complete native warning');
+const zeroSave=structuredClone(stormSave);
+zeroSave.fields!.find(f=>f.id===storm.massSource)!.boltTimer=0;
+const zeroWorld=makeSimWorld('warrior',925),zeroRuntime=new WorldMassRuntime(431,'storm-field',stormCfg,zeroSave);
+zeroRuntime.attach(zeroWorld,zeroSave);pulse(zeroWorld,.01);
+assert.equal(zeroWorld.zones[0].delay,bolts.telegraph,'a due-at-save beat cannot cause an unwarned arrival hit');
+for(const value of [NaN,Infinity,-1]) {
+ const bad=structuredClone(stormSave);bad.fields!.find(f=>f.id===storm.massSource)!.boltTimer=value;
+ assert.throws(()=>new WorldMassRuntime(431,'bad',stormCfg,bad),/field checkpoint/);
+}
+for(const patch of [{ratePerSec:0},{ratePerSec:NaN},{radius:-1},{telegraph:0},{skillId:'missing'},{skillId:'toString'},{throughRoofs:'yes'}]) {
+ const bad=structuredClone(stormCfg);
+ Object.assign(bad.content.find((c:{id:string})=>c.id==='fallen-court').site.altars[0].def.bolts,patch);
+ assert.throws(()=>new WorldMassRuntime(431,'bad',bad),/altar field|finite JSON/);
+}
+console.log('PASS storm cadence through Continue, complete re-warning and malformed field refusal');
+
 const legacy=JSON.parse(canonical(massAdventure()));
 for(const row of legacy.content)if(row.site)delete row.site.altars;
 const old=makeSimWorld('warrior',733),om=new WorldMassRuntime(431,'legacy',legacy);om.attach(old);

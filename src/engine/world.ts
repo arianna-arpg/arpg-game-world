@@ -18502,7 +18502,7 @@ export class World {
    *  Roofs shelter from it (Zone.spareRoofed) unless the strike's own data
    *  reaches through (WeatherStrike.throughRoofs — a future ghost-storm's
    *  lever, not a code branch). */
-  private fireStrikeAt(strike: { skillId: string; radius: number; telegraph: number; throughRoofs?: boolean; fx?: string }, at: Vec2): void {
+  private fireStrikeAt(strike: { skillId: string; radius: number; telegraph: number; throughRoofs?: boolean; fx?: string }, at: Vec2, encounterLevel?: number): void {
     const skill = SKILLS[strike.skillId];
     if (!skill) return;
     if (!this.stormCaster) {
@@ -18513,10 +18513,10 @@ export class World {
     }
     const caster = this.massRuntime ? new Actor('Storm', 'player', vec(at.x, at.y)) : this.stormCaster;
     caster.untargetable = true; caster.invulnerable = true;
-    const level = this.levelAt(at);
+    const level = encounterLevel ?? this.levelAt(at);
     caster.level = Math.max(1, level);
     caster.pos = vec(at.x, at.y); // so a raised guard can still block it fairly
-    // Geographic sky hazards use their impact location, not the hero's level.
+    // Placed fields supply encounterLevel; sky hazards read impact geography.
     const inst = makeSkillInstance(skill, 1 + Math.floor(level / 3));
     this.zones.push({
       pos: vec(at.x, at.y), radius: strike.radius, caster, inst, color: skill.color,
@@ -56203,7 +56203,7 @@ export class World {
           al.boltTimer = 1 / bolts.ratePerSec;
           const ang = rand(0, Math.PI * 2);
           const r = Math.sqrt(rand(0, 1)) * Math.max(0, al.def.radius - bolts.radius * 0.5);
-          this.fireStrikeAt(bolts, vec(al.pos.x + Math.cos(ang) * r, al.pos.y + Math.sin(ang) * r));
+          this.fireStrikeAt(bolts, vec(al.pos.x + Math.cos(ang) * r, al.pos.y + Math.sin(ang) * r), al.level);
         }
       }
       // THE MENDING PULSE: heal EVERYONE inside — enemies included (bring
