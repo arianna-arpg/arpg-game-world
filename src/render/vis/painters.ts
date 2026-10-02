@@ -12,6 +12,7 @@
 // ---------------------------------------------------------------------------
 
 import { creatureTerrain } from './creatureTerrain';
+import { paintStatue } from './statue';
 import { doodadRuleOf, type Doodad } from '../../engine/levelgen';
 import { rockFormBodies, rockSeedOf } from '../../engine/rockForms';
 import type { World } from '../../engine/world';
@@ -171,6 +172,10 @@ export interface DoodadVisualDef {
    *  standing objects 46–56, interactives/ritual 57–59. */
   order: number;
   params?: Record<string, unknown>;
+  /** Sparse standing art repainted above its OWN ground shadow (0..1).
+   * Other sight blockers still veil it; actors/ground underneath stay hidden.
+   * Use for opaque solid-object painters, not ground, crowns or labels. */
+  raisedSurface?: number;
   /** TERRAIN BLEND — mesh this ground-family kind into the land around it.
    *  The group's merged silhouette grows soft rings outward (feather world
    *  units) fading from `strength` to nothing, so a gravel road beds into
@@ -7457,48 +7462,8 @@ export function paintGroupShadows(env: PaintEnv, group: readonly Doodad[], alpha
   }
 }
 
-/** A WEATHERED STATUE: square plinth, the figure's shoulder-and-head mass
- *  off-centre the way old monuments lean, moss creeping up the north face. */
-const statue: GroupPainter = (env, group, def) => {
-  const p = (def.params ?? {}) as { stone?: ColorSpec; moss?: ColorSpec };
-  const { ctx, theme } = env;
-  const stone = resolveColor(p.stone, theme, '#8a8578');
-  const moss = resolveColor(p.moss, theme, '#5a6e42');
-  for (const o of group) {
-    const r = o.radius;
-    const seed = ((o.pos.x * 17 + o.pos.y * 5) | 0) >>> 0;
-    ctx.save();
-    ctx.translate(o.pos.x, o.pos.y);
-    ctx.rotate(o.rot ?? 0);
-    // The plinth: two stacked squares, the lower a shade darker.
-    ctx.fillStyle = shade(stone, -0.3);
-    ctx.fillRect(-r, -r, r * 2, r * 2);
-    ctx.fillStyle = shade(stone, -0.1);
-    ctx.fillRect(-r * 0.74, -r * 0.74, r * 1.48, r * 1.48);
-    ctx.strokeStyle = withAlpha(shade(stone, -0.5), 0.8);
-    ctx.lineWidth = 1.2;
-    ctx.strokeRect(-r * 0.74, -r * 0.74, r * 1.48, r * 1.48);
-    // The figure's mass: shoulders + head, leaning as the ground let it.
-    const lean = (hash01(1, seed) - 0.5) * r * 0.3;
-    ctx.fillStyle = shade(stone, 0.12);
-    ctx.beginPath();
-    ctx.ellipse(lean * 0.4, 0, r * 0.46, r * 0.34, hash01(2, seed) * 0.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = shade(stone, 0.24);
-    ctx.beginPath();
-    ctx.arc(lean, -r * 0.08, r * 0.2, 0, Math.PI * 2);
-    ctx.fill();
-    // Moss holds the sunless corner.
-    ctx.fillStyle = withAlpha(moss, 0.55);
-    for (let i = 0; i < 4; i++) {
-      ctx.beginPath();
-      ctx.arc(-r * 0.5 + hash01(i + 3, seed) * r * 0.5, -r * 0.55 + hash01(i + 9, seed) * r * 0.5,
-        r * (0.1 + hash01(i + 5, seed) * 0.1), 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
-  }
-};
+// Shared carved-stone vocabulary; material and relief live in the visual registry.
+const statue: GroupPainter = paintStatue;
 
 /** A WAYSHRINE: a stone niche with a pitched cap and the votive candle the
  *  road still keeps lit (the glow itself rides the def's LightSpec). */

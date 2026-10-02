@@ -47,7 +47,12 @@ of bodies, with bounded displacement and unobstructed owner links; hidden actors
 cannot displace visible meters. Actual altar restoration uses the shared resource
 transfer painter with an optional restore kind, and the native pulse clock drives
 its sigil. Verify combatfocus/feedingcues/worldmass_fields plus the real combat-focus
-and fields client harnesses. This is an opening network, not global roads,
+and fields client harnesses. Native statues use the parameterized carving in
+`render/vis/statue.ts` and the generic `DoodadVisualDef.raisedSurface` lane:
+own ground shadow cannot erase raised art; other blockers, room/roof/canopy
+and tier rules still apply. Verify sightveil, visibility_stability and
+`balance/raised-surfaces-ui.cjs` after a scoped build. This is an opening
+network, not global roads,
 campaign migration or distant AI.
 Worldmass opening population quotas live in `population.ts` and are saved per
 run; omitted quotas retain legacy encounters. Continuous Lastlight supplies

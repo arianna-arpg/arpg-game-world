@@ -120,8 +120,8 @@ export interface PathSink {
 
 /** One cached solid-body silhouette (flattened from its HitShape). `s` is the
  *  kind's graded shadow strength (sightShadowFrac — scales alpha AND length). */
-interface OccDisc { x: number; y: number; r: number; s: number }
-interface OccRect { x: number; y: number; hw: number; hh: number; rot: number; boundR: number; s: number }
+interface OccDisc { x: number; y: number; r: number; s: number; owner?: Doodad }
+interface OccRect { x: number; y: number; hw: number; hh: number; rot: number; boundR: number; s: number; owner?: Doodad }
 /** One cached wall FACE (a merged run of solid-cell edges), with the outward
  *  normal (away from the solid mass, toward the ground it faces). */
 export interface OccEdge { ax: number; ay: number; bx: number; by: number; nx: number; ny: number }
@@ -404,15 +404,15 @@ export class SightVeil {
       if (sf <= 0) continue;
       const s = hitSurfaceOf(d, 'shot');
       if (s.kind === 'circle') {
-        if (s.r > 0.5) this.discs.push({ x: d.pos.x, y: d.pos.y, r: s.r, s: sf });
+        if (s.r > 0.5) this.discs.push({ x: d.pos.x, y: d.pos.y, r: s.r, s: sf, owner: d });
       } else if (s.kind === 'multi') {
         for (const q of s.parts) {
-          if (q.r > 0.5) this.discs.push({ x: d.pos.x + q.dx, y: d.pos.y + q.dy, r: q.r, s: sf });
+          if (q.r > 0.5) this.discs.push({ x: d.pos.x + q.dx, y: d.pos.y + q.dy, r: q.r, s: sf, owner: d });
         }
       } else {
         this.rects.push({
           x: d.pos.x, y: d.pos.y, hw: s.hw, hh: s.hh, rot: s.rot ?? 0,
-          boundR: Math.hypot(s.hw, s.hh), s: sf,
+          boundR: Math.hypot(s.hw, s.hh), s: sf, owner: d,
         });
       }
     }
@@ -508,6 +508,17 @@ export class SightVeil {
    *  like castRay, so a rim-stander pokes above the cliff darkness while a
    *  deep-bench body stays honestly hidden. */
   occludedAt(pos: Pt, targetElev?: number): number {
+    return this.occlusionAt(pos, targetElev);
+  }
+
+  /** A standing object's own raised art may rise above its ground shadow.
+   * Other bodies, walls and roof hulls still conceal it. Never use this for
+   * actors, labels or ground: their ordinary occlusion query stays unchanged. */
+  raisedSurfaceReveal(d: Doodad): number {
+    return 1 - this.occlusionAt(d.pos, d.tier, d);
+  }
+
+  private occlusionAt(pos: Pt, targetElev?: number, except?: Doodad): number {
     if (!this.active) return 0;
     const px = this.px, py = this.py;
     const qx = pos.x - px, qy = pos.y - py;
@@ -517,6 +528,7 @@ export class SightVeil {
     if (this.doodadF > 0) {
       const len = Math.sqrt(len2);
       for (const c of this.discs) {
+        if (except && c.owner === except) continue;
         const v = this.doodadF * c.s;
         if (v <= f) continue;
         const bd = Math.hypot(c.x - px, c.y - py);
@@ -532,6 +544,7 @@ export class SightVeil {
       }
       if (f < this.doodadF) {
         for (const r of this.rects) {
+          if (except && r.owner === except) continue;
           const v = this.doodadF * r.s;
           if (v <= f) continue;
           const bd = Math.hypot(r.x - px, r.y - py);

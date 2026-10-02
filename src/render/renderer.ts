@@ -877,6 +877,7 @@ export class Renderer {
     // identity through the same effective camera as the light layer.
     // Visibility was resolved before the world pass; only pixels composite here.
     this.sightVeil.draw(this.ctx, this.cam.x - shx, this.cam.y - shy, z, w, h);
+    if (!VIS_ABLATE.has('doodads')) this.drawRaisedDoodads(world);
     if (!VIS_ABLATE.has('doodads')) this.drawCanopies(world); // fake-2D depth: crowns above actors, faded near the hero
     if (!VIS_ABLATE.has('doodads')) this.drawCanopyEyes(world); // the roof's regard — gone wherever you're near
     // THE LIVING FOG, tall pass: the lifted share of each bank wraps bodies
@@ -3293,8 +3294,26 @@ export class Renderer {
     }
   }
 
+  private raisedDoodads: { d: Doodad; def: DoodadVisualDef }[] = [];
+
+  /** Only the object's opaque art returns above its own shadow. The existing
+   * floor/body sheet, other occluders, later crowns, roofs and room veil remain. */
+  private drawRaisedDoodads(world: World): void {
+    const { ctx } = this;
+    const env: PaintEnv = { ctx, theme: world.zone.theme, time: world.time, world };
+    for (const { d, def } of this.raisedDoodads) {
+      const alpha = Math.max(0, Math.min(1, def.raisedSurface ?? 0)) * this.sightVeil.raisedSurfaceReveal(d);
+      if (alpha <= .01) continue;
+      ctx.save();
+      ctx.globalAlpha *= alpha;
+      (PAINTERS[def.painter] ?? PAINTERS.fallback)(env, [d], def);
+      ctx.restore();
+    }
+  }
+
   private drawDoodads(world: World): void {
     const { ctx } = this;
+    this.raisedDoodads.length = 0;
     // Per-zone shadow art direction (ZoneTheme.shadows) folds over the
     // governor's globals — the whiteout lever (budgetMul 0 = shadowless).
     const shTheme = world.zone.theme.shadows;
@@ -3396,6 +3415,11 @@ export class Renderer {
       // their own painter's bake — the understory half of the forest fix.
       if (g.def.bakeWhole && VIS_CFG.ground.bakeDoodads) paintBakedWhole(env, list, g.def);
       else (PAINTERS[g.def.painter] ?? PAINTERS.fallback)(env, list, g.def);
+      // Layered mutations retain their existing complete composition below
+      // the veil; an opaque repaint must not bury their separate adornment.
+      if (g.def.raisedSurface) for (const d of list) {
+        if (!d.adorn) this.raisedDoodads.push({ d, def: g.def });
+      }
     }
 
     // Eldritch-mutated doodads: writhing tentacles grafted onto the silhouette

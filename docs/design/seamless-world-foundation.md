@@ -920,3 +920,25 @@ probe nor an implementation explanation earns an impressed verdict. Preserve
 negative findings and state the seed/class/route and input/capture limitations.
 Frame-stepped play can inspect consecutive animations but cannot establish
 normal reaction-time difficulty, continuous frame pacing or audio quality.
+
+### Raised landmark surfaces
+
+The next visual pass separates a standing object's raised art from the shadow it
+casts onto the ground. `DoodadVisualDef.raisedSurface` opts a sparse solid painter
+into a bounded second paint; `SightVeil.raisedSurfaceReveal` excludes only that
+same object's cached surfaces. Other objects, grid walls and roof hulls remain
+occluders. Tier/storey admission, canopies, roofs and the room veil still apply.
+Ordinary actors, labels, floor pixels and gameplay sight retain their original
+queries and shadows. Layered mutations keep their complete original composition.
+
+The shared statue painter now describes a carved figure, stepped plinth, stone
+relief, incisions and weathering within the existing collision square. Its stone,
+moss, relief and weathering remain registry parameters. This changes presentation
+for existing statues too; no world recipe, saved terrain, hit shape or reward
+changes. It is a focused response to the independent dark-monument finding, not
+a claim of overall art quality or commercial parity.
+
+Verify sightveil and visibility_stability, the native visibility client and
+`balance/raised-surfaces-ui.cjs` against a scoped preview build. The last harness
+captures actual canvas pixels for exposed and externally covered monuments,
+checks far-side shadow and unchanged combat state, and verifies mutation layering.

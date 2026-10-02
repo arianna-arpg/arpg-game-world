@@ -654,8 +654,8 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   // The wayfarer kit — roadside & village-story furniture.
   weathered_statue: {
-    painter: 'statue', order: 54, shadow: 0.6, longShadow: 1.5,
-    params: { stone: 'theme:obstacle|#8a8578', moss: '#5a6e42' },
+    painter: 'statue', order: 54, shadow: 0.6, longShadow: 1.5, raisedSurface: .92,
+    params: { stone: '#aca28e', moss: '#5a6e42', relief: .32, weathering: .55 },
   },
   wayshrine: {
     painter: 'wayshrine', order: 55, shadow: 0.45, longShadow: 0.9,
