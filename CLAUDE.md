@@ -229,6 +229,9 @@ HTML captures, a retained origin and build fingerprint keep review evidence
 traceable. See `docs/ai/PLAYTEST_CLIENT.md`; the client has no arbitrary-code or
 stat-grant endpoint. Frame stepping does not establish real-time feel.
 
+`VIS_CFG.hotbar` controls unassigned slot fill/border opacity; their hit areas
+and key labels remain native. Filled controls retain their existing appearance.
+
 The native camera's saved `Settings.cameraZoom` is exposed in Options → Visuals
 as World zoom. `CAMERA_CFG.zoom` owns range/default/base scale; pointer projection
 and couch framing share that scale while interface size and buffer resolution

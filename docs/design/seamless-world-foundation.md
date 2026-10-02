@@ -1719,3 +1719,17 @@ serialization of actors, effect dependencies or attacks in flight, so it cannot
 safely support seamless unloading yet. The finite population budget and retained
 native bodies remain. An independent reviewer is playing the fixed territory
 build with no assigned class, route, tactic or desired verdict.
+
+### Clearer space beneath unused controls
+
+The climate reviewer still reports enemies disappearing behind the bottom HUD.
+Unassigned hotbar slots now use configurable fill and border opacity through
+VIS_CFG.hotbar, leaving the already-rendered battlefield visible beneath them.
+Filled skills, resource orbs, labels, controls and hit areas are unchanged; this
+addresses the empty-slot obstruction, not every overlap with the interface.
+
+All three type checks and the scoped build pass. An isolated real-client
+comparison places the same visible native wolf beneath slot six in the old and
+new builds. Both screenshots were inspected: the wolf is readable through the
+new empty slot. All eight CSS hit rectangles match exactly and drawing changes
+no gameplay state. The comparison fixture is retained with local QA reports.

@@ -7863,8 +7863,14 @@ export class Renderer {
       ctx.fillStyle = cosmeticHotbarStyle?.fill ?? 'rgba(10,10,16,0.85)';
       ctx.strokeStyle = runningOn ? '#c8a84b' : cosmeticHotbarStyle?.border ?? '#3a3a52';
       ctx.lineWidth = runningOn ? 2.5 : 1.5;
+      ctx.save();
+      if (!inst) ctx.globalAlpha *= VIS_CFG.hotbar.emptyFillAlpha;
       ctx.fillRect(x, by, slot, slot);
+      ctx.restore();
+      ctx.save();
+      if (!inst) ctx.globalAlpha *= VIS_CFG.hotbar.emptyBorderAlpha;
       ctx.strokeRect(x, by, slot, slot);
+      ctx.restore();
       // THE PRESSABLE BAR: publish this slot's rect (CSS px) for the press
       // hit test, and rim the slot under the mouse so the bar reads as
       // pressable before the hand commits.
