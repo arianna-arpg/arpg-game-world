@@ -15,7 +15,9 @@ export interface MassSiteSpec {
   completion?: MassClearanceSpec;
   /** Snapshot native scenery at the local origin; no hidden registry re-read on resume. */
   doodads: Doodad[];
-  fixtures: { monster: string; x: number; y: number }[];
+  /** Native placed bodies. Explicit garrison roles join admission and clearance;
+   * omitted roles preserve older scenery-only completion semantics. */
+  fixtures: { monster: string; x: number; y: number; garrison?: boolean }[];
   cache?: { x: number; y: number; holdSeconds: number };
   /** Finite journey fields use native altar rules, snapshotted per expedition. */
   altars?: MassAltarSpec[];
@@ -56,7 +58,8 @@ export function validateMassSite(site: MassSiteSpec, radius: number): void {
   if (site.altars && (!Array.isArray(site.altars) || site.altars.length > 4
     || new Set(site.altars.map(a=>a.id)).size !== site.altars.length)) throw new Error('Invalid worldmass site fields');
   for (const altar of site.altars ?? []) validateMassAltar(altar, radius);
-  for (const f of site.fixtures) if (!MONSTERS[f.monster] || !within(f.x, f.y, 32))
+  for (const f of site.fixtures) if (!MONSTERS[f.monster] || !within(f.x, f.y, 32)
+    || f.garrison!==undefined && typeof f.garrison!=='boolean')
     throw new Error('Invalid worldmass site fixture');
   if (site.cache && (!within(site.cache.x, site.cache.y, 32)
     || !Number.isFinite(site.cache.holdSeconds) || site.cache.holdSeconds <= 0))

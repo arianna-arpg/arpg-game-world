@@ -1260,3 +1260,28 @@ story/death gates and opt-out. The isolated altar-cues client captures both
 bodies inside, only the enemy inside, then both outside, while checking the real
 Wrath damage multiplier independently for each. Type checks, native combat smoke,
 field/visibility probes and actual screenshots accompany the change.
+
+### Authored native garrison roles
+
+New Stoneward expeditions pair the existing Stone Sentinel with a lighter native
+Karst Slinger placed among the colonnades. Both retain level-four native stats,
+abilities, targeting and movement. This is an encounter-composition experiment:
+a durable defender plus ranged pressure should invite target and approach choices.
+It is not a demonstrated improvement in enjoyment or a difficulty multiplier.
+
+MassSiteSpec.fixtures may explicitly declare garrison=true. Those placed native
+bodies share admission readiness and completion slots with the seeded population.
+Native objective eligibility still decides which bodies must die; marking a
+barrel does not turn scenery into a mandatory enemy. A missing declared guard
+delays the field and cache. Old descriptors with no role flag keep their previous
+completion obligations, and continued Stoneward runs acquire no extra creature.
+
+The existing extension probe now checks both native kits, fixed levels, placed
+guard wounds/home/eligibility through Continue, no completion while the escort
+survives, missing-placement retry, legacy roles and malformed flags. All fifteen
+worldmass probes pass. The isolated extension client walked 468 normal frames
+with AI active after one controlled placement and with invulnerability for route
+QA. It crossed no scene boundary and preserved both wounded defenders' native
+kits and original homes through browser Continue. A separate fresh-context
+Magician playtest uses the fixed candidate without grants or invulnerability;
+its gameplay verdict remains independent of these controlled checks.

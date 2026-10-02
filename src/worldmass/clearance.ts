@@ -18,6 +18,12 @@ export function validateMassClearance(spec: MassClearanceSpec): void {
 export function recordMassGuardian(world: World, state: MassState, id: string, a: Actor): void {
   if(world.objectiveCountable(a))state.claim('site-guardian',id);
 }
+/** All authored garrison slots share their durable native identity. Fixture
+ * roles opt in so an older descriptor does not silently gain new obligations. */
+export function massGarrisonSlots(content: MassContent, place: string): string[] {
+  return [...Array.from({length:content.count},(_,i)=>canonical([place,i])),
+    ...(content.site?.fixtures??[]).flatMap((f,i)=>f.garrison?[canonical([place,'fixture',i])]:[])];
+}
 /** A discovered place resolves its original garrison, independently of its
  * chest. Missing population slots cannot count as kills. Roaming neighbours
  * do not become an unbounded mandatory extermination objective. */
@@ -25,7 +31,7 @@ export function settleMassClearance(world: World, state: MassState, found: MassS
   content: MassContent, present: (id:string)=>boolean, level: number): boolean {
   const spec=content.site?.completion;
   if(!spec || world.player.dead || state.claimed('site-cleared',found.id))return false;
-  const ids=Array.from({length:content.count},(_,i)=>canonical([found.id,i]));
+  const ids=massGarrisonSlots(content,found.id);
   if(ids.some(id=>!present(id)&&!state.claimed('fallen',id)))return false;
   const guards=ids.filter(id=>state.claimed('site-guardian',id));
   if(!guards.length||guards.some(id=>!state.claimed('fallen',id)))return false;

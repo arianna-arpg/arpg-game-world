@@ -39,33 +39,39 @@ app.whenReady().then(async()=>{
    }
    __game.devInput(null);w.loadZone=load;
    const guard=w.actors.find(a=>a.defId==='stone_sentinel');
+   const escort=w.actors.find(a=>a.defId==='karst_slinger');
    __game.step(2);
    window.extensionQA={id:place.id,position:{...w.player.pos}};
    return {frames,loads,sameHero:hero===w.player,site:m.localSite(w.player.pos),guard:guard&&{level:guard.level,
     skills:guard.skills.map(s=>s.def.id),life:guard.life,max:guard.maxLife()},
+    escort:escort&&{level:escort.level,skills:escort.skills.map(s=>s.def.id),life:escort.life},
     field:w.altars.filter(a=>a.def.id==='wrath_altar').map(a=>({source:a.massSource,level:a.level})),
     pos:{...w.player.pos},seed:m.generator.run.seed,fatal:__game.crash().fatal};
   });
   assert.equal(result.fatal,null);assert.equal(result.loads,0);assert.ok(result.sameHero);assert.equal(result.guard.level,4);
   assert.equal(result.site.name,'The Stoneward');assert.equal(result.site.level,4);
+  assert.equal(result.escort.level,4);assert.ok(result.escort.skills.includes('hurl_debris'));assert.ok(result.escort.life>0);
   assert.equal(result.field.length,1);assert.equal(result.field[0].level,4);await shot('stoneward-arrived');
   const saved=await run(()=>{const w=__game.world(),guard=w.actors.find(a=>a.defId==='stone_sentinel');
    guard.life=Math.min(guard.life,guard.maxLife()*.6);
+   const escort=w.actors.find(a=>a.defId==='karst_slinger');escort.life=Math.min(escort.life,escort.maxLife()*.7);
    const home={...guard.aiAnchor};guard.pos={x:home.x+650,y:home.y};__game.ai(guard,w,1/60);
    if(guard.aiPhase!=='leash_home')throw Error('Native guardian did not begin its return');
    guard.pos={x:home.x+400,y:home.y};__game.save();
    return {life:guard.life,skills:guard.skills.map(s=>s.def.id),pos:{...w.player.pos},
-    home,guardPos:{...guard.pos},phase:guard.aiPhase};});
+    home,guardPos:{...guard.pos},phase:guard.aiPhase,
+    escort:{life:escort.life,home:{...escort.aiAnchor},skills:escort.skills.map(s=>s.def.id)}};});
   await win.loadURL(url);
   const continued=await run(async()=>{
    window.requestAnimationFrame=()=>0;await new Promise(r=>setTimeout(r,250));document.querySelector('#sm-continue').click();
    const w=__game.world(),m=w.massRuntime,guard=w.actors.find(a=>a.defId==='stone_sentinel');
-   w.player.invulnerable=true;
-   return {pos:{...w.player.pos},seed:m.generator.run.seed,site:m.localSite(w.player.pos),
+   w.player.invulnerable=true;const escort=w.actors.find(a=>a.defId==='karst_slinger');
+   return {escort:{life:escort.life,home:{...escort.aiAnchor},skills:escort.skills.map(s=>s.def.id)},pos:{...w.player.pos},seed:m.generator.run.seed,site:m.localSite(w.player.pos),
     life:guard.life,skills:guard.skills.map(s=>s.def.id),field:w.altars.filter(a=>a.def.id==='wrath_altar').length,
     home:guard.aiAnchor,guardPos:{...guard.pos},phase:guard.aiPhase,
     fatal:__game.crash().fatal};
   });
+  assert.deepEqual(continued.escort,saved.escort);
   assert.equal(continued.fatal,null);assert.equal(continued.life,saved.life);assert.deepEqual(continued.skills,saved.skills);
   assert.deepEqual(continued.pos,saved.pos);assert.equal(continued.seed,result.seed);assert.equal(continued.field,1);
   assert.deepEqual(continued.home,saved.home);assert.deepEqual(continued.guardPos,saved.guardPos);assert.equal(continued.phase,'leash_home');

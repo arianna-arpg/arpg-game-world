@@ -19,13 +19,15 @@ export function frontierLandmarks(): Landmark[] {
   const prop = (kind: DoodadKind, x: number, y: number, radius: number, rot = 0): Doodad =>
     ({ kind, pos: { x, y }, radius, rot });
   const compose = (id: string, native: string | null, name: string, cache: MassSiteSpec['cache'],
-    undead: boolean, count: number, additions: Doodad[], mechanic?: string, altars?: MassSiteSpec['altars']): Landmark => {
+    undead: boolean, count: number, additions: Doodad[], mechanic?: string, altars?: MassSiteSpec['altars'],
+    fixtures?: MassSiteSpec['fixtures']): Landmark => {
     const site: MassSiteSpec = native ? nativeMassSite(native, name, cache)
       : { name, source: 'native/scenery', doodads: [], fixtures: [], ...(cache ? { cache } : {}) };
     site.source += '+worldmass/landmarks/' + id;
     site.completion = { source: 'objectives/clear', ...OBJECTIVE_REWARD };
     site.doodads.push(...additions);
     if (altars?.length) site.altars = altars;
+    if (fixtures?.length) site.fixtures.push(...fixtures);
     return { id, undead, count, site, ...(mechanic ? { magicPack: { source: 'magicPacks/'+mechanic, mechanic } } : {}) };
   };
   return [
@@ -74,7 +76,8 @@ export function frontierLandmarks(): Landmark[] {
       ]),
       prop('weathered_statue',0,-240,65),prop('brazier',-80,-210,22),prop('brazier',80,-210,22),
       prop('broken_cart',235,145,33,.6),prop('dead_tree',-260,90,47),
-    ], undefined, [nativeMassAltar('wrath_altar',0,30)]),
+    ], undefined, [nativeMassAltar('wrath_altar',0,30)],
+      [{monster:'karst_slinger',x:90,y:-65,garrison:true}]),
       population:{level:4,table:[{id:'stone_sentinel',weight:1}]} },
   ];
 }

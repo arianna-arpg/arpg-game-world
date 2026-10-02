@@ -24,7 +24,7 @@ import { MassEcology, validateMassEcology, type MassEcologySave } from './ecolog
 
 import { MassRewards, type MassRewardSave } from './rewards';
 import { MassFields, type MassFieldSave } from './fields';
-import { recordMassGuardian, settleMassClearance } from './clearance';
+import { massGarrisonSlots, recordMassGuardian, settleMassClearance } from './clearance';
 import { MassBirths, validMassBirth, type MassBirth } from './birth';
 
 interface MassEnemySave {
@@ -388,6 +388,7 @@ export class WorldMassRuntime {
             || Math.hypot(spot.x - q.x, spot.y - q.y) > p.radius) continue;
           a.pos = spot; a.aiAnchor = {...spot}; a.fromZoneGen = true; a.fillResources();
           this.natives.set(id, a); world.actors.push(a);
+          if(fixture.garrison && content.site?.completion)recordMassGuardian(world,this.state,id,a);
         }
       }
       // Bodies remain alive across EVERY page boundary. Do not replace a battle
@@ -428,7 +429,7 @@ export class WorldMassRuntime {
         world.refreshMagicPacks();
       }
       if (content.site) {
-        const ready = Array.from({ length: content.count }, (_, i) => canonical([p.id, i]))
+        const ready = massGarrisonSlots(content,p.id)
           .every(id => this.natives.has(id) || this.state.claimed('fallen', id));
         if (ready) this.fields.admit(world,p,content.site.altars ?? [],q,population.level);
         const cache = content.site.cache;
