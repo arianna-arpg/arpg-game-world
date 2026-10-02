@@ -22,6 +22,7 @@ export interface BodyLook {
   shape: ActorShape;
   /** Runtime only: articulated parts draw separately in their native pose. */
   separateActionParts?: boolean;
+  separateWalkParts?: boolean;
   radius: number;
   color: string;
   material?: string;
@@ -387,7 +388,7 @@ function strSeed(s: string): number {
 
 export function bodyKey(look: BodyLook): string {
   const tack = look.extraParts?.length ? JSON.stringify(look.extraParts) : '';
-  return `${look.shape}|${look.radius.toFixed(1)}|${look.color}|${look.material ?? ''}|${look.outline ?? ''}|${look.look ?? ''}|${tack}|${look.separateActionParts ? 'joints' : ''}`;
+  return `${look.shape}|${look.radius.toFixed(1)}|${look.color}|${look.material ?? ''}|${look.outline ?? ''}|${look.look ?? ''}|${tack}|${look.separateActionParts ? 'joints' : ''}|${look.separateWalkParts ? 'walk' : ''}`;
 }
 
 /** Paint the runtime TACK overlay (extraParts) — collars, brands, harnesses
@@ -413,7 +414,9 @@ export function bodySprite(look: BodyLook): HTMLCanvasElement {
     // part kit (skull/ribs/hood/scythe/…) — the legacy shape never draws.
     const lookDef = lookOf(look.look);
     if (lookDef) {
-      paintLook(ctx, r, look.separateActionParts ? { ...lookDef, parts: lookDef.parts.filter(p => !p.action) } : lookDef,
+      paintLook(ctx, r, look.separateActionParts || look.separateWalkParts ? { ...lookDef,
+        parts: look.separateActionParts ? lookDef.parts.filter(p => !p.action) : lookDef.parts,
+        walk: look.separateWalkParts ? undefined : lookDef.walk } : lookDef,
         lookPalette(look.color, look.material));
       // A material may declare its texture rides part-grammar bodies too
       // (MaterialDef.textureOverLook — the cosmic starfield): painted

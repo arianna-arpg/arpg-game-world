@@ -172,6 +172,15 @@ Starter Warrior/Magician/Rogue, goblin roles and Sylvan Warden/Grove Singer
 compose their silhouettes from the native `LookDef.parts` grammar. Body radius,
 combat ownership and action clocks remain native. After changing these looks,
 inspect the actual class action/guard clients, plus the neutral dagger comparison.
+`LookDef.walk` optionally composes under-body feet and authored hip links,
+with stride, swing, sway and lift controls. The native movement artery stamps
+actual voluntary displacement through `engine/bodyWalk.ts`; rendering is read-only,
+casts retain torso priority, and transient host poses cross co-op snapshots.
+Old saves begin neutral. BODY_WALK_CFG disables animation. Verify bodywalk,
+castingcues, wallpress and couch, plus `balance/walking-parts-ui.cjs` and
+`balance/walking-world-ui.cjs` for actual device input/cache/stop/cast behavior.
+The latter accepts HOLLOW_WAKE_QA_CLASS for all three starters.
+
 The Rogue's paired blades expose separate sides of the same native dagger part.
 Verify castingcues and `balance/body-action-ui.cjs` (default Warrior;
 `HOLLOW_WAKE_QA_CLASS=rogue` exercises actual Backstab and both joints).

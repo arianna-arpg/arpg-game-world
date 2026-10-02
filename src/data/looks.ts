@@ -58,6 +58,10 @@ export const LOOKS: Record<string, LookDef> = {
   // ============================================== THE DEAD (the flagship set)
   /** Bare bones and a blade: ribs radiating off a spine, skull forward. */
   skeleton_warrior: {
+    walk: { cycle: 6, swing: 0.6, sway: 0.045, lift: 0.07, parts: [
+      { kind: 'boot', x: -.5, y: -.55, hip: { x: -.12, y: -.42, width: .21 }, role: 'bone', phase: 1 },
+      { kind: 'boot', x: -.5, y: .55, hip: { x: -.12, y: .42, width: .21 }, role: 'bone', phase: -1 },
+    ] },
     parts: [
       { kind: 'ribs', params: { under: true } },
       { kind: 'sword', y: 0, params: { len: 0.95 },
@@ -66,6 +70,10 @@ export const LOOKS: Record<string, LookDef> = {
     ],
   },
   skeleton_archer: {
+    walk: { cycle: 5.8, swing: 0.6, sway: 0.04, lift: 0.065, parts: [
+      { kind: 'boot', x: -.5, y: -.55, hip: { x: -.12, y: -.42, width: .21 }, role: 'bone', phase: 1 },
+      { kind: 'boot', x: -.5, y: .55, hip: { x: -.12, y: .42, width: .21 }, role: 'bone', phase: -1 },
+    ] },
     parts: [
       { kind: 'ribs', params: { under: true } },
       { kind: 'bow' },
@@ -267,6 +275,10 @@ export const LOOKS: Record<string, LookDef> = {
 
   // ============================================================ GREENSKINS
   goblin: {
+    walk: { cycle: 5.2, swing: 0.6, sway: 0.06, lift: 0.08, parts: [
+      { kind: 'boot', x: -.5, y: -.55, hip: { x: -.12, y: -.42, width: .21 }, role: 'wood', phase: 1 },
+      { kind: 'boot', x: -.5, y: .55, hip: { x: -.12, y: .42, width: .21 }, role: 'wood', phase: -1 },
+    ] },
     parts: [
       { kind: 'torso', scale: .9, params: { head: .46 } },
       { kind: 'ears', x: .28, scale: .8 },
@@ -275,6 +287,10 @@ export const LOOKS: Record<string, LookDef> = {
     ],
   },
   goblin_shaman: {
+    walk: { cycle: 5.8, swing: 0.5, sway: 0.04, lift: 0.065, parts: [
+      { kind: 'boot', x: -.5, y: -.55, hip: { x: -.12, y: -.42, width: .21 }, role: 'wood', phase: 1 },
+      { kind: 'boot', x: -.5, y: .55, hip: { x: -.12, y: .42, width: .21 }, role: 'wood', phase: -1 },
+    ] },
     parts: [
       { kind: 'tatters', scale: .85, params: { n: 3 } },
       { kind: 'robe', scale: .85 },
@@ -285,6 +301,10 @@ export const LOOKS: Record<string, LookDef> = {
     ],
   },
   goblin_brute: {
+    walk: { cycle: 6.5, swing: 0.6, sway: 0.045, lift: 0.07, parts: [
+      { kind: 'boot', x: -.5, y: -.55, hip: { x: -.12, y: -.42, width: .21 }, role: 'wood', phase: 1 },
+      { kind: 'boot', x: -.5, y: .55, hip: { x: -.12, y: .42, width: .21 }, role: 'wood', phase: -1 },
+    ] },
     parts: [
       { kind: 'torso', scale: 1.02 },
       { kind: 'ears', x: .3, scale: .82 },
@@ -294,6 +314,10 @@ export const LOOKS: Record<string, LookDef> = {
     ],
   },
   goblin_chief: {
+    walk: { cycle: 6, swing: 0.6, sway: 0.04, lift: 0.065, parts: [
+      { kind: 'boot', x: -.5, y: -.55, hip: { x: -.12, y: -.42, width: .21 }, role: 'metal', phase: 1 },
+      { kind: 'boot', x: -.5, y: .55, hip: { x: -.12, y: .42, width: .21 }, role: 'metal', phase: -1 },
+    ] },
     parts: [
       { kind: 'cape', scale: .95, role: 'cloth' },
       { kind: 'torso' },
@@ -1527,6 +1551,10 @@ export const LOOKS: Record<string, LookDef> = {
 
   // ========================================================= PLAYER CLASSES
   class_warrior: {
+    walk: { cycle: 6.2, swing: 0.6, sway: 0.035, lift: 0.06, parts: [
+      { kind: 'boot', x: -.5, y: -.55, hip: { x: -.12, y: -.42, width: .21 }, role: 'metal', phase: 1 },
+      { kind: 'boot', x: -.5, y: .55, hip: { x: -.12, y: .42, width: .21 }, role: 'metal', phase: -1 },
+    ] },
     parts: [
       { kind: 'cape', scale: .95, role: 'cloth' },
       { kind: 'torso', role: 'cloth' },
@@ -1538,6 +1566,10 @@ export const LOOKS: Record<string, LookDef> = {
     ],
   },
   class_magician: {
+    walk: { cycle: 6, swing: 0.55, sway: 0.025, lift: 0.055, parts: [
+      { kind: 'boot', x: -.5, y: -.55, hip: { x: -.12, y: -.42, width: .21 }, role: 'wood', phase: 1 },
+      { kind: 'boot', x: -.5, y: .55, hip: { x: -.12, y: .42, width: .21 }, role: 'wood', phase: -1 },
+    ] },
     parts: [
       { kind: 'cape', scale: .95, role: 'cloth' },
       { kind: 'robe', scale: .85 },
@@ -1550,6 +1582,10 @@ export const LOOKS: Record<string, LookDef> = {
     ],
   },
   class_rogue: {
+    walk: { cycle: 5.2, swing: 0.62, sway: 0.045, lift: 0.065, parts: [
+      { kind: 'boot', x: -.5, y: -.55, hip: { x: -.12, y: -.42, width: .21 }, role: 'wood', phase: 1 },
+      { kind: 'boot', x: -.5, y: .55, hip: { x: -.12, y: .42, width: .21 }, role: 'wood', phase: -1 },
+    ] },
     parts: [
       { kind: 'tatters', scale: .6, params: { n: 3 } },
       { kind: 'cape', scale: .8, role: 'dark' },

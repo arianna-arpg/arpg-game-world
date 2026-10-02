@@ -51,7 +51,17 @@ export interface LookDrift {
   desync?: number;
 }
 
+export type WalkPart = PartSpec & { phase?: number; hip?: { x: number; y: number; width: number } };
+export interface WalkLook {
+  /** Distance in body radii per full left/right cycle. */
+  cycle: number;
+  swing: number; sway: number; lift: number;
+  /** Under-body anatomy. Phase signs alternate feet; portraits show rest. */
+  parts: WalkPart[];
+}
+
 export interface LookDef {
+  walk?: WalkLook;
   /** Baked stack, painted in order (under → over). */
   parts: PartSpec[];
   /** Animated overlay parts, drawn per frame in facing space. */
@@ -238,6 +248,24 @@ const torso: PartPainter = (ctx, r, spec, pal) => {
     htrace(); c.fillStyle = shade(ramp.base, 0.1); c.fill();
     volume(c, hr, ramp, htrace);
     htrace(); outlined(c, ramp, 1.4);
+  });
+};
+
+/** A boot/shin from overhead; the upper end tucks under the torso. */
+const boot: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'dark');
+  place(ctx, r, spec, (c, R) => {
+    const length = P(spec, 'length', .68), width = P(spec, 'width', .23);
+    const trace = (): void => {
+      c.beginPath();
+      c.roundRect(-R * length * .7, -R * width, R * length, R * width * 2, R * width * .7);
+    };
+    trace(); c.fillStyle = ramp.base; c.fill();
+    volume(c, R * .7, ramp, trace);
+    trace(); outlined(c, ramp, Math.max(.7, R * .055));
+    c.strokeStyle = withAlpha(ramp.light, .6); c.lineWidth = Math.max(.6, R * .045);
+    c.beginPath(); c.moveTo(-R * length * .36, -R * width * .65);
+    c.lineTo(-R * length * .36, R * width * .65); c.stroke();
   });
 };
 
@@ -5584,7 +5612,7 @@ const captiveCage: PartPainter = (ctx, r, spec) => {
 
 export const PART_PAINTERS: Record<string, PartPainter> = {
   captiveCage,
-  disc, blob, carapace, torso, robe, serpentHead,
+  disc, blob, carapace, torso, boot, robe, serpentHead,
   skull, ribs, spineTrail, crown,
   hood, tatters, pauldrons,
   eyes, obolEyes, maw, snout, mandibles, horns, ears, tusks, spikes, lodgedSpikes, wings,
@@ -5627,9 +5655,28 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   sinterLance, pressurePack, vaporBody, steamTrail, pressureBladder, spoutOrgan, steamJetLegs, sinterPlates,
 };
 
+/** Shared anatomical link for the static portrait and animated foot. */
+export function paintWalkLink(ctx: CanvasRenderingContext2D, r: number, spec: WalkPart,
+  pal: LookPalette, dx = 0, dy = 0): void {
+  if (!spec.hip) return;
+  const ramp = rampFor(spec, pal, 'dark'), hip = spec.hip;
+  ctx.save(); ctx.lineCap = 'round'; ctx.globalAlpha *= spec.alpha ?? 1;
+  for (const side of spec.mirror ? [1, -1] : [1]) {
+    ctx.beginPath(); ctx.moveTo(hip.x * r, hip.y * r * side);
+    ctx.lineTo((spec.x ?? 0) * r + dx, (spec.y ?? 0) * r * side + dy);
+    ctx.strokeStyle = ramp.outline; ctx.lineWidth = hip.width * r + 1.2; ctx.stroke();
+    ctx.strokeStyle = ramp.base; ctx.lineWidth = hip.width * r; ctx.stroke();
+  }
+  ctx.restore();
+}
+
 /** Paint a look's baked stack (local space, +X = facing, r = body radius). */
 export function paintLook(ctx: CanvasRenderingContext2D, r: number,
   look: LookDef, pal: LookPalette): void {
+  for (const spec of look.walk?.parts ?? []) {
+    paintWalkLink(ctx, r, spec, pal);
+    PART_PAINTERS[spec.kind]?.(ctx, r, spec, pal);
+  }
   for (const spec of look.parts) {
     const painter = PART_PAINTERS[spec.kind];
     if (painter) painter(ctx, r, spec, pal);

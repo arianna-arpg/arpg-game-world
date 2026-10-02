@@ -16,7 +16,7 @@ app.whenReady().then(async()=>{
     const {paintLook,lookPalette,LOOKS}=NeutralQA;
     const now=LOOKS.class_rogue;
     // Keep the current body composition; compare paired and articulated blades.
-    const before={parts:now.parts.flatMap(part=>part.kind!=='daggers'?[part]
+    const before={...now,parts:now.parts.flatMap(part=>part.kind!=='daggers'?[part]
       :part.params.side===1?[{...part,action:undefined,params:{len:part.params.len}}]:[])};
     const rows=[];
     for(const radius of [12,18,40])for(const color of ['#5a5c57','#d8b06a','#7a9aff']){

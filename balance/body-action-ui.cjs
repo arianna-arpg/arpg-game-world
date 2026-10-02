@@ -72,7 +72,9 @@ app.whenReady().then(async()=>{
     await run(()=>__game.step(30));
     const settled=await capture('settled');
     for(const result of [prepare,release,settled])assert.deepEqual(result.pos,idle.pos,'paint cannot relocate native actor');
-    const pose=result=>result.rows.find(row=>row.kind==='body');
+    // Opted-in walking feet now precede the torso's cached blit.
+    const bodyRows=result=>result.rows.filter(row=>row.kind==='body').slice(2);
+    const pose=result=>bodyRows(result)[0];
     const ground=result=>result.rows.find(row=>row.kind==='ground');
     assert.notDeepEqual(pose(prepare),pose(idle),'native windup changes the actual painted body');
     assert.notDeepEqual(pose(release),pose(prepare),'successful release changes the painted body again');
@@ -82,7 +84,7 @@ app.whenReady().then(async()=>{
     assert.ok(pose(release).x>pose(idle).x,'native completion follows through');
     assert.ok(Math.abs(pose(settled).x-pose(idle).x)<.001,'settled body returns to native position');
     const jointAngle=(result,index=1)=>{
-      const rows=result.rows.filter(row=>row.kind==='body');
+      const rows=bodyRows(result);
       assert.equal(rows.length,role==='rogue'?3:2,'one body plus exactly the native articulated weapons');
       const angle=Math.atan2(rows[index].b,rows[index].a)-Math.atan2(rows[0].b,rows[0].a);
       return Math.atan2(Math.sin(angle),Math.cos(angle));

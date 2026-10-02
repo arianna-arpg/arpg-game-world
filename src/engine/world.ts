@@ -1,6 +1,7 @@
 import { skillInstanceName, treeInstanceNodeRanks, treePointBudget } from './skillEmpowerment';
 import { skillMergePlan } from './skillMerge';
 import { markBodyAction } from './bodyAction';
+import { markBodyWalk } from './bodyWalk';
 import { concealmentActive, isConcealed, PERCEPTION_CFG } from './perception';
 import { anatomyCueState, anatomyFlash, notePartScar, clearPartScar } from './anatomyCues';
 import { takeWeakPointBreaks } from './weakpoints';
@@ -64376,5 +64377,6 @@ export class World {
       this.steppedClamp(a, vec(a.pos.x + a.vel.x * dt, a.pos.y + a.vel.y * dt), a.pos, disp);
     }
     if (striding) a.strideDist += Math.hypot(a.pos.x - sx, a.pos.y - sy);
+    if (!this.sailing) markBodyWalk(a, a.pos.x - sx, a.pos.y - sy, this.time);
   }
 }

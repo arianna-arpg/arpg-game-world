@@ -1482,6 +1482,9 @@ export class Actor {
   bodyAction?: import('./bodyAction').BodyActionStamp;
   /** Resolved co-op pose; null explicitly clears a pooled render shell. */
   bodyActionPose?: import('./bodyAction').BodyActionPose | null;
+  /** Post-collision voluntary walking; cosmetic and deliberately unsaved. */
+  bodyWalk?: import('./bodyWalk').BodyWalkStamp;
+  bodyWalkPose?: import('./bodyWalk').BodyWalkPose | null;
 
   /** Role axis (player / minion / mercenary / monster). undefined ⇒ 'monster'.
    *  Orthogonal to `team`; see UnitKind. Set only at spawn, never per-frame. */

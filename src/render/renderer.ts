@@ -6,6 +6,8 @@ import { CombatMeterLayout } from './vis/combatMeters';
 import { bodyActionPoseOf } from '../engine/bodyAction';
 import { applyBodyActionPose } from './vis/bodyActionLayer';
 import { drawActionParts } from './vis/actionParts';
+import { bodyWalkPoseOf } from '../engine/bodyWalk';
+import { drawWalkParts, applyWalkBodyPose } from './vis/walkParts';
 import { drawBodyContrast } from './vis/bodyContrast';
 import { drawRaisedGuard } from './vis/raisedGuard';
 import { MassPainter } from '../worldmass/paint';
@@ -5725,8 +5727,17 @@ export class Renderer {
     // Native traversal/emergence owns its pose; ordinary attacks move only
     // the painted body/adorn, leaving ground geometry and meters anchored.
     const actionPose = !tpose && !epose ? bodyActionPoseOf(a, world.time) : undefined;
-    applyBodyActionPose(ctx, actionPose, a.radius);
     look.separateActionParts = !!lookDef?.parts.some(p => p.action);
+    look.separateWalkParts = !!lookDef?.walk;
+    if (lookDef?.walk) {
+      const walkPose = !tpose && !epose && !world.sailing ? bodyWalkPoseOf(a, world.time) : undefined;
+      ctx.rotate(rot);
+      drawWalkParts(ctx, look, lookDef.walk, a.facing, walkPose);
+      ctx.rotate(-rot);
+      // Cast/strike posture owns the torso; mobile skills may still take steps.
+      if (!actionPose) applyWalkBodyPose(ctx, a.radius, lookDef.walk, walkPose);
+    }
+    applyBodyActionPose(ctx, actionPose, a.radius);
     if (rot !== 0) ctx.rotate(rot);
     this.drawCombatBodyEdge(a, world, look);
     ctx.drawImage(bodySprite(look), -half, -half);

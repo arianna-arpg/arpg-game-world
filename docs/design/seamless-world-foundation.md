@@ -1867,3 +1867,62 @@ Formation commit a967559b passed 337 remote probes and Pages run 37065273704.
 Exact live metadata reports build 2026-10-02T21:12:52.235Z; isolated remote QA
 retained seed 648173559 and all six ordinary-save sentinels. The silhouette commit
 0f7f8a12 is pushed and its remote checks are in progress.
+
+### Optional anatomy driven by native walking
+
+`LookDef.walk` now authors under-body feet, hip links, stride length, swing,
+torso sway and lift. The three starter looks, four goblin roles and two basic
+skeletons opt in. Other appearances retain their existing painter. Static
+portraits retain a complete neutral figure; runtime feet reuse fixed cached
+artwork below the independently posed torso and weapons.
+
+The native walking artery records actual post-collision displacement, separate
+from gameplay stride resources. Drawing only reads that transient stamp.
+Holding into a wall cannot accrue gait distance, and displacement from teleport,
+knockback or passive ice coasting cannot create another voluntary step. Standing
+settles the pose; death, downing, anchors, flight, burrow, dash, leap, carom,
+stun and native traversal presentation suppress it. Cast/strike posture keeps
+ownership of the torso; genuinely mobile casts can still move their feet.
+The optional resolved pose crosses native co-op snapshots and explicitly clears
+pooled mirrors when absent. Save formats are unchanged; a loaded actor begins
+in its neutral stance. BODY_WALK_CFG can disable the animation.
+
+The first enlarged gallery exposed detached feet at maximum stride; authored
+hip links corrected that before acceptance. The final gallery was inspected at
+native and enlarged radii. Actual keyboard/mouse clients for Warrior, Magician
+and Rogue verify opposite foot phases, reuse of the same cached foot sprites,
+unchanged simulation during drawing, stopped/paused redraw stability and planted
+feet during the native committed cast. Actual Cleave and Backstab clients retain
+independent body/weapon preparation, release and settle. Nine neutral dagger
+comparisons remain pixel-identical. These are frame-stepped checks, not evidence
+of real-time animation quality or a positive play verdict.
+
+All three type checks, 25 combat smoke episodes, the new bodywalk probe (including
+an actual Lastlight wall and pooled co-op clearing), casting cues, wall pressure,
+couch and input-priority regressions pass. The five smoke scenario summaries
+match the preceding movement revision. A fresh independent reviewer is playing
+the fixed walking build through earned build choices and subsequent destinations;
+no desired verdict has been assigned.
+
+The preceding Rogue formation-build review inspected 94 capture pairs over
+3,104 requested frames (about 52 nominal simulation seconds). Earned equipment,
+Deadly Precision, a passive and persistence worked; Backstab had a satisfying
+payoff. The reviewer would try another distinct destination, but combat pressure
+and presentation did not strongly impress overall. This is not an overall
+acceptance verdict or a long continuous play session.
+
+Silhouette commit 0f7f8a12 passed CI 37065734703 and Pages 37067353967.
+Exact live metadata reports 2026-10-02T21:33:32.521Z; isolated remote QA retained
+seed 2873220053 and all six ordinary-save sentinels. Movement commit 44bbc33a
+also passed CI 37067763291 and Pages 37069372938; exact live build metadata
+reports 2026-10-02T21:53:59.5Z. Remote QA retained seed 2027595269 and the same
+six sentinels through Continue.
+
+Walking palette derivation is cached with a configurable bound and shared run/zone
+cleanup. The gallery verifies the bound and cleanup, plus mirrored translucent
+anatomy. The latter initially assumed byte-identical direct and cached blending;
+measured differences were at most one alpha unit and 2.51 premultiplied color
+units, so the coverage/color check accounts for 8-bit compositing quantization.
+The fixed critic build remains untouched; the final build adds only this palette
+cache and correct hip-link mirror/alpha handling. Final type checks, gallery and
+actual Magician input/cast checks pass on those final changes.

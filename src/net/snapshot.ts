@@ -5,6 +5,7 @@ import { reactiveCueOf, wardCueActive, wardGuardians } from '../engine/combatRea
 import { memoryAccessView } from '../meta/memoryUnlocks';
 import { castingCompletion, castingCueOf } from '../engine/castingCues';
 import { bodyActionPoseOf } from '../engine/bodyAction';
+import { bodyWalkPoseOf } from '../engine/bodyWalk';
 import { guardReleaseCue } from '../engine/warningCues';
 import { encounterCueOf } from '../engine/encounterCombat';
 import { parryCueStrength, guardArcRadians } from '../engine/combatCues';
@@ -80,6 +81,7 @@ export type Vec2W = [number, number];
 /** One renderer-visible actor on the wire. Short keys keep the JSON small. */
 export interface ActorW {
   bodyActionPose?: import('../engine/bodyAction').BodyActionPose;
+  bodyWalkPose?: import('../engine/bodyWalk').BodyWalkPose;
   movementTether?: Actor['movementTether'];
   encounterGroup?: Actor['encounterGroup'];
   encounterCue?: import('../engine/warningCues').EncounterCue;
@@ -757,6 +759,7 @@ function actorToW(a: Actor, world: World): ActorW {
   if (armedCues.length) w.armedCues = armedCues.map(cue => ({ ...cue }));
   w.reactiveCue = reactiveCueOf(a, world.time);
   w.bodyActionPose = bodyActionPoseOf(a, world.time);
+  w.bodyWalkPose = bodyWalkPoseOf(a, world.time);
   const poolCues = poolCueRows(a);
   if (poolCues.length) w.poolCues = poolCues;
   const payloadCues = payloadCueRows(a, world);
@@ -1301,6 +1304,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.life = aw.life; a.es = aw.es; a.absorbLayers.clear(); a.absorb = aw.ab ?? 0;
     a.hitFlash = aw.hf; a.downed = aw.downed; a.dead = aw.dead;
     a.bodyActionPose = aw.bodyActionPose ? { ...aw.bodyActionPose } : null;
+    a.bodyWalkPose = aw.bodyWalkPose ? { ...aw.bodyWalkPose } : null;
     a.passive = aw.passive; a.untargetable = aw.ut;
     a.summonReform = aw.summonReform ? { remaining: aw.summonReform[0], duration: aw.summonReform[1], invulnerable: false, untargetable: false } : undefined;
     a.movementTether = aw.movementTether ? { ...aw.movementTether,
