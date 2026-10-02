@@ -96,6 +96,44 @@ app.whenReady().then(async () => {
   await sleep(1200);
   await shot('03-splash-montage');
 
+  /* THE MIND'S EYE: the picture's edge melts into the dark, and the dark moves.
+     Sampled off real captures: the picture's own left edge reads black while
+     its heart reads the picture; held on one frame, the rim band changes. */
+  const grab = async () => { const img = await win.webContents.capturePage(); const sz = img.getSize(); return { b: img.toBitmap(), w: sz.width, h: sz.height }; };
+  const lumaIn = (g, r) => {
+    const sx = g.w / W, sy = g.h / H; let s = 0, n = 0;
+    for (let y = Math.round(r.y * sy); y < Math.round((r.y + r.h) * sy); y++) {
+      for (let x = Math.round(r.x * sx); x < Math.round((r.x + r.w) * sx); x++) {
+        const i = (y * g.w + x) * 4; s += 0.0722 * g.b[i] + 0.7152 * g.b[i + 1] + 0.2126 * g.b[i + 2]; n++;
+      }
+    }
+    return s / Math.max(1, n);
+  };
+  const moved = (g1, g2, r) => {
+    const sx = g1.w / W, sy = g1.h / H; let s = 0, n = 0;
+    for (let y = Math.round(r.y * sy); y < Math.round((r.y + r.h) * sy); y++) {
+      for (let x = Math.round(r.x * sx); x < Math.round((r.x + r.w) * sx); x++) {
+        const i = (y * g1.w + x) * 4; s += Math.abs(g1.b[i + 1] - g2.b[i + 1]); n++;
+      }
+    }
+    return s / Math.max(1, n);
+  };
+  const eye = await js(`(() => { const t = ${theater}, r = t.stageRect(), p = (t.f.picture || [0, 0, 1, 1]); return { has: !!t.rim, x: r.x, y: r.y, w: r.w, h: r.h, top: r.y + p[1] * r.h, ph: (p[3] - p[1]) * r.h }; })()`);
+  const g1 = await grab();
+  const rimEdge = lumaIn(g1, { x: eye.x + 1, y: eye.top + eye.ph * 0.4, w: 5, h: eye.ph * 0.2 });
+  const heart = lumaIn(g1, { x: eye.x + eye.w * 0.4, y: eye.top + eye.ph * 0.4, w: eye.w * 0.2, h: eye.ph * 0.2 });
+  check('the mind\'s eye melts the picture\'s edge into the dark', eye.has && rimEdge < 10 && heart > rimEdge + 8, `edge ${rimEdge.toFixed(1)} · heart ${heart.toFixed(1)}`);
+  await js(`(${theater}).video.pause(); true`);   // hold the picture still (no theater dim): only the dark may move
+  await sleep(250);
+  const h1g = await grab();
+  await sleep(1300);
+  const h2g = await grab();
+  const band = { x: eye.x + eye.w * 0.2, y: eye.top, w: eye.w * 0.6, h: eye.ph * 0.16 };
+  const drift = moved(h1g, h2g, band);
+  check('the mind\'s eye creeps and swirls on a held frame', drift > 0.12, 'band change ' + drift.toFixed(2));
+  await js(`(() => { const p = (${theater}).video.play(); if (p && p.catch) p.catch(() => {}); return true; })()`);
+  await sleep(300);
+
   // ── 2. the shatter, stepped (the viewer clicks the picture) ────────────────
   const stage = await js(`(() => { const r = (${theater}).stageRect(); return r; })()`);
   const hit = { x: Math.round(stage.x + stage.w * 0.62), y: Math.round(stage.y + stage.h * 0.4) };
@@ -103,6 +141,7 @@ app.whenReady().then(async () => {
   await clickAt(hit.x, hit.y);
   check('a click in the picture starts the break', await waitFor(`!!document.querySelector('.hwcine-gl')`, 3000));
   check('the break carries the frozen frame', await js('HWCinemaTheater._last && HWCinemaTheater._last.hasFrame === 1'), JSON.stringify(await js('HWCinemaTheater._last')));
+  check('the break bakes the mind\'s eye into that frame', await js('HWCinemaTheater._last && HWCinemaTheater._last.rim === 1'));
   for (const t of [0.0, 0.1, 0.3, 0.5, 0.62, 0.8, 1.05, 1.4, 1.9, 2.4]) {
     await js(`HWCinemaTheater.freeze = ${t}; true`);
     await sleep(160);
@@ -204,6 +243,7 @@ app.whenReady().then(async () => {
   check('reduced motion: no unprompted splash', await js('HWCinema.due === null'));
   await clickAt(h1.x, h1.y);
   await waitFor(`(${theater}) && (${theater}).state === 'playing'`, 8000);
+  check('reduced motion: the mind\'s eye holds still', await js(`(() => { const r = (${theater}).rim; return !!r && r.time() === 23 && r.open() === 1; })()`));
   await js(`(${theater}).exit(null); true`);
   await sleep(120);
   check('reduced motion: the exit fades, nothing breaks', await js(`!document.querySelector('.hwcine-gl') && document.querySelector('.hwcine-fade') !== null`));

@@ -69,6 +69,10 @@
            from at, as a share of the picture, when the film ends); 'fade'
            lifts the darkness instead */
         exit: { kind: 'shatter', at: [0.5, 0.44], pace: 1 },   // the insignia's eye, under the title
+        /* held in the mind's eye (theater.rim); the picture is the 2.39:1
+           band between the film's own letterbox bars */
+        rim: true,
+        picture: [0, 0.128, 1, 0.872],
       },
       /* THE ARCHIVE: the previous cut, kept whole as a fallback. It is in no
          feature row and no trigger, so the site never offers it; it plays at
@@ -88,6 +92,8 @@
         ],
         captions: { src: 'media/announcement-v2/narration.en.vtt', lang: 'en', show: 'muted', band: [0.872, 1] },
         exit: { kind: 'shatter', at: [0.5, 0.44], pace: 1 },
+        rim: true,
+        picture: [0, 0.128, 1, 0.872],
       },
     },
 
@@ -101,6 +107,25 @@
       hintSeconds: 1.8,           // the continue line surfaces after this long
       progress: true,             // a hairline along the bottom edge
       volume: 0.8,                // a first-time viewer's level; each viewer's own choice is remembered
+      /* THE MIND'S EYE: a living rim of dark that melds a film's picture into
+         the blanket, so no hard edge ever shows. It creeps and swirls like a
+         thought held in the dark, the picture opens out of it like an eye,
+         and the break carries it. A film opts in with rim: true (or its own
+         dials over these); one whose frame carries bars names its picture's
+         share of the frame (picture: [x0, y0, x1, y1]) so the rim sits on the
+         picture's edge, not the bars. Reduced motion holds it still. */
+      rim: {
+        feather: 0.13,    // the soft band, in picture heights
+        creep: 0.035,     // how far the dark wanders in and out of that band
+        round: 0.2,       // the window's corner radius, in picture heights (an eye, not a box)
+        grain: 1.7,       // the dark's features per picture height
+        drift: 0.14,      // how fast it morphs (noise depth per second)
+        swirl: 0.04,      // its turn about the picture's centre (radians per second)
+        twist: 0.8,       // the extra turn toward the rim (a slow vortex)
+        mist: 0.45,       // smoke in the band rather than a smooth ramp
+        open: [0.4, 2.2], // the reveal: the share of the window open at first, and seconds to rest
+        scale: 0.5,       // the rim canvas's resolution per CSS pixel (it is soft; a fraction is plenty)
+      },
       words: {
         next: 'Click to continue',
         nextTouch: 'Tap to continue',
