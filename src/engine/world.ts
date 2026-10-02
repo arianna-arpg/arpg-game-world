@@ -73,6 +73,7 @@ import { Actor, shellArcFactor, type AmbushSpec, type BrainPhase, type CastingSt
 import { EventBus } from './eventbus';
 import { Party } from './party';
 import { NullInput, SPENT_PRESS_CFG, type PlayerInput, type PlayerInputSource, type MetaAction } from '../net/intent';
+import { SkillInputOrder } from './skillInputOrder';
 import { ZONE_MEMORY_CFG, captureZoneContents, restoreZoneContents, savedZoneContents, type ZoneContents } from './zonecontents';
 import { WorldMassRuntime, type MassAdventureSave } from '../worldmass/runtime';
 import { MASS_ZONE } from '../worldmass/preset';
@@ -5148,8 +5149,10 @@ export class World {
           a.casting.aim = aim;
         }
       }
-      // Toggled auras respond to the press edge; everything else to the hold.
-      for (let i = 0; i < a.skills.length; i++) {
+      // A newly held choice gets the next native opportunity before an older
+      // repeat. Running casts above retain their own held state and commitment.
+      // Toggled auras still respond to the press edge; other skills to the hold.
+      for (const i of this.skillInputOrder.slots(seat,a.skills.length,held,inp.edge,inp.metaEdge)) {
         const inst = a.skills[i];
         if (!inst) {
           // THE UNARMED FLOOR: an EMPTY slot still answers — the improvised
@@ -5214,6 +5217,7 @@ export class World {
    *  wired (the host runs the artery); an entry lives only while a slot is
    *  spent, and leaves with the seat (removeSeat). */
   private spentPresses = new Map<string, Set<number>>();
+  private readonly skillInputOrder = new SkillInputOrder();
   /** The held[] of a seat with no intent this frame (nothing to read). */
   private readonly noHeld: readonly boolean[] = [];
 

@@ -97,3 +97,27 @@ element belongs to that element.**
 
 Probes: `balance/probe_harvest.ts` rig K, `balance/probe_trace.ts` rig D,
 `balance/probe_typingguard.ts`.
+
+## Held-skill priority
+
+`engine/skillInputOrder.ts` orders the ordinary host skill attempts after the
+interaction and timeflow gates. `SKILL_INPUT_CFG.priority = 'recent-held'`
+gives a newly pressed, still-held slot the next available native opportunity
+before an older repeat. For example, holding Cleave and then holding Shield Up
+finishes the current swing and raises the guard, instead of letting Cleave's
+lower slot restart forever. The priority belongs to the seat and disappears on
+release. It is transient and is neither saved nor sent over the wire.
+
+This changes attempt order only: casts retain their commitment, each running
+mode keeps its own button's held state, and every attempt still goes through
+useSkill/useMetaSkill. A refused or cooling-down skill lets another held action
+try. A tap released while the body remains committed is not queued. Toggles
+still require edges; meta presses retain their own lane. Edges in one input
+frame tie by slot index because PlayerInput has no within-frame timestamps.
+Legacy holds without edges retain slot order until a fresh choice arrives.
+
+`priority = 'slot'` restores the previous ordering for comparison. Verify
+`probe_skillinputorder.ts`, native harvest/trace/meta/typing probes and
+`balance/held-priority-ui.cjs`. The client uses real mouse button events in an
+isolated profile; `HOLLOW_WAKE_QA_LEGACY=1` with the prior fixed build reproduces
+the held-shield starvation. This is independent of movement lock during casts.

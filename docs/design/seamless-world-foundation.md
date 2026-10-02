@@ -1435,3 +1435,28 @@ All three type checks, combatfocus and visibility-stability probes, the scoped
 build and the real crowded-renderer check pass. The crowd retains all twelve
 damage values, exact native life fractions and unobstructed body placement.
 The headless check also covers layout opt-out and reveal on a later frame.
+
+### A newer held skill can answer an older repeat
+
+The repeated cast-control criticism led to a reproducible input problem:
+holding Cleave while newly holding Shield Up allowed lower-slot Cleave to keep
+restarting. A native engine reproduction made three swings and never guarded;
+a separate real-client test with actual mouse buttons confirmed it. This was
+not a movement-cancellation or real-time latency finding.
+
+The host now tries the newest still-held skill before older repeats through
+engine/skillInputOrder.ts. Current casts finish, native costs and recovery stay
+in force, and releasing the newer button restores the other held choice.
+There is no released-input queue, cancellation rule, damage adjustment or
+second skill executor. Cooldown/refusal falls through to the next held action.
+The per-seat transient order handles meta edges and changed bars; simultaneous
+edges tie by slot order. SKILL_INPUT_CFG retains the previous policy as a dial.
+
+All three type checks, the scoped build, the new native input-order probe and
+harvest, trace, meta-slot and typing-guard probes pass. Engine checks verify
+the guard begins at exactly the former next-repeat opportunity, release and
+cooldown fallback, no deferred short tap, independent seat histories and ties.
+The isolated native-button client reproduces the prior failure, then verifies
+Cleave commitment, held shield, primary resumption and idle after release;
+screenshots were inspected. This does not establish continuous control feel or
+resolve the critics' broader concerns about early encounter pressure and travel.

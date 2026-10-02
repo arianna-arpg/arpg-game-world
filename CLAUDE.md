@@ -183,6 +183,13 @@ HTML captures, a retained origin and build fingerprint keep review evidence
 traceable. See `docs/ai/PLAYTEST_CLIENT.md`; the client has no arbitrary-code or
 stat-grant endpoint. Frame stepping does not establish real-time feel.
 
+Held skill attempts share `engine/skillInputOrder.ts`: a newer still-held choice
+precedes an older repeat after the native interaction/timeflow gates. Current
+casts, cooldowns, meta/toggle gates and movement rules remain native; released
+presses are not queued. `SKILL_INPUT_CFG` can restore slot order. Verify
+skillinputorder, harvest/trace/meta/typing probes and the real-device-input
+`balance/held-priority-ui.cjs`; see `docs/engine/input.md`.
+
 Scripted QA input passes `core/scriptedInput.ts` before entering the simulation.
 Malformed coordinates/buttons or a throwing source release the QA callback and
 report the error; native device input is unchanged. Verify the isolated

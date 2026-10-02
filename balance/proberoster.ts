@@ -408,6 +408,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_titans.ts', status: 'green', tier: 'fast', why: 'Durable unseen Titan journeys, physical wakes, attributable contact damage, safe terrain birth, cleanup and co-op reconciliation' },
   { probe: 'probe_worldbossspectacle.ts', status: 'green', tier: 'fast', why: 'Colossi: real warning/damage, full-body escape routes, organ-break cancellation, recovery cycles, once-only brood and no looping phase rewards' },
   { probe: 'probe_zonepolicy.ts', status: 'green', tier: 'fast', why: 'ZONE POLICY — the layout half beside the biome half through the ONE policyFor seam: the shipped-empty layout table is byte-identical to biome-only (exhaustive biome × layout × id A/B against the old logic), authored deny/allow rows AND both ways, and eventTargetable/holdfastHostable route the composed verdict' },
+  { probe: 'probe_skillinputorder.ts', status: 'green', tier: 'fast', why: 'New held choices precede older repeats without cancelling native casts; release, cooldown fallback, per-seat history, meta edges and legacy slot policy.' },
 ];
 
 /** Green rows — the gate — optionally narrowed to one lane. */
