@@ -23,6 +23,11 @@ clearance; omitted roles preserve older obligations. Fixed landmark populations,
 home anchors and native return hysteresis survive Continue;
 older descriptors retain their previous network. Verify worldmass_extensions and
 hidden `balance/worldmass-extensions-ui.cjs` (controlled walking and Continue).
+`worldmass/trailWear.ts` paints distance-keyed wear, grit and median grass from
+saved route geometry through the terrain's surviving source mask. `MASS_TRAIL_VIEW`
+owns its presentation controls; native collision and terrain consequences retain
+authority. Verify `balance/trail-wear-ui.cjs` and `balance/trail-wear-world-ui.cjs`
+for geographic page continuity, configuration, cache reuse and consequence erasure.
 Optional `MassJourneySpec.stops` place detours beside an existing route by arc
 length and signed offset. New runs add the Silent Caravan and Windworn Shrine;
 existing network identities and older expeditions stay unchanged. Their native

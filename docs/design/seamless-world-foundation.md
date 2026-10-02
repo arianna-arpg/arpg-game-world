@@ -1534,3 +1534,31 @@ scenery/vitals, retains solid trunks and restores the same proximity fade
 after departure. Gallery and in-world screenshots were inspected. This is a
 shared visual refinement, not evidence of AAA parity or continuous performance.
 The independent route reviewer keeps its earlier fixed build.
+
+### Geographic road surfaces
+
+Two further independent outings reached the Silent Caravan through ordinary
+movement. The Magician found its first recovery and Arcing reward engaging but
+did not want to continue the overall outing. The Warrior enjoyed a shield
+release against two opponents and would try another destination, while still
+finding the pacing uneven and survival forgiving. Both native Save/Continue
+checks passed. These are mixed verdicts, not acceptance or a played AAA comparison.
+
+Saved journey geometry now feeds configurable wheel wear, distance-seeded grit
+and broken median grass through worldmass/trailWear.ts. The terrain baker admits
+the surface only where the original route's attributed ground still survives;
+later terrain consequences and native town floors remain authoritative. Static
+wear shares the bounded terrain cache and consumes no simulation randomness.
+This changes presentation, not route geometry, difficulty or encounter frequency.
+
+All three type checks, the journey probe and scoped build pass. The native
+painter test covers negative coordinates, bends, a junction, eighteen adjacent
+tiles, seeded repeatability, configuration, disabled/degenerate paths and canvas
+state. Whole-surface versus tiled rasterization differs by at most four channel
+levels, with mean absolute error 0.0012 on opaque terrain; geometry is continuous.
+The actual game test has zero warm-cache bakes and unchanged gameplay state.
+Replacing twenty road-source cells with identically colored ground removes wear
+there; outside those cells, twenty-one pixels differ by at most two channel
+levels (51 total), within the recorded Canvas clipping tolerance. Physical
+regions/colors remain equal. Synthetic and actual-game images were inspected.
+This surface pass does not resolve either critic's remaining gameplay concerns.

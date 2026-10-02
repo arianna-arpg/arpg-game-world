@@ -3,6 +3,7 @@ import { massHash } from './random';
 import type { WorldMassRuntime } from './runtime';
 import { regionKind } from '../world/regions';
 import { MASS_CLEARANCE_VIEW } from './clearance';
+import { paintMassTrailWear } from './trailWear';
 
 interface Baked { canvas: HTMLCanvasElement; revision: number }
 /** Canvas assets are renderer-owned, disposable, and bounded independently of
@@ -85,11 +86,16 @@ export class MassPainter {
     }
     sc.putImageData(pixels, 0, 0);
     ctx.drawImage(small, 0, 0, span, span);
-    const solid = new Path2D();
+    const solid = new Path2D(), trailSurface = new Path2D();
     for (let y = 0; y < cols; y++) for (let x = 0; x < cols; x++) {
       const at = { ...cell, x: x * cs, y: y * cs };
       const t = page?.samples[y * cols + x] ?? mass.stream.sample(at);
       const noise = massHash(x + ',' + y, salt);
+      // Only the surviving route's attributed ground receives wear. A later
+      // terrain consequence, clearing or native town floor owns its own face.
+      if (t.region === 'ground' && mass.journey
+        && mass.state.patchAt(at)?.cause === mass.journey.spec.source + '/trail')
+        trailSurface.rect(x * cs, y * cs, cs, cs);
       if (regionKind(t.region)?.standStatusDeep) {
         ctx.fillStyle = 'rgba(153,204,211,.09)'; ctx.fillRect(x * cs + 3, y * cs + 6 + noise % 13, cs * .6, 1);
       } else {
@@ -122,6 +128,11 @@ export class MassPainter {
     // Fractured stone has its own larger geographic lattice. Planes cross
     // physical tile/page joins; clipping preserves the exact collision contour.
     const origin = localOffset({ ...cell, x: 0, y: 0 }, { ...mass.origin, x: 0, y: 0 }, span), grain = cs * 4;
+    if (mass.journey) {
+      ctx.save(); ctx.clip(trailSurface); ctx.translate(-origin.x, -origin.y);
+      paintMassTrailWear(ctx, mass.journey.trails, {x:origin.x,y:origin.y,w:span,h:span}, mass.generator.run.seed);
+      ctx.restore();
+    }
     const vertex = (gx: number, gy: number): { x: number; y: number } => {
       const h = massHash('stone/'+gx+','+gy,mass.generator.run.seed);
       return { x: (gx+.15+(h&255)/255*.7)*grain-origin.x,
