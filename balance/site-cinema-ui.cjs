@@ -209,7 +209,11 @@ app.whenReady().then(async () => {
   check('the down arrow turns the level down', (await js(`(${theater}).video.volume`)) < lv.vol - 0.05);
   /* the natural end: the film runs out and the screen breaks from the eye, with sound */
   const sounded0 = await js('HWCinemaTheater.sounded || 0');
-  await js(`(() => { const v = (${theater}).video; v.currentTime = 58.4; })()`);
+  /* the title card opens the film's bars to the whole frame: the rim keeps
+     measuring and widens with it, so the insignia and its lines stay clear */
+  await js(`(() => { const v = (${theater}).video; v.currentTime = 57.6; })()`);
+  check('the mind\'s eye widens when the film opens its bars', await waitFor(`(() => { const p = (${theater}).rim.picture(); return p[1] < 0.03 && p[3] > 0.97; })()`, 2000),
+    JSON.stringify(await js(`(() => { const t = ${theater}; return t && t.rim ? t.rim.picture().map((v) => +v.toFixed(3)) : null; })()`)));
   check('the film ends and breaks on its own', await waitFor(`!!document.querySelector('.hwcine-gl')`, 6000));
   check('the natural end still speaks (the break has its sound)', (await js('HWCinemaTheater.sounded || 0')) > sounded0);
   for (const t of [0.12, 0.4, 0.6, 0.9]) {

@@ -24,7 +24,7 @@ that button holds keyboard focus.
 | `scripts/publish-site-media.mjs` | Uploads manifest files to the `site-media` release (creates it on first use). |
 | `scripts/fetch-site-media.mjs` | Pulls and verifies manifest files into `site/media/` (every Pages deploy; local previews), unpacking archives. |
 | `scripts/capture-skill-clips.cjs` | Films each skill in the game → `site/media/clips/` (see Skill clips). |
-| `balance/site-cinema-ui.cjs` | The hidden walkthrough (38 checks, frames in `balance/reports/site-cinema/`). |
+| `balance/site-cinema-ui.cjs` | The hidden walkthrough (39 checks, frames in `balance/reports/site-cinema/`). |
 
 A page opts in with one tag: `<script src="assets/cinema.js?v=…"></script>` in
 its `<head>` (today: the homepage). **The `?v=` stamp is the cache key for both
@@ -128,13 +128,18 @@ clean; or `'all'`, `'none'`), and a film needs no setting of its own. The rim
 finds the picture by measuring the film's own black bars while it plays: a
 small copy of the frame (128 × 288) is read a few times a second, every row and
 column whose mean rises above a low threshold belongs to the picture, the
-extent only grows (a dark scene cannot shrink it), and reading stops once it
-has held for a few seconds. The edge is taken at the inner side of the boundary
-sample, so any error falls a sliver inside the picture, where the dark already
-covers the true edge (the announcement measures `[0, 0.132, 1, 0.868]` against
-its bars at 0.128 and 0.872). The rim eases onto the measured edge during the
-eye's opening. A film served cross-origin without CORS cannot be read, so its
-rim stays on the whole frame unless it names its `picture`.
+extent only grows (a dark scene cannot shrink it). The reading never stops while
+the film plays: quick (every 250 ms) while the extent is still being found, then
+a light look every 600 ms, so a film that opens its bars later widens the rim
+with it. The announcement's title card does exactly that, taking the whole
+frame for the insignia and its lines, and the rim follows it out to the frame's
+edge. The edge is taken at the inner side of the boundary sample, so any error
+falls a sliver inside the picture, where the dark already covers the true edge
+(the announcement measures `[0, 0.132, 1, 0.868]` against its bars at 0.128 and
+0.872). The rim eases onto the measured edge (during the eye's opening at
+first). A film served cross-origin without CORS cannot be read, so its rim stays
+on the whole frame unless it names its `picture`. The extent never shrinks, so a
+film that closes its bars again after opening them keeps the wider rim.
 
 It is one GLSL function (`RIM_GLSL` in the theater) with two consumers:
 
