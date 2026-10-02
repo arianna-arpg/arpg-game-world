@@ -1,3 +1,4 @@
+import { drawSkillIcon } from './skillIcons';
 import { treePointBudget } from '../engine/skillEmpowerment';
 import { altarInfluences } from '../engine/altarCues';
 import { drawAltarInfluence } from './vis/altarCueLayer';
@@ -7901,7 +7902,7 @@ export class Renderer {
         const def = inst.def;
         // THE SLOT'S FACE: a converted skill (SkillDef.convert — a full
         // Tame presses as the Whistle) presents the CONVERTED look: color,
-        // initials, and the cooldown clock a press would actually answer to.
+        // shared icon/initials, and the cooldown clock a press would actually answer to.
         const face = world.slotFaceOf(p, inst);
         const cost = p.skillCost(inst);
         // GATED skills grey out hard: no fuel in the pool, no afflicted
@@ -7912,13 +7913,17 @@ export class Renderer {
         // "unaffordable" dimming would lie about the one press that helps.
         ctx.globalAlpha = gated ? 0.15
           : (runningOn || (p.mana >= cost.mana && p.life > cost.life)) ? 0.9 : 0.3;
-        ctx.fillRect(x + 4, by + 4, slot - 8, slot - 8);
+        // Stateful recall retains its explicit REC face; converted skills use
+        // the live face's registry key. Native clocks and gauges paint above it.
+        const illustrated = !inst.state?.markPos && drawSkillIcon(ctx, face, x + 4, by + 4, slot - 8);
+        if (!illustrated) ctx.fillRect(x + 4, by + 4, slot - 8, slot - 8);
         ctx.globalAlpha = 1;
-        ctx.fillStyle = '#0a0a0e';
-        ctx.font = 'bold 13px Verdana';
-        // Stateful skills can change face: Mark shows REC while armed.
-        const label = inst.state?.markPos ? 'REC' : initials(face.name);
-        ctx.fillText(label, x + slot / 2, by + slot / 2 + 5);
+        if (!illustrated) {
+          ctx.fillStyle = '#0a0a0e';
+          ctx.font = 'bold 13px Verdana';
+          const label = inst.state?.markPos ? 'REC' : initials(face.name);
+          ctx.fillText(label, x + slot / 2, by + slot / 2 + 5);
+        }
         // Cooldown sweep — measured against the clock actually SET (an
         // Apotheosis-imposed cooldown sweeps too, not just innate ones).
         const cd = p.cooldowns.get(face.id);

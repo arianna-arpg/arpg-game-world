@@ -2067,3 +2067,31 @@ The shared-field/menu revision 9ed8e8d5 passed all 339 remote checks and Pages
 Remote browser QA preserved seed 2415255320 and all six ordinary-save sentinels.
 Quicker earned-cache opening and empty-XP suppression are pushed in 6e6c4397;
 their remote publishing checks are still running at this checkpoint.
+
+### Shared skill faces
+
+Optional `SkillDef.icon` selects an attributable vector from `render/skillIcons.ts`.
+The canvas hotbar, inventory Memory and Skills rack share the same paths and
+palette. Nine original Warrior, Magician and Rogue starters opt in. Missing,
+unknown and false keys retain initials; the explicit recall face remains REC.
+Native cooldown, affordability, gauge, level and toggle overlays keep authority.
+A bounded 64-face cache composites resource dimming once over the complete image.
+This is a presentation vocabulary, not a change to skills or their costs.
+
+All three type checks and 25 native combat smoke episodes pass. Actual-client
+checks exercise all three kits, unknown/disabled fallbacks, recall, cooldown and
+empty mana, all nine rack faces, and native unlearning back to an illustrated
+Memory in the bag. The SVG/canvas gallery at bar, item and rack sizes was
+inspected along with real hotbars. Geometry is shared; their rasterizers can
+differ at antialiased edge pixels. No external art or runtime dependency was added.
+
+The walking critic completed five kills, level two, two destinations after its
+first equipment upgrade and native Save/Continue. Its 7,773 requested frames
+represent 129.55 nominal seconds, separately from 79.06 minutes of review and
+inspection. Its verdict remains negative: exploration and loot brought curiosity,
+but repetitive combat and unclear melee/rear-hit feedback did not earn a return.
+This is not overall acceptance or a played commercial-game comparison.
+
+Reward revision 6e6c4397 passed CI 37075598077 and Pages 37077084424.
+Exact live metadata reports 2026-10-02T23:21:48.059Z. Isolated remote QA preserved
+seed 3846617265 and all six ordinary-save sentinels through Continue.

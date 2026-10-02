@@ -1,3 +1,4 @@
+import { skillIconSvg } from '../render/skillIcons';
 import { empowermentPassive, empowermentPoints, empowermentRank, hasEmpowermentPassive, skillInstanceName, treeAbilityNodes, treeInstanceNodeRanks, treePointBudget } from '../engine/skillEmpowerment';
 import { skillMergePlan } from '../engine/skillMerge';
 import { massMap } from '../worldmass/paint';
@@ -335,8 +336,7 @@ const gemTileColorOf = (item: ItemInstance): string => {
 };
 
 /** THE ICON LAW (walk-1): the tile face IS the hotbar icon at 1×1 — the
- *  skill's color swatch wearing its initials (one icon truth, no second
- *  art). Supports wear the same face in their def color. */
+ *  shared vector face or its legacy initials. Supports retain their def color. */
 const gemTileFaceHtml = (item: ItemInstance): string => {
   const sp = skillGemPayloadOf(item);
   const gp = supportGemPayloadOf(item);
@@ -346,7 +346,7 @@ const gemTileFaceHtml = (item: ItemInstance): string => {
   const lvl = sp?.level ?? gp?.level ?? 1;
   return `<span style="display:flex;align-items:center;justify-content:center;
       width:22px;height:22px;border-radius:3px;background:${color};opacity:0.9;
-      color:#0a0a0e;font-weight:bold;font-size:9px;font-family:Verdana">${gemInitials(def.name)}</span>
+      color:#0a0a0e;font-weight:bold;font-size:9px;font-family:Verdana">${sp ? skillIconSvg(SKILLS[sp.skillId],22) || gemInitials(def.name) : gemInitials(def.name)}</span>
     <span style="position:absolute;bottom:0;left:2px;font-size:8px;line-height:9px;color:#e8dcc8;text-shadow:0 0 2px #000">${lvl}</span>
     ${gp ? `<span title="Support Memory" aria-label="Support Memory" style="position:absolute;top:0;left:0;
       font-size:10px;line-height:11px;padding:0 1px;border-radius:2px;
@@ -6924,7 +6924,7 @@ ${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its sup
       }
       const sd = seated.def;
       // THE ICON LAW (M1): the seat wears the skill's hotbar face — the
-      // color swatch + initials the canvas bar prints, at seat scale.
+      // shared vector or initials the canvas bar prints, at seat scale.
       return `<div data-drag="rackSeat:${slot}" data-drop="rackSeat:${slot}"
         data-tip="skill" data-skill-id="${sd.id}"
         style="--unlearn-size:${BUILD_PANEL_CFG.unlearnSize}px;position:relative;height:${BUILD_PANEL_CFG.rackSeatHeight}px;border:1px solid ${sd.color};border-radius:5px;
@@ -6941,7 +6941,7 @@ ${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its sup
         <div style="display:flex;align-items:center;gap:4px">
           <span style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;
             width:15px;height:15px;border-radius:2px;background:${sd.color};opacity:0.9;
-            color:#0a0a0e;font-weight:bold;font-size:7px;font-family:Verdana">${gemInitials(sd.name)}</span>
+            color:#0a0a0e;font-weight:bold;font-size:7px;font-family:Verdana">${skillIconSvg(sd,15) || gemInitials(sd.name)}</span>
           <span style="min-width:0">
             <span style="display:block;font-size:10px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${skillInstanceName(seated)}</span>
             <span style="display:block;font-size:8px;color:#8a8678">Lv ${seated.level}</span>
