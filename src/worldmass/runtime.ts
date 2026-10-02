@@ -24,6 +24,7 @@ import { MassEcology, validateMassEcology, type MassEcologySave } from './ecolog
 
 import { MassRewards, type MassRewardSave } from './rewards';
 import { MassFields, type MassFieldSave } from './fields';
+import { recordMassGuardian, settleMassClearance } from './clearance';
 
 interface MassEnemySave {
   id: string; monster: string; level: number; x: number; y: number; life: number; scale: number;
@@ -226,6 +227,7 @@ export class WorldMassRuntime {
     const site = place && this.config.content.find(c => c.id === place.content)?.site;
     if (site?.cache) this.rewards.earn(world, source, site.name);
   }
+  siteCleared(id: string): boolean { return this.state.claimed('site-cleared',id); }
   siteSearched(id: string): boolean {
     return this.state.claimed('site-looted', id) || this.cacheOpened(canonical([id, 'cache']));
   }
@@ -308,6 +310,10 @@ export class WorldMassRuntime {
     }
     if (!boot && world.time < this.nextPopulation) return;
     this.nextPopulation = world.time + .5;
+    for(const found of this.sites.discovered){
+      const content=this.config.content.find(c=>c.id===found.content);
+      if(content)settleMassClearance(world,this.state,found,content,id=>this.natives.has(id),this.populationFor(found).level);
+    }
     // Retained actors still need their original solid scenery after a reload,
     // even when the hero saved far away. Dependency pages do not spawn content.
     const dependencies = new Map<string, ReturnType<MassGenerator['placesInCell']>>();
@@ -384,13 +390,19 @@ export class WorldMassRuntime {
           || Math.hypot(free.x - q.x, free.y - q.y) > p.radius) continue;
         a.pos = free; a.fromZoneGen = true; a.fillResources();
         if (staging) staged.push({id,actor:a});
-        else { this.natives.set(id, a); world.actors.push(a); }
+        else {
+          this.natives.set(id, a); world.actors.push(a);
+          if(content.site?.completion)recordMassGuardian(world,this.state,id,a);
+        }
       }
       // Admission is atomic: never expose half a cohort, then heal/promote
       // its wounded survivors when a later placement finally succeeds.
       if (staging && staged.length === content.count
         && world.promoteMagicPack(staged.map(s=>s.actor),content.magicPack!.mechanic)) {
-        for (const {id,actor} of staged) { this.natives.set(id,actor); world.actors.push(actor); }
+        for (const {id,actor} of staged) {
+          this.natives.set(id,actor); world.actors.push(actor);
+          if(content.site?.completion)recordMassGuardian(world,this.state,id,actor);
+        }
         this.state.claim('native-cohort',p.id);
         world.refreshMagicPacks();
       }

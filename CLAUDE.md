@@ -19,6 +19,12 @@ Optional `MassContent.magicPack` uses native coordinated encounters; admission
 is atomic and saved members retain wounds, cohort identity and casualties.
 Continue re-arms attacks through native warning policy. Verify
 `probe_worldmass_cohorts.ts` and native magic-pack probes as well.
+Optional `MassSiteSpec.completion` snapshots native objective experience for a
+place's original eligible garrison. `worldmass/clearance.ts` records eligibility
+at admission and pays once; chests, ordinary zone objectives and old expeditions
+remain independent. The shared curve is in `data/objectiveRewards.ts`. Verify
+worldmass_clearance, native objectives and `balance/worldmass-clearance-ui.cjs`
+(exact experience/point budget and map state through browser Continue).
 `ui/passiveFrontier.ts` presents the current realm's affordable, reachable native
 passive choices above its graph, using the same panel predicate, tooltip content
 and allocation/choice intents. The graph and search remain available. Verify the

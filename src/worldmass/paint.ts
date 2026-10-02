@@ -192,7 +192,7 @@ export function massMap(mass: WorldMassRuntime, player: { x: number; y: number }
     const title = mass.config.content.find(c => c.id === found.content)?.site?.name ?? 'Discovered place';
     const opened = mass.siteSearched(found.id);
     const label = mass.config.progression ? title + ' · Lv ' + mass.populationFor(found).level : title;
-    const name = label + (opened ? ' · Searched' : '');
+    const name = label + (mass.siteCleared(found.id) ? ' · Cleared' : '') + (opened ? ' · Searched' : '');
     parts.push(`<g><title>${escape(name)}</title><path d="M${x},${y - 5}l5,5 -5,5 -5,-5Z" fill="#d1b685" stroke="#302d23"/><text x="${x + 8}" y="${y + 4}" fill="#eee0bc" font-size="10">${escape(name)}</text></g>`);
   }
   const px = (player.x / grain - left) * scale, py = (player.y / grain - top) * scale;

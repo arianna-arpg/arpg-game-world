@@ -1056,3 +1056,31 @@ Costs, attack timing, concealment and positional damage are unchanged.
 
 The stealth probe retains the 64-orientation regression and obstructed arrival
 case. Verify native starter trees, layers, sanctuary and combat smoke as well.
+
+### Native landmark completion
+
+The opening landmarks now snapshot an optional completion reward. Their
+original admitted garrison uses the native objective eligibility predicate:
+scenery, ambient fauna and exempt bodies cannot become mandatory kills.
+Eligibility is recorded when each original body enters the world. A missing
+population slot is never a kill, and partially admitted cohorts cannot pay.
+
+Once a discovered place's original eligible garrison has fallen, a living
+player receives the shared native objective experience curve (40 + 30 per
+fixed place level) exactly once. This feeds ordinary character levels,
+passive points and level-up recovery; it grants no skill levels, account
+unlocks or currency. Opening its chest is a separate accomplishment.
+Roaming neighbours do not become an unbounded extermination requirement,
+and Cleared does not make the country a sanctuary.
+
+`MassSiteSpec.completion` is optional and snapshotted; old expeditions retain
+their former progression. The map derives Cleared from the durable place
+receipt. `data/objectiveRewards.ts` owns the same curve used by ordinary
+zone clears and escapes, whose existing payout values are unchanged.
+
+Verify worldmass_clearance, the worldmass and objective suites, native combat
+smoke and generation QA. `balance/worldmass-clearance-ui.cjs` exercises actual
+admitted bodies, native kill rewards, level/point changes, the map, saving and
+Continue. Its `HOLLOW_WAKE_QA_UNREWARDED=1` negative control uses the preceding
+build: the same two Cinderwatch kills yield 22 experience alone; the new
+landmark adds 70, reaching level 2 with 47 experience and one passive point.

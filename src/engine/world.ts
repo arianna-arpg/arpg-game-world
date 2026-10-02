@@ -191,6 +191,7 @@ import {
 } from './harvest';
 import { HARVEST_HUSK_KIND, harvestRowsFor, type HarvestNodeDef } from '../data/harvest';
 import type { ContestRecoupSpec, ContestSpec } from '../data/objectives';
+import { objectiveRewardXp } from '../data/objectiveRewards';
 import { PROCESSION_CFG } from '../data/processions';
 import { BOUNTY_CFG } from '../data/bounties';
 import { ADOPT_CFG, CLEAR_CFG, CONTEST_CFG, OFFERING_CFG, STRAGGLER_CFG, maybeAdoptObjective, packageAskRow, pressureRampAt, pressureRampCadence, ventureAskRow } from '../data/objectives';
@@ -52393,7 +52394,7 @@ export class World {
     this.loadZone(dest, this.zone.id);
     if (escaped) {
       this.completedObjectives.add(escaped.id);
-      const bonus = 40 + escaped.level * 30;
+      const bonus = objectiveRewardXp(escaped.level);
       this.grantXp(bonus);
       this.text(vec(this.player.pos.x, this.player.pos.y - 70),
         `Escaped ${escaped.name}! +${bonus} xp`, '#ffd700', 16);
@@ -61591,7 +61592,7 @@ export class World {
    *  them. The CONFINE CLAUSE below is that guard's instance-level half:
    *  a body hard-confined to a disc the walker cannot reach is excluded
    *  by what actually stands on THIS floor, not by what its def promised. */
-  private objectiveCountable(a: Actor): boolean {
+  objectiveCountable(a: Actor): boolean {
     return a.team === 'enemy'
       && !this.isAmbientTag(a.tag)
       // ACTOR-level scenery armor is the same soft-lock guard one layer
@@ -61833,7 +61834,7 @@ export class World {
       return;
     }
     this.completedObjectives.add(this.zone.id);
-    const bonus = 40 + this.zone.level * 30;
+    const bonus = objectiveRewardXp(this.zone.level);
     this.grantXp(bonus);
     this.text(vec(this.player.pos.x, this.player.pos.y - 50),
       `${label} +${bonus} xp`, '#ffd700', 18);

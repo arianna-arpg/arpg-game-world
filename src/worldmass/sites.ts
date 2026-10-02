@@ -7,8 +7,12 @@ import type { MassPlace } from './contracts';
 import { canonical, massHash } from './random';
 import { validateMassAltar, type MassAltarSpec } from './fields';
 
+import { validateMassClearance, type MassClearanceSpec } from './clearance';
+
 export interface MassSiteSpec {
   name: string; source: string;
+  /** Optional once-per-place reward for its original native garrison. */
+  completion?: MassClearanceSpec;
   /** Snapshot native scenery at the local origin; no hidden registry re-read on resume. */
   doodads: Doodad[];
   fixtures: { monster: string; x: number; y: number }[];
@@ -41,6 +45,7 @@ export function nativeMassSite(id: string, name: string, cache?: MassSiteSpec['c
 export function validateMassSite(site: MassSiteSpec, radius: number): void {
   if (!site.name || !site.source || !Array.isArray(site.doodads) || !Array.isArray(site.fixtures)
     || site.doodads.length > 256 || site.fixtures.length > 32) throw new Error('Invalid worldmass site');
+  if(site.completion!==undefined)validateMassClearance(site.completion);
   const within = (x: number, y: number, r = 0) =>
     [x, y, r].every(Number.isFinite) && r >= 0 && Math.hypot(x, y) + r < radius;
   for (const d of site.doodads) {

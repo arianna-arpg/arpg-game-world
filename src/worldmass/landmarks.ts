@@ -1,6 +1,7 @@
 import type { Doodad, DoodadKind } from '../engine/levelgen';
 import { nativeMassSite, type MassSiteSpec } from './sites';
 import { nativeMassAltar } from './fields';
+import { OBJECTIVE_REWARD } from '../data/objectiveRewards';
 
 interface Landmark {
   id: string;
@@ -20,6 +21,7 @@ export function frontierLandmarks(): Landmark[] {
     const site: MassSiteSpec = native ? nativeMassSite(native, name, cache)
       : { name, source: 'native/scenery', doodads: [], fixtures: [], ...(cache ? { cache } : {}) };
     site.source += '+worldmass/landmarks/' + id;
+    site.completion = { source: 'objectives/clear', ...OBJECTIVE_REWARD };
     site.doodads.push(...additions);
     if (altars?.length) site.altars = altars;
     return { id, undead, count, site, ...(mechanic ? { magicPack: { source: 'magicPacks/'+mechanic, mechanic } } : {}) };
