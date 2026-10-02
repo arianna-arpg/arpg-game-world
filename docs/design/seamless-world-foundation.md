@@ -996,9 +996,9 @@ checks painted transforms against unchanged ground and gameplay anchors.
 
 The normal-scale contact retest found that whole-body poses remained modest.
 `PartSpec.action` now optionally declares a joint pivot, preparation angle,
-follow-through angle and reach. The Warrior and skeleton swords and Magician
-staff opt in through their existing look data. Other looks retain their static
-composition. The joint carries the loaded pose into a short completed-use sweep,
+follow-through angle and reach. The Warrior and skeleton swords, Magician
+staff and Rogue paired daggers opt in through their existing look data. Other
+looks retain their static composition. The joint carries the loaded pose into a short completed-use sweep,
 then settles, using host-resolved preparation/strike weights. It never drives
 damage or collision.
 

@@ -1001,9 +1001,14 @@ const sword: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
-/** Paired short blades (rogues) — a mirrored short sword. */
+/** Paired short blades. Optional side (-1 or 1) exposes either native blade
+ * separately for joints; omitted keeps the complete mirrored pair. */
 const daggers: PartPainter = (ctx, r, spec, pal) => {
-  sword(ctx, r, { ...spec, mirror: true, params: { len: 0.5, w: 0.08, ...(spec.params ?? {}) } }, pal);
+  const side = P(spec, 'side', 0);
+  ctx.save();
+  if (side < 0) ctx.scale(1, -1);
+  sword(ctx, r, { ...spec, mirror: side === 0, params: { len: 0.5, w: 0.08, ...(spec.params ?? {}) } }, pal);
+  ctx.restore();
 };
 
 /** THREE-TINED TRIDENT — pit regalia: a long haft into a crossbar crowned

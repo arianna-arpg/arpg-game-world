@@ -2,6 +2,9 @@
 // placement is integration QA, separate from the critic's ordinary-input play.
 const {app,BrowserWindow}=require('electron');
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
+const role=process.env.HOLLOW_WAKE_QA_CLASS||'warrior';
+assert.ok(['warrior','rogue'].includes(role),'unsupported body-action QA class');
+const skillId=role==='rogue'?'backstab':'cleave';
 const dir=path.join(__dirname,'reports'),label=process.env.HOLLOW_WAKE_QA_LABEL||'body-action';fs.mkdirSync(dir,{recursive:true});
 app.setPath('userData',path.join(dir,label+'-'+process.pid));app.disableHardwareAcceleration();
 app.whenReady().then(async()=>{
@@ -26,13 +29,13 @@ app.whenReady().then(async()=>{
 
 
     await win.loadURL('http://127.0.0.1:'+server.address().port);
-    await run(()=>{
+    await run(role=>{
       window.requestAnimationFrame=()=>0;Object.defineProperty(navigator,'getGamepads',{value:()=>[]});
-      __game.devStartRun('warrior');__game.ui.hideAll();
+      __game.devStartRun(role);__game.ui.hideAll();
       const w=__game.world();w.startWorldMass(42);w.actors=[w.player];
       __game.step(2);
       window.actionQA={origin:{...w.player.pos},radius:w.player.radius};
-    });
+    },role);
     const capture=async name=>{
       const result=await run(()=>{
         const w=__game.world(),r=__game.renderer,p=w.player,ctx=r.ctx;
@@ -52,12 +55,15 @@ app.whenReady().then(async()=>{
       await shot(name);return result;
     };
     const idle=await capture('idle');
-    const start=await run(()=>{
-      const w=__game.world(),p=w.player,skill=p.skills.find(s=>s?.def.id==='cleave');
-      if(!skill)throw Error('Native Warrior Cleave absent');
+    const start=await run(skillId=>{
+      const w=__game.world(),p=w.player,skill=p.skills.find(s=>s?.def.id===skillId);
+      if(!skill)throw Error('Native starting skill absent: '+skillId);
       return w.useSkill(p,skill,{x:p.pos.x+100,y:p.pos.y});
-    });assert.ok(start);
-    await run(()=>{for(let i=0;i<18;i++)__game.step(1);});
+    },skillId);assert.ok(start);
+    await run(()=>{
+      const p=__game.world().player;let i=0;
+      while(p.casting&&p.casting.elapsed/p.casting.total<.7&&i++<180)__game.step(1);
+    });
     const prepare=await capture('prepare');assert.ok(prepare.casting);
     await run(()=>{let i=0;while(__game.world().player.casting&&i++<180)__game.step(1);});
     const contact=await capture('contact');assert.ok(contact.stamp&&!contact.casting);
@@ -75,18 +81,24 @@ app.whenReady().then(async()=>{
     assert.ok(pose(prepare).x<pose(idle).x,'preparation draws back');
     assert.ok(pose(release).x>pose(idle).x,'native completion follows through');
     assert.ok(Math.abs(pose(settled).x-pose(idle).x)<.001,'settled body returns to native position');
-    const jointAngle=result=>{
+    const jointAngle=(result,index=1)=>{
       const rows=result.rows.filter(row=>row.kind==='body');
-      assert.equal(rows.length,2,'native Warrior paints one body and one independently articulated weapon');
-      const angle=Math.atan2(rows[1].b,rows[1].a)-Math.atan2(rows[0].b,rows[0].a);
+      assert.equal(rows.length,role==='rogue'?3:2,'one body plus exactly the native articulated weapons');
+      const angle=Math.atan2(rows[index].b,rows[index].a)-Math.atan2(rows[0].b,rows[0].a);
       return Math.atan2(Math.sin(angle),Math.cos(angle));
     };
     assert.ok(Math.abs(jointAngle(idle))<.001,'neutral joint preserves its authored placement');
     assert.ok(jointAngle(prepare)<-.1,'blade draws back independently of torso');
-    assert.ok(jointAngle(release)>.3,'actual completion carries blade through its joint');
+    assert.ok(jointAngle(release)>(role==='rogue'?.1:.3),'actual completion carries blade through its joint');
     assert.ok(Math.abs(jointAngle(settled))<.001,'joint settles without a lingering weapon copy');
+    if(role==='rogue'){
+      assert.ok(Math.abs(jointAngle(idle,2))<.001,'second blade begins neutral');
+      assert.ok(jointAngle(prepare,2)>.1,'second blade prepares on its own opposite joint');
+      assert.ok(jointAngle(release,2)<-.1,'second blade follows through symmetrically');
+      assert.ok(Math.abs(jointAngle(settled,2))<.001,'second blade settles without duplication');
+    }
     fs.writeFileSync(path.join(dir,label+'-ui.json'),JSON.stringify({idle,prepare,contact,release,settled},null,2));
-    console.log('PASS actual native Cleave preparation, completion and settle paint distinct body and weapon poses while ground anchors and gameplay state remain unchanged');
+    console.log('PASS actual native '+skillId+' preparation, completion and settle paint distinct body and weapon poses while ground anchors and gameplay state remain unchanged');
 
   }catch(e){console.error(e.stack||String(e));process.exitCode=1;}
   finally{clearTimeout(timer);win.destroy();server.close();app.exit(process.exitCode||0);}

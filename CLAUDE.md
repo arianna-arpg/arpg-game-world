@@ -62,8 +62,11 @@ successful real-use gate; `SkillDef.bodyMotion` can select/disable a profile.
 Co-op carries the resolved pose; ground geometry and combat clocks stay native.
 `PartSpec.action` adds optional weapon joints to existing looks; runtime sprites
 separate those parts while portraits keep the complete neutral figure.
-Verify castingcues and `balance/body-action-ui.cjs`. This is an opening
-network, not global roads,
+The Rogue's paired blades expose separate sides of the same native dagger part.
+Verify castingcues and `balance/body-action-ui.cjs` (default Warrior;
+`HOLLOW_WAKE_QA_CLASS=rogue` exercises actual Backstab and both joints).
+`balance/dagger-parts-ui.cjs` checks native neutral portrait pixel parity.
+This is an opening network, not global roads,
 campaign migration or distant AI.
 Worldmass opening population quotas live in `population.ts` and are saved per
 run; omitted quotas retain legacy encounters. Continuous Lastlight supplies

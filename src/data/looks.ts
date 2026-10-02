@@ -1542,7 +1542,10 @@ export const LOOKS: Record<string, LookDef> = {
     parts: [
       { kind: 'torso' },
       { kind: 'hood', x: 0.32, scale: 0.9 },
-      { kind: 'daggers', params: { len: 0.5 } },
+      { kind: 'daggers', params: { len: 0.5, side: 1 },
+        action: { pivotX: .1, pivotY: .62, windTurn: -.7, strikeTurn: .22, reach: .26 } },
+      { kind: 'daggers', params: { len: 0.5, side: -1 },
+        action: { pivotX: .1, pivotY: -.62, windTurn: .7, strikeTurn: -.22, reach: .26 } },
       { kind: 'tatters', scale: 0.6, params: { n: 3 } },
     ],
   },
