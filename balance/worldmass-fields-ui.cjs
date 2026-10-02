@@ -4,7 +4,7 @@ const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),
 const dir=path.join(__dirname,'reports');fs.mkdirSync(dir,{recursive:true});
 app.setPath('userData',path.join(dir,'fields-profile-'+process.pid));app.disableHardwareAcceleration();
 app.whenReady().then(async()=>{
- const root=path.resolve(__dirname,'../dist-preview'),server=http.createServer((req,res)=>{
+ const root=path.resolve(__dirname,'..',process.env.HOLLOW_WAKE_QA_DIST||'dist-preview'),server=http.createServer((req,res)=>{
   const p=new URL(req.url,'http://localhost').pathname,f=path.resolve(root,'.'+(p==='/'?'/index.html':p));
   if(!f.startsWith(root+path.sep)||!fs.existsSync(f)){res.writeHead(404);return res.end();}
   res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.css')?'text/css':'text/html');fs.createReadStream(f).pipe(res);
@@ -15,7 +15,12 @@ app.whenReady().then(async()=>{
   const r=await win.webContents.executeJavaScript('(async()=>{try{return {ok:true,value:await ('+fn+')('+args.map(a=>JSON.stringify(a)).join(',')+')}}catch(e){return {ok:false,error:e.stack||String(e)}}})()');
   if(!r.ok)throw Error(r.error);return r.value;
  };
- const shot=async name=>{win.webContents.invalidate();await new Promise(r=>setTimeout(r,250));fs.writeFileSync(path.join(dir,'worldmass-fields-'+name+'.png'),(await win.webContents.capturePage()).toPNG());};
+ const shot=async name=>{
+  // The frozen offscreen compositor can return its previous frame. Capture the
+  // game's actual canvas as well; state checks alone cannot verify a picture.
+  const png=await run(()=>document.getElementById('game').toDataURL('image/png'));
+  fs.writeFileSync(path.join(dir,'worldmass-fields-'+name+'.png'),Buffer.from(png.split(',')[1],'base64'));
+ };
  const timer=setTimeout(()=>app.exit(1),120000),url='http://127.0.0.1:'+server.address().port;
  try{
   await win.loadURL(url);
@@ -26,16 +31,18 @@ app.whenReady().then(async()=>{
    w.landPartyAt(m.journey.local(p));m.update(w,true);
    const a=w.altars.find(a=>a.massSource);if(!a)throw Error('No geographic field');
    w.player.invulnerable=true;w.landPartyAt({x:a.pos.x,y:a.pos.y+95});
-   for(const e of w.actors)if(e.team==='enemy'){e.aiEnabled=false;e.skills=[];}
+   for(const e of w.actors)if(e.team==='enemy'){e.skills=[];}
    __game.step(3);
    return {source:a.massSource,pos:a.pos,level:a.level,name:a.def.name,count:w.altars.filter(a=>a.massSource).length};
   });assert.equal(before.count,1);await shot('approach');
   const pulse=await run(()=>{
    const w=__game.world(),a=w.altars.find(a=>a.massSource);
-   const e=w.createMonster('zombie',1,'enemy');e.aiEnabled=false;e.skills=[];e.pos={x:a.pos.x+45,y:a.pos.y};e.life=10;w.actors.push(e);
+   const e=w.createMonster('zombie',1,'enemy');e.skills=[];e.pos={x:a.pos.x+45,y:a.pos.y};e.life=10;w.actors.push(e);
    w.player.life=20;a.mendTimer=.04;__game.step(3);
-   return {hero:w.player.life,enemy:e.life,flash:w.flashes.some(f=>f.color===a.def.color),fatal:__game.crash().fatal};
-  });assert.ok(pulse.hero>20&&pulse.enemy>10&&pulse.flash);assert.equal(pulse.fatal,null);await shot('shared-pulse');
+   const targets=w.flashes.filter(f=>f.feedingCue?.kind==='restore').map(f=>f.feedingCue.to);
+   __game.step(15);
+   return {hero:w.player.life,enemy:e.life,targets,flash:w.flashes.some(f=>f.color===a.def.color),fatal:__game.crash().fatal};
+  });assert.ok(pulse.hero>20&&pulse.enemy>10&&pulse.flash&&pulse.targets.length===2);assert.equal(pulse.fatal,null);await shot('shared-pulse');
   const saved=await run(async()=>{
    const w=__game.world(),a=w.altars.find(a=>a.massSource);a.mendTimer=.71;__game.save();
    await new Promise(r=>setTimeout(r,250));return w.massRuntime.fields.snapshot();

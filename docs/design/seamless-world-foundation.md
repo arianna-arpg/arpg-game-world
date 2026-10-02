@@ -868,3 +868,31 @@ recipes and malformed-field refusal. The real client checks visible field/pulse
 and browser Continue. Passive choices now keep their allocated names and native
 granted/selected text visible in a collapsible owned list after points are spent.
 This is purchase feedback; broader graph-route planning is still unfinished.
+### Contact and restoration readability
+
+The ninth gameplay pass keeps an actor's native life, defense, cast and component
+meters together in `render/vis/combatMeters.ts`. A bounded placement search avoids
+visible body footprints and other meter groups, and a displaced group has an
+unobstructed line back to its owner. The offset settles back to its native anchor
+after the space clears. Fully hidden actors neither reserve space nor move visible
+meters; the existing tier, concealment and sight veil still control painting.
+Damage text reserves the displaced meter space as well. No actor position, pool,
+cast clock or attack footprint changes. Saturated crowds retain native readouts
+rather than hiding them; this is not a promise of unlimited clutter-free density.
+`VIS_CFG.combatFocus.meters` contains the dials and opt-out.
+
+A measured altar heal now uses the shared restoration/consumption transfer painter
+with an optional `restore` kind: motes travel from the intact source to the bodies
+that actually recovered, with identical treatment of friend and foe. Full pools
+invent no transfer. `AltarDef.mend.cue` can customize or disable the cue; the
+restoration profile supplies its material/timing. The altar's sigil follows its
+available native pulse clock. Legacy transfer packets keep their consumption
+meaning, and source/recipient copies survive the native snapshot path. This adds
+visual attribution, not a new healing rule or an explanation banner.
+
+Validation: combatfocus, feedingcues, worldmass_fields, castingcues, anatomycues and
+visibility_stability probes; native combat smoke; real crowd-render and field
+Continue harnesses. Field screenshots capture the actual canvas because an
+offscreen compositor can return a stale page image. Independent ordinary-input
+critics retest the resulting clarity; their report verdicts remain separate from
+automated correctness checks.

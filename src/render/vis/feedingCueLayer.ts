@@ -17,13 +17,18 @@ export function drawFeedingTransfer(ctx: CanvasRenderingContext2D, f: {
   if (!Number.isFinite(t + row.to.x + row.to.y)) return;
   const dx = row.to.x - f.pos.x, dy = row.to.y - f.pos.y, angle = Math.atan2(dy, dx);
   ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  // Two short jaw arcs close at the actual consumed body; fragments pull inward.
+  // Restorations leave their source intact. Meals close jaws on what was
+  // consumed; both carry the actual transaction toward its recipient.
   ctx.save(); ctx.translate(f.pos.x, f.pos.y); ctx.rotate(angle);
   ctx.globalAlpha *= (1 - t) * 0.9;
   const r = f.radius * (1 - t * 0.8);
   ctx.beginPath();
-  ctx.arc(0, 0, r, -1.15, 1.15); ctx.moveTo(-Math.cos(1.15) * r, Math.sin(1.15) * r);
-  ctx.arc(0, 0, r, Math.PI - 1.15, Math.PI + 1.15); stroke(ctx, f.color, 2); ctx.restore();
+  if(row.kind==='restore')ctx.arc(0,0,f.radius*(.4+t*.5),0,Math.PI*2);
+  else {
+    ctx.arc(0, 0, r, -1.15, 1.15); ctx.moveTo(-Math.cos(1.15) * r, Math.sin(1.15) * r);
+    ctx.arc(0, 0, r, Math.PI - 1.15, Math.PI + 1.15);
+  }
+  stroke(ctx, f.color, 2); ctx.restore();
   for (let i = 0; i < style.pieces; i++) {
     const p = Math.max(0, Math.min(1, t * 1.3 - i * 0.045));
     const bend = Math.sin(p * Math.PI) * style.curl * (i % 2 ? 1 : -1);

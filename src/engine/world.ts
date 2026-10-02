@@ -3,7 +3,7 @@ import { skillMergePlan } from './skillMerge';
 import { concealmentActive, isConcealed, PERCEPTION_CFG } from './perception';
 import { anatomyCueState, anatomyFlash, notePartScar, clearPartScar } from './anatomyCues';
 import { takeWeakPointBreaks } from './weakpoints';
-import { feedingCueFlash, noteRestoreGain } from './feedingCues';
+import { feedingCueFlash, restorationCueFlash, noteRestoreGain } from './feedingCues';
 import { companionCueFlash, companionCueSpec, type CompanionCueEvent } from './companionCues';
 import { RECOVERY_CUES, type RecoveryCueKind } from '../data/companionCues';
 import { CompanionGrants, COMPANION_GRANT_PREFIX, companionGrantStat, summonReservationUnit } from './companionGrants';
@@ -56184,7 +56184,11 @@ export class World {
           let touched = 0;
           for (const a of this.actors) {
             if (a.dead || !inside.has(a.id)) continue;
-            if (a.healBy(heal) > 0) touched++;
+            if (a.healBy(heal) > 0) {
+              touched++;
+              const mendCue=restorationCueFlash(al.pos,a,mend.cue===false?false:{color:al.def.color,...mend.cue},al.tier??0);
+              if(mendCue)this.flashes.push(mendCue);
+            }
           }
           if (touched > 0) {
             this.flashes.push({ pos: vec(al.pos.x, al.pos.y), radius: al.def.radius * 0.5, color: al.def.color, life: 0.35, maxLife: 0.35 });

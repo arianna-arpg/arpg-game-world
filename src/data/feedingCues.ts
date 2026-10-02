@@ -5,6 +5,7 @@ export const FEEDING_CUE_STYLES: Record<string, { color: string; pieces: number;
   flesh: { color: '#d67690', pieces: 5, life: 0.65, curl: 16 },
   ritual: { color: '#bb98e2', pieces: 6, life: 0.7, curl: 20 },
   life: { color: '#f08d90', pieces: 3, life: 0.32, curl: 9 },
+  restoration: { color: '#a2eebc', pieces: 4, life: 0.65, curl: 10 },
   mana: { color: '#91b9f3', pieces: 3, life: 0.32, curl: 9 },
   es: { color: '#9ce5e8', pieces: 3, life: 0.32, curl: 9 },
   absorb: { color: '#e1eaf3', pieces: 3, life: 0.32, curl: 9 },

@@ -9,7 +9,7 @@ export interface FeedingCueState {
   meal?: FeedingMealCue;
   mass?: { count: number; cap: number; profile: string; color: string };
 }
-export interface FeedingTransfer { to: { x: number; y: number }; fromTier: number; toTier: number; profile: string; }
+export interface FeedingTransfer { kind?: 'restore'; to: { x: number; y: number }; fromTier: number; toTier: number; profile: string; }
 export function feedingStyle(id: string) {
   return FEEDING_CUE_STYLES[Object.hasOwn(FEEDING_CUE_STYLES, id) ? id : 'flesh'];
 }
@@ -45,6 +45,13 @@ export function feedingCueFlash(from: { x: number; y: number }, recipient: Actor
   const material = feedingMaterial(spec, fallback), style = feedingStyle(material.profile);
   return { pos: { ...from }, radius: Math.max(4, radius), color: material.color, life: style.life, maxLife: style.life,
     feedingCue: { to: { ...recipient.pos }, fromTier, toTier: recipient.tier ?? 0, profile: material.profile } satisfies FeedingTransfer };
+}
+/** A source-linked restoration after a measured gain. Unlike consumption,
+ * the source remains intact. Optional kind preserves legacy meal packets. */
+export function restorationCueFlash(from: {x:number;y:number}, recipient:Actor,
+  spec: FeedingCueSpec | false | undefined, fromTier=recipient.tier??0) {
+  const flash=feedingCueFlash(from,recipient,spec,'restoration',fromTier);
+  return flash?{...flash,feedingCue:{...flash.feedingCue,kind:'restore' as const}}:undefined;
 }
 export function feedingCueState(a: Actor): FeedingCueState {
   if (a.dead || a.downed) return { gains: [] };

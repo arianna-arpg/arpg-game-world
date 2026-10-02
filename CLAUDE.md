@@ -42,7 +42,13 @@ renderer in `balance/combat-focus-ui.cjs`. Resource floats retain the native
 `gains` preference but `yieldToCombat` makes them obey reward clearance; actual
 healing remains visible and discovery news uses the civic feed. The optional
 text flag also crosses snapshots, with absent legacy flags preserving behavior.
-This is an opening network, not global roads, campaign migration or distant AI.
+`vis/combatMeters.ts` keeps each visible actor's native meters together and clear
+of bodies, with bounded displacement and unobstructed owner links; hidden actors
+cannot displace visible meters. Actual altar restoration uses the shared resource
+transfer painter with an optional restore kind, and the native pulse clock drives
+its sigil. Verify combatfocus/feedingcues/worldmass_fields plus the real combat-focus
+and fields client harnesses. This is an opening network, not global roads,
+campaign migration or distant AI.
 Worldmass opening population quotas live in `population.ts` and are saved per
 run; omitted quotas retain legacy encounters. Continuous Lastlight supplies
 spatial dialogue and physical departure invitations through `localZoneAt` and

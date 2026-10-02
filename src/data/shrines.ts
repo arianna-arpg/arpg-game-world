@@ -89,7 +89,9 @@ export interface AltarDef {
   /** A heal pulse to EVERYONE inside every `every` seconds — your enemies
    *  included (heal = base + perLevel × zone level). Bring burst, or fight
    *  outside the light. */
-  mend?: { every: number; base: number; perLevel: number };
+  mend?: { every: number; base: number; perLevel: number;
+    /** Measured restoration transfer; false opts out of the source-linked cue. */
+    cue?: import('./feedingCues').FeedingCueSpec | false };
   /** POI roll weight (default 1) — rarer altars stand on rarer ground. */
   weight?: number;
   /** Door clearance override for this row (default INTERACT_PLACE_CFG). */

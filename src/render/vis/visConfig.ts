@@ -12,7 +12,10 @@ export const VIS_CFG = {
     player: { enabled: true, pad: 7, corner: 6, nose: 7, width: 1.5, outline: 1.25,
       color: '#edf9e9', edge: '#18201f', crowdAlpha: .95, restAlpha: .4, crowdReach: 130 },
     numbers: { enabled: true, bodyPad: 12, barRise: 34, gap: 3, step: 16, rings: 12 },
+    meters: { enabled: true, bodyScale: 1.15, bodyPad: 3, gap: 2, step: 10, rings: 8,
+      settleSec: .35, linkGap: 2, linkWidth: 1, linkColor: '#adbaa9', linkEdge: '#172019' },
   },
+  altar: { mendRuneRadius: 8.5, mendRuneWidth: 2, mendRuneAlpha: .9 },
   /** Where the key light sits (radians, screen space). Volume shading, gloss
    *  bands and long doodad shadows all agree on this one sun. */
   lightAngle: -2.35, // up-left

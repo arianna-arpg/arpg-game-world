@@ -3,7 +3,7 @@ import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 import { ESSENCES, abilityEssenceOfTier, LEDGER_ESSENCE_TOUCHED } from '../src/data/essences';
-import { CombatTextLayout, combatBodyRect, combatRectsOverlap } from '../src/render/vis/combatFocus';
+import { CombatTextLayout, combatBodyRect, combatRectsOverlap, type CombatRect } from '../src/render/vis/combatFocus';
 import { VIS_CFG } from '../src/render/vis/visConfig';
 const cfg=VIS_CFG.combatFocus.numbers, layout=new CombatTextLayout();
 const bodies=[combatBodyRect({x:0,y:0},14),combatBodyRect({x:22,y:-30},18),combatBodyRect({x:-15,y:-24},14)];
@@ -67,3 +67,63 @@ try{
   assert.equal(Math.random(),nativeNext,'moving the discovery note cannot shift native reward/simulation randomness');
 }finally{restoreRandom();}
 console.log('PASS resource feedback yields independently of healing; wallets, discovery ledger, pickup feed and old/new network text roundtrips are preserved');
+
+import { CombatMeterLayout } from '../src/render/vis/combatMeters';
+const meterLayout=new CombatMeterLayout(), keys=Array.from({length:4},()=>({}));
+const positions=[{x:0,y:0},{x:23,y:-20},{x:-23,y:-20},{x:0,y:-43}];
+let shift={x:0,y:0};const stack:typeof shift[]=[];
+let linkStart={x:0,y:0};const links:{start:typeof shift;end:typeof shift}[]=[];
+const meterCtx={
+ save:()=>stack.push({...shift}),restore:()=>{shift=stack.pop()!;},
+ translate:(x:number,y:number)=>{shift.x+=x;shift.y+=y;},
+ beginPath:()=>{},moveTo:(x:number,y:number)=>{linkStart={x,y};},
+ lineTo:(x:number,y:number)=>{links.push({start:linkStart,end:{x,y}});},stroke:()=>{},
+} as unknown as CanvasRenderingContext2D;
+const frame=(time:number, crowded=true)=>{
+  const drawn:CombatRect[]=[];
+  meterLayout.begin(time);
+  keys.forEach((key,i)=>meterLayout.body(key,crowded?positions[i]:{x:i*200,y:200},12));
+  keys.forEach((key,i)=>{
+    const p=crowded?positions[i]:{x:i*200,y:200};
+    const rect={x:p.x-16,y:p.y-33,w:32,h:16};
+    meterLayout.add(key,rect,()=>drawn.push({...rect,x:rect.x+shift.x,y:rect.y+shift.y}));
+  });
+  meterLayout.paint(meterCtx);
+  return drawn;
+};
+const meterBefore=JSON.stringify(positions), displaced=frame(0),mc=VIS_CFG.combatFocus.meters;
+const bodyBoxes=positions.map(p=>({x:p.x-12,y:p.y-12,w:24,h:24}));
+assert.ok(links.length>0,'crowded meters identify their displaced owner');
+for(const {start,end} of links){
+ const owner=positions.findIndex(p=>Math.abs(Math.hypot(start.x-p.x,start.y-p.y)-(12+mc.linkGap))<.00001);
+ assert.ok(owner>=0,'leader starts outside its real owner');
+ for(const [i,p] of positions.entries())if(i!==owner){
+  const dx=end.x-start.x,dy=end.y-start.y;
+  const t=Math.max(0,Math.min(1,((p.x-start.x)*dx+(p.y-start.y)*dy)/(dx*dx+dy*dy)));
+  assert.ok(Math.hypot(start.x+dx*t-p.x,start.y+dy*t-p.y)>=12+mc.linkGap-.00001,'leader cannot pass through a different body');
+ }
+}
+for(const [i,r] of displaced.entries()){
+ assert.ok(!bodyBoxes.some(b=>combatRectsOverlap(r,b)),'meters leave visible bodies clear');
+ assert.ok(!displaced.slice(0,i).some(b=>combatRectsOverlap(r,b)),'separate actors retain separate meter groups');
+}
+assert.deepEqual(frame(0),displaced,'paused redraw cannot move an anchored meter');
+assert.equal(JSON.stringify(positions),meterBefore,'meter layout cannot move native actors');
+frame(.1,false);const returned=frame(1,false);
+returned.forEach((r,i)=>assert.equal(r.x,i*200-16,'quiet separated bodies return to their native anchors'));
+assert.equal(returned[0].y,167);
+meterLayout.begin(2);
+meterLayout.body(keys[0],{x:0,y:0},12);
+let hiddenCalls=0;
+meterLayout.add(keys[1],{x:-16,y:-33,w:32,h:20},()=>hiddenCalls++);
+meterLayout.add(keys[0],{x:-16,y:-33,w:32,h:8},()=>{});
+meterLayout.paint(meterCtx);
+assert.equal(hiddenCalls,1,'unrevealed native meters still paint under the native sight veil');
+assert.deepEqual(meterLayout.footprints,[{x:-16,y:-33,w:32,h:8}],'hidden meters cannot displace visible meters');
+const enabled=mc.enabled;
+try{
+ (mc as {enabled:boolean}).enabled=false;
+ const disabled=frame(3);
+ disabled.forEach((r,i)=>assert.deepEqual(r,{x:positions[i].x-16,y:positions[i].y-33,w:32,h:16}));
+}finally{(mc as {enabled:boolean}).enabled=enabled;}
+console.log('PASS combat meter groups clear visible bodies, stay stable, return home and ignore hidden competitors without changing actors');

@@ -1,5 +1,6 @@
 import { treePointBudget } from '../engine/skillEmpowerment';
 import { CombatTextLayout, combatBodyRect, drawPlayerFocus } from './vis/combatFocus';
+import { CombatMeterLayout } from './vis/combatMeters';
 import { MassPainter } from '../worldmass/paint';
 import { regionGrid } from '../world/walk'; // worldmass shares native grounded telegraphs
 import { concealmentActive } from '../engine/perception';
@@ -817,6 +818,7 @@ export class Renderer {
       this.drawFlash(f);
     }
     this.drawCompanionCues(world);
+    this.combatMeters.begin(world.time);
     // THE PACK LAYER's drawn bonds (engine/pack.ts): the warden's lines to
     // every body it is actually empowering — over the ground reads, UNDER
     // the bodies they bind (a link is context for a silhouette, never a
@@ -838,6 +840,7 @@ export class Renderer {
       this.drawLite(world, vw, vh);
       for (const a of world.actors) if (!a.dead && a.worm) this.drawWormTail(a, world.time, world);
       for (const a of world.actors) if (!a.dead) this.drawActor(a, world);
+      this.combatMeters.paint(ctx);
       if (world.deathPresentation) drawPlayerDeath(this.ctx, world.player, world.deathPresentation, world.time);
       // THE STATUS VOICE (vis/statusVoiceLayer.ts): what just LANDED on a
       // body is drawn ON it — the frame-diff of each body's statuses plays
@@ -4360,7 +4363,13 @@ export class Renderer {
       ctx.fillStyle = withAlpha(shade(color, 0.15), 0.8);
       ctx.fillRect(x - 4, y - 13, 8, 2);
       // The sigil burning over the runner.
-      const pulse = 0.55 + 0.3 * Math.sin(t * 2.2 + seed);
+      const mendPhase=al.def.mend&&al.mendTimer!==undefined?clamp(1-al.mendTimer/al.def.mend.every,0,1):undefined;
+      const pulse = mendPhase===undefined?0.55+0.3*Math.sin(t*2.2+seed):.35+.65*mendPhase;
+      if(mendPhase!==undefined){
+        const cue=VIS_CFG.altar;
+        ctx.strokeStyle=withAlpha(color,cue.mendRuneAlpha);ctx.lineWidth=cue.mendRuneWidth;
+        ctx.beginPath();ctx.arc(x,y-4,cue.mendRuneRadius,-Math.PI/2,-Math.PI/2+Math.PI*2*mendPhase);ctx.stroke();
+      }
       ctx.strokeStyle = withAlpha(color, pulse);
       ctx.lineWidth = 1.4;
       ctx.beginPath(); ctx.arc(x, y - 4, 4.6, 0, Math.PI * 2); ctx.stroke();
@@ -5397,6 +5406,12 @@ export class Renderer {
       return;
     }
 
+    // Only bodies admitted by the native concealment/storey rules above and
+    // currently revealed on screen may displace another body's combatMeters.
+    if(a.pos.x+a.radius>this.cam.x && a.pos.y+a.radius>this.cam.y
+      && a.pos.x-a.radius<this.cam.x+this.canvas.width/this.zoom
+      && a.pos.y-a.radius<this.cam.y+this.canvas.height/this.zoom
+      && this.labelRevealAt(world,a.pos)>.05) this.combatMeters.body(a,a.pos,a.radius);
     const guardWarning = guardReleaseCue(a, world.time);
     const armedCues = armedStatusCues(a);
     const reactiveCue = reactiveCueOf(a, world.time), wardCue = wardCueActive(a);
@@ -6013,12 +6028,17 @@ export class Renderer {
     if (a !== world.player && (a.life < a.maxLife() - 0.5 || anatomyState.weakpoints.length || anatomyState.parts.length || anatomyState.part)) {
       const bw = Math.max(a.radius * 2.2, anatomyState.weakpoints.length ? ANATOMY_CUE_CFG.overheadWidth : 0);
       const frac = clamp(a.life / a.maxLife(), 0, 1);
-      ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.fillRect(x - bw / 2, y - a.radius - 9, bw, 4);
-      ctx.fillStyle = a.team === 'enemy' ? '#c03030' : '#40b050';
-      ctx.fillRect(x - bw / 2, y - a.radius - 9, bw * frac, 4);
-      drawWeakPointBar(ctx, anatomyState.weakpoints, x - bw / 2, y - a.radius - 9, bw, 4, frac);
-      drawAnatomyMeters(ctx, anatomyState, x, y - anatomyOverheadRise(anatomyState, a.radius, a.facing) - 29, Math.max(bw, 90));
+      const parts=anatomyState.parts.length || anatomyState.segments.some(s=>s.frac<1);
+      const meterWidth=parts?Math.max(bw,90):bw;
+      const meterTop=parts?y-anatomyOverheadRise(anatomyState,a.radius,a.facing)-31:y-a.radius-11;
+      this.combatMeters.add(a,{x:x-meterWidth/2-2,y:meterTop,w:meterWidth+4,h:y-a.radius-3-meterTop},()=>{
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(x - bw / 2, y - a.radius - 9, bw, 4);
+        ctx.fillStyle = a.team === 'enemy' ? '#c03030' : '#40b050';
+        ctx.fillRect(x - bw / 2, y - a.radius - 9, bw * frac, 4);
+        drawWeakPointBar(ctx, anatomyState.weakpoints, x - bw / 2, y - a.radius - 9, bw, 4, frac);
+        drawAnatomyMeters(ctx, anatomyState, x, y - anatomyOverheadRise(anatomyState, a.radius, a.facing) - 29, Math.max(bw, 90));
+      });
     }
     if (a.assaultAura) {
       ctx.save(); ctx.strokeStyle = 'rgba(216,198,124,0.28)'; ctx.fillStyle = 'rgba(216,198,124,0.025)';
@@ -6039,34 +6059,42 @@ export class Renderer {
     if (a !== world.player && a.pliesMax > 0 && a.plies > 0 && a.plies < a.pliesMax) {
       const pip = PLY_CFG.pip;
       const w = (a.pliesMax - 1) * pip.gap;
-      for (let i = 0; i < a.pliesMax; i++) {
-        ctx.fillStyle = i < a.plies ? pip.color : pip.spentColor;
-        ctx.beginPath();
-        ctx.arc(x - w / 2 + i * pip.gap, y - a.radius - 8, pip.r, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      this.combatMeters.add(a,{x:x-w/2-pip.r,y:y-a.radius-8-pip.r,w:w+pip.r*2,h:pip.r*2},()=>{
+        for (let i = 0; i < a.pliesMax; i++) {
+          ctx.fillStyle = i < a.plies ? pip.color : pip.spentColor;
+          ctx.beginPath();
+          ctx.arc(x - w / 2 + i * pip.gap, y - a.radius - 8, pip.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
     }
     // LIFESPAN sliver (the Amalgam's clock): SIZABLE owned minions with a
     // finite hire show how much of it remains — swarms stay clean. A clock,
     // not a health readout: it ticks whether or not the life bar shows.
     if (a !== world.player && a.owner && a.lifespan > 0 && a.radius >= 14 && a.lifespanTotal > 0) {
       const bw = a.radius * 2.2;
-      ctx.fillStyle = '#b8a0e0';
-      ctx.fillRect(x - bw / 2, y - a.radius - 5.5,
-        bw * clamp(a.lifespan / a.lifespanTotal, 0, 1), 2.5);
+      this.combatMeters.add(a,{x:x-bw/2,y:y-a.radius-5.5,w:bw,h:2.5},()=>{
+        ctx.fillStyle = '#b8a0e0';
+        ctx.fillRect(x - bw / 2, y - a.radius - 5.5,
+          bw * clamp(a.lifespan / a.lifespanTotal, 0, 1), 2.5);
+      });
     }
 
     // Layered-defense bars: energy shield (cyan) and absorb (white) — the
     // shield bar follows the same dent rule (full ES on a full body = clean).
     if (a.es > 0 && a.maxEs() > 0 && a.es < a.maxEs() - 0.5) {
       const bw = a.radius * 2.2;
-      ctx.fillStyle = '#5ad8d8';
-      ctx.fillRect(x - bw / 2, y - a.radius - 13, bw * clamp(a.es / a.maxEs(), 0, 1), 3);
+      this.combatMeters.add(a,{x:x-bw/2,y:y-a.radius-13,w:bw,h:3},()=>{
+        ctx.fillStyle = '#5ad8d8';
+        ctx.fillRect(x - bw / 2, y - a.radius - 13, bw * clamp(a.es / a.maxEs(), 0, 1), 3);
+      });
     }
     if (a.absorbTotal > 0) {
       const bw = a.radius * 2.2;
-      ctx.fillStyle = '#e8f0f8';
-      ctx.fillRect(x - bw / 2, y - a.radius - 16, bw * Math.min(1, a.absorbTotal / 60), 2.5);
+      this.combatMeters.add(a,{x:x-bw/2,y:y-a.radius-16,w:bw,h:2.5},()=>{
+        ctx.fillStyle = '#e8f0f8';
+        ctx.fillRect(x - bw / 2, y - a.radius - 16, bw * Math.min(1, a.absorbTotal / 60), 2.5);
+      });
     }
     // POISE sliver (bronze): shown once the break-bar is DENTED — full bars
     // stay invisible so ordinary mobs read clean. A broken bar dims while
@@ -6075,8 +6103,10 @@ export class Renderer {
       const mp = a.maxPoise();
       if (mp > 0 && a.poise < mp - 0.5) {
         const bw = a.radius * 2.2;
-        ctx.fillStyle = a.poiseBroken ? '#7a6438' : '#d8b06a';
-        ctx.fillRect(x - bw / 2, y - a.radius - 19, bw * clamp(a.poise / mp, 0, 1), 2.5);
+        this.combatMeters.add(a,{x:x-bw/2,y:y-a.radius-19,w:bw,h:2.5},()=>{
+          ctx.fillStyle = a.poiseBroken ? '#7a6438' : '#d8b06a';
+          ctx.fillRect(x - bw / 2, y - a.radius - 19, bw * clamp(a.poise / mp, 0, 1), 2.5);
+        });
       }
     }
 
@@ -6243,7 +6273,8 @@ export class Renderer {
     // meter above the head — the victim reads how close freedom is, the
     // HOLDER reads how long the catch will keep, and every ally reads
     // where the rescue stands.
-    this.drawGrabMeter(a, world);
+    if(a.heldBy!==undefined || a.grabHud) this.combatMeters.add(a,
+      {x:x-50,y:y-a.radius-29,w:100,h:22},()=>this.drawGrabMeter(a,world));
 
     // Cast bar above the head (telegraphs enemy casts, too)
     const cs = a.casting;
@@ -6251,138 +6282,142 @@ export class Renderer {
       const bw = 44, bh = 5;
       const bx2 = x - bw / 2, by2 = y - a.radius - 18;
       const color = cs.inst.def.color;
-      ctx.fillStyle = 'rgba(0,0,0,0.7)';
-      ctx.fillRect(bx2 - 1, by2 - 1, bw + 2, bh + 2);
-      let frac: number;
-      if (cs.mode === 'channel') {
-        frac = cs.total > 0 ? 1 - Math.max(0, cs.pulseTimer ?? 0) / cs.total : 1;
-      } else if (cs.mode === 'guard') {
-        // The guard bar IS the shield's remaining health.
-        frac = Math.max(0, (cs.shield ?? 0) / (cs.maxShield ?? 1));
-      } else {
-        frac = cs.total > 0 ? Math.min(1, cs.elapsed / cs.total) : 1;
-      }
-      ctx.fillStyle = color;
-      ctx.fillRect(bx2, by2, bw * frac, bh);
-      // Mode decorations
-      if (cs.mode === 'channel') {
-        // CAPPED / BRIM channels wear their COMPLETION above the pulse
-        // bar (the overcharge stacked-bar idiom): the gather's walk to
-        // its ceiling, gold the instant it truly finishes. Enemies wear
-        // it too — the whole room reads the doom-cast burning in.
-        const holdFrac = castingCompletion(a) ?? null;
-        if (holdFrac !== null) {
-          const hy = by2 - 4;
-          ctx.fillStyle = 'rgba(0,0,0,0.7)';
-          ctx.fillRect(bx2 - 1, hy - 1, bw + 2, 4);
-          ctx.fillStyle = holdFrac >= 1 ? '#ffd700' : color;
-          ctx.fillRect(bx2, hy, bw * holdFrac, 3);
+      const meterRise=cs.mode==='overcharge'?Math.max(0,cs.stage??0)*4:4;
+      const meterWidth=['overcharge','channel','multitude'].includes(cs.mode)?96:50;
+      this.combatMeters.add(a,{x:bx2-3,y:by2-6-meterRise,w:meterWidth,h:bh+10+meterRise},()=>{
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(bx2 - 1, by2 - 1, bw + 2, bh + 2);
+        let frac: number;
+        if (cs.mode === 'channel') {
+          frac = cs.total > 0 ? 1 - Math.max(0, cs.pulseTimer ?? 0) / cs.total : 1;
+        } else if (cs.mode === 'guard') {
+          // The guard bar IS the shield's remaining health.
+          frac = Math.max(0, (cs.shield ?? 0) / (cs.maxShield ?? 1));
+        } else {
+          frac = cs.total > 0 ? Math.min(1, cs.elapsed / cs.total) : 1;
         }
-      }
-      if (cs.mode === 'perfect') {
-        ctx.fillStyle = 'rgba(255,215,0,0.55)';
-        ctx.fillRect(bx2 + bw * 0.72, by2, bw * 0.28, bh);
-      } else if (cs.mode === 'timed' && cs.indicatorAt !== undefined) {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(bx2 + bw * cs.indicatorAt - 1, by2 - 2, 2, bh + 4);
-      } else if (cs.mode === 'guard' && cs.bashAt !== undefined) {
-        // THE BASH TIC: the live arming line — release on the ARMED side
-        // of it and the stance converts into the blow. The value is
-        // refreshGuardBash's (one resolver: supports, buffs and the
-        // inverted contract all move it), shipped over the co-op wire, so
-        // what this draws is exactly what the release check will decide.
-        // The faint underline marks the armed side: right of the tic
-        // normally, LEFT of it inverted (Hollow Answer — the bar reads
-        // "cash what the wall has lost"). No tic = no bash on this stance.
-        // THE ARM METER + THE READIED GOLD (2026-09-16): guardBashReady is
-        // the ONE read the release decides by. The thin bar above the
-        // guard bar is the arm clock walking (the capped-channel idiom —
-        // hidden when the clock is 0), and the moment the bash is truly
-        // READY (clock run AND wall on the armed side) meter, tic and
-        // underline turn gold together; until then the tic sits dim — a
-        // quick release just drops the wall. Enemy guards draw it too.
-        const ready = guardBashReady(cs);
-        const gold = '#ffd700';
-        if ((cs.bashArmAt ?? 0) > 0) {
-          const hy = by2 - 4;
-          ctx.fillStyle = 'rgba(0,0,0,0.7)';
-          ctx.fillRect(bx2 - 1, hy - 1, bw + 2, 4);
-          ctx.fillStyle = ready.ready ? gold : color;
-          ctx.fillRect(bx2, hy, bw * ready.clock, 3);
+        ctx.fillStyle = color;
+        ctx.fillRect(bx2, by2, bw * frac, bh);
+        // Mode decorations
+        if (cs.mode === 'channel') {
+          // CAPPED / BRIM channels wear their COMPLETION above the pulse
+          // bar (the overcharge stacked-bar idiom): the gather's walk to
+          // its ceiling, gold the instant it truly finishes. Enemies wear
+          // it too — the whole room reads the doom-cast burning in.
+          const holdFrac = castingCompletion(a) ?? null;
+          if (holdFrac !== null) {
+            const hy = by2 - 4;
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.fillRect(bx2 - 1, hy - 1, bw + 2, 4);
+            ctx.fillStyle = holdFrac >= 1 ? '#ffd700' : color;
+            ctx.fillRect(bx2, hy, bw * holdFrac, 3);
+          }
         }
-        const tx = bx2 + bw * cs.bashAt;
-        const x0 = cs.bashLow ? bx2 : tx;
-        const x1 = cs.bashLow ? tx : bx2 + bw;
-        ctx.fillStyle = ready.ready ? gold : '#ffffff';
-        ctx.globalAlpha = ready.ready ? 0.8 : 0.35;
-        ctx.fillRect(x0, by2 + bh + 1, Math.max(0, x1 - x0), 1);
-        ctx.globalAlpha = ready.ready ? 1 : 0.55;
-        ctx.fillRect(tx - 1, by2 - 2, 2, bh + 4);
-        ctx.globalAlpha = 1;
-      } else if (cs.mode === 'multitude') {
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(bx2 - 3, by2 - 3, bw + 6, bh + 6);
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 10px Verdana';
-        ctx.textAlign = 'left';
-        ctx.fillText(`×${cs.presses ?? 1}`, bx2 + bw + 6, by2 + bh);
-        ctx.textAlign = 'center';
-      } else if (cs.mode === 'charge' && frac >= 1) {
-        ctx.strokeStyle = '#ffd700';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(bx2 - 2, by2 - 2, bw + 4, bh + 4);
-      } else if (cs.mode === 'concentration') {
-        drawFocusFrame(ctx, bx2, by2, bw, bh, !!cs.focusBroken);
-      } else if (cs.mode === 'overcharge') {
-        // STACKED bars: every banked stage is a thin filled bar laid on
-        // top of the refilling one — the old JRPG hold, made literal.
-        const stages = cs.stage ?? 0;
-        for (let s = 0; s < stages; s++) {
-          const sy = by2 - 4 - s * 4;
-          ctx.fillStyle = 'rgba(0,0,0,0.7)';
-          ctx.fillRect(bx2 - 1, sy - 1, bw + 2, 4);
-          ctx.fillStyle = '#ffd700';
-          ctx.fillRect(bx2, sy, bw, 3);
-        }
-        // Strike-timing disciplines decorate the REFILLING bar — the
-        // release must land inside them (Perfect Draw's golden tail /
-        // Wandering Mark's roving marker).
-        const timing = instanceStrikeTiming(cs.inst);
-        if (timing?.kind === 'perfect') {
+        if (cs.mode === 'perfect') {
           ctx.fillStyle = 'rgba(255,215,0,0.55)';
           ctx.fillRect(bx2 + bw * 0.72, by2, bw * 0.28, bh);
-        } else if (timing?.kind === 'timed' && cs.indicatorAt !== undefined) {
+        } else if (cs.mode === 'timed' && cs.indicatorAt !== undefined) {
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(bx2 + bw * cs.indicatorAt - 1, by2 - 2, 2, bh + 4);
-        }
-        // The SPARK: a bright flare right as a stage banks — and while a
-        // spark WINDOW is invested (Spark Discipline), a golden border
-        // marks the open release window after each bank.
-        const since = cs.sinceStage ?? 999;
-        if (since < 0.15 && stages > 0) {
-          ctx.fillStyle = '#ffffff';
-          ctx.beginPath();
-          ctx.arc(bx2 + bw + 8, by2 + bh / 2, 4, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        if (stages > 0 && (cs.sparkWindow ?? 0) > 0 && since <= (cs.sparkWindow ?? 0)) {
+        } else if (cs.mode === 'guard' && cs.bashAt !== undefined) {
+          // THE BASH TIC: the live arming line — release on the ARMED side
+          // of it and the stance converts into the blow. The value is
+          // refreshGuardBash's (one resolver: supports, buffs and the
+          // inverted contract all move it), shipped over the co-op wire, so
+          // what this draws is exactly what the release check will decide.
+          // The faint underline marks the armed side: right of the tic
+          // normally, LEFT of it inverted (Hollow Answer — the bar reads
+          // "cash what the wall has lost"). No tic = no bash on this stance.
+          // THE ARM METER + THE READIED GOLD (2026-09-16): guardBashReady is
+          // the ONE read the release decides by. The thin bar above the
+          // guard bar is the arm clock walking (the capped-channel idiom —
+          // hidden when the clock is 0), and the moment the bash is truly
+          // READY (clock run AND wall on the armed side) meter, tic and
+          // underline turn gold together; until then the tic sits dim — a
+          // quick release just drops the wall. Enemy guards draw it too.
+          const ready = guardBashReady(cs);
+          const gold = '#ffd700';
+          if ((cs.bashArmAt ?? 0) > 0) {
+            const hy = by2 - 4;
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.fillRect(bx2 - 1, hy - 1, bw + 2, 4);
+            ctx.fillStyle = ready.ready ? gold : color;
+            ctx.fillRect(bx2, hy, bw * ready.clock, 3);
+          }
+          const tx = bx2 + bw * cs.bashAt;
+          const x0 = cs.bashLow ? bx2 : tx;
+          const x1 = cs.bashLow ? tx : bx2 + bw;
+          ctx.fillStyle = ready.ready ? gold : '#ffffff';
+          ctx.globalAlpha = ready.ready ? 0.8 : 0.35;
+          ctx.fillRect(x0, by2 + bh + 1, Math.max(0, x1 - x0), 1);
+          ctx.globalAlpha = ready.ready ? 1 : 0.55;
+          ctx.fillRect(tx - 1, by2 - 2, 2, bh + 4);
+          ctx.globalAlpha = 1;
+        } else if (cs.mode === 'multitude') {
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(bx2 - 3, by2 - 3, bw + 6, bh + 6);
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 10px Verdana';
+          ctx.textAlign = 'left';
+          ctx.fillText(`×${cs.presses ?? 1}`, bx2 + bw + 6, by2 + bh);
+          ctx.textAlign = 'center';
+        } else if (cs.mode === 'charge' && frac >= 1) {
           ctx.strokeStyle = '#ffd700';
           ctx.lineWidth = 2;
           ctx.strokeRect(bx2 - 2, by2 - 2, bw + 4, bh + 4);
+        } else if (cs.mode === 'concentration') {
+          drawFocusFrame(ctx, bx2, by2, bw, bh, !!cs.focusBroken);
+        } else if (cs.mode === 'overcharge') {
+          // STACKED bars: every banked stage is a thin filled bar laid on
+          // top of the refilling one — the old JRPG hold, made literal.
+          const stages = cs.stage ?? 0;
+          for (let s = 0; s < stages; s++) {
+            const sy = by2 - 4 - s * 4;
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.fillRect(bx2 - 1, sy - 1, bw + 2, 4);
+            ctx.fillStyle = '#ffd700';
+            ctx.fillRect(bx2, sy, bw, 3);
+          }
+          // Strike-timing disciplines decorate the REFILLING bar — the
+          // release must land inside them (Perfect Draw's golden tail /
+          // Wandering Mark's roving marker).
+          const timing = instanceStrikeTiming(cs.inst);
+          if (timing?.kind === 'perfect') {
+            ctx.fillStyle = 'rgba(255,215,0,0.55)';
+            ctx.fillRect(bx2 + bw * 0.72, by2, bw * 0.28, bh);
+          } else if (timing?.kind === 'timed' && cs.indicatorAt !== undefined) {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(bx2 + bw * cs.indicatorAt - 1, by2 - 2, 2, bh + 4);
+          }
+          // The SPARK: a bright flare right as a stage banks — and while a
+          // spark WINDOW is invested (Spark Discipline), a golden border
+          // marks the open release window after each bank.
+          const since = cs.sinceStage ?? 999;
+          if (since < 0.15 && stages > 0) {
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(bx2 + bw + 8, by2 + bh / 2, 4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          if (stages > 0 && (cs.sparkWindow ?? 0) > 0 && since <= (cs.sparkWindow ?? 0)) {
+            ctx.strokeStyle = '#ffd700';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(bx2 - 2, by2 - 2, bw + 4, bh + 4);
+          }
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 9px Verdana';
+          ctx.textAlign = 'left';
+          if (stages > 0) ctx.fillText(`+${stages}`, bx2 + bw + 5, by2 - 4);
+          ctx.textAlign = 'center';
+        } else if (cs.mode === 'channel') {
+          ctx.fillStyle = '#fff';
+          ctx.font = '9px Verdana';
+          ctx.textAlign = 'left';
+          ctx.fillText(`${(cs.channelTime ?? 0).toFixed(1)}s`, bx2 + bw + 5, by2 + bh);
+          ctx.textAlign = 'center';
         }
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 9px Verdana';
-        ctx.textAlign = 'left';
-        if (stages > 0) ctx.fillText(`+${stages}`, bx2 + bw + 5, by2 - 4);
-        ctx.textAlign = 'center';
-      } else if (cs.mode === 'channel') {
-        ctx.fillStyle = '#fff';
-        ctx.font = '9px Verdana';
-        ctx.textAlign = 'left';
-        ctx.fillText(`${(cs.channelTime ?? 0).toFixed(1)}s`, bx2 + bw + 5, by2 + bh);
-        ctx.textAlign = 'center';
-      }
+      });
     }
   }
 
@@ -7346,6 +7381,7 @@ export class Renderer {
     ctx.restore();
   }
 
+  private readonly combatMeters = new CombatMeterLayout();
   private readonly combatTextLayout = new CombatTextLayout();
   private drawTexts(world: World): void {
     const { ctx } = this;
@@ -7359,7 +7395,7 @@ export class Renderer {
       && a.pos.x-a.radius < this.cam.x+this.canvas.width/this.zoom
       && a.pos.y-a.radius < this.cam.y+this.canvas.height/this.zoom
       && this.labelRevealAt(world,a.pos) > .05);
-    this.combatTextLayout.begin(visible.map(a=>combatBodyRect(a.pos,a.radius)),
+    this.combatTextLayout.begin([...visible.map(a=>combatBodyRect(a.pos,a.radius)),...this.combatMeters.footprints],
       {x:this.cam.x,y:this.cam.y,w:this.canvas.width/this.zoom,h:this.canvas.height/this.zoom});
     for (const t of world.texts) {
       if (t.kind && !floatKindOn(kindPrefs, t.kind)) continue;
