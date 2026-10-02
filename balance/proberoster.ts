@@ -154,6 +154,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_bashclock.ts', status: 'green', tier: 'fast', why: 'THE ARM CLOCK — a bash is earned by the hold: bashArmAt as layered data, guardBashReady the one readied read, the AI wait-to-arm / early / authored-hold dials and the wire row' },
   { probe: 'probe_bashcontact.ts', status: 'green', tier: 'fast', why: 'Shield bash damage, control effects and attribution share guard/immunity and deferred-fuse resolution' },
   { probe: 'probe_pactsteelstartertrees.ts', status: 'green', tier: 'fast', why: 'Summoner/Juggernaut/Pyromancer opening trees: all 72 routes, passive identity, composable branches, Fury spenders, companion AI, moving and carried fields, expiry bursts, saves and network rebuilds' },
+  { probe: 'probe_guardrecency.ts', status: 'green', tier: 'fast', why: 'native guards/parries activate earned block-recency damage; expiry, rear/depleted/lowered refusal, owner attribution and shield break' },
   { probe: 'probe_wardenbalance.ts', status: 'green', tier: 'fast', why: 'AI bash warning timing, committed facing, shield-pressure and interruption counterplay, player exemption, Warden damage and doctrine level gates' },
   { probe: 'probe_groundlookup.ts', status: 'green', tier: 'fast', why: 'Direct ground membership preserves live registry behavior without per-doodad region enumeration' },
   { probe: 'probe_stealth.ts', status: 'green', tier: 'fast', why: 'Stealth approach, exposure, finite investigation, foliage sight depth and co-op concealment' },

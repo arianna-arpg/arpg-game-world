@@ -41536,6 +41536,9 @@ export class World {
     const arc = (spec.arcDeg * Math.PI / 180) * Math.sqrt(guardian.sheet.get('aoeRadius', tags, extra));
     if (Math.abs(angleDiff(guardian.facing, angleTo(guardian.pos, threatPos))) > arc / 2) return false;
 
+    // Active guards and parries are blocks in the native recency ledger too.
+    // Stamp the actual defender, including a guardian intercepting for an ally.
+    guardian.noteRecent('block');
     if (guardian === this.player && this.deedEnemy(attacker) && rawDamage > 0) {
       this.recordDeed({ kind: 'block', value: rawDamage });
     }

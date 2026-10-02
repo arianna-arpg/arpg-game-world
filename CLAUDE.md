@@ -159,6 +159,10 @@ Legendary skill empowerment is documented in `docs/design/legendary-skill-empowe
 explicit passive slots without expanding branch budgets. Verify `probe_skillempowerment.ts`,
 skill/ability-economy regressions and hidden `balance/skill-empowerment-ui.cjs` after a build.
 
+Native active guards and parries stamp the actual defender's block-recency ledger,
+so earned `recentlyBlocked` modifiers also answer successful active defense.
+Verify `probe_guardrecency.ts`, native talents/guard probes and controlled
+`balance/guard-recency-ui.cjs` (the previous build is its negative control).
 Shield Up's native guard and cast-absorb disciplines live in
 `data/shieldUpTree.ts`, with configurable contracts in `engine/guardArtsSpec.ts`.
 `docs/design/shield-up.md` covers plates, voluntary ram contact, bash waves,

@@ -1213,3 +1213,24 @@ the earlier “cleared” notice. The reward still records the original eligible
 garrison; it does not establish a sanctuary or promise that wandering creatures
 are absent. The existing clearance probe and hidden client verify this wording
 alongside unchanged experience, one-time rewards and Continue.
+
+### Successful active defense and earned counterattacks
+
+A fresh critic chose Answer the Blow but found defensive payoff unclear. An
+independent investigation reproduced a native event omission: active Shield Up
+could absorb a hit without stamping the block-recency ledger. The passive's
+existing `recentlyBlocked` condition therefore remained false. Passive chance
+blocks already stamped it. The shared guard interception now stamps the actual
+defender after the capacity and facing gates, covering guards, parries and an
+owner guarding an ally. It changes neither the passive's value nor the native
+shield, turning, recovery or hit rules.
+
+The negative control held life at 154 and spent shield, but left the melee damage
+factor at 1.095. With the fix, the same native condition raises that factor to
+1.255: the authored 16% increased modifier, with ordinary additive stacking.
+The new guard-recency probe exercises the real incoming hit resolver and native
+Cleave damage packet, condition expiry, rear/depleted/lowered refusals, guarding
+owner attribution and an intercepted shield-breaking hit. The isolated client
+allocates the existing node with one controlled point and verifies the same
+successful hit and modifier activation against both builds. This is controlled
+mechanics QA, not evidence of an improved independent enjoyment verdict.
