@@ -24,7 +24,7 @@ that button holds keyboard focus.
 | `scripts/publish-site-media.mjs` | Uploads manifest files to the `site-media` release (creates it on first use). |
 | `scripts/fetch-site-media.mjs` | Pulls and verifies manifest files into `site/media/` (every Pages deploy; local previews), unpacking archives. |
 | `scripts/capture-skill-clips.cjs` | Films each skill in the game → `site/media/clips/` (see Skill clips). |
-| `balance/site-cinema-ui.cjs` | The hidden walkthrough (27 checks, frames in `balance/reports/site-cinema/`). |
+| `balance/site-cinema-ui.cjs` | The hidden walkthrough (36 checks, frames in `balance/reports/site-cinema/`). |
 
 A page opts in with one tag: `<script src="assets/cinema.js?v=…"></script>` in
 its `<head>` (today: the homepage). **The `?v=` stamp is the cache key for both
@@ -45,8 +45,8 @@ triggers: [
   { selector: '.hero-lockup', play: 'feature', label: 'Watch the Hollow Wake trailer' },
   { selector: '[data-cinema]', play: '@data-cinema' },   // any element, any page, any time
 ],
-films: { announcement: { title, cut, aspect, duration, sources, captions, exit, loop?, cors?, poster? } },
-theater: { blanket, stage, openSeconds, revealSeconds, stallSeconds, hintSeconds, progress, words },
+films: { announcement: { title, cut, aspect, duration, sources, captions, exit, rim?, picture?, loop?, cors?, poster? } },
+theater: { blanket, stage, openSeconds, revealSeconds, stallSeconds, hintSeconds, progress, words, rim },
 ```
 
 - **Feature rows** are read in order. `from` / `until` are ISO dates, so a
@@ -62,6 +62,11 @@ theater: { blanket, stage, openSeconds, revealSeconds, stallSeconds, hintSeconds
   lines appear only while the film plays muted, and `band` places them in the
   picture rows given (the announcement uses its lower letterbox bar).
 - **`exit`**: `{ kind: 'shatter' | 'fade', at: [x, y] share of the picture, pace }`.
+- **`rim`** and **`picture`**: hold the film in the mind's eye (see The
+  theater). `rim: true` takes `theater.rim`'s dials; an object overrides any of
+  them. `picture: [x0, y0, x1, y1]` is the picture's share of the frame when the
+  frame carries black bars (the announcement: `[0, 0.128, 1, 0.872]`), so the
+  rim sits on the picture's edge rather than the bars.
 - **`loop`**: plays until the viewer leaves (clips).
 - **`cors`**: set for media served from another origin with CORS headers.
   The shatter samples the film's last frame, which needs same-origin or
@@ -103,6 +108,41 @@ gesture, so it plays with sound.
   the picture.
 - If a film cannot start, the darkness lifts quietly, the failure is recorded,
   and the splash rests.
+
+### The mind's eye
+
+A film that opts in floats in the darkness like a memory being recalled. A
+living rim, in the blanket's own ink, melts the picture's edge, so no hard
+rectangle ever shows. The window is a rounded eye sitting on the picture's own
+edge. Its border creeps and swirls through slow, domain-warped noise that turns
+about the centre (faster toward the rim, a slow vortex), and the band between
+clear and dark breathes like smoke. As the film starts, the eye opens out of a
+thin slit; the break that ends it is the thought shattering.
+
+It is one GLSL function (`RIM_GLSL` in the theater) with two consumers:
+
+- a small WebGL2 canvas over the playing film, under the captions. It renders
+  at `scale` per CSS pixel (the rim is soft), and overhangs the stage by a few
+  pixels on every side so layer snapping can never show the video's own edge.
+- the shatter's bake: at the break, the frozen frame is redrawn with the rim at
+  the exact clock and opening the viewer last saw, so the first frame of the
+  break matches the screen it replaces (`_last.rim` reports the bake).
+
+Reduced motion holds the rim still at one moment, with the eye already open.
+Without WebGL2, a rounded window with a soft inner shadow stands in. The dials
+live in `theater.rim`:
+
+| Dial | Meaning |
+|---|---|
+| `feather` | the soft band's width, in picture heights |
+| `creep` | how far the dark wanders in and out of that band |
+| `round` | the window's corner radius, in picture heights |
+| `grain` | the dark's features per picture height |
+| `drift` | how fast it morphs (noise depth per second) |
+| `swirl`, `twist` | its turn about the centre (radians per second), and the extra turn toward the rim |
+| `mist` | smoke in the band rather than a smooth ramp |
+| `open` | `[share open at first, seconds to rest]`: the eye opening |
+| `scale` | the rim canvas's resolution per CSS pixel |
 
 ### The shatter
 
