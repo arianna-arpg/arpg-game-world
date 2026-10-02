@@ -14,6 +14,7 @@ import { saveResetNotice } from './meta/saveCompatibility';
 import { DEATH_PRESENTATION } from './data/deathPresentation';
 import { deathPresentationPose } from './engine/deathPresentation';
 import { Input } from './core/input';
+import { assertScriptedInput } from './core/scriptedInput';
 import { PAD_CFG, PadState, connectedPadIndices, padIdAt, synthEscape, type FakePad, type PadTuning } from './core/gamepad';
 import { COUCH_CFG } from './data/couch';
 import { CouchClaimSession, findRebindSlot, PadSeatInput } from './net/couch';
@@ -969,7 +970,16 @@ const diskHydrated = (async (): Promise<void> => {
  *  restores the devices. */
 let devInputSource: ((dt: number) => PlayerInput | null) | null = null;
 function readLocalInput(dt: number): PlayerInput | null {
-  if (devInputSource) return devInputSource(dt);
+  if (devInputSource) {
+    try {
+      const intent=devInputSource(dt);
+      assertScriptedInput(intent);
+      return intent;
+    } catch(error) {
+      devInputSource=null; // A failed harness read cannot poison later native frames.
+      throw error;
+    }
+  }
   const p = world.player;
   if (p.dead || p.downed) return null;
   // The pause menu AND the couch join ceremony both take the hero's hands

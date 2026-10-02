@@ -157,6 +157,12 @@ Resolve visibility before drawing bodies; wall queries and pixels share one cont
 resolver. Verify the sightveil/visibility_stability probes and hidden
 `balance/visibility-ui.cjs` (including its old-code negative control).
 
+Scripted QA input passes `core/scriptedInput.ts` before entering the simulation.
+Malformed coordinates/buttons or a throwing source release the QA callback and
+report the error; native device input is unchanged. Verify the isolated
+`balance/scripted-input-ui.cjs` against a scoped build and ordinary boot smoke.
+Use `renderer.toWorld({x, y})` when mapping screen coordinates for a playtest.
+
 Browser branch previews: `docs/engine/browser-previews.md` documents the Pages
 deployment. `scripts/browser-previews.json` configures isolated builds beside
 `/play/`; `scripts/build-browser-previews.mjs` pins their commits and refuses

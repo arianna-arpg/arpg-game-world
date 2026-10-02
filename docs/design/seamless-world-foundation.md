@@ -1285,3 +1285,24 @@ QA. It crossed no scene boundary and preserved both wounded defenders' native
 kits and original homes through browser Continue. A separate fresh-context
 Magician playtest uses the fixed candidate without grants or invulnerability;
 its gameplay verdict remains independent of these controlled checks.
+
+### Scripted playtest input boundary
+
+The sixth critic made a transport error by passing two numbers to the renderer's
+point-object coordinate converter. The resulting non-finite aim entered a
+scripted cast and later reached canvas drawing. The affected segment is excluded
+from its gameplay evidence; native Save/Exit and Continue recovered the isolated
+run. This is not evidence of an ordinary pointer-control failure.
+
+The shared QA entry point now validates finite movement/aim and boolean slot
+arrays before passing an intent to the simulation. Invalid or throwing callbacks
+stand down after reporting the error. Null and sparse unpressed arrays retain
+their native meaning; ordinary device/network input is unchanged. This does not
+replace the fatal-error trap or validate every simulation boundary.
+
+The hidden scripted-input client refuses seven malformed intents before changes
+to position, facing, mana or projectile count, verifies subsequent native frames,
+and exercises valid null/sparse input plus a real Magician Firebolt cast. All
+three type checks, the scoped build and ordinary desktop boot smoke pass. The
+critic continues on its original fixed candidate, without silently changing the
+build beneath its report.
