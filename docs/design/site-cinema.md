@@ -150,11 +150,18 @@ Reduced motion (or no WebGL2) swaps the break for a fade and a soft wash.
    selector row.
 6. **Runtime films:** `HWCinema.register(id, def)`, then `HWCinema.play(id, opts)`
    (returns a promise that resolves when the theater closes).
-7. **A re-cut of a film:** encode it under a new id (`--id announcement-v2`),
-   point the film's `sources` at the new folder and drop the old files from
-   the manifest. The old assets stay on the release, so a deploy of an earlier
-   commit still finds the files its own manifest names. Raise `cut` only if
-   every visitor should see the new cut once.
+7. **A re-cut of a film:** encode it under a new id (`--id announcement-v3`),
+   point the film's `sources` and `captions` at the new folder, and either
+   drop the old files from the manifest or keep the old cut as an archived
+   fallback (below). The old assets stay on the release either way, so a
+   deploy of an earlier commit still finds the files its own manifest names.
+   Raise `cut` only if every visitor should see the new cut once.
+8. **An archived fallback:** keep the previous cut as its own film row under
+   its encoded id (today `announcement-v2`), with its caption track moved
+   beside its renditions and its files left in the manifest. No feature row
+   or trigger names it, so the site never offers it, but every deploy still
+   serves it: `?cinema=announcement-v2` plays it, and pointing a feature row
+   at it falls back in one line.
 
 ## Skill clips
 
