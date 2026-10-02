@@ -138,7 +138,8 @@ export function massAdventure(): MassAdventure {
         { kind: 'cactus', weight: 3, radius: [22, 40] }, { kind: 'brush', weight: 2, radius: [22, 38] },
       ] },
     ] },
-    settlement: { zone: 'lastlight', source: 'zones/lastlight', apron: 192, blend: 144 },
+    settlement: { zone: 'lastlight', source: 'zones/lastlight', apron: 192, blend: 144,
+      doorPress: { source: 'worldmass/settlement-doors', alignment: .65, reach: 4 } },
     startRadius: 288, populationRadius: 1300, maxPopulation: 96, pageRadius: 2, samplesPerTick: 512,
   });
 }

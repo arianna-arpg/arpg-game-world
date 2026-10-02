@@ -117,7 +117,13 @@ wilderness combat cannot cross the refuge or use an owned minion as a proxy.
 Returning pursuers retain wounds; native residents and training keep their rules.
 `MassSettlementSpec.sanctuary=false` admits open combat. Verify
 `probe_worldmass_sanctuary.ts` and hidden `balance/worldmass-sanctuary-ui.cjs`
-(the prior build is its negative control with `HOLLOW_WAKE_QA_UNSAFE=1`). Verify
+(the prior build is its negative control with `HOLLOW_WAKE_QA_UNSAFE=1`).
+Optional `DoodadDoor.press` accepts deliberate non-combat walking toward a slab;
+new settlements snapshot its policy in `MassSettlementSpec.doorPress`. The native
+latch, opening, collision and door-state save remain authoritative. Verify
+`probe_doorpress.ts` and hidden `balance/worldmass-door-press-ui.cjs`; absent policy
+retains idle-only doors. Locked, switched and pull mechanisms never use this lane.
+Verify
 `probe_worldmass_haven.ts` and the hidden `balance/worldmass-haven-ui.cjs`
 against a scoped preview build, plus town-growth/persistence/visibility checks.
 

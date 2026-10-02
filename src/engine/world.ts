@@ -236,6 +236,7 @@ import { hollowDef } from '../data/hollows';
 import { annexKindDef, annexParentIdOf } from '../data/annexes';
 import type { AnnexSpec, HollowSpec } from './levelgen';
 import { DWELL_CFG, npcDwellReach, npcDwellRadius, transitDwell, transitRadius, transitReach } from '../data/transit';
+import { pressingDoor } from './doorPress';
 import type { DwellReach } from '../data/transit';
 import type { ArenaCrowdSpec, ArenaSpec, ArenaWardSpec } from '../data/arenas';
 import '../data/arenas'; // side-effect: the ward-seal doodad rules register
@@ -3512,6 +3513,7 @@ export class World {
   private wardDwellStart = 0;
   /** Dwell-to-OPEN a structure door (the door doodad's id) + when it began —
    *  push on a closed gate for a beat and it swings (mirrors the portal dwell). */
+  private doorPressIntents: Map<string, Vec2> | null = null;
   private doorDwellId = '';
   private doorDwellStart = 0;
   private doorDwellPos: Vec2 = vec(0, 0);
@@ -5080,6 +5082,7 @@ export class World {
    *  single-player handlePlayerInput ran, now parameterized by PlayerInput and
    *  looped over the roster. Dead/downed seats are skipped. `aim` is world-space. */
   applyInputs(inputs: Map<string, PlayerInput>, dt: number): void {
+    this.doorPressIntents = null;
     for (const seat of this.seats) {
       const a = seat.actor;
       const inp = inputs.get(seat.id);
@@ -5116,6 +5119,10 @@ export class World {
       const tf = this.timeflow.scaleFor(a);
       if (tf <= 0) continue;
       if (!inp) continue;
+      // Capture only unconsumed, non-combat walking. Each update consumes this
+      // once, including paused/dead frames; a stale input cannot open a door.
+      if ((inp.dx || inp.dy) && !inp.held.some(Boolean) && !inp.edge.some(Boolean) && !inp.metaEdge?.some(Boolean))
+        (this.doorPressIntents ??= new Map()).set(seat.id, vec(inp.dx, inp.dy));
       this.moveActor(a, inp.dx, inp.dy, tf === 1 ? dt : dt * tf);
       const aim = inp.aim;
       // LIVE aim for guided projectiles (guidePower) — refreshed every frame,
@@ -48878,6 +48885,8 @@ export class World {
   // --------------------------------------------------------------- update ---
 
   update(dt: number): void {
+    const doorPressIntents = this.doorPressIntents;
+    this.doorPressIntents = null;
     if (this.gameOver) {
       // Continue the visual aftermath on raw seconds, even under a stale menu
       // hold. Never re-enter combat, AI, rewards, respawns, or input handling.
@@ -50559,17 +50568,20 @@ export class World {
           this.caveDwellIdx = -1;
         }
         // STRUCTURE DOORS: push (dwell) on a closed openable door and it swings.
-        // Mirrors the portal dwell — idle + unknocked, nearest pairing wins; and
+        // Idle remains valid; an opted-in slab also accepts deliberate walking
+        // toward it. Quiescence/story/mode gates and nearest pairing still win;
         // ANY party seat can push (a co-op remote hero opens a gate the host
         // never walked to). Per-door data may override the dwell time.
         let onDoor: Doodad | null = null; let doorD = Infinity;
         for (const seat of this.seats) {
           const hero = seat.actor;
-          if (hero.dead || hero.downed || hero.push || !this.seatIdle(seat)) continue;
+          if (hero.dead || hero.downed || hero.push || !hero.isQuiescent()) continue;
+          const idle = this.seatIdle(seat);
           for (const d of this.doodads) {
             const dr = d.door;
             if (!dr || dr.open || dr.broken) continue;
             if (dr.mode !== 'dwell' && dr.mode !== 'both') continue;
+            if (!idle && !pressingDoor(dr.press, doorPressIntents?.get(seat.id), hero, d)) continue;
             const dd = dist(hero.pos, d.pos);
             // Reach honors the 'door' transit row ('radius' today: a push is
             // contact — the plank itself is the occluder a ray would argue with).

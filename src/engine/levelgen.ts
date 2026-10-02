@@ -691,6 +691,8 @@ export interface Doodad {
  *  and it carries no `cells` (a lever is furniture, not a breach). */
 export interface DoodadDoor {
   id: string;
+  /** Optional deliberate walking toward this openable slab also builds its native dwell. */
+  press?: import('./doorPress').DoorPressSpec;
   mode: 'dwell' | 'breakable' | 'both' | 'sealed' | 'switched' | 'pull';
   open?: boolean;
   broken?: boolean;

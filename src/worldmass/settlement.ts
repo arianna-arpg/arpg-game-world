@@ -12,11 +12,14 @@ import type { MassWalk } from './walk';
 import { canonical, massHash } from './random';
 import { pieceState, type PieceState } from './sites';
 import { MassSanctuary } from './sanctuary';
+import { validateDoorPress, type DoorPressSpec } from '../engine/doorPress';
 
 export interface MassSettlementSpec {
   zone: string; source: string; apron: number; blend: number;
   /** Omitted inherits the native safe objective; false admits open settlement combat. */
   sanctuary?: boolean;
+  /** Snapshotted physical opening intent; absent retains native idle-only doors. */
+  doorPress?: DoorPressSpec;
 }
 interface BodyState {
   id: string; monster: string; level: number; team: Actor['team']; name: string; color: string; tag?: string;
@@ -47,6 +50,7 @@ export class MassSettlement {
   readonly sanctuary = new MassSanctuary(this);
   isResident(a: Actor): boolean { return this.residents.has(a); }
   constructor(readonly spec: MassSettlementSpec, world: World, seed: number, saved?: MassSettlementSave) {
+    if (spec.doorPress !== undefined) validateDoorPress(spec.doorPress);
     if (spec.sanctuary !== undefined && typeof spec.sanctuary !== 'boolean') throw new Error('Invalid settlement sanctuary policy');
     if (spec.zone !== START_ZONE || !spec.source || !Number.isFinite(spec.apron) || spec.apron < 96 || spec.apron > 1024
       || !Number.isFinite(spec.blend) || spec.blend < 24 || spec.blend > 512)
@@ -64,6 +68,8 @@ export class MassSettlement {
     this.baseRegions = Array.from(this.grid.kind, (_, i) => this.cellRegion(i));
     this.spawn = { ...world.player.pos };
     this.tier = world.townTierIndex();
+    if (spec.doorPress) for (const d of world.doodads)
+      if (d.door && (d.door.mode === 'dwell' || d.door.mode === 'both')) d.door.press = { ...spec.doorPress };
     this.pieces = world.doodads.map(live => ({ live, base: canonical(pieceState(live)) }));
     const counts = new Map<string, number>();
     this.bodies = world.actors.filter(a => !!a.defId && !a.owner && !world.seats.some(s => s.actor === a)).map(live => {

@@ -1124,3 +1124,22 @@ verdict remained negative: meaningful Mending positioning and a coherent reward
 loop did not outweigh effective stationary Cleave trading, quiet connecting
 travel and interaction friction. No blocking defect was established. This is
 feedback for continuing work, not a claim of enjoyment or AAA parity.
+
+### Physical settlement door approach
+
+New settlement descriptors opt ordinary dwell/both doors into `DoodadDoor.press`:
+continuous non-combat walking toward a nearby slab may build its existing latch.
+The player can keep walking through the opening. Direction and hand reach are
+explicit data; the native time, body quiescence, same-story gate, opening visuals,
+collision repaint, teaching ledger and saved open/broken state remain unchanged.
+Idle dwell is still accepted. Absent policy preserves earlier expedition doors;
+sealed, switched, pull and breakable-only records cannot enter this lane.
+
+Input is captured after native action/timeflow gates and consumed once per world
+update. Attacks and meta presses cannot also push a door. The probe covers the
+native threshold, continued open state, legacy idle behavior, action lock, wrong
+story, mechanism modes and a single contact input that must not persist.
+The actual hidden client walked from the bed through the opening and recovered
+its exact position/open state on Continue. The preceding client stopped inside
+with the door still closed under the same held movement. This addresses observed
+interaction friction without adding a text tutorial or changing transit menus.
