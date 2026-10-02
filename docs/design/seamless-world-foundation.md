@@ -1828,3 +1828,42 @@ remains unmet. Broadleaf commit 9c08057b passed 336 remote probes and Pages run
 37063271887; exact live metadata reports build 2026-10-02T20:53:21.590Z. Isolated
 remote QA retained seed 472598626 and all six ordinary-save sentinels. Formation
 commit a967559b is pushed and its remote checks are in progress.
+
+### Movement intent before older held attacks
+
+The shared host input order now includes the beginning of a walk. A newly
+requested walk can take priority over an older held attack at the next native
+opportunity, without cancelling the attack already committed. Releasing movement
+restores the held attack; pressing an attack afresh while moving chooses it again.
+Steering an existing walk does not continually reset that priority. Policy lives
+in `SKILL_INPUT_CFG`, with both skill-only and original slot-order comparisons.
+
+The actual keyboard/mouse client reproduced the prior behavior: three Firebolts
+and 66.8 units of walking over 150 frames. The revised client executed the first
+Firebolt and walked 354.04 units. Both first moved on frame 45, so the existing
+cast commitment was not shortened. Native movement release, fresh attack and
+final release also pass. Screenshots were inspected; this is controlled input
+evidence, not a real-time feel or enjoyment verdict.
+
+The broader native skill-mode probe initially caught three failures: scripted
+simultaneous walk/hold inputs without edge bits could fail to begin channels.
+The input order now admits a newly observed hold during walking while suppressing
+only older repeats. All 106 native skill-mode checks, 74 couch checks, the seven
+input probe groups, interaction/meta/typing probes, all three type checks and
+25 combat smoke episodes pass. The input probe also
+verifies that later movement neither releases nor replaces a held guard/channel.
+No actor movement rule, cast duration, cooldown, resource cost or network/save
+format changed. Mobile casts retain their mobility, while a new walking intention
+also takes priority over their older repeats; an explicit new press restores them.
+
+The territory critic completed 104 paired captures and verified Save & Exit /
+Continue. Its later fight fell to 24 life and three mana before a successful
+retreat, revising the earlier impression that all sampled combat was low-danger.
+The final verdict still declined another outing: build choices worked, but
+pursuit, role clarity, reward clutter and camp-clear attribution reduced interest.
+No overall acceptance verdict has been reached.
+
+Formation commit a967559b passed 337 remote probes and Pages run 37065273704.
+Exact live metadata reports build 2026-10-02T21:12:52.235Z; isolated remote QA
+retained seed 648173559 and all six ordinary-save sentinels. The silhouette commit
+0f7f8a12 is pushed and its remote checks are in progress.

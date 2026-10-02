@@ -5149,10 +5149,11 @@ export class World {
           a.casting.aim = aim;
         }
       }
-      // A newly held choice gets the next native opportunity before an older
-      // repeat. Running casts above retain their own held state and commitment.
+      // A fresh skill or walk owns the next opportunity before older repeats.
+      // Running casts above retain their held state and native commitment;
+      // walking cannot cancel them or release a held guard/channel.
       // Toggled auras still respond to the press edge; other skills to the hold.
-      for (const i of this.skillInputOrder.slots(seat,a.skills.length,held,inp.edge,inp.metaEdge)) {
+      for (const i of this.skillInputOrder.slots(seat,a.skills.length,held,inp.edge,inp.metaEdge,!!(inp.dx||inp.dy))) {
         const inst = a.skills[i];
         if (!inst) {
           // THE UNARMED FLOOR: an EMPTY slot still answers — the improvised

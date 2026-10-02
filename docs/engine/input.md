@@ -121,3 +121,35 @@ Legacy holds without edges retain slot order until a fresh choice arrives.
 `balance/held-priority-ui.cjs`. The client uses real mouse button events in an
 isolated profile; `HOLLOW_WAKE_QA_LEGACY=1` with the prior fixed build reproduces
 the held-shield starvation. This is independent of movement lock during casts.
+
+### Walking before an older repeat
+
+With `SKILL_INPUT_CFG.movement = 'recent-walk'`, beginning a walk takes the
+next opportunity ahead of skills already held. The running cast still finishes
+under its own movement lock; after it finishes, an older attack cannot keep
+restarting and rooting the hero. Ending the walk restores a still-held skill.
+A fresh skill press while walking wins again. This also applies to mobile
+repeat casts: their current mobility is unchanged, but a newly requested walk
+supersedes their older repeat until the player presses the skill again.
+
+A walk is its zero-to-nonzero intent transition. Steering an existing walk does
+not continually steal priority from an attack. Same-frame walk/skill presses
+favor the explicit skill. While walking, a newly observed held slot without an
+edge bit is also admitted, preserving older scripted/remote intent producers;
+an already observed hold is an older repeat. Outside walking the prior
+edge/slot ordering remains intact.
+
+The running cast's held state is fed before arbitration, so a later walk never
+releases a guard or channel. Native channel/gather mobility, charge/release,
+cooldown, cost and reflex rules still run through their existing gates.
+The history belongs to each seat, is transient, and changes no wire/save format.
+`movement = 'ignore'` restores skill-only precedence; `priority = 'slot'`
+restores the original attempt order altogether.
+
+Verify the input probe, interaction/meta/typing gates, native skillmodes/couch,
+and `balance/movement-priority-ui.cjs`. Its real mouse and keyboard comparison
+against the prior build (`HOLLOW_WAKE_QA_LEGACY=1`) reproduces repeated Firebolts
+during a requested walk. The new build starts moving at the same frame after
+the original cast and then continues walking, until movement ends or a fresh
+attack is pressed. The controlled flat arena tests input semantics, not whether
+ordinary combat is enjoyable.

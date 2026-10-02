@@ -257,12 +257,14 @@ and couch framing share that scale while interface size and buffer resolution
 remain independent. Verify camerazoom/couch and `balance/camera-view-ui.cjs`
 for the real slider, native Firebolt aim, unchanged HUD and browser Continue.
 
-Held skill attempts share `engine/skillInputOrder.ts`: a newer still-held choice
-precedes an older repeat after the native interaction/timeflow gates. Current
-casts, cooldowns, meta/toggle gates and movement rules remain native; released
-presses are not queued. `SKILL_INPUT_CFG` can restore slot order. Verify
-skillinputorder, harvest/trace/meta/typing probes and the real-device-input
-`balance/held-priority-ui.cjs`; see `docs/engine/input.md`.
+Held intentions share `engine/skillInputOrder.ts`: a newer still-held skill or
+new walk precedes an older repeat after the native interaction/timeflow gates.
+Current casts, cooldowns, meta/toggle gates and movement locks remain native;
+walking never releases a running guard/channel, and released presses are not
+queued. `SKILL_INPUT_CFG` restores slot order or ignores movement priority. Verify
+skillinputorder, harvest/trace/meta/typing, skillmodes and couch probes, plus
+`balance/held-priority-ui.cjs` and `balance/movement-priority-ui.cjs` for real
+device input; see `docs/engine/input.md`.
 
 Scripted QA input passes `core/scriptedInput.ts` before entering the simulation.
 Malformed coordinates/buttons or a throwing source release the QA callback and
