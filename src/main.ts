@@ -75,7 +75,8 @@ import { installSkillShowcases } from './showcase/host';
 import { errorOverlayShown, showErrorOverlay, type CrashEntry } from './ui/errorOverlay';
 import { LocalTransport } from './net/local';
 import { ScriptedInput, LocalCoopInput } from './net/scripted';
-import type { PlayerInput, MetaAction } from './net/intent';
+import type { PlayerInput, MetaAction, PlayerInputSource } from './net/intent';
+import { Director } from './director/director';
 import { wireSeed } from './net/transport';
 import type { NetTransport, StateSnapshot, PeerInfo, SessionMsg, ZoneMsg } from './net/transport';
 import { serializeSnapshot, applySnapshot, serializeZone, applyZone } from './net/snapshot';
@@ -731,6 +732,12 @@ declare global {
       padPointer: () => PadPointer;
       fakePad: (p: FakePad | null) => void;
       step: (frames?: number, dtMs?: number) => void;
+      /** THE AGENT SEAT: drive the local hero from a PlayerInputSource (null = keyboard/mouse). */
+      pilot: (src: PlayerInputSource | null) => void;
+      /** Hold the rAF pump: only step() advances the game while held. */
+      hold: (on: boolean) => void;
+      /** THE DIRECTOR (src/director/): staged, frame-stepped captures of real play. */
+      director: () => Director;
       devStartRun: (classId?: string) => string;
       devGrantSkill: (skillId: string, level?: number, slot?: number) => number;
       hydrated: () => Promise<void>;
@@ -790,6 +797,23 @@ window.__game = {
   // per pass; a doubled drive double-steps its frame counter and snaps
   // stale actorShade fades early).
   step: (frames = 1, dtMs = 16.7) => { for (let i = 0; i < frames; i++) tick(last + dtMs); },
+  pilot: (src) => { localPilot = src; },
+  hold: (on) => { directorHold = on; },
+  director: () => director ??= new Director({
+    world: () => world,
+    renderer,
+    startRun: (classId) => {
+      const cls = CLASSES.find(c => c.id === classId) ?? CLASSES[0];
+      document.getElementById('start-menu')?.classList.add('hidden');
+      document.getElementById('class-select')?.classList.add('hidden');
+      startGame(cls);
+    },
+    step: (dtMs) => tick(last + dtMs),
+    setPilot: (src) => { localPilot = src; },
+    hold: (on) => { directorHold = on; },
+    ledger: () => account.ledger,
+    ui: () => ui,
+  }),
   // DEV/QA: start a run headlessly (the perf harness's ignition) — the real
   // startGame path under the first (or named) class, menus dismissed.
   devStartRun: (classId?: string) => {
@@ -1737,6 +1761,14 @@ function renderScaleTick(nowMs: number): void {
 }
 
 let last = performance.now();
+// THE AGENT SEAT + THE DIRECTOR (src/agent/, src/director/): a capture rig or
+// a playtest bot may drive the local seat through the same artery the
+// keyboard does (the pilot replaces readLocalInput on the host), and HOLD the
+// rAF pump so only __game.step() advances the game (deterministic takes).
+// Both are null/false in ordinary play — the classic loop, byte for byte.
+let localPilot: PlayerInputSource | null = null;
+let directorHold = false;
+let director: Director | null = null;
 /** The rAF pump: one tick, then re-arm. All work lives in tick() so tests can
  *  drive frames SYNCHRONOUSLY via __game.step() — a hidden tab freezes rAF
  *  entirely (the tab-throttle gotcha), which would otherwise freeze input
@@ -1747,7 +1779,7 @@ let last = performance.now();
  *  crashed sim is not ticked onward beneath the overlay. */
 function frame(now: number): void {
   if (crashFatal) return;
-  try { tick(now); } catch (e) { reportFatal(e, 'game loop'); }
+  try { if (!directorHold) tick(now); } catch (e) { reportFatal(e, 'game loop'); }
   if (!crashFatal) requestAnimationFrame(frame);
 }
 function tick(now: number): void {
@@ -1850,7 +1882,7 @@ function tick(now: number): void {
       // 2. Gather this frame's per-seat intent into the transport. The local seat
       //    reads the OS; other LOCAL seats (the scripted ally) poll their source.
       //    A REMOTE seat's intent arrives through the transport's own pump.
-      const li = readLocalInput(dt);
+      const li = localPilot && world.player ? localPilot.poll(world.player, world, dt) : readLocalInput(dt);
       if (li) net.sendInput(net.self, li);
       for (const seat of world.seats) {
         if (seat.id === net.self) continue;
