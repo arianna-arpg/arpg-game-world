@@ -99,7 +99,13 @@ geometry, residents, doors, region edits and scenery; `MassWalk` overlays its
 native grid for shared collision/sight. Town counters still require native
 anchors and proximity. New town growth applies to new expeditions, and legacy
 descriptors keep their clearing. Graph travel, cellar/campaign destinations,
-campfire population reset and co-op remain pending. Verify
+campfire population reset and co-op remain pending. Continuous safe settlements
+now share `worldmass/sanctuary.ts` across targeting, impact and native AI retreat:
+wilderness combat cannot cross the refuge or use an owned minion as a proxy.
+Returning pursuers retain wounds; native residents and training keep their rules.
+`MassSettlementSpec.sanctuary=false` admits open combat. Verify
+`probe_worldmass_sanctuary.ts` and hidden `balance/worldmass-sanctuary-ui.cjs`
+(the prior build is its negative control with `HOLLOW_WAKE_QA_UNSAFE=1`). Verify
 `probe_worldmass_haven.ts` and the hidden `balance/worldmass-haven-ui.cjs`
 against a scoped preview build, plus town-growth/persistence/visibility checks.
 

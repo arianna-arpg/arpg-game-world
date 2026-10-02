@@ -1009,3 +1009,37 @@ look. Typed and outline-only hit flashes follow the moving part. The body-action
 client harness checks one body/one weapon, opposite preparation and release
 angles, neutral restoration, stationary ground anchors and unchanged gameplay
 state. `HOLLOW_WAKE_QA_LABEL` can retain evidence for multiple candidates.
+
+### Continuous sanctuary combat boundary
+
+An independent return to Brandt exposed a real gap: wilderness pursuers could
+enter the shop and hurt the player while the HUD said Sanctuary. Native safe
+zones formerly separated these populations through travel; continuous terrain
+needs an explicit spatial combat policy.
+
+`worldmass/sanctuary.ts` shares that policy across hostility, impact resolution
+and native AI. Wilderness combat involving a sheltered body or its owned attack
+proxy is refused in both directions. Already-banked hits recheck at resolution;
+a projectile authored inside town cannot become damaging simply because its
+caster subsequently steps outside. Native settlement residents, practice targets,
+self costs and non-worldmass combat retain their existing rules. Existing damage
+over time and environmental rules are not a blanket invulnerability grant.
+
+An intruder drops its attack and follows native paths to its outside anchor.
+Older saves with an intruder already inside choose a nearby physical exit.
+The body is neither removed nor teleported, and receives no retreat heal; normal
+recovery still runs. Pursuers returning outside cannot be farmed as unresponsive
+targets. Once their return finishes, ordinary wilderness combat resumes.
+Native driven, airborne and self-destruct phases keep their own controllers.
+
+Safe native objectives supply the default. `MassSettlementSpec.sanctuary=false`
+opts a settlement into open combat; `MASS_SANCTUARY_CFG` exposes retreat spacing.
+Continue inherits the corrected safe-place meaning without restaging the world.
+
+Verification: worldmass_sanctuary, all worldmass probes, fielddiscipline,
+castingcues and tacticalai, plus native combat smoke and the real
+`balance/worldmass-sanctuary-ui.cjs`. The controlled client uses actual admitted
+pursuers, a live vendor and native Save/Continue. On the previous candidate its
+negative control lost life from 154 to about 90; the corrected client stayed at
+154 with invulnerability false, and both pursuers physically left the town.
+The separate ordinary-play critic retains its original defect and retest.

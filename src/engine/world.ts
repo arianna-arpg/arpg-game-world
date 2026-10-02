@@ -3798,7 +3798,15 @@ export class World {
   }
   townPresent(): boolean { return this.zone.id === START_ZONE || !!this.massRuntime?.settlement; }
   isSafeAt(pos: Vec2): boolean {
-    return this.massRuntime ? !!this.massRuntime.settlement?.contains(pos.x, pos.y) : this.zone.objective.kind === 'safe';
+    return this.massRuntime ? !!this.massRuntime.settlement?.sanctuary.contains(pos) : this.zone.objective.kind === 'safe';
+  }
+  /** Shared by target selection and already-committed hits at the refuge edge. */
+  sanctuaryBlocksCombat(a: Actor, b: Actor, origin?: Vec2): boolean {
+    return this.massRuntime?.settlement?.sanctuary.blocks(a,b,origin) ?? false;
+  }
+  sanctuaryRetreat(a: Actor): Vec2 | undefined {
+    return this.massRuntime?.settlement?.sanctuary.retreat(a,
+      a.aiTargetId === undefined ? undefined : this.actorById(a.aiTargetId) ?? undefined);
   }
   /** THE TIER FABRIC (engine/tiers.ts): one stateless walk view per elevated
    *  STORY over the SAME grid (index k = tier k; [0] unused; null in
@@ -30382,6 +30390,7 @@ export class World {
 
   /** Are two actors on opposing sides — counting faction diplomacy? */
   hostileTo(a: Actor, b: Actor): boolean {
+    if (this.sanctuaryBlocksCombat(a,b)) return false;
     if (throngTravelProtected(b)) return false;
     // THE TIER LAW (engine/tiers.ts): layers share a screen, never a fight —
     // a deck body and a valley body cannot target, strike, or threaten each
@@ -43105,6 +43114,9 @@ export class World {
     hitEffects?: SkillEffect[],
     hitOrigin?: Vec2, hitTier?: number,
   ): void {
+    // Recheck at impact: an in-flight projectile, field, or delayed fuse may
+    // have been committed before either side crossed the sanctuary boundary.
+    if (this.sanctuaryBlocksCombat(caster,target,hitOrigin)) { target.segHitPending = undefined; return; }
     depth = Math.max(depth, inst.procChainDepth ?? 0);
     const def = inst.def;
     // THE FUSE (FuseSpec — innate or a socketed Time Fuse): the wound

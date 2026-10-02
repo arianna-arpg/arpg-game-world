@@ -11,9 +11,12 @@ import type { MassState } from './state';
 import type { MassWalk } from './walk';
 import { canonical, massHash } from './random';
 import { pieceState, type PieceState } from './sites';
+import { MassSanctuary } from './sanctuary';
 
 export interface MassSettlementSpec {
   zone: string; source: string; apron: number; blend: number;
+  /** Omitted inherits the native safe objective; false admits open settlement combat. */
+  sanctuary?: boolean;
 }
 interface BodyState {
   id: string; monster: string; level: number; team: Actor['team']; name: string; color: string; tag?: string;
@@ -40,7 +43,11 @@ export class MassSettlement {
   private baseRegions: string[];
   private pieces: { live: Doodad; base: string }[];
   private bodies: { id: string; live: Actor }[];
+  private residents = new WeakSet<Actor>();
+  readonly sanctuary = new MassSanctuary(this);
+  isResident(a: Actor): boolean { return this.residents.has(a); }
   constructor(readonly spec: MassSettlementSpec, world: World, seed: number, saved?: MassSettlementSave) {
+    if (spec.sanctuary !== undefined && typeof spec.sanctuary !== 'boolean') throw new Error('Invalid settlement sanctuary policy');
     if (spec.zone !== START_ZONE || !spec.source || !Number.isFinite(spec.apron) || spec.apron < 96 || spec.apron > 1024
       || !Number.isFinite(spec.blend) || spec.blend < 24 || spec.blend > 512)
       throw new Error('Invalid native settlement descriptor');
@@ -64,6 +71,7 @@ export class MassSettlement {
       return { id: live.defId + '#' + n, live };
     });
     if (saved) this.restore(world, saved);
+    this.residents = new WeakSet(this.bodies.map(b=>b.live));
   }
   contains(x: number, y: number): boolean {
     return x >= 0 && y >= 0 && x < this.zone.size.w && y < this.zone.size.h;

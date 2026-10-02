@@ -631,6 +631,18 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   }
   if (actor.leap) return; // airborne
 
+  const sanctuaryHome = world.sanctuaryRetreat(actor);
+  if (sanctuaryHome) {
+    const cs = actor.casting;
+    if (cs?.mode === 'guard') world.guardArts.lower(actor,cs.inst);
+    if (cs && actor.shellGuard?.fromAura === cs.inst.def.id) actor.shellGuard = undefined;
+    actor.casting = null; actor.bodyAction = undefined;
+    actor.aiTargetId = undefined; actor.aggroed = false; actor.threat.clear();
+    actor.facing = angleTo(actor.pos,sanctuaryHome);
+    moveToward(actor,world,sanctuaryHome,dt);
+    return;
+  }
+
   // WARD WATCHER (the add-gate): the moment no live actor carries the ward
   // tag, the ward SHATTERS — the visible links use this exact membership.
   if (actor.aiWardTag && !wardGuardians(actor, world.actors).length) {
