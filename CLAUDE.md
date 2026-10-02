@@ -101,6 +101,11 @@ from their actual body artwork through `vis/bodyContrast.ts`, inside the body's
 pose and opacity, below later world occlusion. Tune/disable it through
 `VIS_CFG.combatFocus.bodies`; `balance/body-contrast-ui.cjs` compares actual
 visible pixels, exclusions, unchanged combat state and native wall concealment.
+Conifers opt into seeded needle boughs through `DoodadVisualDef.canopy.params.needles`.
+`vis/needleCrown.ts` supplies static geometry inside the existing crown cache and
+fade; absent needles retain the star-ring painter. Verify `balance/needle-crown-ui.cjs`
+and `balance/needle-crown-world-ui.cjs` for variant/cache/alpha and native proximity,
+plus canopy-presence, sightveil and visibility-stability probes.
 Native statues use the parameterized carving in
 `render/vis/statue.ts` and the generic `DoodadVisualDef.raisedSurface` lane:
 own ground shadow cannot erase raised art; other blockers, room/roof/canopy

@@ -882,7 +882,8 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   conifer: {
     longShadow: 0.9,
     painter: 'trunk', order: 50, bakeWhole: 'static', params: { scale: 0.26, roots: 3, color: '#4a3826' },
-    canopy: { painter: 'pineCrown', params: { fill: 'theme:tree|#1e3a28' } },
+    canopy: { painter: 'pineCrown', params: { fill: 'theme:tree|#1e3a28',
+      needles: {layers:3,boughs:9,needlePairs:7,irregularity:.22} } },
   },
   ancient_tree: {
     longShadow: 0.9,

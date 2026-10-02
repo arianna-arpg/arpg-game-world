@@ -1514,3 +1514,23 @@ routes, discoveries, enemies, fields and player position. A controlled native
 Haste sample raises hero speed from 200 to 260 and wolf speed from 188 to 244.4;
 leaving removes each recipient independently. Turnoff/arrival screenshots were
 inspected. This establishes the mechanics, not enjoyment or continuous feel.
+
+### Seeded conifer crowns
+
+The shared pine-crown painter now accepts a needle-bough specification for
+layers, branches, needle pairs and irregularity. The conifer visual opts in;
+omitting the specification preserves the previous star rings. Boughs derive
+their palette from the existing theme and their variation from the native
+crown seed. They remain inside the crown radius and use the existing bounded
+sprite cache, canopy slices, rotation, fade and solid trunk rules.
+
+All three type checks, native canopy-presence/sightveil/visibility-stability
+and doodad-family probes, 25 combat smoke episodes and the scoped build pass.
+The native painter/cache client verifies eight distinct seeded variants,
+stable cache hits, alpha-zero silence, bounded extent, state restoration,
+no combat-randomness consumption, and palette/shape controls. The actual game
+client verifies warm canopy draws require no new bough gradients, preserves
+scenery/vitals, retains solid trunks and restores the same proximity fade
+after departure. Gallery and in-world screenshots were inspected. This is a
+shared visual refinement, not evidence of AAA parity or continuous performance.
+The independent route reviewer keeps its earlier fixed build.

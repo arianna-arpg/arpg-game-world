@@ -13,6 +13,7 @@
 
 import { creatureTerrain } from './creatureTerrain';
 import { paintStatue } from './statue';
+import { paintNeedleCrown, type NeedleCrownSpec } from './needleCrown';
 import { doodadRuleOf, type Doodad } from '../../engine/levelgen';
 import { rockFormBodies, rockSeedOf } from '../../engine/rockForms';
 import type { World } from '../../engine/world';
@@ -9725,16 +9726,20 @@ const stoneCrown: CanopyPainter = (env, o, alpha, params) => {
   ctx.restore();
 };
 
-/** An EVERGREEN SPIRE from above: stacked pointed star-rings tightening to
- *  a pale tip — conifers read apart from broadleaf at any distance. */
+/** Evergreen crowns share native cached canopy placement. Optional needle
+ *  boughs add seeded detail; omitting them retains the original star rings. */
 const pineCrown: CanopyPainter = (env, o, alpha, params) => {
-  const p = params as { fill?: ColorSpec };
+  const p = params as { fill?: ColorSpec; needles?: NeedleCrownSpec };
   const { ctx, theme } = env;
   const base = resolveColor(p.fill, theme, theme.tree ?? '#1e3a28');
   ctx.save();
   ctx.translate(o.pos.x, o.pos.y);
   ctx.rotate(o.rot ?? 0);
   ctx.globalAlpha = alpha;
+  if(p.needles){
+    paintNeedleCrown(ctx,o.radius,base,((o.pos.x*11+o.pos.y*5)|0)>>>0,p.needles);
+    ctx.restore();return;
+  }
   const layers: [number, string][] = [
     [1.0, shade(base, -0.18)],
     [0.66, base],
