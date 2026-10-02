@@ -1478,3 +1478,39 @@ The text objects remain unchanged. All three type checks, combatfocus, the
 scoped build and this actual renderer test pass; screenshots were inspected.
 As with damage text, placement is bounded and an overcrowded viewport can still
 fall back to native positions. This does not claim to solve every HUD overlap.
+
+### Route-relative detours
+
+The tenth independent reviewer liked earned build choices and a readable dodge,
+but still found the overall slice sparse and visually schematic. Its negative
+overall verdict remains intact; its native Save/Continue check passed. The
+subsequent fixes and additions are not evidence of a changed enjoyment verdict.
+
+Optional journey stops now name an existing route, an arc-length fraction and
+a signed side offset. They add their own attributable place and physical spur
+after the original network is resolved. Validation refuses missing references,
+duplicate identities, invalid geometry, settlement crossings and overlapping
+destinations/routes. Stop content uses the existing native place lifecycle:
+population admission, discovery, caches, clearance, fields, scenery and saves.
+
+New runs gain two level-two detours on the outer circuit. The Silent Caravan
+combines scattered wagons, supplies and native melee/archer roles; the Windworn
+Shrine combines two native wolves and the shared Haste altar. Either can be
+passed by on the original road. These are configurable compositions and finite
+opening content, not global roadside settlement generation or population paging.
+Old descriptors gain no stops, and adding stops leaves original routes unchanged.
+
+All three type checks, the sixteen worldmass probes and the generation harness
+pass (869 cases across three seeds, zero failures, four existing warnings).
+Geometry checks include 64 route seeds against one native settlement footprint;
+the journey probe also exercises five separately seeded native settlements.
+The first discovery comparison wrongly required insertion order across a sorted
+save; the corrected check compares the complete identities and data by identity.
+No production persistence change was needed for that fixture correction.
+
+The isolated client walks both spurs with native collision and AI, keeps the
+same hero without loading a scene, and verifies exact browser Continue for the
+routes, discoveries, enemies, fields and player position. A controlled native
+Haste sample raises hero speed from 200 to 260 and wolf speed from 188 to 244.4;
+leaving removes each recipient independently. Turnoff/arrival screenshots were
+inspected. This establishes the mechanics, not enjoyment or continuous feel.

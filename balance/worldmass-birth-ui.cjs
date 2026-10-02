@@ -26,7 +26,7 @@ app.whenReady().then(async()=>{
    window.requestAnimationFrame=()=>0;Object.defineProperty(navigator,'getGamepads',{value:()=>[]});
    await new Promise(r=>setTimeout(r,200));__game.devStartRun('warrior');__game.ui.hideAll();__game.step(2);
    const w=__game.world(),config=JSON.parse(JSON.stringify(w.massRuntime.config)),Ctor=w.massRuntime.constructor;
-   config.terrain.places=[];delete config.journey.extensions;config.journey.destinations=config.journey.destinations.filter(d=>d.content==='cinderwatch');
+   config.terrain.places=[];delete config.journey.extensions;delete config.journey.stops;config.journey.destinations=config.journey.destinations.filter(d=>d.content==='cinderwatch');
    const row=config.content.find(c=>c.id==='cinderwatch');delete row.levels;delete row.magicPack;delete row.limits;
    row.level=8;row.count=4;row.table=[{id:'stone_sentinel',weight:1},{id:'sylvan_warden',weight:1}];
    const m=new Ctor(42,'birth-client',config);m.attach(w);

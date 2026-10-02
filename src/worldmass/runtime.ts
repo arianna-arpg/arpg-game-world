@@ -95,7 +95,9 @@ export class WorldMassRuntime {
     if (config.journey && !config.settlement) throw new Error('Frontier routes require a settlement');
     if(config.journey?.extensions!==undefined && !Array.isArray(config.journey.extensions))
       throw new Error('Invalid frontier extensions');
-    const journeyPlaces=[...(config.journey?.destinations ?? []),...(config.journey?.extensions ?? [])];
+    if(config.journey?.stops!==undefined && !Array.isArray(config.journey.stops))
+      throw new Error('Invalid frontier route stops');
+    const journeyPlaces=[...(config.journey?.destinations ?? []),...(config.journey?.extensions ?? []),...(config.journey?.stops ?? [])];
     if(journeyPlaces.reduce((n,d)=>n+(config.content.find(c=>c.id===d.content)?.site?.altars?.length??0),0)>16)
       throw new Error('Frontier field count exceeds its checkpoint budget');
     for (const d of journeyPlaces) {

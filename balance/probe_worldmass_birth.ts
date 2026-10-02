@@ -8,7 +8,7 @@ import { MassBirths, validMassBirth } from '../src/worldmass/birth';
 
 const restore=seedGlobalRandom(731822);
 const spec=JSON.parse(JSON.stringify(massAdventure()));
-spec.terrain.places=[];delete spec.journey.extensions;
+spec.terrain.places=[];delete spec.journey.extensions;delete spec.journey.stops;
 spec.journey.destinations=spec.journey.destinations.filter((d:any)=>d.content==='cinderwatch');
 const row=spec.content.find((c:any)=>c.id==='cinderwatch');
 delete row.levels;delete row.magicPack;

@@ -13,8 +13,8 @@ for (const seed of [1, 42, 451, 7108, 99871]) {
   const w = makeSimWorld('warrior', seed);
   w.startWorldMass(seed);
   const m = w.massRuntime!, journey = m.journey!;
-  assert.equal(journey.places.length, 5);
-  assert.equal(journey.trails.length, 9);
+  assert.equal(journey.places.length, 7);
+  assert.equal(journey.trails.length, 11);
   assert.ok(m.ecology!.stats.pieces > 0);
   for (const trail of journey.trails)
     for (let i = 1; i < trail.points.length; i++) {
@@ -51,7 +51,7 @@ for (const seed of [1, 42, 451, 7108, 99871]) {
       return Math.hypot(q.x - center.x, q.y - center.y) >= p.radius + place.radius;
     }));
   }
-  console.log('PASS seed ' + seed + ': connected eight-route network, four defended reachable destinations, clear approaches');
+  console.log('PASS seed ' + seed + ': connected eleven-route network, seven defended reachable destinations, clear approaches');
   if (seed !== 42)
     continue;
   const before = canonical(journey.trails);

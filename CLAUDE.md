@@ -23,6 +23,12 @@ clearance; omitted roles preserve older obligations. Fixed landmark populations,
 home anchors and native return hysteresis survive Continue;
 older descriptors retain their previous network. Verify worldmass_extensions and
 hidden `balance/worldmass-extensions-ui.cjs` (controlled walking and Continue).
+Optional `MassJourneySpec.stops` place detours beside an existing route by arc
+length and signed offset. New runs add the Silent Caravan and Windworn Shrine;
+existing network identities and older expeditions stay unchanged. Their native
+encounters, caches, fields and consequences use the same place lifecycle.
+Verify worldmass_stops and `balance/worldmass-stops-ui.cjs` for geometry, native
+walking, shared Haste and browser Continue. This remains a finite opening network.
 Routes, clearings, cluster recipes and props are snapshotted per run; Continue
 retains old terrain and sparse changes. The explored map has town footprints,
 zoom, a home bearing and searched-cache state. Verify `probe_worldmass_journey.ts`

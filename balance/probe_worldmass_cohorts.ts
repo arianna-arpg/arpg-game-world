@@ -77,7 +77,7 @@ assert.equal(field.snapshot(fieldWorld).enemies.length,0,'unstructured cohorts o
 console.log('PASS population saturation cannot introduce a partial magic group or an unguarded cache');
 
 const atomicConfig: MassAdventure = JSON.parse(canonical(massAdventure()));
-atomicConfig.terrain.places=[];
+atomicConfig.terrain.places=[];delete atomicConfig.journey!.stops;
 atomicConfig.journey!.destinations=atomicConfig.journey!.destinations.filter(d=>d.content==='broken-gate');
 const atomicWorld=makeSimWorld('warrior',48),atomic=new WorldMassRuntime(42,'atomic-cohort',atomicConfig);
 atomic.attach(atomicWorld);

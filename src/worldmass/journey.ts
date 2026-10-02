@@ -11,7 +11,16 @@ export interface MassJourneyExtension {
   id: string; from: string; content: string;
   offset: { x: number; y: number }; radius: number; jitter: number;
 }
+export interface MassJourneyStop {
+  id: string; content: string; radius: number;
+  /** A stable parent place's existing route; position is fraction of arc length. */
+  from: string; trail: 'approach' | 'circuit'; at: number;
+  /** Signed distance along the route normal, in world units. */
+  offset: number;
+}
 export interface MassJourneySpec {
+  /** Optional places beside existing routes, each reached by a physical spur. */
+  stops?: MassJourneyStop[];
   /** Optional ordered branches from a destination or preceding branch identity. */
   extensions?: MassJourneyExtension[];
   source: string;
@@ -36,6 +45,24 @@ export function segmentDistance(p: Vec2, a: Vec2, b: Vec2): number {
   const dx = b.x - a.x, dy = b.y - a.y;
   const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
   return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
+}
+/** Position and tangent on a polyline, independent of segment count or visit order. */
+export function trailStation(points: readonly Vec2[], fraction: number): { pos: Vec2; normal: Vec2 } {
+  const lengths = points.slice(1).map((p,i) => Math.hypot(p.x-points[i].x,p.y-points[i].y));
+  const total = lengths.reduce((a,b)=>a+b,0);
+  if (!Number.isFinite(total) || total<=0 || !Number.isFinite(fraction) || fraction<0 || fraction>1)
+    throw new Error('Invalid frontier route station');
+  let remaining = total*fraction;
+  for (let i=0;i<lengths.length;i++) {
+    const length=lengths[i];
+    if (!length) continue;
+    if (remaining<=length || lengths.slice(i+1).every(n=>n===0)) {
+      const a=points[i],b=points[i+1],dx=(b.x-a.x)/length,dy=(b.y-a.y)/length;
+      return {pos:{x:a.x+dx*remaining,y:a.y+dy*remaining},normal:{x:-dy,y:dx}};
+    }
+    remaining-=length;
+  }
+  throw new Error('Invalid frontier route station');
 }
 /** An opening region planned from a settlement footprint, not camera arrival.
 * Descriptors own the route spacing/content. Native settlement floors are never
@@ -143,6 +170,40 @@ export class MassJourney {
         source:{generator:generator.spec.id,version:generator.spec.version,rule:e.id,
           source:spec.source,stream:canonical([spec.source,e.id])}});
       trails.push({id:id+'/approach',points,width:spec.width});
+    }
+    if (spec.stops!==undefined && (!Array.isArray(spec.stops)||spec.stops.length>12))
+      throw new Error('Invalid frontier route stops');
+    // Resolve only against the established network. A stop never changes a parent
+    // route, its seed stream, or which circuit neighbour a destination connects to.
+    const parentPlaces=[...places], parentTrails=[...trails];
+    for (const s of spec.stops ?? []) {
+      const parent=parentPlaces.find(p=>p.recipe===s.from);
+      const trail=parentTrails.find(t=>t.id===parent?.id+'/'+s.trail);
+      if (!s.id || extensionIds.has(s.id) || !s.content || !trail
+        || !Number.isFinite(s.radius) || s.radius<160 || s.radius>512
+        || !Number.isFinite(s.at) || s.at<.1 || s.at>.9
+        || !Number.isFinite(s.offset) || Math.abs(s.offset)<s.radius+spec.width/2+60 || Math.abs(s.offset)>1200)
+        throw new Error('Invalid frontier route stop');
+      const {pos:start,normal}=trailStation(trail.points,s.at);
+      const end={x:start.x+normal.x*s.offset,y:start.y+normal.y*s.offset};
+      const steps=Math.ceil(Math.abs(s.offset)/generator.spec.terrainCell);
+      if (town.reserves(end.x,end.y,s.radius))
+        throw new Error('Frontier route stop overlaps settlement');
+      for(let n=0;n<=steps;n++)
+        if(town.reserves(start.x+(end.x-start.x)*n/steps,start.y+(end.y-start.y)*n/steps,spec.width/2))
+          throw new Error('Frontier route stop crosses settlement reserve');
+      if(places.some(p=>segmentDistance(this.local(p),start,end)<p.radius+spec.width/2+30))
+        throw new Error('Frontier route stop crosses a destination');
+      // A detached clearing must not erase another parent route or its escape lane.
+      if(parentTrails.some(t=>t.points.slice(1).some((b,i)=>
+        segmentDistance(end,t.points[i],b)<s.radius+t.width/2+30)))
+        throw new Error('Frontier route stop overlaps an existing route');
+      extensionIds.add(s.id);
+      const id=canonical([generator.run.runId,spec.source,s.id]);
+      places.push({id,content:s.content,recipe:s.id,radius:s.radius,center:walk.at(end.x,end.y),
+        source:{generator:generator.spec.id,version:generator.spec.version,rule:s.id,
+          source:spec.source,stream:canonical([spec.source,s.id])}});
+      trails.push({id:id+'/approach',points:[start,end],width:spec.width});
     }
     this.places = freezeData(places);
     this.trails = freezeData(trails);

@@ -66,6 +66,27 @@ export function frontierLandmarks(): Landmark[] {
       prop('bone_pile', -95, 90, 30), prop('tombstone', 140, -35, 20),
       prop('brush', 10, -195, 38),
     ], 'bloodfont', [nativeMassAltar('storm_altar',0,-90)]),
+    { ...compose('caravan-wreck', null, 'The Silent Caravan', {x:20,y:60,holdSeconds:4}, true, 1, [
+      // Scattered wagons supply cover around two distinct native roles.
+      prop('broken_cart',-105,-65,46,.25),prop('broken_cart',115,75,42,-.5),
+      prop('broken_cart',80,-125,36,1.2),prop('log',-110,65,26,.7),
+      prop('bone_pile',-25,-110,22),prop('bone_pile',125,-40,20),
+      prop('dead_tree',-200,-70,65),prop('dead_tree',190,150,56),
+      prop('rock',-160,155,32),prop('brush',130,-185,40),
+      prop('brazier',-15,-10,20),
+    ],undefined,undefined,[{monster:'skeleton_archer',x:70,y:-70,garrison:true},
+      {monster:'crate',x:-65,y:20},{monster:'barrel',x:95,y:25}]),
+      population:{level:2,table:[{id:'skeleton_warrior',weight:1}]} },
+    { ...compose('windworn-shrine', null, 'The Windworn Shrine', {x:0,y:100,holdSeconds:4}, false, 2, [
+      // Open axes leave room to choose whether the shared Haste field helps.
+      ...[-1,1].flatMap(side=>[
+        prop('standing_stone',side*185,-100,38),prop('standing_stone',side*185,100,34),
+        prop('conifer',side*205,0,63),prop('flowers',side*125,160,30),
+        prop('fern',side*135,-170,31),
+      ]),
+      prop('weathered_statue',0,-205,50),prop('bone_pile',95,-35,21),
+    ],undefined,[nativeMassAltar('haste_altar',0,0)]),
+      population:{level:2,table:[{id:'plains_wolf',weight:1}]} },
     { ...compose('stoneward', null, 'The Stoneward', { x: 0, y: -130, holdSeconds: 5 }, false, 1, [
       // Broken colonnades leave wide approaches; the living guardian owns
       // its native shield, turning, recovery and return-to-post behavior.

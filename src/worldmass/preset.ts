@@ -121,6 +121,10 @@ export function massAdventure(): MassAdventure {
     ],
     rewards: { source: 'worldmass/first-cache-support', supports: [...STARTER_SUPPORTS], level: 1, maxRewards: 1 },
     journey: { source: 'worldmass/frontier-circuit', width: 120, color: '#62573e', clearingColor: '#454331',
+      stops: [
+        {id:'west-caravan',from:'west-camp',trail:'circuit',at:.48,offset:-460,radius:310,content:'caravan-wreck'},
+        {id:'east-shrine',from:'east-camp',trail:'circuit',at:.48,offset:-460,radius:310,content:'windworn-shrine'},
+      ],
       extensions: [{ id: 'north-stoneward', from: 'north-ruin', content: 'stoneward',
         offset: {x: -400, y: -1500}, radius: 390, jitter: .08 }],
       destinations: [
