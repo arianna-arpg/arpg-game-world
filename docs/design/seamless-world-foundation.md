@@ -1143,3 +1143,26 @@ The actual hidden client walked from the bed through the opening and recovered
 its exact position/open state on Continue. The preceding client stopped inside
 with the door still closed under the same held movement. This addresses observed
 interaction friction without adding a text tutorial or changing transit menus.
+
+### Native enemy birth identity
+
+A native monster can roll extra skills, socketed supports, boons and a brain
+variant when constructed. Reconstructing from species/level alone rerolled that
+identity on Continue: four of sixteen tested guardians changed their ability
+set. New descriptors opt into `nativeBirthSource`; each admitted original body
+records its factory seed and exact optional scale argument. Reconstruction
+replays that native factory span through `withSeededRandom`, then restores its
+saved wounds and native cohort state. Combat randomness is never reseeded.
+
+The birth record describes initial construction, not the entire evolving actor
+or a frozen copy of all game content. Future factory/content changes still need
+migration review. Existing descriptors without the namespace retain their former
+construction behavior; previously unsaved rolls cannot be recovered retroactively.
+Malformed or missing birth records in an opted-in checkpoint refuse to load.
+
+The birth probe checks native grants, supports, boon modifier sources, wounds,
+original scale argument, exception cleanup, unrelated RNG isolation and legacy
+admission. All sixteen guardians retained their recorded identity after the fix.
+`balance/worldmass-birth-ui.cjs` creates four controlled native guardians through
+the actual runtime and verifies their kits, boons and exact life through browser
+Save/Continue. This is controlled persistence QA, not an independent play verdict.

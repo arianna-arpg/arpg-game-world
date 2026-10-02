@@ -25,10 +25,12 @@ import { MassEcology, validateMassEcology, type MassEcologySave } from './ecolog
 import { MassRewards, type MassRewardSave } from './rewards';
 import { MassFields, type MassFieldSave } from './fields';
 import { recordMassGuardian, settleMassClearance } from './clearance';
+import { MassBirths, validMassBirth, type MassBirth } from './birth';
 
 interface MassEnemySave {
   id: string; monster: string; level: number; x: number; y: number; life: number; scale: number;
   magicPack?: MagicPackState; name?: string;
+  birth?: MassBirth;
 }
 export interface MassAdventureSave {
   schema: 1; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
@@ -56,6 +58,7 @@ export class WorldMassRuntime {
   readonly config: Readonly<MassAdventure>;
   private readonly configHash: string;
   private natives = new Map<string, Actor>();
+  private births: MassBirths;
   private cacheOpened: (source: string) => boolean = () => false;
   private nearKey = '';
   private dangerCache = new Map<string, number>();
@@ -69,6 +72,7 @@ export class WorldMassRuntime {
     if (!Number.isInteger(this.resumeTier) || this.resumeTier < 0 || this.resumeTier > 6) throw new Error('Invalid worldmass player story');
     this.config = freezeData(JSON.parse(canonical(config)) as MassAdventure);
     this.configHash = massDigest(this.config);
+    this.births = new MassBirths(this.config.nativeBirthSource, seed);
     this.rewards = new MassRewards(this.config.rewards, seed, save?.rewards);
     this.fields = new MassFields(save?.fields);
     this.origin = Object.freeze(save ? { ...save.origin } : { dimension: 'surface', cx: '0', cy: '0' });
@@ -140,7 +144,8 @@ export class WorldMassRuntime {
         throw new Error('Invalid worldmass checkpoint');
       for (const e of save.enemies) if (!e.id || !MONSTERS[e.monster] || !Number.isSafeInteger(e.level) || e.level < 1
         || ![e.x, e.y, e.life, e.scale].every(Number.isFinite) || e.life <= 0 || e.scale <= 0
-        || e.magicPack && (!readMagicPack(e.magicPack) || typeof e.name !== 'string'))
+        || e.magicPack && (!readMagicPack(e.magicPack) || typeof e.name !== 'string')
+        || (this.config.nativeBirthSource || e.birth !== undefined) && !validMassBirth(e.birth!))
         throw new Error('Invalid worldmass survivor');
       this.state.restore(save.state);
       if (save.state.terrain.some(p => !regionKind(p.region))) throw new Error('Unresolved saved worldmass terrain');
@@ -199,7 +204,7 @@ export class WorldMassRuntime {
     if (save) {
       const groups = new Map<number,number>();
       for (const e of save.enemies) {
-        const a = world.createMonster(e.monster, e.level, 'enemy', undefined, { scale: e.scale });
+        const a = this.births.create(world,e.id,e.monster,e.level,e.scale,e.birth);
         const pack = readMagicPack(e.magicPack);
         if (pack) {
           if (!groups.has(pack.id)) groups.set(pack.id,world.nextSquadId());
@@ -366,7 +371,7 @@ export class WorldMassRuntime {
           const id = canonical([p.id, 'fixture', index]);
           if (this.natives.has(id) || this.state.claimed('fallen', id) || this.natives.size >= this.config.maxPopulation) continue;
           const offset = siteOffset(p, fixture.x, fixture.y);
-          const a = world.createMonster(fixture.monster, population.level, 'enemy');
+          const a = this.births.create(world,id,fixture.monster,population.level);
           const spot = world.findFreeSpot({ x: q.x + offset.x, y: q.y + offset.y }, a.radius);
           if (!this.walk.isWalkable(spot.x, spot.y) || world.pointInSolid(spot.x, spot.y, a.radius)
             || Math.hypot(spot.x - q.x, spot.y - q.y) > p.radius) continue;
@@ -388,7 +393,7 @@ export class WorldMassRuntime {
         if (this.natives.has(id) || this.state.claimed('fallen', id) || this.natives.size >= this.config.maxPopulation) continue;
         const spot = this.walk.snapToWalkable({ x: q.x + Math.cos(angle) * radius, y: q.y + Math.sin(angle) * radius });
         if (!this.walk.isWalkable(spot.x, spot.y) || Math.hypot(spot.x - q.x, spot.y - q.y) > p.radius) continue;
-        const a = world.createMonster(monster, population.level, 'enemy', undefined, { scale });
+        const a = this.births.create(world,id,monster,population.level,scale);
         const bodyRadius = a.radius * (coordinated ? RARITY_DEFS.magic.sizeMul : 1);
         const free = world.findFreeSpot(spot, bodyRadius);
         if (!this.walk.isWalkable(free.x, free.y) || world.pointInSolid(free.x, free.y, bodyRadius)
@@ -433,7 +438,8 @@ export class WorldMassRuntime {
     for (const [id, a] of this.natives) {
       if (a.dead) { this.state.claim('fallen', id); continue; }
       enemies.push({ id, monster: a.defId!, level: a.level, x: a.pos.x, y: a.pos.y, life: a.life, scale: a.spawnScale ?? 1,
-        ...(a.magicPack ? { magicPack: a.magicPack, name: a.name } : {}) });
+        ...(a.magicPack ? { magicPack: a.magicPack, name: a.name } : {}),
+        ...(this.births.of(a) ? {birth:this.births.of(a)} : {}) });
     }
     return JSON.parse(JSON.stringify({ schema: 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
       ...(this.config.rewards ? { rewards: this.rewards.snapshot() } : {}),

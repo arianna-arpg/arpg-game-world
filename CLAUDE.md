@@ -28,7 +28,11 @@ place's original eligible garrison. `worldmass/clearance.ts` records eligibility
 at admission and pays once; chests, ordinary zone objectives and old expeditions
 remain independent. New landmark rosters reserve a native eligible guardian through
 `MASS_GARRISON_COMPOSITION` and saved population quotas, retaining wildlife.
-The shared curve is in `data/objectiveRewards.ts`. Verify
+New descriptors also carry `nativeBirthSource`; `worldmass/birth.ts` checkpoints
+the native factory seed and its original scale argument so rolled skills, supports,
+boons and personalities survive Continue. Combat randomness remains independent.
+Verify worldmass_birth and hidden `balance/worldmass-birth-ui.cjs`; old descriptors
+retain their earlier construction path. The shared curve is in `data/objectiveRewards.ts`. Verify
 worldmass_clearance, native objectives and `balance/worldmass-clearance-ui.cjs`
 (exact experience/point budget and map state through browser Continue).
 `ui/passiveFrontier.ts` presents the current realm's affordable, reachable native

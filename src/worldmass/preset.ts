@@ -21,6 +21,8 @@ export interface MassContent extends MassPopulation {
   magicPack?: { source: string; mechanic: string };
 }
 export interface MassAdventure {
+  /** Optional namespace for replayable native factory variants. */
+  nativeBirthSource?: string;
   rewards?: import('./rewards').MassRewardSpec;
   journey?: import('./journey').MassJourneySpec;
   ecology?: import('./ecology').MassEcologySpec;
@@ -91,7 +93,7 @@ export function massAdventure(): MassAdventure {
       presenceTable(table, i + 1, id => MONSTERS[id]?.presence)
         .filter(r => MONSTERS[r.id] && !MONSTERS[r.id].habitat)
         .map(r => ({ id: r.id, weight: r.weight }))));
-  return freezeData({ terrain, progression, theme: JSON.parse(JSON.stringify(TILESETS.downs.theme)) as ZoneDef['theme'],
+  return freezeData({ terrain, progression, nativeBirthSource: 'worldmass/native-birth-v1', theme: JSON.parse(JSON.stringify(TILESETS.downs.theme)) as ZoneDef['theme'],
     content: [...families.map(f => ({ id: f.id, source: 'tilesets/' + f.id + '/packs', level: 1, count: 3,
       levels: populations(TILESETS[f.id].packs.table),
       table: presenceTable(TILESETS[f.id].packs.table, 1, id => MONSTERS[id]?.presence)
