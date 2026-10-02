@@ -896,3 +896,27 @@ Continue harnesses. Field screenshots capture the actual canvas because an
 offscreen compositor can return a stale page image. Independent ordinary-input
 critics retest the resulting clarity; their report verdicts remain separate from
 automated correctness checks.
+
+### Qualitative comparison for the gameplay gauntlet
+
+The author clarified that no commercial reference client is available for a
+literal blind play comparison. Grim Dawn, Diablo 2/4 and Path of Exile 1/2 are
+quality references. Reviews provide criteria; only playing this build provides
+evidence about this build. Published opinions are dated observations, not claims
+about today's balance or endgame.
+
+- Expressive builds and a world worth exploring, with attention to loot friction:
+  [PC Gamer's Grim Dawn review, 12 March 2016](https://www.pcgamer.com/grim-dawn-review/).
+- Upgrades that create skill/gear synergies, and experimentation that remains
+  accessible: [PC Gamer's Diablo 4 review, 10 June 2023](https://www.pcgamer.com/diablo-4-review/).
+- Readable preparations, useful positioning and skill combinations with visible
+  consequences: [PCGamesN's PoE 2 early-access review, 8 December 2024](https://www.pcgamesn.com/path-of-exile-2/early-access-impressions).
+
+For each played encounter, record the threat the critic actually recognized,
+the decision it prompted, the earned build change used in the next fight, and
+the reason to enter or return to a place. Then ask whether the critic wanted to
+continue voluntarily. Distinguish correctness from enjoyment; neither a passed
+probe nor an implementation explanation earns an impressed verdict. Preserve
+negative findings and state the seed/class/route and input/capture limitations.
+Frame-stepped play can inspect consecutive animations but cannot establish
+normal reaction-time difficulty, continuous frame pacing or audio quality.

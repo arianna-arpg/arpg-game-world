@@ -17,7 +17,10 @@ app.whenReady().then(async()=>{
     const result=await win.webContents.executeJavaScript('(async()=>{try{return {ok:true,value:await ('+fn+')('+args.map(a=>JSON.stringify(a)).join(',')+')}}catch(error){return {ok:false,error:error.stack||String(error)}}})()');
     if(!result.ok)throw Error(result.error);return result.value;
   };
-  const shot=async name=>{win.webContents.invalidate();await new Promise(r=>setTimeout(r,300));fs.writeFileSync(path.join(dir,'combat-focus-'+name+'.png'),(await win.webContents.capturePage()).toPNG());};
+  const shot=async name=>{
+    const png=await run(()=>document.getElementById('game').toDataURL('image/png'));
+    fs.writeFileSync(path.join(dir,'combat-focus-'+name+'.png'),Buffer.from(png.split(',')[1],'base64'));
+  };
   const timer=setTimeout(()=>app.exit(1),180000);
   try {
     await win.loadURL('http://127.0.0.1:'+server.address().port);
