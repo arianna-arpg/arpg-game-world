@@ -24,7 +24,7 @@ that button holds keyboard focus.
 | `scripts/publish-site-media.mjs` | Uploads manifest files to the `site-media` release (creates it on first use). |
 | `scripts/fetch-site-media.mjs` | Pulls and verifies manifest files into `site/media/` (every Pages deploy; local previews), unpacking archives. |
 | `scripts/capture-skill-clips.cjs` | Films each skill in the game → `site/media/clips/` (see Skill clips). |
-| `balance/site-cinema-ui.cjs` | The hidden walkthrough (36 checks, frames in `balance/reports/site-cinema/`). |
+| `balance/site-cinema-ui.cjs` | The hidden walkthrough (38 checks, frames in `balance/reports/site-cinema/`). |
 
 A page opts in with one tag: `<script src="assets/cinema.js?v=…"></script>` in
 its `<head>` (today: the homepage). **The `?v=` stamp is the cache key for both
@@ -58,15 +58,16 @@ theater: { blanket, stage, openSeconds, revealSeconds, stallSeconds, hintSeconds
   browser can play, then the smallest rendition whose height covers the
   picture's device pixels. Visitors on a data saver or a slow connection get
   the smallest one.
-- **`captions`**: a WebVTT track drawn by the theater. `show: 'muted'` means
-  lines appear only while the film plays muted, and `band` places them in the
-  picture rows given (the announcement uses its lower letterbox bar).
+- **`captions`**: a WebVTT track drawn by the theater. `show: 'always'` (the
+  announcement) reads the narration with sound or without; `'muted'` shows
+  lines only while the film plays muted. `band` places them in the picture
+  rows given (the announcement uses its lower letterbox bar).
 - **`exit`**: `{ kind: 'shatter' | 'fade', at: [x, y] share of the picture, pace }`.
-- **`rim`** and **`picture`**: hold the film in the mind's eye (see The
-  theater). `rim: true` takes `theater.rim`'s dials; an object overrides any of
-  them. `picture: [x0, y0, x1, y1]` is the picture's share of the frame when the
-  frame carries black bars (the announcement: `[0, 0.128, 1, 0.872]`), so the
-  rim sits on the picture's edge rather than the bars.
+- **`rim`** and **`picture`** (both optional): the mind's eye is the theater's,
+  so a film needs neither (see The theater). `rim: false` opts a film out,
+  `rim: true` opts one in that the policy skips (a loop), and an object
+  carries its own dials over `theater.rim`'s. `picture: [x0, y0, x1, y1]`
+  names the picture's share of the frame and skips the measuring.
 - **`loop`**: plays until the viewer leaves (clips).
 - **`cors`**: set for media served from another origin with CORS headers.
   The shatter samples the film's last frame, which needs same-origin or
@@ -86,7 +87,7 @@ Any showing counts, skipped or watched, and so does a banner click.
 
 Browsers only allow sound after a gesture. An arrival usually plays muted, with
 a pulsing **Sound on** pill and the narration captions. A banner click is a
-gesture, so it plays with sound.
+gesture, so it plays with sound, and the captions read there too.
 
 ## The theater
 
@@ -111,13 +112,29 @@ gesture, so it plays with sound.
 
 ### The mind's eye
 
-A film that opts in floats in the darkness like a memory being recalled. A
-living rim, in the blanket's own ink, melts the picture's edge, so no hard
-rectangle ever shows. The window is a rounded eye sitting on the picture's own
-edge. Its border creeps and swirls through slow, domain-warped noise that turns
-about the centre (faster toward the rim, a slow vortex), and the band between
-clear and dark breathes like smoke. As the film starts, the eye opens out of a
-thin slit; the break that ends it is the thought shattering.
+Every film floats in the darkness like a memory being recalled. A living rim,
+in the blanket's own ink, melts the picture's edge, so no hard rectangle ever
+shows. The window is a rounded eye sitting on the picture's own edge. Its
+border creeps and swirls through slow, domain-warped noise that turns about the
+centre (faster toward the rim, a slow vortex), and the band between clear and
+dark breathes like smoke. The top and bottom bands run only `vertical` as deep
+as the sides, so a wide picture keeps its height. As the film starts, the eye
+opens like eyelids out of a thin, wide slit; the break that ends it is the
+thought shattering.
+
+**It belongs to the theater, not the film.** `theater.rim.apply` names who
+wears it (`'trailers'`: every film that does not loop, so the skill clips stay
+clean; or `'all'`, `'none'`), and a film needs no setting of its own. The rim
+finds the picture by measuring the film's own black bars while it plays: a
+small copy of the frame (128 × 288) is read a few times a second, every row and
+column whose mean rises above a low threshold belongs to the picture, the
+extent only grows (a dark scene cannot shrink it), and reading stops once it
+has held for a few seconds. The edge is taken at the inner side of the boundary
+sample, so any error falls a sliver inside the picture, where the dark already
+covers the true edge (the announcement measures `[0, 0.132, 1, 0.868]` against
+its bars at 0.128 and 0.872). The rim eases onto the measured edge during the
+eye's opening. A film served cross-origin without CORS cannot be read, so its
+rim stays on the whole frame unless it names its `picture`.
 
 It is one GLSL function (`RIM_GLSL` in the theater) with two consumers:
 
@@ -125,23 +142,26 @@ It is one GLSL function (`RIM_GLSL` in the theater) with two consumers:
   at `scale` per CSS pixel (the rim is soft), and overhangs the stage by a few
   pixels on every side so layer snapping can never show the video's own edge.
 - the shatter's bake: at the break, the frozen frame is redrawn with the rim at
-  the exact clock and opening the viewer last saw, so the first frame of the
-  break matches the screen it replaces (`_last.rim` reports the bake).
+  the exact clock, opening and measured picture the viewer last saw, so the
+  first frame of the break matches the screen it replaces (`_last.rim` reports
+  the bake).
 
-Reduced motion holds the rim still at one moment, with the eye already open.
-Without WebGL2, a rounded window with a soft inner shadow stands in. The dials
-live in `theater.rim`:
+Reduced motion holds the rim still at one moment, with the eye already open
+(the measured edge snaps rather than slides). Without WebGL2, a rounded window
+with a soft inner shadow stands in. The dials live in `theater.rim`:
 
 | Dial | Meaning |
 |---|---|
+| `apply` | who wears it: `'trailers'`, `'all'` or `'none'` |
 | `feather` | the soft band's width, in picture heights |
+| `vertical` | the top and bottom bands' depth, as a share of the sides |
 | `creep` | how far the dark wanders in and out of that band |
 | `round` | the window's corner radius, in picture heights |
 | `grain` | the dark's features per picture height |
 | `drift` | how fast it morphs (noise depth per second) |
 | `swirl`, `twist` | its turn about the centre (radians per second), and the extra turn toward the rim |
 | `mist` | smoke in the band rather than a smooth ramp |
-| `open` | `[share open at first, seconds to rest]`: the eye opening |
+| `open` | `[share of the height open at first, seconds to rest]`: the eyelids |
 | `scale` | the rim canvas's resolution per CSS pixel |
 
 ### The shatter
@@ -179,7 +199,8 @@ Reduced motion (or no WebGL2) swaps the break for a fade and a soft wash.
    for a separate mix, `--grain 0` for clean footage), then
    `node scripts/publish-site-media.mjs --only <film>`. Add a `films` row with
    the printed `sources`, point `feature` at it, and commit the registry and
-   manifest. The push deploys it.
+   manifest. The push deploys it. The mind's eye needs nothing: it measures
+   the new film's bars as it plays.
 2. **A scheduled release:** add a feature row with `from`. It needs no deploy on
    the day.
 3. **A/B two cuts:** a `pick` row with weights.

@@ -183,6 +183,7 @@
     if (R) {
       var rc = el.querySelector('.hwcine-rim');
       this.rim = MindsEye.create(rc, R);
+      if (this.rim) this.rim.watch(this.video);   // the film's own bars, measured as it plays
       if (!this.rim) {
         rc.parentNode.removeChild(rc);
         this.rimCss = document.createElement('div');
@@ -582,7 +583,7 @@
      domain-warped noise that turns about the centre (faster toward the rim),
      and the band between clear and dark breathes like smoke. */
   var RIM_GLSL =
-    'uniform vec4 uPic; uniform vec2 uStage; uniform vec4 uRimA; uniform vec4 uRimB; uniform float uOpen;\n' +
+    'uniform vec4 uPic; uniform vec2 uStage; uniform vec4 uRimA; uniform vec4 uRimB; uniform float uOpen; uniform float uRimV;\n' +
     'float rimH(vec3 p){ p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }\n' +
     'float rimN(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);\n' +
     '  float a = mix(mix(rimH(i), rimH(i + vec3(1.0, 0.0, 0.0)), f.x), mix(rimH(i + vec3(0.0, 1.0, 0.0)), rimH(i + vec3(1.0, 1.0, 0.0)), f.x), f.y);\n' +
@@ -595,11 +596,17 @@
     '  vec2 lo = uPic.xy * uStage, hi = uPic.zw * uStage;\n' +
     '  float ph = max(1.0, hi.y - lo.y);\n' +
     '  vec2 p = (uv * uStage - (lo + hi) * 0.5) / ph, b = (hi - lo) * 0.5 / ph;\n' +
-    '  float r = min(uRimA.z, min(b.x, b.y));\n' +
-    '  vec2 q = abs(p) - (b - r);\n' +
+    /* the window is measured with its height stretched by 1 / uRimV, so the
+       top and bottom bands (and their creep) run uRimV as deep as the sides:
+       a wide picture keeps its height */
+    '  vec2 kv = vec2(1.0, 1.0 / max(0.05, uRimV)), pk = p * kv, bk = b * kv;\n' +
+    /* the eye opening: like eyelids, the window's height opens from a thin,
+       wide slit (uOpen is the share of its height open), its width from
+       three quarters of the picture */
+    '  vec2 bo = bk * vec2(mix(0.75, 1.0, uOpen), uOpen);\n' +
+    '  float r = min(uRimA.z, min(bo.x, bo.y));\n' +
+    '  vec2 q = abs(pk) - (bo - r);\n' +
     '  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;\n' +
-    /* the eye opening: the window narrows to a slit while uOpen is low */
-    '  d += (1.0 - uOpen) * (min(b.x, b.y) + uRimA.x + uRimA.y);\n' +
     '  if (d < -(uRimA.x + 2.1 * uRimA.y)) return 0.0;\n' +
     '  float t = uRimB.x, ang = uRimB.y + uRimB.z * length(p);\n' +
     '  vec2 sw = mat2(cos(ang), sin(ang), -sin(ang), cos(ang)) * p * uRimA.w;\n' +
@@ -638,28 +645,66 @@
     'out vec4 o;\n' +
     'void main(){ o = vec4(mix(texture(uSrc, vUv).rgb, uInk, rimDark(vUv)), 1.0); }\n';
 
-  /* the film's rim, or null: theater.rim's dials with the film's own over
-     them, the picture's share of the frame, and the blanket's ink */
+  /* the film's rim, or null. Every film the policy names wears it
+     (theater.rim.apply: 'trailers' = films that do not loop, 'all', 'none')
+     unless it says rim: false; rim: true or an object opts any film in, and
+     an object's dials sit over the theater's. A film may name its picture's
+     share of the frame; otherwise the rim measures the film's own bars as it
+     plays (MindsEye.watch), so a new film needs no setting at all. */
   function rimSpec(f, T) {
-    if (!f.rim) return null;
-    var out = {}, k, base = T.rim || {}, own = typeof f.rim === 'object' ? f.rim : {};
+    var base = T.rim || {}, apply = base.apply || 'trailers';
+    var on = f.rim === false ? false : f.rim ? true : apply === 'all' || (apply === 'trailers' && !f.loop);
+    if (!on) return null;
+    var out = {}, k, own = typeof f.rim === 'object' ? f.rim : {};
     for (k in base) if (Object.prototype.hasOwnProperty.call(base, k)) out[k] = base[k];
     for (k in own) if (Object.prototype.hasOwnProperty.call(own, k)) out[k] = own[k];
     var b = T.blanket || [0, 0, 0, 1];
-    out.picture = f.picture || [0, 0, 1, 1];
+    out.fixed = !!f.picture;
+    out.picture = (f.picture || [0, 0, 1, 1]).slice();
     out.ink = [b[0] / 255, b[1] / 255, b[2] / 255];
     out.open = out.open || [1, 0];
     return out;
   }
   /* secs: the rim's own clock in seconds; it sets both the noise's depth
-     (drift) and the field's turn (swirl), so the two dials stay independent */
-  function rimUniforms(gl, u, R, w, h, secs, open) {
-    gl.uniform4f(u.uPic, R.picture[0], R.picture[1], R.picture[2], R.picture[3]);
+     (drift) and the field's turn (swirl), so the two dials stay independent.
+     pic: the picture rect to draw with (the shatter passes the one it froze) */
+  function rimUniforms(gl, u, R, w, h, secs, open, pic) {
+    var P = pic || R.picture;
+    gl.uniform4f(u.uPic, P[0], P[1], P[2], P[3]);
     gl.uniform2f(u.uStage, Math.max(1, w), Math.max(1, h));
     gl.uniform4f(u.uRimA, R.feather || 0.15, R.creep || 0, R.round || 0, R.grain || 2);
     gl.uniform4f(u.uRimB, secs * (R.drift || 0), secs * (R.swirl || 0), R.twist || 0, R.mist || 0);
     gl.uniform1f(u.uOpen, open);
+    gl.uniform1f(u.uRimV, R.vertical || 1);
     gl.uniform3fv(u.uInk, R.ink);
+  }
+
+  /* THE BARS, MEASURED: a film's picture is wherever its frame is not black.
+     A tiny copy of the frame (taller than wide: the edge that matters is
+     usually top and bottom) is read a few times a second; every row and
+     column whose mean rises above the threshold belongs to the picture, the
+     extent only grows (dark scenes cannot shrink it), and the edge is taken
+     at the inner side of the boundary sample, so any error falls inside the
+     picture, where the rim's dark already covers the true edge. */
+  var BARS = { w: 128, h: 288, every: 250, lum: 6, settle: 3000, quit: 15000 };
+  function measureBars(video, ctx) {
+    var W = BARS.w, H = BARS.h, d;
+    ctx.drawImage(video, 0, 0, W, H);
+    try { d = ctx.getImageData(0, 0, W, H).data; } catch (e) { return null; }   // a cross-origin film without CORS
+    var rows = new Float32Array(H), cols = new Float32Array(W), x, y, i, l;
+    for (y = 0; y < H; y++) {
+      for (x = 0; x < W; x++) {
+        i = (y * W + x) * 4;
+        l = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+        rows[y] += l; cols[x] += l;
+      }
+    }
+    var top = -1, bot = -1, left = -1, right = -1;
+    for (y = 0; y < H; y++) if (rows[y] / W > BARS.lum) { if (top < 0) top = y; bot = y; }
+    for (x = 0; x < W; x++) if (cols[x] / H > BARS.lum) { if (left < 0) left = x; right = x; }
+    if (top < 0 || left < 0) return null;   // a black frame says nothing
+    return [left === 0 ? 0 : (left + 1) / W, top === 0 ? 0 : (top + 1) / H,
+      right === W - 1 ? 1 : right / W, bot === H - 1 ? 1 : bot / H];
   }
   var MindsEye = {
     create: function (cv, R) {
@@ -670,7 +715,49 @@
         if (window.console) console.warn('[cinema] rim shader', e && e.message);
         return null;
       }
-      var E = { gl: gl, cv: cv, R: R, vao: gl.createVertexArray(), t0: now(), liveAt: 0, w: 0, h: 0, drawn: false };
+      var E = { gl: gl, cv: cv, R: R, vao: gl.createVertexArray(), t0: now(), liveAt: 0, w: 0, h: 0, drawn: false,
+        target: R.picture.slice(), detected: false, video: null, bars: null, probeAt: 0, firstProbe: 0, grewAt: 0, lastT: now() };
+      /* the film's bars, measured while it plays (unless the film named its picture) */
+      E.watch = function (video) {
+        if (R.fixed || !video) return;
+        var c = document.createElement('canvas');
+        c.width = BARS.w; c.height = BARS.h;
+        E.video = video;
+        E.bars = c.getContext('2d', { willReadFrequently: true });
+      };
+      /* one step of the measuring and the easing; true when the picture moved */
+      E.measure = function () {
+        var tn = now(), v = E.video;
+        if (E.bars && v && v.readyState >= 2 && !v.paused && tn - E.probeAt >= BARS.every) {
+          if (!E.firstProbe) E.firstProbe = tn;
+          E.probeAt = tn;
+          var m = null;
+          try { m = measureBars(v, E.bars); } catch (e) { m = null; }
+          if (m) {
+            var t = E.target, grew = !E.detected;
+            if (!E.detected) { E.target = m; E.detected = true; }
+            else {
+              if (m[0] < t[0]) { t[0] = m[0]; grew = true; }
+              if (m[1] < t[1]) { t[1] = m[1]; grew = true; }
+              if (m[2] > t[2]) { t[2] = m[2]; grew = true; }
+              if (m[3] > t[3]) { t[3] = m[3]; grew = true; }
+            }
+            if (grew) E.grewAt = tn;
+          }
+          /* the extent has held long enough (or the film is long past its opening): stop reading */
+          if ((E.detected && tn - E.grewAt > BARS.settle) || tn - E.firstProbe > BARS.quit) E.bars = null;
+        }
+        var dt = Math.min(0.1, (tn - E.lastT) / 1000), moved = false, P = R.picture, j, k;
+        E.lastT = tn;
+        if (R.fixed) return false;
+        k = REDUCE ? 1 : 1 - Math.exp(-dt / 0.25);   // reduced motion: snap, never slide
+        for (j = 0; j < 4; j++) {
+          var dlt = E.target[j] - P[j];
+          if (Math.abs(dlt) > 1e-4) { P[j] += dlt * k; moved = true; } else P[j] = E.target[j];
+        }
+        return moved;
+      };
+      E.picture = function () { return R.picture.slice(); };
       /* the dark's clock in seconds: one still moment under reduced motion */
       E.time = function () { return REDUCE ? 23 : (now() - E.t0) / 1000; };
       /* the eye opening, eased from the first live frame */
@@ -691,7 +778,8 @@
         E.draw();
       };
       E.draw = function () {
-        if (REDUCE && E.drawn) return;
+        var moved = E.measure();
+        if (REDUCE && E.drawn && !moved) return;
         gl.viewport(0, 0, cv.width, cv.height);
         gl.disable(gl.BLEND);
         gl.useProgram(prog.p);
@@ -702,7 +790,7 @@
         E.drawn = true;
       };
       /* the rim as it stands this moment, for the shatter's bake */
-      E.state = function () { return { R: R, secs: E.time(), open: E.open() }; };
+      E.state = function () { return { R: R, secs: E.time(), open: E.open(), picture: R.picture.slice() }; };
       E.release = function () {
         var ext = gl.getExtension('WEBGL_lose_context');
         if (ext) ext.loseContext();
@@ -1111,7 +1199,7 @@
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, S.tex);
         gl.uniform1i(S.rimBake.u.uSrc, 0);
-        rimUniforms(gl, S.rimBake.u, o.rim.R, o.rect.w, o.rect.h, o.rim.secs, o.rim.open);
+        rimUniforms(gl, S.rimBake.u, o.rim.R, o.rect.w, o.rect.h, o.rim.secs, o.rim.open, o.rim.picture);
         gl.bindVertexArray(S.lvao);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
         gl.bindVertexArray(null);
