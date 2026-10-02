@@ -2,8 +2,8 @@
 // placement is integration QA, separate from the critic's ordinary-input play.
 const {app,BrowserWindow}=require('electron');
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
-const dir=path.join(__dirname,'reports');fs.mkdirSync(dir,{recursive:true});
-app.setPath('userData',path.join(dir,'body-action-'+process.pid));app.disableHardwareAcceleration();
+const dir=path.join(__dirname,'reports'),label=process.env.HOLLOW_WAKE_QA_LABEL||'body-action';fs.mkdirSync(dir,{recursive:true});
+app.setPath('userData',path.join(dir,label+'-'+process.pid));app.disableHardwareAcceleration();
 app.whenReady().then(async()=>{
   const root=path.resolve(__dirname,'..',process.env.HOLLOW_WAKE_QA_DIST||'dist-preview'),server=http.createServer((req,res)=>{
     const p=new URL(req.url,'http://localhost').pathname,f=path.resolve(root,'.'+(p==='/'?'/index.html':p));
@@ -19,7 +19,7 @@ app.whenReady().then(async()=>{
   };
   const shot=async name=>{
     const png=await run(()=>document.getElementById('game').toDataURL('image/png'));
-    fs.writeFileSync(path.join(dir,'body-action-'+name+'.png'),Buffer.from(png.split(',')[1],'base64'));
+    fs.writeFileSync(path.join(dir,label+'-'+name+'.png'),Buffer.from(png.split(',')[1],'base64'));
   };
   const timer=setTimeout(()=>app.exit(1),180000);
   try {
@@ -57,9 +57,11 @@ app.whenReady().then(async()=>{
       if(!skill)throw Error('Native Warrior Cleave absent');
       return w.useSkill(p,skill,{x:p.pos.x+100,y:p.pos.y});
     });assert.ok(start);
-    await run(()=>{for(let i=0;i<8;i++)__game.step(1);});
+    await run(()=>{for(let i=0;i<18;i++)__game.step(1);});
     const prepare=await capture('prepare');assert.ok(prepare.casting);
     await run(()=>{let i=0;while(__game.world().player.casting&&i++<180)__game.step(1);});
+    const contact=await capture('contact');assert.ok(contact.stamp&&!contact.casting);
+    await run(()=>__game.step(4));
     const release=await capture('release');assert.ok(release.stamp&&!release.casting);
     await run(()=>__game.step(30));
     const settled=await capture('settled');
@@ -73,8 +75,18 @@ app.whenReady().then(async()=>{
     assert.ok(pose(prepare).x<pose(idle).x,'preparation draws back');
     assert.ok(pose(release).x>pose(idle).x,'native completion follows through');
     assert.ok(Math.abs(pose(settled).x-pose(idle).x)<.001,'settled body returns to native position');
-    fs.writeFileSync(path.join(dir,'body-action-ui.json'),JSON.stringify({idle,prepare,release,settled},null,2));
-    console.log('PASS actual native Cleave preparation, completion and settle paint distinct body poses while ground anchors and gameplay state remain unchanged');
+    const jointAngle=result=>{
+      const rows=result.rows.filter(row=>row.kind==='body');
+      assert.equal(rows.length,2,'native Warrior paints one body and one independently articulated weapon');
+      const angle=Math.atan2(rows[1].b,rows[1].a)-Math.atan2(rows[0].b,rows[0].a);
+      return Math.atan2(Math.sin(angle),Math.cos(angle));
+    };
+    assert.ok(Math.abs(jointAngle(idle))<.001,'neutral joint preserves its authored placement');
+    assert.ok(jointAngle(prepare)<-.1,'blade draws back independently of torso');
+    assert.ok(jointAngle(release)>.3,'actual completion carries blade through its joint');
+    assert.ok(Math.abs(jointAngle(settled))<.001,'joint settles without a lingering weapon copy');
+    fs.writeFileSync(path.join(dir,label+'-ui.json'),JSON.stringify({idle,prepare,contact,release,settled},null,2));
+    console.log('PASS actual native Cleave preparation, completion and settle paint distinct body and weapon poses while ground anchors and gameplay state remain unchanged');
 
   }catch(e){console.error(e.stack||String(e));process.exitCode=1;}
   finally{clearTimeout(timer);win.destroy();server.close();app.exit(process.exitCode||0);}

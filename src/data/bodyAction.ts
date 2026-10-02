@@ -9,4 +9,4 @@ export const BODY_ACTION_PROFILES: Record<string, BodyActionProfile> = {
   cast: { pull: .12, windTurn: -.08, compress: .07, reach: .18, releaseTurn: .04, stretch: .10, settle: .26 },
   pulse: { pull: 0, windTurn: 0, compress: .12, reach: 0, releaseTurn: 0, stretch: .16, settle: .30 },
 };
-export const BODY_ACTION_CFG = { enabled: true, maxShift: .36, maxTurn: .4, minScale: .8, maxScale: 1.2 };
+export const BODY_ACTION_CFG = { enabled: true, maxShift: .36, maxTurn: .4, minScale: .8, maxScale: 1.2, partSweepFraction: .35 };

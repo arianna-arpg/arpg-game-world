@@ -20,6 +20,8 @@ import { VIS_CFG } from './visConfig';
 
 export interface BodyLook {
   shape: ActorShape;
+  /** Runtime only: articulated parts draw separately in their native pose. */
+  separateActionParts?: boolean;
   radius: number;
   color: string;
   material?: string;
@@ -385,7 +387,7 @@ function strSeed(s: string): number {
 
 export function bodyKey(look: BodyLook): string {
   const tack = look.extraParts?.length ? JSON.stringify(look.extraParts) : '';
-  return `${look.shape}|${look.radius.toFixed(1)}|${look.color}|${look.material ?? ''}|${look.outline ?? ''}|${look.look ?? ''}|${tack}`;
+  return `${look.shape}|${look.radius.toFixed(1)}|${look.color}|${look.material ?? ''}|${look.outline ?? ''}|${look.look ?? ''}|${tack}|${look.separateActionParts ? 'joints' : ''}`;
 }
 
 /** Paint the runtime TACK overlay (extraParts) — collars, brands, harnesses
@@ -411,7 +413,8 @@ export function bodySprite(look: BodyLook): HTMLCanvasElement {
     // part kit (skull/ribs/hood/scythe/…) — the legacy shape never draws.
     const lookDef = lookOf(look.look);
     if (lookDef) {
-      paintLook(ctx, r, lookDef, lookPalette(look.color, look.material));
+      paintLook(ctx, r, look.separateActionParts ? { ...lookDef, parts: lookDef.parts.filter(p => !p.action) } : lookDef,
+        lookPalette(look.color, look.material));
       // A material may declare its texture rides part-grammar bodies too
       // (MaterialDef.textureOverLook — the cosmic starfield): painted
       // source-atop, so the stipple lands exactly on the composed stack.

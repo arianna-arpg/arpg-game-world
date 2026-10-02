@@ -991,3 +991,21 @@ Verify castingcues (real casts, interruption, opt-outs, native-state preservatio
 and co-op clearing), the combat smoke suite, and `balance/body-action-ui.cjs`.
 The hidden client captures actual preparation/release/settled canvas frames and
 checks painted transforms against unchanged ground and gameplay anchors.
+
+### Articulated native parts
+
+The normal-scale contact retest found that whole-body poses remained modest.
+`PartSpec.action` now optionally declares a joint pivot, preparation angle,
+follow-through angle and reach. The Warrior and skeleton swords and Magician
+staff opt in through their existing look data. Other looks retain their static
+composition. The joint carries the loaded pose into a short completed-use sweep,
+then settles, using host-resolved preparation/strike weights. It never drives
+damage or collision.
+
+Runtime sprites omit only the articulated parts, then draw each from a cached
+native part sprite at its joint. Rotation does not create new cache entries.
+Ordinary portraits, corpses and forge previews still bake the complete neutral
+look. Typed and outline-only hit flashes follow the moving part. The body-action
+client harness checks one body/one weapon, opposite preparation and release
+angles, neutral restoration, stationary ground anchors and unchanged gameplay
+state. `HOLLOW_WAKE_QA_LABEL` can retain evidence for multiple candidates.

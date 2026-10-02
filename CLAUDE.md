@@ -60,6 +60,8 @@ meter clearance and reserve space against damage values. Tune names/threats in
 attack body motion uses `data/bodyAction.ts`, resolved skill delivery and the
 successful real-use gate; `SkillDef.bodyMotion` can select/disable a profile.
 Co-op carries the resolved pose; ground geometry and combat clocks stay native.
+`PartSpec.action` adds optional weapon joints to existing looks; runtime sprites
+separate those parts while portraits keep the complete neutral figure.
 Verify castingcues and `balance/body-action-ui.cjs`. This is an opening
 network, not global roads,
 campaign migration or distant AI.

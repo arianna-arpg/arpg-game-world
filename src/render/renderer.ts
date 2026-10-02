@@ -3,6 +3,7 @@ import { CombatTextLayout, combatBodyRect, drawPlayerFocus } from './vis/combatF
 import { CombatMeterLayout } from './vis/combatMeters';
 import { bodyActionPoseOf } from '../engine/bodyAction';
 import { applyBodyActionPose } from './vis/bodyActionLayer';
+import { drawActionParts } from './vis/actionParts';
 import { MassPainter } from '../worldmass/paint';
 import { regionGrid } from '../world/walk'; // worldmass shares native grounded telegraphs
 import { concealmentActive } from '../engine/perception';
@@ -5707,7 +5708,9 @@ export class Renderer {
     }
     // Native traversal/emergence owns its pose; ordinary attacks move only
     // the painted body/adorn, leaving ground geometry and meters anchored.
-    if (!tpose && !epose) applyBodyActionPose(ctx, bodyActionPoseOf(a, world.time), a.radius);
+    const actionPose = !tpose && !epose ? bodyActionPoseOf(a, world.time) : undefined;
+    applyBodyActionPose(ctx, actionPose, a.radius);
+    look.separateActionParts = !!lookDef?.parts.some(p => p.action);
     if (rot !== 0) ctx.rotate(rot);
     ctx.drawImage(bodySprite(look), -half, -half);
     // THE HIT FLASH rides the body's own pose — a white wash or rim OVER
@@ -5715,6 +5718,8 @@ export class Renderer {
     // speaking beneath it, and baseAlpha already folds every fade lane.
     if (flashA > 0) drawBodyHitFlash(ctx, look, baseAlpha * flashA, hitTintOf(a.hitFlashType)); // THE HIT TINT: the blow's type colors the flash
     // Animated look parts (wisps, flames) ride in the same facing space.
+    if (look.separateActionParts && lookDef) drawActionParts(ctx, look, lookDef, actionPose,
+      baseAlpha * flashA, hitTintOf(a.hitFlashType));
     if (lookDef?.live) drawLiveParts(ctx, look, lookDef, world.time);
     if (rot !== 0) ctx.rotate(-rot);
     // THE WORN GAUGES (tell dress parts): live meters in facing space —

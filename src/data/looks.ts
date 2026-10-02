@@ -60,7 +60,8 @@ export const LOOKS: Record<string, LookDef> = {
   skeleton_warrior: {
     parts: [
       { kind: 'ribs', params: { under: true } },
-      { kind: 'sword', y: 0, params: { len: 0.95 } },
+      { kind: 'sword', y: 0, params: { len: 0.95 },
+        action: { pivotX: .1, pivotY: .62, windTurn: -.95, strikeTurn: .85, reach: .12 } },
       { kind: 'skull', x: 0.5 },
     ],
   },
@@ -1525,14 +1526,15 @@ export const LOOKS: Record<string, LookDef> = {
     parts: [
       { kind: 'torso' },
       { kind: 'pauldrons' },
-      { kind: 'sword' },
+      { kind: 'sword', action: { pivotX: .1, pivotY: .62, windTurn: -1.05, strikeTurn: .95, reach: .12 } },
       { kind: 'shield' },
     ],
   },
   class_magician: {
     parts: [
       { kind: 'robe' },
-      { kind: 'staff', params: { orb: 'glow' } },
+      { kind: 'staff', params: { orb: 'glow' },
+        action: { pivotX: 0, pivotY: .62, windTurn: -.4, strikeTurn: .35, reach: .18 } },
       { kind: 'runes', params: { n: 3 } },
     ],
   },

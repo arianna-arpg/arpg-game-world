@@ -19,6 +19,9 @@ import { materialOf, rampOf, type Ramp } from './materials';
 
 export interface PartSpec {
   kind: string;
+  /** Optional joint driven by the native action clock. Units are body radii
+   * and radians; ordinary static portraits keep the complete neutral pose. */
+  action?: { pivotX: number; pivotY: number; windTurn: number; strikeTurn: number; reach?: number };
   /** Placement in body space: unit = body radius, +X = facing. */
   x?: number;
   y?: number;
