@@ -1,4 +1,4 @@
-import type { World } from '../engine/world';
+import type { Chest, World } from '../engine/world';
 import type { Actor } from '../engine/actor';
 import { MONSTERS } from '../data/monsters';
 import { MAGIC_PACK_CFG, MAGIC_PACKS } from '../data/magicPacks';
@@ -275,6 +275,17 @@ export class WorldMassRuntime {
       .find(p => canonical([p.id, 'cache']) === source && this.state.claimed('site-cache', p.id));
     const site = place && this.config.content.find(c => c.id === place.content)?.site;
     if (site?.cache) this.rewards.earn(world, source, site.name);
+  }
+  /** Preserve the native lock/recovery fraction. An earned, quiet cache merely
+   * progresses faster; opening and all loot remain in the native chest artery. */
+  cacheHoldRate(world: World, chest: Chest): number {
+    if(chest.kind!=='timed' || chest.mimic || !chest.rewardSource)return 1;
+    const place=this.placesInCell(this.walk.at(chest.pos.x,chest.pos.y))
+      .find(p=>canonical([p.id,'cache'])===chest.rewardSource && this.state.claimed('site-cache',p.id));
+    if(!place || !this.siteCleared(place.id))return 1;
+    const seconds=this.config.content.find(c=>c.id===place.content)?.site?.cache?.clearedHoldSeconds;
+    if(seconds===undefined || world.actors.some(a=>world.isPressingFoe(a,world.player.pos,world.player.tier)))return 1;
+    return Math.max(1,chest.maxLock/seconds);
   }
   siteCleared(id: string): boolean { return this.state.claimed('site-cleared',id); }
   siteSearched(id: string): boolean {

@@ -115,6 +115,14 @@ and hidden `balance/worldmass-fields-ui.cjs`. Owned native passive names/effects
 remain visible after allocation through `ui/passiveFrontier.ts`; its client
 harness checks that confirmation alongside single spending and Continue.
 
+Optional `MassSiteSpec.cache.clearedHoldSeconds` accelerates native chest opening
+after an admitted site's durable garrison clearance and only without a nearby
+native pressing foe. New landmark/field-site descriptors snapshot 0.35 seconds
+through MASS_CACHE_OPENING; old descriptors retain their timers. Native progress,
+backoff, loot and reward ownership remain unchanged. Verify worldmass_cacheopening,
+containerloot/tollspill/persistence and `balance/cache-opening-ui.cjs` for
+pressured dwell, partial progress through browser Continue and single opening.
+
 The MenuBar tray seats immediately when opened or rebuilt, with scaled bounds
 on both axes and a scrollable width cap. Verify `balance/menu-tray-ui.cjs` for
 first-click placement, enlarged UI, expanded stations and reachable Pause Menu;

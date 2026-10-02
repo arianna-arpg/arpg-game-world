@@ -1,0 +1,65 @@
+import assert from 'node:assert/strict';
+import { makeSimWorld } from '../src/sim/arena';
+import { seedGlobalRandom } from '../src/sim/rng';
+import { WorldMassRuntime } from '../src/worldmass/runtime';
+import { massAdventure } from '../src/worldmass/preset';
+import { canonical } from '../src/worldmass/random';
+import { serializeCharacter } from '../src/meta/character';
+import { MASS_CACHE_OPENING, validateMassSite } from '../src/worldmass/sites';
+import type { Actor } from '../src/engine/actor';
+const restore=seedGlobalRandom(54121);
+const rig=(legacy=false)=>{
+ const config=JSON.parse(canonical(massAdventure()));
+ if(legacy)for(const c of config.content)if(c.site?.cache)delete c.site.cache.clearedHoldSeconds;
+ const w=makeSimWorld('warrior',54121),m=new WorldMassRuntime(42,'cache-opening',config);m.attach(w);
+ const p=m.journey!.places.find(p=>p.content==='cinderwatch')!;
+ w.landPartyAt(m.journey!.local(p));m.update(w,true);
+ const natives=(m as unknown as {natives:Map<string,Actor>}).natives;
+ const guards=[0,1].map(i=>natives.get(canonical([p.id,i]))!);assert.ok(guards.every(Boolean));
+ const c=w.chests.find(c=>c.rewardSource===canonical([p.id,'cache']))!;
+ for(const a of w.actors)if(a!==w.player&&!guards.includes(a))a.pos={x:-20000,y:-20000};
+ w.player.pos={...c.pos};
+ const clear=()=>{for(const a of guards)w.kill(a,false,w.player);m.update(w,true);assert.ok(m.siteCleared(p.id));};
+ return {w,m,p,c,guards,clear};
+};
+const tick=(w:ReturnType<typeof makeSimWorld>,dt:number)=>(w as unknown as {updateChests(dt:number):void}).updateChests(dt);
+const r=rig();
+assert.equal(r.m.cacheHoldRate(r.w,r.c),1);
+tick(r.w,.4);assert.equal(r.c.opened,false);assert.ok(Math.abs(r.c.lockTime-3.6)<1e-8);
+r.w.player.pos.x+=1000;tick(r.w,.5);assert.ok(Math.abs(r.c.lockTime-3.9)<1e-8);
+r.w.player.pos={...r.c.pos};r.clear();r.c.lockTime=r.c.maxLock;
+const roamer=r.w.createMonster('zombie',2,'enemy');roamer.pos={x:r.c.pos.x+100,y:r.c.pos.y};r.w.actors.push(roamer);
+assert.ok(r.w.isPressingFoe(roamer,r.w.player.pos));
+assert.equal(r.m.cacheHoldRate(r.w,r.c),1,'cleared garrison is not a promise of quiet ground');
+tick(r.w,.4);assert.ok(!r.c.opened&&Math.abs(r.c.lockTime-3.6)<1e-8);
+roamer.pos.x+=2000;r.c.lockTime=r.c.maxLock;
+assert.equal(r.m.cacheHoldRate(r.w,r.c),r.c.maxLock/MASS_CACHE_OPENING.clearedHoldSeconds);
+tick(r.w,.3);assert.equal(r.c.opened,false);tick(r.w,.06);assert.ok(r.c.opened);
+const drops=r.w.drops.length;tick(r.w,5);assert.equal(r.w.drops.length,drops);
+console.log('PASS native under-pressure dwell/recovery, earned quiet opening and single native payout');
+
+const partial=rig();partial.clear();partial.c.lockTime=partial.c.maxLock;
+tick(partial.w,.1);
+const remaining=partial.c.lockTime,saved=serializeCharacter(partial.w);
+const next=makeSimWorld('warrior',54122);assert.ok(next.adoptWorldState(saved.world));next.startWorldMass(42,saved.world!.worldmass);
+const cache=next.chests.find(c=>c.rewardSource===partial.c.rewardSource)!;
+assert.equal(cache.lockTime,remaining);assert.equal(cache.maxLock,partial.c.maxLock);
+assert.equal(next.massRuntime!.config.content.find(c=>c.id==='cinderwatch')!.site!.cache!.clearedHoldSeconds,.35);
+next.player.pos={...cache.pos};
+assert.ok(next.massRuntime!.cacheHoldRate(next,cache)>1);
+tick(next,.24);assert.ok(!cache.opened);tick(next,.02);assert.ok(cache.opened);
+console.log('PASS partial native lock and saved optional opening policy survive actual character Continue');
+
+const old=rig(true);old.clear();assert.equal(old.m.cacheHoldRate(old.w,old.c),1);
+old.c.lockTime=old.c.maxLock;tick(old.w,.36);assert.ok(!old.c.opened);
+assert.equal(old.m.cacheHoldRate(old.w,{...old.c,rewardSource:'foreign'}),1);
+assert.equal(r.m.cacheHoldRate(r.w,{...r.c,opened:false,mimic:true}),1);
+assert.equal(r.m.cacheHoldRate(r.w,{...r.c,kind:'objective'}),1);
+for(const value of [0,-1,Infinity,5]){
+ const site=JSON.parse(canonical(massAdventure().content.find(c=>c.id==='cinderwatch')!.site));
+ site.cache.clearedHoldSeconds=value;assert.throws(()=>validateMassSite(site,310),/cache/);
+}
+const noClear=JSON.parse(canonical(massAdventure().content.find(c=>c.id==='cinderwatch')!.site));
+delete noClear.completion;assert.throws(()=>validateMassSite(noClear,310),/cache/);
+console.log('PASS omitted legacy policy, foreign/mimic/objective chests and malformed authored dwell refusal');
+restore();

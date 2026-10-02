@@ -2005,3 +2005,28 @@ the visible button and opens the native pause page. Normal and enlarged captures
 were inspected. All three type checks and the native menubar probe pass.
 This corrects the menu surface; it does not claim that every HUD element fits the
 smallest stress viewport.
+
+### Earned cache opening pace
+
+Optional `MassSiteSpec.cache.clearedHoldSeconds` accelerates the existing native
+lock timer after the site's recorded garrison is defeated and no native pressing
+foe is near the player. New opening landmarks and country field sites snapshot
+0.35 seconds through `MASS_CACHE_OPENING`. Omission retains the original dwell.
+The rule requires a completion-bearing site, its admitted physical cache identity,
+and its durable clearance receipt. Unfinished, pressured, foreign, mimic and
+objective chests retain native behavior.
+
+The native chest update reads a rate from the worldmass adapter. The original
+remaining/max lock fraction, backing-off recovery, opening animation, contextual
+loot, first-cache choice and one-time payout all remain on their existing paths.
+Roaming threats can restore the original rate; clearing a garrison never declares
+the whole area safe. This rule adds no invulnerability or attack cancellation.
+
+All 21 worldmass probes, native container loot, toll/spill, persistence (84 checks)
+and all three type checks pass. A real-client fixture verifies the original
+four-second hold under pressure, the accelerated partial lock after actual native
+garrison kills, exact partial progress through browser Continue, and native
+opening at the expected remaining beat without repeating its reward. The final
+opened cache screenshot was inspected. The fixture uses controlled positioning
+and kills; an independent critic is separately playing the preserved build
+through ordinary input. Old descriptors keep their earlier timing.

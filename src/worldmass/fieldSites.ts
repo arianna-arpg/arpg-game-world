@@ -1,6 +1,6 @@
 import type { Doodad, DoodadKind } from '../engine/levelgen';
 import type { MassPlaceRecipe } from './contracts';
-import type { MassSiteSpec } from './sites';
+import { MASS_CACHE_OPENING, type MassSiteSpec } from './sites';
 import { nativeMassAltar } from './fields';
 import { OBJECTIVE_REWARD } from '../data/objectiveRewards';
 
@@ -21,7 +21,7 @@ export function countryFieldSites(): FieldSite[] {
       when:[{field:'elevation',min:0},...when],surface:{region:'ground',color}},
     site:{name,source:'worldmass/country-fields/'+id,doodads,fixtures:[],
       completion:{source:'objectives/clear',...OBJECTIVE_REWARD},
-      cache:{x:0,y:220,holdSeconds:4},altars:[nativeMassAltar(altar,0,0)]},
+      cache:{x:0,y:220,holdSeconds:4,...MASS_CACHE_OPENING},altars:[nativeMassAltar(altar,0,0)]},
   });
   return [
     make('mending-hollow','Mending Hollow','mending_altar','forest',

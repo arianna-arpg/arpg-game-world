@@ -56146,7 +56146,7 @@ export class World {
       }
       // Timed: hold the ground to pick the lock; back off and it re-sets.
       if (near) {
-        c.lockTime -= dt;
+        c.lockTime -= dt * (this.massRuntime?.cacheHoldRate(this, c) ?? 1);
         if (c.lockTime <= 0) {
           this.chests.splice(i, 1);
           if (c.mimic) {

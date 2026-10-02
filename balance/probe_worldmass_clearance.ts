@@ -72,7 +72,7 @@ assert.equal(pending.m.siteCleared(pending.place.id),true);
 console.log('PASS unavailable player leaves completion payable rather than losing it');
 
 const oldConfig=JSON.parse(canonical(massAdventure()));
-for(const c of oldConfig.content)if(c.site)delete c.site.completion;
+for(const c of oldConfig.content)if(c.site){delete c.site.completion;if(c.site.cache)delete c.site.cache.clearedHoldSeconds;}
 const oldWorld=makeSimWorld('warrior',92), old=new WorldMassRuntime(42,'legacy-clearance',oldConfig);old.attach(oldWorld);
 const oldPlace=old.journey!.places.find(p=>p.content==='cinderwatch')!;
 oldWorld.player.pos=old.journey!.local(oldPlace);old.update(oldWorld,true);

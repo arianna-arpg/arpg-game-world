@@ -9,6 +9,9 @@ import { validateMassAltar, type MassAltarSpec } from './fields';
 
 import { validateMassClearance, type MassClearanceSpec } from './clearance';
 
+/** Resolved into new descriptors; omitted policies preserve native timed caches. */
+export const MASS_CACHE_OPENING = { clearedHoldSeconds: .35 };
+
 export interface MassSiteSpec {
   name: string; source: string;
   /** Optional once-per-place reward for its original native garrison. */
@@ -18,7 +21,7 @@ export interface MassSiteSpec {
   /** Native placed bodies. Explicit garrison roles join admission and clearance;
    * omitted roles preserve older scenery-only completion semantics. */
   fixtures: { monster: string; x: number; y: number; garrison?: boolean }[];
-  cache?: { x: number; y: number; holdSeconds: number };
+  cache?: { x: number; y: number; holdSeconds: number; clearedHoldSeconds?: number };
   /** Native altar rules, snapshotted per expedition. Repeated places require field residency. */
   altars?: MassAltarSpec[];
 }
@@ -62,7 +65,9 @@ export function validateMassSite(site: MassSiteSpec, radius: number): void {
     || f.garrison!==undefined && typeof f.garrison!=='boolean')
     throw new Error('Invalid worldmass site fixture');
   if (site.cache && (!within(site.cache.x, site.cache.y, 32)
-    || !Number.isFinite(site.cache.holdSeconds) || site.cache.holdSeconds <= 0))
+    || !Number.isFinite(site.cache.holdSeconds) || site.cache.holdSeconds <= 0
+    || site.cache.clearedHoldSeconds!==undefined && (!site.completion || !Number.isFinite(site.cache.clearedHoldSeconds)
+      || site.cache.clearedHoldSeconds<=0 || site.cache.clearedHoldSeconds>site.cache.holdSeconds)))
     throw new Error('Invalid worldmass site cache');
 }
 /** Namespaced quarter turns vary approaches without changing a site's identity. */
