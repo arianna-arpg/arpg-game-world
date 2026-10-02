@@ -478,7 +478,7 @@ function startGame(
   // at the bedside as always. `?prologue` re-runs it deliberately for this
   // page load (the ?couchpads lever precedent) — a veteran re-watching the
   // opening, or a dev testing it, without touching the account gate.
-  const massExpedition = (BUILD_PROFILE.worldmass || new URLSearchParams(location.search).has('worldmass')) && !COOP_ALLY;
+  const massExpedition = worldmassRequested();
   const prologueDue = !massExpedition && (sceneDue(account, 'prologue')
     || new URLSearchParams(location.search).has('prologue'));
   // The LIFE-CONTRACT (meta/modes.ts): class select passes the sworn mode.
@@ -590,9 +590,14 @@ function startMu(): void {
  *  class screen at all; everyone else drifts into Mu, where the class roster
  *  stands IN the world. The legacy class screen remains beneath (co-op
  *  rejoin offers still call it directly). */
+function worldmassRequested(): boolean {
+  return (BUILD_PROFILE.worldmass || new URLSearchParams(location.search).has('worldmass')) && !COOP_ALLY;
+}
 function beginPressed(): void {
-  const prologueDue = sceneDue(account, 'prologue')
-    || new URLSearchParams(location.search).has('prologue');
+  // The expedition skips the authored prologue; retain the ordinary vessel
+  // deal instead of repeatedly forcing that absent tutorial's Warrior.
+  const prologueDue = !worldmassRequested() && (sceneDue(account, 'prologue')
+    || new URLSearchParams(location.search).has('prologue'));
   if (prologueDue) {
     startPicked(CLASSES.find(c => c.id === MU_CFG.provisionalClass) ?? CLASSES[0]);
     return;

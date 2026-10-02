@@ -1100,3 +1100,27 @@ Continue must restore saved vitals before granting the earned level-up refill.
 The clearance probe and `HOLLOW_WAKE_QA_PENDING=1` browser variant exercise this
 boundary. The previous build restored about 32 of 158 life after its reward;
 the corrected build retains the native full life/mana refill and pays once.
+
+### Native expedition opening
+
+Fresh Begin now enters the existing Mu vessel deal when the worldmass build or
+query opt-in is active. The expedition intentionally omits the authored prologue;
+the old Begin handler nevertheless used its forced Warrior branch. The shared
+worldmass predicate now selects both the opening and eventual expedition.
+Native account unlocks, awake vessel eligibility, physical dwell and Wake remain
+authoritative. Ordinary fresh play still enters its authored prologue. Continue
+retains its saved character and descriptor through the existing path.
+
+The hidden `balance/worldmass-opening-ui.cjs` uses a disposable fresh profile and
+actual Begin, walking, vessel card and Wake controls. The preceding preview is a
+negative control: it immediately started Warrior instead of Mu. The corrected
+client selected an awake Rogue and entered Lastlight with no invulnerability or
+extra unlocks. A separate ordinary build retained the prologue. Type checks,
+native Mu/dwell/offer probes and the desktop boot smoke remain required.
+
+A fourth independent ordinary-play critic cleared Grove and Court, tested an
+earned support, returned on foot and verified Save/Continue. Their overall
+verdict remained negative: meaningful Mending positioning and a coherent reward
+loop did not outweigh effective stationary Cleave trading, quiet connecting
+travel and interaction friction. No blocking defect was established. This is
+feedback for continuing work, not a claim of enjoyment or AAA parity.

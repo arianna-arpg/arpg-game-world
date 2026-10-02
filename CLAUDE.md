@@ -3,7 +3,11 @@
 Browser previews use `src/buildProfile.ts`: `HOLLOW_WAKE_STORAGE_SCOPE` isolates
 all browser saves/preferences and disables shared disk endpoints; an empty
 scope preserves normal persistence. `HOLLOW_WAKE_WORLDMASS=1` starts new runs
-in the experiment without a query parameter. Build `dist-preview` with both
+in the experiment without a query parameter. Fresh Begin uses the native Mu
+vessel deal because this mode skips the authored prologue; ordinary Begin retains
+its prologue. Verify `balance/worldmass-opening-ui.cjs` against both profiles
+(`HOLLOW_WAKE_QA_ORDINARY=1` for the ordinary build), plus native Mu probes.
+Build `dist-preview` with both
 variables and run `electron balance/browser-preview-ui.cjs` to verify save
 isolation and Continue. See `docs/design/seamless-world-foundation.md`.
 
