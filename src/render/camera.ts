@@ -69,7 +69,15 @@ export const CAMERA_CFG = {
    *  wakes with. The hero-locked frame is the current default on purpose:
    *  the whole world is being auditioned under the Descent's camera. */
   default: 'hero' as CameraModeId,
+  /** World framing multiplier; 100% preserves the established 1.3 scale. */
+  zoom: { base: 1.3, default: 1, min: .85, max: 1.6, step: .05 },
 };
+
+/** Additive saved preference: absent or malformed values keep classic framing. */
+export function cameraZoomOf(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(CAMERA_CFG.zoom.min,Math.min(CAMERA_CFG.zoom.max,value)) : CAMERA_CFG.zoom.default;
+}
 
 /** Registry lookup with the fabric's default as the safety net — a renamed
  *  mode in an old save (or a bad ZoneDef pin) degrades to the default, never

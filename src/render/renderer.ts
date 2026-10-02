@@ -186,7 +186,7 @@ import { AOE_SHAPE, bandSwingGeo } from '../engine/skills';
 
 import { riderSurface as trackRiderSurface, trackPose } from '../engine/tracks';
 import { UnderstoryLayer } from './vis/understory';
-import { cameraModeOf, couchConfineRect, couchFit, placeCamera } from './camera';
+import { CAMERA_CFG, cameraZoomOf, cameraModeOf, couchConfineRect, couchFit, placeCamera } from './camera';
 import { COUCH_CFG } from '../data/couch';
 import { drawVoidFrame, voidBaseOf } from './vis/voidFrame';
 import { activePieces } from '../world/shape';
@@ -306,12 +306,10 @@ export class Renderer {
   /** Couch guest seats whose CONTROLLER is currently lost (main.ts identity
    *  sweep publishes per frame) — their flank HUD says so. Empty solo. */
   couchPadLost: string[] = [];
-  /** World→screen scale. >1 zooms in; the bigger zones keep it from cramping.
-   *  BASE is the classic constant; the COUCH FRAME (data/couch.ts) widens the
-   *  live value by couchStretch — smoothed toward couchFit each frame, hard-
-   *  floored at the stretch cap. Solo keeps couchStretch pinned at exactly 1,
-   *  so every consumer of `zoom` reads the byte-identical classic 1.3. */
-  private readonly baseZoom = 1.3;
+  /** Saved world framing shares the projection used by pointer aim and all
+   *  world passes. Couch fit still widens this base; resolution scales it
+   *  separately. An absent preference preserves the classic 1.3 framing. */
+  private get baseZoom(): number { return CAMERA_CFG.zoom.base * cameraZoomOf(this.getSettings?.().cameraZoom); }
   private couchStretch = 1;
   private get zoom(): number { return this.baseZoom * this.couchStretch * this.pixelScale; }
   /** Frame delta off the sim clock (canopy/roof fade smoothing). */

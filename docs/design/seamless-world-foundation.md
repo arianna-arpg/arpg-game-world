@@ -1649,3 +1649,29 @@ channel level (27 total), within the recorded clipping tolerance. Cache size is
 two of twenty-five pages. Gallery and generated cold/wet country screenshots
 were inspected. This does not change physics, danger, population or weather.
 A new independent reviewer uses this fixed build and chooses its own route.
+
+### Player-controlled world framing
+
+The eastern Rogue reviewer found close-range contact difficult to judge at the
+fixed camera scale, and followed Mireille's ambiguous “by the fire” invitation
+to the outdoor campfire first. Its experiment still reports costly misses and
+difficult disengagement; no favorable overall verdict has been inferred.
+
+Options → Visuals now exposes World zoom from 85% to 160%. CAMERA_CFG.zoom owns
+the bounds, step, default and established base scale. The additive saved setting
+defaults to 100% for existing users; malformed values fall back and out-of-range
+values clamp. The renderer's shared projection supplies world painting, pointer
+aim and couch fit. Interface scale and render resolution keep their existing
+owners. The frontier invitation now explicitly directs players inside the inn.
+
+All three type checks, the new camera-zoom probe, the native couch probe (74
+checks), worldmass welcome and 25 combat smoke episodes pass. The isolated
+client uses a real pointer click on the native slider, verifies a 1.6× world
+projection with identical HUD rectangles and unchanged position/vitals, and
+retains the preference through browser Continue. Real mouse-aimed Firebolts
+follow the projected target at 85% and 160% zoom, including 75% rendering
+resolution. The first test required exact floating-point equality at the hero
+center, and another assumed a shorter Firebolt windup; the corrected fixture
+uses subpixel comparison, observes the actual launch and settles the native
+cooldown in an empty controlled scene. No production aiming/cast fix was needed.
+Classic/close world views and the actual Options panel were inspected.

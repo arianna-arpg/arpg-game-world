@@ -220,6 +220,12 @@ HTML captures, a retained origin and build fingerprint keep review evidence
 traceable. See `docs/ai/PLAYTEST_CLIENT.md`; the client has no arbitrary-code or
 stat-grant endpoint. Frame stepping does not establish real-time feel.
 
+The native camera's saved `Settings.cameraZoom` is exposed in Options → Visuals
+as World zoom. `CAMERA_CFG.zoom` owns range/default/base scale; pointer projection
+and couch framing share that scale while interface size and buffer resolution
+remain independent. Verify camerazoom/couch and `balance/camera-view-ui.cjs`
+for the real slider, native Firebolt aim, unchanged HUD and browser Continue.
+
 Held skill attempts share `engine/skillInputOrder.ts`: a newer still-held choice
 precedes an older repeat after the native interaction/timeflow gates. Current
 casts, cooldowns, meta/toggle gates and movement rules remain native; released

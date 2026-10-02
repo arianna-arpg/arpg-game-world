@@ -22,7 +22,7 @@ import { AIM_TICK_STYLES, DEFAULT_AIM_TICK, type AimTickOptions } from '../rende
 import { MAP_CFG, MAP_LABEL_MODES, type MapLabelMode, MAP_CHART_MODES, type MapChartMode } from '../ui/mapConfig';
 import { UI_SCALE_CFG } from '../ui/uiScale';
 import { RENDER_SCALE_CFG } from '../render/renderScale';
-import { CAMERA_CFG, CAMERA_MODES, type CameraModeId } from '../render/camera';
+import { CAMERA_CFG, CAMERA_MODES, cameraZoomOf, type CameraModeId } from '../render/camera';
 import { WORLDSTATE_CFG, type ResumeSpawn } from './worldstate';
 import { MENU_ANCHORS, MENU_CFG, type MenuAnchorId } from '../ui/menuConfig';
 import { ESCAPE_CFG, ESCAPE_MODES, type EscapeCloseMode } from '../ui/escapeConfig';
@@ -188,6 +188,8 @@ export interface Settings {
    *  'zone' is the classic frame that never leaves the zone. A ZoneDef.camera
    *  pin overrides this per-zone; boundless zones always free-follow. */
   cameraMode: CameraModeId;
+  /** World framing, independent of interface size and buffer resolution. */
+  cameraZoom: number;
   /** THE RENDER SCALE (render/renderScale.ts): internal resolution as a
    *  dial — the same world view rasterized into a smaller buffer, CSS-
    *  stretched to the window (zoom rides the scale, so framing/camera/aim
@@ -301,6 +303,7 @@ export interface SettingsSave {
   escapeCloses?: EscapeCloseMode;
   treePrompt?: boolean;
   cameraMode?: CameraModeId;
+  cameraZoom?: number;
   renderScale?: number | 'auto';
   veilDarkness?: number;
   noticeSec?: number;
@@ -464,6 +467,7 @@ export const makeSettings = (): Settings => ({
   escapeCloses: ESCAPE_CFG.default,
   treePrompt: false,
   cameraMode: CAMERA_CFG.default,
+  cameraZoom: CAMERA_CFG.zoom.default,
   renderScale: 'auto',
   veilDarkness: 1,
   noticeSec: NOTICE_CFG.defaultSec,
@@ -505,6 +509,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   escapeCloses: s.escapeCloses,
   treePrompt: s.treePrompt,
   cameraMode: s.cameraMode,
+  cameraZoom: cameraZoomOf(s.cameraZoom),
   renderScale: s.renderScale,
   veilDarkness: s.veilDarkness,
   noticeSec: s.noticeSec,
@@ -614,6 +619,7 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     // Unknown values (a renamed mode, a pre-dial save) fall back to the
     // registry default — currently the hero-locked frame.
     cameraMode: CAMERA_MODES.some(m => m.id === s.cameraMode) ? s.cameraMode! : CAMERA_CFG.default,
+    cameraZoom: cameraZoomOf(s.cameraZoom),
     // 'auto' passes whole; numbers re-clamp into the fabric's rails; anything
     // else (a pre-dial save) falls back to the governor.
     renderScale: s.renderScale === 'auto' ? 'auto'

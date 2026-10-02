@@ -128,7 +128,7 @@ export const NPC_DIALOGUES: NpcDialogueDef[] = [
     id: 'mireille_frontier_welcome', speaker: { defId: 'townsfolk_innkeep' }, zone: START_ZONE,
     priority: 200, all: [{ fact: 'mireilleLessonComplete', is: false }], once: 'run',
     trigger: { kind: 'boundaryApproach', radius: 300, holdSec: 16, visible: true },
-    lines: [{ text: 'Off into the wilds already, love? Come find me by the fire before you go. Let us see those two little flasks settled where you can reach them.\n\nNo hurry. Stay beside me a moment when you are ready. The road can spare you that much kindness.' }],
+    lines: [{ text: 'Off into the wilds already, love? Come find me inside the inn before you go. Let us see those two little flasks settled where you can reach them.\n\nNo hurry. Stay beside me a moment when you are ready. The road can spare you that much kindness.' }],
   },
   {
     id: 'mireille_road_welcome', speaker: { defId: 'townsfolk_innkeep' }, zone: START_ZONE,
