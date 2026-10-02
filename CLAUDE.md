@@ -119,7 +119,10 @@ Verify worldmass_rewards and hidden `balance/worldmass-rewards-ui.cjs` against
 the scoped build (cache → pending Continue → choice → pointer socket → Continue).
 `explorationRewardReceipts` retains historical choices and a native Skills/inventory
 shortcut in the journal; receipt text does not assert present item ownership or
-socketing. The rewards client covers this handoff and the saved receipt.
+socketing. `explorationRewardOffersHtml` also serves the native Skills page;
+the bag's pending-choice shortcut opens that workspace without a Journal detour.
+Both surfaces use the same claim intent. The rewards client covers the bag
+shortcut, both offer faces, native socket restrictions and the saved receipt.
 Old manifests keep their former rewards. Memory provenance labels preserve old
 cache identities internally while presenting a registered Chest/Found name.
 

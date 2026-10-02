@@ -1368,3 +1368,25 @@ that attempt lacked position diagnostics and is not counted as successful QA.
 The fixture now requires a clear sampled impact point and verifies that native
 landing did not displace the player. The revised run passed. This is controlled
 mechanics evidence, not a positive independent gameplay verdict.
+
+### Recovered choices beside Skills
+
+The seventh critic's Warrior run never tried the first cache's compatible
+choice, while the sixth critic's Magician eventually found it through Journal
+attention and saw Arcing change a later fight. The seventh report remains a
+negative enjoyment verdict; the sixth would voluntarily continue another build
+experiment. Neither is a commercial-game comparison or evidence of full polish.
+
+Pending cache choices now have an entry beside the bag's recovered loot.
+It opens the native Skills workspace, which displays the same source-attributed
+offer cards as the Journal. Claiming removes both pending faces and places the
+native gem in the adjacent bag; the skill sockets remain in the same workspace.
+The Journal retains its historical receipt. No forced popup, automatic choice,
+socket-rule waiver, extra payout or new save state is added.
+
+All three type checks and the rewards probe pass. The isolated client follows
+the bag shortcut, checks both offer faces and the real inventory/socket
+targets, verifies the combat refusal, sockets the gem in Lastlight and continues
+with the same claimed choice and fitted support. The workspace screenshot was
+inspected. Independent reviewers retain their original fixed builds; this
+navigation refinement does not retroactively change their reports.

@@ -56,13 +56,32 @@ app.whenReady().then(async()=>{
     });
     log({cards});assert.equal(cards.buttons,2);assert.ok(cards.text.includes('Cleave'));
     assert.equal(await run(()=>document.getElementById('world-map').textContent.includes('leaders defeated')),false);await shot('choice');
+    const workspace=await run(()=>{
+      __game.ui.hideAll();__game.ui.toggleInventory();__game.step(2);
+      const shortcut=document.querySelector('[data-exploration-choose]');
+      if(!shortcut?.textContent.includes('Cinderwatch Camp'))throw Error('Recovered choice missing beside bag');
+      shortcut.click();__game.step(2);
+      const panel=document.getElementById('skills-panel'),offer=panel.querySelector('[data-exploration-offer]');
+      if(getComputedStyle(panel).display==='none'||!offer?.textContent.includes('Cleave'))
+        throw Error('Bag shortcut did not show choices beside native skills');
+      const a=offer.getBoundingClientRect(),b=panel.getBoundingClientRect();
+      return {choices:offer.querySelectorAll('[data-exploration-reward]').length,
+        panel:{x:b.x,y:b.y,w:b.width,h:b.height},offer:{x:a.x,y:a.y,w:a.width,h:a.height}};
+    });
+    log({workspace});assert.equal(workspace.choices,2);assert.ok(workspace.panel.x>=0);
+    assert.ok(workspace.panel.y+workspace.panel.h<=850);await shot('workspace');
     const claimed=await run(()=>{
-      document.querySelector('[data-exploration-reward][data-reward-choice="concentrated"]').click();__game.step(2);
+      document.querySelector('#skills-panel [data-exploration-reward][data-reward-choice="concentrated"]').click();__game.step(2);
       const w=__game.world(),item=w.meta.items.find(i=>i.gem?.supportId==='concentrated');
       if(!item)throw Error('Reward did not reach native inventory');
+      if(document.querySelector('#skills-panel [data-exploration-offer]') || document.querySelector('[data-exploration-choose]'))
+        throw Error('Paid choice still displayed in inventory workspace');
+      if(!document.querySelector('[data-drop="gemSock:cleave"]') || !document.querySelector('[data-drag="gearItem:'+item.uid+'"]'))
+        throw Error('Chosen gem and native socket are not together');
+      __game.ui.hideAll();__game.ui.openMapTab('quests');__game.step(2);
       const receipt=document.querySelector('[data-exploration-receipt]');
-      if(!receipt?.textContent.includes('Concentrated Power') || document.querySelector('[data-exploration-offer]'))
-        throw Error('Chosen receipt did not replace the offer');
+      if(!receipt?.textContent.includes('Concentrated Power') || document.querySelector('#world-map [data-exploration-offer]'))
+        throw Error('Chosen receipt did not replace the journal offer');
       w.lastCombatAt=w.time;
       document.querySelector('[data-exploration-skills]').click();__game.step(2);
       if(getComputedStyle(document.getElementById('skills-panel')).display==='none'
@@ -103,7 +122,7 @@ app.whenReady().then(async()=>{
     log({paid:paid.offers,final});assert.equal(final.pending,0);assert.ok(final.supports.includes('concentrated'));assert.equal(final.receipts[0].name,'Concentrated Power');
     await run(()=>{__game.ui.hideAll();__game.ui.openMapTab('quests');__game.step(2);});
     await shot('receipt');
-    log('PASS physical cache, fixed pending Continue, journal choice/receipt, native Skills handoff and bag drag/socket, claimed/socketed Continue');
+    log('PASS physical cache, fixed pending Continue, Journal/Skills choices, bag shortcut, once-only native claim, receipt handoff, bag drag/socket and claimed/socketed Continue');
   }catch(error){log(error.stack||String(error));process.exitCode=1;}
   finally{clearTimeout(timeout);win.destroy();server.close();app.exit(process.exitCode||0);}
 });

@@ -52,7 +52,7 @@ import { bagBoard, canPlaceAt, overlappingItems, swapBlockerFits } from '../engi
 import { ContainerPane } from './containerPane';
 import { InventoryPages, type InventoryPage, type InventoryPageRequest } from './inventoryPages';
 import { questRewardHtml, questImbueHtml } from './questRewards';
-import { explorationRewardHtml } from './explorationRewards';
+import { explorationRewardHtml, explorationRewardOffersHtml, explorationRewardShortcutHtml } from './explorationRewards';
 import { containerOriginOf, findCarried, originContainerId } from '../engine/containers';
 import { CONTAINER_DEFS } from '../data/containers';
 import { BAG_SORT_MODES, type BagSortDir } from '../engine/bagsort';
@@ -4532,6 +4532,7 @@ export class UI {
             <h3>Bag <span style="color:#8a8678;font-weight:normal">(${m.items.length} item${m.items.length === 1 ? '' : 's'})</span></h3>
             ${sortStrip}
           </div>
+          ${invSeat === world.localSeat ? explorationRewardShortcutHtml(world) : ''}
           <div data-bag-grid="1" style="position:relative;width:${W * CELL}px;height:${H * CELL}px">${cells}${tiles}</div>
           <div style="margin-top:8px;color:#8a8678;font-size:10px">
             ${salv === 'break'
@@ -4609,6 +4610,11 @@ export class UI {
       hideTooltip();
       this.refreshInventory();
     }));
+    this.inventory.querySelector<HTMLButtonElement>('[data-exploration-choose]')?.addEventListener('click', () => {
+      this.toggleBuildPanel(this.panelSeat(this.inventory).id, 'show');
+      const scroll = this.buildPanel.querySelector<HTMLElement>('.build-scroll');
+      if (scroll) scroll.scrollTop = 0;
+    });
     // The Build drawer (its handle hangs on the panel edge):
     // toggle + — when open — the learned list's full management wiring.
     this.inventory.querySelector<HTMLButtonElement>('[data-buildflap]')?.addEventListener('click', () => this.toggleBuildPanel(this.panelSeat(this.inventory).id, 'toggle-page'));
@@ -7122,7 +7128,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           ${modeRow}
         </div>`;
     }).join('');
-    return `<div class="build-rack">${rackHtml}</div><div class="build-scroll">${socketWhy
+    return `<div class="build-rack">${rackHtml}</div><div class="build-scroll">${seat === world.localSeat ? explorationRewardOffersHtml(world) : ''}${socketWhy
       ? `<div data-socket-refusal role="status" style="color:#e4b58b;font-size:11px;line-height:1.5;padding:8px">Socket changes unavailable: ${esc(socketWhy)}.</div>` : ''}${graftBank}${rows
       || '<div style="color:#8a8678;font-size:11px">Nothing seated. Skill Memories drop from monsters — press one from your pack into an empty seat above.</div>'}</div>`;
   }
@@ -7131,6 +7137,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   private wireLearnedList(container: HTMLElement, refresh: () => void): void {
     const world = this.getWorld();
     const q = <T extends HTMLElement>(sel: string): T[] => [...container.querySelectorAll<T>(sel)];
+    this.wireExplorationRewards(container, refresh);
     // Every button routes the mutation through world.requestMeta — on the host /
     // single-player it applies immediately to the local seat; on a render-shell
     // CLIENT it ships the intent to the host (which mutates OUR seat + replicates
@@ -9527,6 +9534,16 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     return `<div style="font-size:9px;color:#6a6a78;margin:-2px 0 6px 0">layers: ${chips}${washUi}</div>`;
   }
 
+  /** Both offer surfaces dispatch the same native once-only claim intent. */
+  private wireExplorationRewards(container: HTMLElement, refresh: () => void): void {
+    container.querySelectorAll<HTMLButtonElement>('[data-exploration-reward]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.getWorld().requestMeta({ t: 'explorationReward', source: btn.dataset.explorationReward!, choiceId: btn.dataset.rewardChoice! });
+        refresh();
+      });
+    });
+  }
+
   /** The QUESTS view of the map panel: the journal of active + completed quests. */
   private renderQuestsTab(world: World): void {
     const log = world.questLog();
@@ -9574,11 +9591,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (!this.setPanelHtml(this.worldMap, html)) return;
     const qs = this.worldMap.querySelector<HTMLElement>('#quest-scroll');
     if (qs) qs.scrollTop = prevScroll;
-    this.worldMap.querySelectorAll<HTMLButtonElement>('[data-exploration-reward]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        world.requestMeta({ t: 'explorationReward', source: btn.dataset.explorationReward!, choiceId: btn.dataset.rewardChoice! });
-        this.refreshMap();
-      });
+    this.wireExplorationRewards(this.worldMap, () => {
+      this.refreshMap();
+      this.refreshInventory();
     });
     this.worldMap.querySelectorAll<HTMLButtonElement>('[data-exploration-skills]').forEach(btn => {
       btn.addEventListener('click', () => {
