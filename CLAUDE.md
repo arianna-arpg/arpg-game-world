@@ -13,6 +13,16 @@ isolation and Continue. See `docs/design/seamless-world-foundation.md`.
 
 The continuous-world experiment is specified in `docs/design/seamless-world-foundation.md` (branch `codex/seamless-world-foundation`). `src/worldmass/` implements durable addresses, seeded fields/place claims, sparse consequences, bounded terrain residency and an opt-in `/?worldmass` terrain/combat prototype. It uses native movement, skills, region effects, cell-ray occlusion and character saves. Verify `npm run probe -- worldmass` plus persistence/sightveil/cistern; after a build, `balance/worldmass-ui.cjs` checks the hidden real client with isolated saves. Each new run gets fresh land. Live frame rebasing, distant simulation, native place/campaign migration and full consequence paging remain unfinished; read the document's implementation ledger before extending or describing the mode.
 
+Worldmass level rosters may snapshot native encounter formations through
+`worldmass/encounters.ts`. Geographic biome families opt in at native level,
+habitat and presence gates. Concrete role/species/offset plans are saved; seeded
+place selection and atomic admission preserve their membership across paging.
+Native squad tactics remain authoritative; Continue remaps squad IDs and retains
+casualties/wounds. Optional formations and magic cohorts currently require separate
+owners. Verify worldmass_formations, native encountergroups/encountercombat and
+`balance/worldmass-formations-ui.cjs` for country admission, native combat and
+browser Continue. This does not add distant actor unloading.
+
 Worldmass encounter territories are optional saved descriptors (`territory.ts`).
 They stamp an attributable `Actor.aiTerritory` fallback below authored native
 leashes; relentless tuning ignores the fallback. New expeditions use a 620-unit

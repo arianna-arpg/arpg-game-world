@@ -1756,3 +1756,47 @@ The preceding territory commit has now passed all 336 remote probes and Pages
 publishing. Exact live metadata identifies 3f028952; isolated remote QA preserved
 seed 2070713339 through Continue and all six ordinary-save sentinels. The
 projectile-culling fixture correction is therefore verified in the full suite.
+
+### Native formations in the wider country
+
+Optional level-roster encounter specifications now snapshot concrete native
+formation plans: recipe, role, species, count and relative seats. The biome
+families offer only native level/habitat/presence-eligible surface groups;
+specialized body habitats remain excluded until their seating has an adapter.
+A separate seeded place stream selects a saved plan at the native encounter
+chance. Omitted descriptors retain their ordinary population path.
+
+Native factory variants, group tactics, leader behavior and member modifiers
+remain authoritative. Admission reserves the whole selected formation and checks
+physical clearance between staged bodies before exposing any member. Blocked
+seats and population saturation cannot publish a partial group or its cache.
+Clearance and field/cache admission count the selected formation's original
+seats, including casualties. Continue remaps native squad IDs and preserves roles,
+names, homes and wounds without resurrecting the leader. Magic cohorts and
+formations require separate owners in this first adapter.
+
+Nineteen worldmass probes, both native encounter probes (63 checks), all three
+type checks and generation QA pass (869 cases across three seeds, zero failures,
+four existing warnings). The new probe also verifies an actual level-seven
+Spear Net in unmodified seed-42 country. Initial fixture failures were its
+assumption that ordinary rarity must be explicitly named, and use of the strict
+manifest serializer on a native brain containing undefined fields; native
+representations are now compared correctly.
+
+The isolated client inspects that natural country formation, then separately
+exercises a controlled level-four shaman/brute/skirmisher group. All four bodies
+move; native rallying howl, spark, fan of blades, claw, sunder and heavy strike
+execute with the same hero and zero zone loads. The hero is invulnerable in this
+fixture, so it is not evidence of balanced challenge. Controlled leader removal
+and a survivor wound then persist exactly through browser Continue, with group
+IDs normalized for comparison. Country, combat, survivor and continued images
+were inspected. The initial scripted-input fixture used a numeric held-slot
+array; the documented boolean input shape corrected it. No input contract changed.
+
+The climate critic finished at level two with earned Splitting, two magic items
+and Change the Rhythm, and verified native Save & Exit/Continue. The verdict is
+mixed leaning negative: the split-shot payoff worked, but the reviewer would not
+voluntarily continue that expedition. This remains an unmet acceptance bar.
+The hotbar commit passed 336 remote probes and Pages publication; exact live
+metadata identified 066fd1ce, and remote QA retained seed 2171026257 and all six
+ordinary-save sentinels. Broadleaf publication is in progress separately.

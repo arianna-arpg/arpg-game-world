@@ -10,6 +10,7 @@ export interface MassProgressionSpec {
   variation?: { field: string; levels: number; start: number; span: number };
 }
 export interface MassPopulation {
+  encounters?: import('./encounters').MassEncounterSpec;
   level: number; table: { id: string; weight: number }[];
   /** Optional saved quotas over explicit native identities, independent of the hero. */
   limits?: { source: string; ids: string[]; max: number }[];

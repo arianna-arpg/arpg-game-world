@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_worldmass_formations.ts', status: 'green', tier: 'fast', why: 'snapshotted native formation roles, strict habitat/level gates, atomic seats, wounds/casualties, Continue and dynamic clearance' },
   { probe: 'probe_worldmass_welcome.ts', status: 'green', tier: 'fast', why: 'worldmass spatial dialogue, native departure invitations, visibility, dismissal and saved receipts' },
   { probe: 'probe_worldmass_rewards.ts', status: 'green', tier: 'fast', why: 'earned native support choices, account/fit gates, capacity retries, persistence and legacy provenance labels' },
   { probe: 'probe_worldmass_population.ts', status: 'green', tier: 'fast', why: 'worldmass saved composition quotas, native roster preservation, seeded slots and legacy encounter identity' },

@@ -27,10 +27,14 @@ import { MassFields, type MassFieldSave } from './fields';
 import { massGarrisonSlots, recordMassGuardian, settleMassClearance } from './clearance';
 import { MassBirths, validMassBirth, type MassBirth } from './birth';
 import { applyMassTerritory, validateMassTerritory } from './territory';
+import { massFormation, validateMassEncounters } from './encounters';
+import { applyEncounterGroup, readEncounterGroup, type EncounterGroupState } from '../engine/encounterGroups';
+import { ENCOUNTER_GROUPS, ENCOUNTER_GROUP_CFG } from '../data/encounterGroups';
 
 interface MassEnemySave {
   id: string; monster: string; level: number; x: number; y: number; life: number; scale: number;
   magicPack?: MagicPackState; name?: string;
+  encounterGroup?: EncounterGroupState;
   birth?: MassBirth;
   anchor?: { x: number; y: number }; leashHome?: boolean;
 }
@@ -116,7 +120,13 @@ export class WorldMassRuntime {
     for (const c of config.content) {
       if (c.site?.altars?.length && config.terrain.places.some(p=>p.content===c.id))
         throw new Error('Worldmass altar fields require a finite journey owner');
-      for (const row of [c, ...(c.levels ?? [])]) validatePopulationLimits(row);
+      for (const row of [c, ...(c.levels ?? [])]) {
+        validatePopulationLimits(row);
+        if(row.encounters!==undefined){
+          validateMassEncounters(row.encounters,row.level);
+          if(c.magicPack)throw Error('Worldmass formations and magic cohorts require separate owners');
+        }
+      }
       if (c.magicPack) {
         const def = Object.hasOwn(MAGIC_PACKS,c.magicPack.mechanic) ? MAGIC_PACKS[c.magicPack.mechanic] : undefined;
         const factions = new Set([c.table,...(c.levels?.map(l=>l.table) ?? [])].flat().map(r=>MONSTERS[r.id]?.faction));
@@ -155,6 +165,7 @@ export class WorldMassRuntime {
       for (const e of save.enemies) if (!e.id || !MONSTERS[e.monster] || !Number.isSafeInteger(e.level) || e.level < 1
         || ![e.x, e.y, e.life, e.scale].every(Number.isFinite) || e.life <= 0 || e.scale <= 0
         || e.magicPack && (!readMagicPack(e.magicPack) || typeof e.name !== 'string')
+        || e.encounterGroup !== undefined && (!readEncounterGroup(e.encounterGroup) || typeof e.name !== 'string' || !!e.magicPack)
         || (this.config.nativeBirthSource || e.birth !== undefined) && !validMassBirth(e.birth!)
         || e.anchor !== undefined && (!e.anchor || ![e.anchor.x,e.anchor.y].every(Number.isFinite))
         || e.leashHome !== undefined && (typeof e.leashHome !== 'boolean' || e.leashHome && !e.anchor))
@@ -214,7 +225,7 @@ export class WorldMassRuntime {
     world.notices = []; world.texts = []; // obsolete graph directions do not describe this expedition
     world.landPartyAt(save?.player ?? this.settlement?.spawn ?? { x: 12, y: 12 }, { tier: this.resumeTier });
     if (save) {
-      const groups = new Map<number,number>();
+      const groups = new Map<number,number>(), formations = new Map<number,number>();
       for (const e of save.enemies) {
         const a = this.births.create(world,e.id,e.monster,e.level,e.scale,e.birth);
         applyMassTerritory(a, this.config.territory);
@@ -224,6 +235,13 @@ export class WorldMassRuntime {
           a.magicPack = { ...pack, id: groups.get(pack.id)! };
           a.squadId = a.magicPack.id; a.squadLeader = a.magicPack.leader === 1;
           world.promoteMonster(a,'magic',1,{distinctName:e.name});
+        }
+        const formation=readEncounterGroup(e.encounterGroup);
+        if(formation){
+          if(!formations.has(formation.id))formations.set(formation.id,world.nextSquadId());
+          applyEncounterGroup(a,{...formation,id:formations.get(formation.id)!});
+          if(!a.encounterGroup)throw Error('Invalid saved worldmass formation member');
+          a.name=e.name!;
         }
         a.pos = { x: e.x, y: e.y }; a.fromZoneGen = true; a.fillResources();
         a.aiAnchor = { ...(e.anchor ?? a.pos) };
@@ -303,6 +321,10 @@ export class WorldMassRuntime {
     const level = Math.max(spec.minLevel, Math.min(spec.maxLevel, this.levelAt(pos) + (content.levelOffset ?? 0)));
     return content.levels.find(row => row.level === level)!;
   }
+  private populationCount(place: Pick<MassPlace,'id'|'content'|'center'>): number {
+    return massFormation(this.populationFor(place).encounters,this.generator.run.seed,place.id)?.seats.length
+      ?? this.config.content.find(c=>c.id===place.content)!.count;
+  }
   /** Survived-death wakes retain the run's land and consequences. */
   wake(world: World): void { world.landPartyAt(this.settlement?.spawn ?? { x: 12, y: 12 }); this.nearKey = ''; }
   update(world: World, boot = false): void {
@@ -338,7 +360,7 @@ export class WorldMassRuntime {
     // the first live update, so that restore cannot erase native level-up healing.
     if(this.attached)for(const found of this.sites.discovered){
       const content=this.config.content.find(c=>c.id===found.content);
-      if(content)settleMassClearance(world,this.state,found,content,id=>this.natives.has(id),this.populationFor(found).level);
+      if(content)settleMassClearance(world,this.state,found,content,id=>this.natives.has(id),this.populationFor(found).level,this.populationCount(found));
     }
     // Retained actors still need their original solid scenery after a reload,
     // even when the hero saved far away. Dependency pages do not spawn content.
@@ -373,13 +395,16 @@ export class WorldMassRuntime {
         || Math.hypot(q.x - world.player.pos.x, q.y - world.player.pos.y) > this.config.populationRadius) continue;
       const content = this.config.content.find(c => c.id === p.content)!;
       const population = this.populationFor(p);
+      const formation=massFormation(population.encounters,this.generator.run.seed,p.id);
+      const count=formation?.seats.length??content.count;
       const coordinated = content.magicPack && population.level >= MAGIC_PACKS[content.magicPack.mechanic].minLevel;
-      const staging = coordinated && !this.state.claimed('native-cohort',p.id);
+      const staging = formation ? !this.state.claimed('native-formation',p.id)
+        : coordinated && !this.state.claimed('native-cohort',p.id);
       const staged: { id: string; actor: Actor }[] = [];
-      if (content.site || coordinated) {
+      if (content.site || coordinated || formation) {
         // Reserve the whole site's/cohort's native population before introducing loot.
         // Saturation delays an encounter instead of furnishing free rewards.
-        const identities = [...Array.from({ length: content.count }, (_, i) => canonical([p.id, i])),
+        const identities = [...Array.from({ length: count }, (_, i) => canonical([p.id, i])),
           ...(content.site?.fixtures ?? []).map((_, i) => canonical([p.id, 'fixture', i]))];
         const missing = identities.filter(id => !this.natives.has(id) && !this.state.claimed('fallen', id)).length;
         if (this.natives.size + missing > this.config.maxPopulation) continue;
@@ -401,22 +426,37 @@ export class WorldMassRuntime {
       // with a lossy zone-enemy memo just to meet a streaming quota.
       const rng = massRandom(this.generator.run.seed, ['population', p.id, content.source]);
       const selected: string[] = [];
-      for (let i = 0; i < content.count; i++) {
+      for (let i = 0; i < count; i++) {
         const id = canonical([p.id, i]);
-        const monster = rng.weighted(populationChoices(population, selected)).id;
+        const seat=formation?.seats[i];
+        const monster = seat?.monster ?? rng.weighted(populationChoices(population, selected)).id;
         selected.push(monster);
         const angle = rng.range(0, Math.PI * 2), radius = rng.range(30, p.radius * .65);
         const def = MONSTERS[monster];
         const scale = def.scaleVariance ? rng.range(...def.scaleVariance) : 1;
         if (this.natives.has(id) || this.state.claimed('fallen', id) || this.natives.size >= this.config.maxPopulation) continue;
-        const spot = this.walk.snapToWalkable({ x: q.x + Math.cos(angle) * radius, y: q.y + Math.sin(angle) * radius });
+        const offset=seat?siteOffset(p,seat.x,seat.y):undefined;
+        const spot = this.walk.snapToWalkable({ x: q.x + (offset?.x ?? Math.cos(angle) * radius),
+          y: q.y + (offset?.y ?? Math.sin(angle) * radius) });
         if (!this.walk.isWalkable(spot.x, spot.y) || Math.hypot(spot.x - q.x, spot.y - q.y) > p.radius) continue;
         const a = this.births.create(world,id,monster,population.level,scale);
         applyMassTerritory(a, this.config.territory);
         const bodyRadius = a.radius * (coordinated ? RARITY_DEFS.magic.sizeMul : 1);
-        const free = world.findFreeSpot(spot, bodyRadius);
-        if (!this.walk.isWalkable(free.x, free.y) || world.pointInSolid(free.x, free.y, bodyRadius)
-          || Math.hypot(free.x - q.x, free.y - q.y) > p.radius) continue;
+        let free = world.findFreeSpot(spot, bodyRadius);
+        const fits=()=>this.walk.isWalkable(free.x,free.y)&&!world.pointInSolid(free.x,free.y,bodyRadius)
+          &&Math.hypot(free.x-q.x,free.y-q.y)<=Math.min(p.radius,formation
+            ? ENCOUNTER_GROUPS[formation.recipe].radius??ENCOUNTER_GROUP_CFG.radius : p.radius)
+          &&(!formation||staged.every(s=>Math.hypot(free.x-s.actor.pos.x,free.y-s.actor.pos.y)
+            >=bodyRadius+s.actor.radius+ENCOUNTER_GROUP_CFG.bodyClearance));
+        if(formation){
+          const seating=massRandom(this.generator.run.seed,['formation-seating',p.id,i]);
+          for(let attempt=1;!fits()&&attempt<ENCOUNTER_GROUP_CFG.placementAttempts;attempt++){
+            const jitter=attempt*ENCOUNTER_GROUP_CFG.placementJitter;
+            free=world.findFreeSpot({x:spot.x+seating.range(-jitter,jitter),y:spot.y+seating.range(-jitter,jitter)},bodyRadius);
+          }
+        }
+        if(!fits())continue;
+        if(offset)a.facing=offset.angle;
         a.pos = free; a.aiAnchor = {...free}; a.fromZoneGen = true; a.fillResources();
         if (staging) staged.push({id,actor:a});
         else {
@@ -426,7 +466,19 @@ export class WorldMassRuntime {
       }
       // Admission is atomic: never expose half a cohort, then heal/promote
       // its wounded survivors when a later placement finally succeeds.
-      if (staging && staged.length === content.count
+      if(formation&&staging&&staged.length===count){
+        const squad=world.nextSquadId();
+        staged.forEach(({actor},i)=>applyEncounterGroup(actor,{id:squad,recipe:formation.recipe,slot:formation.seats[i].slot}));
+        if(staged.every(s=>!!s.actor.encounterGroup)){
+          for(const {id,actor} of staged){
+            if(actor.squadLeader)actor.name=ENCOUNTER_GROUPS[formation.recipe].name+' — '+actor.name;
+            actor.fillResources();this.natives.set(id,actor);world.actors.push(actor);
+            if(content.site?.completion)recordMassGuardian(world,this.state,id,actor);
+          }
+          this.state.claim('native-formation',p.id);
+        }
+      }
+      if (!formation && staging && staged.length === count
         && world.promoteMagicPack(staged.map(s=>s.actor),content.magicPack!.mechanic)) {
         for (const {id,actor} of staged) {
           this.natives.set(id,actor); world.actors.push(actor);
@@ -436,7 +488,7 @@ export class WorldMassRuntime {
         world.refreshMagicPacks();
       }
       if (content.site) {
-        const ready = massGarrisonSlots(content,p.id)
+        const ready = massGarrisonSlots(content,p.id,count)
           .every(id => this.natives.has(id) || this.state.claimed('fallen', id));
         if (ready) this.fields.admit(world,p,content.site.altars ?? [],q,population.level);
         const cache = content.site.cache;
@@ -459,6 +511,7 @@ export class WorldMassRuntime {
       enemies.push({ id, monster: a.defId!, level: a.level, x: a.pos.x, y: a.pos.y, life: a.life, scale: a.spawnScale ?? 1,
         anchor: {...(a.aiAnchor ?? a.pos)}, ...(a.aiPhase === 'leash_home' ? {leashHome:true} : {}),
         ...(a.magicPack ? { magicPack: a.magicPack, name: a.name } : {}),
+        ...(a.encounterGroup ? {encounterGroup:a.encounterGroup,name:a.name} : {}),
         ...(this.births.of(a) ? {birth:this.births.of(a)} : {}) });
     }
     return JSON.parse(JSON.stringify({ schema: 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),

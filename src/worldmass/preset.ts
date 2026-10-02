@@ -10,6 +10,7 @@ import { openingPopulation, reserveMassGuardians } from './population';
 import { STARTER_SUPPORTS } from '../meta/account';
 import { nativeMassSite, type MassSiteSpec } from './sites';
 import { MASS_BIOME_FAMILIES, MASS_CLIMATE_ECOLOGY } from './biomes';
+import { nativeMassEncounters } from './encounters';
 
 export const MASS_ZONE = 'worldmass_expedition';
 export interface MassContent extends MassPopulation {
@@ -104,7 +105,10 @@ export function massAdventure(): MassAdventure {
   return freezeData({ terrain, progression, nativeBirthSource: 'worldmass/native-birth-v1', theme: JSON.parse(JSON.stringify(TILESETS.downs.theme)) as ZoneDef['theme'],
     territory: { source: 'worldmass/encounter-territory', radius: 620 },
     content: [...families.map(f => ({ id: f.id, source: 'tilesets/' + f.id + '/packs', level: 1, count: 3,
-      levels: populations(TILESETS[f.id].packs.table),
+      levels: populations(TILESETS[f.id].packs.table).map(row=>{
+        const encounters=nativeMassEncounters(f.id,TILESETS[f.id].biome??f.id,row.level);
+        return {...row,...(encounters?{encounters}:{})};
+      }),
       table: presenceTable(TILESETS[f.id].packs.table, 1, id => MONSTERS[id]?.presence)
         .filter(r => MONSTERS[r.id] && !MONSTERS[r.id].habitat)
         .map(r => ({ id: r.id, weight: r.weight })) })),
