@@ -52,21 +52,22 @@ app.whenReady().then(async()=>{
     assert.equal(result.fatal,null);assert.equal(result.rows.length,12);assert.ok(result.markers>0);
     const meters=await run(()=>{
       const w=__game.world(),r=__game.renderer,ctx=r.ctx,fill=ctx.fillRect,draw=r.drawActor,actors=w.actors;
-      const painted=[];let base;
+      const painted=[];let base, previousRect;
       w.actors=[w.player,...focusQA.enemies];
       r.drawActor=function(...args){base??=ctx.getTransform();return draw.apply(this,args);};
       ctx.fillRect=function(x,y,width,height){
         if(base&&ctx.fillStyle==='#c03030'&&height===4){
           const m=ctx.getTransform();
-          painted.push({x:(m.a*x+m.e-base.e)/base.a,y:(m.d*y+m.f-base.f)/base.d,width,height});
+          painted.push({x:(m.a*x+m.e-base.e)/base.a,y:(m.d*y+m.f-base.f)/base.d,width,height,capacity:previousRect?.width});
         }
+        previousRect={x,y,width,height};
         return fill.call(this,x,y,width,height);
       };
       let result;
       try{
         r.render(w);
         result={painted,bodies:w.actors.map(a=>({x:a.pos.x,y:a.pos.y,r:a.radius})),
-          expected:focusQA.enemies.map(a=>a.radius*2.2*Math.max(0,Math.min(1,a.life/a.maxLife()))),
+          expected:focusQA.enemies.map(a=>Math.max(0,Math.min(1,a.life/a.maxLife()))),
           state:JSON.stringify(w.actors.map(a=>[a.id,a.pos,a.life,a.casting]))};
         r.render(w);
         result.statePreserved=result.state===JSON.stringify(w.actors.map(a=>[a.id,a.pos,a.life,a.casting]));
@@ -77,7 +78,7 @@ app.whenReady().then(async()=>{
     assert.ok(meters.statePreserved,'rendering may not move bodies or alter native pools/casts');
     assert.equal(meters.painted.length,meters.expected.length,'every wounded crowd member retains its native life bar');
     for(const [i,t] of meters.painted.entries()){
-      assert.ok(Math.abs(t.width-meters.expected[i])<.001,'meter keeps the exact native life fraction');
+      assert.ok(t.capacity>0&&Math.abs(t.width/t.capacity-meters.expected[i])<.001,'meter keeps the exact native life fraction');
       for(const b of meters.bodies)assert.ok(!(t.x+t.width>b.x-b.r&&t.x<b.x+b.r&&t.y+t.height>b.y-b.r&&t.y<b.y+b.r),'life meter covers a visible body');
     }
     for(const t of result.rows)for(const b of result.bodies){

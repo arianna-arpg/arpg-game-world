@@ -51,7 +51,12 @@ and fields client harnesses. Native statues use the parameterized carving in
 `render/vis/statue.ts` and the generic `DoodadVisualDef.raisedSurface` lane:
 own ground shadow cannot erase raised art; other blockers, room/roof/canopy
 and tier rules still apply. Verify sightveil, visibility_stability and
-`balance/raised-surfaces-ui.cjs` after a scoped build. This is an opening
+`balance/raised-surfaces-ui.cjs` after a scoped build. Nearby armed enemies keep
+readable native life meters before their first wound; `World.isPressingFoe`
+shares the discipline gate's threat identity. Hover names share bounded body/
+meter clearance and reserve space against damage values. Tune names/threats in
+`VIS_CFG.combatFocus`; verify combatfocus, fielddiscipline and the real
+`balance/combat-identity-ui.cjs` alongside the crowd renderer harness. This is an opening
 network, not global roads,
 campaign migration or distant AI.
 Worldmass opening population quotas live in `population.ts` and are saved per

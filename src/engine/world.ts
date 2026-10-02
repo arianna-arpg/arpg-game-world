@@ -23006,13 +23006,16 @@ export class World {
    *  for every calm-gated dwell: the field discipline's swap gate and the
    *  harvest rite's arming gate read the same truth. */
   private pressingFoeNear(at: Vec2, tier = 0, radius = SWAP_DISCIPLINE_CFG.foeRadius): boolean {
-    const r = radius;
-    if (r <= 0) return false;
-    return this.actors.some(a =>
-      a.team === 'enemy' && !a.dead && !a.passive && !a.untargetable
-      && a.tier === tier // the sovereignty gate: a foe on another story presses nobody
+    return this.actors.some(a => this.isPressingFoe(a, at, tier, radius));
+  }
+
+  /** Shared threat identity for native discipline and nearby body readouts.
+   * Presentation may use a shorter reach; it never changes the surgery gate. */
+  isPressingFoe(a: Actor, at: Vec2, tier = 0, radius = SWAP_DISCIPLINE_CFG.foeRadius): boolean {
+    return radius > 0 && a.team === 'enemy' && !a.dead && !a.passive && !a.untargetable
+      && a.tier === tier
       && (a.skills.some(s => s) || (a.defId ? !!MONSTERS[a.defId]?.spawner : false))
-      && dist(a.pos, at) <= r);
+      && dist(a.pos, at) <= radius;
   }
 
   swapRefusal(seat: Seat, kind: 'unlearn' | 'socket' | 'unsocket', skillId?: string): string | null {

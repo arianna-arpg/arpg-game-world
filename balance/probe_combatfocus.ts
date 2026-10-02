@@ -127,3 +127,19 @@ try{
  disabled.forEach((r,i)=>assert.deepEqual(r,{x:positions[i].x-16,y:positions[i].y-33,w:32,h:16}));
 }finally{(mc as {enabled:boolean}).enabled=enabled;}
 console.log('PASS combat meter groups clear visible bodies, stay stable, return home and ignore hidden competitors without changing actors');
+
+
+const nameTune={...VIS_CFG.combatFocus.names,enabled:true as boolean},names=new CombatTextLayout(()=>nameTune);
+const nameBodies=[{x:470,y:440,w:60,h:95},{x:525,y:420,w:40,h:80},{x:490,y:388,w:46,h:12}];
+const nameKey={},nameAt={x:500,y:448},nameBounds={x:0,y:0,w:1280,h:850};
+names.begin(nameBodies,nameBounds);
+const namePos=names.place(nameKey,nameAt,188,26);
+const nameBox={x:namePos.x-94-nameTune.gap,y:namePos.y-26-nameTune.gap,w:188+nameTune.gap*2,h:26+nameTune.gap*2};
+assert.ok(!nameBodies.some(r=>combatRectsOverlap(nameBox,r)),'whole two-line name clears bodies and meters');
+names.begin(nameBodies,nameBounds);
+assert.deepEqual(names.place(nameKey,nameAt,188,26),namePos,'a stationary hover name remains stable');
+names.forget(nameKey);names.begin([],nameBounds);
+assert.deepEqual(names.place(nameKey,nameAt,188,26),nameAt,'a new hover session can use the now-clear native anchor');
+nameTune.enabled=false;names.begin(nameBodies,nameBounds);
+assert.deepEqual(names.place(nameKey,nameAt,188,26),nameAt,'name layout has an independent opt-out');
+console.log('PASS grouped hover-name placement clears bodies/meters and remains stable with its own configuration');

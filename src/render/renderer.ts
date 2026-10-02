@@ -1010,7 +1010,11 @@ export class Renderer {
    *  name itself (an exactly-duplicate subtitle stays unprinted; the two
    *  line seats never move). The identification lens: name the entity under
    *  the cursor, skip the bestiary recall. */
+  private readonly hoverNameLayout = new CombatTextLayout(() => VIS_CFG.combatFocus.names);
+  private hoverNameRect?: { x: number; y: number; w: number; h: number };
+  private hoverNameActor: Actor | null = null;
   private drawEliteNameHover(world: World): void {
+    this.hoverNameRect = undefined;
     const allMode = (this.getSettings?.().hoverNameplates ?? 'named') === 'all';
     // "The cursor" is wherever aim truly lives: the pad's reticle when the
     // pad owns it, else the mouse — nameplates follow the same point skills do.
@@ -1033,6 +1037,10 @@ export class Renderer {
       if (reveal <= 0.02) continue;
       bd = d; best = a; bestReveal = reveal;
     }
+    if (best !== this.hoverNameActor) {
+      if (this.hoverNameActor) this.hoverNameLayout.forget(this.hoverNameActor);
+      this.hoverNameActor = best;
+    }
     if (!best) return;
     const { ctx } = this;
     const def = MONSTERS[best.defId!];
@@ -1043,14 +1051,30 @@ export class Renderer {
     ctx.textAlign = 'center';
     ctx.globalAlpha = bestReveal;
     ctx.fillStyle = tint;
-    ctx.font = 'bold 12px Verdana';
-    ctx.fillText(best.name, best.pos.x, best.pos.y - best.radius - 20);
+    const nc = VIS_CFG.combatFocus.names, hasSub = !!sub && sub !== best.name;
+    ctx.font = nc.nameFont;
+    let width = ctx.measureText(best.name).width;
+    if (hasSub) { ctx.font = nc.subFont; width = Math.max(width, ctx.measureText(sub!).width); }
+    const height = nc.nameHeight + (hasSub ? nc.subHeight : 0);
+    this.hoverNameLayout.begin([...this.visibleCombatBodies(world).map(a => combatBodyRect(a.pos, a.radius)),
+      ...this.combatMeters.footprints],
+      { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom });
+    const pos = this.hoverNameLayout.place(best,
+      { x: best.pos.x, y: best.pos.y - best.radius - (hasSub ? 8 : 20) }, width, height);
+    this.hoverNameRect = { x: pos.x - width / 2 - nc.gap, y: pos.y - height - nc.gap,
+      w: width + nc.gap * 2, h: height + nc.gap * 2 };
+    ctx.strokeStyle = nc.edge; ctx.lineWidth = nc.outline;
+    ctx.font = nc.nameFont;
+    const nameY = pos.y - (hasSub ? nc.subHeight : 0);
+    if (nc.outline > 0) ctx.strokeText(best.name, pos.x, nameY);
+    ctx.fillText(best.name, pos.x, nameY);
     // Pack identity is the only caption; its world effects explain the mechanic.
     // Other named bodies may retain a concise species/rarity subtitle.
-    if (sub && sub !== best.name) {
+    if (hasSub) {
       ctx.globalAlpha = 0.75 * bestReveal;
-      ctx.font = '10px Verdana';
-      ctx.fillText(sub, best.pos.x, best.pos.y - best.radius - 8);
+      ctx.font = nc.subFont;
+      if (nc.outline > 0) ctx.strokeText(sub!, pos.x, pos.y);
+      ctx.fillText(sub!, pos.x, pos.y);
     }
     ctx.restore();
   }
@@ -6047,10 +6071,14 @@ export class Renderer {
     }
     ctx.restore();
 
-    // anatomyState keeps painted windows and independent part pools readable
-    // even before the first hit; ordinary full-life actors remain bar-less.
-    if (a !== world.player && (a.life < a.maxLife() - 0.5 || anatomyState.weakpoints.length || anatomyState.parts.length || anatomyState.part)) {
-      const bw = Math.max(a.radius * 2.2, anatomyState.weakpoints.length ? ANATOMY_CUE_CFG.overheadWidth : 0);
+    // Armed nearby hostiles remain identifiable before a first hit. Use the
+    // same structural threat identity as field discipline, never a species list
+    // or hidden AI target. Native visibility/tier admission still owns this pass.
+    const tc = VIS_CFG.combatFocus.threats;
+    const nearbyThreat = tc.enabled && world.isPressingFoe(a, world.player.pos, world.player.tier, tc.radius);
+    if (a !== world.player && (nearbyThreat || a.life < a.maxLife() - 0.5 || anatomyState.weakpoints.length || anatomyState.parts.length || anatomyState.part)) {
+      const bw = Math.max(a.radius * 2.2, nearbyThreat ? tc.minWidth : 0,
+        anatomyState.weakpoints.length ? ANATOMY_CUE_CFG.overheadWidth : 0);
       const frac = clamp(a.life / a.maxLife(), 0, 1);
       const parts=anatomyState.parts.length || anatomyState.segments.some(s=>s.frac<1);
       const meterWidth=parts?Math.max(bw,90):bw;
@@ -7405,6 +7433,14 @@ export class Renderer {
     ctx.restore();
   }
 
+  private visibleCombatBodies(world: World): Actor[] {
+    return world.actors.filter(a => !a.dead && !a.burrow && !a.statuses.some(s => STATUS_DEFS[s.id]?.conceals)
+      && a.pos.x+a.radius > this.cam.x && a.pos.y+a.radius > this.cam.y
+      && a.pos.x-a.radius < this.cam.x+this.canvas.width/this.zoom
+      && a.pos.y-a.radius < this.cam.y+this.canvas.height/this.zoom
+      && this.labelRevealAt(world,a.pos) > .05);
+  }
+
   private readonly combatMeters = new CombatMeterLayout();
   private readonly combatTextLayout = new CombatTextLayout();
   private drawTexts(world: World): void {
@@ -7414,12 +7450,9 @@ export class Renderer {
     // OWN settings (the host mints one truth; every seat curates its view).
     const kindPrefs = this.getSettings?.().floatKinds;
     const focus = VIS_CFG.combatFocus;
-    const visible = world.actors.filter(a => !a.dead && !a.burrow && !a.statuses.some(s => STATUS_DEFS[s.id]?.conceals)
-      && a.pos.x+a.radius > this.cam.x && a.pos.y+a.radius > this.cam.y
-      && a.pos.x-a.radius < this.cam.x+this.canvas.width/this.zoom
-      && a.pos.y-a.radius < this.cam.y+this.canvas.height/this.zoom
-      && this.labelRevealAt(world,a.pos) > .05);
-    this.combatTextLayout.begin([...visible.map(a=>combatBodyRect(a.pos,a.radius)),...this.combatMeters.footprints],
+    const visible = this.visibleCombatBodies(world);
+    this.combatTextLayout.begin([...visible.map(a=>combatBodyRect(a.pos,a.radius)),...this.combatMeters.footprints,
+      ...(this.hoverNameRect ? [this.hoverNameRect] : [])],
       {x:this.cam.x,y:this.cam.y,w:this.canvas.width/this.zoom,h:this.canvas.height/this.zoom});
     for (const t of world.texts) {
       if (t.kind && !floatKindOn(kindPrefs, t.kind)) continue;

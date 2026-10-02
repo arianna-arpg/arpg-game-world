@@ -13,13 +13,16 @@ export function combatRectsOverlap(a: CombatRect, b: CombatRect): boolean {
 /** Client-only placement. Values, lifetimes, colours and host positions remain
  * untouched. Stable offsets keep an existing number from snapping back whenever
  * an older one expires; collision can push it farther as a body approaches. */
+interface TextPlacementTuning { readonly enabled: boolean; readonly gap: number; readonly step: number; readonly rings: number }
 export class CombatTextLayout {
+  constructor(private tuning: () => TextPlacementTuning = () => VIS_CFG.combatFocus.numbers) {}
   private offsets = new WeakMap<object, Vec2>();
   private occupied: CombatRect[] = [];
   private bounds?: CombatRect;
   begin(bodies: CombatRect[], bounds?: CombatRect): void { this.occupied = bodies.slice(); this.bounds = bounds; }
+  forget(key: object): void { this.offsets.delete(key); }
   place(key: object, pos: Vec2, width: number, height: number): Vec2 {
-    const c = VIS_CFG.combatFocus.numbers;
+    const c = this.tuning();
     if (!c.enabled) return pos;
     const rect = (p: Vec2): CombatRect => ({ x: p.x - width/2 - c.gap, y: p.y - height - c.gap,
       w: width + c.gap*2, h: height + c.gap*2 });

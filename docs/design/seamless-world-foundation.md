@@ -942,3 +942,27 @@ Verify sightveil and visibility_stability, the native visibility client and
 `balance/raised-surfaces-ui.cjs` against a scoped preview build. The last harness
 captures actual canvas pixels for exposed and externally covered monuments,
 checks far-side shadow and unchanged combat state, and verifies mutation layering.
+
+### Nearby threat identity and hover-name clearance
+
+Extended ordinary play found a small armed pursuer that read as harmless wildlife
+until attacked, and a long native hover name across a close group. Nearby armed
+enemies now retain native life meters at full health, with configurable minimum
+width and reach under `VIS_CFG.combatFocus.threats`. The renderer shares
+`World.isPressingFoe` with the unchanged native field-discipline predicate:
+unarmed prey, passive/untargetable bodies, other stories and out-of-range bodies
+do not acquire this healthy threat meter. Existing wounded/anatomy meters remain.
+No AI, damage, life, chase, calm interval or socket restriction changes.
+
+A native hovered name and its optional subtitle move together through the same
+bounded placement utility as damage values, using independent name settings.
+They clear visible bodies and displaced meters, and damage values reserve the
+resulting name footprint. The source's native reveal/selection rules still gate
+the whole plate. Position remains stable during one hover; leaving that target
+releases the remembered offset. Saturated space retains the name at its original
+anchor rather than dropping information. These remain names, not mechanic prose.
+
+Checks: combatfocus and fielddiscipline probes, game/launcher/sim type checks,
+the existing crowd-render harness (native health fractions and reward clearance)
+and `balance/combat-identity-ui.cjs` (actual hovered crowd name, healthy armed rat,
+unarmed wildlife, passive/untargetable/range/story exclusions and unchanged state).
