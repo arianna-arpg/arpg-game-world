@@ -29071,6 +29071,7 @@ export class World {
   }
 
   explorationRewardOffers() { return this.massRuntime?.rewards.offers(this) ?? []; }
+  explorationRewardReceipts() { return this.massRuntime?.rewards.receipts() ?? []; }
 
   claimExplorationReward(source: string, choiceId: string, seat: Seat = this.localSeat): boolean {
     if (seat !== this.localSeat || this.clientActionHook || seat.actor.dead || seat.actor.downed

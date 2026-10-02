@@ -93,6 +93,18 @@ export class MassRewards {
       }),
     }));
   }
+  /** Historical receipt, never a claim that the gem remains in the pack or fitted. */
+  receipts() {
+    return this.entries.flatMap(r => {
+      const choice = r.choices.find(c => c.gem.supportId === r.claimed);
+      if (!choice) return [];
+      const gem = instance(choice.gem);
+      return [{ source: r.source, label: r.label, name: gem.def.name,
+        description: [gem.def.description,
+          ...(gem.def.rollBase ? veinLines(gem.def.rollBase, gem.rolled) : [])].join(' '),
+        level: gem.level }];
+    });
+  }
   claim(world: World, source: string, choice: string): 'claimed' | 'full' | 'refused' {
     const row = this.entries.find(r => r.source === source && !r.claimed);
     const c = row?.choices.find(c => c.gem.supportId === choice);

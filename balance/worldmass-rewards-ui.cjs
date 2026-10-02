@@ -6,7 +6,7 @@ const file=path.join(dir,'worldmass-rewards-ui.log');fs.writeFileSync(file,'STAR
 const log=v=>fs.appendFileSync(file,JSON.stringify(v)+'\n');
 app.setPath('userData',path.join(dir,'rewards-profile-'+process.pid));app.disableHardwareAcceleration();
 app.whenReady().then(async()=>{
-  const root=path.resolve(__dirname,'../dist-preview'),server=http.createServer((req,res)=>{
+  const root=path.resolve(__dirname,process.env.HOLLOW_WAKE_QA_BUILD||'../dist-preview'),server=http.createServer((req,res)=>{
     const p=new URL(req.url,'http://localhost').pathname,f=path.resolve(root,'.'+(p==='/'?'/index.html':p));
     if(!f.startsWith(root+path.sep)||!fs.existsSync(f)){res.writeHead(404);return res.end();}
     res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.css')?'text/css':'text/html');
@@ -60,10 +60,14 @@ app.whenReady().then(async()=>{
       document.querySelector('[data-exploration-reward][data-reward-choice="concentrated"]').click();__game.step(2);
       const w=__game.world(),item=w.meta.items.find(i=>i.gem?.supportId==='concentrated');
       if(!item)throw Error('Reward did not reach native inventory');
-      __game.ui.hideAll();
-      w.lastCombatAt=w.time;__game.ui.toggleInventory();
-      if(getComputedStyle(document.getElementById('skills-panel')).display==='none')document.querySelector('[data-buildflap]').click();
-      __game.step(2);
+      const receipt=document.querySelector('[data-exploration-receipt]');
+      if(!receipt?.textContent.includes('Concentrated Power') || document.querySelector('[data-exploration-offer]'))
+        throw Error('Chosen receipt did not replace the offer');
+      w.lastCombatAt=w.time;
+      document.querySelector('[data-exploration-skills]').click();__game.step(2);
+      if(getComputedStyle(document.getElementById('skills-panel')).display==='none'
+        || getComputedStyle(document.getElementById('world-map')).display!=='none')
+        throw Error('Receipt did not navigate to native Skills and inventory');
       const refusal=document.querySelector('[data-socket-refusal]');
       if(!refusal || !refusal.textContent.includes('the blood is still hot'))throw Error('Socket reason hidden from the Skills panel');
       __game.ui.hideAll();
@@ -94,10 +98,12 @@ app.whenReady().then(async()=>{
     log({socket});assert.ok(socket.supports.includes('concentrated'));assert.equal(socket.bag,false);assert.equal(socket.fatal,null);await shot('socketed');
     await run(async()=>{__game.ui.hideAll();__game.save();await new Promise(r=>setTimeout(r,250));});
     const paid=await resume();assert.equal(paid.offers[0].claimed,'concentrated');
-    const final=await run(()=>({pending:__game.world().explorationRewardOffers().length,
+    const final=await run(()=>({receipts:__game.world().explorationRewardReceipts(),pending:__game.world().explorationRewardOffers().length,
       supports:__game.world().meta.knownSkills.get('cleave').sockets.map(s=>s?.def.id)}));
-    log({paid:paid.offers,final});assert.equal(final.pending,0);assert.ok(final.supports.includes('concentrated'));
-    log('PASS physical cache, fixed pending Continue, journal choice, native bag drag/socket and claimed/socketed Continue');
+    log({paid:paid.offers,final});assert.equal(final.pending,0);assert.ok(final.supports.includes('concentrated'));assert.equal(final.receipts[0].name,'Concentrated Power');
+    await run(()=>{__game.ui.hideAll();__game.ui.openMapTab('quests');__game.step(2);});
+    await shot('receipt');
+    log('PASS physical cache, fixed pending Continue, journal choice/receipt, native Skills handoff and bag drag/socket, claimed/socketed Continue');
   }catch(error){log(error.stack||String(error));process.exitCode=1;}
   finally{clearTimeout(timeout);win.destroy();server.close();app.exit(process.exitCode||0);}
 });

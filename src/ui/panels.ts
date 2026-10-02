@@ -9580,6 +9580,12 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         this.refreshMap();
       });
     });
+    this.worldMap.querySelectorAll<HTMLButtonElement>('[data-exploration-skills]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (this.mapOpen) this.toggleMap();
+        this.toggleBuildPanel(world.localSeat.id, 'show');
+      });
+    });
     this.worldMap.querySelectorAll<HTMLButtonElement>('[data-quest-reward]').forEach(btn => {
       btn.addEventListener('click', () => {
         world.requestMeta({ t: 'questReward', questId: btn.dataset.questReward!, choiceId: btn.dataset.rewardChoice! });

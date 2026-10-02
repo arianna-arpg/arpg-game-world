@@ -112,6 +112,9 @@ gates choose the offers. Journal cards retain exact payloads and a once-only
 receipt across Continue; full packs keep the offer. Ordinary loot remains.
 Verify worldmass_rewards and hidden `balance/worldmass-rewards-ui.cjs` against
 the scoped build (cache → pending Continue → choice → pointer socket → Continue).
+`explorationRewardReceipts` retains historical choices and a native Skills/inventory
+shortcut in the journal; receipt text does not assert present item ownership or
+socketing. The rewards client covers this handoff and the saved receipt.
 Old manifests keep their former rewards. Memory provenance labels preserve old
 cache identities internally while presenting a registered Chest/Found name.
 

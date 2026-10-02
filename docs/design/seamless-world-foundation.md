@@ -1325,3 +1325,18 @@ records real canvas arcs and a native blocked hit; it reproduces the old 120/240
 mismatch and verifies 240/240 after the change. Screenshots were inspected.
 This corrects spatial feedback; it does not change guard strength or assert
 that the broader combat-enjoyment criterion has passed.
+
+### Exploration reward handoff
+
+Choosing a cache support now leaves a historical Journal receipt with the actual
+chosen definition and rolled effect text, plus a direct request to show the
+native Skills/inventory workspace. It does not auto-socket, re-mint the item or
+claim that a previously chosen gem remains in the pack. Failed/full-pack claims
+leave the offer intact, and receipts derive from the existing saved claim.
+
+The rewards probe covers full-pack absence, once-only payout and receipts after
+socketing/Continue. The isolated client follows the real Journal button into
+Skills, checks the native combat restriction, then returns to Lastlight and
+drags the earned gem into Cleave. The fitted gem and receipt survive Continue;
+the receipt screenshot was inspected. All three type checks pass. This addresses
+a repeated navigation criticism without changing the independent verdicts.

@@ -3,7 +3,7 @@ import { esc } from './dom';
 
 /** Native journal cards, with a separate source/claim identity from quest ledgers. */
 export function explorationRewardHtml(world: World): string {
-  return world.explorationRewardOffers().map(r => `<section data-exploration-offer style="padding:12px;margin:6px 0 16px;background:#211d28;border:1px solid #9b8055;border-radius:6px">
+  const offers = world.explorationRewardOffers().map(r => `<section data-exploration-offer style="padding:12px;margin:6px 0 16px;background:#211d28;border:1px solid #9b8055;border-radius:6px">
     <h3 style="color:#e4cb97;margin:0 0 8px">${esc(r.label)} · a recovered gem</h3>
     <p style="font-size:12px;line-height:1.6;color:#c9c1b1">Choose one support for your skills. The cache's other spoils are yours as well.</p>
     ${r.choices.map(c => `<button data-exploration-reward="${esc(r.source)}" data-reward-choice="${esc(c.id)}"
@@ -14,4 +14,12 @@ export function explorationRewardHtml(world: World): string {
       <span>${esc(c.description)}</span><br><small>1 × 1 · Choose this gem</small></button>`).join('')}
     <p style="font-size:11px;color:#aaa18e">Socket the gem into a matching skill in your inventory. This choice waits if your pack is full, and remains here when you close the journal.</p>
   </section>`).join('');
+  const receipts = world.explorationRewardReceipts().map(r => `<section data-exploration-receipt
+    style="padding:12px;margin:6px 0 16px;background:#1b211e;border:1px solid #6c8067;border-radius:6px">
+    <h3 style="color:#c7dbbb;margin:0 0 8px">${esc(r.label)} · recovered</h3>
+    <p style="margin:6px 0"><strong>${esc(r.name)}</strong> · level ${r.level}</p>
+    <p style="font-size:12px;line-height:1.6;color:#c9c1b1">${esc(r.description)}</p>
+    <button data-exploration-skills>Open Skills &amp; inventory</button>
+  </section>`).join('');
+  return offers + receipts;
 }

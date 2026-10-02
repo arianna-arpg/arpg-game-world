@@ -46,6 +46,7 @@ w.meta.items=[];
 while(autoPlace(w.meta.items,makeSupportGemItem(mintSupportInstance(SUPPORTS.precision,1)))) {}
 assert.equal(rewards.claim(w,'earned','concentrated'),'full');
 assert.deepEqual(rewards.snapshot(),saved);
+assert.deepEqual(rewards.receipts(),[],'full pack cannot display a paid receipt');
 w.meta.items=[];
 assert.equal(rewards.claim(w,'earned','concentrated'),'claimed');
 assert.equal(rewards.claim(w,'earned','concentrated'),'refused');
@@ -56,6 +57,12 @@ assert.ok(instanceMods(cleave).length>before.length);
 assert.ok(cleave.sockets.some(s=>s?.def.id==='concentrated'));
 assert.equal(w.meta.items.length,0);
 assert.equal(new MassRewards(spec,77,rewards.snapshot()).pending,false);
+const receipt = rewards.receipts();
+assert.equal(receipt.length,1);
+assert.equal(receipt[0].name,SUPPORTS.concentrated.name);
+assert.equal(receipt[0].description,SUPPORTS.concentrated.description);
+assert.deepEqual(new MassRewards(spec,77,rewards.snapshot()).receipts(),receipt,
+ 'the chosen reward receipt survives socketing and Continue without minting another gem');
 console.log('PASS locked/forged claims refuse, full pack retries, exact one payout, native socket changes Cleave and claimed saves stay claimed');
 
 assert.throws(()=>validateMassRewards({...spec,maxRewards:0}));
@@ -98,6 +105,7 @@ assert.equal(live.completedQuests.size,0,'exploration never manufactures quest c
 const next=makeSimWorld('warrior',25),paid=serializeCharacter(live);assert.ok(next.adoptWorldState(paid.world));
 next.startWorldMass(paid.world!.worldmass!.state.run.seed,paid.world!.worldmass!);
 assert.equal(next.explorationRewardOffers().length,0);
+assert.deepEqual(next.explorationRewardReceipts(),live.explorationRewardReceipts());
 console.log('PASS real cache timer, normal loot, menu glow, character save/Continue, seat/death gates and no quest forgery');
 
 delete cfg.rewards;
