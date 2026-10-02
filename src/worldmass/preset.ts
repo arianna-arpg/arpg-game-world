@@ -9,6 +9,7 @@ import { frontierLandmarks } from './landmarks';
 import { openingPopulation, reserveMassGuardians } from './population';
 import { STARTER_SUPPORTS } from '../meta/account';
 import { nativeMassSite, type MassSiteSpec } from './sites';
+import { MASS_BIOME_FAMILIES, MASS_CLIMATE_ECOLOGY } from './biomes';
 
 export const MASS_ZONE = 'worldmass_expedition';
 export interface MassContent extends MassPopulation {
@@ -40,13 +41,9 @@ export interface MassAdventure {
 /** Snapshot existing content vocabulary, then own it for this run. Future
  * packages can supply another descriptor without replacing engine rules. */
 export function massAdventure(): MassAdventure {
-  const families = [
-    { id: 'downs', field: 'moisture', min: -.3, max: .35 },
-    { id: 'forest', field: 'moisture', min: .35, max: 2 },
-    { id: 'desert', field: 'moisture', min: -2, max: -.3 },
-  ];
+  const families = MASS_BIOME_FAMILIES;
   const terrain: MassSpec = {
-    id: 'hollow-wake-country', version: 5, addressSpan: 960, terrainCell: 30,
+    id: 'hollow-wake-country', version: 6, addressSpan: 960, terrainCell: 30,
     fields: [
       { id: 'elevation', base: .15, layers: [
         { id: 'continent', period: 18000, amplitude: .7 },
@@ -57,6 +54,10 @@ export function massAdventure(): MassAdventure {
         { id: 'country', period: 8200, amplitude: .8 },
         { id: 'local', period: 1700, amplitude: .25 },
       ] },
+      { id: 'temperature', base: .08, layers: [
+        { id: 'country', period: 12800, amplitude: .75 },
+        { id: 'local', period: 2100, amplitude: .18 },
+      ] },
       { id: 'rock', base: 0, layers: [{ id: 'outcrops', period: 540, amplitude: 1 }] },
       { id: 'danger', base: 0, layers: [{ id: 'country', period: 7000, amplitude: 1 }] },
     ],
@@ -64,15 +65,20 @@ export function massAdventure(): MassAdventure {
       { id: 'lake', source: 'regions/water', priority: 100, when: [{ field: 'elevation', max: -.25 }], region: 'water', color: '#223c45', biome: 'downs' },
       { id: 'shore', source: 'regions/sand', priority: 90, when: [{ field: 'elevation', max: -.16 }], region: 'sand', color: '#595340', biome: 'downs' },
       { id: 'outcrop', source: 'regions/wall', priority: 80, when: [{ field: 'rock', min: .65 }, { field: 'elevation', min: .2 }], region: 'wall', color: '#56594f', biome: 'highland' },
+      {id:'frozen-ground',source:'regions/ice',priority:25,
+        when:[{field:'temperature',max:-.35},{field:'rock',min:.20}],region:'ice',color:'#82999f',biome:'tundra'},
+      {id:'wetland-pools',source:'regions/swamp',priority:25,
+        when:[{field:'temperature',min:-.35},{field:'moisture',min:.35},{field:'elevation',max:.22},{field:'rock',max:-.18}],
+        region:'swamp',color:'#30483d',biome:'marsh'},
       ...families.map(f => ({ id: f.id, source: 'tilesets/' + f.id, priority: 10,
-        when: [{ field: f.field, min: f.min, max: f.max }], region: f.id === 'desert' ? 'sand' : 'ground',
-        color: TILESETS[f.id].theme.ground?.palette?.[2] ?? TILESETS[f.id].theme.floor,
+        when: f.when, region: f.region,
+        color: f.color ?? TILESETS[f.id].theme.ground?.palette?.[2] ?? TILESETS[f.id].theme.floor,
         biome: TILESETS[f.id].biome ?? f.id })),
       { id: 'fallback', source: 'tilesets/downs', priority: 0, when: [], region: 'ground', color: '#31391c', biome: 'downs' },
     ],
     places: [...families.map(f => ({ id: f.id + '-habitat', version: 1, content: f.id,
       period: 1100, chance: .7, radius: 180, jitter: .7, priority: 1,
-      when: [{ field: 'elevation', min: -.1 }, { field: f.field, min: f.min, max: f.max }] })),
+      when: [{ field: 'elevation', min: -.1 }, ...f.when] })),
       { id: 'wayside-camp', version: 1, content: 'wayside-camp', period: 1600, chance: .65,
         radius: 180, jitter: .65, priority: 3, when: [{ field: 'elevation', min: 0 }],
         surface: { region: 'ground', color: '#45412c' } },
@@ -134,6 +140,7 @@ export function massAdventure(): MassAdventure {
         { id: 'south-ruin', content: 'fallen-court', edge: 'south', distance: 1850, radius: 330, jitter: .12 },
       ] },
     ecology: { source: 'worldmass/country-scenery', spacing: 192, rules: [
+      ...MASS_CLIMATE_ECOLOGY,
       { id: 'downs', biomes: ['downs'], chance: .62, cluster: { count: [2, 4], spread: 46 }, pieces: [
         { kind: 'tree', weight: 4, radius: [28, 48] }, { kind: 'rock', weight: 2, radius: [14, 24] },
         { kind: 'grass', weight: 4, radius: [24, 44] }, { kind: 'berry_bush', weight: 1, radius: [24, 36] },

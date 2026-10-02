@@ -13,6 +13,15 @@ isolation and Continue. See `docs/design/seamless-world-foundation.md`.
 
 The continuous-world experiment is specified in `docs/design/seamless-world-foundation.md` (branch `codex/seamless-world-foundation`). `src/worldmass/` implements durable addresses, seeded fields/place claims, sparse consequences, bounded terrain residency and an opt-in `/?worldmass` terrain/combat prototype. It uses native movement, skills, region effects, cell-ray occlusion and character saves. Verify `npm run probe -- worldmass` plus persistence/sightveil/cistern; after a build, `balance/worldmass-ui.cjs` checks the hidden real client with isolated saves. Each new run gets fresh land. Live frame rebasing, distant simulation, native place/campaign migration and full consequence paging remain unfinished; read the document's implementation ledger before extending or describing the mode.
 
+Worldmass version 6 snapshots temperature/moisture/elevation families through
+`worldmass/biomes.ts`, adding native tundra and marsh rosters and scenery.
+Ice, mud and swamp use the existing physical region effects; dry route patches
+retain ground behavior. Optional ecology `regions` lists admit those surfaces,
+while omission preserves older ground/sand-only recipes. Verify worldmass_climate
+and `balance/climate-world-ui.cjs` for generated views, native travel and both
+new/actual previous-version browser Continue. This does not localize weather,
+snow cover or the full native biome-specific systems.
+
 Worldmass version 5 adds a finite opening circuit through `src/worldmass/journey.ts`,
 four native landmark compositions and seeded biome scenery through `ecology.ts`.
 Optional `MassJourneySpec.extensions` attach further places to existing route

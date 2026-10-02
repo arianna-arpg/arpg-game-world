@@ -88,7 +88,7 @@ for (const seed of [1, 42, 451, 7108, 99871]) {
   assert.equal(replay.walk.regionAt(floor.x, floor.y), 'wall', 'Continue cannot repair an edited trail');
   assert.ok(resumed.doodads.some(d => d.pos.x === treePos.x && d.pos.y === treePos.y && d.felled));
   assert.ok(!resumed.doodads.some(d => d.pos.x === removed.x && d.pos.y === removed.y));
-  assert.equal(replay.generator.run.version, 5);
+  assert.equal(replay.generator.run.version, stored.state.run.version);
   const found = journey.places[0], c = w.chests.find(c => c.rewardSource === canonical([found.id, 'cache']))!;
   c.opened = true;
   w.player.pos = journey.local(found);

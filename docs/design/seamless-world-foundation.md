@@ -1587,3 +1587,39 @@ The initial fixture was affected by a queued browser frame after setup; draining
 that callback and initializing both facing samples stabilized the controlled rig.
 Gallery and intact/worn/broken game frames were inspected. A fresh eastern Rogue
 review continues on its earlier fixed build, without these visual changes.
+
+### Continuous climate families
+
+New version-six descriptors add temperature to the existing elevation and
+moisture fields. Configurable family rows choose downs, forest, desert, marsh
+and tundra, with native presence tables for every saved level. Cold ground
+admits ice; low wet ground admits mud and swamp. Native terrain statuses remain
+authoritative, including traction and movement penalties. Existing dry route
+consequences keep their ground behavior. Lakes, shores and outcrops retain their
+higher-priority surface rules.
+
+Ecology recipes can now declare accepted native regions. Marsh recipes use
+reeds, dead trees, ferns, peat mounds, sunken logs and wisps; tundra recipes use
+conifers, stone, drifts, dead trees and icicles. Omitted lists preserve the old
+ground/sand admission and random sequence. The complete configuration remains
+saved per expedition. This does not yet localize weather, seasonal snow cover,
+cold survival or each native biome's larger bespoke generation systems.
+
+All three type checks, seventeen worldmass probes and the scoped build pass.
+Generation QA passes 869 cases across three seeds with zero failures and four
+existing warnings. Climate surveys cover three seeds and 1,323 geographic
+samples, native rosters at all 24 levels, reversed reads and extreme normalized
+addresses. The initial edge assertion incorrectly compared an unnormalized
+address's provenance; normalizing it fixes that test. Two older probes expected
+a fixed version-five number; they now verify the actual saved version.
+
+The isolated real client shows actual seeded cold country and marshland.
+A controlled dry-route-to-swamp walk keeps the same hero with no scene load,
+changes native speed from 200 to 90, and travels about 45 rather than 100 units
+over equal thirty-frame intervals. New climate terrain, local scenery, seed,
+location and complete configuration survive browser Continue. A separate save
+created by the actual pre-climate build also retains its exact version-five
+configuration, location, seed and terrain when continued by the new build.
+Screenshots were inspected. These controlled fixtures do not demonstrate a
+naturally earned distant journey or establish that the critic's concerns about
+travel and encounter pacing have been resolved.

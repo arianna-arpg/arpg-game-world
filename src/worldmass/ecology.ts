@@ -1,4 +1,5 @@
 import type { World } from '../engine/world';
+import { regionKind } from '../world/regions';
 import { hasDoodadRule, bodyRadiusOf, blocksMovement, type Doodad, type DoodadKind } from '../engine/levelgen';
 import { cellKey, localOffset, type MassCell } from './address';
 import type { WorldMassRuntime } from './runtime';
@@ -10,6 +11,8 @@ export interface MassEcologySpec {
   rules: {
     id: string;
     biomes: string[];
+    /** Omitted preserves ground/sand admission in existing run descriptors. */
+    regions?: string[];
     chance: number;
     /** Omitted preserves the original single-piece lattice and its save IDs. */
     cluster?: { count: [number, number]; spread: number };
@@ -41,6 +44,9 @@ export function validateMassEcology(spec: MassEcologySpec, span: number): void {
       || r.cluster.count[1] < r.cluster.count[0] || !Number.isFinite(r.cluster.spread)
       || r.cluster.spread <= 0 || r.cluster.spread > spec.spacing * .24))
       throw new Error('Invalid scenery cluster');
+    else if (r.regions !== undefined && (!Array.isArray(r.regions) || !r.regions.length || r.regions.length>16
+      || new Set(r.regions).size!==r.regions.length || r.regions.some(id=>!regionKind(id))))
+      throw new Error('Invalid scenery regions');
     else if (!r.id || !r.biomes.length || !Number.isFinite(r.chance) || r.chance < 0 || r.chance > 1
       || !r.pieces.length || r.pieces.some(p => !hasDoodadRule(p.kind) || !Number.isFinite(p.weight) || p.weight <= 0
       || p.radius.some(n => !Number.isFinite(n) || n <= 0 || n > spec.spacing * .42) || p.radius[1] < p.radius[0]))
@@ -114,10 +120,8 @@ export class MassEcology {
           const rng = massRandom(this.mass.generator.run.seed, [this.spec.source, key, x, y]);
           const pos = { x: origin.x + x + spacing * (.25 + rng.next() * .5), y: origin.y + y + spacing * (.25 + rng.next() * .5) };
           const terrain = this.mass.stream.sample(this.mass.walk.at(pos.x, pos.y));
-          if (terrain.region !== 'ground' && terrain.region !== 'sand')
-            continue;
           const rule = this.spec.rules.find(r => r.biomes.includes(terrain.biome));
-          if (!rule || !rng.chance(rule.chance))
+          if (!rule || !(rule.regions ?? ['ground','sand']).includes(terrain.region) || !rng.chance(rule.chance))
             continue;
           const count = rule.cluster ? rng.int(...rule.cluster.count) : 1;
           const anchor = pos, cluster: Doodad[] = [];
@@ -128,7 +132,7 @@ export class MassEcology {
             const row = rng.weighted(rule.pieces), radius = rng.range(...row.radius);
             if (rule.cluster) {
               const ground = this.mass.stream.sample(this.mass.walk.at(pos.x, pos.y));
-              if (!rule.biomes.includes(ground.biome) || ground.region !== 'ground' && ground.region !== 'sand') continue;
+              if (!rule.biomes.includes(ground.biome) || !(rule.regions ?? ['ground','sand']).includes(ground.region)) continue;
             }
             if (this.mass.settlement?.reserves(pos.x, pos.y, radius) || this.mass.journey?.reserves(pos, radius)
               || sites.some(p => {
