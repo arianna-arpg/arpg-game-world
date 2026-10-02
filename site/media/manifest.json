@@ -24,6 +24,26 @@
     "announcement-v2/announcement-v2-720.h264.mp4": {
       "bytes": 12126768,
       "sha256": "925cae05a5698ee9b508b71b007a107c09390c55643aa775ffb13dc0f09d16c6"
+    },
+    "announcement-v3/announcement-v3-1440.av1.mp4": {
+      "bytes": 13479499,
+      "sha256": "ce6ff3af1eb5d0c04c671641c3e353564061af78ea6a2c067df4926e08ddfc3d"
+    },
+    "announcement-v3/announcement-v3-1080.av1.mp4": {
+      "bytes": 9172326,
+      "sha256": "76118095baa63e4b6576208a0f2bf1c8af0e3cf6a836087e53e274c6951f97b3"
+    },
+    "announcement-v3/announcement-v3-720.av1.mp4": {
+      "bytes": 5779044,
+      "sha256": "70feb5e1d736e635f20a04c7b9b08a14c7d0c401e5424b214bbb186a523497a1"
+    },
+    "announcement-v3/announcement-v3-1080.hevc.mp4": {
+      "bytes": 14281856,
+      "sha256": "c14a356a2b1a2bfc396926f45f116f70cb8f30e13cde79552c992b3ed413809d"
+    },
+    "announcement-v3/announcement-v3-720.h264.mp4": {
+      "bytes": 9841436,
+      "sha256": "1936cb3f53a02631627bd1a2d5f241623656951ca41a7dc838e22a65544f3712"
     }
   },
   "archives": {

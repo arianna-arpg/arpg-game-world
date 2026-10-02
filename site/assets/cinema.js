@@ -51,6 +51,31 @@
     films: {
       announcement: {
         title: 'Hollow Wake · Announcement Trailer',
+        cut: 2,               // raised for the third trailer, so every visitor sees it once
+        aspect: 16 / 9,
+        duration: 60,
+        sources: [
+          { family: 'av1',  height: 1440, src: 'media/announcement-v3/announcement-v3-1440.av1.mp4',  type: 'video/mp4; codecs="av01.0.12M.10"' },
+          { family: 'av1',  height: 1080, src: 'media/announcement-v3/announcement-v3-1080.av1.mp4',  type: 'video/mp4; codecs="av01.0.08M.10"' },
+          { family: 'av1',  height: 720,  src: 'media/announcement-v3/announcement-v3-720.av1.mp4',   type: 'video/mp4; codecs="av01.0.05M.10"' },
+          { family: 'hevc', height: 1080, src: 'media/announcement-v3/announcement-v3-1080.hevc.mp4', type: 'video/mp4; codecs="hvc1.2.4.L120.B0"' },
+          { family: 'h264', height: 720,  src: 'media/announcement-v3/announcement-v3-720.h264.mp4',  type: 'video/mp4; codecs="avc1.64001F"' },
+        ],
+        /* narration text, shown while the film plays muted (show: 'muted' |
+           'always' | 'never'); band: the picture rows it sits in, here the
+           lower letterbox bar, so a line never covers the picture */
+        captions: { src: 'media/announcement-v3/narration.en.vtt', lang: 'en', show: 'muted', band: [0.872, 1] },
+        /* the exit: 'shatter' breaks the screen from the viewer's click (or
+           from at, as a share of the picture, when the film ends); 'fade'
+           lifts the darkness instead */
+        exit: { kind: 'shatter', at: [0.5, 0.44], pace: 1 },   // the insignia's eye, under the title
+      },
+      /* THE ARCHIVE: the previous cut, kept whole as a fallback. It is in no
+         feature row and no trigger, so the site never offers it; it plays at
+         ?cinema=announcement-v2, and pointing a feature row at it brings it
+         back. Its files stay on the site-media release and in the manifest. */
+      'announcement-v2': {
+        title: 'Hollow Wake · Announcement Trailer (previous cut)',
         cut: 1,
         aspect: 16 / 9,
         duration: 60,
@@ -61,14 +86,8 @@
           { family: 'hevc', height: 1080, src: 'media/announcement-v2/announcement-v2-1080.hevc.mp4', type: 'video/mp4; codecs="hvc1.2.4.L120.B0"' },
           { family: 'h264', height: 720,  src: 'media/announcement-v2/announcement-v2-720.h264.mp4',  type: 'video/mp4; codecs="avc1.64001F"' },
         ],
-        /* narration text, shown while the film plays muted (show: 'muted' |
-           'always' | 'never'); band: the picture rows it sits in, here the
-           lower letterbox bar, so a line never covers the picture */
-        captions: { src: 'media/announcement/narration.en.vtt', lang: 'en', show: 'muted', band: [0.872, 1] },
-        /* the exit: 'shatter' breaks the screen from the viewer's click (or
-           from at, as a share of the picture, when the film ends); 'fade'
-           lifts the darkness instead */
-        exit: { kind: 'shatter', at: [0.5, 0.44], pace: 1 },   // the insignia's eye, under the title
+        captions: { src: 'media/announcement-v2/narration.en.vtt', lang: 'en', show: 'muted', band: [0.872, 1] },
+        exit: { kind: 'shatter', at: [0.5, 0.44], pace: 1 },
       },
     },
 
