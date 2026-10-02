@@ -7,7 +7,13 @@ import type { MassState } from './state';
 import type { MassSettlement } from './settlement';
 import { localOffset, type MassCell } from './address';
 import { canonical, freezeData, massRandom } from './random';
+export interface MassJourneyExtension {
+  id: string; from: string; content: string;
+  offset: { x: number; y: number }; radius: number; jitter: number;
+}
 export interface MassJourneySpec {
+  /** Optional ordered branches from a destination or preceding branch identity. */
+  extensions?: MassJourneyExtension[];
   source: string;
   width: number;
   color: string;
@@ -105,6 +111,39 @@ export class MassJourney {
           y: a.q.y < 0 || b.q.y < 0 ? Math.min(a.q.y, b.q.y) : Math.max(a.q.y, b.q.y) };
         trails.push({ id: a.p.id + '/circuit', points: [a.q, corner, b.q], width: spec.width });
       }
+    const extensionIds=new Set(spec.destinations.map(d=>d.id));
+    if (spec.extensions!==undefined && (!Array.isArray(spec.extensions)||spec.extensions.length>12))
+      throw new Error('Invalid frontier extensions');
+    for (const e of spec.extensions ?? []) {
+      const parent=places.find(p=>p.recipe===e.from);
+      const length=Math.hypot(e.offset?.x,e.offset?.y);
+      if (!e.id || extensionIds.has(e.id) || !parent || !e.content
+        || !Number.isFinite(length) || length<parent.radius+e.radius+spec.width+60 || length>6000
+        || !Number.isFinite(e.radius) || e.radius<160 || e.radius>512
+        || !Number.isFinite(e.jitter) || e.jitter<0 || e.jitter>.2)
+        throw new Error('Invalid frontier extension');
+      extensionIds.add(e.id);
+      const rng=massRandom(generator.run.seed,[spec.source,e.id]),start=this.local(parent);
+      const side={x:-e.offset.y/length,y:e.offset.x/length},bend=rng.range(-e.jitter,e.jitter)*length;
+      const end={x:start.x+e.offset.x+side.x*bend,y:start.y+e.offset.y+side.y*bend};
+      const middle={x:(start.x+end.x)/2+side.x*rng.range(-80,80),
+        y:(start.y+end.y)/2+side.y*rng.range(-80,80)};
+      const points=[start,middle,end];
+      // Extensions cannot punch a second path through the settlement. They
+      // start from already connected places and remain outside its reserve.
+      for(let i=1;i<points.length;i++) {
+        const a=points[i-1],b=points[i],steps=Math.ceil(Math.hypot(b.x-a.x,b.y-a.y)/generator.spec.terrainCell);
+        for(let n=0;n<=steps;n++)
+          if(town.reserves(a.x+(b.x-a.x)*n/steps,a.y+(b.y-a.y)*n/steps,spec.width/2))
+            throw new Error('Frontier extension crosses settlement reserve');
+      }
+      if(town.reserves(end.x,end.y,e.radius))throw new Error('Frontier extension overlaps settlement');
+      const id=canonical([generator.run.runId,spec.source,e.id]);
+      places.push({id,content:e.content,recipe:e.id,radius:e.radius,center:walk.at(end.x,end.y),
+        source:{generator:generator.spec.id,version:generator.spec.version,rule:e.id,
+          source:spec.source,stream:canonical([spec.source,e.id])}});
+      trails.push({id:id+'/approach',points,width:spec.width});
+    }
     this.places = freezeData(places);
     this.trails = freezeData(trails);
     for (let i = 0; i < places.length; i++)

@@ -31,6 +31,7 @@ interface MassEnemySave {
   id: string; monster: string; level: number; x: number; y: number; life: number; scale: number;
   magicPack?: MagicPackState; name?: string;
   birth?: MassBirth;
+  anchor?: { x: number; y: number }; leashHome?: boolean;
 }
 export interface MassAdventureSave {
   schema: 1; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
@@ -92,7 +93,12 @@ export class WorldMassRuntime {
     if (config.progression) validateMassProgression(config.progression, config.terrain);
     if (config.ecology) validateMassEcology(config.ecology, config.terrain.addressSpan);
     if (config.journey && !config.settlement) throw new Error('Frontier routes require a settlement');
-    for (const d of config.journey?.destinations ?? []) {
+    if(config.journey?.extensions!==undefined && !Array.isArray(config.journey.extensions))
+      throw new Error('Invalid frontier extensions');
+    const journeyPlaces=[...(config.journey?.destinations ?? []),...(config.journey?.extensions ?? [])];
+    if(journeyPlaces.reduce((n,d)=>n+(config.content.find(c=>c.id===d.content)?.site?.altars?.length??0),0)>16)
+      throw new Error('Frontier field count exceeds its checkpoint budget');
+    for (const d of journeyPlaces) {
       const site = config.content.find(c => c.id === d.content)?.site;
       if (!site) throw new Error('Unresolved frontier destination');
       validateMassSite(site, d.radius);
@@ -145,7 +151,9 @@ export class WorldMassRuntime {
       for (const e of save.enemies) if (!e.id || !MONSTERS[e.monster] || !Number.isSafeInteger(e.level) || e.level < 1
         || ![e.x, e.y, e.life, e.scale].every(Number.isFinite) || e.life <= 0 || e.scale <= 0
         || e.magicPack && (!readMagicPack(e.magicPack) || typeof e.name !== 'string')
-        || (this.config.nativeBirthSource || e.birth !== undefined) && !validMassBirth(e.birth!))
+        || (this.config.nativeBirthSource || e.birth !== undefined) && !validMassBirth(e.birth!)
+        || e.anchor !== undefined && (!e.anchor || ![e.anchor.x,e.anchor.y].every(Number.isFinite))
+        || e.leashHome !== undefined && (typeof e.leashHome !== 'boolean' || e.leashHome && !e.anchor))
         throw new Error('Invalid worldmass survivor');
       this.state.restore(save.state);
       if (save.state.terrain.some(p => !regionKind(p.region))) throw new Error('Unresolved saved worldmass terrain');
@@ -213,6 +221,9 @@ export class WorldMassRuntime {
           world.promoteMonster(a,'magic',1,{distinctName:e.name});
         }
         a.pos = { x: e.x, y: e.y }; a.fromZoneGen = true; a.fillResources();
+        a.aiAnchor = { ...(e.anchor ?? a.pos) };
+        // Preserve the native return hysteresis, never an unwarned attack phase.
+        if(e.leashHome) a.aiPhase = 'leash_home';
         a.life = Math.min(a.maxLife(), e.life); this.natives.set(e.id, a); world.actors.push(a);
       }
       restoreZoneContents(world, save.contents);
@@ -375,7 +386,7 @@ export class WorldMassRuntime {
           const spot = world.findFreeSpot({ x: q.x + offset.x, y: q.y + offset.y }, a.radius);
           if (!this.walk.isWalkable(spot.x, spot.y) || world.pointInSolid(spot.x, spot.y, a.radius)
             || Math.hypot(spot.x - q.x, spot.y - q.y) > p.radius) continue;
-          a.pos = spot; a.fromZoneGen = true; a.fillResources();
+          a.pos = spot; a.aiAnchor = {...spot}; a.fromZoneGen = true; a.fillResources();
           this.natives.set(id, a); world.actors.push(a);
         }
       }
@@ -398,7 +409,7 @@ export class WorldMassRuntime {
         const free = world.findFreeSpot(spot, bodyRadius);
         if (!this.walk.isWalkable(free.x, free.y) || world.pointInSolid(free.x, free.y, bodyRadius)
           || Math.hypot(free.x - q.x, free.y - q.y) > p.radius) continue;
-        a.pos = free; a.fromZoneGen = true; a.fillResources();
+        a.pos = free; a.aiAnchor = {...free}; a.fromZoneGen = true; a.fillResources();
         if (staging) staged.push({id,actor:a});
         else {
           this.natives.set(id, a); world.actors.push(a);
@@ -438,6 +449,7 @@ export class WorldMassRuntime {
     for (const [id, a] of this.natives) {
       if (a.dead) { this.state.claim('fallen', id); continue; }
       enemies.push({ id, monster: a.defId!, level: a.level, x: a.pos.x, y: a.pos.y, life: a.life, scale: a.spawnScale ?? 1,
+        anchor: {...(a.aiAnchor ?? a.pos)}, ...(a.aiPhase === 'leash_home' ? {leashHome:true} : {}),
         ...(a.magicPack ? { magicPack: a.magicPack, name: a.name } : {}),
         ...(this.births.of(a) ? {birth:this.births.of(a)} : {}) });
     }

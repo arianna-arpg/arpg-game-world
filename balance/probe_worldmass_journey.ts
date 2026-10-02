@@ -13,8 +13,8 @@ for (const seed of [1, 42, 451, 7108, 99871]) {
   const w = makeSimWorld('warrior', seed);
   w.startWorldMass(seed);
   const m = w.massRuntime!, journey = m.journey!;
-  assert.equal(journey.places.length, 4);
-  assert.equal(journey.trails.length, 8);
+  assert.equal(journey.places.length, 5);
+  assert.equal(journey.trails.length, 9);
   assert.ok(m.ecology!.stats.pieces > 0);
   for (const trail of journey.trails)
     for (let i = 1; i < trail.points.length; i++) {

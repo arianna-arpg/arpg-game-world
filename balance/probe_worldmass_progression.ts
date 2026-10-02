@@ -33,11 +33,13 @@ for (const bad of [
 ]) assert.throws(() => validateMassProgression(bad, cfg.terrain));
 assert.throws(() => geographicLevel(policy, Infinity, { danger: 0 }));
 assert.throws(() => geographicLevel(policy, 2000, {}));
-for (const c of cfg.content) {
+const geographicContent=cfg.content.filter(c=>c.levels);
+assert.ok(geographicContent.length>=9,'existing geographic rosters retain their full level envelopes');
+for (const c of geographicContent) {
   assert.equal(c.levels!.length, 24);
   assert.ok(c.levels!.every(r => r.table.length > 0));
 }
-assert.ok(cfg.content.some(c => canonical(c.levels![0].table) !== canonical(c.levels![23].table)),
+assert.ok(geographicContent.some(c => canonical(c.levels![0].table) !== canonical(c.levels![23].table)),
   'the native presence envelopes change composition, not only hit points');
 console.log('PASS configurable geographic bands, regional variation, caps, validation and native roster diversity');
 

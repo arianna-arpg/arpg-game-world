@@ -67,6 +67,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_memorylesson.ts', status: 'green', tier: 'fast', why: 'first Memory menu/item attention, failed recall, successful graduation and account persistence' },
   { probe: 'probe_combatfocus.ts', status: 'green', tier: 'fast', why: 'combatFocus numeric crowd clearance, stable offsets and unchanged host text' },
   { probe: 'probe_worldmass_cohorts.ts', status: 'green', tier: 'fast', why: 'native coordinated landmark encounters, warning-safe Continue, wounds/casualties, complete admission and legacy populations' },
+  { probe: 'probe_worldmass_extensions.ts', status: 'green', tier: 'fast', why: 'connected journey branches, unchanged base circuit and legacy saves, fixed native guardian/field, saved native home/return, chaining and invalid-route refusal' },
   { probe: 'probe_worldmass_journey.ts', status: 'green', tier: 'fast', why: 'connected frontier routes, reachability, native scenery consequences, surveyed paths and legacy worlds' },
   { probe: 'probe_worldmass_progression.ts', status: 'green', tier: 'fast', why: 'geographic danger, native level envelopes, stable encounter rewards and legacy expedition compatibility' },
   { probe: 'probe_doorpress.ts', status: 'green', tier: 'fast', why: 'optional physical door approach, native collision/persistence, legacy idle and combat/story/mechanism refusals' },

@@ -110,6 +110,8 @@ export function massAdventure(): MassAdventure {
           .filter(r => MONSTERS[r.id] && !MONSTERS[r.id].habitat).map(r => ({ id: r.id, weight: r.weight })),
         site: nativeMassSite('pillaged_township', 'Pillaged Ruin', { x: 60, y: 80, holdSeconds: 5 }) },
       ...frontierLandmarks().map(landmark => {
+        if(landmark.population)return {...landmark.population,id:landmark.id,source:landmark.site.source,
+          count:landmark.count,site:landmark.site};
         const levels=populations(landmark.undead ? FACTIONS.undead.table : TILESETS.downs.packs.table)
           .map(row=>landmark.site.completion ? reserveMassGuardians(row,landmark.count) : row);
         return { ...levels[0], id: landmark.id, source: landmark.site.source,
@@ -119,6 +121,8 @@ export function massAdventure(): MassAdventure {
     ],
     rewards: { source: 'worldmass/first-cache-support', supports: [...STARTER_SUPPORTS], level: 1, maxRewards: 1 },
     journey: { source: 'worldmass/frontier-circuit', width: 120, color: '#62573e', clearingColor: '#454331',
+      extensions: [{ id: 'north-stoneward', from: 'north-ruin', content: 'stoneward',
+        offset: {x: -400, y: -1500}, radius: 390, jitter: .08 }],
       destinations: [
         { id: 'west-camp', content: 'cinderwatch', edge: 'west', distance: 1050, radius: 310, jitter: .12 },
         { id: 'north-ruin', content: 'broken-gate', edge: 'north', distance: 1550, radius: 330, jitter: .16 },

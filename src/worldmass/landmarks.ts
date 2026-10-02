@@ -8,6 +8,8 @@ interface Landmark {
   undead: boolean;
   count: number;
   site: MassSiteSpec;
+  /** Optional fixed native encounter roster; otherwise use geographic presence. */
+  population?: import('./progression').MassPopulation;
   magicPack?: { source: string; mechanic: string };
 }
 /** Compositions of the native scenery vocabulary. The complete result is copied
@@ -62,5 +64,17 @@ export function frontierLandmarks(): Landmark[] {
       prop('bone_pile', -95, 90, 30), prop('tombstone', 140, -35, 20),
       prop('brush', 10, -195, 38),
     ], 'bloodfont'),
+    { ...compose('stoneward', null, 'The Stoneward', { x: 0, y: -130, holdSeconds: 5 }, false, 1, [
+      // Broken colonnades leave wide approaches; the living guardian owns
+      // its native shield, turning, recovery and return-to-post behavior.
+      ...[-1,1].flatMap(side=>[
+        prop('standing_stone',side*165,-170,48),prop('standing_stone',side*195,-60,52),
+        prop('standing_stone',side*195,70,48),prop('rock',side*160,180,35),
+        prop('rubble',side*130,215,24),
+      ]),
+      prop('weathered_statue',0,-240,65),prop('brazier',-80,-210,22),prop('brazier',80,-210,22),
+      prop('broken_cart',235,145,33,.6),prop('dead_tree',-260,90,47),
+    ], undefined, [nativeMassAltar('wrath_altar',0,30)]),
+      population:{level:4,table:[{id:'stone_sentinel',weight:1}]} },
   ];
 }

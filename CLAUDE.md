@@ -15,6 +15,12 @@ The continuous-world experiment is specified in `docs/design/seamless-world-foun
 
 Worldmass version 5 adds a finite opening circuit through `src/worldmass/journey.ts`,
 four native landmark compositions and seeded biome scenery through `ecology.ts`.
+Optional `MassJourneySpec.extensions` attach further places to existing route
+identities without moving the base circuit. New runs extend north from the Broken
+Gate to the Stoneward's native level-four guardian and shared Wrath field. Fixed
+landmark populations, home anchors and native return hysteresis survive Continue;
+older descriptors retain their previous network. Verify worldmass_extensions and
+hidden `balance/worldmass-extensions-ui.cjs` (controlled walking and Continue).
 Routes, clearings, cluster recipes and props are snapshotted per run; Continue
 retains old terrain and sparse changes. The explored map has town footprints,
 zoom, a home bearing and searched-cache state. Verify `probe_worldmass_journey.ts`

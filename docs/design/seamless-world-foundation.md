@@ -1166,3 +1166,43 @@ admission. All sixteen guardians retained their recorded identity after the fix.
 `balance/worldmass-birth-ui.cjs` creates four controlled native guardians through
 the actual runtime and verifies their kits, boons and exact life through browser
 Save/Continue. This is controlled persistence QA, not an independent play verdict.
+
+### Connected branches and the Stoneward
+
+Optional ordered `MassJourneySpec.extensions` attach a destination to an existing
+place identity or earlier branch. Each owns its offset, clearing radius, jitter
+and content reference. Its seeded geometry and durable provenance are independent
+of the original circuit; new branches do not move its four town departures or
+reroute its eight trails. Missing parents/content, duplicate identities, invalid
+spacing, overlapping clearings and settlement crossings refuse. Finite altar
+admission remains within the checkpoint's sixteen-field budget. This remains a
+finite opening network on procedural country, not a global road generator.
+
+New expeditions add a northward branch beyond the Broken Gate to the Stoneward:
+paired broken colonnades, a native carved statue, one fixed level-four Stone
+Sentinel and the native shared Wrath altar. A landmark may supply a fixed native
+population instead of a geographic roster. The guardian keeps its native shield,
+turning, recovery, ability grants and leash; the altar's benefits and costs apply
+to both sides. Ordinary cache loot and native landmark clearance remain the
+rewards. Existing descriptors without extensions retain their original land.
+
+Enemy checkpoints now retain the native home anchor and return-home latch.
+A controlled negative case showed that Continue previously moved a returning
+Sentinel's home to its current position and discarded its retreat. Admission now
+records the placed home before the first AI tick; Continue restores it and only
+the safe return phase, never an unwarned attack. Native movement, hysteresis and
+healing still execute in the AI. Legacy records without an anchor use their
+saved position because no earlier home was recorded. This is not complete AI
+state persistence or distant simulation.
+
+Validation: game/launcher/sim type checks, all fifteen worldmass probes, native
+combat smoke (25 episodes), shield-defender counterplay (30 assertions), and
+869 generation cases across three seeds (zero failures, four existing warnings).
+The extension probe checks chained branches, unchanged old routes/Continue,
+fixed danger, real native return behavior, legacy homes and invalid records.
+The hidden `balance/worldmass-extensions-ui.cjs` walks the branch with native
+movement and active AI after one controlled initial placement, using
+invulnerability for route QA. It records no scene swap and verifies the wounded
+guardian's kit, original home/return phase, field and player position through
+browser Continue. This controlled test is separate from the fresh critic's
+ordinary-play assessment; it makes no claim about live frame rate or enjoyment.
