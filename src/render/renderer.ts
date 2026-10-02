@@ -7495,7 +7495,7 @@ export class Renderer {
       ctx.fillStyle = t.color;
       ctx.strokeStyle = 'rgba(0,0,0,0.7)';
       ctx.lineWidth = 3;
-      const pos = t.kind === 'dmg'
+      const pos = t.kind && focus.numbers.kinds.includes(t.kind)
         ? this.combatTextLayout.place(t,t.pos,ctx.measureText(txt).width,t.size) : t.pos;
       ctx.strokeText(txt, pos.x, pos.y);
       ctx.fillText(txt, pos.x, pos.y);

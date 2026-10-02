@@ -11,7 +11,8 @@ export const VIS_CFG = {
   combatFocus: {
     player: { enabled: true, pad: 7, corner: 6, nose: 7, width: 1.5, outline: 1.25,
       color: '#edf9e9', edge: '#18201f', crowdAlpha: .95, restAlpha: .4, crowdReach: 130 },
-    numbers: { enabled: true, bodyPad: 12, barRise: 34, gap: 3, step: 16, rings: 12 },
+    numbers: { enabled: true, kinds: ['dmg','drop','pickup'] as readonly string[],
+      bodyPad: 12, barRise: 34, gap: 3, step: 16, rings: 12 },
     names: { enabled: true, gap: 4, step: 12, rings: 20, nameFont: 'bold 12px Verdana',
       subFont: '10px Verdana', nameHeight: 14, subHeight: 12, outline: 3, edge: '#151712',
       contrast: { minGap: .60, margin: .05 } },

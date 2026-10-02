@@ -73,7 +73,10 @@ friend/foe entry, independent departure, native damage values and screenshots.
 
 The shared `vis/combatFocus.ts` keeps the local player identifiable in crowds
 and places damage values clear of visible bodies; `VIS_CFG.combatFocus` owns
-its presentation dials. Verify `probe_combatfocus.ts` and the isolated real
+its presentation dials. `combatFocus.numbers.kinds` also admits drop/pickup
+floats to stable spacing, preserving native text clocks, curation and combat
+yield. Verify `balance/reward-floats-ui.cjs` for overlap, redraw and preferences.
+Verify `probe_combatfocus.ts` and the isolated real
 renderer in `balance/combat-focus-ui.cjs`. Resource floats retain the native
 `gains` preference but `yieldToCombat` makes them obey reward clearance; actual
 healing remains visible and discovery news uses the civic feed. The optional

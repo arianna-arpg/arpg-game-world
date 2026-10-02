@@ -1460,3 +1460,21 @@ The isolated native-button client reproduces the prior failure, then verifies
 Cleave commitment, held shield, primary resumption and idle after release;
 screenshots were inspected. This does not establish continuous control feel or
 resolve the critics' broader concerns about early encounter pressure and travel.
+
+### Distinct reward announcements
+
+The latest fresh reviewer captured two native drop names painted over one
+another after opening the camp chest (latest-slice-r10, capture 0034). The
+existing stable text layout now admits the configured drop/pickup kinds as well
+as damage. It moves only their painted positions; text values, native source
+positions, lifetimes, pickup-feed records and per-kind preferences remain intact.
+Reward labels still yield when a nearby visible threat would be obscured.
+
+The isolated client mints five native reward floats at one source. The prior
+fixed build has ten intersecting text pairs; the corrected renderer has zero.
+Every name remains present, paused redraw is stable, disabling pickup floats
+leaves only the two drop announcements, and nearby combat suppresses them all.
+The text objects remain unchanged. All three type checks, combatfocus, the
+scoped build and this actual renderer test pass; screenshots were inspected.
+As with damage text, placement is bounded and an overcrowded viewport can still
+fall back to native positions. This does not claim to solve every HUD overlap.
