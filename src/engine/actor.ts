@@ -1473,6 +1473,10 @@ export class Actor {
   slamIcdUntil = 0;
   /** Set while a cast bar is running / a channel is held. */
   casting: CastingState | null = null;
+  /** Completed-use presentation stamp; transient, never a gameplay clock. */
+  bodyAction?: import('./bodyAction').BodyActionStamp;
+  /** Resolved co-op pose; null explicitly clears a pooled render shell. */
+  bodyActionPose?: import('./bodyAction').BodyActionPose | null;
 
   /** Role axis (player / minion / mercenary / monster). undefined ⇒ 'monster'.
    *  Orthogonal to `team`; see UnitKind. Set only at spawn, never per-frame. */

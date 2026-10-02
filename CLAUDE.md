@@ -56,7 +56,11 @@ readable native life meters before their first wound; `World.isPressingFoe`
 shares the discipline gate's threat identity. Hover names share bounded body/
 meter clearance and reserve space against damage values. Tune names/threats in
 `VIS_CFG.combatFocus`; verify combatfocus, fielddiscipline and the real
-`balance/combat-identity-ui.cjs` alongside the crowd renderer harness. This is an opening
+`balance/combat-identity-ui.cjs` alongside the crowd renderer harness. Native
+attack body motion uses `data/bodyAction.ts`, resolved skill delivery and the
+successful real-use gate; `SkillDef.bodyMotion` can select/disable a profile.
+Co-op carries the resolved pose; ground geometry and combat clocks stay native.
+Verify castingcues and `balance/body-action-ui.cjs`. This is an opening
 network, not global roads,
 campaign migration or distant AI.
 Worldmass opening population quotas live in `population.ts` and are saved per

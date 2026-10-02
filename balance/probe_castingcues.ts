@@ -113,4 +113,47 @@ for (const def of [SKILLS.surgewind,SKILLS.kindled_ruin]) {
   start();step(30);
   check('automatic brim payoff has one ready cue and no stale hold', !p.casting && w.flashes.filter(f=>f.combatCue?.style==='cast_ready').length===1 && p.buffs.has('surgewind'));
 }
-console.log(`PASS ${count} casting cue checks`);
+
+import { bodyActionPoseOf } from '../src/engine/bodyAction';
+import { BODY_ACTION_CFG } from '../src/data/bodyAction';
+for (const def of [SKILLS.cleave, SKILLS.firebolt]) {
+  const {w,p,e,start,step}=setup(def); start(); step(4);
+  const pos={...p.pos}, face=p.facing, mana=p.mana;
+  const prep=bodyActionPoseOf(p,w.time);
+  check(def.id+': actual native windup pulls the body back', !!prep && prep.shift<0 && prep.sx<1);
+  const before=JSON.stringify([p.pos,p.facing,p.life,p.mana,p.casting?.elapsed,e.life]);
+  bodyActionPoseOf(p,w.time);
+  check(def.id+': presentation read leaves native state untouched', before===JSON.stringify([p.pos,p.facing,p.life,p.mana,p.casting?.elapsed,e.life]));
+  let n=0; while(p.casting && n++<180)step(1);
+  check(def.id+': successful native completion stamps a visible release', !!p.bodyAction && !!bodyActionPoseOf(p,w.time) && bodyActionPoseOf(p,w.time)!.shift>0);
+  check(def.id+': pose never shifts gameplay position or pays another cost', p.pos.x===pos.x&&p.pos.y===pos.y&&p.facing===face&&p.mana>=mana);
+  const snap=serializeSnapshot(w,1),client=makeSimWorld('guardian',2);applySnapshot(client,snap);
+  const mirror=client.actors[snap.actors.findIndex(a=>a.id===p.id)];
+  assert.deepEqual(bodyActionPoseOf(mirror,w.time),bodyActionPoseOf(p,w.time));count++;console.log('PASS '+def.id+': host pose survives co-op mirror without delivery guesses');
+  step(30);check(def.id+': follow-through settles without a synthetic cooldown', !bodyActionPoseOf(p,w.time));
+  applySnapshot(client,serializeSnapshot(w,2));
+  check(def.id+': idle snapshot clears a pooled client pose', !bodyActionPoseOf(mirror,w.time));
+}
+{
+  const {w,p,start,step}=setup(SKILLS.firebolt);start();step(4);p.poise=0;p.applyStatus('stun',0,1,'motion-rig');step(1);
+  check('interrupted cast never invents a release stamp', !p.casting&&!p.bodyAction&&!bodyActionPoseOf(p,w.time));
+}
+{
+  const {w,p,start,step}=setup({...SKILLS.firebolt,bodyMotion:false});start();step(4);
+  check('skill motion opt-out retains native casting without a pose', !!p.casting&&!bodyActionPoseOf(p,w.time));
+  while(p.casting)step(1);
+  check('skill motion opt-out also suppresses follow-through', !p.bodyAction);
+}
+{
+  const {w,p,inst}=setup(SKILLS.cleave);
+  w.executeSkill(p,inst,{x:p.pos.x+100,y:p.pos.y},{noRepeat:true,noCooldown:true});
+  check('scheduled payload cannot mint a fresh body-action stamp', !p.bodyAction);
+}
+{
+  const {w,p,start,step}=setup({...SKILLS.firebolt,bodyMotion:'__proto__'});start();step(4);
+  check('unknown motion profile safely uses resolved delivery', !!bodyActionPoseOf(p,w.time));
+  const active=BODY_ACTION_CFG.enabled;BODY_ACTION_CFG.enabled=false;
+  check('global motion opt-out is independent of cast behavior', !bodyActionPoseOf(p,w.time)&&!!p.casting);BODY_ACTION_CFG.enabled=active;
+  p.downed=true;check('downed bodies retain their own pose', !bodyActionPoseOf(p,w.time));
+}
+console.log(`PASS ${count} casting and body-action cue checks`);

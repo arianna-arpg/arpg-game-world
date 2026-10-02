@@ -4351,6 +4351,8 @@ export interface SkillDef {
   trigger?: TriggerSpec;
   /** Reusable casting-read profile; false omits supplemental body/outcome cues. Bars remain. */
   castingCue?: string | false;
+  /** Body-space preparation/settle profile; defaults to resolved delivery. */
+  bodyMotion?: string | false;
   /** A serial resurrection contract with native Hivecall tree mechanics. */
   hivecall?: boolean;
   id: string;

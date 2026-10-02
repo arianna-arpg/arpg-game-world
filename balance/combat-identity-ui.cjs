@@ -46,7 +46,7 @@ app.whenReady().then(async()=>{
       const target=identityQA.enemies[0],state=JSON.stringify(w.actors.map(a=>[a.id,a.pos,a.life,a.casting]));
       r.hudMouse=r.toScreen(target.pos);
       ctx.fillText=function(text,x,y,...rest){
-        if(text===target.name)seen.push({text,x,y,width:ctx.measureText(text).width});
+        if(text===target.name)seen.push({text,x,y,width:ctx.measureText(text).width,color:ctx.fillStyle});
         return fill.call(this,text,x,y,...rest);
       };
       try{r.render(w);}finally{ctx.fillText=fill;}

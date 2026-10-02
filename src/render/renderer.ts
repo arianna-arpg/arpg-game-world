@@ -1,6 +1,8 @@
 import { treePointBudget } from '../engine/skillEmpowerment';
 import { CombatTextLayout, combatBodyRect, drawPlayerFocus } from './vis/combatFocus';
 import { CombatMeterLayout } from './vis/combatMeters';
+import { bodyActionPoseOf } from '../engine/bodyAction';
+import { applyBodyActionPose } from './vis/bodyActionLayer';
 import { MassPainter } from '../worldmass/paint';
 import { regionGrid } from '../world/walk'; // worldmass shares native grounded telegraphs
 import { concealmentActive } from '../engine/perception';
@@ -112,7 +114,7 @@ import { drawMagicPackEffects, drawMagicPackRole } from './vis/magicPackLayer';
 import { FACTIONS, MONSTERS, type MonsterDef } from '../data/monsters';
 import { APPARITION_ROLE, MU_CFG } from '../data/mu';
 import { PACK_CFG, packLinks, type LinkStyleOf, type PackLink } from '../engine/pack';
-import { hash01, hexToRgb, shade, valueNoise, withAlpha } from './vis/color';
+import { contrastGuard, hash01, hexToRgb, shade, valueNoise, withAlpha } from './vis/color';
 import { materialOf, rampOf } from './vis/materials';
 import { adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, drawPartSpecs, lookOf, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
 import { drawAdornHitFlash, drawBodyHitFlash, hitFlashAlphaOf } from './vis/hitFlash';
@@ -1050,8 +1052,8 @@ export class Renderer {
     ctx.save();
     ctx.textAlign = 'center';
     ctx.globalAlpha = bestReveal;
-    ctx.fillStyle = tint;
     const nc = VIS_CFG.combatFocus.names, hasSub = !!sub && sub !== best.name;
+    ctx.fillStyle = contrastGuard(tint, nc.edge, nc.contrast, 'lighter');
     ctx.font = nc.nameFont;
     let width = ctx.measureText(best.name).width;
     if (hasSub) { ctx.font = nc.subFont; width = Math.max(width, ctx.measureText(sub!).width); }
@@ -5703,6 +5705,9 @@ export class Renderer {
         Math.sin(a.facing) * bodyCueLean * TELL_CFG.lean.shift * a.radius);
       ctx.scale(1, 1 - bodyCueLean * TELL_CFG.lean.squash);
     }
+    // Native traversal/emergence owns its pose; ordinary attacks move only
+    // the painted body/adorn, leaving ground geometry and meters anchored.
+    if (!tpose && !epose) applyBodyActionPose(ctx, bodyActionPoseOf(a, world.time), a.radius);
     if (rot !== 0) ctx.rotate(rot);
     ctx.drawImage(bodySprite(look), -half, -half);
     // THE HIT FLASH rides the body's own pose — a white wash or rim OVER

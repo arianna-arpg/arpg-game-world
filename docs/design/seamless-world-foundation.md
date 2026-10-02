@@ -966,3 +966,28 @@ Checks: combatfocus and fielddiscipline probes, game/launcher/sim type checks,
 the existing crowd-render harness (native health fractions and reward clearance)
 and `balance/combat-identity-ui.cjs` (actual hovered crowd name, healthy armed rat,
 unarmed wildlife, passive/untargetable/range/story exclusions and unchanged state).
+
+### Native body motion and name contrast
+
+The next ordinary-play pass still found quiet bodies beneath accurate native
+attack sectors and meters, and a dark blue pack name at night. The render now
+derives sweep, thrust, cast and pulse poses from resolved skill delivery. A
+preparation draws back on the actual cast clock; a successful real-use completion
+stamps a bounded follow-through and visual settle. Cancellation, fizzle and
+scheduled descendants do not invent a fresh release. These are painted poses,
+not additional recovery locks: costs, damage timing, reach, collision and AI stay
+native. Held modes retain their existing readiness/guard cues; traversal,
+emergence, dash, leap, downed and burrowed states keep their own motion.
+
+Profiles and global limits live in `data/bodyAction.ts`; `SkillDef.bodyMotion`
+can select another profile or opt out. The co-op snapshot carries the host's
+resolved pose and explicitly clears idle mirrors, without relying on incomplete
+client skill definitions. The renderer moves the body and adorn together while
+leaving shadows, ground warnings and meters at the native anchor. Native hover
+names use the existing color contrast utility and a configurable contrast floor
+against their outline, preserving rarity hue and reveal opacity.
+
+Verify castingcues (real casts, interruption, opt-outs, native-state preservation
+and co-op clearing), the combat smoke suite, and `balance/body-action-ui.cjs`.
+The hidden client captures actual preparation/release/settled canvas frames and
+checks painted transforms against unchanged ground and gameplay anchors.

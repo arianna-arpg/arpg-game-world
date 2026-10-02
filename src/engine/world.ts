@@ -1,5 +1,6 @@
 import { skillInstanceName, treeInstanceNodeRanks, treePointBudget } from './skillEmpowerment';
 import { skillMergePlan } from './skillMerge';
+import { markBodyAction } from './bodyAction';
 import { concealmentActive, isConcealed, PERCEPTION_CFG } from './perception';
 import { anatomyCueState, anatomyFlash, notePartScar, clearPartScar } from './anatomyCues';
 import { takeWeakPointBreaks } from './weakpoints';
@@ -38404,6 +38405,7 @@ export class World {
     if (!opts.noRepeat && !opts.noCooldown && !caster.construct) {
       // THE BEAT LAW: a chain step joins the ring as its HOST's beat.
       this.recordCast(caster, def, inst.chainOf);
+      markBodyAction(caster, inst, this.time, angleTo(caster.pos, aim));
     }
     // THE WITNESS LANE (engine/mimic.ts mimicWitness): a completed enemy
     // art may teach watching seats WITHOUT the blow — reach is each seat's
