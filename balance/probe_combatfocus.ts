@@ -118,9 +118,22 @@ let hiddenCalls=0;
 meterLayout.add(keys[1],{x:-16,y:-33,w:32,h:20},()=>hiddenCalls++);
 meterLayout.add(keys[0],{x:-16,y:-33,w:32,h:8},()=>{});
 meterLayout.paint(meterCtx);
-assert.equal(hiddenCalls,1,'unrevealed native meters still paint under the native sight veil');
+assert.equal(hiddenCalls,1,'unregistered but unconcealed meters retain their original pass');
 assert.deepEqual(meterLayout.footprints,[{x:-16,y:-33,w:32,h:8}],'hidden meters cannot displace visible meters');
 const enabled=mc.enabled;
+for(const useLayout of [true,false]){
+ (mc as {enabled:boolean}).enabled=useLayout;
+ meterLayout.begin(2.5);meterLayout.conceal(keys[1]);
+ let concealedCalls=0;
+ meterLayout.add(keys[1],{x:-16,y:-33,w:32,h:20},()=>concealedCalls++);
+ meterLayout.paint(meterCtx);
+ assert.equal(concealedCalls,0,'concealed meters cannot leak under translucent fog, even with layout disabled');
+ assert.equal(meterLayout.footprints.length,0);
+ meterLayout.begin(2.6);
+ meterLayout.add(keys[1],{x:-16,y:-33,w:32,h:20},()=>concealedCalls++);
+ assert.equal(concealedCalls,1,'next-frame reveal restores the native readout');
+}
+(mc as {enabled:boolean}).enabled=enabled;
 try{
  (mc as {enabled:boolean}).enabled=false;
  const disabled=frame(3);

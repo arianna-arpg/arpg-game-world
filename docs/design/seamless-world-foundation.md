@@ -1413,3 +1413,25 @@ All three type checks, the scoped build, sightveil and visibility-stability
 probes pass; paired visible/disabled/occluded screenshots were inspected.
 Existing health-meter visibility is unchanged. This is controlled readability
 evidence, not a fresh critic's endorsement or proof of real-time performance.
+
+### Concealed overhead meters
+
+The body-contrast check exposed a pre-existing health-meter leak: a wall could
+fully hide the body and name while the native translucent fog still left its
+health and cast readouts visible. CombatMeterLayout now takes the actor's
+existing label/cover admission before queuing or directly painting any meters.
+The same rule applies when displacement is disabled. Opening the sightline
+restores the original readouts; world warnings and combat rules are unchanged.
+
+A controlled native skeleton keeps its wounded life and active Cleave cast while
+the client compares rendering with its meters present or suppressed. The prior
+fixed build leaves 228 changed meter pixels behind a fully concealing wall;
+the corrected build leaves zero. Both builds show 828 meter pixels in the open
+and after removing the wall. Life and cast state stay unchanged. This is a
+rendering fixture with manually advanced visibility time, not a live AI fight.
+The paired screenshots were inspected.
+
+All three type checks, combatfocus and visibility-stability probes, the scoped
+build and the real crowded-renderer check pass. The crowd retains all twelve
+damage values, exact native life fractions and unobstructed body placement.
+The headless check also covers layout opt-out and reveal on a later frame.

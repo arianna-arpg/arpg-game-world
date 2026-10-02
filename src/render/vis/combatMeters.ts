@@ -19,18 +19,24 @@ const union = (a: CombatRect, b: CombatRect): CombatRect => {
 export class CombatMeterLayout {
   private bodies = new Map<object,Body>();
   private rows = new Map<object,Meter>();
+  private concealed = new Set<object>();
   private memory = new WeakMap<object,Memory>();
   private time=0;
   readonly footprints: CombatRect[]=[];
   begin(time: number): void {
-    this.time=time;this.bodies.clear();this.rows.clear();this.footprints.length=0;
+    this.time=time;this.bodies.clear();this.rows.clear();this.concealed.clear();this.footprints.length=0;
   }
+  /** Caller supplies the same cover admission as the body's native labels. */
+  conceal(key: object): void { this.concealed.add(key); }
   body(key: object, pos: Vec2, radius: number): void {
     const c=VIS_CFG.combatFocus.meters,r=radius*c.bodyScale+c.bodyPad;
     this.bodies.set(key,{pos,radius,rect:{x:pos.x-r,y:pos.y-r,w:r*2,h:r*2}});
   }
   add(key: object, rect: CombatRect, paint: () => void): void {
-    // Unseen native meters stay in their original fog-covered pass, and cannot
+    // Native fog is translucent: drawing a concealed meter beneath it still
+    // leaks the owner's presence. Concealment also applies with layout disabled.
+    if(this.concealed.has(key))return;
+    // Off-screen/unregistered meters keep their original pass and cannot
     // influence the layout of a visible body.
     if(!VIS_CFG.combatFocus.meters.enabled || !this.bodies.has(key)){paint();return;}
     const row=this.rows.get(key);

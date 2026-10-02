@@ -5474,10 +5474,12 @@ export class Renderer {
 
     // Only bodies admitted by the native concealment/storey rules above and
     // currently revealed on screen may displace another body's combatMeters.
-    if(a.pos.x+a.radius>this.cam.x && a.pos.y+a.radius>this.cam.y
+    const meterReveal = this.labelRevealAt(world,a.pos);
+    if(meterReveal<=.05)this.combatMeters.conceal(a);
+    else if(a.pos.x+a.radius>this.cam.x && a.pos.y+a.radius>this.cam.y
       && a.pos.x-a.radius<this.cam.x+this.canvas.width/this.zoom
-      && a.pos.y-a.radius<this.cam.y+this.canvas.height/this.zoom
-      && this.labelRevealAt(world,a.pos)>.05) this.combatMeters.body(a,a.pos,a.radius);
+      && a.pos.y-a.radius<this.cam.y+this.canvas.height/this.zoom)
+      this.combatMeters.body(a,a.pos,a.radius);
     const guardWarning = guardReleaseCue(a, world.time);
     const armedCues = armedStatusCues(a);
     const reactiveCue = reactiveCueOf(a, world.time), wardCue = wardCueActive(a);

@@ -80,7 +80,11 @@ healing remains visible and discovery news uses the civic feed. The optional
 text flag also crosses snapshots, with absent legacy flags preserving behavior.
 `vis/combatMeters.ts` keeps each visible actor's native meters together and clear
 of bodies, with bounded displacement and unobstructed owner links; hidden actors
-cannot displace visible meters. Actual altar restoration uses the shared resource
+cannot displace visible meters. Native label/cover admission also suppresses a
+concealed body's meters before the translucent fog pass; disabling layout does
+not disable concealment. Verify `balance/meter-concealment-ui.cjs` against the
+scoped build; `HOLLOW_WAKE_QA_LEGACY=1` on the prior build reproduces the leak.
+Actual altar restoration uses the shared resource
 transfer painter with an optional restore kind, and the native pulse clock drives
 its sigil. Verify combatfocus/feedingcues/worldmass_fields plus the real combat-focus
 and fields client harnesses. Nearby native threats gain a cached silhouette edge
