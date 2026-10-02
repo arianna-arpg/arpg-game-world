@@ -6,7 +6,7 @@ import type { ProjectileShape } from '../src/engine/skills';
 import { VIS_CFG } from '../src/render/vis/visConfig';
 import { clearBakes } from '../src/render/vis/sprites';
 
-let gradients = 0, commands = 0, tethers = 0;
+let gradients = 0, commands = 0, tethers = 0, worldZoom = 1;
 const gradient = { addColorStop() {} };
 const ctx = new Proxy({ globalAlpha: 1 } as unknown as CanvasRenderingContext2D, {
   get(target, key) {
@@ -26,7 +26,7 @@ type Painter = {
   drawProjectiles: (world: World) => void; drawTethers: () => void;
 };
 const painter = Object.create(Renderer.prototype) as Painter;
-Object.assign(painter, { ctx, baseZoom: 1.3, couchStretch: 1, pixelScale: 1,
+Object.assign(painter, { ctx, getSettings: () => ({ cameraZoom: worldZoom }), couchStretch: 1, pixelScale: 1,
   cam: { x: 200, y: -100 }, canvas: { width: 1300, height: 780 },
   drawTethers: () => { tethers++; } });
 const flight = (shape: ProjectileShape, x: number, y: number, radius = 10) =>
@@ -45,18 +45,20 @@ try {
   assert.equal(draw([flight('circle', 120, 200)], 50), 1, 'camera shake can bring an edge effect into view');
   // All four edges, including centers outside the view whose glow, broad
   // form or backward trail can still reach the screen.
-  for (const scale of [1, 0.55]) for (const stretch of [1, 0.7]) {
+  for (const zoom of [.85, 1, 1.6]) for (const scale of [1, 0.55]) for (const stretch of [1, 0.7]) {
+    worldZoom = zoom;
     painter.pixelScale = scale; painter.couchStretch = stretch;
     painter.canvas.width = 1300 * scale; painter.canvas.height = 780 * scale;
-    const right = 200 + 1000 / stretch, bottom = -100 + 600 / stretch;
+    const right = 200 + 1000 / (stretch * zoom), bottom = -100 + 600 / (stretch * zoom);
     for (const shape of shapes) {
       assert.equal(draw([
         flight(shape, 180, 200), flight(shape, right + 20, 200),
         flight(shape, 700, -120), flight(shape, 700, bottom + 20),
-      ]), 4, `${shape} edge effects survive scale ${scale}, couch ${stretch}`);
+      ]), 4, `${shape} edge effects survive zoom ${zoom}, scale ${scale}, couch ${stretch}`);
       assert.equal(draw([flight(shape, right + 500, 200, 200)]), 1, 'large effects are not center-culled');
     }
   }
+  worldZoom = 1;
   const fx = VIS_CFG.fx as { streakLen: number };
   const old = fx.streakLen;
   try {
