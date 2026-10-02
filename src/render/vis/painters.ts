@@ -14,6 +14,7 @@
 import { creatureTerrain } from './creatureTerrain';
 import { paintStatue } from './statue';
 import { paintNeedleCrown, type NeedleCrownSpec } from './needleCrown';
+import { paintBroadleafCrown, type BroadleafCrownSpec } from './broadleafCrown';
 import { doodadRuleOf, type Doodad } from '../../engine/levelgen';
 import { rockFormBodies, rockSeedOf } from '../../engine/rockForms';
 import type { World } from '../../engine/world';
@@ -9561,7 +9562,7 @@ const mushroomCrown: CanopyPainter = (env, o, alpha, params) => {
 /** A LUSH DECIDUOUS CROWN — layered scallop-edged leaf lobes (the bush's
  *  grammar at canopy scale) with a sun-lit side and a dark under-heart. */
 const leafCrown: CanopyPainter = (env, o, alpha, params) => {
-  const p = params as { fill?: ColorSpec };
+  const p = params as { fill?: ColorSpec; broadleaf?: BroadleafCrownSpec };
   const { ctx, theme } = env;
   const base = resolveColor(p.fill, theme, theme.tree ?? '#2c4424');
   const seed = ((o.pos.x * 17 + o.pos.y * 3) | 0) >>> 0;
@@ -9569,6 +9570,10 @@ const leafCrown: CanopyPainter = (env, o, alpha, params) => {
   ctx.translate(o.pos.x, o.pos.y);
   if (o.rot !== undefined) ctx.rotate(o.rot);
   ctx.globalAlpha = alpha;
+  if (p.broadleaf) {
+    paintBroadleafCrown(ctx, o.radius, base, seed, p.broadleaf);
+    ctx.restore(); return;
+  }
   // Under-heart: the crown's own depth.
   ctx.fillStyle = shade(base, -0.4);
   ctx.beginPath();

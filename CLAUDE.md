@@ -133,6 +133,11 @@ Conifers opt into seeded needle boughs through `DoodadVisualDef.canopy.params.ne
 fade; absent needles retain the star-ring painter. Verify `balance/needle-crown-ui.cjs`
 and `balance/needle-crown-world-ui.cjs` for variant/cache/alpha and native proximity,
 plus canopy-presence, sightveil and visibility-stability probes.
+Common trees, ancient trees and forest oaks opt into `canopy.params.broadleaf`.
+`vis/broadleafCrown.ts` supplies bounded, seeded clusters and leaf texture; omitted
+parameters retain the older painter. Verify `balance/broadleaf-crown-ui.cjs` and
+`balance/broadleaf-crown-world-ui.cjs` for cache/alpha/shape and native fading,
+plus the same canopy/sight probes. Trunk collision and sight policy are unchanged.
 Native statues use the parameterized carving in
 `render/vis/statue.ts` and the generic `DoodadVisualDef.raisedSurface` lane:
 own ground shadow cannot erase raised art; other blockers, room/roof/canopy

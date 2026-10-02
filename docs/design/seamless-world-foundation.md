@@ -1733,3 +1733,26 @@ comparison places the same visible native wolf beneath slot six in the old and
 new builds. Both screenshots were inspected: the wolf is readable through the
 new empty slot. All eight CSS hit rectangles match exactly and drawing changes
 no gameplay state. The comparison fixture is retained with local QA reports.
+
+### Broadleaf woodland silhouettes
+
+Common trees, ancient trees and forest oaks now opt into a reusable broadleaf
+specification. Seeded bough clusters, broken outlines and directional leaf
+texture replace the broad circular under-heart for those definitions. Bough
+count, leaflet density and irregularity are configurable; specialty trees
+without the specification retain their previous painter.
+
+The actual painter/cache gallery verifies eight distinct seeded variants,
+configuration and palette response, restored drawing state, bounded geometry,
+monotone visibility alpha and no use of combat randomness. The isolated client
+verifies all three native kinds, zero crown gradients after warming the cache,
+unchanged scenery/vitals, solid trunks and reversible proximity fading
+(about 0.601 to 0.260 and back on the central oak). Gallery and world screenshots
+were inspected. All three type checks, canopy presence, sight veil, visibility
+stability and doodad-family probes, and 25 combat smoke episodes pass. These are rendering checks, not a claim
+that exploration or combat has met the independent critics' acceptance bar.
+
+The preceding territory commit has now passed all 336 remote probes and Pages
+publishing. Exact live metadata identifies 3f028952; isolated remote QA preserved
+seed 2070713339 through Continue and all six ordinary-save sentinels. The
+projectile-culling fixture correction is therefore verified in the full suite.

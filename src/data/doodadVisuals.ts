@@ -770,7 +770,8 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   tree: {
     longShadow: 0.85,
     painter: 'trunk', order: 50, bakeWhole: 'static', params: { scale: 0.3, roots: 4 },
-    canopy: { painter: 'leafCrown', params: { fill: 'theme:tree|#2c4424' } },
+    canopy: { painter: 'leafCrown', params: { fill: 'theme:tree|#2c4424',
+      broadleaf: {boughs:7,leaflets:22,irregularity:.3} } },
   },
   thicket: {
     longShadow: 0.7,
@@ -888,7 +889,8 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   ancient_tree: {
     longShadow: 0.9,
     painter: 'trunk', order: 50, bakeWhole: 'static', params: { scale: 0.22, roots: 6 },
-    canopy: { painter: 'leafCrown', params: { fill: 'theme:tree|#2c4424' } },
+    canopy: { painter: 'leafCrown', params: { fill: 'theme:tree|#2c4424',
+      broadleaf: {boughs:7,leaflets:22,irregularity:.3} } },
   },
   // The FOREST's canopy body: a broad-crowned oak, one shade deeper than the
   // common tree so a sealed forest roof reads as ITS OWN mass, not a smear of
@@ -897,7 +899,8 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   forest_oak: {
     longShadow: 0.95,
     painter: 'trunk', order: 50, bakeWhole: 'static', params: { scale: 0.22, roots: 5, color: '#41321f' },
-    canopy: { painter: 'leafCrown', params: { fill: '#274f1d' } },
+    canopy: { painter: 'leafCrown', params: { fill: '#274f1d',
+      broadleaf: {boughs:9,leaflets:28,irregularity:.22} } },
   },
   // The GLOAMWOOD's canopy body: the same knitting oak gone grey-dark — a
   // desaturated blue-green crown over a near-black crooked bole, so the
