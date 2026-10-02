@@ -118,7 +118,11 @@ app.whenReady().then(async () => {
     }
     return s / Math.max(1, n);
   };
-  const eye = await js(`(() => { const t = ${theater}, r = t.stageRect(), p = (t.f.picture || [0, 0, 1, 1]); return { has: !!t.rim, x: r.x, y: r.y, w: r.w, h: r.h, top: r.y + p[1] * r.h, ph: (p[3] - p[1]) * r.h }; })()`);
+  const eye = await js(`(() => { const t = ${theater}, r = t.stageRect(), p = t.rim ? t.rim.picture() : (t.f.picture || [0, 0, 1, 1]); return { has: !!t.rim, measured: !!(t.rim && t.rim.detected), pic: p, x: r.x, y: r.y, w: r.w, h: r.h, top: r.y + p[1] * r.h, ph: (p[3] - p[1]) * r.h }; })()`);
+  /* the rim found the film's own bars (the announcement's 2.39:1 band sits
+     between 0.128 and 0.872 of the frame), measuring at most a sliver inside */
+  check('the mind\'s eye measures the film\'s own bars', eye.measured && eye.pic[0] === 0 && eye.pic[2] === 1
+    && eye.pic[1] >= 0.1281 && eye.pic[1] < 0.14 && eye.pic[3] <= 0.8719 && eye.pic[3] > 0.86, JSON.stringify(eye.pic.map((v) => +v.toFixed(4))));
   const g1 = await grab();
   const rimEdge = lumaIn(g1, { x: eye.x + 1, y: eye.top + eye.ph * 0.4, w: 5, h: eye.ph * 0.2 });
   const heart = lumaIn(g1, { x: eye.x + eye.w * 0.4, y: eye.top + eye.ph * 0.4, w: eye.w * 0.2, h: eye.ph * 0.2 });
@@ -176,6 +180,10 @@ app.whenReady().then(async () => {
   check('a click plays with sound (the gesture unlocks it)', await waitFor(`(${theater}).state === 'playing' && !(${theater}).video.muted`, 8000));
   await sleep(1500);
   await shot('22-banner-playing');
+  /* the narration reads with sound too (captions show: 'always'): seek to a line and wait for it */
+  await js(`(() => { const v = (${theater}).video; v.currentTime = 22.9; })()`);
+  check('the narration captions show while it plays with sound', await waitFor(`!(${theater}).video.muted && (${theater}).cap.classList.contains('on') && (${theater}).capText.textContent.length > 3`, 6000),
+    await js(`(${theater}).capText.textContent`));
   /* THE LEVEL: the pill's slider sets a level (never just mute or full), a
      drag that ends outside the pill never means "continue", the arrows turn
      it, and the choice is remembered */
