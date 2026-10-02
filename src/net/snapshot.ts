@@ -7,7 +7,7 @@ import { castingCompletion, castingCueOf } from '../engine/castingCues';
 import { bodyActionPoseOf } from '../engine/bodyAction';
 import { guardReleaseCue } from '../engine/warningCues';
 import { encounterCueOf } from '../engine/encounterCombat';
-import { parryCueStrength } from '../engine/combatCues';
+import { parryCueStrength, guardArcRadians } from '../engine/combatCues';
 import type { TitanScenePiece } from '../engine/titans';
 import { cosmeticStyle, COSMETIC_PROJECTILES } from '../data/cosmeticStyles';
 import { cosmeticLoadoutFor, cosmeticSummonSkill, sanitizeCosmeticLoadout } from '../meta/cosmetics';
@@ -222,7 +222,7 @@ export interface CastW { parryCue?: number;
   c: string; mode: string; total: number; elapsed: number;
   pulseTimer?: number; shield?: number; maxShield?: number;
   indicatorAt?: number; presses?: number; channelTime?: number;
-  guardArc?: number;           // guard spec arcDeg (mode === 'guard')
+  guardArc?: number;           // resolved guard coverage in degrees (mode === 'guard')
   /** Guard bash tic: live arming line + inverted contract (mode 'guard'). */
   bashAt?: number; bashLow?: boolean;
   /** THE ARM CLOCK (held seconds before the bash may convert): with the
@@ -828,7 +828,7 @@ function actorToW(a: Actor, world: World): ActorW {
     cw.castingCompletion = castingCompletion(a);
     cw.castingCue = castingCueOf(a);
     cw.focusBroken = cs.focusBroken;
-    if (cs.mode === 'guard' && cs.inst.def.guard) cw.guardArc = cs.inst.def.guard.arcDeg;
+    if (cs.mode === 'guard' && cs.inst.def.guard) cw.guardArc = guardArcRadians(a)*180/Math.PI;
     if (cs.bashAt !== undefined) cw.bashAt = cs.bashAt;
     if (cs.bashLow) cw.bashLow = true;
     if (cs.bashArmAt !== undefined) cw.bashArmAt = cs.bashArmAt;
@@ -1427,6 +1427,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
       focusBroken: aw.cast.focusBroken,
       pulseTimer: aw.cast.pulseTimer, shield: aw.cast.shield, maxShield: aw.cast.maxShield,
       guardReleaseCue: aw.cast.guardReleaseCue ? { ...aw.cast.guardReleaseCue } : undefined,
+      resolvedGuardArc: aw.cast.guardArc===undefined?undefined:aw.cast.guardArc*Math.PI/180,
       parryCue: aw.cast.parryCue, indicatorAt: aw.cast.indicatorAt, presses: aw.cast.presses, channelTime: aw.cast.channelTime,
       bashAt: aw.cast.bashAt, bashLow: aw.cast.bashLow, bashArmAt: aw.cast.bashArmAt,
       aim: { x: a.pos.x, y: a.pos.y }, held: false, baseMult: 1,

@@ -174,6 +174,11 @@ Legendary skill empowerment is documented in `docs/design/legendary-skill-empowe
 explicit passive slots without expanding branch budgets. Verify `probe_skillempowerment.ts`,
 skill/ability-economy regressions and hidden `balance/skill-empowerment-ui.cjs` after a build.
 
+Shield coverage uses `combatCues.guardArcRadians` for both interception and
+paint, including live actor/skill area modifiers. Co-op carries resolved coverage
+through its existing degree-valued cast field. Verify combatcues/defensecues and
+hidden `balance/guard-coverage-ui.cjs` (previous build is its negative control).
+
 Native active guards and parries stamp the actual defender's block-recency ledger,
 so earned `recentlyBlocked` modifiers also answer successful active defense.
 Verify `probe_guardrecency.ts`, native talents/guard probes and controlled

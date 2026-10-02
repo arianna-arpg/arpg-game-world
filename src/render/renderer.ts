@@ -123,6 +123,7 @@ import { adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, drawPartSpecs,
 import { drawAdornHitFlash, drawBodyHitFlash, hitFlashAlphaOf } from './vis/hitFlash';
 import { TELL_CFG, tellDressOf } from '../engine/tells';
 import { guardReleaseCue } from '../engine/warningCues';
+import { guardArcRadians } from '../engine/combatCues';
 import { encounterCueOf } from '../engine/encounterCombat';
 import { WARNING_CUE_CFG } from '../data/warningCues';
 import { drawGuardReleaseGround, drawEncounterCue, warningCueLean } from './vis/warningCueLayer';
@@ -5876,9 +5877,8 @@ export class Renderer {
     // Guard stance: the raised shield arc, fading as its health drains.
     if (a.casting?.mode === 'guard' && a.casting.inst.def.guard) {
       const cs = a.casting;
-      const spec = cs.inst.def.guard!;
       const frac = Math.max(0, (cs.shield ?? 0) / (cs.maxShield ?? 1));
-      const arcRad = spec.arcDeg * Math.PI / 180;
+      const arcRad = guardArcRadians(a);
       const r = a.radius + 9 - (guardWarning ? a.radius * WARNING_CUE_CFG.bash.shieldPull * guardWarning.progress : 0);
       ctx.strokeStyle = cs.inst.def.color;
       ctx.lineWidth = 5;

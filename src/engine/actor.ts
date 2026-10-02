@@ -82,6 +82,8 @@ export interface CastingState {
   castingCue?: import('./castingCues').CastingCue;
   /** Resolved host-only presentation read on a co-op render shell. */
   parryCue?: number;
+  /** Host-resolved radians on render-only shells; live guards derive their arc. */
+  resolvedGuardArc?: number;
   inst: SkillInstance;
   mode: CastMode;
   aim: Vec2;               // updated each frame when the mode tracks aim

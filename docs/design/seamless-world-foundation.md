@@ -1306,3 +1306,22 @@ and exercises valid null/sparse input plus a real Magician Firebolt cast. All
 three type checks, the scoped build and ordinary desktop boot smoke pass. The
 critic continues on its original fixed candidate, without silently changing the
 build beneath its report.
+
+### Shield coverage agrees with native interception
+
+A controlled client reproduction found that a quadrupled area stat widened the
+native Shield Up interception arc from 120 to 240 degrees while the painted arc
+remained 120. A hit at 90 degrees was absorbed outside its visible boundary.
+The guard now derives its coverage through one shared function used by the hit
+gate, persistent arc and impact/break geometry. Live actor and skill-local
+modifiers retain the original square-root scaling and interception behavior.
+
+Co-op carries the resolved angle in its existing degree-valued cast field, so
+render-only actors do not need the host's full equipment or skill instance.
+Lowering the guard removes the view. The combat-cue probe checks reduced, normal
+and enlarged coverage just inside/outside the actual interception boundary,
+skill-local modifiers, remote presentation and cancellation. A hidden client
+records real canvas arcs and a native blocked hit; it reproduces the old 120/240
+mismatch and verifies 240/240 after the change. Screenshots were inspected.
+This corrects spatial feedback; it does not change guard strength or assert
+that the broader combat-enjoyment criterion has passed.

@@ -3,7 +3,7 @@ import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { SKILLS } from '../src/data/skills';
 import { COMBAT_CUE_STYLES } from '../src/data/combatCues';
-import { combatCueFlash, combatCueStyle, parryCueStrength } from '../src/engine/combatCues';
+import { combatCueFlash, combatCueStyle, parryCueStrength, guardArcRadians } from '../src/engine/combatCues';
 import { makeSkillInstance, type SkillInstance } from '../src/engine/skills';
 import { mod } from '../src/engine/stats';
 import type { Actor } from '../src/engine/actor';
@@ -175,4 +175,36 @@ for(const style of [...Object.keys(COMBAT_CUE_STYLES),'missing','constructor','_
   drawReflectedCue(ctx,{pos:{x:1,y:2},radius:4,dir:1});
   check('return marker renders independently of projectile cosmetics',paths===2&&depth===0);
 }
+
+{
+  // Combat and presentation share live area scaling, including local modifiers.
+  const w=makeSimWorld('warrior',927),p=w.player,e=w.createMonster('plains_wolf',1,'enemy');
+  w.actors=[p,e];p.facing=0;e.pos={x:p.pos.x+60,y:p.pos.y};
+  const guard=p.skills.find(s=>s?.def.id==='shield_up')!;
+  assert.ok(w.useSkill(p,guard,e.pos));p.updateTimers(0);
+  const native=guard.def.guard!.arcDeg*Math.PI/180;
+  const hit=(angle:number)=> {
+    const at={x:p.pos.x+60*Math.cos(angle),y:p.pos.y+60*Math.sin(angle)};
+    return (w as any).tryGuardBlock(p,e,at,.01) as boolean;
+  };
+  for(const scale of [.25,1,4]) {
+    p.sheet.setSource('arc-qa',[mod('aoeRadius','override',scale)]);
+    const arc=guardArcRadians(p);
+    check('live shield coverage scales '+scale,Math.abs(arc-native*Math.sqrt(scale))<1e-9);
+    check('inside drawn edge intercepts '+scale,hit(arc/2-.001));
+    check('outside drawn edge refuses '+scale,!hit(arc/2+.001));
+  }
+  p.sheet.removeSource('arc-qa');
+  // Skill-local mods are not present on the actor sheet or remote cast stub.
+  const nativeDef=p.casting!.inst.def;
+  p.casting!.inst.def={...nativeDef,innateMods:[...(nativeDef.innateMods??[]),mod('aoeRadius','more',.44)]};
+  check('local skill modifier contributes to displayed coverage',Math.abs(guardArcRadians(p)-native*1.2)<1e-9);
+  const client=makeSimWorld('warrior',928),snap=serializeSnapshot(w,1);applySnapshot(client,snap);
+  const mirrored=()=>client.actors[snap.actors.findIndex(a=>a.id===p.id)];
+  check('co-op shell receives resolved coverage without needing host modifiers',
+    Math.abs(guardArcRadians(mirrored())-guardArcRadians(p))<1e-9);
+  p.casting=null;applySnapshot(client,serializeSnapshot(w,2));
+  check('lowering clears local and remote coverage',guardArcRadians(p)===0&&guardArcRadians(mirrored())===0);
+}
+
 console.log(`ALL PASS (${count} assertions)`);

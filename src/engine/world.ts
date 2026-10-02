@@ -364,7 +364,7 @@ import { PROC_CUE_CFG } from '../data/procCues';
 import { poolVentRead } from './skills';
 import { RESERVE_CUE_CFG } from '../data/reserveCues';
 import { defenseCueFlash } from './defenseCues';
-import { combatCueFlash, timingCueFlash } from './combatCues';
+import { combatCueFlash, timingCueFlash, guardArcRadians } from './combatCues';
 import { castingEventFlash } from './castingCues';
 import { guardBashGeometry } from './warningCues';
 import { DEFENSE_CUE_CFG } from '../data/defenseCues';
@@ -41531,9 +41531,7 @@ export class World {
     const cs = guardian.casting!;
     const spec = cs.inst.def.guard;
     if (!spec || (cs.shield ?? 0) <= 0) return false;
-    const tags = skillContextTags(cs.inst.def);
-    const extra = instanceMods(cs.inst);
-    const arc = (spec.arcDeg * Math.PI / 180) * Math.sqrt(guardian.sheet.get('aoeRadius', tags, extra));
+    const arc = guardArcRadians(guardian);
     if (Math.abs(angleDiff(guardian.facing, angleTo(guardian.pos, threatPos))) > arc / 2) return false;
 
     // Active guards and parries are blocks in the native recency ledger too.
@@ -41598,7 +41596,7 @@ export class World {
     cs.shield = Math.max(0, (cs.shield ?? 0) - guardArtHit.damage);
     if (cs.shield > 0 && guardArtHit.restore > 0) cs.shield += ((cs.maxShield ?? cs.shield) - cs.shield) * guardArtHit.restore;
     this.flashes.push(defenseCueFlash(guardian, 'guard', 'impact', cs.inst.def.color,
-      { facing: angleTo(guardian.pos, threatPos), arc: spec.arcDeg * Math.PI / 180 }));
+      { facing: angleTo(guardian.pos, threatPos), arc }));
     this.applyThorns(guardian, attacker);
     this.tapCharges(guardian, 'block');
     // CAST-ON-BLOCK trigger gems answer the raised-shield block too.
@@ -41609,7 +41607,7 @@ export class World {
       guardian.useLock = 0.3;
       if (cs.inst.def.cooldown > 0) this.stampSkillCooldown(guardian, cs.inst, cs.inst.def.cooldown);
       this.flashes.push(defenseCueFlash(guardian, 'guard', 'break', cs.inst.def.color,
-        { arc: spec.arcDeg * Math.PI / 180 }));
+        { arc }));
       // Ice Shield's dying burst: a broken shield spends its FULL absorbed
       // capacity as the payload — with the stance's EFFECTIVE bash, innate
       // or socket-grafted (and the inverted contract agrees: a broken wall
