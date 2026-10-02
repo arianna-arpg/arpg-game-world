@@ -1390,3 +1390,26 @@ targets, verifies the combat refusal, sockets the gem in Lastlight and continues
 with the same claimed choice and fitted support. The workspace screenshot was
 inspected. Independent reviewers retain their original fixed builds; this
 navigation refinement does not retroactively change their reports.
+
+### Nearby body separation
+
+Several independent playtests reported losing small or dark creatures against
+nearby scenery. Nearby native threats now gain a subtle edge derived from the
+actual cached body artwork, including part-grammar bodies. It shares the body's
+pose and opacity and remains below fog, roofs and canopy passes. Detached weapon
+joints retain their existing rendering. Radius, fade, width, color, strength and
+opt-out live in VIS_CFG.combatFocus.bodies; no new target or damage rule is added.
+
+The controlled client compares identical frames with this painter enabled and
+disabled for a native skeleton, rat and sentinel. All three gain visible edge
+pixels without changes to actor position, vitals, casting or status state.
+Passive, untargetable, unarmed, distant and other-tier actors gain none. A native
+wall and the completed native body fade also leave zero added edge pixels.
+The first concealment fixture repeated renders at a frozen world time, which
+does not advance that fade; the corrected fixture advances the native clock
+and checks both occlusion and body opacity. This was a fixture correction.
+
+All three type checks, the scoped build, sightveil and visibility-stability
+probes pass; paired visible/disabled/occluded screenshots were inspected.
+Existing health-meter visibility is unchanged. This is controlled readability
+evidence, not a fresh critic's endorsement or proof of real-time performance.

@@ -6,6 +6,7 @@ import { CombatMeterLayout } from './vis/combatMeters';
 import { bodyActionPoseOf } from '../engine/bodyAction';
 import { applyBodyActionPose } from './vis/bodyActionLayer';
 import { drawActionParts } from './vis/actionParts';
+import { drawBodyContrast } from './vis/bodyContrast';
 import { MassPainter } from '../worldmass/paint';
 import { regionGrid } from '../world/walk'; // worldmass shares native grounded telegraphs
 import { concealmentActive } from '../engine/perception';
@@ -5372,6 +5373,14 @@ export class Renderer {
     ctx.restore();
   }
 
+  /** A quiet silhouette edge for nearby native threats; never an X-ray pass. */
+  private drawCombatBodyEdge(a: Actor, world: World, look: BodyLook): void {
+    const c = VIS_CFG.combatFocus.bodies;
+    if (!c.enabled || !world.isPressingFoe(a, world.player.pos, world.player.tier, c.radius)) return;
+    const strength = Math.min(1, Math.max(0, (c.radius - dist(a.pos, world.player.pos)) / c.fade));
+    drawBodyContrast(this.ctx, look, c.width, c.color, c.alpha * strength);
+  }
+
   private drawActor(a: Actor, world: World): void {
     if (a.summonReform) {
       const { ctx } = this;
@@ -5718,6 +5727,7 @@ export class Renderer {
     applyBodyActionPose(ctx, actionPose, a.radius);
     look.separateActionParts = !!lookDef?.parts.some(p => p.action);
     if (rot !== 0) ctx.rotate(rot);
+    this.drawCombatBodyEdge(a, world, look);
     ctx.drawImage(bodySprite(look), -half, -half);
     // THE HIT FLASH rides the body's own pose — a white wash or rim OVER
     // the bake, never a swap: tints, live parts and worn gauges keep

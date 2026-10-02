@@ -16,6 +16,7 @@ export const VIS_CFG = {
       subFont: '10px Verdana', nameHeight: 14, subHeight: 12, outline: 3, edge: '#151712',
       contrast: { minGap: .60, margin: .05 } },
     threats: { enabled: true, radius: 280, minWidth: 22 },
+    bodies: { enabled: true, radius: 380, fade: 90, width: 1.15, color: '#ddd5b8', alpha: .62 },
     meters: { enabled: true, bodyScale: 1.15, bodyPad: 3, gap: 2, step: 10, rings: 8,
       settleSec: .35, linkGap: 2, linkWidth: 1, linkColor: '#adbaa9', linkEdge: '#172019' },
   },

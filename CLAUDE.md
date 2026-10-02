@@ -83,7 +83,12 @@ of bodies, with bounded displacement and unobstructed owner links; hidden actors
 cannot displace visible meters. Actual altar restoration uses the shared resource
 transfer painter with an optional restore kind, and the native pulse clock drives
 its sigil. Verify combatfocus/feedingcues/worldmass_fields plus the real combat-focus
-and fields client harnesses. Native statues use the parameterized carving in
+and fields client harnesses. Nearby native threats gain a cached silhouette edge
+from their actual body artwork through `vis/bodyContrast.ts`, inside the body's
+pose and opacity, below later world occlusion. Tune/disable it through
+`VIS_CFG.combatFocus.bodies`; `balance/body-contrast-ui.cjs` compares actual
+visible pixels, exclusions, unchanged combat state and native wall concealment.
+Native statues use the parameterized carving in
 `render/vis/statue.ts` and the generic `DoodadVisualDef.raisedSurface` lane:
 own ground shadow cannot erase raised art; other blockers, room/roof/canopy
 and tier rules still apply. Verify sightveil, visibility_stability and
