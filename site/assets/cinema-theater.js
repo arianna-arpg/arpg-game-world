@@ -685,8 +685,12 @@
      column whose mean rises above the threshold belongs to the picture, the
      extent only grows (dark scenes cannot shrink it), and the edge is taken
      at the inner side of the boundary sample, so any error falls inside the
-     picture, where the rim's dark already covers the true edge. */
-  var BARS = { w: 128, h: 288, every: 250, lum: 6, settle: 3000, quit: 15000 };
+     picture, where the rim's dark already covers the true edge. The reading
+     never stops while the film plays: quick while the extent is still being
+     found, then a light look (calm) for the rest of the film, so a film that
+     opens its bars later (a title card that takes the whole frame) widens
+     the rim with it. */
+  var BARS = { w: 128, h: 288, every: 250, calm: 600, lum: 6, settle: 3000 };
   function measureBars(video, ctx) {
     var W = BARS.w, H = BARS.h, d;
     ctx.drawImage(video, 0, 0, W, H);
@@ -728,7 +732,8 @@
       /* one step of the measuring and the easing; true when the picture moved */
       E.measure = function () {
         var tn = now(), v = E.video;
-        if (E.bars && v && v.readyState >= 2 && !v.paused && tn - E.probeAt >= BARS.every) {
+        var cadence = E.detected && tn - E.grewAt > BARS.settle ? BARS.calm : BARS.every;
+        if (E.bars && v && v.readyState >= 2 && !v.paused && tn - E.probeAt >= cadence) {
           if (!E.firstProbe) E.firstProbe = tn;
           E.probeAt = tn;
           var m = null;
@@ -744,8 +749,6 @@
             }
             if (grew) E.grewAt = tn;
           }
-          /* the extent has held long enough (or the film is long past its opening): stop reading */
-          if ((E.detected && tn - E.grewAt > BARS.settle) || tn - E.firstProbe > BARS.quit) E.bars = null;
         }
         var dt = Math.min(0.1, (tn - E.lastT) / 1000), moved = false, P = R.picture, j, k;
         E.lastT = tn;
