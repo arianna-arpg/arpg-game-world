@@ -1675,3 +1675,47 @@ center, and another assumed a shorter Firebolt windup; the corrected fixture
 uses subpixel comparison, observes the actual launch and settles the native
 cooldown in an empty controlled scene. No production aiming/cast fix was needed.
 Classic/close world views and the actual Options panel were inspected.
+
+CI subsequently caught a projectile fixture assigning the former fixed zoom
+field, which is now a getter. The fixture now reads the real settings callback
+and checks all projectile forms at wide/default/close zoom, both buffer scales
+and both couch stretches. The corrected test passes; publishing awaits a new
+complete CI run rather than treating the earlier 334/335 result as green.
+
+### Encounter-owned territories
+
+The completed eastern-route review remained negative overall: one kill, a
+recovered chest and armor, but prolonged pursuit prevented the earned Deadly
+Precision from being socketed. Native Save & Exit and same-session Continue
+passed. This is retained as criticism, not counted as an acceptance verdict.
+
+Optional saved `MassAdventure.territory` now assigns an attributable fallback
+to the existing native walk-home policy. New runs use a 620-unit radius around
+each body's admitted home. Authored/dynamic leashes retain priority; relentless
+behavior bypasses the fallback. The native hysteresis returns bodies physically,
+without adding regeneration or clearing wounds. Existing regeneration, native
+guardian healing, cast rules, minion ownership and combat restrictions remain.
+Missing territory descriptors retain old pursuit behavior through Continue.
+
+All three type checks, eighteen worldmass probes, field discipline, the scoped
+build, native brain composition, 25 combat smoke episodes and generation QA pass
+(869 cases across three seeds, zero failures, four
+existing warnings). The seam-combat fixture teleported a monster without moving
+its encounter home, causing the new return policy to avoid the intended fight;
+the fixture now places both at the seam. The territory probe separately checks
+return decisions, wounds, hysteresis, saved homes and authored-policy precedence.
+
+The isolated client walks a Rogue away from a pursuing native wolf, observes
+physical return steps (maximum about 3.2 units), keeps the same bodies with no
+zone loads, and sockets a controlled compatible support only after escape.
+The first fixture detected ordinary native life regeneration; the final fixture
+disables that base regeneration to isolate return healing. A queued browser
+startup frame initially advanced a continued enemy; draining it permits exact
+comparison of saved enemies/configuration and the installed support. Screenshots
+were inspected. These fixtures are not evidence of earned reward enjoyment.
+
+Distant residency remains unfinished. The current checkpoint is not a full
+serialization of actors, effect dependencies or attacks in flight, so it cannot
+safely support seamless unloading yet. The finite population budget and retained
+native bodies remain. An independent reviewer is playing the fixed territory
+build with no assigned class, route, tactic or desired verdict.

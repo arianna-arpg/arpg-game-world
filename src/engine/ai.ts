@@ -893,7 +893,7 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // tether they drop the lock and walk home (with hysteresis, so the edge
   // reads as straining at the chain, not flip-flop) — mending en route when
   // the data says so.
-  const leash = tuning.target?.leash;
+  const leash = tuning.target?.leash ?? (tuning.target?.relentless ? undefined : actor.aiTerritory);
   if (leash && actor.aiAnchor && !actor.isMinion()) {
     const dHome = dist(actor.pos, actor.aiAnchor);
     if (actor.aiPhase === 'leash_home') {

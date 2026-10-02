@@ -444,7 +444,7 @@ export interface AmbushSpec {
 // lives in brain.ts — re-exported here so the bestiary and the world keep
 // their historical import path.
 export type { BrainDef, BrainType, BrainPhase, BrainImpulse, PostSpec, FlockSpec } from './brain';
-import type { BrainDef, BrainType, BrainTuning, CommandState, FlockSpec, PostSpec } from './brain';
+import type { BrainDef, BrainType, BrainTuning, CommandState, FlockSpec, PostSpec, TargetSpec } from './brain';
 import type { EmergeSpec } from './emerge'; // THE EMERGENCE GRAMMAR — AmbushSpec.emerge
 
 /** A worm/snake body: trailing segments that follow the head. The base
@@ -896,6 +896,9 @@ export class Actor {
   /** Spawn anchor for arena-relative choreography (stamped on the first AI
    *  tick, so it reflects the PLACED position, not the factory's 0,0). */
   aiAnchor?: Vec2;
+  /** Encounter-owned fallback territory. Authored leashes take precedence;
+   * relentless phases ignore this fallback. It never teleports or resets vitals. */
+  aiTerritory?: NonNullable<TargetSpec['leash']> & { source: string };
   /** Minted skill instances for scripted casts (aiActions), by skill id. */
   aiActionInsts?: Map<string, SkillInstance>;
   /** Skill ids SILENCED on this body. onPartBroken's breakDisables writes

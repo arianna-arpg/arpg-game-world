@@ -13,6 +13,15 @@ isolation and Continue. See `docs/design/seamless-world-foundation.md`.
 
 The continuous-world experiment is specified in `docs/design/seamless-world-foundation.md` (branch `codex/seamless-world-foundation`). `src/worldmass/` implements durable addresses, seeded fields/place claims, sparse consequences, bounded terrain residency and an opt-in `/?worldmass` terrain/combat prototype. It uses native movement, skills, region effects, cell-ray occlusion and character saves. Verify `npm run probe -- worldmass` plus persistence/sightveil/cistern; after a build, `balance/worldmass-ui.cjs` checks the hidden real client with isolated saves. Each new run gets fresh land. Live frame rebasing, distant simulation, native place/campaign migration and full consequence paging remain unfinished; read the document's implementation ledger before extending or describing the mode.
 
+Worldmass encounter territories are optional saved descriptors (`territory.ts`).
+They stamp an attributable `Actor.aiTerritory` fallback below authored native
+leashes; relentless tuning ignores the fallback. New expeditions use a 620-unit
+home radius, with native return hysteresis and no added return healing. Existing
+regeneration and authored guardian healing retain authority. Old descriptors
+remain unchanged. Verify worldmass_territory/engine/extensions and fielddiscipline,
+plus `balance/worldmass-territory-ui.cjs` for real pursuit, physical return,
+calm socketing and browser Continue. This does not unload distant entities.
+
 Worldmass version 6 snapshots temperature/moisture/elevation families through
 `worldmass/biomes.ts`, adding native tundra and marsh rosters and scenery.
 Ice, mud and swamp use the existing physical region effects; dry route patches

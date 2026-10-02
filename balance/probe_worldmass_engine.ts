@@ -36,6 +36,7 @@ const originalLoad = w.loadZone.bind(w);
 w.loadZone = (...args) => { loads++; originalLoad(...args); };
 hero.pos = { x: 755, y: 12 };
 native.pos = { x: 815, y: 12 };
+native.aiAnchor = { ...native.pos }; // this fixture places the encounter itself at the seam
 let hits = 0, casts = 0;
 setSimTap({ onHit(c, t) { if (c === hero && t === native) hits++; }, onCast(c) { if (c === hero) casts++; } });
 w.useSkill(hero, skill, native.pos);

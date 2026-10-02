@@ -26,6 +26,7 @@ import { MassRewards, type MassRewardSave } from './rewards';
 import { MassFields, type MassFieldSave } from './fields';
 import { massGarrisonSlots, recordMassGuardian, settleMassClearance } from './clearance';
 import { MassBirths, validMassBirth, type MassBirth } from './birth';
+import { applyMassTerritory, validateMassTerritory } from './territory';
 
 interface MassEnemySave {
   id: string; monster: string; level: number; x: number; y: number; life: number; scale: number;
@@ -74,6 +75,7 @@ export class WorldMassRuntime {
     this.config = freezeData(JSON.parse(canonical(config)) as MassAdventure);
     this.configHash = massDigest(this.config);
     this.births = new MassBirths(this.config.nativeBirthSource, seed);
+    if (this.config.territory !== undefined) validateMassTerritory(this.config.territory);
     this.rewards = new MassRewards(this.config.rewards, seed, save?.rewards);
     this.fields = new MassFields(save?.fields);
     this.origin = Object.freeze(save ? { ...save.origin } : { dimension: 'surface', cx: '0', cy: '0' });
@@ -215,6 +217,7 @@ export class WorldMassRuntime {
       const groups = new Map<number,number>();
       for (const e of save.enemies) {
         const a = this.births.create(world,e.id,e.monster,e.level,e.scale,e.birth);
+        applyMassTerritory(a, this.config.territory);
         const pack = readMagicPack(e.magicPack);
         if (pack) {
           if (!groups.has(pack.id)) groups.set(pack.id,world.nextSquadId());
@@ -385,6 +388,7 @@ export class WorldMassRuntime {
           if (this.natives.has(id) || this.state.claimed('fallen', id) || this.natives.size >= this.config.maxPopulation) continue;
           const offset = siteOffset(p, fixture.x, fixture.y);
           const a = this.births.create(world,id,fixture.monster,population.level);
+          applyMassTerritory(a, this.config.territory);
           const spot = world.findFreeSpot({ x: q.x + offset.x, y: q.y + offset.y }, a.radius);
           if (!this.walk.isWalkable(spot.x, spot.y) || world.pointInSolid(spot.x, spot.y, a.radius)
             || Math.hypot(spot.x - q.x, spot.y - q.y) > p.radius) continue;
@@ -408,6 +412,7 @@ export class WorldMassRuntime {
         const spot = this.walk.snapToWalkable({ x: q.x + Math.cos(angle) * radius, y: q.y + Math.sin(angle) * radius });
         if (!this.walk.isWalkable(spot.x, spot.y) || Math.hypot(spot.x - q.x, spot.y - q.y) > p.radius) continue;
         const a = this.births.create(world,id,monster,population.level,scale);
+        applyMassTerritory(a, this.config.territory);
         const bodyRadius = a.radius * (coordinated ? RARITY_DEFS.magic.sizeMul : 1);
         const free = world.findFreeSpot(spot, bodyRadius);
         if (!this.walk.isWalkable(free.x, free.y) || world.pointInSolid(free.x, free.y, bodyRadius)
