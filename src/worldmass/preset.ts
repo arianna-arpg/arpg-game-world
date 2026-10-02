@@ -11,6 +11,7 @@ import { STARTER_SUPPORTS } from '../meta/account';
 import { nativeMassSite, type MassSiteSpec } from './sites';
 import { MASS_BIOME_FAMILIES, MASS_CLIMATE_ECOLOGY } from './biomes';
 import { nativeMassEncounters } from './encounters';
+import { countryFieldSites } from './fieldSites';
 
 export const MASS_ZONE = 'worldmass_expedition';
 export interface MassContent extends MassPopulation {
@@ -23,6 +24,8 @@ export interface MassContent extends MassPopulation {
   magicPack?: { source: string; mechanic: string };
 }
 export interface MassAdventure {
+  /** Optional bounded residency for native fields, including repeated places. */
+  fieldResidency?: import('./fields').MassFieldResidency;
   /** Optional namespace for replayable native factory variants. */
   nativeBirthSource?: string;
   /** Native walk-home fallback; omitted descriptors retain unrestricted populations. */
@@ -44,9 +47,9 @@ export interface MassAdventure {
 /** Snapshot existing content vocabulary, then own it for this run. Future
  * packages can supply another descriptor without replacing engine rules. */
 export function massAdventure(): MassAdventure {
-  const families = MASS_BIOME_FAMILIES;
+  const families = MASS_BIOME_FAMILIES, fields = countryFieldSites();
   const terrain: MassSpec = {
-    id: 'hollow-wake-country', version: 6, addressSpan: 960, terrainCell: 30,
+    id: 'hollow-wake-country', version: 7, addressSpan: 960, terrainCell: 30,
     fields: [
       { id: 'elevation', base: .15, layers: [
         { id: 'continent', period: 18000, amplitude: .7 },
@@ -79,7 +82,7 @@ export function massAdventure(): MassAdventure {
         biome: TILESETS[f.id].biome ?? f.id })),
       { id: 'fallback', source: 'tilesets/downs', priority: 0, when: [], region: 'ground', color: '#31391c', biome: 'downs' },
     ],
-    places: [...families.map(f => ({ id: f.id + '-habitat', version: 1, content: f.id,
+    places: [...fields.map(f=>f.recipe), ...families.map(f => ({ id: f.id + '-habitat', version: 1, content: f.id,
       period: 1100, chance: .7, radius: 180, jitter: .7, priority: 1,
       when: [{ field: 'elevation', min: -.1 }, ...f.when] })),
       { id: 'wayside-camp', version: 1, content: 'wayside-camp', period: 1600, chance: .65,
@@ -104,7 +107,12 @@ export function massAdventure(): MassAdventure {
         .map(r => ({ id: r.id, weight: r.weight }))));
   return freezeData({ terrain, progression, nativeBirthSource: 'worldmass/native-birth-v1', theme: JSON.parse(JSON.stringify(TILESETS.downs.theme)) as ZoneDef['theme'],
     territory: { source: 'worldmass/encounter-territory', radius: 620 },
-    content: [...families.map(f => ({ id: f.id, source: 'tilesets/' + f.id + '/packs', level: 1, count: 3,
+    fieldResidency: { source: 'worldmass/field-residency', retainRadius: 2048, maxResident: 32 },
+    content: [...fields.map(field=>{
+      const levels=populations(field.roster==='undead'?FACTIONS.undead.table:TILESETS[field.roster].packs.table)
+        .map(row=>reserveMassGuardians(row,field.count));
+      return {...levels[0],id:field.id,source:field.site.source,count:field.count,levels,site:field.site};
+    }), ...families.map(f => ({ id: f.id, source: 'tilesets/' + f.id + '/packs', level: 1, count: 3,
       levels: populations(TILESETS[f.id].packs.table).map(row=>{
         const encounters=nativeMassEncounters(f.id,TILESETS[f.id].biome??f.id,row.level);
         return {...row,...(encounters?{encounters}:{})};

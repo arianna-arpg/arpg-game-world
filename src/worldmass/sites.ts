@@ -19,7 +19,7 @@ export interface MassSiteSpec {
    * omitted roles preserve older scenery-only completion semantics. */
   fixtures: { monster: string; x: number; y: number; garrison?: boolean }[];
   cache?: { x: number; y: number; holdSeconds: number };
-  /** Finite journey fields use native altar rules, snapshotted per expedition. */
+  /** Native altar rules, snapshotted per expedition. Repeated places require field residency. */
   altars?: MassAltarSpec[];
 }
 export interface MassSiteDiscovery { id: string; content: string; center: MassAddress }

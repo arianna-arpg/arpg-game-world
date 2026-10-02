@@ -23,7 +23,7 @@ import { populationChoices, validatePopulationLimits } from './population';
 import { MassEcology, validateMassEcology, type MassEcologySave } from './ecology';
 
 import { MassRewards, type MassRewardSave } from './rewards';
-import { MassFields, type MassFieldSave } from './fields';
+import { MassFields, validateMassFieldResidency, type MassFieldSave } from './fields';
 import { massGarrisonSlots, recordMassGuardian, settleMassClearance } from './clearance';
 import { MassBirths, validMassBirth, type MassBirth } from './birth';
 import { applyMassTerritory, validateMassTerritory } from './territory';
@@ -81,7 +81,8 @@ export class WorldMassRuntime {
     this.births = new MassBirths(this.config.nativeBirthSource, seed);
     if (this.config.territory !== undefined) validateMassTerritory(this.config.territory);
     this.rewards = new MassRewards(this.config.rewards, seed, save?.rewards);
-    this.fields = new MassFields(save?.fields);
+    if(this.config.fieldResidency!==undefined)validateMassFieldResidency(this.config.fieldResidency,this.config.populationRadius);
+    this.fields = new MassFields(save?.fields,this.config.fieldResidency);
     this.origin = Object.freeze(save ? { ...save.origin } : { dimension: 'surface', cx: '0', cy: '0' });
     address(this.origin.dimension, this.origin.cx, this.origin.cy, 0, 0, config.terrain.addressSpan);
     this.generator = new MassGenerator(save?.state.run ?? makeMassRun(seed, runId, config.terrain), config.terrain);
@@ -118,7 +119,9 @@ export class WorldMassRuntime {
         || c.table.some(r => !MONSTERS[r.id] || !Number.isFinite(r.weight) || r.weight <= 0)) throw new Error('Invalid worldmass population');
     }
     for (const c of config.content) {
-      if (c.site?.altars?.length && config.terrain.places.some(p=>p.content===c.id))
+      if(config.fieldResidency && (c.site?.altars?.length??0)>config.fieldResidency.maxResident)
+        throw Error('Worldmass site exceeds its field residency budget');
+      if (c.site?.altars?.length && !config.fieldResidency && config.terrain.places.some(p=>p.content===c.id))
         throw new Error('Worldmass altar fields require a finite journey owner');
       for (const row of [c, ...(c.levels ?? [])]) {
         validatePopulationLimits(row);
@@ -256,7 +259,11 @@ export class WorldMassRuntime {
       rows:this.config.content.find(c=>c.id===place.content)?.site?.altars ?? [],
       center:localOffset(place.center,{...this.origin,x:0,y:0},this.config.terrain.addressSpan),
       level:this.populationFor(place).level,
-    }));
+    }),owner=>{
+      const at=address(owner.center.dimension,owner.center.cx,owner.center.cy,owner.center.x,owner.center.y,this.config.terrain.addressSpan);
+      if(canonical(at)!==canonical(owner.center))throw Error('Invalid worldmass field address');
+      return this.placesInCell(at).find(p=>p.id===owner.id&&canonical(p.center)===canonical(at));
+    });
     this.update(world, true);
     this.attached = true;
     this.nextPopulation = world.time;
@@ -356,6 +363,7 @@ export class WorldMassRuntime {
     }
     if (!boot && world.time < this.nextPopulation) return;
     this.nextPopulation = world.time + .5;
+    this.fields.sync(world);
     // Restoring the scene precedes exact saved vitals. Pay pending rewards on
     // the first live update, so that restore cannot erase native level-up healing.
     if(this.attached)for(const found of this.sites.discovered){
@@ -394,6 +402,8 @@ export class WorldMassRuntime {
         : Math.hypot(q.x, q.y) < this.config.startRadius + p.radius)
         || Math.hypot(q.x - world.player.pos.x, q.y - world.player.pos.y) > this.config.populationRadius) continue;
       const content = this.config.content.find(c => c.id === p.content)!;
+      // Reserve every required field before spawning its garrison or reward.
+      if(!this.fields.canAdmit(p,content.site?.altars??[]))continue;
       const population = this.populationFor(p);
       const formation=massFormation(population.encounters,this.generator.run.seed,p.id);
       const count=formation?.seats.length??content.count;

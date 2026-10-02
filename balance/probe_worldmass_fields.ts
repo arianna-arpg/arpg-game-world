@@ -11,8 +11,17 @@ import { ALTARS } from '../src/data/shrines';
 import { altarInfluences } from '../src/engine/altarCues';
 import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 
+// Keep the actual legacy policy under test as the default adds repeated fields.
+const finiteAdventure=()=>{
+ const config=JSON.parse(canonical(massAdventure()));
+ delete config.fieldResidency;
+ const repeated=new Set(config.content.filter((c:any)=>c.site?.altars?.length).map((c:any)=>c.id));
+ config.terrain.places=config.terrain.places.filter((p:any)=>!repeated.has(p.content));
+ config.terrain.version=6;
+ return config;
+};
 const restore=seedGlobalRandom(18431);
-const w=makeSimWorld('warrior',431), base=JSON.parse(canonical(massAdventure()));
+const w=makeSimWorld('warrior',431), base=JSON.parse(canonical(finiteAdventure()));
 delete base.progression;base.content.find((c:{id:string})=>c.id==='memorial-grove').level=7;
 const m=new WorldMassRuntime(431,'field-level',base);m.attach(w);
 const place=m.journey!.places.find(p=>p.content==='memorial-grove')!;
@@ -77,7 +86,7 @@ pulse(next,.02);assert.equal(next.player.life,20+heal);
 next.massRuntime!.update(next,true);assert.equal(next.altars.filter(a=>a.massSource===altar.massSource).length,1);
 console.log('PASS field source, descriptor and remaining pulse survive distant actual character Continue without duplication');
 
-const config=JSON.parse(canonical(massAdventure()));
+const config=JSON.parse(canonical(finiteAdventure()));
 const grove=config.content.find((c:{id:string})=>c.id==='memorial-grove');
 grove.site.altars=[nativeMassAltar('wrath_altar',0,-95)];
 const boost=makeSimWorld('warrior',194), bm=new WorldMassRuntime(431,'wrath',config);bm.attach(boost);
@@ -116,7 +125,7 @@ console.log('PASS actual native modifier membership cues enter/leave both teams,
 console.log('PASS a second native rule composes without bespoke combat code; modifiers enter and leave both teams exactly');
 
 // Native localized storms keep their encounter level and remaining cadence.
-const stormCfg=JSON.parse(canonical(massAdventure()));
+const stormCfg=JSON.parse(canonical(finiteAdventure()));
 delete stormCfg.progression;
 stormCfg.content.find((c:{id:string})=>c.id==='fallen-court').level=7;
 const stormWorld=makeSimWorld('warrior',923),stormRuntime=new WorldMassRuntime(431,'storm-field',stormCfg);
@@ -179,7 +188,7 @@ for(const patch of [{ratePerSec:0},{ratePerSec:NaN},{radius:-1},{telegraph:0},{s
 }
 console.log('PASS storm cadence through Continue, complete re-warning and malformed field refusal');
 
-const legacy=JSON.parse(canonical(massAdventure()));
+const legacy=JSON.parse(canonical(finiteAdventure()));
 for(const row of legacy.content)if(row.site)delete row.site.altars;
 const old=makeSimWorld('warrior',733),om=new WorldMassRuntime(431,'legacy',legacy);om.attach(old);
 old.player.pos=om.journey!.local(om.journey!.places.find(p=>p.content==='memorial-grove')!);om.update(old,true);

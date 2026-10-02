@@ -96,7 +96,15 @@ Finite journey landmarks may declare snapshotted native altar fields through
 `worldmass/fields.ts`. Memorial Grove uses the native shared Mending field;
 native modifiers/healing remain authoritative, with fixed place levels, stable
 sources and saved pulse clocks. Finite journey fields admit modifiers, mending
-and localized storms; repeated-field paging and kill-reward verbs remain pending.
+and localized storms. Version-seven runs add repeated Mending/Blood/Still Hours
+places through `worldmass/fieldSites.ts` and optional `fieldResidency`.
+Unoccupied distant fields preserve remaining cadence and geographic identity;
+living actors retain them, and emitted attacks continue independently. Admission
+reserves required fields before garrisons/rewards. Legacy descriptors keep finite,
+always-resident fields. Verify worldmass_fieldresidency and
+`balance/field-residency-ui.cjs` for native walking, dormant Continue and actual
+previous-version browser saves. Dormant metadata remains whole-run; kill-reward
+verbs and full consequence paging remain pending.
 New Fallen Court encounters carry the native Gathering Storm. `MassFieldSave`
 retains its bolt cadence; new post-Continue strikes receive a full native warning.
 `fireStrikeAt` takes an optional fixed encounter level for placed fields, while

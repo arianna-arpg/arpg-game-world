@@ -13,7 +13,7 @@ import { MONSTERS } from '../src/data/monsters';
 import { presenceTable } from '../src/engine/presence';
 
 const restore=seedGlobalRandom(62042),config=massAdventure();
-assert.equal(config.terrain.version,6);
+assert.equal(config.terrain.version,7);
 for(const family of MASS_BIOME_FAMILIES){
  const content=config.content.find(c=>c.id===family.id)!;assert.ok(content);
  for(const row of content.levels!){

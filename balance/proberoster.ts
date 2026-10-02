@@ -79,6 +79,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_worldmass_haven.ts', status: 'green', tier: 'fast', why: 'continuous native Lastlight, spatial services, plan doors, interiors, town growth snapshots and resume' },
   { probe: 'probe_worldmass_sanctuary.ts', status: 'green', tier: 'fast', why: 'continuous town service safety, symmetric hits, physical retreat, owned proxies, open policy and Continue' },
   { probe: 'probe_worldmass_clearance.ts', status: 'green', tier: 'fast', why: 'native landmark completion XP, garrison eligibility, one-time receipt, partial admission and legacy worlds' },
+  { probe: 'probe_worldmass_fieldresidency.ts', status: 'green', tier: 'fast', why: 'bounded native field residency, repeated geographic identity, atomic admission, ordinary source rekey, in-flight attacks and actual Continue' },
   { probe: 'probe_worldmass_fields.ts', status: 'green', tier: 'fast', why: 'finite native altar fields, shared healing/modifiers, geographic identity, exact saved pulse and admission' },
   { probe: 'probe_worldmass_sites.ts', status: 'green', tier: 'fast', why: 'worldmass native camps and ruins, cross-page discovery, durable loot and scenery, dependency residency and legacy saves' },
   { probe: 'probe_worldmass_engine.ts', status: 'green', tier: 'fast', why: 'worldmass real combat crossings, character saves, terrain changes, killed populations and run lifecycle' },

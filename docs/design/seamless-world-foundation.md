@@ -1926,3 +1926,63 @@ units, so the coverage/color check accounts for 8-bit compositing quantization.
 The fixed critic build remains untouched; the final build adds only this palette
 cache and correct hip-link mirror/alpha handling. Final type checks, gallery and
 actual Magician input/cast checks pass on those final changes.
+
+### Repeated country fields and native field residency
+
+New version-seven expeditions snapshot three procedural destinations through
+`worldmass/fieldSites.ts`: Mending Hollow, the Red Cairn and the Circle of Still
+Hours. Their native Mending, Blood and Still Hours fields affect friend and foe.
+Climate/elevation rules, frequency, geometry, native level rosters, shared
+clearance rewards and caches remain descriptor data. Each site has open approaches
+and its own composition of native scenery. Old expedition manifests are unchanged.
+
+Optional `MassAdventure.fieldResidency` bounds resident fields (32 in new runs).
+A nearby player or living actor retains the actual field. An unoccupied distant
+field detaches its native modifiers and stores its remaining pulse/bolt cadence
+and geographic owner. Detachment also rekeys any ordinary array-indexed altar
+sources without dropping their existing modifiers. Already emitted native attacks
+retain their lifetimes and caster identity. This does not unload actors or cancel
+their combat. Full consequence paging remains unfinished; dormant field records
+still accumulate in the expedition checkpoint.
+
+Admission reserves the site's required field capacity before creating its
+garrison or cache. Saved owners must regenerate the same place and canonical
+address from the saved descriptor. Without this optional policy, previous finite
+fields retain their always-resident behavior and previous count restrictions.
+No new native altar verb or player-only buff pipeline was introduced.
+
+The new probe verifies dormant cadence, actual character Continue, exact re-entry,
+ordinary-source rekeying, living-actor retention, independent in-flight warnings,
+capacity refusal and invalid owners/policies. Three seeded geographic surveys find
+all three families in aggregate and agree under reverse page query order. Generated
+field/cache footprints are reachable and survive cold re-entry. The first survey
+incorrectly required every climate-dependent family in each sampled seed region;
+the corrected assertion requires all families across the survey and destinations
+in each seed, respecting the actual geographic rules.
+
+All three type checks and the generation matrix (869 cases by three seeds,
+zero failures and four existing warnings) pass. The worldmass batch passed 19
+of 20 probes initially: the remaining formation check assumed a fixed version-six
+coordinate. Its revised current-world survey finds a naturally generated Spear Net
+and passes all five groups, including all four roles at geographic level 14.
+The other native formation/admission/Continue assertions are retained.
+
+The isolated real client walks into all three generated fields with ordinary
+keyboard input and verifies both-team effects, then checks dormant browser
+Continue and a single re-admitted field. The actual version-six walking build
+produces a browser save on the same isolated origin; the new build preserves its
+entire descriptor, position and finite field clock. Native screenshots were
+inspected for all three locations. These controlled checks do not establish
+enjoyment, difficulty or real-time performance.
+
+The movement reviewer completed 106 paired captures over 4,293 requested frames
+(71.55 nominal seconds), with two cleared destinations, a third attempted fight,
+earned Arcing Firebolt/passive/equipment and working Save & Exit / Continue.
+It declined further leisure play: presentation, committed casting, chain hits
+on breakables, post-clear chest waits and a clipped menu remained concerns.
+The walking reviewer continues independently. No overall acceptance verdict
+or played AAA comparison has been obtained.
+
+Walking commit 0676a8b8 passed CI 37070140427 and Pages 37071442133.
+Exact preview metadata reports 2026-10-02T22:16:49.538Z. Isolated remote QA
+retained seed 3450388102 and all six ordinary-save sentinels through Continue.

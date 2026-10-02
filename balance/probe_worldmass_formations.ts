@@ -92,8 +92,17 @@ assert.equal(old.actors.filter(a=>a.encounterGroup).length,0);
 assert.ok(old.actors.some(a=>a.defId==='plains_wolf'));
 console.log('PASS saturated and blocked formations produce no partial group/cache; retry admits all roles; omitted descriptors retain ordinary populations');
 const country=makeSimWorld('warrior',92752);country.startWorldMass(42);
-country.landPartyAt({x:-12277.66168867005,y:-3762.7512638410553});country.massRuntime!.update(country,true);
+const mass=country.massRuntime!;
+let destination:import('../src/worldmass/contracts').MassPlace|undefined;
+search:for(let y=-20000;y<=20000;y+=2000)for(let x=-20000;x<=20000;x+=2000){
+  destination=mass.placesInCell(mass.walk.at(x,y)).find(p=>massFormation(mass.populationFor(p).encounters,42,p.id)?.recipe==='spear_net');
+  if(destination)break search;
+}
+assert.ok(destination,'current generated country has a native Spear Net');
+const target=destination!,level=mass.populationFor(target).level;
+country.landPartyAt({x:Number(target.center.cx)*960+target.center.x,y:Number(target.center.cy)*960+target.center.y});
+mass.update(country,true);
 const natural=country.actors.filter(a=>a.encounterGroup?.recipe==='spear_net');
-assert.equal(natural.length,4);assert.ok(natural.every(a=>a.level===7&&!country.pointInSolid(a.pos.x,a.pos.y,a.radius)));
-console.log('PASS unmodified seed-42 country naturally admits a level-seven Spear Net with all native roles');
+assert.equal(natural.length,4);assert.ok(natural.every(a=>a.level===level&&!country.pointInSolid(a.pos.x,a.pos.y,a.radius)));
+console.log('PASS unmodified seed-42 country naturally admits a Spear Net with all native roles at geographic level '+level);
 restore();
