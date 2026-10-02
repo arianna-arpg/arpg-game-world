@@ -307,6 +307,31 @@ export class Renderer {
    *  nothing that speaks to a player — no labels, speech, floating text,
    *  reticle, screen overlays or HUD. The live game leaves it false. */
   worldOnly = false;
+  /** THE DIRECTOR'S EYE (src/director/): a capture rig's camera focus. Wins
+   *  over every other follow point while set; the live game leaves it null. */
+  directorFocus: { x: number; y: number } | null = null;
+  /** THE CLEAN PLATE (src/director/): a capture take may hide the overhead
+   *  readouts (life, ply, poise and shield bars, grab meters, cast bars),
+   *  keeping the world, its telegraphs and its light, and may lift the
+   *  positional sight veil. The live game leaves both false. */
+  directorClean = false;
+  directorNoSightVeil = false;
+  /** THE CINEMATIC OVERLAYS (src/director/): with worldOnly set, still draw
+   *  the screen moments that belong to the action rather than the HUD (the
+   *  ultimate's eyecatch pane, the held-time wash, crossings, a survived
+   *  death's fade and the death flash). The live game leaves it false. */
+  directorCinematic = false;
+  /** THE CAPTURE VIEWPORT (src/director/): render the world at this size
+   *  instead of the window's (a 4K take from a smaller window). The element
+   *  keeps the window's CSS size; null = the window, the live game's value. */
+  private captureViewport: { w: number; h: number } | null = null;
+  setCaptureViewport(v: { w: number; h: number } | null): void {
+    this.captureViewport = v ? { w: Math.max(2, Math.round(v.w)), h: Math.max(2, Math.round(v.h)) } : null;
+    this.resize();
+  }
+  /** The CSS frame the buffer spans: the capture viewport, else the window. */
+  private get frameW(): number { return this.captureViewport?.w ?? window.innerWidth; }
+  private get frameH(): number { return this.captureViewport?.h ?? window.innerHeight; }
   private get zoom(): number { return this.baseZoom * this.couchStretch * this.pixelScale; }
   /** Frame delta off the sim clock (canopy/roof fade smoothing). */
   private frameDt = 0;
@@ -444,13 +469,13 @@ export class Renderer {
   }
 
   resize(): void {
-    const w = window.innerWidth, h = window.innerHeight;
+    const w = this.frameW, h = this.frameH;
     // Buffer at the scaled size; the ELEMENT stays window-sized (CSS pins it
     // — with no explicit style the element would shrink to the buffer).
     this.canvas.width = Math.max(2, Math.round(w * this.pixelScale));
     this.canvas.height = Math.max(2, Math.round(h * this.pixelScale));
-    this.canvas.style.width = w + 'px';
-    this.canvas.style.height = h + 'px';
+    this.canvas.style.width = (this.captureViewport ? window.innerWidth : w) + 'px';
+    this.canvas.style.height = (this.captureViewport ? window.innerHeight : h) + 'px';
     // The crest overlay always carries NATIVE pixels (that is its point).
     this.overlay.width = Math.max(2, w);
     this.overlay.height = Math.max(2, h);
@@ -605,7 +630,7 @@ export class Renderer {
     // couch fit and the ordinary follow. The couch zoom still breathes;
     // the walls stand where the lock stamped them.
     const lockFocus = world.scene?.focus ? null : world.frameLockFocus();
-    let focus: { x: number; y: number } = world.scene?.focus ?? lockFocus ?? world.player.pos;
+    let focus: { x: number; y: number } = this.directorFocus ?? world.scene?.focus ?? lockFocus ?? world.player.pos;
     if (couchOn && viewOk) {
       // The fit sees the EFFECTIVE base zoom (× pixelScale): buffer dims and
       // zoom scale together, so the stretch math is scale-invariant.
@@ -619,7 +644,7 @@ export class Renderer {
     // The positional veils are single-eye fabrics — under a shared couch
     // frame they suspend per COUCH_CFG.render (both players see what the
     // camera sees); each veil's own fade handles the transition gracefully.
-    this.sightVeil.suspend = couchOn && COUCH_CFG.render.sightVeil === 'off';
+    this.sightVeil.suspend = (couchOn && COUCH_CFG.render.sightVeil === 'off') || this.directorNoSightVeil;
     this.roomVeil.suspend = couchOn && COUCH_CFG.render.roomVeil === 'off';
     const z = this.zoom, vw = w / z, vh = h / z;
     const az = world.arena;
@@ -914,7 +939,7 @@ export class Renderer {
     // is wordZ × (cssW / active buffer W) — the crest overlay carries native
     // pixels (ratio 1), the main canvas its render-scale buffer.
     this.wordView = {
-      z: crest ? wordZ : wordZ * (window.innerWidth / Math.max(1, this.canvas.width)),
+      z: crest ? wordZ : wordZ * (this.frameW / Math.max(1, this.canvas.width)),
       ox: this.cam.x - shx, oy: this.cam.y - shy,
     };
     if (!this.worldOnly) this.onCrest(crest, () => {
@@ -943,7 +968,10 @@ export class Renderer {
     }
 
     this.drawAtmosphere(world);
-    if (this.worldOnly) return;   // a showcase stage: no screen overlays, no HUD
+    if (this.worldOnly) {         // a showcase stage: no screen overlays, no HUD
+      if (this.directorCinematic) this.drawCinematicOverlays(world, crest, w, h);
+      return;
+    }
     this.drawStatusFx();          // status ailment overlays (edge vignettes/frost/stars)
     this.drawSurvivalVignette(world); // THE SURVIVAL VEIL: per-row meter washes (breath's asphyxiation blue)
     this.drawLowLifeGlow(world);  // low-life blood vignette + heartbeat + hit surge — over the veil: death keeps the last word
@@ -965,7 +993,7 @@ export class Renderer {
     this.uiW = surfW / us; this.uiH = surfH / us;
     // CSS px per virtual unit: the surface spans the window's CSS width
     // (resize() pins canvas.style.width = innerWidth on both surfaces).
-    this.uiToCss = us * (window.innerWidth / Math.max(1, surfW));
+    this.uiToCss = us * (this.frameW / Math.max(1, surfW));
     this.uiMouse.x = this.hudMouse.x / mScale / us; this.uiMouse.y = this.hudMouse.y / mScale / us;
     this.onCrest(crest, () => this.uiPass(us, () => {
       this.drawTimeflow(world);     // held-time wash + banner (engine/timeflow.ts hud specs)
@@ -994,6 +1022,25 @@ export class Renderer {
     this.onCrest(crest, () => {
       this.drawTraversalFx(world);  // a vertical crossing's wind streaks + whiteout veil (covers the HUD)
       this.drawModeFade(world);     // a survived death's crossing — DEAD LAST (covers the HUD too)
+      if (world.deathPresentation) drawPlayerDeathScreenFlash(this.ctx, this.canvas.width, this.canvas.height, world.deathPresentation);
+    });
+  }
+
+  /** THE CINEMATIC OVERLAYS (directorCinematic): the action's own screen
+   *  moments, drawn in the same order and on the same surfaces as the full
+   *  pass above, minus every readout. */
+  private drawCinematicOverlays(world: World, crest: boolean, w: number, h: number): void {
+    const us = this.uiScaleLive();
+    const surfW = crest ? this.overlay.width : w;
+    const surfH = crest ? this.overlay.height : h;
+    this.uiW = surfW / us; this.uiH = surfH / us;
+    this.onCrest(crest, () => this.uiPass(us, () => {
+      this.drawTimeflow(world);
+      this.drawEyecatch(world);
+    }));
+    this.onCrest(crest, () => {
+      this.drawTraversalFx(world);
+      this.drawModeFade(world);
       if (world.deathPresentation) drawPlayerDeathScreenFlash(this.ctx, this.canvas.width, this.canvas.height, world.deathPresentation);
     });
   }
@@ -3782,7 +3829,7 @@ export class Renderer {
     const edge = VIS_CFG.speech.dodge.edge;
     const view: SpeechRect = {
       x: wv.ox + edge, y: wv.oy + edge,
-      w: window.innerWidth / wv.z - edge * 2, h: window.innerHeight / wv.z - edge * 2,
+      w: this.frameW / wv.z - edge * 2, h: this.frameH / wv.z - edge * 2,
     };
     // PHASE 1 — MEASURE. Every bubble's tuning, gate, clock, wrap and HOME
     // box (the wrap law's hang, pane-dodged) resolve before any draws, so
@@ -5994,7 +6041,7 @@ export class Renderer {
 
     // anatomyState keeps painted windows and independent part pools readable
     // even before the first hit; ordinary full-life actors remain bar-less.
-    if (a !== world.player && (a.life < a.maxLife() - 0.5 || anatomyState.weakpoints.length || anatomyState.parts.length || anatomyState.part)) {
+    if (a !== world.player && !this.directorClean && (a.life < a.maxLife() - 0.5 || anatomyState.weakpoints.length || anatomyState.parts.length || anatomyState.part)) {
       const bw = Math.max(a.radius * 2.2, anatomyState.weakpoints.length ? ANATOMY_CUE_CFG.overheadWidth : 0);
       const frac = clamp(a.life / a.maxLife(), 0, 1);
       ctx.fillStyle = 'rgba(0,0,0,0.6)';
@@ -6020,7 +6067,7 @@ export class Renderer {
     // each dot one hit it can still eat. Same dent rule as every bar
     // (untorn stays clean); once the plies spend out, the ordinary life
     // bar above takes over and the body reads EXPOSED.
-    if (a !== world.player && a.pliesMax > 0 && a.plies > 0 && a.plies < a.pliesMax) {
+    if (a !== world.player && !this.directorClean && a.pliesMax > 0 && a.plies > 0 && a.plies < a.pliesMax) {
       const pip = PLY_CFG.pip;
       const w = (a.pliesMax - 1) * pip.gap;
       for (let i = 0; i < a.pliesMax; i++) {
@@ -6033,7 +6080,7 @@ export class Renderer {
     // LIFESPAN sliver (the Amalgam's clock): SIZABLE owned minions with a
     // finite hire show how much of it remains — swarms stay clean. A clock,
     // not a health readout: it ticks whether or not the life bar shows.
-    if (a !== world.player && a.owner && a.lifespan > 0 && a.radius >= 14 && a.lifespanTotal > 0) {
+    if (a !== world.player && !this.directorClean && a.owner && a.lifespan > 0 && a.radius >= 14 && a.lifespanTotal > 0) {
       const bw = a.radius * 2.2;
       ctx.fillStyle = '#b8a0e0';
       ctx.fillRect(x - bw / 2, y - a.radius - 5.5,
@@ -6042,12 +6089,12 @@ export class Renderer {
 
     // Layered-defense bars: energy shield (cyan) and absorb (white) — the
     // shield bar follows the same dent rule (full ES on a full body = clean).
-    if (a.es > 0 && a.maxEs() > 0 && a.es < a.maxEs() - 0.5) {
+    if (!this.directorClean && a.es > 0 && a.maxEs() > 0 && a.es < a.maxEs() - 0.5) {
       const bw = a.radius * 2.2;
       ctx.fillStyle = '#5ad8d8';
       ctx.fillRect(x - bw / 2, y - a.radius - 13, bw * clamp(a.es / a.maxEs(), 0, 1), 3);
     }
-    if (a.absorbTotal > 0) {
+    if (!this.directorClean && a.absorbTotal > 0) {
       const bw = a.radius * 2.2;
       ctx.fillStyle = '#e8f0f8';
       ctx.fillRect(x - bw / 2, y - a.radius - 16, bw * Math.min(1, a.absorbTotal / 60), 2.5);
@@ -6055,7 +6102,7 @@ export class Renderer {
     // POISE sliver (bronze): shown once the break-bar is DENTED — full bars
     // stay invisible so ordinary mobs read clean. A broken bar dims while
     // it climbs back to the re-arm line.
-    if (a !== world.player) {
+    if (a !== world.player && !this.directorClean) {
       const mp = a.maxPoise();
       if (mp > 0 && a.poise < mp - 0.5) {
         const bw = a.radius * 2.2;
@@ -6227,11 +6274,11 @@ export class Renderer {
     // meter above the head — the victim reads how close freedom is, the
     // HOLDER reads how long the catch will keep, and every ally reads
     // where the rescue stands.
-    this.drawGrabMeter(a, world);
+    if (!this.directorClean) this.drawGrabMeter(a, world);
 
     // Cast bar above the head (telegraphs enemy casts, too)
     const cs = a.casting;
-    if (cs) {
+    if (cs && !this.directorClean) {
       const bw = 44, bh = 5;
       const bx2 = x - bw / 2, by2 = y - a.radius - 18;
       const color = cs.inst.def.color;

@@ -103,6 +103,11 @@ always matching the build; where showcases appear is each surface's choice
 `balance/skill-showcase-ui.cjs` after a build. The site's skill clips
 (`scripts/capture-skill-clips.cjs`) film the same stages into `site/media/clips/`;
 `publish-site-media.mjs --pack clips` ships them as one release archive.
+Gameplay capture: `src/agent/` (HeroAgent, a PlayerInputSource: percept, scripted
+orders over a utility pick, a hand per cast mode) drives a seat through
+`World.applyInputs`; `src/director/` stages ShotSpec JSON (zone mint, sim build,
+spawns, camera, cues, held clock) and `scripts/capture-gameplay.cjs` films it.
+See `docs/engine/agent.md` and `docs/engine/director.md`; verify `probe_agent.ts`.
 
 Guidance for Claude Code working in this repository. This file is committed and
 shared with everyone who clones the repo.

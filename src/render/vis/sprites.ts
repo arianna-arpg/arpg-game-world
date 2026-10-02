@@ -17,6 +17,42 @@ import { registerVisCache } from './caches';
 
 const cache = new Map<string, HTMLCanvasElement>();
 
+/** THE BAKE SCALE (capture rigs only — render/vis/bakeScale.ts): bakes made
+ *  while this exceeds 1 carry that many device pixels per world unit, so a
+ *  close camera keeps bodies crisp. Each such canvas still REPORTS its
+ *  logical size (width/height getters) and is tagged with `__bake`, and the
+ *  drawImage shim maps every draw of it back to logical units, so no painter
+ *  or consumer sees a difference. 1 = the live game's bakes, untouched. */
+export const BAKE_SCALE = { value: 1 };
+/** The native size accessors, read on first use: headless rigs import this
+ *  module before any canvas exists (and never bake above scale 1). */
+let nativeSize: { w?: PropertyDescriptor; h?: PropertyDescriptor } | null = null;
+const canvasSize = (): { w?: PropertyDescriptor; h?: PropertyDescriptor } => nativeSize ??= {
+  w: Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'width'),
+  h: Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'height'),
+};
+
+/** A canvas whose bitmap is `s`× its logical size (see BAKE_SCALE). */
+function scaledCanvas(w: number, h: number, s: number): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  const native = canvasSize();
+  let lw = w, lh = h;
+  c.width = Math.max(2, Math.ceil(w * s));
+  c.height = Math.max(2, Math.ceil(h * s));
+  Object.defineProperty(c, 'width', {
+    configurable: true,
+    get: () => lw,
+    set: (v: number) => { lw = v; native.w?.set?.call(c, Math.ceil(v * s)); },
+  });
+  Object.defineProperty(c, 'height', {
+    configurable: true,
+    get: () => lh,
+    set: (v: number) => { lh = v; native.h?.set?.call(c, Math.ceil(v * s)); },
+  });
+  (c as HTMLCanvasElement & { __bake?: number }).__bake = s;
+  return c;
+}
+
 /** Shrink the LRU to its `keep` NEWEST entries, releasing every evicted
  *  backing store (the steward's zone-swap floor: a session that walks many
  *  biomes must not hold every biome's bestiary and crowns forever — the
@@ -54,10 +90,16 @@ export function baked(key: string, w: number, h: number,
     cache.set(key, hit);
     return hit;
   }
-  const c = document.createElement('canvas');
-  c.width = Math.max(2, Math.ceil(w));
-  c.height = Math.max(2, Math.ceil(h));
+  const s = BAKE_SCALE.value;
+  let c: HTMLCanvasElement;
+  if (s > 1) c = scaledCanvas(Math.max(2, Math.ceil(w)), Math.max(2, Math.ceil(h)), s);
+  else {
+    c = document.createElement('canvas');
+    c.width = Math.max(2, Math.ceil(w));
+    c.height = Math.max(2, Math.ceil(h));
+  }
   const ctx = c.getContext('2d')!;
+  if (s > 1) ctx.scale(s, s);   // BAKE_SCALE: painters keep drawing in logical units
   ctx.translate(c.width / 2, c.height / 2);
   paint(ctx, c.width, c.height);
   cache.set(key, c);
