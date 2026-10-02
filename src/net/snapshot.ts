@@ -9,6 +9,7 @@ import { bodyWalkPoseOf } from '../engine/bodyWalk';
 import { guardReleaseCue } from '../engine/warningCues';
 import { encounterCueOf } from '../engine/encounterCombat';
 import { parryCueStrength, guardArcRadians } from '../engine/combatCues';
+import { meleeReachCueOf } from '../engine/meleeReach';
 import type { TitanScenePiece } from '../engine/titans';
 import { cosmeticStyle, COSMETIC_PROJECTILES } from '../data/cosmeticStyles';
 import { cosmeticLoadoutFor, cosmeticSummonSkill, sanitizeCosmeticLoadout } from '../meta/cosmetics';
@@ -217,6 +218,7 @@ export interface StatusW { id: string; stacks: number; bk?: number; dot?: 1; }
 export interface AuraW { c: string; r: number; sh: number; }
 /** A cast in progress — the few fields the renderer's cast bar + guard arc read. */
 export interface CastW { parryCue?: number;
+  meleeReach?: import('../engine/meleeReach').MeleeReachCue;
   castingCompletion?: number;
   castingCue?: import('../engine/castingCues').CastingCue;
   focusBroken?: boolean;
@@ -830,6 +832,7 @@ function actorToW(a: Actor, world: World): ActorW {
     cw.guardReleaseCue = guardReleaseCue(a, world.time);
     cw.castingCompletion = castingCompletion(a);
     cw.castingCue = castingCueOf(a);
+    if(a.kind==='player')cw.meleeReach = meleeReachCueOf(a);
     cw.focusBroken = cs.focusBroken;
     if (cs.mode === 'guard' && cs.inst.def.guard) cw.guardArc = guardArcRadians(a)*180/Math.PI;
     if (cs.bashAt !== undefined) cw.bashAt = cs.bashAt;
@@ -1432,6 +1435,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
       pulseTimer: aw.cast.pulseTimer, shield: aw.cast.shield, maxShield: aw.cast.maxShield,
       guardReleaseCue: aw.cast.guardReleaseCue ? { ...aw.cast.guardReleaseCue } : undefined,
       resolvedGuardArc: aw.cast.guardArc===undefined?undefined:aw.cast.guardArc*Math.PI/180,
+      resolvedMeleeReach: aw.cast.meleeReach ? { ...aw.cast.meleeReach } : null,
       parryCue: aw.cast.parryCue, indicatorAt: aw.cast.indicatorAt, presses: aw.cast.presses, channelTime: aw.cast.channelTime,
       bashAt: aw.cast.bashAt, bashLow: aw.cast.bashLow, bashArmAt: aw.cast.bashArmAt,
       aim: { x: a.pos.x, y: a.pos.y }, held: false, baseMult: 1,

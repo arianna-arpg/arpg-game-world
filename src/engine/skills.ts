@@ -4363,6 +4363,10 @@ export interface SkillDef {
   color: string;
   /** Optional shared vector face (render/skillIcons); absent/false retains initials. */
   icon?: string | false;
+  /** False omits the local fixed-melee preparation footprint. */
+  reachCue?: false;
+  /** Override/omit the confirmed positional-hit outcome profile. */
+  backstabCue?: string | false;
 
   manaCost: number;
   /** Skills may natively cost life too (costToMana can convert it back). */

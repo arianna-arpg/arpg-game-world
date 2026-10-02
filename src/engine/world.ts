@@ -43233,12 +43233,15 @@ export class World {
       }
     }
 
+    // Freeze the positional result before damage; only a landed wound earns
+    // its presentation cue after the native guard/evade/immune gates below.
+    let rearHit = false;
     // Positional damage: striking from behind the target's facing.
     if (def.backstabMult && def.backstabMult > 1) {
       const behind = Math.abs(angleDiff(target.facing, angleTo(target.pos, caster.pos))) > 2.0;
       if (behind) {
         dmgMult *= def.backstabMult;
-        this.text(vec(target.pos.x, target.pos.y - 12), 'backstab!', '#d8c8ff', 12, 'combat');
+        rearHit = true;
       }
     }
     // PROXIMITY (the point-blank graft): up to the stat's bonus at touch,
@@ -43395,6 +43398,10 @@ export class World {
         }
       }
       dealt = result.total;
+      if (rearHit && dealt > 0 && def.backstabCue !== false) {
+        this.flashes.push(combatCueFlash(target.pos, def.backstabCue ?? 'rear_hit', target.radius,
+          angleTo(target.pos, caster.pos)));
+      }
       if (result.receivedAmounts) this.rollOwnProcs(target, 'struck', {
         depth, target: caster, crit: wasCrit, receivedAmounts: result.receivedAmounts,
       });

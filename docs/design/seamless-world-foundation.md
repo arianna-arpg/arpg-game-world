@@ -2095,3 +2095,41 @@ This is not overall acceptance or a played commercial-game comparison.
 Reward revision 6e6c4397 passed CI 37075598077 and Pages 37077084424.
 Exact live metadata reports 2026-10-02T23:21:48.059Z. Isolated remote QA preserved
 seed 3846617265 and all six ordinary-save sentinels through Continue.
+
+### Melee preparation and confirmed rear strikes
+
+The controlling player's ordinary direct-melee cast now shows a quiet ground
+footprint during preparation. `meleeReachCueOf` reads the resolved delivery,
+skill-local/granted-tag modifiers, reach, width and native shape. The painter
+uses the native square/triangle/band vocabulary and ordinary sector geometry.
+The host supplies a resolved read for native player co-op shells; older wire
+data clears it. Cast-telegraph preferences and `VIS_CFG.meleeReach` control
+visibility, and a skill may opt out with `reachCue:false`.
+
+The guide deliberately omits held modes, totem planting, target-derived casts,
+variable area and traveling melee conversions. It shows the direct footprint;
+additional effects, obstacles and moving bodies still decide actual contacts.
+No reach, aim lock, cast duration, cost, cancellation or hit rule changes.
+
+Positional damage keeps its native multiplier and angle test. A configurable
+`backstabCue` now produces the shared severing profile only after a positive
+landed hit passes guard, evade and immunity gates. The earlier pre-resolution
+"backstab!" caption is removed, so a refused hit cannot announce that success.
+The existing native flash lifecycle and co-op wire carry the outcome.
+
+All three type checks, 112 native combat-cue assertions and 25 combat smoke
+episodes pass. The new melee probe checks real radial/angular hit boundaries
+at three reach scales, exact rear/front damage ratio, refusal and zero-direct-hit
+cases, opt-outs, overrides and native snapshot clearing. The real client captures
+an out-of-range miss and in-range rear kill, the actual 57-unit preparation
+arc, setting opt-out and disappearance on completion, without render mutations.
+Those controlled images were inspected; they are not a player-enjoyment verdict.
+The isolated next critic is playing the preserved client through ordinary input.
+
+The country-reward critic finished level three after Cinderwatch, Silent Caravan
+and Broken Gate, used a support and passive in later fights, and verified native
+Save/Continue. Its 6,323 requested frames are 105.38 nominal seconds, separately
+from 34m21s of review/tool time. The gate retreat/recovery was its strongest
+moment; one compatible Rogue support, duplicate Memory and crowded, mana-limited
+combat left its overall verdict negative. No acceptance claim follows from
+this passing verification.

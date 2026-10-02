@@ -84,6 +84,8 @@ export interface CastingState {
   parryCue?: number;
   /** Host-resolved radians on render-only shells; live guards derive their arc. */
   resolvedGuardArc?: number;
+  /** Host-resolved local weapon footprint; null means deliberately absent. */
+  resolvedMeleeReach?: import('./meleeReach').MeleeReachCue | null;
   inst: SkillInstance;
   mode: CastMode;
   aim: Vec2;               // updated each frame when the mode tracks aim

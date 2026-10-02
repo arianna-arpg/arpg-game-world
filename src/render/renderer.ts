@@ -1,4 +1,5 @@
 import { drawSkillIcon } from './skillIcons';
+import { drawMeleeReach } from './vis/meleeReachLayer';
 import { treePointBudget } from '../engine/skillEmpowerment';
 import { altarInfluences } from '../engine/altarCues';
 import { drawAltarInfluence } from './vis/altarCueLayer';
@@ -6240,6 +6241,10 @@ export class Renderer {
       ctx.fillRect(px, y + a.radius + 4, 6, 6);
       px += 8;
     }
+
+    // Local direct-melee preparation shares native footprint geometry. Host
+    // resolution owns the co-op read; only the controlling seat sees this guide.
+    if(a===world.localSeat.actor && (this.getSettings?.().castTelegraphs ?? true)) drawMeleeReach(ctx,a);
 
     // FORESIGHT — an enemy wind-up marks where the blow will land, in the
     // skill's color, firming toward impact. GROUND footprints ring their

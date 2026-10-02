@@ -9,6 +9,8 @@ export const VIS_CFG = {
   /** Unassigned controls keep their hit areas and key labels while leaving
    * the battlefield visible. Filled skills retain their native readability. */
   hotbar: { emptyFillAlpha: .12, emptyBorderAlpha: .5 },
+  meleeReach: { enabled:true, color:'#dcebd6', edge:'#17201b', alpha:.34, progressAlpha:.25,
+    fillAlpha:.025, width:1.3, outline:1.5 },
   /** Local body identity and numeric clutter share one configurable presentation
    * contract. Neither changes damage, attack geometry or saved actor state. */
   combatFocus: {
