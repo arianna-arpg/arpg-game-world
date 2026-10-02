@@ -50,7 +50,7 @@ app.whenReady().then(async()=>{
   if(unsafe){assert.equal(after.bonus,0);assert.equal(after.cleared,false);}
   else{
    if(pending){assert.equal(after.bonus,0);assert.equal(after.cleared,false);assert.equal(after.level,1);}
-   else{assert.equal(after.bonus,70);assert.ok(after.cleared&&after.map.includes('Cinderwatch Camp · Lv 1 · Cleared'));}
+   else{assert.equal(after.bonus,70);assert.ok(after.cleared&&after.map.includes('Cinderwatch Camp · Lv 1 · Garrison defeated'));}
    await run(async()=>{__game.ui.hideAll();__game.save();await new Promise(r=>setTimeout(r,250));});
    await win.loadURL(url);
    const resumed=await run(async()=>{
@@ -68,7 +68,7 @@ app.whenReady().then(async()=>{
    const expected=pending?{level:2,xp:47,passives:1,cleared:true}:after;
    for(const key of ['level','xp','passives','cleared'])assert.equal(resumed[key],expected[key],'Continue preserves '+key+' without paying again');
    if(pending){assert.equal(resumed.life,resumed.maxLife,'pending level-up heals after saved wounds restore');assert.equal(resumed.mana,resumed.maxMana);}
-   assert.ok(resumed.map.includes('Cleared'));after.resumed=resumed;await shot('continued');
+   assert.ok(resumed.map.includes('Garrison defeated'));after.resumed=resumed;await shot('continued');
   }
   fs.writeFileSync(path.join(dir,label+'-ui.json'),JSON.stringify({before,after},null,2));
   console.log(pending?'PASS immediate final-kill Save/Continue preserves the pending reward and full native level-up recovery':unsafe?'PASS negative control: landmark kills previously supplied no completion reward':'PASS native landmark completion pays once, updates map and restores exact XP/passive budget through browser Continue');

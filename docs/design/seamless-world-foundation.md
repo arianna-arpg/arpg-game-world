@@ -1206,3 +1206,10 @@ invulnerability for route QA. It records no scene swap and verifies the wounded
 guardian's kit, original home/return phase, field and player position through
 browser Continue. This controlled test is separate from the fresh critic's
 ordinary-play assessment; it makes no claim about live frame rate or enjoyment.
+
+The completion notice and map now say **Garrison defeated**, sharing the wording
+through `MASS_CLEARANCE_VIEW`. A fresh playtest encountered another hostile after
+the earlier “cleared” notice. The reward still records the original eligible
+garrison; it does not establish a sanctuary or promise that wandering creatures
+are absent. The existing clearance probe and hidden client verify this wording
+alongside unchanged experience, one-time rewards and Continue.

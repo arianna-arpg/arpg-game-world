@@ -6,6 +6,8 @@ import type { MassSiteDiscovery } from './sites';
 import { objectiveRewardXp, type ObjectiveRewardCurve } from '../data/objectiveRewards';
 import { canonical } from './random';
 
+/** A completed garrison is a durable achievement, not a promise of safe ground. */
+export const MASS_CLEARANCE_VIEW = { complete: 'Garrison defeated' };
 export interface MassClearanceSpec extends ObjectiveRewardCurve { source: string }
 export function validateMassClearance(spec: MassClearanceSpec): void {
   if(!spec || typeof spec!=='object' || !spec.source || ![spec.xpBase,spec.xpPerLevel].every(n=>Number.isSafeInteger(n)&&n>=0&&n<=10000))
@@ -30,6 +32,6 @@ export function settleMassClearance(world: World, state: MassState, found: MassS
   if(!state.claim('site-cleared',found.id))return false;
   const xp=objectiveRewardXp(level,spec);
   world.grantXp(xp);
-  world.notice(content.site!.name+' cleared · +'+xp+' experience','#d8c08a',15,'civic');
+  world.notice(content.site!.name+' · '+MASS_CLEARANCE_VIEW.complete+' · +'+xp+' experience','#d8c08a',15,'civic');
   return true;
 }

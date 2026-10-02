@@ -36,7 +36,7 @@ w.kill(natives.get(slots[1])!,false,w.player);
 const killsOnly=earned(w);m.update(w,true);
 assert.equal(earned(w)-killsOnly,objectiveRewardXp(m.populationFor(place).level,content.site!.completion!));
 assert.ok(m.siteCleared(place.id));assert.ok(m.siteSearched(place.id));
-assert.ok(massMap(m,w.player.pos).includes('Cleared'));
+assert.ok(massMap(m,w.player.pos).includes('Garrison defeated'));
 assert.equal(w.completedObjectives.has(w.zone.id),false,'a place is not a completed global zone or quest');
 const paid=earned(w);
 for(let i=0;i<3;i++)m.update(w,true);
@@ -49,7 +49,7 @@ again.startWorldMass(checkpoint.state.run.seed,checkpoint);
 assert.ok(again.massRuntime!.siteCleared(place.id));
 assert.ok(slots.every(id=>again.massRuntime!.state.claimed('site-guardian',id)));
 const resumedXp=earned(again);again.player.pos=m.journey!.local(place);again.massRuntime!.update(again,true);
-assert.equal(earned(again),resumedXp);assert.ok(massMap(again.massRuntime!,again.player.pos).includes('Cleared'));
+assert.equal(earned(again),resumedXp);assert.ok(massMap(again.massRuntime!,again.player.pos).includes('Garrison defeated'));
 assert.deepEqual(again.massRuntime!.config.content.find(c=>c.id===place.content)!.site!.completion,content.site!.completion);
 console.log('PASS Continue retains eligibility, payout receipt, map state and the saved reward curve without paying again');
 
