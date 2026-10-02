@@ -1,4 +1,4 @@
-import { MONSTERS } from '../data/monsters';
+import { AMBIENT_TAGS, MONSTERS } from '../data/monsters';
 import { SKILLS } from '../data/skills';
 import type { MassPopulation } from './progression';
 
@@ -21,6 +21,24 @@ export function openingPopulation(level: number, table: MassPopulation['table'])
   if(small.length&&table.some(row=>!small.includes(row.id)&&limits.every(l=>!l.ids.includes(row.id))))
     limits.push({source:c.source+'/small-bodies',ids:small,max:c.maxSmallBodies});
   return {level,table,...(limits.length?{limits}:{})};
+}
+/** A completion-bearing place reserves some original slots for native objective
+ * targets. This becomes an ordinary saved quota, never a runtime reroll or a
+ * change to wildlife hostility. Native admission still makes the final decision. */
+export const MASS_GARRISON_COMPOSITION = { source: 'worldmass/landmark-guardians', minimum: 1 };
+export function reserveMassGuardians(population: MassPopulation, count: number,
+  minimum = MASS_GARRISON_COMPOSITION.minimum): MassPopulation {
+  if(!Number.isSafeInteger(minimum)||minimum<0||minimum>count)throw Error('Invalid minimum landmark guardians');
+  if(!minimum)return population;
+  const exempt=population.table.filter(row=>{
+    const def=MONSTERS[row.id];
+    return !def||!!def.passive||!!def.noObjective||AMBIENT_TAGS.has(def.tag??'');
+  }).map(row=>row.id);
+  if(!exempt.length)return population;
+  const result={...population,limits:[...(population.limits??[]),
+    {source:MASS_GARRISON_COMPOSITION.source,ids:exempt,max:count-minimum}]};
+  validatePopulationLimits(result);
+  return result;
 }
 export function validatePopulationLimits(population: MassPopulation): void {
   const limits=population.limits;

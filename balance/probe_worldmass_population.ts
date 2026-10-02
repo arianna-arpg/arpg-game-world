@@ -3,7 +3,7 @@ import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { massAdventure, type MassAdventure } from '../src/worldmass/preset';
 import { WorldMassRuntime } from '../src/worldmass/runtime';
-import { populationChoices, validatePopulationLimits } from '../src/worldmass/population';
+import { populationChoices, validatePopulationLimits, reserveMassGuardians, MASS_GARRISON_COMPOSITION } from '../src/worldmass/population';
 import { canonical, massRandom } from '../src/worldmass/random';
 import { MONSTERS } from '../src/data/monsters';
 import type { MassPopulation } from '../src/worldmass/progression';
@@ -13,7 +13,7 @@ const limited=cfg.content.flatMap(c=>c.levels??[]).filter(p=>p.limits?.length);
 assert.ok(limited.length>0);
 for(const p of cfg.content.flatMap(c=>c.levels??[])){
   validatePopulationLimits(p);
-  if(p.level>2)assert.equal(p.limits,undefined);
+  if(p.level>2)assert.ok(!p.limits?.some(l=>l.source.startsWith('worldmass/opening-composition')));
 }
 for(const p of limited) for(let seed=0;seed<256;seed++){
   const rng=massRandom(seed,['probe/composition']),picked:string[]=[];
@@ -24,6 +24,31 @@ for(const p of limited) for(let seed=0;seed<256;seed++){
 assert.ok(limited.some(p=>p.limits![0].ids.length),'native ranged species remain eligible');
 assert.ok(limited.some(p=>p.limits!.some(l=>l.source.endsWith('/small-bodies'))),'small bodies remain an accent in opening groups, with larger native bodies carrying the fight');
 console.log('PASS bounded opening composition across 256 seeds per native roster; later levels retain native variety');
+
+// Use the real objective predicate as an independent oracle for the saved quotas.
+const eligibilityWorld=makeSimWorld('warrior',701);
+const eligible=new Map<string,boolean>();
+for(const c of cfg.content)for(const row of c.levels??[])for(const r of row.table)
+  if(!eligible.has(r.id))eligible.set(r.id,eligibilityWorld.objectiveCountable(eligibilityWorld.createMonster(r.id,row.level,'enemy')));
+let wildlifeSeen=false, oldEmpty=0, checked=0;
+for(const c of cfg.content.filter(c=>c.site?.completion))for(const row of c.levels??[])for(let seed=0;seed<64;seed++){
+  const pick=(p:MassPopulation)=>{
+    const rng=massRandom(seed,['garrison',c.id,row.level]),ids:string[]=[];
+    for(let i=0;i<c.count;i++)ids.push(rng.weighted(populationChoices(p,ids)).id);
+    return ids;
+  };
+  const ids=pick(row);
+  assert.ok(ids.some(id=>eligible.get(id)),c.id+' must retain an eligible guardian');
+  wildlifeSeen ||= ids.some(id=>!eligible.get(id));checked++;
+  const old={...row,limits:row.limits?.filter(l=>l.source!==MASS_GARRISON_COMPOSITION.source)};
+  if(!pick(old).some(id=>eligible.get(id)))oldEmpty++;
+}
+assert.ok(wildlifeSeen,'eligible garrisons do not erase accompanying native wildlife');
+assert.ok(oldEmpty>0,'negative control must demonstrate the all-exempt population hole');
+const animals:MassPopulation={level:1,table:[{id:'dire_wolf',weight:1}]};
+assert.throws(()=>reserveMassGuardians(animals,2));
+assert.equal(reserveMassGuardians(animals,2,0),animals,'authors can explicitly opt out');
+console.log('PASS '+checked+' landmark populations retain native eligible guardians and wildlife; old rules produced '+oldEmpty+' empty garrisons');
 
 const table=limited[0].table;
 for(const limits of [

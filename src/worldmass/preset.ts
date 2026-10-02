@@ -6,7 +6,7 @@ import type { MassSpec } from './contracts';
 import type { MassProgressionSpec, MassPopulation } from './progression';
 import { freezeData } from './random';
 import { frontierLandmarks } from './landmarks';
-import { openingPopulation } from './population';
+import { openingPopulation, reserveMassGuardians } from './population';
 import { STARTER_SUPPORTS } from '../meta/account';
 import { nativeMassSite, type MassSiteSpec } from './sites';
 
@@ -107,12 +107,13 @@ export function massAdventure(): MassAdventure {
         table: presenceTable(FACTIONS.undead.table, 1, id => MONSTERS[id]?.presence)
           .filter(r => MONSTERS[r.id] && !MONSTERS[r.id].habitat).map(r => ({ id: r.id, weight: r.weight })),
         site: nativeMassSite('pillaged_township', 'Pillaged Ruin', { x: 60, y: 80, holdSeconds: 5 }) },
-      ...frontierLandmarks().map(landmark => ({ id: landmark.id, source: landmark.site.source,
-        level: 1, count: landmark.count, levelOffset: landmark.undead ? 1 : 0,
-        levels: populations(landmark.undead ? FACTIONS.undead.table : TILESETS.downs.packs.table),
-        table: presenceTable(landmark.undead ? FACTIONS.undead.table : TILESETS.downs.packs.table, 1, id => MONSTERS[id]?.presence)
-          .filter(r => MONSTERS[r.id] && !MONSTERS[r.id].habitat).map(r => ({ id: r.id, weight: r.weight })),
-        site: landmark.site, ...(landmark.magicPack ? { magicPack: landmark.magicPack } : {}) })),
+      ...frontierLandmarks().map(landmark => {
+        const levels=populations(landmark.undead ? FACTIONS.undead.table : TILESETS.downs.packs.table)
+          .map(row=>landmark.site.completion ? reserveMassGuardians(row,landmark.count) : row);
+        return { ...levels[0], id: landmark.id, source: landmark.site.source,
+          count: landmark.count, levelOffset: landmark.undead ? 1 : 0, levels,
+          site: landmark.site, ...(landmark.magicPack ? { magicPack: landmark.magicPack } : {}) };
+      }),
     ],
     rewards: { source: 'worldmass/first-cache-support', supports: [...STARTER_SUPPORTS], level: 1, maxRewards: 1 },
     journey: { source: 'worldmass/frontier-circuit', width: 120, color: '#62573e', clearingColor: '#454331',

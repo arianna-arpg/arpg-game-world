@@ -1084,3 +1084,12 @@ admitted bodies, native kill rewards, level/point changes, the map, saving and
 Continue. Its `HOLLOW_WAKE_QA_UNREWARDED=1` negative control uses the preceding
 build: the same two Cinderwatch kills yield 22 experience alone; the new
 landmark adds 70, reaching level 2 with 47 experience and one passive point.
+
+Reward-bearing landmark rosters reserve at least one native objective-eligible
+slot through the same saved composition quotas. `MASS_GARRISON_COMPOSITION`
+owns that minimum; wildlife can still accompany a garrison and keeps its native
+behavior. All-exempt authored rosters refuse instead of creating a place whose
+completion can never pay. Existing expedition descriptors retain their previous
+rosters. The population probe uses the native objective predicate across 6,144
+sampled landmark populations: the prior rules produced 28 all-exempt garrisons,
+while the reservation preserved at least one eligible target in every sample.
