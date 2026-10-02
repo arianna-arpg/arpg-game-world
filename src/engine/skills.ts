@@ -2228,8 +2228,8 @@ export interface BlinkDelivery {
   range: number;
   /** Seconds before the displacement happens (telegraphed). */
   delay?: number;
-  /** With `targeting: { target: 'enemy' }`: arrive BEHIND the target,
-   *  facing it (Shadow Step). */
+  /** With `targeting: { target: 'enemy' }`: arrive behind the target's
+   *  current body heading, facing it; native travel/landing collision still wins. */
   behindTarget?: boolean;
 }
 

@@ -37308,9 +37308,10 @@ export class World {
         if (caster.caromRun) this.endCarom(caster, { quiet: true });
         let dest: Vec2;
         if (d.behindTarget && targetInfo?.actor) {
-          // Shadow Step: emerge on the far side, facing the target.
+          // A rear-target blink follows the victim's body heading, not the
+          // approach line: flanking an unaware foe must not move us in front.
           const foe = targetInfo.actor;
-          const ang = angleTo(caster.pos, foe.pos);
+          const ang = foe.facing + Math.PI;
           dest = vec(
             foe.pos.x + Math.cos(ang) * (foe.radius + caster.radius + 10),
             foe.pos.y + Math.sin(ang) * (foe.radius + caster.radius + 10));

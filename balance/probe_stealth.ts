@@ -1,4 +1,5 @@
 import { strict as assert } from 'node:assert';
+import { angleDiff, angleTo } from '../src/core/math';
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { updateAI } from '../src/engine/ai';
@@ -153,3 +154,34 @@ console.log('PASS charges, offensive invisibility break, alerted rear opening, t
 }
 console.log('PASS hidden projectile launch evidence, watch search rung and ordinary Cloak ambush bonus');
 console.log('PASS stealth perception regression');
+
+// Rear-target movement is body-relative, even when we already flank an unaware
+// victim. The former approach-relative destination failed 40/64 orientations.
+{
+  let casts=0;
+  for(let heading=0;heading<8;heading++)for(let approach=0;approach<8;approach++){
+    const w=makeSimWorld('rogue',42),p=w.player;
+    w.doodads=[];w.markDoodadsChanged();
+    const foe=w.createMonster('zombie',1,'enemy');
+    foe.pos={x:800,y:800};foe.facing=heading*Math.PI/4;foe.facingPrev=foe.facing;w.actors.push(foe);
+    const ang=approach*Math.PI/4;
+    p.pos={x:800+Math.cos(ang)*150,y:800+Math.sin(ang)*150};
+    const mana=p.mana, inst=makeSkillInstance(SKILLS.shadow_step);
+    assert.ok(w.useSkill(p,inst,foe.pos));
+    assert.ok(p.mana<mana,'ordinary native resource cost is paid');
+    assert.ok(Math.abs(angleDiff(foe.facing,angleTo(foe.pos,p.pos)))>2,'land in the actual rear damage sector');
+    near(angleDiff(p.facing,angleTo(p.pos,foe.pos)),0);
+    casts++;
+  }
+  assert.equal(casts,64);
+}
+{
+  const w=makeSimWorld('rogue',43),p=w.player;w.doodads=[];w.markDoodadsChanged();
+  p.pos={x:650,y:800};const foe=w.createMonster('zombie',1,'enemy');
+  foe.pos={x:800,y:800};foe.facing=Math.PI;w.actors.push(foe);
+  w.doodads.push({kind:'rock',pos:{x:845,y:800},radius:30});w.markDoodadsChanged();
+  assert.ok(w.useSkill(p,makeSkillInstance(SKILLS.shadow_step),foe.pos));
+  assert.equal(w.pointInSolid(p.pos.x,p.pos.y,p.radius*.4),null,'rear arrival still respects native solid geometry');
+  assert.ok(p.pos.x>=p.radius&&p.pos.y>=p.radius&&p.pos.x<w.arena.w-p.radius&&p.pos.y<w.arena.h-p.radius,'arrival stays in the native arena');
+}
+console.log('PASS body-relative rear arrival from 64 orientations, native cost/facing and obstructed landing');

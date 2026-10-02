@@ -1043,3 +1043,16 @@ pursuers, a live vendor and native Save/Continue. On the previous candidate its
 negative control lost life from 154 to about 90; the corrected client stayed at
 154 with invulnerability false, and both pursuers physically left the town.
 The separate ordinary-play critic retains its original defect and retest.
+
+### Body-relative rear-target movement
+
+A controlled check of the Rogue's positioning concern found that rear-target
+blinks used the approach line rather than the victim's heading. Forty of 64
+heading/approach combinations landed outside the actual backstab sector.
+The shared `BlinkDelivery.behindTarget` path now chooses the victim's rear.
+Native collision and standing-ground clamps still take priority, and the
+victim can subsequently turn or move; this does not guarantee a later hit.
+Costs, attack timing, concealment and positional damage are unchanged.
+
+The stealth probe retains the 64-orientation regression and obstructed arrival
+case. Verify native starter trees, layers, sanctuary and combat smoke as well.
