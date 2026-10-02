@@ -102,7 +102,8 @@ export function installMenuBarStyles(): void {
     .menu-dock { display: flex; flex-wrap: wrap-reverse; align-items: flex-end; align-content: flex-end; gap: ${MENU_CFG.dockGapPx}px;
       max-width: ${(T + MENU_CFG.dockGapPx) * MENU_CFG.dockCols - MENU_CFG.dockGapPx}px; }
     .menu-bar[data-anchor="right"] .menu-dock { justify-content: flex-end; }
-    .menu-tray { position: absolute; bottom: calc(100% + 8px); left: 0; min-width: 236px; max-height: calc(80vh / var(${UI_SCALE_CFG.cssVar}, 1));
+    .menu-tray { position: absolute; bottom: calc(100% + 8px); left: 0; width: 236px; min-width: 0; box-sizing: border-box;
+      max-width: calc((100vw - ${2 * inset}px) / var(${UI_SCALE_CFG.cssVar}, 1)); max-height: calc(80vh / var(${UI_SCALE_CFG.cssVar}, 1));
       overflow-y: auto; background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 6px; padding: 6px;
       box-shadow: 0 4px 24px rgba(0,0,0,0.7); }
     .menu-bar[data-anchor="right"] .menu-tray { left: auto; right: 0; }
@@ -182,6 +183,7 @@ export class MenuBar {
     root.appendChild(this.tray);
     document.body.appendChild(root);
     this.root = root;
+    window.addEventListener('resize', () => this.seatTray());
 
     // ONE delegated click per root — rebuilt rows stay live.
     root.addEventListener('click', (e) => {
@@ -339,7 +341,7 @@ export class MenuBar {
     this.btn.classList.toggle('lit', this.trayOpen);
     this.tray.classList.toggle('hidden', !this.trayOpen);
     this.dock.classList.toggle('hidden', !dock);
-    if (sig === this.signature) return;
+    if (sig === this.signature) { this.seatTray(); return; }
     this.signature = sig;
     if (dock) this.dock.innerHTML = fold.entries.map(v => this.tileHtml(v)).join('');
     this.tray.innerHTML = fold.groups.map(g => `
@@ -347,6 +349,8 @@ export class MenuBar {
         <div class="menu-group-h">${escapeHtml(g.group.label)}</div>
         ${g.group.id === 'town' ? this.stationsHtml(g.entries) : g.entries.map(v => this.rowHtml(v)).join('')}
       </div>`).join('');
+    // The opening/expansion is already visible; seat it before another game tick.
+    this.seatTray();
   }
 
   /** The same gated station rows feed both the shortcut and its disclosure.
@@ -441,8 +445,13 @@ export class MenuBar {
     const root = this.root.getBoundingClientRect(), tray = this.tray.getBoundingClientRect();
     const wanted = this.root.dataset.anchor === 'right' ? root.right - tray.width : root.left;
     const left = Math.max(MENU_CFG.insetPx, Math.min(wanted, window.innerWidth - tray.width - MENU_CFG.insetPx));
-    this.tray.style.left = `${(left - root.left) / (uiScaleNow() || 1)}px`;
+    const scale = uiScaleNow() || 1;
+    const above = root.top - 8 * scale - tray.height;
+    const top = Math.max(MENU_CFG.insetPx, Math.min(above, window.innerHeight - tray.height - MENU_CFG.insetPx));
+    this.tray.style.left = `${(left - root.left) / scale}px`;
     this.tray.style.right = 'auto';
+    this.tray.style.top = `${(top - root.top) / scale}px`;
+    this.tray.style.bottom = 'auto';
   }
 
   private clearInlineSeat(): void {

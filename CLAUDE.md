@@ -115,6 +115,11 @@ and hidden `balance/worldmass-fields-ui.cjs`. Owned native passive names/effects
 remain visible after allocation through `ui/passiveFrontier.ts`; its client
 harness checks that confirmation alongside single spending and Continue.
 
+The MenuBar tray seats immediately when opened or rebuilt, with scaled bounds
+on both axes and a scrollable width cap. Verify `balance/menu-tray-ui.cjs` for
+first-click placement, enlarged UI, expanded stations and reachable Pause Menu;
+the prior build with HOLLOW_WAKE_QA_LEGACY=1 reproduces the clipped opening.
+
 Native altar modifier recipients share source-attributed sigils through
 `engine/altarCues.ts`; the actor renderer retains visibility and alpha. Native
 membership/source ownership, not a second radius check, drives the display.

@@ -1986,3 +1986,22 @@ or played AAA comparison has been obtained.
 Walking commit 0676a8b8 passed CI 37070140427 and Pages 37071442133.
 Exact preview metadata reports 2026-10-02T22:16:49.538Z. Isolated remote QA
 retained seed 3450388102 and all six ordinary-save sentinels through Continue.
+
+### Seat the menu on its opening frame
+
+The movement critic's 1064-pixel capture reproduced in the actual client: the
+first menu click drew a 236-pixel tray at x=895, ending at x=1131, because the
+placement correction waited for a later game tick. `MenuBar.paint` now seats the
+tray immediately after opening or changing its content. The same placement
+keeps both axes inside the actual viewport and responds to resize without moving
+the user's control row. The tray width can contract on small screens; scrolling
+retains access to its final page.
+
+The real-client control reproduces the old clipping. The fixed client passes
+five viewport/UI-scale/anchor cases from 1064 by 850 at 100% through 320 by 360
+at 200%, without an intervening game tick after opening. Expanded stations remain
+inside the viewport, the button does not move, and scrolling to Pause Menu hits
+the visible button and opens the native pause page. Normal and enlarged captures
+were inspected. All three type checks and the native menubar probe pass.
+This corrects the menu surface; it does not claim that every HUD element fits the
+smallest stress viewport.
