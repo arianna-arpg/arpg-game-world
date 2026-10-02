@@ -46576,7 +46576,7 @@ export class World {
           // its spawn is a closed door.
           if (!actor.noBounty) {
             this.grantXp(actor.xpValue);
-            this.text(actor.pos, `+${actor.xpValue} xp`, '#b8a0e0', 11, 'xp');
+            if (actor.xpValue > 0) this.text(actor.pos, `+${actor.xpValue} xp`, '#b8a0e0', 11, 'xp');
             this.rollDrops(actor);
             // Elites spill extra gems on top of the base roll (bias rides along).
             if (actor.rarity) {

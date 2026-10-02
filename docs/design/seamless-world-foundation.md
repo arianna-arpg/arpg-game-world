@@ -2030,3 +2030,16 @@ opening at the expected remaining beat without repeating its reward. The final
 opened cache screenshot was inspected. The fixture uses controlled positioning
 and kills; an independent critic is separately playing the preserved build
 through ordinary input. Old descriptors keep their earlier timing.
+
+### Empty experience notices
+
+Credited native kills with zero experience no longer emit a "+0 xp" float.
+The native experience grant, kill hooks, loot and all other feedback are
+unchanged. Positive experience keeps its existing display and preference gate.
+All three type checks and the 11 native toll/spill checks pass. This small
+presentation correction adds no new reward rule or target exclusion.
+
+Source inspection confirms that ordinary and repeating chain hops choose the
+nearest eligible unstruck target with a firing line. Breakables participate in
+that native system. No chain-targeting change was made solely from the critic's
+observation; doing so would alter existing skill/environment interactions.
