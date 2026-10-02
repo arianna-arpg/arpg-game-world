@@ -1,4 +1,6 @@
 import { treePointBudget } from '../engine/skillEmpowerment';
+import { altarInfluences } from '../engine/altarCues';
+import { drawAltarInfluence } from './vis/altarCueLayer';
 import { CombatTextLayout, combatBodyRect, drawPlayerFocus } from './vis/combatFocus';
 import { CombatMeterLayout } from './vis/combatMeters';
 import { bodyActionPoseOf } from '../engine/bodyAction';
@@ -4430,7 +4432,10 @@ export class Renderer {
       ctx.stroke();
       ctx.textAlign = 'center';
       ctx.font = 'bold 10px Verdana';
-      ctx.fillStyle = color;
+      const altarLabel=VIS_CFG.altar.label;
+      ctx.strokeStyle=altarLabel.outline;ctx.lineWidth=altarLabel.width;ctx.lineJoin='round';
+      ctx.strokeText(name,x,y+32);
+      ctx.fillStyle=contrastGuard(color,altarLabel.outline,altarLabel.contrast,'lighter');
       ctx.fillText(name, x, y + 32);
     }
   }
@@ -5889,6 +5894,8 @@ export class Renderer {
       ctx.globalAlpha = 1;
     }
 
+    ctx.save(); ctx.globalAlpha = baseAlpha;
+    drawAltarInfluence(ctx, altarInfluences(a, world.altars), a.radius, a.pos, world.time); ctx.restore();
     drawShellCue(ctx, a, world.time);
     ctx.save(); ctx.globalAlpha = baseAlpha;
     drawPayloadBody(ctx, payloadCueRows(a, world), a.radius); ctx.restore();

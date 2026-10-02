@@ -19,7 +19,11 @@ export const VIS_CFG = {
     meters: { enabled: true, bodyScale: 1.15, bodyPad: 3, gap: 2, step: 10, rings: 8,
       settleSec: .35, linkGap: 2, linkWidth: 1, linkColor: '#adbaa9', linkEdge: '#172019' },
   },
-  altar: { mendRuneRadius: 8.5, mendRuneWidth: 2, mendRuneAlpha: .9 },
+  altar: { mendRuneRadius: 8.5, mendRuneWidth: 2, mendRuneAlpha: .9,
+    influence: { enabled: true, maxSources: 3, pad: 9, spacing: 9, motes: 2,
+      period: 1.4, travel: 10, sigil: 4, width: 1.8, outline: '#10121a', contrast: { minGap: .65, margin: .05 } },
+    label: { outline: '#10121a', contrast: { minGap: .65, margin: .05 }, width: 3 },
+  },
   /** Where the key light sits (radians, screen space). Volume shading, gloss
    *  bands and long doodad shadows all agree on this one sun. */
   lightAngle: -2.35, // up-left

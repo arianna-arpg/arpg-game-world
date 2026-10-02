@@ -57,6 +57,13 @@ and hidden `balance/worldmass-fields-ui.cjs`. Owned native passive names/effects
 remain visible after allocation through `ui/passiveFrontier.ts`; its client
 harness checks that confirmation alongside single spending and Continue.
 
+Native altar modifier recipients share source-attributed sigils through
+`engine/altarCues.ts`; the actor renderer retains visibility and alpha. Native
+membership/source ownership, not a second radius check, drives the display.
+`AltarDef.influenceCue=false` opts out; `VIS_CFG.altar` owns presentation.
+Verify worldmass_fields and hidden `balance/altar-cues-ui.cjs` for actual
+friend/foe entry, independent departure, native damage values and screenshots.
+
 The shared `vis/combatFocus.ts` keeps the local player identifiable in crowds
 and places damage values clear of visible bodies; `VIS_CFG.combatFocus` owns
 its presentation dials. Verify `probe_combatfocus.ts` and the isolated real

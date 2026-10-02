@@ -21,6 +21,7 @@ export function validateMassAltar(row: MassAltarSpec, radius: number): void {
     || d.radius < 24 || Math.hypot(row.x,row.y)+d.radius >= radius
     || !Array.isArray(d.mods) || d.mods.length>16
     || d.mods.some(m=>!STAT_DEFS[m.stat] || !['flat','increased','more','override'].includes(m.kind) || !Number.isFinite(m.value))
+    || d.influenceCue!==undefined && typeof d.influenceCue!=='boolean'
     || d.bolts || d.killGems
     || d.mend && (![d.mend.every,d.mend.base,d.mend.perLevel].every(Number.isFinite)
       || d.mend.every<=0 || d.mend.base<0 || d.mend.perLevel<0))

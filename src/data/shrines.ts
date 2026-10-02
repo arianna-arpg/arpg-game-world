@@ -80,6 +80,8 @@ export interface AltarDef {
   radius: number;
   /** Applied to every actor inside — friend, foe, and minion alike. */
   mods: Modifier[];
+  /** Persistent source sigil on actual modifier recipients; presentation only. */
+  influenceCue?: boolean;
   /** LOCALIZED STORM: telegraphed strikes on random points inside the field,
    *  hitting EVERYONE beneath (the weather-strike shape, altar-local — the
    *  telegraph disc is dodgeable and the AI reads it like any blast). */

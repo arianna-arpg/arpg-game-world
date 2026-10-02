@@ -1234,3 +1234,29 @@ owner attribution and an intercepted shield-breaking hit. The isolated client
 allocates the existing node with one controlled point and verifies the same
 successful hit and modifier activation against both builds. This is controlled
 mechanics QA, not evidence of an improved independent enjoyment verdict.
+
+### Shared modifier-field presence
+
+The fifth fresh critic completed an ordinary Warrior run through Cinderwatch,
+Broken Gate and a Stoneward victory, then verified the earned build and location
+through native Save/Continue. The overall verdict remained negative: defensive
+and altar experiments did not communicate their payoff clearly, and sustained
+Cleave remained effective. That report predates the active-block recency fix;
+the fix does not retroactively turn the playtest into a positive review.
+
+Persistent native altar modifier sources now carry the altar's triangular sigil
+and inward-moving motes on their actual recipients. Both teams use the same
+membership ledger and granted source; leaving the field removes the cue with
+the modifiers. The actor renderer retains visibility/alpha, so hidden bodies
+gain no marker, and no line crosses scenery to reveal the source. Pulse-only
+Mending retains its measured restoration transfers. Altar labels use the shared
+contrast guard and an outline. Colors remain authored by the field, presentation
+dials live in VIS_CFG.altar, and AltarDef.influenceCue=false opts out.
+
+This is a presence cue, not a promise that every conditional modifier currently
+contributes, a new combat rule, or a claim that the enjoyment criterion passed.
+The field probe checks both teams, actual native edge contact, source removal,
+story/death gates and opt-out. The isolated altar-cues client captures both
+bodies inside, only the enemy inside, then both outside, while checking the real
+Wrath damage multiplier independently for each. Type checks, native combat smoke,
+field/visibility probes and actual screenshots accompany the change.
