@@ -157,6 +157,12 @@ Resolve visibility before drawing bodies; wall queries and pixels share one cont
 resolver. Verify the sightveil/visibility_stability probes and hidden
 `balance/visibility-ui.cjs` (including its old-code negative control).
 
+Independent local gameplay reviews can use `balance/playtest-client.cjs` with a
+fixed build and unique disposable session. Native device input, paired canvas/
+HTML captures, a retained origin and build fingerprint keep review evidence
+traceable. See `docs/ai/PLAYTEST_CLIENT.md`; the client has no arbitrary-code or
+stat-grant endpoint. Frame stepping does not establish real-time feel.
+
 Scripted QA input passes `core/scriptedInput.ts` before entering the simulation.
 Malformed coordinates/buttons or a throwing source release the QA callback and
 report the error; native device input is unchanged. Verify the isolated
