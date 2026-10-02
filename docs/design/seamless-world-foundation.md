@@ -1562,3 +1562,28 @@ there; outside those cells, twenty-one pixels differ by at most two channel
 levels (51 total), within the recorded Canvas clipping tolerance. Physical
 regions/colors remain equal. Synthetic and actual-game images were inspected.
 This surface pass does not resolve either critic's remaining gameplay concerns.
+
+### Raised guard faces
+
+A copy of the completed Magician review's disposable profile identified the
+unclear road pursuer as a native Sylvan Warden with Shield Up. The original
+review/save evidence was preserved. The reviewer could see bars but could not
+reliably distinguish protected hits from misses; its verdict remains unchanged.
+
+Held guards now carry a segmented raised face through vis/raisedGuard.ts, with
+configurable depth, seams, rims and cracks. Facing/arc come from native coverage,
+and surface wear comes from the actual shield fraction. The existing coverage
+arc remains, including area scaling and the native release pull. Both face and
+arc honor body visibility. No guard strength, cost, interception, AI, reward or
+combat clocks change, and the exposed rear gains no painted shield.
+
+All three type checks, the scoped build, defense-cue probe and native coverage
+client pass, including 240-degree interception. The painter client checks three
+strength states, exposed-side silence, bounded stroke/antialias extent, opacity,
+disable and state/RNG preservation. Actual Warden QA raises its native guard,
+spends its shield from 60 to 24 while life remains 140, rejects a rear block, and
+breaks into the native cooldown. Redrawing preserves the live actor/cast state.
+The initial fixture was affected by a queued browser frame after setup; draining
+that callback and initializing both facing samples stabilized the controlled rig.
+Gallery and intact/worn/broken game frames were inspected. A fresh eastern Rogue
+review continues on its earlier fixed build, without these visual changes.

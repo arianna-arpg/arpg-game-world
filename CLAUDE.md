@@ -126,6 +126,11 @@ successful real-use gate; `SkillDef.bodyMotion` can select/disable a profile.
 Co-op carries the resolved pose; ground geometry and combat clocks stay native.
 `PartSpec.action` adds optional weapon joints to existing looks; runtime sprites
 separate those parts while portraits keep the complete neutral figure.
+`vis/raisedGuard.ts` adds a shield face to native held guards; `RAISED_GUARD_VIEW`
+controls its panels and wear. Facing, coverage and strength read the actual guard;
+body visibility also applies to its existing arc. Verify defensecues,
+`balance/guard-coverage-ui.cjs`, `balance/raised-guard-ui.cjs` and
+`balance/raised-guard-world-ui.cjs` for real raise/absorb/rear/break behavior.
 The Rogue's paired blades expose separate sides of the same native dagger part.
 Verify castingcues and `balance/body-action-ui.cjs` (default Warrior;
 `HOLLOW_WAKE_QA_CLASS=rogue` exercises actual Backstab and both joints).

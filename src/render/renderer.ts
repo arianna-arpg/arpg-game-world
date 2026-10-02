@@ -7,6 +7,7 @@ import { bodyActionPoseOf } from '../engine/bodyAction';
 import { applyBodyActionPose } from './vis/bodyActionLayer';
 import { drawActionParts } from './vis/actionParts';
 import { drawBodyContrast } from './vis/bodyContrast';
+import { drawRaisedGuard } from './vis/raisedGuard';
 import { MassPainter } from '../worldmass/paint';
 import { regionGrid } from '../world/walk'; // worldmass shares native grounded telegraphs
 import { concealmentActive } from '../engine/perception';
@@ -5892,18 +5893,20 @@ export class Renderer {
       const frac = Math.max(0, (cs.shield ?? 0) / (cs.maxShield ?? 1));
       const arcRad = guardArcRadians(a);
       const r = a.radius + 9 - (guardWarning ? a.radius * WARNING_CUE_CFG.bash.shieldPull * guardWarning.progress : 0);
+      ctx.save();
+      drawRaisedGuard(ctx,r,a.facing,arcRad,frac,cs.inst.def.color,baseAlpha);
       ctx.strokeStyle = cs.inst.def.color;
       ctx.lineWidth = 5;
-      ctx.globalAlpha = 0.35 + 0.55 * frac;
+      ctx.globalAlpha = baseAlpha * (0.35 + 0.55 * frac);
       ctx.beginPath();
       ctx.arc(0, 0, r, a.facing - arcRad / 2, a.facing + arcRad / 2);
       ctx.stroke();
       ctx.lineWidth = 2;
-      ctx.globalAlpha = 0.25;
+      ctx.globalAlpha = baseAlpha * 0.25;
       ctx.beginPath();
       ctx.arc(0, 0, r + 5, a.facing - arcRad / 2, a.facing + arcRad / 2);
       ctx.stroke();
-      ctx.globalAlpha = 1;
+      ctx.restore();
     }
 
     ctx.save(); ctx.globalAlpha = baseAlpha;
