@@ -7,7 +7,7 @@ import { massAdventure } from '../src/worldmass/preset';
 import { WorldMassRuntime } from '../src/worldmass/runtime';
 import { recordMassGuardian, settleMassClearance, validateMassClearance } from '../src/worldmass/clearance';
 import { canonical } from '../src/worldmass/random';
-import { serializeCharacter } from '../src/meta/character';
+import { serializeCharacter, applySavedCharacter } from '../src/meta/character';
 import { massMap } from '../src/worldmass/paint';
 import type { Actor } from '../src/engine/actor';
 
@@ -105,5 +105,27 @@ const beforeCompletion=earned(continued);cm.update(continued,true);
 assert.equal(earned(continued)-beforeCompletion,18,'partial Continue uses its authored curve, not current default rewards');
 assert.ok(cm.siteCleared(hp.id));
 console.log('PASS unfinished garrison Continue preserves fallen slots and pays its saved custom curve on the final native kill');
+
+// Save in the half-second between the last native kill and clearance settlement.
+const late=rig();
+for(const id of late.slots)late.w.kill(late.natives.get(id)!,false,late.w.player);
+late.w.player.life=31;late.w.player.mana=4;
+const lateSave=serializeCharacter(late.w);
+assert.equal(late.m.siteCleared(late.place.id),false);
+const lateResume=makeSimWorld('warrior',921);
+assert.ok(applySavedCharacter(lateResume,lateSave));
+assert.ok(lateResume.adoptWorldState(lateSave.world));
+lateResume.startWorldMass(lateSave.world!.worldmass!.state.run.seed,lateSave.world!.worldmass!);
+assert.equal(lateResume.massRuntime!.siteCleared(late.place.id),false,'building the scene cannot spend the pending receipt');
+lateResume.resumeSpawn('exact',lateSave.world!.player);
+const lateBefore=earned(lateResume);
+lateResume.massRuntime!.update(lateResume);
+assert.equal(earned(lateResume)-lateBefore,70);
+assert.equal(lateResume.player.level,2);
+assert.equal(lateResume.player.life,lateResume.player.maxLife(),'saved wounds cannot erase the earned level-up recovery');
+assert.equal(lateResume.player.mana,lateResume.player.maxMana());
+lateResume.massRuntime!.update(lateResume,true);
+assert.equal(earned(lateResume)-lateBefore,70);
+console.log('PASS final-kill Save/Continue pays after saved vitals restore, retaining native level-up recovery exactly once');
 
 restore();

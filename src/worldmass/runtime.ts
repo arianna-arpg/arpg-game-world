@@ -60,6 +60,7 @@ export class WorldMassRuntime {
   private nearKey = '';
   private dangerCache = new Map<string, number>();
   private nextPopulation = 0;
+  private attached = false;
   private places = new Map<string, ReturnType<MassGenerator['placesInCell']>>();
   readonly origin: MassCell;
   readonly resumeTier: number;
@@ -218,6 +219,8 @@ export class WorldMassRuntime {
       level:this.populationFor(place).level,
     }));
     this.update(world, true);
+    this.attached = true;
+    this.nextPopulation = world.time;
   }
   /** Only a generated, admitted physical cache can earn its configured choice. */
   earnCacheReward(world: World, source: string | undefined, pos: { x: number; y: number }): void {
@@ -310,7 +313,9 @@ export class WorldMassRuntime {
     }
     if (!boot && world.time < this.nextPopulation) return;
     this.nextPopulation = world.time + .5;
-    for(const found of this.sites.discovered){
+    // Restoring the scene precedes exact saved vitals. Pay pending rewards on
+    // the first live update, so that restore cannot erase native level-up healing.
+    if(this.attached)for(const found of this.sites.discovered){
       const content=this.config.content.find(c=>c.id===found.content);
       if(content)settleMassClearance(world,this.state,found,content,id=>this.natives.has(id),this.populationFor(found).level);
     }

@@ -1093,3 +1093,10 @@ completion can never pay. Existing expedition descriptors retain their previous
 rosters. The population probe uses the native objective predicate across 6,144
 sampled landmark populations: the prior rules produced 28 all-exempt garrisons,
 while the reservation preserved at least one eligible target in every sample.
+
+Pending completion pays on the first live update after scene reconstruction.
+Saving immediately after the last kill can precede the normal completion tick;
+Continue must restore saved vitals before granting the earned level-up refill.
+The clearance probe and `HOLLOW_WAKE_QA_PENDING=1` browser variant exercise this
+boundary. The previous build restored about 32 of 158 life after its reward;
+the corrected build retains the native full life/mana refill and pays once.

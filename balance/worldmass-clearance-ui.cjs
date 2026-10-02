@@ -1,7 +1,7 @@
 // Controlled native reward/Continue regression; independent critic play uses no grants or kills.
 const {app,BrowserWindow}=require('electron');
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
-const dir=path.join(__dirname,'reports'),unsafe=process.env.HOLLOW_WAKE_QA_UNREWARDED==='1',label=unsafe?'clearance-before':'clearance';
+const dir=path.join(__dirname,'reports'),unsafe=process.env.HOLLOW_WAKE_QA_UNREWARDED==='1',pending=process.env.HOLLOW_WAKE_QA_PENDING==='1',label=pending?'clearance-pending':unsafe?'clearance-before':'clearance';
 app.setPath('userData',path.join(dir,label+'-'+process.pid));app.disableHardwareAcceleration();
 app.whenReady().then(async()=>{
  const root=path.resolve(__dirname,'..',process.env.HOLLOW_WAKE_QA_DIST||'balance/reports/clearance-dist');
@@ -35,19 +35,22 @@ app.whenReady().then(async()=>{
    __game.step(1);return {guards:ids.map(id=>m.natives.get(id)?.defId),level:w.player.level,xp:clearanceQA.earned(),invulnerable:w.player.invulnerable};
   });
   assert.equal(before.invulnerable,false);assert.ok(before.guards.length===2&&before.guards.every(Boolean));await shot('before');
-  const after=await run(()=>{
+  const after=await run(pending=>{
    const w=__game.world(),m=w.massRuntime,q=clearanceQA;
    for(const id of q.ids){const a=m.natives.get(id);if(!a)throw Error('Original native guard missing');w.kill(a,false,w.player);}
-   const kills=q.earned();m.update(w,true);const total=q.earned();
-   __game.ui.toggleMap();__game.step(1);
+   const kills=q.earned();
+   if(pending){w.player.life=31;w.player.mana=4;}else m.update(w,true);
+   const total=q.earned();
+   if(!pending){__game.ui.toggleMap();__game.step(1);}
    return {kills,total,bonus:total-kills,cleared:m.siteCleared?.(q.place.id)??false,
     level:w.player.level,xp:w.meta.xp,passives:w.meta.passivePoints,map:document.getElementById('world-map').textContent,
     invulnerable:w.player.invulnerable,fatal:__game.crash().fatal};
-  });
-  assert.equal(after.fatal,null);assert.equal(after.invulnerable,false);await shot('map');
+  },pending);
+  assert.equal(after.fatal,null);assert.equal(after.invulnerable,false);if(!pending)await shot('map');
   if(unsafe){assert.equal(after.bonus,0);assert.equal(after.cleared,false);}
   else{
-   assert.equal(after.bonus,70);assert.ok(after.cleared&&after.map.includes('Cinderwatch Camp · Lv 1 · Cleared'));
+   if(pending){assert.equal(after.bonus,0);assert.equal(after.cleared,false);assert.equal(after.level,1);}
+   else{assert.equal(after.bonus,70);assert.ok(after.cleared&&after.map.includes('Cinderwatch Camp · Lv 1 · Cleared'));}
    await run(async()=>{__game.ui.hideAll();__game.save();await new Promise(r=>setTimeout(r,250));});
    await win.loadURL(url);
    const resumed=await run(async()=>{
@@ -58,14 +61,17 @@ app.whenReady().then(async()=>{
     __game.ui.hideAll();const w=__game.world(),m=w.massRuntime,place=m.journey.places.find(p=>p.content==='cinderwatch');
     m.update(w,true);__game.ui.toggleMap();__game.step(1);
     return {level:w.player.level,xp:w.meta.xp,passives:w.meta.passivePoints,cleared:m.siteCleared(place.id),
+     life:w.player.life,maxLife:w.player.maxLife(),mana:w.player.mana,maxMana:w.player.maxMana(),
      map:document.getElementById('world-map').textContent,fatal:__game.crash().fatal};
    });
    assert.equal(resumed.fatal,null);
-   for(const key of ['level','xp','passives','cleared'])assert.equal(resumed[key],after[key],'Continue preserves '+key+' without paying again');
+   const expected=pending?{level:2,xp:47,passives:1,cleared:true}:after;
+   for(const key of ['level','xp','passives','cleared'])assert.equal(resumed[key],expected[key],'Continue preserves '+key+' without paying again');
+   if(pending){assert.equal(resumed.life,resumed.maxLife,'pending level-up heals after saved wounds restore');assert.equal(resumed.mana,resumed.maxMana);}
    assert.ok(resumed.map.includes('Cleared'));after.resumed=resumed;await shot('continued');
   }
   fs.writeFileSync(path.join(dir,label+'-ui.json'),JSON.stringify({before,after},null,2));
-  console.log(unsafe?'PASS negative control: landmark kills previously supplied no completion reward':'PASS native landmark completion pays once, updates map and restores exact XP/passive budget through browser Continue');
+  console.log(pending?'PASS immediate final-kill Save/Continue preserves the pending reward and full native level-up recovery':unsafe?'PASS negative control: landmark kills previously supplied no completion reward':'PASS native landmark completion pays once, updates map and restores exact XP/passive budget through browser Continue');
  }catch(e){console.error(e.stack||String(e));process.exitCode=1;}
  finally{clearTimeout(timer);win.destroy();server.close();app.exit(process.exitCode||0);}
 });
