@@ -41,7 +41,7 @@ and `balance/climate-world-ui.cjs` for generated views, native travel and both
 new/actual previous-version browser Continue. This does not localize weather,
 snow cover or the full native biome-specific systems.
 `MASS_SURFACE_VIEW` in `worldmass/surfaceDetail.ts` controls geographic ice
-fractures and wet-ground pools, clipped to actual region cells in the bounded
+fractures, wet-ground pools and water ripples, clipped to actual region cells in the bounded
 terrain bake. Verify `balance/surface-detail-ui.cjs` and
 `balance/surface-world-ui.cjs` for page joins, unchanged state and dry consequences.
 

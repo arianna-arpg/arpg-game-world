@@ -25,8 +25,8 @@ app.whenReady().then(async()=>{
     return c;
    };
    try{
-    const gallery=create(1200,660),gg=gallery.getContext('2d');
-    for(const [i,region] of ['ice','swamp','mud'].entries()){
+    const gallery=create(1600,660),gg=gallery.getContext('2d');
+    for(const [i,region] of ['ice','swamp','mud','water'].entries()){
      const whole=draw(region,-512,-256,1024,768),tiled=create(1024,768),g=tiled.getContext('2d');
      for(let y=0;y<3;y++)for(let x=0;x<4;x++)g.drawImage(draw(region,-512+x*256,-256+y*256,256,256),x*256,y*256);
      const a=read(whole),b=read(tiled);let different=0,max=0,total=0;
@@ -35,7 +35,7 @@ app.whenReady().then(async()=>{
      rows.push({region,max,total,different,hash:hash(whole),repeat:hash(draw(region,-512,-256,1024,768)),
       otherSeed:hash(draw(region,-512,-256,1024,768,cfg,43)),tuned:hash(draw(region,-512,-256,1024,768,tuned))});
      gg.save();gg.beginPath();gg.rect(i*400,0,400,660);gg.clip();gg.translate(i*400,0);
-     gg.fillStyle=['#82999f','#30483d','#1a2a1a'][i];gg.fillRect(0,0,400,660);
+     gg.fillStyle=['#82999f','#30483d','#1a2a1a','#223c45'][i];gg.fillRect(0,0,400,660);
      paint(gg,{x:0,y:0,w:400,h:660},42,region);
      gg.fillStyle='#eee';gg.font='18px sans-serif';gg.fillText(region,20,32);gg.restore();
     }

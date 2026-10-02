@@ -2043,3 +2043,27 @@ Source inspection confirms that ordinary and repeating chain hops choose the
 nearest eligible unstruck target with a firing line. Breakables participate in
 that native system. No chain-targeting change was made solely from the critic's
 observation; doing so would alter existing skill/environment interactions.
+
+### Geographic water surface
+
+The existing physical-surface vocabulary now includes configurable water ripple
+bands. Seeded curves share a broad bearing and cross page boundaries in geographic
+coordinates; the region mask removes them wherever a later consequence dries the
+water. They remain static terrain detail in the existing bounded bake, with no
+simulation randomness, current, weather, depth or collision rule added.
+
+All three type checks pass. The painter compares twelve stitched negative-coordinate
+pages with one continuous surface, verifies deterministic seed/configuration
+variation and preserves canvas state without simulation RNG. In the real client,
+ice, swamp, mud and water retain warm-cache reuse and bounded pages. The dried
+patch interior matches an independently baked all-ground control exactly.
+Long clipped water strokes expose at most three channel levels of raster rounding
+outside the patch (page-wide mean 0.000394); the check bounds both, rather than
+mistaking that rounding for a displaced motif. Generated water, tundra and marsh
+captures were inspected. These controlled render checks are not gameplay reviews.
+
+The shared-field/menu revision 9ed8e8d5 passed all 339 remote checks and Pages
+37075199763; exact preview metadata reports 2026-10-02T22:59:13.166Z.
+Remote browser QA preserved seed 2415255320 and all six ordinary-save sentinels.
+Quicker earned-cache opening and empty-XP suppression are pushed in 6e6c4397;
+their remote publishing checks are still running at this checkpoint.

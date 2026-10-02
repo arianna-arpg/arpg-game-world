@@ -2,15 +2,19 @@ import { massHash } from './random';
 
 interface Bounds { x:number; y:number; w:number; h:number }
 export interface MassSurfaceDetail {
-  kind:'fractures'|'pools';
+  kind:'fractures'|'pools'|'ripples';
   spacing:number; chance:number; extent:number;
   dark:string; light:string; width:number;
+  /** Ripple bands share a geographic bearing; no gameplay current is implied. */
+  bands?:number; amplitude?:number;
 }
 /** Surface identity is physical, not an inference from its color or biome.
  * The caller clips each pattern to surviving native-region cells. */
 export const MASS_SURFACE_VIEW: {enabled:boolean;regions:Record<string,MassSurfaceDetail>} = {
   enabled:true,
   regions:{
+    water:{kind:'ripples',spacing:180,chance:.84,extent:112,bands:3,amplitude:5,
+      dark:'rgba(8,29,39,.24)',light:'rgba(158,205,210,.22)',width:.9},
     ice:{kind:'fractures',spacing:148,chance:.84,extent:94,
       dark:'rgba(32,64,77,.18)',light:'rgba(218,241,244,.32)',width:.85},
     swamp:{kind:'pools',spacing:112,chance:.80,extent:35,
@@ -26,7 +30,7 @@ export function paintMassSurfaceDetail(ctx:CanvasRenderingContext2D,bounds:Bound
   const spec=cfg.regions[region];
   if(!cfg.enabled||!spec||!Number.isFinite(spec.spacing)||spec.spacing<16
     ||!Number.isFinite(spec.extent)||spec.extent<=0||spec.extent>spec.spacing)return;
-  const {spacing,extent}=spec,pad=extent+4;
+  const {spacing,extent}=spec,pad=extent*(spec.kind==='ripples'?1.35:1)+4;
   ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.lineWidth=spec.width;
   for(let gy=Math.floor((bounds.y-pad)/spacing);gy<=Math.floor((bounds.y+bounds.h+pad)/spacing);gy++)
     for(let gx=Math.floor((bounds.x-pad)/spacing);gx<=Math.floor((bounds.x+bounds.w+pad)/spacing);gx++){
@@ -52,6 +56,24 @@ export function paintMassSurfaceDetail(ctx:CanvasRenderingContext2D,bounds:Bound
           line(branch.x+extent*.31,branch.y+extent*.46+offset);ctx.stroke();
         };
         stroke(1.1,spec.dark);stroke(0,spec.light);
+      }else if(spec.kind==='ripples'){
+        const alpha=ctx.globalAlpha,bands=Math.max(1,Math.min(6,Math.round(spec.bands??3)));
+        const amplitude=Math.max(0,Math.min(extent*.15,spec.amplitude??5));
+        for(let band=0;band<bands;band++){
+          const length=extent*(.55+random(30+band)*.40),by=(band-(bands-1)/2)*extent*.18;
+          const offset=(random(40+band)-.5)*extent*.30,phase=random(50+band)*Math.PI*2;
+          const stroke=(dy:number,color:string)=>{
+            ctx.strokeStyle=color;ctx.beginPath();
+            for(let n=0;n<=16;n++){
+              const t=n/16,px=offset+(t-.5)*length*2;
+              const py=by+Math.sin(t*Math.PI*2+phase)*amplitude+dy;
+              if(n===0)move(px,py);else line(px,py);
+            }
+            ctx.stroke();
+          };
+          ctx.globalAlpha=alpha*(band===1?.9:.55);
+          stroke(1.4,spec.dark);stroke(0,spec.light);
+        }
       }else{
         const r=extent*(.55+random(4)*.45),ry=r*(.45+random(5)*.3);
         const outline=Array.from({length:16},(_,i)=>{
