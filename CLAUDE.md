@@ -1,5 +1,10 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Native resource and XP floats now use the same bounded combat-text spacing as
+damage and progression. VIS_CFG.combatFocus.numbers.kinds owns participation.
+Verify infostream/combatfocus plus balance/resource-floats-ui.cjs for native
+orb healing, kill XP, curation, narrow layout and unchanged browser Continue.
+
 Optional journey.roadside policies seed finite native encounters on route ground.
 MassRoadside owns addresses and spacing; ordinary actors, combat and rewards
 retain authority. Schema three preserves their ownership; older descriptors

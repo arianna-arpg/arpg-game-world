@@ -2912,3 +2912,22 @@ Exact live metadata reports 2026-10-03T20:01:56.093Z; isolated remote QA preserv
 seed 2471812362 and six ordinary-save sentinels through Continue. Buff-readout
 head 47e0483e is pushed with CI 37150664829 in progress. Its unused probe import
 was removed before pushing; the final all-three type check passed.
+
+### Separate simultaneous resource and XP notices
+
+The r29 Gate-cache capture showed two native life notices occupying the same
+space. Resource gains and XP now join damage/drop/progression in the shared
+bounded text layout via its existing configurable kind list. Healing, XP,
+resource events, lifetime, native positions and user curation stay unchanged.
+
+All three type checks, 35 information-stream assertions and six combat-layout
+groups pass. Actual native orb collection restored 18 life and two credited
+fixture kills paid 14 XP. Four floats remained distinct and clear of the hero
+at normal and 800-by-600 sizes; repeated painting left simulation untouched.
+Native Continue retained exact seed, health, level and XP without replaying
+transient text. The previous roadside client reproduced six float-pair overlaps
+and four body overlaps at both sizes. All current/prior page and canvas pairs
+were inspected. This controlled regression does not replace gameplay review.
+
+Roadside head 34ae81a6 is pushed. Its fresh critic is playing an unchanged fixed
+build while these independent rendering changes are developed.
