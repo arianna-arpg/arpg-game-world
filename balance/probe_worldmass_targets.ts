@@ -55,6 +55,15 @@ try {
   w.completedQuests.add(Q_FRONTIER_WATCH.id);
   const level=w.player.level;w.player.level=2;
   assert.equal(accept(w,q.id),false,'minimum offer level still applies');
+  assert.match(w.questGiverPrompt()!,/Return at level 3/);
+  const waiting=canonical({quests:w.activeQuests,zones:Object.keys(w.zoneMap),pins:massQuestPins(w)});
+  hooks(w).updateQuestGiver(4);
+  assert.equal(canonical({quests:w.activeQuests,zones:Object.keys(w.zoneMap),pins:massQuestPins(w)}),waiting);
+  const waitingResume=continued(w);stand(waitingResume);
+  assert.match(waitingResume.questGiverPrompt()!,/Return at level 3/);
+  const hint=q.offerLevelHint;q.offerLevelHint=undefined;
+  assert.equal(w.questGiverPrompt(),'No hunts are posted for this country yet.');q.offerLevelHint=hint;
+  console.log('PASS an otherwise qualified future contract names its real offer level without acceptance, directions or replay changes');
   w.player.level=level;assert.ok(accept(w,q.id));
   assert.ok(!hooks(w).acceptableQuests().some(x=>x.id===q.id),'active quest cannot be accepted twice');
   const {m,p,id,escort}=visit(w);

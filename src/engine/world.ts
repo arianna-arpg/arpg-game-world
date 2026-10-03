@@ -28411,6 +28411,9 @@ export class World {
       ? 'Linger — a CALLING awaits you, {name}.'
       : 'Linger — a CALLING awaits you.';
     if (this.activeQuests.some(q => !this.massRuntime || q.placeId)) return 'Your hunts await out in the wilds.';
+    const upcoming = this.eligibleQuestCandidates().filter(q => q.offerLevelHint && this.questOfferLevel(q) > this.player.level)
+      .sort((a,b) => this.questOfferLevel(a) - this.questOfferLevel(b) || a.id.localeCompare(b.id))[0];
+    if (upcoming) return upcoming.offerLevelHint!.replaceAll('{level}', String(this.questOfferLevel(upcoming)));
     if (!this.graphWorkAvailable()) return 'No hunts are posted for this country yet.';
     return 'No work for you yet, traveller.';
   }
@@ -28465,6 +28468,12 @@ export class World {
   graphWorkAvailable(): boolean { return !this.massRuntime; }
 
   private acceptableQuests(): QuestDef[] {
+    return this.eligibleQuestCandidates().filter(q => this.player.level >= this.questOfferLevel(q));
+  }
+
+  /** Shared non-level gates for actual offers and explicitly authored previews.
+   * Reading a preview never accepts work or reveals a destination. */
+  private eligibleQuestCandidates(): QuestDef[] {
     const counts = this.activeCategoryCounts();
     const gateCtx = this.questGateCtx();
     return Object.values(QUESTS).filter(q => {
@@ -28472,7 +28481,6 @@ export class World {
       if (this.massRuntime && !massQuestDestination(this.massRuntime, q.id)) return false;
       if (this.completedQuests.has(q.id)) return false;
       if (this.activeQuests.some(e => e.questId === q.id)) return false;
-      if (this.player.level < this.questOfferLevel(q)) return false;
       if (this.giverPresent(q.giver) === null) return false; // one of its offering NPCs must be present
       if (q.requiresLedger
         && (this.ledger[q.requiresLedger] ?? 0) < 1

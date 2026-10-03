@@ -186,6 +186,9 @@ export interface QuestDef {
   category?: QuestCategory;
   /** Character level the giver starts offering it at. */
   offerAtLevel: number;
+  /** Optional giver preview when level alone blocks otherwise available work.
+   * {level} resolves from the same seeded native offer-level law. */
+  offerLevelHint?: string;
   /** Stable per run and quest; a late arrival remains eligible. */
   offerLevelRange?: readonly [number, number];
   /** Physical objective spoil, collected before the return leg can pay. */

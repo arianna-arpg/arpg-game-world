@@ -33,6 +33,7 @@ export const Q_FRONTIER_STONEWARD: QuestDef = {
   geographies: ['continuous'],
   giver: 'townsfolk_innkeep',
   offerAtLevel: 3,
+  offerLevelHint: 'Return at level {level} for work on the northern road. Explore the nearby country until then.',
   requiresQuests: [Q_FRONTIER_WATCH.id],
   offerLabel: 'The Northern Watch — defeat the Stone Sentinel at the Stoneward',
   zone: { name: 'The Stoneward', tileset: 'downs', direction: 'n', level: 4,

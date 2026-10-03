@@ -1,5 +1,9 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Authored quest offerLevelHint previews share all native offer gates except level.
+They resolve the actual offer level without accepting work or revealing pins.
+Verify worldmass_targets and quest probes plus balance/upcoming-work-ui.cjs.
+
 Native level-up text uses the registered progression float kind and the
 shared combat-text placement budget. Levels, healing, points and lifetime
 are unchanged; players can curate this announcement separately from XP ticks.

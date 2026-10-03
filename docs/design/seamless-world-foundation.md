@@ -2821,3 +2821,27 @@ isolated remote QA preserved seed 3054570831 and all six ordinary-save sentinels
 through Continue. Status-readout and progression-placement commits publish
 together next. The shrine critic has confirmed meaningful pressure and native
 Continue at its second site, and is still exploring before its final judgment.
+
+### Explain the wait between contracts
+
+After the Western Watch pays out, Mireille now explains that the northern-road
+contract becomes available at level three and invites nearby exploration.
+The optional authored offerLevelHint shares every non-level eligibility gate
+with the actual offer, including prior work, giver, geography, category capacity
+and a destination that exists in this run. Its level comes from the same native
+offer law. No hint accepts a quest, discloses a map pin or relaxes progression.
+Definitions without a hint keep their original fallback response.
+
+All three type checks, all 28 worldmass probes and the three quest probes pass
+(the latter include six quest-map and nine Brandt assertions). The controlled
+browser completes the native first contract, takes its Wellspring ring reward,
+and visits the actual new dialogue page at level two. Exact native Continue
+retains seed, paid history, experience and point balance; level three still
+admits the ordinary Northern Watch. The actual previous client reproduces the
+unhelpful no-hunts page with otherwise identical eligibility. Both waiting and
+offered states were inspected in page and canvas views for both clients.
+
+Progression/status head 32274184 is pushed and awaiting CI/Pages verification.
+Two independent gameplay critics remain active on their fixed builds. Neither
+this dialogue regression nor the earlier controlled checks are a gameplay
+acceptance verdict or a commercial-game comparison.
