@@ -1273,7 +1273,8 @@ export const VIS_CFG = {
   infoFeeds: {
     /** The world-news stack: edge pads per anchor + the line gap. maxRows
      *  bounds a bulletin storm to a readable column. */
-    notice: { topPad: 64, bottomPad: 96, sidePad: 18, rowGap: 4, maxRows: 8 },
+    notice: { topPad: 64, bottomPad: 96, sidePad: 18, rowGap: 4, maxRows: 8,
+      maxWidth: 640, hudGap: 12, cacheEntries: 64 },
     /** The right-flank pickup ledger ("Warcry (Common) x1") — seated over
      *  the ground the inventory panel opens onto. */
     pickup: { rightPad: 14, topFrac: 0.34, rowH: 17, font: 12, maxRows: 10 },

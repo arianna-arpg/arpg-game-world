@@ -1,5 +1,12 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+World announcements wrap within `VIS_CFG.infoFeeds.notice.maxWidth` and the live
+HUD's available vertical space. Original message clocks, channels and text stay
+native; layout clips excess rows with an ellipsis and caches measured lines.
+The actual status/wave extent and bottom skill clusters reserve their space.
+Verify infostream and `balance/notice-layout-ui.cjs`, including its previous
+client control, all four anchors, narrow/enlarged UI and unchanged simulation.
+
 Player cast meters now name their live skill and use a wider native progress
 bar; `VIS_CFG.castReadout` controls the presentation. The actual owner slot
 receives a light rim, using the input feeder's identity/host relation. Native

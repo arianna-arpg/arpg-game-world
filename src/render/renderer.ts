@@ -154,6 +154,7 @@ import { gaugeFrac, gaugeLocked, gaugeReady } from '../engine/gauge'; // THE GAU
 import { drawGlow, drawLongShadow, drawShadow, releaseCanvas, sunCast } from './vis/sprites';
 import { drawRuneRing } from './vis/runeRing';
 import { registerVisCache, trimVisCaches } from './vis/caches';
+import { wrapNotice } from './vis/noticeLayout';
 import { resolveSpeech, revealedChars, wrapSpeech, resolveNameTokens, dodgeSpeechBox, layoutSpeechSeats, speechTailBase, type SpeechStyle, type SpeechRect, type SpeechSeatMemory } from './vis/speech';
 import { drawEdgeOverlay, qFrac } from './vis/overlays';
 import { canvasCap, canvasCapsReport } from './vis/canvasCaps';
@@ -279,6 +280,9 @@ export class Renderer {
    *  those passes must compare uiMouse, never hudMouse. */
   private uiW = 0;
   private uiH = 0;
+  /** Actual status/wave extent in this frame's virtual HUD coordinates. */
+  private noticeHeaderBottom = 0;
+  private noticeLineCache = new Map<string, string[]>();
   private uiMouse = { x: -1, y: -1 };
   /** THE PRESSABLE BAR (drawn == tested): every HUD skill-slot rect as THIS
    *  frame drew it, in CSS pixels — main.ts hit-tests a mouse press (and a
@@ -7559,19 +7563,38 @@ export class Renderer {
     const { ctx } = this;
     ctx.save();
     ctx.textAlign = anchor === 'topLeft' ? 'left' : anchor === 'topRight' ? 'right' : 'center';
+    ctx.textBaseline = 'top';
     const x = anchor === 'topLeft' ? v.sidePad
       : anchor === 'topRight' ? this.uiW - v.sidePad : this.uiW / 2;
     const up = anchor === 'bottom';
-    let y = up ? this.uiH - v.bottomPad : v.topPad;
+    const width = Math.max(1, Math.min(v.maxWidth, this.uiW - v.sidePad * 2));
+    const top = Math.max(v.topPad, this.noticeHeaderBottom + v.hudGap);
+    const bottom = Math.min(this.uiH - v.bottomPad,
+      ...this.hudClusterRects.map(r => r.y / this.uiToCss - v.hudGap));
+    let edge = up ? bottom : top, rowsLeft = v.maxRows;
     for (const { n, alpha } of live) {
+      const stride = n.size + v.rowGap;
+      const room = Math.min(rowsLeft, Math.floor((up ? edge - top : bottom - edge) / stride));
+      if (room < 1) break;
       ctx.globalAlpha = alpha;
       ctx.font = `bold ${n.size}px Verdana`;
+      const key = JSON.stringify([ctx.font, width, room, n.text]);
+      let lines = this.noticeLineCache.get(key);
+      if (!lines) {
+        lines = wrapNotice(n.text, width, room, text => ctx.measureText(text).width);
+        this.noticeLineCache.set(key, lines);
+        if (this.noticeLineCache.size > v.cacheEntries) this.noticeLineCache.delete(this.noticeLineCache.keys().next().value!);
+      }
+      const start = up ? edge - lines.length * stride : edge;
       ctx.fillStyle = n.color;
       ctx.strokeStyle = 'rgba(0,0,0,0.75)';
       ctx.lineWidth = 3;
-      ctx.strokeText(n.text, x, y);
-      ctx.fillText(n.text, x, y);
-      y += (up ? -1 : 1) * (n.size + v.rowGap);
+      lines.forEach((line, i) => {
+        ctx.strokeText(line, x, start + i * stride);
+        ctx.fillText(line, x, start + i * stride);
+      });
+      rowsLeft -= lines.length;
+      edge += (up ? -1 : 1) * lines.length * stride;
     }
     ctx.restore();
   }
@@ -7661,6 +7684,7 @@ export class Renderer {
     this.hudSlotRects.length = 0; // THE PRESSABLE BAR's ledger — this frame's rects only
     this.hudMetaRects.length = 0; // THE PRESSABLE META's ledger — likewise
     this.hudClusterRects.length = 0;
+    this.noticeHeaderBottom = 0;
     // THE COUCH DISPATCH (data/couch.ts): solo draws the one classic centered
     // cluster — byte-identical. With guests seated, each local seat's cluster
     // anchors to its own flank (guest bars read pad glyphs, guest identity
@@ -8604,6 +8628,7 @@ export class Renderer {
         hintY += 18;
       }
     }
+    this.noticeHeaderBottom = Math.max(this.noticeHeaderBottom, hintY - 14);
   }
 
   /** The world-level HUD tail — the wave banner + the boss-bar stack. Drawn
@@ -8617,6 +8642,7 @@ export class Renderer {
       ctx.font = 'bold 22px Verdana';
       ctx.fillStyle = '#c8a84b';
       ctx.fillText(`Wave ${world.wave + 1} in ${Math.ceil(world.waveTimer)}...`, w / 2, 110);
+      this.noticeHeaderBottom = Math.max(this.noticeHeaderBottom, 116);
     }
 
     // Boss bar — pushed down below the co-op party strip when it's showing, so the

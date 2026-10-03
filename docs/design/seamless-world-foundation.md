@@ -2488,3 +2488,35 @@ seed 211527239 and all six ordinary-save sentinels through Continue. Subsequent
 cast-readout and reward-description commits are pushed; their combined live
 deployment is still awaiting verification. No overall critic acceptance is
 claimed.
+
+
+### Bounded world announcements around the HUD
+
+The return-contract verification exposed long announcements crossing the
+location/status block. The shared notice renderer now wraps whole words within
+a configurable width and the actual available HUD height. The status block,
+wave heading and bottom skill clusters supply their extents; larger UI scale
+uses the same virtual coordinates. Bottom-anchored paragraphs remain in reading
+order. The existing row cap bounds visible lines, and truncated text carries
+an ellipsis. A bounded measured-line cache avoids repeated wrapping on stable
+frames. Native bulletin text, channels, lifetime and simulation remain unchanged.
+
+All three type checks and the native info-stream probe pass. The actual client
+checks every anchor at 1280 by 850 and at 800 by 600 with 1.5 UI scale, exact full
+quest instructions where space permits, native channel muting and expiry,
+unchanged world state, cached redraws and long unspaced text. The preserved
+previous client reproduces both overlap and clipping; the new client has none
+against the measured status or bottom clusters in those scenarios. Paired page
+and canvas captures for normal/narrow top/bottom comparisons were inspected.
+The stress fixture initially fit its entire text, so its length was increased
+to actually exercise truncation; no implementation change was needed.
+
+Northern Watch revision 1e8bfe15 passed CI 37094295059 and Pages 37095243511.
+Exact live metadata reports 2026-10-03T04:04:45.15Z; isolated remote QA preserved
+seed 984109942 and all six ordinary-save sentinels through Continue. The preceding
+cast/readout reward revision 90cb5f9e passed CI 37093105986 and Pages 37094125922,
+with exact metadata 2026-10-03T03:44:21.567Z and remote seed 2604570438.
+
+The usage interruption stopped both independent reviews before their final
+reports. Separate recovery critics are continuing those same isolated sessions
+and fixed builds. Their incomplete play is not an acceptance verdict.
