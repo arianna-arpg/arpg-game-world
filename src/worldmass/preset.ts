@@ -172,6 +172,7 @@ export function massAdventure(): MassAdventure {
       ] },
     ] },
     settlement: { zone: 'lastlight', source: 'zones/lastlight', apron: 192, blend: 144,
+      cartography: { source: 'zones/lastlight/public-signs', publicSigns: true },
       doorPress: { source: 'worldmass/settlement-doors', alignment: .65, reach: 4 } },
     startRadius: 288, populationRadius: 1300, maxPopulation: 96, pageRadius: 2, samplesPerTick: 512,
   });

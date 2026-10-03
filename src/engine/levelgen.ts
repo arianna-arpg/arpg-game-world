@@ -30,7 +30,7 @@ import type { AmbushSpec } from './actor';
 import type { PostSpec } from './brain'; // THE SPAWN SEAT's duty post (the authored-map fabric)
 import { Rng } from '../core/rng';
 import type { ExitRoadSpec, PackTableEntry, StampIgnoreRule, StampRuleOverride, StampSpec, WhereSpec, ZoneDef } from '../data/zones';
-import { STRUCTURES, legendCell, type CellSpec, type StructureDef } from '../data/structures';
+import { STRUCTURES, STRUCTURE_SERVICE_SIGNS, legendCell, type CellSpec, type StructureDef } from '../data/structures';
 import { hollowShapeOf } from '../data/hollows';
 import { ANNEX_CFG, annexKindDef } from '../data/annexes';
 import { MONSTERS } from '../data/monsters';
@@ -2900,7 +2900,10 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
 /** Rules registered at runtime for NEW kinds (packages, structure legends, fx
  *  layers) — the open half of the vocabulary. Known kinds stay in the exhaustive
  *  table above so tsc still proves full coverage for the built-ins. */
-const RUNTIME_RULES: Record<string, DoodadRule> = {};
+// Native service signs formerly fell through to non-blocking ground. Register
+// that same rule from their authored family so scenery checkpoints accept them.
+const RUNTIME_RULES: Record<string, DoodadRule> = Object.fromEntries(
+  STRUCTURE_SERVICE_SIGNS.map(sign => [sign.kind, { overlap: 'ground' }]));
 
 /** Register a placement/collision rule for a NEW doodad kind (one row = the kind
  *  exists engine-wide; the renderer draws unknown kinds as a generic themed disc

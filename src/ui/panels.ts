@@ -8780,7 +8780,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (this.mapDragging || this.mapWashDragging || this.pressHeld.has(this.worldMap)) return;
     const world = this.getWorld();
     if (world.massRuntime && this.mapTab !== 'quests') {
-      if (this.setPanelHtml(this.worldMap, this.closeGlyphHtml() + this.mapTabsHtml() + massMap(world.massRuntime, world.player.pos, this.massSurveyGrain))) {
+      if (this.setPanelHtml(this.worldMap, this.closeGlyphHtml() + this.mapTabsHtml() + massMap(world.massRuntime, world.player.pos, this.massSurveyGrain, world.doodads))) {
         this.wireMapTabs();
         this.worldMap.querySelectorAll<HTMLButtonElement>('[data-mass-zoom]').forEach(button => {
           button.addEventListener('click', () => {

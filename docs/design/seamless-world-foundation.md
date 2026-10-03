@@ -2168,3 +2168,37 @@ seed 3300052426 and six ordinary-save sentinels. Melee revision a53517cf passed
 CI 37079602337 and Pages 37080849758, with exact live metadata
 2026-10-03T00:11:24.624Z. Remote QA preserved seed 1497103607 and all six sentinels.
 Neither publication is a critic acceptance verdict.
+
+### Native sign cartography
+
+Lastlight's nearby map now reads the actual native service signs for markers,
+names, glyphs and colours. A compact legend includes bearings from the player's
+position. It therefore describes only buildings/signs present in this run;
+it neither invents a service nor promises that an account feature is unlocked.
+Regional zoom suppresses this detail. Missing, removed and felled signs withdraw.
+
+New settlement descriptors snapshot `cartography.publicSigns` and an attributable
+source. That grants directions only: no terrain, trail, discovery or explored-page
+claim changes when the map opens. Older descriptors retain explored-page admission.
+`MASS_MAP_SIGNS` controls presentation without adding another service registry.
+
+A save check exposed that native service signs had relied on the unknown-kind
+non-blocking fallback. Their existing rule is now explicitly registered from
+`STRUCTURE_SERVICE_SIGNS`; passability stays the same, while an altered sign can
+legitimately survive the native scenery checkpoint. A real-client sign rotation
+now survives Save/Continue with identical map coordinates.
+
+The hidden Chromium client also reproduced a blank survey image after Continue
+despite identical SVG geometry. Giving that bounded SVG its own compositing layer
+restores its paint. The client check decodes the actual saved PNG and checks the
+gold player marker as well as DOM state; initial and continued screenshots were
+inspected. This is a verified client rendering correction, not a broad browser
+performance claim.
+
+All three type checks, native town/Continue probes, 25 combat smoke episodes and
+generation QA pass (869 cases across three seeds, zero failures and four existing
+warnings). The town probe covers both initial and fully grown layouts, public
+directions without new knowledge, opt-out, removed signs, the older exploration
+gate and native scenery restoration. The browser checks cover markers, legend,
+zoom, viewport bounds, no knowledge mutation, altered-sign Continue and marker
+withdrawal. Independent critics continue on their own preserved earlier builds.

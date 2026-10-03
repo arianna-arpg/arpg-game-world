@@ -1,5 +1,13 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Native town signs feed the continuous map through `worldmass/cartography.ts`.
+New settlement descriptors can expose public sign locations without surveying
+their ground; older descriptors require explored pages. Names/glyphs/palette
+come from the actual sign visuals, and missing/removed signs disappear.
+Verify worldmass_haven and `balance/town-signs-ui.cjs` for town growth, unchanged
+knowledge, native sign mutations and browser Continue. The SVG has its own
+compositing layer; the client check inspects the saved screenshot's player pixel.
+
 Worldmass cache rewards can snapshot explicit `authoredSupports` alongside the
 account-gated `supports` pool. Both require a compatible equipped host and open
 native socket; an authored treasure grants a physical item, never a random-drop

@@ -5,6 +5,8 @@ import { regionKind } from '../world/regions';
 import { MASS_CLEARANCE_VIEW } from './clearance';
 import { paintMassTrailWear } from './trailWear';
 import { MASS_SURFACE_VIEW, paintMassSurfaceDetail } from './surfaceDetail';
+import type { Doodad } from '../engine/levelgen';
+import { massMapSigns, MASS_MAP_SIGNS } from './cartography';
 
 interface Baked { canvas: HTMLCanvasElement; revision: number }
 /** Canvas assets are renderer-owned, disposable, and bounded independently of
@@ -167,7 +169,7 @@ export class MassPainter {
 }
 
 /** Small moving survey, sampled from the very same physical terrain. */
-export function massMap(mass: WorldMassRuntime, player: { x: number; y: number }, grain = 48): string {
+export function massMap(mass: WorldMassRuntime, player: { x: number; y: number }, grain = 48, scenery: readonly Doodad[] = []): string {
   const cols = 64, rows = 40, scale = 10;
   const left = Math.floor(player.x / grain) - cols / 2, top = Math.floor(player.y / grain) - rows / 2;
   const parts: string[] = [];
@@ -219,6 +221,18 @@ export function massMap(mass: WorldMassRuntime, player: { x: number; y: number }
     const name = label + (mass.siteCleared(found.id) ? ' · '+MASS_CLEARANCE_VIEW.complete : '') + (opened ? ' · Searched' : '');
     parts.push(`<g><title>${escape(name)}</title><path d="M${x},${y - 5}l5,5 -5,5 -5,-5Z" fill="#d1b685" stroke="#302d23"/><text x="${x + 8}" y="${y + 4}" fill="#eee0bc" font-size="10">${escape(name)}</text></g>`);
   }
+  const signs=grain<=MASS_MAP_SIGNS.maxGrain ? massMapSigns(mass,scenery) : [];
+  const townNear=!!mass.settlement?.contains(player.x,player.y);
+  const signRows:string[]=[];
+  for(const sign of signs){
+    const rawX=(sign.x/grain-left)*scale,rawY=(sign.y/grain-top)*scale;
+    const inside=rawX>=12&&rawY>=28&&rawX<=cols*scale-12&&rawY<=rows*scale-12;
+    if(!inside && !townNear)continue;
+    if(inside)parts.push(`<g data-mass-service><title>${escape(sign.name)}</title><circle cx="${rawX}" cy="${rawY}" r="${MASS_MAP_SIGNS.radius}" fill="#191b20" stroke="${escape(sign.color)}" stroke-width="1.5"/><text x="${rawX}" y="${rawY+4}" fill="${escape(sign.color)}" font-size="12" text-anchor="middle">${escape(sign.glyph)}</text></g>`);
+    const bearing=['→','↘','↓','↙','←','↖','↑','↗'][(Math.round(Math.atan2(sign.y-player.y,sign.x-player.x)/(Math.PI/4))+8)%8];
+    signRows.push(`<span style="white-space:nowrap;color:${escape(sign.color)}">${escape(sign.glyph)} ${escape(sign.name)} ${bearing}${inside?'':' · beyond this view'}</span>`);
+  }
+  const legend=signRows.length ? '<div data-mass-services style="display:flex;flex-wrap:wrap;gap:8px 20px;font-size:12px;line-height:1.7;margin:8px 0">'+signRows.join('')+'</div>' : '';
   const px = (player.x / grain - left) * scale, py = (player.y / grain - top) * scale;
-  return `<h2>The Unbroken Wilds</h2><div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><button data-mass-zoom="in" aria-label="Zoom in" ${grain<=24?'disabled':''}>+</button><button data-mass-zoom="out" aria-label="Zoom out" ${grain>=192?'disabled':''}>−</button><span>${grain===24?'Close detail':grain===48?'Nearby country':'Regional survey'}</span></div><svg viewBox="0 0 640 400" style="width:100%;max-height:65vh;background:#0b1112" aria-label="Survey of explored terrain">${parts.join('')}<circle cx="${px}" cy="${py}" r="4" fill="#f5dc98" stroke="#fff"/><text x="320" y="20" fill="#eadab7" text-anchor="middle">N</text></svg><p>Explored country · your position in gold</p>`;
+  return `<h2>The Unbroken Wilds</h2><div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><button data-mass-zoom="in" aria-label="Zoom in" ${grain<=24?'disabled':''}>+</button><button data-mass-zoom="out" aria-label="Zoom out" ${grain>=192?'disabled':''}>−</button><span>${grain===24?'Close detail':grain===48?'Nearby country':'Regional survey'}</span></div><svg viewBox="0 0 640 400" style="width:100%;max-height:65vh;background:#0b1112;transform:translateZ(0)" aria-label="Survey of explored terrain">${parts.join('')}<circle cx="${px}" cy="${py}" r="4" fill="#f5dc98" stroke="#fff"/><text x="320" y="20" fill="#eadab7" text-anchor="middle">N</text></svg>${legend}<p>Explored country · your position in gold</p>`;
 }
