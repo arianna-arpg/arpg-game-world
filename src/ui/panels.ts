@@ -13,6 +13,7 @@ import { renderWardrobe } from './wardrobe';
 import { BUILD_PANEL_CFG, buildPanelSeat } from './buildPanels';
 import { ServiceWorkspace } from './serviceWorkspace';
 import { supportCompatibilityHtml } from './supportCompatibility';
+import { swapReadinessText } from './swapReadiness';
 // ---------------------------------------------------------------------------
 // DOM panels: class selection, character sheet, skill book (unlock / level /
 // socket support gems), passive tree, death screen.
@@ -4576,6 +4577,13 @@ export class UI {
     if (scrollEl) scrollEl.scrollTop = prevScroll;
     const buildEl = this.buildPanel.querySelector<HTMLElement>('.build-scroll');
     if (buildEl) buildEl.scrollTop = prevBuildScroll;
+    // Update the clock text independently: changing tenths must not replace a
+    // dragged skill, its event handlers, scroll position or focused control.
+    const swapReadout = this.buildPanel.querySelector<HTMLElement>('[data-socket-readiness]');
+    if (swapReadout) {
+      const text = swapReadinessText(world.swapReadiness(invSeat, 'socket'), !world.clientActionHook);
+      if (swapReadout.textContent !== text) swapReadout.textContent = text;
+    }
     if (inventoryChanged) this.wireInventory();
     if (buildChanged && this.skillsOpen) this.wireLearnedList(this.buildPanel, () => this.refreshInventory());
     if (inventoryChanged) this.fitBuildRail();
@@ -7129,8 +7137,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           ${modeRow}
         </div>`;
     }).join('');
-    return `<div class="build-rack">${rackHtml}</div><div class="build-scroll">${seat === world.localSeat ? explorationRewardOffersHtml(world) : ''}${socketWhy
-      ? `<div data-socket-refusal role="status" style="color:#e4b58b;font-size:11px;line-height:1.5;padding:8px">Socket changes unavailable: ${esc(socketWhy)}.</div>` : ''}${graftBank}${rows
+    return `<div class="build-rack">${rackHtml}</div><div class="build-scroll">${socketWhy
+      ? `<div data-socket-readiness data-socket-refusal role="status" style="color:#e4b58b;font-size:11px;line-height:1.5;padding:8px">Socket changes unavailable: ${esc(socketWhy)}.</div>` : '<div data-socket-readiness role="status" style="color:#a9bc9d;font-size:11px;line-height:1.5;padding:8px">Supports can be changed here.</div>'}${seat === world.localSeat ? explorationRewardOffersHtml(world) : ''}${graftBank}${rows
       || '<div style="color:#8a8678;font-size:11px">Nothing seated. Skill Memories drop from monsters — press one from your pack into an empty seat above.</div>'}</div>`;
   }
 

@@ -3037,3 +3037,39 @@ victory. The riddle-build critic remains in ordinary play. Its build is frozen.
 Puzzle head cb302916 passed CI 37155328998 and Pages 37156320914. Exact live
 metadata reports build time 2026-10-03T21:50:04.599Z. Remote seed 1756254516
 retained all six ordinary-save sentinels and native Continue with no fatal error.
+
+### Visible readiness for fitting rewards
+
+The native field-discipline predicate now exposes its reason and, for recent
+combat, remaining simulation time. Existing swapRefusal callers retain their
+exact strings and gates. Skills shows the countdown, explains that further hits
+restart it, distinguishes nearby threats, and marks recovery readiness. This
+message precedes recovered-gem choices, which could previously push it out of
+view. Timer text updates independently of the cached panel markup so changing
+tenths does not recreate dragged/focused skill controls. Existing layout/scroll
+and skill fitting still retain their native ownership.
+
+All three type checks and the field-discipline probe's 29 checks pass. Controlled
+browser QA stamps the clock through a real player-side hit, opens native Skills,
+and advances ordinary frames: 5.0s becomes 3.5s, then the gate actually clears.
+The same skill/control DOM nodes survive the partial countdown. Narrow 800-by-600
+shows both the readiness line and the recovered-gem offer; a new nearby hostile
+shows its separate refusal without a false countdown. All five current page/canvas
+pairs and the previous client's hot pair were inspected. The real preceding
+client shows only the original refusal. Initial QA caught reward offers pushing
+the message below the viewport; the final layout orders readiness first.
+
+The game continues simulating with ordinary panels open. The critics' long
+menu-side wait reflected their frame-stepped inspection cadence and must not be
+described as an in-game paused-menu deadlock. Unclocked network mirrors keep
+generic guidance rather than inventing host timing or promising that fitting is
+allowed; the host still checks every mutation. This pass does not add replicated
+restriction metadata or alter any save, recovery duration, damage or reward.
+
+The preceding a1121932 CI run (37156734006) passed 352 of 353 fast probes but
+failed passiveroutes because the two updated choice-pool descriptions no longer
+matched the five explicit visible-tree nodes. Those five descriptions now use
+the same COMBO_CFG window/run expressions. The untouched payload equality check
+passes all 168 assertions; five smoke scenarios across five seeds completed.
+The added narrow native passive-card capture verifies the actual visible wording
+and wrapping. This is a repaired consistency regression, not a waived CI failure.

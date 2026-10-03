@@ -23045,17 +23045,22 @@ export class World {
       && dist(a.pos, at) <= radius;
   }
 
-  swapRefusal(seat: Seat, kind: 'unlearn' | 'socket' | 'unsocket', skillId?: string): string | null {
+  swapReadiness(seat: Seat, kind: 'unlearn' | 'socket' | 'unsocket', skillId?: string): import('./swapReadiness').SwapReadiness {
     const cfg = SWAP_DISCIPLINE_CFG;
-    if (cfg.sanctuaryWaives && this.isSafeAt(seat.actor.pos)) return null;
-    if (this.time - this.lastCombatAt < cfg.calmSec) return 'the blood is still hot';
-    if (this.pressingFoeNear(seat.actor.pos, seat.actor.tier)) return 'foes press too near';
+    if (cfg.sanctuaryWaives && this.isSafeAt(seat.actor.pos)) return { reason: null };
+    const remaining = cfg.calmSec - (this.time - this.lastCombatAt);
+    if (remaining > 0) return { reason: 'the blood is still hot', remaining };
+    if (this.pressingFoeNear(seat.actor.pos, seat.actor.tier)) return { reason: 'foes press too near' };
     if (kind === 'unlearn' && skillId) {
       const hero = this.seatHero(seat);
-      if (cfg.unlearnOffCooldown && hero.cooldowns.has(skillId)) return 'its clock still turns';
-      if (cfg.unlearnNotCasting && hero.casting?.inst.def.id === skillId) return 'mid-cast';
+      if (cfg.unlearnOffCooldown && hero.cooldowns.has(skillId)) return { reason: 'its clock still turns' };
+      if (cfg.unlearnNotCasting && hero.casting?.inst.def.id === skillId) return { reason: 'mid-cast' };
     }
-    return null;
+    return { reason: null };
+  }
+
+  swapRefusal(seat: Seat, kind: 'unlearn' | 'socket' | 'unsocket', skillId?: string): string | null {
+    return this.swapReadiness(seat, kind, skillId).reason;
   }
 
   /** THE UNLEARN'S OWN GATES as ONE read — the overdrive debt lock and the

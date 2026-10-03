@@ -1,5 +1,12 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+World.swapReadiness exposes the native field-discipline reason and combat clock;
+swapRefusal preserves the existing mutation gates and exact legacy strings.
+The Skills banner precedes reward cards and updates timer text independently
+of control markup. Unclocked client mirrors receive no invented timer or promise.
+Verify fielddiscipline and balance/swap-readiness-ui.cjs for native-hit recovery,
+live open-panel time, control identity, narrow layout and prior-client contrast.
+
 Native combo condition readouts in engine/comboConditions reuse comboProgress
 for partial history and the sheet's real condition/countdown for active bonuses.
 Data labels and bounded HUD rows are shared with optional host-resolved snapshots.

@@ -23,6 +23,7 @@
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
+import { swapReadinessText } from '../src/ui/swapReadiness';
 import { SWAP_DISCIPLINE_CFG } from '../src/engine/skills';
 import { SUPPORTS } from '../src/data/supports';
 import { START_ZONE } from '../src/data/zones';
@@ -164,6 +165,35 @@ check('F: foeRadius=0 disables the proximity clause',
 check('F: …and restored, it bites again',
   w.swapRefusal(seat, 'socket') === 'foes press too near');
 wolf2.dead = true;
+
+
+heat();
+check('G: readout exposes the exact authoritative combat countdown',
+  w.swapReadiness(seat, 'socket').remaining === cfg.calmSec);
+w.time += 1.25;
+const recovery = w.swapReadiness(seat, 'socket');
+check('G: countdown follows simulation time and preserves the native refusal',
+  recovery.remaining === cfg.calmSec - 1.25 && recovery.reason === w.swapRefusal(seat, 'socket'));
+check('G: readable recovery rounds upward without announcing zero early',
+  swapReadinessText({ reason: recovery.reason, remaining: .01 }).includes('0.1s'));
+check('G: an unclocked network mirror does not invent a timer',
+  !swapReadinessText(recovery, false).includes('s of recovery'));
+check('G: a mirror without a host restriction does not promise readiness',
+  swapReadinessText({ reason: null }, false) === 'Support changes require a lull in combat.');
+heat();
+check('G: another hit restarts the same native countdown',
+  w.swapReadiness(seat, 'socket').remaining === cfg.calmSec);
+w.time += cfg.calmSec;
+check('G: the exact boundary reports ready without a lingering timer',
+  w.swapReadiness(seat, 'socket').reason === null && w.swapReadiness(seat, 'socket').remaining === undefined
+  && swapReadinessText(w.swapReadiness(seat, 'socket')) === 'Supports can be changed here.');
+const nearFoe = spawnAt('dire_wolf', 60);
+check('G: a nearby threat is a distinct restriction with no false expiry',
+  w.swapReadiness(seat, 'socket').reason === 'foes press too near' && w.swapReadiness(seat, 'socket').remaining === undefined);
+nearFoe.dead = true;
+w.loadZone(START_ZONE); heat();
+check('G: sanctuary suppresses the countdown and the restriction together',
+  w.swapReadiness(seat, 'socket').reason === null && w.swapReadiness(seat, 'socket').remaining === undefined);
 
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILED`);
 process.exit(failed === 0 ? 0 : 1);
