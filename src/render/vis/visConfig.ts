@@ -776,6 +776,9 @@ export const VIS_CFG = {
     clusterBin: 176,
     /** How dark deep night gets (0 = untouched, 1 = pitch black). */
     nightDark: 0.66,
+    /** Temper ambient wash over already-visible bodies and combat readouts.
+     * This is not a light source and never alters the sight/room veil. */
+    readability: { enabled: true, maxDark: .28, feather: 18 },
     /** Ambient darkness floor applied even at noon in lightless interiors. */
     duskDark: 0.22,
     /** Additive emissive bloom pass strength. */

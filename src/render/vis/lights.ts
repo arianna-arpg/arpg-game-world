@@ -27,6 +27,8 @@ import { resolveColor } from './painters';
 import { litPolygon, polygonPath } from './sight';
 import { baked, drawGlow } from './sprites';
 import { VIS_CFG } from './visConfig';
+import { drawReadableLightMask } from './readableLight';
+import type { CombatRect } from './combatFocus';
 
 // The cluster cache re-derives only when a LIGHT-bearing doodad changes —
 // the exact filter zoneClusters gathers with (scoped invalidation:
@@ -357,7 +359,7 @@ export class LightLayer {
   /** Composite the darkness + bloom over the drawn world. Call with the
    *  UNTRANSFORMED context (screen space), after the world layer. */
   render(ctx: CanvasRenderingContext2D, camX: number, camY: number,
-    zoom: number, w: number, h: number): void {
+    zoom: number, w: number, h: number, readable: readonly CombatRect[] = []): void {
     const dark = this.ambient;
     if (dark <= 0.02) {
       // Fully lit: no darkness pass; still bloom strong emissives faintly so
@@ -393,6 +395,7 @@ export class LightLayer {
       b.drawImage(punch, sx - sr, sy - sr, sr * 2, sr * 2);
       if (L.poly) b.restore();
     }
+    drawReadableLightMask(b, readable, dark, camX, camY, k);
     b.globalAlpha = 1;
     b.globalCompositeOperation = 'source-over';
     ctx.save();

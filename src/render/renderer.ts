@@ -959,7 +959,8 @@ export class Renderer {
     // world transform was translate(-cam + shake), so the effective camera
     // the lights must project through is cam - shake.
     if (!VIS_ABLATE.has('lights')) {
-      this.lightLayer.render(ctx, this.cam.x - shx, this.cam.y - shy, z, w, h);
+      this.lightLayer.render(ctx, this.cam.x - shx, this.cam.y - shy, z, w, h,
+        this.combatMeters.readabilityBounds());
     }
 
     this.drawAtmosphere(world);

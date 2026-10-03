@@ -32,6 +32,11 @@ export class CombatMeterLayout {
     const c=VIS_CFG.combatFocus.meters,r=radius*c.bodyScale+c.bodyPad;
     this.bodies.set(key,{pos,radius,rect:{x:pos.x-r,y:pos.y-r,w:r*2,h:r*2}});
   }
+  /** Only admitted visible bodies and their painted readouts may temper light. */
+  readabilityBounds(): CombatRect[] {
+    return [...this.bodies].filter(([key])=>!this.concealed.has(key))
+      .map(([,body])=>({...body.rect})).concat(this.footprints.map(rect=>({...rect})));
+  }
   add(key: object, rect: CombatRect, paint: () => void): void {
     // Native fog is translucent: drawing a concealed meter beneath it still
     // leaks the owner's presence. Concealment also applies with layout disabled.

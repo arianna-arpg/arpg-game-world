@@ -2931,3 +2931,27 @@ were inspected. This controlled regression does not replace gameplay review.
 
 Roadside head 34ae81a6 is pushed. Its fresh critic is playing an unchanged fixed
 build while these independent rendering changes are developed.
+
+### Preserve visible combat reads at night
+
+The r28 Stoneward review showed night wash drowning visible enemies and their
+health/cast bars. A feathered ambient mask now tempers that wash over bodies
+and readouts already admitted by the native combat-meter visibility gates.
+It adds no light source or bloom and never changes sight, room cover, actor
+fade, clocks or combat. The enablement, dimming target and feather are authored
+in VIS_CFG.lights.readability. Daylight bypasses the extra mask.
+
+All three type checks and seven combat-layout groups pass. The browser sampled
+the native Stoneward slinger and sentinel at night, advanced 45 native frames
+through ranged attack and shield behavior, and inspected normal/narrow views.
+Pixel comparison with the mask omitted changed only bounded readout/body regions
+and kept daylight identical. A swallowed fixture and a separately placed native
+sight-occluded enemy (occlusion .85, label reveal zero) received no patch.
+Repeated drawing preserved simulation state. Actual previous-client captures
+show the darker bodies/meters. Five paired page/canvas states per client were
+inspected; these checks do not establish continuous performance or an overall
+gameplay verdict. No save schema or persistence behavior changed.
+
+Resource-float head dd82f330 is committed locally. Roadside CI remains in its
+full fast-probe gate; the earlier buff-only run was superseded by that push.
+Its code is included in the roadside head, not independently certified live.

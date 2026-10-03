@@ -1,5 +1,11 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+CombatMeterLayout.readabilityBounds supplies only admitted visible bodies and
+painted meters to the ambient-light mask. VIS_CFG.lights.readability controls
+local dimming and feathering; sight/room veils, glow sources and gameplay stay
+native. Verify combatfocus and balance/readable-night-ui.cjs against its prior
+client for actual night movement, concealment, narrow view and daylight.
+
 Native resource and XP floats now use the same bounded combat-text spacing as
 damage and progression. VIS_CFG.combatFocus.numbers.kinds owns participation.
 Verify infostream/combatfocus plus balance/resource-floats-ui.cjs for native

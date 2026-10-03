@@ -156,3 +156,13 @@ assert.deepEqual(names.place(nameKey,nameAt,188,26),nameAt,'a new hover session 
 nameTune.enabled=false;names.begin(nameBodies,nameBounds);
 assert.deepEqual(names.place(nameKey,nameAt,188,26),nameAt,'name layout has an independent opt-out');
 console.log('PASS grouped hover-name placement clears bodies/meters and remains stable with its own configuration');
+
+const coverLayout=new CombatMeterLayout(),shown={},hidden={};
+coverLayout.begin(0);coverLayout.body(shown,{x:5,y:9},12);coverLayout.body(hidden,{x:200,y:200},15);coverLayout.conceal(hidden);
+coverLayout.add(shown,{x:0,y:-20,w:25,h:5},()=>{});coverLayout.add(hidden,{x:180,y:170,w:40,h:6},()=>{throw Error("concealed meter painted");});
+coverLayout.paint(meterCtx);
+const regions=coverLayout.readabilityBounds();assert.equal(regions.length,2);
+assert.ok(regions.every(r=>r.x<100&&r.y<100),"hidden bodies and meters cannot temper ambient darkness");
+regions[0].x=999;assert.notEqual(coverLayout.readabilityBounds()[0].x,999,"region consumers cannot mutate native layout");
+coverLayout.begin(1);assert.deepEqual(coverLayout.readabilityBounds(),[],"no stale reveal patches survive the next frame");
+console.log("PASS light-readability regions contain only admitted bodies/readouts, copy bounds and clear on frame change");
