@@ -2316,3 +2316,45 @@ remains below acceptance: stationary victories, dim scenery and reward friction
 limited sustained interest. Its 6,113 requested frames represent about 102 nominal
 seconds, distinct from 48:09 wall time. A fresh review is playing the preserved
 firing-lane build without receiving a list of its changes.
+
+### Saved geographic ground palettes
+
+New expeditions resolve the native downs, forest, desert and marsh palettes,
+grain, stretch, bias, coverage and strength into the run descriptor. A shared
+geographic noise leaf retains full distant integer addresses. The existing
+bounded terrain bake blends those colors across physical cell centers; drawing
+does not reroll the world or change gameplay randomness. Surface provenance
+prevents native biome paint from coating later terrain edits, routes or authored
+clearings. Palette-less tundra keeps its existing snow-colored surface. This
+adapts native palette variation, not localized snowfall, coast influence or
+clearing light.
+
+The actual-client comparison gallery and generated forest view were inspected.
+The browser check verifies warm cache reuse, bounded residency, same-color
+consequence removal and exact new-save appearance through Continue. It also
+creates a save with the preserved firing-lane client and confirms identical
+configuration, terrain samples and baked pixels after continuing on this build.
+The initial cache fixture warmed a different viewport; it now warms precisely
+the viewport it checks. The palette probe's original 100-rounded-shade threshold
+exceeded the native gradient's measured 75 shades; it now tests useful variation
+and channel span without imposing an unrelated palette-size requirement.
+All three type checks, the 23 continuous-world probes and generation QA cover
+the implementation. Generation QA reports 869 cases across three seeds, zero
+errors, four existing geometry warnings and one timing warning under concurrent
+local verification.
+
+Local-progress revision 7ad32cd3 passed CI 37086718667 and Pages 37087759484.
+Exact live metadata reports 2026-10-03T01:54:48.754Z; isolated remote QA preserved
+seed 2735488441 and all six ordinary-save sentinels through Continue.
+
+The independent Rogue reviewer on the authored-treasure build finished four
+destinations, used earned splash and equipment in later encounters, and verified
+native Save/Continue. The final complete garrison rewarded a level and renewed
+interest. The verdict remains mixed: weak opening guidance and early resource
+constraints discouraged the first life. Its 8,682 requested frames represent
+about 145 nominal seconds, separately from 88:49 review wall time. These findings
+are not a live-performance measurement or a commercial-game comparison.
+
+Firing-lane revision adac7f87 passed CI 37088437548 and Pages 37089083823.
+Exact live metadata reports 2026-10-03T02:16:09.917Z; isolated remote QA preserved
+seed 2933103938 and all six ordinary-save sentinels through Continue.

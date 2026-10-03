@@ -12,6 +12,7 @@ import { nativeMassSite, type MassSiteSpec } from './sites';
 import { MASS_BIOME_FAMILIES, MASS_CLIMATE_ECOLOGY } from './biomes';
 import { nativeMassEncounters } from './encounters';
 import { countryFieldSites } from './fieldSites';
+import { nativeMassGround, type MassGroundSpec } from './ground';
 
 export const MASS_ZONE = 'worldmass_expedition';
 export interface MassContent extends MassPopulation {
@@ -24,6 +25,8 @@ export interface MassContent extends MassPopulation {
   magicPack?: { source: string; mechanic: string };
 }
 export interface MassAdventure {
+  /** Optional saved native ground palettes; omitted descriptors keep their original face. */
+  ground?: MassGroundSpec;
   /** Optional bounded residency for native fields, including repeated places. */
   fieldResidency?: import('./fields').MassFieldResidency;
   /** Optional namespace for replayable native factory variants. */
@@ -106,6 +109,7 @@ export function massAdventure(): MassAdventure {
         .filter(r => MONSTERS[r.id] && !MONSTERS[r.id].habitat)
         .map(r => ({ id: r.id, weight: r.weight }))));
   return freezeData({ terrain, progression, nativeBirthSource: 'worldmass/native-birth-v1', theme: JSON.parse(JSON.stringify(TILESETS.downs.theme)) as ZoneDef['theme'],
+    ground: nativeMassGround(families.map(f => ({ surface: f.id, source: 'tilesets/' + f.id, theme: TILESETS[f.id].theme }))),
     territory: { source: 'worldmass/encounter-territory', radius: 620 },
     fieldResidency: { source: 'worldmass/field-residency', retainRadius: 2048, maxResident: 32 },
     content: [...fields.map(field=>{

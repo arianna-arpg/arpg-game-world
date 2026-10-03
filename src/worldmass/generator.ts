@@ -1,6 +1,7 @@
 import { address, cellKey, floorDiv, latticeAt, localOffset, moveAddress, validSpan, type MassAddress, type MassCell } from './address';
 import type { MassPlace, MassPlaceRecipe, MassRange, MassRun, MassSpec, MassTerrain } from './contracts';
-import { canonical, freezeData, massDigest, massHash, massRandom, streamSeed } from './random';
+import { canonical, freezeData, massDigest, massRandom, streamSeed } from './random';
+import { massNoise } from './noise';
 
 const compare = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
 function unique(ids: readonly string[], label: string): void {
@@ -61,7 +62,6 @@ export function makeMassRun(seed: number, runId: string, spec: MassSpec): MassRu
 }
 const matches = (rows: readonly MassRange[], fields: Readonly<Record<string, number>>): boolean =>
   rows.every(r => fields[r.field] >= (r.min ?? -Infinity) && fields[r.field] < (r.max ?? Infinity));
-const smooth = (n: number): number => n * n * (3 - 2 * n);
 
 /** No mutable registry/global-seed reads after construction. Second worlds and
  * async prefetch cannot change a standing world's geographic truth. */
@@ -83,11 +83,7 @@ export class MassGenerator {
       this.salts.set(l, streamSeed(run.seed, [spec.id, spec.version, f.id, l.id]));
   }
   private noise(at: MassAddress, period: number, salt: number): number {
-    const { gx, gy, fx, fy } = latticeAt(at, this.spec.addressSpan, period);
-    const sample = (x: bigint, y: bigint): number => massHash(JSON.stringify([at.dimension, x.toString(), y.toString()]), salt) / 0x100000000;
-    const a = sample(gx, gy), b = sample(gx + 1n, gy), c = sample(gx, gy + 1n), d = sample(gx + 1n, gy + 1n);
-    const sx = smooth(fx), sy = smooth(fy);
-    return (a + (b - a) * sx) * (1 - sy) + (c + (d - c) * sx) * sy;
+    return massNoise(at, this.spec.addressSpan, period, salt);
   }
   fieldsAt(at: MassAddress): Readonly<Record<string, number>> {
     const result: Record<string, number> = Object.create(null) as Record<string, number>;

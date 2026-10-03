@@ -7,6 +7,7 @@ import { paintMassTrailWear } from './trailWear';
 import { MASS_SURFACE_VIEW, paintMassSurfaceDetail } from './surfaceDetail';
 import type { Doodad } from '../engine/levelgen';
 import { massMapSigns, MASS_MAP_SIGNS } from './cartography';
+import { MassGround } from './ground';
 
 interface Baked { canvas: HTMLCanvasElement; revision: number }
 /** Canvas assets are renderer-owned, disposable, and bounded independently of
@@ -41,9 +42,13 @@ export class MassPainter {
     ctx.drawImage(canvas, x, y);
   }
   private runtime: WorldMassRuntime | null = null;
+  private ground: MassGround | null = null;
   private baked = new Map<string, Baked>();
   draw(ctx: CanvasRenderingContext2D, mass: WorldMassRuntime, x: number, y: number, w: number, h: number): void {
-    if (this.runtime !== mass) { this.runtime = mass; this.baked.clear(); }
+    if (this.runtime !== mass) {
+      this.runtime = mass; this.baked.clear();
+      this.ground = new MassGround(mass.config.ground, mass.generator.run.seed, mass.config.terrain.addressSpan);
+    }
     const span = mass.config.terrain.addressSpan;
     // Renderer.cam is the viewport's top-left, not the hero/centre.
     for (let cy = Math.floor(y / span); cy <= Math.floor((y + h) / span); cy++) {
@@ -68,11 +73,12 @@ export class MassPainter {
     // cells; the surface does not expose a checkerboard of random tile shades.
     // The one-cell halo comes from geographic truth, including negative pages.
     const colors: number[][] = [];
+    const ground = this.runtime === mass && this.ground ? this.ground : new MassGround(mass.config.ground, mass.generator.run.seed, span);
     for (let y = -1; y <= cols; y++) for (let x = -1; x <= cols; x++) {
       const t = x >= 0 && y >= 0 && x < cols && y < cols ? page?.samples[y * cols + x] : undefined;
       const sample = t ?? mass.stream.sample({ ...cell, x: x * cs, y: y * cs });
       const lift = 1 + Math.max(-.14, Math.min(.14, (sample.fields.elevation ?? 0) * .13));
-      const rgb = [1, 3, 5].map(i => parseInt(sample.color.slice(i, i + 2), 16) * lift);
+      const rgb = ground.color(sample, { ...cell, x: (x + .5) * cs, y: (y + .5) * cs }).map(v => v * lift);
       colors.push(rgb);
     }
     const step = 4, small = document.createElement('canvas'); small.width = span / step; small.height = span / step;

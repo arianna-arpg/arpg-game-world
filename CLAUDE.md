@@ -1,5 +1,13 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+New expedition descriptors can snapshot native multi-stop ground palettes through
+`worldmass/ground.ts`. The geographic noise leaf also preserves the generator's
+existing samples. Palette controls are compiled only for terrain baking; source
+ownership keeps consequences, authored clearings and routes separate. Omission
+retains prior saved appearance. Verify worldmass probes and generation QA, plus
+`balance/ground-palette-ui.cjs` for actual colors, warm caches, same-color terrain
+edits and exact new/actual previous-client browser Continue.
+
 Native lane-seeking uses `aiNeedsFireLine` and the actual shot ray, so a visible
 but shot-blocked quarry does not strand a ranged body at its preferred distance.
 One memoized kernel pick preserves free spell alternatives, native bans and
