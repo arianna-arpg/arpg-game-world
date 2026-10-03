@@ -13,6 +13,8 @@ import { drawWalkParts, applyWalkBodyPose } from './vis/walkParts';
 import { drawBodyContrast } from './vis/bodyContrast';
 import { drawRaisedGuard } from './vis/raisedGuard';
 import { MassPainter } from '../worldmass/paint';
+import { massQuestPins } from '../worldmass/quests';
+import { drawQuestCompass, questCompassLines } from './vis/questCompass';
 import { regionGrid } from '../world/walk'; // worldmass shares native grounded telegraphs
 import { concealmentActive } from '../engine/perception';
 import { anatomyCueState, anatomyOverheadRise } from '../engine/anatomyCues';
@@ -8597,6 +8599,8 @@ export class Renderer {
       ctx.fillStyle = (massSite?.activity?.complete ?? world.objectiveDone) ? '#ffd700' : '#9a96b8';
       ctx.fillText(world.objectiveText(), x, 82);
     }
+    if (worldInfo && world.massRuntime)
+      hintY = drawQuestCompass(ctx, questCompassLines(p.pos, massQuestPins(world)), x, hintY, this.uiW - x - 16);
     // The kill counter is RUN-END information (credits math, the death
     // screen) — mid-run it's clutter, so the HUD no longer carries it.
     // Unspent-point nudges only — carried-gem COUNTS retired (the refreshed

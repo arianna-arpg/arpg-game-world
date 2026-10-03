@@ -1,5 +1,11 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Accepted continuous contracts share their known map pins with a compact HUD
+compass. It follows the actual destination or return giver, marks nearby ground
+without inventing a route, and disappears after native payout. Undisclosed or
+foreign bindings remain hidden. `VIS_CFG.questCompass` owns its bounded style.
+Verify worldmass_quests/targets, infostream and `balance/quest-compass-ui.cjs`.
+
 Native service guidance and additional contracts share the existing dialogue
 reader. A multi-role NPC keeps its service page before quest work; authored and
 resident conversations retain priority. Ordinary geography classifies only its

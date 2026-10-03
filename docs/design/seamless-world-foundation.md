@@ -2542,3 +2542,44 @@ The recovered place-contract player has independently cleared further sites
 and reports tangible native build payoff, but also flat geography and unclear
 cast commitment in its fixed older client. Both independent reviews remain
 in progress; no overall acceptance has been established.
+
+### Known contract bearings during continuous travel
+
+The existing known quest pins now supply a compact HUD bearing. It follows the
+actual place while afield and the present native giver when the contract is
+ready to return. Nearby uses the placed site's radius or the two bodies' size;
+it makes no reach, line-of-sight or traversable-route claim. Duplicate return
+pins coalesce. Undisclosed directions and foreign bindings stay absent, and
+native payout removes the cue. Native graph geography gains no borrowed pins.
+The shared visual configuration owns enablement, row count, width, spacing and
+colors; its actual extent also reserves room from the notice feed.
+
+All three type checks, place-contract and original-target lifecycle probes, and
+35 native info-stream assertions pass. The actual client verifies acceptance,
+opposite-side bearing reversal, arrival, return and native reward-button removal.
+Three exact browser checkpoints preserve the visible cue and underlying native
+quest state. Repeated draws leave knowledge, bodies, vitals, time and rewards
+unchanged. The 800-by-600 view at 1.5 UI scale keeps the cue and a live announcement
+separate. The initial post-Continue narrow fixture had lost its unsaved notice;
+it now explicitly creates and requires a live notice before checking overlap.
+Paired page/canvas views were inspected, including the prior client's missing
+accepted/return cue. Setup relocations and defeats remain controlled verification.
+
+World-announcement revision b53fe911 passed CI 37140167748 and Pages 37141238601.
+Exact live metadata reports 2026-10-03T17:39:41.882Z; isolated remote QA preserved
+seed 1701158931 and all six ordinary-save sentinels through Continue.
+
+The recovered place-contract review is complete: 9,458 requested frames equal
+157.95 nominal seconds, across 78 minutes of inspection/tool wall time. It
+naturally cleared Broken Gate with earned Arcing and passives and verified
+explicit Save/Continue. Its overall verdict is mixed, leaning negative, citing
+dim geography, unclear cast identity in its preserved older client, quest
+handoff friction and repeated encounters. Native service/cast fixes need their
+own newer ordinary-play judgment; they do not retrospectively pass that review.
+Another fixed-build critic continues its recovered run, and a fresh critic is
+playing the service-guidance build. No overall acceptance is established.
+
+The long-journey audit reconfirms the conservative active population cap:
+survivors and their scenery remain resident. Dependency-aware actor dormancy,
+enemy-created summons and complete transient combat persistence still need a
+separate lifecycle implementation; no unbounded-population claim is made here.

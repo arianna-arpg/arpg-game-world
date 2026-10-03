@@ -13,6 +13,7 @@ import { WorldMassRuntime } from '../src/worldmass/runtime';
 import { massQuestDestination, massQuestPins, validateMassQuests } from '../src/worldmass/quests';
 import { canonical } from '../src/worldmass/random';
 import { massMap } from '../src/worldmass/paint';
+import { questCompassLines } from '../src/render/vis/questCompass';
 import { autoPlace } from '../src/engine/inventory';
 import { forgeItem } from '../src/engine/itemgen';
 
@@ -44,6 +45,12 @@ try {
   assert.equal(canonical(m.state.snapshot()),beforeKnowledge);
   const pins=massQuestPins(w);assert.equal(pins.length,1);assert.equal(pins[0].ready,false);
   const known=canonical(m.state.snapshot());
+  const compass=questCompassLines(w.player.pos,pins);
+  assert.match(compass[0].text,/← Cinderwatch Camp/);
+  w.activeQuests[0].directionsKnown=false;
+  assert.deepEqual(questCompassLines(w.player.pos,massQuestPins(w)),[],'undisclosed directions never enter the compass');
+  w.activeQuests[0].directionsKnown=true;
+  assert.equal(canonical(m.state.snapshot()),known,'compass reads cannot survey terrain or admit bodies');
   const map=massMap(m,w.player.pos,48,w.doodads,pins);
   assert.ok(map.includes('data-mass-quest-directions')&&map.includes('Cinderwatch Camp'));
   assert.equal(canonical(m.state.snapshot()),known,'directions do not explore or spawn a place');
@@ -54,6 +61,7 @@ try {
 
   w.player.pos=m.journey!.local(place);m.update(w,true);
   assert.match(w.questLog().active[0].target!,/here$/,'arrival does not invent an east bearing');
+  assert.match(questCompassLines(w.player.pos,massQuestPins(w))[0].text,/^◆ Cinderwatch Camp · nearby$/);
   const natives=(m as unknown as {natives:Map<string,Actor>}).natives;
   const ids=Array.from({length:m.config.content.find(c=>c.id===place.content)!.count},(_,i)=>canonical([place.id,i]));
   w.chests.find(c=>c.rewardSource===canonical([place.id,'cache']))!.opened=true;m.update(w,true);
@@ -71,6 +79,7 @@ try {
   assert.equal(resume.questRewardOffers().length,0);
   assert.ok(earned(resume)-beforeFinal<150,'only native kill/clear experience, no quest payout away from giver');
   assert.ok(massQuestPins(resume)[0].ready);assert.match(resume.questLog().active[0].target!,/Return to Mireille/);
+  assert.match(questCompassLines(resume.player.pos,massQuestPins(resume))[0].text,/Return to Mireille/);
   console.log('PASS searched and partial states remain unfinished; exact partial Continue; full garrison earns a return leg without paying the quest remotely');
 
   stand(resume,'townsfolk_smith');

@@ -6,6 +6,9 @@
 // ---------------------------------------------------------------------------
 
 export const VIS_CFG = {
+  /** Known contract bearings, independent of terrain survey and pathfinding. */
+  questCompass: { enabled: true, maxRows: 2, maxWidth: 360, lineHeight: 17,
+    font: '11px Verdana', active: '#b7c9d0', ready: '#e4c47e' },
   /** Unassigned controls keep their hit areas and key labels while leaving
    * the battlefield visible. Filled skills retain their native readability. */
   hotbar: { emptyFillAlpha: .12, emptyBorderAlpha: .5 },

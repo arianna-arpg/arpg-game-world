@@ -19,7 +19,7 @@ export interface MassQuestSpec {
   /** Native contracts bound to existing connected places. */
   bindings: MassQuestBinding[];
 }
-export interface MassQuestPin { x: number; y: number; label: string; ready: boolean }
+export interface MassQuestPin { x: number; y: number; radius: number; label: string; ready: boolean }
 
 export function validateMassQuests(config: MassAdventure): void {
   const spec = config.settlement?.quests;
@@ -97,8 +97,8 @@ export function massQuestPins(world: World): MassQuestPin[] {
       const def = QUESTS[entry.questId], ids = def.turnIn?.giver ?? def.giver;
       const body = world.actors.find(a => !a.dead && a.defId && (Array.isArray(ids) ? ids : [ids]).includes(a.defId)
         && mass.settlement?.isResident(a));
-      return body ? [{ ...body.pos, label: 'Return to ' + (MONSTERS[body.defId!]?.name ?? 'the giver'), ready: true }] : [];
+      return body ? [{ ...body.pos, radius: body.radius + world.player.radius, label: 'Return to ' + (MONSTERS[body.defId!]?.name ?? 'the giver'), ready: true }] : [];
     }
-    return [{ ...mass.journey!.local(place), label: mass.config.content.find(c => c.id === place.content)!.site!.name, ready: false }];
+    return [{ ...mass.journey!.local(place), radius: place.radius, label: mass.config.content.find(c => c.id === place.content)!.site!.name, ready: false }];
   });
 }
