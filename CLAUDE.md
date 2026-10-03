@@ -1,5 +1,11 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Native service guidance and additional contracts share the existing dialogue
+reader. A multi-role NPC keeps its service page before quest work; authored and
+resident conversations retain priority. Ordinary geography classifies only its
+own quest givers. Verify worldmass_quests, mireille_lesson, townwelcome and speech,
+plus `balance/service-prompts-ui.cjs` against current and preserved prior clients.
+
 World announcements wrap within `VIS_CFG.infoFeeds.notice.maxWidth` and the live
 HUD's available vertical space. Original message clocks, channels and text stay
 native; layout clips excess rows with an ellipsis and caches measured lines.

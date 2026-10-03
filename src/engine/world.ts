@@ -24105,19 +24105,26 @@ export class World {
       const role = def?.npcRole ?? '';
       const authored = seat === this.localSeat ? this.npcDialogues.dwell(a) : null;
       const ambient = !authored && role === 'resident' && this.speakerRows.has(a.id);
-      const quest = QUEST_GIVER_IDS.has(a.defId);
+      const quest = (this.massRuntime ? QUEST_GIVER_IDS : ZONE_QUEST_GIVER_IDS).has(a.defId);
       // Other counter content is local-hero scoped; the caravan already
       // supports couch guests. Do not lend one hero another's lesson.
       if (seat !== this.localSeat && role !== 'caravanner') continue;
       let radius: number, text: string | null = null, color = '#d8b87a';
       if (authored) { radius = authored.radius; text = authored.text; color = authored.def.color ?? def.color; }
       else if (ambient) { radius = RESIDENT_RADIUS; color = '#d8c8a8'; }
-      else if (quest) { radius = QUESTGIVER_RADIUS; text = this.questGiverPrompt(); color = '#c8a8e8'; }
       else if (role === 'innkeep') { radius = MIREILLE_RADIUS; text = this.innkeepPrompt(); }
       else if (role === 'caravanner') { radius = CARAVAN_RADIUS; text = this.caravanPrompt(seat); }
       else if (role === 'bonewright') { radius = AMALGAM_RADIUS; text = this.amalgamPrompt(); color = '#9ad0b0'; }
       else if (role === 'delver') { radius = DELVER_RADIUS; text = this.delverPrompt(); color = '#7fe0d8'; }
+      else if (quest) { radius = QUESTGIVER_RADIUS; text = this.questGiverPrompt(); color = '#c8a8e8'; }
       else continue;
+      // A service body can also offer contracts. Preserve its native teaching
+      // first, then let the same reader page through the additional work.
+      // Authored conversations and resident speech retain their own selection.
+      if (!authored && !ambient && quest && role !== 'questgiver' && this.getQuestGiver(a.defId)?.id === a.id) {
+        const questPrompt = this.questGiverPrompt();
+        if (questPrompt && questPrompt !== text) text = text ? text + '\n\n' + questPrompt : questPrompt;
+      }
       if (role === 'bonewright' && this.amalgamSite?.necroId !== a.id) continue;
       if (role === 'delver' && (this.descentSite?.delverId !== a.id || this.descentRun)) continue;
       const distance = dist(seat.actor.pos, a.pos);

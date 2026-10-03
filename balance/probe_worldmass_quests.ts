@@ -16,7 +16,7 @@ import { massMap } from '../src/worldmass/paint';
 import { autoPlace } from '../src/engine/inventory';
 import { forgeItem } from '../src/engine/itemgen';
 
-type Hooks = { acceptableQuests(): QuestDef[]; updateQuestGiver(dt: number): void; onQuestZoneFieldCleared(id: string): void };
+type Hooks = { speechCandidates(seat: World['localSeat']): { a: Actor; text: string | null }[]; acceptableQuests(): QuestDef[]; updateQuestGiver(dt: number): void; onQuestZoneFieldCleared(id: string): void };
 const hooks = (w: World) => w as unknown as Hooks;
 const stand = (w: World, id: string) => {
   const actor = w.actors.find(a => a.defId === id && !a.dead)!; assert.ok(actor);
@@ -28,11 +28,16 @@ try {
   const ordinary = makeSimWorld('warrior', 31); ordinary.loadZone('lastlight'); stand(ordinary,'townsfolk_innkeep');
   assert.ok(!hooks(ordinary).acceptableQuests().some(q=>q.id===Q_FRONTIER_WATCH.id));
   assert.equal(ordinary.nearAnyQuestGiver(),false,'continuous-only giver does not gain an ordinary quest prompt');
+  const ordinaryCue=hooks(ordinary).speechCandidates(ordinary.localSeat).find(c=>c.a.defId==='townsfolk_innkeep')!;
+  assert.equal(ordinaryCue.text,ordinary.innkeepPrompt(),'experimental quest registration cannot hide the ordinary native inn service');
   const w=makeSimWorld('warrior',42); w.startWorldMass(42); w.player.invulnerable=true;
   const m=w.massRuntime!, place=massQuestDestination(m,Q_FRONTIER_WATCH.id)!;assert.ok(place);
   const zones=Object.keys(w.zoneMap),beforeKnowledge=canonical(m.state.snapshot()),beforeXp=earned(w);
   stand(w,'townsfolk_innkeep');
   assert.deepEqual(hooks(w).acceptableQuests().map(q=>q.id),[Q_FRONTIER_WATCH.id]);
+  const cues=hooks(w).speechCandidates(w.localSeat).find(c=>c.a.defId==='townsfolk_innkeep')!.text!;
+  assert.ok(cues.startsWith(w.innkeepPrompt()!),'native service guidance leads the multi-role conversation');
+  assert.ok(cues.includes(w.questGiverPrompt()!),'quest work remains available on its own reader page');
   hooks(w).updateQuestGiver(4);
   assert.equal(w.activeQuests.length,1);assert.equal(w.activeQuests[0].placeId,place.id);
   assert.deepEqual(Object.keys(w.zoneMap),zones);assert.equal(earned(w),beforeXp);

@@ -2520,3 +2520,25 @@ with exact metadata 2026-10-03T03:44:21.567Z and remote seed 2604570438.
 The usage interruption stopped both independent reviews before their final
 reports. Separate recovery critics are continuing those same isolated sessions
 and fixed builds. Their incomplete play is not an acceptance verdict.
+
+### Service teaching alongside native contract work
+
+Registering Mireille as a continuous-world quest giver had displaced her native
+flask guidance. It also misclassified her ordinary-zone service even though the
+experimental contracts were unavailable there. Speech candidates now use the
+current geography's quest registry and retain the NPC's native service text
+before additional contract pages. This composes through the existing reader;
+authored dialogue, resident speech, automatic gift/acceptance, reach and timing
+retain their native owners.
+
+All three type checks, the place-contract probe, native Mireille lesson and
+town-welcome checks, and 197 native speech assertions pass. The actual reader
+shows the gifted flask instructions in both geographies while the continuous
+counter still offers Western Watch. A preserved previous client reproduces the
+missing teaching in both modes. All four paired page/canvas views were inspected.
+These are controlled counter fixtures, not ordinary-play acceptance.
+
+The recovered place-contract player has independently cleared further sites
+and reports tangible native build payoff, but also flat geography and unclear
+cast commitment in its fixed older client. Both independent reviews remain
+in progress; no overall acceptance has been established.
