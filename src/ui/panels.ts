@@ -10606,7 +10606,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       </div>
       <div class="rebind-row">
         <span>Hover Nameplates</span>
-        <button id="opt-hovernames" title="Which bodies show the cursor nameplate. NAMED: distinctly-named enemies only, the classic elite read. ALL: every creature, minion, townsfolk and critter names itself under the cursor (name over kind + tier), so you can identify the exact entity without recalling its look. One plate at a time either way, and hidden bodies never tell.">${s.hoverNameplates === 'all' ? 'ALL' : 'NAMED'}</button>
+        <button id="opt-hovernames" title="Which bodies show the cursor nameplate. NAMED: distinctly-named enemies and known garrison members, with their site affiliation. ALL: every creature, minion, townsfolk and critter names itself under the cursor (name over kind + tier), so you can identify the exact entity without recalling its look. One plate at a time either way, and hidden bodies never tell.">${s.hoverNameplates === 'all' ? 'ALL' : 'NAMED'}</button>
       </div>`;
     root.innerHTML = `
       <h1>Options</h1>

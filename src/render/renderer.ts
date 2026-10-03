@@ -6,6 +6,7 @@ import { altarInfluences } from '../engine/altarCues';
 import { drawAltarInfluence } from './vis/altarCueLayer';
 import { CombatTextLayout, combatBodyRect, drawPlayerFocus } from './vis/combatFocus';
 import { CombatMeterLayout } from './vis/combatMeters';
+import { garrisonCaption } from './vis/garrisonName';
 import { bodyActionPoseOf } from '../engine/bodyAction';
 import { applyBodyActionPose } from './vis/bodyActionLayer';
 import { drawActionParts } from './vis/actionParts';
@@ -1027,6 +1028,7 @@ export class Renderer {
    *  they wear their own permanent mark. Drawn on the post-fade layer so a
    *  crown never covers the plate of a foe you can see — and CONCEALED foes
    *  never bid at all: the cursor must not become a canopy probe.
+   *  Discovered garrison members also bid, with their actual site's caption.
    *  Settings.hoverNameplates 'all' widens the BID, never the laws: every
    *  def-carrying actor on any team — minions, NPCs, critters, scenery
    *  bodies — shows the same plate, an unnamed common leading with the def
@@ -1044,21 +1046,24 @@ export class Renderer {
     const cur = this.padAim ?? this.toWorld(this.hudMouse);
     let best: Actor | null = null;
     let bestReveal = 0;
+    let bestGarrison: string | null = null;
     let bd = 80;
     for (const a of world.actors) {
-      if (a.dead || a.nemesis || !a.defId) continue;
+      if (a.dead || a.nemesis || !a.defId || !this.anatomyCueVisible(a, world)) continue;
       const def = MONSTERS[a.defId];
       if (!def) continue;
-      if (!allMode) {
-        if (a.team !== 'enemy' || a.name === def.name) continue;
-        const label = a.rarity ? RARITY_DEFS[a.rarity].label : '';
-        if (label && a.name === `${label} ${def.name}`) continue; // tier-prefixed, not minted
-      }
       const d = Math.hypot(a.pos.x - cur.x, a.pos.y - cur.y) - a.radius;
       if (d >= bd) continue;
       const reveal = this.labelRevealAt(world, a.pos); // hidden foes don't bid
       if (reveal <= 0.02) continue;
-      bd = d; best = a; bestReveal = reveal;
+      const garrison = VIS_CFG.combatFocus.names.garrisons
+        ? world.massRuntime?.garrisonName(a) ?? null : null;
+      if (!allMode && !garrison) {
+        if (a.team !== 'enemy' || a.name === def.name) continue;
+        const label = a.rarity ? RARITY_DEFS[a.rarity].label : '';
+        if (label && a.name === `${label} ${def.name}`) continue; // tier-prefixed, not minted
+      }
+      bd = d; best = a; bestReveal = reveal; bestGarrison = garrison;
     }
     if (best !== this.hoverNameActor) {
       if (this.hoverNameActor) this.hoverNameLayout.forget(this.hoverNameActor);
@@ -1068,9 +1073,12 @@ export class Renderer {
     const { ctx } = this;
     const def = MONSTERS[best.defId!];
     const tint = (best.rarity ? RARITY_DEFS[best.rarity].ring : '') || '#e8dcc8';
-    const sub = best.magicPack ? undefined : (best.rarity && RARITY_DEFS[best.rarity].label
-      ? `${RARITY_DEFS[best.rarity].label} ${def.name}` : def.name);
     ctx.save();
+    ctx.font = VIS_CFG.combatFocus.names.subFont;
+    const sub = bestGarrison ? garrisonCaption(bestGarrison, s => this.ctx.measureText(s).width,
+      this.canvas.width / this.zoom - VIS_CFG.combatFocus.names.gap * 4)
+      : best.magicPack ? undefined : (best.rarity && RARITY_DEFS[best.rarity].label
+        ? `${RARITY_DEFS[best.rarity].label} ${def.name}` : def.name);
     ctx.textAlign = 'center';
     ctx.globalAlpha = bestReveal;
     const nc = VIS_CFG.combatFocus.names, hasSub = !!sub && sub !== best.name;
@@ -1091,8 +1099,8 @@ export class Renderer {
     const nameY = pos.y - (hasSub ? nc.subHeight : 0);
     if (nc.outline > 0) ctx.strokeText(best.name, pos.x, nameY);
     ctx.fillText(best.name, pos.x, nameY);
-    // Pack identity is the only caption; its world effects explain the mechanic.
-    // Other named bodies may retain a concise species/rarity subtitle.
+    // A known garrison identifies its objective owner. Otherwise pack identity
+    // is the only caption; other names may retain their species/rarity subtitle.
     if (hasSub) {
       ctx.globalAlpha = 0.75 * bestReveal;
       ctx.font = nc.subFont;

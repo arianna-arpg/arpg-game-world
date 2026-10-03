@@ -3164,3 +3164,45 @@ Preparation head c8236dc5 passed CI 37159589047 and Pages 37160631927. Its live
 browser check retained all six ordinary-save sentinels and native Continue for
 seed 4040288471 without a fatal error. Roads head bf0289bc is pushed; its CI
 37160926093 is still in progress at this checkpoint.
+
+### Identifying a site's original defenders
+
+A discovered garrison member now carries its site's affiliation in the native
+hover nameplate. This gives players a way to distinguish the objective's original
+defenders from other creatures fighting nearby. The read follows existing
+admission receipts and live actor identity, even when a defender roams. Species
+and proximity cannot manufacture membership. Undiscovered places, fallen bodies,
+converted allies, stale pre-Continue instances and older descriptors without a
+garrison remain excluded. No progression, combat, reward or save rule changes.
+This makes membership visible; it does not reconstruct who dealt an offscreen
+killing blow or prove that the critic's attribution concern is fully resolved.
+
+The plate still selects one visible hovered body. It now also shares the native
+body-state gate for burrow, concealment, covered stories and hidden throngs.
+Terrain/roof/room visibility remains authoritative. Caption width and enablement
+live in VIS_CFG; long modded names shorten by Unicode code point, retaining the
+role first and the full place name in the discovered map index. The NAMED option's
+help now describes known garrison members as well as distinctly named enemies.
+Client mirrors without a worldmass owner receive no invented affiliation.
+
+All three type checks pass. Thirty-one existing worldmass probes passed in the
+full sweep; the new probe initially had a test-only error constructing identity
+prefixes by hand. It now uses canonical garrison slots and passes its three
+groups, including three seeds, native Continue and bounded captions. Combatfocus
+passes all seven groups; the preceding combat-identity browser regression also
+passes. Controlled browser QA verifies real admitted guards, an unrelated body
+of the same species, native swallowed concealment, an actually occluded point
+behind Stoneward scenery, 800-by-600 bounds and exact guard position/life on
+Continue. All six current page/canvas pairs and the prior client's member pair
+were inspected. A fixture refresh after returning from the occlusion scene keeps
+the narrow capture's locality current. Rendering leaves the sampled simulation,
+receipts, discovery, positions and life unchanged. This remains controlled QA,
+not an independent earned gameplay verdict.
+
+Roads head bf0289bc passed CI 37160926093 and Pages 37161969794. The road-choice
+critic independently used its Roads page and chose the eastern grove after
+learning Mireille's flask memories; that run is still underway. No final critic
+acceptance or playable commercial comparison has been established.
+
+Exact live Roads metadata reports 2026-10-03T23:31:59.288Z. Remote seed 996486389
+retained all six ordinary-save sentinels and native Continue without a fatal error.

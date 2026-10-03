@@ -1,5 +1,12 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Worldmass garrisonName reads discovered site admission receipts for actual
+native actors. The ordinary hover plate labels that affiliation without
+inferring membership from species or proximity. VIS_CFG.combatFocus.names owns
+the opt-in and bounded caption width; the native actor/terrain concealment gates
+apply. Verify worldmass_garrisonnames, combatfocus and garrison-names-ui.cjs
+for foreign bodies, hidden guards, narrow view and native Continue.
+
 Stored skill supports can be recovered through unsocketBagSkill without seating
 the old skill. bagSkillSupport reads only the selected cargo cell; native bag
 capacity, field discipline, seat ownership, levels, rolls and lock marks remain

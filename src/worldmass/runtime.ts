@@ -333,6 +333,20 @@ export class WorldMassRuntime {
   siteSearched(id: string): boolean {
     return this.state.claimed('site-looted', id) || this.cacheOpened(canonical([id, 'cache']));
   }
+  /** A discovered site's original defender keeps its affiliation while roaming.
+   * Read admission receipts, never infer membership from proximity or species.
+   * The renderer still owns all visibility/hover admission. */
+  garrisonName(actor: Actor): string | null {
+    if (actor.dead || actor.team !== 'enemy') return null;
+    for (const found of this.sites.discovered) {
+      const content = this.config.content.find(c => c.id === found.content);
+      if (!content?.site?.completion) continue;
+      for (const id of massGarrisonSlots(content, found.id, this.populationCount(found)))
+        if (this.natives.get(id) === actor && this.state.claimed('site-guardian', id)
+          && !this.state.claimed('fallen', id)) return content.site.name;
+    }
+    return null;
+  }
   /** A read-only account of a discovered site's original garrison and admitted
    * cache. This names no hidden positions and never promises safety from visitors. */
   siteActivity(id: string): { text: string; complete: boolean } | null {
