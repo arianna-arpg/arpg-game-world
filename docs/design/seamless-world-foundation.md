@@ -2133,3 +2133,38 @@ from 34m21s of review/tool time. The gate retreat/recovery was its strongest
 moment; one compatible Rogue support, duplicate Memory and crowded, mana-limited
 combat left its overall verdict negative. No acceptance claim follows from
 this passing verification.
+
+### Authored cache treasures
+
+The first cache in new expeditions now offers native Splintering Impact and
+Battering Ram alongside its account-gated support pool. A fresh Rogue therefore
+has three compatible alternatives: critical strikes, splash damage or physical
+knockback. This is an intentional preview reward-policy change, not a global
+starter unlock or a modification to either support's native effects.
+
+Optional `MassRewardSpec.authoredSupports` explicitly names this kind of treasure.
+Ordinary `supports` retain their account gate. Both paths still require a usable
+equipped host and an open native socket before reserving a choice. The physical
+cache, once-only entitlement, saved payload, pack-capacity retry and native
+socket discipline remain authoritative. Receiving or socketing an authored
+treasure does not unlock its future random drops. Omitted policy fields preserve
+older expeditions, including a one-option reward; that UI now says “Claim”.
+
+All three type checks, all 21 worldmass probes and the native mass/displacement
+probe pass. Extended reward checks exercise actual Backstab damage to a neighbour
+outside its direct sector with splash, and a real native push with Battering Ram.
+They also cover unchanged account locks, saved rewards, corrupt/duplicate pools,
+old one-choice behavior and the existing full-pack/single-payout contracts.
+Isolated Warrior and Rogue client checks open a physical cache, preserve its
+pending offer through Continue, claim via the native UI, drag/socket the gem and
+preserve the receipt and fitted support through another Continue. The Rogue
+choice and scrollable Skills workspace images were inspected. These controlled
+checks do not establish enjoyment; a fresh ordinary-input melee critic is playing
+the preserved build.
+
+Skill-face revision b368f595 passed CI 37077778381 and Pages 37078867155.
+Exact preview metadata reports 2026-10-02T23:44:12.075Z; remote browser QA preserved
+seed 3300052426 and six ordinary-save sentinels. Melee revision a53517cf passed
+CI 37079602337 and Pages 37080849758, with exact live metadata
+2026-10-03T00:11:24.624Z. Remote QA preserved seed 1497103607 and all six sentinels.
+Neither publication is a critic acceptance verdict.

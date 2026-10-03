@@ -7,6 +7,7 @@ import { WorldMassRuntime } from '../src/worldmass/runtime';
 import { canonical } from '../src/worldmass/random';
 import { SUPPORTS } from '../src/data/supports';
 import { instanceMods } from '../src/engine/skills';
+import { mod } from '../src/engine/stats';
 import { makeSupportGemItem } from '../src/engine/gemitems';
 import { mintSupportInstance } from '../src/engine/supportbase';
 import { autoPlace } from '../src/engine/inventory';
@@ -34,7 +35,47 @@ for(const id of ['warrior','magician','rogue']){
 }
 console.log('PASS all starter classes earn a usable native support; no attribute/unlock grants and no reroll on build/account changes');
 
-const w=makeSimWorld('warrior',77), rewards=new MassRewards(spec,77);
+for (const gemId of ['splash','battering_ram'] as const) {
+ const world=makeSimWorld('rogue',102), treasure=new MassRewards(spec,102);
+ world.account.unlockedSupports.clear();
+ const accountBefore=canonical([...world.account.unlockedSupports]);
+ assert.ok(treasure.earn(world,'earned-cache','Earned cache'));
+ assert.deepEqual(treasure.offers(world)[0].choices.map(c=>c.id),['splash','battering_ram']);
+ assert.equal(treasure.claim(world,'earned-cache',gemId),'claimed');
+ const item=world.meta.items.find(i=>i.gem?.kind==='support'&&i.gem.supportId===gemId)!;
+ assert.ok(world.socketSupport(item.uid,'backstab'));
+ assert.equal(canonical([...world.account.unlockedSupports]),accountBefore,'treasure never unlocks future random drops');
+ assert.deepEqual(new MassRewards(spec,102,treasure.snapshot()).snapshot(),treasure.snapshot());
+ const inst=world.meta.knownSkills.get('backstab')!,p=world.player;
+ p.pos={x:500,y:500};p.sheet.setSource('qa/land',[mod('accuracy','override',100000),mod('critChance','override',0)]);
+ const enemies=[{x:540,y:500},{x:540,y:545}].map(pos=>{
+  const a=world.createMonster('zombie',1,'enemy');a.pos=pos;a.facing=Math.PI;a.skills=[];a.brain=undefined;
+  a.sheet.setSource('qa/target',[mod('life','override',10000),mod('evasion','override',0),mod('blockChance','override',0)]);
+  a.fillResources();return a;
+ });
+ world.actors=[p,...enemies];const before=enemies.map(a=>a.life);
+ world.executeSkill(p,inst,{x:700,y:500});
+ assert.ok(enemies[0].life<before[0]);
+ if(gemId==='splash')assert.ok(enemies[1].life<before[1],'earned splash reaches a neighbour outside the direct melee sector');
+ else {
+  assert.equal(enemies[1].life,before[1],'knockback remains a direct strike');
+  assert.ok(enemies[0].push,'earned Battering Ram creates native physical displacement');
+ }
+}
+console.log('PASS authored treasures preserve drop locks and native socketing; actual Backstab splash and knockback differ');
+
+const single=makeSimWorld('rogue',103), oldReward=new MassRewards({...spec,authoredSupports:undefined},103);
+assert.ok(oldReward.earn(single,'old-cache','Older cache'));
+assert.deepEqual(oldReward.offers(single)[0].choices.map(c=>c.id),['precision'],'omission retains the old Rogue reward');
+assert.deepEqual(new MassRewards({...spec,authoredSupports:undefined},103,oldReward.snapshot()).snapshot(),oldReward.snapshot());
+assert.throws(()=>new MassRewards({...spec,authoredSupports:undefined},103,[{source:'forged',label:'Bad',
+ choices:[{gem:{kind:'support',supportId:'splash',level:1},hosts:['backstab']}]}]));
+for(const authoredSupports of [['missing'],['splash','splash'],['precision'],null,'splash'])
+ assert.throws(()=>validateMassRewards({...spec,authoredSupports} as never));
+console.log('PASS legacy one-choice reward and authored-pool corruption/duplicate refusals');
+
+const accountSpec={...spec,authoredSupports:undefined};
+const w=makeSimWorld('warrior',77), rewards=new MassRewards(accountSpec,77);
 w.account.unlockedSupports.clear();
 assert.equal(rewards.earn(w,'locked','Locked'),false);assert.equal(rewards.snapshot().length,0);
 w.account.unlockedSupports.add('concentrated');assert.ok(rewards.earn(w,'earned','Earned'));

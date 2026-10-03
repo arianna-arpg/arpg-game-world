@@ -1,5 +1,13 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Worldmass cache rewards can snapshot explicit `authoredSupports` alongside the
+account-gated `supports` pool. Both require a compatible equipped host and open
+native socket; an authored treasure grants a physical item, never a random-drop
+unlock. New expeditions offer native splash and knockback alternatives.
+Omission retains old reward policy. Verify worldmass_rewards and the real
+`balance/worldmass-rewards-ui.cjs` (default Warrior, `HOLLOW_WAKE_QA_CLASS=rogue`)
+for pending/claimed browser Continue, native UI and drag/socket.
+
 Browser previews use `src/buildProfile.ts`: `HOLLOW_WAKE_STORAGE_SCOPE` isolates
 all browser saves/preferences and disables shared disk endpoints; an empty
 scope preserves normal persistence. `HOLLOW_WAKE_WORLDMASS=1` starts new runs

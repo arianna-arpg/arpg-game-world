@@ -11,8 +11,11 @@ import { canonical, massRandom } from './random';
 
 export interface MassRewardSpec {
   source: string;
-  /** An authored pool, gated again by the account and live equipped kit. */
+  /** Ordinary pool, gated again by the account and live equipped kit. */
   supports: string[];
+  /** Explicit physical treasures: usable this life without unlocking random drops.
+   * Omission retains the older account-only reward contract. */
+  authoredSupports?: string[];
   level: number;
   maxRewards: number;
 }
@@ -21,11 +24,14 @@ export interface MassRewardSave {
   source: string; label: string; choices: MassRewardChoice[]; claimed?: string;
 }
 export function validateMassRewards(spec: MassRewardSpec): void {
+  const authored = spec.authoredSupports;
+  if (authored !== undefined && !Array.isArray(authored)) throw new Error('Invalid authored exploration treasures');
+  const pool = [...(Array.isArray(spec.supports) ? spec.supports : []), ...(authored ?? [])];
   if (!spec.source || !Number.isSafeInteger(spec.level) || spec.level < 1 || spec.level > 20
     || !Number.isSafeInteger(spec.maxRewards) || spec.maxRewards < 1 || spec.maxRewards > 16
-    || !Array.isArray(spec.supports) || !spec.supports.length || spec.supports.length > 64
-    || new Set(spec.supports).size !== spec.supports.length
-    || spec.supports.some(id => !Object.hasOwn(SUPPORTS, id))) throw new Error('Invalid exploration reward policy');
+    || !Array.isArray(spec.supports) || !pool.length || pool.length > 64
+    || new Set(pool).size !== pool.length
+    || pool.some(id => typeof id !== 'string' || !Object.hasOwn(SUPPORTS, id))) throw new Error('Invalid exploration reward policy');
 }
 const instance = (gem: SupportGemPayload): SupportInstance =>
   ({ def: SUPPORTS[gem.supportId], level: gem.level, ...(gem.rolled ? { rolled: gem.rolled } : {}) });
@@ -47,15 +53,16 @@ export class MassRewards {
     if (!saved) return;
     if (!spec || !Array.isArray(saved) || saved.length > spec.maxRewards
       || new Set(saved.map(r => r.source)).size !== saved.length) throw new Error('Invalid exploration rewards');
+    const pool = [...spec.supports, ...(spec.authoredSupports ?? [])];
     for (const row of saved) {
       if (!row.source || typeof row.label !== 'string' || row.label.length > 200
-        || !Array.isArray(row.choices) || !row.choices.length || row.choices.length > spec.supports.length
+        || !Array.isArray(row.choices) || !row.choices.length || row.choices.length > pool.length
         || new Set(row.choices.map(c => c.gem.supportId)).size !== row.choices.length
         || row.claimed !== undefined && !row.choices.some(c => c.gem.supportId === row.claimed))
         throw new Error('Invalid exploration reward receipt');
       for (const c of row.choices) {
         const g = c.gem, def = SUPPORTS[g.supportId];
-        if (g.kind !== 'support' || !spec.supports.includes(g.supportId) || g.level !== spec.level
+        if (g.kind !== 'support' || !pool.includes(g.supportId) || g.level !== spec.level
           || !Array.isArray(c.hosts) || !c.hosts.length || c.hosts.length > 32 || c.hosts.some(id => !SKILLS[id]))
           throw new Error('Invalid exploration reward choice');
         const axes = def.rollBase?.axes ?? [];
@@ -69,8 +76,9 @@ export class MassRewards {
   earn(world: World, source: string, label: string): boolean {
     const spec = this.spec;
     if (!spec || this.entries.length >= spec.maxRewards || this.entries.some(r => r.source === source)) return false;
-    const choices = spec.supports.flatMap(id => {
-      if (!isSupportUnlockedForDrop(world.account, id)) return [];
+    const authored = new Set(spec.authoredSupports ?? []);
+    const choices = [...spec.supports, ...authored].flatMap(id => {
+      if (!authored.has(id) && !isSupportUnlockedForDrop(world.account, id)) return [];
       const rng = massRandom(this.seed, [spec.source, source, id]);
       const gem = mintSupportInstance(SUPPORTS[id], spec.level, () => rng.next());
       const hosts = explorationRewardHosts(world, gem);

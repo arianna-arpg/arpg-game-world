@@ -140,7 +140,8 @@ export function massAdventure(): MassAdventure {
           site: landmark.site, ...(landmark.magicPack ? { magicPack: landmark.magicPack } : {}) };
       }),
     ],
-    rewards: { source: 'worldmass/first-cache-support', supports: [...STARTER_SUPPORTS], level: 1, maxRewards: 1 },
+    rewards: { source: 'worldmass/first-cache-support-v2', supports: [...STARTER_SUPPORTS],
+      authoredSupports: ['splash', 'battering_ram'], level: 1, maxRewards: 1 },
     journey: { source: 'worldmass/frontier-circuit', width: 120, color: '#62573e', clearingColor: '#454331',
       stops: [
         {id:'west-caravan',from:'west-camp',trail:'circuit',at:.48,offset:-460,radius:310,content:'caravan-wreck'},
