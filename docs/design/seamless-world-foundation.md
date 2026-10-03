@@ -2728,3 +2728,33 @@ pointing toward graph destinations unavailable in continuous geography. It
 appears in both old and new clients and needs a separate event-boundary fix.
 The independent reviews remain in progress; these controlled checks establish
 neither ordinary-play acceptance nor long-distance actor dormancy.
+
+### Keep country kills within reachable campaign geography
+
+The outpost browser comparison reproduced an older native Odyssey faction-kill
+event advertising the mustering crypt and Nhal, neither reachable in this
+expedition. Odyssey now uses the existing graphWorkAvailable capability at its
+kill, update and lead entry points. Country deaths still use native combat,
+experience and loot. Dormant campaign records remain intact; completed
+historical quest turn-ins retain their earned payment.
+
+All three type checks, seven worldmass-work groups and 26 native Odyssey/night
+groups pass. A native ordinary-world positive control still learns a faction
+lead at its configured kill threshold. Continuous deaths, direct lead calls
+and direct updates leave the campaign unchanged before and after adoption.
+The actual previous client reproduces the unreachable message after native
+zombie kills; the new client does not. Both actual clients retain their exact
+campaign and quest records across browser Continue. Two paired page/canvas
+states per client were inspected. Controlled enemy creation and kills are
+regression fixtures, not ordinary gameplay.
+
+Map revision d2321fd8 passed CI 37144338745 and Pages 37145436895.
+Exact live metadata reports 2026-10-03T18:47:15.822Z; isolated remote QA preserved
+seed 851365273 and all six ordinary-save sentinels through Continue.
+The country-outpost and campaign-boundary commits will publish together.
+
+The recovered native-contract critic has finished with a negative overall
+verdict. Its meaningful build choices and late defensive battle do not outweigh
+knockback cleanup, difficult status interpretation and early onboarding friction.
+The fixed shrine-build critic remains independent and in progress. No review
+acceptance or commercial-game parity is claimed.

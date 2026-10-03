@@ -1,5 +1,11 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Dormant graph campaigns use the shared graphWorkAvailable boundary inside
+Odyssey event/lead entry points, including faction kills and direct updates.
+Native kills and earned historical turn-ins keep their ordinary resolution.
+Verify worldmass_work and odyssey, plus balance/campaign-boundary-ui.cjs for
+the previous-client false lead and exact current browser Continue.
+
 Repeated camps and ruins in `worldmass/countryOutposts.ts` use the native
 garrison-clearance reward and quiet-cache policy already used by landmarks.
 Saved quotas retain at least one eligible defender without making wildlife

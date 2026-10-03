@@ -51,6 +51,7 @@ export class OdysseyRuntime {
 
   update(): void {
     const w = this.w;
+    if (!w.graphWorkAvailable()) return;
     if (w.clientActionHook || w.scene || !w.player || w.player.dead || w.player.downed) { this.risings.clear(); return; }
     // A safe off-world arena is not a new journey. Real runs begin in Lastlight
     // or resume in the field; the tutorial has stamped its faction by then.
@@ -97,7 +98,7 @@ export class OdysseyRuntime {
   }
 
   /** The giver recognizes existing opportunities; never mints a second target. */
-  hasLocalLeads(): boolean { return !!this.state && this.state.leads.length < this.state.roster.length; }
+  hasLocalLeads(): boolean { return this.w.graphWorkAvailable() && !!this.state && this.state.leads.length < this.state.roster.length; }
   localLeads(): void {
     const s = this.state;
     if (!s) return;
@@ -105,11 +106,12 @@ export class OdysseyRuntime {
     this.revealRevenge();
   }
   private revealRevenge(): void {
+    if (!this.w.graphWorkAvailable()) return;
     this.w.learnQuestDirections(`quest_${revengeCommanderId(revengeFactionOf(this.w.account.ledger))}`);
   }
   reveal(id: string): void {
     const s = this.state;
-    if (!s || s.leads.includes(id) || !s.roster.includes(id)) return;
+    if (!this.w.graphWorkAvailable() || !s || s.leads.includes(id) || !s.roster.includes(id)) return;
     s.leads.push(id);
     for (const step of ['operation', 'leader'] as const) {
       this.w.learnQuestDirections(`quest_${odysseyQuestId(id, step)}`);
@@ -185,6 +187,9 @@ export class OdysseyRuntime {
   }
 
   killed(a: Actor, credited: boolean): void {
+    // Dormant graph campaigns retain their receipts; country kills belong to
+    // the active geography and cannot reveal unreachable graph destinations.
+    if (!this.w.graphWorkAvailable()) return;
     const s = this.state;
     if (!s) return;
     if (a.tag === 'odyssey_scout') {

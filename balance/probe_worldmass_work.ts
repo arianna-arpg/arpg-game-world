@@ -4,6 +4,8 @@ import { seedGlobalRandom } from '../src/sim/rng';
 import { townStationFeatures } from '../src/data/townBuild';
 import { FEATURE } from '../src/meta/account';
 import { QUESTS, Q_UNDEAD_SOUTH } from '../src/quests/defs';
+import { MONSTERS } from '../src/data/monsters';
+import { ODYSSEY_CFG } from '../src/data/odyssey';
 import { BRANDT_HAMMER_QUEST } from '../src/data/brandt';
 import type { QuestDef } from '../src/quests/types';
 import type { World } from '../src/engine/world';
@@ -29,6 +31,15 @@ const stand=(w:World,id:string)=>{
  const actor=w.actors.find(a=>a.defId===id&&!a.dead);assert.ok(actor,id);
  w.player.pos={...actor.pos};w.player.tier=actor.tier;
 };
+const factionKills=(w:World)=>{
+ const state=w.odyssey.state!;
+ const def=Object.values(MONSTERS).find(d=>d.faction&&state.roster.includes(d.faction));assert.ok(def);
+ for(let i=0;i<ODYSSEY_CFG.leadsFromKills;i++){
+  const a=w.createMonster(def.id,1,'enemy');a.pos={...w.player.pos};w.actors.push(a);
+  w.kill(a,false,w.player);assert.ok(a.dead,'ordinary native kill still resolves');
+ }
+ return def.faction!;
+};
 const restore=seedGlobalRandom(73912);
 try{
  const native=prepare(false);
@@ -38,6 +49,12 @@ try{
  assert.ok(native.activeQuests.some(q=>q.questId===BRANDT_HAMMER_QUEST));
  native.armBountyBoard();assert.ok(native.bountyOffers.length,'ordinary board still deals real work');
  const offers=structuredClone(native.bountyOffers);
+ native.odyssey.restore(undefined);
+ const faction=factionKills(native);
+ assert.equal(native.odyssey.state!.kills[faction],ODYSSEY_CFG.leadsFromKills);
+ assert.ok(native.odyssey.state!.leads.includes(faction));
+ assert.ok(native.notices.some(n=>n.text.includes('Bearings on your map')));
+ console.log('PASS ordinary native faction kills still discover campaign leads');
  console.log('PASS ordinary Brandt offer, dwell acceptance, destination and bounty slate');
 
  const w=prepare(true);assert.equal(w.graphWorkAvailable(),false);
@@ -55,6 +72,12 @@ try{
  w.odyssey.restore(undefined);const oldLeads=canonical(w.odyssey.snapshot());
  stand(w,'townsfolk_questgiver');hooks(w).updateQuestGiver(4);
  assert.equal(canonical(w.odyssey.snapshot()),oldLeads,'dwell cannot reveal unreachable campaign leads');
+ const notices=w.notices.length;
+ factionKills(w);w.odyssey.reveal(w.odyssey.state!.roster[0]);w.odyssey.localLeads();w.odyssey.update();
+ assert.equal(w.odyssey.hasLocalLeads(),false);
+ assert.equal(canonical(w.odyssey.snapshot()),oldLeads,'all campaign admission paths retain dormant state');
+ assert.ok(!w.notices.slice(notices).some(n=>n.text.includes('Bearings on your map')));
+ console.log('PASS native country deaths resolve without advancing dormant graph campaigns or advertising absent destinations');
  console.log('PASS all present givers, stale direct acceptance, enrollment and leads cannot mint unreachable graph quests');
 
  w.bountyOffers=structuredClone(offers);
@@ -91,5 +114,8 @@ try{
  assert.equal(resumed.acceptBounty(offers[0].id),false);
  assert.deepEqual(hooks(resumed).acceptableQuests(),[]);
  assert.ok(resumed.completedQuests.has(Q_UNDEAD_SOUTH.id));
+ const continuedCampaign=canonical(resumed.odyssey.snapshot());factionKills(resumed);
+ assert.equal(canonical(resumed.odyssey.snapshot()),continuedCampaign);
+ assert.equal(continuedCampaign,canonical(w.odyssey.snapshot()));
  console.log('PASS browser-state adoption retains work and rewards without reopening inaccessible travel');
 }finally{restore();}
