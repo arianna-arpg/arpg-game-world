@@ -110,6 +110,7 @@ assert.ok(oldRoles.siteCleared(oldRoleSite.id),'unflagged legacy fixtures add no
 console.log('PASS omitted garrison roles retain previous fixture completion semantics');
 
 const base:MassAdventure=JSON.parse(canonical(cfg));delete base.journey!.extensions;delete base.journey!.stops;
+delete base.settlement!.quests; // Prior circuit has no northern contract destination.
 const oldWorld=makeSimWorld('warrior',43),old=new WorldMassRuntime(42,'extension',base);old.attach(oldWorld);
 assert.equal(old.journey!.places.length,4);
 assert.deepEqual(journey.trails.slice(0,8),old.journey!.trails,'adding a branch cannot reroute the original circuit');

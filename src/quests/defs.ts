@@ -11,7 +11,7 @@ import { Q_RELIQUARY } from './reliquary';
 import { brandtQuestDefs } from './brandt';
 import { odysseyQuestDefs } from './odyssey';
 import { registerGenPin } from '../engine/genPins';
-import { Q_FRONTIER_WATCH } from './frontier';
+import { Q_FRONTIER_WATCH, Q_FRONTIER_STONEWARD } from './frontier';
 
 /** The Hollow Vault's arena recipe — a quest zone spec is the ONLY thing that
  *  ever asks for it, and the census walks tilesets/biomes/zones, not quests.
@@ -104,6 +104,7 @@ export const Q_UNMADE: QuestDef = {
 
 export const QUESTS: Record<string, QuestDef> = {
   [Q_FRONTIER_WATCH.id]: Q_FRONTIER_WATCH,
+  [Q_FRONTIER_STONEWARD.id]: Q_FRONTIER_STONEWARD,
   ...Object.fromEntries(brandtQuestDefs().map(q => [q.id, q])),
   ...Object.fromEntries(odysseyQuestDefs().map(q => [q.id, q])),
   [Q_UNDEAD_SOUTH.id]: Q_UNDEAD_SOUTH,

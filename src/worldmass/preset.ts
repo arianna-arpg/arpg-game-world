@@ -13,7 +13,7 @@ import { MASS_BIOME_FAMILIES, MASS_CLIMATE_ECOLOGY } from './biomes';
 import { nativeMassEncounters } from './encounters';
 import { countryFieldSites } from './fieldSites';
 import { nativeMassGround, type MassGroundSpec } from './ground';
-import { Q_FRONTIER_WATCH } from '../quests/frontier';
+import { Q_FRONTIER_WATCH, Q_FRONTIER_STONEWARD } from '../quests/frontier';
 
 export const MASS_ZONE = 'worldmass_expedition';
 export interface MassContent extends MassPopulation {
@@ -177,7 +177,10 @@ export function massAdventure(): MassAdventure {
       ] },
     ] },
     settlement: { zone: 'lastlight', source: 'zones/lastlight', apron: 192, blend: 144,
-      quests: { source: 'worldmass/native-clear-contracts', bindings: [{ quest: Q_FRONTIER_WATCH.id, destination: 'west-camp' }] },
+      quests: { source: 'worldmass/native-place-contracts', bindings: [
+        { quest: Q_FRONTIER_WATCH.id, destination: 'west-camp' },
+        { quest: Q_FRONTIER_STONEWARD.id, destination: 'north-stoneward', defeat: { kind: 'population', index: 0 } },
+      ] },
       cartography: { source: 'zones/lastlight/public-signs', publicSigns: true },
       doorPress: { source: 'worldmass/settlement-doors', alignment: .65, reach: 4 } },
     startRadius: 288, populationRadius: 1300, maxPopulation: 96, pageRadius: 2, samplesPerTick: 512,

@@ -5,12 +5,19 @@ import type { World } from '../engine/world';
 import type { MassPlace } from './contracts';
 import { QUESTS } from '../quests/defs';
 import { massJourneyPlaceId } from './journey';
-import { MONSTERS } from '../data/monsters';
+import { AMBIENT_TAGS, MONSTERS } from '../data/monsters';
+import { canonical } from './random';
 
+/** The exact original body slot owns the deed, never its species at large. */
+export interface MassQuestBinding {
+  quest: string;
+  destination: string;
+  defeat?: { kind: 'population' | 'fixture'; index: number };
+}
 export interface MassQuestSpec {
   source: string;
-  /** A native clear contract bound to an existing connected place. */
-  bindings: { quest: string; destination: string }[];
+  /** Native contracts bound to existing connected places. */
+  bindings: MassQuestBinding[];
 }
 export interface MassQuestPin { x: number; y: number; label: string; ready: boolean }
 
@@ -23,18 +30,41 @@ export function validateMassQuests(config: MassAdventure): void {
   const destinations = [...(config.journey?.destinations ?? []), ...(config.journey?.extensions ?? []), ...(config.journey?.stops ?? [])];
   for (const b of spec.bindings) {
     const def = QUESTS[b.quest], target = destinations.find(d => d.id === b.destination);
-    const site = target && config.content.find(c => c.id === target.content)?.site;
-    // This adapter witnesses complete original garrisons. A boss, cargo,
-    // rescue or partial-clear contract needs its own explicit witness.
-    if (!def || !target || !site?.completion || def.zone.objective.kind !== 'clear'
-      || (def.zone.objective.frac ?? 1) !== 1 || def.collect || def.rescue
+    const content = target && config.content.find(c => c.id === target.content);
+    const objective = def?.zone.objective;
+    if (!def || !content?.site?.completion || def.collect || def.rescue || def.zoneVariants
       || def.geographies && !def.geographies.includes('continuous'))
       throw new Error('Unsupported worldmass quest objective or destination');
+    // No partial-clear tally or borrowed success from opening the site's chest.
+    if (objective.kind === 'clear' && (objective.frac ?? 1) === 1 && objective.need === undefined
+      && b.defeat === undefined) continue;
+    const body = objective.kind === 'boss' ? MONSTERS[objective.id] : undefined, slot = b.defeat;
+    if (objective.kind !== 'boss' || objective.levelBonus !== undefined || objective.uber
+      || objective.promote || objective.arenaBossRetry || !body || body.passive || body.noObjective
+      || AMBIENT_TAGS.has(body.tag ?? '') || !slot || !Number.isSafeInteger(slot.index) || slot.index < 0)
+      throw new Error('Unsupported worldmass quest objective or destination');
+    // A fixed original slot must always seat the named native target. Variable
+    // rosters, formations and promoted encounters need explicit adapters.
+    const exact = slot.kind === 'fixture'
+      ? content.site.fixtures[slot.index]?.garrison === true && content.site.fixtures[slot.index].monster === objective.id
+      : slot.kind === 'population' && slot.index < content.count && !content.levels && !content.encounters && !content.magicPack
+        && content.table.length > 0 && content.table.every(row => row.id === objective.id);
+    if (!exact) throw new Error('Unsupported worldmass quest objective or destination');
   }
 }
 export function massQuestDestination(mass: WorldMassRuntime, quest: string): MassPlace | undefined {
   const binding = mass.config.settlement?.quests?.bindings.find(b => b.quest === quest);
   return binding ? mass.journey?.places.find(p => p.recipe === binding.destination) : undefined;
+}
+/** Admission captured native eligibility; a durable death of that same
+ * original body completes the named deed, independently of other defenders. */
+export function massQuestSatisfied(mass: WorldMassRuntime, quest: string, placeId: string): boolean {
+  if (massQuestDestination(mass, quest)?.id !== placeId) return false;
+  const binding = mass.config.settlement?.quests?.bindings.find(b => b.quest === quest), objective = QUESTS[quest]?.zone.objective;
+  if (objective?.kind === 'clear' && !binding?.defeat) return mass.siteCleared(placeId);
+  if (objective?.kind !== 'boss' || !binding?.defeat) return false;
+  const slot = binding.defeat, id = slot.kind === 'fixture' ? canonical([placeId, 'fixture', slot.index]) : canonical([placeId, slot.index]);
+  return mass.state.claimed('site-guardian', id) && mass.state.claimed('fallen', id);
 }
 /** Before the live scene exists, accept only the exact saved run's pinned
  * binding. A stale or foreign place cannot become an ordinary zone quest. */

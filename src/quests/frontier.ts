@@ -25,3 +25,19 @@ export const Q_FRONTIER_WATCH: QuestDef = {
     ],
   },
 };
+
+/** A paid current-run contract leads to a specific original guardian.
+ * Escort clearance and cache searches remain separate optional work. */
+export const Q_FRONTIER_STONEWARD: QuestDef = {
+  id: 'frontier_northern_watch',
+  geographies: ['continuous'],
+  giver: 'townsfolk_innkeep',
+  offerAtLevel: 3,
+  requiresQuests: [Q_FRONTIER_WATCH.id],
+  offerLabel: 'The Northern Watch — defeat the Stone Sentinel at the Stoneward',
+  zone: { name: 'The Stoneward', tileset: 'downs', direction: 'n', level: 4,
+    objective: { kind: 'boss', id: 'stone_sentinel' }, forceWaypoint: false },
+  turnIn: { giver: 'townsfolk_innkeep',
+    prompt: 'The Stone Sentinel has fallen. Return to Mireille at the Lastlight inn for a passive point and experience.' },
+  reward: { xp: 160, passivePoints: 1, ledger: { quests_completed: 1 } },
+};

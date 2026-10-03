@@ -280,7 +280,7 @@ import { DESCENT_AFFIX_FAMILIES, ITEM_AFFIXES } from '../data/itemaffixes';
 import { caravanBand, CARAVAN_BANDS, caravanBandLabel } from '../data/caravan';
 import { TILESETS, CAVE_FACE_IDS, pickTilesetForBiome } from '../data/tilesets';
 import { QUEST_GIVER_IDS, ZONE_QUEST_GIVER_IDS, QUESTS } from '../quests/defs';
-import { massQuestDestination, massQuestTarget, validMassQuestEntry } from '../worldmass/quests';
+import { massQuestDestination, massQuestSatisfied, massQuestTarget, validMassQuestEntry } from '../worldmass/quests';
 import { RELIQUARY_LESSON, resolveQuestZone } from '../quests/reliquary';
 import type { QuestDef, QuestGateCtx } from '../quests/types';
 import { imbuedItem, imbueOptions, mintQuestImbue, restoreQuestImbues, type QuestImbue } from './questImbue';
@@ -28468,6 +28468,7 @@ export class World {
       if (q.requiresLedger
         && (this.ledger[q.requiresLedger] ?? 0) < 1
         && (this.account.ledger[q.requiresLedger] ?? 0) < 1) return false;
+      if (q.requiresQuests?.some(id => !this.completedQuests.has(id))) return false;
       if (q.gate && !q.gate(gateCtx)) return false;
       const cat = q.category ?? DEFAULT_QUEST_CATEGORY;
       const cap = QUEST_CATEGORY_CAPS[cat];
@@ -28957,7 +28958,7 @@ export class World {
    * The runtime's durable witness, never a caller's success flag, authorizes it. */
   completeMassQuest(questId: string, placeId: string): void {
     const mass = this.massRuntime, entry = this.activeQuests.find(q => q.questId === questId && q.placeId === placeId);
-    if (!mass || !entry || this.player.dead || massQuestDestination(mass, questId)?.id !== placeId || !mass.siteCleared(placeId)) return;
+    if (!mass || !entry || this.player.dead || !massQuestSatisfied(mass, questId, placeId)) return;
     this.completeQuestField(entry);
   }
 

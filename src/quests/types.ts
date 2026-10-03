@@ -193,6 +193,9 @@ export interface QuestDef {
   /** Ledger key (per-run OR per-account) that must be ≥1 to offer this — the
    *  chain mechanism (a follow-up quest requires a prior quest's reward key). */
   requiresLedger?: string;
+  /** Completed and paid quest IDs required in this character's current run.
+   * Account history and an unpaid field objective cannot advance this chain. */
+  requiresQuests?: readonly string[];
   /** Arbitrary extra availability predicate over the run's read-only gate ctx —
    *  the seam for gates requiresLedger can't express (class checks, RUN-only
    *  step chains, per-character caps). ANDed with every other gate. */

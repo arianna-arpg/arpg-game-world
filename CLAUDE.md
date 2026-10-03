@@ -7,15 +7,18 @@ clock modes, timing decorations and movement rules remain authoritative.
 Verify castingcues and `balance/cast-readout-ui.cjs`; the previous client with
 HOLLOW_WAKE_QA_LEGACY=1 reproduces the missing name and slot indication.
 
-Native clear contracts can opt into continuous geography through the saved
-settlement quest bindings in `worldmass/quests.ts`. The first binds Mireille's
-Western Watch to Cinderwatch's original garrison, then uses native return,
-capacity, item-choice and reward ownership. Journal/map directions do not reveal
-terrain. The adapter refuses boss/cargo/rescue/partial-clear objectives; old
-descriptors without bindings keep prior offers. Verify worldmass_quests and the
-worldmass suite, native Brandt/quest-map/bounty/Odyssey/reliquary checks, and
-`balance/worldmass-quests-ui.cjs` for real UI, continuous return walking, four
-Continue checkpoints and an actual prior-client save.
+Native contracts opt into continuous geography through saved settlement bindings
+in `worldmass/quests.ts`. Mireille's Western Watch targets Cinderwatch's original
+garrison; the Northern Watch targets the original Stone Sentinel at the Stoneward.
+`QuestDef.requiresQuests` gates on paid current-run completions. Named target
+bindings require a fixed eligible original population/fixture slot, independently
+of escort or cache state. Native return, capacity, choices and rewards retain
+ownership. Journal/map directions never survey terrain. The adapter refuses
+promoted/variant boss, cargo, rescue and partial-clear obligations; older saved
+binding sets stay unchanged. Verify worldmass_quests/targets and the worldmass
+suite, native Brandt/quest-map/bounty/Odyssey/reliquary checks, plus
+`balance/worldmass-quests-ui.cjs` and `balance/worldmass-targets-ui.cjs` for actual
+UI, native walking, four browser checkpoints and real prior-client saves.
 
 New expedition descriptors can snapshot native multi-stop ground palettes through
 `worldmass/ground.ts`. The geographic noise leaf also preserves the generator's

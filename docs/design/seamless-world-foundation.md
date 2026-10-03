@@ -2444,3 +2444,47 @@ The actual native quest UI confirms all three choices fit, carry their base
 benefits and still complete the same continuous return/equipment/Continue loop.
 Paired page and canvas captures were inspected. All three type checks, the
 place-contract lifecycle, native Reliquary and nine Brandt scenarios pass.
+
+
+### Named original guardians and a native quest chain
+
+The Northern Watch follows the paid Western Watch at character level three.
+Mireille asks for the Stone Sentinel at the existing level-four Stoneward, then
+pays 160 experience and one native passive point on return. The contract uses
+the same saved place binding and native quest pipeline; no new route or bespoke
+combat/reward handler is introduced. The declarative requiresQuests gate checks
+completed quests in this run, independently of account history.
+
+A binding can identify a fixed original population or fixture slot for a named
+target. Native admission eligibility plus that same body's durable death owns
+the deed. Another creature of the same species, an escort, a searched cache or
+an unadmitted missing body cannot substitute. The escort may remain alive after
+the contract becomes ready, and full-garrison clearance remains independent.
+A target defeated before acceptance still counts. Promoted/variant bosses,
+variable target rosters, cargo, rescue and partial-clear objectives remain
+outside this adapter; this does not migrate full native boss campaigns or enemy
+summon lifecycles.
+
+All three type checks, 25 worldmass probes and native Brandt, quest-map, bounty,
+Odyssey, reliquary and account-reliquary checks pass. Generation QA reports
+869 cases across three seeds, zero failures, four existing geometry warnings
+and one timing warning. Isolated birth/older-circuit fixtures omit bindings
+whose northern destination they intentionally remove.
+
+The controlled actual client uses native automatic acceptance, the Western
+Watch reward button, the Northern Watch journal/map and native return payout.
+It walks the northern branch in 473 frames with active AI, the same hero and
+zero zone loads. Accepted, wounded, ready and paid states survive exact browser
+Continue; an actual previous client retains its west-only binding set. Original
+guardian skills/wounds, surviving escort and the one passive point are checked.
+The harness now drains its queued boot frame before Continue so incidental
+native regeneration cannot contaminate a zero-time checkpoint comparison.
+Paired page/canvas captures were inspected. Setup relocations, level setup and
+controlled defeats are verification, not ordinary-play evidence.
+
+Place-contract revision ab8beefe passed CI 37091522319 and Pages 37092497080.
+Exact live metadata reports 2026-10-03T03:15:26.504Z; isolated remote QA preserved
+seed 211527239 and all six ordinary-save sentinels through Continue. Subsequent
+cast-readout and reward-description commits are pushed; their combined live
+deployment is still awaiting verification. No overall critic acceptance is
+claimed.
