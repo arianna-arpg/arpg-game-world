@@ -56239,7 +56239,7 @@ export class World {
     for (const s of this.shrines) {
       if (s.used || dist(s.pos, p.pos) > p.radius + 24) continue;
       s.used = true;
-      p.addBuff({ type: 'buff', id: 'shrine_' + s.def.id, duration: s.def.duration, mods: s.def.mods });
+      p.addBuff({ type: 'buff', id: 'shrine_' + s.def.id, label: s.def.name, duration: s.def.duration, mods: s.def.mods });
       this.text(vec(s.pos.x, s.pos.y - 20), s.def.name + '!', s.def.color, 16);
       this.flashes.push({ pos: vec(s.pos.x, s.pos.y), radius: 60, color: s.def.color, life: 0.45, maxLife: 0.45 });
     }

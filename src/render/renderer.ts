@@ -1,3 +1,4 @@
+import { buffReadoutLines, drawBuffReadout } from './vis/buffReadout';
 import { drawSkillIcon } from './skillIcons';
 import { drawMeleeReach } from './vis/meleeReachLayer';
 import { treePointBudget } from '../engine/skillEmpowerment';
@@ -8368,11 +8369,11 @@ export class Renderer {
     }
 
     // Buff pips — RAISED above the meta-button row so both always read;
-    // hovering a pip names it (one small label, never a wall of text).
+    // hovering a pip describes its actual native modifier payload.
     const buffY = by - 40;
     const procCues = procCueRows(p);
     let bpx = bx;
-    let hoverLabel: { x: number; text: string } | null = null;
+    let hoverLabel: { x: number; lines: string[] } | null = null;
     for (const [id, buff] of p.buffs) {
       const procCue = procCues.find(row => row.id === id && row.phase === 'stored');
       if (procCue) drawProcBuff(ctx, procCue, bpx + 5, buffY + 5);
@@ -8384,8 +8385,7 @@ export class Renderer {
       }
       const mx = this.uiMouse.x, myv = this.uiMouse.y; // virtual-space, matching the scaled pip rects
       if (mx >= bpx - 2 && mx <= bpx + 12 && myv >= buffY - 2 && myv <= buffY + 12) {
-        const rem = Math.max(...buff.expiries ?? [buff.remaining ?? 0]);
-        hoverLabel = { x: bpx + 5, text: `${buff.def.label ?? id.replace(/_/g, ' ')} ${rem > 0 && rem < 900 ? Math.ceil(rem) + 's' : ''}`.trim() };
+        hoverLabel = { x: bpx + 5, lines: buffReadoutLines(id, buff) };
       }
       bpx += 14;
     }
@@ -8417,21 +8417,11 @@ export class Renderer {
       ctx.fillText(`${count}`, bpx + 5, buffY - 2);
       const mx = this.uiMouse.x, myv = this.uiMouse.y; // virtual-space, matching the scaled pip rects
       if (mx >= bpx - 2 && mx <= bpx + 12 && myv >= buffY - 2 && myv <= buffY + 12) {
-        hoverLabel = { x: bpx + 5, text: chargeLabel(name) };
+        hoverLabel = { x: bpx + 5, lines: [chargeLabel(name)] };
       }
       bpx += 18;
     }
-    if (hoverLabel) {
-      ctx.font = '10px Verdana';
-      const tw = ctx.measureText(hoverLabel.text).width + 10;
-      ctx.fillStyle = 'rgba(8,8,12,0.92)';
-      ctx.fillRect(hoverLabel.x - tw / 2, buffY - 24, tw, 15);
-      ctx.strokeStyle = '#3a3a52';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(hoverLabel.x - tw / 2, buffY - 24, tw, 15);
-      ctx.fillStyle = '#d8d4c8';
-      ctx.fillText(hoverLabel.text, hoverLabel.x, buffY - 13);
-    }
+    if (hoverLabel) drawBuffReadout(ctx, hoverLabel.lines, hoverLabel.x, buffY - 8, w);
 
     // INVOCATION RUNES: the woven SEQUENCE as ordered diamonds above the
     // bar's right edge — order is the whole grammar, so it must read.

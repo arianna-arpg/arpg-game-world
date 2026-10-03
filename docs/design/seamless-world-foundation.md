@@ -2845,3 +2845,29 @@ Progression/status head 32274184 is pushed and awaiting CI/Pages verification.
 Two independent gameplay critics remain active on their fixed builds. Neither
 this dialogue regression nor the earlier controlled checks are a gameplay
 acceptance verdict or a commercial-game comparison.
+
+### Explain the blessing a shrine actually grants
+
+The independent shrine critic found working blessings with an unhelpful tiny
+identifier-only hover. Native shrine touch now supplies its authored name to
+the existing buff label; the buff-pip hover describes the actual modifier
+payload through the shared item/stat formatter. Barrage names its additional
+projectile and projectile speed, while Stoneskin explains armor and less damage
+taken. Conditional tags and per-stack units remain explicit for other buffs.
+The bounded card wraps within VIS_CFG.buffReadout width and row budgets. It
+claims modifier information only, not an invented summary of other buff verbs.
+Native touch, effect strength, expiry and one-use consumption stay unchanged.
+
+All three type checks, two new buff-readout groups and four existing shrine
+groups pass. Controlled browser walking touches the three actual country
+shrines, then checks their live modifiers and clocks, read-only redraws, an
+800-by-600 hover, expiry and exact consumed-shrine Continue without another
+blessing. The actual previous client reproduces the identifier-only hover.
+All five paired page/canvas states per client were inspected. These controlled
+checks supplement the independent critic; they do not replace its judgment.
+
+Progression/status head 32274184 passed CI 37147261441 and Pages 37148399183.
+Exact live metadata reports 2026-10-03T19:36:07.73Z; isolated remote QA preserved
+seed 22521215 and six ordinary-save sentinels through Continue. Upcoming-work
+head cba25373 is pushed and awaiting its own CI/live verification. Both fixed
+critic builds remain untouched; their final verdicts are still pending.

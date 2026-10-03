@@ -6,6 +6,9 @@
 // ---------------------------------------------------------------------------
 
 export const VIS_CFG = {
+  /** Actual temporary modifier payload, on demand at its native buff pip. */
+  buffReadout: { maxWidth: 360, maxRows: 10, margin: 8, pad: 9, lineHeight: 17, ascent: 12,
+    font: '12px Verdana', background: 'rgba(8,8,12,.94)', edge: '#575368', title: '#f0d99c', detail: '#d8d4c8' },
   /** Native active effects: stable names, expiry clocks and shared pressure. */
   statusReadout: { enabled: true, maxRows: 3, maxWidth: 300, minWidth: 110,
     rowHeight: 34, lineHeight: 20, ascent: 13, detailOffset: 14, gap: 3, pad: 8, stripe: 3,

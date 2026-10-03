@@ -1,5 +1,11 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Temporary-buff hover cards derive modifier lines from the native payload through
+items.formatModLine, preserving tags, conditions and per-stack units. Shrine
+touch attaches its authored name to the existing BuffEffect label. Presentation
+bounds live in VIS_CFG.buffReadout. Verify buffreadout and worldmass_shrines,
+plus balance/buff-readout-ui.cjs for real touch, narrow hover and expiry.
+
 Authored quest offerLevelHint previews share all native offer gates except level.
 They resolve the actual offer level without accepting work or revealing pins.
 Verify worldmass_targets and quest probes plus balance/upcoming-work-ui.cjs.
