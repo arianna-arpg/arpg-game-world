@@ -31,6 +31,7 @@ import { massFormation, validateMassEncounters } from './encounters';
 import { applyEncounterGroup, readEncounterGroup, type EncounterGroupState } from '../engine/encounterGroups';
 import { ENCOUNTER_GROUPS, ENCOUNTER_GROUP_CFG } from '../data/encounterGroups';
 import { validateMassGround } from './ground';
+import { validateMassQuests } from './quests';
 
 interface MassEnemySave {
   id: string; monster: string; level: number; x: number; y: number; life: number; scale: number;
@@ -99,6 +100,7 @@ export class WorldMassRuntime {
       || (config.pageRadius * 2 + 1) ** 2 * config.terrain.addressSpan ** 2 > 33554432)
       throw new Error('Worldmass render residency exceeds its texture budget');
     if (config.ground !== undefined) validateMassGround(config.ground);
+    validateMassQuests(config);
     if (config.progression) validateMassProgression(config.progression, config.terrain);
     if (config.ecology) validateMassEcology(config.ecology, config.terrain.addressSpan);
     if (config.journey && !config.settlement) throw new Error('Frontier routes require a settlement');
@@ -398,6 +400,8 @@ export class WorldMassRuntime {
       const content=this.config.content.find(c=>c.id===found.content);
       if(content)settleMassClearance(world,this.state,found,content,id=>this.natives.has(id),this.populationFor(found).level,this.populationCount(found));
     }
+    if (this.attached) for (const quest of [...world.activeQuests])
+      if (quest.placeId) world.completeMassQuest(quest.questId, quest.placeId);
     // Retained actors still need their original solid scenery after a reload,
     // even when the hero saved far away. Dependency pages do not spawn content.
     const dependencies = new Map<string, ReturnType<MassGenerator['placesInCell']>>();

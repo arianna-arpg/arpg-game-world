@@ -279,7 +279,8 @@ import {
 import { DESCENT_AFFIX_FAMILIES, ITEM_AFFIXES } from '../data/itemaffixes';
 import { caravanBand, CARAVAN_BANDS, caravanBandLabel } from '../data/caravan';
 import { TILESETS, CAVE_FACE_IDS, pickTilesetForBiome } from '../data/tilesets';
-import { QUEST_GIVER_IDS, QUESTS } from '../quests/defs';
+import { QUEST_GIVER_IDS, ZONE_QUEST_GIVER_IDS, QUESTS } from '../quests/defs';
+import { massQuestDestination, massQuestTarget, validMassQuestEntry } from '../worldmass/quests';
 import { RELIQUARY_LESSON, resolveQuestZone } from '../quests/reliquary';
 import type { QuestDef, QuestGateCtx } from '../quests/types';
 import { imbuedItem, imbueOptions, mintQuestImbue, restoreQuestImbues, type QuestImbue } from './questImbue';
@@ -556,7 +557,7 @@ import { captureLoot, skillToLoot, DEATH_SCHEMA, MAX_DEATH_RECORDS, CORPSE_MATCH
 import {
   WORLD_SCHEMA_VERSION, WORLDSTATE_CFG, sanitizeBountyBoard, sanitizeEnemyMemo, sanitizeMercSheets, sanitizeProcessionMemo,
   sanitizeVendorHolds, sanitizeWorldZones,
-  type ResumeSpawn, type SavedPlayerSpot, type SavedZoneMemory, type VendorHoldSave, type WorldStateSave,
+  type ResumeSpawn, type SavedPlayerSpot, type SavedZoneMemory, type VendorHoldSave, type WorldStateSave, type SavedQuestEntry,
 } from '../meta/worldstate';
 
 export type { Doodad } from './levelgen';
@@ -3997,7 +3998,7 @@ export class World {
    *  flag IS the field leg's truth; for a GENERATED posting it is only the ANNOUNCE
    *  latch of the withhold notice (noteBountyReady) — the row's standing is its
    *  kind's own predicates (handState), never this flag, never the zone objective. */
-  activeQuests: { questId: string; zoneId: string; fieldDone: boolean; directionsKnown?: boolean }[] = [];
+  activeQuests: SavedQuestEntry[] = [];
   readonly odyssey = new OdysseyRuntime(this);
   /** Quests finished THIS run (chain gating + re-offer suppression). Per-run. */
   completedQuests = new Set<string>();
@@ -18236,8 +18237,9 @@ export class World {
     this.odyssey.restore(ws.odyssey);
     this.activeQuests = (ws.quests?.active ?? [])
       .filter(q => q && typeof q.questId === 'string' && this.questDefOf(q.questId)
-        && typeof q.zoneId === 'string' && healed[q.zoneId])
-      .map(q => ({ questId: q.questId, zoneId: q.zoneId, fieldDone: !!q.fieldDone, directionsKnown: q.directionsKnown }));
+        && typeof q.zoneId === 'string' && (q.placeId === undefined ? healed[q.zoneId] : validMassQuestEntry(q, ws.worldmass)))
+      .map(q => ({ questId: q.questId, zoneId: q.zoneId, fieldDone: !!q.fieldDone, directionsKnown: q.directionsKnown,
+        ...(q.placeId !== undefined ? { placeId: q.placeId } : {}) }));
     // A hand whose quest row a stale save dropped re-seats it (the row is
     // derivable from the posting — the announce latch re-reads off the
     // kind's own standing so the withhold notice never replays a resolved
@@ -28372,7 +28374,8 @@ export class World {
   /** Is the player near ANY quest-giving NPC (quartermaster, a secret
    *  vocation's shrine spirit, future field boards)? Registry-derived. */
   nearAnyQuestGiver(): boolean {
-    return this.actors.some(a => !a.dead && a.defId && QUEST_GIVER_IDS.has(a.defId)
+    const givers = this.massRuntime ? QUEST_GIVER_IDS : ZONE_QUEST_GIVER_IDS;
+    return this.actors.some(a => !a.dead && a.defId && givers.has(a.defId)
       && dist(a.pos, this.player.pos) <= QUESTGIVER_RADIUS
       && this.dwellReachable(this.player.pos, a.pos, npcDwellReach('questgiver'), this.storyPair(this.player, a)));
   }
@@ -28392,14 +28395,14 @@ export class World {
     if (this.reliquaryLesson()) return 'A keepsake needs a home. Open your inventory and seat your charm in the Reliquary.';
     if (this.graphWorkAvailable() && this.nearQuestGiver() && this.odyssey.hasLocalLeads()) return 'Linger — I can mark the Odyssey leaders and their supply operations.';
     if (this.pendingTurnIns().length) return 'Linger — a bounty is yours to claim.';
-    if (!this.graphWorkAvailable()) return 'No hunts are posted for this country yet.';
     if (this.nextAcceptableQuest()) return this.heroKnown()
       ? 'Linger, {name} — I have work for you…'
       : 'Linger, and I have work for you…';
     if (this.vocationChoiceOffers().length) return this.heroKnown()
       ? 'Linger — a CALLING awaits you, {name}.'
       : 'Linger — a CALLING awaits you.';
-    if (this.activeQuests.length) return 'Your hunts await out in the wilds.';
+    if (this.activeQuests.some(q => !this.massRuntime || q.placeId)) return 'Your hunts await out in the wilds.';
+    if (!this.graphWorkAvailable()) return 'No hunts are posted for this country yet.';
     return 'No work for you yet, traveller.';
   }
 
@@ -28453,10 +28456,11 @@ export class World {
   graphWorkAvailable(): boolean { return !this.massRuntime; }
 
   private acceptableQuests(): QuestDef[] {
-    if (!this.graphWorkAvailable()) return [];
     const counts = this.activeCategoryCounts();
     const gateCtx = this.questGateCtx();
     return Object.values(QUESTS).filter(q => {
+      if (q.geographies && !q.geographies.includes(this.massRuntime ? 'continuous' : 'zones')) return false;
+      if (this.massRuntime && !massQuestDestination(this.massRuntime, q.id)) return false;
       if (this.completedQuests.has(q.id)) return false;
       if (this.activeQuests.some(e => e.questId === q.id)) return false;
       if (this.player.level < this.questOfferLevel(q)) return false;
@@ -28773,7 +28777,9 @@ export class World {
         // The journal names ground by the map's own fog seam (World.visible):
         // a lifted charge reads its name here as on the chart; an omen-face
         // errand's veiled seat stays the ask.
-        target: !this.graphWorkAvailable() && standing === 'afield' ? 'Destination unavailable in this expedition'
+        target: e.placeId && this.massRuntime ? standing === 'ready' ? 'Return to ' + home.counter + ' at ' + (homeName ?? 'the settlement')
+          : massQuestTarget(this.massRuntime, e, this.player.pos)
+          : !this.graphWorkAvailable() && standing === 'afield' ? 'Destination unavailable in this expedition'
           : z ? (this.visible(z) ? z.name : e.directionsKnown === false
           ? 'Lead undiscovered — explore or seek information'
           : `${this.bearingOf(this.zone.map, z.map)} — unexplored country`) : undefined,
@@ -28788,6 +28794,17 @@ export class World {
   /** Accept a quest: GENERATE its directional zone (once) and wire it into the
    *  local world graph via placeZoneAt; discovery belongs to exploration. */
   private acceptQuest(q: QuestDef): void {
+    if (this.massRuntime) {
+      const place = massQuestDestination(this.massRuntime, q.id);
+      if (!place || this.completedQuests.has(q.id) || this.activeQuests.some(e => e.questId === q.id)) return;
+      const entry: SavedQuestEntry = { questId: q.id, zoneId: MASS_ZONE, placeId: place.id,
+        fieldDone: false, directionsKnown: true };
+      this.activeQuests.push(entry);
+      bumpLedger(this.ledger, 'quests_accepted'); this.charDirty = true;
+      this.notice('Quest: ' + q.offerLabel + ' · ' + massQuestTarget(this.massRuntime, entry, this.player.pos), '#c8a8e8', 16, 'civic');
+      return;
+    }
+    if (q.geographies && !q.geographies.includes('zones')) return;
     this.acceptOdysseyCompatibleQuest(q, true);
   }
 
@@ -28847,7 +28864,7 @@ export class World {
   }
 
   private acceptOdysseyCompatibleQuest(q: QuestDef, reveal: boolean): void {
-    if (!this.graphWorkAvailable()) return;
+    if (!this.graphWorkAvailable() || q.geographies && !q.geographies.includes('zones')) return;
     const questSeed = (this.manifest.seed ^ hashStr(q.id)) >>> 0;
     q = { ...q, zone: resolveQuestZone(q, questSeed) };
     const town = this.zoneMap[START_ZONE];
@@ -28933,35 +28950,41 @@ export class World {
   private onQuestZoneFieldCleared(zoneId: string): void {
     // Every row on this ground (THE JUICING LEAN stacks boards' postings on
     // one zone beside an authored quest's own arena).
-    for (const aq of this.activeQuests.filter(e => e.zoneId === zoneId)) {
-      // THE READINESS LAW: a GENERATED posting's deed is its kind's own
-      // predicate — the zone objective is never a posting's deed (a cull's
-      // ground clears while its marks still stand; a gather's while its
-      // nodes stand unspent; a decree's zone empties while the decree
-      // stands), so the clear only ASKS the one fold whether the hand
-      // resolved (a charge's did — its predicate IS the objective).
-      const p = this.bountyHands.find(h => h.id === aq.questId);
-      if (p) { this.noteBountyReady(p); continue; }
-      const q = this.questDefOf(aq.questId);
-      if (q?.turnIn) {
-        if (!aq.fieldDone) {
-          aq.fieldDone = true;
-          this.questRescues.free(q);
-          this.ensureQuestCargo();
-          this.charDirty = true;
-          this.notice(q.turnIn.prompt ?? 'Objective complete — return to the quartermaster to claim your reward.', '#ffd700', 16, 'civic');
-        }
-        continue;
+    for (const aq of this.activeQuests.filter(e => !e.placeId && e.zoneId === zoneId)) this.completeQuestField(aq);
+  }
+
+  /** A place is its own objective owner inside the shared continuous scene.
+   * The runtime's durable witness, never a caller's success flag, authorizes it. */
+  completeMassQuest(questId: string, placeId: string): void {
+    const mass = this.massRuntime, entry = this.activeQuests.find(q => q.questId === questId && q.placeId === placeId);
+    if (!mass || !entry || this.player.dead || massQuestDestination(mass, questId)?.id !== placeId || !mass.siteCleared(placeId)) return;
+    this.completeQuestField(entry);
+  }
+
+  private completeQuestField(aq: SavedQuestEntry): void {
+    // A generated posting still owns its deed predicate; a zone clear can
+    // only ask its native readiness fold, never replace that requirement.
+    const posting = this.bountyHands.find(h => h.id === aq.questId);
+    if (posting) { this.noteBountyReady(posting); return; }
+    const q = this.questDefOf(aq.questId);
+    if (q?.turnIn) {
+      if (!aq.fieldDone) {
+        aq.fieldDone = true;
+        this.questRescues.free(q);
+        this.ensureQuestCargo();
+        this.charDirty = true;
+        this.notice(q.turnIn.prompt ?? 'Objective complete — return to the quartermaster to claim your reward.', '#ffd700', 16, 'civic');
       }
-      this.onQuestZoneCleared(aq);
+      return;
     }
+    this.onQuestZoneCleared(aq);
   }
 
   /** Owed quest objects survive an expired ground cache or a full pack. A field
    * deed can recreate its uncollected object only on that quest's own ground. */
   private ensureQuestCargo(): void {
     for (const aq of this.activeQuests) {
-      if (!aq.fieldDone || aq.zoneId !== this.zone.id) continue;
+      if (aq.placeId || !aq.fieldDone || aq.zoneId !== this.zone.id) continue;
       const q = this.questDefOf(aq.questId);
       if (!q?.collect || this.meta.items.some(i => i.questId === q.id)
         || this.drops.some(d => d.item.kind === 'gear' && d.item.item.questId === q.id)) continue;

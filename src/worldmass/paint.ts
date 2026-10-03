@@ -8,6 +8,7 @@ import { MASS_SURFACE_VIEW, paintMassSurfaceDetail } from './surfaceDetail';
 import type { Doodad } from '../engine/levelgen';
 import { massMapSigns, MASS_MAP_SIGNS } from './cartography';
 import { MassGround } from './ground';
+import type { MassQuestPin } from './quests';
 
 interface Baked { canvas: HTMLCanvasElement; revision: number }
 /** Canvas assets are renderer-owned, disposable, and bounded independently of
@@ -175,7 +176,7 @@ export class MassPainter {
 }
 
 /** Small moving survey, sampled from the very same physical terrain. */
-export function massMap(mass: WorldMassRuntime, player: { x: number; y: number }, grain = 48, scenery: readonly Doodad[] = []): string {
+export function massMap(mass: WorldMassRuntime, player: { x: number; y: number }, grain = 48, scenery: readonly Doodad[] = [], questPins: readonly MassQuestPin[] = []): string {
   const cols = 64, rows = 40, scale = 10;
   const left = Math.floor(player.x / grain) - cols / 2, top = Math.floor(player.y / grain) - rows / 2;
   const parts: string[] = [];
@@ -238,7 +239,17 @@ export function massMap(mass: WorldMassRuntime, player: { x: number; y: number }
     const bearing=['→','↘','↓','↙','←','↖','↑','↗'][(Math.round(Math.atan2(sign.y-player.y,sign.x-player.x)/(Math.PI/4))+8)%8];
     signRows.push(`<span style="white-space:nowrap;color:${escape(sign.color)}">${escape(sign.glyph)} ${escape(sign.name)} ${bearing}${inside?'':' · beyond this view'}</span>`);
   }
+  const questRows: string[] = [];
+  for (const pin of questPins) {
+    const rawX=(pin.x/grain-left)*scale, rawY=(pin.y/grain-top)*scale;
+    const inside=rawX>=12 && rawY>=28 && rawX<=cols*scale-12 && rawY<=rows*scale-12;
+    const x=Math.max(12,Math.min(cols*scale-12,rawX)), y=Math.max(28,Math.min(rows*scale-12,rawY));
+    const bearing=['→','↘','↓','↙','←','↖','↑','↗'][(Math.round(Math.atan2(pin.y-player.y,pin.x-player.x)/(Math.PI/4))+8)%8];
+    parts.push(`<g data-mass-quest><title>${escape(pin.label)}</title><circle cx="${x}" cy="${y}" r="10" fill="#251e11" stroke="#f0c563" stroke-width="2"/><text x="${x}" y="${y+4}" fill="#ffe3a1" font-size="13" text-anchor="middle">${inside?'!':bearing}</text></g>`);
+    questRows.push(`<span style="color:#f0c563">! ${escape(pin.label)} ${bearing}${inside?'':' · beyond this view'}</span>`);
+  }
+  const questLegend=questRows.length ? '<div data-mass-quest-directions style="display:flex;flex-wrap:wrap;gap:8px 20px;font-size:12px;line-height:1.7;margin:8px 0">'+questRows.join('')+'</div>' : '';
   const legend=signRows.length ? '<div data-mass-services style="display:flex;flex-wrap:wrap;gap:8px 20px;font-size:12px;line-height:1.7;margin:8px 0">'+signRows.join('')+'</div>' : '';
   const px = (player.x / grain - left) * scale, py = (player.y / grain - top) * scale;
-  return `<h2>The Unbroken Wilds</h2><div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><button data-mass-zoom="in" aria-label="Zoom in" ${grain<=24?'disabled':''}>+</button><button data-mass-zoom="out" aria-label="Zoom out" ${grain>=192?'disabled':''}>−</button><span>${grain===24?'Close detail':grain===48?'Nearby country':'Regional survey'}</span></div><svg viewBox="0 0 640 400" style="width:100%;max-height:65vh;background:#0b1112;transform:translateZ(0)" aria-label="Survey of explored terrain">${parts.join('')}<circle cx="${px}" cy="${py}" r="4" fill="#f5dc98" stroke="#fff"/><text x="320" y="20" fill="#eadab7" text-anchor="middle">N</text></svg>${legend}<p>Explored country · your position in gold</p>`;
+  return `<h2>The Unbroken Wilds</h2><div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><button data-mass-zoom="in" aria-label="Zoom in" ${grain<=24?'disabled':''}>+</button><button data-mass-zoom="out" aria-label="Zoom out" ${grain>=192?'disabled':''}>−</button><span>${grain===24?'Close detail':grain===48?'Nearby country':'Regional survey'}</span></div><svg viewBox="0 0 640 400" style="width:100%;max-height:65vh;background:#0b1112;transform:translateZ(0)" aria-label="Survey of explored terrain">${parts.join('')}<circle cx="${px}" cy="${py}" r="4" fill="#f5dc98" stroke="#fff"/><text x="320" y="20" fill="#eadab7" text-anchor="middle">N</text></svg>${questLegend}${legend}<p>Explored country · your position in gold</p>`;
 }

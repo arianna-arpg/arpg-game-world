@@ -1,5 +1,15 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Native clear contracts can opt into continuous geography through the saved
+settlement quest bindings in `worldmass/quests.ts`. The first binds Mireille's
+Western Watch to Cinderwatch's original garrison, then uses native return,
+capacity, item-choice and reward ownership. Journal/map directions do not reveal
+terrain. The adapter refuses boss/cargo/rescue/partial-clear objectives; old
+descriptors without bindings keep prior offers. Verify worldmass_quests and the
+worldmass suite, native Brandt/quest-map/bounty/Odyssey/reliquary checks, and
+`balance/worldmass-quests-ui.cjs` for real UI, continuous return walking, four
+Continue checkpoints and an actual prior-client save.
+
 New expedition descriptors can snapshot native multi-stop ground palettes through
 `worldmass/ground.ts`. The geographic noise leaf also preserves the generator's
 existing samples. Palette controls are compiled only for terrain baking; source
@@ -29,7 +39,7 @@ castingcues, combat smoke and the two `balance/sentinel-*-ui.cjs` clients for
 registered glyphs, native-size portraits and real defender attack motion.
 
 Graph quest and bounty offers now read `World.graphWorkAvailable()`. The
-continuous prototype cannot reach their old zone destinations: offers, stale
+continuous prototype cannot reach unbound old zone destinations: offers, stale
 acceptance and new enrollment refuse, while old records and earned turn-ins
 remain intact. Native zone play is unchanged. Verify worldmass_work, brandtquest,
 questmap, bountyboard and Odyssey, plus `balance/graph-work-ui.cjs`; its prior-build

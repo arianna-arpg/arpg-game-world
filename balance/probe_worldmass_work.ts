@@ -9,6 +9,8 @@ import type { QuestDef } from '../src/quests/types';
 import type { World } from '../src/engine/world';
 import { serializeCharacter } from '../src/meta/character';
 import { canonical } from '../src/worldmass/random';
+import { massAdventure } from '../src/worldmass/preset';
+import { WorldMassRuntime } from '../src/worldmass/runtime';
 
 type Hooks={acceptableQuests():QuestDef[];updateQuestGiver(dt:number):void;acceptQuest(q:QuestDef):void};
 const hooks=(w:World)=>w as unknown as Hooks;
@@ -16,7 +18,10 @@ const prepare=(mass:boolean)=>{
  const w=makeSimWorld('warrior',73912);
  for(const flag of townStationFeatures())w.account.features.add(flag);
  w.account.features.add(FEATURE.BRANDT_MAGIC_WARES);
- if(mass)w.startWorldMass(941);else w.loadZone('lastlight');
+ if(mass){
+  const config=JSON.parse(canonical(massAdventure()));delete config.settlement.quests;
+  new WorldMassRuntime(941,'legacy-unbound-work',config).attach(w);
+ }else w.loadZone('lastlight');
  w.player.level=100;w.player.invulnerable=true;
  return w;
 };

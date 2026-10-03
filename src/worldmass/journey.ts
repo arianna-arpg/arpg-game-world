@@ -7,6 +7,9 @@ import type { MassState } from './state';
 import type { MassSettlement } from './settlement';
 import { localOffset, type MassCell } from './address';
 import { canonical, freezeData, massRandom } from './random';
+export function massJourneyPlaceId(run: string, source: string, recipe: string): string {
+  return canonical([run, source, recipe]);
+}
 export interface MassJourneyExtension {
   id: string; from: string; content: string;
   offset: { x: number; y: number }; radius: number; jitter: number;
@@ -120,7 +123,7 @@ export class MassJourney {
           y: start.y + (end.y - start.y) * t + (horizontal ? bend : 0) });
       }
       points.push(end);
-      const id = canonical([generator.run.runId, spec.source, d.id]);
+      const id = massJourneyPlaceId(generator.run.runId, spec.source, d.id);
       places.push({ id, content: d.content, recipe: d.id, radius: d.radius, center: walk.at(end.x, end.y),
         source: { generator: generator.spec.id, version: generator.spec.version,
           rule: d.id, source: spec.source, stream: canonical([spec.source, d.id]) } });
@@ -165,7 +168,7 @@ export class MassJourney {
             throw new Error('Frontier extension crosses settlement reserve');
       }
       if(town.reserves(end.x,end.y,e.radius))throw new Error('Frontier extension overlaps settlement');
-      const id=canonical([generator.run.runId,spec.source,e.id]);
+      const id=massJourneyPlaceId(generator.run.runId,spec.source,e.id);
       places.push({id,content:e.content,recipe:e.id,radius:e.radius,center:walk.at(end.x,end.y),
         source:{generator:generator.spec.id,version:generator.spec.version,rule:e.id,
           source:spec.source,stream:canonical([spec.source,e.id])}});
@@ -199,7 +202,7 @@ export class MassJourney {
         segmentDistance(end,t.points[i],b)<s.radius+t.width/2+30)))
         throw new Error('Frontier route stop overlaps an existing route');
       extensionIds.add(s.id);
-      const id=canonical([generator.run.runId,spec.source,s.id]);
+      const id=massJourneyPlaceId(generator.run.runId,spec.source,s.id);
       places.push({id,content:s.content,recipe:s.id,radius:s.radius,center:walk.at(end.x,end.y),
         source:{generator:generator.spec.id,version:generator.spec.version,rule:s.id,
           source:spec.source,stream:canonical([spec.source,s.id])}});

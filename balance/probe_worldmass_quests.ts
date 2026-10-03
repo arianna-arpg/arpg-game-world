@@ -1,0 +1,117 @@
+import assert from 'node:assert/strict';
+import { makeSimWorld } from '../src/sim/arena';
+import { seedGlobalRandom } from '../src/sim/rng';
+import { serializeCharacter, applySavedCharacter } from '../src/meta/character';
+import { Q_FRONTIER_WATCH } from '../src/quests/frontier';
+import { Q_UNDEAD_SOUTH } from '../src/quests/defs';
+import type { QuestDef } from '../src/quests/types';
+import type { World } from '../src/engine/world';
+import type { Actor } from '../src/engine/actor';
+import { PROGRESSION } from '../src/data/classes';
+import { massAdventure } from '../src/worldmass/preset';
+import { WorldMassRuntime } from '../src/worldmass/runtime';
+import { massQuestDestination, massQuestPins, validateMassQuests } from '../src/worldmass/quests';
+import { canonical } from '../src/worldmass/random';
+import { massMap } from '../src/worldmass/paint';
+import { autoPlace } from '../src/engine/inventory';
+import { forgeItem } from '../src/engine/itemgen';
+
+type Hooks = { acceptableQuests(): QuestDef[]; updateQuestGiver(dt: number): void; onQuestZoneFieldCleared(id: string): void };
+const hooks = (w: World) => w as unknown as Hooks;
+const stand = (w: World, id: string) => {
+  const actor = w.actors.find(a => a.defId === id && !a.dead)!; assert.ok(actor);
+  w.player.pos = { ...actor.pos }; w.player.tier = actor.tier; return actor;
+};
+const earned = (w: World) => w.meta.xp + Array.from({length:w.player.level-1},(_,i)=>PROGRESSION.xpForLevel(i+1)).reduce((a,b)=>a+b,0);
+const restore = seedGlobalRandom(66042);
+try {
+  const ordinary = makeSimWorld('warrior', 31); ordinary.loadZone('lastlight'); stand(ordinary,'townsfolk_innkeep');
+  assert.ok(!hooks(ordinary).acceptableQuests().some(q=>q.id===Q_FRONTIER_WATCH.id));
+  assert.equal(ordinary.nearAnyQuestGiver(),false,'continuous-only giver does not gain an ordinary quest prompt');
+  const w=makeSimWorld('warrior',42); w.startWorldMass(42); w.player.invulnerable=true;
+  const m=w.massRuntime!, place=massQuestDestination(m,Q_FRONTIER_WATCH.id)!;assert.ok(place);
+  const zones=Object.keys(w.zoneMap),beforeKnowledge=canonical(m.state.snapshot()),beforeXp=earned(w);
+  stand(w,'townsfolk_innkeep');
+  assert.deepEqual(hooks(w).acceptableQuests().map(q=>q.id),[Q_FRONTIER_WATCH.id]);
+  hooks(w).updateQuestGiver(4);
+  assert.equal(w.activeQuests.length,1);assert.equal(w.activeQuests[0].placeId,place.id);
+  assert.deepEqual(Object.keys(w.zoneMap),zones);assert.equal(earned(w),beforeXp);
+  assert.equal(canonical(m.state.snapshot()),beforeKnowledge);
+  const pins=massQuestPins(w);assert.equal(pins.length,1);assert.equal(pins[0].ready,false);
+  const known=canonical(m.state.snapshot());
+  const map=massMap(m,w.player.pos,48,w.doodads,pins);
+  assert.ok(map.includes('data-mass-quest-directions')&&map.includes('Cinderwatch Camp'));
+  assert.equal(canonical(m.state.snapshot()),known,'directions do not explore or spawn a place');
+  hooks(w).onQuestZoneFieldCleared(w.zone.id);w.completeMassQuest(Q_FRONTIER_WATCH.id,place.id+'/foreign');
+  assert.equal(w.activeQuests[0].fieldDone,false);
+  assert.match(w.questLog().active[0].target!,/Cinderwatch Camp.*west/);
+  console.log('PASS native Mireille acceptance binds one real place without graph minting, terrain revelation or early rewards; ordinary play stays unchanged');
+
+  w.player.pos=m.journey!.local(place);m.update(w,true);
+  assert.match(w.questLog().active[0].target!,/here$/,'arrival does not invent an east bearing');
+  const natives=(m as unknown as {natives:Map<string,Actor>}).natives;
+  const ids=Array.from({length:m.config.content.find(c=>c.id===place.content)!.count},(_,i)=>canonical([place.id,i]));
+  w.chests.find(c=>c.rewardSource===canonical([place.id,'cache']))!.opened=true;m.update(w,true);
+  assert.equal(w.activeQuests[0].fieldDone,false,'searched cache is not the contract');
+  w.kill(natives.get(ids[0])!,false,w.player);m.update(w,true);
+  assert.equal(w.activeQuests[0].fieldDone,false,'one defender is not a completed garrison');
+  const save=serializeCharacter(w),resume=makeSimWorld('warrior',43);
+  assert.ok(applySavedCharacter(resume,save));assert.ok(resume.adoptWorldState(save.world));
+  resume.startWorldMass(save.world!.worldmass!.state.run.seed,save.world!.worldmass);
+  assert.deepEqual(resume.activeQuests,w.activeQuests);
+  const rm=resume.massRuntime!,rn=(rm as unknown as {natives:Map<string,Actor>}).natives;
+  assert.ok(!rn.has(ids[0])&&rn.has(ids[1]));
+  const beforeFinal=earned(resume);resume.kill(rn.get(ids[1])!,false,resume.player);rm.update(resume,true);
+  assert.ok(resume.activeQuests[0].fieldDone);assert.equal(resume.questStanding(resume.activeQuests[0]),'ready');
+  assert.equal(resume.questRewardOffers().length,0);
+  assert.ok(earned(resume)-beforeFinal<150,'only native kill/clear experience, no quest payout away from giver');
+  assert.ok(massQuestPins(resume)[0].ready);assert.match(resume.questLog().active[0].target!,/Return to Mireille/);
+  console.log('PASS searched and partial states remain unfinished; exact partial Continue; full garrison earns a return leg without paying the quest remotely');
+
+  stand(resume,'townsfolk_smith');
+  assert.equal(resume.claimQuestReward(Q_FRONTIER_WATCH.id,'spring'),false);
+  stand(resume,'townsfolk_innkeep');
+  const offers=resume.questRewardOffers();assert.equal(offers.length,1);assert.equal(offers[0].choices.length,3);
+  assert.ok(offers[0].choices.every(c=>c.lines.length),'native reward cards resolve real affixes');
+  const waiting=serializeCharacter(resume),waitingWorld=makeSimWorld('warrior',44);
+  assert.ok(applySavedCharacter(waitingWorld,waiting));assert.ok(waitingWorld.adoptWorldState(waiting.world));
+  waitingWorld.startWorldMass(waiting.world!.worldmass!.state.run.seed,waiting.world!.worldmass);
+  assert.deepEqual(waitingWorld.questRewardOffers(),offers);
+  const originalItems=waitingWorld.meta.items;waitingWorld.meta.items=[];
+  while(autoPlace(waitingWorld.meta.items,forgeItem({baseId:'ring_coral',ilvl:1,rarity:'common',rng:()=>.5})!)) {}
+  const owed=earned(waitingWorld),ledger=canonical(waitingWorld.ledger);
+  assert.equal(waitingWorld.claimQuestReward(Q_FRONTIER_WATCH.id,'spring'),false);
+  assert.equal(earned(waitingWorld),owed);assert.equal(canonical(waitingWorld.ledger),ledger);
+  waitingWorld.meta.items=originalItems;
+  assert.equal(waitingWorld.claimQuestReward(Q_FRONTIER_WATCH.id,'invented'),false);
+  assert.equal(waitingWorld.claimQuestReward(Q_FRONTIER_WATCH.id,'spring',{...waitingWorld.localSeat,id:'guest'}),false);
+  assert.ok(waitingWorld.claimQuestReward(Q_FRONTIER_WATCH.id,'spring'));
+  assert.equal(earned(waitingWorld)-owed,Q_FRONTIER_WATCH.reward.xp);
+  assert.equal(waitingWorld.activeQuests.length,0);assert.equal(massQuestPins(waitingWorld).length,0);
+  assert.ok(waitingWorld.completedQuests.has(Q_FRONTIER_WATCH.id));
+  assert.equal(waitingWorld.claimQuestReward(Q_FRONTIER_WATCH.id,'hearth'),false);
+  const ring=waitingWorld.meta.items.find(i=>i.name==='Wellspring Ring')!;assert.ok(ring);
+  const mana=waitingWorld.player.sheet.get('mana'),regen=waitingWorld.player.sheet.get('manaRegen');
+  waitingWorld.equipItem(waitingWorld.localSeat,ring.uid);
+  assert.ok(waitingWorld.player.sheet.get('mana')>mana);assert.ok(waitingWorld.player.sheet.get('manaRegen')>regen);
+  console.log('PASS pending choices survive Continue; correct giver, native capacity and host ownership gate one exact reward; earned ring improves native mana and recovery');
+
+  const paid=serializeCharacter(waitingWorld),paidWorld=makeSimWorld('warrior',45);
+  assert.ok(applySavedCharacter(paidWorld,paid));assert.ok(paidWorld.adoptWorldState(paid.world));
+  paidWorld.startWorldMass(paid.world!.worldmass!.state.run.seed,paid.world!.worldmass);
+  assert.ok(paidWorld.completedQuests.has(Q_FRONTIER_WATCH.id));assert.equal(paidWorld.activeQuests.length,0);
+  stand(paidWorld,'townsfolk_innkeep');hooks(paidWorld).updateQuestGiver(4);
+  assert.equal(paidWorld.activeQuests.length,0);assert.equal(paidWorld.questRewardOffers().length,0);
+  const corrupt=structuredClone(save);corrupt.world!.quests!.active[0].placeId+='other-run';
+  const refused=makeSimWorld('warrior',46);assert.ok(refused.adoptWorldState(corrupt.world));
+  assert.equal(refused.activeQuests.length,0);
+  const legacyConfig=JSON.parse(canonical(massAdventure()));delete legacyConfig.settlement.quests;
+  const legacyWorld=makeSimWorld('warrior',47);new WorldMassRuntime(42,'legacy-contract',legacyConfig).attach(legacyWorld);
+  stand(legacyWorld,'townsfolk_innkeep');assert.deepEqual(hooks(legacyWorld).acceptableQuests(),[]);
+  for(const bind of [{quest:Q_UNDEAD_SOUTH.id,destination:'west-camp'},
+    {quest:Q_FRONTIER_WATCH.id,destination:'missing'}]){
+    const bad=JSON.parse(canonical(massAdventure()));bad.settlement.quests.bindings=[bind];
+    assert.throws(()=>validateMassQuests(bad),/quest objective or destination/);
+  }
+  console.log('PASS claimed rewards and legacy omission survive; foreign place identities and unsupported objective bindings refuse');
+}finally{restore();}

@@ -98,6 +98,7 @@ for (const seed of [1, 42, 451, 7108, 99871]) {
 }
 const legacy: MassAdventure = JSON.parse(canonical(massAdventure()));
 delete legacy.journey;
+delete legacy.settlement!.quests;
 delete legacy.ecology;
 legacy.terrain.version = 4;
 const old = makeSimWorld('warrior', 71), oldMass = new WorldMassRuntime(42, 'legacy-v4', legacy);

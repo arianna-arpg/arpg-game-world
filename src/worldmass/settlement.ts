@@ -15,6 +15,8 @@ import { MassSanctuary } from './sanctuary';
 import { validateDoorPress, type DoorPressSpec } from '../engine/doorPress';
 
 export interface MassSettlementSpec {
+  /** Optional native quest contracts tied to this run's physical destinations. */
+  quests?: import('./quests').MassQuestSpec;
   zone: string; source: string; apron: number; blend: number;
   /** Public sign locations are directions only, without surveying their ground. */
   cartography?: { source: string; publicSigns: boolean };

@@ -2358,3 +2358,45 @@ are not a live-performance measurement or a commercial-game comparison.
 Firing-lane revision adac7f87 passed CI 37088437548 and Pages 37089083823.
 Exact live metadata reports 2026-10-03T02:16:09.917Z; isolated remote QA preserved
 seed 2933103938 and all six ordinary-save sentinels through Continue.
+
+### Native contracts attached to physical places
+
+Saved settlement bindings now associate registered native quests with existing
+journey destinations. The first contract is Mireille's Western Watch: defeat
+Cinderwatch Camp's complete original garrison, return to the inn, and choose one
+native ring. The three choices provide life recovery, mana recovery or physical
+attack damage with life. The existing reward path owns forging, capacity checks,
+experience, host ownership, deferred choices and once-only payment. The new
+adapter neither creates an unreachable graph zone nor treats chest opening as
+a defeated garrison.
+
+The journal names the actual site and its level, says “here” on arrival, and
+points home when the work is done. The map supplies accepted directions without
+surveying hidden terrain; a return marker comes from the actual living resident.
+Place identities are bound to the saved run and route source. Ordinary quests
+and prior continuous descriptors keep their previous behavior. This first
+adapter supports full original-garrison contracts only; boss, cargo, rescue and
+partial-clear contracts require their own witnessed objectives.
+
+All three type checks, all 24 worldmass probes, 25 combat smoke episodes and
+native Brandt, quest-map, bounty-board, Odyssey, reliquary, account-reliquary and
+town-welcome checks pass. Generation QA reports 869 cases across three seeds,
+zero errors, four existing geometry warnings and two timing warnings under
+concurrent local verification. Isolated older-configuration fixtures now omit
+bindings whose destinations they deliberately remove; validation remains strict.
+
+The controlled actual-client check verifies native automatic acceptance, map and
+journal presentation, three accessible reward buttons, native equipment effects
+and exact accepted, partial, pending-choice and paid browser Continue. A real
+336-frame return approach walks into town with the same hero and zero zone
+loads. Its first tolerance stopped just outside the boundary; the final endpoint
+now requires reaching the inside edge. Counter placement and defender defeat
+remain explicitly controlled setup, not evidence of ordinary-input play.
+Both page and canvas captures were inspected. A save made by the preserved
+previous client continues without gaining the new contract configuration.
+
+Ground-palette revision 07630d7e passed CI 37089472917 and Pages 37090465513.
+Exact live metadata reports 2026-10-03T02:39:40.007Z; isolated remote QA preserved
+seed 2716652161 and all six ordinary-save sentinels through Continue. A fresh
+independent player is reviewing the fixed place-contract build without an
+implementation briefing. No overall critic acceptance has been established.

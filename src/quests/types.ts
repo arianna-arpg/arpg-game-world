@@ -172,6 +172,8 @@ export interface QuestTurnIn {
 }
 
 export interface QuestDef {
+  /** Omission allows any geography with a valid destination adapter. */
+  geographies?: readonly ('zones' | 'continuous')[];
   /** A prisoner freed by the actual field objective, before the return reward. */
   rescue?: QuestRescue;
   id: string;

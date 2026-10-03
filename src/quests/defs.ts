@@ -11,6 +11,7 @@ import { Q_RELIQUARY } from './reliquary';
 import { brandtQuestDefs } from './brandt';
 import { odysseyQuestDefs } from './odyssey';
 import { registerGenPin } from '../engine/genPins';
+import { Q_FRONTIER_WATCH } from './frontier';
 
 /** The Hollow Vault's arena recipe — a quest zone spec is the ONLY thing that
  *  ever asks for it, and the census walks tilesets/biomes/zones, not quests.
@@ -102,6 +103,7 @@ export const Q_UNMADE: QuestDef = {
 };
 
 export const QUESTS: Record<string, QuestDef> = {
+  [Q_FRONTIER_WATCH.id]: Q_FRONTIER_WATCH,
   ...Object.fromEntries(brandtQuestDefs().map(q => [q.id, q])),
   ...Object.fromEntries(odysseyQuestDefs().map(q => [q.id, q])),
   [Q_UNDEAD_SOUTH.id]: Q_UNDEAD_SOUTH,
@@ -117,6 +119,12 @@ export const QUESTS: Record<string, QuestDef> = {
   // goblin for grandfathered veterans).
   ...Object.fromEntries(revengeQuestDefs().map(q => [q.id, q])),
 };
+
+/** Ordinary zone play excludes givers whose only contracts require another geography. */
+export const ZONE_QUEST_GIVER_IDS: ReadonlySet<string> = new Set(Object.values(QUESTS)
+  .filter(q => !q.geographies || q.geographies.includes('zones'))
+  .flatMap(q => [...(Array.isArray(q.giver) ? q.giver : [q.giver]),
+    ...(q.turnIn ? (Array.isArray(q.turnIn.giver) ? q.turnIn.giver : [q.turnIn.giver]) : [])]));
 
 /** Every giver defId any quest references (offer or turn-in) — the NPCs that
  *  earn a prompt box and dwell attention. Derived, never hand-listed: a new
