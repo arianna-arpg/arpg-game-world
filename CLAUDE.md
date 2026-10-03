@@ -1,5 +1,12 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Native lane-seeking uses `aiNeedsFireLine` and the actual shot ray, so a visible
+but shot-blocked quarry does not strand a ranged body at its preferred distance.
+One memoized kernel pick preserves free spell alternatives, native bans and
+cadence. `move.losSeek=false` explicitly opts out. Verify firinglane, native AI/
+pack-tempo probes and combat smoke; `balance/firing-lane-ui.cjs` checks the actual
+client and can reproduce the prior build with HOLLOW_WAKE_QA_LEGACY=1.
+
 A discovered worldmass site's existing objective HUD reads `siteActivity`: original
 eligible defenders and admitted cache state remain independent. The same pure
 `massGarrisonProgress` fold gates clearance; missing slots and legacy descriptors

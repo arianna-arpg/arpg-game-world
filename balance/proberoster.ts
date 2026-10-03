@@ -102,6 +102,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_companionrecovery.ts', status: 'green', tier: 'fast', why: 'Revival/Whistle cleanse, damage and debuff immunity, body-count budget, expiry, living/downed parity, litter/dwell paths and co-op cue' },
   { probe: 'probe_memoryunlocks.ts', status: 'green', tier: 'fast', why: 'Repeatable memory discovery, secondary access, payment, exhaustion, persistence, legendary mint and host gate' },
   { probe: 'probe_uniqueaccords.ts', status: 'green', tier: 'fast', why: 'Unique grant census, item-owned sockets, live companion investment, Cinder Conductor fuel, Breach Bell cries and Unspent Reply casting costs' },
+  { probe: 'probe_firinglane.ts', status: 'green', tier: 'fast', why: 'native ranged bodies reopen visible blocked firing lanes at 30/60/120Hz; free, mixed, banned and phasing skills preserve their native policy' },
   { probe: 'probe_castingcues.ts', status: 'green', tier: 'fast', why: 'GT-019 real interruption/fizzle, held completion geometry, focus recovery, brim crossing, generic opt-out and co-op parity' },
   { probe: 'probe_afflictioncues.ts', status: 'green', tier: 'fast', why: 'Independent simultaneous blood/kindling/poison/curse layers, individual severity, quiet-presence budget without top-N selection, typed pressure, comfort and co-op cleanup' },
   { probe: 'probe_doomcues.ts', status: 'green', tier: 'fast', why: 'GT-022 Doom: actual bank/life iris, fixed fuse, footprint, early/expiry/death rupture, cure, source credit and co-op cleanup' },

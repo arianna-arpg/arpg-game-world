@@ -2286,3 +2286,33 @@ Reachable-work revision 4c3b4bfd passed CI 37085204790 and Pages 37086245045.
 After publication propagation, exact live metadata reports
 2026-10-03T01:30:37.028Z. Isolated remote QA preserved seed 4101696660 and all six
 ordinary-save sentinels through Continue.
+
+### Firing positions across cover
+
+A controlled native Karst Slinger exposed a real shared AI defect: terrain could
+pass sight while blocking shots, and the shooter would hold fire while remaining
+stationary at its preferred distance. Lane seeking now reads the same shot ray
+and per-skill occlusion policy used by actual attacks. Native free spells and
+phasing remain valid alternatives; a memoized selection preserves bans, reaction,
+random choice and the movement kernel's cast cadence. Explicit losSeek=false can
+keep authored bodies planted. Pure melee behavior and perception remain separate.
+
+The preserved previous actual client reproduces eight seconds of no movement or
+casts across native arena-stands terrain. The fixed client moves about 63 units
+around that cover and starts four legal native Hurl Debris casts. Both captures
+were inspected. This proves the reproduced lane defect; it does not establish
+that every pillar exchange described by a critic had the same cause. Headless
+coverage uses the real AI and world loops at 30/60/120 Hz, plus open-lane, explicit
+policy, free-only, mixed, banned and phasing cases. Mixed kits may reposition
+between casts and later gain a clear line; the checks preserve valid free casts
+while still forbidding blocked ordinary shots. Type checks, 25 combat-smoke
+episodes and native encounter, exhaustion, casting, brain/tactics and pack-tempo
+checks provide the regression coverage.
+
+The independent Warrior reviewer on the earlier sign-cartography build reached
+level three, cleared two garrisons, used earned equipment, Splintering Impact and
+Answer the Blow in later combat, and verified native Save/Continue. Its verdict
+remains below acceptance: stationary victories, dim scenery and reward friction
+limited sustained interest. Its 6,113 requested frames represent about 102 nominal
+seconds, distinct from 48:09 wall time. A fresh review is playing the preserved
+firing-lane build without receiving a list of its changes.
