@@ -231,7 +231,7 @@ export function massMap(mass: WorldMassRuntime, player: { x: number; y: number }
     const title = mass.config.content.find(c => c.id === found.content)?.site?.name ?? 'Discovered place';
     const opened = mass.siteSearched(found.id);
     const label = mass.config.progression ? title + ' · Lv ' + mass.populationFor(found).level : title;
-    const name = label + (mass.siteCleared(found.id) ? ' · '+MASS_CLEARANCE_VIEW.complete : '') + (opened ? ' · Searched' : '');
+    const name = label + (mass.puzzles.activity(found.id)?.complete ? ' · Riddle resolved' : '') + (mass.siteCleared(found.id) ? ' · '+MASS_CLEARANCE_VIEW.complete : '') + (opened ? ' · Searched' : '');
     marker(x,y,7); labels.push({id:found.id,name:title,x,y,priority:1});
     parts.push(`<g data-mass-place="${escape(found.id)}" tabindex="0" aria-label="${escape(name)}"><title>${escape(name)}</title><path d="M${x},${y - 5}l5,5 -5,5 -5,-5Z" fill="#d1b685" stroke="#302d23"/></g>`);
     placeRows.push(`<li data-mass-place-detail="${escape(found.id)}" style="break-inside:avoid;margin:3px 0">${escape(name)}</li>`);

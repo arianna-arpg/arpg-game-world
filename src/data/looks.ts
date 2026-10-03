@@ -4716,6 +4716,7 @@ export const LOOKS: Record<string, LookDef> = {
   },
   /** A lattice cell: a squat faceted stud — the board's tile, not a jewel. */
   lattice_crystal: {
+    toneTint: 1,
     parts: [
       { kind: 'disc', scale: 0.85 },
       { kind: 'crystalGrowths', scale: 0.8, params: { n: 4 } },

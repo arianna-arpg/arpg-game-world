@@ -2955,3 +2955,49 @@ gameplay verdict. No save schema or persistence behavior changed.
 Resource-float head dd82f330 is committed locally. Roadside CI remains in its
 full fast-probe gate; the earlier buff-only run was superseded by that push.
 Its code is included in the roadside head, not independently certified live.
+
+### Native riddles in continuous country
+
+New Memorial Groves replace their original garrison/cache with the native charged
+lattice, keeping the mending field and widening the grave aisle around its court.
+A player strikes ordinary immortal crystal fixtures: the native knock, spill,
+hum, adjacency, completion, attunement wash and loot-table paths execute. The
+placed owner supplies a fixed reward level, not a separate payout implementation.
+The site HUD teaches the rule and reports real progress; the discovered map
+records a solved riddle. Optional LookDef.toneTint makes a crystal's existing
+physical/lightning tone visible across its body, without changing combat.
+
+Puzzle kinds opt into an explicit progress codec. This first geographic adapter
+accepts plain rectangular lattices only; other native kinds need honest geometry
+and state adapters. Finite journey ownership is bounded to 18 fixtures and shares
+the 96-body population cap. Boards admit whole, retain their live actors across
+page travel and keep their scenery dependencies on Continue. Board state, life
+and remaining hum restore without boot rewards. Schema four owns this progress;
+old descriptors remain unchanged. Full transient actor effects are not claimed
+as puzzle progress; arbitrary repeated puzzle residency is not implemented.
+
+All three type checks, the native puzzle probe's 207 assertions, the new
+four-group puzzle regression, and the other 29 worldmass probes pass. Generation
+QA reports 869 cases across three seeds, zero failures and four existing geometry
+warnings. Five smoke scenarios across five seeds completed. Controlled browser
+walking reached the grove; native Firebolt toggled a crystal in 48 frames and
+four further native casts solved the legal board. Both partial and solved native
+Continue retained progress and loot exactly. The actual preceding client refused
+the new descriptor before changing its live world; its own schema-three grove
+continued with three original population slots and the original cache. Five
+page/canvas pairs were inspected, including 800-by-600, changed cells and the
+resolved native loot drop. Initial QA corrected a floating-point hum boundary;
+the first narrow screenshot needed a compositor resize wait, not a game repair.
+
+A fresh independent critic is playing the frozen worldmass-puzzles-dist build.
+The earlier two independent playtests are still running. None has supplied an
+overall acceptance of this batch. Controlled fixtures are not earned playthroughs,
+and no commercial game or continuous real-time performance comparison is claimed.
+
+Roadside head 34ae81a6 passed CI 37151442156 and Pages 37152552069. Exact live
+metadata reports 2026-10-03T20:45:17.739Z; remote QA seed 3524790301 retained all
+six ordinary-save sentinels and native Continue. Readability head 9ea839ba,
+including resource-text head dd82f330, passed CI 37152944770 and Pages 37153749094.
+Its live build time is 2026-10-03T21:05:18.843Z; remote QA seed 3618668646 likewise
+passed with no fatal error. The earlier buff-only CI was superseded by roadside;
+its code reached the published experimental branch in that successful build.

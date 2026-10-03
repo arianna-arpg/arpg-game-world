@@ -8,6 +8,8 @@ import { ALTARS } from '../src/data/shrines';
 import { serializeCharacter } from '../src/meta/character';
 
 const config=JSON.parse(canonical(massAdventure()));
+// Legacy garrison field: these probes intentionally kill all dependents to detach it.
+for(const c of config.content)if(c.site?.puzzles){delete c.site.puzzles;c.count=3;}
 config.fieldResidency={source:'qa/native-fields',retainRadius:2048,maxResident:4};
 const w=makeSimWorld('warrior',791),m=new WorldMassRuntime(791,'field-residency',config);m.attach(w);
 const grove=m.journey!.places.find(p=>p.content==='memorial-grove')!;

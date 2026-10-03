@@ -79,6 +79,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_worldmass_birth.ts', status: 'green', tier: 'fast', why: 'native factory variants and wounded guardians survive Continue without consuming combat RNG; legacy descriptors and invalid records' },
   { probe: 'probe_worldmass_outposts.ts', status: 'green', tier: 'fast', why: 'generated camps and ruins retain eligible garrisons, native once-only clearance, quiet caches and wounded Continue' },
   { probe: 'probe_worldmass_maplabels.ts', status: 'green', tier: 'fast', why: 'bounded known-place labels preserve anchors, avoid collisions and remain deterministic under dense overflow' },
+  { probe: 'probe_worldmass_puzzles.ts', status: 'green', tier: 'fast', why: 'Native placed lattice hits, partial/solved progress and one-shot rewards, exact Continue, geometry/budget and legacy isolation' },
   { probe: 'probe_worldmass_shrines.ts', status: 'green', tier: 'fast', why: 'native one-shot shrine placement, buffs, exact used/unspent Continue, bounded ownership, no duplicate consumption and legacy omission' },
   { probe: 'probe_worldmass_targets.ts', status: 'green', tier: 'fast', why: 'original named target ownership, paid current-run chain, independent escort/cache, native wounds and once-only return reward through Continue' },
   { probe: 'probe_worldmass_quests.ts', status: 'green', tier: 'fast', why: 'native giver to physical garrison to return reward; exact partial/pending/paid Continue, source ownership, no hidden exploration, legacy and ordinary isolation' },

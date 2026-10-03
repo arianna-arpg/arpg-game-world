@@ -9,6 +9,7 @@ import { validateMassAltar, type MassAltarSpec } from './fields';
 
 import { validateMassClearance, type MassClearanceSpec } from './clearance';
 import { validateMassShrine, type MassShrineSpec } from './shrines';
+import { validateMassPuzzle, type MassPuzzleSpec } from './puzzles';
 
 /** Resolved into new descriptors; omitted policies preserve native timed caches. */
 export const MASS_CACHE_OPENING = { clearedHoldSeconds: .35 };
@@ -27,6 +28,8 @@ export interface MassSiteSpec {
   altars?: MassAltarSpec[];
   /** Native one-shot stands, currently owned by finite connected landmarks. */
   shrines?: MassShrineSpec[];
+  /** Finite native riddles; their registered kind owns durable progress. */
+  puzzles?: MassPuzzleSpec[];
 }
 export interface MassSiteDiscovery { id: string; content: string; center: MassAddress }
 export type PieceState = Pick<Doodad, 'pos' | 'kind' | 'radius' | 'rot' | 'adorn' | 'gone' | 'felled' | 'hitbox'>;
@@ -67,6 +70,9 @@ export function validateMassSite(site: MassSiteSpec, radius: number): void {
   if (site.shrines !== undefined && (!Array.isArray(site.shrines) || site.shrines.length > 4
     || new Set(site.shrines.map(s => s.id)).size !== site.shrines.length)) throw Error('Invalid worldmass site shrines');
   for (const shrine of site.shrines ?? []) validateMassShrine(shrine, radius);
+  if (site.puzzles !== undefined && (!Array.isArray(site.puzzles) || site.puzzles.length > 2
+    || new Set(site.puzzles.map(p => p?.id)).size !== site.puzzles.length)) throw Error('Invalid worldmass site puzzles');
+  for (const puzzle of site.puzzles ?? []) validateMassPuzzle(puzzle, radius);
   for (const f of site.fixtures) if (!MONSTERS[f.monster] || !within(f.x, f.y, 32)
     || f.garrison!==undefined && typeof f.garrison!=='boolean')
     throw new Error('Invalid worldmass site fixture');

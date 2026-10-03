@@ -61,6 +61,8 @@ export interface WalkLook {
 }
 
 export interface LookDef {
+  /** Optional body tint from its live native attunement, clamped to [0,1]. */
+  toneTint?: number;
   walk?: WalkLook;
   /** Baked stack, painted in order (under → over). */
   parts: PartSpec[];

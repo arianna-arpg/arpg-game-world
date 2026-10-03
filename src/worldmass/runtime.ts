@@ -34,6 +34,7 @@ import { ENCOUNTER_GROUPS, ENCOUNTER_GROUP_CFG } from '../data/encounterGroups';
 import { validateMassGround } from './ground';
 import { validateMassQuests } from './quests';
 import { MassShrines, MASS_SHRINE_LIMIT, type MassShrineSave } from './shrines';
+import { MassPuzzles, MASS_PUZZLE_LIMIT, puzzleSeats, type MassPuzzleSave } from './puzzles';
 
 interface MassEnemySave {
   id: string; monster: string; level: number; x: number; y: number; life: number; scale: number;
@@ -43,11 +44,12 @@ interface MassEnemySave {
   anchor?: { x: number; y: number }; leashHome?: boolean;
 }
 export interface MassAdventureSave {
-  schema: 1 | 2 | 3; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
+  schema: 1 | 2 | 3 | 4; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
   player: { x: number; y: number; tier?: number }; enemies: MassEnemySave[]; contents: ZoneContents;
   rewards?: MassRewardSave[];
   fields?: MassFieldSave[];
   shrines?: MassShrineSave[];
+  puzzles?: MassPuzzleSave[];
   sites?: MassSiteSave;
   ecology?: MassEcologySave;
   settlement?: MassSettlementSave;
@@ -59,6 +61,7 @@ export class WorldMassRuntime {
   readonly rewards: MassRewards;
   readonly fields: MassFields;
   readonly shrines: MassShrines;
+  readonly puzzles: MassPuzzles;
   readonly generator: MassGenerator;
   readonly state: MassState;
   readonly stream: MassStream;
@@ -91,6 +94,7 @@ export class WorldMassRuntime {
     if(this.config.fieldResidency!==undefined)validateMassFieldResidency(this.config.fieldResidency,this.config.populationRadius);
     this.fields = new MassFields(save?.fields,this.config.fieldResidency);
     this.shrines = new MassShrines(save?.shrines);
+    this.puzzles = new MassPuzzles(save?.puzzles);
     this.origin = Object.freeze(save ? { ...save.origin } : { dimension: 'surface', cx: '0', cy: '0' });
     address(this.origin.dimension, this.origin.cx, this.origin.cy, 0, 0, config.terrain.addressSpan);
     this.generator = new MassGenerator(save?.state.run ?? makeMassRun(seed, runId, config.terrain), config.terrain);
@@ -125,15 +129,20 @@ export class WorldMassRuntime {
       if (!site) throw new Error('Unresolved frontier destination');
       validateMassSite(site, d.radius);
     }
+    if (journeyPlaces.reduce((n,d) => n + (config.content.find(c=>c.id===d.content)?.site?.puzzles ?? [])
+      .reduce((n,r)=>n+puzzleSeats(r).length,0),0) > MASS_PUZZLE_LIMIT)
+      throw Error('Frontier puzzle count exceeds its checkpoint budget');
     if (new Set(config.content.map(c => c.id)).size !== config.content.length) throw new Error('Duplicate worldmass content');
     for (const c of config.content) {
       if (!c.id || !c.source || !Number.isSafeInteger(c.level) || c.level < 1 || c.level > 100
-        || !Number.isSafeInteger(c.count) || c.count < 1 || c.count > 16 || !c.table.length
+        || !Number.isSafeInteger(c.count) || c.count < 0 || c.count === 0 && !c.site || c.count > 16 || !c.table.length
         || c.table.some(r => !MONSTERS[r.id] || !Number.isFinite(r.weight) || r.weight <= 0)) throw new Error('Invalid worldmass population');
     }
     for (const c of config.content) {
       if(config.fieldResidency && (c.site?.altars?.length??0)>config.fieldResidency.maxResident)
         throw Error('Worldmass site exceeds its field residency budget');
+      if (c.site?.puzzles?.length && config.terrain.places.some(p => p.content === c.id))
+        throw Error('Worldmass puzzles require a finite journey owner');
       if (c.site?.shrines?.length && config.terrain.places.some(p => p.content === c.id))
         throw Error('Worldmass shrines require a finite journey owner');
       if (c.site?.altars?.length && !config.fieldResidency && config.terrain.places.some(p=>p.content===c.id))
@@ -176,9 +185,10 @@ export class WorldMassRuntime {
       center => localOffset(center, { ...this.origin, x: 0, y: 0 }, config.terrain.addressSpan), config.terrain.addressSpan);
     if (save) {
       // Older clients must refuse owners they cannot plan/retain. Schema three
-      // adds roadside bodies, two adds one-shot stands; older descriptors keep
+      // adds roadside bodies, two adds one-shot stands, four owns placed riddles; older descriptors keep
       // their original version and never gain new encounters on Continue.
-      if ((save.schema !== 1 && save.schema !== 2 && save.schema !== 3)
+      if ((save.schema !== 1 && save.schema !== 2 && save.schema !== 3 && save.schema !== 4)
+        || save.schema < 4 && config.content.some(c => c.site?.puzzles?.length)
         || save.schema < 3 && !!config.journey?.roadside
         || save.schema === 1 && config.content.some(c => c.site?.shrines?.length)
         || save.configHash !== massDigest(config) || !Array.isArray(save.enemies)
@@ -291,6 +301,11 @@ export class WorldMassRuntime {
       rows: this.config.content.find(c => c.id === place.content)?.site?.shrines ?? [],
       center: this.journey!.local(place),
     }));
+    this.puzzles.restoreAdmitted(world, this.journey?.places ?? [], place => ({
+      rows: this.config.content.find(c=>c.id===place.content)?.site?.puzzles ?? [],
+      center: this.journey!.local(place), level: this.populationFor(place).level,
+    }));
+    if (this.population > this.config.maxPopulation) throw Error('Worldmass puzzle population exceeds capacity');
     this.update(world, true);
     this.attached = true;
     this.nextPopulation = world.time;
@@ -324,14 +339,15 @@ export class WorldMassRuntime {
     const found=this.sites.discovered.find(p=>p.id===id);
     const content=found && this.config.content.find(c=>c.id===found.content);
     if(!found || !content?.site)return null;
+    const riddle=this.puzzles.activity(id);
     const cleared=this.siteCleared(id), searched=this.siteSearched(id);
     const progress=massGarrisonProgress(this.state,content,id,key=>this.natives.has(key),this.populationCount(found));
-    const lines: string[]=[];
+    const lines: string[]=riddle ? [riddle.text] : [];
     if(cleared || progress?.remaining===0)lines.push(MASS_CLEARANCE_VIEW.complete);
     else if(progress)lines.push(MASS_CLEARANCE_VIEW.remaining(progress.remaining));
     if(content.site.cache && this.state.claimed('site-cache',id))
       lines.push(searched ? MASS_CLEARANCE_VIEW.searched : MASS_CLEARANCE_VIEW.cache);
-    return lines.length ? {text:lines.join(' · '),complete:(!content.site.completion || cleared) && (!content.site.cache || searched)} : null;
+    return lines.length ? {text:lines.join(' · '),complete:(!riddle || riddle.complete) && (!content.site.completion || cleared) && (!content.site.cache || searched)} : null;
   }
   /** The location read uses the same admitted footprint/identity as the map.
    * Entering a site never mutates the shared zone or its reward context. */
@@ -432,6 +448,8 @@ export class WorldMassRuntime {
       const cell = this.walk.at(actor.pos.x, actor.pos.y), key = cellKey(cell);
       if (!dependencies.has(key)) dependencies.set(key, this.placesInCell(cell));
     }
+    for (const place of this.journey?.places ?? []) if (this.puzzles.owns(place.id))
+      dependencies.set('puzzle:'+place.id,[place]);
     const eligible = [...this.places.values(), ...dependencies.values()].flat().filter(p => {
       const q = localOffset(p.center, { ...this.origin, x: 0, y: 0 }, this.config.terrain.addressSpan);
       return this.settlement ? !this.settlement.reserves(q.x, q.y, p.radius)
@@ -473,10 +491,10 @@ export class WorldMassRuntime {
         const identities = [...Array.from({ length: count }, (_, i) => canonical([p.id, i])),
           ...(content.site?.fixtures ?? []).map((_, i) => canonical([p.id, 'fixture', i]))];
         const missing = identities.filter(id => !this.natives.has(id) && !this.state.claimed('fallen', id)).length;
-        if (this.natives.size + missing > this.config.maxPopulation) continue;
+        if (this.population + missing + this.puzzles.missing(p,content.site?.puzzles??[]) > this.config.maxPopulation) continue;
         for (const [index, fixture] of (content.site?.fixtures ?? []).entries()) {
           const id = canonical([p.id, 'fixture', index]);
-          if (this.natives.has(id) || this.state.claimed('fallen', id) || this.natives.size >= this.config.maxPopulation) continue;
+          if (this.natives.has(id) || this.state.claimed('fallen', id) || this.population >= this.config.maxPopulation) continue;
           const offset = siteOffset(p, fixture.x, fixture.y);
           const a = this.births.create(world,id,fixture.monster,population.level);
           applyMassTerritory(a, this.config.territory);
@@ -500,7 +518,7 @@ export class WorldMassRuntime {
         const angle = rng.range(0, Math.PI * 2), radius = rng.range(30, p.radius * .65);
         const def = MONSTERS[monster];
         const scale = def.scaleVariance ? rng.range(...def.scaleVariance) : 1;
-        if (this.natives.has(id) || this.state.claimed('fallen', id) || this.natives.size >= this.config.maxPopulation) continue;
+        if (this.natives.has(id) || this.state.claimed('fallen', id) || this.population >= this.config.maxPopulation) continue;
         const offset=seat?siteOffset(p,seat.x,seat.y):undefined;
         const spot = this.walk.snapToWalkable({ x: q.x + (offset?.x ?? Math.cos(angle) * radius),
           y: q.y + (offset?.y ?? Math.sin(angle) * radius) });
@@ -559,6 +577,7 @@ export class WorldMassRuntime {
         if (ready) {
           this.fields.admit(world,p,content.site.altars ?? [],q,population.level);
           this.shrines.admit(world,p,content.site.shrines ?? [],q);
+          this.puzzles.admit(world,p,{rows:content.site.puzzles ?? [],center:q,level:population.level});
         }
         const cache = content.site.cache;
         if (ready && cache && !this.state.claimed('site-cache', p.id)) {
@@ -583,13 +602,14 @@ export class WorldMassRuntime {
         ...(a.encounterGroup ? {encounterGroup:a.encounterGroup,name:a.name} : {}),
         ...(this.births.of(a) ? {birth:this.births.of(a)} : {}) });
     }
-    return JSON.parse(JSON.stringify({ schema: this.config.journey?.roadside ? 3 : this.config.content.some(c => c.site?.shrines?.length) ? 2 : 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
+    return JSON.parse(JSON.stringify({ schema: this.config.content.some(c=>c.site?.puzzles?.length) ? 4 : this.config.journey?.roadside ? 3 : this.config.content.some(c => c.site?.shrines?.length) ? 2 : 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
       ...(this.config.rewards ? { rewards: this.rewards.snapshot() } : {}),
       ...(this.fields.snapshot().length ? { fields: this.fields.snapshot() } : {}),
       ...(this.shrines.snapshot().length ? { shrines: this.shrines.snapshot() } : {}),
+      ...(this.puzzles.population ? { puzzles: this.puzzles.snapshot(world) } : {}),
       origin: this.origin, player: { ...world.player.pos, tier: world.player.tier ?? 0 }, enemies,
       ...(this.settlement ? { settlement: this.settlement.snapshot(world) } : {}),
       ...(this.ecology ? { ecology: this.ecology.snapshot(world) } : {}), sites: this.sites.snapshot(world), contents: captureZoneContents(world) })) as MassAdventureSave;
   }
-  get population(): number { return this.natives.size; }
+  get population(): number { return this.natives.size + this.puzzles.population; }
 }

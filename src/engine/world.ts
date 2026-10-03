@@ -327,7 +327,7 @@ import { REGROWTH_CFG, SCALD_CFG, type BaskSpec } from '../data/scald';
 import { LEDGER_TRAP_SPRUNG, lintTrapworkSpec, trapAnchor, trapEffect, trapTriggerHit, TRAPWORK_CFG, type PlacedTrapwork, type TrapHost, type TrapworkSpec } from './trapworks';
 import { bootOccSites, driveOccSites, OCC_CFG, reviveOccSite, seedOccClockMarks, wakeRousedResidents, type OccHost, type OccKinSpec, type OccSite } from './occurrences';
 import { attunedStatus, rollStartTone, toneAccepted, toneOfAmounts, toneTint, TUNE_CFG } from './tuning';
-import { pickKnockNode, PUZZLE_CFG, PUZZLE_KINDS, puzzleHumOf, puzzleKnockOf, puzzleRewardOf, puzzleSpillOf, type PuzzleHost, type PuzzleRun } from './puzzles';
+import { pickKnockNode, PUZZLE_CFG, PUZZLE_KINDS, puzzleHumOf, puzzleKnockOf, puzzleRewardOf, puzzleSpillOf, type PuzzleHost, type PuzzleRun, type PuzzleCheckpoint } from './puzzles';
 import { MINION_COMBAT } from './minionCombat';
 import {
   batchScaleOf, buildWornThrongDef, isThrongBody, THRONG_CFG, throngMarkerOf,
@@ -40980,6 +40980,39 @@ export class World {
 
   // --- THE PUZZLE FABRIC (engine/puzzles.ts) --------------------------------
 
+  /** Enroll externally placed fixtures in the same native knock/reward pipeline.
+   * Placement owns geometry; the registered kind owns progress and restoration. */
+  installPlacedPuzzle(run: PuzzleRun, random: () => number, saved?: PuzzleCheckpoint): void {
+    if (!run.kind.checkpoint || this.puzzles.some(r => r.id === run.id)
+      || run.kind !== PUZZLE_KINDS[run.spec.kind] || run.nodes.some(n => !n.puzzleNode || n.puzzleNode.id !== run.id))
+      throw Error('Invalid placed puzzle');
+    const host = this.puzzleHost();
+    if (saved && (!Array.isArray(saved.life) || saved.life.length !== run.nodes.length
+      || saved.life.some((v,i) => !Number.isFinite(v) || v <= 0 || v > run.nodes[i].maxLife())
+      || !Array.isArray(saved.hums) || saved.hums.length > run.nodes.length
+      || new Set(saved.hums.map(r => r[0])).size !== saved.hums.length
+      || saved.hums.some(r => !Array.isArray(r) || r.length !== 2 || !Number.isSafeInteger(r[0])
+        || r[0] < 0 || r[0] >= run.nodes.length || !Number.isFinite(r[1]) || r[1] <= 0 || r[1] > puzzleHumOf(run) + 1e-6)
+      || typeof saved.done !== 'boolean')) throw Error('Invalid placed puzzle checkpoint');
+    run.kind.boot(run, { ...host, rng: random });
+    if (saved) {
+      run.done = saved.done;
+      run.kind.checkpoint.restore(run, host, saved.state);
+      run.nodes.forEach((n,i) => { n.life = saved.life[i]; });
+      for (const [i, remaining] of saved.hums) run.hums.set(run.nodes[i].id, this.time + remaining);
+    }
+    this.puzzles.push(run);
+    this.actors.push(...run.nodes);
+  }
+  capturePlacedPuzzle(run: PuzzleRun): PuzzleCheckpoint {
+    if (!run.kind.checkpoint || !this.puzzles.includes(run)) throw Error('Unknown placed puzzle');
+    return { done: run.done, state: run.kind.checkpoint.capture(run), life: run.nodes.map(n => n.life),
+      hums: run.nodes.flatMap((n,i): [number,number][] => {
+        const remaining = (run.hums.get(n.id) ?? 0) - this.time;
+        return remaining > 0 ? [[i, remaining]] : [];
+      }) };
+  }
+
   /** This zone's live activity riddles (bootPuzzles builds them at load). */
   private puzzles: PuzzleRun[] = [];
   private puzzleHostCache: PuzzleHost | null = null;
@@ -41325,7 +41358,7 @@ export class World {
     // (spoils 'none') ground refuses the mint exactly like the gem lane
     // above (the cheap skip is rollDrops' own idiom: no resolution, no rng).
     if (rw?.table && !this.spoilsSealed()) {
-      for (const res of resolveLootTable(rw.table, { ilvl: this.zone.level })) {
+      for (const res of resolveLootTable(rw.table, { ilvl: run.rewardLevel ?? this.zone.level })) {
         const at = this.clampPos(vec(run.at.x + rand(-30, 30), run.at.y + rand(-30, 30)), 10);
         this.mintLootResult(at, res);
       }
@@ -41347,9 +41380,9 @@ export class World {
         this.hazardCaster = c;
       }
       const caster = this.hazardCaster;
-      caster.level = Math.max(1, this.zone.level);
+      caster.level = Math.max(1, run.rewardLevel ?? this.zone.level);
       caster.pos = vec(run.at.x, run.at.y);
-      const inst = makeSkillInstance(SKILLS[rw.cast], 1 + Math.floor(this.zone.level / 3));
+      const inst = makeSkillInstance(SKILLS[rw.cast], 1 + Math.floor(caster.level / 3));
       this.executeSkill(caster, inst, vec(run.at.x, run.at.y), { noCooldown: true, noRepeat: true });
     }
   }
@@ -41357,7 +41390,7 @@ export class World {
   /** Live riddle views for the zone panel + attention chevrons
    *  (data/puzzles.ts registers both — the beacons.ts idiom). */
   puzzleViews(): { id: string; label: string; line: string; done: boolean; pos: Vec2; isObjective: boolean }[] {
-    return this.puzzles.map(r => ({
+    return this.puzzles.filter(r => !this.massRuntime || this.massRuntime.puzzles.visible(r.id,this.player.pos)).map(r => ({
       id: r.id, label: r.spec.label ?? r.kind.label, line: r.kind.status(r),
       done: r.done, pos: r.at, isObjective: r.isObjective,
     }));

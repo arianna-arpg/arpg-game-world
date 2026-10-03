@@ -5645,6 +5645,7 @@ export class Renderer {
     // (quantized, so the bake cache meets a bounded set) and every derived
     // tone follows. The per-body seed desyncs a herd within one shared sky.
     if (lookDef?.drift) look.color = driftColor(lookDef.drift, look.color, world.time, a.id);
+    if (a.tone && lookDef?.toneTint) look.color = mixHex(look.color, toneTint(a.tone), clamp(lookDef.toneTint, 0, 1));
     // TELL TINT rides the same pre-bake color swap (quantized upstream by
     // the tell resolver, so the bake cache meets a bounded set per look).
     if (tdress?.tint) look.color = mixHex(look.color, tdress.tint.color, tdress.tint.f);

@@ -36,13 +36,14 @@ for (const seed of [1, 42, 451, 7108, 99871]) {
     assert.equal(m.localSite(m.settlement!.spawn),null);
     const source = canonical([place.id, 'cache']);
     const chest = w.chests.find(c => c.rewardSource === source)!;
-    assert.ok(chest, 'opening sites have actual caches and native guardians');
+    const puzzle = m.config.content.find(c=>c.id===place.content)!.site!.puzzles?.length;
+    assert.ok(puzzle ? m.puzzles.owns(place.id) : chest, 'opening sites have native playable activities');
     const native = m.snapshot(w).enemies.find(e => e.id === canonical([place.id, 0]));
-    assert.ok(native, 'opening content is an encounter, not a marker');
+    assert.ok(puzzle ? w.puzzleViews().length : native, 'opening content is an activity, not a marker');
     for (const dx of [-.85, .85]) {
       const approach = m.walk.snapToWalkable({ x: center.x + place.radius * dx, y: center.y });
       m.walk.beginFrame();
-      assert.ok(m.walk.reachable(approach, chest.pos), 'cache reachable from both sides');
+      assert.ok(m.walk.reachable(approach, chest?.pos ?? center), 'cache reachable from both sides');
     }
     assert.ok(m.placesInCell(place.center).some(p => p.id === place.id));
     const intersecting = m.placesInCell(place.center).filter(p => p.id !== place.id);
@@ -51,7 +52,7 @@ for (const seed of [1, 42, 451, 7108, 99871]) {
       return Math.hypot(q.x - center.x, q.y - center.y) >= p.radius + place.radius;
     }));
   }
-  console.log('PASS seed ' + seed + ': connected eleven-route network, seven defended reachable destinations, clear approaches');
+  console.log('PASS seed ' + seed + ': connected eleven-route network, seven playable reachable destinations, clear approaches');
   if (seed !== 42)
     continue;
   const before = canonical(journey.trails);

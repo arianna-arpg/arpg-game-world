@@ -1,5 +1,14 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Native placed riddles use PuzzleKindDef.checkpoint for kind-owned progress and
+World.installPlacedPuzzle for the existing knock/reward pipeline. MassPuzzles
+owns finite lattice placement, exact board/life/hum progress and shared population
+capacity. Schema four prevents older clients silently discarding this owner.
+New Memorial Groves hold a quiet lattice; continued descriptors keep their old
+garrison/cache. LookDef.toneTint makes native attunement readable on opted-in bodies.
+Verify worldmass and puzzles probes, generation QA, sim smoke, and
+balance/worldmass-puzzles-ui.cjs for real cast/solve and prior-client Continue.
+
 CombatMeterLayout.readabilityBounds supplies only admitted visible bodies and
 painted meters to the ambient-light mask. VIS_CFG.lights.readability controls
 local dimming and feathering; sight/room veils, glow sources and gameplay stay

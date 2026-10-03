@@ -220,6 +220,8 @@ export interface PuzzleRun {
   done: boolean;
   /** This run IS the zone objective (updateObjective watches it). */
   isObjective: boolean;
+  /** Placed geography may own a fixed native reward level. */
+  rewardLevel?: number;
 }
 
 /** The narrow world surface kinds drive — World hands the placer one
@@ -239,6 +241,12 @@ export interface PuzzleHost {
   /** A hero (a real seat, not a minion) stands within `within` of pos. */
   heroNear(pos: Vec2, within: number): boolean;
   complete(run: PuzzleRun): void;
+}
+
+/** Portable progress for a placed riddle. Clock values are remaining seconds,
+ * node references are stable seat indices. A kind must explicitly own its codec. */
+export interface PuzzleCheckpoint {
+  done: boolean; state: unknown; life: number[]; hums: [number, number][];
 }
 
 export interface PuzzleKindDef {
@@ -269,6 +277,11 @@ export interface PuzzleKindDef {
   quantize?: number;
   label: string;
   boot(run: PuzzleRun, h: PuzzleHost): void;
+  /** Optional durable progress; kinds without a codec cannot be placed persistently. */
+  checkpoint?: {
+    capture(run: PuzzleRun): unknown;
+    restore(run: PuzzleRun, h: PuzzleHost, data: unknown): void;
+  };
   /** A qualifying landed hit on a node (resolveHit routes here). */
   struck?(run: PuzzleRun, node: Actor, h: PuzzleHost, striker: Actor | null): void;
   /** A node's TONE moved (the attunement fabric routes here — chord). */
@@ -525,6 +538,16 @@ registerPuzzleKind({
   who: 'player',
   spacing: 66,
   label: 'the charged lattice',
+  checkpoint: {
+    capture: run => [...run.state.lit as boolean[]],
+    restore(run, h, data) {
+      if (!Array.isArray(data) || data.length !== run.nodes.length
+        || data.some(v => typeof v !== 'boolean') || data.every(Boolean) !== run.done)
+        throw Error('Invalid lattice checkpoint');
+      run.state.lit = [...data];
+      for (let i = 0; i < run.nodes.length; i++) latticeDress(run, h, i);
+    },
+  },
   boot(run, h) {
     const [w, hgt] = run.spec.grid ?? [3, 3];
     // THE FORMAT: a shaped court re-seats the placer's minted line onto its

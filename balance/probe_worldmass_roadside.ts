@@ -35,7 +35,7 @@ try{
  const before={monster:a.defId,life:a.life,pos:{...a.pos},anchor:{...a.aiAnchor!}};
  const hero=w.player;w.landPartyAt({x:q.x+7500,y:q.y+7500});m.update(w,true);w.landPartyAt(q);m.update(w,true);
  assert.equal(w.player,hero);assert.equal(natives.get(id),a);assert.equal(a.life,before.life);
- const save=m.snapshot(w);assert.equal(save.schema,3);
+ const save=m.snapshot(w);assert.equal(save.schema,4);
  const rw=makeSimWorld('warrior',43),rm=new WorldMassRuntime(42,'road-save',save.config,save);rm.attach(rw,save);
  assert.deepEqual(rm.roadside!.places,m.roadside!.places);
  const ra=(rm as unknown as {natives:Map<string,typeof w.player>}).natives.get(id)!;
@@ -48,6 +48,7 @@ try{
  dw.landPartyAt(q);dm.update(dw,true);assert.equal((dm as unknown as {natives:Map<string,unknown>}).natives.has(id),false);
  assert.equal(dm.state.claimed('fallen',id),true);
  const legacy=structuredClone(massAdventure()) as MassAdventure;delete legacy.journey!.roadside;
+ for(const c of legacy.content)if(c.site)delete c.site.puzzles;
  const lw=makeSimWorld('warrior',45),lm=new WorldMassRuntime(42,'legacy-road',legacy);lm.attach(lw);
  assert.equal(lm.roadside,null);assert.equal(lm.snapshot(lw).schema,2);
  assert.throws(()=>new WorldMassRuntime(42,'road-save',save.config,{...save,schema:2}),/checkpoint/);

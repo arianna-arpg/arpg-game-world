@@ -2,6 +2,7 @@ import type { Doodad, DoodadKind } from '../engine/levelgen';
 import { nativeMassSite, MASS_CACHE_OPENING, type MassSiteSpec } from './sites';
 import { nativeMassAltar } from './fields';
 import { nativeMassShrine } from './shrines';
+import { nativeMassPuzzle } from './puzzles';
 import { OBJECTIVE_REWARD } from '../data/objectiveRewards';
 
 interface Landmark {
@@ -21,7 +22,7 @@ export function frontierLandmarks(): Landmark[] {
     ({ kind, pos: { x, y }, radius, rot });
   const compose = (id: string, native: string | null, name: string, cache: MassSiteSpec['cache'],
     undead: boolean, count: number, additions: Doodad[], mechanic?: string, altars?: MassSiteSpec['altars'],
-    fixtures?: MassSiteSpec['fixtures'], shrines?: MassSiteSpec['shrines']): Landmark => {
+    fixtures?: MassSiteSpec['fixtures'], shrines?: MassSiteSpec['shrines'], puzzles?: MassSiteSpec['puzzles']): Landmark => {
     const site: MassSiteSpec = native ? nativeMassSite(native, name, cache)
       : { name, source: 'native/scenery', doodads: [], fixtures: [], ...(cache ? { cache } : {}) };
     site.source += '+worldmass/landmarks/' + id;
@@ -31,6 +32,7 @@ export function frontierLandmarks(): Landmark[] {
     if (altars?.length) site.altars = altars;
     if (shrines?.length) site.shrines = shrines;
     if (fixtures?.length) site.fixtures.push(...fixtures);
+    if (puzzles?.length) { site.puzzles = puzzles; if (!count) delete site.completion; }
     return { id, undead, count, site, ...(mechanic ? { magicPack: { source: 'magicPacks/'+mechanic, mechanic } } : {}) };
   };
   return [
@@ -49,20 +51,21 @@ export function frontierLandmarks(): Landmark[] {
       prop('broken_cart', -105, -205, 34, .8), prop('bone_pile', -45, -190, 21),
       prop('weathered_statue', 130, -190, 42), prop('rock', 190, -110, 31),
     ], 'footfall', undefined, undefined, [nativeMassShrine('barrage', 160, 125)]),
-    compose('memorial-grove', null, 'Memorial Grove', { x: 0, y: 66, holdSeconds: 4 }, false, 3, [
+    compose('memorial-grove', null, 'Memorial Grove', undefined, false, 0, [
       // A processional aisle and paired graves identify the place before its name.
-      // The cache and centre remain reachable from all four road approaches.
+      // The riddle court stays open from all four road approaches.
       prop('weathered_statue', 0, -165, 48),
       ...[-1, 1].flatMap(side => [
         prop('forest_oak', side * 205, -85, 76), prop('forest_oak', side * 190, 140, 66),
         ...[-95, -35, 25, 140].flatMap(y => [
-          prop('tombstone', side * 85, y, 19, side * .12),
-          prop('flowers', side * 113, y + 13, 24),
+          prop('tombstone', side * 145, y, 19, side * .12),
+          prop('flowers', side * 165, y + 13, 24),
         ]),
         prop('standing_stone', side * 52, 220, 25), prop('fern', side * 205, 25, 35),
       ]),
       prop('flowers', 0, -215, 32),
-    ], undefined, [nativeMassAltar('mending_altar', 0, -95)]),
+    ], undefined, [nativeMassAltar('mending_altar', 0, -95)], undefined, undefined,
+      [nativeMassPuzzle('charged_lattice', 0, 0, 'Strike toggles a crystal + neighbours. Kindle all nine.')]),
     compose('fallen-court', 'pillaged_township', 'The Fallen Court', { x: 60, y: 80, holdSeconds: 5 }, true, 4, [
       prop('weathered_statue', -75, -185, 44), prop('dead_tree', 185, 55, 65),
       prop('dead_tree', -175, 120, 60), prop('standing_stone', 135, 160, 30),
