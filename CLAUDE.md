@@ -1,5 +1,13 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Known continuous-map locations share `worldmass/mapLabels.ts`: bounded measured
+labels avoid other labels and place/service/quest/player markers while their
+geographic anchors stay fixed. Full native site state remains in accessible
+titles and a scrollable index. No discovery or terrain state is written.
+`MASS_MAP_LABELS` controls placement and appearance. Verify worldmass_maplabels
+and the worldmass suite, plus `balance/worldmass-maplabels-ui.cjs` against
+current/prior clients for actual bounds, zoom, narrow views and native Continue.
+
 Finite connected landmarks may snapshot native one-use shrines through
 `worldmass/shrines.ts`. Native touch, buffs and expiry retain authority; the
 expedition owns exact placement and consumed state. Omitted descriptors stay

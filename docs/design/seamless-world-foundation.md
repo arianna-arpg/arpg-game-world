@@ -2634,3 +2634,52 @@ mixed and not genuinely impressed; meaningful build choices did not overcome
 combat/chase friction and the sampled exploration. Its final evidence report
 is pending, and the recovered target-contract critic is still playing. No
 overall acceptance or commercial-game parity is claimed.
+
+### Readable names on the continuous survey
+
+The completed service/world review showed overlapping names around Lastlight
+and the western/northern sites. Discovered places now share a bounded measured
+label planner. It tries nearby positions without moving the geographic marker,
+keeps text inside the chart, and reserves place, service, quest and player
+markers. A short leader links displaced labels to their actual anchors.
+Dense overflow keeps its marker and full accessible details rather than
+overprinting another name. The configuration owns font, spacing, width, colors,
+search distance, label budget and enablement.
+
+Map names remain compact. Full native level, garrison and cache state remains
+in focusable marker titles/accessible names and a bounded scrollable index.
+Stable identity ordering keeps that index unchanged through native Continue.
+This alters presentation only: unknown locations remain undisclosed, the
+survey's geographic scale and player-centered view remain unchanged, and map
+painting cannot grant explored land or advance combat.
+
+All three type checks and all 27 continuous-world probes pass. The new pure
+check covers congested opening landmarks, unchanged anchors, shuffled input,
+all four boundaries, long names, bounded dense overflow and disablement.
+The actual client reproduces old-client label overlap at regional scale and
+verifies the corrected measured text boxes against markers, all four zoom
+levels, an 800-by-600 viewport, repeated redraw and browser Continue. Normal,
+resumed, nearer, narrow and close-detail paired page/canvas captures were
+inspected, as were previous-client regional and narrow comparisons. Native
+panel scrolling remains available on smaller windows. Controlled discovery,
+defeat and opened-cache setup are fixture work, not ordinary gameplay.
+
+The first Continue comparison exposed the map's prior insertion-order
+difference; the new view now sorts by stable identity. A closer viewport
+correctly omitted a distant place, so its assertion now uses the appropriate
+visible-place minimum. Resized captures explicitly redraw the canvas without
+advancing simulation.
+
+The completed service/world report records 4,960 requested frames (82.832
+nominal seconds) over 33 minutes 41 seconds of tool/review wall time and 97
+paired captures. Its verdict is mixed, not genuinely impressed overall.
+It identifies low-resource attack waits and knockback chasing as major combat
+friction. It did not exercise town work, death or later progression. A fresh
+independent critic is now playing the fixed shrine build; the recovered
+target-contract review remains in progress. No acceptance is inferred from
+these map checks.
+
+The distant-body audit found live references beyond the current survivor
+checkpoint: casts, owned constructs, pending follow-ups, statuses, squads and
+other effects. Actor unloading is not introduced by this change. Retaining
+those dependencies remains safer than substituting a lossy enemy memo.

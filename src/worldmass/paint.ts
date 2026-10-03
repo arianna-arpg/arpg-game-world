@@ -9,6 +9,7 @@ import type { Doodad } from '../engine/levelgen';
 import { massMapSigns, MASS_MAP_SIGNS } from './cartography';
 import { MassGround } from './ground';
 import type { MassQuestPin } from './quests';
+import { MASS_MAP_LABELS, placeMassMapLabels, type MapBox, type MassMapLabel } from './mapLabels';
 
 interface Baked { canvas: HTMLCanvasElement; revision: number }
 /** Canvas assets are renderer-owned, disposable, and bounded independently of
@@ -179,7 +180,10 @@ export class MassPainter {
 export function massMap(mass: WorldMassRuntime, player: { x: number; y: number }, grain = 48, scenery: readonly Doodad[] = [], questPins: readonly MassQuestPin[] = []): string {
   const cols = 64, rows = 40, scale = 10;
   const left = Math.floor(player.x / grain) - cols / 2, top = Math.floor(player.y / grain) - rows / 2;
-  const parts: string[] = [];
+  const parts: string[] = [], labels: MassMapLabel[] = [], markers: MapBox[] = [], placeRows: string[] = [];
+  const marker = (x: number, y: number, r: number): void => { markers.push({x:x-r,y:y-r,w:r*2,h:r*2}); };
+  const playerX=(player.x/grain-left)*scale, playerY=(player.y/grain-top)*scale;
+  marker(playerX,playerY,8);
   for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
     const at = mass.walk.at((left + x + .5) * grain, (top + y + .5) * grain);
     if (!mass.state.claimed('explored', cellKey(at))) continue;
@@ -204,7 +208,9 @@ export function massMap(mass: WorldMassRuntime, player: { x: number; y: number }
     const rawX = (town.zone.size.w/2/grain-left)*scale, rawY = (town.zone.size.h/2/grain-top)*scale;
     const x = Math.max(20,Math.min(cols*scale-90,rawX)), y = Math.max(35,Math.min(rows*scale-20,rawY));
     const bearing = ['→','↘','↓','↙','←','↖','↑','↗'][(Math.round(Math.atan2(rawY-rows*scale/2,rawX-cols*scale/2)/(Math.PI/4))+8)%8];
-    parts.push(`<g><title>${escape(town.zone.name)}</title><path d="M${x-5},${y+4}v-8l5,-4 5,4v8Z" fill="#edd3a0"/><text x="${x+8}" y="${y+4}" fill="#eee0bc" font-size="11">${escape(town.zone.name)}${x!==rawX||y!==rawY?' '+bearing:''}</text></g>`);
+    const homeName=town.zone.name+(x!==rawX||y!==rawY?' '+bearing:'');
+    labels.push({id:'home',name:homeName,x,y,priority:2}); marker(x,y,8);
+    parts.push(`<g data-mass-place="home" tabindex="0" aria-label="${escape(homeName)}"><title>${escape(homeName)}</title><path d="M${x-5},${y+4}v-8l5,-4 5,4v8Z" fill="#edd3a0"/></g>`);
   }
   // A surveyed path keeps its shape at map scale; only entered pages reveal it.
   if (mass.journey) {
@@ -218,7 +224,7 @@ export function massMap(mass: WorldMassRuntime, player: { x: number; y: number }
     parts.push('<defs><clipPath id="mass-surveyed-trails">'+clips.join('')+'</clipPath></defs>');
     for (const trail of mass.journey.trails) parts.push(`<polyline points="${trail.points.map(p=>[(p.x/grain-left)*scale,(p.y/grain-top)*scale].join(',')).join(' ')}" fill="none" stroke="#b3a17b" stroke-width="2" stroke-linejoin="round" clip-path="url(#mass-surveyed-trails)"/>`);
   }
-  for (const found of mass.sites.discovered) {
+  for (const found of [...mass.sites.discovered].sort((a,b)=>a.id.localeCompare(b.id))) {
     const q = localOffset(found.center, { ...mass.origin, x: 0, y: 0 }, mass.config.terrain.addressSpan);
     const x = (q.x / grain - left) * scale, y = (q.y / grain - top) * scale;
     if (x < 0 || y < 0 || x > cols * scale || y > rows * scale) continue;
@@ -226,7 +232,9 @@ export function massMap(mass: WorldMassRuntime, player: { x: number; y: number }
     const opened = mass.siteSearched(found.id);
     const label = mass.config.progression ? title + ' · Lv ' + mass.populationFor(found).level : title;
     const name = label + (mass.siteCleared(found.id) ? ' · '+MASS_CLEARANCE_VIEW.complete : '') + (opened ? ' · Searched' : '');
-    parts.push(`<g><title>${escape(name)}</title><path d="M${x},${y - 5}l5,5 -5,5 -5,-5Z" fill="#d1b685" stroke="#302d23"/><text x="${x + 8}" y="${y + 4}" fill="#eee0bc" font-size="10">${escape(name)}</text></g>`);
+    marker(x,y,7); labels.push({id:found.id,name:title,x,y,priority:1});
+    parts.push(`<g data-mass-place="${escape(found.id)}" tabindex="0" aria-label="${escape(name)}"><title>${escape(name)}</title><path d="M${x},${y - 5}l5,5 -5,5 -5,-5Z" fill="#d1b685" stroke="#302d23"/></g>`);
+    placeRows.push(`<li data-mass-place-detail="${escape(found.id)}" style="break-inside:avoid;margin:3px 0">${escape(name)}</li>`);
   }
   const signs=grain<=MASS_MAP_SIGNS.maxGrain ? massMapSigns(mass,scenery) : [];
   const townNear=!!mass.settlement?.contains(player.x,player.y);
@@ -235,6 +243,7 @@ export function massMap(mass: WorldMassRuntime, player: { x: number; y: number }
     const rawX=(sign.x/grain-left)*scale,rawY=(sign.y/grain-top)*scale;
     const inside=rawX>=12&&rawY>=28&&rawX<=cols*scale-12&&rawY<=rows*scale-12;
     if(!inside && !townNear)continue;
+    if(inside)marker(rawX,rawY,MASS_MAP_SIGNS.radius+2);
     if(inside)parts.push(`<g data-mass-service><title>${escape(sign.name)}</title><circle cx="${rawX}" cy="${rawY}" r="${MASS_MAP_SIGNS.radius}" fill="#191b20" stroke="${escape(sign.color)}" stroke-width="1.5"/><text x="${rawX}" y="${rawY+4}" fill="${escape(sign.color)}" font-size="12" text-anchor="middle">${escape(sign.glyph)}</text></g>`);
     const bearing=['→','↘','↓','↙','←','↖','↑','↗'][(Math.round(Math.atan2(sign.y-player.y,sign.x-player.x)/(Math.PI/4))+8)%8];
     signRows.push(`<span style="white-space:nowrap;color:${escape(sign.color)}">${escape(sign.glyph)} ${escape(sign.name)} ${bearing}${inside?'':' · beyond this view'}</span>`);
@@ -245,11 +254,23 @@ export function massMap(mass: WorldMassRuntime, player: { x: number; y: number }
     const inside=rawX>=12 && rawY>=28 && rawX<=cols*scale-12 && rawY<=rows*scale-12;
     const x=Math.max(12,Math.min(cols*scale-12,rawX)), y=Math.max(28,Math.min(rows*scale-12,rawY));
     const bearing=['→','↘','↓','↙','←','↖','↑','↗'][(Math.round(Math.atan2(pin.y-player.y,pin.x-player.x)/(Math.PI/4))+8)%8];
+    marker(x,y,12);
     parts.push(`<g data-mass-quest><title>${escape(pin.label)}</title><circle cx="${x}" cy="${y}" r="10" fill="#251e11" stroke="#f0c563" stroke-width="2"/><text x="${x}" y="${y+4}" fill="#ffe3a1" font-size="13" text-anchor="middle">${inside?'!':bearing}</text></g>`);
     questRows.push(`<span style="color:#f0c563">! ${escape(pin.label)} ${bearing}${inside?'':' · beyond this view'}</span>`);
   }
   const questLegend=questRows.length ? '<div data-mass-quest-directions style="display:flex;flex-wrap:wrap;gap:8px 20px;font-size:12px;line-height:1.7;margin:8px 0">'+questRows.join('')+'</div>' : '';
   const legend=signRows.length ? '<div data-mass-services style="display:flex;flex-wrap:wrap;gap:8px 20px;font-size:12px;line-height:1.7;margin:8px 0">'+signRows.join('')+'</div>' : '';
-  const px = (player.x / grain - left) * scale, py = (player.y / grain - top) * scale;
-  return `<h2>The Unbroken Wilds</h2><div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><button data-mass-zoom="in" aria-label="Zoom in" ${grain<=24?'disabled':''}>+</button><button data-mass-zoom="out" aria-label="Zoom out" ${grain>=192?'disabled':''}>−</button><span>${grain===24?'Close detail':grain===48?'Nearby country':'Regional survey'}</span></div><svg viewBox="0 0 640 400" style="width:100%;max-height:65vh;background:#0b1112;transform:translateZ(0)" aria-label="Survey of explored terrain">${parts.join('')}<circle cx="${px}" cy="${py}" r="4" fill="#f5dc98" stroke="#fff"/><text x="320" y="20" fill="#eadab7" text-anchor="middle">N</text></svg>${questLegend}${legend}<p>Explored country · your position in gold</p>`;
+  const cfg=MASS_MAP_LABELS;
+  const context=typeof document==='undefined'?null:document.createElement('canvas').getContext('2d');
+  if(context)context.font=cfg.fontSize+'px sans-serif';
+  const laid=placeMassMapLabels(labels,markers,{x:6,y:28,w:628,h:366},
+    text=>context?.measureText(text).width??text.length*cfg.fontSize*.65);
+  for(const label of laid){
+    const lx=Math.max(label.x,Math.min(label.x+label.w,label.anchor.x));
+    const ly=Math.max(label.y,Math.min(label.y+label.h,label.anchor.y));
+    parts.push(`<g data-mass-label="${escape(label.id)}" pointer-events="none"><path d="M${label.anchor.x},${label.anchor.y}L${lx},${ly}" stroke="${cfg.leader}" stroke-width=".8"/><rect x="${label.x}" y="${label.y}" width="${label.w}" height="${label.h}" rx="3" fill="${cfg.paper}" fill-opacity=".94"/><text x="${label.x+cfg.inset}" y="${label.y+label.h/2}" dominant-baseline="central" font-family="sans-serif" font-size="${cfg.fontSize}" fill="${cfg.ink}">${escape(label.text)}</text></g>`);
+  }
+  const placeLegend=placeRows.length?'<div data-mass-place-index style="max-height:96px;overflow:auto;margin-top:8px;font-size:12px;line-height:1.5"><ul style="list-style:none;margin:0;padding:0;columns:240px 2">'+placeRows.join('')+'</ul></div>':'';
+  const px = playerX, py = playerY;
+  return `<h2>The Unbroken Wilds</h2><div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><button data-mass-zoom="in" aria-label="Zoom in" ${grain<=24?'disabled':''}>+</button><button data-mass-zoom="out" aria-label="Zoom out" ${grain>=192?'disabled':''}>−</button><span>${grain===24?'Close detail':grain===48?'Nearby country':'Regional survey'}</span></div><svg viewBox="0 0 640 400" style="width:100%;max-height:65vh;background:#0b1112;transform:translateZ(0)" aria-label="Survey of explored terrain">${parts.join('')}<circle cx="${px}" cy="${py}" r="4" fill="#f5dc98" stroke="#fff"/><text x="320" y="20" fill="#eadab7" text-anchor="middle">N</text></svg>${placeLegend}${questLegend}${legend}<p>Explored country · your position in gold</p>`;
 }
