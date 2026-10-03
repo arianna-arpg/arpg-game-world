@@ -241,7 +241,12 @@ registerFloatKind({
 });
 registerFloatKind({
   id: 'xp', label: 'Experience Gains',
-  blurb: 'The +N xp note over each paying kill (level-ups always announce).',
+  blurb: 'The +N xp note over each paying kill. Level-ups have their own announcement switch.',
+  defaultOn: true,
+});
+registerFloatKind({
+  id: 'progression', label: 'Level-Up Announcements',
+  blurb: 'Earned levels celebrate beside the fight, leaving combat bodies readable.',
   defaultOn: true,
 });
 registerFloatKind({

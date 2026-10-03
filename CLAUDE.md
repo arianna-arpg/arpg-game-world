@@ -1,5 +1,10 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Native level-up text uses the registered progression float kind and the
+shared combat-text placement budget. Levels, healing, points and lifetime
+are unchanged; players can curate this announcement separately from XP ticks.
+Verify infostream/combatfocus and balance/progression-floats-ui.cjs.
+
 Active effect readouts in render/vis/statusReadout.ts use native status labels,
 clocks, stacks and the existing host-resolved affliction-pressure estimate.
 VIS_CFG.statusReadout owns the bounded presentation; native damage stays in

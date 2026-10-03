@@ -2795,3 +2795,29 @@ reproduces unnamed status pips in all four corresponding states.
 
 The shrine-build gameplay review is still independent and in progress.
 Working presentation and regression checks do not establish overall acceptance.
+
+### Keep level celebrations clear of combat bodies
+
+Native level-up text now belongs to a registered progression float kind,
+admitted to the same measured, bounded placement used by damage and reward
+text. This addresses the critic's visible level-up overlap without moving
+actors or changing experience, level rewards, healing, message lifetime or
+font size. The ordinary information-stream settings expose its own switch,
+independent of small experience tick numbers.
+
+All three type checks, 35 information-stream assertions and six combat-layout
+assertions pass. The actual browser grants two native levels and retains both
+passive points. Two simultaneous announcements avoid the hero and neighboring
+enemies, remain distinct at normal and narrow widths, and retain stable
+placement across paused redraws. The previous client reproduces six text/body
+overlaps. Current/prior paired page and canvas states were inspected at both
+sizes. Native Continue preserves level, experience, points and seed while
+ephemeral celebrations do not replay. Controlled grants and enemy placement
+remain fixtures, not an independent gameplay verdict.
+
+Country-outpost/campaign-boundary head d769d767 passed CI 37145693175 and
+Pages 37146783026. Exact live metadata reports 2026-10-03T19:09:20.153Z;
+isolated remote QA preserved seed 3054570831 and all six ordinary-save sentinels
+through Continue. Status-readout and progression-placement commits publish
+together next. The shrine critic has confirmed meaningful pressure and native
+Continue at its second site, and is still exploring before its final judgment.

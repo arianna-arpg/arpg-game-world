@@ -22697,7 +22697,7 @@ export class World {
       if (!p.downed) p.fillResources();
       // The toast lands where the PLAYER is looking (the controlled body) —
       // the level itself landed on the hero above.
-      this.text(seat.actor.pos, 'LEVEL UP!', '#ffd700', 24);
+      this.text(seat.actor.pos, 'LEVEL UP!', '#ffd700', 24, 'progression');
       // LIVE PARITY: the patron levelled — re-normalize the hired blade.
       if (seat === this.localSeat) this.resyncMercenary();
     }
