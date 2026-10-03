@@ -1,5 +1,11 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+The native `sentinel` look lives in `data/golemLooks.ts` and shares the existing
+quarried anatomy, action joints and travel-driven feet. Stone and Glassguard
+variants retain their own palette and native combat rules. Verify bodywalk,
+castingcues, combat smoke and the two `balance/sentinel-*-ui.cjs` clients for
+registered glyphs, native-size portraits and real defender attack motion.
+
 Graph quest and bounty offers now read `World.graphWorkAvailable()`. The
 continuous prototype cannot reach their old zone destinations: offers, stale
 acceptance and new enrollment refuse, while old records and earned turn-ins

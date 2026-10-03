@@ -2240,3 +2240,27 @@ of inspection/tool time. Tactical group fights and support payoff were strengths
 prop-bound exchanges and unexciting equipment limited its desire to continue.
 Its overall verdict remains below acceptance. Further independent Rogue and
 Warrior reviews continue on their own preserved builds.
+
+### Assembled sentinel bodies
+
+The existing sentinel look now uses the shared quarried-block and hewn-face
+vocabulary for shoulders, arms, body and feet. Native travel drives its alternating
+steps, and native attack preparation/completion drives a jointed striking arm.
+Stone Sentinel and Glassguard Sentinel retain their own palettes. Static
+portraits and corpses include the complete neutral anatomy. No enemy stats,
+hit shapes, defenses, skill grants, timings, rewards or AI were changed.
+
+The actual client verifies voluntary defender approach, a native Heavy Strike,
+the arm's rotation relative to its torso, stable redraw and no simulation writes
+during painting. Its original passive fixture correctly suppressed native body
+motion; removing that fixture suppression and checking relative transforms
+ensures the test now covers the real action. The gallery loads the shipped glyph
+registry and shows both palettes at enlarged and native sizes, preparation,
+release, stepping and static portraits. Those images and real-client captures
+were inspected. All three type checks, 25 combat smoke episodes, five walking
+checks and 68 casting/body-action checks pass. This is a visual improvement,
+not a new combat system or a critic acceptance result.
+
+Sign-cartography revision b1bb4346 passed CI 37083656238 and Pages 37084825586.
+Exact live metadata reports 2026-10-03T01:08:39.069Z; isolated remote QA preserved
+seed 3362398145 and all six ordinary-save sentinels through Continue.

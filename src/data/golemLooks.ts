@@ -13,6 +13,27 @@ const assembled = (kind: string, head: string, extra: PartSpec[] = []): PartSpec
 ];
 
 export const GOLEM_LOOKS: Record<string, LookDef> = {
+  /** Plated sentinels share assembled limbs, native travel and attack clocks.
+   * Their palette remains actor-owned; an energy-shield variant keeps its tint. */
+  sentinel: {
+    walk: { cycle: 7.6, swing: .42, sway: .025, lift: .045, parts: [
+      {kind:'quarriedBlock',x:-.58,y:-.55,scale:.32,phase:1,hip:{x:-.12,y:-.43,width:.3}},
+      {kind:'quarriedBlock',x:-.58,y:.55,scale:.32,phase:-1,hip:{x:-.12,y:.43,width:.3}},
+    ]},
+    parts: [
+      {kind:'quarriedBlock',x:-.2,scale:.78},
+      {kind:'armorPlates',x:-.18,scale:.64},
+      {kind:'quarriedBlock',x:-.13,y:-.75,scale:.39,rot:.15},
+      {kind:'quarriedBlock',x:.38,y:-.86,scale:.34},
+      {kind:'quarriedBlock',x:-.13,y:.75,scale:.39,rot:-.15},
+      {kind:'quarriedBlock',x:.35,y:.85,scale:.31,
+        action:{pivotX:-.13,pivotY:.7,windTurn:-.65,strikeTurn:.65,reach:.15}},
+      {kind:'quarriedBlock',x:.69,y:.8,scale:.36,
+        action:{pivotX:-.13,pivotY:.7,windTurn:-.65,strikeTurn:.65,reach:.15}},
+      {kind:'gem',x:-.23,scale:.36},
+      {kind:'hewnFace',x:.45,scale:.43},
+    ], shadowScale: 1.15,
+  },
   golem_stone_assembled: {
     parts: assembled('quarriedBlock', 'hewnFace', [
       { kind: 'runes', x: -.3, scale: .43, params: { n: 2 } },

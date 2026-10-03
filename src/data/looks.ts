@@ -2116,15 +2116,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', color: '#dff4ff', params: { spread: 0.42, dist: 0.5, size: 0.09 } },
     ],
   },
-  /** Stone sentinel: plated guardian with a burning core. */
-  sentinel: {
-    parts: [
-      { kind: 'disc' },
-      { kind: 'armorPlates' },
-      { kind: 'gem' },
-      { kind: 'eyes', params: { spread: 0.35, dist: 0.6, size: 0.08 } },
-    ],
-  },
   menhir: {
     parts: [
       { kind: 'disc', role: 'dark', scale: 0.95 },
