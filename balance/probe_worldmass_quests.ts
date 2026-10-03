@@ -73,6 +73,7 @@ try {
   stand(resume,'townsfolk_innkeep');
   const offers=resume.questRewardOffers();assert.equal(offers.length,1);assert.equal(offers[0].choices.length,3);
   assert.ok(offers[0].choices.every(c=>c.lines.length),'native reward cards resolve real affixes');
+  assert.ok(offers[0].choices.find(c=>c.id==='spring')!.lines.some(l=>/Maximum Mana/.test(l)),'reward preview includes its base identity');
   const waiting=serializeCharacter(resume),waitingWorld=makeSimWorld('warrior',44);
   assert.ok(applySavedCharacter(waitingWorld,waiting));assert.ok(waitingWorld.adoptWorldState(waiting.world));
   waitingWorld.startWorldMass(waiting.world!.worldmass!.state.run.seed,waiting.world!.worldmass);

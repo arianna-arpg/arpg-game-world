@@ -93,7 +93,11 @@ app.whenReady().then(async()=>{
   });
   const choices=await run(()=>({offers:__game.world().questRewardOffers(),buttons:[...document.querySelectorAll('[data-quest-reward]')].map(b=>({id:b.dataset.rewardChoice,text:b.textContent,rect:b.getBoundingClientRect().toJSON()}))}));
   assert.equal(choices.buttons.length,3);assert.ok(choices.buttons.every(b=>b.rect.width>0&&b.rect.y>=0&&b.rect.bottom<=850));
-  assert.ok(choices.offers[0].choices.every(c=>c.lines.length));results.choices=choices;await shot('reward-choices');
+  assert.ok(choices.offers[0].choices.every(c=>c.lines.length));
+  assert.match(choices.buttons.find(b=>b.id==='spring').text,/Maximum Mana/);
+  assert.match(choices.buttons.find(b=>b.id==='hearth').text,/Maximum Life/);
+  assert.match(choices.buttons.find(b=>b.id==='iron').text,/Physical Damage/);
+  results.choices=choices;await shot('reward-choices');
   const savedReady=await save(),continuedReady=await resume();assert.deepEqual(continuedReady,savedReady);
   const reward=await run(()=>{
    const w=__game.world();__game.ui.openMapTab('quests');__game.step(1);

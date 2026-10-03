@@ -2430,3 +2430,17 @@ requested frames are 86.339 nominal seconds, separately from 60:26 review wall
 time. The report records final saved client closure; its final chat message was
 interrupted by a transport error. This is not a live-performance or AAA
 comparison, and no acceptance verdict is inferred from it.
+
+### Complete equipment information in native reward cards
+
+Quest choice cards previously showed rolled affixes but omitted an item's base
+benefits. They now read base defenses, implicit modifiers, affixes and unique
+lines from the same native item description used by inventory. The Wellspring
+card therefore states both +18 maximum mana and +1.13 mana regeneration per
+second before selection; the other rings similarly expose their actual life
+or physical-damage contribution. Preview and payout still share the same item.
+
+The actual native quest UI confirms all three choices fit, carry their base
+benefits and still complete the same continuous return/equipment/Continue loop.
+Paired page and canvas captures were inspected. All three type checks, the
+place-contract lifecycle, native Reliquary and nine Brandt scenarios pass.

@@ -29138,7 +29138,9 @@ export class World {
         choices: questRewardChoices(this.account, q).map(c => {
           const item = this.questRewardItem(q, c.id, c);
           const size = item ? itemGridSize(item) : { w: 1, h: 1 };
-          return { ...c, lines: item ? describeItem(item).affix.map(l => l.text) : [],
+          const rewardDescription = item ? describeItem(item) : undefined;
+          return { ...c, lines: rewardDescription ? [...rewardDescription.defense.map(l => l.text),
+            ...rewardDescription.implicit, ...rewardDescription.affix.map(l => l.text), ...rewardDescription.unique] : [],
             footprint: `${size.w} × ${size.h}` };
         }) }] : [];
     });
