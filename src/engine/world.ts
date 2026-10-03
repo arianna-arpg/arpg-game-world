@@ -120,7 +120,7 @@ import {
   bagGemItems, findBagGem, freeCellCount, makeSkillGemItem, makeSupportGemItem,
   packGrantState, restoreGrantState,
   rebuildAnyItem, skillGemPayloadOf, skillOfGemItem, supportGemPayloadOf,
-  supportOfGemItem, writeBackSupportGem,
+  supportOfGemItem, writeBackSupportGem, bagSkillSupport,
 } from './gemitems';
 import {
   memoryProvenanceLabel, MEMORY_CFG, MEMORY_KIND_IDS, MEMORY_KINDS, MEMORY_TRADED_PROVENANCE,
@@ -1807,6 +1807,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'learn': return isIdx(a.uid) && (a.slot === undefined || isIdx(a.slot));
     case 'levelSupportInv': return isIdx(a.uid);
     case 'socket': return isIdx(a.uid) && isStr(a.skillId);
+    case 'unsocketBagSkill': return isIdx(a.uid) && isIdx(a.socket);
     case 'levelSupportSocket': case 'unsocket': return isStr(a.skillId) && isIdx(a.socket);
     case 'unlearn':
       return isStr(a.skillId)
@@ -29525,6 +29526,21 @@ export class World {
     return true;
   }
 
+  /** Recover a stored skill's support without seating it. The native bag and
+   * discipline laws still apply; only the selected cargo cell changes. */
+  unsocketBagSkill(uid: number, socketIndex: number, seat: Seat = this.localSeat): boolean {
+    const item = this.bagItem(seat, uid);
+    const payload = item && skillGemPayloadOf(item);
+    const gem = item && bagSkillSupport(item, socketIndex);
+    if (!payload || !gem) return false;
+    const why = this.swapRefusal(seat, 'unsocket', payload.skillId);
+    if (why) { this.failNote(seat.actor, payload.skillId + ':discipline', why); return false; }
+    if (!this.grantSupportGemItem(seat, gem)) return false;
+    payload.sockets[socketIndex] = null;
+    this.markMetaDirty(seat);
+    return true;
+  }
+
   /** Allocate a passive node adjacent to the existing allocation. VOCATION
    *  nodes are the same graph walk but spend VOCATION points, belong only to a
    *  character who EARNED that vocation, and (behind the playtest toggle) wait
@@ -29888,6 +29904,7 @@ export class World {
       case 'reacquireSkill': this.reacquireSkill(action.skillId, seat); break;
       case 'socket': this.socketSupport(action.uid, action.skillId, seat); break;
       case 'unsocket': this.unsocketSupport(action.skillId, action.socket, seat); break;
+      case 'unsocketBagSkill': this.unsocketBagSkill(action.uid, action.socket, seat); break;
       case 'allocate': this.allocateNode(action.nodeId, seat, action.optionId); break;
       case 'refundPassive': this.refundPassiveNode(action.nodeId, seat); break;
       case 'bindGraft': this.bindGraft(action.key, action.skillId, seat); break;

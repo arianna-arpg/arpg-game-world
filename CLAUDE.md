@@ -1,5 +1,11 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Stored skill supports can be recovered through unsocketBagSkill without seating
+the old skill. bagSkillSupport reads only the selected cargo cell; native bag
+capacity, field discipline, seat ownership, levels, rolls and lock marks remain
+authoritative. Verify storedsupports/skillitems/fielddiscipline and the controlled
+stored-supports-ui.cjs upgrade, removal-button, narrow and Continue checks.
+
 MassJourneySpec.notices pins optional public road accounts to each new run.
 The Roads tab resolves actual departure edges and site names without revealing
 map terrain or accepting work. Omitted older descriptors keep their original UI.

@@ -217,6 +217,17 @@ export function skillOfGemItem(item: ItemInstance): SkillInstance | null {
   return inst;
 }
 
+/** Read one support without rebuilding or normalizing the stored skill.
+ * Removing a socket must preserve every unrelated byte of its cargo. */
+export function bagSkillSupport(item: ItemInstance, index: number): SupportInstance | null {
+  if (!Number.isSafeInteger(index) || index < 0) return null;
+  const row = skillGemPayloadOf(item)?.sockets[index];
+  if (!row || !Object.prototype.hasOwnProperty.call(SUPPORTS, row.supportId)) return null;
+  return { def: SUPPORTS[row.supportId], level: row.level,
+    ...(row.locked ? { locked: true } : {}),
+    ...(row.rolled ? { rolled: { ...row.rolled } } : {}) };
+}
+
 /** Rebuild the live support instance from a wrapper item (tolerant). */
 export function supportOfGemItem(item: ItemInstance): SupportInstance | null {
   const p = supportGemPayloadOf(item);

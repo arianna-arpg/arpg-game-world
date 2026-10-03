@@ -3135,3 +3135,32 @@ established, and the overall acceptance criterion remains unmet.
 Readiness head 3746ff37 passed CI 37158246695 and Pages 37159280472. Exact live
 metadata reports 2026-10-03T22:43:12.1Z. Remote seed 4081598247 retained all six
 ordinary-save sentinels and native Continue without a fatal error.
+
+### Recovering supports from stored skill copies
+
+The cast-country playtest exposed a needless sequence after upgrading Firebolt:
+re-seat the old copy, remove its support, replace it again, then fit the support.
+Skills now lists supports inside bagged skill copies with direct removal buttons.
+The intent names a seat-owned item and socket; the engine grants the same native
+support before clearing that one stored cell. It preserves the active skill,
+all unrelated cargo, support levels/rolls and keeper lock marks. Existing combat
+discipline and actual bag capacity still refuse changes. No automatic migration
+or replacement is performed. The native host intent boundary owns the operation.
+
+All three type checks pass, along with the new storedsupports probe's three
+groups, skillitems' 47 checks and fielddiscipline's 29 checks. Coverage includes
+foreign seat IDs, malformed/stale indices, unknown definitions, full-bag atomic
+refusal, recent hits, nearby foes, exact persistence and native refitting.
+Controlled browser QA uses a real same-skill upgrade, stamps heat through a native
+hit, exercises the actual disabled/enabled removal button, and checks exact
+native save/reload/Continue. The support is refitted through the native intent,
+not a simulated drag gesture. All six current page/canvas pairs and the preceding
+client's ready pair were inspected; the removal control fits at 800-by-600.
+The prior client preserves the support but lacks this direct recovery action.
+This is controlled validation, not an earned playthrough or a two-process co-op
+test. The independent road-choice playtest continues against its frozen build.
+
+Preparation head c8236dc5 passed CI 37159589047 and Pages 37160631927. Its live
+browser check retained all six ordinary-save sentinels and native Continue for
+seed 4040288471 without a fatal error. Roads head bf0289bc is pushed; its CI
+37160926093 is still in progress at this checkpoint.

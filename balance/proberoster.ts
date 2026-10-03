@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_storedsupports.ts', status: 'green', tier: 'fast', why: 'bag-owned socket removal retains exact cargo/locks/rolls, host ownership, capacity and combat refusals, persistence and fitting' },
   { probe: 'probe_worldmass_roadguide.ts', status: 'green', tier: 'fast', why: 'run-owned public route choices, no discovery or quest mutation, escaped mod content, descriptor validation and exact Continue' },
   { probe: 'probe_worldmass_formations.ts', status: 'green', tier: 'fast', why: 'snapshotted native formation roles, strict habitat/level gates, atomic seats, wounds/casualties, Continue and dynamic clearance' },
   { probe: 'probe_worldmass_welcome.ts', status: 'green', tier: 'fast', why: 'worldmass spatial dialogue, native departure invitations, visibility, dismissal and saved receipts' },

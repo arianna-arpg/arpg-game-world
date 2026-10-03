@@ -109,6 +109,7 @@ export type MetaAction =
   | { t: 'untameCompanion'; actorId: number }                  // the Tracker's release counter
   | { t: 'companionStance'; skillId?: string; stance?: string } // THE STANCE SHIFT (engine/companionStances.ts): cycle (or set) one bond's conduct, or every bond on the bar when no skill is named
   | { t: 'socket'; uid: number; skillId: string }              // bag support item → skill socket
+  | { t: 'unsocketBagSkill'; uid: number; socket: number }    // stored skill's socket → bag support; needs room
   | { t: 'unsocket'; skillId: string; socket: number }         // socket → bag item (needs room)
   | { t: 'allocate'; nodeId: string; optionId?: string } // optionId: choice-node pick (data/passiveChoices.ts)
   | { t: 'refundPassive'; nodeId: string } // Font service: return a connected node's original points

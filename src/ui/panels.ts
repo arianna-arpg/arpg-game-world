@@ -4,6 +4,7 @@ import { skillMergePlan } from '../engine/skillMerge';
 import { massMap } from '../worldmass/paint';
 import { massQuestPins } from '../worldmass/quests';
 import { roadGuideHtml } from './roadGuide';
+import { storedSupportsHtml } from './storedSupports';
 import { SKILL_EMPOWERMENT } from '../data/skillEmpowerment';
 import { oracleReliquaryHtml } from './reliquary';
 import { planRelicStorage } from '../engine/accountReliquary';
@@ -7139,7 +7140,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         </div>`;
     }).join('');
     return `<div class="build-rack">${rackHtml}</div><div class="build-scroll">${socketWhy
-      ? `<div data-socket-readiness data-socket-refusal role="status" style="color:#e4b58b;font-size:11px;line-height:1.5;padding:8px">Socket changes unavailable: ${esc(socketWhy)}.</div>` : '<div data-socket-readiness role="status" style="color:#a9bc9d;font-size:11px;line-height:1.5;padding:8px">Supports can be changed here.</div>'}${seat === world.localSeat ? explorationRewardOffersHtml(world) : ''}${graftBank}${rows
+      ? `<div data-socket-readiness data-socket-refusal role="status" style="color:#e4b58b;font-size:11px;line-height:1.5;padding:8px">Socket changes unavailable: ${esc(socketWhy)}.</div>` : '<div data-socket-readiness role="status" style="color:#a9bc9d;font-size:11px;line-height:1.5;padding:8px">Supports can be changed here.</div>'}${seat === world.localSeat ? explorationRewardOffersHtml(world) : ''}${graftBank}${storedSupportsHtml(m.items, unsocketWhy)}${rows
       || '<div style="color:#8a8678;font-size:11px">Nothing seated. Skill Memories drop from monsters — press one from your pack into an empty seat above.</div>'}</div>`;
   }
 
@@ -7194,6 +7195,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     q<HTMLButtonElement>('button[data-unsocket]').forEach(btn => btn.addEventListener('click', () => {
       const [skillId, sock] = btn.dataset.unsocket!.split(':');
       world.requestMeta({ t: 'unsocket', skillId, socket: Number(sock) });
+      refresh();
+    }));
+    q<HTMLButtonElement>('button[data-unsocket-bag]').forEach(btn => btn.addEventListener('click', () => {
+      const [uid, socket] = btn.dataset.unsocketBag!.split(':').map(Number);
+      world.requestMeta({ t: 'unsocketBagSkill', uid, socket });
       refresh();
     }));
     // GRAFTS: lift a bank chip → land it on a skill (click-lift twins, the
