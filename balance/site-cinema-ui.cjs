@@ -151,6 +151,13 @@ app.whenReady().then(async () => {
     await sleep(160);
     await shot('10-shatter-' + t.toFixed(2).replace('.', '_'));
   }
+  /* THE SETTLING: the break's very last frame carries no light at all, so the
+     canvas leaves on the page itself (no lingering rays, then a jump) */
+  await js('HWCinemaTheater.freeze = 2.69; true');
+  await sleep(160);
+  const settle = await js('HWCinemaTheater._light || null');
+  check('the break\'s light settles to nothing before the page returns', !!settle && settle.rays < 0.002 && settle.flash < 0.002 && settle.glow < 0.002 && settle.flare < 0.002,
+    settle ? `rays ${settle.rays.toFixed(5)} · flash ${settle.flash.toFixed(5)}` : 'no reading');
   await js('HWCinemaTheater.freeze = null; true');
   check('the theater closes and the page returns', await waitFor(`!document.querySelector('.hwcine') && !document.documentElement.classList.contains('hwcine-lock')`, 6000));
   await sleep(300);

@@ -912,7 +912,7 @@
     '#version 300 es\n' +
     'precision highp float;\n' +
     'in vec2 aO; in vec2 aV; in vec4 aP; in vec3 aC;\n' +
-    'uniform vec2 uView; uniform float uT; uniform float uDpr;\n' +
+    'uniform vec2 uView; uniform float uT; uniform float uDpr; uniform float uTail;\n' +
     'out vec3 vC;\n' +
     'void main(){\n' +
     '  float t = uT - aP.z; float k = t / aP.x;\n' +
@@ -922,7 +922,7 @@
     '  gl_PointSize = aP.y * uDpr * (1.0 - 0.35 * k);\n' +
     '  float tw = 0.55 + 0.45 * sin(t * 31.0 + aP.z * 173.0);\n' +
     '  float life = (1.0 - k) * (1.0 - k) * smoothstep(0.0, 0.06, t);\n' +
-    '  vC = aC * tw * life;\n' +
+    '  vC = aC * tw * life * uTail;\n' +
     '}\n';
   var FS_DUST =
     '#version 300 es\n' +
@@ -1213,6 +1213,13 @@
     }
 
     var CR = 0.24, BR = 0.46, END = 2.7;
+    /* THE SETTLING: over the break's last breaths every light (the flash, the
+       rays, the glare, the lit seams and edges, the motes) eases to nothing
+       together with the last glass, so the final frame IS the page and the
+       canvas leaves without a seam. (The rays decay slowly on their own and
+       used to still glow at a few percent when the canvas went, which read as
+       a lingering layer over a dark page, then a jump.) */
+    var TAIL = 0.6;
     var cam = 1.15 * Math.max(W, H);
     var LIGHT = [0.86, 0.91, 1.0], RAY = [0.6, 0.72, 0.86];
     var t0 = now(), covered = false;
@@ -1231,6 +1238,9 @@
       var rays = te < BR ? 0.12 * smooth(tension) : Math.exp(-tb * 1.5) * (tb < 0.1 ? smooth(tb / 0.1) : 1);
       var flare = te < BR ? 0 : Math.exp(-tb * 1.2);
       var ring = te * 1800, ringA = te < 0.2 ? Math.pow(1 - te / 0.2, 2) : 0;
+      var tail = 1 - smooth((te - (END - TAIL)) / TAIL);   // 1, then eased to exactly 0 at END
+      glow *= tail; flash *= tail; rays *= tail; flare *= tail;
+      if (frozen) Q._light = { te: te, flash: flash, rays: rays, glow: glow, flare: flare, tail: tail };   // QA: the light at the held moment
 
       gl.viewport(0, 0, cv.width, cv.height);
       gl.clearColor(0, 0, 0, 0);
@@ -1301,6 +1311,7 @@
       gl.uniform2f(du.uView, W, H);
       gl.uniform1f(du.uT, te);
       gl.uniform1f(du.uDpr, dpr);
+      gl.uniform1f(du.uTail, tail);
       gl.bindVertexArray(S.dvao);
       gl.drawArrays(gl.POINTS, 0, dn);
       gl.bindVertexArray(null);

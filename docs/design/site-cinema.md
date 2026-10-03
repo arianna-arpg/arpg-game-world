@@ -24,7 +24,7 @@ that button holds keyboard focus.
 | `scripts/publish-site-media.mjs` | Uploads manifest files to the `site-media` release (creates it on first use). |
 | `scripts/fetch-site-media.mjs` | Pulls and verifies manifest files into `site/media/` (every Pages deploy; local previews), unpacking archives. |
 | `scripts/capture-skill-clips.cjs` | Films each skill in the game → `site/media/clips/` (see Skill clips). |
-| `balance/site-cinema-ui.cjs` | The hidden walkthrough (39 checks, frames in `balance/reports/site-cinema/`). |
+| `balance/site-cinema-ui.cjs` | The hidden walkthrough (40 checks, frames in `balance/reports/site-cinema/`). |
 
 A page opts in with one tag: `<script src="assets/cinema.js?v=…"></script>` in
 its `<head>` (today: the homepage). **The `?v=` stamp is the cache key for both
@@ -181,13 +181,20 @@ show; rings thin out toward the rim.
 | 0–0.24 s | cracks race to the corners, and the pieces settle a pixel apart |
 | 0.24–0.46 s | the tension beat |
 | 0.46 s | the break, a release wave from the impact |
+| 2.1–2.7 s | the settling: every light eases to nothing with the last glass |
 
 At the break, the pieces near the strike burst toward the viewer, and the panes
 at the rim drop and turn under gravity. Picture pieces stay solid, and darkness
 pieces thin to glass. Light behind the glass pours through every gap (additive,
 alpha 0, so it lights the page itself), with rays, glass dust and a few motes in
-the insignia's three colors. Everything is gone by 2.7 s. The first frame is
-identical to the screen it replaces.
+the insignia's three colors. The first frame is identical to the screen it
+replaces, and so is the last: over the final 0.6 s (`TAIL`) the flash, the
+rays, the glare, the lit seams and the motes ease to exactly zero together with
+the last falling glass, so the canvas leaves on the page itself. (The rays decay
+slowly on their own; before the settling they still glowed at a few percent
+when the canvas went, which read as a lingering layer over the dark page, then
+a jump.) A QA freeze reports the held moment's light in
+`HWCinemaTheater._light`.
 
 **The sound** is Web Audio with no files: the strike, crackle, the crash, modal
 glass tinkles (plate ratios 1 : 2.32 : 4.25 with contact clicks), a thump, an
