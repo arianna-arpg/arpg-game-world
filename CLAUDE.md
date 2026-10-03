@@ -1,5 +1,12 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Player cast meters now name their live skill and use a wider native progress
+bar; `VIS_CFG.castReadout` controls the presentation. The actual owner slot
+receives a light rim, using the input feeder's identity/host relation. Native
+clock modes, timing decorations and movement rules remain authoritative.
+Verify castingcues and `balance/cast-readout-ui.cjs`; the previous client with
+HOLLOW_WAKE_QA_LEGACY=1 reproduces the missing name and slot indication.
+
 Native clear contracts can opt into continuous geography through the saved
 settlement quest bindings in `worldmass/quests.ts`. The first binds Mireille's
 Western Watch to Cinderwatch's original garrison, then uses native return,

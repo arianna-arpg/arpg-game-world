@@ -2400,3 +2400,33 @@ Exact live metadata reports 2026-10-03T02:39:40.007Z; isolated remote QA preserv
 seed 2716652161 and all six ordinary-save sentinels through Continue. A fresh
 independent player is reviewing the fixed place-contract build without an
 implementation briefing. No overall critic acceptance has been established.
+
+### Readable player cast ownership
+
+The player's existing overhead cast meter now names the skill actually running
+and uses a wider progress strip. The matching hotbar slot receives a light rim.
+A requested replacement that has not started cannot light its slot. Minted
+converted/meta casts resolve to the same first host slot that feeds native input.
+Visual configuration owns width, font, colors and the opt-out. Enemy meter
+dimensions, special cast-mode decorations, cooldowns and all timing/movement
+rules remain unchanged. The larger footprint joins the existing meter layout.
+
+The controlled previous-client comparison reproduces an unnamed small cast bar.
+Both clients keep the same Firebolt commitment: the attempted replacement stays
+pending, movement resumes after completion, and a later Chain Lightning names
+and lights its own actual slot. Held Shield Up remains mobile and displays its
+native shield meter. Actual text, native progress fraction, slot rectangles,
+screen bounds and unchanged simulation state are checked. The initial bounds
+assertion compared world coordinates to screen pixels; it now uses the canvas's
+actual transform. Paired page/canvas comparisons were inspected. All three
+type checks and 67 native casting/body-action checks pass.
+
+The independent firing-lane reviewer cleared three sites as Magician, earned
+Arcing and Change the Rhythm, used both in later fights, and verified native
+Save/Continue. Its verdict remains below acceptance. Grouped shots and deliberate
+avoidance of enemy warnings were strengths; unclear cast commitment, crowded
+bodies and a repetitive observed site loop limited sustained interest. Its 5,170
+requested frames are 86.339 nominal seconds, separately from 60:26 review wall
+time. The report records final saved client closure; its final chat message was
+interrupted by a transport error. This is not a live-performance or AAA
+comparison, and no acceptance verdict is inferred from it.

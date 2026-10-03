@@ -9,6 +9,10 @@ export const VIS_CFG = {
   /** Unassigned controls keep their hit areas and key labels while leaving
    * the battlefield visible. Filled skills retain their native readability. */
   hotbar: { emptyFillAlpha: .12, emptyBorderAlpha: .5 },
+  /** Current player cast: actual work clock and owner, separate from cooldowns. */
+  castReadout: { enabled: true, width: 104, height: 6, nameHeight: 14,
+    font: 'bold 11px Verdana', text: '#f1ecdd', edge: '#121719', outline: 3,
+    slotEdge: '#f1ecdd', slotWidth: 2, slotPad: 2 },
   meleeReach: { enabled:true, color:'#dcebd6', edge:'#17201b', alpha:.34, progressAlpha:.25,
     fillAlpha:.025, width:1.3, outline:1.5 },
   /** Local body identity and numeric clutter share one configurable presentation

@@ -141,6 +141,7 @@ import { REACTIVE_CUE_CFG } from '../data/combatReadability';
 import { drawReactiveCue, drawGaspSpark, drawWardBody, drawWardLinks, drawWardBar } from './vis/combatReadabilityLayer';
 import { drawCastingCue, drawFocusFrame } from './vis/castingCueLayer';
 import { castingCompletion } from '../engine/castingCues';
+import { drawCastName, drawCastSlot } from './vis/castReadout';
 import { COMBAT_CUE_CFG } from '../data/combatCues';
 import { drawShellCue, drawPoiseCue, statusBodyLean, drawStatusBodyCue } from './vis/defenseCueLayer';
 import { drawWatchSense, drawWatchTrails } from './vis/watchLayer';
@@ -6378,12 +6379,15 @@ export class Renderer {
     // Cast bar above the head (telegraphs enemy casts, too)
     const cs = a.casting;
     if (cs) {
-      const bw = 44, bh = 5;
+      const castReadout = VIS_CFG.castReadout.enabled && world.seats.some(s => s.actor === a);
+      const bw = castReadout ? VIS_CFG.castReadout.width : 44, bh = castReadout ? VIS_CFG.castReadout.height : 5;
+      const nameHeight = castReadout ? VIS_CFG.castReadout.nameHeight : 0;
       const bx2 = x - bw / 2, by2 = y - a.radius - 18;
       const color = cs.inst.def.color;
       const meterRise=cs.mode==='overcharge'?Math.max(0,cs.stage??0)*4:4;
-      const meterWidth=['overcharge','channel','multitude'].includes(cs.mode)?96:50;
-      this.combatMeters.add(a,{x:bx2-3,y:by2-6-meterRise,w:meterWidth,h:bh+10+meterRise},()=>{
+      const meterWidth=bw+(['overcharge','channel','multitude'].includes(cs.mode)?52:6);
+      this.combatMeters.add(a,{x:bx2-3,y:by2-6-meterRise-nameHeight,w:meterWidth,h:bh+10+meterRise+nameHeight},()=>{
+        if (castReadout) drawCastName(ctx, a, x, by2-6-meterRise, bw);
         ctx.fillStyle = 'rgba(0,0,0,0.7)';
         ctx.fillRect(bx2 - 1, by2 - 1, bw + 2, bh + 2);
         let frac: number;
@@ -8330,6 +8334,7 @@ export class Renderer {
           gx += 7;
         }
       }
+      drawCastSlot(ctx, p, inst, x, by, slot);
       ctx.fillStyle = '#8a8678';
       ctx.font = '10px Verdana';
       ctx.fillText(keyLabels[i] ?? '?', x + slot / 2, by + slot + 12);
