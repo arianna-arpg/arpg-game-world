@@ -32,6 +32,7 @@ import { applyEncounterGroup, readEncounterGroup, type EncounterGroupState } fro
 import { ENCOUNTER_GROUPS, ENCOUNTER_GROUP_CFG } from '../data/encounterGroups';
 import { validateMassGround } from './ground';
 import { validateMassQuests } from './quests';
+import { MassShrines, MASS_SHRINE_LIMIT, type MassShrineSave } from './shrines';
 
 interface MassEnemySave {
   id: string; monster: string; level: number; x: number; y: number; life: number; scale: number;
@@ -41,10 +42,11 @@ interface MassEnemySave {
   anchor?: { x: number; y: number }; leashHome?: boolean;
 }
 export interface MassAdventureSave {
-  schema: 1; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
+  schema: 1 | 2; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
   player: { x: number; y: number; tier?: number }; enemies: MassEnemySave[]; contents: ZoneContents;
   rewards?: MassRewardSave[];
   fields?: MassFieldSave[];
+  shrines?: MassShrineSave[];
   sites?: MassSiteSave;
   ecology?: MassEcologySave;
   settlement?: MassSettlementSave;
@@ -55,6 +57,7 @@ export interface MassAdventureSave {
 export class WorldMassRuntime {
   readonly rewards: MassRewards;
   readonly fields: MassFields;
+  readonly shrines: MassShrines;
   readonly generator: MassGenerator;
   readonly state: MassState;
   readonly stream: MassStream;
@@ -85,6 +88,7 @@ export class WorldMassRuntime {
     this.rewards = new MassRewards(this.config.rewards, seed, save?.rewards);
     if(this.config.fieldResidency!==undefined)validateMassFieldResidency(this.config.fieldResidency,this.config.populationRadius);
     this.fields = new MassFields(save?.fields,this.config.fieldResidency);
+    this.shrines = new MassShrines(save?.shrines);
     this.origin = Object.freeze(save ? { ...save.origin } : { dimension: 'surface', cx: '0', cy: '0' });
     address(this.origin.dimension, this.origin.cx, this.origin.cy, 0, 0, config.terrain.addressSpan);
     this.generator = new MassGenerator(save?.state.run ?? makeMassRun(seed, runId, config.terrain), config.terrain);
@@ -111,6 +115,8 @@ export class WorldMassRuntime {
     const journeyPlaces=[...(config.journey?.destinations ?? []),...(config.journey?.extensions ?? []),...(config.journey?.stops ?? [])];
     if(journeyPlaces.reduce((n,d)=>n+(config.content.find(c=>c.id===d.content)?.site?.altars?.length??0),0)>16)
       throw new Error('Frontier field count exceeds its checkpoint budget');
+    if (journeyPlaces.reduce((n,d) => n + (config.content.find(c => c.id === d.content)?.site?.shrines?.length ?? 0), 0) > MASS_SHRINE_LIMIT)
+      throw Error('Frontier shrine count exceeds its checkpoint budget');
     for (const d of journeyPlaces) {
       const site = config.content.find(c => c.id === d.content)?.site;
       if (!site) throw new Error('Unresolved frontier destination');
@@ -125,6 +131,8 @@ export class WorldMassRuntime {
     for (const c of config.content) {
       if(config.fieldResidency && (c.site?.altars?.length??0)>config.fieldResidency.maxResident)
         throw Error('Worldmass site exceeds its field residency budget');
+      if (c.site?.shrines?.length && config.terrain.places.some(p => p.content === c.id))
+        throw Error('Worldmass shrines require a finite journey owner');
       if (c.site?.altars?.length && !config.fieldResidency && config.terrain.places.some(p=>p.content===c.id))
         throw new Error('Worldmass altar fields require a finite journey owner');
       for (const row of [c, ...(c.levels ?? [])]) {
@@ -164,7 +172,12 @@ export class WorldMassRuntime {
     this.sites = new MassSites(id => this.config.content.find(c => c.id === id)?.site,
       center => localOffset(center, { ...this.origin, x: 0, y: 0 }, config.terrain.addressSpan), config.terrain.addressSpan);
     if (save) {
-      if (save.schema !== 1 || save.configHash !== massDigest(config) || !Array.isArray(save.enemies)
+      // An older client must refuse a shrine-bearing checkpoint rather than
+      // resave its unknown consumption records away. Schema one remains valid
+      // for descriptors created before one-shot geographic stands existed.
+      if ((save.schema !== 1 && save.schema !== 2)
+        || save.schema === 1 && config.content.some(c => c.site?.shrines?.length)
+        || save.configHash !== massDigest(config) || !Array.isArray(save.enemies)
         || save.enemies.length > config.maxPopulation || !savedZoneContents(save.contents)
         || !Number.isFinite(save.player?.x) || !Number.isFinite(save.player?.y)
         || new Set(save.enemies.map(e => e.id)).size !== save.enemies.length)
@@ -268,6 +281,10 @@ export class WorldMassRuntime {
       if(canonical(at)!==canonical(owner.center))throw Error('Invalid worldmass field address');
       return this.placesInCell(at).find(p=>p.id===owner.id&&canonical(p.center)===canonical(at));
     });
+    this.shrines.restoreAdmitted(world, this.journey?.places ?? [], place => ({
+      rows: this.config.content.find(c => c.id === place.content)?.site?.shrines ?? [],
+      center: this.journey!.local(place),
+    }));
     this.update(world, true);
     this.attached = true;
     this.nextPopulation = world.time;
@@ -532,7 +549,10 @@ export class WorldMassRuntime {
       if (content.site) {
         const ready = massGarrisonSlots(content,p.id,count)
           .every(id => this.natives.has(id) || this.state.claimed('fallen', id));
-        if (ready) this.fields.admit(world,p,content.site.altars ?? [],q,population.level);
+        if (ready) {
+          this.fields.admit(world,p,content.site.altars ?? [],q,population.level);
+          this.shrines.admit(world,p,content.site.shrines ?? [],q);
+        }
         const cache = content.site.cache;
         if (ready && cache && !this.state.claimed('site-cache', p.id)) {
           const offset = siteOffset(p, cache.x, cache.y);
@@ -556,9 +576,10 @@ export class WorldMassRuntime {
         ...(a.encounterGroup ? {encounterGroup:a.encounterGroup,name:a.name} : {}),
         ...(this.births.of(a) ? {birth:this.births.of(a)} : {}) });
     }
-    return JSON.parse(JSON.stringify({ schema: 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
+    return JSON.parse(JSON.stringify({ schema: this.config.content.some(c => c.site?.shrines?.length) ? 2 : 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
       ...(this.config.rewards ? { rewards: this.rewards.snapshot() } : {}),
       ...(this.fields.snapshot().length ? { fields: this.fields.snapshot() } : {}),
+      ...(this.shrines.snapshot().length ? { shrines: this.shrines.snapshot() } : {}),
       origin: this.origin, player: { ...world.player.pos, tier: world.player.tier ?? 0 }, enemies,
       ...(this.settlement ? { settlement: this.settlement.snapshot(world) } : {}),
       ...(this.ecology ? { ecology: this.ecology.snapshot(world) } : {}), sites: this.sites.snapshot(world), contents: captureZoneContents(world) })) as MassAdventureSave;

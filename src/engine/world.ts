@@ -589,6 +589,8 @@ export interface Chest {
 
 /** An activatable one-shot buff pillar. */
 export interface Shrine {
+  /** Geographic placement and consumption are checkpointed by the owning expedition. */
+  massSource?: string;
   pos: Vec2;
   def: ShrineDef;
   used: boolean;

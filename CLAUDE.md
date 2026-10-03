@@ -1,5 +1,15 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Finite connected landmarks may snapshot native one-use shrines through
+`worldmass/shrines.ts`. Native touch, buffs and expiry retain authority; the
+expedition owns exact placement and consumed state. Omitted descriptors stay
+unchanged. Shrine-bearing checkpoints use schema two so older clients refuse
+rather than discard consumption. Repeated shrines require a future residency
+contract; the finite checkpoint budget is 16. Verify worldmass_shrines, the
+worldmass suite, persistence and generation QA, plus
+`balance/worldmass-shrines-ui.cjs` for native walking, six exact checkpoints
+and actual prior-client compatibility/refusal.
+
 Accepted continuous contracts share their known map pins with a compact HUD
 compass. It follows the actual destination or return giver, marks nearby ground
 without inventing a route, and disappears after native payout. Undisclosed or

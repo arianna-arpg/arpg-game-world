@@ -1,6 +1,7 @@
 import type { Doodad, DoodadKind } from '../engine/levelgen';
 import { nativeMassSite, MASS_CACHE_OPENING, type MassSiteSpec } from './sites';
 import { nativeMassAltar } from './fields';
+import { nativeMassShrine } from './shrines';
 import { OBJECTIVE_REWARD } from '../data/objectiveRewards';
 
 interface Landmark {
@@ -20,7 +21,7 @@ export function frontierLandmarks(): Landmark[] {
     ({ kind, pos: { x, y }, radius, rot });
   const compose = (id: string, native: string | null, name: string, cache: MassSiteSpec['cache'],
     undead: boolean, count: number, additions: Doodad[], mechanic?: string, altars?: MassSiteSpec['altars'],
-    fixtures?: MassSiteSpec['fixtures']): Landmark => {
+    fixtures?: MassSiteSpec['fixtures'], shrines?: MassSiteSpec['shrines']): Landmark => {
     const site: MassSiteSpec = native ? nativeMassSite(native, name, cache)
       : { name, source: 'native/scenery', doodads: [], fixtures: [], ...(cache ? { cache } : {}) };
     site.source += '+worldmass/landmarks/' + id;
@@ -28,6 +29,7 @@ export function frontierLandmarks(): Landmark[] {
     if(site.cache)site.cache={...site.cache,...MASS_CACHE_OPENING};
     site.doodads.push(...additions);
     if (altars?.length) site.altars = altars;
+    if (shrines?.length) site.shrines = shrines;
     if (fixtures?.length) site.fixtures.push(...fixtures);
     return { id, undead, count, site, ...(mechanic ? { magicPack: { source: 'magicPacks/'+mechanic, mechanic } } : {}) };
   };
@@ -39,14 +41,14 @@ export function frontierLandmarks(): Landmark[] {
       prop('log', -70, 145, 25, -.4), prop('log', -40, 163, 24, -.4),
       prop('dead_tree', 155, -150, 58), prop('broken_cart', 175, -105, 30, 1.4),
       prop('rock', 20, -160, 28),
-    ]),
+    ], undefined, undefined, undefined, [nativeMassShrine('swiftness', 75, 215)]),
     compose('broken-gate', 'fortress_gate', 'The Broken Gate', { x: 0, y: 40, holdSeconds: 5 }, true, 4, [
       prop('standing_stone', -100, -165, 36), prop('standing_stone', 100, -165, 36),
       prop('brazier', -85, 95, 24), prop('brazier', 85, 95, 24),
       prop('bone_pile', -95, 35, 24), prop('bone_pile', 95, 15, 21),
       prop('broken_cart', -105, -205, 34, .8), prop('bone_pile', -45, -190, 21),
       prop('weathered_statue', 130, -190, 42), prop('rock', 190, -110, 31),
-    ], 'footfall'),
+    ], 'footfall', undefined, undefined, [nativeMassShrine('barrage', 160, 125)]),
     compose('memorial-grove', null, 'Memorial Grove', { x: 0, y: 66, holdSeconds: 4 }, false, 3, [
       // A processional aisle and paired graves identify the place before its name.
       // The cache and centre remain reachable from all four road approaches.
@@ -99,7 +101,7 @@ export function frontierLandmarks(): Landmark[] {
       prop('weathered_statue',0,-240,65),prop('brazier',-80,-210,22),prop('brazier',80,-210,22),
       prop('broken_cart',235,145,33,.6),prop('dead_tree',-260,90,47),
     ], undefined, [nativeMassAltar('wrath_altar',0,30)],
-      [{monster:'karst_slinger',x:90,y:-65,garrison:true}]),
+      [{monster:'karst_slinger',x:90,y:-65,garrison:true}], [nativeMassShrine('stoneskin',0,210)]),
       population:{level:4,table:[{id:'stone_sentinel',weight:1}]} },
   ];
 }

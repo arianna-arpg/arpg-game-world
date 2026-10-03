@@ -2583,3 +2583,54 @@ The long-journey audit reconfirms the conservative active population cap:
 survivors and their scenery remain resident. Dependency-aware actor dormancy,
 enemy-created summons and complete transient combat persistence still need a
 separate lifecycle implementation; no unbounded-population claim is made here.
+
+### Native one-use boons at connected landmarks
+
+New expeditions place existing Swiftness, Barrage and Stoneskin shrines at
+Cinderwatch, Broken Gate and the Stoneward respectively. Their registered
+definitions are snapshotted with the place configuration. The native touch
+handler alone applies their existing modifiers, announcement, flash and expiry.
+The adapter owns geographic identity, physical placement and one-use state;
+it never recreates a buff from a consumed stand.
+
+Shrines admit only after the original garrison has fully admitted, independently
+of defeating it. Population saturation cannot yield an unguarded free boon.
+Each placement uses native free-space and collision checks inside its owner.
+The finite journey permits at most 16 stands, with at most four per site;
+repeated procedural owners explicitly refuse until their residency lifecycle
+exists. Existing expeditions with omitted shrine descriptors retain their land.
+
+Shrine-bearing checkpoints use schema two. The actual previous client refuses
+them before replacing its world, preventing an old build from silently dropping
+consumption records. Current clients still load real schema-one expeditions.
+Saved native buffs keep their own remaining duration; used stands neither
+reapply them after expiry nor refill when revisited. Definitions come from the
+run snapshot even after the current registry changes.
+
+All three type checks, all 26 worldmass probes and 84 native persistence
+assertions pass. Generation QA reports 869 cases across three seeds, zero
+failures, four existing geometry warnings and one timing warning. The shrine
+probe covers placement across three seeds, saturation, malformed/foreign
+records, descriptor bounds, definition snapshots and schema guards.
+
+The actual client walks into all three shrines with active native AI, the same
+hero and zero zone loads. Cast speed rises from 1.03 to 1.23, projectile count
+from zero to one, and armor from zero to 70. Six exact browser checkpoints cover
+unspent and consumed states. Native expiry leaves one used stand and no second
+boon. All six paired page/canvas captures were inspected. The controlled fixture
+uses relocation and invulnerability; it is verification, not ordinary-play
+evidence. Initial fixture failures exposed optional undefined modifier fields
+during canonicalization and an array-order comparison; definitions now use a
+JSON snapshot and verification compares stands by stable identity.
+
+Contract-compass revision 050423cd passed CI 37141984602 and Pages 37142990521.
+Exact live metadata reports 2026-10-03T18:08:43.358Z; isolated remote QA preserved
+seed 3610589155 and all six ordinary-save sentinels through Continue.
+
+The fresh service-guidance critic completed two sites and used its earned
+knockback/movement build in further combat before retreating from Broken Gate.
+Native Save/Continue retained its visible progress. Its overall verdict remains
+mixed and not genuinely impressed; meaningful build choices did not overcome
+combat/chase friction and the sampled exploration. Its final evidence report
+is pending, and the recovered target-contract critic is still playing. No
+overall acceptance or commercial-game parity is claimed.

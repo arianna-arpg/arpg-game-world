@@ -8,6 +8,7 @@ import { canonical, massHash } from './random';
 import { validateMassAltar, type MassAltarSpec } from './fields';
 
 import { validateMassClearance, type MassClearanceSpec } from './clearance';
+import { validateMassShrine, type MassShrineSpec } from './shrines';
 
 /** Resolved into new descriptors; omitted policies preserve native timed caches. */
 export const MASS_CACHE_OPENING = { clearedHoldSeconds: .35 };
@@ -24,6 +25,8 @@ export interface MassSiteSpec {
   cache?: { x: number; y: number; holdSeconds: number; clearedHoldSeconds?: number };
   /** Native altar rules, snapshotted per expedition. Repeated places require field residency. */
   altars?: MassAltarSpec[];
+  /** Native one-shot stands, currently owned by finite connected landmarks. */
+  shrines?: MassShrineSpec[];
 }
 export interface MassSiteDiscovery { id: string; content: string; center: MassAddress }
 export type PieceState = Pick<Doodad, 'pos' | 'kind' | 'radius' | 'rot' | 'adorn' | 'gone' | 'felled' | 'hitbox'>;
@@ -61,6 +64,9 @@ export function validateMassSite(site: MassSiteSpec, radius: number): void {
   if (site.altars && (!Array.isArray(site.altars) || site.altars.length > 4
     || new Set(site.altars.map(a=>a.id)).size !== site.altars.length)) throw new Error('Invalid worldmass site fields');
   for (const altar of site.altars ?? []) validateMassAltar(altar, radius);
+  if (site.shrines !== undefined && (!Array.isArray(site.shrines) || site.shrines.length > 4
+    || new Set(site.shrines.map(s => s.id)).size !== site.shrines.length)) throw Error('Invalid worldmass site shrines');
+  for (const shrine of site.shrines ?? []) validateMassShrine(shrine, radius);
   for (const f of site.fixtures) if (!MONSTERS[f.monster] || !within(f.x, f.y, 32)
     || f.garrison!==undefined && typeof f.garrison!=='boolean')
     throw new Error('Invalid worldmass site fixture');
