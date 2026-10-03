@@ -1,5 +1,13 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Repeated camps and ruins in `worldmass/countryOutposts.ts` use the native
+garrison-clearance reward and quiet-cache policy already used by landmarks.
+Saved quotas retain at least one eligible defender without making wildlife
+mandatory. Existing descriptors keep their original obligations and timers.
+Verify worldmass_outposts/sites/cacheopening and the worldmass suite plus
+generation QA; `balance/worldmass-outposts-ui.cjs` checks real native walking,
+four browser checkpoints and actual prior-client behavior/Continue.
+
 Known continuous-map locations share `worldmass/mapLabels.ts`: bounded measured
 labels avoid other labels and place/service/quest/player markers while their
 geographic anchors stay fixed. Full native site state remains in accessible

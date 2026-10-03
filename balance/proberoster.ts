@@ -77,6 +77,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_worldmass_progression.ts', status: 'green', tier: 'fast', why: 'geographic danger, native level envelopes, stable encounter rewards and legacy expedition compatibility' },
   { probe: 'probe_doorpress.ts', status: 'green', tier: 'fast', why: 'optional physical door approach, native collision/persistence, legacy idle and combat/story/mechanism refusals' },
   { probe: 'probe_worldmass_birth.ts', status: 'green', tier: 'fast', why: 'native factory variants and wounded guardians survive Continue without consuming combat RNG; legacy descriptors and invalid records' },
+  { probe: 'probe_worldmass_outposts.ts', status: 'green', tier: 'fast', why: 'generated camps and ruins retain eligible garrisons, native once-only clearance, quiet caches and wounded Continue' },
   { probe: 'probe_worldmass_maplabels.ts', status: 'green', tier: 'fast', why: 'bounded known-place labels preserve anchors, avoid collisions and remain deterministic under dense overflow' },
   { probe: 'probe_worldmass_shrines.ts', status: 'green', tier: 'fast', why: 'native one-shot shrine placement, buffs, exact used/unspent Continue, bounded ownership, no duplicate consumption and legacy omission' },
   { probe: 'probe_worldmass_targets.ts', status: 'green', tier: 'fast', why: 'original named target ownership, paid current-run chain, independent escort/cache, native wounds and once-only return reward through Continue' },

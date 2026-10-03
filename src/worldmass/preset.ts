@@ -8,7 +8,8 @@ import { freezeData } from './random';
 import { frontierLandmarks } from './landmarks';
 import { openingPopulation, reserveMassGuardians } from './population';
 import { STARTER_SUPPORTS } from '../meta/account';
-import { nativeMassSite, type MassSiteSpec } from './sites';
+import type { MassSiteSpec } from './sites';
+import { countryOutposts } from './countryOutposts';
 import { MASS_BIOME_FAMILIES, MASS_CLIMATE_ECOLOGY } from './biomes';
 import { nativeMassEncounters } from './encounters';
 import { countryFieldSites } from './fieldSites';
@@ -125,16 +126,12 @@ export function massAdventure(): MassAdventure {
       table: presenceTable(TILESETS[f.id].packs.table, 1, id => MONSTERS[id]?.presence)
         .filter(r => MONSTERS[r.id] && !MONSTERS[r.id].habitat)
         .map(r => ({ id: r.id, weight: r.weight })) })),
-      { id: 'wayside-camp', source: 'structures/wayside_camp', level: 1, count: 2,
-        levels: populations(TILESETS.downs.packs.table),
-        table: presenceTable(TILESETS.downs.packs.table, 1, id => MONSTERS[id]?.presence)
-          .filter(r => MONSTERS[r.id] && !MONSTERS[r.id].habitat).map(r => ({ id: r.id, weight: r.weight })),
-        site: nativeMassSite('wayside_camp', 'Wayside Camp', { x: 0, y: 66, holdSeconds: 4 }) },
-      { id: 'pillaged-ruin', source: 'structures/pillaged_township', level: 1, count: 4,
-        levels: populations(FACTIONS.undead.table), levelOffset: 1,
-        table: presenceTable(FACTIONS.undead.table, 1, id => MONSTERS[id]?.presence)
-          .filter(r => MONSTERS[r.id] && !MONSTERS[r.id].habitat).map(r => ({ id: r.id, weight: r.weight })),
-        site: nativeMassSite('pillaged_township', 'Pillaged Ruin', { x: 60, y: 80, holdSeconds: 5 }) },
+      ...countryOutposts().map(outpost => {
+        const levels=populations(outpost.roster==='undead'?FACTIONS.undead.table:TILESETS.downs.packs.table)
+          .map(row=>reserveMassGuardians(row,outpost.count));
+        return {...levels[0],id:outpost.id,source:outpost.site.source,count:outpost.count,levels,site:outpost.site,
+          ...(outpost.levelOffset===undefined?{}:{levelOffset:outpost.levelOffset})};
+      }),
       ...frontierLandmarks().map(landmark => {
         if(landmark.population)return {...landmark.population,id:landmark.id,source:landmark.site.source,
           count:landmark.count,site:landmark.site};

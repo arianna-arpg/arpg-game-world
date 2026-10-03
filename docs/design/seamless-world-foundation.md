@@ -2683,3 +2683,48 @@ The distant-body audit found live references beyond the current survivor
 checkpoint: casts, owned constructs, pending follow-ups, statuses, squads and
 other effects. Actor unloading is not introduced by this change. Retaining
 those dependencies remains safer than substituting a lossy enemy memo.
+
+### Consistent completion for countryside camps and ruins
+
+New repeated Wayside Camps and Pillaged Ruins now use the same native clearance
+curve and optional quiet-cache opening policy as connected landmarks. Their
+existing recipes, footprints, levels and physical chest positions are retained.
+The population descriptor reserves at least one native objective-eligible body;
+ambient wildlife and breakables do not become mandatory objectives. The
+original admitted garrison alone owns the completion receipt and reward.
+A nearby pressing foe still restores the native full chest dwell. All values
+are snapshotted in the run; older descriptors gain no new obligations or rewards.
+
+The implementation extracts these native structure adapters into
+countryOutposts.ts and composes existing population quotas, clearance and cache
+ownership. It adds no alternate loot or combat executor. The original
+single-species site fixture now explicitly clears inherited roster quotas when
+it replaces the roster with one zombie species.
+
+All three type checks and all 28 worldmass probes pass. Natural camps and ruins
+across seeds 42, 81 and 142 retain wounded defenders through native character
+adoption, pay the exact native experience once, and distinguish original
+clearance from a visiting enemy. Generation QA reports 869 cases across three
+seeds, zero failures and four existing geometry warnings.
+
+The real client verifies a naturally generated level-three camp and level-seven
+ruin. Their completed garrisons pay 130 and 250 experience once, respectively.
+After the native pressing-foe gate releases, a native walk reaches and opens
+each cache in 28 frames with the same hero and zero zone loads. Four exact
+browser checkpoints cover wounded/unsearched and completed/searched states.
+The actual previous client reproduces no garrison receipt, no completion reward
+and a full four/five-second dwell. An actual prior-client save continues in
+the new build with its older site policy unchanged. All six current paired
+page/canvas states and both previous cleared-state pairs were inspected.
+Relocation, controlled deaths and invulnerability remain verification setup.
+
+Shrine revision 9fbaa0ee passed CI 37143388378 and Pages 37144020720.
+Exact live metadata reports 2026-10-03T18:25:37.554Z; isolated remote QA preserved
+seed 3311686908 and all six ordinary-save sentinels through Continue.
+The map-label revision d2321fd8 is pushed and awaiting CI/live verification.
+
+The browser comparison also exposed an older campaign faction-kill message
+pointing toward graph destinations unavailable in continuous geography. It
+appears in both old and new clients and needs a separate event-boundary fix.
+The independent reviews remain in progress; these controlled checks establish
+neither ordinary-play acceptance nor long-distance actor dormancy.

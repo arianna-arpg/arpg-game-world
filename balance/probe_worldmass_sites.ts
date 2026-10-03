@@ -23,6 +23,7 @@ function fixture(kind: 'wayside-camp' | 'pillaged-ruin'): MassAdventure {
   config.terrain.places = [{ id: kind, version: 1, content: kind, period: 1536, radius: 300, jitter: 0,
     chance: 1, when: [], priority: 1, surface: { region: 'ground', color: '#665544' } }];
   config.content = [{ ...row, count: 2, level: 7, table: [{ id: 'zombie', weight: 1 }] }];
+  delete config.content[0].limits; // this fixture supplies one explicit eligible species
   return config;
 }
 
