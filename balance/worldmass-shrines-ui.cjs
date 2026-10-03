@@ -75,7 +75,7 @@ app.whenReady().then(async()=>{
    assert.deepEqual(noRefill,{used:true,buff:false,count:1});results.push({site,kind,stat,before,used,noRefill,pendingContinue:true,usedContinue:true});
   }
   const newer=await run(()=>__game.world().massRuntime.snapshot(__game.world()));
-  assert.equal(newer.schema,2);
+  assert.equal(newer.schema,newer.config.journey?.roadside?3:2);
   root=path.resolve(__dirname,'reports','quest-compass-dist');await win.loadURL(url);
   const refusal=await run(async save=>{
    window.requestAnimationFrame=()=>0;await new Promise(r=>setTimeout(r,200));

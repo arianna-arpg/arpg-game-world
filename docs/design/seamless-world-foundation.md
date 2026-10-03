@@ -2871,3 +2871,44 @@ Exact live metadata reports 2026-10-03T19:36:07.73Z; isolated remote QA preserve
 seed 22521215 and six ordinary-save sentinels through Continue. Upcoming-work
 head cba25373 is pushed and awaiting its own CI/live verification. Both fixed
 critic builds remain untouched; their final verdicts are still pending.
+
+### Native encounters between destinations
+
+An optional saved journey policy now places small native groups on connected
+roads. Immutable route stations, seed and biome choose their addresses; explicit
+spacing and town/site clearances keep groups separate from refuge and landmark
+fights. The initial policy allows at most six groups of two within the existing
+96-body budget. They use ordinary native combat, loot and experience, with no
+new site marker, clearance payment or cache loop. This is a finite route policy,
+not an actor-dormancy implementation or a claim of infinite active population.
+
+Schema three prevents older clients from discarding this new ownership. Actual
+older descriptors keep their previous schema and never gain encounters during
+Continue. Generation order also exposed a pre-existing restoration gap: a
+remote felled tree had a saved native clock but no actor to retain its page.
+Pending felling pages now mount before scenery sync resumes those clocks.
+
+All three type checks and all 29 worldmass probes pass. Generation QA passed
+869 cases at three samples each with zero failures and the same four geometry
+warnings. The controlled browser hit a seeded Crag Chorister with native Chain
+Lightning, retained its exact wounds and the enemy plan through Continue, then
+verified native death claims and ordinary XP through another Continue. Direct
+kill calls fixture the latter state; they are not an earned gameplay victory.
+The actual previous client refused the new checkpoint before mutation, and its
+own schema-two save continued unchanged in this client. All four page/canvas
+pairs were inspected. An initial stationary Firebolt fixture missed the moving
+target; the successful Chain Lightning fixture checks persistence, not accuracy.
+
+Independent reviews r28 and r29 both ended mixed, without overall acceptance.
+They valued earned skill modification and later build use; sparse/repetitive
+travel, limited new combat decisions, night contrast and healing-text overlaps
+remain concerns. Their fixed builds and evidence are preserved. A new independent
+critic is playing the fixed roadside build on a self-selected route and class.
+No commercial client has been played, and frame-stepped review does not prove
+live responsiveness or audio quality.
+
+Upcoming-work head cba25373 passed CI 37148850896 and Pages 37149929317.
+Exact live metadata reports 2026-10-03T20:01:56.093Z; isolated remote QA preserved
+seed 2471812362 and six ordinary-save sentinels through Continue. Buff-readout
+head 47e0483e is pushed with CI 37150664829 in progress. Its unused probe import
+was removed before pushing; the final all-three type check passed.

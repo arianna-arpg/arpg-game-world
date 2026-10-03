@@ -22,6 +22,8 @@ export interface MassJourneyStop {
   offset: number;
 }
 export interface MassJourneySpec {
+  /** Optional native encounters on the road network, without site rewards. */
+  roadside?: import('./roadside').MassRoadsideSpec;
   /** Optional places beside existing routes, each reached by a physical spur. */
   stops?: MassJourneyStop[];
   /** Optional ordered branches from a destination or preceding branch identity. */

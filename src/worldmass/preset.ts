@@ -126,6 +126,10 @@ export function massAdventure(): MassAdventure {
       table: presenceTable(TILESETS[f.id].packs.table, 1, id => MONSTERS[id]?.presence)
         .filter(r => MONSTERS[r.id] && !MONSTERS[r.id].habitat)
         .map(r => ({ id: r.id, weight: r.weight })) })),
+      ...families.map(f => {
+        const levels=populations(TILESETS[f.id].packs.table);
+        return {...levels[0],id:'roadside-'+f.id,source:'tilesets/'+f.id+'/roadside-packs',count:2,levels};
+      }),
       ...countryOutposts().map(outpost => {
         const levels=populations(outpost.roster==='undead'?FACTIONS.undead.table:TILESETS.downs.packs.table)
           .map(row=>reserveMassGuardians(row,outpost.count));
@@ -145,6 +149,9 @@ export function massAdventure(): MassAdventure {
     rewards: { source: 'worldmass/first-cache-support-v2', supports: [...STARTER_SUPPORTS],
       authoredSupports: ['splash', 'battering_ram'], level: 1, maxRewards: 1 },
     journey: { source: 'worldmass/frontier-circuit', width: 120, color: '#62573e', clearingColor: '#454331',
+      roadside: { source: 'worldmass/roadside-v1', spacing: 900, chance: .7, radius: 100,
+        townClearance: 600, siteClearance: 180, separation: 950, maxPlaces: 6,
+        habitats: families.map(f=>({biome:TILESETS[f.id].biome??f.id,content:'roadside-'+f.id})) },
       stops: [
         {id:'west-caravan',from:'west-camp',trail:'circuit',at:.48,offset:-460,radius:310,content:'caravan-wreck'},
         {id:'east-shrine',from:'east-camp',trail:'circuit',at:.48,offset:-460,radius:310,content:'windworn-shrine'},

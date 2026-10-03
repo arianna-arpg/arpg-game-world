@@ -1,5 +1,12 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Optional journey.roadside policies seed finite native encounters on route ground.
+MassRoadside owns addresses and spacing; ordinary actors, combat and rewards
+retain authority. Schema three preserves their ownership; older descriptors
+stay unchanged. Saved felling pages mount before native clocks resume, even
+without a nearby actor. Verify worldmass, generation QA and
+balance/worldmass-roadside-ui.cjs for wounds/deaths and actual legacy Continue.
+
 Temporary-buff hover cards derive modifier lines from the native payload through
 items.formatModLine, preserving tags, conditions and per-stack units. Shrine
 touch attaches its authored name to the existing BuffEffect label. Presentation

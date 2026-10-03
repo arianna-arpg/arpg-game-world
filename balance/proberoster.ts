@@ -110,6 +110,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_uniqueaccords.ts', status: 'green', tier: 'fast', why: 'Unique grant census, item-owned sockets, live companion investment, Cinder Conductor fuel, Breach Bell cries and Unspent Reply casting costs' },
   { probe: 'probe_firinglane.ts', status: 'green', tier: 'fast', why: 'native ranged bodies reopen visible blocked firing lanes at 30/60/120Hz; free, mixed, banned and phasing skills preserve their native policy' },
   { probe: 'probe_castingcues.ts', status: 'green', tier: 'fast', why: 'GT-019 real interruption/fizzle, held completion geometry, focus recovery, brim crossing, generic opt-out and co-op parity' },
+  { probe: 'probe_worldmass_roadside.ts', status: 'green', tier: 'slow', why: 'Seeded native route encounters, bounded separation, immutable plan, wounds, deaths, Continue and descriptor/schema compatibility' },
   { probe: 'probe_buffreadout.ts', status: 'green', tier: 'fast', why: 'Native temporary modifier quantities, labels, clocks, conditional scope and one-shot expiry' },
   { probe: 'probe_statusreadout.ts', status: 'green', tier: 'fast', why: 'Native effect names, independent clocks, stacks, shared severity, expiry/cleanse, owning-seat wire and legacy clock omission' },
   { probe: 'probe_afflictioncues.ts', status: 'green', tier: 'fast', why: 'Independent simultaneous blood/kindling/poison/curse layers, individual severity, quiet-presence budget without top-N selection, typed pressure, comfort and co-op cleanup' },

@@ -19,6 +19,7 @@ import { MassSettlement, type MassSettlementSave } from './settlement';
 import { geographicLevel, validateMassProgression, type MassPopulation } from './progression';
 import type { MassPlace } from './contracts';
 import { MassJourney } from './journey';
+import { MassRoadside, validateMassRoadside } from './roadside';
 import { populationChoices, validatePopulationLimits } from './population';
 import { MassEcology, validateMassEcology, type MassEcologySave } from './ecology';
 
@@ -42,7 +43,7 @@ interface MassEnemySave {
   anchor?: { x: number; y: number }; leashHome?: boolean;
 }
 export interface MassAdventureSave {
-  schema: 1 | 2; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
+  schema: 1 | 2 | 3; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
   player: { x: number; y: number; tier?: number }; enemies: MassEnemySave[]; contents: ZoneContents;
   rewards?: MassRewardSave[];
   fields?: MassFieldSave[];
@@ -65,6 +66,7 @@ export class WorldMassRuntime {
   readonly sites: MassSites;
   settlement: MassSettlement | null = null;
   journey: MassJourney | null = null;
+  roadside: MassRoadside | null = null;
   ecology: MassEcology | null = null;
   readonly config: Readonly<MassAdventure>;
   private readonly configHash: string;
@@ -105,6 +107,7 @@ export class WorldMassRuntime {
       throw new Error('Worldmass render residency exceeds its texture budget');
     if (config.ground !== undefined) validateMassGround(config.ground);
     validateMassQuests(config);
+    if (config.journey?.roadside !== undefined) validateMassRoadside(config.journey.roadside, config.content);
     if (config.progression) validateMassProgression(config.progression, config.terrain);
     if (config.ecology) validateMassEcology(config.ecology, config.terrain.addressSpan);
     if (config.journey && !config.settlement) throw new Error('Frontier routes require a settlement');
@@ -172,10 +175,11 @@ export class WorldMassRuntime {
     this.sites = new MassSites(id => this.config.content.find(c => c.id === id)?.site,
       center => localOffset(center, { ...this.origin, x: 0, y: 0 }, config.terrain.addressSpan), config.terrain.addressSpan);
     if (save) {
-      // An older client must refuse a shrine-bearing checkpoint rather than
-      // resave its unknown consumption records away. Schema one remains valid
-      // for descriptors created before one-shot geographic stands existed.
-      if ((save.schema !== 1 && save.schema !== 2)
+      // Older clients must refuse owners they cannot plan/retain. Schema three
+      // adds roadside bodies, two adds one-shot stands; older descriptors keep
+      // their original version and never gain new encounters on Continue.
+      if ((save.schema !== 1 && save.schema !== 2 && save.schema !== 3)
+        || save.schema < 3 && !!config.journey?.roadside
         || save.schema === 1 && config.content.some(c => c.site?.shrines?.length)
         || save.configHash !== massDigest(config) || !Array.isArray(save.enemies)
         || save.enemies.length > config.maxPopulation || !savedZoneContents(save.contents)
@@ -235,6 +239,8 @@ export class WorldMassRuntime {
     if (this.config.journey && this.settlement) {
       this.journey = new MassJourney(this.config.journey, this.settlement, this.generator, this.walk);
       if (!save) this.journey.establish(this.state);
+      if (this.config.journey.roadside) this.roadside = new MassRoadside(this.config.journey.roadside,
+        this.journey, this.settlement, this.generator, this.walk);
     }
     if (this.config.ecology) {
       this.ecology = new MassEcology(this.config.ecology, this);
@@ -347,9 +353,9 @@ export class WorldMassRuntime {
     const planned = this.journey?.inCell(cell) ?? [];
     const country = this.generator.placesInCell(cell).filter(p => {
       const q = localOffset(p.center, { ...this.origin, x: 0, y: 0 }, this.config.terrain.addressSpan);
-      return !this.journey?.reserves(q, p.radius);
+      return !this.journey?.reserves(q, p.radius) && !this.roadside?.reserves(q, p.radius);
     });
-    return [...planned, ...country];
+    return [...planned, ...(this.roadside?.inCell(cell) ?? []), ...country];
   }
   /** Physical cell centres keep cache/order/frame rate out of a place's danger.
    * The native settlement is the refuge footprint, not a point. */
@@ -441,6 +447,7 @@ export class WorldMassRuntime {
     for (const actor of this.natives.values()) {
       const cell = this.walk.at(actor.pos.x, actor.pos.y); sceneryCells.set(cellKey(cell), cell);
     }
+    for (const cell of this.ecology?.pendingFellingCells() ?? []) sceneryCells.set(cellKey(cell), cell);
     this.ecology?.sync(world, [...sceneryCells.values()]);
     this.sites.discover(world.player.pos);
     const seen = new Set<string>();
@@ -576,7 +583,7 @@ export class WorldMassRuntime {
         ...(a.encounterGroup ? {encounterGroup:a.encounterGroup,name:a.name} : {}),
         ...(this.births.of(a) ? {birth:this.births.of(a)} : {}) });
     }
-    return JSON.parse(JSON.stringify({ schema: this.config.content.some(c => c.site?.shrines?.length) ? 2 : 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
+    return JSON.parse(JSON.stringify({ schema: this.config.journey?.roadside ? 3 : this.config.content.some(c => c.site?.shrines?.length) ? 2 : 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
       ...(this.config.rewards ? { rewards: this.rewards.snapshot() } : {}),
       ...(this.fields.snapshot().length ? { fields: this.fields.snapshot() } : {}),
       ...(this.shrines.snapshot().length ? { shrines: this.shrines.snapshot() } : {}),

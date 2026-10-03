@@ -79,6 +79,16 @@ export class MassEcology {
       this.changes.set(id, copy);
     }
   }
+  /** A saved native felling clock must resume even when no actor occupies its
+   * page. Once mounted, sync's existing live-effect rule retains that page. */
+  pendingFellingCells(): MassCell[] {
+    const cells = new Map<string, MassCell>();
+    for (const [, piece] of this.changes) if (piece?.felled) {
+      const at = this.mass.walk.at(piece.pos.x, piece.pos.y), key = cellKey(at);
+      if (!this.resident.has(key)) cells.set(key, { dimension: at.dimension, cx: at.cx, cy: at.cy });
+    }
+    return [...cells.values()];
+  }
   private remember(grove: Grove, present: Set<Doodad>): void {
     for (const p of grove.pieces) {
       const value = present.has(p.live) && !p.live.gone ? pieceState(p.live) : null;
