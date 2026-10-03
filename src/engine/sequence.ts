@@ -293,7 +293,7 @@ function seqView(rule: ComboRuleDef): SeqRule<ComboStep> {
   };
 }
 
-function keyFnOf(rule: ComboRuleDef): ((r: CastRecord) => string) | undefined {
+function keyFnOf(rule: Pick<ComboRuleDef, 'vary' | 'repeat'>): ((r: CastRecord) => string) | undefined {
   const by = rule.vary?.by ?? rule.repeat?.by ?? (rule.repeat ? 'skill' : undefined);
   return by ? (r: CastRecord) => castKey(r, by) : undefined;
 }
@@ -321,7 +321,9 @@ export function matchComboRule(
  * matchComboRule alone.
  */
 export function comboProgress(
-  ring: readonly CastRecord[], rule: ComboRuleDef, now: number, windowScale = 1,
+  ring: readonly CastRecord[],
+  rule: Pick<ComboRuleDef, 'seq' | 'counts' | 'vary' | 'repeat' | 'gate' | 'within'>,
+  now: number, windowScale = 1,
 ): { lit: number; len: number } {
   const within = (rule.within ?? COMBO_CFG.defaultWithin) * Math.max(0.05, windowScale);
   const n = ring.length;

@@ -1414,6 +1414,8 @@ export class Actor {
   /** CO-OP MIRROR ONLY (net/snapshot.ts): host-computed comboHud rows for
    *  body completion and bar chips; [] explicitly clears pooled mirrors. */
   comboHud?: { id: string; lit: number; len: number; glow: number }[];
+  /** Host-resolved native combo conditions; client histories are absent. */
+  comboConditionHud?: import('./comboConditions').ComboConditionRow[];
   /** THE MIMIC BANK (engine/mimic.ts): captured enemy arts — the skill,
    *  the kind that taught it, the capture clock. Ramp state exactly like
    *  the castRing: null until the first capture, cold on a fresh session,

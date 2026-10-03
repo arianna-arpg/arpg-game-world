@@ -70,6 +70,9 @@ import { REMNANT_KINDS } from '../data/remnants';
 import { ORB_DEFS } from '../data/orbs';
 import { RUNE_INFO } from '../data/invocations';
 import { comboCueRows } from '../engine/comboCues';
+import { comboConditionRows } from '../engine/comboConditions';
+import { drawComboConditions } from './vis/comboConditionLayer';
+import { COMBO_CONDITION_HUD } from '../data/comboConditions';
 import { drawComboBody, drawComboHud } from './vis/comboCueLayer';
 import { poolCueRows } from '../engine/reserveCues';
 import { payloadCueRows } from '../engine/payloadCues';
@@ -8448,8 +8451,11 @@ export class Renderer {
 
     // comboCueRows shares consumed progress with body tells and the host wire;
     // completion closes the pattern into its body-matched signature.
-    drawComboHud(ctx, bx + 8, by - 54, comboCueRows(p, world.time));
-    drawProcHud(ctx, procCues, bx + totalW / 2, by - (seat.home && p.possession ? 108 : 78));
+    const comboTop = drawComboHud(ctx, bx + 8, by - 54, comboCueRows(p, world.time));
+    const procY = by - (seat.home && p.possession ? 108 : 78);
+    drawProcHud(ctx, procCues, bx + totalW / 2, procY);
+    drawComboConditions(ctx, bx + totalW / 2, Math.min(comboTop, procY) - COMBO_CONDITION_HUD.gap,
+      Math.min(w - 24, totalW), comboConditionRows(p, world.time));
 
     // THE POSSESSION STRIP (the possession seam, engine/possess.ts): while
     // the local seat rides a foreign body, one centered chip above the bar

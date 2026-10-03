@@ -245,6 +245,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_coherence.ts', status: 'green', tier: 'fast', why: 'the COHERENCE CONTRACT — clearway right-of-way, causeway decking and habitat affinity pinned densely instead of by lucky sweep seeds' },
   { probe: 'probe_cohort.ts', status: 'green', tier: 'fast', why: 'ZoneDef.cohort "authored" — a curated zone\'s population is EXACTLY its authored cohort whatever the world\'s politics do' },
   { probe: 'probe_combo.ts', status: 'green', tier: 'fast', why: 'THE COMBO GRAMMAR + the one sequence matcher — tail seq / counts / vary / repeat / minLen / gate, and the invocation parity fuzz' },
+  { probe: 'probe_comboconditions.ts', status: 'green', tier: 'fast', why: 'Native conditional cast progress, countdown, break/expiry, skill grants and wire cleanup' },
   { probe: 'probe_combocues.ts', status: 'green', tier: 'fast', why: 'GT-034 consume-aware body/HUD progress, actual combo payoff, profile fallback/opt-out, expiry and co-op cleanup' },
   { probe: 'probe_reservecues.ts', status: 'green', tier: 'fast', why: 'GT-020 real reserve bands/vent windows, material tells, pool footprint/rate/HUD parity, source credit and co-op cleanup' },
   { probe: 'probe_contagion2.ts', status: 'green', tier: 'fast', why: 'THE INFECTION FABRIC (contagion Movement II) — the strain grammar (mutant reserved at weight 0), the carrier walk deterministic + capped, the eats-plague refusal/wane/eaten-source, the zombie lean applied + reverted byte-exact on a real world, and the legacy snapshot adoption' },

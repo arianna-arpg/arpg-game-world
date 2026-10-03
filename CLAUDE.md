@@ -1,5 +1,12 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Native combo condition readouts in engine/comboConditions reuse comboProgress
+for partial history and the sheet's real condition/countdown for active bonuses.
+Data labels and bounded HUD rows are shared with optional host-resolved snapshots.
+Passive descriptions use COMBO_CFG's actual window and sequence length.
+Verify the combo probes, sim smoke and balance/combo-conditions-ui.cjs against
+its previous-client control for real input casts, expiry, narrow view and Continue.
+
 Native placed riddles use PuzzleKindDef.checkpoint for kind-owned progress and
 World.installPlacedPuzzle for the existing knock/reward pipeline. MassPuzzles
 owns finite lattice placement, exact board/life/hum progress and shared population

@@ -65,7 +65,7 @@ export function drawComboBody(ctx: CanvasRenderingContext2D, radius: number, row
 
 /** Filled pips always mean NEW progress. A completion travels beneath them
  * into its signature; it never relights the spent casts as another full combo. */
-export function drawComboHud(ctx: CanvasRenderingContext2D, x: number, y: number, rows: readonly ComboCueRow[]): void {
+export function drawComboHud(ctx: CanvasRenderingContext2D, x: number, y: number, rows: readonly ComboCueRow[]): number {
   ctx.save();
   for (const row of rows) {
     const rule = COMBO_RULES[row.id]; if (!rule) continue;
@@ -91,4 +91,5 @@ export function drawComboHud(ctx: CanvasRenderingContext2D, x: number, y: number
     y -= C.hud.row;
   }
   ctx.restore();
+  return y;
 }

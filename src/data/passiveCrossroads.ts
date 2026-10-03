@@ -5,6 +5,7 @@ import { gaugeMod, linkMod, mod, type Modifier } from '../engine/stats';
 import { registerChoiceGroup, type PassiveChoiceOption } from './passiveChoices';
 import './passiveRoutes';
 import { NATIVE_PASSIVE_SCHOOLS } from './passiveNotables';
+import { COMBO_CFG } from '../engine/sequence';
 
 const option = (id: string, name: string, description: string, ...mods: Modifier[]): PassiveChoiceOption =>
   ({ id, name, description, mods });
@@ -26,9 +27,9 @@ export const CROSSROADS_PURSUITS = registerChoiceGroup({
       gaugeMod('damage', 'increased', .02, 'life:missing'), mod('lifeLeech', 'flat', .01)),
     option('focus', 'Keep Your Distance', 'While you have not been hit recently: regenerate 1% of maximum life per second and deal 10% increased projectile damage.',
       mod('lifeRegenPct', 'flat', .01, undefined, 'notHurtRecently'), mod('damage', 'increased', .10, ['projectile'], 'notHurtRecently')),
-    option('weaver', 'Change the Rhythm', 'While your recent skill sequence is varied: 14% increased damage and 8% increased cast speed.',
+    option('weaver', 'Change the Rhythm', 'Varied casts: use ' + COMBO_CFG.conditionRun + ' different skills within ' + COMBO_CFG.conditionWindow + 's for 14% increased damage and 8% increased cast speed. Lasts up to ' + COMBO_CFG.conditionWindow + 's; your next cast rechecks the sequence.',
       mod('damage', 'increased', .14, undefined, 'comboVaried'), mod('castSpeed', 'increased', .08, undefined, 'comboVaried')),
-    option('devotee', 'Perfect One Motion', 'While your recent skill sequence repeats: 14% increased damage and 8% increased attack speed.',
+    option('devotee', 'Perfect One Motion', 'Repeated casts: use one skill ' + COMBO_CFG.conditionRun + ' times within ' + COMBO_CFG.conditionWindow + 's for 14% increased damage and 8% increased attack speed. Lasts up to ' + COMBO_CFG.conditionWindow + 's; your next cast rechecks the sequence.',
       mod('damage', 'increased', .14, undefined, 'comboRepeated'), mod('attackSpeed', 'increased', .08, undefined, 'comboRepeated')),
     option('engineer', 'Prepare the Ground', 'Construct skills cost 12% less mana and have 12% increased effect duration.',
       mod('manaCost', 'more', -.12, ['construct']), mod('effectDuration', 'increased', .12, ['construct'])),

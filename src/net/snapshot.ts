@@ -66,6 +66,7 @@ import { VESTIGES } from '../data/vestiges';
 import { abilityEssenceOfTier, ESSENCES } from '../data/essences';
 import type { Attributes } from '../engine/stats';
 import { comboCueRows } from '../engine/comboCues';
+import { comboConditionRows, type ComboConditionId } from '../engine/comboConditions';
 import { poolCueRows } from '../engine/reserveCues';
 import { payloadCueRows } from '../engine/payloadCues';
 import { procCueRows } from '../engine/procCues';
@@ -189,6 +190,8 @@ export interface ActorW {
   /** COMBO GRAMMAR chips, host-computed like the boss bar (clients hold no
    *  ring): per equipped rule [id, lit, len, glow]. Players only. */
   cb?: [string, number, number, number][];
+  /** Native condition progress and remaining active seconds, host resolved. */
+  cc?: [ComboConditionId, number, number, number][];
   /** THE MIMIC BANK (players only, while filled — engine/mimic.ts): the
    *  captured arts as [skillId, sourceMonsterId] pairs, oldest first, plus
    *  the selection. The client's own build flap/bar draws the chips; the
@@ -797,6 +800,8 @@ function actorToW(a: Actor, world: World): ActorW {
   const bb = BOSS_BAR_OF(a);
   if (bb) w.bb = [bb.pips, bb.lit, bb.hl ? 1 : 0];
   // comboCueRows also carries enemy/companion completion, with no client cast simulation.
+  const comboConditions = comboConditionRows(a, world.time);
+  if (comboConditions.length) w.cc = comboConditions.map(row => [row.id, row.lit, row.len, Math.round(row.remaining * 100) / 100]);
   const comboCues = comboCueRows(a, world.time);
   if (comboCues.length) w.cb = comboCues.map(row => [row.id, row.lit, row.len, Math.round(row.glow * 100) / 100]);
   // Player bar readouts the host owns: banked runes (comboCueRows lives above).
@@ -1328,6 +1333,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     else if (a.primedPours.length) a.primedPours = [];
     if (aw.seat) restoreFlaskChargeBanks(a, aw.fq, true);
     a.comboHud = aw.cb?.map(([id, lit, len, glow]) => ({ id, lit, len, glow })) ?? [];
+    a.comboConditionHud = aw.cc?.map(([id, lit, len, remaining]) => ({ id, lit, len, remaining })) ?? [];
     // Mimic bank mirror (render/UI only — capture clocks stay host-side,
     // so mirrored entries carry at:0 and the client never prunes them).
     a.mimicBank = aw.mk ? aw.mk.map(([sid, src]) => ({ sid, src, at: 0 })) : null;

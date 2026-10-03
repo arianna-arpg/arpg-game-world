@@ -3001,3 +3001,39 @@ including resource-text head dd82f330, passed CI 37152944770 and Pages 371537490
 Its live build time is 2026-10-03T21:05:18.843Z; remote QA seed 3618668646 likewise
 passed with no fatal error. The earlier buff-only CI was superseded by roadside;
 its code reached the published experimental branch in that successful build.
+
+### Native conditional cast feedback
+
+Change the Rhythm and Perfect One Motion now name their native Varied casts and
+Repeated casts states, sequence length and timing rule. A bounded hotbar readout
+shows partial progress and the actual active countdown. It appears only while
+the sheet or an equipped skill grants a matching conditional modifier. The
+existing combo progress reader supplies the partial tail; the sheet condition
+and native countdown supply activation, so aging history cannot prematurely
+erase a live bonus. No perk IDs, replacement damage rule or synthetic buff is
+used. Host-resolved optional rows also clear reused co-op mirrors when absent.
+
+All three type checks and all three combo probes pass: 21 new native-condition,
+41 existing cue and 52 native grammar checks. Five smoke scenarios across five
+seeds completed. The controlled browser fixture allocates the real passive and
+uses native input for Firebolt, Frost Nova and Chain Lightning. The display
+progresses from 0/3 through 2/3 to active 5.2s, matches the actual 14% modifier,
+and expires through ordinary frames. It remains bounded at 800 by 600; rendering
+does not mutate the simulation. Native Continue preserves the allocated passive,
+skills, world seed and position and displays the native cold sequence state.
+The actual preceding puzzle client runs the same fixture with the same native
+bonus but no readout. All seven current page/canvas pairs and the prior active
+and narrow pairs were inspected. The initial test's one-frame second press
+landed during recovery; the final harness holds each native input until exactly
+one cast records, then releases. This was a harness correction.
+
+Independent roadside and readable-world reviews finished mixed and mixed-positive,
+respectively. Both earned builds, used them in subsequent fights and verified
+native Continue. Neither supplied overall acceptance or a commercial comparison.
+Their recurring concerns include repetitive travel, initial preparation,
+obstructive town/prop traversal, threat identification and lingering bleed after
+victory. The riddle-build critic remains in ordinary play. Its build is frozen.
+
+Puzzle head cb302916 passed CI 37155328998 and Pages 37156320914. Exact live
+metadata reports build time 2026-10-03T21:50:04.599Z. Remote seed 1756254516
+retained all six ordinary-save sentinels and native Continue with no fatal error.
