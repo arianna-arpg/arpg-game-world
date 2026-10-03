@@ -3073,3 +3073,29 @@ the same COMBO_CFG window/run expressions. The untouched payload equality check
 passes all 168 assertions; five smoke scenarios across five seeds completed.
 The added narrow native passive-card capture verifies the actual visible wording
 and wrapping. This is a repaired consistency regression, not a waived CI failure.
+
+### Optional preparation bearings
+
+Several independent first lives left Lastlight without discovering Mireille's
+flasks. The existing welcome conversation now opts into a persistent preparation
+bearing while its native incomplete-lesson condition holds. It points to the
+actual living innkeeper, persists after the spoken invitation, and withdraws
+outside sanctuary or after native graduation. Definitions own labels and nearby
+radii; the conversation director resolves live facts and the existing bounded
+compass renders them. It does not accept a quest, reveal terrain, grant equipment,
+auto-learn flasks or impose a departure gate. Unclocked/client mirrors fail closed;
+this pass does not add networked service guidance.
+
+All three type checks, townwelcome (58), worldmass_welcome (four groups),
+mireille_lesson (46), speech and speechgrammar probes pass. Five smoke scenarios
+across five seeds completed. Controlled browser QA verifies the pending bearing
+and exact Continue, positions the hero beside the real innkeeper, waits through
+native dwell gifts, learns both real bag gems via their ordinary double-click
+handlers, and verifies native graduation and completed Continue. Rendering leaves
+time, ledgers, quests, survey and items unchanged. All six current page/canvas
+pairs were inspected, including 800-by-600; the actual prior readiness client
+passes the same native lesson and shows no preparation bearing. Its arrival pair
+was also inspected. This is a controlled presentation/lesson check, not evidence
+that an independent player followed the bearing successfully. That remains for
+fresh gameplay review. Existing opening-room presentation and repetitive country
+travel remain separate concerns.

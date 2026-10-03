@@ -8599,7 +8599,7 @@ export class Renderer {
       ctx.fillText(world.objectiveText(), x, 82);
     }
     if (worldInfo && world.massRuntime)
-      hintY = drawQuestCompass(ctx, questCompassLines(p.pos, massQuestPins(world)), x, hintY, this.uiW - x - 16);
+      hintY = drawQuestCompass(ctx, questCompassLines(p.pos, [...world.npcDialogues.guidance(), ...massQuestPins(world)]), x, hintY, this.uiW - x - 16);
     // The kill counter is RUN-END information (credits math, the death
     // screen) — mid-run it's clutter, so the HUD no longer carries it.
     // Unspent-point nudges only — carried-gem COUNTS retired (the refreshed

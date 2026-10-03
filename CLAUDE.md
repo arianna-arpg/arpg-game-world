@@ -1,5 +1,12 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Optional NpcDialogueDef.guide rows reuse native conversation conditions for
+persistent sanctuary bearings. They remain after spoken invitations and disappear
+when the underlying lesson completes; rendering does not admit speech or quests.
+Only continuous-world HUDs currently display them; client mirrors fail closed.
+Verify townwelcome/worldmass_welcome/mireille_lesson and preparation-guide-ui.cjs
+for native gifts/learning, pending and completed Continue and narrow layout.
+
 World.swapReadiness exposes the native field-discipline reason and combat clock;
 swapRefusal preserves the existing mutation gates and exact legacy strings.
 The Skills banner precedes reward cards and updates timer text independently

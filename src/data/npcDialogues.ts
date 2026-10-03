@@ -35,6 +35,9 @@ export interface NpcDialogueDef {
   /** Optional responses/branches. No choices are selected by ordinary advance. */
   responses?: DialogueResponses;
   color?: string;
+  /** Persistent sanctuary guidance while these conditions hold. Spoken receipts
+   * do not dismiss it; completing the underlying lesson/condition does. */
+  guide?: { label: string; radius: number };
 }
 
 /** Live facts supplement durable ledgers without putting NPC-specific cases in
@@ -126,6 +129,7 @@ export const NPC_DIALOGUES: NpcDialogueDef[] = [
   },
   {
     id: 'mireille_frontier_welcome', speaker: { defId: 'townsfolk_innkeep' }, zone: START_ZONE,
+    guide: { label: 'Prepare flasks · Mireille at the inn', radius: 110 },
     priority: 200, all: [{ fact: 'mireilleLessonComplete', is: false }], once: 'run',
     trigger: { kind: 'boundaryApproach', radius: 300, holdSec: 16, visible: true },
     lines: [{ text: 'Off into the wilds already, love? Come find me inside the inn before you go. Let us see those two little flasks settled where you can reach them.\n\nNo hurry. Stay beside me a moment when you are ready. The road can spare you that much kindness.' }],

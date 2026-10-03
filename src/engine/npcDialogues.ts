@@ -118,6 +118,22 @@ export class NpcDialogueDirector {
       }])) };
   }
 
+  /** Read known sanctuary services through authored conversation conditions.
+   * A guide is not a conversation admission, quest acceptance or survey. */
+  guidance(): { x: number; y: number; radius: number; label: string; ready: boolean }[] {
+    const w = this.w;
+    if (w.scene || w.clientActionHook || !w.player || w.player.dead || w.player.downed
+      || !w.isSafeAt(w.player.pos)) return [];
+    return [...NPC_DIALOGUES].sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id))
+      .flatMap(def => {
+        const guide = def.guide;
+        if (!guide?.label.trim() || !Number.isFinite(guide.radius) || guide.radius <= 0
+          || !npcDialogueEligible(w, { ...def, once: undefined })) return [];
+        const speaker = w.actors.find(a => this.matches(a, def) && w.isSafeAt(a.pos));
+        return speaker ? [{ ...speaker.pos, radius: guide.radius, label: guide.label, ready: false }] : [];
+      });
+  }
+
   callout(admit: boolean): NpcSpeechLine | null {
     const w = this.w;
     if (w.scene || w.clientActionHook || !w.player || w.player.dead || w.player.downed) { this.calling = undefined; return null; }
