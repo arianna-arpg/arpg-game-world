@@ -9,6 +9,8 @@ import { MassBirths, validMassBirth } from '../src/worldmass/birth';
 const restore=seedGlobalRandom(731822);
 const spec=JSON.parse(JSON.stringify(massAdventure()));
 spec.terrain.places=[];delete spec.journey.extensions;delete spec.journey.stops;
+// This fixture deliberately retains just one route, without the public circuit's notices.
+delete spec.journey.notices;
 delete spec.settlement.quests; // This isolated birth fixture removes the contract's northern destination.
 spec.journey.destinations=spec.journey.destinations.filter((d:any)=>d.content==='cinderwatch');
 const row=spec.content.find((c:any)=>c.id==='cinderwatch');

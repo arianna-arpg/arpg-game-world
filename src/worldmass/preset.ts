@@ -149,6 +149,12 @@ export function massAdventure(): MassAdventure {
     rewards: { source: 'worldmass/first-cache-support-v2', supports: [...STARTER_SUPPORTS],
       authoredSupports: ['splash', 'battering_ram'], level: 1, maxRewards: 1 },
     journey: { source: 'worldmass/frontier-circuit', width: 120, color: '#62573e', clearingColor: '#454331',
+      notices: [
+        { destination: 'west-camp', note: 'A patrol camp has taken the western road. A shrine stands by the approach; provisions remain among the tents.' },
+        { destination: 'east-camp', note: 'Crystals wait among the graves of a quiet grove. Kindling the lattice is a riddle, and the mending altar offers a place to recover.' },
+        { destination: 'north-ruin', note: 'Undead keep watch beneath the broken walls. Beyond the gate, the northern trail leads toward a stone guardian.' },
+        { destination: 'south-ruin', note: 'Restless dead gather among ruined homes. A storm altar changes the ground on which you fight.' },
+      ],
       roadside: { source: 'worldmass/roadside-v1', spacing: 900, chance: .7, radius: 100,
         townClearance: 600, siteClearance: 180, separation: 950, maxPlaces: 6,
         habitats: families.map(f=>({biome:TILESETS[f.id].biome??f.id,content:'roadside-'+f.id})) },

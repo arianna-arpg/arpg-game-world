@@ -22,6 +22,8 @@ export interface MassJourneyStop {
   offset: number;
 }
 export interface MassJourneySpec {
+  /** Public accounts of initial roads, pinned to this expedition's descriptor. */
+  notices?: { destination: string; note: string }[];
   /** Optional native encounters on the road network, without site rewards. */
   roadside?: import('./roadside').MassRoadsideSpec;
   /** Optional places beside existing routes, each reached by a physical spur. */
@@ -85,6 +87,11 @@ export class MassJourney {
       || new Set(spec.destinations.map(d => d.id)).size !== spec.destinations.length
       || new Set(spec.destinations.map(d => d.edge)).size !== spec.destinations.length)
       throw new Error('Invalid frontier route descriptor');
+    if (spec.notices !== undefined && (!Array.isArray(spec.notices) || spec.notices.length > 4
+      || new Set(spec.notices.map(n => n?.destination)).size !== spec.notices.length
+      || spec.notices.some(n => !n || !spec.destinations.some(d => d.id === n.destination)
+        || typeof n.note !== 'string' || !n.note.trim() || n.note.length > 240)))
+      throw new Error('Invalid frontier road notice');
     const places: MassPlace[] = [], trails: MassTrail[] = [], w = town.zone.size.w, h = town.zone.size.h;
     for (const d of spec.destinations) {
       if (!d.id || !d.content || !['north', 'east', 'south', 'west'].includes(d.edge)

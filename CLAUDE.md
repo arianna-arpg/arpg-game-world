@@ -1,5 +1,11 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+MassJourneySpec.notices pins optional public road accounts to each new run.
+The Roads tab resolves actual departure edges and site names without revealing
+map terrain or accepting work. Omitted older descriptors keep their original UI.
+Verify worldmass probes and road-guide-ui.cjs for native tab navigation, exact
+Continue, mod-text escaping, unchanged survey and narrow presentation.
+
 Optional NpcDialogueDef.guide rows reuse native conversation conditions for
 persistent sanctuary bearings. They remain after spoken invitations and disappear
 when the underlying lesson completes; rendering does not admit speech or quests.

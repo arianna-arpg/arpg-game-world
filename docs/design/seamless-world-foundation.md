@@ -3099,3 +3099,39 @@ was also inspected. This is a controlled presentation/lesson check, not evidence
 that an independent player followed the bearing successfully. That remains for
 fresh gameplay review. Existing opening-room presentation and repetitive country
 travel remain separate concerns.
+
+### Choosing a road before departure
+
+A separate Roads tab offers public accounts of the four initial departures:
+the western patrol camp, eastern crystal grove, northern undead gate and southern
+storm-altered ruin. Optional descriptor notices bind to real destination IDs;
+the run supplies current names and departure edges. Accounts remain part of the
+saved descriptor. The page neither adds map markers nor discovers/adopts places,
+accepts work or spawns actors. Ordinary maps and older descriptors without public
+accounts keep their original tabs. Modded names and descriptions are escaped.
+
+All three type checks and all 31 worldmass probes pass. Generation QA completed
+869 cases across three seeds with zero failures, four geometry warnings already
+seen in preceding runs and one slow-metropolis warning. Initial checks found a
+wrong test snapshot argument and two existing single-route fixtures retaining
+now-invalid circuit notices; those fixtures now explicitly omit notices just as
+they omit unrelated contracts. Production validation remains strict. Browser QA
+uses the actual Map, Roads and Quests buttons, verifies identical map markup,
+survey and active quests after returning, then native save/reload/Continue.
+All six final current page/canvas pairs and the prior client's Roads-attempt pair
+were inspected. Four cards fit at both 1280-by-850 and 800-by-600; the final wider
+layout keeps two columns. The actual prior preparation client has no Roads tab.
+This checks presentation and persistence, not independent route-choice success.
+The final build is frozen for another fresh-context critic.
+
+The cast-country critic finished interested rather than sold: an earned Splitting
+support and Varied casts bonus changed later combat decisions; native Continue
+worked. Their remaining concerns include muddy offscreen garrison credit and
+moving supports between old and upgraded skill copies. Ninety capture pairs
+cover only 3,173 requested frames (52.99 nominal seconds) across a 53m56 wall
+interval with a long interruption. No real-time feel or commercial parity is
+established, and the overall acceptance criterion remains unmet.
+
+Readiness head 3746ff37 passed CI 37158246695 and Pages 37159280472. Exact live
+metadata reports 2026-10-03T22:43:12.1Z. Remote seed 4081598247 retained all six
+ordinary-save sentinels and native Continue without a fatal error.

@@ -78,6 +78,8 @@ console.log('PASS population saturation cannot introduce a partial magic group o
 
 const atomicConfig: MassAdventure = JSON.parse(canonical(massAdventure()));
 atomicConfig.terrain.places=[];delete atomicConfig.journey!.stops;
+// The single-gate cohort fixture does not retain the public circuit's notices.
+delete atomicConfig.journey!.notices;
 // This isolated Broken Gate fixture deliberately omits the western contract.
 delete atomicConfig.settlement!.quests;
 atomicConfig.journey!.destinations=atomicConfig.journey!.destinations.filter(d=>d.content==='broken-gate');

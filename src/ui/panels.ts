@@ -3,6 +3,7 @@ import { empowermentPassive, empowermentPoints, empowermentRank, hasEmpowermentP
 import { skillMergePlan } from '../engine/skillMerge';
 import { massMap } from '../worldmass/paint';
 import { massQuestPins } from '../worldmass/quests';
+import { roadGuideHtml } from './roadGuide';
 import { SKILL_EMPOWERMENT } from '../data/skillEmpowerment';
 import { oracleReliquaryHtml } from './reliquary';
 import { planRelicStorage } from '../engine/accountReliquary';
@@ -779,7 +780,7 @@ export class UI {
   private massSurveyGrain = 48;
   private mapPan = { x: 0, y: 0 };
   /** Which view the world-map panel shows: the map, or the quest journal. */
-  private mapTab: 'map' | 'quests' = 'map';
+  private mapTab: 'map' | 'quests' | 'roads' = 'map';
   /** Which DIMENSION the map tab shows (surface / underworld / …) — tabs
    *  appear once a run breaches a second dimension (the PoE Acts pattern). */
   private mapDimension = 'surface';
@@ -8788,6 +8789,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // clicks"); deliberate refreshes fire on click, after release, unharmed.
     if (this.mapDragging || this.mapWashDragging || this.pressHeld.has(this.worldMap)) return;
     const world = this.getWorld();
+    if (this.mapTab === 'roads') {
+      if (world.massRuntime?.journey?.spec.notices?.length) {
+        if (this.setPanelHtml(this.worldMap, this.closeGlyphHtml() + this.mapTabsHtml() + roadGuideHtml(world.massRuntime))) this.wireMapTabs();
+        return;
+      }
+      this.mapTab = 'map';
+    }
     if (world.massRuntime && this.mapTab !== 'quests') {
       if (this.setPanelHtml(this.worldMap, this.closeGlyphHtml() + this.mapTabsHtml() + massMap(world.massRuntime, world.player.pos, this.massSurveyGrain, world.doodads, massQuestPins(world)))) {
         this.wireMapTabs();
@@ -9467,7 +9475,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
   /** The Map | Quests tab row (shared by both views of the world-map panel). */
   private mapTabsHtml(): string {
-    const tab = (id: 'map' | 'quests', label: string): string =>
+    const tab = (id: 'map' | 'quests' | 'roads', label: string): string =>
       `<button class="book-tab ${this.mapTab === id ? 'active' : ''}" data-mtab="${id}">${label}</button>`;
     // DIMENSION TABS (the PoE Acts pattern): appear once a run has breached a
     // second worldmass — each tab is its own explorable map to flip through.
@@ -9481,12 +9489,12 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       }).join('');
       dims = `<span style="margin-left:14px;border-left:1px solid #3a3a4e;padding-left:10px">${dims}</span>`;
     }
-    return `<div class="book-tabs" style="margin:2px 0 6px 0">${tab('map', 'Map')}${tab('quests', 'Quests')}${dims}</div>`;
+    return `<div class="book-tabs" style="margin:2px 0 6px 0">${tab('map', 'Map')}${tab('quests', 'Quests')}${world.massRuntime?.journey?.spec.notices?.length ? tab('roads', 'Roads') : ''}${dims}</div>`;
   }
 
   private wireMapTabs(root: ParentNode = this.worldMap): void {
     root.querySelectorAll<HTMLButtonElement>('.book-tab[data-mtab]').forEach(btn => {
-      btn.addEventListener('click', () => { this.mapTab = btn.dataset.mtab as 'map' | 'quests'; this.refreshMap(); });
+      btn.addEventListener('click', () => { this.mapTab = btn.dataset.mtab as 'map' | 'quests' | 'roads'; this.refreshMap(); });
     });
     root.querySelectorAll<HTMLButtonElement>('.book-tab[data-mdim]').forEach(btn => {
       btn.addEventListener('click', () => { this.mapDimension = btn.dataset.mdim!; this.refreshMap(); });
