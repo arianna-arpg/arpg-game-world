@@ -2264,3 +2264,25 @@ not a new combat system or a critic acceptance result.
 Sign-cartography revision b1bb4346 passed CI 37083656238 and Pages 37084825586.
 Exact live metadata reports 2026-10-03T01:08:39.069Z; isolated remote QA preserved
 seed 3362398145 and all six ordinary-save sentinels through Continue.
+
+### Local expedition progress
+
+The existing objective HUD now describes a discovered site's original eligible
+defenders and its admitted cache independently. Remaining defenders survive
+partial Continue; visitors, barrels and native objective exemptions do not inflate
+the obligation. Missing population slots cannot manufacture a zero-defender
+result. Old descriptors without a completion policy retain their original rules.
+No undiscovered place or enemy position is exposed, and defeated does not promise
+that wandering threats cannot arrive. The shared clearance fold still pays once.
+
+The actual client verifies arrival, one survivor, partial browser Continue,
+defeated-but-unsearched, searched and town Sanctuary states. It checks the actual
+canvas text, completion color and compact width, and verifies redraw makes no
+simulation or knowledge writes. The continued and completed captures were
+inspected. All three type checks and the clearance probe pass; native objectives,
+extensions and formations are checked separately.
+
+Reachable-work revision 4c3b4bfd passed CI 37085204790 and Pages 37086245045.
+After publication propagation, exact live metadata reports
+2026-10-03T01:30:37.028Z. Isolated remote QA preserved seed 4101696660 and all six
+ordinary-save sentinels through Continue.

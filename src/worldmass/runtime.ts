@@ -24,7 +24,7 @@ import { MassEcology, validateMassEcology, type MassEcologySave } from './ecolog
 
 import { MassRewards, type MassRewardSave } from './rewards';
 import { MassFields, validateMassFieldResidency, type MassFieldSave } from './fields';
-import { massGarrisonSlots, recordMassGuardian, settleMassClearance } from './clearance';
+import { MASS_CLEARANCE_VIEW, massGarrisonProgress, massGarrisonSlots, recordMassGuardian, settleMassClearance } from './clearance';
 import { MassBirths, validMassBirth, type MassBirth } from './birth';
 import { applyMassTerritory, validateMassTerritory } from './territory';
 import { massFormation, validateMassEncounters } from './encounters';
@@ -291,9 +291,24 @@ export class WorldMassRuntime {
   siteSearched(id: string): boolean {
     return this.state.claimed('site-looted', id) || this.cacheOpened(canonical([id, 'cache']));
   }
+  /** A read-only account of a discovered site's original garrison and admitted
+   * cache. This names no hidden positions and never promises safety from visitors. */
+  siteActivity(id: string): { text: string; complete: boolean } | null {
+    const found=this.sites.discovered.find(p=>p.id===id);
+    const content=found && this.config.content.find(c=>c.id===found.content);
+    if(!found || !content?.site)return null;
+    const cleared=this.siteCleared(id), searched=this.siteSearched(id);
+    const progress=massGarrisonProgress(this.state,content,id,key=>this.natives.has(key),this.populationCount(found));
+    const lines: string[]=[];
+    if(cleared || progress?.remaining===0)lines.push(MASS_CLEARANCE_VIEW.complete);
+    else if(progress)lines.push(MASS_CLEARANCE_VIEW.remaining(progress.remaining));
+    if(content.site.cache && this.state.claimed('site-cache',id))
+      lines.push(searched ? MASS_CLEARANCE_VIEW.searched : MASS_CLEARANCE_VIEW.cache);
+    return lines.length ? {text:lines.join(' · '),complete:(!content.site.completion || cleared) && (!content.site.cache || searched)} : null;
+  }
   /** The location read uses the same admitted footprint/identity as the map.
    * Entering a site never mutates the shared zone or its reward context. */
-  localSite(pos: { x: number; y: number }): { id: string; name: string; level: number } | null {
+  localSite(pos: { x: number; y: number }): { id: string; name: string; level: number; activity: ReturnType<WorldMassRuntime['siteActivity']> } | null {
     if (this.settlement?.contains(pos.x,pos.y)) return null;
     const at = this.walk.at(pos.x,pos.y);
     for (const place of this.places.get(cellKey(at)) ?? []) {
@@ -301,7 +316,7 @@ export class WorldMassRuntime {
       if (!site) continue;
       const q = localOffset(place.center,{...this.origin,x:0,y:0},this.config.terrain.addressSpan);
       if (Math.hypot(q.x-pos.x,q.y-pos.y) <= place.radius)
-        return { id: place.id, name: site.name, level: this.populationFor(place).level };
+        return { id: place.id, name: site.name, level: this.populationFor(place).level, activity:this.siteActivity(place.id) };
     }
     return null;
   }

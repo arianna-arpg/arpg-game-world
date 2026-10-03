@@ -8565,7 +8565,7 @@ export class Renderer {
       ctx.fillText(sceneGround ? dayCycle(sceneSkyTime(world)).label
         : world.sim.hudLine(world.zone, world.time), x, 64);
       ctx.font = '12px Verdana';
-      ctx.fillStyle = world.objectiveDone ? '#ffd700' : '#9a96b8';
+      ctx.fillStyle = (massSite?.activity?.complete ?? world.objectiveDone) ? '#ffd700' : '#9a96b8';
       ctx.fillText(world.objectiveText(), x, 82);
     }
     // The kill counter is RUN-END information (credits math, the death

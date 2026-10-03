@@ -1,5 +1,12 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+A discovered worldmass site's existing objective HUD reads `siteActivity`: original
+eligible defenders and admitted cache state remain independent. The same pure
+`massGarrisonProgress` fold gates clearance; missing slots and legacy descriptors
+cannot invent a completed garrison. Verify worldmass_clearance, native objectives,
+extensions/formations and `balance/site-activity-ui.cjs` for partial Continue and
+actual HUD text, color, bounds and read-only painting.
+
 The native `sentinel` look lives in `data/golemLooks.ts` and shares the existing
 quarried anatomy, action joints and travel-driven feet. Stone and Glassguard
 variants retain their own palette and native combat rules. Verify bodywalk,

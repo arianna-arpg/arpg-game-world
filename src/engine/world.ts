@@ -63998,6 +63998,8 @@ export class World {
   /** The HUD's one-line description of what this zone wants from you. */
   objectiveText(): string {
     if (this.massRuntime && this.isSafeAt(this.player.pos)) return 'Sanctuary';
+    const massActivity=this.massRuntime?.localSite(this.player.pos)?.activity;
+    if(massActivity)return massActivity.text;
     const odysseyPressure = this.odyssey.pressureText();
     if (odysseyPressure) return odysseyPressure;
     const o = this.zone.objective;
