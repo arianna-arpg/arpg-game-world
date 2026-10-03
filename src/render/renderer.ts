@@ -15,6 +15,7 @@ import { drawRaisedGuard } from './vis/raisedGuard';
 import { MassPainter } from '../worldmass/paint';
 import { massQuestPins } from '../worldmass/quests';
 import { drawQuestCompass, questCompassLines } from './vis/questCompass';
+import { drawStatusReadout, statusReadoutRows } from './vis/statusReadout';
 import { regionGrid } from '../world/walk'; // worldmass shares native grounded telegraphs
 import { concealmentActive } from '../engine/perception';
 import { anatomyCueState, anatomyOverheadRise } from '../engine/anatomyCues';
@@ -8632,6 +8633,8 @@ export class Renderer {
         hintY += 18;
       }
     }
+    hintY = drawStatusReadout(ctx, statusReadoutRows(p.statuses, afflictionPressureOf(p), p.dead || p.downed),
+      x, hintY, world.seats.length > 1 ? this.uiW / 2 - 32 : this.uiW - 32, align);
     this.noticeHeaderBottom = Math.max(this.noticeHeaderBottom, hintY - 14);
   }
 

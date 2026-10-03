@@ -2758,3 +2758,40 @@ verdict. Its meaningful build choices and late defensive battle do not outweigh
 knockback cleanup, difficult status interpretation and early onboarding friction.
 The fixed shrine-build critic remains independent and in progress. No review
 acceptance or commercial-game parity is claimed.
+
+### Name active effects and their remaining time
+
+The recovered critic could infer poison only from unexplained life loss and
+small colored status squares. Each seat's existing status header now includes
+bounded native effect rows with names, stack counts and actual expiry clocks.
+Concurrent applications of the same effect show their expiry range. Hard
+control and dangerous damaging effects receive priority, with stable ordering
+within each class and an explicit overflow count. Beneficial effects retain
+their existing presentation. Unmarked contextual effects keep their names
+without being falsely described as damage.
+
+Severity reuses the existing afflictionPressureOf estimate, which shares
+temporary protection pools across effects and respects native damage reduction.
+It is a visual urgency cue, not a promised death forecast. Zero-tick presence
+does not claim ongoing damage. The painter never applies effects, advances
+clocks, removes statuses or changes health; native expiry and cleanse own that.
+VIS_CFG.statusReadout owns enablement, bounds, row budget, fonts and appearance.
+
+The optional status wire clock is quantized upward to a tenth of a second.
+Owning remote seats use the host's pressure and actual clock; older snapshots
+that supplied presence with a 99-second placeholder display no invented timer.
+Normal actor clocks and native save records retain authority.
+
+All three type checks pass, along with three status-readout groups, 86 existing
+affliction-cue assertions and 74 couch assertions. These cover native stacking,
+independent expiry, timer decay, cleansing, read-only derivation, stable shuffled
+input, remote owning-seat identity and legacy omission. The attempted snapshot
+filter matched no registered probe; it is not counted as verification.
+The actual browser shows all three prioritized rows plus overflow, transitions
+from severe to ordinary pressure after native resource restoration, ticks down
+through 30 native frames and removes rows on cleanse. Normal and 800-by-600
+captures were inspected in both page and canvas views; the prior client
+reproduces unnamed status pips in all four corresponding states.
+
+The shrine-build gameplay review is still independent and in progress.
+Working presentation and regression checks do not establish overall acceptance.

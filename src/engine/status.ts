@@ -1859,6 +1859,8 @@ export interface ActiveStatus {
   challengeField?: number;
   id: string;
   remaining: number;
+  /** False on legacy co-op mirrors whose wire supplied presence but no clock. */
+  remainingKnown?: boolean;
   stacks: number;
   /** DoT damage per second per stack (locked in at application time). */
   dps: number;

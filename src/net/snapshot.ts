@@ -214,7 +214,7 @@ export interface ActorW {
 /** `bk` = THE BANK READ (StatusDef.bank — ActiveStatus.bankFrac, 0..1 at
  *  two decimals): the derived scalar the body FX scale by (the tells-wire
  *  idiom — never the bank's source numbers). Absent = no bank worn. */
-export interface StatusW { id: string; stacks: number; bk?: number; dot?: 1; }
+export interface StatusW { id: string; stacks: number; bk?: number; dot?: 1; rem?: number; }
 export interface AuraW { c: string; r: number; sh: number; }
 /** A cast in progress — the few fields the renderer's cast bar + guard arc read. */
 export interface CastW { parryCue?: number;
@@ -813,6 +813,7 @@ function actorToW(a: Actor, world: World): ActorW {
   if (a.absorbTotal > 0) w.ab = Math.round(a.absorbTotal);
   if (a.statuses.length) {
     w.st = a.statuses.map(s => ({ id: s.id, stacks: s.stacks,
+      ...(Number.isFinite(s.remaining) ? { rem: Math.ceil(Math.max(0, s.remaining) * 10) / 10 } : {}),
       ...(s.dps > 0 ? { dot: 1 as const } : {}),
       ...(s.bankFrac !== undefined ? { bk: Math.round(s.bankFrac * 100) / 100 } : {}) }));
   }
@@ -1421,7 +1422,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     // Reconstruct the FX sub-objects the renderer draws (stand-in nested objects
     // so renderer.ts stays untouched). Absent → cleared → that FX simply skips.
     a.statuses.length = 0;
-    if (aw.st) for (const s of aw.st) a.statuses.push({ id: s.id, remaining: 99, stacks: s.stacks, dps: 0, screenDot: s.dot ? true : undefined, sourceName: '', bankFrac: s.bk });
+    if (aw.st) for (const s of aw.st) a.statuses.push({ id: s.id, remaining: Number.isFinite(s.rem) ? s.rem! : 99, remainingKnown: Number.isFinite(s.rem), stacks: s.stacks, dps: 0, screenDot: s.dot ? true : undefined, sourceName: '', bankFrac: s.bk });
     a.casting = aw.cast ? ({
       // THE VENT-RIDE's broil: the client's cast stub carries the column
       // radius as a leap delivery with a vent, so the roil layer reads one

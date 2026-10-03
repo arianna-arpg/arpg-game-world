@@ -1,5 +1,11 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Active effect readouts in render/vis/statusReadout.ts use native status labels,
+clocks, stacks and the existing host-resolved affliction-pressure estimate.
+VIS_CFG.statusReadout owns the bounded presentation; native damage stays in
+the engine. Optional network expiry clocks suppress legacy placeholder times.
+Verify statusreadout, afflictioncues and couch plus status-readout-ui.cjs.
+
 Dormant graph campaigns use the shared graphWorkAvailable boundary inside
 Odyssey event/lead entry points, including faction kills and direct updates.
 Native kills and earned historical turn-ins keep their ordinary resolution.

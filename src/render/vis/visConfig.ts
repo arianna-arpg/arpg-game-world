@@ -6,6 +6,11 @@
 // ---------------------------------------------------------------------------
 
 export const VIS_CFG = {
+  /** Native active effects: stable names, expiry clocks and shared pressure. */
+  statusReadout: { enabled: true, maxRows: 3, maxWidth: 300, minWidth: 110,
+    rowHeight: 34, lineHeight: 20, ascent: 13, detailOffset: 14, gap: 3, pad: 8, stripe: 3,
+    font: 'bold 11px Verdana', detailFont: '10px Verdana',
+    background: 'rgba(12,16,20,.82)', text: '#e9e6dc', detail: '#b9c3c8' },
   /** Known contract bearings, independent of terrain survey and pathfinding. */
   questCompass: { enabled: true, maxRows: 2, maxWidth: 360, lineHeight: 17,
     font: '11px Verdana', active: '#b7c9d0', ready: '#e4c47e' },
