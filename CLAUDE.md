@@ -1,5 +1,13 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Graph quest and bounty offers now read `World.graphWorkAvailable()`. The
+continuous prototype cannot reach their old zone destinations: offers, stale
+acceptance and new enrollment refuse, while old records and earned turn-ins
+remain intact. Native zone play is unchanged. Verify worldmass_work, brandtquest,
+questmap, bountyboard and Odyssey, plus `balance/graph-work-ui.cjs`; its prior-build
+control reproduces the unreachable offers. This is a migration boundary, not
+native campaign integration.
+
 Native town signs feed the continuous map through `worldmass/cartography.ts`.
 New settlement descriptors can expose public sign locations without surveying
 their ground; older descriptors require explored pages. Names/glyphs/palette

@@ -8380,7 +8380,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // direction line teaches the take; while the FIRST writ is in hand, one
     // closing line points the way out and back. The first accept's standing
     // ledger stamp closes the lesson forever — no new key.
-    const lessonTake = world.bountyLessonLive();
+    const lessonTake = !v.unavailable && world.bountyLessonLive();
     const lessonReturn = !lessonTake && v.hands.length > 0
       && (world.ledger.bounties_accepted ?? 0) + (world.account.ledger.bounties_accepted ?? 0) === 1;
     // THE TAKEN HAND(s): state speaks plainly — afield / ready / failed.
@@ -8419,9 +8419,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           <div class="bind-btns"><button data-bounty-accept="${esc(o.id)}"${handFull ? ' disabled title="One bounty in hand at a time."' : ''}${lessonTake && !handFull ? ' class="tut-glow"' : ''}>Accept</button>${
             pinCap > 0 ? `<button data-bounty-lock="${esc(o.id)}" data-locked="${o.locked ? '1' : ''}"${!o.locked && pinned >= pinCap ? ' disabled title="Every reserve pin is spoken for — release one first."' : ` title="${o.locked ? 'Release the pin — the next deal may replace this posting.' : 'Pin this posting — it holds its seat through fresh deals until taken or released.'}"`}>${o.locked ? 'Release' : `Pin (${pinCap - pinned} free)`}</button>` : ''}</div>
         </div>`).join('')
-      : `<div class="skill-entry"><div class="desc">No postings available.</div></div>`;
+      : `<div class="skill-entry"><div class="desc">${esc(v.unavailable ?? 'No postings available.')}</div></div>`;
     this.bountyMenu.innerHTML = `${this.closeGlyphHtml()}<h2>The Bounty Board</h2>`
-      + `<div class="desc" style="margin:-4px 0 8px 0;font-style:italic">Choose a bounty. Return here for your reward.</div>`
+      + (v.unavailable ? '' : `<div class="desc" style="margin:-4px 0 8px 0;font-style:italic">Choose a bounty. Return here for your reward.</div>`)
       + (lessonTake ? `<div class="bounty-lesson">Accept one bounty at a time per board.</div>` : '')
       + (lessonReturn ? `<div class="bounty-lesson">Track your bounty in the journal and map.</div>` : '')
       // THE RECEIPT (the counter laws): what the linger just settled, printed
@@ -8430,7 +8430,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         ? `Handed back: <b>${esc(v.receipt.title)}</b> — no reward.`
         : `Collected: <b>${esc(v.receipt.title)}</b> — paid ${esc(v.receipt.pay)}.`}</div>` : '')
       + handsHtml
-      + `<h3 style="margin:10px 0 4px 0">Available (${v.offers.length}) · refresh in <span data-bounty-countdown>${fmtRestock(v.countdown)}</span></h3>`
+      + `<h3 style="margin:10px 0 4px 0">Available (${v.offers.length})${v.unavailable ? '' : ` · refresh in <span data-bounty-countdown>${fmtRestock(v.countdown)}</span>`}</h3>`
       + offersHtml
       // THE COAST WRITS (a quay board only): the harborhold writ lane's
       // button — the board posts named marks on the coast's living foes,

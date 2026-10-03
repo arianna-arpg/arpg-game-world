@@ -76,6 +76,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_worldmass_progression.ts', status: 'green', tier: 'fast', why: 'geographic danger, native level envelopes, stable encounter rewards and legacy expedition compatibility' },
   { probe: 'probe_doorpress.ts', status: 'green', tier: 'fast', why: 'optional physical door approach, native collision/persistence, legacy idle and combat/story/mechanism refusals' },
   { probe: 'probe_worldmass_birth.ts', status: 'green', tier: 'fast', why: 'native factory variants and wounded guardians survive Continue without consuming combat RNG; legacy descriptors and invalid records' },
+  { probe: 'probe_worldmass_work.ts', status: 'green', tier: 'fast', why: 'new frontier work cannot target inaccessible graph zones; old records and earned native rewards remain intact' },
   { probe: 'probe_worldmass_haven.ts', status: 'green', tier: 'fast', why: 'continuous native Lastlight, spatial services, plan doors, interiors, town growth snapshots and resume' },
   { probe: 'probe_worldmass_sanctuary.ts', status: 'green', tier: 'fast', why: 'continuous town service safety, symmetric hits, physical retreat, owned proxies, open policy and Continue' },
   { probe: 'probe_worldmass_clearance.ts', status: 'green', tier: 'fast', why: 'native landmark completion XP, garrison eligibility, one-time receipt, partial admission and legacy worlds' },

@@ -2202,3 +2202,41 @@ directions without new knowledge, opt-out, removed signs, the older exploration
 gate and native scenery restoration. The browser checks cover markers, legend,
 zoom, viewport bounds, no knowledge mutation, altered-sign Continue and marker
 withdrawal. Independent critics continue on their own preserved earlier builds.
+
+### Reachable work at Lastlight
+
+The continuous prototype no longer offers graph quests or graph-bound bounties
+whose destinations cannot be reached in its geography. One engine capability
+read guards ordinary offers, stale acceptance, direct quest enrollment, campaign
+lead dwell and bounty dealing. The board states that no hunts are posted for this
+country, without promising a timed refresh. Ordinary zone-based play keeps its
+existing quest and bounty behavior.
+
+This is a correctness boundary while native campaign targets await physical
+places, not a completed quest migration. Existing records are retained. The
+journal labels unfinished targets as unavailable; already earned town rewards,
+including native turn-ins and deferred item choices, retain their original path.
+Brandt still trades. No account unlock, quest reward or old world descriptor is
+rewritten.
+
+The preserved previous client reproduces an actual Brandt auto-accept that
+creates two unreachable graph nodes and a bounty offer directing the player to
+the old Crossroads. The fixed actual client keeps the smith's trading service,
+shows no false board offers or refresh countdown, and preserves this behavior
+through browser Continue. Its visible board capture was inspected. All three type
+checks, the new geography-work probe, native Lastlight, Brandt's nine quest
+scenarios, quest cartography, the 194 bounty-board assertions and both Odyssey
+probes pass. The work probe also verifies untouched stale saved offers, preserved
+completed work and an earned native turn-in paid exactly once.
+
+Authored-treasure revision 5f53030c passed CI 37082312173 and Pages 37083207215.
+Exact live metadata reports 2026-10-03T00:44:37.172Z; remote browser QA preserved
+seed 1037875007 and all six ordinary-save sentinels through Continue.
+
+The expedition critic used earned Arcing Firebolt at three later encounters,
+cleared three sites, explored a fourth and verified Save/Continue. Its 6,581
+requested frames represent 109.68 nominal seconds, separately from 62.49 minutes
+of inspection/tool time. Tactical group fights and support payoff were strengths;
+prop-bound exchanges and unexciting equipment limited its desire to continue.
+Its overall verdict remains below acceptance. Further independent Rogue and
+Warrior reviews continue on their own preserved builds.

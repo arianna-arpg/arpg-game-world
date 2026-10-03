@@ -24442,7 +24442,7 @@ export class World {
     if (owed.length) {
       return { pos: b.pos, text: owed.every(h => h.state === 'failed') ? 'Linger to hand the failed posting back.' : 'Linger to turn in the writ.' };
     }
-    return { pos: b.pos, text: 'Linger to read the postings.' };
+    return { pos: b.pos, text: this.graphWorkAvailable() ? 'Linger to read the postings.' : 'No hunts are posted for this country yet.' };
   }
 
   /** THE RESOLVED HANDS at a board: every held posting issued by `boardId`
@@ -24793,6 +24793,7 @@ export class World {
    *  dedupe with THE JUICING LEAN on overlapped ground, and the board's
    *  own band scope (the starter band is Lastlight's alone). */
   armBountyBoard(boardId: string = BOUNTY_BOARD_CFG.boardId): void {
+    if (!this.graphWorkAvailable()) return;
     this.reconcileBounties();
     const beat = this.bountyBeat();
     const bs = this.boardStateOf(boardId);
@@ -25074,6 +25075,7 @@ export class World {
    *  lift (a charge on veiled ground tells you the way — ruled; the errand
    *  kind alone will keep discovery the ask). */
   acceptBounty(id: string, _seat: Seat = this.localSeat): boolean {
+    if (!this.graphWorkAvailable()) return false;
     this.reconcileBounties();
     const i = this.bountyOffers.findIndex(p => p.id === id);
     if (i < 0) return false;
@@ -25364,6 +25366,8 @@ export class World {
    *  rows' precision register, the pay printed, the countdown on the
    *  lattice boundary: one clock with the arm). */
   bountyBoardView(boardId: string = BOUNTY_BOARD_CFG.boardId): {
+    /** No new work while its destination geography is unavailable. */
+    unavailable?: string;
     countdown: number;
     offers: { id: string; title: string; ask: string; route: string; pay: string; locked?: boolean }[];
     hands: { id: string; title: string; ask: string; route: string; pay: string; state: 'afield' | 'ready' | 'failed' }[];
@@ -25397,12 +25401,15 @@ export class World {
     const writs = boardId !== BOUNTY_BOARD_CFG.boardId && boardId === this.zone.id && hold?.state === 'open'
       ? { restSec: Math.max(0, (hold.writsAt ?? 0) - this.time) } : undefined;
     return {
+      ...(!this.graphWorkAvailable() ? { unavailable: 'No hunts are posted for this country yet.' } : {}),
       countdown: (this.bountyBeat() + 1) * this.bountyBeatSeconds() - this.time,
       ...(writs ? { coastWrits: writs } : {}),
       ...(receipt ? { receipt } : {}),
-      offers: this.bountyOffers.filter(o => o.boardId === boardId).map(face),
+      offers: this.graphWorkAvailable() ? this.bountyOffers.filter(o => o.boardId === boardId).map(face) : [],
       // THE READINESS LAW: the card's state is the one fold (handState).
-      hands: this.bountyHands.filter(h => h.boardId === boardId).map(p => ({ ...face(p), state: this.handState(p) })),
+      hands: this.bountyHands.filter(h => h.boardId === boardId).map(p => ({ ...face(p), state: this.handState(p),
+        ...(!this.graphWorkAvailable() && this.handState(p) === 'afield'
+          ? { route: 'Destination unavailable in this expedition' } : {}) })),
     };
   }
 
@@ -28383,8 +28390,9 @@ export class World {
     if (this.questImbues.some(r => this.giverPresent(QUESTS[r.questId]?.turnIn?.giver ?? []) !== null)) return 'Your imbue awaits — choose a magic item in the Quest Journal.';
     if (this.questRewardOffers().length) return 'Your keepsake awaits — choose a reward in the Quest Journal.';
     if (this.reliquaryLesson()) return 'A keepsake needs a home. Open your inventory and seat your charm in the Reliquary.';
-    if (this.nearQuestGiver() && this.odyssey.hasLocalLeads()) return 'Linger — I can mark the Odyssey leaders and their supply operations.';
+    if (this.graphWorkAvailable() && this.nearQuestGiver() && this.odyssey.hasLocalLeads()) return 'Linger — I can mark the Odyssey leaders and their supply operations.';
     if (this.pendingTurnIns().length) return 'Linger — a bounty is yours to claim.';
+    if (!this.graphWorkAvailable()) return 'No hunts are posted for this country yet.';
     if (this.nextAcceptableQuest()) return this.heroKnown()
       ? 'Linger, {name} — I have work for you…'
       : 'Linger, and I have work for you…';
@@ -28440,7 +28448,12 @@ export class World {
       * (range[1] - range[0] + 1)) : q.offerAtLevel;
   }
 
+  /** Graph destinations cannot be offered until the active geography can reach them.
+   * This gates new work only: already earned town rewards remain claimable. */
+  graphWorkAvailable(): boolean { return !this.massRuntime; }
+
   private acceptableQuests(): QuestDef[] {
+    if (!this.graphWorkAvailable()) return [];
     const counts = this.activeCategoryCounts();
     const gateCtx = this.questGateCtx();
     return Object.values(QUESTS).filter(q => {
@@ -28509,7 +28522,7 @@ export class World {
     const next = turnIns.length ? null : this.nextAcceptableQuest();
     const choices = (!turnIns.length && !next && !this.vocationOfferDeclined)
       ? this.vocationChoiceOffers() : [];
-    const odysseyLeads = this.odyssey.hasLocalLeads() && this.nearQuestGiver();
+    const odysseyLeads = this.graphWorkAvailable() && this.odyssey.hasLocalLeads() && this.nearQuestGiver();
     if (!turnIns.length && !next && !choices.length && !odysseyLeads) { this.questGiverDwell = 0; return; }
     this.questGiverDwell += dt;
     if (this.questGiverDwell < QUESTGIVER_DWELL) return;
@@ -28760,7 +28773,8 @@ export class World {
         // The journal names ground by the map's own fog seam (World.visible):
         // a lifted charge reads its name here as on the chart; an omen-face
         // errand's veiled seat stays the ask.
-        target: z ? (this.visible(z) ? z.name : e.directionsKnown === false
+        target: !this.graphWorkAvailable() && standing === 'afield' ? 'Destination unavailable in this expedition'
+          : z ? (this.visible(z) ? z.name : e.directionsKnown === false
           ? 'Lead undiscovered — explore or seek information'
           : `${this.bearingOf(this.zone.map, z.map)} — unexplored country`) : undefined,
       };
@@ -28833,6 +28847,7 @@ export class World {
   }
 
   private acceptOdysseyCompatibleQuest(q: QuestDef, reveal: boolean): void {
+    if (!this.graphWorkAvailable()) return;
     const questSeed = (this.manifest.seed ^ hashStr(q.id)) >>> 0;
     q = { ...q, zone: resolveQuestZone(q, questSeed) };
     const town = this.zoneMap[START_ZONE];
