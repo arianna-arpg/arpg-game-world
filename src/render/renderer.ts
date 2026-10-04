@@ -7,6 +7,7 @@ import { drawAltarInfluence } from './vis/altarCueLayer';
 import { CombatTextLayout, combatBodyRect, drawPlayerFocus } from './vis/combatFocus';
 import { CombatMeterLayout } from './vis/combatMeters';
 import { garrisonCaption } from './vis/garrisonName';
+import { formationCaption, formationIdentityOf, type FormationIdentity } from './vis/formationIdentity';
 import { bodyActionPoseOf } from '../engine/bodyAction';
 import { applyBodyActionPose } from './vis/bodyActionLayer';
 import { drawActionParts } from './vis/actionParts';
@@ -1032,7 +1033,8 @@ export class Renderer {
    *  they wear their own permanent mark. Drawn on the post-fade layer so a
    *  crown never covers the plate of a foe you can see — and CONCEALED foes
    *  never bid at all: the cursor must not become a canopy probe.
-   *  Discovered garrison members also bid, with their actual site's caption.
+   *  Discovered garrison and native formation members also bid; their caption
+   *  identifies affiliation and the actual native leader.
    *  Settings.hoverNameplates 'all' widens the BID, never the laws: every
    *  def-carrying actor on any team — minions, NPCs, critters, scenery
    *  bodies — shows the same plate, an unnamed common leading with the def
@@ -1051,6 +1053,7 @@ export class Renderer {
     let best: Actor | null = null;
     let bestReveal = 0;
     let bestGarrison: string | null = null;
+    let bestFormation: FormationIdentity | null = null;
     let bd = 80;
     for (const a of world.actors) {
       if (a.dead || a.nemesis || !a.defId || !this.anatomyCueVisible(a, world)) continue;
@@ -1062,12 +1065,13 @@ export class Renderer {
       if (reveal <= 0.02) continue;
       const garrison = VIS_CFG.combatFocus.names.garrisons
         ? world.massRuntime?.garrisonName(a) ?? null : null;
-      if (!allMode && !garrison) {
+      const formation=VIS_CFG.combatFocus.names.formations?formationIdentityOf(a):null;
+      if (!allMode && !garrison && !formation) {
         if (a.team !== 'enemy' || a.name === def.name) continue;
         const label = a.rarity ? RARITY_DEFS[a.rarity].label : '';
         if (label && a.name === `${label} ${def.name}`) continue; // tier-prefixed, not minted
       }
-      bd = d; best = a; bestReveal = reveal; bestGarrison = garrison;
+      bd = d; best = a; bestReveal = reveal; bestGarrison = garrison; bestFormation = formation;
     }
     if (best !== this.hoverNameActor) {
       if (this.hoverNameActor) this.hoverNameLayout.forget(this.hoverNameActor);
@@ -1079,7 +1083,9 @@ export class Renderer {
     const tint = (best.rarity ? RARITY_DEFS[best.rarity].ring : '') || '#e8dcc8';
     ctx.save();
     ctx.font = VIS_CFG.combatFocus.names.subFont;
-    const sub = bestGarrison ? garrisonCaption(bestGarrison, s => this.ctx.measureText(s).width,
+    const sub = bestFormation ? formationCaption(bestFormation,bestGarrison,s=>ctx.measureText(s).width,
+      this.canvas.width / this.zoom - VIS_CFG.combatFocus.names.gap * 4)
+      : bestGarrison ? garrisonCaption(bestGarrison, s => this.ctx.measureText(s).width,
       this.canvas.width / this.zoom - VIS_CFG.combatFocus.names.gap * 4)
       : best.magicPack ? undefined : (best.rarity && RARITY_DEFS[best.rarity].label
         ? `${RARITY_DEFS[best.rarity].label} ${def.name}` : def.name);
@@ -1103,8 +1109,8 @@ export class Renderer {
     const nameY = pos.y - (hasSub ? nc.subHeight : 0);
     if (nc.outline > 0) ctx.strokeText(best.name, pos.x, nameY);
     ctx.fillText(best.name, pos.x, nameY);
-    // A known garrison identifies its objective owner. Otherwise pack identity
-    // is the only caption; other names may retain their species/rarity subtitle.
+    // The formation caption retains any known garrison owner. Other names
+    // may retain their species/rarity subtitle.
     if (hasSub) {
       ctx.globalAlpha = 0.75 * bestReveal;
       ctx.font = nc.subFont;

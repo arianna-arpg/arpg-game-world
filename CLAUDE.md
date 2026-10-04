@@ -1,5 +1,13 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Native formationIdentityOf validates live enemy enrollment against recipe,
+slot, species, faction and squad facts. One ordinary hover caption identifies
+the leader and keeps known garrison affiliation; roaming formations use their
+native name. VIS_CFG.combatFocus.names.formations owns the opt-in. Verify
+combatfocus, worldmass_garrisonnames and formation-identity-ui.cjs for native
+sight, narrow layout, unrelated actors and current/prior/current Continue.
+
+
 EncounterGroupDef.ambient can exclude a recipe from automatic pools while
 allowing explicit native selection through the same level/habitat/role gates.
 nativeMassEncounters accepts that native selection policy; new Cinderwatch

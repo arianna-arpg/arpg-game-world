@@ -3841,3 +3841,45 @@ Objective-readout head c6b74869, including the preceding quiet-puzzle fix,
 passed CI 37230592290. Exact preview metadata reports
 2026-10-04T20:24:05.341Z. Remote seed 2443997474 passed six ordinary-save sentinels
 and native Continue without a fatal error.
+
+### Identifying the native formation under the cursor
+
+The existing one-at-a-time hover plate now identifies a native formation leader
+and retains any discovered garrison owner. Non-garrison members show their
+native formation name. Enrollment is checked against the registry slot, species,
+faction, live enemy status and squad role; proximity and a similar name confer
+nothing. VIS_CFG.combatFocus.names.formations owns the optional presentation.
+The existing anatomy and terrain-veil admission, width limits and ordinary
+NAMED/ALL setting remain authoritative. No combat or save rule changes.
+
+All three type checks, combatfocus and worldmass_garrisonnames pass. Controlled
+browser QA checks actual site leaders/members, a live unrelated prowler, stale
+squad/leader/faction values, changed allegiance, swallowed concealment and native
+wall occlusion. It checks 600-pixel bounds, pure rendering and exact position,
+life, bag, seed, claims and native enemy state through current/prior/current
+Continue. Transient numeric squad IDs are normalized only to exact membership.
+An ordinary native spawning seam, with a prepared downs context, supplies the
+non-site captions. Eleven page/canvas pairs were inspected across iterations.
+
+These are prepared presentation fixtures, not earned combat. The initial
+capture filter also caught the unrelated garrison HUD; it was narrowed. A draft
+owner test assigned a number where an Actor is required and broke companion
+rendering; that malformed fixture was removed, with no production exception
+added. The ordinary spawn fixture initially lacked the required native habitat;
+explicit prepared context now satisfies that gate without relaxing production.
+
+The independent accord-country Magician review is negative overall. It earned
+Arcing and Change the Rhythm, used the latter in later fighting, but mostly
+encountered isolated enemies and found the Silent Caravan too similar to camp.
+It stopped with one caravan defender remaining. Native Save & Exit/Continue
+passed; 91 paired captures and 4,647 returned-result requested frames support a
+short, frame-stepped opening sample, not real-time play. No commercial comparator
+was played. It calls for useful crowd encounters and more distinctive places.
+
+A separate returning Magician on the frozen puzzle-reward build found better
+positioning decisions at Broken Gate and a relevant rare item, cleared the gate
+and reached level three. It still reported mild threat and uninteresting quiet
+travel. Its 73 follow-up pairs cover 4,033 returned-result requested frames,
+roughly 67.4 nominal seconds including menus/travel. It is a returning review,
+not fresh or blind. Native Save & Exit/Continue passed. Neither review establishes
+overall acceptance, sustained difficulty or real-time responsiveness.
