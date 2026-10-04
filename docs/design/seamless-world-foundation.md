@@ -4175,3 +4175,48 @@ changed on the strength of a critic's stationary-enemy observation. The new
 frozen build is undergoing an independent, explicitly Warrior-focused review;
 the other fresh reviews continue on their unchanged builds. Acceptance remains
 unmet and no commercial game comparison has been played.
+
+### Wounded skirmishers fight again after rallying
+
+The Road Forager reviewer again observed a long pursuit of the wounded
+Bonepicker. A paired native-AI investigation established a specific rule
+conflict: its authored nerveBelow condition still selected the attack-free
+retreat kernel at zero nerve, after the finite 3.5-second wound panic had
+already ended. The existing morale latch correctly prevented repeated breaks,
+but that authored rule kept overriding the ordinary skirmisher indefinitely.
+
+The open AI condition registry now exposes a strict, finite-argument
+nerveAbove predicate. The Bonepicker's retreat rule uses both ends of the
+courage band: above zero and below 0.45. The native morale clock still owns
+flight at the routed floor; after rallying, normal hit-and-run skill selection
+resumes. Other species, health, damage, cooldowns, panic duration and save
+fields are unchanged. Healing still rearms a later genuine wound crossing.
+This corrects one cause of drawn-out pursuit, not every possible chase.
+
+All three type checks pass. The new nerverecovery probe runs the real old and
+new rules on distinct definition identities at 30, 60 and 120 Hz: the first
+three seconds of position, nerve and remaining panic are exact, the old rule
+casts zero times, and the new rule casts at least twice after rallying.
+It also checks the actual authored boundaries, invalid/unknown predicate
+refusal and healing rearm. The unchanged pack probe passes 110 checks,
+tacticalai 27, worldmass_foragers five, and simulation smoke all five scenarios
+by five seeds with no scenario warnings.
+
+Browser QA compares the actual frozen prior client with the candidate using
+a prepared quarter-life native Cinderwatch survivor and ordinary pursuit
+inputs. The hero never attacks and is not invulnerable. The prior survivor
+remains silent after rallying even at 26 units; the candidate visibly begins
+Hurl Debris after 3.5 seconds and its projectile lowers hero life from 68 to
+59.405. Wounded current/prior/current native Continue preserves the exact
+checked seed, positions, health, items, enemy descriptors and claims. Nine
+page/canvas pairs (18 images), including 800 by 600, were inspected. This is
+controlled QA, not earned combat or an independent enjoyment verdict.
+Continuation does not promise persistence of transient morale clocks.
+
+The preceding reward-layer recording correction acca68d56b3590301df31500d16a13e09f51986a
+passed full CI 37243802586 and Pages 37244535633. The public build metadata
+confirmed that exact revision at 2026-10-04T23:41:09.117Z. Remote native
+Save/Continue passed for seed 588611178 with all six ordinary-save sentinels
+intact and no fatal error. Thus the preparation, loot-label and service-work
+corrections are published. The patrol commitment and this morale correction
+remain separate later revisions until their own publication is verified.

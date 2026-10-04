@@ -16243,9 +16243,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
       },
       // As its nerve goes it stops trading and starts backing off — conduct
       // that changes BEFORE the break, through the pack layer's own
-      // registered condition (the first tenant of registerAICondition).
+      // registered courage band. At the routed floor the finite morale
+      // clock owns flight; after rallying, the native skirmisher fights back.
       rules: [{
-        when: { ext: { nerveBelow: 0.45 } },
+        when: { ext: { nerveAbove: 0, nerveBelow: 0.45 } },
         use: { move: { style: 'retreat' }, tempo: { pauseFor: [0.4, 0.9] } },
       }],
     },

@@ -216,6 +216,11 @@ function wearColors(actor: Actor, roused: boolean): void {
 registerAICondition('nerveBelow', (actor, _t, _ctx, arg) =>
   actor.aiNerve < (typeof arg === 'number' ? arg : 0.5));
 
+/** The lower end of a courage band. Pair with nerveBelow to distinguish
+ * fraying courage from the routed floor without duplicating life thresholds. */
+registerAICondition('nerveAbove', (actor, _t, _ctx, arg) =>
+  typeof arg === 'number' && Number.isFinite(arg) && actor.aiNerve > arg);
+
 /** WARDS NEAR: at least `arg` warded bodies (MoraleSpec.wardTo) are huddled
  *  at this one. THE MATRIARCH's trigger — "I am standing over my young" as
  *  something she can act on. Reads the pack sweep's own count, the same one

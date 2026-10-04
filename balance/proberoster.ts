@@ -63,6 +63,7 @@ export type ProbeRow =
 export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_rewardlabels.ts', status: 'green', tier: 'fast', why: 'Persistent loot label packing, native identity attribution, visible-space refusal, bounded retention and old/new snapshot shells' },
   { probe: 'probe_puzzlecalm.ts', status: 'green', tier: 'fast', why: 'Real native riddle contact preserves existing combat heat, immediate support fitting, hostile and forged-node refusal, configurable policy and save purity' },
+  { probe: 'probe_nerverecovery.ts', status: 'green', tier: 'fast', why: 'Native wounded skirmisher returns to casting after finite panic at three frame rates; exact initial rout, courage boundaries and healing rearm.' },
   { probe: 'probe_foragercommitment.ts', status: 'green', tier: 'fast', why: 'Native generated patrol commitment across three approaches, scoped melee tactics, unchanged ranged/ordinary packs, leader-loss opening and wounded Continue.' },
   { probe: 'probe_worldmass_caravan.ts', status: 'green', tier: 'fast', why: 'Native caravan role admission, actual mending/melee/arrows, one-shot support contrast, wounded Continue and old rosters' },
   { probe: 'probe_worldmass_foragers.ts', status: 'green', tier: 'fast', why: 'Native authored patrol gates, five camp admissions, leader morale, mixed attacks, wounded Continue, atomic seating and legacy rosters' },

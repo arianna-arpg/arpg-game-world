@@ -1,5 +1,11 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+nerveAbove composes with nerveBelow to bound authored courage bands.
+The Bonepicker backs away while fraying, then resumes its native skirmishing
+when the finite wound panic ends. Verify nerverecovery, probe_pack.ts,
+tacticalai, worldmass_foragers, simulation smoke and nerve-recovery-ui.cjs
+for exact initial panic, actual retaliatory throws and wounded Continue.
+
 Road Foragers' two melee members use recipe-owned foragerMuster tuning.
 The thrower keeps its ranged conduct; other packs keep their species defaults.
 Verify foragercommitment, worldmass_foragers, encountergroups, tacticalai and
