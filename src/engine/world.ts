@@ -1805,7 +1805,8 @@ function isValidMetaAction(a: MetaAction): boolean {
       return isIdx(a.index);
     // THE RESIDENCE (skill-items M1): loose gems are bag ITEMS — learn,
     // socket-in, and the loose level-up all address the wrapper by uid.
-    case 'learn': return isIdx(a.uid) && (a.slot === undefined || isIdx(a.slot));
+    case 'learn': return isIdx(a.uid) && (a.slot === undefined || isIdx(a.slot))
+      && (a.emptyOnly === undefined || typeof a.emptyOnly === 'boolean');
     case 'levelSupportInv': return isIdx(a.uid);
     case 'socket': return isIdx(a.uid) && isStr(a.skillId);
     case 'unsocketBagSkill': return isIdx(a.uid) && isIdx(a.socket);
@@ -22920,7 +22921,7 @@ export class World {
    * by construction: the book keys by id and the copy departs first. The
    * only tell is the seat lighting under the drop — shown, never told.
    */
-  learnSkill(uid: number, seat: Seat = this.localSeat, slot?: number): boolean {
+  learnSkill(uid: number, seat: Seat = this.localSeat, slot?: number, emptyOnly = false): boolean {
     const m = seat.meta;
     const p = this.seatHero(seat);
     const item = this.bagItem(seat, uid);
@@ -22943,6 +22944,9 @@ export class World {
       return false;
     }
     const sitter = p.skills[at];
+    // A suggested empty seat is a narrower intent than an aimed replacement.
+    // Recheck live occupancy and identity: stale cards must never swap a build.
+    if (emptyOnly && (sitter || knownCopy || p.dead || p.downed)) return false;
     // THE STRUCTURAL CAP: seats ARE the count — a REPLACE onto an occupied
     // seat never grows it, and a departing known copy hands its count to
     // the newcomer, so only a fresh seat for a fresh skill meets the belt.
@@ -29901,7 +29905,7 @@ export class World {
     if (!isValidMetaAction(action)) return;
     switch (action.t) {
       case 'townPortal': this.castTownPortal(seat); break;
-      case 'learn': this.learnSkill(action.uid, seat, action.slot); break;
+      case 'learn': this.learnSkill(action.uid, seat, action.slot, action.emptyOnly); break;
       case 'unlearn': this.unlearnSkill(action.skillId, seat, action.x, action.y); break;
       case 'attuneSpectre': this.attuneSpectre(action.skillId, action.formId, seat); break;
       case 'mimicSelect': this.mimicSelectFor(action.sid, seat); break;

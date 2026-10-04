@@ -5,6 +5,8 @@ export const DIALOGUE_CFG = {
   pageChars: 210,
   width: 880,
   portraitSize: 72,
+  /** Short responses share rows; longer answers retain the reader scroll. */
+  choiceMinWidth: 160,
   edge: 18,
   hudGap: 18,
   fontSize: 18,

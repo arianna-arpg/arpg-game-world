@@ -84,7 +84,7 @@ export type MetaAction =
   // loose-gem intent addresses the wrapper by uid (the gear address space);
   // learn seats (learned = seated; slot omitted = first free), unlearn
   // mints the wrapper back into the bag (x/y = an aimed cell, unequip-law).
-  | { t: 'learn'; uid: number; slot?: number }                 // bag skill item → rack seat
+  | { t: 'learn'; uid: number; slot?: number; emptyOnly?: boolean }                 // bag skill item → rack seat
   | { t: 'unlearn'; skillId: string; x?: number; y?: number }  // seat → bag item
   // THE SACRIFICIAL FONT (data/essences.ts FONT_CFG — merge / convert / reset):
   | { t: 'fontMerge'; skillId: string; rarity: 'common' | 'magic' | 'rare' | 'legendary' } // N alike → 1 at +1 rarity

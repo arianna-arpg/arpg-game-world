@@ -51,6 +51,7 @@ export const NPC_DIALOGUE_FACTS: Record<string, (w: World) => boolean> = {
   oracleCommanderAfield: w => w.activeQuests.some(q => q.questId.startsWith('oracle_commander_') && !q.fieldDone),
   reliquaryLesson: w => w.reliquaryLesson(),
   mireilleLessonComplete: w => w.mireilleLessonLived(),
+  mireillePreparingFlasks: w => w.mireilleGiftOwed() || w.mireilleGiftLesson() === 'learn',
   brandtImbueWaiting: w => w.questImbues.some(r => [BRANDT_HAMMER_QUEST, BRANDT_TROPHY_QUEST].includes(r.questId)),
 };
 
@@ -61,6 +62,16 @@ export const NPC_APPEARANCES: Record<string, { base: string; variants: { all: re
   ] },
 };
 export const NPC_DIALOGUES: NpcDialogueDef[] = [
+  {
+    id: 'mireille_flask_preparation', speaker: { defId: 'townsfolk_innkeep' }, priority: 210,
+    all: [{ fact: 'mireillePreparingFlasks' }],
+    trigger: { kind: 'dwell', radius: 150, seconds: 1.1 },
+    lines: [{ text: 'I keep flasks for new faces. Shall we find a place for yours?' }],
+    responses: { choices: [
+      { id: 'prepare', label: 'Prepare flasks', action: { type: 'menu', target: 'journal' } },
+      { id: 'pack', label: 'Arrange my pack', action: { type: 'menu', target: 'inventory' } },
+    ] },
+  },
   {
     id: 'oracle_memory_choice', speaker: { defId: 'townsfolk_oracle' }, priority: 212,
     all: [{ fact: 'oracleAtHome' }, { fact: 'oracleMemoryWaiting' }],

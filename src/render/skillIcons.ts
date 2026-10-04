@@ -7,6 +7,18 @@ export interface SkillIcon {
   layers: { path: string; fill?: 'tint' | 'ink'; stroke?: 'tint' | 'ink'; width?: number }[];
 }
 export const SKILL_ICONS: Record<string, SkillIcon> = {
+  lifeFlask: {source:'hollow-wake/skills/life-flask',layers:[
+    {path:'M9 2H15V7L19 12Q22 21 16 22H8Q2 21 5 12L9 7Z',fill:'tint',stroke:'ink'},
+    {path:'M8 5H16M7 13H17M12 14V19M9.5 16.5H14.5',stroke:'ink'},
+  ]},
+  manaFlask: {source:'hollow-wake/skills/mana-flask',layers:[
+    {path:'M9 2H15V7L19 12Q22 21 16 22H8Q2 21 5 12L9 7Z',fill:'tint',stroke:'ink'},
+    {path:'M8 5H16M7 13H17M12 14L9.5 17L12 20L14.5 17Z',stroke:'ink'},
+  ]},
+  catalystFlask: {source:'hollow-wake/skills/catalyst-flask',layers:[
+    {path:'M9 2H15V7L19 12Q22 21 16 22H8Q2 21 5 12L9 7Z',fill:'tint',stroke:'ink'},
+    {path:'M8 5H16M7 13H17M12 14L13 16L16 17L13 18L12 21L11 18L8 17L11 16Z',stroke:'ink'},
+  ]},
   sweep: {source:'hollow-wake/skills/sweep',layers:[
     {path:'M5 17L17 3L21 3L21 7L8 20Z',fill:'tint',stroke:'ink'},
     {path:'M4 14L11 21M4 20L6 18M3 8Q8 1 14 3M2 11L3 8L6 9',stroke:'ink'},

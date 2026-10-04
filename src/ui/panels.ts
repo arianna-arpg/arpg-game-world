@@ -58,6 +58,7 @@ import { ContainerPane } from './containerPane';
 import { InventoryPages, type InventoryPage, type InventoryPageRequest } from './inventoryPages';
 import { questRewardHtml, questImbueHtml } from './questRewards';
 import { questOfferHtml } from './questOffers';
+import { skillPreparationHtml } from './skillPreparation';
 import { explorationRewardHtml, explorationRewardOffersHtml, explorationRewardShortcutHtml } from './explorationRewards';
 import { containerOriginOf, findCarried, originContainerId } from '../engine/containers';
 import { CONTAINER_DEFS } from '../data/containers';
@@ -9616,6 +9617,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       ${this.mapTabsHtml()}
       ${world.massRuntime ? '' : `<div style="color:#6ad8c0;font-size:12px;padding:8px">${esc(world.odyssey.status())}</div>`}
       <div id="quest-scroll" style="overflow-y:auto;max-height:64vh;padding:2px 4px 8px 2px">
+        ${skillPreparationHtml(world, this.slotLabels())}
         ${explorationRewardHtml(world)}
         ${questRewardHtml(world)}
         ${questImbueHtml(world)}
@@ -9638,6 +9640,20 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       btn.addEventListener('click', () => {
         if (this.mapOpen) this.toggleMap();
         this.toggleBuildPanel(world.localSeat.id, 'show');
+      });
+    });
+    this.worldMap.querySelectorAll<HTMLButtonElement>('[data-prepare-inventory]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (this.mapOpen) this.toggleMap();
+        this.toggleInventory();
+      });
+    });
+    this.worldMap.querySelectorAll<HTMLButtonElement>('[data-prepare-skill]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        world.requestMeta({ t: 'learn', uid: Number(btn.dataset.prepareSkill),
+          slot: Number(btn.dataset.prepareSlot), emptyOnly: true });
+        this.refreshMap();
+        this.refreshInventory();
       });
     });
     this.worldMap.querySelectorAll<HTMLButtonElement>('[data-quest-accept]').forEach(btn => {

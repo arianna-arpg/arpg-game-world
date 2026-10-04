@@ -87,7 +87,7 @@ export class DialogueUI {
       .npc-dialogue button:hover,.npc-dialogue button:focus-visible { background:#a58a5350; border-color:#d6bc7b; outline:1px solid #d6bc7b; }
       .npc-dialogue .dialogue-close { position:absolute; right:17px; top:14px; padding:2px 7px; color:#c4b697; background:transparent; border-color:transparent; }
       .dialogue-accessible { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip-path:inset(50%); }
-      .dialogue-choices { display:flex; flex-direction:column; gap:6px; margin-top:8px; }
+      .dialogue-choices { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,${DIALOGUE_CFG.choiceMinWidth}px),1fr)); gap:6px; margin-top:8px; }
       .dialogue-choices[hidden], .dialogue-next[hidden] { display:none; }
       .dialogue-choices button { text-align:left; white-space:normal; overflow-wrap:anywhere; }
       .dialogue-choices button:disabled { opacity:.6; cursor:default; }

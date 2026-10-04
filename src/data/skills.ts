@@ -10022,7 +10022,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   life_flask: {
     tree: FLASK_TREES.life_flask,
-    id: 'life_flask', name: 'Life Flask',
+    id: 'life_flask', name: 'Life Flask', icon: 'lifeFlask',
     // Copy FLAGGED for Arianna's word (the two-stream rewrite, 2026-08-08).
     description: 'Holds up to 3 charges; every life orb you pick up banks one. Drinking spends'
       + ' a charge to pour TWO streams at once: a SURGE of 15% of your maximum life over 0.4'
@@ -10060,7 +10060,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   mana_flask: {
     tree: FLASK_TREES.mana_flask,
-    id: 'mana_flask', name: 'Mana Flask',
+    id: 'mana_flask', name: 'Mana Flask', icon: 'manaFlask',
     description: 'Banks one charge per mana orb you pick up, holding up to 3. Drinking spends a'
       + ' charge to restore mana over 3 seconds, deeper as the skill levels; a REFLEX press'
       + ' works even mid-cast but is refused at full mana. While slotted, your hits have a 5%'
@@ -10087,7 +10087,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   catalyst_flask: {
     tree: FLASK_TREES.catalyst_flask,
-    id: 'catalyst_flask', name: 'Catalyst Flask',
+    id: 'catalyst_flask', name: 'Catalyst Flask', icon: 'catalystFlask',
     description: 'Any orb you pick up feeds this flask, banking up to 6 charges. Drinking'
       + ' consumes the whole bank (at least 2): every charge adds to a pour of life and mana'
       + ' over 3.5 seconds, and the rush grants 15% increased damage and 10% increased move'

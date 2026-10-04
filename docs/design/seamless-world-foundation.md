@@ -3980,3 +3980,58 @@ and Pages 37237112741; exact live metadata reports 2026-10-04T21:42:51.140Z.
 Remote seed 1627184021 passed the same isolation and Continue check. Both had
 null fatal errors. The caravan critic remains on its unchanged frozen build;
 overall independent acceptance remains unmet.
+
+### One preparation stop before the first outing
+
+Mireille's authored welcome now offers the existing Journal or inventory
+directly. The Journal puts her carried flask Memories beside nearby optional
+contracts, with explicit placement into suggested empty skills. Slot labels
+use current keyboard/controller bindings and the native remembered-slot planner.
+A full pack that prevented the gift shows the recovery path instead of an
+imaginary item. The regular inventory and rack remain available.
+
+The existing learn intent accepts an optional emptyOnly restriction. It checks
+the live destination and known-copy state before a swap can occur; stale cards,
+dead/downed actors and malformed policies refuse. Requirements, structural
+capacity, native gifts, once-only charge filling and account graduation retain
+their own rules. No automatic learning, extra grant, combat modifier or save
+field was added. SKILL_PREPARATION_CFG owns presentation enrollment and bounds.
+The attributed vector registry supplies distinct Life, Mana and Catalyst Flask
+symbols through its existing canvas and SVG consumers. Dialogue choiceMinWidth
+allows short alternatives to share a row while long content retains scrolling.
+
+All three type checks, skillpreparation, mireille_lesson, skillitems, townwelcome,
+menubar, worldmass_welcome and simulation smoke pass. The new probe checks pure
+reads, native gift and filling, occupied/known/dead/downed refusals, remembered
+positions, escaped labels, requirements, full racks, full packs and mirrors.
+Eleven final page/canvas pairs were inspected. Controlled browser QA uses the
+actual dwell, dialogue response, Journal placement and contract buttons; tests
+600-pixel layout and both visible responses; and verifies a retained stale
+button cannot replace a newly occupied slot. Partial and full preparation survive
+native Continue and the actual preceding client, preserving the run, items,
+positions, lesson, charges and slot memory. Zero-valued native charge entries
+are normalized to absence for the comparison. Continuation screenshots are
+static and retain unsettled roof fades; they are not real-time scene evaluation.
+
+The fixture prepares the inn position and starts a selected class; this is not
+an earned opening playthrough. An early draft's three vertically stacked
+responses concealed alternatives in the short reader. The final two short
+choices are directly visible at both tested sizes, with explicit clipping
+assertions. An invalid attribute fixture and a missing runtime-update argument
+were corrected without exceptions in production code.
+
+The frozen road-foragers critic has completed its review: low willingness to
+continue. It completed Western Watch and earned/equipped Arcing, Keep Your
+Distance and Wellspring, but undertook no post-support combat. Opening panel
+work, collision friction and crowded feedback outweighed its positive build
+choices. Its final quiet outing was only 955 requested frames, about 15.95
+nominal seconds, not minutes. Native Save & Exit/Continue passed. All 118 capture
+pairs were inspected by the critic; its 4,547 confirmed frame-request frames
+include menus and travel, not continuous real-time play. The frozen caravan
+critic reports a more satisfying later fight but has not yet filed its final
+report. Overall independent acceptance remains unmet; no AAA comparator was
+played.
+
+Light-shadow head defdeb7f passed CI 37237515679 and Pages 37238629289. Exact live
+metadata reports 2026-10-04T22:06:48.144Z. Remote seed 1173988966 passed all six
+ordinary-save sentinels and native browser Continue with a null fatal error.

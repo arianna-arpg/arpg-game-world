@@ -1,5 +1,13 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+skillPreparationHtml presents the native pending flask lesson alongside
+optional contracts. Its buttons send ordinary learn intents with emptyOnly,
+which rechecks occupancy/known copies before changing the rack. Native gifts,
+requirements, once-only filling and graduation remain authoritative. Authored
+Mireille responses open the same Journal or inventory; choiceMinWidth keeps
+short alternatives visible. Verify skillpreparation, mireille_lesson, skillitems,
+townwelcome, menubar, worldmass_welcome, sim smoke and skill-preparation-ui.cjs.
+
 LightSightCache and litPolygon consume the shared RegionGrid contract, so
 native lamps and spell glows respect seamless terrain and Lastlight doors.
 Static silhouettes invalidate on map identity, revision, source and reach.
