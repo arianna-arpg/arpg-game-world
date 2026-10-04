@@ -9,6 +9,9 @@ const rooted: BrainTuning = {squad:{focusLeader:true,formation:'ring',idle:{styl
 const m=(slot:string,monster:string,forward:number,side:number,extra:Partial<EncounterMember>={}):EncounterMember=>
   ({slot,role:slot,monster,at:{forward,side},...extra});
 const lead={leader:true};
+// A small foraging party commits once its two hunters have gathered. The
+// bone-thrower may keep its own range; a straggler cannot postpone the blades.
+const foragerMuster: BrainTuning = {squad:{muster:{count:2,radius:380,bloodiedAt:0.9,patience:2.2}}};
 const pair={count:[2,2] as [number,number]};
 const bandit=['farmland','metropolis','townhouse','sewerworks','highland','foothills','stonecrown'];
 const goblin=['tundra','cinderlands','magma_gallery','highland','foothills','snowcrown','pinnacle'];
@@ -33,7 +36,8 @@ export const ENCOUNTER_GROUPS: Record<string,EncounterGroupDef> = {...Object.fro
   // Explicitly selected teaching patrol; ordinary ambient pools remain unchanged.
   {...crew('gnoll_road_foragers','Road Foragers','gnoll',1,gnoll,
     'A prowler leads another hunter and a bone-thrower. Break the leader to shake their borrowed courage.',[
-      m('leader','gnoll_prowler',65,0,lead),m('hunter','gnoll_prowler',-10,-90),
+      m('leader','gnoll_prowler',65,0,{...lead,tactics:foragerMuster}),
+      m('hunter','gnoll_prowler',-10,-90,{tactics:foragerMuster}),
       m('scavenger','gnoll_bonepicker',-75,80)],
     {squad:{focusLeader:true,formation:'wedge',spacing:65,idle:{style:'drill'},onLeaderDeath:'scatter'}}),ambient:false},
   {...crew('undead_caravan_watch','Caravan Watch','undead',2,['downs'],

@@ -1,5 +1,11 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Road Foragers' two melee members use recipe-owned foragerMuster tuning.
+The thrower keeps its ranged conduct; other packs keep their species defaults.
+Verify foragercommitment, worldmass_foragers, encountergroups, tacticalai and
+simulation smoke, then forager-commitment-ui.cjs for native pursuit/spells,
+leader-loss morale and exact continuation. Frozen playtest builds stay immutable.
+
 RewardLabelLayout gives native ground rewards stable, bounded reading space,
 with visible source tethers and the existing combat/veil gates. Optional dropUid
 attribution crosses snapshots so only an exact, presently drawn name collapses

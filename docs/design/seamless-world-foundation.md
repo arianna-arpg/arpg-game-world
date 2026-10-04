@@ -4132,3 +4132,46 @@ symbol pass, and unchanged symbols when the native veil gate conceals names.
 Only inert save/restore context calls are omitted from that last mark comparison.
 The updated itemreadability probe passes all 170 checks. This is a correction
 to the test's consumption path, not a production change or a removed assertion.
+
+### Small patrols commit without waiting for the ranged member
+
+The Road Foragers' two melee members now have member-owned muster settings:
+two nearby members, a 380-unit gathering radius, the existing wounded early
+commitment, and a 2.2-second maximum wait. The bone-thrower retains its ordinary
+ranged behavior and receives no no-cast gathering gate. Other gnoll packs keep
+their existing three-member/six-second settings. Native sight, movement,
+collision, skill selection, damage, life, morale, rewards and saved identities
+remain the same systems. This is an encounter-data adjustment, not new AI logic.
+
+Exploratory paired runs used three seeds and four approaches, including sides
+where scenery prevented engagement and the setting made no difference. The
+new foragercommitment probe retains three actual generated approaches that
+exposed repeated waiting: native melee casts rise 7 to 21, 4 to 9, and 3 to 9;
+time within 75 units rises 5.25 to 9.23, 3.83 to 8.95, and 3.07 to 8.52 seconds
+during each ten-second prepared run. The hero walks toward the camp briefly,
+then holds invulnerably; unrelated enemies are removed for isolation. This
+measures conduct, not difficulty, enjoyable combat or player skill.
+
+All three type checks pass, as do foragercommitment (four groups), the unchanged
+worldmass_foragers (five), encountergroups (54), tacticalai (27), and simulation
+smoke (five scenarios by five seeds, no scenario warnings). The probe also
+checks unchanged native health, unrelated pack defaults, the ranged member's
+missing muster gate, leader-loss scatter, and exact wounded Continue.
+
+Controlled browser QA uses native Firebolt, Chain Lightning and movement
+after prepared placement with an invulnerable hero. The leader and survivors
+fall through actual skill resolution; the two survivors retain their native
+morale response. Wounded and cleared current-client Continue pass; the cleared
+checkpoint also passes exact actual prior-client/current-client continuation.
+Ten final page/canvas pairs were inspected, including an 800-pixel viewport.
+The earlier stationary-caster fixture exhausted mana while the scavenger fled;
+the final harness pursues through normal movement inputs before casting.
+No resources or enemy health were added to make that test finish.
+
+The separate camp-position investigation did not establish a shared pathfinding
+defect. One earlier apparent stall was the native finite gathering wait, made
+artificial by relocating living squadmates away. No navigation algorithm was
+changed on the strength of a critic's stationary-enemy observation. The new
+frozen build is undergoing an independent, explicitly Warrior-focused review;
+the other fresh reviews continue on their unchanged builds. Acceptance remains
+unmet and no commercial game comparison has been played.
