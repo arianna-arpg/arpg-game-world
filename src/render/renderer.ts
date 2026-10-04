@@ -149,6 +149,7 @@ import { REACTIVE_CUE_CFG } from '../data/combatReadability';
 import { drawReactiveCue, drawGaspSpark, drawWardBody, drawWardLinks, drawWardBar } from './vis/combatReadabilityLayer';
 import { drawCastingCue, drawFocusFrame } from './vis/castingCueLayer';
 import { castingCompletion } from '../engine/castingCues';
+import { chestReadout, drawChestReadout } from './vis/chestReadout';
 import { castMovementHeld, drawCastName, drawCastSlot } from './vis/castReadout';
 import { COMBAT_CUE_CFG } from '../data/combatCues';
 import { drawShellCue, drawPoiseCue, statusBodyLean, drawStatusBodyCue } from './vis/defenseCueLayer';
@@ -4278,6 +4279,8 @@ export class Renderer {
 
   /** Chests use the material grammar; chains, seam light and lid motion carry state. */
   private drawChests(world: World): void {
+    const aim=this.padAim??(this.hudMouse.x>=0?this.toWorld(this.hudMouse):null);
+    const cue=chestReadout(world,aim);
     for (const c of world.chests) {
       const age = c.openedAt === undefined ? Infinity : world.time - c.openedAt;
       const u = Math.max(0, Math.min(1, age / VIS_CFG.chestLid.seconds));
@@ -4285,6 +4288,7 @@ export class Renderer {
         c.kind === 'objective' && !world.objectiveDone, world.time);
       if (!c.opened && c.kind === 'timed' && c.maxLock > 0) {
         this.drawProgressRing(c.pos.x, c.pos.y, 1-c.lockTime/c.maxLock, 'lockpick');
+        if(cue?.chest===c)drawChestReadout(this.ctx,cue.text,c.pos);
       }
     }
   }

@@ -1,5 +1,11 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Native chest search and its one nearby readout share chestInReach and
+CHEST_INTERACTION_CFG. VIS_CFG.chestReadout owns bounded hover/partial/active
+guidance; native sight and veils admit it, and unresolved mirrors stay quiet.
+Verify chestreadout, worldmass_cacheopening and tollspill, plus chest-readout-ui.cjs
+against its actual prior client for ordinary movement, recovery and opening.
+
 Persistent native ember rings use a kind-owned remaining-clock checkpoint and
 fixed descriptor node count. Their native spill, kindle, expiry and reward rules
 remain authoritative. New Windworn Shrines offer this timed activity; older

@@ -3375,3 +3375,50 @@ metadata reports 2026-10-04T01:05:27.351Z. Remote seed 1426177997 retained all s
 ordinary-save sentinels and native Continue without a fatal error. Independent
 road-choice, garrison-country and sighted-country reviews continue on frozen
 builds; no overall critic acceptance or playable commercial comparison is claimed.
+
+### Making cache search state visible
+
+A nearby timed cache can now explain "Searching…" or "Move closer to search".
+Only one cue appears: an active search takes priority, otherwise a hovered or
+partially searched nearby cache can answer. It vanishes after opening or after
+an untouched cache leaves the pointer. Native line of sight admits the cue and
+the existing world/room veils still cover its drawing. Mirrors without an
+authoritative local interaction, dead players and objective chests receive no
+invented timed-search state. Mimics use the same words; no hidden identity is
+disclosed. Width, distance, pointer reach and appearance are configurable.
+
+The engine and readout now share chestInReach. The existing 60-unit extra reach
+and 0.6-per-second recovery moved into CHEST_INTERACTION_CFG with their values
+unchanged. Native opened state, earned quiet-site speed, objective gating, mimic
+reveal, drops and the lid/progress-ring presentation retain their existing paths.
+This is contextual interaction guidance, not a new completion announcement.
+
+All three type checks pass. The new three-group probe covers the exact native
+boundary, actual search/recovery/opening, pure drawing, native rock occlusion,
+one-cue choice, owner/death/objective gates, no mimic disclosure and bounded
+Unicode text. Existing cacheopening (three groups, including partial Continue)
+and tollspill (eleven assertions) pass. Controlled browser QA uses ordinary
+movement and waiting after fixture preparation. Current and actual prior clients
+both reach lock values 2.8978 while searching, 2.94456 after retreat, and 3.24516
+after recovery, then open. Six current page/canvas pairs and the prior approach
+pair were inspected, including 800-by-600. Rendering preserves sampled state.
+The fixture corrects an initial nonexistent mouse-setter call to the renderer's
+existing pointer property; a longer actual search leaves enough partial progress
+to observe recovery before reset. Prepared positioning, invulnerability, removed
+foes and programmed hover make this controlled verification, not earned play.
+
+The garrison-country critic completed a fresh level-three Magician excursion,
+cleared Fallen Court, exercised Change the Rhythm's visible sequence/reset,
+equipped Arcing and armor, fought again and verified native Continue. The
+garrison hover affiliation was useful; interaction ambiguity, finding the
+straggler and uncertain fight readability still weakened the desire to continue.
+Their 113 paired captures cover 4,075 requested frames; wall time is not gameplay
+pacing, and the later solitary enemy did not prove Arcing's chain benefit.
+The independent ember-country reviewer now has the frozen timed-riddle build.
+The road-choice reviewer is writing their report; sighted-country is recovering
+a tool/compaction interruption in its existing session. No final critic
+acceptance or playable commercial comparison has been established.
+
+Ember head 72f0a20f passed CI 37167464819 and Pages 37168172221. Exact live metadata
+reports 2026-10-04T01:31:07.441Z. Remote seed 381199008 retained all six ordinary-save
+sentinels and native Continue without a fatal error.

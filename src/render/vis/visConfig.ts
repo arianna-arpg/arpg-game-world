@@ -1477,6 +1477,9 @@ export const VIS_CFG = {
   /** The chest lid's swing on open: seconds, the lift (px) it rises before
    *  settling open. */
   chestLid: { seconds: 0.35, lift: 7 },
+  chestReadout: { enabled:true, range:180, hoverRadius:28, width:150, y:39,
+    searching:'Searching…', approach:'Move closer to search', font:'11px Verdana',
+    text:'#f1e7cd', edge:'#171510', outline:3 },
 
   /** THE STATUS VOICE's render dials (vis/statusVoiceLayer.ts — the drawn
    *  half of engine/statusVoice.ts; the life / reach / cap live THERE as

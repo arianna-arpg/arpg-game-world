@@ -130,6 +130,7 @@ import {
   type MemoryKind, type MemoryPin, type MemoryProvenance, type MemoryRecallGroup, type MemoryRecallResult,
   type MemoryRecallViewData,
 } from './memories';
+import { chestInReach, CHEST_INTERACTION_CFG } from './chestInteraction';
 import { accountRelicBoard, bankRelic, isRelic, loseCarriedRelics, migrateRelicCarry, migrateRelicCorpses, planRelicStorage, reconcileRelicStash, reliquaryExperience } from './accountReliquary';
 import { emptyStash, personalStashEntries, planStashMove, type PersonalStash, type StashCell } from './stash';
 import { STASH_DEFS } from '../data/stashes';
@@ -56259,7 +56260,7 @@ export class World {
     for (let i = this.chests.length - 1; i >= 0; i--) {
       const c = this.chests[i];
       if (c.opened) continue;
-      const near = dist(c.pos, p.pos) <= p.radius + 60;
+      const near = chestInReach(c, p);
       if (c.kind === 'objective') {
         if (this.objectiveDone && near) this.openChest(c);
         continue;
@@ -56282,7 +56283,7 @@ export class World {
           }
         }
       } else if (c.lockTime < c.maxLock) {
-        c.lockTime = Math.min(c.maxLock, c.lockTime + dt * 0.6);
+        c.lockTime = Math.min(c.maxLock, c.lockTime + dt * CHEST_INTERACTION_CFG.recoveryPerSecond);
       }
     }
   }
