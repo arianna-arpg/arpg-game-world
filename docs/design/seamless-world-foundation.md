@@ -3931,3 +3931,52 @@ Patrol head 6634f8ca passed CI 37232360512 and Pages 37233648316. Exact live
 metadata reports 2026-10-04T20:52:29.518Z. Remote seed 3762790174 passed six
 ordinary-save sentinels and native Continue without a fatal error. Formation
 identity head 8fce1012 is pushed; its publication is pending verification.
+
+### Shared terrain shadows for native lights
+
+The prior light polygon helper accepted only GridWalkField, returning an
+unclipped disc throughout worldmass even though native eyes already used the
+shared RegionGrid interface. litPolygon now uses that interface and the existing
+castGridRay cell crossings. Native wall/window semantics and the decorative
+near-face overlap remain; no perception, combat, darkness or light-intensity
+rule changes. LightSightCache invalidates on terrain identity and revision as
+well as source position and reach, including settlement door repaints. Static
+sources reuse their exact polygon while unchanged. The square-area prescan is
+gone; fine-grid work follows the 48 rays' crossed cells.
+
+All three type checks, lightsight, sightveil, coherence and worldmass_haven pass.
+The new probe covers finite boundaries, translated negative coordinates,
+windows, repaint, same-revision replacement grids, moved/resized sources, and
+actual native Lastlight doors across three seeds. A 1024-radius, two-unit-cell
+open scene stays below 80,000 region reads; repeated static reads add zero.
+This is an operation-count check, not a measured gameplay frame-rate claim.
+
+Controlled browser QA reproduces the actual preceding client's complete light
+occlusion bypass, then verifies current closed/open/resealed doors, a moved
+hero, the inn, an 800-pixel view and a distant negative-coordinate wall edit.
+Twelve page/canvas pairs were inspected. Rendering preserves the run snapshot;
+current/prior/current Continue preserves seed, position, life, items, door state,
+claims and native enemy state, normalizing only transient formation IDs to
+membership. Night-like ambient contrast and source positions are prepared;
+room/roof presentation clocks are settled separately without simulation steps.
+These are visibility fixtures, not ordinary-input play or earned combat.
+
+Two fixture mistakes were corrected without production exceptions: 'closed'
+was not a native door-state action (resealDoor is the separate inverse), and
+teleporting a prepared view before reload triggered normal unload saving.
+Final Continue comparisons keep the saved hero position and reconcile normal
+worldmass admission before saving. The first draft's static world clock also
+left roof fades unsettled; the final captures explicitly settle presentation.
+
+The population investigation found no reusable full actor checkpoint: native
+zone memory, like current worldmass saves, does not serialize every combat
+dependency. Distant survivors are still retained under the conservative cap.
+No eviction, cap increase or dormancy behavior was introduced in this pass.
+
+Formation head 8fce1012 passed CI 37234066258 and Pages 37235362563; exact live
+metadata reports 2026-10-04T21:17:26.675Z. Remote seed 4171674810 passed six
+ordinary-save sentinels and Continue. Caravan head d079f54d passed CI 37235756104
+and Pages 37237112741; exact live metadata reports 2026-10-04T21:42:51.140Z.
+Remote seed 1627184021 passed the same isolation and Continue check. Both had
+null fatal errors. The caravan critic remains on its unchanged frozen build;
+overall independent acceptance remains unmet.

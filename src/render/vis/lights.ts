@@ -15,7 +15,6 @@ import type { World } from '../../engine/world';
 import { dayCycle, sceneSkyTime } from '../../world/daynight';
 import type { Doodad } from '../../engine/levelgen';
 import { lightReach, wellDimScale } from '../../engine/lightwells';
-import { GridWalkField } from '../../world/gridWalk';
 import { STATUS_DEFS } from '../../engine/status';
 import { DOODAD_VISUALS } from '../../data/doodadVisuals';
 import { MONSTERS } from '../../data/monsters';
@@ -24,7 +23,7 @@ import { courtLord } from '../../packages/courts';
 import { registerDoodadFamily } from '../../engine/doodadFamilies';
 import { withAlpha } from './color';
 import { resolveColor } from './painters';
-import { litPolygon, polygonPath } from './sight';
+import { LightSightCache, litPolygon, polygonPath } from './sight';
 import { baked, drawGlow } from './sprites';
 import { VIS_CFG } from './visConfig';
 import { drawReadableLightMask } from './readableLight';
@@ -44,12 +43,6 @@ interface LightSource {
   poly?: { x: number; y: number }[];
 }
 
-/** Cached wall-occlusion polygon of a STATIC light (a doodad, an exit): the
- *  source never moves and the walls only change when the walk grid repaints,
- *  so the 48-ray march re-runs only on a grid version bump — not per frame,
- *  which at the 72-light cap was ~3,500 ray marches a frame in a walled zone. */
-interface PolyCacheEntry { v: number; poly: { x: number; y: number }[] | null }
-
 /** One clustered STATIC emissive source: same-kind emissive doodads binned
  *  once per zone into aggregates (a lava sea's ~3,000 disc lights collapse
  *  to a few dozen pool glows). Two problems die at once: the per-frame light
@@ -68,7 +61,7 @@ export class LightLayer {
   private buf = document.createElement('canvas');
   private bctx = this.buf.getContext('2d')!;
   private lights: LightSource[] = [];
-  private polyCache = new WeakMap<object, PolyCacheEntry>();
+  private polyCache = new LightSightCache();
   /** Static-emissive clusters, rebuilt when the zone's doodad list changes.
    *  Keyed on identity + length + the mutation rev: the rev catches IN-PLACE
    *  flips (a pooled well attached to an authored doodad at zone load or by
@@ -150,12 +143,7 @@ export class LightLayer {
   /** A static source's occlusion poly, re-marched only when the grid repaints. */
   private staticPoly(world: World, key: object, x: number, y: number, r: number):
     { x: number; y: number }[] | undefined {
-    const ver = world.walk instanceof GridWalkField ? world.walk.version : 0;
-    const hit = this.polyCache.get(key);
-    if (hit && hit.v === ver) return hit.poly ?? undefined;
-    const poly = litPolygon(world, x, y, r);
-    this.polyCache.set(key, { v: ver, poly });
-    return poly ?? undefined;
+    return this.polyCache.read(world, key, x, y, r) ?? undefined;
   }
 
   /** Gather every light in view. Call AFTER the doodad cull (the culled map

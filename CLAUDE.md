@@ -1,5 +1,11 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+LightSightCache and litPolygon consume the shared RegionGrid contract, so
+native lamps and spell glows respect seamless terrain and Lastlight doors.
+Static silhouettes invalidate on map identity, revision, source and reach.
+Verify lightsight, sightveil, coherence, worldmass_haven and light-sight-ui.cjs
+for actual prior bypass, native opening/resealing and exact cross-client Continue.
+
 New Silent Caravans select the explicit native undead_caravan_watch recipe:
 two swords, an archer and a mender in a burned-cargo composition. Normal AI,
 healing, projectile chaining, stats, placement and garrison rewards stay native.
