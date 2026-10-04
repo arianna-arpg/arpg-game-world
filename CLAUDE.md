@@ -1,5 +1,13 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+EncounterGroupDef.ambient can exclude a recipe from automatic pools while
+allowing explicit native selection through the same level/habitat/role gates.
+nativeMassEncounters accepts that native selection policy; new Cinderwatch
+descriptors select Road Foragers, whose existing melee, thrown attacks and
+leader-loss morale remain native. Saved rosters never restage on Continue.
+Verify worldmass, encountergroups, simulation smoke, generation QA and
+road-foragers-ui.cjs for actual skills, partial/cleared saves and old refusal.
+
 ObjectiveReadout wraps native public objective text within a configured width
 and moves following bearings, buffs and notices below its last row. VIS_CFG
 bounds characters and rows, with a single retained layout per renderer.

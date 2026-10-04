@@ -1,6 +1,6 @@
 import { MONSTERS } from '../data/monsters';
 import { ENCOUNTER_GROUPS, ENCOUNTER_GROUP_CFG } from '../data/encounterGroups';
-import { encounterGroupPool, planEncounterGroup, type EncounterContext } from '../engine/encounterGroups';
+import { encounterGroupPool, planEncounterGroup, type EncounterContext, type EncounterGroupSpec } from '../engine/encounterGroups';
 import { presenceMul } from '../engine/presence';
 import { canonical, massRandom } from './random';
 
@@ -15,12 +15,14 @@ export interface MassEncounterSpec {
   habitat: Pick<EncounterContext,'biome'|'tileset'|'place'|'story'>;
   plans: MassFormation[];
 }
-export function nativeMassEncounters(tileset: string, biome: string, level: number): MassEncounterSpec | undefined {
+export function nativeMassEncounters(tileset: string, biome: string, level: number,
+  selection?: EncounterGroupSpec): MassEncounterSpec | undefined {
+  if(selection===false)return;
   const habitat:MassEncounterSpec['habitat']={tileset,biome,place:'surface',story:0};
   const plans:MassFormation[]=[];
   for(const faction of new Set(Object.values(ENCOUNTER_GROUPS).map(g=>g.faction))){
     const context={...habitat,level,faction};
-    for(const row of encounterGroupPool(context)){
+    for(const row of encounterGroupPool(context,selection)){
       // Multiple seeded native plans retain optional roles/alternatives without
       // rerolling those roles when a country page arrives.
       for(let variant=0;variant<4;variant++){
@@ -33,7 +35,7 @@ export function nativeMassEncounters(tileset: string, biome: string, level: numb
     }
   }
   return plans.length?{source:'worldmass/native-formations/'+tileset,
-    chance:ENCOUNTER_GROUP_CFG.chance,habitat,plans}:undefined;
+    chance:selection?.chance??ENCOUNTER_GROUP_CFG.chance,habitat,plans}:undefined;
 }
 export function validateMassEncounters(spec: MassEncounterSpec, level: number): void {
   const h=spec?.habitat;

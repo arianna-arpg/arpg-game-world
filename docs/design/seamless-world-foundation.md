@@ -3783,3 +3783,61 @@ Magician and Rogue fixtures all took damage; the latter two died. An earlier
 version omitted the separate AI phase and is invalid evidence. This rules out
 blanket immunity in that fixture, not the critic's concern about encounter
 decisions. No enemy-stat change was made on that basis.
+
+### A coherent patrol on the western road
+
+New Cinderwatch camps now select the native Road Foragers recipe: a prowler
+leader, another prowler and a bonepicker. The bonepicker already carries
+thrown attacks, a visible nerve tell and courage borrowed from a nearby leader.
+The recipe uses the existing squad and leader-loss scatter rules. There are no
+new damage multipliers, rare promotions, free casts or player-build reads.
+The public western road account describes this relationship.
+
+EncounterGroupDef.ambient defaults to the prior automatic-pool behavior.
+An explicit false makes a recipe available only through an authored selection.
+The country adapter now accepts the native encounter selection policy and
+copies its resolved plans into the run. Level, habitat, faction, member and
+geometry gates still apply. The camp's three bodies share existing atomic
+admission, the 96-body budget, native births and garrison completion. New camps
+use this fixed level-one patrol; already saved camps retain their old roster.
+An actual preceding client refuses the unknown formation recipe before
+replacing its live runtime.
+
+All three type checks, all 40 worldmass probes, native encounter-group tests
+and simulation smoke pass. Generation QA reports 869 cases across three seeds
+with zero failures, four standing geometry warnings and one Boulevards timing
+warning (403ms under concurrent load). Five seeded camp checks cover full roles,
+ordinary rarity, collision-free seats and complete guardian counts. Actual AI
+uses Hurl Debris, Rend and Claw. Killing the leader triggers native morale;
+wounded survivors retain exact roles, names, positions, life and homes through
+Continue. Clearance pays once only after all three original defenders fall.
+
+The broader checks initially exposed fixtures assuming two current defenders,
+a birth fixture retaining the new formation while replacing its roster, and
+raw numeric squad-ID comparisons. Explicit two-body fixtures now opt out of
+formations; live camp checks cover all three bodies. Continue comparisons
+normalize only the transient squad number to exact saved membership, preserving
+every other enemy field. The native recipe validator also rejected an initial
+zero-weight exclusion; the explicit ambient policy replaces that invalid draft.
+
+Controlled browser QA admits the group, observes its engagement and retreat,
+defeats it using native Firebolt and Chain Lightning, checks an 800-pixel panel,
+and verifies partial/cleared Continue and an actual older camp's unchanged
+continuation. Nine scene pairs plus the stalled-cast diagnostic were inspected
+across iterations. Prepared positions, invulnerability, distant incidental foes
+and repeated positioning for the survivors are disclosed fixtures, not an earned
+playthrough. Stationary Firebolts initially failed to finish a retreating
+bonepicker; switching to the native Chain Lightning did. No enemy behavior was
+disabled to force the result. The final logger names that spell correctly.
+
+A separate fresh critic is playing the frozen road-foragers build from Begin
+through ordinary inputs, with the initial western contract requested as coverage.
+Its build fingerprint is
+eff6733cfaff0df08cd32345fa07158c87aed0accf0dfb183ed776b27fca2223.
+That critic chooses its class, later decisions and stopping point. Results remain
+pending; these controlled checks are not a claim of encounter quality.
+
+Objective-readout head c6b74869, including the preceding quiet-puzzle fix,
+passed CI 37230592290. Exact preview metadata reports
+2026-10-04T20:24:05.341Z. Remote seed 2443997474 passed six ordinary-save sentinels
+and native Continue without a fatal error.

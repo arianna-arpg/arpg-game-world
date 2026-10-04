@@ -29,6 +29,8 @@ export interface EncounterGroupDef {
   faction: string;
   minLevel: number;
   weight: number;
+  /** False requires an explicit pool selection; omission keeps ambient eligibility. */
+  ambient?: boolean;
   presence?: PresenceSpec;
   /** Lists are ANDed when both are present; absent axes are unrestricted. */
   habitats?: { biomes?: string[]; tilesets?: string[]; place?: 'surface' | 'cave'; stories?: [number, number] };
@@ -93,7 +95,7 @@ function pick<T extends { weight: number }>(rows: T[], random: () => number): T 
  * its unfiltered input. Gate checks themselves consume no random draws. */
 export function encounterGroupPool(q: EncounterContext, spec?: EncounterGroupSpec): EncounterChoice[] {
   if (spec === false) return [];
-  const rows: EncounterChoice[] = spec?.table ?? Object.values(ENCOUNTER_GROUPS).map(g => ({ id:g.id, weight:g.weight }));
+  const rows: EncounterChoice[] = spec?.table ?? Object.values(ENCOUNTER_GROUPS).filter(g=>g.ambient!==false).map(g => ({ id:g.id, weight:g.weight }));
   return rows.filter(r => {
     const g = ENCOUNTER_GROUPS[r.id];
     return g?.id === r.id && Number.isFinite(r.weight) && r.weight > 0 && presenceMul(r.presence,q.level) > 0 && eligible(g,q,memberCap(spec?.maxMembers));
@@ -162,6 +164,7 @@ export function encounterGroupErrors(): string[] {
   for(const [id,g] of Object.entries(ENCOUNTER_GROUPS)) {
     const say=(s:string)=>errors.push(`encounterGroup ${id}: ${s}`);
     if(g.id!==id || !Number.isFinite(g.minLevel) || g.minLevel<1 || !Number.isFinite(g.weight) || g.weight<=0) say('invalid identity/level/weight');
+    if(g.ambient!==undefined && typeof g.ambient!=='boolean') say('invalid ambient policy');
     if(!g.members.length || g.members.some(m=>!m.slot || !m.role) || new Set(g.members.map(m=>m.slot)).size!==g.members.length) say('slots must be nonempty and unique, with named roles');
     if(g.members.filter(m=>m.leader).length!==1) say('require exactly one leader slot');
     const max=g.members.reduce((n,m)=>n+range(m)[1],0);

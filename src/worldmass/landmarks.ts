@@ -3,6 +3,7 @@ import { nativeMassSite, MASS_CACHE_OPENING, type MassSiteSpec } from './sites';
 import { nativeMassAltar } from './fields';
 import { nativeMassShrine } from './shrines';
 import { nativeMassPuzzle } from './puzzles';
+import { nativeMassEncounters } from './encounters';
 import { OBJECTIVE_REWARD } from '../data/objectiveRewards';
 
 interface Landmark {
@@ -35,8 +36,11 @@ export function frontierLandmarks(): Landmark[] {
     if (puzzles?.length) { site.puzzles = puzzles; if (!count) delete site.completion; }
     return { id, undead, count, site, ...(mechanic ? { magicPack: { source: 'magicPacks/'+mechanic, mechanic } } : {}) };
   };
+  const foragers=nativeMassEncounters('downs','downs',1,
+    {chance:1,table:[{id:'gnoll_road_foragers',weight:1}]});
+  if(!foragers)throw Error('Missing native road forager formation');
   return [
-    compose('cinderwatch', 'wayside_camp', 'Cinderwatch Camp', { x: 0, y: 66, holdSeconds: 4 }, false, 2, [
+    {...compose('cinderwatch', 'wayside_camp', 'Cinderwatch Camp', { x: 0, y: 66, holdSeconds: 4 }, false, 3, [
       prop('conifer', -165, -100, 78), prop('conifer', -175, 95, 65),
       prop('broken_cart', 155, -60, 42, .3), prop('brazier', 140, 70, 23),
       prop('log', -100, 125, 24, -.4), prop('grass', -165, 10, 45),
@@ -44,6 +48,7 @@ export function frontierLandmarks(): Landmark[] {
       prop('dead_tree', 155, -150, 58), prop('broken_cart', 175, -105, 30, 1.4),
       prop('rock', 20, -160, 28),
     ], undefined, undefined, undefined, [nativeMassShrine('swiftness', 75, 215)]),
+      population:{level:1,table:[{id:'gnoll_prowler',weight:1}],encounters:foragers}},
     compose('broken-gate', 'fortress_gate', 'The Broken Gate', { x: 0, y: 40, holdSeconds: 5 }, true, 4, [
       prop('standing_stone', -100, -165, 36), prop('standing_stone', 100, -165, 36),
       prop('brazier', -85, 95, 24), prop('brazier', 85, 95, 24),

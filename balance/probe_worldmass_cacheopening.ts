@@ -15,7 +15,7 @@ const rig=(legacy=false)=>{
  const p=m.journey!.places.find(p=>p.content==='cinderwatch')!;
  w.landPartyAt(m.journey!.local(p));m.update(w,true);
  const natives=(m as unknown as {natives:Map<string,Actor>}).natives;
- const guards=[0,1].map(i=>natives.get(canonical([p.id,i]))!);assert.ok(guards.every(Boolean));
+ const guards=Array.from({length:config.content.find((c:any)=>c.id===p.content).count},(_,i)=>natives.get(canonical([p.id,i]))!);assert.ok(guards.every(Boolean));
  const c=w.chests.find(c=>c.rewardSource===canonical([p.id,'cache']))!;
  for(const a of w.actors)if(a!==w.player&&!guards.includes(a))a.pos={x:-20000,y:-20000};
  w.player.pos={...c.pos};

@@ -75,8 +75,8 @@ try {
   resume.startWorldMass(save.world!.worldmass!.state.run.seed,save.world!.worldmass);
   assert.deepEqual(resume.activeQuests,w.activeQuests);
   const rm=resume.massRuntime!,rn=(rm as unknown as {natives:Map<string,Actor>}).natives;
-  assert.ok(!rn.has(ids[0])&&rn.has(ids[1]));
-  const beforeFinal=earned(resume);resume.kill(rn.get(ids[1])!,false,resume.player);rm.update(resume,true);
+  assert.ok(!rn.has(ids[0])&&ids.slice(1).every(id=>rn.has(id)));
+  const beforeFinal=earned(resume);for(const id of ids.slice(1))resume.kill(rn.get(id)!,false,resume.player);rm.update(resume,true);
   assert.ok(resume.activeQuests[0].fieldDone);assert.equal(resume.questStanding(resume.activeQuests[0]),'ready');
   assert.equal(resume.questRewardOffers().length,0);
   assert.ok(earned(resume)-beforeFinal<150,'only native kill/clear experience, no quest payout away from giver');

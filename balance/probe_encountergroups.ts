@@ -32,7 +32,8 @@ for(const g of Object.values(ENCOUNTER_GROUPS)) {
   const q=encounterGroupContext(w.zone,g.faction);
   assert.ok(g.habitats!.tilesets!.some(id=>TILESETS[id]?.packs.table.some(r=>MONSTERS[r.id]?.faction===g.faction)),`${g.id}: no natural source`);
   for(const ts of g.habitats!.tilesets!) assert.ok(TILESETS[ts],`${g.id}: missing terrain ${ts}`);
-  assert.ok(encounterGroupPool(q).some(r=>r.id===g.id));
+  assert.equal(encounterGroupPool(q).some(r=>r.id===g.id),g.ambient!==false);
+  assert.ok(encounterGroupPool(q,{table:[{id:g.id,weight:1}]}).some(r=>r.id===g.id));
   assert.deepEqual(planEncounterGroup(g.id,{...q,level:g.minLevel-1}),[],`${g.id}: early leak`);
   assert.deepEqual(planEncounterGroup(g.id,{...q,tileset:'not_a_habitat'}),[],`${g.id}: habitat leak`);
   assert.deepEqual(planEncounterGroup(g.id,{...q,faction:'unrelated'}),[],`${g.id}: allegiance leak`);
@@ -46,7 +47,7 @@ for(const g of Object.values(ENCOUNTER_GROUPS)) {
   assert.equal(JSON.stringify(g),original,'Spawning must not mutate shared recipes');
   console.log(`PASS ${g.id}: ${members.length} members, native habitat, hard debut, coherent squad`);
 }
-assert.equal(Object.keys(ENCOUNTER_GROUPS).length,47);
+assert.equal(Object.keys(ENCOUNTER_GROUPS).length,48);
 assert.equal(new Set(Object.values(ENCOUNTER_GROUPS).map(g=>g.faction)).size,19);
 for(const d of Object.values(ENCOUNTER_ADVENTURERS)) {
   assert.ok(LOOKS[d.look!],`${d.id}: appearance`);
@@ -163,4 +164,4 @@ for(const hound of kennels.filter(a=>a.movementTether)) {
   assert.deepEqual(hound.movementTether!.point,point); assert.ok(movementTetherDistance(hound.movementTether!,hound.pos)<=235.001);
 }
 restore();
-console.log('PASS encounterGroups: habitat audit, 47 recipes / 19 factions, real coordination, persistence and tethered companions');
+console.log('PASS encounterGroups: habitat audit, 48 recipes / 19 factions, real coordination, persistence and tethered companions');

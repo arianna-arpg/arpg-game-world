@@ -24,10 +24,10 @@ const rig=(seed=42)=>{
 const earned=(w:ReturnType<typeof makeSimWorld>)=>w.meta.xp+
  Array.from({length:w.player.level-1},(_,i)=>PROGRESSION.xpForLevel(i+1)).reduce((a,b)=>a+b,0);
 const {w,m,place,content,slots,natives}=rig();
-assert.equal(slots.length,2);assert.ok(slots.every(id=>natives.has(id)));
+assert.equal(slots.length,3);assert.ok(slots.every(id=>natives.has(id)));
 assert.ok(slots.every(id=>m.state.claimed('site-guardian',id)));
 const cache=w.chests.find(c=>c.rewardSource===canonical([place.id,'cache']))!;
-assert.deepEqual(m.siteActivity(place.id),{text:'Garrison · 2 remaining · Cache unsearched',complete:false});
+assert.deepEqual(m.siteActivity(place.id),{text:'Garrison · 3 remaining · Cache unsearched',complete:false});
 assert.equal(m.siteActivity('unvisited-place'),null);
 const beforeRead=canonical([m.state.snapshot(),m.sites.discovered,w.meta.xp,w.completedObjectives.size]);
 for(let i=0;i<20;i++){m.siteActivity(place.id);w.objectiveText();}
@@ -38,8 +38,8 @@ const before=earned(w);m.update(w,true);
 assert.equal(earned(w),before);assert.equal(m.siteCleared(place.id),false,'looting is not a clearance');
 w.kill(natives.get(slots[0])!,false,w.player);m.update(w,true);
 assert.equal(m.siteCleared(place.id),false,'one survivor keeps its place unfinished');
-assert.deepEqual(m.siteActivity(place.id),{text:'Garrison · 1 remaining · Cache searched',complete:false});
-w.kill(natives.get(slots[1])!,false,w.player);
+assert.deepEqual(m.siteActivity(place.id),{text:'Garrison · 2 remaining · Cache searched',complete:false});
+for(const id of slots.slice(1))w.kill(natives.get(id)!,false,w.player);
 const killsOnly=earned(w);m.update(w,true);
 assert.equal(earned(w)-killsOnly,objectiveRewardXp(m.populationFor(place).level,content.site!.completion!));
 assert.ok(m.siteCleared(place.id));assert.ok(m.siteSearched(place.id));
@@ -70,7 +70,7 @@ assert.equal(massGarrisonProgress(partial.m.state,partial.content,partial.place.
 const withProp={...partial.content,site:{...partial.content.site!,fixtures:[{monster:'barrel',x:0,y:0,garrison:true}]}};
 assert.equal(massGarrisonProgress(partial.m.state,withProp,partial.place.id,id=>!id.includes('fixture')),null,
  'an unadmitted fixture prevents a false complete count');
-assert.deepEqual(massGarrisonProgress(partial.m.state,withProp,partial.place.id,()=>true),{total:2,remaining:1},
+assert.deepEqual(massGarrisonProgress(partial.m.state,withProp,partial.place.id,()=>true),{total:3,remaining:2},
  'present native scenery does not become an eligible defender');
 const barrel=partial.w.createMonster('barrel',1,'enemy');
 recordMassGuardian(partial.w,partial.m.state,'barrel-fixture',barrel);
@@ -103,7 +103,8 @@ const authored=JSON.parse(canonical(massAdventure()));
 const authoredCamp=authored.content.find((c:{id:string})=>c.id==='cinderwatch');
 authoredCamp.site.completion={source:'test/authored-clear',xpBase:7,xpPerLevel:11};
 // This regression requires two mandatory guardians; native wildlife can be exempt.
-for(const row of [authoredCamp,...authoredCamp.levels]){row.table=[{id:'gnoll_prowler',weight:1}];delete row.limits;}
+authoredCamp.count=2;delete authoredCamp.encounters;
+for(const row of [authoredCamp,...(authoredCamp.levels??[])]){row.table=[{id:'gnoll_prowler',weight:1}];delete row.limits;}
 const halfWorld=makeSimWorld('warrior',119), half=new WorldMassRuntime(42,'partial-clearance',authored);half.attach(halfWorld);
 const hp=half.journey!.places.find(p=>p.content==='cinderwatch')!;
 halfWorld.player.pos=half.journey!.local(hp);half.update(halfWorld,true);

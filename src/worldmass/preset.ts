@@ -154,7 +154,7 @@ export function massAdventure(): MassAdventure {
       authoredSupports: ['splash', 'battering_ram'], level: 1, maxRewards: 1 },
     journey: { reservePopulation: true, source: 'worldmass/frontier-circuit', width: 120, color: '#62573e', clearingColor: '#454331',
       notices: [
-        { destination: 'west-camp', note: 'A patrol camp has taken the western road. A shrine stands by the approach; provisions remain among the tents.' },
+        { destination: 'west-camp', note: 'A gnoll patrol has taken the western road. Its bone-thrower borrows courage from the pack leader. A shrine stands by the approach; provisions remain among the tents.' },
         { destination: 'east-camp', note: 'Crystals wait among the graves of a quiet grove. Kindling the lattice is a riddle; farther along the circuit, a side path leads to a ring of fading coals. Past the grove, paired stones answer matching voices.' },
         { destination: 'north-ruin', note: 'Undead keep watch beneath the broken walls. Beyond the gate, the northern trail leads toward a stone guardian.' },
         { destination: 'south-ruin', note: 'Restless dead gather among ruined homes. A storm altar changes the ground on which you fight.' },

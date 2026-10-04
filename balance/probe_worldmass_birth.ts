@@ -14,7 +14,7 @@ delete spec.journey.notices;
 delete spec.settlement.quests; // This isolated birth fixture removes the contract's northern destination.
 spec.journey.destinations=spec.journey.destinations.filter((d:any)=>d.content==='cinderwatch');
 const row=spec.content.find((c:any)=>c.id==='cinderwatch');
-delete row.levels;delete row.magicPack;
+delete row.levels;delete row.magicPack;delete row.encounters; // This fixture owns its complete native roster.
 row.level=8;row.count=4;row.table=[{id:'stone_sentinel',weight:1},{id:'sylvan_warden',weight:1}];delete row.limits;
 function signature(a:any) {return {monster:a.defId,skills:a.skills.map((s:any)=>s&&({id:s.def.id,level:s.level,
  sockets:s.sockets.map((g:any)=>g&&({id:g.def.id,level:g.level})),

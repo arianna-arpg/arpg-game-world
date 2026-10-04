@@ -68,7 +68,10 @@ assert.equal(w.chests.some(c=>c.rewardSource===canonical([shrine.id,'cache'])),f
 const before=m.snapshot(w),continuedWorld=makeSimWorld('warrior',44);
 const continued=new WorldMassRuntime(42,'stops',before.config,before);continued.attach(continuedWorld,before);
 assert.deepEqual(continued.journey!.trails,m.journey!.trails);
-assert.deepEqual(continued.snapshot(continuedWorld).enemies,before.enemies);
+// Native numeric squad IDs are rebuilt; compare exact membership and every other field.
+const groups=(rows:typeof before.enemies)=>rows.map(e=>e.encounterGroup?{...e,encounterGroup:{...e.encounterGroup,
+ id:rows.filter(r=>r.encounterGroup?.id===e.encounterGroup!.id).map(r=>r.id).sort()}}:e);
+assert.deepEqual(groups(continued.snapshot(continuedWorld).enemies),groups(before.enemies));
 const ordered=(rows:typeof m.sites.discovered)=>[...rows].sort((a,b)=>a.id.localeCompare(b.id));
 assert.deepEqual(ordered(continued.sites.discovered),ordered(m.sites.discovered));
 assert.equal(continuedWorld.altars.filter(a=>a.def.id==='haste_altar').length,1);
