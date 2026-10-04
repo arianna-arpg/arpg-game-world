@@ -422,6 +422,10 @@ export const VIS_CFG = {
     /** Keep reward names clear of hostile bodies and their immediate action.
      * Zero restores unconditional labels. Item glyphs and the pickup feed stay. */
     rewardClearance: 52,
+    /** Persistent labels share bounded space, with a tether to the actual item.
+     * Only an exactly attributed, drawn name replaces its transient twin. */
+    rewardLabels: { enabled: true, collapseAnnouncements: true, gap: 3, step: 16, rings: 12,
+      maxLabels: 32, maxWidth: 240, linkWidth: 1, linkColor: '#b5aca0', linkAlpha: .55 },
     /** Currency glyph type sizes (vestige sigils, essence trail). */
     vestigeFont: 13,
     essenceFont: 11,

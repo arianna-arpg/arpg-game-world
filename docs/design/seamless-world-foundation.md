@@ -4035,3 +4035,56 @@ played.
 Light-shadow head defdeb7f passed CI 37237515679 and Pages 37238629289. Exact live
 metadata reports 2026-10-04T22:06:48.144Z. Remote seed 1173988966 passed all six
 ordinary-save sentinels and native browser Continue with a null fatal error.
+
+### Ground rewards share readable space
+
+RewardLabelLayout places nearby equipment and Memory names separately, with a
+thin tether when a label moves. It reserves visible bodies, cast meters, the
+hover caption and other rewards. Names join the native visibility-gated word
+layer, retain Memory purpose/rarity, and follow the existing veil fade. The
+native source-space combat clearance runs before packing: a label cannot dodge
+that policy by moving above a nearby enemy. Saturated labels wait on their
+unchanged ground glyphs. VIS_CFG.drops.rewardLabels owns packing, bounds, the
+label limit, line styling and independent announcement collapse.
+
+Gear drop announcements carry their native item UID. Both ground shells and
+text snapshots optionally carry dropUid; clients collapse a transient name only
+when that exact item has a ground name actually drawn this frame. Unattributed
+text, same-named other items, level-ups, damage and old wire packets keep their
+own semantics. Legacy shells use distinct object identities; all offset keys
+retire when their drops leave the visible set. Native reward values, pickup
+reach, source positions, lifetimes, randomness and save fields are unchanged.
+
+The rewardlabels probe covers crowded one/two-line labels, stable redraws,
+departing bodies, bounds, saturation, reveal refusal, caps, opt-out and identity
+retirement, plus native loot and current/legacy snapshot roundtrips. Combatfocus
+also passes. Controlled browser QA reproduces the actual prior client's three
+duplicate announcements and overlapping ground labels. Eleven final page/canvas
+pairs (all 22 images inspected) cover separate current names, an unrelated
+same-named announcement, 600-pixel layout, actual nearby-enemy suppression,
+return after clearance, native pickup and current/prior/current Continue.
+Native occluded terrain refuses the labels. Drawing leaves the measured native
+state unchanged. Exact continuation compares seed, position, life, XP, bag,
+skills, remaining ground drops and world claims.
+
+These are prepared fixtures, including item identities/positions and an enemy;
+they are not earned combat. An initial fixture moved the hero for pickup
+without updating the native survey, so Continue correctly gained missing
+survey claims. Updating that prepared position through the real mass runtime
+before saving made the full comparison pass. A draft text return-type change
+broke existing observation wrappers; the final implementation retains the void
+API and adds optional attribution instead.
+
+The frozen caravan critic finished Western Watch and independently chose
+Fallen Court. It used earned Arcing Firebolt and activated Change the Rhythm
+in later combat, survived a mistake at 35 life, and stopped after the southern
+cache. Its verdict is mixed: rewards earned a second outing, but preparation
+friction and uneven pressure left it satisfied stopping rather than eager for
+a third route. There were 126 action requests, 256 input events, 7,078 requested
+frames (7,076 attached to confirmed replies), and 124 inspected page/canvas
+pairs. Both native exits were normal and same-session Continue preserved the
+visible equipment/progression it checked. The western leader's stationary
+appearance in 0037–0044 is an observation, not a diagnosed pathfinding bug.
+The reviewer did not visit the caravan, so this report cannot accept that
+recipe. Independent acceptance remains unmet; no commercial comparator was
+played. Separate fresh reviews use frozen preparation and reward-label builds.

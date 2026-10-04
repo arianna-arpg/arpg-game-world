@@ -6,6 +6,7 @@ import { altarInfluences } from '../engine/altarCues';
 import { drawAltarInfluence } from './vis/altarCueLayer';
 import { CombatTextLayout, combatBodyRect, drawPlayerFocus } from './vis/combatFocus';
 import { CombatMeterLayout } from './vis/combatMeters';
+import { RewardLabelLayout } from './vis/rewardLabels';
 import { garrisonCaption } from './vis/garrisonName';
 import { formationCaption, formationIdentityOf, type FormationIdentity } from './vis/formationIdentity';
 import { bodyActionPoseOf } from '../engine/bodyAction';
@@ -954,6 +955,7 @@ export class Renderer {
       this.drawLabels(world);        // actor text (names/prompts) — visibility-gated
       this.drawSpeeches(world);      // THE SPEECH FABRIC: wrapped talk bubbles, typewriter reveal
       this.drawEliteNameHover(world); // cursor nameplate — same layer, same concealment rule
+      this.drawRewardLabels(world);
       this.drawTexts(world);
       this.drawSceneHeroHud(world); // scene fabric: hero-seated teaching bar + prompt (world-space)
       this.drawHarvest(world);      // harvest rites: node glints + live-bind symbol chips (world-space)
@@ -6840,17 +6842,7 @@ export class Renderer {
         ctx.shadowBlur = unique ? D.glowUnique : D.glow;
         drawGroundItem(ctx, item.item.baseId, half, dropColor, D.symbolEdgeColor, D.outlineWidth);
         ctx.restore();
-        // The floating label — dark pill + rarity-colored name.
-        ctx.font = `bold ${D.labelFont}px Verdana`;
-        ctx.textAlign = 'center';
-        const labels = memory ? [item.item.name, memory.rewardLabel] : [item.item.name];
-        const w = Math.max(...labels.map(label=>ctx.measureText(label).width));
-        const h = D.labelPillH*labels.length, top = y-D.labelLift-D.labelPillH*(labels.length-1);
-        if (this.rewardLabelCovered(world, d.pos.x, top+h/2, w, h)) continue;
-        ctx.fillStyle = 'rgba(10,8,14,0.78)';
-        ctx.fillRect(d.pos.x - w / 2 - D.labelPadX, top, w + D.labelPadX * 2, h);
-        ctx.fillStyle = dropColor;
-        labels.forEach((label,i)=>ctx.fillText(label, d.pos.x, top+D.labelPillH*(i+1)-4));
+        // Names join the visibility-gated word layer after combat meters.
         continue;
       }
       const fill = item.kind === 'support' ? item.gem.def.color : item.inst.def.color;
@@ -7531,6 +7523,56 @@ export class Renderer {
       && this.labelRevealAt(world,a.pos) > .05);
   }
 
+  private readonly rewardLabels = new RewardLabelLayout();
+  private readonly namedRewardUids = new Set<number>();
+  /** Ground names retain their source and native visibility, but share reading
+   * space with bodies, cast meters, hover captions and each other. */
+  private drawRewardLabels(world: World): void {
+    const {ctx}=this, D=VIS_CFG.drops, cfg=D.rewardLabels;
+    const bounds={x:this.cam.x,y:this.cam.y,w:this.canvas.width/this.zoom,h:this.canvas.height/this.zoom};
+    const visible=world.drops.filter(d=>d.item.kind==='gear' && d.pos.x>=bounds.x && d.pos.y>=bounds.y
+      && d.pos.x<=bounds.x+bounds.w && d.pos.y<=bounds.y+bounds.h && this.labelRevealAt(world,d.pos)>.05);
+    visible.sort((a,b)=>Math.hypot(a.pos.x-world.player.pos.x,a.pos.y-world.player.pos.y)
+      -Math.hypot(b.pos.x-world.player.pos.x,b.pos.y-world.player.pos.y));
+    this.namedRewardUids.clear();
+    this.rewardLabels.begin(visible.flatMap(d=>d.item.kind==='gear'?[d.item.item.uid??d]:[]),
+      [...this.visibleCombatBodies(world).map(a=>combatBodyRect(a.pos,a.radius)),...this.combatMeters.footprints,
+        ...(this.hoverNameRect?[this.hoverNameRect]:[]),
+        ...visible.map(d=>({x:d.pos.x-D.gearHalf,y:d.pos.y-D.gearHalf,w:D.gearHalf*2,h:D.gearHalf*2}))],bounds);
+    ctx.save(); ctx.font=`bold ${D.labelFont}px Verdana`; ctx.textAlign='center';
+    for(const d of visible) {
+      if(d.item.kind!=='gear')continue;
+      const item=d.item.item, kind=memoryKindOf(item), memory=kind?MEMORY_KINDS[kind]:null;
+      const lines=(memory?[item.name,memory.rewardLabel]:[item.name])
+        .map(label=>wrapNotice(label,Math.min(cfg.maxWidth,bounds.w-D.labelPadX*2),1,s=>ctx.measureText(s).width)[0]??'');
+      const width=Math.max(...lines.map(s=>ctx.measureText(s).width))+D.labelPadX*2, height=D.labelPillH*lines.length;
+      const y=d.pos.y+Math.sin(d.bob)*D.bobAmp;
+      const anchor={x:d.pos.x,y:y-D.labelLift-D.labelPillH*(lines.length-1)};
+      // Packing cannot evade the native combat hush at the item's own anchor.
+      if(this.rewardLabelCovered(world,anchor.x,anchor.y+height/2,width,height))continue;
+      const box=this.rewardLabels.place(item.uid??d,anchor,width,height,b=>
+        !this.rewardLabelCovered(world,b.x+b.w/2,b.y+b.h/2,b.w,b.h)
+        && [{x:b.x,y:b.y},{x:b.x+b.w,y:b.y},{x:b.x,y:b.y+b.h},{x:b.x+b.w,y:b.y+b.h}]
+          .every(p=>this.labelRevealAt(world,p)>.05));
+      if(!box)continue;
+      const x=box.x+box.w/2;
+      const reveal=Math.min(this.labelRevealAt(world,d.pos),...[
+        {x:box.x,y:box.y},{x:box.x+box.w,y:box.y},{x:box.x,y:box.y+box.h},{x:box.x+box.w,y:box.y+box.h}
+      ].map(p=>this.labelRevealAt(world,p)));
+      ctx.globalAlpha=reveal;
+      if(Math.abs(x-anchor.x)>1 || Math.abs(box.y-anchor.y)>1) {
+        ctx.globalAlpha=cfg.linkAlpha*reveal;ctx.strokeStyle=cfg.linkColor;ctx.lineWidth=cfg.linkWidth;
+        ctx.beginPath();ctx.moveTo(d.pos.x,y-D.gearHalf);
+        ctx.lineTo(Math.max(box.x,Math.min(box.x+box.w,d.pos.x)),box.y+box.h);ctx.stroke();ctx.globalAlpha=reveal;
+      }
+      ctx.fillStyle='rgba(10,8,14,0.78)';ctx.fillRect(box.x,box.y,box.w,box.h);
+      ctx.fillStyle=memory?.color??ITEM_RARITIES[item.rarity]?.color??ITEM_RARITIES.common.color;
+      lines.forEach((line,i)=>ctx.fillText(line,x,box.y+D.labelPillH*(i+1)-4));
+      if(item.uid!==undefined)this.namedRewardUids.add(item.uid);
+    }
+    ctx.restore();
+  }
+
   private readonly combatMeters = new CombatMeterLayout();
   private readonly combatTextLayout = new CombatTextLayout();
   private drawTexts(world: World): void {
@@ -7542,9 +7584,11 @@ export class Renderer {
     const focus = VIS_CFG.combatFocus;
     const visible = this.visibleCombatBodies(world);
     this.combatTextLayout.begin([...visible.map(a=>combatBodyRect(a.pos,a.radius)),...this.combatMeters.footprints,
-      ...(this.hoverNameRect ? [this.hoverNameRect] : [])],
+      ...(this.hoverNameRect ? [this.hoverNameRect] : []), ...this.rewardLabels.footprints],
       {x:this.cam.x,y:this.cam.y,w:this.canvas.width/this.zoom,h:this.canvas.height/this.zoom});
     for (const t of world.texts) {
+      if (VIS_CFG.drops.rewardLabels.collapseAnnouncements && t.kind === 'drop'
+        && t.dropUid !== undefined && this.namedRewardUids.has(t.dropUid)) continue;
       if (t.kind && !floatKindOn(kindPrefs, t.kind)) continue;
       // Bind tokens resolve at DRAW, not at spawn — a float naming a key
       // stays honest even if the player rebinds (or grabs the pad) mid-air.

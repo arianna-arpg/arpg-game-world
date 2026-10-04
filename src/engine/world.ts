@@ -1506,6 +1506,8 @@ interface FloatingText {
   kind?: string;
   /** Non-urgent reward feedback yields to nearby visible combat; healing does not. */
   yieldToCombat?: boolean;
+  /** Exact native gear identity; clients may collapse its duplicate ground announcement. */
+  dropUid?: number;
 }
 
 /** THE DISSOLUTION GRAMMAR's live break record (World.dissolves — the flash
@@ -47880,7 +47882,7 @@ export class World {
     this.drops.push(drop);
     if (!droppedBy) {
       this.text(at, `${item.name}!`, ITEM_RARITIES[item.rarity].color,
-        item.rarity === 'unique' ? 17 : 14, 'drop', FLOAT_CFG.dropNameSec);
+        item.rarity === 'unique' ? 17 : 14, 'drop', FLOAT_CFG.dropNameSec, false, item.uid);
       // THE DISCOVERY LEDGER (engine/containers.ts ContainerDef.foundLedger):
       // a GENUINE world mint of a piece some side board accepts stamps the
       // account once — the Vault's case for it surfaces only after the
@@ -64331,10 +64333,11 @@ export class World {
     if (fx) this.flashes.push({ pos: vec(at.x, at.y), radius, color, life: 0.22, maxLife: 0.22, fx, ...(facing === undefined ? {} : { facing }) });
   }
 
-  text(at: Vec2, text: string, color: string, size = 13, kind?: string, life = 1, yieldToCombat = false): void {
+  text(at: Vec2, text: string, color: string, size = 13, kind?: string, life = 1, yieldToCombat = false, dropUid?: number): void {
     this.texts.push({
       pos: vec(at.x + rand(-10, 10), at.y - 16), text, color,
       life, maxLife: life, size, kind, ...(yieldToCombat ? { yieldToCombat: true } : {}),
+      ...(dropUid === undefined ? {} : { dropUid }),
     });
   }
 

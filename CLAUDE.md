@@ -1,5 +1,13 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+RewardLabelLayout gives native ground rewards stable, bounded reading space,
+with visible source tethers and the existing combat/veil gates. Optional dropUid
+attribution crosses snapshots so only an exact, presently drawn name collapses
+its transient announcement. Old shells retain distinct fallback identities.
+VIS_CFG.drops.rewardLabels owns bounds and opt-outs. Verify rewardlabels,
+combatfocus and reward-labels-ui.cjs for actual prior overlap, narrow layouts,
+native pickup, occlusion, pure drawing and exact current/prior/current Continue.
+
 skillPreparationHtml presents the native pending flask lesson alongside
 optional contracts. Its buttons send ordinary learn intents with emptyOnly,
 which rechecks occupancy/known copies before changing the rack. Native gifts,

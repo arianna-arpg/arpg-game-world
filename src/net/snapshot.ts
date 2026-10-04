@@ -248,7 +248,7 @@ export interface CastW { parryCue?: number;
 export interface ProjW { reflectedCue?: true; orbPaint?: import('../engine/skills').OrbPaint; cosmeticProjectile?: string; cosmeticMotif?: CosmeticMotif; p: Vec2W; d: number; r: number; c: string; sh: string; a: number; }
 /** A tether band, RENDER-ONLY on the client (the host owns the damage ticks). */
 export interface TetherW { ax: number; ay: number; bx: number; by: number; c: string; w: number; }
-export interface DropW { p: Vec2W; bob: number; kind: 'skill' | 'support' | 'gear' | 'vestige' | 'essence' | 'abilityEssence'; color: string; rarity?: string; name?: string; baseId?: string; vid?: string; eid?: string; tid?: number; cnt?: number; }
+export interface DropW { p: Vec2W; bob: number; kind: 'skill' | 'support' | 'gear' | 'vestige' | 'essence' | 'abilityEssence'; color: string; rarity?: string; name?: string; baseId?: string; dropUid?: number; vid?: string; eid?: string; tid?: number; cnt?: number; }
 /** kind is an ORB_DEFS registry id — the client renders from the registry. */
 export interface OrbW { p: Vec2W; bob: number; life: number; kind: string; }
 export interface TextW { p: Vec2W; life: number; maxLife: number; size: number; color: string; text: string;
@@ -256,7 +256,9 @@ export interface TextW { p: Vec2W; life: number; maxLife: number; size: number; 
    *  Settings.floatKinds (the host mints one truth; every seat curates). */
   k?: string;
   /** Reward feedback uses each client's visible-combat clearance. */
-  yieldToCombat?: boolean; }
+  yieldToCombat?: boolean;
+  /** Optional exact gear identity for duplicate announcement curation. */
+  dropUid?: number; }
 /** A notice-feed line (screen-anchored world news) — the client filters by
  *  its own channel mutes and draws at its own anchor/duration. */
 export interface NoticeW { text: string; color: string; size: number; ch: string; born: number; }
@@ -957,13 +959,14 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
         : d.item.kind === 'skill' ? skillInstanceName(d.item.inst)
         : d.item.kind === 'support' ? d.item.gem.def.name : undefined,
       baseId: d.item.kind === 'gear' ? d.item.item.baseId : undefined,
+      dropUid: d.item.kind === 'gear' ? d.item.item.uid : undefined,
       vid: d.item.kind === 'vestige' ? d.item.id : undefined,
       eid: d.item.kind === 'essence' ? d.item.essence : undefined,
       tid: d.item.kind === 'abilityEssence' ? d.item.tier : undefined,
       cnt: d.item.kind === 'essence' || d.item.kind === 'abilityEssence' ? d.item.count : undefined,
     })),
     orbs: world.orbs.map(o => ({ p: v2(o.pos), bob: o.bob, life: o.life, kind: o.kind })),
-    texts: world.texts.map(t => ({ p: v2(t.pos), life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, k: t.kind, ...(t.yieldToCombat ? { yieldToCombat: true } : {}) })),
+    texts: world.texts.map(t => ({ p: v2(t.pos), life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, k: t.kind, ...(t.yieldToCombat ? { yieldToCombat: true } : {}), ...(t.dropUid === undefined ? {} : { dropUid: t.dropUid }) })),
     no: world.notices.map(n => ({ text: n.text, color: n.color, size: n.size, ch: n.channel, born: n.bornAt })),
     pfd: world.pickupFeed.map(e => ({ s: e.seatId, l: e.label, c: e.color, n: e.count, born: e.bornAt })),
     recoveryCues: world.emergences.filter(e => e.recoveryCueTier !== undefined && e.life > 0).map(cloneRecoveryCue),
@@ -1526,7 +1529,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
       ? { kind: 'support', gem: { def: { color: d.color, name: d.name ?? '?' }, level: 1 } }
       : d.kind === 'gear'
         // Render-shell gear: base identity resolves the shared inventory glyph.
-        ? { kind: 'gear', item: { name: d.name ?? '?', rarity: (d.rarity ?? 'common'), baseId: d.baseId ?? '' } }
+        ? { kind: 'gear', item: { name: d.name ?? '?', rarity: (d.rarity ?? 'common'), baseId: d.baseId ?? '', ...(d.dropUid === undefined ? {} : { uid: d.dropUid }) } }
         : d.kind === 'vestige'
           ? { kind: 'vestige', id: d.vid ?? '', count: 1 }
           : d.kind === 'essence'
@@ -1543,7 +1546,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   world.creepers.visuals = (snap.creepers ?? []).map(v => ({ ...v, trail: v.trail.map(p => ({ ...p })) }));
   world.satellites.flights.visuals = (snap.satelliteFlights ?? []).map(v => ({ ...v, from: { ...v.from }, to: { ...v.to } }));
   world.orbs = snap.orbs.map(o => ({ pos: { x: o.p[0], y: o.p[1] }, bob: o.bob, life: o.life, kind: o.kind, amount: 0 })) as unknown as World['orbs'];
-  world.texts = snap.texts.map(t => ({ pos: { x: t.p[0], y: t.p[1] }, life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, kind: t.k, ...(t.yieldToCombat ? { yieldToCombat: true } : {}) })) as unknown as World['texts'];
+  world.texts = snap.texts.map(t => ({ pos: { x: t.p[0], y: t.p[1] }, life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, kind: t.k, ...(t.yieldToCombat ? { yieldToCombat: true } : {}), ...(t.dropUid === undefined ? {} : { dropUid: t.dropUid }) })) as unknown as World['texts'];
   world.notices = (snap.no ?? []).map(n => ({ text: n.text, color: n.color, size: n.size, channel: n.ch, bornAt: n.born }));
   world.pickupFeed = (snap.pfd ?? []).map(e => ({ seatId: e.s, label: e.l, color: e.c, count: e.n, bornAt: e.born }));
   world.flashes = snap.flashes.map(f => ({ combatCue: f.combatCue ? { ...f.combatCue } : undefined, pos: { x: f.p[0], y: f.p[1] }, radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
