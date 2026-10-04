@@ -41407,6 +41407,7 @@ export class World {
       });
     }
     this.text(vec(run.at.x, run.at.y - 20), `${label} resolves!`, tint, 16);
+    if (!this.spoilsSealed()) this.massRuntime?.earnPuzzleReward(this, run);
     const rw = puzzleRewardOf(run);
     if (rw?.gems) {
       for (let i = 0; i < rw.gems; i++) {

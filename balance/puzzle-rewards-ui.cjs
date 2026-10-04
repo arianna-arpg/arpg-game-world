@@ -1,9 +1,9 @@
 // Controlled native-input regression, separate from independent gameplay review.
 const {app,BrowserWindow}=require('electron'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
-const dir=path.join(__dirname,'reports'),tag='worldmass-puzzles';
+const dir=path.join(__dirname,'reports'),tag='puzzle-rewards';
 app.setPath('userData',path.join(dir,tag+'-'+process.pid));app.disableHardwareAcceleration();
 app.whenReady().then(async()=>{
- let root=path.resolve(__dirname,'reports','worldmass-puzzles-dist');
+ let root=path.resolve(__dirname,'reports','puzzle-rewards-dist');
  const server=http.createServer((req,res)=>{
   const p=new URL(req.url,'http://localhost').pathname,f=path.resolve(root,'.'+(p==='/'?'/index.html':p));
   if(!f.startsWith(root+path.sep)||!fs.existsSync(f)){res.writeHead(404);return res.end();}
@@ -24,7 +24,7 @@ app.whenReady().then(async()=>{
  });
  const current=root,timer=setTimeout(()=>app.exit(1),240000),results=[];
  const state=()=>{const w=__game.world(),m=w.massRuntime;return {seed:m.generator.run.seed,pos:w.player.pos,
-  puzzles:m.puzzles?.snapshot(w)??[],contents:m.snapshot(w).contents,life:w.player.life,xp:w.meta.xp};};
+  puzzles:m.puzzles?.snapshot(w)??[],contents:m.snapshot(w).contents,rewards:m.rewards.snapshot(),sockets:w.meta.knownSkills.get('firebolt').sockets.map(s=>s?{id:s.def.id,level:s.level}:null),life:w.player.life,xp:w.meta.xp};};
  const save=async()=>{await run(async()=>{__game.save();await new Promise(r=>setTimeout(r,220));});return run(state);};
  const resume=async()=>{await win.loadURL(url);await boot();await run(async()=>{
   for(let i=0;i<80&&!document.querySelector('#sm-continue:not([disabled])');i++)await new Promise(r=>setTimeout(r,100));
@@ -77,10 +77,48 @@ app.whenReady().then(async()=>{
    return {done:r.done,lit:r.state.lit,activity:m.localSite(w.player.pos).activity,puzzles:m.puzzles.snapshot(w),fatal:__game.crash().fatal};
   });
   assert.equal(solved.done,true);assert.equal(solved.activity.complete,true);assert.equal(solved.fatal,null);await shot('solved');
-  const paid=await save();assert.deepEqual(await resume(),paid);
+  
+  const pending=await save();assert.equal(pending.rewards.length,1);assert.deepEqual(await resume(),pending);
+  const offer=async()=>run(()=>{
+   __game.ui.toggleBuildPanel(undefined,'show');__game.ui.refreshInventory();
+   const e=document.querySelector('[data-exploration-offer]');if(!e)throw Error('No native reward card');
+   e.scrollIntoView({block:'start',behavior:'instant'});const b=e.getBoundingClientRect();
+   return {text:e.textContent,inside:b.x>=0&&b.x+b.width<=innerWidth,
+     choices:[...e.querySelectorAll('[data-reward-choice]')].map(b=>b.dataset.rewardChoice)};
+  });
+  const offered=await offer();assert.ok(offered.inside);assert.ok(offered.choices.includes('splitting'));assert.ok(!offered.text.includes("cache's"));await shot('earned-choice');
+  win.setSize(800,600);await new Promise(r=>setTimeout(r,150));await run(()=>{__game.ui.folioSync();});
+  assert.ok((await offer()).inside);await shot('choice-narrow');
+  win.setSize(1280,850);await new Promise(r=>setTimeout(r,150));await run(()=>{__game.ui.folioSync();});
+  await offer();await run(()=>{
+   const button=document.querySelector('[data-reward-choice="splitting"]');button.click();
+   const w=__game.world(),gem=w.meta.items.find(i=>i.gem?.kind==='support'&&i.gem.supportId==='splitting');
+   if(!gem)throw Error('Native claim did not deliver gem');
+   __game.ui.hideAll();
+   // A wandering foe may reach the court during setup. Fit in the native
+   // sanctuary rather than bypassing the ordinary field-discipline gate.
+   w.landPartyAt(w.massRuntime.settlement.spawn);w.massRuntime.update(w,true);let recovery=0;
+   while(w.swapRefusal(w.localSeat,'socket')&&recovery++<30)__game.step(30);
+   if(w.swapRefusal(w.localSeat,'socket'))throw Error('Native field recovery refused: '+w.swapRefusal(w.localSeat,'socket'));
+   w.requestMeta({t:'socket',uid:gem.uid,skillId:'firebolt'});__game.ui.refreshInventory();
+   if(!w.meta.knownSkills.get('firebolt').sockets.some(s=>s?.def.id==='splitting'))throw Error('Native fitting refused');
+   __game.ui.hideAll();
+  });
+  const split=await run(()=>{
+   const w=__game.world(),r=w.puzzles.find(r=>r.spec.kind==='lattice');
+   w.landPartyAt({x:r.at.x,y:r.at.y+270});let shots=[],frames=0;
+   try{__game.devInput(()=>({dx:0,dy:0,aim:{x:w.player.pos.x+800,y:w.player.pos.y+90},held:[true,false,false],edge:[]}));
+    while(!shots.length&&frames++<240){__game.step(1);shots=w.projectiles.filter(p=>p.caster===w.player&&p.inst.def.id==='firebolt');}
+   }finally{__game.devInput(null);}
+   return {frames,shots:shots.map(p=>({dir:p.dir,pos:p.pos})),fatal:__game.crash().fatal};
+  });
+  assert.equal(split.shots.length,2);assert.notDeepEqual(split.shots[0].dir,split.shots[1].dir);assert.equal(split.fatal,null);await shot('split-cast');await run(()=>__game.step(10));await shot('split-flight');
+  await run(()=>__game.step(150));const paid=await save();assert.deepEqual(await resume(),paid);await shot('fitted-continue');
+  results.push({offered,split,pendingContinue:true,fittedContinue:true});
+
   results.push({moves,solved,solvedContinue:true});
   const checkpoint=await run(()=>__game.world().massRuntime.snapshot(__game.world()));assert.equal(checkpoint.schema,7);
-  root=path.resolve(__dirname,'reports','readable-night-dist');await win.loadURL(url);await boot();
+  root=path.resolve(__dirname,'reports','broad-doorways-dist');await win.loadURL(url);await boot();
   const refusal=await run(s=>{
    __game.devStartRun('magician');__game.ui.hideAll();const w=__game.world(),before=w.massRuntime;
    try{w.startWorldMass(s.state.run.seed,s);return {refused:false};}
@@ -90,16 +128,26 @@ app.whenReady().then(async()=>{
    __game.devStartRun('magician');__game.ui.hideAll();const w=__game.world();w.startWorldMass(81);
    const m=w.massRuntime,p=m.journey.places.find(p=>p.content==='memorial-grove');w.landPartyAt(m.journey.local(p));m.update(w,true);
   });
-  const old=await save();assert.equal(old.puzzles.length,0);
+
+  const old=await save();assert.ok(old.puzzles.length);assert.equal(old.rewards.length,0);
   root=current;assert.deepEqual(await resume(),old);await shot('legacy-continue');
-  const legacy=await run(()=>{
-   const w=__game.world(),m=w.massRuntime,p=m.journey.places.find(p=>p.content==='memorial-grove');
-   return {count:m.config.content.find(c=>c.id===p.content).count,cache:w.chests.some(c=>c.rewardSource===JSON.stringify([p.id,'cache'])),schema:m.snapshot(w).schema};
+  const oldSolution=await run(()=>{
+   const r=__game.world().puzzles.find(r=>r.spec.kind==='lattice');
+   for(let mask=0;mask<512;mask++){
+    const trial=[...r.state.lit];for(let i=0;i<9;i++)if(mask&(1<<i)){
+     const x=i%3,y=Math.floor(i/3);for(const [dx,dy] of [[0,0],[-1,0],[1,0],[0,-1],[0,1]]){
+      const xx=x+dx,yy=y+dy;if(xx>=0&&xx<3&&yy>=0&&yy<3)trial[yy*3+xx]=!trial[yy*3+xx];
+     }
+    }if(trial.every(Boolean))return Array.from({length:9},(_,i)=>i).filter(i=>mask&(1<<i));
+   }throw Error('No legacy solution');
   });
-  assert.deepEqual(legacy,{count:3,cache:true,schema:3});results.push({olderClientRefusedBeforeMutation:true,legacy});
+  for(const i of oldSolution)await strike(i);
+  const legacy=await run(()=>{const w=__game.world();return {done:w.puzzles.find(r=>r.spec.kind==='lattice').done,rewards:w.massRuntime.rewards.snapshot().length,schema:w.massRuntime.snapshot(w).schema};});
+  assert.deepEqual(legacy,{done:true,rewards:0,schema:6});await shot('legacy-solved');
+  results.push({olderClientRefusedBeforeMutation:true,legacy});
   fs.writeFileSync(path.join(dir,tag+'-ui.json'),JSON.stringify(results,null,2));
   console.log(JSON.stringify({nativeHitFrames:hit.frames,nativeWinningMoves:moves.map(m=>({i:m.i,frames:m.frames})),partialContinue:true,solvedContinue:true,olderClientRefusedBeforeMutation:true,legacy}));
-  console.log('PASS native walking, Firebolt knock and solved lattice, normal/narrow presentation, partial/solved native Continue and prior-client compatibility');
+  console.log('PASS native Firebolt solve earns shared reward, actual choice button/native socket, two-projectile cast, pending/fitted Continue, narrow view, actual prior refusal and legacy no-grant');
  }catch(e){console.error(e.stack||String(e));process.exitCode=1;}
  finally{clearTimeout(timer);win.destroy();server.close();app.exit(process.exitCode||0);}
 });

@@ -11,6 +11,9 @@ import { canonical, massRandom } from './random';
 
 export interface MassRewardSpec {
   source: string;
+  /** Native events which can earn this shared, bounded treasure budget.
+   * Omission preserves historical cache-only expeditions. */
+  earnFrom?: ('cache' | 'puzzle')[];
   /** Ordinary pool, gated again by the account and live equipped kit. */
   supports: string[];
   /** Explicit physical treasures: usable this life without unlocking random drops.
@@ -24,6 +27,10 @@ export interface MassRewardSave {
   source: string; label: string; choices: MassRewardChoice[]; claimed?: string;
 }
 export function validateMassRewards(spec: MassRewardSpec): void {
+  const triggers = spec.earnFrom;
+  if (triggers !== undefined && (!Array.isArray(triggers) || !triggers.length || triggers.length > 2
+    || new Set(triggers).size !== triggers.length || triggers.some(v => !['cache','puzzle'].includes(v))))
+    throw new Error('Invalid exploration reward triggers');
   const authored = spec.authoredSupports;
   if (authored !== undefined && !Array.isArray(authored)) throw new Error('Invalid authored exploration treasures');
   const pool = [...(Array.isArray(spec.supports) ? spec.supports : []), ...(authored ?? [])];
@@ -44,7 +51,7 @@ export function explorationRewardHosts(world: World, gem: SupportInstance): stri
     && supportFitsInstOrCrew(gem.def, inst, world.summonCrewSkills(inst), gem.rolled) ? [inst.def.id] : []);
 }
 
-/** Choices are earned once at a physical cache, then remain an owned entitlement.
+/** Choices are earned once at a native discovery, then remain an owned entitlement.
  * Saving the native payload fixes rolled cuts; UI reads never mint or reroll. */
 export class MassRewards {
   private entries: MassRewardSave[] = [];
@@ -73,6 +80,7 @@ export class MassRewards {
     }
     this.entries = JSON.parse(canonical(saved));
   }
+  admits(kind: 'cache' | 'puzzle'): boolean { return !!this.spec && (this.spec.earnFrom ?? ['cache']).includes(kind); }
   earn(world: World, source: string, label: string): boolean {
     const spec = this.spec;
     if (!spec || this.entries.length >= spec.maxRewards || this.entries.some(r => r.source === source)) return false;

@@ -47,7 +47,7 @@ interface MassEnemySave {
   anchor?: { x: number; y: number }; leashHome?: boolean;
 }
 export interface MassAdventureSave {
-  schema: 1 | 2 | 3 | 4 | 5 | 6; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
+  schema: 1 | 2 | 3 | 4 | 5 | 6 | 7; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
   player: { x: number; y: number; tier?: number }; enemies: MassEnemySave[]; contents: ZoneContents;
   rewards?: MassRewardSave[];
   fields?: MassFieldSave[];
@@ -193,9 +193,11 @@ export class WorldMassRuntime {
     if (save) {
       // Older clients must refuse owners they cannot plan/retain. Schema three
       // adds roadside bodies, two adds one-shot stands, four owns placed riddles,
-      // five preserves deliberate quest acceptance, six pins native plan variants; older descriptors keep
+      // five preserves deliberate quest acceptance, six pins native plan variants,
+      // seven owns reward triggers; older descriptors keep
       // their original version and never gain new encounters on Continue.
-      if ((save.schema !== 1 && save.schema !== 2 && save.schema !== 3 && save.schema !== 4 && save.schema !== 5 && save.schema !== 6)
+      if ((save.schema !== 1 && save.schema !== 2 && save.schema !== 3 && save.schema !== 4 && save.schema !== 5 && save.schema !== 6 && save.schema !== 7)
+        || save.schema < 7 && config.rewards?.earnFrom !== undefined
         || save.schema < 6 && config.settlement?.structurePlans !== undefined
         || save.schema < 5 && config.settlement?.quests?.acceptance === 'journal'
         || save.schema < 4 && config.content.some(c => c.site?.puzzles?.length)
@@ -323,11 +325,20 @@ export class WorldMassRuntime {
   }
   /** Only a generated, admitted physical cache can earn its configured choice. */
   earnCacheReward(world: World, source: string | undefined, pos: { x: number; y: number }): void {
-    if (!source || !this.config.rewards) return;
+    if (!source || !this.rewards.admits('cache')) return;
     const place = this.placesInCell(this.walk.at(pos.x, pos.y))
       .find(p => canonical([p.id, 'cache']) === source && this.state.claimed('site-cache', p.id));
     const site = place && this.config.content.find(c => c.id === place.content)?.site;
     if (site?.cache) this.rewards.earn(world, source, site.name);
+  }
+  /** Called only by the native completion event, never by restoration or UI reads. */
+  earnPuzzleReward(world: World, run: import('../engine/puzzles').PuzzleRun): void {
+    if (world.massRuntime !== this || world.clientActionHook
+      || !this.rewards.admits('puzzle')) return;
+    const owner=this.puzzles.completed(run);
+    const place=owner && this.journey?.places.find(p=>p.id===owner.place);
+    const site=place && this.config.content.find(c=>c.id===place.content)?.site;
+    if (owner && site) this.rewards.earn(world, owner.source, site.name);
   }
   /** Preserve the native lock/recovery fraction. An earned, quiet cache merely
    * progresses faster; opening and all loot remain in the native chest artery. */
@@ -629,7 +640,7 @@ export class WorldMassRuntime {
         ...(a.encounterGroup ? {encounterGroup:a.encounterGroup,name:a.name} : {}),
         ...(this.births.of(a) ? {birth:this.births.of(a)} : {}) });
     }
-    return JSON.parse(JSON.stringify({ schema: this.config.settlement?.structurePlans !== undefined ? 6 : this.config.settlement?.quests?.acceptance === 'journal' ? 5 : this.config.content.some(c=>c.site?.puzzles?.length) ? 4 : this.config.journey?.roadside ? 3 : this.config.content.some(c => c.site?.shrines?.length) ? 2 : 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
+    return JSON.parse(JSON.stringify({ schema: this.config.rewards?.earnFrom !== undefined ? 7 : this.config.settlement?.structurePlans !== undefined ? 6 : this.config.settlement?.quests?.acceptance === 'journal' ? 5 : this.config.content.some(c=>c.site?.puzzles?.length) ? 4 : this.config.journey?.roadside ? 3 : this.config.content.some(c => c.site?.shrines?.length) ? 2 : 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
       ...(this.config.rewards ? { rewards: this.rewards.snapshot() } : {}),
       ...(this.fields.snapshot().length ? { fields: this.fields.snapshot() } : {}),
       ...(this.shrines.snapshot().length ? { shrines: this.shrines.snapshot() } : {}),

@@ -1,5 +1,12 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Optional rewards.earnFrom pins which native discovery events share a run's
+support-choice allowance. Completion of an owned riddle can now earn the same
+native compatible choices as a cache; omitted legacy policy stays cache-only.
+Schema seven prevents silently losing this trigger policy. Verify worldmass,
+native puzzles, sim smoke and puzzle-rewards-ui.cjs for native solve, ownership,
+shared budgets, pending/fitted Continue and actual prior-client refusal.
+
 New expedition settlement.structurePlans pins native building plan variants.
 Variants retain native identity, services, legend and footprint; the existing
 compiler owns doors, roofs and collision. Schema six refuses older clients;

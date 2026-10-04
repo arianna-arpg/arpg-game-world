@@ -3522,3 +3522,50 @@ continues separately. No overall critic acceptance or commercial parity is claim
 Contract-choice head efe0fcad passed CI 37170011782 and Pages 37170911391. Exact
 live metadata reports 2026-10-04T02:25:30.695Z. Remote seed 2885572613 retained all
 six ordinary-save sentinels and native Continue without a fatal error.
+
+### A build choice for the quiet exploration route
+
+New reward descriptors name their eligible native events through rewards.earnFrom.
+Caches and solved riddles share the existing one-choice expedition allowance.
+This lets a player who follows the grove's puzzle route earn a usable skill support
+without first clearing a camp. Native puzzle loot, attunement and completion remain
+in their existing pipeline. The reward retains its actual source/place identity,
+account drop gates, equipped-skill compatibility and saved native gem payload.
+The UI no longer describes every discovery as a cache.
+
+Only the native completion event can request the reward. The adapter checks the
+actual admitted PuzzleRun object and done latch, its owning place, the live host
+and configured event policy. UI reads and restoration never mint. Sealed spoils
+still refuse at the native event. Full packs defer the same choice; unsupported
+kits consume no budget; claimed receipts survive fitting and cannot pay again.
+Schema seven makes the trigger contract explicit; omitted older policy remains
+cache-only and old solved or unsolved riddles gain no retrospective entitlement.
+
+All three type checks, all 38 worldmass probes, 207 native puzzle assertions and
+simulation smoke pass. The new three-group probe covers all three starter classes,
+forged/unfinished puzzle identities, UI purity, native loot/attunement, unchanged
+account/attributes, shared budget, full-pack retry, mirror/sealed refusal, actual
+native reward/socket intents, pending/fitted Continue, corrupt trigger policies
+and downgrade refusal. The narrow change does not regenerate terrain or encounters.
+
+Controlled browser QA delivers Firebolts through native input to solve the lattice,
+clicks the actual Splitting choice, fits through the normal socket intent, and
+observes two distinct Firebolt trajectories. Full and narrow reward cards, the
+separated projectiles and native Continue were visually inspected. The actual
+preceding client refuses schema seven before replacing its runtime; a run created
+there continues in the new client and solves with its original native loot and no
+added support choice. Partial/pending/fitted state survives native save/Continue.
+The initial fitting check encountered the ordinary recent-cast/nearby-foe refusal;
+the final controlled fixture fits in native Lastlight before returning to the court.
+Prepared positions, scripted winning moves and invulnerability make this a mechanics
+check, not an earned playthrough. The independent critic has its own frozen build.
+
+Ember-country completed its report: one more session sounded worthwhile to inspect
+the earned Memory and gate cache, but the opening was not yet compelling. It solved
+the grove, equipped a hood, fought twice, chose Keep Your Distance and verified
+visible native Continue. Its 121 paired captures and 5,645 requested frames do not
+establish real-time feel. The unrecognized Thunderstruck proc and Memory meaning
+remain concrete reward-clarity feedback. The open-road reviewer used an earned
+Splitting support in later combat but encountered a reporting connection failure;
+that incomplete report is not a final acceptance. Fresh doorway and riddle-country
+reviewers are playing independently. Overall acceptance remains outstanding.

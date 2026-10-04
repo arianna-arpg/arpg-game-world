@@ -72,6 +72,11 @@ export class MassPuzzles {
       this.saved.set(s.id,JSON.parse(canonical(s)));
     }
   }
+  /** Identity, not a matching string or painted status, proves native completion. */
+  completed(run:PuzzleRun):{source:string;place:string}|null{
+    const own=this.live.get(run.id);
+    return own?.run===run && run.done ? {source:run.id,place:own.place} : null;
+  }
   owns(place:string):boolean{return [...this.live.values()].some(r=>r.place===place);}
   visible(id:string,at:{x:number;y:number}):boolean{
     const r=this.live.get(id);return !r||Math.hypot(r.run.at.x-at.x,r.run.at.y-at.y)<PUZZLE_CFG.earshot;

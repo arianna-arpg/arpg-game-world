@@ -57,7 +57,7 @@ app.whenReady().then(async()=>{
   win.setSize(800,600);await new Promise(r=>setTimeout(r,180));await run(()=>window.dispatchEvent(new Event('resize')));await shot('narrow-inside');
   win.setSize(1280,850);await new Promise(r=>setTimeout(r,180));await run(()=>window.dispatchEvent(new Event('resize')));
   const held=await save();assert.deepEqual(await resume(),held);await shot('continued-inside');
-  const checkpoint=await run(()=>__game.world().massRuntime.snapshot(__game.world()));assert.equal(checkpoint.schema,6);
+  const checkpoint=await run(()=>__game.world().massRuntime.snapshot(__game.world()));assert.equal(checkpoint.schema,checkpoint.config.rewards?.earnFrom ? 7 : 6);
   root=path.resolve(__dirname,'reports','quest-choice-dist');await win.loadURL(url);await boot();await start();
   const refusal=await run(s=>{const w=__game.world(),before=w.massRuntime;
    try{w.startWorldMass(s.state.run.seed,s);return {refused:false};}catch(e){return {refused:/Invalid worldmass checkpoint/.test(e.message),same:before===w.massRuntime};}

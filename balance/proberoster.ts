@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_worldmass_puzzlerewards.ts', status: 'green', tier: 'fast', why: 'Native riddle events earn compatible, once-only choices; shared cache budget, strict trigger policy, legacy/pending/fitted Continue and ordinary socketing' },
   { probe: 'probe_worldmass_doorplans.ts', status: 'green', tier: 'fast', why: 'Saved native plan variants, actual off-center inn approaches across three classes, waking latch, unchanged services, old/new Continue and strict geometry ownership' },
   { probe: 'probe_worldmass_questchoice.ts', status: 'green', tier: 'fast', why: 'Optional native contracts: pure offers, deliberate host intent, reach/gates, current and legacy Continue, downgrade refusal, retrospective completion and payout' },
   { probe: 'probe_chestreadout.ts', status: 'green', tier: 'fast', why: 'Native chest reach/recovery, pure contextual search cue, solid-sight/owner gates, hidden mimic identity, bounded text and single reward' },
