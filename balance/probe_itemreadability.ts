@@ -15,6 +15,7 @@ import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 import { Renderer } from '../src/render/renderer';
 import { GROUND_ITEM_SYMBOLS } from '../src/render/groundItems';
 import { VIS_CFG } from '../src/render/vis/visConfig';
+import { RewardLabelLayout } from '../src/render/vis/rewardLabels';
 import type { ItemInstance } from '../src/engine/items';
 import type { World } from '../src/engine/world';
 
@@ -57,26 +58,42 @@ host.drops.push({ pos: { x: 320, y: 80 }, bob: 0, item: { kind: 'vestige', id: v
 
 // Run the actual drop painter with a recording Canvas surface. This catches
 // missing shell fields at the consumption point, rather than testing a copy.
-function paint(w: World, drops = w.drops): { text: string[]; shapes: unknown[][] } {
+function paint(w: World, drops = w.drops, names = true, conceal = 0): { text: string[]; shapes: unknown[][] } {
   const text: string[] = [], shapes: unknown[][] = [];
   const ctx = new Proxy({
     fillText: (s: string) => text.push(s),
     measureText: (s: string) => ({ width: s.length * 7 }),
   }, { get: (o, key) => key in o ? o[key as keyof typeof o]
     : (...args: unknown[]) => shapes.push([String(key), ...args]) });
-  const renderer = Object.create(Renderer.prototype) as { ctx: unknown; drawDrops(w: World): void };
-  renderer.ctx = ctx;
-  // rewardLabelCovered now reads real combat context; preserve the actual
-  // world in this recording painter just as the live renderer does.
-  renderer.drawDrops(Object.assign(Object.create(w), { drops }) as World);
+  // Prepared empty frame, with real native bodies and the actual two painters.
+  // Names moved above the veils; drawing only ground symbols cannot test them.
+  const renderer = Object.assign(Object.create(Renderer.prototype), {
+    ctx, cam:{x:0,y:0}, canvas:{width:1280,height:850}, couchStretch:1, pixelScale:1,
+    frameOccluders:[], roofFade:new Map(), roomVeil:{veiledAt:()=>0},
+    sightVeil:{occludedAt:()=>conceal}, rewardLabels:new RewardLabelLayout(),
+    namedRewardUids:new Set(), combatMeters:{footprints:[]},
+  }) as {drawDrops(w:World):void;drawRewardLabels(w:World):void};
+  const frame=Object.assign(Object.create(w),{drops}) as World;
+  renderer.drawDrops(frame);
+  if(names)renderer.drawRewardLabels(frame);
   return { text, shapes };
 }
 const hostPaint = paint(host);
 const gear = host.drops.filter(d => d.item.kind === 'gear').map(d => paint(host, [d]));
 const paths = gear.map(p => JSON.stringify(p.shapes.filter(s => ['moveTo','lineTo','arc'].includes(String(s[0])))));
 check('equipment categories have distinct low-detail silhouettes', new Set(paths).size === gear.length && paths.every(p => p !== '[]'));
-check('equipment symbols have no tile frames (only the existing name label)', gear.every(p =>
+check('equipment symbols have no tile frames (only the separately painted name label)', gear.every(p =>
   !p.shapes.some(s => s[0] === 'strokeRect') && p.shapes.filter(s => s[0] === 'fillRect').length === 1));
+const gearDrops=host.drops.filter(d=>d.item.kind==='gear');
+check('ground symbols alone have neither equipment-name text nor label panels', gearDrops.every(d=>{
+  const p=paint(host,[d],false);return p.text.length===0&&!p.shapes.some(s=>s[0]==='fillRect'||s[0]==='strokeRect');
+}));
+check('the word layer draws every visible equipment name exactly once', gearDrops.every(d=>{
+  const p=paint(host,[d]);return d.item.kind==='gear'&&p.text.length===1&&p.text[0]===d.item.item.name;
+}));
+const marks=(p:ReturnType<typeof paint>)=>({text:p.text,shapes:p.shapes.filter(s=>s[0]!=='save'&&s[0]!=='restore')});
+check('the real veil gate suppresses equipment names while retaining ground symbols',
+  JSON.stringify(marks(paint(host,gearDrops,true,1)))===JSON.stringify(marks(paint(host,gearDrops,false))));
 check('every equipment category has a ground symbol', Object.values(ITEM_BASES).every(b => !!GROUND_ITEM_SYMBOLS[b.category]));
 const gems = host.drops.filter(d => d.item.kind === 'skill' || d.item.kind === 'support').map(d => paint(host,[d]));
 check('skill/support gems use diamonds without initials or inventory badges', gems.every(p =>

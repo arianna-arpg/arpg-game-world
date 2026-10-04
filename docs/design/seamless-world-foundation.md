@@ -4117,3 +4117,18 @@ All three type checks, speech, speechgrammar, worldmass_quests, skillpreparation
 and simulation smoke (five scenarios, five seeds, no scenario warnings) pass.
 The updated browser run produced twelve page/canvas pairs; all 24 images were
 inspected. Native continuation roof fades remain unsettled in static captures.
+
+### Recording checks follow the reward word layer
+
+CI 37242259393 passed 371 of 372 fast probes, including the restored speech and
+quest checks. Itemreadability still invoked only the ground-symbol painter and
+expected that call to draw a name panel. Pages 37243079563 skipped publication;
+the public preview remained defdeb7f.
+
+The recording probe now exercises both real painters against a prepared frame.
+It retains the no-tile-frame assertion and current/legacy snapshot checks, and
+also requires each visible equipment name exactly once, a text/panel-free
+symbol pass, and unchanged symbols when the native veil gate conceals names.
+Only inert save/restore context calls are omitted from that last mark comparison.
+The updated itemreadability probe passes all 170 checks. This is a correction
+to the test's consumption path, not a production change or a removed assertion.
