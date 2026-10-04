@@ -3569,3 +3569,47 @@ remain concrete reward-clarity feedback. The open-road reviewer used an earned
 Splitting support in later combat but encountered a reporting connection failure;
 that incomplete report is not a final acceptance. Fresh doorway and riddle-country
 reviewers are playing independently. Overall acceptance remains outstanding.
+
+### Explaining earned equipment effects
+
+Ordinary gear hover cards now explain their actual positive compiled proc grants,
+including base payloads, native triggers, skill and condition filters, cooldowns
+and shared simultaneous-hit rules. The reference reads the standing proc, skill
+and status definitions; retuning a definition changes its explanation without
+altering items. Complex payloads can provide an authored description. Unsupported
+payloads remain absent rather than receiving an invented explanation. Names,
+text and entry count are bounded, escaped at presentation and Unicode-safe.
+
+These are base-value references, not predictions of final damage, effective
+chance or active buffs. Inspection draws no randomness and changes no item,
+modifier, combat or save state. Existing equipment cards and ownership gates
+remain authoritative; gear without a proc keeps its previous card. This addresses
+the independent ember-country critic's inability to interpret the earned hood's
+Thunderstruck modifier.
+
+All three type checks, three new reference probe groups, 167 item-readability
+assertions and simulation smoke pass. Registry retuning, all twelve native proc
+affixes, authored complex effects, native gating/timers, deduplication, purity
+and bounded Unicode text are covered. Controlled browser QA inspected all seven
+page/canvas pairs: compact/full, skill-gated, 800 by 600, current Continue, actual
+prior client and return to the new client. Native hover delegation opens the
+cards; exact item, position and life survive the round trips. The controlled
+item fixture is not an earned reward, and its paused waking-house canvas does
+not establish interior visibility or entry quality.
+
+Open-road's interrupted report was recovered from existing public action logs
+and 33 paired captures, with no new gameplay or hidden-state reads. The original
+record completed native Save & Exit and Continue at level three, retaining the
+visible road location, life/mana, Bright Wraps, fitted Splitting and Change the
+Rhythm. Transient combo progress reset; no post-Continue site/map/journal revisit
+was present. The original subjective verdict remains unavailable. Its 4,219
+requested frames and roughly fifty-minute tool session do not establish live
+play duration or feel. Doorway-country encountered repeated connection failures;
+riddle-country resumed its existing frozen session after an interruption.
+Overall independent critic acceptance remains outstanding.
+
+Doorway head bc76a923 passed CI 37171841377 and published exact live metadata
+2026-10-04T03:02:39.522Z. Remote seed 2247407603 retained all six ordinary-save
+sentinels and native Continue without a fatal error. Riddle-reward head b6c803db
+passed CI 37173142612 and Pages 37174087252, publishing exact live metadata
+2026-10-04T03:28:27.21Z; remote seed 2820382001 passed the same persistence checks.

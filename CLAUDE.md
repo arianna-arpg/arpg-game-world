@@ -1,5 +1,12 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+itemProcReferences derives bounded equipment effect references from native
+compiled proc grants and the live proc/skill/status registries. References are
+base payloads, not predicted combat results; complex effects may supply an
+authored ProcDef.description. Verify procreference, itemreadability, sim smoke
+and proc-reference-ui.cjs for escaped compact/full cards, native skill gates,
+purity, narrow layout and exact current/prior-client Continue.
+
 Optional rewards.earnFrom pins which native discovery events share a run's
 support-choice allowance. Completion of an owned riddle can now earn the same
 native compatible choices as a cache; omitted legacy policy stays cache-only.

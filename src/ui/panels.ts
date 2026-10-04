@@ -67,6 +67,7 @@ import { PortalButton } from './portalbutton';
 import { ItemHoldController, type ItemHoldTarget } from './itemhold';
 import { VESTIGES, VESTIGE_LIST } from '../data/vestiges';
 import { compareItemMods, describeItem, itemGridSize, itemLevelReq, type ModCompareRow } from '../engine/itemgen';
+import { itemProcReferences } from '../engine/procReference';
 import { ITEM_BASES } from '../data/itembases';
 import {
   ABILITY_ESSENCE_CFG, ABILITY_ESSENCES, abilityEssenceOfTier, ESSENCES, ESSENCE_IDS,
@@ -3961,6 +3962,10 @@ export class UI {
       for (const s of d.epitaph.lines) lines.push(`<div style="color:#ffe9a8">${s}</div>`);
       if (d.epitaph.flavor) lines.push(`<div style="color:#8a7a5a;font-style:italic">${d.epitaph.flavor}</div>`);
     }
+    const procReferences = itemProcReferences(item);
+    if (procReferences.length) lines.push(`<section data-proc-reference style="margin-top:7px;padding-top:6px;border-top:1px solid #48404e;font-size:11px;line-height:1.5">
+      <div style="color:#aaa18e">Triggered effects · base values</div>
+      ${procReferences.map(r=>`<p style="margin:4px 0;color:#c9c1b1"><strong>${esc(r.name)}</strong> — ${esc(r.text)}</p>`).join('')}</section>`);
     if (d.flavor) lines.push(`<div style="color:#8a7a5a;font-style:italic;margin-top:4px">${d.flavor}</div>`);
     // Full tooltipDetail includes the comparison immediately; the compact
     // card points to the preference without promising a timed expansion.
