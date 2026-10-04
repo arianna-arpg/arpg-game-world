@@ -1004,6 +1004,8 @@ export interface ZoneTiers {
 }
 
 export interface ZoneDef {
+  /** Saved plan variants retain each native building's services and identity. */
+  structurePlans?: import('../engine/structurePlans').StructurePlanOverrides;
   /** Explicitly seal player-created town travel for authored encounters. */
   townPortals?: boolean;
   id: string;

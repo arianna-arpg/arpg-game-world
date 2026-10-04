@@ -60,7 +60,7 @@ app.whenReady().then(async()=>{
   const accepted=await run(state);assert.equal(accepted.quests.length,1);assert.equal(accepted.ledger,1);
   assert.equal((await shot('accepted')).button,null);
   const held=await save();assert.deepEqual(await resume(),held);await journal();await shot('accepted-continue');
-  const checkpoint=await run(()=>__game.world().massRuntime.snapshot(__game.world()));assert.equal(checkpoint.schema,5);
+  const checkpoint=await run(()=>__game.world().massRuntime.snapshot(__game.world()));assert.equal(checkpoint.schema,checkpoint.config.settlement?.structurePlans ? 6 : 5);
   root=path.resolve(__dirname,'reports','chest-readout-dist');await win.loadURL(url);await boot();
   const refusal=await run(s=>{
    __game.devStartRun('magician');__game.ui.hideAll();const w=__game.world(),before=w.massRuntime;

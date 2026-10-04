@@ -1,5 +1,12 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+New expedition settlement.structurePlans pins native building plan variants.
+Variants retain native identity, services, legend and footprint; the existing
+compiler owns doors, roofs and collision. Schema six refuses older clients;
+legacy saves retain their original plans. Verify worldmass_doorplans, worldmass,
+doorpress, generation QA and broad-doorways-ui.cjs for off-centre approaches,
+exact current Continue, old geometry and actual prior-client refusal.
+
 New expedition descriptors opt into settlement.quests.acceptance = 'journal'.
 questOfferChoices reuses native live eligibility; questAccept dispatch rechecks
 host, life, reach and gates before the original quest pipeline. Schema five

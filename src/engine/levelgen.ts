@@ -1,3 +1,4 @@
+import { structurePlanOf, validateStructurePlans } from './structurePlans';
 // ---------------------------------------------------------------------------
 // Level generation — set-piece stamps composed into a layout.
 //
@@ -3071,6 +3072,7 @@ export type Reservation =
   | { rect: { x: number; y: number; w: number; h: number }; margin?: number };
 
 export interface GenCtx {
+  structurePlans?: import('./structurePlans').StructurePlanOverrides;
   rng: Rng;
   /** The zone box. `shape`/`boundless` ride along (generateLayout normalizes
    *  them off the def) so placement passes can ask the RIM LAW — the ellipse
@@ -4976,7 +4978,9 @@ export function generateLayout(
   // LITE (GenCtx.lite): the understory's aerial pass — geometry only.
   opts?: { lite?: boolean },
 ): GeneratedLayout {
+  validateStructurePlans(def.structurePlans);
   const ctx: GenCtx = {
+    structurePlans: def.structurePlans,
     rng,
     // THE RIM PLUMB: the def's shape rides ctx.arena so placement passes can
     // ask insideBounds (the rim law). World callers already pass a full
@@ -6037,6 +6041,7 @@ function findStructureSpot(
  *  window + prop doodads, record roofs/slots/doors on a PlacedStructure, stamp
  *  fx layers, and guarantee every door an open apron reachable from the entry. */
 function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
+  def = structurePlanOf(def, ctx.structurePlans);
   const resolved = resolvePlan(ctx, def);
   if (!resolved) return;
   const { rows, cells } = resolved;

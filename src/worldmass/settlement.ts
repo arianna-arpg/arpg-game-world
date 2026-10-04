@@ -15,6 +15,8 @@ import { MassSanctuary } from './sanctuary';
 import { validateDoorPress, type DoorPressSpec } from '../engine/doorPress';
 
 export interface MassSettlementSpec {
+  /** Native plan variants are pinned with the expedition's finite settlement. */
+  structurePlans?: import('../engine/structurePlans').StructurePlanOverrides;
   /** New-run search for existing terrain; Continue always keeps the saved origin. */
   location?: import('./origin').MassOriginSpec;
   /** Optional native quest contracts tied to this run's physical destinations. */
@@ -69,7 +71,9 @@ export class MassSettlement {
       || !Number.isFinite(saved.clock) || !Number.isFinite(saved.bornAt) || !Array.isArray(saved.regions) || !Array.isArray(saved.scenery) || !Array.isArray(saved.doors) || !Array.isArray(saved.bodies)))
       throw new Error('Invalid native settlement checkpoint');
     this.bornAt = saved?.bornAt ?? world.time;
-    world.loadMassSettlement(seed, this.bornAt, saved?.zone, saved?.tier);
+    if (saved && canonical(saved.zone.structurePlans ?? null) !== canonical(spec.structurePlans ?? null))
+      throw new Error('Mismatched settlement structure plans');
+    world.loadMassSettlement(seed, this.bornAt, saved?.zone, saved?.tier, spec.structurePlans);
     if (!(world.walk instanceof GridWalkField)) throw new Error('Native settlement requires a region grid');
     this.zone = JSON.parse(JSON.stringify(world.zone));
     this.grid = world.walk;

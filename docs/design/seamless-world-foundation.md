@@ -3474,3 +3474,51 @@ on the frozen deliberate-contract build. No overall critic acceptance yet.
 Cache-readout head 56ff8170 passed CI 37168628664 and published exact live metadata
 2026-10-04T01:58:35.771Z. Remote seed 518833761 preserved all six ordinary-save
 sentinels and native Continue without a fatal error.
+
+### Broader native entrances, saved with the expedition
+
+Fresh expeditions author two-cell entrances for the waking house and inn through
+source-attributed structure plan overrides. They keep the native building IDs,
+footprints, furniture, services, NPC seats, roof handling and grouped-door compiler.
+Other plan rows and the shared structure registry remain unchanged. Door pressure,
+opening time, body radii and player movement keep their existing rules. Overrides
+validate known static plans, exact dimensions, native legend characters, bounded
+source strings and a maximum of 32 entries before generation.
+
+Measured approaches on the preceding client crossed at offsets through twelve
+units but remained blocked at eighteen. Loosening pressure reach/alignment in a
+throwaway diagnostic sometimes opened the old door but did not let those bodies
+cross. The chosen sixty-unit doorway gives physical clearance instead. Six held
+inn approaches (Warrior, Magician and Rogue at plus/minus eighteen) now open and
+cross; the native waking-house exit still records its lesson once. Ordinary zones
+and old expeditions retain their thirty-unit entrances. Schema six and matching
+saved settlement plans prevent clients from silently regenerating another layout.
+
+All three type checks, all 37 worldmass probes, the five-group door-pressure probe,
+sim smoke and generation QA pass. The 869-by-three generation sweep has zero
+failures, four existing geometry warnings and one concurrent-load slow-generation
+warning (Boulevards, 431 milliseconds/seed). A final four-group doorway probe also
+passes after the missing-zone checkpoint guard. The new probe covers malformed
+plans, shared-registry purity, physical approaches, services, current/legacy
+Continue and downgrade/mismatched-plan refusal.
+
+Controlled browser QA inspected eight page/canvas pairs including 800 by 600.
+Ordinary held movement crosses the wider entrance; the actual previous client
+remains blocked at the same eighteen-unit offset. Current interior position,
+life, keeper seat, open door and descriptor survive native save/Continue exactly;
+the previous client refuses schema six before replacing its runtime. Legacy
+Continue retains its old geometry. A checkpoint taken while pressing into the old
+closed doorway showed a 0.296-unit contact correction in the prior client too;
+the final exact legacy comparison saves after twelve ordinary retreat frames on
+clear ground. This is not a claim of exact contact-pose preservation. Seeded setup
+and prepared inn approaches make these controlled checks, not earned playtests.
+
+The open-road critic independently declined Western Watch, prepared flasks and
+took the south road. Fallen Court combat earned level three; Change the Rhythm's
+visible one/two/active progression made their rotation rewarding. Quiet travel
+and searching for the last defender still weakened the excursion. Ember-country
+continues separately. No overall critic acceptance or commercial parity is claimed.
+
+Contract-choice head efe0fcad passed CI 37170011782 and Pages 37170911391. Exact
+live metadata reports 2026-10-04T02:25:30.695Z. Remote seed 2885572613 retained all
+six ordinary-save sentinels and native Continue without a fatal error.

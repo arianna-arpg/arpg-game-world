@@ -3772,18 +3772,21 @@ export class World {
   }
   private massSettlementLoading = false;
   private massSettlementDay: number | null = null;
+  private massSettlementPlans: import('./structurePlans').StructurePlanOverrides | undefined;
   /** Pin native town geometry across a worldmass Continue, independently of
    * account growth. No call to this method occurs at a geographic boundary. */
-  loadMassSettlement(seed: number, bornAt: number, saved?: ZoneDef, tier?: number): void {
+  loadMassSettlement(seed: number, bornAt: number, saved?: ZoneDef, tier?: number,
+    structurePlans?: import('./structurePlans').StructurePlanOverrides): void {
     if (saved) {
       this.zoneMap[START_ZONE] = JSON.parse(JSON.stringify(saved));
       this.townTierIdx = tier!;
     }
     this.massSettlementLoading = !!saved;
+    this.massSettlementPlans = structurePlans;
     this.massSettlementDay = Math.floor(bornAt / DAY_LENGTH);
     this.zoneMemory.delete(START_ZONE);
     this.adoptedZonePending = true;
-    try { withSeededRandom(seed, () => this.loadZone(START_ZONE)); } finally { this.massSettlementLoading = false; this.massSettlementDay = null; }
+    try { withSeededRandom(seed, () => this.loadZone(START_ZONE)); } finally { this.massSettlementLoading = false; this.massSettlementDay = null; this.massSettlementPlans = undefined; }
   }
   /** Native region mutations must reach their original plan grid while the
    * encompassing navigation field spans the infinite country. */
@@ -5911,6 +5914,8 @@ export class World {
     // roll: a fortified bonus exit is raised only the first time you stumble in uncharted.
     const firstVisit = !isCave && !this.visited.has(zoneId);
     if (zoneId === START_ZONE && !this.massSettlementLoading) this.refoldTownStations(); // THE STATION FOLD
+    if (zoneId === START_ZONE && this.massSettlementPlans)
+      this.zoneMap[zoneId] = { ...this.zoneMap[zoneId], structurePlans: JSON.parse(JSON.stringify(this.massSettlementPlans)) };
     const def = this.zoneMap[zoneId] ?? this.caveMap[zoneId];
     this.zone = def;
     // The zone's own entry beat: the renderer exempts LOAD-time population

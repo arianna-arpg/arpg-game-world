@@ -1,3 +1,4 @@
+import { nativeStructurePlan } from '../engine/structurePlans';
 import { TILESETS } from '../data/tilesets';
 import { FACTIONS, MONSTERS } from '../data/monsters';
 import { presenceTable } from '../engine/presence';
@@ -190,6 +191,10 @@ export function massAdventure(): MassAdventure {
       ] },
     ] },
     settlement: { zone: 'lastlight', source: 'zones/lastlight', apron: 192, blend: 144,
+      structurePlans: {
+        waking_house: nativeStructurePlan('waking_house', 'structures/waking-house/broad-entry-v1', {5:'##DD###'}),
+        inn: nativeStructurePlan('inn', 'structures/inn/broad-entry-v1', {7:'####W#DD#W####'}),
+      },
       location: { source: 'worldmass/continental-start-v1', base: {dimension:'surface',cx:'0',cy:'0'},
         candidates: 32, spacingCells: 16, minimumFraction: .85,
         sample: {minX:-2000,minY:-2500,maxX:4500,maxY:4000,step:500},
