@@ -1,9 +1,9 @@
 // Prepared native dialogue/Journal fixture. Not an earned playthrough.
 const {app,BrowserWindow}=require('electron'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
-const dir=path.join(__dirname,'reports'),tag='skill-preparation';
+const dir=path.join(__dirname,'reports'),tag=process.env.HOLLOW_WAKE_QA_TAG||'skill-preparation';
 app.setPath('userData',path.join(dir,tag+'-profile-'+process.pid));app.disableHardwareAcceleration();
 app.whenReady().then(async()=>{
- const current=path.resolve(dir,tag+'-dist'),prior=path.resolve(dir,'light-sight-dist');let root=current;
+ const current=path.resolve(process.env.HOLLOW_WAKE_QA_DIST||path.join(dir,'skill-preparation-dist')),prior=path.resolve(dir,'light-sight-dist');let root=current;
  const server=http.createServer((req,res)=>{
   const p=new URL(req.url,'http://localhost').pathname,f=path.resolve(root,'.'+(p==='/'?'/index.html':p));
   if(!f.startsWith(root+path.sep)||!fs.existsSync(f)){res.writeHead(404);return res.end();}
@@ -55,11 +55,18 @@ app.whenReady().then(async()=>{
    return rows;
   });
   const intro=await shot('conversation');
-  assert.ok(intro.boxes.some(b=>b.text==='Prepare flasks'));
+  assert.ok(intro.boxes.some(b=>b.text==='Flasks & contracts'));
   win.setSize(600,650);await new Promise(r=>setTimeout(r,150));await shot('conversation-narrow');
   win.setSize(1280,850);await new Promise(r=>setTimeout(r,150));
-  await run(()=>[...document.querySelectorAll('.dialogue-choices button')].find(b=>b.textContent==='Prepare flasks').click());
+  await run(()=>[...document.querySelectorAll('.dialogue-choices button')].find(b=>b.textContent==='Flasks & contracts').click());
   assert.equal((await shot('ready')).boxes.filter(b=>b.text.startsWith('Place on')).length,2);
+  await run(()=>document.querySelector('[data-quest-accept]').click());
+  const unprepared=await run(()=>{const w=__game.world(),a=w.actors.find(a=>a.defId==='townsfolk_innkeep');
+    return {lesson:w.mireilleGiftLesson(),quests:w.activeQuests.length,authored:w.npcDialogues.dwell(a)?.def.id,
+      cue:w.speechCandidates(w.localSeat).find(c=>c.a===a)?.text,work:w.questGiverPrompt()};});
+  assert.equal(unprepared.lesson,'learn');assert.equal(unprepared.quests,1);
+  assert.notEqual(unprepared.authored,'mireille_flask_preparation');assert.ok(unprepared.cue.includes(unprepared.work));
+  await shot('work-unprepared');
   win.setSize(600,650);await new Promise(r=>setTimeout(r,150));await run(()=>__game.ui.refreshMap());await shot('narrow');
   win.setSize(1280,850);await new Promise(r=>setTimeout(r,150));await run(()=>__game.ui.refreshMap());
   await run(()=>document.querySelector('[data-prepare-skill]').click());
@@ -78,7 +85,7 @@ app.whenReady().then(async()=>{
   const currentState=await save();assert.deepEqual(await resume(),currentState);await shot('current-continue');
   root=prior;assert.deepEqual(await resume(),currentState);await shot('prior-continue');
   root=current;assert.deepEqual(await resume(),currentState);await shot('current-again');
-  await journal();await run(()=>document.querySelector('[data-quest-accept]').click());
+  await journal();
   assert.equal((await run(state)).quests.length,1);await shot('contract');
   fs.writeFileSync(path.join(dir,tag+'-ui.json'),JSON.stringify({rows,partial,currentState,stale},null,2));
   console.log('PASS native dwell, actual dialogue/Journal placements, 600px controls, stale empty-seat refusal, partial and exact current/prior/current Continue, native contract');

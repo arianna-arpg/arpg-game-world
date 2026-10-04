@@ -4088,3 +4088,32 @@ appearance in 0037–0044 is an observation, not a diagnosed pathfinding bug.
 The reviewer did not visit the caravan, so this report cannot accept that
 recipe. Independent acceptance remains unmet; no commercial comparator was
 played. Separate fresh reviews use frozen preparation and reward-label builds.
+
+### Preparation invitation respects native service work
+
+The full fast CI roster for bdd53fb0 passed 369 of 371 probes, then refused
+publication on speech and worldmass_quests. Pages correctly skipped that head;
+the public preview still held defdeb7f. The new authored dwell had reached
+ordinary Mireille conversations and displaced their former attention timing.
+The quest check also exposed the lost native work page during preparation.
+
+The invitation now explicitly opts into the continuous geography through the
+open dialogue-fact registry. Ordinary service speech remains native. A second
+fact withdraws it while Mireille owns either end of an active contract, so a
+player who declines to learn the optional flasks still receives progress and
+return/reward guidance. Its opening response says "Flasks & contracts" and opens
+the shared Journal. The worldmass quest probe now checks the actual authored
+opening response, then retains strict native-service and quest-text assertions
+after acceptance and at turn-in with the flask lesson unfinished. The old
+speech probe passes without modification. No assertions or probes were disabled.
+
+The preparation browser harness accepts a real contract before either flask
+is learned, checks that both preparations remain available and that the native
+quest conversation returns, then verifies partial/full and actual prior-client
+continuation with that active work. Optional harness path/tag overrides preserve
+both frozen fresh-critic builds and their earlier QA evidence.
+
+All three type checks, speech, speechgrammar, worldmass_quests, skillpreparation
+and simulation smoke (five scenarios, five seeds, no scenario warnings) pass.
+The updated browser run produced twelve page/canvas pairs; all 24 images were
+inspected. Native continuation roof fades remain unsettled in static captures.

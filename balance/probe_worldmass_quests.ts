@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { serializeCharacter, applySavedCharacter } from '../src/meta/character';
+import { NPC_DIALOGUES } from '../src/data/npcDialogues';
 import { Q_FRONTIER_WATCH } from '../src/quests/frontier';
 import { Q_UNDEAD_SOUTH } from '../src/quests/defs';
 import type { QuestDef } from '../src/quests/types';
@@ -37,12 +38,17 @@ try {
   stand(w,'townsfolk_innkeep');
   assert.deepEqual(hooks(w).acceptableQuests().map(q=>q.id),[Q_FRONTIER_WATCH.id]);
   const cues=hooks(w).speechCandidates(w.localSeat).find(c=>c.a.defId==='townsfolk_innkeep')!.text!;
-  assert.ok(cues.startsWith(w.innkeepPrompt()!),'native service guidance leads the multi-role conversation');
-  assert.ok(cues.includes(w.questGiverPrompt()!),'quest work remains available on its own reader page');
+  const preparation = NPC_DIALOGUES.find(d=>d.id==='mireille_flask_preparation')!;
+  assert.equal(cues,preparation.lines[0].text,'the continuous opening uses its authored preparation invitation');
+  assert.ok(preparation.responses?.choices?.some(c=>c.action?.type==='menu' && c.action.target==='journal'
+    && /contracts/i.test(c.label)),'the actual response explicitly routes preparation and optional contracts to the native Journal');
   hooks(w).updateQuestGiver(4);
   assert.equal(w.activeQuests.length,0,'new offers wait for a deliberate choice');
   assert.ok(w.acceptQuestOffer(Q_FRONTIER_WATCH.id));
   assert.equal(w.activeQuests.length,1);assert.equal(w.activeQuests[0].placeId,place.id);
+  const workingCue=hooks(w).speechCandidates(w.localSeat).find(c=>c.a.defId==='townsfolk_innkeep')!.text!;
+  assert.ok(workingCue.startsWith(w.innkeepPrompt()!),'declining flask learning does not hide the native inn service');
+  assert.ok(workingCue.includes(w.questGiverPrompt()!),'accepted work takes precedence over the optional preparation invitation');
   assert.deepEqual(Object.keys(w.zoneMap),zones);assert.equal(earned(w),beforeXp);
   assert.equal(canonical(m.state.snapshot()),beforeKnowledge);
   const pins=massQuestPins(w);assert.equal(pins.length,1);assert.equal(pins[0].ready,false);
@@ -87,6 +93,8 @@ try {
   stand(resume,'townsfolk_smith');
   assert.equal(resume.claimQuestReward(Q_FRONTIER_WATCH.id,'spring'),false);
   stand(resume,'townsfolk_innkeep');
+  const returnCue=hooks(resume).speechCandidates(resume.localSeat).find(c=>c.a.defId==='townsfolk_innkeep')!.text!;
+  assert.ok(returnCue.includes(resume.questGiverPrompt()!),'returning with an unfinished flask lesson still exposes the actual reward prompt');
   const offers=resume.questRewardOffers();assert.equal(offers.length,1);assert.equal(offers[0].choices.length,3);
   assert.ok(offers[0].choices.every(c=>c.lines.length),'native reward cards resolve real affixes');
   assert.ok(offers[0].choices.find(c=>c.id==='spring')!.lines.some(l=>/Maximum Mana/.test(l)),'reward preview includes its base identity');

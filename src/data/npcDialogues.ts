@@ -52,6 +52,11 @@ export const NPC_DIALOGUE_FACTS: Record<string, (w: World) => boolean> = {
   reliquaryLesson: w => w.reliquaryLesson(),
   mireilleLessonComplete: w => w.mireilleLessonLived(),
   mireillePreparingFlasks: w => w.mireilleGiftOwed() || w.mireilleGiftLesson() === 'learn',
+  continuousWorld: w => !!w.massRuntime,
+  mireilleContractActive: w => w.activeQuests.some(q => {
+    const def = w.questDefOf(q.questId);
+    return !!def && [def.giver, def.turnIn?.giver].flat().includes('townsfolk_innkeep');
+  }),
   brandtImbueWaiting: w => w.questImbues.some(r => [BRANDT_HAMMER_QUEST, BRANDT_TROPHY_QUEST].includes(r.questId)),
 };
 
@@ -64,11 +69,12 @@ export const NPC_APPEARANCES: Record<string, { base: string; variants: { all: re
 export const NPC_DIALOGUES: NpcDialogueDef[] = [
   {
     id: 'mireille_flask_preparation', speaker: { defId: 'townsfolk_innkeep' }, priority: 210,
-    all: [{ fact: 'mireillePreparingFlasks' }],
+    all: [{ fact: 'continuousWorld' }, { fact: 'mireillePreparingFlasks' }],
+    none: [{ fact: 'mireilleContractActive' }],
     trigger: { kind: 'dwell', radius: 150, seconds: 1.1 },
     lines: [{ text: 'I keep flasks for new faces. Shall we find a place for yours?' }],
     responses: { choices: [
-      { id: 'prepare', label: 'Prepare flasks', action: { type: 'menu', target: 'journal' } },
+      { id: 'prepare', label: 'Flasks & contracts', action: { type: 'menu', target: 'journal' } },
       { id: 'pack', label: 'Arrange my pack', action: { type: 'menu', target: 'inventory' } },
     ] },
   },

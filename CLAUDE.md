@@ -8,6 +8,10 @@ VIS_CFG.drops.rewardLabels owns bounds and opt-outs. Verify rewardlabels,
 combatfocus and reward-labels-ui.cjs for actual prior overlap, narrow layouts,
 native pickup, occlusion, pure drawing and exact current/prior/current Continue.
 
+continuousWorld scopes the authored preparation invitation to the prototype;
+mireilleContractActive restores native work dialogue even with unlearned flasks.
+Verify speech and worldmass_quests as well as the preparation checks below.
+
 skillPreparationHtml presents the native pending flask lesson alongside
 optional contracts. Its buttons send ordinary learn intents with emptyOnly,
 which rechecks occupancy/known copies before changing the rack. Native gifts,
