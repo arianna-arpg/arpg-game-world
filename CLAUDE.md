@@ -1,5 +1,11 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Cast readouts show the native movement-held fact while an authoritative seated
+actor is casting. VIS_CFG.castReadout owns the optional bounded Feet planted
+caption; mobile casts/guards and unresolved mirrors keep their ordinary meter.
+Verify castmovement/bodywalk/combatfocus and cast-movement-ui.cjs against the
+prior client for actual attempted movement, release, narrow view and draw purity.
+
 MassSurvey records optional source-owned map memory through native lineOfSight
 after scenery residency. Its bounded cell/radius policy lives in the run descriptor;
 map paint and road clipping only read it. Legacy descriptors retain page discovery.

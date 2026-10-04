@@ -149,7 +149,7 @@ import { REACTIVE_CUE_CFG } from '../data/combatReadability';
 import { drawReactiveCue, drawGaspSpark, drawWardBody, drawWardLinks, drawWardBar } from './vis/combatReadabilityLayer';
 import { drawCastingCue, drawFocusFrame } from './vis/castingCueLayer';
 import { castingCompletion } from '../engine/castingCues';
-import { drawCastName, drawCastSlot } from './vis/castReadout';
+import { castMovementHeld, drawCastName, drawCastSlot } from './vis/castReadout';
 import { COMBAT_CUE_CFG } from '../data/combatCues';
 import { drawShellCue, drawPoiseCue, statusBodyLean, drawStatusBodyCue } from './vis/defenseCueLayer';
 import { drawWatchSense, drawWatchTrails } from './vis/watchLayer';
@@ -6402,13 +6402,15 @@ export class Renderer {
     if (cs) {
       const castReadout = VIS_CFG.castReadout.enabled && world.seats.some(s => s.actor === a);
       const bw = castReadout ? VIS_CFG.castReadout.width : 44, bh = castReadout ? VIS_CFG.castReadout.height : 5;
-      const nameHeight = castReadout ? VIS_CFG.castReadout.nameHeight : 0;
+      const movement = castReadout && VIS_CFG.castReadout.showMovement && castMovementHeld(world,a)
+        ? VIS_CFG.castReadout.plantedText : undefined;
+      const nameHeight = castReadout ? VIS_CFG.castReadout.nameHeight+(movement?VIS_CFG.castReadout.movementHeight:0) : 0;
       const bx2 = x - bw / 2, by2 = y - a.radius - 18;
       const color = cs.inst.def.color;
       const meterRise=cs.mode==='overcharge'?Math.max(0,cs.stage??0)*4:4;
       const meterWidth=bw+(['overcharge','channel','multitude'].includes(cs.mode)?52:6);
       this.combatMeters.add(a,{x:bx2-3,y:by2-6-meterRise-nameHeight,w:meterWidth,h:bh+10+meterRise+nameHeight},()=>{
-        if (castReadout) drawCastName(ctx, a, x, by2-6-meterRise, bw);
+        if (castReadout) drawCastName(ctx, a, x, by2-6-meterRise, bw, movement);
         ctx.fillStyle = 'rgba(0,0,0,0.7)';
         ctx.fillRect(bx2 - 1, by2 - 1, bw + 2, bh + 2);
         let frac: number;

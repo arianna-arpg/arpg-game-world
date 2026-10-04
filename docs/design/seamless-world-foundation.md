@@ -3293,3 +3293,37 @@ Continental head 0328cf69 passed CI 37163909748 and Pages 37164487829. Exact liv
 metadata reports 2026-10-04T00:19:23.27Z. Remote seed 2615299475 retained six
 ordinary-save sentinels and native Continue without a fatal error. No final
 critic acceptance or direct commercial-game comparison has been established.
+
+### Explaining planted feet during a native cast
+
+Independent reviewers repeatedly attempted to back away while ordinary casts
+held movement. The existing cast name and progress bar now show a second,
+configurable "Feet planted" line when the authoritative native movement rule
+reports that state. It reads World.movementLocked instead of maintaining another
+cast-mobility formula. The label describes the present state without promising
+that every other movement restriction ends with the cast. Mobile guards and
+casts omit it, as do dead/downed/stunned actors, foreign actors and unresolved
+client mirrors. The shared meter layout reserves the extra height. Cast timing,
+input, movement policy, damage and persistence are unchanged.
+
+All three type checks pass, alongside castmovement (three groups), bodywalk
+(five) and combatfocus (seven). Controlled browser QA performs actual movement
+input during Firebolt, after release, during Chain Lightning, with Shield Up,
+and with native cast-mobility investment. The planted cast moves zero units;
+release walking moves 26.72, and mobile guard walking moves 10.688. Read-only
+drawing preserves sampled position, resources, world/cast clocks and projectile
+count. The current and actual preceding clients pass all six scenes. All six
+current page/canvas pairs and the prior casting pair were inspected, including
+800-by-600 bounds. Fixtures use prepared positions, removed foes and invulnerability;
+this is not an independent combat verdict or a persistence change.
+
+The grove-world review remains mixed. Its cited inn image shows the lit room
+surrounded by native room visibility, so this pass preserves that concealment.
+The road-choice, garrison-country and sighted-country playtests continue on their
+frozen builds. The latter independently selected the Memorial Grove via Roads
+and solved its three-by-three lattice through aimed Firebolts, earning a Rough
+Memory. This is a promising observed activity, not final critic acceptance.
+
+Survey head ea310a0a passed CI 37165236594 and Pages 37165968878. Exact live
+metadata reports 2026-10-04T00:48:19.638Z. Remote seed 1494950430 retained all six
+ordinary-save sentinels and native Continue without a fatal error.

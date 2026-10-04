@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_castmovement.ts', status: 'green', tier: 'fast', why: 'Native movement-held cast readout, actual rooted/mobile movement, guard/channel mobility, owner/mirror gates and pure drawing' },
   { probe: 'probe_worldmass_survey.ts', status: 'green', tier: 'fast', why: 'Bounded native sight survey, exact far/negative addresses, wall removal, read-only map, page crossing and old/new Continue' },
   { probe: 'probe_worldmass_origin.ts', status: 'green', tier: 'fast', why: '32 seeded continental-start selections, bounded search, exact large cells, strict recipe validation and old/new native Continue' },
   { probe: 'probe_worldmass_garrisonnames.ts', status: 'green', tier: 'fast', why: 'read-only discovered garrison attribution, roaming and exact Continue, foreign/hidden/legacy exclusions and bounded mod captions' },

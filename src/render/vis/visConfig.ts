@@ -22,6 +22,8 @@ export const VIS_CFG = {
   hotbar: { emptyFillAlpha: .12, emptyBorderAlpha: .5 },
   /** Current player cast: actual work clock and owner, separate from cooldowns. */
   castReadout: { enabled: true, width: 104, height: 6, nameHeight: 14,
+    showMovement: true, plantedText: 'Feet planted', movementHeight: 12,
+    movementFont: '10px Verdana', movementText: '#cad3d4',
     font: 'bold 11px Verdana', text: '#f1ecdd', edge: '#121719', outline: 3,
     slotEdge: '#f1ecdd', slotWidth: 2, slotPad: 2 },
   meleeReach: { enabled:true, color:'#dcebd6', edge:'#17201b', alpha:.34, progressAlpha:.25,

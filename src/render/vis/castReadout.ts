@@ -1,10 +1,19 @@
 import type { Actor } from '../../engine/actor';
+import type { World } from '../../engine/world';
+
 import type { SkillInstance } from '../../engine/skills';
 import { skillInstanceName } from '../../engine/skillEmpowerment';
 import { VIS_CFG } from './visConfig';
 
+/** A live movement fact, not a second cast/mobility formula. Unresolved client
+ * mirrors keep the ordinary cast bar without claiming a local movement rule. */
+export function castMovementHeld(world: World, a: Actor): boolean {
+  return !world.clientActionHook && !!a.casting && !a.dead && !a.downed && !a.isStunned()
+    && world.seats.some(s=>s.actor===a) && world.movementLocked(a);
+}
+
 /** Name the work actually running, not the last key pressed or a queued wish. */
-export function drawCastName(ctx: CanvasRenderingContext2D, a: Actor, x: number, y: number, width: number): void {
+export function drawCastName(ctx: CanvasRenderingContext2D, a: Actor, x: number, y: number, width: number, movement?: string): void {
   if (!a.casting) return;
   const c = VIS_CFG.castReadout;
   ctx.save(); ctx.font = c.font; ctx.textAlign = 'center';
@@ -14,7 +23,14 @@ export function drawCastName(ctx: CanvasRenderingContext2D, a: Actor, x: number,
     name += '…';
   }
   ctx.lineJoin = 'round'; ctx.lineWidth = c.outline; ctx.strokeStyle = c.edge;
-  ctx.strokeText(name, x, y); ctx.fillStyle = c.text; ctx.fillText(name, x, y);
+  const nameY=y-(movement?c.movementHeight:0);
+  ctx.strokeText(name, x, nameY); ctx.fillStyle = c.text; ctx.fillText(name, x, nameY);
+  if(movement){
+    ctx.font=c.movementFont;
+    const points=Array.from(movement);let label=movement;
+    while(points.length&&ctx.measureText(label).width>width){points.pop();label=points.join('')+'…';}
+    ctx.strokeText(label,x,y);ctx.fillStyle=c.movementText;ctx.fillText(label,x,y);
+  }
   ctx.restore();
 }
 
