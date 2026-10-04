@@ -55,6 +55,7 @@ import { DEFAULT_CURSOR_OPTIONS, drawAimReticle } from '../core/cursor';
 import { guardBashReady, instanceChargeCost, instanceDelivery, instanceMeta, instanceMods, metaFaceOf, instanceStrikeTiming, instanceTriggerArmed, instanceUseCharges, poolReadOf, skillContextTags, SKILL_RARITIES, treeSpentBranch } from '../engine/skills';
 import { ITEM_RARITIES } from '../engine/items';
 import { drawGroundItem } from './groundItems';
+import { memoryKindOf, MEMORY_KINDS } from '../engine/memories';
 import { TOWN_PORTAL_CFG } from '../data/townportals';
 import { VESTIGES } from '../data/vestiges';
 import { abilityEssenceOfTier, ESSENCES } from '../data/essences';
@@ -6821,24 +6822,27 @@ export class Renderer {
       }
       if (item.kind === 'gear') {
         const rc = ITEM_RARITIES[item.item.rarity] ?? ITEM_RARITIES.common;
+        const memoryKind = memoryKindOf(item.item), memory = memoryKind ? MEMORY_KINDS[memoryKind] : null;
+        const dropColor = memory?.color ?? rc.color;
         const unique = item.item.rarity === 'unique';
         const half = unique ? D.gearUniqueHalf : D.gearHalf;
         ctx.save();
         ctx.translate(d.pos.x, y);
-        ctx.shadowColor = rc.color;
+        ctx.shadowColor = dropColor;
         ctx.shadowBlur = unique ? D.glowUnique : D.glow;
-        drawGroundItem(ctx, item.item.baseId, half, rc.color, D.symbolEdgeColor, D.outlineWidth);
+        drawGroundItem(ctx, item.item.baseId, half, dropColor, D.symbolEdgeColor, D.outlineWidth);
         ctx.restore();
         // The floating label — dark pill + rarity-colored name.
         ctx.font = `bold ${D.labelFont}px Verdana`;
         ctx.textAlign = 'center';
-        const label = item.item.name;
-        const w = ctx.measureText(label).width;
-        if (this.rewardLabelCovered(world, d.pos.x, y-D.labelLift+D.labelPillH/2, w, D.labelPillH)) continue;
+        const labels = memory ? [item.item.name, memory.rewardLabel] : [item.item.name];
+        const w = Math.max(...labels.map(label=>ctx.measureText(label).width));
+        const h = D.labelPillH*labels.length, top = y-D.labelLift-D.labelPillH*(labels.length-1);
+        if (this.rewardLabelCovered(world, d.pos.x, top+h/2, w, h)) continue;
         ctx.fillStyle = 'rgba(10,8,14,0.78)';
-        ctx.fillRect(d.pos.x - w / 2 - D.labelPadX, y - D.labelLift, w + D.labelPadX * 2, D.labelPillH);
-        ctx.fillStyle = rc.color;
-        ctx.fillText(label, d.pos.x, y - D.labelLift + D.labelPillH - 4);
+        ctx.fillRect(d.pos.x - w / 2 - D.labelPadX, top, w + D.labelPadX * 2, h);
+        ctx.fillStyle = dropColor;
+        labels.forEach((label,i)=>ctx.fillText(label, d.pos.x, top+D.labelPillH*(i+1)-4));
         continue;
       }
       const fill = item.kind === 'support' ? item.gem.def.color : item.inst.def.color;

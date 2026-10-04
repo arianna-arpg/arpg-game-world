@@ -1,5 +1,11 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+MemoryKindDef.rewardLabel and recallDescription explain native Memory purposes
+on drops, pickup history, bag cards and the Recall. Revealed results can focus
+their exact remaining bag item through the normal inventory gate. Verify
+memories, memorylesson and memory-purpose-ui.cjs for native pickup/facet/recall,
+stale-grant refusal, narrow layout, pure reading and actual prior-client Continue.
+
 itemProcReferences derives bounded equipment effect references from native
 compiled proc grants and the live proc/skill/status registries. References are
 base payloads, not predicted combat results; complex effects may supply an

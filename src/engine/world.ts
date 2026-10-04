@@ -47111,7 +47111,7 @@ export class World {
   private noteMemoryPickup(seat: Seat, kind: MemoryKind, total: number): void {
     const k = MEMORY_KINDS[kind];
     this.text(seat.actor.pos, `${k.name} (×${total})`, k.color, 13, 'pickup');
-    notePickup(this.pickupFeed, seat.id, `${k.name} (×${total})`, k.color, this.time);
+    notePickup(this.pickupFeed, seat.id, `${k.name} (×${total}) · ${k.rewardLabel}`, k.color, this.time);
   }
 
   /** THE POUCH SHAPE (skill-items M2/M3, §3b): a picked-up Memory drop

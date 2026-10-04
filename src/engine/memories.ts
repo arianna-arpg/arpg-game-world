@@ -116,16 +116,23 @@ export interface MemoryKindDef {
   /** THE FACET choice interposes at the recall (the banner lane): the cut
    *  is SKILLS-ONLY and rolls the chosen triad's requirement partition. */
   facets: boolean;
+  /** Player-facing purpose, shared by drops, pickup history and the recall. */
+  rewardLabel: string;
+  recallDescription: string;
 }
 
 export const MEMORY_KINDS: Record<MemoryKind, MemoryKindDef> = {
   rough: {
     base: 'rough_memory', name: 'Rough Memory',
     color: '#b89ae0', glyph: '✦', facets: false,
+    rewardLabel: 'Unrevealed gem',
+    recallDescription: 'Spend one Memory to reveal a skill or support gem in your bag. Its source influences what you may find.',
   },
   preformed: {
     base: 'preformed_memory', name: 'Preformed Memory',
     color: '#e8c07a', glyph: '❖', facets: true,
+    rewardLabel: 'Unrevealed skill',
+    recallDescription: 'Spend one Memory to reveal a skill gem in your bag. Choose a facet to seek skills using its attributes.',
   },
 };
 

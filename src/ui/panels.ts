@@ -735,7 +735,7 @@ export class UI {
   private recallKind: MemoryKind = 'rough';
   private recallFacet: string | null = null;
   /** THE REVEAL rows: dropper id → the grant its row last flipped to. */
-  private recallReveals = new Map<string, { name: string; color: string; sockets: number }>();
+  private recallReveals = new Map<string, { name: string; color: string; sockets: number; itemUid: number }>();
   /** Found-flash marks: freshly-recalled bag uids → flash-until (ms). */
   private memFlash = new Map<number, number>();
   /** The Tracker's book: which leaf is open, and which page is under the thumb. */
@@ -4007,10 +4007,9 @@ export class UI {
     if (item.locked) {
       lines.push(`<div style="color:#c8a84b">🔒 Locked — it stays: no salvage, no drop, no sort (${this.lockGestureText()} to unlock)</div>`);
     }
-    lines.push(`<div style="color:#9a94a8;font-size:10px">${k.name} · <span style="color:${k.color}">×${units.length} held</span></div>`);
-    if (k.facets) {
-      lines.push('<div style="color:#c8bce0;font-size:10px">committed before the recall: choose a FACET (one attribute triad) — the grant is a skill of that facet</div>');
-    }
+    lines.push(`<div data-memory-purpose style="color:#d8cce8;font-size:11px;line-height:1.5;margin:4px 0">${esc(k.recallDescription)}</div>`);
+    lines.push(`<div style="color:#9a94a8;font-size:10px">${esc(k.rewardLabel)} · <span style="color:${k.color}">×${units.length} held</span></div>`);
+    // recallDescription carries each kind's choice and result without duplicating it.
     const top = groups.slice(0, MEMORY_CFG.tooltipGroups);
     for (const g of top) {
       // THE PROMISE reads on the card: a pinned group names the gem it is
@@ -5044,6 +5043,7 @@ export class UI {
   // teaching, walk-2 ruled) before the RECALL buttons arm.
 
   showRecall(uid: number, seatId?: string): void {
+    hideTooltip(); // Retire the pouch card before opening its recall choice.
     this.ownPanel(this.recallMenu, this.couchSeatFor(seatId));
     this.recallOpen = true;
     this.recallUid = uid;
@@ -5097,11 +5097,12 @@ export class UI {
         : 'commit to a FACET: the recall grants a skill asking those attributes (skills only — supports hold no attribute)'}</div>` : '';
     const chipStyle = 'display:inline-flex;align-items:center;gap:3px;padding:1px 5px;margin:1px 2px;'
       + 'background:#241d2e;border:1px solid #4a3a5a;border-radius:8px;font-size:9px';
-    const revealHtml = (reveal: { name: string; color: string; sockets: number }): string =>
+    const revealHtml = (reveal: { name: string; color: string; sockets: number; itemUid: number }): string =>
       `<div style="margin-top:2px;font-size:10px;color:${reveal.color}">
         <span style="display:inline-flex;width:14px;height:14px;border-radius:2px;background:${reveal.color}33;border:1px solid ${reveal.color};
           align-items:center;justify-content:center;font-size:6px;vertical-align:middle">${gemInitials(reveal.name)}</span>
-        ${reveal.name}${reveal.sockets ? ` <span style="color:#9a94a8">${'◆'.repeat(reveal.sockets)}</span>` : ''}</div>`;
+        ${esc(reveal.name)}${reveal.sockets ? ` <span style="color:#9a94a8">${'◆'.repeat(reveal.sockets)}</span>` : ''}
+        ${seat.meta.items.some(i=>i.uid===reveal.itemUid && i.gem) ? `<button data-mem-find="${reveal.itemUid}" style="margin-left:6px;padding:3px 7px;font-size:10px">View in bag</button>` : ''}</div>`;
     const portraitOf = (def: MonsterDef | undefined): string => def
       ? this.monsterPortraitHtml(def, false, 30)
       : '<span style="width:30px;text-align:center;color:#5a5668">?</span>';
@@ -5168,10 +5169,18 @@ export class UI {
       }).join('');
     this.recallMenu.innerHTML = `${this.closeGlyphHtml()}
       <h3 style="margin:2px 0 2px;color:${mk.color}">${mk.name.replace(/Memory$/, 'Memories')} <span style="color:#9a94a8;font-size:11px">×${total} held</span></h3>
-      <div style="font-size:10px;color:#8a8678;margin-bottom:4px">each recall returns ONE memory of that body — oldest first, sealed at the drop</div>
+      <div data-memory-purpose style="font-size:11px;line-height:1.5;color:#c8bce0;margin-bottom:6px">${esc(mk.recallDescription)}</div>
       ${facetStrip}
       ${refusal ? `<div style="color:#c08a68;font-size:11px;margin-bottom:4px">${refusal}</div>` : ''}
       ${rows || '<div style="color:#5a5668;font-size:11px">nothing held</div>'}${spent}`;
+    this.recallMenu.querySelectorAll<HTMLElement>('[data-mem-find]').forEach(el => {
+      el.addEventListener('click', () => {
+        const owner=this.panelSeat(this.recallMenu), uid=Number(el.dataset.memFind);
+        if (!owner.meta.items.some(i=>i.uid===uid && i.gem) || !this.openInventory(owner.id)) return;
+        this.closeRecall(); this.serviceWorkspace.select('inventory');
+        this.memFlash.set(uid,Date.now()+1700); this.refreshInventory();
+      });
+    });
     this.recallMenu.querySelectorAll<HTMLElement>('[data-mem-facet]').forEach(el => {
       el.addEventListener('click', () => {
         this.recallFacet = el.dataset.memFacet!;
@@ -5192,7 +5201,7 @@ export class UI {
         const got = w.memoryRecallLast as (MemoryRecallResult & { seat: string }) | null;
         if (got && got.seat === this.panelSeat(this.recallMenu).id) {
           this.recallReveals.set(dropper, {
-            name: got.name,
+            name: got.name, itemUid: got.itemUid,
             color: got.kind === 'skill' ? SKILL_RARITIES[got.rarity ?? 'common'].color : (SUPPORTS[got.id]?.color ?? '#b8b8b8'),
             sockets: got.kind === 'skill' ? SKILL_RARITIES[got.rarity ?? 'common'].sockets : 0,
           });

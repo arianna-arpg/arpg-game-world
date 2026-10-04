@@ -3613,3 +3613,36 @@ Doorway head bc76a923 passed CI 37171841377 and published exact live metadata
 sentinels and native Continue without a fatal error. Riddle-reward head b6c803db
 passed CI 37173142612 and Pages 37174087252, publishing exact live metadata
 2026-10-04T03:28:27.21Z; remote seed 2820382001 passed the same persistence checks.
+
+### Carrying a discovered Memory through to its revealed gem
+
+The native Memory kind registry now owns each kind's short purpose and recall
+explanation. Ground drops use their kind color and a compact second line;
+pickup history, bag hover cards and the Recall explain whether the stone can
+reveal a skill or a skill/support gem. The Preformed description names the
+attribute-facet choice without promising an unavailable specific skill.
+Native source weighting, sealed seeds, unlocking, room checks, stack consumption
+and the recall lesson receipt retain their existing rules.
+
+A successful recall now offers View in bag for its exact newly minted item.
+It uses the panel owner's native inventory gate and existing brief item flash;
+it does not equip, learn, reroll or spend anything. Missing or already removed
+grants cannot navigate to another item. Opening Recall clears the old pouch
+tooltip. The reveal and supplementary descriptions escape their text.
+
+All three type checks, the 99-assertion native Memory probe, memory-lesson
+probe and simulation smoke pass. Controlled browser QA covers native pickup
+from prepared drops, pure bag/choice reads, facet selection before recall, one
+unit spent for the actual Shield Up gem, a disappeared-grant refusal and the
+native bag handoff. It also checks exact items, location, life and seed through
+current Continue, the actual preceding client and return to this client.
+
+Ten page/canvas scene pairs were inspected across the iterations, including
+800 by 600, both pouch kinds, the reveal and prior/current continuation. The
+first single-line ground caption was too wide near canopy; a compact second
+line keeps the existing native concealment and combat-clearance rules. The
+final ground view uses a clear prepared patch; canopy occlusion is not removed
+or claimed solved. The initial harness omitted the native pickup seat argument,
+then passed with the real local seat. Prepared pouches/positions make these
+controlled mechanics and presentation checks, not earned gameplay evidence.
+The frozen independent riddle-country playtest remains separate and ongoing.
