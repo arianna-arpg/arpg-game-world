@@ -1,5 +1,12 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+ObjectiveReadout wraps native public objective text within a configured width
+and moves following bearings, buffs and notices below its last row. VIS_CFG
+bounds characters and rows, with a single retained layout per renderer.
+Verify objective-readout-ui.cjs for the actual prior 600px clipping, complete
+current instructions, bounded mod text, draw purity and exact prior/current
+Continue. Single-line objectives retain their original following baseline.
+
 puzzleContactHeatsCombat keeps enrolled passive puzzle props from prolonging
 the world combat-lull clock. PUZZLE_CFG.passiveContactHeatsCombat can opt back
 in. Real enemies, stale markers, active nodes and prior heat retain their gates.

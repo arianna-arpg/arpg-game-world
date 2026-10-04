@@ -3742,3 +3742,44 @@ ambient darkness was about 0.2205 at time zero and zero at midday. The visible
 scene still relied on muted ground colors and strong occlusion shadows; that
 does not establish a defective day clock. No production brightness change was
 made from this limited diagnostic.
+
+### Keeping objective instructions readable in narrow panels
+
+The native objective HUD now wraps the authoritative objectiveText within
+VIS_CFG.objectiveReadout's width, row and character limits. Its renderer-owned
+layout cache retains only the current text. The following quest bearing,
+blessings, status rows and notice clearance use the resulting baseline.
+Short objectives keep their original spacing. No discovery, combat or save
+rule changes.
+
+All three type checks pass. Controlled browser comparison demonstrates the
+preceding client's paired-stone instruction clipping at 600 pixels; it already
+fits at 800 pixels, so that width is not claimed as a prior failure. The new
+client displays the complete instruction at 1280, 800 and 600 pixels, keeps the
+blessing below it, bounds a long unspaced Unicode mod instruction, and preserves
+position, life, inventory, seed and puzzle progress through current/prior/current
+Continue. Six page/canvas pairs were inspected. These are prepared presentation
+fixtures, not earned gameplay. An initial harness restored a function as its
+return value, which Electron cannot clone; the corrected void restoration
+passes without changing production behavior.
+
+Paired-stones head 6ec85a39 passed CI 37228340866. Exact preview metadata
+reports 2026-10-04T19:48:52.821Z; remote seed 605280296 passed ordinary-save
+isolation and native Continue with no fatal error.
+
+The independent Memory-country Warrior review is complete and negative overall:
+it would stop after Western Watch. It tested earned Battering Ram and Answer
+the Blow in a second fight and verified its level-three build, ring, unused
+Chain Lightning gems and completed contract through native Save & Exit/Continue.
+It inspected 115 paired captures and requested 5,758 confirmed capture frames
+(about 96.16 seconds of stepping, not wall-clock gameplay). Build explanations
+worked, but forgiving fights, duplicate unusable recalls, preparation overhead
+and dark town imagery weakened the session. No later boss or commercial
+comparison was played. Acceptance remains unmet.
+
+A separate native camp-pressure diagnostic included both updateAI and
+World.update, as the real game does. At seed 42, idle prepared Warrior,
+Magician and Rogue fixtures all took damage; the latter two died. An earlier
+version omitted the separate AI phase and is invalid evidence. This rules out
+blanket immunity in that fixture, not the critic's concern about encounter
+decisions. No enemy-stat change was made on that basis.

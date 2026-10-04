@@ -6,6 +6,8 @@
 // ---------------------------------------------------------------------------
 
 export const VIS_CFG = {
+  /** Public activity instructions share a bounded, responsive HUD column. */
+  objectiveReadout: { minWidth: 48, maxWidth: 560, maxRows: 4, maxCharacters: 2048, lineHeight: 17, gap: 18, font: '12px Verdana' },
   /** Actual temporary modifier payload, on demand at its native buff pip. */
   buffReadout: { maxWidth: 360, maxRows: 10, margin: 8, pad: 9, lineHeight: 17, ascent: 12,
     font: '12px Verdana', background: 'rgba(8,8,12,.94)', edge: '#575368', title: '#f0d99c', detail: '#d8d4c8' },

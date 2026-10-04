@@ -165,6 +165,7 @@ import { drawGlow, drawLongShadow, drawShadow, releaseCanvas, sunCast } from './
 import { drawRuneRing } from './vis/runeRing';
 import { registerVisCache, trimVisCaches } from './vis/caches';
 import { wrapNotice } from './vis/noticeLayout';
+import { ObjectiveReadout } from './vis/objectiveReadout';
 import { resolveSpeech, revealedChars, wrapSpeech, resolveNameTokens, dodgeSpeechBox, layoutSpeechSeats, speechTailBase, type SpeechStyle, type SpeechRect, type SpeechSeatMemory } from './vis/speech';
 import { drawEdgeOverlay, qFrac } from './vis/overlays';
 import { canvasCap, canvasCapsReport } from './vis/canvasCaps';
@@ -290,6 +291,7 @@ export class Renderer {
    *  those passes must compare uiMouse, never hudMouse. */
   private uiW = 0;
   private uiH = 0;
+  private objectiveReadout = new ObjectiveReadout();
   /** Actual status/wave extent in this frame's virtual HUD coordinates. */
   private noticeHeaderBottom = 0;
   private noticeLineCache = new Map<string, string[]>();
@@ -8614,7 +8616,8 @@ export class Renderer {
         : world.sim.hudLine(world.zone, world.time), x, 64);
       ctx.font = '12px Verdana';
       ctx.fillStyle = (massSite?.activity?.complete ?? world.objectiveDone) ? '#ffd700' : '#9a96b8';
-      ctx.fillText(world.objectiveText(), x, 82);
+      hintY = this.objectiveReadout.draw(ctx, world.objectiveText(), x, 82,
+        world.seats.length > 1 ? this.uiW / 2 - 32 : this.uiW - x - 16);
     }
     if (worldInfo && world.massRuntime)
       hintY = drawQuestCompass(ctx, questCompassLines(p.pos, [...world.npcDialogues.guidance(), ...massQuestPins(world)]), x, hintY, this.uiW - x - 16);
