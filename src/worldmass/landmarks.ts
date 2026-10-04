@@ -83,15 +83,17 @@ export function frontierLandmarks(): Landmark[] {
     ],undefined,undefined,[{monster:'skeleton_archer',x:70,y:-70,garrison:true},
       {monster:'crate',x:-65,y:20},{monster:'barrel',x:95,y:25}]),
       population:{level:2,table:[{id:'skeleton_warrior',weight:1}]} },
-    { ...compose('windworn-shrine', null, 'The Windworn Shrine', {x:0,y:100,holdSeconds:4}, false, 2, [
-      // Open axes leave room to choose whether the shared Haste field helps.
+    { ...compose('windworn-shrine', null, 'The Windworn Shrine', undefined, false, 0, [
+      // A timed native coal ring invites broad attacks or a quick circuit.
+      // The shared Haste field retains its ordinary movement/casting rules.
       ...[-1,1].flatMap(side=>[
         prop('standing_stone',side*185,-100,38),prop('standing_stone',side*185,100,34),
         prop('conifer',side*205,0,63),prop('flowers',side*125,160,30),
         prop('fern',side*135,-170,31),
       ]),
       prop('weathered_statue',0,-205,50),prop('bone_pile',95,-35,21),
-    ],undefined,[nativeMassAltar('haste_altar',0,0)]),
+    ],undefined,[nativeMassAltar('haste_altar',0,0)],undefined,undefined,
+      [nativeMassPuzzle('ember_ring',0,0,'Strike every coal before the flames gutter. Broad attacks can kindle several.',6)]),
       population:{level:2,table:[{id:'plains_wolf',weight:1}]} },
     { ...compose('stoneward', null, 'The Stoneward', { x: 0, y: -130, holdSeconds: 5 }, false, 1, [
       // Broken colonnades leave wide approaches; the living guardian owns

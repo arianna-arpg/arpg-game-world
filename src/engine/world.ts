@@ -41028,7 +41028,7 @@ export class World {
   }
   capturePlacedPuzzle(run: PuzzleRun): PuzzleCheckpoint {
     if (!run.kind.checkpoint || !this.puzzles.includes(run)) throw Error('Unknown placed puzzle');
-    return { done: run.done, state: run.kind.checkpoint.capture(run), life: run.nodes.map(n => n.life),
+    return { done: run.done, state: run.kind.checkpoint.capture(run, this.puzzleHost()), life: run.nodes.map(n => n.life),
       hums: run.nodes.flatMap((n,i): [number,number][] => {
         const remaining = (run.hums.get(n.id) ?? 0) - this.time;
         return remaining > 0 ? [[i, remaining]] : [];

@@ -3327,3 +3327,51 @@ Memory. This is a promising observed activity, not final critic acceptance.
 Survey head ea310a0a passed CI 37165236594 and Pages 37165968878. Exact live
 metadata reports 2026-10-04T00:48:19.638Z. Remote seed 1494950430 retained all six
 ordinary-save sentinels and native Continue without a fatal error.
+
+### Carrying a native timed riddle into the country
+
+The Windworn Shrine in new expeditions now offers the existing ember-ring activity
+instead of another two-defender cache. All six coals must be alight together;
+single blows, broad attacks, expiry and completion use the native puzzle fabric.
+The existing Haste altar keeps its ordinary shared effect. The eastern road
+account mentions the side path without revealing terrain or accepting work.
+Each run snapshots the ring's exact count, spacing, burn window, routing law and
+native reward table. This supplies a distinct activity, not a new reward engine.
+
+PuzzleKindDef checkpoints now receive a read-only world-clock accessor. The ember
+kind owns capture/restore of remaining durations and native kindle dressing.
+A solved ring stores finite zero durations plus its existing done latch, then
+restores the native solved state; Infinity never enters JSON. Invalid clocks,
+wrong counts and inconsistent completion refuse. Plain lattice checkpoints keep
+their previous shape and behavior. Fixed ring placement remains within the
+finite eighteen-node/shared-actor budgets. Unbounded timed-riddle residency and
+the general distant-actor lifecycle remain unfinished.
+
+All three type checks, all 35 worldmass probes and the native puzzle suite pass
+(the latter has 207 assertions). Generation QA completed 869 cases across three
+seeds with zero failures and four existing warnings. The new four-group probe
+covers five seeded physical courts, multi-node hit routing, recipe isolation,
+partial clocks/hums, post-Continue expiry, distant Continue, solved dressing,
+one-shot rewards, malformed checkpoints and atomic capacity. Its first run found
+a test-only ActiveStatus property mistake, corrected to the native id field.
+The stops probe now checks the two distinct activities rather than expecting a
+cache at both stops.
+
+Controlled browser QA walks 107.548 units inside the court, delivers a Firebolt
+in 49 frames, lets its coal expire after native Continue, and solves the ring
+with Frost Nova in 33 frames. Prepared positions, invulnerability and removed
+unrelated actors keep this a mechanics check rather than an earned playtest.
+The initial approach fixture collided with an authored tree; the final approach
+begins on clear interior ground. All nine page/canvas pairs were inspected,
+including 800-by-600, partial/solved Continue and actual prior/current clients.
+The preceding client refuses the new descriptor before replacing its runtime.
+A save created by that client retains two wolves, its cache and no ember ring in
+the new client. Exact sampled position, life, tier, origin, descriptor hash,
+puzzle progress, XP and contents survive the tested checkpoints. Final checks
+also pass after retaining acceptance of previously ignored legacy lattice fields.
+
+Cast-movement head c02369d8 passed CI 37166280084 and Pages 37166844769. Exact live
+metadata reports 2026-10-04T01:05:27.351Z. Remote seed 1426177997 retained all six
+ordinary-save sentinels and native Continue without a fatal error. Independent
+road-choice, garrison-country and sighted-country reviews continue on frozen
+builds; no overall critic acceptance or playable commercial comparison is claimed.

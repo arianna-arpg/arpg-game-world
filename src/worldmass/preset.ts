@@ -154,7 +154,7 @@ export function massAdventure(): MassAdventure {
     journey: { source: 'worldmass/frontier-circuit', width: 120, color: '#62573e', clearingColor: '#454331',
       notices: [
         { destination: 'west-camp', note: 'A patrol camp has taken the western road. A shrine stands by the approach; provisions remain among the tents.' },
-        { destination: 'east-camp', note: 'Crystals wait among the graves of a quiet grove. Kindling the lattice is a riddle, and the mending altar offers a place to recover.' },
+        { destination: 'east-camp', note: 'Crystals wait among the graves of a quiet grove. Kindling the lattice is a riddle; farther along the circuit, a side path leads to a ring of fading coals.' },
         { destination: 'north-ruin', note: 'Undead keep watch beneath the broken walls. Beyond the gate, the northern trail leads toward a stone guardian.' },
         { destination: 'south-ruin', note: 'Restless dead gather among ruined homes. A storm altar changes the ground on which you fight.' },
       ],

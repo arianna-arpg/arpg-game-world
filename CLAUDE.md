@@ -1,5 +1,12 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Persistent native ember rings use a kind-owned remaining-clock checkpoint and
+fixed descriptor node count. Their native spill, kindle, expiry and reward rules
+remain authoritative. New Windworn Shrines offer this timed activity; older
+expeditions keep their saved encounter. Verify worldmass_embers, worldmass,
+puzzles, generation QA and worldmass-embers-ui.cjs for actual spell delivery,
+partial/solved Continue, strict clocks and the actual prior client's refusal.
+
 Cast readouts show the native movement-held fact while an authoritative seated
 actor is casting. VIS_CFG.castReadout owns the optional bounded Feet planted
 caption; mobile casts/guards and unresolved mirrors keep their ordinary meter.

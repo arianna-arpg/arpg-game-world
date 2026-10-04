@@ -47,7 +47,7 @@ for(let seed=0;seed<64;seed++){
 }
 console.log('PASS 64 seeded route plans keep both spurs attached, detached clearings and settlement reserves');
 
-for(const content of ['caravan-wreck','windworn-shrine']){
+for(const content of ['caravan-wreck']){
  const place=m.journey!.places.find(p=>p.content===content)!;
  w.player.pos=m.journey!.local(place);m.update(w,true);
  const native=m.snapshot(w).enemies.filter(e=>e.id===canonical([place.id,0])||e.id===canonical([place.id,1])
@@ -60,7 +60,11 @@ const caravan=m.journey!.places.find(p=>p.content==='caravan-wreck')!;
 const archerId=canonical([caravan.id,'fixture',0]);
 const archer=m.snapshot(w).enemies.find(e=>e.id===archerId)!;
 assert.equal(archer.monster,'skeleton_archer');assert.ok(m.state.claimed('site-guardian',archerId));
+const shrine=m.journey!.places.find(p=>p.content==='windworn-shrine')!;
+w.player.pos=m.journey!.local(shrine);m.update(w,true);
 assert.ok(w.altars.some(a=>a.def.id==='haste_altar'&&a.level===2));
+assert.equal(m.puzzles.population,6);
+assert.equal(w.chests.some(c=>c.rewardSource===canonical([shrine.id,'cache'])),false);
 const before=m.snapshot(w),continuedWorld=makeSimWorld('warrior',44);
 const continued=new WorldMassRuntime(42,'stops',before.config,before);continued.attach(continuedWorld,before);
 assert.deepEqual(continued.journey!.trails,m.journey!.trails);
@@ -68,7 +72,7 @@ assert.deepEqual(continued.snapshot(continuedWorld).enemies,before.enemies);
 const ordered=(rows:typeof m.sites.discovered)=>[...rows].sort((a,b)=>a.id.localeCompare(b.id));
 assert.deepEqual(ordered(continued.sites.discovered),ordered(m.sites.discovered));
 assert.equal(continuedWorld.altars.filter(a=>a.def.id==='haste_altar').length,1);
-console.log('PASS both stops admit native enemies, cache, garrison/field and retain identities through Continue');
+console.log('PASS distinct stops admit native garrison/cache and timed riddle/field, retaining identities through Continue');
 
 for(const patch of [
  {from:'missing'}, {trail:'missing'}, {id:'north-ruin'}, {radius:NaN}, {offset:100},

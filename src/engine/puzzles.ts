@@ -279,7 +279,7 @@ export interface PuzzleKindDef {
   boot(run: PuzzleRun, h: PuzzleHost): void;
   /** Optional durable progress; kinds without a codec cannot be placed persistently. */
   checkpoint?: {
-    capture(run: PuzzleRun): unknown;
+    capture(run: PuzzleRun, h: Pick<PuzzleHost, 'now'>): unknown;
     restore(run: PuzzleRun, h: PuzzleHost, data: unknown): void;
   };
   /** A qualifying landed hit on a node (resolveHit routes here). */
@@ -327,6 +327,8 @@ export const PUZZLE_CFG = {
    *  refrain, a slow undo press on the lattice — either rings another
    *  node first (which clears the hum) or outlasts it. */
   hum: 0.9,
+  /** Native ember-ring burn window; persistent placements snapshot this value. */
+  emberGutter: 7,
 } as const;
 
 /** THE ROUTING DIALS resolve spec → kind → config (the fabric's usual
@@ -945,7 +947,7 @@ registerPuzzleKind({
 const EMBER_TINT = '#ffb27a';
 
 function emberGutterOf(run: PuzzleRun): number {
-  return run.spec.gutter ?? 7;
+  return run.spec.gutter ?? PUZZLE_CFG.emberGutter;
 }
 
 registerPuzzleKind({
@@ -957,6 +959,22 @@ registerPuzzleKind({
   spacing: 112,
   count: [5, 6],
   label: 'the ember ring',
+  checkpoint: {
+    capture(run, h) {
+      // Solved rings have infinite native clocks; done is their durable proof.
+      return run.done ? run.nodes.map(() => 0)
+        : (run.state.litUntil as number[]).map(t => Math.max(0, t - h.now()));
+    },
+    restore(run, h, data) {
+      if (!Array.isArray(data) || data.length !== run.nodes.length
+        || data.some(v => typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > emberGutterOf(run) + 1e-6)
+        || (run.done ? data.some(v => v !== 0) : data.every(v => v > 0)))
+        throw Error('Invalid ember checkpoint');
+      if (run.done) { run.kind.solved!(run,h); return; }
+      run.state.litUntil = data.map(v => v > 0 ? h.now() + v : 0);
+      run.nodes.forEach((n,i) => { if (data[i] > 0) h.kindle(n,data[i]); else h.quench(n); });
+    },
+  },
   boot(run) {
     run.state.litUntil = run.nodes.map(() => 0);
   },

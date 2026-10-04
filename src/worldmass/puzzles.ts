@@ -12,25 +12,37 @@ export interface MassPuzzleSave { id: string; progress: PuzzleCheckpoint }
 /** Finite fixtures share the native population budget; unbounded puzzle residency
  * needs its own dependency contract. Adding kinds requires a native progress codec. */
 export const MASS_PUZZLE_LIMIT = 18;
-export function nativeMassPuzzle(id: string, x: number, y: number, instruction: string): MassPuzzleSpec {
+export function nativeMassPuzzle(id: string, x: number, y: number, instruction: string, count?: number): MassPuzzleSpec {
   if (!PUZZLES[id]) throw Error('Unknown native puzzle');
   const s=PUZZLES[id], k=PUZZLE_KINDS[s.kind];
-  const spec={...s,grid:s.grid??[3,3],spacing:s.spacing??k.spacing,scramble:s.scramble??[3,6],
+  if(k.geometry==='ring' && !Number.isSafeInteger(count))throw Error('Placed rings need a fixed node count');
+  const layout=k.geometry==='grid' ? {grid:s.grid??[3,3],scramble:s.scramble??[3,6]}
+    : {count:[count!,count!] as [number,number],gutter:s.gutter??PUZZLE_CFG.emberGutter};
+  const spec={...s,...layout,spacing:s.spacing??k.spacing,
     who:s.who??k.who,knock:s.knock??k.knock??PUZZLE_CFG.knock,
     spill:s.spill??k.spill??PUZZLE_CFG.spill,hum:s.hum??k.hum??PUZZLE_CFG.hum};
   return { id, source: 'puzzles/' + id, x, y, instruction, spec: JSON.parse(canonical(spec)) };
 }
 export function puzzleSeats(row: MassPuzzleSpec): { x: number; y: number }[] {
-  const [w,h] = row.spec.grid ?? [3,3], pitch = row.spec.spacing ?? PUZZLE_KINDS[row.spec.kind]?.spacing;
+  const kind=PUZZLE_KINDS[row.spec.kind], pitch=row.spec.spacing??kind?.spacing;
+  if(kind?.geometry==='ring'){
+    const count=row.spec.count?.[0]??0;
+    return Array.from({length:count},(_,i)=>({x:Math.cos(i/count*Math.PI*2)*pitch,y:Math.sin(i/count*Math.PI*2)*pitch}));
+  }
+  const [w,h] = row.spec.grid ?? [3,3];
   return Array.from({length:w*h},(_,i)=>({x:(i%w-(w-1)/2)*pitch,y:(Math.floor(i/w)-(h-1)/2)*pitch}));
 }
 export function validateMassPuzzle(row: MassPuzzleSpec, radius: number): void {
   const s=row?.spec, k=s && PUZZLE_KINDS[s.kind], text=(v:string)=>typeof v==='string'&&v.length>0&&v.length<=256;
-  // The first placement contract is a plain native lattice. Other geometries
-  // require their own footprint/fixture contract, not a silently degraded puzzle.
+  // Persistent placement admits only kinds with owned geometry and progress.
+  // Ring counts are exact descriptor data; no admission-order reroll.
   if (!row || !text(row.id) || !text(row.source) || !text(row.instruction)
-    || ![row.x,row.y].every(Number.isFinite) || !k?.checkpoint || s.kind!=='lattice'
+    || ![row.x,row.y].every(Number.isFinite) || !k?.checkpoint || !['lattice','ember'].includes(s.kind)
     || s.format!==undefined || s.node!==undefined || s.heart!==undefined
+    || s.kind==='ember'&&(s.grid!==undefined||s.scramble!==undefined
+      ||!Array.isArray(s.count)||s.count.length!==2||!Number.isSafeInteger(s.count[0])
+      ||s.count[0]<3||s.count[0]>8||s.count[0]!==s.count[1]
+      ||s.gutter===undefined||!Number.isFinite(s.gutter)||s.gutter<.5||s.gutter>60)
     || s.grid!==undefined&&(!Array.isArray(s.grid)||s.grid.length!==2||s.grid.some(v=>!Number.isSafeInteger(v)||v<2||v>4))
     || s.spacing!==undefined&&(!Number.isFinite(s.spacing)||s.spacing<55||s.spacing>120)
     || s.scramble!==undefined&&(!Array.isArray(s.scramble)||s.scramble.length!==2
