@@ -129,6 +129,7 @@ export type MetaAction =
   | { t: 'holdMuster' }                                        // Harborhold: sound the horn — arm the standing zone's siege defense
   | { t: 'holdRestore' }                                       // Harborhold: pay the carried-Essence restoration at a fallen hold's wreckage
   | { t: 'payToll'; index: number }                            // Holdfast: pay the keeper's toll (essence/gem per the guardian's UnlockSpec; index = legacy wire shape)
+  | { t: 'questAccept'; questId: string }                     // choose a nearby giver's optional contract
   | { t: 'vocationQuest'; questId: string }                    // Vocation menu: undertake a chain step
   | { t: 'questReward'; questId: string; choiceId: string }     // claim one reward at the quest giver
   | { t: 'explorationReward'; source: string; choiceId: string } // an earned discovery, independent of quests

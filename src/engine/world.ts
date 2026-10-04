@@ -1835,6 +1835,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'allocate': return isStr(a.nodeId) && (a.optionId === undefined || isStr(a.optionId));
     case 'refundPassive': return isStr(a.nodeId);
     case 'bindGraft': return isStr(a.key) && (a.skillId === null || isStr(a.skillId));
+    case 'questAccept': return isStr(a.questId);
     case 'vocationQuest': return isStr(a.questId); // menu-accept a vocation chain step
     case 'questReward': return isStr(a.questId) && isStr(a.choiceId);
     case 'explorationReward': return isStr(a.source) && isStr(a.choiceId);
@@ -28411,6 +28412,7 @@ export class World {
     if (this.reliquaryLesson()) return 'A keepsake needs a home. Open your inventory and seat your charm in the Reliquary.';
     if (this.graphWorkAvailable() && this.nearQuestGiver() && this.odyssey.hasLocalLeads()) return 'Linger — I can mark the Odyssey leaders and their supply operations.';
     if (this.pendingTurnIns().length) return 'Linger — a bounty is yours to claim.';
+    if (this.questOfferChoices().length) return 'I have work if you want it. Open Menu → Journal while we talk to choose a contract.';
     if (this.nextAcceptableQuest()) return this.heroKnown()
       ? 'Linger, {name} — I have work for you…'
       : 'Linger, and I have work for you…';
@@ -28527,6 +28529,7 @@ export class World {
    *  FRESH vocation chains are excluded — a specialization is a deliberate CHOICE
    *  (the menu), never a random dwell pull; engaged chains continue normally. */
   private nextAcceptableQuest(): QuestDef | null {
+    if (this.massRuntime?.config.settlement?.quests?.acceptance === 'journal') return null;
     const avail = this.acceptableQuests().filter(q => !this.isVocationChoice(q));
     if (!avail.length) return null;
     for (let i = avail.length - 1; i > 0; i--) { const j = randInt(0, i); [avail[i], avail[j]] = [avail[j], avail[i]]; }
@@ -28560,6 +28563,36 @@ export class World {
     if (turnIns.length) this.onQuestZoneCleared(turnIns[0]);
     else if (next) this.acceptQuest(next);
     else if (choices.length) this.vocationOfferRequested = true; // main loop opens the menu (once per dwell)
+  }
+
+  /** Optional contracts reuse native eligibility and the exact destination binding.
+   * Reading these cards never enrolls work, surveys terrain or forges rewards. */
+  questOfferChoices() {
+    const mass = this.massRuntime;
+    if (mass?.config.settlement?.quests?.acceptance !== 'journal'
+      || this.clientActionHook || this.player.dead || this.player.downed) return [];
+    return this.acceptableQuests().filter(q => !this.isVocationChoice(q))
+      .sort((a,b) => this.questOfferLevel(a) - this.questOfferLevel(b) || a.id.localeCompare(b.id))
+      .map(q => {
+        const place = massQuestDestination(mass, q.id)!;
+        const giver = this.giverPresent(q.giver)!;
+        return {
+          questId: q.id, label: q.offerLabel, giver: MONSTERS[giver.defId!]?.name ?? giver.name,
+          target: massQuestTarget(mass, {questId:q.id,zoneId:MASS_ZONE,placeId:place.id,fieldDone:false}, this.player.pos)!,
+          returnTo: q.turnIn ? (Array.isArray(q.turnIn.giver) ? q.turnIn.giver : [q.turnIn.giver])
+            .map(id => MONSTERS[id]?.name ?? id).join(' or ') : null,
+          xp: q.reward.xp ?? 0, passivePoints: q.reward.passivePoints ?? 0,
+          rewards: q.reward.choices?.map(c => c.name) ?? [],
+        };
+      });
+  }
+
+  /** Host-owned journey, live giver reach and all native gates are rechecked
+   * at dispatch. A stale, foreign or repeated journal action is inert. */
+  acceptQuestOffer(questId: string, seat: Seat = this.localSeat): boolean {
+    if (seat !== this.localSeat || !this.questOfferChoices().some(q => q.questId === questId)) return false;
+    this.acceptQuest(QUESTS[questId]);
+    return this.activeQuests.some(q => q.questId === questId);
   }
 
   /** Menu-accept a vocation chain step (routed through requestMeta like every
@@ -29843,7 +29876,7 @@ export class World {
       // The bounty intents likewise: accepting lifts veils + redraws exit
       // labels, and the slate is host-armed — forward only; the snapshot
       // moves the client.
-      if (action.t !== 'caravanTo' && action.t !== 'vocationQuest' && action.t !== 'questReward' && action.t !== 'harborChart'
+      if (action.t !== 'caravanTo' && action.t !== 'vocationQuest' && action.t !== 'questAccept' && action.t !== 'questReward' && action.t !== 'harborChart'
         && action.t !== 'holdMuster' && action.t !== 'holdRestore'
         && action.t !== 'bountyAccept' && action.t !== 'bountyAbandon' && action.t !== 'bountyTurnIn'
         && action.t !== 'bountyLock' && action.t !== 'bountyCoastWrits'
@@ -29928,6 +29961,7 @@ export class World {
       case 'holdMuster': this.beginHoldMuster(); break;
       case 'holdRestore': this.buyHoldRestore(seat); break;
       case 'payToll': this.payHoldfastToll(action.index, seat); break;
+      case 'questAccept': this.acceptQuestOffer(action.questId, seat); break;
       case 'vocationQuest': this.acceptVocationQuest(action.questId, seat); break;
       case 'questReward': this.claimQuestReward(action.questId, action.choiceId, seat); break;
       case 'explorationReward': this.claimExplorationReward(action.source, action.choiceId, seat); break;

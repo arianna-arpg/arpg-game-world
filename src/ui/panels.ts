@@ -57,6 +57,7 @@ import { bagBoard, canPlaceAt, overlappingItems, swapBlockerFits } from '../engi
 import { ContainerPane } from './containerPane';
 import { InventoryPages, type InventoryPage, type InventoryPageRequest } from './inventoryPages';
 import { questRewardHtml, questImbueHtml } from './questRewards';
+import { questOfferHtml } from './questOffers';
 import { explorationRewardHtml, explorationRewardOffersHtml, explorationRewardShortcutHtml } from './explorationRewards';
 import { containerOriginOf, findCarried, originContainerId } from '../engine/containers';
 import { CONTAINER_DEFS } from '../data/containers';
@@ -9604,6 +9605,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         ${explorationRewardHtml(world)}
         ${questRewardHtml(world)}
         ${questImbueHtml(world)}
+        ${questOfferHtml(world)}
         <h3 style="font-size:12px;color:#c8a8e8;margin:4px 0 6px 0">Active (${log.active.length})</h3>
         ${activeHtml}
         <h3 style="font-size:12px;color:#8a8678;margin:14px 0 6px 0">Completed (${log.completed.length})</h3>
@@ -9622,6 +9624,12 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       btn.addEventListener('click', () => {
         if (this.mapOpen) this.toggleMap();
         this.toggleBuildPanel(world.localSeat.id, 'show');
+      });
+    });
+    this.worldMap.querySelectorAll<HTMLButtonElement>('[data-quest-accept]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        world.requestMeta({ t: 'questAccept', questId: btn.dataset.questAccept! });
+        this.refreshMap();
       });
     });
     this.worldMap.querySelectorAll<HTMLButtonElement>('[data-quest-reward]').forEach(btn => {

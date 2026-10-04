@@ -40,6 +40,8 @@ try {
   assert.ok(cues.startsWith(w.innkeepPrompt()!),'native service guidance leads the multi-role conversation');
   assert.ok(cues.includes(w.questGiverPrompt()!),'quest work remains available on its own reader page');
   hooks(w).updateQuestGiver(4);
+  assert.equal(w.activeQuests.length,0,'new offers wait for a deliberate choice');
+  assert.ok(w.acceptQuestOffer(Q_FRONTIER_WATCH.id));
   assert.equal(w.activeQuests.length,1);assert.equal(w.activeQuests[0].placeId,place.id);
   assert.deepEqual(Object.keys(w.zoneMap),zones);assert.equal(earned(w),beforeXp);
   assert.equal(canonical(m.state.snapshot()),beforeKnowledge);

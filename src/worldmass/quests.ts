@@ -18,6 +18,8 @@ export interface MassQuestSpec {
   source: string;
   /** Native contracts bound to existing connected places. */
   bindings: MassQuestBinding[];
+  /** Omitted older expeditions retain native dwell acceptance. */
+  acceptance?: 'journal';
 }
 export interface MassQuestPin { x: number; y: number; radius: number; label: string; ready: boolean }
 
@@ -27,6 +29,8 @@ export function validateMassQuests(config: MassAdventure): void {
   if (!spec || typeof spec.source !== 'string' || !spec.source || !Array.isArray(spec.bindings)
     || spec.bindings.length > 16 || new Set(spec.bindings.map(b => b.quest)).size !== spec.bindings.length)
     throw new Error('Invalid worldmass quest bindings');
+  if (spec.acceptance !== undefined && spec.acceptance !== 'journal')
+    throw new Error('Invalid worldmass quest acceptance');
   const destinations = [...(config.journey?.destinations ?? []), ...(config.journey?.extensions ?? []), ...(config.journey?.stops ?? [])];
   for (const b of spec.bindings) {
     const def = QUESTS[b.quest], target = destinations.find(d => d.id === b.destination);

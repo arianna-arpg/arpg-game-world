@@ -1,5 +1,12 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+New expedition descriptors opt into settlement.quests.acceptance = 'journal'.
+questOfferChoices reuses native live eligibility; questAccept dispatch rechecks
+host, life, reach and gates before the original quest pipeline. Schema five
+preserves this policy; older saves keep dwell acceptance. Verify worldmass,
+menubar, sim smoke and quest-choice-ui.cjs for deliberate selection, stale clicks,
+exact waiting/accepted Continue and actual prior-client refusal.
+
 Native chest search and its one nearby readout share chestInReach and
 CHEST_INTERACTION_CFG. VIS_CFG.chestReadout owns bounded hover/partial/active
 guidance; native sight and veils admit it, and unresolved mirrors stay quiet.

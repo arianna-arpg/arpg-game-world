@@ -46,7 +46,7 @@ interface MassEnemySave {
   anchor?: { x: number; y: number }; leashHome?: boolean;
 }
 export interface MassAdventureSave {
-  schema: 1 | 2 | 3 | 4; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
+  schema: 1 | 2 | 3 | 4 | 5; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
   player: { x: number; y: number; tier?: number }; enemies: MassEnemySave[]; contents: ZoneContents;
   rewards?: MassRewardSave[];
   fields?: MassFieldSave[];
@@ -190,9 +190,11 @@ export class WorldMassRuntime {
       center => localOffset(center, { ...this.origin, x: 0, y: 0 }, config.terrain.addressSpan), config.terrain.addressSpan);
     if (save) {
       // Older clients must refuse owners they cannot plan/retain. Schema three
-      // adds roadside bodies, two adds one-shot stands, four owns placed riddles; older descriptors keep
+      // adds roadside bodies, two adds one-shot stands, four owns placed riddles,
+      // five preserves deliberate quest acceptance; older descriptors keep
       // their original version and never gain new encounters on Continue.
-      if ((save.schema !== 1 && save.schema !== 2 && save.schema !== 3 && save.schema !== 4)
+      if ((save.schema !== 1 && save.schema !== 2 && save.schema !== 3 && save.schema !== 4 && save.schema !== 5)
+        || save.schema < 5 && config.settlement?.quests?.acceptance === 'journal'
         || save.schema < 4 && config.content.some(c => c.site?.puzzles?.length)
         || save.schema < 3 && !!config.journey?.roadside
         || save.schema === 1 && config.content.some(c => c.site?.shrines?.length)
@@ -623,7 +625,7 @@ export class WorldMassRuntime {
         ...(a.encounterGroup ? {encounterGroup:a.encounterGroup,name:a.name} : {}),
         ...(this.births.of(a) ? {birth:this.births.of(a)} : {}) });
     }
-    return JSON.parse(JSON.stringify({ schema: this.config.content.some(c=>c.site?.puzzles?.length) ? 4 : this.config.journey?.roadside ? 3 : this.config.content.some(c => c.site?.shrines?.length) ? 2 : 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
+    return JSON.parse(JSON.stringify({ schema: this.config.settlement?.quests?.acceptance === 'journal' ? 5 : this.config.content.some(c=>c.site?.puzzles?.length) ? 4 : this.config.journey?.roadside ? 3 : this.config.content.some(c => c.site?.shrines?.length) ? 2 : 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
       ...(this.config.rewards ? { rewards: this.rewards.snapshot() } : {}),
       ...(this.fields.snapshot().length ? { fields: this.fields.snapshot() } : {}),
       ...(this.shrines.snapshot().length ? { shrines: this.shrines.snapshot() } : {}),

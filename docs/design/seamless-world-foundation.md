@@ -3422,3 +3422,55 @@ acceptance or playable commercial comparison has been established.
 Ember head 72f0a20f passed CI 37167464819 and Pages 37168172221. Exact live metadata
 reports 2026-10-04T01:31:07.441Z. Remote seed 381199008 retained all six ordinary-save
 sentinels and native Continue without a fatal error.
+
+### Choosing optional contracts before enrollment
+
+New expeditions keep native contracts as nearby journal offers until explicitly
+accepted. The card names the actual bound destination, its level and bearing,
+the native giver/return leg, experience, passive points and named item choices.
+The giver explains Menu → Journal; the existing menu registry supplies a nearby
+offer count. Reading, closing or switching to Roads never enrolls work, pays
+rewards, reveals map terrain or adds a quest compass. Offers reuse the original
+level, ledger, category, geography, completed/current and reachable-giver gates.
+
+The questAccept meta intent validates its payload and authoritative local seat,
+then rechecks life, current policy and live eligibility. Remote/stale clicks,
+wrong givers, intervening scenery and repeated acceptance are inert. Existing
+completion, retrospective clearance and native turn-in/reward choices remain
+authoritative. Omitted saved policy preserves automatic dwell acceptance.
+Schema five prevents an older client silently converting the new choice policy
+into automatic enrollment; old descriptors retain their previous schema.
+
+All three type checks, all 36 worldmass probes, menubar, sim smoke and generation
+QA (869 × three seeds, zero failures, four existing warnings) pass. The new
+four-group probe includes pending/accepted Continue, native wall reach, malformed
+and foreign intents, mirror forwarding without prediction, escaped mod text,
+legacy policy, downgrade refusal and clearing a destination before enrollment.
+An initial test fixture used the wrong native doodad shape and was corrected;
+the first suite overlapped a legacy fixture update. The final unchanged suite
+passes all 36 without retries; this was not evidence of runtime flakiness.
+
+Controlled browser QA inspects seven page/canvas pairs, including 800 × 600.
+Six native dwell calls leave zero quests; actual journal buttons accept one.
+A retained stale button cannot accept after fixture relocation to Cinderwatch.
+Waiting and accepted states survive native save/Continue. The actual preceding
+client refuses schema five before replacing its runtime; its own saved run
+continues with native dwell enrollment in the new client. Prepared positioning
+and direct dwell calls make these mechanics/UI checks, not an earned playthrough.
+The harness corrected an assumed settlement arrival property to an existing
+journey destination. World frames are fixture views; they do not establish
+interior entry/visibility quality.
+
+Road-choice and sighted-country critics finished with coherent choices but
+lukewarm willingness to continue. Road-choice used earned passive/support/ring
+choices in Fallen Court and verified Continue; mobile targeting, doorway handling
+and crowded labels weakened interest. Sighted-country solved the grove, equipped
+and used a Rare Frost Nova and boots, then verified visible character/map state.
+Its extra sockets were unused, so an immediate reward payoff was not established.
+Neither review supports commercial parity or real-time feel. Ember-country
+continues on its frozen build; a new open-road critic independently chooses play
+on the frozen deliberate-contract build. No overall critic acceptance yet.
+
+Cache-readout head 56ff8170 passed CI 37168628664 and published exact live metadata
+2026-10-04T01:58:35.771Z. Remote seed 518833761 preserved all six ordinary-save
+sentinels and native Continue without a fatal error.

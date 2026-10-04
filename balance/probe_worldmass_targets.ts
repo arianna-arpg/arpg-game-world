@@ -31,7 +31,9 @@ const fresh = (seed: number, config?: MassAdventure) => {
 };
 const accept = (w: World, id: string) => {
   if (!hooks(w).acceptableQuests().some(q=>q.id===id)) return false;
-  hooks(w).updateQuestGiver(4);return w.activeQuests.some(q=>q.questId===id);
+  if (w.massRuntime?.config.settlement?.quests?.acceptance === 'journal') w.acceptQuestOffer(id);
+  else hooks(w).updateQuestGiver(4);
+  return w.activeQuests.some(q=>q.questId===id);
 };
 const qualify = (w: World) => { w.completedQuests.add(Q_FRONTIER_WATCH.id); stand(w); assert.ok(accept(w,q.id)); };
 const visit = (w: World) => {

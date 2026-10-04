@@ -79,7 +79,7 @@ app.whenReady().then(async()=>{
   assert.equal(solved.done,true);assert.equal(solved.activity.complete,true);assert.equal(solved.fatal,null);await shot('solved');
   const paid=await save();assert.deepEqual(await resume(),paid);
   results.push({moves,solved,solvedContinue:true});
-  const checkpoint=await run(()=>__game.world().massRuntime.snapshot(__game.world()));assert.equal(checkpoint.schema,4);
+  const checkpoint=await run(()=>__game.world().massRuntime.snapshot(__game.world()));assert.equal(checkpoint.schema,5);
   root=path.resolve(__dirname,'reports','readable-night-dist');await win.loadURL(url);await boot();
   const refusal=await run(s=>{
    __game.devStartRun('magician');__game.ui.hideAll();const w=__game.world(),before=w.massRuntime;

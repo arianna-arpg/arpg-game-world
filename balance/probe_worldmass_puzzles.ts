@@ -91,12 +91,12 @@ try{
  assert.equal(canonical(done.massRuntime!.snapshot(done).contents),contents,'solved strikes cannot pay again');
  console.log('PASS legitimate native solve and finishing wash, solved progress/loot Continue and one-shot reward latch');
 
- const legacy=structuredClone(massAdventure()) as MassAdventure;
+ const legacy=structuredClone(massAdventure()) as MassAdventure;delete legacy.settlement!.quests!.acceptance;
  for(const c of legacy.content)if(c.site)delete c.site.puzzles;
  const oldWorld=makeSimWorld('warrior',840);new WorldMassRuntime(42,'old-puzzle',legacy).attach(oldWorld);
  assert.equal(oldWorld.massRuntime!.snapshot(oldWorld).schema,3);
  assert.equal(resume(oldWorld).massRuntime!.puzzles.population,0);
- const saved=m.snapshot(w);assert.equal(saved.schema,4);
+ const saved=m.snapshot(w);assert.equal(saved.schema,5);
  assert.throws(()=>new WorldMassRuntime(42,'bad',saved.config,{...saved,schema:3}),/checkpoint/);
  const unknown=structuredClone(saved);unknown.puzzles![0].id='foreign';
  assert.throws(()=>new WorldMassRuntime(42,'bad',unknown.config,unknown).attach(makeSimWorld('warrior',845),unknown),/Unknown worldmass puzzle/);

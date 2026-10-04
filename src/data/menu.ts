@@ -212,6 +212,12 @@ export function bankedTreePoints(r: MenuReads): number {
 }
 registerMenuAttention({ id: 'tree_points', entry: 'inventory', kind: 'pip', read: bankedTreePoints });
 
+/** A nearby optional contract advertises the journal without accepting work. */
+registerMenuAttention({
+  id: 'quest_offers', entry: 'journal', kind: 'pip',
+  read: r => r.seat === r.world.localSeat ? r.world.questOfferChoices().length : 0,
+});
+
 /** First Memory uses the same optional menu-to-item invitation as flask gifts. */
 registerMenuAttention({
   id: 'exploration_reward', entry: 'journal', kind: 'lesson',
