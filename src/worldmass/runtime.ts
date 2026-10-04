@@ -28,6 +28,7 @@ import { MassFields, validateMassFieldResidency, type MassFieldSave } from './fi
 import { MASS_CLEARANCE_VIEW, massGarrisonProgress, massGarrisonSlots, recordMassGuardian, settleMassClearance } from './clearance';
 import { MassBirths, validMassBirth, type MassBirth } from './birth';
 import { chooseMassOrigin, validateMassOrigin } from './origin';
+import { MassSurvey } from './survey';
 import { applyMassTerritory, validateMassTerritory } from './territory';
 import { massFormation, validateMassEncounters } from './encounters';
 import { applyEncounterGroup, readEncounterGroup, type EncounterGroupState } from '../engine/encounterGroups';
@@ -65,6 +66,7 @@ export class WorldMassRuntime {
   readonly puzzles: MassPuzzles;
   readonly generator: MassGenerator;
   readonly state: MassState;
+  readonly survey: MassSurvey;
   readonly stream: MassStream;
   readonly walk: MassWalk;
   readonly sites: MassSites;
@@ -181,6 +183,7 @@ export class WorldMassRuntime {
     if (config.terrain.places.some(p => !config.content.some(c => c.id === p.content))
       || config.terrain.surfaces.some(s => !regionKind(s.region))) throw new Error('Unresolved worldmass content');
     this.state = new MassState(this.generator.run, config.terrain.terrainCell);
+    this.survey = new MassSurvey(this.state, this.config.survey);
     this.stream = new MassStream(this.generator, this.state, { maxPages: (config.pageRadius * 2 + 1) ** 2, maxSamples: 32768 });
     this.walk = new MassWalk(this.stream, this.origin);
     this.sites = new MassSites(id => this.config.content.find(c => c.id === id)?.site,
@@ -483,6 +486,8 @@ export class WorldMassRuntime {
     }
     for (const cell of this.ecology?.pendingFellingCells() ?? []) sceneryCells.set(cellKey(cell), cell);
     this.ecology?.sync(world, [...sceneryCells.values()]);
+    if(!world.player.dead)this.survey.observe(at,target=>world.lineOfSight(world.player.pos,
+      localOffset(target,{...this.origin,x:0,y:0},this.config.terrain.addressSpan),world.player.tier));
     this.sites.discover(world.player.pos);
     const seen = new Set<string>();
     for (const places of this.places.values()) for (const p of places) {

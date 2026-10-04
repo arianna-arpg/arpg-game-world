@@ -16,6 +16,7 @@ function fixture(kind: 'wayside-camp' | 'pillaged-ruin'): MassAdventure {
   const config: MassAdventure = JSON.parse(canonical(massAdventure()));
   delete config.progression; delete config.journey; delete config.ecology;
   delete config.settlement; // native-town lifecycle has its own probe
+  delete config.survey; // legacy lattice fixture retains page-based cartography
   config.terrain.addressSpan = 768; config.terrain.terrainCell = 24;
   const row = config.content.find(c => c.id === kind)!;
   config.terrain.fields = [];

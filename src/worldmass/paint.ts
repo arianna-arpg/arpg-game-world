@@ -180,19 +180,21 @@ export class MassPainter {
 export function massMap(mass: WorldMassRuntime, player: { x: number; y: number }, grain = 48, scenery: readonly Doodad[] = [], questPins: readonly MassQuestPin[] = []): string {
   const cols = 64, rows = 40, scale = 10;
   const left = Math.floor(player.x / grain) - cols / 2, top = Math.floor(player.y / grain) - rows / 2;
+  const surveyClips: string[] = [];
   const parts: string[] = [], labels: MassMapLabel[] = [], markers: MapBox[] = [], placeRows: string[] = [];
   const marker = (x: number, y: number, r: number): void => { markers.push({x:x-r,y:y-r,w:r*2,h:r*2}); };
   const playerX=(player.x/grain-left)*scale, playerY=(player.y/grain-top)*scale;
   marker(playerX,playerY,8);
   for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
     const at = mass.walk.at((left + x + .5) * grain, (top + y + .5) * grain);
-    if (!mass.state.claimed('explored', cellKey(at))) continue;
+    if (!mass.survey.known(at)) continue;
     const t = mass.stream.sample(at);
     const px = (left+x+.5)*grain, py = (top+y+.5)*grain;
     const native = mass.settlement?.contains(px,py) ? mass.settlement.grid.regionAt(px,py) : undefined;
     const kind = regionKind(native);
     const color = kind?.blocks ? '#777568' : kind?.standStatusDeep ? '#365d68'
       : native === 'road' ? '#a19271' : kind?.laid === 'built' ? '#837358' : t.color;
+    surveyClips.push(`<rect x="${x*scale}" y="${y*scale}" width="10" height="10"/>`);
     parts.push(`<rect x="${x * scale}" y="${y * scale}" width="10" height="10" fill="${color}"/>`);
   }
   const escape = (s: string): string => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
@@ -200,7 +202,7 @@ export function massMap(mass: WorldMassRuntime, player: { x: number; y: number }
     const town = mass.settlement;
     for (const st of town.structures) {
       const center = mass.walk.at(st.rect.x+st.rect.w/2,st.rect.y+st.rect.h/2);
-      if (!mass.state.claimed('explored',cellKey(center))) continue;
+      if (!mass.survey.known(center)) continue;
       const x = (st.rect.x/grain-left)*scale, y = (st.rect.y/grain-top)*scale;
       parts.push(`<rect x="${x}" y="${y}" width="${st.rect.w/grain*scale}" height="${st.rect.h/grain*scale}" rx="1" fill="#4c4336" stroke="#bdab87" stroke-width="1"><title>${escape(st.defId.replace(/_/g,' '))}</title></rect>`);
       for (const door of st.doors) parts.push(`<circle cx="${(door.pos.x/grain-left)*scale}" cy="${(door.pos.y/grain-top)*scale}" r="1.5" fill="#f1d8a2"/>`);
@@ -212,16 +214,9 @@ export function massMap(mass: WorldMassRuntime, player: { x: number; y: number }
     labels.push({id:'home',name:homeName,x,y,priority:2}); marker(x,y,8);
     parts.push(`<g data-mass-place="home" tabindex="0" aria-label="${escape(homeName)}"><title>${escape(homeName)}</title><path d="M${x-5},${y+4}v-8l5,-4 5,4v8Z" fill="#edd3a0"/></g>`);
   }
-  // A surveyed path keeps its shape at map scale; only entered pages reveal it.
+  // Roads and terrain share exactly the same surveyed cells at every zoom.
   if (mass.journey) {
-    const clips: string[] = [];
-    const span = mass.config.terrain.addressSpan;
-    for (let cy = Math.floor(top*grain/span); cy <= Math.floor((top+rows)*grain/span); cy++)
-      for (let cx = Math.floor(left*grain/span); cx <= Math.floor((left+cols)*grain/span); cx++) {
-        if (!mass.state.claimed('explored',cellKey(mass.walk.at(cx*span,cy*span)))) continue;
-        clips.push(`<rect x="${(cx*span/grain-left)*scale}" y="${(cy*span/grain-top)*scale}" width="${span/grain*scale}" height="${span/grain*scale}"/>`);
-      }
-    parts.push('<defs><clipPath id="mass-surveyed-trails">'+clips.join('')+'</clipPath></defs>');
+    parts.push('<defs><clipPath id="mass-surveyed-trails">'+surveyClips.join('')+'</clipPath></defs>');
     for (const trail of mass.journey.trails) parts.push(`<polyline points="${trail.points.map(p=>[(p.x/grain-left)*scale,(p.y/grain-top)*scale].join(',')).join(' ')}" fill="none" stroke="#b3a17b" stroke-width="2" stroke-linejoin="round" clip-path="url(#mass-surveyed-trails)"/>`);
   }
   for (const found of [...mass.sites.discovered].sort((a,b)=>a.id.localeCompare(b.id))) {

@@ -1,5 +1,11 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+MassSurvey records optional source-owned map memory through native lineOfSight
+after scenery residency. Its bounded cell/radius policy lives in the run descriptor;
+map paint and road clipping only read it. Legacy descriptors retain page discovery.
+Verify worldmass_survey, the worldmass suite and sighted-survey-ui.cjs for native
+walls/scenery, removal, old/new Continue, map purity and narrow presentation.
+
 Optional settlement.location selects an existing geographical neighbourhood for
 new runs through bounded, seeded field samples. origin.ts never repaints terrain
 or retries the world seed; Continue always uses its saved address. Verify the

@@ -27,6 +27,8 @@ export interface MassContent extends MassPopulation {
   magicPack?: { source: string; mechanic: string };
 }
 export interface MassAdventure {
+  /** Optional sight-admitted map memory; omitted descriptors keep page discovery. */
+  survey?: import('./survey').MassSurveySpec;
   /** Optional saved native ground palettes; omitted descriptors keep their original face. */
   ground?: MassGroundSpec;
   /** Optional bounded residency for native fields, including repeated places. */
@@ -111,6 +113,7 @@ export function massAdventure(): MassAdventure {
         .filter(r => MONSTERS[r.id] && !MONSTERS[r.id].habitat)
         .map(r => ({ id: r.id, weight: r.weight }))));
   return freezeData({ terrain, progression, nativeBirthSource: 'worldmass/native-birth-v1', theme: JSON.parse(JSON.stringify(TILESETS.downs.theme)) as ZoneDef['theme'],
+    survey: {source:'worldmass/sighted-survey-v1',cell:120,radius:480},
     ground: nativeMassGround(families.map(f => ({ surface: f.id, source: 'tilesets/' + f.id, theme: TILESETS[f.id].theme }))),
     territory: { source: 'worldmass/encounter-territory', radius: 620 },
     fieldResidency: { source: 'worldmass/field-residency', retainRadius: 2048, maxResident: 32 },

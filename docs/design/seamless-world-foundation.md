@@ -186,8 +186,9 @@ the log go to ignored `balance/reports/worldmass-*` files.
 - Terrain sampling is budgeted, but an uncached visible texture can still bake
   synchronously. Terrain edits invalidate all floor pages. There is no proven
   crossing frame-time bound yet; the UI harness logs batch timings, not FPS.
-- The local map records entered pages, not detailed line-of-sight exploration.
-  Saves remain whole-run JSON; paging long-run consequences is still required.
+- New descriptors record coarse native-sight survey cells; old maps retain page
+  discovery. This is not pixel-perfect visibility history. Saves remain whole-run
+  JSON; paging long-run consequences is still required.
 - Terrain currently provides open ground, soil/climate variation, lakes/shores,
   outcrops and native biome scenery, with one resident native Lastlight and a
   finite opening circuit. Global roads, drainage, bridges, additional settlements,
@@ -3246,3 +3247,49 @@ metadata reports 2026-10-03T23:53:51.082Z. Remote seed 2939420002 retained all s
 ordinary-save sentinels and native Continue without a fatal error. The independent
 grove, road-choice and garrison-country reviews remain underway; no overall
 critic acceptance or playable commercial comparison is claimed.
+
+### Surveying visible country instead of whole resident pages
+
+Entering a page used to reveal its entire 960-unit square on the map, including
+land behind native walls. New descriptors now own an optional survey policy.
+MassSurvey records cells whose centres pass native lineOfSight, plus the occupied
+cell. The default uses 120-unit cells within 480 units. It runs after scenery
+residency, so trees and site structures are present before sight is sampled.
+Candidate work is capped at 256 per observation; already-known cells need no ray.
+Policy data is copied and frozen, and exact canonical cell identities work across
+negative coordinates and beyond Number precision. Memory uses source-owned
+durable claims and does not invalidate physical terrain caches.
+
+The map, building-centre admission and private sign discovery read the same
+memory. Road lines clip to exactly the painted survey cells. Public Lastlight
+signs, discovered-site markers and known quest directions keep their own existing
+knowledge rules. Opening or zooming the map cannot explore ground. Older
+descriptors retain their previous whole-page map; no historical travel is
+invented or erased by migration. This is coarse cartography, not pixel-perfect
+fog, a replacement for live sight veils, or a distant/world-state paging system.
+
+All three type checks and 34 worldmass probes pass. The new probe's final five
+groups include actual native grid masonry and rock occlusion/removal, source
+isolation, immutable policy ownership, bounded work, exact distant addresses,
+page crossing, read-only maps and old/new native Continue. Legacy 768-unit
+fixtures now explicitly omit the newer survey recipe. Generation QA completed
+869 cases across three seeds with zero failures and four existing warnings.
+Controlled browser QA uses the native map and zoom buttons, a prepared wall
+fixture, ordinary 200.4-unit walking, exact save/reload/Continue, removal of the
+actual blocking terrain and an 800-by-600 view. All nine scene page/canvas pairs
+were inspected. The actual previous client reveals the far side of that same
+wall through its page-based map; its save keeps that behavior in the new client.
+The final browser run also passes after the defensive policy-ownership change.
+
+The grove-world critic completed two Magician lives, three guard/cache sites,
+a walking return and native Continue: 10,309 acknowledged frames and 137 paired
+captures. Their verdict remains mixed. Build choices sustained experimentation,
+but repeated objectives and readability limited the urge to explore. The
+road-choice and garrison-country reviewers continue; a new independent critic
+has the frozen sighted-survey build. That frozen build precedes only the final
+defensive policy-copy change, which does not alter the default recipe.
+
+Continental head 0328cf69 passed CI 37163909748 and Pages 37164487829. Exact live
+metadata reports 2026-10-04T00:19:23.27Z. Remote seed 2615299475 retained six
+ordinary-save sentinels and native Continue without a fatal error. No final
+critic acceptance or direct commercial-game comparison has been established.

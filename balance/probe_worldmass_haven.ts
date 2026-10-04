@@ -126,13 +126,14 @@ for (const grown of [false, true]) {
 }
 // Old descriptors deliberately retain their old clearing and land.
 const legacy = JSON.parse(canonical(massAdventure())); delete legacy.settlement; delete legacy.progression; delete legacy.journey; delete legacy.ecology;
+delete legacy.survey;
 legacy.terrain.version = 2; legacy.terrain.addressSpan = 768; legacy.terrain.terrainCell = 24;
 const old = makeSimWorld('warrior', 531);
 new WorldMassRuntime(42, 'legacy', legacy).attach(old);
 assert.equal(old.massRuntime!.settlement, null);
 assert.deepEqual(old.player.pos, { x: 12, y: 12 });
 console.log('PASS previous worldmass descriptors retain the clearing without inserting a town');
-const oldChart=JSON.parse(canonical(massAdventure()));delete oldChart.settlement.cartography;
+const oldChart=JSON.parse(canonical(massAdventure()));delete oldChart.settlement.cartography;delete oldChart.survey;
 const chartWorld=makeSimWorld('rogue',932);
 new WorldMassRuntime(456,'old-chart',oldChart).attach(chartWorld);
 const chart=chartWorld.massRuntime!,sign=chartWorld.doodads.find(d=>d.kind==='service_sign_inn')!;
