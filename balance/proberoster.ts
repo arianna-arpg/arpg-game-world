@@ -62,6 +62,7 @@ export type ProbeRow =
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_puzzlecalm.ts', status: 'green', tier: 'fast', why: 'Real native riddle contact preserves existing combat heat, immediate support fitting, hostile and forged-node refusal, configurable policy and save purity' },
+  { probe: 'probe_worldmass_caravan.ts', status: 'green', tier: 'fast', why: 'Native caravan role admission, actual mending/melee/arrows, one-shot support contrast, wounded Continue and old rosters' },
   { probe: 'probe_worldmass_foragers.ts', status: 'green', tier: 'fast', why: 'Native authored patrol gates, five camp admissions, leader morale, mixed attacks, wounded Continue, atomic seating and legacy rosters' },
   { probe: 'probe_worldmass_accord.ts', status: 'green', tier: 'fast', why: 'Native paired court, fixed geometry, partial clocks/bound pairs, pure checkpoints, current and legacy Continue, shared reward and population gates' },
   { probe: 'probe_procreference.ts', status: 'green', tier: 'fast', why: 'Item proc references follow native payload/gate data, all twelve proc affixes, pure live retunes, duplicate and bounded Unicode handling' },

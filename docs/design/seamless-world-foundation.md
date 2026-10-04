@@ -3883,3 +3883,51 @@ travel. Its 73 follow-up pairs cover 4,033 returned-result requested frames,
 roughly 67.4 nominal seconds including menus/travel. It is a returning review,
 not fresh or blind. Native Save & Exit/Continue passed. Neither review establishes
 overall acceptance, sustained difficulty or real-time responsiveness.
+
+### A crowd encounter beyond the first reward
+
+New Silent Caravans now use the explicit native Caravan Watch: a skeletal
+mender, two sword carriers and an archer at level two. Its native squad keeps the
+escort together; ordinary healing, melee, arrows, evasion, damage and resources
+retain their existing rules. The recipe is excluded from automatic pools.
+No player-build inspection, rare promotion, damage multiplier or free cast was
+added. The two compact swords and nearby support roles give chaining and broad
+attacks a real opportunity, while the mender creates a target-priority choice.
+
+Native cinder, wrecked carts, cargo and scattered bones replace the fire-and-log
+clearing. Broken sides leave approaches and cover around an open middle. The
+public western road account mentions the burned caravan and its mender. New
+descriptors pin the full roster and composition; current saves never restage.
+An actual preceding client rejects the unknown formation recipe before changing
+its runtime. Its own saved two-defender caravan continues unchanged in this build.
+
+All three type checks, all 41 worldmass probes, native encounter groups and
+simulation smoke pass. Generation QA reports 869 cases across three seeds,
+zero failures and four standing geometry warnings. Five seeds admit complete,
+ordinary, collision-free groups within the shared 96-body cap. Live native AI
+executes Soothing Touch, Cleave, Claw and Bone Arrow; the wounded-sword probe
+receives 23.79 life. A single native Firebolt reaches one escort without support
+and three with Arcing, with original enemy seats and live AI. Wounded native
+roles, life, positions and homes survive Continue; clearance pays once.
+
+Controlled browser QA independently confirms that one-shot contrast, native
+mending, Chain Lightning clearance, 800-pixel layout, exact partial/cleared
+Continue, the prior-client refusal and actual old geometry/roster continuation.
+Eleven page/canvas pairs were inspected. Prepared caster positions, a prepared
+reward receipt with native claim/socket gates, invulnerability and distant
+incidental foes are disclosed controls. Enemy AI remains active. These checks
+demonstrate functionality, not earned play, balance or compelling difficulty.
+The initial road account exceeded its existing 240-character bound; it was
+shortened instead of relaxing the validator. A stale fixture variable was
+removed after type-checking found it.
+
+A fresh critic is playing the frozen caravan-watch build through ordinary
+controls, choosing class, later route and stopping point. The first western
+contract, if offered, is requested coverage. Its verdict remains pending.
+The earlier patrol critic has reached a real build choice and later-fight
+coverage; neither ongoing session yet establishes overall acceptance.
+
+Patrol head 6634f8ca passed CI 37232360512 and Pages 37233648316. Exact live
+metadata reports 2026-10-04T20:52:29.518Z. Remote seed 3762790174 passed six
+ordinary-save sentinels and native Continue without a fatal error. Formation
+identity head 8fce1012 is pushed; its publication is pending verification.

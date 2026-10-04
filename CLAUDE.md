@@ -1,5 +1,13 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+New Silent Caravans select the explicit native undead_caravan_watch recipe:
+two swords, an archer and a mender in a burned-cargo composition. Normal AI,
+healing, projectile chaining, stats, placement and garrison rewards stay native.
+Continued descriptors retain old rosters/geometry. Verify worldmass_caravan,
+worldmass, encountergroups, simulation smoke, generation QA and caravan-watch-ui
+for actual role use, supported-shot contrast, partial saves and prior refusal.
+
+
 Native formationIdentityOf validates live enemy enrollment against recipe,
 slot, species, faction and squad facts. One ordinary hover caption identifies
 the leader and keeps known garrison affiliation; roaming formations use their

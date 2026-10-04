@@ -47,7 +47,7 @@ for(const g of Object.values(ENCOUNTER_GROUPS)) {
   assert.equal(JSON.stringify(g),original,'Spawning must not mutate shared recipes');
   console.log(`PASS ${g.id}: ${members.length} members, native habitat, hard debut, coherent squad`);
 }
-assert.equal(Object.keys(ENCOUNTER_GROUPS).length,48);
+assert.equal(Object.keys(ENCOUNTER_GROUPS).length,49);
 assert.equal(new Set(Object.values(ENCOUNTER_GROUPS).map(g=>g.faction)).size,19);
 for(const d of Object.values(ENCOUNTER_ADVENTURERS)) {
   assert.ok(LOOKS[d.look!],`${d.id}: appearance`);
@@ -164,4 +164,4 @@ for(const hound of kennels.filter(a=>a.movementTether)) {
   assert.deepEqual(hound.movementTether!.point,point); assert.ok(movementTetherDistance(hound.movementTether!,hound.pos)<=235.001);
 }
 restore();
-console.log('PASS encounterGroups: habitat audit, 48 recipes / 19 factions, real coordination, persistence and tethered companions');
+console.log('PASS encounterGroups: habitat audit, 49 recipes / 19 factions, real coordination, persistence and tethered companions');

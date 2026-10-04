@@ -36,6 +36,12 @@ export const ENCOUNTER_GROUPS: Record<string,EncounterGroupDef> = {...Object.fro
       m('leader','gnoll_prowler',65,0,lead),m('hunter','gnoll_prowler',-10,-90),
       m('scavenger','gnoll_bonepicker',-75,80)],
     {squad:{focusLeader:true,formation:'wedge',spacing:65,idle:{style:'drill'},onLeaderDeath:'scatter'}}),ambient:false},
+  {...crew('undead_caravan_watch','Caravan Watch','undead',2,['downs'],
+    'Two swords screen a bone mender while an archer watches the wreck. Pressure the cluster or break its healing.',[
+      m('mender','skeletal_cleric',-65,-35,lead),
+      m('swords','skeleton_warrior',50,0,{...pair,spacing:58}),
+      m('archer','skeleton_archer',-65,85)],
+    {squad:{focusLeader:true,formation:'wedge',spacing:58,idle:{style:'mixed'},onLeaderDeath:'none'}}),ambient:false},
   crew('wayward_expedition','Wayward Expedition','bandit',8,bandit,
     'A shield and challenge in front, a mender behind, and two damage dealers. Interrupt healing or flank the guard.',[
       m('vanguard','wayward_vanguard',75,0,lead),m('mender','wayward_mender',-65,0),

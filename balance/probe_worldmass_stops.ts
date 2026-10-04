@@ -56,9 +56,8 @@ for(const content of ['caravan-wreck']){
  assert.ok(native.every(e=>e.level===2));
  assert.ok(w.chests.some(c=>c.rewardSource===canonical([place.id,'cache'])));
 }
-const caravan=m.journey!.places.find(p=>p.content==='caravan-wreck')!;
-const archerId=canonical([caravan.id,'fixture',0]);
-const archer=m.snapshot(w).enemies.find(e=>e.id===archerId)!;
+const archer=m.snapshot(w).enemies.find(e=>e.encounterGroup?.recipe==='undead_caravan_watch'&&e.monster==='skeleton_archer')!;
+const archerId=archer.id;
 assert.equal(archer.monster,'skeleton_archer');assert.ok(m.state.claimed('site-guardian',archerId));
 const shrine=m.journey!.places.find(p=>p.content==='windworn-shrine')!;
 w.player.pos=m.journey!.local(shrine);m.update(w,true);

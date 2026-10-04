@@ -39,6 +39,9 @@ export function frontierLandmarks(): Landmark[] {
   const foragers=nativeMassEncounters('downs','downs',1,
     {chance:1,table:[{id:'gnoll_road_foragers',weight:1}]});
   if(!foragers)throw Error('Missing native road forager formation');
+  const caravanWatch=nativeMassEncounters('downs','downs',2,
+    {chance:1,table:[{id:'undead_caravan_watch',weight:1}]});
+  if(!caravanWatch)throw Error('Missing native caravan watch formation');
   return [
     {...compose('cinderwatch', 'wayside_camp', 'Cinderwatch Camp', { x: 0, y: 66, holdSeconds: 4 }, false, 3, [
       prop('conifer', -165, -100, 78), prop('conifer', -175, 95, 65),
@@ -77,17 +80,19 @@ export function frontierLandmarks(): Landmark[] {
       prop('bone_pile', -95, 90, 30), prop('tombstone', 140, -35, 20),
       prop('brush', 10, -195, 38),
     ], 'bloodfont', [nativeMassAltar('storm_altar',0,-90)]),
-    { ...compose('caravan-wreck', null, 'The Silent Caravan', {x:20,y:60,holdSeconds:4}, true, 1, [
-      // Scattered wagons supply cover around two distinct native roles.
-      prop('broken_cart',-105,-65,46,.25),prop('broken_cart',115,75,42,-.5),
-      prop('broken_cart',80,-125,36,1.2),prop('log',-110,65,26,.7),
-      prop('bone_pile',-25,-110,22),prop('bone_pile',125,-40,20),
-      prop('dead_tree',-200,-70,65),prop('dead_tree',190,150,56),
-      prop('rock',-160,155,32),prop('brush',130,-185,40),
-      prop('brazier',-15,-10,20),
-    ],undefined,undefined,[{monster:'skeleton_archer',x:70,y:-70,garrison:true},
-      {monster:'crate',x:-65,y:20},{monster:'barrel',x:95,y:25}]),
-      population:{level:2,table:[{id:'skeleton_warrior',weight:1}]} },
+    { ...compose('caravan-wreck', null, 'The Silent Caravan', {x:0,y:155,holdSeconds:4}, true, 4, [
+      // Burned cargo forms a broken horseshoe: two open approaches and a clear
+      // middle for the native escort. Native cinder is decoration, not free damage.
+      prop('cinder',0,-55,145),prop('cinder',0,85,130),
+      prop('broken_cart',-150,-105,45,.65),prop('broken_cart',150,-105,45,-.65),
+      prop('broken_cart',0,-195,42,Math.PI/2),
+      prop('cargo_stack',-165,50,40),prop('cargo_stack',165,50,40),
+      prop('dead_tree',-235,0,60),prop('dead_tree',235,0,60),
+      prop('bone_pile',-60,220,18),prop('bone_pile',60,220,18),
+      prop('bone_pile',-115,140,22),prop('bone_pile',115,140,22),
+      prop('rubble',-120,-170,28),prop('rubble',120,-170,28),
+    ],undefined,undefined,[{monster:'crate',x:-85,y:115},{monster:'barrel',x:85,y:115}]),
+      population:{level:2,table:[{id:'skeleton_warrior',weight:1}],encounters:caravanWatch} },
     { ...compose('windworn-shrine', null, 'The Windworn Shrine', undefined, false, 0, [
       // A timed native coal ring invites broad attacks or a quick circuit.
       // The shared Haste field retains its ordinary movement/casting rules.
