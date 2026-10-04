@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_worldmass_origin.ts', status: 'green', tier: 'fast', why: '32 seeded continental-start selections, bounded search, exact large cells, strict recipe validation and old/new native Continue' },
   { probe: 'probe_worldmass_garrisonnames.ts', status: 'green', tier: 'fast', why: 'read-only discovered garrison attribution, roaming and exact Continue, foreign/hidden/legacy exclusions and bounded mod captions' },
   { probe: 'probe_storedsupports.ts', status: 'green', tier: 'fast', why: 'bag-owned socket removal retains exact cargo/locks/rolls, host ownership, capacity and combat refusals, persistence and fitting' },
   { probe: 'probe_worldmass_roadguide.ts', status: 'green', tier: 'fast', why: 'run-owned public route choices, no discovery or quest mutation, escaped mod content, descriptor validation and exact Continue' },

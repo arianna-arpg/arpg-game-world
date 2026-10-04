@@ -15,6 +15,8 @@ import { MassSanctuary } from './sanctuary';
 import { validateDoorPress, type DoorPressSpec } from '../engine/doorPress';
 
 export interface MassSettlementSpec {
+  /** New-run search for existing terrain; Continue always keeps the saved origin. */
+  location?: import('./origin').MassOriginSpec;
   /** Optional native quest contracts tied to this run's physical destinations. */
   quests?: import('./quests').MassQuestSpec;
   zone: string; source: string; apron: number; blend: number;

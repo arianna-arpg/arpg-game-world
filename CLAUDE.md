@@ -1,5 +1,11 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Optional settlement.location selects an existing geographical neighbourhood for
+new runs through bounded, seeded field samples. origin.ts never repaints terrain
+or retries the world seed; Continue always uses its saved address. Verify the
+worldmass suite, generation QA and continental-start-ui.cjs for off-road movement,
+exact current/prior-client Continue and unchanged legacy zero-origin saves.
+
 Worldmass garrisonName reads discovered site admission receipts for actual
 native actors. The ordinary hover plate labels that affiliation without
 inferring membership from species or proximity. VIS_CFG.combatFocus.names owns

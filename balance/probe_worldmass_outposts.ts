@@ -18,7 +18,10 @@ const find=(m:WorldMassRuntime,kind:string):MassPlace=>{
  const span=m.config.terrain.addressSpan;
  for(let ring=1;ring<=10;ring++)for(let y=-ring;y<=ring;y++)for(let x=-ring;x<=ring;x++){
   if(Math.max(Math.abs(x),Math.abs(y))!==ring)continue;
-  const p=m.placesInCell(m.walk.at(x*span,y*span)).find(p=>p.content===kind);
+  const p=m.placesInCell(m.walk.at(x*span,y*span)).find(p=>{
+   const q=localOffset(p.center,{...m.origin,x:0,y:0},span);
+   return p.content===kind&&!m.settlement?.reserves(q.x,q.y,p.radius);
+  });
   if(p)return p;
  }throw Error('No naturally generated '+kind);
 };
@@ -27,7 +30,7 @@ for(const seed of [42,81,142])for(const kind of ['wayside-camp','pillaged-ruin']
  const center=localOffset(p.center,{...m.origin,x:0,y:0},m.config.terrain.addressSpan);
  w.landPartyAt(center);m.update(w,true);
  const row=m.config.content.find(c=>c.id===kind)!,slots=Array.from({length:row.count},(_,i)=>canonical([p.id,i]));
- assert.ok(slots.every(id=>natives(m).has(id)));
+ assert.ok(slots.every(id=>natives(m).has(id)),canonical({seed,kind,center,population:m.population,reserved:m.settlement?.reserves(center.x,center.y,p.radius)}));
  const guards=slots.filter(id=>m.state.claimed('site-guardian',id));assert.ok(guards.length>=1);
  const c=w.chests.find(c=>c.rewardSource===canonical([p.id,'cache']))!;assert.ok(c);
  assert.match(m.siteActivity(p.id)!.text,/remaining/);assert.equal(m.cacheHoldRate(w,c),1);

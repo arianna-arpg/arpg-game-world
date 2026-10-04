@@ -187,6 +187,10 @@ export function massAdventure(): MassAdventure {
       ] },
     ] },
     settlement: { zone: 'lastlight', source: 'zones/lastlight', apron: 192, blend: 144,
+      location: { source: 'worldmass/continental-start-v1', base: {dimension:'surface',cx:'0',cy:'0'},
+        candidates: 32, spacingCells: 16, minimumFraction: .85,
+        sample: {minX:-2000,minY:-2500,maxX:4500,maxY:4000,step:500},
+        when: [{field:'elevation',min:-.16}] },
       quests: { source: 'worldmass/native-place-contracts', bindings: [
         { quest: Q_FRONTIER_WATCH.id, destination: 'west-camp' },
         { quest: Q_FRONTIER_STONEWARD.id, destination: 'north-stoneward', defeat: { kind: 'population', index: 0 } },

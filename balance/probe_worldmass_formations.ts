@@ -5,6 +5,7 @@ import { WorldMassRuntime } from '../src/worldmass/runtime';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { canonical } from '../src/worldmass/random';
+import { localOffset } from '../src/worldmass/address';
 import { serializeCharacter } from '../src/meta/character';
 import { OBJECTIVE_REWARD } from '../src/data/objectiveRewards';
 
@@ -100,7 +101,7 @@ search:for(let y=-20000;y<=20000;y+=2000)for(let x=-20000;x<=20000;x+=2000){
 }
 assert.ok(destination,'current generated country has a native Spear Net');
 const target=destination!,level=mass.populationFor(target).level;
-country.landPartyAt({x:Number(target.center.cx)*960+target.center.x,y:Number(target.center.cy)*960+target.center.y});
+country.landPartyAt(localOffset(target.center,{...mass.origin,x:0,y:0},mass.config.terrain.addressSpan));
 mass.update(country,true);
 const natural=country.actors.filter(a=>a.encounterGroup?.recipe==='spear_net');
 assert.equal(natural.length,4);assert.ok(natural.every(a=>a.level===level&&!country.pointInSolid(a.pos.x,a.pos.y,a.radius)));

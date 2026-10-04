@@ -3206,3 +3206,43 @@ acceptance or playable commercial comparison has been established.
 
 Exact live Roads metadata reports 2026-10-03T23:31:59.288Z. Remote seed 996486389
 retained all six ordinary-save sentinels and native Continue without a fatal error.
+
+### Finding continental ground for a new Lastlight
+
+Several seeds placed the opening circuit amid water, leaving walkable roads
+looking like narrow causeways. New runs now use the optional settlement.location
+recipe to find an existing neighbourhood with broad land around the starting
+town. The recipe owns field ranges, sample bounds, spacing, candidate budget,
+required fraction and an attributable source. The search keeps a suitable
+original origin, otherwise visits a deterministic bounded sequence of nearby
+cell addresses. It uses the existing field predicate and exact cell arithmetic.
+No seed, noise, coast, terrain version or natural place is rewritten.
+
+The default asks for at least 85% inland samples across the opening country.
+All 32 survey seeds found a qualifying candidate. This is coarse coverage, not a
+proof that every off-road point connects or that every possible seed qualifies.
+An impossible modded request chooses the best sampled candidate within its
+budget and reports satisfied:false. Validation bounds both work and addresses.
+Native saved origins remain authoritative; older descriptors omit the policy.
+
+All three type checks and all 33 worldmass probes pass. Generation QA completed
+869 cases across three seeds with zero failures and the same four geometry
+warnings. Three regression fixtures needed their assumptions corrected: global
+cells are not local positions, sites inside Lastlight's reserved ground are not
+admitted populations, and a site-owned tree is not an ecology-owned tree.
+Their persistence, population and encounter assertions remain in place.
+
+Controlled browser QA compares actual preceding/current builds. Seed 42 changes
+from 14/196 inland samples at zero origin to 195/196 at the selected address.
+After fixture placement and invulnerability, ordinary movement crosses 200.4
+units of off-road ground. All seven page/canvas pairs were inspected, including
+map, native Continue, the previous client reading a new selected origin, and
+the current client preserving the previous zero-origin save. Position, life,
+tier, manifest, descriptor, route addresses and claims remain exact across
+those checkpoints. This is controlled compatibility evidence, not earned play.
+
+Garrison head fbfd6e1d passed CI 37162383957 and Pages 37163117508. Exact live
+metadata reports 2026-10-03T23:53:51.082Z. Remote seed 2939420002 retained all six
+ordinary-save sentinels and native Continue without a fatal error. The independent
+grove, road-choice and garrison-country reviews remain underway; no overall
+critic acceptance or playable commercial comparison is claimed.

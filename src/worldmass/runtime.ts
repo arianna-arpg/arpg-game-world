@@ -27,6 +27,7 @@ import { MassRewards, type MassRewardSave } from './rewards';
 import { MassFields, validateMassFieldResidency, type MassFieldSave } from './fields';
 import { MASS_CLEARANCE_VIEW, massGarrisonProgress, massGarrisonSlots, recordMassGuardian, settleMassClearance } from './clearance';
 import { MassBirths, validMassBirth, type MassBirth } from './birth';
+import { chooseMassOrigin, validateMassOrigin } from './origin';
 import { applyMassTerritory, validateMassTerritory } from './territory';
 import { massFormation, validateMassEncounters } from './encounters';
 import { applyEncounterGroup, readEncounterGroup, type EncounterGroupState } from '../engine/encounterGroups';
@@ -95,9 +96,10 @@ export class WorldMassRuntime {
     this.fields = new MassFields(save?.fields,this.config.fieldResidency);
     this.shrines = new MassShrines(save?.shrines);
     this.puzzles = new MassPuzzles(save?.puzzles);
-    this.origin = Object.freeze(save ? { ...save.origin } : { dimension: 'surface', cx: '0', cy: '0' });
-    address(this.origin.dimension, this.origin.cx, this.origin.cy, 0, 0, config.terrain.addressSpan);
     this.generator = new MassGenerator(save?.state.run ?? makeMassRun(seed, runId, config.terrain), config.terrain);
+    if (config.settlement?.location !== undefined) validateMassOrigin(config.settlement.location, config.terrain);
+    this.origin = Object.freeze(save ? { ...save.origin } : chooseMassOrigin(this.generator, config.settlement?.location).origin);
+    address(this.origin.dimension, this.origin.cx, this.origin.cy, 0, 0, config.terrain.addressSpan);
     if (!Number.isSafeInteger(config.pageRadius) || config.pageRadius < 1 || config.pageRadius > 4
       || !Number.isSafeInteger(config.samplesPerTick) || config.samplesPerTick < 1 || config.samplesPerTick > 65536
       || !Number.isFinite(config.startRadius) || config.startRadius < 0 || config.startRadius > 2048

@@ -60,7 +60,7 @@ export function makeMassRun(seed: number, runId: string, spec: MassSpec): MassRu
   return Object.freeze({ schema: 1, seed, runId, generator: spec.id, version: spec.version,
     manifest: massDigest(spec), addressSpan: spec.addressSpan });
 }
-const matches = (rows: readonly MassRange[], fields: Readonly<Record<string, number>>): boolean =>
+export const matchesMassRanges = (rows: readonly MassRange[], fields: Readonly<Record<string, number>>): boolean =>
   rows.every(r => fields[r.field] >= (r.min ?? -Infinity) && fields[r.field] < (r.max ?? Infinity));
 
 /** No mutable registry/global-seed reads after construction. Second worlds and
@@ -98,7 +98,7 @@ export class MassGenerator {
     return Object.freeze(result);
   }
   terrainAt(at: MassAddress): MassTerrain {
-    const fields = this.fieldsAt(at), s = this.surfaces.find(row => matches(row.when, fields))!;
+    const fields = this.fieldsAt(at), s = this.surfaces.find(row => matchesMassRanges(row.when, fields))!;
     for (const place of this.spec.places.some(p => p.surface) ? this.placesInCell(at) : []) {
       const recipe = this.spec.places.find(p => p.id === place.recipe)!;
       if (!recipe.surface) continue;
@@ -132,7 +132,7 @@ export class MassGenerator {
     const center = address(dimension, cx, cy,
       x + recipe.period * (0.5 + rng.range(-0.5, 0.5) * recipe.jitter),
       y + recipe.period * (0.5 + rng.range(-0.5, 0.5) * recipe.jitter), this.spec.addressSpan);
-    if (!matches(recipe.when, this.fieldsAt(center))) return null;
+    if (!matchesMassRanges(recipe.when, this.fieldsAt(center))) return null;
     return { id: canonical([this.run.runId, ...namespace]), recipe: recipe.id, content: recipe.content,
       center, radius: recipe.radius, source: { generator: this.spec.id, version: this.spec.version,
         rule: recipe.id, source: recipe.content, stream: canonical(namespace) } };

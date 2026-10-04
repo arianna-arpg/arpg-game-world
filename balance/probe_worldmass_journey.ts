@@ -8,6 +8,7 @@ import { localOffset, neighborCell } from '../src/worldmass/address';
 import { massMap } from '../src/worldmass/paint';
 import { serializeCharacter } from '../src/meta/character';
 import { fellableDoodad } from '../src/engine/rampage';
+import type { Doodad } from '../src/engine/levelgen';
 const restore = seedGlobalRandom(88212);
 for (const seed of [1, 42, 451, 7108, 99871]) {
   const w = makeSimWorld('warrior', seed);
@@ -59,14 +60,15 @@ for (const seed of [1, 42, 451, 7108, 99871]) {
   const away = m.walk.at(-2200, -2200);
   w.player.pos = { x: -2200, y: -2200 };
   m.update(w, true);
-  const tree = w.doodads.find(d => fellableDoodad(d) && !m.settlement!.reserves(d.pos.x, d.pos.y, d.radius)
+  const ecologyPieces = [...(m.ecology as unknown as {resident:Map<string,{pieces:{live:Doodad}[]}>}).resident.values()].flatMap(g=>g.pieces.map(p=>p.live));
+  const tree = ecologyPieces.find(d => fellableDoodad(d) && !m.settlement!.reserves(d.pos.x, d.pos.y, d.radius)
     && !journey.reserves(d.pos, d.radius))!;
   assert.ok(tree);
   const treePos = { ...tree.pos };
   assert.ok(w.fellDoodad(tree, 'frontier-probe'));
   const state = m.ecology!.snapshot(w);
   assert.ok(state.changes.length > 0);
-  const piece = w.doodads.find(d => !m.settlement!.reserves(d.pos.x, d.pos.y, d.radius) && !journey.reserves(d.pos, d.radius) && d !== tree)!;
+  const piece = ecologyPieces.find(d => !m.settlement!.reserves(d.pos.x, d.pos.y, d.radius) && !journey.reserves(d.pos, d.radius) && d !== tree)!;
   assert.ok(piece);
   const removed = { ...piece.pos };
   w.doodads = w.doodads.filter(d => d !== piece);
