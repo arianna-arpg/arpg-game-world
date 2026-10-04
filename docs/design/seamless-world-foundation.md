@@ -3698,3 +3698,47 @@ memory-country Warrior review remains in progress; overall acceptance is unmet.
 Memory-purpose head e42f61a6 passed CI 37226372206 and Pages 37227680622.
 Exact live metadata reports 2026-10-04T19:18:23.289Z. Remote seed 203553568
 passed ordinary-save isolation and native Continue with no fatal error.
+
+### Fitting a riddle reward without an artificial combat wait
+
+The native puzzle contact policy now distinguishes a live, enrolled passive
+node from combatants and from actors merely carrying a puzzle marker. Quiet
+contact leaves the existing world combat timestamp untouched. It does not clear
+recent combat, waive nearby-foe checks, alter damage, skip native puzzle hits or
+change the reward pipeline. PUZZLE_CFG.passiveContactHeatsCombat restores the
+previous behavior when desired. Active puzzle bodies, dead/stale/foreign seats
+and unenrolled markers retain the ordinary combat clock. Grudge attribution and
+other native hit effects remain on their original paths.
+
+The three type checks, the new three-group puzzlecalm probe, field discipline,
+attunement, native puzzles and simulation smoke pass. Actual hit resolution
+operates the lattice and permits support fitting in a quiet field. The probe
+also retains prior heat exactly, exercises genuine enemy contact/proximity,
+rejects forged seats and covers the policy dial.
+
+Controlled browser QA solved the same native paired court in both clients and
+claimed Splitting with the real reward button. The preceding client reported
+4.9833 seconds of combat recovery; the new client fitted through the native
+socket intent without advancing time. Seven page/canvas pairs were inspected:
+prior recovery, current choice, narrow panel, fitted support and current/prior/
+current Continue. Exact position, life, bag contents, solved riddle, reward
+receipt and fitted support survive the round trips.
+
+The first browser fixture encountered a genuine nearby enemy and correctly
+refused fitting. The final isolation fixture places living incidental foes
+far from the court in both clients; no combat gate is disabled. Prepared
+positions, invulnerability and scripted pair order make this controlled QA,
+not an earned playthrough. Floating completion text can still overlap the
+native cast caption; this change does not claim to fix that presentation.
+
+An independent Warrior review continues on the frozen Memory build. A new
+fresh-context critic is playing the frozen puzzle-calm build through ordinary
+inputs, choosing its own route and later use of earned upgrades. No overall
+acceptance or commercial-quality comparison is established.
+
+A separate controlled daylight diagnostic compared the same grove at time zero
+and midday with lighting/atmosphere passes individually suppressed. Natural
+ambient darkness was about 0.2205 at time zero and zero at midday. The visible
+scene still relied on muted ground colors and strong occlusion shadows; that
+does not establish a defective day clock. No production brightness change was
+made from this limited diagnostic.

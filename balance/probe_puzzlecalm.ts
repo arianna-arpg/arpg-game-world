@@ -1,0 +1,50 @@
+import assert from 'node:assert/strict';
+import { makeSimWorld } from '../src/sim/arena';
+import { seedGlobalRandom } from '../src/sim/rng';
+import { PUZZLE_CFG, puzzleContactHeatsCombat, type PuzzleRun } from '../src/engine/puzzles';
+import { SUPPORTS } from '../src/data/supports';
+import { SWAP_DISCIPLINE_CFG, type SkillInstance } from '../src/engine/skills';
+import type { Actor } from '../src/engine/actor';
+import { canonical } from '../src/worldmass/random';
+const restore=seedGlobalRandom(102042),cfg=PUZZLE_CFG as {passiveContactHeatsCombat:boolean};
+const prior=cfg.passiveContactHeatsCombat;
+try{
+ const w=makeSimWorld('magician',42);w.startWorldMass(42);
+ const m=w.massRuntime!,p=m.journey!.places.find(p=>p.content==='memorial-grove')!;
+ w.landPartyAt(m.journey!.local(p));m.update(w,true);
+ const guts=w as unknown as {puzzles:PuzzleRun[];resolveHit(a:Actor,s:SkillInstance,b:Actor):void;updatePuzzles(dt:number):void};
+ const r=guts.puzzles.find(r=>r.spec.kind==='lattice')!,node=r.nodes[0],skill=w.player.skills.find(s=>s?.def.id==='firebolt')!;
+ assert.ok(node.passive);assert.ok(skill);w.time=100;w.lastCombatAt=-999;
+ const before=canonical(r.state);
+ guts.resolveHit(w.player,skill,node);guts.updatePuzzles(0);
+ assert.notEqual(canonical(r.state),before,'real native hit still operates the riddle');
+ assert.equal(w.lastCombatAt,-999);assert.equal(w.swapRefusal(w.localSeat,'socket'),null);
+ const gem=w.grantSupportGemItem(w.localSeat,{def:SUPPORTS.arcing,level:1})!;
+ assert.ok(w.socketSupport(gem.uid,'firebolt',w.localSeat));
+ assert.ok(w.localSeat.meta.knownSkills.get('firebolt')!.sockets.some(s=>s?.def.id==='arcing'));
+ console.log('PASS native hit toggles the board while an earned-style support can be fitted immediately');
+
+ w.lastCombatAt=99;w.time=101;guts.resolveHit(w.player,skill,node);
+ assert.equal(w.lastCombatAt,99,'quiet contact neither erases nor renews existing heat');
+ assert.equal(w.swapReadiness(w.localSeat,'socket').remaining,SWAP_DISCIPLINE_CFG.calmSec-2);
+ const foe=w.createMonster('dire_wolf',1,'enemy');foe.pos={x:w.player.pos.x+180,y:w.player.pos.y};foe.fillResources();w.actors.push(foe);
+ w.lastCombatAt=-999;assert.equal(w.swapRefusal(w.localSeat,'socket'),'foes press too near');
+ guts.resolveHit(w.player,skill,foe);assert.equal(w.lastCombatAt,101);
+ w.time=102;guts.resolveHit(w.player,skill,node);assert.equal(w.lastCombatAt,101);
+ assert.equal(w.swapRefusal(w.localSeat,'socket'),'the blood is still hot');
+ console.log('PASS genuine foe proximity and hits retain field discipline; later puzzle contact cannot shorten or prolong recovery');
+
+ const pure=canonical([r.state,w.lastCombatAt,w.player.life,w.localSeat.meta.items]);
+ assert.equal(puzzleContactHeatsCombat(r,node),false);
+ node.dead=true;assert.equal(puzzleContactHeatsCombat(r,node),true);node.dead=false;
+ assert.equal(puzzleContactHeatsCombat(undefined,node),true);
+ assert.equal(puzzleContactHeatsCombat({...r,id:'foreign'},node),true);
+ assert.equal(puzzleContactHeatsCombat({...r,nodes:[]},node),true);
+ assert.equal(canonical([r.state,w.lastCombatAt,w.player.life,w.localSeat.meta.items]),pure);
+ foe.puzzleNode={...node.puzzleNode!};foe.passive=true;w.time=103;guts.resolveHit(w.player,skill,foe);
+ assert.equal(w.lastCombatAt,103,'forged marker cannot claim another actor seat');
+ node.passive=false;w.time=104;guts.resolveHit(w.player,skill,node);assert.equal(w.lastCombatAt,104);
+ node.passive=true;cfg.passiveContactHeatsCombat=true;w.time=105;guts.resolveHit(w.player,skill,node);
+ assert.equal(w.lastCombatAt,105);
+ console.log('PASS pure native identity check, stale/foreign/forged markers, active puzzle bodies and configurable combat contact');
+}finally{cfg.passiveContactHeatsCombat=prior;restore();}

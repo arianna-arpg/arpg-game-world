@@ -328,7 +328,7 @@ import { REGROWTH_CFG, SCALD_CFG, type BaskSpec } from '../data/scald';
 import { LEDGER_TRAP_SPRUNG, lintTrapworkSpec, trapAnchor, trapEffect, trapTriggerHit, TRAPWORK_CFG, type PlacedTrapwork, type TrapHost, type TrapworkSpec } from './trapworks';
 import { bootOccSites, driveOccSites, OCC_CFG, reviveOccSite, seedOccClockMarks, wakeRousedResidents, type OccHost, type OccKinSpec, type OccSite } from './occurrences';
 import { attunedStatus, rollStartTone, toneAccepted, toneOfAmounts, toneTint, TUNE_CFG } from './tuning';
-import { pickKnockNode, PUZZLE_CFG, PUZZLE_KINDS, puzzleHumOf, puzzleKnockOf, puzzleRewardOf, puzzleSpillOf, type PuzzleHost, type PuzzleRun, type PuzzleCheckpoint } from './puzzles';
+import { pickKnockNode, puzzleContactHeatsCombat, PUZZLE_CFG, PUZZLE_KINDS, puzzleHumOf, puzzleKnockOf, puzzleRewardOf, puzzleSpillOf, type PuzzleHost, type PuzzleRun, type PuzzleCheckpoint } from './puzzles';
 import { MINION_COMBAT } from './minionCombat';
 import {
   batchScaleOf, buildWornThrongDef, isThrongBody, THRONG_CFG, throngMarkerOf,
@@ -43322,7 +43322,11 @@ export class World {
     // The CALM clock: any blow involving the player's side is "recent combat"
     // for calm-gated dwells (the mercenary outpost's parley).
     if (caster.team === 'player' || target.team === 'player') {
-      this.lastCombatAt = this.time;
+      // Passive registered riddle props preserve the existing combat clock.
+      // Actual foes still heat it; solving a riddle never clears prior danger.
+      if (!target.puzzleNode || puzzleContactHeatsCombat(
+        this.puzzles.find(run=>run.id===target.puzzleNode!.id), target))
+        this.lastCombatAt = this.time;
       // THE GRUDGE STAMP (survivor trigger eligibility): the world notices a
       // foe that traded blows with a hero — in either direction.
       if (caster.team === 'enemy' && this.seatOf(target)) caster.grudgeMark = true;

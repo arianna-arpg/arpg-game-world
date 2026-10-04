@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_puzzlecalm.ts', status: 'green', tier: 'fast', why: 'Real native riddle contact preserves existing combat heat, immediate support fitting, hostile and forged-node refusal, configurable policy and save purity' },
   { probe: 'probe_worldmass_accord.ts', status: 'green', tier: 'fast', why: 'Native paired court, fixed geometry, partial clocks/bound pairs, pure checkpoints, current and legacy Continue, shared reward and population gates' },
   { probe: 'probe_procreference.ts', status: 'green', tier: 'fast', why: 'Item proc references follow native payload/gate data, all twelve proc affixes, pure live retunes, duplicate and bounded Unicode handling' },
   { probe: 'probe_worldmass_puzzlerewards.ts', status: 'green', tier: 'fast', why: 'Native riddle events earn compatible, once-only choices; shared cache budget, strict trigger policy, legacy/pending/fitted Continue and ordinary socketing' },

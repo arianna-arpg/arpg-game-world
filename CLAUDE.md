@@ -1,5 +1,13 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+puzzleContactHeatsCombat keeps enrolled passive puzzle props from prolonging
+the world combat-lull clock. PUZZLE_CFG.passiveContactHeatsCombat can opt back
+in. Real enemies, stale markers, active nodes and prior heat retain their gates.
+Verify puzzlecalm, fielddiscipline, attunement, native puzzles, sim smoke and
+puzzle-calm-ui.cjs for native hits, immediate reward fitting and prior/current
+Continue. The change neither clears combat nor changes puzzle damage or rewards.
+
+
 Native twin-accord courts now have kind-owned checkpoints for bound pairs and
 remaining half-pair clocks. New expeditions add The Paired Stones beyond the
 grove. Optional journey.reservePopulation keeps unadmitted destination bodies
