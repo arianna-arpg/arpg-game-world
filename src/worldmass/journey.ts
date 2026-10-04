@@ -22,6 +22,8 @@ export interface MassJourneyStop {
   offset: number;
 }
 export interface MassJourneySpec {
+  /** Keep room for unadmitted destination bodies and riddles within the shared cap. */
+  reservePopulation?: boolean;
   /** Public accounts of initial roads, pinned to this expedition's descriptor. */
   notices?: { destination: string; note: string }[];
   /** Optional native encounters on the road network, without site rewards. */

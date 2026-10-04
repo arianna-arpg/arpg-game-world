@@ -3646,3 +3646,55 @@ or claimed solved. The initial harness omitted the native pickup seat argument,
 then passed with the real local seat. Prepared pouches/positions make these
 controlled mechanics and presentation checks, not earned gameplay evidence.
 The frozen independent riddle-country playtest remains separate and ongoing.
+
+### The Paired Stones and reserved opening activities
+
+New expeditions add an optional continuous branch beyond Memorial Grove to
+The Paired Stones. Its four crystals reuse the native twin accord: strike each
+opposite matching pair within its authored window. Bound pairs stay lit while
+an unfinished pair can expire. The native kind now owns capture/restoration of
+bound pairs and remaining time; saved clocks are strictly validated. Ordinary
+spell delivery, spill rules, colors, completion wash and loot remain native.
+The solved riddle shares the existing single discovery support-choice allowance.
+
+The integration check found a real admission failure at seed 99871: incidental
+populations filled all 96 seats before Windworn Shrine could install its riddle.
+The optional journey.reservePopulation policy reserves only still-needed native
+bodies, fixtures and puzzle nodes for the finite opening network. Wild and roadside
+admissions respect the remaining capacity. Existing actors are never removed,
+healed or respawned to make room; fallen slots need no reservation. This preserves
+the 96-seat total limit. The separately bounded puzzle checkpoint allowance is
+24 nodes. It is not unbounded actor dormancy, which remains future foundation work.
+Schema eight refuses older clients that cannot preserve the admission policy;
+omitted legacy descriptors retain their previous admission and geography.
+
+All three type checks and all 39 worldmass probes pass, including five seeded
+physical routes, exact timed-pair progress and crowded travel through all eight
+opening destinations. Retained enemy records and puzzle progress survive Continue.
+Native puzzle tests pass 207 assertions and simulation smoke passes. Generation QA
+covers 869 cases across three seeds with no failures; four standing geometry
+warnings and one concurrent-load Boulevards timing warning remain.
+
+Controlled browser QA used ordinary Firebolts from prepared positions to bind,
+expire and solve pairs, and checked partial/solved Continue, native reward,
+800 by 600 presentation, actual prior-client refusal and legacy-map continuation.
+Nine page/canvas pairs were inspected before the admission refinement; the final
+browser rerun passes the same interaction and persistence checks. Positions and
+invulnerability were controlled fixtures, not an earned playthrough. The first
+extension offset admitted the court while at the grove; its own branch now puts
+it beyond that preload radius. Legacy compatibility fixtures explicitly omit the
+new reservation policy when testing their historical schema.
+
+Riddle-country's independent review is complete: curiosity for another short
+session, without compelling combat yet. It solved the grove, chose/fitted Arcing,
+cleared Wayside Camp, equipped earned items, selected Change the Rhythm and
+verified native Save & Exit/Continue. It observed 94 paired captures and 5,103
+confirmed frame steps, including roughly 19.54 seconds across the camp encounter.
+Flask administration, puzzle hits delaying support installation, repetitive
+scenery and forgiving early fights remain actionable criticism. There is no
+commercial comparison or claim of real-time gameplay quality. The separate
+memory-country Warrior review remains in progress; overall acceptance is unmet.
+
+Memory-purpose head e42f61a6 passed CI 37226372206 and Pages 37227680622.
+Exact live metadata reports 2026-10-04T19:18:23.289Z. Remote seed 203553568
+passed ordinary-save isolation and native Continue with no fatal error.

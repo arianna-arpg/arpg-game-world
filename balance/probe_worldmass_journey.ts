@@ -14,8 +14,8 @@ for (const seed of [1, 42, 451, 7108, 99871]) {
   const w = makeSimWorld('warrior', seed);
   w.startWorldMass(seed);
   const m = w.massRuntime!, journey = m.journey!;
-  assert.equal(journey.places.length, 7);
-  assert.equal(journey.trails.length, 11);
+  assert.equal(journey.places.length, 8);
+  assert.equal(journey.trails.length, 12);
   assert.ok(m.ecology!.stats.pieces > 0);
   for (const trail of journey.trails)
     for (let i = 1; i < trail.points.length; i++) {
@@ -38,7 +38,7 @@ for (const seed of [1, 42, 451, 7108, 99871]) {
     const source = canonical([place.id, 'cache']);
     const chest = w.chests.find(c => c.rewardSource === source)!;
     const puzzle = m.config.content.find(c=>c.id===place.content)!.site!.puzzles?.length;
-    assert.ok(puzzle ? m.puzzles.owns(place.id) : chest, 'opening sites have native playable activities');
+    assert.ok(puzzle ? m.puzzles.owns(place.id) : chest, 'opening sites have native playable activities: '+JSON.stringify({seed,content:place.content,population:m.population,capacity:m.config.maxPopulation,center}));
     const native = m.snapshot(w).enemies.find(e => e.id === canonical([place.id, 0]));
     assert.ok(puzzle ? w.puzzleViews().length : native, 'opening content is an activity, not a marker');
     for (const dx of [-.85, .85]) {
@@ -53,7 +53,7 @@ for (const seed of [1, 42, 451, 7108, 99871]) {
       return Math.hypot(q.x - center.x, q.y - center.y) >= p.radius + place.radius;
     }));
   }
-  console.log('PASS seed ' + seed + ': connected eleven-route network, seven playable reachable destinations, clear approaches');
+  console.log('PASS seed ' + seed + ': connected twelve-route network, eight playable reachable destinations, clear approaches');
   if (seed !== 42)
     continue;
   const before = canonical(journey.trails);

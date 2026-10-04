@@ -3,6 +3,7 @@ import { PUZZLE_CFG, PUZZLE_KINDS, type PuzzleSpec, type PuzzleRun, type PuzzleC
 import { PUZZLES } from '../data/puzzles';
 import { LOOT_TABLES } from '../data/loottables';
 import { SKILLS } from '../data/skills';
+import { DAMAGE_TYPES, ELEMENTAL_TYPES } from '../engine/stats';
 import type { MassPlace } from './contracts';
 import { canonical, massRandom } from './random';
 import { siteOffset } from './sites';
@@ -11,13 +12,13 @@ export interface MassPuzzleSpec { id: string; source: string; x: number; y: numb
 export interface MassPuzzleSave { id: string; progress: PuzzleCheckpoint }
 /** Finite fixtures share the native population budget; unbounded puzzle residency
  * needs its own dependency contract. Adding kinds requires a native progress codec. */
-export const MASS_PUZZLE_LIMIT = 18;
+export const MASS_PUZZLE_LIMIT = 24;
 export function nativeMassPuzzle(id: string, x: number, y: number, instruction: string, count?: number): MassPuzzleSpec {
   if (!PUZZLES[id]) throw Error('Unknown native puzzle');
   const s=PUZZLES[id], k=PUZZLE_KINDS[s.kind];
   if(k.geometry==='ring' && !Number.isSafeInteger(count))throw Error('Placed rings need a fixed node count');
   const layout=k.geometry==='grid' ? {grid:s.grid??[3,3],scramble:s.scramble??[3,6]}
-    : {count:[count!,count!] as [number,number],gutter:s.gutter??PUZZLE_CFG.emberGutter};
+    : {count:[count!,count!] as [number,number],...(s.kind==='accord'?{linger:s.linger??PUZZLE_CFG.accordLinger,tones:s.tones??[...ELEMENTAL_TYPES]}:{gutter:s.gutter??PUZZLE_CFG.emberGutter})};
   const spec={...s,...layout,spacing:s.spacing??k.spacing,
     who:s.who??k.who,knock:s.knock??k.knock??PUZZLE_CFG.knock,
     spill:s.spill??k.spill??PUZZLE_CFG.spill,hum:s.hum??k.hum??PUZZLE_CFG.hum};
@@ -37,14 +38,20 @@ export function validateMassPuzzle(row: MassPuzzleSpec, radius: number): void {
   // Persistent placement admits only kinds with owned geometry and progress.
   // Ring counts are exact descriptor data; no admission-order reroll.
   if (!row || !text(row.id) || !text(row.source) || !text(row.instruction)
-    || ![row.x,row.y].every(Number.isFinite) || !k?.checkpoint || !['lattice','ember'].includes(s.kind)
+    || ![row.x,row.y].every(Number.isFinite) || !k?.checkpoint || !['lattice','ember','accord'].includes(s.kind)
     || s.format!==undefined || s.node!==undefined || s.heart!==undefined
     || s.kind==='ember'&&(s.grid!==undefined||s.scramble!==undefined
       ||!Array.isArray(s.count)||s.count.length!==2||!Number.isSafeInteger(s.count[0])
       ||s.count[0]<3||s.count[0]>8||s.count[0]!==s.count[1]
       ||s.gutter===undefined||!Number.isFinite(s.gutter)||s.gutter<.5||s.gutter>60)
+    || s.kind==='accord'&&(s.grid!==undefined||s.scramble!==undefined||s.gutter!==undefined
+      ||!Array.isArray(s.count)||s.count.length!==2||!Number.isSafeInteger(s.count[0])
+      ||s.count[0]<4||s.count[0]>8||s.count[0]%2!==0||s.count[0]!==s.count[1]
+      ||s.linger===undefined||!Number.isFinite(s.linger)||s.linger<.5||s.linger>60
+      ||s.tones!==undefined&&(!Array.isArray(s.tones)||!s.tones.length||s.tones.length>8
+        ||s.tones.some(t=>!DAMAGE_TYPES.includes(t))))
     || s.grid!==undefined&&(!Array.isArray(s.grid)||s.grid.length!==2||s.grid.some(v=>!Number.isSafeInteger(v)||v<2||v>4))
-    || s.spacing!==undefined&&(!Number.isFinite(s.spacing)||s.spacing<55||s.spacing>120)
+    || s.spacing!==undefined&&(!Number.isFinite(s.spacing)||s.spacing<55||s.spacing>(k.geometry==='ring'?160:120))
     || s.scramble!==undefined&&(!Array.isArray(s.scramble)||s.scramble.length!==2
       ||s.scramble.some(v=>!Number.isSafeInteger(v)||v<1||v>32)||s.scramble[0]>s.scramble[1])
     || s.hum!==undefined&&(!Number.isFinite(s.hum)||s.hum<0||s.hum>30)

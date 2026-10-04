@@ -17,7 +17,7 @@ const stand=(w:World,id='townsfolk_innkeep')=>{
 };
 const fresh=(legacy=false)=>{
  const w=makeSimWorld('magician',42),config=structuredClone(massAdventure()) as MassAdventure;
- delete config.settlement!.structurePlans;delete config.rewards!.earnFrom; // isolate the schema-five acceptance owner
+ delete config.journey!.reservePopulation;delete config.settlement!.structurePlans;delete config.rewards!.earnFrom; // isolate the schema-five acceptance owner
  if(legacy)delete config.settlement!.quests!.acceptance;
  new WorldMassRuntime(42,'choice-test',config).attach(w);stand(w);w.player.invulnerable=true;return w;
 };

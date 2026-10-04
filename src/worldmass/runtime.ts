@@ -47,7 +47,7 @@ interface MassEnemySave {
   anchor?: { x: number; y: number }; leashHome?: boolean;
 }
 export interface MassAdventureSave {
-  schema: 1 | 2 | 3 | 4 | 5 | 6 | 7; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
+  schema: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
   player: { x: number; y: number; tier?: number }; enemies: MassEnemySave[]; contents: ZoneContents;
   rewards?: MassRewardSave[];
   fields?: MassFieldSave[];
@@ -121,6 +121,8 @@ export class WorldMassRuntime {
     if (config.progression) validateMassProgression(config.progression, config.terrain);
     if (config.ecology) validateMassEcology(config.ecology, config.terrain.addressSpan);
     if (config.journey && !config.settlement) throw new Error('Frontier routes require a settlement');
+    if(config.journey?.reservePopulation!==undefined && typeof config.journey.reservePopulation!=='boolean')
+      throw Error('Invalid frontier population reservation');
     if(config.journey?.extensions!==undefined && !Array.isArray(config.journey.extensions))
       throw new Error('Invalid frontier extensions');
     if(config.journey?.stops!==undefined && !Array.isArray(config.journey.stops))
@@ -194,9 +196,10 @@ export class WorldMassRuntime {
       // Older clients must refuse owners they cannot plan/retain. Schema three
       // adds roadside bodies, two adds one-shot stands, four owns placed riddles,
       // five preserves deliberate quest acceptance, six pins native plan variants,
-      // seven owns reward triggers; older descriptors keep
+      // seven owns reward triggers, eight reserves destination population; older descriptors keep
       // their original version and never gain new encounters on Continue.
-      if ((save.schema !== 1 && save.schema !== 2 && save.schema !== 3 && save.schema !== 4 && save.schema !== 5 && save.schema !== 6 && save.schema !== 7)
+      if ((save.schema !== 1 && save.schema !== 2 && save.schema !== 3 && save.schema !== 4 && save.schema !== 5 && save.schema !== 6 && save.schema !== 7 && save.schema !== 8)
+        || save.schema < 8 && config.journey?.reservePopulation !== undefined
         || save.schema < 7 && config.rewards?.earnFrom !== undefined
         || save.schema < 6 && config.settlement?.structurePlans !== undefined
         || save.schema < 5 && config.settlement?.quests?.acceptance === 'journal'
@@ -437,6 +440,20 @@ export class WorldMassRuntime {
     return massFormation(this.populationFor(place).encounters,this.generator.run.seed,place.id)?.seats.length
       ?? this.config.content.find(c=>c.id===place.content)!.count;
   }
+  /** Only still-needed seats reserve space: never evict, respawn or heal a body. */
+  private reservedPopulation(except: string): number {
+    if (!this.journey?.spec.reservePopulation) return 0;
+    let missing = 0;
+    for (const place of this.journey.places) {
+      if (place.id === except) continue;
+      const site = this.config.content.find(c=>c.id===place.content)!.site;
+      const ids = [...Array.from({length:this.populationCount(place)},(_,i)=>canonical([place.id,i])),
+        ...(site?.fixtures??[]).map((_,i)=>canonical([place.id,'fixture',i]))];
+      missing += ids.filter(id=>!this.natives.has(id)&&!this.state.claimed('fallen',id)).length
+        + this.puzzles.missing(place,site?.puzzles??[]);
+    }
+    return missing;
+  }
   /** Survived-death wakes retain the run's land and consequences. */
   wake(world: World): void { world.landPartyAt(this.settlement?.spawn ?? { x: 12, y: 12 }); this.nearKey = ''; }
   update(world: World, boot = false): void {
@@ -516,6 +533,7 @@ export class WorldMassRuntime {
       const content = this.config.content.find(c => c.id === p.content)!;
       // Reserve every required field before spawning its garrison or reward.
       if(!this.fields.canAdmit(p,content.site?.altars??[]))continue;
+      const capacity = Math.max(0, this.config.maxPopulation - this.reservedPopulation(p.id));
       const population = this.populationFor(p);
       const formation=massFormation(population.encounters,this.generator.run.seed,p.id);
       const count=formation?.seats.length??content.count;
@@ -529,10 +547,10 @@ export class WorldMassRuntime {
         const identities = [...Array.from({ length: count }, (_, i) => canonical([p.id, i])),
           ...(content.site?.fixtures ?? []).map((_, i) => canonical([p.id, 'fixture', i]))];
         const missing = identities.filter(id => !this.natives.has(id) && !this.state.claimed('fallen', id)).length;
-        if (this.population + missing + this.puzzles.missing(p,content.site?.puzzles??[]) > this.config.maxPopulation) continue;
+        if (this.population + missing + this.puzzles.missing(p,content.site?.puzzles??[]) > capacity) continue;
         for (const [index, fixture] of (content.site?.fixtures ?? []).entries()) {
           const id = canonical([p.id, 'fixture', index]);
-          if (this.natives.has(id) || this.state.claimed('fallen', id) || this.population >= this.config.maxPopulation) continue;
+          if (this.natives.has(id) || this.state.claimed('fallen', id) || this.population >= capacity) continue;
           const offset = siteOffset(p, fixture.x, fixture.y);
           const a = this.births.create(world,id,fixture.monster,population.level);
           applyMassTerritory(a, this.config.territory);
@@ -556,7 +574,7 @@ export class WorldMassRuntime {
         const angle = rng.range(0, Math.PI * 2), radius = rng.range(30, p.radius * .65);
         const def = MONSTERS[monster];
         const scale = def.scaleVariance ? rng.range(...def.scaleVariance) : 1;
-        if (this.natives.has(id) || this.state.claimed('fallen', id) || this.population >= this.config.maxPopulation) continue;
+        if (this.natives.has(id) || this.state.claimed('fallen', id) || this.population >= capacity) continue;
         const offset=seat?siteOffset(p,seat.x,seat.y):undefined;
         const spot = this.walk.snapToWalkable({ x: q.x + (offset?.x ?? Math.cos(angle) * radius),
           y: q.y + (offset?.y ?? Math.sin(angle) * radius) });
@@ -640,7 +658,7 @@ export class WorldMassRuntime {
         ...(a.encounterGroup ? {encounterGroup:a.encounterGroup,name:a.name} : {}),
         ...(this.births.of(a) ? {birth:this.births.of(a)} : {}) });
     }
-    return JSON.parse(JSON.stringify({ schema: this.config.rewards?.earnFrom !== undefined ? 7 : this.config.settlement?.structurePlans !== undefined ? 6 : this.config.settlement?.quests?.acceptance === 'journal' ? 5 : this.config.content.some(c=>c.site?.puzzles?.length) ? 4 : this.config.journey?.roadside ? 3 : this.config.content.some(c => c.site?.shrines?.length) ? 2 : 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
+    return JSON.parse(JSON.stringify({ schema: this.config.journey?.reservePopulation !== undefined ? 8 : this.config.rewards?.earnFrom !== undefined ? 7 : this.config.settlement?.structurePlans !== undefined ? 6 : this.config.settlement?.quests?.acceptance === 'journal' ? 5 : this.config.content.some(c=>c.site?.puzzles?.length) ? 4 : this.config.journey?.roadside ? 3 : this.config.content.some(c => c.site?.shrines?.length) ? 2 : 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
       ...(this.config.rewards ? { rewards: this.rewards.snapshot() } : {}),
       ...(this.fields.snapshot().length ? { fields: this.fields.snapshot() } : {}),
       ...(this.shrines.snapshot().length ? { shrines: this.shrines.snapshot() } : {}),

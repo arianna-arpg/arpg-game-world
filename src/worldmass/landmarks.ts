@@ -95,6 +95,14 @@ export function frontierLandmarks(): Landmark[] {
     ],undefined,[nativeMassAltar('haste_altar',0,0)],undefined,undefined,
       [nativeMassPuzzle('ember_ring',0,0,'Strike every coal before the flames gutter. Broad attacks can kindle several.',6)]),
       population:{level:2,table:[{id:'plains_wolf',weight:1}]} },
+    { ...compose('paired-stones', null, 'The Paired Stones', undefined, false, 0, [
+      ...[-1,1].flatMap(side=>[
+        prop('standing_stone',side*210,-150,36),prop('standing_stone',side*210,150,36),
+        prop('flowers',side*205,0,32),prop('forest_oak',side*250,75,58),
+      ]),prop('weathered_statue',0,-245,52),prop('flowers',0,230,35),
+    ],undefined,undefined,undefined,undefined,
+      [nativeMassPuzzle('twin_accord',0,0,'Ring both crystals of a matching colour before their light fades. Bound pairs stay lit.',4)]),
+      population:{level:2,table:[{id:'plains_wolf',weight:1}]} },
     { ...compose('stoneward', null, 'The Stoneward', { x: 0, y: -130, holdSeconds: 5 }, false, 1, [
       // Broken colonnades leave wide approaches; the living guardian owns
       // its native shield, turning, recovery and return-to-post behavior.

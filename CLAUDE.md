@@ -1,5 +1,14 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Native twin-accord courts now have kind-owned checkpoints for bound pairs and
+remaining half-pair clocks. New expeditions add The Paired Stones beyond the
+grove. Optional journey.reservePopulation keeps unadmitted destination bodies
+and puzzle nodes inside the shared finite cap; it never evicts existing actors.
+Schema eight pins that policy; omitted legacy descriptors keep their admission.
+Verify worldmass, native puzzles, generation QA and paired-stones-ui.cjs for
+crowded admission, native spell delivery, timed progress, Continue and old refusal.
+
+
 MemoryKindDef.rewardLabel and recallDescription explain native Memory purposes
 on drops, pickup history, bag cards and the Recall. Revealed results can focus
 their exact remaining bag item through the normal inventory gate. Verify

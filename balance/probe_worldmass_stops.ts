@@ -22,11 +22,11 @@ console.log('PASS route stations use arc length through bends and reject invalid
 const w=makeSimWorld('warrior',42),m=new WorldMassRuntime(42,'stops',cfg);m.attach(w);
 const oldConfig:MassAdventure=JSON.parse(canonical(cfg));delete oldConfig.journey!.stops;
 const ow=makeSimWorld('warrior',42),old=new WorldMassRuntime(42,'stops',oldConfig);old.attach(ow);
-assert.deepEqual(m.journey!.places.slice(0,5),old.journey!.places);
-assert.deepEqual(m.journey!.trails.slice(0,9),old.journey!.trails);
+assert.deepEqual(m.journey!.places.slice(0,6),old.journey!.places);
+assert.deepEqual(m.journey!.trails.slice(0,10),old.journey!.trails);
 const legacySave=old.snapshot(ow),legacyWorld=makeSimWorld('warrior',43);
 const legacy=new WorldMassRuntime(42,'stops',legacySave.config,legacySave);legacy.attach(legacyWorld,legacySave);
-assert.equal(legacy.journey!.places.length,5);
+assert.equal(legacy.journey!.places.length,6);
 console.log('PASS route stops leave every original place/trail unchanged; old Continue gains no stops');
 
 for(let seed=0;seed<64;seed++){

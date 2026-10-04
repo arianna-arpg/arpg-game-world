@@ -152,10 +152,10 @@ export function massAdventure(): MassAdventure {
     ],
     rewards: { source: 'worldmass/first-discovery-support-v3', earnFrom: ['cache','puzzle'], supports: [...STARTER_SUPPORTS],
       authoredSupports: ['splash', 'battering_ram'], level: 1, maxRewards: 1 },
-    journey: { source: 'worldmass/frontier-circuit', width: 120, color: '#62573e', clearingColor: '#454331',
+    journey: { reservePopulation: true, source: 'worldmass/frontier-circuit', width: 120, color: '#62573e', clearingColor: '#454331',
       notices: [
         { destination: 'west-camp', note: 'A patrol camp has taken the western road. A shrine stands by the approach; provisions remain among the tents.' },
-        { destination: 'east-camp', note: 'Crystals wait among the graves of a quiet grove. Kindling the lattice is a riddle; farther along the circuit, a side path leads to a ring of fading coals.' },
+        { destination: 'east-camp', note: 'Crystals wait among the graves of a quiet grove. Kindling the lattice is a riddle; farther along the circuit, a side path leads to a ring of fading coals. Past the grove, paired stones answer matching voices.' },
         { destination: 'north-ruin', note: 'Undead keep watch beneath the broken walls. Beyond the gate, the northern trail leads toward a stone guardian.' },
         { destination: 'south-ruin', note: 'Restless dead gather among ruined homes. A storm altar changes the ground on which you fight.' },
       ],
@@ -167,7 +167,9 @@ export function massAdventure(): MassAdventure {
         {id:'east-shrine',from:'east-camp',trail:'circuit',at:.48,offset:-460,radius:310,content:'windworn-shrine'},
       ],
       extensions: [{ id: 'north-stoneward', from: 'north-ruin', content: 'stoneward',
-        offset: {x: -400, y: -1500}, radius: 390, jitter: .08 }],
+        offset: {x: -400, y: -1500}, radius: 390, jitter: .08 },
+        {id:'east-paired-stones',from:'east-camp',content:'paired-stones',
+          offset:{x:1550,y:350},radius:350,jitter:.08}],
       destinations: [
         { id: 'west-camp', content: 'cinderwatch', edge: 'west', distance: 1050, radius: 310, jitter: .12 },
         { id: 'north-ruin', content: 'broken-gate', edge: 'north', distance: 1550, radius: 330, jitter: .16 },

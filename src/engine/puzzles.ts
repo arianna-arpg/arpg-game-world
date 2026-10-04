@@ -329,6 +329,8 @@ export const PUZZLE_CFG = {
   hum: 0.9,
   /** Native ember-ring burn window; persistent placements snapshot this value. */
   emberGutter: 7,
+  /** Native matching-pair window; placed courts snapshot it with their recipe. */
+  accordLinger: 3,
 } as const;
 
 /** THE ROUTING DIALS resolve spec → kind → config (the fabric's usual
@@ -862,7 +864,7 @@ const ACCORD_TINT = '#e8fff0';
 const ACCORD_SLIP = '#9ab0c8';
 
 function accordLingerOf(run: PuzzleRun): number {
-  return run.spec.linger ?? 3;
+  return run.spec.linger ?? PUZZLE_CFG.accordLinger;
 }
 /** idx ↔ partner: pair p seats nodes p and p+pairs (opposite on the ring). */
 function accordPairOf(run: PuzzleRun, idx: number): number {
@@ -879,6 +881,29 @@ registerPuzzleKind({
   count: [4, 6],
   quantize: 2, // pairs stay whole — the placer floors odd rolls
   label: 'the twin accord',
+  checkpoint: {
+    capture(run,h) {
+      const bound=run.state.bound as boolean[], pending=run.state.pending as ({half:number;until:number}|null)[];
+      return {bound:[...bound],pending:pending.map((p,i)=>!bound[i]&&p&&p.until>=h.now()?{half:p.half,left:p.until-h.now()}:null)};
+    },
+    restore(run,h,data) {
+      const d=data as {bound?:boolean[];pending?:({half:number;left:number}|null)[]}|null, pairs=run.nodes.length>>1;
+      if(!d||!Array.isArray(d.bound)||d.bound.length!==pairs||d.bound.some(v=>typeof v!=='boolean')
+        ||d.bound.every(Boolean)!==run.done||!Array.isArray(d.pending)||d.pending.length!==pairs
+        ||d.pending.some((p,i)=>p!==null&&(!p||typeof p!=='object'||d.bound![i]
+          ||!Number.isSafeInteger(p.half)||p.half<0||p.half>=run.nodes.length||p.half%pairs!==i
+          ||typeof p.left!=='number'||!Number.isFinite(p.left)||p.left<0||p.left>accordLingerOf(run)+1e-6)))
+        throw Error('Invalid accord checkpoint');
+      run.state.bound=[...d.bound];
+      run.state.pending=d.pending.map(p=>p?{half:p.half,until:h.now()+p.left}:null);
+      run.nodes.forEach((n,i)=>{
+        const p=i%pairs, pending=d.pending![p];
+        if(d.bound![p])h.kindle(n,9999);
+        else if(pending?.half===i)h.kindle(n,pending.left);
+        else h.quench(n);
+      });
+    },
+  },
   boot(run, h) {
     const pairs = run.nodes.length >> 1;
     const pool = run.spec.tones ?? [...ELEMENTAL_TYPES];

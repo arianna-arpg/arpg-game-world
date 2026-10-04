@@ -80,6 +80,8 @@ const atomicConfig: MassAdventure = JSON.parse(canonical(massAdventure()));
 atomicConfig.terrain.places=[];delete atomicConfig.journey!.stops;
 // The single-gate cohort fixture does not retain the public circuit's notices.
 delete atomicConfig.journey!.notices;
+// The isolated gate keeps only extensions whose parent destination remains.
+atomicConfig.journey!.extensions=atomicConfig.journey!.extensions!.filter(e=>e.from==='north-ruin');
 // This isolated Broken Gate fixture deliberately omits the western contract.
 delete atomicConfig.settlement!.quests;
 atomicConfig.journey!.destinations=atomicConfig.journey!.destinations.filter(d=>d.content==='broken-gate');
