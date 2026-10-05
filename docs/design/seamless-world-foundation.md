@@ -4220,3 +4220,23 @@ Save/Continue passed for seed 588611178 with all six ordinary-save sentinels
 intact and no fatal error. Thus the preparation, loot-label and service-work
 corrections are published. The patrol commitment and this morale correction
 remain separate later revisions until their own publication is verified.
+
+### Native Warrior pursuit coverage
+
+A further isolated native-country comparison exercises the Warrior's original
+Cleave through ordinary movement and held-skill inputs, without invulnerability,
+stat grants or extra resources. Three seeds were tried both healthy and at
+quarter life. The healthy exchanges are identical before/after in this sample.
+For the wounded survivor, seed 7108 exposes a terrain-dependent long chase:
+the previous rule needs ten swings and 19 seconds, whereas the corrected rule
+answers with its own projectile and falls to one swing after 4.35 seconds.
+Other seeds improve less or take slightly longer because the enemy now answers;
+this is not a blanket claim that all fights become shorter or easier.
+
+The nerve-recovery probe now retains that generated-country case, including
+its actual recipe admission, ordinary Cleave damage, unchanged healthy
+exchange and the survivor's real retaliatory damage. Its twelve-second old-rule
+control remains alive and silent; the corrected counterpart is defeated.
+All five probe groups and all three type checks pass. The prepared pursuit
+tracks the target every simulation frame; it is mechanistic evidence, not a
+human reaction-time test or an enjoyment verdict.
