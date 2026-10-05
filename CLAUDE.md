@@ -1,5 +1,11 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+MASS_FLOOR_VIEW budgets offscreen floor preparation by rows/phases and shares
+the canvas residency cap with completed pages. Only complete, current canvases
+publish; changed halos cancel partial work, and cold visible jumps still finish
+synchronously. Verify worldmass_floorwork, worldmass probes, genqa and
+floor-work-ui.cjs for prior pixels, prepared crossing and native continuation.
+
 makeViewportGuard verifies the isolated playtest client's 1280 by 850 content
 view before input, restores and logs geometry changes, and refuses an unrestorable
 view. Step responses report worldSeconds separately from requested frames.

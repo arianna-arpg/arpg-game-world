@@ -12,9 +12,24 @@ import type { MassQuestPin } from './quests';
 import { MASS_MAP_LABELS, placeMassMapLabels, type MapBox, type MassMapLabel } from './mapLabels';
 
 interface Baked { canvas: HTMLCanvasElement; revision: number; checkedRevision: number }
+interface FloorJob { work: Generator<void, HTMLCanvasElement>; revision: number; checkedRevision: number }
+export interface MassFloorPreparation { enabled: boolean; stepsPerDraw: number; halo: number; maxPending: number }
+/** Renderer work policy, independent of saved geography and simulation speed.
+ * A step is one palette/pixel/detail row or bounded finishing phase, not ms. */
+export const MASS_FLOOR_VIEW: MassFloorPreparation = { enabled: true, stepsPerDraw: 24, halo: 1, maxPending: 2 };
 /** Canvas assets are renderer-owned, disposable, and bounded independently of
  * persistent exploration. No camera-relative randomness or page-edge terrain. */
 export class MassPainter {
+  private readonly preparation: Readonly<MassFloorPreparation>;
+  private pending = new Map<string, FloorJob>();
+  constructor(preparation: MassFloorPreparation = MASS_FLOOR_VIEW) {
+    if (typeof preparation.enabled !== 'boolean'
+      || !Number.isSafeInteger(preparation.stepsPerDraw) || preparation.stepsPerDraw < 0 || preparation.stepsPerDraw > 1024
+      || !Number.isSafeInteger(preparation.halo) || preparation.halo < 0 || preparation.halo > 2
+      || !Number.isSafeInteger(preparation.maxPending) || preparation.maxPending < 0 || preparation.maxPending > 8)
+      throw Error('Invalid floor preparation budget');
+    this.preparation = Object.freeze({ ...preparation });
+  }
   private settlementLayer: HTMLCanvasElement | null = null;
   /** Composite native floors through a feathered verge, with neither an arena
    * rim nor a hard rectangle where the procedural country begins. */
@@ -46,34 +61,102 @@ export class MassPainter {
   private runtime: WorldMassRuntime | null = null;
   private ground: MassGround | null = null;
   private baked = new Map<string, Baked>();
+  private revision(mass: WorldMassRuntime, cell: MassCell): number {
+    // Palette blending and solid contours include the neighboring-cell halo.
+    let revision = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++)
+      revision = Math.max(revision, mass.state.terrainRevisionAt(neighborCell(cell, dx, dy)));
+    return revision;
+  }
+  private current(mass: WorldMassRuntime, cell: MassCell, value: {revision:number;checkedRevision:number}): boolean {
+    if (value.checkedRevision === mass.state.terrainRevision) return true;
+    if (value.revision !== this.revision(mass, cell)) return false;
+    value.checkedRevision = mass.state.terrainRevision;
+    return true;
+  }
   draw(ctx: CanvasRenderingContext2D, mass: WorldMassRuntime, x: number, y: number, w: number, h: number): void {
     if (this.runtime !== mass) {
-      this.runtime = mass; this.baked.clear();
+      this.runtime = mass; this.baked.clear(); this.pending.clear();
       this.ground = new MassGround(mass.config.ground, mass.generator.run.seed, mass.config.terrain.addressSpan);
     }
-    const span = mass.config.terrain.addressSpan;
-    // Renderer.cam is the viewport's top-left, not the hero/centre.
-    for (let cy = Math.floor(y / span); cy <= Math.floor((y + h) / span); cy++) {
-      for (let cx = Math.floor(x / span); cx <= Math.floor((x + w) / span); cx++) {
-        const at = mass.walk.at(cx * span, cy * span), key = cellKey(at);
-        let bake = this.baked.get(key);
-        if (!bake || bake.checkedRevision !== mass.state.terrainRevision) {
-          // Palette blending and solid contours read one neighboring cell.
-          // A page stamp includes that halo; a remote edit cannot rebake it.
-          let revision = 0;
-          for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++)
-            revision = Math.max(revision, mass.state.terrainRevisionAt(neighborCell(at, dx, dy)));
-          if (!bake || bake.revision !== revision)
-            bake = { canvas: this.bake(mass, at), revision, checkedRevision: mass.state.terrainRevision };
-          else bake.checkedRevision = mass.state.terrainRevision;
-        }
-        this.baked.delete(key); this.baked.set(key, bake);
-        ctx.drawImage(bake.canvas, cx * span, cy * span, span, span);
+    const span = mass.config.terrain.addressSpan, visible = new Set<string>();
+    const left = Math.floor(x/span), top = Math.floor(y/span), right = Math.floor((x+w)/span), bottom = Math.floor((y+h)/span);
+    // Visible ground is always complete and current. A sudden camera jump may
+    // drain remaining work synchronously; partial canvases never reach the view.
+    for (let cy = top; cy <= bottom; cy++) for (let cx = left; cx <= right; cx++) {
+      const at = mass.walk.at(cx*span, cy*span), key = cellKey(at); visible.add(key);
+      let bake = this.baked.get(key);
+      if (!bake || !this.current(mass, at, bake)) {
+        const job = this.pending.get(key);
+        const canvas = job && this.current(mass, at, job) ? this.finish(job.work) : this.bake(mass, at);
+        bake = {canvas, revision:this.revision(mass, at), checkedRevision:mass.state.terrainRevision};
       }
+      this.pending.delete(key);
+      this.baked.delete(key); this.baked.set(key, bake);
+      ctx.drawImage(bake.canvas, cx*span, cy*span, span, span);
     }
     while (this.baked.size > mass.stream.config.maxPages) this.baked.delete(this.baked.keys().next().value!);
+    this.prepare(mass, visible, {left, top, right, bottom}, {x:x+w/2,y:y+h/2});
+  }
+  private prepare(mass: WorldMassRuntime, visible: ReadonlySet<string>,
+    bounds: {left:number;top:number;right:number;bottom:number}, center: {x:number;y:number}): void {
+    const cfg=this.preparation, span=mass.config.terrain.addressSpan, cap=mass.stream.config.maxPages;
+    if (!cfg.enabled || !cfg.stepsPerDraw || !cfg.halo || !cfg.maxPending || visible.size>=cap) {
+      this.pending.clear(); return;
+    }
+    const candidates: {key:string;cell:MassCell;distance:number}[]=[];
+    for (let cy=bounds.top-cfg.halo;cy<=bounds.bottom+cfg.halo;cy++)
+      for (let cx=bounds.left-cfg.halo;cx<=bounds.right+cfg.halo;cx++) {
+        const cell=mass.walk.at(cx*span,cy*span),key=cellKey(cell);
+        if (visible.has(key) || !mass.stream.page(cell)) continue;
+        candidates.push({key,cell,distance:((cx+.5)*span-center.x)**2+((cy+.5)*span-center.y)**2});
+      }
+    candidates.sort((a,b)=>a.distance-b.distance || a.key.localeCompare(b.key));
+    // Keep a stable nearest set when the apron exceeds capacity, otherwise
+    // completed speculative pages would evict and rebuild one another forever.
+    const desired=candidates.slice(0,cap-visible.size);
+    const wanted=new Set(desired.map(c=>c.key));
+    const selected=desired.filter(({key,cell})=>{
+      const bake=this.baked.get(key);
+      return !bake || !this.current(mass,cell,bake);
+    }).slice(0,cfg.maxPending);
+    for (const key of this.pending.keys()) if (!selected.some(c=>c.key===key)) this.pending.delete(key);
+    for (const {key,cell} of selected) {
+      const job=this.pending.get(key);
+      if (job && this.current(mass,cell,job)) continue;
+      this.baked.delete(key);
+      this.pending.set(key,{work:this.bakeSteps(mass,cell),revision:this.revision(mass,cell),checkedRevision:mass.state.terrainRevision});
+    }
+    // Pending and completed canvases share one residency budget. Never evict
+    // visible ground to make room for speculative work.
+    while (this.baked.size+this.pending.size>cap) {
+      const keys=[...this.baked.keys()];
+      const key=keys.find(k=>!visible.has(k)&&!wanted.has(k)) ?? keys.find(k=>!visible.has(k));
+      if (key===undefined) break;
+      this.baked.delete(key);
+    }
+    let budget=cfg.stepsPerDraw;
+    for (const {key} of selected) {
+      const job=this.pending.get(key);
+      if (!job) continue;
+      while (budget>0) {
+        budget--;
+        const result=job.work.next();
+        if (result.done) {
+          this.baked.set(key,{canvas:result.value,revision:job.revision,checkedRevision:job.checkedRevision});
+          this.pending.delete(key); break;
+        }
+      }
+      if (!budget) break;
+    }
+  }
+  private finish(work: Generator<void, HTMLCanvasElement>): HTMLCanvasElement {
+    for (;;) { const result=work.next(); if (result.done) return result.value; }
   }
   private bake(mass: WorldMassRuntime, cell: MassCell): HTMLCanvasElement {
+    return this.finish(this.bakeSteps(mass,cell));
+  }
+  private *bakeSteps(mass: WorldMassRuntime, cell: MassCell): Generator<void, HTMLCanvasElement> {
     const { addressSpan: span, terrainCell: cs } = mass.config.terrain;
     const canvas = document.createElement('canvas'); canvas.width = span; canvas.height = span;
     const ctx = canvas.getContext('2d')!, cols = span / cs, page = mass.stream.page(cell);
@@ -83,17 +166,17 @@ export class MassPainter {
     // The one-cell halo comes from geographic truth, including negative pages.
     const colors: number[][] = [];
     const ground = this.runtime === mass && this.ground ? this.ground : new MassGround(mass.config.ground, mass.generator.run.seed, span);
-    for (let y = -1; y <= cols; y++) for (let x = -1; x <= cols; x++) {
+    for (let y = -1; y <= cols; y++) { for (let x = -1; x <= cols; x++) {
       const t = x >= 0 && y >= 0 && x < cols && y < cols ? page?.samples[y * cols + x] : undefined;
       const sample = t ?? mass.stream.sample({ ...cell, x: x * cs, y: y * cs });
       const lift = 1 + Math.max(-.14, Math.min(.14, (sample.fields.elevation ?? 0) * .13));
       const rgb = ground.color(sample, { ...cell, x: (x + .5) * cs, y: (y + .5) * cs }).map(v => v * lift);
       colors.push(rgb);
-    }
+    } yield; }
     const step = 4, small = document.createElement('canvas'); small.width = span / step; small.height = span / step;
     const sc = small.getContext('2d')!, pixels = sc.createImageData(small.width, small.height);
     const atColor = (x: number, y: number): number[] => colors[(y + 1) * (cols + 2) + x + 1];
-    for (let y = 0; y < small.height; y++) for (let x = 0; x < small.width; x++) {
+    for (let y = 0; y < small.height; y++) { for (let x = 0; x < small.width; x++) {
       const gx = (x * step + step / 2) / cs - .5, gy = (y * step + step / 2) / cs - .5;
       const ix = Math.floor(gx), iy = Math.floor(gy), fx = gx - ix, fy = gy - iy;
       const a = atColor(ix, iy), b = atColor(ix + 1, iy), c = atColor(ix, iy + 1), d = atColor(ix + 1, iy + 1);
@@ -101,12 +184,12 @@ export class MassPainter {
       const i = (y * small.width + x) * 4;
       for (let ch = 0; ch < 3; ch++) pixels.data[i + ch] = (a[ch] * (1 - fx) + b[ch] * fx) * (1 - fy) + (c[ch] * (1 - fx) + d[ch] * fx) * fy + jitter;
       pixels.data[i + 3] = 255;
-    }
+    } yield; }
     sc.putImageData(pixels, 0, 0);
-    ctx.drawImage(small, 0, 0, span, span);
+    ctx.drawImage(small, 0, 0, span, span); yield;
     const solid = new Path2D(), trailSurface = new Path2D();
     const detailSurfaces = new Map<string,Path2D>();
-    for (let y = 0; y < cols; y++) for (let x = 0; x < cols; x++) {
+    for (let y = 0; y < cols; y++) { for (let x = 0; x < cols; x++) {
       const at = { ...cell, x: x * cs, y: y * cs };
       const t = page?.samples[y * cols + x] ?? mass.stream.sample(at);
       const noise = massHash(x + ',' + y, salt);
@@ -148,19 +231,19 @@ export class MassPainter {
           ctx.stroke();
         }
       }
-    }
+    } yield; }
     // Fractured stone has its own larger geographic lattice. Planes cross
     // physical tile/page joins; clipping preserves the exact collision contour.
     const origin = localOffset({ ...cell, x: 0, y: 0 }, { ...mass.origin, x: 0, y: 0 }, span), grain = cs * 4;
     for(const [region,surface] of detailSurfaces){
       ctx.save();ctx.clip(surface);ctx.translate(-origin.x,-origin.y);
       paintMassSurfaceDetail(ctx,{x:origin.x,y:origin.y,w:span,h:span},mass.generator.run.seed,region);
-      ctx.restore();
+      ctx.restore(); yield;
     }
     if (mass.journey) {
       ctx.save(); ctx.clip(trailSurface); ctx.translate(-origin.x, -origin.y);
       paintMassTrailWear(ctx, mass.journey.trails, {x:origin.x,y:origin.y,w:span,h:span}, mass.generator.run.seed);
-      ctx.restore();
+      ctx.restore(); yield;
     }
     const vertex = (gx: number, gy: number): { x: number; y: number } => {
       const h = massHash('stone/'+gx+','+gy,mass.generator.run.seed);
@@ -168,7 +251,7 @@ export class MassPainter {
         y: (gy+.15+((h>>>8)&255)/255*.7)*grain-origin.y };
     };
     ctx.save(); ctx.clip(solid);
-    for (let gy=Math.floor(origin.y/grain)-1;gy<=Math.ceil((origin.y+span)/grain);gy++)
+    for (let gy=Math.floor(origin.y/grain)-1;gy<=Math.ceil((origin.y+span)/grain);gy++) {
       for (let gx=Math.floor(origin.x/grain)-1;gx<=Math.ceil((origin.x+span)/grain);gx++) {
         const a=vertex(gx,gy),b=vertex(gx+1,gy),c=vertex(gx+1,gy+1),d=vertex(gx,gy+1);
         const shade=massHash('plane/'+gx+','+gy,mass.generator.run.seed);
@@ -178,6 +261,7 @@ export class MassPainter {
           ctx.lineTo(triangle[1].x,triangle[1].y);ctx.lineTo(triangle[2].x,triangle[2].y);ctx.closePath();ctx.fill();
         }
       }
+    yield; }
     ctx.restore();
     return canvas;
   }

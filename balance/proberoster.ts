@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_worldmass_floorwork.ts', status: 'green', tier: 'fast', why: 'Budgeted floor preparation, atomic publication, cold fallback, invalidation and shared residency cap' },
   { probe: 'probe_worldmass_dirtyterrain.ts', status: 'green', tier: 'fast', why: 'Scoped page/sample invalidation, preserved pending work, older and failed restore, painter halo and cache ownership' },
   { probe: 'probe_rewardlabels.ts', status: 'green', tier: 'fast', why: 'Persistent loot label packing, native identity attribution, visible-space refusal, bounded retention and old/new snapshot shells' },
   { probe: 'probe_puzzlecalm.ts', status: 'green', tier: 'fast', why: 'Real native riddle contact preserves existing combat heat, immediate support fitting, hostile and forged-node refusal, configurable policy and save purity' },

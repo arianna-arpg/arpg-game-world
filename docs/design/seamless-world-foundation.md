@@ -184,7 +184,8 @@ the log go to ignored `balance/reports/worldmass-*` files.
   Ecology pages near retained actors/effects also remain resident, so their
   count can exceed the terrain page budget.
 - Terrain sampling is budgeted, but an uncached visible texture can still bake
-  synchronously. Terrain edits now invalidate their sampled pages and neighboring
+  synchronously. Offscreen floor artwork now prepares in bounded row/phase
+  batches and publishes only when complete. Terrain edits invalidate sampled pages and neighboring
   floor dependencies. There is no proven
   crossing frame-time bound yet; the UI harness logs batch timings, not FPS.
 - New descriptors record coarse native-sight survey cells; old maps retain page
@@ -4409,3 +4410,45 @@ zero, active 60-frame requests yielded 1.002 seconds, and Continue resumed the
 clock. It does not claim actual tick counts, measure input processing time, or
 retroactively upgrade old requested-frame logs. All three type checks pass.
 This is review infrastructure, with no gameplay, save-schema or balance change.
+
+### Prepare complete terrain artwork before the camera arrives
+
+MASS_FLOOR_VIEW now owns an optional renderer preparation policy: default
+24 row/phase advances per draw, a one-page apron, and two pending jobs. Work
+starts only for terrain pages already prepared by the stream. Palette rows,
+pixel rows, cell detail and finishing phases retain their original order and
+geographic inputs. A completed canvas publishes atomically; a partial canvas
+never appears on screen. Entering a partially prepared page finishes the same
+job, while a completely cold page retains the full synchronous fallback.
+
+Pending and finished canvases share the existing page residency cap. The
+nearest desired apron remains stable when it exceeds spare capacity, avoiding
+a loop of evicting and rebuilding speculative ground. Leaving that apron
+discards its unfinished work. Terrain and neighboring palette/contour edits
+cancel stale jobs; unrelated edits preserve their progress. Runtime changes
+and restores keep their existing invalidation ownership. This policy changes
+no terrain, combat, discovery claims, run descriptor or save schema.
+
+The six-group worldmass_floorwork probe checks quota, atomic publication,
+prepared and partial crossings, cold fallback, distant/halo edits, restore,
+runtime ownership, negative huge addresses, simulation RNG/state purity,
+combined residency, oversubscribed-apron stability, disabled preparation and
+invalid policy refusal. All 43 worldmass probes and all three type checks pass.
+Generation QA passes 869 cases by three seeds with zero failures and four
+existing-style geometry warnings.
+
+Controlled real-client QA compares the actual previous frozen client against
+the candidate. After stationary preparation, entering the neighboring tile
+needs zero fresh bakes versus one previously. Initial and neighboring floor
+pixels match exactly. Background work never exceeds 24 advances per draw in
+that fixture; nine completed/pending pages stay within its 25-page cap. An edit
+while work is unfinished reconstructs exactly the same image as a complete
+cold bake. Native checked character/world state survives current/prior/current
+Continue. All seven page/canvas pairs and three floor images were inspected,
+including the 800 by 600 view.
+
+These are deterministic work-count, pixel and persistence checks. A row/phase
+is not a millisecond; total render time, cold starts/jumps and large finishing
+phases still have no guaranteed frame-time bound. This change reduces the need
+to begin a full bake at an ordinary prepared crossing. It does not establish
+continuous human frame rate or complete infinite-world streaming.
