@@ -16241,13 +16241,13 @@ export const MONSTERS: Record<string, MonsterDef> = {
         // one kill, a whole flank's worth of read, no new machinery.
         boldNearLeader: 380,
       },
-      // As its nerve goes it stops trading and starts backing off — conduct
-      // that changes BEFORE the break, through the pack layer's own
-      // registered courage band. At the routed floor the finite morale
-      // clock owns flight; after rallying, the native skirmisher fights back.
+      // Fraying courage lengthens its escape between throws. It still
+      // commits to attacks, giving pursuit a counterplay window BEFORE
+      // the break instead of an attack-free retreat until its wounds heal.
+      // At zero nerve the finite morale clock owns flight and rallying.
       rules: [{
         when: { ext: { nerveAbove: 0, nerveBelow: 0.45 } },
-        use: { move: { style: 'retreat' }, tempo: { pauseFor: [0.4, 0.9] } },
+        use: { move: { style: 'hitAndRun', withdraw: [1.8, 2.4] }, tempo: { pauseFor: [0.4, 0.9] } },
       }],
     },
     tells: CRAVEN_COLLAPSE,

@@ -8,7 +8,7 @@ import { setSimTap } from '../src/engine/tap';
 const brain=MONSTERS.gnoll_bonepicker.brain!;
 const exercise=(hz:number,prior:boolean)=>{
  const restore=seedGlobalRandom(113042);
- const rules=brain.rules!.map(r=>{const ext={...r.when.ext};delete ext.nerveAbove;return {...r,when:{...r.when,ext}};});
+ const rules=brain.rules!.map(r=>{const ext={...r.when.ext};delete ext.nerveAbove;return {...r,when:{...r.when,ext},use:{...r.use,move:{style:'retreat' as const}}};});
  // Previous authored rule, on its own definition identity so normalization
  // cannot reuse the current definition's cached tuning.
  MONSTERS.gnoll_bonepicker.brain=prior?{...brain,rules}:brain;
@@ -62,7 +62,7 @@ console.log('PASS strict courage-band boundaries, native rule composition, inval
 // movement thereafter uses ordinary Warrior inputs, with no invulnerability.
 const warriorCountry=(prior:boolean,wounded:boolean)=>{
  const restore=seedGlobalRandom(7108);
- const rules=brain.rules!.map(r=>{const ext={...r.when.ext};delete ext.nerveAbove;return {...r,when:{...r.when,ext}};});
+ const rules=brain.rules!.map(r=>{const ext={...r.when.ext};delete ext.nerveAbove;return {...r,when:{...r.when,ext},use:{...r.use,move:{style:'retreat' as const}}};});
  MONSTERS.gnoll_bonepicker.brain=prior?{...brain,rules}:brain;
  try{
   const w=makeSimWorld('warrior',7108);w.startWorldMass(7108);const m=w.massRuntime!;

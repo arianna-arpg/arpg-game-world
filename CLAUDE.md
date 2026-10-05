@@ -1,5 +1,11 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Fraying Bonepicker courage uses native hitAndRun with a longer authored
+withdraw interval, so modest wounds still leave retaliatory openings before
+panic. Full courage, captain support and the finite rout retain their native
+conduct. Verify frayingnerve, nerverecovery, pack, tacticalai, worldmass_foragers,
+simulation smoke and fraying-nerve-ui.cjs; historical controls pin retreat.
+
 terrainRevisionAt scopes sampled-page and floor-cache invalidation to edited
 geography. Unrelated pages and partial jobs retain their work; the painter
 includes its neighboring palette/contour halo. Restore invalidates all local

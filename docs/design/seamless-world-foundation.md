@@ -4300,3 +4300,70 @@ verdict is preserved. A request for another fresh reviewer hit the agent-thread
 limit; the same reviewer is now separately returning to an immutable new client,
 without being told its changes. That return must not be called fresh-context
 or blind. Overall independent acceptance remains unmet.
+
+### Fraying skirmishers retain an answering window
+
+The returning Warrior reviewer still stopped during Bonepicker pursuit.
+A distinct authored gap remained above the panic threshold: nerve between
+zero and 0.45 selected an attack-free retreat while a modest wound healed.
+The previous correction covered the routed floor, not this intermediate band.
+The first evaluation can still begin one normal throw using the preceding
+nerve stamp; subsequent attacks stop while that retreat condition holds.
+
+The Bonepicker now uses the existing hitAndRun kernel in this band, with its
+own 1.8 to 2.4 second withdrawal interval and existing hesitation. It keeps its
+cowardly spacing but commits to another native throw before retreating again.
+No new movement algorithm, resource grant, stat change or save field is added.
+Other retreating species keep their authored conduct. Historical regression
+controls now explicitly pin the old retreat style instead of inheriting the
+candidate's newly changed style.
+
+The new four-group frayingnerve probe passes at 30, 60 and 120 Hz. It observes
+a second native throw inside the band, and exact paired healthy, routed and
+captain-supported traces. A prepared generated-country Warrior exchange uses
+ordinary movement and Cleave, with real retaliatory damage and no invulnerability:
+seed 451 finishes in 4.98 seconds and three swings versus 12.92 seconds and
+seven swings. The separate three-seed diagnostic also improved the modest-wound
+pursuit; healthy and quarter-life controls were identical in that sample.
+These frame-by-frame pursuit scripts do not establish human combat enjoyment.
+
+All three type checks pass, along with nerverecovery's five groups, pack's
+110 checks, tacticalai's 27, worldmass_foragers' five and five smoke scenarios
+by five seeds without scenario warnings. Browser QA compares the actual frozen
+terrain-cache client against this candidate. The old survivor retreats after
+its first throw; the candidate visibly begins a second Hurl Debris at 2.40
+seconds and damages the pursuing hero. Exact checked native state survives
+current/prior/current Continue. The prepared survey is settled before saving;
+transient AI clocks are not claimed as persistent. All nine page/canvas pairs,
+including 800 by 600, were inspected. The build is frozen separately for a
+new fresh-context critic, whose ordinary-input review remains pending.
+
+### Published checkpoint and completed independent reviews
+
+Revision 6c9c21c5ca719af46a2d5ffbcd6954534756036f passed CI 37247600911
+and Pages 37248905493. The public preview metadata confirmed that exact
+revision at 2026-10-05T00:49:55.425Z. Remote native Save/Continue passed for
+seed 2393073883 with all six ordinary-save sentinels intact and no fatal error.
+This publishes the Warrior regression and scoped terrain-cache work.
+
+The preparation-build reviewer completed Western Watch, earned Arcing and
+two passives, and deliberately activated Change the Rhythm at Broken Gate.
+It stopped with that camp unfinished; the northern boss was not reached.
+The reward-label reviewer earned Splitting, a mana ring and two passives,
+actually used the altered spell in another fight, then solved Memorial Grove.
+Both valued the build decisions, but combat pursuit and travel did not sustain
+their desire to play. Their original mixed reports remain intact: respectively
+138 pairs / 5,659 requested frames and 130 pairs, with complete evidence indexes.
+
+The returning Warrior reviewer killed two Prowlers and visibly hit the
+Bonepicker once, then stopped amid repeated close approaches and missed
+Cleaves. Its report remains negative, with 62 inspected pairs and 2,812
+requested frames (2,811 associated with successful captures). This was a
+returning reviewer, not fresh-context replication. Aiming correction and the
+Swiftness shrine confound comparison with its earlier run.
+
+All three observed native Save/Continue successfully within their documented
+scope. Requested frame steps and wall-clock tool time are not measured world
+runtime. Mandatory instructions exposed features, and no commercial game was
+played. Independent acceptance remains unmet; these reports are evidence of
+specific strengths and unresolved weaknesses, not a quality sign-off.
