@@ -1,5 +1,12 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+terrainRevisionAt scopes sampled-page and floor-cache invalidation to edited
+geography. Unrelated pages and partial jobs retain their work; the painter
+includes its neighboring palette/contour halo. Restore invalidates all local
+cache stamps without adding save fields. Verify worldmass probes, genqa and
+dirty-terrain-ui.cjs for actual old/new bake counts, exact rendered pixels
+and native current/prior/current continuation. This is not an FPS guarantee.
+
 nerveAbove composes with nerveBelow to bound authored courage bands.
 The Bonepicker backs away while fraying, then resumes its native skirmishing
 when the finite wound panic ends. Verify nerverecovery, probe_pack.ts,

@@ -13,7 +13,7 @@ export class MassStream {
   private pages = new Map<string, MassPage>();
   private pending = new Map<string, Job>();
   private needed = new Map<string, MassCell>();
-  private samples = new Map<string, MassTerrain>();
+  private samples = new Map<string, { terrain: MassTerrain; revision: number }>();
   private stateRevision = -1;
   readonly cols: number;
   constructor(readonly generator: MassGenerator, readonly state: MassState, readonly config: MassStreamConfig) {
@@ -25,10 +25,17 @@ export class MassStream {
   }
   private syncChanges(): void {
     if (this.stateRevision === this.state.terrainRevision) return;
-    // Correct conservative invalidation; page-level dirty indexing can refine it.
-    this.pages.clear(); this.pending.clear(); this.samples.clear();
+    // Unrelated edits preserve completed pages and partially prepared work.
+    // Samples validate lazily below, so an edit never scans the whole LRU.
+    for (const [key, page] of this.pages)
+      if (page.revision !== this.state.terrainRevisionAt(page.cell)) this.pages.delete(key);
+    for (const [key, job] of this.pending)
+      if (job.revision !== this.state.terrainRevisionAt(job.cell)) this.pending.delete(key);
     this.stateRevision = this.state.terrainRevision;
-    for (const [key, cell] of this.needed) this.pending.set(key, { key, cell, samples: [], revision: this.stateRevision });
+    const ordered = new Map<string, Job>();
+    for (const [key, cell] of this.needed) if (!this.pages.has(key))
+      ordered.set(key, this.pending.get(key) ?? { key, cell, samples: [], revision: this.state.terrainRevisionAt(cell) });
+    this.pending = ordered;
   }
   request(cells: readonly MassCell[]): void {
     const next = new Map<string, MassCell>();
@@ -43,7 +50,7 @@ export class MassStream {
     // Keep the nearest-first caller order, including previously queued pages.
     const ordered = new Map<string, Job>();
     for (const [key, cell] of next) if (!this.pages.has(key))
-      ordered.set(key, this.pending.get(key) ?? { key, cell, samples: [], revision: this.stateRevision });
+      ordered.set(key, this.pending.get(key) ?? { key, cell, samples: [], revision: this.state.terrainRevisionAt(cell) });
     this.pending = ordered;
     while (this.pages.size + this.pending.size > this.config.maxPages) {
       const key = [...this.pages.keys()].find(k => !next.has(k));
@@ -54,14 +61,14 @@ export class MassStream {
   sample(at: MassAddress): MassTerrain {
     this.syncChanges();
     const p = this.state.atCell(at), key = this.state.key(p);
-    const hit = this.samples.get(key);
-    if (hit) { this.samples.delete(key); this.samples.set(key, hit); return hit; }
+    const revision = this.state.terrainRevisionAt(p), hit = this.samples.get(key);
+    if (hit?.revision === revision) { this.samples.delete(key); this.samples.set(key, hit); return hit.terrain; }
     const half = this.generator.spec.terrainCell / 2;
     const base = this.generator.terrainAt({ ...p, x: p.x + half, y: p.y + half });
     const patch = this.state.patchAt(p);
     const result: MassTerrain = patch ? Object.freeze({ ...base, region: patch.region, color: patch.color,
       source: Object.freeze({ ...base.source, rule: 'terrain-change', source: patch.cause }) }) : base;
-    this.samples.set(key, result);
+    this.samples.delete(key); this.samples.set(key, { terrain: result, revision });
     if (this.samples.size > this.config.maxSamples) this.samples.delete(this.samples.keys().next().value!);
     return result;
   }

@@ -184,7 +184,8 @@ the log go to ignored `balance/reports/worldmass-*` files.
   Ecology pages near retained actors/effects also remain resident, so their
   count can exceed the terrain page budget.
 - Terrain sampling is budgeted, but an uncached visible texture can still bake
-  synchronously. Terrain edits invalidate all floor pages. There is no proven
+  synchronously. Terrain edits now invalidate their sampled pages and neighboring
+  floor dependencies. There is no proven
   crossing frame-time bound yet; the UI harness logs batch timings, not FPS.
 - New descriptors record coarse native-sight survey cells; old maps retain page
   discovery. This is not pixel-perfect visibility history. Saves remain whole-run
@@ -4240,3 +4241,62 @@ control remains alive and silent; the corrected counterpart is defeated.
 All five probe groups and all three type checks pass. The prepared pursuit
 tracks the target every simulation frame; it is mechanistic evidence, not a
 human reaction-time test or an enjoyment verdict.
+
+### Terrain consequences invalidate their own geography
+
+The stream and floor painter previously discarded all sampled/prepared/baked
+terrain whenever any terrain patch changed. A remote consequence or newly
+admitted clearing therefore forced unchanged visible ground to be prepared
+again. The state now indexes each edited page with a monotonic local cache
+stamp. This is derived bookkeeping proportional to edited pages, not another
+saved world field. Restore resets every local stamp, even when loading an
+older checkpoint, and failed restore remains atomic.
+
+The stream keeps unaffected completed pages and partial jobs, restarts touched
+jobs atomically, and preserves the caller's nearest-first scheduling order.
+Individual sampled cells validate lazily against their page stamp; invalidation
+does not scan the entire sample LRU. The floor painter includes neighboring
+pages in its palette/contour dependency stamp, so edits across an edge or corner
+cannot leave a stale blend. Unchanged frames still use the single global
+revision as a cheap no-change check. Native movement/ray invalidation remains
+conservative. Generation output, actors, gameplay rules and save schema do not
+change.
+
+All three type checks and all 42 worldmass probes pass. The new five-group
+probe covers signed huge addresses, dimensions, no-op edits, nonterrain claims,
+real page/sample identity, partial work, touched-job restart, queue priority,
+older/failed restore, warm/cold samples, painter halo, runtime ownership, RNG
+purity and cache bounds. Generation QA passes 869 cases by three seeds with
+zero failures and four existing-style geometry warnings.
+
+Controlled browser QA uses the actual previous client and candidate renderer.
+A distant edit makes the old client bake its unchanged sampled floor once;
+the candidate performs zero bakes and produces identical pixels. Local and
+neighboring-edge edits each rebake the affected floor, change its pixels, and
+match a forced complete rebuild byte for byte. The floor images show the local
+patch and neighboring blend; the full scene remains coherent. Exact native
+current/prior/current Continue preserves terrain consequences alongside the
+checked character, item, enemy and world state. Ten page/canvas pairs and three
+floor images (23 images total), including an 800 by 600 viewport, were inspected.
+These are deterministic cache/work and pixel checks, not real-time FPS or an
+end-to-end crossing-time bound.
+
+The patrol and morale revision d5b3ce204607b3329d44424aee9068c983b054aa passed
+CI 37245449972 and Pages 37246602265. Public build metadata confirmed that
+exact revision at 2026-10-05T00:14:08.262Z. Remote browser Save/Continue passed
+for seed 731011706 with all six ordinary-save sentinels intact and no fatal
+error. The subsequent Warrior regression and this cache revision are later
+commits awaiting their own publication.
+
+The Warrior reviewer of the frozen patrol-only build stopped after two camp
+kills and three visibly missed close-range Cleave attempts against the surviving
+Bonepicker. Preparation, combat labels and native Save/Continue worked; its
+desire to continue was negative. All 55 page/canvas pairs were inspected.
+The log contains 3,294 requested frames, 3,293 linked to successful captures,
+including 944 in combat/pursuit (about 15.76 nominal seconds). These are not
+independently confirmed advancing world ticks. The class was assigned for
+coverage and mandatory documentation exposed feature names. That original
+verdict is preserved. A request for another fresh reviewer hit the agent-thread
+limit; the same reviewer is now separately returning to an immutable new client,
+without being told its changes. That return must not be called fresh-context
+or blind. Overall independent acceptance remains unmet.

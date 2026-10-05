@@ -1,4 +1,4 @@
-import { address, cellKey, type MassAddress } from './address';
+import { address, cellKey, type MassAddress, type MassCell } from './address';
 import type { MassRun, MassTerrainPatch } from './contracts';
 import { canonical, freezeData } from './random';
 
@@ -15,6 +15,13 @@ export class MassState {
   revision = 0;
   /** Terrain consumers need not rebuild when discovery/reward claims change. */
   terrainRevision = 0;
+  private terrainPages = new Map<string, number>();
+  private terrainRestoreRevision = 0;
+  /** Local cache stamps are derived bookkeeping, never saved world content.
+   * A restore invalidates every page even when loading an older checkpoint. */
+  terrainRevisionAt(cell: MassCell): number {
+    return Math.max(this.terrainRestoreRevision, this.terrainPages.get(cellKey(cell)) ?? 0);
+  }
   constructor(readonly run: Readonly<MassRun>, readonly cell: number) {
     if (!Number.isSafeInteger(cell) || cell <= 0 || run.addressSpan % cell) throw new Error('Invalid change lattice');
     this.run = freezeData({ ...run });
@@ -35,6 +42,7 @@ export class MassState {
     const key = this.key(normalized.address), before = this.patches.get(key);
     if (before && canonical(before) === canonical(normalized)) return;
     this.patches.set(key, normalized); this.revision++; this.terrainRevision++;
+    this.terrainPages.set(cellKey(normalized.address), this.terrainRevision);
   }
   /** Returns true exactly once, allowing caller-owned reward/loot semantics. */
   claim(kind: string, id: string): boolean {
@@ -74,5 +82,6 @@ export class MassState {
     // Revision is local invalidation, monotonic even when loading an earlier save.
     this.revision = Math.max(this.revision + 1, data.revision);
     this.terrainRevision++;
+    this.terrainPages.clear(); this.terrainRestoreRevision = this.terrainRevision;
   }
 }

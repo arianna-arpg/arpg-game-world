@@ -1,4 +1,4 @@
-import { cellKey, localOffset, type MassCell } from './address';
+import { cellKey, localOffset, neighborCell, type MassCell } from './address';
 import { massHash } from './random';
 import type { WorldMassRuntime } from './runtime';
 import { regionKind } from '../world/regions';
@@ -11,7 +11,7 @@ import { MassGround } from './ground';
 import type { MassQuestPin } from './quests';
 import { MASS_MAP_LABELS, placeMassMapLabels, type MapBox, type MassMapLabel } from './mapLabels';
 
-interface Baked { canvas: HTMLCanvasElement; revision: number }
+interface Baked { canvas: HTMLCanvasElement; revision: number; checkedRevision: number }
 /** Canvas assets are renderer-owned, disposable, and bounded independently of
  * persistent exploration. No camera-relative randomness or page-edge terrain. */
 export class MassPainter {
@@ -57,8 +57,15 @@ export class MassPainter {
       for (let cx = Math.floor(x / span); cx <= Math.floor((x + w) / span); cx++) {
         const at = mass.walk.at(cx * span, cy * span), key = cellKey(at);
         let bake = this.baked.get(key);
-        if (!bake || bake.revision !== mass.state.terrainRevision) {
-          bake = { canvas: this.bake(mass, at), revision: mass.state.terrainRevision };
+        if (!bake || bake.checkedRevision !== mass.state.terrainRevision) {
+          // Palette blending and solid contours read one neighboring cell.
+          // A page stamp includes that halo; a remote edit cannot rebake it.
+          let revision = 0;
+          for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++)
+            revision = Math.max(revision, mass.state.terrainRevisionAt(neighborCell(at, dx, dy)));
+          if (!bake || bake.revision !== revision)
+            bake = { canvas: this.bake(mass, at), revision, checkedRevision: mass.state.terrainRevision };
+          else bake.checkedRevision = mass.state.terrainRevision;
         }
         this.baked.delete(key); this.baked.set(key, bake);
         ctx.drawImage(bake.canvas, cx * span, cy * span, span, span);
