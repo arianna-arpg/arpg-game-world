@@ -168,6 +168,7 @@ import { drawRuneRing } from './vis/runeRing';
 import { registerVisCache, trimVisCaches } from './vis/caches';
 import { wrapNotice } from './vis/noticeLayout';
 import { ObjectiveReadout } from './vis/objectiveReadout';
+import { drawHudText } from './vis/hudText';
 import { resolveSpeech, revealedChars, wrapSpeech, resolveNameTokens, dodgeSpeechBox, layoutSpeechSeats, speechTailBase, type SpeechStyle, type SpeechRect, type SpeechSeatMemory } from './vis/speech';
 import { drawEdgeOverlay, qFrac } from './vis/overlays';
 import { canvasCap, canvasCapsReport } from './vis/canvasCaps';
@@ -8614,7 +8615,7 @@ export class Renderer {
     const titleLine = m.name !== m.classDef.name
       ? `${m.name}  —  Level ${p.level} ${m.classDef.name}`
       : `${m.classDef.name}  —  Level ${p.level}`;
-    ctx.fillText(titleLine, x, 26);
+    drawHudText(ctx, titleLine, x, 26);
     // CHARACTER-MODE chip (data-driven — any stage that declares a badge shows
     // one): the Immortal's SWORN → UNDYING standing, at a glance, in mode color.
     const stage = world.seatStageDef(seat);
@@ -8631,7 +8632,7 @@ export class Renderer {
       ctx.strokeRect(chipX, 14, bw, 15);
       ctx.fillStyle = col;
       ctx.textAlign = 'left'; // the badge keeps its own left edge inside the chip
-      ctx.fillText(stage.badge, chipX + 6, 25);
+      drawHudText(ctx, stage.badge, chipX + 6, 25);
       ctx.textAlign = align;
     }
     let hintY = worldInfo ? 100 : 46; // a guest's hints start right under its title
@@ -8641,7 +8642,7 @@ export class Renderer {
     if (!worldInfo && this.couchPadLost.includes(seat.id)) {
       ctx.font = 'bold 12px Verdana';
       ctx.fillStyle = '#e8685a';
-      ctx.fillText('CONTROLLER DISCONNECTED — reconnect to rejoin', x, hintY);
+      drawHudText(ctx, 'CONTROLLER DISCONNECTED — reconnect to rejoin', x, hintY);
       hintY += 18;
     }
     if (worldInfo) {
@@ -8669,11 +8670,11 @@ export class Renderer {
       const caveD = sceneGround ? undefined : world.zone.caveDepth;
       const stratText = caveD != null
         ? ` · ${stratumOf(caveD).name} · Depth ${caveD}` : '';
-      ctx.fillText(`${locality.name}${lvText}${stratText}`, x, 46);
+      drawHudText(ctx, `${locality.name}${lvText}${stratText}`, x, 46);
       // Living-world status: time of day · weather · who holds this ground.
       ctx.font = '11px Verdana';
       ctx.fillStyle = '#9ab0c8';
-      ctx.fillText(sceneGround ? dayCycle(sceneSkyTime(world)).label
+      drawHudText(ctx, sceneGround ? dayCycle(sceneSkyTime(world)).label
         : world.sim.hudLine(world.zone, world.time), x, 64);
       ctx.font = '12px Verdana';
       ctx.fillStyle = (massSite?.activity?.complete ?? world.objectiveDone) ? '#ffd700' : '#9a96b8';
@@ -8694,7 +8695,7 @@ export class Renderer {
     // A couch GUEST has no bar of their own, so the line still speaks to them.
     if (m.passivePoints > 0 && !worldInfo) {
       ctx.fillStyle = '#ffd700';
-      ctx.fillText(`${m.passivePoints} passive point${m.passivePoints > 1 ? 's' : ''} — press ${hintKey('panelTree')}`, x, hintY);
+      drawHudText(ctx, `${m.passivePoints} passive point${m.passivePoints > 1 ? 's' : ''} — press ${hintKey('panelTree')}`, x, hintY);
       hintY += 18;
     }
     // (The skill-point nudge retired with the point lane — skill levels are
@@ -8702,14 +8703,14 @@ export class Renderer {
     if (worldInfo && world.mireilleXpBuff > 0) {
       const t = Math.ceil(world.mireilleXpBuff);
       ctx.fillStyle = '#a0d8a0';
-      ctx.fillText(`✦ +5% XP blessing — ${Math.floor(t / 60)}:${(t % 60).toString().padStart(2, '0')}`, x, hintY);
+      drawHudText(ctx, `✦ +5% XP blessing — ${Math.floor(t / 60)}:${(t % 60).toString().padStart(2, '0')}`, x, hintY);
       hintY += 18;
     }
     if (worldInfo) {
       const rep = world.sim.reputation.hud();
       if (rep) {
         ctx.fillStyle = '#e8c87a';
-        ctx.fillText(rep, x, hintY);
+        drawHudText(ctx, rep, x, hintY);
         hintY += 18;
       }
     }

@@ -1,3 +1,4 @@
+import { drawHudText } from './hudText';
 import type { MassQuestPin } from '../../worldmass/quests';
 import { VIS_CFG } from './visConfig';
 
@@ -33,7 +34,7 @@ export function drawQuestCompass(ctx: CanvasRenderingContext2D, lines: readonly 
       text = points.join('') + '…';
     }
     ctx.fillStyle = line.ready ? c.ready : c.active;
-    ctx.fillText(text, x, y); y += c.lineHeight;
+    drawHudText(ctx, text, x, y); y += c.lineHeight;
   }
   ctx.restore();
   return y;

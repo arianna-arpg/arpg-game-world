@@ -1,3 +1,4 @@
+import { drawHudText } from './hudText';
 import { wrapNotice } from './noticeLayout';
 import { VIS_CFG } from './visConfig';
 
@@ -20,7 +21,7 @@ export class ObjectiveReadout {
       this.lines = wrapNotice(bounded, width, c.maxRows, value => ctx.measureText(value).width);
       this.key = key;
     }
-    this.lines.forEach((line, i) => ctx.fillText(line, x, y + i * c.lineHeight));
+    this.lines.forEach((line, i) => drawHudText(ctx, line, x, y + i * c.lineHeight));
     ctx.restore();
     return y + Math.max(0, this.lines.length - 1) * c.lineHeight + c.gap;
   }

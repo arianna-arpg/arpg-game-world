@@ -4588,3 +4588,23 @@ vulnerable expedition. The three starter cards, live attribute and skill hovers,
 and 800 by 600 layout were visually inspected in paired page/canvas captures.
 These prepared UI checks do not constitute earned play or independent acceptance.
 Both critics continue on their unchanged original builds.
+
+### Status text over changing terrain
+
+Inspection of the ongoing Magician review's paired capture 0054 showed the
+location/objective block losing contrast over the bright storm field. The
+new drawHudText helper gives native identity, locality, weather, objective,
+compass and bonus lines a shared optional outline through VIS_CFG.hudText.
+It preserves authored colors, alignment, font, wrapping and baseline layout.
+Canvas save/restore isolates the stroke settings; disabling the outline keeps
+the existing fill-only path. World visibility and simulation are unaffected.
+
+All three type checks pass. Controlled real-client QA compares the actual
+previous build at 1280px width and checks the new build at 1280 and 800px.
+Native multiline objective bounds and following bonus baselines remain valid;
+long mod text stays bounded. Draws preserve the checked state, and native
+current/prior/current Continue retains character items, position, life, seed
+and puzzle progress. All eight page/canvas pairs were inspected.
+The bright and dark panels are deliberately prepared canvas backgrounds
+beneath the real status painter; they demonstrate text contrast, not a
+new biome, a replay of the critic's weather or an earned gameplay result.

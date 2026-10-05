@@ -1,5 +1,10 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+drawHudText gives native status, objective and compass lines a configurable
+VIS_CFG.hudText outline. It preserves authored fill, font, alignment and layout;
+the outline is isolated by canvas save/restore. Verify all type checks and
+native HUD layouts over bright/dark ground, including continuation.
+
 startingAttributesHtml shares full registry names and live attribute tooltips
 across Mu and the class chooser. formatStatValue retains two significant digits
 below one percent, so small per-point grants stay distinct. Verify

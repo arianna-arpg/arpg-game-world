@@ -8,6 +8,8 @@
 export const VIS_CFG = {
   /** The selected speaker explains the idle gesture before native dialogue opens. */
   speechApproach: { enabled: true, font: '10px Verdana', color: '#e4ded0', dy: 22, maxCharacters: 64 },
+  /** Outline screen-space status/route text without changing its layout or authored color. */
+  hudText: { enabled: true, edge: '#10151a', outline: 3 },
   /** Public activity instructions share a bounded, responsive HUD column. */
   objectiveReadout: { minWidth: 48, maxWidth: 560, maxRows: 4, maxCharacters: 2048, lineHeight: 17, gap: 18, font: '12px Verdana' },
   /** Actual temporary modifier payload, on demand at its native buff pip. */
