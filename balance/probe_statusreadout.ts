@@ -46,8 +46,8 @@ try{
 
 const {makeSettings,serializeSettings,deserializeSettings}=await import('../src/meta/settings');
 const defaults=makeSettings();
-assert.equal(defaults.crowdedMeters,false);assert.equal(defaults.castMovementHint,false);assert.equal(defaults.statusReadout,'focus');
-for(const mode of ['focus','corner','off'] as const)for(const effects of ['gentle','still','off'] as const){
+assert.equal(defaults.crowdedMeters,false);assert.equal(defaults.castMovementHint,false);assert.equal(defaults.statusReadout,'hover');
+for(const mode of ['hover','focus','corner','off'] as const)for(const effects of ['gentle','still','off'] as const){
  const saved=serializeSettings({...defaults,statusReadout:mode,afflictionOverlays:effects,crowdedMeters:true,castMovementHint:true});
  const restored=deserializeSettings(saved)!;
  assert.equal(restored.statusReadout,mode);assert.equal(restored.afflictionOverlays,effects);
@@ -67,3 +67,9 @@ assert.deepEqual(new Set(edge.layers.map(l=>l.family)),new Set(['mire','befuddle
 assert.ok(edge.layers.every(l=>l.alpha>0));assert.equal(composeAfflictionEdge(cues,{},'off',1),undefined);
 assert.equal(composeAfflictionEdge(cues,{},'still',1)!.seconds,0);
 console.log('PASS independent persisted preferences, old-save defaults, bounded focus readouts and distinct Mired/Befuddled cues');
+
+const legacyFocus=serializeSettings({...defaults,statusReadout:'focus'});delete legacyFocus.statusReadoutVersion;
+assert.equal(deserializeSettings(legacyFocus)!.statusReadout,'hover');
+for(const mode of ['corner','off'] as const){legacyFocus.statusReadout=mode;assert.equal(deserializeSettings(legacyFocus)!.statusReadout,mode);}
+assert.equal(defaults.skillArtwork,false);
+assert.equal(deserializeSettings(serializeSettings({...defaults,skillArtwork:true}))!.skillArtwork,true);

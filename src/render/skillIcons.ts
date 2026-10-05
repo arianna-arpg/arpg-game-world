@@ -78,7 +78,7 @@ export const SKILL_ICON_VIEW = {
   background:'#111820', ink:'#f4ebd7', rim:'#070c12',
   tintAlpha:.24, lineWidth:1.5, rimWidth:1.4, bakeSize:96, cacheLimit:64,
 };
-export type SkillIconFace = Pick<SkillDef,'color'> & Partial<Pick<SkillDef,'icon'|'tags'|'delivery'|'effects'>>;
+export type SkillIconFace = Pick<SkillDef,'color'> & Partial<Pick<SkillDef,'name'|'icon'|'tags'|'delivery'|'effects'>>;
 /** Ordered visual vocabulary; content can add rules without editing any UI.
  * Gameplay identity supplies the picture, never display-name spelling. */
 export const SKILL_ICON_RULES: {icon:string;tags?:readonly string[];deliveries?:readonly string[];effects?:readonly string[]}[] = [
@@ -105,10 +105,26 @@ export function skillIconKey(face:SkillIconFace):string {
 function definition(face:SkillIconFace):SkillIcon {
   return SKILL_ICONS[skillIconKey(face)] ?? SKILL_ICONS.arcane;
 }
+// One live preference for Canvas, rack, vendor, Memory and preparation faces.
+let artworkPreference:()=>boolean=()=>false;
+export function configureSkillArtwork(preference:()=>boolean):void { artworkPreference=preference; }
+export function skillAcronym(face:SkillIconFace):string {
+  if(face.icon==='recall') return 'R';
+  return (face.name?.trim().split(/[\s-]+/).filter(Boolean).map(word=>[...word][0]).join('') || '?').toUpperCase();
+}
 const cache=new Map<string,HTMLCanvasElement>();
 /** Bake the whole face before applying the caller's affordability alpha, just
  * like an SVG tile. Bounded cached faces avoid per-frame vector allocation. */
 export function drawSkillIcon(ctx:CanvasRenderingContext2D,face:SkillIconFace,x:number,y:number,size:number):boolean {
+  if(!artworkPreference()) {
+    const label=skillAcronym(face),fontSize=size*(label.length>2?.32:.44);
+    ctx.save();ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font='bold '+fontSize+'px Verdana';ctx.lineJoin='round';
+    ctx.strokeStyle=SKILL_ICON_VIEW.rim;ctx.lineWidth=Math.max(1,size*.055);
+    ctx.fillStyle=SKILL_ICON_VIEW.ink;
+    ctx.strokeText(label,x+size/2,y+size/2,size*.94);ctx.fillText(label,x+size/2,y+size/2,size*.94);
+    ctx.restore();return true;
+  }
   const icon=definition(face);
   const c=SKILL_ICON_VIEW,key=JSON.stringify([icon,face.color,c]);
   let image=cache.get(key);
@@ -138,6 +154,15 @@ function bakeSkillIcon(icon:SkillIcon,color:string):HTMLCanvasElement {
 const escape=(value:string)=>value.replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]!));
 /** Same paths, paint order and proportions as the canvas icon; caller owns its label. */
 export function skillIconSvg(face:SkillIconFace,size=24):string {
+  if(!artworkPreference()) {
+    const label=skillAcronym(face),fontSize=label.length>2?7.7:10.6;
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="'+size+'" height="'+size
+      +'" viewBox="0 0 24 24" aria-hidden="true" focusable="false" data-skill-acronym="'+escape(label)
+      +'" style="display:block;flex:none;pointer-events:none"><text x="12" y="12" text-anchor="middle" dominant-baseline="central"'
+      +' font-family="Verdana" font-weight="bold" font-size="'+fontSize+'" fill="'+SKILL_ICON_VIEW.ink
+      +'" stroke="'+SKILL_ICON_VIEW.rim+'" stroke-width="1" paint-order="stroke"'
+      +(label.length>3?' textLength="22" lengthAdjust="spacingAndGlyphs"':'')+'>'+escape(label)+'</text></svg>';
+  }
   const icon=definition(face);
   const c=SKILL_ICON_VIEW,tint=escape(face.color),ink=escape(c.ink),rim=escape(c.rim);
   const layers=icon.layers.map(layer=>{

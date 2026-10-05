@@ -1,6 +1,7 @@
 import { combatTargetStrength } from './vis/combatTargets';
 import { buffReadoutLines, drawBuffReadout } from './vis/buffReadout';
 import { drawSkillIcon } from './skillIcons';
+import { statusIcons, layoutStatusIcons, drawStatusIcons, drawStatusIconHover, type StatusIconHover } from './vis/statusIcons';
 import { drawMeleeReach } from './vis/meleeReachLayer';
 import { treePointBudget } from '../engine/skillEmpowerment';
 import { altarInfluences } from '../engine/altarCues';
@@ -317,6 +318,9 @@ export class Renderer {
    *  itself off the cluster the renderer actually drew (THE MENU BAR's
    *  'bar' anchor, ui/menubar.ts — drawn == seated). */
   hudClusterRects: { seatId: string; x: number; y: number; w: number; h: number }[] = [];
+  /** Current debuff icon bounds in CSS pixels, matching mouse hit areas. */
+  statusIconRects: {seatId:string;id:string;x:number;y:number;w:number;h:number;fraction?:number}[] = [];
+  private statusIconHover?: StatusIconHover;
   /** virtual (uiW×uiH) → CSS-pixel factor for the current frame (render()). */
   private uiToCss = 1;
   /** The PAD's assisted aim (world point + soft-lock target id), fed by main
@@ -7778,6 +7782,7 @@ export class Renderer {
     this.hudSlotRects.length = 0; // THE PRESSABLE BAR's ledger — this frame's rects only
     this.hudMetaRects.length = 0; // THE PRESSABLE META's ledger — likewise
     this.hudClusterRects.length = 0;
+    this.statusIconRects.length = 0; this.statusIconHover = undefined;
     this.noticeHeaderBottom = 0;
     // THE COUCH DISPATCH (data/couch.ts): solo draws the one classic centered
     // cluster — byte-identical. With guests seated, each local seat's cluster
@@ -7796,6 +7801,7 @@ export class Renderer {
       }
     }
     this.drawHudTail(world);
+    if (this.statusIconHover) drawStatusIconHover(this.ctx, this.statusIconHover);
   }
 
   /** ONE seat's HUD cluster — orbs, arcs, bar, pips, buffs, grammar rows,
@@ -8450,6 +8456,21 @@ export class Renderer {
       ctx.fillText(keyLabels[i] ?? '?', x + slot / 2, by + slot + 12);
     }
 
+    // Compact debuffs sit over Life, away from the body and the buff lane.
+    const statusLeft = anchor === 'right' ? w / 2 : 0, statusRight = anchor === 'left' ? w / 2 : w;
+    const debuffRects = layoutStatusIcons(statusIcons(p.statuses, afflictionPressureOf(p), p.dead || p.downed),
+      {x:lifeX,y:orbY,radius:orbR}, statusLeft, statusRight);
+    drawStatusIcons(ctx, debuffRects);
+    for (const rect of debuffRects) {
+      const k = this.uiToCss;
+      this.statusIconRects.push({seatId:seat.id,id:rect.icon.id,x:rect.x*k,y:rect.y*k,w:rect.w*k,h:rect.h*k,fraction:rect.icon.fraction});
+      if ((this.getSettings?.().statusReadout ?? 'hover') !== 'off'
+        && this.uiMouse.x >= rect.x && this.uiMouse.x < rect.x + rect.w
+        && this.uiMouse.y >= rect.y && this.uiMouse.y < rect.y + rect.h) {
+        this.statusIconHover = {rect,left:statusLeft,right:statusRight};
+      }
+    }
+
     // Buff pips — RAISED above the meta-button row so both always read;
     // hovering a pip describes its actual native modifier payload.
     const buffY = by - 40;
@@ -8709,8 +8730,8 @@ export class Renderer {
         hintY += 18;
       }
     }
-    const statusReadout = this.getSettings?.().statusReadout ?? 'focus';
-    if (statusReadout !== 'off') {
+    const statusReadout = this.getSettings?.().statusReadout ?? 'hover';
+    if (statusReadout === 'focus' || statusReadout === 'corner') {
       const rows = statusReadoutRows(p.statuses, afflictionPressureOf(p), p.dead || p.downed);
       if (statusReadout === 'corner') {
         hintY = drawStatusReadout(ctx, rows, x, hintY,

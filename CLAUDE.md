@@ -1,3 +1,14 @@
+Saved skillArtwork defaults off across every Canvas and DOM skill face; name
+acronyms are the default (Cleave C, Sunder Maul SM, Frenzy F), artwork is opt-in.
+statusReadout defaults to hover: compact statusIcons above Life carry color,
+shape/mnemonic and a draining duration track. One hover card holds the detail.
+Old automatic near-hero settings migrate once; deliberate corner/off settings
+survive. statusDuration is presentation-only: accepted application clocks stamp
+it independently of dpsCurve total, and optional snapshot spans carry it to peers.
+Verify statusicons, statusreadout, skillicons, afflictioncues, type checks,
+all-player-visuals-ui, presentation-preferences-ui and debuff-icons-ui.
+See docs/ui/quiet-icons.md. Unique artwork for the full catalogue is future work.
+
 # CLAUDE.md — Hollow Wake (ARPG)
 
 NpcConversationUI integrates live giver-specific work, flask preparation, rewards
@@ -22,12 +33,12 @@ Verify castmovement, fielddiscipline and minimal-ui-preferences-ui.
 
 playerBodyLook applies shared limbs/gait to every registered class look, including
 Breaker. skillIconKey resolves explicit or semantic artwork for every skill;
-unknown/legacy icon keys stay visual. Bar, rack, vendor and Memory chips share
+With skillArtwork enabled, unknown/legacy keys resolve too. Bar, rack, vendor and Memory chips share
 this vocabulary, including recall. Verify bodywalk, skillicons and all-player-visuals-ui.
 
 Saved crowdedMeters and castMovementHint default off; native bar anchors and
-quiet movement captions are the default. statusReadout independently selects
-near-hero text, corner text or off, while afflictionOverlays keeps its own mode.
+quiet movement captions are the default. statusReadout selects hover details
+(default), near-hero text, corner text or off; afflictionOverlays stays independent.
 Mired and Befuddled opt into shared material cues. Verify statusreadout,
 afflictioncues, combatfocus and presentation-preferences-ui with real Options.
 

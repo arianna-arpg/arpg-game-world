@@ -1,4 +1,4 @@
-import { skillIconSvg } from '../render/skillIcons';
+import { configureSkillArtwork, skillIconSvg } from '../render/skillIcons';
 import { empowermentPassive, empowermentPoints, empowermentRank, hasEmpowermentPassive, skillInstanceName, treeAbilityNodes, treeInstanceNodeRanks, treePointBudget } from '../engine/skillEmpowerment';
 import { skillMergePlan } from '../engine/skillMerge';
 import { massMap } from '../worldmass/paint';
@@ -353,7 +353,7 @@ const gemTileFaceHtml = (item: ItemInstance): string => {
   const lvl = sp?.level ?? gp?.level ?? 1;
   return `<span style="display:flex;align-items:center;justify-content:center;
       width:22px;height:22px;border-radius:3px;background:${color};opacity:0.9;
-      color:#0a0a0e;font-weight:bold;font-size:9px;font-family:Verdana">${sp ? skillIconSvg(SKILLS[sp.skillId],22) : skillIconSvg({color,icon:'support'},22)}</span>
+      color:#0a0a0e;font-weight:bold;font-size:9px;font-family:Verdana">${sp ? skillIconSvg(SKILLS[sp.skillId],22) : skillIconSvg({color,name:def.name,icon:'support'},22)}</span>
     <span style="position:absolute;bottom:0;left:2px;font-size:8px;line-height:9px;color:#e8dcc8;text-shadow:0 0 2px #000">${lvl}</span>
     ${gp ? `<span title="Support Memory" aria-label="Support Memory" style="position:absolute;top:0;left:0;
       font-size:10px;line-height:11px;padding:0 1px;border-radius:2px;
@@ -950,6 +950,7 @@ export class UI {
     private onLeaveCoop: () => void = () => { /* default no-op */ },
   ) {
     configureTooltipDetail(() => this.getSettings().tooltipDetail);
+    configureSkillArtwork(() => this.getSettings().skillArtwork);
     installTooltipHints();
     this.portalButton = new PortalButton(this.getWorld, this.getSettings,
       () => this.menuBar.buttonRect(), () => this.menuBar.controls);
@@ -5119,7 +5120,7 @@ export class UI {
     const revealHtml = (reveal: { name: string; color: string; sockets: number; itemUid: number; id: string; kind: string }): string =>
       `<div style="margin-top:2px;font-size:10px;color:${reveal.color}">
         <span style="display:inline-flex;width:14px;height:14px;border-radius:2px;background:${reveal.color}33;border:1px solid ${reveal.color};
-          align-items:center;justify-content:center;font-size:6px;vertical-align:middle">${skillIconSvg((reveal.kind === 'skill' ? SKILLS[reveal.id] : undefined) ?? {color:reveal.color,icon:'support'},14)}</span>
+          align-items:center;justify-content:center;font-size:6px;vertical-align:middle">${skillIconSvg((reveal.kind === 'skill' ? SKILLS[reveal.id] : undefined) ?? {color:reveal.color,name:reveal.name,icon:'support'},14)}</span>
         ${esc(reveal.name)}${reveal.sockets ? ` <span style="color:#9a94a8">${'◆'.repeat(reveal.sockets)}</span>` : ''}
         ${seat.meta.items.some(i=>i.uid===reveal.itemUid && i.gem) ? `<button data-mem-find="${reveal.itemUid}" style="margin-left:6px;padding:3px 7px;font-size:10px">View in bag</button>` : ''}</div>`;
     const portraitOf = (def: MonsterDef | undefined): string => def
@@ -5138,14 +5139,14 @@ export class UI {
         // grant itself (and its pinned grade where the spoil named one).
         ? `<span style="${chipStyle}" title="${esc(g.pin.name)} — ${MEMORY_CFG.strings.pinned} this very memory">
             <span style="width:12px;height:12px;border-radius:2px;background:${g.pin.color}33;border:1px solid ${g.pin.color};
-              display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:${g.pin.color}">${skillIconSvg((g.pin.kind === 'skill' ? SKILLS[g.pin.id] : undefined) ?? {color:g.pin.color,icon:'support'},12)}</span>
+              display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:${g.pin.color}">${skillIconSvg((g.pin.kind === 'skill' ? SKILLS[g.pin.id] : undefined) ?? {color:g.pin.color,name:g.pin.name,icon:'support'},12)}</span>
             <span style="color:${g.pin.rarity ? SKILL_RARITIES[g.pin.rarity].color : '#c8bce0'}">${esc(g.pin.name)}${g.pin.rarity ? ` · ${SKILL_RARITIES[g.pin.rarity].label}` : ''}</span></span>`
         : needsFacet
         ? `<span style="color:#5a5668;font-size:9px">the committed facet decides</span>`
         : g.rung === 'kit'
           ? g.kit.map(c => `<span style="${chipStyle}" title="${c.name} — ×${c.mult} lean">
               <span style="width:12px;height:12px;border-radius:2px;background:${c.color}33;border:1px solid ${c.color};
-                display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:${c.color}">${skillIconSvg(SKILLS[c.id] ?? {color:c.color,icon:'support'},12)}</span>
+                display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:${c.color}">${skillIconSvg(SKILLS[c.id] ?? {color:c.color,name:c.name,icon:'support'},12)}</span>
               <span style="color:#c8bce0">×${c.mult}</span></span>`).join('')
           : g.rung === 'bias'
             ? g.tags.map(t => `<span style="${chipStyle}" title="tag lean — ×${GEM_DROP_CFG.biasMult}">
@@ -6615,7 +6616,7 @@ export class UI {
               display:flex;align-items:center;justify-content:center;
               ${e.kind === 'skill' && e.inst.rarity === 'legendary' ? `box-shadow:0 0 10px ${col};` : ''}${canBuy ? '' : 'opacity:0.55;'}">
               <span style="width:22px;height:22px;border-radius:4px;background:${col}33;border:1px solid ${col};
-                display:flex;align-items:center;justify-content:center;font-size:8px;color:${col}">${skillIconSvg(e.kind === 'skill' ? e.inst.def : {color:col,icon:'support'},22)}</span>
+                display:flex;align-items:center;justify-content:center;font-size:8px;color:${col}">${skillIconSvg(e.kind === 'skill' ? e.inst.def : {color:col,name:e.gem.def.name,icon:'support'},22)}</span>
               ${priceTag}${lockPip}${badge}</div>`;
             return;
           }
@@ -10662,7 +10663,11 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       </div>
       <div class="rebind-row">
         <span>Debuff Names &amp; Durations</span>
-        <button id="opt-statusreadout" title="Show debuff text near your hero, in the upper corner, or hide it. Screen effects have their own setting.">${s.statusReadout === 'focus' ? 'NEAR HERO' : s.statusReadout === 'corner' ? 'UPPER CORNER' : 'OFF'}</button>
+        <button id="opt-statusreadout" title="Hover an icon near Life for details. Optional standing text can appear near your hero or in the upper corner. OFF hides the details; icons and screen effects keep their own behavior.">${s.statusReadout === 'hover' ? 'ON HOVER' : s.statusReadout === 'focus' ? 'NEAR HERO' : s.statusReadout === 'corner' ? 'UPPER CORNER' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Skill Faces</span>
+        <button id="opt-skillartwork" title="ACRONYMS identifies skills by their names. ARTWORK uses the shared visual families.">${s.skillArtwork ? 'ARTWORK' : 'ACRONYMS'}</button>
       </div>
       <div class="rebind-row">
         <span>Health &amp; Cast Bar Placement</span>
@@ -10730,9 +10735,13 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         this.saveSettings(); this.renderOptions(root, onBack);
       });
     }
+    root.querySelector<HTMLElement>('#opt-skillartwork')?.addEventListener('click', () => {
+      const settings = this.getSettings(); settings.skillArtwork = !settings.skillArtwork;
+      this.saveSettings(); this.refreshInventory(true); if (this.vendorOpen) this.refreshVendor(); this.renderOptions(root, onBack);
+    });
     root.querySelector<HTMLElement>('#opt-statusreadout')?.addEventListener('click', () => {
       const settings = this.getSettings();
-      settings.statusReadout = settings.statusReadout === 'focus' ? 'corner' : settings.statusReadout === 'corner' ? 'off' : 'focus';
+      settings.statusReadout = settings.statusReadout === 'hover' ? 'focus' : settings.statusReadout === 'focus' ? 'corner' : settings.statusReadout === 'corner' ? 'off' : 'hover';
       this.saveSettings(); this.renderOptions(root, onBack);
     });
     // THE FALTER is deliberate fake lag (docs/render/falter.md) — a comfort

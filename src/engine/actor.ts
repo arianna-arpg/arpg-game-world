@@ -2781,6 +2781,7 @@ export class Actor {
     const baseDur = banking && def.bank!.duration !== undefined ? def.bank!.duration : def.duration;
     const duration = baseDur * durationScale / expiry;
     const existing = this.statuses.find(s => s.id === id && s.challengeField === opts?.challengeField && s.sourceKey === opts?.sourceKey);
+    const previousRemaining = existing?.remaining;
     // ARMED (rupture-bearing) statuses run a FIXED FUSE: re-application never
     // postpones the blast — the timer set when the keg was armed runs down no
     // matter how often the victim is re-struck. Fresh rupture payloads PUMP
@@ -2853,7 +2854,7 @@ export class Actor {
         casterId: opts?.casterId,
         brood: opts?.brood,
         leech: opts?.leech,
-        total: duration,
+        total: duration, statusDuration: duration,
         // THE BANK's first deposit: this blow is the peak, the read 1/capMul.
         bankPeak: banking ? dps : undefined,
         bankFrac: banking && def.bank ? bankFracOf({ dps, bankPeak: dps }, def) : undefined,
@@ -2871,6 +2872,7 @@ export class Actor {
       }
       return;
     }
+    if (existing && existing.remaining !== previousRemaining) existing.statusDuration = existing.remaining;
     if (existing && opts) {
       existing.propagates = existing.propagates || opts.propagates || def.propagateOnDeath;
       // Rupture payloads ADD (pumping the keg on its fixed fuse) rather than

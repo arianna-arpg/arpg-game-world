@@ -1863,6 +1863,8 @@ export interface ActiveStatus {
   remaining: number;
   /** False on legacy co-op mirrors whose wire supplied presence but no clock. */
   remainingKnown?: boolean;
+  /** Presentation span for the latest accepted clock; never used for damage. */
+  statusDuration?: number;
   stacks: number;
   /** DoT damage per second per stack (locked in at application time). */
   dps: number;

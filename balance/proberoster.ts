@@ -456,7 +456,8 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_zonepolicy.ts', status: 'green', tier: 'fast', why: 'ZONE POLICY — the layout half beside the biome half through the ONE policyFor seam: the shipped-empty layout table is byte-identical to biome-only (exhaustive biome × layout × id A/B against the old logic), authored deny/allow rows AND both ways, and eventTargetable/holdfastHostable route the composed verdict' },
   { probe: 'probe_castaim.ts', status:'green', tier:'fast', why:'Opted-in cursor windups, native commitment/costs and stationary equivalence; aim ownership, exclusions, mobility, mirrors and seeded melee pursuit.' },
   { probe: 'probe_meleeread.ts', status:'green', tier:'fast', why:'Native melee footprint boundaries, confirmed rear-hit outcomes, rejection gates, opt-outs and host-resolved co-op reads.' },
-  { probe: 'probe_skillicons.ts', status: 'green', tier: 'fast', why: 'Every skill and class bar receives shared semantic visual artwork, including legacy keys and recall; no letter fallback.' },
+  { probe: 'probe_statusicons.ts', status:'green', tier:'fast', why:'Native countdown fractions, accepted refreshes, fixed fuses, expiry/cleanse, co-op clocks, stable compact layout and hover information.' },
+  { probe: 'probe_skillicons.ts', status: 'green', tier: 'fast', why: 'Every skill defaults to its name acronym; optional shared artwork covers every skill and class, including legacy keys and recall.' },
   { probe: 'probe_bodywalk.ts', status: 'green', tier: 'fast', why: 'Actual voluntary travel, native walls/casts, stopped poses, mirror clearing and optional native gait data.' },
   { probe: 'probe_skillinputorder.ts', status: 'green', tier: 'fast', why: 'New held choices precede older repeats without cancelling native casts; release, cooldown fallback, per-seat history, meta edges and legacy slot policy.' },
 ];

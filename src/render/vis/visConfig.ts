@@ -6,6 +6,9 @@
 // ---------------------------------------------------------------------------
 
 export const VIS_CFG = {
+  /** Compact Life-adjacent debuffs; one detailed readout only while hovered. */
+  statusIcons: { size:24, gap:3, columns:4, orbClearance:44,
+    background:'rgba(12,16,20,.35)', ink:'#f4ebd7', margin:8, cardWidth:250, lineHeight:16 },
   /** The selected speaker explains the idle gesture before native dialogue opens. */
   speechApproach: { enabled: true, font: '10px Verdana', color: '#e4ded0', dy: 22, maxCharacters: 64 },
   /** Outline screen-space status/route text without changing its layout or authored color. */

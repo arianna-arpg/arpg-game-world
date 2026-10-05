@@ -10,7 +10,7 @@ app.whenReady().then(async()=>{
  const run=async(fn,...args)=>{const out=await win.webContents.executeJavaScript('(async()=>{try{return {ok:true,value:await ('+fn+')('+args.map(a=>JSON.stringify(a)).join(',')+')}}catch(e){return {ok:false,error:e.stack||String(e)}}})()');if(!out.ok)throw Error(out.error);return out.value;};
  const boot=async()=>{await win.loadURL(url);await run(async()=>{window.requestAnimationFrame=()=>0;Object.defineProperty(navigator,'getGamepads',{value:()=>[]});await new Promise(r=>setTimeout(r,200));});};
  const options=()=>run(()=>{__game.ui.showEscapeMenu();document.querySelector('#esc-keys').click();document.querySelector('[data-opttab="visuals"]').click();const s=__game.settings();
- const expected={'opt-statusreadout':s.statusReadout==='focus'?'NEAR HERO':s.statusReadout==='corner'?'UPPER CORNER':'OFF','opt-crowdedmeters':s.crowdedMeters?'AVOID CROWD':'FIXED','opt-castmovement':s.castMovementHint?'ON':'OFF'};
+ const expected={'opt-statusreadout':s.statusReadout==='hover'?'ON HOVER':s.statusReadout==='focus'?'NEAR HERO':s.statusReadout==='corner'?'UPPER CORNER':'OFF','opt-crowdedmeters':s.crowdedMeters?'AVOID CROWD':'FIXED','opt-castmovement':s.castMovementHint?'ON':'OFF'};
  for(const [id,text]of Object.entries(expected))if(document.getElementById(id).textContent!==text)throw Error('Wrong visible preference: '+id);});
  const click=id=>run(id=>{const e=document.getElementById(id);if(!e)throw Error('Missing '+id);e.click();},id);
  const prefs=()=>run(()=>{const s=__game.settings();return {crowded:s.crowdedMeters,planted:s.castMovementHint,text:s.statusReadout,effects:s.afflictionOverlays};});
@@ -33,14 +33,15 @@ app.whenReady().then(async()=>{
  const resume=async()=>{await boot();await run(async()=>{for(let i=0;i<80&&!document.querySelector('#sm-continue:not([disabled])');i++)await new Promise(r=>setTimeout(r,100));const b=document.querySelector('#sm-continue:not([disabled])');if(!b)throw Error('No Continue');b.click();__game.ui.hideAll();});return run(state);};
  try{
   await boot();await run(()=>{for(const k of ['arpg_account_v1','arpg_character_v1','arpg_character_v1_s10','arpg_settings_v1','arpg_workshop_v1','arpg_atlas_v1'])localStorage.setItem(k,'sentinel');__game.devStartRun('magician');__game.ui.hideAll();__game.step(2);const w=__game.world(),p=w.player,m=w.massRuntime,place=m.journey.places.find(p=>p.content==='cinderwatch'),q=m.journey.local(place);w.landPartyAt(q);m.update(w,true);w.landPartyAt(w.findFreeSpot({x:q.x+120,y:q.y+520},p.radius));m.update(w,true);__game.step(2);w.actors=[p];p.statuses=[];p.applyStatus('mired',0,1,'Mud');p.applyStatus('befuddlement',0,1,'Spell');if(!w.useSkill(p,p.skills[0],{x:p.pos.x+150,y:p.pos.y}))throw Error('Cast refused');});
-  assert.deepEqual(await prefs(),{crowded:false,planted:false,text:'focus',effects:'gentle'});
+  assert.deepEqual(await prefs(),{crowded:false,planted:false,text:'hover',effects:'gentle'});
+  await options();await click('opt-statusreadout');await run(()=>__game.ui.hideAll());
   results.defaults=await capture('default-focus');assert.ok(!results.defaults.relocate);assert.ok(!results.defaults.words.some(w=>w.text==='Feet planted'));
   const labels=results.defaults.words.filter(w=>['Mired','Befuddled'].includes(w.text));assert.equal(labels.length,2);assert.ok(labels.every(w=>w.x>300&&w.y>350));assert.ok(results.defaults.energy>0);
   await options();await shot('options');await click('opt-crowdedmeters');await click('opt-castmovement');await click('opt-affliction');await click('opt-affliction');await run(()=>__game.ui.hideAll());
   results.textOnly=await capture('text-only-opt-in-bars');assert.equal(results.textOnly.energy,0);assert.ok(results.textOnly.relocate);assert.ok(results.textOnly.words.some(w=>w.text==='Feet planted'));
   await options();await click('opt-statusreadout');await run(()=>__game.ui.hideAll());results.corner=await capture('corner');assert.ok(results.corner.words.find(w=>w.text==='Mired').x<100);
   await options();await click('opt-statusreadout');await click('opt-affliction');await run(()=>__game.ui.hideAll());results.visualOnly=await capture('visual-only');assert.ok(results.visualOnly.energy>0);assert.ok(!results.visualOnly.words.some(w=>['Mired','Befuddled'].includes(w.text)));
-  await options();await click('opt-statusreadout');await click('opt-crowdedmeters');await click('opt-castmovement');await run(()=>__game.ui.hideAll());
+  await options();await click('opt-statusreadout');await click('opt-statusreadout');await click('opt-crowdedmeters');await click('opt-castmovement');await run(()=>__game.ui.hideAll());
   win.setSize(800,600);await new Promise(r=>setTimeout(r,150));results.narrow=await capture('narrow');
   for(const row of results.narrow.words.filter(w=>['Mired','Befuddled'].includes(w.text)))assert.ok(row.x>=0&&row.x<800&&row.y>100&&row.y<500);
   await run(()=>{const s=__game.settings();s.renderScale=.6;__game.renderer.setRenderScale(.6);});

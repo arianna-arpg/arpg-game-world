@@ -7,10 +7,11 @@ app.whenReady().then(async()=>{
  const win=new BrowserWindow({show:false,width:1280,height:850,webPreferences:{offscreen:true}});
  try{
   await win.loadURL('about:blank');
-  const code=buildSync({stdin:{contents:"export {SKILLS} from './src/data/skills';export {CLASSES} from './src/data/classes';export {SKILL_ICONS,skillIconKey,drawSkillIcon,skillIconSvg} from './src/render/skillIcons';export {LOOKS} from './src/data/looks';export {bodySprite} from './src/render/vis/body';export {drawWalkParts,applyWalkBodyPose} from './src/render/vis/walkParts';export {drawActionParts} from './src/render/vis/actionParts';",resolveDir:path.resolve(__dirname,'..'),loader:'ts'},bundle:true,write:false,format:'iife',globalName:'VisualQA'}).outputFiles[0].text;
+  const code=buildSync({stdin:{contents:"export {SKILLS} from './src/data/skills';export {CLASSES} from './src/data/classes';export {SKILL_ICONS,configureSkillArtwork,skillIconKey,drawSkillIcon,skillIconSvg} from './src/render/skillIcons';export {LOOKS} from './src/data/looks';export {bodySprite} from './src/render/vis/body';export {drawWalkParts,applyWalkBodyPose} from './src/render/vis/walkParts';export {drawActionParts} from './src/render/vis/actionParts';",resolveDir:path.resolve(__dirname,'..'),loader:'ts'},bundle:true,write:false,format:'iife',globalName:'VisualQA'}).outputFiles[0].text;
   await win.webContents.executeJavaScript(code);
   const result=await win.webContents.executeJavaScript('('+ (async()=>{
-   const {SKILLS,CLASSES,SKILL_ICONS,skillIconKey,drawSkillIcon,skillIconSvg,LOOKS,bodySprite,drawWalkParts,applyWalkBodyPose,drawActionParts}=VisualQA;
+   const {SKILLS,CLASSES,SKILL_ICONS,configureSkillArtwork,skillIconKey,drawSkillIcon,skillIconSvg,LOOKS,bodySprite,drawWalkParts,applyWalkBodyPose,drawActionParts}=VisualQA;
+   configureSkillArtwork(()=>true);
    const make=(w,h)=>{const c=document.createElement('canvas');c.width=w;c.height=h;return c;};
    const gallery=make(1200,Math.ceil(CLASSES.length/4)*122),ctx=gallery.getContext('2d');ctx.fillStyle='#30372b';ctx.fillRect(0,0,gallery.width,gallery.height);
    const before=JSON.stringify([SKILLS,LOOKS]),bodyChecks=[];

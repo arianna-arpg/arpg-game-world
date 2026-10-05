@@ -95,7 +95,8 @@ export interface Settings {
   /** Optional movement-lock caption, independent of the cast name. */
   castMovementHint: boolean;
   /** Text is independent of ailment screen effects. */
-  statusReadout: 'focus' | 'corner' | 'off';
+  statusReadout: 'hover' | 'focus' | 'corner' | 'off';
+  skillArtwork: boolean;
   /** THE FALTER (render/screenFx.ts ScreenFxDef.falter): faintness and the
    *  swoon deliberately HOLD presented frames — a simulated lag spike, the
    *  vasovagal skip. Designed and documented (docs/render/falter.md); the
@@ -301,7 +302,10 @@ export interface SettingsSave {
   castNameHint?: boolean;
   supportReadyHint?: boolean;
   castMovementHint?: boolean;
-  statusReadout?: 'focus' | 'corner' | 'off';
+  statusReadout?: 'hover' | 'focus' | 'corner' | 'off';
+  /** 2 migrates the former automatic near-hero readout to icons. */
+  statusReadoutVersion?: number;
+  skillArtwork?: boolean;
   statusFalter?: boolean;
   invertMove?: boolean;
   gearPickup?: 'vacuum' | 'key';
@@ -472,7 +476,8 @@ export const makeSettings = (): Settings => ({
   castNameHint: false,
   supportReadyHint: false,
   castMovementHint: false,
-  statusReadout: 'focus',
+  statusReadout: 'hover',
+  skillArtwork: false,
   statusFalter: true,
   invertMove: false,
   gearPickup: 'vacuum',
@@ -522,6 +527,8 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   supportReadyHint: s.supportReadyHint,
   castMovementHint: s.castMovementHint,
   statusReadout: s.statusReadout,
+  statusReadoutVersion: 2,
+  skillArtwork: s.skillArtwork,
   statusFalter: s.statusFalter,
   invertMove: s.invertMove,
   gearPickup: s.gearPickup,
@@ -622,7 +629,9 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     castNameHint: s.castNameHint === true,
     supportReadyHint: s.supportReadyHint === true,
     castMovementHint: s.castMovementHint === true,
-    statusReadout: s.statusReadout === 'corner' || s.statusReadout === 'off' ? s.statusReadout : 'focus',
+    statusReadout: s.statusReadout === 'corner' || s.statusReadout === 'off' ? s.statusReadout
+      : s.statusReadoutVersion === 2 && s.statusReadout === 'focus' ? 'focus' : 'hover',
+    skillArtwork: s.skillArtwork === true,
     statusFalter: s.statusFalter ?? true,
     invertMove: s.invertMove ?? false,
     gearPickup: s.gearPickup === 'key' ? 'key' : 'vacuum',

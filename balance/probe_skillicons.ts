@@ -1,7 +1,17 @@
 import assert from 'node:assert/strict';
 import {SKILLS} from '../src/data/skills';
 import {CLASSES} from '../src/data/classes';
-import {skillIconKey,skillIconSvg,SKILL_ICONS,SKILL_ICON_RULES} from '../src/render/skillIcons';
+import {configureSkillArtwork,skillAcronym,skillIconKey,skillIconSvg,SKILL_ICONS,SKILL_ICON_RULES} from '../src/render/skillIcons';
+for(const def of Object.values(SKILLS)) {
+ assert.ok(skillAcronym(def).length>0 && skillAcronym(def)!=='?',def.id);
+ assert.ok(skillIconSvg(def).includes('data-skill-acronym='),def.id);
+ assert.ok(!skillIconSvg(def).includes('<path '),def.id);
+}
+for(const [name,label] of [['Cleave','C'],['Sunder Maul','SM'],['Frenzy','F']]) {
+ const def=Object.values(SKILLS).find(s=>s.name===name);assert.ok(def,name);assert.equal(skillAcronym(def),label);
+}
+assert.equal(skillAcronym({color:'#fff',name:'Mark',icon:'recall'}),'R');
+configureSkillArtwork(()=>true);
 const before=JSON.stringify(SKILLS),families=new Set<string>();
 for(const def of Object.values(SKILLS)){
  const key=skillIconKey(def);families.add(key);
@@ -21,3 +31,6 @@ assert.equal(skillIconKey({color:'#fff',icon:'recall'}),'recall');
 const hostile=skillIconSvg({color:'"><script>bad</script>',icon:'missing'});assert.ok(!hostile.includes('<script>'));
 console.log('PASS '+Object.keys(SKILLS).length+' skill definitions and all '+CLASSES.length+' class bars have visual faces across '+families.size+' families, including legacy/unknown keys');
 console.log('PASS semantic extension, recall state, escaped SVG and registry purity');
+
+configureSkillArtwork(()=>false);assert.ok(skillIconSvg(SKILLS.cleave).includes('>C</text>'));
+console.log('PASS all skill acronyms by default, distinct Cleave/Sunder Maul/Frenzy labels, live preference and recall');
