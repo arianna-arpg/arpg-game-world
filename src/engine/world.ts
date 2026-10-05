@@ -24119,7 +24119,7 @@ export class World {
    * are advanced by this read. Pointer intent never widens reach or floors. */
   private speechCandidates(seat: Seat) {
     const candidates: (DwellCandidate & { a: Actor; text: string | null; color: string;
-      ambient: boolean; available: boolean })[] = [];
+      ambient: boolean; available: boolean; approachHint?: string })[] = [];
     if (!seat.actor.dead && !seat.actor.downed) for (const a of this.actors) {
       if (a.dead || !a.defId) continue;
       const def = MONSTERS[a.defId];
@@ -24161,6 +24161,17 @@ export class World {
         ...attention, ...(authored ? { priority: authored.def.priority, dwellSec: authored.seconds } : {}) });
     }
     return candidates;
+  }
+
+  /** One selected, reachable speaker may explain the pending idle gesture.
+   * Pure presentation: never admits speech, spends a clock or performs service. */
+  speechApproachHint(): { a: Actor; text: string } | null {
+    const focus = this.speechFocus.get(this.localSeat);
+    if (!focus || focus.ready || this.time < focus.readAt
+      || this.time - focus.readAt > SPEECH_ATTENTION_CFG.focus.staleSec) return null;
+    const selected = this.speechCandidates(this.localSeat).find(c => c.id === focus.id);
+    const text = selected?.approachHint?.trim();
+    return selected?.available && selected.text && text ? { a: selected.a, text } : null;
   }
 
   /** Ambient speakers use the same attention clock for their subtle tell.

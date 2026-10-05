@@ -782,10 +782,14 @@ export class Renderer {
     this.drawAmalgamPicks(world);  // the Bonewright's body-part choice spots
     // Resolve attention once before both its ground cues and actor labels.
     this.speechFocusLines.clear();
+    this.speechApproach = null;
     this.dialogueVisibleSpeaker = null;
     if (!VIS_ABLATE.has('actors')) {
       for (const line of world.npcSpeechView(!this.dialogueReaderEnabled() || this.npcDialogueAvailable(),
         this.speechPointerHits(world))) this.speechFocusLines.set(line.a, line);
+      if (VIS_CFG.speechApproach.enabled && (!this.dialogueReaderEnabled() || this.npcDialogueAvailable())
+        && ![...this.speechFocusLines.values()].some(line => line.seatId === world.localSeat.id))
+        this.speechApproach = world.speechApproachHint();
     }
     this.drawDwellTells(world);    // THE DWELL TELL: the base ring on every station/NPC in dwell range
     this.drawCampfireHint(world);  // "linger to refresh" prompt by the town campfire
@@ -3804,6 +3808,7 @@ export class Renderer {
    *  any future talker), drawn as bubbles in the WORD LAYER above the veils. */
   private speeches: { a: Actor; text: string; color: string; style?: SpeechStyle }[] = [];
   private speechFocusLines = new Map<Actor, NpcSpeechLine>();
+  private speechApproach: { a: Actor; text: string } | null = null;
   private dialogueVisibleSpeaker: Actor | null = null;
   npcDialogueAvailable: () => boolean = () => true;
   onNpcDialogue: ((world: World, line: NpcSpeechLine | null, focusId: number | null) => void) | null = null;
@@ -6262,6 +6267,12 @@ export class Renderer {
       this.queueLabel(a, a.name, ink, dy, { font: '10px Verdana', stroke: false });
     }
 
+    // The same body, story and post-veil label gates protect the approach hint.
+    if (this.speechApproach?.a === a) {
+      const cue = VIS_CFG.speechApproach, points = Array.from(this.speechApproach.text);
+      const text = points.length > cue.maxCharacters ? points.slice(0, cue.maxCharacters).join('') + '…' : this.speechApproach.text;
+      this.queueLabel(a, text, cue.color, cue.dy, { font: cue.font });
+    }
     // Keep the actor's concealment/story gates above this presentation read.
     const speechFocusLine = this.speechFocusLines.get(a);
     if (world.speechFocusTarget()?.id === a.id) this.dialogueVisibleSpeaker = a;

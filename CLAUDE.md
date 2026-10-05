@@ -1,5 +1,12 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+speechApproachHint reads the selected reachable speaker before native idle
+dwell completes. SpeechAttention.approachHint composes through purpose, role and
+definition; VIS_CFG.speechApproach owns its presentation. Readiness, dialogue,
+panels and native concealment retire/hide the cue without changing service clocks.
+Verify speechapproach, speech, worldmass_welcome, sim smoke and speech-approach-ui;
+comparison builds must share the seamless preview storage profile.
+
 MASS_FLOOR_VIEW pauses speculative work on draws that finish visible terrain.
 It budgets offscreen floor preparation by rows/phases and shares
 the canvas residency cap with completed pages. Only complete, current canvases

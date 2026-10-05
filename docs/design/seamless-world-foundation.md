@@ -4478,3 +4478,46 @@ These single-run CPU timings exclude world simulation, complete scene rendering,
 GPU composition and human input. They do not show higher overall FPS, a faster
 cold start, or a guaranteed frame bound. The diagnostics and their earlier,
 less favorable sample remain in ignored local evidence.
+
+### Published terrain checkpoint and a readable approach to counters
+
+The floor preparation revision 93ce23323162b2b3c8149737dbd13029ce542f3d
+passed CI 37260156166 and Pages 37261426264. Its hosted Save/Continue check
+retained seed 4153076594 and all six ordinary-save sentinels, with no fatal error.
+The visible-work follow-up 7a003650552993744d17664728aa130489f623df passed
+CI 37261554847 and Pages 37263027658. The public build metadata confirmed it
+at 2026-10-05T04:21:22.937Z; remote Save/Continue retained seed 3260647127,
+all six sentinels and no fatal error.
+
+The ongoing independent Warrior review cleared Cinderwatch and made earned
+equipment, support and passive choices. Returning to Mireille required several
+attempts before a 1.67-second idle observation opened the native reward journal.
+The reviewer explicitly distinguished an unclear settling gesture from a broken
+counter, and acknowledged its short/repeated inputs. Its fixed build remains
+unchanged; this is a milestone, not final independent acceptance.
+
+A selected reachable speaker now displays the optional authored approachHint
+while waiting for native idle grace and speech dwell. Functional speech defaults
+to "Stand still to talk"; purpose, role and definition can replace or suppress it.
+The read admits no conversation, pays no reward and advances no clock. Ready,
+stale, departed, dead and wrong-story targets do not retain the hint. Native
+roof/ray reach, local dialogue availability and actor/label concealment still
+gate it; an admitted local utterance takes precedence. VIS_CFG.speechApproach
+owns the appearance and opt-out. No save schema or interaction timing changes.
+
+The four-group native probe covers those gates, overrides, purity and continuous
+inn reach. Existing speech and grammar probes, worldmass welcome, all three type
+checks and the five-by-five simulation smoke suite pass. The smoke run reports
+no scenario warnings; existing content-audit notices remain. Controlled browser
+QA contrasts the actual prior client, observes the native dialogue open and cue
+retire, checks a narrow viewport and exterior reach, and preserves checked
+character/world state through current/prior/current Continue. All seven final
+page/canvas pairs were inspected.
+
+The first fixture accidentally mixed the ordinary and preview build profiles,
+so it read two distinct save namespaces; the apparent flask loss was a fixture
+fault. Rebuilding with the same preview scope resolved the exact-state check.
+The fixture now refuses ordinary storage keys. A resize initially cleared the
+page after the canvas capture; awaiting resize and checking actual canvas/view
+dimensions resolved that capture fault. Neither was repaired by weakening game
+persistence, visibility, idle requirements or the assertions.
