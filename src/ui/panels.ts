@@ -971,11 +971,13 @@ export class UI {
         : el.dataset.tip === 'vgem' ? this.vendorGemTooltip(el.dataset.vgem!, ext)
         : el.dataset.tip === 'gem-overview' ? this.gemOverviewTooltip(el.dataset.gemKind, el.dataset.gemId, this.panelSeat(this.vendorMenu)) : null,
     { extend: true });
-    bindTooltips(this.classSelect, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!) : null);
+    bindTooltips(this.classSelect, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!)
+      : el.dataset.tip === 'attr' ? this.attrTooltip(el.dataset.attrId as AttributeId) : null);
     // THE MU CARD (data/mu.ts) speaks the same chip tongue: its skill chips
     // carry data-tip="cskill" exactly like the class screen's — tooltips are
     // bound PER PANEL ROOT, so the card needs its own delegation row.
-    bindTooltips(this.muCard, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!) : null);
+    bindTooltips(this.muCard, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!)
+      : el.dataset.tip === 'attr' ? this.attrTooltip(el.dataset.attrId as AttributeId) : null);
     // THE VAULT reads compact — name and price on the card, the kind on the
     // section header above it — and keeps each unlock's full story in the
     // shared tooltip behind a HOVER-INTENT dwell: the wall of text speaks
@@ -2236,6 +2238,15 @@ export class UI {
     return { title: a.label, description: `Each point: ${perPoint}`, meta: a.description };
   }
 
+  /** Starting spreads use the same live attribute explanations as the sheet. */
+  private startingAttributesHtml(def: ClassDef): string {
+    const rows = ATTRIBUTE_IDS.filter(id => (def.attributes[id] ?? 0) > 0).map(id =>
+      `<span data-tip="attr" data-attr-id="${esc(id)}"
+        style="display:inline-block;white-space:nowrap;margin:2px 6px;cursor:var(--cursor-help, help);border-bottom:1px dotted var(--text-dim)">
+        ${esc(ATTRIBUTES[id].label)} ${def.attributes[id]}</span>`).join('');
+    return rows ? `<div class="cattrs"><div style="margin:5px 0 2px">Starting attributes</div>${rows}</div>` : '';
+  }
+
   /** Tooltip for a learned skill row (full description + key stats). */
   /** THE COMPUTED BLOCK (engine/skillPreview.ts): what this skill does for
    *  THIS build, read off the live sheet through the engine's own resolvers.
@@ -2677,8 +2688,7 @@ export class UI {
       ${offerHead}
       <div class="cname" style="color:${def.color};font-size:22px;letter-spacing:1px">${def.name}</div>
       <div class="cdesc" style="margin:6px 0 8px 0">${def.description}</div>
-      <div class="cattrs">${ATTRIBUTE_IDS.filter(a => (def.attributes[a] ?? 0) > 0).map(a =>
-    `${ATTRIBUTES[a].short} ${def.attributes[a]}`).join(' &nbsp; ')}</div>
+      ${this.startingAttributesHtml(def)}
       ${chips ? `<div style="margin-top:4px">${chips}</div>` : ''}
       ${def.innateText ? `<div class="cskills" style="margin-top:4px">Innate: ${def.innateText}</div>` : ''}
       <div id="name-row" style="display:flex;gap:6px;justify-content:center;align-items:center;margin:14px 0 4px 0">
@@ -2876,8 +2886,7 @@ export class UI {
         ${note ? 'style="opacity:.5"' : ''}>
         <div class="cname" style="color:${c.color}">${c.name}</div>
         <div class="cdesc">${c.description}</div>
-        <div class="cattrs">${ATTRIBUTE_IDS.filter(a => (c.attributes[a] ?? 0) > 0).map(a =>
-          `${ATTRIBUTES[a].short} ${c.attributes[a]}`).join(' &nbsp; ')}</div>
+        ${this.startingAttributesHtml(c)}
         ${note ? skillChips(c) : this.kitRowHtml(c)}
         ${c.innateText ? `<div class="cskills">Innate: ${c.innateText}</div>` : ''}
         ${note ? `<div class="class-lock">${note}</div>` : ''}

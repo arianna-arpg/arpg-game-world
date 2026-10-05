@@ -745,7 +745,10 @@ export function statLabel(stat: string): string {
 export function formatStatValue(stat: string, kind: ModKind, v: number): string {
   const pct = kind === 'increased' || kind === 'more' || STAT_DEFS[stat]?.percent;
   if (pct) {
-    const p = Math.round(v * 1000) / 10;
+    // Sub-percent grants need two significant digits: 0.08% must not
+    // become 0.1%, and tiny but real attribute bonuses must not read 0%.
+    const p = Math.abs(v) < 0.01 ? Number((v * 100).toPrecision(2))
+      : Math.round(v * 1000) / 10;
     return `${p}%`;
   }
   // Attribute training can grant tiny flat fractions (e.g. +0.004 to a

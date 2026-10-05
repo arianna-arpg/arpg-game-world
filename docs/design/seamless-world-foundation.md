@@ -4561,3 +4561,30 @@ ms, p95 1.9/2.0 ms, and maximum 37.1/36.4 ms. This sample establishes no average
 speedup; the added contract lets slow work yield between steps. It excludes
 world simulation, whole-scene composition and human input, and cannot establish
 live gameplay FPS. The diagnostic and its full values remain in ignored evidence.
+
+### Published terrain allowance and readable starting attributes
+
+Elapsed-time floor preparation revision 4b8ddbdf1677d0dd0e7a8a86878668ae0bf565de
+passed CI 37347822017 and Pages 37349769472. Hosted metadata confirmed it at
+2026-10-05T17:39:05.708Z. Isolated hosted Save/Continue retained seed 956307364,
+all six ordinary-save sentinels and no fatal error.
+
+The fresh Magician reviewer understood the native flask lesson and independently
+chose the southern road from the guide. Its initial class card exposed only
+abbreviated attributes without accessible explanations. This is an onboarding
+observation from an unfinished review, not a positive gameplay verdict.
+
+Both native class-card surfaces now share full attribute names and the existing
+live per-point tooltip. Registry values, class eligibility, skill chips and Wake
+remain authoritative. Controlled inspection also caught an existing formatter
+rounding 0.08% to 0.1%; shared sub-percent formatting now retains two significant
+digits. Larger percentages retain the prior one-decimal presentation. This
+changes displayed precision, not stats, simulation or save formats.
+
+All three type checks and the passiveattributes probe pass, including small
+positive/negative/zero percentages and larger-value formatting regressions.
+Controlled native Begin, vessel approach/dwell and Wake still enter an ordinary
+vulnerable expedition. The three starter cards, live attribute and skill hovers,
+and 800 by 600 layout were visually inspected in paired page/canvas captures.
+These prepared UI checks do not constitute earned play or independent acceptance.
+Both critics continue on their unchanged original builds.

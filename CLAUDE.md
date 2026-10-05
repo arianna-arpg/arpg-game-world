@@ -1,5 +1,10 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+startingAttributesHtml shares full registry names and live attribute tooltips
+across Mu and the class chooser. formatStatValue retains two significant digits
+below one percent, so small per-point grants stay distinct. Verify
+passiveattributes, all type checks and native opening/card hover at narrow size.
+
 MASS_FLOOR_VIEW.maxWorkMs adds an optional elapsed-time allowance shared
 across offscreen floor jobs, checked between rows/phases alongside the step cap.
 Zero disables prewarming; omission retains step-only authoring. The default is
