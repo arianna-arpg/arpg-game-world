@@ -13,20 +13,27 @@ import { MASS_MAP_LABELS, placeMassMapLabels, type MapBox, type MassMapLabel } f
 
 interface Baked { canvas: HTMLCanvasElement; revision: number; checkedRevision: number }
 interface FloorJob { work: Generator<void, HTMLCanvasElement>; revision: number; checkedRevision: number }
-export interface MassFloorPreparation { enabled: boolean; stepsPerDraw: number; halo: number; maxPending: number }
+export interface MassFloorPreparation {
+  enabled: boolean; stepsPerDraw: number; halo: number; maxPending: number;
+  /** Soft elapsed-time allowance checked between steps; omitted keeps step-only pacing. */
+  maxWorkMs?: number;
+}
 /** Renderer work policy, independent of saved geography and simulation speed.
  * A step is one palette/pixel/detail row or bounded finishing phase, not ms. */
-export const MASS_FLOOR_VIEW: MassFloorPreparation = { enabled: true, stepsPerDraw: 24, halo: 1, maxPending: 2 };
+export const MASS_FLOOR_VIEW: MassFloorPreparation = { enabled: true, stepsPerDraw: 24, halo: 1, maxPending: 2, maxWorkMs: 2 };
 /** Canvas assets are renderer-owned, disposable, and bounded independently of
  * persistent exploration. No camera-relative randomness or page-edge terrain. */
 export class MassPainter {
   private readonly preparation: Readonly<MassFloorPreparation>;
   private pending = new Map<string, FloorJob>();
-  constructor(preparation: MassFloorPreparation = MASS_FLOOR_VIEW) {
+  constructor(preparation: MassFloorPreparation = MASS_FLOOR_VIEW,
+    private readonly now: () => number = () => performance.now()) {
     if (typeof preparation.enabled !== 'boolean'
       || !Number.isSafeInteger(preparation.stepsPerDraw) || preparation.stepsPerDraw < 0 || preparation.stepsPerDraw > 1024
       || !Number.isSafeInteger(preparation.halo) || preparation.halo < 0 || preparation.halo > 2
-      || !Number.isSafeInteger(preparation.maxPending) || preparation.maxPending < 0 || preparation.maxPending > 8)
+      || !Number.isSafeInteger(preparation.maxPending) || preparation.maxPending < 0 || preparation.maxPending > 8
+      || preparation.maxWorkMs !== undefined && (!Number.isFinite(preparation.maxWorkMs)
+        || preparation.maxWorkMs < 0 || preparation.maxWorkMs > 100))
       throw Error('Invalid floor preparation budget');
     this.preparation = Object.freeze({ ...preparation });
   }
@@ -103,7 +110,7 @@ export class MassPainter {
   private prepare(mass: WorldMassRuntime, visible: ReadonlySet<string>,
     bounds: {left:number;top:number;right:number;bottom:number}, center: {x:number;y:number}, advance: boolean): void {
     const cfg=this.preparation, span=mass.config.terrain.addressSpan, cap=mass.stream.config.maxPages;
-    if (!cfg.enabled || !cfg.stepsPerDraw || !cfg.halo || !cfg.maxPending || visible.size>=cap) {
+    if (!cfg.enabled || !cfg.stepsPerDraw || !cfg.halo || !cfg.maxPending || cfg.maxWorkMs === 0 || visible.size>=cap) {
       this.pending.clear(); return;
     }
     const candidates: {key:string;cell:MassCell;distance:number}[]=[];
@@ -140,10 +147,19 @@ export class MassPainter {
     // Do not stack speculative painting onto a frame already paying for a
     // visible cold bake or partial completion. Queue bookkeeping still bounds memory.
     let budget=advance ? cfg.stepsPerDraw : 0;
+    // One draw shares one allowance across every queued tile. A native canvas
+    // operation cannot be interrupted: this yields between rows/phases, and
+    // does not bound cold visible work or promise an overall frame time.
+    const started = budget && cfg.maxWorkMs !== undefined ? this.now() : 0;
+    const withinTime = () => {
+      if (cfg.maxWorkMs === undefined) return true;
+      const elapsed = this.now() - started;
+      return elapsed >= 0 && elapsed < cfg.maxWorkMs;
+    };
     for (const {key} of selected) {
       const job=this.pending.get(key);
       if (!job) continue;
-      while (budget>0) {
+      while (budget>0 && withinTime()) {
         budget--;
         const result=job.work.next();
         if (result.done) {

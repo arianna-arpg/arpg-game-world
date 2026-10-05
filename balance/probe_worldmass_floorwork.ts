@@ -14,18 +14,19 @@ const spec:MassSpec={id:'probe:floor-work',version:1,addressSpan:240,terrainCell
  surfaces:[{id:'land',priority:0,when:[],region:'ground',color:'#557744',biome:'field'}],places:[]};
 const origin=address('surface','-9007199254740994','9007199254740993',0,0,240);
 interface RecordedCanvas {key:string;serial:number;complete:boolean}
-const fixture=(policy:Partial<MassFloorPreparation>={},capacity=4)=>{
+const fixture=(policy:Partial<MassFloorPreparation>={},capacity=4,stepMs=0)=>{
  const generator=new MassGenerator(makeMassRun(42,'floor-work',spec),spec);
  const state=new MassState(generator.run,30),stream=new MassStream(generator,state,{maxPages:capacity,maxSamples:2048});
  const walk=new MassWalk(stream,origin),mass={state,stream,walk,generator,origin,config:{terrain:spec}} as unknown as WorldMassRuntime;
  const cells=[origin,neighborCell(origin,1,0),neighborCell(origin,0,1),neighborCell(origin,1,1)];
  stream.request(cells.slice(0,capacity));stream.step(256);
- const painter=new MassPainter({...MASS_FLOOR_VIEW,stepsPerDraw:2,maxPending:1,...policy});
+ let elapsed=0;
+ const painter=new MassPainter({...MASS_FLOOR_VIEW,stepsPerDraw:2,maxPending:1,...policy},()=>elapsed);
  const internals=painter as unknown as {bake:(mass:WorldMassRuntime,cell:MassCell)=>HTMLCanvasElement;bakeSteps:(mass:WorldMassRuntime,cell:MassCell)=>Generator<void,HTMLCanvasElement>;baked:Map<string,{canvas:RecordedCanvas}>;pending:Map<string,unknown>};
  const drawn:RecordedCanvas[]=[],created:RecordedCanvas[]=[];let steps=0,sync=0;
  internals.bakeSteps=function*(_m,cell){
   const canvas={key:cellKey(cell),serial:created.length+1,complete:false};created.push(canvas);
-  for(let i=0;i<6;i++){steps++;yield;}steps++;canvas.complete=true;
+  for(let i=0;i<6;i++){steps++;elapsed+=stepMs;yield;}steps++;elapsed+=stepMs;canvas.complete=true;
   return canvas as unknown as HTMLCanvasElement;
  };
  const bake=internals.bake.bind(painter);
@@ -90,7 +91,7 @@ const fixture=(policy:Partial<MassFloorPreparation>={},capacity=4)=>{
  console.log('PASS combined residency cap, stable full apron, runtime ownership and opt-outs');
 }
 {
- for(const bad of [{stepsPerDraw:NaN},{stepsPerDraw:-1},{stepsPerDraw:1025},{halo:3},{halo:.5},{maxPending:9},{enabled:1}])
+ for(const bad of [{stepsPerDraw:NaN},{stepsPerDraw:-1},{stepsPerDraw:1025},{halo:3},{halo:.5},{maxPending:9},{enabled:1},{maxWorkMs:-1},{maxWorkMs:NaN},{maxWorkMs:Infinity},{maxWorkMs:101}])
   assert.throws(()=>new MassPainter({...MASS_FLOOR_VIEW,...bad} as MassFloorPreparation));
  // A fresh stream with only visible geography available cannot speculate.
  const empty=fixture();(empty.mass as unknown as {stream:MassStream}).stream=new MassStream(empty.mass.generator,empty.state,{maxPages:4,maxSamples:100});
@@ -105,4 +106,22 @@ const fixture=(policy:Partial<MassFloorPreparation>={},capacity=4)=>{
  assert.deepEqual(f.counts(),before,'more prepared neighbors than spare canvas slots cannot cause endless evict/rebuild');
  assert.equal(f.internals.baked.size,4);assert.equal(f.internals.pending.size,0);
  console.log('PASS oversubscribed prepared apron settles without cache churn');
+}
+
+{
+ const f=fixture({stepsPerDraw:24,maxPending:2,maxWorkMs:3},4,1);
+ f.draw();assert.equal(f.counts().steps,7,'cold visible work remains complete, outside the soft allowance');
+ for(let i=0;i<8;i++){
+  const before=f.counts().steps;f.draw();
+  assert.ok(f.counts().steps-before<=3,'all pending tiles share the same time allowance');
+ }
+ assert.equal(f.internals.baked.size,4,'time-limited jobs still finish');
+ const over=fixture({stepsPerDraw:24,maxWorkMs:3},4,2);
+ over.draw();const before=over.counts().steps;over.draw();
+ assert.equal(over.counts().steps-before,2,'a single step may cross the allowance, but no further step starts');
+ const off=fixture({maxWorkMs:0});off.draw();off.draw();
+ assert.equal(off.internals.pending.size,0);assert.equal(off.counts().steps,7);
+ const legacy=fixture({stepsPerDraw:4,maxWorkMs:undefined},4,250);
+ legacy.draw();const n=legacy.counts().steps;legacy.draw();assert.equal(legacy.counts().steps-n,4);
+ console.log('PASS shared soft elapsed-time allowance, bounded step overshoot, eventual completion, zero and legacy policies');
 }

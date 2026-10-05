@@ -4521,3 +4521,43 @@ The fixture now refuses ordinary storage keys. A resize initially cleared the
 page after the canvas capture; awaiting resize and checking actual canvas/view
 dimensions resolved that capture fault. Neither was repaired by weakening game
 persistence, visibility, idle requirements or the assertions.
+
+### Time-aware terrain preparation and published speaker guidance
+
+Speaker guidance revision 1e4da1d27028782f4872a031bd61ee1236406d29 passed
+CI 37264695127 and Pages 37266104134. Hosted build metadata confirmed it at
+2026-10-05T05:05:23.762Z. An isolated hosted Save/Continue check retained seed
+1109505184, all six ordinary-save sentinels and no fatal error.
+
+The fixed-build Warrior reviewer reached level three and saved/exited normally,
+but the interrupted session left no final report. Its 156 paired captures and
+action log remain intact. An independent successor is continuing that inherited
+run; this is disclosed continuation, not a new blind first-run verdict. Neither
+the interruption nor the earlier milestones count as independent acceptance.
+
+MASS_FLOOR_VIEW now combines its 24-step bound with optional maxWorkMs:
+a default two-millisecond elapsed-time allowance shared across pending floor
+tiles. Zero disables speculative preparation; omission retains step-only
+authoring. The allowance starts after queue bookkeeping and is checked before
+each row/phase. A single step can overshoot, and cold visible completion still
+runs synchronously. This is not an overall frame-time or GPU-work guarantee.
+Painting progress depends on available time; final terrain pixels, geography,
+simulation clocks, random streams and save formats do not.
+
+The native floor-work probe now has seven groups, including a deterministic
+clock that proves the shared allowance, eventual completion, single-step
+overshoot, zero policy and omitted legacy policy. All three type checks and
+43 worldmass probes pass. Generation QA reports 869 cases times three seeds,
+zero failures and the same four baseline spacing warnings. Real-client checks
+preserve exact prior floor pixels, changed-halo reconstruction, renderer
+residency bounds and checked state through current/prior/current Continue.
+All seven page/canvas pairs and three floor images were inspected.
+
+A single controlled 960-draw camera traversal compared the previous step-only
+preparation with this allowance. Both finished the same two initial cold tiles,
+needed no later cold or partial visible finishes, and ended with 21 resident
+canvases within a cap of 25. Prior/current mean floor draw times were 0.329/0.341
+ms, p95 1.9/2.0 ms, and maximum 37.1/36.4 ms. This sample establishes no average
+speedup; the added contract lets slow work yield between steps. It excludes
+world simulation, whole-scene composition and human input, and cannot establish
+live gameplay FPS. The diagnostic and its full values remain in ignored evidence.

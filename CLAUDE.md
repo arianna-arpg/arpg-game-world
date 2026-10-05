@@ -1,5 +1,12 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+MASS_FLOOR_VIEW.maxWorkMs adds an optional elapsed-time allowance shared
+across offscreen floor jobs, checked between rows/phases alongside the step cap.
+Zero disables prewarming; omission retains step-only authoring. The default is
+2 ms, with possible single-step overshoot and complete synchronous cold fallback.
+Verify worldmass_floorwork, worldmass probes, genqa and floor-work-ui.cjs;
+use its candidate/tag arguments to preserve previous fixed-build evidence.
+
 speechApproachHint reads the selected reachable speaker before native idle
 dwell completes. SpeechAttention.approachHint composes through purpose, role and
 definition; VIS_CFG.speechApproach owns its presentation. Readiness, dialogue,
