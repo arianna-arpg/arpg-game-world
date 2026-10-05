@@ -22,6 +22,8 @@ import { CouchJoinOverlay, type CouchJoinChoice, type CouchJoinView } from './ui
 import { applyCursor } from './core/cursor';
 import { assistAim, AIM_ASSIST } from './engine/aimassist';
 import { PadPointer } from './ui/padpointer';
+import { DIALOGUE_CFG } from './data/dialogue';
+import { NpcConversationUI, conversationHasRewards } from './ui/npcConversation';
 import { DialogueUI, type DialogueActionContext } from './ui/dialogue';
 import { DialogueActions } from './engine/dialogueActions';
 import { applyUiScale, installUiScaleStyles } from './ui/uiScale';
@@ -443,13 +445,23 @@ dialogueActions.register('menu', {
   refusal: (context, action) => context.world === world ? ui.dialogueMenuRefusal(action.target) : 'This conversation has ended.',
   run: (_context, action) => ui.activateDialogueMenu(action.target),
 });
-const dialogue = new DialogueUI({
+const dialogue: DialogueUI = new DialogueUI({
+  conversationTopFloor: () => ui.conversationTopFloor(),
+  ownerChanged: (id, active) => { ui.conversationSpeakerId = id; ui.conversationWorkspaceActive = id !== null && active; },
+  createWorkspace: (root, changed) => new NpcConversationUI(root, {
+    world: () => world,
+    available: () => renderer.npcDialogueAvailable() && dialogue.open,
+    inventory: () => { if (!ui.inventoryOpen) ui.toggleInventory(); },
+    slotLabels: () => ui.conversationSlotLabels(),
+    changed: () => ui.refreshInventory(),
+  }, changed),
   settings: () => settings, padActive: padActiveNow,
   hudTop: () => ui.hudCluster?.()?.y,
   resolveText: text => renderer.resolveText(text),
   actions: dialogueActions,
   available: () => renderer.npcDialogueAvailable(),
 });
+renderer.npcDialogueOwner = () => dialogue.session.reading?.offer.speakerId ?? null;
 renderer.npcDialogueAvailable = () => running && !world.player?.dead && !world.player?.downed && ui.dialogueContext().available;
 renderer.onNpcDialogue = (w, line, focusId) => {
   dialogue.setAvailable(renderer.npcDialogueAvailable());
@@ -1989,7 +2001,8 @@ function tick(now: number): void {
       }
       if (world.questRewardRequested && !ui.escapeMenuOpen) {
         world.questRewardRequested = false;
-        ui.showQuestReward();
+        // The speaker owns local rewards in reader mode; bubble mode keeps its journal fallback.
+        if (DIALOGUE_CFG.presentation !== 'dialogue' || !conversationHasRewards(world)) ui.showQuestReward();
       }
       // The mercenary outpost's calm parley asks to open the hire/retire menu.
       if (world.mercOutpostRequested && !ui.escapeMenuOpen) {

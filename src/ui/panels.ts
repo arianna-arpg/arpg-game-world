@@ -870,7 +870,11 @@ export class UI {
   private readonly folio = new FolioCore(() => performance.now() / 1000);
   private readonly folioStrip = new FolioStrip(this.folio);
   private readonly folioSurfaces = new Map<HTMLElement, { id: string; isOpen: () => boolean; kind: string }>();
+  conversationWorkspaceActive = false;
+  conversationSpeakerId: number | null = null;
   private readonly serviceWorkspace = new ServiceWorkspace({
+    conversationWorkspace: () => this.conversationWorkspaceActive,
+    conversationCompanion: () => this.conversationSpeakerId !== null,
     inventory: this.inventory,
     inventoryOpen: () => this.inventoryOpen && this.panelSeat(this.inventory) === this.getWorld().localSeat,
     inventoryOwned: () => this.panelSeat(this.inventory) === this.getWorld().localSeat,
@@ -2417,6 +2421,10 @@ export class UI {
   /** One enrollment governs service coexistence as well as folio membership.
    * Shelved leaves cannot suppress a conversation; visible modals/pages can.
    * Inventory accompanies a service only for that service's local owner. */
+  conversationTopFloor(): number { return this.serviceWorkspace.conversationTopFloor; }
+
+  conversationSlotLabels(): string[] { return this.slotLabels(); }
+
   dialogueContext(): { available: boolean } {
     const local = this.getWorld().localSeat?.id;
     if (!local) return { available: false };
@@ -2430,7 +2438,7 @@ export class UI {
       || this.couchJoinOpen || this.muCardOpen || this.storyCardOpen()
       || !this.startMenu.classList.contains('hidden') || this.charSheetOpen || this.mapOpen
       || drawn.some(([el, row]) => row.kind !== 'station' || this.panelSeat(el).id !== local)
-      || (this.inventoryOpen && (!services.length || this.panelSeat(this.inventory).id !== local));
+      || (this.inventoryOpen && (!services.length && this.conversationSpeakerId === null || this.panelSeat(this.inventory).id !== local));
     return { available: !blocked };
   }
 

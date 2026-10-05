@@ -36,7 +36,7 @@ try{
  const offers=w.questOfferChoices();assert.equal(offers.length,1);
  assert.equal(offers[0].questId,q.id);assert.match(offers[0].target,/Cinderwatch Camp.*west/);
  assert.equal(offers[0].xp,q.reward.xp);assert.equal(offers[0].rewards.length,3);
- assert.match(w.questGiverPrompt()!,/Journal/);assert.equal(massQuestPins(w).length,0);
+ assert.match(w.questGiverPrompt()!,/work if you want/);assert.equal(massQuestPins(w).length,0);
  assert.match(questOfferHtml(w),/Accept contract/);assert.equal(state(w),before);
  const waiting=resume(w);assert.deepEqual(waiting.questOfferChoices(),offers);dwell(waiting);
  assert.equal(waiting.activeQuests.length,0,'an unaccepted offer stays optional on Continue');

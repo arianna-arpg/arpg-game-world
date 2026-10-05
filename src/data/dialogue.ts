@@ -13,6 +13,8 @@ export const DIALOGUE_CFG = {
   lineHeight: 1.65,
   /** Stable reading band, used with and without a service. Sizes pre-scale. */
   height: 190,
+  /** Deliberate actions need room for actual reward/item choices. */
+  conversationWorkspaceHeight: 380,
   heightMaxFraction: 0.36,
   heightLimitFraction: 0.6,
   minHeight: 130,

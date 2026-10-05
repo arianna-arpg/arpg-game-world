@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_conversation.ts', status: 'green', tier: 'fast', why: 'Stable NPC ownership, departure and panel suspension; speaker-specific work/rewards, action refresh and near-facing target emphasis' },
   { probe: 'probe_speechapproach.ts', status: 'green', tier: 'fast', why: 'Native selected-speaker approach hint: idle grace, pure reads, authored opt-out, live reach/story/roof, death, stale focus and retirement on dialogue readiness' },
   { probe: 'probe_worldmass_floorwork.ts', status: 'green', tier: 'fast', why: 'Budgeted floor preparation, atomic publication, cold fallback, invalidation and shared residency cap' },
   { probe: 'probe_worldmass_dirtyterrain.ts', status: 'green', tier: 'fast', why: 'Scoped page/sample invalidation, preserved pending work, older and failed restore, painter halo and cache ownership' },

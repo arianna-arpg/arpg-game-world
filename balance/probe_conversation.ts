@@ -1,0 +1,64 @@
+import assert from 'node:assert/strict';
+import { makeSimWorld } from '../src/sim/arena';
+import { seedGlobalRandom } from '../src/sim/rng';
+import { DialogueSession } from '../src/engine/dialogue';
+import { conversationQuests, conversationHasRewards } from '../src/ui/npcConversation';
+import { combatTargetStrength } from '../src/render/vis/combatTargets';
+import type { Actor } from '../src/engine/actor';
+import { Q_FRONTIER_WATCH } from '../src/quests/frontier';
+const restore = seedGlobalRandom(66042);
+try {
+  const w = makeSimWorld('warrior', 42); w.startWorldMass(42);
+  const smith = w.actors.find(a => a.defId === 'townsfolk_smith')!;
+  const mireille = w.actors.find(a => a.defId === 'townsfolk_innkeep')!;
+  const home = {...mireille.pos};
+  w.player.pos = {...smith.pos}; w.player.tier = smith.tier;
+  mireille.pos = {...smith.pos};
+  for (let i=0;i<120;i++) { w.time+=1/60; w.npcSpeechView(true,new Map([[smith.id,0]])); }
+  assert.equal(w.speechFocusTarget()?.id,smith.id);
+  w.npcSpeechView(true,new Map([[mireille.id,0]]),smith.id);
+  assert.equal(w.speechFocusTarget()?.id,smith.id,'reading owns selection even when pointer crosses another speaker');
+  w.npcSpeechView(false,new Map([[mireille.id,0]]),smith.id);
+  assert.equal(w.speechFocusTarget()?.id,smith.id,'a suspended panel retains the reachable speaker');
+  w.npcSpeechView(true,new Map([[mireille.id,0]]));
+  assert.equal(w.speechFocusTarget()?.id,mireille.id,'closing reader restores ordinary explicit targeting');
+  w.player.pos.x+=1000;w.npcSpeechView(true,undefined,smith.id);
+  assert.equal(w.npcDialogueReachable(smith.id),false);assert.notEqual(w.speechFocusTarget()?.id,smith.id);
+  mireille.pos=home;w.player.pos={...home};w.player.tier=mireille.tier;
+  assert.deepEqual(conversationQuests(w,mireille.id).work.map(q=>q.questId),[Q_FRONTIER_WATCH.id]);
+  assert.equal(conversationQuests(w,smith.id).work.length,0,'nearby work belongs to its native giver');
+  assert.ok(w.acceptQuestOffer(Q_FRONTIER_WATCH.id));
+  const quest=w.activeQuests.find(q=>q.questId===Q_FRONTIER_WATCH.id)!;
+  const mass=w.massRuntime!, place=mass.journey!.places.find(p=>p.id===quest.placeId)!;
+  w.landPartyAt(mass.journey!.local(place));mass.update(w,true);
+  const natives=(mass as unknown as {natives:Map<string,Actor>}).natives;
+  for(const [id,a] of [...natives]) if(JSON.parse(id)[0]===place.id) w.kill(a,false,w.player);
+  mass.update(w,true);assert.ok(quest.fieldDone);
+  w.landPartyAt(home);mass.update(w,true);
+  assert.ok(conversationHasRewards(w));
+  assert.equal(conversationQuests(w,mireille.id).rewards.length,1);
+  assert.equal(conversationQuests(w,smith.id).rewards.length,0);
+  const reward=conversationQuests(w,mireille.id).rewards[0];
+  assert.ok(w.claimQuestReward(reward.questId,reward.choices[0].id));
+  assert.equal(w.claimQuestReward(reward.questId,reward.choices[0].id),false,'one reward cannot pay twice');
+  console.log('PASS stable conversation ownership, departure, suspended UI, normal retargeting, giver-specific offers and once-only native reward');
+
+  const session=new DialogueSession(), first={speakerId:1,key:'gift',pages:['Before']};
+  session.sync(1,first);const revision=session.revision;
+  session.refreshOffer({speakerId:2,key:'foreign',pages:['No']});assert.equal(session.revision,revision);
+  session.refreshOffer({speakerId:1,key:'prepared',pages:['After']});
+  assert.equal(session.node?.pages[0],'After');assert.ok(session.revision>revision);
+  session.close();session.sync(1,first);assert.equal(session.reading,null,'satisfied instructions stay retired');
+  console.log('PASS action refresh preserves owner and invalidates stale text/revisions');
+
+  const a=makeSimWorld('warrior',73), hero=a.player, foe=a.createMonster('dire_wolf',1,'enemy');
+  hero.pos={x:500,y:500};hero.facing=0;foe.pos={x:600,y:500};foe.tier=hero.tier;a.actors=[hero,foe];
+  assert.ok(combatTargetStrength(a,foe)>0);
+  hero.facing=Math.PI;assert.equal(combatTargetStrength(a,foe),0);
+  hero.facing=Math.PI/2;assert.equal(combatTargetStrength(a,foe),0);
+  hero.facing=0;foe.pos.x=790;assert.equal(combatTargetStrength(a,foe),0);
+  foe.pos.x=600;foe.passive=true;assert.equal(combatTargetStrength(a,foe),0);foe.passive=false;
+  hero.dead=true;assert.equal(combatTargetStrength(a,foe),0);hero.dead=false;
+  const los=a.lineOfSight;a.lineOfSight=()=>false;assert.equal(combatTargetStrength(a,foe),0);a.lineOfSight=los;
+  console.log('PASS facing cone, nearby radius, native threat/death gates and blocked sight');
+} finally {restore();}

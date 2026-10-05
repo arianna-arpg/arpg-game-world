@@ -86,6 +86,14 @@ export class DialogueSession {
     return ended;
   }
 
+  /** Explicit actions may retire the instructions they just satisfied. */
+  refreshOffer(offer: DialogueOffer): void {
+    if (!this.reading || offer.speakerId !== this.reading.offer.speakerId || !offer.pages.length) return;
+    if (offer.key === this.reading.offer.key) return;
+    this.heard.add(this.reading.offer.key);
+    this.reading = { offer, page: 0 }; this.pending = null; this.revision++;
+  }
+
   /** A changed functional prompt waits behind the page being read. Only the
    * latest state is kept, so completed lessons never queue stale directions. */
   hasNext(): boolean {

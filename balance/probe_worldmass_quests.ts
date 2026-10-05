@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { serializeCharacter, applySavedCharacter } from '../src/meta/character';
+import { conversationQuests } from '../src/ui/npcConversation';
 import { NPC_DIALOGUES } from '../src/data/npcDialogues';
 import { Q_FRONTIER_WATCH } from '../src/quests/frontier';
 import { Q_UNDEAD_SOUTH } from '../src/quests/defs';
@@ -40,8 +41,8 @@ try {
   const cues=hooks(w).speechCandidates(w.localSeat).find(c=>c.a.defId==='townsfolk_innkeep')!.text!;
   const preparation = NPC_DIALOGUES.find(d=>d.id==='mireille_flask_preparation')!;
   assert.equal(cues,preparation.lines[0].text,'the continuous opening uses its authored preparation invitation');
-  assert.ok(preparation.responses?.choices?.some(c=>c.action?.type==='menu' && c.action.target==='journal'
-    && /contracts/i.test(c.label)),'the actual response explicitly routes preparation and optional contracts to the native Journal');
+  assert.deepEqual(conversationQuests(w,w.actors.find(a=>a.defId==='townsfolk_innkeep')!.id).work.map(q=>q.questId),[Q_FRONTIER_WATCH.id],
+    'conversation exposes the actual native optional contract at its giver');
   hooks(w).updateQuestGiver(4);
   assert.equal(w.activeQuests.length,0,'new offers wait for a deliberate choice');
   assert.ok(w.acceptQuestOffer(Q_FRONTIER_WATCH.id));

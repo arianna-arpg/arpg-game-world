@@ -24,10 +24,21 @@ export interface DialogueActionContext {
   choiceId: string;
 }
 
+export interface DialogueWorkspace {
+  readonly active: boolean;
+  readonly choosing: boolean;
+  sync(world: World, speakerId: number): void;
+  reset(): void;
+  back(): void;
+}
+
 interface DialogueHost {
+  createWorkspace?: (root: HTMLElement, changed: () => void) => DialogueWorkspace;
+  ownerChanged?: (id: number | null, conversationWorkspace: boolean) => void;
   settings: () => Settings;
   padActive: () => boolean;
   hudTop: () => number | undefined;
+  conversationTopFloor?: () => number;
   resolveText: (text: string) => string;
   actions: DialogueActions<DialogueActionContext>;
   available: () => boolean;
@@ -48,6 +59,8 @@ export class DialogueUI {
   private readonly progress: HTMLElement;
   private readonly choices: HTMLElement;
   private readonly status: HTMLElement;
+  private readonly conversationWorkspace?: DialogueWorkspace;
+  private refreshConversation = false;
   private choiceSignature = '';
   private world: World | null = null;
   private scene = -1;
@@ -79,7 +92,7 @@ export class DialogueUI {
       .dialogue-portrait { align-self:center; border:1px solid #a58a535e; padding:5px; border-radius:3px;
         background:radial-gradient(ellipse at 50% 55%,#60513255,#11151ccc 73%); box-shadow:inset 0 0 0 3px #14151a; }
       .dialogue-portrait canvas { display:block; width:100%; height:auto; }
-      .npc-dialogue[data-choosing=true] .dialogue-portrait { align-self:start; position:sticky; top:0; }
+      .npc-dialogue[data-workspace=true] .dialogue-portrait,.npc-dialogue[data-choosing=true] .dialogue-portrait { align-self:start; position:sticky; top:0; }
       .dialogue-footer { display:flex; gap:16px; align-items:center; margin-top:6px; min-height:28px; flex-shrink:0; }
       .dialogue-progress { color:#b5a68a; font:11px Verdana,sans-serif; flex:1; }
       .npc-dialogue button { font:12px Verdana,sans-serif; color:#eee0c4; cursor:var(--cursor-point,pointer);
@@ -109,7 +122,7 @@ export class DialogueUI {
       <p class="dialogue-page" aria-hidden="true"><span class="dialogue-ink"></span><span class="dialogue-unread"></span></p>
       <div class="dialogue-accessible" aria-live="polite" aria-atomic="true"></div>
       <div class="dialogue-choices" role="group" aria-label="Responses" hidden></div>
-      <div class="dialogue-status" role="status"></div></div>
+      <div class="dialogue-status" role="status"></div><div class="conversation-workspace"></div></div>
       <div class="dialogue-portrait"><canvas aria-hidden="true"></canvas></div></div>
       <div class="dialogue-footer"><span class="dialogue-progress"></span><button class="dialogue-next" type="button"></button></div>`;
     document.body.appendChild(this.root);
@@ -119,6 +132,7 @@ export class DialogueUI {
     this.accessible = get('.dialogue-accessible'); this.next = get('.dialogue-next');
     this.progress = get('.dialogue-progress');
     this.choices = get('.dialogue-choices'); this.status = get('.dialogue-status');
+    this.conversationWorkspace = host.createWorkspace?.(get('.conversation-workspace'), () => { this.refreshConversation = true; });
     this.next.onclick = () => this.advance();
     get<HTMLButtonElement>('.dialogue-close').onclick = () => this.close();
     // One surface gesture, including portrait, heading and margins. Nested
@@ -128,7 +142,7 @@ export class DialogueUI {
         || event.target.closest('button,a,input,select,textarea,[role="button"],.dialogue-choices')) return;
       const selection = window.getSelection();
       if (selection && !selection.isCollapsed && this.root.contains(selection.anchorNode)) return;
-      this.advance();
+      if (!this.conversationWorkspace?.active) this.advance();
     });
     this.root.addEventListener('pointerdown', event => event.stopPropagation());
     // Capture the bound advance before gameplay sees it. Autorepeat stays
@@ -138,8 +152,8 @@ export class DialogueUI {
       if (isTypingTarget(event.target)) return;
       if (this.choosing && ['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)
         && (!(event.target instanceof Element) || this.root.contains(event.target)
-          || !event.target.closest('button,a,select,[role="button"]'))) {
-        const buttons = [...this.choices.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
+          || !event.target.closest('button,a,select,summary,[role="button"]'))) {
+        const buttons = [...(this.conversationWorkspace?.choosing ? this.root : this.choices).querySelectorAll<HTMLButtonElement>('button:not(:disabled)')].filter(b => b.offsetWidth > 0);
         const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
         const index = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1
           : at < 0 ? (event.key === 'ArrowUp' ? buttons.length - 1 : 0)
@@ -157,7 +171,7 @@ export class DialogueUI {
       // Focused controls own native activation, including explicit response
       // choices. The advance button alone shares the bound advance gesture.
       if (!this.heldKeys.has(code) && event.target instanceof Element
-        && event.target.closest('button,a,select,[role="button"]')
+        && event.target.closest('button,a,select,summary,[role="button"]')
         && !event.target.closest('.dialogue-next')) return;
       if (!this.heldKeys.has(code) && (!this.open || event.key.toLowerCase() !== this.host.settings().keybinds.dialogueAdvance)) return;
       event.preventDefault(); event.stopImmediatePropagation();
@@ -171,16 +185,18 @@ export class DialogueUI {
   }
 
   get open(): boolean { return !this.root.hidden; }
-  get choosing(): boolean { return this.open && this.revealed && this.session.awaitingChoice; }
+  get choosing(): boolean { return this.open && (!!this.conversationWorkspace?.choosing || this.revealed && this.session.awaitingChoice); }
 
   /** Seat before DOM hit-testing as well as after rendering a new page. */
   syncLayout(): void {
-    seatDialogue(this.root, this.host.hudTop());
+    seatDialogue(this.root, this.host.hudTop(), !!this.conversationWorkspace?.active, this.host.conversationTopFloor?.());
   }
 
   setAvailable(available: boolean): void {
     this.available = available;
     this.root.hidden = !available || !this.session.reading;
+    this.host.ownerChanged?.(this.session.reading?.offer.speakerId ?? null, !!this.conversationWorkspace?.active);
+    if (!this.session.reading) this.conversationWorkspace?.reset();
   }
 
   private finish(offer: DialogueOffer | null): void {
@@ -188,6 +204,7 @@ export class DialogueUI {
   }
 
   reset(): void {
+    this.conversationWorkspace?.reset(); this.refreshConversation = false; this.host.ownerChanged?.(null, false);
     this.session.reset(); this.world = null; this.scene = -1; this.pageKey = '';
     this.root.hidden = true;
     this.choiceSignature = ''; this.choices.replaceChildren(); this.status.textContent = '';
@@ -200,6 +217,7 @@ export class DialogueUI {
     const offer = this.available && line
       ? world.npcDialogues.readerOffer(line.a, line.text, DIALOGUE_CFG.pageChars, this.host.resolveText) : null;
     this.finish(this.session.sync(focusId, offer));
+    if (this.refreshConversation && offer) { this.session.refreshOffer(offer); this.refreshConversation = false; }
     const dt = Math.max(0, Math.min(0.1, world.time - this.lastTime));
     this.lastTime = world.time;
     this.setAvailable(this.available);
@@ -223,6 +241,7 @@ export class DialogueUI {
     this.revealed = count >= this.fullPage.length;
     this.ink.textContent = this.fullPage.slice(0, count);
     this.rest.textContent = this.fullPage.slice(count);
+    this.conversationWorkspace?.sync(world, actor.id);
     this.renderControls();
     this.syncLayout();
     const px = Math.round(DIALOGUE_CFG.portraitSize * VIS_CFG.portrait.oversample);
@@ -232,6 +251,7 @@ export class DialogueUI {
 
   advance(): void {
     if (!this.open || !this.pageKey) return;
+    if (this.conversationWorkspace?.active) { this.conversationWorkspace.back(); this.renderControls(); return; }
     if (!this.revealed) {
       this.revealed = true; this.ink.textContent = this.fullPage; this.rest.textContent = ''; this.renderControls();
     } else if (!this.session.awaitingChoice) {
@@ -244,11 +264,15 @@ export class DialogueUI {
     if (!reading || !node || !this.world) return;
     const settings = this.host.settings();
     const bind = this.host.padActive() ? padDisplay(settings.padBinds.dialogueAdvance) : keyDisplay(settings.keybinds.dialogueAdvance);
-    const choosing = this.revealed && this.session.awaitingChoice;
+    const workspaceActive = !!this.conversationWorkspace?.active;
+    this.root.dataset.workspace = String(workspaceActive);
+    this.root.querySelector<HTMLElement>('.dialogue-page')!.hidden = workspaceActive;
+    const choosing = !workspaceActive && this.revealed && this.session.awaitingChoice;
     this.root.dataset.choosing = String(choosing);
     this.next.hidden = choosing;
     this.next.textContent = `${this.revealed ? this.session.hasNext() ? 'Continue' : 'Finish' : 'Reveal'}  ›${bind ? `  ${bind}` : ''}`;
-    this.progress.textContent = choosing ? 'Choose a response' : node.pages.length > 1 ? `${reading.page + 1} / ${node.pages.length}` : '';
+    if (workspaceActive) this.next.textContent = 'Back';
+    this.progress.textContent = workspaceActive ? '' : choosing ? 'Choose a response' : node.pages.length > 1 ? `${reading.page + 1} / ${node.pages.length}` : '';
     this.choices.hidden = !choosing;
     const rows = choosing ? (node.choices ?? []).map(choice => ({ choice,
       reason: this.session.choiceRefusal(choice.id) ?? (choice.action ? this.host.actions.refusal(this.actionContext(choice.id), choice.action) : null),
@@ -295,7 +319,7 @@ export class DialogueUI {
 
   close(): boolean {
     if (!this.session.reading) return false;
-    this.finish(this.session.close()); this.pageKey = ''; this.root.hidden = true;
+    this.finish(this.session.close()); this.pageKey = ''; this.setAvailable(this.available);
     return true;
   }
 }

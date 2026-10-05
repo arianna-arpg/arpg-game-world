@@ -24190,13 +24190,18 @@ export class World {
    * order/culling. Raw counter reads remain available to menus and lessons;
    * only this presentation seam admits proximity bubbles. Service actions
    * retain their existing dwell gates. Couch caravans keep their seat scope. */
-  npcSpeechView(admit = true, pointerHits?: ReadonlyMap<number, number>): NpcSpeechLine[] {
+  npcDialogueReachable(speakerId: number): boolean {
+    return this.speechCandidates(this.localSeat).some(c => c.id === speakerId);
+  }
+
+  npcSpeechView(admit = true, pointerHits?: ReadonlyMap<number, number>, retainedSpeakerId?: number | null): NpcSpeechLine[] {
     this.npcDialogues.refreshAppearances();
-    const callout = this.npcDialogues.callout(admit);
+    const retainedSpeaker = retainedSpeakerId == null ? undefined : this.speechCandidates(this.localSeat).find(c => c.id === retainedSpeakerId);
+    const callout = retainedSpeaker ? null : this.npcDialogues.callout(admit);
     if (callout) return [callout];
     const out: NpcSpeechLine[] = [];
     for (const seat of this.localHumanSeats()) {
-      const candidates = this.speechCandidates(seat);
+      const candidates = seat === this.localSeat && retainedSpeaker ? [retainedSpeaker] : this.speechCandidates(seat);
       if (admit && seat === this.localSeat && SPEECH_ATTENTION_CFG.pointer.enabled) {
         for (const c of candidates) if (c.available) c.pointerDistance = pointerHits?.get(c.id);
       }
@@ -28430,12 +28435,12 @@ export class World {
    *  the world learns who you are.) */
   questGiverPrompt(): string | null {
     if (!this.nearAnyQuestGiver()) return null;
-    if (this.questImbues.some(r => this.giverPresent(QUESTS[r.questId]?.turnIn?.giver ?? []) !== null)) return 'Your imbue awaits — choose a magic item in the Quest Journal.';
-    if (this.questRewardOffers().length) return 'Your keepsake awaits — choose a reward in the Quest Journal.';
+    if (this.questImbues.some(r => this.giverPresent(QUESTS[r.questId]?.turnIn?.giver ?? []) !== null)) return 'Your imbue awaits. Show me the magic piece you would like me to work on.';
+    if (this.questRewardOffers().length) return 'Your keepsake awaits. Choose what you will carry.';
     if (this.reliquaryLesson()) return 'A keepsake needs a home. Open your inventory and seat your charm in the Reliquary.';
     if (this.graphWorkAvailable() && this.nearQuestGiver() && this.odyssey.hasLocalLeads()) return 'Linger — I can mark the Odyssey leaders and their supply operations.';
     if (this.pendingTurnIns().length) return 'Linger — a bounty is yours to claim.';
-    if (this.questOfferChoices().length) return 'I have work if you want it. Open Menu → Journal while we talk to choose a contract.';
+    if (this.questOfferChoices().length) return 'I have work if you want it.';
     if (this.nextAcceptableQuest()) return this.heroKnown()
       ? 'Linger, {name} — I have work for you…'
       : 'Linger, and I have work for you…';

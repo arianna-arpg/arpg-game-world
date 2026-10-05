@@ -23,7 +23,7 @@ app.whenReady().then(async()=>{
  const shot=async name=>{
   const r=await run(()=>{
    const w=__game.world(),p=document.getElementById('world-map'),read=()=>JSON.stringify([w.meta.items,w.player.skills.map(s=>s?.def.id),w.ledger,[...w.player.charges],w.time,w.massRuntime.state.snapshot()]);
-   const before=read();__game.ui.refreshMap();__game.renderer.render(w);const boxes=[...document.querySelectorAll('[data-prepare-skill],.dialogue-choices button')].filter(e=>e.getBoundingClientRect().width&&e.getBoundingClientRect().height).map(e=>{
+   const before=read();__game.ui.refreshMap();__game.renderer.render(w);const boxes=[...document.querySelectorAll('[data-prepare-skill],.dialogue-choices button,.conversation-toolbar button')].filter(e=>e.getBoundingClientRect().width&&e.getBoundingClientRect().height).map(e=>{
     const b=e.getBoundingClientRect();const c=e.closest('.dialogue-layout')?.getBoundingClientRect();return {text:e.textContent,disabled:e.disabled,x:b.x,y:b.y,right:b.right,bottom:b.bottom,clip:c&&{top:c.top,bottom:c.bottom}};});
    return {same:before===read(),fatal:__game.crash().fatal,width:innerWidth,height:innerHeight,boxes,dialogue:document.getElementById('npc-dialogue').innerText,
     journal:p.innerText,canvas:document.getElementById('game').toDataURL()};
@@ -50,15 +50,17 @@ app.whenReady().then(async()=>{
    for(let i=0;i<120;i++)__game.step(1);
   });
   assert.equal((await run(state)).lesson,'learn');
-  await run(()=>{
+  const integrated=await run(()=>!!document.querySelector('[data-conversation-activity="flasks"]'));
+  if(!integrated)await run(()=>{
    const rows=[];for(let i=0;i<8;i++){const w=__game.world(),b=document.querySelector('#npc-dialogue .dialogue-next');rows.push({text:document.querySelector('.dialogue-accessible').textContent,choice:document.querySelector('.dialogue-choices').innerHTML,hidden:document.getElementById('npc-dialogue').hidden,lines:w.npcSpeechView(false).map(l=>l.text)});if(document.querySelector('.dialogue-choices:not([hidden]) button'))break;if(b&&!b.hidden)b.click();__game.step(1);}
    return rows;
   });
   const intro=await shot('conversation');
-  assert.ok(intro.boxes.some(b=>b.text==='Flasks & contracts'));
+  assert.ok(intro.boxes.some(b=>b.text===(integrated?'Flasks':'Flasks & contracts')));
   win.setSize(600,650);await new Promise(r=>setTimeout(r,150));await shot('conversation-narrow');
   win.setSize(1280,850);await new Promise(r=>setTimeout(r,150));
-  await run(()=>[...document.querySelectorAll('.dialogue-choices button')].find(b=>b.textContent==='Flasks & contracts').click());
+  if(integrated)await journal(); // Manual Journal remains a supported preparation path.
+  else await run(()=>[...document.querySelectorAll('.dialogue-choices button')].find(b=>b.textContent==='Flasks & contracts').click());
   assert.equal((await shot('ready')).boxes.filter(b=>b.text.startsWith('Place on')).length,2);
   await run(()=>document.querySelector('[data-quest-accept]').click());
   const unprepared=await run(()=>{const w=__game.world(),a=w.actors.find(a=>a.defId==='townsfolk_innkeep');

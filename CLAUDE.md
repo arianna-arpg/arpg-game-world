@@ -1,5 +1,19 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+NpcConversationUI integrates live giver-specific work, flask preparation, rewards
+and deferred imbues into the reader. retainedSpeakerId pins only an already
+reading, still reachable speaker; pause/services preserve it, departure releases
+it. The Journal remains a manual fallback. conversationWorkspace shares expanded
+action bounds with service/inventory seating, and its actions wake the controller
+pointer. All payments/equips remain native meta commands. combatTargetStrength
+limits silhouette emphasis to nearby, faced, unobstructed native threats.
+Verify conversation, speech, worldmass_quest, mireille_lesson, skillpreparation,
+brandtquest, townwelcome, combatfocus, sim smoke, boot smoke and the conversation,
+dialogue-services and body-contrast UI harnesses. See docs/ui/conversation-integration.md.
+Further seamless passes focus on world continuity and gameplay; preserve the
+classic passive tree and opt-in explanatory captions. Pool/Vault expansion is a
+separate progression pass, not an excuse for further UI instruction layers.
+
 Saved castNameHint and supportReadyHint default off, including older settings.
 Cast-name and Feet planted captions are independent; the native cast bar and
 owner-slot cue remain visual. Skills hides affirmative readiness prose while
@@ -100,8 +114,8 @@ Verify speech and worldmass_quests as well as the preparation checks below.
 skillPreparationHtml presents the native pending flask lesson alongside
 optional contracts. Its buttons send ordinary learn intents with emptyOnly,
 which rechecks occupancy/known copies before changing the rack. Native gifts,
-requirements, once-only filling and graduation remain authoritative. Authored
-Mireille responses open the same Journal or inventory; choiceMinWidth keeps
+requirements, once-only filling and graduation remain authoritative. NpcConversationUI
+offers the same native preparation beside Mireille; the Journal remains available. choiceMinWidth keeps
 short alternatives visible. Verify skillpreparation, mireille_lesson, skillitems,
 townwelcome, menubar, worldmass_welcome, sim smoke and skill-preparation-ui.cjs.
 

@@ -1,3 +1,4 @@
+import { combatTargetStrength } from './vis/combatTargets';
 import { buffReadoutLines, drawBuffReadout } from './vis/buffReadout';
 import { drawSkillIcon } from './skillIcons';
 import { drawMeleeReach } from './vis/meleeReachLayer';
@@ -787,7 +788,7 @@ export class Renderer {
     this.dialogueVisibleSpeaker = null;
     if (!VIS_ABLATE.has('actors')) {
       for (const line of world.npcSpeechView(!this.dialogueReaderEnabled() || this.npcDialogueAvailable(),
-        this.speechPointerHits(world))) this.speechFocusLines.set(line.a, line);
+        this.speechPointerHits(world), this.dialogueReaderEnabled() ? this.npcDialogueOwner() : null)) this.speechFocusLines.set(line.a, line);
       if (VIS_CFG.speechApproach.enabled && (!this.dialogueReaderEnabled() || this.npcDialogueAvailable())
         && ![...this.speechFocusLines.values()].some(line => line.seatId === world.localSeat.id))
         this.speechApproach = world.speechApproachHint();
@@ -3811,6 +3812,7 @@ export class Renderer {
   private speechFocusLines = new Map<Actor, NpcSpeechLine>();
   private speechApproach: { a: Actor; text: string } | null = null;
   private dialogueVisibleSpeaker: Actor | null = null;
+  npcDialogueOwner: () => number | null = () => null;
   npcDialogueAvailable: () => boolean = () => true;
   onNpcDialogue: ((world: World, line: NpcSpeechLine | null, focusId: number | null) => void) | null = null;
   private dialogueReaderEnabled(): boolean { return !!this.onNpcDialogue && DIALOGUE_CFG.presentation === 'dialogue'; }
@@ -5421,8 +5423,8 @@ export class Renderer {
   /** A quiet silhouette edge for nearby native threats; never an X-ray pass. */
   private drawCombatBodyEdge(a: Actor, world: World, look: BodyLook): void {
     const c = VIS_CFG.combatFocus.bodies;
-    if (!c.enabled || !world.isPressingFoe(a, world.player.pos, world.player.tier, c.radius)) return;
-    const strength = Math.min(1, Math.max(0, (c.radius - dist(a.pos, world.player.pos)) / c.fade));
+    const strength = combatTargetStrength(world, a);
+    if (strength <= 0) return;
     drawBodyContrast(this.ctx, look, c.width, c.color, c.alpha * strength);
   }
 

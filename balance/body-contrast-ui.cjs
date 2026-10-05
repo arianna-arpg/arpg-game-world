@@ -37,11 +37,12 @@ app.whenReady().then(async()=>{
     const a=w.createMonster(id,1,'enemy');a.pos={x:h.pos.x+115+i*70,y:h.pos.y-70+i*70};
     a.facing=Math.PI;a.aiAnchor={...a.pos};return a;
    });
-   w.actors=[h,...foes];
+   h.facing=0; w.actors=[h,...foes];
    const r=__game.renderer;r.hudMouse={x:-1000,y:-1000};
-   window.bodyQA={foes,edge:r.drawCombatBodyEdge};
+   window.bodyQA={facing:0,foes,edge:r.drawCombatBodyEdge};
    for(let i=0;i<30;i++)r.render(w);
    bodyQA.compare=()=>{
+    h.facing=bodyQA.facing;
     const state=JSON.stringify(w.actors.map(a=>[a.id,a.pos,a.life,a.mana,a.casting,a.statuses]));
     r.drawCombatBodyEdge=()=>{};r.render(w);
     const off=r.ctx.getImageData(0,0,r.canvas.width,r.canvas.height).data;
@@ -61,7 +62,7 @@ app.whenReady().then(async()=>{
     return readings;
    };
   });
-  const visible=await run(()=>bodyQA.compare());
+  const visible=await run(()=>bodyQA.compare()); console.log(JSON.stringify({visible,view:await run(()=>({facing:__game.world().player.facing,foes:bodyQA.foes.map(a=>({id:a.defId,los:__game.world().lineOfSight(__game.world().player.pos,a.pos,__game.world().player.tier,a.tier),tier:a.tier,heroTier:__game.world().player.tier}))}))}));
   assert.ok(visible.every(v=>v.pixels>12),'each actual native silhouette gets visible edge pixels');
   await shot('visible');
   await run(()=>{__game.renderer.drawCombatBodyEdge=()=>{};__game.renderer.render(__game.world());});
@@ -75,6 +76,8 @@ app.whenReady().then(async()=>{
    const skills=a.skills;test('unarmed',()=>a.skills=[],()=>a.skills=skills);
    const pos={...a.pos};test('distant',()=>a.pos.x+=500,()=>a.pos=pos);
    test('otherTier',()=>a.tier=1,()=>a.tier=0);
+   test('behind',()=>bodyQA.facing=Math.PI,()=>bodyQA.facing=0);
+   test('side',()=>bodyQA.facing=Math.PI/2,()=>bodyQA.facing=0);
    return checks;
   });
   for(const [name,v] of Object.entries(exclusions))assert.equal(v.pixels,0,name+' has no threat edge');

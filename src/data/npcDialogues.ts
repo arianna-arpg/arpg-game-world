@@ -73,16 +73,12 @@ export const NPC_DIALOGUES: NpcDialogueDef[] = [
     none: [{ fact: 'mireilleContractActive' }],
     trigger: { kind: 'dwell', radius: 150, seconds: 1.1 },
     lines: [{ text: 'I keep flasks for new faces. Shall we find a place for yours?' }],
-    responses: { choices: [
-      { id: 'prepare', label: 'Flasks & contracts', action: { type: 'menu', target: 'journal' } },
-      { id: 'pack', label: 'Arrange my pack', action: { type: 'menu', target: 'inventory' } },
-    ] },
   },
   {
     id: 'oracle_memory_choice', speaker: { defId: 'townsfolk_oracle' }, priority: 212,
     all: [{ fact: 'oracleAtHome' }, { fact: 'oracleMemoryWaiting' }],
     trigger: { kind: 'dwell', radius: 150, seconds: 0.4 },
-    lines: [{ text: 'A familiar shadow falls, and this life has room for a different answer. Choose a magic Memory in your Quest Journal.\n\nI can call upon the skills you have made your own. A calling glimpsed must first be welcomed in the Vault before its arts can answer by name.' }],
+    lines: [{ text: 'A familiar shadow falls, and this life has room for a different answer. Choose a magic Memory, and I will call it forth.\n\nI can call upon the skills you have made your own. A calling glimpsed must first be welcomed in the Vault before its arts can answer by name.' }],
   },
   {
     id: 'oracle_commander_pursuit', speaker: { defId: 'townsfolk_oracle' }, priority: 201,
@@ -106,7 +102,7 @@ export const NPC_DIALOGUES: NpcDialogueDef[] = [
     id: 'oracle_reliquary_gift', speaker: { defId: 'townsfolk_oracle' }, priority: 210,
     all: [{ fact: 'oracleAtHome' }, { fact: 'oracleRelicWaiting' }],
     trigger: { kind: 'dwell', radius: 150, seconds: 0.4 },
-    lines: [{ text: 'A quiet place. I had almost forgotten such things existed. Your Reliquary is open now. Choose a charm in your Quest Journal, then seat it in the case.\n\nA relic carried loose is only a memory. Given a place, it can lend you its strength.' }],
+    lines: [{ text: 'A quiet place. I had almost forgotten such things existed. Your Reliquary is open now. Choose a charm, then seat it in the case.\n\nA relic carried loose is only a memory. Given a place, it can lend you its strength.' }],
   },
   {
     id: 'oracle_reliquary_lesson', speaker: { defId: 'townsfolk_oracle' }, priority: 205,
@@ -130,13 +126,13 @@ export const NPC_DIALOGUES: NpcDialogueDef[] = [
     id: 'brandt_trophy_imbue', speaker: { defId: 'townsfolk_smith' }, priority: 181,
     all: [{ fact: 'brandtImbueWaiting' }, { ledger: questDoneKey(BRANDT_TROPHY_QUEST), scope: 'run' }],
     trigger: { kind: 'dwell', radius: 150, seconds: 0.4 },
-    lines: [{ text: 'That fang will do nicely. Thank you. The hammer you brought home still knows its work.\n\nChoose a magic piece and one of my offers in your Quest Journal. Its old strengths will stay. If there is a line you have not studied, a later turn at the salvage bench may teach you something. No hurry — the promise lasts this life.' }],
+    lines: [{ text: 'That fang will do nicely. Thank you. The hammer you brought home still knows its work.\n\nShow me a magic piece, and choose the strength I will add. Its old strengths will stay. If there is a line you have not studied, a later turn at the salvage bench may teach you something. No hurry — the promise lasts this life.' }],
   },
   {
     id: 'brandt_imbue_waiting', speaker: { defId: 'townsfolk_smith' }, priority: 180,
     all: [{ fact: 'brandtImbueWaiting' }],
     trigger: { kind: 'dwell', radius: 150, seconds: 0.4 },
-    lines: [{ text: 'My old hammer. Thank you. You brought back more than a tool. Bring me a magic piece from your pack, and I will add a strength of your choosing without taking away what it already holds. You will find my offers in your Quest Journal.\n\nNo hurry. This work will wait for you through this life, though its strength is the strength we earned at the old forge. Returning my hammer has also opened Rare Wares for investment in the Vault; a salvage bench can follow.' }],
+    lines: [{ text: 'My old hammer. Thank you. You brought back more than a tool. Bring me a magic piece from your pack, and I will add a strength of your choosing without taking away what it already holds.\n\nNo hurry. This work will wait for you through this life, though its strength is the strength we earned at the old forge. Returning my hammer has also opened Rare Wares for investment in the Vault; a salvage bench can follow.' }],
   },
   {
     id: 'brandt_trophy_sought', speaker: { defId: 'townsfolk_smith' }, priority: 160,
