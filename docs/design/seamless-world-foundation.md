@@ -4452,3 +4452,29 @@ is not a millisecond; total render time, cold starts/jumps and large finishing
 phases still have no guaranteed frame-time bound. This change reduces the need
 to begin a full bake at an ordinary prepared crossing. It does not establish
 continuous human frame rate or complete infinite-world streaming.
+
+### Give visible terrain first claim on renderer work
+
+A follow-up cost diagnostic found that prewarming removed three later crossing
+bakes but also spent extra time on the initial cold draw. Preparation now advances
+zero speculative rows/phases on a draw that had to finish visible terrain, whether
+cold or already partially prepared. Queue selection and eviction still run so
+pending memory stays bounded. The next otherwise warm draw resumes its quota.
+
+The floorwork probe now proves this directly for both cold and partial visible
+completion. All six groups, dirtyterrain's five groups and all three type checks
+pass. A separate frozen client repeats exact prior floor pixels, changed-partial
+reconstruction and checked native current/prior/current Continue. Twelve new
+page/canvas images were inspected; the other five images (the narrow pair and
+three floors) are byte-identical to the previously inspected artifacts.
+
+In one controlled 960-draw horizontal-camera diagnostic, the old painter did
+five cold bakes, including three on later crossings; the candidate did only
+the two initial bakes and no partial visible finishes. This trades more average
+work and memory for prepared crossings: measured mean/p95 floor-draw cost was
+about 0.31/1.8 ms versus 0.09/0.1 ms, with 21 resident/pending pages versus five,
+both within the 25-page cap. Initial maxima were about 36.8 ms versus 30.5 ms.
+These single-run CPU timings exclude world simulation, complete scene rendering,
+GPU composition and human input. They do not show higher overall FPS, a faster
+cold start, or a guaranteed frame bound. The diagnostics and their earlier,
+less favorable sample remain in ignored local evidence.

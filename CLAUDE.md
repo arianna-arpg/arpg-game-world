@@ -1,6 +1,7 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
-MASS_FLOOR_VIEW budgets offscreen floor preparation by rows/phases and shares
+MASS_FLOOR_VIEW pauses speculative work on draws that finish visible terrain.
+It budgets offscreen floor preparation by rows/phases and shares
 the canvas residency cap with completed pages. Only complete, current canvases
 publish; changed halos cancel partial work, and cold visible jumps still finish
 synchronously. Verify worldmass_floorwork, worldmass probes, genqa and

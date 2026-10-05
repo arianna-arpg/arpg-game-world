@@ -80,6 +80,7 @@ export class MassPainter {
       this.ground = new MassGround(mass.config.ground, mass.generator.run.seed, mass.config.terrain.addressSpan);
     }
     const span = mass.config.terrain.addressSpan, visible = new Set<string>();
+    let finishedVisible = false;
     const left = Math.floor(x/span), top = Math.floor(y/span), right = Math.floor((x+w)/span), bottom = Math.floor((y+h)/span);
     // Visible ground is always complete and current. A sudden camera jump may
     // drain remaining work synchronously; partial canvases never reach the view.
@@ -87,6 +88,7 @@ export class MassPainter {
       const at = mass.walk.at(cx*span, cy*span), key = cellKey(at); visible.add(key);
       let bake = this.baked.get(key);
       if (!bake || !this.current(mass, at, bake)) {
+        finishedVisible = true;
         const job = this.pending.get(key);
         const canvas = job && this.current(mass, at, job) ? this.finish(job.work) : this.bake(mass, at);
         bake = {canvas, revision:this.revision(mass, at), checkedRevision:mass.state.terrainRevision};
@@ -96,10 +98,10 @@ export class MassPainter {
       ctx.drawImage(bake.canvas, cx*span, cy*span, span, span);
     }
     while (this.baked.size > mass.stream.config.maxPages) this.baked.delete(this.baked.keys().next().value!);
-    this.prepare(mass, visible, {left, top, right, bottom}, {x:x+w/2,y:y+h/2});
+    this.prepare(mass, visible, {left, top, right, bottom}, {x:x+w/2,y:y+h/2}, !finishedVisible);
   }
   private prepare(mass: WorldMassRuntime, visible: ReadonlySet<string>,
-    bounds: {left:number;top:number;right:number;bottom:number}, center: {x:number;y:number}): void {
+    bounds: {left:number;top:number;right:number;bottom:number}, center: {x:number;y:number}, advance: boolean): void {
     const cfg=this.preparation, span=mass.config.terrain.addressSpan, cap=mass.stream.config.maxPages;
     if (!cfg.enabled || !cfg.stepsPerDraw || !cfg.halo || !cfg.maxPending || visible.size>=cap) {
       this.pending.clear(); return;
@@ -135,7 +137,9 @@ export class MassPainter {
       if (key===undefined) break;
       this.baked.delete(key);
     }
-    let budget=cfg.stepsPerDraw;
+    // Do not stack speculative painting onto a frame already paying for a
+    // visible cold bake or partial completion. Queue bookkeeping still bounds memory.
+    let budget=advance ? cfg.stepsPerDraw : 0;
     for (const {key} of selected) {
       const job=this.pending.get(key);
       if (!job) continue;

@@ -37,8 +37,9 @@ const fixture=(policy:Partial<MassFloorPreparation>={},capacity=4)=>{
   counts:()=>({steps,sync}),point:(cell:MassCell)=>localOffset({...cell,x:0,y:0},origin,240)};
 };
 {
- const f=fixture();f.draw();assert.deepEqual(f.counts(),{steps:9,sync:1});
+ const f=fixture();f.draw();assert.deepEqual(f.counts(),{steps:7,sync:1},'cold visible work gets no speculative painting');
  assert.equal(f.internals.pending.size,1);assert.equal(f.internals.baked.size,1);
+ f.draw();assert.deepEqual(f.counts(),{steps:9,sync:1});
  const target=f.created[1],cell=f.cells.find(c=>cellKey(c)===target.key)!;
  for(let i=0;i<3;i++){const before=f.counts().steps;f.draw();assert.ok(f.counts().steps-before<=2);}
  assert.equal(f.internals.baked.get(target.key)?.canvas,target,'publish the completed original job');
@@ -48,8 +49,9 @@ const fixture=(policy:Partial<MassFloorPreparation>={},capacity=4)=>{
  console.log('PASS budgeted preparation, atomic original-canvas publication and prepared crossing');
 }
 {
- const f=fixture();f.draw();const target=f.created[1],cell=f.cells.find(c=>cellKey(c)===target.key)!,p=f.point(cell);
- const before=f.counts().sync;f.draw(p.x,p.y);
+ const f=fixture();f.draw();f.draw();const target=f.created[1],cell=f.cells.find(c=>cellKey(c)===target.key)!,p=f.point(cell);
+ const before=f.counts().sync,steps=f.counts().steps;f.draw(p.x,p.y);
+ assert.equal(f.counts().steps-steps,5,'visible completion gets no speculative painting');
  assert.equal(f.counts().sync,before,'visible partial work resumes instead of restarting');
  assert.equal(f.drawn.at(-1),target);assert.ok(target.complete);
  const far=neighborCell(origin,-30,30),q=f.point(far);f.draw(q.x,q.y);
@@ -58,7 +60,7 @@ const fixture=(policy:Partial<MassFloorPreparation>={},capacity=4)=>{
  console.log('PASS partial crossing, complete cold fallback and departed-work disposal');
 }
 {
- const f=fixture();f.draw();const target=f.created[1];
+ const f=fixture();f.draw();f.draw();const target=f.created[1];
  f.paint(neighborCell(origin,30,30));f.draw();assert.equal(f.created[1],target);
  assert.equal(f.created.length,2,'unrelated edit preserves partially finished work');
  const cell=f.cells.find(c=>cellKey(c)===target.key)!;

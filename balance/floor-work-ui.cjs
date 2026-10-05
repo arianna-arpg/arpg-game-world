@@ -1,6 +1,6 @@
 // Controlled renderer work and exact pixels; not an earned or real-time playthrough.
 const {app,BrowserWindow}=require('electron'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict'),crypto=require('node:crypto');
-const dir=path.join(__dirname,'reports'),tag='floor-work';
+const dir=path.join(__dirname,'reports'),tag=process.argv[3]||'floor-work',candidate=process.argv[2]||'floor-work-dist';
 app.setPath('userData',path.join(dir,tag+'-'+process.pid));app.disableHardwareAcceleration();
 app.whenReady().then(async()=>{
  let root=path.join(dir,'fraying-nerve-dist');
@@ -57,7 +57,7 @@ app.whenReady().then(async()=>{
  try{
   await win.loadURL(url);await boot();await prepare();await shot('prior');
   const prior=await exercise();assert.equal(prior.eastBakes,1);floorFile('prior-east',prior.east);
-  root=path.join(dir,'floor-work-dist');await win.loadURL(url);await boot();await prepare();await shot('current');
+  root=path.join(dir,candidate);await win.loadURL(url);await boot();await prepare();await shot('current');
   const current=await exercise();assert.equal(current.eastBakes,0);assert.equal(current.east,prior.east);assert.equal(current.first,prior.first);
   assert.ok(current.maxWork<=24&&current.maxWork>0);assert.ok(current.peak<=current.cap);floorFile('prepared-east',current.east);
   results.push({priorEastBakes:prior.eastBakes,preparedEastBakes:current.eastBakes,exactPriorPixels:true,maxBackgroundSteps:current.maxWork,peak:current.peak,cap:current.cap,floor:hash(current.east)});
@@ -66,7 +66,7 @@ app.whenReady().then(async()=>{
    // Leave a new painter mid-preparation, edit its palette halo, then enter.
    const p=new q.Painter({enabled:true,stepsPerDraw:1,halo:1,maxPending:2}),c=document.createElement('canvas');c.width=c.height=span;
    const draw=(dx,dy)=>{const ctx=c.getContext('2d');ctx.setTransform(1,0,0,1,-q.left-dx*span,-q.top-dy*span);p.draw(ctx,m,q.left+dx*span,q.top+dy*span,span-1,span-1);return c.toDataURL();};
-   draw(0,0);const pending=p.pending.size;if(!pending)throw Error('No partial preparation');
+   draw(0,0);draw(0,0);const pending=p.pending.size;if(!pending)throw Error('No partial preparation');
    for(let dy=-2;dy<=2;dy++)m.state.paint({address:m.walk.at(q.left+span,q.top+span/2+dy*30),region:'wall',color:'#887755',cause:'qa/floor-work/edit'});
    const edited=draw(1,0);
    const cold=new q.Painter({enabled:false,stepsPerDraw:0,halo:0,maxPending:0}),ctx=c.getContext('2d');ctx.setTransform(1,0,0,1,-q.left-span,-q.top);
@@ -76,7 +76,7 @@ app.whenReady().then(async()=>{
   });floorFile('edited',changed.edited);await shot('edited');
   const checkpoint=await save();assert.deepEqual(await resume(),checkpoint);await shot('continued');
   root=path.join(dir,'fraying-nerve-dist');assert.deepEqual(await resume(),checkpoint);await shot('prior-continued');
-  root=path.join(dir,'floor-work-dist');assert.deepEqual(await resume(),checkpoint);await shot('current-again');
+  root=path.join(dir,candidate);assert.deepEqual(await resume(),checkpoint);await shot('current-again');
   win.setSize(800,600);await new Promise(r=>setTimeout(r,150));await run(()=>__game.ui.folioSync());await shot('narrow');
   results.push({changedPartialMatchesCold:true,pendingBeforeEdit:changed.pending,exactCurrentPriorCurrent:true,fatal:await run(()=>__game.crash().fatal)});
   fs.writeFileSync(path.join(dir,tag+'-ui.json'),JSON.stringify(results,null,2));
