@@ -189,6 +189,9 @@ export interface Settings {
    *  — the bar slot's blooming pip, the SKILLS drawer's pip, the Menu
    *  button's roll-up — and the drawer or the tree spends it. */
   treePrompt: boolean;
+  /** Optional passive text lists; the authored graph is the default view. */
+  passiveAvailableList: boolean;
+  passiveAllocatedList: boolean;
   /** THE CAMERA MODE (render/camera.ts registry): 'hero' locks the view to
    *  your hero everywhere — zone edges simply reveal the void frame — while
    *  'zone' is the classic frame that never leaves the zone. A ZoneDef.camera
@@ -311,6 +314,8 @@ export interface SettingsSave {
   destinationLabels?: 'near' | 'always';
   escapeCloses?: EscapeCloseMode;
   treePrompt?: boolean;
+  passiveAvailableList?: boolean;
+  passiveAllocatedList?: boolean;
   cameraMode?: CameraModeId;
   cameraZoom?: number;
   renderScale?: number | 'auto';
@@ -478,6 +483,8 @@ export const makeSettings = (): Settings => ({
   destinationLabels: 'near',
   escapeCloses: ESCAPE_CFG.default,
   treePrompt: false,
+  passiveAvailableList: false,
+  passiveAllocatedList: false,
   cameraMode: CAMERA_CFG.default,
   cameraZoom: CAMERA_CFG.zoom.default,
   renderScale: 'auto',
@@ -523,6 +530,8 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   destinationLabels: s.destinationLabels,
   escapeCloses: s.escapeCloses,
   treePrompt: s.treePrompt,
+  passiveAvailableList: s.passiveAvailableList,
+  passiveAllocatedList: s.passiveAllocatedList,
   cameraMode: s.cameraMode,
   cameraZoom: cameraZoomOf(s.cameraZoom),
   renderScale: s.renderScale,
@@ -634,6 +643,8 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     escapeCloses: ESCAPE_MODES.some(m => m.id === s.escapeCloses) ? s.escapeCloses! : ESCAPE_CFG.default,
     // The chooser popup is opt-in: a pre-dial save reads OFF (the shown tells stand regardless).
     treePrompt: s.treePrompt === true,
+    passiveAvailableList: s.passiveAvailableList === true,
+    passiveAllocatedList: s.passiveAllocatedList === true,
     // Unknown values (a renamed mode, a pre-dial save) fall back to the
     // registry default — currently the hero-locked frame.
     cameraMode: CAMERA_MODES.some(m => m.id === s.cameraMode) ? s.cameraMode! : CAMERA_CFG.default,

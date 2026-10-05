@@ -1,7 +1,9 @@
 import { esc } from './dom';
 
 /** Presentation only. The caller supplies the same native eligibility and tooltip
- * as the graph; every click still goes through the ordinary allocation intent. */
+ * as the graph; every click still goes through the ordinary allocation intent.
+ * Settings.passiveAvailableList / passiveAllocatedList independently opt in;
+ * both default off so the authored graph keeps its original space. */
 export const PASSIVE_FRONTIER_VIEW = { enabled: true, maxHeight: 190, ownedHeight: 135, minCardWidth: 210 };
 export interface PassiveFrontierCard {
   id: string; title: string; description: string; action: string;

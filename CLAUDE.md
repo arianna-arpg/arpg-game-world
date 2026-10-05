@@ -515,9 +515,11 @@ Verify worldmass_birth and hidden `balance/worldmass-birth-ui.cjs`; old descript
 retain their earlier construction path. The shared curve is in `data/objectiveRewards.ts`. Verify
 worldmass_clearance, native objectives and `balance/worldmass-clearance-ui.cjs`
 (exact experience/point budget and map state through browser Continue).
-`ui/passiveFrontier.ts` presents the current realm's affordable, reachable native
-passive choices above its graph, using the same panel predicate, tooltip content
-and allocation/choice intents. The graph and search remain available. Verify the
+`ui/passiveFrontier.ts` optionally presents the current realm's affordable, reachable
+choices above its graph. Saved passiveAvailableList and passiveAllocatedList
+are independent Options → Interface toggles, both OFF for new and older settings.
+The default retains the pre-seamless graph, layout, zoom, search and tooltips.
+The optional lists use native predicates and allocation/choice intents. Verify the
 native passive probes and hidden `balance/passive-frontier-ui.cjs` for all starter
 classes, exact one-point spending, Continue and viewport layout.
 
@@ -540,9 +542,9 @@ retains its bolt cadence; new post-Continue strikes receive a full native warnin
 weather keeps impact geography. Verify fields and `balance/storm-fields-ui.cjs`
 for real movement evasion, friend/foe impact and browser Continue.
 Verify `probe_worldmass_fields.ts`, persistence/worldmass probes
-and hidden `balance/worldmass-fields-ui.cjs`. Owned native passive names/effects
-remain visible after allocation through `ui/passiveFrontier.ts`; its client
-harness checks that confirmation alongside single spending and Continue.
+and hidden `balance/worldmass-fields-ui.cjs`. The optional passiveAllocatedList
+keeps owned names/effects above the graph through `ui/passiveFrontier.ts`; its
+client harness checks independent toggles, graph parity, spending and Continue.
 
 Optional `MassSiteSpec.cache.clearedHoldSeconds` accelerates native chest opening
 after an admitted site's durable garrison clearance and only without a nearby

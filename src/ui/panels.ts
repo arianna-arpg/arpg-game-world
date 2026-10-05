@@ -7458,10 +7458,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // search, zoom, the tips) in a tools row beneath it.
     const realmChip = activeRealm && this.treeRealm !== MAIN_REALM
       ? `<b style="color:${activeRealm.color ?? '#c8a84b'}">${activeRealm.label}</b> · ` : '';
-    const passiveOwned = refundMode || DEV.passiveTreeEditor ? '' : passiveOwnedHtml(
+    const passiveOwned = !this.getSettings().passiveAllocatedList || refundMode || DEV.passiveTreeEditor ? '' : passiveOwnedHtml(
       [...m.allocated].reverse().map(id=>PASSIVE_NODES[id]).filter(n=>n && visibleNode(n) && n.kind!=='start')
         .map(n=>({id:n.id,title:n.name,description:this.passiveNodeTooltip(n.id)?.description ?? esc(n.description),action:''})));
-    const passiveFrontier = refundMode || DEV.passiveTreeEditor ? '' : passiveFrontierHtml(
+    const passiveFrontier = !this.getSettings().passiveAvailableList || refundMode || DEV.passiveTreeEditor ? '' : passiveFrontierHtml(
       Object.values(PASSIVE_NODES).filter(n => visibleNode(n) && this.nodeAllocatable(n, m))
         .map(n => ({ id: n.id, title: n.name, description: this.passiveNodeTooltip(n.id)?.description ?? esc(n.description),
           action: n.choice && !choiceDealSpent(n, m.choices, PASSIVE_NODES) ? 'Review choices' : 'Allocate · 1 ' + (n.vocation ? 'vocation' : realmOf(n)?.currency ?? 'passive') + ' point' })));
@@ -10474,6 +10474,14 @@ ${ESCAPE_MODES.map(m => `${m.name}: ${m.blurb}`).join('\n')}">${escapeModeOf(s.e
         <button id="opt-treeprompt" title="When a skill completes a level band and mints an Ability point. OFF: the bar slot's gold pip blooms and keeps breathing, the SKILLS drawer and the Menu button wear the pip, and you spend it from the drawer or the tree whenever you like. ON: the chooser popup also opens at the next calm moment.">${s.treePrompt ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
+        <span>Passive tree: available choices</span>
+        <button id="opt-passiveavailable" title="Show the Available now list above the passive graph. OFF keeps the original graph view.">${s.passiveAvailableList ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Passive tree: allocated choices</span>
+        <button id="opt-passiveallocated" title="Show the Your choices list above the passive graph. Allocated nodes remain visible in the graph either way.">${s.passiveAllocatedList ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
         <span>UI Scale</span>
         <span class="pad-opt"><input type="range" id="opt-uiscale" min="${Math.round(UI_SCALE_CFG.min * 100)}" max="${Math.round(UI_SCALE_CFG.max * 100)}" step="${Math.round(UI_SCALE_CFG.step * 100)}"
           value="${Math.round(s.uiScale * 100)}"
@@ -11032,6 +11040,15 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       this.saveSettings();
       this.renderOptions(root, onBack);
     });
+    for (const [id, key] of [['opt-passiveavailable', 'passiveAvailableList'], ['opt-passiveallocated', 'passiveAllocatedList']] as const) {
+      root.querySelector<HTMLElement>('#' + id)?.addEventListener('click', () => {
+        const st = this.getSettings();
+        st[key] = !st[key];
+        this.saveSettings();
+        this.refreshTree();
+        this.renderOptions(root, onBack);
+      });
+    }
     // THE ABILITY POINT PROMPT: the chooser popup is opt-in — the shown
     // tells (the slot's bloom, the pips) carry the milestone either way.
     root.querySelector<HTMLElement>('#opt-treeprompt')?.addEventListener('click', () => {
