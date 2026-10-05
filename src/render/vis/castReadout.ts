@@ -13,18 +13,20 @@ export function castMovementHeld(world: World, a: Actor): boolean {
 }
 
 /** Name the work actually running, not the last key pressed or a queued wish. */
-export function drawCastName(ctx: CanvasRenderingContext2D, a: Actor, x: number, y: number, width: number, movement?: string): void {
-  if (!a.casting) return;
+export function drawCastName(ctx: CanvasRenderingContext2D, a: Actor, x: number, y: number, width: number, movement?: string, showName: boolean = VIS_CFG.castReadout.showName): void {
+  if (!a.casting || (!showName && !movement)) return;
   const c = VIS_CFG.castReadout;
   ctx.save(); ctx.font = c.font; ctx.textAlign = 'center';
-  let name = skillInstanceName(a.casting.inst);
-  if (ctx.measureText(name).width > width) {
-    while (name.length && ctx.measureText(name + '…').width > width) name = name.slice(0, -1);
-    name += '…';
-  }
   ctx.lineJoin = 'round'; ctx.lineWidth = c.outline; ctx.strokeStyle = c.edge;
-  const nameY=y-(movement?c.movementHeight:0);
-  ctx.strokeText(name, x, nameY); ctx.fillStyle = c.text; ctx.fillText(name, x, nameY);
+  if (showName) {
+    let name = skillInstanceName(a.casting.inst);
+    if (ctx.measureText(name).width > width) {
+      while (name.length && ctx.measureText(name + '…').width > width) name = name.slice(0, -1);
+      name += '…';
+    }
+    const nameY=y-(movement?c.movementHeight:0);
+    ctx.strokeText(name, x, nameY); ctx.fillStyle = c.text; ctx.fillText(name, x, nameY);
+  }
   if(movement){
     ctx.font=c.movementFont;
     const points=Array.from(movement);let label=movement;

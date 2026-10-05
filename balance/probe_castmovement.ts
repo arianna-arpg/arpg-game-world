@@ -16,7 +16,12 @@ assert.equal(JSON.stringify([p.pos,p.life,p.mana,p.casting?.elapsed,p.casting?.t
 const text:{s:string;y:number}[]=[];
 const ctx={save(){},restore(){},measureText(s:string){return {width:Array.from(s).length*6};},
  strokeText(){},fillText(s:string,_x:number,y:number){text.push({s,y});}} as unknown as CanvasRenderingContext2D;
+drawCastName(ctx,p,0,0,104);
+assert.equal(text.length,0,'default cast name is quiet');
 drawCastName(ctx,p,0,0,104,VIS_CFG.castReadout.plantedText);
+assert.deepEqual(text.map(t=>t.s),['Feet planted'],'movement caption works without a name');
+text.length=0;
+drawCastName(ctx,p,0,0,104,VIS_CFG.castReadout.plantedText,true);
 assert.deepEqual(text.map(t=>t.s),['Firebolt','Feet planted']);assert.ok(text[0].y<text[1].y);
 assert.equal(JSON.stringify([p.pos,p.life,p.mana,p.casting?.elapsed,p.casting?.total,w.time]),before);
 console.log('PASS native planted cast, refused actual movement and read-only two-line presentation');

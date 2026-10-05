@@ -42,7 +42,7 @@ app.whenReady().then(async()=>{
  try{
   await win.loadURL(url);await boot();
   const started=await run(()=>{
-   __game.devStartRun('magician');__game.ui.hideAll();const w=__game.world();w.startWorldMass(42);
+   __game.devStartRun('magician');__game.settings().supportReadyHint=true;__game.settings().passiveAvailableList=true;__game.ui.hideAll();const w=__game.world();w.startWorldMass(42);
    const p=w.player,m=w.massRuntime;w.landPartyAt(m.journey.local(m.journey.places.find(s=>s.content==='cinderwatch')));
    w.actors=[p];p.invulnerable=true;
    const foe=w.createMonster('dire_wolf',1,'enemy');foe.pos={x:p.pos.x+75,y:p.pos.y};w.actors.push(foe);

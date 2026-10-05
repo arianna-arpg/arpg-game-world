@@ -88,7 +88,11 @@ export interface Settings {
   afflictionOverlays: import('../data/afflictionCues').AfflictionOverlayMode;
   /** Keep native meter anchors unless crowd avoidance is explicitly requested. */
   crowdedMeters: boolean;
-  /** Optional movement-lock caption under the current cast name. */
+  /** Optional name of the skill currently being cast. */
+  castNameHint: boolean;
+  /** Optional affirmative support-readiness message in Skills. Refusals stay visible. */
+  supportReadyHint: boolean;
+  /** Optional movement-lock caption, independent of the cast name. */
   castMovementHint: boolean;
   /** Text is independent of ailment screen effects. */
   statusReadout: 'focus' | 'corner' | 'off';
@@ -294,6 +298,8 @@ export interface SettingsSave {
   lowLifePulse?: boolean;
   afflictionOverlays?: import('../data/afflictionCues').AfflictionOverlayMode;
   crowdedMeters?: boolean;
+  castNameHint?: boolean;
+  supportReadyHint?: boolean;
   castMovementHint?: boolean;
   statusReadout?: 'focus' | 'corner' | 'off';
   statusFalter?: boolean;
@@ -463,6 +469,8 @@ export const makeSettings = (): Settings => ({
   lowLifePulse: true,
   afflictionOverlays: 'gentle',
   crowdedMeters: false,
+  castNameHint: false,
+  supportReadyHint: false,
   castMovementHint: false,
   statusReadout: 'focus',
   statusFalter: true,
@@ -510,6 +518,8 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   lowLifePulse: s.lowLifePulse,
   afflictionOverlays: s.afflictionOverlays,
   crowdedMeters: s.crowdedMeters,
+  castNameHint: s.castNameHint,
+  supportReadyHint: s.supportReadyHint,
   castMovementHint: s.castMovementHint,
   statusReadout: s.statusReadout,
   statusFalter: s.statusFalter,
@@ -609,6 +619,8 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     lowLifePulse: s.lowLifePulse ?? true,
     afflictionOverlays: s.afflictionOverlays === 'off' || s.afflictionOverlays === 'still' ? s.afflictionOverlays : 'gentle',
     crowdedMeters: s.crowdedMeters === true,
+    castNameHint: s.castNameHint === true,
+    supportReadyHint: s.supportReadyHint === true,
     castMovementHint: s.castMovementHint === true,
     statusReadout: s.statusReadout === 'corner' || s.statusReadout === 'off' ? s.statusReadout : 'focus',
     statusFalter: s.statusFalter ?? true,

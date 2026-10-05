@@ -179,14 +179,15 @@ check('G: readable recovery rounds upward without announcing zero early',
 check('G: an unclocked network mirror does not invent a timer',
   !swapReadinessText(recovery, false).includes('s of recovery'));
 check('G: a mirror without a host restriction does not promise readiness',
-  swapReadinessText({ reason: null }, false) === 'Support changes require a lull in combat.');
+  swapReadinessText({ reason: null }, false, true) === 'Support changes require a lull in combat.');
 heat();
 check('G: another hit restarts the same native countdown',
   w.swapReadiness(seat, 'socket').remaining === cfg.calmSec);
 w.time += cfg.calmSec;
 check('G: the exact boundary reports ready without a lingering timer',
   w.swapReadiness(seat, 'socket').reason === null && w.swapReadiness(seat, 'socket').remaining === undefined
-  && swapReadinessText(w.swapReadiness(seat, 'socket')) === 'Supports can be changed here.');
+  && swapReadinessText(w.swapReadiness(seat, 'socket')) === ''
+  && swapReadinessText(w.swapReadiness(seat, 'socket'), true, true) === 'Supports can be changed here.');
 const nearFoe = spawnAt('dire_wolf', 60);
 check('G: a nearby threat is a distinct restriction with no false expiry',
   w.swapReadiness(seat, 'socket').reason === 'foes press too near' && w.swapReadiness(seat, 'socket').remaining === undefined);

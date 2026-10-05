@@ -4598,8 +4598,9 @@ export class UI {
     // dragged skill, its event handlers, scroll position or focused control.
     const swapReadout = this.buildPanel.querySelector<HTMLElement>('[data-socket-readiness]');
     if (swapReadout) {
-      const text = swapReadinessText(world.swapReadiness(invSeat, 'socket'), !world.clientActionHook);
+      const text = swapReadinessText(world.swapReadiness(invSeat, 'socket'), !world.clientActionHook, this.getSettings().supportReadyHint);
       if (swapReadout.textContent !== text) swapReadout.textContent = text;
+      swapReadout.hidden = !text;
     }
     if (inventoryChanged) this.wireInventory();
     if (buildChanged && this.skillsOpen) this.wireLearnedList(this.buildPanel, () => this.refreshInventory());
@@ -7165,7 +7166,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         </div>`;
     }).join('');
     return `<div class="build-rack">${rackHtml}</div><div class="build-scroll">${socketWhy
-      ? `<div data-socket-readiness data-socket-refusal role="status" style="color:#e4b58b;font-size:11px;line-height:1.5;padding:8px">Socket changes unavailable: ${esc(socketWhy)}.</div>` : '<div data-socket-readiness role="status" style="color:#a9bc9d;font-size:11px;line-height:1.5;padding:8px">Supports can be changed here.</div>'}${seat === world.localSeat ? explorationRewardOffersHtml(world) : ''}${graftBank}${storedSupportsHtml(m.items, unsocketWhy)}${rows
+      ? `<div data-socket-readiness data-socket-refusal role="status" style="color:#e4b58b;font-size:11px;line-height:1.5;padding:8px">Socket changes unavailable: ${esc(socketWhy)}.</div>` : `<div data-socket-readiness role="status" ${this.getSettings().supportReadyHint ? '' : 'hidden'} style="color:#a9bc9d;font-size:11px;line-height:1.5;padding:8px">${esc(swapReadinessText({ reason: null }, !world.clientActionHook, this.getSettings().supportReadyHint))}</div>`}${seat === world.localSeat ? explorationRewardOffersHtml(world) : ''}${graftBank}${storedSupportsHtml(m.items, unsocketWhy)}${rows
       || '<div style="color:#8a8678;font-size:11px">Nothing seated. Skill Memories drop from monsters — press one from your pack into an empty seat above.</div>'}</div>`;
   }
 
@@ -10474,6 +10475,10 @@ ${ESCAPE_MODES.map(m => `${m.name}: ${m.blurb}`).join('\n')}">${escapeModeOf(s.e
         <button id="opt-treeprompt" title="When a skill completes a level band and mints an Ability point. OFF: the bar slot's gold pip blooms and keeps breathing, the SKILLS drawer and the Menu button wear the pip, and you spend it from the drawer or the tree whenever you like. ON: the chooser popup also opens at the next calm moment.">${s.treePrompt ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
+        <span>Support ready message</span>
+        <button id="opt-supportready" title="Show a message in Skills when supports can be changed. Restrictions remain visible either way.">${s.supportReadyHint ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
         <span>Passive tree: available choices</span>
         <button id="opt-passiveavailable" title="Show the Available now list above the passive graph. OFF keeps the original graph view.">${s.passiveAvailableList ? 'ON' : 'OFF'}</button>
       </div>
@@ -10656,6 +10661,10 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         <button id="opt-crowdedmeters" title="FIXED keeps bars at their usual position above each body. AVOID CROWD moves overlapping groups with a line to their owner.">${s.crowdedMeters ? 'AVOID CROWD' : 'FIXED'}</button>
       </div>
       <div class="rebind-row">
+        <span>Skill Cast Name</span>
+        <button id="opt-castname" title="Show the skill name above your hero while casting.">${s.castNameHint ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
         <span>Feet Planted Caption</span>
         <button id="opt-castmovement" title="Show a caption during casts that hold your hero in place.">${s.castMovementHint ? 'ON' : 'OFF'}</button>
       </div>
@@ -10707,7 +10716,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       this.saveSettings();
       this.renderOptions(root, onBack);
     });
-    for (const [id, key] of [['opt-crowdedmeters', 'crowdedMeters'], ['opt-castmovement', 'castMovementHint']] as const) {
+    for (const [id, key] of [['opt-crowdedmeters', 'crowdedMeters'], ['opt-castname', 'castNameHint'], ['opt-castmovement', 'castMovementHint']] as const) {
       root.querySelector<HTMLElement>('#' + id)?.addEventListener('click', () => {
         const settings = this.getSettings(); settings[key] = !settings[key];
         this.saveSettings(); this.renderOptions(root, onBack);
@@ -11039,6 +11048,10 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       st.escapeCloses = ESCAPE_MODES[(i + 1) % ESCAPE_MODES.length]!.id;
       this.saveSettings();
       this.renderOptions(root, onBack);
+    });
+    root.querySelector<HTMLElement>('#opt-supportready')?.addEventListener('click', () => {
+      const st = this.getSettings(); st.supportReadyHint = !st.supportReadyHint;
+      this.saveSettings(); this.refreshInventory(true); this.renderOptions(root, onBack);
     });
     for (const [id, key] of [['opt-passiveavailable', 'passiveAvailableList'], ['opt-passiveallocated', 'passiveAllocatedList']] as const) {
       root.querySelector<HTMLElement>('#' + id)?.addEventListener('click', () => {

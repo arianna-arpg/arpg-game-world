@@ -16,7 +16,7 @@ app.whenReady().then(async()=>{
  };
  const timer=setTimeout(()=>app.exit(1),180000),results=[];
  const boot=async cls=>run(cls=>{
-  __game.devStartRun(cls);__game.ui.hideAll();const w=__game.world();w.startWorldMass(42);
+  __game.devStartRun(cls);__game.settings().castNameHint=true;__game.settings().castMovementHint=true;__game.ui.hideAll();const w=__game.world();w.startWorldMass(42);
   const m=w.massRuntime,p=m.journey.places.find(p=>p.content==='cinderwatch');
   w.landPartyAt(m.journey.local(p));m.update(w,true);w.actors=[w.player];w.player.invulnerable=true;
   __game.step(2);w.player.fillResources();

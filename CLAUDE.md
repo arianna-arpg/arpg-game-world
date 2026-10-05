@@ -1,5 +1,11 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Saved castNameHint and supportReadyHint default off, including older settings.
+Cast-name and Feet planted captions are independent; the native cast bar and
+owner-slot cue remain visual. Skills hides affirmative readiness prose while
+retaining live refusal reasons and recovery clocks without replacing controls.
+Verify castmovement, fielddiscipline and minimal-ui-preferences-ui.
+
 playerBodyLook applies shared limbs/gait to every registered class look, including
 Breaker. skillIconKey resolves explicit or semantic artwork for every skill;
 unknown/legacy icon keys stay visual. Bar, rack, vendor and Memory chips share

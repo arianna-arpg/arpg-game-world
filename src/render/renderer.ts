@@ -6431,13 +6431,14 @@ export class Renderer {
       const bw = castReadout ? VIS_CFG.castReadout.width : 44, bh = castReadout ? VIS_CFG.castReadout.height : 5;
       const movement = castReadout && (this.getSettings?.().castMovementHint ?? VIS_CFG.castReadout.showMovement) && castMovementHeld(world,a)
         ? VIS_CFG.castReadout.plantedText : undefined;
-      const nameHeight = castReadout ? VIS_CFG.castReadout.nameHeight+(movement?VIS_CFG.castReadout.movementHeight:0) : 0;
+      const showName = castReadout && (this.getSettings?.().castNameHint ?? VIS_CFG.castReadout.showName);
+      const nameHeight = (showName ? VIS_CFG.castReadout.nameHeight : 0) + (movement ? VIS_CFG.castReadout.movementHeight : 0);
       const bx2 = x - bw / 2, by2 = y - a.radius - 18;
       const color = cs.inst.def.color;
       const meterRise=cs.mode==='overcharge'?Math.max(0,cs.stage??0)*4:4;
       const meterWidth=bw+(['overcharge','channel','multitude'].includes(cs.mode)?52:6);
       this.combatMeters.add(a,{x:bx2-3,y:by2-6-meterRise-nameHeight,w:meterWidth,h:bh+10+meterRise+nameHeight},()=>{
-        if (castReadout) drawCastName(ctx, a, x, by2-6-meterRise, bw, movement);
+        if (showName || movement) drawCastName(ctx, a, x, by2-6-meterRise, bw, movement, showName);
         ctx.fillStyle = 'rgba(0,0,0,0.7)';
         ctx.fillRect(bx2 - 1, by2 - 1, bw + 2, bh + 2);
         let frac: number;
