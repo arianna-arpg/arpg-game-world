@@ -96,6 +96,7 @@ export interface Settings {
   castMovementHint: boolean;
   /** Text is independent of ailment screen effects. */
   statusReadout: 'hover' | 'focus' | 'corner' | 'off';
+  /** Unique skill illustrations; acronyms remain an explicit accessibility preference. */
   skillArtwork: boolean;
   /** THE FALTER (render/screenFx.ts ScreenFxDef.falter): faintness and the
    *  swoon deliberately HOLD presented frames — a simulated lag spike, the
@@ -477,7 +478,7 @@ export const makeSettings = (): Settings => ({
   supportReadyHint: false,
   castMovementHint: false,
   statusReadout: 'hover',
-  skillArtwork: false,
+  skillArtwork: true,
   statusFalter: true,
   invertMove: false,
   gearPickup: 'vacuum',
@@ -631,7 +632,7 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     castMovementHint: s.castMovementHint === true,
     statusReadout: s.statusReadout === 'corner' || s.statusReadout === 'off' ? s.statusReadout
       : s.statusReadoutVersion === 2 && s.statusReadout === 'focus' ? 'focus' : 'hover',
-    skillArtwork: s.skillArtwork === true,
+    skillArtwork: s.skillArtwork !== false,
     statusFalter: s.statusFalter ?? true,
     invertMove: s.invertMove ?? false,
     gearPickup: s.gearPickup === 'key' ? 'key' : 'vacuum',

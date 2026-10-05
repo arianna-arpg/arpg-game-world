@@ -71,5 +71,6 @@ console.log('PASS independent persisted preferences, old-save defaults, bounded 
 const legacyFocus=serializeSettings({...defaults,statusReadout:'focus'});delete legacyFocus.statusReadoutVersion;
 assert.equal(deserializeSettings(legacyFocus)!.statusReadout,'hover');
 for(const mode of ['corner','off'] as const){legacyFocus.statusReadout=mode;assert.equal(deserializeSettings(legacyFocus)!.statusReadout,mode);}
-assert.equal(defaults.skillArtwork,false);
+assert.equal(defaults.skillArtwork,true);
+assert.equal(deserializeSettings(serializeSettings({...defaults,skillArtwork:false}))!.skillArtwork,false);
 assert.equal(deserializeSettings(serializeSettings({...defaults,skillArtwork:true}))!.skillArtwork,true);

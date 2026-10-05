@@ -18,24 +18,30 @@ app.whenReady().then(async()=>{
  try{
   await win.loadURL('http://127.0.0.1:'+server.address().port);
   await run(async()=>{window.requestAnimationFrame=()=>0;Object.defineProperty(navigator,'getGamepads',{value:()=>[]});await new Promise(r=>setTimeout(r,200));});
-  for(const role of ['warrior','magician','rogue']){
+  const code=buildSync({stdin:{contents:"export {CLASSES} from './src/data/classes';export {SKILL_ICONS,SKILL_ICON_VIEW,skillIconKey,drawSkillIcon,skillIconSvg} from './src/render/skillIcons';",
+   resolveDir:path.resolve(__dirname,'..'),loader:'ts'},bundle:true,write:false,format:'iife',globalName:'IconQA'}).outputFiles[0].text;
+  await win.webContents.executeJavaScript(code);
+  const roles=await run(()=>IconQA.CLASSES.map(c=>c.id));
+  for(const role of roles){
    const row=await run(role=>{
     __game.devStartRun(role);__game.ui.hideAll();__game.step(2);
-    const w=__game.world(),p=w.player,r=__game.renderer,c=document.getElementById('game'),ctx=c.getContext('2d');
+    const w=__game.world(),p=w.player,r=__game.renderer,c=document.getElementById('game');
+    const capture=()=>{const out=document.createElement('canvas');out.width=innerWidth;out.height=innerHeight;const g=out.getContext('2d');g.drawImage(c,0,0,out.width,out.height);if(r.overlay.style.display!=='none')g.drawImage(r.overlay,0,0,out.width,out.height);return out.toDataURL();};
     const state=JSON.stringify([p.life,p.mana,p.skills.map(s=>s&&[s.def.id,s.level,s.sockets])]);
     const render=()=>{
-     const words=[],fill=ctx.fillText;ctx.fillText=function(value,...rest){words.push(String(value));return fill.call(this,value,...rest);};
-     try{r.render(w);}finally{ctx.fillText=fill;}return words;
+     const words=[],contexts=[r.ctx,r.octx],fills=contexts.map(ctx=>ctx.fillText);
+     contexts.forEach((ctx,i)=>ctx.fillText=function(value,...rest){words.push(String(value));return fills[i].call(this,value,...rest);});
+     try{r.render(w);}finally{contexts.forEach((ctx,i)=>ctx.fillText=fills[i]);}return words;
     };
-    const normal=render(),png=c.toDataURL(),f=p.skills.filter(Boolean).map(s=>({name:s.def.name,icon:s.def.icon,color:s.def.color}));
+    const normal=render(),png=capture(),f=p.skills.filter(Boolean).map(s=>({id:s.def.id,name:s.def.name,icon:s.def.icon,color:s.def.color}));
     const inst=p.skills[0],saved=inst.def.icon;inst.def.icon=false;const fallback=render();inst.def.icon='missing';const unknown=render();inst.def.icon=saved;
     const oldState=inst.state;inst.state={...oldState,markPos:{x:1,y:1}};const recall=render();inst.state=oldState;
     const cd=p.cooldowns.get(inst.def.id),total=p.cooldownTotals.get(inst.def.id);
     p.cooldowns.set(inst.def.id,2);p.cooldownTotals.set(inst.def.id,4);
-    render();const cooling=c.toDataURL();
+    render();const cooling=capture();
     if(cd===undefined)p.cooldowns.delete(inst.def.id);else p.cooldowns.set(inst.def.id,cd);
     if(total===undefined)p.cooldownTotals.delete(inst.def.id);else p.cooldownTotals.set(inst.def.id,total);
-    const mana=p.mana;p.mana=0;render();const empty=c.toDataURL();p.mana=mana;
+    const mana=p.mana;p.mana=0;render();const empty=capture();p.mana=mana;
     render();
     const same=state===JSON.stringify([p.life,p.mana,p.skills.map(s=>s&&[s.def.id,s.level,s.sockets])]);
     __game.ui.toggleBuildPanel(undefined,'show');
@@ -49,18 +55,15 @@ app.whenReady().then(async()=>{
    assert.equal(row.fatal,null);assert.ok(row.same);
    const initials=row.faces[0].name.split(' ').map(s=>s[0]).join('').slice(0,3).toUpperCase();
    assert.ok(!row.normal.includes(initials));assert.ok(!row.fallback.includes(initials)&&!row.unknown.includes(initials));
-   assert.ok(!row.recall.includes('REC'));assert.notEqual(row.png,row.cooling);assert.notEqual(row.png,row.empty);
-   assert.equal(row.rack.filter(r=>r.svg).length,3,'all equipped native starter rack faces use shared vectors');
+   assert.ok(!row.recall.includes('REC'));assert.ok(row.png!==row.cooling,row.role+' cooldown changes native pixels');assert.ok(row.png!==row.empty,row.role+' affordability changes native pixels');
+   assert.equal(row.rack.filter(r=>r.svg).length,3,'all equipped native class rack faces use shared vectors');
    assert.ok(row.unseated&&row.memorySvg,'native unlearning returns the same illustrated Memory to the bag');
    png(role,row.png);png(role+'-cooldown',row.cooling);png(role+'-unaffordable',row.empty);
    delete row.png;delete row.cooling;delete row.empty;faces.push(...row.faces);rows.push(row);
   }
-  const code=buildSync({stdin:{contents:"export {SKILL_ICONS,SKILL_ICON_VIEW,drawSkillIcon,skillIconSvg} from './src/render/skillIcons';",
-   resolveDir:path.resolve(__dirname,'..'),loader:'ts'},bundle:true,write:false,format:'iife',globalName:'IconQA'}).outputFiles[0].text;
-  await win.webContents.executeJavaScript(code);
   const gallery=await run(async faces=>{
-   const {drawSkillIcon:draw,skillIconSvg:svg,SKILL_ICON_VIEW:cfg,SKILL_ICONS:defs}=IconQA;
-   const c=document.createElement('canvas');c.width=810;c.height=342;const g=c.getContext('2d');g.fillStyle='#171a21';g.fillRect(0,0,c.width,c.height);
+   const {drawSkillIcon:draw,skillIconSvg:svg,SKILL_ICON_VIEW:cfg,SKILL_ICONS:defs,skillIconKey}=IconQA;
+   const c=document.createElement('canvas');c.width=810;c.height=Math.ceil(faces.length/3)*114;const g=c.getContext('2d');g.fillStyle='#171a21';g.fillRect(0,0,c.width,c.height);
    const results=[],saved=JSON.stringify([cfg,defs]),random=Math.random;Math.random=()=>{throw Error('icon used simulation RNG');};
    const canvas=()=>{const x=document.createElement('canvas');x.width=x.height=48;return x;};
    try{
@@ -77,7 +80,7 @@ app.whenReady().then(async()=>{
      const x=i%3*270,y=Math.floor(i/3)*114;
      g.fillStyle='#eee4ce';g.font='14px sans-serif';g.fillText(face.name,x+10,y+20);
      g.drawImage(a,x+10,y+34);g.drawImage(b,x+72,y+34);g.drawImage(a,x+140,y+45,22,22);g.drawImage(b,x+180,y+48,15,15);
-     results.push({id:face.icon,source:defs[face.icon].source,max,mean:total/aa.length,hash:hash>>>0});
+     results.push({id:face.icon,source:defs[skillIconKey(face)].source,max,mean:total/aa.length,hash:hash>>>0});
     }
     const off=canvas(),og=off.getContext('2d');const legacy=draw(og,{...faces[0],icon:false},0,0,48);
     const missing=draw(og,{color:'#fff',icon:'missing'},0,0,48);
@@ -86,11 +89,11 @@ app.whenReady().then(async()=>{
   },faces);
   png('gallery',gallery.png);delete gallery.png;
   assert.equal(gallery.legacy,true);assert.equal(gallery.missing,true);assert.ok(gallery.unchanged);
-  assert.equal(new Set(gallery.results.map(r=>r.hash)).size,9);
+  assert.equal(new Set(gallery.results.map(r=>r.hash)).size,faces.length);
   // SVG and Canvas use different raster paths; compare total coverage, not bit identity.
   for(const r of gallery.results)assert.ok(r.mean<3,'canvas/SVG mismatch: '+JSON.stringify(r));
   fs.writeFileSync(path.join(dir,tag+'-ui.json'),JSON.stringify({rows,gallery},null,2));
-  console.log(JSON.stringify(gallery));console.log('PASS shared native starter bar/rack faces, automatic artwork/recall, affordability/cooldown overlays, SVG/canvas vocabulary and state/RNG preservation');
+  console.log(JSON.stringify(gallery));console.log('PASS all class native bar/rack faces, automatic artwork/recall, affordability/cooldown overlays, SVG/canvas vocabulary and state/RNG preservation');
  }catch(e){console.error(e.stack||String(e));process.exitCode=1;}
  finally{clearTimeout(timer);win.destroy();server.close();app.exit(process.exitCode||0);}
 });

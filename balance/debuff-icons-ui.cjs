@@ -36,6 +36,9 @@ app.whenReady().then(async()=>{
    for(const [i,id]of ['cleave','sunder_maul','frenzy'].entries())if(__game.devGrantSkill(id,1,i)!==i)throw Error('Missing '+id);
    p.statuses=[];for(const id of ['burn','poison','bleed','chill','mired','befuddlement','shock','vulnerable'])p.applyStatus(id,1,2,'QA');
   });
+  assert.deepEqual(await prefs(),{artwork:true,details:'hover'});
+  // Exercise the opt-in acronym mode through the actual Options control.
+  await options('visuals');await click('opt-skillartwork');await run(()=>__game.ui.hideAll());
   assert.deepEqual(await prefs(),{artwork:false,details:'hover'});
   results.quiet=await capture('quiet');assert.equal(results.quiet.icons.length,8);assert.equal(results.quiet.hover,undefined);
   for(const label of ['Burning','Poisoned','Bleeding','Chilled','Mired','Befuddled'])assert.ok(!results.quiet.words.some(w=>w.text===label),label+' must be hover-only');
@@ -48,7 +51,7 @@ app.whenReady().then(async()=>{
   await hover('poison');await run(()=>__game.world().player.endStatus('poison'));results.cleansed=await capture('cleansed');assert.notEqual(results.cleansed.hover,'poison');assert.ok(!results.cleansed.icons.some(i=>i.id==='poison'));assert.ok(!results.cleansed.words.some(w=>w.text==='Poisoned'));
   const rack=await skills();for(const label of ['C','SM','F'])assert.ok(rack.includes(label),'rack '+label);await shot('rack-acronyms');
   await options('visuals');assert.equal(await run(()=>document.getElementById('opt-skillartwork').textContent),'ACRONYMS');assert.equal(await run(()=>document.getElementById('opt-statusreadout').textContent),'ON HOVER');await shot('options');
-  await click('opt-skillartwork');assert.equal(await run(()=>document.getElementById('opt-skillartwork').textContent),'ARTWORK');assert.equal((await skills()).length,0);await shot('rack-artwork');await run(()=>__game.ui.hideAll());results.artwork=await capture('artwork');
+  await click('opt-skillartwork');assert.equal(await run(()=>document.getElementById('opt-skillartwork').textContent),'ARTWORK');assert.equal((await skills()).length,0);await capture('rack-artwork');await run(()=>__game.ui.hideAll());results.artwork=await capture('artwork');
   for(const label of ['C','SM','F'])assert.ok(!results.artwork.words.some(w=>w.text===label&&w.y>results.artwork.slots[0].y));assert.deepEqual(results.artwork.slots,nativeSlots);
   await options('visuals');await click('opt-skillartwork');await click('opt-statusreadout');await run(()=>__game.ui.hideAll());results.focus=await capture('optional-focus');assert.ok(results.focus.words.some(w=>w.text==='Burning'));
   await options('visuals');await click('opt-statusreadout');await run(()=>__game.ui.hideAll());results.corner=await capture('optional-corner');assert.ok(results.corner.words.some(w=>w.text==='Burning'&&w.x<100));
@@ -60,10 +63,10 @@ app.whenReady().then(async()=>{
   await options('visuals');await click('opt-skillartwork');await click('opt-statusreadout');await run(()=>{__game.ui.hideAll();const w=__game.world(),p=w.player;p.statuses=[];p.skills=originalSkills;w.meta.knownSkills=originalKnown;p.fillResources();__game.save();});
   results.saved=await run(state);results.resumed=await resume();assert.deepEqual(results.resumed,results.saved);assert.deepEqual(await prefs(),{artwork:true,details:'focus'});
   await run(()=>{const key=Object.keys(localStorage).find(k=>k.endsWith(':arpg_settings_v1'));const s=JSON.parse(localStorage.getItem(key));delete s.statusReadoutVersion;delete s.skillArtwork;s.statusReadout='focus';localStorage.setItem(key,JSON.stringify(s));});
-  results.migrated=await resume();assert.deepEqual(results.migrated,results.saved);assert.deepEqual(await prefs(),{artwork:false,details:'hover'});
+  results.migrated=await resume();assert.deepEqual(results.migrated,results.saved);assert.deepEqual(await prefs(),{artwork:true,details:'hover'});
   assert.ok(await run(()=>Object.entries(localStorage).filter(([k])=>k.startsWith('arpg_')).every(([,v])=>v==='sentinel')));
   fs.writeFileSync(path.join(dir,tag+'-ui.json'),JSON.stringify(results,null,2));
-  console.log('PASS eight compact Life-adjacent debuffs; real mouse hover/leave, live expiry, refresh and cleanse; distinct C/SM/F on bar and rack; artwork opt-in, all detail modes, scaled narrow HUD, exact native Continue, old settings migration and six untouched ordinary-save sentinels');
+  console.log('PASS eight compact Life-adjacent debuffs; real mouse hover/leave, live expiry, refresh and cleanse; distinct C/SM/F on bar and rack; artwork default and acronym opt-in, all detail modes, scaled narrow HUD, exact native Continue, old settings migration and six untouched ordinary-save sentinels');
  }catch(e){fs.writeFileSync(path.join(dir,tag+'-failure.json'),JSON.stringify(results,null,2));console.error(e.stack||e);process.exitCode=1;}
  finally{clearTimeout(timer);win.destroy();server.close();app.exit(process.exitCode||0);}
 });

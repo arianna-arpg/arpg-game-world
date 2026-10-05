@@ -10667,7 +10667,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       </div>
       <div class="rebind-row">
         <span>Skill Faces</span>
-        <button id="opt-skillartwork" title="ACRONYMS identifies skills by their names. ARTWORK uses the shared visual families.">${s.skillArtwork ? 'ARTWORK' : 'ACRONYMS'}</button>
+        <button id="opt-skillartwork" title="ARTWORK gives each skill its own illustration. ACRONYMS identifies skills by their names.">${s.skillArtwork ? 'ARTWORK' : 'ACRONYMS'}</button>
       </div>
       <div class="rebind-row">
         <span>Health &amp; Cast Bar Placement</span>

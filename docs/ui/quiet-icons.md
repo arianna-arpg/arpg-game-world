@@ -14,10 +14,10 @@ icons. Screen effects keep their independent setting. Former unversioned FOCUS
 settings migrate to ON HOVER, including existing preview saves. Deliberate
 CORNER/OFF choices survive. New explicit choices round-trip normally.
 
-Options → Visuals → Skill Faces defaults to ACRONYMS everywhere: hotbar, Skills,
-preparation, vendor and Memory chips. Cleave is C, Sunder Maul SM, Frenzy F;
-Recall is R. ARTWORK opts into the previous shared-family glyphs. This pass does
-not claim those glyphs uniquely distinguish the full skill catalogue. Native
+Options → Visuals → Skill Faces defaults to ARTWORK everywhere: hotbar, Skills,
+preparation, vendor and Memory chips. Every skill has its own authored composition;
+see [Skill artwork](skill-icons.md). ACRONYMS remains an explicit preference:
+Cleave is C, Sunder Maul SM, Frenzy F and Recall R. Saved choices survive. Native
 slot controls, cooldowns, affordability, charge and cast cues remain in place.
 
 The display span is separate from the mechanical DoT curve clock. Accepted

@@ -2,6 +2,11 @@ import assert from 'node:assert/strict';
 import {SKILLS} from '../src/data/skills';
 import {CLASSES} from '../src/data/classes';
 import {configureSkillArtwork,skillAcronym,skillIconKey,skillIconSvg,SKILL_ICONS,SKILL_ICON_RULES} from '../src/render/skillIcons';
+import {SKILL_ICON_CATALOG} from '../src/render/skillIconCatalog';
+
+// Artwork is the default; the explicit text preference still works live.
+for(const def of Object.values(SKILLS)) assert.ok(skillIconSvg(def).includes('<path '),def.id);
+configureSkillArtwork(()=>false);
 for(const def of Object.values(SKILLS)) {
  assert.ok(skillAcronym(def).length>0 && skillAcronym(def)!=='?',def.id);
  assert.ok(skillIconSvg(def).includes('data-skill-acronym='),def.id);
@@ -15,6 +20,9 @@ configureSkillArtwork(()=>true);
 const before=JSON.stringify(SKILLS),families=new Set<string>();
 for(const def of Object.values(SKILLS)){
  const key=skillIconKey(def);families.add(key);
+ assert.equal(key,'skill:'+def.id,'registered skill needs authored art: '+def.id);
+ assert.equal(skillIconKey({...def,name:'Renamed skill'}),key,'names never select artwork');
+ assert.equal(skillIconKey({...def,icon:'recall'}),'recall','runtime recall must override identity');
  assert.ok(Object.hasOwn(SKILL_ICONS,key),def.id);
  const svg=skillIconSvg(def);
  assert.ok(svg.includes('<path ')&&!svg.includes('<text'),def.id);
@@ -23,6 +31,15 @@ for(const def of Object.values(SKILLS)){
  }
 }
 assert.equal(JSON.stringify(SKILLS),before);
+assert.deepEqual(Object.keys(SKILL_ICON_CATALOG).sort(),Object.keys(SKILLS).sort(),'catalog must cover every skill without stale IDs');
+const art=new Map<string,string>();
+for(const def of Object.values(SKILLS)){
+ const signature=JSON.stringify(SKILL_ICONS[skillIconKey(def)].layers);
+ assert.ok(!art.has(signature),def.id+' duplicates '+art.get(signature));art.set(signature,def.id);
+ for(const icon of [false,'missing','__proto__'] as const)assert.equal(skillIconKey({...def,icon}),skillIconKey(def));
+}
+assert.equal(families.size,Object.keys(SKILLS).length,'all identities are distinct without color');
+assert.equal(skillIconKey({...SKILLS.cleave,icon:'guard'}),'guard','explicit alternate artwork remains available');
 for(const rule of SKILL_ICON_RULES)assert.ok(Object.hasOwn(SKILL_ICONS,rule.icon));
 for(const cls of CLASSES)for(const id of cls.bar)if(id)assert.ok(skillIconSvg(SKILLS[id]).includes('<path '),cls.id+' '+id);
 assert.equal(skillIconKey({color:'#fff',tags:['guard']}),'guard');
@@ -33,4 +50,4 @@ console.log('PASS '+Object.keys(SKILLS).length+' skill definitions and all '+CLA
 console.log('PASS semantic extension, recall state, escaped SVG and registry purity');
 
 configureSkillArtwork(()=>false);assert.ok(skillIconSvg(SKILLS.cleave).includes('>C</text>'));
-console.log('PASS all skill acronyms by default, distinct Cleave/Sunder Maul/Frenzy labels, live preference and recall');
+console.log('PASS authored artwork by default; explicit acronym preference, live switching and recall');

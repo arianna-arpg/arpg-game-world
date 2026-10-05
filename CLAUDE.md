@@ -1,5 +1,8 @@
-Saved skillArtwork defaults off across every Canvas and DOM skill face; name
-acronyms are the default (Cleave C, Sunder Maul SM, Frenzy F), artwork is opt-in.
+Saved skillArtwork defaults on across Canvas and DOM skill faces.
+skillIconCatalog assigns every skill a unique, mechanic-based composition from
+skillIconArt; original starter family keys upgrade by ID and explicit recall
+keeps priority. Acronyms remain an explicit saved preference. Verify skillicons,
+statusreadout, skill-icon-atlas and skill-icons-ui; see docs/ui/skill-icons.md.
 statusReadout defaults to hover: compact statusIcons above Life carry color,
 shape/mnemonic and a draining duration track. One hover card holds the detail.
 Old automatic near-hero settings migrate once; deliberate corner/off settings
@@ -7,7 +10,7 @@ survive. statusDuration is presentation-only: accepted application clocks stamp
 it independently of dpsCurve total, and optional snapshot spans carry it to peers.
 Verify statusicons, statusreadout, skillicons, afflictioncues, type checks,
 all-player-visuals-ui, presentation-preferences-ui and debuff-icons-ui.
-See docs/ui/quiet-icons.md. Unique artwork for the full catalogue is future work.
+See docs/ui/quiet-icons.md for the independent debuff presentation contract.
 
 # CLAUDE.md — Hollow Wake (ARPG)
 
@@ -32,9 +35,9 @@ retaining live refusal reasons and recovery clocks without replacing controls.
 Verify castmovement, fielddiscipline and minimal-ui-preferences-ui.
 
 playerBodyLook applies shared limbs/gait to every registered class look, including
-Breaker. skillIconKey resolves explicit or semantic artwork for every skill;
-With skillArtwork enabled, unknown/legacy keys resolve too. Bar, rack, vendor and Memory chips share
-this vocabulary, including recall. Verify bodywalk, skillicons and all-player-visuals-ui.
+Breaker. skillIconKey resolves explicit artwork, then registered identities,
+then semantic fallbacks. With skillArtwork enabled, unknown/legacy keys resolve
+too. Bar, rack, vendor and Memory chips share this vocabulary, including recall. Verify bodywalk, skillicons and all-player-visuals-ui.
 
 Saved crowdedMeters and castMovementHint default off; native bar anchors and
 quiet movement captions are the default. statusReadout selects hover details

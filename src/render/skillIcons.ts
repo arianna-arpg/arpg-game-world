@@ -1,12 +1,12 @@
 import type { SkillDef } from '../engine/skills';
+import { composeSkillIcon, type SkillIcon } from './skillIconArt';
+import { SKILL_ICON_CATALOG } from './skillIconCatalog';
+export type { SkillIcon } from './skillIconArt';
 
 /** One 24-unit vector vocabulary for the canvas bar, Memory tiles and build rack.
- * Explicit artwork overrides ordered semantic rules. Every definition receives
+ * Explicit artwork overrides registered identities, then semantic fallbacks.
+ * Every definition receives
  * a visual face, including future content and unknown legacy icon keys. */
-export interface SkillIcon {
-  source: string;
-  layers: { path: string; fill?: 'tint' | 'ink'; stroke?: 'tint' | 'ink'; width?: number }[];
-}
 export const SKILL_ICONS: Record<string, SkillIcon> = {
   arcane: {source:'hollow-wake/skills/arcane',layers:[{path:'M12 2L15 9L22 12L15 15L12 22L9 15L2 12L9 9ZM8 12H16M12 8V16',stroke:'ink'}]},
   projectile: {source:'hollow-wake/skills/projectile',layers:[{path:'M3 18L16 5M9 5H19V15M2 11L6 7M11 22L16 17',stroke:'ink'}]},
@@ -74,11 +74,21 @@ export const SKILL_ICONS: Record<string, SkillIcon> = {
     {path:'M3 6H8M2 10H7M2 14H6M17 18L21 18M19 16L21 18L19 20',stroke:'ink'},
   ]},
 };
+// Registered identities take their own composition, even when an old starter
+// still carries one of the original twelve family keys.
+for (const [id, recipe] of Object.entries(SKILL_ICON_CATALOG)) {
+  SKILL_ICONS['skill:'+id] = composeSkillIcon(id, recipe);
+}
+const LEGACY_STARTER_ICONS: Readonly<Record<string,string>> = {
+  cleave:'sweep', war_cry:'rally', firebolt:'ember', frost_nova:'frost',
+  shadow_step:'step', cloak:'veil', shield_up:'guard', backstab:'knife',
+  chain_lightning:'chain', life_flask:'lifeFlask', mana_flask:'manaFlask', catalyst_flask:'catalystFlask',
+};
 export const SKILL_ICON_VIEW = {
   background:'#111820', ink:'#f4ebd7', rim:'#070c12',
-  tintAlpha:.24, lineWidth:1.5, rimWidth:1.4, bakeSize:96, cacheLimit:64,
+  tintAlpha:.16, lineWidth:1.35, rimWidth:.8, maxBakeSize:192, cacheLimit:128,
 };
-export type SkillIconFace = Pick<SkillDef,'color'> & Partial<Pick<SkillDef,'name'|'icon'|'tags'|'delivery'|'effects'>>;
+export type SkillIconFace = Pick<SkillDef,'color'> & Partial<Pick<SkillDef,'id'|'name'|'icon'|'tags'|'delivery'|'effects'>>;
 /** Ordered visual vocabulary; content can add rules without editing any UI.
  * Gameplay identity supplies the picture, never display-name spelling. */
 export const SKILL_ICON_RULES: {icon:string;tags?:readonly string[];deliveries?:readonly string[];effects?:readonly string[]}[] = [
@@ -97,7 +107,9 @@ export const SKILL_ICON_RULES: {icon:string;tags?:readonly string[];deliveries?:
   {icon:'target',deliveries:['target']}, {icon:'projectile',tags:['projectile'],deliveries:['projectile']},
 ];
 export function skillIconKey(face:SkillIconFace):string {
-  if (face.icon && Object.hasOwn(SKILL_ICONS,face.icon)) return face.icon;
+  if (face.icon && Object.hasOwn(SKILL_ICONS,face.icon)
+    && (!face.id || face.icon !== LEGACY_STARTER_ICONS[face.id])) return face.icon;
+  if (face.id && Object.hasOwn(SKILL_ICON_CATALOG,face.id)) return 'skill:'+face.id;
   return SKILL_ICON_RULES.find(rule => rule.tags?.some(t=>face.tags?.some(tag=>tag===t))
     || rule.deliveries?.includes(face.delivery?.type ?? '')
     || rule.effects?.some(type=>face.effects?.some(effect=>effect.type===type)))?.icon ?? 'arcane';
@@ -106,7 +118,7 @@ function definition(face:SkillIconFace):SkillIcon {
   return SKILL_ICONS[skillIconKey(face)] ?? SKILL_ICONS.arcane;
 }
 // One live preference for Canvas, rack, vendor, Memory and preparation faces.
-let artworkPreference:()=>boolean=()=>false;
+let artworkPreference:()=>boolean=()=>true;
 export function configureSkillArtwork(preference:()=>boolean):void { artworkPreference=preference; }
 export function skillAcronym(face:SkillIconFace):string {
   if(face.icon==='recall') return 'R';
@@ -126,28 +138,36 @@ export function drawSkillIcon(ctx:CanvasRenderingContext2D,face:SkillIconFace,x:
     ctx.restore();return true;
   }
   const icon=definition(face);
-  const c=SKILL_ICON_VIEW,key=JSON.stringify([icon,face.color,c]);
+  const c=SKILL_ICON_VIEW, transform=ctx.getTransform();
+  // Rasterize at the actual device footprint. Scaling a 96px bake down to a
+  // 12px Memory chip loses the same fine edges SVG rasterizes natively.
+  const scale=Math.max(Math.hypot(transform.a,transform.b),Math.hypot(transform.c,transform.d));
+  const pixels=Math.max(12,Math.min(c.maxBakeSize,Math.ceil(size*scale)));
+  const key=JSON.stringify([skillIconKey(face),face.color,pixels,c]);
   let image=cache.get(key);
-  if(!image){image=bakeSkillIcon(icon,face.color);cache.set(key,image);}
+  if(!image){image=bakeSkillIcon(icon,face.color,pixels);cache.set(key,image);}
   else {cache.delete(key);cache.set(key,image);}
   while(cache.size>Math.max(0,Math.floor(c.cacheLimit)))cache.delete(cache.keys().next().value!);
   ctx.drawImage(image,x,y,size,size);return true;
 }
-function bakeSkillIcon(icon:SkillIcon,color:string):HTMLCanvasElement {
+function bakeSkillIcon(icon:SkillIcon,color:string,pixels:number):HTMLCanvasElement {
   const c=SKILL_ICON_VIEW,image=document.createElement('canvas');
-  image.width=image.height=Math.max(24,Math.min(192,Math.round(c.bakeSize)));
+  image.width=image.height=pixels;
   const ctx=image.getContext('2d')!;ctx.scale(image.width/24,image.height/24);
   ctx.fillStyle=c.background;ctx.fillRect(0,0,24,24);
   ctx.fillStyle=color;ctx.globalAlpha=c.tintAlpha;ctx.fillRect(0,0,24,24);
   ctx.globalAlpha=1;ctx.lineCap='round';ctx.lineJoin='round';
   for(const layer of icon.layers){
+    ctx.save();
+    if(layer.transform) ctx.transform(...layer.transform);
     const path=new Path2D(layer.path);
-    if(layer.fill){ctx.fillStyle=layer.fill==='tint'?color:c.ink;ctx.fill(path);}
+    if(layer.fill){ctx.fillStyle=layer.fill==='tint'?color:layer.fill==='shade'?c.rim:c.ink;ctx.fill(path);}
     if(layer.stroke){
       const width=layer.width??c.lineWidth;
       ctx.strokeStyle=c.rim;ctx.lineWidth=width+c.rimWidth;ctx.stroke(path);
-      ctx.strokeStyle=layer.stroke==='tint'?color:c.ink;ctx.lineWidth=width;ctx.stroke(path);
+      ctx.strokeStyle=layer.stroke==='tint'?color:layer.stroke==='shade'?c.rim:c.ink;ctx.lineWidth=width;ctx.stroke(path);
     }
+    ctx.restore();
   }
   return image;
 }
@@ -166,11 +186,11 @@ export function skillIconSvg(face:SkillIconFace,size=24):string {
   const icon=definition(face);
   const c=SKILL_ICON_VIEW,tint=escape(face.color),ink=escape(c.ink),rim=escape(c.rim);
   const layers=icon.layers.map(layer=>{
-    const d=escape(layer.path),fill=layer.fill==='tint'?tint:layer.fill==='ink'?ink:'none';
+    const d=escape(layer.path),fill=layer.fill==='tint'?tint:layer.fill==='ink'?ink:layer.fill==='shade'?rim:'none';
     const width=layer.width??c.lineWidth;
-    return '<path d="'+d+'" fill="'+fill+'"/>'
+    return '<g'+(layer.transform?' transform="matrix('+layer.transform.join(' ')+')"':'')+'><path d="'+d+'" fill="'+fill+'"/>'
       +(layer.stroke?'<path d="'+d+'" fill="none" stroke="'+rim+'" stroke-width="'+(width+c.rimWidth)+'"/>'
-        +'<path d="'+d+'" fill="none" stroke="'+(layer.stroke==='tint'?tint:ink)+'" stroke-width="'+width+'"/>':'');
+        +'<path d="'+d+'" fill="none" stroke="'+(layer.stroke==='tint'?tint:layer.stroke==='shade'?rim:ink)+'" stroke-width="'+width+'"/>':'')+'</g>';
   }).join('');
   return '<svg xmlns="http://www.w3.org/2000/svg" width="'+size+'" height="'+size
     +'" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="display:block;flex:none;pointer-events:none"'
