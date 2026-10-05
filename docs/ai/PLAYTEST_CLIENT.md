@@ -49,6 +49,22 @@ combat observations and longer steps only when the visible situation warrants it
 {"input":[{"type":"mouseMove","x":700,"y":400},{"type":"mouseDown","x":700,"y":400,"button":"left","clickCount":1}],"frames":12,"capture":true}
 ```
 
+The client constrains its content view to 1280 by 850 and verifies those logical
+pixel dimensions before delivering any input or steps. A changed view is restored
+and logged; failure to restore refuses the action without delivering it. Each
+successful response includes `viewport` with dimensions, scale and `expected`.
+If `expected` is false, obtain a fresh capture without input before aiming again.
+A mid-action change is logged, not silently cropped or concealed. Native geometry
+constraints reduce this risk; they do not establish the original OS cause.
+
+A stepped response includes `simulation.requestedFrames`, `worldSeconds` and
+`worldChanged`. The elapsed clock covers the step call, after input processing;
+paused/title steps can yield zero. A replaced world or invalid/discontinuous clock
+yields null, which must not be counted as zero elapsed time. This is not an actual
+tick counter and does not measure renderer latency, FPS or wall-clock play time.
+Older logs lack these fields: their requested frames remain nominal, including
+menu steps, and must not be retroactively described as confirmed world runtime.
+
 Every capture produces both `.canvas.png` and `.page.png`. **Inspect both.**
 The canvas is the current native world frame but omits HTML menus, reward
 attention, tooltips and panels. The full page includes that UI, but an offscreen

@@ -1,5 +1,11 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+makeViewportGuard verifies the isolated playtest client's 1280 by 850 content
+view before input, restores and logs geometry changes, and refuses an unrestorable
+view. Step responses report worldSeconds separately from requested frames.
+Verify playtest-viewport-ui.cjs and native Begin/Save/Continue; this harness-only
+change preserves frozen gameplay builds and earlier critics' original evidence.
+
 Fraying Bonepicker courage uses native hitAndRun with a longer authored
 withdraw interval, so modest wounds still leave retaliatory openings before
 panic. Full courage, captain support and the finite rout retain their native

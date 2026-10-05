@@ -4367,3 +4367,45 @@ scope. Requested frame steps and wall-clock tool time are not measured world
 runtime. Mandatory instructions exposed features, and no commercial game was
 played. Independent acceptance remains unmet; these reports are evidence of
 specific strengths and unresolved weaknesses, not a quality sign-off.
+
+### Review geometry and measured world time
+
+Revision 0d5dd22fac47cf294a74db1e5317aa73b7a8ca89 passed CI 37252533111
+and Pages 37253900996. The public preview confirmed that exact revision on
+2026-10-05. Remote native Save/Continue passed for seed 1572491589 with all
+six ordinary-save sentinels intact and no fatal error.
+
+Its fresh-context reviewer chose Warrior, prepared flasks, visited Western Watch
+and used Swiftness. The leader and melee survivor fell; the wounded Bonepicker
+survived. The reviewer observed retaliatory throws but still found repeated
+approaches and missed planted Cleaves unrewarding, stopping at level one before
+a camp clear or earned build decision. Native Save/Continue worked. All 80
+page/canvas pairs were inspected; 82 accepted requests asked for 3,036 frames,
+including 1,434 across 42 consecutive combat observations. These are requested
+steps, not measured world time. One malformed request was rejected and corrected.
+Mandatory repository instructions exposed feature names; no commercial game was
+played. Independent acceptance remains unmet.
+
+A genuine review confound remained: captures 44 and 45 changed page width from
+1280 to 1064, with no reviewer resize. That changes screen aiming coordinates.
+The original OS/compositor cause is unproven and does not erase the whole review.
+The isolated client now constrains and checks its viewport before delivering
+input, restores unexpected geometry, and refuses an unrestorable view. A change
+during an action is explicitly reported. Original captures are never rescaled.
+Reviewers must recapture after a reported mismatch before choosing new aim.
+
+A controlled hidden-window fixture reproduces the coordinate miss after an
+actual 1280-to-1064 shrink. The same mouse point hits after restoration; both
+geometry events and an unrestorable-host refusal pass. All three fixture images
+were inspected. Native Begin, Rogue vessel selection, movement, Wake, pause,
+Save & Exit, relaunch, Continue and a second native exit pass in a separate
+profile using the unchanged frozen gameplay build. All eleven page/canvas pairs
+were inspected at 1280 by 850. The first save click omitted clickCount and did
+not activate; the corrected ordinary click saved and closed normally.
+
+The client additionally reports elapsed world time around each step call, with
+null for a replaced world or invalid clock. Title and paused requests yielded
+zero, active 60-frame requests yielded 1.002 seconds, and Continue resumed the
+clock. It does not claim actual tick counts, measure input processing time, or
+retroactively upgrade old requested-frame logs. All three type checks pass.
+This is review infrastructure, with no gameplay, save-schema or balance change.

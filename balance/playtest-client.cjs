@@ -1,6 +1,7 @@
 // Isolated ordinary-input playtesting. No stat grants, teleports or arbitrary JS endpoint.
 // electron balance/playtest-client.cjs --build balance/reports/<fixed-build> --session <unique-id>
 const {app,BrowserWindow}=require('electron');
+const {VIEWPORT,makeViewportGuard}=require('./playtest-viewport.cjs');
 try {
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),crypto=require('node:crypto');
 const root=path.resolve(__dirname,'..'),args=process.argv.slice(2);
@@ -36,7 +37,8 @@ app.whenReady().then(async()=>{
  });
  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(meta.gamePort,'127.0.0.1',resolve);});
  meta.gamePort=server.address().port;saveMeta(); // Native Continue must return to this same origin.
- const win=new BrowserWindow({show:false,width:1280,height:850,webPreferences:{offscreen:true,backgroundThrottling:false}});
+ const win=new BrowserWindow({show:false,...VIEWPORT,resizable:false,webPreferences:{offscreen:true,backgroundThrottling:false}});
+ const viewportGuard=makeViewportGuard(win,event);viewportGuard.constrain();
  const evaluate=code=>win.webContents.executeJavaScript(code);
  await win.loadURL('http://127.0.0.1:'+meta.gamePort);
  await evaluate("window.requestAnimationFrame=()=>0;Object.defineProperty(navigator,'getGamepads',{value:()=>[]});");
@@ -75,18 +77,23 @@ app.whenReady().then(async()=>{
     if(Object.keys(m).some(k=>!allowed.includes(k)))throw Error('Unknown action; this harness accepts ordinary device input and visible UI only.');
     if(m.frames!==undefined&&(!Number.isInteger(m.frames)||m.frames<1||m.frames>600))throw Error('frames must be an integer from 1 to 600.');
     if(m.input!==undefined)validateInput(m.input);
+    await viewportGuard.beforeInput();
     event({action:m});
     if(m.input){for(const e of m.input)win.webContents.sendInputEvent(e);await new Promise(r=>setTimeout(r,40));
       if(win.isDestroyed()){event({nativeWindowClosed:true});res.end(JSON.stringify({closed:true}));return;}
       await evaluate('void 0');}
-    if(m.frames)await evaluate('__game.step('+m.frames+',16.7)');
     const result={};
+    if(m.frames)result.simulation=await evaluate(`(()=>{const before=__game.world(),start=before?.time;
+      __game.step(${m.frames},16.7);const after=__game.world(),end=after?.time;
+      const continuous=before===after&&Number.isFinite(start)&&Number.isFinite(end)&&end>=start;
+      return {requestedFrames:${m.frames},worldSeconds:continuous?end-start:null,worldChanged:before!==after};})()`);
     if(m.readUI)result.ui=await evaluate(`Array.from(document.querySelectorAll('button,input,select,a,[role="button"]')).filter(e=>{
       const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width&&r.height&&s.visibility!=='hidden'&&s.display!=='none';
     }).map(e=>{const r=e.getBoundingClientRect();return {tag:e.tagName,text:(e.innerText||e.getAttribute('aria-label')||e.title||'').slice(0,300),
       disabled:!!e.disabled,x:r.x,y:r.y,width:r.width,height:r.height};})`);
     if(m.capture)result.images=await capture();
     if(m.health)result.health=await health();
+    result.viewport=await viewportGuard.afterAction();
     event({result});res.setHeader('Content-Type','application/json');res.end(JSON.stringify(result));
     if(m.close)setTimeout(()=>app.quit(),50);
    }catch(error){
