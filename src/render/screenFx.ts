@@ -8,9 +8,8 @@
 // Extensible: StatusDef.screenCue selects/opts out of an independent layer;
 // DoTs and armed culls inherit a fallback. This registry keeps specialized
 // control cues. The vignette channel dispatches material layers in afflictionEdge.ts.
-// Combat ailments only —
-// terrain statuses (mired/sodden/…) and blessings are intentionally absent so
-// the screen never flickers from standing in a swamp.
+// Content may opt terrain effects into restrained feedback through screenCue.
+// Mired uses a slow earth-colored haze; blessings remain quiet.
 // ---------------------------------------------------------------------------
 
 import { STATUS_DEFS, type ActiveStatus } from '../engine/status';

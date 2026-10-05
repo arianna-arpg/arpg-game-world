@@ -2,7 +2,7 @@
 const {app,BrowserWindow}=require('electron');
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
 const dir=path.join(__dirname,'reports'),role=process.env.HOLLOW_WAKE_QA_CLASS||'magician';
-const label='walking-'+role;
+const label=process.env.HOLLOW_WAKE_QA_TAG||'walking-'+role;
 app.setPath('userData',path.join(dir,label+'-'+process.pid));app.disableHardwareAcceleration();
 app.whenReady().then(async()=>{
  const root=path.resolve(__dirname,'..',process.env.HOLLOW_WAKE_QA_DIST||'balance/reports/walking-dist');
@@ -33,7 +33,7 @@ app.whenReady().then(async()=>{
    return {rows,preserved:before===state(),pos:{...p.pos},stamp:p.bodyWalk,casting:p.casting?.inst.def.id??null,
     fatal:__game.crash().fatal,png:document.getElementById('game').toDataURL()};
   });
-  assert.ok(r.preserved);assert.equal(r.fatal,null);assert.ok(r.rows.length>=4);
+  assert.ok(r.preserved);assert.equal(r.fatal,null);assert.ok(r.rows.length>=3,'two moving limb sprites plus the shared torso; separate action parts are optional');
   fs.writeFileSync(path.join(dir,label+'-'+name+'.png'),Buffer.from(r.png.split(',')[1],'base64'));delete r.png;return r;
  };
  const step=frames=>run(n=>__game.step(n),frames);

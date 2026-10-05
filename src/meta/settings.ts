@@ -86,6 +86,12 @@ export interface Settings {
   lowLifePulse: boolean;
   /** Independent ailment layers: gentle motion, still, or disabled. Icons stay visible. */
   afflictionOverlays: import('../data/afflictionCues').AfflictionOverlayMode;
+  /** Keep native meter anchors unless crowd avoidance is explicitly requested. */
+  crowdedMeters: boolean;
+  /** Optional movement-lock caption under the current cast name. */
+  castMovementHint: boolean;
+  /** Text is independent of ailment screen effects. */
+  statusReadout: 'focus' | 'corner' | 'off';
   /** THE FALTER (render/screenFx.ts ScreenFxDef.falter): faintness and the
    *  swoon deliberately HOLD presented frames — a simulated lag spike, the
    *  vasovagal skip. Designed and documented (docs/render/falter.md); the
@@ -284,6 +290,9 @@ export interface SettingsSave {
   cursor?: Partial<CursorOptions>;
   lowLifePulse?: boolean;
   afflictionOverlays?: import('../data/afflictionCues').AfflictionOverlayMode;
+  crowdedMeters?: boolean;
+  castMovementHint?: boolean;
+  statusReadout?: 'focus' | 'corner' | 'off';
   statusFalter?: boolean;
   invertMove?: boolean;
   gearPickup?: 'vacuum' | 'key';
@@ -448,6 +457,9 @@ export const makeSettings = (): Settings => ({
   cursor: { ...DEFAULT_CURSOR_OPTIONS },
   lowLifePulse: true,
   afflictionOverlays: 'gentle',
+  crowdedMeters: false,
+  castMovementHint: false,
+  statusReadout: 'focus',
   statusFalter: true,
   invertMove: false,
   gearPickup: 'vacuum',
@@ -490,6 +502,9 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   cursor: { ...s.cursor },
   lowLifePulse: s.lowLifePulse,
   afflictionOverlays: s.afflictionOverlays,
+  crowdedMeters: s.crowdedMeters,
+  castMovementHint: s.castMovementHint,
+  statusReadout: s.statusReadout,
   statusFalter: s.statusFalter,
   invertMove: s.invertMove,
   gearPickup: s.gearPickup,
@@ -584,6 +599,9 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     cursor: normalizeCursorOptions(s.cursor),
     lowLifePulse: s.lowLifePulse ?? true,
     afflictionOverlays: s.afflictionOverlays === 'off' || s.afflictionOverlays === 'still' ? s.afflictionOverlays : 'gentle',
+    crowdedMeters: s.crowdedMeters === true,
+    castMovementHint: s.castMovementHint === true,
+    statusReadout: s.statusReadout === 'corner' || s.statusReadout === 'off' ? s.statusReadout : 'focus',
     statusFalter: s.statusFalter ?? true,
     invertMove: s.invertMove ?? false,
     gearPickup: s.gearPickup === 'key' ? 'key' : 'vacuum',

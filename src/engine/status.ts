@@ -1038,6 +1038,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   },
   befuddlement: {
     label: 'Befuddled', color: '#c878b8', duration: 7,
+    screenCue: { motif: 'befuddlement', intensity: 0.85 },
     interruptChance: 0.35,
   },
   // The behavior fabric turned into a HEX: aiAimLead/aiAimJitter are stats
@@ -1609,6 +1610,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // curse skill is one data entry away.
   mired: {
     label: 'Mired', color: '#8a7440', duration: 0.6,
+    screenCue: { motif: 'mire', intensity: 0.85 },
     mods: [mod('moveSpeed', 'more', -0.4)],
   },
   sodden: {

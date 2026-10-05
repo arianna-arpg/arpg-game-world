@@ -1,9 +1,9 @@
 // Controlled fixtures exercise native pickup and recall UI; not earned gameplay.
 const {app,BrowserWindow}=require('electron'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
-const dir=path.join(__dirname,'reports'),tag='memory-purpose';
+const dir=path.join(__dirname,'reports'),tag=process.env.HOLLOW_WAKE_QA_TAG||'memory-purpose';
 app.setPath('userData',path.join(dir,tag+'-'+process.pid));app.disableHardwareAcceleration();
 app.whenReady().then(async()=>{
- let root=path.join(dir,'memory-purpose-dist');
+ let root=path.resolve(__dirname,'..',process.env.HOLLOW_WAKE_QA_DIST||'balance/reports/memory-purpose-dist');
  const server=http.createServer((req,res)=>{
   const p=new URL(req.url,'http://localhost').pathname,f=path.resolve(root,'.'+(p==='/'?'/index.html':p));
   if(!f.startsWith(root+path.sep)||!fs.existsSync(f)){res.writeHead(404);return res.end();}
@@ -75,9 +75,9 @@ const current=root,timer=setTimeout(()=>app.exit(1),180000),results=[];
    if(before!==JSON.stringify(w.meta.items))throw Error('Facet selection consumed a memory');
    const b=document.querySelector('[data-mem-recall]');if(b.disabled)throw Error('Native recall refused');b.click();
    const got=w.memoryRecallLast;if(!got)throw Error('No native grant');window.qaGot=got;
-   return {got,left:w.meta.items.find(i=>i.uid===99102).mem.length,button:!!document.querySelector('[data-mem-find="'+got.itemUid+'"]'),text:document.getElementById('recall-menu').textContent};
+   return {got,left:w.meta.items.find(i=>i.uid===99102).mem.length,button:!!document.querySelector('[data-mem-find="'+got.itemUid+'"]'),text:document.getElementById('recall-menu').textContent,visualIcon:!!document.querySelector('#recall-menu svg path')};
   });
-  assert.equal(reveal.left,1);assert.equal(reveal.got.kind,'skill');assert.ok(reveal.button);await shot('revealed');results.push({reveal});
+  assert.equal(reveal.left,1);assert.equal(reveal.got.kind,'skill');assert.ok(reveal.button);assert.ok(reveal.visualIcon,'native revealed Memory uses visual artwork');await shot('revealed');results.push({reveal});
   const stale=await run(()=>{
    const w=__game.world(),uid=qaGot.itemUid,index=w.meta.items.findIndex(i=>i.uid===uid),item=w.meta.items.splice(index,1)[0];
    document.querySelector('[data-mem-find="'+uid+'"]').click();const unchanged=__game.ui.recallOpen;
@@ -89,7 +89,7 @@ const current=root,timer=setTimeout(()=>app.exit(1),180000),results=[];
   win.setSize(1280,850);await new Promise(r=>setTimeout(r,150));await run(()=>__game.ui.folioSync());
   const rough=await hover(99101);assert.ok(rough.text.includes('skill or support gem'));assert.ok(rough.pure&&rough.inside);await shot('rough');
   const saved=await save();assert.deepEqual(await resume(),saved);assert.ok((await hover(99102)).text.includes('reveal a skill gem'));await shot('continued');
-  root=path.join(dir,'proc-reference-dist');assert.deepEqual(await resume(),saved);const old=await hover(99102);assert.ok(!old.text.includes('reveal a skill gem'));await shot('prior');
+  root=path.resolve(__dirname,'..',process.env.HOLLOW_WAKE_QA_PRIOR||'balance/reports/proc-reference-dist');assert.deepEqual(await resume(),saved);const old=await hover(99102);if(!process.env.HOLLOW_WAKE_QA_PRIOR)assert.ok(!old.text.includes('reveal a skill gem'));await shot('prior');
   root=current;assert.deepEqual(await resume(),saved);const returned=await hover(99102);assert.ok(returned.text.includes('reveal a skill gem'));await shot('returned');
   fs.writeFileSync(path.join(dir,tag+'-ui.json'),JSON.stringify({results,stale,sameSave:true},null,2));
   console.log('PASS native Memory pickup, full/narrow explanation, facet/refusal/one-unit recall, exact-grant bag handoff, stale grant and current/prior/current Continue');

@@ -43,7 +43,7 @@ import {
   type SkillDef, type SkillInstance, type SkillRarity, type SkillTreeNode, type SupportInstance,
 } from '../engine/skills';
 import { EQUIP_SLOTS, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type EquipSlotDef, type ItemInstance } from '../engine/items';
-import { findBagGem, gemInitials, packSkillGemPayload, packSupportGemPayload, skillGemPayloadOf, skillOfGemItem, supportGemPayloadOf, supportOfGemItem } from '../engine/gemitems';
+import { findBagGem, packSkillGemPayload, packSupportGemPayload, skillGemPayloadOf, skillOfGemItem, supportGemPayloadOf, supportOfGemItem } from '../engine/gemitems';
 import { veinLines } from '../engine/supportbase';
 import {
   memoryProvenanceLabel, MEMORY_CFG, MEMORY_KINDS, memoryFacets,
@@ -343,7 +343,7 @@ const gemTileColorOf = (item: ItemInstance): string => {
 };
 
 /** THE ICON LAW (walk-1): the tile face IS the hotbar icon at 1×1 — the
- *  shared vector face or its legacy initials. Supports retain their def color. */
+ *  shared visual face. Supports retain their def color. */
 const gemTileFaceHtml = (item: ItemInstance): string => {
   const sp = skillGemPayloadOf(item);
   const gp = supportGemPayloadOf(item);
@@ -353,7 +353,7 @@ const gemTileFaceHtml = (item: ItemInstance): string => {
   const lvl = sp?.level ?? gp?.level ?? 1;
   return `<span style="display:flex;align-items:center;justify-content:center;
       width:22px;height:22px;border-radius:3px;background:${color};opacity:0.9;
-      color:#0a0a0e;font-weight:bold;font-size:9px;font-family:Verdana">${sp ? skillIconSvg(SKILLS[sp.skillId],22) || gemInitials(def.name) : gemInitials(def.name)}</span>
+      color:#0a0a0e;font-weight:bold;font-size:9px;font-family:Verdana">${sp ? skillIconSvg(SKILLS[sp.skillId],22) : skillIconSvg({color,icon:'support'},22)}</span>
     <span style="position:absolute;bottom:0;left:2px;font-size:8px;line-height:9px;color:#e8dcc8;text-shadow:0 0 2px #000">${lvl}</span>
     ${gp ? `<span title="Support Memory" aria-label="Support Memory" style="position:absolute;top:0;left:0;
       font-size:10px;line-height:11px;padding:0 1px;border-radius:2px;
@@ -736,7 +736,7 @@ export class UI {
   private recallKind: MemoryKind = 'rough';
   private recallFacet: string | null = null;
   /** THE REVEAL rows: dropper id → the grant its row last flipped to. */
-  private recallReveals = new Map<string, { name: string; color: string; sockets: number; itemUid: number }>();
+  private recallReveals = new Map<string, { name: string; color: string; sockets: number; itemUid: number; id: string; kind: string }>();
   /** Found-flash marks: freshly-recalled bag uids → flash-until (ms). */
   private memFlash = new Map<number, number>();
   /** The Tracker's book: which leaf is open, and which page is under the thumb. */
@@ -5107,10 +5107,10 @@ export class UI {
         : 'commit to a FACET: the recall grants a skill asking those attributes (skills only — supports hold no attribute)'}</div>` : '';
     const chipStyle = 'display:inline-flex;align-items:center;gap:3px;padding:1px 5px;margin:1px 2px;'
       + 'background:#241d2e;border:1px solid #4a3a5a;border-radius:8px;font-size:9px';
-    const revealHtml = (reveal: { name: string; color: string; sockets: number; itemUid: number }): string =>
+    const revealHtml = (reveal: { name: string; color: string; sockets: number; itemUid: number; id: string; kind: string }): string =>
       `<div style="margin-top:2px;font-size:10px;color:${reveal.color}">
         <span style="display:inline-flex;width:14px;height:14px;border-radius:2px;background:${reveal.color}33;border:1px solid ${reveal.color};
-          align-items:center;justify-content:center;font-size:6px;vertical-align:middle">${gemInitials(reveal.name)}</span>
+          align-items:center;justify-content:center;font-size:6px;vertical-align:middle">${skillIconSvg((reveal.kind === 'skill' ? SKILLS[reveal.id] : undefined) ?? {color:reveal.color,icon:'support'},14)}</span>
         ${esc(reveal.name)}${reveal.sockets ? ` <span style="color:#9a94a8">${'◆'.repeat(reveal.sockets)}</span>` : ''}
         ${seat.meta.items.some(i=>i.uid===reveal.itemUid && i.gem) ? `<button data-mem-find="${reveal.itemUid}" style="margin-left:6px;padding:3px 7px;font-size:10px">View in bag</button>` : ''}</div>`;
     const portraitOf = (def: MonsterDef | undefined): string => def
@@ -5129,14 +5129,14 @@ export class UI {
         // grant itself (and its pinned grade where the spoil named one).
         ? `<span style="${chipStyle}" title="${esc(g.pin.name)} — ${MEMORY_CFG.strings.pinned} this very memory">
             <span style="width:12px;height:12px;border-radius:2px;background:${g.pin.color}33;border:1px solid ${g.pin.color};
-              display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:${g.pin.color}">${gemInitials(g.pin.name)}</span>
+              display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:${g.pin.color}">${skillIconSvg((g.pin.kind === 'skill' ? SKILLS[g.pin.id] : undefined) ?? {color:g.pin.color,icon:'support'},12)}</span>
             <span style="color:${g.pin.rarity ? SKILL_RARITIES[g.pin.rarity].color : '#c8bce0'}">${esc(g.pin.name)}${g.pin.rarity ? ` · ${SKILL_RARITIES[g.pin.rarity].label}` : ''}</span></span>`
         : needsFacet
         ? `<span style="color:#5a5668;font-size:9px">the committed facet decides</span>`
         : g.rung === 'kit'
           ? g.kit.map(c => `<span style="${chipStyle}" title="${c.name} — ×${c.mult} lean">
               <span style="width:12px;height:12px;border-radius:2px;background:${c.color}33;border:1px solid ${c.color};
-                display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:${c.color}">${gemInitials(c.name)}</span>
+                display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:${c.color}">${skillIconSvg(SKILLS[c.id] ?? {color:c.color,icon:'support'},12)}</span>
               <span style="color:#c8bce0">×${c.mult}</span></span>`).join('')
           : g.rung === 'bias'
             ? g.tags.map(t => `<span style="${chipStyle}" title="tag lean — ×${GEM_DROP_CFG.biasMult}">
@@ -5211,7 +5211,7 @@ export class UI {
         const got = w.memoryRecallLast as (MemoryRecallResult & { seat: string }) | null;
         if (got && got.seat === this.panelSeat(this.recallMenu).id) {
           this.recallReveals.set(dropper, {
-            name: got.name, itemUid: got.itemUid,
+            name: got.name, itemUid: got.itemUid, id: got.id, kind: got.kind,
             color: got.kind === 'skill' ? SKILL_RARITIES[got.rarity ?? 'common'].color : (SUPPORTS[got.id]?.color ?? '#b8b8b8'),
             sockets: got.kind === 'skill' ? SKILL_RARITIES[got.rarity ?? 'common'].sockets : 0,
           });
@@ -6606,7 +6606,7 @@ export class UI {
               display:flex;align-items:center;justify-content:center;
               ${e.kind === 'skill' && e.inst.rarity === 'legendary' ? `box-shadow:0 0 10px ${col};` : ''}${canBuy ? '' : 'opacity:0.55;'}">
               <span style="width:22px;height:22px;border-radius:4px;background:${col}33;border:1px solid ${col};
-                display:flex;align-items:center;justify-content:center;font-size:8px;color:${col}">${gemInitials(name)}</span>
+                display:flex;align-items:center;justify-content:center;font-size:8px;color:${col}">${skillIconSvg(e.kind === 'skill' ? e.inst.def : {color:col,icon:'support'},22)}</span>
               ${priceTag}${lockPip}${badge}</div>`;
             return;
           }
@@ -6960,7 +6960,7 @@ ${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its sup
       }
       const sd = seated.def;
       // THE ICON LAW (M1): the seat wears the skill's hotbar face — the
-      // shared vector or initials the canvas bar prints, at seat scale.
+      // shared visual icon the canvas bar prints, at seat scale.
       return `<div data-drag="rackSeat:${slot}" data-drop="rackSeat:${slot}"
         data-tip="skill" data-skill-id="${sd.id}"
         style="--unlearn-size:${BUILD_PANEL_CFG.unlearnSize}px;position:relative;height:${BUILD_PANEL_CFG.rackSeatHeight}px;border:1px solid ${sd.color};border-radius:5px;
@@ -6977,7 +6977,7 @@ ${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its sup
         <div style="display:flex;align-items:center;gap:4px">
           <span style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;
             width:15px;height:15px;border-radius:2px;background:${sd.color};opacity:0.9;
-            color:#0a0a0e;font-weight:bold;font-size:7px;font-family:Verdana">${skillIconSvg(sd,15) || gemInitials(sd.name)}</span>
+            color:#0a0a0e;font-weight:bold;font-size:7px;font-family:Verdana">${skillIconSvg(sd,15)}</span>
           <span style="min-width:0">
             <span style="display:block;font-size:10px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${skillInstanceName(seated)}</span>
             <span style="display:block;font-size:8px;color:#8a8678">Lv ${seated.level}</span>
@@ -10637,7 +10637,19 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       </div>
       <div class="rebind-row">
         <span>Ailment Screen Effects</span>
-        <button id="opt-affliction" title="Blood drips, rising kindling, poison haze and curse effects appear together, each scaling with its own severity. STILL stops their motion; OFF hides these layers. Status icons, body effects, frost, stun and the separate low-life pulse keep their own behavior.">${s.afflictionOverlays.toUpperCase()}</button>
+        <button id="opt-affliction" title="Blood drips, rising kindling, poison haze, mire and befuddlement appear together, each scaling with its own severity. STILL stops their motion; OFF hides these layers. Status icons, body effects, frost, stun and the separate low-life pulse keep their own behavior.">${s.afflictionOverlays.toUpperCase()}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Debuff Names &amp; Durations</span>
+        <button id="opt-statusreadout" title="Show debuff text near your hero, in the upper corner, or hide it. Screen effects have their own setting.">${s.statusReadout === 'focus' ? 'NEAR HERO' : s.statusReadout === 'corner' ? 'UPPER CORNER' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Health &amp; Cast Bar Placement</span>
+        <button id="opt-crowdedmeters" title="FIXED keeps bars at their usual position above each body. AVOID CROWD moves overlapping groups with a line to their owner.">${s.crowdedMeters ? 'AVOID CROWD' : 'FIXED'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Feet Planted Caption</span>
+        <button id="opt-castmovement" title="Show a caption during casts that hold your hero in place.">${s.castMovementHint ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
         <span>Faintness Frame-Falter</span>
@@ -10686,6 +10698,17 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       s.afflictionOverlays = s.afflictionOverlays === 'gentle' ? 'still' : s.afflictionOverlays === 'still' ? 'off' : 'gentle';
       this.saveSettings();
       this.renderOptions(root, onBack);
+    });
+    for (const [id, key] of [['opt-crowdedmeters', 'crowdedMeters'], ['opt-castmovement', 'castMovementHint']] as const) {
+      root.querySelector<HTMLElement>('#' + id)?.addEventListener('click', () => {
+        const settings = this.getSettings(); settings[key] = !settings[key];
+        this.saveSettings(); this.renderOptions(root, onBack);
+      });
+    }
+    root.querySelector<HTMLElement>('#opt-statusreadout')?.addEventListener('click', () => {
+      const settings = this.getSettings();
+      settings.statusReadout = settings.statusReadout === 'focus' ? 'corner' : settings.statusReadout === 'corner' ? 'off' : 'focus';
+      this.saveSettings(); this.renderOptions(root, onBack);
     });
     // THE FALTER is deliberate fake lag (docs/render/falter.md) — a comfort
     // switch, never a graphics-quality one: OFF loses no information (the

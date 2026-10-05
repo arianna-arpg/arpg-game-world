@@ -12,6 +12,8 @@
 // ---------------------------------------------------------------------------
 
 import type { LookDef } from '../render/vis/parts';
+import { CLASSES } from './classes';
+import { playerBodyLook } from './playerBody';
 import { CASTER_LOOKS } from './casterLooks';
 import { DEMON_LOOKS } from './demonLooks';
 import { COURT_LOOKS } from './courtLooks';
@@ -1551,10 +1553,6 @@ export const LOOKS: Record<string, LookDef> = {
 
   // ========================================================= PLAYER CLASSES
   class_warrior: {
-    walk: { cycle: 6.2, swing: 0.6, sway: 0.035, lift: 0.06, parts: [
-      { kind: 'boot', x: -.5, y: -.55, hip: { x: -.12, y: -.42, width: .21 }, role: 'metal', phase: 1 },
-      { kind: 'boot', x: -.5, y: .55, hip: { x: -.12, y: .42, width: .21 }, role: 'metal', phase: -1 },
-    ] },
     parts: [
       { kind: 'cape', scale: .95, role: 'cloth' },
       { kind: 'torso', role: 'cloth' },
@@ -1566,10 +1564,6 @@ export const LOOKS: Record<string, LookDef> = {
     ],
   },
   class_magician: {
-    walk: { cycle: 6, swing: 0.55, sway: 0.025, lift: 0.055, parts: [
-      { kind: 'boot', x: -.5, y: -.55, hip: { x: -.12, y: -.42, width: .21 }, role: 'wood', phase: 1 },
-      { kind: 'boot', x: -.5, y: .55, hip: { x: -.12, y: .42, width: .21 }, role: 'wood', phase: -1 },
-    ] },
     parts: [
       { kind: 'cape', scale: .95, role: 'cloth' },
       { kind: 'robe', scale: .85 },
@@ -1582,10 +1576,6 @@ export const LOOKS: Record<string, LookDef> = {
     ],
   },
   class_rogue: {
-    walk: { cycle: 5.2, swing: 0.62, sway: 0.045, lift: 0.065, parts: [
-      { kind: 'boot', x: -.5, y: -.55, hip: { x: -.12, y: -.42, width: .21 }, role: 'wood', phase: 1 },
-      { kind: 'boot', x: -.5, y: .55, hip: { x: -.12, y: .42, width: .21 }, role: 'wood', phase: -1 },
-    ] },
     parts: [
       { kind: 'tatters', scale: .6, params: { n: 3 } },
       { kind: 'cape', scale: .8, role: 'dark' },
@@ -9768,6 +9758,11 @@ export const LOOKS: Record<string, LookDef> = {
     shadowScale: 0.6,
   },
 };
+
+// Class registry membership, not a hand-picked class list, grants player anatomy.
+for (const cls of CLASSES) if (cls.look && LOOKS[cls.look]) {
+  LOOKS[cls.look] = playerBodyLook(LOOKS[cls.look]);
+}
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look
  *  overrides per skill). Kinds absent here keep the legacy square: a decoy

@@ -22,8 +22,11 @@ export class CombatMeterLayout {
   private concealed = new Set<object>();
   private memory = new WeakMap<object,Memory>();
   private time=0;
+  private relocate=false;
   readonly footprints: CombatRect[]=[];
-  begin(time: number): void {
+  begin(time: number, relocate: boolean = VIS_CFG.combatFocus.meters.enabled): void {
+    if(this.relocate!==relocate)this.memory=new WeakMap();
+    this.relocate=relocate;
     this.time=time;this.bodies.clear();this.rows.clear();this.concealed.clear();this.footprints.length=0;
   }
   /** Caller supplies the same cover admission as the body's native labels. */
@@ -43,7 +46,10 @@ export class CombatMeterLayout {
     if(this.concealed.has(key))return;
     // Off-screen/unregistered meters keep their original pass and cannot
     // influence the layout of a visible body.
-    if(!VIS_CFG.combatFocus.meters.enabled || !this.bodies.has(key)){paint();return;}
+    if(!this.relocate || !this.bodies.has(key)){
+      if(this.bodies.has(key))this.footprints.push({...rect});
+      paint();return;
+    }
     const row=this.rows.get(key);
     if(row){row.rect=union(row.rect,rect);row.paint.push(paint);}
     else this.rows.set(key,{key,rect,paint:[paint]});
@@ -77,7 +83,7 @@ export class CombatMeterLayout {
       };
       const origin={x:0,y:0},prior=this.memory.get(row.key);
       let offset=prior?.offset??origin,clearSince=prior?.clearSince;
-      if(!c.enabled){offset=origin;clearSince=undefined;}
+      if(!this.relocate){offset=origin;clearSince=undefined;}
       else{
         // Keep a live cluster steady while bodies move. Return it home only
         // after its own anchor has stayed clear for a short simulation interval.
@@ -103,7 +109,7 @@ export class CombatMeterLayout {
       const rect=shifted(row.rect,offset);
       this.footprints.push(rect);occupied.push(padded(rect,c.gap));
       ctx.save();
-      if(c.enabled&&(offset.x||offset.y)){
+      if(this.relocate&&(offset.x||offset.y)){
         const line=link(rect);
         if(line){
           ctx.beginPath();ctx.moveTo(line.start.x,line.start.y);ctx.lineTo(line.end.x,line.end.y);

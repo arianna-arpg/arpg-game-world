@@ -1,7 +1,7 @@
 // Shared icon artwork and native bar/rack integration; controlled UI QA, not gameplay.
 const {app,BrowserWindow}=require('electron'),{buildSync}=require('esbuild');
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
-const dir=path.join(__dirname,'reports');
+const dir=path.join(__dirname,'reports'),tag=process.env.HOLLOW_WAKE_QA_TAG||'skill-faces';
 app.setPath('userData',path.join(dir,'skill-faces-profile-'+process.pid));app.disableHardwareAcceleration();
 app.whenReady().then(async()=>{
  const root=path.resolve(__dirname,'..',process.env.HOLLOW_WAKE_QA_DIST||'balance/reports/skill-faces-dist');
@@ -14,7 +14,7 @@ app.whenReady().then(async()=>{
  const win=new BrowserWindow({show:false,width:1280,height:850,webPreferences:{offscreen:true,backgroundThrottling:false}});
  const run=async(fn,...args)=>win.webContents.executeJavaScript('('+fn+')('+args.map(a=>JSON.stringify(a)).join(',')+')');
  const timer=setTimeout(()=>app.exit(1),180000),rows=[],faces=[];
- const png=(name,data)=>fs.writeFileSync(path.join(dir,'skill-faces-'+name+'.png'),Buffer.from(data.split(',')[1],'base64'));
+ const png=(name,data)=>fs.writeFileSync(path.join(dir,tag+'-'+name+'.png'),Buffer.from(data.split(',')[1],'base64'));
  try{
   await win.loadURL('http://127.0.0.1:'+server.address().port);
   await run(async()=>{window.requestAnimationFrame=()=>0;Object.defineProperty(navigator,'getGamepads',{value:()=>[]});await new Promise(r=>setTimeout(r,200));});
@@ -48,8 +48,8 @@ app.whenReady().then(async()=>{
    },role);
    assert.equal(row.fatal,null);assert.ok(row.same);
    const initials=row.faces[0].name.split(' ').map(s=>s[0]).join('').slice(0,3).toUpperCase();
-   assert.ok(!row.normal.includes(initials));assert.ok(row.fallback.includes(initials)&&row.unknown.includes(initials));
-   assert.ok(row.recall.includes('REC'));assert.notEqual(row.png,row.cooling);assert.notEqual(row.png,row.empty);
+   assert.ok(!row.normal.includes(initials));assert.ok(!row.fallback.includes(initials)&&!row.unknown.includes(initials));
+   assert.ok(!row.recall.includes('REC'));assert.notEqual(row.png,row.cooling);assert.notEqual(row.png,row.empty);
    assert.equal(row.rack.filter(r=>r.svg).length,3,'all equipped native starter rack faces use shared vectors');
    assert.ok(row.unseated&&row.memorySvg,'native unlearning returns the same illustrated Memory to the bag');
    png(role,row.png);png(role+'-cooldown',row.cooling);png(role+'-unaffordable',row.empty);
@@ -79,18 +79,18 @@ app.whenReady().then(async()=>{
      g.drawImage(a,x+10,y+34);g.drawImage(b,x+72,y+34);g.drawImage(a,x+140,y+45,22,22);g.drawImage(b,x+180,y+48,15,15);
      results.push({id:face.icon,source:defs[face.icon].source,max,mean:total/aa.length,hash:hash>>>0});
     }
-    const off=canvas(),og=off.getContext('2d');cfg.enabled=false;const disabled=draw(og,faces[0],0,0,48);cfg.enabled=true;
+    const off=canvas(),og=off.getContext('2d');const legacy=draw(og,{...faces[0],icon:false},0,0,48);
     const missing=draw(og,{color:'#fff',icon:'missing'},0,0,48);
-    return {results,disabled,missing,unchanged:saved===JSON.stringify([cfg,defs]),png:c.toDataURL()};
+    return {results,legacy,missing,unchanged:saved===JSON.stringify([cfg,defs]),png:c.toDataURL()};
    }finally{Math.random=random;}
   },faces);
   png('gallery',gallery.png);delete gallery.png;
-  assert.equal(gallery.disabled,false);assert.equal(gallery.missing,false);assert.ok(gallery.unchanged);
+  assert.equal(gallery.legacy,true);assert.equal(gallery.missing,true);assert.ok(gallery.unchanged);
   assert.equal(new Set(gallery.results.map(r=>r.hash)).size,9);
   // SVG and Canvas use different raster paths; compare total coverage, not bit identity.
   for(const r of gallery.results)assert.ok(r.mean<3,'canvas/SVG mismatch: '+JSON.stringify(r));
-  fs.writeFileSync(path.join(dir,'skill-faces-ui.json'),JSON.stringify({rows,gallery},null,2));
-  console.log(JSON.stringify(gallery));console.log('PASS shared native starter bar/rack faces, fallback/recall, affordability/cooldown overlays, SVG/canvas vocabulary and state/RNG preservation');
+  fs.writeFileSync(path.join(dir,tag+'-ui.json'),JSON.stringify({rows,gallery},null,2));
+  console.log(JSON.stringify(gallery));console.log('PASS shared native starter bar/rack faces, automatic artwork/recall, affordability/cooldown overlays, SVG/canvas vocabulary and state/RNG preservation');
  }catch(e){console.error(e.stack||String(e));process.exitCode=1;}
  finally{clearTimeout(timer);win.destroy();server.close();app.exit(process.exitCode||0);}
 });

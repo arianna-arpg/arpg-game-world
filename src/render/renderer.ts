@@ -19,7 +19,7 @@ import { drawRaisedGuard } from './vis/raisedGuard';
 import { MassPainter } from '../worldmass/paint';
 import { massQuestPins } from '../worldmass/quests';
 import { drawQuestCompass, questCompassLines } from './vis/questCompass';
-import { drawStatusReadout, statusReadoutRows } from './vis/statusReadout';
+import { drawStatusReadout, statusReadoutRows, statusReadoutAnchor } from './vis/statusReadout';
 import { regionGrid } from '../world/walk'; // worldmass shares native grounded telegraphs
 import { concealmentActive } from '../engine/perception';
 import { anatomyCueState, anatomyOverheadRise } from '../engine/anatomyCues';
@@ -852,7 +852,7 @@ export class Renderer {
       this.drawFlash(f);
     }
     this.drawCompanionCues(world);
-    this.combatMeters.begin(world.time);
+    this.combatMeters.begin(world.time, this.getSettings?.().crowdedMeters ?? VIS_CFG.combatFocus.meters.enabled);
     // THE PACK LAYER's drawn bonds (engine/pack.ts): the warden's lines to
     // every body it is actually empowering — over the ground reads, UNDER
     // the bodies they bind (a link is context for a silhouette, never a
@@ -6429,7 +6429,7 @@ export class Renderer {
     if (cs) {
       const castReadout = VIS_CFG.castReadout.enabled && world.seats.some(s => s.actor === a);
       const bw = castReadout ? VIS_CFG.castReadout.width : 44, bh = castReadout ? VIS_CFG.castReadout.height : 5;
-      const movement = castReadout && VIS_CFG.castReadout.showMovement && castMovementHeld(world,a)
+      const movement = castReadout && (this.getSettings?.().castMovementHint ?? VIS_CFG.castReadout.showMovement) && castMovementHeld(world,a)
         ? VIS_CFG.castReadout.plantedText : undefined;
       const nameHeight = castReadout ? VIS_CFG.castReadout.nameHeight+(movement?VIS_CFG.castReadout.movementHeight:0) : 0;
       const bx2 = x - bw / 2, by2 = y - a.radius - 18;
@@ -8026,7 +8026,7 @@ export class Renderer {
         const def = inst.def;
         // THE SLOT'S FACE: a converted skill (SkillDef.convert — a full
         // Tame presses as the Whistle) presents the CONVERTED look: color,
-        // shared icon/initials, and the cooldown clock a press would actually answer to.
+        // shared visual icon, and the cooldown clock a press would actually answer to.
         const face = world.slotFaceOf(p, inst);
         const cost = p.skillCost(inst);
         // GATED skills grey out hard: no fuel in the pool, no afflicted
@@ -8037,17 +8037,9 @@ export class Renderer {
         // "unaffordable" dimming would lie about the one press that helps.
         ctx.globalAlpha = gated ? 0.15
           : (runningOn || (p.mana >= cost.mana && p.life > cost.life)) ? 0.9 : 0.3;
-        // Stateful recall retains its explicit REC face; converted skills use
-        // the live face's registry key. Native clocks and gauges paint above it.
-        const illustrated = !inst.state?.markPos && drawSkillIcon(ctx, face, x + 4, by + 4, slot - 8);
-        if (!illustrated) ctx.fillRect(x + 4, by + 4, slot - 8, slot - 8);
+        // Recall and converted skills use the same visual vocabulary as Memories.
+        drawSkillIcon(ctx, inst.state?.markPos ? {...face,icon:'recall'} : face, x + 4, by + 4, slot - 8);
         ctx.globalAlpha = 1;
-        if (!illustrated) {
-          ctx.fillStyle = '#0a0a0e';
-          ctx.font = 'bold 13px Verdana';
-          const label = inst.state?.markPos ? 'REC' : initials(face.name);
-          ctx.fillText(label, x + slot / 2, by + slot / 2 + 5);
-        }
         // Cooldown sweep — measured against the clock actually SET (an
         // Apotheosis-imposed cooldown sweeps too, not just innate ones).
         const cd = p.cooldowns.get(face.id);
@@ -8714,8 +8706,20 @@ export class Renderer {
         hintY += 18;
       }
     }
-    hintY = drawStatusReadout(ctx, statusReadoutRows(p.statuses, afflictionPressureOf(p), p.dead || p.downed),
-      x, hintY, world.seats.length > 1 ? this.uiW / 2 - 32 : this.uiW - 32, align);
+    const statusReadout = this.getSettings?.().statusReadout ?? 'focus';
+    if (statusReadout !== 'off') {
+      const rows = statusReadoutRows(p.statuses, afflictionPressureOf(p), p.dead || p.downed);
+      if (statusReadout === 'corner') {
+        hintY = drawStatusReadout(ctx, rows, x, hintY,
+          world.couchActive() ? this.uiW / 2 - 32 : this.uiW - 32, align);
+      } else {
+        const point = this.toScreen(p.pos);
+        const bufferScale = this.pixelScale < 1 ? this.pixelScale : 1;
+        const anchor = statusReadoutAnchor({x:point.x / (this.canvas.width * bufferScale) * this.uiW,
+          y:point.y / (this.canvas.height * bufferScale) * this.uiH}, this.uiW, this.uiH, world.couchActive() ? align : undefined, rows);
+        drawStatusReadout(ctx, rows, anchor.x, anchor.y, anchor.width, 'left');
+      }
+    }
     this.noticeHeaderBottom = Math.max(this.noticeHeaderBottom, hintY - 14);
   }
 
@@ -8891,9 +8895,6 @@ export class Renderer {
   }
 }
 
-function initials(name: string): string {
-  return name.split(' ').map(s => s[0]).join('').slice(0, 3).toUpperCase();
-}
 
 // hexToRgb / shade now live in vis/color.ts (imported above) — every draw
 // path derives washes and gradients from the SAME color math as the bakes.

@@ -4676,3 +4676,57 @@ are fixture preparation, not earned gameplay. Seven page/canvas pairs were
 inspected. Tiny floating-point elapsed differences use a 1e-9 tolerance.
 A fresh independent Warrior review is underway on the unchanged candidate build;
 its verdict is pending.
+
+
+## Player presentation preferences and shared artwork
+
+The user's visual direction takes priority over automatic crowd cleanup.
+Health/cast meter groups now retain their fixed native anchors by default.
+Options > Visuals can enable crowd avoidance with owner links, and separately
+enable the Feet Planted caption. Both preferences are additive saved fields;
+older settings choose the quiet fixed defaults. Concealed meters remain hidden
+with either placement policy, and fixed visible meters still reserve their
+actual paint bounds for lighting and floating-text placement.
+
+Debuff names and real expiry clocks default to a bounded lane near the hero.
+Text can independently use the upper corner or be switched off. The existing
+ailment-effect dial independently selects gentle motion, still effects or off.
+Mired adds an earth-colored edge haze; Befuddled adds restrained violet corner
+clasps through the shared motif registry. Neither changes movement, interruption
+chance, status duration or damage. Short views place the lane around the body
+and reserve the bottom HUD; local co-op keeps separate text halves.
+
+The vector vocabulary now supplies every registered skill with visual artwork.
+Explicit authored faces remain available; an ordered registry of delivery,
+tag and effect rules covers omitted/old/unknown icon keys, ending the initials
+fallback. Skill bars, stored Memories, rack seats, vendors, recall outcome and
+kit chips share the same paths. Recall uses a return-arrow face, and supports
+use the linking motif. These are reusable family symbols with native tint,
+not a claim of unique bespoke art for every skill. The complete Canvas census
+covers 948 definitions and the SVG/Canvas comparison covers 30 current motifs.
+
+All 39 registered classes compose their looks with playerBodyLook, inheriting
+the same PLAYER_BODY_WALK limbs and gait. The former three inline class gait
+blocks are removed. Clothing and equipment remain class-owned; native actual
+post-collision movement, exclusions and network pose still drive the renderer.
+The rendered gallery checks both foot phases for every class. Breaker's native
+device-input harness confirms opposing cached foot movement, neutral stop,
+repeated-frame stability and planted casting. No account unlocks are changed.
+
+Controlled browser checks exercise the real saved Options, text-only and
+visual-only modes, fixed/opt-in bars and movement caption, narrow presentation,
+read-only rendering and current/prior/current Continue. Six ordinary-save
+sentinels stay untouched in the isolated preview profile. The earlier CI failure
+in nerverecovery came from comparing a historical morale change under the
+subsequently mobile Cleave. That A/B now explicitly pins its historical cast
+movement and aim, preserving every existing outcome assertion; castaim retains
+coverage of current mobile/live-aim behavior.
+
+Fresh gameplay review uses a separate unchanged r54 candidate and its own
+profile. Subsequent r55/r56 candidates correct narrow-view text placement and
+visible Options labels. Controlled checks and galleries do not establish FPS,
+audio, continuous play feel or commercial-quality gameplay.
+
+Verification for this batch: all three type checks, all 380 fast green probes
+and the 25-episode simulation smoke pass. The nine slow and three excluded
+probes were not run. Required ownership review attributes every staged hunk.

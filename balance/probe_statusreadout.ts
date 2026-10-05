@@ -3,7 +3,7 @@ import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { STATUS_DEFS, type ActiveStatus } from '../src/engine/status';
 import { afflictionPressureOf } from '../src/engine/afflictionPressure';
-import { statusReadoutRows, statusReadoutTime } from '../src/render/vis/statusReadout';
+import { statusReadoutRows, statusReadoutTime, statusReadoutAnchor } from '../src/render/vis/statusReadout';
 import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 import { CLASSES } from '../src/data/classes';
 import { NullInput } from '../src/net/intent';
@@ -43,3 +43,27 @@ try{
  assert.deepEqual(statusReadoutRows(client.player.statuses,{}),[]);
  console.log('PASS remote owning seat receives real expiry and severity, legacy wire omits invented countdown, native cleanse reconciles');
 }finally{restore();}
+
+const {makeSettings,serializeSettings,deserializeSettings}=await import('../src/meta/settings');
+const defaults=makeSettings();
+assert.equal(defaults.crowdedMeters,false);assert.equal(defaults.castMovementHint,false);assert.equal(defaults.statusReadout,'focus');
+for(const mode of ['focus','corner','off'] as const)for(const effects of ['gentle','still','off'] as const){
+ const saved=serializeSettings({...defaults,statusReadout:mode,afflictionOverlays:effects,crowdedMeters:true,castMovementHint:true});
+ const restored=deserializeSettings(saved)!;
+ assert.equal(restored.statusReadout,mode);assert.equal(restored.afflictionOverlays,effects);
+ assert.equal(restored.crowdedMeters,true);assert.equal(restored.castMovementHint,true);
+}
+const old=serializeSettings(defaults);delete old.crowdedMeters;delete old.castMovementHint;delete old.statusReadout;
+assert.deepEqual(deserializeSettings(old),defaults);
+for(const [width,height]of [[1280,850],[600,600],[400,460]])for(const side of [undefined,'left','right'] as const){
+ const a=statusReadoutAnchor({x:width/2,y:height/2},width,height,side);
+ assert.ok(a.x>=0&&a.x+a.width<=width&&a.y>0&&a.y+102<height);
+}
+const {collectActiveFx}=await import('../src/render/screenFx');
+const {composeAfflictionEdge}=await import('../src/render/vis/afflictionEdge');
+const cues=collectActiveFx([status('mired'),status('befuddlement')]);
+const edge=composeAfflictionEdge(cues,{},'gentle',1)!;
+assert.deepEqual(new Set(edge.layers.map(l=>l.family)),new Set(['mire','befuddlement']));
+assert.ok(edge.layers.every(l=>l.alpha>0));assert.equal(composeAfflictionEdge(cues,{},'off',1),undefined);
+assert.equal(composeAfflictionEdge(cues,{},'still',1)!.seconds,0);
+console.log('PASS independent persisted preferences, old-save defaults, bounded focus readouts and distinct Mired/Befuddled cues');

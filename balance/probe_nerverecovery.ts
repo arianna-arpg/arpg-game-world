@@ -5,6 +5,7 @@ import { updateAI } from '../src/engine/ai';
 import { evalCondition } from '../src/engine/brain';
 import { MONSTERS } from '../src/data/monsters';
 import { setSimTap } from '../src/engine/tap';
+import { SKILLS } from '../src/data/skills';
 const brain=MONSTERS.gnoll_bonepicker.brain!;
 const exercise=(hz:number,prior:boolean)=>{
  const restore=seedGlobalRandom(113042);
@@ -61,6 +62,11 @@ console.log('PASS strict courage-band boundaries, native rule composition, inval
 // flat arena cannot expose. Prepared isolated participants; every swing and
 // movement thereafter uses ordinary Warrior inputs, with no invulnerability.
 const warriorCountry=(prior:boolean,wounded:boolean)=>{
+ // This A/B isolates the historical morale change. Later mobile/live-aim
+ // Cleave can enter different courage bands and no longer promises identical
+ // healthy fights. Its current movement/aim contract has its own castaim probe.
+ const cleave=SKILLS.cleave;const nativeCleave={castMove:cleave.castMove,castAim:cleave.castAim};
+ cleave.castMove=0;cleave.castAim='press';
  const restore=seedGlobalRandom(7108);
  const rules=brain.rules!.map(r=>{const ext={...r.when.ext};delete ext.nerveAbove;return {...r,when:{...r.when,ext},use:{...r.use,move:{style:'retreat' as const}}};});
  MONSTERS.gnoll_bonepicker.brain=prior?{...brain,rules}:brain;
@@ -83,7 +89,7 @@ const warriorCountry=(prior:boolean,wounded:boolean)=>{
    updateAI(a,w,1/60);w.update(1/60);
   }
   return {time:w.time,initialLife,heroLife:p.life,heroDead:p.dead,enemyDead:a.dead,enemyLife:a.life,swings,throws,hits};
- }finally{MONSTERS.gnoll_bonepicker.brain=brain;restore();setSimTap(null);}
+ }finally{Object.assign(SKILLS.cleave,nativeCleave);MONSTERS.gnoll_bonepicker.brain=brain;restore();setSimTap(null);}
 };
 const fullBefore=warriorCountry(true,false),fullAfter=warriorCountry(false,false);
 assert.deepEqual(fullAfter,fullBefore,'this healthy native melee exchange is unchanged');

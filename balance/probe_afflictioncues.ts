@@ -144,7 +144,8 @@ for (const pool of ['ward', 'absorb', 'es'] as const) {
   } finally { delete STATUS_DEFS[custom]; }
   const fx = collectActiveFx([status('faintness', 0, 3, 1)]);
   check('existing faintness/falter channel remains stack-scaled', collectFalterK(fx) > 0 && collectFalterK(fx) < 0.55);
-  check('terrain statuses stay quiet', !collectActiveFx([status('mired', 0)]).length);
+  check('Mired opts into its own slow material haze', collectActiveFx([status('mired', 0)])[0]?.def.motif === 'mire');
+  check('unopted terrain stays quiet', !collectActiveFx([status('sodden', 0)]).length);
   check('separate instances of one ailment do not duplicate the screen cue', collectActiveFx([status('burn'), status('burn')]).length === 1);
 }
 {

@@ -64,3 +64,16 @@ for(const [id,look] of Object.entries(LOOKS)){
  for(const spec of gait.parts){assert.ok(PART_PAINTERS[spec.kind],id);assert.ok(Number.isFinite(spec.phase??1),id);}
 }
 console.log('PASS every opted-in look has finite configuration and registered limb painters');
+
+const {CLASSES}=await import('../src/data/classes');
+const {PLAYER_BODY_WALK,playerBodyLook}=await import('../src/data/playerBody');
+for(const cls of CLASSES){
+ assert.ok(cls.look&&LOOKS[cls.look]?.walk,cls.id+' inherits walking anatomy');
+ assert.equal(LOOKS[cls.look!].walk,PLAYER_BODY_WALK,cls.id+' shares the same gait foundation');
+}
+const newClass=playerBodyLook({parts:[{kind:'torso'},{kind:'hammer'}]});
+assert.equal(newClass.walk,PLAYER_BODY_WALK);
+const breaker=makeSimWorld('breaker',716);breaker.actors=[breaker.player];
+breaker.moveActor(breaker.player,1,0,1/30);
+assert.ok(bodyWalkPoseOf(breaker.player,breaker.time),'Breaker native displacement reaches the shared gait');
+console.log('PASS all '+CLASSES.length+' registered classes, future class dressing and actual Breaker walking inherit player anatomy');

@@ -80,3 +80,18 @@ export function drawStatusReadout(ctx: CanvasRenderingContext2D, rows: readonly 
   }
   ctx.restore();return y;
 }
+
+/** A stable screen-space lane near the hero, bounded above the native hotbar.
+ * Couch seats retain separate halves even when their bodies meet. */
+export function statusReadoutAnchor(focus: {x:number;y:number}, width:number, height:number,
+  side?: 'left' | 'right', rows?: readonly StatusReadoutRow[]): {x:number;y:number;width:number} {
+  const c=VIS_CFG.statusReadout, start=side==='right'?width/2:0, end=side==='left'?width/2:width;
+  const available=Math.max(0,end-start-c.margin*2), w=Math.min(c.maxWidth,available);
+  const contentHeight=rows ? rows.slice(0,c.maxRows).reduce((h,r)=>h+(r.detail?c.rowHeight:c.lineHeight),0)
+    +(rows.length>c.maxRows?c.lineHeight:0) : c.maxRows*c.rowHeight+c.lineHeight;
+  const lower=Math.min(height-c.bottomReserve-contentHeight,focus.y+c.focusOffset);
+  // If a short viewport cannot fit below the body, reserve a lane above it.
+  const baseline=lower>=focus.y+c.bodyClearance ? lower : focus.y-c.bodyClearance-contentHeight;
+  return {x:Math.max(start+c.margin,Math.min(end-c.margin-w,focus.x-w/2)),
+    y:Math.max(c.ascent+c.margin,baseline),width:w};
+}

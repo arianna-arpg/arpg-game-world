@@ -1,12 +1,31 @@
 import type { SkillDef } from '../engine/skills';
 
 /** One 24-unit vector vocabulary for the canvas bar, Memory tiles and build rack.
- * A skill opts in by registry key; omissions/unknown keys retain its initials. */
+ * Explicit artwork overrides ordered semantic rules. Every definition receives
+ * a visual face, including future content and unknown legacy icon keys. */
 export interface SkillIcon {
   source: string;
   layers: { path: string; fill?: 'tint' | 'ink'; stroke?: 'tint' | 'ink'; width?: number }[];
 }
 export const SKILL_ICONS: Record<string, SkillIcon> = {
+  arcane: {source:'hollow-wake/skills/arcane',layers:[{path:'M12 2L15 9L22 12L15 15L12 22L9 15L2 12L9 9ZM8 12H16M12 8V16',stroke:'ink'}]},
+  projectile: {source:'hollow-wake/skills/projectile',layers:[{path:'M3 18L16 5M9 5H19V15M2 11L6 7M11 22L16 17',stroke:'ink'}]},
+  nova: {source:'hollow-wake/skills/nova',layers:[{path:'M12 7A5 5 0 1 0 12 17A5 5 0 1 0 12 7M12 1V4M12 20V23M1 12H4M20 12H23M4 4L6 6M18 18L20 20M4 20L6 18M18 6L20 4',stroke:'ink'}]},
+  cone: {source:'hollow-wake/skills/cone',layers:[{path:'M3 12L20 3Q14 12 20 21ZM7 12H16',stroke:'ink'}]},
+  target: {source:'hollow-wake/skills/target',layers:[{path:'M12 3V7M12 17V21M3 12H7M17 12H21M12 7A5 5 0 1 0 12 17A5 5 0 1 0 12 7',stroke:'ink'}]},
+  ground: {source:'hollow-wake/skills/ground',layers:[{path:'M3 16L12 11L21 16L12 21ZM12 3V14M8 10L12 14L16 10',stroke:'ink'}]},
+  summon: {source:'hollow-wake/skills/summon',layers:[{path:'M7 12Q2 7 5 4Q8 3 9 8M15 8Q16 3 19 4Q22 7 17 12M12 9Q7 11 5 18Q8 22 12 19Q16 22 19 18Q17 11 12 9Z',stroke:'ink'}]},
+  construct: {source:'hollow-wake/skills/construct',layers:[{path:'M5 21V10L12 6L19 10V21ZM3 10L12 3L21 10M9 21V15H15V21',stroke:'ink'}]},
+  trap: {source:'hollow-wake/skills/trap',layers:[{path:'M3 9L7 15L10 9L14 15L17 9L21 15M3 18H21M5 5L7 8M19 5L17 8',stroke:'ink'}]},
+  aura: {source:'hollow-wake/skills/aura',layers:[{path:'M12 5A3 3 0 1 0 12 11A3 3 0 1 0 12 5M8 20V16Q12 12 16 16V20M5 7Q0 12 5 19M19 7Q24 12 19 19',stroke:'ink'}]},
+  storm: {source:'hollow-wake/skills/storm',layers:[{path:'M4 11Q1 5 7 5Q12 0 16 5Q23 4 21 11ZM13 12L8 17H13L11 22L18 15H13',stroke:'ink'}]},
+  curse: {source:'hollow-wake/skills/curse',layers:[{path:'M3 12Q12 2 21 12Q12 22 3 12ZM12 8L15 12L12 16L9 12ZM3 3L6 6M21 3L18 6M3 21L6 18M21 21L18 18',stroke:'ink'}]},
+  heal: {source:'hollow-wake/skills/heal',layers:[{path:'M9 3H15V9H21V15H15V21H9V15H3V9H9Z',stroke:'ink'}]},
+  corpse: {source:'hollow-wake/skills/corpse',layers:[{path:'M5 10Q4 2 12 2Q20 2 19 10L16 15V20H8V15ZM8 8L10 10M14 10L16 8M9 16H15M12 16V20',stroke:'ink'}]},
+  buff: {source:'hollow-wake/skills/buff',layers:[{path:'M12 2L20 9H16V20H8V9H4ZM9 13H15M9 17H15',stroke:'ink'}]},
+  detonate: {source:'hollow-wake/skills/detonate',layers:[{path:'M12 2L14 8L20 4L17 11L23 13L16 15L19 22L12 18L5 22L8 15L1 13L7 11L4 4L10 8Z',stroke:'ink'}]},
+  recall: {source:'hollow-wake/skills/recall',layers:[{path:'M4 10Q5 2 13 3Q23 4 21 14Q20 21 12 21H7M4 3V10H11M8 17L4 21L8 23',stroke:'ink'}]},
+  support: {source:'hollow-wake/skills/support',layers:[{path:'M9 5L4 10Q1 13 4 16Q7 19 10 16L13 13M11 11L14 8Q17 5 20 8Q23 11 20 14L16 18M8 14L16 10',stroke:'ink'}]},
   lifeFlask: {source:'hollow-wake/skills/life-flask',layers:[
     {path:'M9 2H15V7L19 12Q22 21 16 22H8Q2 21 5 12L9 7Z',fill:'tint',stroke:'ink'},
     {path:'M8 5H16M7 13H17M12 14V19M9.5 16.5H14.5',stroke:'ink'},
@@ -56,19 +75,41 @@ export const SKILL_ICONS: Record<string, SkillIcon> = {
   ]},
 };
 export const SKILL_ICON_VIEW = {
-  enabled:true, background:'#111820', ink:'#f4ebd7', rim:'#070c12',
+  background:'#111820', ink:'#f4ebd7', rim:'#070c12',
   tintAlpha:.24, lineWidth:1.5, rimWidth:1.4, bakeSize:96, cacheLimit:64,
 };
-type Face = Pick<SkillDef,'icon'|'color'>;
-function definition(face:Face):SkillIcon|undefined {
-  return SKILL_ICON_VIEW.enabled && face.icon && Object.hasOwn(SKILL_ICONS,face.icon)
-    ? SKILL_ICONS[face.icon] : undefined;
+export type SkillIconFace = Pick<SkillDef,'color'> & Partial<Pick<SkillDef,'icon'|'tags'|'delivery'|'effects'>>;
+/** Ordered visual vocabulary; content can add rules without editing any UI.
+ * Gameplay identity supplies the picture, never display-name spelling. */
+export const SKILL_ICON_RULES: {icon:string;tags?:readonly string[];deliveries?:readonly string[];effects?:readonly string[]}[] = [
+  {icon:'guard',tags:['guard']}, {icon:'rally',tags:['warcry']},
+  {icon:'heal',tags:['heal'],effects:['heal','restore','restoreOverTime','cleanse']},
+  {icon:'step',tags:['movement'],deliveries:['dash','blink','leap','carom','mark']},
+  {icon:'summon',tags:['summon','minion'],deliveries:['summon']},
+  {icon:'trap',tags:['trap','mine']}, {icon:'construct',tags:['construct','totem'],deliveries:['construct']},
+  {icon:'curse',tags:['curse']}, {icon:'corpse',tags:['corpse']},
+  {icon:'aura',tags:['aura'],deliveries:['aura']}, {icon:'storm',tags:['storm'],deliveries:['storm']},
+  {icon:'detonate',deliveries:['detonate','detonateProjectile']},
+  {icon:'nova',deliveries:['nova']}, {icon:'cone',deliveries:['cone']},
+  {icon:'ground',deliveries:['ground']}, {icon:'sweep',tags:['melee'],deliveries:['melee']},
+  {icon:'ember',tags:['fire']}, {icon:'frost',tags:['cold']}, {icon:'chain',tags:['lightning']},
+  {icon:'curse',tags:['chaos']}, {icon:'buff',tags:['buff'],deliveries:['self']},
+  {icon:'target',deliveries:['target']}, {icon:'projectile',tags:['projectile'],deliveries:['projectile']},
+];
+export function skillIconKey(face:SkillIconFace):string {
+  if (face.icon && Object.hasOwn(SKILL_ICONS,face.icon)) return face.icon;
+  return SKILL_ICON_RULES.find(rule => rule.tags?.some(t=>face.tags?.some(tag=>tag===t))
+    || rule.deliveries?.includes(face.delivery?.type ?? '')
+    || rule.effects?.some(type=>face.effects?.some(effect=>effect.type===type)))?.icon ?? 'arcane';
+}
+function definition(face:SkillIconFace):SkillIcon {
+  return SKILL_ICONS[skillIconKey(face)] ?? SKILL_ICONS.arcane;
 }
 const cache=new Map<string,HTMLCanvasElement>();
 /** Bake the whole face before applying the caller's affordability alpha, just
  * like an SVG tile. Bounded cached faces avoid per-frame vector allocation. */
-export function drawSkillIcon(ctx:CanvasRenderingContext2D,face:Face,x:number,y:number,size:number):boolean {
-  const icon=definition(face);if(!icon)return false;
+export function drawSkillIcon(ctx:CanvasRenderingContext2D,face:SkillIconFace,x:number,y:number,size:number):boolean {
+  const icon=definition(face);
   const c=SKILL_ICON_VIEW,key=JSON.stringify([icon,face.color,c]);
   let image=cache.get(key);
   if(!image){image=bakeSkillIcon(icon,face.color);cache.set(key,image);}
@@ -96,8 +137,8 @@ function bakeSkillIcon(icon:SkillIcon,color:string):HTMLCanvasElement {
 }
 const escape=(value:string)=>value.replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]!));
 /** Same paths, paint order and proportions as the canvas icon; caller owns its label. */
-export function skillIconSvg(face:Face,size=24):string {
-  const icon=definition(face);if(!icon)return '';
+export function skillIconSvg(face:SkillIconFace,size=24):string {
+  const icon=definition(face);
   const c=SKILL_ICON_VIEW,tint=escape(face.color),ink=escape(c.ink),rim=escape(c.rim);
   const layers=icon.layers.map(layer=>{
     const d=escape(layer.path),fill=layer.fill==='tint'?tint:layer.fill==='ink'?ink:'none';

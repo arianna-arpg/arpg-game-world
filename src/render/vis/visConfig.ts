@@ -16,7 +16,8 @@ export const VIS_CFG = {
   buffReadout: { maxWidth: 360, maxRows: 10, margin: 8, pad: 9, lineHeight: 17, ascent: 12,
     font: '12px Verdana', background: 'rgba(8,8,12,.94)', edge: '#575368', title: '#f0d99c', detail: '#d8d4c8' },
   /** Native active effects: stable names, expiry clocks and shared pressure. */
-  statusReadout: { enabled: true, maxRows: 3, maxWidth: 300, minWidth: 110,
+  statusReadout: { enabled: true, maxRows: 3, maxWidth: 240, minWidth: 110,
+    focusOffset: 76, bodyClearance: 44, margin: 12, bottomReserve: 140,
     rowHeight: 34, lineHeight: 20, ascent: 13, detailOffset: 14, gap: 3, pad: 8, stripe: 3,
     font: 'bold 11px Verdana', detailFont: '10px Verdana',
     background: 'rgba(12,16,20,.82)', text: '#e9e6dc', detail: '#b9c3c8' },
@@ -28,7 +29,7 @@ export const VIS_CFG = {
   hotbar: { emptyFillAlpha: .12, emptyBorderAlpha: .5 },
   /** Current player cast: actual work clock and owner, separate from cooldowns. */
   castReadout: { enabled: true, width: 104, height: 6, nameHeight: 14,
-    showMovement: true, plantedText: 'Feet planted', movementHeight: 12,
+    showMovement: false, plantedText: 'Feet planted', movementHeight: 12,
     movementFont: '10px Verdana', movementText: '#cad3d4',
     font: 'bold 11px Verdana', text: '#f1ecdd', edge: '#121719', outline: 3,
     slotEdge: '#f1ecdd', slotWidth: 2, slotPad: 2 },
@@ -46,7 +47,7 @@ export const VIS_CFG = {
       contrast: { minGap: .60, margin: .05 } },
     threats: { enabled: true, radius: 280, minWidth: 22 },
     bodies: { enabled: true, radius: 380, fade: 90, width: 1.15, color: '#ddd5b8', alpha: .62 },
-    meters: { enabled: true, bodyScale: 1.15, bodyPad: 3, gap: 2, step: 10, rings: 8,
+    meters: { enabled: false, bodyScale: 1.15, bodyPad: 3, gap: 2, step: 10, rings: 8,
       settleSec: .35, linkGap: 2, linkWidth: 1, linkColor: '#adbaa9', linkEdge: '#172019' },
   },
   altar: { mendRuneRadius: 8.5, mendRuneWidth: 2, mendRuneAlpha: .9,

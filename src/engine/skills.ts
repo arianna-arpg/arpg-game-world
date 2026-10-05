@@ -4361,7 +4361,7 @@ export interface SkillDef {
   tags: SkillTag[];
   /** UI color used for icon + projectile/impact rendering. */
   color: string;
-  /** Optional shared vector face (render/skillIcons); absent/false retains initials. */
+  /** Optional shared vector face; absent/legacy false uses semantic visual rules. */
   icon?: string | false;
   /** False omits the local fixed-melee preparation footprint. */
   reachCue?: false;

@@ -1,5 +1,16 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+playerBodyLook applies shared limbs/gait to every registered class look, including
+Breaker. skillIconKey resolves explicit or semantic artwork for every skill;
+unknown/legacy icon keys stay visual. Bar, rack, vendor and Memory chips share
+this vocabulary, including recall. Verify bodywalk, skillicons and all-player-visuals-ui.
+
+Saved crowdedMeters and castMovementHint default off; native bar anchors and
+quiet movement captions are the default. statusReadout independently selects
+near-hero text, corner text or off, while afflictionOverlays keeps its own mode.
+Mired and Befuddled opt into shared material cues. Verify statusreadout,
+afflictioncues, combatfocus and presentation-preferences-ui with real Options.
+
 Optional SkillDef.castAim lets an ordinary windup follow its actor's live aim.
 updateCastAim never selects a target or changes commitment; locked targets,
 planting and converted modes retain their rules. Cleave opts in alongside

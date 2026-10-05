@@ -79,9 +79,9 @@ const meterCtx={
  beginPath:()=>{},moveTo:(x:number,y:number)=>{linkStart={x,y};},
  lineTo:(x:number,y:number)=>{links.push({start:linkStart,end:{x,y}});},stroke:()=>{},
 } as unknown as CanvasRenderingContext2D;
-const frame=(time:number, crowded=true)=>{
+const frame=(time:number, crowded=true, relocate=true)=>{
   const drawn:CombatRect[]=[];
-  meterLayout.begin(time);
+  meterLayout.begin(time,relocate);
   keys.forEach((key,i)=>meterLayout.body(key,crowded?positions[i]:{x:i*200,y:200},12));
   keys.forEach((key,i)=>{
     const p=crowded?positions[i]:{x:i*200,y:200};
@@ -136,7 +136,7 @@ for(const useLayout of [true,false]){
 (mc as {enabled:boolean}).enabled=enabled;
 try{
  (mc as {enabled:boolean}).enabled=false;
- const disabled=frame(3);
+ const disabled=frame(3,true,false);
  disabled.forEach((r,i)=>assert.deepEqual(r,{x:positions[i].x-16,y:positions[i].y-33,w:32,h:16}));
 }finally{(mc as {enabled:boolean}).enabled=enabled;}
 console.log('PASS combat meter groups clear visible bodies, stay stable, return home and ignore hidden competitors without changing actors');
