@@ -1,5 +1,11 @@
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Optional SkillDef.castAim lets an ordinary windup follow its actor's live aim.
+updateCastAim never selects a target or changes commitment; locked targets,
+planting and converted modes retain their rules. Cleave opts in alongside
+existing castMove mobility. Verify castaim, melee/casting/AI probes, sim smoke
+and cast-aim-ui.cjs against the prior fixed client and native continuation.
+
 drawHudText gives native status, objective and compass lines a configurable
 VIS_CFG.hudText outline. It preserves authored fill, font, alignment and layout;
 the outline is isolated by canvas save/restore. Verify all type checks and

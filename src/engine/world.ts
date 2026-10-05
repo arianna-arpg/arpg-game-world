@@ -1,5 +1,6 @@
 import { skillInstanceName, treeInstanceNodeRanks, treePointBudget } from './skillEmpowerment';
 import { skillMergePlan } from './skillMerge';
+import { updateCastAim } from './castAim';
 import { markBodyAction } from './bodyAction';
 import { markBodyWalk } from './bodyWalk';
 import { concealmentActive, isConcealed, PERCEPTION_CFG } from './perception';
@@ -56549,6 +56550,7 @@ export class World {
       if (cue) this.flashes.push(cue);
       return;
     }
+    updateCastAim(a);
     // THE LATCHED HAND (engine/cling.ts): a rider casts FROM a seat that
     // moves with its victim — an aim stamped at press goes stale the
     // moment the carried fight turns, and the bite whiffs at the ghost of

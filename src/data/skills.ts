@@ -174,9 +174,10 @@ export const SKILLS: Record<string, SkillDef> = {
     tree: STARTER_SKILL_TREES.cleave,
     id: 'cleave', name: 'Cleave', icon: 'sweep',
     description: 'A wide melee swing that deals physical damage to every enemy in the arc in'
-      + ' front of you.',
+      + ' front of you. Move slowly and adjust your aim during the windup.',
     tags: ['attack', 'melee', 'physical', 'aoe'], color: '#d8b06a',
     manaCost: 2, cooldown: 0, useTime: 0.7,
+    castMove: 0.35, castAim: 'live',
     baseDamage: { physical: [7, 11] },
     delivery: { type: 'melee', range: 55, arcDeg: 130 },
     effects: [{ type: 'damage' }],

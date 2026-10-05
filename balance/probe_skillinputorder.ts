@@ -70,9 +70,11 @@ try{
  assert.deepEqual(walkOrder.slots(legacyHand,3,[true],[],[],true),[0],'a new observed hold during walking remains usable without edge bits');
  console.log('PASS fresh walk, fresh skill, releases, same-frame tie, legacy holds, empty bar and independent seats');
 
- function walking(movement:'recent-walk'|'ignore', release=Infinity, repress=Infinity){
+ function walking(movement:'recent-walk'|'ignore', release=Infinity, repress=Infinity, mobileCleave=false){
   SKILL_INPUT_CFG.movement=movement;
   const w=makeSimWorld('warrior',902),p=w.player;w.actors=[p];
+  // Keep the historical rooted reference: this probe measures intent order.
+  p.skills[0]=makeSkillInstance(mobileCleave?SKILLS.cleave:{...SKILLS.cleave,castMove:0,castAim:'press'});
   const origin={...p.pos},casts:{id:string;frame:number}[]=[];
   let previous:unknown,committed:unknown,firstMove=-1;
   for(let frame=0;frame<150;frame++){
@@ -92,6 +94,9 @@ try{
  assert.equal(retreat.casts.length,1,'a new walk suppresses further auto-repeats');
  assert.equal(retreat.firstMove,blocked.firstMove,'both obey the same original native movement lock');
  assert.ok(retreat.dx>150,'the player actually walks after the committed cast');
+ const mobile=walking('recent-walk',Infinity,Infinity,true);
+ assert.equal(mobile.firstMove,5,'authored mobile Cleave walks during the same committed swing');
+ assert.equal(mobile.casts.length,1,'a fresh walk still suppresses its older repeat');
  const resumed=walking('recent-walk',100);
  assert.ok(resumed.casts.some(c=>c.frame>=100),'ending movement resumes the still-held primary');
  const chosen=walking('recent-walk',Infinity,100);

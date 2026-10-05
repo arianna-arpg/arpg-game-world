@@ -4608,3 +4608,71 @@ and puzzle progress. All eight page/canvas pairs were inspected.
 The bright and dark panels are deliberately prepared canvas backgrounds
 beneath the real status painter; they demonstrate text contrast, not a
 new biome, a replay of the critic's weather or an earned gameplay result.
+
+### Published HUD and independent review outcomes
+
+Starting attributes revision 7fb2910897df504597d2e3b2dbfcd3a6185a8555 passed
+CI 37351984286 and Pages 37353574555; hosted metadata confirmed it at
+2026-10-05T18:09:24.539Z. Isolated hosted Save/Continue retained seed 3384074735,
+six ordinary-save sentinels and no fatal error. HUD contrast revision
+2afcda6136dff6d4f953b457bf877bb0f9baa04a passed CI 37354476303 and Pages
+37357114367, published at 2026-10-05T18:37:41.055Z. Its hosted check retained
+seed 3539936642 and the same six sentinels, with no fatal error.
+
+The recovered Warrior reviewer stopped after killing Stoneward's slinger,
+leaving its Sentinel alive. Pursuit/commitment corrections, crowded combat
+labels and an unusable-looking duplicate gem weakened its desire to continue.
+It reported 46.7099 measured worldSeconds across 80 personally inspected pairs,
+not an hour of continuous play. Its own native persistence check passed for
+the visible location, resources and earned gem.
+
+The fresh Magician reviewer found preparation, route choices, hazard consequences
+and earned build changes legible, but its first southern garrison offered little
+observed pressure. It stopped with mild curiosity, not a strong urge for another
+fight. Its 83 pairs cover 52.8889 measured worldSeconds. Native Continue retained
+the checked level, cleared site/cache, resources, boots, fitted support and passive.
+Both final reports disclose mandatory-document exposure and lack of a played
+commercial comparator. Neither is acceptance of the user's quality target.
+Original reports and image pairs remain in ignored playtest evidence.
+
+### Adjustable ordinary windups
+
+Optional SkillDef.castAim selects press-time or live actor-supplied aim for
+ordinary casts. Omission remains press-time. The shared updateCastAim seam
+copies finite live aim without searching for a target, changing the cast clock,
+canceling commitment or bypassing costs. Seats supply their existing cursor;
+AI retains its existing aim-source policy. Resolved targets, locked aim, planting,
+held/timing conversions, death, downing and stun keep their native gates. The
+existing clinging-target rule runs afterward. Already released/scheduled payloads
+are not redirected. Body preparation, melee footprint, native damage and the
+existing host-resolved replica all consume the same current cast aim.
+
+Cleave opts into live aim and the existing castMove factor of 0.35. Damage,
+cost, useTime and attack-speed scaling remain unchanged. Its description teaches
+the slow step and aim adjustment. This is skill data shared by every bearer,
+not a Warrior-only input shortcut. Native castMobility investment still adds
+to the stride, capped by the existing movement law. Other omitted skills retain
+their original behavior. No new save fields or compatibility reset are needed.
+
+The initial controlled movement-only experiment improved some outer-range
+pursuits but worsened some close pursuits: the fixed press point became stale
+while the attacker moved. A broader prepared comparison of movement plus live
+aim covered twelve seeds, two native ranged species, two attack distances and
+30/60/120 Hz; it motivated the authored choice, not a human-feel or global-balance
+claim. Registered castaim checks exercise the actual engine: exact stationary
+execution/cost/hit traces at all three rates, real left/right hit direction,
+commitment, exclusions, native stun, mobility investment/cap, enemy-supplied aim,
+mirrors and seeded slinger pursuit. The input-order test retains an explicit
+historical rooted reference and separately checks the now-mobile Cleave.
+
+All three type checks, simulation smoke and melee-read, cast-movement,
+casting-cue, body-walk, input-order, fraying-nerve and tactical-AI probes pass.
+The prepared browser comparison uses the actual prior HUD build and current
+fixed build. It checks a 28-unit slow step versus prior rooting over the same
+windup interval, redirected aim, completion, narrow display and draw purity.
+Current/prior/current Continue retains checked seed, position, life, mana, items,
+and skill identities/levels/sockets. Its cleared garrison and resulting level-up
+are fixture preparation, not earned gameplay. Seven page/canvas pairs were
+inspected. Tiny floating-point elapsed differences use a 1e-9 tolerance.
+A fresh independent Warrior review is underway on the unchanged candidate build;
+its verdict is pending.

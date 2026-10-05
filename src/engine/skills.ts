@@ -4653,6 +4653,12 @@ export interface SkillDef {
    *  walking casters by investment (Fleetfoot). Channels use ChannelSpec. */
   castMove?: number;
 
+  /** Ordinary windup aim: omission / press keeps the point stamped at use.
+   *  Live follows the actor's own cursor (AI requires its existing steerAim
+   *  policy). Resolved targets, planting and mode conversions keep their rules.
+   *  This never cancels the cast, changes its clock or acquires a target. */
+  castAim?: 'press' | 'live';
+
   /** STEALTH interaction override: true = using this skill always spends a
    *  stealth charge / shatters invisibility; false = never does. Omitted:
    *  offensive skills (base damage, damage/knockback/pull effects) break
