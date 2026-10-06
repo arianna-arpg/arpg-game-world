@@ -9,6 +9,7 @@ import { nativeMassPuzzle, validateMassPuzzle } from '../src/worldmass/puzzles';
 import { PUZZLE_CFG, type PuzzleRun } from '../src/engine/puzzles';
 import type { Actor } from '../src/engine/actor';
 import type { World } from '../src/engine/world';
+import { beforeMassStreaming } from './worldmassFixtures';
 const guts=(w:World)=>w as unknown as {puzzles:PuzzleRun[];puzzleStruck(n:Actor,p:Actor,wounding:boolean):void;updatePuzzles(dt:number):void};
 const arrive=(w:World)=>{
  const m=w.massRuntime!,p=m.journey!.places.find(p=>p.content==='paired-stones')!;
@@ -38,7 +39,11 @@ try{
   const before=canonical(m.puzzles.snapshot(w));m.update(w,true);assert.equal(canonical(m.puzzles.snapshot(w)),before);
  }
  console.log('PASS five seeded four-node native courts, physical geometry, continuous grove branch and duplicate-free shared capacity');
- const crowded=makeSimWorld('warrior',99871);crowded.startWorldMass(99871);const cm=crowded.massRuntime!;
+ // Keep the original non-retiring reservation contract under its saved policy.
+ // Streaming residency and default country Continue have separate live probes.
+ const crowded=makeSimWorld('warrior',99871);
+ new WorldMassRuntime(99871,'expedition:99871',beforeMassStreaming(structuredClone(massAdventure()) as MassAdventure)).attach(crowded);
+ const cm=crowded.massRuntime!;
  for(const pos of [{x:-6000,y:0},{x:6000,y:0},{x:0,y:-6000},{x:0,y:6000}]){crowded.player.pos=pos;cm.update(crowded,true);}
  const retained=cm.snapshot(crowded).enemies;assert.ok(retained.length>20,'fixture genuinely fills incidental encounters');
  for(const place of cm.journey!.places){
@@ -72,7 +77,9 @@ try{
  re.player.pos={x:-18000,y:-18000};re.massRuntime!.update(re,true);
  const far=resume(re);assert.deepEqual(far.massRuntime!.puzzles.snapshot(far),re.massRuntime!.puzzles.snapshot(re));
  assert.equal(far.puzzleViews().some(r=>r.id===run.id),false);
- const fin=guts(far).puzzles.find(r=>r.id===run.id)!;far.player.pos={...fin.at};far.massRuntime!.update(far,true);
+ assert.equal(far.massRuntime!.puzzles.snapshot(far).find(r=>r.id===run.id)!.resident,false);
+ far.player.pos={...rr.at};far.massRuntime!.update(far,true);
+ const fin=guts(far).puzzles.find(r=>r.id===run.id)!;assert.ok(fin);
  knock(far,fin,[1,3]);assert.equal(fin.done,true);assert.ok(far.massRuntime!.siteActivity(p.id)!.complete);
  assert.ok(far.massRuntime!.rewards.pending,'solved native riddle uses the ordinary shared discovery choice');
  const paid=far.massRuntime!.snapshot(far),done=resume(far),proof=guts(done).puzzles.find(r=>r.id===run.id)!;

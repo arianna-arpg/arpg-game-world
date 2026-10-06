@@ -472,9 +472,10 @@ export function validateWeather(
   return bad;
 }
 
-const STEP = 0.5;          // fixed lifecycle step (seconds)
-const MAX_FRONTS = 4;
-const SPAWN_CHANCE = 0.06; // per step, while under the cap — fronts are rarer now
+/** Native field grammar, also bounds the geographic adapter's finite replay. */
+export const WEATHER_FIELD = { step: .5, maxFronts: 4, spawnChance: .06,
+  birthOffset: 40, speed: [1.5, 4.5], radius: [95, 150], life: [140, 280] } as const;
+const STEP = WEATHER_FIELD.step, MAX_FRONTS = WEATHER_FIELD.maxFronts, SPAWN_CHANCE = WEATHER_FIELD.spawnChance;
 
 export class WeatherField implements WorldOverlay {
   readonly id = 'weather' as const;
@@ -633,12 +634,12 @@ export class WeatherField implements WorldOverlay {
     if (!sky.length) return;
     const kind = this.rng.weighted(sky).kind;
     const dir = this.rng.range(0, Math.PI * 2);
-    const speed = this.rng.range(1.5, 4.5); // node-units/sec — a slow, legible crawl
+    const speed = this.rng.range(...WEATHER_FIELD.speed); // node-units/sec — a slow, legible crawl
     this.fronts.push({
       kind,
-      pos: { x: anchor.x + this.rng.range(-40, 40), y: anchor.y + this.rng.range(-40, 40) },
+      pos: { x: anchor.x + this.rng.range(-WEATHER_FIELD.birthOffset, WEATHER_FIELD.birthOffset), y: anchor.y + this.rng.range(-WEATHER_FIELD.birthOffset, WEATHER_FIELD.birthOffset) },
       vel: { x: Math.cos(dir) * speed, y: Math.sin(dir) * speed },
-      radius: this.rng.range(95, 150),
+      radius: this.rng.range(...WEATHER_FIELD.radius),
       intensity: 0,
       age: 0,
       // Longer-lived fronts = slower-changing sky; THE LINGER FOLD
@@ -646,7 +647,7 @@ export class WeatherField implements WorldOverlay {
       // climate — same node + tolerance as the birthGeo filter above,
       // zero added draws, so a kind without the row keeps today's
       // exact stream (× 1 is byte-identical).
-      life: this.rng.range(140, 280) * lingerMulOf(WEATHER_DEFS[kind], node.geo?.climate),
+      life: this.rng.range(...WEATHER_FIELD.life) * lingerMulOf(WEATHER_DEFS[kind], node.geo?.climate),
     });
   }
 }

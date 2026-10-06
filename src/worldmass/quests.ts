@@ -1,4 +1,5 @@
-import { massBountyLocal, massBountyPlace } from './bounties';
+import { massBountyDestination } from './bounties';
+import { localOffset } from './address';
 import { MASS_ZONE, type MassAdventure } from './preset';
 import type { WorldMassRuntime, MassAdventureSave } from './runtime';
 import type { SavedQuestEntry } from '../meta/worldstate';
@@ -95,14 +96,14 @@ export function massQuestPins(world: World): MassQuestPin[] {
   const mass = world.massRuntime;
   if (!mass) return [];
   const massBountyPins = world.bountyHands.flatMap((p): MassQuestPin[] => {
-    const place = massBountyPlace(mass, p.massBounty);
+    const place = massBountyDestination(mass, p.massBounty);
     if (!place) return [];
     if (world.handState(p) === 'ready') {
       const board = world.bountyBoardsHere().find(b => b.id === p.boardId);
       return board ? [{ ...board.pos, radius: 40, label: 'Return to the Bounty Board', ready: true }] : [];
     }
-    return [{ ...massBountyLocal(mass, place), radius: place.radius,
-      label: mass.config.content.find(c => c.id === place.content)!.site!.name, ready: false }];
+    return [{ ...localOffset(place.center,{...mass.origin,x:0,y:0},mass.config.terrain.addressSpan), radius: place.radius,
+      label: place.name, ready: false }];
   });
   return massBountyPins.concat(world.activeQuests.flatMap((entry): MassQuestPin[] => {
     if (!entry.placeId || entry.directionsKnown === false) return [];

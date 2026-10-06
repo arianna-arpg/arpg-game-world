@@ -61,7 +61,9 @@ try{
  re!.player.pos={x:-18000,y:-18000};re!.massRuntime!.update(re!,true);
  const far=resume(re!);assert.deepEqual(far.massRuntime!.puzzles.snapshot(far),re!.massRuntime!.puzzles.snapshot(re!));
  assert.equal(far.puzzleViews().some(r=>r.id===run.id),false);
- const fin=guts(far).puzzles.find(r=>r.id===run.id)!;far.player.pos={...fin.at};far.massRuntime!.update(far,true);
+ assert.equal(far.massRuntime!.puzzles.snapshot(far).find(r=>r.id===run.id)!.resident,false);
+ far.player.pos={...rr.at};far.massRuntime!.update(far,true);
+ const fin=guts(far).puzzles.find(r=>r.id===run.id)!;assert.ok(fin);
  const nativeText=far.texts.length;knock(far,fin,[0,1,2,3,4,5]);
  assert.equal(fin.done,true);assert.ok(far.texts.length>nativeText);assert.ok(far.player.statuses.length>0);
  const paid=far.massRuntime!.snapshot(far),done=resume(far);

@@ -4267,7 +4267,7 @@ export class Renderer {
       const age = c.openedAt === undefined ? Infinity : world.time - c.openedAt;
       const u = Math.max(0, Math.min(1, age / VIS_CFG.chestLid.seconds));
       drawTreasureChest(this.ctx, c.pos.x, c.pos.y, c.opened, 1-Math.pow(1-u,3),
-        c.kind === 'objective' && !world.objectiveDone, world.time);
+        c.kind === 'objective' && !world.chestObjectiveDone(c), world.time);
       if (!c.opened && c.kind === 'timed' && c.maxLock > 0) {
         this.drawProgressRing(c.pos.x, c.pos.y, 1-c.lockTime/c.maxLock, 'lockpick');
         if(cue?.chest===c)drawChestReadout(this.ctx,cue.text,c.pos);

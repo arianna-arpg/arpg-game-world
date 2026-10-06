@@ -1,3 +1,15 @@
+import { characterPagingAvailable, characterNativePages, commitCharacterNativeCohort, loadCharacterNativePage, forgetCharacterNativePage, resetCharacterNativePages } from '../meta/character';
+import type { CharacterPageEntry } from '../meta/characterPages';
+import { stageNativeCohort, hydrateNativeCohort } from './nativePaging';
+import { createNativeFeatureWarmQueue, type NativeFeatureWarmQueue } from './nativeWarm';
+import { MassStorm, type MassStormSave } from './storm';
+import { MassSnow, type MassSnowSave } from './snow';
+import { MassWeather, type MassWeatherSave } from './weather';
+import { MassGeographicGameplay } from './geographicGameplay';
+import type { MassHierarchySave } from './hierarchy';
+import { MassNativeCountry } from './nativeCountry';
+import { MassNativeHost, nativeWorldCapabilities } from './nativeHost';
+import { MassNativeResidency, type NativeResidencySave } from './nativeResidency';
 import { validateMassBounties } from './bounties';
 import { validateStructurePlans } from '../engine/structurePlans';
 import type { Chest, World } from '../engine/world';
@@ -37,6 +49,7 @@ import { applyEncounterGroup, readEncounterGroup, type EncounterGroupState } fro
 import { ENCOUNTER_GROUPS, ENCOUNTER_GROUP_CFG } from '../data/encounterGroups';
 import { validateMassGround } from './ground';
 import { validateMassQuests } from './quests';
+import { MassDormancy, validateMassDormancy, type MassDormancySave } from './dormancy';
 import { MassShrines, MASS_SHRINE_LIMIT, type MassShrineSave } from './shrines';
 import { MassPuzzles, MASS_PUZZLE_LIMIT, puzzleSeats, type MassPuzzleSave } from './puzzles';
 
@@ -48,10 +61,16 @@ interface MassEnemySave {
   anchor?: { x: number; y: number }; leashHome?: boolean;
 }
 export interface MassAdventureSave {
-  schema: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
+  schema: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
   player: { x: number; y: number; tier?: number }; enemies: MassEnemySave[]; contents: ZoneContents;
   rewards?: MassRewardSave[];
   fields?: MassFieldSave[];
+  dormancy?: MassDormancySave;
+  nativeFeatures?: NativeResidencySave;
+  geography?: MassHierarchySave;
+  weather?: MassWeatherSave;
+  snow?: MassSnowSave;
+  storms?: MassStormSave;
   shrines?: MassShrineSave[];
   puzzles?: MassPuzzleSave[];
   sites?: MassSiteSave;
@@ -64,6 +83,17 @@ export interface MassAdventureSave {
 export class WorldMassRuntime {
   readonly rewards: MassRewards;
   readonly fields: MassFields;
+  readonly dormancy: MassDormancy | null;
+  nativeFeatures: MassNativeResidency | null = null;
+  nativeCountry: MassNativeCountry | null = null;
+  geography: MassGeographicGameplay | null = null;
+  weather: MassWeather | null = null;
+  snow: MassSnow | null = null;
+  storms: MassStorm | null = null;
+  nativeWarm: NativeFeatureWarmQueue | null = null;
+  private nextNativeWarm = 0;
+  private warmFrom: {x:number;y:number} | null = null;
+  private nativeHost: MassNativeHost | null = null;
   readonly shrines: MassShrines;
   readonly puzzles: MassPuzzles;
   readonly generator: MassGenerator;
@@ -80,6 +110,22 @@ export class WorldMassRuntime {
   private readonly configHash: string;
   private natives = new Map<string, Actor>();
   private births: MassBirths;
+  private paged = new Map<string,CharacterPageEntry>();
+  private pagingWrite: Promise<boolean> | null = null;
+  private pagingReads = new Map<string,Promise<void>>();
+  private pagingRetry = new Map<string,number>();
+  private pagingCursor = 0;
+  private pagingRefusal = "";
+  private nextPaging = 0;
+  private disposed = false;
+  get nativePagingStats(): {resident:number;paged:number;pages:number;reads:number;writing:boolean;refusal:string} {
+    return {resident:this.natives.size,paged:this.paged.size,pages:new Set(this.paged.values()).size,
+      reads:this.pagingReads.size,writing:!!this.pagingWrite,refusal:this.pagingRefusal};
+  }
+  async flushNativePaging(): Promise<void> {
+    await this.pagingWrite;await Promise.all([...this.pagingReads.values()]);
+  }
+  private hasNative(id:string):boolean{return this.natives.has(id)||this.paged.has(id);}
   private cacheOpened: (source: string) => boolean = () => false;
   private nearKey = '';
   private dangerCache = new Map<string, number>();
@@ -98,8 +144,12 @@ export class WorldMassRuntime {
     this.rewards = new MassRewards(this.config.rewards, seed, save?.rewards);
     if(this.config.fieldResidency!==undefined)validateMassFieldResidency(this.config.fieldResidency,this.config.populationRadius);
     this.fields = new MassFields(save?.fields,this.config.fieldResidency);
-    this.shrines = new MassShrines(save?.shrines);
-    this.puzzles = new MassPuzzles(save?.puzzles);
+    for (const policy of [config.shrineResidency, config.puzzleResidency])
+      if (policy) validateMassFieldResidency(policy, config.populationRadius);
+    this.shrines = new MassShrines(save?.shrines, config.shrineResidency);
+    this.puzzles = new MassPuzzles(save?.puzzles, config.puzzleResidency);
+    if (config.dormancy) validateMassDormancy(config.dormancy, config.populationRadius);
+    this.dormancy = config.dormancy ? new MassDormancy(config.dormancy) : null;
     this.generator = new MassGenerator(save?.state.run ?? makeMassRun(seed, runId, config.terrain), config.terrain);
     if (config.settlement?.location !== undefined) validateMassOrigin(config.settlement.location, config.terrain);
     this.origin = Object.freeze(save ? { ...save.origin } : chooseMassOrigin(this.generator, config.settlement?.location).origin);
@@ -117,6 +167,7 @@ export class WorldMassRuntime {
       throw new Error('Worldmass render residency exceeds its texture budget');
     if (config.ground !== undefined) validateMassGround(config.ground);
     validateMassQuests(config);
+    if (config.geography && !config.nativeCountry) throw Error('Geographic gameplay requires native country sources');
     if (config.bounties !== undefined) validateMassBounties(config.bounties);
     validateStructurePlans(config.settlement?.structurePlans);
     if (config.journey?.roadside !== undefined) validateMassRoadside(config.journey.roadside, config.content);
@@ -151,9 +202,9 @@ export class WorldMassRuntime {
     for (const c of config.content) {
       if(config.fieldResidency && (c.site?.altars?.length??0)>config.fieldResidency.maxResident)
         throw Error('Worldmass site exceeds its field residency budget');
-      if (c.site?.puzzles?.length && config.terrain.places.some(p => p.content === c.id))
+      if (c.site?.puzzles?.length && !config.puzzleResidency && config.terrain.places.some(p => p.content === c.id))
         throw Error('Worldmass puzzles require a finite journey owner');
-      if (c.site?.shrines?.length && config.terrain.places.some(p => p.content === c.id))
+      if (c.site?.shrines?.length && !config.shrineResidency && config.terrain.places.some(p => p.content === c.id))
         throw Error('Worldmass shrines require a finite journey owner');
       if (c.site?.altars?.length && !config.fieldResidency && config.terrain.places.some(p=>p.content===c.id))
         throw new Error('Worldmass altar fields require a finite journey owner');
@@ -200,7 +251,15 @@ export class WorldMassRuntime {
       // five preserves deliberate quest acceptance, six pins native plan variants,
       // seven owns reward triggers, eight reserves destination population, nine owns country bounties; older descriptors keep
       // their original version and never gain new encounters on Continue.
-      if ((save.schema !== 1 && save.schema !== 2 && save.schema !== 3 && save.schema !== 4 && save.schema !== 5 && save.schema !== 6 && save.schema !== 7 && save.schema !== 8 && save.schema !== 9)
+      if ((save.schema !== 1 && save.schema !== 2 && save.schema !== 3 && save.schema !== 4 && save.schema !== 5 && save.schema !== 6 && save.schema !== 7 && save.schema !== 8 && save.schema !== 9 && save.schema !== 10 && save.schema !== 11)
+        || save.schema < 11 && !!config.geography
+        || !!save.geography !== !!config.geography
+        || !!save.weather !== !!config.geography?.weather
+        || !!save.snow !== !!config.geography?.snow
+        || !!save.storms !== !!config.geography?.storms
+        || save.schema < 10 && !!(config.dormancy || config.shrineResidency || config.puzzleResidency || config.nativeCountry)
+        || !!save.dormancy !== !!config.dormancy
+        || !!save.nativeFeatures !== !!config.nativeCountry
         || save.schema < 9 && config.bounties !== undefined
         || save.schema < 8 && config.journey?.reservePopulation !== undefined
         || save.schema < 7 && config.rewards?.earnFrom !== undefined
@@ -211,7 +270,7 @@ export class WorldMassRuntime {
         || save.schema === 1 && config.content.some(c => c.site?.shrines?.length)
         || canonical(save.settlement?.zone?.structurePlans ?? null) !== canonical(config.settlement?.structurePlans ?? null)
         || save.configHash !== massDigest(config) || !Array.isArray(save.enemies)
-        || save.enemies.length > config.maxPopulation || !savedZoneContents(save.contents)
+        || !config.dormancy && save.enemies.length > config.maxPopulation || !savedZoneContents(save.contents)
         || !Number.isFinite(save.player?.x) || !Number.isFinite(save.player?.y)
         || new Set(save.enemies.map(e => e.id)).size !== save.enemies.length)
         throw new Error('Invalid worldmass checkpoint');
@@ -236,6 +295,11 @@ export class WorldMassRuntime {
     }
   }
   attach(world: World, save?: MassAdventureSave): void {
+    if(!save)resetCharacterNativePages(world);
+    for(const page of characterNativePages(world)){
+      if(page.ref.run!==this.generator.run.runId)throw Error('Foreign native page session');
+      for(const id of page.ids){if(save?.enemies.some(e=>e.id===id))throw Error('Native both resident and paged');this.paged.set(id,page);}
+    }
     this.cacheOpened = source => world.chests.some(c => c.rewardSource === source && c.opened);
     world.zoneMap[MASS_ZONE] = { id: MASS_ZONE, name: 'The Unbroken Wilds', level: 1,
       size: { w: 1536, h: 1536 }, theme: JSON.parse(canonical(this.config.theme)),
@@ -271,6 +335,39 @@ export class WorldMassRuntime {
       if (this.config.journey.roadside) this.roadside = new MassRoadside(this.config.journey.roadside,
         this.journey, this.settlement, this.generator, this.walk);
     }
+    if(this.config.nativeCountry){
+      const spec=this.config.nativeCountry;
+      this.nativeCountry=new MassNativeCountry(this.generator,spec,(center,radius)=>{
+        if(!this.inLocalFrame(center))return false;
+        const q=localOffset(center,{...this.origin,x:0,y:0},this.config.terrain.addressSpan);
+        return !!this.settlement?.reserves(q.x,q.y,radius) || !!this.journey?.reserves(q,radius)
+          || !!this.roadside?.reserves(q,radius) || !!this.geography?.reserves(center,radius);
+      });
+      if(this.config.geography)this.geography=new MassGeographicGameplay(this,this.config.geography,save?.geography);
+      if(this.config.geography?.weather)this.weather=new MassWeather(this.generator.run.seed,this.config.terrain.addressSpan,
+        at=>this.geography?.contextAt(at),this.config.geography.weather,save?.weather);
+      if(this.config.geography?.snow){
+        if(!this.weather)throw Error('Geographic snowfall requires the geographic sky');
+        this.snow=new MassSnow(this.config.terrain.addressSpan,this.config.geography.policy.chunkSpan,this.config.geography.snow,
+          at=>this.geography?.contextAt(at),(at,context)=>this.weather!.sample(at,context),save?.snow);
+      }
+      this.nativeFeatures=new MassNativeResidency({run:this.generator.run.runId,addressSpan:this.config.terrain.addressSpan,
+        maxBlueprints:48,maxResidents:24,maxCandidates:9},at=>this.nativeCountry!.at(at).map(p=>this.nativePlacement(p)),
+        nativeWorldCapabilities(),()=>({...this.origin,x:0,y:0}),save?.nativeFeatures,
+        {regionAt:at=>this.state.patchAt(at)?.region??this.generator.terrainAt(at).region,cellSize:this.config.terrain.terrainCell,reservePadding:spec.clearance});
+      this.nativeWarm=createNativeFeatureWarmQueue();
+      const features=this.nativeFeatures;
+      this.stream.overlay={sample:(at,base)=>features.sample(at,base),revisionAt:cell=>features.revisionAt(cell),
+        get revision(){return features.version;}};
+      this.walk.native={regionAt:at=>features.regionAt(at),cellSize:30,get revision(){return features.version;}};
+      if(this.config.geography?.storms){
+        if(!this.weather)throw Error('Geographic storms require the geographic sky');
+        const policy=this.config.geography.policy;
+        this.storms=new MassStorm(this.generator.run.seed,this.config.terrain.addressSpan,policy.chunkSpan*policy.chunksPerZone,save?.storms);
+      }
+      this.nativeHost=new MassNativeHost(world,{maxPopulation:()=>this.config.maxPopulation-this.reservedPopulation(''),
+        population:()=>this.population,retainRadius:2400,quietSeconds:12});
+    }
     if (this.config.ecology) {
       this.ecology = new MassEcology(this.config.ecology, this);
       this.ecology.restore(save?.ecology, world.time);
@@ -282,29 +379,11 @@ export class WorldMassRuntime {
     if (save) {
       const groups = new Map<number,number>(), formations = new Map<number,number>();
       for (const e of save.enemies) {
-        const a = this.births.create(world,e.id,e.monster,e.level,e.scale,e.birth);
-        applyMassTerritory(a, this.config.territory);
-        const pack = readMagicPack(e.magicPack);
-        if (pack) {
-          if (!groups.has(pack.id)) groups.set(pack.id,world.nextSquadId());
-          a.magicPack = { ...pack, id: groups.get(pack.id)! };
-          a.squadId = a.magicPack.id; a.squadLeader = a.magicPack.leader === 1;
-          world.promoteMonster(a,'magic',1,{distinctName:e.name});
-        }
-        const formation=readEncounterGroup(e.encounterGroup);
-        if(formation){
-          if(!formations.has(formation.id))formations.set(formation.id,world.nextSquadId());
-          applyEncounterGroup(a,{...formation,id:formations.get(formation.id)!});
-          if(!a.encounterGroup)throw Error('Invalid saved worldmass formation member');
-          a.name=e.name!;
-        }
-        a.pos = { x: e.x, y: e.y }; a.fromZoneGen = true; a.fillResources();
-        a.aiAnchor = { ...(e.anchor ?? a.pos) };
-        // Preserve the native return hysteresis, never an unwarned attack phase.
-        if(e.leashHome) a.aiPhase = 'leash_home';
-        a.life = Math.min(a.maxLife(), e.life); this.natives.set(e.id, a); world.actors.push(a);
+        const a=this.restoreNativeBody(world,e,groups,formations);
+        this.natives.set(e.id,a);world.actors.push(a);
       }
       restoreZoneContents(world, save.contents);
+      if (save.dormancy) this.dormancy!.restore(save.dormancy, this.natives, world);
       world.refreshMagicPacks();
     }
     this.fields.restoreAdmitted(world, this.journey?.places ?? [], place=>({
@@ -318,16 +397,31 @@ export class WorldMassRuntime {
     });
     this.shrines.restoreAdmitted(world, this.journey?.places ?? [], place => ({
       rows: this.config.content.find(c => c.id === place.content)?.site?.shrines ?? [],
-      center: this.journey!.local(place),
-    }));
+      center: localOffset(place.center, {...this.origin,x:0,y:0}, this.config.terrain.addressSpan),
+    }), owner => this.locateOwner(owner));
     this.puzzles.restoreAdmitted(world, this.journey?.places ?? [], place => ({
       rows: this.config.content.find(c=>c.id===place.content)?.site?.puzzles ?? [],
-      center: this.journey!.local(place), level: this.populationFor(place).level,
-    }));
-    if (this.population > this.config.maxPopulation) throw Error('Worldmass puzzle population exceeds capacity');
+      center: localOffset(place.center, {...this.origin,x:0,y:0}, this.config.terrain.addressSpan), level: this.populationFor(place).level,
+    }), owner => this.locateOwner(owner));
+    if (!this.dormancy && this.population > this.config.maxPopulation) throw Error('Worldmass puzzle population exceeds capacity');
     this.update(world, true);
     this.attached = true;
     this.nextPopulation = world.time;
+  }
+  private inLocalFrame(at:MassCell):boolean {
+    if(at.dimension!==this.origin.dimension)return false;
+    const dx=BigInt(at.cx)-BigInt(this.origin.cx),dy=BigInt(at.cy)-BigInt(this.origin.cy);
+    return dx>=-4096n&&dx<=4096n&&dy>=-4096n&&dy<=4096n;
+  }
+  private nativePlacement(p:import('./nativeResidency').NativeFeaturePlacement):import('./nativeResidency').NativeFeaturePlacement {
+    if(!this.inLocalFrame(p.origin))return {...p,request:{...p.request,level:this.config.progression?.maxLevel??1}};
+    const q=localOffset(p.origin,{...this.origin,x:0,y:0},this.config.terrain.addressSpan);
+    return {...p,request:{...p.request,level:this.levelAt(q)}};
+  }
+  private locateOwner(owner: {id:string;center:import('./address').MassAddress}): MassPlace | undefined {
+    const at=address(owner.center.dimension,owner.center.cx,owner.center.cy,owner.center.x,owner.center.y,this.config.terrain.addressSpan);
+    if(canonical(at)!==canonical(owner.center))throw Error('Invalid worldmass activity address');
+    return this.placesInCell(at).find(p=>p.id===owner.id && canonical(p.center)===canonical(at));
   }
   /** Only a generated, admitted physical cache can earn its configured choice. */
   earnCacheReward(world: World, source: string | undefined, pos: { x: number; y: number }): void {
@@ -342,7 +436,7 @@ export class WorldMassRuntime {
     if (world.massRuntime !== this || world.clientActionHook
       || !this.rewards.admits('puzzle')) return;
     const owner=this.puzzles.completed(run);
-    const place=owner && this.journey?.places.find(p=>p.id===owner.place);
+    const place=owner && this.locateOwner({id:owner.place,center:owner.center});
     const site=place && this.config.content.find(c=>c.id===place.content)?.site;
     if (owner && site) this.rewards.earn(world, owner.source, site.name);
   }
@@ -383,7 +477,7 @@ export class WorldMassRuntime {
     if(!found || !content?.site)return null;
     const riddle=this.puzzles.activity(id);
     const cleared=this.siteCleared(id), searched=this.siteSearched(id);
-    const progress=massGarrisonProgress(this.state,content,id,key=>this.natives.has(key),this.populationCount(found));
+    const progress=massGarrisonProgress(this.state,content,id,key=>this.hasNative(key),this.populationCount(found));
     const lines: string[]=riddle ? [riddle.text] : [];
     if(cleared || progress?.remaining===0)lines.push(MASS_CLEARANCE_VIEW.complete);
     else if(progress)lines.push(MASS_CLEARANCE_VIEW.remaining(progress.remaining));
@@ -411,7 +505,8 @@ export class WorldMassRuntime {
     const planned = this.journey?.inCell(cell) ?? [];
     const country = this.generator.placesInCell(cell).filter(p => {
       const q = localOffset(p.center, { ...this.origin, x: 0, y: 0 }, this.config.terrain.addressSpan);
-      return !this.journey?.reserves(q, p.radius) && !this.roadside?.reserves(q, p.radius);
+      return !this.journey?.reserves(q, p.radius) && !this.roadside?.reserves(q, p.radius)
+        && !this.nativeFeatures?.intersects(p.center,p.radius);
     });
     return [...planned, ...(this.roadside?.inCell(cell) ?? []), ...country];
   }
@@ -452,15 +547,44 @@ export class WorldMassRuntime {
       const site = this.config.content.find(c=>c.id===place.content)!.site;
       const ids = [...Array.from({length:this.populationCount(place)},(_,i)=>canonical([place.id,i])),
         ...(site?.fixtures??[]).map((_,i)=>canonical([place.id,'fixture',i]))];
-      missing += ids.filter(id=>!this.natives.has(id)&&!this.state.claimed('fallen',id)).length
+      missing += ids.filter(id=>!this.hasNative(id)&&!this.state.claimed('fallen',id)).length
         + this.puzzles.missing(place,site?.puzzles??[]);
     }
     return missing;
+  }
+  /** Worker descriptors are suggestions until the authoritative residency validates
+   * them. Retire the worker whenever its owning world or surface is discarded. */
+  dispose():void { this.disposed=true;this.nativeWarm?.dispose(); }
+  private prepareNativeCountry(world:World):void {
+    const queue=this.nativeWarm,features=this.nativeFeatures,country=this.nativeCountry;
+    if(!queue||!features||!country||queue.stats.disposed)return;
+    const ready=queue.takeReady();
+    if(ready)try{features.adoptPrepared(ready.placement,ready.preparation);}catch(error){
+      queue.error=String(error instanceof Error?error.message:error);queue.dispose();return;
+    }
+    if(world.time<this.nextNativeWarm)return;
+    this.nextNativeWarm=world.time+.5;
+    const p=world.player.pos,from=this.warmFrom;this.warmFrom={...p};
+    const dx=from?p.x-from.x:0,dy=from?p.y-from.y:0,length=Math.hypot(dx,dy);
+    const ahead={x:p.x+(length>1?dx/length*1500:0),y:p.y+(length>1?dy/length*1500:0)};
+    const at=this.walk.at(ahead.x,ahead.y);
+    const rows=country.near(at,country.spec.spacing/2).filter(row=>this.inLocalFrame(row.origin))
+      .map(row=>this.nativePlacement(row)).filter(row=>features.preparationNeeded(row));
+    rows.sort((a,b)=>{
+      const aa=localOffset(a.origin,at,this.config.terrain.addressSpan),bb=localOffset(b.origin,at,this.config.terrain.addressSpan);
+      return aa.x*aa.x+aa.y*aa.y-bb.x*bb.x-bb.y*bb.y;
+    });
+    queue.offer(rows);
   }
   /** Survived-death wakes retain the run's land and consequences. */
   wake(world: World): void { world.landPartyAt(this.settlement?.spawn ?? { x: 12, y: 12 }); this.nearKey = ''; }
   update(world: World, boot = false): void {
     if (world.zone.id !== MASS_ZONE) return;
+    this.prepareNativeCountry(world);
+    if(this.weather){
+      this.weather.setScales(this.weather.time,world.sim.weatherScales(world.devOverlayView()));
+      this.weather.advanceTo(Math.max(this.weather.time, world.time));
+    }
     const at = this.walk.at(world.player.pos.x, world.player.pos.y), key = cellKey(at);
     if (key !== this.nearKey) {
       this.nearKey = key;
@@ -488,12 +612,23 @@ export class WorldMassRuntime {
     }
     if (!boot && world.time < this.nextPopulation) return;
     this.nextPopulation = world.time + .5;
+    this.dormancy?.update(world, this.natives);
+    if(this.nativeFeatures && this.nativeCountry && this.nativeHost){
+      const radius=Math.min(2400,this.nativeCountry.spec.spacing/2);
+      const wanted=new Map(this.nativeCountry.near(at,radius).map(p=>{const placement=this.nativePlacement(p);return [placement.id,placement] as const;}));
+      // Already visited native geometry remains authoritative when a newer
+      // reservation prevents the current provider from proposing its birth.
+      for(const placement of this.nativeFeatures.bornNear(at,radius))wanted.set(placement.id,placement);
+      this.nativeFeatures.sync([...wanted.values()],this.nativeHost);
+    }
     this.fields.sync(world);
+    this.shrines.sync(world);
+    this.puzzles.sync(world);
     // Restoring the scene precedes exact saved vitals. Pay pending rewards on
     // the first live update, so that restore cannot erase native level-up healing.
     if(this.attached)for(const found of this.sites.discovered){
       const content=this.config.content.find(c=>c.id===found.content);
-      if(content)settleMassClearance(world,this.state,found,content,id=>this.natives.has(id),this.populationFor(found).level,this.populationCount(found));
+      if(content)settleMassClearance(world,this.state,found,content,id=>this.hasNative(id),this.populationFor(found).level,this.populationCount(found));
     }
     if (this.attached) for (const quest of [...world.activeQuests])
       if (quest.placeId) world.completeMassQuest(quest.questId, quest.placeId);
@@ -501,11 +636,14 @@ export class WorldMassRuntime {
     // even when the hero saved far away. Dependency pages do not spawn content.
     const dependencies = new Map<string, ReturnType<MassGenerator['placesInCell']>>();
     for (const actor of this.natives.values()) {
+      if (this.dormancy?.isSleeping(actor)) continue;
       const cell = this.walk.at(actor.pos.x, actor.pos.y), key = cellKey(cell);
       if (!dependencies.has(key)) dependencies.set(key, this.placesInCell(cell));
     }
-    for (const place of this.journey?.places ?? []) if (this.puzzles.owns(place.id))
-      dependencies.set('puzzle:'+place.id,[place]);
+    for (const owner of [...this.puzzles.residentOwners(), ...this.shrines.residentOwners()]) {
+      const place=this.locateOwner(owner);
+      if(place) dependencies.set('activity:'+place.id,[place]);
+    }
     const eligible = [...this.places.values(), ...dependencies.values()].flat().filter(p => {
       const q = localOffset(p.center, { ...this.origin, x: 0, y: 0 }, this.config.terrain.addressSpan);
       return this.settlement ? !this.settlement.reserves(q.x, q.y, p.radius)
@@ -519,12 +657,14 @@ export class WorldMassRuntime {
       const cell = neighborCell(at, x, y); sceneryCells.set(cellKey(cell), cell);
     }
     for (const actor of this.natives.values()) {
+      if (this.dormancy?.isSleeping(actor)) continue;
       const cell = this.walk.at(actor.pos.x, actor.pos.y); sceneryCells.set(cellKey(cell), cell);
     }
     for (const cell of this.ecology?.pendingFellingCells() ?? []) sceneryCells.set(cellKey(cell), cell);
     this.ecology?.sync(world, [...sceneryCells.values()]);
     if(!world.player.dead)this.survey.observe(at,target=>world.lineOfSight(world.player.pos,
       localOffset(target,{...this.origin,x:0,y:0},this.config.terrain.addressSpan),world.player.tier));
+    this.geography?.sync(world);
     this.sites.discover(world.player.pos);
     const seen = new Set<string>();
     for (const places of this.places.values()) for (const p of places) {
@@ -534,8 +674,11 @@ export class WorldMassRuntime {
         : Math.hypot(q.x, q.y) < this.config.startRadius + p.radius)
         || Math.hypot(q.x - world.player.pos.x, q.y - world.player.pos.y) > this.config.populationRadius) continue;
       const content = this.config.content.find(c => c.id === p.content)!;
+      if([...this.paged.keys()].some(id=>{try{return (JSON.parse(id) as unknown[])[0]===p.id;}catch{return false;}}))continue;
       // Reserve every required field before spawning its garrison or reward.
-      if(!this.fields.canAdmit(p,content.site?.altars??[]))continue;
+      if(!this.fields.canAdmit(p,content.site?.altars??[])
+        || !this.shrines.canAdmit(p,content.site?.shrines??[])
+        || !this.puzzles.canAdmit(p,content.site?.puzzles??[]))continue;
       const capacity = Math.max(0, this.config.maxPopulation - this.reservedPopulation(p.id));
       const population = this.populationFor(p);
       const formation=massFormation(population.encounters,this.generator.run.seed,p.id);
@@ -549,11 +692,11 @@ export class WorldMassRuntime {
         // Saturation delays an encounter instead of furnishing free rewards.
         const identities = [...Array.from({ length: count }, (_, i) => canonical([p.id, i])),
           ...(content.site?.fixtures ?? []).map((_, i) => canonical([p.id, 'fixture', i]))];
-        const missing = identities.filter(id => !this.natives.has(id) && !this.state.claimed('fallen', id)).length;
+        const missing = identities.filter(id => !this.hasNative(id) && !this.state.claimed('fallen', id)).length;
         if (this.population + missing + this.puzzles.missing(p,content.site?.puzzles??[]) > capacity) continue;
         for (const [index, fixture] of (content.site?.fixtures ?? []).entries()) {
           const id = canonical([p.id, 'fixture', index]);
-          if (this.natives.has(id) || this.state.claimed('fallen', id) || this.population >= capacity) continue;
+          if (this.hasNative(id) || this.state.claimed('fallen', id) || this.population >= capacity) continue;
           const offset = siteOffset(p, fixture.x, fixture.y);
           const a = this.births.create(world,id,fixture.monster,population.level);
           applyMassTerritory(a, this.config.territory);
@@ -577,7 +720,7 @@ export class WorldMassRuntime {
         const angle = rng.range(0, Math.PI * 2), radius = rng.range(30, p.radius * .65);
         const def = MONSTERS[monster];
         const scale = def.scaleVariance ? rng.range(...def.scaleVariance) : 1;
-        if (this.natives.has(id) || this.state.claimed('fallen', id) || this.population >= capacity) continue;
+        if (this.hasNative(id) || this.state.claimed('fallen', id) || this.population >= capacity) continue;
         const offset=seat?siteOffset(p,seat.x,seat.y):undefined;
         const spot = this.walk.snapToWalkable({ x: q.x + (offset?.x ?? Math.cos(angle) * radius),
           y: q.y + (offset?.y ?? Math.sin(angle) * radius) });
@@ -632,7 +775,7 @@ export class WorldMassRuntime {
       }
       if (content.site) {
         const ready = massGarrisonSlots(content,p.id,count)
-          .every(id => this.natives.has(id) || this.state.claimed('fallen', id));
+          .every(id => this.hasNative(id) || this.state.claimed('fallen', id));
         if (ready) {
           this.fields.admit(world,p,content.site.altars ?? [],q,population.level);
           this.shrines.admit(world,p,content.site.shrines ?? [],q);
@@ -650,6 +793,100 @@ export class WorldMassRuntime {
         }
       }
     }
+    this.updateNativePaging(world);
+  }
+  private restoreNativeBody(world:World,e:MassEnemySave,groups:Map<number,number>,formations:Map<number,number>):Actor {
+    if(!e.id||!MONSTERS[e.monster]||!Number.isSafeInteger(e.level)||e.level<1
+      ||![e.x,e.y,e.life,e.scale].every(Number.isFinite)||e.life<=0||e.scale<=0
+      ||e.magicPack&&(!readMagicPack(e.magicPack)||typeof e.name!=='string')
+      ||e.encounterGroup&&(!readEncounterGroup(e.encounterGroup)||typeof e.name!=='string'||!!e.magicPack)
+      ||(this.config.nativeBirthSource||e.birth!==undefined)&&!validMassBirth(e.birth!))throw Error('Invalid paged native survivor');
+        const a = this.births.create(world,e.id,e.monster,e.level,e.scale,e.birth);
+        applyMassTerritory(a, this.config.territory);
+        const pack = readMagicPack(e.magicPack);
+        if (pack) {
+          if (!groups.has(pack.id)) groups.set(pack.id,world.nextSquadId());
+          a.magicPack = { ...pack, id: groups.get(pack.id)! };
+          a.squadId = a.magicPack.id; a.squadLeader = a.magicPack.leader === 1;
+          world.promoteMonster(a,'magic',1,{distinctName:e.name});
+        }
+        const formation=readEncounterGroup(e.encounterGroup);
+        if(formation){
+          if(!formations.has(formation.id))formations.set(formation.id,world.nextSquadId());
+          applyEncounterGroup(a,{...formation,id:formations.get(formation.id)!});
+          if(!a.encounterGroup)throw Error('Invalid saved worldmass formation member');
+          a.name=e.name!;
+        }
+        a.pos = { x: e.x, y: e.y }; a.fromZoneGen = true; a.fillResources();
+        a.aiAnchor = { ...(e.anchor ?? a.pos) };
+        // Preserve the native return hysteresis, never an unwarned attack phase.
+        if(e.leashHome) a.aiPhase = 'leash_home';
+            a.life=Math.min(a.maxLife(),e.life);return a;
+  }
+  private pagingCurrent(world:World):boolean{return !this.disposed&&this.attached&&world.massRuntime===this&&world.zone.id===MASS_ZONE;}
+  private updateNativePaging(world:World):void {
+    if(!this.dormancy||!characterPagingAvailable()||!this.pagingCurrent(world))return;
+    const observers=world.actors.filter(a=>!a.dead&&a.team!=='enemy');
+    const near=(positions:readonly {x:number;y:number}[],radius:number)=>positions.some(p=>observers.some(a=>Math.hypot(a.pos.x-p.x,a.pos.y-p.y)<=radius));
+    // At most two detached page reads. Until complete, every native identity
+    // remains present in the ledger and suppresses replacement births/rewards.
+    for(const page of new Set(this.paged.values())){
+      if(this.pagingReads.size>=2)break;
+      if(this.pagingReads.has(page.ref.key)||(this.pagingRetry.get(page.ref.key)??0)>world.time
+        ||!near(page.positions,this.dormancy.policy.wakeRadius+this.config.populationRadius))continue;
+      const task=(async()=>{
+        const data=await loadCharacterNativePage(page);
+        if(!this.pagingCurrent(world))return;
+        if(data.configHash!==this.configHash)throw Error('Native page config mismatch');
+        const groups=new Map<number,number>(),formations=new Map<number,number>(),player=world.player;
+        const restored=await hydrateNativeCohort({readPage:async()=>JSON.stringify(data.cohort)},page.ref,this.origin,
+          this.config.terrain.addressSpan,player,{create:d=>{
+            const e=data.enemies.find(e=>e.id===d.id);if(!e)throw Error('Missing native page baseline');
+            return this.restoreNativeBody(world,e,groups,formations);
+          },groups:()=>{}});
+        if(!this.pagingCurrent(world)||world.player!==player)return;
+        if(page.ids.some(id=>this.natives.has(id)||this.paged.get(id)!==page))throw Error('Stale native page publication');
+        this.dormancy!.adoptSleeping([...restored.actors.values()]);
+        for(const [id,a]of restored.actors){this.natives.set(id,a);this.paged.delete(id);}
+        forgetCharacterNativePage(world,page);this.pagingRetry.delete(page.ref.key);
+        this.dormancy!.update(world,this.natives);world.refreshMagicPacks();
+      })();
+      this.pagingReads.set(page.ref.key,task);
+      void task.catch(error=>{this.pagingRetry.set(page.ref.key,world.time+5);console.error('[worldmass] native page unavailable; retained its identities:',error);})
+        .finally(()=>this.pagingReads.delete(page.ref.key));
+    }
+    // Bound eligible history, not unsupported mechanics. Those remain pinned.
+    if(this.pagingWrite||world.time<this.nextPaging||this.natives.size<=Math.max(192,this.config.maxPopulation*2))return;
+    this.nextPaging=world.time+2;
+    const byGroup=new Map<string,string[]>();
+    for(const [id,a]of this.natives){const key=a.squadId===undefined?'body:'+id:'squad:'+a.squadId;
+      const group=byGroup.get(key)??[];group.push(id);byGroup.set(key,group);}
+    const groups=[...byGroup.values()],selected:string[]=[];
+    const cursor=this.pagingCursor;
+    for(let i=0;i<groups.length;i++){
+      const index=(cursor+i)%groups.length,ids=groups[index];
+      if(selected.length+ids.length>96)continue;
+      if(ids.some(id=>{const a=this.natives.get(id)!;return !this.dormancy!.isSleeping(a)||near([a.pos],this.dormancy!.policy.sleepRadius+256);}))continue;
+      selected.push(...ids);this.pagingCursor=(index+1)%groups.length;
+      if(selected.length>=96)break;
+    }
+    if(!selected.length)return;
+    let lease;
+    try{lease=stageNativeCohort(this.generator.run.runId,'native/'+crypto.randomUUID(),this.origin,this.config.terrain.addressSpan,
+      world,this.natives,selected,this.dormancy,(id,a)=>({id,monster:a.defId!,level:a.level,provenance:{birth:this.births.of(a)}}));}
+    catch(error){this.pagingRefusal=String(error);return;} // Unsupported dependencies retain their exact live owners.
+    this.pagingRefusal="";
+    const held=lease,valid=()=>this.pagingCurrent(world)&&held.revalidate()
+      &&selected.every(id=>{const a=this.natives.get(id);return !!a&&!near([a.pos],this.dormancy!.policy.sleepRadius);});
+    const task=commitCharacterNativeCohort(world,{...lease,revalidate:valid},entry=>{
+      if(!valid())throw Error('Native changed before release');
+      const actors=selected.map(id=>this.natives.get(id)!);
+      this.dormancy!.release(actors);
+      for(const id of selected){this.natives.delete(id);this.paged.set(id,entry);}
+      world.actorGridRev++;
+    });
+    this.pagingWrite=task;
+    void task.catch(error=>console.error('[worldmass] page commit failed; natives retained:',error)).finally(()=>{this.pagingWrite=null;});
   }
   snapshot(world: World): MassAdventureSave {
     const enemies: MassEnemySave[] = [];
@@ -661,14 +898,20 @@ export class WorldMassRuntime {
         ...(a.encounterGroup ? {encounterGroup:a.encounterGroup,name:a.name} : {}),
         ...(this.births.of(a) ? {birth:this.births.of(a)} : {}) });
     }
-    return JSON.parse(JSON.stringify({ schema: this.config.bounties !== undefined ? 9 : this.config.journey?.reservePopulation !== undefined ? 8 : this.config.rewards?.earnFrom !== undefined ? 7 : this.config.settlement?.structurePlans !== undefined ? 6 : this.config.settlement?.quests?.acceptance === 'journal' ? 5 : this.config.content.some(c=>c.site?.puzzles?.length) ? 4 : this.config.journey?.roadside ? 3 : this.config.content.some(c => c.site?.shrines?.length) ? 2 : 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
+    return JSON.parse(JSON.stringify({ schema: this.config.geography ? 11 : this.config.dormancy || this.config.shrineResidency || this.config.puzzleResidency || this.config.nativeCountry ? 10 : this.config.bounties !== undefined ? 9 : this.config.journey?.reservePopulation !== undefined ? 8 : this.config.rewards?.earnFrom !== undefined ? 7 : this.config.settlement?.structurePlans !== undefined ? 6 : this.config.settlement?.quests?.acceptance === 'journal' ? 5 : this.config.content.some(c=>c.site?.puzzles?.length) ? 4 : this.config.journey?.roadside ? 3 : this.config.content.some(c => c.site?.shrines?.length) ? 2 : 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
       ...(this.config.rewards ? { rewards: this.rewards.snapshot() } : {}),
       ...(this.fields.snapshot().length ? { fields: this.fields.snapshot() } : {}),
       ...(this.shrines.snapshot().length ? { shrines: this.shrines.snapshot() } : {}),
-      ...(this.puzzles.population ? { puzzles: this.puzzles.snapshot(world) } : {}),
+      ...(this.puzzles.snapshot(world).length ? { puzzles: this.puzzles.snapshot(world) } : {}),
+      ...(this.dormancy ? {dormancy:this.dormancy.snapshot(this.natives,world)} : {}),
+      ...(this.nativeFeatures ? {nativeFeatures:this.nativeFeatures.snapshot(world.time)} : {}),
+      ...(this.geography ? {geography:this.geography.snapshot()} : {}),
+      ...(this.weather ? {weather:this.weather.snapshot()} : {}),
+      ...(this.snow ? {snow:this.snow.snapshot()} : {}),
+      ...(this.storms ? {storms:this.storms.snapshot()} : {}),
       origin: this.origin, player: { ...world.player.pos, tier: world.player.tier ?? 0 }, enemies,
       ...(this.settlement ? { settlement: this.settlement.snapshot(world) } : {}),
       ...(this.ecology ? { ecology: this.ecology.snapshot(world) } : {}), sites: this.sites.snapshot(world), contents: captureZoneContents(world) })) as MassAdventureSave;
   }
-  get population(): number { return this.natives.size + this.puzzles.population; }
+  get population(): number { return (this.dormancy?.activeCount(this.natives) ?? this.natives.size) + this.puzzles.population + (this.nativeHost?.population ?? 0) + (this.geography?.population ?? 0); }
 }

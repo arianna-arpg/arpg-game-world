@@ -23,7 +23,7 @@ export interface ZoneContents {
 const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 export function captureZoneContents(w: World): ZoneContents {
   return copy({
-    chests: w.chests,
+    chests: w.chests.filter(c=>!c.massObjectiveOwner),
     shrines: w.shrines.filter(s => !s.massSource).map(s => ({ pos: s.pos, id: s.def.id, used: s.used })),
     altars: w.altars.filter(a => !a.massSource).map(a => ({ pos: a.pos, id: a.def.id, tier: a.tier, objective: a.objective })),
     drops: w.drops.map(d => ({ ...d, item: d.item.kind === 'skill'
@@ -47,7 +47,7 @@ const positioned = (v: { pos?: { x?: number; y?: number } } | null | undefined):
 
 export function restoreZoneContents(w: World, saved: ZoneContents): void {
   const c = copy(saved);
-  w.chests = c.chests.filter(s => positioned(s) && ['objective', 'timed'].includes(s.kind)
+  w.chests = c.chests.filter(s => positioned(s) && !s.massObjectiveOwner && ['objective', 'timed'].includes(s.kind)
     && Number.isFinite(s.lockTime) && Number.isFinite(s.maxLock));
   w.shrines = c.shrines.flatMap(s => {
     const def = s && SHRINES.find(d => d.id === s.id);

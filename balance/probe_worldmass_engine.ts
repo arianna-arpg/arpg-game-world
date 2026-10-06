@@ -18,6 +18,7 @@ const w = makeSimWorld('warrior', 812735), config = JSON.parse(JSON.stringify(ma
 delete config.progression; delete config.journey; delete config.ecology;
 delete config.settlement; // this probe isolates the wilderness adapter
 delete config.survey; // legacy lattice fixture retains page-based cartography
+delete config.nativeCountry;delete config.geography; // legacy 24-unit grid fixture owns its complete terrain
 config.terrain.addressSpan = 768; config.terrain.terrainCell = 24;
 config.terrain.fields = [];
 config.terrain.surfaces = [{ id: 'test-land', priority: 0, when: [], region: 'ground', color: '#445522', biome: 'downs' }];

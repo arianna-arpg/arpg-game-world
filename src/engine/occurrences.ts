@@ -354,6 +354,21 @@ export function mintedOccurrencesOf(zoneId: string): readonly MintedOccurrence[]
   return MINTED.get(zoneId)?.rows ?? [];
 }
 
+/** An isolated native compiler must capture the generation side channel even
+ * when its next pass produces zero rows. Restore the ordinary scene's exact
+ * bundle afterward; this scope never changes finite World loading. */
+export function captureMintedOccurrences<T>(zoneId: string, generate: () => T): { value: T; rows: MintedOccurrence[] } {
+  const previous = MINTED.get(zoneId);
+  MINTED.delete(zoneId);
+  try {
+    const value = generate();
+    return { value, rows: mintedOccurrencesOf(zoneId).map(row => ({ ...row })) };
+  } finally {
+    if (previous) MINTED.set(zoneId, previous);
+    else MINTED.delete(zoneId);
+  }
+}
+
 // --- The runtime sites --------------------------------------------------------
 
 /** One live spot (index-aligned with the minted rows — Zone Memory's

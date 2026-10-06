@@ -119,6 +119,7 @@ console.log('PASS version 4 Continue keeps its original geography without adding
 // A modified first tree must not change which later trees the seed generates.
 const groveConfig: MassAdventure = JSON.parse(canonical(massAdventure()));
 delete groveConfig.settlement; delete groveConfig.journey; delete groveConfig.progression;
+delete groveConfig.nativeCountry;delete groveConfig.geography; // isolated ecology fixture has no native structure placement
 groveConfig.terrain.places = []; groveConfig.content = []; groveConfig.startRadius = 0;
 groveConfig.terrain.surfaces = [{ id: 'grove', source: 'probe/grove', priority: 0, when: [],
   region: 'ground', color: '#334422', biome: 'forest' }];

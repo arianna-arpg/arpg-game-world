@@ -1052,6 +1052,9 @@ export interface ZoneDef {
    *  cellar's roaches — texture the zone asked for by name), so the validator
    *  requires safe-zone rows to be 'critter'-tagged. Absent = the biome list. */
   fauna?: WildlifeRow[];
+  /** Resolved ambient source retained by native pocket saves. This is NOT
+   * authored fauna: sanctuary, special/cohort and density gates still apply. */
+  faunaProvenance?: WildlifeRow[];
   /** THE COHORT LAW — 'authored': this zone's entity MEMBERSHIP is closed.
    *  Its authored packs (+ authored fauna, if any) are the whole cohort:
    *  the ambient injection lanes skip it — no faction-contest rosters, no

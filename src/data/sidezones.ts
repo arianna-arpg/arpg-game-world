@@ -23,6 +23,12 @@ import { TILESETS } from './tilesets';
 import type { ZoneDef } from './zones';
 import type { RadianceCond } from '../world/radiance';
 
+/** Stable native pocket identity, shared by minting and save-chain validation. */
+export function sidezonePocketId(parentId: string, kind: string, seed: number, underSpan?: string): string {
+  if (underSpan) return 'cave_' + underSpan;
+  return kind === 'cave_entrance' ? 'cave_' + parentId + '_' + seed : 'cave_' + kind + '_' + parentId + '_' + seed;
+}
+
 /** Everything a mint may read from the live world, passed by the engine. */
 export interface SidezoneMintCtx {
   /** The zone the entrance stands in (the pocket's way home). */

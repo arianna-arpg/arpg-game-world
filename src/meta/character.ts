@@ -1,5 +1,9 @@
 import { empowermentRank } from '../engine/skillEmpowerment';
-import { storageKey } from '../buildProfile';
+import { BUILD_PROFILE, storageKey } from '../buildProfile';
+import { BrowserNativePages } from './browserNativePages';
+import { characterNativePage, encodeCharacterPages, decodeCharacterPages, hasCharacterPages, readCharacterNativePage, type CharacterPageEntry } from './characterPages';
+import type { NativeCohortLease } from '../worldmass/nativePaging';
+import { BrowserRunStore, isBrowserRunReference } from './browserRunStore';
 // ---------------------------------------------------------------------------
 // CHARACTER PERSISTENCE — the active-run half of localStorage.
 //
@@ -533,31 +537,175 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
   return true;
 }
 
+/** Large browser runs commit atomically. Small local references publish only
+ * after the transaction; the in-session cache still serves synchronous callers. */
+let browserRuns: BrowserRunStore | undefined;
+let nativePages: BrowserNativePages | undefined;
+function nativePageStore(): BrowserNativePages {
+  if (typeof indexedDB === 'undefined') throw Error('Native page storage unavailable');
+  return nativePages ??= new BrowserNativePages(storageKey('arpg_native_pages_v1'));
+}
+interface CharacterPageSession { pages: CharacterPageEntry[]; order: string[]; busy: boolean; revision: number }
+const pageSessions = new WeakMap<World, CharacterPageSession>();
+const pageCommits = new Set<Promise<boolean>>();
+const pageFailures = new Map<number, unknown>();
+/** Native files remain inline until portable page transfer is implemented. */
+export const characterPagingAvailable = (): boolean => !!BUILD_PROFILE.storageScope && typeof indexedDB !== 'undefined';
+export const resetCharacterNativePages = (world: World): void => { pageSessions.delete(world); };
+export const characterNativePages = (world: World): readonly CharacterPageEntry[] => pageSessions.get(world)?.pages ?? [];
+export const loadCharacterNativePage = (entry: CharacterPageEntry) => readCharacterNativePage(nativePageStore(),entry);
+/** Call only AFTER atomic native hydration publishes every page owner. */
+export function forgetCharacterNativePage(world: World, entry: CharacterPageEntry): void {
+  const session=pageSessions.get(world);if(!session)return;
+  session.pages=session.pages.filter(p=>p.ref.key!==entry.ref.key);session.revision++;
+}
+function mirrorBody(world: World, save: CharacterSave): string {
+  const session=pageSessions.get(world);
+  return session?.pages.length ? encodeCharacterPages(save,session.pages,session.order) : characterBody(world,save);
+}
+/** The ordinary CharacterSave slot is the sole commit authority. Pages land
+ * first; a later save/death/import invalidates this lease before any release.
+ * The runtime callback must remove every live/codec reference synchronously. */
+export async function commitCharacterNativeCohort(world: World, lease: NativeCohortLease,
+  release: (entry: CharacterPageEntry) => void): Promise<boolean> {
+  if (!characterPagingAvailable() || saveRefused('native page') || world.player!==world.seatHero(world.localSeat)) return Promise.resolve(false);
+  const slot=saveSlotFor(world);if(slot<0||pageCommits.size>=4)return Promise.resolve(false);
+  let session=pageSessions.get(world);
+  if(!session){session={pages:[],order:[],busy:false,revision:0};pageSessions.set(world,session);}
+  if(session.busy||!lease.revalidate())return Promise.resolve(false);
+  const held=session,manifest=[...session.pages],priorOrder=[...session.order],revision=session.revision,
+    save=serializeCharacter(world),page=characterNativePage(save,lease);
+  if(held.pages.some(p=>p.ref.page===page.cohort.page||p.ids.some(id=>lease.ids.includes(id))))throw Error('Native page already committed');
+  const intent=(mirrorIntents.get(slot)??0)+1,barrier=deletionBarrier(slot);
+  mirrorIntents.set(slot,intent);held.busy=true;
+  const current=()=>pageSessions.get(world)===held&&held.revision===revision
+    &&mirrorIntents.get(slot)===intent&&deletionBarrier(slot)===barrier&&!saveRefused('native page commit');
+  const task=(async()=>{
+    const ref=await nativePageStore().writePage(page.cohort.run,page.cohort.page,JSON.stringify(page));
+    if(!current()||!lease.revalidate())return false;
+    const entry={ref,ids:[...lease.ids],positions:lease.ids.map(id=>{const e=page.enemies.find(e=>e.id===id)!;return {x:e.x,y:e.y};})},pages=[...manifest,entry];
+    Object.freeze(entry.ref);Object.freeze(entry.ids);entry.positions.forEach(p=>Object.freeze(p));Object.freeze(entry.positions);Object.freeze(entry);
+    const order=[...priorOrder,...save.world!.worldmass!.enemies.map(e=>e.id).filter(id=>!priorOrder.includes(id))];
+    const body=encodeCharacterPages(save,pages,order);
+    await writeCharacterMirrorTransaction(slot,body,{intent,barrier});
+    if(!current()||browserRunStore()?.peek(charKeyFor(slot))!==body||!lease.revalidate())return false;
+    // Register before release so a synchronous save from the runtime sees all
+    // owners. A callback must either succeed atomically or throw before edits.
+    held.pages=pages;held.order=order;held.revision++;
+    try{release(entry);}catch(error){held.pages=manifest;held.order=priorOrder;held.revision++;throw error;}
+    pageFailures.delete(slot);return true;
+  })();
+  pageCommits.add(task);
+  void task.catch(error=>pageFailures.set(slot,error)).finally(()=>{held.busy=false;pageCommits.delete(task);});
+  return task;
+}
+function browserRunStore(): BrowserRunStore | undefined {
+  if (typeof indexedDB === 'undefined') return undefined;
+  return browserRuns ??= new BrowserRunStore({ dbName: storageKey('arpg_run_snapshots_v1'),
+    references: { getItem: key => window.localStorage.getItem(key), setItem: (key, body) => window.localStorage.setItem(key, body) },
+    onError: (error, key) => console.error('[save] browser run commit failed:', key, error) });
+}
+const deletionKey = (slot: number): string => charKeyFor(slot) + ':deleted';
+const mirrorIntents = new Map<number, number>();
+function deletionBarrier(slot: number): string | null {
+  try { return window.localStorage.getItem(deletionKey(slot)); } catch { return null; }
+}
+/** Import owns its explicit stand-down exception and awaits this primitive.
+ * A synchronous deletion barrier prevents an unload from reviving a dead run
+ * before its asynchronous tombstone reaches the browser database. */
+export async function writeCharacterMirrorRaw(slot: number, body: string | null): Promise<void> {
+  // Import and disk mirrors must be portable inline saves, never references to
+  // another browser's storage. Internal paged commits use the private lane.
+  if(body!==null && hasCharacterPages(JSON.parse(body)))throw Error('External native page references require portable expansion');
+  await writeCharacterMirrorTransaction(slot,body);
+}
+async function writeCharacterMirrorTransaction(slot: number, body: string | null,
+  accepted?: {intent:number;barrier:string|null}): Promise<void> {
+  const key = charKeyFor(slot), store = browserRunStore();
+  const intent = accepted?.intent ?? (mirrorIntents.get(slot) ?? 0) + 1, barrier = accepted ? accepted.barrier : deletionBarrier(slot);
+  if(accepted && (mirrorIntents.get(slot)!==intent||deletionBarrier(slot)!==barrier))throw Error('Stale native character commit');
+  mirrorIntents.set(slot, intent);
+  if (body === null) {
+    try { window.localStorage.setItem(deletionKey(slot), Date.now() + ':' + Math.random()); window.localStorage.removeItem(key); }
+    catch (error) { console.error('[save] run deletion barrier failed:', error); }
+  }
+  if (store) {
+    await store.write(key, body);
+    // A later queued tombstone must retain its barrier.
+    if (body !== null && mirrorIntents.get(slot) === intent && deletionBarrier(slot) === barrier) {
+      try { window.localStorage.removeItem(deletionKey(slot)); } catch { /* a stale barrier fails closed */ }
+    }
+  } else {
+    if (body !== null) { window.localStorage.setItem(key, body); window.localStorage.removeItem(deletionKey(slot)); }
+  }
+  pageFailures.delete(slot);
+}
+function writeCharacterMirror(slot: number, body: string | null): void {
+  void writeCharacterMirrorTransaction(slot, body).catch(error => console.error('[save] run mirror remains at its last committed snapshot:', error));
+}
+/** Awaited by explicit checkpoints/import; unload keeps the last completed
+ * browser transaction and the ordinary native disk beacon. */
+export async function flushCharacterSaves(): Promise<void> {
+  while(pageCommits.size)await Promise.allSettled([...pageCommits]);
+  await browserRuns?.flush();
+  if(pageFailures.size)throw new AggregateError([...pageFailures.values()],'Native character page commits failed');
+}
 function cachedCharacter(slot: number): CharacterSave | null {
-  try { return JSON.parse(window.localStorage.getItem(charKeyFor(slot)) ?? 'null') as CharacterSave | null; }
-  catch { return null; }
+  if (deletionBarrier(slot)) return null;
+  try {
+    const cached = browserRunStore()?.peek(charKeyFor(slot));
+    const data: unknown = JSON.parse((cached === undefined ? window.localStorage.getItem(charKeyFor(slot)) : cached) ?? 'null');
+    return isBrowserRunReference(data) || hasCharacterPages(data) ? null : data as CharacterSave | null;
+  } catch { return null; }
+}
+/** The New Run patron cleanup needs only identity. A paged transport must
+ * never masquerade as a complete synchronous CharacterSave for resumption. */
+export function savedCharacterPatronId(): string | undefined {
+  if(deletionBarrier(CHAR_SLOT))return undefined;
+  try {
+    const cached=browserRunStore()?.peek(charKeyFor(CHAR_SLOT));
+    const raw:unknown=JSON.parse((cached===undefined?window.localStorage.getItem(charKeyFor(CHAR_SLOT)):cached)??'null');
+    if(hasCharacterPages(raw)&&(raw.characterPages!==1||!Array.isArray(raw.pages)||!raw.pages.length||!Array.isArray(raw.order)))return undefined;
+    const data=(hasCharacterPages(raw)?raw.character:raw) as Partial<CharacterSave>|null;
+    return isCurrentCharacterSave(data)&&typeof data?.charId==='string'&&data.charId.length>0?data.charId:undefined;
+  } catch { return undefined; }
 }
 export function loadCharacter(): CharacterSave | null {
   const data = cachedCharacter(CHAR_SLOT);
   return isCurrentCharacterSave(data) ? data : null;
 }
 
-/** One authority choice for every character slot: an existing disk tombstone
- *  or incompatible save must never resurrect a newer-looking cached mirror. */
+/** Disk remains authoritative where present. Browser tombstones/corruption
+ * cannot fall through to an older full-body localStorage mirror. */
 async function loadCharacterSlot(slot: number): Promise<CharacterSave | null> {
+  if (deletionBarrier(slot)) return null;
   const disk = await diskGet<CharacterSave>(slot);
-  const data = disk !== null ? disk : cachedCharacter(slot);
+  if (deletionBarrier(slot)) return null;
+  let data: CharacterSave | null = disk;
+  if(disk!==null && hasCharacterPages(disk)){writeCharacterMirror(slot,null);return null;}
+  if (disk === null) {
+    if (deletionBarrier(slot)) return null;
+    const store = browserRunStore();
+    if (store) {
+      try { await store.flush(); } catch { /* read the last durable transaction */ }
+      const read = await store.read(charKeyFor(slot));
+      if (read.status === 'value') {
+        try { data = await decodeCharacterPages(JSON.parse(read.body),nativePageStore()); }
+        catch(error) { console.error('[save] character native pages refused:',error); return null; }
+      } else if (read.status === 'deleted' || read.status === 'corrupt') return null;
+      else data = cachedCharacter(slot);
+    } else data = cachedCharacter(slot);
+  }
+  if (deletionBarrier(slot)) return null;
   if (isCurrentCharacterSave(data)) {
-    try { window.localStorage.setItem(charKeyFor(slot), JSON.stringify(data)); } catch { /* ignore */ }
+    if (disk !== null || browserRunStore()?.peek(charKeyFor(slot)) === undefined) writeCharacterMirror(slot, JSON.stringify(data));
     return data;
   }
   if (data && typeof data.schemaVersion === 'number') {
     noteSaveReset(data.accountVersion !== undefined && data.accountVersion !== SAVE_COMPATIBILITY.account ? 'account' : 'run');
-    // Only overwrite a disk copy we actually read. An unavailable endpoint
-    // must not schedule a wipe against an unseen save on that endpoint.
     if (disk !== null) diskPut(slot, '{}');
   }
-  try { window.localStorage.removeItem(charKeyFor(slot)); } catch { /* ignore */ }
+  if (disk !== null || data !== null) writeCharacterMirror(slot, null);
   return null;
 }
 export const loadCharacterAsync = (): Promise<CharacterSave | null> => loadCharacterSlot(CHAR_SLOT);
@@ -657,9 +805,9 @@ export function saveCharacter(world: World): void {
   // Serialize failures never crash gameplay — but they must never be SILENT
   // either: a quiet return here is how a broken save path loses runs for
   // days (the rawJSON regression). Loud on the console, visible to probes.
-  try { body = characterBody(world, serializeCharacter(world)); }
+  try { body = mirrorBody(world, serializeCharacter(world)); }
   catch (e) { console.error('[save] serializeCharacter threw — nothing written:', e); return; }
-  try { window.localStorage.setItem(charKeyFor(slot), body); } catch { /* ignore */ }
+  writeCharacterMirror(slot, body);
   diskPut(slot, body);
 }
 
@@ -676,9 +824,9 @@ export function saveCharacterDurable(world: World): void {
   // gets a say over the exact-resume promise.
   world.invalidateZonesSaveMemo();
   let body: string;
-  try { body = characterBody(world, serializeCharacter(world)); }
+  try { body = mirrorBody(world, serializeCharacter(world)); }
   catch (e) { console.error('[save] serializeCharacter threw — durable write refused:', e); return; }
-  try { window.localStorage.setItem(charKeyFor(slot), body); } catch { /* ignore */ }
+  writeCharacterMirror(slot, body);
   diskBeacon(slot, body);
 }
 
@@ -687,7 +835,7 @@ export function clearCharacter(): void {
   // run off the back of untrusted state (frozen means frozen — both halves,
   // so the disk-first loader isn't left disagreeing with localStorage).
   if (saveRefused('character wipe')) return;
-  try { window.localStorage.removeItem(CHAR_KEY); } catch { /* ignore */ }
+  writeCharacterMirror(CHAR_SLOT, null);
   // DURABLE wipe: must survive the player closing the game on the death screen,
   // else the disk-first loader resurrects the dead character (permadeath break).
   diskBeacon(CHAR_SLOT, '{}');
@@ -701,7 +849,7 @@ export const loadRosterSave = (slot: number): Promise<CharacterSave | null> => l
 
 /** Durably empty a roster slot (vessel deletion — a deliberate roster action). */
 export function wipeRosterSlot(slot: number): void {
-  try { window.localStorage.removeItem(charKeyFor(slot)); } catch { /* ignore */ }
+  writeCharacterMirror(slot, null);
   diskBeacon(slot, '{}');
 }
 
@@ -819,7 +967,7 @@ export function saveCouchGuest(
   let body: string;
   try { body = JSON.stringify(serializeCouchGuest(world, seat, dormant)); }
   catch (e) { console.error('[save] serializeCouchGuest threw — nothing written:', e); return; }
-  try { window.localStorage.setItem(charKeyFor(slot), body); } catch { /* ignore */ }
+  writeCharacterMirror(slot, body);
   if (durable) diskBeacon(slot, body); else diskPut(slot, body);
   const entry = account.roster.find(r => r.charId === seat.meta.charId);
   if (entry) {

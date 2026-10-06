@@ -567,19 +567,25 @@ export class WorldSim {
   }
   private scopeMemo = new WeakMap<OverlayView, Map<string, OverlayView>>();
 
+  /** The same pure gate/frequency read feeds scene and geographic skies. */
+  weatherScales(view: OverlayView): {spawnScale:number;concurrencyScale:number} {
+    let spawnScale=0;
+    for(const id of this.weatherPkgIds)spawnScale+=gateOf(view.gates,id).ignitionMul;
+    return {spawnScale,concurrencyScale:this.effectiveFrequency().concurrency};
+  }
+
   update(dt: number, view: OverlayView): void {
     // Route Storm Fronts pressure into the weather field's spawn rate before it
     // ticks; the per-faction invasion scale reads `this.gates` live (kept current
     // by gatesFor, which the World calls when building the view).
-    let wp = 0;
-    for (const id of this.weatherPkgIds) wp += gateOf(view.gates, id).ignitionMul;
-    this.weather.spawnScale = wp;
+    const weatherScales = this.weatherScales(view);
+    this.weather.spawnScale = weatherScales.spawnScale;
     // The global concurrency crank lifts the migrated-feature caps too (storm
     // fronts, warband hosts, incursion landings), so a frequency boost actually
     // shows MORE at once — the always-on infra fields have no package gate, so
     // the sim hands each the lever directly.
     const conc = this.effectiveFrequency().concurrency;
-    this.weather.concurrencyScale = conc;
+    this.weather.concurrencyScale = weatherScales.concurrencyScale;
     this.invasion.concurrencyScale = conc;
     this.incursionField.concurrencyScale = conc;
     // Faction/world wants drift on their clocks (dread cools between culls).

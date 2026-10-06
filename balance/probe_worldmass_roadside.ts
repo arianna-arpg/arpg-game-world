@@ -1,3 +1,4 @@
+import { beforeMassStreaming } from './worldmassFixtures';
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -35,7 +36,7 @@ try{
  const before={monster:a.defId,life:a.life,pos:{...a.pos},anchor:{...a.aiAnchor!}};
  const hero=w.player;w.landPartyAt({x:q.x+7500,y:q.y+7500});m.update(w,true);w.landPartyAt(q);m.update(w,true);
  assert.equal(w.player,hero);assert.equal(natives.get(id),a);assert.equal(a.life,before.life);
- const save=m.snapshot(w);assert.equal(save.schema,9);
+ const save=m.snapshot(w);assert.equal(save.schema,11);
  const rw=makeSimWorld('warrior',43),rm=new WorldMassRuntime(42,'road-save',save.config,save);rm.attach(rw,save);
  assert.deepEqual(rm.roadside!.places,m.roadside!.places);
  const ra=(rm as unknown as {natives:Map<string,typeof w.player>}).natives.get(id)!;
@@ -47,7 +48,7 @@ try{
  const dead=rm.snapshot(rw),dw=makeSimWorld('warrior',44),dm=new WorldMassRuntime(42,'road-save',dead.config,dead);dm.attach(dw,dead);
  dw.landPartyAt(q);dm.update(dw,true);assert.equal((dm as unknown as {natives:Map<string,unknown>}).natives.has(id),false);
  assert.equal(dm.state.claimed('fallen',id),true);
- const legacy=structuredClone(massAdventure()) as MassAdventure;delete legacy.bounties;delete legacy.journey!.reservePopulation;delete legacy.journey!.roadside;delete legacy.settlement!.quests!.acceptance;delete legacy.settlement!.structurePlans;delete legacy.rewards!.earnFrom;
+ const legacy=beforeMassStreaming(structuredClone(massAdventure()) as MassAdventure);delete legacy.bounties;delete legacy.journey!.reservePopulation;delete legacy.journey!.roadside;delete legacy.settlement!.quests!.acceptance;delete legacy.settlement!.structurePlans;delete legacy.rewards!.earnFrom;
  for(const c of legacy.content)if(c.site)delete c.site.puzzles;
  const lw=makeSimWorld('warrior',45),lm=new WorldMassRuntime(42,'legacy-road',legacy);lm.attach(lw);
  assert.equal(lm.roadside,null);assert.equal(lm.snapshot(lw).schema,2);

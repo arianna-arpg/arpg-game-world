@@ -1,3 +1,9 @@
+import { MASS_SNOW_DEFAULT } from './snow';
+import { MASS_WEATHER_DEFAULT } from './weather';
+import { MASS_HIERARCHY_DEFAULT } from './hierarchy';
+import { nativeMassPyreSources, nativeMassHoldSources } from './objectives';
+import { makeNativeCountrySpec, type NativeCountrySpec } from './nativeCountry';
+import { countryActivitySites } from './activitySites';
 import { nativeStructurePlan } from '../engine/structurePlans';
 import { TILESETS } from '../data/tilesets';
 import { FACTIONS, MONSTERS } from '../data/monsters';
@@ -29,6 +35,8 @@ export interface MassContent extends MassPopulation {
   magicPack?: { source: string; mechanic: string };
 }
 export interface MassAdventure {
+  nativeCountry?: NativeCountrySpec;
+  geography?: import('./geographicGameplay').MassGeographicSpec;
   bounties?: import('./bounties').MassBountySpec;
   /** Optional sight-admitted map memory; omitted descriptors keep page discovery. */
   survey?: import('./survey').MassSurveySpec;
@@ -36,6 +44,9 @@ export interface MassAdventure {
   ground?: MassGroundSpec;
   /** Optional bounded residency for native fields, including repeated places. */
   fieldResidency?: import('./fields').MassFieldResidency;
+  shrineResidency?: import('./fields').MassFieldResidency;
+  puzzleResidency?: import('./fields').MassFieldResidency;
+  dormancy?: import('./dormancy').MassDormancyPolicy;
   /** Optional namespace for replayable native factory variants. */
   nativeBirthSource?: string;
   /** Native walk-home fallback; omitted descriptors retain unrestricted populations. */
@@ -57,7 +68,7 @@ export interface MassAdventure {
 /** Snapshot existing content vocabulary, then own it for this run. Future
  * packages can supply another descriptor without replacing engine rules. */
 export function massAdventure(): MassAdventure {
-  const families = MASS_BIOME_FAMILIES, fields = countryFieldSites(), regional = regionalCountrySites();
+  const families = MASS_BIOME_FAMILIES, fields = countryFieldSites(), regional = regionalCountrySites(), activities = countryActivitySites();
   const terrain: MassSpec = {
     id: 'hollow-wake-country', version: 7, addressSpan: 960, terrainCell: 30,
     fields: [
@@ -92,7 +103,7 @@ export function massAdventure(): MassAdventure {
         biome: TILESETS[f.id].biome ?? f.id })),
       { id: 'fallback', source: 'tilesets/downs', priority: 0, when: [], region: 'ground', color: '#31391c', biome: 'downs' },
     ],
-    places: [...regional.map(r => r.recipe), ...fields.map(f=>f.recipe), ...families.map(f => ({ id: f.id + '-habitat', version: 1, content: f.id,
+    places: [...activities.map(a=>a.recipe), ...regional.map(r => r.recipe), ...fields.map(f=>f.recipe), ...families.map(f => ({ id: f.id + '-habitat', version: 1, content: f.id,
       period: 1100, chance: .7, radius: 180, jitter: .7, priority: 1,
       when: [{ field: 'elevation', min: -.1 }, ...f.when] })),
       { id: 'wayside-camp', version: 1, content: 'wayside-camp', period: 1600, chance: .65,
@@ -115,13 +126,19 @@ export function massAdventure(): MassAdventure {
       presenceTable(table, i + 1, id => MONSTERS[id]?.presence)
         .filter(r => MONSTERS[r.id] && !MONSTERS[r.id].habitat)
         .map(r => ({ id: r.id, weight: r.weight }))));
+  const nativeCountry=makeNativeCountrySpec(terrain.terrainCell);
   return freezeData({ terrain, progression, nativeBirthSource: 'worldmass/native-birth-v1', theme: JSON.parse(JSON.stringify(TILESETS.downs.theme)) as ZoneDef['theme'],
+    nativeCountry,
+    geography: {policy:MASS_HIERARCHY_DEFAULT,pyres:nativeMassPyreSources(nativeCountry).filter(p=>p.source==='data/tilesets'),holds:nativeMassHoldSources(nativeCountry).filter(p=>p.source==='data/tilesets'),maxObjectives:8,weather:MASS_WEATHER_DEFAULT,snow:MASS_SNOW_DEFAULT,storms:true},
     bounties: { source: 'worldmass/place-bounties-v1', maxCandidates: 256 },
     survey: {source:'worldmass/sighted-survey-v1',cell:120,radius:480},
     ground: nativeMassGround(families.map(f => ({ surface: f.id, source: 'tilesets/' + f.id, theme: TILESETS[f.id].theme }))),
     territory: { source: 'worldmass/encounter-territory', radius: 620 },
     fieldResidency: { source: 'worldmass/field-residency', retainRadius: 2048, maxResident: 32 },
-    content: [...[...regional, ...fields].map(field=>{
+    shrineResidency: { source: 'worldmass/shrine-residency', retainRadius: 2048, maxResident: 32 },
+    puzzleResidency: { source: 'worldmass/puzzle-residency', retainRadius: 2048, maxResident: 16 },
+    dormancy: { source: 'worldmass/native-dormancy-v1', wakeRadius: 1600, sleepRadius: 2400, quietSeconds: 12 },
+    content: [...activities.map(a=>({id:a.id,source:a.site.source,level:1,count:0,table:[{id:'plains_wolf',weight:1}],site:a.site})), ...[...regional, ...fields].map(field=>{
       const levels=populations(field.roster==='undead'?FACTIONS.undead.table:TILESETS[field.roster].packs.table)
         .map(row=>reserveMassGuardians(row,field.count));
       return {...levels[0],id:field.id,source:field.site.source,count:field.count,levels,site:field.site};

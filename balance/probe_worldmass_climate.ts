@@ -46,6 +46,7 @@ console.log(JSON.stringify(Object.fromEntries(found)));
 function fixture(biome:string,region:string,explicit=true):MassAdventure{
  const c:MassAdventure=JSON.parse(canonical(config));
  delete c.settlement;delete c.journey;delete c.progression;
+ delete c.nativeCountry;delete c.geography; // this fixture supplies all its terrain/content; native country is tested separately
  c.terrain.fields=[];c.terrain.places=[];c.content=[];c.startRadius=0;c.populationRadius=0;c.maxPopulation=0;c.pageRadius=1;
  c.terrain.surfaces=[{id:'fixture',priority:0,when:[],region,biome,color:'#65757a'}];
  const row=JSON.parse(canonical(MASS_CLIMATE_ECOLOGY.find(r=>r.id===biome)!));

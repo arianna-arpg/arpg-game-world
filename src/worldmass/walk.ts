@@ -20,14 +20,19 @@ export class MassWalk implements RegionGrid {
   /** The common lattice keeps native 30-unit walls and geographic 24-unit
    * cells exact for rays/sweeps; path search keeps its bounded coarse lattice. */
   get cellSize(): number {
-    let a = this.stream.generator.spec.terrainCell, b = this.overlay?.grid.cellSize ?? a;
-    while (b) { const r = a % b; a = b; b = r; }
+    let a = this.stream.generator.spec.terrainCell;
+    for (let b of [this.overlay?.grid.cellSize ?? a, this.native?.cellSize ?? a])
+      while (b) { const r = a % b; a = b; b = r; }
     return a;
   }
+  native?: {regionAt(at:MassAddress):string|undefined; readonly revision:number; cellSize:number};
   overlay?: { grid: RegionGrid; contains(x: number, y: number): boolean };
   private cache = new Map<string, Vec2 | null>();
   private regions = new Map<string, string>();
   private regionRevision = -1;
+  private nativeRevision = -1;
+  private cachedNative: MassWalk['native'];
+  private regionCellSize = 0;
   private cacheVersion = '';
   /** Native scenery joins navigation without repainting physical region cells. */
   obstacles?: { blocked(x: number, y: number): boolean; revision(): string };
@@ -39,22 +44,28 @@ export class MassWalk implements RegionGrid {
     this.config = Object.freeze({ ...config });
     for (const n of Object.values(config)) if (!Number.isSafeInteger(n) || n < 1) throw new Error('Invalid navigation budget');
   }
-  get version(): number { return this.stream.state.terrainRevision + (this.overlay?.grid.version ?? 0); }
+  get version(): number { return this.stream.revision + (this.native?.revision ?? 0) + (this.overlay?.grid.version ?? 0); }
   at(x: number, y: number): MassAddress {
     return address(this.origin.dimension, this.origin.cx, this.origin.cy, x, y, this.stream.generator.spec.addressSpan);
   }
   regionAt(x: number, y: number): string {
     if (this.overlay?.contains(x, y)) return this.overlay.grid.regionAt(x, y);
-    const revision = this.stream.state.terrainRevision;
-    if (revision !== this.regionRevision) { this.regions.clear(); this.regionRevision = revision; }
-    // A ray can visit the same physical cell thousands of times per frame.
-    // Keep this local read numeric; durable address normalization is only needed
-    // on a miss. Sparse edits invalidate before the next query, never next frame.
-    const cs = this.stream.generator.spec.terrainCell;
+    const revision = this.stream.revision, nativeRevision = this.native?.revision ?? 0;
+    const cs = this.cellSize;
+    if (revision !== this.regionRevision || nativeRevision !== this.nativeRevision
+      || this.native !== this.cachedNative || cs !== this.regionCellSize) {
+      this.regions.clear(); this.regionRevision = revision;
+      this.nativeRevision = nativeRevision; this.cachedNative = this.native; this.regionCellSize = cs;
+    }
+    // Native terrain participates in the same hot cache as ordinary country.
+    // Ray/sweep queries revisit these cells thousands of times per frame;
+    // resolve cold native truth once, without requiring scenery/page residency.
+    // The common lattice preserves both 30-unit native and geographic edges.
     const gx = Math.floor(x/cs), gy = Math.floor(y/cs), key = gx+','+gy;
     const hit = this.regions.get(key);
     if (hit !== undefined) return hit;
-    const region = this.stream.sample(this.at((gx+.5)*cs,(gy+.5)*cs)).region;
+    const at = this.at((gx+.5)*cs, (gy+.5)*cs);
+    const region = this.native?.regionAt(at) ?? this.stream.sample(at).region;
     this.regions.set(key,region);
     if (this.regions.size > this.config.regionCacheEntries) this.regions.delete(this.regions.keys().next().value!);
     return region;

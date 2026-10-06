@@ -17,6 +17,7 @@ function fixture(kind: 'wayside-camp' | 'pillaged-ruin'): MassAdventure {
   delete config.progression; delete config.journey; delete config.ecology;
   delete config.settlement; // native-town lifecycle has its own probe
   delete config.survey; // legacy lattice fixture retains page-based cartography
+  delete config.nativeCountry;delete config.geography; // legacy 24-unit grid fixture owns its complete terrain
   config.terrain.addressSpan = 768; config.terrain.terrainCell = 24;
   const row = config.content.find(c => c.id === kind)!;
   config.terrain.fields = [];

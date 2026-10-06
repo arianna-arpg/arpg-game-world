@@ -1,3 +1,18 @@
+Native country and geographic ownership use worldmass/nativeFeatures,
+nativeResidency, nativeCountry and geographicGameplay. Surface chunks/zones/
+regions cross continuously; native pyres/rifts/excavations own independent
+progress, bodies and once-only chests, with exact Bounty Board destinations.
+New objectives require local body-clear access; historical births keep their
+frozen locations. Weather uses saved scale epochs; snow/storm clocks have
+physical owners. Worker preparation is bounded with synchronous collision
+fallback. Browser quiet-group paging releases live actors after durable root
+publication; cold Continue still expands history. Native mouths still use scene
+transitions and live frame rebasing remains unbound. See
+docs/design/seamless-exploration-foundations.md for limits and critic evidence.
+Verify native objective/access/worker/paging probes, all type checks, persistence,
+genqa, sim smoke and native-generation/browser-store harnesses. Preserve
+Mireille's authored Watch quests and classic presentation.
+
 Country Bounty Boards and regional native sites are documented in
 `docs/design/seamless-exploration-foundations.md`. Saved physical targets use
 `worldmass/bounties.ts`; `engine/altarBodies.ts` shares actual stone-slab

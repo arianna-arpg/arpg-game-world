@@ -8,6 +8,8 @@ import { MASS_SURFACE_VIEW, paintMassSurfaceDetail } from './surfaceDetail';
 import type { Doodad } from '../engine/levelgen';
 import { massMapSigns, MASS_MAP_SIGNS } from './cartography';
 import { MassGround } from './ground';
+import { mix } from '../render/vis/color';
+import { paintRegionMasonry, paintRegionFoliage } from '../render/vis/regionMaterials';
 import type { MassQuestPin } from './quests';
 import { MASS_MAP_LABELS, placeMassMapLabels, type MapBox, type MassMapLabel } from './mapLabels';
 
@@ -72,13 +74,13 @@ export class MassPainter {
     // Palette blending and solid contours include the neighboring-cell halo.
     let revision = 0;
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++)
-      revision = Math.max(revision, mass.state.terrainRevisionAt(neighborCell(cell, dx, dy)));
+      revision = Math.max(revision, mass.stream.revisionAt(neighborCell(cell, dx, dy)));
     return revision;
   }
   private current(mass: WorldMassRuntime, cell: MassCell, value: {revision:number;checkedRevision:number}): boolean {
-    if (value.checkedRevision === mass.state.terrainRevision) return true;
+    if (value.checkedRevision === mass.stream.revision) return true;
     if (value.revision !== this.revision(mass, cell)) return false;
-    value.checkedRevision = mass.state.terrainRevision;
+    value.checkedRevision = mass.stream.revision;
     return true;
   }
   draw(ctx: CanvasRenderingContext2D, mass: WorldMassRuntime, x: number, y: number, w: number, h: number): void {
@@ -98,7 +100,7 @@ export class MassPainter {
         finishedVisible = true;
         const job = this.pending.get(key);
         const canvas = job && this.current(mass, at, job) ? this.finish(job.work) : this.bake(mass, at);
-        bake = {canvas, revision:this.revision(mass, at), checkedRevision:mass.state.terrainRevision};
+        bake = {canvas, revision:this.revision(mass, at), checkedRevision:mass.stream.revision};
       }
       this.pending.delete(key);
       this.baked.delete(key); this.baked.set(key, bake);
@@ -134,7 +136,7 @@ export class MassPainter {
       const job=this.pending.get(key);
       if (job && this.current(mass,cell,job)) continue;
       this.baked.delete(key);
-      this.pending.set(key,{work:this.bakeSteps(mass,cell),revision:this.revision(mass,cell),checkedRevision:mass.state.terrainRevision});
+      this.pending.set(key,{work:this.bakeSteps(mass,cell),revision:this.revision(mass,cell),checkedRevision:mass.stream.revision});
     }
     // Pending and completed canvases share one residency budget. Never evict
     // visible ground to make room for speculative work.
@@ -208,6 +210,12 @@ export class MassPainter {
     sc.putImageData(pixels, 0, 0);
     ctx.drawImage(small, 0, 0, span, span); yield;
     const solid = new Path2D(), trailSurface = new Path2D();
+    // Renderer texture phase uses the durable address, never the movable hero
+    // frame. This bounded visual period is divisible by native courses (15),
+    // blocks (20) and foliage cells (30); it is not a geography period.
+    const materialPeriod = BigInt(cs * 65536);
+    const materialAxis = (value: string): number => Number((BigInt(value) * BigInt(span) % materialPeriod + materialPeriod) % materialPeriod);
+    const materialX = materialAxis(cell.cx), materialY = materialAxis(cell.cy);
     const detailSurfaces = new Map<string,Path2D>();
     for (let y = 0; y < cols; y++) { for (let x = 0; x < cols; x++) {
       const at = { ...cell, x: x * cs, y: y * cs };
@@ -238,17 +246,37 @@ export class MassPainter {
         }
       }
       if (regionKind(t.region)?.blocks) {
-        // The solid silhouette remains exact, unlike soft soil-color joins.
-        ctx.fillStyle = t.color; ctx.fillRect(x * cs, y * cs, cs, cs);
-        solid.rect(x * cs, y * cs, cs, cs);
+        // Keep native material identity: the same fill, running bond, leaf
+        // clumps and rim the native ground baker uses. A hedge never receives
+        // the generic rock fracture overlay, nor a field wall a cliff texture.
+        const vis = regionKind(t.region)?.visual, px = x * cs, py = y * cs;
+        const fill = vis?.fill ?? t.color;
+        ctx.globalAlpha = vis?.alpha ?? 1;
+        ctx.fillStyle = fill; ctx.fillRect(px, py, cs, cs); ctx.globalAlpha = 1;
+        if (vis) {
+          const dark = mix(fill, '#000000', .42), lit = mix(fill, '#ffffff', .34);
+          if (vis.masonry) paintRegionMasonry(ctx, px, py, cs, materialX, materialY, fill, dark, lit, mass.generator.run.seed);
+          if (vis.foliage) paintRegionFoliage(ctx, px, py, cs, materialX, materialY, fill, dark, lit, mass.generator.run.seed);
+        } else solid.rect(px, py, cs, cs);
         const here = localOffset(at, { ...mass.origin, x: 0, y: 0 }, span)!;
-        ctx.strokeStyle = 'rgba(215,210,188,.42)'; ctx.lineWidth = 3;
-        for (const [dx, dy] of [[0, -1], [-1, 0], [1, 0], [0, 1]]) {
-          if (regionKind(mass.walk.regionAt(here.x + dx * cs + cs / 2, here.y + dy * cs + cs / 2))?.blocks) continue;
-          ctx.beginPath();
-          if (dx) { const edge = (x + (dx > 0 ? 1 : 0)) * cs; ctx.moveTo(edge, y * cs); ctx.lineTo(edge, (y + 1) * cs); }
-          else { const edge = (y + (dy > 0 ? 1 : 0)) * cs; ctx.moveTo(x * cs, edge); ctx.lineTo((x + 1) * cs, edge); }
-          ctx.stroke();
+        const edge = vis?.edge;
+        // Match native semantics: visual walls rim only walkable neighbors.
+        // The themed generic wall retains its existing country silhouette.
+        if (!vis || edge) for (const [dx, dy] of [[0, -1], [-1, 0], [1, 0], [0, 1]]) {
+          const neighbor = regionKind(mass.walk.regionAt(here.x + dx * cs + cs / 2, here.y + dy * cs + cs / 2));
+          if (vis ? !neighbor?.walkable : neighbor?.blocks) continue;
+          if (edge) {
+            const width = Math.min(cs, edge.width ?? 4);
+            ctx.fillStyle = edge.color; ctx.globalAlpha = .9;
+            ctx.fillRect(px + (dx > 0 ? cs - width : 0), py + (dy > 0 ? cs - width : 0), dx ? width : cs, dy ? width : cs);
+            ctx.globalAlpha = 1;
+          } else {
+            ctx.strokeStyle = 'rgba(215,210,188,.42)'; ctx.lineWidth = 3;
+            ctx.beginPath();
+            if (dx) { const ex = (x + (dx > 0 ? 1 : 0)) * cs; ctx.moveTo(ex, py); ctx.lineTo(ex, py + cs); }
+            else { const ey = (y + (dy > 0 ? 1 : 0)) * cs; ctx.moveTo(px, ey); ctx.lineTo(px + cs, ey); }
+            ctx.stroke();
+          }
         }
       }
     } yield; }

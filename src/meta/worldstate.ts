@@ -295,6 +295,7 @@ export interface SavedPlayerSpot {
 }
 
 export interface WorldStateSave {
+  massSideareas?: import('../worldmass/sideareas').MassSideareaSave;
   worldmass?: import('../worldmass/runtime').MassAdventureSave;
   odyssey?: import('../world/odyssey').OdysseyState;
   townPortals?: import('../engine/townportal').TownPortal[];
@@ -664,6 +665,7 @@ export function sanitizeBountyBoard(
     const massBounty = savedMassBounty(x.massBounty, worldmass);
     const countryKind = (MASS_BOUNTY_KINDS as readonly string[]).includes(x.kind);
     if (countryKind !== !!massBounty || x.massBounty && !massBounty
+      || massBounty && (Boolean(massBounty.objective) !== (x.kind === 'country_objective'))
       || massBounty && (x.zoneId !== 'worldmass_expedition' || x.boardId !== 'lastlight')) return null;
     const expedition = x.expedition && typeof x.expedition.map === 'string'
       && typeof x.expedition.anchor === 'string' && !!zones[x.expedition.anchor]

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { SAVE_COMPATIBILITY, isCurrentCharacterSave, saveResetNotice } from '../src/meta/saveCompatibility';
 import { serializeAccount, deserializeAccount, ROSTER_SLOT_BASE } from '../src/meta/account';
-import { serializeCharacter, applySavedCharacter, loadCharacter, loadCharacterAsync, loadRosterSave, charKeyFor, CHAR_SLOT } from '../src/meta/character';
+import { serializeCharacter, applySavedCharacter, loadCharacter, loadCharacterAsync, loadRosterSave, charKeyFor, CHAR_SLOT, writeCharacterMirrorRaw, clearCharacter } from '../src/meta/character';
 import { ACCOUNT_KEY, ACCOUNT_SLOT, SETTINGS_KEY, SETTINGS_SLOT, loadAccountAsync, loadSettingsAsync } from '../src/meta/persistence';
 import { makeSettings, serializeSettings } from '../src/meta/settings';
 import { planSaveImport, SAVE_EXPORT_KIND, SAVE_EXPORT_VERSION } from '../src/meta/portage';
@@ -76,6 +76,8 @@ try {
   window.localStorage.setItem(ACCOUNT_KEY, JSON.stringify(account));
   const reset = await loadAccountAsync();
   assert.equal(reset.credits, 0); assert.deepEqual(reset.roster, []);
+  await writeCharacterMirrorRaw(CHAR_SLOT, JSON.stringify(character));
+  await writeCharacterMirrorRaw(ROSTER_SLOT_BASE, JSON.stringify(character));
   const oldAccountCharacter = { ...character, accountVersion: SAVE_COMPATIBILITY.account - 1 };
   put(CHAR_SLOT, oldAccountCharacter); cache(CHAR_SLOT, character);
   assert.equal(await loadCharacterAsync(), null);
@@ -87,6 +89,7 @@ try {
   console.log('PASS account reset invalidates all characters while settings and authored content remain intact');
 
   // Deliberate deletion wins too, even if the stale mirror has current stamps.
+  await writeCharacterMirrorRaw(CHAR_SLOT, JSON.stringify(character));
   put(CHAR_SLOT, {}); cache(CHAR_SLOT, character);
   assert.equal(await loadCharacterAsync(), null);
   put(ACCOUNT_SLOT, {}); window.localStorage.setItem(ACCOUNT_KEY, JSON.stringify(account));
@@ -96,13 +99,24 @@ try {
   // Static hosting/offline fallback still validates revisions, without writing
   // a wipe to an endpoint whose authoritative save we could not inspect.
   available = false;
-  cache(CHAR_SLOT, character); assert.deepEqual(await loadCharacterAsync(), character);
-  cache(ROSTER_SLOT_BASE, character); assert.deepEqual(await loadRosterSave(ROSTER_SLOT_BASE), character);
+  // A genuine newer run/import releases the previous deletion barrier.
+  await writeCharacterMirrorRaw(CHAR_SLOT, JSON.stringify(character));
+  assert.deepEqual(await loadCharacterAsync(), character);
+  await writeCharacterMirrorRaw(ROSTER_SLOT_BASE, JSON.stringify(character));
+  assert.deepEqual(await loadRosterSave(ROSTER_SLOT_BASE), character);
   cache(CHAR_SLOT, oldRun); assert.equal(await loadCharacterAsync(), null);
   window.localStorage.setItem(ACCOUNT_KEY, JSON.stringify(oldRosterAccount));
   assert.equal((await loadAccountAsync()).roster.length, 0);
   assert.equal((await loadAccountAsync()).credits, 321);
   console.log('PASS endpoint-free storage applies the same reset policy');
+
+  await writeCharacterMirrorRaw(CHAR_SLOT, JSON.stringify(character));
+  clearCharacter(); // deliberately unavailable endpoint: the disk still has an old run
+  put(CHAR_SLOT, character); available = true;
+  assert.equal(await loadCharacterAsync(), null, 'death barrier defeats a stale disk even when its beacon failed');
+  await writeCharacterMirrorRaw(CHAR_SLOT, JSON.stringify(character));
+  assert.deepEqual(await loadCharacterAsync(), character, 'an explicitly newer run can commit after deletion');
+  console.log('PASS synchronous death barrier refuses stale disk resurrection and a newer save releases it');
 
   const envelope = { kind: SAVE_EXPORT_KIND, version: SAVE_EXPORT_VERSION, exportedAt: '2026-09-09',
     account, settings, characters: { [CHAR_SLOT]: character } };

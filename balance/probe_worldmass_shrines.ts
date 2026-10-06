@@ -1,3 +1,4 @@
+import { beforeMassStreaming } from './worldmassFixtures';
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -63,7 +64,7 @@ try {
   assert.deepEqual(contents.shrines[0],{pos:ordinary.pos,id:ordinary.def.id,used:true});
   const native=makeSimWorld('warrior',733);restoreZoneContents(native,contents);
   assert.equal(native.shrines.length,1);assert.equal(native.shrines[0].used,true);
-  const legacy=structuredClone(massAdventure()) as MassAdventure;delete legacy.bounties;delete legacy.journey!.reservePopulation;
+  const legacy=beforeMassStreaming(structuredClone(massAdventure()) as MassAdventure);delete legacy.bounties;delete legacy.journey!.reservePopulation;
   delete legacy.journey!.roadside;delete legacy.settlement!.quests!.acceptance;delete legacy.settlement!.structurePlans;delete legacy.rewards!.earnFrom;
   for(const c of legacy.content)if(c.site){delete c.site.shrines;delete c.site.puzzles;}
   const old=makeSimWorld('warrior',734);new WorldMassRuntime(42,'legacy-shrine',legacy).attach(old);
@@ -73,18 +74,18 @@ try {
   console.log('PASS ordinary zone contents keep native shrines; the expedition owns its own records once; old descriptors gain no new stands');
 
   const full=JSON.parse(JSON.stringify(serializeCharacter(w).world!.worldmass!));
-  assert.equal(full.schema,9);
+  assert.equal(full.schema,11);
   const downgraded={...full,schema:1};
   assert.throws(()=>new WorldMassRuntime(42,'downgraded',full.config,downgraded),/checkpoint/);
   assert.equal(serializeCharacter(old).world!.worldmass!.schema,1,'old descriptors retain their original checkpoint version');
   full.shrines[0].id+='foreign';
   const badWorld=makeSimWorld('warrior',735);
-  assert.throws(()=>new WorldMassRuntime(42,'bad',full.config,full).attach(badWorld,full),/Unknown or displaced/);
+  assert.throws(()=>new WorldMassRuntime(42,'bad',full.config,full).attach(badWorld,full),/Unknown worldmass shrine/);
   assert.throws(()=>new MassShrines([unspent[0],unspent[0]]),/checkpoint/);
   assert.throws(()=>new MassShrines([{...unspent[0],pos:{x:NaN,y:0}}]),/checkpoint/);
   assert.throws(()=>validateMassShrine({...nativeMassShrine('wrath',0,0),def:{...SHRINES[0],duration:-1}},310),/Unsupported/);
   assert.throws(()=>validateMassShrine(nativeMassShrine('wrath',400,0),310),/Unsupported/);
-  const repeated=structuredClone(massAdventure()) as MassAdventure;
+  const repeated=beforeMassStreaming(structuredClone(massAdventure()) as MassAdventure);
   repeated.terrain.places=[...repeated.terrain.places,{...repeated.terrain.places[0],id:'unbounded-shrines',content:'cinderwatch'}];
   assert.throws(()=>new WorldMassRuntime(42,'repeated',repeated),/finite journey owner/);
   const many=structuredClone(massAdventure()) as MassAdventure;

@@ -40,14 +40,15 @@
 // ---------------------------------------------------------------------------
 
 import { isCurrentCharacterSave } from './saveCompatibility';
+import { hasCharacterPages } from './characterPages';
 import {
   deserializeAccount, serializeAccount, ROSTER_SLOT_BASE,
   type AccountSave,
 } from './account';
 import { deserializeSettings, serializeSettings, type SettingsSave } from './settings';
 import {
-  CHAR_SLOT, charKeyFor,
-  loadCharacterAsync, loadRosterSave, type CharacterSave,
+  CHAR_SLOT,
+  loadCharacterAsync, loadRosterSave, writeCharacterMirrorRaw, flushCharacterSaves, type CharacterSave,
 } from './character';
 import {
   ACCOUNT_KEY, ACCOUNT_SLOT, SETTINGS_KEY, SETTINGS_SLOT,
@@ -71,6 +72,7 @@ export interface SaveEnvelope {
 
 /** Gather the current save set through the boot loaders themselves. */
 export async function buildSaveEnvelope(): Promise<SaveEnvelope> {
+  await flushCharacterSaves();
   const account = await loadAccountAsync();
   const settings = await loadSettingsAsync();
   const characters: Record<string, CharacterSave> = {};
@@ -157,7 +159,7 @@ export function planSaveImport(text: string): SaveImportVerdict {
     if (slot !== CHAR_SLOT && slot < ROSTER_SLOT_BASE) {
       return { ok: false, why: `Character slot ${slot} is reserved ground — not a character slot.` };
     }
-    if (!isCurrentCharacterSave(payload)) {
+    if (hasCharacterPages(payload) || !isCurrentCharacterSave(payload)) {
       return { ok: false, why: `The character in slot ${slot} does not match this version's save format.` };
     }
     // Only slots the incoming account CLAIMS are written — an unclaimed
@@ -195,17 +197,20 @@ export function planSaveImport(text: string): SaveImportVerdict {
 export async function applySaveImport(plan: SaveImportPlan): Promise<void> {
   // FIRST: the stand-down. From here to the reload no autosave can write.
   suppressSaves('save import in flight — restarting');
+  // Drain prior writes before replacing slots; an older failed write must not
+  // prevent an explicit import from repairing that slot.
+  try { await flushCharacterSaves(); } catch { /* incoming writes are authoritative */ }
   const disk: Promise<void>[] = [];
   try { window.localStorage.setItem(ACCOUNT_KEY, plan.accountBody); } catch { /* quota — disk still lands */ }
   disk.push(diskPutRaw(ACCOUNT_SLOT, plan.accountBody));
   try { window.localStorage.setItem(SETTINGS_KEY, plan.settingsBody); } catch { /* ignore */ }
   disk.push(diskPutRaw(SETTINGS_SLOT, plan.settingsBody));
   for (const c of plan.characters) {
-    try { window.localStorage.setItem(charKeyFor(c.slot), c.body); } catch { /* ignore */ }
+    await writeCharacterMirrorRaw(c.slot, c.body);
     disk.push(diskPutRaw(c.slot, c.body));
   }
   for (const s of plan.wipeSlots) {
-    try { window.localStorage.removeItem(charKeyFor(s)); } catch { /* ignore */ }
+    await writeCharacterMirrorRaw(s, null);
     disk.push(diskPutRaw(s, '{}')); // the resetAccount idiom: mismatch → fresh default
   }
   await Promise.all(disk);

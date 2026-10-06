@@ -1,3 +1,4 @@
+import { beforeMassStreaming } from './worldmassFixtures';
 import assert from 'node:assert/strict';
 import {makeSimWorld} from '../src/sim/arena';
 import {seedGlobalRandom} from '../src/sim/rng';
@@ -16,7 +17,7 @@ import {SUPPORTS} from '../src/data/supports';
 
 const guts=(w:World)=>w as unknown as {puzzles:PuzzleRun[];puzzleStruck(n:Actor,p:Actor,wounding:boolean):void;updatePuzzles(dt:number):void};
 const fresh=(id='magician',legacy=false)=>{
- const w=makeSimWorld(id,42),c=structuredClone(massAdventure()) as MassAdventure;if(legacy){delete c.bounties;delete c.journey!.reservePopulation;delete c.rewards!.earnFrom;}
+ const w=makeSimWorld(id,42),c=structuredClone(massAdventure()) as MassAdventure;if(legacy){beforeMassStreaming(c);delete c.bounties;delete c.journey!.reservePopulation;delete c.rewards!.earnFrom;}
  new WorldMassRuntime(42,'puzzle-reward',c).attach(w);
  const p=w.massRuntime!.journey!.places.find(p=>p.content==='memorial-grove')!;
  w.landPartyAt(w.massRuntime!.journey!.local(p));w.massRuntime!.update(w,true);
@@ -85,7 +86,7 @@ try{
  const sealed=fresh();sealed.zone={...sealed.zone,spoils:'none'};solve(sealed);assert.equal(sealed.explorationRewardOffers().length,0);
  const duplicate=fresh();assert.ok(duplicate.massRuntime!.rewards.earn(duplicate,'cache-already-earned','Earlier cache'));
  solve(duplicate);assert.equal(duplicate.massRuntime!.rewards.snapshot().length,1,'cache and puzzle share one budget');
- const checkpoint=m.snapshot(w);assert.equal(checkpoint.schema,9);
+ const checkpoint=m.snapshot(w);assert.equal(checkpoint.schema,11);
  assert.throws(()=>new WorldMassRuntime(42,'downgrade',checkpoint.config,{...checkpoint,schema:6}),/checkpoint/);
  for(const bad of [[],['unknown'],['puzzle','puzzle'],null,'puzzle'])
   assert.throws(()=>validateMassRewards({...massAdventure().rewards!,earnFrom:bad} as never),/triggers/);

@@ -1,3 +1,4 @@
+import { beforeMassStreaming } from './worldmassFixtures';
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -54,9 +55,11 @@ try{
  assert.deepEqual(resumed!.massRuntime!.puzzles.snapshot(resumed!),snapshot,'exact partial board, life and remaining hum; no registry reroll');
  const rr=guts(resumed!).puzzles.find(r=>r.id===run.id)!;
  assert.deepEqual(rr.nodes.map(n=>n.tone),run.nodes.map(n=>n.tone));
- const same=canonical(resumed!.massRuntime!.puzzles.snapshot(resumed!));
+ const same=resumed!.massRuntime!.puzzles.snapshot(resumed!).find(r=>r.id===run.id)!;
  resumed!.player.pos={x:-18000,y:-18000};resumed!.massRuntime!.update(resumed!,true);
- assert.equal(canonical(resumed!.massRuntime!.puzzles.snapshot(resumed!)),same);
+ const dormant=resumed!.massRuntime!.puzzles.snapshot(resumed!).find(r=>r.id===run.id)!;
+ assert.deepEqual(dormant.progress,same.progress);assert.deepEqual(dormant.place,same.place);
+ assert.equal(dormant.resident,false);assert.equal(guts(resumed!).puzzles.some(r=>r.id===run.id),false);
  assert.equal(resumed!.puzzleViews().some(r=>r.id===run.id),false,'distant placed riddles do not flood the current zone panel');
  const far=resume(resumed!);assert.deepEqual(far.massRuntime!.puzzles.snapshot(far),resumed!.massRuntime!.puzzles.snapshot(resumed!));
  far.player.pos={...rr.at};far.massRuntime!.update(far,true);
@@ -91,12 +94,12 @@ try{
  assert.equal(canonical(done.massRuntime!.snapshot(done).contents),contents,'solved strikes cannot pay again');
  console.log('PASS legitimate native solve and finishing wash, solved progress/loot Continue and one-shot reward latch');
 
- const legacy=structuredClone(massAdventure()) as MassAdventure;delete legacy.bounties;delete legacy.journey!.reservePopulation;delete legacy.settlement!.quests!.acceptance;delete legacy.settlement!.structurePlans;delete legacy.rewards!.earnFrom;
+ const legacy=beforeMassStreaming(structuredClone(massAdventure()) as MassAdventure);delete legacy.bounties;delete legacy.journey!.reservePopulation;delete legacy.settlement!.quests!.acceptance;delete legacy.settlement!.structurePlans;delete legacy.rewards!.earnFrom;
  for(const c of legacy.content)if(c.site)delete c.site.puzzles;
  const oldWorld=makeSimWorld('warrior',840);new WorldMassRuntime(42,'old-puzzle',legacy).attach(oldWorld);
  assert.equal(oldWorld.massRuntime!.snapshot(oldWorld).schema,3);
  assert.equal(resume(oldWorld).massRuntime!.puzzles.population,0);
- const saved=m.snapshot(w);assert.equal(saved.schema,9);
+ const saved=m.snapshot(w);assert.equal(saved.schema,11);
  assert.throws(()=>new WorldMassRuntime(42,'bad',saved.config,{...saved,schema:3}),/checkpoint/);
  const unknown=structuredClone(saved);unknown.puzzles![0].id='foreign';
  assert.throws(()=>new WorldMassRuntime(42,'bad',unknown.config,unknown).attach(makeSimWorld('warrior',845),unknown),/Unknown worldmass puzzle/);
@@ -109,7 +112,7 @@ try{
  assert.throws(()=>validateMassPuzzle({...row,spec:{...row.spec,scramble:[0,0]}},330),/Unsupported/);
  assert.throws(()=>validateMassPuzzle({...row,spec:{...row.spec,kind:'refrain'}},330),/Unsupported/);
  assert.throws(()=>validateMassPuzzle({...row,x:300},330),/exceeds/);
- const repeated=structuredClone(massAdventure()) as MassAdventure;
+ const repeated=beforeMassStreaming(structuredClone(massAdventure()) as MassAdventure);
  repeated.terrain.places=[...repeated.terrain.places,{...repeated.terrain.places[0],id:'unbounded-puzzle',content:'memorial-grove',radius:330}];
  assert.throws(()=>new WorldMassRuntime(42,'repeated',repeated),/finite journey owner/);
  console.log('PASS legacy descriptors unchanged, schema downgrade and invalid owner/progress/geometry refuse, atomic shared-budget admission');

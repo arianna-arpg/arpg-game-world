@@ -37,6 +37,7 @@ console.log('PASS native level/habitat/presence gates, snapshotted plans, stable
 function config():MassAdventure{
   const c:MassAdventure=JSON.parse(canonical(preset));
   delete c.settlement;delete c.journey;delete c.ecology;delete c.progression;
+ delete c.nativeCountry;delete c.geography; // this fixture supplies all its terrain/content; native country is tested separately
   c.startRadius=0;c.maxPopulation=4;c.populationRadius=1000;
   c.terrain.fields=[];c.terrain.surfaces=[{id:'flat',priority:0,when:[],region:'ground',color:'#445544',biome:'tundra'}];
   c.terrain.places=[{id:'formation',version:1,content:'formation',period:1200,chance:1,radius:240,jitter:0,priority:1,when:[]}];
