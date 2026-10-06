@@ -1,3 +1,4 @@
+import { ALTAR_BODY } from '../engine/altarBodies';
 import { combatTargetStrength } from './vis/combatTargets';
 import { buffReadoutLines, drawBuffReadout } from './vis/buffReadout';
 import { drawSkillIcon } from './skillIcons';
@@ -4412,12 +4413,14 @@ export class Renderer {
       // The altar itself: foot course, slab, chisel light.
       drawShadow(ctx, x, y + 3, 15, 0.5);
       ctx.fillStyle = shade(ramp.base, -0.14);
-      ctx.fillRect(x - 14, y - 2, 28, 13);
+      ctx.fillRect(x - ALTAR_BODY.halfWidth, y + ALTAR_BODY.offsetY - ALTAR_BODY.halfHeight,
+        ALTAR_BODY.halfWidth * 2, ALTAR_BODY.halfHeight * 2);
       ctx.fillStyle = ramp.base;
       ctx.fillRect(x - 12, y - 11, 24, 14);
       ctx.strokeStyle = withAlpha(ramp.outline, 0.9);
       ctx.lineWidth = 1.3;
-      ctx.strokeRect(x - 14, y - 2, 28, 13);
+      ctx.strokeRect(x - ALTAR_BODY.halfWidth, y + ALTAR_BODY.offsetY - ALTAR_BODY.halfHeight,
+        ALTAR_BODY.halfWidth * 2, ALTAR_BODY.halfHeight * 2);
       ctx.strokeRect(x - 12, y - 11, 24, 14);
       ctx.fillStyle = withAlpha(ramp.light, 0.4);
       ctx.fillRect(x - 12, y - 11, 24, 3);

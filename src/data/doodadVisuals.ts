@@ -29,6 +29,7 @@ const WATER_LOOK = {
 };
 
 export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
+  altar_plinth: { painter: 'altarBody', order: 58 }, // the native altar pass paints its physical slab
   service_sign_oracle: { painter: 'serviceSign', order: 59, params: { name: 'Oracle’s House', glyph: '◉', color: '#c7adeb' } },
   service_sign_inn: { painter: 'serviceSign', order: 59, params: { name: 'Mireille’s Inn', glyph: '☾', color: '#e4c580' } },
   service_sign_smith: { painter: 'serviceSign', order: 59, params: { name: 'Brandt’s Blacksmithery', glyph: '⚒', color: '#eba977' } },

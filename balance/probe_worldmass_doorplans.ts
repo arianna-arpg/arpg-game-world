@@ -9,7 +9,7 @@ import {serializeCharacter,applySavedCharacter} from '../src/meta/character';
 import {canonical} from '../src/worldmass/random';
 
 const original=canonical([STRUCTURES.inn,STRUCTURES.waking_house]);
-const config=()=>{const c=structuredClone(massAdventure()) as MassAdventure;delete c.journey!.reservePopulation;delete c.rewards!.earnFrom;return c;};
+const config=()=>{const c=structuredClone(massAdventure()) as MassAdventure;delete c.bounties;delete c.journey!.reservePopulation;delete c.rewards!.earnFrom;return c;};
 const fresh=(id='magician',legacy=false,seed=42)=>{
  const w=makeSimWorld(id,seed),c=config();if(legacy)delete c.settlement!.structurePlans;
  new WorldMassRuntime(seed,'broad-door-'+seed,c).attach(w);return w;

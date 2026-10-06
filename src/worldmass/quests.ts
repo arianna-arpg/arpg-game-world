@@ -1,3 +1,4 @@
+import { massBountyLocal, massBountyPlace } from './bounties';
 import { MASS_ZONE, type MassAdventure } from './preset';
 import type { WorldMassRuntime, MassAdventureSave } from './runtime';
 import type { SavedQuestEntry } from '../meta/worldstate';
@@ -93,7 +94,17 @@ export function massQuestTarget(mass: WorldMassRuntime, entry: SavedQuestEntry, 
 export function massQuestPins(world: World): MassQuestPin[] {
   const mass = world.massRuntime;
   if (!mass) return [];
-  return world.activeQuests.flatMap((entry): MassQuestPin[] => {
+  const massBountyPins = world.bountyHands.flatMap((p): MassQuestPin[] => {
+    const place = massBountyPlace(mass, p.massBounty);
+    if (!place) return [];
+    if (world.handState(p) === 'ready') {
+      const board = world.bountyBoardsHere().find(b => b.id === p.boardId);
+      return board ? [{ ...board.pos, radius: 40, label: 'Return to the Bounty Board', ready: true }] : [];
+    }
+    return [{ ...massBountyLocal(mass, place), radius: place.radius,
+      label: mass.config.content.find(c => c.id === place.content)!.site!.name, ready: false }];
+  });
+  return massBountyPins.concat(world.activeQuests.flatMap((entry): MassQuestPin[] => {
     if (!entry.placeId || entry.directionsKnown === false) return [];
     const place = massQuestDestination(mass, entry.questId);
     if (!place || place.id !== entry.placeId) return [];
@@ -104,5 +115,5 @@ export function massQuestPins(world: World): MassQuestPin[] {
       return body ? [{ ...body.pos, radius: body.radius + world.player.radius, label: 'Return to ' + (MONSTERS[body.defId!]?.name ?? 'the giver'), ready: true }] : [];
     }
     return [{ ...mass.journey!.local(place), radius: place.radius, label: mass.config.content.find(c => c.id === place.content)!.site!.name, ready: false }];
-  });
+  }));
 }

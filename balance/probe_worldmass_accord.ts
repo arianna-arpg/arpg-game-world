@@ -49,7 +49,7 @@ try{
  }
  const after=cm.snapshot(crowded);
  for(const old of retained)assert.deepEqual(after.enemies.find(e=>e.id===old.id),old,'reservation never evicts or heals a retained body');
- assert.equal(after.schema,8);const again=resume(crowded);
+ assert.equal(after.schema,9);const again=resume(crowded);
  assert.deepEqual(again.massRuntime!.snapshot(again).enemies,after.enemies);
  assert.deepEqual(again.massRuntime!.puzzles.snapshot(again),after.puzzles);
  assert.throws(()=>new WorldMassRuntime(99871,'old',after.config,{...after,schema:7}),/checkpoint/);
@@ -96,7 +96,7 @@ try{
  const small=makeSimWorld('warrior',9152);new WorldMassRuntime(42,'small',tiny).attach(small);arrive(small);
  assert.equal(guts(small).puzzles.some(r=>r.spec.kind==='accord'),false,'never admit a partial pair court');
  const legacy=structuredClone(massAdventure()) as MassAdventure;
- delete legacy.journey!.reservePopulation;
+ delete legacy.bounties;delete legacy.journey!.reservePopulation;
  legacy.content=legacy.content.filter(c=>c.id!=='paired-stones');legacy.journey!.extensions=legacy.journey!.extensions!.filter(e=>e.content!=='paired-stones');
  const old=makeSimWorld('warrior',9124);new WorldMassRuntime(42,'legacy',legacy).attach(old);
  assert.equal(old.massRuntime!.journey!.places.length,7);assert.equal(resume(old).massRuntime!.journey!.places.length,7);

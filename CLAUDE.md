@@ -1,3 +1,10 @@
+Country Bounty Boards and regional native sites are documented in
+`docs/design/seamless-exploration-foundations.md`. Saved physical targets use
+`worldmass/bounties.ts`; `engine/altarBodies.ts` shares actual stone-slab
+footprints with the native altar renderer. Verify the worldmass, altar_bodies,
+regional and native bounty probes, genqa, simulation smoke and
+`balance/exploration-foundations-ui.cjs` in the isolated preview profile.
+
 World text rollback: main now owns hover-name selection/text/style and item-label
 placement. Combat floats keep native positions; saved SPREAD values are ignored.
 This supersedes historical name/reward packing and combat-hush notes below.

@@ -9276,6 +9276,7 @@ const rootHairs: GroupPainter = (env, group, def) => {
 };
 
 export const PAINTERS: Record<string, GroupPainter> = {
+  altarBody: () => {}, // drawAltars owns the slab and field together; never paint a second body here.
   creatureTerrain,
   wheatStalk, windmillTower, chimneyStack, hideRack, targetButt, sewerGrate, lightShaft, culvertStair,
   trackGroove, shearDisc, rimeFlail, bumperDome, rollingStone, floorPlate, dartBolt,

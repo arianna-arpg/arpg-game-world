@@ -41,10 +41,13 @@ for (const seed of [1, 42, 451, 7108, 99871]) {
     assert.ok(puzzle ? m.puzzles.owns(place.id) : chest, 'opening sites have native playable activities: '+JSON.stringify({seed,content:place.content,population:m.population,capacity:m.config.maxPopulation,center}));
     const native = m.snapshot(w).enemies.find(e => e.id === canonical([place.id, 0]));
     assert.ok(puzzle ? w.puzzleViews().length : native, 'opening content is an activity, not a marker');
+    const puzzleId = puzzle ? canonical([place.id, 'puzzle', m.config.content.find(c => c.id === place.content)!.site!.puzzles![0].id]) : null;
+    const target = chest?.pos ?? w.actors.find(a => a.puzzleNode?.id === puzzleId && a.puzzleNode.idx === 0)?.pos;
+    assert.ok(target, 'native activity has a physical interaction point');
     for (const dx of [-.85, .85]) {
       const approach = m.walk.snapToWalkable({ x: center.x + place.radius * dx, y: center.y });
       m.walk.beginFrame();
-      assert.ok(m.walk.reachable(approach, chest?.pos ?? center), 'cache reachable from both sides');
+      assert.ok(m.walk.reachable(approach, target), 'native cache or puzzle node reachable from both sides');
     }
     assert.ok(m.placesInCell(place.center).some(p => p.id === place.id));
     const intersecting = m.placesInCell(place.center).filter(p => p.id !== place.id);

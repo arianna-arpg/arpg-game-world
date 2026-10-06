@@ -11,6 +11,7 @@ import { openingPopulation, reserveMassGuardians } from './population';
 import { STARTER_SUPPORTS } from '../meta/account';
 import type { MassSiteSpec } from './sites';
 import { countryOutposts } from './countryOutposts';
+import { regionalCountrySites } from './regionalSites';
 import { MASS_BIOME_FAMILIES, MASS_CLIMATE_ECOLOGY } from './biomes';
 import { nativeMassEncounters } from './encounters';
 import { countryFieldSites } from './fieldSites';
@@ -28,6 +29,7 @@ export interface MassContent extends MassPopulation {
   magicPack?: { source: string; mechanic: string };
 }
 export interface MassAdventure {
+  bounties?: import('./bounties').MassBountySpec;
   /** Optional sight-admitted map memory; omitted descriptors keep page discovery. */
   survey?: import('./survey').MassSurveySpec;
   /** Optional saved native ground palettes; omitted descriptors keep their original face. */
@@ -55,7 +57,7 @@ export interface MassAdventure {
 /** Snapshot existing content vocabulary, then own it for this run. Future
  * packages can supply another descriptor without replacing engine rules. */
 export function massAdventure(): MassAdventure {
-  const families = MASS_BIOME_FAMILIES, fields = countryFieldSites();
+  const families = MASS_BIOME_FAMILIES, fields = countryFieldSites(), regional = regionalCountrySites();
   const terrain: MassSpec = {
     id: 'hollow-wake-country', version: 7, addressSpan: 960, terrainCell: 30,
     fields: [
@@ -90,7 +92,7 @@ export function massAdventure(): MassAdventure {
         biome: TILESETS[f.id].biome ?? f.id })),
       { id: 'fallback', source: 'tilesets/downs', priority: 0, when: [], region: 'ground', color: '#31391c', biome: 'downs' },
     ],
-    places: [...fields.map(f=>f.recipe), ...families.map(f => ({ id: f.id + '-habitat', version: 1, content: f.id,
+    places: [...regional.map(r => r.recipe), ...fields.map(f=>f.recipe), ...families.map(f => ({ id: f.id + '-habitat', version: 1, content: f.id,
       period: 1100, chance: .7, radius: 180, jitter: .7, priority: 1,
       when: [{ field: 'elevation', min: -.1 }, ...f.when] })),
       { id: 'wayside-camp', version: 1, content: 'wayside-camp', period: 1600, chance: .65,
@@ -114,11 +116,12 @@ export function massAdventure(): MassAdventure {
         .filter(r => MONSTERS[r.id] && !MONSTERS[r.id].habitat)
         .map(r => ({ id: r.id, weight: r.weight }))));
   return freezeData({ terrain, progression, nativeBirthSource: 'worldmass/native-birth-v1', theme: JSON.parse(JSON.stringify(TILESETS.downs.theme)) as ZoneDef['theme'],
+    bounties: { source: 'worldmass/place-bounties-v1', maxCandidates: 256 },
     survey: {source:'worldmass/sighted-survey-v1',cell:120,radius:480},
     ground: nativeMassGround(families.map(f => ({ surface: f.id, source: 'tilesets/' + f.id, theme: TILESETS[f.id].theme }))),
     territory: { source: 'worldmass/encounter-territory', radius: 620 },
     fieldResidency: { source: 'worldmass/field-residency', retainRadius: 2048, maxResident: 32 },
-    content: [...fields.map(field=>{
+    content: [...[...regional, ...fields].map(field=>{
       const levels=populations(field.roster==='undead'?FACTIONS.undead.table:TILESETS[field.roster].packs.table)
         .map(row=>reserveMassGuardians(row,field.count));
       return {...levels[0],id:field.id,source:field.site.source,count:field.count,levels,site:field.site};

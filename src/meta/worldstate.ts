@@ -1,3 +1,4 @@
+import { savedMassBounty, MASS_BOUNTY_KINDS } from '../worldmass/bounties';
 import { empowermentRank } from '../engine/skillEmpowerment';
 // ---------------------------------------------------------------------------
 // WORLDSTATE PERSISTENCE — the world half of a saved run.
@@ -652,7 +653,7 @@ export function sanitizeVendorHolds(
  *  the slate is persisted state, not a derivation (the live-world pool
  *  divergence — see WorldStateSave.bountyBoard). */
 export function sanitizeBountyBoard(
-  raw: unknown, zones: Record<string, ZoneDef>,
+  raw: unknown, zones: Record<string, ZoneDef>, worldmass?: import('../worldmass/runtime').MassAdventureSave,
 ): BountyBoardSave | null {
   if (!raw || typeof raw !== 'object') return null;
   const bb = raw as BountyBoardSave;
@@ -660,13 +661,17 @@ export function sanitizeBountyBoard(
     const x = p as BountyPosting | null;
     if (!x || typeof x !== 'object') return null;
     if (typeof x.id !== 'string' || typeof x.kind !== 'string' || !BOUNTY_KINDS[x.kind]) return null;
+    const massBounty = savedMassBounty(x.massBounty, worldmass);
+    const countryKind = (MASS_BOUNTY_KINDS as readonly string[]).includes(x.kind);
+    if (countryKind !== !!massBounty || x.massBounty && !massBounty
+      || massBounty && (x.zoneId !== 'worldmass_expedition' || x.boardId !== 'lastlight')) return null;
     const expedition = x.expedition && typeof x.expedition.map === 'string'
       && typeof x.expedition.anchor === 'string' && !!zones[x.expedition.anchor]
       && isFiniteNum(x.expedition.seed) && isFiniteNum(x.expedition.level) && x.expedition.level >= 1
       ? { ...x.expedition, level: Math.floor(x.expedition.level) } : undefined;
     if (x.kind === 'expedition' && !expedition) return null;
     if (typeof x.boardId !== 'string' || typeof x.zoneId !== 'string'
-      || (!zones[x.zoneId] && !(expedition && x.acceptAt === undefined))) return null;
+      || (!zones[x.zoneId] && !massBounty && !(expedition && x.acceptAt === undefined))) return null;
     if (!isFiniteNum(x.beat)) return null;
     // Preserve every valid component of the frozen reward bundle.
     const raw = x.pay ?? {};
@@ -754,6 +759,7 @@ export function sanitizeBountyBoard(
     return {
       id: x.id, kind: x.kind, boardId: x.boardId, zoneId: x.zoneId,
       beat: Math.floor(x.beat), pay,
+      ...(massBounty ? { massBounty } : {}),
       ...(x.failed === true ? { failed: true } : {}),
       ...(x.face === 'omen' || x.face === 'lift' ? { face: x.face } : {}),
       ...(x.locked === true ? { locked: true } : {}),

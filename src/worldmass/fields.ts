@@ -1,3 +1,4 @@
+import { syncAltarBodies } from '../engine/altarBodies';
 import type { Altar, World } from '../engine/world';
 import { ALTARS, type AltarDef } from '../data/shrines';
 import { STAT_DEFS } from '../engine/stats';
@@ -62,6 +63,7 @@ function detachFields(world: World, removed: Set<Altar>): void {
     if(removed.has(altar))altar.affected.clear();
   });
   world.altars=remaining;
+  syncAltarBodies(world);
   for(const row of rekey)row.actor.sheet.setSource(row.source,row.mods);
 }
 
@@ -123,6 +125,7 @@ export class MassFields {
       if(this.policy)this.owners.set(id,{id:place.id,center:{...place.center}});
       this.live.set(id,altar);world.altars.push(altar);
     }
+    syncAltarBodies(world);
   }
   restoreAdmitted(world: World, places: readonly MassPlace[], resolve: (p:MassPlace)=>FieldContext,
     locate?: (owner: FieldOwner)=>MassPlace | undefined): void {

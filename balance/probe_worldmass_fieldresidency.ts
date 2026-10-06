@@ -128,7 +128,8 @@ for(const [id,example] of Object.entries(generatedExamples)){
  world.landPartyAt(localOffset(place.center,{...runtime.origin,x:0,y:0},960));runtime.update(world,true);
  const field=world.altars.find(a=>a.massSource===canonical([place.id,'altar',runtime.config.content.find(c=>c.id===id)!.site!.altars![0].id]))!;
  assert.ok(field,'generated native field admitted with its garrison');
- assert.ok(!world.pointInSolid(field.pos.x,field.pos.y,16));
+ assert.equal(world.pointInSolid(field.pos.x,field.pos.y,16)?.kind,'altar_plinth');
+ assert.ok(!world.pointInSolid(field.pos.x+50,field.pos.y,16),'a body-clear approach remains beside the altar');
  const chest=world.chests.find(c=>c.rewardSource===canonical([place.id,'cache']))!;
  assert.ok(chest&&!world.pointInSolid(chest.pos.x,chest.pos.y,20));
  for(const a of world.actors)if(a!==world.player)a.dead=true;

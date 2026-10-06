@@ -1,3 +1,5 @@
+import { dealMassBounties, massBountiesAvailable, massBountyAccept, massBountyRoute } from '../worldmass/bounties';
+import { syncAltarBodies } from './altarBodies';
 import { skillInstanceName, treeInstanceNodeRanks, treePointBudget } from './skillEmpowerment';
 import { skillMergePlan } from './skillMerge';
 import { updateCastAim } from './castAim';
@@ -7256,6 +7258,7 @@ export class World {
         this.altars.push({ pos: this.clampPos(vec(at.x, at.y), 16), def: adef, affected: new Set() });
       }
     }
+    syncAltarBodies(this);
     // The purchased ground's FORM (data/pocketForms.ts): a pocket wears the
     // shape it was minted with — the treasure litter below and the ambient-
     // event gate both read it. Null on ordinary ground.
@@ -18236,7 +18239,7 @@ export class World {
     // questDefOf resolves a taken posting's generated def only while its
     // hand is seated (the resolver seam; docs/design/bounty-board.md §2:
     // without this order every accepted bounty silently dies on reload).
-    const bb = sanitizeBountyBoard(ws.bountyBoard, healed);
+    const bb = sanitizeBountyBoard(ws.bountyBoard, healed, ws.worldmass);
     this.bountyBoardState = {};
     this.boardStateOf(BOUNTY_BOARD_CFG.boardId).armedBeat = bb?.armedBeat ?? -1;
     this.boardStateOf(BOUNTY_BOARD_CFG.boardId).refreshSeq = bb?.refreshSeq ?? 0;
@@ -24489,7 +24492,7 @@ export class World {
     if (owed.length) {
       return { pos: b.pos, text: owed.every(h => h.state === 'failed') ? 'Linger to hand the failed posting back.' : 'Linger to turn in the writ.' };
     }
-    return { pos: b.pos, text: this.graphWorkAvailable() ? 'Linger to read the postings.' : 'No hunts are posted for this country yet.' };
+    return { pos: b.pos, text: this.graphWorkAvailable() || massBountiesAvailable(this, b.id) ? 'Linger to read the postings.' : 'No hunts are posted for this country yet.' };
   }
 
   /** THE RESOLVED HANDS at a board: every held posting issued by `boardId`
@@ -24840,6 +24843,15 @@ export class World {
    *  dedupe with THE JUICING LEAN on overlapped ground, and the board's
    *  own band scope (the starter band is Lastlight's alone). */
   armBountyBoard(boardId: string = BOUNTY_BOARD_CFG.boardId): void {
+    if (massBountiesAvailable(this, boardId)) {
+      this.reconcileBounties();
+      const beat = this.bountyBeat(), bs = this.boardStateOf(boardId);
+      const offers = dealMassBounties(this, boardId, beat, bs.refreshSeq, bs.armedBeat === beat,
+        (level, rng) => this.pickBountyGemId(level, rng));
+      this.bountyOffers = [...this.bountyOffers.filter(p => p.boardId !== boardId || !p.massBounty), ...offers];
+      bs.armedBeat = beat; this.charDirty = true;
+      return;
+    }
     if (!this.graphWorkAvailable()) return;
     this.reconcileBounties();
     const beat = this.bountyBeat();
@@ -25122,11 +25134,12 @@ export class World {
    *  lift (a charge on veiled ground tells you the way — ruled; the errand
    *  kind alone will keep discovery the ask). */
   acceptBounty(id: string, _seat: Seat = this.localSeat): boolean {
-    if (!this.graphWorkAvailable()) return false;
+    if (!this.graphWorkAvailable() && !massBountiesAvailable(this)) return false;
     this.reconcileBounties();
     const i = this.bountyOffers.findIndex(p => p.id === id);
     if (i < 0) return false;
     const p = this.bountyOffers[i];
+    if (this.massRuntime && (!p.massBounty || massBountyAccept(this, p)) || !this.massRuntime && p.massBounty) return false;
     const row = BOUNTY_KINDS[p.kind];
     if (!row) return false;
     const cap = QUEST_CATEGORY_CAPS.bounty ?? 1;
@@ -25145,7 +25158,7 @@ export class World {
     // seal its accept with a world act, run BEFORE the hand seats; a
     // refusal (the room filled between the arm and the take) strikes the
     // posting with its courtesy — the stale-offer race law.
-    if (p.pay.level !== undefined && !this.bountyApproaches(p.boardId, false).has(p.expedition?.anchor ?? p.zoneId)) {
+    if (!p.massBounty && p.pay.level !== undefined && !this.bountyApproaches(p.boardId, false).has(p.expedition?.anchor ?? p.zoneId)) {
       this.notice('The approach is blocked or beyond this board’s travel budget. The posting remains on the slate.', BOUNTY_BOARD_CFG.accent, 14, 'civic');
       return false;
     }
@@ -25448,14 +25461,14 @@ export class World {
     const writs = boardId !== BOUNTY_BOARD_CFG.boardId && boardId === this.zone.id && hold?.state === 'open'
       ? { restSec: Math.max(0, (hold.writsAt ?? 0) - this.time) } : undefined;
     return {
-      ...(!this.graphWorkAvailable() ? { unavailable: 'No hunts are posted for this country yet.' } : {}),
+      ...(!this.graphWorkAvailable() && !massBountiesAvailable(this, boardId) ? { unavailable: 'No hunts are posted for this country yet.' } : {}),
       countdown: (this.bountyBeat() + 1) * this.bountyBeatSeconds() - this.time,
       ...(writs ? { coastWrits: writs } : {}),
       ...(receipt ? { receipt } : {}),
-      offers: this.graphWorkAvailable() ? this.bountyOffers.filter(o => o.boardId === boardId).map(face) : [],
+      offers: this.bountyOffers.filter(o => o.boardId === boardId && (this.graphWorkAvailable() ? !o.massBounty : massBountiesAvailable(this, boardId) && !!o.massBounty)).map(face),
       // THE READINESS LAW: the card's state is the one fold (handState).
       hands: this.bountyHands.filter(h => h.boardId === boardId).map(p => ({ ...face(p), state: this.handState(p),
-        ...(!this.graphWorkAvailable() && this.handState(p) === 'afield'
+        ...(!this.graphWorkAvailable() && !p.massBounty && this.handState(p) === 'afield'
           ? { route: 'Destination unavailable in this expedition' } : {}) })),
     };
   }
@@ -28863,7 +28876,8 @@ export class World {
         // The journal names ground by the map's own fog seam (World.visible):
         // a lifted charge reads its name here as on the chart; an omen-face
         // errand's veiled seat stays the ask.
-        target: e.placeId && this.massRuntime ? standing === 'ready' ? 'Return to ' + home.counter + ' at ' + (homeName ?? 'the settlement')
+        target: p?.massBounty ? standing === 'ready' ? 'Return to the Bounty Board at Lastlight' : massBountyRoute(this, p)
+          : e.placeId && this.massRuntime ? standing === 'ready' ? 'Return to ' + home.counter + ' at ' + (homeName ?? 'the settlement')
           : massQuestTarget(this.massRuntime, e, this.player.pos)
           : !this.graphWorkAvailable() && standing === 'afield' ? 'Destination unavailable in this expedition'
           : z ? (this.visible(z) ? z.name : e.directionsKnown === false

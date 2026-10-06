@@ -21,7 +21,7 @@ const prepare=(mass:boolean)=>{
  for(const flag of townStationFeatures())w.account.features.add(flag);
  w.account.features.add(FEATURE.BRANDT_MAGIC_WARES);
  if(mass){
-  const config=JSON.parse(canonical(massAdventure()));delete config.settlement.quests;
+  const config=JSON.parse(canonical(massAdventure()));delete config.settlement.quests;delete config.bounties;
   new WorldMassRuntime(941,'legacy-unbound-work',config).attach(w);
  }else w.loadZone('lastlight');
  w.player.level=100;w.player.invulnerable=true;

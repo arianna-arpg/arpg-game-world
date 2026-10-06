@@ -326,6 +326,8 @@ export interface BountyPay {
  *  ledger (credited at the kill chokepoint — readable from anywhere,
  *  wipe-proof: re-entry re-posts the remainder). */
 export interface BountyPosting {
+  /** A generated physical destination, independent of the finite zone graph. */
+  massBounty?: import('../worldmass/bounties').MassBountyTarget;
   id: string;
   kind: string;
   boardId: string;
@@ -370,6 +372,7 @@ export interface BountyPosting {
 export function clonePosting(p: BountyPosting): BountyPosting {
   return {
     id: p.id, kind: p.kind, boardId: p.boardId, zoneId: p.zoneId, beat: p.beat,
+    ...(p.massBounty ? { massBounty: { ...p.massBounty, center: { ...p.massBounty.center } } } : {}),
     pay: {
       ...(p.pay.level !== undefined ? { level: p.pay.level } : {}),
       ...(p.pay.budget ? { budget: { ...p.pay.budget } } : {}),
