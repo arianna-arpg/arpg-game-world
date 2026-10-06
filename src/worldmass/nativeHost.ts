@@ -9,6 +9,8 @@ import { nativeFeatureAdmission } from './nativeFeatures';
 import { sidezoneOf } from '../data/sidezones';
 import { MassOccurrences, massOccurrenceSupported, type MassOccurrencesSave, type MassOccurrenceDisturbance } from './occurrences';
 import type { Vec2 } from '../core/math';
+import { PUZZLE_CFG } from '../engine/puzzles';
+import { MassCourtPuzzles, massCourtPuzzlesSupported, type MassCourtPuzzlesSave } from './courtPuzzles';
 
 /** These mechanics still need their own local owners; looking like scenery is
  * not evidence that their native interaction is installed. */
@@ -18,7 +20,8 @@ const contextualKinds=new Set(['bounty_board','harbor_board','muster_horn',
 export function nativeWorldCapabilities():ReadonlySet<string>{
   const caps=new Set(['terrain','scenery','state','structures','doors','sidezones','breakables','garrisons','landmark-spawns',
     'door:dwell','door:breakable','door:both','slot:tower',
-    'occurrences','occurrence:abyssal_fracture','occurrence-trigger:dwell','occurrence-aftermath:fixture']);
+    'occurrences','occurrence:abyssal_fracture','occurrence-trigger:dwell','occurrence-aftermath:fixture',
+    'puzzles','puzzle:court_shrine','puzzle:refrain','puzzle:tempo','puzzle:accord','puzzle:ember']);
   for(const kind of doodadRuleKinds()){
     const r=doodadRuleOf(kind);
     const sidezone=sidezoneOf(kind),ownedEntrance=!!sidezone&&!sidezone.spanMouth;
@@ -42,6 +45,7 @@ interface NativeHostSave {
    * body wounds persist, but this array must never be labelled exact combat. */
   transient:string[];
   occurrences?:MassOccurrencesSave;
+  courts?:MassCourtPuzzlesSave;
 }
 export interface NativeHostPolicy {
   /** Shared population includes this host. Never create a second hidden cap. */
@@ -61,14 +65,16 @@ export class MassNativeHost implements NativeFeatureHost {
   private readonly retainRadius:number;
   private readonly quietSeconds:number;
   readonly occurrences:MassOccurrences;
+  readonly courts:MassCourtPuzzles;
   constructor(readonly world:World,readonly policy:NativeHostPolicy,saved?:NativeResidencySave){
     this.retainRadius=policy.retainRadius??512;this.quietSeconds=policy.quietSeconds??15;
     if(!Number.isFinite(this.retainRadius)||this.retainRadius<256||this.retainRadius>8192
       ||!Number.isFinite(this.quietSeconds)||this.quietSeconds<5||this.quietSeconds>300)throw Error('Invalid native host residency');
     this.occurrences=new MassOccurrences(world,{...policy,retainRadius:this.retainRadius,quietSeconds:this.quietSeconds},saved);
+    this.courts=new MassCourtPuzzles(world,{...policy,retainRadius:Math.max(this.retainRadius,PUZZLE_CFG.earshot)});
   }
   get clock():number{return this.world.time;}
-  get population():number{let n=this.occurrences.population;for(const rows of this.residents.values())for(const a of rows.values())if(!a.dead)n++;return n;}
+  get population():number{let n=this.occurrences.population+this.courts.population;for(const rows of this.residents.values())for(const a of rows.values())if(!a.dead)n++;return n;}
   get hasOccurrences():boolean{return this.occurrences.hasOccurrences;}
   updateOccurrences(dt:number,disturbances:readonly MassOccurrenceDisturbance[]):void{this.occurrences.update(dt,disturbances);}
   private saved(instance:NativeFeatureInstance,value?:unknown):NativeHostSave|undefined{
@@ -85,15 +91,18 @@ export class MassNativeHost implements NativeFeatureHost {
       ||s.bodies.some(b=>!b.dead&&!b.state&&!s.transient.includes(b.slot)))throw Error('Unlabelled native transient checkpoint');
     if((instance.blueprint.descriptor.sidechannels?.occurrences.length??0)>0&&!s.occurrences)
       throw Error('Native feature lost occurrence checkpoint');
+    if((instance.blueprint.descriptor.sidechannels?.puzzles.length??0)>0&&!s.courts)
+      throw Error('Native feature lost court puzzle checkpoint');
     return s;
   }
   canInstall(instance:NativeFeatureInstance,savedNativeState?:unknown):boolean{
     if(this.residents.has(instance.id))return false;
     if(!nativeFeatureAdmission(instance.blueprint,nativeWorldCapabilities()).ok)return false;
-    if(!massOccurrenceSupported(instance))return false;
+    if(!massOccurrenceSupported(instance)||!massCourtPuzzlesSupported(instance))return false;
     const saved=this.saved(instance,savedNativeState);
     const needed=saved?saved.bodies.filter(b=>!b.dead).length:upperPopulation(instance);
-    return this.policy.population()+needed+this.occurrences.requiredPopulation(instance,saved?.occurrences)<=this.policy.maxPopulation();
+    return this.policy.population()+needed+this.occurrences.requiredPopulation(instance,saved?.occurrences)
+      +this.courts.requiredPopulation(instance,saved?.courts)<=this.policy.maxPopulation();
   }
   private refusal(a:Actor,state:NativeActorState|null,instance:NativeFeatureInstance):string|null{
     if(a.dead)return null;
@@ -146,9 +155,15 @@ export class MassNativeHost implements NativeFeatureHost {
     }
     const live=[...bodies.values()].filter(a=>!a.dead);
     const occurrence=this.occurrences.prepare(instance,saved?.occurrences);
-    if(this.policy.population()+live.length+this.occurrences.requiredPopulation(instance,saved?.occurrences)>this.policy.maxPopulation())throw Error('Native feature population exceeded its reservation');
+    const court=this.courts.prepare(instance,saved?.courts);
+    if(this.policy.population()+live.length+this.occurrences.requiredPopulation(instance,saved?.occurrences)
+      +this.courts.requiredPopulation(instance,saved?.courts)>this.policy.maxPopulation())throw Error('Native feature population exceeded its reservation');
     const detachScene=world.installMassNativeScene(instance);
-    try{occurrence?.mount();}catch(error){detachScene();throw error;}
+    try{court?.mount();occurrence?.mount();}catch(error){
+      // Both controllers prepare detached; a failed publication must not leave
+      // a partial ring or an event behind in a scene whose owner never mounted.
+      try{court?.rollbackMount();}finally{detachScene();}throw error;
+    }
     world.actors.push(...live);world.actorGridRev++;this.residents.set(instance.id,bodies);
     let detached=false;
     const states=()=>new Map([...bodies].map(([slot,a])=>[slot,a.dead?null:captureNativeActorState(a)]));
@@ -175,22 +190,27 @@ export class MassNativeHost implements NativeFeatureHost {
           ...(a.squadId===undefined?{}:{squadId:a.squadId}),...(state?{state}:{})});
       }
       return {schema:1,owner:instance.id,descriptor:instance.blueprint.descriptor.hash,clock:world.time,playerId:world.player.id,bodies:rows,transient,
-        ...(occurrence?{occurrences:occurrence.capture()}: {})};
+        ...(occurrence?{occurrences:occurrence.capture()}: {}),...(court?{courts:court.capture()}: {})};
     };
     return {
       hasDoodad:d=>world.doodads.includes(d),capture,
       canRetire:()=>{
         if(detached)return true;
-        const owned=new Set([...bodies.values(),...(occurrence?.actors()??[])]),g=instance.blueprint.grid!,o=instance.offset;
+        const owned=new Set([...bodies.values(),...(occurrence?.actors()??[]),...(court?.actors()??[])]),g=instance.blueprint.grid!,o=instance.offset;
         if(world.actors.some(a=>!a.dead&&!owned.has(a)&&sameStory(a,{tier:0})
           &&a.pos.x>=o.x-this.retainRadius&&a.pos.y>=o.y-this.retainRadius
           &&a.pos.x<=o.x+g.cols*g.cell+this.retainRadius&&a.pos.y<=o.y+g.rows*g.cell+this.retainRadius))return false;
-        return safe(states())&&(!occurrence||occurrence.canRetire(new Set(bodies.values())));
+        return safe(states())
+          &&(!court||court.canRetire(new Set([...bodies.values(),...(occurrence?.actors()??[])])))
+          &&(!occurrence||occurrence.canRetire(new Set([...bodies.values(),...(court?.actors()??[])])));
       },
       detach:()=>{
         if(detached)return;
-        if(!safe(states()))throw Error('Cannot retire a native feature with live dependencies');
-        occurrence?.detach();
+        if(!safe(states())
+          ||court&&!court.canRetire(new Set([...bodies.values(),...(occurrence?.actors()??[])]))
+          ||occurrence&&!occurrence.canRetire(new Set([...bodies.values(),...(court?.actors()??[])])))
+          throw Error('Cannot retire a native feature with live dependencies');
+        court?.detach(new Set([...bodies.values(),...(occurrence?.actors()??[])]));occurrence?.detach();
         const owned=new Set(bodies.values());world.actors=world.actors.filter(a=>!owned.has(a));world.actorGridRev++;
         detachScene();this.residents.delete(instance.id);detached=true;
       },

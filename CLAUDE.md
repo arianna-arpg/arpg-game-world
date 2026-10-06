@@ -6,6 +6,17 @@ player-requested details). Reusing main's mechanics does not authorize reusing
 its redundant local banners. Preserve warning readability and native timing;
 add or improve visual cues when needed instead of restoring narration.
 
+MassCourtPuzzles binds the native court wrapper and all four fitted inner
+riddles to physical features. Shared node reservations, source-owned rewards,
+native progress/light/absence clocks, atomic publication and closed-owner
+retirement preserve partial and solved Continue. Native puzzle feedback uses
+crystal tones, kindling and flashes; redundant local prose is silent. Verify
+courtpuzzles/courtcontinuity, native puzzle/spoils probes, full worldmass,
+genqa and native-courts-ui.cjs. Native obstacle candidate memoization preserves
+exact shape/channel/margin queries and live door/scenery changes; verify
+nativeobstaclecache and the separately tagged frame-attribution browser course.
+Neither this cache nor court admission completes main mechanics parity.
+
 MassOccurrences now owns complete native surface fractures: original warning,
 spring, scar, wave and fixture driver; exact geographic body/scenery receipts
 and dormant zone census preserve native rewards and population caps.

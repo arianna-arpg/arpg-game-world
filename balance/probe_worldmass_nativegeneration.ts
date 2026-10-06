@@ -61,6 +61,16 @@ try {
   assert.equal(admission.ok, false, 'a visible court cannot silently lose its native hidden event');
   assert.ok(admission.missing.includes('occurrences'));
   assert.ok(admission.missing.includes('occurrence:abyssal_fracture'));
+  const shrineBlueprint = compileNativeFeature(resolveNativeFeature(request(2))), courtCapabilities = new Set(nativeWorldCapabilities());
+  assert.equal(nativeFeatureAdmission(shrineBlueprint, courtCapabilities).ok, true, 'complete native four-inner court owner admits the frozen shrine');
+  courtCapabilities.delete('puzzle:court_shrine');
+  assert.ok(nativeFeatureAdmission(shrineBlueprint, courtCapabilities).missing.includes('puzzle:court_shrine'),
+    'ordinary scenery and puzzle capabilities cannot stand in for the native court wrapper owner');
+  courtCapabilities.add('puzzle:court_shrine');
+  const innerKind = (shrineBlueprint.descriptor.sidechannels!.puzzles[0].spec as CourtShrineSpec).shrine.kind;
+  courtCapabilities.delete('puzzle:' + innerKind);
+  assert.ok(nativeFeatureAdmission(shrineBlueprint, courtCapabilities).missing.includes('puzzle:' + innerKind),
+    'a wrapper without the actual rolled inner law must refuse the complete feature');
   console.log('PASS real native court tenant event and fitted shrine generation survive isolated capture reproducibly');
   const isolated = (normal: boolean) => {
     const script = `${normal ? "import { makeSimWorld } from './src/sim/arena.ts';makeSimWorld('warrior',2917);" : "import './src/worldmass/nativeBootstrap.ts';"}

@@ -81,10 +81,11 @@ try{
   if(trial.every(Boolean)){solution=mask;break;}
  }
  assert.ok(solution>=0,'native scramble stays solvable');
- const nativeText=far.texts.length;
+ const nativeFlashes=far.flashes.length;
  for(let i=0;i<9;i++)if(solution&(1<<i))ring(far,board,i);
  assert.equal(board.done,true);assert.equal(far.massRuntime!.siteActivity(p.id)!.complete,true);
- assert.ok(far.texts.length>nativeText,'native completion announces its result');
+ assert.ok(far.flashes.length>nativeFlashes,'native completion shows its finishing light');
+ assert.ok(!far.texts.some(t=>t.text.includes('resolves!')),'completion does not narrate its visible result');
  assert.ok(far.player.statuses.length>0,'native finishing-tone wash executes');
  const resolved=far.massRuntime!.puzzles.snapshot(far),contents=canonical(far.massRuntime!.snapshot(far).contents);
  const done=resume(far);assert.deepEqual(done.massRuntime!.puzzles.snapshot(done),resolved);

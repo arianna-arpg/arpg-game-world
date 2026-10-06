@@ -20,6 +20,9 @@ export interface NativeFeaturePlacement {
   request: NativeFeatureRequest;
   priority?: number;
 }
+/** Exact-point broad-phase memo only; never stores solidity or native bodies.
+ * Its bound is independent of explored history and hydrated blueprint count. */
+export const NATIVE_OBSTACLE_CANDIDATE_CACHE=32768;
 export interface NativeResidencyConfig {
   run: string; addressSpan: number; maxBlueprints: number; maxResidents: number; maxCandidates: number;
 }
@@ -130,6 +133,10 @@ export class MassNativeResidency {
   private cache=new Map<string,Cached>();
   private refused=new Map<string,readonly string[]>();
   private revisions=new Map<string,number>();
+  private obstacleCandidates=new Map<string,readonly NativeFeaturePlacement[]>();
+  private obstacleLookupStats={hits:0,misses:0,invalidations:0};
+  /** Only privately cloned/deep-frozen placements enter this identity memo. */
+  private placementIdentities=new WeakMap<NativeFeaturePlacement,string>();
   private revision=0;
   private preparationStats={adopted:0,late:0,synchronous:0};
   constructor(config:NativeResidencyConfig,
@@ -172,7 +179,10 @@ export class MassNativeResidency {
     }
   }
   private indexBorn(row:Born,b:NativeFeatureBlueprint):void {
-    row.placement=freezeData(row.placement);
+    row.placement=this.freezePlacement(row.placement);
+    // A saved/prepared birth can become authoritative where a prior provider
+    // lookup returned nothing. No cached negative may hide that ownership.
+    this.obstacleCandidates.clear();this.obstacleLookupStats.invalidations++;
     if(row.metadataStatus)this.legacySidechannels++;
     if(row.accessStatus==='legacy-unverified-access')this.legacyAccess++;
     if(row.accessStatus==='legacy-unverified-reservation')this.legacyReservation++;
@@ -195,7 +205,12 @@ export class MassNativeResidency {
       for(const id of this.bornCells.get(cellKey({dimension:at.dimension,cx:x.toString(),cy:y.toString()}))??[])ids.add(id);
     return [...ids].map(id=>this.born.get(id)!.placement).sort((a,b)=>a.id.localeCompare(b.id));
   }
+  private freezePlacement(p:NativeFeaturePlacement):NativeFeaturePlacement {
+    this.validatePlacement(p);const identity=canonical([p.origin,p.request]);
+    const frozen=freezeData(clone(p));this.placementIdentities.set(frozen,identity);return frozen;
+  }
   private validatePlacement(p:NativeFeaturePlacement):void {
+    if(this.placementIdentities.has(p))return;
     if(!p.id||p.id!==p.request.id||p.priority!==undefined&&!Number.isFinite(p.priority)
       ||canonical(p.origin)!==canonical(address(p.origin.dimension,p.origin.cx,p.origin.cy,p.origin.x,p.origin.y,this.config.addressSpan)))
       throw Error('Invalid native physical feature placement');
@@ -280,12 +295,13 @@ export class MassNativeResidency {
   }
   private ensure(p:NativeFeaturePlacement,prepared?:NativeFeatureBlueprint):Cached|null {
     this.validatePlacement(p);
+    const identity=this.placementIdentities.get(p)??canonical([p.origin,p.request]);
     const hit=this.cache.get(p.id);
-    if(hit&&(canonical(hit.born.placement.origin)!==canonical(p.origin)||canonical(hit.born.placement.request)!==canonical(p.request)))
+    if(hit&&this.placementIdentities.get(hit.born.placement)!==identity)
       throw Error('A physical native feature cannot move or reseed');
     if(hit){this.cache.delete(p.id);this.cache.set(p.id,hit);this.observe(hit);return hit;}
     let born=this.born.get(p.id);
-    if(born&&(canonical(born.placement.origin)!==canonical(p.origin)||canonical(born.placement.request)!==canonical(p.request)))
+    if(born&&this.placementIdentities.get(born.placement)!==identity)
       throw Error('A physical native feature cannot move or reseed');
     if(this.refused.has(p.id))return null;
     let descriptor:NativeFeatureDescriptor,blueprint:NativeFeatureBlueprint;
@@ -343,9 +359,24 @@ export class MassNativeResidency {
     return {...base,region,color,biome:z.biome??base.biome,source:{generator:'native-feature',version:1,
       rule:b.descriptor.source.kind+'/'+b.descriptor.source.id,source:'tilesets/'+b.descriptor.source.tileset,stream:b.descriptor.hash}};
   }
-  /** Same native shape solver used by World.pointInSolid, available cold. */
+  private cachedObstacleCandidates(at:MassAddress):readonly NativeFeaturePlacement[] {
+    // Exact canonical address components: no bucket rounding, lossy global
+    // number conversion, radius approximation, or cross-dimension aliasing.
+    const key=JSON.stringify([at.dimension,at.cx,at.cy,at.x,at.y]);
+    const hit=this.obstacleCandidates.get(key);
+    if(hit){this.obstacleLookupStats.hits++;this.obstacleCandidates.delete(key);this.obstacleCandidates.set(key,hit);return hit;}
+    this.obstacleLookupStats.misses++;
+    const rows=Object.freeze(this.candidates(at).map(p=>this.placementIdentities.has(p)?p:this.freezePlacement(p)));
+    this.obstacleCandidates.set(key,rows);
+    if(this.obstacleCandidates.size>NATIVE_OBSTACLE_CANDIDATE_CACHE)this.obstacleCandidates.delete(this.obstacleCandidates.keys().next().value!);
+    return rows;
+  }
+  /** Same native shape solver used by World.pointInSolid, available cold.
+   * Only the immutable provider shortlist is memoized. Door state, gone flags,
+   * current native geometry, channels and margins are read on EVERY query;
+   * eviction/Continue rehydrates sparse edits through the ordinary ensure(). */
   obstacleAt(at:MassAddress,radius:number,channel:'move'|'shot'|'sight'='move'):{owner:string;doodad:Doodad}|null {
-    for(const p of this.candidates(at)){
+    for(const p of this.cachedObstacleCandidates(at)){
       if(p.origin.dimension!==at.dimension)continue;
       const entry=this.ensure(p);if(!entry)continue;
       const local=localOffset(at,p.origin,this.config.addressSpan,32);
@@ -353,7 +384,8 @@ export class MassNativeResidency {
       const q=entry.instance?localOffset(at,this.frameOrigin(),this.config.addressSpan):local;
       const blocks=channel==='move'?blocksMovement:channel==='shot'?blocksProjectiles:blocksSightOf;
       const d=list.find(d=>(d.tier??0)===0&&!d.gone&&blocks(d)
-        &&shapeContains(hitSurfaceOf(d,channel),d.pos.x,d.pos.y,q.x,q.y,radius));
+        &&shapeContains(hitSurfaceOf(d,channel),d.pos.x,d.pos.y,q.x,q.y,radius)
+        &&(!entry.instance||entry.binding?.hasDoodad?.(d)!==false));
       if(d){
         if(entry.instance)return {owner:p.id,doodad:d};
         const offset=localOffset(p.origin,this.frameOrigin(),this.config.addressSpan);
@@ -427,5 +459,5 @@ export class MassNativeResidency {
   }
   refusals(id:string):readonly string[]{return this.refused.get(id)??[];}
   get stats(){return {resident:[...this.cache.values()].filter(e=>e.instance).length,
-    blueprints:this.cache.size,born:this.born.size,legacyUnverifiedSidechannels:this.legacySidechannels,legacyUnverifiedAccess:this.legacyAccess,legacyUnverifiedReservation:this.legacyReservation,refused:this.refused.size,revision:this.revision,preparation:{...this.preparationStats}};}
+    blueprints:this.cache.size,born:this.born.size,legacyUnverifiedSidechannels:this.legacySidechannels,legacyUnverifiedAccess:this.legacyAccess,legacyUnverifiedReservation:this.legacyReservation,refused:this.refused.size,revision:this.revision,preparation:{...this.preparationStats},obstacleLookup:{...this.obstacleLookupStats,cached:this.obstacleCandidates.size,limit:NATIVE_OBSTACLE_CANDIDATE_CACHE}};}
 }

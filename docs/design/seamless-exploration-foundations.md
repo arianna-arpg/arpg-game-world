@@ -343,3 +343,84 @@ natural fracture browser course again passed both Continue checkpoints and
 verified that neither warning nor eruption emits local narration. Independent
 critics accepted these supported event and geographic-plan contracts; overall
 exploration frame pacing and the remaining main mechanics are still open work.
+
+Native court ownership now retains the generated court_shrine wrapper and its
+complete refrain, tempo, accord or ember inner mechanic. The frozen source owns
+the fitted center, ring radius, angular phase, node species/count, reward table,
+wash and source level. Wrapper boot re-seats and hands control to the native
+inner before the detached group is validated; no generic unphased replacement
+ring is admitted. Native hits still pass through the ordinary spell/projectile,
+knock, spill and hum rules. Shared population reserves the entire ring before
+publishing any node. The feature, ring and neighboring event actors retire only
+after all dependencies and physical participants pass a complete preflight.
+An installation failure rolls back the exact unpublished group and its scene.
+
+Court checkpoints retain puzzle progress, native wounds, hums and intrinsic
+kindled-light duration. Native kinds own absence behavior: tempo holds its
+unheard pulse phases; refrain holds playback but an expired answer window
+returns to playback; unbound accord halves and embers expire on their original
+clocks. Continue pays no reward or solve again. The native source controls every
+loot-table mint's spoils policy and gem floor/level, without changing World.zone.
+Court wash and playback remain on the same physical story. Existing older
+checkpoints retain their original compatible light reconstruction when no
+literal light receipt exists. External combat statuses still pin ordinary
+streaming and retain the documented native transient Continue boundary.
+
+The immediate puzzle narrator is quiet at the native puzzle hook, including
+finite puzzles. Existing tones, kindling, playback flashes, mistake flashes and
+finishing light remain active; ordinary reward delivery and requested details
+remain native. Distant resident courts do not populate the nearby puzzle view.
+These rules implement the user's show-don't-tell requirement without changing
+puzzle timing, solution grammar or the authored campaign.
+
+The next pathfinding correction memoizes bounded exact-point native candidate
+lists rather than collision answers. Every move, shot and sight query still
+checks the current native shape with its requested signed margin, door state,
+gone flag and live scene membership. Cold blueprint eviction and Continue retain
+sparse edits. A newly authoritative physical birth invalidates cached negatives.
+The cache holds at most 32,768 points independently of traveled history; this is
+an entry bound, not evidence of reduced total memory. Live frame rebasing and
+fully paged historical feature records remain separate unfinished work.
+
+The real browser acceptance uses four unchanged seed-713 country placements:
+accord at owner (24,-15), refrain (4,44), ember (76,67), and tempo (86,5).
+Original courtyard variants, fitted rings, crystal species and source levels
+remain intact. Controlled arrival teleports and player invulnerability are
+explicit test conveniences. Ordinary Firebolt casts, mana, projectile collision,
+knock routing, timers, native effects and rewards remain enabled. Every kind
+passes partial and solved durable Continue, with no duplicate reward, local
+puzzle narration or console errors. All 24 recorded intended-seat hits,
+including two deliberate mistakes, landed in 55 frames with targetHits=1.
+Independent screenshot review confirms native mistake flashes, saved partial
+kindling and completion effects. This establishes interaction and persistence;
+it is not a continuous walking-discovery or frame-pacing claim.
+
+The broader worldmass gate passed 77 of 78 groups; the remaining old assertion
+expected court capability to remain unsupported. It now requires the complete
+court owner and rejects a missing wrapper capability, and its direct rerun
+passed. Following the common optional light receipt, the finite puzzle suite,
+court codecs, six-group independent continuity, activity residency, accord,
+ember, existing placed-puzzle and puzzle-reward checks all passed again. All
+three type-check projects, production/preview builds, actual boot and all five
+simulation smoke scenarios passed. Generation QA passed 869 cases across three
+seeds with no failures: four known clearance warnings and one timing warning
+for a 403 ms metropolis generation sample during concurrent verification.
+
+The tagged natural 3,000-unit course now completes with the bounded candidate
+cache and ordinary scenery avoidance, actors, AI, effects and rendering intact.
+Excluding the separately reported arrival frame, ordinary control step p95 fell
+from 168.1 to 45.0 ms and maximum from 310.5 to 133.2 ms; simulation p95 fell
+from 158.0 to 36.2 ms. Steps over 50 ms fell from 145 to 43. These are measured
+manual-step costs, not compositor FPS. The cache recorded 1,152,302 hits and
+20,593 misses with 7,876 retained exact points. Both courses completed without
+console errors. The final build also admits native courts, with final doodad
+counts 1,112 versus 1,151 and actor counts 48 versus 49, so this is a qualified
+before/after observation rather than a bit-identical causal experiment.
+
+Separate instrumentation locates the reduced work in country candidate lookup:
+country.near calls fell from 1,782,363 to 141,570 and measured ensure time from
+6,484 to 140 ms. Instrumented costs include tracing overhead. Residual runtime
+updates still spike around a 30-frame cadence, and cold path work remains;
+there is no claim of smooth frame pacing. No post-arrival renderer frame
+exceeded 50 ms in either ordinary control. Tagged reports preserve build
+fingerprints, counts and screenshots for independent review.

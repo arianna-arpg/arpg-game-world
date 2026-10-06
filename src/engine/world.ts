@@ -338,7 +338,7 @@ import { REGROWTH_CFG, SCALD_CFG, type BaskSpec } from '../data/scald';
 import { LEDGER_TRAP_SPRUNG, lintTrapworkSpec, trapAnchor, trapEffect, trapTriggerHit, TRAPWORK_CFG, type PlacedTrapwork, type TrapHost, type TrapworkSpec } from './trapworks';
 import { bootOccSites, driveOccSites, OCC_CFG, reviveOccSite, seedOccClockMarks, wakeRousedResidents, type OccHost, type OccKinSpec, type OccSite } from './occurrences';
 import { attunedStatus, rollStartTone, toneAccepted, toneOfAmounts, toneTint, TUNE_CFG } from './tuning';
-import { pickKnockNode, puzzleContactHeatsCombat, PUZZLE_CFG, PUZZLE_KINDS, puzzleHumOf, puzzleKnockOf, puzzleRewardOf, puzzleSpillOf, type PuzzleHost, type PuzzleRun, type PuzzleCheckpoint } from './puzzles';
+import { capturePuzzleKindles, restorePuzzleKindles, pickKnockNode, puzzleContactHeatsCombat, PUZZLE_CFG, PUZZLE_KINDS, puzzleHumOf, puzzleKnockOf, puzzleRewardOf, puzzleSpillOf, type PuzzleHost, type PuzzleRun, type PuzzleCheckpoint } from './puzzles';
 import { MINION_COMBAT } from './minionCombat';
 import {
   batchScaleOf, buildWornThrongDef, isThrongBody, THRONG_CFG, throngMarkerOf,
@@ -401,7 +401,7 @@ import type { WispKindRow, WisplightSurge } from '../packages/overlays/wisplight
 import type { DroveSurge } from '../packages/overlays/drove';
 import type { QuickeningField } from '../packages/overlays/quickening';
 import { plyCountOf, plyFloorOf } from './plies';
-import { PUZZLES } from '../data/puzzles';
+import { COURT_SHRINE_KIND, PUZZLES } from '../data/puzzles';
 import { buildZoneCollapse, COLLAPSE_CFG, type CollapseField } from './collapse';
 import { buildZoneSpans, type SpanField } from './spans';
 import { buildZoneFlux, CONJURE_CFG, ConjuredGround, FLUX_CFG, type ConjureGrant, type FluxField } from './flux';
@@ -23535,8 +23535,8 @@ export class World {
 
   /** Shed an essence packet on the ground (the spill fabric) — vacuumed on
    *  touch like a vestige; scatter keeps a trail readable at a glance. */
-  dropEssenceAt(at: Vec2, gain: EssenceCost): void {
-    if (this.spoilsSealed()) return; // THE SPOILS LAW — spilled essence is minted wealth
+  dropEssenceAt(at: Vec2, gain: EssenceCost, contextZone?: Readonly<ZoneDef>): void {
+    if (contextZone ? contextZone.spoils === 'none' : this.spoilsSealed()) return; // THE SPOILS LAW — spilled essence is minted wealth
     if (gain.count <= 0) return;
     const s = ESSENCE_SPILL_CFG.scatter;
     const pos = this.clampPos(vec(at.x + rand(-s, s), at.y + rand(-s, s)), 10, undefined, this.spoilClamp());
@@ -23583,8 +23583,8 @@ export class World {
    *  its color (the dropGemAt idiom), so the moment reads from across the
    *  room; the pickup feed banks the quiet ledger row. `rng` lets the kill
    *  path scatter off its own fork (below); direct mints default global. */
-  dropAbilityEssenceAt(at: Vec2, tier: number, count: number, rng: () => number = Math.random): void {
-    if (this.spoilsSealed()) return; // THE SPOILS LAW — minted wealth
+  dropAbilityEssenceAt(at: Vec2, tier: number, count: number, rng: () => number = Math.random, contextZone?: Readonly<ZoneDef>): void {
+    if (contextZone ? contextZone.spoils === 'none' : this.spoilsSealed()) return; // THE SPOILS LAW — minted wealth
     if (count <= 0) return;
     const def = abilityEssenceOfTier(tier);
     const s = ESSENCE_SPILL_CFG.scatter;
@@ -41248,35 +41248,67 @@ export class World {
 
   /** Enroll externally placed fixtures in the same native knock/reward pipeline.
    * Placement owns geometry; the registered kind owns progress and restoration. */
-  preparePlacedPuzzle(run: PuzzleRun, random: () => number, saved?: PuzzleCheckpoint): void {
-    if (!run.kind.checkpoint
-      || run.kind !== PUZZLE_KINDS[run.spec.kind] || run.nodes.some(n => !n.puzzleNode || n.puzzleNode.id !== run.id))
+  private preparedPlacedPuzzles = new WeakSet<PuzzleRun>();
+  preparePlacedPuzzle(run: PuzzleRun, random: () => number, saved?: PuzzleCheckpoint, elapsedAbsent = 0): void {
+    this.preparedPlacedPuzzles.delete(run);
+    if (!Number.isFinite(elapsedAbsent) || elapsedAbsent < 0) throw Error('Invalid placed puzzle absence');
+    if (!run.kind || (!run.kind.checkpoint && run.kind.id !== COURT_SHRINE_KIND) || run.heart || !run.nodes.length || new Set(run.nodes).size !== run.nodes.length
+      || run.kind !== PUZZLE_KINDS[run.spec.kind]
+      || run.nodes.some((n,i) => !n.puzzleNode || n.puzzleNode.id !== run.id || n.puzzleNode.idx !== i))
       throw Error('Invalid placed puzzle');
-    const host = this.puzzleHost();
+    const host = this.puzzleHost(run);
     if (saved && (!Array.isArray(saved.life) || saved.life.length !== run.nodes.length
       || saved.life.some((v,i) => !Number.isFinite(v) || v <= 0 || v > run.nodes[i].maxLife())
       || !Array.isArray(saved.hums) || saved.hums.length > run.nodes.length
       || new Set(saved.hums.map(r => r[0])).size !== saved.hums.length
       || saved.hums.some(r => !Array.isArray(r) || r.length !== 2 || !Number.isSafeInteger(r[0])
         || r[0] < 0 || r[0] >= run.nodes.length || !Number.isFinite(r[1]) || r[1] <= 0 || r[1] > puzzleHumOf(run) + 1e-6)
+      || saved.kindles !== undefined && (!Array.isArray(saved.kindles) || saved.kindles.length !== run.nodes.length
+        || saved.kindles.some(v => !Number.isFinite(v) || v < 0 || v > 9999 + 1e-6))
       || typeof saved.done !== 'boolean')) throw Error('Invalid placed puzzle checkpoint');
     run.kind.boot(run, { ...host, rng: random });
+    // A registered wrapper may hand ownership to its native inner kind. Only
+    // that final kind can promise a complete durable progress codec.
+    if (run.kind !== PUZZLE_KINDS[run.kind.id] || !run.kind.checkpoint)
+      throw Error('Placed puzzle has no final native checkpoint');
     if (saved) {
       run.done = saved.done;
       run.kind.checkpoint.restore(run, host, saved.state);
+      if (saved.kindles !== undefined) restorePuzzleKindles(run, host, saved.kindles);
       run.nodes.forEach((n,i) => { n.life = saved.life[i]; });
-      for (const [i, remaining] of saved.hums) run.hums.set(run.nodes[i].id, this.time + remaining);
+      for (const [i, remaining] of saved.hums) if (remaining > elapsedAbsent)
+        run.hums.set(run.nodes[i].id, this.time + remaining - elapsedAbsent);
+      if (elapsedAbsent > 0) run.kind.checkpoint.absent?.(run, host, elapsedAbsent);
     }
+    this.preparedPlacedPuzzles.add(run);
+  }
+  /** Publish a validated, already booted native ring without rerolling it. */
+  enrollPreparedPuzzle(run: PuzzleRun): void { this.enrollPreparedPuzzles([run]); }
+  /** A feature publishes its whole court group or none. The returned closure
+   * is solely for rollback inside that immediate, unobserved installation. */
+  enrollPreparedPuzzles(runs: readonly PuzzleRun[]): () => void {
+    const nodes = runs.flatMap(run => run.nodes), owned = new Set(nodes), group = new Set(runs);
+    if (new Set(runs.map(run => run.id)).size !== runs.length || owned.size !== nodes.length
+      || new Set(nodes.map(n => n.id)).size !== nodes.length
+      || runs.some(run => !this.preparedPlacedPuzzles.has(run) || this.puzzles.some(r => r.id === run.id))
+      || nodes.some(n => this.actors.includes(n) || this.actors.some(a => a.id === n.id)))
+      throw Error('Invalid prepared puzzle enrollment');
+    this.puzzles.push(...runs);this.actors.push(...nodes);this.actorGridRev++;
+    let removed = false;
+    return () => {
+      if (removed) return; removed = true;
+      this.puzzles = this.puzzles.filter(run => !group.has(run));
+      this.actors = this.actors.filter(node => !owned.has(node));this.actorGridRev++;
+    };
   }
   installPlacedPuzzle(run: PuzzleRun, random: () => number, saved?: PuzzleCheckpoint): void {
     if (this.puzzles.some(r => r.id === run.id)) throw Error('Duplicate placed puzzle');
     this.preparePlacedPuzzle(run, random, saved);
-    this.puzzles.push(run);
-    this.actors.push(...run.nodes);
+    this.enrollPreparedPuzzle(run);
   }
   /** A place may release a riddle only when its native interactions no longer
    * have a claim on the nodes. Removal is residency, never death/completion. */
-  releasePlacedPuzzle(run: PuzzleRun): boolean {
+  canReleasePlacedPuzzle(run: PuzzleRun): boolean {
     if (!this.puzzles.includes(run) || run.isObjective) return false;
     const nodes = new Set(run.nodes), owned = new Map(run.nodes.map(n => [String(n.id), n]));
     if (this.puzzleKnocks.some(k => nodes.has(k.node) || !!k.striker && nodes.has(k.striker))) return false;
@@ -41287,7 +41319,11 @@ export class World {
       || n.statuses.some(s => !(s.id === PUZZLE_CFG.kindleStatus && s.sourceName === 'the refrain'
         || n.tone && s.id === attunedStatus(n.tone) && s.sourceName === 'attunement')
         || s.dps !== 0 || (s.power ?? 1) !== 1 || Object.entries(s).some(([key,value]) => value !== undefined && !intrinsicKeys.has(key))))) return false;
-    if (massDormancyPins(this, owned, new Set([run])).size) return false;
+    return massDormancyPins(this, owned, new Set([run])).size === 0;
+  }
+  releasePlacedPuzzle(run: PuzzleRun): boolean {
+    if (!this.canReleasePlacedPuzzle(run)) return false;
+    const nodes = new Set(run.nodes);
     this.puzzles = this.puzzles.filter(r => r !== run);
     this.actors = this.actors.filter(a => !nodes.has(a));
     this.actorGridRev++;
@@ -41295,7 +41331,8 @@ export class World {
   }
   capturePlacedPuzzle(run: PuzzleRun): PuzzleCheckpoint {
     if (!run.kind.checkpoint || !this.puzzles.includes(run)) throw Error('Unknown placed puzzle');
-    return { done: run.done, state: run.kind.checkpoint.capture(run, this.puzzleHost()), life: run.nodes.map(n => n.life),
+    return { done: run.done, state: run.kind.checkpoint.capture(run, this.puzzleHost(run)), life: run.nodes.map(n => n.life),
+      kindles: capturePuzzleKindles(run),
       hums: run.nodes.flatMap((n,i): [number,number][] => {
         const remaining = (run.hums.get(n.id) ?? 0) - this.time;
         return remaining > 0 ? [[i, remaining]] : [];
@@ -41311,14 +41348,15 @@ export class World {
   private puzzleKnocks: { node: Actor; striker: Actor | null; t: number; wounding: boolean }[] = [];
 
   /** The narrow world surface puzzle kinds drive — kinds never import World. */
-  private puzzleHost(): PuzzleHost {
+  private puzzleHost(run?: PuzzleRun): PuzzleHost {
     // SOVEREIGNTY: census — a puzzle host read (the derived census, probe_tiers RIG T).
     this.puzzleHostCache ??= {
       now: () => this.time,
       rng: () => rand(0, 1),
       flash: (pos, radius, color, life = 0.25) =>
         this.flashes.push({ pos: vec(pos.x, pos.y), radius, color, life, maxLife: life }),
-      say: (pos, msg, color, size = 12) => this.text(vec(pos.x, pos.y), msg, color, size),
+      // Native tones, kindled crystals and mistake/completion flashes show local progress.
+      say: () => {},
       setTone: (node, tone) => this.setPuzzleTone(node, tone),
       kindle: (node, seconds) => node.applyStatus(PUZZLE_CFG.kindleStatus, 0,
         seconds / Math.max(0.01, STATUS_DEFS[PUZZLE_CFG.kindleStatus]?.duration ?? 1), 'the refrain'),
@@ -41326,6 +41364,10 @@ export class World {
       heroNear: (pos, within) => this.actors.some(x => !x.dead && x.team === 'player'
         && x.kind !== 'minion' && x.kind !== 'mercenary' && dist(x.pos, pos) <= within),
       complete: run => this.completePuzzle(run),
+    };
+    if (run?.owner) return { ...this.puzzleHostCache,
+      heroNear: (pos, within) => this.actors.some(x => !x.dead && x.team === 'player'
+        && x.kind !== 'minion' && x.kind !== 'mercenary' && sameStory(x, run.nodes[0]) && dist(x.pos, pos) <= within),
     };
     return this.puzzleHostCache;
   }
@@ -41542,9 +41584,8 @@ export class World {
   private updatePuzzles(dt: number): void {
     this.drainPuzzleKnocks();
     if (!this.puzzles.length) return;
-    const host = this.puzzleHost();
     for (const run of this.puzzles) {
-      if (!run.done) run.kind.tick?.(run, host, dt);
+      if (!run.done) run.kind.tick?.(run, this.puzzleHost(run), dt);
     }
   }
 
@@ -41599,7 +41640,7 @@ export class World {
       g.run.hums.clear();
       for (const n of fresh) g.run.hums.set(n.id, this.time + puzzleHumOf(g.run));
       for (const node of fresh) {
-        g.run.kind.struck!(g.run, node, this.puzzleHost(), g.striker);
+        g.run.kind.struck!(g.run, node, this.puzzleHost(g.run), g.striker);
         if (g.run.done) break;
       }
     }
@@ -41613,7 +41654,7 @@ export class World {
     if (!pn) return;
     const run = this.puzzles.find(r => r.id === pn.id);
     if (!run || run.done || !run.kind.tuned) return;
-    run.kind.tuned(run, node, this.puzzleHost(), tone);
+    run.kind.tuned(run, node, this.puzzleHost(run), tone);
   }
 
   /** A riddle RESOLVES: latch, chorus, and the spec's own rewards — a
@@ -41624,7 +41665,6 @@ export class World {
     // SOVEREIGNTY: census — the puzzle's own reward pass (the derived census, probe_tiers RIG T).
     if (run.done) return;
     run.done = true;
-    const label = run.spec.label ?? run.kind.label;
     const goal = (run.state.goal as DamageType | undefined) ?? 'lightning';
     const tint = toneTint(goal);
     for (const n of run.nodes) {
@@ -41633,12 +41673,13 @@ export class World {
         color: tint, life: 0.5, maxLife: 0.5,
       });
     }
-    this.text(vec(run.at.x, run.at.y - 20), `${label} resolves!`, tint, 16);
-    if (!this.spoilsSealed()) this.massRuntime?.earnPuzzleReward(this, run);
+    const rewardZone = run.rewardZone;
+    const sealed = rewardZone ? rewardZone.spoils === 'none' : this.spoilsSealed();
+    if (!sealed) this.massRuntime?.earnPuzzleReward(this, run);
     const rw = puzzleRewardOf(run);
     if (rw?.gems) {
       for (let i = 0; i < rw.gems; i++) {
-        this.dropGemAt(vec(run.at.x + rand(-30, 30), run.at.y + rand(-30, 30)));
+        this.dropGemAt(vec(run.at.x + rand(-30, 30), run.at.y + rand(-30, 30)), undefined, false, run.rewardSource, undefined, undefined, rewardZone);
       }
     }
     // THE DIVERSIFIED POUR (2026-08-07): a reward TABLE resolves through the
@@ -41647,10 +41688,10 @@ export class World {
     // purpose: a riddle pays of the ground underfoot, not of a writ — sealed
     // (spoils 'none') ground refuses the mint exactly like the gem lane
     // above (the cheap skip is rollDrops' own idiom: no resolution, no rng).
-    if (rw?.table && !this.spoilsSealed()) {
+    if (rw?.table && !sealed) {
       for (const res of resolveLootTable(rw.table, { ilvl: run.rewardLevel ?? this.zone.level })) {
         const at = this.clampPos(vec(run.at.x + rand(-30, 30), run.at.y + rand(-30, 30)), 10);
-        this.mintLootResult(at, res);
+        this.mintLootResult(at, res, false, run.rewardSource, rewardZone);
       }
     }
     if (rw?.washFor) {
@@ -41659,6 +41700,7 @@ export class World {
       const scale = rw.washFor / Math.max(0.01, sdef?.duration ?? rw.washFor);
       for (const x of this.actors) {
         if (x.dead || x.team !== 'player' || x.construct || x.passive) continue;
+        if (run.owner && !sameStory(x, run.nodes[0])) continue;
         if (dist(x.pos, run.at) > TUNE_CFG.pulseRadius * 2) continue;
         x.applyStatus(sid, 0, scale, 'attunement');
       }
@@ -41680,7 +41722,9 @@ export class World {
   /** Live riddle views for the zone panel + attention chevrons
    *  (data/puzzles.ts registers both — the beacons.ts idiom). */
   puzzleViews(): { id: string; label: string; line: string; done: boolean; pos: Vec2; isObjective: boolean }[] {
-    return this.puzzles.filter(r => !this.massRuntime || this.massRuntime.puzzles.visible(r.id,this.player.pos)).map(r => ({
+    return this.puzzles.filter(r => r.owner
+      ? sameStory(this.player,r.nodes[0]) && dist(r.at,this.player.pos) < PUZZLE_CFG.earshot
+      : !this.massRuntime || this.massRuntime.puzzles.visible(r.id,this.player.pos)).map(r => ({
       id: r.id, label: r.spec.label ?? r.kind.label, line: r.kind.status(r),
       done: r.done, pos: r.at, isObjective: r.isObjective,
     }));
@@ -47270,7 +47314,7 @@ export class World {
       return;
     }
     const dropSkill = (): void => {
-      const inst = this.rollSkillGem(bias, this.lootLevelAt(at), floor);
+      const inst = this.rollSkillGem(bias, contextZone?.level ?? this.lootLevelAt(at), floor);
       const bobF = Math.random(); // rand(0, 2π)'s own draw, raw — the seed site
       land(bobF, () => {
         this.noteGemDrop(inst.def.id, inst.rarity);
@@ -47280,7 +47324,7 @@ export class World {
       });
     };
     if (chance(GEM_DROP_CFG.skillShare)) { dropSkill(); return; }
-    const gemDef = this.rollSupportDropGated(bias, this.lootLevelAt(at), floor);
+    const gemDef = this.rollSupportDropGated(bias, contextZone?.level ?? this.lootLevelAt(at), floor);
     if (!gemDef) { dropSkill(); return; } // no supports unlocked → a skill gem instead
     const bobF = Math.random();
     land(bobF, () => {
@@ -48082,14 +48126,14 @@ export class World {
    *  carry the same grace/dropper guards as discarded gems. `owed` marks
    *  gear the player is OWED (a corpse reclaim, a dev conjure) — owned
    *  property, exempt from the spoils law like any discard. */
-  dropGearAt(at: Vec2, item: ItemInstance, droppedBy?: string, owed = false): void {
+  dropGearAt(at: Vec2, item: ItemInstance, droppedBy?: string, owed = false, contextZone?: Readonly<ZoneDef>): void {
     // Lessons gate ambient relics at the shared mint seam, including caches.
     // Earned rewards and owned property always retain their ordinary delivery.
     if (!droppedBy && !owed && CONTAINER_DEFS.some(c => c.dropLedger
       && (this.account.ledger[c.dropLedger] ?? 0) < 1 && containerAccepts(c, item))) return;
     // THE SPOILS LAW: minted gear refuses on sealed ground; a player's own
     // discards (droppedBy) and owed returns are movement and always land.
-    if (!droppedBy && !owed && this.spoilsSealed()) return;
+    if (!droppedBy && !owed && (contextZone ? contextZone.spoils === 'none' : this.spoilsSealed())) return;
     // THE SPOILS STORY: a discard lands on its dropper's story, minted gear
     // on the shedder's (the context) — the clamp confines on that story.
     const dropper = droppedBy ? this.seats.find(s => s.id === droppedBy)?.actor : undefined;
@@ -48138,8 +48182,8 @@ export class World {
   }
 
   /** Shed a vestige on the ground (kill path / tables) — vacuumed on touch. */
-  dropVestigeAt(at: Vec2, id: string, count = 1): void {
-    if (this.spoilsSealed()) return; // THE SPOILS LAW — vestiges are minted wealth
+  dropVestigeAt(at: Vec2, id: string, count = 1, contextZone?: Readonly<ZoneDef>): void {
+    if (contextZone ? contextZone.spoils === 'none' : this.spoilsSealed()) return; // THE SPOILS LAW — vestiges are minted wealth
     if (!VESTIGES[id]) return;
     const pos = this.clampPos(vec(at.x + rand(-14, 14), at.y + rand(-14, 14)), 10, undefined, this.spoilClamp());
     this.drops.push({ pos, item: { kind: 'vestige', id, count }, bob: rand(0, Math.PI * 2), tier: this.spoilStory });
@@ -49202,15 +49246,15 @@ export class World {
   }
 
   /** Every loot-table consumer shares currency, gem and item delivery. */
-  private mintLootResult(at: Vec2, result: LootResult, owed = false, from?: string | MemoryProvenance): void {
+  private mintLootResult(at: Vec2, result: LootResult, owed = false, from?: string | MemoryProvenance, contextZone?: Readonly<ZoneDef>): void {
     switch (result.kind) {
       // THE MEMORY LAW: a table's gem rides the drop chokepoint whole — its
       // Memory wears the PAYING body's provenance (or the caller's word).
-      case 'gem': this.dropGemAt(at, undefined, owed, from); break;
-      case 'item': this.dropGearAt(at, result.item, undefined, owed); break;
-      case 'vestige': this.dropVestigeAt(at, result.id, result.count); break;
-      case 'essence': this.dropEssenceAt(at, result.gain); break;
-      case 'memoryEssence': this.dropAbilityEssenceAt(at, result.tier, result.count); break;
+      case 'gem': this.dropGemAt(at, undefined, owed, from, undefined, undefined, contextZone); break;
+      case 'item': this.dropGearAt(at, result.item, undefined, owed, contextZone); break;
+      case 'vestige': this.dropVestigeAt(at, result.id, result.count, contextZone); break;
+      case 'essence': this.dropEssenceAt(at, result.gain, contextZone); break;
+      case 'memoryEssence': this.dropAbilityEssenceAt(at, result.tier, result.count, Math.random, contextZone); break;
     }
   }
 
