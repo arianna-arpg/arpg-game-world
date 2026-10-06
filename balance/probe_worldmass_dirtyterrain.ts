@@ -94,3 +94,17 @@ const paint=(state:MassState,cell:MassCell,color='#123456')=>state.paint({addres
  assert.ok((painter as unknown as {baked:Map<string,unknown>}).baked.size<=stream.config.maxPages);
  console.log('PASS real painter retention, diagonal halo, restore/runtime ownership, RNG purity and cache bounds');
 }
+
+{
+ const {state}=factory();paint(state,origin);paint(state,far);
+ const first=state.patchesInCells([origin,origin]);assert.equal(first.length,1);
+ assert.equal(first[0],state.patchAt(origin));assert.ok(Object.isFrozen(first)&&Object.isFrozen(first[0].address));
+ const before=state.snapshot();paint(state,origin,'#abcdef');
+ assert.equal(first[0].color,'#123456','earlier route input stays frozen across later edits');
+ assert.equal(state.patchesInCells([origin])[0].color,'#abcdef');
+ assert.equal(state.patchesInCells([{...origin,dimension:'below'}]).length,0);
+ assert.throws(()=>state.patchesInCells(Array(129).fill(origin)));
+ state.restore(before);assert.equal(state.patchesInCells([origin])[0].color,'#123456');
+ const fresh=new MassState(gen.run,30);state.restore(fresh.snapshot());assert.equal(state.patchesInCells([origin,far]).length,0);
+ console.log('PASS bounded local terrain inputs retain signed-page isolation and immutable edit/restore snapshots');
+}

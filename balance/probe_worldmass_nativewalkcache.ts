@@ -71,3 +71,40 @@ try{
  assert.ok((walk as unknown as {regions:Map<string,string>}).regions.size<=32);
  console.log('PASS actual cold native structure, no scene admission, native grid mutation, Continue and bounded cache eviction');
 }finally{restore();}
+
+{
+ const {walk,stream}=make();walk.native={cellSize:30,revision:0,regionAt:()=> 'ground'};
+ let blocked:string|undefined,queries=0;
+ walk.obstacles={blocked(x,y){queries++;return Math.floor(x/6)+','+Math.floor(y/6)===blocked;},revision:()=>blocked??'clear'};
+ const cases:[{x:number;y:number},{x:number;y:number}][]=[
+  [{x:119,y:1},{x:60,y:60}], [{x:1,y:119},{x:60,y:60}],
+  [{x:-119,y:-1},{x:-60,y:-60}], [{x:-1,y:-119},{x:-60,y:-60}],
+  [{x:60,y:1},{x:60,y:119}], [{x:1,y:60},{x:119,y:60}],
+  [{x:60,y:60},{x:60,y:60}], [{x:-11,y:17},{x:60,y:60}],
+ ];
+ // Independent slab-intersection oracle: every closed touched cell must refuse
+ // in BOTH directions, including endpoints and rays lying along grid edges.
+ const touched=(a:{x:number;y:number},b:{x:number;y:number},x:number,y:number)=>{
+  let lo=0,hi=1;
+  for(const [start,delta,min,max] of [[a.x,b.x-a.x,x*6,(x+1)*6],[a.y,b.y-a.y,y*6,(y+1)*6]]){
+   if(delta===0){if(start<min||start>max)return false;continue;}
+   const u=(min-start)/delta,v=(max-start)/delta;lo=Math.max(lo,Math.min(u,v));hi=Math.min(hi,Math.max(u,v));if(lo>hi)return false;
+  }return true;
+ };
+ let comparisons=0;
+ for(const [a,b]of cases){
+  blocked=undefined;assert.equal(walk.lineWalkable(a,b),true);assert.equal(walk.lineWalkable(b,a),true);
+  for(let y=Math.floor(Math.min(a.y,b.y)/6)-1;y<=Math.floor(Math.max(a.y,b.y)/6)+1;y++)for(let x=Math.floor(Math.min(a.x,b.x)/6)-1;x<=Math.floor(Math.max(a.x,b.x)/6)+1;x++){
+   blocked=x+','+y;const expected=!touched(a,b,x,y);
+   assert.equal(walk.lineWalkable(a,b),expected,'forward closed supercover '+blocked+' '+JSON.stringify([a,b]));
+   assert.equal(walk.lineWalkable(b,a),expected,'reverse closed supercover '+blocked+' '+JSON.stringify([a,b]));comparisons+=2;
+  }
+ }
+ blocked=undefined;
+ const from={x:23931.467146196403,y:-10093.821228397079},to={x:23820,y:-10020};
+ assert.equal(walk.lineWalkable(from,to),true,'actual natural caravan connector is a clear line, not a spurious Manhattan detour');
+ assert.deepEqual(walk.pathStep(from,to),to);assert.equal(walk.lineWalkable(to,from),true);
+ const bounded=new MassWalk(stream,walk.origin,{...MASS_NAVIGATION,maxLineCells:2});bounded.native=walk.native;bounded.obstacles=walk.obstacles;queries=0;
+ assert.equal(bounded.lineWalkable({x:119,y:1},{x:60,y:60}),false,'long rays still refuse when traversal budget exhausts');assert.ok(queries<=16,'endpoint checks add only bounded constant work');
+ console.log('PASS exact negative-axis endpoint termination, direction symmetry, closed corner/edge/point blockers, independent slab oracle and bounded ray work',JSON.stringify({comparisons,queries}));
+}

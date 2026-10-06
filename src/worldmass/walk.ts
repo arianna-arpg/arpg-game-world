@@ -102,13 +102,31 @@ export class MassWalk implements RegionGrid {
     const sx = Math.sign(dx), sy = Math.sign(dy);
     let tx = sx ? ((x + (sx > 0 ? 1 : 0)) * cs - from.x) / dx : Infinity;
     let ty = sy ? ((y + (sy > 0 ? 1 : 0)) * cs - from.y) / dy : Infinity;
-    const ok = (cx: number, cy: number): boolean => {
+    const clearCell = (cx: number, cy: number): boolean => {
       const id = this.regionAt((cx + .5) * cs, (cy + .5) * cs);
       return !!regionKind(id)?.walkable && !this.obstacles?.blocked((cx + .5) * cs, (cy + .5) * cs) && (!profile || profile.costOf(id) <= 1);
     };
+    // A closed endpoint on a grid edge/corner touches both/all four cells.
+    // Check them in either direction before stopping an axis at its goal cell.
+    const endpointClear = (p: Vec2): boolean => {
+      const cx = Math.floor(p.x / cs), cy = Math.floor(p.y / cs), edgeX = p.x % cs === 0, edgeY = p.y % cs === 0;
+      return clearCell(cx, cy) && (!edgeX || clearCell(cx - 1, cy)) && (!edgeY || clearCell(cx, cy - 1))
+        && (!(edgeX && edgeY) || clearCell(cx - 1, cy - 1));
+    };
+    if (!endpointClear(from) || !endpointClear(to)) return false;
+    // Rays lying on a grid edge touch both sides along their entire length.
+    const edgeX = dx === 0 && from.x % cs === 0, edgeY = dy === 0 && from.y % cs === 0;
+    const ok = (cx: number, cy: number): boolean => clearCell(cx, cy)
+      && (!edgeX || clearCell(cx - 1, cy)) && (!edgeY || clearCell(cx, cy - 1))
+      && (!(edgeX && edgeY) || clearCell(cx - 1, cy - 1));
     for (let i = 0; i < this.config.maxLineCells; i++) {
       if (!ok(x, y)) return false;
       if (x === ex && y === ey) return true;
+      // At a mixed-sign endpoint corner, stepping both axes at t=1 used to
+      // overshoot the negative axis forever. Its endpoint contacts are already
+      // checked above; advance only axes that have not reached the goal cell.
+      if (x === ex) tx = Infinity;
+      if (y === ey) ty = Infinity;
       if (Math.abs(tx - ty) < 1e-12) {
         if (!ok(x + sx, y) || !ok(x, y + sy)) return false;
         x += sx; y += sy; tx += cs / Math.abs(dx); ty += cs / Math.abs(dy);

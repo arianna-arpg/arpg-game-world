@@ -1,4 +1,4 @@
-import { localOffset } from '../worldmass/address';
+import { localOffset, type MassAddress } from '../worldmass/address';
 import { massDormancyPins } from '../worldmass/dormancy';
 import { massSideareaId, savedMassSideareas, copyMassSidearea, type MassSideareaRoot, type MassSideareaSave } from '../worldmass/sideareas';
 import { dealMassBounties, massBountiesAvailable, massBountyAccept, massBountyRoute } from '../worldmass/bounties';
@@ -207,12 +207,14 @@ import { driveNativeBeacon, nativeBeaconConfig, type NativeBeaconHost, type Nati
 import { driveNativeRiftPours, finishNativeDig, driveHoldObjectives, resolveHoldContest, type HoldFixture, type HoldObjectiveHost, type HoldObjectiveOptions } from './holdObjectives';
 import { objectiveRewardXp } from '../data/objectiveRewards';
 import { PROCESSION_CFG } from '../data/processions';
+import { driveNativeProcession, nativeProcessionConfig, nativeProcessionSteering, type NativeProcessionConfig, type NativeProcessionState } from './processionObjectives';
+import type { MassProcessionCartBirth, MassProcessionAmbushBirth, MassProcessionRoadRow } from '../worldmass/processionTypes';
 import { BOUNTY_CFG } from '../data/bounties';
 import { ADOPT_CFG, CLEAR_CFG, OFFERING_CFG, STRAGGLER_CFG, maybeAdoptObjective, packageAskRow, ventureAskRow } from '../data/objectives';
 import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS } from '../data/looks';
 import {
   blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleKinds, doodadRuleOf, generateLayout,
-  hitSurfaceOf, normalizeDoodadBound, pitRegionOf,
+  hitSurfaceOf, normalizeDoodadBound, pitRegionOf, layTraveledWay,
   type BrittleSpec, type Doodad, type DoodadEffect, type DoodadKind, type PlacedStructure, type PlacedSlot,
   type ResonanceSpec,
 } from './levelgen';
@@ -22867,6 +22869,7 @@ export class World {
     // Any XP change re-replicates this seat's meta (xp bar + level + points). The
     // dirty Set coalesces, so a kill-storm still ships at most one meta/snapshot.
     this.markMetaDirty(seat);
+    const levelUpCueStart = p.level;
     while (m.xp >= m.xpNeeded) {
       m.xp -= m.xpNeeded;
       p.level++;
@@ -22878,12 +22881,13 @@ export class World {
       // A DOWNED seat banks XP and levels, but must NOT auto-heal off 0 — only an
       // ally's revive restores it (to REVIVE_LIFE_FRAC). Mirrors the regen guard.
       if (!p.downed) p.fillResources();
-      // The toast lands where the PLAYER is looking (the controlled body) —
-      // the level itself landed on the hero above.
-      this.text(seat.actor.pos, 'LEVEL UP!', '#ffd700', 24, 'progression');
+      // Preserve the retired LEVEL UP! floater's random draw per level.
+      rand(-10, 10);
       // LIVE PARITY: the patron levelled — re-normalize the hired blade.
       if (seat === this.localSeat) this.resyncMercenary();
     }
+    // One physical level-up burst per grant, including multi-level rewards.
+    if (p.level > levelUpCueStart) this.flashes.push({ pos: { ...seat.actor.pos }, radius: 80, color: '#ffd700', life: .65, maxLife: .65, fx: 'sparkle' });
     // Reaching character level 5 surfaces the Quest Package in the Vault next run.
     // Account-level progression belongs to THIS MACHINE's account — the local
     // hero always, and a couch guest too (both characters are the account's
@@ -23580,9 +23584,8 @@ export class World {
   }
 
   /** Shed an Ability Essence packet on the ground — vacuumed on touch like
-   *  the tints. THE DROP IS AN EVENT: the mint floats the tier's name in
-   *  its color (the dropGemAt idiom), so the moment reads from across the
-   *  room; the pickup feed banks the quiet ledger row. `rng` lets the kill
+   *  the tints. The mint uses lootDropCue's colored glint; the ground packet
+   *  and pickup feed keep its identity and count. `rng` lets the kill
    *  path scatter off its own fork (below); direct mints default global. */
   dropAbilityEssenceAt(at: Vec2, tier: number, count: number, rng: () => number = Math.random, contextZone?: Readonly<ZoneDef>): void {
     if (contextZone ? contextZone.spoils === 'none' : this.spoilsSealed()) return; // THE SPOILS LAW — minted wealth
@@ -23591,7 +23594,7 @@ export class World {
     const s = ESSENCE_SPILL_CFG.scatter;
     const pos = this.clampPos(vec(at.x + (rng() * 2 - 1) * s, at.y + (rng() * 2 - 1) * s), 10, undefined, this.spoilClamp());
     this.drops.push({ pos, item: { kind: 'abilityEssence', tier: def.tier, count }, bob: rng() * Math.PI * 2, tier: this.spoilStory });
-    this.text(at, `${def.label}!`, def.color, 14, 'drop', FLOAT_CFG.dropNameSec);
+    this.lootDropCue(at, def.color);
   }
 
   /** THE FORKED TRICKLE: the kill-path roll draws from its OWN salted
@@ -47320,8 +47323,7 @@ export class World {
       land(bobF, () => {
         this.noteGemDrop(inst.def.id, inst.rarity);
         this.drops.push({ pos, item: { kind: 'skill', inst }, bob: bobF * Math.PI * 2, tier: this.spoilStory });
-        this.text(at, `${skillInstanceName(inst)}!`, SKILL_RARITIES[inst.rarity ?? 'common'].color, 15,
-          'drop', FLOAT_CFG.dropNameSec);
+        this.lootDropCue(at, SKILL_RARITIES[inst.rarity ?? 'common'].color);
       });
     };
     if (chance(GEM_DROP_CFG.skillShare)) { dropSkill(); return; }
@@ -47331,7 +47333,7 @@ export class World {
     land(bobF, () => {
       this.noteGemDrop(gemDef.id);
       this.drops.push({ pos, item: { kind: 'support', gem: { def: gemDef, level: 1 } }, bob: bobF * Math.PI * 2, tier: this.spoilStory });
-      this.text(at, `${gemDef.name}!`, gemDef.color, 14, 'drop', FLOAT_CFG.dropNameSec);
+      this.lootDropCue(at, gemDef.color);
     });
   }
 
@@ -47349,7 +47351,7 @@ export class World {
       const inst = makeSkillGem(def, pin.l ?? 1, pin.r ?? rollSkillRarity(seedLaneFrac(seed, 'rarity')));
       this.noteGemDrop(inst.def.id, inst.rarity); // a BUILT spoil is a genuine mint too — the drop index sees it
       this.drops.push({ pos, item: { kind: 'skill', inst }, bob: bobF * Math.PI * 2, tier: this.spoilStory });
-      this.text(at, `${skillInstanceName(inst)}!`, SKILL_RARITIES[inst.rarity ?? 'common'].color, 15, 'drop', FLOAT_CFG.dropNameSec);
+      this.lootDropCue(at, SKILL_RARITIES[inst.rarity ?? 'common'].color);
       return;
     }
     const def = SUPPORTS[pin.id];
@@ -47357,7 +47359,7 @@ export class World {
     const cutRng = new Rng((seed ^ 0x9e3779b9) >>> 0);
     this.noteGemDrop(def.id);
     this.drops.push({ pos, item: { kind: 'support', gem: mintSupportInstance(def, pin.l ?? 1, () => cutRng.next()) }, bob: bobF * Math.PI * 2, tier: this.spoilStory });
-    this.text(at, `${def.name}!`, def.color, 14, 'drop', FLOAT_CFG.dropNameSec);
+    this.lootDropCue(at, def.color);
   }
 
   /** THE STONE's ground mint: one Memory unit sealed around its foreordained
@@ -47366,9 +47368,8 @@ export class World {
    *  written only when it says something), riding the GEAR drop lane whole
    *  (the pouch item IS the drop — pickup auto-merges it onto the standing
    *  tile of its KIND). NOT a gem mint: THE MINT LAW stamps at the RECALL,
-   *  where the gem actually enters the world. One text call, like the gem
-   *  it replaced (the float fabric draws jitter per call — parity is the law
-   *  here). */
+   *  where the gem actually enters the world. Its physical glint keeps the
+   *  former name floater's one jitter draw, preserving the native stream. */
   private dropMemoryUnit(
     pos: Vec2, at: Vec2, prov: MemoryProvenance, seed: number, kind: MemoryKind, bobF: number,
     pin?: MemoryPin, tileset?: string,
@@ -47380,7 +47381,14 @@ export class World {
       ...(pin ? { g: { ...pin } } : {}),
     };
     this.drops.push({ pos, item: { kind: 'gear', item: makeMemoryItem(kind, [unit]) }, bob: bobF * Math.PI * 2, tier: this.spoilStory });
-    this.text(at, `${MEMORY_KINDS[kind].name}!`, MEMORY_KINDS[kind].color, 14, 'drop', FLOAT_CFG.dropNameSec);
+    this.lootDropCue(at, MEMORY_KINDS[kind].color);
+  }
+
+  /** The falling spoil already carries its ground identity. Show its arrival
+   *  through a colored glint, preserving the former floater's sole RNG draw. */
+  private lootDropCue(at: Vec2, color: string): void {
+    const x = at.x + rand(-10, 10);
+    this.flashes.push({ pos: vec(x, at.y), radius: 24, color, life: .35, maxLife: .35, fx: 'sparkle' });
   }
 
   /** The pouch pickup's one float + feed line (the count IS the news). */
@@ -48123,7 +48131,7 @@ export class World {
     this.markMetaDirty(seat);
   }
 
-  /** Mint a ground gear drop. Kill loot announces itself; player discards
+  /** Mint a ground gear drop. Kill loot glints at arrival; player discards
    *  carry the same grace/dropper guards as discarded gems. `owed` marks
    *  gear the player is OWED (a corpse reclaim, a dev conjure) — owned
    *  property, exempt from the spoils law like any discard. */
@@ -48147,8 +48155,7 @@ export class World {
     if (droppedBy) { drop.grace = DROP_PICKUP_GRACE; drop.droppedBy = droppedBy; }
     this.drops.push(drop);
     if (!droppedBy) {
-      this.text(at, `${item.name}!`, ITEM_RARITIES[item.rarity].color,
-        item.rarity === 'unique' ? 17 : 14, 'drop', FLOAT_CFG.dropNameSec, false, item.uid);
+      this.lootDropCue(at, ITEM_RARITIES[item.rarity].color);
       // THE DISCOVERY LEDGER (engine/containers.ts ContainerDef.foundLedger):
       // a GENUINE world mint of a piece some side board accepts stamps the
       // account once — the Vault's case for it surfaces only after the
@@ -51598,6 +51605,10 @@ export class World {
         if (s.charge < need) add({ pos: s.pos, frac: clamp(s.charge / Math.max(0.01, need), 0, 1), kind: 'digsite' });
       }
     }
+    for(const view of this.massRuntime?.geography?.caravans.processions.views(this.player.pos)??[]){
+      if(!view.rolling&&!view.done&&!view.lost&&!view.away&&view.rallyFrac>0)
+        add({pos:view.pos,kind:'procession',frac:view.rallyFrac});
+    }
     // The procession's rally ring while the dwell builds at the dormant cart.
     const pr = this.procession;
     if (pr && !pr.rolling && !this.objectiveDone && !this.objectiveLost && pr.dwellStart > 0) {
@@ -51860,6 +51871,8 @@ export class World {
     pos: Vec2; frac: number; started: boolean; rolling: boolean;
     done: boolean; lost: boolean; lifeFrac: number;
   } | null {
+    const geographic=this.massRuntime?.geography?.caravans.processions.views(this.player.pos).find(v=>!v.away&&!v.done&&!v.lost);
+    if(geographic)return geographic;
     const o = this.zone.objective;
     if (o.kind !== 'procession') return null;
     const pr = this.procession;
@@ -51875,50 +51888,88 @@ export class World {
     };
   }
 
-  /** Bandits puff from smoke near the road ahead of the rolling cart — the
-   *  procession's only spawns, capped while enough robbers stand. Each wears
-   *  the FIXATION GRAFT (the extraction idiom): the GOODS are the enemy until
-   *  you out-shout them on the threat chart. */
-  private spawnProcessionAmbush(
-    pr: { heading: number }, cart: Actor, robbers?: PackTableEntry[],
-  ): void {
-    const cfg = PROCESSION_CFG;
-    const alive = this.actors.filter(a => !a.dead && a.tag === 'procession_robber').length;
-    if (alive >= cfg.puffCap) return;
-    const lvl = Math.max(1, this.zone.level);
-    const table = robbers ?? cfg.robbers;
-    const n = Math.min(randInt(cfg.puffCount[0], cfg.puffCount[1]), cfg.puffCap - alive);
-    const base = vec(
-      cart.pos.x + Math.cos(pr.heading) * cfg.puffLead,
-      cart.pos.y + Math.sin(pr.heading) * cfg.puffLead);
-    let spawned = 0;
-    for (let i = 0; i < n; i++) {
-      const type = this.weightedPick(table, lvl);
-      if (!MONSTERS[type]) continue;
-      const m = this.createMonster(type, lvl, 'enemy');
-      const at = vec(base.x + rand(-cfg.puffJitter, cfg.puffJitter),
-        base.y + rand(-cfg.puffJitter, cfg.puffJitter));
-      m.pos = this.clampPos(this.findFreeSpot(at, m.radius + 2) ?? this.clampNear(cart.pos, 150), m.radius);
-      m.tag = 'procession_robber';
-      m.eventKey = `procession:${this.zone.id}`;
-      const ag = m.defId ? MONSTERS[m.defId]?.aggro : undefined;
-      m.aiTuning = {
-        target: {
-          prefer: 'highestThreat', relentless: true, stickiness: cfg.fixation.stickiness,
-          threat: { damage: ag?.fury ?? 1, decay: cfg.fixation.decay * (ag?.waver ?? 1) },
-        },
-      };
-      m.addThreat(cart.id, cfg.fixation.seedThreat * (ag?.fixation ?? 1));
-      m.aiTargetId = cart.id;
-      m.aggroed = true;
-      m.aiAwakened = true;
-      this.actors.push(m);
-      this.flashes.push({ pos: vec(m.pos.x, m.pos.y), radius: 42, color: cfg.smoke, life: 0.5, maxLife: 0.5 });
-      spawned++;
+  /** The native factory loop is shared; the geographic owner publishes its
+   * detached batch only after capacity and source validation. */
+  private nativeProcessionBodies(cart:Actor, heading:number, count:number, zone:Readonly<ZoneDef>, cfg:NativeProcessionConfig, owner:string, origin:Vec2=cart.pos):Actor[] {
+    const lvl=Math.max(1,zone.level),base=vec(origin.x+Math.cos(heading)*cfg.puffLead,origin.y+Math.sin(heading)*cfg.puffLead),out:Actor[]=[];
+    for(let i=0;i<count;i++){
+      const type=this.weightedPick(cfg.robbers as PackTableEntry[],lvl);if(!MONSTERS[type])continue;
+      const m=this.createMonster(type,lvl,'enemy');
+      const at=vec(base.x+rand(-cfg.puffJitter,cfg.puffJitter),base.y+rand(-cfg.puffJitter,cfg.puffJitter));
+      m.pos=this.clampPos(this.findFreeSpot(at,m.radius+2)??this.clampNear(cart.pos,150),m.radius);
+      m.tag='procession_robber';m.eventKey='procession:'+owner;
+      const ag=m.defId?MONSTERS[m.defId]?.aggro:undefined;
+      m.aiTuning={target:{prefer:'highestThreat',relentless:true,stickiness:cfg.fixation.stickiness,
+        threat:{damage:ag?.fury??1,decay:cfg.fixation.decay*(ag?.waver??1)}}};
+      m.addThreat(cart.id,cfg.fixation.seedThreat*(ag?.fixation??1));m.aiTargetId=cart.id;m.aggroed=true;m.aiAwakened=true;out.push(m);
     }
-    if (spawned > 0) {
-      this.text(vec(base.x, base.y - 30), 'an ambush — they want the goods!', cfg.smoke, 13);
+    return out;
+  }
+  private spawnProcessionAmbush(cart:Actor,heading:number,count:number,cfg:NativeProcessionConfig):number {
+    const bodies=this.nativeProcessionBodies(cart,heading,count,this.zone,cfg,this.zone.id);
+    for(const m of bodies){
+      this.actors.push(m);this.flashes.push({pos:{...m.pos},radius:cfg.ambushFlare.radius,color:cfg.smoke,life:cfg.ambushFlare.life,maxLife:cfg.ambushFlare.life});
     }
+    return bodies.length;
+  }
+  createMassProcessionCart(request:MassProcessionCartBirth):Actor {
+    return withSeededRandom(request.seed,()=>{
+      const cfg=request.config,level=Math.max(1,request.zone.level),cart=this.createMonster(cfg.cartId,level,'player');
+      const pool=Math.round(cfg.lifeBase+level*cfg.lifePerLevel);
+      cart.sheet.setSource('procession_cart',[{stat:'life',kind:'flat',value:Math.max(0,pool-cart.maxLife())}]);cart.fillResources();
+      const at=vec(request.at.x+rand(-26,26),request.at.y+44+rand(-10,10));
+      cart.pos=this.clampPos(this.findFreeSpot(at,cart.radius+2)??at,cart.radius);
+      cart.untargetable=true;cart.invulnerable=true;cart.tag='procession_cart';cart.eventKey='procession:'+request.owner;
+      return cart;
+    });
+  }
+  createMassProcessionAmbush(request:MassProcessionAmbushBirth):readonly Actor[] {
+    if(!Number.isSafeInteger(request.count)||request.count<0||request.count>request.config.puffCap)throw Error('Invalid native caravan batch');
+    return withSeededRandom(request.seed,()=>{
+      const bodies=this.nativeProcessionBodies(request.cart,request.heading,request.count,request.zone,request.config,request.owner,request.at);
+      for(const a of bodies)a.fromZoneGen=true;
+      return bodies;
+    });
+  }
+  /** Ordinary path steering toward a certified adjacent road point. */
+  massProcessionSteering(cart:Actor,target:Vec2):Vec2{return nativeProcessionSteering(cart,target,this.pathField());}
+  /** Produce the original kept-road discs without changing terrain or scenery. */
+  createMassProcessionRoad(owner:string,seed:number,points:readonly Vec2[],emission:{band:[number,number];step:number;kind:'road';overgrowth:0}={band:[16,22],step:30,kind:'road',overgrowth:0}):Doodad[]{
+    if(!owner||!Number.isSafeInteger(seed)||points.length<2||points.length>192
+      ||points.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)))throw Error('Invalid native procession road');
+    const ctx={rng:new Rng(seed),walk:this.massRuntime?.walk,doodads:[] as Doodad[],reserved:[] as {pos:Vec2;radius:number}[],overgrowth:0};
+    layTraveledWay(ctx,points.map(p=>({...p})),{...emission,reserve:true});return ctx.doodads;
+  }
+  installMassProcessionRoad(owner:string,rows:readonly MassProcessionRoadRow[],project?:(at:MassAddress)=>Vec2):()=>void{
+    const mass=this.massRuntime;if((!mass&&!project)||!owner)throw Error('Missing native procession road owner');
+    const local=project??((at:MassAddress)=>localOffset(at,{...mass!.origin,x:0,y:0},mass!.config.terrain.addressSpan));
+    const road=rows.map(row=>({...row.doodad,pos:local(row.at)}));
+    this.doodads.push(...road);this.grounds.push(...road.filter(d=>GROUND_KINDS.includes(d.kind)));this.markDoodadsChanged();let detached=false;
+    return()=>{if(detached)return;const own=new Set(road);this.doodads=this.doodads.filter(d=>!own.has(d));this.grounds=this.grounds.filter(d=>!own.has(d));this.markDoodadsChanged();detached=true;};
+  }
+  massProcessionWreck(_owner:string,zone:Readonly<ZoneDef>,at:Vec2,seed:number,rewardSource:string):void{
+    this.spillMassObjectiveGem(zone,at,seed,rewardSource);
+  }
+  /** Existing surface scenery is planning input, never removed to fit a road.
+   * Exact native discs/unions and conservative rotated-slab boxes are copied. */
+  massProcessionObstacles(center:Vec2,extent:number):{circles:{x:number;y:number;radius:number}[];boxes:{minX:number;minY:number;maxX:number;maxY:number;padding:number}[]}|null{
+    if(!Number.isFinite(extent)||extent<=0||extent>6000)throw Error('Invalid procession obstacle extent');
+    const circles:{x:number;y:number;radius:number}[]=[],boxes:{minX:number;minY:number;maxX:number;maxY:number;padding:number}[]=[];
+    const disc=(x:number,y:number,radius:number)=>{if(Math.abs(x)<=extent+radius&&Math.abs(y)<=extent+radius)circles.push({x,y,radius});};
+    for(const d of this.doodadsNear(center.x,center.y,extent*Math.SQRT2)){
+      if((d.tier??0)!==0||!blocksMovement(d))continue;
+      const x=d.pos.x-center.x,y=d.pos.y-center.y,shape=hitSurfaceOf(d,'move');
+      if(shape.kind==='circle')disc(x,y,shape.r);
+      else if(shape.kind==='multi')for(const part of shape.parts)disc(x+part.dx,y+part.dy,part.r);
+      else {const {ex,ey}=shapeAabbHalf(shape);if(Math.abs(x)<=extent+ex&&Math.abs(y)<=extent+ey)boxes.push({minX:x-ex,minY:y-ey,maxX:x+ex,maxY:y+ey,padding:0});}
+      if(circles.length+boxes.length>4096)return null;
+    }
+    circles.sort((a,b)=>a.x-b.x||a.y-b.y||a.radius-b.radius);boxes.sort((a,b)=>a.minX-b.minX||a.minY-b.minY||a.maxX-b.maxX||a.maxY-b.maxY);
+    return {circles,boxes};
+  }
+  massProcessionStandClear(pos:Vec2,radius:number):boolean{return this.clearOfDoors(pos,radius+MIN_PORTAL_SEP);}
+  massProcessionReachable(player:Actor,cart:Actor,reach:DwellReach):boolean {
+    return this.dwellReachable(player.pos,cart.pos,reach,this.storyPair(player,cart));
   }
 
   // --- LURE FABRIC: monster-attention points (the mapMarkers/attention idea,
@@ -56581,7 +56632,7 @@ export class World {
 
   /** Burst a chest open: one contextual loot list and a swig of resources. */
   chestObjectiveDone(c: Chest): boolean {
-    return c.massObjectiveOwner ? !!this.massRuntime?.geography?.objectives.chestReady(c) : this.objectiveDone;
+    return c.massObjectiveOwner ? !!this.massRuntime?.geography?.chestReady(c) : this.objectiveDone;
   }
   installMassObjectiveChest(owner: string, chest: Chest): () => void {
     if (chest.massObjectiveOwner !== owner || this.chests.some(c=>c.massObjectiveOwner===owner)) throw Error('Duplicate geographic objective chest');
@@ -56592,11 +56643,11 @@ export class World {
     if (c.opened || c.massObjectiveOwner && !this.chestObjectiveDone(c)) return;
     c.opened = true;
     c.openedAt = this.time; // M-SPILL: the lid swings (the renderer's own clock read)
-    if(c.massObjectiveOwner)this.massRuntime?.geography?.objectives.chestOpened(c,this.time);
+    if(c.massObjectiveOwner)this.massRuntime?.geography?.chestOpened(c,this.time);
     const rewardLevel = c.rewardLevel ?? this.levelAt(c.pos);
     this.withMassReward(rewardLevel, () => {
       const memoryProvenance = 'chest'; // Durable cache identity stays on the chest; Memories name their registered source.
-      const lootZone = this.massRuntime?.geography?.objectives.chestContext(c)
+      const lootZone = this.massRuntime?.geography?.chestContext(c)
         ?? (c.rewardLevel === undefined && !this.massRuntime ? this.zone : { ...this.zone, level: rewardLevel });
       if (!this.spoilsSealed()) {
         for (const result of resolveLootTable(selectContainerLoot('chest', lootZone), { ilvl: rewardLevel, sourceId: memoryProvenance })) {
@@ -62306,7 +62357,7 @@ export class World {
 
   private completeObjective(label: string): void {
     if (this.objectiveDone) return;
-    const visibleHold = ['beacon', 'rifts', 'pyres', 'unearth'].includes(this.zone.objective.kind);
+    const visibleHold = ['beacon', 'rifts', 'pyres', 'unearth', 'procession'].includes(this.zone.objective.kind);
     this.objectiveDone = true; // per-load latch: unseals this zone's exits
     // ONE-SHOT UBER: record an account-scoped kill so the boss is forever dead.
     // Meta-progression — a sealed (Undying) character's trophy is its own; the
@@ -62329,6 +62380,7 @@ export class World {
     if (this.completedObjectives.has(this.zone.id)) {
       if (!visibleHold) this.text(vec(this.player.pos.x, this.player.pos.y - 50),
         `${label} (already cleared)`, '#9a9a9a', 16);
+      else if (obj.kind === 'procession') rand(-10, 10); // retired native procession completion floater
       if (isQuestZone) this.onQuestZoneFieldCleared(this.zone.id);
       return;
     }
@@ -62337,6 +62389,7 @@ export class World {
     this.grantXp(bonus);
     if (!visibleHold) this.text(vec(this.player.pos.x, this.player.pos.y - 50),
       `${label} +${bonus} xp`, '#ffd700', 18);
+    else if (obj.kind === 'procession') rand(-10, 10); // retired native procession completion floater
     if (isQuestZone) this.onQuestZoneFieldCleared(this.zone.id);
   }
 
@@ -62652,81 +62705,22 @@ export class World {
       }
 
       case 'procession': {
-        // ESCORT THE CARAVAN: dormant until the rally dwell, then a path-field
-        // march toward the crossing. Robbers ADJACENT stop the wheels; the
-        // rolling cart's lure draws the zone's own population after the
-        // goods, and bandit ambushes puff from smoke on the march clock.
-        // Arrival completes; the cart's death LOSES the objective — bounty
-        // forfeit, roads open, the zone's TTL refresh deals a fresh caravan.
-        const pr = this.procession;
-        if (this.objectiveDone || this.objectiveLost || !pr || pr.cartId == null) return;
-        const cart = this.actorById(pr.cartId);
-        if (!cart || cart.dead) {
-          this.objectiveLost = true;
-          if (cart) {
-            this.dropGemAt(cart.pos); // scavenge the wreck
-            this.flashes.push({ pos: vec(cart.pos.x, cart.pos.y), radius: 90, color: PROCESSION_CFG.smoke, life: 0.7, maxLife: 0.7 });
-          }
-          pr.cartId = null;
-          this.notice('The caravan is lost — its bounty with it.', '#d05050', 16, 'events');
-          return;
-        }
-        if (!pr.rolling) {
-          // The rally: linger at the wheel (presence — the road ahead is the
-          // fight). An entry GRACE keeps arrival from rallying the cart while
-          // you're still reading the ground (it waits at your own gate).
-          if (this.time - this.zoneEnteredAt < PROCESSION_CFG.entryGraceSec) { pr.dwellStart = 0; return; }
-          const engaged = !this.player.dead
-            && dist(this.player.pos, cart.pos) <= transitRadius('procession', 96)
-            && this.dwellReachable(this.player.pos, cart.pos, transitReach('procession'), this.storyPair(this.player, cart));
-          if (!engaged) { pr.dwellStart = 0; return; }
-          if (pr.dwellStart === 0) pr.dwellStart = this.time;
-          if (this.time - pr.dwellStart >= transitDwell('procession', 0.9)) {
-            pr.rolling = true;
-            pr.started = true;
-            pr.puffAt = this.time + rand(o.puffEvery?.[0] ?? PROCESSION_CFG.puffEvery[0],
-              o.puffEvery?.[1] ?? PROCESSION_CFG.puffEvery[1]);
-            cart.untargetable = false; // cargo on the road is cargo at risk
-            cart.invulnerable = false;
-            this.text(vec(cart.pos.x, cart.pos.y - 40),
-              'The procession sets out — see it through!', PROCESSION_CFG.accent, 15);
-            this.flashes.push({ pos: vec(cart.pos.x, cart.pos.y), radius: 80, color: PROCESSION_CFG.accent, life: 0.5, maxLife: 0.5 });
-          }
-          return;
-        }
-        // The goods pull: idle locals drift after the rolling cart and turn on
-        // it the moment they truly perceive it (team-player body, fair game).
-        this.setLure('procession', cart.pos,
-          PROCESSION_CFG.lureRadius, PROCESSION_CFG.lurePace, PROCESSION_CFG.lureStandoff, undefined, cart.tier);
-        // Robbed: any live foe at the wheels stops the cart dead.
-        const robbed = this.enemiesOf(cart).some(e => !e.dead && !e.passive
-          && dist(e.pos, cart.pos) <= PROCESSION_CFG.robRadius);
-        if (!robbed) {
-          // Steer on the zone's pathing authority (the ai.ts idiom): straight
-          // where the line is clean, flow-field steps around the terrain.
-          const pf = this.pathField();
-          let to = pr.dest;
-          if (pf?.pathStep && !(pf.lineWalkable?.(cart.pos, pr.dest) ?? false)) {
-            to = pf.pathStep(cart.pos, pr.dest) ?? pr.dest;
-          }
-          pr.heading = angleTo(cart.pos, to);
-          cart.facing = pr.heading;
-          this.moveActor(cart, to.x - cart.pos.x, to.y - cart.pos.y,
-            dt * (o.speedMul ?? PROCESSION_CFG.speedMul));
-        }
-        // Ambushes: bandits puff from smoke near the road ahead, capped while
-        // enough robbers still stand (never an infinite pile-up).
-        if (this.time >= pr.puffAt) {
-          pr.puffAt = this.time + rand(o.puffEvery?.[0] ?? PROCESSION_CFG.puffEvery[0],
-            o.puffEvery?.[1] ?? PROCESSION_CFG.puffEvery[1]);
-          this.spawnProcessionAmbush(pr, cart, o.robbers);
-        }
-        if (dist(cart.pos, pr.dest) <= PROCESSION_CFG.arriveDist) {
-          this.flashes.push({ pos: vec(cart.pos.x, cart.pos.y), radius: 110, color: PROCESSION_CFG.accent, life: 0.7, maxLife: 0.7 });
-          cart.dead = true; // it rolls through the crossing and away
-          pr.cartId = null;
-          this.completeObjective('The caravan arrives — the road held!');
-        }
+        const pr=this.procession;if(!pr)return;
+        const state:NativeProcessionState={...pr,enteredAt:this.zoneEnteredAt,done:this.objectiveDone,lost:this.objectiveLost};
+        driveNativeProcession(dt,state,nativeProcessionConfig(o),{
+          now:this.time,player:this.player,random:{range:rand,int:randInt},actorById:id=>this.actorById(id)??null,
+          reachable:(p,c,r)=>this.massProcessionReachable(p,c,r),enemiesOf:a=>this.enemiesOf(a),
+          steering:(cart,to)=>nativeProcessionSteering(cart,to,this.pathField()),
+          move:(a,dx,dy,step)=>this.moveActor(a,dx,dy,step),
+          lure:(a,c)=>this.setLure('procession',a.pos,c.lureRadius,c.lurePace,c.lureStandoff,c.lureLinger,a.tier),
+          flash:(pos,radius,color,life)=>this.flashes.push({pos,radius,color,life,maxLife:life}),
+          robbersAlive:()=>this.actors.filter(a=>!a.dead&&a.tag==='procession_robber').length,
+          spawnAmbush:(a,h,n,c)=>this.spawnProcessionAmbush(a,h,n,c),
+          wreck:cart=>this.dropGemAt(cart.pos),lose:()=>{this.objectiveLost=true;},
+          win:()=>this.completeObjective('The caravan arrives — the road held!'),
+        });
+        const {enteredAt:_enteredAt,done,lost,...progress}=state;
+        Object.assign(pr,progress);this.objectiveDone=done;this.objectiveLost=lost;
         return;
       }
 
@@ -64390,6 +64384,8 @@ export class World {
     // Local work is visible in the native fixtures, light and charge rings.
     // Bounty details and discovered destinations remain available on request.
     if(activity && dist(activity.pos,this.player.pos)<1600)return '';
+    const caravan=this.massRuntime?.geography?.caravans.processions.views(this.player.pos)[0];
+    if(caravan&&dist(caravan.pos,this.player.pos)<1600)return '';
     const massActivity=this.massRuntime?.localSite(this.player.pos)?.activity;
     if(massActivity)return massActivity.text;
     const odysseyPressure = this.odyssey.pressureText();

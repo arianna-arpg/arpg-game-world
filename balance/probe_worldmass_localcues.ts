@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
-import { seedGlobalRandom } from '../src/sim/rng';
+import { mulberry32, seedGlobalRandom } from '../src/sim/rng';
 import type { World } from '../src/engine/world';
+import type { Vec2 } from '../src/core/math';
+import { GEM_DROP_CFG } from '../src/engine/loot';
+import type { MemoryPin } from '../src/engine/memories';
+import type { ItemInstance } from '../src/engine/items';
+import { RELIQUARY } from '../src/data/containers';
+import { PROGRESSION } from '../src/data/classes';
+import { SKILLS } from '../src/data/skills';
+import { SUPPORTS } from '../src/data/supports';
 import type { HoldFixture } from '../src/engine/holdObjectives';
 import { bootPlacedOccSites, OCCURRENCES, type OccSite } from '../src/engine/occurrences';
 import { lightwellOf } from '../src/engine/lightwells';
@@ -26,9 +34,8 @@ const holds=(w:World,k:Exclude<NativeMassHoldKind,'beacon'>)=>access(w)[k==='une
 const family={pyres:{kind:PYRE_CFG.kind,done:PYRE_CFG.kindLit,radius:PYRE_CFG.radius,need:5,flare:130,transit:'pyre'},
   rifts:{kind:RIFT_CFG.kind,done:RIFT_CFG.kindSealed,radius:RIFT_CFG.radius,need:9,flare:150,transit:'rift'},
   unearth:{kind:DIG_CFG.kind,done:DIG_CFG.kindDug,radius:DIG_CFG.radius,need:3.5,flare:110,transit:'digsite'}};
-// Observe the real text/XP arteries. Native level-up presentation is unrelated
-// to local fixture narration and remains free to run inside the actual grant.
-// Native gem reward labels likewise belong to the actual loot artery.
+// Observe real text/XP arteries without substituting grant or drop behavior.
+// Reward cues are checked independently below, including their old RNG draws.
 function observe(w:World){
   const spoken:{value:string;reward:boolean}[]=[],grants:number[]=[],text=w.text,grant=w.grantXp,gem=w.dropGemAt;let rewarding=false;
   w.text=(...args:Parameters<World['text']>)=>{spoken.push({value:args[1],reward:rewarding});return text.apply(w,args);};
@@ -40,6 +47,143 @@ function observe(w:World){
 const flat=():MassAdventure=>{const base=massAdventure();return {terrain:{...base.terrain,fields:[],places:[],surfaces:[{id:'flat',priority:1,when:[],region:'ground',color:'#314232',biome:'downs'}]},theme:base.theme,content:[],startRadius:0,populationRadius:600,maxPopulation:30,pageRadius:1,samplesPerTick:256};};
 const undo=seedGlobalRandom(82449);
 try {
+  // All five native mint lanes previously ended in exactly one World.text
+  // jitter draw. Replace ONLY that new presentation seam on the control with
+  // the old real text artery; native rolls, IDs, notes and drops still execute.
+  const shares={memory:GEM_DROP_CFG.memoryShare,skill:GEM_DROP_CFG.skillShare};
+  const skill=Object.values(SKILLS).find(s=>!s.noDrop)!.id,support=Object.keys(SUPPORTS)[0];
+  const lanes:{name:string;memory:number;skill:number;kind:string;pin?:MemoryPin}[]=[
+    {name:'ordinary skill',memory:0,skill:1,kind:'skill'},
+    {name:'ordinary support',memory:0,skill:0,kind:'support'},
+    {name:'pinned skill',memory:0,skill:1,kind:'skill',pin:{k:'skill',id:skill,r:'rare',l:3}},
+    {name:'pinned support',memory:0,skill:0,kind:'support',pin:{k:'support',id:support,l:4}},
+    {name:'memory',memory:1,skill:1,kind:'gear'},
+  ];
+  try {
+    for(const [index,lane]of lanes.entries()){
+      GEM_DROP_CFG.memoryShare=lane.memory;GEM_DROP_CFG.skillShare=lane.skill;
+      const run=(legacy:boolean)=>{
+        const world=makeSimWorld('warrior',83500+index);world.zone={...world.zone,level:50};
+        for(const id of Object.keys(SUPPORTS))world.account.unlockedSupports.add(id);
+        world.texts=[];world.flashes=[];world.drops=[];
+        if(legacy)Reflect.set(world,'lootDropCue',(at:Vec2,color:string)=>world.text(at,'legacy drop!',color,14,'drop'));
+        const random=Math.random,next=mulberry32(83900+index);let draws=0;
+        Math.random=()=>{draws++;return next();};
+        try{
+          for(let n=0;n<3;n++)world.dropGemAt(world.player.pos,undefined,true,'cue-probe',undefined,lane.pin);
+          const used=draws,tail=Math.random();
+          // Item allocation IDs are monotonic process identities, not RNG or
+          // drop contents. Every other native field must match the old lane.
+          const drops=JSON.parse(JSON.stringify(world.drops,(key,value)=>key==='uid'?undefined:value));
+          return{world,drops,used,tail};
+        }finally{Math.random=random;}
+      };
+      const old=run(true),current=run(false),oldNames=old.world.texts.filter(t=>t.kind==='drop');
+      assert.equal(oldNames.length,3,lane.name+' must exercise the old cue three times');
+      assert.deepEqual(current.drops,old.drops,lane.name+' native species/rarity/seed/position/bob must not drift');
+      assert.equal(current.used,old.used);assert.equal(current.tail,old.tail,lane.name+' next global draw');
+      assert.ok(current.world.drops.every(d=>d.item.kind===lane.kind),lane.name+' actual native lane');
+      assert.equal(current.world.texts.filter(t=>t.kind==='drop').length,0);
+      assert.equal(current.world.flashes.length,3);
+      current.world.flashes.forEach((f,i)=>{assert.equal(f.fx,'sparkle');assert.equal(f.radius,24);assert.equal(f.maxLife,.35);
+        assert.equal(f.color,oldNames[i].color);assert.equal(f.pos.x,oldNames[i].pos.x);assert.equal(f.pos.y,current.world.player.pos.y);});
+    }
+    // A source which refuses wealth still mints no body, cue or RNG draw.
+    const refused=makeSimWorld('warrior',83999);refused.zone={...refused.zone,spoils:'none'};refused.flashes=[];refused.texts=[];
+    const random=Math.random;let calls=0;Math.random=()=>{calls++;return .5;};
+    try{refused.dropGemAt(refused.player.pos);assert.equal(calls,0);assert.equal(refused.drops.length,0);assert.equal(refused.flashes.length,0);}
+    finally{Math.random=random;}
+  }finally{GEM_DROP_CFG.memoryShare=shares.memory;GEM_DROP_CFG.skillShare=shares.skill;}
+  console.log('PASS all five native gem/memory mint lanes preserve exact drops and old World.text RNG stream; one visible glint, no duplicate drop-name float, no cue on refused mint');
+
+  // Gear uses the same cue after its native scatter/bob. Its UID and cargo
+  // are supplied property, so unlike freshly allocated memory IDs these
+  // compare literally, including provenance and discard/owed ledger policy.
+  for(const lane of ['normal','memory','owed','discard','spoils-refused','lesson-refused'] as const){
+    const run=(legacy:boolean)=>{
+      const world=makeSimWorld('warrior',84000),minted:ItemInstance={uid:84001,baseId:'relic_charm',name:'Native cue relic',ilvl:11,tier:2,
+        rarity:'magic',baseRoll:.37,implicitRolls:[.21],affixes:[],x:2,y:3};
+      if(lane==='memory'){minted.baseId='rough_memory';minted.name='Rough Memory';minted.mem=[{d:'quest',s:713,e:'rare',t:'courtland'}];}
+      const before=structuredClone(minted);assert.ok(world.metaProgressionActive());
+      world.account.ledger[RELIQUARY.dropLedger!]=lane==='lesson-refused'?0:1;
+      delete world.account.ledger[RELIQUARY.foundLedger!];world.accountDirty=false;
+      const ledgerBefore=structuredClone(world.account.ledger);
+      if(lane==='owed'||lane==='discard'||lane==='spoils-refused')world.zone={...world.zone,spoils:'none'};
+      world.drops=[];world.texts=[];world.flashes=[];
+      if(legacy)Reflect.set(world,'lootDropCue',(at:Vec2,color:string)=>world.text(at,`${minted.name}!`,color,14,'drop',1,false,minted.uid));
+      const random=Math.random,next=mulberry32(84002);let draws=0;Math.random=()=>{draws++;return next();};
+      try{
+        world.dropGearAt(world.player.pos,minted,lane==='discard'?world.localSeat.id:undefined,lane==='owed');
+        const used=draws,tail=Math.random();
+        return{world,minted,before,ledgerBefore,used,tail,drops:structuredClone(world.drops)};
+      }finally{Math.random=random;}
+    };
+    const old=run(true),current=run(false),refused=lane.endsWith('refused'),cue=!refused&&lane!=='discard';
+    assert.deepEqual(current.drops,old.drops,lane+' exact UID/cargo/position/bob/grace');
+    assert.deepEqual(current.minted,old.minted);assert.deepEqual(current.world.account.ledger,old.world.account.ledger);
+    assert.equal(current.world.accountDirty,old.world.accountDirty);assert.equal(current.used,old.used);assert.equal(current.tail,old.tail);
+    assert.equal(current.used,refused?0:lane==='discard'?3:4,lane+' native scatter/bob plus exactly one old cue draw');
+    assert.equal(current.world.drops.length,refused?0:1);assert.equal(current.world.texts.length,0);
+    assert.equal(current.world.flashes.length,cue?1:0);assert.equal(old.world.texts.length,cue?1:0);
+    if(refused){assert.deepEqual(current.minted,current.before);assert.deepEqual(current.world.account.ledger,current.ledgerBefore);}
+    else{
+      const expected=structuredClone(current.before);delete expected.x;delete expected.y;assert.deepEqual(current.minted,expected);
+      const drop=current.world.drops[0];assert.ok(drop.item.kind==='gear');assert.equal(drop.item.item,current.minted);
+      if(lane==='discard'){assert.equal(drop.droppedBy,current.world.localSeat.id);assert.ok(drop.grace!>0);}
+      else assert.equal(drop.droppedBy,undefined);
+    }
+    assert.equal(current.world.account.ledger[RELIQUARY.foundLedger!],lane==='normal'?1:undefined);
+    assert.equal(current.world.accountDirty,lane==='normal');
+    if(cue){const flash=current.world.flashes[0],text=old.world.texts[0];assert.equal(flash.fx,'sparkle');assert.equal(flash.radius,24);
+      assert.equal(flash.maxLife,.35);assert.equal(flash.color,text.color);assert.equal(flash.pos.x,text.pos.x);assert.equal(flash.pos.y,current.world.player.pos.y);}
+  }
+  console.log('PASS native gear mint, owed return, discard and both refusal gates preserve literal UID/cargo, discovery ledger, scatter and global RNG; only genuine/owed mint gets one glint');
+
+  // Kill-path essence packets have their own scatter stream; the old name
+  // consumed GLOBAL jitter after those three draws. Preserve both streams.
+  for(const forked of [false,true])for(const refused of [false,true]){
+    const run=(legacy:boolean)=>{
+      const world=makeSimWorld('warrior',84100);world.drops=[];world.texts=[];world.flashes=[];
+      if(refused)world.zone={...world.zone,spoils:'none'};
+      if(legacy)Reflect.set(world,'lootDropCue',(at:Vec2,color:string)=>world.text(at,'Memory Essence III!',color,14,'drop'));
+      const random=Math.random,next=mulberry32(84101),packet=mulberry32(84102);let draws=0,packetDraws=0;
+      Math.random=()=>{draws++;return next();};const rng=()=>{packetDraws++;return packet();};
+      try{
+        world.dropAbilityEssenceAt(world.player.pos,3,4,forked?rng:undefined);
+        world.dropAbilityEssenceAt(world.player.pos,3,0,forked?rng:undefined);
+        const used=draws,packetUsed=packetDraws,tail=Math.random(),packetTail=rng();
+        return{world,used,packetUsed,tail,packetTail,drops:structuredClone(world.drops)};
+      }finally{Math.random=random;}
+    };
+    const old=run(true),current=run(false);assert.deepEqual(current.drops,old.drops);
+    assert.equal(current.used,old.used);assert.equal(current.packetUsed,old.packetUsed);assert.equal(current.tail,old.tail);assert.equal(current.packetTail,old.packetTail);
+    assert.equal(current.used,refused?0:forked?1:4);assert.equal(current.packetUsed,!refused&&forked?3:0);
+    assert.equal(current.world.drops.length,refused?0:1);assert.equal(current.world.texts.length,0);assert.equal(current.world.flashes.length,refused?0:1);
+    if(!refused){assert.deepEqual(current.drops[0].item,{kind:'abilityEssence',tier:3,count:4});
+      assert.equal(current.world.flashes[0].pos.x,old.world.texts[0].pos.x);assert.equal(current.world.flashes[0].pos.y,current.world.player.pos.y);
+      assert.equal(current.world.flashes[0].color,old.world.texts[0].color);}
+  }
+  console.log('PASS actual tier-III essence mint preserves forked/global scatter and one global cue draw; zero count/sealed source emits no packet, cue or draw');
+
+  // The former banner consumed a draw INSIDE each level step, before mercenary
+  // normalization. A coalesced cue cannot move those draws after the loop.
+  const levelWorld=makeSimWorld('warrior',83450),hero=levelWorld.player,start=hero.level,passiveBefore=levelWorld.meta.passivePoints;
+  levelWorld.texts=[];levelWorld.flashes=[];const levelRandom=Math.random,levelNext=mulberry32(83451),expected=mulberry32(83451);let levelDraws=0;
+  const checkpoints:number[]=[],normalize=Reflect.get(levelWorld,'resyncMercenary') as ()=>void;
+  Reflect.set(levelWorld,'resyncMercenary',()=>{checkpoints.push(levelDraws);normalize.call(levelWorld);});
+  Math.random=()=>{levelDraws++;return levelNext();};
+  try{
+    levelWorld.grantXp(0);assert.equal(levelDraws,0);assert.equal(levelWorld.flashes.length,0);
+    const amount=levelWorld.meta.xpNeeded-levelWorld.meta.xp+PROGRESSION.xpForLevel(start+1)+PROGRESSION.xpForLevel(start+2)+7;
+    hero.life=Math.max(1,hero.maxLife()/2);levelWorld.grantXp(amount);
+    assert.equal(hero.level,start+3);assert.equal(levelWorld.meta.xp,7);
+    assert.equal(levelWorld.meta.passivePoints,passiveBefore+3*PROGRESSION.passivePointsPerLevel);assert.equal(hero.life,hero.maxLife());
+    assert.deepEqual(checkpoints,[1,2,3]);assert.equal(levelDraws,3);for(let i=0;i<3;i++)expected();assert.equal(Math.random(),expected());
+    assert.equal(levelWorld.texts.some(t=>t.text==='LEVEL UP!'),false);assert.equal(levelWorld.flashes.length,1);
+    assert.deepEqual(levelWorld.flashes[0],{pos:{...hero.pos},radius:80,color:'#ffd700',life:.65,maxLife:.65,fx:'sparkle'});
+  }finally{Math.random=levelRandom;Reflect.set(levelWorld,'resyncMercenary',normalize);}
+  console.log('PASS native multi-level XP/points/healing preserved with one gold burst, no LEVEL UP narration and exact per-level RNG order before normalization');
+
   // Real finite World callbacks: remaining counts and final banners must be
   // silent without removing the shared start flash, done face, rings or bounty.
   for(const [index,kind]of (['pyres','rifts','unearth'] as const).entries()){

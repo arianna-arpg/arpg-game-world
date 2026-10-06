@@ -1,3 +1,4 @@
+import { chooseNativeGeographicObjective, type NativeGeographicObjectiveSource } from './geographicObjectiveChoice';
 import { resolveNativeBeacon } from '../engine/beaconSpec';
 import type { Vec2 } from '../core/math';
 import type { MassAddress } from './address';
@@ -5,7 +6,7 @@ import { address,localOffset,moveAddress } from './address';
 import type { MassRun,MassSpec } from './contracts';
 import { MassGenerator } from './generator';
 import type { MassGeography } from './hierarchy';
-import type { MassHoldContext,NativeMassHoldSource } from './objectives';
+import type { MassHoldContext } from './objectives';
 import { MASS_ACCESS_POLICY,planGeographicAccess,validateGeographicAccess,type MassAccessProof } from './geographicAccessCore';
 import { canonical,freezeData,massDigest,massRandom } from './random';
 
@@ -23,7 +24,7 @@ export interface GeographicReservations {
 }
 export interface GeographicPlanInput {
   compiler:typeof GEOGRAPHIC_PLAN_COMPILER;policy:typeof MASS_ACCESS_POLICY;run:MassRun;terrain:MassSpec;owner:Readonly<MassGeography>;
-  context:Readonly<MassHoldContext>;selection:NativeMassHoldSource[];
+  context:Readonly<MassHoldContext>;selection:readonly NativeGeographicObjectiveSource[];
   fixtureCount:number;chestWanted:boolean;fixtureRadius:number;
   regions:Record<string,{walkable:boolean;dry:boolean}>;reservations:GeographicReservations;
 }
@@ -61,9 +62,7 @@ export function validateGeographicPlanInput(input:Readonly<GeographicPlanInput>)
     throw Error('Invalid frozen geographic reservations');
   const regions=[...input.terrain.surfaces.map(s=>s.region),...input.terrain.places.flatMap(p=>p.surface?[p.surface.region]:[])];
   if(regions.some(id=>!input.regions[id]||typeof input.regions[id].walkable!=='boolean'||typeof input.regions[id].dry!=='boolean'))throw Error('Incomplete geographic terrain policy');
-  const rng=massRandom(input.run.seed,[owner.id,'native-objective']);
-  if(!rng.chance(input.selection.reduce((n,r)=>n+r.weight,0)/input.selection[0].totalWeight)
-    ||canonical(rng.weighted(input.selection))!==canonical(input.context.recipe))throw Error('Geographic plan source lottery changed');
+  if(canonical(chooseNativeGeographicObjective(input.run.seed,owner.id,input.selection))!==canonical(input.context.recipe))throw Error('Geographic plan source lottery changed');
   const recipe=input.context.recipe;
   const resolved=recipe.alias==='circuit'?resolveNativeBeacon('circuit',massRandom(input.run.seed,[owner.id,'native-beacon/resolve'])):recipe.objective;
   if(canonical(input.context.zone.objective)!==canonical(resolved))throw Error('Geographic plan changed native objective resolution');

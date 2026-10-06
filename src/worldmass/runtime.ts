@@ -542,9 +542,8 @@ export class WorldMassRuntime {
   }
   /** Only still-needed seats reserve space: never evict, respawn or heal a body. */
   private reservedPopulation(except: string): number {
-    if (!this.journey?.spec.reservePopulation) return 0;
-    let missing = 0;
-    for (const place of this.journey.places) {
+    let missing = this.geography?.reservedPopulation(except)??0;
+    for (const place of this.journey?.spec.reservePopulation?this.journey.places:[]) {
       if (place.id === except) continue;
       const site = this.config.content.find(c=>c.id===place.content)!.site;
       const ids = [...Array.from({length:this.populationCount(place)},(_,i)=>canonical([place.id,i])),
@@ -554,6 +553,8 @@ export class WorldMassRuntime {
     }
     return missing;
   }
+  /** Actual free seats, including every other funded activity's future needs. */
+  availablePopulation(exceptOwner=''):number{return Math.max(0,this.config.maxPopulation-this.population-this.reservedPopulation(exceptOwner));}
   /** Worker descriptors are suggestions until the authoritative residency validates
    * them. Retire the worker whenever its owning world or surface is discarded. */
   dispose():void { this.disposed=true;this.nativeWarm?.dispose();this.geography?.dispose(); }
@@ -590,6 +591,7 @@ export class WorldMassRuntime {
   wake(world: World): void { world.landPartyAt(this.settlement?.spawn ?? { x: 12, y: 12 }); this.nearKey = ''; }
   update(world: World, boot = false): void {
     if (world.zone.id !== MASS_ZONE) return;
+    this.geography?.restoreProcessions(world);
     this.geography?.prepare(this.walk.at(world.player.pos.x,world.player.pos.y),world.time);
     this.prepareNativeCountry(world);
     if(this.weather){

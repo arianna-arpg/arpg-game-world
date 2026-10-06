@@ -1,4 +1,7 @@
-import type { World } from '../engine/world';
+import type { World, Chest } from '../engine/world';
+import { MassProcessionGameplay } from './processionGameplay';
+import type { NativeMassProcessionSource } from './processionTypes';
+import { chooseNativeGeographicObjective, type NativeGeographicObjectiveSource } from './geographicObjectiveChoice';
 import { regionKind } from '../world/regions';
 import type { ZoneDef } from '../data/zones';
 import { MassPhysicalIntel, type PhysicalIntelTarget, type PhysicalRevealPolicy } from './physicalIntel';
@@ -12,7 +15,7 @@ import { createGeographicPlanWarmQueue, type GeographicPlanWarmQueue } from './g
 import { canonical, freezeData, massRandom } from './random';
 import type { WorldMassRuntime } from './runtime';
 
-export interface MassGeographicSpec { policy: MassHierarchyPolicy; pyres: NativeMassPyreSource[]; holds?: NativeMassHoldSource[]; maxObjectives: number; weather?: import('./weather').MassWeatherPolicy; snow?: import('./snow').MassSnowPolicy; storms?: boolean }
+export interface MassGeographicSpec { policy: MassHierarchyPolicy; pyres: NativeMassPyreSource[]; holds?: NativeMassHoldSource[]; processions?: readonly NativeMassProcessionSource[]; maxObjectives: number; weather?: import('./weather').MassWeatherPolicy; snow?: import('./snow').MassSnowPolicy; storms?: boolean }
 interface Planned { owner: Readonly<MassGeography>; context: Readonly<MassHoldContext>; positions: MassAddress[]; chestPosition?: MassAddress; access?:Readonly<MassAccessProof>; legacyAccess?:'legacy-unverified-access' }
 /** Geographic ownership persists independently from renderer pages. Native
  * objectives mount only their own real fixtures, preserving neighboring work. */
@@ -20,6 +23,7 @@ export class MassGeographicGameplay {
   readonly hierarchy: MassHierarchy;
   readonly objectives: MassObjectives;
   readonly intel: MassPhysicalIntel;
+  readonly caravans: MassProcessionGameplay;
   private intelWork=new Map<string,{plan:Readonly<GeographicPlan>;policy:Readonly<PhysicalRevealPolicy>;owners:readonly Readonly<MassGeography>[];cursor:number;targets:PhysicalIntelTarget[];check?:Generator<void,boolean>;target?:Readonly<GeographicPlan>}>();
   private intelMetrics={checks:0,maxSliceMs:0,prepared:0};
   private snapshotHost: MassObjectiveHost | null = null;
@@ -58,6 +62,7 @@ export class MassGeographicGameplay {
       }
       if(access)this.savedPlan(row.owner,access.definition);
     }
+    this.caravans=new MassProcessionGameplay(mass,this.hierarchy,spec.processions??[],owner=>this.selection(owner));
     this.intel=new MassPhysicalIntel(this.hierarchy);
     for(const row of this.hierarchy.controllers()){
       const beacon=row.controllers.find(c=>c.id==='objective:beacon');
@@ -116,12 +121,20 @@ export class MassGeographicGameplay {
     this.planning.maxPlaceMs=Math.max(this.planning.maxPlaceMs,m.placeMs);this.planning.maxStandMs=Math.max(this.planning.maxStandMs,m.standMs);
     this.planning.maxRouteMs=Math.max(this.planning.maxRouteMs,m.routeMs);this.planning.maxExpanded=Math.max(this.planning.maxExpanded,m.expanded);this.planning.maxTerrainSamples=Math.max(this.planning.maxTerrainSamples,m.samples);
   }
+  /** Saved runs without the new family retain their former ordering/draws. */
+  private selection(owner:Readonly<MassGeography>):readonly NativeGeographicObjectiveSource[]{
+    const tileset=owner.native?.zone?.tileset;
+    const holds=(this.spec.holds??this.spec.pyres).filter(p=>p.source==='data/tilesets'&&p.tileset===tileset);
+    if(this.spec.processions===undefined)return holds;
+    return [...holds,...this.spec.processions.filter(p=>p.source==='data/tilesets'&&p.tileset===tileset)].sort((a,b)=>a.id.localeCompare(b.id));
+  }
   /** Cheap input capture only: never reads generated place pages or terrain. */
   private request(owner:Readonly<MassGeography>):Readonly<GeographicPlanInput>|null{
     const zone=owner.native?.zone;if(!zone)return null;
-    const rows=(this.spec.holds??this.spec.pyres).filter(p=>p.source==='data/tilesets'&&p.tileset===zone.tileset),rng=massRandom(this.mass.generator.run.seed,[owner.id,'native-objective']);
-    if(!rows.length||!rng.chance(rows.reduce((n,p)=>n+p.weight,0)/rows[0].totalWeight))return null;
-    const source=rng.weighted(rows),center=this.nearby(owner.center),context=resolveMassHoldContext({...zone,id:owner.id},source,center?this.mass.levelAt(center):this.mass.config.progression?.maxLevel??zone.level,massRandom(this.mass.generator.run.seed,[owner.id,'native-beacon/resolve']));
+    if(this.hierarchy.controller(owner.id,'procession-access')||this.caravans?.processions.has(owner.id))return null;
+    const rows=this.selection(owner),source=chooseNativeGeographicObjective(this.mass.generator.run.seed,owner.id,rows);
+    if(!source||source.objective.kind==='procession')return null;
+    const center=this.nearby(owner.center),context=resolveMassHoldContext({...zone,id:owner.id},source as NativeMassHoldSource,center?this.mass.levelAt(center):this.mass.config.progression?.maxLevel??zone.level,massRandom(this.mass.generator.run.seed,[owner.id,'native-beacon/resolve']));
     const reservations:GeographicReservations={circles:[],trails:[]},halfSpan=Math.floor(Math.min(MASS_ACCESS_POLICY.halfSpan,owner.span/2-180)/30)*30;
     if(center){
       const town=this.mass.settlement;if(town)reservations.town={minX:-center.x,minY:-center.y,maxX:town.zone.size.w-center.x,maxY:town.zone.size.h-center.y,padding:town.spec.apron+town.spec.blend};
@@ -182,7 +195,9 @@ export class MassGeographicGameplay {
   /** Call BEFORE nativeCountry.near. Hierarchy queries do not invoke country
    * placement/reservations, so this can get ahead without forcing cold plans. */
   prepare(at:MassAddress,now:number):void{
-    if(this.disposed||!this.warm||this.warm.stats.disposed)return;
+    if(this.disposed)return;
+    this.caravans.prepare(at,now);
+    if(!this.warm||this.warm.stats.disposed)return;
     if(!Number.isFinite(now)||now<0)throw Error('Invalid geographic preparation clock');
     this.advancePreparation();if(this.warm.stats.disposed)return;
     if(now<this.nextPrepare)return;this.nextPrepare=now+.5;
@@ -209,7 +224,7 @@ export class MassGeographicGameplay {
     }
     this.warm.offer([...intelRequests,...requests].slice(0,64));
   }
-  dispose():void{if(this.disposed)return;this.disposed=true;this.validation=null;this.warm?.dispose();}
+  dispose():void{if(this.disposed)return;this.disposed=true;this.validation=null;this.warm?.dispose();this.caravans.dispose();}
   get warmStats(){return {...this.preparing,queue:this.warm?.stats??null,validating:this.validation?.input.owner.id??null,disposed:this.disposed};}
   /** Cold/teleport queries use the identical kernel synchronously. No pending
    * result can temporarily clear a route or shift an existing born owner. */
@@ -225,6 +240,7 @@ export class MassGeographicGameplay {
   }
   reserves(at: MassAddress, radius: number): boolean {
     if(at.dimension!==this.mass.origin.dimension)return false;
+    if(this.caravans?.reserves(at,radius))return true;
     const span=this.mass.config.terrain.addressSpan, pad=Math.ceil(radius+150);
     const lower=moveAddress(at,{x:-pad,y:-pad},span);
     for(const owner of this.hierarchy.intersections('zone',massAddressBounds(lower,pad*2+1,pad*2+1,span))){
@@ -235,10 +251,15 @@ export class MassGeographicGameplay {
     return false;
   }
   private stands(plan:Planned):MassAddress[]{return plan.chestPosition?[...plan.positions,plan.chestPosition]:plan.positions;}
-  get population():number{return this.bodies?.population??0;}
+  get population():number{return (this.bodies?.population??0)+(this.caravans?.population??0);}
+  reservedPopulation(except?:string):number{return this.caravans?.reservedPopulation(except)??0;}
+  restoreProcessions(world:World):void{this.caravans.sync(world);}
+  chestReady(chest:Chest):boolean{return this.caravans.processions.chestContext(chest)!==undefined?this.caravans.processions.chestReady(chest):this.objectives.chestReady(chest);}
+  chestContext(chest:Chest):Readonly<ZoneDef>|undefined{return this.caravans.processions.chestContext(chest)??this.objectives.chestContext(chest);}
+  chestOpened(chest:Chest,now:number):void{if(this.caravans.processions.chestContext(chest))this.caravans.processions.chestOpened(chest,now);else this.objectives.chestOpened(chest,now);}
   private host(world:World):MassObjectiveHost {
     this.bodies??=new MassObjectiveBodies(world,this.mass.generator.run.seed,{population:()=>this.mass.population,
-      maxPopulation:()=>this.mass.config.maxPopulation,retainRadius:2400,quietSeconds:12});
+      maxPopulation:()=>this.mass.population+this.mass.availablePopulation(),retainRadius:2400,quietSeconds:12});
     return this.snapshotHost={get now(){return world.time;},hold:world.massHoldHost(false),
       installPyres:(owner,fixtures)=>world.installMassPyres(owner,fixtures),
       installHolds:(owner,kind,fixtures)=>world.installMassHolds(owner,kind,fixtures),
@@ -322,7 +343,7 @@ export class MassGeographicGameplay {
   }
   get intelPreparationStats(){return {...this.intelMetrics,pending:this.intelWork.size,cursor:this.intelWork.values().next().value?.cursor??0};}
   update(world:World,dt:number):void {
-    this.advanceIntel(world);this.objectives.update(dt,this.host(world));
+    this.advanceIntel(world);this.objectives.update(dt,this.host(world));this.caravans.update(world,dt);
     if(world.player.dead||world.player.tier!==0)return;
     // Footsteps require a mounted destination in real sight, never a map reveal.
     for(const view of this.objectives.views(world.player.pos)){
@@ -338,7 +359,8 @@ export class MassGeographicGameplay {
       this.intel.observe(view.owner,world.time);
     }
   }
-  snapshot():MassHierarchySave{if(this.snapshotHost)this.objectives.captureEffects(this.snapshotHost);return this.hierarchy.snapshot();}
+  snapshot():MassHierarchySave{this.caravans.capture();if(this.snapshotHost)this.objectives.captureEffects(this.snapshotHost);return this.hierarchy.snapshot();}
   /** Pure generated targets for diagnostics and physical planning. */
   plannedAt(at:MassAddress):Readonly<Planned>|null{return this.plan(this.hierarchy.at(at).zone);}
+  processionPlannedAt(at:MassAddress){return this.caravans.plannedAt(at);}
 }

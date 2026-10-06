@@ -11,6 +11,8 @@ export interface MassStateSave {
 /** Sparse consequences belong to the run, never a resident page's lifetime. */
 export class MassState {
   private patches = new Map<string, MassTerrainPatch>();
+  /** Derived page index: bounded planning reads only nearby sparse edits. */
+  private patchPages = new Map<string, Map<string, Readonly<MassTerrainPatch>>>();
   private claims = new Map<string, [string, string]>();
   revision = 0;
   /** Terrain consumers need not rebuild when discovery/reward claims change. */
@@ -35,6 +37,12 @@ export class MassState {
     return canonical([cellKey(p), p.x, p.y]);
   }
   patchAt(at: MassAddress): Readonly<MassTerrainPatch> | undefined { return this.patches.get(this.key(at)); }
+  /** No history-wide snapshot or scan when preparing a local physical route. */
+  patchesInCells(cells: readonly MassCell[]): readonly Readonly<MassTerrainPatch>[] {
+    if (!Array.isArray(cells) || cells.length > 128) throw Error('Terrain patch query exceeds page budget');
+    const keys = new Set(cells.map(c => cellKey(address(c.dimension, c.cx, c.cy, 0, 0, this.run.addressSpan))));
+    return Object.freeze([...keys].sort().flatMap(key => [...(this.patchPages.get(key)?.values() ?? [])]));
+  }
   paint(patch: MassTerrainPatch): void {
     if (typeof patch.region !== 'string' || !patch.region || typeof patch.cause !== 'string' || !patch.cause
       || !/^#[0-9a-f]{6}$/i.test(patch.color)) throw new Error('Terrain change needs region, color, and cause');
@@ -42,6 +50,10 @@ export class MassState {
     const key = this.key(normalized.address), before = this.patches.get(key);
     if (before && canonical(before) === canonical(normalized)) return;
     this.patches.set(key, normalized); this.revision++; this.terrainRevision++;
+    const page = cellKey(normalized.address);
+    let rows = this.patchPages.get(page);
+    if (!rows) { rows = new Map(); this.patchPages.set(page, rows); }
+    rows.set(key, normalized);
     this.terrainPages.set(cellKey(normalized.address), this.terrainRevision);
   }
   /** Returns true exactly once, allowing caller-owned reward/loot semantics. */
@@ -78,7 +90,7 @@ export class MassState {
       if (!Array.isArray(row) || row.length !== 2 || row.some(v => typeof v !== 'string')
         || !next.claim(row[0], row[1])) throw new Error('Malformed or duplicate world claim');
     }
-    this.patches = next.patches; this.claims = next.claims;
+    this.patches = next.patches; this.patchPages = next.patchPages; this.claims = next.claims;
     // Revision is local invalidation, monotonic even when loading an earlier save.
     this.revision = Math.max(this.revision + 1, data.revision);
     this.terrainRevision++;

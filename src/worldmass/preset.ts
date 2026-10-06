@@ -2,6 +2,7 @@ import { MASS_SNOW_DEFAULT } from './snow';
 import { MASS_WEATHER_DEFAULT } from './weather';
 import { MASS_HIERARCHY_DEFAULT } from './hierarchy';
 import { nativeMassPyreSources, nativeMassHoldSources } from './objectives';
+import { nativeMassProcessionSources } from './processionSources';
 import { makeNativeCountrySpec, type NativeCountrySpec } from './nativeCountry';
 import { countryActivitySites } from './activitySites';
 import { nativeStructurePlan } from '../engine/structurePlans';
@@ -129,7 +130,7 @@ export function massAdventure(): MassAdventure {
   const nativeCountry=makeNativeCountrySpec(terrain.terrainCell);
   return freezeData({ terrain, progression, nativeBirthSource: 'worldmass/native-birth-v1', theme: JSON.parse(JSON.stringify(TILESETS.downs.theme)) as ZoneDef['theme'],
     nativeCountry,
-    geography: {policy:MASS_HIERARCHY_DEFAULT,pyres:nativeMassPyreSources(nativeCountry).filter(p=>p.source==='data/tilesets'),holds:nativeMassHoldSources(nativeCountry).filter(p=>p.source==='data/tilesets'),maxObjectives:8,weather:MASS_WEATHER_DEFAULT,snow:MASS_SNOW_DEFAULT,storms:true},
+    geography: {policy:MASS_HIERARCHY_DEFAULT,pyres:nativeMassPyreSources(nativeCountry).filter(p=>p.source==='data/tilesets'),holds:nativeMassHoldSources(nativeCountry).filter(p=>p.source==='data/tilesets'),processions:nativeMassProcessionSources(nativeCountry),maxObjectives:8,weather:MASS_WEATHER_DEFAULT,snow:MASS_SNOW_DEFAULT,storms:true},
     bounties: { source: 'worldmass/place-bounties-v1', maxCandidates: 256 },
     survey: {source:'worldmass/sighted-survey-v1',cell:120,radius:480},
     ground: nativeMassGround(families.map(f => ({ surface: f.id, source: 'tilesets/' + f.id, theme: TILESETS[f.id].theme }))),

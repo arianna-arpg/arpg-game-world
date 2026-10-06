@@ -537,3 +537,144 @@ evidence, not hidden by the improved travel average. Continuity review
 accepted the beacon/circuit integration within the exercised scope; these
 independent critics used the same model and do not constitute cross-model
 review or acceptance of unfinished campaign/seafaring migration.
+
+Published beacon checkpoint: commit 75bba196b9c6e92565880064ab67ed3e46ffe480
+passed CI 37528609135 and Pages 37531998456. The seamless preview build manifest
+was independently read back at that exact commit, built 2026-10-06T21:12:30.280Z.
+
+Native surface processions now run through the original procession operation.
+Their carts use the same native body factory, entry jitter, durability, grace,
+rally radius, enemy wheel-stop rules, lure and scheduled ambush tuning. Native
+source tables determine the full wave and species. Each caravan has its own
+physical bodies and event key; nearby enemies still stop the wheels regardless
+of which activity owns them. Arrival removes the cart without killing it and
+pays its source-level reward once. Destruction spills the original source-bound
+wreck reward once and grants no delivery reward. Finite processions share this
+driver, with independent parity fixtures for its branches and random stream.
+
+New country runs include the eligible native surface procession rows in the
+same objective lottery as holds and beacons. Every native objective weight
+remains in the denominator; unsupported choices are not replaced by another
+reward. Existing saves without the new source catalog retain their original
+selection policy. Source level, native tuning, weighted selection identity,
+terrain edits, native structure reservations and actual movement obstacles are
+part of preparation. Unsupported marine, realm, boundless and sealed-spoils
+contexts do not acquire an improvised caravan mechanic.
+
+A bounded pure worker prepares a dry route spanning at least three chunks.
+Synchronous preparation uses the same kernel and yields between work units.
+The saved route contains an independently re-emittable native kept-road recipe:
+16–22-pixel discs at 30-pixel spacing, emitted by the original layTraveledWay.
+The walk proof covers a 60-pixel corridor and 128-pixel terminal aprons with
+native collision, cold terrain, historical footprints and door clearance. It
+never carves away an obstacle to make a route succeed. The first leg is limited
+to 240 pixels so the factory's original off-center cart spawn remains inside
+that proof; later legs retain their 450-pixel limit. A continuous geometric
+counterexample guards the rejected former 450-pixel first connector.
+
+Unborn candidate queries create no actors, reservation or payout. A route can
+be reconsidered if its terrain or scenery input changes before admission;
+a born owner retains its exact route and source. Its complete cart/wave budget,
+controller slots, road, optional chest and saved access publish atomically.
+Any failed install rolls back only that attempted owner's installed scene.
+Restoring a born caravan claims its missing population seats before optional
+new content. Capacity refusal cannot truncate a wave or invent a smaller one.
+
+Away from the player, the caravan pauses with native absence protection.
+Observed bodies, active effects and cross-owner actor references continue to
+pin residency; lures expire on their own clocks. Quiet retirement retains the
+full native actor codec and wounds. Active Continue reconstructs the native
+factory baseline and saved wounds/positions, with the existing transient
+combat-state boundary explicitly retained. Save settles a just-destroyed cart
+before capture. Return grants the original grace without creating a new cart
+life, new wreck payout or completed delivery. Cave descent and a CharacterSave
+inside the cave retain the same surface owner on return.
+
+Processions communicate through moving carts, road material, rally rings,
+reinforcement flashes and arrival/wreck effects. Local objective start/count/
+completion prose is quiet. A multi-level reward emits one gold burst; gem and
+Memory arrivals emit a colored glint while the actual ground item retains its
+identity. Each removed reward floater's original random draw is preserved at
+the same point in the native operation. These presentation changes do not
+change reward amounts, passive points, item identities or source-level floors.
+
+This is an open-country road delivery binding. A terminal apron is not a
+finite authored exit, portal, campaign completion or sea crossing. Campaign,
+Odyssey, faction progression, continuous sailing and remaining objective
+families still require their own native bindings. Historical owner/source/
+receipt metadata and cold Continue expansion remain cumulative. The current
+live coordinate frame still requires the separately unfinished rebasing work.
+Worker work allowances are soft: a page, hash or sweep can overshoot a slice,
+and final synchronous scene checks/publication can be expensive. Functional
+concurrent probes observed tens-of-milliseconds admissions; there is no new
+isolated frame-pacing or smooth-FPS claim for this pass.
+
+Visual review of the first completed browser course found a genuine movement
+fault: the cart's center reached 150 pixels outside the certified road's
+centerline. An instrumented replay attributed this to native navigation,
+not weather or collision separation. MassWalk's grid ray overshot a negative
+axis when a clear line ended at an exact mixed-sign grid corner; it returned
+blocked and selected an unnecessary Manhattan detour. The ray now stops each
+axis at its destination cell after checking every closed endpoint contact.
+Rays lying on grid edges still check both sides; blocked corner, point and
+endpoint contacts still refuse. An independent slab-intersection oracle checks
+1,860 forward/reverse cases, including the actual caravan connector, and a
+small traversal budget still refuses long rays. Native movement, actor
+separation and weather forces are unchanged.
+
+The presentation review also caught hidden random draws in the retired native
+start/ambush/completion text. Rally retains its original draw after the due
+clock; a successful ambush retains one after every actual body and flash;
+zero-body batches and the loss bulletin spend none. Finite completion retains
+its original post-reward draw. A geographic owner stores the corresponding
+draws in its own durable stream. An independent archived finite-World
+transcription now compares the actual factories, movement, loss, completion,
+reclear, rewards and next random draw, rather than treating narration as an
+RNG-free mock. Visual glints and the level-up burst similarly preserve all
+five gem/Memory lanes and per-level draw order before mercenary normalization.
+
+Caravan mechanics verification passed all 89 worldmass rigs with retries off,
+including the six new source, route, worker, driver, continuity and gameplay
+rigs. The continuity rig has 14 groups, including a natural chest-bearing
+owner (-6,1): locked before arrival, earned on arrival, opened through the
+real World chest artery, then still opened with no refill after CharacterSave
+Continue. Native objective and Memory probes, all three type-check projects,
+production build, actual game boot and all five simulation smoke scenarios
+passed. Generation QA passed 869 cases x 3 seeds with no failures and the same
+four recorded native clearance warnings.
+
+The complete corrected browser course used index-C4ngOMtn, natural seed 713
+owner (4,-2), and 5,158.524 units of frozen kept road across six chunks. Native
+incoming damage reduced the cart to 2,062.632559725573 Life; partial Continue
+retained that exact value. Every observed cart body remained within the
+certified capsules or terminal aprons. Maximum centerline distance was
+30.442 pixels before Continue and 23.636 afterward, versus 150.193 in the
+preserved faulty-ray control. Maximum observed cart step was 1.5045 pixels.
+The final native delivery paid once, with XP 424 remaining 424 through terminal
+Continue. Immediate cart death followed by save produced one wreck payout,
+no delivery reward, XP 0 remaining 0, and no second wreck after Continue.
+No console errors were recorded. The course used initial arrival teleports,
+an invulnerable test hero and 41 disclosed native enemy cleanup kills after
+ordinary pressure; it does not establish unassisted combat balance or FPS.
+
+Screenshots of the corrected course showed the saved wounded cart on its
+road and arrival through light rather than a LEVEL UP banner. They also
+exposed an Ability Essence mint's duplicate name announcement. The final
+cue-only follow-up applies the same preserved-jitter glint to essence and
+gear mints. Independent tests compare seven native loot lanes, supplied and
+global random streams, full item identity/provenance, discovery ledgers,
+owned returns, discards and sealed/lesson refusals. The existing information
+and reward-label probes retain explicit text transport and manual identities
+without requiring automatic duplicate names over newly minted loot.
+
+Final loot-cue browser verification used index-B1ufADhm. Actual native vendor
+stock supplied a rare Brine Coil; World minted it beside a tier-III Ability
+Essence packet. Both produced colored sparkle glints with no drop-name
+narration. Real save, durable flush, reload and Continue retained the exact
+two drops and XP, with no repeated glint or refill. The final mint and Continue
+images were independently inspected. C4ngOMtn remains the full traversal
+receipt; B1ufADhm adds only this tested, RNG-preserving cue correction. Final
+local-cue (7 groups), reward-label, information-stream, ability-economy and
+all-project type checks pass. These are same-model independent reviews of
+specific ownership/integration seams, not cross-model review or acceptance
+of the still-unbound gameplay listed above.

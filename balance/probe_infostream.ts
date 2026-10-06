@@ -6,8 +6,8 @@
 //   B. the PURE LIST LAWS (pushNotice cap + channel default, pruneNotices
 //      aging, notePickup coalesce/clock-refresh/per-seat cap/seat isolation),
 //   C. the LIVE ENGINE (bulletins land in the notice feed and NEVER in the
-//      overhead float lane; drop names mint kind 'drop' standing
-//      FLOAT_CFG.dropNameSec; pickups tag 'pickup' + write coalescing feed
+//      overhead float lane; explicit drop-kind text stands
+//      FLOAT_CFG.dropNameSec while minted gems use a glint; pickups tag 'pickup' + write coalescing feed
 //      rows; essence pays 'gains' + a row; a credited kill floats kind 'xp';
 //      a real melee swing floats kind 'dmg'; the co-op wire round-trips
 //      kinds, notices and feed rows losslessly),
@@ -117,11 +117,15 @@ const check = (name: string, ok: boolean, detail = ''): void => {
   check('C3: bulletins NEVER enter the overhead float lane (the declutter law)',
     !w.texts.some(t => t.text === 'qa probe line'), `floats ${floatsBefore} → ${w.texts.length}`);
 
-  // Drop names: dropGemAt announces where it falls, standing dropNameSec.
+  // Real gem arrival is physical. Explicit drop-kind text remains a supported
+  // information/replication policy, independent of whether a mint requests it.
+  const dropsBefore=w.drops.length,dropFloatsBefore=w.texts.filter(t=>t.kind==='drop').length,flashesBefore=w.flashes.length;
   w.dropGemAt(w.player.pos);
-  const dropFloat = w.texts.find(t => t.kind === 'drop');
-  check('C4: a minted drop names itself (kind \'drop\')', !!dropFloat, dropFloat?.text ?? 'none');
-  check('C5: the drop name STANDS FLOAT_CFG.dropNameSec (3s, not the 1s tick)',
+  check('C4: an actual gem mint has a visible glint and no duplicate drop-name float',w.drops.length===dropsBefore+1
+    &&w.texts.filter(t=>t.kind==='drop').length===dropFloatsBefore&&w.flashes.slice(flashesBefore).some(f=>f.fx==='sparkle'&&f.radius===24));
+  w.text(w.player.pos,'explicit drop-kind policy','#abcdef',14,'drop',FLOAT_CFG.dropNameSec);
+  const dropFloat = w.texts.find(t => t.text === 'explicit drop-kind policy');
+  check('C5: explicit drop-kind text STANDS FLOAT_CFG.dropNameSec (3s, not the 1s tick)',
     !!dropFloat && dropFloat.maxLife === FLOAT_CFG.dropNameSec, `maxLife ${dropFloat?.maxLife}`);
 
   // The pickup feed: two identical support gems vacuum → ONE coalesced row.
@@ -177,7 +181,7 @@ const check = (name: string, ok: boolean, detail = ''): void => {
 
   // THE WIRE: kinds, notices and feed rows round-trip the snapshot losslessly.
   pending.push({ text: 'wire line', channel: 'war' });
-  w.dropGemAt(w.player.pos); // keep a fresh 'drop' float alive across the trip
+  w.text(w.player.pos,'wire drop-kind policy','#abcdef',14,'drop',FLOAT_CFG.dropNameSec);
   step(0.15);
   const preNotices = w.notices.length;
   const preRow = w.pickupFeed.find(e => e.seatId === seatId && e.label === `${sup.name} (Support Memory)`);

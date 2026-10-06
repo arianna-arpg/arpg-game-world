@@ -501,6 +501,12 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_worldmass_beacons.ts', status: 'green', tier: 'fast', why: 'Native beacon/circuit resolver, exact shared scheduler, mixed factory parity, frozen births, lure leases and once discovery-before-reward ownership.' },
   { probe: 'probe_worldmass_hierarchyidentity.ts', status: 'green', tier: 'fast', why: 'Immutable recorded geography avoids repeated source copies while preserving input, controller, snapshot and source-old Continue isolation.' },
   { probe: 'probe_worldmass_dormancypinattribution.ts', status: 'green', tier: 'fast', why: 'Immutable data-only pin certificates preserve uncached actor dependency sets across real terrain, late owners, numeric IDs, weak ledgers, mutable collections, cycles and getters.' },
+  { probe: 'probe_worldmass_processionsources.ts', status: 'green', tier: 'fast', why: 'Pinned open native source inventory, exact historical hold lottery, combined single-zone selection and frozen source receipts.' },
+  { probe: 'probe_worldmass_processionroutes.ts', status: 'green', tier: 'fast', why: 'Dry body/corridor/apron capsule routes across native chunks, bounded pure planning, reservation and coherent proof rejection.' },
+  { probe: 'probe_worldmass_processionworker.ts', status: 'green', tier: 'fast', why: 'Real isolated worker and cooperative fallback parity, bounded envelopes, stale replies, disposal and source identity.' },
+  { probe: 'probe_worldmass_processions.ts', status: 'green', tier: 'fast', why: 'Independent native escort driver and RNG traces, actual cart/ambush factory parity, kept native roads and original ground behavior.' },
+  { probe: 'probe_worldmass_processioncontinuity.ts', status: 'green', tier: 'fast', why: 'Independent native carts, reserved ambushes, real dependency pins, wounds, absence and once arrival/loss ownership.' },
+  { probe: 'probe_worldmass_processiongameplay.ts', status: 'green', tier: 'fast', why: 'Natural full-runtime route detours around existing scenery, complete atomic admission, exact saved roads and wounded CharacterSave Continue.' },
   { probe: 'probe_worldmass_nativeingress.ts', status: 'green', tier: 'fast', why: 'Real native exterior body-clear ingress, bounded route proof, terrain refusals, reserved corridors and exact saved acceptance.' },
 ];
 

@@ -35,10 +35,15 @@ layout.begin([],[],bounds);assert.equal((layout as any).offsets.size,0,'retired 
 console.log('PASS bounds, saturation, visibility, invalid input, per-frame cap, opt-out and bounded identity retention');
 
 const w=makeSimWorld('warrior',79);
-w.drops=[];w.texts=[];
+w.drops=[];w.texts=[];w.flashes=[];
 const item=(uid:number):ItemInstance=>({uid,baseId:'legs_evasion_es',name:'Windtrews',ilvl:1,tier:1,rarity:'common',baseRoll:0,implicitRolls:[],affixes:[]});
 w.dropGearAt(w.player.pos,item(79001));w.dropGearAt(w.player.pos,item(79002));
-assert.equal(w.drops.length,2);assert.deepEqual(w.texts.map(t=>t.dropUid),[79001,79002]);
+assert.equal(w.drops.length,2);assert.equal(w.texts.length,0,'physical gear drops do not duplicate their ground identity with floaters');
+assert.equal(w.flashes.length,2);assert.ok(w.flashes.every(f=>f.fx==='sparkle'&&f.radius===24&&f.maxLife===.35));
+// Explicit text still transports optional item identity when a caller needs
+// it. Keep that wire contract separate from actual loot mint presentation.
+w.text(w.player.pos,'Windtrews!','#ddd',14,'drop',1,false,79001);
+w.text(w.player.pos,'Windtrews!','#ddd',14,'drop',1,false,79002);
 w.text(w.player.pos,'Windtrews!','#ddd',14,'drop');
 assert.equal(w.texts.at(-1)!.dropUid,undefined,'unattributed or same-named announcements remain independent');
 const snap=serializeSnapshot(w,1), client=makeSimWorld('warrior',80);
@@ -52,4 +57,4 @@ assert.ok(client.drops.every(d=>d.item.kind!=='gear'||d.item.item.uid===undefine
 const legacyKeys=client.drops.slice();layout.begin(legacyKeys,[],bounds);
 assert.ok(layout.place(legacyKeys[0],source,100,14));assert.ok(layout.place(legacyKeys[1],source,100,14));
 assert.equal(layout.footprints.length,2,'legacy shells do not share an undefined identity');
-console.log('PASS actual native loot attribution, duplicate-name identity, snapshot roundtrip and legacy render shells');
+console.log('PASS actual native gear glints without duplicate floaters; explicit textual UID attribution, duplicate-name identity, snapshot roundtrip and legacy render shells');

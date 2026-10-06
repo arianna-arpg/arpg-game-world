@@ -211,6 +211,14 @@ export interface NativeDormancyOwnership { garrisonSlot?: string }
 export function nativeDormancyRefusal(a:Actor,world:World,quietSeconds:number, captured?:NativeActorState|null,
   ownership?:NativeDormancyOwnership): string | null {
   if(a.dead||a.team!=='enemy'||!a.fromZoneGen||a.companion||a.downed)return 'not a living native enemy';
+  return nativeActorQuietRefusal(a,world,quietSeconds,captured,ownership);
+}
+
+/** Shared native quiet-state proof only. The caller must first prove its own
+ * supported body kind, identity and ownership. This grants no team/factory
+ * eligibility and does not discard any action, timer or dependency. */
+export function nativeActorQuietRefusal(a:Actor,world:World,quietSeconds:number, captured?:NativeActorState|null,
+  ownership?:NativeDormancyOwnership): string | null {
   if(a.aggroed||a.aiTargetId!==undefined||a.aiTargetRef||a.threat.size||a.aiPhase==='leash_home'
     ||world.time-Math.max(a.lastCombatAt,a.aiHitAt,a.aiEngagedAt)<quietSeconds)return 'engaged or returning';
   if(a.casting||a.dash||a.push||a.leap||a.caromRun||a.onTierLink||a.useLock>0||a.reflexLock>0)return 'committed movement or action';

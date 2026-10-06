@@ -28,8 +28,8 @@
 //   F. DROPS: rollSkillGem mints at level 1 ALWAYS (the preLevel roll is
 //      retired); the kill-path essence roll honors the zone FLOORS (shallow
 //      ground never mints deep tiers, ground below every floor mints nothing)
-//      and THE TIER GRADIENT leans deep on deep ground; the mint FLOATS the
-//      tier's name (the drop is an EVENT — the dopamine ruling); a packet at
+//      and THE TIER GRADIENT leans deep on deep ground; the mint glints in the
+//      tier's color without duplicating its ground label; a packet at
 //      the hero's feet vacuums into the wallet through the real update.
 //   G. THE SPOILS LAW: sealed ground refuses the new mint primitive.
 //   H. PERSISTENCE: the wallet survives the character-save round trip, a
@@ -306,6 +306,7 @@ check('C: the highest-N inputs burn — the L1 straggler survives the fuse',
     tiersSeen().length > 0 && tiersSeen().every(t => t === 1));
   w.drops.length = 0;
   w.texts.length = 0;
+  w.flashes.length = 0;
   (w.zone as { level: number }).level = 20;
   for (let i = 0; i < 200; i++) roller.rollAbilityEssenceDrop(at, 1e9);
   const seen = tiersSeen();
@@ -314,8 +315,11 @@ check('C: the highest-N inputs burn — the L1 straggler survives the fuse',
     seen.every(t => t >= 1 && t <= ABILITY_ESSENCES.length)
     && count(ABILITY_ESSENCES.length) > count(1),
     `IV×${count(4)} vs I×${count(1)} over ${seen.length}`);
-  check('F: the mint FLOATS the tier\'s name — the drop is an EVENT',
-    w.texts.some(t => t.text.includes('Memory Essence'))); // the label renamed with skill-items M2 (card 10)
+  check('F: each native mint glints in its tier color without a duplicate drop-name floater',
+    w.flashes.length === seen.length && seen.length > 0
+    && w.flashes.every((f, i) => f.fx === 'sparkle' && f.radius === 24 && f.maxLife === .35
+      && f.color === abilityEssenceOfTier(seen[i]).color && f.pos.y === at.y && Math.abs(f.pos.x - at.x) <= 10)
+    && !w.texts.some(t => t.kind === 'drop' || t.text.includes('Memory Essence')));
   (w.zone as { level: number }).level = zl;
 
   // The vacuum: a packet at the hero's feet reaches the wallet through the

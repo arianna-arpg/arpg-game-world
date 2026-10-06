@@ -7477,7 +7477,9 @@ export function overgrowthOf(def: ZoneDef, override?: number): number {
  *  never salt-and-pepper), reclaiming flora sprouts along them, and the
  *  clearway carve/gate/genqa all read the same `wild` tag. Draw discipline:
  *  overgrowth 0 draws NOTHING beyond the caller's own disc radius. */
-export function wayRoller(ctx: GenCtx, overgrowth = ctx.overgrowth ?? 0):
+/** Native way emitters need no arena, actor or scene-generation state. */
+export type NativeWayContext = Pick<GenCtx, 'rng' | 'walk' | 'doodads' | 'reserved' | 'overgrowth'>;
+export function wayRoller(ctx: NativeWayContext, overgrowth = ctx.overgrowth ?? 0):
 (pos: Vec2, radius: number, kind: DoodadKind) => void {
   const og = Math.max(0, Math.min(1, overgrowth));
   const [runLo, runHi] = COHERENCE_CFG.wildRun;
@@ -7530,7 +7532,7 @@ export function wayRoller(ctx: GenCtx, overgrowth = ctx.overgrowth ?? 0):
  *  ground so later landmark/structure rolls route around them — wild
  *  stretches deliberately reserve nothing (what the wood won back, the world
  *  may crowd). Returns the way's discs. */
-export function layTraveledWay(ctx: GenCtx, pts: Vec2[], opts?: {
+export function layTraveledWay(ctx: NativeWayContext, pts: Vec2[], opts?: {
   band?: [number, number]; kind?: DoodadKind; overgrowth?: number; step?: number;
   reserve?: boolean;
 }): Doodad[] {

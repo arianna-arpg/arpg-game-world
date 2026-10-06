@@ -160,6 +160,8 @@ export class MassHierarchy {
   }
   // A record owns one immutable geography snapshot; controller state stays mutable.
   owner(id: string): Readonly<MassGeography> | undefined { return this.records.get(id)?.owner; }
+  /** Read-only capacity preflight for atomic multi-controller native births. */
+  controllerCount(owner: string): number { return this.records.get(owner)?.controllers.length ?? 0; }
   controller(owner: string, id: string): Readonly<MassControllerSave> | undefined {
     const c = this.records.get(owner)?.controllers.find(c => c.id === id); return c && freezeData(copy(c));
   }

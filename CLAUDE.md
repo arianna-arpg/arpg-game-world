@@ -6,6 +6,21 @@ player-requested details). Reusing main's mechanics does not authorize reusing
 its redundant local banners. Preserve warning readability and native timing;
 add or improve visual cues when needed instead of restoring narration.
 
+Native processions own actual carts, complete source-bound ambush waves and
+kept roads crossing chunks. The shared finite driver keeps native rally,
+wheel-stop, arrival and loss rules. Frozen access and emission proofs precede
+atomic publication; born owners restore capacity before optional new births.
+Native spawn jitter is covered by a first road leg of at most 240 pixels.
+Quiet wounds, source tuning, lost/arrived receipts and chest state survive
+Continue. Roads detour around existing scenery; preparation never clears land.
+Local starts, arrivals, wrecks and reward drops use motion, rings and light;
+level and loot cues preserve the former presentation random draws. Verify all
+six procession probes, localcues, infostream, native objectives/memories,
+worldmass, genqa, sim smoke and native-processions-ui.cjs. A road terminal apron
+is not an authored campaign exit. Marine/realm/campaign delivery, complete
+historical paging and coordinate rebasing remain unbound. See the exploration
+foundations for native factory, save and browser evidence.
+
 Native survey spires and attunement circuits share the original beacon hold,
 reinforcement and lure operation. Prepared discoveries name frozen physical
 objectives; surveying never grants footsteps, terrain exploration or quest
