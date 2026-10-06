@@ -121,20 +121,20 @@ function definition(face:SkillIconFace):SkillIcon {
 let artworkPreference:()=>boolean=()=>true;
 export function configureSkillArtwork(preference:()=>boolean):void { artworkPreference=preference; }
 export function skillAcronym(face:SkillIconFace):string {
-  if(face.icon==='recall') return 'R';
-  return (face.name?.trim().split(/[\s-]+/).filter(Boolean).map(word=>[...word][0]).join('') || '?').toUpperCase();
+  if(face.icon==='recall') return 'REC';
+  return (face.name?.split(' ').map(word=>word[0]).join('').slice(0,3) || '?').toUpperCase();
 }
 const cache=new Map<string,HTMLCanvasElement>();
 /** Bake the whole face before applying the caller's affordability alpha, just
  * like an SVG tile. Bounded cached faces avoid per-frame vector allocation. */
 export function drawSkillIcon(ctx:CanvasRenderingContext2D,face:SkillIconFace,x:number,y:number,size:number):boolean {
   if(!artworkPreference()) {
-    const label=skillAcronym(face),fontSize=size*(label.length>2?.32:.44);
-    ctx.save();ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.font='bold '+fontSize+'px Verdana';ctx.lineJoin='round';
-    ctx.strokeStyle=SKILL_ICON_VIEW.rim;ctx.lineWidth=Math.max(1,size*.055);
-    ctx.fillStyle=SKILL_ICON_VIEW.ink;
-    ctx.strokeText(label,x+size/2,y+size/2,size*.94);ctx.fillText(label,x+size/2,y+size/2,size*.94);
+    // Main's classicFallback: the tile takes affordability alpha, the small
+    // dark initials stay at full opacity; native cooldowns draw over both.
+    ctx.save();ctx.fillStyle=face.color;ctx.fillRect(x,y,size,size);
+    ctx.globalAlpha=1;ctx.fillStyle='#0a0a0e';ctx.font='bold 13px Verdana';
+    ctx.textAlign='center';ctx.textBaseline='alphabetic';
+    ctx.fillText(skillAcronym(face),x+size/2,y+size/2+5);
     ctx.restore();return true;
   }
   const icon=definition(face);
@@ -174,15 +174,7 @@ function bakeSkillIcon(icon:SkillIcon,color:string,pixels:number):HTMLCanvasElem
 const escape=(value:string)=>value.replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]!));
 /** Same paths, paint order and proportions as the canvas icon; caller owns its label. */
 export function skillIconSvg(face:SkillIconFace,size=24):string {
-  if(!artworkPreference()) {
-    const label=skillAcronym(face),fontSize=label.length>2?7.7:10.6;
-    return '<svg xmlns="http://www.w3.org/2000/svg" width="'+size+'" height="'+size
-      +'" viewBox="0 0 24 24" aria-hidden="true" focusable="false" data-skill-acronym="'+escape(label)
-      +'" style="display:block;flex:none;pointer-events:none"><text x="12" y="12" text-anchor="middle" dominant-baseline="central"'
-      +' font-family="Verdana" font-weight="bold" font-size="'+fontSize+'" fill="'+SKILL_ICON_VIEW.ink
-      +'" stroke="'+SKILL_ICON_VIEW.rim+'" stroke-width="1" paint-order="stroke"'
-      +(label.length>3?' textLength="22" lengthAdjust="spacingAndGlyphs"':'')+'>'+escape(label)+'</text></svg>';
-  }
+  if(!artworkPreference()) return classicSkillMarkup(face);
   const icon=definition(face);
   const c=SKILL_ICON_VIEW,tint=escape(face.color),ink=escape(c.ink),rim=escape(c.rim);
   const layers=icon.layers.map(layer=>{
@@ -196,4 +188,11 @@ export function skillIconSvg(face:SkillIconFace,size=24):string {
     +'" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="display:block;flex:none;pointer-events:none"'
     +' stroke-linecap="round" stroke-linejoin="round"><rect width="24" height="24" fill="'+escape(c.background)
     +'"/><rect width="24" height="24" fill="'+tint+'" opacity="'+c.tintAlpha+'"/>'+layers+'</svg>';
+}
+
+/** Main's bag, rack, vendor and Memory faces inherit the existing tile's
+ * authored color and font. A label marker adds no drawing or layout rules. */
+export function classicSkillMarkup(face:SkillIconFace):string {
+  const label=escape(skillAcronym(face));
+  return '<span data-skill-acronym="'+label+'">'+label+'</span>';
 }

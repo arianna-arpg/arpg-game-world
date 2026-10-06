@@ -1,3 +1,14 @@
+Classic feedback preferences: spreadCombatText defaults false (native float
+positions). Aim Ticks adds Facing + Brackets via playerOverlay; Line remains
+the default, and the shared opacity control also dims/hides the locator.
+classicSkillMarkup and skillAcronym restore main's colored tiles and small dark
+initials (including REC), while the separate artwork catalogue remains intact.
+statusPresentation shares live-debuff admission, native metadata and paired
+icon/screen definitions; unprofiled harmful effects inherit a soft vignette.
+Verify presentationdefaults, afflictioncues, statusicons, statusreadout,
+skillicons, combatfocus, sim smoke and classic-feedback-ui. See
+docs/ui/classic-feedback.md for settings and controlled integration evidence.
+
 Saved skillArtwork defaults on across Canvas and DOM skill faces.
 skillIconCatalog assigns every skill a unique, mechanic-based composition from
 skillIconArt; original starter family keys upgrade by ID and explicit recall

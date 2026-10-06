@@ -13,6 +13,8 @@
 // and by MonsterDef.aims for bestiary bodies.
 // ---------------------------------------------------------------------------
 
+import { drawPlayerFocus } from './combatFocus';
+
 export interface AimTickStyleDef {
   id: string;
   /** Options-menu button label. */
@@ -22,9 +24,13 @@ export interface AimTickStyleDef {
    *  owns alpha (player setting × the body's own fade) — a style picks only
    *  shape and paint. */
   draw: (ctx: CanvasRenderingContext2D, facing: number, radius: number) => void;
+  /** Optional local-player overlay, drawn once above world text instead of
+   * the body tick. Other actors retain this style's ordinary draw function. */
+  playerOverlay?: (ctx:CanvasRenderingContext2D,facing:number,radius:number,crowded:boolean)=>void;
 }
 
 export const AIM_TICK_STYLES: Record<string, AimTickStyleDef> = {
+  // playerFocusStyle is installed below so its ordinary actors reuse Line.
   /** The classic: a radial line from mid-body to the rim. */
   line: {
     id: 'line', label: 'Line',
@@ -48,6 +54,13 @@ export const AIM_TICK_STYLES: Record<string, AimTickStyleDef> = {
       ctx.fill();
     },
   },
+};
+
+/** The playerFocusStyle keeps the locator and live-facing arrow together on
+ * the existing selector/opacity control. It does not bracket every monster. */
+AIM_TICK_STYLES.focus = {
+  id:'focus',label:'Facing + Brackets',draw:AIM_TICK_STYLES.line.draw,
+  playerOverlay:(ctx,facing,radius,crowded)=>drawPlayerFocus(ctx,{x:0,y:0},radius,facing,crowded),
 };
 
 /** The player's tick preferences (persisted in Settings.aimTick). */

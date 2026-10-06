@@ -10667,11 +10667,15 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       </div>
       <div class="rebind-row">
         <span>Skill Faces</span>
-        <button id="opt-skillartwork" title="ARTWORK gives each skill its own illustration. ACRONYMS identifies skills by their names.">${s.skillArtwork ? 'ARTWORK' : 'ACRONYMS'}</button>
+        <button id="opt-skillartwork" title="ARTWORK gives each skill its own illustration. ACRONYMS restores classic colored tiles and small initials.">${s.skillArtwork ? 'ARTWORK' : 'ACRONYMS'}</button>
       </div>
       <div class="rebind-row">
         <span>Health &amp; Cast Bar Placement</span>
         <button id="opt-crowdedmeters" title="FIXED keeps bars at their usual position above each body. AVOID CROWD moves overlapping groups with a line to their owner.">${s.crowdedMeters ? 'AVOID CROWD' : 'FIXED'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Combat Text Placement</span>
+        <button id="opt-spreadcombattext" title="CLASSIC keeps floating numbers at their usual positions. SPREAD separates overlapping combat numbers and rewards.">${s.spreadCombatText ? 'SPREAD' : 'CLASSIC'}</button>
       </div>
       <div class="rebind-row">
         <span>Skill Cast Name</span>
@@ -10729,7 +10733,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       this.saveSettings();
       this.renderOptions(root, onBack);
     });
-    for (const [id, key] of [['opt-crowdedmeters', 'crowdedMeters'], ['opt-castname', 'castNameHint'], ['opt-castmovement', 'castMovementHint']] as const) {
+    for (const [id, key] of [['opt-spreadcombattext', 'spreadCombatText'], ['opt-crowdedmeters', 'crowdedMeters'], ['opt-castname', 'castNameHint'], ['opt-castmovement', 'castMovementHint']] as const) {
       root.querySelector<HTMLElement>('#' + id)?.addEventListener('click', () => {
         const settings = this.getSettings(); settings[key] = !settings[key];
         this.saveSettings(); this.renderOptions(root, onBack);

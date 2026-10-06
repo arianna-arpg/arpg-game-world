@@ -60,7 +60,7 @@ export function drawPlayerFocus(ctx: CanvasRenderingContext2D, pos: Vec2, radius
   if(!c.enabled)return;
   const r=radius+c.pad, length=c.corner;
   ctx.save();ctx.translate(pos.x,pos.y);ctx.lineJoin='round';ctx.lineCap='round';
-  ctx.globalAlpha=crowded?c.crowdAlpha:c.restAlpha;
+  ctx.globalAlpha*=crowded?c.crowdAlpha:c.restAlpha; // drawPlayerFocus respects Aim Tick opacity
   ctx.beginPath();
   for(const sx of [-1,1])for(const sy of [-1,1]){
     ctx.moveTo(sx*(r-length),sy*r);ctx.lineTo(sx*r,sy*r);ctx.lineTo(sx*r,sy*(r-length));

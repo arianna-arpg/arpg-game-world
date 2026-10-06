@@ -10,14 +10,19 @@ effect removes its readout on the next draw. Only one hover card is drawn.
 
 Options → Visuals → Debuff Names & Durations defaults to ON HOVER. NEAR HERO,
 UPPER CORNER and OFF remain available; OFF hides details but retains the compact
-icons. Screen effects keep their independent setting. Former unversioned FOCUS
+icons. Screen effects keep their independent setting. statusPresentation shares native
+active-status rules and metadata between icons and screen effects. Unprofiled
+harmful effects receive a soft edge vignette; explicit screenCue opt-outs and
+specialized effects are preserved. Both paths retire on cleanse/expiry. Former unversioned FOCUS
 settings migrate to ON HOVER, including existing preview saves. Deliberate
 CORNER/OFF choices survive. New explicit choices round-trip normally.
 
 Options → Visuals → Skill Faces defaults to ARTWORK everywhere: hotbar, Skills,
 preparation, vendor and Memory chips. Every skill has its own authored composition;
 see [Skill artwork](skill-icons.md). ACRONYMS remains an explicit preference:
-Cleave is C, Sunder Maul SM, Frenzy F and Recall R. Saved choices survive. Native
+Cleave is C, Sunder Maul SM, Frenzy F and Recall REC. classicSkillMarkup restores
+main's inherited tile fonts/colors; the hotbar uses its colored tile and small
+dark initials. Saved choices survive. Native
 slot controls, cooldowns, affordability, charge and cast cues remain in place.
 
 The display span is separate from the mechanical DoT curve clock. Accepted

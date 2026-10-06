@@ -15,7 +15,7 @@ for(const def of Object.values(SKILLS)) {
 for(const [name,label] of [['Cleave','C'],['Sunder Maul','SM'],['Frenzy','F']]) {
  const def=Object.values(SKILLS).find(s=>s.name===name);assert.ok(def,name);assert.equal(skillAcronym(def),label);
 }
-assert.equal(skillAcronym({color:'#fff',name:'Mark',icon:'recall'}),'R');
+assert.equal(skillAcronym({color:'#fff',name:'Mark',icon:'recall'}),'REC');
 configureSkillArtwork(()=>true);
 const before=JSON.stringify(SKILLS),families=new Set<string>();
 for(const def of Object.values(SKILLS)){
@@ -49,5 +49,5 @@ const hostile=skillIconSvg({color:'"><script>bad</script>',icon:'missing'});asse
 console.log('PASS '+Object.keys(SKILLS).length+' skill definitions and all '+CLASSES.length+' class bars have visual faces across '+families.size+' families, including legacy/unknown keys');
 console.log('PASS semantic extension, recall state, escaped SVG and registry purity');
 
-configureSkillArtwork(()=>false);assert.ok(skillIconSvg(SKILLS.cleave).includes('>C</text>'));
+configureSkillArtwork(()=>false);assert.ok(skillIconSvg(SKILLS.cleave).includes('>C</span>'));
 console.log('PASS authored artwork by default; explicit acronym preference, live switching and recall');

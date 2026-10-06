@@ -30,7 +30,7 @@ export function composeAfflictionEdge(fx: ActiveFx[], pressure: AfflictionPressu
     if (seen.has(f.id)) continue;
     seen.add(f.id);
     const family = f.def.motif ?? 'generic';
-    const key = family === 'generic' ? `${family}|${f.color}` : family;
+    const key = family === 'generic' || family === 'soft' ? `${family}|${f.color}` : family;
     const intensity = clamp01((f.def.intensity ?? 0.6) * f.k);
     const ownPressure = Object.hasOwn(pressure, f.id) ? Math.max(0, pressure[f.id]) : 0;
     const lead = intensity * (0.15 + Math.min(2, ownPressure));

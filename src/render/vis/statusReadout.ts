@@ -1,7 +1,8 @@
-import { STATUS_DEFS, type ActiveStatus } from '../../engine/status';
+import { STATUS_DEFS, type ActiveStatus, type StatusDef } from '../../engine/status';
 import type { AfflictionPressure } from '../../engine/afflictionPressure';
 import { AFFLICTION_CUE_CFG } from '../../data/afflictionCues';
 import { VIS_CFG } from './visConfig';
+import {activeDebuffs,statusPresentation} from '../statusPresentation';
 
 export interface StatusReadoutRow {
   id: string; label: string; color: string; stacks: number;
@@ -13,9 +14,9 @@ export function statusReadoutRows(statuses: readonly ActiveStatus[], pressure: A
   inactive = false): StatusReadoutRow[] {
   if (inactive) return [];
   const rows = new Map<string, StatusReadoutRow>();
-  for (const s of statuses) {
-    const def = STATUS_DEFS[s.id];
-    if (!def || def.beneficial || s.remaining <= 0 || s.stacks <= 0) continue;
+  for (const s of activeDebuffs(statuses)) {
+    const def:Partial<StatusDef> = STATUS_DEFS[s.id] ?? {};
+    const presentation = statusPresentation(s)!;
     const dot = s.dps > 0 || s.screenDot;
     const armed = (s.rupture ?? 0) > 0 || !!def.cullsAtLethal || !!def.dischargeOnHit;
     const severe = (pressure[s.id] ?? 0) >= AFFLICTION_CUE_CFG.pressureFull;
@@ -37,7 +38,7 @@ export function statusReadoutRows(statuses: readonly ActiveStatus[], pressure: A
         row.remaining = Math.max(row.remaining, clock);
         row.firstExpiry = Math.min(row.firstExpiry!, clock);
       }
-    } else rows.set(s.id, { id:s.id,label:def.label,color:def.color,stacks:s.stacks,
+    } else rows.set(s.id, { id:s.id,label:presentation.label,color:presentation.color,stacks:s.stacks,
       remaining:clock,firstExpiry:clock,detail,priority });
   }
   return [...rows.values()].sort((a,b)=>b.priority-a.priority||a.id.localeCompare(b.id));

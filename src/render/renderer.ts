@@ -6,7 +6,7 @@ import { drawMeleeReach } from './vis/meleeReachLayer';
 import { treePointBudget } from '../engine/skillEmpowerment';
 import { altarInfluences } from '../engine/altarCues';
 import { drawAltarInfluence } from './vis/altarCueLayer';
-import { CombatTextLayout, combatBodyRect, drawPlayerFocus } from './vis/combatFocus';
+import { CombatTextLayout, combatBodyRect } from './vis/combatFocus';
 import { CombatMeterLayout } from './vis/combatMeters';
 import { RewardLabelLayout } from './vis/rewardLabels';
 import { garrisonCaption } from './vis/garrisonName';
@@ -6114,7 +6114,7 @@ export class Renderer {
       if (alpha > 0.01) {
         const style = AIM_TICK_STYLES[tick.style] ?? AIM_TICK_STYLES[DEFAULT_AIM_TICK.style];
         ctx.globalAlpha = alpha;
-        style.draw(ctx, a.facing, a.radius);
+        if (!style.playerOverlay || a !== world.player) style.draw(ctx, a.facing, a.radius);
         ctx.globalAlpha = baseAlpha;
       }
     }
@@ -7601,8 +7601,9 @@ export class Renderer {
     // OWN settings (the host mints one truth; every seat curates its view).
     const kindPrefs = this.getSettings?.().floatKinds;
     const focus = VIS_CFG.combatFocus;
+    const spreadCombatText = this.getSettings?.().spreadCombatText === true;
     const visible = this.visibleCombatBodies(world);
-    this.combatTextLayout.begin([...visible.map(a=>combatBodyRect(a.pos,a.radius)),...this.combatMeters.footprints,
+    if (spreadCombatText) this.combatTextLayout.begin([...visible.map(a=>combatBodyRect(a.pos,a.radius)),...this.combatMeters.footprints,
       ...(this.hoverNameRect ? [this.hoverNameRect] : []), ...this.rewardLabels.footprints],
       {x:this.cam.x,y:this.cam.y,w:this.canvas.width/this.zoom,h:this.canvas.height/this.zoom});
     for (const t of world.texts) {
@@ -7619,16 +7620,21 @@ export class Renderer {
       ctx.fillStyle = t.color;
       ctx.strokeStyle = 'rgba(0,0,0,0.7)';
       ctx.lineWidth = 3;
-      const pos = t.kind && focus.numbers.kinds.includes(t.kind)
+      const pos = spreadCombatText && t.kind && focus.numbers.kinds.includes(t.kind)
         ? this.combatTextLayout.place(t,t.pos,ctx.measureText(txt).width,t.size) : t.pos;
       ctx.strokeText(txt, pos.x, pos.y);
       ctx.fillText(txt, pos.x, pos.y);
     }
     ctx.globalAlpha = 1;
     const hero=world.player;
-    if(!hero.dead && !hero.burrow && !hero.statuses.some(s=>STATUS_DEFS[s.id]?.conceals)) {
-      drawPlayerFocus(ctx,hero.pos,hero.radius,hero.facing,visible.some(a=>a!==hero
+    const tick = this.getSettings?.().aimTick ?? DEFAULT_AIM_TICK;
+    const playerOverlay = (AIM_TICK_STYLES[tick.style] ?? AIM_TICK_STYLES[DEFAULT_AIM_TICK.style]).playerOverlay;
+    if(playerOverlay && tick.alpha > .01 && hero.aims && !hero.passive && !hero.dead && !hero.downed
+      && !hero.burrow && !hero.statuses.some(s=>s.remaining>0 && s.stacks>0 && STATUS_DEFS[s.id]?.conceals)) {
+      ctx.save();ctx.globalAlpha=clamp(tick.alpha,0,1);ctx.translate(hero.pos.x,hero.pos.y);
+      playerOverlay(ctx,hero.facing,hero.radius,visible.some(a=>a!==hero
         && world.hostileTo(hero,a) && Math.hypot(a.pos.x-hero.pos.x,a.pos.y-hero.pos.y)<focus.player.crowdReach));
+      ctx.restore();
     }
   }
 

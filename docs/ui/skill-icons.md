@@ -41,7 +41,9 @@ randomness. SVG follows the same layer transforms and escapes dynamic colors.
 
 Options → Visuals → Skill Faces defaults to ARTWORK. Missing legacy settings
 also choose artwork. Explicit saved `skillArtwork:false` remains ACRONYMS, and
-either preference changes all surfaces immediately. Debuff-name preferences
+either preference changes all surfaces immediately. classicSkillMarkup and
+skillAcronym retain main's original fallback: native tile colors/fonts, small dark
+hotbar initials, three-letter abbreviation cap, and REC for Recall. Debuff-name preferences
 remain independent. There is no account or character reset.
 
 ## Extending and verifying

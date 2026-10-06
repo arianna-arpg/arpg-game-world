@@ -27,6 +27,7 @@ app.whenReady().then(async()=>{
     await run(()=>{
       window.requestAnimationFrame=()=>0;Object.defineProperty(navigator,'getGamepads',{value:()=>[]});
       __game.devStartRun('warrior');__game.ui.hideAll();
+      __game.settings().spreadCombatText=true;__game.settings().crowdedMeters=true;__game.settings().aimTick.style='focus';
       const w=__game.world();w.startWorldMass(42);w.player.invulnerable=true;
       const m=w.massRuntime,p=m.journey.places.find(p=>p.content==='fallen-court');
       w.landPartyAt(m.journey.local(p));m.update(w,true);__game.step(2);
