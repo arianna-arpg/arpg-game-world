@@ -10674,10 +10674,6 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         <button id="opt-crowdedmeters" title="FIXED keeps bars at their usual position above each body. AVOID CROWD moves overlapping groups with a line to their owner.">${s.crowdedMeters ? 'AVOID CROWD' : 'FIXED'}</button>
       </div>
       <div class="rebind-row">
-        <span>Combat Text Placement</span>
-        <button id="opt-spreadcombattext" title="CLASSIC keeps floating numbers at their usual positions. SPREAD separates overlapping combat numbers and rewards.">${s.spreadCombatText ? 'SPREAD' : 'CLASSIC'}</button>
-      </div>
-      <div class="rebind-row">
         <span>Skill Cast Name</span>
         <button id="opt-castname" title="Show the skill name above your hero while casting.">${s.castNameHint ? 'ON' : 'OFF'}</button>
       </div>
@@ -10699,7 +10695,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       </div>
       <div class="rebind-row">
         <span>Hover Nameplates</span>
-        <button id="opt-hovernames" title="Which bodies show the cursor nameplate. NAMED: distinctly-named enemies, known garrison members and native formations. Captions identify leaders and site affiliation. ALL: every creature, minion, townsfolk and critter names itself under the cursor (name over kind + tier), so you can identify the exact entity without recalling its look. One plate at a time either way, and hidden bodies never tell.">${s.hoverNameplates === 'all' ? 'ALL' : 'NAMED'}</button>
+        <button id="opt-hovernames" title="Which bodies show the cursor nameplate. NAMED: distinctly-named enemies. ALL: every creature, minion, townsfolk and critter names itself under the cursor (name over kind + tier), so you can identify the exact entity without recalling its look. One plate at a time either way, and hidden bodies never tell.">${s.hoverNameplates === 'all' ? 'ALL' : 'NAMED'}</button>
       </div>`;
     root.innerHTML = `
       <h1>Options</h1>
@@ -10733,7 +10729,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       this.saveSettings();
       this.renderOptions(root, onBack);
     });
-    for (const [id, key] of [['opt-spreadcombattext', 'spreadCombatText'], ['opt-crowdedmeters', 'crowdedMeters'], ['opt-castname', 'castNameHint'], ['opt-castmovement', 'castMovementHint']] as const) {
+    for (const [id, key] of [['opt-crowdedmeters', 'crowdedMeters'], ['opt-castname', 'castNameHint'], ['opt-castmovement', 'castMovementHint']] as const) {
       root.querySelector<HTMLElement>('#' + id)?.addEventListener('click', () => {
         const settings = this.getSettings(); settings[key] = !settings[key];
         this.saveSettings(); this.renderOptions(root, onBack);

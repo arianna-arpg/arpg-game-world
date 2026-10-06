@@ -1,3 +1,9 @@
+World text rollback: main now owns hover-name selection/text/style and item-label
+placement. Combat floats keep native positions; saved SPREAD values are ignored.
+This supersedes historical name/reward packing and combat-hush notes below.
+See docs/ui/classic-feedback.md; verify presentationdefaults, combatfocus,
+rewardlabels and the reward-labels/classic-feedback/combat-focus UI harnesses.
+
 Classic feedback preferences: spreadCombatText defaults false (native float
 positions). Aim Ticks adds Facing + Brackets via playerOverlay; Line remains
 the default, and the shared opacity control also dims/hides the locator.

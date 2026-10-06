@@ -88,8 +88,6 @@ export interface Settings {
   afflictionOverlays: import('../data/afflictionCues').AfflictionOverlayMode;
   /** Keep native meter anchors unless crowd avoidance is explicitly requested. */
   crowdedMeters: boolean;
-  /** Optional displaced combat floats; classic native positions are the default. */
-  spreadCombatText: boolean;
   /** Optional name of the skill currently being cast. */
   castNameHint: boolean;
   /** Optional affirmative support-readiness message in Skills. Refusals stay visible. */
@@ -302,7 +300,6 @@ export interface SettingsSave {
   lowLifePulse?: boolean;
   afflictionOverlays?: import('../data/afflictionCues').AfflictionOverlayMode;
   crowdedMeters?: boolean;
-  spreadCombatText?: boolean;
   castNameHint?: boolean;
   supportReadyHint?: boolean;
   castMovementHint?: boolean;
@@ -477,7 +474,6 @@ export const makeSettings = (): Settings => ({
   lowLifePulse: true,
   afflictionOverlays: 'gentle',
   crowdedMeters: false,
-  spreadCombatText: false,
   castNameHint: false,
   supportReadyHint: false,
   castMovementHint: false,
@@ -528,7 +524,6 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   lowLifePulse: s.lowLifePulse,
   afflictionOverlays: s.afflictionOverlays,
   crowdedMeters: s.crowdedMeters,
-  spreadCombatText: s.spreadCombatText,
   castNameHint: s.castNameHint,
   supportReadyHint: s.supportReadyHint,
   castMovementHint: s.castMovementHint,
@@ -632,7 +627,6 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     lowLifePulse: s.lowLifePulse ?? true,
     afflictionOverlays: s.afflictionOverlays === 'off' || s.afflictionOverlays === 'still' ? s.afflictionOverlays : 'gentle',
     crowdedMeters: s.crowdedMeters === true,
-    spreadCombatText: s.spreadCombatText === true,
     castNameHint: s.castNameHint === true,
     supportReadyHint: s.supportReadyHint === true,
     castMovementHint: s.castMovementHint === true,

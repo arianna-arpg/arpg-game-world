@@ -11,12 +11,14 @@ import {seedGlobalRandom} from '../src/sim/rng';
 import {gemInitials} from '../src/engine/gemitems';
 import {SKILLS} from '../src/data/skills';
 import {configureSkillArtwork,skillIconSvg,skillAcronym} from '../src/render/skillIcons';
-const defaults=makeSettings();assert.equal(defaults.spreadCombatText,false);assert.equal(defaults.aimTick.style,'line');
-for(const style of ['line','dot','focus'])for(const alpha of [0,.35,1])for(const spreadCombatText of [false,true]){
- const loaded=deserializeSettings(serializeSettings({...defaults,spreadCombatText,aimTick:{style,alpha}}))!;
- assert.equal(loaded.spreadCombatText,spreadCombatText);assert.deepEqual(loaded.aimTick,{style,alpha});
+const defaults=makeSettings();assert.equal(defaults.aimTick.style,'line');
+for(const style of ['line','dot','focus'])for(const alpha of [0,.35,1]){
+ const loaded=deserializeSettings(serializeSettings({...defaults,aimTick:{style,alpha}}))!;
+ assert.deepEqual(loaded.aimTick,{style,alpha});
 }
-const old=serializeSettings(defaults);delete old.spreadCombatText;assert.equal(deserializeSettings(old)!.spreadCombatText,false);
+const old={...serializeSettings(defaults),spreadCombatText:true};
+assert.ok(!('spreadCombatText' in deserializeSettings(old)!),'retired spreading preference is ignored');
+assert.ok(!('spreadCombatText' in serializeSettings(deserializeSettings(old)!)),'retired preference is not saved again');
 configureSkillArtwork(()=>false);
 for(const def of Object.values(SKILLS)){assert.equal(skillAcronym(def),gemInitials(def.name));const markup=skillIconSvg(def);
  assert.ok(!/<svg|style=/.test(markup),'classicFallback inherits native DOM fonts and colors');}

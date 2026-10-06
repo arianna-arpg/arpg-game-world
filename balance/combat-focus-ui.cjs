@@ -27,7 +27,7 @@ app.whenReady().then(async()=>{
     await run(()=>{
       window.requestAnimationFrame=()=>0;Object.defineProperty(navigator,'getGamepads',{value:()=>[]});
       __game.devStartRun('warrior');__game.ui.hideAll();
-      __game.settings().spreadCombatText=true;__game.settings().crowdedMeters=true;__game.settings().aimTick.style='focus';
+      __game.settings().crowdedMeters=true;__game.settings().aimTick.style='focus';
       const w=__game.world();w.startWorldMass(42);w.player.invulnerable=true;
       const m=w.massRuntime,p=m.journey.places.find(p=>p.content==='fallen-court');
       w.landPartyAt(m.journey.local(p));m.update(w,true);__game.step(2);
@@ -48,7 +48,7 @@ app.whenReady().then(async()=>{
       ctx.fillText=function(text,x,y,...rest){if(focusQA.rewardTexts.includes(String(text))||text==='+7 Life')feedback.push(String(text));if(/^1(1[1-9]|2[0-2])$/.test(String(text)))rows.push({text:String(text),x,y,width:ctx.measureText(String(text)).width});return fill.call(this,text,x,y,...rest);};
       ctx.stroke=function(...args){if(ctx.strokeStyle==='#edf9e9')markers++;return stroke.apply(this,args);};
       try{__game.step(1);}finally{ctx.fillText=fill;ctx.stroke=stroke;}
-      return {rows,markers,feedback,rewards:focusQA.rewardTexts,walletsUnchanged:focusQA.wallets===JSON.stringify([w.meta.essences,w.meta.abilityEssences,w.pickupFeed]),bodies:[w.player,...focusQA.enemies].map(a=>({x:a.pos.x,y:a.pos.y,r:a.radius})),fatal:__game.crash().fatal};
+      return {rows,markers,feedback,rewards:focusQA.rewardTexts,walletsUnchanged:focusQA.wallets===JSON.stringify([w.meta.essences,w.meta.abilityEssences,w.pickupFeed]),native:w.texts.filter(t=>/^1(1[1-9]|2[0-2])$/.test(t.text)).map(t=>({text:t.text,x:t.pos.x,y:t.pos.y})),bodies:[w.player,...focusQA.enemies].map(a=>({x:a.pos.x,y:a.pos.y,r:a.radius})),fatal:__game.crash().fatal};
     });
     assert.equal(result.fatal,null);assert.equal(result.rows.length,12);assert.ok(result.markers>0);
     const meters=await run(()=>{
@@ -82,11 +82,9 @@ app.whenReady().then(async()=>{
       assert.ok(t.capacity>0&&Math.abs(t.width/t.capacity-meters.expected[i])<.001,'meter keeps the exact native life fraction');
       for(const b of meters.bodies)assert.ok(!(t.x+t.width>b.x-b.r&&t.x<b.x+b.r&&t.y+t.height>b.y-b.r&&t.y<b.y+b.r),'life meter covers a visible body');
     }
-    for(const t of result.rows)for(const b of result.bodies){
-      assert.ok(!(t.x+t.width/2>b.x-b.r&&t.x-t.width/2<b.x+b.r&&t.y>b.y-b.r&&t.y-15<b.y+b.r),'damage text covers a body');
-    }
+    for(const t of result.rows){const native=result.native.find(n=>n.text===t.text);assert.equal(t.x,native.x);assert.equal(t.y,native.y);}
     assert.ok(result.feedback.includes('+7 Life'),'actual healing feedback stays visible');
-    assert.ok(result.rewards.length===2&&!result.rewards.some(t=>result.feedback.includes(t)),'resource reward text yields near combat');
+    assert.ok(result.rewards.length===2&&result.rewards.every(t=>result.feedback.includes(t)),'resource reward text retains native visibility near combat');
     assert.ok(result.walletsUnchanged,'presentation does not consume currency or pickup-feed records');
     await shot('crowd');
     const quiet=await run(()=>{
@@ -105,7 +103,7 @@ app.whenReady().then(async()=>{
     });
     assert.equal(alive.fatal,null);await shot('fight');
     fs.writeFileSync(path.join(dir,'combat-focus-ui.json'),JSON.stringify({result,meters,alive},null,2));
-    console.log('PASS real renderer retains 12 damage values outside the crowd and draws the local-player marker above combat; currency yields with healing and pickup records preserved; native crowd meters clear bodies with exact fractions and unchanged simulation');
+    console.log('PASS real renderer retains 12 damage values at native positions and draws the local-player marker above combat; currency remains visible with healing and pickup records preserved; native crowd meters clear bodies with exact fractions and unchanged simulation');
   }catch(e){console.error(e.stack||String(e));process.exitCode=1;}
   finally{clearTimeout(timer);win.destroy();server.close();app.exit(process.exitCode||0);}
 });

@@ -17,7 +17,7 @@ app.whenReady().then(async()=>{
 
  const snapshot=()=>{const w=__game.world(),p=w.player;return {seed:w.massRuntime.generator.run.seed,pos:p.pos,life:p.life,mana:p.mana,items:w.meta.items,skills:p.skills.map(i=>i&&{id:i.def.id,level:i.level,sockets:i.sockets})};};
  const resume=async()=>{await boot();await run(async()=>{for(let i=0;i<80&&!document.querySelector('#sm-continue:not([disabled])');i++)await new Promise(r=>setTimeout(r,100));const b=document.querySelector('#sm-continue:not([disabled])');if(!b)throw Error('Missing Continue');b.click();__game.ui.hideAll();});return run(snapshot);};
- const presentationPrefs=()=>run(()=>{const s=__game.settings();return {spread:s.spreadCombatText,aim:s.aimTick,art:s.skillArtwork};});
+ const presentationPrefs=()=>run(()=>{const s=__game.settings();return {aim:s.aimTick,art:s.skillArtwork};});
  const capture=async(name)=>{
   const data=await run(()=>{const r=__game.renderer,w=__game.world(),p=w.player,words=[],markers=[];
    const contexts=[r.ctx,r.octx],saved=contexts.map(c=>({fillText:c.fillText,stroke:c.stroke,beginPath:c.beginPath,moveTo:c.moveTo,lineTo:c.lineTo}));
@@ -36,7 +36,7 @@ app.whenReady().then(async()=>{
  };
  const nativeNumbers=data=>{for(const t of data.floats){const drawn=data.words.filter(d=>d.text===t.text);assert.equal(drawn.length,1,t.text);assert.equal(drawn[0].x,t.x);assert.equal(drawn[0].y,t.y);}};
  const tick=async(style)=>{await options('interface');await run(style=>document.querySelector('[data-aimtick-style="'+style+'"]').click(),style);await run(()=>__game.ui.hideAll());};
- const alpha=async(value)=>{await options('interface');await run(value=>{const e=document.getElementById('opt-aimtick');e.value=String(value);e.dispatchEvent(new Event('input',{bubbles:true}));},value);await run(()=>__game.ui.hideAll());};
+ const alpha=async(value)=>{await options('interface');await run(value=>{const e=document.getElementById('opt-aimtick');e.value=String(value);e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));},value);await run(()=>__game.ui.hideAll());};
  const effects=()=>run(()=>{const r=__game.renderer,w=__game.world(),cv=document.createElement('canvas');cv.width=600;cv.height=400;const g=cv.getContext('2d'),oldCanvas=r.canvas,oldCtx=r.ctx;
   r.canvas=cv;r.ctx=g;try{r.drawStatusFx();r.drawAfflictionOverlays(w);}finally{r.canvas=oldCanvas;r.ctx=oldCtx;}
   const px=g.getImageData(0,0,600,400).data;let energy=0;for(let i=3;i<px.length;i+=4)energy+=px[i];return {energy,center:g.getImageData(300,200,1,1).data[3],pixels:cv.toDataURL()};});
@@ -47,12 +47,10 @@ app.whenReady().then(async()=>{
    for(const [i,id]of ['cleave','sunder_maul','frenzy'].entries())__game.devGrantSkill(id,1,i);
    for(let i=0;i<12;i++)w.text({x:p.pos.x,y:p.pos.y-20},String(901+i),'#f2ebcf',15,'dmg',10);
   });
-  assert.equal((await presentationPrefs()).spread,false);assert.equal((await presentationPrefs()).aim.style,'line');
+  assert.equal((await presentationPrefs()).aim.style,'line');
   results.classic=await capture('classic-default');nativeNumbers(results.classic);assert.equal(results.classic.markers.length,0);
   await run(()=>__game.step(3));results.moving=await capture('classic-moving');nativeNumbers(results.moving);
-  await options('visuals');assert.equal(await run(()=>document.getElementById('opt-spreadcombattext').textContent),'CLASSIC');await click('opt-spreadcombattext');assert.equal(await run(()=>document.getElementById('opt-spreadcombattext').textContent),'SPREAD');await run(()=>__game.ui.hideAll());
-  results.spread=await capture('spread-opt-in');assert.ok(results.spread.floats.some(t=>results.spread.words.some(d=>d.text===t.text&&(d.x!==t.x||d.y!==t.y))));assert.equal(results.spread.words.filter(t=>/^9[0-9][0-9]$/.test(t.text)).length,12);
-  await options('visuals');await click('opt-spreadcombattext');await run(()=>__game.ui.hideAll());nativeNumbers(await capture('classic-returned'));
+  await options('visuals');assert.equal(await run(()=>!!document.getElementById('opt-spreadcombattext')),false);await run(()=>__game.ui.hideAll());
   await tick('dot');assert.equal((await capture('dot')).markers.length,0);await tick('focus');await run(()=>__game.world().player.facing=0);results.focus=await capture('focus-right');assert.equal(results.focus.markers.length,1);assert.ok(results.focus.markers[0].points[13].x>0);assert.equal(results.focus.markers[0].points[13].y,0);
   await run(()=>__game.world().player.facing=Math.PI/2);results.turned=await capture('focus-down');assert.ok(Math.abs(results.turned.markers[0].points[13].x)<1e-8);assert.ok(results.turned.markers[0].points[13].y>0);
   await alpha(25);results.dim=await capture('focus-dim');assert.ok(Math.abs(results.dim.markers[0].alpha/results.focus.markers[0].alpha-.25/.8)<.001);await alpha(0);assert.equal((await capture('focus-hidden')).markers.length,0);await alpha(80);
@@ -78,12 +76,12 @@ app.whenReady().then(async()=>{
   await options('visuals');await click('opt-affliction');await run(()=>__game.ui.hideAll());assert.equal((await effects()).energy,0);assert.equal((await capture('icons-effects-off')).icons.length,3);
   await options('visuals');await click('opt-affliction');await run(()=>{__game.ui.hideAll();__game.world().player.endStatus('poison');});results.cleansed=await capture('paired-cleanse');assert.ok(!results.cleansed.icons.some(i=>i.id==='poison'));assert.ok(!results.cleansed.fx.some(i=>i.id==='poison'));
   await run(()=>__game.world().player.updateTimers(Math.max(...__game.world().player.statuses.map(s=>s.remaining))+1));results.expired=await capture('paired-expiry');assert.equal(results.expired.icons.length,0);assert.equal(results.expired.fx.length,0);assert.equal((await effects()).energy,0);
-  await tick('focus');await alpha(35);await options('visuals');await click('opt-spreadcombattext');await run(()=>{__game.ui.hideAll();const w=__game.world(),p=w.player;p.skills=originalSkills;w.meta.knownSkills=originalKnown;p.fillResources();w.texts=[];__game.save();});
+  await tick('focus');await alpha(35);await run(()=>{__game.ui.hideAll();const w=__game.world(),p=w.player;p.skills=originalSkills;w.meta.knownSkills=originalKnown;p.fillResources();w.texts=[];__game.save();});
   results.saved=await run(snapshot);const prefs=await presentationPrefs();results.resumed=await resume();assert.deepEqual(results.resumed,results.saved);assert.deepEqual(await presentationPrefs(),prefs);
-  await run(()=>{const key=Object.keys(localStorage).find(k=>k.endsWith(':arpg_settings_v1'));const s=JSON.parse(localStorage.getItem(key));delete s.spreadCombatText;localStorage.setItem(key,JSON.stringify(s));});await resume();assert.equal((await presentationPrefs()).spread,false);assert.equal((await presentationPrefs()).aim.style,'focus');
+  await run(()=>{const key=Object.keys(localStorage).find(k=>k.endsWith(':arpg_settings_v1'));const s=JSON.parse(localStorage.getItem(key));s.spreadCombatText=true;localStorage.setItem(key,JSON.stringify(s));});await resume();assert.equal(await run(()=>__game.settings().spreadCombatText),undefined);assert.equal((await presentationPrefs()).aim.style,'focus');
   assert.ok(await run(()=>Object.entries(localStorage).filter(([k])=>k.startsWith('arpg_')).every(([,v])=>v==='sentinel')));
   delete results.gentle.pixels;fs.writeFileSync(path.join(dir,tag+'-ui.json'),JSON.stringify(results,null,2));
-  console.log('PASS exact main face pixels (20 cases), real classic rack/hotbar, native/default damage trajectories and opt-in spreading; Aim Tick choices/facing/opacity/concealment; paired debuff/vignette lifecycle and comfort modes; Options persistence, exact Continue, legacy migration and save sentinels');
+  console.log('PASS exact main face pixels (20 cases), real classic rack/hotbar, native damage trajectories and ignored legacy spreading; Aim Tick choices/facing/opacity/concealment; paired debuff/vignette lifecycle and comfort modes; Options persistence, exact Continue, legacy migration and save sentinels');
  }catch(e){fs.writeFileSync(path.join(dir,tag+'-failure.json'),JSON.stringify(results,null,2));console.error(e.stack||e);process.exitCode=1;}
  finally{clearTimeout(timer);win.destroy();server.close();app.exit(process.exitCode||0);}
 });

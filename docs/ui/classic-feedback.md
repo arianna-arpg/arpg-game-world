@@ -7,11 +7,18 @@ first three space-delimited words; Recall is REC. Artwork remains the saved,
 independent preference supplied by the separate skill-illustration pass.
 Cooldowns, affordability, slots and controls retain their native behavior.
 
-Options → Visuals → Combat Text Placement defaults to CLASSIC, including old
-settings with no preference. Floating numbers draw at their actual positions;
-there is no packing displacement. SPREAD explicitly enables the existing
-crowd-avoidance layout. Native values, trajectories, lifetimes and visibility
-filters are unchanged. Rendering never edits the simulation's text objects.
+World text uses main's original placement and styling. Hover names remain above
+their actor, with the original rarity/species subtitle and NAMED/ALL selection.
+Line of sight can hide or reveal a name but never changes its position. Garrison
+and formation captions are no longer injected into hover names.
+
+Ground items use the original single-line rarity-colored name pill above the
+item, in the original world draw pass. There is no packing, connecting line,
+extra Memory-purpose line, truncation, crowd suppression or label-count cap.
+Normal item bobbing remains. Floating text uses its actual simulation position,
+trajectory and lifetime. The SPREAD option is removed and old saved values are
+ignored. Drop announcements and reward floats keep their native visibility and
+per-kind preferences, including during combat.
 
 Options → Interface → Aim Ticks now offers Line, Dot and Facing + Brackets.
 Line remains the default. Facing + Brackets places the local player's locator
@@ -48,12 +55,14 @@ their own layers rather than collapsing to one unrelated tint.
 - classic-feedback-ui runs a controlled hidden game and drives actual Options.
   It compares classic face pixels with the painter extracted from main (20
   readiness/affordability/Recall cases), checks real bar/rack faces, compares
-  classic damage coordinates with native text positions, and exercises SPREAD.
+  classic damage coordinates with native text positions, and confirms that SPREAD is retired.
   It verifies marker direction, opacity, concealment, paired icon/vignette
   application/cleanse/expiry, actual overlay pixels and comfort controls, exact
   Save/Continue, legacy preferences and six untouched production-save sentinels.
-- combat-focus-ui explicitly enables the opt-in layout/locator/meter preferences
-  before checking their existing crowd behavior. debuff-icons-ui verifies real
+- reward-labels-ui checks original item/name painters against main and fixed
+  anchors across visibility and crowd changes, including native pickup.
+- combat-focus-ui enables the opt-in locator/meter preferences while checking
+  native combat-text coordinates and reward visibility. debuff-icons-ui verifies real
   hover input and narrow/scaled HUD behavior. These are controlled integration
   checks, not an ordinary-input gameplay review.
 
