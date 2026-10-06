@@ -187,7 +187,7 @@ try {
     if (kind === 'rifts') assert.ok(bodyBefore.births.some(b => b.bodies.length), 'production rift actually pours before character Continue');
     const continued = structuredClone(saved);
     if (kind === 'rifts') for (const owner of continued.world!.worldmass!.geography!.owners)
-      owner.controllers = owner.controllers.filter(c => c.id !== 'objective-access');
+      owner.controllers = owner.controllers.filter(c => !['objective-access','physical-intel','beacon-survey'].includes(c.id));
     const fresh = makeSimWorld('warrior', 901745); assert.ok(applySavedCharacter(fresh, continued)); assert.ok(fresh.adoptWorldState(continued.world));
     fresh.startWorldMass(continued.world!.worldmass!.state.run.seed, continued.world!.worldmass); w = fresh; m = w.massRuntime!;
     if (kind === 'rifts') {

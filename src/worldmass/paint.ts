@@ -370,6 +370,24 @@ export function massMap(mass: WorldMassRuntime, player: { x: number; y: number }
     parts.push(`<g data-mass-place="${escape(found.id)}" tabindex="0" aria-label="${escape(name)}"><title>${escape(name)}</title><path d="M${x},${y - 5}l5,5 -5,5 -5,-5Z" fill="#d1b685" stroke="#302d23"/></g>`);
     placeRows.push(`<li data-mass-place-detail="${escape(found.id)}" style="break-inside:avoid;margin:3px 0">${escape(name)}</li>`);
   }
+  // Explicit recon grants only these frozen destinations; intervening terrain
+  // and any imagined connecting roads remain unknown. Details live on the map.
+  const intel=(mass.geography?.intel.knownTargets()??[]).flatMap(target=>{
+    const dx=BigInt(target.center.cx)-BigInt(mass.origin.cx),dy=BigInt(target.center.cy)-BigInt(mass.origin.cy);
+    if(target.center.dimension!==mass.origin.dimension||dx < -4096n||dx>4096n||dy < -4096n||dy>4096n)return [];
+    const p=localOffset(target.center,{...mass.origin,x:0,y:0},mass.config.terrain.addressSpan);
+    return [{target,p,distance:Math.hypot(p.x-player.x,p.y-player.y)}];
+  }).sort((a,b)=>a.distance-b.distance||a.target.id.localeCompare(b.target.id)).slice(0,32);
+  for(const {target,p} of intel){
+    const rawX=(p.x/grain-left)*scale,rawY=(p.y/grain-top)*scale,inside=rawX>=12&&rawY>=28&&rawX<=cols*scale-12&&rawY<=rows*scale-12;
+    const x=Math.max(12,Math.min(cols*scale-12,rawX)),y=Math.max(28,Math.min(rows*scale-12,rawY));
+    const bearing=['→','↘','↓','↙','←','↖','↑','↗'][(Math.round(Math.atan2(p.y-player.y,p.x-player.x)/(Math.PI/4))+8)%8];
+    const known=mass.geography!.intel.visited(target.id)?'Visited':'Surveyed';
+    const name=target.name+' · '+known+' '+bearing;
+    marker(x,y,7);
+    parts.push(`<g data-mass-intel="${escape(target.id)}" tabindex="0" aria-label="${escape(name)}"><title>${escape(name)}</title><path d="M${x},${y-6}l6,6 -6,6 -6,-6Z" fill="#153a4b" stroke="#8fd4ff" stroke-width="2"/>${inside?'':`<text x="${x}" y="${y+4}" text-anchor="middle" fill="#bfe8ff" font-size="10">${bearing}</text>`}</g>`);
+    placeRows.push(`<li data-mass-intel-detail="${escape(target.id)}" style="break-inside:avoid;margin:3px 0;color:#8fd4ff">${escape(name)}</li>`);
+  }
   const signs=grain<=MASS_MAP_SIGNS.maxGrain ? massMapSigns(mass,scenery) : [];
   const townNear=!!mass.settlement?.contains(player.x,player.y);
   const signRows:string[]=[];

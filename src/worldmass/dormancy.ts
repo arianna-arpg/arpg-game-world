@@ -40,6 +40,34 @@ const entityKeys = new Set(['aiTargetId','aiHitById','lastFoeId','watchQuarryId'
   'sourceId','victimId','preyId','quarryId','orbitAnchorId','echoPrey','necroId','cartId']);
 // Attribution histories are not live dependency leases. They still remap in saves.
 const dependencyKeys = new Set([...entityKeys].filter(k=>!['aiHitById','lastFoeId'].includes(k)));
+/** A certificate covers only deeply immutable, plain, dependency-free data.
+ * Actor identities, numeric reference fields, accessors, mutable collections,
+ * unknown classes and cycles always fall back to ordinary dependency scanning.
+ * Weak membership neither retains terrain history nor needs a mutation epoch:
+ * every property of a certified graph is a frozen data descriptor. */
+const dependencyFreeData=new WeakSet<object>();
+function isDependencyFreeData(value:object,active?:Set<object>,budget?:{left:number}):boolean {
+  if(dependencyFreeData.has(value))return true;
+  const proto=Object.getPrototypeOf(value);
+  if(proto!==Object.prototype&&proto!==null&&proto!==Array.prototype||!Object.isFrozen(value))return false;
+  active??=new Set<object>();budget??={left:4096};
+  if(--budget.left<0||active.size>=64||active.has(value))return false;
+  active.add(value);
+  try {
+    for(const [key,descriptor] of Object.entries(Object.getOwnPropertyDescriptors(value))){
+      if(!descriptor.enumerable)continue;
+      // Inspection never invokes getters. Fallback keeps the original scanner
+      // semantics, including one ordinary read of an enumerable accessor.
+      if(!('value' in descriptor))return false;
+      const child:unknown=descriptor.value;
+      // Reject possible IDs even before they belong to this owner. Otherwise a
+      // future actor could make a formerly harmless frozen record a live lease.
+      if(typeof child==='number'&&dependencyKeys.has(key))return false;
+      if(child!==null&&typeof child==='object'&&!isDependencyFreeData(child,active,budget))return false;
+    }
+    dependencyFreeData.add(value);return true;
+  } finally {active.delete(value);}
+}
 const rootExcluded = new Set(['id','statusRelay','gridSeq']);
 const unsafeKeys = new Set(['__proto__','prototype','constructor']);
 
@@ -155,6 +183,7 @@ export function massDormancyPins(world: World, owned: ReadonlyMap<string,Actor>,
     if(!value||typeof value!=='object'||seen.has(value)||excludedOwners.has(value))return;
     if(value instanceof Actor){if(native.has(value))pinned.add(value);return;}
     seen.add(value);
+    if(isDependencyFreeData(value))return;
     if(value instanceof WeakMap||value instanceof WeakSet){for(const a of native)if(value.has(a))pinned.add(a);return;}
     if(value instanceof Map){for(const [k,v]of value){if(typeof k==='number'){const a=ids.get(k);if(a)pinned.add(a);}else visit(k);visit(v);}return;}
     if(value instanceof Set){for(const v of value){if(typeof v==='number'){const a=ids.get(v);if(a)pinned.add(a);}else visit(v);}return;}

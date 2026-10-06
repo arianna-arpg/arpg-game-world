@@ -7,6 +7,9 @@ import type { NativeCountrySpec } from './nativeCountry';
 import { PYRE_CFG } from '../data/pyres';
 import { RIFT_CFG } from '../data/rifts';
 import { DIG_CFG } from '../data/digsites';
+import { BEACON_CFG } from '../data/beacons';
+import { Rng } from '../core/rng';
+import { driveNativeBeacon, nativeBeaconConfig, resolveNativeBeacon, type NativeBeaconConfig, type NativeBeaconState } from '../engine/beaconObjectives';
 import { transitDwell, transitRadius, transitReach, type DwellReach } from '../data/transit';
 import { driveHoldObjectives, driveNativeRiftPours, finishNativeDig, resolveHoldContest, type DigFinishConfig, type RiftPourConfig, type HoldFixture, type HoldObjectiveHost } from '../engine/holdObjectives';
 import type { MassObjectiveEffects } from './objectiveBodies';
@@ -19,16 +22,17 @@ const chestId = (kind: NativeMassHoldKind) => idOf(kind) + ':chest';
 const bodiesId = (kind: NativeMassHoldKind) => idOf(kind) + ':population';
 /** The native World.loadZone objective chest roll, frozen when an owner is born. */
 export const MASS_NATIVE_OBJECTIVE_CHEST_CHANCE = .75;
-export type NativeMassHoldKind = 'pyres' | 'rifts' | 'unearth';
+export type NativeMassHoldKind = 'pyres' | 'rifts' | 'unearth' | 'beacon';
 type NativeHoldSpecs = { [K in NativeMassHoldKind]: Extract<ObjectiveSpec, { kind: K }> };
 export interface NativeMassHoldSource<K extends NativeMassHoldKind = NativeMassHoldKind> {
   id: string; source: string; tileset?: string; weight: number; totalWeight: number;
   objective: NativeHoldSpecs[K];
+  alias?: 'circuit';
 }
 export type NativeMassPyreSource = NativeMassHoldSource<'pyres'>;
 export interface MassHoldContext { source: string; zone: ZoneDef; recipe?: NativeMassHoldSource }
 export interface MassPyreContext { source: string; zone: ZoneDef; recipe?: NativeMassPyreSource }
-export const isNativeMassHoldKind = (kind: string): kind is NativeMassHoldKind => ['pyres', 'rifts', 'unearth'].includes(kind);
+export const isNativeMassHoldKind = (kind: string): kind is NativeMassHoldKind => ['pyres', 'rifts', 'unearth', 'beacon'].includes(kind);
 const isNativeHold = (o: ObjectiveSpec): o is NativeHoldSpecs[NativeMassHoldKind] => isNativeMassHoldKind(o.kind);
 /** The actual native weighted rows. Bare tileset pyres resolve to {kind:'pyres'}
  * in engine/worldgen.rollObjective; every count/hold override from authored zone
@@ -39,10 +43,11 @@ export function nativeMassPyreSources(country?: NativeCountrySpec): readonly Rea
 export function nativeMassHoldSources(country?: NativeCountrySpec): readonly Readonly<NativeMassHoldSource>[] {
   const rows: NativeMassHoldSource[] = [];
   const tilesets = country ? (country.sources as { tilesets: { definition: TilesetDef }[] }).tilesets.map(t => t.definition) : Object.values(TILESETS);
-  for (const ts of tilesets) for (const [i, row] of ts.objectives.entries()) if (isNativeMassHoldKind(row.kind) && row.weight > 0)
+  for (const ts of tilesets) for (const [i, row] of ts.objectives.entries()) if ((isNativeMassHoldKind(row.kind) || row.kind === 'circuit') && row.weight > 0)
     rows.push({ id: `tilesets/${ts.id}/objectives/${i}`, source: 'data/tilesets', tileset: ts.id, weight: row.weight,
-      totalWeight: ts.objectives.reduce((n, o) => n + Math.max(0, o.weight), 0), objective: { kind: row.kind } });
-  for (const z of Object.values(ZONES)) if (z.objective.kind === 'pyres' || z.objective.kind === 'rifts' || z.objective.kind === 'unearth') rows.push({
+      totalWeight: ts.objectives.reduce((n, o) => n + Math.max(0, o.weight), 0), objective: { kind: row.kind === 'circuit' ? 'beacon' : row.kind },
+      ...(row.kind === 'circuit' ? { alias: 'circuit' as const } : {}) });
+  for (const z of Object.values(ZONES)) if (isNativeHold(z.objective)) rows.push({
     id: `zones/${z.id}/objective`, source: 'data/zones', ...(z.tileset ? { tileset: z.tileset } : {}), weight: 1, totalWeight: 1, objective: clone(z.objective),
   });
   return freezeData(rows.sort((a, b) => a.id.localeCompare(b.id)));
@@ -51,9 +56,11 @@ export function resolveMassPyreContext(zone: ZoneDef, source: NativeMassPyreSour
   if (!Number.isSafeInteger(level) || level < 1 || !source.id || !source.source || source.objective.kind !== 'pyres') throw Error('Invalid native pyre context');
   return freezeData(clone({ source: source.source + '/' + source.id, zone: { ...zone, level, objective: source.objective }, recipe: source }));
 }
-export function resolveMassHoldContext(zone: ZoneDef, source: NativeMassHoldSource, level = zone.level): Readonly<MassHoldContext> {
+export function resolveMassHoldContext(zone: ZoneDef, source: NativeMassHoldSource, level = zone.level, rng: { int(lo: number, hi: number): number } = new Rng(zone.seed ?? 0)): Readonly<MassHoldContext> {
   if (!Number.isSafeInteger(level) || level < 1 || !source.id || !source.source || !isNativeMassHoldKind(source.objective.kind)) throw Error('Invalid native hold context');
-  return freezeData(clone({ source: source.source + '/' + source.id, zone: { ...zone, level, objective: source.objective }, recipe: source }));
+  if (source.alias && (source.alias !== 'circuit' || source.objective.kind !== 'beacon')) throw Error('Invalid native hold alias');
+  const objective = source.alias === 'circuit' ? resolveNativeBeacon('circuit', rng) : source.objective;
+  return freezeData(clone({ source: source.source + '/' + source.id, zone: { ...zone, level, objective }, recipe: source }));
 }
 export interface MassObjectiveHost {
   readonly now: number;
@@ -67,18 +74,21 @@ export interface MassObjectiveHost {
   canRetire(fixtures: HoldFixture[], owned?: ReadonlySet<Actor>): boolean;
   /** Native objectiveRewardXp; called only after durable receipt. */
   complete(owner: string, zone: Readonly<ZoneDef>, label: string): void;
+  /** Prevalidated immutable physical discoveries. Admission requires this lane. */
+  reveal?(owner: string, zone: Readonly<ZoneDef>, now: number): void;
 }
 interface PyreDefinition {
   kind: NativeMassHoldKind; source: string; zone: ZoneDef; recipe?: NativeMassHoldSource; positions: MassAddress[]; need: number;
   radius: number; holdRadius: number; reach: DwellReach; cold: string; lit: string; accent: string;
   contest: ReturnType<typeof resolveHoldContest>;
   pour?: RiftPourConfig; dig?: DigFinishConfig;
+  beacon?: NativeBeaconConfig;
   /** Absence belongs to a historical owner born before native chest ownership. */
   reward?: { chance: number; source: string; position: MassAddress | null };
 }
-interface PyreState { fixtures: { charge: number; recoup: number; pourRemaining?: number | null }[] }
+interface PyreState { fixtures: { charge: number; recoup: number; pourRemaining?: number | null }[]; reinforceRemaining?: number | null }
 interface ChestState { opened: boolean; openedAt?: number }
-interface Resident { owner: string; definition: Readonly<PyreDefinition>; fixtures: HoldFixture[]; chest?: Chest; effects?: MassObjectiveEffects; detach: () => void; held: HoldFixture | null }
+interface Resident { owner: string; definition: Readonly<PyreDefinition>; fixtures: HoldFixture[]; beaconState?: NativeBeaconState; chest?: Chest; effects?: MassObjectiveEffects; detach: () => void; held: HoldFixture | null }
 export interface MassPyreView {
   owner: string; kind: NativeMassHoldKind; name: string; pos: Vec2; frac: number; done: boolean; lit: number; count: number;
   contested: boolean; draining: boolean; recouping: boolean;
@@ -88,7 +98,9 @@ export interface MassObjectiveTarget {
   name: string; level: number; center: MassAddress; complete: boolean;
 }
 const clone = <T>(v: T): T => JSON.parse(canonical(v)) as T;
-const nativeConfig = (kind: NativeMassHoldKind) => kind === 'pyres' ? { ...PYRE_CFG, transit: 'pyre', fallback: 110, done: PYRE_CFG.kindLit, flare: 130,
+const nativeConfig = (kind: NativeMassHoldKind) => kind === 'beacon' ? { ...BEACON_CFG, count: [1, 1], transit: 'beacon', fallback: BEACON_CFG.holdRadius, done: BEACON_CFG.kindLit, flare: 240,
+  stir: 'the spire stirs — the wilds turn toward its light…', complete: 'The land is surveyed!' }
+  : kind === 'pyres' ? { ...PYRE_CFG, transit: 'pyre', fallback: 110, done: PYRE_CFG.kindLit, flare: 130,
   stir: 'the kindling catches — hold the ground…', complete: 'Every pyre burns — the dark gives ground!' }
   : kind === 'rifts' ? { ...RIFT_CFG, transit: 'rift', fallback: 120, done: RIFT_CFG.kindSealed, flare: 150,
     stir: 'the seal takes — the tear howls against it…', complete: 'The last rift is sealed — the ground rests!' }
@@ -103,10 +115,10 @@ export class MassObjectives {
   constructor(readonly hierarchy: MassHierarchy, readonly maxResident = 8) {
     if (!Number.isSafeInteger(maxResident) || maxResident < 1 || maxResident > 64) throw Error('Invalid native objective residency budget');
     for (const row of hierarchy.controllers()) {
-      const objectives = row.controllers.filter(c => ['pyres', 'rifts', 'unearth'].some(k => c.id === 'objective:' + k));
+      const objectives = row.controllers.filter(c => ['pyres', 'rifts', 'unearth', 'beacon'].some(k => c.id === 'objective:' + k));
       if (objectives.length > 1) throw Error('Multiple native local objectives share one zone');
       const objective = objectives[0], kind = (objective?.definition as PyreDefinition | undefined)?.kind;
-      const chest = row.controllers.find(c => ['pyres', 'rifts', 'unearth'].some(k => c.id === 'objective:' + k + ':chest'));
+      const chest = row.controllers.find(c => ['pyres', 'rifts', 'unearth', 'beacon'].some(k => c.id === 'objective:' + k + ':chest'));
       if (objective) {
         const { definition } = this.read(row.owner, objective);
         this.kinds.set(row.owner.id, definition.kind);
@@ -140,10 +152,22 @@ export class MassObjectives {
   count(owner: MassGeography, context?: MassHoldContext): number {
     const o = (context?.zone ?? owner.native?.zone)?.objective;
     if (owner.kind !== 'zone' || !o || !isNativeHold(o)) return 0;
+    if (o.kind === 'beacon') {
+      const count = o.count ?? 1;
+      if (!Number.isSafeInteger(count) || count < 1 || count > 32) throw Error('Invalid native beacon count');
+      return count;
+    }
     const band = o.count ?? nativeConfig(o.kind).count;
     if (band.length !== 2 || !band.every(n => Number.isSafeInteger(n) && n > 0 && n <= 32) || band[0] > band[1])
       throw Error('Invalid native pyre count');
     return massRandom(this.hierarchy.seed, [owner.id, 'native-' + o.kind + '/count']).int(band[0], band[1]);
+  }
+  fixtureRadius(owner: MassGeography, context?: MassHoldContext): number {
+    const kind = this.kinds.get(owner.id), old = kind && this.hierarchy.controller(owner.id, idOf(kind));
+    if (old) return (old.definition as PyreDefinition).radius;
+    const o = (context?.zone ?? owner.native?.zone)?.objective;
+    if (!o || !isNativeHold(o)) throw Error('Missing native hold fixture context');
+    return o.kind === 'beacon' ? nativeBeaconConfig(o).radius : nativeConfig(o.kind).radius;
   }
   chestWanted(owner: MassGeography, context?: MassHoldContext): boolean {
     const zone = context?.zone ?? owner.native?.zone, kind = this.kinds.get(owner.id) ?? zone?.objective.kind;
@@ -162,12 +186,13 @@ export class MassObjectives {
     const count = this.count(owner, context), zone = context?.zone ?? owner.native?.zone, o = zone?.objective;
     if (!count || !o || !isNativeHold(o) || this.live.size >= this.maxResident) return false;
     if (o.kind !== 'pyres' && (!host.installHolds || !host.installEffects)) return false;
+    if (o.kind === 'beacon' && !host.reveal) return false;
     const cfg = nativeConfig(o.kind), ID = idOf(o.kind);
     if (positions.length !== count || new Set(positions.map(canonical)).size !== count
       || positions.some(at => canonical(address(at.dimension, at.cx, at.cy, at.x, at.y, this.hierarchy.addressSpan)) !== canonical(at)
         || !massBoundsContains(owner.bounds, at, this.hierarchy.addressSpan))) throw Error('Invalid native pyre placement');
     const need = o.kind === 'pyres' ? o.kindleSec ?? transitDwell('pyre', PYRE_CFG.kindleSec)
-      : o.kind === 'rifts' ? o.sealSec ?? transitDwell('rift', RIFT_CFG.sealSec) : o.digSec ?? transitDwell('digsite', DIG_CFG.digSec);
+      : o.kind === 'rifts' ? o.sealSec ?? transitDwell('rift', RIFT_CFG.sealSec) : o.kind === 'beacon' ? nativeBeaconConfig(o).need : o.digSec ?? transitDwell('digsite', DIG_CFG.digSec);
     if (!Number.isFinite(need) || need <= 0) throw Error('Invalid native pyre duration');
     const source = context?.source ?? owner.native!.source;
     const wanted = this.chestWanted(owner, context);
@@ -180,8 +205,14 @@ export class MassObjectives {
       radius: cfg.radius, holdRadius: transitRadius(cfg.transit, cfg.fallback), reach: transitReach(cfg.transit), cold: cfg.kind, lit: cfg.done, accent: cfg.accent,
       contest: clone(resolveHoldContest(cfg.contest, o.contest)), reward,
       ...(o.kind === 'rifts' ? { pour: clone(RIFT_CFG.pour) } : o.kind === 'unearth' ? { dig: clone({ spoilGemChance: DIG_CFG.spoilGemChance, ambush: DIG_CFG.ambush }) } : {}) };
+    if (o.kind === 'beacon') {
+      const beacon = clone(nativeBeaconConfig(o));
+      Object.assign(definition, { beacon, radius: beacon.radius, holdRadius: beacon.holdRadius, reach: beacon.reach,
+        cold: beacon.cold, lit: beacon.lit, accent: beacon.accent, contest: beacon.contest });
+    }
     const c = this.hierarchy.enroll(owner, ID, source, definition,
-      { fixtures: positions.map(() => ({ charge: 0, recoup: 0, ...(o.kind === 'rifts' ? { pourRemaining: null } : {}) })) }, host.now);
+      { fixtures: positions.map(() => ({ charge: 0, recoup: 0, ...(o.kind === 'rifts' ? { pourRemaining: null } : {}) })),
+        ...(o.kind === 'beacon' ? { reinforceRemaining: null } : {}) }, host.now);
     this.kinds.set(owner.id, o.kind);
     if (reward.position) this.hierarchy.enroll(owner, chestId(o.kind), 'engine/world/objective-chest', reward, { opened: false }, host.now);
     if (o.kind !== 'pyres') this.hierarchy.enroll(owner, bodiesId(o.kind), 'engine/world/native-objective-bodies', { kind: o.kind, source }, null, host.now);
@@ -204,19 +235,32 @@ export class MassObjectives {
       const ID = idOf(run.definition.kind), c = this.hierarchy.status(run.owner, ID)!;
       if (c.phase === 'complete' || c.phase === 'failed') continue;
       const d = run.definition, cfg = nativeConfig(d.kind);
-      driveHoldObjectives(dt, {
+      const hold: HoldObjectiveHost = { ...host.hold,
+        // The native first-charge flare remains; immediate narration is silent.
+        text: () => {}, held: s => { run.held = s; if (s) host.hold.held(s); } };
+      if (d.kind === 'beacon') driveNativeBeacon(dt, run.fixtures, d.beacon!, run.beaconState!, hold, run.effects!.beaconHost());
+      else driveHoldObjectives(dt, {
         fixtures: run.fixtures, need: d.need, transitKind: cfg.transit, holdFallback: cfg.fallback, holdRadius: d.holdRadius, reach: d.reach, contest: d.contest,
         doneKind: d.lit, accent: d.accent, flareColor: d.accent, flareR: cfg.flare,
         stirText: cfg.stir,
         onFill: s => {
           if (d.kind === 'unearth') finishNativeDig(s, d.dig!, run.effects!.digHost(run.fixtures.indexOf(s)));
         },
-      }, { ...host.hold,
-        // Keep stirText as the native first-charge flash trigger. Presentation
-        // suppresses its words; the flare and changed fixture show the action.
-        text: () => {}, held: s => { run.held = s; if (s) host.hold.held(s); } });
+      }, hold);
       if (d.kind === 'rifts') driveNativeRiftPours(run.fixtures, d.need, d.pour!, d.accent, run.effects!.riftHost());
       const done = run.fixtures.every(s => s.charge >= d.need);
+      if (done && d.kind === 'beacon') {
+        // Receipts require this exact native clock. Keep the phase active until
+        // the prevalidated survey has completed, then publish completion.
+        this.checkpoint(run, host.now, 'active');
+        const latest = this.hierarchy.controller(run.owner, ID)!;
+        if (!latest.receipts.some(r => r.id === 'native-beacon-reveal')) {
+          if (!host.reveal) throw Error('Native beacon requires prepared physical discoveries');
+          host.reveal(run.owner, d.zone, host.now);
+          if (!this.hierarchy.receipt(run.owner, ID, latest.revision, { id: 'native-beacon-reveal', source: 'engine/world/surveyAround',
+            subject: run.owner, kind: 'physical-survey', at: host.now })) throw Error('Concurrent native beacon survey receipt');
+        }
+      }
       this.checkpoint(run, host.now, done ? 'complete' : 'active');
       if (done) {
         const latest = this.hierarchy.status(run.owner, ID)!;
@@ -272,6 +316,7 @@ export class MassObjectives {
     if (this.live.has(owner.id)) return true;
     if (this.live.size >= this.maxResident) return false;
     const { definition, state } = this.read(owner, c);
+    if (definition.kind === 'beacon' && !host.reveal) return false;
     const fixtures: HoldFixture[] = definition.positions.map((at, i) => {
       const pos = local(at), charge = state.fixtures[i].charge;
       const remaining = state.fixtures[i].pourRemaining;
@@ -301,6 +346,7 @@ export class MassObjectives {
       }
     } catch (error) { detach(); effects?.detach(); throw error; }
     const run: Resident = { owner: owner.id, definition, fixtures, ...(chest ? { chest } : {}),
+      ...(definition.kind === 'beacon' ? { beaconState: { reinforceAt: state.reinforceRemaining == null ? 0 : host.now + state.reinforceRemaining } } : {}),
       ...(effects ? { effects } : {}), detach: () => { effects?.detach(); detachChest?.(); detach(); }, held: null };
     this.live.set(owner.id, run);
     if (effects) this.checkpointEffects(run, host.now, 'active');
@@ -333,7 +379,8 @@ export class MassObjectives {
     const ID = idOf(run.definition.kind), c = this.hierarchy.status(run.owner, ID)!;
     if (c.phase === 'complete' || c.phase === 'failed') return;
     const state: PyreState = { fixtures: run.fixtures.map(s => ({ charge: s.charge, recoup: s.recoup,
-      ...(run.definition.kind === 'rifts' ? { pourRemaining: s.pourAt === 0 ? null : Math.max(0, s.pourAt - now) } : {}) })) };
+      ...(run.definition.kind === 'rifts' ? { pourRemaining: s.pourAt === 0 ? null : Math.max(0, s.pourAt - now) } : {}) })),
+      ...(run.beaconState ? { reinforceRemaining: run.beaconState.reinforceAt === 0 ? null : Math.max(0, run.beaconState.reinforceAt - now) } : {}) };
     if (!this.hierarchy.update(run.owner, ID, c.revision, now, state, phase)) throw Error('Concurrent native objective checkpoint');
   }
   /** Called before hierarchy.snapshot, not every frame: native actor graphs are
@@ -359,9 +406,24 @@ export class MassObjectives {
       || state.fixtures.some(s => !Number.isFinite(s.charge) || s.charge < 0 || s.charge > d.need || !Number.isFinite(s.recoup) || s.recoup < 0)
       || d.kind === 'rifts' && (!d.pour || state.fixtures.some(s => s.pourRemaining !== null && (!Number.isFinite(s.pourRemaining) || s.pourRemaining! < 0)))
       || d.kind === 'unearth' && !d.dig
+      || d.kind === 'beacon' && (!d.beacon || !validBeacon(d.beacon) || d.beacon.need !== d.need || d.beacon.radius !== d.radius
+        || d.beacon.cold !== d.cold || d.beacon.lit !== d.lit || d.beacon.holdRadius !== d.holdRadius || d.beacon.reach !== d.reach
+        || canonical(d.beacon.contest) !== canonical(d.contest) || d.beacon.accent !== d.accent
+        || state.reinforceRemaining !== null && (!Number.isFinite(state.reinforceRemaining) || state.reinforceRemaining! < 0)
+        || c.phase === 'complete' && !c.receipts.some(r => r.id === 'native-beacon-reveal' && r.subject === owner.id && r.kind === 'physical-survey'))
       || c.phase === 'complete' && (state.fixtures.some(s => s.charge !== d.need)
         || !c.receipts.some(r => r.id === 'native-objective-payout' && r.subject === owner.id && r.kind === 'objective-complete')))
       throw Error('Invalid native pyre checkpoint');
     return { definition: freezeData(clone(d)), state: clone(state) };
   }
+}
+
+function validBeacon(c: NativeBeaconConfig): boolean {
+  const band = (v: readonly number[], min: number) => Array.isArray(v) && v.length === 2 && v.every(n => Number.isFinite(n) && n >= min) && v[0] <= v[1];
+  const r = c.reinforce;
+  return !!c.flareColor && [c.need, c.radius, c.holdRadius, c.flareRadius, c.lureRadius, c.lurePace, c.lureStandoff, c.revealRadius].every(n => Number.isFinite(n) && n > 0)
+    && Number.isSafeInteger(c.revealCount) && c.revealCount >= 0 && Number.isSafeInteger(c.revealSalt)
+    && (r === false || !!r && band(r.every, .001) && band(r.batch, 1) && r.batch.every(Number.isSafeInteger) && band(r.radius, 0)
+      && Number.isSafeInteger(r.cap) && r.cap > 0 && Number.isSafeInteger(r.levelBonus) && typeof r.levelScale === 'boolean'
+      && Number.isFinite(r.mixChance) && r.mixChance >= 0 && r.mixChance <= 1 && Array.isArray(r.mixFactions) && r.mixFactions.every(id => typeof id === 'string' && !!id));
 }

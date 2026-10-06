@@ -424,3 +424,116 @@ updates still spike around a 30-frame cadence, and cold path work remains;
 there is no claim of smooth frame pacing. No post-arrival renderer frame
 exceeded 50 ms in either ordinary control. Tagged reports preserve build
 fingerprints, counts and screenshots for independent review.
+
+Native survey spires and attunement circuits now use a shared beacon operation:
+the original contested hold, native idle-only pull, pressure-scaled reinforcement
+clock and nearest banked stone selection. The native worldgen resolver remains
+the authority for a single 22-second spire and three or four eight-second
+waystones. The weighted source denominator still includes unsupported native
+objective families. Source count, radius, full tuning, birth rosters, native
+wounds/deaths, remaining deadline and owner-named lure leases survive geographic
+retirement and Continue. Saved native and faction-mix tables replay through the
+same detached factories, including mix-only births. Global capacity refusal
+advances the original due beat without manufacturing a replacement wave.
+
+A beacon waits for a prepared physical discovery manifest before publishing its
+fixtures. Targets are accepted native pyre, rift or excavation operations with
+frozen context, exact stands/chest and body-clear approaches; preparation creates
+no actors or visits. The same bounded plan worker prepares these destinations,
+and exact native terrain/scenery checks yield between route samples. Native
+portal clearances and historical native footprints protect actionable stands.
+Preparing a destination reserves its original access geometry for later arrival.
+The proof reaches surrounding dry country; it does not assert a continuous road
+from the beacon to every destination or authorize drawing one.
+
+Survey distance explicitly projects native node units (east 86, north 78) onto
+the saved geographic zone span. The current supported projection accepts native
+radii through 400 node units, with a bounded candidate query. Native count,
+seed and reveal salt pick unknown destinations when the final stone fills.
+Knowledge and actual visitation have separate geographic receipts: surveying
+never explores intervening terrain, opens a cache or completes a visit quest.
+Ordinary observed objectives record their visit even before a beacon exists.
+The manually opened map gives bearings to known destinations; local stones use
+native light, charge rings and flares without redundant objective narration.
+Beacon bounties retain the ordinary issuing-board completion and payment rules.
+
+Continue validates target source/access hashes, exact approaches, native beacon
+reveal policy, legal knowledge phases and causal discovery timestamps. Already
+born beacon tuning outranks current data defaults. The existing active-combat
+transient save boundary and cumulative historical receipt growth remain explicit;
+this pass is not a complete campaign, seafaring or infinite-memory claim.
+
+The remaining periodic actor-retirement scan now weakly certifies only deeply
+frozen plain data without actor references, numeric dependency fields, getters,
+mutable collections or unknown classes. Uncertifiable controllers retain the
+full original scan. Immutable sampled-terrain entries are replaced on edits and
+restore, allowing the same certificate without omitting World.walk or mutable
+terrain state. Adversarial pin-set comparisons retain direct references, late
+actor IDs, weak ledgers, cycles, getters and frozen mutable Maps/Sets.
+
+A surveyed excavation exposed a first-arrival fault: its nearby mounds stayed
+absent because the distant reward chest and final access samples lay outside
+the terrain-page envelope. Admission now starts when any original fixture is
+in range, then checks the complete frozen site against authoritative cold
+terrain, native footprints and portal clearances. Positions and access routes
+remain unchanged. Regressions include the exact first mound, real non-solid
+waypoints and an accepted cold monastery footprint; blockers still refuse
+admission and removing the conflict admits the same owner.
+
+Recorded region, zone and chunk descriptors are copied and deeply frozen once
+on enrollment or restore. Queries share those immutable owners; controller
+state, receipts and snapshots retain defensive copies. This removes repeated
+whole-source copies from weather and reservation queries without adding a
+history cache. The identity probe also covers nested input/snapshot mutation,
+controller updates, bounded unrecorded queries and source-old Continue.
+
+Beacon checkpoint verification: all three project type checks, standard build
+and game boot passed. The final worldmass roster passed 83/83 rigs; generation
+QA passed 869 cases x 3 seeds with 0 failures and 4 known clearance warnings, and
+the 5 simulation smoke scenarios passed. The finite objective probe retains
+its native fracture success arm: its chase stand now avoids actual road exits
+so the fixture cannot accidentally leave the tested zone. The guestless
+adoption negative explicitly removes generated resident guests; separate
+positive resident precedence coverage remains. Neither change alters gameplay.
+
+The final browser bundle index-CQM24TWN completed a natural single spire and
+four-stone circuit, exact partial/solved CharacterSave Continue, once-only
+payout, silent local cues and actual walks to their frozen discoveries. The
+spire revealed 7 real targets and the circuit 2; surveying granted no visits.
+Final walks took 2079 and 2053 ordinary 30 Hz input frames respectively and both
+destinations mounted at unchanged access/definition hashes. Both target
+screenshots visibly show their native fixture and charge arc. No console
+errors were recorded. This functional course discloses initial teleports,
+player invulnerability and native kill cleanup of 11/29 pressure enemies after
+600 ordinary combat frames; it is not unassisted combat-balance evidence.
+
+The preserved final matched comparison changes only dormancy certificates,
+immutable sampled-terrain entries and immutable recorded geography; the
+first-arrival correction is present in both builds. Control index-n6Sf7GPw
+and candidate index-CQM24TWN share the same other source/build inputs and
+identical worker assets. All four 3,000-unit courses passed. Excluding the
+separately retained arrival frame, ordinary step mean fell from 46.44 to
+21.21 ms, p95 from 74.9 to 41.1 ms and maximum from 263 to 167.7 ms. Steps
+over 50 ms fell from 264/1064 to 26/1063. Both ended with 61 actors; ambient
+RNG and worker timing still differ (1,225 versus 1,248 doodads), so this is
+qualified matched-build evidence, not a bit-identical simulation or FPS.
+Initial arrival remained expensive: 321.4 versus 307.8 ms. Native collision,
+actors, weather, AI, effects and rendering remained enabled; initial teleport
+and player invulnerability were identical disclosed controls.
+
+An earlier two-module comparison without immutable geography showed cheaper
+repeated retirement scans but a worse first certificate scan and more slow
+steps overall. The final combined result must not be attributed to that
+certificate alone. Cold certificate construction and other remaining spikes
+still need bounded follow-up; no smooth-pacing claim is made. Preserved
+reports, build manifests and screenshots retain both comparisons.
+
+Generation review accepted this combined optimization with explicit residuals:
+35 scheduled retirement scans averaged 71.1 versus 26.31 ms (median 70.5
+versus 18.6), but the first scan worsened from 77.0 to 120.4 ms and another
+candidate scan reached 114.4 ms. An attributed candidate step spent 167.2 ms
+in path search. These remaining cold/periodic costs are retained as follow-up
+evidence, not hidden by the improved travel average. Continuity review
+accepted the beacon/circuit integration within the exercised scope; these
+independent critics used the same model and do not constitute cross-model
+review or acceptance of unfinished campaign/seafaring migration.

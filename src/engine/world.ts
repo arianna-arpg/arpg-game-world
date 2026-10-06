@@ -203,11 +203,12 @@ import type { ContestSpec } from '../data/objectives';
 import { biasTable, composeBias } from '../world/overlay';
 import type { MassObjectiveBirth } from '../worldmass/objectiveBodies';
 import type { MassOccurrenceBirth, MassOccurrenceDisturbance } from '../worldmass/occurrences';
+import { driveNativeBeacon, nativeBeaconConfig, type NativeBeaconHost, type NativeBeaconReinforceConfig, type NativeBeaconTables } from './beaconObjectives';
 import { driveNativeRiftPours, finishNativeDig, driveHoldObjectives, resolveHoldContest, type HoldFixture, type HoldObjectiveHost, type HoldObjectiveOptions } from './holdObjectives';
 import { objectiveRewardXp } from '../data/objectiveRewards';
 import { PROCESSION_CFG } from '../data/processions';
 import { BOUNTY_CFG } from '../data/bounties';
-import { ADOPT_CFG, CLEAR_CFG, OFFERING_CFG, STRAGGLER_CFG, maybeAdoptObjective, packageAskRow, pressureRampAt, pressureRampCadence, ventureAskRow } from '../data/objectives';
+import { ADOPT_CFG, CLEAR_CFG, OFFERING_CFG, STRAGGLER_CFG, maybeAdoptObjective, packageAskRow, ventureAskRow } from '../data/objectives';
 import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS } from '../data/looks';
 import {
   blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleKinds, doodadRuleOf, generateLayout,
@@ -51615,6 +51616,8 @@ export class World {
    *  (drawn == tested: the chevron speaks the exact scalars the charge
    *  logic ran this frame). */
   spireView(): { pos: Vec2; frac: number; done: boolean; charged: number; count: number; contested: boolean; draining: boolean; recouping: boolean } | null {
+    const geographic=this.massRuntime?.geography?.objectives.views(this.player.pos,'beacon')[0];
+    if(geographic)return {...geographic,charged:geographic.lit};
     const o = this.zone.objective;
     if (o.kind !== 'beacon' || !this.spires.length) return null;
     const need = o.chargeSec ?? transitDwell('beacon', BEACON_CFG.chargeSec);
@@ -51928,6 +51931,7 @@ export class World {
    *  seconds on its own. Idle-only by construction (the AI consults lureFor
    *  in its targetless branch) — a lure DRAWS the unaware, it never
    *  overrides combat, orders, or fear. */
+  removeMassLure(id:string):void{this.lures.delete(id);}
   setLure(id: string, pos: Vec2, radius: number, pace: number, standoff: number, linger = 0.6, tier?: number): void {
     // `tier`: the story the lure lies on (the investigation-crosses law) —
     // a drawn body on another story walks the crossing before it can mill
@@ -62227,21 +62231,31 @@ export class World {
     const allowed=resolved.filter(e=>factionAllowed(MONSTERS[e.id]?.faction??'',zone));
     return (allowed.length?allowed:resolved).map(row=>({...row}));
   }
+  massObjectivePortalClear(kind:'beacon'|'pyres'|'rifts'|'unearth'):number{return kind==='beacon'?BEACON_CFG.portalClear:kind==='pyres'?PYRE_CFG.portalClear:kind==='rifts'?RIFT_CFG.portalClear:DIG_CFG.portalClear;}
+  massObjectiveStandClear(pos:Vec2,kind:'beacon'|'pyres'|'rifts'|'unearth'):boolean{return this.clearOfDoors(pos,this.massObjectivePortalClear(kind));}
+  massObjectiveBeaconTables(zone:Readonly<ZoneDef>,at:Vec2,config:NativeBeaconReinforceConfig):NativeBeaconTables{
+    const native=zone.packs?this.massObjectiveSpawnTable(zone,at).filter(row=>!!MONSTERS[row.id]).map(row=>({id:row.id,weight:row.weight,...(row.presence===undefined?{}:{presence:row.presence})})):[];
+    const mix:PackTableEntry[]=[];
+    for(const id of config.mixFactions)for(const row of FACTIONS[id]?.table??[])
+      if(MONSTERS[row.id])mix.push({id:row.id,weight:row.weight,...(row.presence===undefined?{}:{presence:row.presence})});
+    return {native,mix};
+  }
   /** Detached bodies: the geographic owner publishes only after shared-cap and
    * checkpoint validation. The frozen table makes later weather irrelevant to
    * replaying an existing birth. */
   createMassObjectiveBodies(request:MassObjectiveBirth):readonly Actor[]{
     return withSeededRandom(request.seed,()=>{
       const {zone,at,config,table}=request,out:Actor[]=[];
-      if(!table.length)return out;
+      if(!table.length&&(request.kind!=='beacon'||!request.mixTable.length))return out;
       const type=request.kind==='dig'?this.weightedPick(table,zone.level):undefined;
       const n=request.kind==='dig'?Math.min(randInt(request.config.count[0],request.config.count[1]),request.maxBodies):request.count;
       if(!Number.isSafeInteger(n)||n<0||n>256)throw Error('Invalid geographic objective birth count');
       for(let i=0;i<n;i++){
-        const m=this.createMonster(type??this.weightedPick(table,zone.level),Math.max(1,zone.level+config.levelBonus),'enemy');
+        const drawTable=request.kind==='beacon'&&request.mixTable.length&&(!table.length||rand(0,1)<request.config.mixChance)?request.mixTable:table;
+        const m=this.createMonster(type??this.weightedPick(drawTable,zone.level),Math.max(1,zone.level+config.levelBonus),'enemy');
         const ang=rand(0,Math.PI*2),rr=rand(config.radius[0],config.radius[1]);
         m.pos=this.clampPos(vec(at.x+Math.cos(ang)*rr,at.y+Math.sin(ang)*rr),m.radius);
-        m.fromZoneGen=true;if(request.kind==='rift')m.tag='rift_born';out.push(m);
+        m.fromZoneGen=true;if(request.kind==='rift')m.tag='rift_born';else if(request.kind==='beacon')m.tag='spire_drawn';out.push(m);
       }
       return out;
     });
@@ -62251,15 +62265,15 @@ export class World {
       this.dropGemAt(at,undefined,false,rewardSource,undefined,undefined,zone)));
   }
   installMassPyres(owner:string,fixtures:HoldFixture[]):()=>void{return this.installMassHolds(owner,'pyres',fixtures);}
-  installMassHolds(owner:string,kind:'pyres'|'rifts'|'unearth',fixtures:HoldFixture[]):()=>void{
-    const read=()=>kind==='pyres'?this.pyres:kind==='rifts'?this.rifts:this.digs;
+  installMassHolds(owner:string,kind:'pyres'|'rifts'|'unearth'|'beacon',fixtures:HoldFixture[]):()=>void{
+    const read=()=>kind==='pyres'?this.pyres:kind==='rifts'?this.rifts:kind==='beacon'?this.spires:this.digs;
     if(!owner||fixtures.some(s=>s.owner!==owner||read().includes(s)))throw Error('Invalid geographic hold enrollment');
     read().push(...fixtures);this.doodads.push(...fixtures.map(s=>s.doodad));this.markDoodadsChanged();
     let detached=false;
     return()=>{
       if(detached)return;
       const owned=new Set(fixtures),doodads=new Set(fixtures.map(s=>s.doodad)),remaining=read().filter(s=>!owned.has(s));
-      if(kind==='pyres')this.pyres=remaining;else if(kind==='rifts')this.rifts=remaining;else this.digs=remaining;
+      if(kind==='pyres')this.pyres=remaining;else if(kind==='rifts')this.rifts=remaining;else if(kind==='beacon')this.spires=remaining;else this.digs=remaining;
       this.doodads=this.doodads.filter(d=>!doodads.has(d));
       if(this.heldFixture&&owned.has(this.heldFixture))this.heldFixture=null;
       this.markDoodadsChanged();detached=true;
@@ -62495,41 +62509,18 @@ export class World {
         // the ATTUNEMENT CIRCUIT (same rules, smaller stones).
         if (this.objectiveDone || !this.spires.length) return;
         const circuit = this.spires.length > 1;
-        const stone = circuit ? 'waystone' : 'spire';
-        const need = o.chargeSec ?? transitDwell('beacon', BEACON_CFG.chargeSec);
-        const res = this.driveHoldFixtures(dt, {
-          fixtures: this.spires, need,
-          transitKind: 'beacon', holdFallback: BEACON_CFG.holdRadius,
-          contest: this.resolveContest(BEACON_CFG.contest),
-          doneKind: circuit ? BEACON_CFG.kindWayLit : BEACON_CFG.kindLit,
-          accent: BEACON_CFG.accent, flareColor: BEACON_CFG.flare,
-          flareR: circuit ? 160 : 240,
-          stirText: `the ${stone} stirs — the wilds turn toward its light…`,
-        });
-        // Lit wicks draw moths whether or not the hero stands by them: every
-        // banked, unfinished stone keeps its pull. No waves, no bonus spawns —
-        // the lure only redirects who already lives here…
-        this.spires.forEach((s, i) => {
-          if (s.charge > 0 && s.charge < need) {
-            this.setLure(`survey_spire_${i}`, s.pos,
-              o.lureRadius ?? BEACON_CFG.lureRadius, BEACON_CFG.lurePace, BEACON_CFG.lureStandoff, undefined, 0); // a spire stands on the ground
-          }
-        });
-        // …while the OPERATION'S PRESSURE trickles real bodies to the rim
-        // (the marrow-drawn seasoning — BEACON_CFG.reinforce, spec-overridable).
-        this.updateSpireReinforce(o);
+        const cfg=nativeBeaconConfig({...o,count:this.spires.length}),state={reinforceAt:this.spireReinforceAt};
+        const need=cfg.need;
+        driveNativeBeacon(dt,this.spires,cfg,state,this.massHoldHost(false),this.nativeBeaconHost());
+        this.spireReinforceAt=state.reinforceAt;
         if (this.spires.every(s => s.charge >= need)) {
-          const last = res.filled ?? this.spires[this.spires.length - 1];
-          const news = this.surveyAround(this.zone,
+          this.surveyAround(this.zone,
             o.revealRadius ?? BEACON_CFG.revealRadius,
             o.revealCount ?? BEACON_CFG.revealCount);
           this.completeObjective(circuit
             ? 'The circuit hums as one — the land is surveyed!'
             : 'The spire flares — the land is surveyed!');
-          if (news > 0) {
-            this.text(vec(last.pos.x, last.pos.y - 64),
-              `${news} new ${news === 1 ? 'place' : 'places'} charted`, BEACON_CFG.flare, 14);
-          }
+          // The flare and newly charted places carry the local result.
         }
         return;
       }
@@ -62779,79 +62770,25 @@ export class World {
     }
   }
 
-  /** THE OPERATION'S PRESSURE (BEACON_CFG.reinforce, spec-overridable;
-   *  `reinforce: false` silences the bleed): while any stone holds banked,
-   *  unfinished charge, small reinforcement groups arrive at the rim of the
-   *  pressed stone on a jittered clock and drift in on the standing lure —
-   *  no orders, no scripted charge: they exist inside the pull, and the
-   *  pull does the rest. The body of each group is the zone's OWN table,
-   *  seasoned with the mix factions' rosters (the extraction package's
-   *  grammar — the Marrow-Drawn follow charged ley like bleeding marrow;
-   *  an unregistered roster degrades silently to the native table).
-   *  Bounded by the live 'spire_drawn' cap — a trickle, never a wave. */
-  /** THE PRESSURE RAMP's read for a trickle lane (spire reinforcements,
-   *  rift pours): the fold over the zone's LIVE level — a Quickened surge
-   *  rides free — unless the lane's config opts out (`levelScale: false`). */
-  private trickleRamp(cfg: { levelScale?: boolean }): number {
-    return cfg.levelScale === false ? 1 : pressureRampAt(this.zone.level);
-  }
-
-  private updateSpireReinforce(o: Extract<ObjectiveSpec, { kind: 'beacon' }>): void {
-    // SOVEREIGNTY: seat — reinforcements seat by distance (the derived census, probe_tiers RIG T).
-    if (o.reinforce === false) return;
-    const cfg = { ...BEACON_CFG.reinforce, ...(o.reinforce ?? {}) };
-    const need = o.chargeSec ?? transitDwell('beacon', BEACON_CFG.chargeSec);
-    if (!this.spires.some(s => s.charge > 0 && s.charge < need)) return;
-    // THE PRESSURE RAMP: the bleed grows with the zone's live level —
-    // batch + cap scale, the beat tightens on the cadence share. Level-3
-    // ground keeps the two-body trickle; level-50 ground gets a war.
-    const ramp = this.trickleRamp(cfg);
-    const beat = (): number => rand(cfg.every[0], cfg.every[1]) / pressureRampCadence(ramp);
-    if (this.spireReinforceAt === 0) {
-      // Arm on the first banked second — the first group is never instant.
-      this.spireReinforceAt = this.time + beat();
-      return;
-    }
-    if (this.time < this.spireReinforceAt) return;
-    this.spireReinforceAt = this.time + beat();
-    const rampCap = Math.max(1, Math.round(cfg.cap * ramp));
-    const drawn = this.actors.filter(a => !a.dead && a.tag === 'spire_drawn').length;
-    if (drawn >= rampCap) return;
-    // The pressed stone: the banked-unfinished one nearest the hero.
-    let at: Vec2 | null = null;
-    let bd = Infinity;
-    for (const s of this.spires) {
-      if (!(s.charge > 0 && s.charge < need)) continue;
-      const d = dist(this.player.pos, s.pos);
-      if (d < bd) { bd = d; at = s.pos; }
-    }
-    if (!at) return;
-    const native: PackTableEntry[] = this.zone.packs
-      ? this.effectiveSpawn(this.zone, this.baseTable(this.zone)).table
-        .filter(en => MONSTERS[en.id])
-        .map(en => ({ id: en.id, weight: en.weight, presence: en.presence }))
-      : [];
-    const mix: PackTableEntry[] = [];
-    for (const fid of cfg.mixFactions) {
-      for (const en of FACTIONS[fid]?.table ?? []) {
-        if (MONSTERS[en.id]) mix.push({ id: en.id, weight: en.weight, presence: en.presence });
-      }
-    }
-    if (!native.length && !mix.length) return;
-    const n = Math.min(
-      randInt(Math.max(1, Math.round(cfg.batch[0] * ramp)), Math.max(1, Math.round(cfg.batch[1] * ramp))),
-      rampCap - drawn);
-    for (let i = 0; i < n; i++) {
-      const table = mix.length && (!native.length || rand(0, 1) < cfg.mixChance) ? mix : native;
-      const type = this.weightedPick(table, this.zone.level);
-      const m = this.createMonster(type, Math.max(1, this.zone.level + cfg.levelBonus), 'enemy');
-      const ang = rand(0, Math.PI * 2);
-      const rr = rand(cfg.radius[0], cfg.radius[1]);
-      m.pos = this.clampPos(vec(at.x + Math.cos(ang) * rr, at.y + Math.sin(ang) * rr), m.radius);
-      m.tag = 'spire_drawn';
-      this.actors.push(m);
-    }
-    this.flashes.push({ pos: vec(at.x, at.y), radius: 40, color: BEACON_CFG.accent, life: 0.35, maxLife: 0.35 });
+  /** Finite scenes and geographic owners share the same beacon operation.
+   * This host retains native factory/RNG order and the idle-only lure fabric. */
+  private nativeBeaconHost():NativeBeaconHost{
+    return {now:this.time,level:this.zone.level,player:this.player.pos,random:{range:rand,int:randInt},
+      born:()=>this.actors.filter(a=>!a.dead&&a.tag==='spire_drawn').length,
+      tables:(at,cfg)=>this.massObjectiveBeaconTables(this.zone,at,cfg),
+      spawn:(fixture,count,cfg,tables)=>{
+        for(let i=0;i<count;i++){
+          const table=tables.mix.length&&(!tables.native.length||rand(0,1)<cfg.mixChance)?tables.mix:tables.native;
+          const type=this.weightedPick([...table],this.zone.level);
+          const m=this.createMonster(type,Math.max(1,this.zone.level+cfg.levelBonus),'enemy');
+          const angle=rand(0,Math.PI*2),radius=rand(cfg.radius[0],cfg.radius[1]);
+          m.pos=this.clampPos(vec(fixture.pos.x+Math.cos(angle)*radius,fixture.pos.y+Math.sin(angle)*radius),m.radius);
+          m.tag='spire_drawn';this.actors.push(m);
+        }
+        return count;
+      },
+      lure:(fixture,slot,cfg)=>this.setLure('survey_spire_'+slot,fixture.pos,cfg.lureRadius,cfg.lurePace,cfg.lureStandoff,undefined,0),
+      flash:(pos,radius,color,life)=>this.flashes.push({pos,radius,color,life,maxLife:life})};
   }
 
   /** THE POUR (RIFT_CFG.pour): every OPEN tear births small groups of the
@@ -64450,11 +64387,9 @@ export class World {
     // SOVEREIGNTY: census — nearby objective bearings and counts touch no body.
     if (this.massRuntime && this.isSafeAt(this.player.pos)) return 'Sanctuary';
     const activity=this.massRuntime?.geography?.objectives.views(this.player.pos)[0];
-    if(activity && dist(activity.pos,this.player.pos)<1600){
-      const complete=activity.kind==='pyres'?'Every pyre burns — the dark gives ground!':activity.kind==='rifts'?'Every rift is sealed!':'Every cache is unearthed!';
-      const action=activity.kind==='pyres'?'Kindle the pyres':activity.kind==='rifts'?'Seal the rifts':'Unearth the caches';
-      return activity.done?complete:action+' — '+activity.lit+'/'+activity.count;
-    }
+    // Local work is visible in the native fixtures, light and charge rings.
+    // Bounty details and discovered destinations remain available on request.
+    if(activity && dist(activity.pos,this.player.pos)<1600)return '';
     const massActivity=this.massRuntime?.localSite(this.player.pos)?.activity;
     if(massActivity)return massActivity.text;
     const odysseyPressure = this.odyssey.pressureText();

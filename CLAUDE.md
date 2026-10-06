@@ -6,6 +6,20 @@ player-requested details). Reusing main's mechanics does not authorize reusing
 its redundant local banners. Preserve warning readability and native timing;
 add or improve visual cues when needed instead of restoring narration.
 
+Native survey spires and attunement circuits share the original beacon hold,
+reinforcement and lure operation. Prepared discoveries name frozen physical
+objectives; surveying never grants footsteps, terrain exploration or quest
+visits. Source-bound manifests, native timing, wounded bodies and once-only
+reveal/reward receipts survive Continue. Stones communicate locally through
+light, charge rings and flares; bearings live on the player-opened map.
+Verify beacons/physicalintel/beaconcontinuity, geographic worker/access,
+native objectives and native-beacons-ui.cjs. Immutable plain-data dependency
+certificates preserve every mutable/actor pin; verify dormancypinattribution
+and hierarchyidentity plus the matched frame-attribution course. Recorded
+geography shares deeply frozen owners while mutable controller reads remain
+isolated. See the exploration foundations
+for tested scope and remaining native mechanics dependencies.
+
 MassCourtPuzzles binds the native court wrapper and all four fitted inner
 riddles to physical features. Shared node reservations, source-owned rewards,
 native progress/light/absence clocks, atomic publication and closed-owner

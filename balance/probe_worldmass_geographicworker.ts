@@ -9,7 +9,10 @@ import { GeographicPlanWarmQueue,createGeographicPlanWarmQueue,type GeographicCo
 
 const undo=seedGlobalRandom(901743);
 try{
- const w=makeSimWorld('warrior',901743);w.startWorldMass(901743);const m=w.massRuntime!,g=m.geography!;
+ const w=makeSimWorld('warrior',901743);w.startWorldMass(901743);const m=w.massRuntime!;
+ // The historical hash controls keep the original supported source roster.
+ // New beacon/circuit lotteries are checked separately below, never substituted.
+ const g=new MassGeographicGameplay(m,{...m.config.geography!,holds:m.config.geography!.holds!.filter(r=>r.objective.kind!=='beacon')},undefined,null);
  const center=(x:number,y:number)=>address('surface','0','0',x*5400+2700,y*5400+2700,960);
  const fixture=[[3,1,'9efb0cd46dc1b2b4'],[6,2,'d7f01aa80265ed5b'],[-3,14,'996e6c671cdaa7d3']] as const;
  const inputs=fixture.map(([x,y])=>g.preparationInput(center(x,y))!);assert.ok(inputs.every(Boolean));
@@ -27,11 +30,29 @@ try{
   }
  }finally{Math.random=random;}
  console.log('PASS all three real native families match independently captured committed plan hashes, worker/sync equality and ambient RNG isolation');
+ const beacons=new Map<string,Readonly<GeographicPlanInput>>();
+ for(let r=0;r<=16&&beacons.size<2;r++)for(let y=-r;y<=r&&beacons.size<2;y++)for(let x=-r;x<=r&&beacons.size<2;x++){
+  if(Math.max(Math.abs(x),Math.abs(y))!==r)continue;
+  const input=m.geography!.preparationInput(center(x,y));
+  if(input?.context.zone.objective.kind!=='beacon')continue;
+  const key=input.context.recipe?.alias??'beacon';if(beacons.has(key))continue;
+  const reply=prepareGeographicPlan(job(input));if(reply.preparation?.plan)beacons.set(key,input);
+ }
+ assert.equal(beacons.size,2,'native weighted sources supply both spire and circuit');
+ for(const input of beacons.values()){
+  const prepared=prepareGeographicPlan(job(input)).preparation!;
+  assert.equal(canonical(compileGeographicPlan(input).plan),canonical(validateGeographicPreparation(input,prepared)));
+  const changed=structuredClone(input);if(changed.context.zone.objective.kind!=='beacon')throw Error('Expected beacon');
+  changed.context.zone.objective.count=(changed.context.zone.objective.count??1)+1;
+  assert.throws(()=>compileGeographicPlan(changed),'coherent input cannot change the resolved native count');
+ }
+ console.log('PASS native beacon/circuit source lottery, exact worker parity and invented count refusal');
+
  const input=inputs[0],prepared=prepareGeographicPlan(job(input)).preparation!;
  for(const edit of [(p:typeof prepared)=>{p.sourceHash='other';},(p:typeof prepared)=>{p.inputHash='other';},(p:typeof prepared)=>{p.plan!.access.paths[0][0]++;}]){const bad=structuredClone(prepared);edit(bad);assert.throws(()=>validateGeographicPreparation(input,bad));}
- const changed=structuredClone(input) as GeographicPlanInput;changed.fixtureRadius++;assert.equal(new MassGeographicGameplay(m,m.config.geography!,undefined,null).adoptPrepared(changed,{...prepared,...geographicPlanIdentity(changed)}),'stale','worker cannot invent a registered source via coherent headers');
- const late=new MassGeographicGameplay(m,m.config.geography!,undefined,null);const expected=late.plannedAt(input.owner.center);assert.equal(late.adoptPrepared(input,prepared),'existing');assert.equal(canonical(late.plannedAt(input.owner.center)),canonical(expected));
- const warmed=new MassGeographicGameplay(m,m.config.geography!,undefined,null);assert.equal(warmed.adoptPrepared(input,prepared),'adopted');assert.equal(canonical(warmed.plannedAt(input.owner.center)),canonical(expected));assert.equal(warmed.warmStats.synchronous,0);assert.equal(warmed.warmStats.used,1);warmed.dispose();assert.equal(warmed.adoptPrepared(inputs[1],prepareGeographicPlan(job(inputs[1])).preparation!),'disposed');
+ const changed=structuredClone(input) as GeographicPlanInput;changed.fixtureRadius++;assert.equal(new MassGeographicGameplay(m,g.spec,undefined,null).adoptPrepared(changed,{...prepared,...geographicPlanIdentity(changed)}),'stale','worker cannot invent a registered source via coherent headers');
+ const late=new MassGeographicGameplay(m,g.spec,undefined,null);const expected=late.plannedAt(input.owner.center);assert.equal(late.adoptPrepared(input,prepared),'existing');assert.equal(canonical(late.plannedAt(input.owner.center)),canonical(expected));
+ const warmed=new MassGeographicGameplay(m,g.spec,undefined,null);assert.equal(warmed.adoptPrepared(input,prepared),'adopted');assert.equal(canonical(warmed.plannedAt(input.owner.center)),canonical(expected));assert.equal(warmed.warmStats.synchronous,0);assert.equal(warmed.warmStats.used,1);warmed.dispose();assert.equal(warmed.adoptPrepared(inputs[1],prepareGeographicPlan(job(inputs[1])).preparation!),'disposed');
  console.log('PASS current registered-source adoption, exact cold result, already-computed owner wins and disposal gate');
  class Port implements GeographicCompilePort{
   onmessage:GeographicCompilePort['onmessage']=null;onerror:GeographicCompilePort['onerror']=null;jobs:GeographicPlanJob[]=[];terminated=0;
@@ -51,13 +72,13 @@ try{
   assert.doesNotThrow(()=>{if(malformed==='null')p.onmessage?.({data:null} as unknown as MessageEvent<GeographicPlanReply>);else p.reply(r);});
   assert.equal(q.stats.disposed,true,malformed);assert.equal(p.terminated,1);
  }
- const stagedPort=new Port(),stagedQueue=new GeographicPlanWarmQueue(stagedPort),staged=new MassGeographicGameplay(m,m.config.geography!,undefined,stagedQueue);
+ const stagedPort=new Port(),stagedQueue=new GeographicPlanWarmQueue(stagedPort),staged=new MassGeographicGameplay(m,g.spec,undefined,stagedQueue);
  stagedQueue.offer([input]);stagedPort.reply();staged.prepare(input.owner.center,0);assert.equal(staged.warmStats.adopted,0,'partial route is never published');assert.equal(staged.warmStats.validating,input.owner.id);
  for(let n=0;n<1000&&!staged.warmStats.adopted;n++)staged.prepare(input.owner.center,.001);
  assert.equal(staged.warmStats.adopted,1);assert.equal(canonical(staged.plannedAt(input.owner.center)),canonical(expected));assert.equal(staged.warmStats.synchronous,0);
- const racePort=new Port(),raceQueue=new GeographicPlanWarmQueue(racePort),race=new MassGeographicGameplay(m,m.config.geography!,undefined,raceQueue);
+ const racePort=new Port(),raceQueue=new GeographicPlanWarmQueue(racePort),race=new MassGeographicGameplay(m,g.spec,undefined,raceQueue);
  raceQueue.offer([input]);racePort.reply();race.prepare(input.owner.center,0);race.plannedAt(input.owner.center);race.prepare(input.owner.center,.001);assert.equal(race.warmStats.adopted,0);assert.equal(race.warmStats.validating,null);assert.equal(race.warmStats.late,1);
- const stopPort=new Port(),stopQueue=new GeographicPlanWarmQueue(stopPort),stopped=new MassGeographicGameplay(m,m.config.geography!,undefined,stopQueue);
+ const stopPort=new Port(),stopQueue=new GeographicPlanWarmQueue(stopPort),stopped=new MassGeographicGameplay(m,g.spec,undefined,stopQueue);
  stopQueue.offer([input]);stopPort.reply();stopped.prepare(input.owner.center,0);assert.ok(stopped.warmStats.validating);stopped.dispose();stopped.prepare(input.owner.center,1);assert.equal(stopped.warmStats.validating,null);assert.equal(stopped.warmStats.adopted,0);assert.equal(stopPort.terminated,1);
  staged.dispose();race.dispose();assert.equal(createGeographicPlanWarmQueue(),null);
  const far=g.preparationInput(moveAddress(center(-3,14),{x:0,y:0},960));assert.ok(far);

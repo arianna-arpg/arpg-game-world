@@ -4,10 +4,13 @@ const {app,BrowserWindow}=require('electron');
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),crypto=require('node:crypto'),assert=require('node:assert/strict');
 const tag=process.argv.find(a=>a.startsWith('--tag='))?.slice(6)??'';if(tag&&!/^[a-z0-9-]{1,48}$/.test(tag))throw Error('Invalid attribution report tag');
 const prefix='geographic-frame-attribution'+(tag?'-'+tag:'');
+const workspace=path.resolve(__dirname,'..'),outDir=process.argv.find(a=>a.startsWith('--out-dir='))?.slice(10)??'dist-preview';
+const buildRoot=path.resolve(workspace,outDir),buildRelative=path.relative(workspace,buildRoot);
+if(!buildRelative||buildRelative.startsWith('..')||path.isAbsolute(buildRelative))throw Error('Attribution build must be a child of this workspace');
 const dir=path.join(__dirname,'reports');fs.mkdirSync(dir,{recursive:true});
 app.setPath('userData',path.join(dir,prefix+'-profile-'+process.pid));app.disableHardwareAcceleration();
 app.whenReady().then(async()=>{
- const root=path.resolve(__dirname,'..','dist-preview'),report={tag,seed:901743,consoleErrors:[],methodology:{
+ const root=buildRoot,report={tag,harnessSha256:crypto.createHash('sha256').update(fs.readFileSync(__filename)).digest('hex'),seed:901743,consoleErrors:[],methodology:{
   course:{start:{x:21660,y:13500},end:{x:24660,y:13500},waypointStep:60},
   frameSource:'The real __game.step(1,16.7) input/AI/World/renderer/tail pipeline; rAF disabled only to prevent duplicate hidden-window frames.',
   control:'Existing native sim/render telemetry only; no engine/render method wrappers.',
@@ -16,6 +19,7 @@ app.whenReady().then(async()=>{
   exception:'Controlled initial teleport and diagnostic player.invulnerable=true in both passes; normal actors, AI, collision, status/effect processing, workers and renderer remain active.',
   pacing:'Synthetic16.7ms simulation steps with4ms asynchronous gaps. Elapsed step cost is not FPS or compositor latency. Native pre/gap telemetry is not used as pacing evidence.',
   observations:'Census/report work runs after the timed step and is measured separately; resulting allocation/GC effects are not assumed zero. Control runs first, so JIT, native ambient RNG and asynchronous worker timing can differ.',
+  runtimeCoverage:'Residual pass includes dormancy, field/shrine/puzzle controllers, survey, population/context helpers and site discovery; wrappers are report-only and preserve native calls.',
   bounds:{maxFrames:1800,slowThresholdMs:50,maxSlowFrames:128,maxHooks:768}
  }};
  const files=fs.readdirSync(path.join(root,'assets')).filter(n=>n.endsWith('.js')).sort();
@@ -47,6 +51,7 @@ app.whenReady().then(async()=>{
      return{actors:{total:w.actors.length,live:live.length,enemies:enemy,near1200:near,maxDistance,statuses,casting,byKind},effects,
       scene:{doodads:w.doodads.length,structures:w.structures.length,grounds:size(w.grounds),bridges:size(w.bridges),caveEntrances:size(w.caveEntrances),chests:w.chests.length},
       terrain:{stream:m.stream.stats,floorBaked:size(r.massPainter?.baked),floorPending:size(r.massPainter?.pending),walkRegions:size(m.walk.regions),walkPaths:size(m.walk.cache),walkSearches:m.walk.searches,revision:m.walk.version,generatorPlacePages:size(m.generator.placePages),generatorCandidates:size(m.generator.candidates),generatorDecisions:size(m.generator.decisions)},
+      ownership:{classicNatives:size(m.natives),sleeping:size(m.dormancy?.asleep),frozen:size(m.dormancy?.frozen),fields:m.fields?.residentCount,shrines:m.shrines?.residentCount,puzzles:m.puzzles?.residentCount,discovered:size(m.sites?.discovered)},
       native,geographic:{cached:m.geography.accessStats.cachedPlans,adopted:m.geography.warmStats.adopted,used:m.geography.warmStats.used,validating:m.geography.warmStats.validating},
       player:{life:hero.life,mana:hero.mana,dead:hero.dead,statuses:(hero.statuses??[]).map(s=>s.id??s.def?.id??s.kind??'unknown'),tier:hero.tier??0},
       canvas:{width:r.canvas.width,height:r.canvas.height,pixelScale:r.pixelScale,zoom:r.zoom,falterArmed:r.falterArmed,falterHolding:performance.now()<r.falterHoldUntil}};
@@ -77,11 +82,11 @@ app.whenReady().then(async()=>{
      calibration={samples,checksum:sum,estimateMsPerCall:[...samples.map(s=>Math.max(0,s.wrappedMs-s.directMs)/s.calls)].sort((a,b)=>a-b)[1],caveat:'No-op clock/bookkeeping calibration only; JIT/GC/cache perturbation is not corrected away.'};
      bind(w,'applyInputs','World.applyInputs','time','inputs');bind(w,'update','World.update','time','world');bind(r,'render','Renderer.render','time','render');
      for(const key of protoNames(w))if(/^(update[A-Z]|refresh[A-Z]|separateActors$)/.test(key))bind(w,key,'World.'+key);
-     for(const key of ['moveActor','clampPos','pointInSolid','lineOfSight','ensureDoodadIdx','doodadsNear','actorsNear','rebuildActorGrid','installMassNativeScene'])bind(w,key,'World.'+key);
+     for(const key of ['moveActor','clampPos','pointInSolid','lineOfSight','ensureDoodadIdx','doodadsNear','actorsNear','rebuildActorGrid','installMassNativeScene','completeMassQuest'])bind(w,key,'World.'+key);
      for(const key of protoNames(r))if(/^(draw[A-Z]|update[A-Z]|cullDoodads$)/.test(key))bind(r,key,'Renderer.'+key);
      for(const [key,names]of [['sightVeil',['update','draw','extractEdges','gatherDoodads','occlusionAt']],['roomVeil',['update','draw']],['lightLayer',['collect','render','staticPoly','bloom']],['massPainter',['draw','prepare','bake','finish','drawSettlement']]])for(const name of names)bind(r[key],name,key+'.'+name);
-     for(const name of ['update','prepareNativeCountry','placesInCell','updateOccurrences'])bind(m,name,'runtime.'+name);
-     for(const [object,names]of [['geography',['prepare','advancePreparation','plan','reserves','sync','update']],['nativeFeatures',['ensure','sync','adoptPrepared','obstacleAt','intersects']],['nativeCountry',['near']],['ecology',['sync']],['sites',['sync']],['stream',['step']],['generator',['placesInCell']],['nativeHost',['install','updateOccurrences']]])for(const name of names)bind(m[object],name,object+'.'+name);
+     for(const name of ['update','prepareNativeCountry','placesInCell','updateOccurrences','populationFor','populationCount','reservedPopulation','siteSearched','siteCleared','locateOwner','nativePlacement'])bind(m,name,'runtime.'+name);
+     for(const [object,names]of [['geography',['prepare','advancePreparation','plan','reserves','sync','update']],['nativeFeatures',['ensure','sync','adoptPrepared','obstacleAt','intersects']],['nativeCountry',['near']],['ecology',['sync']],['sites',['sync','discover']],['dormancy',['update','activeCount']],['fields',['sync','canAdmit','admit']],['shrines',['sync','canAdmit','admit','residentOwners']],['puzzles',['sync','canAdmit','admit','missing','residentOwners']],['survey',['observe']],['stream',['step']],['generator',['placesInCell']],['nativeHost',['install','updateOccurrences']]])for(const name of names)bind(m[object],name,object+'.'+name);
      for(const name of ['pathStep','line','snapToWalkable'])bind(m.walk,name,'walk.'+name);
      for(const name of ['regionAt','isWalkable'])bind(m.walk,name,'walk.'+name,'count');bind(m.generator,'terrainAt','generator.terrainAt','count');bind(m.stream,'sample','stream.sample','count');bind(m.nativeFeatures,'regionAt','nativeFeatures.regionAt','count');
      for(const name of ['updateTimers','refreshConditions','tickChronoStatuses'])bind(Object.getPrototypeOf(hero),name,'Actor.'+name);
@@ -105,7 +110,7 @@ app.whenReady().then(async()=>{
        inputToWorldMs:Math.max(0,(marks.worldStart??before)-(marks.inputsEnd??before)),
        afterWorldBeforeRenderMs:Math.max(0,(marks.renderStart??before)-(marks.worldEnd??before)),
        beforeInputsMs:Math.max(0,(marks.inputsStart??before)-before),afterRenderMs:Math.max(0,before+stepMs-(marks.renderEnd??before))}:null;
-      const row={frame,simTime:w.time,simDelta:w.time-timeBefore,pos:{...hero.pos},goal,stepMs,simMs,renderMs,outsideNativeSlabsMs:Math.max(0,stepMs-simMs-renderMs),gaps,hookCalls:frameHookCalls};frames.push(row);
+      const row={frame,simTime:w.time,simDelta:w.time-timeBefore,pos:{...hero.pos},goal,stepMs,simMs,renderMs,outsideNativeSlabsMs:Math.max(0,stepMs-simMs-renderMs),gaps,hookCalls:frameHookCalls,...(instrumented?{dormancyMs:callRows.find(c=>c.name==='dormancy.update')?.ms??0}:{})};frames.push(row);
       if(stepMs>50){const timed=callRows.filter(c=>c.mode==='time');slowFrames.push({...row,census:census(),inclusive:[...timed].sort((a,b)=>b.ms-a.ms).slice(0,28),exclusive:[...timed].sort((a,b)=>b.selfMs-a.selfMs).slice(0,20),queryCounts:callRows.filter(c=>c.mode==='count')});if(slowFrames.length>128){slowFrames.sort((a,b)=>b.stepMs-a.stepMs);slowFrames.length=128;}}
       if(frame%300===0){const at={frame,pos:{...hero.pos},goal,actors:w.actors.length,adopted:m.geography.warmStats.adopted};progress.push(at);console.log('ATTRIBUTION_PROGRESS '+JSON.stringify({instrumented,...at}));}
       observationsMs+=performance.now()-observationStart;
@@ -115,7 +120,7 @@ app.whenReady().then(async()=>{
      }
     }finally{active=false;__game.devInput(null);for(const h of original.reverse()){if(h.own)h.owner[h.key]=h.fn;else delete h.owner[h.key];}}
     const result={instrumented,route,start,end:{...hero.pos},goal,reached:goal===route.length-1&&Math.hypot(route[goal].x-hero.pos.x,route[goal].y-hero.pos.y)<10,
-     actualWorldSeconds:w.time-startTime,initial,final:census(),progress,calibration,hookCalls,observationsMs,hookInventory:rows.slice(1).map(r=>({name:r.name,mode:r.mode})),
+     actualWorldSeconds:w.time-startTime,initial,final:census(),progress,calibration,hookCalls,observationsMs,...(instrumented?{scheduledDormancy:summary(frames.filter(f=>f.dormancyMs>0).map(f=>f.dormancyMs))}:{}),hookInventory:rows.slice(1).map(r=>({name:r.name,mode:r.mode})),
      summary:{step:summary(frames.map(f=>f.stepMs)),nativeSim:summary(frames.map(f=>f.simMs)),nativeRender:summary(frames.map(f=>f.renderMs)),outsideNativeSlabs:summary(frames.map(f=>f.outsideNativeSlabsMs)),
       ...(instrumented?{inputToWorld:summary(frames.map(f=>f.gaps.inputToWorldMs)),beforeInputs:summary(frames.map(f=>f.gaps.beforeInputsMs)),afterWorldBeforeRender:summary(frames.map(f=>f.gaps.afterWorldBeforeRenderMs)),afterRender:summary(frames.map(f=>f.gaps.afterRenderMs))}:{})},
      travelSummary:{excludes:'Frame 0 is the first entry frame after controlled initial teleport; excluded here, retained in complete summary/raw frames.',step:summary(frames.slice(1).map(f=>f.stepMs)),nativeSim:summary(frames.slice(1).map(f=>f.simMs)),nativeRender:summary(frames.slice(1).map(f=>f.renderMs))},

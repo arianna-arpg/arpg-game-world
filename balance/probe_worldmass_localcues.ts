@@ -22,7 +22,7 @@ import { address, localOffset, moveAddress, type MassAddress } from '../src/worl
 
 type Access={pyres:HoldFixture[];rifts:HoldFixture[];digs:HoldFixture[];occs:OccSite[];updateObjective(dt:number):void;updateOccurrences(dt:number):void};
 const access=(w:World)=>w as unknown as Access;
-const holds=(w:World,k:NativeMassHoldKind)=>access(w)[k==='unearth'?'digs':k];
+const holds=(w:World,k:Exclude<NativeMassHoldKind,'beacon'>)=>access(w)[k==='unearth'?'digs':k];
 const family={pyres:{kind:PYRE_CFG.kind,done:PYRE_CFG.kindLit,radius:PYRE_CFG.radius,need:5,flare:130,transit:'pyre'},
   rifts:{kind:RIFT_CFG.kind,done:RIFT_CFG.kindSealed,radius:RIFT_CFG.radius,need:9,flare:150,transit:'rift'},
   unearth:{kind:DIG_CFG.kind,done:DIG_CFG.kindDug,radius:DIG_CFG.radius,need:3.5,flare:110,transit:'digsite'}};
@@ -67,7 +67,7 @@ try {
   const w=makeSimWorld('warrior',82449),runtime=new WorldMassRuntime(74,'native-hold-bodies',flat());runtime.attach(w);w.time=100;w.flashes=[];
   const zone:ZoneDef={...structuredClone(ZONES.crossroads),id:'rift-owner-source',level:1,objective:{kind:'rifts',count:[2,2],sealSec:9},packs:{count:[1,1],size:[1,1],table:[{id:'zombie',weight:1}]}};
   let hierarchy=new MassHierarchy(runtime.generator.run.runId,74,960,MASS_HIERARCHY_DEFAULT,[{id:'native-hold',source:'data/rifts',biomes:['downs'],zone}]);
-  const kinds:NativeMassHoldKind[]=['rifts','unearth','pyres'],xs=[[800,1200],[6200,6600,7000,7400],[11600,12000]];
+  const kinds:Exclude<NativeMassHoldKind,'beacon'>[]=['rifts','unearth','pyres'],xs=[[800,1200],[6200,6600,7000,7400],[11600,12000]];
   const owners=xs.map(x=>hierarchy.at(address('surface','0','0',x[0],800,960)).zone),points=xs.map(x=>x.map(x=>address('surface','0','0',x,800,960)));
   const local=(at:MassAddress)=>localOffset(at,{...runtime.origin,x:0,y:0},960);
   const contexts=[{source:'data/rifts',zone},{source:'data/digsites',zone:{...zone,id:'dig-owner-source',objective:{kind:'unearth',count:[4,4],digSec:3.5}} as ZoneDef},

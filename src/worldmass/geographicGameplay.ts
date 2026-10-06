@@ -1,13 +1,11 @@
 import type { World } from '../engine/world';
 import { regionKind } from '../world/regions';
 import type { ZoneDef } from '../data/zones';
-import { PYRE_CFG } from '../data/pyres';
+import { MassPhysicalIntel, type PhysicalIntelTarget, type PhysicalRevealPolicy } from './physicalIntel';
 import { localOffset, moveAddress, type MassAddress } from './address';
 import { discTerrainClear, GeographicAccessIndex, MASS_ACCESS_POLICY, validateGeographicAccess, type MassAccessProof } from './geographicAccess';
 import { MassHierarchy, massAddressBounds, nativeHierarchySources, type MassGeography, type MassHierarchyPolicy, type MassHierarchySave } from './hierarchy';
 import { MassObjectiveBodies } from './objectiveBodies';
-import { RIFT_CFG } from '../data/rifts';
-import { DIG_CFG } from '../data/digsites';
 import { MassObjectives, resolveMassHoldContext, isNativeMassHoldKind, type MassObjectiveHost, type MassHoldContext, type NativeMassHoldSource, type NativeMassPyreSource } from './objectives';
 import { compileGeographicPlan, GEOGRAPHIC_PLAN_COMPILER, validateGeographicPreparation, validateGeographicPreparationSteps, type GeographicPlan, type GeographicPlanInput, type GeographicPreparation, type GeographicReservations, type GeographicPlanMetrics } from './geographicPlan';
 import { createGeographicPlanWarmQueue, type GeographicPlanWarmQueue } from './geographicWarm';
@@ -21,6 +19,9 @@ interface Planned { owner: Readonly<MassGeography>; context: Readonly<MassHoldCo
 export class MassGeographicGameplay {
   readonly hierarchy: MassHierarchy;
   readonly objectives: MassObjectives;
+  readonly intel: MassPhysicalIntel;
+  private intelWork=new Map<string,{plan:Readonly<GeographicPlan>;policy:Readonly<PhysicalRevealPolicy>;owners:readonly Readonly<MassGeography>[];cursor:number;targets:PhysicalIntelTarget[];check?:Generator<void,boolean>;target?:Readonly<GeographicPlan>}>();
+  private intelMetrics={checks:0,maxSliceMs:0,prepared:0};
   private snapshotHost: MassObjectiveHost | null = null;
   private bodies: MassObjectiveBodies | null = null;
   private plans = new Map<string, Planned | null>();
@@ -47,7 +48,7 @@ export class MassGeographicGameplay {
     this.objectives = new MassObjectives(this.hierarchy, spec.maxObjectives);
     for(const row of this.hierarchy.controllers()){
       const access=row.controllers.find(c=>c.id==='objective-access');
-      const born=row.controllers.find(c=>['pyres','rifts','unearth'].some(k=>c.id==='objective:'+k));
+      const born=row.controllers.find(c=>['pyres','rifts','unearth','beacon'].some(k=>c.id==='objective:'+k));
       if(born&&!access){
         const legacy=this.legacyPlan(row.owner,born.definition);
         this.hierarchy.enroll(row.owner,'objective-access-legacy','worldmass/legacy-unverified-access',
@@ -56,6 +57,12 @@ export class MassGeographicGameplay {
         if(this.plans.size>256)this.plans.delete(this.plans.keys().next().value!);
       }
       if(access)this.savedPlan(row.owner,access.definition);
+    }
+    this.intel=new MassPhysicalIntel(this.hierarchy);
+    for(const row of this.hierarchy.controllers()){
+      const beacon=row.controllers.find(c=>c.id==='objective:beacon');
+      if(beacon&&(!this.intel.manifest(row.owner.id)||beacon.phase==='complete'&&this.hierarchy.status(row.owner.id,'beacon-survey')?.phase!=='complete'))
+        throw Error('Native beacon lost its physical discovery manifest');
     }
   }
   private nearby(at:MassAddress):{x:number;y:number}|undefined{
@@ -72,7 +79,7 @@ export class MassGeographicGameplay {
     if(data.positions.length!==this.objectives.count(owner,data.context)
       ||!!data.chestPosition!==this.objectives.chestWanted(owner,data.context)
       ||canonical(stands)!==canonical(data.access.targets.map(t=>t.at)))throw Error('Saved geographic access lost an objective stand');
-    const kind=data.context.zone.objective.kind,fixtureRadius=kind==='rifts'?RIFT_CFG.radius:kind==='unearth'?DIG_CFG.radius:PYRE_CFG.radius;
+    const kind=data.context.zone.objective.kind,fixtureRadius=this.objectives.fixtureRadius(owner,data.context);
     if(data.access.targets.some((t,i)=>t.radius!==(i<data.positions.length?fixtureRadius:24)))throw Error('Saved geographic access changed fixture clearance');
     const born=this.hierarchy.controller(owner.id,'objective:'+kind);
     if(born){const historical=this.legacyPlan(owner,born.definition);
@@ -114,7 +121,7 @@ export class MassGeographicGameplay {
     const zone=owner.native?.zone;if(!zone)return null;
     const rows=(this.spec.holds??this.spec.pyres).filter(p=>p.source==='data/tilesets'&&p.tileset===zone.tileset),rng=massRandom(this.mass.generator.run.seed,[owner.id,'native-objective']);
     if(!rows.length||!rng.chance(rows.reduce((n,p)=>n+p.weight,0)/rows[0].totalWeight))return null;
-    const source=rng.weighted(rows),center=this.nearby(owner.center),context=resolveMassHoldContext({...zone,id:owner.id},source,center?this.mass.levelAt(center):this.mass.config.progression?.maxLevel??zone.level);
+    const source=rng.weighted(rows),center=this.nearby(owner.center),context=resolveMassHoldContext({...zone,id:owner.id},source,center?this.mass.levelAt(center):this.mass.config.progression?.maxLevel??zone.level,massRandom(this.mass.generator.run.seed,[owner.id,'native-beacon/resolve']));
     const reservations:GeographicReservations={circles:[],trails:[]},halfSpan=Math.floor(Math.min(MASS_ACCESS_POLICY.halfSpan,owner.span/2-180)/30)*30;
     if(center){
       const town=this.mass.settlement;if(town)reservations.town={minX:-center.x,minY:-center.y,maxX:town.zone.size.w-center.x,maxY:town.zone.size.h-center.y,padding:town.spec.apron+town.spec.blend};
@@ -134,7 +141,7 @@ export class MassGeographicGameplay {
     }
     const input:GeographicPlanInput={compiler:GEOGRAPHIC_PLAN_COMPILER,policy:MASS_ACCESS_POLICY,run:this.mass.generator.run,terrain,owner,context,selection:rows,
       fixtureCount:this.objectives.count(owner,context),chestWanted:this.objectives.chestWanted(owner,context),
-      fixtureRadius:context.zone.objective.kind==='rifts'?RIFT_CFG.radius:context.zone.objective.kind==='unearth'?DIG_CFG.radius:PYRE_CFG.radius,regions,reservations};
+      fixtureRadius:this.objectives.fixtureRadius(owner,context),regions,reservations};
     return freezeData(JSON.parse(canonical(input)) as GeographicPlanInput);
   }
   preparationInput(at:MassAddress):Readonly<GeographicPlanInput>|null{return this.request(this.hierarchy.at(at).zone);}
@@ -192,7 +199,15 @@ export class MassGeographicGameplay {
       const request=this.request(owner);
       if(request)requests.push(request);else{this.cachePlan(owner,null);this.preparing.sourceNegatives++;}
     }
-    this.warm.offer(requests);
+    // Survey work is prepared before its physical spire publishes. The same
+    // worker and validator serve its real future destinations; no final-flare mint.
+    const intelRequests:Readonly<GeographicPlanInput>[]=[];
+    for(const work of this.intelWork.values())for(const owner of work.owners.slice(work.cursor)){
+      if(intelRequests.length>=32)break;
+      if(this.plans.has(owner.id)||this.hierarchy.controller(owner.id,'objective-access')||this.validation?.input.owner.id===owner.id)continue;
+      const input=this.request(owner);if(input)intelRequests.push(input);else this.cachePlan(owner,null);
+    }
+    this.warm.offer([...intelRequests,...requests].slice(0,64));
   }
   dispose():void{if(this.disposed)return;this.disposed=true;this.validation=null;this.warm?.dispose();}
   get warmStats(){return {...this.preparing,queue:this.warm?.stats??null,validating:this.validation?.input.owner.id??null,disposed:this.disposed};}
@@ -204,7 +219,7 @@ export class MassGeographicGameplay {
     const start=performance.now();
     const remember=(value:Planned|null)=>{const elapsed=performance.now()-start;this.planning.coldQueries++;this.planning.totalMs+=elapsed;this.planning.maxMs=Math.max(this.planning.maxMs,elapsed);this.planning[value?'accepted':'rejected']++;return this.cachePlan(owner,value);};
     const saved=this.hierarchy.controller(owner.id,'objective-access');if(saved)return remember(this.savedPlan(owner,saved.definition));
-    for(const kind of ['pyres','rifts','unearth']){const born=this.hierarchy.controller(owner.id,'objective:'+kind);if(born)return remember(this.legacyPlan(owner,born.definition));}
+    for(const kind of ['pyres','rifts','unearth','beacon']){const born=this.hierarchy.controller(owner.id,'objective:'+kind);if(born)return remember(this.legacyPlan(owner,born.definition));}
     const input=this.request(owner);if(!input)return remember(null);
     this.preparing.synchronous++;const result=compileGeographicPlan(input,this.mass.generator);this.metrics(result.metrics);return remember(result.plan);
   }
@@ -229,7 +244,7 @@ export class MassGeographicGameplay {
       installHolds:(owner,kind,fixtures)=>world.installMassHolds(owner,kind,fixtures),
       installEffects:(owner,zone,fixtures,saved)=>this.bodies!.install(owner,zone,fixtures,saved),
       installChest:(owner,chest)=>world.installMassObjectiveChest(owner,chest),canRetire:(fixtures,owned)=>world.canRetireMassPyres(fixtures,owned),
-      complete:(owner,zone,label)=>world.completeMassObjective(owner,zone,label)};
+      complete:(owner,zone,label)=>world.completeMassObjective(owner,zone,label),reveal:(owner,_zone,now)=>{this.intel.reveal(owner,now);}};
   }
   sync(world:World):void {
     const mass=this.mass,at=mass.walk.at(world.player.pos.x,world.player.pos.y),span=mass.config.terrain.addressSpan;
@@ -239,34 +254,90 @@ export class MassGeographicGameplay {
     for(const owner of owners){
       const plan=this.plan(owner);if(!plan?.access)continue;
       if(this.hierarchy.controller(owner.id,'objective:'+plan.context.zone.objective.kind))continue;
-      // Wait until all required terrain/scenery is resident. Do not seat only
-      // part of an operation, and never carve a path through native blockers.
-      if(this.stands(plan).some(p=>{const q=this.local(p);return Math.hypot(q.x-world.player.pos.x,q.y-world.player.pos.y)>mass.config.pageRadius*span-160;}))continue;
-      if(this.stands(plan).some(p=>{const q=this.local(p);return !mass.walk.isWalkable(q.x,q.y)||!!world.pointInSolid(q.x,q.y,(plan.context.zone.objective.kind==='rifts'?RIFT_CFG.radius:plan.context.zone.objective.kind==='unearth'?DIG_CFG.radius:PYRE_CFG.radius)+12);}))continue;
-      const route=this.accessIndices.get(owner.id)!;
-      if(route.points.some(p=>{const q=this.local(moveAddress(owner.center,p,span));return Math.hypot(q.x-world.player.pos.x,q.y-world.player.pos.y)>mass.config.pageRadius*span-160;}))continue;
-      // Last admission sweep sees exact live terrain and native hit shapes,
-      // including cold native blockers. Later player edits can legitimately
-      // obstruct a saved route; they never reroll an existing objective.
-      const clear=(p:{x:number;y:number})=>{
-        const q=this.local(moveAddress(owner.center,p,span));
-        if(!discTerrainClear(q,MASS_ACCESS_POLICY.bodyRadius,mass.walk.cellSize,p=>{
-          const id=mass.walk.regionAt(p.x,p.y),kind=regionKind(id);
-          return !!kind?.walkable&&!kind.standStatusDeep&&!['water','lava','chasm','bog','swamp'].includes(id);
-        }))return false;
-        return !world.pointInSolid(q.x,q.y,MASS_ACCESS_POLICY.bodyRadius);
-      };
-      const half=plan.access.halfSpan,side=half/30*2+1,point=(i:number)=>({x:i%side*30-half,y:Math.floor(i/side)*30-half});
-      if(plan.access.paths.some(path=>path.some((i,n)=>{
-        const a=point(n?path[n-1]:i),b=point(i);
-        return ![.25,.5,.75,1].every(t=>clear({x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t}));
-      })))continue;
+      if(this.intelWork.has(owner.id)&&!this.intel.manifest(owner.id))continue;
+      // Reaching any original fixture activates the whole operation. Render
+      // page residency is not physics authority: cold native queries validate
+      // every stand, chest and connecting path before atomic publication.
+      if(!plan.positions.some(p=>{const q=this.nearby(p);return !!q&&Math.hypot(q.x-world.player.pos.x,q.y-world.player.pos.y)<=mass.config.pageRadius*span-160;}))continue;
+      const check=this.checkIntelAccess(plan as GeographicPlan,world);
+      let verified=check.next();while(!verified.done)verified=check.next();
+      if(!verified.value)continue;
       const {owner:_owner,...definition}=plan;
       this.hierarchy.enroll(owner,'objective-access','worldmass/geographic-access-v1',definition,null,world.time);
+      if(plan.context.zone.objective.kind==='beacon'&&!this.intel.manifest(owner.id)){
+        if(!this.intelWork.has(owner.id)&&this.intelWork.size<2){
+          const policy=this.intel.policy(owner,plan.context.zone);
+          this.intelWork.set(owner.id,{plan:plan as GeographicPlan,policy,owners:this.intel.candidates(owner,policy),cursor:0,targets:[]});
+          this.nextPrepare=0;
+        }
+        continue;
+      }
       this.objectives.admit(owner,plan.positions,host,p=>this.local(p),plan.context,plan.chestPosition);
     }
   }
-  update(world:World,dt:number):void {this.objectives.update(dt,this.host(world));}
+  /** Verify a complete operation against exact native terrain/scenery without
+   * installing fixtures, actors or knowledge. Each yield bounds one route sample. */
+  private *checkIntelAccess(plan:Readonly<GeographicPlan>,world:World):Generator<void,boolean>{
+    const span=this.mass.config.terrain.addressSpan,fixtureRadius=this.objectives.fixtureRadius(plan.owner,plan.context),kind=plan.context.zone.objective.kind;
+    if(!isNativeMassHoldKind(kind))return false;
+    for(const [i,at] of this.stands(plan).entries()){
+      const p=this.nearby(at);if(!p||!this.mass.walk.isWalkable(p.x,p.y)||world.pointInSolid(p.x,p.y,(i<plan.positions.length?fixtureRadius:24)+12))return false;
+      if(i<plan.positions.length&&(!world.massObjectiveStandClear(p,kind)||this.mass.nativeFeatures?.intersects(at,world.massObjectivePortalClear(kind))))return false;
+      yield;
+    }
+    const half=plan.access.halfSpan,side=half/30*2+1,point=(i:number)=>({x:i%side*30-half,y:Math.floor(i/side)*30-half});
+    for(const path of plan.access.paths)for(let n=0;n<path.length;n++){
+      const a=point(path[Math.max(0,n-1)]),b=point(path[n]);
+      for(const t of [.25,.5,.75,1]){
+        const q=this.local(moveAddress(plan.owner.center,{x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t},span));
+        if(!discTerrainClear(q,MASS_ACCESS_POLICY.bodyRadius,this.mass.walk.cellSize,p=>{
+          const id=this.mass.walk.regionAt(p.x,p.y),kind=regionKind(id);
+          return !!kind?.walkable&&!kind.standStatusDeep&&!['water','lava','chasm','bog','swamp'].includes(id);
+        })||world.pointInSolid(q.x,q.y,MASS_ACCESS_POLICY.bodyRadius))return false;
+        yield;
+      }
+    }
+    return true;
+  }
+  private advanceIntel(world:World):void{
+    const work=this.intelWork.values().next().value;if(!work)return;
+    const started=performance.now();
+    for(let steps=0;steps<64;steps++){
+      if(work.check){
+        const result=work.check.next();this.intelMetrics.checks++;
+        if(result.done){if(result.value)work.targets.push(this.intel.reserve(work.target!,world.time));work.check=undefined;work.target=undefined;work.cursor++;}
+      }else if(work.cursor>=work.owners.length){
+        this.intel.finish(work.plan.owner,work.policy,work.targets,world.time);this.intelWork.delete(work.plan.owner.id);this.intelMetrics.prepared++;break;
+      }else{
+        const owner=work.owners[work.cursor];
+        // Unrequested distant owners stay cold until their background result.
+        if(!this.plans.has(owner.id)&&!this.hierarchy.controller(owner.id,'objective-access')&&this.warm&&!this.warm.stats.disposed)break;
+        const plan=this.plan(owner);
+        if(!plan?.access||plan.context.zone.objective.kind==='beacon'){work.cursor++;}
+        else{work.target=plan as GeographicPlan;work.check=this.checkIntelAccess(work.target,world);}
+      }
+      if(performance.now()-started>=2)break;
+    }
+    this.intelMetrics.maxSliceMs=Math.max(this.intelMetrics.maxSliceMs,performance.now()-started);
+  }
+  get intelPreparationStats(){return {...this.intelMetrics,pending:this.intelWork.size,cursor:this.intelWork.values().next().value?.cursor??0};}
+  update(world:World,dt:number):void {
+    this.advanceIntel(world);this.objectives.update(dt,this.host(world));
+    if(world.player.dead||world.player.tier!==0)return;
+    // Footsteps require a mounted destination in real sight, never a map reveal.
+    for(const view of this.objectives.views(world.player.pos)){
+      if(this.intel.visited(view.owner)||Math.hypot(view.pos.x-world.player.pos.x,view.pos.y-world.player.pos.y)>180)continue;
+      if(view.kind==='beacon'||!world.lineOfSight(world.player.pos,view.pos,0))continue;
+      if(!this.intel.reserved(view.owner)){
+        const owner=this.hierarchy.owner(view.owner),access=this.hierarchy.controller(view.owner,'objective-access');
+        // Old unverified-access owners are never catalogue candidates. Current
+        // physical arrivals retain boots even before any beacon surveys them.
+        if(!owner||!access)continue;
+        this.intel.reserve(this.savedPlan(owner,access.definition) as GeographicPlan,world.time);
+      }
+      this.intel.observe(view.owner,world.time);
+    }
+  }
   snapshot():MassHierarchySave{if(this.snapshotHost)this.objectives.captureEffects(this.snapshotHost);return this.hierarchy.snapshot();}
   /** Pure generated targets for diagnostics and physical planning. */
   plannedAt(at:MassAddress):Readonly<Planned>|null{return this.plan(this.hierarchy.at(at).zone);}

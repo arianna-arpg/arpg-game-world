@@ -1,3 +1,4 @@
+import { resolveNativeBeacon } from '../engine/beaconSpec';
 import type { Vec2 } from '../core/math';
 import type { MassAddress } from './address';
 import { address,localOffset,moveAddress } from './address';
@@ -44,7 +45,7 @@ export function validateGeographicPlanInput(input:Readonly<GeographicPlanInput>)
   canonical(input);
   const span=input.terrain.addressSpan,owner=input.owner,kind=input.context.zone.objective.kind;
   if(input.compiler!==GEOGRAPHIC_PLAN_COMPILER||canonical(input.policy)!==canonical(MASS_ACCESS_POLICY)||owner.kind!=='zone'||owner.run!==input.run.runId||input.run.addressSpan!==span
-    ||input.context.zone.id!==owner.id||!['pyres','rifts','unearth'].includes(kind)||!input.context.recipe
+    ||input.context.zone.id!==owner.id||!['pyres','rifts','unearth','beacon'].includes(kind)||!input.context.recipe
     ||!Number.isSafeInteger(input.fixtureCount)||input.fixtureCount<1||input.fixtureCount>32||typeof input.chestWanted!=='boolean'
     ||!Number.isFinite(input.fixtureRadius)||input.fixtureRadius<=0||input.fixtureRadius>36
     ||!Array.isArray(input.selection)||!input.selection.length||input.selection.length>128
@@ -63,6 +64,14 @@ export function validateGeographicPlanInput(input:Readonly<GeographicPlanInput>)
   const rng=massRandom(input.run.seed,[owner.id,'native-objective']);
   if(!rng.chance(input.selection.reduce((n,r)=>n+r.weight,0)/input.selection[0].totalWeight)
     ||canonical(rng.weighted(input.selection))!==canonical(input.context.recipe))throw Error('Geographic plan source lottery changed');
+  const recipe=input.context.recipe;
+  const resolved=recipe.alias==='circuit'?resolveNativeBeacon('circuit',massRandom(input.run.seed,[owner.id,'native-beacon/resolve'])):recipe.objective;
+  if(canonical(input.context.zone.objective)!==canonical(resolved))throw Error('Geographic plan changed native objective resolution');
+  if(kind==='beacon'){
+    const o=input.context.zone.objective as Extract<typeof resolved,{kind:'beacon'}>,count=o.count??1;
+    if(input.fixtureCount!==count||input.fixtureRadius!==(count>1?11:15))throw Error('Geographic plan changed native beacon geometry');
+  }
+
 }
 
 type GeographicBody={x:number;y:number;radius:number};

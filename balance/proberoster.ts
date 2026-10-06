@@ -496,6 +496,11 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_worldmass_geographicworker.ts', status: 'green', tier: 'fast', why: 'Native plan golden parity, bounded geographic worker queue, copied immutable input, staged semantic adoption and synchronous/disposal races.' },
   { probe: 'probe_worldmass_geographicacceptance.ts', status: 'green', tier: 'fast', why: 'Independent authentic worker proof acceptance and coherent-header rejection of reserved routes, blocked stands and wet body-cell coverage.' },
   { probe: 'probe_worldmass_geographicaccess.ts', status: 'green', tier: 'fast', why: 'Connected dry objective/chest access, final physical admission, bounded planning and frozen legacy Continue.' },
+  { probe: 'probe_worldmass_beaconcontinuity.ts', status: 'green', tier: 'fast', why: 'Actual natural spire/circuit partial and solved CharacterSave, native pressure deadlines, wounds/lures, once survey payout and prior physical visits preserved before recon enrollment.' },
+  { probe: 'probe_worldmass_physicalintel.ts', status: 'green', tier: 'fast', why: 'Frozen actual objective access without actors or boots, capped native projected discovery, prior-visit exclusion and coherent source/policy/receipt/causality refusal.' },
+  { probe: 'probe_worldmass_beacons.ts', status: 'green', tier: 'fast', why: 'Native beacon/circuit resolver, exact shared scheduler, mixed factory parity, frozen births, lure leases and once discovery-before-reward ownership.' },
+  { probe: 'probe_worldmass_hierarchyidentity.ts', status: 'green', tier: 'fast', why: 'Immutable recorded geography avoids repeated source copies while preserving input, controller, snapshot and source-old Continue isolation.' },
+  { probe: 'probe_worldmass_dormancypinattribution.ts', status: 'green', tier: 'fast', why: 'Immutable data-only pin certificates preserve uncached actor dependency sets across real terrain, late owners, numeric IDs, weak ledgers, mutable collections, cycles and getters.' },
   { probe: 'probe_worldmass_nativeingress.ts', status: 'green', tier: 'fast', why: 'Real native exterior body-clear ingress, bounded route proof, terrain refusals, reserved corridors and exact saved acceptance.' },
 ];
 

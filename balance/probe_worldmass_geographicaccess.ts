@@ -43,11 +43,11 @@ try{
  for(let i=0;i<24;i++){const start=performance.now();mass.nativeCountry!.near(mass.walk.at((i-12)*10800+2700,2700),2400);scans.push(performance.now()-start);}
  const sorted=[...scans].sort((a,b)=>a-b);console.log('COLD_NATIVE_COUNTRY_SCANS',JSON.stringify({count:scans.length,totalMs:performance.now()-scanStart,medianMs:sorted[12],p95Ms:sorted[Math.floor(sorted.length*.95)],maxMs:sorted.at(-1),planning:geography.accessStats}));
  const found=new Map<string,NonNullable<ReturnType<typeof geography.plannedAt>>>();
- for(let r=0;r<=18&&found.size<3;r++)for(let y=-r;y<=r&&found.size<3;y++)for(let x=-r;x<=r&&found.size<3;x++){
+ for(let r=0;r<=18&&found.size<4;r++)for(let y=-r;y<=r&&found.size<4;y++)for(let x=-r;x<=r&&found.size<4;x++){
   if(Math.max(Math.abs(x),Math.abs(y))!==r)continue;
   const p=geography.plannedAt(mass.walk.at(x*5400+2700,y*5400+2700));if(p&&!found.has(p.context.zone.objective.kind))found.set(p.context.zone.objective.kind,p);
  }
- assert.deepEqual([...found.keys()].sort(),['pyres','rifts','unearth']);
+ assert.deepEqual([...found.keys()].sort(),['beacon','pyres','rifts','unearth']);
  for(const [kind,p]of found){
   validateGeographicAccess(p.access!,span);assert.equal(p.access!.targets.length,p.positions.length+(p.chestPosition?1:0));
   const route=geographicAccessPoints(p.access!),far=route.find(q=>p.positions.every(t=>{const d=localOffset(t,p.owner.center,span);return Math.hypot(d.x-q.x,d.y-q.y)>180;}))!;
@@ -76,7 +76,7 @@ try{
  const chest=world.chests.find(c=>c.massObjectiveOwner===p.owner.id);if(chest){world.landPartyAt(chest.pos);(world as unknown as {updateChests(dt:number):void}).updateChests(1);assert.ok(chest.opened);}
  const saved=serializeCharacter(world),receiptBefore=geography.hierarchy.controller(p.owner.id,'objective:pyres')!;
  assert.equal(saved.world!.worldmass!.schema,11);assert.equal(receiptBefore.phase,'complete');assert.equal(receiptBefore.receipts.length,1);
- const legacy=structuredClone(saved);for(const owner of legacy.world!.worldmass!.geography!.owners)owner.controllers=owner.controllers.filter(c=>c.id!=='objective-access');
+ const legacy=structuredClone(saved);for(const owner of legacy.world!.worldmass!.geography!.owners)owner.controllers=owner.controllers.filter(c=>!['objective-access','physical-intel','beacon-survey'].includes(c.id));
  const continued=makeSimWorld('warrior',901745);assert.ok(applySavedCharacter(continued,legacy));assert.ok(continued.adoptWorldState(legacy.world));continued.startWorldMass(legacy.world!.worldmass!.state.run.seed,legacy.world!.worldmass);
  const geo=continued.massRuntime!.geography!,oldPlan=geo.plannedAt(p.owner.center)!;
  assert.equal(oldPlan.legacyAccess,'legacy-unverified-access');assert.equal(oldPlan.access,undefined);assert.deepEqual(oldPlan.positions,p.positions);assert.deepEqual(oldPlan.context,p.context);assert.deepEqual(oldPlan.chestPosition,p.chestPosition);

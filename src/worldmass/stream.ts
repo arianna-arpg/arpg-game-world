@@ -16,7 +16,7 @@ export class MassStream {
   private pages = new Map<string, MassPage>();
   private pending = new Map<string, Job>();
   private needed = new Map<string, MassCell>();
-  private samples = new Map<string, { terrain: MassTerrain; revision: number }>();
+  private samples = new Map<string, Readonly<{ terrain: MassTerrain; revision: number }>>();
   private stateRevision = -1;
   readonly cols: number;
   constructor(readonly generator: MassGenerator, readonly state: MassState, readonly config: MassStreamConfig) {
@@ -71,7 +71,7 @@ export class MassStream {
     const patch = this.state.patchAt(p);
     const result: MassTerrain = patch ? Object.freeze({ ...base, region: patch.region, color: patch.color,
       source: Object.freeze({ ...base.source, rule: 'terrain-change', source: patch.cause }) }) : base;
-    this.samples.delete(key); this.samples.set(key, { terrain: result, revision });
+    this.samples.delete(key); this.samples.set(key, Object.freeze({ terrain: result, revision }));
     if (this.samples.size > this.config.maxSamples) this.samples.delete(this.samples.keys().next().value!);
     return this.overlay?.sample(at,result) ?? result;
   }

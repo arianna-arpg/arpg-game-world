@@ -8,6 +8,7 @@
 // one or two fresh frontiers of its own. The world never runs out of edge.
 // ---------------------------------------------------------------------------
 
+import { resolveNativeBeacon } from './beaconSpec';
 import { clamp } from '../core/math';
 import { Rng, rollSeed } from '../core/rng';
 import { WAR_PAIRS } from '../data/monsters';
@@ -2180,10 +2181,10 @@ function rollObjective(
     case 'escape': return { kind: 'escape', interval: [2.2, 3.6] };
     case 'spawners': return { kind: 'spawners', spawnerId, count: [2, 3] };
     case 'waves': return { kind: 'waves', waves: rng.int(3, 4) };
-    case 'beacon': return { kind: 'beacon' }; // numbers default from BEACON_CFG
+    case 'beacon': return resolveNativeBeacon(kind,rng); // numbers default from BEACON_CFG
     // The ATTUNEMENT CIRCUIT: several smaller waystones, a shorter hold each —
     // the same beacon fabric wearing a count (the flexibility IS the point).
-    case 'circuit': return { kind: 'beacon', count: rng.int(3, 4), chargeSec: 8 };
+    case 'circuit': return resolveNativeBeacon(kind,rng);
     case 'procession': return { kind: 'procession' }; // numbers default from PROCESSION_CFG
     case 'bounty': return { kind: 'bounty' };         // numbers default from BOUNTY_CFG
     case 'offering': return { kind: 'offering' };     // altar + numbers roll at load

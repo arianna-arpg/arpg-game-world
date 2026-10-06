@@ -184,7 +184,8 @@ for (const kind of MASS_BOUNTY_KINDS) registerBountyKind({
       country_visit: ['Scout', 'Reach and discover'], country_clear: ['Secure', 'Defeat the original garrison at'],
       country_cache: ['Recover', 'Search the cache at'], country_puzzle: ['Resolve', 'Solve the riddle at'],
       country_objective: p.massBounty?.objective?.kind==='pyres'?['Kindle','Light every pyre in']:
-        p.massBounty?.objective?.kind==='rifts'?['Seal','Seal every rift in']:['Unearth','Open every burial mound in'],
+        p.massBounty?.objective?.kind==='rifts'?['Seal','Seal every rift in']:
+        p.massBounty?.objective?.kind==='beacon'?['Attune','Attune every survey stone in']:['Unearth','Open every burial mound in'],
     };
     return { title: `${verbs[kind][0]} ${name}`, ask: `${verbs[kind][1]} ${name}. Return to the issuing Bounty Board.` };
   },

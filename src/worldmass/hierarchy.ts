@@ -133,7 +133,8 @@ export class MassHierarchy {
           || new Set(row.controllers.map(c => c.id)).size !== row.controllers.length) throw Error('Invalid geographic owner checkpoint');
         if (row.owner.native && !this.sources.some(s => canonical(s) === canonical(row.owner.native))) throw Error('Unknown frozen geographic source');
         for (const c of row.controllers) this.validateController(c);
-        this.records.set(row.owner.id, copy(row));
+        const restored = copy(row); restored.owner = freezeData(restored.owner);
+        this.records.set(row.owner.id, restored);
       }
     }
   }
@@ -157,7 +158,8 @@ export class MassHierarchy {
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) out.push(this.geography(kind, bounds.dimension, x.toString(), y.toString()));
     return Object.freeze(out);
   }
-  owner(id: string): Readonly<MassGeography> | undefined { const r = this.records.get(id); return r && freezeData(copy(r.owner)); }
+  // A record owns one immutable geography snapshot; controller state stays mutable.
+  owner(id: string): Readonly<MassGeography> | undefined { return this.records.get(id)?.owner; }
   controller(owner: string, id: string): Readonly<MassControllerSave> | undefined {
     const c = this.records.get(owner)?.controllers.find(c => c.id === id); return c && freezeData(copy(c));
   }
@@ -178,7 +180,7 @@ export class MassHierarchy {
       return old;
     }
     let row = this.records.get(owner.id);
-    if (!row) { row = { owner: copy(owner), controllers: [] }; this.records.set(owner.id, row); }
+    if (!row) { row = { owner: freezeData(copy(owner)), controllers: [] }; this.records.set(owner.id, row); }
     if (row.controllers.length >= 128) throw Error('Geographic owner controller budget exceeded');
     const c: MassControllerSave = { id, source, definition: copy(definition), definitionHash: hash, phase: 'waiting', clock: 0,
       updatedAt: now, revision: 0, state: copy(state), receipts: [] };
@@ -209,7 +211,7 @@ export class MassHierarchy {
   private geography(kind: MassGeographicKind, dimension: string, ix: string, iy: string): Readonly<MassGeography> {
     if (!['region', 'zone', 'chunk'].includes(kind)) throw Error('Unknown geographic owner kind');
     const x = integer(ix), y = integer(iy), id = canonical([this.run, this.policy.source, this.policy.version, dimension, kind, ix, iy]);
-    const saved = this.records.get(id); if (saved) return freezeData(copy(saved.owner));
+    const saved = this.records.get(id); if (saved) return saved.owner;
     const found = this.cache.get(id);
     if (found) { this.cache.delete(id); this.cache.set(id, found); return found; }
     const span = this.span(kind), s = BigInt(span), minX = x * s, minY = y * s;
