@@ -649,7 +649,8 @@ incoming damage reduced the cart to 2,062.632559725573 Life; partial Continue
 retained that exact value. Every observed cart body remained within the
 certified capsules or terminal aprons. Maximum centerline distance was
 30.442 pixels before Continue and 23.636 afterward, versus 150.193 in the
-preserved faulty-ray control. Maximum observed cart step was 1.5045 pixels.
+preserved faulty-ray control. Maximum observed cart step was 1.7413 pixels
+before Continue and 1.5045 afterward.
 The final native delivery paid once, with XP 424 remaining 424 through terminal
 Continue. Immediate cart death followed by save produced one wreck payout,
 no delivery reward, XP 0 remaining 0, and no second wreck after Continue.
@@ -678,3 +679,67 @@ local-cue (7 groups), reward-label, information-stream, ability-economy and
 all-project type checks pass. These are same-model independent reviews of
 specific ownership/integration seams, not cross-model review or acceptance
 of the still-unbound gameplay listed above.
+
+## Native ambient cold across geographic regions
+
+Geographic contexts already retained the native tileset windchill dial and
+country climate. The World driver previously returned early because the shared
+seamless shell carries no windchill. It now resolves each live player seat's
+local context and live wind independently. The camera player's sky cannot
+supply a distant seat's weather, and no shared zone is replaced.
+
+The native cold ladder, exposure bank, temperature/night/wind cadence, warmth
+ward, standing fires, roofs, upwind doodad lee and shedding remain unchanged.
+Crossing a chunk does not reset exposure. Country without a windchill dial
+pauses the exposure bank, matching the finite driver's no-dial behavior; existing
+statuses retain their ordinary decay. Immediate feedback remains the native
+physical cold effects and status consequences, with no new local narration.
+
+CharacterSave retains main's existing transient-player boundary: temporary
+chill, frozen, hearthglow and exposure timers reset on Continue. Frozen region
+sources and climate persist. This is not exact active-condition persistence.
+No contact, effect, or full-mountain capability is added. Hearth crystals still
+need their native contact/ICD owner; haven stones still need status-wash effect
+ownership. Full passes and crowns also need tracks, creep, pitfalls and vertical
+traversal. Current country source selection does not yet reproduce main's
+climate/depth-weighted mountain-face selection, and grid rock alone does not
+provide the doodad windbreak test. This slice activates source-authored ambient
+cold; it does not claim the entire mountain traversal loop.
+
+Independent windchill verification passed five groups: a transcription of the
+pre-change finite driver compares statuses, sheet values, clocks and RNG; real
+cold/warm sources and independent seats exercise the spatial reads; native fire,
+roof, lee and ward fixtures exercise relief; CharacterSave pins the native
+transient boundary. Native massif checks (three seeds), physical-weather checks,
+all three type-check projects and all five simulation smoke scenarios passed.
+
+Actual browser index-DRiuXMio used seed 713's Overpass/Forest boundary at
+(21600,12300). Two native chill stacks reduced observed movement from 140 to 98.
+Ordinary walking crossed both a region and a chunk in the same World and scene,
+then native status decay restored movement in the warm country. The return walk
+rearmed cold. Save/flush/reload/Continue retained exact location and source
+context while resetting transient player conditions as native. This course used
+a source-level-15 hero via native XP, no invulnerability and no enemy cleanup.
+Two earlier pressure-death attempts remain recorded; this is not a combat-balance
+claim. A directly applied native hearthglow verified its effect, not acquisition.
+
+A separate focused browser course found the existing Wayside Camp campfire at
+(5202.864,4303.732). Actual exposure 290 pixels away banked two chill stacks;
+standing 65 pixels away in the same cold context shed both within four seconds,
+with no roof, ward or wind. The fire remained the same live generated fixture.
+No scenery or cold status was injected. This focused course used disclosed hero
+invulnerability to isolate warmth from enemy pressure; native cold still applied.
+Both courses recorded zero console errors and no local cold narration. The
+exposure, warm crossing, Continue, ward and natural-fire images were inspected.
+
+The broader verification caught the ember-court probe's obsolete demand for a
+reward-name floater after the prior loot-glint correction. Its replacement pins
+all six coal completion flares, actual kindling, native ground loot/glint and
+reward-wash duration; Continue and repeat strikes cannot replay rewards, light
+or the wash. All four corrected ember groups passed. No gameplay change was
+needed for that failed presentation expectation.
+
+The final complete worldmass rerun passed 90/90 rigs with retries disabled
+in 304.8 seconds, including the corrected ember checks, cold, all six caravan
+rigs and seven local-cue groups. Main remained bc8a0e0a at the final source
+check; its eleven main-only commits concern presentation and capture tooling.

@@ -7,7 +7,7 @@ import { canonical } from '../src/worldmass/random';
 import { serializeCharacter, applySavedCharacter } from '../src/meta/character';
 import { nativeMassPuzzle, validateMassPuzzle } from '../src/worldmass/puzzles';
 import { PUZZLES } from '../src/data/puzzles';
-import { PUZZLE_CFG, type PuzzleRun } from '../src/engine/puzzles';
+import { PUZZLE_CFG, puzzleRewardOf, type PuzzleRun } from '../src/engine/puzzles';
 import type { Actor } from '../src/engine/actor';
 import type { World } from '../src/engine/world';
 
@@ -64,16 +64,33 @@ try{
  assert.equal(far.massRuntime!.puzzles.snapshot(far).find(r=>r.id===run.id)!.resident,false);
  far.player.pos={...rr.at};far.massRuntime!.update(far,true);
  const fin=guts(far).puzzles.find(r=>r.id===run.id)!;assert.ok(fin);
- const nativeText=far.texts.length;knock(far,fin,[0,1,2,3,4,5]);
- assert.equal(fin.done,true);assert.ok(far.texts.length>nativeText);assert.ok(far.player.statuses.length>0);
+ const nativeText=far.texts.length,nativeFlares=far.flashes.length,nativeDrops=far.drops.length;
+ knock(far,fin,[0,1,2,3,4,5]);
+ assert.equal(fin.done,true);assert.equal(far.texts.length,nativeText,'native light and physical loot carry completion without local narration');
+ assert.ok(fin.nodes.every(n=>n.statuses.some(s=>s.id===PUZZLE_CFG.kindleStatus&&s.sourceName==='the refrain'&&s.remaining>0)),
+  'every solved coal still wears its native flame');
+ const flares=far.flashes.slice(nativeFlares),finish=flares.filter(f=>f.maxLife===.5);
+ assert.equal(finish.length,fin.nodes.length,'exactly one native finishing flare per coal');
+ for(const n of fin.nodes)assert.ok(finish.some(f=>f.pos.x===n.pos.x&&f.pos.y===n.pos.y&&f.radius===n.radius+26));
+ assert.ok(far.drops.length>nativeDrops,'fixed seed exercises actual native ember_spoils on the ground');
+ assert.ok(flares.some(f=>f.fx==='sparkle'&&f.radius===24&&f.maxLife===.35),'the native reward mint glints physically');
+ const wash=far.player.statuses.find(s=>s.id==='attuned_lightning'&&s.sourceName==='attunement');
+ assert.ok(wash);assert.equal(wash.remaining,puzzleRewardOf(fin)!.washFor,'native reward wash keeps its exact duration');
  const paid=far.massRuntime!.snapshot(far),done=resume(far);
  assert.deepEqual(done.massRuntime!.puzzles.snapshot(done),paid.puzzles);
  assert.equal(canonical(done.massRuntime!.snapshot(done).contents),canonical(paid.contents));
+ assert.deepEqual(done.massRuntime!.rewards.snapshot(),far.massRuntime!.rewards.snapshot());
  const proof=guts(done).puzzles.find(r=>r.id===fin.id)!;
  assert.ok((proof.state.litUntil as number[]).every(t=>t===Infinity));
+ assert.ok(proof.nodes.every(n=>n.statuses.some(s=>s.id===PUZZLE_CFG.kindleStatus&&s.remaining>0)));
+ const resumedFlares=done.flashes.length,resumedWords=done.texts.length;
+ assert.equal(done.player.statuses.some(s=>s.id==='attuned_lightning'),false,'Continue restores solved dressing without replaying the transient reward wash');
  knock(done,proof,[0,1,2,3,4,5]);
  assert.equal(canonical(done.massRuntime!.snapshot(done).contents),canonical(paid.contents));
- console.log('PASS distant native Continue, broad-hit solve, finite JSON proof, solved dressing and one-shot native rewards');
+ assert.deepEqual(done.massRuntime!.rewards.snapshot(),far.massRuntime!.rewards.snapshot());
+ assert.equal(done.flashes.length,resumedFlares);assert.equal(done.texts.length,resumedWords);
+ assert.equal(done.player.statuses.some(s=>s.id==='attuned_lightning'),false);
+ console.log('PASS distant native Continue, broad-hit solve, exact coal flares/kindling, physical reward glint and wash; solved dressing survives without reward/cue/wash replay');
 
  const row=nativeMassPuzzle('ember_ring',0,0,'Kindle every coal',6);
  for(const spec of [{...row.spec,count:[5,6]},{...row.spec,count:[9,9]},{...row.spec,gutter:Infinity},

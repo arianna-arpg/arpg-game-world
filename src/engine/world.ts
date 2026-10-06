@@ -54364,15 +54364,24 @@ export class World {
    *  Player seats only, like the heat. */
   private chillTimers = new Map<number, number>();
   private updateWindchill(dt: number): void {
-    const chillDial = this.zone.theme.windchill ?? 0;
-    if (chillDial <= 0) return;
-    const bakedT = this.zoneMap[this.zone.id]?.geo?.climate?.temperature ?? 0.5;
-    const coldMul = WINDCHILL_CFG.coldBase + WINDCHILL_CFG.coldGain * (1 - bakedT);
+    // Geographic zones coexist in one World. Each seat reads its own frozen
+    // native theme, climate and live sky; crossing a boundary never resets the
+    // actor's native exposure clock. Finite scenes retain their original reads.
+    const geographicCold = !!this.massRuntime?.geography;
+    const sceneDial = this.zone.theme.windchill ?? 0;
+    if (!geographicCold && sceneDial <= 0) return;
+    const sceneTemperature = this.zoneMap[this.zone.id]?.geo?.climate?.temperature ?? 0.5;
     const dark = dayCycle(this.time).light < WINDCHILL_CFG.nightBelow;
-    const zw = this.zoneWind();
+    const sceneWind = geographicCold ? null : this.zoneWind();
     for (const s of this.seats) {
       const a = s.actor;
       if (a.dead || a.downed) continue;
+      const local = geographicCold ? this.localZoneAt(a.pos) : undefined;
+      const chillDial = local ? local.theme.windchill ?? 0 : sceneDial;
+      if (chillDial <= 0) continue;
+      const bakedT = local ? local.geo?.climate?.temperature ?? 0.5 : sceneTemperature;
+      const coldMul = WINDCHILL_CFG.coldBase + WINDCHILL_CFG.coldGain * (1 - bakedT);
+      const zw = geographicCold ? this.zoneWind(a.pos) : sceneWind;
       let t = (this.chillTimers.get(a.id) ?? 0) + dt;
       // WARMTH, cheapest test first: a carried ward (the windchillWard stat
       // — the mountain hearth's hearthglow ember, or any gear/passive that
@@ -54404,8 +54413,6 @@ export class World {
         if (t >= every) {
           t = 0;
           a.applyStatus('chill', 0, 1, 'the mountain cold');
-          if ((a.statuses.find(x => x.id === 'chill')?.stacks ?? 0) === 1) {
-          }
         }
         // While exposed the world owns the chill's clock (slow cadences must
         // not lapse between ticks or the freeze ladder could never climb);

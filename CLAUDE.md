@@ -6,6 +6,15 @@ player-requested details). Reusing main's mechanics does not authorize reusing
 its redundant local banners. Preserve warning readability and native timing;
 add or improve visual cues when needed instead of restoring narration.
 
+Native geographic windchill reads each live player seat's local source theme,
+climate and wind. The original cold ladder, fire/roof/lee/ward relief and exposure
+clock remain native; chunk and region crossing never swaps World.zone or erases
+accrued exposure. No local cold narration is added. Continue keeps main's existing
+transient-player boundary: chill, frozen, hearthglow and exposure timers reset.
+This does not admit unowned hearth contact, haven effects or complete mountain
+layouts. Verify worldmass_windchill, physical weather, native massif and the
+native-windchill-ui browser course; see exploration foundations for limits.
+
 Native processions own actual carts, complete source-bound ambush waves and
 kept roads crossing chunks. The shared finite driver keeps native rally,
 wheel-stop, arrival and loss rules. Frozen access and emission proofs precede
