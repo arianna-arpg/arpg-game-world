@@ -488,6 +488,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_worldmass_nativewalkcache.ts', status: 'green', tier: 'fast', why: 'Native terrain query cache, cold collision, native edits, mixed lattice boundaries and exact Continue.' },
   { probe: 'probe_worldmass_weather_world.ts', status: 'green', tier: 'fast', why: 'Actual world physical weather and native wind/rain gates with saved country Continue.' },
   { probe: 'probe_worldmass_windchill.ts', status: 'green', tier: 'fast', why: 'Seat-local native cold, climate and wind; real warmth and region crossing, finite driver parity and native transient Continue boundary.' },
+  { probe: 'probe_worldmass_nativeeffects.ts', status: 'green', tier: 'fast', why: 'Complete native haven stones: frozen effect/status sources, original scheduler and filters, authoritative cooldowns, owned randomness, atomic residence and Continue.' },
   { probe: 'probe_worldmass_objectivebounties.ts', status: 'green', tier: 'fast', why: 'Actual native board postings for born geographic objectives, exact witnesses, Continue, completion and once-only issuing-board reward.' },
   { probe: 'probe_worldmass_holdfamilies.ts', status: 'green', tier: 'fast', why: 'Native rift/dig scheduling, actual owner populations, caps, exact quiet states and active save boundary.' },
   { probe: 'probe_worldmass_nativepaging.ts', status: 'green', tier: 'fast', why: 'Dependency-closed exact native page commits, failure-safe ownership release and verified hydration.' },

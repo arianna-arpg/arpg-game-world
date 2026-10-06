@@ -3457,6 +3457,29 @@ export class World {
     maw_reel: (d, eff) => this.effectMawReel(d, eff),
     orb_spring: (d, eff) => this.effectOrbSpring(d, eff),
   };
+  /** Exact scenery residence owns only the random stream around the native
+   * handler. Cooldowns and early-frame ordering remain in updateDoodadEffects. */
+  private readonly massNativeEffectOwners = new Map<string, ReadonlySet<Doodad>>();
+  private readonly massNativeEffectInvokers = new Map<Doodad, (handler: () => void) => void>();
+  installMassNativeEffects(owner: string, rows: readonly { doodad: Doodad; invoke: (handler: () => void) => void }[]): () => void {
+    const pieces = new Set(rows.map(row => row.doodad));
+    if (!owner || this.massNativeEffectOwners.has(owner) || pieces.size !== rows.length
+      || rows.some(row => !this.doodads.includes(row.doodad) || !row.doodad.effect
+        || typeof row.invoke !== 'function' || this.massNativeEffectInvokers.has(row.doodad)))
+      throw Error('Invalid native effect scenery enrollment');
+    // All validation precedes publication. A disposer from an older scene can
+    // never remove a newer owner that happens to carry the same durable ID.
+    this.massNativeEffectOwners.set(owner, pieces);
+    for (const row of rows) this.massNativeEffectInvokers.set(row.doodad, row.invoke);
+    let removed = false;
+    return () => {
+      if (removed) return;
+      for (const row of rows) if (this.massNativeEffectInvokers.get(row.doodad) === row.invoke)
+        this.massNativeEffectInvokers.delete(row.doodad);
+      if (this.massNativeEffectOwners.get(owner) === pieces) this.massNativeEffectOwners.delete(owner);
+      removed = true;
+    };
+  }
   /** Reusable hidden caster for environmental hazards (lava orbs) — like demonCaster. */
   private hazardCaster: Actor | null = null;
   /** ZONE MEMORY: per-run, in-memory remembrance so re-entering a zone within
@@ -3776,9 +3799,12 @@ export class World {
   private massCaveIds = new Set<string>();
   setMassEntrances(owner: string, rows: readonly { pos: Vec2; seed: number; kind: string; parent: ZoneDef;
     roof?: PlacedStructure | null; mouthTier?: number; underSpan?: string }[]): void {
+    const dwelling = this.caveEntrances[this.caveDwellIdx];
     this.caveEntrances = this.caveEntrances.filter(e => e.massOwner !== owner);
     for (const row of rows) this.caveEntrances.push({ ...row, massOwner: owner, nativeParent: row.parent });
-    this.caveDwellIdx = -1;
+    // Only removal of the actual mouth cancels its dwell. A distant native
+    // haven or another owner entering residence must not restart this clock.
+    this.caveDwellIdx = dwelling ? this.caveEntrances.indexOf(dwelling) : -1;
   }
   private mintMassSidearea(cm: { pos: Vec2; seed: number; kind: string; massOwner?: string; nativeParent?: ZoneDef }): ZoneDef | null {
     const mass = this.massRuntime, sz = sidezoneOf(cm.kind);
@@ -3888,17 +3914,36 @@ export class World {
   /** Admit complete translated native scenery without resetting any live scene. */
   installMassNativeScene(instance: import('../worldmass/nativeResidency').NativeFeatureInstance): () => void {
     const pieces=new Set(instance.layout.doodads), structures=new Set(instance.layout.structures ?? []);
-    this.doodads.push(...instance.layout.doodads.filter(d=>!d.gone));
-    this.structures.push(...structures);
-    this.setMassEntrances(instance.id, instance.entrances.map(e=>({pos:{...e.pos},seed:e.seed,kind:e.kind,
-      parent:instance.zone,mouthTier:e.tier,roof:sidezoneOf(e.kind)?.indoorsOnly?this.roofedStructureAt(e.pos):null})));
-    for(const d of pieces)if(d.felled)this.restoreDoodadFelling(d,d.felled);
-    this.markDoodadsChanged();this.rebuildClientTerrain();
-    return ()=>{
-      this.setMassEntrances(instance.id,[]);
+    if([...pieces].some(d=>this.doodads.includes(d))||[...structures].some(s=>this.structures.includes(s))
+      ||this.caveEntrances.some(e=>e.massOwner===instance.id))throw Error('Native scenery already enrolled');
+    const previous={entrances:this.caveEntrances,dwell:this.caveDwellIdx,bridges:this.bridges,grounds:this.grounds};
+    const existingRegrowth=new Set(this.regrowing.filter(d=>pieces.has(d)));
+    const removePieces=()=>{
       this.doodads=this.doodads.filter(d=>!pieces.has(d));
       this.structures=this.structures.filter(s=>!structures.has(s));
+      this.regrowing=this.regrowing.filter(d=>!pieces.has(d)||existingRegrowth.has(d));
+    };
+    try{
+      this.doodads.push(...instance.layout.doodads.filter(d=>!d.gone));
+      this.structures.push(...structures);
+      this.setMassEntrances(instance.id, instance.entrances.map(e=>({pos:{...e.pos},seed:e.seed,kind:e.kind,
+        parent:instance.zone,mouthTier:e.tier,roof:sidezoneOf(e.kind)?.indoorsOnly?this.roofedStructureAt(e.pos):null})));
+      for(const d of pieces)if(d.felled)this.restoreDoodadFelling(d,d.felled);
       this.markDoodadsChanged();this.rebuildClientTerrain();
+    }catch(error){
+      // A failed scenery publication must also undo regrowth and entrance
+      // enrollment before the native effect/court controllers can mount.
+      removePieces();this.caveEntrances=previous.entrances;this.caveDwellIdx=previous.dwell;
+      this.bridges=previous.bridges;this.grounds=previous.grounds;this.markDoodadsChanged();throw error;
+    }
+    const entrances=new Set(this.caveEntrances.filter(e=>e.massOwner===instance.id));
+    let detached=false;
+    return ()=>{
+      if(detached)return;
+      const dwelling=this.caveEntrances[this.caveDwellIdx];
+      this.caveEntrances=this.caveEntrances.filter(e=>!entrances.has(e));
+      this.caveDwellIdx=dwelling?this.caveEntrances.indexOf(dwelling):-1;
+      removePieces();this.markDoodadsChanged();this.rebuildClientTerrain();detached=true;
     };
   }
   /** Reuse native furniture, faction and landmark factories in an owned local
@@ -6027,6 +6072,8 @@ export class World {
       if (zoneId === START_ZONE) this.massRuntime.wake(this);
       return;
     }
+    this.massNativeEffectOwners.clear();
+    this.massNativeEffectInvokers.clear();
     this.townLayoutChangedOnLoad = false;
     // Legacy rescue evidence must arrive before the town layout is generated.
     this.questRescues.reconcile();
@@ -17053,11 +17100,14 @@ export class World {
     for (const d of this.doodads) {
       const eff = d.effect;
       if (!eff) continue;
+      const invoke = this.massNativeEffectInvokers.get(d);
+      if (invoke && d.gone) continue;
       if (d.felled) continue; // a crushed vent sleeps until it stands again (the rampage fabric)
       eff.cd = (eff.cd ?? 0) - dt;
       if (eff.cd > 0) continue;
       eff.cd = eff.interval;
-      this.doodadEffects[eff.id]?.(d, eff);
+      if (invoke) invoke(() => this.doodadEffects[eff.id]?.(d, eff));
+      else this.doodadEffects[eff.id]?.(d, eff);
     }
   }
 

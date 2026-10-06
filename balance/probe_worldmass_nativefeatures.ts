@@ -113,7 +113,15 @@ try {
       assert.ok(f.requirements.includes('storeys')&&f.requirements.includes('folk')&&f.requirements.includes('npcs'));
       assert.ok(st.storeys!.some(s=>s.floors.length&&s.walls.length));
     }
-    if(id==='siege_castle')assert.ok(f.requirements.includes('doodad-effects'),'mechanical vents retain their native area effects');
+    if(id==='siege_castle'){
+      assert.ok(f.requirements.includes('native-effects'),'mechanical vents retain their native area effects');
+      for(const [index,doodad]of f.layout.doodads.entries())if(doodad.effect){
+        const effectSource=f.descriptor.effectSources?.rows.find(row=>row.index===index);
+        assert.ok(effectSource&&effectSource.origin==='explicit');
+        assert.equal(canonical(effectSource.effect),canonical(doodad.effect));
+        assert.ok(f.requirements.includes('native-effect:'+doodad.effect.id+':'+(doodad.effect.statusId??'-')));
+      }
+    }
   }
   assert.ok(storeys>0&&doors>15&&slots>0);
   console.log('PASS native compound generators, '+doors+' doors, '+slots+' slots, storeys, roofs, folk and live effect metadata');

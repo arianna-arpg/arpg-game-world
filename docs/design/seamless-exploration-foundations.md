@@ -743,3 +743,117 @@ The final complete worldmass rerun passed 90/90 rigs with retries disabled
 in 304.8 seconds, including the corrected ember checks, cold, all six caravan
 rigs and seven local-cue groups. Main remained bc8a0e0a at the final source
 check; its eleven main-only commits concern presentation and capture tooling.
+
+
+## Native haven stones and complete drover waystations
+
+The unchanged drover_waystation composition now has the missing native effect
+owner. Its haven stone, fire, cairns, optional shrine and surrounding scenery are
+retained as generated. Haven supplies Cloud Haven concealment/evasion; the
+separate real campfire supplies native warmth. No source is filtered to remove
+an unimplemented centerpiece, and this does not enable full mountain layouts.
+
+Descriptors freeze each explicit or rule-hydrated effect together with its
+native status definition. Worker source identity includes those registries.
+Admission refuses missing or incompatible haven contracts before physical
+geometry is published. Other effect families still require their own owners.
+Legacy effect-free descriptors remain valid; historical unowned stones cannot
+silently gain a new mechanism from the live registry.
+
+MassNativeEffects wraps the existing early World scheduler and status_wash
+handler. Original timing, actor order, floor/range/dead/construct/invulnerability
+filters, duration refresh and source attribution remain native. This includes
+native acceptance of enemies, passive, downed and flying bodies. Chance-one
+pulses still consume their native random draw. Rule hydration draws once;
+explicit cooldowns, including an omitted first cooldown, keep their authored
+meaning. Geographic streams are owned and saved per stone; finite scenes retain
+their original global stream. This is not a claim of identical global RNG across
+different streaming schedules.
+
+The mutable cooldown exists only in sparse doodad state. Effect checkpoints
+retain source slots and random draws, not a second clock. Absence freezes the
+cooldown and produces no retrospective pulse or reward. Retirement unregisters
+the exact scenery references without stripping already applied actor benefits.
+Player statuses retain the native transient reset on Continue. Native pale
+light and wash flashes communicate the local effect without explanatory text.
+
+Scenery setup now rolls back its own entrance, regrowth and derived terrain
+registrations if publication throws. Effects and court controllers roll back
+before the scene is removed when composite enrollment fails. Disposers are
+idempotent and cannot erase a newer registration with the same durable owner.
+
+The paired source census resolved all 385 country sources at three declared
+seeds and neutral diagnostic climate: 1,155 outputs with zero generation errors.
+Admission rose from 643 to 661, with exactly the 18 drover waystations across
+farmland, foothills, highland, overpass, snowcrown and stonecrown added and no
+previous admissions lost. This measures compiler contracts, not natural frequency
+or full gameplay parity. Native clustering can still decline individual props
+when their original siting rules cannot place them.
+
+Eight focused groups compare the real finite handler against the owned handler,
+including every distinct filter, irregular time steps, chance-one draws and
+physical flashes. They verify immediate saves before an explicit first pulse,
+frozen absence, overlapping owners without duplicated status stacking, removed
+scenery, exact rollback/retry, historical source refusal and cold sparse restore.
+A further native entrance regression preserves an unrelated cave's actual dwell
+object and elapsed clock when other owners mount, retire or shift array indices;
+removing the actual mouth still cancels entry.
+
+Generation QA passed 869 cases x three seeds with zero failures and four known
+clearance warnings. Native compiler/worker checks, all project types, five
+simulation smoke scenarios, classic production build and actual game boot passed.
+After the cave-dwell correction, the final complete seamless run passed 91/91
+with retries disabled in 302.1 seconds; all three project type checks passed.
+
+Final browser index-DHgdz5Pc exercised unchanged seed713 waystations. The
+farmland owner (6,-3) at (34997.708,-12946.764) used a vulnerable source-level21
+hero. Ordinary walking changed detectability from 1 to .65 and evasion from 58
+to 69.6, then native expiry removed the benefit after departure. Saved cooldown
+.5999999999999968 and seven random draws survived actual save/flush/reload/
+Continue; the transient player status reset, then the next pulse arrived after
+18 ordinary frames. The strengthened retirement course waited seven extra ticks
+before departure: cooldown .5666666666666675 and eight draws remained exact
+while absent and on remount, with pulse counts 1/1/1 and no hidden catch-up.
+
+Two natural Overpass owners retained their same live stones because real foreign
+creatures still occupied their retention bounds. Those reports record the exact
+pins and explicitly do not claim retirement. No creature, status or guard was
+removed to obtain either result. Initial arrivals and distant return used
+teleports; radius crossings used ordinary input. Native XP matched local source
+level. Invulnerability was used only for its separate negative wash-filter test.
+An earlier arbitrary departure died to ordinary combat and remains recorded;
+these courses do not establish combat balance. All final courses had zero console
+errors and no haven narration. Eight final images were independently inspected;
+unrelated distant rift news on one image remains permitted by the gameplay rule.
+
+A separate real browser worker diagnostic offered an unchanged provider source
+to the actual native warm queue. One worker result completed with zero failures,
+no error/disposal, and normal source/proof acceptance without scene publication.
+This is labelled an explicit diagnostic offer, not natural look-ahead timing.
+The two same-model critics accepted the specific source, residence, timing and
+continuity seams; they did not certify full main parity or infinite history.
+
+## Remaining long-journey boundary audit
+
+A read-only audit at f3985d5c reproduced a live seed-713 update failure near
+positive cell 4094: a generation halo reaches beyond localOffset's guarded
+frame before the player itself reaches cell 4096. The nominal guard is
+4096 x 960 world units; it is not a universally safe player radius. Production
+rebasing has no callers, and cold native collision has a nearby cutoff too.
+The existing rebase transaction is therefore a foundation, not live support.
+
+The immutable home origin must be separated from the moving local frame before
+rebasing can be enabled. Town geometry, service identities, level-distance,
+return mouths, controller positions and dormant exact actor graphs all belong
+to that work. Changing only the runtime origin or translating only live actors
+would relocate home or restore stale coordinates. No bounds were widened.
+
+Classic quiet-body paging is active, but cold Continue still expands all pages.
+Geographic records, native source descriptors and changes, terminal population
+identities, drops, cave memory and weather accumulation still retain history.
+The next pager must use CharacterSave's existing root transaction for complete
+native owners, a pageable spatial/identity index and lazy nearby hydration.
+Missing state cannot be treated as unvisited land or regenerated factories.
+The hierarchy's 128-controller bound is per owner and 4096 receipts is per
+controller; neither is a global travel limit. Persistent foreign dependencies
+can still honestly pin active capacity. These findings remain unfinished work.

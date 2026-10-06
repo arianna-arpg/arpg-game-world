@@ -125,6 +125,6 @@ try{
   assert.equal(thermal(next).chillTimers.size,0,'native transient player condition boundary is explicit; no claim of exact active cold Continue');
   assert.equal(canonical(next.massRuntime!.geography!.contextAt(next.massRuntime!.walk.at(coldSite.at.x,coldSite.at.y))),canonical(coldSite.zone));
   const caps=nativeWorldCapabilities();assert.equal(caps.has('context:windchill'),false);assert.equal(caps.has('doodad:hearth_crystal'),false);
-  assert.equal(caps.has('doodad:haven_stone'),false);
-  console.log('PASS CharacterSave retains frozen native climate while preserving main\'s transient player-status/timer reset; no unbound mountain/hearth/haven capability is admitted');
+  assert.equal(caps.has('doodad:smolderstone'),false);
+  console.log('PASS CharacterSave retains frozen native climate while preserving main\'s transient player-status/timer reset; no unbound mountain/hearth contact capability is admitted');
 }finally{undo();}

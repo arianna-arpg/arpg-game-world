@@ -6,13 +6,25 @@ player-requested details). Reusing main's mechanics does not authorize reusing
 its redundant local banners. Preserve warning readability and native timing;
 add or improve visual cues when needed instead of restoring narration.
 
+Native haven stones retain the unchanged drover_waystation composition and
+original status_wash handler. Frozen per-doodad effect/status sources and worker
+identity precede admission; unsupported effects and historical unowned stones
+fail before collision publication. MassNativeEffects owns hydration and saved
+random draws around the one early native scheduler. Cooldowns live only in
+sparse scenery, freeze while absent and never catch up. Original target filters,
+Cloud Haven refresh and pale flashes remain; no narration or new UI is added.
+Scenery, effects and court enrollment roll back atomically. Verify nativeeffects,
+native worker/features/residency/host, full worldmass, genqa, types and the natural
+native-haven-ui browser course. Haven is concealment/evasion, not a warmth ward.
+Hearth contact, full mountain sources and distant world paging remain separate.
+
 Native geographic windchill reads each live player seat's local source theme,
 climate and wind. The original cold ladder, fire/roof/lee/ward relief and exposure
 clock remain native; chunk and region crossing never swaps World.zone or erases
 accrued exposure. No local cold narration is added. Continue keeps main's existing
 transient-player boundary: chill, frozen, hearthglow and exposure timers reset.
-This does not admit unowned hearth contact, haven effects or complete mountain
-layouts. Verify worldmass_windchill, physical weather, native massif and the
+This cold change does not admit hearth contact or complete mountain layouts;
+haven effects are owned separately above. Verify worldmass_windchill, physical weather, native massif and the
 native-windchill-ui browser course; see exploration foundations for limits.
 
 Native processions own actual carts, complete source-bound ambush waves and
