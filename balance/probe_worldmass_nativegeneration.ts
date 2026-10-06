@@ -54,7 +54,10 @@ try {
   assert.equal(canonical(compile(2).sidechannels), canonical(shrine.sidechannels));
   const eventDescriptor = resolveNativeFeature(request(23));
   assert.ok(eventDescriptor.sidechannels!.occurrences.some(row => row.site.id === 'abyssal_fracture'));
-  const admission = nativeFeatureAdmission(compileNativeFeature(eventDescriptor), nativeWorldCapabilities());
+  const eventBlueprint = compileNativeFeature(eventDescriptor), capabilities = new Set(nativeWorldCapabilities());
+  assert.equal(nativeFeatureAdmission(eventBlueprint, capabilities).ok, true, 'complete fracture owner now admits the native court');
+  capabilities.delete('occurrences'); capabilities.delete('occurrence:abyssal_fracture');
+  const admission = nativeFeatureAdmission(eventBlueprint, capabilities);
   assert.equal(admission.ok, false, 'a visible court cannot silently lose its native hidden event');
   assert.ok(admission.missing.includes('occurrences'));
   assert.ok(admission.missing.includes('occurrence:abyssal_fracture'));

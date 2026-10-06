@@ -72,9 +72,11 @@ try {
   const points = [[800, 1200], [6200, 6600, 7000, 7400]].map(xs => xs.map(x => address('surface', '0', '0', x, 800, 960)));
   const local = (a: MassAddress) => localOffset(a, { ...runtime.origin, x: 0, y: 0 }, 960);
   let max = 3, bodies: MassObjectiveBodies = new MassObjectiveBodies(w, 74, { population: () => bodies.population, maxPopulation: () => max });
-  let objectives = new MassObjectives(h, 2), payouts = 0;
+  let objectives = new MassObjectives(h, 2), payouts = 0, localNarration = 0;
+  const text = w.text.bind(w), heard: string[] = [];
+  w.text = (pos, line, color, size, options) => { heard.push(line); text(pos, line, color, size, options); };
   assert.deepEqual(objectives.targets(2, 'board-before-discovery'), []);
-  const host: MassObjectiveHost = { get now() { return w.time; }, hold: w.massHoldHost(),
+  const host: MassObjectiveHost = { get now() { return w.time; }, hold: { ...w.massHoldHost(), text: () => { localNarration++; } },
     installPyres: (o, f) => w.installMassPyres(o, f), installHolds: (o, k, f) => w.installMassHolds(o, k, f),
     installEffects: (o, z, f, s) => bodies.install(o, z, f, s), installChest: (o, c) => w.installMassObjectiveChest(o, c),
     canRetire: (f, own) => w.canRetireMassPyres(f, own), complete: (o, z, label) => { payouts++; w.completeMassObjective(o, z, label); } };
@@ -132,6 +134,9 @@ try {
   objectives.captureEffects(host); const dug = getBodies(1);
   assert.ok(dug.spills.length > 0, 'fixed native roll exercises actual gem spill');
   assert.ok(dug.births.length > 0, 'fixed native roll exercises actual ambush');
+  assert.equal(localNarration, 0); assert.ok(!heard.includes('the turned earth answers!'));
+  assert.equal(w.flashes.filter(f => f.radius === 110 && f.maxLife === .8).length, 4,
+    'each native opened mound retains its flare alongside real ambush bodies');
   const drops = w.drops.length, births = dug.births.length; step(30); objectives.captureEffects(host);
   assert.equal(getBodies(1).births.length, births); assert.equal(w.drops.length, drops); assert.equal(payouts, 1);
   assert.equal(getBodies(0).births.filter(b => b.bodies.some(a => a.dead)).length, dormantBodies.births.length);

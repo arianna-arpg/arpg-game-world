@@ -150,9 +150,9 @@ try {
 
   for(const seed of [2,23]){
     const d=resolveNativeFeature({id:'native-sidechannel/'+seed,seed,source:{kind:'massif',id:'well_court',tileset:'courtland',scope:'landform',poolIndex:1}}),b=compileNativeFeature(d);
-    assert.ok(d.sidechannels);const admission=nativeFeatureAdmission(b,nativeWorldCapabilities());assert.equal(admission.ok,false);
-    if(seed===23){assert.ok(d.sidechannels.occurrences.length);assert.ok(admission.missing.includes('occurrences'));assert.ok(d.requirements.some(r=>r.startsWith('occurrence-trigger:')));}
-    else{assert.ok(d.sidechannels.puzzles.length);assert.ok(admission.missing.includes('puzzles'));assert.ok(d.zone.puzzles?.length);}
+    assert.ok(d.sidechannels);const caps=nativeWorldCapabilities(),admission=nativeFeatureAdmission(b,caps);
+    if(seed===23){assert.ok(d.sidechannels.occurrences.length);assert.equal(admission.ok,true);const missing=new Set(caps);missing.delete('occurrences');assert.ok(nativeFeatureAdmission(b,missing).missing.includes('occurrences'));assert.ok(d.requirements.some(r=>r.startsWith('occurrence-trigger:')));}
+    else{assert.equal(admission.ok,false);assert.ok(d.sidechannels.puzzles.length);assert.ok(admission.missing.includes('puzzles'));assert.ok(d.zone.puzzles?.length);}
   }
   console.log('PASS real court occurrence and fitted shrine retain complete side-registry records and refuse without their actual native owners');
   const samples: NativeFeatureRequest[] = [

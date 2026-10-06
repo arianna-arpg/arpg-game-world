@@ -65,7 +65,7 @@ export interface MassObjectiveHost {
   installChest(owner: string, chest: Chest): () => void;
   /** Same-story nearby actors, ongoing interaction and references must pin. */
   canRetire(fixtures: HoldFixture[], owned?: ReadonlySet<Actor>): boolean;
-  /** Native objectiveRewardXp + native text; called only after durable receipt. */
+  /** Native objectiveRewardXp; called only after durable receipt. */
   complete(owner: string, zone: Readonly<ZoneDef>, label: string): void;
 }
 interface PyreDefinition {
@@ -209,13 +209,12 @@ export class MassObjectives {
         doneKind: d.lit, accent: d.accent, flareColor: d.accent, flareR: cfg.flare,
         stirText: cfg.stir,
         onFill: s => {
-          const left = run.fixtures.filter(x => x.charge < d.need).length;
           if (d.kind === 'unearth') finishNativeDig(s, d.dig!, run.effects!.digHost(run.fixtures.indexOf(s)));
-          if (left > 0) host.hold.text({ x: s.pos.x, y: s.pos.y - (d.kind === 'unearth' ? 72 : 56) },
-            d.kind === 'pyres' ? `the pyre burns — ${left} still cold` : d.kind === 'rifts' ? `the tear seals — ${left} remain${left === 1 ? 's' : ''}`
-              : `${left} mound${left === 1 ? '' : 's'} left unopened`, d.accent, d.kind === 'unearth' ? 13 : 14);
         },
-      }, { ...host.hold, held: s => { run.held = s; if (s) host.hold.held(s); } });
+      }, { ...host.hold,
+        // Keep stirText as the native first-charge flash trigger. Presentation
+        // suppresses its words; the flare and changed fixture show the action.
+        text: () => {}, held: s => { run.held = s; if (s) host.hold.held(s); } });
       if (d.kind === 'rifts') driveNativeRiftPours(run.fixtures, d.need, d.pour!, d.accent, run.effects!.riftHost());
       const done = run.fixtures.every(s => s.charge >= d.need);
       this.checkpoint(run, host.now, done ? 'complete' : 'active');

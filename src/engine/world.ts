@@ -202,6 +202,7 @@ import { HARVEST_HUSK_KIND, harvestRowsFor, type HarvestNodeDef } from '../data/
 import type { ContestSpec } from '../data/objectives';
 import { biasTable, composeBias } from '../world/overlay';
 import type { MassObjectiveBirth } from '../worldmass/objectiveBodies';
+import type { MassOccurrenceBirth, MassOccurrenceDisturbance } from '../worldmass/occurrences';
 import { driveNativeRiftPours, finishNativeDig, driveHoldObjectives, resolveHoldContest, type HoldFixture, type HoldObjectiveHost, type HoldObjectiveOptions } from './holdObjectives';
 import { objectiveRewardXp } from '../data/objectiveRewards';
 import { PROCESSION_CFG } from '../data/processions';
@@ -4188,7 +4189,8 @@ export class World {
   private occs: OccSite[] = [];
   /** The frame's disturb pings ('disturb' triggers hear them) — popBrittle
    *  feeds it, the occurrence sweep drains it. */
-  private occDisturbs: Vec2[] = [];
+  private occDisturbs: MassOccurrenceDisturbance[] = [];
+  private massOccurrenceDecorSources = new Map<Doodad, {owner:string;zone:Readonly<ZoneDef>}>();
   /** The narrow OccHost handed to the occurrence drivers (memoized — the
    *  sweep runs per frame; the closures read live state). */
   private occHostObj?: OccHost;
@@ -6176,6 +6178,7 @@ export class World {
     this.digs = [];         // dig sites — all charge-array riders
     this.occs = [];         // occurrence sites re-boot below (sprung rides Zone Memory)
     this.occDisturbs.length = 0;
+    this.massOccurrenceDecorSources.clear();
     this.spireReinforceAt = 0;
     this.wpRefusedAt = -1e9;
     this.heldFixture = null;
@@ -52515,7 +52518,7 @@ export class World {
     // resolution. Aetherial shelves keep their sky door by construction:
     // they carry no theme.pitfall and sit at caveDepth 0, so the word stays
     // 'fall' and this branch never fires there.
-    if (!fall && this.pitPolicyFor({ kind: 'fall', to: 'edge' }).kind === 'descend') {
+    if (!fall && this.pitPolicyFor({ kind: 'fall', to: 'edge' },this.player.pos).kind === 'descend') {
       // The rim the descent banks (caveReturn — the climb-out surfaces the
       // party there) must be STANDABLE: a lingerer's own feet are mid-void
       // by definition, so the nearest lip stands in for where they fell.
@@ -61148,7 +61151,8 @@ export class World {
     // THE OCCURRENCE FABRIC's disturb stimulus: a breaking body is a noise
     // in the ground — armed 'disturb' triggers hear it next sweep
     // (occurrences.ts; the ring drains there). Gated so quiet zones pay nothing.
-    if (this.occs.length) this.occDisturbs.push(vec(d.pos.x, d.pos.y));
+    if (this.occs.length || this.massRuntime?.hasOccurrences)
+      this.occDisturbs.push({x:d.pos.x,y:d.pos.y,tier:d.tier??0});
     // SURFACE PROCS: the pop is a trigger of its own (procs.ts 'surface').
     // No skill instance exists at a pop, so the roll reads the striker's
     // SHEET alone (passives, affixes, sheet-granted proc stats) — a
@@ -61236,7 +61240,7 @@ export class World {
             amount: dmg.amount ?? 0, pctMaxLife: dmg.pctMaxLife ?? 0.12,
             type: (dmg.type ?? 'physical') as DamageSpec['type'], canKill: dmg.canKill ?? true,
           },
-        }), edge);
+        },d.pos), edge);
       }
     }
     // FUME: the wreck exhales a lingering hazard cloud (gas pods, spore sacs).
@@ -62162,7 +62166,8 @@ export class World {
       reachable: (s, reach) => this.dwellReachable(this.player.pos, s.pos, reach, this.storyPair(this.player, s.doodad)),
       pressers: (s, contest) => this.contestPressers(s, contest),
       held: s => { if (!scoped || s) this.heldFixture = s; },
-      text: (pos, text, color, size) => this.text(pos, text, color, size),
+      // Native charge rings, flashes and changing fixture faces show the work.
+      text: () => {},
       flash: (pos, radius, color, life) => this.flashes.push({ pos, radius, color, life, maxLife: life }),
       changed: () => this.markDoodadsChanged(),
     };
@@ -62221,10 +62226,10 @@ export class World {
   }
   /** The geographic controller writes its once-only receipt before this native
    * reward artery. It never marks the entire continuous surface complete. */
-  completeMassObjective(owner: string, zone: Readonly<ZoneDef>, label: string): void {
+  completeMassObjective(owner: string, zone: Readonly<ZoneDef>, _label: string): void {
     if (!this.massRuntime || !owner || this.clientActionHook) return;
-    const bonus = objectiveRewardXp(zone.level); this.grantXp(bonus);
-    this.text(vec(this.player.pos.x, this.player.pos.y - 50), label + ' +' + bonus + ' xp', '#ffd700', 18);
+    // Show completion through the native final flare, changed fixtures and opened chest.
+    this.grantXp(objectiveRewardXp(zone.level));
   }
 
   /** Pay the zone's one-time bounty and unseal its exits. */
@@ -62243,6 +62248,7 @@ export class World {
 
   private completeObjective(label: string): void {
     if (this.objectiveDone) return;
+    const visibleHold = ['beacon', 'rifts', 'pyres', 'unearth'].includes(this.zone.objective.kind);
     this.objectiveDone = true; // per-load latch: unseals this zone's exits
     // ONE-SHOT UBER: record an account-scoped kill so the boss is forever dead.
     // Meta-progression — a sealed (Undying) character's trophy is its own; the
@@ -62263,7 +62269,7 @@ export class World {
     // One-time REWARD: a re-cleared zone pays no bounty (it still unseals above so
     // the player can leave). First clear pays the bounty.
     if (this.completedObjectives.has(this.zone.id)) {
-      this.text(vec(this.player.pos.x, this.player.pos.y - 50),
+      if (!visibleHold) this.text(vec(this.player.pos.x, this.player.pos.y - 50),
         `${label} (already cleared)`, '#9a9a9a', 16);
       if (isQuestZone) this.onQuestZoneFieldCleared(this.zone.id);
       return;
@@ -62271,7 +62277,7 @@ export class World {
     this.completedObjectives.add(this.zone.id);
     const bonus = objectiveRewardXp(this.zone.level);
     this.grantXp(bonus);
-    this.text(vec(this.player.pos.x, this.player.pos.y - 50),
+    if (!visibleHold) this.text(vec(this.player.pos.x, this.player.pos.y - 50),
       `${label} +${bonus} xp`, '#ffd700', 18);
     if (isQuestZone) this.onQuestZoneFieldCleared(this.zone.id);
   }
@@ -62455,13 +62461,6 @@ export class World {
           accent: BEACON_CFG.accent, flareColor: BEACON_CFG.flare,
           flareR: circuit ? 160 : 240,
           stirText: `the ${stone} stirs — the wilds turn toward its light…`,
-          onFill: s => {
-            const left = this.spires.filter(x => x.charge < need).length;
-            if (left > 0) {
-              this.text(vec(s.pos.x, s.pos.y - 56),
-                `the ${stone} hums — ${left} remain${left === 1 ? 's' : ''}`, BEACON_CFG.flare, 14);
-            }
-          },
         });
         // Lit wicks draw moths whether or not the hero stands by them: every
         // banked, unfinished stone keeps its pull. No waves, no bonus spawns —
@@ -62524,13 +62523,6 @@ export class World {
           doneKind: RIFT_CFG.kindSealed,
           accent: RIFT_CFG.accent, flareColor: RIFT_CFG.accent, flareR: 150,
           stirText: 'the seal takes — the tear howls against it…',
-          onFill: s => {
-            const left = this.rifts.filter(x => x.charge < need).length;
-            if (left > 0) {
-              this.text(vec(s.pos.x, s.pos.y - 56),
-                `the tear seals — ${left} remain${left === 1 ? 's' : ''}`, RIFT_CFG.accent, 14);
-            }
-          },
         });
         this.updateRiftPours(o);
         if (this.rifts.every(s => s.charge >= need)) {
@@ -62552,13 +62544,6 @@ export class World {
           doneKind: PYRE_CFG.kindLit,
           accent: PYRE_CFG.accent, flareColor: PYRE_CFG.accent, flareR: 130,
           stirText: 'the kindling catches — hold the ground…',
-          onFill: s => {
-            const left = this.pyres.filter(x => x.charge < need).length;
-            if (left > 0) {
-              this.text(vec(s.pos.x, s.pos.y - 56),
-                `the pyre burns — ${left} still cold`, PYRE_CFG.accent, 14);
-            }
-          },
         });
         if (this.pyres.every(s => s.charge >= need)) {
           this.completeObjective('Every pyre burns — the dark gives ground!');
@@ -62592,13 +62577,8 @@ export class World {
                   const ang=rand(0,Math.PI*2),rr=rand(A.radius[0],A.radius[1]);
                   m.pos=this.clampPos(vec(pos.x+Math.cos(ang)*rr,pos.y+Math.sin(ang)*rr),m.radius);this.actors.push(m);
                 }
-              },text:(pos,text,color,size)=>this.text(pos,text,color,size),
+              },text:()=>{}, // Turned earth, native flare and emerging creatures show the ambush.
             });
-            const left = this.digs.filter(x => x.charge < need).length;
-            if (left > 0) {
-              this.text(vec(s.pos.x, s.pos.y - 72),
-                `${left} mound${left === 1 ? '' : 's'} left unopened`, DIG_CFG.accent, 13);
-            }
           },
         });
         if (this.digs.every(s => s.charge >= need)) {
@@ -62854,10 +62834,63 @@ export class World {
     });
   }
 
+  /** The exact native occurrence roster: explicit kin first, then the
+   * registered faction's non-boss, non-spawner, non-passive bodies. */
+  massOccurrenceSpawnTable(spec:OccKinSpec):import('./occurrences').OccKinRow[]{
+    let table=(spec.kin??[]).filter(en=>MONSTERS[en.id]);
+    if(!table.length&&spec.faction)table=(FACTIONS[spec.faction]?.table??[]).filter(en=>{
+      const d=MONSTERS[en.id];return !!d&&!d.boss&&!d.passive&&!d.spawner;
+    });
+    return table.map(row=>({...row}));
+  }
+  /** Native type -> factory -> angle -> radius order, detached until its
+   * occurrence owner commits the complete reserved wave. */
+  createMassOccurrenceBodies(request:MassOccurrenceBirth):readonly Actor[]{
+    if(!Number.isSafeInteger(request.count)||request.count<0||request.count>256)
+      throw Error('Invalid native occurrence birth count');
+    return withSeededRandom(request.seed,()=>{
+      const {zone,spec,table,at,band,count}=request,out:Actor[]=[];
+      if(!table.length)return out;
+      for(let i=0;i<count;i++){
+        const type=this.weightedPick(table,zone.level);
+        const m=this.createMonster(type,Math.max(1,zone.level+(spec.levelBonus??0)),'enemy');
+        const angle=rand(0,Math.PI*2),radius=rand(band[0],band[1]);
+        m.pos=this.clampPos(vec(at.x+Math.cos(angle)*radius,at.y+Math.sin(angle)*radius),m.radius);
+        m.tag=spec.tag??OCC_CFG.bornTag;m.tier=0;m.fromZoneGen=true;out.push(m);
+      }
+      return out;
+    });
+  }
+  /** Event decoration retains its exact instances and native pit source;
+   * retiring one occurrence cannot remove a neighbor's scar or geometry. */
+  installMassOccurrenceDecor(owner:string,zone:Readonly<ZoneDef>,rows:readonly Doodad[]):()=>void{
+    if((zone.caveDepth??0)>=1||zone.theme.pitfall&&zone.theme.pitfall.kind!=='fall')
+      throw Error('Native occurrence needs an owned vertical pit context');
+    if(!owner||new Set(rows).size!==rows.length||rows.some(d=>this.doodads.includes(d)||this.massOccurrenceDecorSources.has(d)))
+      throw Error('Invalid native occurrence decoration enrollment');
+    const owned=new Set(rows);let detached=false;
+    for(const d of rows)this.massOccurrenceDecorSources.set(d,{owner,zone});
+    this.doodads.push(...rows.filter(d=>!d.gone));this.markDoodadsChanged();
+    return()=>{
+      if(detached)return;detached=true;
+      this.doodads=this.doodads.filter(d=>!owned.has(d));
+      for(const d of owned)this.massOccurrenceDecorSources.delete(d);
+      this.markDoodadsChanged();
+    };
+  }
+  private massOccurrencePitContext(at:Vec2):Readonly<ZoneDef>|undefined{
+    for(const[d,source]of this.massOccurrenceDecorSources){
+      if(d.gone)continue;const region=pitRegionOf(d);if(!region)continue;
+      if(pitAt([{x:d.pos.x,y:d.pos.y,r:d.radius,kind:d.kind,region}],this.bridges,at.x,at.y))return source.zone;
+    }
+    return undefined;
+  }
+
   /** THE OCCURRENCE SWEEP (engine/occurrences.ts): drive this zone's armed/
    *  sprung sites one frame, then drain the disturb ring. A siteless zone
    *  pays one length check. */
   private updateOccurrences(dt: number): void {
+    this.massRuntime?.updateOccurrences(dt, this.occDisturbs);
     if (this.occs.length) driveOccSites(this.occHost(), this.occs, dt);
     if (this.occDisturbs.length) this.occDisturbs.length = 0;
   }
@@ -62885,15 +62918,7 @@ export class World {
         this.markDoodadsChanged();
       },
       pour: (spec: OccKinSpec, x, y, band, n) => {
-        let table = (spec.kin ?? []).filter(en => MONSTERS[en.id]);
-        if (!table.length && spec.faction) {
-          // The registry lane: a registered roster, mini-event-shaped (no
-          // bosses, no spawners, no scenery — the leyline's own filter).
-          table = (FACTIONS[spec.faction]?.table ?? []).filter(en => {
-            const d = MONSTERS[en.id];
-            return !!d && !d.boss && !d.passive && !d.spawner;
-          });
-        }
+        const table = this.massOccurrenceSpawnTable(spec);
         if (!table.length) return 0;
         const tag = spec.tag ?? OCC_CFG.bornTag;
         let spawned = 0;
@@ -62911,7 +62936,8 @@ export class World {
         return spawned;
       },
       tagCount: (tag) => this.actors.filter(a => !a.dead && a.tag === tag).length,
-      announce: (x, y, text, color) => this.text(vec(x, y - 40), text, color, 15),
+      // Show, don't tell: cracks, tremor, eruption and living bodies carry local events.
+      announce: () => {},
       rumble: (mag) => { this.shake = Math.max(this.shake, mag); },
       flash: (x, y, radius, color) =>
         this.flashes.push({ pos: vec(x, y), radius, color, life: 0.5, maxLife: 0.5 }),
@@ -63952,10 +63978,11 @@ export class World {
    *  overridden: sky doors (skyfall) and authored ejects keep their meaning.
    *  ONE resolver for every fall the ground itself deals — the boundary
    *  arrest and the brittle-span give-way must hear the same word. */
-  private pitPolicyFor(policy: RecoveryPolicy): RecoveryPolicy {
+  private pitPolicyFor(policy: RecoveryPolicy, at?:Vec2): RecoveryPolicy {
     if (policy.kind !== 'fall' && policy.kind !== 'descend') return policy;
-    return this.zone.theme.pitfall
-      ?? ((this.zone.caveDepth ?? 0) >= 1 ? PIT_CFG.caveFall : policy);
+    const zone=at&&this.massRuntime?(this.massOccurrencePitContext(at)??this.zone):this.zone;
+    return zone.theme.pitfall
+      ?? ((zone.caveDepth ?? 0) >= 1 ? PIT_CFG.caveFall : policy);
   }
 
   /** A MOVE was arrested entering a region with a boundary policy (void → fall).
@@ -63963,7 +63990,7 @@ export class World {
    *  is already confined to the EDGE by clampPos; `pre` is where they moved from. */
   private resolveBoundary(a: Actor, result: CollisionResult, pre: Vec2, forced = false): void {
     let policy = regionKind(result.blockedKind)?.boundaryPolicy;
-    if (policy) policy = this.pitPolicyFor(policy); // the zone's word on pit-family falls
+    if (policy) policy = this.pitPolicyFor(policy,result.at); // the zone's word on pit-family falls
     if (!policy) return;
     // A LEVITATING actor floats over fall pits (void): no fall damage / eject — so it
     // can't be knocked into the void for a cheap kill. (Pathing still avoids void.)

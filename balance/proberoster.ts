@@ -106,6 +106,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_worldmass_dormancy.ts', status: 'green', tier: 'fast', why: 'native cohort-safe dormancy, pinned dependencies, exact sleeping state, bounded fair retirement and real generated Continue' },
   { probe: 'probe_worldmass_nativefeatures.ts', status: 'green', tier: 'fast', why: 'complete native compiler descriptors, massif and compound structure breadth, cave seating and honest capability refusal' },
   { probe: 'probe_worldmass_nativegeneration.ts', status: 'green', tier: 'fast', why: 'Isolated native event and court-shrine side channels preserve complete frozen definitions and restore finite registries.' },
+  { probe: 'probe_worldmass_occurrences.ts', status: 'green', tier: 'fast', why: 'Natural native fracture owner, full wave reservation, exact native driver/scenery/cue parity, no invented XP and strict unsupported context refusal.' },
   { probe: 'probe_worldmass_nativeresidency.ts', status: 'green', tier: 'fast', why: 'cold and resident native geometry parity, native doors, bounded dependency residency and sparse Continue' },
   { probe: 'probe_worldmass_nativehost.ts', status: 'green', tier: 'fast', why: 'actual native inhabited structures, atomic budgets, door and fixture consequences, quiet eviction and wounded Continue' },
   { probe: 'probe_worldmass_nativecountry.ts', status: 'green', tier: 'fast', why: 'saved native climate and source catalogue, deterministic physical placement, large addresses and registry revision refusal' },
@@ -487,6 +488,10 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_worldmass_holdfamilies.ts', status: 'green', tier: 'fast', why: 'Native rift/dig scheduling, actual owner populations, caps, exact quiet states and active save boundary.' },
   { probe: 'probe_worldmass_nativepaging.ts', status: 'green', tier: 'fast', why: 'Dependency-closed exact native page commits, failure-safe ownership release and verified hydration.' },
   { probe: 'probe_worldmass_nativeworker.ts', status: 'green', tier: 'fast', why: 'Actual native worker compiler equivalence, source validation, bounded queue and late-result/disposal safety.' },
+  { probe: 'probe_worldmass_localcues.ts', status: 'green', tier: 'fast', why: 'Native finite and geographic holds/fractures keep flashes, rings, changed fixtures, clocks, ambushes, gem drops and once rewards without local narration; ordinary text remains enabled.' },
+  { probe: 'probe_worldmass_occurrencecontinuity.ts', status: 'green', tier: 'fast', why: 'Independent native factory parity, full-wave capacity, exact partial/wounded return, dependency pins, zone census, clocks/rewards, pit ownership and living-wave cellar Continue without ZoneMemory duplication.' },
+  { probe: 'probe_worldmass_geographicworker.ts', status: 'green', tier: 'fast', why: 'Native plan golden parity, bounded geographic worker queue, copied immutable input, staged semantic adoption and synchronous/disposal races.' },
+  { probe: 'probe_worldmass_geographicacceptance.ts', status: 'green', tier: 'fast', why: 'Independent authentic worker proof acceptance and coherent-header rejection of reserved routes, blocked stands and wet body-cell coverage.' },
   { probe: 'probe_worldmass_geographicaccess.ts', status: 'green', tier: 'fast', why: 'Connected dry objective/chest access, final physical admission, bounded planning and frozen legacy Continue.' },
   { probe: 'probe_worldmass_nativeingress.ts', status: 'green', tier: 'fast', why: 'Real native exterior body-clear ingress, bounded route proof, terrain refusals, reserved corridors and exact saved acceptance.' },
 ];

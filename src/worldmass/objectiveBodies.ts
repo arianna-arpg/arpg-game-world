@@ -188,7 +188,8 @@ export class MassObjectiveBodies {
             world.spillMassObjectiveGem(zone, at, streamSeed(this.seed, [owner, 'native-objective/gem', slot]), canonical([owner, 'dig-spill', slot]));
           },
           ambush: (at, config) => { spawn(slot, at, config); },
-          text: (pos, text, color, size) => world.text(pos, text, color, size) };
+          // The native mound flare and emerging ambush carry this local cue.
+          text: () => {} };
       },
     };
   }

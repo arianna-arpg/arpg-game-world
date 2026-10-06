@@ -4,9 +4,11 @@ import { doodadRuleKinds, doodadRuleOf } from '../engine/levelgen';
 import { sameStory } from '../engine/tiers';
 import { captureNativeActorState, massDormancyPins, nativeDormancyRefusal, restoreNativeActorState,
   type NativeActorState } from './dormancy';
-import type { NativeFeatureBinding, NativeFeatureHost, NativeFeatureInstance } from './nativeResidency';
+import type { NativeFeatureBinding, NativeFeatureHost, NativeFeatureInstance, NativeResidencySave } from './nativeResidency';
 import { nativeFeatureAdmission } from './nativeFeatures';
 import { sidezoneOf } from '../data/sidezones';
+import { MassOccurrences, massOccurrenceSupported, type MassOccurrencesSave, type MassOccurrenceDisturbance } from './occurrences';
+import type { Vec2 } from '../core/math';
 
 /** These mechanics still need their own local owners; looking like scenery is
  * not evidence that their native interaction is installed. */
@@ -15,7 +17,8 @@ const contextualKinds=new Set(['bounty_board','harbor_board','muster_horn',
   'regent_brazier','regent_brazier_lit']);
 export function nativeWorldCapabilities():ReadonlySet<string>{
   const caps=new Set(['terrain','scenery','state','structures','doors','sidezones','breakables','garrisons','landmark-spawns',
-    'door:dwell','door:breakable','door:both','slot:tower']);
+    'door:dwell','door:breakable','door:both','slot:tower',
+    'occurrences','occurrence:abyssal_fracture','occurrence-trigger:dwell','occurrence-aftermath:fixture']);
   for(const kind of doodadRuleKinds()){
     const r=doodadRuleOf(kind);
     const sidezone=sidezoneOf(kind),ownedEntrance=!!sidezone&&!sidezone.spanMouth;
@@ -38,11 +41,13 @@ interface NativeHostSave {
   /** Active transients retain the native scene save boundary. Their ordinary
    * body wounds persist, but this array must never be labelled exact combat. */
   transient:string[];
+  occurrences?:MassOccurrencesSave;
 }
 export interface NativeHostPolicy {
   /** Shared population includes this host. Never create a second hidden cap. */
   population():number; maxPopulation():number;
   retainRadius?:number; quietSeconds?:number;
+  zoneOwner?:(pos:Vec2)=>string;
 }
 const upperPopulation=(i:NativeFeatureInstance):number=>i.layout.breakables.length
   +i.layout.doodads.filter(d=>d.door&&!d.door.open&&!d.door.broken&&['breakable','both'].includes(d.door.mode)).length
@@ -55,13 +60,17 @@ export class MassNativeHost implements NativeFeatureHost {
   private residents=new Map<string,ReadonlyMap<string,Actor>>();
   private readonly retainRadius:number;
   private readonly quietSeconds:number;
-  constructor(readonly world:World,readonly policy:NativeHostPolicy){
+  readonly occurrences:MassOccurrences;
+  constructor(readonly world:World,readonly policy:NativeHostPolicy,saved?:NativeResidencySave){
     this.retainRadius=policy.retainRadius??512;this.quietSeconds=policy.quietSeconds??15;
     if(!Number.isFinite(this.retainRadius)||this.retainRadius<256||this.retainRadius>8192
       ||!Number.isFinite(this.quietSeconds)||this.quietSeconds<5||this.quietSeconds>300)throw Error('Invalid native host residency');
+    this.occurrences=new MassOccurrences(world,{...policy,retainRadius:this.retainRadius,quietSeconds:this.quietSeconds},saved);
   }
   get clock():number{return this.world.time;}
-  get population():number{let n=0;for(const rows of this.residents.values())for(const a of rows.values())if(!a.dead)n++;return n;}
+  get population():number{let n=this.occurrences.population;for(const rows of this.residents.values())for(const a of rows.values())if(!a.dead)n++;return n;}
+  get hasOccurrences():boolean{return this.occurrences.hasOccurrences;}
+  updateOccurrences(dt:number,disturbances:readonly MassOccurrenceDisturbance[]):void{this.occurrences.update(dt,disturbances);}
   private saved(instance:NativeFeatureInstance,value?:unknown):NativeHostSave|undefined{
     if(value===undefined)return;
     const s=value as NativeHostSave;
@@ -74,14 +83,17 @@ export class MassNativeHost implements NativeFeatureHost {
       ||b.squadId!==undefined&&!Number.isSafeInteger(b.squadId))throw Error('Invalid native feature body receipt');
     if(s.transient.some(slot=>typeof slot!=='string'||!s.bodies.some(b=>b.slot===slot&&!b.dead&&!b.state))
       ||s.bodies.some(b=>!b.dead&&!b.state&&!s.transient.includes(b.slot)))throw Error('Unlabelled native transient checkpoint');
+    if((instance.blueprint.descriptor.sidechannels?.occurrences.length??0)>0&&!s.occurrences)
+      throw Error('Native feature lost occurrence checkpoint');
     return s;
   }
   canInstall(instance:NativeFeatureInstance,savedNativeState?:unknown):boolean{
     if(this.residents.has(instance.id))return false;
     if(!nativeFeatureAdmission(instance.blueprint,nativeWorldCapabilities()).ok)return false;
+    if(!massOccurrenceSupported(instance))return false;
     const saved=this.saved(instance,savedNativeState);
     const needed=saved?saved.bodies.filter(b=>!b.dead).length:upperPopulation(instance);
-    return this.policy.population()+needed<=this.policy.maxPopulation();
+    return this.policy.population()+needed+this.occurrences.requiredPopulation(instance,saved?.occurrences)<=this.policy.maxPopulation();
   }
   private refusal(a:Actor,state:NativeActorState|null,instance:NativeFeatureInstance):string|null{
     if(a.dead)return null;
@@ -133,14 +145,21 @@ export class MassNativeHost implements NativeFeatureHost {
       }
     }
     const live=[...bodies.values()].filter(a=>!a.dead);
-    if(this.policy.population()+live.length>this.policy.maxPopulation())throw Error('Native feature population exceeded its reservation');
+    const occurrence=this.occurrences.prepare(instance,saved?.occurrences);
+    if(this.policy.population()+live.length+this.occurrences.requiredPopulation(instance,saved?.occurrences)>this.policy.maxPopulation())throw Error('Native feature population exceeded its reservation');
     const detachScene=world.installMassNativeScene(instance);
+    try{occurrence?.mount();}catch(error){detachScene();throw error;}
     world.actors.push(...live);world.actorGridRev++;this.residents.set(instance.id,bodies);
     let detached=false;
     const states=()=>new Map([...bodies].map(([slot,a])=>[slot,a.dead?null:captureNativeActorState(a)]));
     const safe=(captures:ReturnType<typeof states>)=>{
       if(massDormancyPins(world,bodies).size)return false;
-      for(const [slot,a]of bodies)if(this.refusal(a,captures.get(slot)??null,instance))return false;
+      const known=new Set([world.player.id,...[...bodies.values()].map(a=>a.id)]);
+      for(const [slot,a]of bodies){
+        const state=captures.get(slot);
+        if(this.refusal(a,state??null,instance))return false;
+        if(state&&state.nodes.some(n=>n.entries.some(pair=>pair.some(v=>v!==null&&typeof v==='object'&&'actor'in v&&!known.has(v.actor)))))return false;
+      }
       return true;
     };
     const capture=():NativeHostSave=>{
@@ -155,21 +174,23 @@ export class MassNativeHost implements NativeFeatureHost {
         rows.push({slot,actorId:a.id,monster:a.defId!,dead:a.dead,pos:{...a.pos},life:Math.max(0,a.life),
           ...(a.squadId===undefined?{}:{squadId:a.squadId}),...(state?{state}:{})});
       }
-      return {schema:1,owner:instance.id,descriptor:instance.blueprint.descriptor.hash,clock:world.time,playerId:world.player.id,bodies:rows,transient};
+      return {schema:1,owner:instance.id,descriptor:instance.blueprint.descriptor.hash,clock:world.time,playerId:world.player.id,bodies:rows,transient,
+        ...(occurrence?{occurrences:occurrence.capture()}: {})};
     };
     return {
       hasDoodad:d=>world.doodads.includes(d),capture,
       canRetire:()=>{
         if(detached)return true;
-        const owned=new Set(bodies.values()),g=instance.blueprint.grid!,o=instance.offset;
+        const owned=new Set([...bodies.values(),...(occurrence?.actors()??[])]),g=instance.blueprint.grid!,o=instance.offset;
         if(world.actors.some(a=>!a.dead&&!owned.has(a)&&sameStory(a,{tier:0})
           &&a.pos.x>=o.x-this.retainRadius&&a.pos.y>=o.y-this.retainRadius
           &&a.pos.x<=o.x+g.cols*g.cell+this.retainRadius&&a.pos.y<=o.y+g.rows*g.cell+this.retainRadius))return false;
-        return safe(states());
+        return safe(states())&&(!occurrence||occurrence.canRetire(new Set(bodies.values())));
       },
       detach:()=>{
         if(detached)return;
         if(!safe(states()))throw Error('Cannot retire a native feature with live dependencies');
+        occurrence?.detach();
         const owned=new Set(bodies.values());world.actors=world.actors.filter(a=>!owned.has(a));world.actorGridRev++;
         detachScene();this.residents.delete(instance.id);detached=true;
       },

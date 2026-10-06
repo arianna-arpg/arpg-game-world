@@ -1,15 +1,16 @@
 import type { World } from '../engine/world';
 import { regionKind } from '../world/regions';
 import type { ZoneDef } from '../data/zones';
-import { segmentDistance } from './journey';
 import { PYRE_CFG } from '../data/pyres';
 import { localOffset, moveAddress, type MassAddress } from './address';
-import { discTerrainClear, GeographicAccessIndex, MASS_ACCESS_POLICY, planGeographicAccess, validateGeographicAccess, type MassAccessProof } from './geographicAccess';
+import { discTerrainClear, GeographicAccessIndex, MASS_ACCESS_POLICY, validateGeographicAccess, type MassAccessProof } from './geographicAccess';
 import { MassHierarchy, massAddressBounds, nativeHierarchySources, type MassGeography, type MassHierarchyPolicy, type MassHierarchySave } from './hierarchy';
 import { MassObjectiveBodies } from './objectiveBodies';
 import { RIFT_CFG } from '../data/rifts';
 import { DIG_CFG } from '../data/digsites';
 import { MassObjectives, resolveMassHoldContext, isNativeMassHoldKind, type MassObjectiveHost, type MassHoldContext, type NativeMassHoldSource, type NativeMassPyreSource } from './objectives';
+import { compileGeographicPlan, GEOGRAPHIC_PLAN_COMPILER, validateGeographicPreparation, validateGeographicPreparationSteps, type GeographicPlan, type GeographicPlanInput, type GeographicPreparation, type GeographicReservations, type GeographicPlanMetrics } from './geographicPlan';
+import { createGeographicPlanWarmQueue, type GeographicPlanWarmQueue } from './geographicWarm';
 import { canonical, freezeData, massRandom } from './random';
 import type { WorldMassRuntime } from './runtime';
 
@@ -25,8 +26,12 @@ export class MassGeographicGameplay {
   private plans = new Map<string, Planned | null>();
   private contexts = new Map<string, Readonly<ZoneDef>>();
   private planning={coldQueries:0,accepted:0,rejected:0,totalMs:0,maxMs:0,maxExpanded:0,maxTerrainSamples:0,maxPlaceMs:0,maxStandMs:0,maxRouteMs:0};
+  private preparedOwners=new Set<string>();
+  private preparing={adopted:0,accepted:0,refused:0,late:0,stale:0,used:0,synchronous:0,sourceNegatives:0,validationSteps:0,maxValidationSliceMs:0,lastAdopted:[] as string[],lastUsed:[] as string[]};
+  private nextPrepare=0;private prepareFrom:MassAddress|undefined;private disposed=false;
+  private validation:{input:Readonly<GeographicPlanInput>;preparation:GeographicPreparation;steps:Generator<void,Readonly<GeographicPlan>|null>}|null=null;
   private accessIndices=new Map<string,GeographicAccessIndex>();
-  constructor(readonly mass: WorldMassRuntime, readonly spec: MassGeographicSpec, saved?: MassHierarchySave) {
+  constructor(readonly mass: WorldMassRuntime, readonly spec: MassGeographicSpec, saved?: MassHierarchySave, readonly warm:GeographicPlanWarmQueue|null=createGeographicPlanWarmQueue()) {
     if (!mass.nativeCountry || !Number.isSafeInteger(spec.maxObjectives) || spec.maxObjectives < 1 || spec.maxObjectives > 32
       || !Array.isArray(spec.pyres) || spec.pyres.some(p => !p.id || !p.source || !p.tileset || !Number.isFinite(p.weight)
         || p.weight <= 0 || !Number.isFinite(p.totalWeight) || p.totalWeight < p.weight || p.objective.kind !== 'pyres')
@@ -94,89 +99,114 @@ export class MassGeographicGameplay {
     if(this.contexts.size>256)this.contexts.delete(this.contexts.keys().next().value!);
     return context;
   }
-  /** The same saved weighted row main uses: unsupported objective rolls do not
-   * silently become pyres. Authored quest/campaign objectives never enter here. */
-  private plan(owner: Readonly<MassGeography>): Planned | null {
-    const old = this.plans.get(owner.id); if (old !== undefined) return old;
-    const started=performance.now();
-    const remember = (value: Planned | null) => {
-      const elapsed=performance.now()-started;this.planning.coldQueries++;this.planning.totalMs+=elapsed;this.planning.maxMs=Math.max(this.planning.maxMs,elapsed);this.planning[value?'accepted':'rejected']++;
-      this.plans.set(owner.id,value);
-      if(value?.access)this.accessIndices.set(owner.id,new GeographicAccessIndex(value.access,this.mass.config.terrain.addressSpan));
-      if(this.plans.size>256){const first=this.plans.keys().next().value!;this.plans.delete(first);this.accessIndices.delete(first);}return value;
-    };
-    const saved=this.hierarchy.controller(owner.id,'objective-access');if(saved)return remember(this.savedPlan(owner,saved.definition));
-    for(const kind of ['pyres','rifts','unearth']){const born=this.hierarchy.controller(owner.id,'objective:'+kind);if(born)return remember(this.legacyPlan(owner,born.definition));}
-    const zone = owner.native?.zone; if (!zone) return remember(null);
-    const rows = (this.spec.holds??this.spec.pyres).filter(p => p.source === 'data/tilesets' && p.tileset === zone.tileset);
-    const rng = massRandom(this.mass.generator.run.seed, [owner.id, 'native-objective']);
-    if (!rows.length || !rng.chance(rows.reduce((n,p)=>n+p.weight,0)/rows[0].totalWeight)) return remember(null);
-    const source = rng.weighted(rows), center = this.nearby(owner.center);
-    const context = resolveMassHoldContext({...zone,id:owner.id}, source, center?this.mass.levelAt(center):this.mass.config.progression?.maxLevel??zone.level);
-    const pyreCount = this.objectives.count(owner, context), count=pyreCount+(this.objectives.chestWanted(owner,context)?1:0), positions:MassAddress[] = [];
-    const halfSpan=Math.floor(Math.min(MASS_ACCESS_POLICY.halfSpan,owner.span/2-180)/30)*30;
-    const radius=Math.min(960,halfSpan-180),span=this.mass.config.terrain.addressSpan;
-    // Reserve against immutable planned country sites, including footprints
-    // straddling address-cell boundaries. Native country cannot be queried here.
-    const placeStarted=performance.now();
-    const placeBodies=new Map<string,{x:number;y:number;radius:number}>();
-    const lo=moveAddress(owner.center,{x:-halfSpan-150,y:-halfSpan-150},span),hi=moveAddress(owner.center,{x:halfSpan+150,y:halfSpan+150},span);
-    if((BigInt(hi.cx)-BigInt(lo.cx)+1n)*(BigInt(hi.cy)-BigInt(lo.cy)+1n)>64n)return remember(null);
-    for(let y=BigInt(lo.cy);y<=BigInt(hi.cy);y++)for(let x=BigInt(lo.cx);x<=BigInt(hi.cx);x++)
-      for(const place of this.mass.generator.placesInCell({dimension:owner.dimension,cx:x.toString(),cy:y.toString()})){
-        const q=localOffset(place.center,owner.center,span,64);placeBodies.set(place.id,{...q,radius:place.radius});
-      }
-    if(placeBodies.size>4096)return remember(null);
-    this.planning.maxPlaceMs=Math.max(this.planning.maxPlaceMs,performance.now()-placeStarted);
-    const standStarted=performance.now();
-    const reservations=[...placeBodies.values()];
-    // Freeze the finite town/trail/roadside shapes into the owner's small local
-    // frame once. A* must not convert every remote place address on every edge.
-    const trails:{a:{x:number;y:number};b:{x:number;y:number};radius:number}[]=[];
+  private cachePlan(owner:Readonly<MassGeography>,value:Planned|null):Planned|null{
+    this.plans.set(owner.id,value);
+    if(value?.access)this.accessIndices.set(owner.id,new GeographicAccessIndex(value.access,this.mass.config.terrain.addressSpan));
+    if(this.plans.size>256){const first=this.plans.keys().next().value!;this.plans.delete(first);this.accessIndices.delete(first);this.preparedOwners.delete(first);}
+    return value;
+  }
+  private metrics(m:GeographicPlanMetrics):void{
+    this.planning.maxPlaceMs=Math.max(this.planning.maxPlaceMs,m.placeMs);this.planning.maxStandMs=Math.max(this.planning.maxStandMs,m.standMs);
+    this.planning.maxRouteMs=Math.max(this.planning.maxRouteMs,m.routeMs);this.planning.maxExpanded=Math.max(this.planning.maxExpanded,m.expanded);this.planning.maxTerrainSamples=Math.max(this.planning.maxTerrainSamples,m.samples);
+  }
+  /** Cheap input capture only: never reads generated place pages or terrain. */
+  private request(owner:Readonly<MassGeography>):Readonly<GeographicPlanInput>|null{
+    const zone=owner.native?.zone;if(!zone)return null;
+    const rows=(this.spec.holds??this.spec.pyres).filter(p=>p.source==='data/tilesets'&&p.tileset===zone.tileset),rng=massRandom(this.mass.generator.run.seed,[owner.id,'native-objective']);
+    if(!rows.length||!rng.chance(rows.reduce((n,p)=>n+p.weight,0)/rows[0].totalWeight))return null;
+    const source=rng.weighted(rows),center=this.nearby(owner.center),context=resolveMassHoldContext({...zone,id:owner.id},source,center?this.mass.levelAt(center):this.mass.config.progression?.maxLevel??zone.level);
+    const reservations:GeographicReservations={circles:[],trails:[]},halfSpan=Math.floor(Math.min(MASS_ACCESS_POLICY.halfSpan,owner.span/2-180)/30)*30;
     if(center){
-      for(const place of this.mass.journey?.places??[]){const q=this.mass.journey!.local(place);reservations.push({x:q.x-center.x,y:q.y-center.y,radius:place.radius+60});}
-      for(const place of this.mass.roadside?.places??[]){const q=this.mass.roadside!.local(place);reservations.push({x:q.x-center.x,y:q.y-center.y,radius:place.radius});}
+      const town=this.mass.settlement;if(town)reservations.town={minX:-center.x,minY:-center.y,maxX:town.zone.size.w-center.x,maxY:town.zone.size.h-center.y,padding:town.spec.apron+town.spec.blend};
+      for(const place of this.mass.journey?.places??[]){const q=this.mass.journey!.local(place);reservations.circles.push({x:q.x-center.x,y:q.y-center.y,radius:place.radius+60});}
+      for(const place of this.mass.roadside?.places??[]){const q=this.mass.roadside!.local(place);reservations.circles.push({x:q.x-center.x,y:q.y-center.y,radius:place.radius});}
       for(const trail of this.mass.journey?.trails??[])for(let i=1;i<trail.points.length;i++){
         const a={x:trail.points[i-1].x-center.x,y:trail.points[i-1].y-center.y},b={x:trail.points[i].x-center.x,y:trail.points[i].y-center.y};
-        const r=this.mass.journey!.spec.width/2+30,pad=halfSpan+150+r;
+        const radius=this.mass.journey!.spec.width/2+30,pad=halfSpan+150+radius;
         if(Math.min(a.x,b.x)>pad||Math.max(a.x,b.x)<-pad||Math.min(a.y,b.y)>pad||Math.max(a.y,b.y)<-pad)continue;
-        trails.push({a,b,radius:r});
+        reservations.trails.push({a,b,radius});
       }
     }
-    const nearBodies=reservations.filter(b=>Math.abs(b.x)<=halfSpan+150+b.radius&&Math.abs(b.y)<=halfSpan+150+b.radius);
-    const independentReserve=(at:MassAddress,r:number):boolean=>{
-      const q=localOffset(at,owner.center,span,16);
-      if(center&&this.mass.settlement?.reserves(center.x+q.x,center.y+q.y,r))return true;
-      return nearBodies.some(b=>(q.x-b.x)**2+(q.y-b.y)**2<(r+b.radius)**2)||trails.some(t=>segmentDistance(q,t.a,t.b)<t.radius+r);
-    };
-    // Pure planned stands reserve their own clearances before native structures
-    // or ecology are born. No actor position or arrival order participates.
-    for (let attempt=0; attempt<96 && positions.length<count; attempt++) {
-      const angle=rng.range(0,Math.PI*2), reach=Math.sqrt(rng.next())*radius;
-      const at=moveAddress(owner.center,{x:Math.round(Math.cos(angle)*reach/30)*30,y:Math.round(Math.sin(angle)*reach/30)*30},this.mass.config.terrain.addressSpan);
-      if(independentReserve(at,150))continue;
-      if(positions.some(q=>{const d=localOffset(q,at,this.mass.config.terrain.addressSpan);return Math.hypot(d.x,d.y)<300;}))continue;
-      const terrain=this.mass.generator.terrainAt(at),rule=regionKind(terrain.region);
-      if(!rule?.walkable||['water','lava','chasm','bog','swamp'].includes(terrain.region))continue;
-      let clear=true;
-      for(let i=0;i<12;i++){
-        const q=moveAddress(at,{x:Math.cos(i*Math.PI/6)*80,y:Math.sin(i*Math.PI/6)*80},this.mass.config.terrain.addressSpan);
-        const kind=this.mass.generator.terrainAt(q).region;
-        if(!regionKind(kind)?.walkable||regionKind(kind)?.standStatusDeep||['water','lava','chasm','bog','swamp'].includes(kind)){clear=false;break;}
-      }
-      if(!clear)continue;
-      positions.push(at);
+    reservations.circles=reservations.circles.filter(b=>Math.abs(b.x)<=halfSpan+150+b.radius&&Math.abs(b.y)<=halfSpan+150+b.radius);
+    const terrain=this.mass.generator.spec,regions:GeographicPlanInput['regions']={};
+    for(const id of new Set([...terrain.surfaces.map(s=>s.region),...terrain.places.flatMap(p=>p.surface?[p.surface.region]:[])])){
+      const r=regionKind(id);regions[id]={walkable:!!r?.walkable,dry:!!r?.walkable&&!r.standStatusDeep&&!['water','lava','chasm','bog','swamp'].includes(id)};
     }
-    this.planning.maxStandMs=Math.max(this.planning.maxStandMs,performance.now()-standStarted);
-    if(positions.length!==count)return remember(null);
-    const fixtureRadius=context.zone.objective.kind==='rifts'?RIFT_CFG.radius:context.zone.objective.kind==='unearth'?DIG_CFG.radius:PYRE_CFG.radius;
-    const routeStarted=performance.now();
-    const access=planGeographicAccess(owner.center,positions.map((at,i)=>({at,radius:i<pyreCount?fixtureRadius:24})),span,
-      {terrainCell:this.mass.config.terrain.terrainCell,regionAt:at=>this.mass.generator.terrainAt(at).region,reserved:independentReserve},halfSpan);
-    this.planning.maxRouteMs=Math.max(this.planning.maxRouteMs,performance.now()-routeStarted);
-    this.planning.maxExpanded=Math.max(this.planning.maxExpanded,access.expanded);this.planning.maxTerrainSamples=Math.max(this.planning.maxTerrainSamples,access.samples);
-    if(!access.ok)return remember(null);
-    return remember({owner,context,positions:positions.slice(0,pyreCount),...(positions[pyreCount]?{chestPosition:positions[pyreCount]}:{}),access:access.proof});
+    const input:GeographicPlanInput={compiler:GEOGRAPHIC_PLAN_COMPILER,policy:MASS_ACCESS_POLICY,run:this.mass.generator.run,terrain,owner,context,selection:rows,
+      fixtureCount:this.objectives.count(owner,context),chestWanted:this.objectives.chestWanted(owner,context),
+      fixtureRadius:context.zone.objective.kind==='rifts'?RIFT_CFG.radius:context.zone.objective.kind==='unearth'?DIG_CFG.radius:PYRE_CFG.radius,regions,reservations};
+    return freezeData(JSON.parse(canonical(input)) as GeographicPlanInput);
+  }
+  preparationInput(at:MassAddress):Readonly<GeographicPlanInput>|null{return this.request(this.hierarchy.at(at).zone);}
+  /** Always compare against the current owner's expected frozen source input,
+   * never a digest supplied by the worker itself. Born work wins every race. */
+  private preparedStatus(input:Readonly<GeographicPlanInput>,checkSource=true):'existing'|'stale'|'disposed'|undefined{
+    if(this.disposed)return 'disposed';
+    const owner=this.hierarchy.at(input.owner.center).zone;
+    if(this.plans.has(owner.id)||this.hierarchy.controller(owner.id,'objective-access')||this.objectives.has(owner.id)){this.preparing.late++;return 'existing';}
+    if(checkSource){const expected=this.request(owner);if(!expected||canonical(expected)!==canonical(input)){this.preparing.stale++;return 'stale';}}
+  }
+  private publishPrepared(input:Readonly<GeographicPlanInput>,plan:Readonly<GeographicPlan>|null):void{
+    this.cachePlan(input.owner,plan);this.preparedOwners.add(input.owner.id);
+    this.preparing.adopted++;this.preparing[plan?'accepted':'refused']++;this.preparing.lastAdopted.push(input.owner.id);if(this.preparing.lastAdopted.length>16)this.preparing.lastAdopted.shift();
+  }
+  adoptPrepared(input:Readonly<GeographicPlanInput>,preparation:GeographicPreparation):'adopted'|'existing'|'stale'|'disposed'{
+    const status=this.preparedStatus(input);if(status)return status;
+    const plan=validateGeographicPreparation(input,preparation,this.mass.generator);this.publishPrepared(input,plan);return 'adopted';
+  }
+  /** At most one proof is being checked, and at most 64 bounded samples are
+   * advanced per tick. The time limit is soft by one place page/sample; record
+   * the actual maximum rather than promising that page generation is free. */
+  private advancePreparation():void{
+    if(!this.warm)return;
+    const start=performance.now();
+    try{
+      if(!this.validation){const ready=this.warm.takeReady();if(ready&&!this.preparedStatus(ready.input))this.validation={...ready,steps:validateGeographicPreparationSteps(ready.input,ready.preparation,this.mass.generator)};}
+      const pending=this.validation;if(!pending)return;
+      if(this.preparedStatus(pending.input,false)){this.validation=null;return;}
+      for(let i=0;i<64;i++){
+        const next=pending.steps.next();this.preparing.validationSteps++;
+        if(next.done){if(!this.preparedStatus(pending.input))this.publishPrepared(pending.input,next.value);this.validation=null;break;}
+        if(performance.now()-start>=2)break;
+      }
+    }catch(error){this.validation=null;this.warm.fail(String(error instanceof Error?error.message:error));}
+    finally{this.preparing.maxValidationSliceMs=Math.max(this.preparing.maxValidationSliceMs,performance.now()-start);}
+  }
+  /** Call BEFORE nativeCountry.near. Hierarchy queries do not invoke country
+   * placement/reservations, so this can get ahead without forcing cold plans. */
+  prepare(at:MassAddress,now:number):void{
+    if(this.disposed||!this.warm||this.warm.stats.disposed)return;
+    if(!Number.isFinite(now)||now<0)throw Error('Invalid geographic preparation clock');
+    this.advancePreparation();if(this.warm.stats.disposed)return;
+    if(now<this.nextPrepare)return;this.nextPrepare=now+.5;
+    let dx=0,dy=0;const old=this.prepareFrom;this.prepareFrom={...at};
+    if(old&&old.dimension===at.dimension&&BigInt(at.cx)-BigInt(old.cx)>-64n&&BigInt(at.cx)-BigInt(old.cx)<64n&&BigInt(at.cy)-BigInt(old.cy)>-64n&&BigInt(at.cy)-BigInt(old.cy)<64n){const d=localOffset(at,old,this.mass.config.terrain.addressSpan,64);dx=d.x;dy=d.y;}
+    const distance=Math.hypot(dx,dy),span=this.mass.config.terrain.addressSpan,zoneSpan=this.hierarchy.span('zone');
+    const ahead=moveAddress(at,{x:distance>1?dx/distance*zoneSpan:0,y:distance>1?dy/distance*zoneSpan:0},span),middle=this.hierarchy.at(ahead).zone;
+    const lower=moveAddress(middle.origin,{x:-zoneSpan*2,y:-zoneSpan*2},span);
+    const owners=[...this.hierarchy.intersections('zone',massAddressBounds(lower,zoneSpan*5,zoneSpan*5,span))];
+    owners.sort((a,b)=>{const aa=localOffset(a.center,ahead,span,64),bb=localOffset(b.center,ahead,span,64);return aa.x*aa.x+aa.y*aa.y-bb.x*bb.x-bb.y*bb.y||a.id.localeCompare(b.id);});
+    const requests:Readonly<GeographicPlanInput>[]=[];
+    for(const owner of owners){
+      if(this.validation?.input.owner.id===owner.id||this.plans.has(owner.id)||this.hierarchy.controller(owner.id,'objective-access')||this.objectives.has(owner.id))continue;
+      const request=this.request(owner);
+      if(request)requests.push(request);else{this.cachePlan(owner,null);this.preparing.sourceNegatives++;}
+    }
+    this.warm.offer(requests);
+  }
+  dispose():void{if(this.disposed)return;this.disposed=true;this.validation=null;this.warm?.dispose();}
+  get warmStats(){return {...this.preparing,queue:this.warm?.stats??null,validating:this.validation?.input.owner.id??null,disposed:this.disposed};}
+  /** Cold/teleport queries use the identical kernel synchronously. No pending
+   * result can temporarily clear a route or shift an existing born owner. */
+  private plan(owner:Readonly<MassGeography>):Planned|null{
+    const old=this.plans.get(owner.id);
+    if(old!==undefined){if(this.preparedOwners.delete(owner.id)){this.preparing.used++;this.preparing.lastUsed.push(owner.id);if(this.preparing.lastUsed.length>16)this.preparing.lastUsed.shift();}return old;}
+    const start=performance.now();
+    const remember=(value:Planned|null)=>{const elapsed=performance.now()-start;this.planning.coldQueries++;this.planning.totalMs+=elapsed;this.planning.maxMs=Math.max(this.planning.maxMs,elapsed);this.planning[value?'accepted':'rejected']++;return this.cachePlan(owner,value);};
+    const saved=this.hierarchy.controller(owner.id,'objective-access');if(saved)return remember(this.savedPlan(owner,saved.definition));
+    for(const kind of ['pyres','rifts','unearth']){const born=this.hierarchy.controller(owner.id,'objective:'+kind);if(born)return remember(this.legacyPlan(owner,born.definition));}
+    const input=this.request(owner);if(!input)return remember(null);
+    this.preparing.synchronous++;const result=compileGeographicPlan(input,this.mass.generator);this.metrics(result.metrics);return remember(result.plan);
   }
   reserves(at: MassAddress, radius: number): boolean {
     if(at.dimension!==this.mass.origin.dimension)return false;

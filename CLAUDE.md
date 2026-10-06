@@ -1,3 +1,21 @@
+Show, don't tell is an absolute gameplay rule. Immediate local happenings must
+communicate through physical changes, motion, light, sound and consequence,
+rather than explanatory on-screen narration. Retain text only where the
+information cannot be shown sufficiently (for example distant world news or
+player-requested details). Reusing main's mechanics does not authorize reusing
+its redundant local banners. Preserve warning readability and native timing;
+add or improve visual cues when needed instead of restoring narration.
+
+MassOccurrences now owns complete native surface fractures: original warning,
+spring, scar, wave and fixture driver; exact geographic body/scenery receipts
+and dormant zone census preserve native rewards and population caps.
+GeographicPlanWarmQueue prepares the same access kernel off-thread and checks
+complete frozen terrain/reservation proofs before publication. Verify occurrence
+parity/continuity and geographic worker/acceptance probes, plus the natural
+native-occurrences-ui and geographic-plan-ui browser courses. Caldera wakes,
+regional campaign/Odyssey, continuous seafaring and fully paged history remain
+unbound. See docs/design/seamless-exploration-foundations.md.
+
 Native country and geographic ownership use worldmass/nativeFeatures,
 nativeResidency, nativeCountry and geographicGameplay. Surface chunks/zones/
 regions cross continuously; native pyres/rifts/excavations own independent

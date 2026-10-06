@@ -9,6 +9,7 @@ import { MassGeographicGameplay } from './geographicGameplay';
 import type { MassHierarchySave } from './hierarchy';
 import { MassNativeCountry } from './nativeCountry';
 import { MassNativeHost, nativeWorldCapabilities } from './nativeHost';
+import type { MassOccurrenceDisturbance } from './occurrences';
 import { MassNativeResidency, type NativeResidencySave } from './nativeResidency';
 import { validateMassBounties } from './bounties';
 import { validateStructurePlans } from '../engine/structurePlans';
@@ -366,7 +367,8 @@ export class WorldMassRuntime {
         this.storms=new MassStorm(this.generator.run.seed,this.config.terrain.addressSpan,policy.chunkSpan*policy.chunksPerZone,save?.storms);
       }
       this.nativeHost=new MassNativeHost(world,{maxPopulation:()=>this.config.maxPopulation-this.reservedPopulation(''),
-        population:()=>this.population,retainRadius:2400,quietSeconds:12});
+        population:()=>this.population,retainRadius:2400,quietSeconds:12,
+        ...(this.geography?{zoneOwner:(pos:{x:number;y:number})=>this.geography!.hierarchy.at(this.walk.at(pos.x,pos.y)).zone.id}:{})},save?.nativeFeatures);
     }
     if (this.config.ecology) {
       this.ecology = new MassEcology(this.config.ecology, this);
@@ -554,7 +556,7 @@ export class WorldMassRuntime {
   }
   /** Worker descriptors are suggestions until the authoritative residency validates
    * them. Retire the worker whenever its owning world or surface is discarded. */
-  dispose():void { this.disposed=true;this.nativeWarm?.dispose(); }
+  dispose():void { this.disposed=true;this.nativeWarm?.dispose();this.geography?.dispose(); }
   private prepareNativeCountry(world:World):void {
     const queue=this.nativeWarm,features=this.nativeFeatures,country=this.nativeCountry;
     if(!queue||!features||!country||queue.stats.disposed)return;
@@ -576,10 +578,19 @@ export class WorldMassRuntime {
     });
     queue.offer(rows);
   }
+  /** Run native occurrence drivers before World drains this frame's sounds.
+   * Their binding owns controller, scenery and population snapshots together. */
+  get hasOccurrences():boolean {return !this.disposed&&!!this.nativeHost?.hasOccurrences;}
+  updateOccurrences(dt:number,disturbs:readonly MassOccurrenceDisturbance[]):void {
+    const host=this.nativeHost;
+    if(!host||!this.attached||this.disposed||host.world.massRuntime!==this||host.world.zone.id!==MASS_ZONE)return;
+    host.updateOccurrences(dt,disturbs);
+  }
   /** Survived-death wakes retain the run's land and consequences. */
   wake(world: World): void { world.landPartyAt(this.settlement?.spawn ?? { x: 12, y: 12 }); this.nearKey = ''; }
   update(world: World, boot = false): void {
     if (world.zone.id !== MASS_ZONE) return;
+    this.geography?.prepare(this.walk.at(world.player.pos.x,world.player.pos.y),world.time);
     this.prepareNativeCountry(world);
     if(this.weather){
       this.weather.setScales(this.weather.time,world.sim.weatherScales(world.devOverlayView()));

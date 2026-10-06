@@ -267,3 +267,79 @@ simulation smoke suite passed. The rebuilt client booted successfully; the final
 real browser course entered a natural rock mouth, continued inside the native
 cave, and walked back to the exact surface return with no console errors. These checks verify the stated integrations, not
 full main-gameplay parity or smooth frame pacing.
+
+The next integration binds the native abyssal fracture occurrence to each
+physical feature and geographic zone. Its existing driver owns the 13.5-second
+warning, 30-second spring, seeded wound dressing, initial wave and capped fixture
+aftermath. Partial dwell, one-time warning state, exact scars, spawn receipts,
+wounds and deaths survive ordinary streaming and CharacterSave Continue. The
+initial maximum wave reserves capacity before the trigger advances; distant
+survivors remain in their geographic zone's compact tag census without actor
+hydration. Leaving and returning cannot replay a spring or native kill payment.
+Event completion adds no XP path. Only the event's exact pit geometry reads its
+frozen source fall policy; unrelated ground keeps its existing policy.
+
+The real browser fixture is the unchanged seed-713 country provider's slag tor
+at physical owner cell (0,16), native seed 279689217 and country level 24.
+Native game ticks reached the warning at 13.5103 seconds and the spring at
+30.0099 seconds. Two durable Save/Continue cycles preserved the partial warning,
+six original creatures and eight native scar pieces, with no console errors
+or event-completion XP. Independent tests compare the detached factory against
+the original native factory and the event adapter against the original driver;
+they cover full-wave reservation, story separation, exact wounds, foreign
+references, dormant neighboring-zone census, source pit behavior and no repeated
+rewards. The fixture aftermath retains its absolute native world-clock: returning
+to overdue ground settles at most one due beat, never an accumulated burst.
+
+The admitted occurrence family is deliberately complete and narrow. Caldera
+wakes still require a physical parent-to-den witness; other event families,
+vertical pit policies, source cast seals, timed Quickening and unbound reward
+contexts remain refused. Quiet streaming requires an exact closed actor graph;
+active combat Continue retains the explicit native transient-save boundary.
+Historical event birth receipts still grow, including defeated identities.
+
+Geographic preparation now uses the same pure plan kernel in the synchronous
+path and a small module worker. Frozen input includes native source definitions,
+terrain rules, level, and independent settlement, journey and roadside
+reservations. A bounded queue permits one in-flight job, sixteen queued inputs
+and four ready results. Before publication, cooperative validation checks the
+returned stands and every route segment against exact dry terrain cells and
+frozen reservations without repeating pathfinding. The per-frame allowance is
+64 validation steps and a soft two milliseconds, with possible one-step
+overshoot. No partial result reserves ground. Existing saved births and an
+authoritative synchronous query win any race; disposal clears both the worker
+and the pending validator. Unexpected jumps retain synchronous collision.
+
+The user's standing Show, don't tell rule supersedes native local narration.
+Fracture warning and eruption text, hold-start instructions, remaining-fixture
+banners and local hold-completion prose are suppressed. Native cracks, tremor,
+flash, charge rings, lit/sealed/dug fixture faces and emerging creatures remain
+the evidence on screen. First-charge flashes are retained even though their
+shared driver formerly coupled them to a text hook. Distant survey discoveries,
+requested information, combat numbers and system notices are unaffected by this
+focused change. Objective receipts, charge/contest clocks and native rewards
+remain unchanged. The project guidance requires future mechanics to meet this
+rule instead of inheriting redundant prose from main.
+
+The actual geographic-worker browser course compared the same 3,000-unit
+walk and frozen pyre owner (6,2) in seed 901743. Its synchronous first query
+cost 32.8 ms; ordinary walking consumed the previously validated worker plan
+in 0.2 ms. Five plans were adopted (two accepted, three absent), with 1,705
+validation steps and a measured maximum validation slice of 7.4 ms, exceeding
+the soft two-millisecond allowance. Actual worker output matched all three
+reference objective families. This is evidence for removing that specific plan
+stall, not a total-frame improvement: the control measured 18.1 ms median,
+202.5 ms p95 and 442 ms maximum; the prepared run measured 19.1, 225.9 and
+574.2 ms respectively. Ordinary scenery avoidance and encounters produced
+1,072 versus 1,058 frames. Remaining world-update and floor costs still require
+work before smooth exploration can be claimed.
+
+The final integration gate passed all 75 worldmass probes in 312.5 seconds,
+including independent local visual-cue and event continuity coverage. All
+three type-check projects, the default build and actual boot passed. Generation
+QA passed 869 cases across three seeds with no failures and the same four
+clearance warnings; all five simulation smoke scenarios passed. The rebuilt
+natural fracture browser course again passed both Continue checkpoints and
+verified that neither warning nor eruption emits local narration. Independent
+critics accepted these supported event and geographic-plan contracts; overall
+exploration frame pacing and the remaining main mechanics are still open work.

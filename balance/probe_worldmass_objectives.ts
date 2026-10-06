@@ -31,9 +31,9 @@ try {
     hierarchy.at(address('surface', '0', '0', 6200, 800, 960)).zone];
   const points = [[800, 1100], [6200, 6500]].map(xs => xs.map(x => address('surface', '0', '0', x, 800, 960)));
   const local = (at: MassAddress) => localOffset(at, { ...runtime.origin, x: 0, y: 0 }, 960);
-  let payout = 0;
+  let payout = 0, localNarration = 0;
   const host: MassObjectiveHost = {
-    get now() { return w.time; }, hold: w.massHoldHost(),
+    get now() { return w.time; }, hold: { ...w.massHoldHost(), text: () => { localNarration++; } },
     installPyres: (owner, rows) => w.installMassPyres(owner, rows), canRetire: rows => w.canRetireMassPyres(rows),
     installChest: (owner, chest) => w.installMassObjectiveChest(owner, chest),
     complete: (owner, z, label) => { payout += objectiveRewardXp(z.level); w.completeMassObjective(owner, z, label); },
@@ -49,6 +49,9 @@ try {
   const step = (dt: number) => { w.time += dt; objectives.update(dt, host); };
   w.player.pos = { x: a[0].pos.x + 28, y: a[0].pos.y }; step(2);
   w.player.pos = { x: b[0].pos.x + 28, y: b[0].pos.y }; step(1);
+  assert.equal(localNarration, 0, 'local operation begins through the native flash, not narration');
+  assert.equal(w.flashes.filter(f => f.radius === 90 && f.maxLife === .5).length, 2,
+    'suppressing stir words must preserve the first-charge flash on each owner');
   assert.equal(a[0].charge, 2); assert.equal(b[0].charge, 1); assert.equal(a[1].charge, 0); assert.equal(b[1].charge, 0);
   assert.equal(w.zone.id, 'worldmass_expedition'); assert.equal(w.objectiveDone, false);
   assert.equal(objectives.views(w.player.pos)[0].owner, owners[1].id);
@@ -77,6 +80,9 @@ try {
 
   for (const fixture of nativeRows(w)) { w.player.pos = { x: fixture.pos.x + 28, y: fixture.pos.y }; step(10); }
   assert.equal(payout, 2 * objectiveRewardXp(3)); assert.ok(nativeRows(w).every(s => s.doodad.kind === PYRE_CFG.kindLit));
+  assert.equal(localNarration, 0, 'remaining-fixture narration stays silent');
+  assert.equal(w.flashes.filter(f => f.radius === 130 && f.maxLife === .8).length, 4,
+    'each native pyre lights with exactly one completion flare');
   assert.equal(lightwellOf(PYRE_CFG.kindLit)!.feed, PYRE_CFG.feed);
   assert.ok(stayed.controllers().every(row => row.controllers.find(c => c.id === 'objective:pyres')!.receipts.length === 1));
   assert.ok(w.chests.filter(c => c.massObjectiveOwner).every(c => objectives.chestReady(c)));
