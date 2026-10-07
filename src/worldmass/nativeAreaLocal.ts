@@ -1,11 +1,13 @@
-import { dist, type Vec2 } from '../core/math';
+import { castRay, LOS_CFG } from '../engine/los';
+import { nativeFloorElevAt, nativeRayElev, nativeShotElev, nativeLineOfSight, nativeSightClipD, nativeLineOfFire, nativeClipShot, type NativeSightHost, type NativeSightSources } from '../engine/nativeSight';
+import { dist, vec, type Vec2 } from '../core/math';
 import type { ZoneDef } from '../data/zones';
 import { GridWalkField, DEFAULT_CELL } from '../world/gridWalk';
 import { hullOf } from '../world/shape';
 import { isDoodadGround, regionKind } from '../world/regions';
 import type { WalkField } from '../world/walk';
 import { blocksMovement, doodadRuleOf, hitSurfaceOf, normalizeDoodadBound, pitRegionOf, type Doodad } from '../engine/levelgen';
-import { makeTierNav, makeTierView, MAX_TIER } from '../engine/tiers';
+import { makeTierNav, makeTierView, tierElevOf, MAX_TIER } from '../engine/tiers';
 import { DiscIndex, SPATIAL_CFG } from '../engine/spatial';
 import { pushOutOfShape, shapeContains, shapeAabbHalf } from '../engine/shapes';
 import { pitAt, pitSupportedAt, type PitSurface } from '../engine/pitfall';
@@ -33,6 +35,18 @@ export interface NativeAreaAmbientServices {
   player: NonNullable<NativeAmbientHost['player']>;
   actors: NativeAmbientHost['actors'];
 }
+/** Explicit local optical-medium owner; omission must not silently remove fog. */
+export interface NativeAreaSightServices { opaqueAt(x:number,y:number):boolean }
+export interface NativeAreaSight {
+  lineOfSight(from:Vec2,to:Vec2,fromTier?:number,toTier?:number):boolean;
+  sightClipD(from:Vec2,to:Vec2,fromTier?:number,toTier?:number):number;
+  lineOfFire(from:Vec2,to:Vec2,story?:number):boolean;
+  clipShot(from:Vec2,to:Vec2,story?:number):Vec2;
+}
+const nativeSightSources:NativeSightSources={
+  get castRay(){return castRay;},get LOS_CFG(){return LOS_CFG;},
+  get tierElevOf(){return tierElevOf;},get dist(){return dist;},get vec(){return vec;},
+};
 // Preserve exact public source records; private execution never inherits
 // mutable process defaults for optional native fields.
 function localData<T>(value:T,freeze=true):T {
@@ -134,6 +148,26 @@ export class NativeAreaLocal {
       pad:input.config.navigationPad,doodadRuleOf,blocksMovement,hitSurfaceOf,groundAt:p=>this.geometry.groundAt(p),
       paintNavGrounds:g=>paintNativeNavGrounds(nav,g),stampNavSurface:(g,d)=>stampNativeNavSurface(nav,g,d) };
     this.nav=nav;
+  }
+  /** Fixed-stage native sight/shot channels over retained geometry. The optical
+   * medium remains an explicit local capability, not captured source authority. */
+  sight(services:NativeAreaSightServices):NativeAreaSight {
+    const optical=services&&Object.getOwnPropertyDescriptor(services,'opaqueAt');
+    if(!optical||!Object.hasOwn(optical,'value')||typeof optical.value!=='function')throw Error('Native area sight requires its own optical-medium service');
+    const local=this,opaqueAt=optical.value as NativeAreaSightServices['opaqueAt'];
+    const host:NativeSightHost={
+      get zone(){return local.context.zone;},get walk(){return local.walk;},
+      doodadsAt:(x,y)=>local.index.at(x,y),opaqueAt:(...args)=>opaqueAt.call(services,...args),
+      floorElevAt:p=>nativeFloorElevAt(host,nativeSightSources,p),
+      rayElev:(...args)=>nativeRayElev(host,nativeSightSources,...args),
+      shotElev:(...args)=>nativeShotElev(host,nativeSightSources,...args),
+    };
+    return Object.freeze({
+      lineOfSight:(...args:Parameters<NativeAreaSight['lineOfSight']>)=>nativeLineOfSight(host,nativeSightSources,...args),
+      sightClipD:(...args:Parameters<NativeAreaSight['sightClipD']>)=>nativeSightClipD(host,nativeSightSources,...args),
+      lineOfFire:(...args:Parameters<NativeAreaSight['lineOfFire']>)=>nativeLineOfFire(host,nativeSightSources,...args),
+      clipShot:(...args:Parameters<NativeAreaSight['clipShot']>)=>nativeClipShot(host,nativeSightSources,...args),
+    });
   }
   pointInSolid(x:number,y:number,margin=0,tier=0):Doodad|null {
     for(const d of this.index.at(x,y)) {

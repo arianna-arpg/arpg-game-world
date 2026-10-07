@@ -1,3 +1,14 @@
+NativeAreaEncounters composes complete native packs and wildlife with local sight,
+hostility, status relays, rarity and immediate magic-pack refresh. Detached staged
+actors transfer relay ownership after validation; supplied magic effects and
+refresh flags retain their identities. World shares these exact operations and
+keeps its live adapter caches outside reflective controller ownership. Native
+failed habitat attempts and partial factory errors retain allocation/RNG effects.
+This is preparation, not complete birth order or runtime admission; source
+issuance, environmental/controller owners, paging and playable two-area Continue
+remain required. Verify nativesight/nativehostility/nativestatusrelay,
+nativemonsterpromotion/worldmass_nativeareaambient, types, genqa and sim smoke.
+
 NativeAreaContinuations retains both native random cursors across full geometry
 and later preparation. Generation receipts remain separate from old area-v1
 identity and refuse random drift outside the actual layout operation. Shared

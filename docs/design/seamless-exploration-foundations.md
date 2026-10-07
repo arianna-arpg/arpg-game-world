@@ -1636,3 +1636,61 @@ generation course also passes natural mouth/structure discovery, actual walking,
 interior entry, cold Continue and exact return. That browser course exercises
 previously admitted feature owners, not the still-unbound complete-area policy.
 Nine slow and three excluded probes were not part of the fast run.
+
+## NativeAreaEncounters: complete rarity and local encounter ownership
+
+The pack and later wildlife stages now compose the unchanged native factories,
+population decisions, placement, encounter groups, sight, hostility, status relay,
+rarity and immediate magic-pack refresh. NativeAreaAmbient binds one complete
+retained layout and its actual staged census. Classic World uses the same optical,
+targeting, relay and promotion operations. No rarity weights, habitat rules,
+failed-attempt consumption or authored pack minimums are replaced.
+
+Construction takes detached staged actors, including the player, and explicitly
+transfers their status-relay capability after validating the whole cohort and
+building the host. A published World's actors must not be borrowed. Exact initial
+magic effects, resolving/pending flags, squad sequence, bombard revision and
+tagging state are mandatory; existing shared runtime objects and effects arrays
+retain identity. The host's identity is frozen while its staged actor list remains
+mutable. Named party, appearance, clock, optical-medium, sanctuary and hit services
+remain explicit trusted dependencies. This does not authenticate their provenance.
+
+The retained-layout comparison uses three complete archived layouts and nine
+natural stream pairs. It includes actual native rarity rolls and 533 admitted
+bodies, 66 magic members and exact stage receipts. Two additional mechanism
+controls use unchanged meadow geometry: transferring already-warm siphon/arclink
+cohorts, then relaying again with the former World forbidden; and 34 actual failed
+lava-habitat attempts followed by native wildlife. Combined, 11 classic/local/cold
+comparisons retain 598 residents, 632 factory results, 2,791 random draws, ordered
+actor identities and factory arguments, shared runtime relationships, and complete
+pack-boundary and final effects/body states. These targeted controls do not claim
+natural spawn frequencies. They rebuild preparation from the same source geometry
+and cursor, not from a complete saved live-controller page.
+
+Seven optical operations match their archived originals over 11,340 pairs and
+five complete natural layouts, including ray outputs, read/exception order and
+360 warm/cold local comparisons. Hostility covers native sanctuary/tier, guise,
+burrow, diplomacy, prey and breakable-owner targeting; relay covers actual
+application and nearest/range/tie behavior. Promotion covers all 19 magic-pack
+mechanics, native partial errors, and a real reflected hit killing a conductor
+while refresh is in progress. Review caught a cache ownership regression: a
+cached census getter made sleeping actors appear controller-owned. The repaired
+World views are non-enumerable; genuine foreign actor references still pin them.
+
+Full native birth ordering still includes effects, terrain, breakables, NPC/folk,
+objective adoption, faction contests, objective fixtures, camps, garrisons,
+landmark dwellers, bounty marks and memory finalization around these stages.
+Complete source issuance, environmental owners, body/controller paging and an
+actual two-area playable/cold-Continue course still precede full-area activation.
+This checkpoint does not establish main-content parity, whole towns/crypts in
+the continuous runtime, or complete mountain and hydrology integration.
+
+NativeAreaEncounters verification: all three type checks, all 468 fast probes
+without retries, 2,607 generation cases (zero failures; four existing warnings),
+and 25 combat smoke episodes pass. The detached lifecycle regression also
+checks a live provider changing the cohort before handoff; final validation
+prevents a partially transferred relay owner. The isolated client generation
+course passes natural structures, actual walking, cave entry, cold Continue and
+exact return. It remains a regression for already-admitted feature owners,
+not evidence of complete-area runtime activation. Nine slow and three excluded
+probes were not run.

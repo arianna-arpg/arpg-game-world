@@ -1,3 +1,6 @@
+import { nativeFloorElevAt, nativeRayElev, nativeShotElev, nativeLineOfSight, nativeSightClipD, nativeLineOfFire, nativeClipShot, type NativeSightHost, type NativeSightSources } from './nativeSight';
+import { nativeHostileTo, nativeIsPrey, nativeSeekPrey, nativeEnemiesOf, type NativeHostilityHost, type NativeHostilitySources } from './nativeHostility';
+import { nativeRelayStatus, type NativeStatusRelaySources, type NativeStatusRelayHost } from './nativeStatusRelay';
 import { createNativeMonster, stampNativeMonsterLevel, armNativeMonsterAmbush, type NativeMonsterFactoryHost, type NativeMonsterFactorySources } from './nativeMonsterFactory';
 import { nativeSimView, nativeBaseTable, nativeEffectiveSpawn, nativeWildlifeTableFor, nativeCaveAirFor, nativeVerminPressure, type NativePopulationHost, type NativePopulationSources } from './nativePopulationResolution';
 import { nativeFarPoint, nativeFarthestStand, nativeFindFreeSpot, nativePlacementClamp, nativePlacementDataInputs, type NativePlacementHost } from './nativePlacement';
@@ -493,6 +496,8 @@ import { gateOf } from '../packages/weighting';
 import { courtLord, courtLordForZone } from '../packages/courts';
 import type { ActiveEncounter, BoroughRuntime, VeilKnot } from './encounter';
 import { boroughVendorWeights, townResidentsHere, noteSoulsSheltered } from '../data/boroughs';
+import { promoteNativeRarity, promoteNativeRarityStacked, promoteNativeMagicPack, refreshNativeMagicPacks,
+  type NativeMonsterPromotionSources, type NativeMonsterPromotionHost } from './nativeMonsterPromotion';
 import { rollRarity, rarityMods, RARITY_DEFS, type MonsterRarity } from './rarity';
 import { magicPackPool, magicPackSize, magicPackMinimum, rollMagicPack, readMagicPack, updateMagicPacks, magicPackDeath, type MagicPackState } from './magicPacks';
 import { MAGIC_PACKS, MAGIC_PACK_CFG } from '../data/magicPacks';
@@ -12313,6 +12318,52 @@ export class World {
     spawnNativeWildlife(this.nativeAmbientHost(), def);
   }
 
+  /** Native providers remain lazy and live. This is an operation boundary,
+   * not captured source/controller authority for detached areas. */
+  private nativeMonsterPromotionSourceView?: NativeMonsterPromotionSources;
+  private nativeMonsterPromotionView?: NativeMonsterPromotionHost;
+  private nativeMonsterPromotionSources(): NativeMonsterPromotionSources {
+    if (this.nativeMonsterPromotionSourceView) return this.nativeMonsterPromotionSourceView;
+    const view: NativeMonsterPromotionSources = {
+      get RARITY_DEFS() { return RARITY_DEFS; }, get rarityMods() { return rarityMods; },
+      get MONSTER_NAME_CFG() { return MONSTER_NAME_CFG; }, get rollMonsterName() { return rollMonsterName; },
+      get MAGIC_PACKS() { return MAGIC_PACKS; }, get MAGIC_PACK_CFG() { return MAGIC_PACK_CFG; },
+      get magicPackMinimum() { return magicPackMinimum; }, get MONSTERS() { return MONSTERS; },
+      get stepMagicPackMechanics() { return stepMagicPackMechanics; }, get updateMagicPacks() { return updateMagicPacks; },
+      get SKILLS() { return SKILLS; }, get makeSkillInstance() { return makeSkillInstance; },
+      get monsterSkillLevelOf() { return monsterSkillLevelOf; }, get random() { return Math.random; },
+    };
+    // A cached view is not a controller dependency: its actors getter must
+    // not reintroduce the intentionally excluded root census to dormancy.
+    Object.defineProperty(this, 'nativeMonsterPromotionSourceView', { value: view, writable: true, configurable: true, enumerable: false });
+    return view;
+  }
+
+  private nativeMonsterPromotionHost(): NativeMonsterPromotionHost {
+    const world = this;
+    if (this.nativeMonsterPromotionView) return this.nativeMonsterPromotionView;
+    const view: NativeMonsterPromotionHost = {
+      get actors() { return world.actors; },
+      get magicPackResolving() { return world.magicPackResolving; },
+      set magicPackResolving(value) { world.magicPackResolving = value; },
+      get magicPackRefreshPending() { return world.magicPackRefreshPending; },
+      set magicPackRefreshPending(value) { world.magicPackRefreshPending = value; },
+      get magicPackEffects() { return world.magicPackEffects; },
+      set magicPackEffects(value) { world.magicPackEffects = value; },
+      nextSquadId: () => world.nextSquadId(),
+      promoteRarity: (...args) => world.promoteRarity(...args),
+      refreshMagicPacks: (...args) => world.refreshMagicPacks(...args),
+      enemiesOf: a => world.enemiesOf(a),
+      lineOfSight: (a, b, fromTier, toTier) => world.lineOfSight(a, b, fromTier, toTier),
+      clipShot: (a, b, tier) => world.clipShot(a, b, tier),
+      resolveHit: (a, instance, victim, areaMul, chainMul) => world.resolveHit(a, instance, victim, areaMul, chainMul),
+    };
+    // A cached view is not a controller dependency: its actors getter must
+    // not reintroduce the intentionally excluded root census to dormancy.
+    Object.defineProperty(this, 'nativeMonsterPromotionView', { value: view, writable: true, configurable: true, enumerable: false });
+    return view;
+  }
+
   /** Promote a freshly-created monster to an elite tier: buffed life/damage +
    *  rolled affixes (a 'rarity' stat source), a bigger body, more xp, and a
    *  display prefix. Drops + the crowned-kill ledger are handled on death. */
@@ -12322,32 +12373,14 @@ export class World {
    *  absent = the authored path — set-piece bosses keep their identity under
    *  the plain tier label, exactly as before. */
   private promoteRarity(a: Actor, rarity: MonsterRarity, opts?: { distinctName?: string | boolean }): void {
-    if (a.magicPack && rarity !== 'magic') {
-      a.magicPack = undefined;
-      this.refreshMagicPacks();
-    }
-    const def = RARITY_DEFS[rarity];
-    a.rarity = rarity;
-    a.sheet.setSource('rarity', rarityMods(rarity, !a.magicPack));
-    a.radius *= def.sizeMul;
-    a.xpValue = Math.round(a.xpValue * def.xpMul);
-    if (typeof opts?.distinctName === 'string') {
-      a.name = opts.distinctName;
-    } else if (opts?.distinctName && MONSTER_NAME_CFG.namedRarities.includes(rarity)) {
-      a.name = rollMonsterName(Math.random, a.faction);
-    } else if (def.label) {
-      a.name = `${def.label} ${a.name}`;
-    }
-    a.fillResources(); // re-fill now that max life has grown
+    return promoteNativeRarity(this.nativeMonsterPromotionHost(), this.nativeMonsterPromotionSources(), a, rarity, opts);
   }
 
   /** Promote, then STACK the rarity's stat mods `stacks-1` more times (each as its own
    *  compounding source) — the difficulty-spike lever for bosses. stacks=1 is a plain
    *  single promote; 2+ multiplies life/damage hard (e.g. a double-Crowned uber). */
   private promoteRarityStacked(a: Actor, rarity: MonsterRarity, stacks: number, opts?: { distinctName?: string | boolean }): void {
-    this.promoteRarity(a, rarity, opts);
-    for (let i = 1; i < stacks; i++) a.sheet.setSource('rarityStack' + i, rarityMods(rarity));
-    if (stacks > 1) a.fillResources();
+    return promoteNativeRarityStacked(this.nativeMonsterPromotionHost(), this.nativeMonsterPromotionSources(), a, rarity, stacks, opts);
   }
 
   /** Public promotion seam — AI choreography (the `summon` verb's rarity
@@ -12359,21 +12392,7 @@ export class World {
   /** Encounter promotion seam. A failed habitat placement cannot leave a lone
    * magic elite. Existing promoted actors are deliberately not re-promoted. */
   promoteMagicPack(members: Actor[], mechanic: string): boolean {
-    const def = MAGIC_PACKS[mechanic];
-    if (!def || members.length < magicPackMinimum(def) || members.length > MAGIC_PACK_CFG.maxMembers) return false;
-    if (new Set(members).size !== members.length || members.some(a => a.dead || a.owner
-      || a.team !== 'enemy' || a.magicPack || (a.rarity && a.rarity !== 'normal')
-      || a.level < def.minLevel || a.faction !== members[0].faction)) return false;
-    const id = this.nextSquadId();
-    members.forEach((a, i) => {
-      a.magicPack = { id, mechanic, slot: i, size: members.length, fallen: 0, ...(i === 0 ? { leader: 1 as const } : {}) };
-      a.squadId = id;
-      a.squadLeader = i === 0;
-      this.promoteRarity(a, 'magic');
-      a.name = `${def.name} ${MONSTERS[a.defId ?? '']?.name ?? a.name}`;
-    });
-    this.refreshMagicPacks();
-    return true;
+    return promoteNativeMagicPack(this.nativeMonsterPromotionHost(), this.nativeMonsterPromotionSources(), members, mechanic);
   }
 
   /** The pack conductor owns its warning geometry; ordinary skill resolution
@@ -12438,23 +12457,7 @@ export class World {
     };
   }
   refreshMagicPacks(dt = 0): void {
-    // A reflected hit can kill a conductor during this fold. Reconcile the
-    // death after the hit loop, without advancing any encounter clock twice.
-    if (this.magicPackResolving) { this.magicPackRefreshPending = true; return; }
-    this.magicPackResolving = true;
-    try {
-      this.magicPackEffects = stepMagicPackMechanics(this.actors, dt, {
-        enemies: a => this.enemiesOf(a),
-        clear: (a, b, tier) => this.lineOfSight(a, b, tier, tier),
-        clip: (a, b, tier) => this.clipShot(a, b, tier),
-        hit: (caster, skill, victim) => {
-          const def = SKILLS[skill];
-          if (def) this.resolveHit(caster, makeSkillInstance(def, monsterSkillLevelOf(caster.level)), victim, 1, 1);
-        },
-      });
-      updateMagicPacks(this.actors);
-    } finally { this.magicPackResolving = false; }
-    if (this.magicPackRefreshPending) { this.magicPackRefreshPending = false; this.refreshMagicPacks(); }
+    return refreshNativeMagicPacks(this.nativeMonsterPromotionHost(), this.nativeMonsterPromotionSources(), dt);
   }
 
   // --- SQUAD TACTICS: engage tokens + death reactions -------------------------
@@ -30167,49 +30170,41 @@ export class World {
     if (t.fallback === 'self') return { pos: vec(caster.pos.x, caster.pos.y), self: true };
     return null;
   }
+  private nativeHostilityView?: NativeHostilityHost & NativeStatusRelayHost;
+  private static nativeHostilitySourceView?: NativeHostilitySources;
+  private static nativeStatusRelaySourceView?: NativeStatusRelaySources;
+  private nativeHostilityHost(): NativeHostilityHost & NativeStatusRelayHost {
+    if (this.nativeHostilityView) return this.nativeHostilityView;
+    const world = this;
+    const view: NativeHostilityHost & NativeStatusRelayHost = {
+      get actors() { return world.actors; }, get zone() { return world.zone; },
+      sanctuaryBlocksCombat: (a, b) => world.sanctuaryBlocksCombat(a, b),
+      isPrey: (a, b) => world.isPrey(a, b), hostileTo: (a, b) => world.hostileTo(a, b),
+      enemiesOf: a => world.enemiesOf(a),
+    };
+    // Adapter caches must not become population owners in reflective dormancy scans.
+    Object.defineProperty(this, 'nativeHostilityView', { value: view, writable: true, configurable: true, enumerable: false });
+    return view;
+  }
+  private static nativeHostilitySources(): NativeHostilitySources {
+    return World.nativeHostilitySourceView ??= {
+      get throngTravelProtected() { return throngTravelProtected; }, get clingBurrowed() { return clingBurrowed; },
+      get normalizeBrain() { return normalizeBrain; }, get STATUS_DEFS() { return STATUS_DEFS; },
+      get factionStance() { return factionStance; }, get dist() { return dist; },
+    };
+  }
+  private static nativeStatusRelaySources(): NativeStatusRelaySources {
+    return World.nativeStatusRelaySourceView ??= {
+      get STATUS_RELAY_IDS() { return STATUS_RELAY_IDS; }, get STATUS_RELAYS() { return STATUS_RELAYS; },
+      get relayStatusStat() { return relayStatusStat; }, get sameStory() { return sameStory; }, get dist() { return dist; },
+    };
+  }
+
+
 
   /** Are two actors on opposing sides — counting faction diplomacy? */
   hostileTo(a: Actor, b: Actor): boolean {
-    if (this.sanctuaryBlocksCombat(a,b)) return false;
-    if (throngTravelProtected(b)) return false;
-    // THE TIER LAW (engine/tiers.ts): layers share a screen, never a fight —
-    // a deck body and a valley body cannot target, strike, or threaten each
-    // other. Sitting in the ONE hostility gate, targeting, swings, threat
-    // and projectiles all agree for free. (Shoving a body OFF its layer is
-    // the honest way to bring a fight down — the rim fall in the push lane.)
-    // EXCEPT under RIM DUELS (ZoneTiers.rimDuels, open exposure): cross-tier
-    // hostility stands and SIGHT mediates — the butte walls' blocksSight
-    // already confine the fights to rims and spans, which is the fantasy.
-    if ((a.tier ?? 0) !== (b.tier ?? 0) && !this.zone.tiers?.rimDuels) return false;
-    // THE GUISE (the possession seam, engine/possess.ts): a seat wearing a
-    // body of faction F reads as KIN to team-enemy bodies of F while the
-    // guise holds — ONE-directional in the one hostility gate (their
-    // targeting, swings, threat and stray zones all pass the rider by; the
-    // rider's own targeting asks the other direction and stays live). The
-    // first harm the rider authors tears it for good (resolveHit).
-    if (b.possession?.guiseFaction && !b.possession.guiseBroken
-      && a.team === 'enemy' && a.faction === b.possession.guiseFaction) return false;
-    // THE BURROW (the latch fabric, engine/cling.ts): a rider sunk INSIDE
-    // the body it rides cannot be found BY that body — sitting in the one
-    // hostility gate, the host's targeting, swings, novas and stray zones
-    // all pass its own parasite by for free. ONE-directional like the
-    // guise: the rider's teeth ask the other direction and stay live, and
-    // every OTHER combatant still scrapes riders off normally. The host's
-    // honest answer is its shake clock — the pop-out (clingRelease
-    // 'shake') scatters the rider into a real vulnerability window.
-    if (b.clingTo?.id === a.id && clingBurrowed(b)) return false;
-    if (a.team !== b.team) return true;
-    // PREDATION (TargetSpec.prey): a hunter is hostile to its FOOD no matter
-    // whose side the food nominally stands on — and it's ONE-directional:
-    // the hare never wars back, it runs (MoraleSpec.skittish). Because this
-    // sits in the one hostility gate, targeting, swings, and projectiles all
-    // agree the wolf may eat.
-    if (this.isPrey(a, b)) return true;
-    // Faction grudges are LIVE wherever rivals share ground: a gnoll pack
-    // that stumbles into the risen dead doesn't wait for a war banner.
-    return !!(a.team === 'enemy'
-      && a.faction && b.faction
-      && factionStance(a.faction, b.faction) === 'hostile');
+    return nativeHostileTo(this.nativeHostilityHost(), World.nativeHostilitySources(), a, b);
   }
 
   /** Does `a`'s brain list `b` as prey (by tag, faction, or defId)? Kin —
@@ -30217,33 +30212,14 @@ export class World {
    *  RESOLVED stamp (aiPrey) when one exists, so a hunger rule can switch
    *  predation on and off live; the brain's base serves un-ticked actors. */
   private isPrey(a: Actor, b: Actor): boolean {
-    if (!a.brain || a === b || b.dead) return false;
-    const prey = a.aiPrey ?? normalizeBrain(a.brain).base.target?.prey;
-    if (!prey || !prey.length) return false;
-    if (b.defId === a.defId) return false;
-    if (a.squadId !== undefined && b.squadId === a.squadId) return false;
-    // THE SCENT LAW (StatusDef.smellsOfPrey — Scentcraft's mark): a body
-    // wearing prey-scent is FOOD to anything that already hunts. The list's
-    // CONTENTS stop mattering; its existence is the qualifier (a hunter's
-    // nose, fooled). The kin guards above still hold — nothing eats its
-    // own kind or its own squad, however it smells.
-    if (b.statuses.some(s => STATUS_DEFS[s.id]?.smellsOfPrey)) return true;
-    return prey.some(p => b.tag === p || b.faction === p || b.defId === p);
+    return nativeIsPrey(World.nativeHostilitySources(), a, b);
   }
 
   /** The idle hunter's NOSE (BehaviorSpec.seek 'prey'): the nearest actor
    *  this one's resolved prey list marks as food, within range — sight not
    *  required; hunger walks farther than eyes see. */
   seekPrey(actor: Actor, range: number): Actor | null {
-    // SOVEREIGNTY: scent — hunger walks the crossing (the goal carries its story) (the derived census, probe_tiers RIG T).
-    let best: Actor | null = null;
-    let bd = range;
-    for (const b of this.actors) {
-      if (b.dead || b.passive || b.untargetable || !this.isPrey(actor, b)) continue;
-      const d = dist(actor.pos, b.pos);
-      if (d < bd) { bd = d; best = b; }
-    }
-    return best;
+    return nativeSeekPrey(this.nativeHostilityHost(), World.nativeHostilitySources(), actor, range);
   }
 
   /** The scavenger's nose (BehaviorSpec.seek 'loot'): the nearest UNCLAIMED
@@ -30835,22 +30811,7 @@ export class World {
 
   // Modifier-granted fields: no item IDs, no persistent changes to terrain.
   private relayStatus: NonNullable<Actor['statusRelay']> = (owner, args) => {
-    if (owner.dead || owner.downed) return false;
-    for (const id of owner.sheet.armedFamily('relayStatus_', STATUS_RELAY_IDS)) {
-      const relay = STATUS_RELAYS[id];
-      if (relay.status !== args[0] || owner.sheet.get(relayStatusStat(id)) <= 0) continue;
-      let nearest: Actor | undefined, reach = relay.radius;
-      for (const enemy of this.enemiesOf(owner)) {
-        if (!sameStory(owner, enemy) || enemy.dead || enemy.untargetable || enemy.invulnerable || enemy.passive) continue;
-        const d = dist(owner.pos, enemy.pos);
-        if (d < reach) { reach = d; nearest = enemy; }
-      }
-      if (!nearest) continue; // No recipient: the original application lands normally.
-      nearest.applyStatus(args[0], args[1], args[2], owner.name,
-        { ...args[4], casterId: owner.id, relayed: true });
-      return true;
-    }
-    return false;
+    return nativeRelayStatus(this.nativeHostilityHost(), World.nativeStatusRelaySources(), owner, args);
   };
 
   private grantedPocketZone = '';
@@ -33902,16 +33863,7 @@ export class World {
   }
 
   enemiesOf(actor: Actor): Actor[] {
-    return this.actors.filter(a =>
-      (this.hostileTo(actor, a)
-        // BREAKABLE conjured objects join their OWNER's hostile pool — the
-        // owner's every damage path (swings, zones, projectiles) can find
-        // and demolish them, though the steering PICKS refuse to CHASE
-        // furniture (assistAim + the SEEKWORTHY homing gate). Never anyone
-        // else's pool: minions and allies see furniture, the owner sees a
-        // target.
-        || (a.construct?.breakable !== undefined && a.owner === actor))
-      && !a.dead && !a.untargetable && !a.downed);
+    return nativeEnemiesOf(this.nativeHostilityHost(), actor);
   }
 
   /** Resolve an actor by id (patrol followers heel to a leader id; events
@@ -53255,32 +53207,47 @@ export class World {
     }
   }
 
+  private static readonly nativeSightSources: NativeSightSources = {
+    get castRay() { return castRay; }, get LOS_CFG() { return LOS_CFG; },
+    get tierElevOf() { return tierElevOf; }, get dist() { return dist; }, get vec() { return vec; },
+  };
+  private nativeSightContext: NativeSightHost | undefined;
+  /** One live view per World; sight queries never allocate provider tables. */
+  private nativeSightHost(): NativeSightHost {
+    if (!this.nativeSightContext) {
+      const world = this;
+      const nativeSightHost: NativeSightHost = {
+        get zone() { return world.zone; }, get walk() { return world.walk; },
+        doodadsAt: (x, y) => world.doodadsAt(x, y), opaqueAt: (x, y) => world.opaqueAt(x, y),
+        floorElevAt: p => world.floorElevAt(p),
+        rayElev: (a, b, fromTier, toTier) => world.rayElev(a, b, fromTier, toTier),
+        shotElev: (a, story) => world.shotElev(a, story),
+      };
+      // Adapter getters must not become a second owner graph for dormancy.
+      Object.defineProperty(this, 'nativeSightContext', { value: nativeSightHost, writable: true, configurable: true, enumerable: false });
+      return nativeSightHost;
+    }
+    return this.nativeSightContext;
+  }
+
   /** THE ELEVATION LAW's floor read (the tier fabric): the story a POINT's
    *  own ground sits at — what a ray endpoint stands on when no actor is in
    *  hand (links answer their span's top; true walls read 0). */
   private floorElevAt(p: Vec2): number {
-    const e = this.walk?.regionAt ? tierElevOf(this.walk.regionAt(p.x, p.y)) : null;
-    return e ?? 0;
+    return nativeFloorElevAt(this.nativeSightHost(), World.nativeSightSources, p);
   }
 
   /** The height pair a SIGHT ray travels between (LOS_CFG.elev.eye above
    *  each endpoint's story — passed tiers win, floors answer otherwise).
    *  undefined in untiered zones: castRay's legacy flat read, zero cost. */
   private rayElev(from: Vec2, to: Vec2, fromTier?: number, toTier?: number): RayElev | undefined {
-    if (!this.zone.tiers) return undefined;
-    const eye = LOS_CFG.elev.eye;
-    return {
-      from: (fromTier ?? this.floorElevAt(from)) + eye,
-      to: (toTier ?? this.floorElevAt(to)) + eye,
-    };
+    return nativeRayElev(this.nativeSightHost(), World.nativeSightSources, from, to, fromTier, toTier);
   }
 
   /** The FLAT height a SHOT ray flies at (the flight law: a story-s flight
    *  crosses any floor at or below s — the projectile sweep's own rule). */
   private shotElev(from: Vec2, story?: number): RayElev | undefined {
-    if (!this.zone.tiers) return undefined;
-    const h = (story ?? this.floorElevAt(from)) + LOS_CFG.elev.eye;
-    return { from: h, to: h };
+    return nativeShotElev(this.nativeSightHost(), World.nativeSightSources, from, story);
   }
 
   /**
@@ -53296,7 +53263,7 @@ export class World {
    * the floor under each point.
    */
   lineOfSight(from: Vec2, to: Vec2, fromTier?: number, toTier?: number): boolean {
-    return castRay(this, from, to, 'sight', this.rayElev(from, to, fromTier, toTier)) === null;
+    return nativeLineOfSight(this.nativeSightHost(), World.nativeSightSources, from, to, fromTier, toTier);
   }
 
   /** THE WATCH FABRIC's drawn-read ray (render/vis/watchLayer.ts + the
@@ -53306,8 +53273,7 @@ export class World {
    *  sample), so the drawn fan and the tested ray can never disagree.
    *  Returns the clip distance, or Infinity when the line is clear. */
   sightClipD(from: Vec2, to: Vec2, fromTier?: number, toTier?: number): number {
-    const hit = castRay(this, from, to, 'sight', this.rayElev(from, to, fromTier, toTier));
-    return hit ? hit.d : Infinity;
+    return nativeSightClipD(this.nativeSightHost(), World.nativeSightSources, from, to, fromTier, toTier);
   }
 
   /**
@@ -53322,7 +53288,7 @@ export class World {
    * exemption, so the decision to fire and the flight itself always agree.
    */
   lineOfFire(from: Vec2, to: Vec2, story?: number): boolean {
-    return castRay(this, from, to, 'shot', this.shotElev(from, story)) === null;
+    return nativeLineOfFire(this.nativeSightHost(), World.nativeSightSources, from, to, story);
   }
 
   /** Clip a cast line at the first shot-blocker: the point just SHORT of the
@@ -53330,12 +53296,7 @@ export class World {
    *  ground/storm placements land on the castable side of the stone. Rides
    *  the shot channel's flat elevation (the caster's story). */
   clipShot(from: Vec2, to: Vec2, story?: number): Vec2 {
-    const hit = castRay(this, from, to, 'shot', this.shotElev(from, story));
-    if (!hit) return to;
-    const back = Math.max(0, hit.d - LOS_CFG.clipBackoff);
-    const len = dist(from, to) || 1;
-    return vec(from.x + (to.x - from.x) * (back / len),
-               from.y + (to.y - from.y) * (back / len));
+    return nativeClipShot(this.nativeSightHost(), World.nativeSightSources, from, to, story);
   }
 
   /** THE AFFORDANCE DOCTRINE's resolver (the 'travel' occlusion attitude —

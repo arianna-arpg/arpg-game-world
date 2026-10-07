@@ -61,6 +61,11 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_nativesight.ts', status: 'green', tier: 'fast', why: 'Pinned seven native optical operations across complete layouts, exact ray outputs and read order, exception prefixes, live World wrappers and cold local geometry' },
+  { probe: 'probe_nativehostility.ts', status: 'green', tier: 'fast', why: 'Exact native tier, sanctuary, guise, burrow, diplomacy, prey and owner-construct targeting with actual World wrappers and dormancy ownership' },
+  { probe: 'probe_nativestatusrelay.ts', status: 'green', tier: 'fast', why: 'Actual grounded status transfer with native nearest ties, recipient rules, complete arguments, lazy source order and partial exceptions' },
+  { probe: 'probe_nativemonsterpromotion.ts', status: 'green', tier: 'fast', why: 'All native magic mechanics and rarity operations, exact full actor graphs and draw order, real reflected conductor death and dormancy cache isolation' },
+  { probe: 'probe_worldmass_nativeareaambient.ts', status: 'green', tier: 'fast', why: 'Complete retained layouts with native rarity, local sight and hostility, exact stage bodies and identities, failed habitat attempts and transferred warm state' },
   { probe: 'probe_worldmass_nativearearandom.ts', status: 'green', tier: 'fast', why: 'Exact dual native random cursors, zero-state restoration, scoped callbacks and cold layout/effect/population continuation with complete body graphs' },
   { probe: 'probe_worldmass_nativeareageneration.ts', status: 'green', tier: 'fast', why: 'Unchanged complete native output with durable dual-stream continuation, exact layout boundary, source checks and inherited accessor refusal' },
   { probe: 'probe_nativepopulationresolution.ts', status: 'green', tier: 'fast', why: 'Archived resolution/wildlife parity, full native loads and isolated area census with actual cave face identity and source receivers' },
