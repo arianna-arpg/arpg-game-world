@@ -61,6 +61,8 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_nativesceneecology.ts', status: 'green', tier: 'fast', why: 'Native carried throng, complete lightweight ecology and vent seating, claimed-pocket state and lightwell installation with exact draws and partial births' },
+  { probe: 'probe_nativesceneenvironment.ts', status: 'green', tier: 'fast', why: 'Exact native scenery, all puzzle presets, harvest, geyser and escape births with mutable local geometry, original ordering and partial failure state' },
   { probe: 'probe_nativescenegeometry.ts', status: 'green', tier: 'fast', why: 'Complete mutable native layouts, doors, tiers, hazards and scenery revisions with archived original behavior, real World delegates and partial failures' },
   { probe: 'probe_nativescenepopulation.ts', status: 'green', tier: 'fast', why: 'Mutable native census replacement, full remembered bodies and magic groups, objective counts, contest and wave births with exact random and allocation effects' },
   { probe: 'probe_nativeareabirth.ts', status: 'green', tier: 'fast', why: 'Pinned complete native birth ordering through final wells, exact full loads and remembered returns, native controller/body state and failed births' },

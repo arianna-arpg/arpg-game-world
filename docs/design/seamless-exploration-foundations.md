@@ -1888,3 +1888,73 @@ and later wave/contest factory failures, stream identities/cursors, and 21 cache
 method-selection checks. An independent World AST audit confirms that only the
 52 intended methods, layout adoption and the new adapter members changed;
 2,273 other class members retain their original text.
+
+
+## NativeSceneEnvironment and NativeSceneEcology: complete native birth mechanisms
+
+NativeSceneEnvironment shares eight original native methods for scenery actors,
+puzzle setup and tone changes, harvest placement, geyser fields and escape
+fronts. The local owner retains puzzle runs, knocks and cached callbacks;
+harvest nodes, sessions and offers; and geyser fields, pocks and sweep state.
+It binds the existing mutable geometry and population owners instead of
+borrowing a standing World. Puzzle completion and harvest timeflow remain real,
+explicit services; the birth layer does not invent replacement rewards.
+
+NativeSceneEcology shares the original throng pocket/husk and lightweight
+population stages, deferred vent seating and final lightwell installation.
+Fourteen World methods delegate to this core. The one-line actor lookup remains
+an explicit boundary: classic World keeps its original lookup and the local
+owner uses the same archived lookup against its own live census. Existing native
+pool capacity and failed seating consume their original draws; there is no new
+population truncation or per-body reseeding. Carrying an area retains its pool,
+claimed-pocket ledger, bookkeeping and monotonic well sequence. Fresh state is
+only for a genuinely fresh owner.
+
+The local ecology owner requires the exact same scene and geometry identities
+as its population owner. Provider identities are retained while their fields
+and methods remain live. Geyser state comes from the actual environment owner;
+clock, seat roster, radiance and run-long throng claims remain explicit shared
+services. World adapters preserve original module initialization positions,
+method selection and receivers; their caches remain nonenumerable.
+
+The durable environment archive compares 22 local and 22 actual World courses,
+including retained natural heartwood, glimmervale and downs layouts, every one
+of the 15 installed puzzle presets, explicit scenery/geyser/escape fixtures,
+and post-allocation factory failures. Natural sources produce puzzles and
+harvest nodes; the forced geyser/escape fixtures demonstrate mechanisms, not
+natural frequency. The course records 137 published and 139 allocated bodies
+and 740 random draws. Fifty-one additional branch/read comparisons exercise
+655 host events, including reset and error boundaries. Independent deferred
+callback checks cover real tone/status changes, live clock/census/tier filters,
+completion forwarding and thrown errors.
+
+The ecology course preserves complete pool columns and actor state across
+retained layouts, carried populations, claimed pockets, held-off rows, vent
+seating, native capacity saturation, and partial factory failures. Its selected
+natural layouts are ecology-negative: positive population, vent, capacity and
+well cases are labelled explicit installed-source mechanism fixtures. The
+baseline 16 comparisons are supplemented by seven independent carry/cue cases,
+cold A/B/A replay, binding identity/refusal checks and exact stream cursors.
+Neither suite depends on runtime Git or ignored development files.
+
+These owners are invoked by the existing native birth sequence at its original
+positions. They do not yet supply the complete area update driver, puzzle or
+harvest reward execution, lightweight combat/XP/promotion, throng claiming,
+rendering contexts or whole-owner persistence. Those obligations, universal
+campaign/package birth services, installed source issuance and a real natural
+two-area cold-Continue course remain required before complete seamless areas
+can be activated. The native content catalogue and localized ordinary mire
+policy are preserved.
+
+Validation for NativeSceneEnvironment and NativeSceneEcology: all three project
+type checks pass. The full fast roster passes 474/474 without retries in
+927.2 seconds; nine slow and three excluded probes were not run. The complete
+generation matrix passes 869 cases across three seeds (2,607 generations), with
+four known spacing warnings and one metropolis timing warning while checks ran
+concurrently. A separate quiet metropolis run passes all 13 cases across three
+seeds with no warnings; the boulevard case takes 267ms/seed there. All 25 smoke
+simulation episodes pass. The built client passes native structure/movement,
+cave entry, same-hero continuation, cold Continue and exact return. This client
+course covers already-admitted content, not full native-area activation. The
+World source audit retains 2,311 unrelated members and the original actor lookup;
+only 22 delegates and six adapter members change.

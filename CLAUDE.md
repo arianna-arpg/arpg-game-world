@@ -1,3 +1,13 @@
+NativeSceneEnvironment and NativeSceneEcology share complete native birth
+operations with classic World: scenery, puzzles and tones, harvest, geysers,
+escape fronts, carried throng, lightweight populations, vent seating and wells.
+Local owners retain the same geometry/census and explicit campaign services;
+remembered state, native pool limits, getter order and partial failures remain.
+These are birth owners, not the full update/reward/render/paging dispatcher.
+Keep completion, timeflow, radiance, carried state and source context real. Verify
+nativesceneenvironment/nativesceneecology, nativeareabirth, all types, generation,
+sim smoke and client entry/Continue/return before full-area admission work.
+
 NativeSceneGeometry and NativeScenePopulation now give complete native layouts
 mutable local geometry and a replaceable actor census. Classic World shares the
 same layout adoption, doors, navigation, movement, hazards, creep installation,
