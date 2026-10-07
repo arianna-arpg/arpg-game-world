@@ -1,3 +1,7 @@
+import { nativeFarPoint, nativeFarthestStand, nativeFindFreeSpot, nativePlacementClamp, nativePlacementDataInputs, type NativePlacementHost } from './nativePlacement';
+import { nativeFieldExitPos, nativeExitPosition, nativeBoundaryGateFor, nativeMeldFor, nativeExitRoadAnnotations, nativeProcessionDestination, separateNativeExits, type NativeExitPreparationHost, type NativeExitPreparationSources } from './nativeExitPreparation';
+import { spawnNativeEncounterGroup, type NativeEncounterGroupHost } from './nativeEncounterGroup';
+import { buildNativeConvexNav, paintNativeNavGrounds, stampNativeNavSurface, type NativeNavigationHost } from './nativeNavigation';
 import { spawnNativePacks, placeNativeInHabitat, spawnNativeWildlife, type NativeAmbientHost } from './nativeAmbient';
 import { serializeAccount } from '../meta/account';
 import type { MassResidentResume } from '../meta/characterResume';
@@ -248,7 +252,7 @@ import {
   sympathyRelationOf, sympathyStat,
 } from './sympathy';
 import { CHARGE_DEFS } from './charges';
-import { pushOutOfShape, shapeAabbHalf, shapeContains, shapeDistance, type HitShape } from './shapes';
+import { pushOutOfShape, shapeAabbHalf, shapeContains, type HitShape } from './shapes';
 import { projFormNose, projFormTouches } from './projForms';
 import { STRUCTURES } from '../data/structures';
 import { dwellOf, sidezoneOf, sidezonePocketId } from '../data/sidezones';
@@ -11739,44 +11743,29 @@ export class World {
     return best;
   }
 
+  private nativeExitPreparationHost():NativeExitPreparationHost {
+    const world=this;
+    return {get zone(){return world.zone;},get arena(){return world.arena;},get exits(){return world.exits;},
+      get zoneMap(){return world.zoneMap;},get caveMap(){return world.caveMap;},get sim(){return world.sim;},
+      get entryFrom(){return world.entryFrom;},get zoneMemory(){return world.zoneMemory;},get biomeFor(){return world.biomeFor;},
+      dimensionBiomeFor:dimension=>world.dimensionBiomeFor(dimension),zoneMemoryFresh:id=>world.zoneMemoryFresh(id),
+      fieldExitPos:exit=>world.fieldExitPos(exit),pickProcessionDest:zone=>world.pickProcessionDest(zone)};
+  }
+  private nativeExitPreparationSources():NativeExitPreparationSources {
+    return {get PORTAL_EDGE_INSET(){return PORTAL_EDGE_INSET;},get MIN_PORTAL_SEP(){return MIN_PORTAL_SEP;},
+      get BIOMES(){return BIOMES;},get TILESETS(){return TILESETS;},get PROCESSION_CFG(){return PROCESSION_CFG;},
+      get isFieldPixel(){return isFieldPixel;},get exitInside(){return exitInside;},get biomeFrontierTarget(){return biomeFrontierTarget;},
+      warn:message=>console.warn(message)};
+  }
+
   /** A FIELD zone's exit portal: march inward from the rect edge along the side's axis
    *  until the heat-map blob begins, then sit a little inside it — so the portal lands on
    *  the expanse's edge/corner silhouette (the 'field' generator carves a stem there).
    *  Null if the blob never reaches this side at this fraction (caller uses the rect edge). */
-  private fieldExitPos(e: ZoneExitDef): Vec2 | null {
-    const f = this.zone.field;
-    if (!f) return null;
-    const { w, h } = this.arena;
-    const t = clamp(e.at ?? 0.5, 0.08, 0.92);
-    let x: number, y: number, dx: number, dy: number;
-    if (e.side === 'n') { x = w * t; y = 0; dx = 0; dy = 1; }
-    else if (e.side === 's') { x = w * t; y = h; dx = 0; dy = -1; }
-    else if (e.side === 'w') { x = 0; y = h * t; dx = 1; dy = 0; }
-    else { x = w - 1; y = h * t; dx = -1; dy = 0; }
-    const step = 24, maxI = Math.ceil(Math.max(w, h) / step);
-    for (let i = 0; i < maxI; i++) {
-      if (isFieldPixel(f, x, y)) {
-        return vec(clamp(x + dx * 80, 60, w - 60), clamp(y + dy * 80, 60, h - 60));
-      }
-      x += dx * step; y += dy * step;
-    }
-    return null;
-  }
+  private fieldExitPos(e: ZoneExitDef): Vec2 | null { return nativeFieldExitPos(this.nativeExitPreparationHost(),e,this.nativeExitPreparationSources()); }
 
   private placeExit(e: ZoneExitDef, defIndex: number): ZoneExit {
-    const t = e.at ?? 0.5;
-    const inset = PORTAL_EDGE_INSET;
-    const { w, h } = this.arena;
-    const edge = e.side === 'n' ? vec(clamp(w * t, inset, w - inset), inset)
-      : e.side === 's' ? vec(clamp(w * t, inset, w - inset), h - inset)
-      : e.side === 'w' ? vec(inset, clamp(h * t, inset, h - inset))
-      : vec(w - inset, clamp(h * t, inset, h - inset));
-    // On an ellipse zone, pull the rect-edge portal onto the reachable rim. On a FIELD
-    // zone, snap it onto the heat-map blob's edge in this direction (the expanse corners).
-    const posFrac = e.posFrac;
-    const pos = posFrac && Number.isFinite(posFrac.fx) && Number.isFinite(posFrac.fy)
-      ? exitInside(vec(clamp(w * posFrac.fx, inset, w - inset), clamp(h * posFrac.fy, inset, h - inset)), this.arena)
-      : (this.zone.field && this.fieldExitPos(e)) || exitInside(edge, this.arena);
+    const pos=nativeExitPosition(this.nativeExitPreparationHost(),e,this.nativeExitPreparationSources());
     // BOUNDARY GATE: does this edge cross an enclave biome's boundary? Rides
     // the same prediction seam as the level preview below — an unminted
     // frontier already knows what looms behind it. Streams to clients like
@@ -11864,28 +11853,7 @@ export class World {
    *  toll façade — the same annotation fabric, a different registry row);
    *  cross-dimension edges keep their own dressings. Pure per (graph,
    *  field, overlay state) — reload/co-op re-derive identically. */
-  private boundaryGateFor(e: ZoneExitDef): string | undefined {
-    if (e.lock) {
-      const info = this.sim.holdfastField?.infoFor(this.zone.id);
-      if (info && info.lockId === e.lock) return this.sim.holdfastField?.def(info.defId)?.gate;
-      return undefined; // a foreign lock (not this zone's holdfast) stays undressed
-    }
-    if (e.crossDim) return undefined;
-    const from = this.zone.biome;
-    let to: string | undefined;
-    if (e.to === '?') {
-      const c = biomeFrontierTarget(this.zone, e.side, this.biomeFor);
-      to = this.zone.dimension ? this.dimensionBiomeFor(this.zone.dimension)(c) : this.biomeFor(c);
-    } else {
-      to = (this.zoneMap[e.to] ?? this.caveMap[e.to])?.biome;
-    }
-    if (!to || to === from) return undefined;
-    const fromGate = from ? BIOMES[from]?.enclave?.gate : undefined;
-    const toGate = BIOMES[to]?.enclave?.gate;
-    if (toGate && !fromGate) return toGate;
-    if (fromGate && !toGate) return fromGate;
-    return undefined;
-  }
+  private boundaryGateFor(e: ZoneExitDef): string | undefined { return nativeBoundaryGateFor(this.nativeExitPreparationHost(),e,this.nativeExitPreparationSources()); }
 
   /** The BIOME-MELD id an exit wears, or undefined for a plain edge: the
    *  DIFFERENT biome past this exit declares its edge dressing (BiomeInfo
@@ -11896,29 +11864,7 @@ export class World {
    *  promise the terrain makes is the promise the mint keeps. Deliberately
    *  one-directional (only the FOREIGN kit grows in — a zone needs no
    *  preview of itself); locked and cross-dimension edges stay unmixed. */
-  private meldFor(e: ZoneExitDef): string | undefined {
-    if (e.lock || e.crossDim) return undefined;
-    const from = this.zone.biome;
-    let to: string | undefined;
-    let toFace: string | undefined;
-    if (e.to === '?') {
-      const c = biomeFrontierTarget(this.zone, e.side, this.biomeFor);
-      to = this.zone.dimension ? this.dimensionBiomeFor(this.zone.dimension)(c) : this.biomeFor(c);
-    } else {
-      const n = this.zoneMap[e.to] ?? this.caveMap[e.to];
-      to = n?.biome;
-      toFace = n?.tileset;
-    }
-    if (!to || to === from) return undefined;
-    // THE FACE VOICE (#50 Part B): a RESOLVED neighbor announces in its own
-    // face's words when its tileset declares them (TilesetDef.meld ▷
-    // BiomeInfo.meld, read off ZoneDef.tileset mint provenance). A '?'
-    // frontier carries just a predicted biome — no face exists until the
-    // mint rolls one — so the biome meld keeps the frontier's promise BY
-    // CONSTRUCTION (toFace is assigned only on the resolved branch).
-    const faceMeld = toFace ? TILESETS[toFace]?.meld : undefined;
-    return faceMeld ?? BIOMES[to]?.meld;
-  }
+  private meldFor(e: ZoneExitDef): string | undefined { return nativeMeldFor(this.nativeExitPreparationHost(),e,this.nativeExitPreparationSources()); }
 
   /** THE LIVE OVERLAP RESOLVE — the last line of defense behind the def-level
    *  spacing guards (worldgen spacedExitAt et al.): scan the placed portals in
@@ -11929,37 +11875,7 @@ export class World {
    *  guard was supposed to make this a no-op, and silence would hide the bug.
    *  `fromIdx` lets syncZoneExits resolve ONLY freshly-appended portals so a
    *  mid-session append never teleports a portal the player already saw. */
-  private separateOverlappingExits(fromIdx = 1): void {
-    const { w, h } = this.arena;
-    const inset = 60; // stay comfortably inside the arena while sliding
-    for (let i = Math.max(1, fromIdx); i < this.exits.length; i++) {
-      const e = this.exits[i];
-      const side = this.zone.exits[e.defIndex]?.side;
-      const horiz = side === undefined || side === 'n' || side === 's'; // slide along the edge
-      for (let guard = 0; guard < 24; guard++) {
-        let clash: ZoneExit | null = null;
-        for (let j = 0; j < i; j++) {
-          if (dist(this.exits[j].pos, e.pos) < MIN_PORTAL_SEP) { clash = this.exits[j]; break; }
-        }
-        if (!clash) break;
-        if (guard === 0) {
-          console.warn(`[world] overlapping portals in '${this.zone.id}' `
-            + `(defIndex ${clash.defIndex} vs ${e.defIndex}) — sliding the later one apart. `
-            + 'The def-level spacing guard should have prevented this; trace the appender.');
-        }
-        const step = MIN_PORTAL_SEP - dist(clash.pos, e.pos) + 8;
-        const along = horiz ? e.pos.x - clash.pos.x : e.pos.y - clash.pos.y;
-        const dir = along !== 0 ? Math.sign(along) : (i % 2 === 0 ? 1 : -1);
-        if (horiz) e.pos.x = clamp(e.pos.x + dir * step, inset, w - inset);
-        else e.pos.y = clamp(e.pos.y + dir * step, inset, h - inset);
-        // Clamped back INTO the clash (a corner)? Push along the other axis too.
-        if (dist(clash.pos, e.pos) < MIN_PORTAL_SEP) {
-          if (horiz) e.pos.y = clamp(e.pos.y + (e.pos.y >= h / 2 ? -1 : 1) * step, inset, h - inset);
-          else e.pos.x = clamp(e.pos.x + (e.pos.x >= w / 2 ? -1 : 1) * step, inset, w - inset);
-        }
-      }
-    }
-  }
+  private separateOverlappingExits(fromIdx = 1): void { return separateNativeExits(this.nativeExitPreparationHost(),this.nativeExitPreparationSources(),fromIdx); }
 
   /** Keep a proposed TRANSIT SPOT (realm gate / breach / descent platform) off
    *  every other "linger here" trigger — portals, mouths, the dock, sibling
@@ -12123,42 +12039,27 @@ export class World {
 
   /** Shared encounterGroup seam for ambient packs, events and bespoke maps.
    * Planning and terrain seating finish before any member enters the world. */
+  private nativeEncounterGroupHost(): NativeEncounterGroupHost {
+    const world = this;
+    return {
+      get zone() { return world.zone; }, get player() { return world.player; },
+      get tierViews() { return world.tierViews; }, get actors() { return world.actors; },
+      config: { get radius() { return ENCOUNTER_GROUP_CFG.radius; },
+        get placementAttempts() { return ENCOUNTER_GROUP_CFG.placementAttempts; },
+        get placementJitter() { return ENCOUNTER_GROUP_CFG.placementJitter; },
+        get bodyClearance() { return ENCOUNTER_GROUP_CFG.bodyClearance; } },
+      group: id => ENCOUNTER_GROUPS[id], encounterGroupContext, planEncounterGroup, applyEncounterGroup, rand,
+      pathField: tier => world.pathField(tier),
+      createMonster: (id, level, team) => world.createMonster(id, level, team),
+      findFreeSpot: (at, radius, tier) => world.findFreeSpot(at, radius, tier),
+      placeInHabitat: actor => world.placeInHabitat(actor),
+      pointInSolid: (x, y, margin, tier) => world.pointInSolid(x, y, margin, tier),
+      nextSquadId: () => world.nextSquadId(),
+    };
+  }
+
   spawnEncounterGroup(recipe: string, level: number, at: Vec2, opts: EncounterGroupSpawnOptions = {}): Actor[] {
-    const group = ENCOUNTER_GROUPS[recipe], tier = opts.tier ?? 0;
-    if (group?.id !== recipe || !Number.isFinite(at.x) || !Number.isFinite(at.y) || !Number.isInteger(tier) || tier < 0
-      || (opts.facing !== undefined && !Number.isFinite(opts.facing))) return [];
-    const plan = planEncounterGroup(recipe, encounterGroupContext(this.zone, group.faction, tier, level), opts.maxMembers);
-    if (!plan.length) return [];
-    const facing = opts.facing ?? Math.atan2(this.player.pos.y-at.y,this.player.pos.x-at.x);
-    const c = Math.cos(facing), s = Math.sin(facing), radius = group.radius ?? ENCOUNTER_GROUP_CFG.radius;
-    const field = this.pathField(tier);
-    if (tier > 0 && !this.tierViews?.[tier]) return [];
-    const members: Actor[] = [];
-    for (const seat of plan) {
-      const a = this.createMonster(seat.monster,level,'enemy'); a.tier=tier;
-      let placed=false;
-      for (let attempt=0;attempt<ENCOUNTER_GROUP_CFG.placementAttempts;attempt++) {
-        const jitter=attempt*ENCOUNTER_GROUP_CFG.placementJitter;
-        a.pos=this.findFreeSpot(vec(at.x+c*seat.offset.x-s*seat.offset.y+rand(-jitter,jitter),
-          at.y+s*seat.offset.x+c*seat.offset.y+rand(-jitter,jitter)),a.radius,tier);
-        if (a.habitat && !this.placeInHabitat(a)) continue;
-        if (dist(a.pos,at)>radius || this.pointInSolid(a.pos.x,a.pos.y,a.radius,tier)) continue;
-        if (field && (!field.isWalkable(a.pos.x,a.pos.y) || (field.reachable && !field.reachable(at,a.pos)))) continue;
-        if (members.some(b=>dist(a.pos,b.pos)<a.radius+b.radius+ENCOUNTER_GROUP_CFG.bodyClearance)) continue;
-        placed=true; break;
-      }
-      if (!placed) return []; // no orphan healer, keeper, or missing frontline
-      a.facing=facing;
-      if (opts.persistent !== undefined) a.fromZoneGen=opts.persistent;
-      members.push(a);
-    }
-    const id=this.nextSquadId();
-    members.forEach((a,i)=>{
-      applyEncounterGroup(a,{id,recipe,slot:plan[i].member.slot});
-      if (a.squadLeader) a.name=`${group.name} — ${a.name}`;
-      a.fillResources(); this.actors.push(a);
-    });
-    return members;
+    return spawnNativeEncounterGroup(this.nativeEncounterGroupHost(), recipe, level, at, opts);
   }
 
   /** THE PARTY-LANDING LAW — one placement for every arrival that adjusts
@@ -14993,54 +14894,13 @@ export class World {
    *  def.exits, the exitBoundaries discipline; the Holdfast's kept road is
    *  the first rider — any system may claim an index). Returns undefined for
    *  an unannotated zone so its generation stays byte-identical. */
-  private exitRoadAnnotations(def: ZoneDef): (ExitRoadSpec | undefined)[] | undefined {
-    let out: (ExitRoadSpec | undefined)[] | undefined;
-    const annotate = (idx: number, spec: ExitRoadSpec): void => {
-      (out ??= new Array<ExitRoadSpec | undefined>(def.exits.length).fill(undefined))[idx] = spec;
-    };
-    // HOLDFAST: a guardian's KEPT ROAD runs to its locked gate.
-    const hf = this.sim.holdfastField;
-    const info = hf?.infoFor(def.id);
-    const road = info?.decorRoad ? hf?.def(info.defId)?.road : undefined;
-    if (info && road) {
-      const idx = def.exits.findIndex(e => e.lock === info.lockId);
-      if (idx >= 0) {
-        const { chance: _rolledAtEnsure, ...spec } = road;
-        annotate(idx, spec);
-      }
-    }
-    // PROCESSION: the caravan's TRAVELED WAY — entry portal to the crossing,
-    // carved at generation time so the land itself says where the goods are
-    // headed. The destination is picked here (and pinned by the Zone Memory
-    // rider), since the annotation must exist BEFORE the layout carves.
-    if (def.objective.kind === 'procession') {
-      const destIdx = this.pickProcessionDest(def);
-      if (destIdx != null) annotate(destIdx, { ...PROCESSION_CFG.road });
-    }
-    return out;
-  }
+  private exitRoadAnnotations(def: ZoneDef): (ExitRoadSpec | undefined)[] | undefined { return nativeExitRoadAnnotations(this.nativeExitPreparationHost(),def,this.nativeExitPreparationSources()); }
 
   /** The procession's crossing: the memory rider's pinned exit when fresh
    *  (same crossing every re-entry), else the farthest unlocked portal from
    *  the one we came in by. Null = no usable second exit (a dead-end pocket
    *  — the escort degrades to a roadless far-POI run, staged at placement). */
-  private pickProcessionDest(def: ZoneDef): number | null {
-    const memo = !def.boundless && this.zoneMemoryFresh(def.id)
-      ? this.zoneMemory.get(def.id)!.procession : undefined;
-    if (memo?.destIdx !== undefined && def.exits[memo.destIdx]
-      && !def.exits[memo.destIdx].lock) return memo.destIdx;
-    const back = this.entryFrom ? this.exits.find(x => x.to === this.entryFrom) : undefined;
-    const from = back?.pos ?? vec(this.arena.w / 2, this.arena.h / 2);
-    let best: number | null = null, bd = -1;
-    for (const x of this.exits) {
-      const ed = def.exits[x.defIndex];
-      if (!ed || ed.lock) continue;                 // never march into a sealed gate
-      if (this.entryFrom && ed.to === this.entryFrom) continue; // outward, not back
-      const d = dist(x.pos, from);
-      if (d > bd) { bd = d; best = x.defIndex; }
-    }
-    return best;
-  }
+  private pickProcessionDest(def: ZoneDef): number | null { return nativeProcessionDestination(this.nativeExitPreparationHost(),def); }
 
   /** Muster the Holdfast's RUNTIME at its generated gate (one muster per visit;
    *  the lock STATE persists on the overlay). The façade, throat, posts,
@@ -22320,6 +22180,26 @@ export class World {
       ^ Math.imul(++this.farPointDraws, 0x9e3779b1)) >>> 0);
     return (a, c) => r.range(a, c);
   }
+  /** Classic placement readers; a detached area host supplies its own state. */
+  private nativePlacementHost(): NativePlacementHost {
+    const world = this;
+    return {
+      get arena() { return world.arena; }, get walk() { return world.walk; },
+      set walk(value) { world.walk = value as typeof world.walk; },
+      get tierViews() { return world.tierViews; }, get zoneTiers() { return world.zone.tiers; },
+      get playerPosition() { return world.player.pos; }, get zoneEntry() { return world.zoneEntry; },
+      get eventAnchors() { return world.eventAnchors; }, get bridges() { return world.bridges; },
+      config: { get eventSpacing() { return EVENT_SPACING; }, get ledgeGrasp() { return WALK_CFG.ledgeGrasp; },
+        get pitSweepGran() { return PIT_CFG.sweepGran; } },
+      rand, isGridWalk: (walk): walk is GridWalkField => walk instanceof GridWalkField,
+      doodadsAt: (x, y) => world.doodadsAt(x, y), pointInSolid: (...args) => world.pointInSolid(...args),
+      clampPos: (...args) => world.clampPos(...args), farthestStand: (radius, reachable) => world.farthestStand(radius, reachable),
+      blocksMovement, hitSurfaceOf, pushOutOfShape, pitRegionOf, regionKind,
+      zonePits: () => world.zonePits(), pitHomeKinds: (mover, pits) => world.pitHomeKinds(mover, pits), pitAt, pitSupportedAt,
+    };
+  }
+
+
 
   /** A random point at least `minFromPlayer` away (best effort). When
    *  `spaceFromEvents`, it also tries to stay EVENT_SPACING from every other world
@@ -22333,33 +22213,7 @@ export class World {
    *  placement whose ground has to replay off the zone seed. */
   private farPoint(minFromPlayer: number, spaceFromEvents = false,
     draw: (a: number, c: number) => number = rand): Vec2 {
-    let best = vec(this.arena.w / 2, this.arena.h / 2);
-    let bestScore = -Infinity;
-    for (let tries = 0; tries < 40; tries++) {
-      const sp = samplePoint(this.arena, 90, draw);
-      const p = vec(sp.x, sp.y);
-      if (this.walk && !this.walk.isWalkable(p.x, p.y)) continue; // walk zones: on-mesh only
-      if (this.pointInSolid(p.x, p.y, 16)) continue; // never anchor an event/pack inside a rock blob
-      const dPlayer = dist(p, this.player.pos);
-      let dEvents = Infinity;
-      if (spaceFromEvents) for (const a of this.eventAnchors) dEvents = Math.min(dEvents, dist(p, a));
-      if (dPlayer >= minFromPlayer && (!spaceFromEvents || dEvents >= EVENT_SPACING)) {
-        if (spaceFromEvents) this.eventAnchors.push(p);
-        return p;
-      }
-      // Track the best compromise: maximize whichever constraint is worst.
-      const score = Math.min(dPlayer, spaceFromEvents ? dEvents : Infinity);
-      if (score > bestScore) { bestScore = score; best = p; }
-    }
-    // Every sample missed the mesh (a mostly-solid carve): `best` would still
-    // be the raw arena center — inside rock, snapping wherever clampPos lands
-    // it. Degrade to the true farthest walkable stand instead.
-    if (bestScore === -Infinity) {
-      const far = this.farthestStand(16, false);
-      if (far) best = far;
-    }
-    if (spaceFromEvents) this.eventAnchors.push(best);
-    return best;
+    return nativeFarPoint(this.nativePlacementHost(), minFromPlayer, spaceFromEvents, draw);
   }
 
   /** Rebuild the player's modifier sources (level / passives / attributes). */
@@ -63044,31 +62898,7 @@ export class World {
    *  instead of collapsing onto the entry portal or the arena center.
    *  Load/spawn-time only — never per-frame. */
   private farthestStand(radius: number, needReachable: boolean): Vec2 | null {
-    // Sample every walk cell's center: a fixed 60px stride can skip a whole
-    // 30px-wide corridor, including the only stand outside arrival grace.
-    const step = this.walk instanceof GridWalkField ? Math.min(60, this.walk.cell) : 60;
-    const start = this.walk instanceof GridWalkField ? Math.ceil(90 / step) * step + step / 2 : 90;
-    let best: Vec2 | null = null;
-    let bd = -1;
-    let bestOpen: Vec2 | null = null; // the walkable-only understudy
-    let bo = -1;
-    for (let y = start; y < this.arena.h - 60; y += step) {
-      for (let x = start; x < this.arena.w - 60; x += step) {
-        if (this.walk && !this.walk.isWalkable(x, y)) continue;
-        if (this.pointInSolid(x, y, radius * 0.5)) continue;
-        // Score the full-radius landing, not a point clamping may move.
-        const stand = this.clampPos(vec(x, y), radius);
-        const d = dist(stand, this.player.pos);
-        if (d > bo) { bo = d; bestOpen = stand; }
-        if (needReachable && this.walk?.reachable
-          && !this.walk.reachable(this.zoneEntry, stand)) continue;
-        if (d > bd) { bd = d; best = stand; }
-      }
-    }
-    // Reachability that eliminated EVERY stand is a broken metric (an entry
-    // sitting off-mesh reports nothing reachable) — a far walkable stand
-    // still beats the entry stack the callers would otherwise fall to.
-    return best ?? bestOpen;
+    return nativeFarthestStand(this.nativePlacementHost(), radius, needReachable);
   }
 
   // ---------------------------------------------------------------- misc ----
@@ -63469,69 +63299,18 @@ export class World {
    *  move-blocking doodads stamp 'wall' at TRUNK radius + NAV_CFG.pad —
    *  chasm discs first so bridge spans can re-open their crossings, solids
    *  last so a boulder on a bridge still blocks (clampPos parity). */
-  private buildConvexNav(): GridWalkField {
-    // Sized to the ACTIVE union's hull — the base box exactly until an annex
-    // opens (hullOf is origin-pinned), so a piece-less zone rakes the grid it
-    // always did.
-    const g = new GridWalkField(this.arenaHull.w, this.arenaHull.h);
-    if (this.arena.shape === 'ellipse') {
-      // Row-fill the inscribed ellipse; the corners stay 'wall' so paths
-      // never hug ground clampToBounds would drag feet back from.
-      const rx = this.arena.w / 2, ry = this.arena.h / 2;
-      for (let y = g.cell / 2; y < this.arena.h; y += g.cell) {
-        const ny = (y - ry) / ry;
-        const k = 1 - ny * ny;
-        if (k <= 0) continue;
-        const half = Math.sqrt(k) * rx;
-        g.fillRect(rx - half, y - g.cell / 2, rx + half, y + g.cell / 2 - 1, true);
-      }
-    } else {
-      g.fillRect(0, 0, this.arena.w, this.arena.h, true);
-    }
-    // OPEN ANNEX PIECES join the walkable union in their own silhouettes
-    // (dormant pieces stay 'wall' — the nav refuses exactly what the clamp
-    // refuses, drawn == pathed at the bound). Rows ride the global cell
-    // lattice like the base fill, so seams share cells cleanly.
-    for (const pc of this.arena.pieces ?? []) {
-      if (!pc.active) continue;
-      if ((pc.shape ?? 'rect') !== 'ellipse') {
-        g.fillRect(pc.x, pc.y, pc.x + pc.w, pc.y + pc.h, true);
-      } else {
-        const prx = pc.w / 2, pry = pc.h / 2;
-        const pcx = pc.x + prx, pcy = pc.y + pry;
-        for (let y = g.cell / 2; y < this.arenaHull.h; y += g.cell) {
-          if (y < pc.y || y > pc.y + pc.h) continue;
-          const ny = (y - pcy) / pry;
-          const k = 1 - ny * ny;
-          if (k <= 0) continue;
-          const half = Math.sqrt(k) * prx;
-          g.fillRect(pcx - half, y - g.cell / 2, pcx + half, y + g.cell / 2 - 1, true);
-        }
-      }
-    }
-    const solids: Doodad[] = [], spans: Doodad[] = [];
-    for (const d of this.doodads) {
-      if (doodadRuleOf(d.kind).spans) { spans.push(d); continue; }
-      if (!blocksMovement(d)) continue;
-      if (d.kind === 'chasm') {
-        this.stampNavSurface(g, d);
-      } else {
-        solids.push(d);
-      }
-    }
-    // TRAVEL PREFERENCE: paint the SENSED ground kinds under every walkable
-    // cell a ground disc covers — sampled through groundAt itself, never a
-    // re-derivation, so bridges (null), fords (shallow), way-masked decks and
-    // the nastiest-ground priority all price exactly as they play (one-source
-    // doctrine: the caldera's lava lakes and the fen's bogs finally EXIST to
-    // pathing). Kind cells stay walkable — only the weighted fields read them;
-    // region EFFECTS keep flowing from groundAt/walk alone (this.walk is null
-    // on convex zones, so painting here double-applies nothing).
-    this.paintNavGrounds(g);
-    for (const s of spans) g.fillDisc(s.pos.x, s.pos.y, s.radius, 'ground');
-    for (const o of solids) this.stampNavSurface(g, o);
-    return g;
+  private nativeNavigationHost(): NativeNavigationHost {
+    const world = this;
+    return {
+      get arena() { return world.arena; }, get arenaHull() { return world.arenaHull; },
+      get doodads() { return world.doodads; }, get grounds() { return world.grounds; },
+      get pad() { return NAV_CFG.pad; }, doodadRuleOf, blocksMovement, hitSurfaceOf,
+      groundAt: p => world.groundAt(p), paintNavGrounds: g => world.paintNavGrounds(g),
+      stampNavSurface: (g, d) => world.stampNavSurface(g, d),
+    };
   }
+
+  private buildConvexNav(): GridWalkField { return buildNativeConvexNav(this.nativeNavigationHost()); }
 
   /** Sample groundAt at each nav cell center under every ground disc and
    *  stamp the reported kind ('deep_water' where the water reads deep — its
@@ -63541,62 +63320,13 @@ export class World {
    *  marsh entry re-priced the same water repeatedly); cells outside a
    *  disc's own circle are skipped before the groundAt query. A groundless
    *  zone pays one empty loop. */
-  private paintNavGrounds(g: GridWalkField): void {
-    if (this.grounds.length === 0) return;
-    const cell = g.cell;
-    // The dedup lattice matches the GRID's own dims (the union hull) — a
-    // cols mismatch would fold annex-column indices onto the next row's.
-    const cols = Math.ceil(this.arenaHull.w / cell);
-    const seen = new Uint8Array(cols * Math.ceil(this.arenaHull.h / cell) + cols + 1);
-    const probe = vec(0, 0);
-    for (const d of this.grounds) {
-      const r2 = (d.radius + cell * 0.5) ** 2;
-      const x0 = Math.max(cell / 2, Math.floor((d.pos.x - d.radius) / cell) * cell + cell / 2);
-      const y0 = Math.max(cell / 2, Math.floor((d.pos.y - d.radius) / cell) * cell + cell / 2);
-      for (let cy = y0; cy <= Math.min(this.arenaHull.h, d.pos.y + d.radius); cy += cell) {
-        for (let cx = x0; cx <= Math.min(this.arenaHull.w, d.pos.x + d.radius); cx += cell) {
-          if ((cx - d.pos.x) ** 2 + (cy - d.pos.y) ** 2 > r2) continue; // bbox corner, not the disc
-          const si = Math.floor(cy / cell) * cols + Math.floor(cx / cell);
-          if (seen[si]) continue; // one sample per cell per rebuild
-          seen[si] = 1;
-          if (!g.isWalkable(cx, cy)) continue; // bounds shape holds
-          probe.x = cx; probe.y = cy;
-          const ground = this.groundAt(probe);
-          if (!ground) continue;
-          const kind = ground.kind === 'water' && ground.deep ? 'deep_water' : ground.kind;
-          if (kind === 'ground') continue;
-          // quiet: no baker ever reads the nav grid's dirty ring — don't churn it.
-          g.fillRegion(cx, cy, cx, cy, kind, true);
-        }
-      }
-    }
-  }
+  private paintNavGrounds(g: GridWalkField): void { paintNativeNavGrounds(this.nativeNavigationHost(), g); }
 
   /** Stamp one move-blocker's TRUE surface (+ NAV_CFG.pad) onto the nav grid.
    *  Discs keep the classic fillDisc; oblong surfaces mark exactly the cells
    *  their padded shape covers — so the pathfield squeezes a doorway the
    *  same way feet do (clampPos parity via the shared hit-surface fabric). */
-  private stampNavSurface(g: GridWalkField, d: Doodad): void {
-    const s = hitSurfaceOf(d, 'move');
-    if (s.kind === 'circle') {
-      g.fillDisc(d.pos.x, d.pos.y, s.r + NAV_CFG.pad, 'wall');
-      return;
-    }
-    const { ex, ey } = shapeAabbHalf(s);
-    const pad = NAV_CFG.pad;
-    const step = g.cellSize;
-    // March cell centers across the padded bounding window; a center within
-    // pad of the surface blocks (matches fillDisc's center-in-reach rule).
-    const x0 = d.pos.x - ex - pad, x1 = d.pos.x + ex + pad;
-    const y0 = d.pos.y - ey - pad, y1 = d.pos.y + ey + pad;
-    for (let cy = (Math.floor(y0 / step) + 0.5) * step; cy <= y1 + step / 2; cy += step) {
-      for (let cx = (Math.floor(x0 / step) + 0.5) * step; cx <= x1 + step / 2; cx += step) {
-        if (shapeDistance(s, d.pos.x, d.pos.y, cx, cy) < pad) {
-          g.fillRegion(cx, cy, cx, cy, 'wall');
-        }
-      }
-    }
-  }
+  private stampNavSurface(g: GridWalkField, d: Doodad): void { stampNativeNavSurface(this.nativeNavigationHost(), g, d); }
 
   /** Is the target under crowns outside the viewer's local presence?
    *  Connected canopy membership grants no distant vision. */
@@ -63632,29 +63362,7 @@ export class World {
    *  Spawn placement and the unstuck sentinel both come through here, so an
    *  actor can never be born into (or left inside) a wall to pingpong forever. */
   findFreeSpot(at: Vec2, radius: number, tier = 0): Vec2 {
-    // LAYER SOVEREIGNTY: the whole hunt happens on ONE story — solids of the
-    // body's own layer reject, the clamp confines against that story's floor
-    // (ClampOpts.tier), and the walkability read is the story's own view
-    // (the base grid is another layer's truth: a "free" spot judged on it
-    // would strand an under-story runner off its own web). tier 0 (every
-    // legacy caller) walks the identical path it always did.
-    const opts = tier >= 1 ? { tier } : undefined;
-    const walkAt = tier >= 1 && this.tierViews
-      ? this.tierViews[Math.min(tier, this.tierViews.length - 1)] ?? this.walk
-      : this.walk;
-    const p = this.clampPos(vec(at.x, at.y), radius, undefined, opts);
-    if (!this.pointInSolid(p.x, p.y, radius * 0.4, tier)) return p;
-    for (let ring = 1; ring <= 7; ring++) {
-      const rr = ring * 55;
-      for (let k = 0; k < 10; k++) {
-        const a = (k / 10) * Math.PI * 2 + ring * 0.73;
-        const q = this.clampPos(vec(at.x + Math.cos(a) * rr, at.y + Math.sin(a) * rr), radius, undefined, opts);
-        if (this.pointInSolid(q.x, q.y, radius * 0.4, tier)) continue;
-        if (walkAt && !walkAt.isWalkable(q.x, q.y)) continue;
-        return q;
-      }
-    }
-    return p; // no clear ground within ~385u — keep the clamp (never loop forever)
+    return nativeFindFreeSpot(this.nativePlacementHost(), at, radius, tier);
   }
 
   /**
@@ -63664,6 +63372,8 @@ export class World {
    * beyond the gap crosses it, while walking and dashing slide along it.
    */
   clampPos(p: Vec2, radius: number, from?: Vec2, opts?: ClampOpts): Vec2 {
+    if (from === undefined && nativePlacementDataInputs(p, opts))
+      return nativePlacementClamp(this.nativePlacementHost(), p, radius, opts?.tier);
     const movementTether = opts?.mover instanceof Actor ? refreshMovementTether(opts.mover, this) : undefined;
     if (movementTether) p = movementTetherLimit(movementTether, p);
     const b0 = clampToBounds(p, radius, this.arena);

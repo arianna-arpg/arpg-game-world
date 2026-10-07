@@ -1,3 +1,14 @@
+NativeAreaLocal binds complete native geometry to the shared NativeNavigation,
+NativePlacement, NativeEncounterGroup and NativeAmbient stages. Classic World
+uses the same operations. NativeExitPreparation retains lazy native source reads,
+original load order and complete full-load geometry. Local preparation owns its
+collision and player position; provider reads remain lazy across seeded scopes.
+Own-data normalization and finite grid/index work limits protect prepared frames.
+This is fixed-stage preparation, not complete population/controller admission:
+source issuance, full load RNG continuation, world-sim resolutions, magic refresh,
+body paging and shared interiors remain required. Verify the five corresponding
+probes, nativeambient/nativeareacompiler, types, genqa and sim smoke.
+
 NativeCompleteAreas preserves the whole native load-prepared layout, including
 ordered boundary/road/meld inputs, exact generation ports, all output collections,
 source mechanisms and cave seed ordering. Physical seam mouths remain distinct

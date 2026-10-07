@@ -62,6 +62,11 @@ export type ProbeRow =
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_nativeambient.ts', status: 'green', tier: 'fast', why: 'Archived actual native pack/habitat/wildlife parity, full body/callback tapes and exact random draws with isolated stage receipts' },
+  { probe: 'probe_nativenavigation.ts', status: 'green', tier: 'fast', why: 'Pinned native grid painting and obstacle navigation parity across 45529 cells and 4744 ground queries' },
+  { probe: 'probe_nativeplacement.ts', status: 'green', tier: 'fast', why: 'Pinned native free/far/stand placement and exact moverless clamp parity, original pit and tier scopes, RNG and callback tapes' },
+  { probe: 'probe_nativeencountergroup.ts', status: 'green', tier: 'fast', why: 'Pinned native formation materialization across all 49 recipes, full bodies and RNG, no partial publication on failed seats' },
+  { probe: 'probe_nativeexitpreparation.ts', status: 'green', tier: 'fast', why: 'Pinned native exit geometry and lazy source reads, three complete real loadZone comparisons and original ordering' },
+  { probe: 'probe_worldmass_nativearealocal.ts', status: 'green', tier: 'fast', why: 'Complete retained area local navigation/placement and normal ambient bodies, foreign terrain isolation and source-preserving context refusal' },
   { probe: 'probe_worldmass_nativeareacompiler.ts', status: 'green', tier: 'fast', why: 'Complete native area output and archived load-boundary goldens, original generation ports, durable entrance zip and explicit unbound runtime' },
   { probe: 'probe_worldmass_nativearearoutes.ts', status: 'green', tier: 'fast', why: 'Whole-area body-clear spawn/approach paths, retained walls and closed gates, source-exact cold replay and bounded conservative search' },
   { probe: 'probe_worldmass_nativesubstrate.ts', status: 'green', tier: 'fast', why: 'Native geography owns actual generator/stream/collision fields and materials, neutral mire bypasses, finite-domain candidate refusal and legacy isolation' },

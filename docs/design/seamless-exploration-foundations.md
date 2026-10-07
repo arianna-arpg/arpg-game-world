@@ -1528,3 +1528,54 @@ actor paging. Sleeping bodies must retain their native state and cannot count as
 dead or disappear from objectives. The current shared actor limit cannot be solved
 by silently dropping native packs. These boundaries prepare the coherent playable
 course; neither a helper extraction nor a successful restore is that course.
+
+
+## NativeAreaLocal: full-layout local preparation with shared native operations
+
+NativeAreaLocal now composes complete retained geometry with the actual shared
+navigation, free/far placement, habitat and encounter-group materializers. It
+keeps the native floor, pit, bridge, tier and formation behavior at the original
+stage boundaries. Classic World delegates to the same operations, including a
+conservative data-only placement shortcut; accessor-bearing inputs retain their
+original general movement read order. General movement and tether behavior stay
+in the existing World path.
+
+The local frame copies exact source records, normalizes separate own-data working
+records and supplies the area's entry, player position, index and navigation.
+Optional fields cannot inherit process defaults, required fields refuse absence,
+and grid/index/tier work has explicit limits. Source providers are read when the
+native operation uses them; preparing a frame before a seeded random scope cannot
+capture a stale random function. These are fixed-stage frames: native registries
+must still be the same installed source, and changed doors or terrain require a
+new frame. Mutable navigation objects are preparation scratch, not saved authority.
+
+The durable comparisons pin actual original methods from commit 3b14dba3:
+
+- NativeNavigation: ten layouts, 45,529 grid cells and 4,744 ground queries,
+  including wet ground, rotated blockers, bridges and open/closed annexes.
+- NativePlacement: 998 archived comparisons, 11,373 random draws, 96,467 ordered
+  callbacks and 60 shape/pit tapes; additional accessor controls retain native
+  read order and tier restoration on exceptions.
+- NativeEncounterGroup: all 49 authored recipes across 168 pairs, 646 factory
+  attempts, 638 admitted bodies and 2,868 random draws. Failed seats preserve
+  consumed attempts without partial groups. This preserves native behavior;
+  errors during final decoration/publication are not an area rollback transaction.
+- NativeExitPreparation: 840 core pairs, 252 actual World wrapper pairs and
+  26,798 source/host reads. Three actual full-load pairs preserve complete zone,
+  geometry, structures, exits and generation side channels. Their live doodad
+  counts are 285/153/418; the earlier 278/144/246 archives are prepared generation
+  outputs at a different stage and must not be conflated with these loads.
+- NativeAreaLocal: three complete archived layouts, 633 placement/navigation
+  queries, 352 normal-rarity bodies and 1,555 random draws. A foreign factory host
+  cannot supply its placement, terrain or player position; cold and A/B/A runs
+  retain the same bodies and source bytes. Normal rarity is deliberate here:
+  detached magic-pack refresh and complete load-stage sequencing remain unbound.
+
+The frame does not issue compiler source authority, resolve world-simulation
+population modifiers, resume both native random streams, own every birth stage,
+translate controllers, publish areas, or page/save their complete populations.
+Those remain necessary before activating a full-area continuous-world policy.
+The next playable course still requires two complete naturally generated areas,
+physical substrate/seams, combat and wounds, an entrance, cold Continue, and no
+silently omitted bodies or unsupported environmental mechanisms. Main-content
+parity, mountain/hydrology variety and repeated real-play passes remain open.
