@@ -1,6 +1,7 @@
-import { characterPagingAvailable, characterNativePages, commitCharacterNativeCohort, loadCharacterNativePage, forgetCharacterNativePage, resetCharacterNativePages } from '../meta/character';
+import { characterPagingAvailable, characterNativePages, commitCharacterNativeCohort, loadCharacterNativePage, forgetCharacterNativePage, resetCharacterNativePages, characterNativeSessionCurrent, characterNativeSessionToken, characterNativePageOrder } from '../meta/character';
+import type { MassResidentResume } from '../meta/characterResume';
 import type { CharacterPageEntry } from '../meta/characterPages';
-import { stageNativeCohort, hydrateNativeCohort } from './nativePaging';
+import { stageNativeCohort, hydrateNativeCohortData } from './nativePaging';
 import { createNativeFeatureWarmQueue, type NativeFeatureWarmQueue } from './nativeWarm';
 import { MassStorm, type MassStormSave } from './storm';
 import { MassSnow, type MassSnowSave } from './snow';
@@ -78,6 +79,24 @@ export interface MassAdventureSave {
   ecology?: MassEcologySave;
   settlement?: MassSettlementSave;
 }
+/** Explicit restoration view: resident rows are not a complete portable save. */
+export type MassRuntimeRestore = MassAdventureSave | MassResidentResume;
+interface MassRestoreData extends Omit<MassAdventureSave, 'enemies' | 'dormancy'> {
+  residentEnemies: MassAdventureSave['enemies']; residentDormancy?: MassDormancySave;
+}
+function restoreData(input?: MassRuntimeRestore): MassRestoreData | undefined {
+  if (!input) return;
+  if ('definition' in input) return {...input.definition, residentEnemies:input.residentEnemies, residentDormancy:input.residentDormancy};
+  const {enemies,dormancy,...definition}=input;
+  return {...definition,residentEnemies:enemies,residentDormancy:dormancy};
+}
+export interface NativeReadiness {
+  readonly status:'ready'|'pending'|'refused'; readonly pending:number; readonly required:number;
+  readonly retryable:boolean; readonly error?:string;
+}
+export interface MassResumePreparation {
+  isCurrent():boolean|Promise<boolean>; signal?:AbortSignal;
+}
 /** First engine adapter. Residency NEVER tears down the World, its actors, or
  * in-flight skills. The population cap is deliberately conservative until full
  * dependency-aware dormancy exists: wounded/engaged bodies are never discarded. */
@@ -121,7 +140,7 @@ export class WorldMassRuntime {
   private disposed = false;
   get nativePagingStats(): {resident:number;paged:number;pages:number;reads:number;writing:boolean;refusal:string} {
     return {resident:this.natives.size,paged:this.paged.size,pages:new Set(this.paged.values()).size,
-      reads:this.pagingReads.size,writing:!!this.pagingWrite,refusal:this.pagingRefusal};
+      reads:this.pagingReads.size,writing:!!this.pagingWrite,refusal:this.pagingRefusal||this.pagingErrors.values().next().value||""};
   }
   async flushNativePaging(): Promise<void> {
     await this.pagingWrite;await Promise.all([...this.pagingReads.values()]);
@@ -132,10 +151,18 @@ export class WorldMassRuntime {
   private dangerCache = new Map<string, number>();
   private nextPopulation = 0;
   private attached = false;
+  private savedNativeOwners=new Set<string>();
+  private restoring = false;
+  private resumeCurrent:(()=>boolean|Promise<boolean>)|null=null;
+  private resumeSignal:AbortSignal|undefined;
+  private pagingErrors=new Map<string,string>();
+  private readiness:Readonly<NativeReadiness>=Object.freeze({status:'ready',pending:0,required:0,retryable:false});
+  get resumePending():boolean{return this.restoring;}
   private places = new Map<string, ReturnType<MassGenerator['placesInCell']>>();
   readonly origin: MassCell;
   readonly resumeTier: number;
-  constructor(seed: number, runId: string, config: MassAdventure = massAdventure(), save?: MassAdventureSave) {
+  constructor(seed: number, runId: string, config: MassAdventure = massAdventure(), input?: MassRuntimeRestore) {
+    const save=restoreData(input);
     this.resumeTier = save?.player.tier ?? 0;
     if (!Number.isInteger(this.resumeTier) || this.resumeTier < 0 || this.resumeTier > 6) throw new Error('Invalid worldmass player story');
     this.config = freezeData(JSON.parse(canonical(config)) as MassAdventure);
@@ -259,7 +286,7 @@ export class WorldMassRuntime {
         || !!save.snow !== !!config.geography?.snow
         || !!save.storms !== !!config.geography?.storms
         || save.schema < 10 && !!(config.dormancy || config.shrineResidency || config.puzzleResidency || config.nativeCountry)
-        || !!save.dormancy !== !!config.dormancy
+        || !!save.residentDormancy !== !!config.dormancy
         || !!save.nativeFeatures !== !!config.nativeCountry
         || save.schema < 9 && config.bounties !== undefined
         || save.schema < 8 && config.journey?.reservePopulation !== undefined
@@ -270,12 +297,12 @@ export class WorldMassRuntime {
         || save.schema < 3 && !!config.journey?.roadside
         || save.schema === 1 && config.content.some(c => c.site?.shrines?.length)
         || canonical(save.settlement?.zone?.structurePlans ?? null) !== canonical(config.settlement?.structurePlans ?? null)
-        || save.configHash !== massDigest(config) || !Array.isArray(save.enemies)
-        || !config.dormancy && save.enemies.length > config.maxPopulation || !savedZoneContents(save.contents)
+        || save.configHash !== massDigest(config) || !Array.isArray(save.residentEnemies)
+        || !config.dormancy && save.residentEnemies.length > config.maxPopulation || !savedZoneContents(save.contents)
         || !Number.isFinite(save.player?.x) || !Number.isFinite(save.player?.y)
-        || new Set(save.enemies.map(e => e.id)).size !== save.enemies.length)
+        || new Set(save.residentEnemies.map(e => e.id)).size !== save.residentEnemies.length)
         throw new Error('Invalid worldmass checkpoint');
-      for (const e of save.enemies) if (!e.id || !MONSTERS[e.monster] || !Number.isSafeInteger(e.level) || e.level < 1
+      for (const e of save.residentEnemies) if (!e.id || !MONSTERS[e.monster] || !Number.isSafeInteger(e.level) || e.level < 1
         || ![e.x, e.y, e.life, e.scale].every(Number.isFinite) || e.life <= 0 || e.scale <= 0
         || e.magicPack && (!readMagicPack(e.magicPack) || typeof e.name !== 'string')
         || e.encounterGroup !== undefined && (!readEncounterGroup(e.encounterGroup) || typeof e.name !== 'string' || !!e.magicPack)
@@ -295,11 +322,14 @@ export class WorldMassRuntime {
           this.state.paint({ address: this.walk.at(x, y), region: 'ground', color, cause: 'worldmass/start-clearing' });
     }
   }
-  attach(world: World, save?: MassAdventureSave): void {
+  attach(world: World, input?: MassRuntimeRestore, options:{restoreOnly?:boolean}={}): void {
+    const save=restoreData(input);
+    this.restoring=!!options.restoreOnly;
+    this.savedNativeOwners=new Set(save?.nativeFeatures?.born.filter(row=>row.changes.native!==undefined).map(row=>row.placement.id)??[]);
     if(!save)resetCharacterNativePages(world);
     for(const page of characterNativePages(world)){
       if(page.ref.run!==this.generator.run.runId)throw Error('Foreign native page session');
-      for(const id of page.ids){if(save?.enemies.some(e=>e.id===id))throw Error('Native both resident and paged');this.paged.set(id,page);}
+      for(const id of page.ids){if(save?.residentEnemies.some(e=>e.id===id)||this.paged.has(id)||this.state.claimed('fallen',id))throw Error('Native page identity conflicts with retained history');this.paged.set(id,page);}
     }
     this.cacheOpened = source => world.chests.some(c => c.rewardSource === source && c.opened);
     world.zoneMap[MASS_ZONE] = { id: MASS_ZONE, name: 'The Unbroken Wilds', level: 1,
@@ -380,12 +410,12 @@ export class WorldMassRuntime {
     world.landPartyAt(save?.player ?? this.settlement?.spawn ?? { x: 12, y: 12 }, { tier: this.resumeTier });
     if (save) {
       const groups = new Map<number,number>(), formations = new Map<number,number>();
-      for (const e of save.enemies) {
+      for (const e of save.residentEnemies) {
         const a=this.restoreNativeBody(world,e,groups,formations);
         this.natives.set(e.id,a);world.actors.push(a);
       }
       restoreZoneContents(world, save.contents);
-      if (save.dormancy) this.dormancy!.restore(save.dormancy, this.natives, world);
+      if (save.residentDormancy) this.dormancy!.restore(save.residentDormancy, this.natives, world);
       world.refreshMagicPacks();
     }
     this.fields.restoreAdmitted(world, this.journey?.places ?? [], place=>({
@@ -406,9 +436,69 @@ export class WorldMassRuntime {
       center: localOffset(place.center, {...this.origin,x:0,y:0}, this.config.terrain.addressSpan), level: this.populationFor(place).level,
     }), owner => this.locateOwner(owner));
     if (!this.dormancy && this.population > this.config.maxPopulation) throw Error('Worldmass puzzle population exceeds capacity');
-    this.update(world, true);
-    this.attached = true;
-    this.nextPopulation = world.time;
+    this.restoring ||= this.paged.size>0;
+    if(!this.restoring)this.finishResume(world);
+  }
+  /** Finish only after the historical neighborhood is resident. Rewards stay
+   * disabled through this initial update, as on the ordinary inline restore. */
+  finishResume(world:World):void {
+    if(this.disposed||world.massRuntime!==this||world.zone.id!==MASS_ZONE)throw Error('Stale native resume runtime');
+    if(this.attached&&!this.restoring)return;
+    if(this.nearNativePages(world,this.resumeReadRadius).length)throw Error('Native resume neighborhood is not ready');
+    this.resumeCurrent=null;this.resumeSignal=undefined;this.restoring=false;
+    try{this.update(world,true);}catch(error){this.restoring=true;throw error;}
+    this.attached=true;this.nextPopulation=world.time;this.savedNativeOwners.clear();
+  }
+  private get resumeReadRadius():number{return (this.dormancy?.policy.wakeRadius??0)+this.config.populationRadius;}
+  private nativeObservers(world:World):Actor[]{return world.actors.filter(a=>!a.dead&&a.team!=='enemy');}
+  private nearNativePages(world:World,radius:number):CharacterPageEntry[]{
+    const observers=this.nativeObservers(world),distance=(p:CharacterPageEntry)=>Math.min(...p.positions.map(at=>
+      Math.min(...observers.map(a=>Math.hypot(a.pos.x-at.x,a.pos.y-at.y)))));
+    return [...new Set(this.paged.values())].map(page=>({page,distance:distance(page)}))
+      .filter(row=>row.distance<=radius).sort((a,b)=>a.distance-b.distance||a.page.ref.key.localeCompare(b.page.ref.key)).map(row=>row.page);
+  }
+  private readinessValue(status:NativeReadiness['status'],required:number,error?:string):Readonly<NativeReadiness>{
+    const next={status,pending:this.pagingReads.size,required,retryable:status==='refused',...(error?{error}:{})};
+    if(JSON.stringify(next)!==JSON.stringify(this.readiness))this.readiness=Object.freeze(next);
+    return this.readiness;
+  }
+  /** Called before World time, input, AI or effects advance. Surface coordinates
+   * alone can wake surface pages; native interiors never enter this path. */
+  nativeReadiness(world:World):Readonly<NativeReadiness>{
+    if(world.zone.id!==MASS_ZONE)return this.readinessValue('ready',0);
+    if(this.disposed||world.massRuntime!==this)return this.readinessValue('refused',0,'Stale native runtime');
+    if(this.paged.size&&!characterNativeSessionCurrent(world))return this.readinessValue('refused',this.paged.size,'Native page session was replaced');
+    this.startNativePageReads(world);
+    const required=this.nearNativePages(world,this.restoring?this.resumeReadRadius:this.dormancy?.policy.wakeRadius??0);
+    const failure=required.find(p=>this.pagingErrors.has(p.ref.key));
+    if(failure)return this.readinessValue('refused',required.length,this.pagingErrors.get(failure.ref.key));
+    if(required.length)return this.readinessValue('pending',required.length);
+    if(this.restoring)world.withGlobalPolicies(()=>this.finishResume(world));
+    return this.readinessValue('ready',0);
+  }
+  /** Explicit retry is independent of a paused simulation clock. Missing bytes
+   * retain every original claim and reference; retry never rerolls a body. */
+  retryNativePages(world:World):Readonly<NativeReadiness>{
+    this.pagingRetry.clear();this.pagingErrors.clear();return this.nativeReadiness(world);
+  }
+  async prepareResumeNeighborhood(world:World,options:MassResumePreparation):Promise<void>{
+    if(this.attached||!this.restoring)throw Error('Native resume is not in restore-only phase');
+    this.resumeCurrent=options.isCurrent;this.resumeSignal=options.signal;
+    const current=async()=>{if(options.signal?.aborted||!this.pagingCurrent(world)||!await options.isCurrent())throw Error('Stale native resume preparation');};
+    try{
+      for(;;){
+        await current();const required=this.nearNativePages(world,this.resumeReadRadius);if(!required.length)break;
+        this.startNativePageReads(world);
+        const failed=required.find(p=>this.pagingErrors.has(p.ref.key));
+        if(failed)throw Error(this.pagingErrors.get(failed.ref.key)!);
+        // A just-published cohort may occupy a read slot until its finally
+        // callback runs. Await that slot rather than misreport missing bytes.
+        const reads=[...this.pagingReads.values()];
+        if(!reads.length)throw Error('Native resume page unavailable');
+        await Promise.race(reads).catch(()=>{});
+      }
+      await current();
+    }finally{this.resumeCurrent=null;this.resumeSignal=undefined;}
   }
   private inLocalFrame(at:MassCell):boolean {
     if(at.dimension!==this.origin.dimension)return false;
@@ -590,8 +680,10 @@ export class WorldMassRuntime {
   /** Survived-death wakes retain the run's land and consequences. */
   wake(world: World): void { world.landPartyAt(this.settlement?.spawn ?? { x: 12, y: 12 }); this.nearKey = ''; }
   update(world: World, boot = false): void {
-    if (world.zone.id !== MASS_ZONE) return;
-    this.geography?.restoreProcessions(world);
+    if (world.zone.id !== MASS_ZONE || this.restoring) return;
+    if(this.nativeReadiness(world).status!=='ready')return;
+    if(boot||world.time>=this.nextPopulation)this.geography?.restoreResidentOwners(world);
+    else this.geography?.restoreProcessions(world);
     this.geography?.prepare(this.walk.at(world.player.pos.x,world.player.pos.y),world.time);
     this.prepareNativeCountry(world);
     if(this.weather){
@@ -632,6 +724,7 @@ export class WorldMassRuntime {
       // Already visited native geometry remains authoritative when a newer
       // reservation prevents the current provider from proposing its birth.
       for(const placement of this.nativeFeatures.bornNear(at,radius))wanted.set(placement.id,placement);
+      if(!this.attached)this.nativeFeatures.sync(this.nativeFeatures.bornNear(at,radius).filter(p=>this.savedNativeOwners.has(p.id)),this.nativeHost);
       this.nativeFeatures.sync([...wanted.values()],this.nativeHost);
     }
     this.fields.sync(world);
@@ -836,38 +929,62 @@ export class WorldMassRuntime {
         if(e.leashHome) a.aiPhase = 'leash_home';
             a.life=Math.min(a.maxLife(),e.life);return a;
   }
-  private pagingCurrent(world:World):boolean{return !this.disposed&&this.attached&&world.massRuntime===this&&world.zone.id===MASS_ZONE;}
-  private updateNativePaging(world:World):void {
-    if(!this.dormancy||!characterPagingAvailable()||!this.pagingCurrent(world))return;
-    const observers=world.actors.filter(a=>!a.dead&&a.team!=='enemy');
-    const near=(positions:readonly {x:number;y:number}[],radius:number)=>positions.some(p=>observers.some(a=>Math.hypot(a.pos.x-p.x,a.pos.y-p.y)<=radius));
-    // At most two detached page reads. Until complete, every native identity
-    // remains present in the ledger and suppresses replacement births/rewards.
-    for(const page of new Set(this.paged.values())){
+  private pagingCurrent(world:World):boolean{return !this.disposed&&(this.attached||this.restoring)
+    &&world.massRuntime===this&&world.zone.id===MASS_ZONE&&characterNativeSessionCurrent(world);}
+  private readNativePage(page:CharacterPageEntry):ReturnType<typeof loadCharacterNativePage>{return loadCharacterNativePage(page);}
+  private startNativePageReads(world:World):void {
+    if(!this.dormancy||!this.paged.size||!this.pagingCurrent(world))return;
+    // Closest first, no more than two retained payloads/decoded cohorts. A page
+    // remains a living identity until the entire detached cohort can publish.
+    for(const page of this.nearNativePages(world,this.resumeReadRadius)){
       if(this.pagingReads.size>=2)break;
-      if(this.pagingReads.has(page.ref.key)||(this.pagingRetry.get(page.ref.key)??0)>world.time
-        ||!near(page.positions,this.dormancy.policy.wakeRadius+this.config.populationRadius))continue;
+      if(this.pagingReads.has(page.ref.key)||(this.pagingRetry.get(page.ref.key)??0)>Date.now())continue;
+      const player=world.player,session=characterNativeSessionToken(world),guard=this.resumeCurrent,signal=this.resumeSignal;
+      const current=()=>this.pagingCurrent(world)&&world.player===player&&!signal?.aborted
+        &&characterNativeSessionToken(world)===session&&page.ids.every(id=>this.paged.get(id)===page&&!this.natives.has(id)&&!this.state.claimed('fallen',id));
+      this.pagingErrors.delete(page.ref.key);
       const task=(async()=>{
-        const data=await loadCharacterNativePage(page);
-        if(!this.pagingCurrent(world))return;
-        if(data.configHash!==this.configHash)throw Error('Native page config mismatch');
-        const groups=new Map<number,number>(),formations=new Map<number,number>(),player=world.player;
-        const restored=await hydrateNativeCohort({readPage:async()=>JSON.stringify(data.cohort)},page.ref,this.origin,
-          this.config.terrain.addressSpan,player,{create:d=>{
+        const data=await this.readNativePage(page);
+        if(!current()||guard&&!await guard())return;
+        if(!current())return;
+        if(data.configHash!==this.configHash||canonical(data.cohort.policy)!==canonical(this.dormancy!.policy))throw Error('Native page config mismatch');
+        world.withGlobalPolicies(()=>{
+          if(!current())return;
+          const groups=new Map<number,number>(),formations=new Map<number,number>();
+          const restored=hydrateNativeCohortData(data.cohort,page.ref,this.origin,this.config.terrain.addressSpan,player,{create:d=>{
+            if(!current())throw Error('Stale native page factory');
             const e=data.enemies.find(e=>e.id===d.id);if(!e)throw Error('Missing native page baseline');
             return this.restoreNativeBody(world,e,groups,formations);
           },groups:()=>{}});
-        if(!this.pagingCurrent(world)||world.player!==player)return;
-        if(page.ids.some(id=>this.natives.has(id)||this.paged.get(id)!==page))throw Error('Stale native page publication');
-        this.dormancy!.adoptSleeping([...restored.actors.values()]);
-        for(const [id,a]of restored.actors){this.natives.set(id,a);this.paged.delete(id);}
-        forgetCharacterNativePage(world,page);this.pagingRetry.delete(page.ref.key);
-        this.dormancy!.update(world,this.natives);world.refreshMagicPacks();
+          if(!current())return;
+          if(restored.actors.size!==page.ids.length||page.ids.some(id=>!restored.actors.has(id)))throw Error('Native page publication lost a body');
+          this.dormancy!.adoptSleeping([...restored.actors.values()]);
+          for(const [id,a]of restored.actors){this.natives.set(id,a);this.paged.delete(id);}
+          // No await separates publication and manifest removal. Saving during
+          // any later turn sees either the old page or every restored body.
+          forgetCharacterNativePage(world,page);this.pagingRetry.delete(page.ref.key);this.pagingErrors.delete(page.ref.key);
+          this.orderNativeBodies(world);
+          this.dormancy!.update(world,this.natives);
+          // Async completion order must not become native update order. Keep
+          // every non-owned actor in its slot and reorder only exact old bodies.
+          const owned=new Set(this.natives.values()),active=new Set(world.actors);
+          const ordered=[...this.natives.values()].filter(a=>active.has(a));let cursor=0,changed=false;
+          world.actors=world.actors.map(a=>{if(!owned.has(a))return a;const next=ordered[cursor++];changed ||= next!==a;return next;});
+          if(changed)world.actorGridRev++;
+          world.refreshMagicPacks();
+        });
       })();
       this.pagingReads.set(page.ref.key,task);
-      void task.catch(error=>{this.pagingRetry.set(page.ref.key,world.time+5);console.error('[worldmass] native page unavailable; retained its identities:',error);})
-        .finally(()=>this.pagingReads.delete(page.ref.key));
+      void task.catch(error=>{if(this.pagingCurrent(world)&&characterNativeSessionToken(world)===session){
+        this.pagingRetry.set(page.ref.key,Date.now()+5000);this.pagingErrors.set(page.ref.key,String(error instanceof Error?error.message:error));
+      }}).finally(()=>{if(this.pagingReads.get(page.ref.key)===task)this.pagingReads.delete(page.ref.key);});
     }
+  }
+  private updateNativePaging(world:World):void {
+    if(!this.dormancy||!characterPagingAvailable()||!this.pagingCurrent(world)||this.restoring)return;
+    this.startNativePageReads(world);
+    const observers=this.nativeObservers(world);
+    const near=(positions:readonly {x:number;y:number}[],radius:number)=>positions.some(p=>observers.some(a=>Math.hypot(a.pos.x-p.x,a.pos.y-p.y)<=radius));
     // Bound eligible history, not unsupported mechanics. Those remain pinned.
     if(this.pagingWrite||world.time<this.nextPaging||this.natives.size<=Math.max(192,this.config.maxPopulation*2))return;
     this.nextPaging=world.time+2;
@@ -901,7 +1018,15 @@ export class WorldMassRuntime {
     this.pagingWrite=task;
     void task.catch(error=>console.error('[worldmass] page commit failed; natives retained:',error)).finally(()=>{this.pagingWrite=null;});
   }
+  private orderNativeBodies(world:World):void {
+    const order=characterNativePageOrder(world);if(!order.length)return;
+    const positions=new Map(order.map((id,i)=>[id,i]));
+    const ordered=[...this.natives].sort((a,b)=>(positions.get(a[0])??Infinity)-(positions.get(b[0])??Infinity));
+    // In-place ordering keeps outstanding durable-write leases on this exact registry.
+    this.natives.clear();for(const [id,a]of ordered)this.natives.set(id,a);
+  }
   snapshot(world: World): MassAdventureSave {
+    this.orderNativeBodies(world);
     const enemies: MassEnemySave[] = [];
     for (const [id, a] of this.natives) {
       if (a.dead) { this.state.claim('fallen', id); continue; }

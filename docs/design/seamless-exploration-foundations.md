@@ -857,3 +857,136 @@ Missing state cannot be treated as unvisited land or regenerated factories.
 The hierarchy's 128-controller bound is per owner and 4096 receipts is per
 controller; neither is a global travel limit. Persistent foreign dependencies
 can still honestly pin active capacity. These findings remain unfinished work.
+
+
+## Cold Continue for existing native actor pages
+
+The previous cold-expansion limit above is superseded for browser slots already
+using quiet native cohort pages. The transport stays characterPages:1 and the
+ordinary BrowserRunStore slot remains the sole durable authority. No second
+root or portable-save schema was introduced.
+
+Continue rereads its slot instead of using the menu's cached character. The menu
+retains only display/patron metadata; its existing controls stay available while
+loading so New Run can cancel. CharacterResume distinguishes a complete inline
+save from resident mass sections plus immutable native-page claims. Validation
+checks every page sequentially using the same structural gates as the native
+codec, then discards each distant payload. Only resident and nearby native bodies
+are created. Original native ordering, wounds, sheets, group identities and
+once-only receipts remain owned by the native runtime.
+
+Restoration prepares a detached World/account first. Native inventory, route,
+climate, capital, relief and atlas helpers borrow that candidate only during
+synchronous work and return to the currently adopted World between awaits.
+Account Set changes, slot replacement, deletion, import, roster changes and a
+new resume request invalidate publication. Malformed seamless world/sidearea
+state refuses instead of becoming a fresh world. Candidate teardown releases its
+runtime and exact page session without removing a newer owner.
+
+Restore-only attachment mounts already retained owners before optional births.
+At most two nearby cohort reads may hydrate at once. A missing required cohort
+holds host movement, casting, AI and World time at the wake boundary; farther
+prefetch alone does not hold play. Retry uses wall time, preserves all page/body
+claims and never generates replacement creatures or pays clearance rewards.
+Durable saves remain available while a recoverable page read is held.
+
+An active native cave keeps the surface page session, restores its actual
+interior and ladder, and does not interpret interior coordinates as surface
+locations. The real return lands at its mouth before restoring nearby surface
+cohorts. Portable exports still expand all referenced pages; a missing/corrupt
+page fails export instead of silently dropping the character. Native files
+remain inline, and couch guests retain the complete loader without binding their
+old world pages onto the host.
+
+Focused probes cover staged publication/global ownership, native readiness and
+page integrity/authority. The scale fixture synthesizes 1,000 distinct transport
+pages from genuine native cohorts: 2,000 native IDs, 33,217,790 payload bytes read,
+maximum one preflight read at a time, and zero far Actor factories. Returned page
+metadata is 319,602 bytes; the complete resume is 3,639,867 bytes because the
+unchanged non-actor root remains about 3.3 MB. This is a transport scale test, not
+natural encounter density or total-memory/GC evidence.
+
+This improvement bounds cold native body reconstruction. It does not bound
+all-history read time, page identities/order, disk use, feature descriptors,
+objective/cave/controller history, or coordinate range. The numerical frame
+limit documented above remains. Native caves still use scene transitions;
+continuous seafaring, faction/campaign/Odyssey geography and remaining native
+source families are separate integration work.
+
+Final browser acceptance used index-BPfZZMdJ.js (SHA256
+39fe96623a01e8d0ef822092dccf3b8313be06e60dece4d844116ef9957d719e)
+through the actual menu and isolated browser storage. Ninety-six controlled
+teleport trips produced 583 saved native identities: 103 resident and 480 in
+five pages. Explicit GC retained 103 original Actor WeakRefs. This is generated
+native history with controlled travel, not natural walking-density evidence.
+The root still occupied 6,210,880 bytes.
+
+Cold menu entry read no actor pages and created no native bodies. Missing and
+corrupt far pages both refused Continue before any factory and left root/account
+unchanged. Repaired Continue validated five pages and reread one nearby cohort:
+96 historical bodies returned in their original order, 384 remained paged, and
+three optional new births brought residency to 202. The 296 total factory calls
+also include ordinary settlement setup; they are not all cohort restorations.
+After explicit GC no instrumented parsed page-root WeakRef remained. This checks
+retention of those roots, not peak bytes or constant total memory.
+
+Required near-page delay held 20 frames without advancing input or world time.
+A subsequent missing-page retry held 12 frames, preserved all 96 claims through
+a durable Save, and restored their exact wounds without using simulation time
+for retry. A malformed active cave ladder refused; repair restored the same
+hero at the exact cellar pose and the native exit returned to (195,375), while
+192 far bodies remained paged. The existing New Run button cancelled a delayed
+Continue into its provisional class-selection flow; this did not mint a new
+replacement vessel.
+
+The actual Options Download action refused missing export bytes, then produced
+a complete inline export after repair. After deleting only the isolated test
+profile's old native-page database, the actual file-input and confirmation
+import restored all 586 exported bodies with no actor-page reads. The report
+and its exact harness copy are native-resume-ui-final-BPfZZMdJ under the ignored
+balance/reports directory; the reusable course is balance/native-resume-ui.cjs.
+
+Final verification: all three type-check projects pass; all 93 worldmass probes
+pass with retries disabled (358.8 seconds); persistence and simulation smoke
+pass; generation QA covers 869 cases across three seeds with no failures and
+five warnings. The four final browser images were independently inspected and
+the course reports no console errors. This is scoped same-model independent
+acceptance of cold restoration, not certification of complete main parity.
+
+Reciprocal review then reproduced two preflight/decoder mismatches: invalid
+array/typed-array properties and unsupported formation identities. The shared
+validator now checks encoder-representable fields, prototype safety, exact
+position versus page-distance metadata, and explicit native formation baseline
+identity/species. Valid sparse arrays, aliases, numeric sentinel clocks, magic
+packs and encounter formations remain accepted. The expanded characterresume
+probe passes six groups; nativepaging passes two and dormancy passes ten.
+
+The repaired final client is index-C-gWPEy0.js, SHA256
+f7be3284c233f059bea4d7ab2d1b806264570dbeabe29becd93b35bc9c4f360f.
+A separate focused browser course copied the prior course's genuine 586-body
+history and let the normal runtime page it again; it did not repeat or invent
+travel. Three coherently rehashed far-page faults (array length, typed-array
+named property and unbacked squad) each refused before any Actor factory while
+preserving the current World, account and durable root. Repaired Continue kept
+298 bodies resident and 288 in three distant pages, with exact order and pose.
+Actual export/import again restored all 586 bodies without old page reads.
+All five follow-up images were inspected and console errors were empty.
+
+The corrected-client report is native-resume-validator-ui-final-C-gWPEy0 in
+balance/reports, with the exact harness preserved beside it. Its reusable course
+is balance/native-resume-validator-ui.cjs. The earlier full cave, delayed-wake
+and New Run course remains attributed to BPfZZMdJ; these two reports are
+complementary functional evidence, not a performance or constant-memory claim.
+
+The shared staged-World probe also exercises unchanged finite crossroads saves
+for mortal and roster-owned immortal characters. Both exact and selected-town
+wakes preserve native survivor memory/routes; subsequent saves use the proper
+slot without overwriting the mortal run. It now passes eight groups, and the
+final test-only addition passes the simulation type check.
+
+After the codec repair, all 93 worldmass probes passed again with retries
+disabled (444.4 seconds), all three type-check projects passed, and the complete
+persistence harness passed. Classic production build/boot passed before the
+validator-only repair; the final preview build and targeted browser course
+cover the corrected client. The classic/roster test-only addition passed its
+focused eight-group run and simulation type check separately.

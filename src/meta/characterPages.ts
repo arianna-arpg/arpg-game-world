@@ -3,7 +3,16 @@ import type { NativePageRef, NativePageStorage } from './browserNativePages';
 import type { NativeCohortLease, NativeCohortPage } from '../worldmass/nativePaging';
 import type { MassAdventureSave } from '../worldmass/runtime';
 import type { MassDormancySave } from '../worldmass/dormancy';
-import { canonical } from '../worldmass/random';
+import { canonical, freezeData, massDigest } from '../worldmass/random';
+import { address } from '../worldmass/address';
+import { validateMassDormancy, validateNativeDormancyCheckpoint } from '../worldmass/dormancy';
+import { validMassBirth } from '../worldmass/birth';
+import { readMagicPack } from '../engine/magicPacks';
+import { readEncounterGroup } from '../engine/encounterGroups';
+import { MONSTERS } from '../data/monsters';
+import { ENCOUNTER_GROUPS } from '../data/encounterGroups';
+import { isCurrentCharacterSave } from './saveCompatibility';
+import type { CharacterResume } from './characterResume';
 
 /** This is a transport envelope, never a new CharacterSave schema. The game's
  * one BrowserRunStore slot owns its commit and previous revision. Portable and
@@ -88,7 +97,85 @@ export async function readCharacterNativePage(storage: Pick<NativePageStorage,'r
     || canonical([...c.checkpoint.sleeping].sort())!==canonical([...entry.ids].sort())
     || c.checkpoint.unsupported.length
     || data.enemies.some(e=>!entry.ids.some((id,i)=>id===e.id&&entry.positions[i].x===e.x&&entry.positions[i].y===e.y))) reject();
+  validateNativeDormancyCheckpoint(c.checkpoint, data.enemies, true,
+    new Map(data.enemies.map(e => [e.id, e.magicPack?.id ?? e.encounterGroup?.id])));
   return data;
+}
+
+/** Same baseline eligibility as applyEncounterGroup, before a native factory.
+ * The decoder may restore exact tactics later, but it cannot create a missing
+ * formation that the native body factory would have refused. */
+function nativeFormationFits(monster: string, raw: unknown): boolean {
+  const state = readEncounterGroup(raw), group = state && ENCOUNTER_GROUPS[state.recipe];
+  const member = group?.members.find(m => m.slot === state!.slot);
+  return !!group && !!member && MONSTERS[monster]?.faction === group.faction
+    && (member.monster === monster || !!member.choices?.some(r => r.id === monster));
+}
+
+export type PagedCharacterResume = Omit<Extract<CharacterResume, { kind: 'browser-native-pages' }>, 'authority'>;
+
+/** Validate metadata first, before any I/O or actor factory. This gate never
+ * pretends the resident portion of an envelope is a complete CharacterSave. */
+export function validateCharacterPageEnvelope(value: unknown): CharacterPagesEnvelope {
+  if (!hasCharacterPages(value) || value.characterPages !== 1 || !Array.isArray(value.pages) || !value.pages.length
+    || !Array.isArray(value.order) || !isCurrentCharacterSave(value.character)) reject();
+  const mass = value.character.world?.worldmass;
+  if (!mass?.dormancy || !mass.config.dormancy || !Array.isArray(mass.enemies) || !Array.isArray(mass.state.claims)
+    || mass.configHash !== massDigest(mass.config)) reject();
+  address(mass.origin.dimension, mass.origin.cx, mass.origin.cy, 0, 0, mass.config.terrain.addressSpan);
+  validateMassDormancy(mass.config.dormancy, mass.config.populationRadius);
+  const ids = new Set(mass.enemies.map(e => e.id)), refs = new Set<string>(), keys = new Set<string>();
+  if (ids.size !== mass.enemies.length) reject();
+  const dead = new Set(mass.state.claims.filter(r => r[0] === 'fallen').map(r => r[1]));
+  for (const entry of value.pages) {
+    const r = entry?.ref;
+    if (!r || typeof r.run !== 'string' || r.run !== mass.state.run.runId || typeof r.page !== 'string' || !r.page
+      || typeof r.revision !== 'string' || !r.revision || r.key !== JSON.stringify([r.run,r.page,r.revision])
+      || !/^[0-9a-f]{64}$/.test(r.digest) || !Number.isSafeInteger(r.bytes) || r.bytes < 0
+      || refs.has(r.page) || keys.has(r.key) || !Array.isArray(entry.ids) || entry.ids.length < 1 || entry.ids.length > 96
+      || !Array.isArray(entry.positions) || entry.positions.length !== entry.ids.length) reject();
+    refs.add(r.page); keys.add(r.key);
+    for (let i=0; i<entry.ids.length; i++) {
+      const id=entry.ids[i], pos=entry.positions[i];
+      if (typeof id !== 'string' || !id || ids.has(id) || dead.has(id) || !pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) reject();
+      ids.add(id);
+    }
+  }
+  if (value.order.length !== ids.size || new Set(value.order).size !== ids.size || value.order.some(id => !ids.has(id))) reject();
+  validateNativeDormancyCheckpoint(mass.dormancy, mass.enemies, false,
+    new Map(mass.enemies.map(e => [e.id, e.magicPack?.id ?? e.encounterGroup?.id])));
+  return value;
+}
+
+/** Every page is verified sequentially, then released. Retained memory is the
+ * root plus identity metadata, never the far actor codecs or merged graphs. */
+export async function preparePagedCharacterResume(value: unknown, storage: Pick<NativePageStorage,'readPage'>,
+  current: () => boolean = () => true): Promise<PagedCharacterResume> {
+  const envelope = validateCharacterPageEnvelope(value), mass = envelope.character.world!.worldmass!;
+  const check = (): void => { if (!current()) throw Error('Stale character resume'); };
+  for (const entry of envelope.pages) {
+    check();
+    const data = await readCharacterNativePage(storage,entry); check();
+    const c = data.cohort;
+    if (data.configHash !== mass.configHash || c.addressSpan !== mass.config.terrain.addressSpan
+      || canonical(c.frame) !== canonical(mass.origin) || canonical(c.policy) !== canonical(mass.config.dormancy)
+      || data.enemies.some(e => !MONSTERS[e.monster] || !Number.isSafeInteger(e.level) || e.level < 1
+        || ![e.x,e.y,e.life,e.scale].every(Number.isFinite) || e.life <= 0 || e.scale <= 0
+        || e.magicPack && (!readMagicPack(e.magicPack) || typeof e.name !== 'string')
+        || e.encounterGroup && (!nativeFormationFits(e.monster, e.encounterGroup) || typeof e.name !== 'string' || !!e.magicPack)
+        || (mass.config.nativeBirthSource || e.birth !== undefined) && !validMassBirth(e.birth!)
+        || e.anchor !== undefined && (!e.anchor || ![e.anchor.x,e.anchor.y].every(Number.isFinite))
+        || e.leashHome !== undefined && (typeof e.leashHome !== 'boolean' || e.leashHome && !e.anchor)
+        || !c.bodies.some(b => b.id===e.id && b.monster===e.monster && b.level===e.level))) reject();
+  }
+  check();
+  const {world, ...character} = envelope.character;
+  const {worldmass: _mass, ...worldFields} = world!;
+  const {enemies, dormancy, ...definition} = mass;
+  return {kind:'browser-native-pages', character, world:worldFields,
+    mass:{definition,residentEnemies:enemies,residentDormancy:dormancy!},
+    pages:freezeData({version:1 as const,run:mass.state.run.runId,configHash:mass.configHash,frame:{...mass.origin},
+      addressSpan:mass.config.terrain.addressSpan,policy:{...mass.config.dormancy!},pages:copy(envelope.pages),order:[...envelope.order]})};
 }
 
 /** Expand transport only at the existing async Continue/export seam. No Actor

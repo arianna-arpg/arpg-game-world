@@ -48,7 +48,7 @@ import {
 import { deserializeSettings, serializeSettings, type SettingsSave } from './settings';
 import {
   CHAR_SLOT,
-  loadCharacterAsync, loadRosterSave, writeCharacterMirrorRaw, flushCharacterSaves, type CharacterSave,
+  loadCharacterPortable, writeCharacterMirrorRaw, flushCharacterSaves, type CharacterSave,
 } from './character';
 import {
   ACCOUNT_KEY, ACCOUNT_SLOT, SETTINGS_KEY, SETTINGS_SLOT,
@@ -76,10 +76,10 @@ export async function buildSaveEnvelope(): Promise<SaveEnvelope> {
   const account = await loadAccountAsync();
   const settings = await loadSettingsAsync();
   const characters: Record<string, CharacterSave> = {};
-  const run = await loadCharacterAsync();
+  const run = await loadCharacterPortable();
   if (run) characters[String(CHAR_SLOT)] = run;
   for (const r of account.roster) {
-    const save = await loadRosterSave(r.slot);
+    const save = await loadCharacterPortable(r.slot);
     if (save) characters[String(r.slot)] = save;
   }
   return {

@@ -1,3 +1,5 @@
+import { serializeAccount } from '../meta/account';
+import type { MassResidentResume } from '../meta/characterResume';
 import { localOffset, type MassAddress } from '../worldmass/address';
 import { massDormancyPins } from '../worldmass/dormancy';
 import { massSideareaId, savedMassSideareas, copyMassSidearea, type MassSideareaRoot, type MassSideareaSave } from '../worldmass/sideareas';
@@ -573,7 +575,7 @@ import { captureLoot, skillToLoot, DEATH_SCHEMA, MAX_DEATH_RECORDS, CORPSE_MATCH
 import {
   WORLD_SCHEMA_VERSION, WORLDSTATE_CFG, sanitizeBountyBoard, sanitizeEnemyMemo, sanitizeMercSheets, sanitizeProcessionMemo,
   sanitizeVendorHolds, sanitizeWorldZones,
-  type ResumeSpawn, type SavedPlayerSpot, type SavedZoneMemory, type VendorHoldSave, type WorldStateSave, type SavedQuestEntry,
+  type WorldStateRestore, type ResumeSpawn, type SavedPlayerSpot, type SavedZoneMemory, type VendorHoldSave, type WorldStateSave, type SavedQuestEntry,
 } from '../meta/worldstate';
 
 export type { Doodad } from './levelgen';
@@ -3783,13 +3785,20 @@ export class World {
   walk: WalkField | null = null;
   /** Opt-in worldmass expedition; page residency does not own combat lifetime. */
   massRuntime: WorldMassRuntime | null = null;
-  startWorldMass(seed = rollSeed(), save?: MassAdventureSave): void {
+  startWorldMass(seed = rollSeed(), save?: MassAdventureSave | MassResidentResume,
+    options?: { restoreOnly?: boolean }): void {
     this.massAway = null;
     if (!save) { this.massSideareaRoots.clear(); this.massCaveIds.clear(); }
-    const runtime = new WorldMassRuntime(seed, 'expedition:' + seed, save?.config, save);
+    const definition = save && ('definition' in save ? save.definition : save);
+    const runtime = new WorldMassRuntime(seed, 'expedition:' + seed, definition?.config, save);
     this.massRuntime?.dispose();
     this.massRuntime = null;
-    runtime.attach(this, save);
+    try { runtime.attach(this, save, options); }
+    catch (error) {
+      runtime.dispose();
+      if (this.massRuntime === runtime) this.massRuntime = null;
+      throw error;
+    }
     if (!runtime.settlement) { this.grounds = []; this.bridges = []; }
   }
   /** The continuous surface remains an expedition owner while a native pocket
@@ -3843,10 +3852,13 @@ export class World {
     } as MassSideareaSave);
   }
   /** Called only after the surface checkpoint has restored successfully. */
-  restoreMassSideareas(raw: MassSideareaSave | undefined): boolean {
+  restoreMassSideareas(raw: MassSideareaSave | undefined, strict = false): boolean {
     if (!raw || !this.massRuntime) return false;
     const surface = this.massRuntime.snapshot(this), saved = savedMassSideareas(raw, surface);
-    if (!saved) return false;
+    if (!saved) {
+      if (strict) throw Error('The saved native sidearea could not be restored');
+      return false;
+    }
     this.massSideareaRoots = new Map(saved.roots.map(r => [r.id, r]));
     this.massCaveIds = new Set(saved.caves.map(z => z.id));
     for (const z of saved.caves) this.caveMap[z.id] = copyMassSidearea(z);
@@ -3867,7 +3879,7 @@ export class World {
     if (!away) return;
     const ret = this.caveStack[0] ?? this.caveReturn;
     this.massAway = null;
-    this.startWorldMass(away.surface.state.run.seed, away.surface);
+    this.startWorldMass(away.surface.state.run.seed, away.surface, { restoreOnly: true });
     this.caveReturn = null; this.caveStack = [];
     if (wake) this.massRuntime!.wake(this);
     else if (ret) {
@@ -3876,6 +3888,9 @@ export class World {
         { spread: indoors || raised ? 25 : 50, band: [0, indoors || raised ? 25 : 50], tier: ret.tier ?? 0 });
     }
     this.caveExitGrace = true;
+    // Preserve the native synchronous return when no page I/O is required.
+    // The exit pose is already final before any surface-neighborhood read.
+    this.nativeWorldReady();
   }
   private massSettlementLoading = false;
   private massSettlementDay: number | null = null;
@@ -4458,7 +4473,8 @@ export class World {
 
   /** The meta-progression account (drop/vendor gating, restock, features).
    *  A REFERENCE owned by main.ts — it outlives this World; never re-loaded. */
-  readonly account: Account;
+  private accountSource: Account;
+  get account(): Account { return this.accountSource; }
   /** World-clock time (seconds) at which Brandt next restocks (town only). */
   vendorRestockAt = 0;
   /** THE STANDING SHELF: which BEAT each counter's stock was last armed at
@@ -4510,23 +4526,10 @@ export class World {
   private mireilleAfterglow = false;
 
   constructor(account: Account, manifest: ExpeditionManifest) {
-    this.account = account;
+    this.accountSource = account;
     // Rebuild account item bodies before a new run mints session uids.
     this.account.reliquary.items = this.account.reliquary.items.map(rebuildItem).filter((i): i is ItemInstance => !!i);
     migrateRelicCorpses(this.account, this.account.deaths);
-    // THE BAG BOARD (engine/inventory.ts): the player bag's dims resolve
-    // through this one lazy read — a client mirrors the host's shipped
-    // dims (netBagBoard), everyone else folds the account's expansions —
-    // so every placement helper, the sort and the panel share one board.
-    setBagBoardSource(() => this.netBagBoard ?? bagBoardFor(this.account.features));
-    // THE CONTAINER BOARDS (engine/containers.ts): the same one lazy read
-    // for every side board — a client mirrors the host's shipped boards
-    // (netContainerBoards: absent id = the board does not exist for the
-    // run), everyone else folds the account's owned rungs — so the fold,
-    // the intents, the face and the landing preview test one set of cells.
-    setContainerBoardSource(def => this.netContainerBoards
-      ? (this.netContainerBoards[def.id] ? unpackContainerBoard(this.netContainerBoards[def.id]) : null)
-      : containerBoardFor(def, this.account.features));
     this.manifest = manifest;
     this.sim = new WorldSim(manifest);
     // TOWN-BUILDING: swap the per-run town for its expanded form (account-gated
@@ -4548,7 +4551,49 @@ export class World {
     // by SAIL; their searoutes draw the crossing). THE FOOTPRINT LAW rides the
     // same guard: no woven road may cut ACROSS a Field expanse's core rect
     // (both-ends-outside — an incident spoke or a bay pocket's road passes).
+    this.bindGlobalPolicies();
+  }
+
+  private static policyOwner: World | undefined;
+  /** Native helpers have one synchronous owner. Detached resume work borrows
+   * it only during its actual factory/adoption tranche, never across I/O. */
+  bindGlobalPolicies(): void {
+    this.sim.bindGeographyPolicies();
+    World.policyOwner = this;
+    // THE BAG BOARD (engine/inventory.ts): the player bag's dims resolve
+    // through this one lazy read — a client mirrors the host's shipped
+    // dims (netBagBoard), everyone else folds the account's expansions —
+    // so every placement helper, the sort and the panel share one board.
+    setBagBoardSource(() => this.netBagBoard ?? bagBoardFor(this.account.features));
+    // THE CONTAINER BOARDS (engine/containers.ts): the same one lazy read
+    // for every side board — a client mirrors the host's shipped boards
+    // (netContainerBoards: absent id = the board does not exist for the
+    // run), everyone else folds the account's owned rungs — so the fold,
+    // the intents, the face and the landing preview test one set of cells.
+    setContainerBoardSource(def => this.netContainerBoards
+      ? (this.netContainerBoards[def.id] ? unpackContainerBoard(this.netContainerBoards[def.id]) : null)
+      : containerBoardFor(def, this.account.features));
     setRouteGuard((a, b) => !footprintBars(a, b, this.zoneMap) && this.landRoute(a, b));
+  }
+  withGlobalPolicies<T>(action: () => T): T {
+    const previous = World.policyOwner;
+    this.bindGlobalPolicies();
+    try { return action(); }
+    finally { previous?.bindGlobalPolicies(); }
+  }
+  static staged(account: Account, manifest: ExpeditionManifest): World {
+    const previous = World.policyOwner;
+    try { return new World(account, manifest); }
+    finally { previous?.bindGlobalPolicies(); }
+  }
+  /** Promote only a still-current detached account. No await may divide this
+   * comparison, publication and the caller's world adoption. */
+  publishResumeAccount(shared: Account, baseline: string): boolean {
+    if (JSON.stringify(serializeAccount(shared)) !== baseline) return false;
+    for (const key of Object.keys(shared)) if (!(key in this.account)) Reflect.deleteProperty(shared, key);
+    Object.assign(shared, this.account);
+    this.accountSource = shared;
+    return true;
   }
 
   /** Does a straight land route survive between two map coords (no open-ocean
@@ -18301,7 +18346,7 @@ export class World {
    *  CONTRACT: call AFTER createPlayer + applySavedCharacter, and ALWAYS
    *  follow with resumeSpawn() — the current zone still points at the
    *  pre-adopt def until that reload. */
-  adoptWorldState(ws: WorldStateSave | undefined | null): boolean {
+  adoptWorldState(ws: WorldStateRestore | undefined | null): boolean {
     if (!ws || ws.schemaVersion !== WORLD_SCHEMA_VERSION) return false;
     if (typeof ws.time !== 'number' || !Number.isFinite(ws.time)) return false;
     // Event zones survive only while CLAIMED — by a still-active quest whose
@@ -49386,7 +49431,13 @@ export class World {
 
   // --------------------------------------------------------------- update ---
 
+  /** Called before host input/AI and by headless updates. Immutable-page I/O
+   * progresses outside world time; no simulation crosses an absent cohort. */
+  nativeWorldReady(): boolean {
+    return !this.massRuntime || this.massRuntime.nativeReadiness(this).status === 'ready';
+  }
   update(dt: number): void {
+    if (!this.gameOver && !this.nativeWorldReady()) return;
     const doorPressIntents = this.doorPressIntents;
     this.doorPressIntents = null;
     if (this.gameOver) {
@@ -49448,10 +49499,12 @@ export class World {
     this.convexNav?.beginFrame?.();
     // A survived death's fade/wake sequence (character modes). The world keeps
     // simulating beneath the dark — the death itself was already banked.
+    const massBeforeTransition = this.massRuntime;
     if (this.pendingRespawn) this.updateModeRespawn(dt);
     // A live VERTICAL CROSSING (geyser launch / cloud fall): the traversal
     // owns the player until the veil clears; the world keeps simulating.
     if (this.traversal) this.updateTraversal(dt);
+    if (this.massRuntime !== massBeforeTransition && !this.nativeWorldReady()) return;
     if (this.lowLifeHitFlash > 0) this.lowLifeHitFlash = Math.max(0, this.lowLifeHitFlash - dt);
     if (this.mireilleXpBuff > 0) this.mireilleXpBuff = Math.max(0, this.mireilleXpBuff - dt);
 

@@ -6,6 +6,19 @@ player-requested details). Reusing main's mechanics does not authorize reusing
 its redundant local banners. Preserve warning readability and native timing;
 add or improve visual cues when needed instead of restoring narration.
 
+Cold browser Continue uses explicit CharacterResume resident sections and
+immutable page claims, never a partial CharacterSave. Every page receives the
+shared native codec validation sequentially; far Actors are not constructed.
+Staged worlds borrow and restore native inventory/route/climate/capital/relief/
+atlas policies and publish only under current slot, account and roster authority.
+Near historical owners restore before optional births. Missing required bytes
+hold host input/AI and World time while wall-clock retries preserve all claims.
+Cave coordinates never wake surface pages. Native files and portable exports
+remain complete; corrupt export pages fail instead of omitting a character.
+Verify characterresume, resumeworld, nativeresume, all worldmass, persistence,
+genqa, sim smoke and native-resume-ui. Metadata and preflight I/O still grow with
+history; feature/controller paging and live coordinate rebasing remain unbound.
+
 Native haven stones retain the unchanged drover_waystation composition and
 original status_wash handler. Frozen per-doodad effect/status sources and worker
 identity precede admission; unsupported effects and historical unowned stones
@@ -85,7 +98,7 @@ New objectives require local body-clear access; historical births keep their
 frozen locations. Weather uses saved scale epochs; snow/storm clocks have
 physical owners. Worker preparation is bounded with synchronous collision
 fallback. Browser quiet-group paging releases live actors after durable root
-publication; cold Continue still expands history. Native mouths still use scene
+publication; bounded native cold restoration follows the contract above. Native mouths still use scene
 transitions and live frame rebasing remains unbound. See
 docs/design/seamless-exploration-foundations.md for limits and critic evidence.
 Verify native objective/access/worker/paging probes, all type checks, persistence,

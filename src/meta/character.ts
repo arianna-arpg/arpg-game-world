@@ -1,9 +1,11 @@
 import { empowermentRank } from '../engine/skillEmpowerment';
 import { BUILD_PROFILE, storageKey } from '../buildProfile';
 import { BrowserNativePages } from './browserNativePages';
-import { characterNativePage, encodeCharacterPages, decodeCharacterPages, hasCharacterPages, readCharacterNativePage, type CharacterPageEntry } from './characterPages';
+import { characterNativePage, encodeCharacterPages, decodeCharacterPages, hasCharacterPages, readCharacterNativePage, preparePagedCharacterResume, validateCharacterPageEnvelope, type CharacterPageEntry } from './characterPages';
 import type { NativeCohortLease } from '../worldmass/nativePaging';
 import { BrowserRunStore, isBrowserRunReference } from './browserRunStore';
+import { characterResumeFields, type CharacterFields, type CharacterResume, type CharacterResumeRead, type CharacterContinueSummary, type ResumeAuthority } from './characterResume';
+import { freezeData, massDigest } from '../worldmass/random';
 // ---------------------------------------------------------------------------
 // CHARACTER PERSISTENCE — the active-run half of localStorage.
 //
@@ -36,7 +38,7 @@ import type { ItemInstance } from '../engine/items';
 import type { Attributes } from '../engine/stats';
 import { emptyAbilityEssences, emptyEssences, MAX_LEARNED_SKILLS, type PlayerMeta, type Seat, type World } from '../engine/world';
 import type { ExpeditionManifest } from '../packages/manifest';
-import { diskBeacon, diskGet, diskPut, saveAccount, saveAccountDurable, saveRefused } from './persistence';
+import { diskBeacon, diskGet, diskPut, saveAccount, saveAccountDurable, saveRefused, saveSuppressed } from './persistence';
 import { DEATH_SCHEMA, MAX_DEATH_RECORDS, type DeathRecord } from './death';
 import { DEFAULT_MODE_ID, mintCharId, modeById, ROSTER_SLOT_BASE, type RosterEntry } from './modes';
 import type { WorldStateSave } from './worldstate';
@@ -381,7 +383,7 @@ export function rebuildSkill(s: SavedSkill): SkillInstance | null {
  *  layers the world writes on top; the COUCH JOIN (a guest vessel grafting
  *  onto its own seat) uses exactly this and nothing more. Null only if the
  *  class id is gone (the save is unresumable). */
-export function rebuildSavedMeta(save: CharacterSave): { meta: PlayerMeta; deaths: DeathRecord[] } | null {
+export function rebuildSavedMeta(save: CharacterFields): { meta: PlayerMeta; deaths: DeathRecord[] } | null {
   const classDef = CLASSES.find(c => c.id === save.classId);
   if (!classDef) return null;
 
@@ -485,6 +487,13 @@ export function rebuildSavedMeta(save: CharacterSave): { meta: PlayerMeta; death
 /** Rebuild meta from a save and graft it onto an already-created World/player.
  *  Returns false for an incompatible save or a removed class (unresumable). */
 export function applySavedCharacter(world: World, save: CharacterSave): boolean {
+  return applyCharacterFields(world, save);
+}
+/** Applies only character build/carry state. World/page adoption is separate. */
+export function applyCharacterResumeFields(world: World, resume: CharacterResume): boolean {
+  return characterResumeAuthority(resume) && applyCharacterFields(world, characterResumeFields(resume));
+}
+function applyCharacterFields(world: World, save: CharacterFields): boolean {
   if (!isCurrentCharacterSave(save)) return false;
   const built = rebuildSavedMeta(save);
   if (!built) return false;
@@ -545,7 +554,19 @@ function nativePageStore(): BrowserNativePages {
   if (typeof indexedDB === 'undefined') throw Error('Native page storage unavailable');
   return nativePages ??= new BrowserNativePages(storageKey('arpg_native_pages_v1'));
 }
-interface CharacterPageSession { pages: CharacterPageEntry[]; order: string[]; busy: boolean; revision: number }
+interface CharacterPageSession { pages: CharacterPageEntry[]; order: string[]; busy: boolean; revision: number;
+  slot: number; epoch: number }
+const slotEpochs = new Map<number, number>();
+const slotWriters = new Map<number, WeakRef<World>>();
+const slotEpoch = (slot: number): number => slotEpochs.get(slot) ?? 0;
+function invalidateCharacterSlot(slot: number): void { slotEpochs.set(slot, slotEpoch(slot) + 1); }
+function acceptCharacterWriter(world: World, slot: number): void {
+  const prior=slotWriters.get(slot)?.deref();
+  if(prior && prior!==world)invalidateCharacterSlot(slot);
+  slotWriters.set(slot,new WeakRef(world));
+  const session=pageSessions.get(world);
+  if(session && session.slot===slot)session.epoch=slotEpoch(slot);
+}
 const pageSessions = new WeakMap<World, CharacterPageSession>();
 const pageCommits = new Set<Promise<boolean>>();
 const pageFailures = new Map<number, unknown>();
@@ -553,6 +574,13 @@ const pageFailures = new Map<number, unknown>();
 export const characterPagingAvailable = (): boolean => !!BUILD_PROFILE.storageScope && typeof indexedDB !== 'undefined';
 export const resetCharacterNativePages = (world: World): void => { pageSessions.delete(world); };
 export const characterNativePages = (world: World): readonly CharacterPageEntry[] => pageSessions.get(world)?.pages ?? [];
+export const characterNativePageOrder = (world: World): readonly string[] => pageSessions.get(world)?.order ?? [];
+export const characterNativeSessionToken = (world: World): object | undefined => pageSessions.get(world);
+export const characterNativeSessionCurrent = (world: World): boolean => {
+  const session=pageSessions.get(world);
+  return !saveSuppressed() && (!session || session.epoch===slotEpoch(session.slot)
+    && !deletionBarrier(session.slot) && saveSlotFor(world)===session.slot);
+};
 export const loadCharacterNativePage = (entry: CharacterPageEntry) => readCharacterNativePage(nativePageStore(),entry);
 /** Call only AFTER atomic native hydration publishes every page owner. */
 export function forgetCharacterNativePage(world: World, entry: CharacterPageEntry): void {
@@ -561,6 +589,7 @@ export function forgetCharacterNativePage(world: World, entry: CharacterPageEntr
 }
 function mirrorBody(world: World, save: CharacterSave): string {
   const session=pageSessions.get(world);
+  if(!characterNativeSessionCurrent(world))throw Error('Stale native character page session');
   return session?.pages.length ? encodeCharacterPages(save,session.pages,session.order) : characterBody(world,save);
 }
 /** The ordinary CharacterSave slot is the sole commit authority. Pages land
@@ -569,16 +598,17 @@ function mirrorBody(world: World, save: CharacterSave): string {
 export async function commitCharacterNativeCohort(world: World, lease: NativeCohortLease,
   release: (entry: CharacterPageEntry) => void): Promise<boolean> {
   if (!characterPagingAvailable() || saveRefused('native page') || world.player!==world.seatHero(world.localSeat)) return Promise.resolve(false);
-  const slot=saveSlotFor(world);if(slot<0||pageCommits.size>=4)return Promise.resolve(false);
+  const slot=saveSlotFor(world);if(slot<0||pageCommits.size>=4||!characterNativeSessionCurrent(world))return Promise.resolve(false);
+  acceptCharacterWriter(world,slot);
   let session=pageSessions.get(world);
-  if(!session){session={pages:[],order:[],busy:false,revision:0};pageSessions.set(world,session);}
+  if(!session){session={pages:[],order:[],busy:false,revision:0,slot,epoch:slotEpoch(slot)};pageSessions.set(world,session);}
   if(session.busy||!lease.revalidate())return Promise.resolve(false);
   const held=session,manifest=[...session.pages],priorOrder=[...session.order],revision=session.revision,
     save=serializeCharacter(world),page=characterNativePage(save,lease);
   if(held.pages.some(p=>p.ref.page===page.cohort.page||p.ids.some(id=>lease.ids.includes(id))))throw Error('Native page already committed');
   const intent=(mirrorIntents.get(slot)??0)+1,barrier=deletionBarrier(slot);
   mirrorIntents.set(slot,intent);held.busy=true;
-  const current=()=>pageSessions.get(world)===held&&held.revision===revision
+  const current=()=>characterNativeSessionCurrent(world)&&pageSessions.get(world)===held&&held.revision===revision
     &&mirrorIntents.get(slot)===intent&&deletionBarrier(slot)===barrier&&!saveRefused('native page commit');
   const task=(async()=>{
     const ref=await nativePageStore().writePage(page.cohort.run,page.cohort.page,JSON.stringify(page));
@@ -617,6 +647,7 @@ export async function writeCharacterMirrorRaw(slot: number, body: string | null)
   // Import and disk mirrors must be portable inline saves, never references to
   // another browser's storage. Internal paged commits use the private lane.
   if(body!==null && hasCharacterPages(JSON.parse(body)))throw Error('External native page references require portable expansion');
+  invalidateCharacterSlot(slot);
   await writeCharacterMirrorTransaction(slot,body);
 }
 async function writeCharacterMirrorTransaction(slot: number, body: string | null,
@@ -662,6 +693,7 @@ function cachedCharacter(slot: number): CharacterSave | null {
  * never masquerade as a complete synchronous CharacterSave for resumption. */
 export function savedCharacterPatronId(): string | undefined {
   if(deletionBarrier(CHAR_SLOT))return undefined;
+  if(summaryPatron && leaseCurrent(summaryPatron.lease))return summaryPatron.id;
   try {
     const cached=browserRunStore()?.peek(charKeyFor(CHAR_SLOT));
     const raw:unknown=JSON.parse((cached===undefined?window.localStorage.getItem(charKeyFor(CHAR_SLOT)):cached)??'null');
@@ -709,6 +741,137 @@ async function loadCharacterSlot(slot: number): Promise<CharacterSave | null> {
   return null;
 }
 export const loadCharacterAsync = (): Promise<CharacterSave | null> => loadCharacterSlot(CHAR_SLOT);
+
+interface ResumeLease {
+  slot:number; intent:number; barrier:string|null; epoch:number;
+  source:'disk'|'browser'|'legacy'; body:string; revision?:number; reference:string|null;
+  signal?:AbortSignal; bound?:World; session?:CharacterPageSession; cancelled:boolean;
+}
+const resumeLeases = new WeakMap<ResumeAuthority, ResumeLease>();
+type ResumeStamp=Pick<ResumeLease,'slot'|'intent'|'barrier'|'epoch'|'reference'|'signal'|'cancelled'>;
+let summaryPatron: {id:string|undefined;lease:ResumeStamp}|undefined;
+function slotReference(slot:number):string|null {try{const body=window.localStorage.getItem(charKeyFor(slot));return body===null?null:massDigest(body);}catch{return null;}}
+type ResumeSource = {status:'value'; data:unknown; lease:ResumeLease}
+  | {status:'empty'|'deleted'|'stale'} | {status:'refused';reason:string};
+function leaseCurrent(lease:ResumeStamp):boolean {
+  return !lease.cancelled && !lease.signal?.aborted && !saveSuppressed()
+    && (mirrorIntents.get(lease.slot)??0)===lease.intent && deletionBarrier(lease.slot)===lease.barrier
+    && slotEpoch(lease.slot)===lease.epoch && slotReference(lease.slot)===lease.reference;
+}
+/** A fresh authority read never writes, deletes, heals, or downgrades a slot. */
+async function readResumeSource(slot:number,signal?:AbortSignal):Promise<ResumeSource> {
+  if(slot!==CHAR_SLOT && (!Number.isSafeInteger(slot)||slot<ROSTER_SLOT_BASE))return {status:'refused',reason:'Invalid character slot'};
+  const lease:ResumeLease={slot,intent:mirrorIntents.get(slot)??0,barrier:deletionBarrier(slot),epoch:slotEpoch(slot),
+    source:'legacy',body:'',reference:slotReference(slot),...(signal?{signal}:{}),cancelled:false};
+  if(lease.barrier)return {status:'deleted'};
+  if(!leaseCurrent(lease))return {status:'stale'};
+  try {
+    const disk=await diskGet<unknown>(slot);
+    if(!leaseCurrent(lease))return {status:'stale'};
+    if(disk!==null){
+      if(hasCharacterPages(disk))return {status:'refused',reason:'Native files require a portable character'};
+      lease.source='disk';lease.body=JSON.stringify(disk);return {status:'value',data:disk,lease};
+    }
+    const store=browserRunStore();
+    if(store){
+      try{await store.flush();}catch{/* The durable root is still the authority. */}
+      if(!leaseCurrent(lease))return {status:'stale'};
+      const read=await store.read(charKeyFor(slot));
+      if(!leaseCurrent(lease))return {status:'stale'};
+      if(read.status==='deleted')return {status:'deleted'};
+      if(read.status==='corrupt'||read.status==='unavailable')return {status:'refused',reason:'Character storage '+read.status};
+      if(read.status==='value'){
+        lease.source='browser';lease.body=read.body;lease.revision=read.revision;
+        return {status:'value',data:JSON.parse(read.body),lease};
+      }
+    }
+    const raw=window.localStorage.getItem(charKeyFor(slot));
+    if(!raw)return {status:'empty'};
+    const data:unknown=JSON.parse(raw);
+    if(isBrowserRunReference(data)||hasCharacterPages(data))return {status:'refused',reason:'Referenced character storage unavailable'};
+    lease.body=raw;return {status:'value',data,lease};
+  }catch(error){return {status:'refused',reason:String(error instanceof Error?error.message:error)};}
+}
+/** The menu needs identity only. This does not validate/expand distant pages or
+ * grant resume authority, and never changes the complete synchronous loader. */
+export async function readCharacterContinueSummary(slot=CHAR_SLOT):Promise<CharacterContinueSummary|null> {
+  const read=await readResumeSource(slot);
+  if(read.status!=='value')return null;
+  try {
+    const save=hasCharacterPages(read.data)?validateCharacterPageEnvelope(read.data).character:read.data;
+    if(!isCurrentCharacterSave(save)||!leaseCurrent(read.lease))return null;
+    const fields=save as CharacterFields;
+    if(slot===CHAR_SLOT){const {slot:intendedSlot,intent,barrier,epoch,reference,cancelled}=read.lease;
+      summaryPatron={id:fields.charId,lease:{slot:intendedSlot,intent,barrier,epoch,reference,cancelled}};}
+    return {classId:fields.classId,level:fields.level,...(fields.name===undefined?{}:{name:fields.name}),
+      ...(fields.charId===undefined?{}:{charId:fields.charId}),...(fields.modeId===undefined?{}:{modeId:fields.modeId})};
+  }catch{return null;}
+}
+export async function readCharacterResume(slot=CHAR_SLOT,options:{signal?:AbortSignal}={}):Promise<CharacterResumeRead> {
+  const read=await readResumeSource(slot,options.signal);
+  if(read.status!=='value')return read;
+  try {
+    const authority=Object.freeze({}) as ResumeAuthority;
+    let resume:CharacterResume;
+    if(hasCharacterPages(read.data)){
+      const payload=await preparePagedCharacterResume(read.data,nativePageStore(),()=>leaseCurrent(read.lease));
+      resume={...payload,authority};
+    }else{
+      if(!isCurrentCharacterSave(read.data))return {status:'incompatible'};
+      resume={kind:'inline',save:read.data as CharacterSave,authority};
+    }
+    if(!leaseCurrent(read.lease))return {status:'stale'};
+    resumeLeases.set(authority,read.lease);
+    return {status:'ready',resume:freezeData(resume)};
+  }catch(error){return leaseCurrent(read.lease)?{status:'refused',reason:String(error instanceof Error?error.message:error)}:{status:'stale'};}
+}
+/** Portable callers require every historical body. A corrupt/missing page is
+ * a failed export, never an empty slot silently omitted from the bundle. */
+export async function loadCharacterPortable(slot=CHAR_SLOT):Promise<CharacterSave|null> {
+  const read=await readResumeSource(slot);
+  if(read.status==='empty'||read.status==='deleted')return null;
+  if(read.status!=='value')throw Error(read.status==='refused'?read.reason:'Stale portable character read');
+  const saved=await decodeCharacterPages(read.data,nativePageStoreForPortable(read.data));
+  if(!isCurrentCharacterSave(saved))throw Error('Incompatible portable character');
+  if(!leaseCurrent(read.lease))throw Error('Stale portable character read');
+  const after=await readResumeSource(slot);
+  if(after.status!=='value'||!leaseCurrent(read.lease)||after.lease.source!==read.lease.source
+    ||after.lease.body!==read.lease.body||after.lease.revision!==read.lease.revision)throw Error('Stale portable character read');
+  return saved;
+}
+function nativePageStoreForPortable(value:unknown):Pick<BrowserNativePages,'readPage'> {
+  // Inline/native-file exports do not need an IndexedDB service at all.
+  return hasCharacterPages(value)?nativePageStore():{readPage:async()=>{throw Error('Unexpected native page read');}};
+}
+
+/** Synchronous final check, usable in the same turn as candidate publication. */
+export function characterResumeAuthority(resume:CharacterResume):boolean {
+  const lease=resumeLeases.get(resume.authority);
+  return !!lease && leaseCurrent(lease) && (!lease.bound || pageSessions.get(lease.bound)===lease.session);
+}
+export async function characterResumeCurrent(resume:CharacterResume):Promise<boolean> {
+  if(!characterResumeAuthority(resume))return false;
+  const lease=resumeLeases.get(resume.authority)!;
+  const current=await readResumeSource(lease.slot,lease.signal);
+  return characterResumeAuthority(resume) && current.status==='value' && current.lease.source===lease.source
+    && current.lease.body===lease.body && current.lease.revision===lease.revision;
+}
+/** Consume authority once, after build/world validation and before runtime
+ * attachment. Rollback only removes this exact session, never its successor. */
+export function bindCharacterResumePages(world:World,resume:CharacterResume):()=>void {
+  if(!characterResumeAuthority(resume))throw Error('Stale character resume');
+  const lease=resumeLeases.get(resume.authority)!;
+  if(lease.bound || saveSlotFor(world)!==lease.slot)throw Error('Character resume authority already used or foreign slot');
+  const fields=characterResumeFields(resume);
+  if(fields.charId && fields.charId!==world.meta.charId)throw Error('Foreign resumed character');
+  const prior=pageSessions.get(world), pages=resume.kind==='browser-native-pages'?resume.pages:undefined;
+  const session:CharacterPageSession={pages:pages?[...pages.pages]:[],order:pages?[...pages.order]:[],busy:false,revision:0,
+    slot:lease.slot,epoch:lease.epoch};
+  pageSessions.set(world,session);lease.bound=world;lease.session=session;
+  let rolled=false;
+  return ()=>{if(rolled)return;rolled=true;lease.cancelled=true;
+    if(pageSessions.get(world)===session){if(prior)pageSessions.set(world,prior);else pageSessions.delete(world);}};
+}
 
 /** The localStorage mirror key for a character slot (the shared run slot keeps
  *  its historical key; roster slots suffix theirs). Exported for meta/portage.ts. */
@@ -801,6 +964,8 @@ export function saveCharacter(world: World): void {
   if (!world.clientActionHook) saveAccount(world.account);
   const slot = saveSlotFor(world);
   if (slot < 0) return;
+  if(!characterNativeSessionCurrent(world))return;
+  acceptCharacterWriter(world,slot);
   let body: string;
   // Serialize failures never crash gameplay — but they must never be SILENT
   // either: a quiet return here is how a broken save path loses runs for
@@ -820,6 +985,8 @@ export function saveCharacterDurable(world: World): void {
   if (!world.clientActionHook) saveAccountDurable(world.account);
   const slot = saveSlotFor(world);
   if (slot < 0) return;
+  if(!characterNativeSessionCurrent(world))return;
+  acceptCharacterWriter(world,slot);
   // The session's LAST write is always built fresh — the memo's fold never
   // gets a say over the exact-resume promise.
   world.invalidateZonesSaveMemo();
@@ -835,6 +1002,7 @@ export function clearCharacter(): void {
   // run off the back of untrusted state (frozen means frozen — both halves,
   // so the disk-first loader isn't left disagreeing with localStorage).
   if (saveRefused('character wipe')) return;
+  invalidateCharacterSlot(CHAR_SLOT);
   writeCharacterMirror(CHAR_SLOT, null);
   // DURABLE wipe: must survive the player closing the game on the death screen,
   // else the disk-first loader resurrects the dead character (permadeath break).
@@ -849,6 +1017,7 @@ export const loadRosterSave = (slot: number): Promise<CharacterSave | null> => l
 
 /** Durably empty a roster slot (vessel deletion — a deliberate roster action). */
 export function wipeRosterSlot(slot: number): void {
+  invalidateCharacterSlot(slot);
   writeCharacterMirror(slot, null);
   diskBeacon(slot, '{}');
 }

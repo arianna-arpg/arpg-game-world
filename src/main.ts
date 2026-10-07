@@ -37,7 +37,7 @@ import { World, type Seat } from './engine/world';
 import { applyLab, ULT_QA } from './engine/ultimates'; // THE LAB LEVER — the dev panel's Lab tab; __game.ultqa is its console twin
 import { sceneBegin, sceneCardAck, sceneDue, muTakeClassRequest, muOfferOf } from './engine/scenes';
 import { MU_CFG, MU_SCENE_ID } from './data/mu';
-import { buildManifest, reconcileManifest, type ExpeditionManifest } from './packages/manifest';
+import { buildManifest, type ExpeditionManifest } from './packages/manifest';
 import { bumpLedger, mergeLedger } from './packages/ledger';
 import { registerAllPackageFactions } from './packages/factionGen';
 import { Renderer } from './render/renderer';
@@ -82,12 +82,15 @@ import {
   saveSuppressed, suppressSaves,
 } from './meta/persistence';
 import {
-  applySavedCharacter, clearCharacter, loadCharacter, loadCharacterAsync, savedCharacterPatronId,
+  clearCharacter, loadCharacter, savedCharacterPatronId, CHAR_SLOT,
+  readCharacterContinueSummary, readCharacterResume,
   loadRosterSave, persistRun, persistRunDurable, flushCharacterSaves,
   rebuildSavedMeta, saveCouchGuest,
   type CharacterSave,
 } from './meta/character';
 import { resolveResumeSpawn } from './meta/worldstate';
+import { characterResumeFields } from './meta/characterResume';
+import { prepareCharacterWorld } from './meta/resumeWorld';
 import { DEFAULT_MODE_ID, freeRosterSlot, mintCharId, modeById, rosterCapacity, type RosterEntry } from './meta/modes';
 import { healMercEngagements, releaseMercsOf } from './meta/mercs';
 import type { Settings } from './meta/settings';
@@ -345,8 +348,17 @@ function coopActive(): boolean {
  *  Today: the timeflow's menu-hold gate — menus hard-pause the sim only when
  *  this machine owns the one real sim AND no live peer shares it (a co-op
  *  world is never one player's to stop; a client render-shell never holds). */
+let resumeRequest = 0;
+let resumeController: AbortController | null = null;
+function cancelCharacterResume(): void {
+  resumeRequest++;
+  if (resumeController) { resumeController.abort(); ui.setContinuePending(false); }
+  resumeController = null;
+}
 let previousAdoptedWorld: World | undefined;
 function adoptWorld(w: World): World {
+  cancelCharacterResume();
+  w.bindGlobalPolicies();
   if(previousAdoptedWorld && previousAdoptedWorld !== w)previousAdoptedWorld.massRuntime?.dispose();
   previousAdoptedWorld=w;
   // (Couch guests count as live players too — a shared screen is never one
@@ -547,6 +559,7 @@ let startPickPending = false;
 const startPicked = async (d: ClassDef, modeId?: string, name?: string, kitPicks?: Record<string, string>): Promise<void> => {
   if (startPickPending) return;
   startPickPending = true;
+  cancelCharacterResume();
   try {
     // A browser root may live only in IndexedDB. Resolve the existing boot
     // load before replacing its patron or mutating the authoritative account.
@@ -586,6 +599,7 @@ function worldmassRequested(): boolean {
   return (BUILD_PROFILE.worldmass || new URLSearchParams(location.search).has('worldmass')) && !COOP_ALLY;
 }
 function beginPressed(): void {
+  cancelCharacterResume();
   // The expedition skips the authored prologue; retain the ordinary vessel
   // deal instead of repeatedly forcing that absent tutorial's Warrior.
   const prologueDue = !worldmassRequested() && (sceneDue(account, 'prologue')
@@ -598,107 +612,64 @@ function beginPressed(): void {
 }
 ui.onBeginRun = beginPressed;
 
-/** THE WAKEFUL WORLD: stand the saved world back up around a freshly-resumed
- *  character — adopt the save's world section (zone graph, discovery, clock,
- *  quests, zone memory, overlay snapshots), then wake per the resolved policy
- *  (mode pin ▷ player setting ▷ engine default). A save with NO adoptable
- *  world resumes fresh exactly as before worldstate existed — with its
- *  generated objective keys scrubbed, so a re-rolled world can't wake
- *  pre-cleared ground. Shared by both resume paths (run slot + roster). */
-function restoreWorldState(world: World, save: CharacterSave): void {
-  if (!save.world || !world.adoptWorldState(save.world)) {
-    world.scrubStaleObjectives(); // fresh reroll — createPlayer already stood us in town
-    return;
-  }
-  if (save.world.worldmass) {
-    world.startWorldMass(save.world.worldmass.state.run.seed, save.world.worldmass);
-    if (!world.restoreMassSideareas(save.world.massSideareas)) world.resumeSpawn('exact', save.world.player);
-    return;
-  }
-  // THE SEALED SHORES reconcile: restored rivers rebuild their exits to the
-  // dealt landings only and re-stamp their berths (an older save's
-  // accumulated discovery roads rewire to the nearest port and heal away).
-  world.reconcileSoulrivers();
-  // …and the SURFACE waters: port zones rebuild to notarized deeds, hold
-  // anchors re-seal their causeway locks, and the DRY-ROAD heal drops any
-  // saved road that walks across the sea (the voyage is the only crossing).
-  world.reconcileSeaPorts();
-  // …and THE WEB LAWS: a pre-budget save's Field expanses stamp their map
-  // berths and shed hub spokes past the biome road budget (the degree trim
-  // precedent, applied to the land's own hubs).
-  world.reconcileWebLaws();
-  const mode = modeById(world.meta.modeId);
-  world.resumeSpawn(resolveResumeSpawn(mode.resume, settings.resumeSpawn), save.world.player);
-}
-
-/** Resume an account-roster character (an Immortal vessel) from its own slot.
- *  Async (disk-first load); a missing/corrupt slot just returns to the menu —
- *  the entry stays listed, deletion is only ever the player's deliberate call. */
+/** Both Continue buttons reread their slot. The menu holds a label only; an
+ * old cached character cannot replace a newer save or a reassigned vessel. */
 function resumeRosterChar(entry: RosterEntry): void {
-  // THE FALLEN LOCK (the resurrection covenant): a fallen vessel cannot be
-  // played — the menu row already refuses, this is the belt behind it (and
-  // behind any stale handler holding an old card).
   if (entry.fallen) {
     ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar,
       `${entry.name} lies fallen — resurrect them in the Vault (${entry.fallen.fee} ${META_CURRENCY_LABEL}).`);
     return;
   }
-  void (async (): Promise<void> => {
+  void resumeCharacterSlot(entry.slot, { ...entry });
+}
+function resumeGame(): void { void resumeCharacterSlot(CHAR_SLOT); }
+async function resumeCharacterSlot(slot: number, roster?: RosterEntry): Promise<void> {
+  cancelCharacterResume();
+  const request = resumeRequest, controller = new AbortController();
+  resumeController = controller;
+  ui.setContinuePending(true);
+  const current = (): boolean => request === resumeRequest && !controller.signal.aborted;
+  const cardCurrent = (): boolean => !roster || !!account.roster.find(r => r.slot === slot
+    && r.charId === roster.charId && r.modeId === roster.modeId && !r.fallen
+    && modeById(r.modeId).save === 'roster');
+  let prepared: Awaited<ReturnType<typeof prepareCharacterWorld>> | undefined;
+  try {
+    await diskHydrated;
+    if (!current()) return;
+    if (!cardCurrent()) throw Error('The selected vessel changed during Continue');
+    const read = await readCharacterResume(slot, { signal: controller.signal });
+    if (!current()) return;
+    if (!cardCurrent()) throw Error('The selected vessel changed during Continue');
+    if (read.status !== 'ready') {
+      if (read.status === 'stale') throw Error('The saved character changed. Please try Continue again');
+      throw Error(read.status === 'refused' ? read.reason : 'The saved character is unavailable');
+    }
+    const fields = characterResumeFields(read.resume);
+    if (roster && (fields.charId && fields.charId !== roster.charId
+      || fields.modeId && fields.modeId !== roster.modeId)
+      || !roster && modeById(fields.modeId ?? DEFAULT_MODE_ID).save === 'roster')
+      throw Error('The saved character belongs to a different slot');
+    prepared = await prepareCharacterWorld(account, read.resume, {
+      isCurrent: () => current() && cardCurrent(), signal: controller.signal, fallbackSeed: rollSeed(),
+      spawn: resolveResumeSpawn(modeById(fields.modeId ?? DEFAULT_MODE_ID).resume, settings.resumeSpawn),
+      ...(roster ? { roster: { charId: roster.charId, modeId: roster.modeId } } : {}),
+    });
+    if (!current() || !cardCurrent()) return;
+    const resumed = prepared.publish();
     couchReset();
-    const save = await loadRosterSave(entry.slot);
-    const classDef = save && CLASSES.find(c => c.id === save.classId);
-    if (!save || !classDef) {
-      ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
-      return;
-    }
-    const manifest = reconcileManifest(save.expedition, account, rollSeed());
-    world = adoptWorld(new World(account, Object.freeze(manifest)));
-    world.createPlayer(classDef, { modeId: entry.modeId, charId: entry.charId, startingCompanions: false, startingFlasks: false });
-    if (!applySavedCharacter(world, save)) {
-      ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
-      return;
-    }
-    // Identity drift heal: the save is the authority on mode/stage, the roster
-    // card on charId — an old save missing its id re-adopts the card's.
-    if (!world.meta.charId) world.meta.charId = entry.charId;
-    restoreWorldState(world, save); // the vessel's world wakes with it
+    world = adoptWorld(resumed);
     lastSentZone = '';
     if (COOP_ALLY) spawnCoopAlly();
     ui.resetRunView();
-    deathShown = false;
-    running = true;
-    ui.hideAll();
-  })();
-}
-
-/** Resume the saved in-progress character, or fall back to the start menu.
- *  `preloaded` is the disk/local save fetched at boot; without it we read sync. */
-function resumeGame(preloaded?: CharacterSave | null): void {
-  couchReset();
-  const save = preloaded ?? loadCharacter();
-  const classDef = save && CLASSES.find(c => c.id === save.classId);
-  // A saved character is always resumable — resume must NOT depend on the
-  // (now random, slot-based) class-select roll. Only a missing/invalid save bails.
-  if (!save || !classDef) {
-    clearCharacter();
-    ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
-    return;
+    deathShown = false; pendingDeathScreen = null;
+    running = true; ui.hideAll();
+  } catch (error) {
+    if (current()) ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar,
+      error instanceof Error ? error.message : 'The saved world could not be read');
+  } finally {
+    prepared?.discard();
+    if (resumeController === controller) { resumeController = null; ui.setContinuePending(false); }
   }
-  // Rebuild the run-locked manifest from the save (tolerant of removed packages);
-  // its stored seed makes the resumed world deterministic.
-  const manifest = reconcileManifest(save.expedition, account, rollSeed());
-  world = adoptWorld(new World(account, Object.freeze(manifest)));
-  world.createPlayer(classDef, { startingCompanions: false, startingFlasks: false });          // builds a valid skeleton in town…
-  if (!applySavedCharacter(world, save)) { // …then the save overwrites the build
-    clearCharacter();
-    ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
-    return;
-  }
-  restoreWorldState(world, save);        // …and the world wakes around it
-  if (COOP_ALLY) spawnCoopAlly();
-  ui.resetRunView();        // same rule as startGame: fresh World, fresh view state
-  deathShown = false;
-  running = true;
 }
 
 // Dev/debug handle (also keeps headless testing possible when rAF is paused).
@@ -931,12 +902,13 @@ if (DEV.mapForge || devPanelOptIn) mountMapForge(ui, () => world);
 ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
 ui.setContinueSave(loadCharacter());          // instant: localStorage cache
 const diskHydrated = (async (): Promise<void> => {
-  const [a, s, c] = await Promise.all([loadAccountAsync(), loadSettingsAsync(), loadCharacterAsync()]);
+  const bootRequest = resumeRequest;
+  const [a, s, c] = await Promise.all([loadAccountAsync(), loadSettingsAsync(), readCharacterContinueSummary()]);
   Object.assign(account, a);                  // mutate-in-place: shared refs stay valid
   reconcileClassBundleGems(account);
   Object.assign(settings, s);
   applyUiScale(settings.uiScale);             // the disk save may carry a different dial
-  ui.setContinueSave(c);                       // disk save wins (re-renders the menu)
+  if (bootRequest === resumeRequest) ui.setContinueSave(c); // a newer start/Continue owns the menu
   ui.setStartMenuNotice(saveResetNotice());
   // Workshop disk reconcile: the save file is the cross-session authority
   // (another machine, a cleared browser profile). When it changed anything,
@@ -1892,30 +1864,36 @@ function tick(now: number): void {
       //    guests' panel toggles ride their own pads right behind.
       handleLocalPanels();
       handleCouchPanels();
-      // 2. Gather this frame's per-seat intent into the transport. The local seat
-      //    reads the OS; other LOCAL seats (the scripted ally) poll their source.
-      //    A REMOTE seat's intent arrives through the transport's own pump.
-      const li = readLocalInput(dt);
-      if (li) net.sendInput(net.self, li);
-      for (const seat of world.seats) {
-        if (seat.id === net.self) continue;
-        const intent = seat.input.poll(seat.actor, world, dt);
-        if (intent) net.sendInput(seat.id, intent);
-      }
-      // 3. Apply all seat intents (single path for every player-kind hero).
-      world.applyInputs(net.drainInputs(), dt);
-      // 3.5. Apply clients' META intents (point-spends, gem ops, drops) to their
-      //      OWN seats BEFORE the sim ticks — so the change lands in this tick's
-      //      drops/orbs pass and re-replicates in the same broadcast.
-      drainMetaActions();
+      // Missing nearby native pages hold the whole simulation before input or
+      // AI can step. Rendering, menus and durable saves remain available.
+      if (world.gameOver || world.nativeWorldReady()) {
+        // 2. Gather this frame's per-seat intent into the transport. The local seat
+        //    reads the OS; other LOCAL seats (the scripted ally) poll their source.
+        //    A REMOTE seat's intent arrives through the transport's own pump.
+        const li = readLocalInput(dt);
+        if (li) net.sendInput(net.self, li);
+        for (const seat of world.seats) {
+          if (seat.id === net.self) continue;
+          const intent = seat.input.poll(seat.actor, world, dt);
+          if (intent) net.sendInput(seat.id, intent);
+        }
+        // 3. Apply all seat intents (single path for every player-kind hero).
+        world.applyInputs(net.drainInputs(), dt);
+        // 3.5. Apply clients' META intents (point-spends, gem ops, drops) to their
+        //      OWN seats BEFORE the sim ticks — so the change lands in this tick's
+        //      drops/orbs pass and re-replicates in the same broadcast.
+        drainMetaActions();
 
-      // The deathPresentation keeps ambience alive, but the settled run must
-      // never gain a late AI kill, cast, or reward behind its epilogue.
-      if (!world.gameOver) for (const a of world.actors) updateAI(a, world, dt);
-      // Mirror the gear-pickup feel preference onto the sim (Settings is a
-      // UI concern the World can't import; a boolean crosses the seam).
-      world.gearVacuum = settings.gearPickup !== 'key';
-      world.update(dt);
+        // The deathPresentation keeps ambience alive, but the settled run must
+        // never gain a late AI kill, cast, or reward behind its epilogue.
+        if (!world.gameOver) for (const a of world.actors) updateAI(a, world, dt);
+        // Mirror the gear-pickup feel preference onto the sim (Settings is a
+        // UI concern the World can't import; a boolean crosses the seam).
+        world.gearVacuum = settings.gearPickup !== 'key';
+        world.update(dt);
+      } else {
+        net.drainInputs(); // do not replay accumulated movement/casts on recovery
+      }
       // DWELL → MENU polls. The world keeps simulating under the pause menu,
       // so a dwell can fire while it's up — HOLD the request (don't clear)
       // until the pause menu closes, else a station menu pops OVER the pause
@@ -2183,6 +2161,7 @@ function hostTail(dt: number): void {
   }
 
   if (world.gameOver && !deathShown) {
+    cancelCharacterResume();
     deathShown = true;
     // CO-OP: tell connected clients the run ended so they leave their (now-frozen)
     // render shell and offer a fresh class pick — no reload, the session lives on.
@@ -2541,6 +2520,7 @@ function onDeathDismiss(): void {
 /** Open the co-op lobby (copy-paste WebRTC signaling). HOST keeps running the sim
  *  and accepts joiners; a JOINER becomes a render-only client of the host. */
 function openLobby(): void {
+  cancelCharacterResume();
   // Class choice is restricted to what THIS player has unlocked in their own
   // Vault (the host gates by the host's account, each joiner by their own) — a
   // real gameplay choice, not a free pick of every class.
@@ -2630,6 +2610,7 @@ function resetToLocal(): void {
  *  `notice` is the reason we landed here, shown on the menu (a session that ended
  *  under the player must say so — an unexplained menu reads as a crash). */
 function toStartMenu(notice?: string): void {
+  cancelCharacterResume();
   // A HOST SAYS GOODBYE FIRST — and says it HERE rather than in leaveCoop, so
   // that every road to the menu carries it (the Leave button, "Save & Main
   // Menu", any future exit), never just the one that remembered. The ordering is

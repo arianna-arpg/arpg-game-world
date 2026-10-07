@@ -159,7 +159,8 @@ import {
   type ActionId, type PadActionId, type Settings,
 } from '../meta/settings';
 import { PAD_CFG, padDisplay, AIM_ASSIST_MODES, connectedPadIndices } from '../core/gamepad';
-import { wipeRosterSlot, type CharacterSave } from '../meta/character';
+import { wipeRosterSlot } from '../meta/character';
+import type { CharacterContinueSummary } from '../meta/characterResume';
 import {
   applySaveImport, buildSaveEnvelope, planSaveImport, saveEnvelopeName,
   type SaveImportPlan,
@@ -521,7 +522,8 @@ export class UI {
   private expeditionSetup = document.getElementById('expedition-setup')!;
 
   /** The resumable character save, if any (set after the async boot load). */
-  private continueSave: CharacterSave | null = null;
+  private continueSave: CharacterContinueSummary | null = null;
+  private continuePending = false;
   /** The rolled class roster for the CURRENT new-run offer. Cached so menu
    *  navigation (Vault, Event Weights, Back) doesn't re-roll it; reset only when
    *  a run ends (resetClassRoster, called on death) so each new run deals fresh. */
@@ -558,7 +560,7 @@ export class UI {
   /** Start-menu callbacks, retained so Vault/Keybinds sub-views can return. */
   private startHandlers: {
     onStart: (d: ClassDef, modeId?: string) => void;
-    onContinue: (s?: CharacterSave | null) => void;
+    onContinue: () => void;
     onCoop?: () => void;
     onRoster?: (e: RosterEntry) => void;
     /** Why we landed here (a co-op session that ended under the player). Shown
@@ -11204,12 +11206,19 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
 
   // ------------------------------------------------------------ start menu
 
-  /** Cache the resumable character save (from the async disk/local load) so the
+  /** Cache only the resumable character summary (from the authoritative load) so the
    *  start menu can enable Continue. Null disables it. */
-  setContinueSave(save: CharacterSave | null): void {
-    this.continueSave = save;
+  setContinueSave(save: CharacterContinueSummary | null): void {
+    this.continueSave = save ? { classId: save.classId, name: save.name, level: save.level,
+      charId: save.charId, modeId: save.modeId } : null;
     // Refresh only the menu PROPER (startMenuBack null): re-rendering while a
     // subscreen (Options, the Immortal roster) is up would yank the reader out.
+    if (!this.startMenu.classList.contains('hidden') && this.startHandlers && !this.startMenuBack) this.renderStartMenu();
+  }
+
+  /** Async storage retains the existing menu so New Run can cancel a read. */
+  setContinuePending(pending: boolean): void {
+    this.continuePending = pending;
     if (!this.startMenu.classList.contains('hidden') && this.startHandlers && !this.startMenuBack) this.renderStartMenu();
   }
 
@@ -11224,7 +11233,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
    *  Chronicle / Options / Exit (+ Co-op). Subscreens render into the pane. */
   showStartMenu(
     onStart: (d: ClassDef, modeId?: string) => void,
-    onContinue: (s?: CharacterSave | null) => void,
+    onContinue: () => void,
     onCoop?: () => void,
     onRoster?: (e: RosterEntry) => void,
     notice?: string,
@@ -11267,7 +11276,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       ${h.notice ? `<div class="acct-head" style="color:#e8b06a">${h.notice}</div>` : ''}
       <div class="esc-btns">
         <button id="sm-start">${sceneDue(acc, 'prologue') ? 'Begin' : 'New Run'}</button>
-        <button id="sm-continue" ${canContinue
+        <button id="sm-continue" ${this.continuePending ? 'disabled' : ''} ${canContinue
           ? `title="Resume ${esc(contWho)} — exactly where the run left off"` : 'disabled'}>${canContinue
           ? 'Continue Run' : 'No Run to Continue'}</button>
         ${immortalsBtn}
@@ -11291,8 +11300,8 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     });
     if (h.onCoop) document.getElementById('sm-coop')!.addEventListener('click', () => h.onCoop!());
     document.getElementById('sm-continue')!.addEventListener('click', () => {
-      if (!this.continueSave) return;
-      this.startMenu.classList.add('hidden'); h.onContinue(this.continueSave);
+      if (!this.continueSave || this.continuePending) return;
+      h.onContinue();
     });
     document.getElementById('sm-immortals')?.addEventListener('click', () => this.renderImmortalRoster());
     document.getElementById('sm-vault')?.addEventListener('click', () =>

@@ -317,6 +317,32 @@ export class WorldSim {
    *  QA can crank event frequency mid-run (the dev Event tab). null = use manifest. */
   private devFreqOverride: FrequencyProfile | null = null;
 
+  private static geographyOwner: WorldSim | undefined;
+  /** Restore native global samplers after detached world preparation. The
+   * same live owner is a no-op, so ordinary native hydration keeps its caches. */
+  bindGeographyPolicies(): void {
+    if (WorldSim.geographyOwner === this) return;
+    WorldSim.geographyOwner = this;
+    const seed = this.manifest.seed >>> 0;
+    // Climate radial layers (wildness) anchor on the same static home coord —
+    // static data, so host and clients agree without replication.
+    setClimateOrigin(ZONES[START_ZONE].map);
+    // THE CAPITAL POLE (world/civics.ts): pure seed math off the shared run
+    // seed — host/clients/reloads agree like the origin above. Installed
+    // before anything samples the field (the BiomeField ctor above only
+    // resets memos; first sampling happens after construction), and AFTER
+    // the origin (the pole is home-relative).
+    installCapitalPole(seed);
+    // THE RELIEF SEED (world/relief.ts): the river tracers descend the SAME
+    // elevation field every other sampler reads — installed here because
+    // course-instance seeds are hash descendants that cannot recover it.
+    setReliefSeed(seed);
+    // THE ATLAS SEED (world/atlas.ts): the feature finders and the painted
+    // chart read the same field seed — installed beside the relief seed,
+    // under the same law (one installed truth, host and clients agree).
+    setAtlasSeed(seed);
+  }
+
   constructor(manifest: ExpeditionManifest) {
     this.manifest = manifest;
     const seed = manifest.seed >>> 0;
@@ -335,23 +361,7 @@ export class WorldSim {
     // regions; centered on the town's CANONICAL map coord (static, never the moved
     // runtime copy) so difficulty is anchored to home no matter how town expands.
     this.levelField = new LevelField((seed ^ 0x1e7e1) >>> 0, ZONES[START_ZONE].map);
-    // Climate radial layers (wildness) anchor on the same static home coord —
-    // static data, so host and clients agree without replication.
-    setClimateOrigin(ZONES[START_ZONE].map);
-    // THE CAPITAL POLE (world/civics.ts): pure seed math off the shared run
-    // seed — host/clients/reloads agree like the origin above. Installed
-    // before anything samples the field (the BiomeField ctor above only
-    // resets memos; first sampling happens after construction), and AFTER
-    // the origin (the pole is home-relative).
-    installCapitalPole(seed);
-    // THE RELIEF SEED (world/relief.ts): the river tracers descend the SAME
-    // elevation field every other sampler reads — installed here because
-    // course-instance seeds are hash descendants that cannot recover it.
-    setReliefSeed(seed);
-    // THE ATLAS SEED (world/atlas.ts): the feature finders and the painted
-    // chart read the same field seed — installed beside the relief seed,
-    // under the same law (one installed truth, host and clients agree).
-    setAtlasSeed(seed);
+    this.bindGeographyPolicies();
     this.incursionField = new IncursionField(new Rng((seed ^ 0x1ec0) >>> 0));
     // Build the package→world routing from the manifest, and instantiate any
     // NET-NEW package overlays (migrated features route pressure into the shared

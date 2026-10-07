@@ -24,6 +24,7 @@ export class MassGeographicGameplay {
   readonly objectives: MassObjectives;
   readonly intel: MassPhysicalIntel;
   readonly caravans: MassProcessionGameplay;
+  readonly warm:GeographicPlanWarmQueue|null;
   private intelWork=new Map<string,{plan:Readonly<GeographicPlan>;policy:Readonly<PhysicalRevealPolicy>;owners:readonly Readonly<MassGeography>[];cursor:number;targets:PhysicalIntelTarget[];check?:Generator<void,boolean>;target?:Readonly<GeographicPlan>}>();
   private intelMetrics={checks:0,maxSliceMs:0,prepared:0};
   private snapshotHost: MassObjectiveHost | null = null;
@@ -36,7 +37,7 @@ export class MassGeographicGameplay {
   private nextPrepare=0;private prepareFrom:MassAddress|undefined;private disposed=false;
   private validation:{input:Readonly<GeographicPlanInput>;preparation:GeographicPreparation;steps:Generator<void,Readonly<GeographicPlan>|null>}|null=null;
   private accessIndices=new Map<string,GeographicAccessIndex>();
-  constructor(readonly mass: WorldMassRuntime, readonly spec: MassGeographicSpec, saved?: MassHierarchySave, readonly warm:GeographicPlanWarmQueue|null=createGeographicPlanWarmQueue()) {
+  constructor(readonly mass: WorldMassRuntime, readonly spec: MassGeographicSpec, saved?: MassHierarchySave, warm?:GeographicPlanWarmQueue|null) {
     if (!mass.nativeCountry || !Number.isSafeInteger(spec.maxObjectives) || spec.maxObjectives < 1 || spec.maxObjectives > 32
       || !Array.isArray(spec.pyres) || spec.pyres.some(p => !p.id || !p.source || !p.tileset || !Number.isFinite(p.weight)
         || p.weight <= 0 || !Number.isFinite(p.totalWeight) || p.totalWeight < p.weight || p.objective.kind !== 'pyres')
@@ -62,13 +63,17 @@ export class MassGeographicGameplay {
       }
       if(access)this.savedPlan(row.owner,access.definition);
     }
-    this.caravans=new MassProcessionGameplay(mass,this.hierarchy,spec.processions??[],owner=>this.selection(owner));
     this.intel=new MassPhysicalIntel(this.hierarchy);
     for(const row of this.hierarchy.controllers()){
       const beacon=row.controllers.find(c=>c.id==='objective:beacon');
       if(beacon&&(!this.intel.manifest(row.owner.id)||beacon.phase==='complete'&&this.hierarchy.status(row.owner.id,'beacon-survey')?.phase!=='complete'))
         throw Error('Native beacon lost its physical discovery manifest');
     }
+    // No worker exists until every saved owner/source has passed validation.
+    // An explicitly supplied queue stays caller-owned if construction refuses.
+    this.caravans=new MassProcessionGameplay(mass,this.hierarchy,spec.processions??[],owner=>this.selection(owner));
+    try{this.warm=warm===undefined?createGeographicPlanWarmQueue():warm;}
+    catch(error){this.caravans.dispose();throw error;}
   }
   private nearby(at:MassAddress):{x:number;y:number}|undefined{
     const dx=BigInt(at.cx)-BigInt(this.mass.origin.cx),dy=BigInt(at.cy)-BigInt(this.mass.origin.cy);
@@ -254,6 +259,14 @@ export class MassGeographicGameplay {
   get population():number{return (this.bodies?.population??0)+(this.caravans?.population??0);}
   reservedPopulation(except?:string):number{return this.caravans?.reservedPopulation(except)??0;}
   restoreProcessions(world:World):void{this.caravans.sync(world);}
+  /** Saved bodies and funded controllers precede optional feature admissions.
+   * This calls the native managers' existing-owner restore paths only. */
+  restoreResidentOwners(world:World):void {
+    this.restoreProcessions(world);
+    const at=this.mass.walk.at(world.player.pos.x,world.player.pos.y),span=this.mass.config.terrain.addressSpan;
+    const lower=moveAddress(at,{x:-2400,y:-2400},span);
+    this.objectives.sync(this.hierarchy.intersections('zone',massAddressBounds(lower,4800,4800,span)),this.host(world),p=>this.local(p));
+  }
   chestReady(chest:Chest):boolean{return this.caravans.processions.chestContext(chest)!==undefined?this.caravans.processions.chestReady(chest):this.objectives.chestReady(chest);}
   chestContext(chest:Chest):Readonly<ZoneDef>|undefined{return this.caravans.processions.chestContext(chest)??this.objectives.chestContext(chest);}
   chestOpened(chest:Chest,now:number):void{if(this.caravans.processions.chestContext(chest))this.caravans.processions.chestOpened(chest,now);else this.objectives.chestOpened(chest,now);}

@@ -74,7 +74,7 @@ export function massQuestSatisfied(mass: WorldMassRuntime, quest: string, placeI
 }
 /** Before the live scene exists, accept only the exact saved run's pinned
  * binding. A stale or foreign place cannot become an ordinary zone quest. */
-export function validMassQuestEntry(entry: SavedQuestEntry, save: MassAdventureSave | undefined): boolean {
+export function validMassQuestEntry(entry: SavedQuestEntry, save: Pick<MassAdventureSave, 'config' | 'state'> | undefined): boolean {
   if (!save || entry.zoneId !== MASS_ZONE || typeof entry.placeId !== 'string') return false;
   const bindings = save.config?.settlement?.quests?.bindings;
   const binding = Array.isArray(bindings) ? bindings.find(b => b?.quest === entry.questId) : undefined;

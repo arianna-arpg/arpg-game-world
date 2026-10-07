@@ -294,6 +294,12 @@ export interface SavedPlayerSpot {
   };
 }
 
+/** World adoption needs geography and quest ownership, not a complete actor
+ * history. Resident resume supplies this explicitly without becoming a save. */
+export type WorldStateRestore = Omit<WorldStateSave, 'worldmass'> & {
+  worldmass?: Omit<import('../worldmass/runtime').MassAdventureSave, 'enemies' | 'dormancy'>;
+};
+
 export interface WorldStateSave {
   massSideareas?: import('../worldmass/sideareas').MassSideareaSave;
   worldmass?: import('../worldmass/runtime').MassAdventureSave;
@@ -654,7 +660,7 @@ export function sanitizeVendorHolds(
  *  the slate is persisted state, not a derivation (the live-world pool
  *  divergence — see WorldStateSave.bountyBoard). */
 export function sanitizeBountyBoard(
-  raw: unknown, zones: Record<string, ZoneDef>, worldmass?: import('../worldmass/runtime').MassAdventureSave,
+  raw: unknown, zones: Record<string, ZoneDef>, worldmass?: WorldStateRestore['worldmass'],
 ): BountyBoardSave | null {
   if (!raw || typeof raw !== 'object') return null;
   const bb = raw as BountyBoardSave;

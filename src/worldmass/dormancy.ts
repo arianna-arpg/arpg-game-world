@@ -70,6 +70,15 @@ function isDependencyFreeData(value:object,active?:Set<object>,budget?:{left:num
 }
 const rootExcluded = new Set(['id','statusRelay','gridSeq']);
 const unsafeKeys = new Set(['__proto__','prototype','constructor']);
+/** Captured class fields cannot replace prototype behavior or accessors. Read
+ * descriptors rather than invoking a getter during the pure validation pass. */
+function nativePrototypeProperty(prototype: object, key: string): boolean {
+  for (let p: object | null = prototype; p; p = Object.getPrototypeOf(p)) {
+    const d = Object.getOwnPropertyDescriptor(p, key);
+    if (d) return !!d.get || !!d.set || typeof d.value === 'function' || d.writable === false;
+  }
+  return false;
+}
 
 /** Exact data graph for the supported native classes. Unlike JSON.stringify,
  * this retains aliases, Maps, Sets, typed recency clocks and Infinity sentinels.
@@ -108,12 +117,126 @@ export function captureNativeActorState(actor: Actor): NativeActorState | null {
   try { return {version:1,root:encode(actor,'',true),nodes}; } catch { return null; }
 }
 
+/** The decoder and streamed page preflight share this structural gate.
+ * It inspects packed data without constructing an Actor or decoded graph. */
+export function validateNativeActorState(saved: NativeActorState, expected: {
+  monster: string; team: string; actors: ReadonlySet<number>; squads: ReadonlySet<number>;
+  level?: number; life?: number; position?: { x: number; y: number };
+}): void {
+  const fail = (): never => { throw Error('Invalid native actor checkpoint'); };
+  if (saved?.version !== 1 || !Array.isArray(saved.nodes) || !saved.nodes.length || saved.nodes.length > 16384) fail();
+  const value = (v: Value, key = ''): void => {
+    if (v === null || typeof v === 'string' || typeof v === 'boolean') return;
+    if (typeof v === 'number') { if (!Number.isFinite(v)) fail(); return; }
+    if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).length !== 1) fail();
+    if ('ref' in v) { if (!Number.isSafeInteger(v.ref) || v.ref < 0 || v.ref >= saved.nodes.length) fail(); return; }
+    if ('actor' in v) { if (!Number.isSafeInteger(v.actor) || !expected.actors.has(v.actor)) fail(); return; }
+    // Unresolved historical numeric IDs intentionally become negative sentinels.
+    if ('entity' in v) { if (!Number.isSafeInteger(v.entity) || v.entity < 0 || dependencyKeys.has(key) && !expected.actors.has(v.entity)) fail(); return; }
+    if ('squad' in v) { if (!Number.isSafeInteger(v.squad) || !expected.squads.has(v.squad)) fail(); return; }
+    if ('special' in v && ['undefined', 'nan', 'positive', 'negative'].includes(v.special)) return;
+    fail();
+  };
+  for (const node of saved.nodes) {
+    if (!node || !['object', 'array', 'map', 'set', 'float64', 'sheet'].includes(node.kind) || !Array.isArray(node.entries)) fail();
+    const properties = new Set<string>();
+    for (let i = 0; i < node.entries.length; i++) {
+      const pair = node.entries[i];
+      if (!Array.isArray(pair) || pair.length !== 2) fail();
+      const [key, v] = pair; value(v, typeof key === 'string' ? key : '');
+      if (node.kind === 'map') value(key);
+      else if (node.kind === 'set') { if (key !== null) fail(); }
+      else if (node.kind === 'float64') {
+        // The encoder emits one numeric index in order, and numbers only.
+        // Named fields can target readonly accessors; refs/strings would invoke
+        // numeric coercion during decode (possibly throwing or losing data).
+        if (key !== i || typeof v !== 'number' && !(v && typeof v === 'object'
+          && 'special' in v && ['nan', 'positive', 'negative'].includes(v.special))) fail();
+      } else {
+        // Object.entries emits string own keys. Array length is nonenumerable
+        // and is never emitted, even for sparse arrays or named properties.
+        if (typeof key !== 'string' || unsafeKeys.has(key) || properties.has(key)
+          || node.kind === 'array' && key === 'length'
+          || node.kind === 'sheet' && nativePrototypeProperty(StatSheet.prototype, key)) fail();
+        properties.add(key as string);
+      }
+    }
+  }
+  value(saved.root);
+  if (!saved.root || typeof saved.root !== 'object' || !('ref' in saved.root)) fail();
+  const root = saved.nodes[(saved.root as { ref: number }).ref];
+  if (root.kind !== 'object') fail();
+  const fields = new Map(root.entries.map(([k, v]) => [String(k), v]));
+  if (fields.size !== root.entries.length || fields.get('defId') !== expected.monster || fields.get('team') !== expected.team
+    || typeof fields.get('life') !== 'number' || !Number.isFinite(fields.get('life')) || (fields.get('life') as number) <= 0
+    || expected.level !== undefined && fields.get('level') !== expected.level
+    || expected.life !== undefined && fields.get('life') !== expected.life) fail();
+  const sheet = fields.get('sheet');
+  if (!sheet || typeof sheet !== 'object' || !('ref' in sheet) || saved.nodes[sheet.ref]?.kind !== 'sheet') fail();
+  if (expected.position) {
+    const pos = fields.get('pos');
+    if (!pos || typeof pos !== 'object' || !('ref' in pos) || saved.nodes[pos.ref]?.kind !== 'object') fail();
+    const point = new Map(saved.nodes[(pos as { ref: number }).ref].entries);
+    if (!Number.isFinite(expected.position.x) || !Number.isFinite(expected.position.y)
+      || point.get('x') !== expected.position.x || point.get('y') !== expected.position.y) fail();
+  }
+  for (const key of fields.keys()) if (rootExcluded.has(key) || nativePrototypeProperty(Actor.prototype, key)) fail();
+}
+
+export function unpackNativeCheckpoint(saved: MassDormancySave, state: PackedActorState): NativeActorState {
+  if (state?.version !== 2 || !Array.isArray(state.nodes)) throw Error('Invalid packed native checkpoint');
+  return { version: 1, root: state.root, nodes: state.nodes.map(index => {
+    if (!Number.isSafeInteger(index) || index < 0 || index >= saved.nodeDictionary.length) throw Error('Invalid native node dictionary reference');
+    const node = saved.nodeDictionary[index];
+    if (!node || !Array.isArray(node.entries)) throw Error('Invalid native node dictionary');
+    return { kind: node.kind, entries: node.entries.map(i => {
+      if (!Number.isSafeInteger(i) || i < 0 || i >= saved.dictionary.length) throw Error('Invalid native dictionary reference');
+      return saved.dictionary[i];
+    }) };
+  }) };
+}
+
+export function validateNativeDormancyCheckpoint(saved: MassDormancySave,
+  bodies: readonly { id: string; monster: string; team?: string; level?: number; life?: number; x?: number; y?: number }[],
+  requireSleeping = false, formations?: ReadonlyMap<string, number | undefined>): void {
+  const fail = (): never => { throw Error('Invalid population dormancy checkpoint'); };
+  if (saved?.schema !== 1 || !Number.isFinite(saved.clock) || !Number.isSafeInteger(saved.playerId)
+    || !Array.isArray(saved.dictionary) || !Array.isArray(saved.nodeDictionary) || !Array.isArray(saved.identities)
+    || !Array.isArray(saved.actors) || !Array.isArray(saved.sleeping) || !Array.isArray(saved.unsupported)) fail();
+  const expected = new Map(bodies.map(b => [b.id, b]));
+  if (expected.size !== bodies.length || saved.identities.length !== bodies.length) fail();
+  const identities = new Map<string, MassDormancySave['identities'][number]>(), actors = new Set([saved.playerId]), squads = new Set<number>();
+  for (const row of saved.identities) {
+    if (!row || !expected.has(row.id) || identities.has(row.id) || !Number.isSafeInteger(row.actorId) || actors.has(row.actorId)
+      || row.squadId !== undefined && !Number.isSafeInteger(row.squadId)) fail();
+    if (formations && (!formations.has(row.id) || formations.get(row.id) !== row.squadId)) fail();
+    identities.set(row.id, row); actors.add(row.actorId); if (row.squadId !== undefined) squads.add(row.squadId);
+  }
+  const exact = new Set<string>();
+  for (const row of saved.actors) {
+    const identity = identities.get(row.id), body = expected.get(row.id);
+    if (!identity || !body || exact.has(row.id) || identity.actorId !== row.actorId || identity.squadId !== row.squadId) fail();
+    exact.add(row.id);
+    const state = unpackNativeCheckpoint(saved, row.state);
+    validateNativeActorState(state, { monster: body!.monster, team: body!.team ?? 'enemy',
+      actors, squads, ...(body!.level === undefined ? {} : { level: body!.level }), ...(body!.life === undefined ? {} : { life: body!.life }),
+      ...(body!.x === undefined && body!.y === undefined ? {} : { position: { x: body!.x!, y: body!.y! } }) });
+    const root = state.nodes[(state.root as { ref: number }).ref];
+    const squad = root.entries.find(([key]) => key === 'squadId')?.[1];
+    if (row.squadId === undefined ? squad !== undefined && !(squad && typeof squad === 'object' && 'special' in squad && squad.special === 'undefined')
+      : !squad || typeof squad !== 'object' || !('squad' in squad) || squad.squad !== row.squadId) fail();
+  }
+  if (new Set(saved.sleeping).size !== saved.sleeping.length || saved.sleeping.some(id => !exact.has(id))
+    || new Set(saved.unsupported).size !== saved.unsupported.length || saved.unsupported.some(id => !identities.has(id) || exact.has(id))
+    || requireSleeping && (saved.unsupported.length || exact.size !== bodies.length || saved.sleeping.length !== bodies.length)) fail();
+}
+
 /** Decode completely before changing the live actor, so an invalid record never
  * leaves a half-restored sheet. IDs remap through the owner's recreated bodies;
  * absent historical targets remain absent, never alias a newly born actor. */
 export function restoreNativeActorState(actor: Actor, saved: NativeActorState,
   actors: ReadonlyMap<number,Actor>, squads: ReadonlyMap<number,number> = new Map()): void {
-  if (saved?.version!==1 || !Array.isArray(saved.nodes) || saved.nodes.length>16384) throw Error('Invalid native actor checkpoint');
+  validateNativeActorState(saved, { monster: actor.defId!, team: actor.team, actors: new Set(actors.keys()), squads: new Set(squads.keys()) });
   const objects: unknown[] = saved.nodes.map(n=> {
     if (!n || !Array.isArray(n.entries)) throw Error('Invalid native checkpoint node');
     switch(n.kind) {
@@ -339,14 +462,7 @@ export class MassDormancy {
       if(row.squadId!==undefined){if(a.squadId===undefined)throw Error('Missing native formation');const prior=squads.get(row.squadId);if(prior!==undefined&&prior!==a.squadId)throw Error('Split native formation');squads.set(row.squadId,a.squadId);}}
     for(const row of saved.actors){const identity=saved.identities.find(r=>r.id===row.id);
       if(!identity||identity.actorId!==row.actorId||identity.squadId!==row.squadId)throw Error('Inconsistent native checkpoint identity');}
-    const unpack=(state:PackedActorState):NativeActorState=>{
-      if(state?.version!==2||!Array.isArray(state.nodes))throw Error('Invalid packed native checkpoint');
-      return {version:1,root:state.root,nodes:state.nodes.map(index=>{
-        if(!Number.isSafeInteger(index)||index<0||index>=saved.nodeDictionary.length)throw Error('Invalid native node dictionary reference');
-        const n=saved.nodeDictionary[index];return {kind:n.kind,entries:n.entries.map(i=>{
-        if(!Number.isSafeInteger(i)||i<0||i>=saved.dictionary.length)throw Error('Invalid native dictionary reference');
-        return saved.dictionary[i];})};})};};
-    for(const row of saved.actors)restoreNativeActorState(owned.get(row.id)!,unpack(row.state),actors,squads);
+    for(const row of saved.actors)restoreNativeActorState(owned.get(row.id)!,unpackNativeCheckpoint(saved,row.state),actors,squads);
     for(const id of saved.sleeping){const a=owned.get(id);if(!a||!saved.actors.some(r=>r.id===id))throw Error('Unknown dormant native');this.asleep.add(a);const state=captureNativeActorState(a);if(!state)throw Error('Unrestorable dormant native');this.frozen.set(a,state);}
     world.actors=world.actors.filter(a=>!this.asleep.has(a));world.actorGridRev++;
   }

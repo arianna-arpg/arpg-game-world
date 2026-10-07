@@ -3,7 +3,7 @@ import type { World } from '../engine/world';
 import type { NativePageRef, NativePageRoot, NativePageStorage } from '../meta/browserNativePages';
 import type { MassCell } from './address';
 import { cellKey, validSpan } from './address';
-import { MassDormancy, captureNativeActorState, massDormancyPins, nativeDormancyRefusal, type MassDormancySave } from './dormancy';
+import { MassDormancy, captureNativeActorState, massDormancyPins, nativeDormancyRefusal, validateNativeDormancyCheckpoint, validateMassDormancy, type MassDormancySave } from './dormancy';
 import { canonical } from './random';
 export interface PagedNativeDescriptor { id:string; monster:string; level:number; provenance:unknown }
 export interface NativeCohortPage {
@@ -84,13 +84,26 @@ export interface NativePageHydrationHost {
  * complete page decodes off-world; a malformed codec cannot partly mount it. */
 export async function hydrateNativeCohort(storage:Pick<NativePageStorage,'readPage'>,ref:NativePageRef,frame:MassCell,addressSpan:number,
   player:Actor,host:NativePageHydrationHost):Promise<{page:NativeCohortPage;actors:Map<string,Actor>;dormancy:MassDormancy}>{
-  const body=await storage.readPage(ref);const page=JSON.parse(body) as NativeCohortPage;
-  if(page.schema!==1||page.run!==ref.run||page.page!==ref.page||canonical(page.frame)!==canonical(frame)||page.addressSpan!==addressSpan
+  const body=await storage.readPage(ref);
+  return hydrateNativeCohortData(JSON.parse(body) as NativeCohortPage,ref,frame,addressSpan,player,host);
+}
+/** Structural/codec validation is shared by streamed preflight and actual
+ * restoration. Every malformed page is refused before a native factory. */
+export function validateNativeCohortPage(page:NativeCohortPage,ref:NativePageRef,frame:MassCell,addressSpan:number):void {
+  validSpan(addressSpan);cellKey(frame);validateMassDormancy(page?.policy);
+  if(!page||page.schema!==1||page.run!==ref.run||page.page!==ref.page||canonical(page.frame)!==canonical(frame)||page.addressSpan!==addressSpan
     ||!Array.isArray(page.bodies)||!page.bodies.length||page.bodies.length>96||new Set(page.bodies.map(b=>b.id)).size!==page.bodies.length
-    ||page.bodies.some(b=>!b.id||!b.monster||!Number.isFinite(b.level)||b.level<1)
+    ||page.bodies.some(b=>!b.id||!b.monster||!Number.isSafeInteger(b.level)||b.level<1)
     ||page.checkpoint?.unsupported?.length||page.checkpoint?.identities?.length!==page.bodies.length
     ||page.checkpoint?.sleeping?.length!==page.bodies.length||page.checkpoint?.actors?.length!==page.bodies.length
     ||page.bodies.some(b=>!page.checkpoint.identities.some(i=>i.id===b.id)))throw Error('Invalid or incompatible native cohort page');
+  validateNativeDormancyCheckpoint(page.checkpoint,page.bodies,true);
+}
+/** Detached decode is synchronous so a staged World can scope all global
+ * native factory policies without holding them across a storage await. */
+export function hydrateNativeCohortData(page:NativeCohortPage,ref:NativePageRef,frame:MassCell,addressSpan:number,
+  player:Actor,host:NativePageHydrationHost):{page:NativeCohortPage;actors:Map<string,Actor>;dormancy:MassDormancy}{
+  validateNativeCohortPage(page,ref,frame,addressSpan);
   const actors=new Map(page.bodies.map(d=>{const a=host.create(d);if(a.defId!==d.monster||a.level!==d.level)throw Error('Wrong native page factory');return [d.id,a] as const;}));
   host.groups(page.checkpoint.identities,actors);
   const dormancy=new MassDormancy(page.policy);

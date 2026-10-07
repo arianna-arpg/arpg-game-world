@@ -28,7 +28,7 @@ export function massBountiesAvailable(world: World, board: string = BOUNTY_BOARD
 }
 /** Save sanitation validates identity shape without creating a second runtime.
  * The live resolver then requires the exact generated place before any action. */
-export function savedMassBounty(raw: unknown, save?: MassAdventureSave): MassBountyTarget | undefined {
+export function savedMassBounty(raw: unknown, save?: Omit<MassAdventureSave, 'enemies' | 'dormancy'>): MassBountyTarget | undefined {
   const t = raw as MassBountyTarget;
   if (!save?.config.bounties || !t || t.run !== save.state.run.runId || typeof t.id !== 'string' || !t.id
     || typeof t.content !== 'string' || !t.content) return undefined;
