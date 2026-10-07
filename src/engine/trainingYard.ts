@@ -3,11 +3,13 @@ import { TRAINING_YARD } from '../data/trainingYard';
 import { START_ZONE } from '../data/zones';
 import type { Doodad } from './levelgen';
 
+export interface NativeTrainingYardHost extends Pick<World,'clientActionHook'|'zone'|'account'|'actors'|'createMonster'|'player'|'clampPos'|'townSeat'|'doodads'|'markDoodadsChanged'> {}
+
 // References expire naturally when loadZone replaces the town's scenery.
-const backstops = new WeakMap<World, Doodad[]>();
+const backstops = new WeakMap<NativeTrainingYardHost, Doodad[]>();
 
 /** Raise only missing range bodies. Never reload town or disturb the live run. */
-export function syncTrainingYard(w: World): number {
+export function syncTrainingYard(w: NativeTrainingYardHost): number {
   const def = TRAINING_YARD;
   if (w.clientActionHook || w.zone.id !== START_ZONE || !w.account.features.has(def.feature)) return 0;
   let spawned = 0;

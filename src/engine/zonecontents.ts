@@ -20,8 +20,9 @@ export interface ZoneContents {
   altars: { pos: { x: number; y: number }; id: string; tier?: number; objective?: boolean }[];
   drops: (Omit<GemDrop, 'item'> & { item: SavedDropItem })[];
 }
+export interface NativeZoneContentsHost extends Pick<World,'chests'|'shrines'|'altars'|'drops'> {}
 const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value));
-export function captureZoneContents(w: World): ZoneContents {
+export function captureZoneContents(w: NativeZoneContentsHost): ZoneContents {
   return copy({
     chests: w.chests.filter(c=>!c.massObjectiveOwner),
     shrines: w.shrines.filter(s => !s.massSource).map(s => ({ pos: s.pos, id: s.def.id, used: s.used })),
@@ -45,7 +46,7 @@ export function savedZoneContents(raw: unknown): ZoneContents | undefined {
 const positioned = (v: { pos?: { x?: number; y?: number } } | null | undefined): boolean =>
   !!v?.pos && Number.isFinite(v.pos.x) && Number.isFinite(v.pos.y);
 
-export function restoreZoneContents(w: World, saved: ZoneContents): void {
+export function restoreZoneContents(w: NativeZoneContentsHost, saved: ZoneContents): void {
   const c = copy(saved);
   w.chests = c.chests.filter(s => positioned(s) && !s.massObjectiveOwner && ['objective', 'timed'].includes(s.kind)
     && Number.isFinite(s.lockTime) && Number.isFinite(s.maxLock));

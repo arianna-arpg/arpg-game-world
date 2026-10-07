@@ -61,6 +61,10 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_nativelayoutgeneration.ts', status: 'green', tier: 'fast', why: 'Exact native remembered seeds, held-city physical fixtures, complete layout outputs and live local/World ownership with original failures' },
+  { probe: 'probe_nativeresidentsession.ts', status: 'green', tier: 'fast', why: 'Native resident/director identity, visit persistence, actual installed facts and original reset ordering across re-entry' },
+  { probe: 'probe_nativescenephysical.ts', status: 'green', tier: 'fast', why: 'Native altar and training WeakMap ownership, complete installed content capture/restore, local identity and partial failures' },
+  { probe: 'probe_nativesceneadoption.ts', status: 'green', tier: 'fast', why: 'Unchanged installed objective adoption over genuine local and campaign sources, exact precedence, aliases and failed reads' },
   { probe: 'probe_nativesceneecology.ts', status: 'green', tier: 'fast', why: 'Native carried throng, complete lightweight ecology and vent seating, claimed-pocket state and lightwell installation with exact draws and partial births' },
   { probe: 'probe_nativesceneenvironment.ts', status: 'green', tier: 'fast', why: 'Exact native scenery, all puzzle presets, harvest, geyser and escape births with mutable local geometry, original ordering and partial failure state' },
   { probe: 'probe_nativescenebounty.ts', status: 'green', tier: 'fast', why: 'Native cull/gather birth, arrival/readiness, full installed source/country context, aliases and partial effects' },

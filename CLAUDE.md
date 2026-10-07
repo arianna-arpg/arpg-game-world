@@ -1,3 +1,14 @@
+NativeLayoutGeneration shares native memory/seed choice and physical held-city
+fixtures with classic World. NativeResidentSession retains one genuine dialogue
+director and visit history; NativeScenePhysical keeps native altar/training
+WeakMap identity and complete content restoration. NativeAreaSceneAdoption reads
+the unchanged installed objective sources through real campaign/local providers.
+Preserve birth ordering, source receivers, local census identity and random
+continuations. Resident spatial services, full controllers and the complete area
+assembler/update/reward/paging/source issuer still precede seamless activation.
+Verify nativelayoutgeneration/nativeresidentsession/nativescenephysical/
+nativesceneadoption, all types, generation, sim and client Continue courses.
+
 NativeAreaBoundaries now shares the exact pre-layout campaign graph operation,
 including whole neighbor graphs, reciprocal heals and boundary/road/meld inputs.
 NativeSettlementServices, NativeSceneBounty and NativeSceneOccurrences supply

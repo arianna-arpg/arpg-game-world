@@ -388,6 +388,12 @@ export interface PackageAskState {
 
 /** One package's adoptable presence — registered by the package's own module
  *  (never listed by hand here). */
+/** Exact shared adoption/read scope. Scene exits and fracture view are local; overlay fields belong to the real campaign. */
+export interface ObjectiveReadContext {
+ readonly sim: Pick<World['sim'],'fractureField'|'holdfastField'>;
+ readonly exits: World['exits'];
+ fractureView: World['fractureView'];
+}
 export interface PackageAskRow {
   /** The package id (keys the row; stamped on the spec as `pkg`). */
   pkg: string;
@@ -399,9 +405,9 @@ export interface PackageAskRow {
    *  seat state — never force one. The key feeds the per-guest coin and is
    *  stamped on the spec (`key`), so a replaced guest reads stale and the
    *  ask hands back / re-rolls rather than silently rebinding. */
-  standing: (world: World, def: ZoneDef) => string | null;
+  standing: (world: ObjectiveReadContext, def: ZoneDef) => string | null;
   /** THE LIVE VIEW the driver + HUD watch (World.packageAskView wraps it). */
-  view: (world: World, def: ZoneDef, key: string) => PackageAskState;
+  view: (world: ObjectiveReadContext, def: ZoneDef, key: string) => PackageAskState;
   /** Adoption coin override (absent = ADOPT_CFG.packageChance). */
   chance?: number;
 }
@@ -430,7 +436,7 @@ export function packageAskRows(): readonly PackageAskRow[] {
 function maybePackageAsk(
   def: ZoneDef,
   bare: ObjectiveSpec,
-  world: World,
+  world: ObjectiveReadContext,
 ): ObjectiveSpec | null {
   for (const row of packageAskRows()) {
     const key = row.standing(world, def);
@@ -508,13 +514,13 @@ export interface VentureAskRow {
    *  read 'won' or 'lost' MUST read null here, so a resolved or failed
    *  venture can never (re-)offer itself and the hand-back converges to the
    *  bare cull instead of flip-flopping. */
-  standing: (world: World, def: ZoneDef) => string | null;
+  standing: (world: ObjectiveReadContext, def: ZoneDef) => string | null;
   /** The ask's prose title for this stand (resolved once, stamped on the
    *  spec — the holdfast speaks its guardian's own name). */
-  title: (world: World, def: ZoneDef, key: string) => string;
+  title: (world: ObjectiveReadContext, def: ZoneDef, key: string) => string;
   /** THE LIVE VIEW the driver + HUD watch (World.ventureAskView wraps it):
    *  the tri-state verdict for the BOUND key, off the fabric's own state. */
-  view: (world: World, def: ZoneDef, key: string) => VentureAskState;
+  view: (world: ObjectiveReadContext, def: ZoneDef, key: string) => VentureAskState;
   /** Adoption coin override (absent = ADOPT_CFG.ventureChance). */
   chance?: number;
 }
@@ -542,7 +548,7 @@ export function ventureAskRows(): readonly VentureAskRow[] {
 function maybeVentureAsk(
   def: ZoneDef,
   bare: ObjectiveSpec,
-  world: World,
+  world: ObjectiveReadContext,
 ): ObjectiveSpec | null {
   for (const row of ventureAskRows()) {
     const key = row.standing(world, def);
@@ -653,7 +659,7 @@ function maybePuzzleAsk(
 export function maybeAdoptObjective(
   def: ZoneDef,
   layout: Pick<GeneratedLayout, 'doodads' | 'landmarkSpawns'>,
-  world?: World,
+  world?: ObjectiveReadContext,
 ): ObjectiveSpec | null {
   let o = def.objective;
   let reverted: ObjectiveSpec | null = null;

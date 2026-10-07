@@ -217,7 +217,7 @@ import '../data/bounties';
 import { ADOPT_CFG, OFFERING_CFG, STRAGGLER_CFG, maybeAdoptObjective, packageAskRow, ventureAskRow } from '../data/objectives';
 import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS } from '../data/looks';
 import {
-  blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleKinds, doodadRuleOf, generateLayout,
+  blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleKinds, doodadRuleOf,
   hitSurfaceOf, normalizeDoodadBound, pitRegionOf, layTraveledWay,
   type BrittleSpec, type Doodad, type DoodadEffect, type DoodadKind, type PlacedStructure, type PlacedSlot,
   type ResonanceSpec,
@@ -249,7 +249,7 @@ import {
 import { CHARGE_DEFS } from './charges';
 import { pushOutOfShape, shapeAabbHalf, shapeContains, type HitShape } from './shapes';
 import { projFormNose, projFormTouches } from './projForms';
-import { STRUCTURES } from '../data/structures';
+import '../data/structures';
 import { dwellOf, sidezoneOf, sidezonePocketId } from '../data/sidezones';
 import { underSpanPolicyOf } from '../data/underspans';
 import { hollowDef } from '../data/hollows';
@@ -579,6 +579,7 @@ import { sceneBootThrong, sceneThrongSources, sceneMintThrongPocket, sceneMintTh
 import { settlementArmVendorStock, settlementRestockOrdinal, settlementRestockSeconds, settlementSyncHoldIdx, settlementResolveCommission, settlementOverlayHold, settlementBuildVendorStock, settlementVendorEntryAllowed, settlementCurateVendorStock, settlementCommissionOdds, settlementMintCommissionEntry, settlementVendorMemoryCeiling, settlementVendorGemLevel, settlementVendorStockPolicy, settlementVendorGemsOpen, settlementVendorSize, settlementRollSupportDropGated, settlementRollSkillGem, settlementWaresBonus, settlementVendorQualityPieces, settlementCarriedGemIds, settlementSkillDropPool, settlementGemWeights, settlementSupportDropPool, settlementPickGem, settlementArmLastlightRecruiter, settlementTownSeat, settlementMercSheetFor, settlementDealTemplateOffers, type NativeSettlementHost } from './nativeSettlementServices';
 
 import { prepareNativeAreaBoundaries, type NativeAreaBoundaryHost } from './nativeAreaBoundaries';
+import {generateNativeAreaLayout,nativeZoneMemoryFresh,nativeCrusadeFixtureSpecs,type NativeLayoutGenerationHost} from './nativeLayoutGeneration';
 
 import { sceneOccurrenceHost, sceneOccurrenceSpawnTable, sceneAbortTraces, type NativeSceneOccurrenceHost, type NativeSceneTraceResetHost } from './nativeSceneOccurrences';
 
@@ -6328,23 +6329,7 @@ export class World {
     // Caves now get Zone Memory too (so descending + resurfacing — or stepping out and
     // back — doesn't respawn a side area). The BOUNDLESS abyss is exempt: it's streamed,
     // not a fixed population, and is never re-entered (one descent per Delver).
-    const memory = !def.boundless && this.zoneMemoryFresh(zoneId) ? this.zoneMemory.get(zoneId)! : null;
-    const layoutSeed = memory?.seed ?? def.seed ?? rollSeed();
-    this.currentZoneSeed = layoutSeed;
-    // THE REGROWTH CYCLE's authored clock (updateCharRegrowth): remembered
-    // ground keeps its age across the leaving; fresh ground is born now.
-    this.charBorn = memory?.charBorn ?? this.time;
-    this.charRegrowAcc = 0;
-    this.farPointDraws = 0; // the seeded-fallback lane replays from the top
-    const rng = new Rng(layoutSeed);
-    // CRUSADE WORKS ride the REAL structure pipeline: a held zone's tier
-    // structures inject as per-load fixtures (plan walls carve the walk grid,
-    // gates are true doors, tower slots man, breakables live, footprints
-    // reserve + hold aprons) at seats deterministic per seed + tier — never
-    // stamped over portals, never ghost-geometry.
-    const crusadeWorks = this.crusadeFixtureSpecs(def, entry);
-    this.crusadeWorksAt = crusadeWorks ? vec(crusadeWorks.center.x, crusadeWorks.center.y) : null;
-    const layout = generateLayout(def, this.arena, rng, entry, this.exits.map(e => e.pos), crusadeWorks?.fixtures);
+    const {memory,rng,layout}=this.runNativeLayoutGeneration(def,entry,zoneId);
     this.runNativeAreaLayout(def,layout,entry,zoneId);
     // WAKE HERE (GeneratedLayout.spawnAt): arriving WITHOUT a back-portal — a
     // fresh run, a respawn — lands the party at the plan's declared spawn
@@ -10835,6 +10820,30 @@ export class World {
    Object.defineProperty(this,'nativeSceneEnvironmentView',{value:host,writable:true,configurable:true,enumerable:false});
    return host;
   }
+
+  private nativeLayoutGenerationView?:NativeLayoutGenerationHost;
+  private nativeLayoutGenerationHost():NativeLayoutGenerationHost {
+    if(this.nativeLayoutGenerationView)return this.nativeLayoutGenerationView;
+    const world=this;
+    const host:NativeLayoutGenerationHost=Object.freeze({
+      get zoneMemory(){return world.zoneMemory;},
+      get time(){return world.time;},
+      get inCave(){return world.inCave;},
+      get sim(){return world.sim;},
+      get arena(){return world.arena;},
+      get exits(){return world.exits;},
+      get currentZoneSeed(){return world.currentZoneSeed;},set currentZoneSeed(v:World['currentZoneSeed']){world.currentZoneSeed=v;},
+      get charBorn(){return world.charBorn;},set charBorn(v:World['charBorn']){world.charBorn=v;},
+      get charRegrowAcc(){return world.charRegrowAcc;},set charRegrowAcc(v:World['charRegrowAcc']){world.charRegrowAcc=v;},
+      get farPointDraws(){return world.farPointDraws;},set farPointDraws(v:World['farPointDraws']){world.farPointDraws=v;},
+      get crusadeWorksAt(){return world.crusadeWorksAt;},set crusadeWorksAt(v:World['crusadeWorksAt']){world.crusadeWorksAt=v;},
+      get zoneMemoryFresh(){const fn=world.zoneMemoryFresh;return(...args:Parameters<NativeLayoutGenerationHost['zoneMemoryFresh']>)=>fn.apply(world,args);},
+      get crusadeFixtureSpecs(){const fn=world.crusadeFixtureSpecs;return(...args:Parameters<NativeLayoutGenerationHost['crusadeFixtureSpecs']>)=>fn.apply(world,args);},
+    });
+    Object.defineProperty(this,'nativeLayoutGenerationView',{value:host,enumerable:false,configurable:true,writable:true});
+    return host;
+  }
+  private runNativeLayoutGeneration(def:ZoneDef,entry:Vec2,zoneId:string){return generateNativeAreaLayout(this.nativeLayoutGenerationHost(),def,entry,zoneId);}
 
   private nativeAreaBoundaryView?:NativeAreaBoundaryHost;
   private nativeAreaBoundaryHost():NativeAreaBoundaryHost {
@@ -16292,10 +16301,7 @@ export class World {
   // remembered base every entry.
 
   /** Is this zone's memory still within the TTL (game time)? */
-  private zoneMemoryFresh(zoneId: string): boolean {
-    const m = this.zoneMemory.get(zoneId);
-    return !!m && this.time - m.savedAt < ZONE_MEMORY_CFG.ttl;
-  }
+  private zoneMemoryFresh(zoneId: string): boolean {return nativeZoneMemoryFresh(this.nativeLayoutGenerationHost(),zoneId);}
 
   /** PURE capture of the CURRENT zone's memory (seed + living base enemies +
    *  door states), or null where memory doesn't apply. No side effects — the
@@ -18082,66 +18088,7 @@ export class World {
    *  Deterministic per zone seed + tier (re-entry at the same tier rebuilds
    *  identically; a tier-up regrows the works on the next visit). Returns
    *  null on unheld/ineligible ground. */
-  private crusadeFixtureSpecs(def: ZoneDef, entry: Vec2): { fixtures: { structure: string; x: number; y: number }[]; center: Vec2 } | null {
-    if (this.inCave || def.caveDepth != null || def.special || def.objective.kind === 'safe') return null;
-    const info = this.sim.crusadeField?.crusadeOn(def.id);
-    if (!info?.structure || !STRUCTURES[info.structure]) return null;
-    const rng = new Rng((((def.seed ?? 0) ^ 0xc205) + info.tier * 0x9e37) >>> 0);
-    const { w, h } = this.arena;
-    const margin = 200;
-    const exitPts = this.exits.map(e => e.pos);
-    const clearOf = (p: Vec2, entryClear: number, portalClear: number): boolean =>
-      dist(p, entry) >= entryClear && exitPts.every(x => dist(p, x) >= portalClear);
-    // The main works: the candidate FARTHEST from the entry that clears every
-    // portal (fixed-count draws — a rejected candidate never shifts later
-    // rolls, the findSpot discipline).
-    let center = vec(w / 2, h / 2);
-    let bestD = -1;
-    for (let t = 0; t < 12; t++) {
-      const p = vec(rng.range(margin, w - margin), rng.range(margin, h - margin));
-      const d = dist(p, entry);
-      if (clearOf(p, 320, 260) && d > bestD) { bestD = d; center = p; }
-    }
-    const fixtures: { structure: string; x: number; y: number }[] = [
-      { structure: info.structure, x: center.x, y: center.y },
-    ];
-    const placed: Vec2[] = [vec(center.x, center.y)];
-    // The town square: raised once, a street's remove from the works.
-    if (info.cityFill?.square && STRUCTURES[info.cityFill.square]) {
-      for (let t = 0; t < 8; t++) {
-        const a = rng.range(0, Math.PI * 2);
-        const p = vec(
-          clamp(center.x + Math.cos(a) * rng.range(300, 420), margin, w - margin),
-          clamp(center.y + Math.sin(a) * rng.range(300, 420), margin, h - margin));
-        if (!clearOf(p, 260, 220) || placed.some(q => dist(p, q) < 280)) continue;
-        fixtures.push({ structure: info.cityFill.square, x: p.x, y: p.y });
-        placed.push(p);
-        break;
-      }
-    }
-    // The street-mix: weighted picks spread around the works.
-    if (info.cityFill?.structures?.length) {
-      const fills = rng.int(info.cityFill.count[0], info.cityFill.count[1]);
-      const total = info.cityFill.structures.reduce((a, s) => a + s.weight, 0);
-      for (let i = 0; i < fills; i++) {
-        let roll = rng.range(0, total);
-        let pick = info.cityFill.structures[0].structure;
-        for (const s of info.cityFill.structures) { roll -= s.weight; if (roll <= 0) { pick = s.structure; break; } }
-        if (!STRUCTURES[pick]) continue;
-        for (let t = 0; t < 10; t++) {
-          const a = rng.range(0, Math.PI * 2);
-          const p = vec(
-            clamp(center.x + Math.cos(a) * rng.range(260, 560), margin, w - margin),
-            clamp(center.y + Math.sin(a) * rng.range(260, 560), margin, h - margin));
-          if (!clearOf(p, 240, 200) || placed.some(q => dist(p, q) < 230)) continue;
-          fixtures.push({ structure: pick, x: p.x, y: p.y });
-          placed.push(p);
-          break;
-        }
-      }
-    }
-    return { fixtures, center };
-  }
+  private crusadeFixtureSpecs(def: ZoneDef, entry: Vec2): { fixtures: { structure: string; x: number; y: number }[]; center: Vec2 } | null {return nativeCrusadeFixtureSpecs(this.nativeLayoutGenerationHost(),def,entry);}
 
   // ------------------------------------------------------- contagion materialize
   //

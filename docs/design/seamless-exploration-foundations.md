@@ -2046,3 +2046,81 @@ once-only payout, narrow/scaled presentation and Save/Continue. The first
 conversation invocation served an old harness build and failed at its missing
 save hook; selecting the freshly verified build passes without production changes.
 These client courses cover admitted content, not complete seamless native areas.
+
+## NativeLayoutGeneration, resident sessions and physical places
+
+NativeLayoutGeneration shares the complete memory/seed-to-layout operation with
+classic World. Fresh ground uses its original seed fallback, remembered ground
+retains its seed and regrowth age, and boundless ground follows its existing
+memory exemption. The held-territory source supplies native outpost, camp,
+fortress and city fixtures through the real structure generator, including the
+square and weighted street mix. No fixture becomes decorative proxy geometry.
+The local owner writes the same mutable geometry counters and keeps genuine
+campaign memory and Crusade state. Layout adoption and later births remain
+separate, ordered operations.
+
+Twenty complete archived/local/actual-World layout comparisons cover two canonical
+native places, quiet and explicitly QA-ignited native held cities, and fresh,
+remembered, boundless, missing-seed and zero-seed controls. They retain 43,748
+doodads, 101 physical structures, both random continuations, source reads and
+memory identity. The modified seed/boundless and ignition cases are mechanism
+controls, not natural content-frequency claims. Thirty-six installed tier/seed/
+arena comparisons preserve every native fixture attempt; 42 ordering/failure
+comparisons and lazy-memory controls retain partial writes and original draws.
+Some held-city variants produce native required-point reachability warnings in
+both old and new implementations. Equality does not certify those routes as
+playable; their geometric cause is being investigated separately.
+
+NativeResidentSession owns one real NpcDialogueDirector and the native speech
+maps. Factory appearance and resident reset share that exact director. Re-entry
+runs the original reset at the original birth stage, retaining visit history.
+The complete installed fact registry and director runtime are unchanged; their
+host types now describe the actual campaign/local services they consume.
+Twenty cold-process courses retain nine resident births from a full native
+Lastlight layout, 30 draws, 205 provider reads and 36 calls, plus binding,
+selected-method, live fact and sequential A/B/A controls. The three archived
+spatial read methods in the oracle are test fixtures only. Production still
+requires genuine local spatial services. This session is not a simultaneous
+multi-area controller, saved visit codec or dialogue/reward dispatcher.
+
+NativeScenePhysical gives the original altar, training-yard and content-memory
+services one stable local host. Both native WeakMaps follow that host throughout
+its residency. Geometry/census/seating identity is enforced; the actual mutable
+chest, shrine, altar and drop arrays remain authoritative. Twenty archived/World/
+local cold-process courses retain 39 native actor allocations and complete
+item/actor identities, all nine training targets and every installed altar,
+shrine and loot row. Native finite birth syncs altar bodies before remembered
+altar objects replace them. That order, including the absence of an implicit
+second sync, remains unchanged. Later physical interactions and rewards are
+separate owners still required by complete scenes.
+
+NativeAreaSceneAdoption calls the unchanged installed objective-adoption function.
+Its real campaign fracture/holdfast fields, local exits and local fracture state
+preserve authored-objective protection and lair/package/venture/puzzle precedence.
+Fifty original/local comparisons retain 1,716 source reads and every currently
+installed package/venture source, with additional exception, alias and live-state
+controls. Natural forest and downs layouts remain whole. Positive package asks
+use explicit native QA source activation; they do not establish event frequency.
+This is the complete adoption read service, not package birth/update ownership.
+
+The World audit preserves 2,345 unrelated members and all 379 previous runtime
+module positions. Only the layout-generation block, its two helper delegates
+and three adapter members change. All other existing source edits in this pass
+narrow types while retaining identical emitted runtime JavaScript. These owners
+converge on the complete NativeAreaBirth composition; installed campaign/source
+issuance, remaining native controllers, runtime dispatch and whole-owner paging
+still precede seamless admission and the actual two-area cold-Continue course.
+The localized ordinary mire policy remains unchanged.
+
+Validation for NativeLayoutGeneration, NativeResidentSession, NativeScenePhysical
+and NativeAreaSceneAdoption: all 482 fast probes pass without retries in 861.1
+seconds; nine slow and three excluded probes were not run. All three project
+type checks and all 25 simulation smoke episodes pass. The full generation matrix
+passes 869 cases at three seeds (2,607 generations), with no failures and four
+existing spacing warnings. The built client passes the complete native structure,
+movement, cave, same-hero continuation, cold Continue and return course. The
+conversation course passes gifts, work, reward, once-only payout, scaled bounds
+and Save/Continue. Existing dialogue, physical-content and objective source
+modules emit identical JavaScript; the World audit retains 2,345 unchanged
+members and all 379 prior runtime import positions. These checks do not certify
+complete seamless native-area admission or resolve the structure access defects.

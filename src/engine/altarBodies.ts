@@ -7,11 +7,12 @@ export const ALTAR_BODY = { kind: 'altar_plinth', halfWidth: 14, halfHeight: 6.5
 registerDoodadRule(ALTAR_BODY.kind, {
   overlap: 'solid', blocksMove: true, surface: { hw: 1, hh: ALTAR_BODY.halfHeight / ALTAR_BODY.halfWidth, orient: 'fixed' },
 });
-const bodies = new WeakMap<World, Map<Altar, Doodad>>();
+export interface NativeAltarBodyHost extends Pick<World,'doodads'|'altars'|'markDoodadsChanged'> {}
+const bodies = new WeakMap<NativeAltarBodyHost, Map<Altar, Doodad>>();
 
 /** Native scenery owns physics/path queries. The altar owner owns residency;
  * these derived bodies are rebuilt once on admission, never checkpointed twice. */
-export function syncAltarBodies(world: World): void {
+export function syncAltarBodies(world: NativeAltarBodyHost): void {
   const live = bodies.get(world) ?? new Map<Altar, Doodad>();
   bodies.set(world, live);
   const present = new Set(world.doodads), wanted = new Set(world.altars);
