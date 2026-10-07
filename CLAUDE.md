@@ -1,3 +1,24 @@
+NativeCompleteAreas preserves the whole native load-prepared layout, including
+ordered boundary/road/meld inputs, exact generation ports, all output collections,
+source mechanisms and cave seed ordering. Physical seam mouths remain distinct
+from native generation ports. NativeAmbient shares the original pack, habitat
+and later wildlife stages with explicit host inputs; classic play uses the same
+operations. Complete-area publication still refuses until a real compiler source
+issuer and all local population/controller owners exist. Verify nativeambient,
+nativeareacompiler, nativearearoutes, nativesubstrate, types, genqa and sim smoke.
+
+NativeAreaRoutes proves exact interior stands through complete retained native
+geometry, with conservative body-clear routes and collision replay on restore.
+NativeSubstrate binds saved native geography to the existing generator, streamed
+terrain and collision; native climate/depth replace independent noise only under
+its explicit discriminator. Every captured biome needs authored material rows;
+those rows are outside-area policy, not a claim of native face generation.
+Ordinary mire remains localized with neutral bypass reservations. Optional patch
+cells crossing the finite mapping domain refuse whole; valid base ground remains.
+Fresh adventure activation stays blocked until complete native area, population
+and controller ownership is installed. Old descriptors keep legacy generation.
+Verify nativearearoutes, nativesubstrate, terrainpatches and all types.
+
 NativeAreaFoundations shares the complete native recipe mint with classic
 worldgen through explicit providers and original-order topology hooks. Saved
 native mapping keeps exact source bytes, explicit origins and rational scale;

@@ -61,6 +61,10 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_nativeambient.ts', status: 'green', tier: 'fast', why: 'Archived actual native pack/habitat/wildlife parity, full body/callback tapes and exact random draws with isolated stage receipts' },
+  { probe: 'probe_worldmass_nativeareacompiler.ts', status: 'green', tier: 'fast', why: 'Complete native area output and archived load-boundary goldens, original generation ports, durable entrance zip and explicit unbound runtime' },
+  { probe: 'probe_worldmass_nativearearoutes.ts', status: 'green', tier: 'fast', why: 'Whole-area body-clear spawn/approach paths, retained walls and closed gates, source-exact cold replay and bounded conservative search' },
+  { probe: 'probe_worldmass_nativesubstrate.ts', status: 'green', tier: 'fast', why: 'Native geography owns actual generator/stream/collision fields and materials, neutral mire bypasses, finite-domain candidate refusal and legacy isolation' },
   { probe: 'probe_nativezonemint.ts', status: 'green', tier: 'fast', why: 'Archived full native mint and mutated graph parity, exact RNG/read tapes, explicit source/topology dependency boundary' },
   { probe: 'probe_worldmass_nativegeography.ts', status: 'green', tier: 'fast', why: 'Exact saved native source bytes, rational signed-address mapping, explicit finite domain and stable pre-mint owner contexts' },
   { probe: 'probe_worldmass_nativeareageometry.ts', status: 'green', tier: 'fast', why: 'Complete native grids and analytic footprints, frozen material/movement sources, ground-fold parity and whole capsule clearance' },

@@ -1,3 +1,4 @@
+import { MassNativeSubstrate, validateNativeSubstrate } from './nativeSubstrate';
 import { address, cellKey, floorDiv, latticeAt, localOffset, moveAddress, validSpan, type MassAddress, type MassCell } from './address';
 import type { MassPlace, MassPlaceRecipe, MassRange, MassRun, MassSpec, MassTerrain } from './contracts';
 import { canonical, freezeData, massDigest, massRandom, streamSeed } from './random';
@@ -19,7 +20,8 @@ function ranges(rows: readonly MassRange[], fields: Set<string>): void {
     if ((r.min ?? -Infinity) >= (r.max ?? Infinity)) throw new Error('Empty terrain range');
   }
 }
-export function validateMassSpec(spec: MassSpec): void {
+export function validateMassSpec(spec: MassSpec, nativeSeed?: number): void {
+  validateNativeSubstrate(spec, nativeSeed);
   canonical(spec);
   if (!spec.id || !Number.isSafeInteger(spec.version) || spec.version < 1) throw new Error('Invalid generator identity');
   validSpan(spec.addressSpan); validSpan(spec.terrainCell);
@@ -56,7 +58,7 @@ export function validateMassSpec(spec: MassSpec): void {
 }
 
 export function makeMassRun(seed: number, runId: string, spec: MassSpec): MassRun {
-  validateMassSpec(spec);
+  validateMassSpec(spec, seed);
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff || typeof runId !== 'string' || !runId)
     throw new Error('Run needs a uint32 seed and stable ID');
   return Object.freeze({ schema: 1, seed, runId, generator: spec.id, version: spec.version,
@@ -71,6 +73,7 @@ export class MassGenerator {
   readonly spec: Readonly<MassSpec>;
   readonly run: Readonly<MassRun>;
   readonly patches: MassTerrainPatches | null;
+  readonly nativeSubstrate: MassNativeSubstrate | null;
   private readonly surfaces: MassSpec['surfaces'];
   private readonly salts = new Map<MassSpec['fields'][number]['layers'][number], number>();
   private readonly candidates = new Map<string, MassPlace | null>();
@@ -81,16 +84,19 @@ export class MassGenerator {
     if (canonical(run) !== canonical(expected)) throw new Error('World generator/content manifest mismatch');
     this.spec = freezeData(JSON.parse(canonical(spec)) as MassSpec);
     this.run = freezeData({ ...run });
+    this.nativeSubstrate = Object.hasOwn(this.spec, 'nativeSubstrate') ? new MassNativeSubstrate(this.run, this.spec) : null;
     this.surfaces = [...this.spec.surfaces].sort((a, b) => b.priority - a.priority || compare(a.id, b.id));
     for (const f of this.spec.fields) for (const l of f.layers)
       this.salts.set(l, streamSeed(run.seed, [spec.id, spec.version, f.id, l.id]));
-    this.patches = this.spec.patches ? new MassTerrainPatches(this.spec, this.run,
-      at => this.baseTerrainAt(at), (origin, box) => this.patchSitesClear(origin, box)) : null;
+    this.patches = Object.hasOwn(this.spec, 'patches') && this.spec.patches ? new MassTerrainPatches(this.spec, this.run,
+      at => this.baseTerrainAt(at), (origin, box) => this.patchSitesClear(origin, box),
+      this.nativeSubstrate ? (origin, size) => this.nativeSubstrate!.supportsPatchCell(origin, size) : undefined) : null;
   }
   private noise(at: MassAddress, period: number, salt: number): number {
     return massNoise(at, this.spec.addressSpan, period, salt);
   }
   fieldsAt(at: MassAddress): Readonly<Record<string, number>> {
+    if (this.nativeSubstrate) return this.nativeSubstrate.fieldsAt(at);
     const result: Record<string, number> = Object.create(null) as Record<string, number>;
     for (const f of this.spec.fields) {
       let value = f.base;
@@ -120,6 +126,7 @@ export class MassGenerator {
   }
   /** Original policy, deliberately patch-free to keep candidate proofs acyclic. */
   private baseTerrainAt(at: MassAddress): MassTerrain {
+    if (this.nativeSubstrate) return this.nativeSubstrate.sample(at);
     const fields = this.fieldsAt(at), s = this.surfaces.find(row => matchesMassRanges(row.when, fields))!;
     for (const place of this.spec.places.some(p => p.surface) ? this.placesInCell(at) : []) {
       const recipe = this.spec.places.find(p => p.id === place.recipe)!;

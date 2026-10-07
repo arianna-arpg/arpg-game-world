@@ -38,6 +38,8 @@ export interface MassPatchPolicy {
   }[];
 }
 export interface MassSpec {
+  /** New explicit source-owned substrate; omission preserves legacy noise. */
+  nativeSubstrate?: import('./nativeSubstrate').NativeSubstrate;
   id: string; version: number;
   /** Durable address unit, fixed during a run. */
   addressSpan: number;

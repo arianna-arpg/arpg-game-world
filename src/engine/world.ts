@@ -1,3 +1,4 @@
+import { spawnNativePacks, placeNativeInHabitat, spawnNativeWildlife, type NativeAmbientHost } from './nativeAmbient';
 import { serializeAccount } from '../meta/account';
 import type { MassResidentResume } from '../meta/characterResume';
 import type { MassNativeBrittlePopContext } from '../worldmass/nativeBrittles';
@@ -518,7 +519,7 @@ import { WEATHER_DEFS, WET_SKY, type WeatherFront, type WeatherStrike } from '..
 import { eventFrontFor } from './eventWeather';
 import { WEATHER_DRESS_CFG, dressPlanFor, rollDressPieces } from './weatherDress';
 import { dayCycle, inPhases, DAY_LENGTH } from '../world/daynight';
-import { activeAnnexKey, clampToBounds, exitInside, hullOf, insideBounds, samplePoint, unionArea, type Bounds } from '../world/shape';
+import { activeAnnexKey, clampToBounds, exitInside, hullOf, insideBounds, samplePoint, type Bounds } from '../world/shape';
 import { distFromHome, traitsOf, isDeathAligned, factionTemper } from '../world/traits';
 import { extractionLookFor } from '../data/extraction';
 import { REMNANT_KINDS, remnantDropStat } from '../data/remnants';
@@ -12088,146 +12089,36 @@ export class World {
   /** Seed the zone's monster packs — one type per pack, scattered wide.
    *  `table` lets the world-sim hand in a day/weather/faction-biased table;
    *  count/size still come from the zone's own PackSpec. */
+  private nativeAmbientHost(): NativeAmbientHost {
+    const world = this;
+    return {
+      get arena() { return world.arena; }, get walk() { return world.walk; },
+      get tierViews() { return world.tierViews; }, get player() { return world.player; },
+      get actors() { return world.actors; }, get doodads() { return world.doodads; },
+      config: { get countScale() { return COUNT_SCALE; }, get referenceArea() { return REF_AREA; },
+        get fieldAreaCap() { return FIELD_PACK_AREA_CAP; }, get pocketAreaFloor() { return POCKET_CFG.packAreaFloor; },
+        get tierPackSplit() { return TIER_CFG.packSplit; } },
+      get random() { return Math.random; }, rand, randInt,
+      isGridWalk: (walk): walk is GridWalkField => walk instanceof GridWalkField,
+      monster: id => MONSTERS[id], packageActive: (id, level) => world.sim.packageActive(id, level),
+      farPoint: min => world.farPoint(min), weightedPick: (table, level) => world.weightedPick(table, level),
+      rollPackSize, rollRarity, magicPackPool, magicPackSize, rollMagicPack, storyTable, tierFloorAt,
+      encounterGroupContext, rollEncounterGroup,
+      spawnEncounterGroup: (recipe, level, at, options) => world.spawnEncounterGroup(recipe, level, at, options),
+      nextSquadId: () => world.nextSquadId(), createMonster: (id, level, team) => world.createMonster(id, level, team),
+      placeInHabitat: actor => world.placeInHabitat(actor), findFreeSpot: (...args) => world.findFreeSpot(...args),
+      promoteRarity: (actor, rarity, options) => world.promoteRarity(actor, rarity, options),
+      promoteMagicPack: (members, id) => world.promoteMagicPack(members, id),
+      wildlifeTableFor: def => World.wildlifeTableFor(def), verminPressure: () => world.sim.verminfallField?.townPressure() ?? 1,
+      presenceMul, notice: (text, color, size, category) => world.notice(text, color, size, category),
+    };
+  }
+
+  /** Seed the zone's monster packs — one type per pack, scattered wide.
+   *  `table` lets the world-sim hand in a day/weather/faction-biased table;
+   *  count/size still come from the zone's own PackSpec. */
   private spawnPacks(def: ZoneDef, factor = 1, table?: PackTableEntry[]): void {
-    const spec = def.packs;
-    if (!spec) return;
-    // EXPLICIT ZERO opts a zone out of ambient packs entirely (the quay's
-    // near-sanctuary read) — the max(1,…) floor below would otherwise force
-    // one pack through any density. Authored fauna still breathes (its own
-    // lane); staged spawns (events, sieges, contests) never route here.
-    if (def.packDensity === 0) return;
-    const picks = table && table.length ? table : spec.table;
-    // Bigger zones hold more packs — count tracks the LINEAR span (sqrt of area), so
-    // density (and net xp/zone) stays roughly flat. A FIELD mega-zone is mostly walkable
-    // BLOB inside a big bounding rect, so it scales on its WALKABLE cell area (not the
-    // rect) with a larger cap — the enemy budget matches where you can actually fight.
-    // A purchased POCKET budgets on its walkable carve for the same reason,
-    // in the other direction: a carve layout (dungeon/mycelia faces walk
-    // 10-25% of their rect) minted what READ as a tiny hollow while still
-    // budgeting a full rect's population — crammed, in a dead-end, against
-    // the one portal the player arrives by. Pockets also shed the 0.8 area
-    // FLOOR (POCKET_PACK_FLOOR): a deliberately small hollow holds a
-    // deliberately small guard, never a full zone's minimum.
-    // Every other zone keeps the rect-area + 2.2 cap + 0.8 floor
-    // (byte-identical) to preserve shipped balance.
-    let area: number, cap = 2.2;
-    if (def.field && this.walk instanceof GridWalkField) {
-      area = this.walk.walkableCount() * this.walk.cell * this.walk.cell;
-      cap = FIELD_PACK_AREA_CAP;
-    } else if (def.pocket && this.walk instanceof GridWalkField) {
-      area = this.walk.walkableCount() * this.walk.cell * this.walk.cell;
-    } else {
-      // The composite bound's area fold (world/shape.ts): the base piece's
-      // classic bbox (×π/4 inscribed) plus each OPEN annex — the same
-      // arithmetic, so a piece-less zone budgets to the bit what it always
-      // did, and revealed ground buys its own share of the population.
-      area = unionArea(this.arena);
-    }
-    const areaFactor = clamp(Math.sqrt(area / REF_AREA), def.pocket ? POCKET_CFG.packAreaFloor : 0.8, cap);
-    const packs = Math.max(1,
-      Math.round(randInt(spec.count[0], spec.count[1]) * factor * COUNT_SCALE * areaFactor * (def.packDensity ?? 1)));
-    // Crowned champions are warband leaders — only eligible while the Warbands
-    // package is live (it gates the apex tier that drives its own unlock).
-    const crownedEligible = def.objective.kind !== 'safe'
-      && this.player !== undefined
-      && this.sim.packageActive('warbands', this.player.level);
-    for (let i = 0; i < packs; i++) {
-      // Beyond a typical monster's reach, so packs are FOUND, not delivered.
-      // The keenest sensors (blood mites, whose swarm AI ×1.4's an already-high
-      // detection) still notice you on arrival — by design, that's their thing.
-      const at = this.farPoint(840);
-      // THE TIER SPLIT (engine/tiers.ts): a tiered zone seeds a share of its
-      // packs on the elevated stories — the deck duel and the valley duel
-      // are different packs. Rolled per PACK so squads never straddle a rim;
-      // multi-story summits deal the elevated share uniformly across their
-      // levels. Rolled BEFORE the type pick (the story fold, 2026-08-06) so
-      // THE STORY TABLE (engine/tiers.ts storyTable — PackTableEntry.
-      // storyPresence, "harder kin near the crown") can shape the offer by
-      // the pack's own story: on tiered ground every pack folds at its
-      // ROLLED story — ground packs at 0, so a from-the-benches row is
-      // absent from the valley — while flat zones skip the fold entirely
-      // (short-circuit before any draw: byte-identical stream, A/B-proven).
-      // Folding at the rolled story, not the seated one, is the deliberate
-      // light-footprint trade: the anchor hunt below lets a refused bench
-      // fall a story, so a crown-priced pack can seat one bench lower (or
-      // ground out entirely when no bench anchors) still wearing the
-      // crown's table. Seat-true folding would need pick-after-anchor — a
-      // far heavier stream reorder for a rare misfit.
-      const tierLevels = def.tiers && this.tierViews ? Math.max(1, def.tiers.levels ?? 1) : 0;
-      const tierPack = tierLevels > 0
-        && Math.random() < (def.tiers!.packSplit ?? TIER_CFG.packSplit);
-      const packStory = tierPack && this.walk
-        ? (tierLevels > 1 ? 1 + Math.floor(Math.random() * tierLevels) : 1) : 0;
-      const type = this.weightedPick(tierLevels > 0 ? storyTable(picks, packStory) : picks, def.level);
-      // SIZE: a def that declares its NATURAL GROUP (MonsterDef.packSize)
-      // sizes its own packs — murmurations field as flocks, hermits walk
-      // alone — else a weighted ARCHETYPE spread (swarm / standard /
-      // grazing) when the zone defines one, else the flat band. One size
-      // roll on the stream whichever lane resolves, so undeclared defs
-      // spawn byte-identically to what they always did.
-      const ps = MONSTERS[type]?.packSize;
-      let n = ps ? randInt(ps[0], ps[1])
-        : spec.archetypes?.length ? rollPackSize(spec.archetypes) : randInt(spec.size[0], spec.size[1]);
-      const magicEligible = !MONSTERS[type]?.boss && !MONSTERS[type]?.passive
-        && (!ps || ps[1] > 1) && magicPackPool(def.level, def.magicPacks, ps?.[1]).length > 0;
-      let leaderRarity = rollRarity(crownedEligible, magicEligible);
-      if (leaderRarity === 'magic') n = Math.min(magicPackSize(def.level, def.magicPacks), ps?.[1] ?? Infinity);
-      const magicPack = leaderRarity === 'magic' ? rollMagicPack(def.level, def.magicPacks, Math.random, n) : undefined;
-      if (leaderRarity === 'magic' && !magicPack) leaderRarity = 'normal';
-      const magicPackMembers: Actor[] = [];
-      // A co-spawned pack IS a squad: shared id + a leader (the elite when one
-      // rolled, else the first body) — squad tactics (muster, tokens, focus
-      // fire, formations, leader-death reactions) all key off these stamps.
-      const squadId = this.nextSquadId();
-      // The BENCH picks the anchor (the wildlife rig's proven sampling): a
-      // valley anchor usually stands beyond any snap radius of the layer,
-      // so an elevated pack rolls its own seat instead of quietly staying
-      // grounded (the old near-`at` snap under-filled every deck). A roll
-      // whose bench refuses falls DOWN the stories from packStory.
-      let tierAnchor: Vec2 | null = null;
-      let tierAnchorAt = 0;
-      if (packStory > 0 && this.walk) {
-        for (let t = packStory; t >= 1 && !tierAnchor; t--) {
-          const view = this.tierViews?.[t];
-          if (!view) continue;
-          for (let s = 0; s < 8; s++) {
-            const q = view.snapToWalkable(vec(rand(200, this.arena.w - 200), rand(200, this.arena.h - 200)));
-            if (tierFloorAt(this.walk.regionAt?.(q.x, q.y), t)) { tierAnchor = vec(q.x, q.y); tierAnchorAt = t; break; }
-          }
-        }
-      }
-      // Mixed encounter groups replace NORMAL ambient packs, preserving the
-      // existing rare/magic opportunities and sealed authored-map compositions.
-      const encounterGroupRecipe = leaderRarity === 'normal' && (def.cohort !== 'authored' || spec.encounterGroups !== undefined)
-        ? rollEncounterGroup(encounterGroupContext(def, MONSTERS[type]?.faction, tierAnchorAt), spec.encounterGroups) : undefined;
-      if (encounterGroupRecipe && this.spawnEncounterGroup(encounterGroupRecipe, def.level, tierAnchor ?? at,
-        { tier: tierAnchorAt, persistent: true, maxMembers: spec.encounterGroups === false ? undefined : spec.encounterGroups?.maxMembers }).length) continue;
-      for (let k = 0; k < n; k++) {
-        const m = this.createMonster(type, def.level, 'enemy');
-        // TERRAIN-BOUND (MonsterDef.habitat): the body exists only on its
-        // ground — relocate onto a matching doodad, or don't spawn it at all
-        // (a zone with no big-enough pond simply has no lake horror).
-        if (m.habitat && !this.placeInHabitat(m)) continue;
-        if (k === 0 && leaderRarity !== 'normal' && !magicPack) this.promoteRarity(m, leaderRarity, { distinctName: true });
-        m.squadId = squadId;
-        m.squadLeader = k === 0;
-        if (!m.habitat) {
-          // findFreeSpot: the jittered point can land deep inside a rock/thicket
-          // blob that clampPos's passes can't escape — a monster BORN embedded
-          // pingpongs against the collision resolve forever (cost + nonsense).
-          m.pos = this.findFreeSpot(vec(at.x + rand(-90, 90), at.y + rand(-90, 90)), m.radius);
-          if (tierAnchor && this.walk && this.tierViews?.[tierAnchorAt]) {
-            const q = this.tierViews[tierAnchorAt]!.snapToWalkable(
-              vec(tierAnchor.x + rand(-90, 90), tierAnchor.y + rand(-90, 90)));
-            if (tierFloorAt(this.walk.regionAt?.(q.x, q.y), tierAnchorAt)) { m.pos = vec(q.x, q.y); m.tier = tierAnchorAt; }
-            else { m.pos = vec(tierAnchor.x, tierAnchor.y); m.tier = tierAnchorAt; }
-          }
-        }
-        this.actors.push(m);
-        magicPackMembers.push(m);
-      }
-      if (magicPack) this.promoteMagicPack(magicPackMembers, magicPack.id);
-    }
+    spawnNativePacks(this.nativeAmbientHost(), def, factor, table);
   }
 
   /** Shared encounterGroup seam for ambient packs, events and bespoke maps.
@@ -12371,17 +12262,7 @@ export class World {
    *  Returns false when the zone offers no qualifying ground — the body
    *  simply isn't spawned (a zone without a big pond has no lake horror). */
   private placeInHabitat(m: Actor): boolean {
-    const h = m.habitat;
-    if (!h) return true;
-    const spots = this.doodads.filter(d =>
-      d.kind === h.kind && !d.gone && d.radius >= (h.minRadius ?? 0));
-    if (!spots.length) return false;
-    const s = spots[randInt(0, spots.length - 1)];
-    const ang = rand(0, Math.PI * 2);
-    const dd = Math.sqrt(Math.random()) * Math.max(0, s.radius - m.radius * 0.5);
-    m.pos = vec(s.pos.x + Math.cos(ang) * dd, s.pos.y + Math.sin(ang) * dd);
-    m.confine = { x: s.pos.x, y: s.pos.y, r: s.radius + (h.grace ?? 24) };
-    return true;
+    return placeNativeInHabitat(this.nativeAmbientHost(), m);
   }
 
   /** BURROW ({do:'burrow'}): if the actor stands ON qualifying ground, it
@@ -12564,103 +12445,7 @@ export class World {
    *  (squad-stamped, so wolf packs hunt with discipline) away from the
    *  entrance. Safe zones and biomes without a table stay fauna-free. */
   private spawnWildlife(def: ZoneDef): void {
-    // AUTHORED FAUNA (ZoneDef.fauna) REPLACES the biome table outright — and it
-    // alone passes the sanctuary gate below (the town's gutter rats, the
-    // cellar's roaches): explicit authorship is the opt-in. The validator
-    // holds safe-zone fauna to 'critter'-tagged texture.
-    const authored = def.fauna;
-    // SPECIAL zones host no ambient life (the open sea, boss arenas) — the same
-    // gate spawnPacks/spawnContest already honor. Without it, the sea's
-    // undefined biome fell through to the plains fallback below and hares,
-    // wolves and lash-maidens spawned ON OPEN WATER during a voyage.
-    // WAVES arenas are sealed stages too: nothing wanders into The Pit —
-    // no grazing hares, no passing hunters, only what the wave brings.
-    if (!authored && (def.objective.kind === 'safe' || def.objective.kind === 'waves' || def.special)) return;
-    // THE COHORT LAW: a closed-membership zone hosts no biome fallback fauna
-    // — its authored rows (if any) are the whole ambient cohort too.
-    if (!authored && def.cohort === 'authored') return;
-    const table = World.wildlifeTableFor(def);
-    if (!table?.length) return;
-    // TOWN PRESSURE (the Verminfall's threat-as-texture): while warrens fester
-    // in the near ring, authored VERMIN-tagged rows swell their chance — home
-    // reads the siege in its gutters before the map says a word.
-    const vermMul = this.sim.verminfallField?.townPressure() ?? 1;
-    for (const w of table) {
-      // Presence gates fauna too: row envelope × def envelope scale the CHANCE
-      // (rows aren't a weighted pick against each other, so chance is the dial).
-      const lvl = Math.max(1, def.level);
-      // A row naming an unknown monster is a DATA bug (the validator warns) —
-      // but it must never crash a zone's gen. Skip it; the warning is the fix.
-      if (!MONSTERS[w.id]) continue;
-      const pressed = authored && MONSTERS[w.id]?.tags?.includes('vermin') ? vermMul : 1;
-      // packDensity is the zone's ONE ambient-density dial: it has always
-      // scaled the pack budget; BIOME-FALLBACK fauna chances breathe with
-      // it too. AUTHORED rows are exempt — explicit authorship is a
-      // deliberate population (the cellar's roaches, the quay's crabs),
-      // never ambience to be dialed away.
-      const chance = w.chance * pressed * presenceMul(w.presence, lvl)
-        * presenceMul(MONSTERS[w.id]?.presence, lvl) * (authored ? 1 : (def.packDensity ?? 1));
-      if (Math.random() >= chance) continue;
-      const n = randInt(w.count[0], w.count[1]);
-      // TIER ROW (WildlifeRow.tier — the tier fabric): fauna that lives on
-      // an ELEVATED layer (scamps atop the buttes, rats in the drains,
-      // condor roosts on a summit bench). A zone without a tier layer
-      // simply skips the row — the same graceful no-op as `near` without
-      // its doodad; a row asking for a story the zone doesn't stack clamps
-      // to the highest one it does.
-      const wTier = (w.tier ?? 0) >= 1 && def.tiers && this.tierViews
-        ? Math.min(w.tier ?? 1, Math.max(1, def.tiers.levels ?? 1)) : 0;
-      if ((w.tier ?? 0) >= 1 && wTier === 0) continue;
-      // PLACEMENT HINT (row.near): the band spawns on the RIM of a matching
-      // doodad — frogs at the water's edge, not the meadow's middle. A zone
-      // without one simply skips the row (no pond, no frogs).
-      let at = this.farPoint(700);
-      if (wTier >= 1 && this.tierViews?.[wTier] && this.walk) {
-        // Sample the LAYER for a seat (several tries — a lone random point
-        // often lands a valley away from any deck; one miss must not eat
-        // the row's whole chance).
-        const view = this.tierViews[wTier]!;
-        let seat: Vec2 | null = null;
-        for (let s = 0; s < 8 && !seat; s++) {
-          const q = view.snapToWalkable(vec(rand(200, this.arena.w - 200), rand(200, this.arena.h - 200)));
-          if (tierFloorAt(this.walk.regionAt?.(q.x, q.y), wTier)) seat = vec(q.x, q.y);
-        }
-        if (!seat) continue; // the layer truly has no floor — skip, never strand
-        at = seat;
-      } else if (w.near) {
-        const spots = this.doodads.filter(d => d.kind === w.near && !d.gone);
-        if (!spots.length) continue;
-        const s = spots[randInt(0, spots.length - 1)];
-        const ang = rand(0, Math.PI * 2);
-        at = vec(s.pos.x + Math.cos(ang) * (s.radius + 26), s.pos.y + Math.sin(ang) * (s.radius + 26));
-      }
-      const squadId = this.nextSquadId();
-      let landed = 0;
-      for (let k = 0; k < n; k++) {
-        const m = this.createMonster(w.id, Math.max(1, def.level), 'enemy');
-        if (m.habitat && !this.placeInHabitat(m)) continue;
-        m.squadId = squadId;
-        m.squadLeader = k === 0;
-        if (!m.habitat) {
-          if (wTier >= 1 && this.tierViews?.[wTier] && this.walk) {
-            // Tier fauna seats on its OWN floor (the jittered snap keeps the
-            // band together without wandering off the deck).
-            const q = this.tierViews[wTier]!.snapToWalkable(vec(at.x + rand(-90, 90), at.y + rand(-90, 90)));
-            if (tierFloorAt(this.walk.regionAt?.(q.x, q.y), wTier)) { m.pos = vec(q.x, q.y); m.tier = wTier; }
-            else { m.pos = vec(at.x, at.y); m.tier = wTier; }
-          } else {
-            m.pos = this.findFreeSpot(vec(at.x + rand(-110, 110), at.y + rand(-110, 110)), m.radius);
-          }
-        }
-        this.actors.push(m);
-        landed++;
-      }
-      // THE ARRIVAL LINE (WildlifeRow.announce): an EVENT row tells the
-      // heroes it landed — the "something stirs in this zone" beat, pure data.
-      if (w.announce && landed > 0) {
-        this.notice(w.announce, '#e8c84a', 13, 'war'); // THE NOTICE FEED: once for the world, not once per seat
-      }
-    }
+    spawnNativeWildlife(this.nativeAmbientHost(), def);
   }
 
   /** Promote a freshly-created monster to an elite tier: buffed life/damage +

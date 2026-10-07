@@ -11,26 +11,29 @@ export interface MassPatchPlan {
   /** Row-major cell indices on the policy lattice, not continuous paint discs. */
   cells: readonly number[];
 }
+// Source-owned optional values must not inherit process-global defaults.
+const patchOwn = (value: unknown, key: string) => !!value && typeof value === 'object' && Object.hasOwn(value, key);
+const patchRequired = (value: unknown, keys: readonly string[]) => keys.every(key => patchOwn(value, key));
 const matches = (rows: readonly MassRange[], fields: Readonly<Record<string, number>>) =>
-  rows.every(r => fields[r.field] >= (r.min ?? -Infinity) && fields[r.field] < (r.max ?? Infinity));
+  rows.every(r => fields[r.field] >= (patchOwn(r, 'min') ? r.min! : -Infinity) && fields[r.field] < (patchOwn(r, 'max') ? r.max! : Infinity));
 export function patchBoxIntersects(box: MassPatchBox, x: number, y: number, radius: number): boolean {
   return Math.hypot(Math.max(0, box.minX - x, x - box.maxX), Math.max(0, box.minY - y, y - box.maxY)) <= radius;
 }
 export function validateMassPatches(spec: MassSpec): void {
-  const p = spec.patches; if (p === undefined) return;
-  if (!p || typeof p !== 'object') throw Error('Invalid terrain patch policy');
+  const p = patchOwn(spec, 'patches') ? spec.patches : undefined; if (p === undefined) return;
+  if (!patchRequired(p, ['source', 'version', 'spacing', 'jitter', 'bypass', 'recipes'])) throw Error('Invalid terrain patch policy');
   const valid = (n: number, lo: number, hi: number) => Number.isFinite(n) && n >= lo && n <= hi;
   const ids = (values: readonly string[]) => values.length > 0 && values.every(s => typeof s === 'string' && !!s) && new Set(values).size === values.length;
   if (typeof p.source !== 'string' || !p.source || p.source.length > 256 || !Number.isSafeInteger(p.version) || p.version < 1
     || !Number.isSafeInteger(p.spacing) || p.spacing % spec.terrainCell || !valid(p.spacing / spec.terrainCell, 8, 64)
     || p.spacing > spec.addressSpan * 2 || !valid(p.jitter, 0, .8)
     || !Number.isSafeInteger(p.bypass) || p.bypass % spec.terrainCell || p.bypass < Math.max(48, spec.terrainCell * 2)
-    || !Array.isArray(p.recipes) || p.recipes.length > 32 || !ids(p.recipes.map(r => r.id))) throw Error('Invalid terrain patch lattice');
-  if (p.exclusions !== undefined) {
+    || !Array.isArray(p.recipes) || p.recipes.length > 32 || !ids(p.recipes.map(r => patchOwn(r, 'id') ? r.id : ''))) throw Error('Invalid terrain patch lattice');
+  if (patchOwn(p, 'exclusions') && p.exclusions !== undefined) {
     if (!Array.isArray(p.exclusions) || p.exclusions.length > 64) throw Error('Invalid terrain patch exclusions');
     for (const e of p.exclusions) {
-      if (!e || typeof e.source !== 'string' || !e.source || !e.bounds || !e.origin
-        || Object.keys(e.bounds).length !== 4 || !(['minX','minY','maxX','maxY'] as const).every(k => typeof e.bounds[k] === 'number' && valid(e.bounds[k], -1048576, 1048576))
+      if (!patchRequired(e, ['source', 'bounds', 'origin']) || !patchRequired(e.origin, ['dimension', 'cx', 'cy', 'x', 'y']) || typeof e.source !== 'string' || !e.source || !e.bounds || !e.origin
+        || Object.keys(e.bounds).length !== 4 || !(['minX','minY','maxX','maxY'] as const).every(k => patchOwn(e.bounds, k) && typeof e.bounds[k] === 'number' && valid(e.bounds[k], -1048576, 1048576))
         || e.bounds.minX >= e.bounds.maxX || e.bounds.minY >= e.bounds.maxY
         || canonical(address(e.origin.dimension, e.origin.cx, e.origin.cy, e.origin.x, e.origin.y, spec.addressSpan)) !== canonical(e.origin))
         throw Error('Invalid terrain patch exclusion');
@@ -38,13 +41,13 @@ export function validateMassPatches(spec: MassSpec): void {
   }
   const surfaces = new Set(spec.surfaces.map(s => s.id)), fields = new Set(spec.fields.map(f => f.id));
   for (const r of p.recipes) {
-    if (!Array.isArray(r.onSurfaces) || !ids(r.onSurfaces) || r.onSurfaces.some((s: string) => !surfaces.has(s))
-      || !valid(r.chance, 0, 1) || !Array.isArray(r.choices) || r.choices.length > 16 || !ids(r.choices.map((c: MassPatchChoice) => c.id))
-      || !Array.isArray(r.when) || r.when.some((w: MassRange) => !fields.has(w.field)
-        || w.min !== undefined && !Number.isFinite(w.min) || w.max !== undefined && !Number.isFinite(w.max)
-        || (w.min ?? -Infinity) >= (w.max ?? Infinity))) throw Error('Invalid terrain patch recipe');
+    if (!patchRequired(r, ['id', 'onSurfaces', 'chance', 'choices', 'when']) || !Array.isArray(r.onSurfaces) || !ids(r.onSurfaces) || r.onSurfaces.some((s: string) => !surfaces.has(s))
+      || !valid(r.chance, 0, 1) || !Array.isArray(r.choices) || r.choices.length > 16 || !ids(r.choices.map((c: MassPatchChoice) => patchOwn(c, 'id') ? c.id : ''))
+      || !Array.isArray(r.when) || r.when.some((w: MassRange) => !patchRequired(w, ['field']) || !fields.has(w.field)
+        || patchOwn(w, 'min') && !Number.isFinite(w.min) || patchOwn(w, 'max') && !Number.isFinite(w.max)
+        || (patchOwn(w, 'min') ? w.min! : -Infinity) >= (patchOwn(w, 'max') ? w.max! : Infinity))) throw Error('Invalid terrain patch recipe');
     for (const c of r.choices) {
-      if (typeof c.region !== 'string' || !c.region || !/^#[0-9a-f]{6}$/i.test(c.color) || !valid(c.weight, Number.MIN_VALUE, 1e6)
+      if (!patchRequired(c, ['id', 'region', 'color', 'weight', 'radius', 'scale', 'wobble', 'pieces']) || typeof c.region !== 'string' || !c.region || !/^#[0-9a-f]{6}$/i.test(c.color) || !valid(c.weight, Number.MIN_VALUE, 1e6)
         || !Array.isArray(c.radius) || c.radius.length !== 2 || !valid(c.radius[0], spec.terrainCell, p.spacing)
         || !valid(c.radius[1], c.radius[0], p.spacing) || !valid(c.scale, .1, 4) || !valid(c.wobble, 0, 1)
         || !Array.isArray(c.pieces) || c.pieces.length !== 2 || c.pieces.some((n: number) => !Number.isSafeInteger(n) || !valid(n, 0, 12)) || c.pieces[1] < c.pieces[0]
@@ -63,7 +66,8 @@ export class MassTerrainPatches {
   private readonly cache = new Map<string, Readonly<MassPatchPlan> | null>();
   constructor(private readonly spec: Readonly<MassSpec>, private readonly run: Readonly<MassRun>,
     private readonly baseAt: (at: MassAddress) => MassTerrain,
-    private readonly sitesClear: (origin: MassAddress, box: MassPatchBox) => boolean) {}
+    private readonly sitesClear: (origin: MassAddress, box: MassPatchBox) => boolean,
+    private readonly patchDomain?: (origin: MassAddress, size: number) => boolean) {}
   private get policy(): MassPatchPolicy { return this.spec.patches!; }
   private origin(dimension: string, gx: bigint, gy: bigint): MassAddress | null {
     const period = BigInt(this.policy.spacing), span = BigInt(this.spec.addressSpan);
@@ -87,6 +91,7 @@ export class MassTerrainPatches {
   }
   private make(key: string, origin: MassAddress): Readonly<MassPatchPlan> | null {
     const p = this.policy, cell = this.spec.terrainCell, cols = p.spacing / cell;
+    if (this.patchDomain && this.patchDomain(origin, p.spacing) !== true) return null;
     const id = canonical([this.run.runId, p.source, p.version, key]);
     const rng = massRandom(this.run.seed, [this.spec.id, this.spec.version, 'terrain-patch', p.source, p.version, key]);
     const center = { x: p.spacing * (.5 + rng.range(-.5, .5) * p.jitter), y: p.spacing * (.5 + rng.range(-.5, .5) * p.jitter) };
@@ -122,7 +127,7 @@ export class MassTerrainPatches {
     return freezeData({ id, origin, recipe: recipe.id, choice, footprint, bypasses, cells });
   }
   private excluded(origin: MassAddress, box: MassPatchBox): boolean {
-    for (const e of this.policy.exclusions ?? []) {
+    for (const e of patchOwn(this.policy, 'exclusions') ? this.policy.exclusions ?? [] : []) {
       if (origin.dimension !== e.origin.dimension) continue;
       // The exclusion is bounded local data. Discard far cells using BigInt
       // before subtraction; no address history is narrowed into Number.

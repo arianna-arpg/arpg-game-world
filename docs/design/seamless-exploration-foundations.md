@@ -1449,3 +1449,82 @@ source-appropriate ambient packs and habitat, all selected objective/environment
 owners, durable sidearea transitions and actual cold browser Continue. Towns,
 cities, regional watercourses, shared interiors, bounty-opened sections and long
 history residency/rebasing remain in the broader generation completion ledger.
+
+## NativeAreaRoutes and NativeSubstrate: physical integration beyond seams
+
+NativeAreaRoutes extends the proof from paired boundary approaches into a whole
+native area's interior. Exact spawn/entry and interaction/approach stands connect
+through continuous capsules over retained grid, silhouette and doodad geometry.
+A bounded deterministic search may conservatively refuse a route; it never snaps
+an endpoint, erases a wall, exempts a closed door or takes an exterior shortcut.
+Ground-tier walking is the current scope. Higher tiers, mutable gate authority
+and automatic discovery of every required objective stand remain separate.
+
+The naturally minted forest/districts and saltflat/dunefield controls retain all
+32 and 167 doodads. Their entry-to-approach routes measure 6,197 and 4,039 pixels,
+including the forest detour. Serialized restoration rechecks every segment in
+both directions against the complete geometry identity. Synthetic controls retain
+closed/open native doors, ellipse exteriors, exact fractional stands, disconnected
+annexes and bounded failure. These geometry-only controls do not substitute for
+the compiler's original load-time boundary/road/meld and generation-port inputs.
+
+NativeSubstrate is a saved optional MassSpec discriminator consumed by the real
+MassGenerator, MassStream and MassWalk. Complete source JSON and explicit mapping
+own biome, native depth and every climate range input. Independent noise layers
+and the old place lottery are refused for this policy. Every captured biome must
+have explicit authored outside-area material/palette rules; these rules neither
+select a complete face nor reproduce its generated native layout. Existing native
+pour patches use that same geography, preserving neutral annuli and their scenery
+reservations. Broad bog, swamp or mud base cover is refused; an intentionally broad
+hazard needs a complete area owner with its own navigation and activity.
+
+The fixed native field survey covers 625 points and 26 naturally occurring biomes,
+including forest, jungle, marsh, desert, highland, tundra, coastline and ocean.
+Cold policy restoration retains every sampled field/material tuple. A native marsh
+control contains 29 mire cells with 68 neutral bypass cells; actual page samples
+and collision queries agree with the generator. Entire optional patch candidates
+that exceed the finite mapping envelope refuse before sampling outside it. Saved
+fields and patch conditions ignore inherited process defaults. The original
+terrain policy remains selected when the discriminator is absent.
+
+This connects physical terrain preparation, page streaming and collision under
+one native field. It does not ship an adventure with empty or mismatched living
+content: WorldMassRuntime explicitly refuses the new substrate until complete area,
+population and controller ownership exists. A shipped outside-area palette policy,
+measured map scale, ecology/habitat policy and the ordinary browser traversal /
+sidearea / cold Continue course remain required before fresh-run activation.
+
+## NativeCompleteAreas and NativeAmbient: complete load inputs and living stages
+
+NativeCompleteAreas compiles the complete native layout with its original
+load-prepared boundary, road and meld inputs. Finite generation ports and true
+physical seam mouths are recorded separately: substituting one for the other
+changes structure eligibility. Three archived actual native loads retain the
+meadow's 278 doodads and walled manor, the saltflat's 144 doodads and watchtower,
+and the downs' 246 doodads, three boundary gates and watchtower. Ten complete
+output pairs preserve every generated collection, mechanism side channel,
+entrance seed and the next four generation draws. Restore consumes the complete
+saved result without consulting the live generator or registries.
+
+The compiler requires an explicit synchronous same-build/source lease covering
+mint and boundary provenance. Its caller-provided certificate is a trust boundary,
+not a complete captured dependency closure. There is no production issuer yet;
+valid descriptors still refuse runtime publication. Collision-adjusted entrance
+seats, shared interior bindings and the full lifecycle owners remain required.
+Malformed positioned records, cave seeds, effect/brittle sources and accessor
+inputs refuse before admission. Requirement enumeration does not grant support.
+
+NativeAmbient shares the original pack spawning, habitat placement and wildlife
+operations with classic World through explicit geometry, factory, controller and
+random inputs. The wildlife stage stays later in native load order. An archived
+original-method comparison covers 48 pairs, 453 factory attempts, 415 admitted
+bodies, eight grouped bodies and 2,753 exact random draws and stream sentinels.
+Frozen resolved pack and wildlife receipts retain full tables and explicit absence;
+they do not implement the upstream weather, conquest or world-simulation owners.
+
+Full area ambient admission still requires local encounter-group placement,
+source-equivalent factories and resolutions, durable born slots and bounded live
+actor paging. Sleeping bodies must retain their native state and cannot count as
+dead or disappear from objectives. The current shared actor limit cannot be solved
+by silently dropping native packs. These boundaries prepare the coherent playable
+course; neither a helper extraction nor a successful restore is that course.

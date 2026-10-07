@@ -164,6 +164,12 @@ export class WorldMassRuntime {
   readonly origin: MassCell;
   readonly resumeTier: number;
   constructor(seed: number, runId: string, config: MassAdventure = massAdventure(), input?: MassRuntimeRestore) {
+    // Consume one detached config: an accessor must not switch terrain after
+    // NativeSubstrate admission. All following reads use these saved values.
+    config = freezeData(JSON.parse(canonical(config)) as MassAdventure);
+    // NativeSubstrate has real streamed terrain, but complete area/population
+    // ownership must be installed before it can become a playable adventure.
+    if (Object.hasOwn(config.terrain, 'nativeSubstrate')) throw Error('Native substrate requires complete native area and population runtime owners');
     const save=restoreData(input);
     if (!save) config = reserveMassOpening(seed, runId, config);
     this.resumeTier = save?.player.tier ?? 0;
