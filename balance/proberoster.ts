@@ -61,6 +61,8 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_nativesceneencounterbirth.ts', status: 'green', tier: 'fast', why: 'Complete native encounter selection, retained winner RNG, extraction nodes and borough inhabitants, with live local campaign sources and exact partial effects' },
+  { probe: 'probe_nativescenehistory.ts', status: 'green', tier: 'fast', why: 'Complete native birth-time nemeses, grudges and remains, carried campaign authority, local body ownership and exact partial effects' },
   { probe: 'probe_nativescenesites.ts', status: 'green', tier: 'fast', why: 'Complete native vocation and mercenary field sites, installed faction filters, veteran stock, local settlement identity and partial births' },
   { probe: 'probe_nativesceneopenings.ts', status: 'green', tier: 'fast', why: 'Complete native hollow and annex reveals, mutable local carving, child entrances, remembered finds and original callback failure effects' },
   { probe: 'probe_nativelayoutgeneration.ts', status: 'green', tier: 'fast', why: 'Exact native remembered seeds, held-city physical fixtures, complete layout outputs and live local/World ownership with original failures' },

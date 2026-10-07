@@ -1,3 +1,14 @@
+NativeAreaSceneHistory preserves native sagas, nemeses, grudges and player
+corpses with genuine shared campaign state and separate local corpse arrays.
+NativeAreaSceneEncounterBirth shares every native event placement, extraction
+and borough materialization branch with classic World, retaining the winning
+RNG for later controllers. Keep original birth predicates, source gates, native
+partial failures, run-wide history flush/manifest identity and live local census.
+These are birth owners; later encounter/history execution, rewards, full scene
+composition, source issuance and whole-owner paging still precede activation.
+Verify nativescenehistory/nativesceneencounterbirth, all types, generation,
+simulation and the built client entry/Continue/return courses.
+
 NativeAreaSceneSites shares complete native vocation and mercenary field-site
 births, filters and stock with classic World and the real settlement owner.
 NativeAreaSceneOpenings shares complete hollow and annex carving, furnishing,

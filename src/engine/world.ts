@@ -310,7 +310,7 @@ import { Rng, rollSeed, withSeededRandom } from '../core/rng';
 import '../data/shrines';
 import { type AltarDef, type ShrineDef } from '../data/shrines';
 import { WorldSim } from '../world/sim';
-import { patronFaction, biomesForFaction, biomeEventDensity, biomeSpacing, BIOMES, BIOME_FIELD, OCEAN_BIOME } from '../world/biomes';
+import { patronFaction, biomesForFaction, biomeSpacing, BIOMES, BIOME_FIELD, OCEAN_BIOME } from '../world/biomes';
 import { boundaryGateOf } from '../data/boundaryGates';
 import { fieldRegionAt, isFieldPixel, fieldCoreRect, FIELD_BIOME, FIELD_GEN, type FieldExtent } from '../world/fieldRegion';
 import {
@@ -473,9 +473,9 @@ import { lordDef } from '../packages/lords';
 import { allEncounterSpecs, allFurnishSpecs, packageSeed } from '../packages/registry';
 import { CLASSIC_EXTRACT_TEMPER, ENCOUNTER_CFG } from '../packages/encounters';
 import type { BoroughSpec, ExtractDisperseSpec, ExtractSpec, ExtractTemperSpec } from '../packages/encounters';
-import { gateOf } from '../packages/weighting';
+import '../packages/weighting';
 import { courtLord, courtLordForZone } from '../packages/courts';
-import type { ActiveEncounter, BoroughRuntime, VeilKnot } from './encounter';
+import type { ActiveEncounter, VeilKnot } from './encounter';
 import { noteSoulsSheltered } from '../data/boroughs';
 import { promoteNativeRarity, promoteNativeRarityStacked, promoteNativeMagicPack, refreshNativeMagicPacks,
   type NativeMonsterPromotionSources, type NativeMonsterPromotionHost } from './nativeMonsterPromotion';
@@ -503,7 +503,7 @@ import {
 } from '../world/bulletins';
 import { edgeBlockAt } from '../world/edgeBlocks';
 import type { WorldBossField, WorldBossMint } from '../packages/overlays/worldboss';
-import { eventTargetable, holdfastHostable } from '../world/zonePolicy';
+import { holdfastHostable } from '../world/zonePolicy';
 import type { InvasionHost } from '../world/invasion';
 import { SNOW_CFG } from './snowCover';
 export { SNOW_CFG } from './snowCover';
@@ -555,7 +555,7 @@ import {
 import { MERC_TEMPLATE_BY_ID, type MercTemplateDef } from '../data/mercenaries';
 import { MercInput } from './mercbrain';
 import {
-  NEMESIS_CFG, bumpGrudge, formNemesis, grudgeTier, mintNemesisName, nemesisTitle, peekSaga,
+  NEMESIS_CFG, bumpGrudge, formNemesis, mintNemesisName, nemesisTitle,
   promoteNemesis, recordDeed, resolveNemesisSlain, sagaKey, touchSaga,
   type NemesisRecord,
 } from '../meta/nemesis';
@@ -586,6 +586,8 @@ import { sceneOccurrenceHost, sceneOccurrenceSpawnTable, sceneAbortTraces, type 
 import { sceneSeedCullMarks, sceneSeedGatherNodes, sceneNoteBountyArrivals, sceneHandState, sceneNoteBountyReady, sceneObjectiveDoneAt, sceneQuestDefOf, type NativeSceneBountyHost } from './nativeSceneBounty';
 import { openNativeHollow, revealNativeAnnex, furnishNativeAnnex, activateNativeAnnex, type NativeSceneOpeningHost } from './nativeSceneOpenings';
 import { siteZoneMatchesSiteFilter, sitePlaceVocationSites, siteSpawnVocationSite, sitePlaceMercOutpost, siteBuildMercOffers, type NativeSceneSiteHost } from './nativeSceneSites';
+import { historyModeStageDef, historyCorpseRecords, historyNemesisActive, historyWatchedSagas, historySagaDirty, historyManifestNemeses, historySpawnNemesisActor, historyApplyGrudgeEffects, historySpawnPlayerCorpses, type NativeSceneHistoryHost } from './nativeSceneHistory';
+import { encounterBirthPlaceEncounters, encounterBirthEventDensityFor, encounterBirthMaterializeExtractionNode, encounterBirthMaterializeBorough, encounterBirthRollExtractTemper, type NativeSceneEncounterBirthHost } from './nativeSceneEncounterBirth';
 
 export type { Doodad } from './levelgen';
 
@@ -5678,7 +5680,7 @@ export class World {
   modeDef(): CharacterModeDef { return modeById(this.meta.modeId); }
 
   /** The stage the local character currently stands on. */
-  modeStageDef(): ModeStageDef { return stageOf(this.meta.modeId, this.meta.modeStage); }
+  modeStageDef(): ModeStageDef { return historyModeStageDef(this.nativeSceneHistoryHost()); }
 
   /** May this character still write ACCOUNT progression (ledger milestones,
    *  vocation unlocks, uber trophies, craft lore)? An Undying character reads
@@ -5793,9 +5795,7 @@ export class World {
   /** The corpse ring this character's zones SPAWN from — the interaction
    *  scope. Mortals share the account graveyard; the Undying see only their
    *  own falls (and theirs exist only in their own save). */
-  corpseRecords(): DeathRecord[] {
-    return this.modeStageDef().corpseSource === 'own' ? this.charDeaths : this.account.deaths;
-  }
+  corpseRecords(): DeathRecord[] { return historyCorpseRecords(this.nativeSceneHistoryHost()); }
 
   /** The party has no one left standing — conclude per context, in order:
    *  the Descent resurfaces (the deep spits you out, never a run end), a
@@ -6956,76 +6956,7 @@ export class World {
   // seed (the position uses the general far-point picker).
 
   /** Roll which encounters appear in this zone (at most one, for now). */
-  private placeEncounters(def: ZoneDef): void {
-    const o = def.objective;
-    if (o.kind === 'safe' || o.kind === 'waves' || this.inCave) return;
-    if (!def.packs?.table?.length) return;
-    const zoneDim = def.dimension ?? 'surface';
-    const gates = this.sim.gatesFor(this.player.level);
-    // Roll each ACTIVE encounter package independently off its OWN package seed.
-    // (Previously a single shared encRng was seeded from a hardcoded 'breach'
-    // literal and `break` stopped after the first spec — which biased placement
-    // and starved any later encounter package once a second one shipped.) The
-    // WINNER's rng — already past its open + scale draws — becomes this.encRng, so
-    // the field's later spawn pulses keep drawing from it: byte-identical when a
-    // single encounter package is active.
-    const winners: { def: ActiveEncounter['def']; scale: ActiveEncounter['scale']; rng: Rng }[] = [];
-    for (const spec of allEncounterSpecs()) {
-      const gate = gateOf(gates, spec.packageId);
-      if (!gate.active) continue; // package off / below its start level → no discovery yet
-      if (spec.surge) continue;   // spatial world events (Demon Invasion) place at
-                                  // their epicenter, never as a random in-zone diamond
-      // An encounter places only in its declared dimensions (default surface) —
-      // the same seam the overlays use, so a surface package's diamonds never
-      // seed in hell unless its def says so.
-      if (!(spec.dimensions ?? ['surface']).includes(zoneDim)) continue;
-      // …and only on its declared GROUNDS, when it declares any (the generic
-      // biome allowlist — a village settles temperate country; an unbiomed
-      // zone counts as outside every allowlist).
-      if (spec.biomes && (!def.biome || !spec.biomes.includes(def.biome))) continue;
-      if (!eventTargetable(spec.packageId, def)) continue; // biome policy + structural floor
-      // EXTRACT encounters ask the overlay's SPENT LEDGER: a drained seam's
-      // ground stays quiet until it replenishes (the essence-faucet guard the
-      // deterministic per-zone roll needs — mycelia-suppression pattern).
-      if (spec.extract && this.sim.extractionField?.nodeAvailable(def.id) === false) continue;
-      // BOROUGH encounters ask theirs: settled ground (held or lost) stays
-      // quiet until the country resettles.
-      if (spec.borough && this.sim.boroughField?.siteAvailable(def.id) === false) continue;
-      const rng = new Rng((packageSeed(this.manifest.seed, spec.packageId) ^ hashStr(def.id)) >>> 0);
-      // Per-zone (encounterDensity), per-biome (eventDensityMul), and live MYCELIA
-      // suppression compose onto the package pressure — a Field expanse seeds more
-      // breaches; a spore-smothered zone seeds fewer (the bloom's tug-of-war).
-      const densityMul = this.eventDensityFor(def);
-      if (!rng.chance(clamp(ENCOUNTER_CFG.openChance * gate.ignitionMul * densityMul, 0, ENCOUNTER_CFG.openChanceCap))) continue;
-      winners.push({ def: spec, scale: rng.weighted(spec.scales), rng });
-    }
-    if (!winners.length) return;
-    // Fair, ORDER-INDEPENDENT pick among the rolled winners so registry order can
-    // never let one encounter package starve another (a single winner → no draw).
-    const chosen = winners.length === 1 ? winners[0]
-      : winners[new Rng((this.manifest.seed ^ hashStr(def.id) ^ 0xe11c) >>> 0).int(0, winners.length - 1)];
-    this.encRng = chosen.rng; // spawn pulses continue from the chosen package's stream
-    const at = this.clampPos(this.farPoint(520, true), 24);
-    const enc: ActiveEncounter = {
-      def: chosen.def, scale: chosen.scale, pos: vec(at.x, at.y), phase: 'dormant',
-      radius: chosen.scale.startRadius, timer: 0, maxTimer: 0, spawnTimer: 0,
-      kills: 0, bonusUsed: 0, spawned: new Set(),
-    };
-    // THE COURT (def.court): roll WHICH lord themes this zone's field — its own
-    // salted stream (courtLordForZone), so every existing draw above stays
-    // byte-identical and the world map's marker agrees without asking us.
-    if (chosen.def.court) {
-      const lord = courtLordForZone(packageSeed(this.manifest.seed, chosen.def.packageId),
-        def.id, chosen.def.court.lords);
-      if (lord) enc.lordId = lord.id;
-    }
-    this.encounters.push(enc);
-    // An EXTRACT encounter stands its node the moment the zone does — the seam
-    // is scenery you can find, not a diamond that pops on approach.
-    if (enc.def.extract) this.materializeExtractionNode(enc);
-    // A BOROUGH stands its hearths + folk the same way: a place you FIND.
-    if (enc.def.borough) this.materializeBorough(enc);
-  }
+  private placeEncounters(def: ZoneDef): void { return encounterBirthPlaceEncounters(this.nativeSceneEncounterBirthHost(),def); }
 
   /** Step onto the diamond → OPEN the field. Bumps the discovery ledger. */
   private openEncounter(e: ActiveEncounter): void {
@@ -7410,37 +7341,7 @@ export class World {
    *  dwell arms it). The body is per-biome (data/extraction.ts); the well
    *  doodad under it carries the light + the spent face; dressing scatters
    *  the "environmental shift" the locals are about to object to. */
-  private materializeExtractionNode(e: ActiveEncounter): void {
-    const spec = e.def.extract!;
-    const look = extractionLookFor(this.zone.biome);
-    const lvl = Math.max(1, this.zone.level);
-    const node = this.createMonster(look.node, lvl, 'player');
-    const target = Math.round((spec.node.lifeBase + lvl * spec.node.lifePerLevel) * (e.scale.nodeLifeMul ?? 1));
-    node.sheet.setSource('extract_node', [{ stat: 'life', kind: 'flat', value: Math.max(0, target - node.maxLife()) }]);
-    node.life = node.maxLife();
-    node.pos = vec(e.pos.x, e.pos.y);
-    node.untargetable = true;   // scenery until tapped —
-    node.invulnerable = true;   // — no ambient wanderer chews the prize early
-    node.tag = 'extraction_node';
-    node.eventKey = `extraction:${this.zone.id}`;
-    this.actors.push(node);
-    const well: Doodad = { pos: vec(e.pos.x, e.pos.y + 6), radius: 26, kind: look.well ?? 'marrow_well' };
-    this.doodads.push(well);
-    // THE TEMPER ROLL (ExtractSwarmSpec.tempers, her ask 2026-09-11): one row
-    // per seam on the encounter stream — who the swarm comes for first.
-    const temper = this.rollExtractTemper(spec);
-    e.ex = { nodeId: node.id, well, dwellStart: 0, stood: 0, reseedAt: 0, entries: new Map(), temper: temper.id };
-    // Per-biome dressing on radial bands (the runtime ring-scatter idiom).
-    for (const row of look.dressing ?? []) {
-      const n = this.encRng.int(row.count[0], row.count[1]);
-      for (let i = 0; i < n; i++) {
-        const ang = this.encRng.range(0, Math.PI * 2);
-        const r = this.encRng.range(row.ring[0], row.ring[1]);
-        const spot = this.findFreeSpot(vec(e.pos.x + Math.cos(ang) * r, e.pos.y + Math.sin(ang) * r), 14);
-        if (spot) this.doodads.push({ pos: spot, radius: this.encRng.range(9, 14), kind: row.kind });
-      }
-    }
-  }
+  private materializeExtractionNode(e: ActiveEncounter): void { return encounterBirthMaterializeExtractionNode(this.nativeSceneEncounterBirthHost(),e); }
 
   /** Per-frame extraction driver (dormant = the dwell; open = the defense).
    *  Branches out of updateEncounters so the plain-encounter path stays
@@ -7618,17 +7519,7 @@ export class World {
   /** Roll one temper by weight on the encounter stream (deterministic per
    *  placement — a reload re-rolls the same seam); a spec without rows
    *  wears the classic fixation and draws nothing from the stream. */
-  private rollExtractTemper(spec: ExtractSpec): ExtractTemperSpec {
-    const rows = spec.swarm.tempers;
-    if (!rows?.length) return CLASSIC_EXTRACT_TEMPER;
-    const total = rows.reduce((s, t) => s + Math.max(0, t.weight), 0);
-    let roll = this.encRng.range(0, total);
-    for (const t of rows) {
-      roll -= Math.max(0, t.weight);
-      if (roll <= 0) return t;
-    }
-    return rows[rows.length - 1];
-  }
+  private rollExtractTemper(spec: ExtractSpec): ExtractTemperSpec { return encounterBirthRollExtractTemper(this.nativeSceneEncounterBirthHost(),spec); }
 
   /** The end, either way: pay by how long the stand held, mark the ground
    *  spent, and send the swarm home — each body by its own temper. */
@@ -7844,43 +7735,7 @@ export class World {
    *  rouse rule: unarmed villagers are DELIBERATELY helpless), and sheltered
    *  (untargetable/invulnerable) until the muster makes the stand real, so
    *  no ambient wanderer eats the village before it can be found. */
-  private materializeBorough(e: ActiveEncounter): void {
-    const spec = e.def.borough!;
-    const lvl = Math.max(1, this.zone.level + spec.folk.levelBonus);
-    // The hearth + ring dressing (small kinds only — a runtime stamp must
-    // never wall a path; the extraction ring-scatter idiom).
-    this.doodads.push({ pos: vec(e.pos.x, e.pos.y + 6), radius: 18, kind: spec.site.center.kind });
-    for (const row of spec.site.dressing) {
-      const n = this.encRng.int(row.count[0], row.count[1]);
-      for (let i = 0; i < n; i++) {
-        const ang = this.encRng.range(0, Math.PI * 2);
-        const r = this.encRng.range(row.ring[0], row.ring[1]);
-        const spot = this.findFreeSpot(vec(e.pos.x + Math.cos(ang) * r, e.pos.y + Math.sin(ang) * r), 14);
-        if (spot) this.doodads.push({ pos: spot, radius: this.encRng.range(10, 14), kind: row.kind });
-      }
-    }
-    const bo: BoroughRuntime = {
-      stage: 'muster', folkIds: [], stood: 0, reseedAt: 0, graceUntil: 0,
-      entries: new Map(), quarry: new Map(), arms: new Map(),
-      armDwellStart: new Map(), armAsked: new Set(),
-    };
-    const band = spec.folk.byScale[e.scale.id] ?? [3, 4];
-    const count = this.encRng.int(band[0], band[1]);
-    for (let i = 0; i < count; i++) {
-      const type = this.weightedPick(spec.folk.roster, lvl);
-      const f = this.createMonster(type, lvl, 'player');
-      const ang = this.encRng.range(0, Math.PI * 2);
-      const r = Math.sqrt(this.encRng.next()) * spec.folk.huddleRadius;
-      f.pos = this.clampPos(vec(e.pos.x + Math.cos(ang) * r, e.pos.y + Math.sin(ang) * r), f.radius);
-      f.tag = 'borough_huddled';
-      f.untargetable = true;
-      f.invulnerable = true;
-      f.eventKey = `borough:${this.zone.id}`;
-      bo.folkIds.push(f.id);
-      this.actors.push(f);
-    }
-    e.bo = bo;
-  }
+  private materializeBorough(e: ActiveEncounter): void { return encounterBirthMaterializeBorough(this.nativeSceneEncounterBirthHost(),e); }
 
   /** The living villagers of a borough (dead ids stay listed on the runtime —
    *  survivors are this subset). */
@@ -10882,6 +10737,71 @@ export class World {
       get dealTemplateOffers(){const method=world.dealTemplateOffers;return (...args:Parameters<NativeSceneSiteHost['dealTemplateOffers']>)=>method.apply(world,args);},
     };
     Object.defineProperty(this,'nativeSceneSiteView',{value:host,writable:true,configurable:true,enumerable:false});
+    return host;
+  }
+
+  private nativeSceneHistoryView?:NativeSceneHistoryHost;
+  private nativeSceneHistoryHost():NativeSceneHistoryHost {
+    if(this.nativeSceneHistoryView)return this.nativeSceneHistoryView;
+    const world=this;
+    const host:NativeSceneHistoryHost={
+      get meta(){return world.meta;},
+      get modeStageDef(){const method=world.modeStageDef;return (...args:Parameters<NativeSceneHistoryHost['modeStageDef']>)=>method.apply(world,args);},
+      get charDeaths(){return world.charDeaths;},
+      get account(){return world.account;},
+      get hiredMercs(){return world.hiredMercs;},
+      get time(){return world.time;},
+      get lastSagaFlushAt(){return world.lastSagaFlushAt;}, set lastSagaFlushAt(value){world.lastSagaFlushAt=value;},
+      get accountDirty(){return world.accountDirty;}, set accountDirty(value){world.accountDirty=value;},
+      get localSeat(){return world.localSeat;},
+      get nemesisActive(){const method=world.nemesisActive;return (...args:Parameters<NativeSceneHistoryHost['nemesisActive']>)=>method.apply(world,args);},
+      get watchedSagas(){const method=world.watchedSagas;return (...args:Parameters<NativeSceneHistoryHost['watchedSagas']>)=>method.apply(world,args);},
+      get sim(){return world.sim;},
+      get manifestedThisRun(){return world.manifestedThisRun;},
+      get spawnNemesisActor(){const method=world.spawnNemesisActor;return (...args:Parameters<NativeSceneHistoryHost['spawnNemesisActor']>)=>method.apply(world,args);},
+      get createMonster(){const method=world.createMonster;return (...args:Parameters<NativeSceneHistoryHost['createMonster']>)=>method.apply(world,args);},
+      get promoteRarity(){const method=world.promoteRarity;return (...args:Parameters<NativeSceneHistoryHost['promoteRarity']>)=>method.apply(world,args);},
+      get findFreeSpot(){const method=world.findFreeSpot;return (...args:Parameters<NativeSceneHistoryHost['findFreeSpot']>)=>method.apply(world,args);},
+      get arena(){return world.arena;},
+      get actors(){return world.actors;},
+      get notice(){const method=world.notice;return (...args:Parameters<NativeSceneHistoryHost['notice']>)=>method.apply(world,args);},
+      get text(){const method=world.text;return (...args:Parameters<NativeSceneHistoryHost['text']>)=>method.apply(world,args);},
+      get events(){return world.events;},
+      get sagaDirty(){const method=world.sagaDirty;return (...args:Parameters<NativeSceneHistoryHost['sagaDirty']>)=>method.apply(world,args);},
+      get playerCorpses(){return world.playerCorpses;}, set playerCorpses(value){world.playerCorpses=value;},
+      get zoneMap(){return world.zoneMap;},
+      get corpseRecords(){const method=world.corpseRecords;return (...args:Parameters<NativeSceneHistoryHost['corpseRecords']>)=>method.apply(world,args);},
+      get clampPos(){const method=world.clampPos;return (...args:Parameters<NativeSceneHistoryHost['clampPos']>)=>method.apply(world,args);},
+    };
+    Object.defineProperty(this,'nativeSceneHistoryView',{value:host,writable:true,configurable:true,enumerable:false});
+    return host;
+  }
+
+  private nativeSceneEncounterBirthView?:NativeSceneEncounterBirthHost;
+  private nativeSceneEncounterBirthHost():NativeSceneEncounterBirthHost {
+    if(this.nativeSceneEncounterBirthView)return this.nativeSceneEncounterBirthView;
+    const world=this;
+    const host:NativeSceneEncounterBirthHost={
+      get inCave(){return world.inCave;},
+      get sim(){return world.sim;},
+      get player(){return world.player;},
+      get manifest(){return world.manifest;},
+      get eventDensityFor(){const method=world.eventDensityFor;return (...args:Parameters<NativeSceneEncounterBirthHost['eventDensityFor']>)=>method.apply(world,args);},
+      get encRng(){return world.encRng;}, set encRng(value){world.encRng=value;},
+      get clampPos(){const method=world.clampPos;return (...args:Parameters<NativeSceneEncounterBirthHost['clampPos']>)=>method.apply(world,args);},
+      get farPoint(){const method=world.farPoint;return (...args:Parameters<NativeSceneEncounterBirthHost['farPoint']>)=>method.apply(world,args);},
+      get encounters(){return world.encounters;},
+      get materializeExtractionNode(){const method=world.materializeExtractionNode;return (...args:Parameters<NativeSceneEncounterBirthHost['materializeExtractionNode']>)=>method.apply(world,args);},
+      get materializeBorough(){const method=world.materializeBorough;return (...args:Parameters<NativeSceneEncounterBirthHost['materializeBorough']>)=>method.apply(world,args);},
+      get zone(){return world.zone;},
+      get createMonster(){const method=world.createMonster;return (...args:Parameters<NativeSceneEncounterBirthHost['createMonster']>)=>method.apply(world,args);},
+      get actors(){return world.actors;},
+      get doodads(){return world.doodads;},
+      get rollExtractTemper(){const method=world.rollExtractTemper;return (...args:Parameters<NativeSceneEncounterBirthHost['rollExtractTemper']>)=>method.apply(world,args);},
+      get findFreeSpot(){const method=world.findFreeSpot;return (...args:Parameters<NativeSceneEncounterBirthHost['findFreeSpot']>)=>method.apply(world,args);},
+      get weightedPick(){const method=world.weightedPick;return (...args:Parameters<NativeSceneEncounterBirthHost['weightedPick']>)=>method.apply(world,args);},
+    };
+    Object.defineProperty(this,'nativeSceneEncounterBirthView',{value:host,writable:true,configurable:true,enumerable:false});
     return host;
   }
 
@@ -18700,11 +18620,7 @@ export class World {
    *  + per-biome (eventDensityMul) levers × the live MYCELIA spore SUPPRESSION (1 = clear,
    *  →floor = smothered) × the live QUICKENING surge (>1 while the ground runs quick —
    *  trouble comes looking for trouble). The one chokepoint every event-ignition gate reads. */
-  private eventDensityFor(def: ZoneDef): number {
-    return (def.encounterDensity ?? 1) * biomeEventDensity(def.biome)
-      * (this.sim.myceliaField?.suppressionAt(def.id) ?? 1)
-      * (this.sim.overlayFor<QuickeningField>('quickening', def.dimension)?.eventMulAt(def.id) ?? 1);
-  }
+  private eventDensityFor(def: ZoneDef): number { return encounterBirthEventDensityFor(this.nativeSceneEncounterBirthHost(),def); }
 
   // ------------------------------------------------------- mycelia bloom
   //
@@ -26777,32 +26693,16 @@ export class World {
 
   /** Does the world's memory watch this character? (Mode-stage policy;
    *  defaults ON — world bookkeeping, not player progression.) */
-  private nemesisActive(): boolean {
-    return this.modeStageDef().nemesisMemory ?? true;
-  }
+  private nemesisActive(): boolean { return historyNemesisActive(this.nativeSceneHistoryHost()); }
 
   /** The names the world watches this run: the hero's — and, THE HIRELING
    *  SEAM, a hired mercenary's own (a retired "Arianna" drags her old
    *  grudges into her patron's run). */
-  private watchedSagas(): { name: string; role: 'self' | 'merc' }[] {
-    const out: { name: string; role: 'self' | 'merc' }[] = [{ name: this.meta.name, role: 'self' }];
-    for (const hm of this.hiredMercs) {
-      if (sagaKey(hm.name) !== sagaKey(this.meta.name)
-        && !out.some(w => sagaKey(w.name) === sagaKey(hm.name))) {
-        out.push({ name: hm.name, role: 'merc' });
-      }
-    }
-    return out;
-  }
+  private watchedSagas(): { name: string; role: 'self' | 'merc' }[] { return historyWatchedSagas(this.nativeSceneHistoryHost()); }
 
   /** Saga persistence throttle: grudge bumps ride a slow flush (they happen
    *  per kill); formations/promotions/fates pass `important` and save now. */
-  private sagaDirty(important = false): void {
-    if (important || this.time - this.lastSagaFlushAt > 30) {
-      this.lastSagaFlushAt = this.time;
-      this.accountDirty = true;
-    }
-  }
+  private sagaDirty(important = false): void { return historySagaDirty(this.nativeSceneHistoryHost(),important); }
 
   /** May the world remember this foe? Fixtures, minions, doors, and anything
    *  flagged noNemesis are beneath memory. */
@@ -26922,79 +26822,17 @@ export class World {
   /** loadZone tail: one remembered foe may STEP OUT of the memory into this
    *  zone, hunting whichever watched name it holds a grudge against. Zone
    *  faction and grudge tier raise the odds; each record fields once per run. */
-  private manifestNemeses(def: ZoneDef): void {
-    if (!this.localSeat || !this.nemesisActive()) return;
-    if (def.objective.kind === 'safe') return;
-    let placed = 0;
-    for (const watch of this.watchedSagas()) {
-      if (placed >= NEMESIS_CFG.maxManifestPerZone) break;
-      const saga = peekSaga(this.account, watch.name);
-      if (!saga) continue;
-      const owner = this.sim.faction.owner(def.id).faction;
-      for (const rec of saga.nemeses) {
-        if (placed >= NEMESIS_CFG.maxManifestPerZone) break;
-        if (this.manifestedThisRun.has(rec.id)) continue;
-        if (!MONSTERS[rec.defId]) continue; // a patched-out foe stays a story
-        let chance: number = NEMESIS_CFG.manifestChance;
-        if (owner && owner === rec.faction) chance += NEMESIS_CFG.manifestFactionBonus;
-        chance += grudgeTier(saga, rec.faction)?.manifestBonus ?? 0;
-        if (Math.random() >= chance) continue;
-        this.spawnNemesisActor(rec, watch, def);
-        placed++;
-      }
-    }
-  }
+  private manifestNemeses(def: ZoneDef): void { return historyManifestNemeses(this.nativeSceneHistoryHost(),def); }
 
   /** Field one remembered foe: the base monster at zone level, swollen by its
    *  rank (life/damage 'more' mods, size, tint), wearing its minted name —
    *  and already hunting (it came here for you). */
-  private spawnNemesisActor(rec: NemesisRecord, watch: { name: string; role: 'self' | 'merc' }, def: ZoneDef): void {
-    const rank = NEMESIS_RANKS[Math.max(0, Math.min(rec.rank, NEMESIS_RANKS.length - 1))];
-    const a = this.createMonster(rec.defId, Math.max(1, def.level), 'enemy');
-    // A foe that was an ELITE in life returns at that tier (ring, affixes,
-    // stats) — the nemesis rank then stacks its own menace on top.
-    if (rec.bornRarity && rec.bornRarity !== 'normal') this.promoteRarity(a, rec.bornRarity);
-    a.name = nemesisTitle(rec);
-    a.nemesis = { sagaKey: sagaKey(watch.name), id: rec.id, tint: rank.tint };
-    a.radius = Math.round(a.radius * rank.sizeMult);
-    a.sheet.setSource('nemesis', [mod('life', 'more', rank.lifeMore), mod('damage', 'more', rank.damageMore)]);
-    a.life = a.maxLife();
-    a.aggroed = true;
-    a.pos = this.findFreeSpot(vec(
-      this.arena.w * (0.25 + Math.random() * 0.5),
-      this.arena.h * (0.25 + Math.random() * 0.5)), a.radius);
-    this.actors.push(a);
-    this.manifestedThisRun.add(rec.id);
-    rec.encounters++;
-    rec.lastSeenAt = Date.now();
-    const hunts = watch.role === 'merc'
-      ? `hunts your hireling, ${watch.name}` : `remembers the name ${watch.name}`;
-    this.notice(`${a.name} ${hunts}.`, rank.tint, 15, 'events');
-    this.text(vec(a.pos.x, a.pos.y - a.radius - 14), '…found you.', rank.tint, 12);
-    this.events.emit('nemesis/manifested', { saga: sagaKey(watch.name), nemesis: rec.name });
-    this.sagaDirty();
-  }
+  private spawnNemesisActor(rec: NemesisRecord, watch: { name: string; role: 'self' | 'merc' }, def: ZoneDef): void { return historySpawnNemesisActor(this.nativeSceneHistoryHost(),rec,watch,def); }
 
   /** Grudged-faction pressure: members of a people that KNOWS this name fight
    *  it harder (the tier's flat data-driven edge), and the zone whispers the
    *  standing on entry — once per faction per load. */
-  private applyGrudgeEffects(def: ZoneDef): void {
-    if (!this.localSeat || !this.nemesisActive()) return;
-    const saga = peekSaga(this.account, this.meta.name);
-    if (!saga) return;
-    const announced = new Set<string>();
-    for (const a of this.actors) {
-      if (a.dead || a.team !== 'enemy' || !a.faction || a.owner) continue;
-      const tier = grudgeTier(saga, a.faction);
-      if (!tier) continue;
-      a.sheet.setSource('grudge', [mod('damage', 'more', tier.damageMore)]);
-      if (!announced.has(a.faction)) {
-        announced.add(a.faction);
-        const fac = (FACTIONS[a.faction]?.name ?? a.faction).replace(/^the /, '');
-        this.notice(tier.entryLine.replace('{faction}', fac).replace('{name}', this.meta.name), '#c88888', 13, 'events');
-      }
-    }
-  }
+  private applyGrudgeEffects(def: ZoneDef): void { return historyApplyGrudgeEffects(this.nativeSceneHistoryHost(),def); }
 
   // ----------------------------------------------------------- quest giver ---
   //
@@ -27899,28 +27737,7 @@ export class World {
    *  stable id ONLY (a radius test would false-match an adjacent static zone,
    *  which can sit ~55 apart); gen_/quest_/cave_ ids churn each run and
    *  re-bind by map coordinate instead. Caves never anchor a corpse. */
-  private spawnPlayerCorpses(def: ZoneDef): void {
-    this.playerCorpses = [];
-    if (!this.zoneMap[def.id]) return; // a cave (off-graph): no stable node
-    const ring = this.corpseRecords();
-    for (let i = 0; i < ring.length; i++) {
-      const d = ring[i];
-      if (d.loot.items.length === 0 || d.owner !== 'p0') continue; // reclaimed / other seat
-      const exact = d.zoneId === def.id;
-      const generated = /^(gen_|quest_|cave_)/.test(d.zoneId);
-      if (generated) {
-        if (!exact && Math.hypot(def.map.x - d.mapX, def.map.y - d.mapY) > CORPSE_MATCH_RADIUS) continue;
-      } else if (!exact) {
-        continue;
-      }
-      this.playerCorpses.push({
-        pos: this.clampPos(vec(d.pos.x, d.pos.y), 16),
-        recordIndex: i, owner: d.owner,
-        who: { classId: d.classId, level: d.charLevel },
-        dwell: 0, reclaimed: false,
-      });
-    }
-  }
+  private spawnPlayerCorpses(def: ZoneDef): void { return historySpawnPlayerCorpses(this.nativeSceneHistoryHost(),def); }
 
   /** Is the player by a not-yet-reclaimed corpse? (Renderer prompt.) */
   nearPlayerCorpse(): boolean {

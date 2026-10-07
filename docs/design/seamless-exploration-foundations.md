@@ -2180,3 +2180,66 @@ Save/Continue. The World audit retains 2,342 unchanged members, changes exactly
 nine native methods and adds four hidden-adapter members; all 380 prior runtime
 module positions remain unchanged. The geometry annotation emits identical
 JavaScript. No structure-siting correction is included in this checkpoint.
+
+
+## NativeAreaSceneHistory and complete encounter births
+
+NativeAreaSceneHistory shares all nine original stage, corpse, saga, nemesis and
+grudge operations with classic World. The local owner uses the same complete
+geometry, census and native factory. Campaign/account history, hired mercenaries,
+faction state, the run-wide manifestation set and the dirty/flush cadence remain
+genuine shared services. Only the corpse array belongs to this area. A fresh
+local history owner must never reset a run-wide manifestation or flush ledger.
+
+Sixty cold archived/current-World/local comparisons preserve 50 native body
+allocations, 318 ordered random draws and 16 reached partial failures. Positive
+carried histories and native worn-item loot are explicit mechanism fixtures;
+canonical forest and downs geometry is retained. The lifecycle controls include
+live replacement of account, death history, meta, mercenaries, zone map, real
+event bus and manifestation set, a second owner sharing actual campaign state,
+and exact dirty thresholds and backward clock behavior. The original 52-course
+complete serialized result remains unchanged after adding eight lifecycle cases.
+Actual World callback selection, cache identity and genuine dormancy pins pass.
+
+NativeAreaSceneEncounterBirth shares all five original placement, density,
+extraction, borough and temper operations with classic World. It reads the whole
+installed encounter registry and its original campaign gates, dimensions, biome
+filters, spent ledgers, targetability, court choices and density. Extraction
+nodes keep their complete bodies, wells, temperament and dressing; boroughs keep
+native props and inhabitants. The retained winning RNG belongs to the area's
+later encounter controller and is never reconstructed from the initial seed.
+
+Thirty-eight cold archived/current-World/local comparisons preserve complete
+canonical source991 forest/downs layouts, 61 real bodies, 468 draws and ten
+reached partial failures. All installed extraction and borough scales, native
+temper fallback identity and partial births are exercised. The enabled account,
+level39 hero, forced chance and explicit cave/objective variants are labelled
+mechanism controls, not evidence of ordinary encounter frequency. Independent
+throw-before-every-observed-operation controls add 727 native/core pairs, 705
+reached failures and 30,763 ordered observations. Fourteen genuine local-owner
+identity/live-state guards, twenty selected-provider controls and two lazy
+campaign controls pass; nine actual World callback/cache controls also pass.
+
+NativeAreaSceneHistory and NativeAreaSceneEncounterBirth preserve allocation,
+publication, ledger and presentation ordering, including native partial failures.
+No rollback, reduced source roster or substitute local campaign is introduced.
+These owners still require later history/encounter updates, reclaim and reward
+execution, the complete birth composition, installed source issuance, runtime
+controllers and whole-owner paging before seamless admission. Ordinary mire
+continues to use localized terrain with navigable bypasses. No structure-siting
+correction is included in this checkpoint.
+
+
+Validation for NativeAreaSceneHistory and NativeAreaSceneEncounterBirth: all
+486 fast probes pass without retries in 888.9 seconds; nine slow and three
+excluded probes were not run. All three type checks and 25 simulation smoke
+episodes pass. The complete generation matrix passes 869 cases at three seeds
+(2,607 generations) with zero failures, four existing spacing warnings and one
+city timing warning under concurrent load. A quiet repeat of all 13 metropolis
+cases at three seeds passes with zero warnings. The built client passes native
+structure/movement/cave entry, same-hero continuation, cold Continue and exact
+return; the conversation course passes native gifts, work, once-only payouts,
+scaled bounds and Save/Continue. The World audit preserves 2,341 existing members
+and all 382 prior runtime import positions, changing exactly fourteen complete
+native operations and adding four hidden adapter members. These tests certify
+the scoped integration, not complete seamless admission or corrected siting.
