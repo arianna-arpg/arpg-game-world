@@ -1,4 +1,5 @@
-import { spawnNativeDoorGuards, spawnNativeFurniture, spawnNativeResidents, spawnNativeFieldInhabitants, type NativeInhabitantHost, type NativeInhabitantSources } from './nativeInhabitants';
+import './nativeInhabitants';
+import { type NativeInhabitantHost, type NativeInhabitantSources } from './nativeInhabitants';
 import { nativeFloorElevAt, nativeRayElev, nativeShotElev, nativeLineOfSight, nativeSightClipD, nativeLineOfFire, nativeClipShot, type NativeSightHost, type NativeSightSources } from './nativeSight';
 import { nativeHostileTo, nativeIsPrey, nativeSeekPrey, nativeEnemiesOf, type NativeHostilityHost, type NativeHostilitySources } from './nativeHostility';
 import { nativeRelayStatus, type NativeStatusRelaySources, type NativeStatusRelayHost } from './nativeStatusRelay';
@@ -72,7 +73,7 @@ import { COMBAT_DEEDS, DEED_CFG } from '../data/classdeeds';
 import { selectContainerLoot } from '../data/containerloot';
 import { rollMemoryEssenceTier } from '../data/essences';
 import type { LootResult } from './loot';
-import { fontStandsIn } from './fontPlacement';
+import './fontPlacement';
 import { refugeDeparture, type RefugeDeparture } from './refugeDeparture';
 import { skillAbsorbAmount } from './absorb';
 import { instanceEffects } from './skills';
@@ -203,7 +204,7 @@ import { COMBO_CFG, comboRepeatedNow, comboStat, comboVariedNow, matchComboRule,
 import { mimicCapture, mimicPowerMods, mimicRefreshWatch, mimicSelect, mimicSelected } from './mimic';
 import { COMBO_LIST, COMBO_RULES } from '../data/combos';
 import { ATTRIBUTE_IDS, ATTRIBUTES, ELEMENTAL_TYPES, STAT_DEFS, DAMAGE_COLOR, isAttributeId } from './stats';
-import { skyOf, START_ZONE, ZONES, objectiveEarnsChest, objectiveSeals, escapeExitAllowed, type ExitRoadSpec, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
+import { skyOf, START_ZONE, ZONES, objectiveSeals, escapeExitAllowed, type ExitRoadSpec, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
 import { SUITES, type SuiteDef, type SuiteStation } from '../data/suites';
 import { BEACON_CFG } from '../data/beacons';
 import { LEYLINE_CFG } from '../data/leyline';
@@ -318,7 +319,8 @@ import { questRewardChoices } from './questRewardChoices';
 import { passiveRefund } from './passiveRefund';
 import { QUEST_CATEGORY_CAPS, DEFAULT_QUEST_CATEGORY, questStandingLine, type QuestCategory, type QuestStanding } from '../quests/types';
 import { Rng, rollSeed, withSeededRandom } from '../core/rng';
-import { ALTARS, INTERACT_PLACE_CFG, SHRINES, type AltarDef, type ShrineDef } from '../data/shrines';
+import '../data/shrines';
+import { type AltarDef, type ShrineDef } from '../data/shrines';
 import { WorldSim } from '../world/sim';
 import { patronFaction, biomesForFaction, biomeEventDensity, biomeSpacing, BIOMES, BIOME_FIELD, OCEAN_BIOME } from '../world/biomes';
 import { boundaryGateOf } from '../data/boundaryGates';
@@ -354,7 +356,7 @@ import {
 import { dwellerPhaseAt, lintVentDweller, VENT_DWELLER_CFG, type DwellerPhase } from './ventDweller';
 import { REGROWTH_CFG, SCALD_CFG, type BaskSpec } from '../data/scald';
 import { LEDGER_TRAP_SPRUNG, lintTrapworkSpec, trapAnchor, trapEffect, trapTriggerHit, TRAPWORK_CFG, type PlacedTrapwork, type TrapHost, type TrapworkSpec } from './trapworks';
-import { bootOccSites, driveOccSites, OCC_CFG, reviveOccSite, seedOccClockMarks, wakeRousedResidents, type OccHost, type OccKinSpec, type OccSite } from './occurrences';
+import { driveOccSites, OCC_CFG, type OccHost, type OccKinSpec, type OccSite } from './occurrences';
 import { attunedStatus, rollStartTone, toneAccepted, toneOfAmounts, toneTint, TUNE_CFG } from './tuning';
 import { capturePuzzleKindles, restorePuzzleKindles, pickKnockNode, puzzleContactHeatsCombat, PUZZLE_CFG, PUZZLE_KINDS, puzzleHumOf, puzzleKnockOf, puzzleRewardOf, puzzleSpillOf, type PuzzleHost, type PuzzleRun, type PuzzleCheckpoint } from './puzzles';
 import { MINION_COMBAT } from './minionCombat';
@@ -420,9 +422,11 @@ import type { DroveSurge } from '../packages/overlays/drove';
 import type { QuickeningField } from '../packages/overlays/quickening';
 import { plyCountOf, plyFloorOf } from './plies';
 import { COURT_SHRINE_KIND, PUZZLES } from '../data/puzzles';
-import { buildZoneCollapse, COLLAPSE_CFG, type CollapseField } from './collapse';
-import { buildZoneSpans, type SpanField } from './spans';
-import { buildZoneFlux, CONJURE_CFG, ConjuredGround, FLUX_CFG, type ConjureGrant, type FluxField } from './flux';
+import './collapse';
+import { type CollapseField } from './collapse';
+import './spans';
+import { type SpanField } from './spans';
+import { CONJURE_CFG, ConjuredGround, type ConjureGrant, type FluxField } from './flux';
 import { CONJURE_RIDERS } from '../data/conjury';
 import { traversalDef, type TraversalCapture, type TraversalState } from './traversal';
 import { affordTravel, castGridRay, castRay, LOS_CFG, type RayElev } from './los';
@@ -496,7 +500,7 @@ import type { BoroughSpec, ExtractDisperseSpec, ExtractSpec, ExtractTemperSpec }
 import { gateOf } from '../packages/weighting';
 import { courtLord, courtLordForZone } from '../packages/courts';
 import type { ActiveEncounter, BoroughRuntime, VeilKnot } from './encounter';
-import { boroughVendorWeights, townResidentsHere, noteSoulsSheltered } from '../data/boroughs';
+import { boroughVendorWeights, noteSoulsSheltered } from '../data/boroughs';
 import { promoteNativeRarity, promoteNativeRarityStacked, promoteNativeMagicPack, refreshNativeMagicPacks,
   type NativeMonsterPromotionSources, type NativeMonsterPromotionHost } from './nativeMonsterPromotion';
 import { rollRarity, rarityMods, RARITY_DEFS, type MonsterRarity } from './rarity';
@@ -561,9 +565,7 @@ import { planSkillSlots, rememberSkillSlot } from '../meta/skillSlotMemory';
 // so a level gate authored anywhere in the catalog has a live signal BY
 // CONSTRUCTION (unlocks.ts → vendors.ts touches world only type-wise; no
 // runtime cycle).
-import {
-  allUnlockables, catalogClassLevelMilestones, catalogLevelMilestones, isUnlockOwned, settleClassUnlocks,
-} from '../meta/unlocks';
+import { catalogClassLevelMilestones, catalogLevelMilestones, settleClassUnlocks } from '../meta/unlocks';
 import { CLASS_WEB_CFG } from '../data/classTiers';
 import {
   modeById, resurrectFee, stageOf, DEFAULT_MODE_ID, FADE_DEFAULTS,
@@ -592,6 +594,7 @@ import {
   sanitizeVendorHolds, sanitizeWorldZones,
   type WorldStateRestore, type ResumeSpawn, type SavedPlayerSpot, type SavedZoneMemory, type VendorHoldSave, type WorldStateSave, type SavedQuestEntry,
 } from '../meta/worldstate';
+import { birthNativeArea, type NativeAreaBirthHost, type NativeAreaBirthArguments } from './nativeAreaBirth';
 
 export type { Doodad } from './levelgen';
 
@@ -6822,979 +6825,7 @@ export class World {
         'this ground keeps no spoils — it pays in experience alone', '#c8b070', 14);
     }
 
-    // Remembered DOOR STATES re-apply first (an opened gate stays open across the
-    // memory's life): the layout regenerated pristine doors above; the shared
-    // setDoorState path flips + repaints them silently.
-    for (const [doorId, st] of Object.entries(memory?.doorState ?? {})) {
-      this.setDoorState(doorId, st, { silent: true });
-    }
-    // LESSON DOORS mint open for GRADUATED accounts (DoodadDoor.lesson names
-    // an account-ledger key; the first dwell-open stamped it). Applied before
-    // the breakable door-actor spawn below so a graduated 'both'-mode door
-    // never posts a guard on an already-open frame. Zone memory above stays
-    // authoritative for this run's own openings; this is the veteran's key.
-    for (const d of this.doodads) {
-      const lesson = d.door && !d.door.open && !d.door.broken ? d.door.lesson : undefined;
-      if (lesson && (this.account?.ledger[lesson] ?? 0)) {
-        this.setDoorState(d.door!.id, 'open', { silent: true });
-      }
-    }
-    // THE HARBORHOLD boot — after the door replays above on purpose: the
-    // persisted hold state is AUTHORITATIVE over remembered opens (the town
-    // may have fallen or rebuilt while you sailed; the gate must match the
-    // state, not the memory).
-    if (def.harborhold) this.bootHarborhold(def);
-    else if (def.holdAnchor) this.bootQuay(def);
-    // Remembered HOLLOWS re-open (the hollows fabric): the layout regenerated
-    // them sealed above; re-carve each remembered id through the shared
-    // openHollow path — revive mode furnishes STRUCTURE (the crevice shaft,
-    // the vein, the camp) but never re-pays loot or re-wakes ambushes.
-    for (const id of memory?.hollows ?? []) {
-      this.openHollow(id, null, { silent: true, revive: true });
-    }
-    // REVEALED ANNEX PIECES (the composite bound) re-join the union the same
-    // way — revive mode carves + re-dresses structure, never re-pays loot
-    // (THE FIND LAW). After the layout: generation stays base-piece by
-    // construction (the pieces were dormant through every boot consumer
-    // above).
-    for (const id of memory?.annexOpen ?? []) this.annexReveal(id, { silent: true, revive: true });
-    // FOUND IS FOUND (her ruling — the run ledger outlives the memory): every
-    // annex this run ever revealed here re-opens even when the TTL forgot
-    // the visit — the mundane zone re-dressed on its own clock, the broken
-    // wall stays broken. Sorted so a chain replays parents-first ('ax0' <
-    // 'ax0.1' lexicographically); idempotent over the memory loop above.
-    {
-      const pfx = zoneId + ':';
-      const found = [...this.annexFound].filter(k => k.startsWith(pfx)).sort();
-      for (const key of found) this.annexReveal(key.slice(pfx.length), { silent: true, revive: true });
-    }
-    spawnNativeDoorGuards(this.nativeInhabitantHost(), World.nativeInhabitantSources, def, layout);
-    spawnNativeFurniture(this.nativeInhabitantHost(), World.nativeInhabitantSources, def, layout);
-    spawnNativeResidents(this.nativeInhabitantHost(), World.nativeInhabitantSources, def, layout);
-    // Where there's a smith, there's a stock — armed on THE BEAT LAW's
-    // lattice (floor(time / restockSeconds)): the shelf is a pure function
-    // of (world seed, counter, beat), so within one beat the counter keeps
-    // the SAME wares across zone hops and reloads — leaving town sheds
-    // nothing, re-entering re-rolls nothing, and the countdown shows the
-    // true remainder of the CURRENT beat, never a fresh full clock. A
-    // TURNED beat (or a fresh world) arms anew, resolving THE STANDING
-    // ORDER's away beats and re-seating reserved rows (the hold outlives
-    // the stock array by design). Sold-out stays sold-out until the beat
-    // turns — the wait IS the scarcity.
-    this.zoneHasVendorCounter = layout.npcs.some(n => {
-      const role = MONSTERS[n.id]?.npcRole;
-      return role === 'vendor' || role === 'chandler';
-    });
-    if (layout.npcs.some(n => MONSTERS[n.id]?.npcRole === 'vendor')) {
-      const beat = this.restockOrdinal();
-      if (this.vendorArmedBeat['brandt'] !== beat) {
-        this.vendorStock = this.armVendorStock('brandt');
-        this.vendorArmedBeat['brandt'] = beat;
-      } else {
-        // Same beat, standing stock: just re-anchor held rows (free, and
-        // keeps the seat law self-healing across any splice).
-        this.syncHoldIdx('brandt', this.vendorStock);
-      }
-      this.vendorRestockAt = (beat + 1) * this.restockSeconds();
-    }
-
-    // THE ADOPTIVE LANE (data/objectives.ts): ground whose mint actually
-    // STANDS an adoptable feature — a lair's den mouth, an apex native's
-    // claim — may re-negotiate a BARE rolled cull into that feature's own
-    // ask. Adoption, never dependency: the feature spawned by its own law in
-    // the layout above, nothing is ever placed FOR the ask, and featureless
-    // ground passes untouched (weight 0 structurally). Pure + rng-free
-    // (seeded off def.seed), so every load, save and seat re-derives the
-    // same verdict; the stamp is idempotent (an adopted kind never re-rolls).
-    {
-      // The world read opens THE PACKAGE CLASS (a standing guest may take the
-      // ask; a stamped guest ask re-validates its presence — THE HAND-BACK);
-      // the lair half is byte-identical with or without it. The engagement
-      // latch is zone-local: every load starts the SURVIVE CONTRACT fresh.
-      this.packageAskEngaged = false;
-      const adopted = maybeAdoptObjective(def, layout, this);
-      if (adopted) def.objective = adopted;
-    }
-    // Population: the objective decides who's waiting. Open the Zone Memory
-    // tagging window so every BASE enemy spawned below is flagged fromZoneGen —
-    // overlay/event spawns come AFTER the window closes and stay live.
-    this.zoneGenTagging = true;
-    const o = def.objective;
-    // THE POOL RIM FILTER (the door law's kin — task_e2243782's coda):
-    // generation is rect-blind, so an ellipse zone's POI pool can hold
-    // points beyond the inscribed rim — ground no body can ever stand on.
-    // Every consumer of this pool seats something a player must REACH
-    // (spires, rift/pyre/dig fixtures, the siphon, the waypoint, chests,
-    // shrines, spawner bodies, puzzle bells), and each clamps its seat,
-    // which PROJECTS an out-of-rim pick onto the rim — where none of the
-    // pick's guarantees (door clearance, walkability, spacing) were ever
-    // measured; on carved ground the walk confine then drags it onto
-    // walkable-but-unreachable cells beyond the rim. Filter the pool ONCE
-    // at its birth, at the mouth clamp's own 28u margin: a surviving POI
-    // is a seat every consumer's smaller body clamp provably leaves
-    // unmoved (picked == clamped == dwelled), and a starved consumer
-    // degrades to farPoint, whose samplePoint is already shape-aware.
-    // Draw-free, and rect zones keep every POI BY CONSTRUCTION (the guard
-    // never fires) — their draws are byte-identical.
-    const pois = this.arena.shape === 'ellipse'
-      ? layout.pois.filter(p => insideBounds(p, 28, this.arena))
-      : [...layout.pois];
-    // A SPECIAL arena (boss set-piece) spawns NOTHING ambient — no packs, no faction
-    // contest. Only its authored boss (below) populates it.
-    if (!def.special && o.kind !== 'waves' && o.kind !== 'safe') {
-      // Day/night, weather, and faction territory bend the table and the count;
-      // a conquered zone draws from its new ruler's roster (see baseTable).
-      const e = this.effectiveSpawn(def, this.baseTable(def));
-      this.spawnPacks(def, (o.kind === 'escape' ? 0.6 : 1) * e.countMul, e.table);
-      // A node two hostile factions both hold spawns both — let them brawl.
-      // (Hand-authored factionWar zones stage their own fight below.)
-      if (!def.factionWar) this.spawnContest(def, e.inject);
-    }
-    // FACTION WAR: two rival hosts spawn mid-brawl at a contested point,
-    // with skirmishing packs of each side scattered wider. Wade in, or
-    // circle the carnage and pick off whoever limps away.
-    if (def.factionWar) {
-      const battlefield = this.farPoint(700);
-      def.factionWar.forEach((factionId, side) => {
-        const roster = FACTIONS[factionId];
-        if (!roster) return;
-        const dir = side === 0 ? -1 : 1;
-        // the front line
-        for (let pk = 0; pk < 2; pk++) {
-          const type = this.weightedPick(roster.table, Math.max(1, def.level));
-          const n = randInt(3, 5);
-          for (let k = 0; k < n; k++) {
-            const mw = this.createMonster(type, Math.max(1, def.level), 'enemy');
-            mw.pos = this.clampPos(vec(
-              battlefield.x + dir * (70 + rand(0, 60)),
-              battlefield.y + (pk - 0.5) * 90 + rand(-40, 40)), mw.radius);
-            this.actors.push(mw);
-          }
-        }
-        // reinforcements in the field
-        const at = this.farPoint(650);
-        const type2 = this.weightedPick(roster.table, Math.max(1, def.level));
-        for (let k = 0; k < randInt(3, 5); k++) {
-          const mw = this.createMonster(type2, Math.max(1, def.level), 'enemy');
-          mw.pos = this.clampPos(vec(at.x + rand(-80, 80), at.y + rand(-80, 80)), mw.radius);
-          this.actors.push(mw);
-        }
-      });
-      this.text(vec(p.pos.x, p.pos.y - 70),
-        `${FACTIONS[def.factionWar[0]]?.name ?? def.factionWar[0]} wars with ${FACTIONS[def.factionWar[1]]?.name ?? def.factionWar[1]}!`,
-        '#e85050', 15);
-    }
-    if (o.kind === 'boss') {
-      // ONE-SHOT UBER lifecycle: a recorded forever-dead boss never re-spawns (the
-      // zone becomes an empty cleared arena). Absent uber = a normal repeatable boss.
-      if (!this.uberDefeated(o, def.id)) {
-        const boss = this.createMonster(o.id, def.level + (o.levelBonus ?? 0), 'enemy');
-        // Partial HP memory cannot restore broken parts or phase clocks.
-        // Completed attempts still use ordinary cleared-zone memory.
-        if (o.arenaBossRetry === 'restart' && !this.objectiveDone) boss.fromZoneGen = false;
-        // The Unmade arena: spawn on the dais (pois[0]) instead of a random far point,
-        // and init the in-zone choreography (no longer Crowned by default — see promote).
-        if (def.layoutType === 'unmade_vault') {
-          const dais = layout.pois.length ? layout.pois[0] : vec(this.arena.w / 2, this.arena.h / 2);
-          boss.pos = this.clampPos(vec(dais.x, dais.y), boss.radius);
-          // EXCLUDE the boss from Zone Memory (it's spawned inside the tagging window, so
-          // clear the flag): re-entry should re-spawn it FRESH (full HP, replaying from
-          // Phase I on a regenerated grid) — not restore a wounded body that would
-          // phase-JUMP to the apex with stale flood/crack paint. Also keeps the arena
-          // cleanly re-fightable (a killed Unmade respawns on the next entry).
-          boss.fromZoneGen = false;
-          const m = 70;
-          this.bossRun = {
-            bossId: o.id, anchor: vec(dais.x, dais.y),
-            rect: { x0: m, y0: m, x1: this.arena.w - m, y1: this.arena.h - m },
-          };
-        } else if (layout.bossSeat) {
-          // THE BOSS SEAT (GeneratedLayout.bossSeat — the dais law, generalized):
-          // the recipe named where its ask stands — the vent cauldron seats
-          // its maw IN the heart vent (engine/ventcauldron.ts); the dweller
-          // sweep then finds that vent from the body's own seat.
-          boss.pos = this.clampPos(vec(layout.bossSeat.x, layout.bossSeat.y), boss.radius);
-        } else {
-          boss.pos = this.clampPos(this.farPoint(720), boss.radius);
-        }
-        // OPT-IN difficulty spike (any boss): promote to an elite rarity, optionally
-        // STACKED. Absent = a plain boss. The lever to crank a boss harder via data.
-        if (o.promote) this.promoteRarityStacked(boss, o.promote.rarity, o.promote.stacks ?? 1);
-        this.actors.push(boss);
-      }
-    }
-    if (o.kind === 'spawners') {
-      const n = rng.int(o.count[0], o.count[1]);
-      for (let i = 0; i < n; i++) {
-        const s = this.createMonster(o.spawnerId, def.level, 'enemy');
-        const at = pois.length
-          ? pois.splice(rng.int(0, pois.length - 1), 1)[0]
-          : this.farPoint(740, false, this.seededDraw());
-        s.pos = this.clampPos(vec(at.x, at.y), s.radius);
-        this.actors.push(s);
-      }
-    }
-    // SURVEY SPIRES (beacon): the objective fixtures stand at POIs — dormant
-    // stone until a hero holds ground beside one (updateObjective drives the
-    // charge, the lure, and the survey). count 1 = the lone spire; 2+ = the
-    // ATTUNEMENT CIRCUIT's smaller waystones. A finished zone keeps LIT
-    // stones (scenery — proof the ground is surveyed); remembered charges
-    // resume exactly, stone by stone. Placement rides the layout rng, so a
-    // remembered seed puts every stone back where it stood.
-    if (o.kind === 'beacon') {
-      const count = Math.max(1, o.count ?? 1);
-      const circuit = count > 1;
-      const bodyR = circuit ? BEACON_CFG.wayRadius : BEACON_CFG.radius;
-      const need = o.chargeSec ?? transitDwell('beacon', BEACON_CFG.chargeSec);
-      const charges = memory?.spireCharges
-        ?? (memory?.spireCharge !== undefined ? [memory.spireCharge] : undefined);
-      for (let i = 0; i < count; i++) {
-        const at = this.interactSpot(pois, rng, 620, BEACON_CFG.portalClear);
-        const pos = this.clampPos(vec(at.x, at.y), bodyR);
-        const charge = this.objectiveDone ? need : Math.min(charges?.[i] ?? 0, need);
-        const spireDoodad: Doodad = {
-          pos: vec(pos.x, pos.y), radius: bodyR,
-          kind: charge >= need
-            ? (circuit ? BEACON_CFG.kindWayLit : BEACON_CFG.kindLit)
-            : (circuit ? BEACON_CFG.kindWay : BEACON_CFG.kind),
-        };
-        this.doodads.push(spireDoodad);
-        this.spires.push({ pos: vec(pos.x, pos.y), charge, doodad: spireDoodad, pourAt: 0, recoup: 0 });
-      }
-    }
-    // THE CONTEST-LAW KIN (rifts / pyres / dig sites): the spire's placement
-    // discipline verbatim — fixtures at POIs off the layout rng (a remembered
-    // seed re-places every one on the same ground), remembered charges resume
-    // fixture by fixture, and a finished zone stands them in their finished
-    // face (sealed seam / burning bowl / opened mound — proof of work done).
-    const placeHolds = (
-      count: [number, number], need: number, bodyR: number, clear: number,
-      kinds: { open: string; done: string }, charges: number[] | undefined,
-      into: HoldFixture[],
-    ): void => {
-      const n = rng.int(count[0], count[1]);
-      for (let i = 0; i < n; i++) {
-        const at = this.interactSpot(pois, rng, 620, clear);
-        const pos = this.clampPos(vec(at.x, at.y), bodyR);
-        const charge = this.objectiveDone ? need : Math.min(charges?.[i] ?? 0, need);
-        const d: Doodad = {
-          pos: vec(pos.x, pos.y), radius: bodyR,
-          kind: charge >= need ? kinds.done : kinds.open,
-        };
-        this.doodads.push(d);
-        into.push({ pos: vec(pos.x, pos.y), charge, doodad: d, pourAt: 0, recoup: 0 });
-      }
-    };
-    if (o.kind === 'rifts') {
-      placeHolds(o.count ?? RIFT_CFG.count, o.sealSec ?? transitDwell('rift', RIFT_CFG.sealSec),
-        RIFT_CFG.radius, RIFT_CFG.portalClear,
-        { open: RIFT_CFG.kind, done: RIFT_CFG.kindSealed }, memory?.riftCharges, this.rifts);
-    }
-    if (o.kind === 'pyres') {
-      placeHolds(o.count ?? PYRE_CFG.count, o.kindleSec ?? transitDwell('pyre', PYRE_CFG.kindleSec),
-        PYRE_CFG.radius, PYRE_CFG.portalClear,
-        { open: PYRE_CFG.kind, done: PYRE_CFG.kindLit }, memory?.pyreCharges, this.pyres);
-    }
-    if (o.kind === 'unearth') {
-      placeHolds(o.count ?? DIG_CFG.count, o.digSec ?? transitDwell('digsite', DIG_CFG.digSec),
-        DIG_CFG.radius, DIG_CFG.portalClear,
-        { open: DIG_CFG.kind, done: DIG_CFG.kindDug }, memory?.digCharges, this.digs);
-    }
-    // THE BESIEGED WAYPOINT ('leyline'): the SIPHON seats at its own POI —
-    // it taps the vein wherever it runs, and the drawn tether spans back to
-    // the starved stone (the beam is the map to the fight). A promoted,
-    // NAMED champion of the zone's own table by default (every biome's thief
-    // is native; spec `id` pins a def), posted at its tap so nothing wanders
-    // the objective away. Spawned inside the tagging window: the wounded
-    // thief rides Zone Memory like any body, and a fallen one stays fallen
-    // via completedObjectives. A rosterless zone spawns nothing — the
-    // objective completes vacuously (the puzzle's no-wedge law).
-    if (o.kind === 'leyline' && !this.objectiveDone) {
-      let type = o.id && MONSTERS[o.id] ? o.id : undefined;
-      if (!type && def.packs) {
-        const e = this.effectiveSpawn(def, this.baseTable(def));
-        const eligible = e.table.filter(en => {
-          const d = MONSTERS[en.id];
-          return !!d && !d.passive && !d.noObjective && !d.spawner;
-        });
-        // THE STATURE FLOOR (LEYLINE_CFG.siphonMinXp): the thief is a body
-        // worth promoting — livestock-grade fauna stay in the flock. The
-        // floor degrades gracefully: an all-critter table rolls unfiltered.
-        const statured = eligible.filter(en =>
-          (MONSTERS[en.id]?.xp ?? 0) >= LEYLINE_CFG.siphonMinXp);
-        const pool = statured.length ? statured : eligible;
-        if (pool.length) type = this.weightedPick(pool, def.level);
-      }
-      if (type) {
-        const m = this.createMonster(type,
-          Math.max(1, def.level + (o.levelBonus ?? LEYLINE_CFG.levelBonus)), 'enemy');
-        const at = this.interactSpot(pois, rng, 640, LEYLINE_CFG.portalClear);
-        m.pos = this.clampPos(this.findFreeSpot(vec(at.x, at.y), m.radius + 2) ?? vec(at.x, at.y), m.radius);
-        this.promoteRarityStacked(m, o.rarity ?? LEYLINE_CFG.rarity, o.stacks ?? LEYLINE_CFG.stacks);
-        const fac = m.faction ?? (m.defId ? MONSTERS[m.defId]?.faction : undefined) ?? '';
-        m.name = `${mintNemesisName(fac, () => rng.next())}, ${rng.pick(LEYLINE_CFG.titles)}`;
-        m.tag = 'ley_siphon';
-        // Posted at the tap (the duty-post fabric): a displaced thief walks
-        // back to the vein it drinks from.
-        m.aiPost = vec(m.pos.x, m.pos.y);
-        m.postSpec = { slack: LEYLINE_CFG.leash, hold: false };
-        this.actors.push(m);
-      }
-    }
-    // PROCESSION (escort): the caravan waits DORMANT beside the gate you came
-    // in by — immobile, immune cargo until the rally dwell sets it rolling
-    // (updateObjective owns the march, the robbers, the arrival, the loss).
-    // The memory rider re-stages a left march exactly: same crossing, cart
-    // re-waiting where you left it at its remembered health; a LOST caravan
-    // stays lost until the memory lapses and the zone deals a fresh one.
-    if (o.kind === 'procession' && !this.objectiveDone) {
-      const rider = memory?.procession;
-      if (rider?.lost) {
-        this.objectiveLost = true;
-      } else {
-        const destIdx = def.exitRoads?.findIndex(r => r !== undefined) ?? -1;
-        const destExit = destIdx >= 0 ? this.exits.find(x => x.defIndex === destIdx) : undefined;
-        // Roadless fallback (a dead-end pocket): the farthest POI stands in
-        // for the crossing — the escort runs, only the carved way is absent.
-        const dest = destExit ? vec(destExit.pos.x, destExit.pos.y)
-          : (pois.length ? vec(pois[pois.length - 1].x, pois[pois.length - 1].y)
-            : this.farPoint(700, false, this.seededDraw()));
-        const cart = this.createMonster(PROCESSION_CFG.cartId, Math.max(1, def.level), 'player');
-        const pool = Math.round(PROCESSION_CFG.lifeBase + Math.max(1, def.level) * PROCESSION_CFG.lifePerLevel);
-        cart.sheet.setSource('procession_cart', [{ stat: 'life', kind: 'flat', value: Math.max(0, pool - cart.maxLife()) }]);
-        cart.fillResources();
-        const spawnAt = rider?.x !== undefined && rider?.y !== undefined
-          ? vec(rider.x, rider.y)
-          : vec(this.zoneEntry.x + rand(-26, 26), this.zoneEntry.y + 44 + rand(-10, 10));
-        cart.pos = this.clampPos(this.findFreeSpot(spawnAt, cart.radius + 2) ?? spawnAt, cart.radius);
-        if (rider?.life !== undefined) cart.life = Math.max(1, Math.min(cart.maxLife(), rider.life));
-        cart.untargetable = true; // dormant cargo — nothing chews it before the rally
-        cart.invulnerable = true;
-        cart.tag = 'procession_cart';
-        cart.eventKey = `procession:${def.id}`;
-        this.actors.push(cart);
-        this.procession = {
-          cartId: cart.id, rolling: false, started: !!rider?.started,
-          startPos: rider?.sx !== undefined && rider?.sy !== undefined
-            ? vec(rider.sx, rider.sy) : vec(cart.pos.x, cart.pos.y),
-          dest, destIdx: destIdx >= 0 ? destIdx : null,
-          dwellStart: 0, puffAt: 0, heading: angleTo(cart.pos, dest),
-        };
-      }
-    }
-    // AMBIENT SCENERY + THE PUZZLE PLACER (engine/puzzles.ts): the zone's
-    // planted object-actors and activity riddles stand up HERE, each on its
-    // own salted stream + the leftover POIs — never a generation concern,
-    // never a draw off layout/spawn rng.
-    this.bootScenery(def, pois);
-    this.bootPuzzles(def, pois, memory);
-    // THE THRONG POCKET BOOT (engine/throng.ts): finite gatherable husks
-    // stand up on their own salted stream — same discipline as the two
-    // lines above; claimed seats (throngClaimed, run-long) stay empty.
-    this.bootThrong(pois);
-    // THE LITE POOL BOOT (engine/lite.ts): carry keeper-owned rows across,
-    // zero the pool, pour the theme's ambient swarms on their own salted
-    // stream, re-field the carried roster — same boot discipline again.
-    this.bootLite(def, pois);
-    // THE RESOURCE HARVEST (engine/harvest.ts): the biome's gatherable
-    // nodes stand up on their own salted stream — the same boot discipline,
-    // placed LAST so every prior lane's pool draws stay byte-frozen.
-    this.bootHarvest(def, pois, memory);
-    // A trace never crosses a boundary either — the writ endures.
-    this.traceAbortAll();
-    // THE GEYSER FABRIC (engine/geysers.ts): timed vents + their current
-    // bands stand up on their own salted stream — appended AFTER the lanes
-    // above so their draws stay byte-frozen (the harvest seat's own law).
-    // Authored rows (GeneratedLayout.authoredVents — the lake's metronome)
-    // ride in beside the theme's counts.
-    this.bootGeysers(def, pois, layout.authoredVents);
-    // THE VENT SEAT (LiteSwarmRow.seat 'vents' — the steam-wisp tide): the
-    // lite rows bootLite deferred seat at the vents that now stand, on
-    // their own salted lane (no POI draw moved).
-    this.bootLiteVentSeats();
-    // THE ESCAPE SEAM (FrontSpawnRow.heels): under an 'escape' objective the
-    // Char's chase lanes field at the party's heels the moment the zone
-    // stands (creep field + party placement both done above).
-    this.bootEscapeChase();
-    spawnNativeFieldInhabitants(this.nativeInhabitantHost(), World.nativeInhabitantSources, def, layout);
-    // BOUNTY WRITS: `count` of the zone's own bodies walk it as MARKED QUARRY —
-    // named from the nemesis vocabulary, promoted, tagged, roaming with the
-    // population. Spawned INSIDE the tagging window, so Zone Memory resumes a
-    // half-claimed hunt with the SAME named marks at the same wounds (names,
-    // rarity, tags and HP all ride ZoneEnemyMemo — no rider needed). A
-    // completed zone posts no new writs; the board is settled.
-    if (o.kind === 'bounty' && !this.objectiveDone) {
-      const n = rng.int(o.count?.[0] ?? BOUNTY_CFG.count[0], o.count?.[1] ?? BOUNTY_CFG.count[1]);
-      const { table } = this.effectiveSpawn(def, this.baseTable(def));
-      const eligible = table.filter(en => {
-        const md = MONSTERS[en.id];
-        return !!md && !md.passive && !md.noObjective && !md.spawner && !md.npcRole;
-      });
-      for (let i = 0; i < n; i++) {
-        let m: Actor | null;
-        if (eligible.length) {
-          const type = this.weightedPick(eligible, Math.max(1, def.level));
-          m = this.createMonster(type, Math.max(1, def.level), 'enemy');
-          m.pos = this.spawnPoint(24);
-          this.actors.push(m);
-        } else {
-          // No eligible roster (a strange zone) — post the writ on an existing
-          // counted body instead; an empty zone simply posts fewer writs.
-          m = this.countedEnemies().find(a =>
-            a.tag !== 'bounty_mark' && (a.rarity ?? 'normal') === 'normal') ?? null;
-          if (!m) break;
-        }
-        this.promoteRarityStacked(m, o.rarity ?? BOUNTY_CFG.rarity, o.stacks ?? BOUNTY_CFG.stacks);
-        // Two writs must never name the same quarry (a small pool re-rolls a
-        // few times, then concedes — a rare double is livable, a common one
-        // reads as a bug).
-        const fac = m.faction ?? (m.defId ? MONSTERS[m.defId]?.faction : undefined) ?? '';
-        let name = mintNemesisName(fac, () => rng.next());
-        for (let tries = 0; tries < 4 && this.actors.some(a => a !== m && a.tag === 'bounty_mark' && a.name === name); tries++) {
-          name = mintNemesisName(fac, () => rng.next());
-        }
-        m.name = name;
-        m.tag = 'bounty_mark';
-      }
-    }
-    // WILDLIFE: the biome's ambient fauna (WILDLIFE registry) — hares that
-    // exist to be chased, the wolf packs that chase them. AMBIENT_TAGS
-    // bearers all, so no objective ever waits on a rabbit. Spawned inside
-    // the tagging window: the meadow you left is the meadow you return to.
-    this.spawnWildlife(def);
-    // ARRIVAL GRACE (purchased pockets): the sold ground has exactly ONE
-    // portal and the buyer arrives through it — a fair landing is part of
-    // the promise. Fresh gens sweep hostiles off the entry ring (gen-time
-    // camps/garrisons can seat anywhere; the samplers already keep away);
-    // remembered re-entries are exempt on purpose — bodies the PLAYER led to
-    // the door are history, not generation.
-    if (def.pocket && !memory) this.enforceArrivalGrace();
-    // Close the Zone Memory tagging window: the base population is placed. On a
-    // remembered re-entry, swap the freshly-spawned base enemies for the ones we
-    // left (cleared stays cleared; survivors keep their wounds + positions).
-    this.zoneGenTagging = false;
-    if (memory) this.restoreZoneEnemies(memory);
-    // THE CULL's marks (bounty board M1): a held cull posting targeting
-    // THIS zone posts its quarry through the promote-and-name grammar —
-    // AFTER the memory swap, or a remembered re-entry would swallow the
-    // fresh marks (the posting is usually taken after the ground was first
-    // walked, so the memo knows none). Only the REMAINDER posts (count −
-    // claimed − standing), so wiped ground, remembered ground and fresh
-    // ground all deal the hunt back honestly — the claim ledger rides the
-    // POSTING, never the population. (Marks may re-mint with fresh names
-    // between visits; the ledger, not the fiction, is the law here.)
-    this.seedCullMarks(def, rng);
-    // THE GATHER's ground (first-writ W2): a held gather posting targeting
-    // this zone plants its remainder of nodes — the cull's remote-writ law
-    // on the harvest fabric.
-    this.seedGatherNodes(def, pois);
-    // THE ERRAND's deed is the walk itself: arriving in a held errand's
-    // zone flips the hand ready and speaks the withhold prompt.
-    this.noteBountyArrivals(def, firstVisit, from);
-    // THE OCCURRENCE FABRIC (engine/occurrences.ts): adopt the mint's planted
-    // triggers — armed spots carry NO standing state (invisible by
-    // construction); a remembered SPRUNG spot re-stands its seeded wound +
-    // fixture. Outside the tagging window on purpose: poured kin are
-    // transient population, never memory-captured twice.
-    this.occs = bootOccSites(def.id, memory?.occSprung);
-    for (const s of this.occs) if (s.state === 'sprung') reviveOccSite(this.occHost(), s);
-    // THE WORLD-CLOCK WAKE (engine/occurrences.ts): seed every armed clock
-    // site's watermark from this ground's own leave-stamp — the first driven
-    // frame settles the windows the absence spanned, exact arithmetic, no
-    // world sweep — then wake any dormant-tagged resident a sprung
-    // rouseResident occurrence names: this zone's own sites, or the parent
-    // ring's when this ground is its den (the caveDepth-gated exit peek).
-    // Pure reads over standing sprung state; with no rouse row, no-ops.
-    seedOccClockMarks(this.occs, memory?.savedAt, this.time);
-    wakeRousedResidents(this.occHost(), def, this.occs,
-      zid => this.zoneMemory.get(zid)?.occSprung, this.actors);
-    // WAVES REMEMBERED: a left assault resumes where it stood — the counter and
-    // the mid-wave survivors both ride Zone Memory (exits no longer seal on
-    // waves, so an open road must never reset the gauntlet). A completed arena
-    // stays completed via completedObjectives; past the TTL the fight re-arms
-    // fresh, like every other forgotten ground.
-    if (memory && o.kind === 'waves' && !this.objectiveDone) {
-      this.wave = Math.max(0, Math.floor(memory.wave ?? 0));
-      this.waveActive = !!memory.waveActive;
-    }
-    // THE CULL (kind 'clear'): stamp the ask. A remembered ground resumes its
-    // OWN ask + tally (the need must never re-derive from a thinned field);
-    // fresh ground derives it here — after the base population stands, so a
-    // frac share reads the true fresh count. `all: true` stamps nothing (the
-    // classic full clear: updateObjective's empty-floor rule is the whole
-    // law there), and neither does a completed zone.
-    if (o.kind === 'clear' && !o.all && !this.objectiveDone) {
-      const remembered = Math.floor(memory?.cullNeed ?? 0);
-      const need = remembered > 0 ? remembered : this.rollCullNeed(o, rng);
-      if (need > 0) {
-        this.cull = { need, kills: clamp(Math.floor(memory?.cullKills ?? 0), 0, need) };
-      }
-    }
-    // A CLEARED side area stays cleared PERMANENTLY (run-long), even past the memory
-    // TTL: drop its base population so re-entry never re-stocks a one-time cave (the
-    // objective is already done; exits are already open). Surface zones still refresh.
-    if (isCave && this.objectiveDone) {
-      this.actors = this.actors.filter(a => !(a.fromZoneGen && a.team === 'enemy' && !(a.defId && MONSTERS[a.defId]?.passive)));
-    }
-
-    // Leftover points of interest hold treasure, shrines, and altars. (A SPECIAL
-    // arena gets NONE of this clutter — it's a clean boss stage.)
-    this.shrines = [];
-    this.altars = [];
-    if (!def.special && o.kind !== 'waves' && o.kind !== 'safe') {
-      // PLACEMENT HYGIENE: every interactive stand keeps the data-driven door
-      // clearance (INTERACT_PLACE_CFG / def.portalClear) — no altar atop a
-      // portal, however cramped the isles (interactSpot degrades gracefully).
-      const rollAltar = (): AltarDef =>
-        rng.weighted(ALTARS.map(d => ({ d, weight: d.weight ?? 1 }))).d;
-      // THE OFFERING ALTAR (kind 'offering'): the objective's centerpiece takes
-      // the FIRST spot — an altar from the registry (spec-pinned or weight-
-      // rolled, so a storm or gilded row reshapes the whole ask), hungry for
-      // `need` deaths inside its field. Offered progress rides Zone Memory;
-      // a finished zone keeps no hungering altar (the ground is sated).
-      if (o.kind === 'offering' && !this.objectiveDone) {
-        const adef = (o.altarId && ALTARS.find(a => a.id === o.altarId)) || rollAltar();
-        const at = this.interactSpot(pois, rng, 650, adef.portalClear ?? INTERACT_PLACE_CFG.portalClear);
-        this.altars.push({
-          pos: this.clampPos(vec(at.x, at.y), 16), def: adef,
-          affected: new Set(), objective: true,
-        });
-        const need = rng.int(o.need?.[0] ?? OFFERING_CFG.need[0], o.need?.[1] ?? OFFERING_CFG.need[1]);
-        this.offering = {
-          altarIdx: this.altars.length - 1,
-          offered: Math.min(memory?.altarOffered ?? 0, need),
-          need,
-        };
-      }
-      const caches = (rng.chance(0.5) ? 1 : 0) + (rng.chance(0.15) ? 1 : 0);
-      for (let i = 0; i < caches; i++) {
-        const c = this.createMonster(FIXTURE_IDS.gem_cache, def.level, 'enemy');
-        c.fromZoneGen = true;
-        const at = this.interactSpot(pois, rng, 600, INTERACT_PLACE_CFG.portalClear);
-        c.pos = this.clampPos(vec(at.x, at.y), c.radius);
-        if (!memory?.contents) this.actors.push(c);
-      }
-      if (rng.chance(0.65)) {
-        const sdef = rng.pick(SHRINES);
-        const at = this.interactSpot(pois, rng, 500, sdef.portalClear ?? INTERACT_PLACE_CFG.portalClear);
-        this.shrines.push({ pos: this.clampPos(vec(at.x, at.y), 14), def: sdef, used: false });
-      }
-      if (rng.chance(0.45)) {
-        const adef = rollAltar();
-        const at = this.interactSpot(pois, rng, 600, adef.portalClear ?? INTERACT_PLACE_CFG.portalClear);
-        this.altars.push({ pos: this.clampPos(vec(at.x, at.y), 16), def: adef, affected: new Set() });
-      }
-    }
-    syncAltarBodies(this);
-    // The purchased ground's FORM (data/pocketForms.ts): a pocket wears the
-    // shape it was minted with — the treasure litter below and the ambient-
-    // event gate both read it. Null on ordinary ground.
-    const pform = def.pocket ? pocketFormOf(def.pocketForm) : null;
-    // Reward chests: gated objectives earn a locked treasure; the wilds
-    // sometimes hide a timed chest — and some chests bite back. (Not in a special
-    // arena — its reward is the quest turn-in, not a zone chest.)
-    this.chests = [];
-    if (!def.special && o.kind !== 'safe') {
-      // Chest-worthiness is its own policy row (objectiveEarnsChest) — DECOUPLED
-      // from exit-sealing, so an unsealed waves/spawners zone still stakes its
-      // locked treasure on the objective.
-      const gated = objectiveEarnsChest(o);
-      // No objective chest on a zone whose reward was already claimed this run.
-      if (gated && !this.completedObjectives.has(def.id) && rng.chance(0.75)) {
-        const at = this.interactSpot(pois, rng, 500, INTERACT_PLACE_CFG.portalClear);
-        this.chests.push({
-          pos: this.clampPos(vec(at.x, at.y), 14),
-          kind: 'objective', mimic: false, opened: false, lockTime: 0, maxLock: 0,
-        });
-      }
-      if (o.kind !== 'waves' && rng.chance(0.3)) {
-        const at = this.interactSpot(pois, rng, 550, INTERACT_PLACE_CFG.portalClear);
-        this.chests.push({
-          pos: this.clampPos(vec(at.x, at.y), 14),
-          kind: 'timed', mimic: rng.chance(0.25), opened: false,
-          lockTime: 3, maxLock: 3,
-        });
-      }
-    }
-
-    // PURCHASED-POCKET TREASURE (the form's litter): the hoard's whole point
-    // is walking in ON the plunder. Extra gem-caches seed the POIs, and a
-    // guaranteed chest stakes the centerpiece — kind 'objective' seals it on
-    // the zone's own ask (fell the guard, take the hoard), deliberately
-    // bypassing objectiveEarnsChest: the FORM stakes the treasure, that's
-    // what the toll bought. Same rng/POI discipline as the rolls above, so
-    // revisits replay the same litter.
-    if (pform && !def.special && o.kind !== 'safe') {
-      if (pform.caches) {
-        const n = rng.int(pform.caches[0], pform.caches[1]);
-        for (let i = 0; i < n; i++) {
-          const c = this.createMonster(FIXTURE_IDS.gem_cache, def.level, 'enemy');
-          c.fromZoneGen = true;
-          const at = this.interactSpot(pois, rng, 520, INTERACT_PLACE_CFG.portalClear);
-          c.pos = this.clampPos(vec(at.x, at.y), c.radius);
-          if (!memory?.contents) this.actors.push(c);
-        }
-      }
-      if (pform.chest && !this.completedObjectives.has(def.id)
-        && !this.chests.some(c => c.kind === pform.chest)) {
-        const at = this.interactSpot(pois, rng, 520, INTERACT_PLACE_CFG.portalClear);
-        this.chests.push({
-          pos: this.clampPos(vec(at.x, at.y), 14),
-          kind: pform.chest, mimic: false, opened: false,
-          lockTime: pform.chest === 'timed' ? 3 : 0, maxLock: pform.chest === 'timed' ? 3 : 0,
-          // THE THEMED CACHE: a tinted toll's promised gear rarity rides the
-          // staked chest (ZoneDef.cacheRarity, baked at the pocket mint).
-          ...(def.cacheRarity ? { rarity: def.cacheRarity } : {}),
-        });
-      }
-    }
-
-    if (memory?.contents) restoreZoneContents(this, memory.contents);
-
-    // THE ARRIVAL LATCH re-arms per zone: every station must see its disc
-    // EMPTY once before its dwell may fire (stationDwellArmed).
-    this.stationArmed.clear();
-    // Sacrificial Font placement follows the shared settlement service policy.
-    // The town seat is a REAL site (townBuild.ts FONT_SITE — shared with
-    // nearFont's reach), not the old centre-plaza formula: the centre is
-    // the waypoint + bounty board's working ground.
-    this.fonts = [];
-    if (fontStandsIn(def)) {
-      const at = def.id === START_ZONE
-        ? this.townSeat('font')
-        : (pois.length ? pois.splice(rng.int(0, pois.length - 1), 1)[0]
-          : this.farPoint(450, false, this.seededDraw()));
-      this.fonts.push({ pos: this.clampPos(vec(at.x, at.y), 18) });
-    }
-    // The waypoint, for zones that carry one (the town's always burns).
-    // A WAYPOINTLESS DIMENSION (DimensionDef.waypoints: false) heals any
-    // persisted def that predates the vow — the flag strips, the attunement
-    // forgets, and no ring ever lights up here again (save tolerance: older
-    // Aetherial saves carried a Firmament waypoint).
-    if (def.waypoint && dimensionDef(def.dimension).waypoints === false) {
-      def.waypoint = false;
-      this.discoveredWaypoints.delete(def.id);
-    }
-    this.waypointPos = null;
-    if (def.waypoint) {
-      const at = def.id === START_ZONE
-        ? this.townSeat('waypoint')
-        : (pois.length ? pois.splice(rng.int(0, pois.length - 1), 1)[0]
-          : this.farPoint(420, false, this.seededDraw()));
-      this.waypointPos = this.clampPos(vec(at.x, at.y), 18);
-      // You know the way home: the town's waypoint starts attuned.
-      if (def.id === START_ZONE) this.discoveredWaypoints.add(def.id);
-    }
-    // The normal arrival and developer unlock share one idempotent range mint.
-    syncTrainingYard(this);
-    // THE TRACKER: the Bestiary's keeper camps at the west edge once his
-    // Vault feature is bought (townBuild raised his fire; the body and the
-    // fixture line up at TRACKER_SITE).
-    if (def.id === START_ZONE && featureEnabled(this.account, FEATURE.TRACKER)) {
-      const t = this.createMonster(FIXTURE_IDS.townsfolk_tracker, 1, 'player');
-      // South of his fire, facing it — clear of the camp's own rocks (the
-      // old north-east stand overlapped a rock and got shoved off its seat).
-      t.pos = this.clampPos(this.townSeat('tracker', 0, 34), t.radius);
-      this.actors.push(t);
-    }
-    // THE RECRUITER'S TABLE (FEATURE.MERC_RECRUITER): the Vault's officer
-    // sets up in the east quarter — a PORT-identical counter (template
-    // blades, no retirement) whose single-serve sheet is dealt once per
-    // world and locked (THE MUSTER-ROLL LAW; armLastlightRecruiter). The
-    // merc-state reset further down SPARES an armed port counter whose
-    // captain stands in this zone's actors — this one, exactly like the
-    // quay boot's.
-    if (def.id === START_ZONE && featureEnabled(this.account, FEATURE.MERC_RECRUITER)) {
-      const officer = this.createMonster(FIXTURE_IDS.merc_captain, 1, 'player');
-      officer.name = 'the Recruiting Officer';
-      officer.pos = this.clampPos(this.townSeat('recruiter', 24, -18), officer.radius);
-      this.actors.push(officer);
-      this.doodads.push({
-        pos: this.clampPos(this.townSeat('recruiter', -20, 14), 10),
-        radius: 9, kind: 'merc_banner', rot: 0,
-      });
-      this.armLastlightRecruiter(officer, def.id);
-    }
-    // THE RESIDENTS (data/boroughs.ts TOWN_RESIDENTS): the families the
-    // Boroughs sent home stand at their cottage doors in the ward — every row
-    // whose gate the account holds AND whose cottage this tier raises. Named
-    // + given their line at the seat (the recruiting officer's rename idiom);
-    // nothing persists — the town re-lays from the account at every load.
-    if (def.id === START_ZONE) {
-      // `unlock` avenues resolve through the catalog (the gatework's closure
-      // shape — boroughs.ts stays a leaf and never imports the catalog).
-      const owned = (id: string): boolean => {
-        const u = allUnlockables().find(x => x.id === id);
-        return !!u && isUnlockOwned(this.account, u);
-      };
-      for (const { row, pos: at } of townResidentsHere(this.account, this.townTierIdx, owned)) {
-        const r = this.createMonster(row.def, 1, 'player');
-        r.name = row.name;
-        r.pos = this.clampPos(vec(at.x, at.y), r.radius);
-        this.actors.push(r);
-        // THE TRANSIENT TELLING's 'resident' lane (speechTell) + THE SPEECH
-        // GRAMMAR's WARD company: every family is one named speaker.
-        this.speakerRows.set(r.id, makeSpeakerRow(r.id, row.line, 'resident', {
-          key: `ward:${row.id}`, company: 'ward', name: row.name, roles: row.roles ?? ['resident'], own: [row.line],
-        }));
-      }
-    }
-    // The entered place is visible in its terrain and the existing location readout.
-    rand(-10, 10); // retain the retired native entry-title jitter draw
-    // If a warband is storming this ground as you arrive, you'll know it.
-    const invader = this.sim.zoneStatus(def).invadedBy;
-    if (invader && FACTIONS[invader]) {
-      this.text(vec(p.pos.x, p.pos.y - 92),
-        `${FACTIONS[invader].name} storms ${def.name}!`, '#e8a050', 16);
-    }
-
-    // A faction's WARLORD rules its capital — walking in is a boss fight, and
-    // cutting it down is how you break that faction's grip on the world.
-    const lord = this.sim.warlord.lordAt(def.id);
-    if (lord && o.kind !== 'boss' && this.sim.faction.owner(def.id).faction === lord.faction) {
-      const bossId = this.sim.warlord.bossId(lord.faction);
-      if (bossId && MONSTERS[bossId]) {
-        const wl = this.createMonster(bossId, def.level + 2, 'enemy');
-        wl.faction = lord.faction;
-        wl.xpValue = Math.max(wl.xpValue, 120); // a warlord's bounty (the top
-        // bar itself is the authored-boss contract — World.bossBarInfo)
-        wl.tag = 'warlord';
-        wl.pos = this.clampPos(this.farPoint(700), wl.radius);
-        this.actors.push(wl);
-        const wname = (FACTIONS[lord.faction]?.name ?? lord.faction).replace(/^the /, '');
-        this.text(vec(p.pos.x, p.pos.y - 116), `${wname} warlord rules ${def.name}!`, '#e85050', 16);
-      }
-    }
-
-    // THE THEATER FABRIC (engine/theater.ts): the zone's own life may already
-    // be playing here — the owner's patrol on its beat, a siege at a camp,
-    // hell's grind-column on the march. Texture, never objective: skipped in
-    // town, the arenas, and hand-authored war zones; a pocket FORM may
-    // decline it outright (ambientEvents: false — a bought strongroom hosts
-    // no patrols). The ENTRY beat (beat 0) skips on a REMEMBERED re-entry (a
-    // fresh patrol every time you cross back would itself be a "re-entry
-    // punish"); THE DWELL CADENCE (updateTheater) keeps drawing while you
-    // stay — lingering provides the world's life, as the world does not
-    // revolve around the player. Every draw is a pure keyed hash (seed ×
-    // zone × visit × kind × beat — engine/theater.ts THE DRAW LAW), so the
-    // fabric consumes NOTHING from the global die and kinds can never
-    // starve each other (the old one-shared-roll first-bite cascade is
-    // dead). Mycelia suppression still smothers the beat (the bloom choking
-    // out competing turmoil), folded inside runTheaterBeat off its own
-    // keyed stream.
-    this.theaterSpots = {
-      camps: layout.camps.map(c => vec(c.x, c.y)),
-      pois: layout.pois.map(c => vec(c.x, c.y)),
-    };
-    // The ambient envelope THE POUR LEDGER bands replacement kinds against:
-    // the zone's own booted counted population, stamped ONCE per visit —
-    // emptying the floor never regrows the band.
-    this.theaterAmbientBudget = this.countedEnemies().length;
-    this.theaterVisit = (this.theaterVisitSeq.get(def.id) ?? 0) + 1;
-    this.theaterVisitSeq.set(def.id, this.theaterVisit);
-    this.theaterQuiet = o.kind === 'safe' || o.kind === 'waves' || !!def.factionWar
-      || pform?.ambientEvents === false;
-    if (!this.theaterQuiet && !memory) {
-      // MYCELIA suppression gates the entry beat on the LIVE die, exactly as
-      // the old lane's roll did (a spore-smothered zone stays smothered);
-      // dwell beats re-check it keyed inside theaterRunBeat.
-      const sup = this.sim.myceliaField?.suppressionAt(def.id) ?? 1;
-      if (sup >= 1 || Math.random() < sup) {
-        // THE PARITY DRAW: the old shared entry roll spent one global draw
-        // HERE on every eligible fresh entry — seated or not — and every
-        // seed-pinned mint downstream of a zone entry is tuned against
-        // that spend (probe_lairs' pinnacle scan and probe_straying's
-        // fold pins caught its removal). The fabric's own draws are keyed
-        // and spend nothing, so the old spend is preserved — and
-        // discarded — to keep the world stream where the world left it.
-        // Retiring this burn is a deliberate world-wide re-pin, never a
-        // drive-by.
-        void Math.random();
-        this.theaterRunBeat(0);
-      }
-    }
-
-    // In-zone ENCOUNTERS (Breach diamonds): rolled per package gate (pressure +
-    // start level), so they begin appearing once a feature is live (Breach at L10).
-    this.placeEncounters(def);
-
-    // SECRET VOCATION SITES: a qualifying zone may host a hidden calling's
-    // shrine (deterministic per zone + run seed) — see data/vocations.ts.
-    this.placeVocationSites(def);
-
-    // MERCENARY OUTPOST: a qualifying wild zone may host the market's camp
-    // (same deterministic per-zone/run roll as the shrine sites). The reset
-    // SPARES a PORT-POLICY counter whose captain stands in THIS zone's
-    // actor list — the hold boot armed the quay's a step earlier
-    // (refreshHoldServices), the town boot the recruiter's table, and the
-    // unconditional null used to stomp them (an open town's captain woke
-    // inert until the next live state transition — the quay boot made the
-    // latent stomp load-bearing). A stale counter from the previous zone
-    // still clears: its captain is not among the fresh actors.
-    if (!(this.mercOutpost?.port && this.actors.includes(this.mercOutpost.captain))) {
-      this.mercOutpost = null;
-    }
-    this.mercDwell = 0;
-    this.mercDwellFired = false;
-    if (!isCave) this.placeMercOutpost(def);
-
-    // THE WORLD'S MEMORY: a remembered foe may step out of it (manifestation),
-    // and a grudged faction's members fight the name a little harder.
-    if (!isCave) {
-      this.manifestNemeses(def);
-      this.applyGrudgeEffects(def);
-    }
-
-    // CORPSE RUN: spawn any prior death whose coordinate matches this zone.
-    this.spawnPlayerCorpses(def);
-
-    // THE NETHER TIE (DimensionDef.over): a realm that HANGS OVER another
-    // resolves the ground beneath it — the nearest charted zone of the world
-    // below at THIS zone's own coordinate. Falls drop into it (proportional
-    // landing) and the understory's windows look down on its true terrain.
-    // Authored anchors (ZoneDef.below — launch shelves) outrank the resolver.
-    this.skyBelow = null;
-    {
-      const over = dimensionDef(def.dimension).over;
-      if (over !== undefined && !def.below) {
-        const id = this.nearestZoneOf(over, def.map);
-        if (id) this.skyBelow = { zoneId: id };
-      }
-    }
-
-    // THE LIVING COLLAPSE (engine/collapse.ts): stand this zone's dissolving
-    // ground up when its theme asks for it. Rolls on a SALTED copy of the
-    // zone seed (never layout/spawn rng — the fog contract); the goal (the
-    // never-melting platform the spine runs to) is the spec's named doodad,
-    // else the exit standing farthest from the entry. Convex zones (no walk
-    // grid) can't melt — buildZoneCollapse declines them.
-    this.collapse = null;
-    const cspec = this.zone.theme.collapse;
-    if (cspec && this.walk instanceof GridWalkField) {
-      let goal: Vec2 | null = null;
-      if (cspec.goal?.doodad) {
-        const g = this.doodads.find(d => d.kind === cspec.goal!.doodad);
-        if (g) goal = vec(g.pos.x, g.pos.y);
-      }
-      if (!goal) {
-        let bd = -1;
-        for (const e of this.exits) {
-          const d = dist(e.pos, this.zoneEntry);
-          if (d > bd) { bd = d; goal = vec(e.pos.x, e.pos.y); }
-        }
-      }
-      this.collapse = buildZoneCollapse(cspec, this.walk,
-        new Rng((this.currentZoneSeed ^ COLLAPSE_CFG.salt) >>> 0), this.zoneEntry, goal,
-        // Every exit portal HOLDS its ground (the anti-soft-lock floor): the
-        // melt may strand you from a door tactically, never permanently.
-        this.exits.map(e => vec(e.pos.x, e.pos.y)));
-    }
-
-    // THE LIVING FLUX (engine/flux.ts): stand this zone's shifting ground up
-    // when its theme asks for it — pads, lanes and carriers all derive from
-    // the kinds the layout painted; the salted stream keeps the fog contract.
-    // The ladder anchor is the spec's named doodad, else the farthest exit.
-    this.flux = null;
-    const fspec = this.zone.theme.flux;
-    if (fspec && this.walk instanceof GridWalkField) {
-      let fgoal: Vec2 | null = null;
-      if (fspec.goal?.doodad) {
-        const g = this.doodads.find(d => d.kind === fspec.goal!.doodad);
-        if (g) fgoal = vec(g.pos.x, g.pos.y);
-      }
-      if (!fgoal) {
-        let bd = -1;
-        for (const e of this.exits) {
-          const d = dist(e.pos, this.zoneEntry);
-          if (d > bd) { bd = d; fgoal = vec(e.pos.x, e.pos.y); }
-        }
-      }
-      this.flux = buildZoneFlux(fspec, this.walk,
-        new Rng((this.currentZoneSeed ^ FLUX_CFG.salt) >>> 0), this.zoneEntry, fgoal,
-        this.exits.map(e => vec(e.pos.x, e.pos.y)));
-    }
-
-    // EPHEMERAL SPANS (engine/spans.ts): stand this zone's condition-held
-    // ground up when its theme asks for it — sunbridges, star-spans, prism
-    // walks. State derives from (world time, sky front, skyOf) alone, so a
-    // resume or a co-op client re-derives the identical bridges. Painted to
-    // the honest state IMMEDIATELY (arriving at night shows no sunbridge).
-    this.spans = null;
-    const sspec = this.zone.theme.spans;
-    if (sspec?.length && this.walk instanceof GridWalkField) {
-      this.spans = buildZoneSpans(sspec, this.walk, (c) => this.radianceCondHeld(c));
-    }
-
-    // CONJURED GROUND: every grid zone gets the ledger (conjurable region
-    // kinds gate where it actually works — data, not a biome check). Wired
-    // to whichever fabrics stood up so annexed cells melt/phase honestly.
-    // EVERY zone gets the ledger (a convex interior holds presences with no
-    // walkable half — the cells simply never place; conjurable region kinds
-    // gate where the bridge half works — data, not a biome check).
-    this.conjured = new ConjuredGround(
-      this.walk instanceof GridWalkField ? this.walk : null,
-      id => !!regionKind(id)?.conjurable,
-      { collapse: this.collapse, flux: this.flux },
-      // Side:'enemies' grants read the world's own hostility, not bare
-      // team inequality (neutral fauna keeps out of other people's storms).
-      (o, a) => this.hostileTo(o as Actor, a as Actor));
-
-    // THE ZONE-RUNTIME REGISTRY (see buildZoneRuntimes): every package's
-    // per-zone reset runs, then — on ordinary ground — every enter() fires.
-    // A SPECIAL arena hosts NO overlay content on entry — mirror the
-    // materializeLiveZoneEvents `this.zone.special` guard so the on-entry path
-    // can't squat a Balor/crusade/hunt/fracture on the clean boss stage (the
-    // eventOwned contract). The overlay SELECTORS also exclude it, but this is
-    // the central catch. Rows flagged `ownedGround` are the one exception:
-    // the event that MINTED a special arena must still stand its fight up
-    // there (its selector only ever fires in zones its own overlay bound,
-    // so nothing forfeits the contract).
-    for (const r of this.zoneRuntimes) r.reset?.();
-    if (!isCave && def.special) {
-      for (const r of this.zoneRuntimes) {
-        if (r.ownedGround) r.enter?.(def, false);
-      }
-    }
-    if (!isCave && !def.special) {
-      for (const r of this.zoneRuntimes) r.enter?.(def, false);
-    } else {
-      // POCKET-NATIVE runtimes (rows flagged `inCaves`): a package whose
-      // whole mechanic LIVES in registered side-zones (the Unsealing's tomb
-      // pockets) still stages on cave ground — the one sanctioned, opt-in
-      // exception to the caves-are-invisible doctrine (the ownedGround
-      // idiom; every other row keeps the classic silence below).
-      if (isCave && !def.special) {
-        for (const r of this.zoneRuntimes) {
-          if (r.inCaves) r.enter?.(def, false);
-        }
-      }
-      // DESCENT: a normal cave may host a Delver (rolled per mouth, gated). The
-      // DESCENT abyss itself (cave_descent_*) never hosts one — it IS the dive.
-      this.placeDescentDelver(def);
-      // Arriving in the abyss: light the lamp + raise the climb-out shaft. (descend()
-      // sets descentRun before loadZone, so this fires on the first descent frame.)
-      if (this.descentRun && this.descentRun.caveId === def.id) this.enterDescentZone();
-    }
-    // RESUME A SUSPENDED VOYAGE: stepping off the Wraithsail's decks pops the
-    // way-home stack back onto the sea — re-arm the stashed run exactly where
-    // the boat was left (the resurfaceFromDescent idiom: any non-sea load
-    // nulled `voyage`, so the stash IS the crossing). Fresh cast-off grace so
-    // the hull's shadow can't dwell you straight back aboard, and the ghost
-    // ship releases her boarding hold (the re-board cooldown arms).
-    if (zoneId === VOYAGE_ZONE_ID && this.wraithsailSeaStash) {
-      const stash = this.wraithsailSeaStash;
-      this.wraithsailSeaStash = null;
-      this.voyage = stash.run;
-      this.voyage.grace = VOYAGE_CFG.castOffGrace;
-      this.voyage.landDwell = 0;
-      this.voyage.lastStreamAt = vec(Infinity, Infinity);
-      this.player.pos = vec(stash.pos.x, stash.pos.y);
-      this.sim.wraithsailField?.onBoardingLeft();
-      this.streamCoast(true);
-    }
-    // POOLED-AMBIENT lightwells wake with the zone (after every doodad source
-    // above — generation, memory restore, package dressing — has finished).
-    this.attachZoneWells();
+    this.runNativeAreaBirth(def, layout, zoneId, memory, rng, firstVisit, from, isCave, p);
   }
 
   /** THE ZONE-RUNTIME REGISTRY — one row per package's in-zone runtime, built
@@ -12176,6 +11207,145 @@ export class World {
     get hashStr() { return hashStr; }, get withSeededRandom() { return withSeededRandom; },
     get rollFolk() { return rollFolk; }, get makeSpeakerRow() { return makeSpeakerRow; }, get random() { return Math.random; },
   };
+  /** The complete post-arrival birth operation; no extra seed scope is opened. */
+  private runNativeAreaBirth(...args:NativeAreaBirthArguments):void {
+    birthNativeArea(this.nativeAreaBirthHost(),...args);
+  }
+  private nativeAreaBirthView?:NativeAreaBirthHost;
+  /** Live original-order native birth ports; not an independent actor owner. */
+  private nativeAreaBirthHost():NativeAreaBirthHost {
+    if(this.nativeAreaBirthView)return this.nativeAreaBirthView;
+    const world=this;
+    const host:NativeAreaBirthHost={
+      get doodads() { return world.doodads; },
+      get account() { return world.account; },
+      get annexFound() { return world.annexFound; },
+      get zoneHasVendorCounter() { return world.zoneHasVendorCounter; }, set zoneHasVendorCounter(v) { world.zoneHasVendorCounter=v; },
+      get vendorArmedBeat() { return world.vendorArmedBeat; },
+      get vendorStock() { return world.vendorStock; }, set vendorStock(v) { world.vendorStock=v; },
+      get vendorRestockAt() { return world.vendorRestockAt; }, set vendorRestockAt(v) { world.vendorRestockAt=v; },
+      get packageAskEngaged() { return world.packageAskEngaged; }, set packageAskEngaged(v) { world.packageAskEngaged=v; },
+      get zoneGenTagging() { return world.zoneGenTagging; }, set zoneGenTagging(v) { world.zoneGenTagging=v; },
+      get arena() { return world.arena; },
+      get actors() { return world.actors; }, set actors(v) { world.actors=v; },
+      get objectiveDone() { return world.objectiveDone; }, set objectiveDone(v) { world.objectiveDone=v; },
+      get bossRun() { return world.bossRun; }, set bossRun(v) { world.bossRun=v; },
+      get spires() { return world.spires; },
+      get rifts() { return world.rifts; },
+      get pyres() { return world.pyres; },
+      get digs() { return world.digs; },
+      get objectiveLost() { return world.objectiveLost; }, set objectiveLost(v) { world.objectiveLost=v; },
+      get exits() { return world.exits; },
+      get zoneEntry() { return world.zoneEntry; },
+      get procession() { return world.procession; }, set procession(v) { world.procession=v; },
+      get occs() { return world.occs; }, set occs(v) { world.occs=v; },
+      get time() { return world.time; },
+      get zoneMemory() { return world.zoneMemory; },
+      get wave() { return world.wave; }, set wave(v) { world.wave=v; },
+      get waveActive() { return world.waveActive; }, set waveActive(v) { world.waveActive=v; },
+      get cull() { return world.cull; }, set cull(v) { world.cull=v; },
+      get shrines() { return world.shrines; }, set shrines(v) { world.shrines=v; },
+      get altars() { return world.altars; }, set altars(v) { world.altars=v; },
+      get offering() { return world.offering; }, set offering(v) { world.offering=v; },
+      get chests() { return world.chests; }, set chests(v) { world.chests=v; },
+      get completedObjectives() { return world.completedObjectives; },
+      get stationArmed() { return world.stationArmed; },
+      get fonts() { return world.fonts; }, set fonts(v) { world.fonts=v; },
+      get discoveredWaypoints() { return world.discoveredWaypoints; },
+      get waypointPos() { return world.waypointPos; }, set waypointPos(v) { world.waypointPos=v; },
+      get townTierIdx() { return world.townTierIdx; },
+      get speakerRows() { return world.speakerRows; },
+      get sim() { return world.sim; },
+      get theaterSpots() { return world.theaterSpots; }, set theaterSpots(v) { world.theaterSpots=v; },
+      get theaterAmbientBudget() { return world.theaterAmbientBudget; }, set theaterAmbientBudget(v) { world.theaterAmbientBudget=v; },
+      get theaterVisit() { return world.theaterVisit; }, set theaterVisit(v) { world.theaterVisit=v; },
+      get theaterVisitSeq() { return world.theaterVisitSeq; },
+      get theaterQuiet() { return world.theaterQuiet; }, set theaterQuiet(v) { world.theaterQuiet=v; },
+      get mercOutpost() { return world.mercOutpost; }, set mercOutpost(v) { world.mercOutpost=v; },
+      get mercDwell() { return world.mercDwell; }, set mercDwell(v) { world.mercDwell=v; },
+      get mercDwellFired() { return world.mercDwellFired; }, set mercDwellFired(v) { world.mercDwellFired=v; },
+      get skyBelow() { return world.skyBelow; }, set skyBelow(v) { world.skyBelow=v; },
+      get collapse() { return world.collapse; }, set collapse(v) { world.collapse=v; },
+      get zone() { return world.zone; },
+      get walk() { return world.walk; },
+      get currentZoneSeed() { return world.currentZoneSeed; },
+      get flux() { return world.flux; }, set flux(v) { world.flux=v; },
+      get spans() { return world.spans; }, set spans(v) { world.spans=v; },
+      get conjured() { return world.conjured; }, set conjured(v) { world.conjured=v; },
+      get zoneRuntimes() { return world.zoneRuntimes; },
+      get descentRun() { return world.descentRun; },
+      get wraithsailSeaStash() { return world.wraithsailSeaStash; }, set wraithsailSeaStash(v) { world.wraithsailSeaStash=v; },
+      get voyage() { return world.voyage; }, set voyage(v) { world.voyage=v; },
+      get player() { return world.player; },
+      get setDoorState() { const method=world.setDoorState; return (...args:Parameters<NativeAreaBirthHost['setDoorState']>)=>method.apply(world,args); },
+      get bootHarborhold() { const method=world.bootHarborhold; return (...args:Parameters<NativeAreaBirthHost['bootHarborhold']>)=>method.apply(world,args); },
+      get bootQuay() { const method=world.bootQuay; return (...args:Parameters<NativeAreaBirthHost['bootQuay']>)=>method.apply(world,args); },
+      get openHollow() { const method=world.openHollow; return (...args:Parameters<NativeAreaBirthHost['openHollow']>)=>method.apply(world,args); },
+      get annexReveal() { const method=world.annexReveal; return (...args:Parameters<NativeAreaBirthHost['annexReveal']>)=>method.apply(world,args); },
+      get nativeInhabitantHost() { const method=world.nativeInhabitantHost; return (...args:Parameters<NativeAreaBirthHost['nativeInhabitantHost']>)=>method.apply(world,args); },
+      get restockOrdinal() { const method=world.restockOrdinal; return (...args:Parameters<NativeAreaBirthHost['restockOrdinal']>)=>method.apply(world,args); },
+      get armVendorStock() { const method=world.armVendorStock; return (...args:Parameters<NativeAreaBirthHost['armVendorStock']>)=>method.apply(world,args); },
+      get syncHoldIdx() { const method=world.syncHoldIdx; return (...args:Parameters<NativeAreaBirthHost['syncHoldIdx']>)=>method.apply(world,args); },
+      get restockSeconds() { const method=world.restockSeconds; return (...args:Parameters<NativeAreaBirthHost['restockSeconds']>)=>method.apply(world,args); },
+      get effectiveSpawn() { const method=world.effectiveSpawn; return (...args:Parameters<NativeAreaBirthHost['effectiveSpawn']>)=>method.apply(world,args); },
+      get baseTable() { const method=world.baseTable; return (...args:Parameters<NativeAreaBirthHost['baseTable']>)=>method.apply(world,args); },
+      get spawnPacks() { const method=world.spawnPacks; return (...args:Parameters<NativeAreaBirthHost['spawnPacks']>)=>method.apply(world,args); },
+      get spawnContest() { const method=world.spawnContest; return (...args:Parameters<NativeAreaBirthHost['spawnContest']>)=>method.apply(world,args); },
+      get farPoint() { const method=world.farPoint; return (...args:Parameters<NativeAreaBirthHost['farPoint']>)=>method.apply(world,args); },
+      get weightedPick() { const method=world.weightedPick; return (...args:Parameters<NativeAreaBirthHost['weightedPick']>)=>method.apply(world,args); },
+      get createMonster() { const method=world.createMonster; return (...args:Parameters<NativeAreaBirthHost['createMonster']>)=>method.apply(world,args); },
+      get clampPos() { const method=world.clampPos; return (...args:Parameters<NativeAreaBirthHost['clampPos']>)=>method.apply(world,args); },
+      get text() { const method=world.text; return (...args:Parameters<NativeAreaBirthHost['text']>)=>method.apply(world,args); },
+      get uberDefeated() { const method=world.uberDefeated; return (...args:Parameters<NativeAreaBirthHost['uberDefeated']>)=>method.apply(world,args); },
+      get promoteRarityStacked() { const method=world.promoteRarityStacked; return (...args:Parameters<NativeAreaBirthHost['promoteRarityStacked']>)=>method.apply(world,args); },
+      get seededDraw() { const method=world.seededDraw; return (...args:Parameters<NativeAreaBirthHost['seededDraw']>)=>method.apply(world,args); },
+      get interactSpot() { const method=world.interactSpot; return (...args:Parameters<NativeAreaBirthHost['interactSpot']>)=>method.apply(world,args); },
+      get findFreeSpot() { const method=world.findFreeSpot; return (...args:Parameters<NativeAreaBirthHost['findFreeSpot']>)=>method.apply(world,args); },
+      get bootScenery() { const method=world.bootScenery; return (...args:Parameters<NativeAreaBirthHost['bootScenery']>)=>method.apply(world,args); },
+      get bootPuzzles() { const method=world.bootPuzzles; return (...args:Parameters<NativeAreaBirthHost['bootPuzzles']>)=>method.apply(world,args); },
+      get bootThrong() { const method=world.bootThrong; return (...args:Parameters<NativeAreaBirthHost['bootThrong']>)=>method.apply(world,args); },
+      get bootLite() { const method=world.bootLite; return (...args:Parameters<NativeAreaBirthHost['bootLite']>)=>method.apply(world,args); },
+      get bootHarvest() { const method=world.bootHarvest; return (...args:Parameters<NativeAreaBirthHost['bootHarvest']>)=>method.apply(world,args); },
+      get traceAbortAll() { const method=world.traceAbortAll; return (...args:Parameters<NativeAreaBirthHost['traceAbortAll']>)=>method.apply(world,args); },
+      get bootGeysers() { const method=world.bootGeysers; return (...args:Parameters<NativeAreaBirthHost['bootGeysers']>)=>method.apply(world,args); },
+      get bootLiteVentSeats() { const method=world.bootLiteVentSeats; return (...args:Parameters<NativeAreaBirthHost['bootLiteVentSeats']>)=>method.apply(world,args); },
+      get bootEscapeChase() { const method=world.bootEscapeChase; return (...args:Parameters<NativeAreaBirthHost['bootEscapeChase']>)=>method.apply(world,args); },
+      get spawnPoint() { const method=world.spawnPoint; return (...args:Parameters<NativeAreaBirthHost['spawnPoint']>)=>method.apply(world,args); },
+      get countedEnemies() { const method=world.countedEnemies; return (...args:Parameters<NativeAreaBirthHost['countedEnemies']>)=>method.apply(world,args); },
+      get spawnWildlife() { const method=world.spawnWildlife; return (...args:Parameters<NativeAreaBirthHost['spawnWildlife']>)=>method.apply(world,args); },
+      get enforceArrivalGrace() { const method=world.enforceArrivalGrace; return (...args:Parameters<NativeAreaBirthHost['enforceArrivalGrace']>)=>method.apply(world,args); },
+      get restoreZoneEnemies() { const method=world.restoreZoneEnemies; return (...args:Parameters<NativeAreaBirthHost['restoreZoneEnemies']>)=>method.apply(world,args); },
+      get seedCullMarks() { const method=world.seedCullMarks; return (...args:Parameters<NativeAreaBirthHost['seedCullMarks']>)=>method.apply(world,args); },
+      get seedGatherNodes() { const method=world.seedGatherNodes; return (...args:Parameters<NativeAreaBirthHost['seedGatherNodes']>)=>method.apply(world,args); },
+      get noteBountyArrivals() { const method=world.noteBountyArrivals; return (...args:Parameters<NativeAreaBirthHost['noteBountyArrivals']>)=>method.apply(world,args); },
+      get occHost() { const method=world.occHost; return (...args:Parameters<NativeAreaBirthHost['occHost']>)=>method.apply(world,args); },
+      get rollCullNeed() { const method=world.rollCullNeed; return (...args:Parameters<NativeAreaBirthHost['rollCullNeed']>)=>method.apply(world,args); },
+      get townSeat() { const method=world.townSeat; return (...args:Parameters<NativeAreaBirthHost['townSeat']>)=>method.apply(world,args); },
+      get armLastlightRecruiter() { const method=world.armLastlightRecruiter; return (...args:Parameters<NativeAreaBirthHost['armLastlightRecruiter']>)=>method.apply(world,args); },
+      get theaterRunBeat() { const method=world.theaterRunBeat; return (...args:Parameters<NativeAreaBirthHost['theaterRunBeat']>)=>method.apply(world,args); },
+      get placeEncounters() { const method=world.placeEncounters; return (...args:Parameters<NativeAreaBirthHost['placeEncounters']>)=>method.apply(world,args); },
+      get placeVocationSites() { const method=world.placeVocationSites; return (...args:Parameters<NativeAreaBirthHost['placeVocationSites']>)=>method.apply(world,args); },
+      get placeMercOutpost() { const method=world.placeMercOutpost; return (...args:Parameters<NativeAreaBirthHost['placeMercOutpost']>)=>method.apply(world,args); },
+      get manifestNemeses() { const method=world.manifestNemeses; return (...args:Parameters<NativeAreaBirthHost['manifestNemeses']>)=>method.apply(world,args); },
+      get applyGrudgeEffects() { const method=world.applyGrudgeEffects; return (...args:Parameters<NativeAreaBirthHost['applyGrudgeEffects']>)=>method.apply(world,args); },
+      get spawnPlayerCorpses() { const method=world.spawnPlayerCorpses; return (...args:Parameters<NativeAreaBirthHost['spawnPlayerCorpses']>)=>method.apply(world,args); },
+      get nearestZoneOf() { const method=world.nearestZoneOf; return (...args:Parameters<NativeAreaBirthHost['nearestZoneOf']>)=>method.apply(world,args); },
+      get radianceCondHeld() { const method=world.radianceCondHeld; return (...args:Parameters<NativeAreaBirthHost['radianceCondHeld']>)=>method.apply(world,args); },
+      get hostileTo() { const method=world.hostileTo; return (...args:Parameters<NativeAreaBirthHost['hostileTo']>)=>method.apply(world,args); },
+      get placeDescentDelver() { const method=world.placeDescentDelver; return (...args:Parameters<NativeAreaBirthHost['placeDescentDelver']>)=>method.apply(world,args); },
+      get enterDescentZone() { const method=world.enterDescentZone; return (...args:Parameters<NativeAreaBirthHost['enterDescentZone']>)=>method.apply(world,args); },
+      get streamCoast() { const method=world.streamCoast; return (...args:Parameters<NativeAreaBirthHost['streamCoast']>)=>method.apply(world,args); },
+      get attachZoneWells() { const method=world.attachZoneWells; return (...args:Parameters<NativeAreaBirthHost['attachZoneWells']>)=>method.apply(world,args); },
+      get nativeInhabitantSources(){return World.nativeInhabitantSources;},
+      maybeAdoptObjective:(def,layout)=>maybeAdoptObjective(def,layout,world),
+      syncAltarBodies:()=>syncAltarBodies(world),
+      restoreZoneContents:contents=>restoreZoneContents(world,contents),
+      syncTrainingYard:()=>syncTrainingYard(world),
+    };
+    Object.defineProperty(this,'nativeAreaBirthView',{value:host,writable:true,configurable:true,enumerable:false});
+    return host;
+  }
+
   private nativeInhabitantView?: NativeInhabitantHost;
   private nativeInhabitantHost(): NativeInhabitantHost {
     if (this.nativeInhabitantView) return this.nativeInhabitantView;

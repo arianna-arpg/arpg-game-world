@@ -1751,3 +1751,60 @@ repair. Both final client courses pass: conversations/gifts/work/reward, narrow
 and enlarged UI, exact cold Continue, and natural structure/walking/cave entry/
 Continue/return. These exercise admitted runtime content, not full-area activation.
 Nine slow and three excluded probes were not part of the fast run.
+
+## NativeAreaBirth: the complete native birth sequence
+
+Classic World now consumes one shared operation covering the entire original
+973-line post-arrival load sequence, from remembered door/lesson replay through
+final lightwell setup. It retains the original order of inhabitants, objective
+adoption and bodies, faction contests, scenery, puzzles, harvest, lightweight
+populations, environmental controllers, field inhabitants, bounty work, wildlife,
+remembered population replacement, occurrences, rewards, resident services,
+encounters, nemeses, dynamic terrain and ordered package initialization. Arrival
+movement and upstream layout/environment adoption remain separate operations.
+The same layout RNG and ambient random scope continue through the driver.
+
+The World adapter exposes live native fields and selects each original method
+before evaluating its arguments. Native memory restoration may replace the whole
+actor census; the adapter follows that replacement. Errors retain already-made
+mutations, allocations and random consumption. The adapter cache stays outside
+reflective controller ownership. Moving the operation also preserves original
+runtime module initialization positions, including modules whose remaining World
+imports became type-only. Structural World types describe exact ports without
+introducing a runtime World import in the shared driver.
+
+The durable archive comparison runs 66 complete-load pairs: three retained
+natural field sources and Lastlight across fresh/remembered loads and explicit
+factory failures, plus 15 objective configurations, a special arena and faction
+war in both fresh and remembered courses. These last configurations are explicit
+mechanism fixtures, not evidence of their natural frequency. The comparisons
+cover 3,657 allocated bodies, full geometry, factory arguments, resident and
+controller state/aliases, ordered calls, both next random cursors and allocation
+continuations. The original operation is pinned from commit 81b96a31 and invoked
+independently at the actual World load boundary.
+
+Independent source review authenticates the full archived block and reconstructed
+load operation. Execution controls cover 177 method-selection/receiver/arity
+cases, 60 live fields, 34 writable ports, and 16 early door/lesson/hold/hollow/
+annex cases. Five actual native loads fail immediately after packs, lightweight
+ecology, wildlife, remembered population restoration or final wells: 327
+allocated bodies and 14,291 draws match the original partial outcomes. These
+controls do not authenticate callback closures or unseen weak-collection state.
+
+This checkpoint makes classic World the real consumer of the complete shared
+birth operation. It does not install a mutable detached scene, prove the
+lifecycle of every campaign package, publish a complete seamless town or supply
+whole-owner paging. Those owners and a genuine two-area movement/combat/history/
+cold Continue course remain required before full-area activation.
+
+NativeAreaBirth verification: all three type checks, 2,607 generation cases
+(zero failures, four existing warnings), 25 combat smoke episodes, and both
+client generation and conversation/Continue courses passed. The no-retry fast
+run passed 469/470 probes in 835.5 seconds; its one failure was the local-cue
+control still looking for the moved entry-title draw inside loadZone. That
+control now follows the shared operation without changing its archived title,
+original methods or behavioral assertions. Its focused run passes, and independent
+missing/duplicate/mistimed-draw mutations all fail the unchanged comparison.
+No production code changed after the broad run. Nine slow and three excluded
+probes were not run. The client courses cover already-admitted content, not
+complete-area activation.

@@ -1,3 +1,14 @@
+NativeAreaBirth shares the complete native post-arrival load sequence with
+classic World, from remembered doors through final lightwells. Objective,
+environment, inhabitants, memory replacement, reward/service and ordered package
+stages retain their original boundaries and both random continuations. The live
+adapter preserves method selection before argument evaluation, mutable census
+replacement and native partial failures; module initialization order is retained.
+This completes shared birth ordering, not detached controller ownership or
+seamless-area admission. Mutable scenes, installed source issuance, complete-owner
+paging and the playable two-area Continue course remain required. Verify
+nativeareabirth, all types, generation, sim smoke and both client courses.
+
 NativeAreaInhabitants shares the exact native door guard, furniture, resident,
 daily guest, camp, garrison and landmark birth stages with classic World. The
 local binding uses the same retained geometry, census, factories and promotions;
