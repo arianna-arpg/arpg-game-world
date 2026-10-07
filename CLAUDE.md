@@ -1,3 +1,13 @@
+NativeAreaInhabitants shares the exact native door guard, furniture, resident,
+daily guest, camp, garrison and landmark birth stages with classic World. The
+local binding uses the same retained geometry, census, factories and promotions;
+resident maps, campaign ledgers and dialogue director remain explicit live
+services. Native reset order, upstairs seating, day seeds, callback selection
+and partial failed births are preserved. This is preparation: the complete birth
+driver, controller ownership, authenticated source issuer, paging and playable
+two-area Continue still precede full-area activation. Verify nativeinhabitants,
+all types, generation, sim smoke and client conversations/native generation.
+
 NativeAreaEncounters composes complete native packs and wildlife with local sight,
 hostility, status relays, rarity and immediate magic-pack refresh. Detached staged
 actors transfer relay ownership after validation; supplied magic effects and

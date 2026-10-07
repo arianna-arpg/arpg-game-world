@@ -1,3 +1,4 @@
+import { spawnNativeDoorGuards, spawnNativeFurniture, spawnNativeResidents, spawnNativeFieldInhabitants, type NativeInhabitantHost, type NativeInhabitantSources } from './nativeInhabitants';
 import { nativeFloorElevAt, nativeRayElev, nativeShotElev, nativeLineOfSight, nativeSightClipD, nativeLineOfFire, nativeClipShot, type NativeSightHost, type NativeSightSources } from './nativeSight';
 import { nativeHostileTo, nativeIsPrey, nativeSeekPrey, nativeEnemiesOf, type NativeHostilityHost, type NativeHostilitySources } from './nativeHostility';
 import { nativeRelayStatus, type NativeStatusRelaySources, type NativeStatusRelayHost } from './nativeStatusRelay';
@@ -6867,100 +6868,9 @@ export class World {
       const found = [...this.annexFound].filter(k => k.startsWith(pfx)).sort();
       for (const key of found) this.annexReveal(key.slice(pfx.length), { silent: true, revive: true });
     }
-    // BREAKABLE door-actors: every still-closed breakable door gets a passive
-    // guard-actor at the exact door pos (RAW — no clampPos snap off the sealed
-    // cells; it is anchored + passive, nothing ever re-legalizes it). Spawned
-    // HERE, outside the memory tagging window, so memory never captures one —
-    // door persistence is owned solely by doorState.
-    for (const d of this.doodads) {
-      const dr = d.door;
-      if (!dr || dr.open || dr.broken) continue;
-      if (dr.mode !== 'breakable' && dr.mode !== 'both') continue;
-      const c = this.createMonster(FIXTURE_IDS.door_timber, Math.max(1, def.level), 'enemy');
-      c.pos = vec(d.pos.x, d.pos.y);
-      c.doorId = dr.id;
-      if (dr.life) c.life = Math.min(dr.life, c.maxLife()); // per-door data may weaken a rotten door
-      this.actors.push(c);
-    }
-
-    // The blueprint's furniture: destructible clutter and friendly folk.
-    for (const b of layout.breakables) {
-      const c = this.createMonster(b.id, Math.max(1, def.level), 'enemy');
-      c.fromZoneGen = true; // furniture is part of the persistent population
-      c.pos = this.clampPos(vec(b.pos.x, b.pos.y), c.radius);
-      this.actors.push(c);
-    }
-    // The spoken seats re-learn per zone (a plan npc's line, a family's line
-    // — both keyed by the body minted below).
-    this.speakerRows.clear(); // THE SPEECH GRAMMAR's rows go with them (the deck re-deals at the next telling)
-    this.speechMemory.clear(); // THE TRANSIENT TELLING: the clocks go with the lines (speechTell keeps no memory across a load)
-    this.speechFocus.clear();
-    this.speechFocusSpeaker = undefined;
-    this.dialogueScene++;
-    this.npcDialogues.leaveZone();
-    let npcSeat = 0; // THE SPEECH GRAMMAR's seat index — a stable speaker key per plan seat
-    for (const n of layout.npcs) {
-      const arrival = MONSTERS[n.id]?.npcRequiresLedger;
-      if (arrival && !this.account.ledger[arrival] && !this.ledger[arrival]) continue;
-      // Mireille the Innkeep is ALWAYS present (she talks if her heal is locked).
-      const c = this.createMonster(n.id, 1, 'player');
-      // THE STOREY (engine/storeys.ts): a body seated on a structure's floor
-      // above wears that story from its first tick — clamped on the story's
-      // own view so it never spawns inside a hanging wall.
-      c.tier = n.tier ?? 0;
-      c.pos = c.tier >= 1 ? this.findFreeSpot(vec(n.pos.x, n.pos.y), c.radius, c.tier)
-        : this.clampPos(vec(n.pos.x, n.pos.y), c.radius);
-      this.actors.push(c);
-      // THE SPOKEN SEAT: a plan's npc row may carry a line — it rides the
-      // residents' bubble lane (residentPrompt reads npcRole 'resident') on
-      // the 'seat' lane of THE TRANSIENT TELLING (engine/speech.ts).
-      // THE SPEECH GRAMMAR (engine/speechGrammar.ts) speaks through the same
-      // row: the seat's structure is its COMPANY, MonsterDef.speechRoles its
-      // pools, the authored line its FIRST WORD (a def-named body is not
-      // NAMED — it never fills '{other}').
-      const speechRoles = MONSTERS[n.id]?.speechRoles ?? [];
-      if (n.line || speechRoles.length) {
-        this.speakerRows.set(c.id, makeSpeakerRow(c.id, n.line ?? '', 'seat', {
-          key: `${n.sid ?? def.id}:seat${npcSeat}:${n.id}`, company: n.sid ?? `zone:${def.id}`, name: null,
-          roles: speechRoles, own: n.line ? [n.line] : [],
-        }));
-      }
-      npcSeat++;
-    }
-    // THE FOLK SEATS (data/innfolk.ts): every seat a plan declared rolls its
-    // guest on a seed of (zone, seat, DAY) — the same company through one
-    // day, new faces at dawn; a seat's chance may leave it empty. The guest
-    // wears a rolled name, colour and line and its row's haunt.
-    const seated = new Set<string>(); // THE COMPANY LAW: no two seats deal the same guest in one house
-    for (const fk of layout.folk ?? []) {
-      const day = this.massSettlementDay ?? Math.floor(this.time / DAY_LENGTH);
-      let roll: ReturnType<typeof rollFolk> = null;
-      for (let salt = 0; salt < 4; salt++) {
-        // THE COMPANY IS THE DAY'S, NOT THE RUN'S: seeded off the ZONE's own seed
-        // (the manifest's would deal a different head-count per world, and every
-        // actor id after the town's bodies with it — the hermetic-world law).
-        const seed = (((def.seed ?? 0) * 0x9e3779b1) ^ hashStr(`folk:${def.id}:${fk.key}:${day}:${salt}`)) >>> 0;
-        roll = withSeededRandom(seed, () => (Math.random() < (fk.chance ?? 1) ? rollFolk(fk.pool, Math.random) : null));
-        if (!roll || !seated.has(roll.name)) break; // an empty seat stays empty; a repeated face re-deals
-      }
-      if (!roll) continue;
-      seated.add(roll.name);
-      const c = this.createMonster(roll.defId, 1, 'player');
-      c.name = roll.name;
-      c.color = roll.color;
-      c.tier = fk.tier ?? 0;
-      c.pos = c.tier >= 1 ? this.findFreeSpot(vec(fk.pos.x, fk.pos.y), c.radius, c.tier)
-        : this.clampPos(vec(fk.pos.x, fk.pos.y), c.radius);
-      this.actors.push(c);
-      // THE TRANSIENT TELLING's 'folk' lane (speechTell) + THE SPEECH GRAMMAR's
-      // speaker row: the rolled line is its FIRST WORD, the row's other lines
-      // follow, its roles are the row's (FolkRow.roles), its company the house
-      // that seated it, its rolled name the one '{other}' may speak.
-      this.speakerRows.set(c.id, makeSpeakerRow(c.id, roll.line, 'folk', {
-        key: fk.key, company: fk.sid ?? fk.key.replace(/:folk\d+$/, ''), name: roll.name,
-        roles: roll.row.roles ?? [], own: [roll.line, ...roll.row.lines.filter(l => l !== roll.line)].filter(l => !!l),
-      }));
-    }
+    spawnNativeDoorGuards(this.nativeInhabitantHost(), World.nativeInhabitantSources, def, layout);
+    spawnNativeFurniture(this.nativeInhabitantHost(), World.nativeInhabitantSources, def, layout);
+    spawnNativeResidents(this.nativeInhabitantHost(), World.nativeInhabitantSources, def, layout);
     // Where there's a smith, there's a stock — armed on THE BEAT LAW's
     // lattice (floor(time / restockSeconds)): the shelf is a pure function
     // of (world seed, counter, beat), so within one beat the counter keeps
@@ -7306,68 +7216,7 @@ export class World {
     // Char's chase lanes field at the party's heels the moment the zone
     // stands (creep field + party placement both done above).
     this.bootEscapeChase();
-    // Walled camps post their guards — each watch is a squad.
-    if (def.packs) {
-      for (const c of layout.camps) {
-        const type = this.weightedPick(def.packs.table, def.level);
-        const n = randInt(3, 5);
-        const squadId = this.nextSquadId();
-        for (let k = 0; k < n; k++) {
-          const m = this.createMonster(type, def.level, 'enemy');
-          m.squadId = squadId;
-          m.squadLeader = k === 0;
-          m.pos = this.clampPos(vec(c.x + rand(-70, 70), c.y + rand(-70, 70)), m.radius);
-          this.actors.push(m);
-        }
-      }
-    }
-    // Faction POIs (war camps, halls, fortresses, townships) come pre-inhabited
-    // by their garrison faction — drawn from that faction's own roster, with the
-    // faction forced on each so the census/contest sim counts them correctly.
-    for (const grn of layout.garrisons) {
-      const roster = FACTIONS[grn.faction];
-      if (!roster) continue;
-      const type = this.weightedPick(roster.table, def.level);
-      const n = randInt(grn.size[0], grn.size[1]);
-      const squadId = this.nextSquadId();
-      for (let k = 0; k < n; k++) {
-        const m = this.createMonster(type, Math.max(1, def.level), 'enemy');
-        m.faction = grn.faction;
-        m.squadId = squadId;
-        m.squadLeader = k === 0;
-        m.pos = this.clampPos(vec(grn.pos.x + rand(-70, 70), grn.pos.y + rand(-70, 70)), m.radius);
-        this.actors.push(m);
-      }
-    }
-    // LANDMARK dwellers (pit spawns): positions + ids resolved AT GEN
-    // (deterministic per seed) — spawned raw at their sampled cells (a pocket
-    // dweller must stay ON its jump-only island; clampPos would snap it off).
-    for (const ls of layout.landmarkSpawns ?? []) {
-      if (!MONSTERS[ls.id]) continue;
-      const m = this.createMonster(ls.id, Math.max(1, def.level), 'enemy');
-      m.pos = vec(ls.pos.x, ls.pos.y);
-      // THE ALOFT COURT (the wildlife wTier precedent): a spawn row placed on
-      // an upper story wears that story, or the mover contract snaps it off
-      // the rim at the first step.
-      if (ls.tier) m.tier = ls.tier;
-      // Spawner-row ambush (LandmarkSpawns.ambush): arm the INSTANCE — the
-      // same kind roams free elsewhere; these wait (the penned herd).
-      if (ls.ambush) {
-        m.ambushSpec = ls.ambush;
-        this.armAmbush(m, ls.ambush);
-      }
-      // THE SEAT'S TEMPERS (SpawnSeat — the authored-map fabric): a DUTY POST
-      // at the seat (the theater's posted-folk idiom) and a RARITY promotion
-      // through the real elite ladder. Classic rows carry neither.
-      if (ls.post) {
-        m.aiPost = vec(ls.pos.x, ls.pos.y);
-        m.postSpec = ls.post === true ? {} : ls.post;
-        if (ls.facing !== undefined) m.aiPostFacing = ls.facing;
-      }
-      this.actors.push(m);
-      // SpawnSeat.rarity — the seat's promotion through the real elite ladder (authored maps).
-      if (ls.rarity && ls.rarity !== 'normal' && ls.rarity in RARITY_DEFS) this.promoteMonster(m, ls.rarity as MonsterRarity);
-    }
+    spawnNativeFieldInhabitants(this.nativeInhabitantHost(), World.nativeInhabitantSources, def, layout);
     // BOUNTY WRITS: `count` of the zone's own bodies walk it as MARKED QUARRY —
     // named from the nemesis vocabulary, promoted, tagged, roaming with the
     // population. Spawned INSIDE the tagging window, so Zone Memory resumes a
@@ -12320,6 +12169,39 @@ export class World {
 
   /** Native providers remain lazy and live. This is an operation boundary,
    * not captured source/controller authority for detached areas. */
+  private static readonly nativeInhabitantSources: NativeInhabitantSources = {
+    get MONSTERS() { return MONSTERS; }, get FIXTURE_IDS() { return FIXTURE_IDS; }, get FACTIONS() { return FACTIONS; },
+    get RARITY_DEFS() { return RARITY_DEFS; }, get DAY_LENGTH() { return DAY_LENGTH; },
+    get vec() { return vec; }, get rand() { return rand; }, get randInt() { return randInt; },
+    get hashStr() { return hashStr; }, get withSeededRandom() { return withSeededRandom; },
+    get rollFolk() { return rollFolk; }, get makeSpeakerRow() { return makeSpeakerRow; }, get random() { return Math.random; },
+  };
+  private nativeInhabitantView?: NativeInhabitantHost;
+  private nativeInhabitantHost(): NativeInhabitantHost {
+    if (this.nativeInhabitantView) return this.nativeInhabitantView;
+    const world = this;
+    const view: NativeInhabitantHost = {
+      get actors() { return world.actors; }, get doodads() { return world.doodads; },
+      get account() { return world.account; }, get ledger() { return world.ledger; },
+      get massSettlementDay() { return world.massSettlementDay; }, get time() { return world.time; },
+      get speakerRows() { return world.speakerRows; }, get speechMemory() { return world.speechMemory; },
+      get speechFocus() { return world.speechFocus; },
+      get speechFocusSpeaker() { return world.speechFocusSpeaker; }, set speechFocusSpeaker(v) { world.speechFocusSpeaker = v; },
+      get dialogueScene() { return world.dialogueScene; }, set dialogueScene(v) { world.dialogueScene = v; },
+      get npcDialogues() { return world.npcDialogues; },
+      get createMonster() { const method = world.createMonster; return (...args: Parameters<NativeInhabitantHost['createMonster']>) => method.apply(world, args); },
+      get clampPos() { const method = world.clampPos; return (...args: Parameters<NativeInhabitantHost['clampPos']>) => method.apply(world, args); },
+      get findFreeSpot() { const method = world.findFreeSpot; return (...args: Parameters<NativeInhabitantHost['findFreeSpot']>) => method.apply(world, args); },
+      get nextSquadId() { const method = world.nextSquadId; return (...args: Parameters<NativeInhabitantHost['nextSquadId']>) => method.apply(world, args); },
+      get weightedPick() { const method = world.weightedPick; return (...args: Parameters<NativeInhabitantHost['weightedPick']>) => method.apply(world, args); },
+      get armAmbush() { const method = world.armAmbush; return (...args: Parameters<NativeInhabitantHost['armAmbush']>) => method.apply(world, args); },
+      get promoteMonster() { const method = world.promoteMonster; return (...args: Parameters<NativeInhabitantHost['promoteMonster']>) => method.apply(world, args); },
+    };
+    // Live adapters are not independent controller owners of the entire census.
+    Object.defineProperty(this, 'nativeInhabitantView', { value: view, writable: true, configurable: true, enumerable: false });
+    return view;
+  }
+
   private nativeMonsterPromotionSourceView?: NativeMonsterPromotionSources;
   private nativeMonsterPromotionView?: NativeMonsterPromotionHost;
   private nativeMonsterPromotionSources(): NativeMonsterPromotionSources {

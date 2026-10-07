@@ -1,3 +1,4 @@
+import type { NativeInhabitantHost } from '../engine/nativeInhabitants';
 import type { Actor, Team } from '../engine/actor';
 import type { PackTableEntry, ZoneDef } from '../data/zones';
 import type { MonsterRarity } from '../engine/rarity';
@@ -29,6 +30,11 @@ export interface NativeAreaAmbientContext extends NativeAreaSightServices {
   sanctuaryBlocksCombat: NativeHostilityHost['sanctuaryBlocksCombat'];
   resolveHit: NativeMonsterPromotionHost['resolveHit'];
 }
+/** Original resident-state owner for the prepared area. Its dialogue director
+ * must also supply this area's factory appearance service. These are live
+ * trusted controllers, not a new dialogue implementation or source certificate. */
+export type NativeAreaResidentContext = Pick<NativeInhabitantHost,
+  'account'|'ledger'|'massSettlementDay'|'speakerRows'|'speechMemory'|'speechFocus'|'speechFocusSpeaker'|'dialogueScene'|'npcDialogues'>;
 export interface NativeAreaAmbientInput {
   local: NativeAreaLocal;
   population: NativeAreaPopulation;
@@ -65,6 +71,7 @@ export class NativeAreaAmbient {
   magicPackResolving: boolean;
   magicPackRefreshPending: boolean;
   magicPackEffects: MagicPackVisual[];
+  private readonly local: NativeAreaLocal;
   private readonly sources: NativeAreaAmbientSources;
   private readonly factory: NativeMonsterFactoryHost;
   private readonly promotion: NativeMonsterPromotionHost;
@@ -73,6 +80,7 @@ export class NativeAreaAmbient {
   private readonly relay: NonNullable<Actor['statusRelay']> = (a,args)=>nativeRelayStatus(this.relayHost,this.sources.relay,a,args);
   constructor(raw:NativeAreaAmbientInput) {
     const local=binding<NativeAreaLocal>(raw,'local'),context=binding<NativeAreaAmbientContext>(raw,'context');
+    this.local=local;
     this.population=binding(raw,'population');this.player=binding(raw,'player');this.sources=binding(raw,'sources');
     const initial=binding<NativeAreaAmbientInput['state']>(raw,'state');
     const state=Object.create(null) as NativeAreaAmbientInput['state'];
@@ -143,7 +151,7 @@ export class NativeAreaAmbient {
       wildlifeTableFor:(...a)=>area.population.wildlifeTableFor(...a),verminPressure:()=>area.population.verminPressure(),
     };
     this.host=Object.freeze(local.ambient({ambient,groups:this.sources.groups,player:this.player,actors:this.actors}));
-    for(const key of ['population','zone','actors','player','sight','host','sources','factory','promotion','hostility','relayHost','relay'])
+    for(const key of ['local','population','zone','actors','player','sight','host','sources','factory','promotion','hostility','relayHost','relay'])
       Object.defineProperty(this,key,{writable:false,configurable:false});
     // A trusted live provider may have changed the cohort while building the host.
     // Revalidate after its last read, before transferring even the first relay.
@@ -152,6 +160,29 @@ export class NativeAreaAmbient {
       const d=Object.getOwnPropertyDescriptor(actor,'statusRelay');
       Object.defineProperty(actor,'statusRelay',d?{...d,value:this.relay}:{value:this.relay,writable:true,enumerable:true,configurable:true});
     }
+  }
+  /** Bind the original inhabitants stages to this same census, factory and
+   * fixed local geometry. Caller retains native reset/replay/load ordering. */
+  inhabitants(context:NativeAreaResidentContext):NativeInhabitantHost {
+    for(const key of ['account','ledger','massSettlementDay','speakerRows','speechMemory','speechFocus','speechFocusSpeaker','dialogueScene','npcDialogues'])
+      if(!context||!Object.hasOwn(context,key))throw Error('Native area inhabitants require explicit resident state: '+key);
+    const area=this,placement=this.local.placement((...args)=>area.sources.ambient.rand(...args));
+    return Object.freeze({
+      get actors(){return area.actors;},get doodads(){return area.local.doodads;},
+      get account(){return context.account;},get ledger(){return context.ledger;},
+      get massSettlementDay(){return context.massSettlementDay;},get time(){return area.factory.time;},
+      get speakerRows(){return context.speakerRows;},get speechMemory(){return context.speechMemory;},get speechFocus(){return context.speechFocus;},
+      get speechFocusSpeaker(){return context.speechFocusSpeaker;},set speechFocusSpeaker(v:number|undefined){context.speechFocusSpeaker=v;},
+      get dialogueScene(){return context.dialogueScene;},set dialogueScene(v:number){context.dialogueScene=v;},
+      get npcDialogues(){return context.npcDialogues;},
+      get createMonster(){const method=area.createMonster;return (...args:Parameters<NativeInhabitantHost['createMonster']>)=>method.apply(area,args);},
+      clampPos:(...args:Parameters<NativeInhabitantHost['clampPos']>)=>placement.clampPos(...args),
+      get findFreeSpot(){const owner=area.host,method=owner.findFreeSpot;return (...args:Parameters<NativeInhabitantHost['findFreeSpot']>)=>method.apply(owner,args);},
+      get nextSquadId(){const method=area.nextSquadId;return ()=>method.call(area);},
+      get weightedPick(){const owner=area.sources.ambient,method=owner.weightedPick;return (...args:Parameters<NativeInhabitantHost['weightedPick']>)=>method.apply(owner,args);},
+      armAmbush:(...args:Parameters<NativeInhabitantHost['armAmbush']>)=>armNativeMonsterAmbush(...args,area.sources.factory),
+      get promoteMonster(){const method=area.promoteMonster;return (...args:Parameters<NativeInhabitantHost['promoteMonster']>)=>method.apply(area,args);},
+    });
   }
   nextSquadId():number {return this.squadSequence++;}
   createMonster(id:string,level:number,team:Team,owner?:Actor,spawn?:{scale?:number}):Actor {

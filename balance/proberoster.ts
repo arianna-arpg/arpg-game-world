@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_nativeinhabitants.ts', status: 'green', tier: 'fast', why: 'Original native door, furniture, NPC and daily folk stages plus camp, garrison and landmark births with exact order, full state and partial failures' },
   { probe: 'probe_nativesight.ts', status: 'green', tier: 'fast', why: 'Pinned seven native optical operations across complete layouts, exact ray outputs and read order, exception prefixes, live World wrappers and cold local geometry' },
   { probe: 'probe_nativehostility.ts', status: 'green', tier: 'fast', why: 'Exact native tier, sanctuary, guise, burrow, diplomacy, prey and owner-construct targeting with actual World wrappers and dormancy ownership' },
   { probe: 'probe_nativestatusrelay.ts', status: 'green', tier: 'fast', why: 'Actual grounded status transfer with native nearest ties, recipient rules, complete arguments, lazy source order and partial exceptions' },

@@ -1694,3 +1694,60 @@ course passes natural structures, actual walking, cave entry, cold Continue and
 exact return. It remains a regression for already-admitted feature owners,
 not evidence of complete-area runtime activation. Nine slow and three excluded
 probes were not run.
+
+
+## NativeAreaInhabitants: native residents and field populations
+
+The original door guard, furniture, NPC/daily guest and camp/garrison/landmark
+stages are shared with classic World at their unchanged load boundaries. Closed
+breakable doors retain raw seats and door-owned persistence. Furniture keeps
+native placement and memory tagging. Residents retain campaign arrival gates,
+upper-storey seating, speech rows and the exact transient dialogue reset order.
+Daily guests keep their original zone/seat/day seed, empty-seat probability and
+duplicate-name retries. Camps and garrisons retain native squad identity and
+level/faction rules; landmark dwellers retain island seats, tiers, ambushes,
+duty posts and rarity promotion after publication.
+
+NativeAreaAmbient.inhabitants binds those operations to the same complete local
+geometry, staged actors, factory and promotion owner. The returned host is frozen;
+resident maps, focus/scene fields, ledgers, settlement day and dialogue director
+stay explicit live services. Binding reads no resident values or clocks and
+transfers no actor relay a second time. The caller must supply the original
+resident-state owner and the same director used for factory appearance. Own-key
+checks do not authenticate controller provenance. Door, lesson, annex and other
+geometry replay must already be reflected in the fixed preparation frame.
+
+The durable comparison pins all four original stage bodies from f461ec80 and
+runs 72 archived/core/World cases plus 144 local/cold comparisons across three
+seeds, three day settings and four success/factory-failure positions. The native
+Lastlight layout retains 201 doodads, six breakables, four NPC seats and five daily
+guest seats, including upper floors. A separate explicit mechanism fixture uses
+that complete geometry with a closed breakable door, camp, garrison and landmark
+rows; it is not evidence of their natural frequency. The combined original
+courses retain 639 surviving body states and 819 random draws, including exact
+stage boundaries, actor identities, factory arguments, speech rows and partial
+failures. The same providing World's geometry/census/resident paths throw during
+local stages. Independent controls cover 102 mechanisms and seven classic method
+selection cases; local review also covers eight reset/day/error courses and four
+method-selection/receiver cases. Adapters capture the native method before its
+arguments are evaluated, retaining original receiver and argument count.
+
+The complete load still has objective adoption and fixtures, faction contests,
+scenery, puzzles, harvest, geysers, other environmental controllers and memory
+finalization around these stages. Those operations must retain their original
+order and both random continuations. This checkpoint neither publishes a whole
+new town into seamless play nor supplies full controller paging, source issuance
+or the two-area playable/Continue acceptance course. Those remain required for
+full-area activation and the larger generation/content parity work.
+
+NativeAreaInhabitants verification: all three type checks, all 469 fast probes
+without retries, 2,607 generation cases (zero failures; four existing warnings),
+and 25 combat smoke episodes passed. The client conversation course exposed a
+separate Continue defect: rebuilding a reward affix wrote into the frozen save
+receipt. Character restoration now detaches its complete carry state before
+normalization, explicitly excluding inline world history. The focused character
+and staged-world restore probes and all three type checks passed after that
+repair. Both final client courses pass: conversations/gifts/work/reward, narrow
+and enlarged UI, exact cold Continue, and natural structure/walking/cave entry/
+Continue/return. These exercise admitted runtime content, not full-area activation.
+Nine slow and three excluded probes were not part of the fast run.
