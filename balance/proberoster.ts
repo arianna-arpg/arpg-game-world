@@ -61,6 +61,8 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_nativescenesites.ts', status: 'green', tier: 'fast', why: 'Complete native vocation and mercenary field sites, installed faction filters, veteran stock, local settlement identity and partial births' },
+  { probe: 'probe_nativesceneopenings.ts', status: 'green', tier: 'fast', why: 'Complete native hollow and annex reveals, mutable local carving, child entrances, remembered finds and original callback failure effects' },
   { probe: 'probe_nativelayoutgeneration.ts', status: 'green', tier: 'fast', why: 'Exact native remembered seeds, held-city physical fixtures, complete layout outputs and live local/World ownership with original failures' },
   { probe: 'probe_nativeresidentsession.ts', status: 'green', tier: 'fast', why: 'Native resident/director identity, visit persistence, actual installed facts and original reset ordering across re-entry' },
   { probe: 'probe_nativescenephysical.ts', status: 'green', tier: 'fast', why: 'Native altar and training WeakMap ownership, complete installed content capture/restore, local identity and partial failures' },

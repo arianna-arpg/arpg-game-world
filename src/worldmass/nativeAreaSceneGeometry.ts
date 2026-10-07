@@ -30,7 +30,7 @@ export class NativeAreaSceneGeometry implements native.NativeSceneGeometryHost, 
  get drainSurvival(){const c=this.campaign,f=c.drainSurvival;return (...args:Parameters<World['drainSurvival']>)=>f.apply(c,args);}
  get radianceCondHeld(){const c=this.campaign,f=c.radianceCondHeld;return (...args:Parameters<World['radianceCondHeld']>)=>f.apply(c,args);}
  get createMonster(){const c=this.campaign,f=c.createMonster;return (...args:Parameters<World['createMonster']>)=>f.apply(c,args);}
- readonly arena:Bounds; readonly arenaHull:{w:number;h:number};
+ readonly arena:Bounds; arenaHull:{w:number;h:number};
  readonly navigationPad:number; readonly eventSpacing:number; readonly minPortalSeparation:number;
  get zone(){return this.state.zone;} get player(){return this.state.player;}
  get actors(){return this.state.actors;} set actors(v:Actor[]){this.state.actors=v;}

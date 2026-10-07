@@ -2124,3 +2124,59 @@ and Save/Continue. Existing dialogue, physical-content and objective source
 modules emit identical JavaScript; the World audit retains 2,345 unchanged
 members and all 379 prior runtime import positions. These checks do not certify
 complete seamless native-area admission or resolve the structure access defects.
+
+## NativeAreaSceneSites and hidden-area openings
+
+NativeAreaSceneSites shares all five native field-service operations with World:
+site filters, vocation placement and birth, mercenary outposts and their offers.
+The local owner uses actual geometry and population, the genuine campaign and
+account, and the same settlement stock and outpost pointer. All eight installed
+secret vocations retain their complete NPC and dressing behavior. Veteran offers
+use native saved builds and exclude engaged mercenaries; re-entry keeps existing
+offer sheets. These are generated places and stock, not hiring or quest execution.
+
+Twenty-six archived/current-World/local cold-process comparisons preserve 32
+actual body allocations and 490 random draws, complete actors and scenery,
+all filter axes, stock aliases and partial factory/dressing/stock failures.
+Positive forced-chance and veteran controls are labelled mechanism cases;
+retained natural forest/downs courses do not establish encounter frequency.
+Seven selected-callback controls and a genuine foreign-target dormancy test
+verify that the hidden live World adapter preserves provider identity and does
+not accidentally pin every actor through its cache.
+
+NativeAreaSceneOpenings shares all four complete hollow and annex operations
+with World. Opening changes the same grid, hull, props, entrances and census
+that other local services use. The shared geometry hull was already writable at
+runtime; its type now permits native annex expansion. Found annexes remain in
+the real campaign ledger beyond ordinary zone-memory expiry. Child faces stand
+inside newly exposed space; revealed side entrances keep their original seed.
+Remote discovery preserves native zone-map precedence and existing memory arrays.
+
+Fifty-four archived/current-World/local cold-process comparisons preserve 20
+real body allocations, 375 ordered draws and seven actual partial failures.
+The unchanged canonical source991 downs contains a natural vein hollow. The
+annex control uses complete native generation with explicitly authored nested
+pieces; every installed hollow/annex kind is additionally exercised as a named
+mechanism variant. Full geometry, original source arrays, child faces, unrelated
+scenery, actor state, navigation samples and callback ordering compare. Native
+opening stamps its ledger before furnishing: a failed callback can leave a
+partial find, and repeat opening does not replay or complete it. This extraction
+preserves that behavior; it adds no rollback policy.
+
+Reward callbacks in this oracle record invocation and failure only. Real local
+item/orb delivery, all remaining birth and package controllers, installed source
+issuance and complete area paging still precede seamless activation. The complete
+birth assembler must keep these owners on one census and geometry with genuine
+carried campaign state. Ordinary mire remains localized with navigable bypasses.
+
+Validation for NativeAreaSceneSites and NativeAreaSceneOpenings: all 484 fast
+probes pass without retries in 856.3 seconds. Nine slow and three excluded probes
+were not run. All three project type checks and all 25 smoke simulation episodes
+pass. The full generation matrix passes 2,607 generations with zero failures and
+four existing spacing warnings. The built client passes native structures and
+movement, cave entry, same-hero continuation, cold Continue and exact return;
+its conversation course also passes native gifts, work, once-only rewards and
+Save/Continue. The World audit retains 2,342 unchanged members, changes exactly
+nine native methods and adds four hidden-adapter members; all 380 prior runtime
+module positions remain unchanged. The geometry annotation emits identical
+JavaScript. No structure-siting correction is included in this checkpoint.

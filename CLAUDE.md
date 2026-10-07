@@ -1,3 +1,12 @@
+NativeAreaSceneSites shares complete native vocation and mercenary field-site
+births, filters and stock with classic World and the real settlement owner.
+NativeAreaSceneOpenings shares complete hollow and annex carving, furnishing,
+child entrances and remembered discoveries over the same mutable geometry.
+Preserve original partial failures and random continuation; genuine reward
+execution and full update/controller/source/paging owners remain required.
+Verify nativescenesites/nativesceneopenings, all types, generation and native
+client entry/Continue/return before composing complete seamless area birth.
+
 NativeLayoutGeneration shares native memory/seed choice and physical held-city
 fixtures with classic World. NativeResidentSession retains one genuine dialogue
 director and visit history; NativeScenePhysical keeps native altar/training

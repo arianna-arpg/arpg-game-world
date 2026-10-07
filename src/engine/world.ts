@@ -252,8 +252,8 @@ import { projFormNose, projFormTouches } from './projForms';
 import '../data/structures';
 import { dwellOf, sidezoneOf, sidezonePocketId } from '../data/sidezones';
 import { underSpanPolicyOf } from '../data/underspans';
-import { hollowDef } from '../data/hollows';
-import { annexKindDef, annexParentIdOf } from '../data/annexes';
+import '../data/hollows';
+import '../data/annexes';
 import type { AnnexSpec, HollowSpec } from './levelgen';
 import { DWELL_CFG, npcDwellReach, npcDwellRadius, transitDwell, transitRadius, transitReach } from '../data/transit';
 import { pressingDoor } from './doorPress';
@@ -548,8 +548,8 @@ import {
 } from '../meta/modes';
 import {
   LEDGER_MERC_MARKET_MET, LEDGER_MERC_OUTPOST_FOUND,
-  MERC_CFG, MERC_SCHEMA, addRetiredMerc, availableRetired, engageMerc, mintMercId,
-  releaseMercsOf, retiredShare, snapshotBuild,
+  MERC_CFG, MERC_SCHEMA, addRetiredMerc, engageMerc, mintMercId,
+  releaseMercsOf, snapshotBuild,
   type MercOffer, type MercRosterEntry, type MercSnapshot,
 } from '../meta/mercs';
 import { MERC_TEMPLATE_BY_ID, type MercTemplateDef } from '../data/mercenaries';
@@ -584,6 +584,8 @@ import {generateNativeAreaLayout,nativeZoneMemoryFresh,nativeCrusadeFixtureSpecs
 import { sceneOccurrenceHost, sceneOccurrenceSpawnTable, sceneAbortTraces, type NativeSceneOccurrenceHost, type NativeSceneTraceResetHost } from './nativeSceneOccurrences';
 
 import { sceneSeedCullMarks, sceneSeedGatherNodes, sceneNoteBountyArrivals, sceneHandState, sceneNoteBountyReady, sceneObjectiveDoneAt, sceneQuestDefOf, type NativeSceneBountyHost } from './nativeSceneBounty';
+import { openNativeHollow, revealNativeAnnex, furnishNativeAnnex, activateNativeAnnex, type NativeSceneOpeningHost } from './nativeSceneOpenings';
+import { siteZoneMatchesSiteFilter, sitePlaceVocationSites, siteSpawnVocationSite, sitePlaceMercOutpost, siteBuildMercOffers, type NativeSceneSiteHost } from './nativeSceneSites';
 
 export type { Doodad } from './levelgen';
 
@@ -10819,6 +10821,68 @@ export class World {
    };
    Object.defineProperty(this,'nativeSceneEnvironmentView',{value:host,writable:true,configurable:true,enumerable:false});
    return host;
+  }
+
+  private nativeSceneOpeningView?:NativeSceneOpeningHost;
+  private nativeSceneOpeningHost():NativeSceneOpeningHost {
+    if(this.nativeSceneOpeningView)return this.nativeSceneOpeningView;
+    const world=this;
+    const host:NativeSceneOpeningHost={
+      get openedHollows(){return world.openedHollows;},
+      get zoneHollows(){return world.zoneHollows;},
+      get walk(){return world.walk;},
+      get doodads(){return world.doodads;},
+      get flashes(){return world.flashes;},
+      get zone(){return world.zone;},
+      get actors(){return world.actors;},
+      get caveEntrances(){return world.caveEntrances;},
+      get arena(){return world.arena;},
+      get annexOpen(){return world.annexOpen;},
+      get arenaHull(){return world.arenaHull;}, set arenaHull(value){world.arenaHull=value;},
+      get annexFound(){return world.annexFound;},
+      get zoneAnnexSpecs(){return world.zoneAnnexSpecs;},
+      get zoneMap(){return world.zoneMap;},
+      get caveMap(){return world.caveMap;},
+      get zoneMemory(){return world.zoneMemory;},
+      get markDoodadsChanged(){const method=world.markDoodadsChanged;return (...args:Parameters<NativeSceneOpeningHost['markDoodadsChanged']>)=>method.apply(world,args);},
+      get createMonster(){const method=world.createMonster;return (...args:Parameters<NativeSceneOpeningHost['createMonster']>)=>method.apply(world,args);},
+      get clampPos(){const method=world.clampPos;return (...args:Parameters<NativeSceneOpeningHost['clampPos']>)=>method.apply(world,args);},
+      get weightedPick(){const method=world.weightedPick;return (...args:Parameters<NativeSceneOpeningHost['weightedPick']>)=>method.apply(world,args);},
+      get dropGemAt(){const method=world.dropGemAt;return (...args:Parameters<NativeSceneOpeningHost['dropGemAt']>)=>method.apply(world,args);},
+      get shedOrb(){const method=world.shedOrb;return (...args:Parameters<NativeSceneOpeningHost['shedOrb']>)=>method.apply(world,args);},
+      get text(){const method=world.text;return (...args:Parameters<NativeSceneOpeningHost['text']>)=>method.apply(world,args);},
+      get annexFurnish(){const method=world.annexFurnish;return (...args:Parameters<NativeSceneOpeningHost['annexFurnish']>)=>method.apply(world,args);},
+      get annexReveal(){const method=world.annexReveal;return (...args:Parameters<NativeSceneOpeningHost['annexReveal']>)=>method.apply(world,args);},
+    };
+    Object.defineProperty(this,'nativeSceneOpeningView',{value:host,writable:true,configurable:true,enumerable:false});
+    return host;
+  }
+
+  private nativeSceneSiteView?:NativeSceneSiteHost;
+  private nativeSceneSiteHost():NativeSceneSiteHost {
+    if(this.nativeSceneSiteView)return this.nativeSceneSiteView;
+    const world=this;
+    const host:NativeSceneSiteHost={
+      get sim(){return world.sim;},
+      get vocationSites(){return world.vocationSites;},
+      get zoneMatchesSiteFilter(){const method=world.zoneMatchesSiteFilter;return (...args:Parameters<NativeSceneSiteHost['zoneMatchesSiteFilter']>)=>method.apply(world,args);},
+      get manifest(){return world.manifest;},
+      get spawnVocationSite(){const method=world.spawnVocationSite;return (...args:Parameters<NativeSceneSiteHost['spawnVocationSite']>)=>method.apply(world,args);},
+      get arena(){return world.arena;},
+      get createMonster(){const method=world.createMonster;return (...args:Parameters<NativeSceneSiteHost['createMonster']>)=>method.apply(world,args);},
+      get zone(){return world.zone;},
+      get findFreeSpot(){const method=world.findFreeSpot;return (...args:Parameters<NativeSceneSiteHost['findFreeSpot']>)=>method.apply(world,args);},
+      get actors(){return world.actors;},
+      get doodads(){return world.doodads;},
+      get mercOutpost(){return world.mercOutpost;}, set mercOutpost(value){world.mercOutpost=value;},
+      get player(){return world.player;},
+      get account(){return world.account;},
+      get mercSheetFor(){const method=world.mercSheetFor;return (...args:Parameters<NativeSceneSiteHost['mercSheetFor']>)=>method.apply(world,args);},
+      get buildMercOffers(){const method=world.buildMercOffers;return (...args:Parameters<NativeSceneSiteHost['buildMercOffers']>)=>method.apply(world,args);},
+      get dealTemplateOffers(){const method=world.dealTemplateOffers;return (...args:Parameters<NativeSceneSiteHost['dealTemplateOffers']>)=>method.apply(world,args);},
+    };
+    Object.defineProperty(this,'nativeSceneSiteView',{value:host,writable:true,configurable:true,enumerable:false});
+    return host;
   }
 
   private nativeLayoutGenerationView?:NativeLayoutGenerationHost;
@@ -26252,50 +26316,7 @@ export class World {
   // rows for good, and nothing short of a new world deals new blades.
 
   /** Seeded outpost roll for this zone (loadZone tail; wilds only). */
-  private placeMercOutpost(def: ZoneDef): void {
-    const cfg = MERC_CFG.outpost;
-    // ONE OFFICER PER ZONE, by construction: an already-armed counter (the
-    // quay boot's captain, the town recruiter's table) holds the ground —
-    // the wild roll never stacks a second market into the same zone.
-    if (this.mercOutpost) return;
-    // Harborhold ground provides its own captain (the hold's merc service —
-    // template-only, seated at the quay): the wild-outpost roll stands down
-    // on a legacy town AND on both halves of a harbor pair. Veterans and
-    // retirement stay a true-wilds exclusive.
-    if (def.harborhold || def.holdAnchor) return;
-    if (!this.zoneMatchesSiteFilter(def, cfg.filter)) return;
-    // THE WILDS COMMISSION: the free companies pitch no camp for an
-    // unproven line. Until the CURRENT hero stands at the unlock level —
-    // or forever after the account's first wilds parley stamped the
-    // graduation (LEDGER_MERC_OUTPOST_FOUND) — the wild roll stands down.
-    // Ports and the Lastlight recruiter stay the early market on purpose,
-    // and the roll itself is untouched: a graduated account meets camps at
-    // whatever the current chance/filter schema says.
-    if (this.player.level < cfg.unlockLevel
-      && !(this.account.ledger[LEDGER_MERC_OUTPOST_FOUND] ?? 0)) return;
-    if (!MONSTERS[FIXTURE_IDS.merc_captain]) return;
-    const rng = new Rng((this.manifest.seed ^ hashStr(`mercpost_${def.id}`)) >>> 0);
-    if (rng.range(0, 1) >= cfg.chance) return;
-    const captain = this.createMonster(FIXTURE_IDS.merc_captain, Math.max(1, def.level), 'enemy');
-    captain.pos = this.findFreeSpot(vec(
-      this.arena.w * rng.range(0.25, 0.75),
-      this.arena.h * rng.range(0.25, 0.75)), captain.radius);
-    this.actors.push(captain);
-    // Camp dressing: a banner and a ring of bedrolls (generic-disc fallback
-    // renders unknown kinds — dedicated art can come later without data changes).
-    this.doodads.push({ pos: this.findFreeSpot(vec(captain.pos.x + 34, captain.pos.y - 26), 10), radius: 9, kind: 'merc_banner', rot: 0 });
-    for (let i = 0; i < 3; i++) {
-      const a = rng.range(0, Math.PI * 2), r = rng.range(46, 84);
-      this.doodads.push({
-        pos: this.findFreeSpot(vec(captain.pos.x + Math.cos(a) * r, captain.pos.y + Math.sin(a) * r), 14),
-        radius: rng.range(11, 15), kind: 'merc_bedroll', rot: rng.range(0, Math.PI * 2),
-      });
-    }
-    this.mercOutpost = {
-      captain,
-      offers: this.mercSheetFor(def.id, () => this.buildMercOffers(rng)),
-    };
-  }
+  private placeMercOutpost(def: ZoneDef): void { return sitePlaceMercOutpost(this.nativeSceneSiteHost(),def); }
 
   /** THE MUSTER-ROLL LAW — one locked sheet per officer per world. The
    *  first arm MINTS the sheet (and the world save carries it from birth);
@@ -26331,30 +26352,7 @@ export class World {
   /** MINT this outpost's offer sheet (once — mercSheetFor locks it): seeded
    *  count, the roster-fill-scaled veteran share (drawn from POOLED veterans
    *  only), baselines for the rest. */
-  private buildMercOffers(rng: Rng): MercOffer[] {
-    const { min, max } = MERC_CFG.offers;
-    const count = min + Math.floor(rng.range(0, max - min + 1));
-    const shuffle = <T,>(arr: T[]): T[] => {
-      for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(rng.range(0, i + 1));
-        [arr[i], arr[j]] = [arr[j], arr[i]];
-      }
-      return arr;
-    };
-    const offers: MercOffer[] = [];
-    const veterans = shuffle([...availableRetired(this.account)]);
-    const wantRetired = Math.min(veterans.length, Math.round(count * retiredShare(this.account)));
-    for (let i = 0; i < wantRetired; i++) {
-      const v = veterans[i];
-      offers.push({
-        kind: 'retired', refId: v.mercId, name: v.name, classId: v.classId,
-        blurb: 'A veteran of the wake — a life someone lived, sword-arm for hire.',
-        retiredLevel: v.retiredLevel,
-      });
-    }
-    this.dealTemplateOffers(rng, count, offers);
-    return shuffle(offers);
-  }
+  private buildMercOffers(rng: Rng): MercOffer[] { return siteBuildMercOffers(this.nativeSceneSiteHost(),rng); }
 
   /** The calm-parley dwell: fires the menu request ONCE per approach; backing
    *  off (or trouble arriving) re-arms it. Gates, in order: captain standing,
@@ -27331,73 +27329,16 @@ export class World {
   /** Does this zone qualify to host `filter`? Axes AND; within an axis any id
    *  matches. Registry-resolved (biomes' patron factions, the LIVE territory
    *  sim) — never a hardcoded zone list. */
-  private zoneMatchesSiteFilter(def: ZoneDef, filter: VocationSiteFilter): boolean {
-    if (def.objective.kind === 'safe') return false; // never in sanctuaries
-    if (filter.minLevel !== undefined && def.level < filter.minLevel) return false;
-    if (filter.biomes && !(def.biome && filter.biomes.includes(def.biome))) return false;
-    if (filter.patronFactions) {
-      const pf = def.biome ? patronFaction(def.biome) : null;
-      if (!pf || !filter.patronFactions.includes(pf)) return false;
-    }
-    if (filter.controllingFactions) {
-      const own = this.sim.faction.owner(def.id);
-      if (!own.faction || !own.owned || !filter.controllingFactions.includes(own.faction)) return false;
-    }
-    if (filter.layouts && !(def.layoutType && filter.layouts.includes(def.layoutType))) return false;
-    if (filter.harborhold !== undefined) {
-      // THE HARBORHOLD AXIS (data/harborholds.ts): port-town ground only —
-      // true = any hold, else exactly the named state (the Mooring Stone
-      // stands on WON quays; a burned or besieged town keeps no counsel).
-      const h = def.harborhold;
-      if (!h) return false;
-      if (filter.harborhold !== true && h.state !== filter.harborhold) return false;
-    }
-    return true;
-  }
+  private zoneMatchesSiteFilter(def: ZoneDef, filter: VocationSiteFilter): boolean { return siteZoneMatchesSiteFilter(this.nativeSceneSiteHost(),def,filter); }
 
   /** Roll + place every secret vocation's site for this zone (loadZone tail).
    *  WHETHER is deterministic per (run seed, vocation, zone id); WHERE is a
    *  seeded spot in the zone's midlands, nudged onto clear ground. */
-  private placeVocationSites(def: ZoneDef): void {
-    for (const v of Object.values(VOCATIONS)) {
-      if (!v.secret) continue;
-      // Idempotent per site: a mid-session re-roll (a harborhold opening —
-      // resolveHoldDefense) never doubles a shrine that already stands.
-      if (this.vocationSites.some(s => s.vocId === v.id && !s.npc.dead)) continue;
-      if (!this.zoneMatchesSiteFilter(def, v.secret.site.filter)) continue;
-      const rng = new Rng((this.manifest.seed ^ hashStr(`vocsite_${v.id}_${def.id}`)) >>> 0);
-      if (rng.range(0, 1) >= v.secret.site.chance) continue;
-      this.spawnVocationSite(v.id, vec(
-        this.arena.w * rng.range(0.3, 0.7),
-        this.arena.h * rng.range(0.3, 0.7)), rng);
-    }
-  }
+  private placeVocationSites(def: ZoneDef): void { return sitePlaceVocationSites(this.nativeSceneSiteHost(),def); }
 
   /** Materialize one site: the shrine spirit (an ordinary passive giver NPC)
    *  plus its grown dressing. Shared by the seeded roll and the dev cheat. */
-  private spawnVocationSite(vocId: string, at: Vec2, rng: Rng): boolean {
-    const v = VOCATIONS[vocId];
-    if (!v?.secret) return false;
-    const npcDef = MONSTERS[v.secret.site.npc];
-    if (!npcDef) return false;
-    const npc = this.createMonster(v.secret.site.npc, Math.max(1, this.zone.level), 'enemy');
-    npc.pos = this.findFreeSpot(at, npc.radius);
-    this.actors.push(npc);
-    this.vocationSites.push({ vocId, npc });
-    for (const dress of v.secret.site.doodads ?? []) {
-      for (let i = 0; i < dress.count; i++) {
-        const a = rng.range(0, Math.PI * 2);
-        const r = rng.range(dress.radius * 0.5, dress.radius);
-        const p = this.findFreeSpot(
-          vec(npc.pos.x + Math.cos(a) * r, npc.pos.y + Math.sin(a) * r), dress.size[1]);
-        this.doodads.push({
-          pos: p, radius: rng.range(dress.size[0], dress.size[1]),
-          kind: dress.kind, rot: rng.range(0, Math.PI * 2),
-        });
-      }
-    }
-    return true;
-  }
+  private spawnVocationSite(vocId: string, at: Vec2, rng: Rng): boolean { return siteSpawnVocationSite(this.nativeSceneSiteHost(),vocId,at,rng); }
 
   /** Proximity DISCOVERY: walking into a site's aura RECEIVES the calling —
    *  for a qualifying character — via the run-ledger discovery key the chain's
@@ -58852,77 +58793,7 @@ export class World {
    *  memory revive + co-op), revive (structure only — never loot/ambush),
    *  bare (carve + seam splice only: a co-op client converging on the host;
    *  contents arrive with the host's own doodad stream). */
-  openHollow(id: string, _opener?: Actor | null, opts?: { silent?: boolean; revive?: boolean; bare?: boolean }): void {
-    if (this.openedHollows.has(id)) return;
-    const h = this.zoneHollows.find(s => s.id === id);
-    if (!h) return;
-    this.openedHollows.add(id);
-    const walk = this.walk instanceof GridWalkField ? this.walk : null;
-    if (walk) {
-      const cs = walk.cell;
-      // Inset a hair so the carve claims exactly the recorded cells (rect
-      // edges sit on cell boundaries; fillRegion is inclusive of both ends).
-      walk.fillRegion(h.rect.x + 1, h.rect.y + 1, h.rect.x + h.rect.w - 1, h.rect.y + h.rect.h - 1, 'ground');
-      for (const s of h.seams) {
-        walk.fillRegion(s.x - cs * 0.45, s.y - cs * 0.45, s.x + cs * 0.45, s.y + cs * 0.45, 'ground');
-      }
-    }
-    for (let i = this.doodads.length - 1; i >= 0; i--) {
-      const d = this.doodads[i];
-      if (d.hollow === id) { d.gone = true; this.doodads.splice(i, 1); }
-    }
-    this.markDoodadsChanged();
-    if (!opts?.silent) {
-      this.flashes.push({
-        pos: vec(h.rect.x + h.rect.w / 2, h.rect.y + h.rect.h / 2),
-        radius: Math.max(h.rect.w, h.rect.h) * 0.7, color: '#d8c890', life: 0.35, maxLife: 0.35,
-      });
-    }
-    if (opts?.bare) return;
-    const def = hollowDef(h.kind);
-    if (!def) return;
-    const rng = new Rng(h.seed);
-    const center = vec(h.rect.x + h.rect.w / 2, h.rect.y + h.rect.h / 2);
-    const added: Doodad[] = [];
-    def.reveal({
-      center, rect: h.rect, rng, level: Math.max(1, this.zone.level), revive: !!opts?.revive,
-      addDoodad: (d) => {
-        const dd: Doodad = {
-          pos: vec(d.pos.x, d.pos.y), radius: d.radius, kind: d.kind,
-          ...(d.rot !== undefined ? { rot: d.rot } : {}),
-        };
-        this.doodads.push(dd);
-        added.push(dd);
-      },
-      spawnEnemy: (mid, pos) => {
-        const m = this.createMonster(mid, Math.max(1, this.zone.level), 'enemy');
-        m.pos = this.clampPos(vec(pos.x, pos.y), m.radius);
-        m.fromZoneGen = true; // zone memory captures the pocket's survivors
-        this.actors.push(m);
-      },
-      packPick: () => this.zone.packs?.table?.length
-        ? this.weightedPick(this.zone.packs.table, Math.max(1, this.zone.level)) : null,
-      dropGem: (pos) => this.dropGemAt(vec(pos.x, pos.y)),
-      shedOrb: (kind, pos) => this.shedOrb(kind, vec(pos.x, pos.y)),
-      text: (pos, msg, color) => this.text(vec(pos.x, pos.y), msg, color ?? '#d8c890', 12),
-    });
-    if (added.length) this.markDoodadsChanged();
-    // A revealed SIDEZONE MOUTH (the crevice shaft) joins the dwell registry
-    // live, with the same position-hash seed loadZone derives — the reveal's
-    // own seeded stream fixes the shaft's position, so the reopened hollow
-    // descends into the SAME deeper cave on every visit.
-    for (const d of added) {
-      if (d.kind === 'cave_entrance' || !sidezoneOf(d.kind)) continue;
-      const pos = this.clampPos(vec(d.pos.x, d.pos.y), 28);
-      this.caveEntrances.push({
-        pos,
-        seed: hashStr(`${this.zone.id}:${d.kind}:${Math.round(d.pos.x)},${Math.round(d.pos.y)}`),
-        kind: d.kind,
-        roof: null,
-        mouthTier: d.tier,
-      });
-    }
-  }
+  openHollow(id: string, _opener?: Actor | null, opts?: { silent?: boolean; revive?: boolean; bare?: boolean }): void { return openNativeHollow(this.nativeSceneOpeningHost(),id,_opener,opts); }
 
   // --- THE COMPOSITE BOUND's ACTIVATION SEAM (Secrets Charter, Movement I) --
 
@@ -58941,110 +58812,19 @@ export class World {
    *  arrive on the host's streams). Convex zones carry no carve — bounds
    *  admission is the whole reveal. Still LAZILY HONEST until next boot:
    *  creep/fog skins and the lite pool keep boot-time sizing. */
-  annexReveal(pieceId: string, opts?: { silent?: boolean; revive?: boolean; bare?: boolean }): boolean {
-    const pc = this.arena.pieces?.find(q => q.id === pieceId);
-    if (!pc) return false;
-    if (this.annexOpen.has(pieceId)) return true;
-    pc.active = true;
-    this.annexOpen.add(pieceId);
-    this.arenaHull = hullOf(this.arena);
-    // FOUND IS FOUND (her ruling): the find outlives zone memory — the boot
-    // replay reads this back beyond the TTL. The mundane zone re-dresses on
-    // its own clock; the broken wall stays broken.
-    this.annexFound.add(`${this.zone.id}:${pieceId}`);
-    const spec = this.zoneAnnexSpecs.find(s => s.piece === pieceId);
-    // THE CARVE (grid zones): repaint the recorded chamber + mouth run.
-    if (spec?.carve && this.walk instanceof GridWalkField) {
-      for (const r of spec.carve) {
-        this.walk.fillRegion(r.x + 1, r.y + 1, r.x + r.w - 1, r.y + r.h - 1, 'ground');
-      }
-    }
-    // The face dies (a struck ring-0 face was already spliced by its pop;
-    // replays and remote reveals splice here), and the CHILD faces stand up
-    // inside the freshly opened ground.
-    let dressed = false;
-    for (let i = this.doodads.length - 1; i >= 0; i--) {
-      const d = this.doodads[i];
-      if (d.annex === pieceId) { d.gone = true; this.doodads.splice(i, 1); dressed = true; }
-    }
-    const faceR = (this.walk instanceof GridWalkField ? this.walk.cell : 30) * 0.62;
-    for (const cs of this.zoneAnnexSpecs) {
-      if (annexParentIdOf(cs.piece) !== pieceId) continue;
-      if (this.annexOpen.has(cs.piece)) continue;
-      if (this.doodads.some(d => d.annex === cs.piece)) continue;
-      const face = annexKindDef(cs.kind)?.face;
-      if (!face) continue;
-      this.doodads.push({ pos: vec(cs.face.x, cs.face.y), radius: faceR, kind: face, annex: cs.piece });
-      dressed = true;
-    }
-    if (dressed) this.markDoodadsChanged();
-    if (!opts?.silent) {
-      // THE QUIET RECLASS: no text box — one soft pulse at the broken FACE
-      // (the wall the player watched), never the unseen annex heart; the
-      // faceless dev/QA lane keeps the centroid pulse.
-      const at = spec ? spec.face : vec(pc.x + pc.w / 2, pc.y + pc.h / 2);
-      this.flashes.push({
-        pos: vec(at.x, at.y),
-        radius: spec ? 52 : Math.max(pc.w, pc.h) * 0.4, color: '#d8c890', life: 0.4, maxLife: 0.4,
-      });
-    }
-    // FURNISH (host business — the client passes bare and takes the host's
-    // doodad/actor streams): the kind dresses its ground from the piece's
-    // own seed; loot pays once ever (the revive discipline).
-    if (!opts?.bare && spec) this.annexFurnish(spec, pc, !!opts?.revive);
-    return true;
-  }
+  annexReveal(pieceId: string, opts?: { silent?: boolean; revive?: boolean; bare?: boolean }): boolean { return revealNativeAnnex(this.nativeSceneOpeningHost(),pieceId,opts); }
 
   /** Dress a revealed annex from its piece's own seed (data/annexes.ts —
    *  the openHollow verb surface, one fabric over). Structure replants on
    *  every replay; loot/ambush only at the live find (revive=false). */
-  private annexFurnish(spec: AnnexSpec, pc: { seed?: number }, revive: boolean): void {
-    const kd = annexKindDef(spec.kind);
-    if (!kd) return;
-    const rng = new Rng((pc.seed ?? hashStr(`${this.zone.id}:${spec.piece}`)) >>> 0);
-    const center = vec(spec.rect.x + spec.rect.w / 2, spec.rect.y + spec.rect.h / 2);
-    const added: Doodad[] = [];
-    kd.furnish({
-      center, rect: spec.rect, rng, level: Math.max(1, this.zone.level), revive,
-      addDoodad: (d) => {
-        const dd: Doodad = {
-          pos: vec(d.pos.x, d.pos.y), radius: d.radius, kind: d.kind,
-          ...(d.rot !== undefined ? { rot: d.rot } : {}),
-        };
-        this.doodads.push(dd);
-        added.push(dd);
-      },
-      spawnEnemy: (mid, pos) => {
-        const m = this.createMonster(mid, Math.max(1, this.zone.level), 'enemy');
-        m.pos = this.clampPos(vec(pos.x, pos.y), m.radius);
-        m.fromZoneGen = true; // zone memory captures the annex's survivors
-        this.actors.push(m);
-      },
-      packPick: () => this.zone.packs?.table?.length
-        ? this.weightedPick(this.zone.packs.table, Math.max(1, this.zone.level)) : null,
-      dropGem: (pos) => this.dropGemAt(vec(pos.x, pos.y)),
-      shedOrb: (kind, pos) => this.shedOrb(kind, vec(pos.x, pos.y)),
-    });
-    if (added.length) this.markDoodadsChanged();
-  }
+  private annexFurnish(spec: AnnexSpec, pc: { seed?: number }, revive: boolean): void { return furnishNativeAnnex(this.nativeSceneOpeningHost(),spec,pc,revive); }
 
   /** Reveal by ADDRESS — the cross-zone face of the seam. The current zone
    *  routes to annexReveal; an away zone stamps the run-scope FOUND ledger
    *  (Movement II's adjudication of the old TTL hole: the durable half the
    *  boot replay reads back regardless of memory freshness) plus any
    *  standing memory's annexOpen as the fresh-lane fast path. */
-  annexActivate(zoneId: string, pieceId: string): boolean {
-    if (zoneId === this.zone.id) return this.annexReveal(pieceId);
-    const def = this.zoneMap[zoneId] ?? this.caveMap[zoneId];
-    if (!def?.annexes?.some(r => r.id === pieceId)) return false;
-    this.annexFound.add(`${zoneId}:${pieceId}`);
-    const m = this.zoneMemory.get(zoneId);
-    if (m) {
-      if (!m.annexOpen) m.annexOpen = [];
-      if (!m.annexOpen.includes(pieceId)) m.annexOpen.push(pieceId);
-    }
-    return true;
-  }
+  annexActivate(zoneId: string, pieceId: string): boolean { return activateNativeAnnex(this.nativeSceneOpeningHost(),zoneId,pieceId); }
 
   /** DEV QA LANE: reveal one named piece — or every dormant piece of the
    *  current zone when called bare. Returns how many joined the union. */
