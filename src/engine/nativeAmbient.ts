@@ -90,7 +90,7 @@ export function captureNativeAmbientResolvedInputs(input: NativeAmbientResolvedI
     const array = Array.isArray(value);
     if (Object.getPrototypeOf(value) !== (array ? Array.prototype : Object.prototype)) throw Error('Non-plain native ambient resolved data');
     const keys = Reflect.ownKeys(value), descriptors = Object.getOwnPropertyDescriptors(value);
-    if (keys.some(k => typeof k !== 'string' || !(array && k === 'length') && (['__proto__', 'prototype', 'constructor'].includes(k) || !descriptors[k].enumerable || !('value' in descriptors[k]))))
+    if (keys.some(k => typeof k !== 'string' || !(array && k === 'length') && (['__proto__', 'prototype', 'constructor'].includes(k) || !descriptors[k].enumerable || !Object.hasOwn(descriptors[k], 'value'))))
       throw Error('Non-data native ambient resolved property');
     active.add(value);
     try {

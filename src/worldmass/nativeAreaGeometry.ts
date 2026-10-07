@@ -52,7 +52,7 @@ function encode(value: unknown, path = '$', seen = new Set<object>()): Wire {
   const keys = Reflect.ownKeys(value);
   const read = (key: string): Wire => {
     const d = Object.getOwnPropertyDescriptor(value, key)!;
-    if (!d.enumerable || !('value' in d)) throw Error('Non-data native area field at ' + path + '.' + key);
+    if (!d.enumerable || !Object.hasOwn(d, 'value')) throw Error('Non-data native area field at ' + path + '.' + key);
     return encode(d.value, path + '.' + key, seen);
   };
   let result: Wire;

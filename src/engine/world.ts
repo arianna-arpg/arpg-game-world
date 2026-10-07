@@ -1,3 +1,5 @@
+import { createNativeMonster, stampNativeMonsterLevel, armNativeMonsterAmbush, type NativeMonsterFactoryHost, type NativeMonsterFactorySources } from './nativeMonsterFactory';
+import { nativeSimView, nativeBaseTable, nativeEffectiveSpawn, nativeWildlifeTableFor, nativeCaveAirFor, nativeVerminPressure, type NativePopulationHost, type NativePopulationSources } from './nativePopulationResolution';
 import { nativeFarPoint, nativeFarthestStand, nativeFindFreeSpot, nativePlacementClamp, nativePlacementDataInputs, type NativePlacementHost } from './nativePlacement';
 import { nativeFieldExitPos, nativeExitPosition, nativeBoundaryGateFor, nativeMeldFor, nativeExitRoadAnnotations, nativeProcessionDestination, separateNativeExits, type NativeExitPreparationHost, type NativeExitPreparationSources } from './nativeExitPreparation';
 import { spawnNativeEncounterGroup, type NativeEncounterGroupHost } from './nativeEncounterGroup';
@@ -12025,7 +12027,7 @@ export class World {
       placeInHabitat: actor => world.placeInHabitat(actor), findFreeSpot: (...args) => world.findFreeSpot(...args),
       promoteRarity: (actor, rarity, options) => world.promoteRarity(actor, rarity, options),
       promoteMagicPack: (members, id) => world.promoteMagicPack(members, id),
-      wildlifeTableFor: def => World.wildlifeTableFor(def), verminPressure: () => world.sim.verminfallField?.townPressure() ?? 1,
+      wildlifeTableFor: def => World.wildlifeTableFor(def), verminPressure: () => nativeVerminPressure(world.nativePopulationHost()),
       presenceMul, notice: (text, color, size, category) => world.notice(text, color, size, category),
     };
   }
@@ -12257,12 +12259,7 @@ export class World {
    *  anchor whose country keeps no table): unrowed provenance degrades to
    *  the meadow texture it always had, never to silence. */
   static wildlifeTableFor(def: ZoneDef): (typeof WILDLIFE)[string] | undefined {
-    if (def.fauna) return def.fauna;
-    if (def.faunaProvenance) return def.faunaProvenance;
-    if (def.biome !== undefined) return WILDLIFE[def.biome];
-    const air = World.caveAirFor(def);
-    if (air?.length) return air;
-    return WILDLIFE[def.anchor ?? 'plains'] ?? WILDLIFE.plains;
+    return nativeWildlifeTableFor(World.nativePopulationSources(), def, d => World.caveAirFor(d));
   }
 
   /** The pool roll's identity salt (the CAVE_FACE_SALT discipline): the
@@ -12305,40 +12302,7 @@ export class World {
    *  spawns beneath the chosen table stay live dice (spawnWildlife
    *  unchanged). */
   static caveAirFor(def: ZoneDef): (typeof WILDLIFE)[string] | undefined {
-    if (def.caveDepth == null || def.seed == null || def.dimension !== undefined) return undefined;
-    const face = def.packs
-      ? CAVE_FACE_IDS.find(id => TILESETS[id]?.packs === def.packs) : undefined;
-    const spec = face !== undefined ? TILESETS[face]?.caveFace : undefined;
-    if (face === undefined || !spec) return undefined;
-    // THE THEMED BYPASS: the face's own biomes map names its country. A row
-    // may be BANDED (CaveFaceBiomeRow — the caveFaceBiomeW fold's shape);
-    // the bypass reads the row's own weight band-free, since it identifies
-    // the face's home country, not a depth's share (rootways under the
-    // garden stays themed 'garden' at every rung it serves).
-    let themed: string | undefined; let best = 0;
-    for (const [b, bw] of Object.entries(spec.biomes ?? {})) {
-      const w = typeof bw === 'number' ? bw : bw.w;
-      if (b !== '*' && w >= CAVE_POOL_CFG.themedBar && w > best) { themed = b; best = w; }
-    }
-    if (themed !== undefined) return WILDLIFE[themed];
-    // THE POOL ROLL: claiming rows × strata × anchor affinity, plus the echo.
-    const cands: { table?: (typeof WILDLIFE)[string]; w: number }[] = [];
-    for (const p of CAVE_POOLS) {
-      if (!p.faces.includes(face)) continue;
-      const aff = p.anchors
-        ? (def.anchor !== undefined && p.anchors[def.anchor] !== undefined
-          ? p.anchors[def.anchor] : p.anchors['*'] ?? 1)
-        : 1;
-      const w = p.weight * presenceMul(p.strata, def.caveDepth) * aff;
-      if (w > 0) cands.push({ table: p.table, w });
-    }
-    if (!cands.length) return undefined;
-    cands.push({ table: undefined, w: CAVE_POOL_CFG.anchorEcho }); // the echo's seat
-    let total = 0;
-    for (const c of cands) total += c.w;
-    let roll = new Rng(((def.seed ^ World.CAVE_POOL_SALT) >>> 0)).range(0, total);
-    for (const c of cands) { roll -= c.w; if (roll <= 0) return c.table; }
-    return cands[cands.length - 1].table;
+    return nativeCaveAirFor(World.nativePopulationSources(), def);
   }
 
   /** Populate the zone's ambient FAUNA from its provenance WILDLIFE table
@@ -13396,6 +13360,27 @@ export class World {
     }
   }
 
+  /** Live classic readers; the detached area adapter supplies its own census. */
+  private nativePopulationHost(): NativePopulationHost {
+    const world = this;
+    return {
+      get actors() { return world.actors; }, get player() { return world.player; },
+      get zoneMap() { return world.zoneMap; }, get zone() { return world.zone; },
+      get time() { return world.time; }, get sim() { return world.sim; },
+      get visited() { return world.visited; }, get surveyed() { return world.surveyed; },
+      continentFor: c => world.continentFor(c), simView: () => world.simView(),
+    };
+  }
+  private static nativePopulationSources(): NativePopulationSources {
+    return {
+      get FACTIONS() { return FACTIONS; }, get MONSTERS() { return MONSTERS; },
+      get WILDLIFE() { return WILDLIFE; }, get TILESETS() { return TILESETS; },
+      get CAVE_FACE_IDS() { return CAVE_FACE_IDS; }, get CAVE_POOL_CFG() { return CAVE_POOL_CFG; },
+      get CAVE_POOLS() { return CAVE_POOLS; }, get CAVE_POOL_SALT() { return World.CAVE_POOL_SALT; },
+      get Rng() { return Rng; }, get factionAllowed() { return factionAllowed; }, get presenceMul() { return presenceMul; },
+    };
+  }
+
   /** Snapshot for the world-sim: the node graph plus a live by-faction
    *  headcount of the enemies in THIS zone (one pass over the actor list).
    *  DIMENSION-SCOPED: `nodes`/`byId` carry only the SURFACE graph — every
@@ -13404,27 +13389,7 @@ export class World {
    *  can't creep through the hellgate's back-edge; a warband can't anchor on a
    *  hell node it can't march to. */
   private simView(): OverlayView {
-    const census: Record<string, number> = {};
-    for (const a of this.actors) {
-      if (a.team === 'enemy' && !a.dead && a.faction) {
-        census[a.faction] = (census[a.faction] ?? 0) + 1;
-      }
-    }
-    const charLevel = this.player ? this.player.level : 1;
-    const allNodes = Object.values(this.zoneMap);
-    const nodes: ZoneDef[] = [];
-    const byId: Record<string, ZoneDef> = {};
-    for (const z of allNodes) {
-      if ((z.dimension ?? 'surface') !== 'surface') continue;
-      nodes.push(z); byId[z.id] = z;
-    }
-    return {
-      nodes, byId, allNodes,
-      currentZoneId: this.zone.id, time: this.time, census,
-      charLevel, gates: this.sim.gatesFor(charLevel), visited: this.visited,
-      surveyed: this.surveyed,
-      terrain: (c) => this.continentFor(c).kind,
-    };
+    return nativeSimView(this.nativePopulationHost());
   }
 
   // --- DEV-only helpers (the QA Event tab; see dev/gemSpawner.ts) -------------
@@ -13841,44 +13806,14 @@ export class World {
   /** Run a zone's base table through the world-sim, clamping the count swing. */
   private effectiveSpawn(zone: ZoneDef, base: PackTableEntry[]):
     { table: PackTableEntry[]; countMul: number; inject: string[] } {
-    const r = this.sim.resolve(zone, base, this.simView());
-    // HARD per-biome faction deny: drop entries whose faction the zone forbids
-    // (no goblins in the deep sea). Done HERE, not via spawn-bias, because the
-    // bias path's degenerate guard re-adds a fully-zeroed table. Keep a non-empty
-    // result — if the deny would empty the roster, fall back to the resolved table.
-    const allowed = r.table.filter(e => factionAllowed(MONSTERS[e.id]?.faction ?? '', zone));
-    const table = allowed.length ? allowed : r.table;
-    // THE COHORT LAW (ZoneDef.cohort 'authored'): membership is closed —
-    // injected contest/invasion rosters never stage here. The reweighs above
-    // (day/night, weather, territory tilts on the AUTHORED members) stand.
-    const inject = zone.cohort === 'authored' ? [] : r.injectFactions;
-    return { table, countMul: clamp(r.countMul, 0.5, 2.5), inject };
+    return nativeEffectiveSpawn(this.nativePopulationHost(), World.nativePopulationSources(), zone, base);
   }
 
   /** The roster a zone spawns from: a conqueror's host if the zone has fallen
    *  to an invasion, otherwise its own authored pack table. This is what makes
    *  a converted zone re-open full of its new ruler's monsters. */
   private baseTable(def: ZoneDef): PackTableEntry[] {
-    // THE COHORT LAW: a closed-membership zone NEVER swaps its table — not
-    // for a conqueror, a crusade's grip, or a hell lord's heartland. The
-    // authored cohort is the population, whoever's banner flies on the map.
-    if (def.cohort === 'authored') return def.packs?.table ?? [];
-    // A Crusade that's TIGHTENED its grip (entrenched / converted) floods the zone
-    // with its own faction, the rivals gone — the population IS the crusade's.
-    const cru = this.sim.crusadeField?.crusadeOn(def.id);
-    if (cru?.suppressNatives && FACTIONS[cru.faction]) return FACTIONS[cru.faction].table;
-    const conqueror = this.sim.faction.conquerorOf(def.id);
-    if (conqueror && FACTIONS[conqueror]) return FACTIONS[conqueror].table;
-    // THE WAR BELOW: a lord's HEARTLAND (the ground around its citadel) is
-    // fully the lord's — the population IS the host (the crusade's suppress-
-    // natives grip, in hell's grammar). Ordinary owned ground keeps its native
-    // country and takes the host as an injected contingent (affectSpawns).
-    const hw = this.sim.hellWarField;
-    if (hw && def.dimension === hw.dimension) {
-      const st = hw.zoneWar(def.id);
-      if (st?.heartland && FACTIONS[st.lord.faction]) return FACTIONS[st.lord.faction].table;
-    }
-    return def.packs?.table ?? [];
+    return nativeBaseTable(this.nativePopulationHost(), World.nativePopulationSources(), def);
   }
 
   // ---- THE THEATER FABRIC — the World glue (engine/theater.ts) ------------
@@ -29990,38 +29925,54 @@ export class World {
    *  count) and the boss poise pool. createMonster mints through it and
    *  relevelActor re-stamps a LIVING body through it (the growing bond), so
    *  a re-leveled body and a fresh mint at that level can never drift. */
+  private nativeMonsterFactorySources(): NativeMonsterFactorySources {
+    return {
+      get Actor() { return Actor; },
+      get MONSTERS() { return MONSTERS; },
+      get vec() { return vec; },
+      get mod() { return mod; },
+      get sympathyStat() { return sympathyStat; },
+      get rand() { return rand; },
+      get tellSpecsOf() { return tellSpecsOf; },
+      get DEFENSE_CFG() { return DEFENSE_CFG; },
+      get defDensity() { return defDensity; },
+      get defBreathes() { return defBreathes; },
+      get squishSpecOf() { return squishSpecOf; },
+      get makeReserve() { return makeReserve; },
+      get rollStartTone() { return rollStartTone; },
+      get attunedStatus() { return attunedStatus; },
+      get TUNE_CFG() { return TUNE_CFG; },
+      get chance() { return chance; },
+      get rollItem() { return rollItem; },
+      get monsterTurnSpeed() { return monsterTurnSpeed; },
+      get makeSkillInstance() { return makeSkillInstance; },
+      get SKILLS() { return SKILLS; },
+      get SUPPORTS() { return SUPPORTS; },
+      get validTreeNodes() { return validTreeNodes; },
+      get CHOICE_GROUPS() { return CHOICE_GROUPS; },
+      get plyCountOf() { return plyCountOf; },
+      get MONSTER_LEVEL_SCALE() { return MONSTER_LEVEL_SCALE; },
+      get XP_SCALE() { return XP_SCALE; },
+      get monsterSkillLevelOf() { return monsterSkillLevelOf; },
+      get random() { return Math.random; },
+    };
+  }
+  private nativeMonsterFactoryHost(): NativeMonsterFactoryHost {
+    const world = this;
+    return {
+      get relayStatus() { return world.relayStatus; },
+      get bombardMintRev() { return world.bombardMintRev; }, set bombardMintRev(value) { world.bombardMintRev = value; },
+      stampMonsterLevel: (a, def, level) => world.stampMonsterLevel(a, def, level),
+      applyPartyScale: a => world.applyPartyScale(a),
+      get zoneGenTagging() { return world.zoneGenTagging; },
+      get npcDialogues() { return world.npcDialogues; },
+      armAmbush: (a, spec) => world.armAmbush(a, spec),
+      get time() { return world.time; },
+    };
+  }
+
   private stampMonsterLevel(a: Actor, def: MonsterDef, level: number): void {
-    a.level = level;
-    const lv = level - 1;
-    // THE PLY FABRIC (engine/plies.ts): hit-counted durability stamped at
-    // mint — the life pool underneath stays authored and fully live.
-    if (def.plies) {
-      a.plySpec = def.plies;
-      a.pliesMax = plyCountOf(def.plies, level);
-    }
-    // Monsters grow with wave level through the same modifier system. The
-    // baseline (life/damage/accuracy/evasion) is a global lever; per-stat
-    // scaling is opt-in below.
-    a.sheet.setSource('level',
-      Object.entries(MONSTER_LEVEL_SCALE).map(([stat, c]) => mod(stat, 'increased', c * lv)));
-    // OPT-IN per-stat scaling (StatScale): flat/increased per-level (× lv^pow) +
-    // a geometric MORE term — layered on the baseline, applied ONLY where noted.
-    if (def.scaling) {
-      const scaleMods: Modifier[] = [];
-      for (const [stat, s] of Object.entries(def.scaling)) {
-        const lvp = Math.pow(lv, s.pow ?? 1); // 0 at level 1 ⇒ base is the lv-1 value
-        if (s.flatPerLevel) scaleMods.push(mod(stat, 'flat', s.flatPerLevel * lvp));
-        if (s.incPerLevel) scaleMods.push(mod(stat, 'increased', s.incPerLevel * lvp));
-        if (s.rate) scaleMods.push(mod(stat, 'more', Math.pow(1 + s.rate, lv) - 1));
-      }
-      if (scaleMods.length) a.sheet.setSource('scaling', scaleMods);
-    }
-    // Bosses hold their ground: a default poise pool (levels with them)
-    // unless the def declares one.
-    if (def.boss && def.base.poise === undefined) {
-      a.sheet.setBase('poise',
-        DEFENSE_CFG.poise.bossBase + DEFENSE_CFG.poise.bossPerLevel * lv);
-    }
+    stampNativeMonsterLevel(a, def, level, this.nativeMonsterFactorySources());
   }
 
   /** Re-level a LIVING body in place (the growing bond's door —
@@ -30041,286 +29992,7 @@ export class World {
   }
 
   createMonster(defId: string, level: number, team: Team, owner?: Actor, spawn?: { scale?: number }): Actor {
-    const def: MonsterDef = MONSTERS[defId];
-    const a = new Actor(def.name, team, vec(0, 0));
-    a.statusRelay = this.relayStatus;
-    a.defId = defId;
-    // THE GUN CENSUS: a bombard-wearing mint re-keys updateBombardment's
-    // presence flag the same frame — the one signal a push can't carry.
-    if (def.bombard) this.bombardMintRev++;
-    a.color = def.color;
-    a.shape = def.shape;
-    a.radius = def.radius;
-    a.level = level;
-    a.invulnerable = !!def.invulnerable;
-    a.untargetable = !!def.untargetable;
-    a.levitates = !!def.levitates;
-    for (const [stat, value] of Object.entries(def.base)) a.sheet.setBase(stat, value);
-    // Innate mods + an optional per-monster detection multiplier (one source).
-    const innate = def.mods ? [...def.mods] : [];
-    if (def.detection !== undefined && def.detection !== 1) {
-      innate.push(mod('detectionRange', 'more', def.detection - 1));
-    }
-    // Born-with SYMPATHY LINKS fold as potency-1 stats through the same
-    // innate source — the fabric reads monsters and players identically.
-    if (def.sympathy) {
-      for (const link of def.sympathy) innate.push(mod(sympathyStat(link), 'flat', 1));
-    }
-    if (innate.length) a.sheet.setSource('innate', innate);
-    // THE LATCH (engine/cling.ts): any monster can be a clinger — stamped
-    // at mint so summons, claims and wild spawns all wear it identically.
-    if (def.cling) a.cling = def.cling;
-    // THE GRAB FABRIC's victim-side policy override (engine/grab.ts):
-    // per-body word over the rarity tiers — the Winter King is never
-    // luggage; a fat unique toad may opt back in.
-    if (def.grabbable !== undefined) a.grabbable = def.grabbable;
-    // ROOTED BODIES (the siegebreaker lane, damage.ts): a def that cannot
-    // walk is a STRUCTURE to the slayer fold — stamped at mint like cling,
-    // so summons, spawner objects and wild engines all wear it identically.
-    if (def.base.moveSpeed === 0) a.stationary = true;
-    // THE PLY FABRIC (engine/plies.ts): hit-counted durability stamped at
-    // mint — the life pool underneath stays authored and fully live.
-    // THE LEVEL STAMP (stampMonsterLevel — ONE fold): plies, the baseline
-    // growth source, opt-in per-stat scaling and the boss poise pool, shared
-    // with the in-place relevel a growing bond rides (relevelActor). A fresh
-    // mint stands at full plies.
-    const lv = level - 1;
-    this.stampMonsterLevel(a, def, level);
-    a.plies = a.pliesMax;
-    // CO-OP: scale HOSTILE monsters (never player-side minions) by the live party
-    // size. coopScale returns 0 at 1 player ⇒ the source is never set ⇒ single-
-    // player identical. Lands in starting life via fillResources() below.
-    if (team === 'enemy' && !owner) this.applyPartyScale(a);
-    if (owner) {
-      a.owner = owner;
-      a.kind = 'minion';
-      // Minions inherit the owner's minion-scaling stats as multipliers.
-      a.sheet.setSource('owner', [
-        mod('damage', 'more', owner.sheet.get('minionDamage') - 1),
-        mod('life', 'more', owner.sheet.get('minionLife') - 1),
-      ]);
-    }
-    // Behavior & body plan from the definition. BRAIN VARIANTS roll a
-    // per-spawn PERSONALITY (pack-runner / loner / tide-cycler from one def)
-    // — the same body, a different mind each time it walks in.
-    a.brain = def.brain;
-    if (def.brainVariants?.length) {
-      let total = 0;
-      for (const v of def.brainVariants) total += v.weight;
-      let roll = rand(0, total);
-      for (let vi = 0; vi < def.brainVariants.length; vi++) {
-        const v = def.brainVariants[vi];
-        roll -= v.weight;
-        if (roll <= 0) { a.brain = v.brain; a.brainVariant = vi; break; }
-      }
-    }
-    // THE TELL FABRIC (engine/tells.ts): the binding list this body wears —
-    // def rows + the rolled temperament's rows. Stamped once; the sweep
-    // (updateTells) and the renderer both read it. Undefined = null-cost.
-    a.tellSpecs = tellSpecsOf(def, a.brainVariant);
-    // THE WATCH FABRIC (engine/watch.ts): the ladder posture, stamped the
-    // same way — undefined keeps every gate/sweep/draw hook null-cost.
-    a.watch = def.watch;
-    // Def-level role tag (ambient wildlife etc.) — spawners may still
-    // overwrite it for event roles (patrols, sieges).
-    if (def.tag) a.tag = def.tag;
-    // DUTY POST (brain.ts PostSpec), the def-level lane: every spawn of this
-    // def keeps a station — its first-tick anchor — walking back whenever
-    // idle drift, a shove or a gale strays it. Spawners stamp Actor.aiPost /
-    // postSpec directly for site-exact posts (a holdfast's gate crew).
-    if (def.post) a.postSpec = def.post === true ? {} : def.post;
-    a.passive = !!def.passive;
-    a.driven = !!def.driven; // engine-wheeled — movementLocked's passive lock stands aside
-
-    // aims:false — facing-is-noise bodies (data lever): no aim tick.
-    if (def.aims === false) a.aims = false;
-    if (def.spawnFacing !== undefined) a.facing = def.spawnFacing;
-    // SCALE VARIANCE: a herd reads as a mix of big adults and small young. Roll a
-    // per-spawn body-scale (sizing the body + — with scaleStats — its life/damage),
-    // and below the juvenile cut SWAP to the juvenile brain (the young flee, never
-    // gore). Harmless on any monster without the lever (no source set).
-    if (def.scaleVariance) {
-      const s = spawn?.scale !== undefined && Number.isFinite(spawn.scale) && spawn.scale > 0
-        ? spawn.scale : rand(def.scaleVariance[0], def.scaleVariance[1]);
-      a.spawnScale = s;
-      a.radius = def.radius * s;
-      if (def.scaleStats) a.sheet.setSource('scaleVar', [mod('life', 'more', s - 1), mod('damage', 'more', s - 1)]);
-      // THE YOUNG (engine/pack.ts): the roll is RECORDED, not merely acted
-      // on. Before this flag a juvenile was a one-way brain swap nothing
-      // could ask about afterwards — so the matriarch could not know whom
-      // she was guarding and the den could not show its young as young.
-      if (def.juvenileBelow !== undefined && s <= def.juvenileBelow) {
-        a.juvenile = true;
-        if (def.juvenileBrain) a.brain = def.juvenileBrain;
-      }
-    }
-    // WEIGHT defaults from the BODY: mass grows with the (post-variance)
-    // radius × the material's DENSITY (MATERIAL_NATURE — a knee-high iron
-    // thrall anchors, a man-high wisp flies from a slap) × the def's HEFT
-    // multiplier, unless the def brings its own base.weight — so the
-    // bestiary gets honest heft for free and any monster can still pin or
-    // scale it as data (engine/mass.ts; docs/engine/mass.md).
-    if (def.base.weight === undefined) {
-      a.sheet.setBase('weight',
-        Math.pow(a.radius / DEFENSE_CFG.weight.refRadius, DEFENSE_CFG.weight.radiusPow)
-        * defDensity(def) * (def.heft ?? 1));
-    }
-    // (Bosses hold their ground: the default poise pool — levels with them —
-    // is part of THE LEVEL STAMP above; rank-and-file keep the registry base,
-    // which ships EMPTY: poise is a defense TEXTURE a def authors, never
-    // ambience — a rabbit has none; a knight declares his.)
-    // BREATH: does this body tire? The material's nature (MATERIAL_NATURE,
-    // data/monsters.ts) with the def's own override — read once here so
-    // the AI's default-kite gate is a field test, not a registry walk.
-    a.breathes = defBreathes(def);
-    // Zone Memory: flag the zone's BASE population (spawned inside the tagging
-    // window in loadZone) so it can be snapshotted + restored on re-entry. Overlay
-    // and event spawns fall outside the window, so they stay live (untouched).
-    if (this.zoneGenTagging && team === 'enemy' && !owner) a.fromZoneGen = true;
-    // moveSpeed 0 in the DEF means rooted — the stat itself floors at 30,
-    // which is exactly how barrels learned to walk. Never again. Breakables
-    // (orbDrops) stay shovable; spawners, caches and townsfolk hold their ground.
-    a.anchored = (def.base.moveSpeed ?? 1) <= 0 && !def.orbDrops;
-    a.movementTetherSpec = def.movementTether;
-    a.faction = def.faction;
-    a.adorn = def.adorn;
-    a.material = def.material;
-    a.look = this.npcDialogues.appearanceFor(a.defId!) ?? def.look;
-    if (def.worm) {
-      a.worm = {
-        length: def.worm.length,
-        spacing: def.worm.spacing ?? def.radius * 1.1,
-        taper: def.worm.taper ?? 0.88,
-        segments: [],
-        // THE SEGMENT FABRIC (engine/segments.ts): hittable chains, wound
-        // states, kit-part looks — all data off the def, absent = legacy.
-        ...(def.worm.hittable ? { hittable: true } : {}),
-        ...(def.worm.looks ? { looks: def.worm.looks } : {}),
-        ...(def.worm.wounds ? { wounds: def.worm.wounds } : {}),
-      };
-    }
-    if (def.explodeOnDeath) a.explodeOnDeath = def.explodeOnDeath;
-    if (def.deathBurst) a.deathBurst = def.deathBurst;
-    if (def.refuge) a.refuge = def.refuge;
-    // THE SQUISH FABRIC (engine/squish.ts): normalized once at spawn — the
-    // tread sweep and the separation exemption read a field, never the registry.
-    const squishSpec = squishSpecOf(def);
-    if (squishSpec) a.squish = squishSpec;
-    if (def.habitat) a.habitat = def.habitat; // confine derives lazily (update sweep)
-    if (def.wake) a.wake = def.wake; // the body-wake odometer arms on first move
-    // THE RESERVES (engine/reserves.ts): the body arrives with its pools
-    // filled to their authored share — one live row per spec, minted here
-    // so EVERY spawn path (packs, events, zone-memory restores, summons)
-    // carries the same fuel economy.
-    if (def.reserves?.length) {
-      a.reserves = new Map(def.reserves.map(r => [r.id, makeReserve(r)]));
-      a.reserveSpecs = def.reserves;
-    }
-    if (def.rooted) a.rootedSpec = def.rooted; // the claim, stamped for the slayer fold
-    if (def.volatile) a.volatile = def.volatile; // the poked nest arms
-    if (def.onHitByType) { a.onHitByType = def.onHitByType; a.onHitTypeIcd = def.onHitTypeIcd; } // the body's element grammar
-    // TUNABLE (the attunement fabric): the body wakes in its ground state —
-    // or, for riddle hearts, a rolled one — and WEARS the tone from tick one.
-    if (def.tune) {
-      a.tune = def.tune;
-      a.tone = rollStartTone(def.tune, () => rand(0, 1));
-      a.applyStatus(attunedStatus(a.tone), 0, TUNE_CFG.holdScale, 'attunement');
-    }
-    // CARRIED GEAR (MonsterDef.carry — the Hollowborn): mint the real piece
-    // the body walks in wearing; its credited kill drops exactly this.
-    if (def.carry && (def.carry.chance === undefined || chance(def.carry.chance))) {
-      const worn = rollItem({
-        ilvl: Math.max(1, level),
-        ...(def.carry.rarity !== undefined ? { rarity: def.carry.rarity } : {}),
-        ...(def.carry.category !== undefined ? { category: def.carry.category } : {}),
-      });
-      if (worn) a.carriedGear = worn;
-    }
-    if (def.immuneGround) a.immuneGround = def.immuneGround; // the insured (lava natives)
-    if (def.pathCosts) a.pathCosts = def.pathCosts; // the wayfaring overrides (the magma worm's bath)
-    // ARMED AMBUSH (the ambush fabric): born as waiting scenery — the
-    // update sweep springs it on proximity, a wound springs it instantly.
-    if (def.ambush) this.armAmbush(a, def.ambush);
-    // SHELL GUARD worn as anatomy: the directional absorb, pool full at birth.
-    if (def.shellGuard) {
-      const sg = def.shellGuard;
-      a.shellGuard = {
-        side: sg.side, arcDeg: sg.arcDeg ?? 180,
-        max: sg.max, pool: sg.max,
-        regenDelay: sg.regenDelay ?? 4,
-        regenRate: sg.regenRate ?? sg.max / 6,
-        lastHitAt: -999, broken: false,
-        color: sg.color ?? '#c8b87a',
-        shellVisual: sg.shellVisual,
-        breathe: sg.breathe, // the tidal shell's opening rides along
-      };
-    }
-    // TURN SPEED: derive innate handling from anatomy unless explicitly
-    // authored. Seat control bypasses this innate rate at the steering seam.
-    a.turnSpeed = monsterTurnSpeed(def);
-    a.facingPrev = a.facing; // the first acquired target also pays the turn
-    if (def.flier) { a.flying = true; a.flyingBase = true; }
-    a.spawnedAt = this.time;
-    // Monsters' skills level up with them — same leveling system as the player.
-    const skillLevel = monsterSkillLevelOf(level);
-    a.skills = def.skills.map(id => makeSkillInstance(SKILLS[id], skillLevel));
-    // LEVEL-GATED GRANTS (MonsterGrant): once the monster is high enough, its kit
-    // evolves — gain a new skill, or socket a support into an existing one (riding
-    // the skill instances' default 3 sockets; the cast pipeline reads them).
-    if (def.grants) {
-      const supLevel = 1 + Math.floor(lv / 5);
-      for (const g of def.grants) {
-        if (level < g.atLevel) continue;
-        if (g.chance !== undefined && Math.random() >= g.chance) continue; // per-spawn variant roll
-        if (g.skill && SKILLS[g.skill]) a.skills.push(makeSkillInstance(SKILLS[g.skill], skillLevel));
-        if (g.support && SUPPORTS[g.support]) {
-          const target = g.on ? a.skills.find(s => s?.def.id === g.on) : a.skills[0];
-          if (target) {
-            const slot = target.sockets.findIndex(x => x === null);
-            if (slot >= 0) target.sockets[slot] = { def: SUPPORTS[g.support], level: supLevel };
-          }
-        }
-      }
-    }
-    // THE MONSTER PIN (skill-mode trees, M1): a kit may pin spent tree
-    // nodes per skill — the ONE validation seam applies (structure only;
-    // an authored pin is the def's warrant, no level budget), and every
-    // cast-path read resolves through the views, so the telegraph draws
-    // exactly what the resolve fires. Capability only: no def wears it yet.
-    if (def.skillTrees) {
-      for (const inst of a.skills) {
-        const pin = inst ? def.skillTrees[inst.def.id] : undefined;
-        if (inst && pin?.length) inst.treeNodes = validTreeNodes(inst.def, pin);
-      }
-    }
-    // BOONS (MonsterBoon): spawn-rolled options from the SAME choice pools
-    // the player's tree deals (data/passiveChoices.ts) — mods fold as a
-    // sheet source, an option's graft rides the first skill's graft lane
-    // (the player's mutator seam, verbatim). Attributes are player-pipeline
-    // payloads and deliberately skip the bestiary.
-    for (const b of def.boons ?? []) {
-      if (level < (b.minLevel ?? 1)) continue;
-      const group = CHOICE_GROUPS[b.group];
-      if (!group) continue;
-      if (b.chance !== undefined && Math.random() >= b.chance) continue;
-      const pool = [...group.options];
-      const picks = Math.min(Math.max(1, b.pick ?? 1), pool.length);
-      const mods: Modifier[] = [];
-      for (let i = 0; i < picks; i++) {
-        const opt = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
-        if (opt.mods) mods.push(...opt.mods);
-        if (opt.graft && SUPPORTS[opt.graft.support] && a.skills[0]) {
-          (a.skills[0].grafts ??= []).push({ def: SUPPORTS[opt.graft.support], level: opt.graft.level ?? 1 });
-        }
-        // A boon-rolled WORN CONDUIT rides the same actor-level lane the
-        // player's allocations use — parity by construction.
-        if (opt.conduit) (a.wornConduits ??= []).push(opt.conduit);
-      }
-      if (mods.length) a.sheet.setSource(`boon:${group.id}`, mods);
-    }
-    a.xpValue = Math.round(def.xp * XP_SCALE * (1 + 0.15 * lv));
-    a.fillResources();
-    return a;
+    return createNativeMonster(this.nativeMonsterFactoryHost(), this.nativeMonsterFactorySources(), defId, level, team, owner, spawn);
   }
 
   minionsOf(owner: Actor, monsterId?: string): Actor[] {
@@ -43225,11 +42897,7 @@ export class World {
    *  untouchable unless the spec waits `visible` — the penned herd you can
    *  see seething is armed exactly like the reed lurker you can't. */
   armAmbush(a: Actor, spec: AmbushSpec): void {
-    a.ambushArmed = true;
-    if (!spec.visible) {
-      a.untargetable = true;
-      a.sheet.setSource('ambush', [mod('invisible', 'flat', 1)]);
-    }
+    armNativeMonsterAmbush(a, spec, this.nativeMonsterFactorySources());
   }
 
   /** SPRING an armed ambusher — the reveal, then (pack) the chained herd:

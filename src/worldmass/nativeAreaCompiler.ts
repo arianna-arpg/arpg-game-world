@@ -1,6 +1,8 @@
 /** Whole native layout compilation. This is a preparation boundary only: no
  * bodies, terrain or controllers are published into a running world here. */
 import { Rng } from '../core/rng';
+import { NativeAreaRandom, restoreNativeAreaRandomState, type NativeAreaRandomState } from './nativeAreaRandom';
+import { captureNativeAreaGeneration, type NativeAreaGenerationReceipt } from './nativeAreaGeneration';
 import type { Vec2 } from '../core/math';
 import type { ZoneDef } from '../data/zones';
 import { sidezoneOf } from '../data/sidezones';
@@ -33,14 +35,18 @@ export interface NativeAreaCompileInput {
 }
 function leaseMethods(lease:NativeAreaCompilerLease) {
   const read=Object.getOwnPropertyDescriptor(lease,'readRevision'),check=Object.getOwnPropertyDescriptor(lease,'assertCurrent');
-  if(!read||!check||!('value'in read)||!('value'in check)||typeof read.value!=='function'||typeof check.value!=='function')throw Error('Native compiler lease needs explicit synchronous callbacks');
+  if(!read||!check||!Object.hasOwn(read,'value')||!Object.hasOwn(check,'value')||typeof read.value!=='function'||typeof check.value!=='function')throw Error('Native compiler lease needs explicit synchronous callbacks');
   return {read:()=>read.value.call(lease) as string,check:(certificate:Readonly<NativeAreaCompilerCertificate>,input:Readonly<NativeAreaCompileInput>)=>check.value.call(lease,certificate,input) as unknown};
 }
 /** Frozen inputs precede every callback. The revision is read after the check
  * too, so a callback cannot silently mutate installed sources while certifying. */
 export function compileNativeArea(raw:NativeAreaCompileInput,lease:NativeAreaCompilerLease):Readonly<NativeAreaDescriptor> {
+  return compileNativeAreaCore(raw,lease);
+}
+function compileNativeAreaCore(raw:NativeAreaCompileInput,lease:NativeAreaCompilerLease,
+  continuation?:{rng:Rng;beforeLayout():void;afterLayout():void}):Readonly<NativeAreaDescriptor> {
   const input=copyNativeAreaData(raw),cd=Object.getOwnPropertyDescriptor(lease,'certificate');
-  if(!cd||!('value'in cd))throw Error('Native compiler certificate must be detached data');
+  if(!cd||!Object.hasOwn(cd,'value'))throw Error('Native compiler certificate must be detached data');
   const certificate=copyNativeAreaData(cd.value) as NativeAreaCompilerCertificate;
   validateNativeAreaCertificate(certificate);const methods=leaseMethods(lease);
   const sourceZone=input.mintedZone;
@@ -64,9 +70,15 @@ export function compileNativeArea(raw:NativeAreaCompileInput,lease:NativeAreaCom
   const extraFixtures=structuredClone(input.extraFixtures??[]);
   const bounds={w:zone.size.w,h:zone.size.h,shape:zone.shape!,boundless:!!zone.boundless,
     ...(zone.annexes?.length?{pieces:zone.annexes.map(r=>({...r,active:false}))}:{})};
-  const rng=new Rng(zone.seed!);
-  const {value:layout,sidechannels}=captureNativeGeneration(zone,()=>generateLayout(zone,bounds,rng,entry,exitPoints,extraFixtures));
-  const generationNext=Array.from({length:4},()=>rng.next());
+  const rng=continuation?.rng??new Rng(zone.seed!);
+  const {value:layout,sidechannels}=captureNativeGeneration(zone,()=>{
+    continuation?.beforeLayout();
+    const generated=generateLayout(zone,bounds,rng,entry,exitPoints,extraFixtures);
+    continuation?.afterLayout();
+    return generated;
+  });
+  const witness=Rng.fromState(rng.snapshot());
+  const generationNext=Array.from({length:4},()=>witness.next());
   const effectSources=captureNativeEffectSources(layout.doodads),brittleSources=captureNativeBrittleSources(layout.doodads);
   const doodadRules=[...new Set(layout.doodads.map(d=>d.kind))].map(kind=>[kind,copyNativeAreaData(doodadRuleOf(kind))] as [string,ReturnType<typeof doodadRuleOf>]);
   const entrances:NativeAreaEntrance[]=[];const sidezoneDefinitions:NativeAreaDescriptor['sidezoneDefinitions']=[];let ordinal=0;
@@ -92,4 +104,21 @@ export function compileNativeArea(raw:NativeAreaCompileInput,lease:NativeAreaCom
     requirements:nativeAreaRequirements(zone,geometry.layout,doodadRules,entrances,sidechannels,effectSources,brittleSources),generationNext};
   const frozen=copyNativeAreaData(descriptor);validateNativeAreaDescriptor(frozen);
   stableCheck(revision);return frozen;
+}
+
+/** Compile under explicit native streams. The immediate layout cursor is
+ * captured before any diagnostic witness or source-receipt work. This does
+ * not skip the native effect/terrain/NPC/objective stages before ambient birth. */
+export function compileNativeAreaGeneration(raw:NativeAreaCompileInput,lease:NativeAreaCompilerLease,
+  state:NativeAreaRandomState):Readonly<NativeAreaGenerationReceipt> {
+  const input=copyNativeAreaData(raw),randomStart=restoreNativeAreaRandomState(state);
+  if(randomStart.geometry!==new Rng(input.mintedZone.seed!).snapshot())throw Error('Native generation needs the resolved geometry seed cursor');
+  const streams=NativeAreaRandom.fromState(randomStart);
+  let randomAfterGeneration:Readonly<NativeAreaRandomState>|undefined;
+  const area=streams.run(rng=>compileNativeAreaCore(input,lease,{rng,beforeLayout:()=>{
+    if(serializeNativeAreaData(streams.snapshot())!==serializeNativeAreaData(randomStart))throw Error('Native compiler preparation consumed a generation stream before layout');
+  },afterLayout:()=>{randomAfterGeneration=streams.snapshot();}}));
+  if(!randomAfterGeneration)throw Error('Native generation did not reach its continuation boundary');
+  return captureNativeAreaGeneration({schema:1,algorithm:'native-area-generation-continuation-v1',area,
+    randomStart,randomAfterGeneration,randomAfterCapture:streams.snapshot()});
 }

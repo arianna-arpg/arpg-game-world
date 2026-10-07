@@ -1,3 +1,14 @@
+NativeAreaContinuations retains both native random cursors across full geometry
+and later preparation. Generation receipts remain separate from old area-v1
+identity and refuse random drift outside the actual layout operation. Shared
+native population resolution preserves campaign rules, live staged census and
+exact cave source-face identity; shared monster factories preserve complete
+actors, equipment, scaling, appearance and original failure side effects. Classic
+World uses these same operations. The caller still owes an authentic source
+issuer, full birth ordering, local magic refresh, controller/paging ownership and
+runtime publication. Verify nativearearandom/nativeareageneration,
+nativepopulationresolution/nativemonsterfactory, all types, genqa and sim smoke.
+
 NativeAreaLocal binds complete native geometry to the shared NativeNavigation,
 NativePlacement, NativeEncounterGroup and NativeAmbient stages. Classic World
 uses the same operations. NativeExitPreparation retains lazy native source reads,

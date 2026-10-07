@@ -61,6 +61,10 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_worldmass_nativearearandom.ts', status: 'green', tier: 'fast', why: 'Exact dual native random cursors, zero-state restoration, scoped callbacks and cold layout/effect/population continuation with complete body graphs' },
+  { probe: 'probe_worldmass_nativeareageneration.ts', status: 'green', tier: 'fast', why: 'Unchanged complete native output with durable dual-stream continuation, exact layout boundary, source checks and inherited accessor refusal' },
+  { probe: 'probe_nativepopulationresolution.ts', status: 'green', tier: 'fast', why: 'Archived resolution/wildlife parity, full native loads and isolated area census with actual cave face identity and source receivers' },
+  { probe: 'probe_nativemonsterfactory.ts', status: 'green', tier: 'fast', why: 'All shipped native monster definitions, exact actor and equipment graphs, party scaling, appearance, allocator/random side effects and imported function receivers' },
   { probe: 'probe_nativeambient.ts', status: 'green', tier: 'fast', why: 'Archived actual native pack/habitat/wildlife parity, full body/callback tapes and exact random draws with isolated stage receipts' },
   { probe: 'probe_nativenavigation.ts', status: 'green', tier: 'fast', why: 'Pinned native grid painting and obstacle navigation parity across 45529 cells and 4744 ground queries' },
   { probe: 'probe_nativeplacement.ts', status: 'green', tier: 'fast', why: 'Pinned native free/far/stand placement and exact moverless clamp parity, original pit and tier scopes, RNG and callback tapes' },

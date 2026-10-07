@@ -1579,3 +1579,60 @@ The next playable course still requires two complete naturally generated areas,
 physical substrate/seams, combat and wounds, an entrance, cold Continue, and no
 silently omitted bodies or unsupported environmental mechanisms. Main-content
 parity, mountain/hydrology variety and repeated real-play passes remain open.
+
+
+## NativeAreaContinuations: random state, population decisions and complete births
+
+NativeAreaContinuations records both original streams: the explicit geometry
+Rng and the transitive Math.random stream used by effects and births. Saved
+cursors preserve zero without seed remapping. Synchronous scopes restore the
+outer stream on errors, refuse reentry and expired callbacks, and retain consumed
+draws. Six cold layout/effect/population courses match 376 factories and complete
+body graphs, with 9,938 geometry and 1,668 ambient draws; 1,300 primitive
+comparisons pin the unchanged generator. This does not authorize asynchronous
+work or change native failure side effects into rollback.
+
+The separate generation receipt retains the complete old area descriptor plus
+start, immediate post-layout and post-capture cursors. Diagnostic witnesses use
+a cloned cursor. Preparation and source capture must not consume either stream
+outside actual generateLayout. Nine natural layout/stream pairs retain identical
+legacy output and resume native effect attachment after cold restore. Exact
+source/geography matching, malformed state, inherited descriptor and random
+drift controls guard the boundary. Keep the whole envelope: old area-v1 identity
+does not cover the additional random state. A valid cursor and caller-provided
+lease remain evidence of structure, not an authentic installed-source issuer.
+
+NativePopulationResolution shares native campaign table selection, overlay
+resolution, faction restrictions, authored cohorts, wildlife provenance and cave
+pool rules with World. NativeAreaPopulation binds these decisions to its explicit
+zone, player and staged actors while reading named campaign services at their
+original stages. Exact cave face identity is retained; a detached JSON zone
+cannot silently substitute for the original source-face packs reference. Tests
+compare 630 core and 240 World cases, 1,440 actual cave/wildlife cases, and three
+complete native loads with 220 births and 10,673 random draws. Six isolated
+A/B/A courses use real born populations while unrelated World state throws.
+
+NativeMonsterFactory shares the complete original construction, level stamping
+and ambush operations. Installed sources and explicit host services retain native
+equipment, support grants, party scaling, appearance overrides, tagging, clock
+reads and allocation/revision side effects. The comparison covers every one of
+the 1,184 installed monster definitions, including complete actor graphs and
+failed-birth behavior. Imported functions keep their original receiver semantics.
+These factories produce actual native bodies; promotion and magic-pack refresh
+remain separate native operations with their own stateful dependencies.
+
+The next integration boundary is local hostility and sight/shot geometry feeding
+actual magic-pack refresh. Even zero-time refresh changes shared pack state,
+modifiers and visible effects, so deferring it until publication is not generally
+equivalent. Full birth-stage ordering, authenticated source reconstruction,
+controller and body paging, and the two-area playable/cold-Continue course still
+precede fresh full-area activation. These preparations do not establish complete
+main-content parity or the requested mountain, water and settlement variety.
+
+NativeAreaContinuations verification at this checkpoint: all three type checks,
+all 463 fast probes, 2,607 generation cases (zero failures; four existing
+warnings), and 25 combat smoke episodes pass. The isolated real-client native
+generation course also passes natural mouth/structure discovery, actual walking,
+interior entry, cold Continue and exact return. That browser course exercises
+previously admitted feature owners, not the still-unbound complete-area policy.
+Nine slow and three excluded probes were not part of the fast run.
