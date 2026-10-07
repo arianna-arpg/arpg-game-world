@@ -61,6 +61,8 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_nativescenegeometry.ts', status: 'green', tier: 'fast', why: 'Complete mutable native layouts, doors, tiers, hazards and scenery revisions with archived original behavior, real World delegates and partial failures' },
+  { probe: 'probe_nativescenepopulation.ts', status: 'green', tier: 'fast', why: 'Mutable native census replacement, full remembered bodies and magic groups, objective counts, contest and wave births with exact random and allocation effects' },
   { probe: 'probe_nativeareabirth.ts', status: 'green', tier: 'fast', why: 'Pinned complete native birth ordering through final wells, exact full loads and remembered returns, native controller/body state and failed births' },
   { probe: 'probe_nativeinhabitants.ts', status: 'green', tier: 'fast', why: 'Original native door, furniture, NPC and daily folk stages plus camp, garrison and landmark births with exact order, full state and partial failures' },
   { probe: 'probe_nativesight.ts', status: 'green', tier: 'fast', why: 'Pinned seven native optical operations across complete layouts, exact ray outputs and read order, exception prefixes, live World wrappers and cold local geometry' },

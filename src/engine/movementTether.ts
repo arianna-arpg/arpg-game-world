@@ -79,7 +79,7 @@ export function landMovementTether(a: Actor): void {
   else { a.movementTether.released = true; a.movementTether.returning = false; }
 }
 
-export function refreshMovementTether(a: Actor, w: World): MovementTetherState | undefined {
+export function refreshMovementTether(a: Actor, w: Pick<World, 'actorById'>): MovementTetherState | undefined {
   const t = a.movementTether;
   if (!t || t.released || a.dead) return;
   if (t.anchorId !== undefined) {

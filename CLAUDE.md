@@ -1,3 +1,14 @@
+NativeSceneGeometry and NativeScenePopulation now give complete native layouts
+mutable local geometry and a replaceable actor census. Classic World shares the
+same layout adoption, doors, navigation, movement, hazards, creep installation,
+remembered population, counts, faction contests and wave births. Real factories,
+rarity, magic groups and inhabitant hosts follow census replacement. No source
+issuer, complete environmental/controller owner, full-area publication or paging
+is implied. Bind the actual resolved seed, exits, prior counters and campaign
+services; do not derive them from defaults. Verify nativescenegeometry,
+nativescenepopulation, nativeareabirth, all types, generation and client entry/
+Continue/return. Full scene activation remains a later integration boundary.
+
 NativeAreaBirth shares the complete native post-arrival load sequence with
 classic World, from remembered doors through final lightwells. Objective,
 environment, inhabitants, memory replacement, reward/service and ordered package

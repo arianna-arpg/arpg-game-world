@@ -5,10 +5,12 @@ import { nativeHostileTo, nativeIsPrey, nativeSeekPrey, nativeEnemiesOf, type Na
 import { nativeRelayStatus, type NativeStatusRelaySources, type NativeStatusRelayHost } from './nativeStatusRelay';
 import { createNativeMonster, stampNativeMonsterLevel, armNativeMonsterAmbush, type NativeMonsterFactoryHost, type NativeMonsterFactorySources } from './nativeMonsterFactory';
 import { nativeSimView, nativeBaseTable, nativeEffectiveSpawn, nativeWildlifeTableFor, nativeCaveAirFor, nativeVerminPressure, type NativePopulationHost, type NativePopulationSources } from './nativePopulationResolution';
-import { nativeFarPoint, nativeFarthestStand, nativeFindFreeSpot, nativePlacementClamp, nativePlacementDataInputs, type NativePlacementHost } from './nativePlacement';
+import './nativePlacement';
+import { type NativePlacementHost } from './nativePlacement';
 import { nativeFieldExitPos, nativeExitPosition, nativeBoundaryGateFor, nativeMeldFor, nativeExitRoadAnnotations, nativeProcessionDestination, separateNativeExits, type NativeExitPreparationHost, type NativeExitPreparationSources } from './nativeExitPreparation';
 import { spawnNativeEncounterGroup, type NativeEncounterGroupHost } from './nativeEncounterGroup';
-import { buildNativeConvexNav, paintNativeNavGrounds, stampNativeNavSurface, type NativeNavigationHost } from './nativeNavigation';
+import './nativeNavigation';
+import { type NativeNavigationHost } from './nativeNavigation';
 import { spawnNativePacks, placeNativeInHabitat, spawnNativeWildlife, type NativeAmbientHost } from './nativeAmbient';
 import { serializeAccount } from '../meta/account';
 import type { MassResidentResume } from '../meta/characterResume';
@@ -49,8 +51,7 @@ import { COSMETIC_CFG } from '../data/cosmetics';
 // ---------------------------------------------------------------------------
 
 import { DeedTracker, type DeedEvent } from './deeds';
-import { ensureMovementTether, landMovementTether, updateMovementTethers, refreshMovementTether, movementTetherLimit, movementTetherDistance,
-  savedMovementTether, restoreMovementTether, type MovementTetherState } from './movementTether';
+import { ensureMovementTether, landMovementTether, updateMovementTethers, refreshMovementTether, savedMovementTether, restoreMovementTether, type MovementTetherState } from './movementTether';
 import { CompanionBonds } from './companionBonds';
 import { Assaults, assaultNode } from './assault';
 import { Challenges } from './challenges';
@@ -181,12 +182,12 @@ import { awakenMemoryFromDrop, memoryCommissionReady, memoryProgressionOpen, mem
 import { MEMORY_UNLOCK_CFG, type MemorySecondaryMechanic } from '../data/memoryUnlocks';
 import { powerProgressionRefusal } from '../data/powerProgression';
 import { SKILL_LIST, SKILLS } from '../data/skills';
-import { AMBIENT_TAGS, CAVE_POOLS, CAVE_POOL_CFG, FACTIONS, FIXTURE_IDS, MONSTERS, WAVE_TABLE, WILDLIFE, factionStance, temperOf, defBreathes, defDensity, defLeavesRemains, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
+import { AMBIENT_TAGS, CAVE_POOLS, CAVE_POOL_CFG, FACTIONS, FIXTURE_IDS, MONSTERS, WILDLIFE, factionStance, temperOf, defBreathes, defDensity, defLeavesRemains, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
 import { presenceMul, presenceTable } from './presence';
 import { killRuleMatches, killRules, type KillCtx, type KillRule } from './killHandlers';
 import { updateScene, sceneInterceptFall, sceneNoteCast, type SceneRuntime } from './scenes';
 import { CLASSES, classOpeningSkills, classSkillStat, PROGRESSION, type ClassDef } from '../data/classes';
-import { coopScale } from '../data/coop';
+import '../data/coop';
 import type { CouchSeatTag } from '../data/couch';
 import { SUPPORT_LIST, SUPPORTS } from '../data/supports';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateOpen } from '../data/passives';
@@ -226,7 +227,7 @@ import { PROCESSION_CFG } from '../data/processions';
 import { driveNativeProcession, nativeProcessionConfig, nativeProcessionSteering, type NativeProcessionConfig, type NativeProcessionState } from './processionObjectives';
 import type { MassProcessionCartBirth, MassProcessionAmbushBirth, MassProcessionRoadRow } from '../worldmass/processionTypes';
 import { BOUNTY_CFG } from '../data/bounties';
-import { ADOPT_CFG, CLEAR_CFG, OFFERING_CFG, STRAGGLER_CFG, maybeAdoptObjective, packageAskRow, ventureAskRow } from '../data/objectives';
+import { ADOPT_CFG, OFFERING_CFG, STRAGGLER_CFG, maybeAdoptObjective, packageAskRow, ventureAskRow } from '../data/objectives';
 import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS } from '../data/looks';
 import {
   blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleKinds, doodadRuleOf, generateLayout,
@@ -246,8 +247,8 @@ import { DEATH_PRESENTATION } from '../data/deathPresentation';
 import { deathPresentationPose } from './deathPresentation';
 import { fellableDoodad, fellJitter, fellProgress, RAMPAGE_CFG, rampageSpecOf, type RampageSpec } from './rampage';
 import { canSquish, SQUISH_CFG, squishSpecOf } from './squish';
-import { anyPitNear, PIT_CFG, pitAt, pitIdentityKey, pitSupportedAt, type PitSurface } from './pitfall';
-import { floorStoryOf, landingTier, laneLedgerOnDescend, linkFlipTier, linkSpanOf, makeTierNav, makeTierView, resolveTierCrossing, sameStory, storyTable, tierElevOf, tierEnclosed, tierFloorAt, tierLinkOf, TIER_CFG, type WalkView } from './tiers';
+import { PIT_CFG, pitAt, pitIdentityKey, type PitSurface } from './pitfall';
+import { floorStoryOf, landingTier, laneLedgerOnDescend, linkFlipTier, linkSpanOf, resolveTierCrossing, sameStory, storyTable, tierElevOf, tierEnclosed, tierFloorAt, tierLinkOf, TIER_CFG, type WalkView } from './tiers';
 import { BURST_TOUCH_PAD, lightReach, lightwellOf } from './lightwells';
 import { gateThroatAt } from './layoutRecipes';
 import { liquidOf } from './genkit';
@@ -338,16 +339,16 @@ import { bountyRoutes } from '../world/bountyRoutes';
 import type { TravelRoute } from '../world/travelRoutes';
 import { factionAllowed } from '../world/zonePolicy';
 import { regionGrid, type WalkField, type PathProfile } from '../world/walk'; // worldmass cell geometry
-import { GridWalkField, WALK_CFG } from '../world/gridWalk';
-import { regionKind, survivalResource, survivalEaseStat, survivalBandMeter, SURVIVAL_EASE_CAP, isDoodadGround, LIQUID_CFG, regionPathCost, DOUSE_CFG, type DouseSpec, type SurvivalResourceDef } from '../world/regions';
+import { GridWalkField } from '../world/gridWalk';
+import { regionKind, survivalResource, survivalEaseStat, survivalBandMeter, SURVIVAL_EASE_CAP, isDoodadGround, regionPathCost, DOUSE_CFG, type DouseSpec, type SurvivalResourceDef } from '../world/regions';
 import { continentAt, continentSeedFrom, type ContinentInfo } from '../world/continents';
 import { zoneFeatureHarvest } from '../world/atlas';
 import { climateAt } from '../world/climate';
 import { VeilIndex, VEIL_DEFAULTS, veilSpecOf, type VeilPatch } from './veil';
-import { registerDoodadFamily, doodadFamilyBits, doodadFamilyIndex, doodadFamilyEpoch, doodadFamilyCount } from './doodadFamilies';
-import { buildZoneFog, FOG_BANKS, FOG_CFG, FogField, type FogBank } from './fog';
-import { buildZoneCreep, CREEP_CFG, CREEPS, CreepField, crestPoint, type FrontConsumeRow } from './creep';
-import { lintTrackSpec, placeTrack, riderSurface, TRACK_CFG, trackArcFrac, trackDone, trackPending, trackPose, type PlacedTrack, type TrackPayload, type TrackSpec } from './tracks';
+import { registerDoodadFamily } from './doodadFamilies';
+import { FOG_BANKS, FOG_CFG, FogField, type FogBank } from './fog';
+import { CREEP_CFG, CREEPS, CreepField, crestPoint, type FrontConsumeRow } from './creep';
+import { placeTrack, riderSurface, TRACK_CFG, trackArcFrac, trackDone, trackPending, trackPose, type PlacedTrack, type TrackPayload, type TrackSpec } from './tracks';
 import {
   anchorVent, cometFanOf, columnPayload, fieldSurgeWindow, GEYSER_CFG, lintGeyserSpec, nextSurgeAfter,
   rainFanOf, rollGeyserField, seatVent, ventDownstream, ventReadAt, ventSpill,
@@ -355,7 +356,7 @@ import {
 } from './geysers';
 import { dwellerPhaseAt, lintVentDweller, VENT_DWELLER_CFG, type DwellerPhase } from './ventDweller';
 import { REGROWTH_CFG, SCALD_CFG, type BaskSpec } from '../data/scald';
-import { LEDGER_TRAP_SPRUNG, lintTrapworkSpec, trapAnchor, trapEffect, trapTriggerHit, TRAPWORK_CFG, type PlacedTrapwork, type TrapHost, type TrapworkSpec } from './trapworks';
+import { LEDGER_TRAP_SPRUNG, trapAnchor, trapEffect, trapTriggerHit, TRAPWORK_CFG, type PlacedTrapwork, type TrapHost, type TrapworkSpec } from './trapworks';
 import { driveOccSites, OCC_CFG, type OccHost, type OccKinSpec, type OccSite } from './occurrences';
 import { attunedStatus, rollStartTone, toneAccepted, toneOfAmounts, toneTint, TUNE_CFG } from './tuning';
 import { capturePuzzleKindles, restorePuzzleKindles, pickKnockNode, puzzleContactHeatsCombat, PUZZLE_CFG, PUZZLE_KINDS, puzzleHumOf, puzzleKnockOf, puzzleRewardOf, puzzleSpillOf, type PuzzleHost, type PuzzleRun, type PuzzleCheckpoint } from './puzzles';
@@ -445,7 +446,7 @@ import { dimensionDef, dimensionBiomeAt, dimensionBiomeDepth, dimensionIds, dime
 import { radianceOf, radianceCondHeld, type RadianceCond } from '../world/radiance';
 import { delverMulAt } from '../world/strata';
 import { COURSE_FIELD_SALT, courseBiomeAt, courseMintHints, strewnInstancesNear, type CourseInstance, type CourseMintHints, type CourseSpec } from '../world/courses';
-import type { DisplacementPolicy, CollisionResult, RecoveryPolicy, DamageSpec, RegionKind } from '../world/regions';
+import type { DisplacementPolicy, CollisionResult, RecoveryPolicy, DamageSpec } from '../world/regions';
 import { registerGenPin } from './genPins';
 import { authoredMapOf, authoredZoneSpec, definedSpec, sealAuthoredZone } from './authoredMaps'; // THE AUTHORED-MAP FABRIC
 import type { ZoneSpec } from './worldgen';
@@ -535,7 +536,7 @@ import { WEATHER_DEFS, WET_SKY, type WeatherFront, type WeatherStrike } from '..
 import { eventFrontFor } from './eventWeather';
 import { WEATHER_DRESS_CFG, dressPlanFor, rollDressPieces } from './weatherDress';
 import { dayCycle, inPhases, DAY_LENGTH } from '../world/daynight';
-import { activeAnnexKey, clampToBounds, exitInside, hullOf, insideBounds, samplePoint, type Bounds } from '../world/shape';
+import { exitInside, hullOf, samplePoint, type Bounds } from '../world/shape';
 import { distFromHome, traitsOf, isDeathAligned, factionTemper } from '../world/traits';
 import { extractionLookFor } from '../data/extraction';
 import { REMNANT_KINDS, remnantDropStat } from '../data/remnants';
@@ -595,6 +596,9 @@ import {
   type WorldStateRestore, type ResumeSpawn, type SavedPlayerSpot, type SavedZoneMemory, type VendorHoldSave, type WorldStateSave, type SavedQuestEntry,
 } from '../meta/worldstate';
 import { birthNativeArea, type NativeAreaBirthHost, type NativeAreaBirthArguments } from './nativeAreaBirth';
+import { nativeSceneDoodadsAt, nativeSceneDoodadsNear, nativeSceneEnsureDoodadIdx, nativeSceneSyncFamRevs, nativeSceneMarkDoodadsChanged, nativeSceneDoodadFamilyRev, nativeScenePathField, nativeSceneTierPathField, nativeSceneZonePits, nativeScenePitHomeKinds, nativeSceneGroundInsured, nativeSceneWalkResolve, nativeSceneWalkSweep, nativeScenePitResolve, nativeScenePitSweep, nativeSceneClampPos, nativeScenePointInSolid, nativeSceneGroundAt, nativeSceneRoofedStructureAt, nativeSceneSetDoorState, nativeSceneAddTrack, nativeSceneCollectContactHazards, nativeSceneAddTrapwork, nativeSceneNativeNavigationHost, nativeSceneBuildConvexNav, nativeScenePaintNavGrounds, nativeSceneStampNavSurface, nativeSceneNativePlacementHost, nativeSceneFarPoint, nativeSceneFarthestStand, nativeSceneFindFreeSpot, nativeSceneDoorSpots, nativeSceneClearOfDoors, nativeSceneClearTransitSpot, nativeSceneInteractSpot, nativeSceneSeededDraw, nativeSceneOpaqueAt, nativeSceneInstallCreepFront, nativeSceneFrontConsume, type NativeSceneGeometryHost } from './nativeSceneGeometry';
+import { adoptNativeAreaLayout, type NativeAreaLayoutHost, type NativeAreaLayoutArguments } from './nativeAreaLayout';
+import { restoreSceneEnemies, sceneCountedEnemies, sceneObjectiveCountable, sceneConfineUnreachable, sceneRollCullNeed, sceneLivingSpawners, spawnSceneContest, spawnSceneWave, sceneSpawnPoint, sceneIsAmbientTag, applySceneWaveFrenzy, scenePartyScaleCount, applyScenePartyScale, type NativeSceneServiceHost } from './nativeScenePopulation';
 
 export type { Doodad } from './levelgen';
 
@@ -923,16 +927,6 @@ export const SCENERY_CFG = {
   /** Door clearance a planted body keeps (interactSpot's clear). */
   portalClear: 200,
 } as const;
-
-/** THE SEEDED-FALLBACK salt (World.seededDraw → farPoint's `draw`). A load-time
- *  placement that holds a seeded stream must not fall back to the TRUE die when
- *  the POI pool runs dry, or its ground stops being a function of the zone seed
- *  — the gap that let a remembered survey spire re-place itself somewhere new
- *  while its banked charge (restored by INDEX) followed the old ordinal. Its own
- *  salt, like SCENERY_CFG's: the fallback draws from a DEDICATED sub-stream and
- *  never from the caller's rng, so making a lane reproducible shifts no other
- *  lane's draw order. */
-const FARPOINT_SALT = 0x7a4f0d;
 
 /** DESERT HEAT tunables (World.updateScorch — THE SCORCH BAR's ambient
  *  lanes): the sunscorch cadence. ONE bar unit == ONE legacy stack, so
@@ -5567,22 +5561,10 @@ export class World {
    *  (1 − the patron's mercEase stat) — the Harborwarden's Fair Company node
    *  buys the weight down to the TRUE SOLO CURVE with the blades beside you.
    *  The one place hirelings touch difficulty, and every term is a dial. */
-  private partyScaleCount(): number {
-    const ease = Math.min(1, Math.max(0, this.player.sheet.get('mercEase')));
-    const mercWeight = MERC_CFG.partyScaleWeight * (1 - ease);
-    return Math.max(1, this.seats.reduce((n, s) =>
-      n + (s.actor.dead ? 0 : s.merc ? mercWeight : 1), 0));
-  }
+  private partyScaleCount(): number { return scenePartyScaleCount(this.nativeScenePopulationHost()); }
 
   /** Set (or clear) the co-op party-size scaling source on one hostile enemy. */
-  private applyPartyScale(a: Actor): void {
-    const s = coopScale(this.partyScaleCount());
-    if (s.life > 0 || s.damage > 0) {
-      a.sheet.setSource('partyScale', [mod('life', 'more', s.life), mod('damage', 'more', s.damage)]);
-    } else {
-      a.sheet.removeSource('partyScale');
-    }
-  }
+  private applyPartyScale(a: Actor): void { return applyScenePartyScale(this.nativeScenePopulationHost(),a); }
 
   /** Re-scale all LIVING enemies after a join/leave, PRESERVING each one's current
    *  life fraction — so a join can't heal a half-dead boss and a leave can't gib
@@ -6495,283 +6477,7 @@ export class World {
     const crusadeWorks = this.crusadeFixtureSpecs(def, entry);
     this.crusadeWorksAt = crusadeWorks ? vec(crusadeWorks.center.x, crusadeWorks.center.y) : null;
     const layout = generateLayout(def, this.arena, rng, entry, this.exits.map(e => e.pos), crusadeWorks?.fixtures);
-    this.doodads = layout.doodads;
-    // RULE-EFFECT ATTACH: a kind whose DOODAD_RULES row declares a standing
-    // `effect` (lava's heat wash, a leyline node's element surge) gets it
-    // here — on the FRESH doodad list, with a randomized first cooldown —
-    // the ONE seam every gen path pours through (tileset stamps, landmark
-    // pours, cave mints). The old lava/magma_core special case ran BEFORE
-    // this assignment and armed the PREVIOUS zone's array — any kind's data
-    // row now arms the zone actually being loaded.
-    for (const d of this.doodads) {
-      if (d.effect) continue;
-      const rEff = doodadRuleOf(d.kind).effect;
-      if (rEff) d.effect = { ...rEff, cd: rand(0, rEff.interval) };
-    }
-    this.bridges = layout.doodads.filter(d => doodadRuleOf(d.kind).spans);
-    this.grounds = layout.doodads.filter(d => GROUND_KINDS.includes(d.kind));
-    this.walk = layout.walk ?? null; // a non-convex layout's walkability (else convex)
-    // THE TIER FABRIC (engine/tiers.ts): one walk view per elevated story —
-    // stateless adapters over the SAME grid (tier flags on region rows), so
-    // carves and repaints self-heal on every layer by construction. Reads
-    // `def.tiers` (generateLayout just stamped it), never this.zone (stale
-    // until the assignment below).
-    if (this.walk) {
-      const lv = Math.max(1, def.tiers?.levels ?? 1);
-      this.tierViews = [];
-      for (let t = 1; t <= lv; t++) this.tierViews[t] = makeTierView(this.walk, t);
-    } else this.tierViews = null;
-    this.tierCrossings.length = 0; // the chase ledger is zone-local
-    this.tierNavs.clear(); this.tierSeats = null; // per-story fields die with their zone
-    this.airPockets = layout.airPockets ?? []; // underwater: circular bubbles for the renderer
-    this.grantedPocketCache.clear();
-    this.grantedTrailMemory.clear();
-    this.syncedGrantedPockets = undefined;
-    this.structures = layout.structures ?? []; // plan structures (rects/roofs/doors/slots)
-    // A PORT's DOCK: planted on the oceanward arena edge (the coast landmark's
-    // liquid pools that side too, since both read the same bearing convention).
-    // Dwell at it to open the Sail menu.
-    // THE DOCK-LOCATION LAW: a layout that placed its own dock (the
-    // harborcove pier's BERTH) owns the whole quay — this oceanward formula
-    // plant and its dressing stand down, so a recipe's dock is a real PLACE
-    // (piers, planks, lanterns), never doubled by the fallback. Legacy
-    // ports without one keep the old shape byte-true.
-    if (def.port && !this.doodads.some(d => d.kind === 'dock')) {
-      const a = this.oceanBearing(def.map);
-      const dock = vec(
-        this.arena.w / 2 + Math.cos(a) * (this.arena.w / 2 - 150),
-        this.arena.h / 2 + Math.sin(a) * (this.arena.h / 2 - 150));
-      this.doodads.push({ pos: this.clampPos(dock, 26), radius: 26, kind: 'dock' });
-      // THE HARBOR BOARD (data/ports.ts): planted a step INLAND of the dock —
-      // dwell to read the hearsay (far omens as rumor rows), hire passage down
-      // the shipping lanes, or buy a chart of a far seat. The dock keeps its
-      // own law: dwelling THERE still casts off directly. HARBORHOLD ground
-      // (a legacy town, or a paired quay reading its anchor's ladder)
-      // suppresses this plant — the board is a SERVICE seated at its plan
-      // anchor (the knowledge network is the hold's reward; refreshHoldServices).
-      if (!def.harborhold && !def.holdAnchor) {
-        const board = vec(dock.x - Math.cos(a) * 130, dock.y - Math.sin(a) * 130);
-        this.doodads.push({ pos: this.clampPos(board, 16), radius: 16, kind: 'harbor_board' });
-      }
-      // THE HAVEN'S QUAY (ZoneDef.portTier — the sea's hub harbor wears its
-      // trade): lantern posts flanking the dock and cargo stacked along the
-      // quay line, seeded per zone — a haven READS as a haven from the pier.
-      if (def.portTier === 'haven') {
-        const qr = new Rng(((def.seed ?? 0) ^ 0x9a7b0) >>> 0);
-        const px = -Math.sin(a), py = Math.cos(a); // along-quay axis
-        for (const side of [-1, 1]) {
-          this.doodads.push({
-            pos: this.clampPos(vec(dock.x + px * side * 110, dock.y + py * side * 110), 10),
-            radius: 10, kind: 'lantern_post',
-          });
-        }
-        const stacks = qr.int(2, 4);
-        for (let i = 0; i < stacks; i++) {
-          const t = qr.range(-1.4, 1.4);
-          const inland = qr.range(60, 150);
-          this.doodads.push({
-            pos: this.clampPos(vec(
-              dock.x + px * t * 130 - Math.cos(a) * inland,
-              dock.y + py * t * 130 - Math.sin(a) * inland), 16),
-            radius: 16, kind: 'cargo_stack',
-          });
-        }
-      }
-    }
-    if (def.port) {
-      // THE FIRST PORT (once per account-run arc): finding your first harbor
-      // is finding THE SEA — name it, say what the dock means, and stamp the
-      // ledger (the meta hooks future shipwright/voyager unlocks read).
-      // seas_found counts each named water once per run session.
-      const seaName = this.seaNameOf(def);
-      if (!this.ledger.first_port_found) {
-        bumpLedger(this.ledger, 'first_port_found');
-        this.notice(`you have found ${seaName ?? 'the sea'} — the dock casts off, the board knows the water`, '#7fd0ff', 16, 'world');
-      }
-      if (def.seaId && !this.seasSeen.has(def.seaId)) {
-        this.seasSeen.add(def.seaId);
-        bumpLedger(this.ledger, 'seas_found');
-      }
-    }
-    // THE RIVER OF SOULS (world/soulriver.ts): finding ANY of its strewn
-    // shores stamps the one ledger mark and says what the ferry means (the
-    // untethered river is one river, met again — the first meeting speaks).
-    if (isSoulriverId(def.id) && !this.ledger.soul_river_found) {
-      bumpLedger(this.ledger, 'soul_river_found');
-      this.notice('the River of Souls — board the Pale Ferry; the dead pour this way through every country of the deep', '#9fd8ec', 16, 'world');
-    }
-    // THE BREACH (bottom of the cave ladder): the torn way into the Underworld.
-    this.breachPos = null;
-    if (def.breach) {
-      // clearTransitSpot: the tear must never open ON the climb-out portal or a
-      // deeper mouth — stacked transitions leave one of them un-dwellable.
-      const p = this.clearTransitSpot(this.clampPos(this.farPoint(360), 30));
-      this.breachPos = vec(p.x, p.y);
-      this.doodads.push({ pos: vec(p.x, p.y), radius: 30, kind: 'breach' });
-    }
-    // DIMENSION GATE DOODADS (DimensionEntry.gateDoodad): any registered
-    // dimension whose entry names a gate doodad KIND turns every standing
-    // doodad of that kind into a realm gate here (the Ascent's shining arch
-    // at a cloud shelf's far end). Pure registry scan — no kind literals.
-    // ONE exception, same registry read: a gate whose DESTINATION is the
-    // zone underfoot never arms. enterDimension can only land in the
-    // dimension's own gate zone, so an arch standing INSIDE that zone is a
-    // door to the ground it stands on — the "Firmament inside the Firmament"
-    // loop: an exit-labeled ring that recenters the player where they
-    // arrived (and, planted near a fan portal, OUT-DWELLS it — realm_gate
-    // 0.45s vs zone_exit 0.5s — sealing a real road out). The doodad still
-    // stands (the arrival's own monument); only the crossing disarms, and
-    // dimGatesView stops labeling it as a way somewhere. Heals by
-    // construction: dimGates is re-derived every load, never persisted.
-    this.dimGates = [];
-    for (const dimId of dimensionIds()) {
-      const ent = dimensionDef(dimId).entry;
-      const gd = ent?.gateDoodad;
-      if (!ent || !gd || ent.gate.id === def.id) continue;
-      for (const d of this.doodads) {
-        if (d.kind === gd) this.dimGates.push({ pos: vec(d.pos.x, d.pos.y), dimId, radius: d.radius });
-      }
-    }
-    // Reset the boss-fight runtime + its FX HERE (before the boss-spawn block below
-    // sets bossRun) — the late overlay-reset block runs AFTER the population spawn
-    // and would otherwise clobber a freshly-inited bossRun.
-    this.bossRun = null;
-    this.arenaSinks.clear(); // per-boss collapse records are zone-transient
-    this.migrantSquadId = undefined; // each zone's herd is its own squad
-    this.arenaWash = null;
-    this.shake = 0;
-    // Snow is per-visit: frozen biomes wake already blanketed (their floor),
-    // everyone else starts bare and lets the sky decide. The runtime floor
-    // resets with it — whoever holds snow here (Deepwinter) re-pins on entry.
-    this.snowCover = (this.zone.theme.heat ?? 0.5) <= 0.05 ? SNOW_CFG.frozenBaseline : 0;
-    this.snowFloor = 0;
-    this.weatherDressAcc = WEATHER_DRESS_CFG.cadenceSec; // dress reconciles on the first beat in
-    this.tempGrounds = [];
-    // Evaporating pools persist ON their doodads (zone memory) — harvest
-    // them back into the sweep so a revisit resumes the drying mid-step.
-    this.evaporating = this.doodads.filter(d => d.evap && !d.gone);
-    // THE RAMPAGE FABRIC: felled state is strictly runtime — a fresh load
-    // mints pristine ground from seed (the reversion guarantee's second
-    // road), so the regrow sweep starts empty by construction.
-    this.regrowing = [];
-    this.rampageTimer = 0;
-    // THE LIVING FOG (engine/fog.ts): banks gather on a SALTED copy of the
-    // layout seed — fog can never advance layout/spawn rng — and roam from
-    // there, transient like all ambient texture. Open-sky zones (no
-    // ambientDark) also breed sky-born mist under a 'fog' weather front.
-    this.fog = buildZoneFog(
-      this.zone.theme.fog, this.currentZoneSeed, this.arena, this.doodads,
-      new Rng((this.currentZoneSeed ^ FOG_CFG.salt) >>> 0),
-      this.zone.theme.ambientDark == null);
-    // THE CREEP (engine/creep.ts): ambient membrane pockets seed on their
-    // OWN salted stream — like fog, creep can never advance layout/spawn
-    // rng. Runtime spreaders (packages, creep-heart monsters) plant more
-    // through creepEnsure(); everything here is rebuilt per visit.
-    this.creep = buildZoneCreep(
-      this.zone.theme.creep,
-      // The aquatic flag rides along so sea-forsworn kinds (notAquatic —
-      // no water waves inside the sea) are refused structurally at build.
-      { ...this.arena, ...(this.zone.aquatic ? { aquatic: true } : {}) },
-      new Rng((this.currentZoneSeed ^ CREEP_CFG.salt) >>> 0));
-    // Advancing fronts read the land through ONE installed window (ways
-    // snapshot + terrain adapter); a front-less field pays nothing for it.
-    if (this.creep) this.installCreepFront(this.creep);
-    // THE TRACK FABRIC (engine/tracks.ts): moving-hazard lanes. Gen-emitted
-    // lanes (landmark builders — the groove already baked under them) plus
-    // ZoneTheme rows; packages ensure more at runtime. Placement is pure
-    // geometry — no rng, no state: rider poses derive from the synced clock.
-    this.tracks = [];
-    this.trackSweepAcc = 0;
-    for (const spec of [...(layout.tracks ?? []), ...(this.zone.theme.tracks ?? [])]) {
-      this.addTrack(spec);
-    }
-    // Standing contact doodads (DoodadRule.contact — bumpers): collected once;
-    // swept beside the lanes.
-    this.collectContactHazards();
-    // THE TRAPWORKS FABRIC (engine/trapworks.ts): triggers wired to the
-    // world's own hazards. Gen-emitted rows (the interiors' trap pass) plus
-    // ZoneTheme rows; runtime ensures extend. Sprung state is transient —
-    // the zone re-generation re-arms every mechanism (the collapse
-    // transience doctrine: leave and return, the crypt has reset its teeth).
-    this.trapworks = [];
-    this.trapSweepAcc = 0;
-    this.trapDeferred = [];
-    for (const spec of [...(layout.trapworks ?? []), ...(this.zone.theme.trapworks ?? [])]) {
-      this.addTrapwork(spec);
-    }
-    // Cave mouths: pair each cave_entrance doodad with its stable seed (pushed
-    // in lock-step by stampCaveMouth). Stepping onto one descends into a cave.
-    // THE MOUTH SEAT: a STORY-SEATED door (tier >= 1 — relocateDeepDoors'
-    // sunken gates) keeps its EXACT seat, bounds-only — the ground-story
-    // furniture push and ground confinement are the wrong frame for a door
-    // standing on its own story's floor (the street-lamp law), and they
-    // tore the dwell entry off the drawn door (the 264px crypt_gate
-    // divergence; the relocation now guarantees an in-shape duct seat, so
-    // the bounds clamp is a no-op safety). Ground mouths keep the classic
-    // byte-identical clamp.
-    const mouthSeat = (d: { pos: Vec2; tier?: number }): Vec2 =>
-      (d.tier ?? 0) >= 1
-        ? clampToBounds(vec(d.pos.x, d.pos.y), 28, this.arena)
-        : this.clampPos(vec(d.pos.x, d.pos.y), 28);
-    const mouths = layout.doodads.filter(d => d.kind === 'cave_entrance');
-    this.caveEntrances = mouths.map((d, i) => ({
-      pos: mouthSeat(d),
-      seed: layout.caveSeeds[i] ?? 0,
-      kind: 'cave_entrance',
-      mouthTier: d.tier,
-    }));
-    // REGISTERED SIDEZONE entrances (data/sidezones.ts): any OTHER doodad kind
-    // with a SidezoneDef is a dwell-mouth too — the cellar hatch, a package's
-    // arena maw. Their pocket seed derives from the mouth's POSITION (stable:
-    // the layout regenerates from a fixed def.seed), where classic caves ride
-    // the stampCaveMouth caveSeeds zip. An indoorsOnly mouth resolves its home
-    // roof HERE, once — mouths never move.
-    for (const d of layout.doodads) {
-      const sz = sidezoneOf(d.kind);
-      if (d.kind === 'cave_entrance' || !sz) continue;
-      const pos = mouthSeat(d);
-      this.caveEntrances.push({
-        pos,
-        seed: hashStr(`${zoneId}:${d.kind}:${Math.round(d.pos.x)},${Math.round(d.pos.y)}`),
-        kind: d.kind,
-        roof: sz.indoorsOnly ? this.roofedStructureAt(pos) : null,
-        mouthTier: d.tier,
-      });
-    }
-    // THE SPAN MOUTHS (the rooted web, data/underspans.ts): pair this zone's
-    // spanMouth doodads with its span MEMBERSHIPS — mouths sorted by
-    // position, spans by id, zipped by ordinal (both orders deterministic per
-    // layout, so the pairing is persistent geography). A paired mouth's seed
-    // re-keys to the SPAN hash — parent-independent, so every member's door
-    // derives the one shared pocket (`cave_<span>`). A surplus mouth stays a
-    // dead gate (opens nothing, warned); a missing mouth leaves the far
-    // arrival landing at the zone's own spawn instead of a doorstep.
-    {
-      const spanIds = [...new Set((def.underways ?? []).map(u => u.span))].sort();
-      if (spanIds.length) {
-        const spanMouths = this.caveEntrances
-          .filter(en => sidezoneOf(en.kind)?.spanMouth)
-          .sort((a, b) => (a.pos.y - b.pos.y) || (a.pos.x - b.pos.x));
-        for (let i = 0; i < spanMouths.length && i < spanIds.length; i++) {
-          spanMouths[i].underSpan = spanIds[i];
-          spanMouths[i].seed = hashStr(spanIds[i]);
-        }
-        if (spanMouths.length < spanIds.length) {
-          console.warn(`[underspans] zone '${zoneId}': ${spanIds.length} span membership(s), only ${spanMouths.length} mouth(s) seated`);
-        }
-      }
-    }
-    // SECRET HOLLOWS (the hollows fabric): the layout's sealed pockets. Fresh
-    // per visit; the remembered opens re-carve just below (after door states),
-    // once the doodads and the walk grid are both live.
-    this.zoneHollows = layout.hollows ?? [];
-    this.openedHollows = new Set();
-    // SEALED ANNEX FACES (the growing zone): the layout's reveal records —
-    // remembered + found opens replay below through the same seam.
-    this.zoneAnnexSpecs = layout.annexes ?? [];
-    this.caveExitGrace = false; // re-armed by the cave-return path after this returns
-
-    this.zoneEntry = vec(entry.x, entry.y);
+    this.runNativeAreaLayout(def,layout,entry,zoneId);
     // WAKE HERE (GeneratedLayout.spawnAt): arriving WITHOUT a back-portal — a
     // fresh run, a respawn — lands the party at the plan's declared spawn
     // cell (the town's bedside) instead of the geometric entry. zoneEntry
@@ -10776,40 +10482,12 @@ export class World {
    *  descent platform, the waypoint, docks, dimension gates. Every clearance-
    *  aware placement (transit spots, altars/shrines/spires/chests/caches)
    *  measures against this ONE list — a new door kind joins here once. */
-  private doorSpots(): Vec2[] {
-    const spots: Vec2[] = [
-      this.zoneEntry,
-      ...this.exits.map(e => e.pos),
-      ...this.caveEntrances.map(c => c.pos),
-      ...this.demonPortals.map(g => g.pos),
-      ...this.crusadePortals.map(g => g.pos),
-      ...this.necropolisPortals.map(g => g.pos),
-      ...this.fractureRifts.map(g => g.pos),
-      ...this.dimGates.map(g => g.pos),
-    ];
-    if (this.breachPos) spots.push(this.breachPos);
-    if (this.descentSite) spots.push(this.descentSite.platform);
-    if (this.waypointPos) spots.push(this.waypointPos);
-    for (const d of this.doodads) if (d.kind === 'dock') spots.push(d.pos);
-    return spots;
-  }
+  private doorSpots(): Vec2[] { return nativeSceneDoorSpots(this.nativeSceneGeometryHost()); }
 
   /** Is a point at least `clear` from every door? (doorSpots) */
-  private clearOfDoors(p: Vec2, clear: number): boolean {
-    return this.doorSpots().every(s => dist(p, s) >= clear);
-  }
+  private clearOfDoors(p: Vec2, clear: number): boolean { return nativeSceneClearOfDoors(this.nativeSceneGeometryHost(),p,clear); }
 
-  private clearTransitSpot(at: Vec2, clear = MIN_PORTAL_SEP + 14): Vec2 {
-    if (this.clearOfDoors(at, clear)) return at;
-    for (let ring = 1; ring <= 5; ring++) {
-      for (let k = 0; k < 8; k++) {
-        const a = (k / 8) * Math.PI * 2 + ring * 0.39; // stagger rings so probes never line up
-        const p = this.clampPos(vec(at.x + Math.cos(a) * clear * ring, at.y + Math.sin(a) * clear * ring), 30);
-        if (this.clearOfDoors(p, clear)) return p;
-      }
-    }
-    return at;
-  }
+  private clearTransitSpot(at: Vec2, clear = MIN_PORTAL_SEP + 14): Vec2 { return nativeSceneClearTransitSpot(this.nativeSceneGeometryHost(),at,clear); }
 
   /** A stand-clear spot for an INTERACTIVE placement (altar, shrine, spire,
    *  chest, cache): prefer a generation POI that honors the door clearance
@@ -10823,26 +10501,7 @@ export class World {
    *  Clearance is data:
    *  INTERACT_PLACE_CFG.portalClear or the def's own portalClear. */
   private interactSpot(pois: Vec2[], rng: Rng, minDist: number, clear: number,
-    rimMargin?: number): Vec2 {
-    const clearIdx: number[] = [];
-    for (let i = 0; i < pois.length; i++) {
-      if (!this.clearOfDoors(pois[i], clear)) continue;
-      // THE FOOTPRINT RIM TEST (the pool rim filter's big-fixture kin): a
-      // caller whose fixture SPREADS (the puzzle ring's bells stand a whole
-      // footprint from this center) names its spread as `rimMargin`, and an
-      // ellipse zone skips candidates whose spread would overhang the rim —
-      // else the per-bell clamp bunches the ring's far arc onto it.
-      // Draw-free (the filter spends no rng); rect zones never fire.
-      if (rimMargin !== undefined && this.arena.shape === 'ellipse'
-        && !insideBounds(pois[i], rimMargin, this.arena)) continue;
-      clearIdx.push(i);
-    }
-    if (clearIdx.length) return pois.splice(clearIdx[rng.int(0, clearIdx.length - 1)], 1)[0];
-    const far = this.farPoint(minDist, false, this.seededDraw());
-    if (this.clearOfDoors(far, clear)) return far;
-    const seed = pois.length ? pois.splice(rng.int(0, pois.length - 1), 1)[0] : far;
-    return this.clearTransitSpot(vec(seed.x, seed.y), clear);
-  }
+    rimMargin?: number): Vec2 { return nativeSceneInteractSpot(this.nativeSceneGeometryHost(),pois,rng,minDist,clear,rimMargin); }
 
   /** An exit whose destination lives in ANOTHER dimension without the declared
    *  gate marker (ZoneExitDef.crossDim) — never legal. Dimensions are sealed
@@ -11211,6 +10870,227 @@ export class World {
   private runNativeAreaBirth(...args:NativeAreaBirthArguments):void {
     birthNativeArea(this.nativeAreaBirthHost(),...args);
   }
+  private nativeScenePopulationView?:NativeSceneServiceHost;
+  private nativeScenePopulationHost():NativeSceneServiceHost {
+    if(this.nativeScenePopulationView)return this.nativeScenePopulationView;
+    const world=this;
+    const host:NativeSceneServiceHost={
+      get actors(){return world.actors;}, set actors(v){world.actors=v;},
+      get createMonster(){const fn=world.createMonster;return (...args:Parameters<NativeSceneServiceHost['createMonster']>)=>fn.apply(world,args);},
+      get nextSquadId(){const fn=world.nextSquadId;return (...args:Parameters<NativeSceneServiceHost['nextSquadId']>)=>fn.apply(world,args);},
+      get promoteRarity(){const fn=world.promoteRarity;return (...args:Parameters<NativeSceneServiceHost['promoteRarity']>)=>fn.apply(world,args);},
+      get clampPos(){const fn=world.clampPos;return (...args:Parameters<NativeSceneServiceHost['clampPos']>)=>fn.apply(world,args);},
+      get refreshMagicPacks(){const fn=world.refreshMagicPacks;return (...args:Parameters<NativeSceneServiceHost['refreshMagicPacks']>)=>fn.apply(world,args);},
+      get objectiveCountable(){const fn=world.objectiveCountable;return (...args:Parameters<NativeSceneServiceHost['objectiveCountable']>)=>fn.apply(world,args);},
+      get isAmbientTag(){const fn=world.isAmbientTag;return (...args:Parameters<NativeSceneServiceHost['isAmbientTag']>)=>fn.apply(world,args);},
+      get confineUnreachable(){const fn=world.confineUnreachable;return (...args:Parameters<NativeSceneServiceHost['confineUnreachable']>)=>fn.apply(world,args);},
+      get pathField(){const fn=world.pathField;return (...args:Parameters<NativeSceneServiceHost['pathField']>)=>fn.apply(world,args);},
+      get zoneEntry(){return world.zoneEntry;},
+      get countedEnemies(){const fn=world.countedEnemies;return (...args:Parameters<NativeSceneServiceHost['countedEnemies']>)=>fn.apply(world,args);},
+      get sim(){return world.sim;},
+      get farPoint(){const fn=world.farPoint;return (...args:Parameters<NativeSceneServiceHost['farPoint']>)=>fn.apply(world,args);},
+      get weightedPick(){const fn=world.weightedPick;return (...args:Parameters<NativeSceneServiceHost['weightedPick']>)=>fn.apply(world,args);},
+      get notice(){const fn=world.notice;return (...args:Parameters<NativeSceneServiceHost['notice']>)=>fn.apply(world,args);},
+      get wave(){return world.wave;}, set wave(v){world.wave=v;},
+      get waveActive(){return world.waveActive;}, set waveActive(v){world.waveActive=v;},
+      get zone(){return world.zone;},
+      get effectiveSpawn(){const fn=world.effectiveSpawn;return (...args:Parameters<NativeSceneServiceHost['effectiveSpawn']>)=>fn.apply(world,args);},
+      get baseTable(){const fn=world.baseTable;return (...args:Parameters<NativeSceneServiceHost['baseTable']>)=>fn.apply(world,args);},
+      get player(){return world.player;},
+      get spawnPoint(){const fn=world.spawnPoint;return (...args:Parameters<NativeSceneServiceHost['spawnPoint']>)=>fn.apply(world,args);},
+      get walk(){return world.walk;},
+      get pointInSolid(){const fn=world.pointInSolid;return (...args:Parameters<NativeSceneServiceHost['pointInSolid']>)=>fn.apply(world,args);},
+      get structures(){return world.structures;},
+      get applyWaveFrenzy(){const fn=world.applyWaveFrenzy;return (...args:Parameters<NativeSceneServiceHost['applyWaveFrenzy']>)=>fn.apply(world,args);},
+      get text(){const fn=world.text;return (...args:Parameters<NativeSceneServiceHost['text']>)=>fn.apply(world,args);},
+      get arena(){return world.arena;},
+      get farthestStand(){const fn=world.farthestStand;return (...args:Parameters<NativeSceneServiceHost['farthestStand']>)=>fn.apply(world,args);},
+      get time(){return world.time;},
+      get seats(){return world.seats;},
+      get partyScaleCount(){const fn=world.partyScaleCount;return (...args:Parameters<NativeSceneServiceHost['partyScaleCount']>)=>fn.apply(world,args);},
+    };
+    Object.defineProperty(this,"nativeScenePopulationView",{value:host,writable:true,configurable:true,enumerable:false});
+    return host;
+  }
+
+  private nativeSceneGeometryView?:NativeSceneGeometryHost;
+  private nativeSceneGeometryHost():NativeSceneGeometryHost {
+    if(this.nativeSceneGeometryView)return this.nativeSceneGeometryView;
+    const world=this;
+    const host:NativeSceneGeometryHost={
+      get frontSpawned(){return world.frontSpawned;}, set frontSpawned(v){world.frontSpawned=v;},
+      get frontRiders(){return world.frontRiders;}, set frontRiders(v){world.frontRiders=v;},
+      get evaporating(){return world.evaporating;},
+      get time(){return world.time;},
+      get seats(){return world.seats;},
+      get installCreepFront(){const fn=world.installCreepFront;return (...args:Parameters<NativeSceneGeometryHost['installCreepFront']>)=>fn.apply(world,args);},
+      get frontConsume(){const fn=world.frontConsume;return (...args:Parameters<NativeSceneGeometryHost['frontConsume']>)=>fn.apply(world,args);},
+      get seatOf(){const fn=world.seatOf;return (...args:Parameters<NativeSceneGeometryHost['seatOf']>)=>fn.apply(world,args);},
+      get drainSurvival(){const fn=world.drainSurvival;return (...args:Parameters<NativeSceneGeometryHost['drainSurvival']>)=>fn.apply(world,args);},
+      get radianceCondHeld(){const fn=world.radianceCondHeld;return (...args:Parameters<NativeSceneGeometryHost['radianceCondHeld']>)=>fn.apply(world,args);},
+      get createMonster(){const fn=world.createMonster;return (...args:Parameters<NativeSceneGeometryHost['createMonster']>)=>fn.apply(world,args);},
+      get descentSite(){return world.descentSite;},
+      get fractureRifts(){return world.fractureRifts;},
+      get necropolisPortals(){return world.necropolisPortals;},
+      get crusadePortals(){return world.crusadePortals;},
+      get demonPortals(){return world.demonPortals;},
+      get minPortalSeparation(){return MIN_PORTAL_SEP;},
+      get exits(){return world.exits;},
+      get caveEntrances(){return world.caveEntrances;},
+      get breachPos(){return world.breachPos;},
+      get waypointPos(){return world.waypointPos;},
+      get dimGates(){return world.dimGates;},
+      get farPointDraws(){return world.farPointDraws;}, set farPointDraws(v){world.farPointDraws=v;},
+      get currentZoneSeed(){return world.currentZoneSeed;},
+      get fog(){return world.fog;},
+      get doorSpots(){const fn=world.doorSpots;return (...args:Parameters<NativeSceneGeometryHost['doorSpots']>)=>fn.apply(world,args);},
+      get clearOfDoors(){const fn=world.clearOfDoors;return (...args:Parameters<NativeSceneGeometryHost['clearOfDoors']>)=>fn.apply(world,args);},
+      get clearTransitSpot(){const fn=world.clearTransitSpot;return (...args:Parameters<NativeSceneGeometryHost['clearTransitSpot']>)=>fn.apply(world,args);},
+      get interactSpot(){const fn=world.interactSpot;return (...args:Parameters<NativeSceneGeometryHost['interactSpot']>)=>fn.apply(world,args);},
+      get seededDraw(){const fn=world.seededDraw;return (...args:Parameters<NativeSceneGeometryHost['seededDraw']>)=>fn.apply(world,args);},
+      get opaqueAt(){const fn=world.opaqueAt;return (...args:Parameters<NativeSceneGeometryHost['opaqueAt']>)=>fn.apply(world,args);},
+      get doodadIdx(){return world.doodadIdx;},
+      get doodadIdxArr(){return world.doodadIdxArr;}, set doodadIdxArr(v){world.doodadIdxArr=v;},
+      get doodads(){return world.doodads;},
+      get doodadIdxLen(){return world.doodadIdxLen;}, set doodadIdxLen(v){world.doodadIdxLen=v;},
+      get doodadIdxRev(){return world.doodadIdxRev;}, set doodadIdxRev(v){world.doodadIdxRev=v;},
+      get doodadsRev(){return world.doodadsRev;}, set doodadsRev(v){world.doodadsRev=v;},
+      get famEpoch(){return world.famEpoch;}, set famEpoch(v){world.famEpoch=v;},
+      get famRevs(){return world.famRevs;}, set famRevs(v){world.famRevs=v;},
+      get walk(){return world.walk;}, set walk(v){world.walk=v;},
+      get zone(){return world.zone;},
+      get tierViews(){return world.tierViews;},
+      get arena(){return world.arena;},
+      get convexNav(){return world.convexNav;}, set convexNav(v){world.convexNav=v;},
+      get convexNavKey(){return world.convexNavKey;}, set convexNavKey(v){world.convexNavKey=v;},
+      get tierNavs(){return world.tierNavs;},
+      get pitsCache(){return world.pitsCache;},
+      get collapse(){return world.collapse;},
+      get flux(){return world.flux;},
+      get conjured(){return world.conjured;},
+      get bridges(){return world.bridges;},
+      get massRuntime(){return world.massRuntime;},
+      get structures(){return world.structures;},
+      get actors(){return world.actors;},
+      get flashes(){return world.flashes;},
+      get tracks(){return world.tracks;},
+      get contactHazards(){return world.contactHazards;}, set contactHazards(v){world.contactHazards=v;},
+      get trapworks(){return world.trapworks;},
+      get arenaHull(){return world.arenaHull;},
+      get grounds(){return world.grounds;},
+      get player(){return world.player;},
+      get zoneEntry(){return world.zoneEntry;},
+      get eventAnchors(){return world.eventAnchors;},
+      get ensureDoodadIdx(){const fn=world.ensureDoodadIdx;return (...args:Parameters<NativeSceneGeometryHost['ensureDoodadIdx']>)=>fn.apply(world,args);},
+      get syncFamRevs(){const fn=world.syncFamRevs;return (...args:Parameters<NativeSceneGeometryHost['syncFamRevs']>)=>fn.apply(world,args);},
+      get tierPathField(){const fn=world.tierPathField;return (...args:Parameters<NativeSceneGeometryHost['tierPathField']>)=>fn.apply(world,args);},
+      get doodadFamilyRev(){const fn=world.doodadFamilyRev;return (...args:Parameters<NativeSceneGeometryHost['doodadFamilyRev']>)=>fn.apply(world,args);},
+      get buildConvexNav(){const fn=world.buildConvexNav;return (...args:Parameters<NativeSceneGeometryHost['buildConvexNav']>)=>fn.apply(world,args);},
+      get nativeSettlementGrid(){const fn=world.nativeSettlementGrid;return (...args:Parameters<NativeSceneGeometryHost['nativeSettlementGrid']>)=>fn.apply(world,args);},
+      get groundInsured(){const fn=world.groundInsured;return (...args:Parameters<NativeSceneGeometryHost['groundInsured']>)=>fn.apply(world,args);},
+      get walkSweep(){const fn=world.walkSweep;return (...args:Parameters<NativeSceneGeometryHost['walkSweep']>)=>fn.apply(world,args);},
+      get pitSweep(){const fn=world.pitSweep;return (...args:Parameters<NativeSceneGeometryHost['pitSweep']>)=>fn.apply(world,args);},
+      get nativePlacementHost(){const fn=world.nativePlacementHost;return (...args:Parameters<NativeSceneGeometryHost['nativePlacementHost']>)=>fn.apply(world,args);},
+      get doodadsAt(){const fn=world.doodadsAt;return (...args:Parameters<NativeSceneGeometryHost['doodadsAt']>)=>fn.apply(world,args);},
+      get walkResolve(){const fn=world.walkResolve;return (...args:Parameters<NativeSceneGeometryHost['walkResolve']>)=>fn.apply(world,args);},
+      get zonePits(){const fn=world.zonePits;return (...args:Parameters<NativeSceneGeometryHost['zonePits']>)=>fn.apply(world,args);},
+      get pitHomeKinds(){const fn=world.pitHomeKinds;return (...args:Parameters<NativeSceneGeometryHost['pitHomeKinds']>)=>fn.apply(world,args);},
+      get pitResolve(){const fn=world.pitResolve;return (...args:Parameters<NativeSceneGeometryHost['pitResolve']>)=>fn.apply(world,args);},
+      get nativeGridAt(){const fn=world.nativeGridAt;return (...args:Parameters<NativeSceneGeometryHost['nativeGridAt']>)=>fn.apply(world,args);},
+      get text(){const fn=world.text;return (...args:Parameters<NativeSceneGeometryHost['text']>)=>fn.apply(world,args);},
+      get markDoodadsChanged(){const fn=world.markDoodadsChanged;return (...args:Parameters<NativeSceneGeometryHost['markDoodadsChanged']>)=>fn.apply(world,args);},
+      get nativeNavigationHost(){const fn=world.nativeNavigationHost;return (...args:Parameters<NativeSceneGeometryHost['nativeNavigationHost']>)=>fn.apply(world,args);},
+      get doodadsNear(){const fn=world.doodadsNear;return (...args:Parameters<NativeSceneGeometryHost['doodadsNear']>)=>fn.apply(world,args);},
+      get pathField(){const fn=world.pathField;return (...args:Parameters<NativeSceneGeometryHost['pathField']>)=>fn.apply(world,args);},
+      get clampPos(){const fn=world.clampPos;return (...args:Parameters<NativeSceneGeometryHost['clampPos']>)=>fn.apply(world,args);},
+      get pointInSolid(){const fn=world.pointInSolid;return (...args:Parameters<NativeSceneGeometryHost['pointInSolid']>)=>fn.apply(world,args);},
+      get groundAt(){const fn=world.groundAt;return (...args:Parameters<NativeSceneGeometryHost['groundAt']>)=>fn.apply(world,args);},
+      get roofedStructureAt(){const fn=world.roofedStructureAt;return (...args:Parameters<NativeSceneGeometryHost['roofedStructureAt']>)=>fn.apply(world,args);},
+      get setDoorState(){const fn=world.setDoorState;return (...args:Parameters<NativeSceneGeometryHost['setDoorState']>)=>fn.apply(world,args);},
+      get addTrack(){const fn=world.addTrack;return (...args:Parameters<NativeSceneGeometryHost['addTrack']>)=>fn.apply(world,args);},
+      get collectContactHazards(){const fn=world.collectContactHazards;return (...args:Parameters<NativeSceneGeometryHost['collectContactHazards']>)=>fn.apply(world,args);},
+      get addTrapwork(){const fn=world.addTrapwork;return (...args:Parameters<NativeSceneGeometryHost['addTrapwork']>)=>fn.apply(world,args);},
+      get paintNavGrounds(){const fn=world.paintNavGrounds;return (...args:Parameters<NativeSceneGeometryHost['paintNavGrounds']>)=>fn.apply(world,args);},
+      get stampNavSurface(){const fn=world.stampNavSurface;return (...args:Parameters<NativeSceneGeometryHost['stampNavSurface']>)=>fn.apply(world,args);},
+      get farPoint(){const fn=world.farPoint;return (...args:Parameters<NativeSceneGeometryHost['farPoint']>)=>fn.apply(world,args);},
+      get farthestStand(){const fn=world.farthestStand;return (...args:Parameters<NativeSceneGeometryHost['farthestStand']>)=>fn.apply(world,args);},
+      get findFreeSpot(){const fn=world.findFreeSpot;return (...args:Parameters<NativeSceneGeometryHost['findFreeSpot']>)=>fn.apply(world,args);},
+      get navigationPad(){return NAV_CFG.pad;},
+      get eventSpacing(){return EVENT_SPACING;},
+      refreshMovementTether:a=>refreshMovementTether(a,world),
+    };
+    Object.defineProperty(this,"nativeSceneGeometryView",{value:host,writable:true,configurable:true,enumerable:false});
+    return host;
+  }
+
+  private nativeAreaLayoutView?:NativeAreaLayoutHost;
+  private nativeAreaLayoutHost():NativeAreaLayoutHost {
+    if(this.nativeAreaLayoutView)return this.nativeAreaLayoutView;
+    const world=this;
+    const host:NativeAreaLayoutHost={
+      get doodads(){return world.doodads;}, set doodads(v){world.doodads=v;},
+      get bridges(){return world.bridges;}, set bridges(v){world.bridges=v;},
+      get grounds(){return world.grounds;}, set grounds(v){world.grounds=v;},
+      get walk(){return world.walk;}, set walk(v){world.walk=v;},
+      get tierViews(){return world.tierViews;}, set tierViews(v){world.tierViews=v;},
+      get tierCrossings(){return world.tierCrossings;},
+      get tierNavs(){return world.tierNavs;},
+      get tierSeats(){return world.tierSeats;}, set tierSeats(v){world.tierSeats=v;},
+      get airPockets(){return world.airPockets;}, set airPockets(v){world.airPockets=v;},
+      get grantedPocketCache(){return world.grantedPocketCache;},
+      get grantedTrailMemory(){return world.grantedTrailMemory;},
+      get syncedGrantedPockets(){return world.syncedGrantedPockets;}, set syncedGrantedPockets(v){world.syncedGrantedPockets=v;},
+      get structures(){return world.structures;}, set structures(v){world.structures=v;},
+      get oceanBearing(){const fn=world.oceanBearing;return (...args:Parameters<NativeAreaLayoutHost['oceanBearing']>)=>fn.apply(world,args);},
+      get arena(){return world.arena;},
+      get clampPos(){const fn=world.clampPos;return (...args:Parameters<NativeAreaLayoutHost['clampPos']>)=>fn.apply(world,args);},
+      get seaNameOf(){const fn=world.seaNameOf;return (...args:Parameters<NativeAreaLayoutHost['seaNameOf']>)=>fn.apply(world,args);},
+      get ledger(){return world.ledger;},
+      get notice(){const fn=world.notice;return (...args:Parameters<NativeAreaLayoutHost['notice']>)=>fn.apply(world,args);},
+      get seasSeen(){return world.seasSeen;},
+      get breachPos(){return world.breachPos;}, set breachPos(v){world.breachPos=v;},
+      get clearTransitSpot(){const fn=world.clearTransitSpot;return (...args:Parameters<NativeAreaLayoutHost['clearTransitSpot']>)=>fn.apply(world,args);},
+      get farPoint(){const fn=world.farPoint;return (...args:Parameters<NativeAreaLayoutHost['farPoint']>)=>fn.apply(world,args);},
+      get dimGates(){return world.dimGates;}, set dimGates(v){world.dimGates=v;},
+      get bossRun(){return world.bossRun;}, set bossRun(v){world.bossRun=v;},
+      get arenaSinks(){return world.arenaSinks;},
+      get migrantSquadId(){return world.migrantSquadId;}, set migrantSquadId(v){world.migrantSquadId=v;},
+      get arenaWash(){return world.arenaWash;}, set arenaWash(v){world.arenaWash=v;},
+      get shake(){return world.shake;}, set shake(v){world.shake=v;},
+      get snowCover(){return world.snowCover;}, set snowCover(v){world.snowCover=v;},
+      get zone(){return world.zone;},
+      get snowFloor(){return world.snowFloor;}, set snowFloor(v){world.snowFloor=v;},
+      get weatherDressAcc(){return world.weatherDressAcc;}, set weatherDressAcc(v){world.weatherDressAcc=v;},
+      get tempGrounds(){return world.tempGrounds;}, set tempGrounds(v){world.tempGrounds=v;},
+      get evaporating(){return world.evaporating;}, set evaporating(v){world.evaporating=v;},
+      get regrowing(){return world.regrowing;}, set regrowing(v){world.regrowing=v;},
+      get rampageTimer(){return world.rampageTimer;}, set rampageTimer(v){world.rampageTimer=v;},
+      get fog(){return world.fog;}, set fog(v){world.fog=v;},
+      get currentZoneSeed(){return world.currentZoneSeed;},
+      get creep(){return world.creep;}, set creep(v){world.creep=v;},
+      get installCreepFront(){const fn=world.installCreepFront;return (...args:Parameters<NativeAreaLayoutHost['installCreepFront']>)=>fn.apply(world,args);},
+      get tracks(){return world.tracks;}, set tracks(v){world.tracks=v;},
+      get trackSweepAcc(){return world.trackSweepAcc;}, set trackSweepAcc(v){world.trackSweepAcc=v;},
+      get addTrack(){const fn=world.addTrack;return (...args:Parameters<NativeAreaLayoutHost['addTrack']>)=>fn.apply(world,args);},
+      get collectContactHazards(){const fn=world.collectContactHazards;return (...args:Parameters<NativeAreaLayoutHost['collectContactHazards']>)=>fn.apply(world,args);},
+      get trapworks(){return world.trapworks;}, set trapworks(v){world.trapworks=v;},
+      get trapSweepAcc(){return world.trapSweepAcc;}, set trapSweepAcc(v){world.trapSweepAcc=v;},
+      get trapDeferred(){return world.trapDeferred;}, set trapDeferred(v){world.trapDeferred=v;},
+      get addTrapwork(){const fn=world.addTrapwork;return (...args:Parameters<NativeAreaLayoutHost['addTrapwork']>)=>fn.apply(world,args);},
+      get caveEntrances(){return world.caveEntrances;}, set caveEntrances(v){world.caveEntrances=v;},
+      get roofedStructureAt(){const fn=world.roofedStructureAt;return (...args:Parameters<NativeAreaLayoutHost['roofedStructureAt']>)=>fn.apply(world,args);},
+      get zoneHollows(){return world.zoneHollows;}, set zoneHollows(v){world.zoneHollows=v;},
+      get openedHollows(){return world.openedHollows;}, set openedHollows(v){world.openedHollows=v;},
+      get zoneAnnexSpecs(){return world.zoneAnnexSpecs;}, set zoneAnnexSpecs(v){world.zoneAnnexSpecs=v;},
+      get caveExitGrace(){return world.caveExitGrace;}, set caveExitGrace(v){world.caveExitGrace=v;},
+      get zoneEntry(){return world.zoneEntry;}, set zoneEntry(v){world.zoneEntry=v;},
+    };
+    Object.defineProperty(this,"nativeAreaLayoutView",{value:host,writable:true,configurable:true,enumerable:false});
+    return host;
+  }
+
+  private runNativeAreaLayout(...args:NativeAreaLayoutArguments):void {adoptNativeAreaLayout(this.nativeAreaLayoutHost(),...args);}
+
   private nativeAreaBirthView?:NativeAreaBirthHost;
   /** Live original-order native birth ports; not an independent actor owner. */
   private nativeAreaBirthHost():NativeAreaBirthHost {
@@ -15242,9 +15122,7 @@ export class World {
 
   /** THE VAPOR RIDE's env hook (engine/los.ts OccEnv.opaqueAt): the zone's
    *  sight-occluding fog lobes. One integer read when no such bank stands. */
-  opaqueAt(x: number, y: number): boolean {
-    return this.fog !== null && this.fog.occluders > 0 && this.fog.occludesAt(x, y);
-  }
+  opaqueAt(x: number, y: number): boolean { return nativeSceneOpaqueAt(this.nativeSceneGeometryHost(),x,y); }
 
   /** THE PRESSURE GAUGE read (the tells fabric's 'rounds:<skillId>' source —
    *  TellWorld.kitRounds): a body's kit skill's live use-charge bank as
@@ -16456,40 +16334,7 @@ export class World {
 
   /** Restore a remembered zone's base enemies: drop the freshly-spawned batch and
    *  re-materialize exactly what we left (who / where / how-hurt). */
-  private restoreZoneEnemies(memory: ZoneMemory): void {
-    this.actors = this.actors.filter(a => !(a.fromZoneGen && a.team === 'enemy'));
-    const magicPackIds = new Map<number, number>();
-    const encounterGroupIds = new Map<number, number>();
-    for (const e of memory.enemies) {
-      if (!MONSTERS[e.defId]) continue;
-      const m = this.createMonster(e.defId, Math.max(1, e.level), 'enemy');
-      const magicPack = e.rarity === 'magic' ? readMagicPack(e.magicPack) : undefined;
-      if (magicPack) {
-        if (!magicPackIds.has(magicPack.id)) magicPackIds.set(magicPack.id, this.nextSquadId());
-        m.magicPack = { ...magicPack, id: magicPackIds.get(magicPack.id)! };
-        m.squadId = m.magicPack.id;
-        m.squadLeader = m.magicPack.leader === 1;
-      }
-      if (e.faction) m.faction = e.faction;
-      const encounterGroup = readEncounterGroup(e.encounterGroup);
-      if (encounterGroup) {
-        if (!encounterGroupIds.has(encounterGroup.id)) encounterGroupIds.set(encounterGroup.id, m.magicPack?.id ?? this.nextSquadId());
-        applyEncounterGroup(m, { ...encounterGroup, id: encounterGroupIds.get(encounterGroup.id)! });
-      }
-      if (e.rarity) this.promoteRarity(m, e.rarity);
-      if (e.name) m.name = e.name; // the exact remembered name, never a re-roll
-      if (e.tag) m.tag = e.tag;
-      if (e.tier) m.tier = e.tier; // the tier fabric: a deck body returns to its deck
-      if (e.aiAwakened) m.aiAwakened = true; // the rouse latch — woken stays woken
-      m.fromZoneGen = true;
-      m.pos = this.clampPos(vec(e.x, e.y), m.radius, undefined, { mover: m });
-      m.fillResources();
-      m.life = Math.max(1, Math.min(m.maxLife(), e.life));
-      m.movementTether = restoreMovementTether(e.movementTether);
-      this.actors.push(m);
-    }
-    this.refreshMagicPacks();
-  }
+  private restoreZoneEnemies(memory: ZoneMemory): void { return restoreSceneEnemies(this.nativeScenePopulationHost(),memory); }
 
   /** Shared refusal for the button, menu, input and the authoritative cast. */
   townPortalRefusal(seat: Seat = this.localSeat): string | null {
@@ -17368,37 +17213,7 @@ export class World {
    *  field rosters and brawl over it. Mirrors the factionWar staging; the
    *  dominant side simply fields more. The existing diplomacy (hostileTo)
    *  already turns them loose on each other. */
-  private spawnContest(def: ZoneDef, factions: string[]): void {
-    if (factions.length < 1) return;
-    const multi = factions.length >= 2;
-    const order = multi ? this.sim.rankContest(def.id, factions) : factions;
-    order.forEach((fid, rank) => {
-      const roster = FACTIONS[fid];
-      if (!roster) return;
-      // Two+ contenders: the dominant fields more. A lone invader pours in a
-      // full warband — the zone's own packs are the defenders it crashes into.
-      const packs = multi ? (rank === 0 ? 2 : 1) : 2;
-      for (let pk = 0; pk < packs; pk++) {
-        const at = this.farPoint(650);
-        const type = this.weightedPick(roster.table, Math.max(1, def.level));
-        for (let k = 0; k < randInt(3, 5); k++) {
-          const m = this.createMonster(type, Math.max(1, def.level), 'enemy');
-          // Contest bodies fight under the CONTESTANT'S banner, not their def's
-          // — a conscript roster (a hell lord's host fielding Legion rabble)
-          // must brawl AS the host, or the two sides read as one census and
-          // never fight (every sibling spawner stamps the same way).
-          m.faction = fid;
-          m.pos = this.clampPos(vec(at.x + rand(-80, 80), at.y + rand(-80, 80)), m.radius);
-          this.actors.push(m);
-        }
-      }
-    });
-    if (multi) {
-      this.notice(`${FACTIONS[order[0]]?.name ?? order[0]} contests ${FACTIONS[order[1]]?.name ?? order[1]}!`, '#e85050', 15, 'war');
-    } else {
-      this.notice(`${FACTIONS[order[0]]?.name ?? order[0]} invades!`, '#e8a050', 15, 'war');
-    }
-  }
+  private spawnContest(def: ZoneDef, factions: string[]): void { return spawnSceneContest(this.nativeScenePopulationHost(),def,factions); }
 
   /** Storm fronts call lightning down on the zone you stand in. The harder the
    *  storm rages (its intensity), the faster the bolts fall. Sanctuaries are
@@ -21165,29 +20980,9 @@ export class World {
    *  it, so a lane that gains reproducibility would move everybody else's ground
    *  (the seeded draw-order contract — the same reason SCENERY_CFG and
    *  PUZZLE_CFG carry their own salts). */
-  private seededDraw(): (a: number, c: number) => number {
-    const r = new Rng((this.currentZoneSeed ^ FARPOINT_SALT
-      ^ Math.imul(++this.farPointDraws, 0x9e3779b1)) >>> 0);
-    return (a, c) => r.range(a, c);
-  }
+  private seededDraw(): (a: number, c: number) => number { return nativeSceneSeededDraw(this.nativeSceneGeometryHost()); }
   /** Classic placement readers; a detached area host supplies its own state. */
-  private nativePlacementHost(): NativePlacementHost {
-    const world = this;
-    return {
-      get arena() { return world.arena; }, get walk() { return world.walk; },
-      set walk(value) { world.walk = value as typeof world.walk; },
-      get tierViews() { return world.tierViews; }, get zoneTiers() { return world.zone.tiers; },
-      get playerPosition() { return world.player.pos; }, get zoneEntry() { return world.zoneEntry; },
-      get eventAnchors() { return world.eventAnchors; }, get bridges() { return world.bridges; },
-      config: { get eventSpacing() { return EVENT_SPACING; }, get ledgeGrasp() { return WALK_CFG.ledgeGrasp; },
-        get pitSweepGran() { return PIT_CFG.sweepGran; } },
-      rand, isGridWalk: (walk): walk is GridWalkField => walk instanceof GridWalkField,
-      doodadsAt: (x, y) => world.doodadsAt(x, y), pointInSolid: (...args) => world.pointInSolid(...args),
-      clampPos: (...args) => world.clampPos(...args), farthestStand: (radius, reachable) => world.farthestStand(radius, reachable),
-      blocksMovement, hitSurfaceOf, pushOutOfShape, pitRegionOf, regionKind,
-      zonePits: () => world.zonePits(), pitHomeKinds: (mover, pits) => world.pitHomeKinds(mover, pits), pitAt, pitSupportedAt,
-    };
-  }
+  private nativePlacementHost(): NativePlacementHost { return nativeSceneNativePlacementHost(this.nativeSceneGeometryHost()); }
 
 
 
@@ -21202,9 +20997,7 @@ export class World {
    *  roll each visit — nearly every caller), or seededDraw() for a load-time
    *  placement whose ground has to replay off the zone seed. */
   private farPoint(minFromPlayer: number, spaceFromEvents = false,
-    draw: (a: number, c: number) => number = rand): Vec2 {
-    return nativeFarPoint(this.nativePlacementHost(), minFromPlayer, spaceFromEvents, draw);
-  }
+    draw: (a: number, c: number) => number = rand): Vec2 { return nativeSceneFarPoint(this.nativeSceneGeometryHost(),minFromPlayer,spaceFromEvents,draw); }
 
   /** Rebuild the player's modifier sources (level / passives / attributes). */
   recalcPlayer(): void { this.recalcSeat(this.localSeat); }
@@ -50515,32 +50308,7 @@ export class World {
    *  route here): flip the doodad's state, repaint its plan cells back to floor
    *  in grid zones (pathing/reachability caches self-heal), and retire any
    *  door-actor still guarding the frame. Idempotent per state. */
-  setDoorState(id: string, state: 'open' | 'broken', opts?: { silent?: boolean }): void {
-    const d = this.doodads.find(x => x.door?.id === id);
-    if (!d?.door) return;
-    if (state === 'open' ? (d.door.open || d.door.broken) : d.door.broken) return;
-    if (state === 'open') d.door.open = true;
-    else { d.door.broken = true; d.door.open = true; }
-    const nativeSettlementGrid = this.nativeGridAt(d.pos);
-    if (nativeSettlementGrid && d.door.cells) {
-      const c = d.door.cells;
-      nativeSettlementGrid.fillRegion(c.x, c.y, c.x + c.w - 0.01, c.y + c.h - 0.01, 'ground');
-    }
-    // The breakable's guard-actor is moot once the way is open — retire it by
-    // MARKING dead (no loot/credit/burst: kill() never ran for a dwell-open).
-    // Never splice here: setDoorState fires from inside damage loops iterating
-    // this.actors (a blast killing the door), and a splice would shift the
-    // array under the iterator, silently skipping the next actor's hit. The
-    // per-frame dead sweep removes the body at its safe point.
-    for (const a of this.actors) {
-      if (a.doorId === id) a.dead = true;
-    }
-    if (!opts?.silent) {
-      this.text(vec(d.pos.x, d.pos.y - 24),
-        state === 'broken' ? 'the door splinters!' : 'the door swings open', '#c8b47a', 13);
-      this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: d.radius + 10, color: '#c8b47a', life: 0.3, maxLife: 0.3 });
-    }
-  }
+  setDoorState(id: string, state: 'open' | 'broken', opts?: { silent?: boolean }): void { return nativeSceneSetDoorState(this.nativeSceneGeometryHost(),id,state,opts); }
 
   /**
    * Objective-gated travel: where the SEAL POLICY says so (OBJECTIVE_SEALS
@@ -53010,18 +52778,7 @@ export class World {
 
   /** Place one authored lane. Refuses garbage loudly (lint gripes + the
    *  rider cap) rather than carrying a NaN lane into the sim. */
-  addTrack(spec: TrackSpec): PlacedTrack | null {
-    const gripes = lintTrackSpec(spec, this.zone.id);
-    if (gripes.length) { for (const g of gripes) console.warn(`[tracks] ${g}`); return null; }
-    const live = this.tracks.reduce((n, t) => n + t.riders.length, 0);
-    if (live + spec.riders.length > TRACK_CFG.maxRidersPerZone) {
-      console.warn(`[tracks] ${this.zone.id}: rider cap ${TRACK_CFG.maxRidersPerZone} — lane refused`);
-      return null;
-    }
-    const placed = placeTrack(spec);
-    this.tracks.push(placed);
-    return placed;
-  }
+  addTrack(spec: TrackSpec): PlacedTrack | null { return nativeSceneAddTrack(this.nativeSceneGeometryHost(),spec); }
 
   /** The runtime seam (the creepEnsure idiom): a package or a boss fight
    *  plants lanes mid-visit. Gen-emitted lanes get their groove baked; these
@@ -53034,19 +52791,7 @@ export class World {
    *  loadZone calls it once; anything that PLANTS such a doodad mid-visit
    *  (a package, a boss beat, a probe) calls it again — existing gates are
    *  kept so re-scans never reset a body's re-hit grace. */
-  collectContactHazards(): void {
-    const prior = new Map(this.contactHazards.map(c => [c.d, c.gate]));
-    const groups = new Map<string, Map<number, number>>();
-    for (const c of this.contactHazards) if (c.d.contactGroup) groups.set(c.d.contactGroup, c.gate);
-    this.contactHazards = [];
-    for (const d of this.doodads) {
-      if (doodadRuleOf(d.kind).contact) {
-        const gate = (d.contactGroup ? groups.get(d.contactGroup) : prior.get(d)) ?? new Map<number, number>();
-        if (d.contactGroup) groups.set(d.contactGroup, gate);
-        this.contactHazards.push({ d, gate });
-      }
-    }
-  }
+  collectContactHazards(): void { return nativeSceneCollectContactHazards(this.nativeSceneGeometryHost()); }
 
   /** THE GEYSER FABRIC (engine/geysers.ts): this zone's timed vents.
    *  Eruption state is a PURE FUNCTION of the synced clock (ventReadAt), so
@@ -53723,28 +53468,7 @@ export class World {
 
   /** Place one authored trapwork + its tell doodad. Refuses garbage loudly
    *  (the addTrack discipline). */
-  addTrapwork(spec: TrapworkSpec, opts?: { noTell?: boolean }): PlacedTrapwork | null {
-    const gripes = lintTrapworkSpec(spec, this.zone.id);
-    if (gripes.length) { for (const g of gripes) console.warn(`[trapworks] ${g}`); return null; }
-    if (this.trapworks.length >= TRAPWORK_CFG.maxPerZone) {
-      console.warn(`[trapworks] ${this.zone.id}: cap ${TRAPWORK_CFG.maxPerZone} — trapwork refused`);
-      return null;
-    }
-    const id = spec.id ?? `tw_${this.trapworks.length}`;
-    const placed: PlacedTrapwork = { spec, id, state: 'armed', rearmAt: Infinity, sprungAt: -1, springs: 0 };
-    this.trapworks.push(placed);
-    // The TELL — a plate wears a doodad at its press disc (hidden plates a
-    // fainter kind; render/vis/trapLayer.ts resolves them close-up).
-    // Triplines default to none (their emitter doodads are authored by gen).
-    const vis = spec.visKind ?? (spec.trigger.kind === 'plate'
-      ? (spec.hidden ? 'ruin_plate_hidden' : 'ruin_plate') : '');
-    if (vis && !opts?.noTell) {
-      const at = trapAnchor(spec.trigger);
-      this.doodads.push({ pos: vec(at.x, at.y), radius: (spec.trigger.r ?? TRAPWORK_CFG.plateRadius) + 4, kind: vis } as Doodad);
-      this.markDoodadsChanged();
-    }
-    return placed;
-  }
+  addTrapwork(spec: TrapworkSpec, opts?: { noTell?: boolean }): PlacedTrapwork | null { return nativeSceneAddTrapwork(this.nativeSceneGeometryHost(),spec,opts); }
 
   /** The runtime seam (the tracksEnsure idiom): packages/boss beats plant
    *  mechanisms mid-visit. */
@@ -54313,145 +54037,14 @@ export class World {
    *  Installed wherever a field is born (loadZone build + creepEnsure). */
   private frontSpawned = 0;
   private frontRiders = 0;
-  private installCreepFront(field: CreepField): void {
-    // SOVEREIGNTY: seat — a front's seating (the derived census, probe_tiers RIG T).
-    this.frontSpawned = 0;
-    this.frontRiders = 0;
-    // Live way discs (kept roads/causeways — wild stretches already gave
-    // themselves back to the land and don't count). Ways never move at
-    // runtime, so one snapshot serves the visit; the field hands slices of
-    // THIS list to its cover mask and the render clip alike.
-    const ways: { x: number; y: number; r: number }[] = [];
-    for (const d of this.doodads) {
-      if (d.wild || d.gone) continue;
-      if (!doodadRuleOf(d.kind).clearway) continue;
-      ways.push({ x: d.pos.x, y: d.pos.y, r: d.radius });
-    }
-    field.setWays(ways);
-    field.setTerrain({
-      // Doodad grounds first, then GRID regions (the soulriver's inland sea
-      // is a region, not discs — the current's flow.channel window must see
-      // it). Bare cells still answer null: legacy fronts read identically.
-      groundKindAt: (x, y) => this.groundAt(vec(x, y))?.kind ?? this.walk?.regionAt?.(x, y) ?? null,
-      eachFuelNear: (x, y, r, fn) => {
-        for (const d of this.doodadsNear(x, y, r)) {
-          if (d.gone || d.keep || d.door) continue;
-          const fuel = doodadRuleOf(d.kind).fuel;
-          if (!fuel) continue;
-          if (dist(d.pos, vec(x, y)) > r + d.radius) continue;
-          fn(fuel, d);
-        }
-      },
-      consume: (ref, row) => this.frontConsume(ref as Doodad, row),
-      stamp: (x, y, r, ground, shallow, fade) => {
-        // Converted ground is ordinary runtime terrain: a real disc in the
-        // doodad list (groundAt senses it, the chunk baker repaints it,
-        // the index rebuild is the same one every brittle pop pays).
-        const px = clamp(x, 8, this.arena.w - 8), py = clamp(y, 8, this.arena.h - 8);
-        // Already that ground? Stay the hand — a flood re-wetting a marsh
-        // pool would only dirty chunks for nothing (the wet country the
-        // crest crosses is conversion-free by definition).
-        if (this.groundAt(vec(px, py))?.kind === ground) return;
-        // SHALLOW (and evaporating) POOLS NEVER STACK: the ford-lightening
-        // visual draws per shallow disc, so overlapping wake pools
-        // composite into a flat pale wash that erases the mottle under the
-        // crossed band (the "ground goes flat past a line" read). Kissing
-        // is fine; landing ON an existing pool of the same kind is refused
-        // — the wake is a chain of pools by contract, not a smear. A FRESH
-        // wave crossing a drying pool re-wets it instead: the dwell clock
-        // resets, no twin stacks on top.
-        if (shallow || fade) {
-          for (const o of this.doodadsNear(px, py, r)) {
-            if (o.kind !== ground || !(o.shallow || o.evap) || o.gone) continue;
-            const dd = Math.hypot(o.pos.x - px, o.pos.y - py);
-            if (dd < (o.radius + r) * 0.95) {
-              if (fade && o.evap) o.evap.t = Math.max(o.evap.t, fade.after);
-              return;
-            }
-          }
-        }
-        const d: Doodad = {
-          pos: vec(px, py),
-          radius: r, kind: ground, ...(shallow ? { shallow: true } : {}),
-          ...(fade ? { evap: { t: fade.after, rate: fade.rate } } : {}),
-          laidAt: this.time, // the regrowth cycle's age read (updateCharRegrowth)
-        };
-        this.doodads.push(d);
-        if (GROUND_KINDS.includes(d.kind)) this.grounds.push(d);
-        if (fade) this.evaporating.push(d);
-        this.markDoodadsChanged();
-      },
-      drag: (a, dx, dy) => {
-        // The undertow rides the wind fabric's exact spares: planted
-        // sentries, anchored bodies, constructs and the airborne feel
-        // nothing; weight leans against the carry; origin-aware confine.
-        const b = a as Actor;
-        if (b.dead || b.downed || b.anchored || b.construct || b.leap || b.passive || isDormant(b)) return;
-        const w = Math.max(0.4, b.effectiveWeight());
-        b.pos = this.clampPos(vec(b.pos.x + dx / w, b.pos.y + dy / w), b.radius, b.pos);
-      },
-      drown: (a, drain, dt) => {
-        // The crest pulls breath exactly as deep water does — player seats
-        // only; what dwells in the flood is adapted to it. The hold stamp
-        // keeps the terrain sweep's regen from refilling against us.
-        const b = a as Actor;
-        if (!this.seatOf(b) || b.dead || b.downed) return;
-        (b.survivalHeldAt ??= {})['breath'] = this.time;
-        this.drainSurvival(b, 'breath', drain, dt);
-      },
-      // THE VESSEL FLOW's ground truth (FrontSpec.flow steering + the
-      // confine mask + rider seat pull-in all read THIS): the walk grid
-      // where one exists, bare bounds where none does — open zones steer
-      // nothing and confine nothing, exactly as authored.
-      openAt: (x, y) => x >= 0 && y >= 0 && x <= this.arena.w && y <= this.arena.h
-        && (!this.walk || this.walk.isWalkable(x, y)),
-      // The lane gate's sky window (FrontSpawnRow.when) — the leaf's
-      // structural FrontCond is radiance's own shape (the cast is the
-      // zero-import doctrine's price, paid once here).
-      condHeld: (c) => this.radianceCondHeld(c as RadianceCond),
-      // THE CASTER-LESS BASELINE (CreepTerrain.statusDps): a skin's granted
-      // DoT lands at the status row's own baseline for this zone's level
-      // (the ground-effect lane's law) — the wildfire's wreath, the comet's
-      // sear and the runoff's scald all TICK instead of wearing a 0-dps label.
-      statusDps: (id) => baselineStatusDps(id, Math.max(1, this.zone.level)),
-      // A fielding wave's arrival line (FrontSpawnRow.announce), on every
-      // seat — the wildlife arrival-line idiom.
-      announce: (text, color) => {
-        for (const s of this.seats) {
-          this.text(vec(s.actor.pos.x, s.actor.pos.y - 36), text, color ?? '#9fd8e8', 13);
-        }
-      },
-    });
-  }
+  private installCreepFront(field: CreepField): void { return nativeSceneInstallCreepFront(this.nativeSceneGeometryHost(),field); }
 
   /** THE FRONT EATS: one fueled doodad consumed by a passing front —
    *  swapped to its remnant kind or felled outright (the popBrittle
    *  removal discipline: splice + explicit rev bump), a flash in the
    *  row's tint, and sometimes KIN crawling out of the wreck (capped per
    *  visit — a burning grove births a pack, never a flood). */
-  private frontConsume(d: Doodad, row: FrontConsumeRow): void {
-    if (d.gone) return;
-    const at = vec(d.pos.x, d.pos.y);
-    const color = row.fx ?? '#e8d0a0';
-    if (row.leave) {
-      d.kind = row.leave;
-      delete d.adorn;
-      delete d.effect;
-      this.markDoodadsChanged();
-    } else {
-      d.gone = true;
-      const i = this.doodads.indexOf(d);
-      if (i >= 0) this.doodads.splice(i, 1);
-      this.markDoodadsChanged();
-    }
-    this.flashes.push({ pos: at, radius: Math.max(20, d.radius * 1.8), color, life: 0.32, maxLife: 0.32 });
-    if (row.spawn && this.frontSpawned < CREEP_CFG.front.spawnMax && chance(row.spawn.chance)) {
-      const m = this.createMonster(row.spawn.monster, Math.max(1, this.zone.level), 'enemy');
-      m.pos = this.clampPos(vec(at.x + rand(-20, 20), at.y + rand(-20, 20)), m.radius);
-      this.actors.push(m);
-      this.frontSpawned++;
-    }
-  }
+  private frontConsume(d: Doodad, row: FrontConsumeRow): void { return nativeSceneFrontConsume(this.nativeSceneGeometryHost(),d,row); }
 
   /** THE FRONT DRINKS THE BLOW: a blast's typed roll splashes any marching
    *  skin under it — the quench/feed lane (FrontSpec.quench/feed), rowed
@@ -54809,14 +54402,7 @@ export class World {
    *  courtyards and doorways count as open: roof rects exclude them). Public:
    *  the render layer reads it for the interior-reveal rule (roof-gated
    *  labels hide with the room they mark). */
-  roofedStructureAt(pos: Vec2): PlacedStructure | null {
-    for (const st of this.structures) {
-      for (const r of st.roofs) {
-        if (pos.x > r.x && pos.x < r.x + r.w && pos.y > r.y && pos.y < r.y + r.h) return st;
-      }
-    }
-    return null;
-  }
+  roofedStructureAt(pos: Vec2): PlacedStructure | null { return nativeSceneRoofedStructureAt(this.nativeSceneGeometryHost(),pos); }
 
   /** THE STOREY FABRIC (engine/storeys.ts): the plan structure whose stacked
    *  footprint holds this point — the building whose floors above stand on
@@ -60608,10 +60194,7 @@ export class World {
    *  The static AMBIENT_TAGS registry, PLUS every holdfast guardian's
    *  neutralTag from the live overlay — a new guardian def (any package,
    *  any dimension) is ambient-exempt with zero engine edits. */
-  isAmbientTag(tag: string | undefined): boolean {
-    if (!tag) return false;
-    return AMBIENT_TAGS.has(tag) || !!this.sim.holdfastField?.guardianTags().has(tag);
-  }
+  isAmbientTag(tag: string | undefined): boolean { return sceneIsAmbientTag(this.nativeScenePopulationHost(),tag); }
 
   /** Would this body COUNT toward the zone's objective, alive or just
    *  felled? THE ONE PREDICATE behind countedEnemies (the population read)
@@ -60627,21 +60210,7 @@ export class World {
    *  them. The CONFINE CLAUSE below is that guard's instance-level half:
    *  a body hard-confined to a disc the walker cannot reach is excluded
    *  by what actually stands on THIS floor, not by what its def promised. */
-  objectiveCountable(a: Actor): boolean {
-    return a.team === 'enemy'
-      && !this.isAmbientTag(a.tag)
-      // ACTOR-level scenery armor is the same soft-lock guard one layer
-      // down: a planted body no build can even FIGHT — a throng husk
-      // waiting to be claimed, an extraction node — must never gate a
-      // clear (the Hivecaller's own unclaimed husks were walling the
-      // objective). Def-level passive/noObjective below covers KINDS;
-      // this covers the armor stamped onto ordinary kinds at plant time.
-      // Deliberately the full pair — a merely-untargetable body (a phased
-      // boss, a warded heart) still counts and still gates.
-      && !(a.passive && a.untargetable)
-      && !(a.defId && (MONSTERS[a.defId]?.passive || MONSTERS[a.defId]?.noObjective))
-      && !this.confineUnreachable(a);
-  }
+  objectiveCountable(a: Actor): boolean { return sceneObjectiveCountable(this.nativeScenePopulationHost(),a); }
 
   /** THE CONFINE CLAUSE of the soft-lock guard — the INSTANCE half.
    *  Def-level noObjective covers KINDS that live on forbidding ground;
@@ -60660,19 +60229,10 @@ export class World {
    *  ground, a field without components, an unwalkable entry anchor — the
    *  body COUNTS, exactly as before this clause: the guard may only ever
    *  excuse a wedge, never invent a completion. */
-  private confineUnreachable(a: Actor): boolean {
-    const c = a.confine;
-    if (!c) return false;
-    const f = this.pathField();
-    if (!f || !f.reachable) return false;
-    if (!f.isWalkable(this.zoneEntry.x, this.zoneEntry.y)) return false;
-    return !f.reachable(this.zoneEntry, vec(c.x, c.y));
-  }
+  private confineUnreachable(a: Actor): boolean { return sceneConfineUnreachable(this.nativeScenePopulationHost(),a); }
 
   /** Living enemies that count toward objectives (caches and such don't). */
-  private countedEnemies(): Actor[] {
-    return this.actors.filter(a => !a.dead && this.objectiveCountable(a));
-  }
+  private countedEnemies(): Actor[] { return sceneCountedEnemies(this.nativeScenePopulationHost()); }
 
   /** Derive THE CULL's ask for fresh 'clear' ground: the spec's own `need`
    *  (flat, or a [min,max] band rolled off the layout rng — the offering's
@@ -60684,18 +60244,10 @@ export class World {
    *  spawned — the empty-floor mercy completes it either way). Returns 0
    *  when no ask is derivable (nothing counted stands on a strange empty
    *  mint): no cull state, the empty-floor rule already holds. */
-  private rollCullNeed(o: Extract<ObjectiveSpec, { kind: 'clear' }>, rng: Rng): number {
-    if (typeof o.need === 'number') return Math.max(1, Math.floor(o.need));
-    if (o.need) return Math.max(1, rng.int(Math.floor(o.need[0]), Math.floor(o.need[1])));
-    const pop = this.countedEnemies().length;
-    if (!pop) return 0;
-    return Math.min(pop, clamp(Math.round(pop * (o.frac ?? CLEAR_CFG.frac)), CLEAR_CFG.min, CLEAR_CFG.max));
-  }
+  private rollCullNeed(o: Extract<ObjectiveSpec, { kind: 'clear' }>, rng: Rng): number { return sceneRollCullNeed(this.nativeScenePopulationHost(),o,rng); }
 
   /** Living spawner objects in the zone. */
-  private livingSpawners(): Actor[] {
-    return this.actors.filter(a => !a.dead && !!a.defId && !!MONSTERS[a.defId]?.spawner);
-  }
+  private livingSpawners(): Actor[] { return sceneLivingSpawners(this.nativeScenePopulationHost()); }
 
   /** THE CONTEST LAW's resolution: the kind's own config under the zone's
    *  ObjectiveTuning.contest override (`false` waives the law → null,
@@ -61394,94 +60946,7 @@ export class World {
     };
   }
 
-  private spawnWave(): void {
-    this.wave++;
-    this.waveActive = true;
-    // Leveled zones draw a WEIGHTED table so day/night, weather, and a faction
-    // contest actually reshape who attacks; a PACKLESS arena (The Pit) runs
-    // the flat WAVE_TABLE escalation at zone level — which the Pit re-stamps
-    // from the CHARACTER on every entry (levelWith), creeping +1 per 2 waves.
-    // (A hypothetical level-0 arena keeps the classic level = wave ladder.)
-    const level = this.zone.level > 0
-      ? this.zone.level + Math.floor((this.wave - 1) / 2)
-      : this.wave;
-    let pickType: () => string;
-    if (this.zone.packs) {
-      const e = this.effectiveSpawn(this.zone, this.baseTable(this.zone));
-      const table: PackTableEntry[] = e.table
-        .filter(en => MONSTERS[en.id])
-        .map(en => ({ id: en.id, weight: en.weight, presence: en.presence }));
-      // Contested ground bleeds into the assault — the rival rosters join in.
-      for (const fid of e.inject) {
-        for (const en of FACTIONS[fid]?.table ?? []) {
-          if (!MONSTERS[en.id]) continue;
-          const ex = table.find(t => t.id === en.id);
-          if (ex) ex.weight += en.weight;
-          else table.push({ id: en.id, weight: en.weight, presence: en.presence });
-        }
-      }
-      pickType = (): string => this.weightedPick(table, level);
-    } else {
-      // Wave tiers gate entry; def-level presence still shapes the pool — but
-      // folded at the WAVE number, the axis the table is designed on. Folding
-      // at the (now character-stamped) zone level would let a high-level hero's
-      // wave 1 exclude every early-band monster and thin the pool toward empty;
-      // composition follows the wave ladder, STATS follow the hero (`level`).
-      const pool: PackTableEntry[] = [];
-      for (const tier of WAVE_TABLE) {
-        if (this.wave >= tier.minWave) pool.push(...tier.ids.map(id => ({ id, weight: 1 })));
-      }
-      pickType = (): string => this.weightedPick(pool, this.wave);
-    }
-    // COUNT scales with the wave AND the character (data/waves.ts): an arena
-    // that grows with whoever dares it, not a fixed drip.
-    const cfg = WAVE_CFG;
-    const count = Math.min(
-      Math.round(cfg.count.base + this.wave * cfg.count.perWave + this.player.level * cfg.count.perLevel),
-      cfg.count.max);
-    // SURGE GROUPS: the wave breaks from a few points, not an even sprinkle —
-    // every anchor is a fully-legal spawn point (reachability-checked); the
-    // members ring their anchor and clamp legal, falling back onto it where
-    // the ring leaves the mesh.
-    const anchors: Vec2[] = [];
-    for (let k = 0, n = Math.max(1, Math.ceil(count / cfg.cluster.size)); k < n; k++) {
-      anchors.push(this.spawnPoint(24));
-    }
-    const o = this.zone.objective;
-    const frenzy = o.kind === 'waves' && o.frenzy !== false ? cfg.frenzy : null;
-    for (let i = 0; i < count; i++) {
-      const m = this.createMonster(pickType(), level, 'enemy');
-      const a = anchors[i % anchors.length];
-      const ang = rand(0, Math.PI * 2), rr = rand(12, cfg.cluster.spread);
-      let p = vec(a.x + Math.cos(ang) * rr, a.y + Math.sin(ang) * rr);
-      // A ring position keeps ALL of spawnPoint's guarantees or falls back to
-      // its anchor (which holds them by construction): on-mesh, not embedded
-      // in a solid (a member born inside a boulder can strand un-killable and
-      // stall the endless objective), and not across a wall into a sealed
-      // interior in structure zones.
-      const bad = (this.walk && !this.walk.isWalkable(p.x, p.y))
-        || this.pointInSolid(p.x, p.y, m.radius * 0.5)
-        || (this.structures.length > 0 && !!this.walk?.reachable
-          && !this.walk.reachable(this.zoneEntry, p));
-      if (bad) p = vec(a.x, a.y);
-      m.pos = this.clampPos(p, m.radius);
-      if (frenzy) this.applyWaveFrenzy(m, frenzy);
-      // Wave bodies ARE this zone's population: flag them for Zone Memory so a
-      // boundary cross remembers the mid-wave survivors alongside the counter.
-      m.fromZoneGen = true;
-      this.actors.push(m);
-    }
-    // Boss cadence is the OBJECTIVE'S data (bossEveryWaves/bossId) — any
-    // survival arena declares its own lord; nothing is keyed to a zone id.
-    if (o.kind === 'waves' && o.bossEveryWaves && o.bossId && this.wave % o.bossEveryWaves === 0) {
-      const boss = this.createMonster(o.bossId, level + 1, 'enemy');
-      boss.pos = this.spawnPoint(boss.radius);
-      if (frenzy) this.applyWaveFrenzy(boss, frenzy);
-      boss.fromZoneGen = true; // the wave's lord is remembered like its rank and file
-      this.actors.push(boss);
-      this.text(vec(this.player.pos.x, this.player.pos.y - 60), `${boss.name} emerges!`, '#ff5050', 20);
-    }
-  }
+  private spawnWave(): void { return spawnSceneWave(this.nativeScenePopulationHost()); }
 
   /** FRENZY (data/waves.ts): a wave spawn arrives ALREADY HUNTING — aggro
    *  latched from frame one (the nemesis precedent), x-ray 360° senses, an
@@ -61490,86 +60955,9 @@ export class World {
    *  FRESH merged brain per instance — the def's SHARED brain object is never
    *  mutated (normalizeBrain caches per object identity; touching def.brain
    *  would frenzy every monster of that def everywhere, forever). */
-  applyWaveFrenzy(m: Actor, fz: WaveFrenzySpec): void {
-    m.aggroed = true; // came here for you — with relentless below, detection is ∞ from frame one
-    // A huge FINITE horizon, not Infinity: every other alert writer uses
-    // time + duration, and a JSON round-trip (snapshots, future saves) turns
-    // Infinity into null — which would read as never-alerted.
-    m.alertUntil = this.time + 1e9;
-    const b: NonNullable<Actor['brain']> = m.brain ?? {};
-    m.brain = {
-      ...b,
-      perception: {
-        ...b.perception,
-        xray: true,
-        arcDeg: 360,
-        alertShout: Math.max(fz.shoutRadius, b.perception?.alertShout ?? 0),
-        memory: Math.max(fz.memory, b.perception?.memory ?? 0),
-        attentionSpan: undefined, // a wave never forgets you
-      },
-      target: {
-        ...b.target,
-        relentless: true,
-        detectMul: Math.max(fz.detectMul, b.target?.detectMul ?? 0),
-        leash: undefined,         // no giving up and walking home
-        kindBias: { ...fz.kindBias },
-      },
-      move: {
-        ...b.move,
-        style: 'direct',
-        closeFrac: Math.min(fz.closeFrac, b.move?.closeFrac ?? fz.closeFrac),
-        pathing: 'route',         // charge AROUND walls, never pile into them
-        withdraw: undefined,      // no post-strike backpedal (skirmish presets)
-      },
-      // NULL clears the AXIS through the archetype preset too (mergeTuning):
-      // an artillery/caster body in a wave keeps its guns but loses the kite
-      // budget and duty-cycle pauses its preset ships — a wave does not
-      // hesitate, and it never routs.
-      morale: null,
-      tempo: null,
-    };
-    if (fz.moveSpeedMore) m.sheet.setSource('waveFrenzy', [mod('moveSpeed', 'more', fz.moveSpeedMore)]);
-  }
+  applyWaveFrenzy(m: Actor, fz: WaveFrenzySpec): void { return applySceneWaveFrenzy(this.nativeScenePopulationHost(),m,fz); }
 
-  private spawnPoint(radius: number): Vec2 {
-    for (let tries = 0; tries < 30; tries++) {
-      const sp = samplePoint(this.arena, 60, rand);
-      const p = vec(sp.x, sp.y);
-      if (this.walk && !this.walk.isWalkable(p.x, p.y)) continue; // walk zones: on-mesh only
-      if (this.pointInSolid(p.x, p.y, radius * 0.5)) continue;    // not inside a wall/rock/thicket
-      // Zones with plan structures: AMBIENT spawns must not strand inside a
-      // sealed interior (a walkable-but-unreachable courtyard would jam clear/
-      // wave objectives). Explicit garrison/slot spawns bypass this by design.
-      if (this.structures.length && this.walk?.reachable
-        && !this.walk.reachable(this.zoneEntry, p)) continue;
-      if (dist(p, this.player.pos) > 450) {
-        // THE CLAMPED BAR (hfpocket II, 2026-08-07): clampPos resolves the
-        // body's FULL radius (the solid gate above cleared only radius*0.5)
-        // and can push a marginal candidate back INSIDE the grace disc — the
-        // 08-07 nightly's 448-under-450 (probe_holdfast_pocket seed 471714).
-        // The bar judges the point the caller actually RECEIVES: clamp
-        // first, and a pulled-under candidate keeps sampling — the
-        // farthestStand degrade below still floors cramped ground.
-        const q = this.clampPos(p, radius);
-        if (dist(q, this.player.pos) > 450) return q;
-      }
-    }
-    // Sampling failed — usually a CRAMPED zone where nothing clears the
-    // player-distance bar. The old fallback stacked everything at the entry
-    // (±140) — which is exactly where an arriving player STANDS: in a tiny
-    // carve the whole population teleported onto the portal (the pocket
-    // death-ball). Degrade honestly instead: the reachable stand FARTHEST
-    // from the player, jittered so repeated calls don't pile one spot.
-    const far = this.farthestStand(radius, this.structures.length > 0);
-    if (far) {
-      return this.clampPos(vec(far.x + rand(-70, 70), far.y + rand(-70, 70)), radius);
-    }
-    // No stand at all (degenerate ground): the old last resorts.
-    if (this.structures.length) {
-      return this.clampPos(vec(this.zoneEntry.x + rand(-140, 140), this.zoneEntry.y + rand(-140, 140)), radius);
-    }
-    return this.clampPos(vec(this.arena.w / 2, this.arena.h / 2), radius); // clampPos snaps to walkable
-  }
+  private spawnPoint(radius: number): Vec2 { return sceneSpawnPoint(this.nativeScenePopulationHost(),radius); }
 
   /** LAST-RESORT placement: the valid stand FARTHEST from the player, scanned
    *  on a grid — walkable, clear of solids, and (when asked) reachable
@@ -61578,9 +60966,7 @@ export class World {
    *  pockets): placements degrade toward "as far away as the ground allows"
    *  instead of collapsing onto the entry portal or the arena center.
    *  Load/spawn-time only — never per-frame. */
-  private farthestStand(radius: number, needReachable: boolean): Vec2 | null {
-    return nativeFarthestStand(this.nativePlacementHost(), radius, needReachable);
-  }
+  private farthestStand(radius: number, needReachable: boolean): Vec2 | null { return nativeSceneFarthestStand(this.nativeSceneGeometryHost(),radius,needReachable); }
 
   // ---------------------------------------------------------------- misc ----
 
@@ -61610,51 +60996,23 @@ export class World {
    *  grown by the index pad, covers x/y). Rebuilds the index lazily when the
    *  doodad list changed — see the field doc. THE way per-frame code touches
    *  doodads; the full-list scans it replaced were the caldera frame drops. */
-  doodadsAt(x: number, y: number): readonly Doodad[] {
-    this.ensureDoodadIdx();
-    return this.doodadIdx.at(x, y);
-  }
+  doodadsAt(x: number, y: number): readonly Doodad[] { return nativeSceneDoodadsAt(this.nativeSceneGeometryHost(),x,y); }
 
   /** The AREA candidate set: every doodad whose disc could intersect a
    *  circle of `reach` at (x, y) — doodadsAt's area sibling on the same
    *  lazy rebuild, for skill-shaped queries (the strike-surface seam).
    *  A candidate SUPERSET: the caller applies its exact geometry. */
-  doodadsNear(x: number, y: number, reach: number): readonly Doodad[] {
-    this.ensureDoodadIdx();
-    return this.doodadIdx.near(x, y, reach);
-  }
+  doodadsNear(x: number, y: number, reach: number): readonly Doodad[] { return nativeSceneDoodadsNear(this.nativeSceneGeometryHost(),x,y,reach); }
 
   /** Rebuild the doodad index lazily when the list changed — the shared
    *  gate behind doodadsAt/doodadsNear (see the field doc). */
-  private ensureDoodadIdx(): void {
-    if (this.doodadIdxArr !== this.doodads || this.doodadIdxLen !== this.doodads.length
-      || this.doodadIdxRev !== this.doodadsRev) {
-      // Broad-phase bound refresh (hit-surface fabric): a doodad whose true
-      // surface pokes past its visual radius (door slabs) must insert wider,
-      // or corner queries would miss it. Stamped HERE — the one chokepoint
-      // every doodad list change already flows through — so gen-time,
-      // package, terraform, and snapshot-applied doodads all self-heal.
-      for (const d of this.doodads) normalizeDoodadBound(d);
-      this.doodadIdx.build(this.doodads);
-      this.doodadIdxArr = this.doodads;
-      this.doodadIdxLen = this.doodads.length;
-      this.doodadIdxRev = this.doodadsRev;
-    }
-  }
+  private ensureDoodadIdx(): void { return nativeSceneEnsureDoodadIdx(this.nativeSceneGeometryHost()); }
 
   /** Per-family mutation counters (engine/doodadFamilies.ts) — see
    *  doodadFamilyRev. Re-seated when the family registry grows (epoch). */
   private famRevs: number[] = [];
   private famEpoch = -1;
-  private syncFamRevs(): void {
-    if (this.famEpoch !== doodadFamilyEpoch()) {
-      this.famEpoch = doodadFamilyEpoch();
-      // Seed every counter at the global rev: ≥ any value a consumer has
-      // stored (families bump at most once per markDoodadsChanged), so a
-      // late-registered family forces one honest resync, never staleness.
-      this.famRevs = new Array(doodadFamilyCount()).fill(this.doodadsRev);
-    }
-  }
+  private syncFamRevs(): void { return nativeSceneSyncFamRevs(this.nativeSceneGeometryHost()); }
 
   /** In-place doodad mutations that DON'T change the list length (kind swaps,
    *  radius edits) must call this so the index re-syncs. Pushes and splices
@@ -61663,26 +61021,11 @@ export class World {
    *  (a drying pool's radius step stops rebuilding the nav grid and the veil
    *  index — the churn-cascade fix); a no-arg call bumps every family, the
    *  safe default for sites that predate the registry. */
-  markDoodadsChanged(touched?: Doodad | readonly Doodad[]): void {
-    this.doodadsRev++;
-    this.syncFamRevs();
-    if (!touched) {
-      for (let i = 0; i < this.famRevs.length; i++) this.famRevs[i]++;
-      return;
-    }
-    const list = Array.isArray(touched) ? touched as readonly Doodad[] : [touched as Doodad];
-    let bits = 0;
-    for (const d of list) bits |= doodadFamilyBits(d.kind);
-    for (let i = 0; i < this.famRevs.length; i++) if (bits & (1 << i)) this.famRevs[i]++;
-  }
+  markDoodadsChanged(touched?: Doodad | readonly Doodad[]): void { return nativeSceneMarkDoodadsChanged(this.nativeSceneGeometryHost(),touched); }
   /** A family's mutation counter — cache keys pair it with (identity,
    *  length) exactly like doodadRev, but it moves only when a doodad of THAT
    *  family was reported changed (or on an unattributed change). */
-  doodadFamilyRev(id: string): number {
-    this.syncFamRevs();
-    const at = doodadFamilyIndex(id);
-    return at >= 0 ? this.famRevs[at] : this.doodadsRev;
-  }
+  doodadFamilyRev(id: string): number { return nativeSceneDoodadFamilyRev(this.nativeSceneGeometryHost(),id); }
   /** The doodad-list revision, readable — anything that CACHES against the
    *  doodad set (the renderer's baked blend beds) keys on (list identity,
    *  length, THIS) exactly like the internal spatial/veil indexes. */
@@ -61747,9 +61090,7 @@ export class World {
    *  bearers. Terrain effects (applyRegionEffects) and travel pricing
    *  (pathProfileFor) both read it, so what a body wades free it also never
    *  detours around — pain and preference can't disagree by construction. */
-  groundInsured(a: Actor, kindId: string): boolean {
-    return a.flying || a.habitat?.kind === kindId || a.immuneGround?.includes(kindId) || false;
-  }
+  groundInsured(a: Actor, kindId: string): boolean { return nativeSceneGroundInsured(this.nativeSceneGeometryHost(),a,kindId); }
 
   /** An actor's PRICED VIEW of the ground (walk.ts PathProfile), interned.
    *  Resolution per kind, first answer wins:
@@ -61846,28 +61187,7 @@ export class World {
    *  flattened stack. Story 0 and tier-less zones return exactly the field
    *  they always did (same object, no new work): the flat lane is
    *  byte-identical by construction. */
-  pathField(story = 0): WalkField | null {
-    if (this.walk) {
-      if (!this.walk.pathStep) return null;
-      if (story >= 1 && this.zone.tiers && this.tierViews) return this.tierPathField(story);
-      return this.walk;
-    }
-    if (this.arena.boundless) return null;
-    // Convex zones carry no tier stack (tierViews ride this.walk), so every
-    // story normalizes onto the ONE nav below; the per-story fields cache in
-    // tierNavs — a Map keyed BY story — never through this single-slot key,
-    // so two stories can't clobber (or serve) each other here. A composite
-    // zone's key carries the ACTIVE-union fingerprint, so an annex reveal
-    // re-rakes the grid on its next ask (piece-less zones append nothing —
-    // the standing key strings never move).
-    const ak = this.arena.pieces?.length ? '|ax:' + activeAnnexKey(this.arena) : '';
-    const key = this.zone.id + ':' + this.doodads.length + ':' + this.doodadFamilyRev('nav-block') + ak;
-    if (!this.convexNav || this.convexNavKey !== key) {
-      this.convexNav = this.buildConvexNav();
-      this.convexNavKey = key;
-    }
-    return this.convexNav;
-  }
+  pathField(story = 0): WalkField | null { return nativeScenePathField(this.nativeSceneGeometryHost(),story); }
 
   /** The per-story field behind pathField(story ≥ 1): derived off the base
    *  grid (makeTierNav — the story's floor mask, true kinds, link seams) and
@@ -61875,16 +61195,7 @@ export class World {
    *  door breaks reach every story's field on their next ask. A story past
    *  the zone's stack clamps to the top (the clampPos discipline); a
    *  non-grid walk model degrades to the flat field it always had. */
-  private tierPathField(story: number): WalkField {
-    const base = this.nativeSettlementGrid();
-    if (!base) return this.walk!;
-    const t = Math.max(1, Math.min(story, this.tierViews!.length - 1));
-    const hit = this.tierNavs.get(t);
-    if (hit && hit.walk === base && hit.v === base.version) return hit.g;
-    const g = makeTierNav(base, t);
-    this.tierNavs.set(t, { g, walk: base, v: base.version });
-    return g;
-  }
+  private tierPathField(story: number): WalkField { return nativeSceneTierPathField(this.nativeSceneGeometryHost(),story); }
 
   /** THE LINK SEATS: the zone's crossings as aim points — contiguous link
    *  cells (4-neighbour flood) clustered to ONE seat each, the member cell
@@ -61980,18 +61291,9 @@ export class World {
    *  move-blocking doodads stamp 'wall' at TRUNK radius + NAV_CFG.pad —
    *  chasm discs first so bridge spans can re-open their crossings, solids
    *  last so a boulder on a bridge still blocks (clampPos parity). */
-  private nativeNavigationHost(): NativeNavigationHost {
-    const world = this;
-    return {
-      get arena() { return world.arena; }, get arenaHull() { return world.arenaHull; },
-      get doodads() { return world.doodads; }, get grounds() { return world.grounds; },
-      get pad() { return NAV_CFG.pad; }, doodadRuleOf, blocksMovement, hitSurfaceOf,
-      groundAt: p => world.groundAt(p), paintNavGrounds: g => world.paintNavGrounds(g),
-      stampNavSurface: (g, d) => world.stampNavSurface(g, d),
-    };
-  }
+  private nativeNavigationHost(): NativeNavigationHost { return nativeSceneNativeNavigationHost(this.nativeSceneGeometryHost()); }
 
-  private buildConvexNav(): GridWalkField { return buildNativeConvexNav(this.nativeNavigationHost()); }
+  private buildConvexNav(): GridWalkField { return nativeSceneBuildConvexNav(this.nativeSceneGeometryHost()); }
 
   /** Sample groundAt at each nav cell center under every ground disc and
    *  stamp the reported kind ('deep_water' where the water reads deep — its
@@ -62001,13 +61303,13 @@ export class World {
    *  marsh entry re-priced the same water repeatedly); cells outside a
    *  disc's own circle are skipped before the groundAt query. A groundless
    *  zone pays one empty loop. */
-  private paintNavGrounds(g: GridWalkField): void { paintNativeNavGrounds(this.nativeNavigationHost(), g); }
+  private paintNavGrounds(g: GridWalkField): void { return nativeScenePaintNavGrounds(this.nativeSceneGeometryHost(),g); }
 
   /** Stamp one move-blocker's TRUE surface (+ NAV_CFG.pad) onto the nav grid.
    *  Discs keep the classic fillDisc; oblong surfaces mark exactly the cells
    *  their padded shape covers — so the pathfield squeezes a doorway the
    *  same way feet do (clampPos parity via the shared hit-surface fabric). */
-  private stampNavSurface(g: GridWalkField, d: Doodad): void { stampNativeNavSurface(this.nativeNavigationHost(), g, d); }
+  private stampNavSurface(g: GridWalkField, d: Doodad): void { return nativeSceneStampNavSurface(this.nativeSceneGeometryHost(),g,d); }
 
   /** Is the target under crowns outside the viewer's local presence?
    *  Connected canopy membership grants no distant vision. */
@@ -62020,31 +61322,14 @@ export class World {
    *  placement rejection and the unstuck sentinel. `tier` is the STORY the
    *  point is judged on (layer sovereignty — a surface trunk is no solid to
    *  the root duct beneath it; clampPos's own doodad gate, mirrored). */
-  pointInSolid(x: number, y: number, margin = 0, tier = 0): Doodad | null {
-    if(tier===0 && this.massRuntime?.nativeFeatures
-      && Math.max(Math.abs(x),Math.abs(y))<this.massRuntime.config.terrain.addressSpan*4095){
-      const native=this.massRuntime.nativeFeatures.obstacleAt(this.massRuntime.walk.at(x,y),margin);
-      if(native)return native.doodad;
-    }
-    for (const o of this.doodadsAt(x, y)) {
-      if ((o.tier ?? 0) !== tier) continue; // its layer's solids only
-      if (!blocksMovement(o)) continue;
-      // The TRUNK (or the true slab surface) — never the crown.
-      if (!shapeContains(hitSurfaceOf(o, 'move'), o.pos.x, o.pos.y, x, y, margin)) continue;
-      if (o.kind === 'chasm' && this.bridges.some(b => dist(vec(x, y), b.pos) <= b.radius)) continue;
-      return o;
-    }
-    return null;
-  }
+  pointInSolid(x: number, y: number, margin = 0, tier = 0): Doodad | null { return nativeScenePointInSolid(this.nativeSceneGeometryHost(),x,y,margin,tier); }
 
   /** A clear stand-spot at/near `at`: bounds+walk clamped, then — if the point
    *  is still EMBEDDED in a solid (deep inside a rock blob clampPos's passes
    *  can't escape) — probe outward rings for the nearest free, walkable spot.
    *  Spawn placement and the unstuck sentinel both come through here, so an
    *  actor can never be born into (or left inside) a wall to pingpong forever. */
-  findFreeSpot(at: Vec2, radius: number, tier = 0): Vec2 {
-    return nativeFindFreeSpot(this.nativePlacementHost(), at, radius, tier);
-  }
+  findFreeSpot(at: Vec2, radius: number, tier = 0): Vec2 { return nativeSceneFindFreeSpot(this.nativeSceneGeometryHost(),at,radius,tier); }
 
   /**
    * Clamp to the zone bounds, then push out of blocking terrain (radial
@@ -62052,224 +61337,13 @@ export class World {
    * only points INSIDE a circle are pushed, a blink whose destination is
    * beyond the gap crosses it, while walking and dashing slide along it.
    */
-  clampPos(p: Vec2, radius: number, from?: Vec2, opts?: ClampOpts): Vec2 {
-    if (from === undefined && nativePlacementDataInputs(p, opts))
-      return nativePlacementClamp(this.nativePlacementHost(), p, radius, opts?.tier);
-    const movementTether = opts?.mover instanceof Actor ? refreshMovementTether(opts.mover, this) : undefined;
-    if (movementTether) p = movementTetherLimit(movementTether, p);
-    const b0 = clampToBounds(p, radius, this.arena);
-    const out = vec(b0.x, b0.y);
-    // THE TIER FABRIC: the mover's layer, read once — gates the doodad
-    // collision below (a street lamp never blocks the duct runner beneath
-    // it) and the walk-confine swap further down.
-    const mvTier = opts?.tier ?? (opts?.mover as { tier?: number } | undefined)?.tier ?? 0;
-    // A wall-phasing displacement (ignoreConfine) stays in-bounds but skips doodad
-    // + walk confinement (a flicker/teleport lands past rocks, walls, the void).
-    if (!opts?.disp?.ignoreConfine) {
-    // Iterate: escaping one circle of a blob can land inside its neighbor.
-    // Candidates come from the spatial index, re-queried per pass (a push can
-    // slide the point toward discs the first bucket didn't see).
-    for (let pass = 0; pass < 3; pass++) {
-      let moved = false;
-      for (const o of this.doodadsAt(out.x, out.y)) {
-        if ((o.tier ?? 0) !== mvTier) continue; // its layer's furniture only
-        if (!blocksMovement(o)) continue;
-        // THE PITFALL FABRIC (engine/pitfall.ts): a fall-able pit is a DROP,
-        // not a wall — the push loop leaves it whole and the pit confine
-        // below owns the crossing (grasp the lip, arrest at support loss,
-        // the region's boundary policy decides what the fall means). Gen
-        // and pathing still read blocksMovement: only the mover knows the
-        // difference between stone and a long way down.
-        if (pitRegionOf(o)) continue;
-        // The hit-surface fabric: trunks (discs) keep the classic radial
-        // slide byte-for-byte; oblong surfaces (door slabs, benches) push
-        // out through their true face — walking into a door slides you
-        // along the plank, not around an invisible circle.
-        const push = pushOutOfShape(hitSurfaceOf(o, 'move'), o.pos.x, o.pos.y, out.x, out.y, radius);
-        if (!push) continue;
-        if (o.kind === 'chasm' && this.bridges.some(b => dist(out, b.pos) <= b.radius)) continue;
-        moved = true;
-        out.x = push.x; out.y = push.y;
-        // CLASSIFY (opt-in): record what stopped us, for the collision-proc
-        // seam (fall-able pits never reach here — the pit confine classifies
-        // their arrests as 'void' with the pit's own region).
-        if (opts?.out) {
-          opts.out.hit = 'wall'; opts.out.at = vec(o.pos.x, o.pos.y);
-          opts.out.blockedKind = o.kind;
-          opts.out.normal = { x: push.nx, y: push.ny };
-        }
-      }
-      if (!moved) break;
-    }
-    }
-    const b1 = clampToBounds(out, radius, this.arena);
-    out.x = b1.x; out.y = b1.y;
-    // THE TIER SWAP (engine/tiers.ts): an elevated mover confines against
-    // ITS story's floor — that story's view is scoped over this.walk for
-    // exactly the confine block below (synchronous, never re-entrant:
-    // walkResolve/walkSweep read this.walk, so the swap reaches every
-    // sample without threading a param through four layers). Restored in
-    // the finally. A stale tier beyond the zone's stack clamps to the top.
-    // Gated on zone.tiers (the arrivalStory law's second half): every tier-
-    // region painter stamps def.tiers, so a zone WITHOUT it owns no story
-    // floor anywhere — tierViews[1] there is the EMPTY mask, and swapping to
-    // it froze any body wearing a stale layer index solid. A stale tier in
-    // a storyless zone now walks the base grid instead.
-    const moverTier = mvTier;
-    let tierSwap: WalkField | null = null;
-    if (moverTier >= 1 && this.zone.tiers && this.tierViews && this.walk) {
-      const view = this.tierViews[Math.min(moverTier, this.tierViews.length - 1)];
-      if (view) { tierSwap = this.walk; this.walk = view as unknown as GridWalkField; }
-    }
-    try {
-    // NON-CONVEX zones (Phase 2/3): keep the actor on walkable ground, but ASK THE
-    // REGION POLICY (not a bare bool) — walls confine, void is enter-then-resolve,
-    // and a displacement may opt to cross. NULL walk (plains + existing) skips all.
-    if (this.walk && !opts?.disp?.ignoreConfine) {
-      const disp = opts?.disp;
-      const destKind = this.walk.regionAt?.(out.x, out.y) ?? (this.walk.isWalkable(out.x, out.y) ? 'ground' : 'wall');
-      const ddef = regionKind(destKind);
-      const isFall = !!ddef && !ddef.walkable && !ddef.blocks; // void-like: ENTER then resolve
-      // A fall region may be crossed harmlessly by a fall-ignoring move or a data
-      // crossing exception (a bridge over grid-void); walls only by ignoreConfine (above).
-      const crossable = isFall && (!!disp?.ignoreFall || (ddef!.crossableBy ? ddef!.crossableBy(disp ?? {}) : false));
-      if (crossable) {
-        // pass through (out stays the raw destination)
-      } else if (from) {
-        // Swept confine along from→out (no wall-tunnel, no wrong-side snap), then
-        // classify what we were confined out of — the collision-proc / fall seam.
-        // A fall-ignoring move crosses void bands to far walkable ground (walls still stop it).
-        const desired = vec(out.x, out.y);
-        const r = this.walkResolve(from, out, !!disp?.ignoreFall, radius * WALK_CFG.ledgeGrasp);
-        out.x = r.x; out.y = r.y;
-        if (opts?.out && (desired.x !== r.x || desired.y !== r.y)) {
-          // Probe the cell JUST BEYOND the confined point toward the goal — that's
-          // the actual blocker (NOT regionAt(desired), which a strong overshoot lands
-          // past, on the far walkable side, mis-reporting a void as a wall).
-          const bx = desired.x - r.x, by = desired.y - r.y, bl = Math.hypot(bx, by) || 1;
-          const cs = this.walk.cellSize ?? 24;
-          const bk = this.walk.regionAt?.(r.x + (bx / bl) * cs, r.y + (by / bl) * cs) ?? 'wall';
-          const bdef = regionKind(bk);
-          opts.out.hit = bdef && !bdef.walkable && !bdef.blocks ? 'void' : 'wall';
-          opts.out.at = desired;
-          opts.out.blockedKind = bk;
-        }
-      } else if (!this.walk.isWalkable(out.x, out.y)) {
-        // A placement/teleport (no origin): nearest walkable.
-        const s = this.walk.snapToWalkable(out);
-        out.x = s.x; out.y = s.y;
-      }
-    }
-    } finally { if (tierSwap) this.walk = tierSwap; } // the tier swap ends with the walk confine
-    // THE PITFALL CONFINE (the pitfall fabric, engine/pitfall.ts): fall-able
-    // pit doodads are DROPS, not walls. The sweep advances while the body's
-    // grasp disc still overlaps standing ground or a spanning deck — the
-    // aetherial cloud-lip law in disc space, drawn == tested against the
-    // chasmPit painter's blob union — and slides along rims exactly as the
-    // walk confine slides along walls. An arrest past all support classifies
-    // 'void' carrying the pit's own REGION, so the boundary policy (or the
-    // zone's theme.pitfall) decides what the fall MEANS. Fall-ignoring
-    // displacements (fliers, levitators, blinks) sail across; a body HOME in
-    // a pit's kind (the insurance trio: wings / habitat / immune ground)
-    // walks it like floor. Zones without pits pay one empty-list check.
-    {
-      const pits = this.zonePits();
-      // Elevated movers pass over pit mouths (a deck or bench spans the
-      // world's floor features — the rim fall is their only way down).
-      if (pits.length && moverTier === 0 && !opts?.disp?.ignoreConfine && !opts?.disp?.ignoreFall) {
-        const grasp = radius * WALK_CFG.ledgeGrasp;
-        const home = this.pitHomeKinds(opts?.mover, pits);
-        if (from) {
-          if (anyPitNear(pits, from.x, from.y, out.x, out.y, radius + PIT_CFG.sweepGran)) {
-            const desired = vec(out.x, out.y);
-            const r = this.pitResolve(pits, from, out, grasp, home);
-            out.x = r.x; out.y = r.y;
-            if (opts?.out && (desired.x !== r.x || desired.y !== r.y)) {
-              // The blocker is the pit just past the confined point toward
-              // the goal (the walk confine's probe-beyond discipline).
-              const bx = desired.x - r.x, by = desired.y - r.y, bl = Math.hypot(bx, by) || 1;
-              const hitPit = pitAt(pits, this.bridges,
-                r.x + (bx / bl) * PIT_CFG.sweepGran, r.y + (by / bl) * PIT_CFG.sweepGran, home)
-                ?? pitAt(pits, this.bridges, desired.x, desired.y, home);
-              if (hitPit) {
-                opts.out.hit = 'void';
-                opts.out.at = desired;
-                opts.out.blockedKind = hitPit.region;
-              }
-            }
-          }
-        } else if (!pitSupportedAt(pits, this.bridges, out.x, out.y, grasp, home)) {
-          // A placement/teleport (no origin) may not land IN a pit: march a
-          // FIXED ray from the covering disc's heart until the whole UNION
-          // lets go (a radial per-disc push ping-pongs inside a blob's
-          // waist — the ray walks straight out of a chain of wells).
-          const over0 = pitAt(pits, this.bridges, out.x, out.y, home);
-          if (over0) {
-            let dx = out.x - over0.x, dy = out.y - over0.y;
-            const dl = Math.hypot(dx, dy);
-            if (dl < 0.001) { dx = 1; dy = 0; } else { dx /= dl; dy /= dl; }
-            let px = over0.x + dx * (over0.r + radius);
-            let py = over0.y + dy * (over0.r + radius);
-            for (let s = 0; s < 64 && pitAt(pits, this.bridges, px, py, home); s++) {
-              px += dx * PIT_CFG.sweepGran; py += dy * PIT_CFG.sweepGran;
-            }
-            out.x = px; out.y = py;
-          }
-        }
-      }
-    }
-    // Terrain may slide a legal destination beyond the cord. Refuse that
-    // step instead of projecting the terrain-resolved body INTO a wall.
-    if (movementTether && movementTetherDistance(movementTether, out) > movementTether.spec.length + 0.001) {
-      // A moving anchor can leave NO legal point on this side of a wall.
-      // Break that cord instead of teleporting a body through solid terrain.
-      if (movementTetherDistance(movementTether, movementTether.safe) > movementTether.spec.length) {
-        movementTether.released = true; movementTether.returning = false;
-        return out;
-      }
-      return { ...movementTether.safe };
-    }
-    return out;
-  }
+  clampPos(p: Vec2, radius: number, from?: Vec2, opts?: ClampOpts): Vec2 { return nativeSceneClampPos(this.nativeSceneGeometryHost(),p,radius,from,opts); }
 
   /** Swept walkability resolve (Phase 2): the farthest point along from→to that
    *  stays on walkable ground, with an axis-slide so walking into a wall slides
    *  along it rather than stopping dead. Prevents fast moves (dash/knockback/slip)
    *  from tunneling across a wall, and never snaps to the wrong-side region. */
-  private walkResolve(from: Vec2, to: Vec2, crossFall = false, grasp = 0): Vec2 {
-    const wf = this.walk!;
-    // VOID-OWNED GROUND: an actor standing over ANY vertical void — a cell
-    // that just MELTED under them (mid-teeter), a lip they're GRASPING
-    // (WALK_CFG.ledgeGrasp), or open sky a lapsed cloudform stranded them
-    // on — is the FALL DOORS' business, not the rescue's. The off-mesh
-    // rescue snap must not fire (it read as a free teleport to the nearest
-    // standing cloud and made the fall unreachable in real play): they hold
-    // where the ground was, input finds no purchase, and the coyote grace /
-    // boundary door decide. Genuine off-mesh corruption (walls) keeps the
-    // rescue.
-    const fromVoid = (): boolean => {
-      const rk = regionKind(wf.regionAt?.(from.x, from.y));
-      return !!rk && !rk.walkable && !rk.blocks;
-    };
-    const start = wf.isWalkable(from.x, from.y) ? from
-      : (this.collapse?.voidAt(from.x, from.y) || this.flux?.voidAt(from.x, from.y)
-        || this.conjured?.voidAt(from.x, from.y) || fromVoid()
-        || (grasp > 0 && (wf.supportedAt?.(from.x, from.y, grasp) ?? false))) ? from
-      : wf.snapToWalkable(from);
-    const full = this.walkSweep(start, to, crossFall, grasp);
-    if (full.x === to.x && full.y === to.y) return full;
-    // Blocked: also try single-axis slides so a diagonal-into-wall slides along the
-    // open axis. Pick whichever of {full, x-only, y-only} advanced furthest — each
-    // is a STRAIGHT sweep from start, so the chosen move never cuts a corner / crosses
-    // a wall (we deliberately don't chain H-then-V, which could clip the corner).
-    const xOnly = this.walkSweep(start, vec(to.x, start.y), crossFall, grasp);
-    const yOnly = this.walkSweep(start, vec(start.x, to.y), crossFall, grasp);
-    const d2 = (p: Vec2): number => (p.x - start.x) ** 2 + (p.y - start.y) ** 2;
-    let best = full;
-    if (d2(xOnly) > d2(best)) best = xOnly;
-    if (d2(yOnly) > d2(best)) best = yOnly;
-    return best;
-  }
+  private walkResolve(from: Vec2, to: Vec2, crossFall = false, grasp = 0): Vec2 { return nativeSceneWalkResolve(this.nativeSceneGeometryHost(),from,to,crossFall,grasp); }
 
   /** Reusable CollisionResult so the per-frame movers can request "what stopped me"
    *  without allocating each frame. Reset hit='none' before each clampPos that uses it. */
@@ -62441,40 +61515,7 @@ export class World {
    *  `grasp` > 0 is the LEDGE-GRASP radius: a sample over void stays passable while
    *  any part of the body disc still overlaps standing ground — touching a lip is a
    *  grasp; only carrying the whole body past all support is the walk-off. */
-  private walkSweep(start: Vec2, end: Vec2, crossFall = false, grasp = 0): Vec2 {
-    const wf = this.walk!;
-    const dx = end.x - start.x, dy = end.y - start.y;
-    const len = Math.hypot(dx, dy);
-    if (len < 0.0001) return vec(start.x, start.y);
-    const passable = (px: number, py: number): boolean => {
-      if (wf.isWalkable(px, py)) return true;
-      const rk = regionKind(wf.regionAt?.(px, py));
-      if (!rk || rk.walkable || rk.blocks) return false; // walls stop at the face
-      if (crossFall) return true; // fall-ignoring move sails the gap
-      return grasp > 0 && (wf.supportedAt?.(px, py, grasp) ?? false);
-    };
-    const gran = (wf.cellSize ?? 24) * 0.34;
-    const steps = Math.max(1, Math.ceil(len / gran));
-    let lastT = 0;
-    let blockedT = -1;
-    for (let i = 1; i <= steps; i++) {
-      const t = i / steps;
-      if (!passable(start.x + dx * t, start.y + dy * t)) { blockedT = t; break; }
-      lastT = t;
-    }
-    if (blockedT < 0) return vec(start.x + dx * lastT, start.y + dy * lastT);
-    // CONTACT REFINE: bisect between the last clear sample and the blocked one
-    // so the stop point sits AT the wall face instead of on a sample-grid
-    // multiple. Without this the stop quantizes differently every frame (the
-    // sample spacing shifts with per-frame move length) and a body pressed
-    // against a wall visibly VIBRATES on and off it.
-    let lo = lastT, hi = blockedT;
-    for (let k = 0; k < 4; k++) {
-      const mid = (lo + hi) / 2;
-      if (passable(start.x + dx * mid, start.y + dy * mid)) lo = mid; else hi = mid;
-    }
-    return vec(start.x + dx * lo, start.y + dy * lo);
-  }
+  private walkSweep(start: Vec2, end: Vec2, crossFall = false, grasp = 0): Vec2 { return nativeSceneWalkSweep(this.nativeSceneGeometryHost(),start,end,crossFall,grasp); }
 
   // --- THE PITFALL SURFACES (the pitfall fabric, engine/pitfall.ts) ----------
 
@@ -62485,19 +61526,7 @@ export class World {
    *  next query. Empty almost everywhere: pitless zones pay these compares
    *  and nothing else. Public: the dev hitbox layer and the probe read the
    *  same list the mover tests. */
-  zonePits(): readonly PitSurface[] {
-    const c = this.pitsCache;
-    if (c.arr !== this.doodads || c.len !== this.doodads.length || c.rev !== this.doodadsRev) {
-      c.arr = this.doodads; c.len = this.doodads.length; c.rev = this.doodadsRev;
-      c.list = [];
-      for (const d of this.doodads) {
-        if (d.gone) continue;
-        const region = pitRegionOf(d);
-        if (region) c.list.push({ x: d.pos.x, y: d.pos.y, r: d.radius, kind: d.kind, region });
-      }
-    }
-    return c.list;
-  }
+  zonePits(): readonly PitSurface[] { return nativeSceneZonePits(this.nativeSceneGeometryHost()); }
   private pitsCache: { arr: readonly Doodad[] | null; len: number; rev: number; list: PitSurface[] } =
     { arr: null, len: -1, rev: -1, list: [] };
 
@@ -62507,15 +61536,7 @@ export class World {
    *  pricing make), so the void angler roams and hunts across its chasm and
    *  can never be shoved into it: what can't hurt a body can't swallow it
    *  either. Null (the common case) allocates nothing. */
-  private pitHomeKinds(a: Actor | undefined, pits: readonly PitSurface[]): readonly string[] | null {
-    if (!a) return null;
-    let home: string[] | null = null;
-    for (const p of pits) {
-      if (home?.includes(p.kind)) continue;
-      if (this.groundInsured(a, p.kind)) (home ??= []).push(p.kind);
-    }
-    return home;
-  }
+  private pitHomeKinds(a: Actor | undefined, pits: readonly PitSurface[]): readonly string[] | null { return nativeScenePitHomeKinds(this.nativeSceneGeometryHost(),a,pits); }
 
   /** Swept pit confine — walkResolve's disc-space mirror: the farthest point
    *  along from→to whose grasp disc keeps hold, with single-axis slides so a
@@ -62523,46 +61544,14 @@ export class World {
    *  all support HOLDS where it stands (the aetherial rescue-snap lesson: no
    *  free teleport off a lip — the fall doors already own that body). */
   private pitResolve(pits: readonly PitSurface[], from: Vec2, to: Vec2,
-    grasp: number, home: readonly string[] | null): Vec2 {
-    if (!pitSupportedAt(pits, this.bridges, from.x, from.y, grasp, home)) return vec(from.x, from.y);
-    const full = this.pitSweep(pits, from, to, grasp, home);
-    if (full.x === to.x && full.y === to.y) return full;
-    const xOnly = this.pitSweep(pits, from, vec(to.x, from.y), grasp, home);
-    const yOnly = this.pitSweep(pits, from, vec(from.x, to.y), grasp, home);
-    const d2 = (p: Vec2): number => (p.x - from.x) ** 2 + (p.y - from.y) ** 2;
-    let best = full;
-    if (d2(xOnly) > d2(best)) best = xOnly;
-    if (d2(yOnly) > d2(best)) best = yOnly;
-    return best;
-  }
+    grasp: number, home: readonly string[] | null): Vec2 { return nativeScenePitResolve(this.nativeSceneGeometryHost(),pits,from,to,grasp,home); }
 
   /** March the segment at PIT_CFG.sweepGran, stop where support would end,
    *  then bisect to the lip (walkSweep's contact refine, disc space) so a
    *  body pressed against a rim rests AT it instead of vibrating on a
    *  sample-grid multiple. */
   private pitSweep(pits: readonly PitSurface[], start: Vec2, end: Vec2,
-    grasp: number, home: readonly string[] | null): Vec2 {
-    const dx = end.x - start.x, dy = end.y - start.y;
-    const len = Math.hypot(dx, dy);
-    if (len < 0.0001) return vec(start.x, start.y);
-    const passable = (px: number, py: number): boolean =>
-      pitSupportedAt(pits, this.bridges, px, py, grasp, home);
-    const steps = Math.max(1, Math.ceil(len / PIT_CFG.sweepGran));
-    let lastT = 0;
-    let blockedT = -1;
-    for (let i = 1; i <= steps; i++) {
-      const t = i / steps;
-      if (!passable(start.x + dx * t, start.y + dy * t)) { blockedT = t; break; }
-      lastT = t;
-    }
-    if (blockedT < 0) return vec(start.x + dx * lastT, start.y + dy * lastT);
-    let lo = lastT, hi = blockedT;
-    for (let k = 0; k < 4; k++) {
-      const mid = (lo + hi) / 2;
-      if (passable(start.x + dx * mid, start.y + dy * mid)) lo = mid; else hi = mid;
-    }
-    return vec(start.x + dx * lo, start.y + dy * lo);
-  }
+    grasp: number, home: readonly string[] | null): Vec2 { return nativeScenePitSweep(this.nativeSceneGeometryHost(),pits,start,end,grasp,home); }
 
   /**
    * The terrain underfoot, depth-aware: bridges override everything (you
@@ -62588,114 +61577,7 @@ export class World {
     return best;
   }
 
-  groundAt(p: Vec2, tier = 0): { kind: string; deep: boolean } | null {
-    if (this.bridges.some(b => dist(p, b.pos) <= b.radius)) return null;
-    // THE TIER FABRIC: ground belongs to its LAYER — a web laid on the
-    // street cannot snare a body running the duct beneath it (and a duct's
-    // own filth never wets the street). Untiered zones carry all-zero tiers,
-    // so the compare is free everywhere else.
-    const wantTier = tier;
-    // WATER DEPTH is BODY-aware, not per-stamp: deep = penetrating past the
-    // configured inset of ANY covering non-ford disc. A lake laid down as many
-    // overlapping discs reads as one contiguous body — the seam between two
-    // discs is as deep as their centers (it used to strobe shallow↔deep per
-    // disc while wading across) — while the true shore ring stays wadeable.
-    // A ford disc covering the point forces wading depth outright: shallows
-    // are shallow no matter how deep the channel they cross.
-    let inWater = false, ford = false, pen = 0;
-    // THE CAUSEWAY FOLD (regions.ts `laid`/`severity`/`overruns` — the
-    // 2026-07-30 ruling): ONE data fold where a hand-priority chain used to
-    // rank kinds by name. Covering discs sort into two bands by their row's
-    // `laid` class, and three laws resolve the report:
-    //   1. THE CAUSEWAY LAW — a BUILT surface (pavement, decking) beats any
-    //      natural disc covering the same spot: pavement is never lethal.
-    //      Generation already routes ways around molten ground (the way
-    //      layer's yield); this read-time law covers disc-edge tangency and
-    //      dynamically-laid hazards, and its promise is the player's read.
-    //   2. SEVERITY WITHIN NATURE — among GROUND-laid discs the worst
-    //      authored `severity` speaks: the bog outranks its own mud fringe,
-    //      the melt outranks the bog (the old chain let any soft disc mute
-    //      a lethal one — the bug this fold retires). Ties keep the
-    //      FIRST-sensed disc (stability).
-    //   3. THE OVERRUNS EXCEPTION — a deposit row wearing `overruns` (mud,
-    //      sand) speaks over pavement when it WINS the natural band: a muddy
-    //      road still reads as mud. Only the band's WINNER is consulted — a
-    //      bog outranking the mud never inherits the mud's exception (no
-    //      smuggling lane) — and the registerRegion validate net keeps every
-    //      overruns row harmless by construction.
-    // A `wild` disc (the overgrowth pass) has lost its worn surface: its
-    // built standing is stripped and it reports at texture grade among the
-    // natural band — an overgrown stretch makes no causeway promise. (That
-    // demotion reproduces the old chain's registry fallback byte-for-byte:
-    // wild ways have always still reported themselves when nothing else
-    // covered — RULED 2026-07-31: they keep speaking. An overgrown way
-    // stays readable ground; only the causeway promise is forfeit.)
-    let built: string | null = null;   // first-sensed covering BUILT disc
-    let nat: RegionKind | null = null; // worst-severity covering GROUND disc
-    let natSev = -Infinity;
-    // THE DEPTH LEDGER (2026-07-31 — the depth law, generalized off the kind
-    // literal): any NATURAL row declaring standStatusDeep resolves body-aware
-    // depth exactly as the water lane does — ford/pen accumulated across the
-    // band LEADER's own discs (a welded body of sinks is ONE pool: the seam
-    // between two discs is as deep as both say it is) — and the report
-    // carries it only when that kind WINS. Scalars, not a map, losslessly: a
-    // kind takes the ledger with the leadership (its own first disc is what
-    // promoted it), same-kind discs feed it from either side of the take,
-    // and a dethroned kind can never win the report anyway. Water keeps its
-    // own accumulator lane, byte-for-byte.
-    let deepKind: string | null = null;
-    let deepFord = false, deepPen = 0;
-    for (const d of this.doodadsAt(p.x, p.y)) {
-      if ((d.tier ?? 0) !== wantTier) continue; // its layer's ground, never the other's
-      const dd = dist(p, d.pos);
-      if (dd > d.radius) continue;
-      if (d.kind === 'water') {
-        inWater = true;
-        if (d.shallow) ford = true;
-        else pen = Math.max(pen, d.radius - dd);
-        continue;
-      }
-      const rk = regionKind(d.kind);
-      if (!rk) continue; // registered = sensed (the registry IS the ground vocabulary)
-      if ((rk.laid ?? 'ground') === 'built' && !d.wild) {
-        if (!built) built = d.kind;
-      } else {
-        const sev = (rk.laid ?? 'ground') === 'built' ? 0 : rk.severity ?? 0;
-        if (sev > natSev) {
-          natSev = sev; nat = rk;
-          if (rk.standStatusDeep) {
-            deepKind = d.kind;
-            deepFord = !!d.shallow;
-            deepPen = d.shallow ? 0 : d.radius - dd;
-          } else deepKind = null;
-        } else if (deepKind !== null && d.kind === deepKind) {
-          if (d.shallow) deepFord = true;
-          else deepPen = Math.max(deepPen, d.radius - dd);
-        }
-      }
-    }
-    // The standing winner: nature beats construction only through its own
-    // winner's `overruns`; construction otherwise silences the whole band.
-    const winner = nat && (!built || nat.overruns)
-      ? { kind: nat.id, sev: natSev }
-      : built ? { kind: built, sev: 0 } : null;
-    // THE WET SEAT: the water return keeps its precedence as the water row's
-    // own severity — only a STRICTLY worse ground winner (the mire class and
-    // up) speaks over standing water; deposits, texture and pavement all
-    // defer to the wet (a flooded road reads water, exactly as it always
-    // did). The lethal class sits above the seat by authored design: a
-    // puddle over the melt is steam, never refuge.
-    if (inWater && !(winner && winner.sev > (regionKind('water')?.severity ?? 0))) {
-      return { kind: 'water', deep: !ford && pen > LIQUID_CFG.deepInset };
-    }
-    // A winning non-water liquid reads THE DEPTH LEDGER: deep toward its own
-    // core unless a shallow disc fords it — the fused sink's promised "true
-    // deep heart" finally speaks (swimming in the water that burns is on
-    // you). Every other winner reads flat, as it always did.
-    return winner
-      ? { kind: winner.kind, deep: winner.kind === deepKind && !deepFord && deepPen > LIQUID_CFG.deepInset }
-      : null;
-  }
+  groundAt(p: Vec2, tier = 0): { kind: string; deep: boolean } | null { return nativeSceneGroundAt(this.nativeSceneGeometryHost(),p,tier); }
 
   /** CLIENT terrain rebuild: `bridges`/`grounds` aren't shipped as their own arrays,
    *  but their DOODADS are (serializeZone ships every doodad) — so reconstruct the

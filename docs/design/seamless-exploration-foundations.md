@@ -1808,3 +1808,83 @@ missing/duplicate/mistimed-draw mutations all fail the unchanged comparison.
 No production code changed after the broad run. Nine slow and three excluded
 probes were not run. The client courses cover already-admitted content, not
 complete-area activation.
+
+
+## NativeSceneGeometry and NativeScenePopulation: mutable local areas
+
+The complete native layout adoption and 39 native geometry operations are now
+shared with classic World. NativeAreaSceneGeometry owns the retained native
+working grid or analytic terrain, doodads, floors, structures, side-area mouths,
+tracks, traps, fog, creep terrain callbacks and their mutable navigation/index
+caches. Door opening and breakage repaint native cells; changes to upper floors
+invalidate the original tier navigation. Movement uses the full native body,
+tier, pit and tether rules. No terrain is cleared or replaced to make a local
+area fit. The caller must supply the actual resolved currentZoneSeed and prepared
+exits before adoption; a default seed is not a source receipt.
+
+NativeScenePopulation shares 13 native census, restoration, objective, contest,
+wave and party-scale operations with classic World. NativeAreaScenePopulation
+binds existing factories, population resolution, complete packs, wildlife,
+inhabitants, local sight/hostility, rarity and magic refresh to the same live
+scene. Native memory restoration replaces the complete actor array and every
+population host follows it. Remembered normal, rare and magic bodies keep the
+original wounds, encounter-group remapping, shared runtime identities and
+allocation/random side effects. Actual prior squad/factory counters and refresh
+state are mandatory inputs. NativeSceneObjectiveState supplies only the native
+fresh load reset; memory, completion and later controllers retain their own
+ordered stages.
+
+Classic adapters preserve live reads, method selection before argument
+evaluation, receivers and partial failures. Their cached views are nonenumerable
+so reflective controller ownership does not acquire a hidden World reference.
+Original runtime import positions are retained when an extracted operation was
+a module's last World consumer.
+
+The durable geometry oracle pins all 39 original methods and the complete
+adoption block from 81b96a31. Six local/archive comparisons and six actual World
+comparisons cover complete grids and analytic terrain, generated doors, roofs,
+upper floors, native mouth links, 138 physical query points, scenery revisions
+and wildfire terrain callbacks. Six failures preserve the same mutation prefixes.
+The course observes 234 native RNG draws and 27,204 read/callback events per
+complete comparison lane, with 36 tether cases and 57 cached method-selection
+checks. Its additional rooms fixture deliberately forces one track and three
+trap mechanisms; this demonstrates the mechanisms, not their natural frequency.
+Missing door repaint and stale scenery-index mutations both fail the intended
+physical checks. The archive and inputs are embedded; Git and ignored files are
+not runtime dependencies.
+
+The population course uses two complete retained native layouts and compares
+remembered bodies, replacement census references, group aliases, later objective
+counts and actual contest/wave births against the archived original methods.
+Partial factory failures preserve native allocations and random consumption.
+The local lane refuses reads through the supplying World's geometry, census and
+factory methods. This is local preparation, not a campaign source certificate.
+
+These mutable owners remove the fixed-stage population/geometry limitation.
+They do not yet form a complete NativeAreaBirth host: environmental birth,
+package/controller update and reward ownership, installed source issuance,
+whole-owner paging and the natural two-area cold-Continue course are still
+required. No complete towns, crypts, hydrology or bounty-opened regions are
+silently activated by this extraction. Existing ordinary mire patch/bypass
+policy is unchanged.
+
+
+NativeSceneGeometry and NativeScenePopulation verification: all three project
+type checks, 2,607 generation cases (zero failures, four existing warnings),
+25 simulation smoke episodes and the client natural-structure/cave entry/cold
+Continue/exact-return course pass. The no-retry broad run passed 471/472 in
+950.2 seconds. Its single failure was the existing geometry oracle invoking
+World.groundAt with a small plain object after that method became a delegate.
+The oracle now calls the actual shared native ground operation with the same
+ports; all terrain assertions remain unchanged, and its focused run passes.
+The population fixture also now zips retained exit positions with their native
+exit definitions. Both final mutable-scene probes pass after that test repair.
+No executable production behavior changed after the broad run. Nine slow and
+three excluded probes were not run. Client coverage exercises already-admitted
+content; it does not certify full-area activation.
+
+The final population oracle adds six actual World comparisons, both restoration
+and later wave/contest factory failures, stream identities/cursors, and 21 cached
+method-selection checks. An independent World AST audit confirms that only the
+52 intended methods, layout adoption and the new adapter members changed;
+2,273 other class members retain their original text.

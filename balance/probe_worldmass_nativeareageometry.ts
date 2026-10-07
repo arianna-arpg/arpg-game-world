@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { World } from '../src/engine/world';
+import '../src/engine/world';
+import { nativeSceneGroundAt, type NativeSceneGeometryHost } from '../src/engine/nativeSceneGeometry';
 import { hitSurfaceOf, blocksMovement, type Doodad, type GeneratedLayout } from '../src/engine/levelgen';
 import { shapeContains, shapeDistance } from '../src/engine/shapes';
 import { insideBounds, type Bounds } from '../src/world/shape';
@@ -19,7 +20,7 @@ const eq = (a: unknown, b: unknown, label: string) => { assert.deepEqual(a, b, l
 
 // The native methods remain an independent live oracle. Source hashes make the
 // exact comparison target explicit without any runtime Git/ignored dependency.
-const files = ['src/engine/world.ts', 'src/engine/levelgen.ts', 'src/engine/shapes.ts', 'src/world/shape.ts', 'src/world/gridWalk.ts'];
+const files = ['src/engine/world.ts', 'src/engine/nativeSceneGeometry.ts', 'src/engine/levelgen.ts', 'src/engine/shapes.ts', 'src/world/shape.ts', 'src/world/gridWalk.ts'];
 const nativeHashes = Object.fromEntries(files.map(f => [f, createHash('sha256').update(readFileSync(f)).digest('hex')]));
 const oldRandom = Math.random;
 Math.random = () => { throw Error('Geometry consumed ambient random'); };
@@ -36,9 +37,11 @@ try {
   ];
   for (const doodads of variants) {
     const geometry = createNativeAreaGeometry(capture(layout(doodads)));
-    const fake = { bridges: doodads.filter(d => d.kind === 'bridge'), doodadsAt: () => doodads };
+    // These are the complete ports read by native ground folding. The separate
+    // nativescenegeometry probe exercises actual World adapters and their cache.
+    const nativeGroundHost: Pick<NativeSceneGeometryHost, 'bridges' | 'doodadsAt'> = { bridges: doodads.filter(d => d.kind === 'bridge'), doodadsAt: () => doodads };
     for (let y = 210; y <= 390; y += 15) for (let x = 210; x <= 390; x += 15) for (const tier of [0, 1, 2])
-      eq(geometry.groundAt({ x, y }, tier), World.prototype.groundAt.call(fake as unknown as World, { x, y }, tier), 'native ordered ground fold');
+      eq(geometry.groundAt({ x, y }, tier), nativeSceneGroundAt(nativeGroundHost as NativeSceneGeometryHost, { x, y }, tier), 'native ordered ground fold');
   }
   const analytic = createNativeAreaGeometry(capture(layout([]), { ...bounds, shape: 'ellipse', pieces: [
     { id: 'east', x: 1100, y: 200, w: 500, h: 400, active: true },
