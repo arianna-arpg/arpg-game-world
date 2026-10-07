@@ -2,6 +2,7 @@ import { compileNativeFeature, nativeFeatureSourceIdentity, nativeLayoutRequirem
   type NativeFeatureRequest, type NativeFeatureDescriptor, type NativeFeatureBlueprint } from './nativeFeatures';
 import { canonical, massDigest } from './random';
 import { captureNativeEffectSources } from './nativeEffectSources';
+import { captureNativeBrittleSources } from './nativeBrittleSources';
 
 export const NATIVE_PREPARATION_PROTOCOL=1;
 export interface NativeFeaturePreparation {
@@ -49,13 +50,14 @@ export function validateNativePreparation(request:NativeFeatureRequest,prepared:
   }
   const descriptor=prepared.descriptor!;
   if(descriptor.id!==request.id||descriptor.seed!==request.seed||descriptor.compiler!==expected.compiler
-    ||!descriptor.effectSources||massDigest({zone:descriptor.sourceZone,authored:descriptor.authored,effectRegistryHash:descriptor.effectSources.registryHash})!==expected.sourceHash
+    ||!descriptor.effectSources||!descriptor.brittleSources||massDigest({zone:descriptor.sourceZone,authored:descriptor.authored,effectRegistryHash:descriptor.effectSources.registryHash,brittleRegistryHash:descriptor.brittleSources.registryHash})!==expected.sourceHash
     ||canonical(descriptor.source)!==canonical({...request.source,...(descriptor.zone.variantName?{variant:descriptor.zone.variantName}:{})})
     ||JSON.stringify(descriptor).length*2!==prepared.bytes)throw Error('Native prepared descriptor has foreign source or request');
   const blueprint=compileNativeFeature(descriptor),ownsEnvironment=request.source.kind==='massif'&&request.source.scope!=='landform';
   if(!descriptor.sidechannels||descriptor.environment.owner!==(ownsEnvironment?'source':'containing-region')
     ||canonical(captureNativeEffectSources(blueprint.layout.doodads))!==canonical(descriptor.effectSources)
-    ||canonical(nativeLayoutRequirements(blueprint.layout,descriptor.zone,blueprint.entrances,ownsEnvironment,descriptor.sidechannels,descriptor.effectSources))!==canonical(descriptor.requirements))
+    ||canonical(captureNativeBrittleSources(blueprint.layout.doodads))!==canonical(descriptor.brittleSources)
+    ||canonical(nativeLayoutRequirements(blueprint.layout,descriptor.zone,blueprint.entrances,ownsEnvironment,descriptor.sidechannels,descriptor.effectSources,descriptor.brittleSources))!==canonical(descriptor.requirements))
     throw Error('Native prepared descriptor lost lifecycle requirements');
   return blueprint;
 }

@@ -16,6 +16,8 @@ import { shapeContains, shapeBoundR } from '../engine/shapes';
 import { canonical, freezeData, massDigest, massHash } from './random';
 import { captureNativeEffectSources, nativeEffectRegistryHash, nativeEffectRequirements,
   nativeHavenEffectSupported, validateNativeEffectSources, type NativeEffectSources } from './nativeEffectSources';
+import { captureNativeBrittleSources, nativeBrittleRegistryHash, nativeBrittleRequirements,
+  nativeUrnSourceSupported, validateNativeBrittleSources, type NativeBrittleSources } from './nativeBrittleSources';
 
 export type NativeFeatureKind = 'massif' | 'structure' | 'composition';
 export interface NativeFeatureSource {
@@ -54,6 +56,8 @@ export interface NativeFeatureDescriptor {
   /** Rule effects are resolved after native generation and frozen before birth.
    * Absent only on historical descriptors which cannot acquire new effects. */
   effectSources?:Readonly<NativeEffectSources>;
+  /** Native urn wake/dissolution dependencies, absent only on older geometry. */
+  brittleSources?:Readonly<NativeBrittleSources>;
   entrances: NativeFeatureEntrance[];
   approach: Vec2;
   requirements: string[];
@@ -177,7 +181,7 @@ function sourceZone(request: NativeFeatureRequest): { zone: ZoneDef; authored: N
  * resolves the same seeded variant and parameters without generating geometry. */
 export function nativeFeatureSourceIdentity(request:NativeFeatureRequest){
   const {zone,authored}=sourceZone(request);
-  return {compiler:'native-feature-v1' as const,requestHash:massDigest(request),sourceHash:massDigest({zone,authored,effectRegistryHash:nativeEffectRegistryHash()})};
+  return {compiler:'native-feature-v1' as const,requestHash:massDigest(request),sourceHash:massDigest({zone,authored,effectRegistryHash:nativeEffectRegistryHash(),brittleRegistryHash:nativeBrittleRegistryHash()})};
 }
 function bodyClear(grid: GridWalkField, doodads: Doodad[], p: Vec2, radius = NATIVE_FEATURE_LIMITS.bodyRadius): boolean {
   for (const [dx, dy] of [[0,0],[radius,0],[-radius,0],[0,radius],[0,-radius]])
@@ -213,7 +217,7 @@ function reachableCells(grid: GridWalkField, doodads: Doodad[], approach: Vec2):
   return { reached, parent };
 }
 export const NATIVE_ENVIRONMENT_MECHANICS=['fog','creep','lite','collapse','flux','pitfall','spans','tracks','geysers','regrowth','heat','swelter','windchill','gaze'] as const;
-export function nativeLayoutRequirements(layout: GeneratedLayout, zone: ZoneDef, entrances: NativeFeatureEntrance[], ownsEnvironment:boolean, sidechannels?:Readonly<NativeGenerationSidechannels>, effectSources?:Readonly<NativeEffectSources>): string[] {
+export function nativeLayoutRequirements(layout: GeneratedLayout, zone: ZoneDef, entrances: NativeFeatureEntrance[], ownsEnvironment:boolean, sidechannels?:Readonly<NativeGenerationSidechannels>, effectSources?:Readonly<NativeEffectSources>, brittleSources?:Readonly<NativeBrittleSources>): string[] {
   const result = new Set<string>(['terrain','scenery','state']);
   const collections: [keyof GeneratedLayout,string][] = [
     ['breakables','breakables'],['npcs','npcs'],['folk','folk'],['garrisons','garrisons'],
@@ -251,6 +255,7 @@ export function nativeLayoutRequirements(layout: GeneratedLayout, zone: ZoneDef,
   }
   if(sidechannels)for(const requirement of nativeGenerationRequirements(sidechannels))result.add(requirement);
   if(effectSources)for(const requirement of nativeEffectRequirements(effectSources))result.add(requirement);
+  if(brittleSources)for(const requirement of nativeBrittleRequirements(brittleSources))result.add(requirement);
   return [...result].sort();
 }
 export function resolveNativeFeature(request: NativeFeatureRequest): Readonly<NativeFeatureDescriptor> {
@@ -336,14 +341,14 @@ export function resolveNativeFeature(request: NativeFeatureRequest): Readonly<Na
     }
   }
   const {walk: _walk,...data}=layout;
-  const effectSources=captureNativeEffectSources(layout.doodads);
+  const effectSources=captureNativeEffectSources(layout.doodads),brittleSources=captureNativeBrittleSources(layout.doodads);
   const ownsEnvironment=request.source.kind==='massif'&&request.source.scope!=='landform';
   const environment:NativeFeatureDescriptor['environment']={owner:ownsEnvironment?'source':'containing-region',
     sourceMechanics:NATIVE_ENVIRONMENT_MECHANICS.filter(k=>zone.theme[k]!==undefined&&(!Array.isArray(zone.theme[k])||(zone.theme[k] as unknown[]).length>0))};
   const body = {
     schema:1 as const,compiler:'native-feature-v1' as const,id:request.id,seed:request.seed,source:{...copy(request.source), ...(zone.variantName ? {variant:zone.variantName} : {})},
     authored,environment,sourceZone:authoredZone,zone:copy(zone),geometry:{grid:grid.pack(),layout:copy(data),support:Array.from(support)},
-    sidechannels,effectSources,entrances,approach,requirements:nativeLayoutRequirements(layout,zone,entrances,ownsEnvironment,sidechannels,effectSources),unsupported:[...new Set(unsupported)].sort(),
+    sidechannels,effectSources,brittleSources,entrances,approach,requirements:nativeLayoutRequirements(layout,zone,entrances,ownsEnvironment,sidechannels,effectSources,brittleSources),unsupported:[...new Set(unsupported)].sort(),
   };
   return freezeData({...body,hash:massDigest(body)});
 }
@@ -363,6 +368,11 @@ export function compileNativeFeature(raw: Readonly<NativeFeatureDescriptor>): Na
     validateNativeEffectSources(descriptor.effectSources,descriptor.geometry.layout.doodads);
     if(nativeEffectRequirements(descriptor.effectSources).some(r=>!descriptor.requirements.includes(r)))
       throw Error('Native checkpoint lost effect ownership');
+  }
+  if(descriptor.brittleSources){
+    validateNativeBrittleSources(descriptor.brittleSources,descriptor.geometry.layout.doodads);
+    if(nativeBrittleRequirements(descriptor.brittleSources).some(r=>!descriptor.requirements.includes(r)))
+      throw Error('Native checkpoint lost brittle ownership');
   }
   const packed=descriptor.geometry.grid;
   if(!packed||![packed.cols,packed.rows,packed.cell].every(n=>Number.isInteger(n)&&n>0)||packed.cell!==30
@@ -388,6 +398,10 @@ export function nativeFeatureAdmission(feature: NativeFeatureBlueprint, capabili
     ?[...feature.unsupported,'native-effect-source-contract']:feature.unsupported;
   if(feature.descriptor.effectSources?.rows.some(row=>row.effect.id==='status_wash'&&row.effect.statusId==='cloudhaven'&&!nativeHavenEffectSupported(row)))
     unsupported=[...unsupported,'native-effect-source-incompatible'];
+  if(!feature.descriptor.brittleSources&&feature.layout.doodads.some(d=>d.kind==='burial_urn'))
+    unsupported=[...unsupported,'native-brittle-source-contract'];
+  if(feature.descriptor.brittleSources?.definitions.some(d=>!nativeUrnSourceSupported(d,feature.descriptor.zone)))
+    unsupported=[...unsupported,'native-brittle-source-incompatible'];
   return {ok:missing.length===0&&unsupported.length===0,missing,unsupported};
 }
 

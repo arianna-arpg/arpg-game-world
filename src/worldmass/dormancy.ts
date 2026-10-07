@@ -330,7 +330,12 @@ const linked = ['owner','partLink','partActors','worm','surf','construct','summo
 
 /** An owning feature may prove its one settled native garrison slot. This never
  * excludes the body, its sheet, foreign dependencies, or any other component. */
-export interface NativeDormancyOwnership { garrisonSlot?: string }
+export interface NativeDormancyOwnership {
+  garrisonSlot?: string;
+  /** The source owner certifies the native observational tell scheduler. Its
+   * deadline, specs, values and revision remain in the complete actor codec. */
+  nativeTellClock?: true;
+}
 export function nativeDormancyRefusal(a:Actor,world:World,quietSeconds:number, captured?:NativeActorState|null,
   ownership?:NativeDormancyOwnership): string | null {
   if(a.dead||a.team!=='enemy'||!a.fromZoneGen||a.companion||a.downed)return 'not a living native enemy';
@@ -369,7 +374,12 @@ export function nativeActorQuietRefusal(a:Actor,world:World,quietSeconds:number,
   if(a.magicPack?.runtime)return 'native magic-pack runtime';
   if(a.aiPhase && a.aiPhase!=='idle' && a.aiPhase!=='wander')return 'native AI phase';
   // Remaining absolute deadlines must complete under native authority first.
-  for(const [k,v]of Object.entries(a))if(typeof v==='number'&&/(At|Until)$/.test(k)&&v>world.time)return 'native deadline '+k;
+  for(const [k,v]of Object.entries(a))if(typeof v==='number'&&/(At|Until)$/.test(k)&&v>world.time){
+    // This recurring visual read has no gameplay work to finish. Keep its
+    // exact clock; after absence the native scheduler evaluates once, normally.
+    if(k==='tellNextAt'&&ownership?.nativeTellClock&&captured)continue;
+    return 'native deadline '+k;
+  }
   if(!(captured===undefined?captureNativeActorState(a):captured))return 'unsupported native state';
   return null;
 }

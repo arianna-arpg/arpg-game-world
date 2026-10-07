@@ -1,5 +1,12 @@
 import assert from 'node:assert/strict';
-import { makeSimWorld } from '../src/sim/arena';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import ts from 'typescript';
+import { LitePool, type LiteSwarmRow } from '../src/engine/lite';
+import { NullInput } from '../src/net/intent';
+import { captureNativeActorState } from '../src/worldmass/dormancy';
+import { makeSimWorld, classById, SIM_ARENA_ID } from '../src/sim/arena';
 import { mulberry32, seedGlobalRandom } from '../src/sim/rng';
 import type { World } from '../src/engine/world';
 import type { Vec2 } from '../src/core/math';
@@ -28,6 +35,15 @@ import type { NativeFeaturePlacement } from '../src/worldmass/nativeResidency';
 import type { MassOccurrencesSave } from '../src/worldmass/occurrences';
 import { address, localOffset, moveAddress, type MassAddress } from '../src/worldmass/address';
 
+
+// The complete three native methods and entry-title statement are verbatim
+// bc8a0e0a9211815d99dcf0ea389e451157c0684d, independent of today's implementation.
+// Shared engine helpers remain current; this is operation/RNG parity, not an
+// archived-client or generation-equivalence claim. No Git history is needed at run time.
+const NATIVE_CUE_METHODS = "private bootLite(def: ZoneDef, pois: Vec2[]): void {\n    const pool = this.lite;\n    const carried: { owner: number; defId: string; plies: number }[] = [];\n    for (let i = 0; i < pool.used; i++) {\n      if (!pool.alive[i] || !pool.owner[i]) continue;\n      const k = this.liteKinds[pool.kind[i]];\n      if (k) carried.push({ owner: pool.owner[i], defId: k.defId, plies: pool.plies[i] });\n    }\n    pool.reset(this.arena.w, this.arena.h);\n    this.liteKinds = [];\n    this.liteKindIdxMap.clear();\n    this.liteMaxR = 0;\n    this.liteBeatAt.clear();\n    this.liteOrders.clear();\n    this.liteXpAcc = 0;\n    this.liteKills.clear();\n    this.litePromoteBudget = 0;\n    this.litePockets = [];\n    this.liteBurrows = [];\n    this.liteWhenAnnounces = [];\n    this.liteColonySeen.clear();\n    this.liteRegenClock = 0;\n    this.liteHasTrample = false;\n    this.liteMinTrampleSpeed = Infinity;\n    const spec = def.theme.lite;\n    this.liteVentRows = [];\n    if (spec?.swarms.length) {\n      const rng = new Rng((this.currentZoneSeed ^ LITE_CFG.salt) >>> 0);\n      for (const row of spec.swarms) {\n        // THE VENT SEAT (LiteSwarmRow.seat 'vents'): a row that seats AT the\n        // zone's geyser vents is deferred past bootGeysers (the vents do not\n        // stand yet) onto its own salted lane — bootLiteVentSeats — and\n        // spends NOTHING here, so the POI stream keeps its exact shape.\n        if (row.seat === 'vents') { this.liteVentRows.push(row); continue; }\n        const has = rng.next() < (row.chance ?? 1);\n        const pockets = rng.int(row.pockets[0], row.pockets[1]);\n        // THE CONDITIONED POUR (LiteSwarmRow.when): an out-of-hour row still\n        // rolls its whole shape and SEATS its pockets (the salted stream's\n        // draws are sacred — held or not, every roll happens), but pours no\n        // bodies yet; the regrowth sweep raises the tide when the hour\n        // comes, and the announce waits with it (liteWhenAnnounces).\n        const held = this.liteCondHeld(row.when);\n        let poured = false;\n        for (let p = 0; p < pockets; p++) {\n          const heart = this.interactSpot(pois, rng, LITE_CFG.pour.reach, LITE_CFG.pour.portalClear);\n          const n = rng.int(row.size[0], row.size[1]);\n          // THE REGROWTH LAW: a regen-bearing row's pocket remembers this\n          // heart + rolled size as its cap (resolved once, no extra draws —\n          // the salted stream's fixed shape holds).\n          let pk = -1;\n          for (let s = 0; s < n; s++) {\n            const ang = rng.range(0, Math.PI * 2);\n            const d = rng.range(4, LITE_CFG.pour.scatter);\n            if (!has) continue;\n            const kindIdx = this.liteKindOf(row.monsterId);\n            if (kindIdx < 0) continue;\n            if (pk === -1) pk = this.litePocketEnsure(row, kindIdx, heart, n);\n            if (!held) continue; // the seats stand; the bodies wait for the hour\n            const bx = heart.x + Math.cos(ang) * d, by = heart.y + Math.sin(ang) * d;\n            const open = this.liteOpenAt(bx, by);\n            if (pool.spawn(kindIdx, open ? bx : heart.x, open ? by : heart.y, 0, 0,\n              this.liteKinds[kindIdx].plies0, pk >= 0 ? pk : -1) >= 0) {\n              poured = true;\n              if (pk >= 0) {\n                this.litePockets[pk].poured = true;\n                this.litePockets[pk].live++;\n              }\n            }\n          }\n        }\n        if (poured && row.announce) {\n          for (const s of this.seats) {\n            this.text(vec(s.actor.pos.x, s.actor.pos.y - 36), row.announce,\n              row.announceColor ?? '#c8a878', 13);\n          }\n        } else if (has && !held && row.when && row.announce) {\n          this.liteWhenAnnounces.push({ when: row.when, text: row.announce, color: row.announceColor });\n        }\n      }\n    }\n    for (let c = 0; c < carried.length; c++) {\n      const row = carried[c];\n      const keeper = this.actorById(row.owner);\n      if (!keeper || keeper.dead) continue;\n      if (!keeper.skills.some(s =>\n        s?.def.throng?.tier === 'lite' && s.def.throng.monsterId === row.defId)) continue;\n      const kindIdx = this.liteKindOf(row.defId);\n      if (kindIdx < 0) continue;\n      const ang = (c / Math.max(1, carried.length)) * Math.PI * 2;\n      const bx = keeper.pos.x + Math.cos(ang) * 46, by = keeper.pos.y + Math.sin(ang) * 46;\n      const open = this.liteOpenAt(bx, by);\n      pool.spawn(kindIdx, open ? bx : keeper.pos.x, open ? by : keeper.pos.y,\n        1, keeper.id, row.plies);\n    }\n  }\nprivate bootLiteVentSeats(): void {\n    const rows = this.liteVentRows;\n    this.liteVentRows = [];\n    const f = this.geysers;\n    if (!rows.length || !f || !f.vents.length) return;\n    const pool = this.lite;\n    const rng = new Rng((this.currentZoneSeed ^ LITE_CFG.salt ^ LITE_CFG.ventSeat.salt) >>> 0);\n    for (const row of rows) {\n      const has = rng.next() < (row.chance ?? 1);\n      const want = Math.min(f.vents.length, rng.int(row.pockets[0], row.pockets[1]));\n      // Distinct vents, a seeded partial shuffle (every draw happens, minted or not).\n      const order = f.vents.map((_, i) => i);\n      for (let i = 0; i < want; i++) {\n        const j = i + rng.int(0, order.length - 1 - i);\n        const tmp = order[i]; order[i] = order[j]; order[j] = tmp;\n      }\n      const held = this.liteCondHeld(row.when);\n      let poured = false;\n      for (let i = 0; i < want; i++) {\n        const v = f.vents[order[i]];\n        const heart = vec(v.pos.x, v.pos.y);\n        const n = rng.int(row.size[0], row.size[1]);\n        let pk = -1;\n        for (let s = 0; s < n; s++) {\n          const ang = rng.range(0, Math.PI * 2);\n          const d = rng.range(4, LITE_CFG.ventSeat.scatter);\n          if (!has) continue;\n          const kindIdx = this.liteKindOf(row.monsterId);\n          if (kindIdx < 0) continue;\n          if (pk === -1) pk = this.litePocketEnsure(row, kindIdx, heart, n);\n          if (!held) continue;\n          const bx = heart.x + Math.cos(ang) * d, by = heart.y + Math.sin(ang) * d;\n          const open = this.liteOpenAt(bx, by);\n          if (pool.spawn(kindIdx, open ? bx : heart.x, open ? by : heart.y, 0, 0,\n            this.liteKinds[kindIdx].plies0, pk >= 0 ? pk : -1) >= 0) {\n            poured = true;\n            if (pk >= 0) {\n              this.litePockets[pk].poured = true;\n              this.litePockets[pk].live++;\n            }\n          }\n        }\n      }\n      if (poured && row.announce) {\n        for (const s of this.seats) {\n          this.text(vec(s.actor.pos.x, s.actor.pos.y - 36), row.announce, row.announceColor ?? '#c8a878', 13);\n        }\n      } else if (has && !held && row.when && row.announce) {\n        this.liteWhenAnnounces.push({ when: row.when, text: row.announce, color: row.announceColor });\n      }\n    }\n  }\nprivate liteRegenSweep(): void {\n    // SOVEREIGNTY: census — the pool's own pocket bookkeeping and announces (the derived census, probe_tiers RIG T).\n    // The waiting announces (conditioned rows booted out of hour): the\n    // first sweep that finds an hour held cries that arrival once.\n    if (this.liteWhenAnnounces.length) {\n      const still: { when: LiteCond; text: string; color?: string }[] = [];\n      for (const an of this.liteWhenAnnounces) {\n        if (this.liteCondHeld(an.when)) {\n          for (const s of this.seats) {\n            this.text(vec(s.actor.pos.x, s.actor.pos.y - 36), an.text, an.color ?? '#c8a878', 13);\n          }\n        } else still.push(an);\n      }\n      this.liteWhenAnnounces = still;\n    }\n    // Anchor discovery: any living body wearing MonsterDef.colony.\n    for (const a of this.actors) {\n      if (a.dead || !a.defId || this.liteColonySeen.has(a.id)) continue;\n      const spec = MONSTERS[a.defId]?.colony;\n      if (!spec) continue;\n      this.liteColonySeen.add(a.id);\n      const kindIdx = this.liteKindOf(spec.monsterId);\n      if (kindIdx < 0) continue;\n      const pk = this.litePockets.length;\n      const p = this.litePocketPush(spec, kindIdx, a.pos.x, a.pos.y, spec.cap, a.id, spec.radius);\n      const seed = Math.min(p.cap,\n        Math.round(p.cap * (spec.seedFrac ?? LITE_CFG.regen.seedFrac)));\n      for (let s = 0; s < seed; s++) this.litePocketBirth(pk, p);\n    }\n    const pks = this.litePockets;\n    if (!pks.length) return;\n    // Census — one pass over the pool.\n    for (const p of pks) p.live = 0;\n    const pool = this.lite;\n    for (let i = 0; i < pool.used; i++) {\n      if (!pool.alive[i]) continue;\n      const pk = pool.pocket[i];\n      if (pk >= 0 && pk < pks.length) pks[pk].live++;\n    }\n    for (let pk = 0; pk < pks.length; pk++) {\n      const p = pks[pk];\n      if (p.extinct) continue;\n      // THE POUR'S HOUR (LiteSwarmRow.when → LitePocket.when): resolved\n      // once per pocket per sweep — everything below branches on it.\n      const held = this.liteCondHeld(p.when);\n      if (p.anchorId) {\n        const anchor = this.actorById(p.anchorId);\n        if (!anchor || anchor.dead) { this.litePocketExtinct(pk, p); continue; }\n        // The heart WALKS with a living anchor — a lumbering brood carries\n        // its collective's home on its back.\n        p.x = anchor.pos.x; p.y = anchor.pos.y;\n      } else if (p.poured && p.live === 0) {\n        // THE EXTERMINATION LAW: an ambient pocket wiped to zero has\n        // nothing left to breed back — the burrow seals. A CONDITIONED\n        // pocket out of its hour is exempt: a tide that receded at dawn\n        // drained itself, and what the hour took the hour returns.\n        if (held) {\n          this.litePocketExtinct(pk, p);\n          continue;\n        }\n      }\n      if (!held) {\n        // THE RECEDING TIDE: out of its hour a conditioned pocket stops\n        // breeding and gently culls toward empty — at its own regrowth\n        // rate, so the dusk that raises a tide in minutes is the dawn\n        // that lowers it in minutes. No disturbance stamp, no extinction:\n        // the hour is weather, not violence.\n        p.acc = 0;\n        if (p.live > 0) this.litePocketRecede(pk, p);\n        continue;\n      }\n      if (p.live >= p.cap) { p.acc = 0; continue; }\n      if (this.time < p.disturbedUntil) continue;\n      // The calm gate: nothing breeds under a predator's shadow.\n      let calm = true;\n      for (const seat of this.seats) {\n        const s = seat.actor;\n        if (s.dead) continue;\n        const dx = s.pos.x - p.x, dy = s.pos.y - p.y;\n        if (dx * dx + dy * dy <= p.calmRadius * p.calmRadius) { calm = false; break; }\n      }\n      if (!calm) continue;\n      p.acc += p.rate * LITE_CFG.regen.every;\n      let n = Math.floor(p.acc);\n      if (n <= 0) continue;\n      p.acc -= n;\n      n = Math.min(n, p.cap - p.live);\n      for (let s = 0; s < n; s++) this.litePocketBirth(pk, p);\n    }\n  }";
+const NATIVE_ENTRY_TITLE = "this.text(vec(p.pos.x, p.pos.y - 46), def.name, def.theme.accent, 24);";
+const NATIVE_CUE_HASH = 'cb66da24c6dbc000866807c3f58ba6f8c17b34008740dd76e929d5398ebf900d';
+
 type Access={pyres:HoldFixture[];rifts:HoldFixture[];digs:HoldFixture[];occs:OccSite[];updateObjective(dt:number):void;updateOccurrences(dt:number):void};
 const access=(w:World)=>w as unknown as Access;
 const holds=(w:World,k:Exclude<NativeMassHoldKind,'beacon'>)=>access(w)[k==='unearth'?'digs':k];
@@ -44,9 +60,146 @@ function observe(w:World){
   w.text({...w.player.pos},'17','#fff',14);assert.equal(spoken[0].value,'17','ordinary text remains enabled');spoken.length=0;
   return {spoken,grants,silent:()=>assert.deepEqual(spoken.filter(s=>!s.reward),[],'no local narrator text may escape through real World.text')};
 }
+// Compile the original methods against the same native helper imports as the
+// candidate. For entry only, restore the archived title statement in the current
+// full loadZone method: every other load operation and helper stays identical.
+// Parsing one method avoids maintaining a second enormous loadZone transcription.
+function nativeCueControl() {
+  assert.equal(createHash('sha256').update(NATIVE_CUE_METHODS+'\n'+NATIVE_ENTRY_TITLE).digest('hex'),NATIVE_CUE_HASH);
+  const url=new URL('../src/engine/world.ts',import.meta.url),source=readFileSync(url,'utf8');
+  const ast=ts.createSourceFile('world.ts',source,ts.ScriptTarget.Latest,true);
+  const klass=ast.statements.find((n):n is ts.ClassDeclaration=>ts.isClassDeclaration(n)&&n.name?.text==='World')!;
+  const load=klass.members.find(m=>m.name?.getText(ast)==='loadZone')!;
+  const loadText=load.getText(ast),retired='rand(-10, 10); // retain the retired native entry-title jitter draw';
+  assert.equal(loadText.split(retired).length,2,'entry control must replace exactly the one retired native title seam');
+  const control=source.slice(0,klass.getStart(ast))+'export class World {\n'+NATIVE_CUE_METHODS+'\n'+loadText.replace(retired,NATIVE_ENTRY_TITLE)+'\n}';
+  const js=ts.transpileModule(control,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,esModuleInterop:true}}).outputText;
+  const exports:{World?:{prototype:Record<string,Function>}}={};
+  new Function('exports','require',js)(exports,createRequire(url));
+  return exports.World!.prototype;
+}
+function cueWorld(seed:number,seats:number) {
+  const reset=seedGlobalRandom(seed);
+  try {
+    const world=makeSimWorld('warrior',seed);
+    for(let n=1;n<seats;n++)world.addSeat('cue-seat-'+n,classById('warrior'),new NullInput(),{startingCompanions:false});
+    world.actors=world.seats.map(s=>s.actor);world.texts=[];world.flashes=[];world.doodads=[];
+    for(const s of world.seats)s.actor.pos={x:1500,y:1500};
+    return world;
+  } finally {reset();}
+}
+const cueValue=(value:unknown):unknown=>JSON.parse(JSON.stringify(value));
+function liteCueParity() {
+  const control=nativeCueControl();
+  type Case={name:string;patch?:Partial<LiteSwarmRow>;deferred?:boolean;capacity?:number;emptyVents?:boolean};
+  const cases:Case[]=[{name:'immediate'}, {name:'no-caption',patch:{announce:undefined}},
+    {name:'chance-miss',patch:{chance:0}}, {name:'empty-pour',patch:{size:[0,0]}},
+    {name:'no-pockets',patch:{pockets:[0,0]}}, {name:'unknown-kind',patch:{monsterId:'missing-cue-species'}},
+    {name:'full-pool',capacity:0}, {name:'deferred',deferred:true},
+    {name:'deferred-no-caption',deferred:true,patch:{announce:undefined}},
+    {name:'deferred-chance-miss',deferred:true,patch:{chance:0}},
+    {name:'deferred-full-pool',deferred:true,capacity:0}];
+  let pairs=0;
+  for(const vent of [false,true])for(const seatCount of [1,3])for(const spec of [...cases,...(vent?[{name:'no-vents',emptyVents:true}]:[])]) {
+    const run=(legacy:boolean)=>{
+      const world=cueWorld(84700,seatCount);
+      if(legacy)for(const name of ['bootLite','bootLiteVentSeats','liteRegenSweep'])Reflect.set(world,name,control[name]);
+      if(spec.capacity!==undefined)Reflect.set(world,'lite',new LitePool(spec.capacity));
+      const row:LiteSwarmRow={monsterId:'glimmerling',pockets:[2,2],size:[3,3],regen:{rate:4,calmRadius:1},
+        announce:'native cue control',...(vent?{seat:'vents'}:{}),...(spec.deferred?{when:{phases:['night']}}:{}),...spec.patch};
+      // A second real row catches relocating a caption draw after the whole
+      // loop; its exact open/spawn calls must see the same global draw cursor.
+      const follower:LiteSwarmRow={...row,announce:undefined,monsterId:'glimmerling',pockets:[1,1],size:[2,2],chance:1};
+      const def:ZoneDef={...world.zone,theme:{...world.zone.theme,lite:{swarms:[row,follower]}}};
+      world.zone=def;world.time=12;world.texts=[];
+      const methods=['liteCondHeld','liteKindOf','litePocketEnsure','liteOpenAt','litePocketBirth','litePocketExtinct'];
+      const tape:number[]=[],trace:{op:string;draw:number;result?:unknown}[]=[],phases:{name:string;used:number;live:number;pending:unknown;state:unknown}[]=[];
+      for(const name of methods){const original=Reflect.get(world,name) as Function;
+        Reflect.set(world,name,function(...args:unknown[]){trace.push({op:name+':enter',draw:tape.length});const result=original.apply(world,args);
+          trace.push({op:name+':leave',draw:tape.length,result:cueValue(result??null)});return result;});}
+      const spawn=world.lite.spawn;world.lite.spawn=function(...args:Parameters<LitePool['spawn']>){trace.push({op:'spawn',draw:tape.length});return spawn.apply(this,args);};
+      const old=Math.random,next=mulberry32(84701);Math.random=()=>{const n=next();tape.push(n);return n;};
+      const state=()=>cueValue({pool:world.lite,pockets:Reflect.get(world,'litePockets'),burrows:Reflect.get(world,'liteBurrows'),doodads:world.doodads});
+      const phase=(name:string,fn:()=>void)=>{const before=tape.length;fn();
+        const pending=legacy?(Reflect.get(world,'liteWhenAnnounces') as {when:unknown}[]).map(r=>r.when):Reflect.get(world,'liteWhenCueDraws');
+        phases.push({name,used:tape.length-before,live:world.lite.liveCount,pending:cueValue(pending),state:state()});};
+      try {
+        phase('boot',()=>Reflect.get(world,'bootLite').call(world,def,[{x:300,y:300},{x:500,y:300},{x:700,y:300}]));
+        if(vent){
+          // Real native authored vents, clear of the hero. The no-vent case
+          // exercises the original field/rows refusal without substituting spawn.
+          if(!spec.emptyVents)Reflect.get(world,'bootGeysers').call(world,def,[],[
+            {pos:{x:300,y:300},cls:'hiss'},{pos:{x:800,y:300},cls:'hiss'}]);
+          phase('vent',()=>Reflect.get(world,'bootLiteVentSeats').call(world));
+          phase('vent-again',()=>Reflect.get(world,'bootLiteVentSeats').call(world));
+        }
+        phase('closed',()=>Reflect.get(world,'liteRegenSweep').call(world));
+        if(spec.deferred){
+          // Current seats at the opening hour own the former draws, not the
+          // number of seats when the row was first queued.
+          world.addSeat('late-cue-seat',classById('warrior'),new NullInput(),{startingCompanions:false});
+          for(const s of world.seats)s.actor.pos={x:1500,y:1500};
+        }
+        world.time=160;assert.equal(world.liteCondHeld({phases:['night']}),true);
+        phase('opened',()=>Reflect.get(world,'liteRegenSweep').call(world));
+        phase('opened-again',()=>Reflect.get(world,'liteRegenSweep').call(world));
+        world.time=252;phase('closed-again',()=>Reflect.get(world,'liteRegenSweep').call(world));
+        world.time=400;phase('reopened',()=>Reflect.get(world,'liteRegenSweep').call(world));
+        const used=tape.length,tail=Math.random(),captions=world.texts.filter(t=>t.text==='native cue control').length;
+        return {tape,trace,phases,used,tail,captions,otherTexts:world.texts.filter(t=>t.text!=='native cue control')};
+      } finally {Math.random=old;}
+    };
+    const old=run(true),current=run(false),label=`${vent?'vent':'poi'} ${seatCount} seats ${spec.name}`;
+    assert.deepEqual({...current,captions:old.captions},old,label+' exact global tape, native operation order, pool bytes, pockets and burrows');
+    assert.equal(current.captions,0,label+' silent native candidate');
+    const announced=spec.name==='immediate'||spec.name==='deferred'||spec.name==='deferred-full-pool';
+    const expected=announced?seatCount+(spec.deferred?1:0):0;
+    assert.equal(old.captions,expected,label+' original speaking positive/negative control');
+    assert.equal(current.phases.find(p=>p.name===(vent?'vent':'boot'))!.used,spec.name==='immediate'?seatCount:0,label+' exact initial draw count');
+    assert.equal(current.phases.find(p=>p.name==='opened')!.used,spec.deferred&&announced?seatCount+1:0,label+' current-seat deferred count');
+    for(const name of ['closed','opened-again','closed-again','reopened',...(vent?['vent-again']:[])])
+      assert.equal(current.phases.find(p=>p.name===name)!.used,0,label+' no repeated/closed draw at '+name);
+    if(spec.name==='immediate')assert.ok(current.phases.find(p=>p.name===(vent?'vent':'boot'))!.live>=6,label+' actual native bodies');
+    if(spec.name==='deferred'){
+      assert.equal(current.phases.find(p=>p.name==='closed')!.live,0,label+' no out-of-hour bodies');
+      assert.ok(current.phases.find(p=>p.name==='opened')!.live>0,label+' native regrowth on the real night condition');
+    }
+    if(spec.capacity===0)assert.ok(current.phases.every(p=>p.live===0),label+' real pool capacity refusal');
+    pairs++;
+  }
+  console.log('PASS '+pairs+' archived native POI/vent cue pairs: positive/refused pours, exact per-seat global tape/order, pools/burrows, deferred late join and once-only reopening; no local narration');
+
+  for(const seatCount of [1,3])for(const remembered of [false,true]){
+    const run=(legacy:boolean)=>{
+      const world=cueWorld(84800,seatCount),nativeLoad=legacy?control.loadZone:world.loadZone;
+      // Re-entry captures the actual arena through native ZoneMemory. The
+      // native forget-on-leave switch exercises fresh entry without a fake memo.
+      Reflect.set(world,'forgetMemoryOnLeave',!remembered);
+      const tape:number[]=[],trace:{op:string;draw:number}[]=[],random=Math.random,next=mulberry32(84801),now=Date.now;
+      const zoneStatus=world.sim.zoneStatus;world.sim.zoneStatus=function(...args:Parameters<typeof zoneStatus>){trace.push({op:'zoneStatus',draw:tape.length});return zoneStatus.apply(this,args);};
+      const create=world.createMonster;world.createMonster=function(...args:Parameters<World['createMonster']>){trace.push({op:'factory',draw:tape.length});return create.apply(this,args);};
+      Math.random=()=>{const n=next();tape.push(n);return n;};Date.now=()=>1700000000000;
+      try {
+        nativeLoad.call(world,SIM_ARENA_ID);
+        assert.equal((Reflect.get(world,'zoneMemory') as Map<string,unknown>).has(SIM_ARENA_ID),remembered);
+        const used=tape.length,tail=Math.random(),titles=world.texts.filter(t=>t.text===world.zone.name);
+        return {tape,used,tail,trace,titles:titles.length,actors:world.actors.map(a=>captureNativeActorState(a)),
+          doodads:cueValue(world.doodads),drops:cueValue(world.drops),flashes:cueValue(world.flashes),
+          texts:world.texts.filter(t=>t.text!==world.zone.name)};
+      } finally {Math.random=random;Date.now=now;}
+    };
+    const old=run(true),current=run(false),label=`entry ${seatCount} seats remembered=${remembered}`;
+    assert.equal(old.titles,1,label+' old entry title was once per zone, not per seat');
+    assert.equal(current.titles,0,label+' duplicate title is silent');
+    assert.deepEqual({...current,titles:old.titles},old,label+' actual full load native global RNG and gameplay state');
+  }
+  console.log('PASS full native zone loads preserve archived entry-title RNG timing, actor/scenery state and next draw for solo/co-op fresh/remembered entry without a duplicate title');
+}
+
 const flat=():MassAdventure=>{const base=massAdventure();return {terrain:{...base.terrain,fields:[],places:[],surfaces:[{id:'flat',priority:1,when:[],region:'ground',color:'#314232',biome:'downs'}]},theme:base.theme,content:[],startRadius:0,populationRadius:600,maxPopulation:30,pageRadius:1,samplesPerTick:256};};
 const undo=seedGlobalRandom(82449);
 try {
+  liteCueParity();
   // All five native mint lanes previously ended in exactly one World.text
   // jitter draw. Replace ONLY that new presentation seam on the control with
   // the old real text artery; native rolls, IDs, notes and drops still execute.

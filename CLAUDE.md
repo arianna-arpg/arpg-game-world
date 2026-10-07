@@ -1,3 +1,20 @@
+Native burial urns keep main's hit/touch, surface-proc, orb/gem, skeleton wake
+and ceramic dissolution order. Frozen whole-source contracts precede admission.
+MassNativeBrittles reserves the full two-body maximum before any pop effect;
+recursive breaks share pending capacity. Actual factory draws and birth baselines
+own exact wounds/deaths without replaying rewards or duplicating native pages.
+Current native party scaling stays separate from the immutable factory baseline;
+settled source-incompatible flags refuse before publication. Silent local entry
+and swarm cues preserve the original per-seat random draws; verify localcues.
+Emergence, debris and foreign actor dependencies pin streaming; native possession
+uses the existing hero-save/transient-body boundary without ejecting live play.
+Only explicitly certified observational tell clocks may sleep with complete
+actor state; collision-query scratch releases its references after its sweep.
+Verify nativebrittlesources/nativebrittles/brittleparity, all worldmass, native
+emerge/dissolve/possession/tells/persistence, types, genqa and native-urns-ui.
+Do not infer complete main parity, continuous underground or deep-biome siting
+from this family. See exploration foundations for evidence and remaining limits.
+
 Show, don't tell is an absolute gameplay rule. Immediate local happenings must
 communicate through physical changes, motion, light, sound and consequence,
 rather than explanatory on-screen narration. Retain text only where the

@@ -158,6 +158,8 @@ immediate.dead=true;immediate.life=0; // Save at the death boundary, before runt
 const afterKill=rr.snapshot(continued);assert.ok(!afterKill.enemies.some(e=>e.id===killedId));
 assert.ok(!afterKill.dormancy!.identities.some(e=>e.id===killedId));
 const afterDeathWorld=makeSimWorld('warrior',28),afterDeath=new WorldMassRuntime(99,'dormancy-country',afterKill.config,afterKill);
+// Direct runtime hydration requires the enclosing native World clock, as CharacterSave restores it.
+afterDeathWorld.time=continued.time;
 afterDeath.attach(afterDeathWorld,afterKill);assert.ok(!afterDeath.snapshot(afterDeathWorld).enemies.some(e=>e.id===killedId));
 console.log('PASS immediate post-kill Save/Continue excludes the dead native from both population and exact identity tables');
 undo();

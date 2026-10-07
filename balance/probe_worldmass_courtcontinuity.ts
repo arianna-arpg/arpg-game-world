@@ -127,12 +127,17 @@ try {
   console.log('PASS failed composite enrollment rolls back all new court actors/controller/scenery despite nearby hero and admits exactly once on retry');
 
   {
-    // Seed9 has an unsupported burial urn beside its guards. Its complete
-    // feature must stay refused; do not strip the urn to exhibit its puzzle.
-    const g=fresh(),mass=g.massRuntime!,h=nativeHost(g),blockedId='court-garrison-refused';
-    const blocked:NativeFeaturePlacement={id:blockedId,origin:mass.walk.at(10000,6000),request:{...request('refrain',9),id:blockedId}};
-    const actors=[...g.actors],decor=[...g.doodads];assert.ok(mass.nativeFeatures!.sync([blocked],h).deferred.includes(blockedId));
-    assert.ok(mass.nativeFeatures!.refusals(blockedId).includes('capability:doodad:burial_urn'));assert.deepEqual(g.actors,actors);assert.deepEqual(g.doodads,decor);
+    // Seed9 now retains its complete native urn, court and guard composition.
+    const g=fresh(),mass=g.massRuntime!,h=nativeHost(g),urnCourtId='court-garrison-urn';
+    const urnCourt:NativeFeaturePlacement={id:urnCourtId,origin:mass.walk.at(10000,6000),request:{...request('refrain',9),id:urnCourtId}};
+    assert.ok(mass.nativeFeatures!.sync([urnCourt],h).admitted.includes(urnCourtId));
+    assert.deepEqual(mass.nativeFeatures!.refusals(urnCourtId),[]);
+    assert.ok(court(g,urnCourtId));
+    const urnFeature=mass.nativeFeatures!.snapshot(g.time).born.find(b=>b.placement.id===urnCourtId)!;
+    const urnIndices=urnFeature.descriptor.brittleSources!.rows.map(row=>row.index);
+    assert.ok(urnIndices.length>0);
+    assert.ok(urnIndices.every(index=>urnFeature.descriptor.geometry.layout.doodads[index].kind==='burial_urn'));
+    assert.ok(g.doodads.some(d=>d.kind==='burial_urn'),'whole native scenery is retained');
     // Seed31 is an unchanged native refrain court with its own actual guard
     // cohort and supported scenery. Every sibling shares one feature owner.
     const id='court-garrison-continuity',place:NativeFeaturePlacement={id,origin:mass.walk.at(10000,6000),request:{...request('refrain',31),id}};
@@ -151,6 +156,6 @@ try {
     same(bodySummary(saved.bodies),expected);same(affiliations(saved.bodies.filter(b=>b.slot.startsWith('garrison/')&&!b.dead).map(b=>resumed.actors.find(a=>a.id===b.actorId)!)),groups);same(resumed.capturePlacedPuzzle(court(resumed,id)),progress);
     assert.equal(owner.courts.views().filter(run=>run.owner===id).length,1);assert.equal(saved.bodies.filter(b=>!b.dead).length,first.filter(b=>!b.dead).length);
     resumed.player.pos={x:-80000,y:-80000};assert.ok(country.nativeFeatures!.sync([],owner).retired.includes(id),'restored siblings do not pin one another forever');
-    console.log('PASS actual garrison-bearing refrain preserves guard wounds, native affiliations and partial court through composite retirement/Continue; unsupported burial-urn source refuses whole');
+    console.log('PASS actual garrison-bearing refrain preserves guard wounds, native affiliations and partial court through composite retirement/Continue; newly owned burial-urn court retains its whole composition');
   }
 } finally {undo();}

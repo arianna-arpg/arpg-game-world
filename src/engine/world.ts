@@ -1,5 +1,7 @@
 import { serializeAccount } from '../meta/account';
 import type { MassResidentResume } from '../meta/characterResume';
+import type { MassNativeBrittlePopContext } from '../worldmass/nativeBrittles';
+import { nativeUrnRewardContextSupported } from '../worldmass/nativeBrittleSources';
 import { localOffset, type MassAddress } from '../worldmass/address';
 import { massDormancyPins } from '../worldmass/dormancy';
 import { massSideareaId, savedMassSideareas, copyMassSidearea, type MassSideareaRoot, type MassSideareaSave } from '../worldmass/sideareas';
@@ -3482,6 +3484,33 @@ export class World {
       removed = true;
     };
   }
+  /** Complete urn owners lease wake capacity before the native operation. The
+   * native pop remains synchronous and preserves recursive surface-proc order. */
+  private readonly massNativeBrittleOwners = new Map<string, ReadonlySet<Doodad>>();
+  private readonly massNativeBrittles = new Map<Doodad, (native: (context: MassNativeBrittlePopContext) => void) => boolean>();
+  nativeUrnRewardContextSupported(): boolean {
+    return nativeUrnRewardContextSupported(this.zone)
+      && (this.sim.overlayFor<QuickeningField>('quickening', this.zone.dimension)?.bountyMulAt(this.zone.id) ?? 1) === 1;
+  }
+  installMassNativeBrittles(owner: string, rows: readonly {
+    doodad: Doodad; invoke: (native: (context: MassNativeBrittlePopContext) => void) => boolean;
+  }[]): () => void {
+    const pieces = new Set(rows.map(row => row.doodad));
+    if (!owner || this.massNativeBrittleOwners.has(owner) || pieces.size !== rows.length
+      || rows.some(row => !this.doodads.includes(row.doodad) || row.doodad.gone || row.doodad.kind !== 'burial_urn'
+        || typeof row.invoke !== 'function' || this.massNativeBrittles.has(row.doodad)))
+      throw Error('Invalid native brittle scenery enrollment');
+    this.massNativeBrittleOwners.set(owner, pieces);
+    for (const row of rows) this.massNativeBrittles.set(row.doodad, row.invoke);
+    let removed = false;
+    return () => {
+      if (removed) return;
+      for (const row of rows) if (this.massNativeBrittles.get(row.doodad) === row.invoke)
+        this.massNativeBrittles.delete(row.doodad);
+      if (this.massNativeBrittleOwners.get(owner) === pieces) this.massNativeBrittleOwners.delete(owner);
+      removed = true;
+    };
+  }
   /** Reusable hidden caster for environmental hazards (lava orbs) — like demonCaster. */
   private hazardCaster: Actor | null = null;
   /** ZONE MEMORY: per-run, in-memory remembrance so re-entering a zone within
@@ -4185,10 +4214,9 @@ export class World {
   /** Burrow doodads planted at ambient regen hearts (parallel to
    *  litePockets; sealed via evap on extinction). */
   private liteBurrows: (Doodad | undefined)[] = [];
-  /** Conditioned pour rows (LiteSwarmRow.when) whose hour hadn't come at
-   *  boot: the announce waits with the tide — fired once, at the first
-   *  regrowth sweep that finds the hour held. Zone-local. */
-  private liteWhenAnnounces: { when: LiteCond; text: string; color?: string }[] = [];
+  /** Retain former local-caption jitter at its native conditional/once boundary.
+   * Actual swarms and burrows carry the arrival cue without narration. */
+  private liteWhenCueDraws: LiteCond[] = [];
   /** THE VENT SEAT's deferred rows (LiteSwarmRow.seat 'vents'): stashed by
    *  bootLite, seated by bootLiteVentSeats once the geyser field stands. */
   private liteVentRows: LiteSwarmRow[] = [];
@@ -6119,6 +6147,8 @@ export class World {
     }
     this.massNativeEffectOwners.clear();
     this.massNativeEffectInvokers.clear();
+    this.massNativeBrittleOwners.clear();
+    this.massNativeBrittles.clear();
     this.townLayoutChangedOnLoad = false;
     // Legacy rescue evidence must arrive before the town layout is generated.
     this.questRescues.reconcile();
@@ -7648,7 +7678,8 @@ export class World {
         }));
       }
     }
-    this.text(vec(p.pos.x, p.pos.y - 46), def.name, def.theme.accent, 24);
+    // The entered place is visible in its terrain and the existing location readout.
+    rand(-10, 10); // retain the retired native entry-title jitter draw
     // If a warband is storming this ground as you arrive, you'll know it.
     const invader = this.sim.zoneStatus(def).invadedBy;
     if (invader && FACTIONS[invader]) {
@@ -32888,7 +32919,7 @@ export class World {
     this.litePromoteBudget = 0;
     this.litePockets = [];
     this.liteBurrows = [];
-    this.liteWhenAnnounces = [];
+    this.liteWhenCueDraws = [];
     this.liteColonySeen.clear();
     this.liteRegenClock = 0;
     this.liteHasTrample = false;
@@ -32909,7 +32940,7 @@ export class World {
         // rolls its whole shape and SEATS its pockets (the salted stream's
         // draws are sacred — held or not, every roll happens), but pours no
         // bodies yet; the regrowth sweep raises the tide when the hour
-        // comes, and the announce waits with it (liteWhenAnnounces).
+        // comes. Its retired caption draws wait at the same native boundary.
         const held = this.liteCondHeld(row.when);
         let poured = false;
         for (let p = 0; p < pockets; p++) {
@@ -32940,12 +32971,9 @@ export class World {
           }
         }
         if (poured && row.announce) {
-          for (const s of this.seats) {
-            this.text(vec(s.actor.pos.x, s.actor.pos.y - 36), row.announce,
-              row.announceColor ?? '#c8a878', 13);
-          }
+          for (let seat = 0; seat < this.seats.length; seat++) rand(-10, 10);
         } else if (has && !held && row.when && row.announce) {
-          this.liteWhenAnnounces.push({ when: row.when, text: row.announce, color: row.announceColor });
+          this.liteWhenCueDraws.push(row.when);
         }
       }
     }
@@ -33596,11 +33624,9 @@ export class World {
         }
       }
       if (poured && row.announce) {
-        for (const s of this.seats) {
-          this.text(vec(s.actor.pos.x, s.actor.pos.y - 36), row.announce, row.announceColor ?? '#c8a878', 13);
-        }
+        for (let seat = 0; seat < this.seats.length; seat++) rand(-10, 10);
       } else if (has && !held && row.when && row.announce) {
-        this.liteWhenAnnounces.push({ when: row.when, text: row.announce, color: row.announceColor });
+        this.liteWhenCueDraws.push(row.when);
       }
     }
   }
@@ -33700,19 +33726,15 @@ export class World {
    *  exterminated; a colony pocket dies with its anchor — the nest is the
    *  true target (docs/engine/lite.md). */
   private liteRegenSweep(): void {
-    // SOVEREIGNTY: census — the pool's own pocket bookkeeping and announces (the derived census, probe_tiers RIG T).
-    // The waiting announces (conditioned rows booted out of hour): the
-    // first sweep that finds an hour held cries that arrival once.
-    if (this.liteWhenAnnounces.length) {
-      const still: { when: LiteCond; text: string; color?: string }[] = [];
-      for (const an of this.liteWhenAnnounces) {
-        if (this.liteCondHeld(an.when)) {
-          for (const s of this.seats) {
-            this.text(vec(s.actor.pos.x, s.actor.pos.y - 36), an.text, an.color ?? '#c8a878', 13);
-          }
-        } else still.push(an);
+    // SOVEREIGNTY: census — native pocket bookkeeping (probe_tiers RIG T).
+    if (this.liteWhenCueDraws.length) {
+      const still: LiteCond[] = [];
+      for (const when of this.liteWhenCueDraws) {
+        if (this.liteCondHeld(when)) {
+          for (let seat = 0; seat < this.seats.length; seat++) rand(-10, 10);
+        } else still.push(when);
       }
-      this.liteWhenAnnounces = still;
+      this.liteWhenCueDraws = still;
     }
     // Anchor discovery: any living body wearing MonsterDef.colony.
     for (const a of this.actors) {
@@ -61345,6 +61367,14 @@ export class World {
    *  its own rewards; a timer-pop names nobody and rolls nothing). */
   private popBrittle(d: Doodad, striker?: Actor | null, strikeAt?: Vec2 | null): void {
     if (d.gone) return;
+    const invoke = this.massNativeBrittles.get(d);
+    if (invoke) { invoke(context => this.popBrittleNative(d, striker, strikeAt, context)); return; }
+    this.popBrittleNative(d, striker, strikeAt);
+  }
+
+  private popBrittleNative(d: Doodad, striker?: Actor | null, strikeAt?: Vec2 | null,
+    context?: MassNativeBrittlePopContext): void {
+    if (d.gone) return;
     // A breaking resonant stone TOLLS as it goes (near/touch/dwell pops reach
     // here without passing strikeSurfaces; the cooldown dedupes hit-pops).
     const res = doodadRuleOf(d.kind).resonance;
@@ -61394,9 +61424,12 @@ export class World {
     });
     if (br.text) this.text(vec(d.pos.x, d.pos.y - 14), br.text, color, 12);
     if (br.orbChance && chance(br.orbChance)) {
-      this.shedOrb(chance(0.5) ? 'life' : 'mana', d.pos, { tier: d.tier });
+      const kind = chance(0.5) ? 'life' : 'mana';
+      this.shedOrb(kind, d.pos, { tier: d.tier,
+        ...(context ? { amount: orbAmount(ORB_DEFS[kind], context.sourceZone.level) } : {}) });
     }
-    if (br.gemChance && chance(br.gemChance)) this.dropGemAt(vec(d.pos.x, d.pos.y));
+    if (br.gemChance && chance(br.gemChance))
+      this.dropGemAt(vec(d.pos.x, d.pos.y), undefined, false, undefined, undefined, undefined, context?.sourceZone);
     // THE REMAINS (the quiet reclass): the wreck leaves its own pile — the
     // crumble SHOWS and the dust STAYS. Pushed after the splice; the rev
     // bump below covers the same-frame length-net window.
@@ -61469,10 +61502,15 @@ export class World {
       const [lo, hi] = sp.count ?? [1, 1];
       const n = lo + Math.floor(rand(0, hi - lo + 1));
       for (let i = 0; i < n; i++) {
-        const m = this.createMonster(sp.monster, Math.max(1, this.zone.level), 'enemy');
+        const level = Math.max(1, context?.sourceZone.level ?? this.zone.level);
+        const factory = () => this.createMonster(sp.monster, level, 'enemy');
+        const m = context ? context.createWake(sp.monster, level, factory) : factory();
         m.pos = this.clampPos(vec(d.pos.x + rand(-22, 22), d.pos.y + rand(-22, 22)), m.radius);
         this.actors.push(m);
-        this.emergeBody(m, { host: true }); // THE EMERGENCE GRAMMAR: the wake BURSTS OUT of the breaking host
+        context?.publishedBody(m);
+        this.emergeBody(m, { host: true, ...(context ? { ground: emergeGroundFor(context.sourceZone.biome,
+          this.groundAt(m.pos, m.tier)?.kind ?? this.walk?.regionAt?.(m.pos.x, m.pos.y)) } : {}) });
+        // THE EMERGENCE GRAMMAR: the wake BURSTS OUT of the breaking host
       }
     }
     // THE SHALLOW GRAVE: the wreck spills BODIES, not the living — raisable
@@ -61498,7 +61536,12 @@ export class World {
     // fired exactly as before (drawn == tested at the instant; the motion is
     // after-image): hand the body to the fragment engine. A row's REMAINS
     // is the debris lane's input (adopted, never a second pile).
-    if (dissolveRow) this.dissolveBreak(d, dissolveRow, strikeAt ?? null, remainsDoodad);
+    if (dissolveRow) {
+      const before = this.doodads.length;
+      const record = this.dissolveBreak(d, dissolveRow, strikeAt ?? null, remainsDoodad);
+      // A capped motion may still publish its native evaporating debris.
+      context?.dissolved(record?.debris ?? (this.doodads.length > before ? this.doodads[before] : null), record);
+    }
   }
 
   // ------------------------------------------------ THE EMERGENCE GRAMMAR
@@ -62185,6 +62228,8 @@ export class World {
         }
       }
     }
+    // separateScratch is query storage, not a live cross-frame actor lease.
+    cand.length = 0;
   }
 
   /** Scratch for the squish sweep's per-victim treader query (actorsNear contract). */

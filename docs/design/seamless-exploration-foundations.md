@@ -990,3 +990,121 @@ persistence harness passed. Classic production build/boot passed before the
 validator-only repair; the final preview build and targeted browser course
 cover the corrected client. The classic/roster test-only addition passed its
 focused eight-group run and simulation type check separately.
+
+## Native burial urns, graveyards and ruins
+
+The unchanged country catalogue now admits complete native urn providers through
+MassNativeBrittles. Original composition geometry, urn positions, doors and native
+side-area mouths are retained. The reference is main
+bc8a0e0a9211815d99dcf0ea389e451157c0684d; this adapter does not add a new quest,
+completion reward, explanatory caption or combat tuning.
+
+Frozen source contracts intern the complete urn rule, resolved ceramic motion,
+emitted debris rule, native skeleton definition/skills/material nature and actual
+inherited tell specifications. Selected dissolution/tell implementations and
+worker source identity must remain compatible. Missing historical ownership and
+unsupported native branches refuse the entire feature before geometry admission.
+Only open, default-bounty, unfloored reward contexts are currently supported;
+the actual shell and its live quickening multiplier must also be equivalent.
+Birth level and direct orb/gem/ground context come from the immutable source.
+
+The native handler remains the sole pop operation. A maximum-two-body lease is
+visible in the shared census before the urn changes or any random draw occurs.
+Recursive cave_in breaks see outer pending leases. Predictable preflight refusal
+leaves the urn untouched at that boundary; it does not undo an attack that reached
+it. Once native side effects begin, the operation is synchronous and once-only.
+Unexpected postcommit failure latches a fault and refuses incomplete checkpoints;
+there is no claim of rolling back arbitrary procs, damage, kills or account loot.
+
+Birth receipts keep the actual factory draw tape and original factory baseline,
+then each body's identity, position, wounds and death. Restore replays only the
+detached factory; it never repeats a break, surface proc, reward or emergence.
+The complete factory baseline stays immutable; current native party scaling is
+saved separately and restored before wounds. Actual join/leave rounding, including
+finite life above the current maximum, remains exact. Settled source-incompatible
+role or immunity flags refuse capture and restore. Independent birth counts reject
+missing body rows. Dead tombstone IDs cannot collide with new live
+actors across repeated Continue. This owner is the sole wake authority: it does
+not tag wakes into fromZoneGen memory or ordinary native actor pages.
+
+Streaming retains active emergence, motion/debris and actor dependencies until
+native cleanup releases them. Fully quiet closed bodies retain their complete
+codec. The exact native tell deadline/specs/values/revision may sleep under a
+source-specific certificate: tells only observe state, and the ordinary scheduler
+evaluates once when its saved deadline has elapsed. Other deadlines remain pins.
+The native separation sweep clears its completed query scratch rather than hiding
+references from the dependency scanner. Active Continue retains the established
+native transient boundary, with exact birth/wounds/deaths but no promise to resume
+every action or fragment. Possession saves the true hero and projects the borrowed
+body to its native enemy baseline without ejecting or mutating ongoing play.
+
+Uncollected loot remains in normal ZoneContents; picked-up inventory uses normal
+character saves. Resource orbs remain native scene transients. Broken scenery and
+birth receipts are captured together, so remounting cannot regenerate a pot or
+reroll its contents. Controller enrollment rollback is separate from gameplay:
+every earlier scenery/controller/body publication is undone if a later mount
+fails before the scene is observed.
+
+The repeated source census uses the same 385 entries, native sizes, level 15,
+three diagnostic seeds and declared neutral climate as the haven baseline.
+Catalogue hash remains 2db84ac4df20c119. Admission rises from 661 to 770 of 1155 rows:
+109 newly clear rows across 46 source entries, zero lost admitted rows and zero
+errors. These are diagnostic admission counts, not natural spawn frequencies.
+The country provider still omits native biomeDepth; this does not certify the
+original fringe-to-heart siting rules. Tier/track/context-dependent providers
+remain refused whole. Native mouths still transition scenes; continuous caves,
+full campaign/Odyssey/faction geography, seafaring, complete historical paging
+and live coordinate rebasing remain separate work.
+
+The native entry-title and immediate, deferred and vent swarm captions are silent.
+The original global jitter draws remain at their precise conditional, per-seat
+and once-only boundaries. Swarms, burrows, clocks and native cues stay unchanged.
+The localcues regression compares 46 complete swarm cases and four full zone loads
+against archived main methods/statements; it preserves exact draw tapes, downstream
+sentinels and physical results. The archive runs on current native helpers, so it
+is not a claim to execute a complete old engine.
+
+Verification on the final production tree: source contracts passed four groups;
+lifecycle passed eleven groups. Independent reciprocal review rejected 27 altered
+factory fields, four visual variants, six settled role/ownership mutations and
+seven malformed current-party shapes before publication; 24 additional real
+public-seat transitions retained exact current wounds and the original factory.
+The original independent scratch had an instance-identity fixture mistake; the
+corrected independent copy is retained with the failed original.
+
+Native pop parity passed 240 paired cases: 192 against the pinned main handler,
+24 whole family_plot owned/unowned cases and 24 differing source/shell contexts.
+The latter observed actual orbs, gems, wake bodies and source ground. A real
+progression runtime retained the wake's source reward level after distant movement.
+This does not claim integration of every alternate non-progression configuration.
+Native dissolution, emergence, possession, tells, persistence and lite checks,
+all three type-check projects, five simulation smoke scenarios over five seeds,
+and classic build/boot passed. GenQA passed 869 cases across three seeds with zero
+failures and the four existing geometry warnings.
+
+The final browser course is native-urns-accepted-XyQzvXLR, built from the final
+production source (index-XyQzvXLR.js, SHA256 prefix 564fa03773ef6d12). It used seed 713,
+two unchanged natural source sites and four input-driven urn breaks, including
+touch and hit. An actual attack wounded a native wake from 181.8 to 164.98442447940104
+in 21 frames; active, wounded and dead Continue retained the intended receipts.
+An uncollected Rough Memory survived Continue exactly, ordinary walking collected
+it in 19 frames, and another Continue retained inventory without a ground duplicate.
+The native mausoleum admitted after 45 walking frames, kept the same hero and exact
+interior/return position through Continue, and returned to the surface in 39 frames.
+Both cave-entry captures had no duplicate title or swarm narration. The course
+recorded zero console errors and 17 screenshots; the report retains exact source,
+harness and client identities.
+
+A preceding run of the same final client failed a straight-line test walk against
+a native cart after successfully preserving uncollected loot. The final harness
+uses its existing body-clear approach method for pickup too; both reports remain.
+Controlled approach placement, player invulnerability, native grantXp and the
+labelled direct native kill receipt are disclosed in the report. No source,
+geometry, spawn rule or reward RNG was substituted. This is functional acceptance,
+not performance or combat-balance evidence; quiet streaming retirement is proven
+by the native headless lifecycle checks rather than the browser course.
+
+The complete final worldmass gate passed 96 of 96 probes in 432.0 seconds with
+retries disabled (four workers, 300-second per-probe timeout). Independent
+same-model reviews accepted the bounded source, lifecycle and final browser
+scopes; they are not cross-model consensus or evidence of full main parity.

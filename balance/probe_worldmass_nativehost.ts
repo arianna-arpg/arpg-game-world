@@ -106,7 +106,8 @@ try{
   runtime.nativeFeatures=brittleResume;brittleResume.sync([brittle],host);
   assert.equal(w.doodads.some(d=>d.kind==='seed_pod'&&d.pos.x===pod.pos.x&&d.pos.y===pod.pos.y),false);
   assert.equal(JSON.stringify([w.drops,w.orbs]),afterPop);assert.ok(popped.born[0].changes.doodads.some(([,d])=>d===null));
-  assert.equal(nativeWorldCapabilities().has('doodad:burial_urn'),false,'a spawned encounter cannot be accepted as a simple pop');
+  assert.ok(nativeWorldCapabilities().has('native-brittles')&&nativeWorldCapabilities().has('doodad:burial_urn'),
+    'urn admission requires the separate complete wake owner; it is not a simple scenery pop');
   console.log('PASS actual native seed-pod pop, sparse destruction receipt and no repeated spill after owner save/remount');
 
   // Separate production integration: no custom host/provider is substituted.
