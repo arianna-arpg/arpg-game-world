@@ -106,13 +106,14 @@ const legacy: MassAdventure = JSON.parse(canonical(massAdventure()));
 delete legacy.journey;
 delete legacy.settlement!.quests;
 delete legacy.ecology;
+delete legacy.terrain.patches; // Historical terrain has no local patch policy.
 legacy.terrain.version = 4;
 const old = makeSimWorld('warrior', 71), oldMass = new WorldMassRuntime(42, 'legacy-v4', legacy);
 oldMass.attach(old);
 assert.equal(oldMass.journey, null);
 assert.equal(oldMass.ecology, null);
 const saved = oldMass.snapshot(old), again = makeSimWorld('warrior', 72);
-new WorldMassRuntime(42, 'legacy-v4', legacy, saved).attach(again, saved);
+new WorldMassRuntime(42, 'legacy-v4', saved.config, saved).attach(again, saved);
 assert.equal(again.massRuntime!.generator.run.version, 4);
 assert.equal(again.massRuntime!.journey, null);
 console.log('PASS version 4 Continue keeps its original geography without adding routes or scenery');
@@ -121,6 +122,7 @@ const groveConfig: MassAdventure = JSON.parse(canonical(massAdventure()));
 delete groveConfig.settlement; delete groveConfig.journey; delete groveConfig.progression;
 delete groveConfig.nativeCountry;delete groveConfig.geography; // isolated ecology fixture has no native structure placement
 groveConfig.terrain.places = []; groveConfig.content = []; groveConfig.startRadius = 0;
+delete groveConfig.terrain.patches;
 groveConfig.terrain.surfaces = [{ id: 'grove', source: 'probe/grove', priority: 0, when: [],
   region: 'ground', color: '#334422', biome: 'forest' }];
 groveConfig.ecology = { source: 'probe/grove', spacing: 192, rules: [{

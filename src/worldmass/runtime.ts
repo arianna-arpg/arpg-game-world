@@ -1,3 +1,5 @@
+import { massTerrainRegions } from './contracts';
+import { reserveMassOpening } from './patchReservations';
 import { characterPagingAvailable, characterNativePages, commitCharacterNativeCohort, loadCharacterNativePage, forgetCharacterNativePage, resetCharacterNativePages, characterNativeSessionCurrent, characterNativeSessionToken, characterNativePageOrder } from '../meta/character';
 import type { MassResidentResume } from '../meta/characterResume';
 import type { CharacterPageEntry } from '../meta/characterPages';
@@ -163,6 +165,7 @@ export class WorldMassRuntime {
   readonly resumeTier: number;
   constructor(seed: number, runId: string, config: MassAdventure = massAdventure(), input?: MassRuntimeRestore) {
     const save=restoreData(input);
+    if (!save) config = reserveMassOpening(seed, runId, config);
     this.resumeTier = save?.player.tier ?? 0;
     if (!Number.isInteger(this.resumeTier) || this.resumeTier < 0 || this.resumeTier > 6) throw new Error('Invalid worldmass player story');
     this.config = freezeData(JSON.parse(canonical(config)) as MassAdventure);
@@ -266,7 +269,7 @@ export class WorldMassRuntime {
       if (p.surface && !regionKind(p.surface.region)) throw new Error('Unresolved site surface');
     }
     if (config.terrain.places.some(p => !config.content.some(c => c.id === p.content))
-      || config.terrain.surfaces.some(s => !regionKind(s.region))) throw new Error('Unresolved worldmass content');
+      || massTerrainRegions(config.terrain).some(id => !regionKind(id))) throw new Error('Unresolved worldmass content');
     this.state = new MassState(this.generator.run, config.terrain.terrainCell);
     this.survey = new MassSurvey(this.state, this.config.survey);
     this.stream = new MassStream(this.generator, this.state, { maxPages: (config.pageRadius * 2 + 1) ** 2, maxSamples: 32768 });
@@ -369,6 +372,7 @@ export class WorldMassRuntime {
     if(this.config.nativeCountry){
       const spec=this.config.nativeCountry;
       this.nativeCountry=new MassNativeCountry(this.generator,spec,(center,radius)=>{
+        if(this.generator.patches?.reserves(center,radius))return true;
         if(!this.inLocalFrame(center))return false;
         const q=localOffset(center,{...this.origin,x:0,y:0},this.config.terrain.addressSpan);
         return !!this.settlement?.reserves(q.x,q.y,radius) || !!this.journey?.reserves(q,radius)

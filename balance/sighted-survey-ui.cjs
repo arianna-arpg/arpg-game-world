@@ -46,6 +46,7 @@ app.whenReady().then(async()=>{
  const fixture=()=>{const w=__game.world(),M=w.massRuntime.constructor,c=JSON.parse(JSON.stringify(w.massRuntime.config));
   delete c.settlement;delete c.journey;delete c.ecology;delete c.progression;
   c.content=[];c.maxPopulation=0;c.terrain.places=[];
+  delete c.terrain.patches;
   c.terrain.surfaces=[{id:'plain',source:'qa/plain',priority:0,when:[],region:'ground',color:'#445522',biome:'downs'}];
   const m=new M(42,'survey-browser',c);m.attach(w);w.player.invulnerable=true;
   for(let y=9420;y<=10620;y+=30)m.state.paint({address:m.walk.at(10200,y),region:'wall',color:'#777777',cause:'qa:survey-wall'});

@@ -61,6 +61,9 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_fieldchoice.ts', status: 'green', tier: 'fast', why: 'Archived native field read/callback parity, floor claims, exact memo limits and independent instance isolation' },
+  { probe: 'probe_pourshape.ts', status: 'green', tier: 'fast', why: 'Archived native pour mask and RNG parity; shared lobes preserve guard/depth/paint wrappers' },
+  { probe: 'probe_worldmass_terrainpatches.ts', status: 'green', tier: 'fast', why: 'Physical localized terrain, neutral swept bypasses, reservations, deterministic full addresses and legacy Continue' },
   { probe: 'probe_conversation.ts', status: 'green', tier: 'fast', why: 'Stable NPC ownership, departure and panel suspension; speaker-specific work/rewards, action refresh and near-facing target emphasis' },
   { probe: 'probe_speechapproach.ts', status: 'green', tier: 'fast', why: 'Native selected-speaker approach hint: idle grace, pure reads, authored opt-out, live reach/story/roof, death, stale focus and retirement on dialogue readiness' },
   { probe: 'probe_worldmass_floorwork.ts', status: 'green', tier: 'fast', why: 'Budgeted floor preparation, atomic publication, cold fallback, invalidation and shared residency cap' },

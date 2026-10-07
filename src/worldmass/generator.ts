@@ -2,6 +2,7 @@ import { address, cellKey, floorDiv, latticeAt, localOffset, moveAddress, validS
 import type { MassPlace, MassPlaceRecipe, MassRange, MassRun, MassSpec, MassTerrain } from './contracts';
 import { canonical, freezeData, massDigest, massRandom, streamSeed } from './random';
 import { massNoise } from './noise';
+import { MassTerrainPatches, patchBoxIntersects, validateMassPatches, type MassPatchBox } from './terrainPatches';
 
 const compare = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
 function unique(ids: readonly string[], label: string): void {
@@ -47,6 +48,7 @@ export function validateMassSpec(spec: MassSpec): void {
     if (p.surface && (!p.surface.region || !/^#[0-9a-f]{6}$/i.test(p.surface.color))) throw new Error('Invalid place surface');
     if ((Math.ceil(spec.addressSpan / p.period) + 5) ** 2 > 4096) throw new Error('Place page query exceeds candidate budget');
   }
+  validateMassPatches(spec);
   if (spec.places.length > 64) throw new Error('Regional planner exceeds 64 place families');
   for (const a of spec.places) for (const b of spec.places) {
     if (Math.ceil((a.radius + b.radius) / b.period) + 2 > 8) throw new Error('Place overlap query exceeds bounded neighborhood');
@@ -68,6 +70,7 @@ export const matchesMassRanges = (rows: readonly MassRange[], fields: Readonly<R
 export class MassGenerator {
   readonly spec: Readonly<MassSpec>;
   readonly run: Readonly<MassRun>;
+  readonly patches: MassTerrainPatches | null;
   private readonly surfaces: MassSpec['surfaces'];
   private readonly salts = new Map<MassSpec['fields'][number]['layers'][number], number>();
   private readonly candidates = new Map<string, MassPlace | null>();
@@ -81,6 +84,8 @@ export class MassGenerator {
     this.surfaces = [...this.spec.surfaces].sort((a, b) => b.priority - a.priority || compare(a.id, b.id));
     for (const f of this.spec.fields) for (const l of f.layers)
       this.salts.set(l, streamSeed(run.seed, [spec.id, spec.version, f.id, l.id]));
+    this.patches = this.spec.patches ? new MassTerrainPatches(this.spec, this.run,
+      at => this.baseTerrainAt(at), (origin, box) => this.patchSitesClear(origin, box)) : null;
   }
   private noise(at: MassAddress, period: number, salt: number): number {
     return massNoise(at, this.spec.addressSpan, period, salt);
@@ -98,6 +103,23 @@ export class MassGenerator {
     return Object.freeze(result);
   }
   terrainAt(at: MassAddress): MassTerrain {
+    const base = this.baseTerrainAt(at);
+    return this.patches?.sample(at, base) ?? base;
+  }
+  private patchSitesClear(origin: MassAddress, box: MassPatchBox): boolean {
+    const span = this.spec.addressSpan;
+    const lo = moveAddress(origin, { x: box.minX, y: box.minY }, span);
+    const hi = moveAddress(origin, { x: box.maxX, y: box.maxY }, span);
+    for (let y = BigInt(lo.cy); y <= BigInt(hi.cy); y++) for (let x = BigInt(lo.cx); x <= BigInt(hi.cx); x++) {
+      for (const place of this.placesInCell({ dimension: origin.dimension, cx: x.toString(), cy: y.toString() })) {
+        const q = localOffset(place.center, origin, span, 100000);
+        if (patchBoxIntersects(box, q.x, q.y, place.radius)) return false;
+      }
+    }
+    return true;
+  }
+  /** Original policy, deliberately patch-free to keep candidate proofs acyclic. */
+  private baseTerrainAt(at: MassAddress): MassTerrain {
     const fields = this.fieldsAt(at), s = this.surfaces.find(row => matchesMassRanges(row.when, fields))!;
     for (const place of this.spec.places.some(p => p.surface) ? this.placesInCell(at) : []) {
       const recipe = this.spec.places.find(p => p.id === place.recipe)!;

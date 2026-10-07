@@ -71,7 +71,7 @@ export interface MassAdventure {
 export function massAdventure(): MassAdventure {
   const families = MASS_BIOME_FAMILIES, fields = countryFieldSites(), regional = regionalCountrySites(), activities = countryActivitySites();
   const terrain: MassSpec = {
-    id: 'hollow-wake-country', version: 7, addressSpan: 960, terrainCell: 30,
+    id: 'hollow-wake-country', version: 8, addressSpan: 960, terrainCell: 30,
     fields: [
       { id: 'elevation', base: .15, layers: [
         { id: 'continent', period: 18000, amplitude: .7 },
@@ -95,15 +95,23 @@ export function massAdventure(): MassAdventure {
       { id: 'outcrop', source: 'regions/wall', priority: 80, when: [{ field: 'rock', min: .65 }, { field: 'elevation', min: .2 }], region: 'wall', color: '#56594f', biome: 'highland' },
       {id:'frozen-ground',source:'regions/ice',priority:25,
         when:[{field:'temperature',max:-.35},{field:'rock',min:.20}],region:'ice',color:'#82999f',biome:'tundra'},
-      {id:'wetland-pools',source:'regions/swamp',priority:25,
-        when:[{field:'temperature',min:-.35},{field:'moisture',min:.35},{field:'elevation',max:.22},{field:'rock',max:-.18}],
-        region:'swamp',color:'#30483d',biome:'marsh'},
       ...families.map(f => ({ id: f.id, source: 'tilesets/' + f.id, priority: 10,
         when: f.when, region: f.region,
         color: f.color ?? TILESETS[f.id].theme.ground?.palette?.[2] ?? TILESETS[f.id].theme.floor,
         biome: TILESETS[f.id].biome ?? f.id })),
       { id: 'fallback', source: 'tilesets/downs', priority: 0, when: [], region: 'ground', color: '#31391c', biome: 'downs' },
     ],
+    patches: { source: 'worldmass/native-terrain-patches-v1', version: 1, spacing: 960, jitter: .12, bypass: 60,
+      recipes: [
+        { id: 'wetland-pockets', when: [], onSurfaces: ['marsh'], chance: .9, choices: [
+          { id: 'mud-hollow', weight: 3, region: 'mud', color: '#4b4938', radius: [65, 100], scale: 1.3, wobble: .3, pieces: [2, 5] },
+          { id: 'reed-pool', weight: 2, region: 'swamp', color: '#30483d', radius: [60, 95], scale: 1.3, wobble: .4, pieces: [2, 4] },
+        ] },
+        { id: 'woodland-hollows', when: [{ field: 'moisture', min: .45 }], onSurfaces: ['forest'], chance: .25, choices: [
+          { id: 'mud-hollow', weight: 1, region: 'mud', color: '#454637', radius: [60, 85], scale: 1.3, wobble: .35, pieces: [1, 3] },
+        ] },
+      ],
+    },
     places: [...activities.map(a=>a.recipe), ...regional.map(r => r.recipe), ...fields.map(f=>f.recipe), ...families.map(f => ({ id: f.id + '-habitat', version: 1, content: f.id,
       period: 1100, chance: .7, radius: 180, jitter: .7, priority: 1,
       when: [{ field: 'elevation', min: -.1 }, ...f.when] })),

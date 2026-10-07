@@ -1,3 +1,4 @@
+import { massTerrainRegions } from './contracts';
 import type { Vec2 } from '../core/math';
 import { Rng } from '../core/rng';
 import type { World } from '../engine/world';
@@ -150,7 +151,7 @@ export class MassProcessionGameplay {
     for (let y = BigInt(lo.cy); y <= BigInt(hi.cy); y++) for (let x = BigInt(lo.cx); x <= BigInt(hi.cx); x++) cells.push({ dimension: owner.dimension, cx: x.toString(), cy: y.toString() });
     const patches = this.mass.state.patchesInCells(cells), terrain = this.mass.generator.spec;
     if (patches.length > PROCESSION_ROUTE_POLICY.maxPatches) return null;
-    const regions: ProcessionPlanInput['regions'] = Object.fromEntries([...new Set([...terrain.surfaces.map(s => s.region), ...terrain.places.flatMap(p => p.surface ? [p.surface.region] : []), ...patches.map(p => p.region)])].map(id => {
+    const regions: ProcessionPlanInput['regions'] = Object.fromEntries([...new Set([...massTerrainRegions(terrain), ...patches.map(p => p.region)])].map(id => {
       const r = regionKind(id); return [id, { walkable: !!r?.walkable, dry: !!r?.walkable && !r.standStatusDeep && !['water', 'lava', 'chasm', 'bog', 'swamp'].includes(id), standStatusDeep: !!r?.standStatusDeep }];
     }));
     const geometry = { circles: circles.filter(c => Math.abs(c.x) <= extent + c.radius && Math.abs(c.y) <= extent + c.radius),

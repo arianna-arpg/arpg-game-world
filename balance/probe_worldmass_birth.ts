@@ -31,7 +31,7 @@ for(const seed of [11,42,81,142]) {
  const before=a.map(signature),save=serializeCharacter(w),checkpoint=save.world!.worldmass!;
  assert.ok(checkpoint.enemies.every(e=>validMassBirth(e.birth!)));
  const invalid=JSON.parse(JSON.stringify(checkpoint));delete invalid.enemies[0].birth;
- assert.throws(()=>new WorldMassRuntime(seed,'invalid',spec,invalid),/Invalid worldmass survivor/);
+ assert.throws(()=>new WorldMassRuntime(seed,'invalid',invalid.config,invalid),/Invalid worldmass survivor/);
  const again=makeSimWorld('warrior',seed+1);again.adoptWorldState(save.world);again.startWorldMass(seed,checkpoint);
  const after=again.actors.filter(a=>a.defId==='stone_sentinel'||a.defId==='sylvan_warden').map(signature);
  for(let i=0;i<before.length;i++){checked++;if(JSON.stringify(before[i])!==JSON.stringify(after[i]))mismatches++;}
@@ -59,6 +59,6 @@ const legacy=JSON.parse(JSON.stringify(spec));delete legacy.nativeBirthSource;
 const old=new WorldMassRuntime(71,'old-style',legacy);old.attach(w);
 w.player.pos=old.journey!.local(old.journey!.places[0]);old.update(w,true);
 const oldSave=old.snapshot(w);assert.ok(oldSave.enemies.length>0&&oldSave.enemies.every(e=>!e.birth));
-new WorldMassRuntime(71,'old-style',legacy,oldSave).attach(makeSimWorld('warrior',72),oldSave);
+new WorldMassRuntime(71,'old-style',oldSave.config,oldSave).attach(makeSimWorld('warrior',72),oldSave);
 console.log('PASS existing descriptors without birth records retain their legacy admission path');
 restore();

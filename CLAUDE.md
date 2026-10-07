@@ -1,3 +1,17 @@
+Generation variety is a world contract: ordinary mire is localized physical
+terrain over neutral ground, with complete raster shapes and reserved bypasses.
+Fresh terrain v8 owns this saved policy; old descriptors retain their original
+terrain. Shared native pour lobes preserve finite guard/depth/paint behavior.
+Ecology reserves complete movement shapes, not just painted radii; native
+features and objective fixtures respect the same annuli. Route workers include
+all physical materials. Native field selection now owns instance-local memos
+with explicit readers, preserving classic source behavior; immutable climate/
+continent capture and unified biome/depth/face country mapping remain open.
+Verify fieldchoice, pourshape, terrainpatches, all worldmass, types, native
+generation and the natural terrain browser course. The exploration foundations
+track regional hydrology, full places/interiors, bounty-opened routes, habitats,
+long-history paging/rebasing and experience passes still owed for main parity.
+
 Native region geometry lives in world/regionGeometry. The classic regionWinner
 wrapper supplies the original complete field selection, scale data and policy.
 The shared solver preserves native hash, scan/pruning/tie order and depth across

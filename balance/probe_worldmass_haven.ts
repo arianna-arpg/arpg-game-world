@@ -126,7 +126,7 @@ for (const grown of [false, true]) {
 }
 // Old descriptors deliberately retain their old clearing and land.
 const legacy = JSON.parse(canonical(massAdventure())); delete legacy.settlement; delete legacy.progression; delete legacy.journey; delete legacy.ecology;
-delete legacy.survey;delete legacy.nativeCountry;delete legacy.geography;
+delete legacy.survey;delete legacy.nativeCountry;delete legacy.geography;delete legacy.terrain.patches;
 legacy.terrain.version = 2; legacy.terrain.addressSpan = 768; legacy.terrain.terrainCell = 24;
 const old = makeSimWorld('warrior', 531);
 new WorldMassRuntime(42, 'legacy', legacy).attach(old);

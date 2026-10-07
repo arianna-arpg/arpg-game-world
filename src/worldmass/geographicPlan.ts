@@ -1,3 +1,4 @@
+import { massTerrainRegions } from './contracts';
 import { chooseNativeGeographicObjective, type NativeGeographicObjectiveSource } from './geographicObjectiveChoice';
 import { resolveNativeBeacon } from '../engine/beaconSpec';
 import type { Vec2 } from '../core/math';
@@ -60,7 +61,7 @@ export function validateGeographicPlanInput(input:Readonly<GeographicPlanInput>)
     ||reserved.trails.some(t=>!finite(t.a)||!finite(t.b)||!Number.isFinite(t.radius)||t.radius<0)
     ||reserved.town&&(!Object.values(reserved.town).every(Number.isFinite)||reserved.town.minX>reserved.town.maxX||reserved.town.minY>reserved.town.maxY||reserved.town.padding<0))
     throw Error('Invalid frozen geographic reservations');
-  const regions=[...input.terrain.surfaces.map(s=>s.region),...input.terrain.places.flatMap(p=>p.surface?[p.surface.region]:[])];
+  const regions=massTerrainRegions(input.terrain);
   if(regions.some(id=>!input.regions[id]||typeof input.regions[id].walkable!=='boolean'||typeof input.regions[id].dry!=='boolean'))throw Error('Incomplete geographic terrain policy');
   if(canonical(chooseNativeGeographicObjective(input.run.seed,owner.id,input.selection))!==canonical(input.context.recipe))throw Error('Geographic plan source lottery changed');
   const recipe=input.context.recipe;
@@ -105,7 +106,7 @@ export function compileGeographicPlan(input:Readonly<GeographicPlanInput>,genera
   for(let attempt=0;attempt<96&&positions.length<count;attempt++){
     const angle=rng.range(0,Math.PI*2),reach=Math.sqrt(rng.next())*radius;
     const at=moveAddress(owner.center,{x:Math.round(Math.cos(angle)*reach/30)*30,y:Math.round(Math.sin(angle)*reach/30)*30},span);
-    if(reserved(at,150)||positions.some(q=>{const d=localOffset(q,at,span);return Math.hypot(d.x,d.y)<300;}))continue;
+    if(gen.patches?.reserves(at,150)||reserved(at,150)||positions.some(q=>{const d=localOffset(q,at,span);return Math.hypot(d.x,d.y)<300;}))continue;
     const region=gen.terrainAt(at).region;
     if(!input.regions[region]?.walkable||['water','lava','chasm','bog','swamp'].includes(region))continue;
     let clear=true;
@@ -163,7 +164,7 @@ export function* validateGeographicPreparationSteps(input:Readonly<GeographicPla
   const reserved=geographicReservations(input,[...bodies.values()],halfSpan),targets=plan.access.targets.map(t=>({...localOffset(t.at,center,span,16),radius:t.radius}));
   for(let i=0;i<targets.length;i++){
     const t=targets[i];const at:MassAddress=plan.access.targets[i].at;
-    if(t.x%30||t.y%30||Math.hypot(t.x,t.y)>Math.min(960,halfSpan-180)+22||reserved(at,150)
+    if(t.x%30||t.y%30||Math.hypot(t.x,t.y)>Math.min(960,halfSpan-180)+22||gen.patches?.reserves(at,150)||reserved(at,150)
       ||targets.slice(0,i).some(q=>Math.hypot(q.x-t.x,q.y-t.y)<300))throw Error('Prepared geographic stand violates frozen reservations');
     const id=gen.terrainAt(at).region;yield;
     if(!input.regions[id]?.walkable||['water','lava','chasm','bog','swamp'].includes(id))throw Error('Prepared geographic stand has invalid terrain');

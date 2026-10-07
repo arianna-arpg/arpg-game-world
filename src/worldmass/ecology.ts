@@ -1,6 +1,7 @@
 import type { World } from '../engine/world';
+import { shapeBoundR } from '../engine/shapes';
 import { regionKind } from '../world/regions';
-import { hasDoodadRule, bodyRadiusOf, blocksMovement, type Doodad, type DoodadKind } from '../engine/levelgen';
+import { hasDoodadRule, bodyRadiusOf, blocksMovement, hitSurfaceOf, type Doodad, type DoodadKind } from '../engine/levelgen';
 import { cellKey, localOffset, type MassCell } from './address';
 import type { WorldMassRuntime } from './runtime';
 import { canonical, massRandom } from './random';
@@ -154,6 +155,11 @@ export class MassEcology {
               continue;
             const id = canonical([this.mass.generator.run.runId, this.spec.source, key, x, y, ...(rule.cluster ? [i] : [])]);
             const live: Doodad = { pos, radius, kind: row.kind, rot: rng.range(0, Math.PI * 2) }, base = canonical(pieceState(live));
+            // Native logs and rock satellites extend beyond their paint radius.
+            // Reserve the complete movement shape after its original rotation
+            // draw; omission keeps the historic ecology draw stream identical.
+            if (this.mass.generator.patches?.reserves(this.mass.walk.at(pos.x,pos.y),
+              Math.max(radius, shapeBoundR(hitSurfaceOf(live, 'move'))))) continue;
             // Canopies may overlap; solid trunks retain a traversable gap. Decide
             // against generated peers, even when a saved peer has been removed.
             if (blocksMovement(live) && cluster.some(d => blocksMovement(d)

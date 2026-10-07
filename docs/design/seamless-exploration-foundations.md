@@ -1155,3 +1155,144 @@ and GenQA's 2,607 cases passed; GenQA retained its four existing warnings. An
 initial test-only implicit-any error was corrected with explicit generic policy
 annotations before the final type check. No country depth activation or infinite
 address guarantee follows from these results.
+
+## Generation variety is a world contract
+
+The renewed target is complete native content in one coherent continuous world,
+followed by repeated experience and correctness passes. Counting catalogue rows
+or props does not establish parity. Track each behavior through natural
+selection, whole-source compilation, admission/refusal, access, activation,
+progress, absence, return and cold Continue. Current broad parity remains open.
+
+The next foundations and their acceptance outcomes are:
+
+| Foundation | Required player-visible result | Current boundary |
+| --- | --- | --- |
+| One saved geographic context | Ground, native biome, interior depth, climate, face, population and weather describe the same place | Region geometry and field choice are shared; immutable climate/continent capture and the address mapping remain open |
+| Regional waterways and terrain topology | Rivers have coherent courses and crossings; lakes/ponds have shores; mountain routes include passes, detours and deliberate barriers | Local ingress and procession routes exist; they do not prove regional connectivity |
+| Local material patches | Ordinary mire leaves usable neutral routes; exceptional broad hazards belong to explicit points of interest | The new physical patch policy below covers bounded mud/swamp hollows; broader hazard programs remain open |
+| Complete native layout ownership | Towns, cities, pillaged districts, groves, crypts and side areas retain all native controllers, residents and environmental mechanics | Current massif/structure/composition admission remains selective; unsupported dependencies still refuse whole sources |
+| Durable work and route consequences | Bounties and native quests open specific blocked sections, with persistent world changes | Existing exploration bounties certify completed deeds; they do not yet open regional routes |
+| Continuous interior and vertical access | Entrances, stairs, cliffs and underground routes have explicit physical and save ownership | Existing caves are scene-based; tier/track and seamless underground integration remain open |
+| Contextual ecology | Native habitats and encounters vary with geography, time and place activity | Five base families and supported native garrisons are a partial population vocabulary |
+| Long-history ownership and moving frame | Travel, consequences, loot and returns stay bounded and exact across very long play | Terrain caches and actor paging are bounded; full feature/controller/history paging and live rebasing remain open |
+| Repeated experience passes | Ordinary routes offer meaningful discoveries, different combat spaces and real traversal choices | Lifecycle proofs are necessary but cannot establish pacing or lasting interest alone |
+
+Measure experience separately from controlled mechanics courses: distance and
+world time between useful discoveries, repeated activities, unavoidable slow
+terrain, detour lengths, declined source families, population saturation,
+frame cost and save growth. Do not clear a path or force a source and count the
+result as evidence of natural distribution. Preserve native behavior where it
+is reused; record new continuous placement policy separately. Main's native
+32-bit geographic hash, scene assumptions and current missing adapters remain
+explicit constraints, not reasons to silently substitute different content.
+
+## Native field selection
+
+`world/fieldChoice.ts` shares the original field roll, ordered climate bands,
+weight fallback and complete existence-floor search through explicit reader
+inputs. Every instance owns its pick and floor-seat memos. Classic biomes keep
+the original live registry/anchor readers and invalidation lifetime. This is
+preparation for a saved geography policy; it does not activate native depth in
+old square-country descriptors or freeze the climate/continent readers.
+
+The durable archived-source oracle covers complete input-read and callback
+tapes, synthetic gates and duplicate tilt rows, native canonical sites,
+reentrant floor-seat construction, memo limits, reset/anchor invalidation,
+immutable exported seats and two-instance A/B/A isolation. Its unchanged
+native readers are explicitly outside that extraction oracle's scope.
+
+## Localized physical terrain
+
+Fresh terrain version 8 uses neutral marsh ground with mud/swamp pockets and
+occasional muddy woodland hollows. Saved descriptors without `patches` retain
+their original surfaces, fields, identifiers and draw streams, including broad
+historic marsh mud. There is no silent save migration. Versioned patch recipes
+are part of the run manifest, with native material IDs and a single shared
+lattice independent of render pages or visit order.
+
+`engine/genkit.ts` shares the exact native pour core/lobe construction and
+radial membership predicate. The finite generator retains its original siting,
+guards, depth core and liquid painting. Continuous patches rasterize that
+shared geometry directly into physical region cells; these cells are not a
+claim of footprint identity with native overlapping doodad paint discs.
+Rendering, movement, navigation costs and native status effects read the same
+region. No duplicate wet doodad layer applies a second terrain effect.
+
+Every ordinary candidate must retain its entire raster shape on eligible
+neutral floor. It is declined whole if a shore, wall, another material or an
+existing place blocks the footprint or its complete neutral bypass annulus.
+Conservative reach and raster bounds keep all candidates and bypasses inside
+separate lattice cells. Neutral ground here means `ground`, not the older
+access predicate whose dry set includes slowing mud and sand. The fresh
+60-unit-wide ring supports a full player body around both sides and corners;
+this is local circumvention, not a guarantee of worldwide connectivity.
+
+Fresh runtime construction also pins an explicit address-space exclusion for
+Lastlight and the finite opening quest network. Its conservative hull covers
+every town tier, ordered destination/extension offsets and jitter, lateral road
+stops and scenery margins. It is resolved before final manifest construction;
+workers receive the same rectangles and Continue never recomputes them from
+current account or source tuning. This deliberately reserves some neutral
+opening countryside as well as the actual fixed foundations.
+
+Ecology reserves the ring using complete native movement-shape bounds,
+including long logs and rock satellites. Native country features and objective
+fixtures also respect it, in both synchronous planning and prepared-result
+validation. Neutral roads can cross it. Live creatures and player consequences
+are not permanently absent from a traversal route. Existing native feature
+sources may still intentionally contain wider wet areas; the local patch
+contract does not rewrite their source geometry.
+
+Candidate IDs retain full signed address text, geometric math uses bounded
+local offsets, and partially representable lattice cells at the address-domain
+edge decline rather than overflow. A bounded cache changes work only, never
+geographic decisions. Physical region enumeration includes patch materials in
+both the live runtime and route workers. Adding a material does not authorize
+missing native mechanics or bypass whole-source admission.
+
+Focused acceptance includes 15 field-choice oracle groups (28 archived/new
+paired runs), 966 native pour pairs with exact RNG/mask/wrapper receipts,
+and 12 terrain-patch contract groups. These cover 441 archived old-terrain
+comparisons, 98 swept bypass routes, extended log/rock reservations, full signed
+addresses, cache eviction, 18 exclusion contacts and 558 actual opening
+footprints. Two naturally conflicting opening patches decline whole while
+12 unaffected neighboring plans remain identical.
+
+The fixed preset survey sampled 7,803 lattice-centered points over three seeds,
+including 446 marsh samples (279 neutral, 102 mud, 65 swamp), and found 188
+patch plans. Its center bias makes it unsuitable as an area-coverage estimate.
+The separate current-site census checked 143 doodads across 18 repeated-site
+recipes, including all 116 movement blockers, and found no actual physical
+overhang. This evidence covers those source templates; the general historic
+site validator still uses nominal radii and does not certify arbitrary future
+custom movement shapes.
+
+The browser course on the reviewed preview bundle walked complete upper/lower
+bypasses around both naturally selected seed-991 pockets with the actual
+15-unit Warrior radius. Mud changed native speed 200→120, swamp 200→90;
+ordinary exits restored 200 after native linger. Two hundred sampled physical
+cells matched generator, stream and live navigation, including cold Continue.
+The course preserved real scenery and used the full runtime, but no native
+features were resident at these two pockets. Feature exclusion is covered
+separately by admission checks. Initial arrivals used
+labelled teleports and native XP grants raised the hero to level 5 in level-4
+country; movement thereafter used ordinary input. It did not clear scenery,
+paint ground, inject statuses or grant invulnerability. Twelve screenshots
+record arrival, bypasses, effects, Continue and recovery. Software/offscreen
+frame timings during concurrent tests are diagnostic, not interactive FPS.
+
+The preview smoke harness now awaits the durable browser save queue and checks
+the IndexedDB character root before fresh-renderer Continue. The previous
+localStorage-character assertion predated native page persistence. Six
+production-storage sentinels remain unchanged in the isolated preview profile.
+
+A separate seed-991 timing course on the same bundle retained identical plans
+and saved configuration, with no concurrent repository checks during its
+measured run. Across 487 instrumented manual frames, top-level patch work was
+120.6 ms of 10,786.1 ms total step time (about 1.12%); nested calls were not
+summed twice. Patch work reached 3.1 ms in mud and 9.4 ms in swamp. Five outer
+frames exceeded 100 ms, dominated by simulation work outside these wrappers;
+patch work represented 1.4–4.1% of those steps. This narrows the attribution but
+leaves the broader simulation spikes unresolved. It is not a performance pass
+or an interactive-FPS measurement.

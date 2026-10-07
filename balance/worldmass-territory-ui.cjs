@@ -26,6 +26,7 @@ app.whenReady().then(async()=>{
    await new Promise(r=>setTimeout(r,200));__game.devStartRun('rogue');__game.ui.hideAll();
    const w=__game.world();w.startWorldMass(42);const C=w.massRuntime.constructor,c=JSON.parse(JSON.stringify(w.massRuntime.config));
    delete c.settlement;delete c.journey;delete c.ecology;delete c.progression;
+   delete c.terrain.patches;
    c.terrain.fields=[];c.terrain.surfaces=[{id:'plain',source:'test/plain',priority:0,when:[],region:'ground',color:'#424b32',biome:'downs'}];
    c.terrain.places=[{id:'wolves',version:1,content:'wolves',period:900,chance:1,radius:150,jitter:0,priority:1,when:[]}];
    c.content=[{id:'wolves',source:'test/wolves',level:1,count:1,table:[{id:'plains_wolf',weight:1}]}];

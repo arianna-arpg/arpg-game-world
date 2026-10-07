@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { massAdventure } from '../src/worldmass/preset';
+import { WorldMassRuntime } from '../src/worldmass/runtime';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import type { World } from '../src/engine/world';
@@ -14,6 +16,29 @@ import { MassNativeResidency } from '../src/worldmass/nativeResidency';
 import { compileNativeFeature, resolveNativeFeature } from '../src/worldmass/nativeFeatures';
 import { nativeWorldCapabilities } from '../src/worldmass/nativeHost';
 const point=(x:number,y:number)=>address('surface','0','0',x*5400+2700,y*5400+2700,960);
+function naturalBeacon(w:World,alias='beacon',accept:(p:Readonly<GeographicPlan>)=>boolean=()=>true):Readonly<GeographicPlan>{
+ const g=w.massRuntime!.geography!;
+ for(let r=0;r<=16;r++)for(let y=-r;y<=r;y++)for(let x=-r;x<=r;x++){
+  if(Math.max(Math.abs(x),Math.abs(y))!==r)continue;
+  const p=g.plannedAt(point(x,y));
+  if(p?.access&&p.context.zone.objective.kind==='beacon'&&(p.context.recipe?.alias??'beacon')===alias&&accept(p as GeographicPlan)){
+   const it=(g as unknown as {checkIntelAccess(p:Readonly<GeographicPlan>,world:World):Generator<void,boolean>}).checkIntelAccess(p as GeographicPlan,w);
+   let next=it.next();while(!next.done)next=it.next();if(next.value)return p as GeographicPlan;
+  }
+ }
+ throw Error('No current natural '+alias+' source found');
+}
+function historicalWorld(){
+ // Preserve the pre-patch terrain descriptor for this historical regression.
+ // The exact old plan/hash remains the oracle; fresh sources are exercised separately.
+ const config=structuredClone(massAdventure());delete config.terrain.patches;config.terrain.version=7;
+ config.terrain.surfaces=config.terrain.surfaces.map(s=>s.id==='marsh'?{...s,region:'mud'}:s);
+ config.terrain.surfaces=[...config.terrain.surfaces.slice(0,4),{id:'wetland-pools',source:'regions/swamp',priority:25,
+  when:[{field:'temperature',min:-.35},{field:'moisture',min:.35},{field:'elevation',max:.22},{field:'rock',max:-.18}],
+  region:'swamp',color:'#30483d',biome:'marsh'},...config.terrain.surfaces.slice(4)];
+
+ const w=makeSimWorld('warrior',901743);new WorldMassRuntime(901743,'expedition:901743',config).attach(w);return w;
+}
 const rows=(w:World,id:string)=>(w as unknown as {spires:HoldFixture[]}).spires.filter(s=>s.owner===id);
 const state=(w:World,id:string)=>{const g=w.massRuntime!.geography!;g.snapshot();return g.hierarchy.controller(id,'objective:beacon')!;};
 const body=(w:World,id:string)=>w.massRuntime!.geography!.hierarchy.controller(id,'objective:beacon:population')!.state as MassObjectiveBodiesSave;
@@ -22,8 +47,8 @@ function restore(w:World){const s=serializeCharacter(w),next=makeSimWorld('warri
 function seat(w:World,p:Readonly<GeographicPlan>){const m=w.massRuntime!,g=m.geography!,q=local(w,p.owner.center);w.landPartyAt(q);m.update(w,true);for(let i=0;i<20000&&!g.objectives.has(p.owner.id);i++){g.sync(w);g.update(w,0);}assert.ok(g.objectives.has(p.owner.id),'native beacon must finish checked physical manifest before mounting '+JSON.stringify({stats:g.intelPreparationStats,positions:p.positions.map(a=>{const v=local(w,a);return {v,distance:Math.hypot(v.x-w.player.pos.x,v.y-w.player.pos.y),walk:m.walk.isWalkable(v.x,v.y),solid:!!w.pointInSolid(v.x,v.y,g.objectives.fixtureRadius(p.owner,p.context)+12),doors:w.massObjectiveStandClear(v,'beacon'),cold:m.nativeFeatures?.intersects(a,130)};})}));}
 const undo=seedGlobalRandom(901743);
 try{
- for(const [alias,x,y]of [['beacon',-2,1],['circuit',-2,-4]] as const){
-  let w=makeSimWorld('warrior',901743);w.startWorldMass(901743);let g=w.massRuntime!.geography!;const p=g.plannedAt(point(x,y)) as Readonly<GeographicPlan>;assert.equal(p.context.recipe?.alias??'beacon',alias);
+ for(const alias of ['beacon','circuit'] as const){
+  let w=makeSimWorld('warrior',901743);w.startWorldMass(901743);let g=w.massRuntime!.geography!;const p=naturalBeacon(w,alias);assert.equal(p.context.recipe?.alias??'beacon',alias);
   seat(w,p);const manifest=g.intel.manifest(p.owner.id)!;assert.ok(manifest.candidates.length>0);assert.ok(manifest.candidates.every(t=>!g.intel.visited(t.id)));
   const firstSeat=local(w,p.positions[0]);w.player.pos={x:firstSeat.x+70,y:firstSeat.y};assert.equal(rows(w,p.owner.id).length,alias==='beacon'?1:4);w.time+=.5;g.update(w,.5);const before=state(w,p.owner.id);assert.equal((before.state as {fixtures:{charge:number}[]}).fixtures[0].charge,.5);
   const frozen=canonical(manifest),clock=w.time,bank=canonical(before.state),lures=body(w,p.owner.id).lures;assert.ok(lures?.length);
@@ -50,7 +75,7 @@ try{
  // Exact browser failure: the frozen destination's reward chest lies beyond
  // the render-page circle at the first mound. Complete cold physics still
  // passes, so reaching the actual surveyed first fixture must publish it.
- {const replayUndo=seedGlobalRandom(901743);const sourceWorld=makeSimWorld('warrior',901743);sourceWorld.startWorldMass(901743);const sourceGeo=sourceWorld.massRuntime!.geography!,planned=sourceGeo.plannedAt(point(-1,0))!,beacon=sourceGeo.plannedAt(point(-2,1))!;
+ {const replayUndo=seedGlobalRandom(901743);const sourceWorld=historicalWorld();const sourceGeo=sourceWorld.massRuntime!.geography!,planned=sourceGeo.plannedAt(point(-1,0))!,beacon=sourceGeo.plannedAt(point(-2,1))!;
  const {owner,...definition}=beacon;sourceGeo.hierarchy.enroll(owner,'objective-access','worldmass/geographic-access-v1',definition,null,sourceWorld.time);const discovered=sourceGeo.intel.reserve(planned as GeographicPlan,sourceWorld.time);sourceGeo.intel.finish(owner,sourceGeo.intel.policy(owner,beacon.context.zone),[discovered],sourceWorld.time);sourceGeo.intel.reveal(owner.id,sourceWorld.time);
  const arrived=restore(sourceWorld),arrivalGeo=arrived.massRuntime!.geography!,target=arrivalGeo.plannedAt(point(-1,0))!;
  assert.ok(arrivalGeo.intel.known(target.owner.id));assert.equal(arrivalGeo.intel.visited(target.owner.id),false);
@@ -65,14 +90,14 @@ try{
  let w=makeSimWorld('warrior',901743);w.startWorldMass(901743);let g=w.massRuntime!.geography!;let visitedPlan:Readonly<GeographicPlan>|undefined;
  for(let y=-3;y<=3&&!visitedPlan;y++)for(let x=-3;x<=3&&!visitedPlan;x++){const p=g.plannedAt(point(x,y));if(!p?.access||p.context.zone.objective.kind==='beacon')continue;const q=local(w,p.positions[0]);w.landPartyAt({x:q.x+70,y:q.y});w.massRuntime!.update(w,true);g.sync(w);g.update(w,0);if(g.intel.visited(p.owner.id))visitedPlan=p as GeographicPlan;}
  assert.ok(visitedPlan,'ordinary mounted same-story LOS target must persist a visit before survey');const id=visitedPlan.owner.id;w.player.pos={x:-50000,y:50000};w=restore(w);g=w.massRuntime!.geography!;assert.ok(g.intel.known(id)&&g.intel.visited(id));
- const survey=g.plannedAt(point(-2,1))!;assert.equal(survey.context.zone.objective.kind,'beacon');const {owner:surveyOwner,...definition}=survey;g.hierarchy.enroll(surveyOwner,'objective-access','worldmass/geographic-access-v1',definition,null,w.time);
+ const survey=naturalBeacon(w,'beacon',p=>g.intel.candidates(p.owner,g.intel.policy(p.owner,p.context.zone)).some(o=>o.id===visitedPlan!.owner.id));assert.equal(survey.context.zone.objective.kind,'beacon');const {owner:surveyOwner,...definition}=survey;g.hierarchy.enroll(surveyOwner,'objective-access','worldmass/geographic-access-v1',definition,null,w.time);
  const target=g.intel.reserve(visitedPlan,w.time),policy=g.intel.policy(surveyOwner,survey.context.zone);g.intel.finish(surveyOwner,policy,[target],w.time);assert.deepEqual(g.intel.reveal(surveyOwner.id,w.time),[]);assert.ok(g.intel.visited(id));
  console.log('PASS ordinary physical visit before any beacon survives departure/CharacterSave and cannot become new survey intel');
  // A non-solid native transit seat must veto both present admission and future
  // survey validation. This is a controlled placement-conflict fixture; it never
  // changes the natural objective's frozen source, access path or charge.
  w=makeSimWorld('warrior',901743);w.startWorldMass(901743);g=w.massRuntime!.geography!;
- const guarded=g.plannedAt(point(-2,1)) as Readonly<GeographicPlan>,mass=w.massRuntime!,at=guarded.positions[0],pos=local(w,at);
+ const guarded=naturalBeacon(w),mass=w.massRuntime!,at=guarded.positions[0],pos=local(w,at);
  w.landPartyAt(local(w,guarded.owner.center));
  const future=()=>{const it=(g as unknown as {checkIntelAccess(p:Readonly<GeographicPlan>,world:World):Generator<void,boolean>}).checkIntelAccess(guarded,w);let next=it.next();while(!next.done)next=it.next();return next.value;};
  const transit=w as unknown as {waypointPos:{x:number;y:number}|null},oldWaypoint=transit.waypointPos;

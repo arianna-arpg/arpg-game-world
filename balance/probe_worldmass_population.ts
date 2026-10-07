@@ -63,7 +63,8 @@ console.log('PASS invalid quotas refuse; overlapping quotas retain an unrestrict
 
 const fixture:MassAdventure=JSON.parse(canonical(cfg));
 delete fixture.settlement;delete fixture.journey;delete fixture.ecology;delete fixture.progression;
-fixture.terrain.fields=[];
+delete fixture.terrain.patches;
+fixture.terrain.fields =[];
 fixture.terrain.surfaces=[{id:'land',priority:0,when:[],region:'ground',color:'#445522',biome:'downs'}];
 fixture.terrain.places=[{id:'population',version:1,content:'population',period:1800,radius:250,jitter:0,chance:1,when:[],priority:1}];
 fixture.content=[{...limited[0],id:'population',source:'probe/composition',count:4}];

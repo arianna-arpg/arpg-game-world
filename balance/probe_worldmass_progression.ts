@@ -48,6 +48,7 @@ const fixture: MassAdventure = JSON.parse(canonical(cfg));
 delete fixture.settlement; delete fixture.journey; delete fixture.ecology;
 fixture.progression = { source: 'probe/progression', minLevel: 1, maxLevel: 12,
   stops: [{ distance: 0, level: 1 }, { distance: 2000, level: 1 }, { distance: 9000, level: 12 }] };
+delete fixture.terrain.patches;
 fixture.terrain.fields = [];
 fixture.terrain.surfaces = [{ id: 'land', priority: 0, when: [], region: 'ground', color: '#445522', biome: 'downs' }];
 fixture.terrain.places = [{ id: 'camp', version: 1, content: 'wayside-camp', period: 1800,

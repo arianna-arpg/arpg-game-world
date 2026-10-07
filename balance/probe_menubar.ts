@@ -64,7 +64,7 @@ function check(name: string, ok: boolean, detail = ''): void {
   if (ok) { pass++; console.log(`  ok  ${name}`); }
   else { fail++; console.log(`FAIL  ${name}${detail ? ` — ${detail}` : ''}`); }
 }
-const src = (p: string): string => readFileSync(resolve(process.cwd(), p), 'utf8');
+const src = (p: string): string => readFileSync(resolve(process.cwd(), p), 'utf8').replace(/\r\n/g, '\n');
 
 // --- A. THE REGISTRY -----------------------------------------------------------
 console.log('A. THE REGISTRY');

@@ -12,6 +12,7 @@ import { serializeCharacter, applySavedCharacter } from '../src/meta/character';
 import type { MassNativeHost } from '../src/worldmass/nativeHost';
 import type { NativeFeaturePlacement } from '../src/worldmass/nativeResidency';
 import { canonical } from '../src/worldmass/random';
+import { MASS_DORMANCY_RETIRE_BUDGET } from '../src/worldmass/dormancy';
 
 type Inner='accord'|'tempo'|'ember'|'refrain';
 type Hooks={mintLootResult(at:{x:number;y:number},result:LootResult,owed:boolean,from?:string|MemoryProvenance,context?:Readonly<ZoneDef>):void;puzzles:PuzzleRun[];puzzleStruck(node:Actor,striker:Actor|null,wounding:boolean):void;updatePuzzles(dt:number):void};
@@ -81,6 +82,17 @@ try {
       const foreignNode=w.createMonster('ember_crystal',11,'enemy');foreignNode.puzzleNode={id:'foreign-queued-owner',idx:0};
       hooks(w).puzzleStruck(foreignNode,run.nodes[0],false);assert.equal(w.canReleasePlacedPuzzle(run),false);
       assert.ok(m.nativeFeatures!.sync([],host).deferred.includes(placement.id));hooks(w).updatePuzzles(0);
+      // This focused fixture advances puzzles directly, without normal runtime
+      // updates. Continue may also restore ordinary country visitors near the
+      // court. They must pin it until their real dormancy owner settles them.
+      const countryBodies=(m as unknown as {natives:ReadonlyMap<string,Actor>}).natives;
+      const visitors=[...countryBodies.values()].filter(a=>w.actors.includes(a));
+      const resources=visitors.map(a=>({id:a.id,pos:{...a.pos},life:a.life,mana:a.mana,es:a.es,dead:a.dead}));
+      const near=visitors.filter(a=>!a.dead&&(a.tier??0)===0&&Math.hypot(a.pos.x-run.at.x,a.pos.y-run.at.y)<=(host.policy.retainRadius??512));
+      if(near.length)assert.ok(m.nativeFeatures!.sync([],host).deferred.includes(placement.id),'real nearby country visitors retain the court');
+      for(let i=0;i<=Math.ceil(countryBodies.size/MASS_DORMANCY_RETIRE_BUDGET);i++)m.dormancy!.update(w,countryBodies);
+      assert.ok(near.every(a=>m.dormancy!.isSleeping(a)),'only native dormancy may settle quiet country visitors');
+      assert.deepEqual(visitors.map(a=>({id:a.id,pos:{...a.pos},life:a.life,mana:a.mana,es:a.es,dead:a.dead})),resources,'dormancy preserves every visitor body and resource');
       const before=structuredClone(w.capturePlacedPuzzle(run));assert.ok(m.nativeFeatures!.sync([],host).retired.includes(placement.id));assert.ok(run.nodes.every(n=>!w.actors.includes(n)));assert.ok(!hooks(w).puzzles.includes(run));
       const gap=kind==='refrain'?((before.state as {left:number}).left+5):20;w.time+=gap;
       const sleeping=serializeCharacter(w);next=makeSimWorld('warrior',84332);assert.ok(applySavedCharacter(next,sleeping));assert.ok(next.adoptWorldState(sleeping.world));next.startWorldMass(42,sleeping.world!.worldmass);

@@ -65,6 +65,7 @@ app.whenReady().then(async()=>{
   await run(()=>{
    const w=__game.world(),Constructor=w.massRuntime.constructor,c=JSON.parse(JSON.stringify(w.massRuntime.config));
    delete c.settlement;delete c.journey;delete c.progression;delete c.ecology;
+   delete c.terrain.patches;
    c.terrain.fields=[];c.terrain.places=[];c.content=[];c.populationRadius=0;c.startRadius=0;c.maxPopulation=0;
    c.terrain.surfaces=[{id:'aim-floor',priority:0,when:[],region:'ground',biome:'downs',color:'#454331'}];
    new Constructor(42,'camera-native-aim',c).attach(w);

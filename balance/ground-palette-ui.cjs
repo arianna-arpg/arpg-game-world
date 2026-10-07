@@ -46,6 +46,7 @@ app.whenReady().then(async()=>{
    for(const [index,name] of ['downs','forest','desert','marsh'].entries()){
     const c=JSON.parse(JSON.stringify(full)),surface=c.terrain.surfaces.find(s=>s.id===name);
     delete c.settlement;delete c.journey;delete c.progression;delete c.ecology;
+    delete c.terrain.patches;
     c.terrain.fields=[];c.terrain.places=[];c.terrain.surfaces=[{...surface,when:[]}];c.content=[];
     c.populationRadius=0;c.startRadius=0;c.maxPopulation=0;c.pageRadius=1;
     const record={name};

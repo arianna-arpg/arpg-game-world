@@ -52,7 +52,7 @@ import { regionKind } from '../world/regions';
 import { isFieldPixel } from '../world/fieldRegion';
 // Safe despite genkit importing our types: those are `import type` edges,
 // erased at runtime — no actual module cycle exists.
-import { Mask, GEN_CELL, disc, radial, bearingNoise, paintLiquid, valueNoise2, wanderPath } from './genkit';
+import { Mask, GEN_CELL, disc, radial, bearingNoise, pourLobes, paintLiquid, valueNoise2, wanderPath } from './genkit';
 import { blendDither, compileBlendField } from './blend';
 
 export type KnownDoodadKind =
@@ -9500,18 +9500,9 @@ function pourBody(
   const ox = Math.floor((center.x - reach) / GEN_CELL) * GEN_CELL;
   const oy = Math.floor((center.y - reach) / GEN_CELL) * GEN_CELL;
   const m = Mask.forRect(ox, oy, reach * 2 + GEN_CELL, reach * 2 + GEN_CELL);
-  radial(m, center.x, center.y, a => body * (1 + bearingNoise(a, wob, seed)));
-  // LOBES: the piece rolls, reshaped — each a smaller wobbled radial ORed on,
-  // so a multi-lobed marsh keeps its sprawl without the circle seams. Lobe
-  // radii keep the union INSIDE `reach` (0.95 + 0.55×(1+wob) < 2.2 for any
-  // wobble ≤ 1), so the frame never clips a lobe.
-  const n = ctx.rng.int(pieces[0], pieces[1]);
-  for (let i = 0; i < n; i++) {
-    const ang = ctx.rng.range(0, Math.PI * 2);
-    const off = ctx.rng.range(body * 0.45, body * 0.95);
-    const lr = body * ctx.rng.range(0.3, 0.55);
-    radial(m, center.x + Math.cos(ang) * off, center.y + Math.sin(ang) * off,
-      a => lr * (1 + bearingNoise(a, wob, (seed + i + 1) >>> 0)));
+  // Core then lobes, preserving the native radial union and piece draw order.
+  for (const lobe of pourLobes(ctx.rng, center, body, seed, pieces)) {
+    radial(m, lobe.x, lobe.y, a => lobe.radius * (1 + bearingNoise(a, wob, lobe.seed)));
   }
   maskGuards(ctx, m, kind, hard);
   // Depth heart FIRST (under the lattice): the scatter's old center disc,
