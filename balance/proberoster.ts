@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_geographysource.ts', status: 'green', tier: 'fast', why: 'Complete frozen native sources, composed classic parity, live mutation isolation, exact serialization and cache pressure' },
   { probe: 'probe_continentcore.ts', status: 'green', tier: 'fast', why: 'Archived native continents, classic wrappers, exact read/call order and immutable instance isolation' },
   { probe: 'probe_climatecore.ts', status: 'green', tier: 'fast', why: 'Archived native climate, complete ordered registry capture, invalidation, source hydration and isolated readers' },
   { probe: 'probe_dimensiongeometry.ts', status: 'green', tier: 'fast', why: 'Archived native realm site/depth geometry and exact coordinate/policy read tapes' },

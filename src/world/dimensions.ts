@@ -173,6 +173,14 @@ export function dimensionDef(id: string | undefined): DimensionDef {
 
 export function dimensionIds(): string[] { return Object.keys(DIMENSIONS); }
 
+/** Snapshot the complete owned registry through the caller's strict copier,
+ * before enumeration can discard descriptors or inherited state. */
+export function captureDimensionDefinitions(
+  copy: <T>(value: T) => T,
+): Readonly<Record<string, DimensionDef>> {
+  return copy(DIMENSIONS);
+}
+
 /** How many frontier roads a dimension's GATE ZONE fans out when it mints
  *  (World.enterDimension) — and therefore the EXACT degree a roadless gate
  *  hub is allowed to hold forever (the load-time heal trims accretion back

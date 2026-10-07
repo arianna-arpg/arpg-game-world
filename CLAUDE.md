@@ -1,3 +1,13 @@
+NativeGeographySource captures the complete native base-field records, effective
+climate overrides, resolved anchors, continent policy and actual ordered face
+pools with an explicit seed. Exact source bytes and private readers own sampling
+and memo state. Capture after world binding; restore never consults live data.
+The native-geography-v1 boundary rejects lossy data and unsafe coordinate/work
+ranges, preserving classic wrappers and native hash limitations. Verify
+geographysource, climatecore, dimensions, nativecountry, types and genqa. This
+source is ready for physical projection; it does not activate complete layouts,
+habitats, hydrology, shared interiors or a new continuous-world policy.
+
 NativeClimate and NativeContinent share exact native geography operations with
 classic wrappers. Complete ordered climate capture includes private dimension
 overrides and tagged resolved anchors; frozen climate readers require frozen

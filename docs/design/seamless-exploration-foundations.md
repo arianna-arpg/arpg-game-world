@@ -1168,7 +1168,7 @@ The next foundations and their acceptance outcomes are:
 
 | Foundation | Required player-visible result | Current boundary |
 | --- | --- | --- |
-| One saved geographic context | Ground, native biome, interior depth, climate, face, population and weather describe the same place | Region geometry and field choice are shared; immutable climate/continent capture and the address mapping remain open |
+| One saved geographic context | Ground, native biome, interior depth, climate, face, population and weather describe the same place | NativeGeographySource now owns complete immutable base-field/face sampling; physical address mapping and terrain/population projection remain open |
 | Regional waterways and terrain topology | Rivers have coherent courses and crossings; lakes/ponds have shores; mountain routes include passes, detours and deliberate barriers | Local ingress and procession routes exist; they do not prove regional connectivity |
 | Local material patches | Ordinary mire leaves usable neutral routes; exceptional broad hazards belong to explicit points of interest | The new physical patch policy below covers bounded mud/swamp hollows; broader hazard programs remain open |
 | Complete native layout ownership | Towns, cities, pillaged districts, groves, crypts and side areas retain all native controllers, residents and environmental mechanics | Current massif/structure/composition admission remains selective; unsupported dependencies still refuse whole sources |
@@ -1330,3 +1330,57 @@ arithmetic, including signed zero, remains unchanged. Generation QA passes
 2,607 cases with no failures and four existing warnings; simulation smoke,
 geography, dimensions, biome share, settled-country and field-choice probes
 also pass.
+
+## NativeGeographySource: complete base-field capture
+
+The native-geography-v1 source owns one explicit uint32 field seed, all 50
+current biome definitions, all 123 complete tileset definitions, all three
+effective dimension definitions, ordered field/band/floor policies and actual
+shared/realm face pools. It also owns the complete native continent policy and
+climate source, including effective private overrides and already-resolved
+origin/anchor states. Capture happens explicitly after native registration and
+world binding. The new factory imports only native leaf operations, constructs
+its own readers and caches, and never binds or modifies another World.
+
+Its identity is the exact serialized source text. Nested record order, pool
+duplicates, full source payloads and tagged missing/null/undefined anchors stay
+observable; unsupported or lossy data is refused before JSON can normalize it.
+Private execution views use own properties, including the native unknown-band
+fallback, so later inherited property additions cannot change sampled results.
+Prototype lookup aliases are outside this new source/API domain. The classic
+adapters keep their original permissive behavior.
+
+The explicit supported work limits are region search at most 16, aggregate
+floor candidate boxes at most 262,144 cells and landfall at most 4,096 steps.
+Unsafe lattice indices, derived sites and coordinate arithmetic refuse before
+a native loop. These limits do not clamp native policy values. They establish
+coordinate/work safety, not numerical conditioning of every possible extreme
+authored coefficient. Native signed 32-bit hash aliases remain explicit; this
+sampler is not a proof of unbounded geographic uniqueness.
+
+The durable composed course compares 520 full native geography tuples and
+2,040 face selections with next-RNG sentinels across four seeds. It retains the
+real seed-713 desert, jungle and rift fringe/interior witnesses, full registry
+copies, thirteen independent live-source mutations, cold serialized restore,
+and a second World binding. Five directed mutations also change new-source
+sampled values. A 16,420-cell realm course crosses the native memo cap and
+revisits in reverse order. Eight custom surface-palette comparisons preserve
+the native mixed-table cache interaction: that custom case is deliberately
+call-order dependent, so unrestricted order independence is not claimed.
+
+Independent adversarial checks reproduce and close inherited axis/envelope
+leaks and non-terminating derived floor scans. A separate worker-style module
+load matches six complete operation sets using eight native leaf modules,
+with no live registry, data, worldmass or global-random dependency. Durable
+regressions cover the repaired scan bounds, prototype lookup/fallback, missing
+face payloads, absent pool targets and unsafe derived climate sites.
+
+This completes the base-field and face-selection source boundary. Full source
+records do not include every downstream structure/composition/layout handler,
+so they do not establish a complete native layout compiler. The next playable
+phase must connect a saved physical mapping to authoritative substrate,
+habitat/population, complete admitted face layouts, bilateral openings and
+barriers, and cold Continue together. Adding native depth to the old unrelated
+square-country policy remains invalid. Regional hydrology, full towns/cities,
+shared crypt/interior graphs, bounty-opened routes, and long-history paging
+remain open in the broader generation ledger.
