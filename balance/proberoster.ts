@@ -61,6 +61,10 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_continentcore.ts', status: 'green', tier: 'fast', why: 'Archived native continents, classic wrappers, exact read/call order and immutable instance isolation' },
+  { probe: 'probe_climatecore.ts', status: 'green', tier: 'fast', why: 'Archived native climate, complete ordered registry capture, invalidation, source hydration and isolated readers' },
+  { probe: 'probe_dimensiongeometry.ts', status: 'green', tier: 'fast', why: 'Archived native realm site/depth geometry and exact coordinate/policy read tapes' },
+  { probe: 'probe_tilesetchoice.ts', status: 'green', tier: 'fast', why: 'Archived actual native face selection, ordered duplicate pools and exact random stream/read tapes' },
   { probe: 'probe_fieldchoice.ts', status: 'green', tier: 'fast', why: 'Archived native field read/callback parity, floor claims, exact memo limits and independent instance isolation' },
   { probe: 'probe_pourshape.ts', status: 'green', tier: 'fast', why: 'Archived native pour mask and RNG parity; shared lobes preserve guard/depth/paint wrappers' },
   { probe: 'probe_worldmass_terrainpatches.ts', status: 'green', tier: 'fast', why: 'Physical localized terrain, neutral swept bypasses, reservations, deterministic full addresses and legacy Continue' },

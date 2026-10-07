@@ -1,3 +1,12 @@
+NativeClimate and NativeContinent share exact native geography operations with
+classic wrappers. Complete ordered climate capture includes private dimension
+overrides and tagged resolved anchors; frozen climate readers require frozen
+continent callbacks. Native dimension and face rules preserve separate realm
+geometry, palette fallbacks, ordered shared/realm pools and caller RNG positions.
+Verify climatecore, continentcore, dimensiongeometry, tilesetchoice, geography,
+biomes, civics, seas, dimensions, types and genqa. These leaf extractions do not
+activate a native country mapping or complete physical terrain/content parity.
+
 Generation variety is a world contract: ordinary mire is localized physical
 terrain over neutral ground, with complete raster shapes and reserved bypasses.
 Fresh terrain v8 owns this saved policy; old descriptors retain their original

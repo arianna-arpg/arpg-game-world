@@ -14,6 +14,7 @@ import type { AnnexRollSpec } from './annexes';
 import type { Rng } from '../core/rng';
 import { presenceMul, type LevelEnvelope } from '../engine/presence';
 import { climateAffinity, type ClimateSpec } from '../world/climate';
+import { nativeTilesetChoice } from '../world/tilesetChoice';
 import { ARENA_BOSS_TILESETS } from './arenaBossTilesets';
 
 /** A tileset-declared BLEND (the blend fabric, engine/blend.ts): zones minted
@@ -14153,32 +14154,8 @@ export function pickTilesetForBiome(
   biome: string, rng: Rng, depth?: number, realm?: string,
   climate?: Record<string, number>,
 ): string | undefined {
-  // A realm caller (spec.dimension mints, the gate mint) widens the pool with
-  // its OWN tilesets (TilesetDef.realm) — the surface pool alone starved any
-  // biome whose faces are all realm-locked (the wasteland-Firmament defect).
-  const shared = TILESETS_BY_BIOME[biome];
-  const owned = realm ? REALM_TILESETS_BY_BIOME[realm]?.[biome] : undefined;
-  const c = owned?.length ? (shared?.length ? [...shared, ...owned] : owned) : shared;
-  if (!c || !c.length) return undefined;
-  const staged = depth !== undefined && c.some(id => TILESETS[id].depthAffinity);
-  const geoed = !!climate && c.some(id => TILESETS[id].geoAffinity);
-  if (!staged && !geoed) return rng.pick(c);
-  const weights = c.map(id => {
-    const t = TILESETS[id];
-    const dAff = t.depthAffinity && depth !== undefined ? presenceMul(t.depthAffinity, depth) : 1;
-    const gAff = t.geoAffinity && climate ? climateAffinity(t.geoAffinity, climate) : 1;
-    return dAff * gAff;
-  });
-  let total = 0;
-  for (const w of weights) total += w;
-  // Degenerate staging (every envelope zero here) never starves the biome.
-  if (total <= 0) return rng.pick(c);
-  let roll = rng.range(0, total);
-  for (let i = 0; i < c.length; i++) {
-    roll -= weights[i];
-    if (roll <= 0) return c[i];
-  }
-  return c[c.length - 1];
+  return nativeTilesetChoice({ shared: TILESETS_BY_BIOME, realms: REALM_TILESETS_BY_BIOME,
+    definitions: TILESETS, climateAffinity }, biome, rng, depth, realm, climate);
 }
 
 /** Boot check: which BIOME_FIELD biomes have NO tileset AT ALL (would fall

@@ -1296,3 +1296,37 @@ frames exceeded 100 ms, dominated by simulation work outside these wrappers;
 patch work represented 1.4–4.1% of those steps. This narrows the attribution but
 leaves the broader simulation spikes unresolved. It is not a performance pass
 or an interactive-FPS measurement.
+
+## Native dimension and face rules: shared exact cores
+
+NativeClimate and NativeContinent now share their native arithmetic with the
+classic adapters. The climate source API captures the effective ordered axes,
+named bands, private dimension overrides, and resolved origin/anchor states.
+A captured climate reader must receive immutable continent readers; callbacks
+alone do not prove a complete frozen geography source. The continent reader
+owns all four native configuration values and preserves the fixed home land
+pin, bridge rules, landfall behavior, and signed 32-bit hash semantics.
+
+The realm geometry and tileset picker also use shared native operations.
+Realm ownership and depth remain separate operations with their original
+palette fallbacks. Face selection preserves shared then realm pool order,
+duplicates, raw depth/climate inputs, all-zero fallback, and the caller's
+random stream. Complete base-field capture, physical-to-native mapping,
+terrain/population projection, and source-owned country activation are still
+separate remaining work.
+
+The durable extraction probes embed pinned native implementations rather than
+calling the replacement on both sides. The continent course covers 46,969
+operation pairs, 3,006 classic-wrapper pairs, exact read/call tapes and 300
+instance-isolation cases. Realm checks cover 1,800 site/depth tuples, exact
+read tapes and 80 actual classic-wrapper pairs. Face checks cover 4,080 actual
+registry selections and 1,440 ordered data/callback/random tapes. Existing
+civic and sea courses pass. These are source-preservation checks, not evidence
+that previously unsupported towns, interiors or traversals are now admitted.
+The NativeClimate course additionally passes 16 groups and 1,033 exact
+comparisons, with 20 explicit refusals of source data that JSON would erase
+or change. This validation stays at the new capture boundary; classic
+arithmetic, including signed zero, remains unchanged. Generation QA passes
+2,607 cases with no failures and four existing warnings; simulation smoke,
+geography, dimensions, biome share, settled-country and field-choice probes
+also pass.

@@ -1,3 +1,4 @@
+import { nativeDimensionSite, nativeDimensionDepth } from './dimensionGeometry';
 // ---------------------------------------------------------------------------
 // DIMENSIONS — parallel worldmasses the run can breach into. The SURFACE is
 // dimension zero; delving cave-within-cave-within-cave breaches the
@@ -357,14 +358,6 @@ registerDimension({
   },
 });
 
-function hashCell(a: number, b: number, seed: number): number {
-  let h = (seed ^ 0x9e3779b9) >>> 0;
-  h = Math.imul(h ^ (a | 0), 0x85ebca6b) >>> 0;
-  h = Math.imul(h ^ (b | 0), 0xc2b2ae35) >>> 0;
-  h ^= h >>> 13; h = Math.imul(h, 0x27d4eb2f) >>> 0; h ^= h >>> 15;
-  return h >>> 0;
-}
-
 /** A dimension's biome at a coordinate — the same jittered-Voronoi idiom as
  *  the surface heat map, drawn over the DIMENSION'S palette and picked through
  *  the SHARED weight × climate-affinity machinery (fieldBiomePick), under the
@@ -373,20 +366,8 @@ export function dimensionBiomeAt(dimId: string, coord: MapCoord, seed: number): 
   const def = dimensionDef(dimId);
   const table = def.biomes;
   if (!table?.length) return 'grove';
-  const span = BIOME_FIELD_CFG.cellSpan, jit = BIOME_FIELD_CFG.jitter;
-  const cx = Math.floor(coord.x / span), cy = Math.floor(coord.y / span);
-  let bestGx = cx, bestGy = cy, bestPx = coord.x, bestPy = coord.y, bd = Infinity;
-  for (let dx = -1; dx <= 1; dx++) {
-    for (let dy = -1; dy <= 1; dy++) {
-      const gx = cx + dx, gy = cy + dy;
-      const h = hashCell(gx, gy, seed);
-      const px = (gx + 0.5 + (((h & 0xffff) / 0xffff) - 0.5) * jit) * span;
-      const py = (gy + 0.5 + ((((h >>> 16) & 0xffff) / 0xffff) - 0.5) * jit) * span;
-      const d = (px - coord.x) ** 2 + (py - coord.y) ** 2;
-      if (d < bd) { bd = d; bestGx = gx; bestGy = gy; bestPx = px; bestPy = py; }
-    }
-  }
-  return fieldBiomePick(table, bestGx, bestGy, { x: bestPx, y: bestPy }, seed, dimId);
+  const site = nativeDimensionSite(coord, seed, BIOME_FIELD_CFG);
+  return fieldBiomePick(table, site.gx, site.gy, site.site, seed, dimId);
 }
 
 /** How DEEP into its region a coordinate sits on a DIMENSION's own field —
@@ -398,18 +379,5 @@ export function dimensionBiomeAt(dimId: string, coord: MapCoord, seed: number): 
 export function dimensionBiomeDepth(dimId: string, coord: MapCoord, seed: number): number {
   const def = dimensionDef(dimId);
   if (!def.biomes?.length) return 0;
-  const span = BIOME_FIELD_CFG.cellSpan, jit = BIOME_FIELD_CFG.jitter;
-  const cx = Math.floor(coord.x / span), cy = Math.floor(coord.y / span);
-  let bd = Infinity;
-  for (let dx = -1; dx <= 1; dx++) {
-    for (let dy = -1; dy <= 1; dy++) {
-      const gx = cx + dx, gy = cy + dy;
-      const h = hashCell(gx, gy, seed);
-      const px = (gx + 0.5 + (((h & 0xffff) / 0xffff) - 0.5) * jit) * span;
-      const py = (gy + 0.5 + ((((h >>> 16) & 0xffff) / 0xffff) - 0.5) * jit) * span;
-      const d = (px - coord.x) ** 2 + (py - coord.y) ** 2;
-      if (d < bd) bd = d;
-    }
-  }
-  return Math.max(0, Math.min(1, 1 - Math.sqrt(bd) / (span * 0.5)));
+  return nativeDimensionDepth(coord, seed, BIOME_FIELD_CFG);
 }
