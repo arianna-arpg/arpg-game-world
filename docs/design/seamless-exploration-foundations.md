@@ -1384,3 +1384,68 @@ barriers, and cold Continue together. Adding native depth to the old unrelated
 square-country policy remains invalid. Regional hydrology, full towns/cities,
 shared crypt/interior graphs, bounty-opened routes, and long-history paging
 remain open in the broader generation ledger.
+
+## NativeAreaFoundations: complete recipes, physical owners and connections
+
+The classic native recipe mint now delegates to `engine/nativeZoneMint.ts`.
+All definitions and source operations are explicit providers. Native graph
+placement, graph mutation, atlas destination resolution and source-anchor
+selection remain in the classic adapter. Topology hooks execute at the original
+name, map/frontier, course-continuation and waypoint boundaries, retaining the
+native main stream and explicit-seed identity substream. This enables a new
+physical area policy to share the complete face/variant/objective/footprint/
+layout/war/blend/annex operation without borrowing a mutable finite graph.
+
+The saved physical mapping uses complete native source JSON as a string so a
+parent manifest cannot reorder source properties. Two recorded origins and a
+positive reduced rational scale map signed addresses by exact integer/rational
+arithmetic before one documented binary64 rounding boundary. An explicit native
+envelope and native reader guards refuse unsupported travel instead of wrapping
+or clamping. Stable owner requests supply a target and seed; the complete source
+resolver can replace both for an atlas destination before face selection. Point
+queries do not reroll a recorded area. Inverse anchors must reproduce the exact
+native point after physical address rounding; unrepresentable anchors refuse
+instead of moving the requested site. No default map scale or new preset has
+been activated by this foundation.
+
+`nativeAreaGeometry` preserves every generated layout collection, the actual
+packed grid or analytic footprint, and resolved native material and movement
+facts. Ground doodads remain a separate ordered native channel; they are not
+flattened into a second grid effect. Rectangular physical ownership is half-open
+at right/bottom edges so adjoining owners can meet; original bounds bytes and
+classic finite actor confinement are unchanged. Capsule clearance is a bounded
+conservative proof for ordinary ground-tier walking, not a replacement for
+native sliding, jumping, tier movement or a universal path-existence solver.
+
+`nativeAreaSeams` plans both mouths from the same complete physical owner
+references before generation. Rectangular facing boundaries are its first
+supported shapes. It explicitly refuses other boundary kinds, overlaps and
+insufficient clearance. Its bounded route search preserves mandatory mouths
+and stays inside a reserved corridor; it never clears a wall, moves an entrance
+or rerolls the selected face. Publication requires a full swept body test in
+both directions, exact current owner sources, and an unchanged physical revision.
+A global complete-owner reservation is still required before area publication;
+pairwise planning alone cannot establish absence of unrelated neighbors. Saved
+receipts require actual collision reproof after restoration; source bytes alone
+cannot certify a clear route. All saved seam input rejects accessors before any
+validation read.
+
+The physical integration probe naturally selects an entire forest/districts
+recipe and a saltflat/dunefield recipe, supplies paired mouths before native
+generation, and retains all generated output. The original straight connection
+fails on a native district wall even though both endpoints are clear. Bounded
+routing finds and proves a detour without changing that wall. A real native
+closed door spanning the connecting substrate blocks the course; opening it
+restores collision passage. Exact geometry restoration retains the reverse
+capsule proof. This is headless generation and geometry evidence, not a claim of
+a completed browser trip, ambient population admission or finished objectives.
+The proof connects the two interior approach points through both mouths; area
+admission must separately connect those approaches to spawn, objectives and
+other required internal components.
+
+The coherent fresh-run activation gate remains open. It still requires a real
+installed compiler/source certificate, authoritative substrate outside areas,
+source-appropriate ambient packs and habitat, all selected objective/environment
+owners, durable sidearea transitions and actual cold browser Continue. Towns,
+cities, regional watercourses, shared interiors, bounty-opened sections and long
+history residency/rebasing remain in the broader generation completion ledger.

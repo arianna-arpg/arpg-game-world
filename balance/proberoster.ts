@@ -61,6 +61,10 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_nativezonemint.ts', status: 'green', tier: 'fast', why: 'Archived full native mint and mutated graph parity, exact RNG/read tapes, explicit source/topology dependency boundary' },
+  { probe: 'probe_worldmass_nativegeography.ts', status: 'green', tier: 'fast', why: 'Exact saved native source bytes, rational signed-address mapping, explicit finite domain and stable pre-mint owner contexts' },
+  { probe: 'probe_worldmass_nativeareageometry.ts', status: 'green', tier: 'fast', why: 'Complete native grids and analytic footprints, frozen material/movement sources, ground-fold parity and whole capsule clearance' },
+  { probe: 'probe_worldmass_nativeareaseams.ts', status: 'green', tier: 'fast', why: 'Bilateral generation mouths, retained native-layout detours, whole capsule routes, source/revision receipts and actual closed-door refusal' },
   { probe: 'probe_geographysource.ts', status: 'green', tier: 'fast', why: 'Complete frozen native sources, composed classic parity, live mutation isolation, exact serialization and cache pressure' },
   { probe: 'probe_continentcore.ts', status: 'green', tier: 'fast', why: 'Archived native continents, classic wrappers, exact read/call order and immutable instance isolation' },
   { probe: 'probe_climatecore.ts', status: 'green', tier: 'fast', why: 'Archived native climate, complete ordered registry capture, invalidation, source hydration and isolated readers' },

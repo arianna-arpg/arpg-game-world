@@ -1,3 +1,15 @@
+NativeAreaFoundations shares the complete native recipe mint with classic
+worldgen through explicit providers and original-order topology hooks. Saved
+native mapping keeps exact source bytes, explicit origins and rational scale;
+canonical area requests remain separate from resolved atlas anchors and point
+sampling. Whole generated geometry retains native grids, analytic silhouettes,
+all output collections and ordered ground channels. Bilateral seam mouths are
+generation inputs; bounded capsule routes detour around existing walls and
+refuse unknown geometry or closed doors. These are inactive area foundations,
+not full runtime area admission: population, objectives, environmental owners,
+compiler source installation and the complete playable course remain required.
+Verify nativezonemint, nativegeography, nativeareageometry, nativeareaseams,
+all types and genqa. See the NativeAreaFoundations section in exploration docs.
 NativeGeographySource captures the complete native base-field records, effective
 climate overrides, resolved anchors, continent policy and actual ordered face
 pools with an explicit seed. Exact source bytes and private readers own sampling
