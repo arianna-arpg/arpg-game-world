@@ -75,7 +75,7 @@ function capable(mass: WorldMassRuntime, place: MassPlace, kind: string): boolea
   return !!site && (kind === 'country_visit' || kind === 'country_clear' && !!site.completion
     || kind === 'country_cache' && !!site.cache || kind === 'country_puzzle' && !!site.puzzles?.length);
 }
-export function massBountyDone(world: World, p: BountyPosting): boolean {
+export function massBountyDone(world: Pick<World, 'massRuntime'>, p: BountyPosting): boolean {
   const mass=world.massRuntime,d=mass&&massBountyDestination(mass,p.massBounty);
   if(!mass||!d||!destinationCapable(mass,d,p.kind))return false;
   if(p.kind==='country_objective')return mass.geography?.objectives.target(d.target.id)?.complete===true;

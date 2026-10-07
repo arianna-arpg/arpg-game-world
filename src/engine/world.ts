@@ -127,13 +127,13 @@ import {
 import { CONTAINER_DEFS } from '../data/containers';
 import { amplifySeatMods } from './seatlaw'; // THE SEAT LAW
 import {
-  bagGemItems, findBagGem, freeCellCount, makeSkillGemItem, makeSupportGemItem,
+  findBagGem, freeCellCount, makeSkillGemItem, makeSupportGemItem,
   packGrantState, restoreGrantState,
-  rebuildAnyItem, skillGemPayloadOf, skillOfGemItem, supportGemPayloadOf,
+  rebuildAnyItem, skillGemPayloadOf, skillOfGemItem,
   supportOfGemItem, writeBackSupportGem, bagSkillSupport,
 } from './gemitems';
 import {
-  memoryProvenanceLabel, MEMORY_CFG, MEMORY_KIND_IDS, MEMORY_KINDS, MEMORY_TRADED_PROVENANCE,
+  memoryProvenanceLabel, MEMORY_CFG, MEMORY_KINDS, MEMORY_TRADED_PROVENANCE,
   facetRng, findMemoryItem, makeMemoryItem, memoryFacetAttrs, memoryFormOf, memoryGroupKey, memoryGroups,
   memoryKindForSeed, memoryKindOf, memoryRarityLean, memoryUnitsOf, mergeMemory, pickSeeded, rollSeededRarity,
   seedLaneFrac,
@@ -158,7 +158,7 @@ import {
   VENDOR_ESSENCE_PRICE, VENDOR_ITEM_CFG, VENDOR_MEMORY_PRICE, VENDOR_SUPPORT_PRICE, walletBreakdown, walletMortalValue,
   type AbilityCost, type EssenceCost, type EssenceId, type EssenceSpillSpec,
 } from '../data/essences';
-import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, ITEM_RARITY_IDS, SLOT_BY_ID, baseComplexityOf, slotsForCategory, socketCap, type ItemCategory, type ItemInstance, type ItemRarity, type RoughMemoryUnit } from './items';
+import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, baseComplexityOf, slotsForCategory, socketCap, type ItemCategory, type ItemInstance, type ItemRarity, type RoughMemoryUnit } from './items';
 import { DROP_CFG, GEM_DROP_CFG, resolveLootTable, rollVestigeId, gemFloorFor, type GemFloor } from './loot';
 import { epitaphFor, VESTIGES } from '../data/vestiges';
 import { MONSTER_THEMES } from '../data/infrequents';
@@ -168,7 +168,7 @@ import { treeSpentCount } from './skilltree'; // THE SKILL-TREE GRAPH — ranked
 import { awakenMemoryFromDrop, memoryCommissionReady, memoryProgressionOpen, memorySecondaryOpen, type MemoryAccess } from '../meta/memoryUnlocks';
 import { MEMORY_UNLOCK_CFG, type MemorySecondaryMechanic } from '../data/memoryUnlocks';
 import { powerProgressionRefusal } from '../data/powerProgression';
-import { SKILL_LIST, SKILLS } from '../data/skills';
+import { SKILLS } from '../data/skills';
 import { AMBIENT_TAGS, CAVE_POOLS, CAVE_POOL_CFG, FACTIONS, FIXTURE_IDS, MONSTERS, WILDLIFE, factionStance, temperOf, defBreathes, defDensity, defLeavesRemains, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
 import { presenceMul, presenceTable } from './presence';
 import { killRuleMatches, killRules, type KillCtx, type KillRule } from './killHandlers';
@@ -176,7 +176,7 @@ import { updateScene, sceneInterceptFall, sceneNoteCast, type SceneRuntime } fro
 import { CLASSES, classOpeningSkills, classSkillStat, PROGRESSION, type ClassDef } from '../data/classes';
 import '../data/coop';
 import type { CouchSeatTag } from '../data/couch';
-import { SUPPORT_LIST, SUPPORTS } from '../data/supports';
+import { SUPPORTS } from '../data/supports';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateOpen } from '../data/passives';
 import { CHOICE_GROUPS, PASSIVE_CHOICE_CFG, choiceDealSpent, choiceLockReason, choiceOptionOf, chosenOf, graftSourcesOf, sanitizeChoices } from '../data/passiveChoices';
 import { openRealms, realmOf, realmOpen, type PassiveRealmDef } from '../data/passiveRealms';
@@ -202,7 +202,7 @@ import { DIG_CFG } from '../data/digsites';
 import {
   HARVEST_CFG, harvestPayout, harvestSeqFor, harvestWindowFor,
 } from './harvest';
-import { HARVEST_HUSK_KIND, harvestRowsFor, type HarvestNodeDef } from '../data/harvest';
+import { HARVEST_HUSK_KIND, type HarvestNodeDef } from '../data/harvest';
 import type { ContestSpec } from '../data/objectives';
 import { biasTable, composeBias } from '../world/overlay';
 import type { MassObjectiveBirth } from '../worldmass/objectiveBodies';
@@ -213,7 +213,7 @@ import { objectiveRewardXp } from '../data/objectiveRewards';
 import { PROCESSION_CFG } from '../data/processions';
 import { driveNativeProcession, nativeProcessionConfig, nativeProcessionSteering, type NativeProcessionConfig, type NativeProcessionState } from './processionObjectives';
 import type { MassProcessionCartBirth, MassProcessionAmbushBirth, MassProcessionRoadRow } from '../worldmass/processionTypes';
-import { BOUNTY_CFG } from '../data/bounties';
+import '../data/bounties';
 import { ADOPT_CFG, OFFERING_CFG, STRAGGLER_CFG, maybeAdoptObjective, packageAskRow, ventureAskRow } from '../data/objectives';
 import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS } from '../data/looks';
 import {
@@ -273,7 +273,7 @@ import { shipOf, type ShipDef } from '../data/ships';
 import { expandedTown, townTier, townSiteAt, townSiteStructure, townStationFeatures, TOWN_TIERS, type TownSiteId } from '../data/townBuild';
 import { bountyEssenceMix, rollBudgetBountyPay, ensureBountyRewardChoices } from '../data/bountyRewards';
 import {
-  BOUNTY_BOARD_CFG, BOUNTY_KINDS, bountyChargePay, bountySourceRows, clonePosting, describeBountyPay, liveBountyBand, postingQuestDef, rollBountyPay,
+  BOUNTY_BOARD_CFG, BOUNTY_KINDS, bountyChargePay, bountySourceRows, clonePosting, describeBountyPay, liveBountyBand, rollBountyPay,
   type BountyKindRow, type BountyTargetRef,
 } from '../data/bountyboard';
 import type { AttentionPoint } from '../world/attention';
@@ -321,7 +321,7 @@ import {
 import { zoneKindOf } from '../data/zoneKinds';
 import { EAGER_WORLD_WEB } from '../config';
 import { eventLevel as resolveEventLevel } from '../world/levelField';
-import { HUB_ZONE, OPENING_PROGRESSION, tuneOpeningProgression } from '../world/openingProgression';
+import { HUB_ZONE, OPENING_PROGRESSION } from '../world/openingProgression';
 import { bountyRoutes } from '../world/bountyRoutes';
 import type { TravelRoute } from '../world/travelRoutes';
 import { factionAllowed } from '../world/zonePolicy';
@@ -476,7 +476,7 @@ import type { BoroughSpec, ExtractDisperseSpec, ExtractSpec, ExtractTemperSpec }
 import { gateOf } from '../packages/weighting';
 import { courtLord, courtLordForZone } from '../packages/courts';
 import type { ActiveEncounter, BoroughRuntime, VeilKnot } from './encounter';
-import { boroughVendorWeights, noteSoulsSheltered } from '../data/boroughs';
+import { noteSoulsSheltered } from '../data/boroughs';
 import { promoteNativeRarity, promoteNativeRarityStacked, promoteNativeMagicPack, refreshNativeMagicPacks,
   type NativeMonsterPromotionSources, type NativeMonsterPromotionHost } from './nativeMonsterPromotion';
 import { rollRarity, rarityMods, RARITY_DEFS, type MonsterRarity } from './rarity';
@@ -524,8 +524,7 @@ import {
   type TheaterContext, type TheaterKindDef, type TheaterRow, type TheaterSpots,
 } from './theater';
 import {
-  featureEnabled, isSkillUnlockedForDrop, isSupportUnlockedForDrop, FEATURE,
-  STARTER_SKILLS, applyCredits, META_CURRENCY_LABEL,
+  featureEnabled, isSkillUnlockedForDrop, isSupportUnlockedForDrop, FEATURE, applyCredits, META_CURRENCY_LABEL,
   LEDGER_ACCOUNT_DEATHS, LEDGER_FLASK_LESSON, CLASS_LEVEL_MILESTONES, isVaultAvailable,
   LEDGER_CORPSES_RECLAIMED,
   classLevelLedgerKey, gemDropKey, LEDGER_GEMDROP_TOTAL, LEDGER_VENDOR_BOUGHT,
@@ -553,7 +552,7 @@ import {
   releaseMercsOf, retiredShare, snapshotBuild,
   type MercOffer, type MercRosterEntry, type MercSnapshot,
 } from '../meta/mercs';
-import { MERC_TEMPLATES, MERC_TEMPLATE_BY_ID, type MercTemplateDef } from '../data/mercenaries';
+import { MERC_TEMPLATE_BY_ID, type MercTemplateDef } from '../data/mercenaries';
 import { MercInput } from './mercbrain';
 import {
   NEMESIS_CFG, bumpGrudge, formNemesis, grudgeTier, mintNemesisName, nemesisTitle, peekSaga,
@@ -576,6 +575,14 @@ import { adoptNativeAreaLayout, type NativeAreaLayoutHost, type NativeAreaLayout
 import { restoreSceneEnemies, sceneCountedEnemies, sceneObjectiveCountable, sceneConfineUnreachable, sceneRollCullNeed, sceneLivingSpawners, spawnSceneContest, spawnSceneWave, sceneSpawnPoint, sceneIsAmbientTag, applySceneWaveFrenzy, scenePartyScaleCount, applyScenePartyScale, type NativeSceneServiceHost } from './nativeScenePopulation';
 import { sceneBootScenery, sceneBootPuzzles, sceneBootHarvest, sceneBootGeysers, sceneBootEscapeChase, sceneHarvestRowPick, scenePuzzleHost, sceneSetPuzzleTone, type NativeSceneEnvironmentHost, type NativeSceneEnvironmentSources } from './nativeSceneEnvironment';
 import { sceneBootThrong, sceneThrongSources, sceneMintThrongPocket, sceneMintThrongHusk, sceneBootLite, sceneLiteKindOf, sceneLiteOpenAt, sceneLitePocketEnsure, sceneLiteCondHeld, sceneBootLiteVentSeats, sceneLitePlantBurrow, sceneLitePocketPush, sceneAttachZoneWells, sceneGeyserSurge, type NativeSceneEcologyHost, type NativeSceneEcologySources } from './nativeSceneEcology';
+
+import { settlementArmVendorStock, settlementRestockOrdinal, settlementRestockSeconds, settlementSyncHoldIdx, settlementResolveCommission, settlementOverlayHold, settlementBuildVendorStock, settlementVendorEntryAllowed, settlementCurateVendorStock, settlementCommissionOdds, settlementMintCommissionEntry, settlementVendorMemoryCeiling, settlementVendorGemLevel, settlementVendorStockPolicy, settlementVendorGemsOpen, settlementVendorSize, settlementRollSupportDropGated, settlementRollSkillGem, settlementWaresBonus, settlementVendorQualityPieces, settlementCarriedGemIds, settlementSkillDropPool, settlementGemWeights, settlementSupportDropPool, settlementPickGem, settlementArmLastlightRecruiter, settlementTownSeat, settlementMercSheetFor, settlementDealTemplateOffers, type NativeSettlementHost } from './nativeSettlementServices';
+
+import { prepareNativeAreaBoundaries, type NativeAreaBoundaryHost } from './nativeAreaBoundaries';
+
+import { sceneOccurrenceHost, sceneOccurrenceSpawnTable, sceneAbortTraces, type NativeSceneOccurrenceHost, type NativeSceneTraceResetHost } from './nativeSceneOccurrences';
+
+import { sceneSeedCullMarks, sceneSeedGatherNodes, sceneNoteBountyArrivals, sceneHandState, sceneNoteBountyReady, sceneObjectiveDoneAt, sceneQuestDefOf, type NativeSceneBountyHost } from './nativeSceneBounty';
 
 export type { Doodad } from './levelgen';
 
@@ -6289,124 +6296,8 @@ export class World {
     this.objectiveLatch = null; // THE RESOLUTION LATCH is display state — zone-local, never persisted
     this.lures.clear();     // lures are zone-local
 
-    // HOLDFAST: on first arrival in an uncharted zone, maybe raise a fortified, LOCKED
-    // bonus exit (appended to def.exits BEFORE eager-charting + portal placement, so it
-    // places like a normal exit yet the eager web skips it — see eagerChartNeighbors).
-    if (firstVisit) this.rollHoldfast(def);
+    this.runNativeAreaBoundaries(def,firstVisit,isCave);
 
-    // EAGER WEB: resolve this zone's '?' frontiers into real, connected, pre-recognized
-    // neighbour nodes (mint or link) BEFORE placing the live portals — so each portal
-    // shows its real destination and the map renders an interwoven web, not stray '?'
-    // ghosts. One ring only (the new nodes' own frontiers stay lazy). A cave/town or the
-    // flag-off case is a no-op. (Charts from this zone's context, like the lazy path did.)
-    if (!isCave) this.eagerChartNeighbors(def);
-
-    // THE MINT HORIZON (FORECHART_CFG.horizon — the pregen doctrine's hard
-    // half): the player's ACTIVE VICINITY is fully-resolved ground, always.
-    // Everything within the horizon of an arrival resolves NOW, veiled, so
-    // ambient growth can never happen underfoot — by the time the player
-    // walks anywhere inside it, every node they can meet already exists and
-    // is merely FOUND. On sweep-filled ground this is one no-op scan; real
-    // work only follows a long teleport/sail into thin chart, at a zone-load
-    // boundary that is already paying for a layout build.
-    if (!isCave && FORECHART_CFG.enabled && def.objective.kind !== 'safe' && def.id !== MASS_ZONE) {
-      this.chartWithin(def.map, FORECHART_CFG.horizon, def.dimension ?? 'surface');
-    }
-
-    // Birth-only openingProgression: the road graph is now real, but none of
-    // its field neighbours has been played. Existing saves retain their levels.
-    if (def.id === HUB_ZONE && firstVisit && Object.keys(this.zoneMap).some(id => id.startsWith('gen_opening_'))
-      && !Object.keys(this.zoneMap).some(id => id.startsWith('gen_') && this.visited.has(id))) {
-      tuneOpeningProgression(this.zoneMap, (a, b) => this.landRoute(a.map, b.map)
-        && escarpmentRoad(a.map, b.map, this.sim.biomeField.fieldSeed));
-    }
-
-    // THE RING-1 UNVEIL (the forechart law): every direct neighbour of ground
-    // you STAND ON is part of the classic one-ring map preview — if the
-    // forechart minted it ahead (veiled), finding this zone finds them. The
-    // per-sweep invariant pass (updateForechart) backstops the same rule for
-    // late weaves; this is the immediate, entry-moment lift.
-    if (!isCave) {
-      for (const e of def.exits) {
-        const n = e.to !== '?' ? this.zoneMap[e.to] : undefined;
-        if (n?.veiled) n.veiled = false;
-      }
-    }
-
-    // ROADLESS-DIMENSION HEAL: a persisted cross-edge into (or out of) a
-    // dimension that has since sworn off its road (DimensionEntry.road:
-    // false) strips at load — older saves carried a Firmament↔surface road,
-    // and a stripped edge heals the def permanently (worldstate tolerance).
-    if (def.exits.some(e => e.crossDim)) {
-      const roadless = (to: string): boolean =>
-        [def.dimension, this.zoneMap[to]?.dimension].some(d =>
-          d !== undefined && dimensionDef(d).entry?.road === false);
-      const kept = def.exits.filter(e => !e.crossDim || !roadless(e.to));
-      if (kept.length !== def.exits.length) def.exits = kept;
-    }
-    // UNMARKED CROSS-DIMENSION HEAL: an edge whose destination lives in
-    // another dimension WITHOUT the declared crossDim marker is never legal
-    // (isIllegalCrossDim used to seal it forever as "a sealed rift" — a dead
-    // portal squatting the zone). Strip it at load instead: the def heals
-    // permanently, and the live seal stays as the belt for anything appended
-    // mid-session. Warn once per edge so the appender stays traceable.
-    {
-      const kept = def.exits.filter(e => {
-        if (e.to === '?' || e.crossDim) return true;
-        const dest = this.zoneMap[e.to];
-        if (!dest || (dest.dimension ?? 'surface') === (def.dimension ?? 'surface')) return true;
-        console.warn(`[world] healed unmarked cross-dimension edge ${def.id}(${def.dimension ?? 'surface'}) → ${e.to}(${dest.dimension ?? 'surface'}) — stripped at load`);
-        return false;
-      });
-      if (kept.length !== def.exits.length) def.exits = kept;
-    }
-    // ROADLESS-HUB FAN HEAL: a roadless gate hub holds EXACTLY its minted fan
-    // (GATE_FANOUT — the same constant enterDimension mints with). Older
-    // saves accreted weave roads onto the Firmament before the weaver learned
-    // the hub rule; trim the def back to its fan and drop the partners'
-    // reciprocals (their own back-edges at index 0 are never touched — the
-    // append-only invariant makes the fan a stable prefix).
-    if (isRoadlessGateHub(def) && def.exits.length > GATE_FANOUT) {
-      const dropped = def.exits.slice(GATE_FANOUT);
-      def.exits = def.exits.slice(0, GATE_FANOUT);
-      console.warn(`[world] trimmed roadless gate hub '${def.id}' back to its ${GATE_FANOUT}-road fan (${dropped.length} accreted edge(s) healed)`);
-      for (const e of dropped) {
-        const p = this.zoneMap[e.to];
-        if (!p || def.exits.some(x => x.to === p.id)) continue;
-        const kept = p.exits.filter((x, i) => i === 0 || x.to !== def.id);
-        if (kept.length !== p.exits.length) p.exits = kept;
-      }
-    } else if (!isRoadlessGateHub(def)) {
-      // The partner-side mirror: an accreted edge INTO a roadless hub that
-      // the hub itself no longer names (its fan heal ran on an earlier load)
-      // strips here too — whichever side loads first, both heal.
-      const kept = def.exits.filter((e, i) => {
-        if (e.to === '?' || i === 0) return true;
-        const dest = this.zoneMap[e.to];
-        if (!dest || !isRoadlessGateHub(dest)) return true;
-        return dest.exits.some(x => x.to === def.id);
-      });
-      if (kept.length !== def.exits.length) def.exits = kept;
-    }
-    siteZoneExits(def);
-    this.exits = def.exits.map((e, i) => this.placeExit(e, i));
-    // Stash the boundary annotations on the def (index-aligned, TRANSIENT —
-    // re-derived every load) so generateLayout below can erect the gate
-    // terrain for whichever exits cross an enclave boundary.
-    def.exitBoundaries = this.exits.map(x => x.boundary);
-    // EXIT ROADS ride the same transient seam: a zone whose Holdfast rolled a
-    // KEPT ROAD annotates that exit with its guardian's road spec, and the
-    // layout pipeline carves the traveled way (source portal → gate mouth).
-    def.exitRoads = this.exitRoadAnnotations(def);
-    // BIOME MELDS ride it too: exits facing a different biome that declares
-    // an edge dressing grow a band of the foreign kit (data/melds.ts) along
-    // this zone's edge — the terrain says "jungle ahead" before the label.
-    def.exitMelds = this.exits.map(x => x.meld);
-    // BELT-AND-SUSPENDERS: whatever def data or edge-snapping produced, no two
-    // live portals may overlap (an overlapped pair leaves one of them un-dwellable
-    // — the "can't choose which zone I enter" hard-lock). Runs BEFORE the layout
-    // carve below, so the clears open around the RESOLVED positions.
-    this.separateOverlappingExits();
 
     // Every player SEAT (the local hero + co-op allies, downed bodies included)
     // and their mobile minions step through together; constructs are anchored
@@ -10943,6 +10834,145 @@ export class World {
    };
    Object.defineProperty(this,'nativeSceneEnvironmentView',{value:host,writable:true,configurable:true,enumerable:false});
    return host;
+  }
+
+  private nativeAreaBoundaryView?:NativeAreaBoundaryHost;
+  private nativeAreaBoundaryHost():NativeAreaBoundaryHost {
+   if(this.nativeAreaBoundaryView)return this.nativeAreaBoundaryView;
+   const world=this;
+   const host:NativeAreaBoundaryHost=Object.freeze({
+      get zoneMap(){return world.zoneMap;},
+      get visited(){return world.visited;},
+      get sim(){return world.sim;},
+      get exits(){return world.exits;}, set exits(value){world.exits=value;},
+      get rollHoldfast(){const fn=world.rollHoldfast;return (...args:Parameters<World['rollHoldfast']>)=>fn.apply(world,args);},
+      get eagerChartNeighbors(){const fn=world.eagerChartNeighbors;return (...args:Parameters<World['eagerChartNeighbors']>)=>fn.apply(world,args);},
+      get chartWithin(){const fn=world.chartWithin;return (...args:Parameters<World['chartWithin']>)=>fn.apply(world,args);},
+      get landRoute(){const fn=world.landRoute;return (...args:Parameters<World['landRoute']>)=>fn.apply(world,args);},
+      get placeExit(){const fn=world.placeExit;return (...args:Parameters<World['placeExit']>)=>fn.apply(world,args);},
+      get exitRoadAnnotations(){const fn=world.exitRoadAnnotations;return (...args:Parameters<World['exitRoadAnnotations']>)=>fn.apply(world,args);},
+      get separateOverlappingExits(){const fn=world.separateOverlappingExits;return (...args:Parameters<World['separateOverlappingExits']>)=>fn.apply(world,args);},
+   });
+   Object.defineProperty(this,'nativeAreaBoundaryView',{value:host,enumerable:false,configurable:true,writable:true});
+   return host;
+  }
+  private runNativeAreaBoundaries(def:ZoneDef,firstVisit:boolean,isCave:boolean):void {
+   return prepareNativeAreaBoundaries(this.nativeAreaBoundaryHost(),def,firstVisit,isCave);
+  }
+
+
+  private nativeSceneOccurrenceView?:(NativeSceneOccurrenceHost & NativeSceneTraceResetHost);
+  private nativeSceneOccurrenceHost():NativeSceneOccurrenceHost & NativeSceneTraceResetHost {
+    if(this.nativeSceneOccurrenceView)return this.nativeSceneOccurrenceView;
+    const world=this;
+    const host:NativeSceneOccurrenceHost & NativeSceneTraceResetHost={
+      get occHostObj(){return world.occHostObj;},set occHostObj(value){world.occHostObj=value;},
+      get time(){return world.time;},
+      get zone(){return world.zone;},
+      get player(){return world.player;},
+      get occDisturbs(){return world.occDisturbs;},
+      get doodads(){return world.doodads;},
+      get actors(){return world.actors;},
+      get shake(){return world.shake;},set shake(value){world.shake=value;},
+      get flashes(){return world.flashes;},
+      get traceRuns(){return world.traceRuns;},set traceRuns(value){world.traceRuns=value;},
+      get timeflow(){return world.timeflow;},
+      get markDoodadsChanged(){const method=world.markDoodadsChanged;return (...args:Parameters<NativeSceneOccurrenceHost['markDoodadsChanged']>)=>method.apply(world,args);},
+      get massOccurrenceSpawnTable(){const method=world.massOccurrenceSpawnTable;return (...args:Parameters<NativeSceneOccurrenceHost['massOccurrenceSpawnTable']>)=>method.apply(world,args);},
+      get weightedPick(){const method=world.weightedPick;return (...args:Parameters<NativeSceneOccurrenceHost['weightedPick']>)=>method.apply(world,args);},
+      get createMonster(){const method=world.createMonster;return (...args:Parameters<NativeSceneOccurrenceHost['createMonster']>)=>method.apply(world,args);},
+      get clampPos(){const method=world.clampPos;return (...args:Parameters<NativeSceneOccurrenceHost['clampPos']>)=>method.apply(world,args);},
+    };
+    Object.defineProperty(this,'nativeSceneOccurrenceView',{value:host,writable:true,configurable:true,enumerable:false});
+    return host;
+  }
+
+  private nativeSceneBountyView?:NativeSceneBountyHost;
+  private nativeSceneBountyHost():NativeSceneBountyHost {
+    if(this.nativeSceneBountyView)return this.nativeSceneBountyView;
+    const world=this;
+    const host:NativeSceneBountyHost={
+      get zoneMap(){return world.zoneMap;},
+      get visited(){return world.visited;},
+      get ledger(){return world.ledger;},
+      get sim(){return world.sim;},
+      get massRuntime(){return world.massRuntime;},
+      get objectiveDoneAt(){const method=world.objectiveDoneAt;return (...args:Parameters<NativeSceneBountyHost['objectiveDoneAt']>)=>method.apply(world,args);},
+      get bountyHands(){return world.bountyHands;},
+      get actors(){return world.actors;},
+      get effectiveSpawn(){const method=world.effectiveSpawn;return (...args:Parameters<NativeSceneBountyHost['effectiveSpawn']>)=>method.apply(world,args);},
+      get baseTable(){const method=world.baseTable;return (...args:Parameters<NativeSceneBountyHost['baseTable']>)=>method.apply(world,args);},
+      get weightedPick(){const method=world.weightedPick;return (...args:Parameters<NativeSceneBountyHost['weightedPick']>)=>method.apply(world,args);},
+      get createMonster(){const method=world.createMonster;return (...args:Parameters<NativeSceneBountyHost['createMonster']>)=>method.apply(world,args);},
+      get spawnPoint(){const method=world.spawnPoint;return (...args:Parameters<NativeSceneBountyHost['spawnPoint']>)=>method.apply(world,args);},
+      get countedEnemies(){const method=world.countedEnemies;return (...args:Parameters<NativeSceneBountyHost['countedEnemies']>)=>method.apply(world,args);},
+      get promoteRarityStacked(){const method=world.promoteRarityStacked;return (...args:Parameters<NativeSceneBountyHost['promoteRarityStacked']>)=>method.apply(world,args);},
+      get harvestNodes(){return world.harvestNodes;},
+      get currentZoneSeed(){return world.currentZoneSeed;},
+      get harvestRowPick(){const method=world.harvestRowPick;return (...args:Parameters<NativeSceneBountyHost['harvestRowPick']>)=>method.apply(world,args);},
+      get interactSpot(){const method=world.interactSpot;return (...args:Parameters<NativeSceneBountyHost['interactSpot']>)=>method.apply(world,args);},
+      get clampPos(){const method=world.clampPos;return (...args:Parameters<NativeSceneBountyHost['clampPos']>)=>method.apply(world,args);},
+      get doodads(){return world.doodads;},
+      get markDoodadsChanged(){const method=world.markDoodadsChanged;return (...args:Parameters<NativeSceneBountyHost['markDoodadsChanged']>)=>method.apply(world,args);},
+      get clientActionHook(){return world.clientActionHook;},
+      get charDirty(){return world.charDirty;},set charDirty(value){world.charDirty=value;},
+      get noteBountyReady(){const method=world.noteBountyReady;return (...args:Parameters<NativeSceneBountyHost['noteBountyReady']>)=>method.apply(world,args);},
+      get activeQuests(){return world.activeQuests;},
+      get handState(){const method=world.handState;return (...args:Parameters<NativeSceneBountyHost['handState']>)=>method.apply(world,args);},
+      get notice(){const method=world.notice;return (...args:Parameters<NativeSceneBountyHost['notice']>)=>method.apply(world,args);},
+      get questDefOf(){const method=world.questDefOf;return (...args:Parameters<NativeSceneBountyHost['questDefOf']>)=>method.apply(world,args);},
+      get completedObjectives(){return world.completedObjectives;},
+    };
+    Object.defineProperty(this,'nativeSceneBountyView',{value:host,writable:true,configurable:true,enumerable:false});
+    return host;
+  }
+
+  private nativeSettlementView?:NativeSettlementHost;
+  private nativeSettlementHost():NativeSettlementHost {
+    if(this.nativeSettlementView)return this.nativeSettlementView;
+    const world=this;
+    const host:NativeSettlementHost={
+      get resolveCommission(){const method=world.resolveCommission;return (...args:Parameters<NativeSettlementHost['resolveCommission']>)=>method.apply(world,args);},
+      get manifest(){return world.manifest;},
+      get restockOrdinal(){const method=world.restockOrdinal;return (...args:Parameters<NativeSettlementHost['restockOrdinal']>)=>method.apply(world,args);},
+      get overlayHold(){const method=world.overlayHold;return (...args:Parameters<NativeSettlementHost['overlayHold']>)=>method.apply(world,args);},
+      get buildVendorStock(){const method=world.buildVendorStock;return (...args:Parameters<NativeSettlementHost['buildVendorStock']>)=>method.apply(world,args);},
+      get vendorEntryAllowed(){const method=world.vendorEntryAllowed;return (...args:Parameters<NativeSettlementHost['vendorEntryAllowed']>)=>method.apply(world,args);},
+      get curateVendorStock(){const method=world.curateVendorStock;return (...args:Parameters<NativeSettlementHost['curateVendorStock']>)=>method.apply(world,args);},
+      get time(){return world.time;},
+      get restockSeconds(){const method=world.restockSeconds;return (...args:Parameters<NativeSettlementHost['restockSeconds']>)=>method.apply(world,args);},
+      get account(){return world.account;},
+      get vendorHolds(){return world.vendorHolds;},
+      get commissionOdds(){const method=world.commissionOdds;return (...args:Parameters<NativeSettlementHost['commissionOdds']>)=>method.apply(world,args);},
+      get mintCommissionEntry(){const method=world.mintCommissionEntry;return (...args:Parameters<NativeSettlementHost['mintCommissionEntry']>)=>method.apply(world,args);},
+      get charDirty(){return world.charDirty;},set charDirty(value){world.charDirty=value;},
+      get vendorMemoryCeiling(){const method=world.vendorMemoryCeiling;return (...args:Parameters<NativeSettlementHost['vendorMemoryCeiling']>)=>method.apply(world,args);},
+      get vendorGemLevel(){const method=world.vendorGemLevel;return (...args:Parameters<NativeSettlementHost['vendorGemLevel']>)=>method.apply(world,args);},
+      get vendorStockPolicy(){const method=world.vendorStockPolicy;return (...args:Parameters<NativeSettlementHost['vendorStockPolicy']>)=>method.apply(world,args);},
+      get vendorGemsOpen(){const method=world.vendorGemsOpen;return (...args:Parameters<NativeSettlementHost['vendorGemsOpen']>)=>method.apply(world,args);},
+      get vendorSize(){const method=world.vendorSize;return (...args:Parameters<NativeSettlementHost['vendorSize']>)=>method.apply(world,args);},
+      get rollSupportDropGated(){const method=world.rollSupportDropGated;return (...args:Parameters<NativeSettlementHost['rollSupportDropGated']>)=>method.apply(world,args);},
+      get rollSkillGem(){const method=world.rollSkillGem;return (...args:Parameters<NativeSettlementHost['rollSkillGem']>)=>method.apply(world,args);},
+      get waresBonus(){const method=world.waresBonus;return (...args:Parameters<NativeSettlementHost['waresBonus']>)=>method.apply(world,args);},
+      get sim(){return world.sim;},
+      get player(){return world.player;},
+      get vendorQualityPieces(){const method=world.vendorQualityPieces;return (...args:Parameters<NativeSettlementHost['vendorQualityPieces']>)=>method.apply(world,args);},
+      get carriedGemIds(){const method=world.carriedGemIds;return (...args:Parameters<NativeSettlementHost['carriedGemIds']>)=>method.apply(world,args);},
+      get skillDropPool(){const method=world.skillDropPool;return (...args:Parameters<NativeSettlementHost['skillDropPool']>)=>method.apply(world,args);},
+      get gemWeights(){const method=world.gemWeights;return ((...args:Parameters<NativeSettlementHost['gemWeights']>)=>method.apply(world,args)) as NativeSettlementHost['gemWeights'];},
+      get supportDropPool(){const method=world.supportDropPool;return (...args:Parameters<NativeSettlementHost['supportDropPool']>)=>method.apply(world,args);},
+      get zone(){return world.zone;},
+      get pickGem(){const method=world.pickGem;return ((...args:Parameters<NativeSettlementHost['pickGem']>)=>method.apply(world,args)) as NativeSettlementHost['pickGem'];},
+      get seats(){return world.seats;},
+      get mercSheetFor(){const method=world.mercSheetFor;return (...args:Parameters<NativeSettlementHost['mercSheetFor']>)=>method.apply(world,args);},
+      get dealTemplateOffers(){const method=world.dealTemplateOffers;return (...args:Parameters<NativeSettlementHost['dealTemplateOffers']>)=>method.apply(world,args);},
+      get mercOutpost(){return world.mercOutpost;},set mercOutpost(value){world.mercOutpost=value;},
+      get townTierIdx(){return world.townTierIdx;},
+      get arena(){return world.arena;},
+      get mercSheets(){return world.mercSheets;},
+    };
+    Object.defineProperty(this,'nativeSettlementView',{value:host,writable:true,configurable:true,enumerable:false});
+    return host;
   }
 
   private nativeScenePopulationView?:NativeSceneServiceHost;
@@ -22830,14 +22860,7 @@ export class World {
    *  stage resolves to the arena's centre with a warning — every seat the
    *  engine reads unconditionally (font, waypoint, the stations) is authored
    *  at every rung, probe-pinned. */
-  townSeat(id: TownSiteId, dx = 0, dy = 0): Vec2 {
-    const p = townSiteAt(this.townTierIdx, id);
-    if (!p) {
-      console.warn(`[town] site '${id}' has no seat at tier ${this.townTierIdx}`);
-      return vec(this.arena.w / 2 + dx, this.arena.h / 2 + dy);
-    }
-    return vec(p.x + dx, p.y + dy);
-  }
+  townSeat(id: TownSiteId, dx = 0, dy = 0): Vec2 { return settlementTownSeat(this.nativeSettlementHost(),id,dx,dy); }
 
   /** A town site's seat, or null where the tier does not raise it. */
   townSite(id: TownSiteId): Vec2 | null {
@@ -23300,12 +23323,7 @@ export class World {
    *  still stand; a decree's zone empties while the decree stands), never
    *  a stored latch (a save re-derives it; a standing-state read may even
    *  step back). Drawn == turned-in, by construction. */
-  handState(p: BountyPosting): QuestStanding {
-    const row = BOUNTY_KINDS[p.kind];
-    if (!row) return 'afield';
-    if (p.failed === true || (row.failed?.(this, p) ?? false)) return 'failed';
-    return row.done(this, p) ? 'ready' : 'afield';
-  }
+  handState(p: BountyPosting): QuestStanding { return sceneHandState(this.nativeSceneBountyHost(),p); }
 
   /** THE WITHHOLD NOTICE — the one site that speaks a posting's resolution
    *  ("the ask is met — return to the board" / "the ask has failed"): once
@@ -23314,22 +23332,7 @@ export class World {
    *  re-arms it — and is never a readiness of its own). Called wherever a
    *  deed may have landed: the cull's claim, the gather's rite, the
    *  arrival note, the zone's own clear, and the field watch's sweep. */
-  private noteBountyReady(p: BountyPosting): void {
-    const aq = this.activeQuests.find(e => e.questId === p.id);
-    if (!aq) return;
-    const standing = this.handState(p);
-    if (standing === 'afield') {
-      if (aq.fieldDone) { aq.fieldDone = false; this.charDirty = true; }
-      return;
-    }
-    if (aq.fieldDone) return;
-    aq.fieldDone = true;
-    this.notice(standing === 'ready'
-      ? (this.questDefOf(p.id)?.turnIn?.prompt ?? 'The ask is met — return to the bounty board to claim the pay.')
-      : 'The ask has failed — return to the bounty board to hand the posting back.',
-    BOUNTY_BOARD_CFG.accent, 16, 'civic');
-    this.charDirty = true;
-  }
+  private noteBountyReady(p: BountyPosting): void { return sceneNoteBountyReady(this.nativeSceneBountyHost(),p); }
 
   /** THE BEAT's quantum — the board's OWN clock (never the vendor restock
    *  quantum: a Rush Order rung must not re-pace the board). Future board
@@ -23524,10 +23527,7 @@ export class World {
   }
 
   /** Abort every trace (zone change / run end) — writs endure. */
-  traceAbortAll(): void {
-    for (const r of this.traceRuns) if (r.held) this.timeflow.release('trace');
-    this.traceRuns = [];
-  }
+  traceAbortAll(): void { return sceneAbortTraces(this.nativeSceneOccurrenceHost()); }
 
   /** The renderer's view (drawTrace — the tell-wire idiom: derived
    *  scalars + the geometry the session itself measures; drawn == tested
@@ -23579,21 +23579,14 @@ export class World {
   /** Has this zone's objective been completed this run? The bounty kinds'
    *  one public completion read (the predicate is the law — a pure read
    *  over the same record the exit unseal consults). */
-  objectiveDoneAt(zoneId: string): boolean {
-    return this.completedObjectives.has(zoneId);
-  }
+  objectiveDoneAt(zoneId: string): boolean { return sceneObjectiveDoneAt(this.nativeSceneBountyHost(),zoneId); }
 
   /** THE RESOLVER SEAM (charter §2): every quest lookup that must also see
    *  GENERATED postings routes here — the static registry first, then the
    *  taken hands' derived defs (offers hold no quest rows, so only hands
    *  resolve). The save's quest filter rides this, which is why the board's
    *  slate stands up BEFORE it in adoptWorldState. */
-  questDefOf(id: string): QuestDef | undefined {
-    const q = QUESTS[id];
-    if (q) return q;
-    const p = this.bountyHands.find(h => h.id === id);
-    return p ? postingQuestDef(p, this) : undefined;
-  }
+  questDefOf(id: string): QuestDef | undefined { return sceneQuestDefOf(this.nativeSceneBountyHost(),id); }
 
   /** THE BOARD ROSTER (the kinship): every standing board — Lastlight's
    *  (the feature), plus each port zone whose paired hold stands OPEN with
@@ -24262,40 +24255,7 @@ export class World {
    *  promote, nemesis-name, dedupe, tag). Posts only the REMAINDER
    *  (count − claimed − standing), so wiped ground re-deals and the hunt
    *  can always finish. */
-  private seedCullMarks(def: ZoneDef, rng: { int(a: number, b: number): number; next(): number }): void {
-    for (const p of this.bountyHands) {
-      if (p.kind !== 'cull' || p.zoneId !== def.id || !p.cull) continue;
-      const standing = this.actors.filter(a => !a.dead && a.tag === 'bounty_mark').length;
-      const need = Math.max(0, p.cull.count - p.cull.claimed - standing);
-      if (!need) continue;
-      const { table } = this.effectiveSpawn(def, this.baseTable(def));
-      const eligible = table.filter(en => {
-        const md = MONSTERS[en.id];
-        return !!md && !md.passive && !md.noObjective && !md.spawner && !md.npcRole;
-      });
-      for (let i = 0; i < need; i++) {
-        let m: Actor | null;
-        if (eligible.length) {
-          const type = this.weightedPick(eligible, Math.max(1, p.challengeLevel ?? def.level));
-          m = this.createMonster(type, Math.max(1, p.challengeLevel ?? def.level), 'enemy');
-          m.pos = this.spawnPoint(24);
-          this.actors.push(m);
-        } else {
-          m = this.countedEnemies().find(a =>
-            a.tag !== 'bounty_mark' && (a.rarity ?? 'normal') === 'normal') ?? null;
-          if (!m) break;
-        }
-        this.promoteRarityStacked(m, BOUNTY_CFG.rarity, BOUNTY_CFG.stacks);
-        const fac = m.faction ?? (m.defId ? MONSTERS[m.defId]?.faction : undefined) ?? '';
-        let name = mintNemesisName(fac, () => rng.next());
-        for (let tries = 0; tries < 4 && this.actors.some(a => a !== m && a.tag === 'bounty_mark' && a.name === name); tries++) {
-          name = mintNemesisName(fac, () => rng.next());
-        }
-        m.name = name;
-        m.tag = 'bounty_mark';
-      }
-    }
-  }
+  private seedCullMarks(def: ZoneDef, rng: { int(a: number, b: number): number; next(): number }): void { return sceneSeedCullMarks(this.nativeSceneBountyHost(),def,rng); }
 
   /** THE GATHER's ground (first-writ W2 — the cull's remote-writ law on
    *  the harvest fabric): a held gather posting targeting THIS zone plants
@@ -24306,43 +24266,13 @@ export class World {
    *  (never the zone's mint stream — a held writ must not re-deal another
    *  system's draws) and ride the standing rite machinery whole: arming,
    *  the rite, the payout, the zone-memory spent flags. */
-  private seedGatherNodes(def: ZoneDef, pois: Vec2[]): void {
-    for (const p of this.bountyHands) {
-      if (p.kind !== 'gather' || p.zoneId !== def.id || !p.gather) continue;
-      if (p.gather.claimed >= p.gather.count) continue;
-      if (def.objective.kind === 'safe' || def.spoils === 'none') continue;
-      const rows = harvestRowsFor(def.biome, def.tileset);
-      if (!rows.length) continue; // structurally excluded at the roll; belt and braces
-      const live = this.harvestNodes.filter(n => !n.spent).length;
-      const need = Math.max(0, p.gather.count - p.gather.claimed - live);
-      if (!need) continue;
-      const grng = new Rng((this.currentZoneSeed ^ HARVEST_CFG.salt ^ hashStr(p.id)) >>> 0);
-      for (let i = 0; i < need; i++) {
-        const row = this.harvestRowPick(rows, grng);
-        const at = this.interactSpot(pois, grng, 620, HARVEST_CFG.portalClear);
-        const pos = this.clampPos(vec(at.x, at.y), HARVEST_CFG.nodeRadius);
-        const d: Doodad = {
-          pos: vec(pos.x, pos.y), radius: HARVEST_CFG.nodeRadius, kind: row.kind,
-        };
-        this.doodads.push(d);
-        this.harvestNodes.push({ pos: vec(pos.x, pos.y), def: row, doodad: d, spent: false });
-      }
-      this.markDoodadsChanged();
-    }
-  }
+  private seedGatherNodes(def: ZoneDef, pois: Vec2[]): void { return sceneSeedGatherNodes(this.nativeSceneBountyHost(),def,pois); }
 
   /** The arrival note (loadZone): a held posting on this ground asks THE
    *  READINESS LAW's one fold at the door — the errand's entry IS its deed
    *  (the field-clear hook's twin for a kind whose predicate is the walk
    *  itself); any other kind simply reads afield until its own ask lands. */
-  private noteBountyArrivals(def: ZoneDef, firstVisit: boolean, from?: string): void {
-    for (const p of this.bountyHands) {
-      const row = BOUNTY_KINDS[p.kind];
-      if (row?.arrival && !this.clientActionHook) { row.arrival(this, p, def, firstVisit, from); this.charDirty = true; }
-      if (p.zoneId !== def.id && !row?.arrival) continue;
-      this.noteBountyReady(p);
-    }
-  }
+  private noteBountyArrivals(def: ZoneDef, firstVisit: boolean, from?: string): void { return sceneNoteBountyArrivals(this.nativeSceneBountyHost(),def,firstVisit,from); }
 
   /** THE FIELD WATCH (M2 — the annul reconcile's full honesty, charter §4):
    *  K4's done flips ANYWHERE (the boss slain, the hold opened, the
@@ -25246,18 +25176,7 @@ export class World {
    *  per world off the world's own seed, locked by THE MUSTER-ROLL LAW,
    *  spent by hiring, refreshed by nothing — reloads, re-rolls and town
    *  refreshes change nothing until the world itself is made anew. */
-  private armLastlightRecruiter(officer: Actor, zoneId: string): void {
-    const offers = this.mercSheetFor(zoneId, () => {
-      const rng = new Rng((this.manifest.seed ^ hashStr(`recruiter:${zoneId}`)) >>> 0);
-      const [lo, hi] = MERC_CFG.recruiter.offers;
-      return this.dealTemplateOffers(rng, rng.int(lo, hi));
-    });
-    this.mercOutpost = {
-      captain: officer, offers, port: true,
-      title: "The Recruiter's Table",
-      pitch: '"The Vault pays my table\'s rent, so I\'ll be plain: these blades, this world, no others. Choose."',
-    };
-  }
+  private armLastlightRecruiter(officer: Actor, zoneId: string): void { return settlementArmLastlightRecruiter(this.nativeSettlementHost(),officer,zoneId); }
 
   /** The muster-horn dwell (the caravanner latch discipline): completes into
    *  the hold panel via the polled one-shot. Host-side only — panel actions
@@ -26441,21 +26360,7 @@ export class World {
    *  gone from the world's supply — while an engaged-elsewhere veteran
    *  KEEPS the row (they return to the pool when released) and the hire
    *  gate speaks instead (mercOfferBlocked). */
-  private mercSheetFor(zoneId: string, mint: () => MercOffer[]): MercOffer[] {
-    let sheet = this.mercSheets[zoneId];
-    if (!sheet) {
-      sheet = this.mercSheets[zoneId] = mint();
-      this.charDirty = true; // world-save state from the moment it's dealt
-    }
-    for (let i = sheet.length - 1; i >= 0; i--) {
-      const o = sheet[i];
-      if (o.kind === 'retired' && !this.account.mercRoster.some(r => r.mercId === o.refId)) {
-        sheet.splice(i, 1);
-        this.charDirty = true;
-      }
-    }
-    return sheet;
-  }
+  private mercSheetFor(zoneId: string, mint: () => MercOffer[]): MercOffer[] { return settlementMercSheetFor(this.nativeSettlementHost(),zoneId,mint); }
 
   /** Why this offer refuses a hire RIGHT NOW (null = hireable). Locked
    *  sheets keep their rows (THE MUSTER-ROLL LAW) while availability stays
@@ -26474,22 +26379,7 @@ export class World {
   /** Deal COUNT baseline-template offers into `into` (shuffled archetype
    *  pool, seeded names) — the shared tail of every officer's mint: the
    *  wilds sheet after its veterans, the port muster, the town recruiter. */
-  private dealTemplateOffers(rng: Rng, count: number, into: MercOffer[] = []): MercOffer[] {
-    const templates = [...MERC_TEMPLATES];
-    for (let i = templates.length - 1; i > 0; i--) {
-      const j = Math.floor(rng.range(0, i + 1));
-      [templates[i], templates[j]] = [templates[j], templates[i]];
-    }
-    for (let i = 0; into.length < count && i < templates.length; i++) {
-      const t = templates[i];
-      into.push({
-        kind: 'template', refId: t.id,
-        name: t.names[Math.floor(rng.range(0, t.names.length))] ?? t.id,
-        classId: t.classId, blurb: t.blurb,
-      });
-    }
-    return into;
-  }
+  private dealTemplateOffers(rng: Rng, count: number, into: MercOffer[] = []): MercOffer[] { return settlementDealTemplateOffers(this.nativeSettlementHost(),rng,count,into); }
 
   /** MINT this outpost's offer sheet (once — mercSheetFor locks it): seeded
    *  count, the roster-fill-scaled veteran share (drawn from POOLED veterans
@@ -44941,31 +44831,12 @@ export class World {
   private gemWeights<T>(
     pool: T[], tagsOf: (x: T) => readonly SkillTag[], weightOf: (x: T) => number,
     bias?: SkillTag[], carried?: (x: T) => boolean,
-  ): number[] {
-    return pool.map(x => {
-      let w = weightOf(x);
-      for (const t of tagsOf(x)) w *= GEM_DROP_CFG.tagWeights[t] ?? 1;
-      if (bias && tagsOf(x).some(t => bias.includes(t))) w *= GEM_DROP_CFG.biasMult;
-      if (carried?.(x)) w *= GEM_DROP_CFG.carriedMult;
-      return Math.max(0, w);
-    });
-  }
+  ): number[] { return settlementGemWeights(this.nativeSettlementHost(),pool,tagsOf,weightOf,bias,carried); }
 
   private pickGem<T>(
     pool: T[], tagsOf: (x: T) => readonly SkillTag[], weightOf: (x: T) => number,
     bias?: SkillTag[], carried?: (x: T) => boolean,
-  ): T | null {
-    if (pool.length === 0) return null;
-    const weights = this.gemWeights(pool, tagsOf, weightOf, bias, carried);
-    const total = weights.reduce((s, w) => s + w, 0);
-    if (total <= 0) return pool[0];
-    let r = Math.random() * total;
-    for (let i = 0; i < pool.length; i++) {
-      r -= weights[i];
-      if (r <= 0) return pool[i];
-    }
-    return pool[pool.length - 1];
-  }
+  ): T | null { return settlementPickGem(this.nativeSettlementHost(),pool,tagsOf,weightOf,bias,carried); }
 
   /** The skill-gem drop POOL at a bracket: unlocked (account gating), inside
    *  minDropLevel, never noDrop. The fallback STILL respects gating —
@@ -44973,20 +44844,10 @@ export class World {
    *  even if the unlocked set were somehow emptied; it only keeps the
    *  contract (a non-empty pool, since no starter is noDrop). ONE filter
    *  serves the roller and THE STANDING ORDER's odds. */
-  private skillDropPool(atLevel: number, floor?: GemFloor): SkillDef[] {
-    let pool = SKILL_LIST.filter(s => !s.noDrop
-      && (isSkillUnlockedForDrop(this.account, s.id) || !!floor?.skills.has(s.id))
-      && (s.minDropLevel ?? 0) <= atLevel);
-    if (pool.length === 0) pool = SKILL_LIST.filter(s => !s.noDrop && STARTER_SKILLS.includes(s.id));
-    return pool;
-  }
+  private skillDropPool(atLevel: number, floor?: GemFloor): SkillDef[] { return settlementSkillDropPool(this.nativeSettlementHost(),atLevel,floor); }
 
   /** The support-gem drop POOL at a bracket (may be empty — nothing unlocked). */
-  private supportDropPool(atLevel: number, floor?: GemFloor): SupportDef[] {
-    return SUPPORT_LIST.filter(d =>
-      (isSupportUnlockedForDrop(this.account, d.id) || !!floor?.supports.has(d.id))
-      && (d.minDropLevel ?? 0) <= atLevel);
-  }
+  private supportDropPool(atLevel: number, floor?: GemFloor): SupportDef[] { return settlementSupportDropPool(this.nativeSettlementHost(),atLevel,floor); }
 
   /** THE GEM FLOOR (engine/loot.ts GEM_FLOORS — THE SCALD KIT K2, charter
    *  §4): the gems THIS ZONE's country floors into the kill-path pool —
@@ -45004,53 +44865,17 @@ export class World {
    *  mints at level 1 — leveling is the Ability Essence economy's job, so
    *  a find is a SHAPE (skill × rarity), never a pre-walked ladder. (The
    *  old GEM_DROP_CFG.preLevel deep-zone roll retired with M-ECON.) */
-  rollSkillGem(bias?: SkillTag[], atLevel = this.zone.level, floor?: GemFloor, ceiling?: SkillRarity): SkillInstance {
-    const pool = this.skillDropPool(atLevel, floor);
-    const owned = this.carriedGemIds().skills;
-    const skillDef = this.pickGem(pool, s => s.tags,
-      // THE GEM FLOOR's lean: the country's own gems roll at ×floorMult here.
-      s => (s.dropWeight ?? 100) * (floor?.skills.has(s.id) ? GEM_DROP_CFG.floorMult : 1), bias,
-      s => owned.has(s.id)) ?? pick(pool);
-    const rarity = rollSkillRarity(Math.random(), ceiling);
-    return makeSkillGem(skillDef, 1, rarity);
-  }
+  rollSkillGem(bias?: SkillTag[], atLevel = this.zone.level, floor?: GemFloor, ceiling?: SkillRarity): SkillInstance { return settlementRollSkillGem(this.nativeSettlementHost(),bias,atLevel,floor,ceiling); }
 
   /** Pick a support gem from the UNLOCKED pool (weighted, bracketed,
    *  bias-aware — dropTags default to what the gem sockets into), or null. */
-  private rollSupportDropGated(bias?: SkillTag[], atLevel = this.zone.level, floor?: GemFloor): SupportDef | null {
-    const pool = this.supportDropPool(atLevel, floor);
-    const owned = this.carriedGemIds().supports;
-    return this.pickGem(pool, d => d.dropTags ?? d.requiresTags ?? [],
-      d => d.weight * (floor?.supports.has(d.id) ? GEM_DROP_CFG.floorMult : 1), bias,
-      d => owned.has(d.id));
-  }
+  private rollSupportDropGated(bias?: SkillTag[], atLevel = this.zone.level, floor?: GemFloor): SupportDef | null { return settlementRollSupportDropGated(this.nativeSettlementHost(),bias,atLevel,floor); }
 
   /** Every gem id the PARTY already carries — bags, bars, and sockets alike
    *  (grafts stay out: they're derived, not owned stones). Feeds
    *  GEM_DROP_CFG.carriedMult, the fresh-find lean that keeps a growing
    *  catalog surfacing NEW gems instead of the fifth copy of one. */
-  private carriedGemIds(): { skills: Set<string>; supports: Set<string> } {
-    const skills = new Set<string>(), supports = new Set<string>();
-    const take = (inst: SkillInstance | null): void => {
-      if (!inst) return;
-      skills.add(inst.def.id);
-      for (const s of inst.sockets) if (s) supports.add(s.def.id);
-    };
-    for (const seat of this.seats) {
-      for (const inst of seat.actor.skills) take(inst);
-      // THE RESIDENCE: loose gems ride the bag as wrapper items now.
-      for (const item of bagGemItems(seat.meta.items)) {
-        const sp = skillGemPayloadOf(item);
-        if (sp) {
-          skills.add(sp.skillId);
-          for (const row of sp.sockets) if (row) supports.add(row.supportId);
-        }
-        const gp = supportGemPayloadOf(item);
-        if (gp) supports.add(gp.supportId);
-      }
-    }
-    return { skills, supports };
-  }
+  private carriedGemIds(): { skills: Set<string>; supports: Set<string> } { return settlementCarriedGemIds(this.nativeSettlementHost()); }
 
   /** THE DROP INDEX (meta/account.ts gemDropKey — the bestiary's sibling):
    *  stamp the account the moment a gem is genuinely MINTED into the world.
@@ -46370,29 +46195,15 @@ export class World {
     return n;
   }
 
-  private waresBonus(): { gems: number; gear: number } {
-    let gems = 0, gear = 0;
-    for (const r of VENDOR_CFG.wares.ladder) {
-      if (featureEnabled(this.account, r.flag)) { gems += r.gems; gear += r.gear; }
-    }
-    return { gems, gear };
-  }
-  private vendorSize(): number {
-    return VENDOR_CFG.wares.baseGems + this.waresBonus().gems;
-  }
+  private waresBonus(): { gems: number; gear: number } { return settlementWaresBonus(this.nativeSettlementHost()); }
+  private vendorSize(): number { return settlementVendorSize(this.nativeSettlementHost()); }
   /** THE BEAT LAW's quantum: the base beat cut by every owned RUSH rung
    *  (VENDOR_CFG.restock.ladder), floored at minSec. Feeds the lattice
    *  (restockOrdinal), the live mark, the per-beat shelf seed and the
    *  standing order's catchup alike — ONE clock, no drift possible. A rung
    *  bought mid-run re-buckets the watch honestly (VendorHold.watchedSec
    *  anchors on SECONDS, never stored beat indices). */
-  private restockSeconds(): number {
-    let sec: number = VENDOR_CFG.restock.baseSec;
-    for (const r of VENDOR_CFG.restock.ladder) {
-      if (featureEnabled(this.account, r.flag)) sec -= r.cutSec;
-    }
-    return Math.max(VENDOR_CFG.restock.minSec, sec);
-  }
+  private restockSeconds(): number { return settlementRestockSeconds(this.nativeSettlementHost()); }
 
   /** THE TRADE GATE (VENDOR_CFG.trade) — why this seat cannot BUY here, or
    *  null when trade is open. ONE predicate: the engine buy handlers refuse
@@ -46416,9 +46227,7 @@ export class World {
    *  builders read this ONE predicate (buildVendorStock + mintDelverStock)
    *  — the stock is the gate now; what stands on a shelf is honestly
    *  buyable. Keeper's account, as above. */
-  vendorGemsOpen(): boolean {
-    return featureEnabled(this.account, FEATURE.VENDOR_GEMS);
-  }
+  vendorGemsOpen(): boolean { return settlementVendorGemsOpen(this.nativeSettlementHost()); }
 
   /** THE COUNTER GLASS pack — deterministic display cells for a counter's
    *  WHOLE shelf (skill-items M3, the one face): first-fit in STOCK ORDER
@@ -46487,19 +46296,13 @@ export class World {
   /** The gem BRACKET a counter rolls at (VENDOR_CFG.gemBracket): the gear
    *  shelf's own "at the buyer's level" anchoring, or the bare ground.
    *  World drops never read this. */
-  private vendorGemLevel(): number {
-    return VENDOR_CFG.gemBracket === 'shopper'
-      ? Math.max(this.zone.level, this.player.level)
-      : this.zone.level;
-  }
+  private vendorGemLevel(): number { return settlementVendorGemLevel(this.nativeSettlementHost()); }
 
   /** The restock BEAT the world clock stands at — the standing order's
    *  resolution lattice. Pure f(time), so beats that passed while the
    *  counter stood unattended are countable at any later arm, and a
    *  resolved beat can never come around again. */
-  private restockOrdinal(): number {
-    return Math.floor(this.time / this.restockSeconds());
-  }
+  private restockOrdinal(): number { return settlementRestockOrdinal(this.nativeSettlementHost()); }
 
   /** Reserve capacity at every holding counter: one slot per owned ladder
    *  rung (VENDOR_CFG.lock.ladder — appending a flag + its Vault row raises
@@ -46529,112 +46332,31 @@ export class World {
   /** Re-anchor each held row's slot to where its entry ACTUALLY sits — after
    *  any stock splice, before any rebuild. A stood-down counter's rows keep
    *  their last-known seats. */
-  private syncHoldIdx(key: string, stock: VendorEntry[]): void {
-    const hold = this.vendorHolds[key];
-    if (!hold) return;
-    for (const row of hold.locks) {
-      const at = stock.indexOf(row.entry);
-      if (at >= 0) row.idx = at;
-    }
-  }
+  private syncHoldIdx(key: string, stock: VendorEntry[]): void { return settlementSyncHoldIdx(this.nativeSettlementHost(),key,stock); }
 
   /** Seat the hold's reserved rows over a freshly-rolled shelf — each at its
    *  remembered slot (clamped to the shelf; a collision probes to the
    *  nearest free seat). The overlay is the ONE way held rows reach a stock
    *  array. */
-  private overlayHold(key: string, out: VendorEntry[]): VendorEntry[] {
-    const hold = this.vendorHolds[key];
-    if (!hold?.locks.length) return out;
-    // Unpaid reservations outside a retuned stock policy cannot occupy an
-    // invisible reserve slot. Release them before overlay, preserving legal rows.
-    const legal = hold.locks.filter(row => this.vendorEntryAllowed(key, row.entry));
-    if (legal.length !== hold.locks.length) { hold.locks = legal; this.charDirty = true; }
-    const used = new Set<number>();
-    for (const row of [...hold.locks].sort((a, b) => a.idx - b.idx)) {
-      let at = Math.min(Math.max(0, Math.floor(row.idx)), Math.max(0, out.length - 1));
-      while (used.has(at) && at < out.length - 1) at++;
-      while (used.has(at) && at > 0) at--;
-      used.add(at);
-      row.idx = at;
-      out[at] = row.entry;
-    }
-    return out;
-  }
+  private overlayHold(key: string, out: VendorEntry[]): VendorEntry[] { return settlementOverlayHold(this.nativeSettlementHost(),key,out); }
 
-  private vendorStockPolicy(key?: string) { return VENDORS.find(v => v.id === key)?.stockPolicy; }
+  private vendorStockPolicy(key?: string) { return settlementVendorStockPolicy(this.nativeSettlementHost(),key); }
 
-  vendorMemoryCeiling(key?: string): SkillRarity | undefined {
-    const policy = this.vendorStockPolicy(key);
-    if (!policy) return undefined;
-    const allowed = new Set<string>(policy.baseRarities);
-    for (const upgrade of policy.upgrades ?? []) if (featureEnabled(this.account, upgrade.feature)) {
-      for (const rarity of upgrade.rarities) allowed.add(rarity);
-    }
-    const top = [...ITEM_RARITY_IDS].reverse().find(r => allowed.has(r)) ?? 'common';
-    return top === 'unique' ? 'legendary' : top;
-  }
+  vendorMemoryCeiling(key?: string): SkillRarity | undefined { return settlementVendorMemoryCeiling(this.nativeSettlementHost(),key); }
 
   /** Stock ceilings also guard old reserved rows and direct purchase intents. */
-  vendorEntryAllowed(key: string, entry: VendorEntry): boolean {
-    const policy = this.vendorStockPolicy(key);
-    if (!policy) return true;
-    const ceiling = this.vendorMemoryCeiling(key)!;
-    const ranks = Object.keys(SKILL_RARITIES);
-    if (entry.kind === 'skill') return this.vendorGemsOpen() && ranks.indexOf(entry.inst.rarity ?? 'common') <= ranks.indexOf(ceiling);
-    if (entry.kind === 'support') return this.vendorGemsOpen() && featureEnabled(this.account, FEATURE.BRANDT_SELL_SUPPORTS);
-    if (memoryKindOf(entry.item)) return (!policy.memoriesRequire || featureEnabled(this.account, policy.memoriesRequire))
-      && !!entry.item.mem?.every(u => u.ceiling && ranks.indexOf(u.ceiling) <= ranks.indexOf(ceiling));
-    return policy.baseRarities.includes(entry.item.rarity)
-      || !!policy.upgrades?.some(u => featureEnabled(this.account, u.feature) && u.rarities.includes(entry.item.rarity));
-  }
+  vendorEntryAllowed(key: string, entry: VendorEntry): boolean { return settlementVendorEntryAllowed(this.nativeSettlementHost(),key,entry); }
 
   /** Arm/refresh ONE counter: resolve the standing order's elapsed beats,
    *  roll a fresh shelf at the counter's bracket, seat the reserved rows.
    *  Every arm site and the restock walk through here — one builder. */
-  armVendorStock(key: string): VendorEntry[] {
-    this.resolveCommission(key);
-    // THE FOREORDAINED SHELF: the whole roll runs on a stream seeded
-    // (world seed, counter, beat) — the commission resolver's own doctrine
-    // widened to the ordinary wares, borrowed via the off-stream swap
-    // (core/rng.ts withSeededRandom) so no other system's die ever moves.
-    // Within one beat the counter deals ONE truth: re-entering, reloading,
-    // or peeking twice meets the same shelf — scumming a re-roll means
-    // WAITING for the beat to turn. (Live params still fold honestly: a
-    // level-up or borough swell mid-beat changes what a FRESH arm rolls,
-    // but the standing-shelf law means mid-beat re-arms don't happen.)
-    const seed = (this.manifest.seed ^ hashStr(`vendorshelf:${key}:${this.restockOrdinal()}`)) >>> 0;
-    return withSeededRandom(seed, () => {
-      const stock = this.overlayHold(key, this.buildVendorStock({ counter: key }))
-        .filter(entry => this.vendorEntryAllowed(key, entry));
-      this.curateVendorStock(key, stock);
-      return stock;
-    });
-  }
+  armVendorStock(key: string): VendorEntry[] { return settlementArmVendorStock(this.nativeSettlementHost(),key); }
 
-  vendorQualityPieces(key: string): number {
-    if (!VENDORS.find(v => v.id === key)?.quality) return 0;
-    return VENDOR_CFG.quality.ladder.reduce((n, r) => n + (featureEnabled(this.account, r.flag) ? r.pieces : 0), 0);
-  }
+  vendorQualityPieces(key: string): number { return settlementVendorQualityPieces(this.nativeSettlementHost(),key); }
 
   /** Select fresh equipment after reservations are seated. This stays inside
    * the shelf's seeded stream and never changes a held item's properties. */
-  private curateVendorStock(key: string, stock: VendorEntry[]): void {
-    const count = this.vendorQualityPieces(key);
-    if (!count) return;
-    const held = new Set(this.vendorHolds[key]?.locks.map(r => r.entry) ?? []);
-    const pool = stock.filter((e): e is VendorEntry & { kind: 'item' } => e.kind === 'item'
-      && !held.has(e) && !e.item.mem && !e.item.gem && e.item.rarity !== 'unique');
-    let selected = 0;
-    while (pool.length && selected < count) {
-      const e = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
-      const rarity = selected < VENDOR_CFG.quality.magicPieces || e.item.rarity === 'common' ? 'magic' : e.item.rarity;
-      if (!this.vendorEntryAllowed(key, { kind: 'item', item: { ...e.item, rarity } })) continue;
-      const baseId = rarity === 'magic' && ITEM_BASES[e.item.baseId]?.minRarity === 'rare' ? undefined : e.item.baseId;
-      const item = rollItem({ baseId, ilvl: e.item.ilvl, rarity,
-        rarityCeiling: rarity, affixQuality: VENDOR_CFG.quality });
-      if (item?.affixes.length) { e.item = item; selected++; }
-    }
-  }
+  private curateVendorStock(key: string, stock: VendorEntry[]): void { return settlementCurateVendorStock(this.nativeSettlementHost(),key,stock); }
 
   /** Roll a fresh counter onto the ONE shelf (skill-items M3, §6 — the
    *  gem-case face is retired): MEMORY POUCHES follow the counter's policy
@@ -46647,66 +46369,7 @@ export class World {
    *  priced by quality in mixed essence. Both halves widen through the ONE
    *  broader-wares fold (waresBonus). `opts` lets an arm site stand down a
    *  half it does not deal (pouches ride the gems half). */
-  buildVendorStock(opts?: { gems?: boolean; gear?: boolean; counter?: string }): VendorEntry[] {
-    const out: VendorEntry[] = [];
-    const ceiling = this.vendorMemoryCeiling(opts?.counter);
-    const sellSupports = featureEnabled(this.account, FEATURE.BRANDT_SELL_SUPPORTS);
-    const lvl = this.vendorGemLevel();
-    if (opts?.gems !== false) {
-      // The standard offering: one stack per pouch kind, unit counts by
-      // dial. Seeds draw from the CURRENT stream — under armVendorStock's
-      // seeded swap that makes every unit's grant a pure function of
-      // (world seed, counter, beat): reload or re-entry meets the same
-      // sealed futures (THE FOREORDAINED SHELF, extended to the pouches).
-      for (const kind of MEMORY_KIND_IDS) {
-        const policy = this.vendorStockPolicy(opts?.counter);
-        const n = policy?.memoriesRequire && !featureEnabled(this.account, policy.memoriesRequire) ? 0 : VENDOR_CFG.pouches[kind];
-        if (n <= 0) continue;
-        const units: RoughMemoryUnit[] = Array.from({ length: n }, () =>
-          ({ d: MEMORY_TRADED_PROVENANCE, s: (Math.random() * 4294967296) >>> 0, ...(ceiling ? { ceiling } : {}) }));
-        out.push({ kind: 'item', item: makeMemoryItem(kind, units) });
-      }
-      if (this.vendorGemsOpen()) {
-        for (let i = 0; i < this.vendorSize(); i++) {
-          if (sellSupports && Math.random() < VENDOR_CFG.supportShare) {
-            const sd = this.rollSupportDropGated(undefined, lvl);
-            // A chassis gem CUTS AT THE VEIN here — under armVendorStock's
-            // seeded swap, so the shelf's cuts are foreordained too.
-            if (sd) { out.push({ kind: 'support', gem: mintSupportInstance(sd, 1) }); continue; }
-          }
-          out.push({ kind: 'skill', inst: this.rollSkillGem(undefined, lvl, undefined, ceiling) });
-        }
-      }
-    }
-    if (opts?.gear !== false) {
-      // The gear shelf: the base VENDOR_ITEM_CFG.slots plus every owned
-      // broader-wares rung's gear. Rolls anchor to the LOCAL hero's level
-      // (the shopper).
-      const shelf = VENDOR_ITEM_CFG.slots + this.waresBonus().gear;
-      // THE PROSPERITY CURVE: a fuller Lastlight attracts finer wares — the
-      // authored weights lifted by the refugee population (data/boroughs.ts;
-      // population 0, or the Borough package off, = the authored table verbatim).
-      const shelfWeights = { ...boroughVendorWeights(this.sim.boroughField?.population ?? 0) };
-      const policy = this.vendorStockPolicy(opts?.counter);
-      let rarityCeiling: ItemRarity | undefined;
-      if (policy) {
-        const allowed = new Set<string>(policy.baseRarities);
-        for (const upgrade of policy.upgrades ?? []) if (featureEnabled(this.account, upgrade.feature)) {
-          for (const rarity of upgrade.rarities) allowed.add(rarity);
-        }
-        for (const rarity of Object.keys(shelfWeights) as (keyof typeof shelfWeights)[]) {
-          if (!allowed.has(rarity)) shelfWeights[rarity] = 0;
-        }
-        rarityCeiling = [...ITEM_RARITY_IDS].reverse().find(r => allowed.has(r));
-      }
-      for (let i = 0; i < shelf; i++) {
-        const ilvl = Math.max(1, this.player.level + randInt(-VENDOR_ITEM_CFG.ilvlJitter, VENDOR_ITEM_CFG.ilvlJitter));
-        const item = rollItem({ ilvl, rarityWeights: shelfWeights, rarityCeiling });
-        if (item) out.push({ kind: 'item', item });
-      }
-    }
-    return out;
-  }
+  buildVendorStock(opts?: { gems?: boolean; gear?: boolean; counter?: string }): VendorEntry[] { return settlementBuildVendorStock(this.nativeSettlementHost(),opts); }
 
   /** Restock now and arm the next restock at the next BEAT BOUNDARY —
    *  (beat+1) × sec, never time + sec, so the live mark, the panel
@@ -46744,36 +46407,7 @@ export class World {
    *  a reserved row wearing the commission mark and stops the watch — the
    *  order stands fulfilled-pending-purchase; releasing the find unbought
    *  resumes the watch (you turned down the find, not the order). */
-  private resolveCommission(key: string): void {
-    const hold = this.vendorHolds[key];
-    if (!hold) return;
-    const c = hold.commission;
-    if (!c || hold.locks.some(r => r.commission)
-      || !memoryCommissionReady(this.account, c.kind, c.id, VENDOR_CFG.commission.need)) { hold.watchedSec = this.time; return; }
-    // THE WALL-TIME ANCHOR: beats to resolve = the lattice indices whose
-    // spans END inside (watchedSec, now] under the CURRENT quantum. The
-    // watch remembers seconds, never beat indices — a rush rung bought
-    // mid-run re-buckets already-watched time under the new cadence
-    // honestly: no phantom catchup burst, no re-opened beats, whichever
-    // way the quantum moves (time only runs forward).
-    const sec = this.restockSeconds();
-    const nowBeat = Math.floor(this.time / sec);
-    const from = Math.max(Math.floor(hold.watchedSec / sec) + 1, nowBeat - VENDOR_CFG.commission.maxCatchup);
-    const p = this.commissionOdds(c);
-    for (let o = from; o <= nowBeat && p > 0; o++) {
-      const rng = new Rng((this.manifest.seed ^ hashStr(`vendorhold:${key}:${c.kind}:${c.id}:${o}`)) >>> 0);
-      if (rng.next() >= p) continue;
-      const entry = this.mintCommissionEntry(c, rng, key);
-      if (!entry) break; // the registry lost the gem — the sanitizer owns the rest
-      const used = new Set(hold.locks.map(r => r.idx));
-      let idx = 0;
-      while (used.has(idx)) idx++;
-      hold.locks.push({ entry, idx, commission: true });
-      this.charDirty = true;
-      break;
-    }
-    hold.watchedSec = this.time;
-  }
+  private resolveCommission(key: string): void { return settlementResolveCommission(this.nativeSettlementHost(),key); }
 
   /** P(one restock beat surfaces the gem): the slot's kind share × the gem's
    *  weight share of ITS pool (the roller's own filter + weights at the
@@ -46781,53 +46415,12 @@ export class World {
    *  1-(1-p)^slots — then the config kindness dial. 0 = this counter cannot
    *  roll it here (locked pool, out of bracket, supports not yet sold);
    *  the panel prints the same number the resolver rolls. */
-  commissionOdds(c: { kind: 'skill' | 'support'; id: string }): number {
-    const lvl = this.vendorGemLevel();
-    const sellSupports = featureEnabled(this.account, FEATURE.BRANDT_SELL_SUPPORTS);
-    const carried = this.carriedGemIds();
-    let share: number;
-    let frac = 0;
-    if (c.kind === 'skill') {
-      share = sellSupports ? 1 - VENDOR_CFG.supportShare : 1;
-      const pool = this.skillDropPool(lvl);
-      const i = pool.findIndex(s => s.id === c.id);
-      if (i >= 0) {
-        const w = this.gemWeights(pool, s => s.tags, s => s.dropWeight ?? 100, undefined,
-          s => carried.skills.has(s.id));
-        const total = w.reduce((s, x) => s + x, 0);
-        frac = total > 0 ? w[i] / total : 0;
-      }
-    } else {
-      share = sellSupports ? VENDOR_CFG.supportShare : 0;
-      const pool = this.supportDropPool(lvl);
-      const i = pool.findIndex(d => d.id === c.id);
-      if (i >= 0) {
-        const w = this.gemWeights(pool, d => d.dropTags ?? d.requiresTags ?? [], d => d.weight, undefined,
-          d => carried.supports.has(d.id));
-        const total = w.reduce((s, x) => s + x, 0);
-        frac = total > 0 ? w[i] / total : 0;
-      }
-    }
-    const pSlot = share * frac;
-    if (pSlot <= 0) return 0;
-    const pBeat = 1 - Math.pow(1 - pSlot, this.vendorSize());
-    return Math.min(1, pBeat * VENDOR_CFG.commission.oddsMult);
-  }
+  commissionOdds(c: { kind: 'skill' | 'support'; id: string }): number { return settlementCommissionOdds(this.nativeSettlementHost(),c); }
 
   /** Mint the standing order's find on the hit beat's own stream — the
    *  roller's own mint (rarity → sockets), the beat as its die. The counter
    *  takes no deep-zone pre-level: the ground is the ground. */
-  private mintCommissionEntry(c: { kind: 'skill' | 'support'; id: string }, rng: Rng, key = 'brandt'): VendorEntry | null {
-    if (c.kind === 'skill') {
-      const def = SKILLS[c.id];
-      if (!def) return null;
-      return { kind: 'skill', inst: makeSkillGem(def, 1, rollSkillRarity(rng.next(), this.vendorMemoryCeiling(key))) };
-    }
-    const def = SUPPORTS[c.id];
-    if (!def) return null;
-    // The standing order's find cuts on the beat's own die (foreordained).
-    return { kind: 'support', gem: mintSupportInstance(def, 1, () => rng.next()) };
-  }
+  private mintCommissionEntry(c: { kind: 'skill' | 'support'; id: string }, rng: Rng, key = 'brandt'): VendorEntry | null { return settlementMintCommissionEntry(this.nativeSettlementHost(),c,rng,key); }
 
   /** Toggle a reserve on one shelf row (the vendorLock intent, validated).
    *  ON reserves within the ladder's capacity; OFF releases — the row stays
@@ -60338,13 +59931,7 @@ export class World {
 
   /** The exact native occurrence roster: explicit kin first, then the
    * registered faction's non-boss, non-spawner, non-passive bodies. */
-  massOccurrenceSpawnTable(spec:OccKinSpec):import('./occurrences').OccKinRow[]{
-    let table=(spec.kin??[]).filter(en=>MONSTERS[en.id]);
-    if(!table.length&&spec.faction)table=(FACTIONS[spec.faction]?.table??[]).filter(en=>{
-      const d=MONSTERS[en.id];return !!d&&!d.boss&&!d.passive&&!d.spawner;
-    });
-    return table.map(row=>({...row}));
-  }
+  massOccurrenceSpawnTable(spec:OccKinSpec):import('./occurrences').OccKinRow[]{ return sceneOccurrenceSpawnTable(spec); }
   /** Native type -> factory -> angle -> radius order, detached until its
    * occurrence owner commits the complete reserved wave. */
   createMassOccurrenceBodies(request:MassOccurrenceBirth):readonly Actor[]{
@@ -60400,51 +59987,7 @@ export class World {
   /** The narrow OccHost (the TrapHost idiom) — memoized once, closures read
    *  live state. THE QUICKENING ANCHOR lives here: every pour mints at the
    *  LIVE this.zone.level, the exact field the surge writes. */
-  private occHost(): OccHost {
-    // SOVEREIGNTY: seat — a host object — no touch (the derived census, probe_tiers RIG T).
-    return this.occHostObj ??= {
-      timeOf: () => this.time,
-      zoneLevel: () => this.zone.level,
-      heroDist: (x, y) => this.player.dead
-        ? Infinity : Math.hypot(this.player.pos.x - x, this.player.pos.y - y),
-      disturbedNear: (x, y, r) =>
-        this.occDisturbs.some(p => Math.hypot(p.x - x, p.y - y) <= r),
-      dice: (a, b) => rand(a, b),
-      diceInt: (a, b) => randInt(a, b),
-      plant: (row) => {
-        this.doodads.push({
-          pos: vec(row.x, row.y), radius: row.r, kind: row.kind,
-          ...(row.rot !== undefined ? { rot: row.rot } : {}),
-          ...(row.fall ? { fall: true } : {}),
-        });
-        this.markDoodadsChanged();
-      },
-      pour: (spec: OccKinSpec, x, y, band, n) => {
-        const table = this.massOccurrenceSpawnTable(spec);
-        if (!table.length) return 0;
-        const tag = spec.tag ?? OCC_CFG.bornTag;
-        let spawned = 0;
-        for (let i = 0; i < n; i++) {
-          const type = this.weightedPick(table, this.zone.level);
-          const m = this.createMonster(type,
-            Math.max(1, this.zone.level + (spec.levelBonus ?? 0)), 'enemy');
-          const ang = rand(0, Math.PI * 2);
-          const rr = rand(band[0], band[1]);
-          m.pos = this.clampPos(vec(x + Math.cos(ang) * rr, y + Math.sin(ang) * rr), m.radius);
-          m.tag = tag;
-          this.actors.push(m);
-          spawned++;
-        }
-        return spawned;
-      },
-      tagCount: (tag) => this.actors.filter(a => !a.dead && a.tag === tag).length,
-      // Show, don't tell: cracks, tremor, eruption and living bodies carry local events.
-      announce: () => {},
-      rumble: (mag) => { this.shake = Math.max(this.shake, mag); },
-      flash: (x, y, radius, color) =>
-        this.flashes.push({ pos: vec(x, y), radius, color, life: 0.5, maxLife: 0.5 }),
-    };
-  }
+  private occHost(): OccHost { return sceneOccurrenceHost(this.nativeSceneOccurrenceHost()); }
 
   private spawnWave(): void { return spawnSceneWave(this.nativeScenePopulationHost()); }
 

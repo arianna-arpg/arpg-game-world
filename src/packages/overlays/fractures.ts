@@ -486,7 +486,7 @@ registerMarkerSource((world: World): MapMarker[] => {
 // ground while the run still tears onward.
 registerBountySource({
   id: 'fractures',
-  census(world: World) {
+  census(world: import('../../data/bountyboard').BountyReadContext) {
     const f = world.sim.fractureField?.peek();
     if (!f) return [];
     const z = world.zoneMap[f.zoneId];

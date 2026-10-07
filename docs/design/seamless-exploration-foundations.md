@@ -1958,3 +1958,91 @@ cave entry, same-hero continuation, cold Continue and exact return. This client
 course covers already-admitted content, not full native-area activation. The
 World source audit retains 2,311 unrelated members and the original actor lookup;
 only 22 delegates and six adapter members change.
+
+
+## NativeAreaBoundaries and living-place generation ownership
+
+NativeAreaBoundaries shares the exact native pre-layout graph stage. First-visit
+holdfast rolls, eager and horizon charting, opening progression, neighbor reveal,
+roadless/cross-dimension repairs, exit siting and physical separation retain their
+original order. Boundary, road and biome-meld annotations keep their source and
+exit-row identities. The operation retains every generated graph child and all
+reciprocal mutations; it does not reduce a prepared place to its parent ZoneDef.
+The classic World adapter owns its live graph and cached view. A detached source
+issuer must still provide authentic campaign graph/controller ownership.
+
+The two canonical seed-991 owner requests are derived through the existing native
+mapping without face, seed or biome overrides. Real default-enabled campaigns
+prepare forest and downs and add 82 and 83 graph zones, respectively. Four direct
+controller comparisons, 36 explicit branch/read cases and 14 callback-selection
+cases match the pinned native block. Six actual full-load comparisons cover both
+natural places, remembered entry and a second-exit-placement exception; 548 factory
+bodies and 45,413 random draws match. Independent alias tests retain prior live
+exits on mid-map failure and preserve earlier graph changes on later exceptions.
+These controls do not certify every complex or a naturally selected locked gate.
+
+NativeSettlementServices shares 29 original methods: the full stock-generation
+dependency chain plus native town seating and recruiter sheets. The local owner
+uses actual adopted town tier and area geometry alongside real campaign account,
+party, stock holds, recruit sheets, time and borough population. Held item objects
+and native allocation IDs survive shelf generation; return visits retain recruiter
+offers. The same gem helpers continue serving their original loot callers with
+unchanged defaults, bias and explicit floor arguments. No purchase, hiring or UI
+transaction was replaced. Twenty-six cold-process original/local/World courses
+match 7,257 native draws, 76,936 provider reads and 2,262 operation calls, including
+partial allocation failures, nullable borough state and every native town tier.
+
+NativeSceneBounty shares seven original operations for cull marks, gather nodes,
+arrival, readiness and quest-copy reads. The local owner requires the same scene,
+geometry, population and environment owners and the actual campaign posting/quest
+ledgers. It retains native multiple-posting count rules, actor/node aliases and
+partial failure effects. Installed bounty source callbacks now declare their real
+read contract, including the actual seamless runtime; six type-only source changes
+produce identical runtime JavaScript. Twenty-one original/local/World courses
+cover all installed kinds, all four positive package censuses and a real country
+destination with discovery and live null/restore transitions. Country visit
+readiness is positive; the course does not claim completed country clear/cache/
+puzzle/objective rewards. Per lane it retains 79 actor states, 64 harvest nodes,
+652 draws, 971 host calls and 1,650 source reads.
+
+NativeSceneOccurrences shares the exact native event callback host, population
+roster and generation-time trace reset. Local events read their own mutable
+terrain, zone level and current actor census, while using genuine campaign time
+and trace-release services. Remembered events restore their wound without a second
+wave; fresh events retain native telegraph, spring and later fixture behavior.
+The local callback cache is a private instance field. A foreign carried cache is
+refused, late state-property injection cannot redirect it, and a new owner gets a
+new closure. This fixes a defect found during independent draft review; the
+classic native cache operation itself remains unchanged. Seventeen complete
+original/local/World courses on three retained layouts match 78 allocations and
+488 random draws; 68 roster cases, 22 local binding controls and additional
+partial-failure/read-order cases verify the boundary. Positive occurrences are
+explicit installed-recipe fixtures, not claims about natural event frequency.
+
+All four classic adapters preserve selected-method timing and native receivers;
+their caches are nonenumerable and pass real dormant-reference negative/positive
+checks. The World source audit preserves 2,299 unrelated members and all 375
+previous runtime module positions; only 39 selected methods, the pre-layout block
+and nine adapter members change. These shared operations remain at their existing
+native load/birth positions. The local owners are ready to compose; complete
+NativeAreaScene birth/controller integration has not been activated.
+
+Still required: one genuine resident director/session shared by appearance and
+resident resets, objective-adoption source context, stable physical-content owners,
+all selected native package/presenter callbacks, authentic installed source sessions,
+whole-owner paging and update/render/reward dispatch. Actual full seamless-area
+A/B/A and cold Continue remain acceptance gates. This pass does not change the
+localized ordinary mire policy or claim biome, hydrology or main-content parity.
+
+Validation for NativeAreaBoundaries, NativeSettlementServices, NativeSceneBounty
+and NativeSceneOccurrences: all 478 fast probes pass without retries in 908.7
+seconds. Nine slow and three excluded probes were not run. All three project
+type checks pass, all 25 smoke simulation episodes pass, and the complete
+869-case generation matrix passes three seeds (2,607 generations) with no
+failures and four existing spacing warnings. The built client passes native
+structures/movement, cave entry, same-hero continuation, cold Continue and exact
+return. The separate conversation course passes native gifts, work, reward,
+once-only payout, narrow/scaled presentation and Save/Continue. The first
+conversation invocation served an old harness build and failed at its missing
+save hook; selecting the freshly verified build passes without production changes.
+These client courses cover admitted content, not complete seamless native areas.

@@ -1,3 +1,15 @@
+NativeAreaBoundaries now shares the exact pre-layout campaign graph operation,
+including whole neighbor graphs, reciprocal heals and boundary/road/meld inputs.
+NativeSettlementServices, NativeSceneBounty and NativeSceneOccurrences supply
+native stock/recruiter/seating, bounty site/arrival and local event services.
+Classic World uses the same operations. Retain real campaign/source providers,
+item and actor identities, held stock, local census/terrain and callback caches.
+Occurrence callbacks belong to their own area; transferred caches are refused.
+This does not complete the resident director, physical-content/reward owners,
+package runtime registry, installed source session or seamless-area activation.
+Verify nativeareaboundaries/nativesettlementservices/nativescenebounty/
+nativesceneoccurrences, all types, generation, sim and client Continue courses.
+
 NativeSceneEnvironment and NativeSceneEcology share complete native birth
 operations with classic World: scenery, puzzles and tones, harvest, geysers,
 escape fronts, carried throng, lightweight populations, vent seating and wells.
