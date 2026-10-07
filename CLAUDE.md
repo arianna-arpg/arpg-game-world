@@ -1,3 +1,11 @@
+Native region geometry lives in world/regionGeometry. The classic regionWinner
+wrapper supplies the original complete field selection, scale data and policy.
+The shared solver preserves native hash, scan/pruning/tie order and depth across
+same-biome cells. This prepares a source-owned country adapter; it does not add
+biomeDepth to the existing square-country policy or change historic descriptors.
+Verify geography, native biome probes, nativecountry, types and genqa. Native
+32-bit hash aliases and global field-selection policy remain explicit limits.
+
 Native burial urns keep main's hit/touch, surface-proc, orb/gem, skeleton wake
 and ceramic dissolution order. Frozen whole-source contracts precede admission.
 MassNativeBrittles reserves the full two-body maximum before any pop effect;

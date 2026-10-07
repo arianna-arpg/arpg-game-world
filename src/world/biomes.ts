@@ -22,6 +22,7 @@ import { continentAt, continentSeedFrom } from './continents';
 import { CLIMATE_CFG, climateAt, climateAffinity, registerClimateInvalidation, validateClimateSpecs, type ClimateSpec } from './climate';
 import { presenceMul, type LevelEnvelope } from '../engine/presence';
 import type { MapCoord } from './coords';
+import { regionGeometry, regionCellHash as hashCell } from './regionGeometry';
 
 export interface BiomeInfo {
   /** The faction that springs from this land (must exist in FACTIONS). */
@@ -1409,15 +1410,6 @@ export interface BiomeFieldModifier {
   label?: string;
 }
 
-/** Integer hash (Rng's family) → deterministic across host / client / reload. */
-function hashCell(a: number, b: number, seed: number): number {
-  let h = (seed ^ 0x9e3779b9) >>> 0;
-  h = Math.imul(h ^ (a | 0), 0x85ebca6b) >>> 0;
-  h = Math.imul(h ^ (b | 0), 0xc2b2ae35) >>> 0;
-  h ^= h >>> 13; h = Math.imul(h, 0x27d4eb2f) >>> 0; h ^= h >>> 15;
-  return h >>> 0;
-}
-
 // Cell-pick memo: the pick is pure per (dimension, seed, cell), and floods /
 // map washes hammer the same cells thousands of times. Bounded — cleared
 // wholesale at the cap (a re-fill is cheap; correctness never depends on it).
@@ -1574,26 +1566,13 @@ export function fieldBiomePick(
  * Depth compares the nearest DIFFERENT biome in this bounded neighborhood;
  * it saturates at one when no opposing biome is nearby. */
 export function regionWinner(coord: MapCoord, seed: number): { biome: string; gx: number; gy: number; scale: number; score: number; depth: number } {
-  const span = BIOME_FIELD_CFG.cellSpan, cfg = BIOME_FIELD_CFG.regionScale;
-  const cx = Math.floor(coord.x / span), cy = Math.floor(coord.y / span);
-  let best = { biome: 'grove', gx: cx, gy: cy, scale: 1, score: Infinity };
-  let other = Infinity;
-  for (let dx = -cfg.search; dx <= cfg.search; dx++) for (let dy = -cfg.search; dy <= cfg.search; dy++) {
-    const gx = cx + dx, gy = cy + dy, h = hashCell(gx, gy, seed);
-    const x = (gx + 0.5 + ((h & 0xffff) / 0xffff - 0.5) * BIOME_FIELD_CFG.jitter) * span;
-    const y = (gy + 0.5 + ((h >>> 16) / 0xffff - 0.5) * BIOME_FIELD_CFG.jitter) * span;
-    const distance = (x - coord.x) ** 2 + (y - coord.y) ** 2;
-    if (distance / (cfg.max ** 2) >= other) continue;
-    const biome = fieldBiomePick(BIOME_FIELD, gx, gy, { x, y }, seed);
-    const band = BIOMES[biome]?.regionScale ?? cfg.default;
-    const scale = Math.max(cfg.min, Math.min(cfg.max, band[0] + (band[1] - band[0]) * hashCell(gx, gy, seed ^ 0x72ad1) / 0x100000000));
-    const score = distance / (scale * scale);
-    if (score < best.score) {
-      if (biome !== best.biome) other = best.score;
-      best = { biome, gx, gy, scale, score };
-    } else if (biome !== best.biome && score < other) other = score;
-  }
-  return { ...best, depth: Number.isFinite(other) ? Math.max(0, 1 - Math.sqrt(best.score / Math.max(other, 1e-9))) : 1 };
+  return regionGeometry(coord, seed, {
+    cellSpan: BIOME_FIELD_CFG.cellSpan,
+    jitter: BIOME_FIELD_CFG.jitter,
+    regionScale: BIOME_FIELD_CFG.regionScale,
+    biomeAtCell: (gx, gy, site, fieldSeed) => fieldBiomePick(BIOME_FIELD, gx, gy, site, fieldSeed),
+    scaleForBiome: biome => BIOMES[biome]?.regionScale,
+  });
 }
 
 /** The current biome at a map coordinate, with the ocean mask authoritative. */

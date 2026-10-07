@@ -1108,3 +1108,50 @@ The complete final worldmass gate passed 96 of 96 probes in 432.0 seconds with
 retries disabled (four workers, 300-second per-probe timeout). Independent
 same-model reviews accepted the bounded source, lifecycle and final browser
 scopes; they are not cross-model consensus or evidence of full main parity.
+
+## Shared native region geometry and the next country boundary
+
+`world/regionGeometry.ts` now owns the original integer hash and weighted,
+jittered regional geometry. `world/biomes.ts` supplies the existing native field
+picker, including its climate bands and existence floors, and the original
+per-biome scale data. Scan order, pruning, strict ties and the different-biome
+depth calculation remain exact. Adjacent cells of the same biome retain an
+interior instead of creating artificial fringes. The leaf takes explicit
+readonly policy/callback inputs and owns no memo or ambient random draws.
+
+This is a preparatory source extraction. The current country still uses its
+saved square-region selection and omits biomeDepth. The native field picker
+still reads its established global climate/anchor policy; extracting geometry
+does not make that entire policy immutable or solve a worldmass coordinate
+mapping. The native hash retains signed 32-bit cell coercion and its existing
+aliases. A future address adapter must state and verify its supported domain.
+
+A separate deterministic native-source survey over 15,553 targeted samples
+found real fringe/interior pairs within the same native region. With the
+original complete composition generator, buried_village produces zero pieces
+at its desert fringe and 31 inside (two urns and the vault gate); sepulcher_site
+produces zero and 15 (two urns and its gate). Temple of the Green and the
+Sundering likewise obey their native depth gates. Omitting depth admits the
+full compositions at those fringes. The providers' chance-one diagnostic
+wrapper is explicit: these are eligibility results, not natural spawn rates.
+Across 128 pinned desert selector cases, supplying actual depth changes 63
+native tileset choices, with the same subsequent random draw.
+
+Two declared coordinate projections also produced different biome owners from
+the present country sampler. Neither projection is adopted by this extraction.
+The next country integration therefore needs one saved source policy and
+mapping for biome identity, depth, climate and native tileset selection, with
+a stable zone mint anchor shared by features, objectives and weather. Native
+source gates must receive that source's depth. Existing saved configurations
+and born descriptors remain authoritative; filling old missing depth with a
+new value would change their geometry and obligations retroactively.
+
+The extraction's durable geography probe passed 1,837 archived-native comparisons
+plus the existing region, cliff, density, terrain, save and network checks. A
+separate same-model review passed 2,844 complete geometry/callback-trace cases
+and 288 classic-wrapper comparisons. Types for all three projects, grove, garden,
+mountain, scald, warfront, biome-share and nativecountry probes, classic build/boot,
+and GenQA's 2,607 cases passed; GenQA retained its four existing warnings. An
+initial test-only implicit-any error was corrected with explicit generic policy
+annotations before the final type check. No country depth activation or infinite
+address guarantee follows from these results.
