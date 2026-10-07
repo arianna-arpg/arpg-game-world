@@ -491,7 +491,15 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
 }
 /** Applies only character build/carry state. World/page adoption is separate. */
 export function applyCharacterResumeFields(world: World, resume: CharacterResume): boolean {
-  return characterResumeAuthority(resume) && applyCharacterFields(world, characterResumeFields(resume));
+  if (!characterResumeAuthority(resume)) return false;
+  // The receipt remains frozen authority. Registry rebuilding and later play
+  // need their own mutable carry graph (affixes, gems, corpses and companions).
+  // Inline fields are only a type view: explicitly omit its potentially huge
+  // world before cloning, so this stage never expands native world history.
+  const fields = resume.kind === 'inline'
+    ? (({ world: _world, ...character }) => character)(resume.save)
+    : resume.character;
+  return applyCharacterFields(world, structuredClone(fields));
 }
 function applyCharacterFields(world: World, save: CharacterFields): boolean {
   if (!isCurrentCharacterSave(save)) return false;

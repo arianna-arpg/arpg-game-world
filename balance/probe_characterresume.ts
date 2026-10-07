@@ -1,3 +1,5 @@
+import { forgeItem } from '../src/engine/itemgen';
+import { makeSkillGemItem } from '../src/engine/gemitems';
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { serializeCharacter, charKeyFor, readCharacterResume, readCharacterContinueSummary, characterResumeAuthority,
@@ -220,11 +222,26 @@ Object.defineProperty(globalThis,'window',{configurable:true,value:{localStorage
 }}});
 globalThis.fetch=async()=>new Response('',{status:404});
 try{
-  const inline=clone(save);inline.charId='resume-probe';mem.set(charKeyFor(1),JSON.stringify(inline));
+  const inline=clone(save);inline.charId='resume-probe';
+  // Actual native reward affix plus a carried skill gem: both rebuild paths
+  // write normalization fields and later gameplay must own their nested data.
+  const resumeCarry=forgeItem({baseId:'ring_coral',ilvl:1,rarity:'magic',quality:1,affixes:[{id:'life_regen'}]})!;
+  const resumeGem=makeSkillGemItem(w.meta.knownSkills.values().next().value!);
+  assert.ok(resumeCarry.affixes.length);inline.items=[resumeCarry,resumeGem];
+  mem.set(charKeyFor(1),JSON.stringify(inline));
   const summary=await readCharacterContinueSummary();assert.equal(summary?.classId,'warrior');assert.equal('world' in summary!,false);
   const first=await readCharacterResume();assert.equal(first.status,'ready');if(first.status!=='ready')throw Error('fixture');
   assert.equal(first.resume.kind,'inline');assert.ok(characterResumeAuthority(first.resume));
-  const next=makeSimWorld('warrior',115);assert.ok(applyCharacterResumeFields(next,first.resume));
+  const resumeBytes=JSON.stringify(first.resume),next=makeSimWorld('warrior',115);
+  assert.ok(applyCharacterResumeFields(next,first.resume));
+  const carried=next.meta.items.find(i=>i.uid===resumeCarry.uid)!,gem=next.meta.items.find(i=>i.uid===resumeGem.uid)!;
+  assert.ok(carried&&gem?.gem?.kind==='skill');
+  assert.deepEqual(carried.affixes,resumeCarry.affixes);assert.deepEqual(gem.gem,resumeGem.gem);
+  carried.affixes[0].rolls[0]=.25;carried.implicitRolls[0]=.5;
+  if(gem.gem.kind==='skill'){gem.gem.level++;gem.gem.sockets[0]=null;}
+  assert.equal(JSON.stringify(first.resume),resumeBytes,'live character edits must not mutate the frozen authority');
+  assert.equal(JSON.parse(mem.get(charKeyFor(1))!).items[0].affixes[0].rolls[0],1);
+  console.log('PASS frozen Continue detaches reward affixes, implicit rolls and nested skill cargo before rebuilding and gameplay');
   const rollback=bindCharacterResumePages(next,first.resume),token=characterNativeSessionToken(next);
   assert.ok(token);assert.ok(characterNativeSessionCurrent(next));assert.ok(await characterResumeCurrent(first.resume));
   assert.throws(()=>bindCharacterResumePages(next,first.resume),/already used/);

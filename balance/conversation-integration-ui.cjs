@@ -60,8 +60,15 @@ app.whenReady().then(async()=>{
    assert.ok(results.companion.visible&&results.companion.readerOpen&&results.companion.bagBottom<=results.companion.readerTop,'scaled inventory must leave conversation clear');
    await run(()=>{__game.ui.toggleInventory();__game.step(2);});
    results.paid=await run(()=>{const w=conversationQA.w,b=document.querySelector('[data-conversation-reward]'),id=b.dataset.conversationReward,before=w.meta.items.length;b.click();b.click();__game.step(2);return {id,before,after:w.meta.items.length,done:w.completedQuests.has(id),remaining:w.questRewardOffers().length};});assert.ok(results.paid.done);assert.equal(results.paid.after,results.paid.before+1);assert.equal(results.paid.remaining,0);fits(await run(box));
-   await run(()=>{__game.ui.hideAll();__game.save();});const state=()=>{const w=__game.world();return {pos:w.player.pos,items:w.meta.items,quests:[...w.completedQuests],skills:w.player.skills.map(s=>s&&{id:s.def.id,level:s.level,sockets:s.sockets})};};results.saved=await run(state);
-   await boot();await run(async()=>{for(let i=0;i<80&&!document.querySelector('#sm-continue:not([disabled])');i++)await new Promise(r=>setTimeout(r,100));document.querySelector('#sm-continue:not([disabled])').click();__game.ui.hideAll();});results.resumed=await run(state);assert.deepEqual(results.resumed,results.saved);
+   await run(async()=>{__game.ui.hideAll();__game.save();await __game.flushRunSave();});const state=()=>{const w=__game.world();return {pos:w.player.pos,items:w.meta.items,quests:[...w.completedQuests],skills:w.player.skills.map(s=>s&&{id:s.def.id,level:s.level,sockets:s.sockets})};};results.saved=await run(state);
+   await boot();await run(async()=>{
+    for(let i=0;i<100&&!document.querySelector('#sm-continue:not([disabled])');i++)await new Promise(r=>setTimeout(r,100));
+    const button=document.querySelector('#sm-continue:not([disabled])');if(!button)throw Error('Conversation Continue is unavailable after durable save');
+    const priorWorld=__game.world();button.click();
+    for(let i=0;i<100&&(__game.world()===priorWorld||!__game.world().localSeat);i++)await new Promise(r=>setTimeout(r,100));
+    if(__game.world()===priorWorld||!__game.world().localSeat)throw Error('Conversation Continue did not publish its restored world: '+document.getElementById('start-menu')?.textContent);
+    __game.ui.hideAll();
+   });results.resumed=await run(state);assert.deepEqual(results.resumed,results.saved);
    assert.ok(await run(()=>Object.entries(localStorage).filter(([k])=>k.startsWith('arpg_')).every(([,v])=>v==='sentinel')));
    console.log('PASS Brandt pointer ownership/pause/departure, Mireille native gifts/equipping/work/reward without Journal takeover, narrow/175% bounds, double-click once-only payout, exact Save/Continue and ordinary-save isolation');
   }
