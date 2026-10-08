@@ -2313,3 +2313,52 @@ Continue, exact return, native structure frames and conversation/save courses.
 The World audit retains 2,347 unrelated members and all 384 prior runtime module
 positions; twelve exact delegates and four hidden adapter members are the only
 member changes. This validates the scoped integration, not full area activation.
+
+## NativeAreaSceneTheater
+
+NativeAreaSceneTheater shares the nine complete native ambient-activity birth
+and helper operations with classic World. It retains native faction context,
+concurrency, event-body creation, pour limits, tag lookup, entry and near-point
+helpers. The same scene, geometry, population, environment and ecology must be
+supplied; the environment state is shared with ecology, and the campaign clock
+remains live. The area host exposes the complete installed NativeTheaterHost
+contract. Four existing activity modules narrow only their structural types;
+their emitted JavaScript remains identical.
+
+The oracle preserves 67 cold archived/current/local comparisons: 168 complete
+bodies, 584 ordered draws and four reached partial failures. Full output is
+42,689,894 bytes, SHA256 42cb96d1361d8a0eb6d462a20448fdfc2f0385ee99a1a5070fcc4a53147b5d0f.
+All installed activity kinds retain their own rows and recipes. Canonical native
+forest/downs fixtures remain intact; a complete explicit native sinter-terraces
+fixture reaches readiness at native clock 417, producing all six real pilgrims
+with their actual lamps and held parts. This is a face mechanism control, not
+evidence of natural geographic frequency. Distinct hero/body identities are
+asserted independently of output equality.
+
+An independent 27 cold comparisons add 39 bodies, 112 draws and 18 reached
+errors. They cover selected factories, after-publication failures, retained
+ActiveTheaterRun host identity and later tick/end behavior after replacing the
+census or clock. Default context evaluates exactly once for absent or explicit
+undefined arguments, even when its provider itself returns undefined. Explicit
+context bypasses that provider. The World forwarding default preserves native
+function arity while leaving actual context evaluation to the shared operation.
+Twenty actual World callback selection/receiver controls, live field aliases,
+hidden cached-host identity and real/false dormancy-pin controls are included.
+
+NativeAreaSceneTheater requires genuine movement, threat, radiance, dress, gem
+delivery, notice and retirement services. Their explicit contract does not
+implement those later runtime services. Complete birth composition, authentic
+source installation, update/reward execution, whole-owner paging and the
+playable two-area Continue course remain required before full area activation.
+Ordinary mire remains localized with traversable neutral bypasses.
+
+NativeAreaSceneTheater checkpoint validation: all three type checks pass. The
+full no-retry fast run passes 488 probes in 921.0 seconds and finds one obsolete
+pilgrimage source assertion naming World instead of NativeTheaterHost. Updating
+only that exact interface-name assertion makes the complete pilgrimage probe
+pass; runtime code remains unchanged from the broad run. Nine slow and three
+excluded probes were not run. Generation passes 2,607 cases with zero failures
+and four retained spacing warnings; all 25 simulation episodes and the built
+native entry/Continue/return and conversation courses pass. The World audit
+retains 2,354 unrelated members and all 386 prior runtime module positions,
+with nine exact delegates and two hidden adapter members.

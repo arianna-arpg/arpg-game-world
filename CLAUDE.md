@@ -1,3 +1,11 @@
+NativeAreaSceneTheater shares complete native ambient-activity birth and helpers
+with classic World, using the same geometry/population/environment/ecology and
+live campaign clock. NativeTheaterHost keeps the complete installed controller
+contract explicit. Preserve original rows, body/item identity, pour limits,
+selected callbacks and once-only default context. Full movement, threat, reward,
+retirement, update dispatch and paging services still precede area activation.
+Verify nativescenetheater, all types, generation, simulation and client Continue.
+
 NativeAreaSceneHarbor shares complete harbor/quay birth, doors, dressing,
 services, retained counter stock and whole-party landings with classic World.
 NativeAreaSceneDescent shares native cave Delvers, once-minted shelves and

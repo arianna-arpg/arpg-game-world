@@ -25,7 +25,7 @@ import {
   type ActiveTheaterRun, type TheaterSpots,
 } from '../engine/theater';
 import { FACTIONS } from './monsters';
-import type { World } from '../engine/world';
+import type {NativeTheaterHost} from '../engine/nativeTheaterHost';
 
 // --- THE SIEGE FURNITURE -----------------------------------------------------
 // The shell pock: a blast crater at walking scale — GROUND, not obstacle
@@ -198,7 +198,7 @@ registerTheaterKind({
   params: {
     followers: 5, maxWaypoints: 6, leadJitter: 26, followJitter: 55,
   } satisfies ColumnParams,
-  spawn: (w: World, run: ActiveTheaterRun, spots: TheaterSpots) => {
+  spawn: (w: NativeTheaterHost, run: ActiveTheaterRun, spots: TheaterSpots) => {
     const p = run.params<ColumnParams>();
     const roster = FACTIONS[run.primary];
     const route = [...spots.pois, ...spots.camps].slice(0, p.maxWaypoints);
@@ -221,7 +221,7 @@ registerTheaterKind({
     }
     w.notice('a grind-column on the march', '#e8823a', 14, 'world');
   },
-  tick: (w: World, run: ActiveTheaterRun) => {
+  tick: (w: NativeTheaterHost, run: ActiveTheaterRun) => {
     // Column troops are ordinary bounties; breaking it ends the march quietly.
     if (!w.anyAliveWithTag('war_column', run.primary)) run.done = true;
   },

@@ -504,7 +504,7 @@ import { eventFrontFor } from './eventWeather';
 import { WEATHER_DRESS_CFG, dressPlanFor, rollDressPieces } from './weatherDress';
 import { dayCycle, inPhases, DAY_LENGTH } from '../world/daynight';
 import { exitInside, hullOf, samplePoint, type Bounds } from '../world/shape';
-import { distFromHome, traitsOf, isDeathAligned, factionTemper } from '../world/traits';
+import { isDeathAligned, factionTemper } from '../world/traits';
 import { extractionLookFor } from '../data/extraction';
 import { REMNANT_KINDS, remnantDropStat } from '../data/remnants';
 import {
@@ -512,7 +512,7 @@ import {
   orbRefundStat, orbTrickleStat, ORB_TRICKLE,
 } from '../data/orbs';
 import {
-  ActiveTheaterRun, runTheaterBeat, theaterConcurrencyFold, theaterKindDef, THEATER_CFG,
+  ActiveTheaterRun, theaterKindDef, THEATER_CFG,
   type TheaterContext, type TheaterKindDef, type TheaterRow, type TheaterSpots,
 } from './theater';
 import {
@@ -584,6 +584,8 @@ import { encounterBirthPlaceEncounters, encounterBirthEventDensityFor, encounter
 import { descentPlaceDescentDelver, descentMintDelverStock, descentEnterDescentZone, type NativeSceneDescentHost } from './nativeSceneDescent';
 
 import { harborHoldStateFor, harborBootQuay, harborBootHarborhold, harborResealDoor, harborRefreshHoldDress, harborHoldDressSpotOk, harborRefreshHoldServices, harborArmPortMercs, harborLandPartyAt, type NativeSceneHarborHost } from './nativeSceneHarbor';
+
+import { nativeTheaterContextNow, nativeTheaterConcurrencyNow, nativeTheaterRunBeat, nativeTheaterPourRoom, nativeTheaterSpawn, nativeSpawnEventActor, nativeClampNear, nativeAnyAliveWithTag, nativeZoneEntryPos, type NativeSceneTheaterHost } from './nativeSceneTheater';
 
 export type { Doodad } from './levelgen';
 
@@ -10734,6 +10736,54 @@ export class World {
     return host;
   }
 
+  private nativeSceneTheaterView?:NativeSceneTheaterHost;
+  private nativeSceneTheaterHost():NativeSceneTheaterHost{
+    if(this.nativeSceneTheaterView)return this.nativeSceneTheaterView;
+    const world=this;
+    const host:NativeSceneTheaterHost={
+      get radianceCondHeld(){const method=world.radianceCondHeld;return(...args:Parameters<NativeSceneTheaterHost['radianceCondHeld']>)=>method.apply(world,args);},
+      get geysers(){return world.geysers;},
+      get time(){return world.time;},
+      get geyserMode(){return world.geyserMode;},
+      get walk(){return world.walk;},
+      get exits(){return world.exits;},
+      get clampPos(){const method=world.clampPos;return(...args:Parameters<NativeSceneTheaterHost['clampPos']>)=>method.apply(world,args);},
+      get arena(){return world.arena;},
+      get actorById(){const method=world.actorById;return(...args:Parameters<NativeSceneTheaterHost['actorById']>)=>method.apply(world,args);},
+      get imminentThreatTo(){const method=world.imminentThreatTo;return(...args:Parameters<NativeSceneTheaterHost['imminentThreatTo']>)=>method.apply(world,args);},
+      get plantDressAt(){const method=world.plantDressAt;return(...args:Parameters<NativeSceneTheaterHost['plantDressAt']>)=>method.apply(world,args);},
+      get manifest(){return world.manifest;},
+      get zone(){return world.zone;},
+      get theaterVisit(){return world.theaterVisit;},
+      get dropGemAt(){const method=world.dropGemAt;return(...args:Parameters<NativeSceneTheaterHost['dropGemAt']>)=>method.apply(world,args);},
+      get theaterPourRoom(){const method=world.theaterPourRoom;return(...args:Parameters<NativeSceneTheaterHost['theaterPourRoom']>)=>method.apply(world,args);},
+      get notice(){const method=world.notice;return(...args:Parameters<NativeSceneTheaterHost['notice']>)=>method.apply(world,args);},
+      get theaterRuns(){return world.theaterRuns;},
+      get theaterSpots(){return world.theaterSpots;},
+      get theaterSpawn(){const method=world.theaterSpawn;return(...args:Parameters<NativeSceneTheaterHost['theaterSpawn']>)=>method.apply(world,args);},
+      get clampNear(){const method=world.clampNear;return(...args:Parameters<NativeSceneTheaterHost['clampNear']>)=>method.apply(world,args);},
+      get anyAliveWithTag(){const method=world.anyAliveWithTag;return(...args:Parameters<NativeSceneTheaterHost['anyAliveWithTag']>)=>method.apply(world,args);},
+      get pathField(){const method=world.pathField;return(...args:Parameters<NativeSceneTheaterHost['pathField']>)=>method.apply(world,args);},
+      get moveActor(){const method=world.moveActor;return(...args:Parameters<NativeSceneTheaterHost['moveActor']>)=>method.apply(world,args);},
+      get actors(){return world.actors;},
+      get zoneEntryPos(){const method=world.zoneEntryPos;return(...args:Parameters<NativeSceneTheaterHost['zoneEntryPos']>)=>method.apply(world,args);},
+      get slipAway(){const method=world.slipAway;return(...args:Parameters<NativeSceneTheaterHost['slipAway']>)=>method.apply(world,args);},
+      get doodads(){return world.doodads;},
+      get sim(){return world.sim;},
+      get zoneMap(){return world.zoneMap;},
+      get theaterContextNow(){const method=world.theaterContextNow;return(...args:Parameters<NativeSceneTheaterHost['theaterContextNow']>)=>method.apply(world,args);},
+      get theaterConcurrencyNow(){const method=world.theaterConcurrencyNow;return(...args:Parameters<NativeSceneTheaterHost['theaterConcurrencyNow']>)=>method.apply(world,args);},
+      get theaterPour(){return world.theaterPour;},
+      get theaterAmbientBudget(){return world.theaterAmbientBudget;},
+      get spawnEventActor(){const method=world.spawnEventActor;return(...args:Parameters<NativeSceneTheaterHost['spawnEventActor']>)=>method.apply(world,args);},
+      get createMonster(){const method=world.createMonster;return(...args:Parameters<NativeSceneTheaterHost['createMonster']>)=>method.apply(world,args);},
+      get weightedPick(){const method=world.weightedPick;return(...args:Parameters<NativeSceneTheaterHost['weightedPick']>)=>method.apply(world,args);},
+      get zoneEntry(){return world.zoneEntry;},
+    };
+    Object.defineProperty(this,'nativeSceneTheaterView',{value:host,writable:true,configurable:true,enumerable:false});
+    return host;
+  }
+
   private nativeSceneHarborView?:NativeSceneHarborHost;
   private nativeSceneHarborHost():NativeSceneHarborHost{
     if(this.nativeSceneHarborView)return this.nativeSceneHarborView;
@@ -12902,65 +12952,18 @@ export class World {
    *  ever see what this returns). Camps/routes come from the boot stash;
    *  everything else reads the live sim — a siege drawn at dwell beat 4
    *  sees the contest as it stands NOW. */
-  theaterContextNow(): TheaterContext {
-    const fac = this.sim.faction, owner = fac.owner(this.zone.id);
-    const host = this.sim.invasion.activeHostOn(this.zone.id);
-    // Rooted factions only stage their life near home (FACTION_TRAITS eventRange).
-    let nearHome = true;
-    if (owner.faction) {
-      const t = traitsOf(owner.faction);
-      if (t.eventRange !== undefined) {
-        nearHome = distFromHome(owner.faction, this.zone, this.zoneMap) <= t.eventRange;
-      }
-    }
-    return {
-      owner: owner.faction, ownerPower: owner.power,
-      biome: this.zone.biome,
-      tileset: this.zone.tileset, // THE FACE AXIS (TheaterRow.tilesets) — zone-standing truth
-      contestants: fac.contestants(this.zone.id),
-      invader: host?.faction ?? null,
-      hasCamps: this.theaterSpots.camps.length > 0,
-      hasRoute: this.theaterSpots.camps.length + this.theaterSpots.pois.length >= 2,
-      nearHome,
-    };
-  }
+  theaterContextNow(): TheaterContext { return nativeTheaterContextNow(this.nativeSceneTheaterHost()); }
 
   /** THE CONCURRENCY LEVER, folded: ground defaults (base 1; 2 on a faction
    *  HEARTLAND — the owner standing on its own origin zone or home biome;
    *  small zones clamp to 1) then every registered external writer pushes
    *  it UP (theaterConcurrencyFold — the Odyssey seam, shipped consumer-
    *  less). */
-  theaterConcurrencyNow(): number {
-    const cc = THEATER_CFG.concurrency;
-    let ground = cc.base;
-    const owner = this.sim.faction.owner(this.zone.id).faction;
-    if (owner) {
-      const t = traitsOf(owner);
-      const heartland = t.originZone ? t.originZone === this.zone.id
-        : t.homeBiome ? this.zone.biome === t.homeBiome : false;
-      if (heartland) ground = Math.max(ground, cc.heartland);
-    }
-    if (Math.min(this.arena.w, this.arena.h) < cc.smallDim) ground = Math.min(ground, cc.small);
-    return theaterConcurrencyFold(this, ground);
-  }
+  theaterConcurrencyNow(): number { return nativeTheaterConcurrencyNow(this.nativeSceneTheaterHost()); }
 
   /** Run one theater beat (0 = entry; dwell beats count up). Seats at most
    *  one run. Public so the probe drives the very path the game walks. */
-  theaterRunBeat(beat: number, ctx: TheaterContext = this.theaterContextNow()): void {
-    const run = runTheaterBeat(this, {
-      beat, ctx,
-      spots: this.theaterSpots,
-      live: this.theaterRuns,
-      concurrency: this.theaterConcurrencyNow(),
-      // The ENTRY beat arrives pre-gated (the boot site resolves mycelia on
-      // the live die — the old lane's exact shape); dwell beats re-check
-      // the bloom on their own keyed stream.
-      suppression: beat === 0 ? 1 : (this.sim.myceliaField?.suppressionAt(this.zone.id) ?? 1),
-      held: c => this.radianceCondHeld(c),
-      stance: factionStance,
-    });
-    if (run && !run.done) this.theaterRuns.push(run);
-  }
+  theaterRunBeat(beat: number, ctx: TheaterContext | undefined = undefined): void { return nativeTheaterRunBeat(this.nativeSceneTheaterHost(),beat,ctx); }
 
   /** THE POUR LEDGER's headroom for a kind this visit. Replacement kinds
    *  band against the booted population (max(floor, bandFrac × budget));
@@ -12968,28 +12971,13 @@ export class World {
    *  The ENTRY beat's replacement pour is whole — the parity floor: entry
    *  behaves exactly as the old lane, and the ledger still counts it, so
    *  a big entry cast spends the visit's band honestly. */
-  theaterPourRoom(def: TheaterKindDef, row: TheaterRow, entry: boolean): number {
-    if (entry && def.posture === 'replacement') return Number.POSITIVE_INFINITY;
-    const poured = this.theaterPour.get(def.id) ?? 0;
-    const pc = THEATER_CFG.pour;
-    const cap = def.posture === 'additive'
-      ? (row.pourCap ?? def.pourCap ?? pc.additiveCap)
-      : Math.max(pc.floor, Math.round(pc.bandFrac * this.theaterAmbientBudget));
-    return cap - poured;
-  }
+  theaterPourRoom(def: TheaterKindDef, row: TheaterRow, entry: boolean): number { return nativeTheaterPourRoom(this.nativeSceneTheaterHost(),def,row,entry); }
 
   /** Pour one theater body: the ledger-honest wrapper every kind spawns
    *  through (spawnEventActor underneath — the ONE presence-banded pick).
    *  Returns null when the visit's pour room is spent — at cap the pour
    *  stops cleanly. */
-  theaterSpawn(run: ActiveTheaterRun, table: PackTableEntry[], level: number, faction: string, tag: string): Actor | null {
-    const def = run.def();
-    if (!def) return null;
-    if (this.theaterPourRoom(def, run.row, run.entry) <= 0) return null;
-    const a = this.spawnEventActor(table, level, 'enemy', faction, tag);
-    this.theaterPour.set(def.id, (this.theaterPour.get(def.id) ?? 0) + 1);
-    return a;
-  }
+  theaterSpawn(run: ActiveTheaterRun, table: PackTableEntry[], level: number, faction: string, tag: string): Actor | null { return nativeTheaterSpawn(this.nativeSceneTheaterHost(),run,table,level,faction,tag); }
 
   /** Tick live runs and drive THE DWELL CADENCE: standing on un-quiet
    *  ground re-draws on the beat lattice ((beat+1) × everySec of dwell) —
@@ -13008,26 +12996,16 @@ export class World {
   }
 
   /** Spawn a tagged event actor from a weighted table; returns it. */
-  spawnEventActor(table: PackTableEntry[], level: number, team: Team, faction: string, tag: string): Actor {
-    const a = this.createMonster(this.weightedPick(table, level), level, team);
-    a.faction = faction;
-    a.tag = tag;
-    this.actors.push(a);
-    return a;
-  }
+  spawnEventActor(table: PackTableEntry[], level: number, team: Team, faction: string, tag: string): Actor { return nativeSpawnEventActor(this.nativeSceneTheaterHost(),table,level,team,faction,tag); }
 
   /** A jittered point near `at`, clamped into the arena. */
-  clampNear(at: Vec2, r: number): Vec2 {
-    return this.clampPos(vec(at.x + rand(-r, r), at.y + rand(-r, r)), 16);
-  }
+  clampNear(at: Vec2, r: number): Vec2 { return nativeClampNear(this.nativeSceneTheaterHost(),at,r); }
 
   /** The current visit's ARRIVAL point (the walked portal, or the waypoint
    *  stone) — the theater march's boot-seat law reads it (engine/theater.ts
    *  marchSeat: no column seats inside the arrival's grace disc). A copy:
    *  zoneEntry itself stays private. (hfpocket 2026-08-05) */
-  zoneEntryPos(): Vec2 {
-    return vec(this.zoneEntry.x, this.zoneEntry.y);
-  }
+  zoneEntryPos(): Vec2 { return nativeZoneEntryPos(this.nativeSceneTheaterHost()); }
 
   /** Where a caravan starts: well across the zone from the player. */
   farFromExit(): Vec2 {
@@ -17228,9 +17206,7 @@ export class World {
   }
 
   /** Is any living tagged actor of this faction still standing? */
-  anyAliveWithTag(tag: string, faction: string): boolean {
-    return this.actors.some(a => !a.dead && a.tag === tag && a.faction === faction);
-  }
+  anyAliveWithTag(tag: string, faction: string): boolean { return nativeAnyAliveWithTag(this.nativeSceneTheaterHost(),tag,faction); }
 
   // (payEventReward is GONE — THE RESIDENT LAW's arcless gate: a theater
   // run has no payout verb, structurally. The old siege's broken-siege

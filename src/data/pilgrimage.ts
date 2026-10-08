@@ -58,7 +58,7 @@ import {
 import { registerDoodadRule } from '../engine/levelgen';
 import { AMBIENT_TAGS, MONSTERS } from './monsters';
 import { DOODAD_VISUALS } from './doodadVisuals';
-import type { World } from '../engine/world';
+import type {NativeTheaterHost} from '../engine/nativeTheaterHost';
 import type { Actor } from '../engine/actor';
 
 const C = PILGRIMAGE_CFG;
@@ -109,7 +109,7 @@ function leadBody(): { r: number; speed: number } {
  *  truth: the field, the exits, the walk grid. The same resolver serves
  *  `ready` (the beat gate) and `spawn` (the stand-up), so the two can never
  *  disagree about whether a procession forms. */
-export function pilgrimagePlan(w: World, cueOverride?: PilgrimCue): PilgrimagePlan | null {
+export function pilgrimagePlan(w: NativeTheaterHost, cueOverride?: PilgrimCue): PilgrimagePlan | null {
   const field = w.geysers;
   const L = loudestVent(field);
   if (!field || !L) return null;
@@ -152,7 +152,7 @@ export function pilgrimagePlan(w: World, cueOverride?: PilgrimCue): PilgrimagePl
  *  lies inside the departure band for THIS walk — the fastest honest walk
  *  still arrives before the hour, the slowest (plus slack) does not leave
  *  the line standing at the brim too long. Read-only over the zone. */
-export function pilgrimageReady(w: World): boolean {
+export function pilgrimageReady(w: NativeTheaterHost): boolean {
   const plan = pilgrimagePlan(w);
   if (!plan) return false;
   const band = departBand(plan.pathLen, plan.speed);
@@ -198,7 +198,7 @@ const FAR_GOAL = vec(-1e6, -1e6);
 
 /** Stand a pace on every member (the funeral's stat source, re-solved);
  *  pace 1 lifts it. The march ledger remembers it so a dissolve lifts too. */
-function stampPace(w: World, m: MarchState, pace: number): void {
+function stampPace(w: NativeTheaterHost, m: MarchState, pace: number): void {
   for (const id of m.ids) {
     const a = w.actorById(id);
     if (!a || a.dead) continue;
@@ -212,7 +212,7 @@ function stampPace(w: World, m: MarchState, pace: number): void {
  *  broil (or any telegraph) inside the horizon, takes the dodge reflex's
  *  own dive state — the feet step off the vent a breath before it blows.
  *  Draw-free (a coincident threat's exit bearing hashes off the body id). */
-export function pilgrimStepOff(w: World, ids: readonly number[]): number {
+export function pilgrimStepOff(w: NativeTheaterHost, ids: readonly number[]): number {
   const S = C.stepOff;
   let stepped = 0;
   for (const id of ids) {
@@ -237,7 +237,7 @@ export function pilgrimStepOff(w: World, ids: readonly number[]): number {
  *  ONE dress path (plantDressAt → plantImpactDress → evap), and the small
  *  keyed gem beat (ONE roll per pilgrimage on the theater draw law's own
  *  keyed stream; dropGemAt seals itself under the spoils law). */
-function layOfferings(w: World, run: ActiveTheaterRun, S: PilgrimageState, vent: PlacedVent): void {
+function layOfferings(w: NativeTheaterHost, run: ActiveTheaterRun, S: PilgrimageState, vent: PlacedVent): void {
   if (S.offered) return;
   S.offered = true;
   const O = C.offerings;
@@ -257,7 +257,7 @@ function layOfferings(w: World, run: ActiveTheaterRun, S: PilgrimageState, vent:
  *  route (the march ledger re-pointed, heels re-aimed) — the procession
  *  keeps walking or disperses, it never idles leaderless (THE NO-TAG LAW).
  *  Returns the new lead, or null when no one stands. */
-function closeRanks(w: World, m: MarchState, S: PilgrimageState, lead: Actor | undefined): Actor | null {
+function closeRanks(w: NativeTheaterHost, m: MarchState, S: PilgrimageState, lead: Actor | undefined): Actor | null {
   const route = S.phase === 'disperse' ? backRoute(S) : S.route;
   let best: Actor | null = null, bd = Infinity;
   for (const id of m.ids) {
@@ -300,7 +300,7 @@ function backRoute(S: PilgrimageState): Vec2[] {
 
 /** The vigil ends: the line turns and walks back down the way it came;
  *  marchTick slips it away at the mouth (the silent departure). */
-function disperse(w: World, m: MarchState, S: PilgrimageState, lead: Actor | undefined): void {
+function disperse(w: NativeTheaterHost, m: MarchState, S: PilgrimageState, lead: Actor | undefined): void {
   S.phase = 'disperse';
   const back = backRoute(S);
   if (lead && !lead.dead) {
@@ -322,7 +322,7 @@ registerTheaterKind({
   ready: (w) => pilgrimageReady(w),
   cast: () => ({ primary: 'geyserkin' }),
   params: {},
-  spawn: (w: World, run: ActiveTheaterRun) => {
+  spawn: (w: NativeTheaterHost, run: ActiveTheaterRun) => {
     const plan = pilgrimagePlan(w, run.data.devCue as PilgrimCue | undefined);
     if (!plan) { run.done = true; return; }
     // Whole-line-or-nothing below the floor on dwell re-draws (a two-body
@@ -355,7 +355,7 @@ registerTheaterKind({
     } satisfies PilgrimageState;
     w.notice('a lantern line sets out across the terraces', '#ffd9a0', 14, 'world');
   },
-  tick: (w: World, run: ActiveTheaterRun) => {
+  tick: (w: NativeTheaterHost, run: ActiveTheaterRun) => {
     const S = stateOf(run);
     const m = (run.data.marches as MarchState[] | undefined)?.[0];
     if (!S || !m) { marchTick(w, run); return; }
@@ -432,7 +432,7 @@ registerTheaterRow({ id: 'pilgrimage_fields', kind: C.kind, biomes: ['scald'], t
  *  tick AT that cue — so the line climbs on a quiet field and the hour opens
  *  as it reaches the brim, exactly as the real clock would have it — and
  *  handed back when the run ends. Returns a status line for the dev panel. */
-export function devSummonPilgrimage(w: World): string {
+export function devSummonPilgrimage(w: NativeTheaterHost): string {
   const field = w.geysers;
   if (!field || !field.vents.length) return 'no vents here — mint a scald face first';
   if (w.theaterRuns.some(r => !r.done && r.kind === C.kind)) return 'a pilgrimage already walks this ground';
