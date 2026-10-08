@@ -1068,7 +1068,7 @@ function createGameWindow(opts) {
     show: opts?.show !== false,
     autoHideMenuBar: true,
     backgroundColor: '#0a0a0e',
-    title: cfg.game.title,
+    title: cfg.game.title + ' — ' + selectedBranch,
     icon: APP_ICON,
     fullscreen,
     webPreferences: {

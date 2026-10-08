@@ -186,7 +186,7 @@
       const dev = !!d.developer;
       $('devbox').classList.toggle('player', !dev);
       document.body.classList.toggle('player', !dev);
-      $('row-liveSource').classList.toggle('hidden', !!s.packaged);
+      $('row-liveSource').classList.toggle('hidden', !!s.packaged || s.selectedBranch !== s.mainBranch);
       $('row-console').classList.toggle('hidden', !!s.packaged || s.platform !== 'win32');
     }
     for (const k of DEV_KEYS) {
@@ -273,6 +273,8 @@
       // meaningless, and Update means "download from GitHub Releases and
       // install it in place" (directInstall=false keeps the old open-the-
       // release-page behavior).
+      $('update-btn').textContent = '⬇  Update & Play';
+      $('hint').textContent = 'Main plays locally. Other branches download separate game files and saves.';
       if (s.packaged) {
         $('rebuild').classList.add('hidden');
         $('update-btn').textContent = s.directInstall ? '⬇  Update & Restart' : '⬇  Get Update (opens browser)';
@@ -379,7 +381,7 @@
       } finally { setBusy(false); }
     });
     $('quit').addEventListener('click', () => window.launcher.quit());
-    window.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !$('play').disabled) doPlay(); });
+    window.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !['SELECT', 'BUTTON', 'INPUT'].includes(e.target.tagName) && !$('play').disabled) doPlay(); });
 
     window.launcher.onLog(appendLog);
     window.launcher.onProgress((p) => {
