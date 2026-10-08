@@ -1,3 +1,15 @@
+RegionalTerrainComposition (schema 14) adds saved seeded chamber/link terrain
+rules alongside familiar native formations. New worlds vary extent, connected
+trees/cycles, bends, shoulders and complete nested motifs; topology is dry-route
+topology, since native water remains traversable. Exact original-plus-expanded
+ownership frees exterior gaps for small terrain while retaining site holes and
+120-unit route/port protection. Grammar-only local site collars may widen the
+outline with an independent area cap; preserve all circles, obstacle/route caps
+and historical omission. Verify terrainvariation, regionalexpansion, historical
+regionalextents, landform suite, adjacent site/Continue probes, types, genqa, sim
+and terrain-variation-ui.cjs. See docs/worldgen/seamless-landforms.md. Finite
+uniqueness evidence is not unlimited non-repetition or full native-zone parity.
+
 Regional extent composition (regionalExtentSchema 13) adds saved 3,300/6,000/
 6,600-unit native terrain alongside historical small districts. Captured parent
 foundations accept whole protected-site holes, dry collars and bounded spurs;

@@ -5,7 +5,7 @@ import { GridWalkField } from '../world/gridWalk';
 import { captureLandformShape } from './landformSources';
 import type { MassLandformShape } from './landforms';
 import type { MassRegionalLandformPolicy } from './regionalLandforms';
-import { freezeData } from './random';
+import { freezeData, massHash } from './random';
 
 type Point = { x: number; y: number };
 type Port = Point & { dx: number; dy: number };
@@ -42,7 +42,7 @@ function connected(rows: readonly (readonly string[])[]): boolean {
  * Narrow parent paths cannot fit this rectangle. Transparent child cells inherit
  * their parent; no corridor is carved to force a child into the composition. */
 function placeChild(rows: string[][], child: MassLandformShape, components: RegionalShape['components'],
-  foundation?: readonly string[], navigation: readonly Point[] = []): boolean {
+  foundation?: readonly string[], navigation: readonly Point[] = [], regionalTerrainSeed?: number): boolean {
   const n = rows.length, m = child.rows.length, stride = n + 1, occupied = new Int32Array(stride * stride);
   for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) occupied[(y + 1) * stride + x + 1]
     = (rows[y][x] === 'g' && (!foundation || foundation[y][x] === 'g') ? 0 : 1)
@@ -60,9 +60,10 @@ function placeChild(rows: string[][], child: MassLandformShape, components: Regi
         if (xx >= 0 && yy >= 0 && xx < m && yy < m && child.rows[yy][xx] !== '.' && !dry(child.rows[yy][xx])) return true;
       return false;
     })) continue;
-    // Central discoveries precede further broad rooms. Stable cell ordering
-    // resolves ties, so source capture does not depend on runtime residency.
-    const d = (x + m / 2 - n / 2) ** 2 + (y + m / 2 - n / 2) ** 2;
+    // Historical sources favor the center. regionalTerrainSeed ranks eligible
+    // cells independently, allowing discoveries throughout generated courts.
+    const d = regionalTerrainSeed===undefined ? (x + m / 2 - n / 2) ** 2 + (y + m / 2 - n / 2) ** 2
+      : massHash(x+','+y+','+components.length,regionalTerrainSeed);
     if (d < score) { seat = { x, y }; score = d; }
   }
   if (!seat) return false;
@@ -91,7 +92,7 @@ export function fitRegionalChildren(shape: MassLandformShape, rows: readonly str
   const cells = rows.map(row => row.split('')), components: RegionalShape['components'] = [];
   for (const component of shape.components ?? []) {
     const child = children.find(s => s.id === component.shape);
-    if (!child || child.rows.length !== component.size || !placeChild(cells, child, components, foundation, shape.navigation)) return null;
+    if (!child || child.rows.length !== component.size || !placeChild(cells, child, components, foundation, shape.navigation, shape.grammar?.childSeed)) return null;
   }
   if (!connected(cells)) return null;
   return { ...shape, rows: cells.map(row => row.join('')), components };

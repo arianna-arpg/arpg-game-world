@@ -1,3 +1,5 @@
+import { generateRegionalTerrain, type RegionalTerrainGrammar } from './regionalTerrainGrammar';
+import { regionalTerrainFootprint, regionalTerrainAt, regionalTerrainCircle, regionalTerrainBox } from './regionalTerrainFootprint';
 import { fitRegionalChildren } from './regionalLandformSources';
 import { address, floorDiv, latticeAt, localOffset, moveAddress, type MassAddress } from './address';
 import type { MassRun, MassSpec, MassTerrain, MassRange } from './contracts';
@@ -13,10 +15,25 @@ export interface MassRegionalLandformPolicy {
   source:string;version:1;spacing:number;chance:number;jitter:number;
   siteApron:number;maxAlteredFraction:number;
   shapes:readonly MassLandformShape[];recipes:readonly MassLandformRecipe[];
+  composition?: RegionalTerrainGrammar;
 }
 export type RegionalLandformSites=(origin:MassAddress,box:MassPatchBox)=>readonly RegionalLandformSite[]|null;
 const integer=(v:number,lo:number,hi:number)=>Number.isSafeInteger(v)&&v>=lo&&v<=hi;
 const dry=(c:string)=>c==='g'||c==='c';
+export function validateRegionalTerrainGrammar(spec:MassSpec):void {
+  const parent=spec.landforms?.regional;if(!parent||!Object.hasOwn(parent,'composition'))return;
+  const p=parent.composition;
+  const range=(v:unknown,lo:number,hi:number,step=0):boolean=>Array.isArray(v)&&v.length===2
+    &&v.every(n=>typeof n==='number'&&Number.isFinite(n)&&n>=lo&&n<=hi&&(!step||Number.isSafeInteger(n)&&n%step===0))&&v[0]<=v[1];
+  if(!p||p.version!==1||typeof p.source!=='string'||!p.source||p.source.length>256
+    ||!Number.isFinite(p.chance)||p.chance<0||p.chance>1
+    ||!range(p.extent,2160,6960,60)||(p.extent[1]+270)>parent.spacing*(1-parent.jitter)
+    ||!range(p.nodes,4,10,1)||!range(p.extraLinks,0,4,1)||!range(p.corridor,90,150,30)
+    ||!range(p.waterChance,0,1)||!integer(p.maxChildren,0,4)
+    ||!Array.isArray(p.motifs)||p.motifs.length<1||p.motifs.length>32
+    ||new Set(p.motifs.map(m=>m.shape)).size!==p.motifs.length
+    ||p.motifs.some(m=>!spec.landforms!.shapes.some(s=>s.id===m.shape)||!Number.isFinite(m.weight)||m.weight<=0||m.weight>100))throw Error('Invalid regional terrain grammar');
+}
 export function validateRegionalLandforms(spec:MassSpec):void {
   const owner=spec.landforms;
   if(!owner||!Object.hasOwn(owner,'regional'))return;
@@ -67,6 +84,7 @@ export function validateRegionalLandforms(spec:MassSpec):void {
   for(const r of p.recipes)if(!r.id||!Array.isArray(r.biomes)||!r.biomes.length||r.biomes.some((b:string)=>typeof b!=='string'||!b)
     ||!Array.isArray(r.shapes)||!r.shapes.length||r.shapes.some((id:string)=>!ids.has(id))||!regionKind(r.barrier?.region)?.blocks||!/^#[0-9a-f]{6}$/i.test(r.barrier?.color)
     ||!Array.isArray(r.when)||r.when.some((w:MassRange)=>!fields.has(w.field)||w.min!==undefined&&!Number.isFinite(w.min)||w.max!==undefined&&!Number.isFinite(w.max)||(w.min??-Infinity)>=(w.max??Infinity)))throw Error('Invalid regional extent recipe');
+  validateRegionalTerrainGrammar(spec);
 }
 
 function orientedRegionalShape(shape:MassLandformShape,turn:number,mirror:boolean):MassLandformShape {
@@ -75,6 +93,8 @@ function orientedRegionalShape(shape:MassLandformShape,turn:number,mirror:boolea
   const plan={shape,turn,mirror} as MassLandformPlan;
   const foundationPlan=shape.foundationRows?{...plan,shape:{...shape,rows:shape.foundationRows}}:null;
   return {...shape, ...(foundationPlan?{foundationRows:Array.from({length:n},(_,y)=>Array.from({length:n},(_,x)=>landformCell(foundationPlan,x,y)).join(''))}:{}),rows:Array.from({length:n},(_,y)=>Array.from({length:n},(_,x)=>landformCell(plan,x,y)).join('')),
+    ...(shape.grammar?{grammar:{...shape.grammar,nodes:shape.grammar.nodes.map(a=>({...a,...point(a.x,a.y)})),
+      edges:shape.grammar.edges.map(e=>({...e,points:e.points.map(a=>point(a.x,a.y))}))}}:{}),
     navigation:shape.navigation!.map(a=>point(a.x,a.y)),
     ports:shape.ports!.map(a=>{const q=point(a.x,a.y),r=point(a.x+a.dx,a.y+a.dy);return {...q,dx:r.x-q.x,dy:r.y-q.y};}),
     ...(shape.components?{components:shape.components.map(c=>{const a=point(c.x,c.y),b=point(c.x+c.size-1,c.y+c.size-1);return {...c,x:Math.min(a.x,b.x),y:Math.min(a.y,b.y)};})}:{})};
@@ -118,7 +138,12 @@ export class MassRegionalLandforms {
     if(!recipe)return null;
     const count=BigInt(recipe.shapes.length),salt=massRandom(this.run.seed,[p.source,recipe.id,'extents']).int(0,recipe.shapes.length-1);
     const index=Number(((gx+gy+BigInt(salt))%count+count)%count),source=p.shapes.find(s=>s.id===recipe.shapes[index])!;
-    const size=source.rows.length*cell,origin=moveAddress(center,{x:-size/2,y:-size/2},span),bounds={minX:0,minY:0,maxX:size,maxY:size};
+    const regionalTerrainMode=p.composition&&massRandom(this.run.seed,[p.composition.source,p.composition.version,key,seat,'mode']).chance(p.composition.chance);
+    const regionalTerrainSeed=massRandom(this.run.seed,[p.composition?.source??'',p.composition?.version??0,key,seat,'geometry']).int(0,0xffffffff);
+    const regionalGrammar=regionalTerrainMode?generateRegionalTerrain(p.composition!,this.spec.landforms!.shapes,regionalTerrainSeed):null;
+    if(regionalTerrainMode&&!regionalGrammar){this.counters.topology++;this.topologyReasons['grammar']=(this.topologyReasons['grammar']??0)+1;return null;}
+    const regionalTerrainSource=regionalGrammar??source;
+    const size=regionalTerrainSource.rows.length*cell,origin=moveAddress(center,{x:-size/2,y:-size/2},span),bounds={minX:0,minY:0,maxX:size,maxY:size};
     for(const e of this.spec.landforms!.exclusions??[]) {
       if(e.origin.dimension!==dimension)continue;
       const limit=BigInt(Math.ceil(2100000/span)+16),dx=BigInt(origin.cx)-BigInt(e.origin.cx),dy=BigInt(origin.cy)-BigInt(e.origin.cy);
@@ -128,14 +153,20 @@ export class MassRegionalLandforms {
     }
     // A selection rule, not a claim that underlying lakes survive inside the
     // authored envelope. Avoid putting these inland formations in broad water.
-    let wet=0;
+    let wet=0,regionalTerrainSamples=0;
     for(let y=0;y<5;y++)for(let x=0;x<5;x++) {
-      const t=read(moveAddress(origin,{x:size*(x+1)/6,y:size*(y+1)/6},span));
+      const px=size*(x+1)/6,py=size*(y+1)/6;
+      // Unowned gaps do not veto a generated arm beside an existing lake.
+      // This remains a bounded inland selection rule, not a shoreline proof.
+      if(regionalGrammar?.rows[Math.floor(py/cell)][Math.floor(px/cell)]==='.')continue;
+      regionalTerrainSamples++;
+      const t=read(moveAddress(origin,{x:px,y:py},span));
       if(regionKind(t.region)?.standStatusDeep&&++wet>5){this.counters.water++;return null;}
     }
+    if(regionalGrammar&&wet>regionalTerrainSamples/5){this.counters.water++;return null;}
     const sites=this.sites(origin,bounds);
     if(!sites||sites.length>32){this.counters.sites++;return null;}
-    const oriented=orientedRegionalShape(source,rng.int(0,3),rng.chance(.5));
+    const oriented=regionalGrammar??orientedRegionalShape(source,rng.int(0,3),rng.chance(.5));
     // Three-cell-wide real substrate contacts make each authored dry edge
     // join dry country; a transparent source apron is never assumed dry.
     for(const port of oriented.ports!)for(let side=-1;side<=1;side++) {
@@ -143,27 +174,56 @@ export class MassRegionalLandforms {
       if(!this.spec.landforms!.bypassRegions.includes(read(q).region)){this.counters.ports++;return null;}
     }
     const foundation=oriented.foundationRows?{...oriented,rows:oriented.foundationRows,components:[]}:oriented;
-    const composed=composeRegionalSites(foundation,[...sites].sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0),cell,p.siteApron,p.maxAlteredFraction,reason=>{this.topologyReasons[reason]=(this.topologyReasons[reason]??0)+1;});
+    const composed=composeRegionalSites(foundation,[...sites].sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0),cell,p.siteApron,p.maxAlteredFraction,reason=>{this.topologyReasons[reason]=(this.topologyReasons[reason]??0)+1;},!!regionalGrammar);
     if(!composed){this.counters.topology++;return null;}
     const shape=oriented.components?.length?fitRegionalChildren({...oriented,navigation:composed.navigation},composed.rows,this.spec.landforms!.shapes):composed;
     if(!shape){this.counters.topology++;this.topologyReasons['child-fit']=(this.topologyReasons['child-fit']??0)+1;return null;}
     if(oriented.components?.length&&!regionalRoutesPreserved(foundation,shape,cell,reason=>{this.topologyReasons['child-'+reason]=(this.topologyReasons['child-'+reason]??0)+1;})){this.counters.topology++;return null;}
     this.counters.accepted++;
-    return freezeData({id:canonical([this.run.runId,p.source,p.version,key]),origin,recipe,shape,turn:0,mirror:false,bounds,regionalExtent:true});
+    return freezeData({id:canonical([this.run.runId,p.source,p.version,key]),origin,recipe,shape,turn:0,mirror:false,bounds,regionalExtent:true,
+      ...(regionalGrammar?{regionalTerrainFootprint:regionalTerrainFootprint(oriented,shape)}:{})});
   }
-  at(at:MassAddress):Readonly<MassLandformPlan>|null {
+  /** Inspect the formation envelope, including transparent site/exterior holes. */
+  formationAt(at:MassAddress):Readonly<MassLandformPlan>|null {
     const q=latticeAt(at,this.spec.addressSpan,this.policy.spacing),plan=this.candidate(at.dimension,q.gx,q.gy);
     if(!plan)return null;
     const v=localOffset(at,plan.origin,this.spec.addressSpan,Math.ceil(this.policy.spacing/this.spec.addressSpan)+1);
     return v.x>=0&&v.y>=0&&v.x<plan.bounds.maxX&&v.y<plan.bounds.maxY?plan:null;
   }
+  at(at:MassAddress):Readonly<MassLandformPlan>|null {
+    const plan=this.formationAt(at);if(!plan)return null;
+    if(!plan.regionalTerrainFootprint)return plan;
+    const q=localOffset(at,plan.origin,this.spec.addressSpan,Math.ceil(this.policy.spacing/this.spec.addressSpan)+1);
+    return regionalTerrainAt(plan,q.x,q.y,this.spec.landforms!.cell)?plan:null;
+  }
   reserves(at:MassAddress,radius:number):boolean {
-    const s=this.spec.addressSpan,p=this.policy,lo=latticeAt({...at,x:at.x-radius,y:at.y-radius},s,p.spacing),hi=latticeAt({...at,x:at.x+radius,y:at.y+radius},s,p.spacing);
+    const s=this.spec.addressSpan,p=this.policy,regionalTerrainPadding=p.composition?120:0,lo=latticeAt({...at,x:at.x-radius-regionalTerrainPadding,y:at.y-radius-regionalTerrainPadding},s,p.spacing),hi=latticeAt({...at,x:at.x+radius+regionalTerrainPadding,y:at.y+radius+regionalTerrainPadding},s,p.spacing);
     if(!Number.isFinite(radius)||radius<0||(hi.gx-lo.gx+1n)*(hi.gy-lo.gy+1n)>4096n)throw Error('Invalid regional extent reservation');
     for(let y=lo.gy;y<=hi.gy;y++)for(let x=lo.gx;x<=hi.gx;x++) {
       const plan=this.candidate(at.dimension,x,y);if(!plan)continue;
       const q=localOffset(at,plan.origin,s,100000);
-      if(patchBoxIntersects(plan.bounds,q.x,q.y,radius))return true;
+      if(plan.regionalTerrainFootprint?regionalTerrainCircle(plan,q.x,q.y,radius,this.spec.landforms!.cell):patchBoxIntersects(plan.bounds,q.x,q.y,radius))return true;
+    }
+    return false;
+  }
+  /** Whole-source legacy admission remains byte-for-byte compatible; new graph
+   * formations reserve actual owned cells so their exterior gaps can compose. */
+  regionalTerrainIntersects(origin:MassAddress,box:MassPatchBox):boolean {
+    const s=this.spec.addressSpan,p=this.policy;
+    if(!p.composition){
+      const width=box.maxX-box.minX,height=box.maxY-box.minY;
+      // Preserve the original square-radius arithmetic as well as its policy.
+      return this.reserves(moveAddress(origin,{x:(box.minX+box.maxX)/2,y:(box.minY+box.maxY)/2},s),width===height?Math.SQRT2*width/2:Math.hypot(width,height)/2);
+    }
+    const lo=latticeAt({...origin,x:origin.x+box.minX-120,y:origin.y+box.minY-120},s,p.spacing);
+    const hi=latticeAt({...origin,x:origin.x+box.maxX+120,y:origin.y+box.maxY+120},s,p.spacing);
+    if((hi.gx-lo.gx+1n)*(hi.gy-lo.gy+1n)>4096n)throw Error('Regional terrain box query exceeds budget');
+    for(let y=lo.gy;y<=hi.gy;y++)for(let x=lo.gx;x<=hi.gx;x++) {
+      const plan=this.candidate(origin.dimension,x,y);if(!plan)continue;
+      const q=localOffset(origin,plan.origin,s,100000);
+      const relative={minX:q.x+box.minX,minY:q.y+box.minY,maxX:q.x+box.maxX,maxY:q.y+box.maxY};
+      if(plan.regionalTerrainFootprint) {if(regionalTerrainBox(plan,relative,this.spec.landforms!.cell))return true;}
+      else if(patchBoxIntersects(plan.bounds,(relative.minX+relative.maxX)/2,(relative.minY+relative.maxY)/2,Math.hypot(box.maxX-box.minX,box.maxY-box.minY)/2))return true;
     }
     return false;
   }

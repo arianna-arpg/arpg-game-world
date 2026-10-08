@@ -1,3 +1,4 @@
+import { defaultRegionalTerrainGrammar } from './regionalTerrainGrammar';
 import { regionalLandformPolicy } from './regionalLandformSources';
 import { WATER_SURFACE } from '../data/waterSurface';
 import { LASTLIGHT_DEFENSES } from '../data/settlementDefenses';
@@ -105,7 +106,7 @@ export function massAdventure(): MassAdventure {
         biome: TILESETS[f.id].biome ?? f.id })),
       { id: 'fallback', source: 'tilesets/downs', priority: 0, when: [], region: 'ground', color: '#31391c', biome: 'downs' },
     ],
-    landforms: { ...massLandformPolicy(), regional: regionalLandformPolicy() },
+    landforms: { ...massLandformPolicy(), regional: { ...regionalLandformPolicy(), composition: defaultRegionalTerrainGrammar() } },
     patches: { source: 'worldmass/native-terrain-patches-v1', version: 1, spacing: 960, jitter: .12, bypass: 60,
       recipes: [
         { id: 'wetland-pockets', when: [], onSurfaces: ['marsh'], chance: .9, choices: [

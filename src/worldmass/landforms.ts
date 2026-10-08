@@ -5,7 +5,15 @@ import { canonical, freezeData, massRandom } from './random';
 import { regionKind } from '../world/regions';
 import { patchBoxIntersects, type MassPatchBox } from './terrainPatches';
 
+/** Realized regionalGrammar graph uses cell coordinates; it is a generation
+ * trace, never a replacement for native zone/event ownership. */
+export interface RegionalTerrainTrace {
+  source:string;seed:number;childSeed:number;
+  nodes:readonly {x:number;y:number;radius:number}[];
+  edges:readonly {a:number;b:number;points:readonly {x:number;y:number}[]}[];
+}
 export interface MassLandformShape {
+  grammar?: RegionalTerrainTrace;
   id: string; source: string; builder: string; params: Record<string, number>;
   /** Immutable native builder result: transparent, ground, barrier, water, crossing. */
   rows: readonly string[];
@@ -32,6 +40,8 @@ export interface MassLandformPlan {
   id: string; origin: MassAddress; recipe: MassLandformRecipe; shape: MassLandformShape;
   turn: number; mirror: boolean; bounds: MassPatchBox;
   regionalExtent?: true;
+  /** Immutable regionalTerrainFootprint preserves site holes as reservations. */
+  regionalTerrainFootprint?: readonly string[];
 }
 const owns = (v: object, k: string) => Object.hasOwn(v, k);
 const finite = (n: number, lo: number, hi: number) => Number.isFinite(n) && n >= lo && n <= hi;
@@ -148,7 +158,7 @@ export class MassLandforms {
         const q=localOffset(origin,e.origin,span,Number(limit));
         if(q.x<=e.bounds.maxX && q.x+size>=e.bounds.minX && q.y<=e.bounds.maxY && q.y+size>=e.bounds.minY){excluded=true;break;}
       }
-      if(excluded || this.regionalLandforms?.reserves(center,Math.SQRT2*size/2) || !this.sitesClear(origin,bounds))continue;
+      if(excluded || this.regionalLandforms?.regionalTerrainIntersects(origin,bounds) || !this.sitesClear(origin,bounds))continue;
       const plan:MassLandformPlan={id:canonical([this.run.runId,p.source,p.version,key]),origin,recipe,shape,
         turn:rng.int(0,3),mirror:rng.chance(.5),bounds};
       // Explicit source policy can reshape micro outcrops inside a precinct.

@@ -101,6 +101,87 @@ renders six positions along one connected multi-screen route, and exercises
 native occupants, decoration and durable Continue. These are route-position
 views; they do not constitute a full automated combat playthrough.
 
+## Seeded regional composition
+
+RegionalTerrainComposition is the schema-14 continuation of this foundation.
+New expeditions save an optional `landforms.regional.composition` policy. At each
+eligible seat, the default gives seeded construction an 85% choice and keeps
+familiar native formations as the other option. Actual admission proportions
+can differ because both branches still have physical/site checks.
+
+The saved rules construct 4–10 connected courts with a random growth tree and
+0–3 additional links. Extent varies from 3,300–6,600 units; 90–150-unit dry paths
+keep their physical width across scales. Different chamber sizes, bent links,
+water/solid shoulders and irregular boundaries alter the realized ground.
+The source retains its graph as a diagnostic trace, never as replacement native
+zone ownership. Dry preferred routes are connected; native water remains a
+traversable alternative with its usual swimming/path costs. Four real exterior
+contacts remain, without a universal dry ring that would erase the route choices.
+Only owned sample cells contribute to the generated branch's bounded inland
+selection rule; a lake in an unowned gap does not veto a neighboring arm.
+Fully enclosed transparent source pockets become lake or solid interiors so
+unreachable noise-ground content cannot appear inside them.
+
+Complete pinned native pools and groves can occupy broad courts. Source and
+post-site fitting both preserve every motif cell and its dry margin. Seeded
+spatial ranking removes the old preference for the formation center. Required
+children still cause whole-candidate refusal if no valid court survives. These
+large nested motifs remain uncommon; the smaller ordinary terrain repertoire
+also composes through the exterior gaps.
+
+Exact reservation uses the union of original source cells and final painted
+cells, plus a 120-unit margin. Protected site holes therefore remain reserved,
+but unrelated exterior gaps between arms can hold complete small formations and
+ordinary content. Painted-cell lookup agrees with collision/streaming; inspection
+of the full envelope is a separate planning operation. Circle and rectangle
+reservation both include exact boundary tangencies.
+
+Generated formations opt into bounded local outline growth around a site that
+intersects their original footprint or apron. Every supplied protected circle
+is masked before any growth. Dry collars may expand into original transparency,
+then existing bounded repair and route comparisons determine whether the result
+is valid. Added area has its own cap of 12% of the source square; the existing
+12% obstacle-change cap still applies separately. Unrelated sites cause no
+isolated collar, frame/contact cells remain transparent, and circles are never
+painted over. Familiar/historical sources keep their prior composition rules.
+
+Construction consumes a separate deterministic stream and saved versioned rules;
+chunk order, cache eviction and player discovery do not affect it. Schema 14
+prevents older clients from interpreting these rules incorrectly. Descriptors
+without composition retain exact historical cells, placements, terrain and schema
+13 Continue behavior. Future algorithm changes must preserve this version or
+explicitly introduce another version; a saved seed alone is not a migration.
+
+The terrainvariation probe compares 256 source seeds after normalizing rotation,
+reflection and scale, reconstructs actual dry raster adjacency, and independently
+checks radius-15 connectivity for every source. It also verifies real protected
+sites, nested native sources, released exterior pockets, signed coordinates,
+cache eviction, streamed/cold equivalence, configuration validation and Continue.
+The fixed 192-cell default-country square plus one targeted regression location
+across seeds 42/713/991 admits 19 generated formations and 2 familiar formations,
+with 12 graph signatures across 5 geographic recipes. All 63 actual original
+source/site intersections remain protected. Both retained native children share
+the targeted formation at seed 42, candidate (-7,-3); the broad square contained
+none, so nesting remains sparse. A flat-country layering course finds 133 sample
+hits on complete small formations inside large envelopes, not 133 distinct
+formations. Cold survey p95 was approximately 178–199 ms under concurrent
+verification, with maxima around 225 ms; planning is still synchronous.
+
+The regionalexpansion probe tests local detours, protection/order independence,
+contact/budget refusal and an exact pre-change historical digest. Infeasible
+minimum loop counts refuse instead of silently simplifying the requested graph. A 32-bit source
+seed and a finite corpus do not guarantee infinite non-repetition.
+
+Built-client acceptance uses `balance/terrain-variation-ui.cjs` after building
+with `HOLLOW_WAKE_STORAGE_SCOPE=preview:seamless-terrain-variation-qa`,
+`HOLLOW_WAKE_WORLDMASS=1`, and
+`npx vite build --outDir .claude/terrain-variation.local.work/dist`.
+It finds actual admitted graph variations, a nested motif and a familiar source,
+checks native inhabitants/dressing, renders six streamed route positions, and
+compares exact terrain after a cold durable Continue. Reports live under
+`balance/reports/terrain-variation-*`. Route views are not an automated combat
+playthrough. Cold planning is still synchronous; frame scheduling remains work.
+
 ## Remaining integration
 
 The source chat's 27 locale programs, 135 layout variants, 30 regional graph forms, bounty-gated passages and their native objective/turn-in ownership still need integration through real zone owners. The shared builders here are preparation for those programs, not inhabited towns or complete crypt adventures.
