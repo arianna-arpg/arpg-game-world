@@ -11,6 +11,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('launcher', {
   /** Current repo/build/config state (version, branch, head, dirty, …). */
   status: () => ipcRenderer.invoke('launcher:status'),
+  branches: () => ipcRenderer.invoke('launcher:branches'),
+  selectBranch: (/** @type {string} */ name) => ipcRenderer.invoke('launcher:selectBranch', name),
   /** Checkout: git fetch + how far behind the GitHub branch we are (+ changelog).
    *  Packaged: the release-channel probe — how many published builds are newer. */
   check: () => ipcRenderer.invoke('launcher:check'),

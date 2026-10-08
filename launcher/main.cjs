@@ -78,6 +78,7 @@ const path = require('node:path');
 const { startGameServer } = require('./server.cjs');
 const { createDeadman, skipVerdict } = require('./perfdeadman.cjs');
 const updates = require('./updates.cjs');
+const branches = require('./branches.cjs');
 
 // ------------------------------------------------------------------- config
 
@@ -110,8 +111,9 @@ const PACKAGED = app.isPackaged;
 const REPO = PACKAGED ? null : path.join(__dirname, '..');
 /** Where the built game + committed launcher.config.json live. */
 const BASE = PACKAGED ? process.resourcesPath : path.join(__dirname, '..');
-const DIST = path.join(BASE, 'dist');
-const STAMP = path.join(DIST, '.build-head');
+let SOURCE_ROOT = REPO;
+let DIST = path.join(BASE, 'dist');
+let STAMP = path.join(DIST, '.build-head');
 /** Packaged identity (version/hash/branch/date), stamped at dist time by
  *  scripts/make-build-info.mjs; null in a checkout — git answers live. */
 const BUILD_INFO = PACKAGED ? readJson(path.join(BASE, 'build-info.json')) : null;
@@ -212,16 +214,103 @@ const channelStatus = () => ({
 function resolveSavesDir() {
   const spec = String((cfg.paths && cfg.paths.saves) || 'auto');
   if (spec === 'auto') {
-    return REPO ? path.join(REPO, 'saves') : path.join(app.getPath('userData'), 'saves');
+    return SOURCE_ROOT ? path.join(SOURCE_ROOT, 'saves') : path.join(app.getPath('userData'), 'saves');
   }
   const expanded = spec
-    .replace(/\$\{repo\}/g, REPO ?? app.getPath('userData'))
+    .replace(/\$\{repo\}/g, SOURCE_ROOT ?? app.getPath('userData'))
     .replace(/\$\{data\}/g, app.getPath('userData'))
     .replace(/\$\{exe\}/g, path.dirname(app.getPath('exe')))
     .replace(/\$\{home\}/g, os.homedir());
   return path.resolve(BASE, expanded);
 }
-const SAVES = resolveSavesDir();
+let SAVES = resolveSavesDir();
+// Selection is session-local: every launch starts on Main.
+const MAIN_BRANCH = String(cfg.repo.branch || 'main');
+let selectedBranch = MAIN_BRANCH;
+/** @type {import('./branches.cjs').Branch[]} */ let branchRows = [];
+let branchOnline = false;
+let branchNote = 'Refresh branches to see the latest GitHub list.';
+let mainUnavailable = '';
+const BRANCH_CACHE = path.join(app.getPath('userData'), 'branch-builds');
+const branchHome = (/** @type {string} */ name) => branches.branchDir(BRANCH_CACHE, String(cfg.repo.github), name);
+const branchInstalled = () => {
+  const b = branches.installed(branchHome(selectedBranch));
+  return b?.branch === selectedBranch ? b : null;
+};
+const activeSaves = () => selectedBranch === MAIN_BRANCH ? SAVES : path.join(branchHome(selectedBranch), 'saves');
+const activeSession = () => selectedBranch === MAIN_BRANCH ? session.defaultSession
+  : session.fromPartition('persist:branch-' + branches.key(String(cfg.repo.github).toLowerCase() + ':' + selectedBranch));
+const branchApi = () => ({ gh: String(cfg.repo.github), api: updateCfg().api, timeoutMs: updateCfg().probeTimeoutMs });
+function branchStatus() {
+  const build = selectedBranch === MAIN_BRANCH ? null : branchInstalled();
+  return { selectedBranch, mainBranch: MAIN_BRANCH, branchOnline, branchNote,
+    branchBuild: build ? { commit: build.commit, version: build.version } : null,
+    branches: [{ name: MAIN_BRANCH, commit: '' }, ...branchRows.filter(b => b.name !== MAIN_BRANCH)] };
+}
+async function closeGameServer() {
+  const old = gameServer;
+  gameServer = null; gameUrl = null;
+  if (old) { old.closeAllConnections(); await new Promise(resolve => old.close(resolve)); }
+}
+async function chooseBranch(/** @type {string} */ name) {
+  if (gameWin && !gameWin.isDestroyed()) return { ok: false, error: 'Close the game before changing branches.' };
+  if (name !== MAIN_BRANCH && (!branchOnline || !branchRows.some(b => b.name === name))) {
+    return { ok: false, error: 'That branch is no longer available. Refresh the branch list.' };
+  }
+  if (name !== selectedBranch) {
+    await closeGameServer(); stopSourceServer(); selectedBranch = name;
+  }
+  return { ok: true, ...branchStatus() };
+}
+let branchProbe = async () => SMOKE || PERF ? [] : branches.listBranches(branchApi());
+async function refreshBranches() {
+  if (gameWin && !gameWin.isDestroyed()) return { ok: false, error: 'Close the game before refreshing branches.' };
+  try {
+    branchRows = await branchProbe();
+    branchOnline = true;
+    branchNote = 'Each experimental branch has its own saves. Main is the default.';
+  } catch (e) {
+    branchRows = []; branchOnline = false;
+    branchNote = 'GitHub is unavailable. Using local ' + MAIN_BRANCH + '. ' + String(e instanceof Error ? e.message : e);
+  }
+  const next = branches.selectAvailable(branchRows, selectedBranch, MAIN_BRANCH, branchOnline);
+  if (next !== selectedBranch) {
+    if (branchOnline) branchNote = 'The selected branch was deleted. Using local ' + MAIN_BRANCH + '.';
+    await chooseBranch(next);
+  }
+  return { ok: true, ...branchStatus() };
+}
+/** Resolve actual local Main without checking out or merging branches. */
+async function configureMainCheckout() {
+  if (PACKAGED || SMOKE || PERF) return;
+  const current = (await git(['branch', '--show-current'])).out.trim();
+  if (current === MAIN_BRANCH) return;
+  const worktrees = (await git(['worktree', 'list', '--porcelain'])).out;
+  const block = worktrees.split(/\r?\n\r?\n/).find(b => b.split(/\r?\n/).includes('branch refs/heads/' + MAIN_BRANCH));
+  const root = block?.split(/\r?\n/).find(l => l.startsWith('worktree '))?.slice(9);
+  if (!root || !fs.existsSync(path.join(root, 'package.json'))) {
+    mainUnavailable = 'No local ' + MAIN_BRANCH + ' checkout is available. Open the launcher from your Main checkout.';
+    return;
+  }
+  SOURCE_ROOT = root; DIST = path.join(root, 'dist'); STAMP = path.join(DIST, '.build-head'); SAVES = resolveSavesDir();
+}
+async function checkBranchBuild() {
+  const found = await branches.findBundle(branchApi(), selectedBranch);
+  const local = branchInstalled();
+  if (!found) return { ok: false, hint: 'No verified build has been published for this branch yet. Choose Main or try again after its build finishes.' };
+  return { ok: true, mode: 'branch', behind: local?.commit === found.commit ? 0 : 1, ahead: 0,
+    changes: [{ hash: found.commit.slice(0, 8), subject: 'Latest published build of ' + selectedBranch }] };
+}
+async function prepareBranchBuild() {
+  const found = await branches.findBundle(branchApi(), selectedBranch);
+  if (!found) return false;
+  if (branchInstalled()?.commit === found.commit) return true;
+  log('Downloading game files for ' + selectedBranch + '…');
+  await branches.downloadBundle({ home: branchHome(selectedBranch), branch: selectedBranch, bundle: found,
+    onProgress: p => sendProgress({ pct: p.pct, gotMb: p.got / 1048576, totalMb: p.total / 1048576, tag: selectedBranch }) });
+  await closeGameServer();
+  return true;
+}
 
 if (PERF) {
   // Windows' native occlusion tracker can STICK a visible window at
@@ -319,8 +408,8 @@ function run(cmd, args, opts) {
     if (!REPO) { resolve({ code: -1, out: '', err: 'child processes are unavailable in a packaged install' }); return; }
     const useShell = process.platform === 'win32' && cmd === 'npm';
     const child = useShell
-      ? spawn([cmd, ...args].join(' '), { cwd: REPO, shell: true, windowsHide: true })
-      : spawn(cmd, args, { cwd: REPO, windowsHide: true });
+      ? spawn([cmd, ...args].join(' '), { cwd: SOURCE_ROOT ?? REPO, shell: true, windowsHide: true })
+      : spawn(cmd, args, { cwd: SOURCE_ROOT ?? REPO, windowsHide: true });
     let out = '', err = '';
     const feed = (/** @type {Buffer} */ chunk, /** @type {boolean} */ isErr) => {
       const s = chunk.toString();
@@ -360,10 +449,10 @@ async function repoStatus() {
       packaged: true, updateMode: UPDATE_MODE, savesDir: SAVES,
       directInstall: cfg.updates.directInstall !== false,
       platform: process.platform, dev: cfg.dev, mode: devMode(),
-      ...channelStatus(),
+      ...channelStatus(), ...branchStatus(),
     };
   }
-  const pkg = readJson(path.join(/** @type {string} */ (REPO), 'package.json')) ?? {};
+  const pkg = readJson(path.join(/** @type {string} */ (SOURCE_ROOT), 'package.json')) ?? {};
   const branch = (await git(['rev-parse', '--abbrev-ref', 'HEAD'])).out.trim();
   const headRaw = (await git(['log', '-1', '--format=%h%x09%s%x09%ci'])).out.trim();
   const [hash = '', subject = '', date = ''] = headRaw.split('\t');
@@ -380,7 +469,7 @@ async function repoStatus() {
     packaged: false, updateMode: UPDATE_MODE, savesDir: SAVES,
     directInstall: cfg.updates.directInstall !== false,
     platform: process.platform, dev: cfg.dev, mode: devMode(),
-    ...channelStatus(),
+    ...channelStatus(), ...branchStatus(),
   };
 }
 
@@ -480,6 +569,7 @@ function setChannel(id) {
 }
 
 async function checkUpdates() {
+  if (selectedBranch !== MAIN_BRANCH) return checkBranchBuild();
   if (UPDATE_MODE === 'none') return { ok: true, behind: 0, ahead: 0, changes: [], mode: 'none' };
   if (UPDATE_MODE === 'release') return checkReleaseUpdates();
   return checkGitUpdates();
@@ -652,7 +742,7 @@ async function buildStamp() {
   const h = crypto.createHash('sha1').update(porcelain).update(diff);
   for (const line of porcelain.split('\n')) {
     if (!line.startsWith('??')) continue;
-    const p = path.join(BASE, line.slice(3).trim());
+    const p = path.join(SOURCE_ROOT ?? BASE, line.slice(3).trim());
     try { const st = fs.statSync(p); h.update(`${p}:${st.size}:${st.mtimeMs};`); } catch { /* raced away */ }
   }
   return `${head}|${h.digest('hex')}`;
@@ -660,6 +750,7 @@ async function buildStamp() {
 
 /** @param {boolean} [force] @returns {Promise<{ ok: boolean, error?: string }>} */
 async function ensureBuilt(force) {
+  if (mainUnavailable) return { ok: false, error: mainUnavailable };
   if (PACKAGED) {
     // The package ships its dist; there is no compiler out here to run.
     return fs.existsSync(path.join(DIST, 'index.html'))
@@ -683,6 +774,13 @@ async function ensureBuilt(force) {
 }
 
 async function update() {
+  if (gameWin && !gameWin.isDestroyed()) return { ok: false, error: 'Close the game before updating.' };
+  if (selectedBranch !== MAIN_BRANCH) {
+    await refreshBranches();
+    if (selectedBranch === MAIN_BRANCH) return { ok: false, error: branchNote };
+    if (!await prepareBranchBuild()) return { ok: false, error: 'No verified build has been published for this branch yet.' };
+    return { ok: true };
+  }
   if (UPDATE_MODE === 'release') {
     if (quietBusy) return { ok: false, error: 'An update is already downloading in the background — it will be in place for the next launch.' };
     // THE DIRECT UPDATE first — download + install + relaunch, no browser.
@@ -705,6 +803,7 @@ async function update() {
     return { ok: true, opened: true };
   }
   if (UPDATE_MODE === 'none') return { ok: false, error: 'Updates are disabled for this install (updates.mode).' };
+  if ((await git(['branch', '--show-current'])).out.trim() !== MAIN_BRANCH) return { ok: false, error: 'The local checkout is no longer on ' + MAIN_BRANCH + '. Relaunch before updating.' };
   const pull = await run('git', ['pull', '--ff-only', cfg.repo.remote, cfg.repo.branch]);
   if (pull.code !== 0) {
     log('PULL FAILED — you may have local changes; commit or stash them first.');
@@ -740,12 +839,13 @@ async function resetAllData() {
   if (gameWin && !gameWin.isDestroyed()) {
     return { ok: false, error: 'Close the game window first — a running game would just re-save itself over the wipe.' };
   }
-  const entries = fs.existsSync(SAVES) ? fs.readdirSync(SAVES) : [];
+  const saves = activeSaves();
+  const entries = fs.existsSync(saves) ? fs.readdirSync(saves) : [];
   /** @type {Electron.MessageBoxOptions} */
   const box = {
     type: 'warning',
     title: 'Reset everything?',
-    message: 'Erase ALL saved data and start from a fresh slate?',
+    message: 'Erase saved data for ' + selectedBranch + ' and start from a fresh slate?',
     detail:
       'This permanently deletes:\n\n' +
       `  •  ${entries.length} file${entries.length === 1 ? '' : 's'} in saves/ — the account (unlocks, sagas, nemeses, corpses), every character and roster slot, and settings\n` +
@@ -769,10 +869,10 @@ async function resetAllData() {
   const failures = [];
   let removed = 0;
   for (const name of entries) {
-    try { fs.rmSync(path.join(SAVES, name), { recursive: true, force: true }); removed++; }
+    try { fs.rmSync(path.join(saves, name), { recursive: true, force: true }); removed++; }
     catch (e) { failures.push(`${name}: ${String(e)}`); }
   }
-  try { await session.defaultSession.clearStorageData(); }
+  try { await activeSession().clearStorageData(); }
   catch (e) { failures.push(`browser storage: ${String(e)}`); }
   log(`Fresh slate — erased ${removed}/${entries.length} save file${entries.length === 1 ? '' : 's'} and cleared the game's browser storage.`);
   if (failures.length) {
@@ -787,7 +887,7 @@ async function resetAllData() {
 async function ensureServer() {
   if (gameServer && gameUrl) return gameUrl;
   const started = await startGameServer({
-    root: DIST, savesDir: SAVES,
+    root: selectedBranch === MAIN_BRANCH ? DIST : /** @type {import('./branches.cjs').Installed} */ (branchInstalled()).root, savesDir: activeSaves(),
     host: cfg.server.host, port: cfg.server.port,
   });
   gameServer = started.server;
@@ -814,7 +914,7 @@ function devMode() {
   const d = cfg.dev || {};
   const pinned = SMOKE ? SMOKE === 'source' : PERF ? false : null;
   const developer = pinned ?? !!d.developer;
-  const liveSource = developer && !PACKAGED && (pinned ?? d.liveSource !== false);
+  const liveSource = developer && !PACKAGED && selectedBranch === MAIN_BRANCH && (pinned ?? d.liveSource !== false);
   return {
     developer,
     liveSource,
@@ -905,12 +1005,12 @@ function ensureSourceServer() {
   if (viteProc && viteUrl) return Promise.resolve(viteUrl);
   return new Promise((resolve, reject) => {
     if (!REPO) { reject(new Error('Live source needs a checkout — this install ships no source.')); return; }
-    const bin = path.join(REPO, 'node_modules', 'vite', 'bin', 'vite.js');
+    const bin = path.join(SOURCE_ROOT ?? REPO, 'node_modules', 'vite', 'bin', 'vite.js');
     if (!fs.existsSync(bin)) { reject(new Error('Vite is not installed — run npm install first.')); return; }
     const port = Number(cfg.dev && cfg.dev.vitePort) || 5173;
     log(`Starting the Vite dev server (live source) on port ${port}…`);
     const child = spawn(process.execPath, [bin, '--host', '127.0.0.1', '--port', String(port)], {
-      cwd: REPO, windowsHide: true,
+      cwd: SOURCE_ROOT ?? REPO, windowsHide: true,
       env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', NO_COLOR: '1', FORCE_COLOR: '0' },
     });
     viteProc = child;
@@ -968,11 +1068,13 @@ function createGameWindow(opts) {
     show: opts?.show !== false,
     autoHideMenuBar: true,
     backgroundColor: '#0a0a0e',
-    title: cfg.game.title,
+    title: cfg.game.title + ' — ' + selectedBranch,
     icon: APP_ICON,
     fullscreen,
     webPreferences: {
       devTools: tools,
+      session: activeSession(),
+      contextIsolation: true, sandbox: true, nodeIntegration: false,
       // perfBeat: the perf harness alone loads the deadman's beat bridge
       // (perf-preload.cjs → window.__perfBeat). Play/smoke stay preload-free.
       ...(opts?.perfBeat ? { preload: path.join(__dirname, 'perf-preload.cjs') } : {}),
@@ -1002,10 +1104,22 @@ function createGameWindow(opts) {
 }
 
 async function play() {
+  if (gameWin && !gameWin.isDestroyed()) { gameWin.focus(); return { ok: true }; }
+  if (selectedBranch !== MAIN_BRANCH) await refreshBranches();
+  if (mainUnavailable && selectedBranch === MAIN_BRANCH) return { ok: false, error: mainUnavailable };
   const mode = devMode();
   /** @type {string} */
   let url;
-  if (mode.liveSource) {
+  if (selectedBranch !== MAIN_BRANCH) {
+    try {
+      if (!await prepareBranchBuild()) return { ok: false, error: 'No verified build has been published for this branch yet. Choose Main or wait for its build to finish.' };
+    } catch (e) {
+      branchNote = 'Could not load ' + selectedBranch + '. Using local ' + MAIN_BRANCH + '. ' + String(e);
+      log(branchNote); await chooseBranch(MAIN_BRANCH);
+      return play();
+    }
+    url = await ensureServer();
+  } else if (mode.liveSource) {
     try {
       const cold = !viteProc;
       url = await ensureSourceServer();
@@ -1072,10 +1186,12 @@ async function exclusive(name, fn) {
 
 function wireIpc() {
   ipcMain.handle('launcher:status', () => repoStatus());
+  ipcMain.handle('launcher:branches', () => exclusive('branches', () => refreshBranches()));
+  ipcMain.handle('launcher:selectBranch', (_e, name) => exclusive('branch selection', () => chooseBranch(String(name))));
   ipcMain.handle('launcher:check', () => exclusive('check', () => checkUpdates()));
   ipcMain.handle('launcher:update', () => exclusive('update', () => update()));
   ipcMain.handle('launcher:play', () => exclusive('play', () => play()));
-  ipcMain.handle('launcher:rebuild', () => exclusive('rebuild', () => ensureBuilt(true)));
+  ipcMain.handle('launcher:rebuild', () => exclusive('rebuild', () => selectedBranch === MAIN_BRANCH ? ensureBuilt(true) : prepareBranchBuild().then(() => ({ ok: true }))));
   ipcMain.handle('launcher:reset', () => exclusive('reset', () => resetAllData()));
   ipcMain.handle('launcher:setDev', (_e, patch) => setDev(patch));
   ipcMain.handle('launcher:setChannel', (_e, id) => setChannel(id));
@@ -1132,6 +1248,7 @@ async function smoke() {
   // machine: the launcher-page lanes read the committed defaults, in memory
   // only (nothing is written — setDev/setChannel are never reached here).
   if (SMOKE === 'launcher' || SMOKE === 'update') cfg.dev = { ...CONFIG_DEFAULTS.dev };
+  if (SMOKE === 'launcher') cfg.updates.checkOnLaunch = false;
 
   try {
     if (SMOKE === 'update') {
@@ -1170,6 +1287,28 @@ async function smoke() {
       const wantOpts = updates.UPDATE_CHANNELS.map(c => c.id).join(',');
       if (setChannelApi !== 'function') errors.push(`setChannel bridge missing (typeof window.launcher.setChannel = ${setChannelApi})`);
       if (channelOpts !== wantOpts) errors.push(`channel picker drew '${channelOpts}', the registry holds '${wantOpts}'`);
+      const branchPicker = await launcherWin.webContents.executeJavaScript(
+        "typeof window.launcher.branches === 'function' && typeof window.launcher.selectBranch === 'function' && document.getElementById('branch')?.value === 'main'");
+      if (!branchPicker) errors.push('branch picker or bridge missing, or Main is not the default');
+      // Exercise the real bridge and dropdown against a controlled catalog.
+      const savedProbe = branchProbe, savedFind = branches.findBundle;
+      try {
+        branchProbe = async () => [{ name: 'fixture/experiment', commit: '1'.repeat(40) }];
+        branches.findBundle = async () => null;
+        await launcherWin.webContents.executeJavaScript('window.launcher.branches().then(refresh)');
+        await launcherWin.webContents.executeJavaScript("(() => { const s = document.getElementById('branch'); s.value = 'fixture/experiment'; s.dispatchEvent(new Event('change')); })()");
+        await until(launcherWin.webContents, "document.getElementById('update-status').textContent.includes('No verified build')", 10000);
+        if (selectedBranch !== 'fixture/experiment') errors.push('branch selection did not reach the main process');
+        branchProbe = async () => [];
+        await launcherWin.webContents.executeJavaScript('window.launcher.branches().then(refresh)');
+        if (selectedBranch !== MAIN_BRANCH) errors.push('deleted branch did not fall back to Main');
+        branchProbe = async () => [{ name: 'fixture/experiment', commit: '1'.repeat(40) }];
+        await refreshBranches(); await chooseBranch('fixture/experiment');
+        branchProbe = async () => { throw new Error('fixture offline'); };
+        await launcherWin.webContents.executeJavaScript('window.launcher.branches().then(refresh)');
+        const offline = await launcherWin.webContents.executeJavaScript("document.getElementById('branch').value === 'main' && document.getElementById('branch').options.length === 1 && document.getElementById('branch-note').textContent.includes('unavailable')");
+        if (!offline || selectedBranch !== MAIN_BRANCH) errors.push('offline branch fallback did not reach the page');
+      } finally { branchProbe = savedProbe; branches.findBundle = savedFind; }
       await watcherSelfTest(launcherWin.webContents);
       const status = await launcherWin.webContents.executeJavaScript(`document.getElementById('update-status')?.textContent ?? ''`);
       console.log(`SMOKE launcher: v${app.getVersion()} packaged=${PACKAGED} updateMode=${UPDATE_MODE} channel=${updateCfg().channel} status="${status}"`);
@@ -2024,6 +2163,7 @@ app.whenReady().then(async () => {
   boot('electron ready');
   if (SMOKE) { wireIpc(); await smoke(); return; }
   if (PERF) { wireIpc(); await perfMode(); return; }
+  await configureMainCheckout();
   wireIpc();
   // STRAIGHT INTO THE GAME: --play asks for it, and a gamescope / Steam Deck
   // session implies it — a console-style boot wants the game, not a utility
