@@ -13,6 +13,7 @@ const rig=(cover=true)=>{
  seedGlobalRandom(73617);
  const w=makeSimWorld('warrior',73617),c=structuredClone(massAdventure());
  delete c.settlement;delete c.journey;delete c.progression;delete c.ecology;
+ delete c.terrain.patches;
  c.terrain.fields=[];c.terrain.places=[];c.content=[];c.populationRadius=0;c.startRadius=0;c.maxPopulation=0;
  c.terrain.surfaces=[{id:'floor',source:'qa/lane',priority:0,when:[],region:'ground',biome:'downs',color:'#454b32'}];
  const m=new WorldMassRuntime(42,'lane-inspection',c);m.attach(w);

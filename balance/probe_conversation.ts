@@ -35,12 +35,12 @@ try {
   for(const [id,a] of [...natives]) if(JSON.parse(id)[0]===place.id) w.kill(a,false,w.player);
   mass.update(w,true);assert.ok(quest.fieldDone);
   w.landPartyAt(home);mass.update(w,true);
-  assert.ok(conversationHasRewards(w));
-  assert.equal(conversationQuests(w,mireille.id).rewards.length,1);
+  assert.equal(conversationHasRewards(w),false,'experience-only return needs no choice toolbar');
+  assert.equal(conversationQuests(w,mireille.id).rewards.length,0);
   assert.equal(conversationQuests(w,smith.id).rewards.length,0);
-  const reward=conversationQuests(w,mireille.id).rewards[0];
-  assert.ok(w.claimQuestReward(reward.questId,reward.choices[0].id));
-  assert.equal(w.claimQuestReward(reward.questId,reward.choices[0].id),false,'one reward cannot pay twice');
+  (w as unknown as {updateQuestGiver(dt:number):void}).updateQuestGiver(4);
+  assert.ok(w.completedQuests.has(Q_FRONTIER_WATCH.id));
+  assert.equal(w.claimQuestReward(Q_FRONTIER_WATCH.id,'hearth'),false,'retired ring intent cannot pay');
   console.log('PASS stable conversation ownership, departure, suspended UI, normal retargeting, giver-specific offers and once-only native reward');
 
   const session=new DialogueSession(), first={speakerId:1,key:'gift',pages:['Before']};

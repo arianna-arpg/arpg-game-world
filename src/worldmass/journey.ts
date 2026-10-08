@@ -1,5 +1,5 @@
+import { settlementDeparture } from './settlementExits';
 import type { Vec2 } from '../core/math';
-import { regionKind } from '../world/regions';
 import type { MassPlace } from './contracts';
 import type { MassGenerator } from './generator';
 import type { MassWalk } from './walk';
@@ -105,25 +105,8 @@ export class MassJourney {
       const horizontal = d.edge === 'east' || d.edge === 'west';
       const normal = { x: d.edge === 'west' ? -1 : d.edge === 'east' ? 1 : 0,
         y: d.edge === 'north' ? -1 : d.edge === 'south' ? 1 : 0 };
-      // Prefer an existing native path at the edge; otherwise the closest
-      // walkable edge cell. No door, wall or interior is erased to make an exit.
-      const extent = horizontal ? h : w, cs = town.grid.cellSize;
-      const candidates: {
-        pos: Vec2;
-        score: number;
-      }[] = [];
-      for (let t = cs * 2.5; t < extent - cs * 2; t += cs) {
-        const pos = horizontal ? { x: d.edge === 'east' ? w - cs / 2 : cs / 2, y: t }
-          : { x: t, y: d.edge === 'south' ? h - cs / 2 : cs / 2 };
-        const kind = town.foundationRegion(pos.x, pos.y);
-        if (!kind || !regionKind(kind)?.walkable)
-          continue;
-        candidates.push({ pos, score: Math.abs(t - extent / 2) + (kind === 'path' || kind === 'road' ? -extent : 0) });
-      }
-      candidates.sort((a, b) => a.score - b.score);
-      if (!candidates.length)
-        throw new Error('Settlement has no traversable frontier edge');
-      const start = candidates[0].pos;
+      const extent = horizontal ? h : w;
+      const start = settlementDeparture(town, d.edge);
       const tangent = rng.range(-d.jitter, d.jitter) * extent;
       const end = { x: start.x + normal.x * d.distance + (horizontal ? 0 : tangent),
         y: start.y + normal.y * d.distance + (horizontal ? tangent : 0) };

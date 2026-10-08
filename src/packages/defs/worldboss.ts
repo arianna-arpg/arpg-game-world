@@ -326,7 +326,7 @@ registerMarkerSource((world: World): MapMarker[] => {
 // row's own worldboss_slain_<def> stamp, read by the board's delta law.
 registerBountySource({
   id: 'worldboss',
-  census(world: World): BountyTargetRef[] {
+  census(world: import('../../data/bountyboard').BountyReadContext): BountyTargetRef[] {
     const out: BountyTargetRef[] = [];
     for (const f of world.sim.worldBossFieldsAll()) {
       for (const s of f.peekSerpents()) {

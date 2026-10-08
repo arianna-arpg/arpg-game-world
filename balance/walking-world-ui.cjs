@@ -45,6 +45,7 @@ app.whenReady().then(async()=>{
    __game.devStartRun(role);__game.ui.hideAll();const w=__game.world();w.startWorldMass(42);
    const C=w.massRuntime.constructor,c=JSON.parse(JSON.stringify(w.massRuntime.config));
    delete c.settlement;delete c.journey;delete c.progression;delete c.ecology;
+   delete c.terrain.patches;
    c.terrain.fields=[];c.terrain.places=[];c.content=[];c.populationRadius=0;c.startRadius=0;c.maxPopulation=0;
    c.terrain.surfaces=[{id:'floor',source:'qa/walk-floor',priority:0,when:[],region:'ground',biome:'downs',color:'#454b32'}];
    new C(42,'walk-paint-client',c).attach(w);w.landPartyAt({x:-4000,y:-4000});__game.step(2);

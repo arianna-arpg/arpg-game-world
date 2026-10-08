@@ -32,7 +32,7 @@
 import type { PresenceEntry } from '../engine/presence';
 import { registerGenPin } from '../engine/genPins';
 import { registerBountySource, type BountyTargetRef } from './bountyboard';
-import type { World } from '../engine/world';
+import type { BountyReadContext } from './bountyboard';
 
 /** THE PERSISTED STATE — rides ZoneDef.harborhold verbatim into the world
  *  save (pure JSON; the zones array is the store). IDENTITY (which class,
@@ -474,7 +474,7 @@ export function sanitizeHoldState(raw: unknown): HarborholdState | null {
 // chart has not found is not the board's to tell.
 registerBountySource({
   id: 'harborhold',
-  census(world: World): BountyTargetRef[] {
+  census(world: BountyReadContext): BountyTargetRef[] {
     const out: BountyTargetRef[] = [];
     for (const z of Object.values(world.zoneMap)) {
       if (!z.harborhold || z.harborhold.state !== 'besieged' || z.veiled) continue;

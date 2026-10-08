@@ -8,6 +8,7 @@
 // one or two fresh frontiers of its own. The world never runs out of edge.
 // ---------------------------------------------------------------------------
 
+import { mintNativeZone } from './nativeZoneMint';
 import { resolveNativeBeacon } from './beaconSpec';
 import { clamp } from '../core/math';
 import { Rng, rollSeed } from '../core/rng';
@@ -1225,527 +1226,185 @@ export function placeZoneAt(
     ?? nearestNode(zoneMap, target, undefined, spec.dimension); // town always exists ⇒ non-null in practice
   if (scarp?.blockedSide && src && !spec.noBackEdge && sideToward(target, src.map) === scarp.blockedSide) return src;
   const srcMap = src?.map ?? target;
-  const rng = new Rng(spec.seed ?? rollSeed());
-  // THE IDENTITY SUB-STREAM: an EXPLICITLY seeded mint resolves the zone's
-  // IDENTITY rolls (variant, objective, footprint, layout, war roll) on a
-  // stream of their own. The shared `rng` also feeds name-dedupe retries and
-  // frontier/exit picks — draws whose COUNT depends on what already exists
-  // in this world — so identical seeds minted into two different worlds
-  // diverged by the time the layout picked (the perf gate's pinned zones
-  // re-rolled layouts per run). Seedless mints keep every draw on the one
-  // shared stream, byte-identical to every zone ever rolled.
-  const genRng = spec.seed !== undefined ? new Rng((spec.seed ^ 0x51ed2ab9) >>> 0) : rng;
-  // HEAT-MAP AUTHORITATIVE (random frontier only): re-select the WHOLE tileset from
-  // the biome field at this coord, so theme/packs/layout/decoration/biome all match
-  // the region you explored INTO — not the inherited corridor tileset. Authored
-  // quest/demon/crusade/incursion mints leave fieldBiome unset → spec.tileset wins,
-  // byte-identical. Seeded by the zone rng, so revisits/co-op stay deterministic.
-  let tilesetId = spec.tileset ?? 'deepwood';
-  // A directed mint with NO tileset and NO field resolution is an authoring
-  // slip — the deepwood fallback still applies, but loudly.
-  if (!spec.tileset && !(spec.fieldBiome && spec.biomeFor)) {
-    console.warn(`[worldgen] mint '${spec.id ?? `gen_${genIndex}`}' from '${src?.id ?? '?'}' declares no tileset — falling back to 'deepwood'`);
-  }
-  if (spec.port) {
-    // A PORT is a shore — but WHICH shore is face-level data: the local
-    // biome's DOCK-WEIGHTED faces host it (TilesetDef.docks × depthAffinity,
-    // pickDockTileset — harbors grow on landward faces, never on brine pans
-    // or half-drowned ground), and a biome fielding no dockable face cedes
-    // the harbor to the classic coast (PORT_MINT.fallbackBiome).
-    const fb = spec.fieldBiome && spec.biomeFor ? spec.biomeFor(target) : undefined;
-    tilesetId = (fb ? pickDockTileset(fb, rng, spec.biomeDepthFor?.(target)) : undefined)
-      ?? pickDockTileset(PORT_MINT.fallbackBiome, rng)
-      ?? tilesetId;
-  } else if (spec.fieldBiome && spec.biomeFor) {
-    const fb = spec.biomeFor(target);
-    let picked: string | undefined;
-    // MARINE DEPTH: the edge of a marine region is shallow (isle/coast); its HEART is
-    // the true DEEP SEA — so how DEEP into the region the coord sits decides the tileset
-    // ("migrate deep into the marine biome → the deep-sea zone spawns").
-    if (BIOMES[fb]?.marine) {
-      const depth = spec.biomeDepthFor?.(target) ?? 0;
-      picked = depth >= BIOME_FIELD_CFG.deepThreshold
-        ? pickTilesetForBiome(MARINE_MINT.deepBiome, rng)
-        : pickTilesetForBiome(BIOMES[fb]?.marine === 'coast' ? fb : MARINE_MINT.openShallowBiome, rng);
-    }
-    // SUB-BIOME STAGING: land biomes with depth-affine faces (the desert's
-    // waste/erg/glasspan) weigh the pick by how deep into the region this
-    // mint sits — same lever the marine split reads, generalized as data.
-    // GEO-LOCKED faces (TilesetDef.geoAffinity) fold the coord's baked
-    // climate the same way — the mountain country's per-range snow lock.
-    // A dimensioned mint widens the pool with its realm's own tilesets
-    // (TilesetDef.realm) — surface mints pass no realm, byte-identical.
-    picked = picked ?? pickTilesetForBiome(fb, rng, spec.biomeDepthFor?.(target), spec.dimension,
-      spec.climateFor?.(target, spec.dimension));
-    if (picked) tilesetId = picked;
-  }
-  // Same guard mintCave carries: a directed mint naming an unregistered
-  // tileset must degrade loudly to a real one, never crash the mint chain.
-  let tileset = TILESETS[tilesetId];
-  if (!tileset) {
-    console.warn(`[worldgen] mint '${spec.id ?? `gen_${genIndex}`}' names unregistered tileset '${tilesetId}' — falling back to 'deepwood'`);
-    tilesetId = 'deepwood';
-    tileset = TILESETS[tilesetId];
-  }
-  const id = spec.id ?? `gen_${genIndex}`;
-  // LEVEL priority: explicit spec.level (authored/quest/event mints) → the DIFFICULTY
-  // FIELD at this coordinate (random frontiers: radial danger geography) → the legacy
-  // source.level + 1 fallback. The field reads `target` — the SAME projected coord the
-  // portal label samples (placeExit) — so the "Uncharted · Lv N" preview is exact.
-  const level = spec.level ?? spec.levelFor?.(target) ?? (src ? src.level + 1 : 1);
-
-  // Sub-biome variant: rolled once, folded into BOTH the name and the layout.
-  // The tileset's COMMON rows then ride every roll — a variant re-authors the
-  // dressing that CHANGES; common carries what the biome always is.
-  let layout = tileset.layout;
-  let variantName: string | undefined;
-  let variantTheme: Partial<ZoneDef['theme']> | undefined;
-  let variantLayoutParams: Record<string, unknown> | undefined;
-  if (tileset.variants && tileset.variants.length) {
-    // A NAMED face (spec.variant — perf-gate pins, dev mints) skips the roll;
-    // the spec-less stream stays byte-identical. Unknown names warn and roll.
-    // The roll itself is pickTilesetVariant — TilesetVariant.weight honored,
-    // all-weights-absent byte-identical to the old uniform pick.
-    const forced = spec.variant ? tileset.variants.find(x => x.name === spec.variant) : undefined;
-    if (spec.variant && !forced) {
-      console.warn(`[worldgen] mint '${spec.id ?? `gen_${genIndex}`}': tileset '${tileset.id}' has no variant '${spec.variant}' — rolling`);
-    }
-    const v = forced ?? pickTilesetVariant(genRng, tileset.variants);
-    variantName = v.name;
-    layout = v.layout;
-    variantTheme = v.theme; // a face may RECOLOR itself (merged over base below)
-    variantLayoutParams = v.layoutParams; // …and retune its recipe knobs (merged below)
-  }
-  if (tileset.common && tileset.common.length) layout = [...tileset.common, ...layout];
-
-  // A name nobody on the map is wearing yet (or an explicit override — the Caravan
-  // pre-derives its destination name so the menu label matches the minted zone).
-  const taken = new Set(Object.values(zoneMap).map(z => z.name));
-  let name = spec.name ?? '';
-  if (!name) {
-    // THE BARE-NAME LAW: the rolled face is DATA (ZoneDef.variantName, set
-    // below), never baked into the walking name — portals, banners and event
-    // lines stay clutter-free, and the MAP pane supplies the sub-biome
-    // typing deliberately (the zone box's biome chip).
-    for (let tries = 0; tries < 12; tries++) {
-      name = `${rng.pick(tileset.nameFirst)} ${rng.pick(tileset.nameSecond)}`;
-      if (!taken.has(name)) break;
-    }
-    if (taken.has(name)) name += ' II';
-  }
-
-  // An objectivePool spec (a pocket form) filters the tileset's weights before
-  // the roll — same single draw, so only the spec'd mint's stream shifts. An
-  // emptied pool degrades to 'clear' without drawing (nothing to weigh).
-  const objWeights = spec.objectivePool
-    ? tileset.objectives.filter(o => spec.objectivePool!.includes(o.kind))
-    : tileset.objectives;
-  const objective = spec.objective
-    ?? (objWeights.length ? rollObjective(genRng, objWeights, tileset.spawnerId) : { kind: 'clear' as const });
-
-  // The zone's biome (authored tileset tag, else the heat-map field) — drives BOTH
-  // the layout generator (below) AND the map SPACING (the per-biome density lever:
-  // grove tight, desert spacious). Computed once here so placement can read it.
-  const zoneBiome = tileset.biome ?? spec.biomeFor?.(target);
-  const nodeSep = biomeSpacing(zoneBiome);
-
-  // COURSE hints — does this mint ride a declared throughline? Gated on
-  // fieldBiome (the winding-bend discipline) and CROSS-CHECKED against the
-  // sampled biome: a feather-band coord whose dither fell OFF the course gets
-  // no artery dressing, so hints and heat map never disagree. A NON-painting
-  // course (rivers) crosses whatever country it crosses — it never touched
-  // the heat map, so there is nothing to disagree with.
-  const courseHints = spec.fieldBiome ? spec.courseFor?.(target) ?? null : null;
-  const onCourse = courseHints
-    && (courseHints.spec.paints === false || courseHints.spec.biome === zoneBiome)
-    ? courseHints : null;
-
-  // Map node: start at the target, then PUSH AWAY from any crowding neighbour until it
-  // clears the biome's spacing — a deterministic-ish push (toward the gap, not a random
-  // walk) GUARANTEES non-overlap (no more tangled, stacked nodes). Considers ALL nodes
-  // incl. floating event mints, so a crusade/demon/incursion never stacks on a sibling.
-  const map = { x: target.x + rng.range(-16, 16), y: target.y + rng.range(-12, 12) };
-  const nudge = spec.nudgeDir ?? { x: target.x - srcMap.x, y: target.y - srcMap.y };
-  const tl = Math.hypot(nudge.x, nudge.y) || 1;
-  const nx = nudge.x / tl, ny = nudge.y / tl;
-  // WINDING: bend the node off the cardinal axis (perpendicular = (-ny, nx)). Gated on
-  // fieldBiome (random frontier) so DIRECTED mints draw zero extra RNG → byte-identical.
-  if (spec.fieldBiome) {
-    const wind = rng.range(-LABYRINTH_WIND, LABYRINTH_WIND);
-    map.x += -ny * wind; map.y += nx * wind;
-  }
-  // COURSE HUG: a throughline keeps its zones ON the line — pull the node
-  // toward the course centerline (capped at the spec's hug), so a cardinal
-  // frontier step off this node can't fall out of the corridor at a bend and
-  // break the followable chain. Deterministic (no rng); course mints only.
-  if (onCourse && onCourse.hug > 0) {
-    const pl = Math.hypot(onCourse.centerPull.x, onCourse.centerPull.y);
-    if (pl > 1) {
-      const f = Math.min(1, onCourse.hug / pl);
-      map.x += onCourse.centerPull.x * f;
-      map.y += onCourse.centerPull.y * f;
-    }
-  }
-  // Find the nearest neighbour inside the spacing radius; push directly away from it
-  // by the deficit (+ a hair), with a small seeded angle jitter so two coincident
-  // mints don't push along the same axis forever. Iterate to settle multi-crowding.
-  // THE FOOTPRINT LAW (spacing half): a FIELD expanse is its whole core rect,
-  // not a point — the crowding distance is point-to-rect, so mints keep the
-  // spacing from the meadow's EDGE and can never stand on the expanse itself.
-  for (let tries = 0; tries < 20; tries++) {
-    let nearPt: { x: number; y: number } | null = null, nd = Infinity;
-    for (const z of Object.values(zoneMap)) {
-      if (z.id === id) continue;
-      // Other-dimension nodes share the coordinate plane but render on their
-      // own map tab — hell must not shove surface zones around (or vice versa).
-      if ((z.dimension ?? 'surface') !== (spec.dimension ?? 'surface')) continue;
-      let px = z.map.x, py = z.map.y, interior = false;
-      if (z.field) {
-        const r = fieldCoreRect(z.field, z.size);
-        if (r.x1 > r.x0 && r.y1 > r.y0) {
-          px = clamp(map.x, r.x0, r.x1); py = clamp(map.y, r.y0, r.y1);
-          // Standing INSIDE the rect: full-deficit push away from the rect's
-          // centre (the clamp degenerates to the point itself — no direction,
-          // and its distance-to-centre must NOT read as clearance: a directed
-          // quest landing mid-meadow is at clearance ZERO, wherever the
-          // centre happens to sit).
-          if (px === map.x && py === map.y) { px = (r.x0 + r.x1) / 2; py = (r.y0 + r.y1) / 2; interior = true; }
+  const minted = mintNativeZone<{ map: MapCoord; exits: ZoneExitDef[]; backEdge: ZoneExitDef[];
+    backSide: Dir; srcDim: string; myDim: string; wetDeed: { notarized?: true } }>({ target, source: src, genIndex, spec, geographyEligible, destinationSeed,
+    destination, locale, scarp }, {
+    TILESETS, BIOMES, BIOME_FIELD_CFG, MARINE_MINT, PORT_MINT, WAR_PAIRS, ESCARPMENT_CFG, SPECIAL_ARENA_THEME,
+    PORT_COAST, SPECLESS_H_STRETCH, LOCALE_LAYOUT, pickDockTileset, pickTilesetForBiome, pickTilesetVariant,
+    biomeSpacing, isAquaticBiome, dimensionDef, hasLayout, expandExplorationSize, pickExplorationLocale,
+    localeProgram, compileLocale, localeSeed, atlasSeedInstalled, featuresAt, foldFeatureHits, bakeAtlasContext,
+    lairLandmarkRolls, rollObjective, pickLayout, applyBlend, applyAnnexes, rollSeed,
+    warn: message => console.warn(message),
+  }, {
+    names: () => Object.values(zoneMap).map(z => z.name),
+    prepare: ({ rng, id, tileset, nodeSep, onCourse }) => {
+      // Map node: start at the target, then PUSH AWAY from any crowding neighbour until it
+      // clears the biome's spacing — a deterministic-ish push (toward the gap, not a random
+      // walk) GUARANTEES non-overlap (no more tangled, stacked nodes). Considers ALL nodes
+      // incl. floating event mints, so a crusade/demon/incursion never stacks on a sibling.
+      const map = { x: target.x + rng.range(-16, 16), y: target.y + rng.range(-12, 12) };
+      const nudge = spec.nudgeDir ?? { x: target.x - srcMap.x, y: target.y - srcMap.y };
+      const tl = Math.hypot(nudge.x, nudge.y) || 1;
+      const nx = nudge.x / tl, ny = nudge.y / tl;
+      // WINDING: bend the node off the cardinal axis (perpendicular = (-ny, nx)). Gated on
+      // fieldBiome (random frontier) so DIRECTED mints draw zero extra RNG → byte-identical.
+      if (spec.fieldBiome) {
+        const wind = rng.range(-LABYRINTH_WIND, LABYRINTH_WIND);
+        map.x += -ny * wind; map.y += nx * wind;
+      }
+      // COURSE HUG: a throughline keeps its zones ON the line — pull the node
+      // toward the course centerline (capped at the spec's hug), so a cardinal
+      // frontier step off this node can't fall out of the corridor at a bend and
+      // break the followable chain. Deterministic (no rng); course mints only.
+      if (onCourse && onCourse.hug > 0) {
+        const pl = Math.hypot(onCourse.centerPull.x, onCourse.centerPull.y);
+        if (pl > 1) {
+          const f = Math.min(1, onCourse.hug / pl);
+          map.x += onCourse.centerPull.x * f;
+          map.y += onCourse.centerPull.y * f;
         }
       }
-      const d = interior ? 0 : Math.hypot(px - map.x, py - map.y);
-      if (d < nodeSep && d < nd) { nd = d; nearPt = { x: px, y: py }; }
-    }
-    if (!nearPt) break;
-    const away = Math.atan2(map.y - nearPt.y, map.x - nearPt.x) + rng.range(-0.35, 0.35);
-    const push = (nodeSep - nd) + 8;
-    map.x += Math.cos(away) * push;
-    map.y += Math.sin(away) * push;
-  }
-  // THE MAP CLEARWAY (WEB_CFG.mintRoadClear): a fresh node must not stand ON a
-  // standing road's line — it would read as a junction that doesn't exist.
-  // Push perpendicular off the nearest offending chord until clear.
-  // Deterministic (no rng): the push side is the side the node already leans
-  // toward, so replays and co-op clients re-derive the same nudge.
-  for (let tries = 0; tries < 12; tries++) {
-    let bestD: number = WEB_CFG.mintRoadClear;
-    let push: { x: number; y: number } | null = null;
-    for (const z of Object.values(zoneMap)) {
-      if (z.id === id || (z.dimension ?? 'surface') !== (spec.dimension ?? 'surface')) continue;
-      for (const e of z.exits) {
-        if (e.to === '?' || e.crossDim || z.id > e.to) continue; // each chord once
-        const dst = zoneMap[e.to];
-        if (!dst || (dst.dimension ?? 'surface') !== (spec.dimension ?? 'surface')) continue;
-        const d = segPointDist(z.map, dst.map, map);
-        if (d >= bestD) continue;
-        const abx = dst.map.x - z.map.x, aby = dst.map.y - z.map.y;
-        const l = Math.hypot(abx, aby) || 1;
-        const side = Math.sign(abx * (map.y - z.map.y) - aby * (map.x - z.map.x)) || 1;
-        const mag = (WEB_CFG.mintRoadClear - d) + 4;
-        push = { x: (-aby / l) * side * mag, y: (abx / l) * side * mag };
-        bestD = d;
+      // Find the nearest neighbour inside the spacing radius; push directly away from it
+      // by the deficit (+ a hair), with a small seeded angle jitter so two coincident
+      // mints don't push along the same axis forever. Iterate to settle multi-crowding.
+      // THE FOOTPRINT LAW (spacing half): a FIELD expanse is its whole core rect,
+      // not a point — the crowding distance is point-to-rect, so mints keep the
+      // spacing from the meadow's EDGE and can never stand on the expanse itself.
+      for (let tries = 0; tries < 20; tries++) {
+        let nearPt: { x: number; y: number } | null = null, nd = Infinity;
+        for (const z of Object.values(zoneMap)) {
+          if (z.id === id) continue;
+          // Other-dimension nodes share the coordinate plane but render on their
+          // own map tab — hell must not shove surface zones around (or vice versa).
+          if ((z.dimension ?? 'surface') !== (spec.dimension ?? 'surface')) continue;
+          let px = z.map.x, py = z.map.y, interior = false;
+          if (z.field) {
+            const r = fieldCoreRect(z.field, z.size);
+            if (r.x1 > r.x0 && r.y1 > r.y0) {
+              px = clamp(map.x, r.x0, r.x1); py = clamp(map.y, r.y0, r.y1);
+              // Standing INSIDE the rect: full-deficit push away from the rect's
+              // centre (the clamp degenerates to the point itself — no direction,
+              // and its distance-to-centre must NOT read as clearance: a directed
+              // quest landing mid-meadow is at clearance ZERO, wherever the
+              // centre happens to sit).
+              if (px === map.x && py === map.y) { px = (r.x0 + r.x1) / 2; py = (r.y0 + r.y1) / 2; interior = true; }
+            }
+          }
+          const d = interior ? 0 : Math.hypot(px - map.x, py - map.y);
+          if (d < nodeSep && d < nd) { nd = d; nearPt = { x: px, y: py }; }
+        }
+        if (!nearPt) break;
+        const away = Math.atan2(map.y - nearPt.y, map.x - nearPt.x) + rng.range(-0.35, 0.35);
+        const push = (nodeSep - nd) + 8;
+        map.x += Math.cos(away) * push;
+        map.y += Math.sin(away) * push;
       }
-    }
-    if (!push) break;
-    map.x += push.x;
-    map.y += push.y;
-  }
-  // LAND CLAMP: the placement jitter, the winding bend, and the anti-crowd
-  // push must not shove a node into the sea — the ocean is a BIOME now, so
-  // the sampler itself knows where the water is. Walk back toward the TARGET
-  // (every caller's target is verified land: pulled ashore, a harbor's last
-  // land coord, a sail landing) — never toward the anchor, which for a
-  // landfall port sits across the whole ocean.
-  if (spec.biomeFor) {
-    for (let t = 0; t < 8 && spec.biomeFor(map) === OCEAN_BIOME; t++) {
-      map.x += (target.x - map.x) * 0.4;
-      map.y += (target.y - map.y) * 0.4;
-    }
-  }
+      // THE MAP CLEARWAY (WEB_CFG.mintRoadClear): a fresh node must not stand ON a
+      // standing road's line — it would read as a junction that doesn't exist.
+      // Push perpendicular off the nearest offending chord until clear.
+      // Deterministic (no rng): the push side is the side the node already leans
+      // toward, so replays and co-op clients re-derive the same nudge.
+      for (let tries = 0; tries < 12; tries++) {
+        let bestD: number = WEB_CFG.mintRoadClear;
+        let push: { x: number; y: number } | null = null;
+        for (const z of Object.values(zoneMap)) {
+          if (z.id === id || (z.dimension ?? 'surface') !== (spec.dimension ?? 'surface')) continue;
+          for (const e of z.exits) {
+            if (e.to === '?' || e.crossDim || z.id > e.to) continue; // each chord once
+            const dst = zoneMap[e.to];
+            if (!dst || (dst.dimension ?? 'surface') !== (spec.dimension ?? 'surface')) continue;
+            const d = segPointDist(z.map, dst.map, map);
+            if (d >= bestD) continue;
+            const abx = dst.map.x - z.map.x, aby = dst.map.y - z.map.y;
+            const l = Math.hypot(abx, aby) || 1;
+            const side = Math.sign(abx * (map.y - z.map.y) - aby * (map.x - z.map.x)) || 1;
+            const mag = (WEB_CFG.mintRoadClear - d) + 4;
+            push = { x: (-aby / l) * side * mag, y: (abx / l) * side * mag };
+            bestD = d;
+          }
+        }
+        if (!push) break;
+        map.x += push.x;
+        map.y += push.y;
+      }
+      // LAND CLAMP: the placement jitter, the winding bend, and the anti-crowd
+      // push must not shove a node into the sea — the ocean is a BIOME now, so
+      // the sampler itself knows where the water is. Walk back toward the TARGET
+      // (every caller's target is verified land: pulled ashore, a harbor's last
+      // land coord, a sail landing) — never toward the anchor, which for a
+      // landfall port sits across the whole ocean.
+      if (spec.biomeFor) {
+        for (let t = 0; t < 8 && spec.biomeFor(map) === OCEAN_BIOME; t++) {
+          map.x += (target.x - map.x) * 0.4;
+          map.y += (target.y - map.y) * 0.4;
+        }
+      }
 
-  if (scarp) Object.assign(map, target); // the local cliff contract samples this exact location
-  if (destination) Object.assign(map, destination.seat); // atlas seat is immutable geography
+      if (scarp) Object.assign(map, target); // the local cliff contract samples this exact location
+      if (destination) Object.assign(map, destination.seat); // atlas seat is immutable geography
 
-  // Back-edge to the anchor (reachability is the back-edge's job — UNCONDITIONAL,
-  // bypassing the degree cap), then 1-2 fresh frontiers so it can grow its own edges.
-  // A FLOATING zone skips the back-edge (it mints disconnected, wired in later by
-  // connectFloatingZone on approach — the fog-of-war find-it).
-  //
-  // DIMENSIONS ARE SEALED: an anchor in another dimension mints NO back-edge
-  // unless this is a declared gate (spec.gateCross → the exit carries crossDim,
-  // the one legal crossing). Callers used to be trusted here — the exact
-  // footgun that let a mismatched (anchor, dimension) pair silently forge a
-  // hell↔surface road indistinguishable from the Hellgate's.
-  const backSide: Dir = src ? sideToward(map, srcMap) : 's';
-  const srcDim = src?.dimension ?? 'surface';
-  const myDim = spec.dimension ?? 'surface';
-  // An UNAVOIDABLY wet back-edge (no dry anchor existed) is a deliberate
-  // reachability deed — notarize it so the dry-road law's heal and census
-  // recognize the intent (surface only; other planes have no ocean).
-  const wetDeed = src && myDim === 'surface' && srcDim === 'surface'
-    && !routeOk(map, srcMap) ? { notarized: true as const } : {};
-  let backEdge: ZoneExitDef[] = [];
-  if (src && !spec.floating && !spec.noBackEdge) {
-    if (srcDim === myDim) backEdge = [{ to: src.id, side: backSide, ...wetDeed }];
-    else if (spec.gateCross) backEdge = [{ to: src.id, side: backSide, crossDim: true }];
-    else {
-      console.warn(`[worldgen] refused cross-dimension back-edge ${spec.id ?? `gen_${genIndex}`} (${myDim}) → ${src.id} (${srcDim}) — only a declared gate may cross`);
-    }
-  }
-  const exits: ZoneExitDef[] = backEdge;
-  const openSides = (['n', 's', 'e', 'w'] as const).filter(s => s !== backSide);
-  // A POCKET is a cul-de-sac by contract: the back-edge is its ONLY road, so
-  // it rolls no frontiers at all (and skips the roll's rng draw — pockets are
-  // new callers, every existing mint's stream is untouched).
-  const frontiers = spec.pocket ? 0 : spec.forceFrontiers ?? rng.int(1, 2);
-  for (let i = 0; i < frontiers && openSides.length; i++) {
-    const side = openSides.splice(rng.int(0, openSides.length - 1), 1)[0];
-    exits.push({ to: '?', side, at: rng.pick([0.35, 0.5, 0.65]), tileset: tileset.id });
-  }
+      // Back-edge to the anchor (reachability is the back-edge's job — UNCONDITIONAL,
+      // bypassing the degree cap), then 1-2 fresh frontiers so it can grow its own edges.
+      // A FLOATING zone skips the back-edge (it mints disconnected, wired in later by
+      // connectFloatingZone on approach — the fog-of-war find-it).
+      //
+      // DIMENSIONS ARE SEALED: an anchor in another dimension mints NO back-edge
+      // unless this is a declared gate (spec.gateCross → the exit carries crossDim,
+      // the one legal crossing). Callers used to be trusted here — the exact
+      // footgun that let a mismatched (anchor, dimension) pair silently forge a
+      // hell↔surface road indistinguishable from the Hellgate's.
+      const backSide: Dir = src ? sideToward(map, srcMap) : 's';
+      const srcDim = src?.dimension ?? 'surface';
+      const myDim = spec.dimension ?? 'surface';
+      // An UNAVOIDABLY wet back-edge (no dry anchor existed) is a deliberate
+      // reachability deed — notarize it so the dry-road law's heal and census
+      // recognize the intent (surface only; other planes have no ocean).
+      const wetDeed = src && myDim === 'surface' && srcDim === 'surface'
+        && !routeOk(map, srcMap) ? { notarized: true as const } : {};
+      let backEdge: ZoneExitDef[] = [];
+      if (src && !spec.floating && !spec.noBackEdge) {
+        if (srcDim === myDim) backEdge = [{ to: src.id, side: backSide, ...wetDeed }];
+        else if (spec.gateCross) backEdge = [{ to: src.id, side: backSide, crossDim: true }];
+        else {
+          console.warn(`[worldgen] refused cross-dimension back-edge ${spec.id ?? `gen_${genIndex}`} (${myDim}) → ${src.id} (${srcDim}) — only a declared gate may cross`);
+        }
+      }
+      const exits: ZoneExitDef[] = backEdge;
+      const openSides = (['n', 's', 'e', 'w'] as const).filter(s => s !== backSide);
+      // A POCKET is a cul-de-sac by contract: the back-edge is its ONLY road, so
+      // it rolls no frontiers at all (and skips the roll's rng draw — pockets are
+      // new callers, every existing mint's stream is untouched).
+      const frontiers = spec.pocket ? 0 : spec.forceFrontiers ?? rng.int(1, 2);
+      for (let i = 0; i < frontiers && openSides.length; i++) {
+        const side = openSides.splice(rng.int(0, openSides.length - 1), 1)[0];
+        exits.push({ to: '?', side, at: rng.pick([0.35, 0.5, 0.65]), tileset: tileset.id });
+      }
 
-  // Roll a varied footprint: an independent width and an ASPECT class. A
-  // sizeBand spec (a pocket form's deliberate hollow) swaps the bands under
-  // the SAME two draws — spec-less mints keep every stream byte-identical.
-  const rolledShape = genRng.chance(tileset.ellipseChance ?? 0) ? 'ellipse' as const : 'rect' as const;
-  let shape = spec.shape ?? rolledShape;
-  const aspect = genRng.pick([1, 1, 0.64, 1.55, 0.78, 1.32]);
-  const bandW = spec.sizeBand?.w ?? tileset.sizeW;
-  const bandH = spec.sizeBand?.h ?? tileset.sizeH;
-  const baseW = genRng.range(bandW[0], bandW[1]);
-  const size = {
-    w: Math.round(baseW),
-    h: Math.round(clamp(baseW * aspect, bandH[0], bandH[1] * (spec.sizeBand ? 1 : SPECLESS_H_STRETCH))),
-  };
-  const ordinary = geographyEligible && !locale && !spec.sizeBand && !spec.shape && !spec.noWeave
-    && !spec.objective && !onCourse && !tileset.forceLayout && !tileset.boundless && !isAquaticBiome(zoneBiome);
-  if (ordinary) {
-    Object.assign(size, expandExplorationSize(size, 'surface'));
-    const varietySeed = spec.seed ?? localeSeed(`${destinationSeed}/${id}/${target.x}/${target.y}`);
-    const selected = pickExplorationLocale(zoneBiome, varietySeed);
-    const program = selected ? localeProgram(selected) : undefined;
-    if (program) {
-      locale = compileLocale(program, varietySeed);
-      Object.assign(size, locale.size ?? program.size);
-      shape = 'rect';
-    }
-  }
-  // COURSE CONTINUATION: a zone on a throughline GUARANTEES a way onward along
-  // it (up- and downstream) — a 1-frontier roll on the wrong side must never
-  // dead-end the artery. Appended after the size roll so the 'at' pick spaces
-  // against the real footprint; append-only (the weave/defIndex invariant).
-  // Draws RNG only for course mints, so every other mint's stream is untouched.
-  // A POCKET never continues an artery — a dead-end is the whole point.
-  if (onCourse && !spec.pocket) {
-    for (const side of onCourse.continueSides) {
-      if (side === backSide || exits.some(e => e.side === side)) continue;
-      const at = findNonCollidingAt(side, exits, rng, size) ?? bestSpacedAt(side, exits, size);
-      exits.push({ to: '?', side, at, tileset: tileset.id });
-    }
-  }
-  // Biome (computed above as zoneBiome): the authored tileset tag wins; else the
-  // heat-map FIELD fills it. The biome then dictates which LAYOUT GENERATOR shapes the
-  // zone (default 'plains'), stored on the def so revisits replay the topology.
-  const biome = zoneBiome;
-  // An authored set-piece arena forces its layout; a COURSE may force its
-  // recipe on the zones riding it (the river's riverland carve in whatever
-  // local dress the tileset wears); a tileset FACE may pin its own (the
-  // chasm-maze reach vs the stone-forest weald); otherwise the biome rolls
-  // from allowedLayouts. Pins branch BEFORE the roll, so the rng stream
-  // shifts only for pinned mints — every existing mint's draw order is
-  // untouched (the cave-mint forceLayout contract, mirrored).
-  const rolledLayout = spec.layoutType ?? onCourse?.forceLayout ?? onCourse?.spec.forceLayout ?? tileset.forceLayout
-    ?? pickLayout(biome, target, genRng, spec.biomeFor);
-  const layoutType = locale ? LOCALE_LAYOUT : rolledLayout;
-  // generateLayout degrades an unregistered layout id to 'plains' silently —
-  // say so at mint, where the authoring slip (a quest def's layoutType typo)
-  // is one hop away. Biome allowedLayouts are boot-validated; this covers the
-  // directed spec path those validators can't see.
-  if (layoutType !== 'plains' && !hasLayout(layoutType)) {
-    console.warn(`[worldgen] mint '${id}' names unregistered layout '${layoutType}' — generateLayout will fall back to 'plains'`);
-  }
-  // GEO context — how deep inside its biome blob the zone sits (0 = edge, 1 =
-  // interior), from the EXISTING biome-depth sampler (sim.biomeField.sampleDepth,
-  // already threaded for the marine shallow-isles/deep-sea split), plus the
-  // CLIMATE axes at the coordinate (rounded for tidy serialization). Pure field
-  // reads, NO rng — directed mints without samplers simply carry no geo.
-  // Computed BEFORE the roll merges (a pure hoist, stream-invisible): the
-  // lair fold reads it, so deep-country natives can claim the heart of a
-  // biome and refuse its border (the roost law).
-  const climate = spec.climateFor?.(target, spec.dimension);
-  const geo0 = (spec.biomeDepthFor || climate || scarp)
-    ? {
-      ...(scarp ? { escarpment: scarp } : {}),
-      ...(spec.biomeDepthFor ? { biomeDepth: Math.max(0, Math.min(1, spec.biomeDepthFor(target))) } : {}),
-      ...(climate ? {
-        climate: Object.fromEntries(Object.entries(climate).map(([k, v]) => [k, Math.round(v * 100) / 100])),
-      } : {}),
-    }
-    : undefined;
-  // THE ATLAS FEATURES (world/atlas.ts): a RANDOM-FRONTIER surface mint that
-  // stands within reach of a summit / lode / lake basin INHERITS it — the ids
-  // and a relief lift baked onto geo (the def carries the truth, like
-  // climate), its landmark + composition rolls appended AFTER the zone's
-  // own (tail draws: every feature-less mint's stream is untouched), its
-  // recipe knobs merged below the mint spec's. Directed mints and other
-  // dimensions never look (the frontier law); no installed seed = no hits.
-  const atlasSeed = atlasSeedInstalled();
-  const featureHits = spec.fieldBiome && (spec.dimension ?? 'surface') === 'surface'
-    ? featuresAt(target) : [];
-  const featureFold = featureHits.length ? foldFeatureHits(featureHits) : null;
-  const atlasContext = featureFold && atlasSeed !== null
-    ? bakeAtlasContext(target, atlasSeed, featureHits) : undefined;
-  const geo = featureFold?.ids.length
-    ? { ...(geo0 ?? {}), features: featureFold.ids, atlas: atlasContext,
-      ...(featureFold.relief ? { relief: featureFold.relief } : {}) }
-    : geo0;
-  // STRUCTURE ROLLS: merge the tileset's chances with the biome's (both pure
-  // data). Baked onto the def so revisits/co-op replay the same rolls, and so
-  // the bastion layout resolves its candidate pool from the zone itself. Special
-  // arenas skip them (a boss arena owns its own furniture).
-  const structureRolls = spec.special || locale ? [] : [
-    ...(tileset.structures ?? []),
-    ...(biome ? BIOMES[biome]?.structures ?? [] : []),
-  ];
-  const landmarkRolls = spec.special || locale ? [] : [
-    ...(tileset.landmarks ?? []),
-    ...(biome ? BIOMES[biome]?.landmarks ?? [] : []),
-    // A port ALWAYS gets its shoreline (the harbor's reason to exist).
-    ...(spec.port ? [{ landmark: PORT_COAST, chance: 1 }] : []),
-    ...(onCourse?.landmarks ?? []),
-    ...(featureFold?.landmarks ?? []),
-    // THE LAIR FABRIC (engine/lairs.ts): natives that claim this biome at
-    // this level seat their lair rolls beside the authored ones — pure
-    // predicate here; the chance draws in generateLayout's landmark loop
-    // like any other row (unclaimed ground burns no rng). Course mints
-    // carry their course id, so a native may claim the rivers themselves.
-    ...lairLandmarkRolls({
-      place: 'surface', biome, level, tileset: tileset.id, port: spec.port,
-      course: onCourse?.spec.id,
-      biomeDepth: geo?.biomeDepth, climate: geo?.climate,
-    }),
-  ];
-  // COMPOSITION ROLLS: the whole-zone coordinated bundles, same merge + bake
-  // discipline as structures/landmarks (special arenas skip them too).
-  const compositionRolls = spec.special || locale ? [] : [
-    ...(tileset.compositions ?? []),
-    ...(biome ? BIOMES[biome]?.compositions ?? [] : []),
-    // A course TERMINUS bakes its reward rolls onto the def like any other
-    // roll source (revisits/co-op replay them — the same discipline).
-    ...(onCourse?.compositions ?? []),
-    ...(featureFold?.compositions ?? []),
-  ];
-  // (GEO hoisted above the roll merges — the lair fold reads it there.)
-  // Layout knobs, spec ▷ atlas ▷ course/stage ▷ variant ▷ tileset ▷ biome (most-specific
-  // wins) — baked so revisits/co-op replay the same recipe tweaks. A course
-  // slots UNDER the spec (a directed mint may still override the artery's
-  // orientation); the rolled FACE slots between its tileset and the course
-  // (the theme-merge precedence, mirrored onto recipe knobs).
-  const layoutParams = {
-    ...(biome ? BIOMES[biome]?.layoutParams : undefined),
-    ...tileset.layoutParams,
-    ...variantLayoutParams,
-    ...onCourse?.layoutParams,
-    ...featureFold?.layoutParams,
-    ...spec.layoutParams,
-  };
-  // WAYPOINT VETO: no waypoint may spawn within an existing exclusion zone's radius
-  // (the anti-teleport gate around a boss arena). Excludes the zone being minted from
-  // its own radius. Measured in Euclidean node-space (the same convention everywhere).
-  // A WAYPOINTLESS DIMENSION (DimensionDef.waypoints: false — the Aetherial)
-  // vetoes outright, AFTER the ??-chain so the seeded draw order is untouched.
-  // A 'leyline' roll FORCES the stone (the besieged waypoint IS the ask) —
-  // OR-ed after the chance draw so the seeded stream is byte-identical for
-  // every other mint; ground the vetoes still refuse degrades the objective
-  // back to 'clear' below (a leyline zone without a waypoint is incoherent).
-  const wpCand = ((spec.forceWaypoint ?? rng.chance(0.3)) || objective.kind === 'leyline')
-    && dimensionDef(spec.dimension).waypoints !== false;
-  const wpBlocked = Object.values(zoneMap).some(z =>
-    z.wpExclusionRadius !== undefined && z.id !== id && coordDist(target, z.map) < z.wpExclusionRadius);
-  const objectiveFinal: ObjectiveSpec =
-    objective.kind === 'leyline' && (wpBlocked || !wpCand) ? { kind: 'clear' } : objective;
-  // SKY EXPOSURE bake (spec ▷ tileset, most-specific wins): a sheltered
-  // interior carries its roof on the def, so skyOf() answers from pure
-  // zone data everywhere (engine, sim, renderer, both co-op sides).
-  const sky = spec.sky ?? tileset.sky;
-  // CAMERA PIN bake (the sky law, same precedence): the biome's claim on its
-  // frame rides the def so the renderer's existing chain (render/camera.ts:
-  // ZoneDef.camera ▷ Settings ▷ CAMERA_CFG.default) picks it up unchanged.
-  // Absent everywhere = no key, byte-identical — no draw burns either way.
-  const camera = spec.camera ?? tileset.camera;
-  const def: ZoneDef = {
-    id, name, level,
-    ...(locale ? { locale, destination } : {}),
-    size,
-    shape, biome,
-    // MINT PROVENANCE (the face-voice seam): the resolved face this ground
-    // wears — post-fallback, post-field-repick, so it is always the truth.
-    tileset: tilesetId,
-    // AQUATIC (the coherence fabric): open-seabed biomes stamp the flag so
-    // habitat-bearing flora places freely and the default gravel exit-road
-    // stands down — durable on the def, one classifier (isAquaticBiome).
-    ...(isAquaticBiome(biome) ? { aquatic: true } : {}),
-    theme: spec.special ? SPECIAL_ARENA_THEME
-      : variantTheme ? { ...tileset.theme, ...variantTheme } : tileset.theme,
-    layout: locale ? [] : layout,
-    ...(layoutType !== 'plains' ? { layoutType } : {}),
-    objective: objectiveFinal,
-    // The biome's puzzle repertoire + ambient scenery-actors ride the def
-    // (rolled at LOAD on salted streams — never a generation concern).
-    ...(tileset.puzzles ? { puzzles: tileset.puzzles } : {}),
-    ...(tileset.scenery ? { scenery: tileset.scenery } : {}),
-    // SECRET HOLLOWS (the hollows fabric): the tileset's budget rides onto
-    // SURFACE mints too — mintCave carried it from day one, but this literal
-    // never did, so every authored surface budget (the downs' tor caches,
-    // the warrens' squats + stairwells) was silently inert. stampHollows
-    // runs LAST in generateLayout, so the bake shifts no earlier draw.
-    ...(!locale && tileset.hollows ? { hollows: tileset.hollows } : {}),
-    packs: spec.packsOverride ?? tileset.packs,
-    exits,
-    map,
-    waypoint: wpBlocked ? false : wpCand,
-    // THE KNOWLEDGE LAW: born veiled (ZoneSpec.veiled above); World.visible
-    // and the knowledge acts lift it.
-    ...(spec.veiled === false ? {} : { veiled: true }),
-    ...(spec.wpExclusionRadius ? { wpExclusionRadius: spec.wpExclusionRadius } : {}),
-    // A SPECIAL arena ignores the biome and locks out overlay events (eventOwned).
-    ...(spec.special ? { special: true, eventOwned: true } : {}),
-    factionWar: spec.noFactionWar ? undefined : (genRng.chance(0.18) ? genRng.pick(WAR_PAIRS) : undefined),
-    seed: spec.seed ?? rollSeed(), // fixed: this zone keeps its layout across revisits
-    ...(variantName ? { variantName } : {}),
-    ...(spec.floating ? { floating: true } : {}),
-    ...(spec.concealed ? { concealed: true } : {}),
-    ...(structureRolls.length ? { structures: structureRolls } : {}),
-    ...(landmarkRolls.length ? { landmarks: landmarkRolls } : {}),
-    ...(compositionRolls.length ? { compositions: compositionRolls } : {}),
-    ...(geo ? { geo } : {}),
-    ...(onCourse?.journey ? { journey: onCourse.journey } : {}),
-    // AQUATIC (the coherence fabric): open-seabed biomes stamp the flag so
-    // habitat-bearing flora places freely and the default gravel exit-road
-    // stands down — durable on the def, one classifier (isAquaticBiome).
-    ...(isAquaticBiome(biome) ? { aquatic: true } : {}),
-    ...(Object.keys(layoutParams).length ? { layoutParams } : {}),
-    ...(spec.kind ? { kind: spec.kind } : {}),
-    ...(spec.port ? { port: true } : {}),
-    ...(spec.dimension ? { dimension: spec.dimension } : {}),
-    ...(spec.pocket ? { pocket: true } : {}),
-    ...(sky ? { sky } : {}),
-    ...(camera ? { camera } : {}),
-  };
-  if (scarp?.blockedSide) {
-    // No frontier may promise a crossing through the impassable face.
-    def.exits = def.exits.filter(e => e.side !== scarp.blockedSide);
-  }
-  // Existing river geography remains material inside a cliff locale.
-  if (scarp && locale && onCourse && !locale.river) locale.river = {
-    ...ESCARPMENT_CFG.river,
-  };
-  // THE BLEND (engine/blend.ts): resolve a declared partner onto the def —
-  // layout rows tagged, pack tables merged — off the def seed's dedicated
-  // sub-stream (blendless mints keep every draw byte-identical).
-  if (!locale) applyBlend(def, tileset, variantName, spec.blend, !spec.packsOverride);
-  // THE ANNEX ROLL (the growing zone): dormant secret chains onto the def,
-  // whole from its seed on their own salted stream — annex-less tilesets
-  // burn zero draws (the blend law).
-  if (!locale) applyAnnexes(def, tileset);
+
+      return { map, exits, backEdge, backSide, srcDim, myDim, wetDeed };
+    },
+    continueCourse: ({ rng, size, tileset, onCourse, topology }) => {
+      const { backSide, exits } = topology;
+      // COURSE CONTINUATION: a zone on a throughline GUARANTEES a way onward along
+      // it (up- and downstream) — a 1-frontier roll on the wrong side must never
+      // dead-end the artery. Appended after the size roll so the 'at' pick spaces
+      // against the real footprint; append-only (the weave/defIndex invariant).
+      // Draws RNG only for course mints, so every other mint's stream is untouched.
+      // A POCKET never continues an artery — a dead-end is the whole point.
+      if (onCourse && !spec.pocket) {
+        for (const side of onCourse.continueSides) {
+          if (side === backSide || exits.some(e => e.side === side)) continue;
+          const at = findNonCollidingAt(side, exits, rng, size) ?? bestSpacedAt(side, exits, size);
+          exits.push({ to: '?', side, at, tileset: tileset.id });
+        }
+      }
+
+    },
+    waypointBlocked: (id, target) => Object.values(zoneMap).some(z =>
+      z.wpExclusionRadius !== undefined && z.id !== id && coordDist(target, z.map) < z.wpExclusionRadius),
+  });
+  const { zone: def, rng } = minted;
+  const { map, backEdge, backSide, srcDim, myDim, wetDeed } = minted.topology;
   // THE SETTLING (WEB_CFG.settle): when this mint could not fully clear its
   // neighbours — a directed quest dropped into saturated ring-1, twenty
   // anti-crowd pushes spent — the NEIGHBOURHOOD gives way instead of two

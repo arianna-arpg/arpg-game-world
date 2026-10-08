@@ -39,6 +39,7 @@ app.whenReady().then(async()=>{
    const encounters=c.content.find(c=>c.id==='tundra').levels.find(p=>p.level===4).encounters;
    if(!encounters)throw Error('No native tundra formation');encounters.chance=1;
    delete c.settlement;delete c.journey;delete c.ecology;delete c.progression;
+   delete c.terrain.patches;
    c.terrain.fields=[];c.terrain.surfaces=[{id:'plain',source:'qa/plain',priority:0,when:[],region:'ground',color:'#424b32',biome:'tundra'}];
    c.terrain.places=[{id:'formation',version:1,content:'formation',period:1200,chance:1,radius:240,jitter:0,priority:1,when:[]}];
    c.content=[{id:'formation',source:'qa/native-goblin',level:4,count:2,table:[{id:'plains_wolf',weight:1}],encounters}];

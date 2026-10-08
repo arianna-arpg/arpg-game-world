@@ -167,7 +167,7 @@ console.log('PASS native storm warning, fixed level, source isolation, friend/fo
 
 storm.boltTimer=.43;
 const stormSave=stormRuntime.snapshot(stormWorld);
-const stormNext=makeSimWorld('warrior',924),stormResume=new WorldMassRuntime(431,'storm-field',stormCfg,stormSave);
+const stormNext=makeSimWorld('warrior',924),stormResume=new WorldMassRuntime(431,'storm-field',stormSave.config,stormSave);
 stormResume.attach(stormNext,stormSave);
 const returnedStorm=stormNext.altars.find(a=>a.massSource===storm.massSource)!;
 assert.equal(returnedStorm.boltTimer,.43);assert.equal(returnedStorm.level,7);
@@ -177,12 +177,12 @@ pulse(stormNext,.02);
 assert.equal(stormNext.zones[0].delay,bolts.telegraph,'the next restored beat starts a complete native warning');
 const zeroSave=structuredClone(stormSave);
 zeroSave.fields!.find(f=>f.id===storm.massSource)!.boltTimer=0;
-const zeroWorld=makeSimWorld('warrior',925),zeroRuntime=new WorldMassRuntime(431,'storm-field',stormCfg,zeroSave);
+const zeroWorld=makeSimWorld('warrior',925),zeroRuntime=new WorldMassRuntime(431,'storm-field',zeroSave.config,zeroSave);
 zeroRuntime.attach(zeroWorld,zeroSave);pulse(zeroWorld,.01);
 assert.equal(zeroWorld.zones[0].delay,bolts.telegraph,'a due-at-save beat cannot cause an unwarned arrival hit');
 for(const value of [NaN,Infinity,-1]) {
  const bad=structuredClone(stormSave);bad.fields!.find(f=>f.id===storm.massSource)!.boltTimer=value;
- assert.throws(()=>new WorldMassRuntime(431,'bad',stormCfg,bad),/field checkpoint/);
+ assert.throws(()=>new WorldMassRuntime(431,'bad',bad.config,bad),/field checkpoint/);
 }
 for(const patch of [{ratePerSec:0},{ratePerSec:NaN},{radius:-1},{telegraph:0},{skillId:'missing'},{skillId:'toString'},{throughRoofs:'yes'}]) {
  const bad=structuredClone(stormCfg);

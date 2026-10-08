@@ -1,3 +1,6 @@
+import { landformHabitatSeat, landformHabitatStand } from './landformHabitats';
+import { massTerrainRegions } from './contracts';
+import { reserveMassOpening } from './patchReservations';
 import { characterPagingAvailable, characterNativePages, commitCharacterNativeCohort, loadCharacterNativePage, forgetCharacterNativePage, resetCharacterNativePages, characterNativeSessionCurrent, characterNativeSessionToken, characterNativePageOrder } from '../meta/character';
 import type { MassResidentResume } from '../meta/characterResume';
 import type { CharacterPageEntry } from '../meta/characterPages';
@@ -39,7 +42,7 @@ import { MassRoadside, validateMassRoadside } from './roadside';
 import { populationChoices, validatePopulationLimits } from './population';
 import { MassEcology, validateMassEcology, type MassEcologySave } from './ecology';
 
-import { MassRewards, type MassRewardSave } from './rewards';
+import { LegacyMassRewardArchive, type MassRewardSave } from './rewards';
 import { MassFields, validateMassFieldResidency, type MassFieldSave } from './fields';
 import { MASS_CLEARANCE_VIEW, massGarrisonProgress, massGarrisonSlots, recordMassGuardian, settleMassClearance } from './clearance';
 import { MassBirths, validMassBirth, type MassBirth } from './birth';
@@ -62,8 +65,13 @@ interface MassEnemySave {
   birth?: MassBirth;
   anchor?: { x: number; y: number }; leashHome?: boolean;
 }
+type LandformCompositionSchema = 12;
+type RegionalLandformSchema = 13;
+const regionalLandformSchema = (config:MassAdventure):boolean => !!config.terrain.landforms?.regional;
+const landformCompositionSchema = (config:MassAdventure):boolean => !!config.terrain.landforms
+  && (config.terrain.places.some(p=>p.landformHabitat) || !!config.ecology?.landformDressing);
 export interface MassAdventureSave {
-  schema: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
+  schema: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | LandformCompositionSchema | RegionalLandformSchema; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
   player: { x: number; y: number; tier?: number }; enemies: MassEnemySave[]; contents: ZoneContents;
   rewards?: MassRewardSave[];
   fields?: MassFieldSave[];
@@ -101,7 +109,7 @@ export interface MassResumePreparation {
  * in-flight skills. The population cap is deliberately conservative until full
  * dependency-aware dormancy exists: wounded/engaged bodies are never discarded. */
 export class WorldMassRuntime {
-  readonly rewards: MassRewards;
+  readonly legacyRewards: LegacyMassRewardArchive;
   readonly fields: MassFields;
   readonly dormancy: MassDormancy | null;
   nativeFeatures: MassNativeResidency | null = null;
@@ -162,14 +170,21 @@ export class WorldMassRuntime {
   readonly origin: MassCell;
   readonly resumeTier: number;
   constructor(seed: number, runId: string, config: MassAdventure = massAdventure(), input?: MassRuntimeRestore) {
+    // Consume one detached config: an accessor must not switch terrain after
+    // NativeSubstrate admission. All following reads use these saved values.
+    config = freezeData(JSON.parse(canonical(config)) as MassAdventure);
+    // NativeSubstrate has real streamed terrain, but complete area/population
+    // ownership must be installed before it can become a playable adventure.
+    if (Object.hasOwn(config.terrain, 'nativeSubstrate')) throw Error('Native substrate requires complete native area and population runtime owners');
     const save=restoreData(input);
+    if (!save) config = reserveMassOpening(seed, runId, config);
     this.resumeTier = save?.player.tier ?? 0;
     if (!Number.isInteger(this.resumeTier) || this.resumeTier < 0 || this.resumeTier > 6) throw new Error('Invalid worldmass player story');
     this.config = freezeData(JSON.parse(canonical(config)) as MassAdventure);
     this.configHash = massDigest(this.config);
     this.births = new MassBirths(this.config.nativeBirthSource, seed);
     if (this.config.territory !== undefined) validateMassTerritory(this.config.territory);
-    this.rewards = new MassRewards(this.config.rewards, seed, save?.rewards);
+    this.legacyRewards = new LegacyMassRewardArchive(this.config.rewards, save?.rewards);
     if(this.config.fieldResidency!==undefined)validateMassFieldResidency(this.config.fieldResidency,this.config.populationRadius);
     this.fields = new MassFields(save?.fields,this.config.fieldResidency);
     for (const policy of [config.shrineResidency, config.puzzleResidency])
@@ -262,11 +277,12 @@ export class WorldMassRuntime {
     }
     for (const p of config.terrain.places) {
       const site = config.content.find(c => c.id === p.content)?.site;
+      if (p.landformHabitat && site) throw Error('landformHabitat cannot overwrite an authored site');
       if (site) validateMassSite(site, p.radius);
       if (p.surface && !regionKind(p.surface.region)) throw new Error('Unresolved site surface');
     }
     if (config.terrain.places.some(p => !config.content.some(c => c.id === p.content))
-      || config.terrain.surfaces.some(s => !regionKind(s.region))) throw new Error('Unresolved worldmass content');
+      || massTerrainRegions(config.terrain).some(id => !regionKind(id))) throw new Error('Unresolved worldmass content');
     this.state = new MassState(this.generator.run, config.terrain.terrainCell);
     this.survey = new MassSurvey(this.state, this.config.survey);
     this.stream = new MassStream(this.generator, this.state, { maxPages: (config.pageRadius * 2 + 1) ** 2, maxSamples: 32768 });
@@ -279,7 +295,9 @@ export class WorldMassRuntime {
       // five preserves deliberate quest acceptance, six pins native plan variants,
       // seven owns reward triggers, eight reserves destination population, nine owns country bounties; older descriptors keep
       // their original version and never gain new encounters on Continue.
-      if ((save.schema !== 1 && save.schema !== 2 && save.schema !== 3 && save.schema !== 4 && save.schema !== 5 && save.schema !== 6 && save.schema !== 7 && save.schema !== 8 && save.schema !== 9 && save.schema !== 10 && save.schema !== 11)
+      if ((save.schema !== 1 && save.schema !== 2 && save.schema !== 3 && save.schema !== 4 && save.schema !== 5 && save.schema !== 6 && save.schema !== 7 && save.schema !== 8 && save.schema !== 9 && save.schema !== 10 && save.schema !== 11 && save.schema !== 12 && save.schema !== 13) // RegionalLandformSchema
+        || save.schema < 13 && regionalLandformSchema(config)
+        || save.schema < 12 && landformCompositionSchema(config)
         || save.schema < 11 && !!config.geography
         || !!save.geography !== !!config.geography
         || !!save.weather !== !!config.geography?.weather
@@ -369,6 +387,7 @@ export class WorldMassRuntime {
     if(this.config.nativeCountry){
       const spec=this.config.nativeCountry;
       this.nativeCountry=new MassNativeCountry(this.generator,spec,(center,radius)=>{
+        if(this.generator.patches?.reserves(center,radius) || this.generator.landforms?.reserves(center,radius))return true;
         if(!this.inLocalFrame(center))return false;
         const q=localOffset(center,{...this.origin,x:0,y:0},this.config.terrain.addressSpan);
         return !!this.settlement?.reserves(q.x,q.y,radius) || !!this.journey?.reserves(q,radius)
@@ -514,23 +533,6 @@ export class WorldMassRuntime {
     const at=address(owner.center.dimension,owner.center.cx,owner.center.cy,owner.center.x,owner.center.y,this.config.terrain.addressSpan);
     if(canonical(at)!==canonical(owner.center))throw Error('Invalid worldmass activity address');
     return this.placesInCell(at).find(p=>p.id===owner.id && canonical(p.center)===canonical(at));
-  }
-  /** Only a generated, admitted physical cache can earn its configured choice. */
-  earnCacheReward(world: World, source: string | undefined, pos: { x: number; y: number }): void {
-    if (!source || !this.rewards.admits('cache')) return;
-    const place = this.placesInCell(this.walk.at(pos.x, pos.y))
-      .find(p => canonical([p.id, 'cache']) === source && this.state.claimed('site-cache', p.id));
-    const site = place && this.config.content.find(c => c.id === place.content)?.site;
-    if (site?.cache) this.rewards.earn(world, source, site.name);
-  }
-  /** Called only by the native completion event, never by restoration or UI reads. */
-  earnPuzzleReward(world: World, run: import('../engine/puzzles').PuzzleRun): void {
-    if (world.massRuntime !== this || world.clientActionHook
-      || !this.rewards.admits('puzzle')) return;
-    const owner=this.puzzles.completed(run);
-    const place=owner && this.locateOwner({id:owner.place,center:owner.center});
-    const site=place && this.config.content.find(c=>c.id===place.content)?.site;
-    if (owner && site) this.rewards.earn(world, owner.source, site.name);
   }
   /** Preserve the native lock/recovery fraction. An earned, quiet cache merely
    * progresses faster; opening and all loot remain in the native chest artery. */
@@ -780,6 +782,8 @@ export class WorldMassRuntime {
         : Math.hypot(q.x, q.y) < this.config.startRadius + p.radius)
         || Math.hypot(q.x - world.player.pos.x, q.y - world.player.pos.y) > this.config.populationRadius) continue;
       const content = this.config.content.find(c => c.id === p.content)!;
+      const landformHabitat = this.config.terrain.places.find(r=>r.id===p.recipe)?.landformHabitat
+        && !!this.generator.landforms?.reserves(p.center,p.radius);
       if([...this.paged.keys()].some(id=>{try{return (JSON.parse(id) as unknown[])[0]===p.id;}catch{return false;}}))continue;
       // Reserve every required field before spawning its garrison or reward.
       if(!this.fields.canAdmit(p,content.site?.altars??[])
@@ -830,7 +834,7 @@ export class WorldMassRuntime {
         const offset=seat?siteOffset(p,seat.x,seat.y):undefined;
         const spot = this.walk.snapToWalkable({ x: q.x + (offset?.x ?? Math.cos(angle) * radius),
           y: q.y + (offset?.y ?? Math.sin(angle) * radius) });
-        if (!this.walk.isWalkable(spot.x, spot.y) || Math.hypot(spot.x - q.x, spot.y - q.y) > p.radius) continue;
+        if (!landformHabitat && (!this.walk.isWalkable(spot.x, spot.y) || Math.hypot(spot.x - q.x, spot.y - q.y) > p.radius)) continue;
         const a = this.births.create(world,id,monster,population.level,scale);
         applyMassTerritory(a, this.config.territory);
         const bodyRadius = a.radius * (coordinated ? RARITY_DEFS.magic.sizeMul : 1);
@@ -846,6 +850,21 @@ export class WorldMassRuntime {
             const jitter=attempt*ENCOUNTER_GROUP_CFG.placementJitter;
             free=world.findFreeSpot({x:spot.x+seating.range(-jitter,jitter),y:spot.y+seating.range(-jitter,jitter)},bodyRadius);
           }
+        }
+        if(landformHabitat) {
+          // Coordinated peers are still unpromoted while staging; reserve the
+          // radius they will have when the complete native cohort is published.
+          const landformHabitatStagedRadius=(peer:Actor)=>peer.radius*(coordinated?RARITY_DEFS.magic.sizeMul:1);
+          const repaired=landformHabitatSeat(free,q,Math.min(p.radius,formation
+            ? ENCOUNTER_GROUPS[formation.recipe].radius??ENCOUNTER_GROUP_CFG.radius : p.radius),this.walk.cellSize,candidate=>{
+            free=candidate;
+            return fits()&&landformHabitatStand(this.walk,candidate,bodyRadius)
+              &&world.actors.every(peer=>peer.dead || (peer.tier??0)!==0
+                || Math.hypot(peer.pos.x-candidate.x,peer.pos.y-candidate.y)>=peer.radius+bodyRadius+2)
+              &&staged.every(peer=>Math.hypot(peer.actor.pos.x-candidate.x,peer.actor.pos.y-candidate.y)>=landformHabitatStagedRadius(peer.actor)+bodyRadius+2);
+          });
+          if(!repaired)continue;
+          free=repaired;
         }
         if(!fits())continue;
         if(offset)a.facing=offset.angle;
@@ -1036,8 +1055,8 @@ export class WorldMassRuntime {
         ...(a.encounterGroup ? {encounterGroup:a.encounterGroup,name:a.name} : {}),
         ...(this.births.of(a) ? {birth:this.births.of(a)} : {}) });
     }
-    return JSON.parse(JSON.stringify({ schema: this.config.geography ? 11 : this.config.dormancy || this.config.shrineResidency || this.config.puzzleResidency || this.config.nativeCountry ? 10 : this.config.bounties !== undefined ? 9 : this.config.journey?.reservePopulation !== undefined ? 8 : this.config.rewards?.earnFrom !== undefined ? 7 : this.config.settlement?.structurePlans !== undefined ? 6 : this.config.settlement?.quests?.acceptance === 'journal' ? 5 : this.config.content.some(c=>c.site?.puzzles?.length) ? 4 : this.config.journey?.roadside ? 3 : this.config.content.some(c => c.site?.shrines?.length) ? 2 : 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
-      ...(this.config.rewards ? { rewards: this.rewards.snapshot() } : {}),
+    return JSON.parse(JSON.stringify({ schema: regionalLandformSchema(this.config) ? 13 : landformCompositionSchema(this.config) ? 12 : this.config.geography ? 11 : this.config.dormancy || this.config.shrineResidency || this.config.puzzleResidency || this.config.nativeCountry ? 10 : this.config.bounties !== undefined ? 9 : this.config.journey?.reservePopulation !== undefined ? 8 : this.config.rewards?.earnFrom !== undefined ? 7 : this.config.settlement?.structurePlans !== undefined ? 6 : this.config.settlement?.quests?.acceptance === 'journal' ? 5 : this.config.content.some(c=>c.site?.puzzles?.length) ? 4 : this.config.journey?.roadside ? 3 : this.config.content.some(c => c.site?.shrines?.length) ? 2 : 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
+      ...(this.config.rewards ? { rewards: this.legacyRewards.snapshot() } : {}),
       ...(this.fields.snapshot().length ? { fields: this.fields.snapshot() } : {}),
       ...(this.shrines.snapshot().length ? { shrines: this.shrines.snapshot() } : {}),
       ...(this.puzzles.snapshot(world).length ? { puzzles: this.puzzles.snapshot(world) } : {}),

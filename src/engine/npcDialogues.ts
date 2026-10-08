@@ -4,7 +4,8 @@ import { npcDwellRadius } from '../data/transit';
 import { dist } from '../core/math';
 import { Rng } from '../core/rng';
 import type { Actor } from './actor';
-import type { NpcSpeechLine, World } from './world';
+import type { NpcSpeechLine } from './world';
+import type { NativeNpcDialogueHost } from './nativeNpcDialogueHost';
 import { dialoguePages, type DialogueOffer, type DialogueChoice } from './dialogue';
 
 export const npcDialogueReceipt = (id: string): string => `dialogue_seen:${id}`;
@@ -14,7 +15,7 @@ const hashStr = (s: string): number => {
   return hash >>> 0;
 };
 
-export function dialogueConditionMet(w: World, c: DialogueCondition): boolean {
+export function dialogueConditionMet(w: NativeNpcDialogueHost, c: DialogueCondition): boolean {
   if ('quest' in c) return w.activeQuests.some(q => q.questId === c.quest && (c.state !== 'ready' || w.questStanding(q) === 'ready'));
   if ('fact' in c) {
     const fact = NPC_DIALOGUE_FACTS[c.fact];
@@ -27,7 +28,7 @@ export function dialogueConditionMet(w: World, c: DialogueCondition): boolean {
     || (c.scope !== 'account' && (w.ledger[c.ledger] ?? 0) >= n);
 }
 
-export function npcDialogueEligible(w: World, def: NpcDialogueDef): boolean {
+export function npcDialogueEligible(w: NativeNpcDialogueHost, def: NpcDialogueDef): boolean {
   if (def.zone && w.localZoneAt(w.player.pos).id !== def.zone) return false;
   if (def.once && (def.once === 'account' ? w.account.ledger : w.ledger)[npcDialogueReceipt(def.id)]) return false;
   return (def.all ?? []).every(c => dialogueConditionMet(w, c))
@@ -43,7 +44,7 @@ export class NpcDialogueDirector {
   private armed = new Set<string>();
   private admittedVisits = new Map<number, string>();
   private calling?: { def: NpcDialogueDef; line: NpcSpeechLine; until: number };
-  constructor(private readonly w: World) {}
+  constructor(private readonly w: NativeNpcDialogueHost) {}
 
   appearanceFor(defId: string): string | undefined {
     const rule = NPC_APPEARANCES[defId];

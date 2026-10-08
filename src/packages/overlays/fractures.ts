@@ -486,7 +486,7 @@ registerMarkerSource((world: World): MapMarker[] => {
 // ground while the run still tears onward.
 registerBountySource({
   id: 'fractures',
-  census(world: World) {
+  census(world: import('../../data/bountyboard').BountyReadContext) {
     const f = world.sim.fractureField?.peek();
     if (!f) return [];
     const z = world.zoneMap[f.zoneId];
@@ -565,11 +565,11 @@ registerAttentionSource((world: World): AttentionPoint[] => {
 registerPackageAsk({
   pkg: 'fractures',
   title: 'the fracture',
-  standing: (world: World, def): string | null => {
+  standing: (world: import('../../data/objectives').ObjectiveReadContext, def): string | null => {
     const info = world.sim.fractureField?.fractureIn(def.id);
     return info && !info.longerTimer ? info.id : null;
   },
-  view: (world: World, def, key) => {
+  view: (world: import('../../data/objectives').ObjectiveReadContext, def, key) => {
     const info = world.sim.fractureField?.fractureIn(def.id);
     const run = world.fractureView();
     const live = !!run && run.id === key && (run.phase === 'fissure' || run.phase === 'chasm');

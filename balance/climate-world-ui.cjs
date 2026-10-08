@@ -44,6 +44,7 @@ app.whenReady().then(async()=>{
   const travel=await run(()=>{
    const w=__game.world(),Constructor=w.massRuntime.constructor,c=JSON.parse(JSON.stringify(w.massRuntime.config));
    delete c.settlement;delete c.journey;delete c.progression;
+   delete c.terrain.patches;
    c.terrain.fields=[];c.terrain.places=[];c.content=[];c.populationRadius=0;c.startRadius=0;c.maxPopulation=0;
    c.terrain.surfaces=[{id:'fixture',priority:0,when:[],region:'swamp',biome:'marsh',color:'#30483d'}];
    delete c.ecology;

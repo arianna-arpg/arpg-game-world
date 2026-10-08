@@ -629,6 +629,18 @@ character walks back for it), 7 the first cut, 8 A, 9 as built, 10 as set,
 
 ---
 
+## §7b The reconciliation ledger (the base moves daily)
+
+The lane merges the seamless foundation's tip into `shard-world` as a MERGE
+(never a rebase — the branch is pushed and hosted), resolves the few hunks the
+keeper seams share with the refactor, and re-runs every gate. Each row names
+the base taken and what moved.
+
+| date | base merged | hunks | what moved |
+|---|---|---|---|
+| 2026-10-07 | `67d9c290` (pushed tip) | 0 | the lane's first base (a rebase, before the branch was pushed) |
+| 2026-10-08 | `ae5b686f` (31 LOCAL commits of the codex worktree, unpushed at the time) | 3, all in `world.ts` | the party scale moved into `engine/nativeScenePopulation.ts` and THE NEAR LAW moved with it (`scenePartyScaleCount(host, at)`); the experimental exploration rewards were retired upstream, so the keeper-gated `claimExplorationReward` went with them; the coop import kept `COOP_SCALING` for the mercy and XP reads. All 17 `keeperSeat` seams survived in place. |
+
 ## §8 M0 receipts (2026-10-07, this pass)
 
 **Built** (every file new unless named): `src/net/wsframe.ts` (the RFC 6455

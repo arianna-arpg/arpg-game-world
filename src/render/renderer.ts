@@ -2619,6 +2619,7 @@ export class Renderer {
           this.drawAnimatedRegions(world, layer);
         } finally { world.walk = walk; world.zone = zone; }
       });
+      this.massPainter.drawWater(ctx, mass, this.cam.x, this.cam.y, vw, vh, world.time);
       return;
     }
     // BOUNDLESS (the Descent): no edges — stream baked chunks around the

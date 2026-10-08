@@ -26,6 +26,7 @@ app.whenReady().then(async()=>{
    await new Promise(r=>setTimeout(r,200));__game.devStartRun('rogue');__game.ui.hideAll();
    const w=__game.world();w.startWorldMass(42);const C=w.massRuntime.constructor,c=JSON.parse(JSON.stringify(w.massRuntime.config));
    delete c.settlement;delete c.journey;delete c.ecology;delete c.progression;
+   delete c.terrain.patches;
    c.terrain.fields=[];c.terrain.surfaces=[{id:'plain',source:'test/plain',priority:0,when:[],region:'ground',color:'#424b32',biome:'downs'}];
    c.terrain.places=[{id:'wolves',version:1,content:'wolves',period:900,chance:1,radius:150,jitter:0,priority:1,when:[]}];
    c.content=[{id:'wolves',source:'test/wolves',level:1,count:1,table:[{id:'plains_wolf',weight:1}]}];
@@ -36,12 +37,13 @@ app.whenReady().then(async()=>{
    window.__territoryQA={foe,hero:w.player,home:{...foe.aiAnchor},life:foe.life,seen:[],maxReturnStep:0,loads:0};
    const load=w.loadZone;w.loadZone=function(...args){__territoryQA.loads++;return load.apply(this,args);};
    const inst=w.localSeat.meta.knownSkills.get('backstab');
-   w.massRuntime.rewards.earn(w,'test/support','QA support');
-   // Mint a compatible support only for testing the existing calm gate, not a playtest reward.
-   if(!w.claimExplorationReward('test/support','precision'))throw Error('QA support claim refused');
+   // Prepared native item for the calm gate, independent of discovery rewards.
+   w.dropPinnedGem({...w.player.pos}, {...w.player.pos}, {k:'support',id:'precision',l:1}, .5);
+   const prepared=w.drops.pop();if(prepared?.item.kind!=='support')throw Error('No prepared support');
+   w.grantSupportGemItem(w.localSeat,prepared.item.gem);
    return {home:__territoryQA.home,life:foe.life,radius:foe.aiTerritory?.radius,skills:!!inst};
   });
-  assert.equal(setup.radius,620);assert.ok(setup.skills);
+  assert.equal(setup.radius,760);assert.ok(setup.skills);
   await run(()=>{__game.devInput(()=>({dx:1,dy:0,aim:{...__territoryQA.foe.pos},held:[],edge:[]}));});
   const advance=async(n)=>run(n=>{
    const w=__game.world(),q=__territoryQA;

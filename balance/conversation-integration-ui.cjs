@@ -41,7 +41,9 @@ app.whenReady().then(async()=>{
     const out={active:__game.padPointer().active,workspace:document.getElementById('npc-dialogue').dataset.workspace,open:!document.getElementById('npc-dialogue').hidden};window.qaPad=null;return out;
    });assert.ok(results.controller.active&&results.controller.open);assert.equal(results.controller.workspace,'true');await shot('flasks');
    results.gifts=await run(()=>{const w=conversationQA.w;return {skills:w.mireilleLessonSkills(),items:w.meta.items.map(i=>[i.uid,i.gem?.skillId])};});assert.equal(results.gifts.skills.length,2);
-   await click('[data-prepare-skill]');await click('[data-prepare-skill]');
+   // This conversation fixture uses ordinary learn intents; real pack drags are
+   // exercised by gameplay-followup-ui.cjs. No shortcut button remains.
+   await run(()=>{const w=conversationQA.w;for(const id of w.mireilleLessonSkills()){const item=w.meta.items.find(i=>i.gem?.skillId===id);w.requestMeta({t:'learn',uid:item.uid});}__game.step(2);});
    results.prepared=await run(()=>({pending:conversationQA.w.mireilleLessonSkills(),skills:conversationQA.w.player.skills.map(s=>s?.def.id)}));assert.deepEqual(results.prepared.pending,[]);assert.ok(results.prepared.skills.includes('life_flask')&&results.prepared.skills.includes('mana_flask'));fits(await run(box));
    await click('[data-conversation-activity="work"]');await shot('work');
    const accepted=await run(()=>{const b=document.querySelector('[data-conversation-accept]'),id=b.dataset.conversationAccept;b.click();b.click();__game.step(2);return {id,active:conversationQA.w.activeQuests.map(q=>q.questId)};});assert.equal(accepted.active.filter(id=>id===accepted.id).length,1);
@@ -51,19 +53,26 @@ app.whenReady().then(async()=>{
     for(const [id,a] of [...m.natives])if(JSON.parse(id)[0]===place.id)w.kill(a,false,w.player);m.update(w,true);
     if(!quest.fieldDone)throw Error('Native garrison failed to complete');w.landPartyAt(q.home);m.update(w,true);q.inn=w.actors.find(a=>a.defId==='townsfolk_innkeep');q.stand(q.inn);__game.step(140);
    },accepted.id);
-   results.reward=await run(box);fits(results.reward);assert.ok(results.reward.actions.includes('Rewards'));await shot('rewards');
+   results.reward=await run(box);fits(results.reward);assert.ok(!results.reward.actions.includes('Rewards'),'experience-only turn-in has no ring toolbar');await shot('rewards');
    win.setSize(820,650);await new Promise(r=>setTimeout(r,100));await run(()=>__game.step(2));fits(await run(box));await shot('rewards-narrow');
    await run(()=>{__game.ui.showEscapeMenu();document.getElementById('esc-keys').click();document.querySelector('[data-opttab="interface"]').click();const s=document.getElementById('opt-uiscale');s.value='175';s.dispatchEvent(new Event('input',{bubbles:true}));__game.ui.hideEscapeMenu();__game.step(2);});fits(await run(box));
-   const visibleReward=await run(()=>{const b=document.querySelector('[data-conversation-reward]');b.scrollIntoView({block:'center'});const r=b.getBoundingClientRect(),p=document.querySelector('.dialogue-layout').getBoundingClientRect();return {top:r.top,bottom:r.bottom,parentTop:p.top,parentBottom:p.bottom,hit:b.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2))};});assert.ok(visibleReward.hit&&visibleReward.top>=visibleReward.parentTop&&visibleReward.bottom<=visibleReward.parentBottom);await shot('rewards-scaled');
+   await shot('experience-return-scaled');
    await click('[data-conversation-inventory]');
    results.companion=await run(()=>{const a=document.getElementById('inventory').getBoundingClientRect(),b=document.getElementById('npc-dialogue').getBoundingClientRect();return {bagTop:a.top,bagBottom:a.bottom,readerTop:b.top,visible:a.width>0,readerOpen:!document.getElementById('npc-dialogue').hidden};});
    assert.ok(results.companion.visible&&results.companion.readerOpen&&results.companion.bagBottom<=results.companion.readerTop,'scaled inventory must leave conversation clear');
    await run(()=>{__game.ui.toggleInventory();__game.step(2);});
-   results.paid=await run(()=>{const w=conversationQA.w,b=document.querySelector('[data-conversation-reward]'),id=b.dataset.conversationReward,before=w.meta.items.length;b.click();b.click();__game.step(2);return {id,before,after:w.meta.items.length,done:w.completedQuests.has(id),remaining:w.questRewardOffers().length};});assert.ok(results.paid.done);assert.equal(results.paid.after,results.paid.before+1);assert.equal(results.paid.remaining,0);fits(await run(box));
-   await run(()=>{__game.ui.hideAll();__game.save();});const state=()=>{const w=__game.world();return {pos:w.player.pos,items:w.meta.items,quests:[...w.completedQuests],skills:w.player.skills.map(s=>s&&{id:s.def.id,level:s.level,sockets:s.sockets})};};results.saved=await run(state);
-   await boot();await run(async()=>{for(let i=0;i<80&&!document.querySelector('#sm-continue:not([disabled])');i++)await new Promise(r=>setTimeout(r,100));document.querySelector('#sm-continue:not([disabled])').click();__game.ui.hideAll();});results.resumed=await run(state);assert.deepEqual(results.resumed,results.saved);
+   results.paid=await run(()=>{const w=conversationQA.w;return {done:w.completedQuests.has('frontier_western_watch'),remaining:w.questRewardOffers().length,rings:w.meta.items.filter(i=>['Hearthward Ring','Wellspring Ring','Watchkeeper’s Ring'].includes(i.name)).length};});assert.ok(results.paid.done);assert.equal(results.paid.remaining,0);assert.equal(results.paid.rings,0);fits(await run(box));
+   await run(async()=>{__game.ui.hideAll();__game.save();await __game.flushRunSave();});const state=()=>{const w=__game.world();return {pos:w.player.pos,items:w.meta.items,quests:[...w.completedQuests],skills:w.player.skills.map(s=>s&&{id:s.def.id,level:s.level,sockets:s.sockets})};};results.saved=await run(state);
+   await boot();await run(async()=>{
+    for(let i=0;i<100&&!document.querySelector('#sm-continue:not([disabled])');i++)await new Promise(r=>setTimeout(r,100));
+    const button=document.querySelector('#sm-continue:not([disabled])');if(!button)throw Error('Conversation Continue is unavailable after durable save');
+    const priorWorld=__game.world();button.click();
+    for(let i=0;i<100&&(__game.world()===priorWorld||!__game.world().localSeat);i++)await new Promise(r=>setTimeout(r,100));
+    if(__game.world()===priorWorld||!__game.world().localSeat)throw Error('Conversation Continue did not publish its restored world: '+document.getElementById('start-menu')?.textContent);
+    __game.ui.hideAll();
+   });results.resumed=await run(state);assert.deepEqual(results.resumed,results.saved);
    assert.ok(await run(()=>Object.entries(localStorage).filter(([k])=>k.startsWith('arpg_')).every(([,v])=>v==='sentinel')));
-   console.log('PASS Brandt pointer ownership/pause/departure, Mireille native gifts/equipping/work/reward without Journal takeover, narrow/175% bounds, double-click once-only payout, exact Save/Continue and ordinary-save isolation');
+   console.log('PASS Brandt pointer ownership/pause/departure, Mireille native gifts/equipping/work/reward without Journal takeover, narrow/175% bounds, experience-only native turn-in, exact Save/Continue and ordinary-save isolation');
   }
   fs.writeFileSync(path.join(dir,tag+'-ui.json'),JSON.stringify(results,null,2));
  }catch(e){fs.writeFileSync(path.join(dir,tag+'-failure.json'),JSON.stringify(results,null,2));console.error(e.stack||e);process.exitCode=1;}finally{clearTimeout(timer);win.destroy();server.close();app.exit(process.exitCode||0);}

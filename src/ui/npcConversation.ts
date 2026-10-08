@@ -142,8 +142,6 @@ export class NpcConversationUI implements DialogueWorkspace {
       this.status.textContent = w.questRewardOffers().some(r => r.questId === d.conversationReward) ? 'Make room in your pack, then choose again.' : '';
     } else if (d.conversationImbue && q.imbues.some(r => r.questId === d.conversationImbue && r.items.some(i => i.uid === Number(d.uid) && i.options.some(a => a.id === d.affix))))
       w.requestMeta({ t: 'questImbue', questId: d.conversationImbue, uid: Number(d.uid), affixId: d.affix! });
-    else if (d.prepareSkill && w.actors.some(a => a.id === this.speakerId && a.defId === 'townsfolk_innkeep'))
-      w.requestMeta({ t: 'learn', uid: Number(d.prepareSkill), slot: Number(d.prepareSlot), emptyOnly: true });
     else return;
     this.host.changed(); this.changed(); this.signature = ''; this.draw();
   }

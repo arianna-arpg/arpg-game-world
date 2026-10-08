@@ -44,7 +44,7 @@ guardian.pos={x:home.x+650,y:home.y};updateAI(guardian,world,1/60);
 assert.equal(guardian.aiPhase,'leash_home');
 guardian.pos={x:home.x+400,y:home.y};guardian.life*=.6;
 const checkpoint=m.snapshot(world);
-const resumed=makeSimWorld('warrior',47),runtime=new WorldMassRuntime(42,'extension',cfg,checkpoint);
+const resumed=makeSimWorld('warrior',47),runtime=new WorldMassRuntime(42,'extension',checkpoint.config,checkpoint);
 runtime.attach(resumed,checkpoint);
 const returned=resumed.actors.find(a=>a.defId==='stone_sentinel')!;
 assert.deepEqual(returned.aiAnchor,home);assert.equal(returned.aiPhase,'leash_home');
@@ -61,12 +61,12 @@ assert.ok(Math.hypot(returned.pos.x-home.x,returned.pos.y-home.y)<distance);
 assert.ok(returned.life>guardian.life,'native return healing resumes only during simulation');
 for(const patch of [{anchor:null},{anchor:{x:NaN,y:0}},{leashHome:'yes'},{anchor:undefined,leashHome:true}]) {
  const invalid=structuredClone(checkpoint);Object.assign(invalid.enemies[0],patch);
- assert.throws(()=>new WorldMassRuntime(42,'extension',cfg,invalid),/Invalid worldmass survivor/);
+ assert.throws(()=>new WorldMassRuntime(42,'extension',invalid.config,invalid),/Invalid worldmass survivor/);
 }
 const legacyHome=structuredClone(checkpoint);
 for(const enemy of legacyHome.enemies){delete enemy.anchor;delete enemy.leashHome;}
 const oldHomeWorld=makeSimWorld('warrior',48);
-new WorldMassRuntime(42,'extension',cfg,legacyHome).attach(oldHomeWorld,legacyHome);
+new WorldMassRuntime(42,'extension',legacyHome.config,legacyHome).attach(oldHomeWorld,legacyHome);
 const fallback=oldHomeWorld.actors.find(a=>a.defId==='stone_sentinel')!;
 assert.deepEqual(fallback.aiAnchor,fallback.pos,'old records have no earlier home to recover');
 console.log('PASS native guardian home, return hysteresis and wounds survive Continue; legacy homes and invalid records are explicit');

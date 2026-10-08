@@ -61,21 +61,26 @@ function observe(w:World){
   return {spoken,grants,silent:()=>assert.deepEqual(spoken.filter(s=>!s.reward),[],'no local narrator text may escape through real World.text')};
 }
 // Compile the original methods against the same native helper imports as the
-// candidate. For entry only, restore the archived title statement in the current
-// full loadZone method: every other load operation and helper stays identical.
-// Parsing one method avoids maintaining a second enormous loadZone transcription.
+// candidate. For entry only, restore the archived title statement in the shared
+// NativeAreaBirth operation reached by the current full load. All other birth
+// work and helpers stay identical; the archived title still supplies its draw.
 function nativeCueControl() {
   assert.equal(createHash('sha256').update(NATIVE_CUE_METHODS+'\n'+NATIVE_ENTRY_TITLE).digest('hex'),NATIVE_CUE_HASH);
   const url=new URL('../src/engine/world.ts',import.meta.url),source=readFileSync(url,'utf8');
   const ast=ts.createSourceFile('world.ts',source,ts.ScriptTarget.Latest,true);
   const klass=ast.statements.find((n):n is ts.ClassDeclaration=>ts.isClassDeclaration(n)&&n.name?.text==='World')!;
   const load=klass.members.find(m=>m.name?.getText(ast)==='loadZone')!;
-  const loadText=load.getText(ast),retired='rand(-10, 10); // retain the retired native entry-title jitter draw';
-  assert.equal(loadText.split(retired).length,2,'entry control must replace exactly the one retired native title seam');
-  const control=source.slice(0,klass.getStart(ast))+'export class World {\n'+NATIVE_CUE_METHODS+'\n'+loadText.replace(retired,NATIVE_ENTRY_TITLE)+'\n}';
-  const js=ts.transpileModule(control,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,esModuleInterop:true}}).outputText;
-  const exports:{World?:{prototype:Record<string,Function>}}={};
-  new Function('exports','require',js)(exports,createRequire(url));
+  const loadText=load.getText(ast),seam='this.runNativeAreaBirth(';
+  assert.equal(loadText.split(seam).length,2,'entry control must route exactly one complete native birth');
+  const birthUrl=new URL('../src/engine/nativeAreaBirth.ts',import.meta.url),birthSource=readFileSync(birthUrl,'utf8');
+  const retired='rand(-10, 10); // retain the retired native entry-title jitter draw';
+  assert.equal(birthSource.split(retired).length,2,'entry control must replace exactly the one retired native title seam');
+  const compile=(source:string)=>ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,esModuleInterop:true}}).outputText;
+  const birthExports:Record<string,unknown>={};
+  new Function('exports','require',compile(birthSource.replace(retired,NATIVE_ENTRY_TITLE.replace('this.','host.'))))(birthExports,createRequire(birthUrl));
+  const control=source.slice(0,klass.getStart(ast))+'export class World {\n'+NATIVE_CUE_METHODS+'\n'+loadText.replace(seam,'birthNativeArea(this.nativeAreaBirthHost(),')+'\n}';
+  const exports:{World?:{prototype:Record<string,Function>}}={},requireNative=createRequire(url);
+  new Function('exports','require',compile(control))(exports,(id:string)=>id==='./nativeAreaBirth'?birthExports:requireNative(id));
   return exports.World!.prototype;
 }
 function cueWorld(seed:number,seats:number) {
@@ -196,7 +201,7 @@ function liteCueParity() {
   console.log('PASS full native zone loads preserve archived entry-title RNG timing, actor/scenery state and next draw for solo/co-op fresh/remembered entry without a duplicate title');
 }
 
-const flat=():MassAdventure=>{const base=massAdventure();return {terrain:{...base.terrain,fields:[],places:[],surfaces:[{id:'flat',priority:1,when:[],region:'ground',color:'#314232',biome:'downs'}]},theme:base.theme,content:[],startRadius:0,populationRadius:600,maxPopulation:30,pageRadius:1,samplesPerTick:256};};
+const flat=():MassAdventure=>{const base=massAdventure(),terrain={...base.terrain};delete terrain.patches;delete terrain.landforms;return {terrain:{...terrain,fields:[],places:[],surfaces:[{id:'flat',priority:1,when:[],region:'ground',color:'#314232',biome:'downs'}]},theme:base.theme,content:[],startRadius:0,populationRadius:600,maxPopulation:30,pageRadius:1,samplesPerTick:256};};
 const undo=seedGlobalRandom(82449);
 try {
   liteCueParity();

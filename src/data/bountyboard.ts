@@ -429,19 +429,21 @@ export interface BountyTargetRef {
 }
 
 /** One live-census source — registered from the owning fabric's module. */
+export interface BountyReadContext extends Pick<World,'zoneMap'|'visited'|'ledger'|'sim'|'massRuntime'|'objectiveDoneAt'> {}
+
 export interface BountySourceRow {
   id: string;
   /** The live census: every answerable ask this source stands behind right
    *  now. A pure read (never ignites, never mutates); empty when the
    *  package is absent or quiet. */
-  census(world: World): BountyTargetRef[];
+  census(world: BountyReadContext): BountyTargetRef[];
   /** The standing-state resolution read, for sources without a resolution
    *  ledger (the harborhold's `state === 'open'`). Refs that carry `ledger`
    *  never consult this — the kind's own delta law answers first. */
-  resolved?(world: World, p: BountyPosting): boolean;
+  resolved?(world: BountyReadContext, p: BountyPosting): boolean;
   /** The fail read (the hold FELL) — resolves at the board like a turn-in,
    *  no pay, per walk-1's fail ruling. A live read, never a latch. */
-  failed?(world: World, p: BountyPosting): boolean;
+  failed?(world: BountyReadContext, p: BountyPosting): boolean;
   /** THE SUMMONS face (M3 K5 — "the board plants the ask"): declaring this
    *  block makes the source SUMMONABLE. `ignite` is the directed verb
    *  (devIgnite promoted to the registry — the board's accept calls it);
@@ -621,14 +623,14 @@ export interface BountyKindRow {
   /** Optional travel contract: null means the player chooses the destination. */
   target?(world: World, p: BountyPosting): string | null;
   route?(world: World, p: BountyPosting): string;
-  arrival?(world: World, p: BountyPosting, zone: ZoneDef, firstVisit: boolean, from?: string): void;
-  done(world: World, p: BountyPosting): boolean;
-  failed?(world: World, p: BountyPosting): boolean;
+  arrival?(world: BountyReadContext, p: BountyPosting, zone: ZoneDef, firstVisit: boolean, from?: string): void;
+  done(world: BountyReadContext, p: BountyPosting): boolean;
+  failed?(world: BountyReadContext, p: BountyPosting): boolean;
   /** A reason string ANNULS the posting (the world moved on — the reconcile's
    *  honesty read); null = the ask still stands. */
   annulled?(world: World, p: BountyPosting): string | null;
   /** Card copy — the precision register (names, reads; never captions). */
-  copy(world: World, p: BountyPosting): { title: string; ask: string };
+  copy(world: BountyReadContext, p: BountyPosting): { title: string; ask: string };
 }
 
 export const BOUNTY_KINDS: Record<string, BountyKindRow> = {};
@@ -1186,7 +1188,7 @@ export const BOUNTY_BOARD_GIVER = 'bounty_board';
  *  (World.questDefOf = QUESTS[id] ?? this). Zone-spec fields are benign
  *  honest values off the CLAIMED zone (the mint lane never runs for a
  *  claim-lane posting; the fields exist to satisfy the standing type). */
-export function postingQuestDef(p: BountyPosting, world: World): QuestDef {
+export function postingQuestDef(p: BountyPosting, world: BountyReadContext): QuestDef {
   const z = world.zoneMap[p.zoneId] as ZoneDef | undefined;
   const c = BOUNTY_KINDS[p.kind]?.copy(world, p) ?? { title: p.id, ask: '' };
   return {

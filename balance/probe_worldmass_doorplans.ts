@@ -10,7 +10,13 @@ import {serializeCharacter,applySavedCharacter} from '../src/meta/character';
 import {canonical} from '../src/worldmass/random';
 
 const original=canonical([STRUCTURES.inn,STRUCTURES.waking_house]);
-const config=()=>{const c=structuredClone(massAdventure()) as MassAdventure;beforeMassStreaming(c);delete c.bounties;delete c.journey!.reservePopulation;delete c.rewards!.earnFrom;return c;};
+// Historical broad-entry descriptors still resume exactly; new expeditions use main's plans.
+assert.equal(massAdventure().settlement!.structurePlans,undefined);
+const config=()=>{const c=structuredClone(massAdventure()) as MassAdventure;
+c.settlement!.structurePlans={
+ waking_house:nativeStructurePlan('waking_house','structures/waking-house/broad-entry-v1',{5:'##DD###'}),
+ inn:nativeStructurePlan('inn','structures/inn/broad-entry-v1',{7:'####W#DD#W####'}),
+};beforeMassStreaming(c);delete c.bounties;delete c.journey!.reservePopulation;delete c.rewards;return c;};
 const fresh=(id='magician',legacy=false,seed=42)=>{
  const w=makeSimWorld(id,seed),c=config();if(legacy)delete c.settlement!.structurePlans;
  new WorldMassRuntime(seed,'broad-door-'+seed,c).attach(w);return w;
@@ -71,6 +77,14 @@ try{
   const continued=resume(old);assert.equal(door(continued,'inn').door!.cells!.w,30);
   assert.equal(continued.massRuntime!.snapshot(continued).schema,5);
  }
+ const current=fresh('warrior',true),innEntry=door(current,'inn');
+ assert.equal(innEntry.door!.cells!.w,30);assert.equal(door(current,'waking_house').door!.cells!.w,30);
+ const cell=innEntry.door!.cells!,grid=current.massRuntime!.settlement!.grid;
+ assert.equal(grid.regionAt(cell.x-15,cell.y+15),'rampart','inn lamp keeps its original wall beside the single-cell doorway');
+ current.landPartyAt({x:innEntry.pos.x,y:innEntry.pos.y+78});walk(current,0,-1,150);
+ assert.ok(innEntry.door!.open&&current.player.pos.y<innEntry.pos.y,'centered native approach crosses the original doorway');
+ assert.equal(door(resume(current),'inn').door!.cells!.w,30);
+ console.log('PASS new expeditions use original single-cell doors, solid adjacent walls and centered entry');
  const zones=makeSimWorld('magician',49);zones.loadZone('lastlight');
  assert.equal(zones.zone.structurePlans,undefined);assert.equal(door(zones,'inn').door!.cells!.w,30);
  assert.equal(canonical([STRUCTURES.inn,STRUCTURES.waking_house]),original);

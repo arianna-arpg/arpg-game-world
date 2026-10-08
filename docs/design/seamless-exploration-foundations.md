@@ -1155,3 +1155,1476 @@ and GenQA's 2,607 cases passed; GenQA retained its four existing warnings. An
 initial test-only implicit-any error was corrected with explicit generic policy
 annotations before the final type check. No country depth activation or infinite
 address guarantee follows from these results.
+
+## Generation variety is a world contract
+
+The renewed target is complete native content in one coherent continuous world,
+followed by repeated experience and correctness passes. Counting catalogue rows
+or props does not establish parity. Track each behavior through natural
+selection, whole-source compilation, admission/refusal, access, activation,
+progress, absence, return and cold Continue. Current broad parity remains open.
+
+The next foundations and their acceptance outcomes are:
+
+| Foundation | Required player-visible result | Current boundary |
+| --- | --- | --- |
+| One saved geographic context | Ground, native biome, interior depth, climate, face, population and weather describe the same place | NativeGeographySource now owns complete immutable base-field/face sampling; physical address mapping and terrain/population projection remain open |
+| Regional waterways and terrain topology | Rivers have coherent courses and crossings; lakes/ponds have shores; mountain routes include passes, detours and deliberate barriers | Local ingress and procession routes exist; they do not prove regional connectivity |
+| Local material patches | Ordinary mire leaves usable neutral routes; exceptional broad hazards belong to explicit points of interest | The new physical patch policy below covers bounded mud/swamp hollows; broader hazard programs remain open |
+| Complete native layout ownership | Towns, cities, pillaged districts, groves, crypts and side areas retain all native controllers, residents and environmental mechanics | Current massif/structure/composition admission remains selective; unsupported dependencies still refuse whole sources |
+| Durable work and route consequences | Bounties and native quests open specific blocked sections, with persistent world changes | Existing exploration bounties certify completed deeds; they do not yet open regional routes |
+| Continuous interior and vertical access | Entrances, stairs, cliffs and underground routes have explicit physical and save ownership | Existing caves are scene-based; tier/track and seamless underground integration remain open |
+| Contextual ecology | Native habitats and encounters vary with geography, time and place activity | Five base families and supported native garrisons are a partial population vocabulary |
+| Long-history ownership and moving frame | Travel, consequences, loot and returns stay bounded and exact across very long play | Terrain caches and actor paging are bounded; full feature/controller/history paging and live rebasing remain open |
+| Repeated experience passes | Ordinary routes offer meaningful discoveries, different combat spaces and real traversal choices | Lifecycle proofs are necessary but cannot establish pacing or lasting interest alone |
+
+Measure experience separately from controlled mechanics courses: distance and
+world time between useful discoveries, repeated activities, unavoidable slow
+terrain, detour lengths, declined source families, population saturation,
+frame cost and save growth. Do not clear a path or force a source and count the
+result as evidence of natural distribution. Preserve native behavior where it
+is reused; record new continuous placement policy separately. Main's native
+32-bit geographic hash, scene assumptions and current missing adapters remain
+explicit constraints, not reasons to silently substitute different content.
+
+## Native field selection
+
+`world/fieldChoice.ts` shares the original field roll, ordered climate bands,
+weight fallback and complete existence-floor search through explicit reader
+inputs. Every instance owns its pick and floor-seat memos. Classic biomes keep
+the original live registry/anchor readers and invalidation lifetime. This is
+preparation for a saved geography policy; it does not activate native depth in
+old square-country descriptors or freeze the climate/continent readers.
+
+The durable archived-source oracle covers complete input-read and callback
+tapes, synthetic gates and duplicate tilt rows, native canonical sites,
+reentrant floor-seat construction, memo limits, reset/anchor invalidation,
+immutable exported seats and two-instance A/B/A isolation. Its unchanged
+native readers are explicitly outside that extraction oracle's scope.
+
+## Localized physical terrain
+
+Fresh terrain version 8 uses neutral marsh ground with mud/swamp pockets and
+occasional muddy woodland hollows. Saved descriptors without `patches` retain
+their original surfaces, fields, identifiers and draw streams, including broad
+historic marsh mud. There is no silent save migration. Versioned patch recipes
+are part of the run manifest, with native material IDs and a single shared
+lattice independent of render pages or visit order.
+
+`engine/genkit.ts` shares the exact native pour core/lobe construction and
+radial membership predicate. The finite generator retains its original siting,
+guards, depth core and liquid painting. Continuous patches rasterize that
+shared geometry directly into physical region cells; these cells are not a
+claim of footprint identity with native overlapping doodad paint discs.
+Rendering, movement, navigation costs and native status effects read the same
+region. No duplicate wet doodad layer applies a second terrain effect.
+
+Every ordinary candidate must retain its entire raster shape on eligible
+neutral floor. It is declined whole if a shore, wall, another material or an
+existing place blocks the footprint or its complete neutral bypass annulus.
+Conservative reach and raster bounds keep all candidates and bypasses inside
+separate lattice cells. Neutral ground here means `ground`, not the older
+access predicate whose dry set includes slowing mud and sand. The fresh
+60-unit-wide ring supports a full player body around both sides and corners;
+this is local circumvention, not a guarantee of worldwide connectivity.
+
+Fresh runtime construction also pins an explicit address-space exclusion for
+Lastlight and the finite opening quest network. Its conservative hull covers
+every town tier, ordered destination/extension offsets and jitter, lateral road
+stops and scenery margins. It is resolved before final manifest construction;
+workers receive the same rectangles and Continue never recomputes them from
+current account or source tuning. This deliberately reserves some neutral
+opening countryside as well as the actual fixed foundations.
+
+Ecology reserves the ring using complete native movement-shape bounds,
+including long logs and rock satellites. Native country features and objective
+fixtures also respect it, in both synchronous planning and prepared-result
+validation. Neutral roads can cross it. Live creatures and player consequences
+are not permanently absent from a traversal route. Existing native feature
+sources may still intentionally contain wider wet areas; the local patch
+contract does not rewrite their source geometry.
+
+Candidate IDs retain full signed address text, geometric math uses bounded
+local offsets, and partially representable lattice cells at the address-domain
+edge decline rather than overflow. A bounded cache changes work only, never
+geographic decisions. Physical region enumeration includes patch materials in
+both the live runtime and route workers. Adding a material does not authorize
+missing native mechanics or bypass whole-source admission.
+
+Focused acceptance includes 15 field-choice oracle groups (28 archived/new
+paired runs), 966 native pour pairs with exact RNG/mask/wrapper receipts,
+and 12 terrain-patch contract groups. These cover 441 archived old-terrain
+comparisons, 98 swept bypass routes, extended log/rock reservations, full signed
+addresses, cache eviction, 18 exclusion contacts and 558 actual opening
+footprints. Two naturally conflicting opening patches decline whole while
+12 unaffected neighboring plans remain identical.
+
+The fixed preset survey sampled 7,803 lattice-centered points over three seeds,
+including 446 marsh samples (279 neutral, 102 mud, 65 swamp), and found 188
+patch plans. Its center bias makes it unsuitable as an area-coverage estimate.
+The separate current-site census checked 143 doodads across 18 repeated-site
+recipes, including all 116 movement blockers, and found no actual physical
+overhang. This evidence covers those source templates; the general historic
+site validator still uses nominal radii and does not certify arbitrary future
+custom movement shapes.
+
+The browser course on the reviewed preview bundle walked complete upper/lower
+bypasses around both naturally selected seed-991 pockets with the actual
+15-unit Warrior radius. Mud changed native speed 200→120, swamp 200→90;
+ordinary exits restored 200 after native linger. Two hundred sampled physical
+cells matched generator, stream and live navigation, including cold Continue.
+The course preserved real scenery and used the full runtime, but no native
+features were resident at these two pockets. Feature exclusion is covered
+separately by admission checks. Initial arrivals used
+labelled teleports and native XP grants raised the hero to level 5 in level-4
+country; movement thereafter used ordinary input. It did not clear scenery,
+paint ground, inject statuses or grant invulnerability. Twelve screenshots
+record arrival, bypasses, effects, Continue and recovery. Software/offscreen
+frame timings during concurrent tests are diagnostic, not interactive FPS.
+
+The preview smoke harness now awaits the durable browser save queue and checks
+the IndexedDB character root before fresh-renderer Continue. The previous
+localStorage-character assertion predated native page persistence. Six
+production-storage sentinels remain unchanged in the isolated preview profile.
+
+A separate seed-991 timing course on the same bundle retained identical plans
+and saved configuration, with no concurrent repository checks during its
+measured run. Across 487 instrumented manual frames, top-level patch work was
+120.6 ms of 10,786.1 ms total step time (about 1.12%); nested calls were not
+summed twice. Patch work reached 3.1 ms in mud and 9.4 ms in swamp. Five outer
+frames exceeded 100 ms, dominated by simulation work outside these wrappers;
+patch work represented 1.4–4.1% of those steps. This narrows the attribution but
+leaves the broader simulation spikes unresolved. It is not a performance pass
+or an interactive-FPS measurement.
+
+## Native dimension and face rules: shared exact cores
+
+NativeClimate and NativeContinent now share their native arithmetic with the
+classic adapters. The climate source API captures the effective ordered axes,
+named bands, private dimension overrides, and resolved origin/anchor states.
+A captured climate reader must receive immutable continent readers; callbacks
+alone do not prove a complete frozen geography source. The continent reader
+owns all four native configuration values and preserves the fixed home land
+pin, bridge rules, landfall behavior, and signed 32-bit hash semantics.
+
+The realm geometry and tileset picker also use shared native operations.
+Realm ownership and depth remain separate operations with their original
+palette fallbacks. Face selection preserves shared then realm pool order,
+duplicates, raw depth/climate inputs, all-zero fallback, and the caller's
+random stream. Complete base-field capture, physical-to-native mapping,
+terrain/population projection, and source-owned country activation are still
+separate remaining work.
+
+The durable extraction probes embed pinned native implementations rather than
+calling the replacement on both sides. The continent course covers 46,969
+operation pairs, 3,006 classic-wrapper pairs, exact read/call tapes and 300
+instance-isolation cases. Realm checks cover 1,800 site/depth tuples, exact
+read tapes and 80 actual classic-wrapper pairs. Face checks cover 4,080 actual
+registry selections and 1,440 ordered data/callback/random tapes. Existing
+civic and sea courses pass. These are source-preservation checks, not evidence
+that previously unsupported towns, interiors or traversals are now admitted.
+The NativeClimate course additionally passes 16 groups and 1,033 exact
+comparisons, with 20 explicit refusals of source data that JSON would erase
+or change. This validation stays at the new capture boundary; classic
+arithmetic, including signed zero, remains unchanged. Generation QA passes
+2,607 cases with no failures and four existing warnings; simulation smoke,
+geography, dimensions, biome share, settled-country and field-choice probes
+also pass.
+
+## NativeGeographySource: complete base-field capture
+
+The native-geography-v1 source owns one explicit uint32 field seed, all 50
+current biome definitions, all 123 complete tileset definitions, all three
+effective dimension definitions, ordered field/band/floor policies and actual
+shared/realm face pools. It also owns the complete native continent policy and
+climate source, including effective private overrides and already-resolved
+origin/anchor states. Capture happens explicitly after native registration and
+world binding. The new factory imports only native leaf operations, constructs
+its own readers and caches, and never binds or modifies another World.
+
+Its identity is the exact serialized source text. Nested record order, pool
+duplicates, full source payloads and tagged missing/null/undefined anchors stay
+observable; unsupported or lossy data is refused before JSON can normalize it.
+Private execution views use own properties, including the native unknown-band
+fallback, so later inherited property additions cannot change sampled results.
+Prototype lookup aliases are outside this new source/API domain. The classic
+adapters keep their original permissive behavior.
+
+The explicit supported work limits are region search at most 16, aggregate
+floor candidate boxes at most 262,144 cells and landfall at most 4,096 steps.
+Unsafe lattice indices, derived sites and coordinate arithmetic refuse before
+a native loop. These limits do not clamp native policy values. They establish
+coordinate/work safety, not numerical conditioning of every possible extreme
+authored coefficient. Native signed 32-bit hash aliases remain explicit; this
+sampler is not a proof of unbounded geographic uniqueness.
+
+The durable composed course compares 520 full native geography tuples and
+2,040 face selections with next-RNG sentinels across four seeds. It retains the
+real seed-713 desert, jungle and rift fringe/interior witnesses, full registry
+copies, thirteen independent live-source mutations, cold serialized restore,
+and a second World binding. Five directed mutations also change new-source
+sampled values. A 16,420-cell realm course crosses the native memo cap and
+revisits in reverse order. Eight custom surface-palette comparisons preserve
+the native mixed-table cache interaction: that custom case is deliberately
+call-order dependent, so unrestricted order independence is not claimed.
+
+Independent adversarial checks reproduce and close inherited axis/envelope
+leaks and non-terminating derived floor scans. A separate worker-style module
+load matches six complete operation sets using eight native leaf modules,
+with no live registry, data, worldmass or global-random dependency. Durable
+regressions cover the repaired scan bounds, prototype lookup/fallback, missing
+face payloads, absent pool targets and unsafe derived climate sites.
+
+This completes the base-field and face-selection source boundary. Full source
+records do not include every downstream structure/composition/layout handler,
+so they do not establish a complete native layout compiler. The next playable
+phase must connect a saved physical mapping to authoritative substrate,
+habitat/population, complete admitted face layouts, bilateral openings and
+barriers, and cold Continue together. Adding native depth to the old unrelated
+square-country policy remains invalid. Regional hydrology, full towns/cities,
+shared crypt/interior graphs, bounty-opened routes, and long-history paging
+remain open in the broader generation ledger.
+
+## NativeAreaFoundations: complete recipes, physical owners and connections
+
+The classic native recipe mint now delegates to `engine/nativeZoneMint.ts`.
+All definitions and source operations are explicit providers. Native graph
+placement, graph mutation, atlas destination resolution and source-anchor
+selection remain in the classic adapter. Topology hooks execute at the original
+name, map/frontier, course-continuation and waypoint boundaries, retaining the
+native main stream and explicit-seed identity substream. This enables a new
+physical area policy to share the complete face/variant/objective/footprint/
+layout/war/blend/annex operation without borrowing a mutable finite graph.
+
+The saved physical mapping uses complete native source JSON as a string so a
+parent manifest cannot reorder source properties. Two recorded origins and a
+positive reduced rational scale map signed addresses by exact integer/rational
+arithmetic before one documented binary64 rounding boundary. An explicit native
+envelope and native reader guards refuse unsupported travel instead of wrapping
+or clamping. Stable owner requests supply a target and seed; the complete source
+resolver can replace both for an atlas destination before face selection. Point
+queries do not reroll a recorded area. Inverse anchors must reproduce the exact
+native point after physical address rounding; unrepresentable anchors refuse
+instead of moving the requested site. No default map scale or new preset has
+been activated by this foundation.
+
+`nativeAreaGeometry` preserves every generated layout collection, the actual
+packed grid or analytic footprint, and resolved native material and movement
+facts. Ground doodads remain a separate ordered native channel; they are not
+flattened into a second grid effect. Rectangular physical ownership is half-open
+at right/bottom edges so adjoining owners can meet; original bounds bytes and
+classic finite actor confinement are unchanged. Capsule clearance is a bounded
+conservative proof for ordinary ground-tier walking, not a replacement for
+native sliding, jumping, tier movement or a universal path-existence solver.
+
+`nativeAreaSeams` plans both mouths from the same complete physical owner
+references before generation. Rectangular facing boundaries are its first
+supported shapes. It explicitly refuses other boundary kinds, overlaps and
+insufficient clearance. Its bounded route search preserves mandatory mouths
+and stays inside a reserved corridor; it never clears a wall, moves an entrance
+or rerolls the selected face. Publication requires a full swept body test in
+both directions, exact current owner sources, and an unchanged physical revision.
+A global complete-owner reservation is still required before area publication;
+pairwise planning alone cannot establish absence of unrelated neighbors. Saved
+receipts require actual collision reproof after restoration; source bytes alone
+cannot certify a clear route. All saved seam input rejects accessors before any
+validation read.
+
+The physical integration probe naturally selects an entire forest/districts
+recipe and a saltflat/dunefield recipe, supplies paired mouths before native
+generation, and retains all generated output. The original straight connection
+fails on a native district wall even though both endpoints are clear. Bounded
+routing finds and proves a detour without changing that wall. A real native
+closed door spanning the connecting substrate blocks the course; opening it
+restores collision passage. Exact geometry restoration retains the reverse
+capsule proof. This is headless generation and geometry evidence, not a claim of
+a completed browser trip, ambient population admission or finished objectives.
+The proof connects the two interior approach points through both mouths; area
+admission must separately connect those approaches to spawn, objectives and
+other required internal components.
+
+The coherent fresh-run activation gate remains open. It still requires a real
+installed compiler/source certificate, authoritative substrate outside areas,
+source-appropriate ambient packs and habitat, all selected objective/environment
+owners, durable sidearea transitions and actual cold browser Continue. Towns,
+cities, regional watercourses, shared interiors, bounty-opened sections and long
+history residency/rebasing remain in the broader generation completion ledger.
+
+## NativeAreaRoutes and NativeSubstrate: physical integration beyond seams
+
+NativeAreaRoutes extends the proof from paired boundary approaches into a whole
+native area's interior. Exact spawn/entry and interaction/approach stands connect
+through continuous capsules over retained grid, silhouette and doodad geometry.
+A bounded deterministic search may conservatively refuse a route; it never snaps
+an endpoint, erases a wall, exempts a closed door or takes an exterior shortcut.
+Ground-tier walking is the current scope. Higher tiers, mutable gate authority
+and automatic discovery of every required objective stand remain separate.
+
+The naturally minted forest/districts and saltflat/dunefield controls retain all
+32 and 167 doodads. Their entry-to-approach routes measure 6,197 and 4,039 pixels,
+including the forest detour. Serialized restoration rechecks every segment in
+both directions against the complete geometry identity. Synthetic controls retain
+closed/open native doors, ellipse exteriors, exact fractional stands, disconnected
+annexes and bounded failure. These geometry-only controls do not substitute for
+the compiler's original load-time boundary/road/meld and generation-port inputs.
+
+NativeSubstrate is a saved optional MassSpec discriminator consumed by the real
+MassGenerator, MassStream and MassWalk. Complete source JSON and explicit mapping
+own biome, native depth and every climate range input. Independent noise layers
+and the old place lottery are refused for this policy. Every captured biome must
+have explicit authored outside-area material/palette rules; these rules neither
+select a complete face nor reproduce its generated native layout. Existing native
+pour patches use that same geography, preserving neutral annuli and their scenery
+reservations. Broad bog, swamp or mud base cover is refused; an intentionally broad
+hazard needs a complete area owner with its own navigation and activity.
+
+The fixed native field survey covers 625 points and 26 naturally occurring biomes,
+including forest, jungle, marsh, desert, highland, tundra, coastline and ocean.
+Cold policy restoration retains every sampled field/material tuple. A native marsh
+control contains 29 mire cells with 68 neutral bypass cells; actual page samples
+and collision queries agree with the generator. Entire optional patch candidates
+that exceed the finite mapping envelope refuse before sampling outside it. Saved
+fields and patch conditions ignore inherited process defaults. The original
+terrain policy remains selected when the discriminator is absent.
+
+This connects physical terrain preparation, page streaming and collision under
+one native field. It does not ship an adventure with empty or mismatched living
+content: WorldMassRuntime explicitly refuses the new substrate until complete area,
+population and controller ownership exists. A shipped outside-area palette policy,
+measured map scale, ecology/habitat policy and the ordinary browser traversal /
+sidearea / cold Continue course remain required before fresh-run activation.
+
+## NativeCompleteAreas and NativeAmbient: complete load inputs and living stages
+
+NativeCompleteAreas compiles the complete native layout with its original
+load-prepared boundary, road and meld inputs. Finite generation ports and true
+physical seam mouths are recorded separately: substituting one for the other
+changes structure eligibility. Three archived actual native loads retain the
+meadow's 278 doodads and walled manor, the saltflat's 144 doodads and watchtower,
+and the downs' 246 doodads, three boundary gates and watchtower. Ten complete
+output pairs preserve every generated collection, mechanism side channel,
+entrance seed and the next four generation draws. Restore consumes the complete
+saved result without consulting the live generator or registries.
+
+The compiler requires an explicit synchronous same-build/source lease covering
+mint and boundary provenance. Its caller-provided certificate is a trust boundary,
+not a complete captured dependency closure. There is no production issuer yet;
+valid descriptors still refuse runtime publication. Collision-adjusted entrance
+seats, shared interior bindings and the full lifecycle owners remain required.
+Malformed positioned records, cave seeds, effect/brittle sources and accessor
+inputs refuse before admission. Requirement enumeration does not grant support.
+
+NativeAmbient shares the original pack spawning, habitat placement and wildlife
+operations with classic World through explicit geometry, factory, controller and
+random inputs. The wildlife stage stays later in native load order. An archived
+original-method comparison covers 48 pairs, 453 factory attempts, 415 admitted
+bodies, eight grouped bodies and 2,753 exact random draws and stream sentinels.
+Frozen resolved pack and wildlife receipts retain full tables and explicit absence;
+they do not implement the upstream weather, conquest or world-simulation owners.
+
+Full area ambient admission still requires local encounter-group placement,
+source-equivalent factories and resolutions, durable born slots and bounded live
+actor paging. Sleeping bodies must retain their native state and cannot count as
+dead or disappear from objectives. The current shared actor limit cannot be solved
+by silently dropping native packs. These boundaries prepare the coherent playable
+course; neither a helper extraction nor a successful restore is that course.
+
+
+## NativeAreaLocal: full-layout local preparation with shared native operations
+
+NativeAreaLocal now composes complete retained geometry with the actual shared
+navigation, free/far placement, habitat and encounter-group materializers. It
+keeps the native floor, pit, bridge, tier and formation behavior at the original
+stage boundaries. Classic World delegates to the same operations, including a
+conservative data-only placement shortcut; accessor-bearing inputs retain their
+original general movement read order. General movement and tether behavior stay
+in the existing World path.
+
+The local frame copies exact source records, normalizes separate own-data working
+records and supplies the area's entry, player position, index and navigation.
+Optional fields cannot inherit process defaults, required fields refuse absence,
+and grid/index/tier work has explicit limits. Source providers are read when the
+native operation uses them; preparing a frame before a seeded random scope cannot
+capture a stale random function. These are fixed-stage frames: native registries
+must still be the same installed source, and changed doors or terrain require a
+new frame. Mutable navigation objects are preparation scratch, not saved authority.
+
+The durable comparisons pin actual original methods from commit 3b14dba3:
+
+- NativeNavigation: ten layouts, 45,529 grid cells and 4,744 ground queries,
+  including wet ground, rotated blockers, bridges and open/closed annexes.
+- NativePlacement: 998 archived comparisons, 11,373 random draws, 96,467 ordered
+  callbacks and 60 shape/pit tapes; additional accessor controls retain native
+  read order and tier restoration on exceptions.
+- NativeEncounterGroup: all 49 authored recipes across 168 pairs, 646 factory
+  attempts, 638 admitted bodies and 2,868 random draws. Failed seats preserve
+  consumed attempts without partial groups. This preserves native behavior;
+  errors during final decoration/publication are not an area rollback transaction.
+- NativeExitPreparation: 840 core pairs, 252 actual World wrapper pairs and
+  26,798 source/host reads. Three actual full-load pairs preserve complete zone,
+  geometry, structures, exits and generation side channels. Their live doodad
+  counts are 285/153/418; the earlier 278/144/246 archives are prepared generation
+  outputs at a different stage and must not be conflated with these loads.
+- NativeAreaLocal: three complete archived layouts, 633 placement/navigation
+  queries, 352 normal-rarity bodies and 1,555 random draws. A foreign factory host
+  cannot supply its placement, terrain or player position; cold and A/B/A runs
+  retain the same bodies and source bytes. Normal rarity is deliberate here:
+  detached magic-pack refresh and complete load-stage sequencing remain unbound.
+
+The frame does not issue compiler source authority, resolve world-simulation
+population modifiers, resume both native random streams, own every birth stage,
+translate controllers, publish areas, or page/save their complete populations.
+Those remain necessary before activating a full-area continuous-world policy.
+The next playable course still requires two complete naturally generated areas,
+physical substrate/seams, combat and wounds, an entrance, cold Continue, and no
+silently omitted bodies or unsupported environmental mechanisms. Main-content
+parity, mountain/hydrology variety and repeated real-play passes remain open.
+
+
+## NativeAreaContinuations: random state, population decisions and complete births
+
+NativeAreaContinuations records both original streams: the explicit geometry
+Rng and the transitive Math.random stream used by effects and births. Saved
+cursors preserve zero without seed remapping. Synchronous scopes restore the
+outer stream on errors, refuse reentry and expired callbacks, and retain consumed
+draws. Six cold layout/effect/population courses match 376 factories and complete
+body graphs, with 9,938 geometry and 1,668 ambient draws; 1,300 primitive
+comparisons pin the unchanged generator. This does not authorize asynchronous
+work or change native failure side effects into rollback.
+
+The separate generation receipt retains the complete old area descriptor plus
+start, immediate post-layout and post-capture cursors. Diagnostic witnesses use
+a cloned cursor. Preparation and source capture must not consume either stream
+outside actual generateLayout. Nine natural layout/stream pairs retain identical
+legacy output and resume native effect attachment after cold restore. Exact
+source/geography matching, malformed state, inherited descriptor and random
+drift controls guard the boundary. Keep the whole envelope: old area-v1 identity
+does not cover the additional random state. A valid cursor and caller-provided
+lease remain evidence of structure, not an authentic installed-source issuer.
+
+NativePopulationResolution shares native campaign table selection, overlay
+resolution, faction restrictions, authored cohorts, wildlife provenance and cave
+pool rules with World. NativeAreaPopulation binds these decisions to its explicit
+zone, player and staged actors while reading named campaign services at their
+original stages. Exact cave face identity is retained; a detached JSON zone
+cannot silently substitute for the original source-face packs reference. Tests
+compare 630 core and 240 World cases, 1,440 actual cave/wildlife cases, and three
+complete native loads with 220 births and 10,673 random draws. Six isolated
+A/B/A courses use real born populations while unrelated World state throws.
+
+NativeMonsterFactory shares the complete original construction, level stamping
+and ambush operations. Installed sources and explicit host services retain native
+equipment, support grants, party scaling, appearance overrides, tagging, clock
+reads and allocation/revision side effects. The comparison covers every one of
+the 1,184 installed monster definitions, including complete actor graphs and
+failed-birth behavior. Imported functions keep their original receiver semantics.
+These factories produce actual native bodies; promotion and magic-pack refresh
+remain separate native operations with their own stateful dependencies.
+
+The next integration boundary is local hostility and sight/shot geometry feeding
+actual magic-pack refresh. Even zero-time refresh changes shared pack state,
+modifiers and visible effects, so deferring it until publication is not generally
+equivalent. Full birth-stage ordering, authenticated source reconstruction,
+controller and body paging, and the two-area playable/cold-Continue course still
+precede fresh full-area activation. These preparations do not establish complete
+main-content parity or the requested mountain, water and settlement variety.
+
+NativeAreaContinuations verification at this checkpoint: all three type checks,
+all 463 fast probes, 2,607 generation cases (zero failures; four existing
+warnings), and 25 combat smoke episodes pass. The isolated real-client native
+generation course also passes natural mouth/structure discovery, actual walking,
+interior entry, cold Continue and exact return. That browser course exercises
+previously admitted feature owners, not the still-unbound complete-area policy.
+Nine slow and three excluded probes were not part of the fast run.
+
+## NativeAreaEncounters: complete rarity and local encounter ownership
+
+The pack and later wildlife stages now compose the unchanged native factories,
+population decisions, placement, encounter groups, sight, hostility, status relay,
+rarity and immediate magic-pack refresh. NativeAreaAmbient binds one complete
+retained layout and its actual staged census. Classic World uses the same optical,
+targeting, relay and promotion operations. No rarity weights, habitat rules,
+failed-attempt consumption or authored pack minimums are replaced.
+
+Construction takes detached staged actors, including the player, and explicitly
+transfers their status-relay capability after validating the whole cohort and
+building the host. A published World's actors must not be borrowed. Exact initial
+magic effects, resolving/pending flags, squad sequence, bombard revision and
+tagging state are mandatory; existing shared runtime objects and effects arrays
+retain identity. The host's identity is frozen while its staged actor list remains
+mutable. Named party, appearance, clock, optical-medium, sanctuary and hit services
+remain explicit trusted dependencies. This does not authenticate their provenance.
+
+The retained-layout comparison uses three complete archived layouts and nine
+natural stream pairs. It includes actual native rarity rolls and 533 admitted
+bodies, 66 magic members and exact stage receipts. Two additional mechanism
+controls use unchanged meadow geometry: transferring already-warm siphon/arclink
+cohorts, then relaying again with the former World forbidden; and 34 actual failed
+lava-habitat attempts followed by native wildlife. Combined, 11 classic/local/cold
+comparisons retain 598 residents, 632 factory results, 2,791 random draws, ordered
+actor identities and factory arguments, shared runtime relationships, and complete
+pack-boundary and final effects/body states. These targeted controls do not claim
+natural spawn frequencies. They rebuild preparation from the same source geometry
+and cursor, not from a complete saved live-controller page.
+
+Seven optical operations match their archived originals over 11,340 pairs and
+five complete natural layouts, including ray outputs, read/exception order and
+360 warm/cold local comparisons. Hostility covers native sanctuary/tier, guise,
+burrow, diplomacy, prey and breakable-owner targeting; relay covers actual
+application and nearest/range/tie behavior. Promotion covers all 19 magic-pack
+mechanics, native partial errors, and a real reflected hit killing a conductor
+while refresh is in progress. Review caught a cache ownership regression: a
+cached census getter made sleeping actors appear controller-owned. The repaired
+World views are non-enumerable; genuine foreign actor references still pin them.
+
+Full native birth ordering still includes effects, terrain, breakables, NPC/folk,
+objective adoption, faction contests, objective fixtures, camps, garrisons,
+landmark dwellers, bounty marks and memory finalization around these stages.
+Complete source issuance, environmental owners, body/controller paging and an
+actual two-area playable/cold-Continue course still precede full-area activation.
+This checkpoint does not establish main-content parity, whole towns/crypts in
+the continuous runtime, or complete mountain and hydrology integration.
+
+NativeAreaEncounters verification: all three type checks, all 468 fast probes
+without retries, 2,607 generation cases (zero failures; four existing warnings),
+and 25 combat smoke episodes pass. The detached lifecycle regression also
+checks a live provider changing the cohort before handoff; final validation
+prevents a partially transferred relay owner. The isolated client generation
+course passes natural structures, actual walking, cave entry, cold Continue and
+exact return. It remains a regression for already-admitted feature owners,
+not evidence of complete-area runtime activation. Nine slow and three excluded
+probes were not run.
+
+
+## NativeAreaInhabitants: native residents and field populations
+
+The original door guard, furniture, NPC/daily guest and camp/garrison/landmark
+stages are shared with classic World at their unchanged load boundaries. Closed
+breakable doors retain raw seats and door-owned persistence. Furniture keeps
+native placement and memory tagging. Residents retain campaign arrival gates,
+upper-storey seating, speech rows and the exact transient dialogue reset order.
+Daily guests keep their original zone/seat/day seed, empty-seat probability and
+duplicate-name retries. Camps and garrisons retain native squad identity and
+level/faction rules; landmark dwellers retain island seats, tiers, ambushes,
+duty posts and rarity promotion after publication.
+
+NativeAreaAmbient.inhabitants binds those operations to the same complete local
+geometry, staged actors, factory and promotion owner. The returned host is frozen;
+resident maps, focus/scene fields, ledgers, settlement day and dialogue director
+stay explicit live services. Binding reads no resident values or clocks and
+transfers no actor relay a second time. The caller must supply the original
+resident-state owner and the same director used for factory appearance. Own-key
+checks do not authenticate controller provenance. Door, lesson, annex and other
+geometry replay must already be reflected in the fixed preparation frame.
+
+The durable comparison pins all four original stage bodies from f461ec80 and
+runs 72 archived/core/World cases plus 144 local/cold comparisons across three
+seeds, three day settings and four success/factory-failure positions. The native
+Lastlight layout retains 201 doodads, six breakables, four NPC seats and five daily
+guest seats, including upper floors. A separate explicit mechanism fixture uses
+that complete geometry with a closed breakable door, camp, garrison and landmark
+rows; it is not evidence of their natural frequency. The combined original
+courses retain 639 surviving body states and 819 random draws, including exact
+stage boundaries, actor identities, factory arguments, speech rows and partial
+failures. The same providing World's geometry/census/resident paths throw during
+local stages. Independent controls cover 102 mechanisms and seven classic method
+selection cases; local review also covers eight reset/day/error courses and four
+method-selection/receiver cases. Adapters capture the native method before its
+arguments are evaluated, retaining original receiver and argument count.
+
+The complete load still has objective adoption and fixtures, faction contests,
+scenery, puzzles, harvest, geysers, other environmental controllers and memory
+finalization around these stages. Those operations must retain their original
+order and both random continuations. This checkpoint neither publishes a whole
+new town into seamless play nor supplies full controller paging, source issuance
+or the two-area playable/Continue acceptance course. Those remain required for
+full-area activation and the larger generation/content parity work.
+
+NativeAreaInhabitants verification: all three type checks, all 469 fast probes
+without retries, 2,607 generation cases (zero failures; four existing warnings),
+and 25 combat smoke episodes passed. The client conversation course exposed a
+separate Continue defect: rebuilding a reward affix wrote into the frozen save
+receipt. Character restoration now detaches its complete carry state before
+normalization, explicitly excluding inline world history. The focused character
+and staged-world restore probes and all three type checks passed after that
+repair. Both final client courses pass: conversations/gifts/work/reward, narrow
+and enlarged UI, exact cold Continue, and natural structure/walking/cave entry/
+Continue/return. These exercise admitted runtime content, not full-area activation.
+Nine slow and three excluded probes were not part of the fast run.
+
+## NativeAreaBirth: the complete native birth sequence
+
+Classic World now consumes one shared operation covering the entire original
+973-line post-arrival load sequence, from remembered door/lesson replay through
+final lightwell setup. It retains the original order of inhabitants, objective
+adoption and bodies, faction contests, scenery, puzzles, harvest, lightweight
+populations, environmental controllers, field inhabitants, bounty work, wildlife,
+remembered population replacement, occurrences, rewards, resident services,
+encounters, nemeses, dynamic terrain and ordered package initialization. Arrival
+movement and upstream layout/environment adoption remain separate operations.
+The same layout RNG and ambient random scope continue through the driver.
+
+The World adapter exposes live native fields and selects each original method
+before evaluating its arguments. Native memory restoration may replace the whole
+actor census; the adapter follows that replacement. Errors retain already-made
+mutations, allocations and random consumption. The adapter cache stays outside
+reflective controller ownership. Moving the operation also preserves original
+runtime module initialization positions, including modules whose remaining World
+imports became type-only. Structural World types describe exact ports without
+introducing a runtime World import in the shared driver.
+
+The durable archive comparison runs 66 complete-load pairs: three retained
+natural field sources and Lastlight across fresh/remembered loads and explicit
+factory failures, plus 15 objective configurations, a special arena and faction
+war in both fresh and remembered courses. These last configurations are explicit
+mechanism fixtures, not evidence of their natural frequency. The comparisons
+cover 3,657 allocated bodies, full geometry, factory arguments, resident and
+controller state/aliases, ordered calls, both next random cursors and allocation
+continuations. The original operation is pinned from commit 81b96a31 and invoked
+independently at the actual World load boundary.
+
+Independent source review authenticates the full archived block and reconstructed
+load operation. Execution controls cover 177 method-selection/receiver/arity
+cases, 60 live fields, 34 writable ports, and 16 early door/lesson/hold/hollow/
+annex cases. Five actual native loads fail immediately after packs, lightweight
+ecology, wildlife, remembered population restoration or final wells: 327
+allocated bodies and 14,291 draws match the original partial outcomes. These
+controls do not authenticate callback closures or unseen weak-collection state.
+
+This checkpoint makes classic World the real consumer of the complete shared
+birth operation. It does not install a mutable detached scene, prove the
+lifecycle of every campaign package, publish a complete seamless town or supply
+whole-owner paging. Those owners and a genuine two-area movement/combat/history/
+cold Continue course remain required before full-area activation.
+
+NativeAreaBirth verification: all three type checks, 2,607 generation cases
+(zero failures, four existing warnings), 25 combat smoke episodes, and both
+client generation and conversation/Continue courses passed. The no-retry fast
+run passed 469/470 probes in 835.5 seconds; its one failure was the local-cue
+control still looking for the moved entry-title draw inside loadZone. That
+control now follows the shared operation without changing its archived title,
+original methods or behavioral assertions. Its focused run passes, and independent
+missing/duplicate/mistimed-draw mutations all fail the unchanged comparison.
+No production code changed after the broad run. Nine slow and three excluded
+probes were not run. The client courses cover already-admitted content, not
+complete-area activation.
+
+
+## NativeSceneGeometry and NativeScenePopulation: mutable local areas
+
+The complete native layout adoption and 39 native geometry operations are now
+shared with classic World. NativeAreaSceneGeometry owns the retained native
+working grid or analytic terrain, doodads, floors, structures, side-area mouths,
+tracks, traps, fog, creep terrain callbacks and their mutable navigation/index
+caches. Door opening and breakage repaint native cells; changes to upper floors
+invalidate the original tier navigation. Movement uses the full native body,
+tier, pit and tether rules. No terrain is cleared or replaced to make a local
+area fit. The caller must supply the actual resolved currentZoneSeed and prepared
+exits before adoption; a default seed is not a source receipt.
+
+NativeScenePopulation shares 13 native census, restoration, objective, contest,
+wave and party-scale operations with classic World. NativeAreaScenePopulation
+binds existing factories, population resolution, complete packs, wildlife,
+inhabitants, local sight/hostility, rarity and magic refresh to the same live
+scene. Native memory restoration replaces the complete actor array and every
+population host follows it. Remembered normal, rare and magic bodies keep the
+original wounds, encounter-group remapping, shared runtime identities and
+allocation/random side effects. Actual prior squad/factory counters and refresh
+state are mandatory inputs. NativeSceneObjectiveState supplies only the native
+fresh load reset; memory, completion and later controllers retain their own
+ordered stages.
+
+Classic adapters preserve live reads, method selection before argument
+evaluation, receivers and partial failures. Their cached views are nonenumerable
+so reflective controller ownership does not acquire a hidden World reference.
+Original runtime import positions are retained when an extracted operation was
+a module's last World consumer.
+
+The durable geometry oracle pins all 39 original methods and the complete
+adoption block from 81b96a31. Six local/archive comparisons and six actual World
+comparisons cover complete grids and analytic terrain, generated doors, roofs,
+upper floors, native mouth links, 138 physical query points, scenery revisions
+and wildfire terrain callbacks. Six failures preserve the same mutation prefixes.
+The course observes 234 native RNG draws and 27,204 read/callback events per
+complete comparison lane, with 36 tether cases and 57 cached method-selection
+checks. Its additional rooms fixture deliberately forces one track and three
+trap mechanisms; this demonstrates the mechanisms, not their natural frequency.
+Missing door repaint and stale scenery-index mutations both fail the intended
+physical checks. The archive and inputs are embedded; Git and ignored files are
+not runtime dependencies.
+
+The population course uses two complete retained native layouts and compares
+remembered bodies, replacement census references, group aliases, later objective
+counts and actual contest/wave births against the archived original methods.
+Partial factory failures preserve native allocations and random consumption.
+The local lane refuses reads through the supplying World's geometry, census and
+factory methods. This is local preparation, not a campaign source certificate.
+
+These mutable owners remove the fixed-stage population/geometry limitation.
+They do not yet form a complete NativeAreaBirth host: environmental birth,
+package/controller update and reward ownership, installed source issuance,
+whole-owner paging and the natural two-area cold-Continue course are still
+required. No complete towns, crypts, hydrology or bounty-opened regions are
+silently activated by this extraction. Existing ordinary mire patch/bypass
+policy is unchanged.
+
+
+NativeSceneGeometry and NativeScenePopulation verification: all three project
+type checks, 2,607 generation cases (zero failures, four existing warnings),
+25 simulation smoke episodes and the client natural-structure/cave entry/cold
+Continue/exact-return course pass. The no-retry broad run passed 471/472 in
+950.2 seconds. Its single failure was the existing geometry oracle invoking
+World.groundAt with a small plain object after that method became a delegate.
+The oracle now calls the actual shared native ground operation with the same
+ports; all terrain assertions remain unchanged, and its focused run passes.
+The population fixture also now zips retained exit positions with their native
+exit definitions. Both final mutable-scene probes pass after that test repair.
+No executable production behavior changed after the broad run. Nine slow and
+three excluded probes were not run. Client coverage exercises already-admitted
+content; it does not certify full-area activation.
+
+The final population oracle adds six actual World comparisons, both restoration
+and later wave/contest factory failures, stream identities/cursors, and 21 cached
+method-selection checks. An independent World AST audit confirms that only the
+52 intended methods, layout adoption and the new adapter members changed;
+2,273 other class members retain their original text.
+
+
+## NativeSceneEnvironment and NativeSceneEcology: complete native birth mechanisms
+
+NativeSceneEnvironment shares eight original native methods for scenery actors,
+puzzle setup and tone changes, harvest placement, geyser fields and escape
+fronts. The local owner retains puzzle runs, knocks and cached callbacks;
+harvest nodes, sessions and offers; and geyser fields, pocks and sweep state.
+It binds the existing mutable geometry and population owners instead of
+borrowing a standing World. Puzzle completion and harvest timeflow remain real,
+explicit services; the birth layer does not invent replacement rewards.
+
+NativeSceneEcology shares the original throng pocket/husk and lightweight
+population stages, deferred vent seating and final lightwell installation.
+Fourteen World methods delegate to this core. The one-line actor lookup remains
+an explicit boundary: classic World keeps its original lookup and the local
+owner uses the same archived lookup against its own live census. Existing native
+pool capacity and failed seating consume their original draws; there is no new
+population truncation or per-body reseeding. Carrying an area retains its pool,
+claimed-pocket ledger, bookkeeping and monotonic well sequence. Fresh state is
+only for a genuinely fresh owner.
+
+The local ecology owner requires the exact same scene and geometry identities
+as its population owner. Provider identities are retained while their fields
+and methods remain live. Geyser state comes from the actual environment owner;
+clock, seat roster, radiance and run-long throng claims remain explicit shared
+services. World adapters preserve original module initialization positions,
+method selection and receivers; their caches remain nonenumerable.
+
+The durable environment archive compares 22 local and 22 actual World courses,
+including retained natural heartwood, glimmervale and downs layouts, every one
+of the 15 installed puzzle presets, explicit scenery/geyser/escape fixtures,
+and post-allocation factory failures. Natural sources produce puzzles and
+harvest nodes; the forced geyser/escape fixtures demonstrate mechanisms, not
+natural frequency. The course records 137 published and 139 allocated bodies
+and 740 random draws. Fifty-one additional branch/read comparisons exercise
+655 host events, including reset and error boundaries. Independent deferred
+callback checks cover real tone/status changes, live clock/census/tier filters,
+completion forwarding and thrown errors.
+
+The ecology course preserves complete pool columns and actor state across
+retained layouts, carried populations, claimed pockets, held-off rows, vent
+seating, native capacity saturation, and partial factory failures. Its selected
+natural layouts are ecology-negative: positive population, vent, capacity and
+well cases are labelled explicit installed-source mechanism fixtures. The
+baseline 16 comparisons are supplemented by seven independent carry/cue cases,
+cold A/B/A replay, binding identity/refusal checks and exact stream cursors.
+Neither suite depends on runtime Git or ignored development files.
+
+These owners are invoked by the existing native birth sequence at its original
+positions. They do not yet supply the complete area update driver, puzzle or
+harvest reward execution, lightweight combat/XP/promotion, throng claiming,
+rendering contexts or whole-owner persistence. Those obligations, universal
+campaign/package birth services, installed source issuance and a real natural
+two-area cold-Continue course remain required before complete seamless areas
+can be activated. The native content catalogue and localized ordinary mire
+policy are preserved.
+
+Validation for NativeSceneEnvironment and NativeSceneEcology: all three project
+type checks pass. The full fast roster passes 474/474 without retries in
+927.2 seconds; nine slow and three excluded probes were not run. The complete
+generation matrix passes 869 cases across three seeds (2,607 generations), with
+four known spacing warnings and one metropolis timing warning while checks ran
+concurrently. A separate quiet metropolis run passes all 13 cases across three
+seeds with no warnings; the boulevard case takes 267ms/seed there. All 25 smoke
+simulation episodes pass. The built client passes native structure/movement,
+cave entry, same-hero continuation, cold Continue and exact return. This client
+course covers already-admitted content, not full native-area activation. The
+World source audit retains 2,311 unrelated members and the original actor lookup;
+only 22 delegates and six adapter members change.
+
+
+## NativeAreaBoundaries and living-place generation ownership
+
+NativeAreaBoundaries shares the exact native pre-layout graph stage. First-visit
+holdfast rolls, eager and horizon charting, opening progression, neighbor reveal,
+roadless/cross-dimension repairs, exit siting and physical separation retain their
+original order. Boundary, road and biome-meld annotations keep their source and
+exit-row identities. The operation retains every generated graph child and all
+reciprocal mutations; it does not reduce a prepared place to its parent ZoneDef.
+The classic World adapter owns its live graph and cached view. A detached source
+issuer must still provide authentic campaign graph/controller ownership.
+
+The two canonical seed-991 owner requests are derived through the existing native
+mapping without face, seed or biome overrides. Real default-enabled campaigns
+prepare forest and downs and add 82 and 83 graph zones, respectively. Four direct
+controller comparisons, 36 explicit branch/read cases and 14 callback-selection
+cases match the pinned native block. Six actual full-load comparisons cover both
+natural places, remembered entry and a second-exit-placement exception; 548 factory
+bodies and 45,413 random draws match. Independent alias tests retain prior live
+exits on mid-map failure and preserve earlier graph changes on later exceptions.
+These controls do not certify every complex or a naturally selected locked gate.
+
+NativeSettlementServices shares 29 original methods: the full stock-generation
+dependency chain plus native town seating and recruiter sheets. The local owner
+uses actual adopted town tier and area geometry alongside real campaign account,
+party, stock holds, recruit sheets, time and borough population. Held item objects
+and native allocation IDs survive shelf generation; return visits retain recruiter
+offers. The same gem helpers continue serving their original loot callers with
+unchanged defaults, bias and explicit floor arguments. No purchase, hiring or UI
+transaction was replaced. Twenty-six cold-process original/local/World courses
+match 7,257 native draws, 76,936 provider reads and 2,262 operation calls, including
+partial allocation failures, nullable borough state and every native town tier.
+
+NativeSceneBounty shares seven original operations for cull marks, gather nodes,
+arrival, readiness and quest-copy reads. The local owner requires the same scene,
+geometry, population and environment owners and the actual campaign posting/quest
+ledgers. It retains native multiple-posting count rules, actor/node aliases and
+partial failure effects. Installed bounty source callbacks now declare their real
+read contract, including the actual seamless runtime; six type-only source changes
+produce identical runtime JavaScript. Twenty-one original/local/World courses
+cover all installed kinds, all four positive package censuses and a real country
+destination with discovery and live null/restore transitions. Country visit
+readiness is positive; the course does not claim completed country clear/cache/
+puzzle/objective rewards. Per lane it retains 79 actor states, 64 harvest nodes,
+652 draws, 971 host calls and 1,650 source reads.
+
+NativeSceneOccurrences shares the exact native event callback host, population
+roster and generation-time trace reset. Local events read their own mutable
+terrain, zone level and current actor census, while using genuine campaign time
+and trace-release services. Remembered events restore their wound without a second
+wave; fresh events retain native telegraph, spring and later fixture behavior.
+The local callback cache is a private instance field. A foreign carried cache is
+refused, late state-property injection cannot redirect it, and a new owner gets a
+new closure. This fixes a defect found during independent draft review; the
+classic native cache operation itself remains unchanged. Seventeen complete
+original/local/World courses on three retained layouts match 78 allocations and
+488 random draws; 68 roster cases, 22 local binding controls and additional
+partial-failure/read-order cases verify the boundary. Positive occurrences are
+explicit installed-recipe fixtures, not claims about natural event frequency.
+
+All four classic adapters preserve selected-method timing and native receivers;
+their caches are nonenumerable and pass real dormant-reference negative/positive
+checks. The World source audit preserves 2,299 unrelated members and all 375
+previous runtime module positions; only 39 selected methods, the pre-layout block
+and nine adapter members change. These shared operations remain at their existing
+native load/birth positions. The local owners are ready to compose; complete
+NativeAreaScene birth/controller integration has not been activated.
+
+Still required: one genuine resident director/session shared by appearance and
+resident resets, objective-adoption source context, stable physical-content owners,
+all selected native package/presenter callbacks, authentic installed source sessions,
+whole-owner paging and update/render/reward dispatch. Actual full seamless-area
+A/B/A and cold Continue remain acceptance gates. This pass does not change the
+localized ordinary mire policy or claim biome, hydrology or main-content parity.
+
+Validation for NativeAreaBoundaries, NativeSettlementServices, NativeSceneBounty
+and NativeSceneOccurrences: all 478 fast probes pass without retries in 908.7
+seconds. Nine slow and three excluded probes were not run. All three project
+type checks pass, all 25 smoke simulation episodes pass, and the complete
+869-case generation matrix passes three seeds (2,607 generations) with no
+failures and four existing spacing warnings. The built client passes native
+structures/movement, cave entry, same-hero continuation, cold Continue and exact
+return. The separate conversation course passes native gifts, work, reward,
+once-only payout, narrow/scaled presentation and Save/Continue. The first
+conversation invocation served an old harness build and failed at its missing
+save hook; selecting the freshly verified build passes without production changes.
+These client courses cover admitted content, not complete seamless native areas.
+
+## NativeLayoutGeneration, resident sessions and physical places
+
+NativeLayoutGeneration shares the complete memory/seed-to-layout operation with
+classic World. Fresh ground uses its original seed fallback, remembered ground
+retains its seed and regrowth age, and boundless ground follows its existing
+memory exemption. The held-territory source supplies native outpost, camp,
+fortress and city fixtures through the real structure generator, including the
+square and weighted street mix. No fixture becomes decorative proxy geometry.
+The local owner writes the same mutable geometry counters and keeps genuine
+campaign memory and Crusade state. Layout adoption and later births remain
+separate, ordered operations.
+
+Twenty complete archived/local/actual-World layout comparisons cover two canonical
+native places, quiet and explicitly QA-ignited native held cities, and fresh,
+remembered, boundless, missing-seed and zero-seed controls. They retain 43,748
+doodads, 101 physical structures, both random continuations, source reads and
+memory identity. The modified seed/boundless and ignition cases are mechanism
+controls, not natural content-frequency claims. Thirty-six installed tier/seed/
+arena comparisons preserve every native fixture attempt; 42 ordering/failure
+comparisons and lazy-memory controls retain partial writes and original draws.
+Some held-city variants produce native required-point reachability warnings in
+both old and new implementations. Equality does not certify those routes as
+playable; their geometric cause is being investigated separately.
+
+NativeResidentSession owns one real NpcDialogueDirector and the native speech
+maps. Factory appearance and resident reset share that exact director. Re-entry
+runs the original reset at the original birth stage, retaining visit history.
+The complete installed fact registry and director runtime are unchanged; their
+host types now describe the actual campaign/local services they consume.
+Twenty cold-process courses retain nine resident births from a full native
+Lastlight layout, 30 draws, 205 provider reads and 36 calls, plus binding,
+selected-method, live fact and sequential A/B/A controls. The three archived
+spatial read methods in the oracle are test fixtures only. Production still
+requires genuine local spatial services. This session is not a simultaneous
+multi-area controller, saved visit codec or dialogue/reward dispatcher.
+
+NativeScenePhysical gives the original altar, training-yard and content-memory
+services one stable local host. Both native WeakMaps follow that host throughout
+its residency. Geometry/census/seating identity is enforced; the actual mutable
+chest, shrine, altar and drop arrays remain authoritative. Twenty archived/World/
+local cold-process courses retain 39 native actor allocations and complete
+item/actor identities, all nine training targets and every installed altar,
+shrine and loot row. Native finite birth syncs altar bodies before remembered
+altar objects replace them. That order, including the absence of an implicit
+second sync, remains unchanged. Later physical interactions and rewards are
+separate owners still required by complete scenes.
+
+NativeAreaSceneAdoption calls the unchanged installed objective-adoption function.
+Its real campaign fracture/holdfast fields, local exits and local fracture state
+preserve authored-objective protection and lair/package/venture/puzzle precedence.
+Fifty original/local comparisons retain 1,716 source reads and every currently
+installed package/venture source, with additional exception, alias and live-state
+controls. Natural forest and downs layouts remain whole. Positive package asks
+use explicit native QA source activation; they do not establish event frequency.
+This is the complete adoption read service, not package birth/update ownership.
+
+The World audit preserves 2,345 unrelated members and all 379 previous runtime
+module positions. Only the layout-generation block, its two helper delegates
+and three adapter members change. All other existing source edits in this pass
+narrow types while retaining identical emitted runtime JavaScript. These owners
+converge on the complete NativeAreaBirth composition; installed campaign/source
+issuance, remaining native controllers, runtime dispatch and whole-owner paging
+still precede seamless admission and the actual two-area cold-Continue course.
+The localized ordinary mire policy remains unchanged.
+
+Validation for NativeLayoutGeneration, NativeResidentSession, NativeScenePhysical
+and NativeAreaSceneAdoption: all 482 fast probes pass without retries in 861.1
+seconds; nine slow and three excluded probes were not run. All three project
+type checks and all 25 simulation smoke episodes pass. The full generation matrix
+passes 869 cases at three seeds (2,607 generations), with no failures and four
+existing spacing warnings. The built client passes the complete native structure,
+movement, cave, same-hero continuation, cold Continue and return course. The
+conversation course passes gifts, work, reward, once-only payout, scaled bounds
+and Save/Continue. Existing dialogue, physical-content and objective source
+modules emit identical JavaScript; the World audit retains 2,345 unchanged
+members and all 379 prior runtime import positions. These checks do not certify
+complete seamless native-area admission or resolve the structure access defects.
+
+## NativeAreaSceneSites and hidden-area openings
+
+NativeAreaSceneSites shares all five native field-service operations with World:
+site filters, vocation placement and birth, mercenary outposts and their offers.
+The local owner uses actual geometry and population, the genuine campaign and
+account, and the same settlement stock and outpost pointer. All eight installed
+secret vocations retain their complete NPC and dressing behavior. Veteran offers
+use native saved builds and exclude engaged mercenaries; re-entry keeps existing
+offer sheets. These are generated places and stock, not hiring or quest execution.
+
+Twenty-six archived/current-World/local cold-process comparisons preserve 32
+actual body allocations and 490 random draws, complete actors and scenery,
+all filter axes, stock aliases and partial factory/dressing/stock failures.
+Positive forced-chance and veteran controls are labelled mechanism cases;
+retained natural forest/downs courses do not establish encounter frequency.
+Seven selected-callback controls and a genuine foreign-target dormancy test
+verify that the hidden live World adapter preserves provider identity and does
+not accidentally pin every actor through its cache.
+
+NativeAreaSceneOpenings shares all four complete hollow and annex operations
+with World. Opening changes the same grid, hull, props, entrances and census
+that other local services use. The shared geometry hull was already writable at
+runtime; its type now permits native annex expansion. Found annexes remain in
+the real campaign ledger beyond ordinary zone-memory expiry. Child faces stand
+inside newly exposed space; revealed side entrances keep their original seed.
+Remote discovery preserves native zone-map precedence and existing memory arrays.
+
+Fifty-four archived/current-World/local cold-process comparisons preserve 20
+real body allocations, 375 ordered draws and seven actual partial failures.
+The unchanged canonical source991 downs contains a natural vein hollow. The
+annex control uses complete native generation with explicitly authored nested
+pieces; every installed hollow/annex kind is additionally exercised as a named
+mechanism variant. Full geometry, original source arrays, child faces, unrelated
+scenery, actor state, navigation samples and callback ordering compare. Native
+opening stamps its ledger before furnishing: a failed callback can leave a
+partial find, and repeat opening does not replay or complete it. This extraction
+preserves that behavior; it adds no rollback policy.
+
+Reward callbacks in this oracle record invocation and failure only. Real local
+item/orb delivery, all remaining birth and package controllers, installed source
+issuance and complete area paging still precede seamless activation. The complete
+birth assembler must keep these owners on one census and geometry with genuine
+carried campaign state. Ordinary mire remains localized with navigable bypasses.
+
+Validation for NativeAreaSceneSites and NativeAreaSceneOpenings: all 484 fast
+probes pass without retries in 856.3 seconds. Nine slow and three excluded probes
+were not run. All three project type checks and all 25 smoke simulation episodes
+pass. The full generation matrix passes 2,607 generations with zero failures and
+four existing spacing warnings. The built client passes native structures and
+movement, cave entry, same-hero continuation, cold Continue and exact return;
+its conversation course also passes native gifts, work, once-only rewards and
+Save/Continue. The World audit retains 2,342 unchanged members, changes exactly
+nine native methods and adds four hidden-adapter members; all 380 prior runtime
+module positions remain unchanged. The geometry annotation emits identical
+JavaScript. No structure-siting correction is included in this checkpoint.
+
+
+## NativeAreaSceneHistory and complete encounter births
+
+NativeAreaSceneHistory shares all nine original stage, corpse, saga, nemesis and
+grudge operations with classic World. The local owner uses the same complete
+geometry, census and native factory. Campaign/account history, hired mercenaries,
+faction state, the run-wide manifestation set and the dirty/flush cadence remain
+genuine shared services. Only the corpse array belongs to this area. A fresh
+local history owner must never reset a run-wide manifestation or flush ledger.
+
+Sixty cold archived/current-World/local comparisons preserve 50 native body
+allocations, 318 ordered random draws and 16 reached partial failures. Positive
+carried histories and native worn-item loot are explicit mechanism fixtures;
+canonical forest and downs geometry is retained. The lifecycle controls include
+live replacement of account, death history, meta, mercenaries, zone map, real
+event bus and manifestation set, a second owner sharing actual campaign state,
+and exact dirty thresholds and backward clock behavior. The original 52-course
+complete serialized result remains unchanged after adding eight lifecycle cases.
+Actual World callback selection, cache identity and genuine dormancy pins pass.
+
+NativeAreaSceneEncounterBirth shares all five original placement, density,
+extraction, borough and temper operations with classic World. It reads the whole
+installed encounter registry and its original campaign gates, dimensions, biome
+filters, spent ledgers, targetability, court choices and density. Extraction
+nodes keep their complete bodies, wells, temperament and dressing; boroughs keep
+native props and inhabitants. The retained winning RNG belongs to the area's
+later encounter controller and is never reconstructed from the initial seed.
+
+Thirty-eight cold archived/current-World/local comparisons preserve complete
+canonical source991 forest/downs layouts, 61 real bodies, 468 draws and ten
+reached partial failures. All installed extraction and borough scales, native
+temper fallback identity and partial births are exercised. The enabled account,
+level39 hero, forced chance and explicit cave/objective variants are labelled
+mechanism controls, not evidence of ordinary encounter frequency. Independent
+throw-before-every-observed-operation controls add 727 native/core pairs, 705
+reached failures and 30,763 ordered observations. Fourteen genuine local-owner
+identity/live-state guards, twenty selected-provider controls and two lazy
+campaign controls pass; nine actual World callback/cache controls also pass.
+
+NativeAreaSceneHistory and NativeAreaSceneEncounterBirth preserve allocation,
+publication, ledger and presentation ordering, including native partial failures.
+No rollback, reduced source roster or substitute local campaign is introduced.
+These owners still require later history/encounter updates, reclaim and reward
+execution, the complete birth composition, installed source issuance, runtime
+controllers and whole-owner paging before seamless admission. Ordinary mire
+continues to use localized terrain with navigable bypasses. No structure-siting
+correction is included in this checkpoint.
+
+
+Validation for NativeAreaSceneHistory and NativeAreaSceneEncounterBirth: all
+486 fast probes pass without retries in 888.9 seconds; nine slow and three
+excluded probes were not run. All three type checks and 25 simulation smoke
+episodes pass. The complete generation matrix passes 869 cases at three seeds
+(2,607 generations) with zero failures, four existing spacing warnings and one
+city timing warning under concurrent load. A quiet repeat of all 13 metropolis
+cases at three seeds passes with zero warnings. The built client passes native
+structure/movement/cave entry, same-hero continuation, cold Continue and exact
+return; the conversation course passes native gifts, work, once-only payouts,
+scaled bounds and Save/Continue. The World audit preserves 2,341 existing members
+and all 382 prior runtime import positions, changing exactly fourteen complete
+native operations and adding four hidden adapter members. These tests certify
+the scoped integration, not complete seamless admission or corrected siting.
+
+
+## NativeAreaSceneHarbor and NativeAreaSceneDescent
+
+NativeAreaSceneHarbor shares nine complete native operations with classic World:
+hold lookup, harbor/quay birth, remembered-gate resealing, complete hold dressing
+and services, port mercenary sheets, and whole-party landing. Besieged, opened
+and fallen states still follow the genuine persisted hold. The paired quay keeps
+its real counters, stock and recruiters; gate/causeway/dock relocation uses the
+same mutable structures, grid, exits and doodads as every other scene service.
+
+The harbor owner shares the actual local scene, geometry, population and
+settlement. Its mercenary outpost aliases the settlement owner used by field
+sites and recruiters. Standing chandler shelves, vendor beats and missing-hold
+warning memory belong to the carried run; entering another area must not replace
+or clear them. Landings preserve downed seats, living owned minions, excluded
+stationary constructs, native scatter, story-specific placement, trails and
+movement tethers. No partial party or rebuilt mercenary offer cache is used.
+
+The harbor oracle preserves 114 cold archived/current-World/local comparisons:
+66 actual native bodies, 2,195 ordered draws and nineteen reached failures. Four
+complete source991 harbor/quay layouts are genuine bounded macro discoveries;
+two complete freeport compositions are explicitly labelled mechanism fixtures,
+not natural occurrence evidence. The base 72-case complete output remains
+unchanged. An independent 42-case supplement verifies direct landing defaults,
+clamp bypass, missing/actual higher-story views, mid-party errors and deferred
+merc-sheet callbacks after replacing real scene and campaign state. Twenty-two
+actual World callable/cache controls include genuine false/positive dormancy
+pins. Existing harbortown door/apron warnings remain access follow-up work.
+
+NativeAreaSceneDescent shares three complete native operations: cave Delver
+placement, the shaft's once-minted stock and descent entry. Every original cave,
+objective, package, level, dimension, depth and special-ground gate remains.
+Native stock uses the real settlement's gem/support policy and the original item
+allocator. Re-entry projects the same retained shelf after purchases; it never
+rerolls sold cargo. The shaft site is the actual geometry field, while the run
+and shelf map remain shared campaign state. Entry preserves the same run object,
+return platform, survival map and native light refill, including partial errors.
+
+Thirty-seven cold archived/current-World/local comparisons preserve twelve
+real bodies, 904 draws, twelve reached errors and the exact 950,951-byte complete
+result, including item identities and allocator continuation. Fixtures use an
+actual generated rootways cave and the real native descend transition into a
+boundless descent area. The explicit entrance seeds 4242 and 4243 retain both
+the native chance miss and the positive candidate. This is bounded mechanism
+selection with an enabled level39 campaign, not a claim of natural mouth
+frequency. Separate labelled shaft-stock keys exercise a real support outcome
+without altering installed chance or item sources. Eleven actual World callback
+controls, live run/site/shelf aliases, three native setters and dormancy checks
+pass. Root independently verifies every original operation body against Git.
+
+NativeAreaSceneHarbor and NativeAreaSceneDescent supply the exact birth positions
+in NativeAreaBirth, preserving remembered-door precedence, stock publication,
+body allocation, item IDs, random continuation and native partial failures.
+Later siege/depth/light/spawn controllers, transactions and rewards, coastal
+source issuance, complete birth composition, runtime dispatch and whole-owner
+paging remain required. These owners do not activate seamless areas or claim
+complete physical access to every authored structure. Ordinary mire remains
+localized with neutral bypasses.
+
+NativeAreaSceneHarbor and NativeAreaSceneDescent checkpoint validation: all three
+type checks and all 488 fast probes pass without retries (881.7 seconds). Nine slow
+and three excluded probes were not run. Generation passes 2,607 cases with zero
+failures, four retained spacing warnings and one concurrent metropolis timing
+warning; the quiet 13-case/three-seed metropolis repeat has no warnings. All 25
+simulation episodes pass. The built client passes native cave entry, same-hero
+Continue, exact return, native structure frames and conversation/save courses.
+The World audit retains 2,347 unrelated members and all 384 prior runtime module
+positions; twelve exact delegates and four hidden adapter members are the only
+member changes. This validates the scoped integration, not full area activation.
+
+## NativeAreaSceneTheater
+
+NativeAreaSceneTheater shares the nine complete native ambient-activity birth
+and helper operations with classic World. It retains native faction context,
+concurrency, event-body creation, pour limits, tag lookup, entry and near-point
+helpers. The same scene, geometry, population, environment and ecology must be
+supplied; the environment state is shared with ecology, and the campaign clock
+remains live. The area host exposes the complete installed NativeTheaterHost
+contract. Four existing activity modules narrow only their structural types;
+their emitted JavaScript remains identical.
+
+The oracle preserves 67 cold archived/current/local comparisons: 168 complete
+bodies, 584 ordered draws and four reached partial failures. Full output is
+42,689,894 bytes, SHA256 42cb96d1361d8a0eb6d462a20448fdfc2f0385ee99a1a5070fcc4a53147b5d0f.
+All installed activity kinds retain their own rows and recipes. Canonical native
+forest/downs fixtures remain intact; a complete explicit native sinter-terraces
+fixture reaches readiness at native clock 417, producing all six real pilgrims
+with their actual lamps and held parts. This is a face mechanism control, not
+evidence of natural geographic frequency. Distinct hero/body identities are
+asserted independently of output equality.
+
+An independent 27 cold comparisons add 39 bodies, 112 draws and 18 reached
+errors. They cover selected factories, after-publication failures, retained
+ActiveTheaterRun host identity and later tick/end behavior after replacing the
+census or clock. Default context evaluates exactly once for absent or explicit
+undefined arguments, even when its provider itself returns undefined. Explicit
+context bypasses that provider. The World forwarding default preserves native
+function arity while leaving actual context evaluation to the shared operation.
+Twenty actual World callback selection/receiver controls, live field aliases,
+hidden cached-host identity and real/false dormancy-pin controls are included.
+
+NativeAreaSceneTheater requires genuine movement, threat, radiance, dress, gem
+delivery, notice and retirement services. Their explicit contract does not
+implement those later runtime services. Complete birth composition, authentic
+source installation, update/reward execution, whole-owner paging and the
+playable two-area Continue course remain required before full area activation.
+Ordinary mire remains localized with traversable neutral bypasses.
+
+NativeAreaSceneTheater checkpoint validation: all three type checks pass. The
+full no-retry fast run passes 488 probes in 921.0 seconds and finds one obsolete
+pilgrimage source assertion naming World instead of NativeTheaterHost. Updating
+only that exact interface-name assertion makes the complete pilgrimage probe
+pass; runtime code remains unchanged from the broad run. Nine slow and three
+excluded probes were not run. Generation passes 2,607 cases with zero failures
+and four retained spacing warnings; all 25 simulation episodes and the built
+native entry/Continue/return and conversation courses pass. The World audit
+retains 2,354 unrelated members and all 386 prior runtime module positions,
+with nine exact delegates and two hidden adapter members.
+
+## Whole resolved structure placement
+
+Native plan placement now checks the entire resolved footprint and radius-15
+door approaches against native rectangular/elliptical bounds and actual finite
+walk-grid backing. A boundless arena has no invented outer rim, but its stamped
+plan must still fit the backing it actually owns. Invalid placement moves the
+same resolved plan on a distance/y/x ordered lattice, without selecting another
+blueprint or drawing more random values. Search stops after 65,536 examined
+seats and refuses explicitly if no whole placement is admitted. Reservations,
+retained collision shapes, door topology, hazards and native severance checks
+remain part of admission. The search bound is not a frame-time guarantee.
+
+Opening prior doors for this topology check uses a detached grid. Live doors,
+geometry and random state stay untouched until placement. Original valid
+explicit fixtures retain their carve-first behavior; pre-stamp walkability is
+not substituted for the building's authored carving. fixturePlacements records
+the actual structure id, rectangle, requested position, center and occurrence
+index. Duplicate references remain distinct authored occurrences. The field is
+absent when there are no receipts. A relocated main held-settlement structure
+updates crusadeWorksAt to its real center; every unrelated preparation read,
+write and random operation retains the archived original behavior.
+
+The durable regression retains 20 complete native preparation courses and five
+full natural generation boundaries, 25 complete random-draw tape hashes, three
+transported main anchors and ten absent-receipt controls. Twelve complete scenes
+prove 2,134 bidirectional swept legs and 13,610 real World.moveActor calls at
+fixed 1/60 with the ordinary radius-15 hero and all scenery retained. Only real
+native doors are opened. Bounds, ellipse, cropped/wider backing, duplicate
+occurrences, ordered search and work exhaustion have explicit controls. Exact
+axial swept-grid clearance preserves cell-width entrances in all four door
+directions; a real blocking cell still refuses the selected seat. Extra
+random consumption, empty receipt publication and stale anchors each fail
+independent negative checks. This is movement evidence, not full AI/update or
+browser performance certification.
+
+The fixed, unfiltered natural corpus covers 128 ordinary targets plus 15
+available campaign-held cases across four seeds, 33 faces, 22 biomes and 15
+layouts. No generation throws; all structure counts/kinds remain. Eight complete
+layouts change under the new placement. Optional later features still obey their
+original spatial predicates: one moved bastion causes an optional blood_mere
+to exhaust its original 18 attempts. An archived downs watchtower also moves
+30 pixels, retaining all 246 props and its optional hollow. The original archive
+is retained beside an explicit corrected
+whole-output hash. All direct compiler/sidechannel/continuation comparisons
+remain. Independent real movement succeeds for that watchtower both before
+and after relocation; its movement is a conservative approach-rule consequence,
+not evidence that the original tower was inaccessible.
+
+Known original explicit-site failures remain visible: some held buildings carve
+onto disconnected ground; later longhouses or market rows can overlap earlier
+approaches or remove a previously emitted doorway. They require resolved
+post-carve connectivity and protection of complete prior structures/approaches.
+The exploratory correction for those cases is not part of this checkpoint.
+
+A first broad run exposed an overconservative sampled grid clearance that
+exhausted placement in a native bounty destination. The corrected exact sweep
+preserves tangent passage without enlarging the player radius. The actual bounty
+course again loads, spawns its marks, resolves the deed and pays at the board.
+The same correction retains the archived optional hollow; the three unchanged
+sight/local-area/ambient fixture counts require no weakened assertions.
+Ordinary mire remains localized, with neutral routes around its patches.
+
+The final fixturePlacements checkpoint passes all 490 fast regression probes
+without retries, all three type-check configurations, 25 simulation episodes,
+and both built-client entry/Continue/return and conversation courses. The wider
+generation sweep passes 8,690 cases. Its 28 spacing warnings reproduce on the
+same 23 original-generator cases; the concurrent metropolis timing warning
+is checked separately in an isolated 130-case metropolis replay.
+
+
+## Native coastal generation ownership
+
+NativeAreaSceneCoast shares the complete classic coastline, island and sea-port
+operations with World. It streams actual continent/biome coast geometry, mints
+the installed island definitions, preserves each island's eight shore discs and
+shared land metadata, and builds complete harbor anchor/quay/causeway networks.
+No alternate face pool, body limit, port cap or substitute mint is introduced.
+Native frontier labels, road constraints, dimension courses, boundary gates and
+biome melds retain their original source predicates and ordering.
+
+The local owner binds the same scene census and geometry as the other native
+area owners. Campaign zone/cave graphs, WorldSim, nextGenId, manifest, knowledge
+sets and warning ledger stay live and shared. Voyage is carried from the native
+birth stage's actual stash restoration; this owner does not create a new run.
+Sighted ports gain knowledge at the original point, chart hooks receive the
+actual local view, and coast geometry is published only after label updates.
+Failures retain the original earlier graph, allocator and discovery effects.
+
+The durable archive compares all 20 complete original bodies, parameter defaults
+and seed hashing. Forty-four cold original/World/local courses cover all seven
+natural island types, three sea classes and four ships, including repeats, exact
+restream thresholds, replaced graphs, saved legacy ports, half-built pairs and
+six reached partial failures. Complete graph/geometry/state receipts match over
+1,981 draws and 155 real chart callbacks. Twenty-five World callback controls
+also retain selected callables and receivers; cached views stay out of the
+enumerable controller roots.
+
+This closes coastal birth ownership, not the complete seamless-area boundary.
+Voyage and sea tables/memos, climate/atlas/relief policies, worldgen providers and
+the campaign route guard still require a complete native source session. The
+base geography capture alone does not authenticate them. Sailing updates, ship
+combat, full island interior population/controllers, whole-owner persistence and
+the complete two-area Continue course remain required before activation.
+
+The NativeAreaSceneCoast checkpoint passes all three type configurations,
+60 native probes without retries, ten additional travel/dimension/harbor probes,
+25 simulation episodes and both built-client entry/Continue/return courses.
+Generation QA passes 2,607 cases with the four recorded spacing warnings and one
+concurrent-load timing warning. The preceding structure checkpoint's isolated
+130-case metropolis replay had no timing warning; this is not an FPS benchmark.
+
+## Native arrival integration
+
+NativeAreaSceneArrival now supplies the three remaining small area-birth helpers:
+arrival safety, account/run defeated-boss lookup and nearest eligible zone. Its
+geometry and actor census must be the same local objects; campaign records remain
+live across replacement. Classic World delegates to the same original operations
+and original arrival policy. Passive, confined, dead, untargetable and service
+bodies retain their native exemptions, including cramped-entry fallback ordering
+and the original first-in-order distance tie. No new encounter or terrain policy
+is introduced by this extraction.
+
+The retained original-method oracle compares three full native layouts (two
+archived and fresh Lastlight), 12 original/classic/local triples with 120 actual
+factory bodies, six reached partial failures and six explicit cramped-entry
+controls. It also checks replaced census/campaign roots, exact source bodies,
+selected callback receivers, constructor refusals and invisible adapter caches.
+The complete ordered runtime registry, genuine source-session issuer, full scene
+execution and persistent two-area return/Continue still precede activation.
+
+Arrival validation: all three type configurations, 492/492 fast probes without
+retries, 2,607 generation cases with no failures, 25 smoke simulation episodes,
+the production preview build and both native-generation and conversation
+Save/Continue client courses passed. Generation retained the four known spacing
+warnings and one concurrent metropolis timing warning. Nine slow and three
+excluded probes were not run. Full seamless-area activation remains separate.
+
+## Native Titan area ownership
+
+NativeAreaSceneTitans instantiates the complete original TitanRuntime against an
+area's actual geometry, native population factory and carried campaign journey.
+The installed controller's executable is unchanged; its explicit host covers
+terrain warnings, solid travelling bodies, native fire/ice/storm hazards, safe
+crossing admission, scenery felling, wounds and engagement, departure of the
+whole anatomy, repeated network scenes and cleanup. NativeSceneTerrain shares
+the original scenery-felling and ground/bridge rebuild operations with World.
+
+The complete retained oracle covers all three native Titan definitions on two
+whole native layouts, 42 original/classic/local triples, 78 real factory bodies,
+12 reached partial failures and exact leave/reenter wound persistence. It compares
+all 96,498,471 bytes of ordered complete records through a streaming digest; it
+does not trim geometry or actor state for that comparison. Campaign events in
+these controls are explicit fixtures, not a claim about natural event frequency.
+
+This makes the controller locally ownable. Full ordered area dispatch, native
+hazard damage and rewards in that dispatch, source-session issuance, whole-owner
+paging and the playable two-area Save/Continue course remain required.
+
+Titan validation: all three type configurations, 62/62 native regressions without
+retries, eleven related terrain/persistence/boss probes, 2,607 generation cases
+with no failures, 25 smoke episodes, the build and both client Save/Continue
+courses passed. Generation reports four known spacing and three timing warnings;
+the isolated stalkwood rerun is clear, while metropolis retains a timing warning.
+These changes do not occur in GenQA's executable import graph. The preceding
+arrival checkpoint passed all 492 fast probes; a new full 493-probe run was not
+performed after the Titan integration.
+
+
+## Native runtime event births
+
+NativeAreaSceneRuntimeBirth supplies the complete 26 native event-placement
+entry points and their 17 transitive helpers. The original 43 bodies and default
+arguments match local main 651d7e05. Classic World uses those same operations;
+2,330 other World members and the original emitted import order are unchanged.
+The local binding shares geometry, census, population, generation anchors and
+theater services, plus live campaign simulation, ledger, manifest and graph.
+Private source policies remain the actual World lexical values behind lazy,
+nonenumerable adapters. Each area's materialization state and fracture cursor
+must be carried across lifecycle transitions, not reconstructed from defaults.
+
+Coverage includes warbands, invasions, crusades, underworld courts/fronts,
+world bosses, contagion, deepwinter, infestations, broods and swarm wakes,
+candle courts, starfall, mycelia, holdfasts, tomb seals, hunts, fractures/rifts,
+rituals, amalgamations, observers, vendettas, caravan returns and sky geysers.
+The cold original/classic/local oracle retains two complete native layouts and
+compares 116 courses, including positive bodies, repeat placement, actual campaign
+restores, native source predicates, partial factory and terrain failures, callback
+selection and hidden cache behavior. Eligible-source mechanism fixtures are
+explicit controls, not measurements of natural biome or event frequency.
+
+This completes these birth owners, not the full ordered registry dispatcher,
+ongoing controllers/rewards, immutable source-session issuance, whole-owner
+paging or full seamless area admission. A playable multi-zone return and cold
+Continue course is still required before claiming native content parity.
+
+Runtime birth validation: all three type configurations, all 2,607 generation
+cases (four known spacing warnings), 25 smoke episodes and both built-client
+entry/Continue/return courses passed. The complete 116-course oracle matches
+128,259,339 serialized bytes per lane, with 352 actual bodies, 2,446 draws and
+58 reached partial failures. The no-retry fast sweep passed 493/494 probes;
+its geometry oracle still borrowed actorById from current World in its archived
+control. Pinning that transitive helper to the same original revision and
+rebinding the instrumented current cache restored all six geometry comparisons,
+partial-failure courses and callback checks. The focused rerun passed; the entire
+494-probe sweep was not repeated after that test-only correction.
+
+## Native hierarchy direction
+
+The intended nesting is world mass -> biome regions -> native zones -> streamed chunks.
+A region is a native geographic biome territory; a zone is an actual native
+ZoneDef and its persistent ID, objectives, event memberships, neighbors and map
+knowledge. Chunks partition that zone's physical content for streaming and
+rendering. Loading, unloading or subdividing a chunk cannot change a zone's
+identity, reroll its event, reset its objective or grant a second reward.
+
+Region events may span several zones. World weather fronts move through physical
+space and affect each region, zone and chunk they cover; their ownership and
+clock do not transfer whenever the player crosses a chunk boundary. Biome blends,
+watercourses, roads and mountain passes must cross chunk seams continuously.
+Surface and side-area owners retain their native dimension and parent links.
+
+The revealed terrain map is the local view of those chunks. Zooming outward
+should resolve to zone footprints and the native event/quest markers, then biome
+regions in the same world. It must read the same saved source identities and
+knowledge without revealing unexplored terrain merely by zooming. Existing
+fixed-size MassHierarchy cells remain an earlier experimental policy; they are
+not a substitute for native biome territory and actual native zone membership.
+The native identity/extent binding, scoped event projection and map transition
+still need implementation and validation; this checkpoint does not claim them.
+
+
+## Native ordered runtime registry
+
+NativeSceneRuntimeRegistry preserves all 36 native runtime rows in their
+original order and the exact live activation dispatcher. Cave-native, entry-only
+and special-arena ownership rules remain the original ones; reset stays at its
+original point in NativeAreaBirth. Classic World and the local scene execute the
+same functions. The two bodies match local main 651d7e05; 2,375 other World
+members and all 391 prior emitted imports remain unchanged.
+
+NativeAreaSceneRuntimeRegistry binds 26 genuine event births, the real Titan
+controller, six geometry collections, 32 existing birth-state roots, the shared
+descent timer and 35 additional carried controller fields. It checks scene,
+geometry, population, simulation and ledger identities. No constructor clears
+these roots. A second binding retains existing sets, wounds and controller refs;
+chunk residency changes must reuse that zone's owners instead of running a new
+zone birth. New-state factories are only for a genuinely new owner.
+
+The shared full-layout fixture preserves the preceding birth oracle and adds
+ordered entry/live scenarios for ordinary land, special arenas, cave pockets,
+repeated activation and reached partial failures. The source oracle independently
+pins both original bodies, while the eligibility matrix checks dispatch and
+failure order. This completes the registry binding, not full ongoing controller
+updates, combat/reward execution, authenticated source issuance, whole-area
+paging or native biome-region/zone/chunk mapping and map zoom.
+
+Registry validation: all three type configurations, 64/64 native probes without
+retries, six related event/controller probes, 2,607 generation cases with zero
+failures, 25 smoke episodes, the build and both isolated client Continue courses
+passed. Generation reported four known spacing warnings and one metropolis
+timing warning. The complete cold registry oracle compares 34 courses and
+38,573,081 serialized bytes per lane: 101 real factory bodies and 16 reached
+partial effects. A full 495-probe sweep was not repeated after this registry
+change; the preceding 494-probe result and geometry-oracle correction are
+reported above.

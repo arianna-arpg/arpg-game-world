@@ -81,7 +81,7 @@ try{
  far.player.pos={...rr.at};far.massRuntime!.update(far,true);
  const fin=guts(far).puzzles.find(r=>r.id===run.id)!;assert.ok(fin);
  knock(far,fin,[1,3]);assert.equal(fin.done,true);assert.ok(far.massRuntime!.siteActivity(p.id)!.complete);
- assert.ok(far.massRuntime!.rewards.pending,'solved native riddle uses the ordinary shared discovery choice');
+ assert.equal(far.massRuntime!.snapshot(far).rewards,undefined,'native riddle does not issue a retired support choice');
  const paid=far.massRuntime!.snapshot(far),done=resume(far),proof=guts(done).puzzles.find(r=>r.id===run.id)!;
  assert.deepEqual(done.massRuntime!.puzzles.snapshot(done),paid.puzzles);
  assert.equal(canonical(done.massRuntime!.snapshot(done).contents),canonical(paid.contents));

@@ -4,6 +4,7 @@ import type { MassAdventure } from '../src/worldmass/preset';
  * assertions or letting today's repeated activity recipes leak into old saves.
  * Call only on mutable fixture clones whose schema predates streaming owners. */
 export function beforeMassStreaming(config:MassAdventure):MassAdventure {
+ delete config.terrain.landforms; // landform composition did not exist in these historical schemas
  const finite=new Set([...(config.journey?.destinations??[]),...(config.journey?.extensions??[]),
   ...(config.journey?.stops??[])].map(p=>p.content));
  const repeated=new Set(config.terrain.places.filter(p=>{

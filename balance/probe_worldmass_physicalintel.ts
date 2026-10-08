@@ -9,7 +9,18 @@ import { canonical, massDigest } from '../src/worldmass/random';
 const undo=seedGlobalRandom(901743);
 try{
  const world=makeSimWorld('warrior',901743);world.startWorldMass(901743);const mass=world.massRuntime!,geo=mass.geography!,h=geo.hierarchy,intel=geo.intel;
- const at=address('surface','0','0',-8100,8100,960),beacon=geo.plannedAt(at);assert.ok(beacon?.context.zone.objective.kind==='beacon');
+ // Discover a current natural source without populating or changing its terrain.
+ let beacon:Readonly<GeographicPlan>|undefined;
+ for(let r=0;r<=16&&!beacon;r++)for(let y=-r;y<=r&&!beacon;y++)for(let x=-r;x<=r&&!beacon;x++){
+  if(Math.max(Math.abs(x),Math.abs(y))!==r)continue;
+  const p=geo.plannedAt(address('surface','0','0',x*5400+2700,y*5400+2700,960));
+  if(p?.access&&p.context.zone.objective.kind==='beacon'){
+   const targets=intel.candidates(p.owner,intel.policy(p.owner,p.context.zone)).map(o=>geo.plannedAt(o.center))
+    .filter(t=>t?.access&&t.context.zone.objective.kind!=='beacon');
+   if(targets.length>=5)beacon=p as GeographicPlan;
+  }
+ }
+ assert.ok(beacon?.context.zone.objective.kind==='beacon','current natural beacon must exist');const at=beacon.owner.center;
  const context={...beacon.context,zone:{...beacon.context.zone,objective:{...beacon.context.zone.objective,revealCount:2}}};
  const {owner:beaconOwner,...beaconDefinition}=beacon;
  h.enroll(beaconOwner,'objective-access','worldmass/geographic-access-v1',{...beaconDefinition,context},null,0);

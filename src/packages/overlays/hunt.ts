@@ -449,7 +449,7 @@ registerMarkerSource((world: World): MapMarker[] => {
 // migrating beast's card follows it live (the kind's copy re-reads here).
 registerBountySource({
   id: 'hunt',
-  census(world: World) {
+  census(world: import('../../data/bountyboard').BountyReadContext) {
     const h = world.sim.huntField?.peek();
     if (!h || !h.revealed || h.lifeFrac <= 0) return [];
     const z = world.zoneMap[h.currentZoneId];

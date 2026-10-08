@@ -1,3 +1,4 @@
+import { massTerrainRegions } from './contracts';
 import type { World, Chest } from '../engine/world';
 import { MassProcessionGameplay } from './processionGameplay';
 import type { NativeMassProcessionSource } from './processionTypes';
@@ -154,7 +155,7 @@ export class MassGeographicGameplay {
     }
     reservations.circles=reservations.circles.filter(b=>Math.abs(b.x)<=halfSpan+150+b.radius&&Math.abs(b.y)<=halfSpan+150+b.radius);
     const terrain=this.mass.generator.spec,regions:GeographicPlanInput['regions']={};
-    for(const id of new Set([...terrain.surfaces.map(s=>s.region),...terrain.places.flatMap(p=>p.surface?[p.surface.region]:[])])){
+    for(const id of new Set(massTerrainRegions(terrain))){
       const r=regionKind(id);regions[id]={walkable:!!r?.walkable,dry:!!r?.walkable&&!r.standStatusDeep&&!['water','lava','chasm','bog','swamp'].includes(id)};
     }
     const input:GeographicPlanInput={compiler:GEOGRAPHIC_PLAN_COMPILER,policy:MASS_ACCESS_POLICY,run:this.mass.generator.run,terrain,owner,context,selection:rows,

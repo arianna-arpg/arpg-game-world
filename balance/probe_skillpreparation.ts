@@ -22,15 +22,16 @@ const snapshot = (w: ReturnType<typeof create>) => JSON.stringify({
 });
 const uid = (w: ReturnType<typeof create>, id: string) => findBagGem(w.meta.items,'skill',id)!.uid;
 const w=create(), untouched=snapshot(w), html=skillPreparationHtml(w,labels);
-assert.match(html,/Ready for the road/); assert.match(html,/Place on 2/); assert.match(html,/Place on 3/);
+assert.match(html,/<details data-skill-preparation/);assert.match(html,/Open pack/);
+assert.match(html,/Drag a flask Memory/);assert.doesNotMatch(html,/data-prepare-skill|data-prepare-slot|<details[^>]* open/);
 assert.equal(snapshot(w),untouched,'reading cannot fit, fill or grant');
 assert.ok(dialogueConditionMet(w,{fact:'mireillePreparingFlasks'}));
-w.requestMeta({t:'learn',uid:uid(w,'life_flask'),slot:3,emptyOnly:true});
+w.requestMeta({t:'learn',uid:uid(w,'life_flask'),slot:3});
 assert.equal(w.player.skills[3]?.def.id,'life_flask');
 assert.match(skillPreparationHtml(w,labels),/Mana Flask/);
 assert.doesNotMatch(skillPreparationHtml(w,labels),/<strong>Life Flask/);
 assert.ok(w.mireilleGiftLesson());
-w.requestMeta({t:'learn',uid:uid(w,'mana_flask'),slot:4,emptyOnly:true});
+w.requestMeta({t:'learn',uid:uid(w,'mana_flask'),slot:4});
 assert.equal(skillPreparationHtml(w,labels),'');
 for(let i=0;i<10;i++)w.update(1/60);
 assert.equal(w.account.ledger[LEDGER_FLASK_LESSON],1);
@@ -42,7 +43,7 @@ w.player.charges.set('flask_life',0);
 for(let i=0;i<10;i++)w.update(1/60);
 assert.equal(w.player.charges.get('flask_life'),0,'the presentation cannot repeat the fill');
 assert.ok(w.unlearnSkill('life_flask'));assert.equal(skillPreparationHtml(w,labels),'','finished lesson never reopens');
-console.log('PASS native dwell gift, pure suggested slots, two validated placements, once-only fill/graduation and intentional removal');
+console.log('PASS native dwell gift, optional instructions, two native pack placements, once-only fill/graduation and intentional removal');
 
 const s=create(), life=uid(s,'life_flask');
 let before=snapshot(s);
@@ -63,21 +64,13 @@ assert.equal(s.meta.knownSkills.get('life_flask')?.rarity,'common','ordinary exp
 console.log('PASS stale occupied/known, dead/downed, invalid policy; native intentional replacement unchanged');
 
 const m=create();
-m.account.skillSlotMemory={life_flask:7,mana_flask:6};
-assert.match(skillPreparationHtml(m,labels),/Place on 6/);assert.match(skillPreparationHtml(m,labels),/Place on 5/);
-const original=SKILLS.life_flask.requirements;
-try {SKILLS.life_flask.requirements={strength:9999};assert.match(skillPreparationHtml(m,labels),/Requirements not met/);
- const before=snapshot(m);m.applyAction(m.localSeat,{t:'learn',uid:uid(m,'life_flask'),slot:7,emptyOnly:true});assert.equal(snapshot(m),before);
-} finally {SKILLS.life_flask.requirements=original;}
-assert.match(skillPreparationHtml(m,['a','b','c','<img onerror=x>','z']),/Place on 8/);
-m.account.skillSlotMemory={};
-assert.ok(skillPreparationHtml(m,['a','b','c','<img onerror=x>','z']).includes('&lt;img onerror=x&gt;'));
-assert.ok(!skillPreparationHtml(m,['a','b','c','<img onerror=x>','z']).includes('<img'));
-m.player.skills=m.player.skills.map(s=>s??m.player.skills[0]);
-assert.match(skillPreparationHtml(m,labels),/No empty skill slot/);
+const beforeGuide=snapshot(m), guide=skillPreparationHtml(m,labels,true);
+assert.doesNotMatch(guide,/Open pack|data-prepare-skill|data-prepare-slot/);
+assert.match(guide,/Skills/);assert.match(guide,/Life Flask/);assert.match(guide,/Mana Flask/);
+assert.equal(snapshot(m),beforeGuide,'instructions inside inventory are read-only too');
 m.clientActionHook=()=>{};assert.equal(skillPreparationHtml(m,labels),'');m.clientActionHook=undefined;
 SKILL_PREPARATION_CFG.enabled=false;assert.equal(skillPreparationHtml(m,labels),'');SKILL_PREPARATION_CFG.enabled=true;
-console.log('PASS remembered binds, native requirements, escaped player labels, full bar, mirror and optional presentation');
+console.log('PASS optional in-pack guidance cannot seat Memories, mirrors stay quiet and disabling only hides guidance');
 
 const packed=makeSimWorld('magician',771);
 const keeper=packed.createMonster('townsfolk_innkeep',1,'player');keeper.pos={...packed.player.pos};packed.actors.push(keeper);
@@ -87,6 +80,6 @@ while(freeCellCount(packed.meta.items)>1) {
 for(let i=0;i<100;i++)packed.update(1/60);
 assert.ok(packed.mireilleGiftOwed());assert.equal(packed.mireilleGiftLesson(),null);
 const packedBefore=snapshot(packed),waiting=skillPreparationHtml(packed,labels);
-assert.match(waiting,/Open pack/);assert.match(waiting,/need room/);
+assert.match(waiting,/Open pack/);assert.match(waiting,/Make room/);
 assert.doesNotMatch(waiting,/data-prepare-skill/);assert.equal(snapshot(packed),packedBefore);
 console.log('PASS an undelivered full-pack gift shows recovery, never a nonexistent skill');

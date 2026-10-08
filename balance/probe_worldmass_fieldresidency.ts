@@ -94,9 +94,10 @@ const bad=makeSimWorld('warrior',797);
 assert.throws(()=>new WorldMassRuntime(791,'bad',invalid.config,invalid).attach(bad,invalid),/Unknown saved|field address/);
 console.log('PASS invalid policies and displaced saved identities are refused');
 
-const generatedExamples:Record<string,{seed:number;center:import('../src/worldmass/address').MassAddress}>={};
+const generatedExamples:Record<string,{seed:number;runId:string;center:import('../src/worldmass/address').MassAddress}>={};
 for(const seed of [42,713,991]){
  const runtime=new WorldMassRuntime(seed,'field-country-'+seed);
+ runtime.attach(makeSimWorld('warrior',seed)); // Survey the actual opening and its reservations.
  const ids=new Set(['mending-hollow','red-cairn','still-circle']);
  const found=new Map<string,import('../src/worldmass/contracts').MassPlace>();
  const pages:{at:import('../src/worldmass/address').MassAddress;ids:string[]}[]=[];
@@ -108,13 +109,14 @@ for(const seed of [42,713,991]){
  assert.ok(found.size>0,'each seeded region contains repeated field destinations');
  console.log('Country field seed '+seed+': '+[...new Set([...found.values()].map(p=>p.content))].sort().join(', '));
  const reverse=new WorldMassRuntime(seed,'field-country-'+seed);
+ reverse.attach(makeSimWorld('warrior',seed+1000));
  for(const page of pages.reverse())assert.deepEqual(reverse.placesInCell(page.at).map(p=>p.id),page.ids);
  for(const p of found.values()){
   assert.ok(runtime.placesInCell(p.center).some(q=>canonical(q)===canonical(p)));
   assert.equal(runtime.generator.terrainAt(p.center).region,'ground');
   const local=localOffset(p.center,{...runtime.origin,x:0,y:0},960);
-  assert.ok(!runtime.journey?.reserves(local,p.radius));
-  generatedExamples[p.content]??={seed,center:p.center};
+  assert.ok(runtime.journey&&!runtime.journey.reserves(local,p.radius));
+  generatedExamples[p.content]??={seed,runId:runtime.generator.run.runId,center:p.center};
  }
 }
 assert.deepEqual(Object.keys(generatedExamples).sort(),['mending-hollow','red-cairn','still-circle']);
@@ -122,7 +124,7 @@ console.log('PASS three repeated native field families across three seeds, rever
 console.log(JSON.stringify(generatedExamples));
 
 for(const [id,example] of Object.entries(generatedExamples)){
- const world=makeSimWorld('warrior',812),runtime=new WorldMassRuntime(example.seed,'country-continue-'+id);
+ const world=makeSimWorld('warrior',812),runtime=new WorldMassRuntime(example.seed,example.runId);
  runtime.attach(world);
  const place=runtime.placesInCell(example.center).find(p=>p.content===id)!;
  world.landPartyAt(localOffset(place.center,{...runtime.origin,x:0,y:0},960));runtime.update(world,true);

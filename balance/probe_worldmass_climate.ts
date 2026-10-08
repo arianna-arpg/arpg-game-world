@@ -13,7 +13,7 @@ import { MONSTERS } from '../src/data/monsters';
 import { presenceTable } from '../src/engine/presence';
 
 const restore=seedGlobalRandom(62042),config=massAdventure();
-assert.equal(config.terrain.version,7);
+assert.equal(config.terrain.version,8);
 for(const family of MASS_BIOME_FAMILIES){
  const content=config.content.find(c=>c.id===family.id)!;assert.ok(content);
  for(const row of content.levels!){
@@ -39,14 +39,15 @@ for(const seed of [42,713,991]){
  assert.equal(canonical(gen.terrainAt(edge)),canonical(gen.terrainAt(address(edge.dimension,'-999999999999999',edge.cy,-.001,0,960))));
 }
 assert.deepEqual([...found.keys()].sort(),MASS_BIOME_FAMILIES.map(f=>f.id).sort());
-for(const id of ['ice','mud','swamp'])assert.ok(regions.has(id),id+' absent from survey');
-console.log('PASS seeded surveys find every climate and native ice/mud/swamp; reverse reads and extreme page boundaries agree');
+for(const id of ['ice'])assert.ok(regions.has(id),id+' absent from survey');
+console.log('PASS seeded surveys find every climate and native ice; localized wet patches have their own full-footprint probe; reverse reads and extreme page boundaries agree');
 console.log(JSON.stringify(Object.fromEntries(found)));
 
 function fixture(biome:string,region:string,explicit=true):MassAdventure{
  const c:MassAdventure=JSON.parse(canonical(config));
  delete c.settlement;delete c.journey;delete c.progression;
  delete c.nativeCountry;delete c.geography; // this fixture supplies all its terrain/content; native country is tested separately
+ delete c.terrain.patches;delete c.terrain.landforms; // fixed surface fixture owns no geographic terrain layers
  c.terrain.fields=[];c.terrain.places=[];c.content=[];c.startRadius=0;c.populationRadius=0;c.maxPopulation=0;c.pageRadius=1;
  c.terrain.surfaces=[{id:'fixture',priority:0,when:[],region,biome,color:'#65757a'}];
  const row=JSON.parse(canonical(MASS_CLIMATE_ECOLOGY.find(r=>r.id===biome)!));

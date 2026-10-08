@@ -79,7 +79,7 @@ try{
  const paid=far.massRuntime!.snapshot(far),done=resume(far);
  assert.deepEqual(done.massRuntime!.puzzles.snapshot(done),paid.puzzles);
  assert.equal(canonical(done.massRuntime!.snapshot(done).contents),canonical(paid.contents));
- assert.deepEqual(done.massRuntime!.rewards.snapshot(),far.massRuntime!.rewards.snapshot());
+ assert.deepEqual(done.massRuntime!.legacyRewards.snapshot(),far.massRuntime!.legacyRewards.snapshot());
  const proof=guts(done).puzzles.find(r=>r.id===fin.id)!;
  assert.ok((proof.state.litUntil as number[]).every(t=>t===Infinity));
  assert.ok(proof.nodes.every(n=>n.statuses.some(s=>s.id===PUZZLE_CFG.kindleStatus&&s.remaining>0)));
@@ -87,7 +87,7 @@ try{
  assert.equal(done.player.statuses.some(s=>s.id==='attuned_lightning'),false,'Continue restores solved dressing without replaying the transient reward wash');
  knock(done,proof,[0,1,2,3,4,5]);
  assert.equal(canonical(done.massRuntime!.snapshot(done).contents),canonical(paid.contents));
- assert.deepEqual(done.massRuntime!.rewards.snapshot(),far.massRuntime!.rewards.snapshot());
+ assert.deepEqual(done.massRuntime!.legacyRewards.snapshot(),far.massRuntime!.legacyRewards.snapshot());
  assert.equal(done.flashes.length,resumedFlares);assert.equal(done.texts.length,resumedWords);
  assert.equal(done.player.statuses.some(s=>s.id==='attuned_lightning'),false);
  console.log('PASS distant native Continue, broad-hit solve, exact coal flares/kindling, physical reward glint and wash; solved dressing survives without reward/cue/wash replay');

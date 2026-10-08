@@ -1,7 +1,10 @@
+import { MassLandforms, validateMassLandforms } from './landforms';
+import { MassNativeSubstrate, validateNativeSubstrate } from './nativeSubstrate';
 import { address, cellKey, floorDiv, latticeAt, localOffset, moveAddress, validSpan, type MassAddress, type MassCell } from './address';
 import type { MassPlace, MassPlaceRecipe, MassRange, MassRun, MassSpec, MassTerrain } from './contracts';
 import { canonical, freezeData, massDigest, massRandom, streamSeed } from './random';
 import { massNoise } from './noise';
+import { MassTerrainPatches, patchBoxIntersects, validateMassPatches, type MassPatchBox } from './terrainPatches';
 
 const compare = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
 function unique(ids: readonly string[], label: string): void {
@@ -18,7 +21,8 @@ function ranges(rows: readonly MassRange[], fields: Set<string>): void {
     if ((r.min ?? -Infinity) >= (r.max ?? Infinity)) throw new Error('Empty terrain range');
   }
 }
-export function validateMassSpec(spec: MassSpec): void {
+export function validateMassSpec(spec: MassSpec, nativeSeed?: number): void {
+  validateNativeSubstrate(spec, nativeSeed);
   canonical(spec);
   if (!spec.id || !Number.isSafeInteger(spec.version) || spec.version < 1) throw new Error('Invalid generator identity');
   validSpan(spec.addressSpan); validSpan(spec.terrainCell);
@@ -44,9 +48,13 @@ export function validateMassSpec(spec: MassSpec): void {
       || !Number.isFinite(p.chance) || p.chance < 0 || p.chance > 1
       || !Number.isFinite(p.radius) || p.radius <= 0 || p.radius > p.period / 2
       || !Number.isFinite(p.jitter) || p.jitter < 0 || p.jitter > 0.8) throw new Error('Invalid place recipe: ' + p.id);
+    if (Object.hasOwn(p, 'landformHabitat') && (p.landformHabitat !== true || p.surface !== undefined))
+      throw Error('Invalid landformHabitat population recipe');
     if (p.surface && (!p.surface.region || !/^#[0-9a-f]{6}$/i.test(p.surface.color))) throw new Error('Invalid place surface');
     if ((Math.ceil(spec.addressSpan / p.period) + 5) ** 2 > 4096) throw new Error('Place page query exceeds candidate budget');
   }
+  validateMassPatches(spec);
+  validateMassLandforms(spec);
   if (spec.places.length > 64) throw new Error('Regional planner exceeds 64 place families');
   for (const a of spec.places) for (const b of spec.places) {
     if (Math.ceil((a.radius + b.radius) / b.period) + 2 > 8) throw new Error('Place overlap query exceeds bounded neighborhood');
@@ -54,7 +62,7 @@ export function validateMassSpec(spec: MassSpec): void {
 }
 
 export function makeMassRun(seed: number, runId: string, spec: MassSpec): MassRun {
-  validateMassSpec(spec);
+  validateMassSpec(spec, seed);
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff || typeof runId !== 'string' || !runId)
     throw new Error('Run needs a uint32 seed and stable ID');
   return Object.freeze({ schema: 1, seed, runId, generator: spec.id, version: spec.version,
@@ -68,6 +76,9 @@ export const matchesMassRanges = (rows: readonly MassRange[], fields: Readonly<R
 export class MassGenerator {
   readonly spec: Readonly<MassSpec>;
   readonly run: Readonly<MassRun>;
+  readonly patches: MassTerrainPatches | null;
+  readonly landforms: MassLandforms | null;
+  readonly nativeSubstrate: MassNativeSubstrate | null;
   private readonly surfaces: MassSpec['surfaces'];
   private readonly salts = new Map<MassSpec['fields'][number]['layers'][number], number>();
   private readonly candidates = new Map<string, MassPlace | null>();
@@ -78,14 +89,25 @@ export class MassGenerator {
     if (canonical(run) !== canonical(expected)) throw new Error('World generator/content manifest mismatch');
     this.spec = freezeData(JSON.parse(canonical(spec)) as MassSpec);
     this.run = freezeData({ ...run });
+    this.nativeSubstrate = Object.hasOwn(this.spec, 'nativeSubstrate') ? new MassNativeSubstrate(this.run, this.spec) : null;
     this.surfaces = [...this.spec.surfaces].sort((a, b) => b.priority - a.priority || compare(a.id, b.id));
     for (const f of this.spec.fields) for (const l of f.layers)
       this.salts.set(l, streamSeed(run.seed, [spec.id, spec.version, f.id, l.id]));
+    this.landforms = Object.hasOwn(this.spec,'landforms') ? new MassLandforms(this.spec,this.run,
+      at=>this.baseTerrainAt(at),(origin,box)=>this.patchSitesClear(origin,box,true), // landformHabitat owners compose with terrain
+      this.nativeSubstrate ? (origin,size)=>this.nativeSubstrate!.supportsPatchCell(origin,size) : undefined,
+      (origin,box)=>this.regionalLandformSites(origin,box)) : null;
+    this.patches = Object.hasOwn(this.spec, 'patches') && this.spec.patches ? new MassTerrainPatches(this.spec, this.run,
+      at => this.baseTerrainAt(at), (origin, box) => this.patchSitesClear(origin, box)
+        && !this.landforms?.reserves(moveAddress(origin,{x:(box.minX+box.maxX)/2,y:(box.minY+box.maxY)/2},this.spec.addressSpan),
+          Math.hypot(box.maxX-box.minX,box.maxY-box.minY)/2),
+      this.nativeSubstrate ? (origin, size) => this.nativeSubstrate!.supportsPatchCell(origin, size) : undefined) : null;
   }
   private noise(at: MassAddress, period: number, salt: number): number {
     return massNoise(at, this.spec.addressSpan, period, salt);
   }
   fieldsAt(at: MassAddress): Readonly<Record<string, number>> {
+    if (this.nativeSubstrate) return this.nativeSubstrate.fieldsAt(at);
     const result: Record<string, number> = Object.create(null) as Record<string, number>;
     for (const f of this.spec.fields) {
       let value = f.base;
@@ -98,6 +120,49 @@ export class MassGenerator {
     return Object.freeze(result);
   }
   terrainAt(at: MassAddress): MassTerrain {
+    const base = this.baseTerrainAt(at);
+    const landformTerrain = this.landforms?.sample(at,base) ?? base;
+    return this.patches?.sample(at, landformTerrain) ?? landformTerrain;
+  }
+  private patchSitesClear(origin: MassAddress, box: MassPatchBox, landformHabitats = false): boolean {
+    const span = this.spec.addressSpan;
+    const lo = moveAddress(origin, { x: box.minX, y: box.minY }, span);
+    const hi = moveAddress(origin, { x: box.maxX, y: box.maxY }, span);
+    for (let y = BigInt(lo.cy); y <= BigInt(hi.cy); y++) for (let x = BigInt(lo.cx); x <= BigInt(hi.cx); x++) {
+      for (const place of this.placesInCell({ dimension: origin.dimension, cx: x.toString(), cy: y.toString() })) {
+        if (landformHabitats && this.spec.places.find(p=>p.id===place.recipe)?.landformHabitat) continue;
+        const q = localOffset(place.center, origin, span, 100000);
+        if (patchBoxIntersects(box, q.x, q.y, place.radius)) return false;
+      }
+    }
+    return true;
+  }
+  /** Enumerate protected geographic sites once per large footprint, independent
+   * of streamed pages. Ordinary habitat packs remain terrain-compatible. */
+  private regionalLandformSites(origin:MassAddress,box:MassPatchBox):import('./regionalLandformComposition').RegionalLandformSite[]|null {
+    const span=this.spec.addressSpan,result:import('./regionalLandformComposition').RegionalLandformSite[]=[];
+    let budget=0;
+    for(const recipe of this.spec.places) {
+      if(recipe.landformHabitat)continue;
+      const pad=recipe.radius+this.spec.landforms!.regional!.siteApron;
+      const lo=latticeAt(moveAddress(origin,{x:box.minX-pad,y:box.minY-pad},span),span,recipe.period);
+      const hi=latticeAt(moveAddress(origin,{x:box.maxX+pad,y:box.maxY+pad},span),span,recipe.period);
+      const count=(hi.gx-lo.gx+1n)*(hi.gy-lo.gy+1n);
+      if(count>4096n||budget+Number(count)>8192)return null;
+      budget+=Number(count);
+      for(let gy=lo.gy;gy<=hi.gy;gy++)for(let gx=lo.gx;gx<=hi.gx;gx++) {
+        const place=this.candidate(recipe,origin.dimension,gx,gy);if(!place)continue;
+        const q=localOffset(place.center,origin,span,100000);
+        if(patchBoxIntersects(box,q.x,q.y,pad)&&this.accepted(place,recipe)) {
+          result.push({id:place.id,x:q.x,y:q.y,radius:place.radius});if(result.length>32)return null;
+        }
+      }
+    }
+    return result;
+  }
+  /** Original policy, deliberately patch-free to keep candidate proofs acyclic. */
+  private baseTerrainAt(at: MassAddress): MassTerrain {
+    if (this.nativeSubstrate) return this.nativeSubstrate.sample(at);
     const fields = this.fieldsAt(at), s = this.surfaces.find(row => matchesMassRanges(row.when, fields))!;
     for (const place of this.spec.places.some(p => p.surface) ? this.placesInCell(at) : []) {
       const recipe = this.spec.places.find(p => p.id === place.recipe)!;

@@ -65,7 +65,7 @@ try {
   const native=makeSimWorld('warrior',733);restoreZoneContents(native,contents);
   assert.equal(native.shrines.length,1);assert.equal(native.shrines[0].used,true);
   const legacy=beforeMassStreaming(structuredClone(massAdventure()) as MassAdventure);delete legacy.bounties;delete legacy.journey!.reservePopulation;
-  delete legacy.journey!.roadside;delete legacy.settlement!.quests!.acceptance;delete legacy.settlement!.structurePlans;delete legacy.rewards!.earnFrom;
+  delete legacy.journey!.roadside;delete legacy.settlement!.quests!.acceptance;delete legacy.settlement!.structurePlans;delete legacy.rewards;
   for(const c of legacy.content)if(c.site){delete c.site.shrines;delete c.site.puzzles;}
   const old=makeSimWorld('warrior',734);new WorldMassRuntime(42,'legacy-shrine',legacy).attach(old);
   old.player.pos=old.massRuntime!.journey!.local(old.massRuntime!.journey!.places.find(p=>p.content==='cinderwatch')!);old.massRuntime!.update(old,true);
@@ -74,7 +74,7 @@ try {
   console.log('PASS ordinary zone contents keep native shrines; the expedition owns its own records once; old descriptors gain no new stands');
 
   const full=JSON.parse(JSON.stringify(serializeCharacter(w).world!.worldmass!));
-  assert.equal(full.schema,11);
+  assert.equal(full.schema,13); // RegionalLandformSchema on fresh expeditions
   const downgraded={...full,schema:1};
   assert.throws(()=>new WorldMassRuntime(42,'downgraded',full.config,downgraded),/checkpoint/);
   assert.equal(serializeCharacter(old).world!.worldmass!.schema,1,'old descriptors retain their original checkpoint version');

@@ -41,15 +41,17 @@ try {
   const resources=bodies.map(a=>({actor:a,life:a.life,mana:a.mana,es:a.es}));
   const unknownController={nested:{targetId:expected[0].id},direct:expected[1],weak:new WeakMap<Actor,boolean>([[expected[2],true]])};
   Reflect.set(w,'probeUnknownNativeController',unknownController);
-  const entries=Object.entries;
+  const entries=Object.entries,descriptors=Object.getOwnPropertyDescriptors;
   const profile=(excluded:ReadonlySet<object>)=>{
-    let visited=0,walkVisits=0,streamVisits=0,generatorVisits=0;
+    let visited=0,walkVisits=0,streamVisits=0,generatorVisits=0,sampleEntryVisits=0,sampleDescriptorReads=0;
+    const sampleWrappers=new Set((m.stream as unknown as {samples:Map<string,object>}).samples.values());
     const visitCounts=new Map<string,number>();
-    Object.entries=((value:object)=>{visited++;if(value===walk)walkVisits++;if(value===m.stream)streamVisits++;if(value===m.generator)generatorVisits++;
+    Object.getOwnPropertyDescriptors=((value:object)=>{if(sampleWrappers.has(value))sampleDescriptorReads++;return descriptors(value);}) as typeof Object.getOwnPropertyDescriptors;
+    Object.entries=((value:object)=>{visited++;if(sampleWrappers.has(value))sampleEntryVisits++;if(value===walk)walkVisits++;if(value===m.stream)streamVisits++;if(value===m.generator)generatorVisits++;
       const name=value?.constructor?.name??'null';visitCounts.set(name,(visitCounts.get(name)??0)+1);return entries(value);}) as typeof Object.entries;
     let pins:Set<Actor>;const before=performance.now();
-    try{pins=massDormancyPins(w,owned,excluded);}finally{Object.entries=entries;}
-    return {pins,diagnosticMs:performance.now()-before,visited,walkVisits,streamVisits,generatorVisits,topKinds:[...visitCounts].sort((a,b)=>b[1]-a[1]).slice(0,10)};
+    try{pins=massDormancyPins(w,owned,excluded);}finally{Object.entries=entries;Object.getOwnPropertyDescriptors=descriptors;}
+    return {pins,diagnosticMs:performance.now()-before,visited,walkVisits,streamVisits,generatorVisits,sampleEntryVisits,sampleDescriptorReads,topKinds:[...visitCounts].sort((a,b)=>b[1]-a[1]).slice(0,10)};
   };
   const all=profile(new Set()),warm=profile(new Set()),withoutWalk=profile(new Set([walk]));
   const ids=(pins:ReadonlySet<Actor>)=>[...pins].map(a=>a.id).sort((a,b)=>a-b);
@@ -104,7 +106,11 @@ try {
   const wrapperCold=profile(new Set()),wrapperWarm=profile(new Set());
   assert.deepEqual(ids(wrapperCold.pins),ids(referencePins(w,owned)));
   assert.deepEqual(ids(wrapperWarm.pins),ids(wrapperCold.pins));
-  assert.ok(wrapperWarm.visited<10000,'warm data-only certification must avoid traversing the32,768 immutable sample wrappers');
+  // Count the actual immutable entries, independently of unrelated native
+  // scenery/controller growth elsewhere in this real-world object graph.
+  assert.ok(all.sampleDescriptorReads>0,'cold scan must actually certify production sample entries');
+  assert.equal(wrapperWarm.sampleEntryVisits,0,'warm scan must not enumerate any immutable sample wrapper');
+  assert.equal(wrapperWarm.sampleDescriptorReads,0,'warm scan must reuse certificates without reinspecting sample descriptors');
   const at={...m.origin,x:w.player.pos.x,y:w.player.pos.y},stateBefore=m.state.snapshot();
   m.stream.sample(at);const key=m.state.key(at),old=samples.get(key)!;assert.ok(Object.isFrozen(old));
   const oldRevision=old.revision,oldTerrain=old.terrain;m.stream.sample(at);assert.equal(samples.get(key),old);

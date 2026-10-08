@@ -1,3 +1,8 @@
+import { regionalLandformPolicy } from './regionalLandformSources';
+import { WATER_SURFACE } from '../data/waterSurface';
+import { LASTLIGHT_DEFENSES } from '../data/settlementDefenses';
+import { massLandformPolicy } from './landformSources';
+import { massLandformDressing } from './landformDressing';
 import { MASS_SNOW_DEFAULT } from './snow';
 import { MASS_WEATHER_DEFAULT } from './weather';
 import { MASS_HIERARCHY_DEFAULT } from './hierarchy';
@@ -5,7 +10,6 @@ import { nativeMassPyreSources, nativeMassHoldSources } from './objectives';
 import { nativeMassProcessionSources } from './processionSources';
 import { makeNativeCountrySpec, type NativeCountrySpec } from './nativeCountry';
 import { countryActivitySites } from './activitySites';
-import { nativeStructurePlan } from '../engine/structurePlans';
 import { TILESETS } from '../data/tilesets';
 import { FACTIONS, MONSTERS } from '../data/monsters';
 import { presenceTable } from '../engine/presence';
@@ -15,7 +19,6 @@ import type { MassProgressionSpec, MassPopulation } from './progression';
 import { freezeData } from './random';
 import { frontierLandmarks } from './landmarks';
 import { openingPopulation, reserveMassGuardians } from './population';
-import { STARTER_SUPPORTS } from '../meta/account';
 import type { MassSiteSpec } from './sites';
 import { countryOutposts } from './countryOutposts';
 import { regionalCountrySites } from './regionalSites';
@@ -52,6 +55,7 @@ export interface MassAdventure {
   nativeBirthSource?: string;
   /** Native walk-home fallback; omitted descriptors retain unrestricted populations. */
   territory?: import('./territory').MassTerritory;
+  /** Retired offer descriptor, retained only to read older saved expeditions. */
   rewards?: import('./rewards').MassRewardSpec;
   journey?: import('./journey').MassJourneySpec;
   ecology?: import('./ecology').MassEcologySpec;
@@ -71,7 +75,7 @@ export interface MassAdventure {
 export function massAdventure(): MassAdventure {
   const families = MASS_BIOME_FAMILIES, fields = countryFieldSites(), regional = regionalCountrySites(), activities = countryActivitySites();
   const terrain: MassSpec = {
-    id: 'hollow-wake-country', version: 7, addressSpan: 960, terrainCell: 30,
+    id: 'hollow-wake-country', version: 8, addressSpan: 960, terrainCell: 30,
     fields: [
       { id: 'elevation', base: .15, layers: [
         { id: 'continent', period: 18000, amplitude: .7 },
@@ -90,22 +94,31 @@ export function massAdventure(): MassAdventure {
       { id: 'danger', base: 0, layers: [{ id: 'country', period: 7000, amplitude: 1 }] },
     ],
     surfaces: [
-      { id: 'lake', source: 'regions/water', priority: 100, when: [{ field: 'elevation', max: -.25 }], region: 'water', color: '#223c45', biome: 'downs' },
+      { id: 'lake', source: 'regions/water', priority: 100, when: [{ field: 'elevation', max: -.25 }], region: 'water', color: WATER_SURFACE.deep, biome: 'downs' },
       { id: 'shore', source: 'regions/sand', priority: 90, when: [{ field: 'elevation', max: -.16 }], region: 'sand', color: '#595340', biome: 'downs' },
       { id: 'outcrop', source: 'regions/wall', priority: 80, when: [{ field: 'rock', min: .65 }, { field: 'elevation', min: .2 }], region: 'wall', color: '#56594f', biome: 'highland' },
       {id:'frozen-ground',source:'regions/ice',priority:25,
         when:[{field:'temperature',max:-.35},{field:'rock',min:.20}],region:'ice',color:'#82999f',biome:'tundra'},
-      {id:'wetland-pools',source:'regions/swamp',priority:25,
-        when:[{field:'temperature',min:-.35},{field:'moisture',min:.35},{field:'elevation',max:.22},{field:'rock',max:-.18}],
-        region:'swamp',color:'#30483d',biome:'marsh'},
       ...families.map(f => ({ id: f.id, source: 'tilesets/' + f.id, priority: 10,
         when: f.when, region: f.region,
         color: f.color ?? TILESETS[f.id].theme.ground?.palette?.[2] ?? TILESETS[f.id].theme.floor,
         biome: TILESETS[f.id].biome ?? f.id })),
       { id: 'fallback', source: 'tilesets/downs', priority: 0, when: [], region: 'ground', color: '#31391c', biome: 'downs' },
     ],
+    landforms: { ...massLandformPolicy(), regional: regionalLandformPolicy() },
+    patches: { source: 'worldmass/native-terrain-patches-v1', version: 1, spacing: 960, jitter: .12, bypass: 60,
+      recipes: [
+        { id: 'wetland-pockets', when: [], onSurfaces: ['marsh'], chance: .9, choices: [
+          { id: 'mud-hollow', weight: 3, region: 'mud', color: '#4b4938', radius: [65, 100], scale: 1.3, wobble: .3, pieces: [2, 5] },
+          { id: 'reed-pool', weight: 2, region: 'swamp', color: '#30483d', radius: [60, 95], scale: 1.3, wobble: .4, pieces: [2, 4] },
+        ] },
+        { id: 'woodland-hollows', when: [{ field: 'moisture', min: .45 }], onSurfaces: ['forest'], chance: .25, choices: [
+          { id: 'mud-hollow', weight: 1, region: 'mud', color: '#454637', radius: [60, 85], scale: 1.3, wobble: .35, pieces: [1, 3] },
+        ] },
+      ],
+    },
     places: [...activities.map(a=>a.recipe), ...regional.map(r => r.recipe), ...fields.map(f=>f.recipe), ...families.map(f => ({ id: f.id + '-habitat', version: 1, content: f.id,
-      period: 1100, chance: .7, radius: 180, jitter: .7, priority: 1,
+      period: 1100, chance: .7, radius: 180, jitter: .7, priority: 1, landformHabitat: true as const,
       when: [{ field: 'elevation', min: -.1 }, ...f.when] })),
       { id: 'wayside-camp', version: 1, content: 'wayside-camp', period: 1600, chance: .65,
         radius: 180, jitter: .65, priority: 3, when: [{ field: 'elevation', min: 0 }],
@@ -134,7 +147,7 @@ export function massAdventure(): MassAdventure {
     bounties: { source: 'worldmass/place-bounties-v1', maxCandidates: 256 },
     survey: {source:'worldmass/sighted-survey-v1',cell:120,radius:480},
     ground: nativeMassGround(families.map(f => ({ surface: f.id, source: 'tilesets/' + f.id, theme: TILESETS[f.id].theme }))),
-    territory: { source: 'worldmass/encounter-territory', radius: 620 },
+    territory: { source: 'worldmass/encounter-territory', radius: 760 },
     fieldResidency: { source: 'worldmass/field-residency', retainRadius: 2048, maxResident: 32 },
     shrineResidency: { source: 'worldmass/shrine-residency', retainRadius: 2048, maxResident: 32 },
     puzzleResidency: { source: 'worldmass/puzzle-residency', retainRadius: 2048, maxResident: 16 },
@@ -171,8 +184,6 @@ export function massAdventure(): MassAdventure {
           site: landmark.site, ...(landmark.magicPack ? { magicPack: landmark.magicPack } : {}) };
       }),
     ],
-    rewards: { source: 'worldmass/first-discovery-support-v3', earnFrom: ['cache','puzzle'], supports: [...STARTER_SUPPORTS],
-      authoredSupports: ['splash', 'battering_ram'], level: 1, maxRewards: 1 },
     journey: { reservePopulation: true, source: 'worldmass/frontier-circuit', width: 120, color: '#62573e', clearingColor: '#454331',
       notices: [
         { destination: 'west-camp', note: 'Gnolls hold the western road; their bone-thrower borrows courage from the leader. A shrine and provisions remain at camp. Farther north along the circuit, a burned caravan shelters clustered dead and a bone mender.' },
@@ -197,7 +208,7 @@ export function massAdventure(): MassAdventure {
         { id: 'east-camp', content: 'memorial-grove', edge: 'east', distance: 1350, radius: 330, jitter: .16 },
         { id: 'south-ruin', content: 'fallen-court', edge: 'south', distance: 1850, radius: 330, jitter: .12 },
       ] },
-    ecology: { source: 'worldmass/country-scenery', spacing: 192, rules: [
+    ecology: { source: 'worldmass/country-scenery', spacing: 192, landformDressing: massLandformDressing(), rules: [
       ...MASS_CLIMATE_ECOLOGY,
       { id: 'downs', biomes: ['downs'], chance: .62, cluster: { count: [2, 4], spread: 46 }, pieces: [
         { kind: 'tree', weight: 4, radius: [28, 48] }, { kind: 'rock', weight: 2, radius: [14, 24] },
@@ -214,10 +225,7 @@ export function massAdventure(): MassAdventure {
       ] },
     ] },
     settlement: { zone: 'lastlight', source: 'zones/lastlight', apron: 192, blend: 144,
-      structurePlans: {
-        waking_house: nativeStructurePlan('waking_house', 'structures/waking-house/broad-entry-v1', {5:'##DD###'}),
-        inn: nativeStructurePlan('inn', 'structures/inn/broad-entry-v1', {7:'####W#DD#W####'}),
-      },
+      defenses: { ...LASTLIGHT_DEFENSES },
       location: { source: 'worldmass/continental-start-v1', base: {dimension:'surface',cx:'0',cy:'0'},
         candidates: 32, spacingCells: 16, minimumFraction: .85,
         sample: {minX:-2000,minY:-2500,maxX:4500,maxY:4000,step:500},

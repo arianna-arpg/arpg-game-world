@@ -18,8 +18,8 @@ import { serializeCharacter, applySavedCharacter } from '../src/meta/character';
 const restore = seedGlobalRandom(741125);
 const nativeRows = (w: World) => (w as unknown as { pyres: HoldFixture[] }).pyres;
 try {
-  const base = massAdventure();
-  const config: MassAdventure = { terrain: { ...base.terrain, fields: [], places: [],
+  const base = massAdventure(), terrain = { ...base.terrain }; delete terrain.patches;delete terrain.landforms;
+  const config: MassAdventure = { terrain: { ...terrain, fields: [], places: [],
     surfaces: [{ id: 'controlled-flat', priority: 1, when: [], region: 'ground', color: '#314232', biome: 'downs' }] },
     theme: base.theme, content: [], startRadius: 0, populationRadius: 600, maxPopulation: 20, pageRadius: 1, samplesPerTick: 256 };
   const w = makeSimWorld('warrior', 741125), runtime = new WorldMassRuntime(42, 'objective-life', config); runtime.attach(w);
@@ -154,7 +154,7 @@ try {
   assert.ok(w.dwellRingsView().some(r => r.kind === 'pyre'));
   assert.ok(w.pyresView());
   const checkpoint = m.geography!.hierarchy.controller(plan.owner.id, 'objective:pyres')!;
-  const saved = serializeCharacter(w); assert.equal(saved.world!.worldmass!.schema, 11); assert.ok(saved.world!.worldmass!.geography);
+  const saved = serializeCharacter(w); assert.equal(saved.world!.worldmass!.schema,13); /* RegionalLandformSchema */ assert.ok(saved.world!.worldmass!.geography);
   const continued = makeSimWorld('warrior', 1712); assert.ok(applySavedCharacter(continued, saved)); assert.ok(continued.adoptWorldState(saved.world));
   continued.startWorldMass(saved.world!.worldmass!.state.run.seed, saved.world!.worldmass); w = continued; m = w.massRuntime!;
   assert.deepEqual(m.geography!.hierarchy.controller(plan.owner.id, 'objective:pyres')!.state, checkpoint.state);

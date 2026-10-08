@@ -54,8 +54,8 @@ app.whenReady().then(async()=>{
    const w=__game.world(),m=w.massRuntime,c=w.chests.find(c=>c.rewardSource===source);
    const before={opened:c.opened,remaining:c.lockTime,rate:m.cacheHoldRate(w,c)};
    __game.step(10);const justBefore=c.opened;__game.step(2);
-   const opened=c.opened,drops=w.drops.length,rewards=m.rewards.snapshot();__game.step(10);
-   return {before,justBefore,opened,drops,afterDrops:w.drops.length,rewards,afterRewards:m.rewards.snapshot(),fatal:__game.crash().fatal};
+   const opened=c.opened,drops=w.drops.length,rewards=m.snapshot(w).rewards??[];__game.step(10);
+   return {before,justBefore,opened,drops,afterDrops:w.drops.length,rewards,afterRewards:m.snapshot(w).rewards??[],fatal:__game.crash().fatal};
   },partial.source);
   assert.equal(continued.fatal,null);assert.equal(continued.before.remaining,partial.remaining);
   assert.equal(continued.before.rate,partial.rate);assert.ok(!continued.justBefore&&continued.opened);

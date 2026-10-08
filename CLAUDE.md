@@ -1,3 +1,337 @@
+Regional extent composition (regionalExtentSchema 13) adds saved 3,300/6,000/
+6,600-unit native terrain alongside historical small districts. Captured parent
+foundations accept whole protected-site holes, dry collars and bounded spurs;
+complete child pools reseat only in surviving original broad courts. Preserve
+terminal-distance limits, full child geometry, four real exterior contacts,
+opening exclusions, signed coordinates and historical policy omission. This
+explicit substrate replaces local noise hydrology inside its irregular outline;
+it does not preserve every preexisting noise lake. Large sources retain native
+path widths. Four finite seats use at most 38 substrate reads each; cold planning
+remains synchronous. Verify regionalextents, landform suite, adjacent terrain/
+site/Continue probes, all types, genqa, sim and regional-extents-ui.cjs after an
+isolated build. See docs/worldgen/seamless-landforms.md for scope and limits.
+
+Gameplay followup: discovery support choices and Western Watch's ring choice
+are retired. LegacyMassRewardArchive only validates/preserves historical receipts;
+no claim or earning path remains, and owned gems/items survive. Optional flask
+instructions require real pack gestures; the account lesson remains native.
+Behind-target blink arrivals stamp facing and facingPrev, including delayed
+variants. Brush/reeds/berry bushes regain native Concealed, with felled/gone
+props excluded from standing effects. CaveMouthParams.rockFace opts genuine
+caverns into upright entry art; pit/hatch entry mechanics stay native. New default
+encounter territory is 760; saved/authored values remain. See
+docs/design/seamless-gameplay-review.md and docs/engine/stealth.md. Verify types,
+shadowarrival, brushcover, stealth, skillpreparation, mireille_lesson,
+worldmass_rewards/puzzlerewards/quests/questchoice/territory, conversation,
+nativescenegeometry, old-descriptor probes, sim smoke, genqa and the hidden
+gameplay-followup-ui.cjs after an isolated gameplay-followup-dist build.
+
+Saved landformHabitat recipes now let ordinary native packs inhabit regional
+terrain while complete authored sites keep their reservations. Body-clear dry
+seating stays inside native encounter bounds and preserves formations, wounds,
+casualties and rewards. landformCompositionSchema 12 makes older clients refuse
+terrain/content relationships they cannot reproduce. Optional ecology.landformDressing
+uses pinned native
+rules and ordinary scenery persistence; omission retains historical bare terrain.
+Keep source-cell/feather clearance and protected crossings. Candidate-local
+substrate reuse preserves geometry; small address spans use derived local bounds.
+Verify landformhabitats, landformdressing, landformintegrity, landforms, formations,
+climate, terrainpatches, nativecountry, all types, genqa, sim and landforms-ui.cjs.
+See docs/worldgen/seamless-landforms.md for the remaining native-zone boundary.
+
+Marsh and Thicket Stalkers opt into lurkMeleeRange: finish an ambush and
+trade attacks until the prey escapes commitRange. Thicket reserves Closing Fang
+for targets beyond 130 units; player use and other species stay authored.
+Cleave has no free movement or live aim. Review remaining gameplay deviations
+in docs/design/seamless-gameplay-review.md. Verify stalkercommitment, castaim,
+skillinputorder, worldmass_doorplans, Cleave, tactical AI, sim smoke and genqa.
+
+MassLandforms embeds 21 captured native district shapes in new seamless
+expeditions. Shared adventure/exploration district bodies feed both localeGen
+and the immutable landform source policy. Preserve complete admission, opening
+and site exclusions, dry bypasses, signed addresses, saved source cells and
+legacy omission. Natural outlines differ from built precincts; rotations do not
+count as novelty. This is terrain integration, not full native zones, bounty
+passages or hierarchy/map parity. Verify worldmass_landforms, terrainpatches,
+nativecountry, climate, nativeingress, all types, genqa and landforms-ui.cjs.
+See docs/worldgen/seamless-landforms.md for provenance and remaining work.
+
+Shared ordinary-water palettes and live, world-anchored ripples use
+`data/waterSurface.ts` and `render/vis/waterSurface.ts`. New seamless expeditions
+snapshot timber Lastlight defenses, road-aligned gates and mortal native guards;
+ownerless guard kills grant no player rewards. Native rampart/gatehouse blueprints
+are reusable separately. See `docs/design/water-and-town-watch.md`; verify
+settlementdefenses, watersurface, worldmass_sanctuary, douse, all types, genqa,
+sim smoke and the hidden water-watch-ui client after an isolated build.
+
+NativeSceneRuntimeRegistry shares all 36 original ordered event rows and live
+activation with classic World. NativeAreaSceneRuntimeRegistry binds the same
+local birth, geometry and Titan owners, carried controller state and descent
+timer to one campaign. Construction does not reset a zone or its wounds; only
+the original whole-area birth sequence invokes reset. Keep cave/noLive/special
+eligibility, original order and partial effects unchanged. Full ongoing update,
+reward, source issuance, whole-owner paging and native hierarchy/map activation
+remain required. Verify nativesceneruntimeregistry, nativesceneruntimebirth,
+native regressions, all types, generation, sim and both client Continue courses.
+
+NativeSceneRuntimeBirth shares all 26 native runtime event births and their 17
+helpers with classic World. NativeAreaSceneRuntimeBirth binds real local geometry,
+population, generation and theater owners to live campaign events and original
+source providers. Preserve native filters, complete bodies, private policies,
+materialization latches, wounds, door spacing, random cursors and partial effects.
+This is birth ownership, not full runtime registry/update/reward dispatch or area
+paging. Verify nativesceneruntimebirth, native regressions, relevant event probes,
+all types, generation, simulation and built-client entry/Continue/return.
+
+Native hierarchy direction: world mass -> biome regions -> native zones -> streamed chunks.
+Regions retain native geographic biome identity; zones retain actual native IDs,
+objectives, events and map knowledge. Chunks own streaming, not replacement zones.
+World weather crosses every affected region/zone/chunk through its footprint.
+Map zoom must progress from revealed local terrain to native zone/event/region
+views over the same saved identities. Existing square MassHierarchy cells are an
+older experimental ownership policy, not completion of this native hierarchy.
+
+NativeAreaSceneTitans owns the complete native TitanRuntime over the actual local
+geometry/population and live campaign journey. NativeSceneTerrain shares original
+felling/regrowth registration and ground/bridge publication with classic World.
+Keep warning/occupancy, safe crossing, retained wounds, attributed hazards,
+whole-anatomy departures, network scenes and native partial effects unchanged.
+The World terrain view stays hidden before first use. Full registry dispatch,
+contact damage/rewards, source issuance and whole-owner paging still precede
+seamless activation. Verify nativescenetitans, titans/rampage/terrain/persistence,
+all types, generation, simulation and built-client entry/Continue/return.
+
+NativeAreaSceneArrival shares exact native arrival safety, defeated-boss and
+nearest-zone birth lookups with classic World. Bind the original arrival policy,
+real local geometry/census and live campaign records. Preserve protected bodies,
+cramped-entry fallbacks, selected callbacks, native tie order and partial effects.
+The cached World adapter must remain nonenumerable before and after first use.
+This does not complete the ordered runtime registry, full scene birth, immutable
+source session or area paging. Verify nativescenearrival, native generation,
+all types, simulation and built-client entry/Continue/return.
+
+NativeAreaSceneCoast shares native coastline, all island types and full sea-port
+network birth with classic World. It uses the same geometry/census and live
+campaign graphs, allocator, voyage and knowledge. Preserve chart/order/partial
+effects, held ports, real sources, course fields and boundary/meld annotations.
+Complete source-session issuance, sailing controllers, island interior birth and
+whole-owner persistence still precede seamless activation. Verify nativescenecoast,
+related birth/exit/boundary/harbor/voyage/dimension probes, all types, generation,
+simulation and built-client entry/Continue/return.
+
+Native resolved structure plans now retain their selected blueprint while
+whole footprints and radius-15 door approaches respect native bounds and actual
+finite grid backing. Exact swept-grid clearance preserves body-width tangent
+entrances in all four door directions. Draw-free bounded reseating records fixturePlacements by
+authored occurrence; moved main crusade works transport their gameplay anchor.
+Preserve explicit carve-first semantics, original selection draws, complete
+structures and original optional-placement consequences. This is not universal
+post-stamp access: disconnected explicit sites and later door/footprint overlap
+remain separate work. Verify nativestructureaccess, nativelayoutgeneration,
+nativeareacompiler, all types, generation, simulation and client Continue.
+
+NativeAreaSceneTheater shares complete native ambient-activity birth and helpers
+with classic World, using the same geometry/population/environment/ecology and
+live campaign clock. NativeTheaterHost keeps the complete installed controller
+contract explicit. Preserve original rows, body/item identity, pour limits,
+selected callbacks and once-only default context. Full movement, threat, reward,
+retirement, update dispatch and paging services still precede area activation.
+Verify nativescenetheater, all types, generation, simulation and client Continue.
+
+NativeAreaSceneHarbor shares complete harbor/quay birth, doors, dressing,
+services, retained counter stock and whole-party landings with classic World.
+NativeAreaSceneDescent shares native cave Delvers, once-minted shelves and
+abyss entry over the same local geometry/population and settlement campaign.
+Preserve run-long stock/manifest/site aliases, original gate and partial-failure
+order, and live callbacks. Siege/depth/light updates, purchases/rewards, complete
+coastal source issuance and whole-owner paging remain required for activation.
+Verify nativesceneharbor/nativescenedescent, all types, generation, simulation
+and built client entry/Continue/return before whole-scene assembly.
+
+NativeAreaSceneHistory preserves native sagas, nemeses, grudges and player
+corpses with genuine shared campaign state and separate local corpse arrays.
+NativeAreaSceneEncounterBirth shares every native event placement, extraction
+and borough materialization branch with classic World, retaining the winning
+RNG for later controllers. Keep original birth predicates, source gates, native
+partial failures, run-wide history flush/manifest identity and live local census.
+These are birth owners; later encounter/history execution, rewards, full scene
+composition, source issuance and whole-owner paging still precede activation.
+Verify nativescenehistory/nativesceneencounterbirth, all types, generation,
+simulation and the built client entry/Continue/return courses.
+
+NativeAreaSceneSites shares complete native vocation and mercenary field-site
+births, filters and stock with classic World and the real settlement owner.
+NativeAreaSceneOpenings shares complete hollow and annex carving, furnishing,
+child entrances and remembered discoveries over the same mutable geometry.
+Preserve original partial failures and random continuation; genuine reward
+execution and full update/controller/source/paging owners remain required.
+Verify nativescenesites/nativesceneopenings, all types, generation and native
+client entry/Continue/return before composing complete seamless area birth.
+
+NativeLayoutGeneration shares native memory/seed choice and physical held-city
+fixtures with classic World. NativeResidentSession retains one genuine dialogue
+director and visit history; NativeScenePhysical keeps native altar/training
+WeakMap identity and complete content restoration. NativeAreaSceneAdoption reads
+the unchanged installed objective sources through real campaign/local providers.
+Preserve birth ordering, source receivers, local census identity and random
+continuations. Resident spatial services, full controllers and the complete area
+assembler/update/reward/paging/source issuer still precede seamless activation.
+Verify nativelayoutgeneration/nativeresidentsession/nativescenephysical/
+nativesceneadoption, all types, generation, sim and client Continue courses.
+
+NativeAreaBoundaries now shares the exact pre-layout campaign graph operation,
+including whole neighbor graphs, reciprocal heals and boundary/road/meld inputs.
+NativeSettlementServices, NativeSceneBounty and NativeSceneOccurrences supply
+native stock/recruiter/seating, bounty site/arrival and local event services.
+Classic World uses the same operations. Retain real campaign/source providers,
+item and actor identities, held stock, local census/terrain and callback caches.
+Occurrence callbacks belong to their own area; transferred caches are refused.
+This does not complete the resident director, physical-content/reward owners,
+package runtime registry, installed source session or seamless-area activation.
+Verify nativeareaboundaries/nativesettlementservices/nativescenebounty/
+nativesceneoccurrences, all types, generation, sim and client Continue courses.
+
+NativeSceneEnvironment and NativeSceneEcology share complete native birth
+operations with classic World: scenery, puzzles and tones, harvest, geysers,
+escape fronts, carried throng, lightweight populations, vent seating and wells.
+Local owners retain the same geometry/census and explicit campaign services;
+remembered state, native pool limits, getter order and partial failures remain.
+These are birth owners, not the full update/reward/render/paging dispatcher.
+Keep completion, timeflow, radiance, carried state and source context real. Verify
+nativesceneenvironment/nativesceneecology, nativeareabirth, all types, generation,
+sim smoke and client entry/Continue/return before full-area admission work.
+
+NativeSceneGeometry and NativeScenePopulation now give complete native layouts
+mutable local geometry and a replaceable actor census. Classic World shares the
+same layout adoption, doors, navigation, movement, hazards, creep installation,
+remembered population, counts, faction contests and wave births. Real factories,
+rarity, magic groups and inhabitant hosts follow census replacement. No source
+issuer, complete environmental/controller owner, full-area publication or paging
+is implied. Bind the actual resolved seed, exits, prior counters and campaign
+services; do not derive them from defaults. Verify nativescenegeometry,
+nativescenepopulation, nativeareabirth, all types, generation and client entry/
+Continue/return. Full scene activation remains a later integration boundary.
+
+NativeAreaBirth shares the complete native post-arrival load sequence with
+classic World, from remembered doors through final lightwells. Objective,
+environment, inhabitants, memory replacement, reward/service and ordered package
+stages retain their original boundaries and both random continuations. The live
+adapter preserves method selection before argument evaluation, mutable census
+replacement and native partial failures; module initialization order is retained.
+This completes shared birth ordering, not detached controller ownership or
+seamless-area admission. Mutable scenes, installed source issuance, complete-owner
+paging and the playable two-area Continue course remain required. Verify
+nativeareabirth, all types, generation, sim smoke and both client courses.
+
+NativeAreaInhabitants shares the exact native door guard, furniture, resident,
+daily guest, camp, garrison and landmark birth stages with classic World. The
+local binding uses the same retained geometry, census, factories and promotions;
+resident maps, campaign ledgers and dialogue director remain explicit live
+services. Native reset order, upstairs seating, day seeds, callback selection
+and partial failed births are preserved. This is preparation: the complete birth
+driver, controller ownership, authenticated source issuer, paging and playable
+two-area Continue still precede full-area activation. Verify nativeinhabitants,
+all types, generation, sim smoke and client conversations/native generation.
+
+NativeAreaEncounters composes complete native packs and wildlife with local sight,
+hostility, status relays, rarity and immediate magic-pack refresh. Detached staged
+actors transfer relay ownership after validation; supplied magic effects and
+refresh flags retain their identities. World shares these exact operations and
+keeps its live adapter caches outside reflective controller ownership. Native
+failed habitat attempts and partial factory errors retain allocation/RNG effects.
+This is preparation, not complete birth order or runtime admission; source
+issuance, environmental/controller owners, paging and playable two-area Continue
+remain required. Verify nativesight/nativehostility/nativestatusrelay,
+nativemonsterpromotion/worldmass_nativeareaambient, types, genqa and sim smoke.
+
+NativeAreaContinuations retains both native random cursors across full geometry
+and later preparation. Generation receipts remain separate from old area-v1
+identity and refuse random drift outside the actual layout operation. Shared
+native population resolution preserves campaign rules, live staged census and
+exact cave source-face identity; shared monster factories preserve complete
+actors, equipment, scaling, appearance and original failure side effects. Classic
+World uses these same operations. The caller still owes an authentic source
+issuer, full birth ordering, local magic refresh, controller/paging ownership and
+runtime publication. Verify nativearearandom/nativeareageneration,
+nativepopulationresolution/nativemonsterfactory, all types, genqa and sim smoke.
+
+NativeAreaLocal binds complete native geometry to the shared NativeNavigation,
+NativePlacement, NativeEncounterGroup and NativeAmbient stages. Classic World
+uses the same operations. NativeExitPreparation retains lazy native source reads,
+original load order and complete full-load geometry. Local preparation owns its
+collision and player position; provider reads remain lazy across seeded scopes.
+Own-data normalization and finite grid/index work limits protect prepared frames.
+This is fixed-stage preparation, not complete population/controller admission:
+source issuance, full load RNG continuation, world-sim resolutions, magic refresh,
+body paging and shared interiors remain required. Verify the five corresponding
+probes, nativeambient/nativeareacompiler, types, genqa and sim smoke.
+
+NativeCompleteAreas preserves the whole native load-prepared layout, including
+ordered boundary/road/meld inputs, exact generation ports, all output collections,
+source mechanisms and cave seed ordering. Physical seam mouths remain distinct
+from native generation ports. NativeAmbient shares the original pack, habitat
+and later wildlife stages with explicit host inputs; classic play uses the same
+operations. Complete-area publication still refuses until a real compiler source
+issuer and all local population/controller owners exist. Verify nativeambient,
+nativeareacompiler, nativearearoutes, nativesubstrate, types, genqa and sim smoke.
+
+NativeAreaRoutes proves exact interior stands through complete retained native
+geometry, with conservative body-clear routes and collision replay on restore.
+NativeSubstrate binds saved native geography to the existing generator, streamed
+terrain and collision; native climate/depth replace independent noise only under
+its explicit discriminator. Every captured biome needs authored material rows;
+those rows are outside-area policy, not a claim of native face generation.
+Ordinary mire remains localized with neutral bypass reservations. Optional patch
+cells crossing the finite mapping domain refuse whole; valid base ground remains.
+Fresh adventure activation stays blocked until complete native area, population
+and controller ownership is installed. Old descriptors keep legacy generation.
+Verify nativearearoutes, nativesubstrate, terrainpatches and all types.
+
+NativeAreaFoundations shares the complete native recipe mint with classic
+worldgen through explicit providers and original-order topology hooks. Saved
+native mapping keeps exact source bytes, explicit origins and rational scale;
+canonical area requests remain separate from resolved atlas anchors and point
+sampling. Whole generated geometry retains native grids, analytic silhouettes,
+all output collections and ordered ground channels. Bilateral seam mouths are
+generation inputs; bounded capsule routes detour around existing walls and
+refuse unknown geometry or closed doors. These are inactive area foundations,
+not full runtime area admission: population, objectives, environmental owners,
+compiler source installation and the complete playable course remain required.
+Verify nativezonemint, nativegeography, nativeareageometry, nativeareaseams,
+all types and genqa. See the NativeAreaFoundations section in exploration docs.
+NativeGeographySource captures the complete native base-field records, effective
+climate overrides, resolved anchors, continent policy and actual ordered face
+pools with an explicit seed. Exact source bytes and private readers own sampling
+and memo state. Capture after world binding; restore never consults live data.
+The native-geography-v1 boundary rejects lossy data and unsafe coordinate/work
+ranges, preserving classic wrappers and native hash limitations. Verify
+geographysource, climatecore, dimensions, nativecountry, types and genqa. This
+source is ready for physical projection; it does not activate complete layouts,
+habitats, hydrology, shared interiors or a new continuous-world policy.
+
+NativeClimate and NativeContinent share exact native geography operations with
+classic wrappers. Complete ordered climate capture includes private dimension
+overrides and tagged resolved anchors; frozen climate readers require frozen
+continent callbacks. Native dimension and face rules preserve separate realm
+geometry, palette fallbacks, ordered shared/realm pools and caller RNG positions.
+Verify climatecore, continentcore, dimensiongeometry, tilesetchoice, geography,
+biomes, civics, seas, dimensions, types and genqa. These leaf extractions do not
+activate a native country mapping or complete physical terrain/content parity.
+
+Generation variety is a world contract: ordinary mire is localized physical
+terrain over neutral ground, with complete raster shapes and reserved bypasses.
+Fresh terrain v8 owns this saved policy; old descriptors retain their original
+terrain. Shared native pour lobes preserve finite guard/depth/paint behavior.
+Ecology reserves complete movement shapes, not just painted radii; native
+features and objective fixtures respect the same annuli. Route workers include
+all physical materials. Native field selection now owns instance-local memos
+with explicit readers, preserving classic source behavior; immutable climate/
+continent capture and unified biome/depth/face country mapping remain open.
+Verify fieldchoice, pourshape, terrainpatches, all worldmass, types, native
+generation and the natural terrain browser course. The exploration foundations
+track regional hydrology, full places/interiors, bounty-opened routes, habitats,
+long-history paging/rebasing and experience passes still owed for main parity.
+
 Native region geometry lives in world/regionGeometry. The classic regionWinner
 wrapper supplies the original complete field selection, scale data and policy.
 The shared solver preserves native hash, scan/pruning/tie order and depth across
@@ -203,9 +537,10 @@ afflictioncues, combatfocus and presentation-preferences-ui with real Options.
 
 Optional SkillDef.castAim lets an ordinary windup follow its actor's live aim.
 updateCastAim never selects a target or changes commitment; locked targets,
-planting and converted modes retain their rules. Cleave opts in alongside
-existing castMove mobility. Verify castaim, melee/casting/AI probes, sim smoke
-and cast-aim-ui.cjs against the prior fixed client and native continuation.
+planting and converted modes retain their rules. Cleave uses the native planted,
+press-time aim default; castMobility still requires investment. Verify castaim,
+melee/casting/AI probes, sim smoke and cast-aim-ui.cjs for current native
+commitment, Stalker close combat, original door widths and continuation.
 
 drawHudText gives native status, objective and compass lines a configurable
 VIS_CFG.hudText outline. It preserves authored fill, font, alignment and layout;
@@ -281,13 +616,10 @@ continuousWorld scopes the authored preparation invitation to the prototype;
 mireilleContractActive restores native work dialogue even with unlearned flasks.
 Verify speech and worldmass_quests as well as the preparation checks below.
 
-skillPreparationHtml presents the native pending flask lesson alongside
-optional contracts. Its buttons send ordinary learn intents with emptyOnly,
-which rechecks occupancy/known copies before changing the rack. Native gifts,
-requirements, once-only filling and graduation remain authoritative. NpcConversationUI
-offers the same native preparation beside Mireille; the Journal remains available. choiceMinWidth keeps
-short alternatives visible. Verify skillpreparation, mireille_lesson, skillitems,
-townwelcome, menubar, worldmass_welcome, sim smoke and skill-preparation-ui.cjs.
+skillPreparationHtml now offers initially closed, read-only instructions beside
+Mireille, in the Journal and in the pack. No preparation button dispatches learn.
+Native pack gestures, gift requirements, once-only filling and graduation remain
+authoritative. Verify skillpreparation, mireille_lesson and gameplay-followup-ui.cjs.
 
 LightSightCache and litPolygon consume the shared RegionGrid contract, so
 native lamps and spell glows respect seamless terrain and Lastlight doors.
@@ -356,19 +688,17 @@ authored ProcDef.description. Verify procreference, itemreadability, sim smoke
 and proc-reference-ui.cjs for escaped compact/full cards, native skill gates,
 purity, narrow layout and exact current/prior-client Continue.
 
-Optional rewards.earnFrom pins which native discovery events share a run's
-support-choice allowance. Completion of an owned riddle can now earn the same
-native compatible choices as a cache; omitted legacy policy stays cache-only.
-Schema seven prevents silently losing this trigger policy. Verify worldmass,
-native puzzles, sim smoke and puzzle-rewards-ui.cjs for native solve, ownership,
-shared budgets, pending/fitted Continue and actual prior-client refusal.
+Historical rewards.earnFrom still participates in old save-schema validation.
+It no longer issues rewards. Native puzzle loot and attunement remain; verify
+worldmass_puzzlerewards and the read-only legacy archive course.
 
-New expedition settlement.structurePlans pins native building plan variants.
+Saved settlement.structurePlans still pins native building plan variants; new
+expeditions use the original inn and waking-house door widths.
 Variants retain native identity, services, legend and footprint; the existing
 compiler owns doors, roofs and collision. Schema six refuses older clients;
 legacy saves retain their original plans. Verify worldmass_doorplans, worldmass,
-doorpress, generation QA and broad-doorways-ui.cjs for off-centre approaches,
-exact current Continue, old geometry and actual prior-client refusal.
+doorpress, generation QA and cast-aim-ui.cjs for centered native entry and
+continuation. The door-plan probe retains explicit historical broad-plan fixtures.
 
 New expedition descriptors opt into settlement.quests.acceptance = 'journal'.
 questOfferChoices reuses native live eligibility; questAccept dispatch rechecks
@@ -836,20 +1166,11 @@ spatial dialogue and physical departure invitations through `localZoneAt` and
 Verify worldmass_population, worldmass_welcome, memorylesson and the scoped
 journey client harness; native memory/menu/town-welcome probes remain applicable.
 
-New expedition descriptors also snapshot a first-cache support choice through
-`worldmass/rewards.ts`: existing account unlocks and native equipped-skill socket
-gates choose the offers. Journal cards retain exact payloads and a once-only
-receipt across Continue; full packs keep the offer. Ordinary loot remains.
-Verify worldmass_rewards and hidden `balance/worldmass-rewards-ui.cjs` against
-the scoped build (cache → pending Continue → choice → pointer socket → Continue).
-`explorationRewardReceipts` retains historical choices and a native Skills/inventory
-shortcut in the journal; receipt text does not assert present item ownership or
-socketing. `explorationRewardOffersHtml` also serves the native Skills page;
-the bag's pending-choice shortcut opens that workspace without a Journal detour.
-Both surfaces use the same claim intent. The rewards client covers the bag
-shortcut, both offer faces, native socket restrictions and the saved receipt.
-Old manifests keep their former rewards. Memory provenance labels preserve old
-cache identities internally while presenting a registered Chest/Found name.
+New expeditions do not carry discovery support-choice descriptors. Historical
+rewards are read-only compatibility data; native inventory/socket items retain
+their ordinary ownership. No Journal, Skills or bag reward surfaces remain.
+Memory provenance keeps old cache identities while presenting a Chest/Found name.
+Verify worldmass_rewards and gameplay-followup-ui.cjs.
 
 Worldmass version 4 adds geographic progression through
 `src/worldmass/progression.ts`: saved distance/field rules and native presence

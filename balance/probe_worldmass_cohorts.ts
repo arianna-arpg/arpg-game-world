@@ -95,7 +95,8 @@ atomicWorld.findFreeSpot=function(...args){
 };
 atomicWorld.player.pos=atomic.journey!.local(atomicGate);atomic.update(atomicWorld,true);
 assert.equal(atomic.snapshot(atomicWorld).enemies.length,0,'one failed seat cannot publish a partial cohort');
-assert.equal(atomicWorld.chests.length,0);
+assert.ok(!atomicWorld.chests.some(c=>c.rewardSource===canonical([atomicGate.id,'cache'])), 'failed cohort cannot publish its cache; unrelated native caches are independent');
+assert.equal(atomic.state.claimed('site-cache',atomicGate.id),false);
 atomicWorld.findFreeSpot=find;atomic.update(atomicWorld,true);
 assert.equal(atomicWorld.actors.filter(a=>a.magicPack?.mechanic==='footfall').length,4);
 console.log('PASS failed seating leaves no partial encounter; later retry admits the complete native cohort');
@@ -105,7 +106,7 @@ for(const c of legacy.content)delete c.magicPack;
 const oldWorld=makeSimWorld('warrior',46),old=new WorldMassRuntime(42,'plain-landmarks',legacy);
 old.attach(oldWorld);oldWorld.player.pos=old.journey!.local(old.journey!.places.find(p=>p.content==='broken-gate')!);old.update(oldWorld,true);
 const oldSave=old.snapshot(oldWorld),oldAgain=makeSimWorld('warrior',47);
-new WorldMassRuntime(42,'plain-landmarks',legacy,oldSave).attach(oldAgain,oldSave);
+new WorldMassRuntime(42,'plain-landmarks',oldSave.config,oldSave).attach(oldAgain,oldSave);
 assert.ok(!oldAgain.actors.some(a=>a.magicPack),'existing descriptors cannot acquire new encounters');
 const invalid: MassAdventure=JSON.parse(canonical(massAdventure()));
 invalid.content.find(c=>c.id==='broken-gate')!.magicPack!.mechanic='__proto__';

@@ -1,3 +1,4 @@
+import { massTerrainRegions } from './contracts';
 import type { Vec2 } from '../core/math';
 import type { MassProcessionContext } from './processionTypes';
 import { validateNativeGeographicSelection, type NativeGeographicObjectiveSource, type NativeGeographicSelectionReceipt } from './geographicObjectiveChoice';
@@ -108,7 +109,7 @@ export function validateProcessionPlanInput(input: Readonly<ProcessionPlanInput>
       || !input.regions[patch.region]) throw Error('Invalid procession terrain patch');
     const key = canonical(patch.address); if (patches.has(key)) throw Error('Duplicate procession patch'); patches.add(key);
   }
-  for (const id of [...input.terrain.surfaces.map(s => s.region), ...input.terrain.places.flatMap(s => s.surface ? [s.surface.region] : [])])
+  for (const id of massTerrainRegions(input.terrain))
     if (!input.regions[id] || typeof input.regions[id].walkable !== 'boolean' || typeof input.regions[id].dry !== 'boolean') throw Error('Missing procession terrain rules');
 }
 class RouteBudget extends Error {}

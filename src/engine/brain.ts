@@ -137,6 +137,9 @@ export interface MoveSpec {
   /** charge/lurk: begin the committed rush within this range (default 320;
    *  lurk defaults 260). */
   commitRange?: number;
+  /** lurk: finish the rush at this center distance and trade blows; stay in
+   * pursuit until the prey escapes commitRange. Omitted keeps the old watch. */
+  lurkMeleeRange?: number;
   /** charge: sprint speed multiplier (default 2.4) and the recovery window
    *  before the next charge (default [2.5, 4.5]). */
   chargeSpeed?: number;

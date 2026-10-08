@@ -321,7 +321,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
 //   STANDING CONTRACT).
 registerVentureAsk({
   id: 'holdfast',
-  standing: (world: World, def: ZoneDef): string | null => {
+  standing: (world: import('../../data/objectives').ObjectiveReadContext, def: ZoneDef): string | null => {
     const hf = world.sim.holdfastField;
     const info = hf?.infoFor(def.id);
     // Only a STANDING sealed gate is adoptable: an opened (looted) or a
@@ -333,12 +333,12 @@ registerVentureAsk({
     if (!hf.def(info.defId)) return null;
     return `${info.lockId}:${info.defId}`;
   },
-  title: (world: World, def: ZoneDef): string => {
+  title: (world: import('../../data/objectives').ObjectiveReadContext, def: ZoneDef): string => {
     const hf = world.sim.holdfastField;
     const info = hf?.infoFor(def.id);
     return (info && hf?.def(info.defId)?.name) || 'the holdfast';
   },
-  view: (world: World, def: ZoneDef, key: string) => {
+  view: (world: import('../../data/objectives').ObjectiveReadContext, def: ZoneDef, key: string) => {
     const hf = world.sim.holdfastField;
     const info = hf?.infoFor(def.id);
     const gdef = info ? hf?.def(info.defId) : undefined;

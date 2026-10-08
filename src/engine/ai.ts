@@ -3731,6 +3731,19 @@ function lurkKernel(ctx: KernelCtx): void {
   const unseenArc = spec.unseenArc ?? 1.75;
   const unseen = Math.abs(angleDiff(target.facing, angleTo(target.pos, a.pos))) > unseenArc;
   const commit = spec.commitRange ?? 260;
+  if (spec.lurkMeleeRange !== undefined) {
+    const reach = Math.max(a.radius + target.radius + 2, spec.lurkMeleeRange);
+    if (d <= reach) a.aiPhase = 'lurk_melee';
+    if (a.aiPhase === 'lurk_melee') {
+      if (d > commit) a.aiPhase = '';
+      else {
+        // A landed ambush becomes a close fight, not another lap through prey.
+        if (d > reach) moveToward(a, world, ctx.goal, dt);
+        a.facing = angleTo(a.pos, target.pos);
+        return;
+      }
+    }
+  }
   if (a.aiPhase === 'lurk_rush') {
     if (!unseen && d > commit) {
       a.aiPhase = ''; // stared down at range: break off, resume the watch

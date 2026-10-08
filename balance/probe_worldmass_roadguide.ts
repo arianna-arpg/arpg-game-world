@@ -41,7 +41,7 @@ try {
  const oldWorld=makeSimWorld('warrior',6),old=new WorldMassRuntime(2,'guide-old',changed);old.attach(oldWorld);
  assert.deepEqual(massRoadNotices(old),[],'omitted old descriptors stay omitted');
  const oldSave=old.snapshot(oldWorld),oldAgain=makeSimWorld('warrior',7);
- new WorldMassRuntime(2,'guide-old',changed,oldSave).attach(oldAgain,oldSave);
+ new WorldMassRuntime(2,'guide-old',oldSave.config,oldSave).attach(oldAgain,oldSave);
  assert.deepEqual(massRoadNotices(oldAgain.massRuntime!),[]);
  console.log('PASS mod-owned accounts/names escaped, omitted old descriptors and old Continue preserved');
 

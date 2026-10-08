@@ -1,3 +1,4 @@
+import { SETTLEMENT_GUARDS } from './settlementDefenses';
 import { HIVECALL_MONSTERS } from './hivecall';
 import type { SpeechAttention } from './speechAttention';
 ﻿// ---------------------------------------------------------------------------
@@ -626,6 +627,8 @@ export interface MonsterDef {
    *  standing sentry; hold:false = a body that merely orbits home). Spawners
    *  may stamp site-exact posts on top (Actor.aiPost — the holdfast crew). */
   post?: PostSpec | true;
+  /** Independent sanctuary defender; its kills pay no player bounty. */
+  settlementGuard?: boolean;
   /** How worth guarding this monster is to protector brains (higher = posted
    *  first). Omitted: commanders rank 2, casters 1, everyone else 0. */
   wardPriority?: number;
@@ -2188,6 +2191,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   ...WORLDBOSS_ENCOUNTER_MONSTERS,
   ...TITAN_MONSTERS,
   ...TETHERED_MONSTERS,
+  ...SETTLEMENT_GUARDS,
   ...TETHER_KEEPERS,
   ...ENCOUNTER_ADVENTURERS,
 
@@ -5477,7 +5481,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     tells: HUNGER_LEAN,
     brain: {
       type: 'basic',
-      move: { style: 'lurk', ring: 260, commitRange: 250, unseenArc: 1.6 },
+      move: { style: 'lurk', ring: 260, commitRange: 250, unseenArc: 1.6, lurkMeleeRange: 44 },
+      // Closing Fang crosses a real gap; claws own the close fight.
+      skillUse: { reserve: [{ skill: 'closing_fang', when: { distOver: 130 } }] },
       // The cat hunts on its STOMACH's clock (drives): a fed stalker just
       // watches; a hungry one puts the meadow's small lives on the menu.
       drives: { hunger: { rise: 0.008, start: [0.2, 0.7], onKill: -0.6 } },
@@ -13174,7 +13180,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     tells: HUNGER_LEAN,
     brain: {
       type: 'basic',
-      move: { style: 'lurk', ring: 240, commitRange: 230, unseenArc: 1.5 },
+      move: { style: 'lurk', ring: 240, commitRange: 230, unseenArc: 1.5, lurkMeleeRange: 44 },
       behavior: { stalk: { arcDeg: 80 }, spacing: 26 },
       drives: { hunger: { rise: 0.008, start: [0.2, 0.6], onKill: -0.6 } },
       perception: { memory: 4 },

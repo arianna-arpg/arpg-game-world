@@ -5,7 +5,7 @@ import { BRANDT_CFG, BRANDT_HAMMER_QUEST, BRANDT_TROPHY_QUEST } from './brandt';
 import { RELIQUARY_CFG } from './reliquary';
 import { ORACLE_RESCUED } from './oracle';
 export { BRANDT_HAMMER_QUEST } from './brandt';
-import type { World } from '../engine/world';
+import type { NativeNpcDialogueHost } from '../engine/nativeNpcDialogueHost';
 import type { DialogueResponses } from '../engine/dialogue';
 
 export type DialogueCondition =
@@ -42,7 +42,7 @@ export interface NpcDialogueDef {
 
 /** Live facts supplement durable ledgers without putting NPC-specific cases in
  * the director. New systems can register their own facts here. */
-export const NPC_DIALOGUE_FACTS: Record<string, (w: World) => boolean> = {
+export const NPC_DIALOGUE_FACTS: Record<string, (w: NativeNpcDialogueHost) => boolean> = {
   oracleAttuned: w => !!w.account.ledger[RELIQUARY_CFG.attunement],
   oracleAtHome: w => w.localZoneAt(w.player.pos).id === START_ZONE,
   oracleRelicWaiting: w => w.activeQuests.some(a => w.questStanding(a) === 'ready'

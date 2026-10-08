@@ -488,7 +488,7 @@ const src = (p: string): string => fs.readFileSync(path.join(here, '..', 'src', 
     /a\.carriedLamp \?\?/.test(lights));
   const theater = src('engine/theater.ts');
   check('H5 the fabric grew exactly two seams: THE FACE AXIS (tilesets) and THE LOCAL CLOCK GATE (ready)',
-    /tilesets\?: string\[\]/.test(theater) && /ready\?\(world: World, ctx: TheaterContext\): boolean/.test(theater)
+    /tilesets\?: string\[\]/.test(theater) && /ready\?\(world: NativeTheaterHost, ctx: TheaterContext\): boolean/.test(theater)
     && /def\.ready && !def\.ready\(world, o\.ctx\)/.test(theater));
 }
 

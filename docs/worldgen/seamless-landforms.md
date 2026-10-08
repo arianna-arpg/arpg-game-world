@@ -1,0 +1,108 @@
+# Seamless regional landforms
+
+The active `codex/seamless-world-foundation` terrain now embeds navigational districts into continuous country. This is the terrain portion of the uncommitted generation expansion in the primary `main` checkout, adapted to streamed world addresses. It does not activate that expansion's bounded zone graphs or claim complete content parity.
+
+## Shared source and physical behavior
+
+`engine/adventureDistricts.ts` and `engine/explorationDistricts.ts` retain the eleven original district-builder bodies. The native locale registry and seamless source capture use those same functions. No copy of the original geometry algorithm lives in the sampler.
+
+The new expedition descriptor captures 21 physical templates: arcades, terraces, ossuary spokes, cloisters, braided thickets, pools, ridge spurs, canals, settlement blocks, crypt wings and a grove ring. A second grove differing mostly by orientation was excluded from the shipped repertoire. Natural templates receive irregular outer envelopes; built precincts retain their deliberate walls. Four exterior approaches connect to existing native stands, without cutting a universal cross through their interiors.
+
+Six geographic recipes choose these shapes for country precincts, desert precincts, woodland passages, wetland crossings, frozen ridges and elevated passes. They use the current seamless climate/biome fields. This does not add every native biome to the base substrate or complete the native Mountain biome integration.
+
+Every admitted shape occupies several streamed chunks but has one deterministic geographic identity. Ground, walls, water and bridges feed the existing renderer, movement, sight and projectile material rules. Native crag, sandstone, hedgewall and drystone semantics are preserved. Water retains native wading/swimming and path costs; dry crossings offer an alternative. No combat rule is replaced. The route proof checks radius-15 clearance; actual movement still uses the existing native region-boundary collision behavior.
+
+## Admission and persistence
+
+- The saved terrain policy owns the complete raster sources, material eligibility and exclusions. Continue does not rebake from current registries. New habitat/dressing composition uses checkpoint schema 12 so older clients refuse generation they cannot reproduce. Historical descriptors keep their existing schema. Descriptors without `landforms` retain their previous terrain; these additions are enabled for new expeditions.
+- A 2,880-unit candidate lattice is generation bookkeeping, not a region, zone, map tile or streaming chunk. Signed 64-bit addresses remain distinct beyond JavaScript's safe integer range.
+- Each candidate has at most four deterministic seats. Acceptance uses complete footprints, never clipped pixels, discovery order or loaded pages. Neighboring eligible cells use different motifs within a recipe; sparse admitted sites can still repeat. Rotation and reflection are not counted as new content.
+- Existing authored country sites and the complete opening-town/journey reservation take precedence. New descriptors explicitly mark ordinary biome habitat packs with `landformHabitat`; those population footprints can share regional terrain, without weakening ordinary mire-patch reservations. Recipes with authored surfaces or site content cannot use the opt-in. Shores are retained. Explicit interior material policy permits reshaping small base outcrops, while the whole outer bypass must already be traversable.
+- A 120-unit dry apron surrounds every source. Later native features and ordinary blocking scenery reserve the complete footprint. Optional `ecology.landformDressing` adds native rubble, bones, leaf litter, scree, wisps and snowdrifts through the existing scenery owner. Source definitions and palettes are saved; full decoration circles plus a 30-unit feather margin fit dry source cells and the recipe's current allowed surfaces. Water, walls and bridge decks stay clear at admission. Native undead-rising and snow-burrow affordances are retained; these are not newly authored quests or reward sites. Ordinary mire patches cannot cover either passages or bypasses; mire remains localized elsewhere.
+- Habitat birth checks the complete native body against terrain and existing bodies, with bounded, draw-free reseating inside the original habitat or formation radius. Ordinary native spawning, formations, wounds, casualties, territory, rewards and Continue retain their owners. No terrain is carved to force a pack into a narrow site.
+- The cache is bounded at 128 candidates. Overlapping seats reuse substrate reads within one candidate; the temporary memo is discarded after the decision. Address bounds derive from actual spacing and chunk size, including 30-unit address chunks. Source validation bounds work, rejects malformed cells and disconnected floor, and checks material eligibility. The generator supplies the same terrain to cold collision and resident pages. Player terrain changes remain a later layer.
+
+## Verification
+
+Run `npm run check`, `npm run genqa`, and the probes `worldmass_landforms`, `worldmass_landformhabitats`, `worldmass_landformdressing`, and `worldmass_landformintegrity`. Adjacent checks include `worldmass_terrainpatches`, `worldmass_nativecountry`, `worldmass_climate`, and `worldmass_nativeingress`.
+
+The landform probe exercises all 21 sources, body-clear approaches, the complete outer bypass, actual native player movement, multi-chunk sampling, opposite query order, cache eviction, far signed coordinates, excluded shores/sites/opening paths and cold Continue. Its structural critic normalizes scale and all eight rotations/reflections before comparing ground/water/barrier occupancy. The closest shipped pair differs in 11.52% of its 32×32 samples; this is a finite corpus check, not a promise of unlimited uniqueness.
+
+The fixed default-world survey covers 1,200 candidate cells across seeds 42, 713 and 991. With ordinary habitats composed into terrain it finds 192 admitted regional footprints across all six recipes, compared with 61 for the historical all-place exclusion. The admitted rectangles cover approximately 2.96% of the surveyed area; density remains spatially uneven. Whole-footprint reservations deliberately make regional terrain much sparser than its raw candidate chance. Future density tuning must retain navigation and source compatibility.
+
+The habitat course seats 84 native bodies across all 21 sources and exercises actual character serialization, wounds, casualties and atomic formations. Dressing checks all five climates, independent circle clearance, ordinary ecology equivalence, removal, eviction and Continue. Integrity checks retain captured terrain/provenance signatures, every source at small signed chunks and bounded temporary reuse. A representative rejected candidate fell from 5,364 to 1,484 substrate reads; cold admission remains synchronous and is not yet guaranteed to fit a frame budget.
+
+For built-client acceptance, build with `HOLLOW_WAKE_STORAGE_SCOPE=preview:seamless-landforms-qa`, `HOLLOW_WAKE_WORLDMASS=1` and `npx vite build --outDir .claude/landforms.local.work/dist`, then run `npx electron balance/landforms-ui.cjs`. This uses an isolated profile, finds naturally admitted terrain, renders four families and exercises durable Continue. Reports and the source contact sheet are written beneath `balance/reports/landforms-*`.
+
+## Multi-screen regional extents
+
+The optional saved `landforms.regional` policy adds twenty sources with physical
+bodies of 3,300, 6,000 and 6,600 units. The regionalExtentSchema checkpoint is 13;
+older clients refuse it. The original 21 small source cells remain byte-identical,
+and policies without the new member retain historical placement. Fresh worlds
+keep small formations between larger ones. The 9,600-unit candidate lattice is
+placement bookkeeping, not a zone or biome-region identity.
+
+The reusable capture input accepts extents from 2,160 to 6,960 units in 60-unit
+steps; the three shipped scales are data choices, not separate algorithms.
+The same native builders run at larger physical dimensions, with 30-unit cells
+and unchanged 100–120-unit paths. The repertoire includes branching Y/cloister
+layouts, flower pools, ossuary chambers, ridge branches, braids, canals, terraces
+and crypt wings. An irregular 120-unit dry collar connects four exterior ports.
+It remains a bounded rounded formation, not arbitrary stitched continental
+geometry. Climate fields and biome identity continue across it; material choices
+come from the saved geographic recipe.
+
+A regional formation explicitly owns local ground and hydrology inside its
+outline. This is necessary because demanding a pristine, site-free six-screen
+rectangle rejected nearly all candidates. Its interior can replace ordinary
+noise lakes and micro-outcrops. A 25-point inland selection rule rejects broad-water
+placements; it is not an exact coastline-preservation proof. Every exterior port
+checks three actual substrate contact cells. The transparent exterior remains
+ordinary terrain. Native source-owned substrates currently refuse this additional
+layer rather than silently changing their authored geography.
+
+Existing protected country-site circles remain completely transparent. Their
+exterior dry collars join the parent through bounded 90-unit spurs, with a maximum
+1,800-unit new spur and 32 repair passes. The opening reservation still excludes
+whole formations. At most 12% of source water/barrier cells may change. Preserved
+terminal distances must remain within 72–135% of the parent distance, plus 180 units
+of tolerance. If a proof terminal falls inside a site, it moves along the original
+dry route to a surviving nearby stand before comparison. Invalid geometry is
+refused as a whole. No saved terrain edits or late resident objects decide it.
+
+Nested pools are complete pinned small native motifs. Parent foundations are
+saved separately, so site composition happens first and the pool can then move
+into another original broad court. A 30-unit margin protects adjacent parent
+paths; child rectangles cannot fit narrow corridors. The Y carries one pool
+formation; the largest ossuary can carry two. Required children must all fit, or
+the candidate refuses. Continue reuses pinned parent and child geometry.
+
+Each candidate has at most four deterministic seats and 38 substrate reads per
+seat. Site enumeration is deduplicated geographic planning, capped at 8,192
+candidate visits and 32 protected sites. Sixteen regional decisions are cached;
+small-terrain admission reserves accepted larger formations. Native habitat
+seating, dressing, ordinary mire exclusions and streamed/cold collision use the
+same final source. Cache eviction and reverse query order regenerate identical
+plans, including at far signed addresses.
+
+The regional extent probe independently checks body-width connectivity, exact
+children, more than 30 streamed chunks, protected circles, source validation,
+far coordinates, eviction and schema 13 cold Continue. Its 300-location survey
+across seeds 42/713/991 finds 39 formations, including 19 large and 4 nested examples,
+across 7 builders and all 6 geographic recipes;302 protected-circle intersections
+retain their original substrate. Cold planning is bounded but synchronous:
+measured 95 th-percentile costs were roughly 100–160 ms, with maxima around 235 ms
+under concurrent verification. Worker scheduling/frame-budget work remains.
+
+Built-client verification uses `balance/regional-extents-ui.cjs` after the same
+isolated build as above. It finds natural large nested terrain and flower pools,
+renders six positions along one connected multi-screen route, and exercises
+native occupants, decoration and durable Continue. These are route-position
+views; they do not constitute a full automated combat playthrough.
+
+## Remaining integration
+
+The source chat's 27 locale programs, 135 layout variants, 30 regional graph forms, bounty-gated passages and their native objective/turn-in ownership still need integration through real zone owners. The shared builders here are preparation for those programs, not inhabited towns or complete crypt adventures.
+
+Keep the hierarchy target: world mass → geographic biome regions → actual native zones → streamed chunks. The candidate lattice above must never become a substitute hierarchy. Native zone/event map zoom, world weather footprints, full native area activation and population/controller persistence remain on that existing integration path. Older saved worlds need an explicit migration policy before acquiring new terrain in unvisited country.

@@ -28,6 +28,7 @@ app.whenReady().then(async()=>{
    const result=await run(region=>{
     const w=__game.world(),Constructor=w.massRuntime.constructor,c=JSON.parse(JSON.stringify(w.massRuntime.config));
     delete c.settlement;delete c.journey;delete c.progression;delete c.ecology;
+    delete c.terrain.patches;
     c.terrain.fields=[];c.terrain.places=[];c.content=[];c.populationRadius=0;c.startRadius=0;c.maxPopulation=0;
     c.terrain.surfaces=[{id:'fixture',priority:0,when:[],region,biome:region==='ice'?'tundra':'marsh',color:'#566664'}];
     const m=new Constructor(42,'surface-physical-'+region,c);m.attach(w);w.landPartyAt({x:450,y:450});

@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { massAdventure } from '../src/worldmass/preset';
+import { WorldMassRuntime } from '../src/worldmass/runtime';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { address,moveAddress } from '../src/worldmass/address';
@@ -9,7 +11,14 @@ import { GeographicPlanWarmQueue,createGeographicPlanWarmQueue,type GeographicCo
 
 const undo=seedGlobalRandom(901743);
 try{
- const w=makeSimWorld('warrior',901743);w.startWorldMass(901743);const m=w.massRuntime!;
+ // Preserve the pre-patch terrain descriptor for this historical regression.
+ // The exact old plan/hash remains the oracle; fresh sources are exercised separately.
+ const config=structuredClone(massAdventure());delete config.terrain.patches;delete config.terrain.landforms;config.terrain.version=7;
+ config.terrain.surfaces=config.terrain.surfaces.map(s=>s.id==='marsh'?{...s,region:'mud'}:s);
+ config.terrain.surfaces=[...config.terrain.surfaces.slice(0,4),{id:'wetland-pools',source:'regions/swamp',priority:25,
+  when:[{field:'temperature',min:-.35},{field:'moisture',min:.35},{field:'elevation',max:.22},{field:'rock',max:-.18}],
+  region:'swamp',color:'#30483d',biome:'marsh'},...config.terrain.surfaces.slice(4)];
+ const w=makeSimWorld('warrior',901743),m=new WorldMassRuntime(901743,'expedition:901743',config);m.attach(w);
  // The historical hash controls keep the original supported source roster.
  // New beacon/circuit lotteries are checked separately below, never substituted.
  const g=new MassGeographicGameplay(m,{...m.config.geography!,holds:m.config.geography!.holds!.filter(r=>r.objective.kind!=='beacon')},undefined,null);
@@ -30,10 +39,11 @@ try{
   }
  }finally{Math.random=random;}
  console.log('PASS all three real native families match independently captured committed plan hashes, worker/sync equality and ambient RNG isolation');
+ const currentWorld=makeSimWorld('warrior',901743);currentWorld.startWorldMass(901743);const current=currentWorld.massRuntime!;
  const beacons=new Map<string,Readonly<GeographicPlanInput>>();
  for(let r=0;r<=16&&beacons.size<2;r++)for(let y=-r;y<=r&&beacons.size<2;y++)for(let x=-r;x<=r&&beacons.size<2;x++){
   if(Math.max(Math.abs(x),Math.abs(y))!==r)continue;
-  const input=m.geography!.preparationInput(center(x,y));
+  const input=current.geography!.preparationInput(center(x,y));
   if(input?.context.zone.objective.kind!=='beacon')continue;
   const key=input.context.recipe?.alias??'beacon';if(beacons.has(key))continue;
   const reply=prepareGeographicPlan(job(input));if(reply.preparation?.plan)beacons.set(key,input);

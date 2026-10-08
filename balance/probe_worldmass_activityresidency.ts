@@ -101,7 +101,7 @@ try{
   console.log('PASS same-story participant and distant native target references prevent destructive puzzle eviction');
 
   enter(w,first);run=getRun(w,first);solve(w,run);
-  const solved=structuredClone(w.capturePlacedPuzzle(run)),rewards=canonical(m.rewards.snapshot());
+  const solved=structuredClone(w.capturePlacedPuzzle(run)),rewards=canonical(m.legacyRewards.snapshot());
   const used=w.shrines.find(s=>s.massSource===shrine.massSource)!;
   w.player.pos={...used.pos};hooks(w).updateShrines();assert.ok(used.used);
   const texts=w.texts.length;away(w);
@@ -111,10 +111,10 @@ try{
   assert.equal(w.texts.length,texts,'eviction executes no additional reward');
   w=checkpoint(w);m=w.massRuntime!;assert.equal(m.puzzles.activity(first.id)!.complete,true);
   enter(w,first);run=getRun(w,first);sameCheckpoint(w.capturePlacedPuzzle(run),solved);
-  assert.equal(canonical(m.rewards.snapshot()),rewards);
+  assert.equal(canonical(m.legacyRewards.snapshot()),rewards);
   const sameShrine=w.shrines.find(s=>s.massSource===shrine.massSource)!;assert.ok(sameShrine.used);
   const before=w.texts.length;w.player.pos={...sameShrine.pos};hooks(w).updateShrines();assert.equal(w.texts.length,before);
-  strike(w,run,0);assert.ok(run.done);assert.equal(canonical(m.rewards.snapshot()),rewards);
+  strike(w,run,0);assert.ok(run.done);assert.equal(canonical(m.legacyRewards.snapshot()),rewards);
   console.log('PASS native solve and spent shrine survive eviction/Continue/remount without paying or applying their boon twice');
 
   away(w);

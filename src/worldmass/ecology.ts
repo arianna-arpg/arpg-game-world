@@ -1,27 +1,37 @@
 import type { World } from '../engine/world';
+import { shapeBoundR } from '../engine/shapes';
+import { landformDressingClear, validateLandformDressing } from './landformDressing';
 import { regionKind } from '../world/regions';
-import { hasDoodadRule, bodyRadiusOf, blocksMovement, type Doodad, type DoodadKind } from '../engine/levelgen';
+import { hasDoodadRule, bodyRadiusOf, blocksMovement, hitSurfaceOf, type Doodad, type DoodadKind, type DoodadRule } from '../engine/levelgen';
 import { cellKey, localOffset, type MassCell } from './address';
 import type { WorldMassRuntime } from './runtime';
 import { canonical, massRandom } from './random';
 import { pieceState, type PieceState } from './sites';
+export interface MassEcologyRule {
+  id: string;
+  biomes: string[];
+  /** Omitted preserves ground/sand admission in existing run descriptors. */
+  regions?: string[];
+  chance: number;
+  /** Omitted preserves the original single-piece lattice and its save IDs. */
+  cluster?: { count: [number, number]; spread: number };
+  pieces: {
+    kind: DoodadKind;
+    weight: number;
+    radius: [number, number];
+  }[];
+}
 export interface MassEcologySpec {
   source: string;
   spacing: number;
-  rules: {
-    id: string;
-    biomes: string[];
-    /** Omitted preserves ground/sand admission in existing run descriptors. */
-    regions?: string[];
-    chance: number;
-    /** Omitted preserves the original single-piece lattice and its save IDs. */
-    cluster?: { count: [number, number]; spread: number };
-    pieces: {
-      kind: DoodadKind;
-      weight: number;
-      radius: [number, number];
-    }[];
-  }[];
+  rules: MassEcologyRule[];
+  /** Source-pinned inert dressing inside regional terrain; omitted saves keep bare reservations. */
+  landformDressing?: {
+    source: string; rules: MassEcologyRule[];
+    /** Ground-paint feather margin; light spill is intentionally not clipped. */
+    clearance: number;
+    definitions: { kind: DoodadKind; rule: DoodadRule }[];
+  };
 }
 export interface MassEcologySave {
   clock: number;
@@ -39,7 +49,8 @@ export function validateMassEcology(spec: MassEcologySpec, span: number): void {
   if (!spec.source || !Number.isSafeInteger(spec.spacing) || spec.spacing < 96 || span % spec.spacing
     || spec.rules.length > 16 || new Set(spec.rules.map(r => r.id)).size !== spec.rules.length)
     throw new Error('Invalid scenery lattice');
-  for (const r of spec.rules)
+  if (spec.landformDressing !== undefined) validateLandformDressing(spec.landformDressing);
+  for (const r of [...spec.rules, ...(spec.landformDressing?.rules ?? [])])
     if (r.cluster && (r.cluster.count.length !== 2 || r.cluster.count.some(n => !Number.isSafeInteger(n) || n < 1 || n > 6)
       || r.cluster.count[1] < r.cluster.count[0] || !Number.isFinite(r.cluster.spread)
       || r.cluster.spread <= 0 || r.cluster.spread > spec.spacing * .24))
@@ -127,10 +138,15 @@ export class MassEcology {
       const sites = this.mass.placesInCell(cell), spacing = this.spec.spacing;
       for (let y = 0; y < span; y += spacing)
         for (let x = 0; x < span; x += spacing) {
-          const rng = massRandom(this.mass.generator.run.seed, [this.spec.source, key, x, y]);
-          const pos = { x: origin.x + x + spacing * (.25 + rng.next() * .5), y: origin.y + y + spacing * (.25 + rng.next() * .5) };
+          const landformDressingAnchorRng = massRandom(this.mass.generator.run.seed, [this.spec.source, key, x, y]);
+          const pos = { x: origin.x + x + spacing * (.25 + landformDressingAnchorRng.next() * .5), y: origin.y + y + spacing * (.25 + landformDressingAnchorRng.next() * .5) };
           const terrain = this.mass.stream.sample(this.mass.walk.at(pos.x, pos.y));
-          const rule = this.spec.rules.find(r => r.biomes.includes(terrain.biome));
+          const landformDressingPlan = this.spec.landformDressing
+            ? this.mass.generator.landforms?.at(this.mass.walk.at(pos.x,pos.y)) : null;
+          const landformDressing = landformDressingPlan ? this.spec.landformDressing : undefined;
+          const landformDressingSource = landformDressing?.source ?? this.spec.source;
+          const rng = landformDressing ? massRandom(this.mass.generator.run.seed, [landformDressingSource,key,x,y]) : landformDressingAnchorRng;
+          const rule = (landformDressing?.rules ?? this.spec.rules).find(r => r.biomes.includes(terrain.biome));
           if (!rule || !(rule.regions ?? ['ground','sand']).includes(terrain.region) || !rng.chance(rule.chance))
             continue;
           const count = rule.cluster ? rng.int(...rule.cluster.count) : 1;
@@ -152,8 +168,20 @@ export class MassEcology {
                 return Math.hypot(q.x - pos.x, q.y - pos.y) < p.radius + radius + 24;
               }))
               continue;
-            const id = canonical([this.mass.generator.run.runId, this.spec.source, key, x, y, ...(rule.cluster ? [i] : [])]);
+            const id = canonical([this.mass.generator.run.runId, landformDressingSource, key, x, y, ...(rule.cluster ? [i] : [])]);
             const live: Doodad = { pos, radius, kind: row.kind, rot: rng.range(0, Math.PI * 2) }, base = canonical(pieceState(live));
+            // Native logs and rock satellites extend beyond their paint radius.
+            // Reserve the complete movement shape after its original rotation
+            // draw; omission keeps the historic ecology draw stream identical.
+            const seamlessLandformReservations = this.mass.generator.landforms;
+            if (landformDressingPlan) {
+              if (!landformDressingClear(landformDressingPlan, this.mass.walk.at(pos.x,pos.y), radius + landformDressing!.clearance,
+                this.mass.config.terrain.addressSpan, this.mass.config.terrain.terrainCell,
+                at => { const p=localOffset(at,{...this.mass.origin,x:0,y:0},span); return this.mass.walk.regionAt(p.x,p.y); }, rule.regions ?? ['ground','sand'])) continue;
+            } else if (seamlessLandformReservations?.reserves(this.mass.walk.at(pos.x,pos.y),
+              Math.max(radius, shapeBoundR(hitSurfaceOf(live, 'move'))))) continue;
+            if (this.mass.generator.patches?.reserves(this.mass.walk.at(pos.x,pos.y),
+              Math.max(radius, shapeBoundR(hitSurfaceOf(live, 'move'))))) continue;
             // Canopies may overlap; solid trunks retain a traversable gap. Decide
             // against generated peers, even when a saved peer has been removed.
             if (blocksMovement(live) && cluster.some(d => blocksMovement(d)
