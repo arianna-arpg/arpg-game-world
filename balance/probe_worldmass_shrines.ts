@@ -74,7 +74,7 @@ try {
   console.log('PASS ordinary zone contents keep native shrines; the expedition owns its own records once; old descriptors gain no new stands');
 
   const full=JSON.parse(JSON.stringify(serializeCharacter(w).world!.worldmass!));
-  assert.equal(full.schema,11);
+  assert.equal(full.schema,12); // landformCompositionSchema on fresh expeditions
   const downgraded={...full,schema:1};
   assert.throws(()=>new WorldMassRuntime(42,'downgraded',full.config,downgraded),/checkpoint/);
   assert.equal(serializeCharacter(old).world!.worldmass!.schema,1,'old descriptors retain their original checkpoint version');

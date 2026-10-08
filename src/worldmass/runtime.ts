@@ -1,3 +1,4 @@
+import { landformHabitatSeat, landformHabitatStand } from './landformHabitats';
 import { massTerrainRegions } from './contracts';
 import { reserveMassOpening } from './patchReservations';
 import { characterPagingAvailable, characterNativePages, commitCharacterNativeCohort, loadCharacterNativePage, forgetCharacterNativePage, resetCharacterNativePages, characterNativeSessionCurrent, characterNativeSessionToken, characterNativePageOrder } from '../meta/character';
@@ -64,8 +65,11 @@ interface MassEnemySave {
   birth?: MassBirth;
   anchor?: { x: number; y: number }; leashHome?: boolean;
 }
+type LandformCompositionSchema = 12;
+const landformCompositionSchema = (config:MassAdventure):boolean => !!config.terrain.landforms
+  && (config.terrain.places.some(p=>p.landformHabitat) || !!config.ecology?.landformDressing);
 export interface MassAdventureSave {
-  schema: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
+  schema: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | LandformCompositionSchema; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
   player: { x: number; y: number; tier?: number }; enemies: MassEnemySave[]; contents: ZoneContents;
   rewards?: MassRewardSave[];
   fields?: MassFieldSave[];
@@ -271,6 +275,7 @@ export class WorldMassRuntime {
     }
     for (const p of config.terrain.places) {
       const site = config.content.find(c => c.id === p.content)?.site;
+      if (p.landformHabitat && site) throw Error('landformHabitat cannot overwrite an authored site');
       if (site) validateMassSite(site, p.radius);
       if (p.surface && !regionKind(p.surface.region)) throw new Error('Unresolved site surface');
     }
@@ -288,7 +293,8 @@ export class WorldMassRuntime {
       // five preserves deliberate quest acceptance, six pins native plan variants,
       // seven owns reward triggers, eight reserves destination population, nine owns country bounties; older descriptors keep
       // their original version and never gain new encounters on Continue.
-      if ((save.schema !== 1 && save.schema !== 2 && save.schema !== 3 && save.schema !== 4 && save.schema !== 5 && save.schema !== 6 && save.schema !== 7 && save.schema !== 8 && save.schema !== 9 && save.schema !== 10 && save.schema !== 11)
+      if ((save.schema !== 1 && save.schema !== 2 && save.schema !== 3 && save.schema !== 4 && save.schema !== 5 && save.schema !== 6 && save.schema !== 7 && save.schema !== 8 && save.schema !== 9 && save.schema !== 10 && save.schema !== 11 && save.schema !== 12) // LandformCompositionSchema
+        || save.schema < 12 && landformCompositionSchema(config)
         || save.schema < 11 && !!config.geography
         || !!save.geography !== !!config.geography
         || !!save.weather !== !!config.geography?.weather
@@ -790,6 +796,8 @@ export class WorldMassRuntime {
         : Math.hypot(q.x, q.y) < this.config.startRadius + p.radius)
         || Math.hypot(q.x - world.player.pos.x, q.y - world.player.pos.y) > this.config.populationRadius) continue;
       const content = this.config.content.find(c => c.id === p.content)!;
+      const landformHabitat = this.config.terrain.places.find(r=>r.id===p.recipe)?.landformHabitat
+        && !!this.generator.landforms?.reserves(p.center,p.radius);
       if([...this.paged.keys()].some(id=>{try{return (JSON.parse(id) as unknown[])[0]===p.id;}catch{return false;}}))continue;
       // Reserve every required field before spawning its garrison or reward.
       if(!this.fields.canAdmit(p,content.site?.altars??[])
@@ -840,7 +848,7 @@ export class WorldMassRuntime {
         const offset=seat?siteOffset(p,seat.x,seat.y):undefined;
         const spot = this.walk.snapToWalkable({ x: q.x + (offset?.x ?? Math.cos(angle) * radius),
           y: q.y + (offset?.y ?? Math.sin(angle) * radius) });
-        if (!this.walk.isWalkable(spot.x, spot.y) || Math.hypot(spot.x - q.x, spot.y - q.y) > p.radius) continue;
+        if (!landformHabitat && (!this.walk.isWalkable(spot.x, spot.y) || Math.hypot(spot.x - q.x, spot.y - q.y) > p.radius)) continue;
         const a = this.births.create(world,id,monster,population.level,scale);
         applyMassTerritory(a, this.config.territory);
         const bodyRadius = a.radius * (coordinated ? RARITY_DEFS.magic.sizeMul : 1);
@@ -856,6 +864,21 @@ export class WorldMassRuntime {
             const jitter=attempt*ENCOUNTER_GROUP_CFG.placementJitter;
             free=world.findFreeSpot({x:spot.x+seating.range(-jitter,jitter),y:spot.y+seating.range(-jitter,jitter)},bodyRadius);
           }
+        }
+        if(landformHabitat) {
+          // Coordinated peers are still unpromoted while staging; reserve the
+          // radius they will have when the complete native cohort is published.
+          const landformHabitatStagedRadius=(peer:Actor)=>peer.radius*(coordinated?RARITY_DEFS.magic.sizeMul:1);
+          const repaired=landformHabitatSeat(free,q,Math.min(p.radius,formation
+            ? ENCOUNTER_GROUPS[formation.recipe].radius??ENCOUNTER_GROUP_CFG.radius : p.radius),this.walk.cellSize,candidate=>{
+            free=candidate;
+            return fits()&&landformHabitatStand(this.walk,candidate,bodyRadius)
+              &&world.actors.every(peer=>peer.dead || (peer.tier??0)!==0
+                || Math.hypot(peer.pos.x-candidate.x,peer.pos.y-candidate.y)>=peer.radius+bodyRadius+2)
+              &&staged.every(peer=>Math.hypot(peer.actor.pos.x-candidate.x,peer.actor.pos.y-candidate.y)>=landformHabitatStagedRadius(peer.actor)+bodyRadius+2);
+          });
+          if(!repaired)continue;
+          free=repaired;
         }
         if(!fits())continue;
         if(offset)a.facing=offset.angle;
@@ -1046,7 +1069,7 @@ export class WorldMassRuntime {
         ...(a.encounterGroup ? {encounterGroup:a.encounterGroup,name:a.name} : {}),
         ...(this.births.of(a) ? {birth:this.births.of(a)} : {}) });
     }
-    return JSON.parse(JSON.stringify({ schema: this.config.geography ? 11 : this.config.dormancy || this.config.shrineResidency || this.config.puzzleResidency || this.config.nativeCountry ? 10 : this.config.bounties !== undefined ? 9 : this.config.journey?.reservePopulation !== undefined ? 8 : this.config.rewards?.earnFrom !== undefined ? 7 : this.config.settlement?.structurePlans !== undefined ? 6 : this.config.settlement?.quests?.acceptance === 'journal' ? 5 : this.config.content.some(c=>c.site?.puzzles?.length) ? 4 : this.config.journey?.roadside ? 3 : this.config.content.some(c => c.site?.shrines?.length) ? 2 : 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
+    return JSON.parse(JSON.stringify({ schema: landformCompositionSchema(this.config) ? 12 : this.config.geography ? 11 : this.config.dormancy || this.config.shrineResidency || this.config.puzzleResidency || this.config.nativeCountry ? 10 : this.config.bounties !== undefined ? 9 : this.config.journey?.reservePopulation !== undefined ? 8 : this.config.rewards?.earnFrom !== undefined ? 7 : this.config.settlement?.structurePlans !== undefined ? 6 : this.config.settlement?.quests?.acceptance === 'journal' ? 5 : this.config.content.some(c=>c.site?.puzzles?.length) ? 4 : this.config.journey?.roadside ? 3 : this.config.content.some(c => c.site?.shrines?.length) ? 2 : 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
       ...(this.config.rewards ? { rewards: this.rewards.snapshot() } : {}),
       ...(this.fields.snapshot().length ? { fields: this.fields.snapshot() } : {}),
       ...(this.shrines.snapshot().length ? { shrines: this.shrines.snapshot() } : {}),

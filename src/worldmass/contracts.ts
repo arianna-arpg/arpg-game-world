@@ -17,6 +17,8 @@ export interface MassPlaceRecipe {
   when: readonly MassRange[]; priority: number;
   /** Deterministic site ground, sampled before residency and before player edits. */
   surface?: { region: string; color: string };
+  /** Ordinary population may share saved landforms; omission reserves its whole footprint. */
+  landformHabitat?: true;
 }
 /** Saved physical patches share ONE lattice. Their complete raster footprints
  * stay inside a cell, with a neutral, scenery-reserved bypass around each. */

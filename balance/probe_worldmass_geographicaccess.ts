@@ -75,7 +75,7 @@ try{
  }
  const chest=world.chests.find(c=>c.massObjectiveOwner===p.owner.id);if(chest){world.landPartyAt(chest.pos);(world as unknown as {updateChests(dt:number):void}).updateChests(1);assert.ok(chest.opened);}
  const saved=serializeCharacter(world),receiptBefore=geography.hierarchy.controller(p.owner.id,'objective:pyres')!;
- assert.equal(saved.world!.worldmass!.schema,11);assert.equal(receiptBefore.phase,'complete');assert.equal(receiptBefore.receipts.length,1);
+ assert.equal(saved.world!.worldmass!.schema,12); /* landformCompositionSchema */assert.equal(receiptBefore.phase,'complete');assert.equal(receiptBefore.receipts.length,1);
  const legacy=structuredClone(saved);for(const owner of legacy.world!.worldmass!.geography!.owners)owner.controllers=owner.controllers.filter(c=>!['objective-access','physical-intel','beacon-survey'].includes(c.id));
  const continued=makeSimWorld('warrior',901745);assert.ok(applySavedCharacter(continued,legacy));assert.ok(continued.adoptWorldState(legacy.world));continued.startWorldMass(legacy.world!.worldmass!.state.run.seed,legacy.world!.worldmass);
  const geo=continued.massRuntime!.geography!,oldPlan=geo.plannedAt(p.owner.center)!;
@@ -87,6 +87,6 @@ try{
  const corrupt=structuredClone(saved),access=corrupt.world!.worldmass!.geography!.owners.find(o=>o.owner.id===p.owner.id)!.controllers.find(c=>c.id==='objective-access')!;
  (access.definition as {access:MassAccessProof}).access.paths[0][0]++;access.definitionHash=massDigest(access.definition);
  const refused=makeSimWorld('warrior',901746);assert.ok(applySavedCharacter(refused,corrupt));assert.ok(refused.adoptWorldState(corrupt.world));assert.throws(()=>refused.startWorldMass(corrupt.world!.worldmass!.state.run.seed,corrupt.world!.worldmass),/geographic access/i);
- console.log('PASS actual scenery blocker refuses admission; prior schema11 completed objective Continue retains exact stands/context/chest/receipt and no duplicate payout; malformed current proof rejects');
+ console.log('PASS actual scenery blocker refuses admission; historical objective receipt Continue (landformCompositionSchema) retains exact stands/context/chest/receipt and no duplicate payout; malformed current proof rejects');
  console.log('GEOGRAPHIC_PLANNING_STATS',JSON.stringify(geography.accessStats));
 }finally{restore();}

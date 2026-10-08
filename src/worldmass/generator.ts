@@ -48,6 +48,8 @@ export function validateMassSpec(spec: MassSpec, nativeSeed?: number): void {
       || !Number.isFinite(p.chance) || p.chance < 0 || p.chance > 1
       || !Number.isFinite(p.radius) || p.radius <= 0 || p.radius > p.period / 2
       || !Number.isFinite(p.jitter) || p.jitter < 0 || p.jitter > 0.8) throw new Error('Invalid place recipe: ' + p.id);
+    if (Object.hasOwn(p, 'landformHabitat') && (p.landformHabitat !== true || p.surface !== undefined))
+      throw Error('Invalid landformHabitat population recipe');
     if (p.surface && (!p.surface.region || !/^#[0-9a-f]{6}$/i.test(p.surface.color))) throw new Error('Invalid place surface');
     if ((Math.ceil(spec.addressSpan / p.period) + 5) ** 2 > 4096) throw new Error('Place page query exceeds candidate budget');
   }
@@ -92,7 +94,7 @@ export class MassGenerator {
     for (const f of this.spec.fields) for (const l of f.layers)
       this.salts.set(l, streamSeed(run.seed, [spec.id, spec.version, f.id, l.id]));
     this.landforms = Object.hasOwn(this.spec,'landforms') ? new MassLandforms(this.spec,this.run,
-      at=>this.baseTerrainAt(at),(origin,box)=>this.patchSitesClear(origin,box),
+      at=>this.baseTerrainAt(at),(origin,box)=>this.patchSitesClear(origin,box,true), // landformHabitat owners compose with terrain
       this.nativeSubstrate ? (origin,size)=>this.nativeSubstrate!.supportsPatchCell(origin,size) : undefined) : null;
     this.patches = Object.hasOwn(this.spec, 'patches') && this.spec.patches ? new MassTerrainPatches(this.spec, this.run,
       at => this.baseTerrainAt(at), (origin, box) => this.patchSitesClear(origin, box)
@@ -121,12 +123,13 @@ export class MassGenerator {
     const landformTerrain = this.landforms?.sample(at,base) ?? base;
     return this.patches?.sample(at, landformTerrain) ?? landformTerrain;
   }
-  private patchSitesClear(origin: MassAddress, box: MassPatchBox): boolean {
+  private patchSitesClear(origin: MassAddress, box: MassPatchBox, landformHabitats = false): boolean {
     const span = this.spec.addressSpan;
     const lo = moveAddress(origin, { x: box.minX, y: box.minY }, span);
     const hi = moveAddress(origin, { x: box.maxX, y: box.maxY }, span);
     for (let y = BigInt(lo.cy); y <= BigInt(hi.cy); y++) for (let x = BigInt(lo.cx); x <= BigInt(hi.cx); x++) {
       for (const place of this.placesInCell({ dimension: origin.dimension, cx: x.toString(), cy: y.toString() })) {
+        if (landformHabitats && this.spec.places.find(p=>p.id===place.recipe)?.landformHabitat) continue;
         const q = localOffset(place.center, origin, span, 100000);
         if (patchBoxIntersects(box, q.x, q.y, place.radius)) return false;
       }

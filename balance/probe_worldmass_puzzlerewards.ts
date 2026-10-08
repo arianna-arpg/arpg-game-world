@@ -18,6 +18,9 @@ import {SUPPORTS} from '../src/data/supports';
 const guts=(w:World)=>w as unknown as {puzzles:PuzzleRun[];puzzleStruck(n:Actor,p:Actor,wounding:boolean):void;updatePuzzles(dt:number):void};
 const fresh=(id='magician',legacy=false)=>{
  const w=makeSimWorld(id,42),c=structuredClone(massAdventure()) as MassAdventure;if(legacy){c.settlement!.structurePlans={};/* explicit schema-six fixture */beforeMassStreaming(c);delete c.bounties;delete c.journey!.reservePopulation;delete c.rewards!.earnFrom;}
+ // Keep this reward/schema course on its historical terrain descriptor.
+ for(const p of c.terrain.places)delete p.landformHabitat;
+ if(c.ecology)delete c.ecology.landformDressing;
  new WorldMassRuntime(42,'puzzle-reward',c).attach(w);
  const p=w.massRuntime!.journey!.places.find(p=>p.content==='memorial-grove')!;
  w.landPartyAt(w.massRuntime!.journey!.local(p));w.massRuntime!.update(w,true);

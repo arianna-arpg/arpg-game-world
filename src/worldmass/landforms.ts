@@ -89,6 +89,7 @@ export class MassLandforms {
     private readonly sitesClear: (origin:MassAddress,box:MassPatchBox)=>boolean,
     private readonly domain?: (origin:MassAddress,size:number)=>boolean) {}
   private get policy(): MassLandformPolicy { return this.spec.landforms!; }
+  private get landformFrameCells(): number { return Math.ceil(this.policy.spacing/this.spec.addressSpan)+1; }
   private candidate(dimension:string,gx:bigint,gy:bigint): Readonly<MassLandformPlan>|null {
     const key=canonical([dimension,gx.toString(),gy.toString()]);
     if(this.cache.has(key))return this.cache.get(key)!;
@@ -102,6 +103,15 @@ export class MassLandforms {
     const axis=(g:bigint):[string,number]=>{const q=floorDiv(g*period,bigSpan);return [q.toString(),Number(g*period-q*bigSpan)];};
     const [cx,x]=axis(gx),[cy,y]=axis(gy),cellOrigin=address(dimension,cx,cy,x,y,span);
     if(this.domain && !this.domain(cellOrigin,p.spacing))return null;
+    // Seats overlap substantially. Cache pure substrate reads for this one
+    // candidate, preserving draw order and releasing the cache with the plan.
+    // At most four (64*64+1) addresses can be sampled by the validated source.
+    const landformTerrainMemo=new Map<string,MassTerrain>();
+    const landformBaseAt=(at:MassAddress):MassTerrain=>{
+      const k=at.cx+'/'+at.cy+'/'+at.x+'/'+at.y,hit=landformTerrainMemo.get(k);
+      if(hit)return hit;
+      const value=this.baseAt(at);landformTerrainMemo.set(k,value);return value;
+    };
     const rng=massRandom(this.run.seed,[this.spec.id,this.spec.version,p.source,p.version,key]);
     if(!rng.chance(p.chance))return null;
     // Finite, seeded reseating changes placement, never a rejected shape's
@@ -109,7 +119,7 @@ export class MassLandforms {
     const jitter={x:rng.range(-.5,.5)*p.spacing*p.jitter,y:rng.range(-.5,.5)*p.spacing*p.jitter};
     for (const [sx,sy] of [[1,1],[-1,-1],[1,-1],[-1,1]]) {
       const offset={x:Math.round((p.spacing/2+jitter.x*sx)/p.cell)*p.cell,y:Math.round((p.spacing/2+jitter.y*sy)/p.cell)*p.cell};
-      const center=moveAddress(cellOrigin,offset,span),base=this.baseAt(center);
+      const center=moveAddress(cellOrigin,offset,span),base=landformBaseAt(center);
       const recipe=p.recipes.find(r=>r.biomes.includes(base.biome) && r.when.every(w=>base.fields[w.field]>=(w.min??-Infinity) && base.fields[w.field]<(w.max??Infinity)));
       if(!recipe)continue;
       // Spatial coloring changes motifs in neighboring eligible cells. Random
@@ -134,7 +144,7 @@ export class MassLandforms {
       // separate reserved owners and cannot be overwritten by this base layer.
       let clear=true;
       terrain: for(let y=0;y<size;y+=p.cell)for(let x=0;x<size;x+=p.cell) {
-        const t=this.baseAt(moveAddress(origin,{x:x+p.cell/2,y:y+p.cell/2},span));
+        const t=landformBaseAt(moveAddress(origin,{x:x+p.cell/2,y:y+p.cell/2},span));
         const c=landformCell(plan,x/p.cell,y/p.cell);
         if(!(c==='.'?p.bypassRegions:p.interiorRegions).includes(t.region)){clear=false;break terrain;}
       }
@@ -145,12 +155,12 @@ export class MassLandforms {
   at(at:MassAddress): Readonly<MassLandformPlan>|null {
     const p=this.policy,q=latticeAt(at,this.spec.addressSpan,p.spacing),plan=this.candidate(at.dimension,q.gx,q.gy);
     if(!plan)return null;
-    const v=localOffset(at,plan.origin,this.spec.addressSpan,32),size=plan.bounds.maxX;
+    const v=localOffset(at,plan.origin,this.spec.addressSpan,this.landformFrameCells),size=plan.bounds.maxX;
     return v.x>=0 && v.y>=0 && v.x<size && v.y<size ? plan : null;
   }
   sample(at:MassAddress,base:MassTerrain): MassTerrain {
     const plan=this.at(at);if(!plan)return base;
-    const v=localOffset(at,plan.origin,this.spec.addressSpan,32),c=landformCell(plan,Math.floor(v.x/this.policy.cell),Math.floor(v.y/this.policy.cell));
+    const v=localOffset(at,plan.origin,this.spec.addressSpan,this.landformFrameCells),c=landformCell(plan,Math.floor(v.x/this.policy.cell),Math.floor(v.y/this.policy.cell));
     if(c==='.')return base;
     const surface=c==='b'?plan.recipe.barrier:c==='w'?{region:'water',color:'#294850'}:c==='c'?{region:'locale_bridge',color:'#75694b'}:{region:'ground',color:base.color};
     return Object.freeze({...base,...surface,source:Object.freeze({generator:this.spec.id,version:this.spec.version,

@@ -1,6 +1,7 @@
 import { WATER_SURFACE } from '../data/waterSurface';
 import { LASTLIGHT_DEFENSES } from '../data/settlementDefenses';
 import { massLandformPolicy } from './landformSources';
+import { massLandformDressing } from './landformDressing';
 import { MASS_SNOW_DEFAULT } from './snow';
 import { MASS_WEATHER_DEFAULT } from './weather';
 import { MASS_HIERARCHY_DEFAULT } from './hierarchy';
@@ -116,7 +117,7 @@ export function massAdventure(): MassAdventure {
       ],
     },
     places: [...activities.map(a=>a.recipe), ...regional.map(r => r.recipe), ...fields.map(f=>f.recipe), ...families.map(f => ({ id: f.id + '-habitat', version: 1, content: f.id,
-      period: 1100, chance: .7, radius: 180, jitter: .7, priority: 1,
+      period: 1100, chance: .7, radius: 180, jitter: .7, priority: 1, landformHabitat: true as const,
       when: [{ field: 'elevation', min: -.1 }, ...f.when] })),
       { id: 'wayside-camp', version: 1, content: 'wayside-camp', period: 1600, chance: .65,
         radius: 180, jitter: .65, priority: 3, when: [{ field: 'elevation', min: 0 }],
@@ -208,7 +209,7 @@ export function massAdventure(): MassAdventure {
         { id: 'east-camp', content: 'memorial-grove', edge: 'east', distance: 1350, radius: 330, jitter: .16 },
         { id: 'south-ruin', content: 'fallen-court', edge: 'south', distance: 1850, radius: 330, jitter: .12 },
       ] },
-    ecology: { source: 'worldmass/country-scenery', spacing: 192, rules: [
+    ecology: { source: 'worldmass/country-scenery', spacing: 192, landformDressing: massLandformDressing(), rules: [
       ...MASS_CLIMATE_ECOLOGY,
       { id: 'downs', biomes: ['downs'], chance: .62, cluster: { count: [2, 4], spread: 46 }, pieces: [
         { kind: 'tree', weight: 4, radius: [28, 48] }, { kind: 'rock', weight: 2, radius: [14, 24] },

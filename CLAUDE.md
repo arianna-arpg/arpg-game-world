@@ -1,3 +1,16 @@
+Saved landformHabitat recipes now let ordinary native packs inhabit regional
+terrain while complete authored sites keep their reservations. Body-clear dry
+seating stays inside native encounter bounds and preserves formations, wounds,
+casualties and rewards. landformCompositionSchema 12 makes older clients refuse
+terrain/content relationships they cannot reproduce. Optional ecology.landformDressing
+uses pinned native
+rules and ordinary scenery persistence; omission retains historical bare terrain.
+Keep source-cell/feather clearance and protected crossings. Candidate-local
+substrate reuse preserves geometry; small address spans use derived local bounds.
+Verify landformhabitats, landformdressing, landformintegrity, landforms, formations,
+climate, terrainpatches, nativecountry, all types, genqa, sim and landforms-ui.cjs.
+See docs/worldgen/seamless-landforms.md for the remaining native-zone boundary.
+
 Marsh and Thicket Stalkers opt into lurkMeleeRange: finish an ambush and
 trade attacks until the prey escapes commitRange. Thicket reserves Closing Fang
 for targets beyond 130 units; player use and other species stay authored.

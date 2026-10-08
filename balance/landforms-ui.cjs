@@ -50,9 +50,15 @@ app.whenReady().then(async()=>{
     if(!stand)throw Error('No regional approach');w.landPartyAt(stand);m.update(w,true);
     for(let i=0;i<5;i++)__game.step(1);
     window.__landformLast={origin:p.origin,id:p.id,shape:p.shape.id,source:JSON.stringify(m.config.terrain.landforms)};
-    return {id:p.id,shape:p.shape.id,recipe:p.recipe.id,pos:{...w.player.pos},terrain:m.walk.regionAt(w.player.pos.x,w.player.pos.y),crash:__game.crash().fatal};
+    const inside=pos=>{const x=pos.x-origin.x,y=pos.y-origin.y;return x>=0&&y>=0&&x<p.bounds.maxX&&y<p.bounds.maxY;};
+    const dressing=w.doodads.filter(d=>inside(d.pos));
+    const inhabitants=w.actors.filter(a=>a.team==='enemy'&&!a.dead&&inside(a.pos));
+    return {id:p.id,shape:p.shape.id,recipe:p.recipe.id,pos:{...w.player.pos},terrain:m.walk.regionAt(w.player.pos.x,w.player.pos.y),
+      dressing:dressing.length,dressingKinds:[...new Set(dressing.map(d=>d.kind))],inhabitants:inhabitants.map(a=>a.defId),crash:__game.crash().fatal};
    },index);assert.equal(visit.crash,null);visit.image=await shot('region-'+index);report.visits.push(visit);
   }
+  assert.ok(report.visits.some(v=>v.dressing>0),'naturally admitted terrain must carry native dressing');
+  assert.ok(report.visits.some(v=>v.inhabitants.length>0),'naturally admitted terrain must contain native inhabitants');
   report.saved=await run(async()=>{const w=__game.world();__game.save();await __game.flushRunSave();return {...window.__landformLast,pos:{...w.player.pos}};});
   await boot();
   report.continued=await run(async expected=>{
@@ -64,7 +70,7 @@ app.whenReady().then(async()=>{
   },report.saved);
   assert.equal(report.continued.id,report.saved.id);assert.equal(report.continued.source,report.saved.source);assert.deepEqual(report.continued.pos,report.saved.pos);assert.equal(report.continued.crash,null);
   report.continuedImage=await shot('continued');delete report.saved.source;delete report.continued.source;
-  fs.writeFileSync(path.join(reports,'landforms-ui.json'),JSON.stringify(report,null,2));console.log('PASS naturally generated regional terrain, four rendered families, source-pinned cold Continue');
+  fs.writeFileSync(path.join(reports,'landforms-ui.json'),JSON.stringify(report,null,2));console.log('PASS naturally generated regional terrain, four rendered regional families with native inhabitants and dressing, source-pinned cold Continue');
   clearTimeout(timer);win.destroy();server.close();app.exit(0);
  }catch(e){report.failure=String(e.stack||e);try{report.failureImage=await shot('failure');}catch{}fs.writeFileSync(path.join(reports,'landforms-ui.json'),JSON.stringify(report,null,2));console.error(e);clearTimeout(timer);app.exit(1);}
 });
