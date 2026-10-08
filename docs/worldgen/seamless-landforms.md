@@ -34,6 +34,73 @@ The habitat course seats 84 native bodies across all 21 sources and exercises ac
 
 For built-client acceptance, build with `HOLLOW_WAKE_STORAGE_SCOPE=preview:seamless-landforms-qa`, `HOLLOW_WAKE_WORLDMASS=1` and `npx vite build --outDir .claude/landforms.local.work/dist`, then run `npx electron balance/landforms-ui.cjs`. This uses an isolated profile, finds naturally admitted terrain, renders four families and exercises durable Continue. Reports and the source contact sheet are written beneath `balance/reports/landforms-*`.
 
+## Multi-screen regional extents
+
+The optional saved `landforms.regional` policy adds twenty sources with physical
+bodies of 3,300, 6,000 and 6,600 units. The regionalExtentSchema checkpoint is 13;
+older clients refuse it. The original 21 small source cells remain byte-identical,
+and policies without the new member retain historical placement. Fresh worlds
+keep small formations between larger ones. The 9,600-unit candidate lattice is
+placement bookkeeping, not a zone or biome-region identity.
+
+The reusable capture input accepts extents from 2,160 to 6,960 units in 60-unit
+steps; the three shipped scales are data choices, not separate algorithms.
+The same native builders run at larger physical dimensions, with 30-unit cells
+and unchanged 100–120-unit paths. The repertoire includes branching Y/cloister
+layouts, flower pools, ossuary chambers, ridge branches, braids, canals, terraces
+and crypt wings. An irregular 120-unit dry collar connects four exterior ports.
+It remains a bounded rounded formation, not arbitrary stitched continental
+geometry. Climate fields and biome identity continue across it; material choices
+come from the saved geographic recipe.
+
+A regional formation explicitly owns local ground and hydrology inside its
+outline. This is necessary because demanding a pristine, site-free six-screen
+rectangle rejected nearly all candidates. Its interior can replace ordinary
+noise lakes and micro-outcrops. A 25-point inland selection rule rejects broad-water
+placements; it is not an exact coastline-preservation proof. Every exterior port
+checks three actual substrate contact cells. The transparent exterior remains
+ordinary terrain. Native source-owned substrates currently refuse this additional
+layer rather than silently changing their authored geography.
+
+Existing protected country-site circles remain completely transparent. Their
+exterior dry collars join the parent through bounded 90-unit spurs, with a maximum
+1,800-unit new spur and 32 repair passes. The opening reservation still excludes
+whole formations. At most 12% of source water/barrier cells may change. Preserved
+terminal distances must remain within 72–135% of the parent distance, plus 180 units
+of tolerance. If a proof terminal falls inside a site, it moves along the original
+dry route to a surviving nearby stand before comparison. Invalid geometry is
+refused as a whole. No saved terrain edits or late resident objects decide it.
+
+Nested pools are complete pinned small native motifs. Parent foundations are
+saved separately, so site composition happens first and the pool can then move
+into another original broad court. A 30-unit margin protects adjacent parent
+paths; child rectangles cannot fit narrow corridors. The Y carries one pool
+formation; the largest ossuary can carry two. Required children must all fit, or
+the candidate refuses. Continue reuses pinned parent and child geometry.
+
+Each candidate has at most four deterministic seats and 38 substrate reads per
+seat. Site enumeration is deduplicated geographic planning, capped at 8,192
+candidate visits and 32 protected sites. Sixteen regional decisions are cached;
+small-terrain admission reserves accepted larger formations. Native habitat
+seating, dressing, ordinary mire exclusions and streamed/cold collision use the
+same final source. Cache eviction and reverse query order regenerate identical
+plans, including at far signed addresses.
+
+The regional extent probe independently checks body-width connectivity, exact
+children, more than 30 streamed chunks, protected circles, source validation,
+far coordinates, eviction and schema 13 cold Continue. Its 300-location survey
+across seeds 42/713/991 finds 39 formations, including 19 large and 4 nested examples,
+across 7 builders and all 6 geographic recipes;302 protected-circle intersections
+retain their original substrate. Cold planning is bounded but synchronous:
+measured 95 th-percentile costs were roughly 100–160 ms, with maxima around 235 ms
+under concurrent verification. Worker scheduling/frame-budget work remains.
+
+Built-client verification uses `balance/regional-extents-ui.cjs` after the same
+isolated build as above. It finds natural large nested terrain and flower pools,
+renders six positions along one connected multi-screen route, and exercises
+native occupants, decoration and durable Continue. These are route-position
+views; they do not constitute a full automated combat playthrough.
+
 ## Remaining integration
 
 The source chat's 27 locale programs, 135 layout variants, 30 regional graph forms, bounty-gated passages and their native objective/turn-in ownership still need integration through real zone owners. The shared builders here are preparation for those programs, not inhabited towns or complete crypt adventures.

@@ -79,6 +79,6 @@ export interface MassPage {
 export function massTerrainRegions(spec: MassSpec): string[] {
   return [...new Set([...spec.surfaces.map(s => s.region),
     ...spec.places.flatMap(p => p.surface ? [p.surface.region] : []),
-    ...(spec.landforms ? ['ground','water','locale_bridge',...spec.landforms.recipes.map(r=>r.barrier.region)] : []),
+    ...(spec.landforms ? ['ground','water','locale_bridge',...spec.landforms.recipes.map(r=>r.barrier.region), ...(spec.landforms.regional?.recipes.map(r=>r.barrier.region)??[]) /* regionalLandforms */] : []),
     ...(spec.patches?.recipes.flatMap(r => r.choices.map(c => c.region)) ?? [])])];
 }

@@ -1,3 +1,4 @@
+import { MassRegionalLandforms, validateRegionalLandforms, type MassRegionalLandformPolicy, type RegionalLandformSites } from './regionalLandforms';
 import { address, floorDiv, latticeAt, localOffset, moveAddress, type MassAddress } from './address';
 import type { MassPatchPolicy, MassRange, MassRun, MassSpec, MassTerrain } from './contracts';
 import { canonical, freezeData, massRandom } from './random';
@@ -8,6 +9,11 @@ export interface MassLandformShape {
   id: string; source: string; builder: string; params: Record<string, number>;
   /** Immutable native builder result: transparent, ground, barrier, water, crossing. */
   rows: readonly string[];
+  /** Regional sources retain complete child placements and route terminals. */
+  foundationRows?: readonly string[]; // regionalExtent parent before nested sources
+  components?: readonly {shape:string;x:number;y:number;size:number}[];
+  navigation?: readonly {x:number;y:number}[];
+  ports?: readonly {x:number;y:number;dx:number;dy:number}[];
 }
 export interface MassLandformRecipe {
   id: string; biomes: readonly string[]; when: readonly MassRange[]; shapes: readonly string[];
@@ -20,10 +26,12 @@ export interface MassLandformPolicy {
   shapes: readonly MassLandformShape[];
   recipes: readonly MassLandformRecipe[];
   exclusions?: MassPatchPolicy['exclusions'];
+  regional?: MassRegionalLandformPolicy;
 }
 export interface MassLandformPlan {
   id: string; origin: MassAddress; recipe: MassLandformRecipe; shape: MassLandformShape;
   turn: number; mirror: boolean; bounds: MassPatchBox;
+  regionalExtent?: true;
 }
 const owns = (v: object, k: string) => Object.hasOwn(v, k);
 const finite = (n: number, lo: number, hi: number) => Number.isFinite(n) && n >= lo && n <= hi;
@@ -71,6 +79,7 @@ export function validateMassLandforms(spec: MassSpec): void {
       || !Object.values(e.bounds).every(n=>finite(n as number,-1048576,1048576)) || Object.keys(e.bounds).length!==4
       || !(e.bounds.minX<e.bounds.maxX && e.bounds.minY<e.bounds.maxY)) throw Error('Invalid regional exclusion');
   }
+  validateRegionalLandforms(spec);
 }
 export function landformCell(plan: MassLandformPlan, x: number, y: number): string {
   const n=plan.shape.rows.length;
@@ -83,13 +92,16 @@ export function landformCell(plan: MassLandformPlan, x: number, y: number): stri
  * before publication. No query depends on discovery, page order or live props.
  * The complete footprint reserves passages and its dry outer bypass. */
 export class MassLandforms {
+  readonly regionalLandforms: MassRegionalLandforms | null;
   private cache = new Map<string, Readonly<MassLandformPlan>|null>();
   constructor(private readonly spec: Readonly<MassSpec>, private readonly run: Readonly<MassRun>,
     private readonly baseAt: (at:MassAddress)=>MassTerrain,
     private readonly sitesClear: (origin:MassAddress,box:MassPatchBox)=>boolean,
-    private readonly domain?: (origin:MassAddress,size:number)=>boolean) {}
+    private readonly domain?: (origin:MassAddress,size:number)=>boolean, regionalLandformSites?: RegionalLandformSites) {
+    this.regionalLandforms=spec.landforms?.regional ? new MassRegionalLandforms(spec,run,baseAt,regionalLandformSites??(()=>null)) : null;
+  }
   private get policy(): MassLandformPolicy { return this.spec.landforms!; }
-  private get landformFrameCells(): number { return Math.ceil(this.policy.spacing/this.spec.addressSpan)+1; }
+  private get landformFrameCells(): number { return Math.ceil(Math.max(this.policy.spacing,this.policy.regional?.spacing??0)/this.spec.addressSpan)+1; }
   private candidate(dimension:string,gx:bigint,gy:bigint): Readonly<MassLandformPlan>|null {
     const key=canonical([dimension,gx.toString(),gy.toString()]);
     if(this.cache.has(key))return this.cache.get(key)!;
@@ -136,7 +148,7 @@ export class MassLandforms {
         const q=localOffset(origin,e.origin,span,Number(limit));
         if(q.x<=e.bounds.maxX && q.x+size>=e.bounds.minX && q.y<=e.bounds.maxY && q.y+size>=e.bounds.minY){excluded=true;break;}
       }
-      if(excluded || !this.sitesClear(origin,bounds))continue;
+      if(excluded || this.regionalLandforms?.reserves(center,Math.SQRT2*size/2) || !this.sitesClear(origin,bounds))continue;
       const plan:MassLandformPlan={id:canonical([this.run.runId,p.source,p.version,key]),origin,recipe,shape,
         turn:rng.int(0,3),mirror:rng.chance(.5),bounds};
       // Explicit source policy can reshape micro outcrops inside a precinct.
@@ -153,6 +165,7 @@ export class MassLandforms {
     return null;
   }
   at(at:MassAddress): Readonly<MassLandformPlan>|null {
+    const regionalExtent=this.regionalLandforms?.at(at);if(regionalExtent)return regionalExtent;
     const p=this.policy,q=latticeAt(at,this.spec.addressSpan,p.spacing),plan=this.candidate(at.dimension,q.gx,q.gy);
     if(!plan)return null;
     const v=localOffset(at,plan.origin,this.spec.addressSpan,this.landformFrameCells),size=plan.bounds.maxX;
@@ -168,6 +181,7 @@ export class MassLandforms {
   }
   reserves(at:MassAddress,radius:number):boolean {
     if(!Number.isFinite(radius)||radius<0)throw Error('Invalid landform reservation query');
+    if(this.regionalLandforms?.reserves(at,radius))return true;
     const p=this.policy,s=this.spec.addressSpan,lo=latticeAt({...at,x:at.x-radius,y:at.y-radius},s,p.spacing),hi=latticeAt({...at,x:at.x+radius,y:at.y+radius},s,p.spacing);
     if((hi.gx-lo.gx+1n)*(hi.gy-lo.gy+1n)>4096n)throw Error('Landform reservation query exceeds budget');
     for(let y=lo.gy;y<=hi.gy;y++)for(let x=lo.gx;x<=hi.gx;x++) {

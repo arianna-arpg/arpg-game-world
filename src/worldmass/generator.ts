@@ -95,7 +95,8 @@ export class MassGenerator {
       this.salts.set(l, streamSeed(run.seed, [spec.id, spec.version, f.id, l.id]));
     this.landforms = Object.hasOwn(this.spec,'landforms') ? new MassLandforms(this.spec,this.run,
       at=>this.baseTerrainAt(at),(origin,box)=>this.patchSitesClear(origin,box,true), // landformHabitat owners compose with terrain
-      this.nativeSubstrate ? (origin,size)=>this.nativeSubstrate!.supportsPatchCell(origin,size) : undefined) : null;
+      this.nativeSubstrate ? (origin,size)=>this.nativeSubstrate!.supportsPatchCell(origin,size) : undefined,
+      (origin,box)=>this.regionalLandformSites(origin,box)) : null;
     this.patches = Object.hasOwn(this.spec, 'patches') && this.spec.patches ? new MassTerrainPatches(this.spec, this.run,
       at => this.baseTerrainAt(at), (origin, box) => this.patchSitesClear(origin, box)
         && !this.landforms?.reserves(moveAddress(origin,{x:(box.minX+box.maxX)/2,y:(box.minY+box.maxY)/2},this.spec.addressSpan),
@@ -135,6 +136,29 @@ export class MassGenerator {
       }
     }
     return true;
+  }
+  /** Enumerate protected geographic sites once per large footprint, independent
+   * of streamed pages. Ordinary habitat packs remain terrain-compatible. */
+  private regionalLandformSites(origin:MassAddress,box:MassPatchBox):import('./regionalLandformComposition').RegionalLandformSite[]|null {
+    const span=this.spec.addressSpan,result:import('./regionalLandformComposition').RegionalLandformSite[]=[];
+    let budget=0;
+    for(const recipe of this.spec.places) {
+      if(recipe.landformHabitat)continue;
+      const pad=recipe.radius+this.spec.landforms!.regional!.siteApron;
+      const lo=latticeAt(moveAddress(origin,{x:box.minX-pad,y:box.minY-pad},span),span,recipe.period);
+      const hi=latticeAt(moveAddress(origin,{x:box.maxX+pad,y:box.maxY+pad},span),span,recipe.period);
+      const count=(hi.gx-lo.gx+1n)*(hi.gy-lo.gy+1n);
+      if(count>4096n||budget+Number(count)>8192)return null;
+      budget+=Number(count);
+      for(let gy=lo.gy;gy<=hi.gy;gy++)for(let gx=lo.gx;gx<=hi.gx;gx++) {
+        const place=this.candidate(recipe,origin.dimension,gx,gy);if(!place)continue;
+        const q=localOffset(place.center,origin,span,100000);
+        if(patchBoxIntersects(box,q.x,q.y,pad)&&this.accepted(place,recipe)) {
+          result.push({id:place.id,x:q.x,y:q.y,radius:place.radius});if(result.length>32)return null;
+        }
+      }
+    }
+    return result;
   }
   /** Original policy, deliberately patch-free to keep candidate proofs acyclic. */
   private baseTerrainAt(at: MassAddress): MassTerrain {

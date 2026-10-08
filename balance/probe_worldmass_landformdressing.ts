@@ -12,7 +12,7 @@ const copy=<T>(value:T):T=>JSON.parse(canonical(value));
 let passed=0;
 function test(name:string,fn:()=>void){fn();passed++;console.log('PASS '+name);}
 function config(biome='downs',dressed=true):MassAdventure {
-  const native=copy(massAdventure()), policy=native.terrain.landforms!;
+  const native=copy(massAdventure()), policy=native.terrain.landforms!; delete policy.regional; // regionalExtent has its own integration course
   policy.chance=1;
   return {terrain:{id:'landform-dressing-proof',version:1,addressSpan:960,terrainCell:30,
     fields:[{id:'elevation',base:.1,layers:[]}],places:[],landforms:policy,

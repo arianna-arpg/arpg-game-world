@@ -127,7 +127,8 @@ test('native formations compose with corridors atomically and preserve their cas
 test('ordinary habitat composition increases real terrain density while retaining real habitats',()=>{
   let current=0,legacy=0,overlaps=0;const recipes=new Set<string>();
   for(const seed of [42,713,991]) {
-    const currentSpec=copy(massAdventure().terrain),oldSpec=copy(currentSpec);
+    const currentSpec=copy(massAdventure().terrain); delete currentSpec.landforms!.regional; // regionalExtent is surveyed separately
+    const oldSpec=copy(currentSpec);
     for(const p of oldSpec.places)delete p.landformHabitat;
     const now=new MassGenerator(makeMassRun(seed,'density',currentSpec),currentSpec),old=new MassGenerator(makeMassRun(seed,'density',oldSpec),oldSpec);
     for(let y=-10;y<10;y++)for(let x=-10;x<10;x++) {

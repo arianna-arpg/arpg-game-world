@@ -1,3 +1,16 @@
+Regional extent composition (regionalExtentSchema 13) adds saved 3,300/6,000/
+6,600-unit native terrain alongside historical small districts. Captured parent
+foundations accept whole protected-site holes, dry collars and bounded spurs;
+complete child pools reseat only in surviving original broad courts. Preserve
+terminal-distance limits, full child geometry, four real exterior contacts,
+opening exclusions, signed coordinates and historical policy omission. This
+explicit substrate replaces local noise hydrology inside its irregular outline;
+it does not preserve every preexisting noise lake. Large sources retain native
+path widths. Four finite seats use at most 38 substrate reads each; cold planning
+remains synchronous. Verify regionalextents, landform suite, adjacent terrain/
+site/Continue probes, all types, genqa, sim and regional-extents-ui.cjs after an
+isolated build. See docs/worldgen/seamless-landforms.md for scope and limits.
+
 Gameplay followup: discovery support choices and Western Watch's ring choice
 are retired. LegacyMassRewardArchive only validates/preserves historical receipts;
 no claim or earning path remains, and owned gems/items survive. Optional flask

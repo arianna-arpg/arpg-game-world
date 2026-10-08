@@ -117,6 +117,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_tilesetchoice.ts', status: 'green', tier: 'fast', why: 'Archived actual native face selection, ordered duplicate pools and exact random stream/read tapes' },
   { probe: 'probe_fieldchoice.ts', status: 'green', tier: 'fast', why: 'Archived native field read/callback parity, floor claims, exact memo limits and independent instance isolation' },
   { probe: 'probe_pourshape.ts', status: 'green', tier: 'fast', why: 'Archived native pour mask and RNG parity; shared lobes preserve guard/depth/paint wrappers' },
+  { probe: 'probe_worldmass_regionalextents.ts', status: 'green', tier: 'fast', why: 'Multi-screen native terrain, source-pinned nested pools, protected sites, route continuity, signed streaming and schema-13 Continue' },
   { probe: 'probe_worldmass_landformhabitats.ts', status: 'green', tier: 'fast', why: 'Native packs inside regional terrain, body-clear seating, atomic formations, casualty Continue, protected sites and real-country density' },
   { probe: 'probe_worldmass_landformdressing.ts', status: 'green', tier: 'fast', why: 'Source-pinned native ground dressing, complete dry footprints, historical ecology, eviction and Continue' },
   { probe: 'probe_worldmass_landformintegrity.ts', status: 'green', tier: 'fast', why: 'Captured landform equivalence, every source across tiny signed chunks, candidate-local bounded substrate reuse' },

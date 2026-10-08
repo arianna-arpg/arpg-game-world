@@ -66,10 +66,12 @@ interface MassEnemySave {
   anchor?: { x: number; y: number }; leashHome?: boolean;
 }
 type LandformCompositionSchema = 12;
+type RegionalLandformSchema = 13;
+const regionalLandformSchema = (config:MassAdventure):boolean => !!config.terrain.landforms?.regional;
 const landformCompositionSchema = (config:MassAdventure):boolean => !!config.terrain.landforms
   && (config.terrain.places.some(p=>p.landformHabitat) || !!config.ecology?.landformDressing);
 export interface MassAdventureSave {
-  schema: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | LandformCompositionSchema; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
+  schema: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | LandformCompositionSchema | RegionalLandformSchema; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
   player: { x: number; y: number; tier?: number }; enemies: MassEnemySave[]; contents: ZoneContents;
   rewards?: MassRewardSave[];
   fields?: MassFieldSave[];
@@ -293,7 +295,8 @@ export class WorldMassRuntime {
       // five preserves deliberate quest acceptance, six pins native plan variants,
       // seven owns reward triggers, eight reserves destination population, nine owns country bounties; older descriptors keep
       // their original version and never gain new encounters on Continue.
-      if ((save.schema !== 1 && save.schema !== 2 && save.schema !== 3 && save.schema !== 4 && save.schema !== 5 && save.schema !== 6 && save.schema !== 7 && save.schema !== 8 && save.schema !== 9 && save.schema !== 10 && save.schema !== 11 && save.schema !== 12) // LandformCompositionSchema
+      if ((save.schema !== 1 && save.schema !== 2 && save.schema !== 3 && save.schema !== 4 && save.schema !== 5 && save.schema !== 6 && save.schema !== 7 && save.schema !== 8 && save.schema !== 9 && save.schema !== 10 && save.schema !== 11 && save.schema !== 12 && save.schema !== 13) // RegionalLandformSchema
+        || save.schema < 13 && regionalLandformSchema(config)
         || save.schema < 12 && landformCompositionSchema(config)
         || save.schema < 11 && !!config.geography
         || !!save.geography !== !!config.geography
@@ -1052,7 +1055,7 @@ export class WorldMassRuntime {
         ...(a.encounterGroup ? {encounterGroup:a.encounterGroup,name:a.name} : {}),
         ...(this.births.of(a) ? {birth:this.births.of(a)} : {}) });
     }
-    return JSON.parse(JSON.stringify({ schema: landformCompositionSchema(this.config) ? 12 : this.config.geography ? 11 : this.config.dormancy || this.config.shrineResidency || this.config.puzzleResidency || this.config.nativeCountry ? 10 : this.config.bounties !== undefined ? 9 : this.config.journey?.reservePopulation !== undefined ? 8 : this.config.rewards?.earnFrom !== undefined ? 7 : this.config.settlement?.structurePlans !== undefined ? 6 : this.config.settlement?.quests?.acceptance === 'journal' ? 5 : this.config.content.some(c=>c.site?.puzzles?.length) ? 4 : this.config.journey?.roadside ? 3 : this.config.content.some(c => c.site?.shrines?.length) ? 2 : 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
+    return JSON.parse(JSON.stringify({ schema: regionalLandformSchema(this.config) ? 13 : landformCompositionSchema(this.config) ? 12 : this.config.geography ? 11 : this.config.dormancy || this.config.shrineResidency || this.config.puzzleResidency || this.config.nativeCountry ? 10 : this.config.bounties !== undefined ? 9 : this.config.journey?.reservePopulation !== undefined ? 8 : this.config.rewards?.earnFrom !== undefined ? 7 : this.config.settlement?.structurePlans !== undefined ? 6 : this.config.settlement?.quests?.acceptance === 'journal' ? 5 : this.config.content.some(c=>c.site?.puzzles?.length) ? 4 : this.config.journey?.roadside ? 3 : this.config.content.some(c => c.site?.shrines?.length) ? 2 : 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
       ...(this.config.rewards ? { rewards: this.legacyRewards.snapshot() } : {}),
       ...(this.fields.snapshot().length ? { fields: this.fields.snapshot() } : {}),
       ...(this.shrines.snapshot().length ? { shrines: this.shrines.snapshot() } : {}),
