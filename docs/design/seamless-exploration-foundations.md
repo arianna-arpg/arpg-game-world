@@ -2431,3 +2431,45 @@ and both built-client entry/Continue/return and conversation courses. The wider
 generation sweep passes 8,690 cases. Its 28 spacing warnings reproduce on the
 same 23 original-generator cases; the concurrent metropolis timing warning
 is checked separately in an isolated 130-case metropolis replay.
+
+
+## Native coastal generation ownership
+
+NativeAreaSceneCoast shares the complete classic coastline, island and sea-port
+operations with World. It streams actual continent/biome coast geometry, mints
+the installed island definitions, preserves each island's eight shore discs and
+shared land metadata, and builds complete harbor anchor/quay/causeway networks.
+No alternate face pool, body limit, port cap or substitute mint is introduced.
+Native frontier labels, road constraints, dimension courses, boundary gates and
+biome melds retain their original source predicates and ordering.
+
+The local owner binds the same scene census and geometry as the other native
+area owners. Campaign zone/cave graphs, WorldSim, nextGenId, manifest, knowledge
+sets and warning ledger stay live and shared. Voyage is carried from the native
+birth stage's actual stash restoration; this owner does not create a new run.
+Sighted ports gain knowledge at the original point, chart hooks receive the
+actual local view, and coast geometry is published only after label updates.
+Failures retain the original earlier graph, allocator and discovery effects.
+
+The durable archive compares all 20 complete original bodies, parameter defaults
+and seed hashing. Forty-four cold original/World/local courses cover all seven
+natural island types, three sea classes and four ships, including repeats, exact
+restream thresholds, replaced graphs, saved legacy ports, half-built pairs and
+six reached partial failures. Complete graph/geometry/state receipts match over
+1,981 draws and 155 real chart callbacks. Twenty-five World callback controls
+also retain selected callables and receivers; cached views stay out of the
+enumerable controller roots.
+
+This closes coastal birth ownership, not the complete seamless-area boundary.
+Voyage and sea tables/memos, climate/atlas/relief policies, worldgen providers and
+the campaign route guard still require a complete native source session. The
+base geography capture alone does not authenticate them. Sailing updates, ship
+combat, full island interior population/controllers, whole-owner persistence and
+the complete two-area Continue course remain required before activation.
+
+The NativeAreaSceneCoast checkpoint passes all three type configurations,
+60 native probes without retries, ten additional travel/dimension/harbor probes,
+25 simulation episodes and both built-client entry/Continue/return courses.
+Generation QA passes 2,607 cases with the four recorded spacing warnings and one
+concurrent-load timing warning. The preceding structure checkpoint's isolated
+130-case metropolis replay had no timing warning; this is not an FPS benchmark.

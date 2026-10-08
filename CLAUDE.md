@@ -1,3 +1,12 @@
+NativeAreaSceneCoast shares native coastline, all island types and full sea-port
+network birth with classic World. It uses the same geometry/census and live
+campaign graphs, allocator, voyage and knowledge. Preserve chart/order/partial
+effects, held ports, real sources, course fields and boundary/meld annotations.
+Complete source-session issuance, sailing controllers, island interior birth and
+whole-owner persistence still precede seamless activation. Verify nativescenecoast,
+related birth/exit/boundary/harbor/voyage/dimension probes, all types, generation,
+simulation and built-client entry/Continue/return.
+
 Native resolved structure plans now retain their selected blueprint while
 whole footprints and radius-15 door approaches respect native bounds and actual
 finite grid backing. Exact swept-grid clearance preserves body-width tangent
