@@ -18,7 +18,7 @@ const stand=(w:World,id='townsfolk_innkeep')=>{
 };
 const fresh=(legacy=false)=>{
  const w=makeSimWorld('magician',42),config=structuredClone(massAdventure()) as MassAdventure;
- beforeMassStreaming(config);delete config.bounties;delete config.journey!.reservePopulation;delete config.settlement!.structurePlans;delete config.rewards!.earnFrom; // isolate the schema-five acceptance owner
+ beforeMassStreaming(config);delete config.bounties;delete config.journey!.reservePopulation;delete config.settlement!.structurePlans;delete config.rewards; // isolate the schema-five acceptance owner
  if(legacy)delete config.settlement!.quests!.acceptance;
  new WorldMassRuntime(42,'choice-test',config).attach(w);stand(w);w.player.invulnerable=true;return w;
 };
@@ -36,7 +36,7 @@ try{
  assert.equal(w.activeQuests.length,0);assert.equal((w as unknown as Hooks).questGiverDwell,0);
  const offers=w.questOfferChoices();assert.equal(offers.length,1);
  assert.equal(offers[0].questId,q.id);assert.match(offers[0].target,/Cinderwatch Camp.*west/);
- assert.equal(offers[0].xp,q.reward.xp);assert.equal(offers[0].rewards.length,3);
+ assert.equal(offers[0].xp,q.reward.xp);assert.equal(offers[0].rewards.length,0); // Western Watch now pays experience only.
  assert.match(w.questGiverPrompt()!,/work if you want/);assert.equal(massQuestPins(w).length,0);
  assert.match(questOfferHtml(w),/Accept contract/);assert.equal(state(w),before);
  const waiting=resume(w);assert.deepEqual(waiting.questOfferChoices(),offers);dwell(waiting);
@@ -93,7 +93,8 @@ try{
  mass.update(prior,true);assert.equal(mass.siteCleared(place.id),true);assert.equal(prior.activeQuests.length,0);
  stand(prior);assert.ok(prior.acceptQuestOffer(q.id));mass.update(prior,true);
  assert.equal(prior.questStanding(prior.activeQuests[0]),'ready');
- assert.equal(prior.questRewardOffers().length,1);assert.ok(prior.claimQuestReward(q.id,'spring'));
+ assert.deepEqual(prior.questRewardOffers(),[]);assert.equal(prior.claimQuestReward(q.id,'spring'),false);
+ dwell(prior); // The native giver pays experience after the retrospective field completion.
  assert.ok(prior.completedQuests.has(q.id));assert.equal(prior.acceptQuestOffer(q.id),false);
- console.log('PASS free exploration before enrollment earns native retrospective completion and exactly one original return reward');
+ console.log('PASS free exploration before enrollment earns native retrospective completion and the ordinary experience-only return');
 }finally{restore();}

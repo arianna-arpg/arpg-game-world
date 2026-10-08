@@ -616,6 +616,7 @@ export function nativeSceneGroundAt(host:NativeSceneGeometryHost, p: Vec2, tier 
     let deepKind: string | null = null;
     let deepFord = false, deepPen = 0;
     for (const d of host.doodadsAt(p.x, p.y)) {
+      if (d.gone || d.felled) continue; // Removed foliage cannot grant standing cover.
       if ((d.tier ?? 0) !== wantTier) continue; // its layer's ground, never the other's
       const dd = dist(p, d.pos);
       if (dd > d.radius) continue;

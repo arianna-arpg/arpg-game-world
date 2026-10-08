@@ -37,10 +37,10 @@ app.whenReady().then(async()=>{
  const prepare=async(support=false)=>run(support=>{
   __game.devStartRun('magician');__game.ui.hideAll();const w=__game.world();w.startWorldMass(42);
   if(support){
-   // A prepared reward receipt, not an earned playthrough. Claim/socket gates remain native.
-   w.massRuntime.rewards.earn(w,'qa/caravan-cache','Prepared cache');
-   const offer=w.explorationRewardOffers()[0];
-   if(!offer?.choices.some(c=>c.id==='arcing')||!w.claimExplorationReward(offer.source,'arcing'))throw Error('No Arcing choice');
+   // Prepare a native carried support; the removed reward chooser is not involved.
+   w.dropPinnedGem({...w.player.pos}, {...w.player.pos}, {k:'support',id:'arcing',l:1}, .5);
+   const prepared=w.drops.pop();if(prepared?.item.kind!=='support')throw Error('No prepared support');
+   w.grantSupportGemItem(w.localSeat,prepared.item.gem);
    const item=w.meta.items.find(i=>i.gem?.supportId==='arcing');
    if(!item||!w.socketSupport(item.uid,'firebolt'))throw Error('Cannot fit prepared Arcing');
   }

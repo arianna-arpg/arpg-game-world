@@ -2474,12 +2474,12 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'campfire', order: 53,
     light: { radius: -5, color: '#ffae52', intensity: 0.6, flicker: 6 },
   },
-  // Geology, not an icon: the mouth form-rolls its portal (browed arch or
-  // rockfall ring) from the biome's own stone, with chance-rolled stalactite
-  // fangs, threshold rubble, and theme-gated hanging vines.
+  // A horizontal passage cut into a standing rock face. Pits below retain
+  // their circular descending throat; native entry geometry and seeds stay fixed.
   cave_entrance: {
     painter: 'caveMouth', order: 55,
     params: {
+      rockFace: true,
       color: 'theme:obstacle', edge: 'theme:obstacleEdge', material: 'stone',
       glow: '#caa860', teeth: {}, rubble: {}, vines: { color: 'theme:tree' },
     },
@@ -2515,6 +2515,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   frostmaw_maw: {
     painter: 'caveMouth', order: 55,
     params: {
+      rockFace: true,
       color: '#3a4a58', edge: '#7a98ac', material: 'stone',
       glow: '#8ac8e8', throat: '#0a1016', teeth: {},
     },
@@ -2549,6 +2550,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   wyrm_barrow_mouth: {
     painter: 'caveMouth', order: 55,
     params: {
+      rockFace: true,
       color: '#2e2018', edge: '#5a3c2a', material: 'stone',
       glow: '#ff8a2a', throat: '#140a04', teeth: {},
     },
@@ -2579,6 +2581,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   roost_crag: {
     painter: 'caveMouth', order: 55,
     params: {
+      rockFace: true,
       color: '#4a4238', edge: '#786a54', material: 'stone',
       glow: '#ff9a3a', throat: '#120c06', teeth: {}, rubble: {},
     },
@@ -2634,6 +2637,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   glacier_mouth: {
     painter: 'caveMouth', order: 55,
     params: {
+      rockFace: true,
       color: '#2a4150', edge: '#487086', material: 'ice',
       glow: '#8ed0ec', throat: '#04080c', teeth: {},
     },
@@ -2652,6 +2656,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   tide_hollow: {
     painter: 'caveMouth', order: 55,
     params: {
+      rockFace: true,
       color: '#1e4038', edge: '#3a6c5c', material: 'stone',
       glow: '#9fe8d8', throat: '#04100c', teeth: {},
     },

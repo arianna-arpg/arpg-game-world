@@ -16,7 +16,7 @@ const config=()=>{const c=structuredClone(massAdventure()) as MassAdventure;
 c.settlement!.structurePlans={
  waking_house:nativeStructurePlan('waking_house','structures/waking-house/broad-entry-v1',{5:'##DD###'}),
  inn:nativeStructurePlan('inn','structures/inn/broad-entry-v1',{7:'####W#DD#W####'}),
-};beforeMassStreaming(c);delete c.bounties;delete c.journey!.reservePopulation;delete c.rewards!.earnFrom;return c;};
+};beforeMassStreaming(c);delete c.bounties;delete c.journey!.reservePopulation;delete c.rewards;return c;};
 const fresh=(id='magician',legacy=false,seed=42)=>{
  const w=makeSimWorld(id,seed),c=config();if(legacy)delete c.settlement!.structurePlans;
  new WorldMassRuntime(seed,'broad-door-'+seed,c).attach(w);return w;

@@ -1,3 +1,4 @@
+import { paintRockFaceEntrance } from './rockFaceEntrance';
 import { paintWaterSurface } from './waterSurface';
 // ---------------------------------------------------------------------------
 // DOODAD PAINTERS — the parametric painter library. Every doodad kind maps
@@ -3068,6 +3069,8 @@ const windowSlit: GroupPainter = (env, group) => {
 };
 
 export interface CaveMouthParams {
+  /** Horizontal passage in an upright rock face; omission retains a downward mouth. */
+  rockFace?: boolean;
   /** Brow/jamb stone color (default the biome's own obstacle rock). */
   color?: ColorSpec;
   edge?: ColorSpec;
@@ -3166,6 +3169,14 @@ const caveMouth: GroupPainter = (env, group, def) => {
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
+    }
+    if (p.rockFace) {
+      paintRockFaceEntrance(ctx, r, seed, base, edgeCol, throatCol, glowCol, flick, p,
+        resolveColorOpt(p.vines?.color, theme));
+      if (p.label) env.labelSink?.(o, o.pos, o.pos.x, o.pos.y + r + 14,
+        p.label, '#d8d4c8', { font: '11px Verdana' });
+      ctx.restore();
+      continue;
     }
     // THE THROAT: underground black swallowing a rim-lifted edge — the hole
     // reads round because its rim remembers the daylight.

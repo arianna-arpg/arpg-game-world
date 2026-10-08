@@ -132,7 +132,6 @@ export type MetaAction =
   | { t: 'questAccept'; questId: string }                     // choose a nearby giver's optional contract
   | { t: 'vocationQuest'; questId: string }                    // Vocation menu: undertake a chain step
   | { t: 'questReward'; questId: string; choiceId: string }     // claim one reward at the quest giver
-  | { t: 'explorationReward'; source: string; choiceId: string } // an earned discovery, independent of quests
   | { t: 'questImbue'; questId: string; uid: number; affixId: string }
   // GEAR (items are addressed by uid — stable across bag re-sorts and the wire).
   | { t: 'equipItem'; uid: number; slot?: string }             // bag OR worn item → doll slot (auto-picks when omitted; worn→worn swaps through the vacated slot)

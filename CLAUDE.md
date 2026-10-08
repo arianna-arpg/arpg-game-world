@@ -1,3 +1,18 @@
+Gameplay followup: discovery support choices and Western Watch's ring choice
+are retired. LegacyMassRewardArchive only validates/preserves historical receipts;
+no claim or earning path remains, and owned gems/items survive. Optional flask
+instructions require real pack gestures; the account lesson remains native.
+Behind-target blink arrivals stamp facing and facingPrev, including delayed
+variants. Brush/reeds/berry bushes regain native Concealed, with felled/gone
+props excluded from standing effects. CaveMouthParams.rockFace opts genuine
+caverns into upright entry art; pit/hatch entry mechanics stay native. New default
+encounter territory is 760; saved/authored values remain. See
+docs/design/seamless-gameplay-review.md and docs/engine/stealth.md. Verify types,
+shadowarrival, brushcover, stealth, skillpreparation, mireille_lesson,
+worldmass_rewards/puzzlerewards/quests/questchoice/territory, conversation,
+nativescenegeometry, old-descriptor probes, sim smoke, genqa and the hidden
+gameplay-followup-ui.cjs after an isolated gameplay-followup-dist build.
+
 Saved landformHabitat recipes now let ordinary native packs inhabit regional
 terrain while complete authored sites keep their reservations. Body-clear dry
 seating stays inside native encounter bounds and preserves formations, wounds,
@@ -588,13 +603,10 @@ continuousWorld scopes the authored preparation invitation to the prototype;
 mireilleContractActive restores native work dialogue even with unlearned flasks.
 Verify speech and worldmass_quests as well as the preparation checks below.
 
-skillPreparationHtml presents the native pending flask lesson alongside
-optional contracts. Its buttons send ordinary learn intents with emptyOnly,
-which rechecks occupancy/known copies before changing the rack. Native gifts,
-requirements, once-only filling and graduation remain authoritative. NpcConversationUI
-offers the same native preparation beside Mireille; the Journal remains available. choiceMinWidth keeps
-short alternatives visible. Verify skillpreparation, mireille_lesson, skillitems,
-townwelcome, menubar, worldmass_welcome, sim smoke and skill-preparation-ui.cjs.
+skillPreparationHtml now offers initially closed, read-only instructions beside
+Mireille, in the Journal and in the pack. No preparation button dispatches learn.
+Native pack gestures, gift requirements, once-only filling and graduation remain
+authoritative. Verify skillpreparation, mireille_lesson and gameplay-followup-ui.cjs.
 
 LightSightCache and litPolygon consume the shared RegionGrid contract, so
 native lamps and spell glows respect seamless terrain and Lastlight doors.
@@ -663,12 +675,9 @@ authored ProcDef.description. Verify procreference, itemreadability, sim smoke
 and proc-reference-ui.cjs for escaped compact/full cards, native skill gates,
 purity, narrow layout and exact current/prior-client Continue.
 
-Optional rewards.earnFrom pins which native discovery events share a run's
-support-choice allowance. Completion of an owned riddle can now earn the same
-native compatible choices as a cache; omitted legacy policy stays cache-only.
-Schema seven prevents silently losing this trigger policy. Verify worldmass,
-native puzzles, sim smoke and puzzle-rewards-ui.cjs for native solve, ownership,
-shared budgets, pending/fitted Continue and actual prior-client refusal.
+Historical rewards.earnFrom still participates in old save-schema validation.
+It no longer issues rewards. Native puzzle loot and attunement remain; verify
+worldmass_puzzlerewards and the read-only legacy archive course.
 
 Saved settlement.structurePlans still pins native building plan variants; new
 expeditions use the original inn and waking-house door widths.
@@ -1144,20 +1153,11 @@ spatial dialogue and physical departure invitations through `localZoneAt` and
 Verify worldmass_population, worldmass_welcome, memorylesson and the scoped
 journey client harness; native memory/menu/town-welcome probes remain applicable.
 
-New expedition descriptors also snapshot a first-cache support choice through
-`worldmass/rewards.ts`: existing account unlocks and native equipped-skill socket
-gates choose the offers. Journal cards retain exact payloads and a once-only
-receipt across Continue; full packs keep the offer. Ordinary loot remains.
-Verify worldmass_rewards and hidden `balance/worldmass-rewards-ui.cjs` against
-the scoped build (cache → pending Continue → choice → pointer socket → Continue).
-`explorationRewardReceipts` retains historical choices and a native Skills/inventory
-shortcut in the journal; receipt text does not assert present item ownership or
-socketing. `explorationRewardOffersHtml` also serves the native Skills page;
-the bag's pending-choice shortcut opens that workspace without a Journal detour.
-Both surfaces use the same claim intent. The rewards client covers the bag
-shortcut, both offer faces, native socket restrictions and the saved receipt.
-Old manifests keep their former rewards. Memory provenance labels preserve old
-cache identities internally while presenting a registered Chest/Found name.
+New expeditions do not carry discovery support-choice descriptors. Historical
+rewards are read-only compatibility data; native inventory/socket items retain
+their ordinary ownership. No Journal, Skills or bag reward surfaces remain.
+Memory provenance keeps old cache identities while presenting a Chest/Found name.
+Verify worldmass_rewards and gameplay-followup-ui.cjs.
 
 Worldmass version 4 adds geographic progression through
 `src/worldmass/progression.ts`: saved distance/field rules and native presence

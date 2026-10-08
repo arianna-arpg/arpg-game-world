@@ -42,7 +42,7 @@ import { MassRoadside, validateMassRoadside } from './roadside';
 import { populationChoices, validatePopulationLimits } from './population';
 import { MassEcology, validateMassEcology, type MassEcologySave } from './ecology';
 
-import { MassRewards, type MassRewardSave } from './rewards';
+import { LegacyMassRewardArchive, type MassRewardSave } from './rewards';
 import { MassFields, validateMassFieldResidency, type MassFieldSave } from './fields';
 import { MASS_CLEARANCE_VIEW, massGarrisonProgress, massGarrisonSlots, recordMassGuardian, settleMassClearance } from './clearance';
 import { MassBirths, validMassBirth, type MassBirth } from './birth';
@@ -107,7 +107,7 @@ export interface MassResumePreparation {
  * in-flight skills. The population cap is deliberately conservative until full
  * dependency-aware dormancy exists: wounded/engaged bodies are never discarded. */
 export class WorldMassRuntime {
-  readonly rewards: MassRewards;
+  readonly legacyRewards: LegacyMassRewardArchive;
   readonly fields: MassFields;
   readonly dormancy: MassDormancy | null;
   nativeFeatures: MassNativeResidency | null = null;
@@ -182,7 +182,7 @@ export class WorldMassRuntime {
     this.configHash = massDigest(this.config);
     this.births = new MassBirths(this.config.nativeBirthSource, seed);
     if (this.config.territory !== undefined) validateMassTerritory(this.config.territory);
-    this.rewards = new MassRewards(this.config.rewards, seed, save?.rewards);
+    this.legacyRewards = new LegacyMassRewardArchive(this.config.rewards, save?.rewards);
     if(this.config.fieldResidency!==undefined)validateMassFieldResidency(this.config.fieldResidency,this.config.populationRadius);
     this.fields = new MassFields(save?.fields,this.config.fieldResidency);
     for (const policy of [config.shrineResidency, config.puzzleResidency])
@@ -530,23 +530,6 @@ export class WorldMassRuntime {
     const at=address(owner.center.dimension,owner.center.cx,owner.center.cy,owner.center.x,owner.center.y,this.config.terrain.addressSpan);
     if(canonical(at)!==canonical(owner.center))throw Error('Invalid worldmass activity address');
     return this.placesInCell(at).find(p=>p.id===owner.id && canonical(p.center)===canonical(at));
-  }
-  /** Only a generated, admitted physical cache can earn its configured choice. */
-  earnCacheReward(world: World, source: string | undefined, pos: { x: number; y: number }): void {
-    if (!source || !this.rewards.admits('cache')) return;
-    const place = this.placesInCell(this.walk.at(pos.x, pos.y))
-      .find(p => canonical([p.id, 'cache']) === source && this.state.claimed('site-cache', p.id));
-    const site = place && this.config.content.find(c => c.id === place.content)?.site;
-    if (site?.cache) this.rewards.earn(world, source, site.name);
-  }
-  /** Called only by the native completion event, never by restoration or UI reads. */
-  earnPuzzleReward(world: World, run: import('../engine/puzzles').PuzzleRun): void {
-    if (world.massRuntime !== this || world.clientActionHook
-      || !this.rewards.admits('puzzle')) return;
-    const owner=this.puzzles.completed(run);
-    const place=owner && this.locateOwner({id:owner.place,center:owner.center});
-    const site=place && this.config.content.find(c=>c.id===place.content)?.site;
-    if (owner && site) this.rewards.earn(world, owner.source, site.name);
   }
   /** Preserve the native lock/recovery fraction. An earned, quiet cache merely
    * progresses faster; opening and all loot remain in the native chest artery. */
@@ -1070,7 +1053,7 @@ export class WorldMassRuntime {
         ...(this.births.of(a) ? {birth:this.births.of(a)} : {}) });
     }
     return JSON.parse(JSON.stringify({ schema: landformCompositionSchema(this.config) ? 12 : this.config.geography ? 11 : this.config.dormancy || this.config.shrineResidency || this.config.puzzleResidency || this.config.nativeCountry ? 10 : this.config.bounties !== undefined ? 9 : this.config.journey?.reservePopulation !== undefined ? 8 : this.config.rewards?.earnFrom !== undefined ? 7 : this.config.settlement?.structurePlans !== undefined ? 6 : this.config.settlement?.quests?.acceptance === 'journal' ? 5 : this.config.content.some(c=>c.site?.puzzles?.length) ? 4 : this.config.journey?.roadside ? 3 : this.config.content.some(c => c.site?.shrines?.length) ? 2 : 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
-      ...(this.config.rewards ? { rewards: this.rewards.snapshot() } : {}),
+      ...(this.config.rewards ? { rewards: this.legacyRewards.snapshot() } : {}),
       ...(this.fields.snapshot().length ? { fields: this.fields.snapshot() } : {}),
       ...(this.shrines.snapshot().length ? { shrines: this.shrines.snapshot() } : {}),
       ...(this.puzzles.snapshot(world).length ? { puzzles: this.puzzles.snapshot(world) } : {}),

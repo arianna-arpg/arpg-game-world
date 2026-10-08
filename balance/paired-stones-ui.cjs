@@ -56,8 +56,8 @@ app.whenReady().then(async()=>{
   await run(()=>__game.step(210));const expired=await run(()=>{const r=__game.world().puzzles.find(r=>r.spec.kind==='accord');return {bound:r.state.bound,pending:r.state.pending};});
   assert.deepEqual(expired,{bound:[true,false],pending:[null,null]});await shot('expired');
   const a=await strike(1);assert.equal(a.pending[1].half,1);const b=await strike(3);assert.equal(b.done,true);await shot('solved');
-  const won=await run(()=>{const w=__game.world();return {reward:!!w.massRuntime.rewards.pending,done:w.puzzles.find(r=>r.spec.kind==='accord').done};});
-  assert.deepEqual(won,{reward:true,done:true});win.setSize(800,600);await new Promise(r=>setTimeout(r,150));await run(()=>__game.ui.folioSync());await shot('narrow');
+  const won=await run(()=>{const w=__game.world();return {reward:!!w.massRuntime.snapshot(w).rewards?.some(r=>!r.claimed),done:w.puzzles.find(r=>r.spec.kind==='accord').done};});
+  assert.deepEqual(won,{reward:false,done:true});win.setSize(800,600);await new Promise(r=>setTimeout(r,150));await run(()=>__game.ui.folioSync());await shot('narrow');
   win.setSize(1280,850);await new Promise(r=>setTimeout(r,150));await run(()=>__game.ui.folioSync());
   const paid=await save();assert.deepEqual(await resume(),paid);await shot('solved-continue');
   const checkpoint=await run(()=>__game.world().massRuntime.snapshot(__game.world()));

@@ -18,7 +18,6 @@ import type { MassProgressionSpec, MassPopulation } from './progression';
 import { freezeData } from './random';
 import { frontierLandmarks } from './landmarks';
 import { openingPopulation, reserveMassGuardians } from './population';
-import { STARTER_SUPPORTS } from '../meta/account';
 import type { MassSiteSpec } from './sites';
 import { countryOutposts } from './countryOutposts';
 import { regionalCountrySites } from './regionalSites';
@@ -55,6 +54,7 @@ export interface MassAdventure {
   nativeBirthSource?: string;
   /** Native walk-home fallback; omitted descriptors retain unrestricted populations. */
   territory?: import('./territory').MassTerritory;
+  /** Retired offer descriptor, retained only to read older saved expeditions. */
   rewards?: import('./rewards').MassRewardSpec;
   journey?: import('./journey').MassJourneySpec;
   ecology?: import('./ecology').MassEcologySpec;
@@ -146,7 +146,7 @@ export function massAdventure(): MassAdventure {
     bounties: { source: 'worldmass/place-bounties-v1', maxCandidates: 256 },
     survey: {source:'worldmass/sighted-survey-v1',cell:120,radius:480},
     ground: nativeMassGround(families.map(f => ({ surface: f.id, source: 'tilesets/' + f.id, theme: TILESETS[f.id].theme }))),
-    territory: { source: 'worldmass/encounter-territory', radius: 620 },
+    territory: { source: 'worldmass/encounter-territory', radius: 760 },
     fieldResidency: { source: 'worldmass/field-residency', retainRadius: 2048, maxResident: 32 },
     shrineResidency: { source: 'worldmass/shrine-residency', retainRadius: 2048, maxResident: 32 },
     puzzleResidency: { source: 'worldmass/puzzle-residency', retainRadius: 2048, maxResident: 16 },
@@ -183,8 +183,6 @@ export function massAdventure(): MassAdventure {
           site: landmark.site, ...(landmark.magicPack ? { magicPack: landmark.magicPack } : {}) };
       }),
     ],
-    rewards: { source: 'worldmass/first-discovery-support-v3', earnFrom: ['cache','puzzle'], supports: [...STARTER_SUPPORTS],
-      authoredSupports: ['splash', 'battering_ram'], level: 1, maxRewards: 1 },
     journey: { reservePopulation: true, source: 'worldmass/frontier-circuit', width: 120, color: '#62573e', clearingColor: '#454331',
       notices: [
         { destination: 'west-camp', note: 'Gnolls hold the western road; their bone-thrower borrows courage from the leader. A shrine and provisions remain at camp. Farther north along the circuit, a burned caravan shelters clustered dead and a bone mender.' },

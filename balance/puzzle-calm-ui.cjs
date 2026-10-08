@@ -25,7 +25,7 @@ app.whenReady().then(async()=>{
  });
  const current=root,timer=setTimeout(()=>app.exit(1),240000),results=[];
  const state=()=>{const w=__game.world(),m=w.massRuntime;return {seed:m.generator.run.seed,pos:w.player.pos,life:w.player.life,
-  puzzles:m.puzzles.snapshot(w),rewards:m.rewards.snapshot(),contents:m.snapshot(w).contents};};
+  puzzles:m.puzzles.snapshot(w),rewards:m.snapshot(w).rewards??[],contents:m.snapshot(w).contents};};
  const save=async()=>{await run(async()=>{__game.save();await new Promise(r=>setTimeout(r,250));});return run(state);};
  const resume=async()=>{await win.loadURL(url);await boot();await run(async()=>{
   for(let i=0;i<80&&!document.querySelector('#sm-continue:not([disabled])');i++)await new Promise(r=>setTimeout(r,100));
@@ -44,8 +44,10 @@ app.whenReady().then(async()=>{
  root=path.join(dir,prior?'paired-stones-dist':'puzzle-calm-dist');await win.loadURL(url);await boot();
  await run(()=>{__game.devStartRun('magician');__game.ui.hideAll();const w=__game.world();w.startWorldMass(42);const m=w.massRuntime,p=m.journey.places.find(p=>p.content==='paired-stones');w.landPartyAt(m.journey.local(p));m.update(w,true);for(const a of w.actors)if(a.team==='enemy'&&!a.passive){a.pos={x:w.player.pos.x+5000+a.id*3,y:w.player.pos.y};a.aiAnchor={...a.pos};}});
  for(const i of [0,2,1,3]){const hit=await strike(i);assert.ok(hit.frames<300);assert.equal(hit.fatal,null);}
- const earned=await run(()=>{const w=__game.world();__game.ui.toggleBuildPanel(undefined,'show');__game.ui.refreshInventory();const b=document.querySelector('[data-reward-choice="splitting"]');if(!b)throw Error('No actual earned choice');b.click();__game.ui.refreshInventory();return {done:w.puzzles.find(r=>r.spec.kind==='accord').done,refusal:w.swapRefusal(w.localSeat,'socket'),remaining:w.swapReadiness(w.localSeat,'socket').remaining,uid:w.meta.items.find(i=>i.gem?.kind==='support'&&i.gem.supportId==='splitting')?.uid};});
- assert.ok(earned.done&&earned.uid);assert.equal(earned.refusal,prior?'the blood is still hot':null);await shot(prior?'prior-recovery':'immediate-choice');results.push({prior,...earned});
+ const earned=await run(()=>{const w=__game.world();__game.ui.toggleBuildPanel(undefined,'show');__game.ui.refreshInventory();w.dropPinnedGem({...w.player.pos}, {...w.player.pos}, {k:'support',id:'splitting',l:1}, .5);
+   const prepared=w.drops.pop();if(prepared?.item.kind!=='support')throw Error('No prepared support');
+   w.grantSupportGemItem(w.localSeat,prepared.item.gem);__game.ui.refreshInventory();return {done:w.puzzles.find(r=>r.spec.kind==='accord').done,refusal:w.swapRefusal(w.localSeat,'socket'),remaining:w.swapReadiness(w.localSeat,'socket').remaining,uid:w.meta.items.find(i=>i.gem?.kind==='support'&&i.gem.supportId==='splitting')?.uid};});
+ assert.ok(earned.done&&earned.uid);assert.equal(earned.refusal,prior?'the blood is still hot':null);await shot(prior?'prior-recovery':'immediate-fit');results.push({prior,...earned});
  if(!prior){win.setSize(800,600);await new Promise(r=>setTimeout(r,150));await run(()=>__game.ui.folioSync());await shot('narrow');
  const fitted=await run(uid=>{const w=__game.world(),at=w.time;w.requestMeta({t:'socket',uid,skillId:'firebolt'});__game.ui.refreshInventory();return {sameTime:at===w.time,fitted:w.meta.knownSkills.get('firebolt').sockets.some(s=>s?.def.id==='splitting'),refusal:w.swapRefusal(w.localSeat,'socket')};},earned.uid);assert.deepEqual(fitted,{sameTime:true,fitted:true,refusal:null});await shot('fitted');
  win.setSize(1280,850);await new Promise(r=>setTimeout(r,150));await run(()=>{__game.ui.hideAll();__game.ui.folioSync();});
@@ -54,6 +56,6 @@ app.whenReady().then(async()=>{
  root=path.join(dir,'paired-stones-dist');assert.deepEqual(await resume(),saved);await shot('prior-continue');root=current;assert.deepEqual(await resume(),saved);await shot('returned');
  }
  }
- fs.writeFileSync(path.join(dir,tag+'-ui.json'),JSON.stringify(results,null,2));console.log('PASS same native solve and earned Splitting: actual prior recovery, immediate current field fitting without time advance, narrow UI and exact current/prior/current Continue');
+ fs.writeFileSync(path.join(dir,tag+'-ui.json'),JSON.stringify(results,null,2));console.log('PASS same native solve and prepared Splitting: actual prior recovery, immediate current field fitting without time advance, narrow UI and exact current/prior/current Continue');
  }catch(e){console.error(e.stack||String(e));process.exitCode=1;}finally{clearTimeout(timer);win.destroy();server.close();app.exit(process.exitCode||0);}
 });

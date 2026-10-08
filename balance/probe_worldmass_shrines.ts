@@ -65,7 +65,7 @@ try {
   const native=makeSimWorld('warrior',733);restoreZoneContents(native,contents);
   assert.equal(native.shrines.length,1);assert.equal(native.shrines[0].used,true);
   const legacy=beforeMassStreaming(structuredClone(massAdventure()) as MassAdventure);delete legacy.bounties;delete legacy.journey!.reservePopulation;
-  delete legacy.journey!.roadside;delete legacy.settlement!.quests!.acceptance;delete legacy.settlement!.structurePlans;delete legacy.rewards!.earnFrom;
+  delete legacy.journey!.roadside;delete legacy.settlement!.quests!.acceptance;delete legacy.settlement!.structurePlans;delete legacy.rewards;
   for(const c of legacy.content)if(c.site){delete c.site.shrines;delete c.site.puzzles;}
   const old=makeSimWorld('warrior',734);new WorldMassRuntime(42,'legacy-shrine',legacy).attach(old);
   old.player.pos=old.massRuntime!.journey!.local(old.massRuntime!.journey!.places.find(p=>p.content==='cinderwatch')!);old.massRuntime!.update(old,true);

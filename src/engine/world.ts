@@ -1636,6 +1636,8 @@ interface PendingRespawn {
 /** A delayed displacement in flight (Warp's telegraphed blink). */
 interface PendingBlink {
   actor: Actor; dest: Vec2; timer: number; color: string;
+  /** Rear-target blinks turn on arrival, including delayed variants. */
+  faceTarget?: Actor;
   /** The blinking skill (arrival Dive Bomb blasts / No Man's Land fields). */
   inst?: SkillInstance;
 }
@@ -1843,7 +1845,6 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'questAccept': return isStr(a.questId);
     case 'vocationQuest': return isStr(a.questId); // menu-accept a vocation chain step
     case 'questReward': return isStr(a.questId) && isStr(a.choiceId);
-    case 'explorationReward': return isStr(a.source) && isStr(a.choiceId);
     case 'questImbue': return isStr(a.questId) && isIdx(a.uid) && isStr(a.affixId);
     case 'bindSkill': return isIdx(a.slot) && (a.skillId === null || isStr(a.skillId));
     case 'swapSkillSlots': return isIdx(a.a) && isIdx(a.b);
@@ -25341,20 +25342,6 @@ export class World {
     }
   }
 
-  explorationRewardOffers() { return this.massRuntime?.rewards.offers(this) ?? []; }
-  explorationRewardReceipts() { return this.massRuntime?.rewards.receipts() ?? []; }
-
-  claimExplorationReward(source: string, choiceId: string, seat: Seat = this.localSeat): boolean {
-    if (seat !== this.localSeat || this.clientActionHook || seat.actor.dead || seat.actor.downed
-      || this.panelSealed('inventory') || !this.massRuntime) return false;
-    const result = this.massRuntime.rewards.claim(this, source, choiceId);
-    if (result === 'full') this.failNote(seat.actor, 'explorationReward', 'Make room in your pack, then choose your gem again.');
-    if (result !== 'claimed') return false;
-    this.markMetaDirty(seat);
-    saveCharacter(this);
-    return true;
-  }
-
   /** The journal shows choices only at the giver, from live ready quests. */
   questRewardOffers(): { questId: string; label: string; prompt: string; xp: number;
     choices: (NonNullable<QuestDef['reward']['choices']>[number] & { lines: string[]; footprint: string })[] }[] {
@@ -26112,7 +26099,6 @@ export class World {
       case 'questAccept': this.acceptQuestOffer(action.questId, seat); break;
       case 'vocationQuest': this.acceptVocationQuest(action.questId, seat); break;
       case 'questReward': this.claimQuestReward(action.questId, action.choiceId, seat); break;
-      case 'explorationReward': this.claimExplorationReward(action.source, action.choiceId, seat); break;
       case 'questImbue': this.claimQuestImbue(action.questId, action.uid, action.affixId, seat); break;
       case 'equipItem': this.equipItem(seat, action.uid, action.slot); break;
       case 'unequipItem': this.unequipItem(seat, action.slot, action.x, action.y); break;
@@ -33033,12 +33019,14 @@ export class World {
         // Afterspray support — pays at this end alone).
         this.moveBlast(caster, inst, caster.pos, 'depart');
         if (d.delay && d.delay > 0) {
-          this.pendingBlinks.push({ actor: caster, dest, timer: d.delay, color: cosmeticColor, inst });
+          this.pendingBlinks.push({ actor: caster, dest, timer: d.delay, color: cosmeticColor, inst,
+            ...(d.behindTarget && targetInfo?.actor ? { faceTarget: targetInfo.actor } : {}) });
           this.flashes.push({ pos: vec(dest.x, dest.y), radius: caster.radius * 1.6, color: cosmeticColor, life: d.delay, maxLife: d.delay });
         } else {
           this.teleportActor(caster, dest, def.color, undefined, caster.tier);
           if (d.behindTarget && targetInfo?.actor) {
-            caster.facing = angleTo(caster.pos, targetInfo.actor.pos);
+            // Arrival is an atomic turn; the ordinary turn-rate cap must not undo it.
+            caster.facingPrev = caster.facing = angleTo(caster.pos, targetInfo.actor.pos);
           }
           // ...and where you reappear (No Man's Land fields drop here too).
           this.moveBlast(caster, inst, caster.pos);
@@ -36829,7 +36817,6 @@ export class World {
     }
     const rewardZone = run.rewardZone;
     const sealed = rewardZone ? rewardZone.spoils === 'none' : this.spoilsSealed();
-    if (!sealed) this.massRuntime?.earnPuzzleReward(this, run);
     const rw = puzzleRewardOf(run);
     if (rw?.gems) {
       for (let i = 0; i < rw.gems; i++) {
@@ -51150,7 +51137,6 @@ export class World {
           this.mintLootResult(c.pos, result, false, memoryProvenance); // THE MEMORY LAW: the chest is the provenance
         }
       }
-      if (!this.spoilsSealed()) this.massRuntime?.earnCacheReward(this, c.rewardSource, c.pos);
       // THE THEMED CACHE (Chest.rarity — a tinted toll's promise): one rolled
       // GEAR piece at exactly that rarity, on top of the ordinary container pay.
       // Spoils-sealed ground still seals it (dropGearAt rides the same law).
@@ -52449,6 +52435,9 @@ export class World {
       if (pb.timer <= 0) {
         this.pendingBlinks.splice(i, 1);
         this.teleportActor(pb.actor, pb.dest, pb.color, undefined, pb.actor.tier);
+        if (pb.faceTarget && sameStory(pb.actor, pb.faceTarget)) {
+          pb.actor.facingPrev = pb.actor.facing = angleTo(pb.actor.pos, pb.faceTarget.pos);
+        }
         // Delayed blinks (Warp) erupt on arrival too.
         if (pb.inst) {
           this.moveBlast(pb.actor, pb.inst, pb.actor.pos);

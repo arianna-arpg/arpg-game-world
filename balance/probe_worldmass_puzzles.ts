@@ -95,7 +95,7 @@ try{
  assert.equal(canonical(done.massRuntime!.snapshot(done).contents),contents,'solved strikes cannot pay again');
  console.log('PASS legitimate native solve and finishing wash, solved progress/loot Continue and one-shot reward latch');
 
- const legacy=beforeMassStreaming(structuredClone(massAdventure()) as MassAdventure);delete legacy.bounties;delete legacy.journey!.reservePopulation;delete legacy.settlement!.quests!.acceptance;delete legacy.settlement!.structurePlans;delete legacy.rewards!.earnFrom;
+ const legacy=beforeMassStreaming(structuredClone(massAdventure()) as MassAdventure);delete legacy.bounties;delete legacy.journey!.reservePopulation;delete legacy.settlement!.quests!.acceptance;delete legacy.settlement!.structurePlans;delete legacy.rewards;
  for(const c of legacy.content)if(c.site)delete c.site.puzzles;
  const oldWorld=makeSimWorld('warrior',840);new WorldMassRuntime(42,'old-puzzle',legacy).attach(oldWorld);
  assert.equal(oldWorld.massRuntime!.snapshot(oldWorld).schema,3);
