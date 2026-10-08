@@ -201,7 +201,7 @@ function liteCueParity() {
   console.log('PASS full native zone loads preserve archived entry-title RNG timing, actor/scenery state and next draw for solo/co-op fresh/remembered entry without a duplicate title');
 }
 
-const flat=():MassAdventure=>{const base=massAdventure(),terrain={...base.terrain};delete terrain.patches;return {terrain:{...terrain,fields:[],places:[],surfaces:[{id:'flat',priority:1,when:[],region:'ground',color:'#314232',biome:'downs'}]},theme:base.theme,content:[],startRadius:0,populationRadius:600,maxPopulation:30,pageRadius:1,samplesPerTick:256};};
+const flat=():MassAdventure=>{const base=massAdventure(),terrain={...base.terrain};delete terrain.patches;delete terrain.landforms;return {terrain:{...terrain,fields:[],places:[],surfaces:[{id:'flat',priority:1,when:[],region:'ground',color:'#314232',biome:'downs'}]},theme:base.theme,content:[],startRadius:0,populationRadius:600,maxPopulation:30,pageRadius:1,samplesPerTick:256};};
 const undo=seedGlobalRandom(82449);
 try {
   liteCueParity();

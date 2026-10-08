@@ -20,7 +20,7 @@ delete config.settlement; // this probe isolates the wilderness adapter
 delete config.survey; // legacy lattice fixture retains page-based cartography
 delete config.nativeCountry;delete config.geography; // legacy 24-unit grid fixture owns its complete terrain
 config.terrain.addressSpan = 768; config.terrain.terrainCell = 24;
-delete config.terrain.patches;
+delete config.terrain.patches;delete config.terrain.landforms;
 config.terrain.fields = [];
 config.terrain.surfaces = [{ id: 'test-land', priority: 0, when: [], region: 'ground', color: '#445522', biome: 'downs' }];
 config.terrain.places = [{ id: 'patrol', version: 1, content: 'native', period: 600, radius: 150, jitter: 0, chance: 1, when: [], priority: 1 }];

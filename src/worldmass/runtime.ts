@@ -378,7 +378,7 @@ export class WorldMassRuntime {
     if(this.config.nativeCountry){
       const spec=this.config.nativeCountry;
       this.nativeCountry=new MassNativeCountry(this.generator,spec,(center,radius)=>{
-        if(this.generator.patches?.reserves(center,radius))return true;
+        if(this.generator.patches?.reserves(center,radius) || this.generator.landforms?.reserves(center,radius))return true;
         if(!this.inLocalFrame(center))return false;
         const q=localOffset(center,{...this.origin,x:0,y:0},this.config.terrain.addressSpan);
         return !!this.settlement?.reserves(q.x,q.y,radius) || !!this.journey?.reserves(q,radius)

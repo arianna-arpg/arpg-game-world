@@ -116,7 +116,7 @@ console.log('PASS invalid reward policies, duplicate receipts and corrupted payl
 
 const cfg:MassAdventure=JSON.parse(canonical(massAdventure()));
 delete cfg.progression;delete cfg.journey;delete cfg.ecology;delete cfg.settlement;
-delete cfg.terrain.patches;
+delete cfg.terrain.patches;delete cfg.terrain.landforms;
 cfg.terrain.fields =[];
 cfg.terrain.surfaces=[{id:'land',priority:0,when:[],region:'ground',color:'#445522',biome:'downs'}];
 cfg.terrain.places=[{id:'camp',version:1,content:'wayside-camp',period:1920,radius:180,jitter:0,chance:1,when:[],priority:1}];

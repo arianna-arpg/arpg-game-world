@@ -50,6 +50,8 @@ export interface MassSpec {
   places: readonly MassPlaceRecipe[];
   /** Omission retains the original terrain algorithm and saved geography. */
   patches?: MassPatchPolicy;
+  /** Saved regional navigation shapes; omitted in historical runs. */
+  landforms?: import('./landforms').MassLandformPolicy;
 }
 export interface MassRun {
   schema: 1; seed: number; runId: string;
@@ -75,5 +77,6 @@ export interface MassPage {
 export function massTerrainRegions(spec: MassSpec): string[] {
   return [...new Set([...spec.surfaces.map(s => s.region),
     ...spec.places.flatMap(p => p.surface ? [p.surface.region] : []),
+    ...(spec.landforms ? ['ground','water','locale_bridge',...spec.landforms.recipes.map(r=>r.barrier.region)] : []),
     ...(spec.patches?.recipes.flatMap(r => r.choices.map(c => c.region)) ?? [])])];
 }

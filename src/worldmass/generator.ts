@@ -1,3 +1,4 @@
+import { MassLandforms, validateMassLandforms } from './landforms';
 import { MassNativeSubstrate, validateNativeSubstrate } from './nativeSubstrate';
 import { address, cellKey, floorDiv, latticeAt, localOffset, moveAddress, validSpan, type MassAddress, type MassCell } from './address';
 import type { MassPlace, MassPlaceRecipe, MassRange, MassRun, MassSpec, MassTerrain } from './contracts';
@@ -51,6 +52,7 @@ export function validateMassSpec(spec: MassSpec, nativeSeed?: number): void {
     if ((Math.ceil(spec.addressSpan / p.period) + 5) ** 2 > 4096) throw new Error('Place page query exceeds candidate budget');
   }
   validateMassPatches(spec);
+  validateMassLandforms(spec);
   if (spec.places.length > 64) throw new Error('Regional planner exceeds 64 place families');
   for (const a of spec.places) for (const b of spec.places) {
     if (Math.ceil((a.radius + b.radius) / b.period) + 2 > 8) throw new Error('Place overlap query exceeds bounded neighborhood');
@@ -73,6 +75,7 @@ export class MassGenerator {
   readonly spec: Readonly<MassSpec>;
   readonly run: Readonly<MassRun>;
   readonly patches: MassTerrainPatches | null;
+  readonly landforms: MassLandforms | null;
   readonly nativeSubstrate: MassNativeSubstrate | null;
   private readonly surfaces: MassSpec['surfaces'];
   private readonly salts = new Map<MassSpec['fields'][number]['layers'][number], number>();
@@ -88,8 +91,13 @@ export class MassGenerator {
     this.surfaces = [...this.spec.surfaces].sort((a, b) => b.priority - a.priority || compare(a.id, b.id));
     for (const f of this.spec.fields) for (const l of f.layers)
       this.salts.set(l, streamSeed(run.seed, [spec.id, spec.version, f.id, l.id]));
+    this.landforms = Object.hasOwn(this.spec,'landforms') ? new MassLandforms(this.spec,this.run,
+      at=>this.baseTerrainAt(at),(origin,box)=>this.patchSitesClear(origin,box),
+      this.nativeSubstrate ? (origin,size)=>this.nativeSubstrate!.supportsPatchCell(origin,size) : undefined) : null;
     this.patches = Object.hasOwn(this.spec, 'patches') && this.spec.patches ? new MassTerrainPatches(this.spec, this.run,
-      at => this.baseTerrainAt(at), (origin, box) => this.patchSitesClear(origin, box),
+      at => this.baseTerrainAt(at), (origin, box) => this.patchSitesClear(origin, box)
+        && !this.landforms?.reserves(moveAddress(origin,{x:(box.minX+box.maxX)/2,y:(box.minY+box.maxY)/2},this.spec.addressSpan),
+          Math.hypot(box.maxX-box.minX,box.maxY-box.minY)/2),
       this.nativeSubstrate ? (origin, size) => this.nativeSubstrate!.supportsPatchCell(origin, size) : undefined) : null;
   }
   private noise(at: MassAddress, period: number, salt: number): number {
@@ -110,7 +118,8 @@ export class MassGenerator {
   }
   terrainAt(at: MassAddress): MassTerrain {
     const base = this.baseTerrainAt(at);
-    return this.patches?.sample(at, base) ?? base;
+    const landformTerrain = this.landforms?.sample(at,base) ?? base;
+    return this.patches?.sample(at, landformTerrain) ?? landformTerrain;
   }
   private patchSitesClear(origin: MassAddress, box: MassPatchBox): boolean {
     const span = this.spec.addressSpan;

@@ -1,5 +1,6 @@
 import { WATER_SURFACE } from '../data/waterSurface';
 import { LASTLIGHT_DEFENSES } from '../data/settlementDefenses';
+import { massLandformPolicy } from './landformSources';
 import { MASS_SNOW_DEFAULT } from './snow';
 import { MASS_WEATHER_DEFAULT } from './weather';
 import { MASS_HIERARCHY_DEFAULT } from './hierarchy';
@@ -103,6 +104,7 @@ export function massAdventure(): MassAdventure {
         biome: TILESETS[f.id].biome ?? f.id })),
       { id: 'fallback', source: 'tilesets/downs', priority: 0, when: [], region: 'ground', color: '#31391c', biome: 'downs' },
     ],
+    landforms: massLandformPolicy(),
     patches: { source: 'worldmass/native-terrain-patches-v1', version: 1, spacing: 960, jitter: .12, bypass: 60,
       recipes: [
         { id: 'wetland-pockets', when: [], onSurfaces: ['marsh'], chance: .9, choices: [

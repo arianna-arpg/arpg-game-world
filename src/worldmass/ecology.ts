@@ -158,6 +158,9 @@ export class MassEcology {
             // Native logs and rock satellites extend beyond their paint radius.
             // Reserve the complete movement shape after its original rotation
             // draw; omission keeps the historic ecology draw stream identical.
+            const seamlessLandformReservations = this.mass.generator.landforms;
+            if (seamlessLandformReservations?.reserves(this.mass.walk.at(pos.x,pos.y),
+              Math.max(radius, shapeBoundR(hitSurfaceOf(live, 'move'))))) continue;
             if (this.mass.generator.patches?.reserves(this.mass.walk.at(pos.x,pos.y),
               Math.max(radius, shapeBoundR(hitSurfaceOf(live, 'move'))))) continue;
             // Canopies may overlap; solid trunks retain a traversable gap. Decide

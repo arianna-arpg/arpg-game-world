@@ -18,7 +18,7 @@ import { serializeCharacter, applySavedCharacter } from '../src/meta/character';
 const restore = seedGlobalRandom(741125);
 const nativeRows = (w: World) => (w as unknown as { pyres: HoldFixture[] }).pyres;
 try {
-  const base = massAdventure(), terrain = { ...base.terrain }; delete terrain.patches;
+  const base = massAdventure(), terrain = { ...base.terrain }; delete terrain.patches;delete terrain.landforms;
   const config: MassAdventure = { terrain: { ...terrain, fields: [], places: [],
     surfaces: [{ id: 'controlled-flat', priority: 1, when: [], region: 'ground', color: '#314232', biome: 'downs' }] },
     theme: base.theme, content: [], startRadius: 0, populationRadius: 600, maxPopulation: 20, pageRadius: 1, samplesPerTick: 256 };

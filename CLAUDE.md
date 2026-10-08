@@ -1,3 +1,13 @@
+MassLandforms embeds 21 captured native district shapes in new seamless
+expeditions. Shared adventure/exploration district bodies feed both localeGen
+and the immutable landform source policy. Preserve complete admission, opening
+and site exclusions, dry bypasses, signed addresses, saved source cells and
+legacy omission. Natural outlines differ from built precincts; rotations do not
+count as novelty. This is terrain integration, not full native zones, bounty
+passages or hierarchy/map parity. Verify worldmass_landforms, terrainpatches,
+nativecountry, climate, nativeingress, all types, genqa and landforms-ui.cjs.
+See docs/worldgen/seamless-landforms.md for provenance and remaining work.
+
 Shared ordinary-water palettes and live, world-anchored ripples use
 `data/waterSurface.ts` and `render/vis/waterSurface.ts`. New seamless expeditions
 snapshot timber Lastlight defenses, road-aligned gates and mortal native guards;

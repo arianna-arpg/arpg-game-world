@@ -117,6 +117,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_tilesetchoice.ts', status: 'green', tier: 'fast', why: 'Archived actual native face selection, ordered duplicate pools and exact random stream/read tapes' },
   { probe: 'probe_fieldchoice.ts', status: 'green', tier: 'fast', why: 'Archived native field read/callback parity, floor claims, exact memo limits and independent instance isolation' },
   { probe: 'probe_pourshape.ts', status: 'green', tier: 'fast', why: 'Archived native pour mask and RNG parity; shared lobes preserve guard/depth/paint wrappers' },
+  { probe: 'probe_worldmass_landforms.ts', status: 'green', tier: 'fast', why: 'Shared native district terrain in seamless country, actual collision, body-wide routes, structural diversity, signed seams and cold Continue' },
   { probe: 'probe_worldmass_terrainpatches.ts', status: 'green', tier: 'fast', why: 'Physical localized terrain, neutral swept bypasses, reservations, deterministic full addresses and legacy Continue' },
   { probe: 'probe_conversation.ts', status: 'green', tier: 'fast', why: 'Stable NPC ownership, departure and panel suspension; speaker-specific work/rewards, action refresh and near-facing target emphasis' },
   { probe: 'probe_speechapproach.ts', status: 'green', tier: 'fast', why: 'Native selected-speaker approach hint: idle grace, pure reads, authored opt-out, live reach/story/roof, death, stale focus and retirement on dialogue readiness' },
