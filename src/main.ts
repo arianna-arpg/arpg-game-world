@@ -53,6 +53,7 @@ import { serializeSnapshot, applySnapshot, serializeZone, applyZone } from './ne
 import { RemoteInput } from './net/remote';
 import { WebRtcTransport } from './net/webrtc';
 import { WsTransport, WS_TRANSPORT_CFG } from './net/ws';
+import { readTravelingVessel, ShardVesselLink, travelNote } from './meta/shardVessel';
 import { openCoopLobby } from './ui/lobby';
 import { CLASSES, type ClassDef } from './data/classes';
 import { SKILLS as CLIP_SKILLS } from './data/skills';
@@ -333,6 +334,9 @@ let sessionDispose: (() => void) | null = null;
 let hostLostDispose: (() => void) | null = null;
 const pendingRejoins = new Map<string, string>();
 let pendingRejoinClass: ClassDef | null = null;
+/** CLIENT, THE SHARD: the vessel link of the last shard session (heroSave
+ *  mirrors, THE DEATH COVENANT's word, our own bodies' rows — meta/shardVessel.ts). */
+let shardVessel: ShardVesselLink | null = null;
 /** HOST: meta intents (point-spends, gem ops, drops) received from clients this
  *  frame, tagged with the sender's seat. Drained + applied just before world.update
  *  (so the change replicates in the SAME tick's snapshot). */
@@ -2490,11 +2494,16 @@ function onClientRunEnd(): void {
   unsubscribeFromHost();    // drop the dead run's snapshot/zone subs + stale interp state
   pendingRejoinClass = null;
   ui.resetClassRoster();    // deal a fresh class hand for the rejoin pick
-  ui.showClassSelect(cls => {
+  const pickNextHero = (): void => ui.showClassSelect(cls => {
     pendingRejoinClass = cls;
     net.sendSession({ t: 'rejoin', classId: cls.id });
     ui.hideAll();           // the class pick is sent; wait for the host's newRun
   });
+  // THE DEATH COVENANT (THE SHARD — shardVessel): a vessel that fell on a
+  // hosted world reads its reckoning first (the death screen, the Vault),
+  // then picks the next hero; its body waits where it fell.
+  const fell = shardVessel?.takeDeath(net, world);
+  if (fell) ui.showDeath(fell.reck, pickNextHero); else pickNextHero();
 }
 
 /** CLIENT: the host re-seated us in its new run — rebuild our render shell and
@@ -2565,16 +2574,24 @@ function openLobby(): void {
     // socket where the copy-paste dance was (WsTransport, same grammar).
     connect: async (url, classId) => {
       const ws = new WsTransport();
-      const cls = CLASSES.find(c => c.id === classId) ?? CLASSES[0];
+      // THE VESSEL (docs/engine/shard.md "The vessel and the corpse"): the run
+      // slot's hero travels when there is one (its class over the lobby card),
+      // keyed home by this account's id; else the card's fresh hero, as ever.
+      const vessel = await readTravelingVessel();
+      const cls = CLASSES.find(c => c.id === (vessel?.classId ?? classId)) ?? CLASSES[0];
       try {
         net = ws;
         subscribeToHost();
         wireSession();                             // run-lifecycle channel (newRun/hostLeft)
-        const { self, seed } = await ws.connect(url, { name: 'Joiner', classId, cosmeticLoadout: account.cosmetics.loadout });
+        shardVessel = new ShardVesselLink(ws, account, vessel, () => (net === ws ? world : null),
+          { runWiped: () => ui.setContinueSave(null), mayWrite: () => net === ws || !running });
+        const { self, seed } = await ws.connect(url, { name: vessel?.name ?? 'Joiner', classId: cls.id,
+          cosmeticLoadout: account.cosmetics.loadout, accountId: account.accountId }, vessel ?? undefined);
         startAsClient(cls, self, seed);
       } catch (e) { resetToLocal(); throw e; }     // an unreachable server must revert net to LocalTransport
     },
     connectDefault: WS_TRANSPORT_CFG.defaultUrl,
+    serverHero: async (classId) => travelNote(await readTravelingVessel(), classId),
     onClose: () => { /* host keeps playing; a non-started joiner just closes */ },
   });
 }
