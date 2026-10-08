@@ -20,7 +20,7 @@
 // milestones that lift those are the charter's M1-M3.
 // ---------------------------------------------------------------------------
 
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { installHeadlessShims } from '../src/sim/shims';
 // The sim arena's import list IS the boot registration set main.ts performs
@@ -63,6 +63,10 @@ export const SHARD_CFG = {
   dressSec: 4,
   /** A stalled process catches up at most this many ticks per pump, then drops the rest. */
   maxCatchUpTicks: 5,
+  /** Engine faults print one stack per this many seconds; the rest are counted. */
+  faultLogSec: 5,
+  /** Tick-time ring for the status page's p50/p95 (ticks). */
+  telemetryTicks: 600,
   /** THE KEEPER SEAT. reviveSec = THE MERCY: seconds a downed seat waits with
    *  no standing ally before the keeper stands it up where it fell.
    *  shadowOffset = THE SHADOW (the wilds): the mass runtime streams, births
@@ -108,6 +112,20 @@ export interface ShardSave {
   world: WorldStateSave;
 }
 
+/** The seed of the newest `shard_<seed>.json` in a save dir, or undefined. */
+export function newestSavedSeed(dir: string): number | undefined {
+  try {
+    let best: { seed: number; mtime: number } | null = null;
+    for (const name of readdirSync(dir)) {
+      const m = /^shard_([0-9a-f]{8})\.json$/.exec(name);
+      if (!m) continue;
+      const mtime = statSync(join(dir, name)).mtimeMs;
+      if (!best || mtime > best.mtime) best = { seed: parseInt(m[1], 16) >>> 0, mtime };
+    }
+    return best?.seed;
+  } catch { return undefined; }
+}
+
 let booted = false;
 /** One-time engine boot for a shard process: shims, the package factions,
  *  the content census. Idempotent. */
@@ -140,13 +158,19 @@ export class ShardHost {
   ticks = 0;
   /** Engine throws caught by the pump (a server never dies on one frame). */
   faults = 0;
+  /** Ticks the pump DROPPED to bound a stall (the world ran slow for everyone). */
+  droppedTicks = 0;
+  private readonly bootAt = Date.now();
+  private readonly tickMs: number[] = [];
+  private tickMsAt = 0;
+  private lastFaultLogAt = 0;
+  private faultsSinceLog = 0;
 
   private snapTick = 0;
-  private stateTimer = 0;
   private metaHeartbeat = SHARD_CFG.metaHeartbeatSec;
   private persistTimer = SHARD_CFG.persistSec;
   private lastSentZone = '';
-  private lastSentDoodads = -1;
+  private lastSentDoodadRev = -1;
   private dressTimer = 0;
   private readonly pendingActions: { seat: string; action: MetaAction }[] = [];
   private timer: NodeJS.Timeout | null = null;
@@ -156,7 +180,10 @@ export class ShardHost {
   constructor(opts: ShardOptions = {}) {
     bootShardEngine();
     this.log = opts.log ?? ((line) => console.log(line));
-    this.seed = (opts.seed ?? rollSeed()) >>> 0;
+    // THE HOSTED SEED: given, else the NEWEST world in the save dir (a restart
+    // with no flag brings the same world back), else a fresh roll.
+    const saveDir = opts.saveDir === null ? null : (opts.saveDir ?? SHARD_CFG.saveDir);
+    this.seed = (opts.seed ?? (saveDir ? newestSavedSeed(saveDir) : undefined) ?? rollSeed()) >>> 0;
     this.account = makeAccount();
     if (opts.open) openAccount(this.account);
     const manifest = buildManifest(this.account, this.seed);
@@ -189,6 +216,7 @@ export class ShardHost {
     this.net.worldmass = this.worldmass;
     this.net.features = [...this.account.features];
     this.net.setSeedSource(() => this.world.manifest.seed);
+    this.net.statusSource = () => this.status();
     this.net.onPeerJoin(p => this.onJoin(p));
     this.net.onPeerLeave(id => this.world.removeSeat(id));
     this.net.onSession((m, from) => this.onSession(m, from));
@@ -213,7 +241,6 @@ export class ShardHost {
     // The joiner needs the standing terrain NOW, not at the next zone change.
     this.net.sendZoneTo(peer.id, serializeZone(this.world));
     this.lastSentZone = this.world.zone.id;
-    this.lastSentDoodads = this.world.doodads.length;
     this.log(`[shard] ${peer.id} joined as ${peer.classId} (${this.net.connectionCount()} connected)`);
   }
 
@@ -270,12 +297,13 @@ export class ShardHost {
       this.dressTimer -= dt;
       if (w.zone.id !== this.lastSentZone) {
         this.lastSentZone = w.zone.id;
-        this.lastSentDoodads = w.doodads.length;
+        this.lastSentDoodadRev = w.doodadsVersion();
         this.dressTimer = SHARD_CFG.dressSec;
         this.net.sendZone(serializeZone(w));
-      } else if (this.dressTimer <= 0 && w.doodads.length !== this.lastSentDoodads) {
-        // THE DRESS BEAT: the roster moved (the wilds grew, a tree fell) — re-ship.
-        this.lastSentDoodads = w.doodads.length;
+      } else if (this.dressTimer <= 0 && w.doodadsVersion() !== this.lastSentDoodadRev) {
+        // THE DRESS BEAT: the roster moved (the wilds grew, a tree fell, a swap
+        // kept the count) — the engine's own doodad revision is the signal.
+        this.lastSentDoodadRev = w.doodadsVersion();
         this.dressTimer = SHARD_CFG.dressSec;
         this.net.sendZone(serializeZone(w));
       }
@@ -284,9 +312,9 @@ export class ShardHost {
         this.metaHeartbeat = SHARD_CFG.metaHeartbeatSec;
         for (const s of w.seats) w.markMetaDirty(s);
       }
-      this.stateTimer -= dt;
-      if (this.stateTimer <= 0) {
-        this.stateTimer = 1 / SHARD_CFG.stateHz;
+      // THE WIRE RATE on integer ticks (60 / 20 = every 3rd): a reset timer
+      // under a fixed step fired every 4th tick — 15 Hz wearing a 20 Hz name.
+      if (this.ticks % Math.max(1, Math.round(SHARD_CFG.tickHz / SHARD_CFG.stateHz)) === 0) {
         this.net.sendState(serializeSnapshot(w, ++this.snapTick));
         w.metaDirty.clear();
       }
@@ -334,15 +362,52 @@ export class ShardHost {
     const dt = 1 / SHARD_CFG.tickHz;
     let n = 0;
     while (this.accum >= dt && n < SHARD_CFG.maxCatchUpTicks) {
+      const t0 = performance.now();
       try { this.tick(dt); }
       catch (e) {
         this.faults++;
-        this.log(`[shard] engine fault at tick ${this.ticks}: ${e instanceof Error ? e.stack ?? e.message : String(e)}`);
+        this.faultsSinceLog++;
+        // One stack per faultLogSec; a fault every tick would otherwise drown the log.
+        if (now - this.lastFaultLogAt >= SHARD_CFG.faultLogSec * 1000) {
+          this.lastFaultLogAt = now;
+          this.log(`[shard] engine fault at tick ${this.ticks} (${this.faultsSinceLog} since the last line): ${e instanceof Error ? e.stack ?? e.message : String(e)}`);
+          this.faultsSinceLog = 0;
+        }
       }
+      const ms = performance.now() - t0;
+      if (this.tickMs.length < SHARD_CFG.telemetryTicks) this.tickMs.push(ms);
+      else { this.tickMs[this.tickMsAt] = ms; this.tickMsAt = (this.tickMsAt + 1) % SHARD_CFG.telemetryTicks; }
       this.accum -= dt;
       n++;
     }
-    if (n >= SHARD_CFG.maxCatchUpTicks) this.accum = 0; // a long stall is dropped, never replayed
+    if (n >= SHARD_CFG.maxCatchUpTicks && this.accum >= dt) {
+      // A long stall is dropped, never replayed — and counted, so the status
+      // page shows a world that ran slow for everyone.
+      this.droppedTicks += Math.floor(this.accum / dt);
+      this.accum = 0;
+    }
+  }
+
+  /** THE STATUS PAGE (served by the transport on a plain GET): what the world is doing. */
+  status(): Record<string, unknown> {
+    const sorted = [...this.tickMs].sort((a, b) => a - b);
+    const q = (p: number): number => sorted.length ? +sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))].toFixed(2) : 0;
+    const w = this.world;
+    return {
+      world: this.worldmass ? 'the Unbroken Wilds' : 'classic',
+      seed: '0x' + this.seed.toString(16).padStart(8, '0'),
+      zone: w.zone.id,
+      clock: +w.time.toFixed(1),
+      uptimeSec: Math.round((Date.now() - this.bootAt) / 1000),
+      seats: w.seats.filter(s => !s.keeper).map(s => ({ id: s.id, name: s.actor.name, level: s.actor.level, alive: !s.actor.dead && !s.actor.downed })),
+      connections: this.net.connectionCount(),
+      ticks: this.ticks,
+      tickMsP50: q(0.5), tickMsP95: q(0.95),
+      droppedTicks: this.droppedTicks,
+      faults: this.faults + this.net.faults,
+      actors: w.actors.length,
+      saving: this.savePath ?? 'ephemeral',
+    };
   }
 
   /** Stop the pump, write the world, close the wire. */

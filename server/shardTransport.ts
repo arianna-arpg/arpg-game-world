@@ -29,9 +29,12 @@ import { sanitizeCosmeticLoadout } from '../src/meta/cosmetics';
 export const SHARD_WIRE_CFG = {
   /** Largest frame/message a client may send (its inputs and intents are tiny). */
   maxClientMessage: 256 * 1024,
-  /** A socket whose send buffer passes this skips broadcasts until it drains
-   *  (the webrtc.ts fanOut law: never stall the loop on one slow peer). */
-  sendBufferCap: 1_000_000,
+  /** A socket whose send buffer passes this skips SNAPSHOTS until it drains
+   *  (the webrtc.ts fanOut law: never stall the loop on one slow peer) —
+   *  sized to a few wilds snapshots, so a lagging link plays a beat behind,
+   *  never seconds. One-shot rows (welcome, zone, session, roster) are never
+   *  skipped: a dropped one is a permanent desync. */
+  sendBufferCap: 96 * 1024,
   /** Keepalive: ping every `pingSec`, reap a socket silent for `reapSec`. */
   pingSec: 15,
   reapSec: 45,
@@ -69,6 +72,20 @@ export function sanitizeInput(raw: unknown): PlayerInput | null {
 
 const CLIENT_SESSION_KINDS = new Set<SessionMsg['t']>(['rejoin', 'cosmetics', 'action']);
 
+/** THE PRESS IS KEPT: two client frames landing in one server tick used to
+ *  overwrite each other, losing a single-frame edge or meta press. The later
+ *  frame's axes, aim, held and seq stand; the EDGES of both are kept. */
+export function mergeInputs(prev: PlayerInput, next: PlayerInput): PlayerInput {
+  const or = (a: readonly boolean[], b: readonly boolean[]): boolean[] => {
+    const n = Math.max(a.length, b.length), out: boolean[] = [];
+    for (let i = 0; i < n; i++) out.push(!!a[i] || !!b[i]);
+    return out;
+  };
+  const merged: PlayerInput = { ...next, edge: or(prev.edge, next.edge) };
+  if (prev.metaEdge || next.metaEdge) merged.metaEdge = or(prev.metaEdge ?? [], next.metaEdge ?? []);
+  return merged;
+}
+
 export class ShardTransport implements NetTransport {
   readonly self: PlayerId = 'p0';
   readonly isHost = true;
@@ -80,6 +97,10 @@ export class ShardTransport implements NetTransport {
   private pending = new Map<PlayerId, PlayerInput>();
   private nextSeat = 1;
   private seedSource: () => number = () => 0;
+  /** THE STATUS PAGE: a plain GET on the port answers this (the host wires
+   *  it) — seed, seats, tick time, faults, uptime — so a forwarded port in a
+   *  browser tab tells a host what its world is doing. */
+  statusSource: (() => unknown) | null = null;
   /** Carried on every welcome: the hosted world is the continuous surface. */
   worldmass = false;
   /** Carried on every welcome: the shard account's feature ids (the hearth's tier). */
@@ -107,7 +128,14 @@ export class ShardTransport implements NetTransport {
   listen(port: number, host = '0.0.0.0'): Promise<number> {
     return new Promise((resolve, reject) => {
       const server = createServer((req, res) => {
-        // A plain HTTP hit is not a game client — say so and hang up.
+        // A plain HTTP hit is not a game client: the status page answers it.
+        if (this.statusSource) {
+          let body = '{}';
+          try { body = JSON.stringify(this.statusSource()); } catch { /* a status that throws reads as empty */ }
+          res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.end(body);
+          return;
+        }
         res.writeHead(426, { 'content-type': 'text/plain', upgrade: 'websocket' });
         res.end(`hollow wake shard — connect with a WebSocket client (${req.url ?? '/'})`);
       });
@@ -192,17 +220,20 @@ export class ShardTransport implements NetTransport {
         cosmeticLoadout: sanitizeCosmeticLoadout(m.cosmeticLoadout),
       };
       this.peerList.push(peer);
-      this.write(conn, encodeText(JSON.stringify({ t: 'welcome', self: seatId, peers: this.peerList, seed: this.seedSource() >>> 0, worldmass: this.worldmass, features: this.features } satisfies WireMsg)));
-      this.broadcast({ t: 'pjoin', peer }, conn);
-      this.joinCbs.forEach(cb => cb(peer)); // the host spawns the seat
+      this.write(conn, encodeText(JSON.stringify({ t: 'welcome', self: seatId, peers: this.peerList, seed: this.seedSource() >>> 0, worldmass: this.worldmass, features: this.features } satisfies WireMsg)), true);
+      this.broadcast({ t: 'pjoin', peer }, conn, true);
+      this.joinCbs.forEach(cb => this.guard(() => cb(peer))); // the host spawns the seat
     } else if (m.t === 'input' && conn.seat) {
       const input = sanitizeInput(m.input);
-      if (input) this.pending.set(conn.seat, input); // keyed by the BINDING, never m.seat
+      if (input) {
+        const prev = this.pending.get(conn.seat); // keyed by the BINDING, never m.seat
+        this.pending.set(conn.seat, prev ? mergeInputs(prev, input) : input); // THE PRESS IS KEPT
+      }
     } else if (m.t === 'session' && conn.seat) {
       const msg = m.msg;
       if (!msg || typeof msg !== 'object' || !CLIENT_SESSION_KINDS.has(msg.t)) return;
       const seat = conn.seat;
-      this.sessionCbs.forEach(cb => cb(msg, seat));
+      this.sessionCbs.forEach(cb => this.guard(() => cb(msg, seat)));
     }
   }
 
@@ -216,8 +247,8 @@ export class ShardTransport implements NetTransport {
       this.bySeat.delete(gone);
       this.peerList = this.peerList.filter(p => p.id !== gone);
       this.pending.delete(gone);
-      this.broadcast({ t: 'pleave', id: gone });
-      this.leaveCbs.forEach(cb => cb(gone)); // the host despawns the seat
+      this.broadcast({ t: 'pleave', id: gone }, undefined, true);
+      this.leaveCbs.forEach(cb => this.guard(() => cb(gone))); // the host despawns the seat
     }
   }
 
@@ -237,15 +268,24 @@ export class ShardTransport implements NetTransport {
     }
   }
 
-  private write(conn: Conn, frame: Uint8Array): boolean {
+  /** Faults in a host callback (a join that throws mid-seat, a session
+   *  handler) are logged, never let through the socket layer — one bad
+   *  frame must not kill the process that holds everyone's world. */
+  faults = 0;
+  private guard(fn: () => void): void {
+    try { fn(); }
+    catch (e) { this.faults++; console.warn('[shard] host callback fault:', e instanceof Error ? e.stack ?? e.message : String(e)); }
+  }
+
+  private write(conn: Conn, frame: Uint8Array, oneShot = false): boolean {
     if (conn.closed) return false;
-    if (conn.sock.writableLength >= SHARD_WIRE_CFG.sendBufferCap) return false; // congested: skip, never stall
+    if (!oneShot && conn.sock.writableLength >= SHARD_WIRE_CFG.sendBufferCap) return false; // congested: skip a snapshot, never stall
     try { conn.sock.write(frame); return true; } catch { return false; }
   }
 
-  private broadcast(m: WireMsg, except?: Conn): void {
+  private broadcast(m: WireMsg, except?: Conn, oneShot = false): void {
     const frame = encodeText(JSON.stringify(m));
-    for (const c of this.bySeat.values()) if (c !== except) this.write(c, frame);
+    for (const c of this.bySeat.values()) if (c !== except) this.write(c, frame, oneShot);
   }
 
   // ---- NetTransport (host role) -------------------------------------------
@@ -262,11 +302,11 @@ export class ShardTransport implements NetTransport {
 
   sendState(s: StateSnapshot): void { this.broadcast({ t: 'snap', snap: s }); }
   onState(cb: (s: StateSnapshot) => void): () => void { this.stateCbs.add(cb); return () => { this.stateCbs.delete(cb); }; }
-  sendZone(z: ZoneMsg): void { this.broadcast({ t: 'zone', zone: z }); }
+  sendZone(z: ZoneMsg): void { this.broadcast({ t: 'zone', zone: z }, undefined, true); }
   /** Ship the zone to ONE seat (a joiner's first terrain, a re-seat). */
   sendZoneTo(seat: PlayerId, z: ZoneMsg): void {
     const c = this.bySeat.get(seat);
-    if (c) this.write(c, encodeText(JSON.stringify({ t: 'zone', zone: z } satisfies WireMsg)));
+    if (c) this.write(c, encodeText(JSON.stringify({ t: 'zone', zone: z } satisfies WireMsg)), true);
   }
   onZone(cb: (z: ZoneMsg) => void): () => void { this.zoneCbs.add(cb); return () => { this.zoneCbs.delete(cb); }; }
   onPeerJoin(cb: (p: PeerInfo) => void): () => void { this.joinCbs.add(cb); return () => { this.joinCbs.delete(cb); }; }
@@ -275,9 +315,9 @@ export class ShardTransport implements NetTransport {
   sendSession(msg: SessionMsg, to?: PlayerId): void {
     if (to) {
       const c = this.bySeat.get(to);
-      if (c) this.write(c, encodeText(JSON.stringify({ t: 'session', msg } satisfies WireMsg)));
+      if (c) this.write(c, encodeText(JSON.stringify({ t: 'session', msg } satisfies WireMsg)), true);
     } else {
-      this.broadcast({ t: 'session', msg });
+      this.broadcast({ t: 'session', msg }, undefined, true);
     }
   }
   onSession(cb: (m: SessionMsg, from: PlayerId) => void): () => void { this.sessionCbs.add(cb); return () => { this.sessionCbs.delete(cb); }; }

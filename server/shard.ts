@@ -58,8 +58,14 @@ async function main(): Promise<void> {
     await shard.stop();
     process.exit(0);
   };
-  process.on('SIGINT', () => { void bye(); });
-  process.on('SIGTERM', () => { void bye(); });
+  // Every ending writes the world: Ctrl-C, a closed console (SIGHUP on
+  // Windows), Ctrl-Break, a service stop, and a throw nothing caught.
+  for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK'] as const) {
+    try { process.on(sig, () => { void bye(); }); } catch { /* a platform without the signal */ }
+  }
+  process.on('uncaughtException', (e) => { console.error('[shard] uncaught:', e); void bye(); });
+  process.on('unhandledRejection', (e) => { console.error('[shard] unhandled rejection:', e); void bye(); });
+  console.log(`[shard] status page: http://${host === '0.0.0.0' ? 'localhost' : host}:${bound}/`);
 }
 
 void main();

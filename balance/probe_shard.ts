@@ -26,10 +26,12 @@
 // ---------------------------------------------------------------------------
 
 import { mkdtempSync, existsSync, rmSync } from 'node:fs';
+import { get as httpGet } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ShardHost, SHARD_CFG } from '../server/shardHost';
-import { sanitizeInput } from '../server/shardTransport';
+import { mergeInputs, sanitizeInput } from '../server/shardTransport';
+import { newestSavedSeed } from '../server/shardHost';
 import { WsTransport } from '../src/net/ws';
 import { wildsShellActive, wildsShellAttach, wildsShellStream, wildsShellZone } from '../src/net/wildsClient';
 import { applySnapshot, serializeSnapshot, serializeZone } from '../src/net/snapshot';
@@ -42,6 +44,7 @@ import { MASS_ZONE } from '../src/worldmass/preset';
 import { WS_OP, WsMessageAssembler, decodeFrames, encodeClose, encodeFrame, encodeText } from '../src/net/wsframe';
 import type { StateSnapshot, ZoneMsg } from '../src/net/snapshot';
 import { seedGlobalRandom } from '../src/sim/rng';
+import type { PlayerInput } from '../src/net/intent';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -117,6 +120,10 @@ function maskedFrame(opcode: number, payload: Uint8Array, fin = true): Uint8Arra
     JSON.stringify(sanitizeInput({ dx: 7, dy: -2, aim: { x: 1, y: 2 }, held: [true, 'no', 1], edge: [], seq: 3.7 })) === JSON.stringify({ dx: 1, dy: -1, aim: { x: 1, y: 2 }, held: [true, false, false], edge: [], seq: 3 }));
   check('A sanitize: a missing or NaN aim is refused', sanitizeInput({ dx: 0, dy: 0, held: [], edge: [] }) === null && sanitizeInput({ dx: 0, dy: 0, aim: { x: NaN, y: 0 }, held: [], edge: [] }) === null);
   check('A sanitize: non-objects are refused', sanitizeInput(null) === null && sanitizeInput('x') === null);
+  const i1: PlayerInput = { dx: 0, dy: 0, aim: { x: 0, y: 0 }, held: [true], edge: [true, false], metaEdge: [false, true], seq: 1 };
+  const i2: PlayerInput = { dx: 1, dy: 0, aim: { x: 5, y: 5 }, held: [false], edge: [false, false], seq: 2 };
+  const m12 = mergeInputs(i1, i2);
+  check('A merge: two frames in one tick keep both frames\' edges and the later axes', m12.dx === 1 && m12.seq === 2 && m12.edge[0] === true && m12.edge[1] === false && m12.metaEdge?.[1] === true && m12.held[0] === false);
 }
 
 // ============================================================ B: the boot ==
@@ -156,7 +163,16 @@ await waitFor(() => got.zone !== null, host, 30);
 check('C join: the zone message lands first and names the hearth', got.zone !== null && got.zone.zoneId === 'lastlight' && events[0] === 'zone');
 const snapsBefore = snaps;
 await runTicks(host, 60);
-check('C wire: snapshots ride the wire rate (≈20 per second of ticks)', snaps - snapsBefore >= 15 && snaps - snapsBefore <= 25, `${snaps - snapsBefore} in 60 ticks`);
+check('C wire: snapshots ride the wire rate (exactly 20 per 60 ticks)', snaps - snapsBefore === 20, `${snaps - snapsBefore} in 60 ticks`);
+{
+  // (the headless shims stub global fetch to a 404 — ask node:http directly)
+  const res = await new Promise<{ status: number; body: string }>((resolve, reject) => {
+    httpGet(`http://127.0.0.1:${port}/`, r => { let body = ''; r.on('data', c => { body += c; }); r.on('end', () => resolve({ status: r.statusCode ?? 0, body })); }).on('error', reject);
+  });
+  let status: Record<string, unknown> = {};
+  try { status = JSON.parse(res.body) as Record<string, unknown>; } catch { /* not JSON */ }
+  check('C status: a plain GET on the port answers the status page', res.status === 200 && status.seed === '0x' + SEED.toString(16).padStart(8, '0') && Array.isArray(status.seats) && (status.seats as unknown[]).length === 1 && typeof status.tickMsP50 === 'number', `${res.status} ${res.body.slice(0, 160)}`);
+}
 {
   const s = got.snap;
   check('C wire: our seat rides the snapshot, the keeper rides none', !!s && !!s.seats['p1'] && s.seats['p0'] === undefined);
@@ -260,6 +276,9 @@ await host.stop();
     check('J persist: the resumed keeper wakes in the hearth, alone', b.world.zone.id === 'lastlight' && b.world.seats.length === 1 && !!b.keeper.keeper);
     const ephemeral = new ShardHost({ seed: 1, saveDir: null, log: () => { /* quiet */ } });
     check('J persist: an ephemeral shard has no save path', ephemeral.savePath === null);
+    check('J persist: the newest save names the seed a flagless restart reuses', newestSavedSeed(dir) === 0x0badf00d);
+    const flagless = new ShardHost({ saveDir: dir, open: false, log: () => { /* quiet */ } });
+    check('J persist: a shard started with no seed brings the newest world back', flagless.seed === 0x0badf00d && Math.abs(flagless.world.time - timeA) < 1e-6);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -337,6 +356,7 @@ await host.stop();
   await runTicks(wilds, Math.ceil(SHARD_CFG.dressSec * SHARD_CFG.tickHz) + 2);
   const quiet = zones2;
   w.doodads.push({ ...w.doodads[0], pos: { x: w.doodads[0].pos.x + 7, y: w.doodads[0].pos.y + 7 } });
+  w.markDoodadsChanged(); // the engine's own revision is the beat's signal
   await runTicks(wilds, Math.ceil(SHARD_CFG.dressSec * SHARD_CFG.tickHz) + 2);
   offZ();
   check('P dress: a changed doodad roster re-ships the zone message on the beat, a still one does not', quiet === 0 && zones2 === 1, `quiet ${quiet}, after ${zones2}`);
