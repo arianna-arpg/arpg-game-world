@@ -28,6 +28,9 @@ export interface LobbyCallbacks {
   connect?: (url: string, classId: string) => Promise<void>;
   /** The address the server box offers first (WS_TRANSPORT_CFG.defaultUrl). */
   connectDefault?: string;
+  /** THE VESSEL: one line naming which hero will travel to the server (the
+   *  saved hero, or a fresh one of the chosen class). Absent = no line. */
+  serverHero?: (classId: string) => Promise<string>;
   onClose: () => void;
 }
 
@@ -149,6 +152,11 @@ export function openCoopLobby(cb: LobbyCallbacks): void {
     url.type = 'text'; url.value = cb.connectDefault ?? 'ws://localhost:8787';
     css(url, { width: '100%', marginTop: '6px', background: '#0e0c14', color: '#b8e0b8', border: '1px solid #3a3450', borderRadius: '5px', padding: '6px', font: '12px monospace', boxSizing: 'border-box' });
     stage.append(url);
+    if (cb.serverHero) {
+      const traveler = h('div'); css(traveler, { marginTop: '6px', color: '#9a93ac', fontSize: '12px' });
+      stage.append(traveler);
+      void cb.serverHero(selectedClassId).then(line => { traveler.textContent = line; }, () => { /* the line stays empty */ });
+    }
     const go = btn('Connect'); css(go, { marginTop: '8px' });
     stage.append(go);
     go.addEventListener('click', async () => {

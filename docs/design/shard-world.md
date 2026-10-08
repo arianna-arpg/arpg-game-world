@@ -567,10 +567,14 @@ HUD's local site name reads a private runtime map the shell never fills.
    all-owned (invasions per player would fracture the world) vs. all-global
    (loses her "only that player aware"). Plus THE CREDIT LAW for an owned
    event others finish.
-6. **The vessel** — client-held hero save uploaded at login with a server
-   mirror (recommended; the couch guest shape) vs. server-held heroes.
-   Mortal death ends the seat's run while the world persists; Immortal lanes
-   respawn in the hearth. Should a shard pin a mode?
+6. **The vessel** — RULED 2026-10-07 (her word): the client keeps its hero
+   save and uploads it at login (the couch guest shape) with a server mirror;
+   a mortal death drops the corpse at the death spot on the shard and ends
+   that player's run while the world persists ("equivalent to having their
+   character die in a normal run"), and a new character can walk back and
+   reclaim it; Immortal vessels keep THE MERCY. BUILT (§8). Open beneath it:
+   should a shard pin a mode; should a fresh hero become a vessel; the
+   mirror's rollback window.
 7. **Settlements** — the short ladder (camp → hamlet → village), what a
    station is, founder/company/public access, raids yes/no, the essence
    prices.
@@ -741,3 +745,59 @@ stall the bounded pump drops rather than replays once per `persistSec`. The
 rig ran 21 s before section Q and 69-90 s with it on this machine (four wilds
 boots and resumes plus ~550 frames; the spread is co-session load), so its
 `fast` roster tier deserves a look.
+**THE VESSEL + THE DEATH COVENANT** (card 6 as ruled, 2026-10-07; branch
+`shard-vessel`; the contract is `docs/engine/shard.md` "The vessel and the
+corpse"). Built: `server/vessel.ts` (THE JUDGMENT, the graft, THE MIRROR, the
+covenant watcher), `server/corpses.ts` (the records file, the standing bodies,
+the reclaim), `src/net/vesselWire.ts` (the rows and their sanitizers),
+`src/meta/shardVessel.ts` (the client's link: the mirror's slot write, the
+reckoning at home, the drawn bodies). Seams: `Account.accountId`, minted from
+webcrypto by a profile's first load and never by `makeAccount` (sims and
+probes stay byte-identical); `saveVesselMirror` and `throngRowsOf` in
+`meta/character.ts` (the local save's throng fold lifted out, byte-identical);
+four `SessionMsg` kinds (`heroSave`, `corpse`, `corpses`, `leaving`);
+`PeerInfo.accountId`; the join's `accountId`/`vessel`; THE FAREWELL in
+`WsTransport.leave`; the host's join extras (`ShardJoin`); one-line routes in
+`ShardHost` (join, rejoin, leaving, tick, stop); the lobby's traveler line;
+`onClientRunEnd` stages the death screen. No engine seam: the covenant reads
+the down from the ShardHost side the tick it lands, ahead of THE MERCY's clock.
+Beyond the card: a mortal vessel that LEAVES while down has fallen (no escape
+through the door), each tombstone keeps THE LATE WORD its client is owed and
+re-speaks it at any re-upload of that vessel (the client converges after a
+crash or a lost socket; it wipes before it mints, so a reckoning can be lost
+but never repeated), the farewell's requested mirror is throttled, and the
+shard's `rejoin` now sends `newRun` before the re-seat's zone message (M0's
+order reached the client before its shell and zone subscription stood up, so
+a rejoined hero had no terrain — the covenant's own road back to the body).
+
+Probe receipts (`npx tsx balance/probe_shard.ts`: 116 checks, ALL PASS, exit
+0). L: a made account carries no id; a profile's first boot mints one and
+every later load keeps it; a legacy cached save is minted and cached; a
+malformed id is dropped; minting never draws the seeded stream; the id rides
+the join to the host alone. M: `ShardVesselLink` saves the account before the
+shard keys a record by its id; a 6.7 KB level-12
+warrior seats at its level with its bag and doll over the lobby card; eight
+hostile shapes and a twin upload fall back fresh; the mirror lands on the
+persistence beat (1195 ticks) in the run slot with no world half and the
+vessel's own ledger and run config; a late mirror never lands once another
+run owns the slot; the farewell's last mirror lands before the close; the
+mirror round-trips as the next upload. N: with an ally
+standing the down stays co-op's; alone, the vessel falls (`corpse` then
+`runEnd`; the body recorded at the death spot holding its 4 worn pieces; 60
+carried, 60 minted; the client's credits, chronicle, death tally and run
+counters; the slot wiped; the seat gone; the records file holding body and
+tombstone); an Immortal vessel and a fresh hero are downed and the mercy
+stands them up; the fallen vessel's stale save takes no seat and hears its
+word again; a vessel downed beside an ally whose client leaves has fallen
+(body, tombstone, the owed word), its unheard client re-uploads, hears
+`corpse` then `runEnd`, mints 9 and wipes, and its class pick rejoins with
+the terrain after its `newRun`. O: a second boot remembers the body; the
+rejoin's fresh hero (terrain after `newRun`) finds it 1500 px from the
+bedside, told by its own row; another account sees nothing and cannot
+reclaim; the owner's dwell runs the corpse run's own clock, the 4 exact
+pieces come home to its bag, the record clears on disk, the deed rides the
+next row; a worldmass shard on the same directory keeps the tombstone while
+its world half stays ephemeral. The rig now lets its sockets settle 600 ms
+before `process.exit`:
+Node on Windows asserted inside libuv when the exit landed mid-close, a red
+exit code under `npm run probe` on an all-green rig.

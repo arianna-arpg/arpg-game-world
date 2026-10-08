@@ -19,7 +19,11 @@ import type { PlayerId, PlayerInput } from './intent';
 
 /** THE GRAMMAR — one JSON message per frame, both directions. */
 export type WireMsg =
-  | { t: 'join'; classId: string; name: string; cosmeticLoadout?: import('../engine/cosmetics').CosmeticLoadout }
+  | { t: 'join'; classId: string; name: string; cosmeticLoadout?: import('../engine/cosmetics').CosmeticLoadout;
+      /** THE IDENTITY + THE VESSEL (docs/engine/shard.md "The vessel and the
+       *  corpse"): the account's id, and the hero that travels (a
+       *  CharacterSave with NO world half; absent = a fresh hero). */
+      accountId?: string; vessel?: import('../meta/character').CharacterSave }
   | { t: 'welcome'; self: PlayerId; peers: PeerInfo[]; seed: number; worldmass?: boolean; features?: string[] }
   | { t: 'input'; seat: PlayerId; input: PlayerInput }
   | { t: 'snap'; snap: StateSnapshot }
@@ -31,6 +35,9 @@ export type WireMsg =
 export const WS_TRANSPORT_CFG = {
   /** Default address the lobby's "Join a Server" box offers. */
   defaultUrl: 'ws://localhost:8787',
+  /** THE FAREWELL: how long a leaving vessel holds its socket open for the
+   *  shard's last mirror (`heroSave`) before it closes anyway (ms). */
+  farewellMs: 1500,
 };
 
 export class WsTransport implements NetTransport {
@@ -65,7 +72,7 @@ export class WsTransport implements NetTransport {
 
   /** Open the socket and wait for the shard's welcome. Resolves with our seat
    *  id AND the shard's run seed (the lobby builds the render shell from it). */
-  connect(url: string, info: Omit<PeerInfo, 'id' | 'isHost'>): Promise<{ self: PlayerId; seed: number; worldmass: boolean; features: string[] }> {
+  connect(url: string, info: Omit<PeerInfo, 'id' | 'isHost'>, vessel?: import('../meta/character').CharacterSave): Promise<{ self: PlayerId; seed: number; worldmass: boolean; features: string[] }> {
     return new Promise((resolve, reject) => {
       let ws: WebSocket;
       try { ws = new WebSocket(url); } catch (e) { reject(e instanceof Error ? e : new Error(String(e))); return; }
@@ -73,7 +80,8 @@ export class WsTransport implements NetTransport {
       let settled = false;
       const fail = (why: string): void => { if (settled) return; settled = true; reject(new Error(why)); };
       ws.onopen = (): void => {
-        ws.send(JSON.stringify({ t: 'join', classId: info.classId, name: info.name, cosmeticLoadout: info.cosmeticLoadout } satisfies WireMsg));
+        ws.send(JSON.stringify({ t: 'join', classId: info.classId, name: info.name, cosmeticLoadout: info.cosmeticLoadout,
+          ...(info.accountId ? { accountId: info.accountId } : {}), ...(vessel ? { vessel } : {}) } satisfies WireMsg));
       };
       ws.onmessage = (ev): void => {
         let m: WireMsg;
@@ -115,16 +123,42 @@ export class WsTransport implements NetTransport {
         this.peerList = this.peerList.filter(p => p.id !== m.id);
         this.leaveCbs.forEach(cb => cb(m.id));
         break;
-      case 'session': this.sessionCbs.forEach(cb => cb(m.msg, 'p0')); break; // from the shard (the host seat)
+      case 'session':
+        this.sessionCbs.forEach(cb => cb(m.msg, 'p0')); // from the shard (the host seat)
+        if (m.msg?.t === 'heroSave') this.farewellClose?.(); // THE FAREWELL: the last mirror landed
+        break;
       default: break; // join/input/welcome never arrive at a client
     }
   }
+
+  /** THE FAREWELL (a traveling vessel's clean leave — docs/engine/shard.md
+   *  "The vessel and the corpse"): armed by the vessel link when a hero
+   *  traveled, leave() first asks the shard for its last mirror (`session
+   *  leaving`) and holds the socket open until that `heroSave` lands or
+   *  WS_TRANSPORT_CFG.farewellMs passes. The session subscribers still
+   *  standing receive it as any message. Disarmed: the instant close. */
+  farewell = false;
+  private farewellClose: (() => void) | null = null;
 
   leave(): void {
     this.hostGone = true; // our own teardown — never a lost host
     const ws = this.ws;
     this.ws = null;
-    if (ws) { try { ws.close(1000, 'leave'); } catch { /* already closed */ } }
+    if (!ws) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const close = (): void => {
+      this.farewellClose = null;
+      if (timer !== null) clearTimeout(timer);
+      try { ws.close(1000, 'leave'); } catch { /* already closed */ }
+    };
+    if (this.farewell && this.welcomed && ws.readyState === WebSocket.OPEN) {
+      try { ws.send(JSON.stringify({ t: 'session', msg: { t: 'leaving' } } satisfies WireMsg)); } catch { close(); return; }
+      this.farewellClose = close;
+      timer = setTimeout(close, WS_TRANSPORT_CFG.farewellMs);
+      (timer as { unref?: () => void }).unref?.(); // a Node rig never waits on a farewell
+      return;
+    }
+    close();
   }
 
   private send(m: WireMsg): void {

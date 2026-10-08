@@ -25,6 +25,7 @@ import type { WireMsg } from '../src/net/ws';
 import type { NetTransport, PeerInfo, SessionMsg, StateSnapshot, ZoneMsg } from '../src/net/transport';
 import type { PlayerId, PlayerInput } from '../src/net/intent';
 import { sanitizeCosmeticLoadout } from '../src/meta/cosmetics';
+import { isAccountId } from '../src/meta/account';
 
 export const SHARD_WIRE_CFG = {
   /** Largest frame/message a client may send (its inputs and intents are tiny). */
@@ -99,7 +100,12 @@ export function sanitizeInput(raw: unknown): PlayerInput | null {
   return out;
 }
 
-const CLIENT_SESSION_KINDS = new Set<SessionMsg['t']>(['rejoin', 'cosmetics', 'action']);
+const CLIENT_SESSION_KINDS = new Set<SessionMsg['t']>(['rejoin', 'cosmetics', 'action', 'leaving']);
+
+/** What a join carries beyond its roster row (THE VESSEL — docs/engine/
+ *  shard.md "The vessel and the corpse"): the uploaded hero, UNJUDGED here
+ *  (server/vessel.ts validates it before anything grafts). */
+export interface ShardJoin { vessel?: unknown }
 
 /** THE PRESS IS KEPT: two client frames landing in one server tick used to
  *  overwrite each other, losing a single-frame edge or meta press. The later
@@ -138,7 +144,7 @@ export class ShardTransport implements NetTransport {
 
   private readonly stateCbs = new Set<(s: StateSnapshot) => void>();
   private readonly zoneCbs = new Set<(z: ZoneMsg) => void>();
-  private readonly joinCbs = new Set<(p: PeerInfo) => void>();
+  private readonly joinCbs = new Set<(p: PeerInfo, join: ShardJoin) => void>();
   private readonly leaveCbs = new Set<(id: PlayerId) => void>();
   private readonly sessionCbs = new Set<(m: SessionMsg, from: PlayerId) => void>();
   private readonly hostLostCbs = new Set<() => void>();
@@ -270,7 +276,11 @@ export class ShardTransport implements NetTransport {
       this.peerList.push(peer);
       this.write(conn, encodeText(JSON.stringify({ t: 'welcome', self: seatId, peers: this.peerList, seed: this.seedSource() >>> 0, worldmass: this.worldmass, features: this.features } satisfies WireMsg)), true);
       this.broadcast({ t: 'pjoin', peer }, conn, true);
-      this.joinCbs.forEach(cb => this.guard(() => cb(peer))); // the host spawns the seat
+      // THE IDENTITY rides to the HOST alone: the roster row above (welcome,
+      // pjoin) never carries the accountId, so no peer can learn another's.
+      const accountId = isAccountId(m.accountId) ? m.accountId : undefined;
+      const hostPeer: PeerInfo = accountId ? { ...peer, accountId } : peer;
+      this.joinCbs.forEach(cb => this.guard(() => cb(hostPeer, { vessel: m.vessel }))); // the host spawns the seat
     } else if (m.t === 'input' && conn.seat) {
       const input = sanitizeInput(m.input);
       if (input) {
@@ -366,7 +376,8 @@ export class ShardTransport implements NetTransport {
     if (c) this.write(c, encodeText(JSON.stringify({ t: 'zone', zone: z } satisfies WireMsg)), true);
   }
   onZone(cb: (z: ZoneMsg) => void): () => void { this.zoneCbs.add(cb); return () => { this.zoneCbs.delete(cb); }; }
-  onPeerJoin(cb: (p: PeerInfo) => void): () => void { this.joinCbs.add(cb); return () => { this.joinCbs.delete(cb); }; }
+  /** A join: the host-side roster row (with its accountId) + the vessel it carried. */
+  onPeerJoin(cb: (p: PeerInfo, join: ShardJoin) => void): () => void { this.joinCbs.add(cb); return () => { this.joinCbs.delete(cb); }; }
   onPeerLeave(cb: (id: PlayerId) => void): () => void { this.leaveCbs.add(cb); return () => { this.leaveCbs.delete(cb); }; }
 
   sendSession(msg: SessionMsg, to?: PlayerId): void {

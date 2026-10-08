@@ -61,15 +61,17 @@ gate). The regression rig is `balance/probe_shard.ts` (`npm run probe -- shard`)
 
 - The whole party travels together (`loadZone` carries every seat); a seat
   cannot be in a zone the keeper is not in. Lifted by M1 (THE SIM UNITS).
-- A joiner is a fresh level-1 hero of the chosen class with the base bar and
-  no kit; it saves nothing when it leaves. Lifted by M2 (THE VESSEL).
+- A joiner with no saved hero is a fresh level-1 hero of the chosen class
+  with the base bar and no kit; it saves nothing when it leaves. A joiner
+  WITH one travels as its VESSEL (below, "The vessel and the corpse").
 - Every account-gated read rides the SHARD's account (THE KEEPER'S GATE):
   with a fresh account the hearth is a hamlet and no station answers; `--open`
   is the play-test answer until M2 (THE SEAT'S GATE).
 - Events are the world's, seated around the keeper's zone. Lifted by M3.
 - A player death with no other player standing is a DOWN, and the keeper's
   mercy stands it up where it fell after `SHARD_CFG.keeper.reviveSec`; the
-  world never ends. The death covenant on a shard is card 6.
+  world never ends. A MORTAL vessel's such down is THE DEATH COVENANT
+  instead (below); Immortal vessels and fresh heroes keep the mercy.
 - The wire is the co-op snapshot (full state, JSON, 20 Hz, no interest
   management) under THE WIRE DISCIPLINE's first row: the account-derived
   `memoryAccess` view rides every `WIRE_CFG.memoryAccessBeat`-th snapshot
@@ -134,6 +136,44 @@ replays once per `persistSec`; a fresh wilds boots in 2.9-5.9 s and a resume
 stands up in 3.0-4.5 s (the constructor's synchronous steps ~0.9-1.1 s, the
 first live update the rest).
 
+## The vessel and the corpse
+
+Card 6 as ruled (her word, 2026-10-07): the shard's world persists; the hero
+is the client's. A client keeps its hero save and uploads it at login; the
+shard mirrors it home; a MORTAL vessel's death leaves its corpse on the shard
+and ends that player's run, "equivalent to having their character die in a
+normal run", and the next hero of the same account can walk back to the body
+and reclaim it. Immortal vessels keep THE MERCY.
+
+| piece | file | law |
+|---|---|---|
+| THE IDENTITY | `meta/account.ts` (`accountId`, `ensureAccountId`, `isAccountId`) | every profile's account carries a stable random 128-bit hex id, minted once by its first load (`ensureAccountId` in `loadAccount`/`loadAccountAsync`: the synchronous boot load mints in memory, the disk-first load adopts that id or the cache's and caches it; the disk takes it with the account's next ordinary write, because a compatible boot never writes the disk, and `ShardVesselLink` saves the account before a shard keys any record by it; a save that predates it mints at its next load) from `crypto.getRandomValues`, never `Math.random` (the seeded stream never moves). `makeAccount` and `deserializeAccount` never mint and `serializeAccount` omits an empty id, so every sim and probe account stays byte-identical (THE SOLO INVARIANT: a parity rig comparing two worlds' accounts caught the first, eager draft). The `join` carries it; the host keeps it per seat and NEVER re-broadcasts it (the welcome/pjoin roster rows omit it). It keys this player's own records and nothing else. |
+| THE VESSEL | `server/vessel.ts` (`VesselDesk`, `judgeVessel`) | the `join` may carry `vessel`: the client's run-slot hero as a CharacterSave with NO world half (the couch guest's shape; `meta/shardVessel.ts` `readTravelingVessel`, roster vessels stay home). THE JUDGMENT (structure, finite numbers, size, schema, class, character id, then `rebuildSavedMeta`) gates it; a vessel that fails, has no account id, already fell here, or already walks the world joins as the fresh card hero with one log line. The graft is the couch guest's (`rebuildSavedMeta` + `World.adoptSeatMeta`) plus the seat-scoped half of `applySavedCharacter` (the seated heal, flask banks, primed pours, guard clocks, fielded bonds and rosters; bonds whose skill the build lacks sleep and ride home as they came). The uploaded class wins over the lobby card. |
+| THE MIRROR | `VesselDesk.mirror` | on the persistence beat (`SHARD_CFG.persistSec`, ephemeral worlds too), at THE FAREWELL (`session leaving`: the client's `WsTransport.leave()` holds the socket open for the last mirror, up to `WS_TRANSPORT_CFG.farewellMs`; honored once per `VESSEL_CFG.farewellEverySec`) and at a clean shutdown, the shard ships `session heroSave` to that seat alone: `serializeCouchGuest`'s shape, no world, the build and carry as the shard holds them, and the vessel's own run ledger, run config, contracts and sleeping bonds passed through verbatim (never the shard's). The client writes it to the hero's own slot (`saveVesselMirror`: the shared Continue slot for a run-mode vessel), honoring only the vessel it sent, and only while the shard session is current or no other run is live (a farewell's late mirror never overwrites a new run's save). |
+| THE DEATH COVENANT | `VesselDesk.tick` → `fall` | a vessel whose stage's `onDeath` is `'end'` (read from `meta/modes.ts`, never a mode id) and whose down only THE MERCY would answer (`VESSEL_CFG.covenantAt` `'mercy'`: while another player stands, the down stays co-op's to revive) FALLS that same tick, before the mercy's clock could ever stand it up: its worn and side-board gear (`captureLoot`, the DeathRecord's own policy) is recorded as a corpse keyed by account (caves and empty carries leave none, the corpse run's law), its fall is TOMBSTONED, the client hears `corpse` (where it lies + the reckoning the shard appraised: the seat's carried essence at the mortal exchange times the stage's rate) then `runEnd`, and the seat leaves the world. A mortal vessel whose client LEAVES while it is down has fallen too (leaving is never the road out of a death). `updateDownedSeats`' law is untouched (no engine seam). |
+| THE LATE WORD | `ShardCorpses.markFallen` / `VesselDesk.seat` | each tombstone keeps the word its client is owed (the note + the reckoning). A re-upload of a fallen vessel never takes a seat: it hears `corpse` then `runEnd` again, so a client that never heard (a crash, a dropped socket, a leave while down) runs its reckoning and wipes its slot, and its class pick's `rejoin` seats a fresh hero. The client wipes BEFORE it mints, so a crash between the two can lose a reckoning but never repeat one. |
+| THE RECKONING, at home | `meta/shardVessel.ts` (`ShardVesselLink`) | the client mints the shard's appraisal into its own account (credits, the chronicle row, the death tally, its own run counters, class claims, released contracts), wipes its run slot (permadeath), and shows the ordinary death screen naming the ground, then the Vault, then the class pick whose `rejoin` re-seats a fresh hero under the same account id (the shard now sends `newRun` BEFORE the re-seat's zone message: the client's shell and its zone subscription stand up on `newRun`, so M0's order left a rejoined hero without terrain). No local corpse is recorded: the body is the shard's. |
+| THE CORPSE RETURNS | `server/corpses.ts` (`ShardCorpses`) | the records file `saves/shard_<seed>.records.json` (bodies + tombstones; written on change, loaded at boot, kept beside the world save but independent of it: `--worldmass` and other ephemeral worlds still remember their dead; absent only under `--ephemeral`). Any seat that named the account sees that account's bodies in its zone (static zones by id; a churned generated id re-binds by map coordinate inside `CORPSE_MATCH_RADIUS`), drawn on its own shell from `session corpses` rows sent to it alone. The reclaim is the corpse run's dwell (`'corpse_reclaim'` transit row: reach, discipline, clock) for the owning seat only; the gear comes home into THAT seat's bag (ground drops are not owner-gated on a shared world; a full bag spills at its feet as owed property), the record clears, and the claimant's account deed rides the next row. |
+
+Wire rows (types and sanitizers in `src/net/vesselWire.ts`):
+
+| row | direction | carries |
+|---|---|---|
+| `join { accountId?, vessel? }` | client → shard | the account id; the hero (CharacterSave, no world) |
+| `session heroSave { save }` | shard → one seat | the vessel's mirror |
+| `session corpse { note, reckoning }` | shard → one seat | `ShardCorpseNote` (id?, charId, name, classId, level, zoneId, zoneName, pos, pieces, diedAt) + `ShardReckoning` (rows, carried, mult, minted, renown, level, zones, kills, modeId, modeStage); `runEnd` follows. Sent at the fall, and again (THE LATE WORD) at any re-upload of the fallen vessel |
+| `session corpses { zoneId, bodies, reclaimed? }` | shard → one seat | its own standing bodies (`ShardBodyRow`: id, x, y, classId, level, dwell) + reclaims since the last row |
+| `session leaving` | seat → shard | THE FAREWELL: mirror me before my socket closes |
+
+Honest limits: a fresh hero (no upload) keeps M0's semantics (no mirror, the
+mercy); trust is the claim tier (the shard believes a well-formed vessel, the
+client believes the shard's reckoning); the reclaim's corpse deed reaches the
+account, other shard deeds (kills, discoveries) still feed the shard's account
+until M2's account deltas; account Relics never travel (the save excludes
+them) and a shard death does not run the pack-Relic loss; the client's world
+map does not mark a shard corpse (the shell's map is its own until the chart
+rides the wire).
+
 ## Dials
 
 `SHARD_CFG` (server/shardHost.ts): `tickHz` 60, `stateHz` 20,
@@ -143,7 +183,8 @@ first live update the rest).
 `WILDS_CLIENT_CFG.surveyEveryFrames` 30 (src/net/wildsClient.ts). `SHARD_WIRE_CFG`
 (server/shardTransport.ts): `maxClientMessage` 256 KB, `sendBufferCap` 96 KB,
 `pingSec` 15, `reapSec` 45, `maxSlots` 16. `WS_TRANSPORT_CFG.defaultUrl`
-(src/net/ws.ts) is the lobby box's first offer. `WIRE_CFG.memoryAccessBeat`
+(src/net/ws.ts) is the lobby box's first offer; `farewellMs` 1500 is how long
+a leaving vessel holds its socket for the last mirror. `WIRE_CFG.memoryAccessBeat`
 (src/net/snapshot.ts) is the account-view beat.
 
 ## Hosting on Codespaces
@@ -158,3 +199,15 @@ start, set the port PUBLIC once (Ports panel, or
 `gh codespace ports visibility 8787:public -c <name>`) and hand players the
 address shown there. The codespace idles out after its timeout; starting it
 again brings the same world back.
+
+THE VESSEL: `VESSEL_CFG` (server/vessel.ts): `maxBytes` 240 KB (under the
+wire's 256 KB frame cap), `maxLevel` 999, `maxDepth` 24, `maxNodes` 60000,
+`maxString` 4096, `maxName` 64, `maxCharId` 64, `maxBar` 32, `maxItemUid`
+2^31-1, `covenantAt` `'mercy'` (or `'down'`: every down of a mortal vessel is
+its death), `farewellEverySec` 2. The mirror rides `SHARD_CFG.persistSec`. `SHARD_CORPSE_CFG`
+(server/corpses.ts): `perAccount` = `MAX_DEATH_RECORDS` (3, the account
+ring's size), `fallenPerAccount` 64, `schema` 1, `reclaimRadius` 110 /
+`reclaimDwell` 1.0 (fallbacks behind the `'corpse_reclaim'` transit row),
+`clampRadius` 16, `dwellStep` 0.1, `flash` (64 px, 0.5 s, the reclaim gold).
+`VESSEL_WIRE_CFG` (src/net/vesselWire.ts): `maxText` 96, `maxValue` 1e9,
+`maxBodies` 32.
