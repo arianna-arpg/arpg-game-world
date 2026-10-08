@@ -20,7 +20,7 @@ import type { PlayerId, PlayerInput } from './intent';
 /** THE GRAMMAR — one JSON message per frame, both directions. */
 export type WireMsg =
   | { t: 'join'; classId: string; name: string; cosmeticLoadout?: import('../engine/cosmetics').CosmeticLoadout }
-  | { t: 'welcome'; self: PlayerId; peers: PeerInfo[]; seed: number; worldmass?: boolean }
+  | { t: 'welcome'; self: PlayerId; peers: PeerInfo[]; seed: number; worldmass?: boolean; features?: string[] }
   | { t: 'input'; seat: PlayerId; input: PlayerInput }
   | { t: 'snap'; snap: StateSnapshot }
   | { t: 'zone'; zone: ZoneMsg }
@@ -65,7 +65,7 @@ export class WsTransport implements NetTransport {
 
   /** Open the socket and wait for the shard's welcome. Resolves with our seat
    *  id AND the shard's run seed (the lobby builds the render shell from it). */
-  connect(url: string, info: Omit<PeerInfo, 'id' | 'isHost'>): Promise<{ self: PlayerId; seed: number; worldmass: boolean }> {
+  connect(url: string, info: Omit<PeerInfo, 'id' | 'isHost'>): Promise<{ self: PlayerId; seed: number; worldmass: boolean; features: string[] }> {
     return new Promise((resolve, reject) => {
       let ws: WebSocket;
       try { ws = new WebSocket(url); } catch (e) { reject(e instanceof Error ? e : new Error(String(e))); return; }
@@ -80,7 +80,14 @@ export class WsTransport implements NetTransport {
         try { m = JSON.parse(String(ev.data)) as WireMsg; } catch { return; }
         if (m.t === 'welcome') {
           this.self = m.self; this.peerList = m.peers; this.welcomed = true;
-          if (!settled) { settled = true; resolve({ self: m.self, seed: m.seed, worldmass: m.worldmass === true }); }
+          if (!settled) {
+            settled = true;
+            // THE SHARD'S TOWN FEATURES: the account features that size the hearth
+            // (townTier) — a wilds shell builds its World with these so the seed
+            // lays the SAME settlement the server laid (strings only, sanitized).
+            const features = Array.isArray(m.features) ? m.features.filter((f): f is string => typeof f === 'string').slice(0, 256) : [];
+            resolve({ self: m.self, seed: m.seed, worldmass: m.worldmass === true, features });
+          }
           return;
         }
         this.dispatch(m);

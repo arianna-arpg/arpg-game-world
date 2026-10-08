@@ -53,6 +53,7 @@ import { serializeSnapshot, applySnapshot, serializeZone, applyZone } from './ne
 import { RemoteInput } from './net/remote';
 import { WebRtcTransport } from './net/webrtc';
 import { WsTransport, WS_TRANSPORT_CFG } from './net/ws';
+import { wildsShellActive, wildsShellAttach, wildsShellDetach, wildsShellStream, wildsShellZone } from './net/wildsClient';
 import { openCoopLobby } from './ui/lobby';
 import { CLASSES, type ClassDef } from './data/classes';
 import { SKILLS as CLIP_SKILLS } from './data/skills';
@@ -2294,6 +2295,8 @@ function clientApplyAndRender(dt: number): void {
   // predicted one (anchor to the host's ack + replay unacked input) for responsive
   // movement. Other actors keep snapshot interpolation.
   predictOwnHero();
+  // THE WILDS ON THE WIRE: stream the ground around our own hero every frame.
+  if (clientWilds && wildsShellActive(world)) wildsShellStream(world, world.player.pos);
   // The latest snapshot's seatMeta delta (if any) is now applied — let the next
   // arriving snapshot stop carrying it forward (coalescing guard in onState).
   metaApplied = true;
@@ -2371,7 +2374,7 @@ function subscribeToHost(): void {
     }
     prevSnapshot = latestSnapshot ?? s; latestSnapshot = s; snapAccum = 0;
   });
-  zoneDispose = net.onZone(z => { applyZone(world, z); });
+  zoneDispose = net.onZone(z => { if (clientWilds) wildsShellZone(world, z, clientWilds.seed); else applyZone(world, z); });
 }
 /** Client: stop applying broadcasts. */
 function unsubscribeFromHost(): void {
@@ -2570,8 +2573,8 @@ function openLobby(): void {
         net = ws;
         subscribeToHost();
         wireSession();                             // run-lifecycle channel (newRun/hostLeft)
-        const { self, seed } = await ws.connect(url, { name: 'Joiner', classId, cosmeticLoadout: account.cosmetics.loadout });
-        startAsClient(cls, self, seed);
+        const { self, seed, worldmass, features } = await ws.connect(url, { name: 'Joiner', classId, cosmeticLoadout: account.cosmetics.loadout });
+        startAsClient(cls, self, seed, worldmass ? { features } : undefined);
       } catch (e) { resetToLocal(); throw e; }     // an unreachable server must revert net to LocalTransport
     },
     connectDefault: WS_TRANSPORT_CFG.defaultUrl,
@@ -2582,17 +2585,32 @@ function openLobby(): void {
 /** Become a render-only CLIENT of a host: a shell World backs the camera/HUD/
  *  getters, but it never simulates — the frame loop's client branch applies the
  *  host's snapshots and renders. clientSeatId anchors the camera on OUR hero. */
-function startAsClient(classDef: ClassDef, selfSeat: string, hostSeed: number): void {
+/** THE WILDS ON THE WIRE (src/net/wildsClient.ts): set while the shell shows
+ *  a hosted Unbroken Wilds — the zone handler and the frame loop route
+ *  through the wilds shell instead of the classic client lanes. */
+let clientWilds: { seed: number } | null = null;
+
+function startAsClient(classDef: ClassDef, selfSeat: string, hostSeed: number, wilds?: { features: string[] }): void {
   couchReset(); // a render shell hosts no couch — the pads are free again
+  wildsShellDetach(world); // a previous shell's runtime never outlives its World
+  clientWilds = null;
   // THE SEED THREAD: build the shell from the HOST's run seed, never a local
   // roll — manifest.seed drives randomizeStarterWeb and every `manifest.seed ^ …`
   // mint derivation, so our own seed would put us on a different map from frame
   // one (the shell's zone graph, gate seeds and vendor shelves would all
   // disagree with the authority we render). wireSeed normalizes the untrusted
   // wire value; ONE seam covers both seating roads (welcome and newRun).
-  world = adoptWorld(new World(account, Object.freeze(buildManifest(account, wireSeed(hostSeed, rollSeed())))));
+  // A WILDS shell builds its World with the SHARD's town features: the mass
+  // runtime lays the hearth from townTier(account), and the seed alone cannot
+  // pin that — the welcome's feature list can (wildsClient.ts).
+  const shellAccount = wilds ? { ...account, features: new Set(wilds.features) } : account;
+  world = adoptWorld(new World(shellAccount, Object.freeze(buildManifest(account, wireSeed(hostSeed, rollSeed())))));
   world.createPlayer(classDef, { startingCompanions: false, startingFlasks: false });   // a local shell (getters/camera/HUD) — not the authority
   world.clientSeatId = selfSeat;
+  if (wilds) {
+    clientWilds = { seed: world.manifest.seed };
+    wildsShellAttach(world, clientWilds.seed); // inert: the land from the seed, the life from the wire
+  }
   // META mutations on a client are INTENTS: ship them to the host (which owns every
   // mutation) instead of applying to the throwaway render shell. requestMeta routes
   // through this; the host applies it to our seat and replicates the result back.
@@ -2619,6 +2637,7 @@ function resetToLocal(): void {
   net.leave();
   net = new LocalTransport();
   lastSentZone = '';
+  clientWilds = null; // a wilds shell's zone routing never outlives its session (the runtime dies with the World on the next adopt)
 }
 
 /** Return to the start menu, always resetting the transport to local first — so

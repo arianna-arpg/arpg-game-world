@@ -432,20 +432,37 @@ unchanged. Horizontal scale on the surface needs a REGION PARTITION
 the "region subscriptions" that lane already names as its step 6; the
 `SimUnit` seam (§3.3) is the one place it plugs.
 
-THE LAND IS THE SEED'S, THE LIFE IS THE SERVER'S. On the wilds the terrain
-(pages, native features, roads) is a pure function of the seed, so a client
-may mint the ground it stands on LOCALLY from the welcome's seed — the
-exception to §3.4 that the wilds earn — while every body, drop and state
-rides the snapshot. What the wire lacks today (the welcome now says
-`worldmass: true`): the render shell does not yet start its own mass
-runtime, the zone message ships `walk: null` (a `MassWalk` is not a packed
-grid, so the client's prediction has no ground to clamp on), and the mass
-lane's own save shape (`MassAdventureSave`) is not yet the shard's
-persistence (a wilds shard runs ephemeral). THE WILDS ON THE WIRE is the
-next pass: the shell starts `startWorldMass(seed)` on the welcome, the zone
-message carries the mass identity instead of a walk grid, positions stay in
-the shared local frame (the lane's own no-rebase invariant), and the shard
-adopts the mass save under its wrapper.
+THE LAND IS THE SEED'S, THE LIFE IS THE SERVER'S — BUILT (M0.6, the same
+day; `src/net/wildsClient.ts`). On the wilds the terrain (pages, roads, the
+hearth's lay) is a pure function of the seed plus the hearth's tier, so the
+render shell MINTS the ground it stands on locally: on a welcome that says
+`worldmass: true` the shell builds its World with the SHARD's town features
+(the welcome carries them — the one thing the seed alone cannot pin) and
+starts the mass runtime in RESTORE-ONLY posture, which births nothing and
+runs no sim; every frame it streams terrain pages around its own hero with
+the runtime's public pieces (the body of `WorldMassRuntime.update`'s
+streaming block, since the runtime exposes no stream-only entry), keeps the
+sky on the shard's clock and lets the map remember what the hero saw. Every
+body, drop and doodad rides the wire exactly as a classic client's do. Two
+laws the zone message would break are held in the shell: `applyZone` nulls
+`world.walk` (a `MassWalk` is not a packed grid), so the shell re-seats the
+runtime's walk after every zone message and prediction clamps on the real
+ground; and a POCKET (a native cave, a side area) arrives as an ordinary
+zone id, so the shell drops its runtime for the pocket and re-attaches when
+the surface returns. Server side, two laws the single-focus runtime needs:
+THE SHADOW (the runtime streams, births and dwells around `world.player`,
+the keeper on a shard, so on the wilds the keeper's body shadows the FOCUS
+SEAT — the first standing player — `shadowOffset` px behind it every tick;
+one focus is the sim-unit gap M1 closes, and players far from the focus meet
+cold ground) and THE DRESS BEAT (the zone message is the one-shot carrier of
+doodads and the wilds GROW them as the focus walks — ecology, sites, native
+scenery — so a changed doodad roster re-ships the zone message, at most once
+per `dressSec`). Still open on the wilds: the mass lane's own save shape
+(`MassAdventureSave`) is not yet the shard's persistence (a wilds shard runs
+ephemeral; the vessel and corpse records persist beside it), native-feature
+grid edits the server makes do not reach the shell's walk (a wall the server
+blocks is open to prediction until the ack lands), and the HUD's local site
+name reads a private runtime map the shell never fills.
 
 ---
 
@@ -454,6 +471,7 @@ adopts the mass save under its wrapper.
 | M | Name | Builds | Engine seams (tokens) | Gate |
 |---|---|---|---|---|
 | **M0** | **THE HEADLESS HOST** (this pass) | `src/server/shardHost.ts` (boot, frame, persistence beat), `shardTransport.ts` (host role over WS), `src/net/wsframe.ts` (RFC 6455 server codec, zero deps), `src/net/ws.ts` (client `WsTransport`), `scripts/shard.ts` (`npm run shard -- --port --seed`), lobby row "Join a server" | `keeperSeat` (5 one-line gates) | `balance/probe_shard.ts` (in-process shard + a Node `WebSocket` client: welcome, zone, snapshot, input moves the hero, action applies, leave despawns, keeper exempt) |
+| **M0.6** | **THE WILDS ON THE WIRE** (this pass) | `src/net/wildsClient.ts` (the shell's inert runtime, streaming, zone law, pocket law), the welcome's `features`, THE SHADOW and THE DRESS BEAT on the shard, THE WIRE DISCIPLINE's first row (`WIRE_CFG.memoryAccessBeat`) | main.ts client lanes (`clientWilds`), snapshot.ts (the beat) | probe_shard P (shadow, welcome features, inert attach, frame agreement, zone law, life from the wire, streaming, mass-walk prediction, the pocket round trip, the dress beat) |
 | **M0.5** | **THE UNBROKEN WILDS, HOSTED** (this pass) | `--worldmass` on the shard (`ShardHost.worldmass`, `startWorldMass` under the keeper, the welcome's `worldmass` flag), `Host Shard.bat` | none | probe_shard K (the runtime stands, ticks faultless, a joiner rides the surface snapshot) |
 | M1 | THE SIM UNITS | unit registry, wake/sleep, `detachSeat`/`attachSeat`, per-unit snapshots, the keeper's world sweep, multi-presence `simView`, the chart on the wire | `shardWorld` (sweep gate, alias adoption, hand-off) | probe: two seats in two zones at once; byte-identical solo |
 | M2 | THE SEAT'S GATE | account claims, `accountOf(seat)`, the 243-read classification, account deltas, hero upload/mirror, `shard.json` | `shardWorld` (the resolver) | probe: two claims, two gates, deltas land home |
@@ -600,6 +618,19 @@ frames — the standing harness gotcha, not a shard fault.
 **Measured** (§1's table stands): ~1 ms per 60 Hz tick for a small wild
 zone; 44-52 KB per snapshot of which 43.7 KB is the `memoryAccess` row
 (chip filed on main); the shard's wire is otherwise ~1-19 KB per tick.
+
+**M0.6, the same day — THE WILDS ON THE WIRE, walked live:** a browser
+Warrior joined a `--worldmass --open` shard, the shell built its World with
+the shard's town features, started the runtime inert (population 0, 994
+doodads from the wire, 53 bodies from the wire, `walk === massRuntime.walk`),
+walked out of the Waking House through its door, across the hearth's ward at
+night, through the east gate and onto open country: the HUD read "The
+Unbroken Wilds — Country Lv 1", the ground painted from the seed, natives
+streamed around the shadowed keeper, and the dress beat re-shipped the zone
+message four times on the way so forest oaks, standing stones, berry bushes
+and brush stood where the server grew them. The probe's section P pins each
+law headless, including the dress beat firing exactly once for a changed
+roster and never for a still one.
 
 **M0.5, the same day, on the seamless foundation** (branch rebased onto
 `origin/codex/seamless-world-foundation` @ `67d9c290` with zero conflicts;

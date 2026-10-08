@@ -20,6 +20,9 @@
 //   I  the leave: a dropped socket despawns its seat
 //   J  persistence: the world half writes and a second host resumes it
 //   K  THE UNBROKEN WILDS: the seamless foundation's surface hosts headless
+//   P  THE WILDS ON THE WIRE: a render shell lays the same land from the seed,
+//      takes the life from the wire, keeps its walk, streams pages, and the
+//      keeper shadows the focus seat
 // ---------------------------------------------------------------------------
 
 import { mkdtempSync, existsSync, rmSync } from 'node:fs';
@@ -28,6 +31,14 @@ import { join } from 'node:path';
 import { ShardHost, SHARD_CFG } from '../server/shardHost';
 import { sanitizeInput } from '../server/shardTransport';
 import { WsTransport } from '../src/net/ws';
+import { wildsShellActive, wildsShellAttach, wildsShellStream, wildsShellZone } from '../src/net/wildsClient';
+import { applySnapshot, serializeSnapshot, serializeZone } from '../src/net/snapshot';
+import { World } from '../src/engine/world';
+import { buildManifest } from '../src/packages/manifest';
+import { makeAccount } from '../src/meta/account';
+import { CLASSES } from '../src/data/classes';
+import { cellKey } from '../src/worldmass/address';
+import { MASS_ZONE } from '../src/worldmass/preset';
 import { WS_OP, WsMessageAssembler, decodeFrames, encodeClose, encodeFrame, encodeText } from '../src/net/wsframe';
 import type { StateSnapshot, ZoneMsg } from '../src/net/snapshot';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -272,6 +283,64 @@ await host.stop();
   off();
   const snap2 = got2 as StateSnapshot | null;
   check('K wilds: a joiner rides the surface snapshot beside the natives', !!snap2 && !!snap2.seats['p1'] && snap2.actors.length > 2);
+
+  // ================================================== P: THE WILDS ON THE WIRE ==
+  // THE SHADOW: the keeper follows the focus seat (p1) on the surface.
+  const p1w = w.seats.find(s => s.id === 'p1')!;
+  for (let i = 0; i < 3; i++) wilds.tick(DT);
+  check('P shadow: the keeper stands the shadow offset behind the focus seat',
+    Math.abs(wilds.keeper.actor.pos.x - p1w.actor.pos.x) < 0.5 && Math.abs(wilds.keeper.actor.pos.y - (p1w.actor.pos.y + SHARD_CFG.keeper.shadowOffset)) < 0.5
+    && wilds.focusSeat() === p1w);
+  check('P welcome: the shard\'s town features ride the welcome', hello.features.length > 0 && hello.features.every(f => typeof f === 'string'));
+  // The shell: built with the shard's features, the runtime inert, the land from the seed.
+  const shellAccount = { ...makeAccount(), features: new Set(hello.features) };
+  const shell = new World(shellAccount, Object.freeze(buildManifest(shellAccount, hello.seed)));
+  shell.createPlayer(CLASSES[0], { startingCompanions: false, startingFlasks: false });
+  shell.clientSeatId = 'p1';
+  const actorsBefore = shell.actors.length;
+  wildsShellAttach(shell, hello.seed);
+  check('P shell: the runtime stands inert on the shell', wildsShellActive(shell) && shell.massRuntime !== null && shell.zone.id === MASS_ZONE);
+  check('P shell: attach births no natives', shell.massRuntime!.population === 0, `actors ${actorsBefore}→${shell.actors.length}`);
+  check('P frame: the shell and the shard agree on the ground\'s origin and arena',
+    cellKey(shell.massRuntime!.origin) === cellKey(w.massRuntime!.origin) && shell.arena.w === w.arena.w && shell.arena.h === w.arena.h,
+    `arena ${shell.arena.w}x${shell.arena.h} vs ${w.arena.w}x${w.arena.h}`);
+  const sample = { x: p1w.actor.pos.x + 1234, y: p1w.actor.pos.y - 777 };
+  check('P frame: a point addresses the same cell on both sides',
+    cellKey(shell.massRuntime!.walk.at(sample.x, sample.y)) === cellKey(w.massRuntime!.walk.at(sample.x, sample.y)));
+  // The zone message: the server's doodads land, the walk stays the MassWalk.
+  const zmsg = serializeZone(w);
+  wildsShellZone(shell, zmsg, hello.seed);
+  check('P zone: the surface message keeps the mass walk under the server\'s doodads',
+    shell.walk === shell.massRuntime!.walk && shell.doodads.length === zmsg.doodads.length && shell.zone.id === MASS_ZONE, `doodads ${shell.doodads.length}`);
+  // The snapshot: the life from the wire.
+  const snapW = serializeSnapshot(w, 7);
+  applySnapshot(shell, snapW);
+  check('P life: the shell wears the shard\'s bodies and clock', shell.actors.length === snapW.actors.length && Math.abs(shell.time - snapW.time) < 1e-6 && shell.localSeat.actor.pos.x === snapW.seats['p1'].pos[0]);
+  // Streaming around the hero publishes the pages under it.
+  const hero = shell.player;
+  const heroCell = shell.massRuntime!.walk.at(hero.pos.x, hero.pos.y);
+  for (let i = 0; i < 120; i++) wildsShellStream(shell, hero.pos);
+  check('P stream: the hero\'s own page is published after a few frames', shell.massRuntime!.stream.page(heroCell) !== undefined);
+  check('P stream: the sky rides the shard\'s clock', !shell.massRuntime!.weather || shell.massRuntime!.weather.time >= shell.time - 1e-6);
+  // Prediction clamps on real ground: moving the hero through moveActor never throws and lands somewhere.
+  const x0 = hero.pos.x;
+  for (let i = 0; i < 30; i++) shell.moveActor(hero, 1, 0, DT);
+  check('P ground: the shell\'s own hero walks the mass walk', Number.isFinite(hero.pos.x) && hero.pos.x > x0, `Δx=${(hero.pos.x - x0).toFixed(1)}`);
+  // A pocket zone message drops the runtime; the surface brings it back.
+  wildsShellZone(shell, { ...zmsg, zoneId: 'cave_mass_probe', name: 'A pocket', walk: null }, hello.seed);
+  check('P pocket: a pocket zone message drops the shell\'s runtime', shell.massRuntime === null);
+  wildsShellZone(shell, zmsg, hello.seed);
+  check('P pocket: the surface message re-seats the runtime and its walk', shell.massRuntime !== null && shell.walk === shell.massRuntime.walk && shell.zone.id === MASS_ZONE);
+  // THE DRESS BEAT: a grown doodad roster re-ships the zone message within dressSec.
+  let zones2 = 0;
+  const offZ = c.onZone(() => { zones2++; });
+  await runTicks(wilds, Math.ceil(SHARD_CFG.dressSec * SHARD_CFG.tickHz) + 2);
+  const quiet = zones2;
+  w.doodads.push({ ...w.doodads[0], pos: { x: w.doodads[0].pos.x + 7, y: w.doodads[0].pos.y + 7 } });
+  await runTicks(wilds, Math.ceil(SHARD_CFG.dressSec * SHARD_CFG.tickHz) + 2);
+  offZ();
+  check('P dress: a changed doodad roster re-ships the zone message on the beat, a still one does not', quiet === 0 && zones2 === 1, `quiet ${quiet}, after ${zones2}`);
+
   c.leave();
   await waitFor(() => w.seats.length === 1, wilds, 60);
   await wilds.stop();

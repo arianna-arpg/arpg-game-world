@@ -82,6 +82,8 @@ export class ShardTransport implements NetTransport {
   private seedSource: () => number = () => 0;
   /** Carried on every welcome: the hosted world is the continuous surface. */
   worldmass = false;
+  /** Carried on every welcome: the shard account's feature ids (the hearth's tier). */
+  features: string[] = [];
   private keepalive: NodeJS.Timeout | null = null;
 
   private readonly stateCbs = new Set<(s: StateSnapshot) => void>();
@@ -190,7 +192,7 @@ export class ShardTransport implements NetTransport {
         cosmeticLoadout: sanitizeCosmeticLoadout(m.cosmeticLoadout),
       };
       this.peerList.push(peer);
-      this.write(conn, encodeText(JSON.stringify({ t: 'welcome', self: seatId, peers: this.peerList, seed: this.seedSource() >>> 0, worldmass: this.worldmass } satisfies WireMsg)));
+      this.write(conn, encodeText(JSON.stringify({ t: 'welcome', self: seatId, peers: this.peerList, seed: this.seedSource() >>> 0, worldmass: this.worldmass, features: this.features } satisfies WireMsg)));
       this.broadcast({ t: 'pjoin', peer }, conn);
       this.joinCbs.forEach(cb => cb(peer)); // the host spawns the seat
     } else if (m.t === 'input' && conn.seat) {

@@ -55,11 +55,21 @@ export const SHARD_CFG = {
   metaHeartbeatSec: 1.5,
   /** Write the world half of the save this often (main.ts's autosave beat). */
   persistSec: 20,
+  /** THE DRESS BEAT: the zone message is the one-shot carrier of doodads and
+   *  structures, and the wilds GROW them as the focus walks (ecology, sites,
+   *  native scenery). When the doodad roster changed since the last send, the
+   *  shard re-ships the zone message, at most once per dressSec. */
+  dressSec: 4,
   /** A stalled process catches up at most this many ticks per pump, then drops the rest. */
   maxCatchUpTicks: 5,
   /** THE KEEPER SEAT. reviveSec = THE MERCY: seconds a downed seat waits with
-   *  no standing ally before the keeper stands it up where it fell. */
-  keeper: { classId: 'warrior', name: 'The Keeper', reviveSec: 8 },
+   *  no standing ally before the keeper stands it up where it fell.
+   *  shadowOffset = THE SHADOW (the wilds): the mass runtime streams, births
+   *  and dwells around `world.player`, which on a shard is the keeper — so on
+   *  the surface the keeper's body shadows the FOCUS SEAT (the first standing
+   *  player) this many px behind it, every tick. One focus, one keeper: the
+   *  sim-unit gap M1 closes; players far from the focus meet cold ground. */
+  keeper: { classId: 'warrior', name: 'The Keeper', reviveSec: 8, shadowOffset: 48 },
   /** The shard save's own schema (wraps WorldStateSave's). */
   saveSchema: 1,
   /** Where shard saves land by default (gitignored beside the game's). */
@@ -131,6 +141,8 @@ export class ShardHost {
   private metaHeartbeat = SHARD_CFG.metaHeartbeatSec;
   private persistTimer = SHARD_CFG.persistSec;
   private lastSentZone = '';
+  private lastSentDoodads = -1;
+  private dressTimer = 0;
   private readonly pendingActions: { seat: string; action: MetaAction }[] = [];
   private timer: NodeJS.Timeout | null = null;
   private lastWall = 0;
@@ -168,6 +180,7 @@ export class ShardHost {
     }
     this.net = new ShardTransport();
     this.net.worldmass = this.worldmass;
+    this.net.features = [...this.account.features];
     this.net.setSeedSource(() => this.world.manifest.seed);
     this.net.onPeerJoin(p => this.onJoin(p));
     this.net.onPeerLeave(id => this.world.removeSeat(id));
@@ -193,6 +206,7 @@ export class ShardHost {
     // The joiner needs the standing terrain NOW, not at the next zone change.
     this.net.sendZoneTo(peer.id, serializeZone(this.world));
     this.lastSentZone = this.world.zone.id;
+    this.lastSentDoodads = this.world.doodads.length;
     this.log(`[shard] ${peer.id} joined as ${peer.classId} (${this.net.connectionCount()} connected)`);
   }
 
@@ -233,6 +247,7 @@ export class ShardHost {
   /** One engine step: the host frame verbatim, then the wire, then the beats. */
   tick(dt: number): void {
     const w = this.world;
+    if (this.worldmass) this.shadowFocus();
     for (const seat of w.seats) {
       const intent = seat.input.poll(seat.actor, w, dt); // RemoteInput polls null — its intent arrives via the wire
       if (intent) this.net.sendInput(seat.id, intent);
@@ -244,8 +259,16 @@ export class ShardHost {
     this.ticks++;
 
     if (this.net.connectionCount() > 0) {
+      this.dressTimer -= dt;
       if (w.zone.id !== this.lastSentZone) {
         this.lastSentZone = w.zone.id;
+        this.lastSentDoodads = w.doodads.length;
+        this.dressTimer = SHARD_CFG.dressSec;
+        this.net.sendZone(serializeZone(w));
+      } else if (this.dressTimer <= 0 && w.doodads.length !== this.lastSentDoodads) {
+        // THE DRESS BEAT: the roster moved (the wilds grew, a tree fell) — re-ship.
+        this.lastSentDoodads = w.doodads.length;
+        this.dressTimer = SHARD_CFG.dressSec;
         this.net.sendZone(serializeZone(w));
       }
       this.metaHeartbeat -= dt;
@@ -265,6 +288,21 @@ export class ShardHost {
       if (this.persistTimer <= 0) { this.persistTimer = SHARD_CFG.persistSec; this.persist(); }
     }
   }
+
+  /** THE SHADOW: the keeper's body follows the focus seat on the wilds (see
+   *  SHARD_CFG.keeper.shadowOffset). The first standing non-keeper seat is
+   *  the focus; with none connected the keeper stays where it last stood. */
+  private shadowFocus(): void {
+    const focus = this.world.seats.find(s => !s.keeper && !s.actor.dead);
+    if (!focus) return;
+    const k = this.keeper.actor;
+    k.pos.x = focus.actor.pos.x;
+    k.pos.y = focus.actor.pos.y + SHARD_CFG.keeper.shadowOffset;
+    k.tier = focus.actor.tier;
+  }
+
+  /** The focus seat THE SHADOW follows (null = none connected). */
+  focusSeat(): Seat | null { return this.world.seats.find(s => !s.keeper && !s.actor.dead) ?? null; }
 
   /** Start the wall-clock pump (fixed steps, bounded catch-up). */
   start(): void {

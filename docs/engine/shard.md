@@ -25,7 +25,7 @@ disabled" refusal of `npm.ps1`; in a PowerShell window the same fix is
 | `--host <addr>` | bind address (default `0.0.0.0`) |
 | `--seed <n>` | THE HOSTED SEED, hex with `0x` or decimal (default: a fresh roll) |
 | `--class <id>` | the keeper's class (cosmetic; it never fights) |
-| `--worldmass` | THE UNBROKEN WILDS: host the seamless foundation's continuous surface (M0.5 — the shell does not yet render it; see the charter §3.12) |
+| `--worldmass` | THE UNBROKEN WILDS: host the seamless foundation's continuous surface; a joining shell renders it from the seed (charter §3.12). Ephemeral until the mass save is adopted. |
 | `--open` | THE OPEN ACCOUNT: every class, station feature and memory unlocked on the shard account (play-test servers) |
 | `--ephemeral` | never write the world; default writes `saves/shard_<seed>.json` every `SHARD_CFG.persistSec` and on Ctrl-C |
 | `--save-dir <p>` | where shard saves land |
@@ -45,6 +45,8 @@ gate). The regression rig is `balance/probe_shard.ts` (`npm run probe -- shard`)
 | `WsTransport` | `src/net/ws.ts` | the CLIENT role of `NetTransport` over the native `WebSocket`; `connect(url, info)` resolves `{ self, seed }` off the shard's welcome (THE SEED THREAD); `WireMsg` is `webrtc.ts`'s `NetMsg` grammar verbatim. A socket that dies before the welcome is the connect's failure; after it, `onHostLost`. |
 | `ShardTransport` | `server/shardTransport.ts` | the HOST role over `node:http` upgrade + the frame assembler. Seat ids bind to the CONNECTION at join; inputs and session messages are keyed by that binding, never by the seat a client claims. Every input is shape-checked (`sanitizeInput`); unknown session kinds drop; a congested socket is skipped (never stalls the loop); a keepalive ping reaps silent sockets; non-JSON or protocol errors close the socket, which despawns its seat. |
 | `ShardHost` | `server/shardHost.ts` | boot (`bootShardEngine`: shims, package factions, the content census; registrations via `src/sim/arena`'s import list), one `World` from a real expedition manifest, the host frame verbatim (`poll seats → applyInputs → drain meta intents → updateAI → update`), the zone message on change, the meta heartbeat, 20 Hz snapshots, the persistence beat, a bounded fixed-step pump that logs engine faults instead of dying. |
+| THE WILDS SHELL | `src/net/wildsClient.ts` | the render shell's half of a hosted Unbroken Wilds: `wildsShellAttach` starts the mass runtime restore-only (inert) from the welcome's seed on a World built with the shard's town features, `wildsShellStream` streams pages around the own hero each frame (the runtime's own streaming block over public members) and keeps the sky on the shard's clock, `wildsShellZone` re-seats the mass walk under the server's doodads on the surface and drops the runtime for a pocket. Wired from main.ts (`clientWilds`). |
+| THE SHADOW / THE DRESS BEAT | `ShardHost` | on the wilds the keeper shadows the focus seat `SHARD_CFG.keeper.shadowOffset` px behind it each tick (the runtime streams, births and dwells around `world.player`); a changed doodad roster re-ships the zone message at most once per `SHARD_CFG.dressSec`. |
 | THE KEEPER SEAT | `Seat.keeper` (world.ts) | the parked p0: exempt from `partyScaleCount`, `grantXp`, absent from `serializeSnapshot`'s seats/actors/meta rows; in `updateDownedSeats` it is THE MERCY — a downed seat with no other standing seat rises after `keeper.reviveSec`, by clock, never by reach. Absent on every non-shard world: the solo invariant. |
 
 ## M0 semantics (honest, inherited from co-op)
@@ -70,7 +72,8 @@ gate). The regression rig is `balance/probe_shard.ts` (`npm run probe -- shard`)
 
 `SHARD_CFG` (server/shardHost.ts): `tickHz` 60, `stateHz` 20,
 `metaHeartbeatSec` 1.5, `persistSec` 20, `maxCatchUpTicks` 5,
-`keeper { classId, name, reviveSec 8 }`, `saveDir`. `SHARD_WIRE_CFG`
+`keeper { classId, name, reviveSec 8, shadowOffset 48 }`, `dressSec` 4, `saveDir`;
+`WILDS_CLIENT_CFG.surveyEveryFrames` 30 (src/net/wildsClient.ts). `SHARD_WIRE_CFG`
 (server/shardTransport.ts): `maxClientMessage` 256 KB, `sendBufferCap` 1 MB,
 `pingSec` 15, `reapSec` 45, `maxSlots` 16. `WS_TRANSPORT_CFG.defaultUrl`
 (src/net/ws.ts) is the lobby box's first offer. `WIRE_CFG.memoryAccessBeat`
