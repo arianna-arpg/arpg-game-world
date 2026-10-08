@@ -16,6 +16,9 @@
 // the socket, and a keepalive ping reaps silent connections.
 // ---------------------------------------------------------------------------
 
+import { createReadStream, statSync } from 'node:fs';
+import { extname, resolve, sep } from 'node:path';
+import type { ServerResponse } from 'node:http';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { createHash } from 'node:crypto';
 import type { Duplex } from 'node:stream';
@@ -121,6 +124,14 @@ export function mergeInputs(prev: PlayerInput, next: PlayerInput): PlayerInput {
   return merged;
 }
 
+/** THE SERVED CLIENT's content types (a web build's files; anything else is a blob). */
+const CLIENT_TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.map': 'application/json', '.webmanifest': 'application/manifest+json',
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.webp': 'image/webp',
+  '.wasm': 'application/wasm', '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.mp4': 'video/mp4', '.webm': 'video/webm', '.txt': 'text/plain; charset=utf-8',
+};
+
 export class ShardTransport implements NetTransport {
   readonly self: PlayerId = 'p0';
   readonly isHost = true;
@@ -136,10 +147,15 @@ export class ShardTransport implements NetTransport {
    *  it) — seed, seats, tick time, faults, uptime — so a forwarded port in a
    *  browser tab tells a host what its world is doing. */
   statusSource: (() => unknown) | null = null;
+  /** THE SERVED CLIENT: the folder of a web build (`npm run build:web` → site/play) the shard
+   *  hands out on plain GETs, so a hosted world is one link; null = the status JSON on '/'. */
+  clientDir: string | null = null;
   /** Carried on every welcome: the hosted world is the continuous surface. */
   worldmass = false;
   /** Carried on every welcome: the shard account's feature ids (the hearth's tier). */
   features: string[] = [];
+  /** THE LAND DIGEST the shard's wilds run (null on a classic world): a shell that lays another land refuses the join. */
+  land: string | null = null;
   private keepalive: NodeJS.Timeout | null = null;
 
   private readonly stateCbs = new Set<(s: StateSnapshot) => void>();
@@ -159,18 +175,38 @@ export class ShardTransport implements NetTransport {
   /** Seated connections (the keeper's own seat is not a connection). */
   connectionCount(): number { return this.bySeat.size; }
 
+  /** THE SERVED CLIENT: one file under clientDir (index.html for '/'), never a path outside
+   *  it; hashed assets cache a day, pages never. False = not ours to serve. */
+  private serveClient(url: string, res: ServerResponse): boolean {
+    const dir = this.clientDir!;
+    let rel: string;
+    try { rel = decodeURIComponent(url); } catch { return false; }
+    if (rel === '/' || rel === '') rel = '/index.html';
+    const file = resolve(dir, '.' + rel);
+    if (file !== dir && !file.startsWith(dir + sep)) return false;
+    let size: number;
+    try { const s = statSync(file); if (!s.isFile()) return false; size = s.size; } catch { return false; }
+    const type = CLIENT_TYPES[extname(file).toLowerCase()] ?? 'application/octet-stream';
+    res.writeHead(200, { 'content-type': type, 'content-length': size, 'cache-control': rel.startsWith('/assets/') ? 'public, max-age=86400, immutable' : 'no-cache' });
+    createReadStream(file).pipe(res);
+    return true;
+  }
+
   /** Open the socket server. Port 0 picks a free one; resolves the bound port. */
   listen(port: number, host = '0.0.0.0'): Promise<number> {
     return new Promise((resolve, reject) => {
       const server = createServer((req, res) => {
-        // A plain HTTP hit is not a game client: the status page answers it.
-        if (this.statusSource) {
+        // A plain HTTP hit is not a game client: THE STATUS PAGE answers '/status' (and '/'
+        // with no served client), THE SERVED CLIENT answers everything under its folder.
+        const url = (req.url ?? '/').split('?')[0];
+        if (this.statusSource && (url === '/status' || (url === '/' && !this.clientDir))) {
           let body = '{}';
           try { body = JSON.stringify(this.statusSource()); } catch { /* a status that throws reads as empty */ }
           res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
           res.end(body);
           return;
         }
+        if (this.clientDir && this.serveClient(url, res)) return;
         res.writeHead(426, { 'content-type': 'text/plain', upgrade: 'websocket' });
         res.end(`hollow wake shard — connect with a WebSocket client (${req.url ?? '/'})`);
       });
@@ -274,7 +310,7 @@ export class ShardTransport implements NetTransport {
         cosmeticLoadout: sanitizeCosmeticLoadout(m.cosmeticLoadout),
       };
       this.peerList.push(peer);
-      this.write(conn, encodeText(JSON.stringify({ t: 'welcome', self: seatId, peers: this.peerList, seed: this.seedSource() >>> 0, worldmass: this.worldmass, features: this.features } satisfies WireMsg)), true);
+      this.write(conn, encodeText(JSON.stringify({ t: 'welcome', self: seatId, peers: this.peerList, seed: this.seedSource() >>> 0, worldmass: this.worldmass, features: this.features, ...(this.land ? { land: this.land } : {}) } satisfies WireMsg)), true);
       this.broadcast({ t: 'pjoin', peer }, conn, true);
       // THE IDENTITY rides to the HOST alone: the roster row above (welcome,
       // pjoin) never carries the accountId, so no peer can learn another's.

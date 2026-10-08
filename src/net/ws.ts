@@ -24,7 +24,7 @@ export type WireMsg =
        *  corpse"): the account's id, and the hero that travels (a
        *  CharacterSave with NO world half; absent = a fresh hero). */
       accountId?: string; vessel?: import('../meta/character').CharacterSave }
-  | { t: 'welcome'; self: PlayerId; peers: PeerInfo[]; seed: number; worldmass?: boolean; features?: string[] }
+  | { t: 'welcome'; self: PlayerId; peers: PeerInfo[]; seed: number; worldmass?: boolean; features?: string[]; land?: string }
   | { t: 'input'; seat: PlayerId; input: PlayerInput }
   | { t: 'snap'; snap: StateSnapshot }
   | { t: 'zone'; zone: ZoneMsg }
@@ -40,6 +40,10 @@ export const WS_TRANSPORT_CFG = {
   /** A connect that has heard no welcome by then fails (a private port, a
    *  wrong address, a sleeping codespace all answer with silence). */
   connectTimeoutMs: 10_000,
+  /** Hosts a port forwarder serves as TLS on :443 only (a codespace, a dev tunnel; GitHub
+   *  says its forwarding domain can change, hence a list): a bare host there becomes
+   *  wss:// with no port, and a container port pasted onto it is dropped. */
+  tlsHostSuffixes: ['.app.github.dev', '.devtunnels.ms'],
   /** THE FAREWELL: how long a leaving vessel holds its socket open for the
    *  shard's last mirror (`heroSave`) before it closes anyway (ms). */
   farewellMs: 1500,
@@ -50,12 +54,25 @@ export const WS_TRANSPORT_CFG = {
  *  default port, and whitespace is forgiven. */
 export function normalizeShardUrl(raw: string): string {
   let s = raw.trim();
+  const forwarded = (host: string): boolean => WS_TRANSPORT_CFG.tlsHostSuffixes.some(sfx => host.toLowerCase().endsWith(sfx));
   if (/^https:\/\//i.test(s)) s = 'wss://' + s.slice(8);
   else if (/^http:\/\//i.test(s)) s = 'ws://' + s.slice(7);
-  else if (!/^wss?:\/\//i.test(s)) s = 'ws://' + s;
+  else if (!/^wss?:\/\//i.test(s)) s = (forwarded(s.split(/[/:?#]/, 1)[0]) ? 'wss://' : 'ws://') + s;
   s = s.replace(/\/+$/, '');
+  const m = /^wss?:\/\/([^/:?#]+)(?::\d+)?(.*)$/i.exec(s);
+  if (m && forwarded(m[1])) s = 'wss://' + m[1] + m[2];
   if (/^ws:\/\/[^/:]+$/i.test(s)) s += ':' + WS_TRANSPORT_CFG.defaultPort;
   return s;
+}
+
+/** THE SERVED CLIENT's first offer: a page a forwarded host handed out (a codespace's shard
+ *  serving its own client) offers the shard that served it; everywhere else, the default. */
+export function defaultShardUrl(): string {
+  try {
+    const host = location.hostname;
+    if (WS_TRANSPORT_CFG.tlsHostSuffixes.some(sfx => host.toLowerCase().endsWith(sfx))) return normalizeShardUrl(location.origin);
+  } catch { /* no window: a probe, a worker */ }
+  return WS_TRANSPORT_CFG.defaultUrl;
 }
 
 export class WsTransport implements NetTransport {
@@ -90,7 +107,7 @@ export class WsTransport implements NetTransport {
 
   /** Open the socket and wait for the shard's welcome. Resolves with our seat
    *  id AND the shard's run seed (the lobby builds the render shell from it). */
-  connect(url: string, info: Omit<PeerInfo, 'id' | 'isHost'>, vessel?: import('../meta/character').CharacterSave): Promise<{ self: PlayerId; seed: number; worldmass: boolean; features: string[] }> {
+  connect(url: string, info: Omit<PeerInfo, 'id' | 'isHost'>, vessel?: import('../meta/character').CharacterSave): Promise<{ self: PlayerId; seed: number; worldmass: boolean; features: string[]; land?: string }> {
     return new Promise((resolve, reject) => {
       let ws: WebSocket;
       try { ws = new WebSocket(normalizeShardUrl(url)); } catch (e) { reject(e instanceof Error ? e : new Error(String(e))); return; }
@@ -115,7 +132,7 @@ export class WsTransport implements NetTransport {
             // (townTier) — a wilds shell builds its World with these so the seed
             // lays the SAME settlement the server laid (strings only, sanitized).
             const features = Array.isArray(m.features) ? m.features.filter((f): f is string => typeof f === 'string').slice(0, 256) : [];
-            resolve({ self: m.self, seed: m.seed, worldmass: m.worldmass === true, features });
+            resolve({ self: m.self, seed: m.seed, worldmass: m.worldmass === true, features, land: typeof m.land === 'string' ? m.land : undefined });
           }
           return;
         }

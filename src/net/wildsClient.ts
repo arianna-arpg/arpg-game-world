@@ -19,6 +19,7 @@
 // (the welcome carries them) — the one divergence the seed alone cannot pin.
 // ---------------------------------------------------------------------------
 
+import { massDigest } from '../worldmass/random';
 import type { World } from '../engine/world';
 import type { Vec2 } from '../core/math';
 import { MASS_ZONE } from '../worldmass/preset';
@@ -36,10 +37,21 @@ export function wildsShellActive(world: World): boolean {
   return world.massRuntime !== null && world.zone.id === MASS_ZONE;
 }
 
-/** Stand the mass runtime up on a render shell, inert. Idempotent. */
-export function wildsShellAttach(world: World, seed: number): void {
+/** Stand the mass runtime up on a render shell, inert. Idempotent. With `land` (the
+ *  welcome's THE LAND DIGEST) the shell proves it lays the land the shard runs — a
+ *  client built on another preset refuses loudly instead of walking into walls the
+ *  server does not have. */
+export function wildsShellAttach(world: World, seed: number, land?: string): void {
   if (world.massRuntime) return;
   world.startWorldMass(seed >>> 0, undefined, { restoreOnly: true });
+  const rt = world.massRuntime as World['massRuntime']; // re-read: the early return above narrowed the property for TS
+  if (land && rt) {
+    const mine = massDigest(rt.config);
+    if (mine !== land) {
+      rt.dispose(); world.massRuntime = null;
+      throw new Error('this build lays another land than the server runs (update the game, or the server)');
+    }
+  }
 }
 
 /** Tear the shell's runtime down (a pocket, a leave). Idempotent. */

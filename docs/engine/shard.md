@@ -29,10 +29,13 @@ disabled" refusal of `npm.ps1`; in a PowerShell window the same fix is
 | `--open` | THE OPEN ACCOUNT: every class, station feature and memory unlocked on the shard account (play-test servers) |
 | `--ephemeral` | never write the world; default writes `saves/shard_<seed>.json` (`shard_<seed>_wilds.json` on the wilds) every `SHARD_CFG.persistSec` and on Ctrl-C. A world resumes when the shard starts again with the same `--seed`: the file is named by it |
 | `--save-dir <p>` | where shard saves land |
+| `--per-ip <n>` | sockets one address may hold (`SHARD_WIRE_CFG.maxPerIp`, default 8); `0` = no cap — behind a port forwarder (a codespace) every player arrives from the forwarder's one address |
+| `--client <dir>` | THE SERVED CLIENT: a web build (`npm run build:web` → `site/play`, the default when it exists) handed out on plain GETs at `/`, so a hosted world is one link and client and server never drift; THE STATUS PAGE moves to `/status` |
 
 A player joins from the start menu's **Co-op (Beta)** → class card → **Join a
 Server** → `ws://<machine>:<port>` → Connect. A plain GET on the same port
-(a browser tab on `http://<machine>:<port>/`) answers THE STATUS PAGE: the
+(a browser tab on `http://<machine>:<port>/status`, or `/` when no client is
+served) answers THE STATUS PAGE: the
 world's kind and seed, the zone, the clock, uptime, the seated players, tick
 time p50/p95, dropped ticks, faults and where it saves. Both launchers
 (`Host Shard.bat`, the codespace's `start-shard.sh`) stand the Unbroken Wilds
@@ -54,9 +57,11 @@ gate). The regression rig is `balance/probe_shard.ts` (`npm run probe -- shard`)
 | THE WILDS SHELL | `src/net/wildsClient.ts` | the render shell's half of a hosted Unbroken Wilds: `wildsShellAttach` starts the mass runtime restore-only (inert) from the welcome's seed on a World built with the shard's town features, `wildsShellStream` streams pages around the own hero each frame (the runtime's own streaming block over public members) and keeps the sky on the shard's clock, `wildsShellZone` re-seats the mass walk under the server's doodads on the surface and drops the runtime for a pocket. Wired from main.ts (`clientWilds`). |
 | THE SHADOW / THE DRESS BEAT | `ShardHost` | on the wilds the keeper shadows the focus seat `SHARD_CFG.keeper.shadowOffset` px behind it each tick (the runtime streams, births and dwells around `world.player`); a changed doodad roster re-ships the zone message at most once per `SHARD_CFG.dressSec`. |
 | THE WILDS SAVE | `server/wildsSave.ts` | a `--worldmass` shard's persistence: the classic `ShardSave` write already carries the mass half; `readWildsSave` reads the wilds' own file, `resumeWilds` stands it back up in the mass lane's resume order with the keeper waking at the hearth, and THE RESUME LAW holds every socket, tick and write until `ShardHost.ready()` resolves. |
-| THE KEEPER SEAT | `Seat.keeper` (world.ts) | the parked p0: exempt from `partyScaleCount`, `grantXp`, absent from `serializeSnapshot`'s seats/actors/meta rows; in `updateDownedSeats` it is THE MERCY — a downed seat with no other standing seat rises after `keeper.reviveSec`, by clock, never by reach. THE WARDEN IS NO BODY: its hands take nothing (`pickupSeat`), it has no shoulder (`separateActors`), it is invulnerable (lava and water under THE SHADOW), THE WARDEN STANDS every tick in both lanes (flags re-worn, downed/dead cleared, its level mirroring the highest standing player's — the world's "character level" for event gates, vendor shelves and bounty work), a keeper world never concludes a wipe, and on a shard any seat may carry a quest item, take a giver's contract, claim a quest or exploration reward and swap gems against its OWN combat clock (the `localSeat` gates read the keeper). THE SEALED ROADS: the shard stamps the keeper's act clock every tick, so it is never idle and no station, mouth or portal ever fires off its standing — roads that would move the whole party stay shut until per-seat travel exists (card B). Absent on every non-shard world: the solo invariant. |
+| THE KEEPER SEAT | `Seat.keeper` (world.ts) | the parked p0: exempt from `partyScaleCount`, `grantXp`, absent from `serializeSnapshot`'s seats/actors/meta rows; in `updateDownedSeats` it is THE MERCY — a downed seat with no other standing seat rises after `keeper.reviveSec`, by clock, never by reach. THE WARDEN IS NO BODY: its hands take nothing (`pickupSeat`), it has no shoulder (`separateActors`), it is invulnerable (lava and water under THE SHADOW), THE WARDEN STANDS every tick in both lanes (flags re-worn, downed/dead cleared, its level mirroring the highest standing player's — the world's "character level" for event gates, vendor shelves and bounty work), a keeper world never concludes a wipe, and on a shard any seat may carry a quest item, take a giver's contract, claim a quest reward and swap gems against its OWN combat clock (the `localSeat` gates read the keeper). THE SEALED ROADS: the shard stamps the keeper's act clock every tick, so it is never idle and no station, mouth or portal ever fires off its standing — roads that would move the whole party stay shut until per-seat travel exists (card B). Absent on every non-shard world: the solo invariant. |
 | THE NEAR LAW | `COOP_SCALING.shareRadius` (data/coop.ts), set by the shard to `SHARD_CFG.nearRadius` | a kill's XP pays only the seats within the radius of its place (`grantXp(amount, at)` from `kill`; zone and quest rewards stay world-wide), an enemy's party scale counts the seats near IT (`partyScaleCount(at)` → `scenePartyScaleCount(host, at)` in `engine/nativeScenePopulation.ts`, where the seamless lane keeps the scale), and the mercy counts an ally only within reach. 0 (the default every other lane keeps) is the old world-wide party, byte-identical. |
 | THE HEARTH WAKE / THE SPAWN GRACE | `ShardHost.onJoin` / `hearthSeat` / `endGraces` | every joiner stands up on a free spot at THE HEARTH SEAT — the wilds' native settlement keeps its own bedside (`MassSettlement.spawn`, the same spot on a fresh or a resumed surface), a classic world's is where the keeper first stood — never beside the shadowed keeper, wherever THE FOCUS has walked it. The joiner is untargetable until its first WILLED input (a direction, a held or edged slot, a meta press) or `SHARD_CFG.spawnGraceSec`, whichever comes first; the grace is per seat, ends with the seat, and the keeper never wears one. |
+| THE LAND DIGEST | `wildsSave.shellLandDigest` / `ShardTransport.land` / `wildsShellAttach(world, seed, land)` | the land is the seed's AND the preset's: a shell lays `startWorldMass`'s reservation over the build's preset, whose digest is the mass runtime's own `configHash`. The wilds save reader refuses (and the boot sets aside) a save whose digest differs — her ruling 2026-10-08: old saves are legacy, never migrated — and the welcome carries the digest the shard runs, so a client built on another preset refuses the join loudly instead of predicting against walls the server does not have. |
+| THE NEAR LAW AT THE MINT | `World.settleNearScale` | `createMonster` scales a body at its (0, 0) placeholder before its caller seats it, so with a radius set the scale is queued and settled where the body actually stands after each tick's update, and settled for every living enemy at a join (`addSeat` seats the newcomer beside the shadowed keeper before the hearth wake moves it) and at a leave. The life-fraction law is `rescaleEnemies`', which the engine keeps with its rounding (the seamless lane's brittles probe pins and replays it); the shard's settle clamps so no rounded life tops a fractional maximum, and a wilds save resumes "the same wounds" to the number. Off a shard the radius is 0 and the queue never fills. |
 
 ## M0 semantics (honest, inherited from co-op)
 
@@ -191,20 +196,74 @@ waits for a welcome before it fails as silence; `normalizeShardUrl` turns the
 `https://` address a codespace shows into `wss://`, `http://` into `ws://` and a
 bare host into `ws://host:8787`; `farewellMs` 1500 is how long
 a leaving vessel holds its socket for the last mirror. `WIRE_CFG.memoryAccessBeat`
-(src/net/snapshot.ts) is the account-view beat.
+(src/net/snapshot.ts) is the account-view beat; the view is built every tick and
+also ships on any tick it differs from the one this world last shipped (THE CHANGE
+BEAT), so a graduation reaches every client on the next snapshot and the beat only
+re-sends an unchanged view.
 
 ## Hosting on Codespaces
 
-`.devcontainer/devcontainer.json` makes a codespace on this branch a ready
-host: Node 22, `npm install` on create, port 8787 forwarded under an https
-label (so the forwarded address is `wss://`), and `start-shard.sh` standing
-the shard up in the background at every (re)start — idempotent, flags from a
-`SHARD_ARGS` Codespaces secret (default `--port 8787 --open`), log in
-`shard.log`, the world saved to the codespace's `saves/`. After the first
-start, set the port PUBLIC once (Ports panel, or
-`gh codespace ports visibility 8787:public -c <name>`) and hand players the
-address shown there. The codespace idles out after its timeout; starting it
-again brings the same world back.
+A codespace on this branch is a SESSION HOST, not a server: it runs while
+someone is using it and stops after its idle timeout (5 to 240 minutes,
+default 30; player traffic is not activity, only typing, the mouse and a
+terminal are), it always stops within 12 hours, and starting it again brings
+back the same world and the same address. The always-on answer is the VPS
+(charter card 11). A 2-core codespace spends 2 core-hours per hour of the
+120 (Free) or 180 (Pro) a personal account gets each month.
+
+`.devcontainer/devcontainer.json` makes the codespace ready: Node 22,
+`npm ci` and the web client built (`npm run build:web`) on create, port 8787
+forwarded, and `start-shard.sh` at every start and attach. The script stands
+the shard up DETACHED — its own session (`setsid`) with the hangup ignored,
+because a lifecycle hook runs under a terminal whose hangup reaches every
+process left in its session and Node undoes `nohup` at boot — under a
+supervisor that restarts THE BREAKER's exit (2), a close fault (3) or a crash
+after five seconds from the newest saved world (a clean exit stays down), one
+lock making it idempotent, the log in `shard.log`, the world in the
+codespace's `saves/`. Flags ride the `SHARD_ARGS` secret (default
+`--port 8787 --open --worldmass`; the script prepends `--per-ip 0` because
+every player arrives from the forwarder's one address). The shard speaks plain
+HTTP and WebSocket; the forwarder adds TLS, so the public address is always
+`https://<name>-8787.app.github.dev` and the client turns it into `wss://`.
+With the client served by the shard itself (THE SERVED CLIENT), that one
+https address is both the game and the server: its lobby offers the shard
+that served it.
+
+1. Once, before creating it: Settings → Codespaces → Default idle timeout →
+   240 minutes. Optionally add the `SHARD_ARGS` secret with access to this
+   repository (a changed secret applies at the next start).
+2. Create it: the repository → branch `shard-world` → Code → Codespaces →
+   New with options → 2-core; or
+   `gh codespace create -R arianna-arpg/arpg-game-world -b shard-world -m basicLinux32gb --idle-timeout 240m`
+   (the CLI needs the `codespace` scope: `gh auth refresh -h github.com -s codespace`).
+3. Wait for the creation log to finish `npm ci` and the build. Then
+   `tail shard.log` shows "listening" and `curl -s localhost:8787/status`
+   prints the status JSON.
+4. After EVERY start: make the port public — Ports → 8787 → Port Visibility →
+   Public, or `gh codespace ports visibility 8787:public -c <name>`
+   (`gh codespace list` shows the name). The script tries this itself once the
+   shard answers; visibility can revert on a restart, so check it each time.
+   Nothing in `devcontainer.json` can set it.
+5. Open `https://<name>-8787.app.github.dev/` in a private browser window:
+   the game's start menu (or, with no served client, the status JSON). A
+   GitHub sign-in page means the port is private; any other page means the
+   WebSocket will fail too.
+6. Players open the same link: Co-op (Beta) → Join a Server → Connect (the
+   address is already their own page's), or paste the https address into a
+   client built from this branch — THE LAND DIGEST refuses a build that lays
+   another land.
+7. Keep the codespace's tab open while playing. When it stops, start it again
+   at github.com/codespaces and repeat steps 4 and 5; the shard resumes the
+   newest `saves/shard_*` world and loses at most `SHARD_CFG.persistSec`.
+8. Stop it after a session (`gh codespace stop -c <name>`). Back up before the
+   30-day deletion of a stopped codespace:
+   `gh codespace cp -e -r -c <name> 'remote:/workspaces/arpg-game-world/saves' ./shard-saves/`.
+9. To update: `git pull && npm ci && npm run build:web`, then
+   `pkill -f server/shard.ts` (a clean exit stops the supervisor) and
+   `bash .devcontainer/start-shard.sh`; served clients update with it.
+
+With the port public, anyone with the link reads the status page (the seed,
+the zone, every seated player's name and level) — fine among friends.
 
 THE VESSEL: `VESSEL_CFG` (server/vessel.ts): `maxBytes` 240 KB (under the
 wire's 256 KB frame cap), `maxLevel` 999, `maxDepth` 24, `maxNodes` 60000,

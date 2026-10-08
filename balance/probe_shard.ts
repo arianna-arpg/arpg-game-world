@@ -51,8 +51,11 @@ import { join } from 'node:path';
 import { ShardHost, SHARD_CFG, newestSavedSeed, type ShardSave } from '../server/shardHost'; // + the wrapper's shape (Q, wildsSave)
 import { mergeInputs, sanitizeInput } from '../server/shardTransport';
 import { judgeVessel, VESSEL_CFG } from '../server/vessel';
+import { readWildsSave, shellLandDigest } from '../server/wildsSave';
+import { COOP_SCALING } from '../src/data/coop';
+import type { Actor } from '../src/engine/actor';
 import { shardRecordsPath, type ShardRecordsSave } from '../server/corpses';
-import { WsTransport, normalizeShardUrl } from '../src/net/ws';
+import { WsTransport, WS_TRANSPORT_CFG, defaultShardUrl, normalizeShardUrl } from '../src/net/ws';
 import { wildsShellActive, wildsShellAttach, wildsShellStream, wildsShellZone } from '../src/net/wildsClient';
 import { applySnapshot, serializeSnapshot, serializeZone } from '../src/net/snapshot';
 import { World } from '../src/engine/world';
@@ -174,6 +177,11 @@ function maskedFrame(opcode: number, payload: Uint8Array, fin = true): Uint8Arra
     normalizeShardUrl(' https://name-8787.app.github.dev/ ') === 'wss://name-8787.app.github.dev'
     && normalizeShardUrl('myhost') === 'ws://myhost:8787' && normalizeShardUrl('http://10.0.0.5:9000') === 'ws://10.0.0.5:9000'
     && normalizeShardUrl('ws://localhost:8787') === 'ws://localhost:8787');
+  check('A address: a forwarded host (a codespace) is wss with no port, bare or with a pasted container port',
+    normalizeShardUrl('name-8787.app.github.dev') === 'wss://name-8787.app.github.dev'
+    && normalizeShardUrl('wss://name-8787.app.github.dev:8787/') === 'wss://name-8787.app.github.dev'
+    && normalizeShardUrl('http://name-8787.app.github.dev') === 'wss://name-8787.app.github.dev');
+  check('A address: without a window the first offer is the default', defaultShardUrl() === WS_TRANSPORT_CFG.defaultUrl);
   const i1: PlayerInput = { dx: 0, dy: 0, aim: { x: 0, y: 0 }, held: [true], edge: [true, false], metaEdge: [false, true], seq: 1 };
   const i2: PlayerInput = { dx: 1, dy: 0, aim: { x: 5, y: 5 }, held: [false], edge: [false, false], seq: 2 };
   const m12 = mergeInputs(i1, i2);
@@ -311,6 +319,27 @@ check('C wire: snapshots ride the wire rate (exactly 20 per 60 ticks)', snaps - 
   await second.connect(url, { name: 'Second', classId: 'warrior' });
   await waitFor(() => host.world.seats.length === 3, host, 50);
   check('F party: two seated players scale as TWO (the keeper still nothing)', count() === 2 && host.world.seats.length === 3);
+  // THE NEAR LAW AT THE MINT (the merge audit's finding): createMonster scales a body at its
+  // (0, 0) placeholder; the shard settles the scale where the body actually stands.
+  {
+    const w = host.world, p1 = w.seats.find(s => s.id === 'p1')!, p2 = w.seats.find(s => !s.keeper && s !== p1)!;
+    const radius = COOP_SCALING.shareRadius, p2x = p2.actor.pos.x, p2y = p2.actor.pos.y;
+    const mints: Actor[] = [];
+    const mint = (x: number, y: number): Actor => { const m = w.createMonster('zombie', 2, 'enemy'); m.pos.x = x; m.pos.y = y; if (!w.actors.includes(m)) w.actors.push(m); mints.push(m); return m; };
+    try {
+      COOP_SCALING.shareRadius = 300;
+      p2.actor.pos.x = p1.actor.pos.x + 520; p2.actor.pos.y = p1.actor.pos.y;
+      const beside = mint(p1.actor.pos.x + 40, p1.actor.pos.y), far = mint(p1.actor.pos.x + 260, p1.actor.pos.y + 900);
+      w.settleNearScale();
+      check('F near law: a mint beside one seat scales as ONE once settled where it stands', beside.maxLife() === far.maxLife(), `${beside.maxLife().toFixed(1)} vs ${far.maxLife().toFixed(1)}`);
+      p2.actor.pos.x = p1.actor.pos.x + 40; p2.actor.pos.y = p1.actor.pos.y + 40;
+      w.settleNearScale(true);
+      check('F near law: the seats near the body decide its scale, re-read on a join', beside.maxLife() > far.maxLife(), `${beside.maxLife().toFixed(1)} vs ${far.maxLife().toFixed(1)}`);
+    } finally {
+      COOP_SCALING.shareRadius = radius; p2.actor.pos.x = p2x; p2.actor.pos.y = p2y;
+      w.actors = w.actors.filter(a => !mints.includes(a));
+    }
+  }
   second.leave();
   check('F party: the second seat leaves cleanly', await waitFor(() => host.world.seats.length === 2, host, 60));
 }
@@ -422,7 +451,7 @@ await host.stop();
   await waitFor(() => got2 !== null, wilds, 30);
   off();
   const snap2 = got2 as StateSnapshot | null;
-  check('K wilds: a joiner rides the surface snapshot beside the natives', !!snap2 && !!snap2.seats['p1'] && snap2.actors.length > 2);
+  check('K wilds: a joiner rides the surface snapshot beside the natives', !!snap2 && !!snap2.seats['p1'] && snap2.actors.some(a => a.team === 'enemy'));
 
   // ================================================== P: THE WILDS ON THE WIRE ==
   // THE SHADOW: the keeper follows the focus seat (p1) on the surface.
@@ -527,8 +556,18 @@ await host.stop();
     // The party is set down on open country east of the hearth (the engine's
     // own landPartyAt: the Waking House's latched door walls a bedside walk in),
     // then the joiner walks east over the wire and THE SHADOW drags the stream.
-    const st = a.world.massRuntime!.settlement!;
-    a.world.landPartyAt({ x: st.zone.size.w + st.spec.apron + st.spec.blend + 400, y: st.zone.size.h / 2 });
+    const st = a.world.massRuntime!.settlement!, mw = a.world.massRuntime!.walk;
+    // The regional land is READ, never assumed: the first of nine lanes east of the ring
+    // whose 340 px eastward line the mass walk calls open (lineWalkable reads regions
+    // and the native obstacles alike) is the walk's ground.
+    const xEast = st.zone.size.w + st.spec.apron + st.spec.blend + 400;
+    const lanes = [0, 120, -120, 240, -240, 360, -360, 480, -480].map(dy => ({ x: xEast, y: st.zone.size.h / 2 + dy }));
+    // A band three rows wide (the hero's own breadth), since the landing may nudge the body off the line.
+    const open = (p: { x: number; y: number }): boolean => [-24, 0, 24].every(dy => mw.lineWalkable({ x: p.x, y: p.y + dy }, { x: p.x + 340, y: p.y + dy }));
+    const lane = lanes.find(open);
+    check('Q wilds save: open ground east of the ring stands for the walk', !!lane, lane ? `lane y=${lane.y.toFixed(0)}` : 'no open 340 px eastward band among nine candidates');
+    a.world.landPartyAt(lane ?? lanes[0]);
+    walker.actor.pos.x = (lane ?? lanes[0]).x; walker.actor.pos.y = (lane ?? lanes[0]).y; // on the scanned lane itself, not the landing's loose ring
     const d0 = a.world.doodads.length, x0 = walker.actor.pos.x;
     for (let i = 0; i < 600 && walker.actor.pos.x < x0 + 300; i++) {
       cq.sendInput('p1', { dx: 1, dy: 0, aim: { x: walker.actor.pos.x + 100, y: walker.actor.pos.y }, held: [], edge: [], seq: i + 1 });
@@ -549,6 +588,17 @@ await host.stop();
       `${(statSync(a.savePath!).size / 1e6).toFixed(2)} MB in ${persistMs.toFixed(0)} ms, ${written.world.worldmass?.enemies.length} natives`);
     await a.stop(); // stop() writes the same world again (no frame between)
     const saved = readSave(a.savePath!);
+    // THE LAND DIGEST (the merge audit's finding; her ruling: another land's save is legacy):
+    // the shell lays the digest the shard runs, and a save digesting otherwise is refused.
+    {
+      check('Q wilds save: THE LAND DIGEST — the shell lays the land the shard runs', shellLandDigest(QSEED) === saved.world.worldmass!.configHash,
+        `shell ${shellLandDigest(QSEED).slice(0, 12)} shard ${String(saved.world.worldmass!.configHash).slice(0, 12)}`);
+      const other = JSON.parse(JSON.stringify(saved)) as ShardSave;
+      (other.world.worldmass as unknown as { configHash: string }).configHash = 'another-land';
+      const otherPath = join(dir, 'other-land.json'); writeFileSync(otherPath, JSON.stringify(other));
+      const read = readWildsSave(otherPath, SHARD_CFG.saveSchema, QSEED);
+      check('Q wilds save: a save from another build\'s land is refused, never resumed', read !== null && 'refused' in read && /land/.test(read.refused), read && 'refused' in read ? read.refused : 'accepted');
+    }
 
     // ---- the second life: THE RESUME LAW, then the world as it was
     t0 = performance.now();

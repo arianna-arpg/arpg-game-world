@@ -5555,8 +5555,32 @@ export class World {
   /** keeperSeat: `at` is THE NEAR LAW's place — an enemy's scale counts the seats near IT (nativeScenePopulation). */
   private partyScaleCount(at?: Vec2): number { return scenePartyScaleCount(this.nativeScenePopulationHost(), at); }
 
+  /** keeperSeat — THE NEAR LAW AT THE MINT: createMonster scales a body at its (0, 0)
+   *  placeholder before its caller seats it, so on a shard (a radius set) the scale is
+   *  queued and settled where the body actually stands (settleNearScale). */
+  private nearScaleDue: Actor[] = [];
   /** Set (or clear) the co-op party-size scaling source on one hostile enemy. */
-  private applyPartyScale(a: Actor): void { return applyScenePartyScale(this.nativeScenePopulationHost(),a); }
+  private applyPartyScale(a: Actor): void {
+    if (COOP_SCALING.shareRadius > 0 && a.pos.x === 0 && a.pos.y === 0) this.nearScaleDue.push(a); // keeperSeat: scaled at the placeholder, settled after the seat
+    return applyScenePartyScale(this.nativeScenePopulationHost(),a);
+  }
+  /** keeperSeat — THE NEAR LAW where bodies stand: the queued mints (every living enemy with
+   *  `every` — a join seats the newcomer beside the shadowed keeper before the shard moves it
+   *  to the hearth, and a leave re-reads every body) re-scaled by the seats near each one under
+   *  rescaleEnemies' life-fraction law, clamped so no rounded life tops a fractional maximum
+   *  (the engine's own law keeps its rounding — the seamless lane pins and replays it; a shard's
+   *  wilds save must resume "the same wounds", so the shard's settle is the one that clamps).
+   *  Off a shard the radius is 0 and the queue never fills: solo is byte-identical. */
+  settleNearScale(every = false): void {
+    const due = every ? this.actors : this.nearScaleDue.splice(0);
+    if (every) this.nearScaleDue.length = 0;
+    for (const a of due) {
+      if (a.dead || a.team !== 'enemy' || a.owner) continue;
+      const frac = a.maxLife() > 0 ? a.life / a.maxLife() : 1;
+      applyScenePartyScale(this.nativeScenePopulationHost(), a);
+      a.life = Math.min(a.maxLife(), Math.max(1, Math.round(a.maxLife() * frac)));
+    }
+  }
 
   /** Re-scale all LIVING enemies after a join/leave, PRESERVING each one's current
    *  life fraction — so a join can't heal a half-dead boss and a leave can't gib

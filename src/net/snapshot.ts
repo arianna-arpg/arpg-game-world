@@ -901,6 +901,12 @@ let GRAB_HUD_OF: (a: Actor) => [string, number] | null = () => null;
 // actorToW does not otherwise carry).
 let WATCH_V_OF: (a: Actor) => number = () => 0;
 
+/** THE WIRE DISCIPLINE: the account view this world last shipped, as the JSON it went out
+ *  as. The view is built every tick as it always was (its cost was never the problem — the
+ *  44 KB on the wire was); it ships on its beat, or on any tick it differs from the last
+ *  shipped view, so a graduation reaches every client on the next snapshot while an
+ *  unchanged view rides only the beat (the first snapshot a joiner sees ships it). */
+const lastShippedMemoryAccess = new WeakMap<World, string>();
 export function serializeSnapshot(world: World, tick: number): StateSnapshot {
   const seatById = new Map<Actor, string>();
   for (const s of world.seats) seatById.set(s.actor, s.id);
@@ -943,7 +949,12 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     seats, seatMeta,
     vendor: world.vendorStock.map(e => vendorEntryW(e, world)), vendorRestockAt: world.vendorRestockAt,
     vendorCap: world.vendorLockCap(),
-    memoryAccess: tick % WIRE_CFG.memoryAccessBeat === 1 ? memoryAccessView(world.account) : undefined, // THE WIRE DISCIPLINE
+    memoryAccess: (() => { // THE WIRE DISCIPLINE: the beat, or a view that changed
+      const view = memoryAccessView(world.account), key = JSON.stringify(view);
+      if (tick % WIRE_CFG.memoryAccessBeat !== 1 && lastShippedMemoryAccess.get(world) === key) return undefined;
+      lastShippedMemoryAccess.set(world, key);
+      return view;
+    })(),
     vendorTradeOpen: world.vendorTradeRefusal() === null,
     vendorGemsOpen: world.vendorGemsOpen(),
     bagBoard: bagBoard(),

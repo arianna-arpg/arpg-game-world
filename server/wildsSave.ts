@@ -51,6 +51,20 @@ import type { Seat, World } from '../src/engine/world';
 import { WORLD_SCHEMA_VERSION, type WorldStateSave } from '../src/meta/worldstate';
 import type { MassSideareaSave } from '../src/worldmass/sideareas';
 import type { ShardSave } from './shardHost';
+import { massAdventure } from '../src/worldmass/preset';
+import { reserveMassOpening } from '../src/worldmass/patchReservations';
+import { massDigest } from '../src/worldmass/random';
+
+/** THE LAND DIGEST — the land is the seed's AND the preset's: what a joining shell
+ *  lays from the welcome's seed (wildsShellAttach → startWorldMass's own reservation
+ *  over the build's preset), as the mass runtime's own config digest. A save whose
+ *  runtime config digests otherwise would resume on another build's land under
+ *  shells that lay this one's: it is refused and set aside (her ruling 2026-10-08:
+ *  old saves are legacy, never migrated). */
+export function shellLandDigest(seed: number): string {
+  const s = seed >>> 0;
+  return massDigest(reserveMassOpening(s, 'expedition:' + s, massAdventure()));
+}
 
 /** A wilds save as read off disk: absent (null), refused (with the reason), or
  *  a world half that carries the Unbroken Wilds of THIS seed. */
@@ -71,6 +85,8 @@ export function readWildsSave(path: string, schema: number, seed: number): Wilds
   if (!ws.worldmass) return { refused: 'the world half carries no Unbroken Wilds' };
   const run = ws.worldmass.state?.run?.seed;
   if (save.seed !== seed || run !== seed) return { refused: `another seed's world (wrapper ${String(save.seed)}, run ${String(run)}, shard ${seed})` };
+  const land = shellLandDigest(seed);
+  if (ws.worldmass.configHash !== land) return { refused: `another build's land (saved ${String(ws.worldmass.configHash)}, a shell lays ${land})` };
   return { ws };
 }
 

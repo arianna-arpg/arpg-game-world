@@ -602,30 +602,84 @@ character walks back for it), 7 the first cut, 8 A, 9 as built, 10 as set,
     distant player never withholds (THE NEAR LAW now does this), a visible
     tell on the downed body, and a return to the hearth after N seconds.
     C: the ruled covenant now. Rec: B now, C with the vessel (in flight).
+    **RULED C (2026-10-08, her word):** a player who dies drops the corpse
+    at the death spot with the equipped gear, saved at the server, visible
+    to the fallen account alone, and the character dies and is deleted
+    unless Immortal; a new character on the same server finds and loots it.
+    So every lethal down is the death, as in single player (the covenant
+    reads 'down', never 'mercy'); the mercy remains the Immortal's and the
+    keeper's. BUILD: `VESSEL_CFG.covenantAt = 'down'`; fresh heroes die
+    too once THE LOGIN THROUGH MU (card 22) makes every joiner a vessel.
 15. **Roads that move the whole party** (caravan, town portal, caves,
     classic portals) until per-seat travel exists — A: move everyone.
     B: move only when every connected player gathers, shown as a muster
     ring. C: seal them on shards (TODAY: sealed by THE SEALED ROADS).
     Rec: C while shards are friends-only; B is the first per-seat step.
+    **RULED B FOR PARTIES ONLY (2026-10-08):** a party's road waits for the
+    party at a visible muster ring; two independent players in one place
+    are never moved together and travel home on their own. Until THE PARTY
+    (card 23) exists the roads stay sealed (C).
 16. **Disconnects** — A: the hero vanishes at once (today; a disconnect is a
     free escape from death). B: the hero lies dormant N seconds and a
     reconnect token reclaims it. C: the server holds the hero until the
-    next login. Rec: B now, C with THE VESSEL.
+    next login. Rec: B now, C with THE VESSEL. **RULED B (2026-10-08).**
 17. **Identity and talk** — A: a name entered once, overhead names on
     heroes, world-anchored pings (a visible cue, SHOW DON'T TELL). B: text
-    chat as well. Rec: A; chat is yours.
+    chat as well. Rec: A; chat is yours. **RULED A now, B as a later pass
+    (2026-10-08): text chat is important, not paramount.**
 18. **World-freezing powers on a shard** (Time Stop, any world-wide hold)
     — A: freeze the whole World. B: scope them to a radius. C: exempt
-    other players. Rec: B.
+    other players. Rec: B. **RULED B WITH C (2026-10-08):** a world-freezing
+    power on a shard bends a radius and never bends another player.
 19. **Getting the client to players** — A: friends run the branch checkout.
     B: a Pages preview of this branch pinned to the shard's commit (https,
     so wss) and version-gated. C: a packaged build channel. Rec: B.
+    **RULED B, HELD (2026-10-08):** scoped to us for now — a launcher change
+    that picks the branch a player runs is coming from the launcher lane,
+    and production has ONE branch once the seamless foundation merges into
+    main; the preview is a stepping stone, never the road.
 20. **The joiner's wake** — BUILT as B: every joiner wakes at the hearth
     (never beside the shadowed keeper) and is unseen by foes until its first
     willed input or `spawnGraceSec` (THE HEARTH WAKE + THE SPAWN GRACE).
 21. **The probe's tier** — the shard rig now boots four wilds (about 90 s):
     keep it on the fast lane, or split the wilds-save section into a slow
-    rig. Rec: split.
+    rig. Rec: split. **RULED: the recommendation (2026-10-08).**
+
+**Her rulings of 2026-10-08 also settle card 6's open thirds through card
+22: a shard pins no life contract — the vessel brings its own from Mu — and
+a fresh hero without a run save is never a shard's hero: it becomes a vessel
+in Mu first.**
+
+22. **THE LOGIN THROUGH MU** (her ruling 2026-10-08, from card 6's reading):
+    the tutorial is LOCAL ONLY — no server, no MMO machinery, "begin" plays
+    it as ever. A player connecting to a server (co-op or a shard) with a
+    live vessel resumes it; without one, Mu opens as in single player, the
+    pick creates the vessel and THEN the client connects, so the shard seats
+    the vessel at the hearth (THE HEARTH WAKE) and the gameplay is the
+    single-player variant, never co-op's — co-op semantics live inside a
+    party alone (card 23). Mu may grow into the hub that sends a chosen
+    class to Lastlight on the server, but the easiest faithful path wins:
+    the lobby's Join a Server pins the address, Mu plays locally, the pick
+    connects. BUILD NEXT: a server-bound Mu (the address pinned through the
+    pick), the fresh-hero lane retired (every joiner a vessel), the death
+    covenant on 'down', the dormant reconnect (card 16), the scoped freeze
+    (card 18), the probe split (card 21).
+
+23. **THE PARTY** (for her word; her ask 2026-10-08 — "players that are
+    PARTIED TOGETHER are effectively a unit, our equivalent of co-op; two
+    individual players do not NEED to be partied to play in the same
+    vicinity"). The recommendation: a party is an explicit social unit
+    (invite, accept, leave; a leader only for kicks and the muster) and the
+    ONLY thing that makes two players a unit. Independents are neighbors.
+    Enemies scale by who stands near them whatever their parties (the mob
+    cannot tell friends from strangers — THE NEAR LAW as built). XP pays the
+    killer's party within the near radius, never a passing stranger; a
+    stranger who dealt the blow is paid by contribution. Loot is PER PLAYER:
+    each seat sees and takes its own drops (the corpse law's sibling). Roads
+    that move a whole party wait at the muster ring (card 15) and leave
+    independents alone. A revive reaches party members and anyone who walks
+    up and kneels. The wire: a `party` row per seat (leader, members), the
+    invite as a session message, the HUD's party frame. Build after her word.
 
 ---
 
@@ -639,7 +693,7 @@ the base taken and what moved.
 | date | base merged | hunks | what moved |
 |---|---|---|---|
 | 2026-10-07 | `67d9c290` (pushed tip) | 0 | the lane's first base (a rebase, before the branch was pushed) |
-| 2026-10-08 | `ae5b686f` (31 LOCAL commits of the codex worktree, unpushed at the time) | 3, all in `world.ts` | the party scale moved into `engine/nativeScenePopulation.ts` and THE NEAR LAW moved with it (`scenePartyScaleCount(host, at)`); the experimental exploration rewards were retired upstream, so the keeper-gated `claimExplorationReward` went with them; the coop import kept `COOP_SCALING` for the mercy and XP reads. All 17 `keeperSeat` seams survived in place. |
+| 2026-10-08 | `ae5b686f` (31 LOCAL commits of the codex worktree, unpushed at the time) | 3, all in `world.ts` | the party scale moved into `engine/nativeScenePopulation.ts` and THE NEAR LAW moved with it (`scenePartyScaleCount(host, at)`); the experimental exploration rewards were retired upstream, so the keeper-gated `claimExplorationReward` went with them; the coop import kept `COOP_SCALING` for the mercy and XP reads. Of the 17 `keeperSeat` seams, 15 stand in `world.ts` as they were, the two party-scale lines moved with the scale into the scene module, and the retired reward claim's gate went with its method. The merge audit (an Opus critic, 2026-10-08) found THE LAND DIGEST gap (the preset's terrain version moved under the seed — fixed: refused saves are legacy, the welcome proves the land) and THE NEAR LAW AT THE MINT (pre-existing: the mint-time scale read a placeholder — fixed: settled where the body stands); it noted that `mercEase` is read off the keeper's sheet on a shard (a seat's own Fair Company never lightens its hired blades — OWED) and that the shell mints the settlement watch at attach before the first snapshot replaces it (harmless). Nine other probes red after the merge are red on the codex tip itself (its in-flight work), left to that lane. |
 
 ## §8 M0 receipts (2026-10-07, this pass)
 

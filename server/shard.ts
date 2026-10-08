@@ -18,7 +18,10 @@
 // ws://<this machine>:<port>. Ctrl-C writes the world and closes the wire.
 // ---------------------------------------------------------------------------
 
+import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
 import { ShardHost } from './shardHost';
+import { SHARD_WIRE_CFG } from './shardTransport';
 
 function parseArgs(argv: string[]): Record<string, string | true> {
   const out: Record<string, string | true> = {};
@@ -42,6 +45,10 @@ async function main(): Promise<void> {
     return Number.isFinite(n) ? n : undefined;
   };
   const port = num(args.port) ?? 8787;
+  // --per-ip <n>: sockets one address may hold (SHARD_WIRE_CFG.maxPerIp; 0 = no cap — behind
+  // a port forwarder every player arrives from the forwarder's one address).
+  const perIp = num(args['per-ip']);
+  if (perIp !== undefined) SHARD_WIRE_CFG.maxPerIp = perIp > 0 ? perIp : Number.POSITIVE_INFINITY;
   const host = typeof args.host === 'string' ? args.host : '0.0.0.0';
   const shard = new ShardHost({
     seed: num(args.seed),
@@ -54,6 +61,10 @@ async function main(): Promise<void> {
   // the first socket or tick (listen awaits it too; this keeps the order plain).
   await shard.ready();
   const bound = await shard.listen(port, host);
+  // THE SERVED CLIENT: `--client <dir>` (default site/play once `npm run build:web` wrote it)
+  // is handed out on plain GETs, so a hosted world is one link; '/status' keeps THE STATUS PAGE.
+  const clientDir = typeof args.client === 'string' ? args.client : existsSync('site/play/index.html') ? 'site/play' : null;
+  shard.net.clientDir = clientDir ? resolve(clientDir) : null;
   console.log(`[shard] ${shard.worldmass ? 'the Unbroken Wilds' : 'world'} 0x${shard.seed.toString(16).padStart(8, '0')} — listening on ws://${host === '0.0.0.0' ? 'localhost' : host}:${bound}`
     + (shard.savePath ? ` — saving to ${shard.savePath}` : ' — ephemeral'));
   shard.start();
@@ -77,7 +88,9 @@ async function main(): Promise<void> {
   }
   process.on('uncaughtException', (e) => { console.error('[shard] uncaught:', e); void bye(2); });
   process.on('unhandledRejection', (e) => { console.error('[shard] unhandled rejection:', e); void bye(2); });
-  console.log(`[shard] status page: http://${host === '0.0.0.0' ? 'localhost' : host}:${bound}/`);
+  console.log(`[shard] status page: http://${host === '0.0.0.0' ? 'localhost' : host}:${bound}/status${shard.net.clientDir ? ` — the client is served at / from ${shard.net.clientDir}` : ''}`);
+  if (process.env.CODESPACE_NAME && process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN)
+    console.log(`[shard] codespace address: https://${process.env.CODESPACE_NAME}-${bound}.${process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}/ (the port must be PUBLIC)`);
 }
 
 void main();

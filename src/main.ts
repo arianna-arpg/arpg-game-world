@@ -53,7 +53,7 @@ import type { NetTransport, StateSnapshot, PeerInfo, SessionMsg, ZoneMsg } from 
 import { serializeSnapshot, applySnapshot, serializeZone, applyZone } from './net/snapshot';
 import { RemoteInput } from './net/remote';
 import { WebRtcTransport } from './net/webrtc';
-import { WsTransport, WS_TRANSPORT_CFG } from './net/ws';
+import { WsTransport, defaultShardUrl } from './net/ws';
 import { wildsShellActive, wildsShellAttach, wildsShellDetach, wildsShellStream, wildsShellZone } from './net/wildsClient';
 import { readTravelingVessel, ShardVesselLink, travelNote } from './meta/shardVessel';
 import { openCoopLobby } from './ui/lobby';
@@ -2589,12 +2589,12 @@ function openLobby(): void {
         wireSession();                             // run-lifecycle channel (newRun/hostLeft)
         shardVessel = new ShardVesselLink(ws, account, vessel, () => (net === ws ? world : null),
           { runWiped: () => ui.setContinueSave(null), mayWrite: () => net === ws || !running });
-        const { self, seed, worldmass, features } = await ws.connect(url, { name: vessel?.name ?? 'Joiner', classId: cls.id,
+        const { self, seed, worldmass, features, land } = await ws.connect(url, { name: vessel?.name ?? 'Joiner', classId: cls.id,
           cosmeticLoadout: account.cosmetics.loadout, accountId: account.accountId }, vessel ?? undefined);
-        startAsClient(cls, self, seed, worldmass ? { features } : undefined);
+        startAsClient(cls, self, seed, worldmass ? { features, land } : undefined);
       } catch (e) { resetToLocal(); throw e; }     // an unreachable server must revert net to LocalTransport
     },
-    connectDefault: WS_TRANSPORT_CFG.defaultUrl,
+    connectDefault: defaultShardUrl(), // THE SERVED CLIENT: a codespace's page offers the shard that served it (WS_TRANSPORT_CFG.defaultUrl elsewhere)
     serverHero: async (classId) => travelNote(await readTravelingVessel(), classId),
     onClose: () => { /* host keeps playing; a non-started joiner just closes */ },
   });
@@ -2606,9 +2606,9 @@ function openLobby(): void {
 /** THE WILDS ON THE WIRE (src/net/wildsClient.ts): set while the shell shows
  *  a hosted Unbroken Wilds — the zone handler and the frame loop route
  *  through the wilds shell instead of the classic client lanes. */
-let clientWilds: { seed: number } | null = null;
+let clientWilds: { seed: number; land?: string } | null = null; // THE LAND DIGEST rides from the welcome to the attach
 
-function startAsClient(classDef: ClassDef, selfSeat: string, hostSeed: number, wilds?: { features: string[] }): void {
+function startAsClient(classDef: ClassDef, selfSeat: string, hostSeed: number, wilds?: { features: string[]; land?: string }): void { // wilds.land = THE LAND DIGEST
   couchReset(); // a render shell hosts no couch — the pads are free again
   wildsShellDetach(world); // a previous shell's runtime never outlives its World
   clientWilds = null;
@@ -2634,8 +2634,8 @@ function startAsClient(classDef: ClassDef, selfSeat: string, hostSeed: number, w
   world.clientSeatId = selfSeat;
   world.createPlayer(classDef, { startingCompanions: false, startingFlasks: false });   // a local shell (getters/camera/HUD) — not the authority
   if (wilds) {
-    clientWilds = { seed: world.manifest.seed };
-    wildsShellAttach(world, clientWilds.seed); // inert: the land from the seed, the life from the wire
+    clientWilds = { seed: world.manifest.seed, land: wilds.land };
+    wildsShellAttach(world, clientWilds.seed, clientWilds.land); // inert: the land from the seed, the life from the wire; THE LAND DIGEST proves the preset
   }
   // Reset movement-prediction state so our input seq realigns with the host's fresh
   // per-seat ack (a new run = a fresh World on the host = an empty lastInputSeq).

@@ -42,6 +42,7 @@ import { rollSeed } from '../src/core/rng';
 import { serializeSnapshot, serializeZone } from '../src/net/snapshot';
 import type { PeerInfo, SessionMsg } from '../src/net/transport';
 import type { MetaAction, PlayerInput } from '../src/net/intent';
+import { massDigest } from '../src/worldmass/random';
 import { sanitizeCosmeticLoadout } from '../src/meta/cosmetics';
 import { WORLD_SCHEMA_VERSION, type WorldStateSave } from '../src/meta/worldstate';
 import { ShardTransport, type ShardJoin } from './shardTransport';
@@ -252,6 +253,7 @@ export class ShardHost {
     this.net = new ShardTransport();
     this.net.worldmass = this.worldmass;
     this.net.features = [...this.account.features];
+    this.net.land = this.world.massRuntime ? massDigest(this.world.massRuntime.config) : null; // THE LAND DIGEST (wildsSave.shellLandDigest)
     this.net.setSeedSource(() => this.world.manifest.seed);
     this.net.statusSource = () => this.status();
     // THE VESSEL + THE CORPSE records: the records file lives beside the world
@@ -262,7 +264,10 @@ export class ShardHost {
     this.corpses = new ShardCorpses(this.world, toSeat, shardRecordsPath(recordsDir, this.seed), this.seed, this.log);
     this.vessels = new VesselDesk(this.world, toSeat, this.corpses, { beatSec: SHARD_CFG.persistSec, log: this.log });
     this.net.onPeerJoin((p, join) => this.onJoin(p, join));
-    this.net.onPeerLeave(id => { this.vessels.leave(id); this.graces.delete(id); this.world.removeSeat(id); });
+    this.net.onPeerLeave(id => {
+      this.vessels.leave(id); this.graces.delete(id); this.world.removeSeat(id);
+      this.world.settleNearScale(true); // keeperSeat: THE NEAR LAW re-read where every body stands after the leave (and clamped for the save)
+    });
     this.net.onSession((m, from) => this.onSession(m, from));
   }
 
@@ -349,6 +354,7 @@ export class ShardHost {
     seat.actor.pos.x = at.x; seat.actor.pos.y = at.y; seat.actor.tier = hearth.tier;
     seat.actor.untargetable = true;
     this.graces.set(seat.id, this.world.time + SHARD_CFG.spawnGraceSec);
+    this.world.settleNearScale(true); // keeperSeat: addSeat scaled every body beside the shadowed keeper; the hearth is where the joiner stands
     // The joiner needs the standing terrain NOW, not at the next zone change.
     this.net.sendZoneTo(peer.id, serializeZone(this.world));
     this.lastSentZone = this.world.zone.id;
@@ -459,6 +465,7 @@ export class ShardHost {
       this.drainMetaActions();
       if (!w.gameOver) for (const a of w.actors) updateAI(a, w, dt);
       w.update(dt);
+      w.settleNearScale(); // keeperSeat: THE NEAR LAW where this tick's mints stand
       this.consecutiveFaults = 0;
     } catch (e) {
       this.noteFault('the simulate phase', e);
