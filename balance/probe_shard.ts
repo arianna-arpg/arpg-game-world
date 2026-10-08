@@ -20,17 +20,47 @@
 //   I  the leave: a dropped socket despawns its seat
 //   J  persistence: the world half writes and a second host resumes it
 //   K  THE UNBROKEN WILDS: the seamless foundation's surface hosts headless
+// THE VESSEL AND THE CORPSE (docs/engine/shard.md "The vessel and the corpse"):
+//   L  THE IDENTITY: an account mints one stable id; the join carries it to
+//      the host alone; minting never touches the seeded stream
+//   M  THE VESSEL: an uploaded hero grafts at its level with its own bag and
+//      doll; hostile or duplicate vessels fall back fresh; THE MIRROR lands on
+//      the beat and at the farewell, and round-trips as the next upload
+//   N  THE DEATH COVENANT: a mortal vessel with no one left to kneel falls
+//      (body recorded, `corpse` then `runEnd`, the client's own reckoning,
+//      the run slot wiped, the seat gone); Immortal vessels and fresh heroes
+//      keep THE MERCY; a fallen vessel never walks in again; a vessel that
+//      leaves while down has fallen and hears THE LATE WORD at its next upload
+//   O  THE CORPSE RETURNS: the same account's next hero finds the body, only
+//      its owner reclaims it by the dwell, the gear comes home to its bag, the
+//      record clears, and the records outlive two boots (the wilds too)
 // ---------------------------------------------------------------------------
 
-import { mkdtempSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, existsSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ShardHost, SHARD_CFG } from '../server/shardHost';
 import { sanitizeInput } from '../server/shardTransport';
+import { judgeVessel, VESSEL_CFG } from '../server/vessel';
+import { shardRecordsPath, type ShardRecordsSave } from '../server/corpses';
 import { WsTransport } from '../src/net/ws';
 import { WS_OP, WsMessageAssembler, decodeFrames, encodeClose, encodeFrame, encodeText } from '../src/net/wsframe';
 import type { StateSnapshot, ZoneMsg } from '../src/net/snapshot';
 import { seedGlobalRandom } from '../src/sim/rng';
+import type { SessionMsg } from '../src/net/transport';
+import { NullInput } from '../src/net/intent';
+import { dist, vec } from '../src/core/math';
+import { CLASSES } from '../src/data/classes';
+import { transitDwell, transitRadius } from '../src/data/transit';
+import { rollItem } from '../src/engine/itemgen';
+import { autoPlace } from '../src/engine/inventory';
+import type { ItemCategory } from '../src/engine/items';
+import type { Seat } from '../src/engine/world';
+import {
+  deserializeAccount, isAccountId, LEDGER_ACCOUNT_DEATHS, LEDGER_CORPSES_RECLAIMED, makeAccount, serializeAccount,
+} from '../src/meta/account';
+import { loadCharacter, serializeCouchGuest, type CharacterSave } from '../src/meta/character';
+import { readTravelingVessel, ShardVesselLink } from '../src/meta/shardVessel';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -276,7 +306,379 @@ await host.stop();
   await waitFor(() => w.seats.length === 1, wilds, 60);
   await wilds.stop();
 }
+// =========================================== L–O: THE VESSEL + THE CORPSE ==
+// One classic shard with a records directory hosts every step: the identity,
+// an uploaded vessel and its mirrors, THE DEATH COVENANT, the body's return.
+const VSEED = 0x05e55e1;
+const vdir = mkdtempSync(join(tmpdir(), 'hw-vessel-'));
+const quiet = (): void => { /* quiet */ };
+const vh = new ShardHost({ seed: VSEED, saveDir: vdir, open: true, log: quiet });
+const vurl = `ws://127.0.0.1:${await vh.listen(0, '127.0.0.1')}`;
+const seatOf = (id: string): Seat | undefined => vh.world.seats.find(s => s.id === id);
+const rowsOf = (t: WsTransport): SessionMsg[] => { const log: SessionMsg[] = []; t.onSession(m => log.push(m)); return log; };
+const onDisk = (): ShardRecordsSave => JSON.parse(readFileSync(shardRecordsPath(vdir, VSEED)!, 'utf-8')) as ShardRecordsSave;
+const uids = (items: readonly { uid: number }[]): string => JSON.stringify(items.map(i => i.uid).sort((a, b) => a - b));
+/** Forge a vessel on a scratch seat: the couch guest's shape, as the wire carries it. */
+function forgeVessel(o: { classId: string; level: number; name: string; charId: string; modeId?: string;
+  bag: number; worn: ItemCategory[]; essences?: Record<string, number> }): CharacterSave {
+  const w = vh.world;
+  const seat = w.addSeat('forge', CLASSES.find(c => c.id === o.classId)!, new NullInput(), { startingCompanions: false, startingFlasks: false });
+  w.seatHero(seat).level = o.level;
+  seat.meta.name = o.name; seat.meta.charId = o.charId;
+  if (o.modeId) seat.meta.modeId = o.modeId;
+  for (const slot of o.worn) {
+    const it = rollItem({ ilvl: o.level, rarity: 'rare', category: slot });
+    if (it) { seat.meta.items.push(it); w.equipItem(seat, it.uid, slot); }
+  }
+  for (let placed = 0, tries = 0; placed < o.bag && tries < 50; tries++) {
+    const it = rollItem({ ilvl: o.level, rarity: 'magic' });
+    if (it && autoPlace(seat.meta.items, it)) placed++;
+  }
+  Object.assign(seat.meta.essences, o.essences ?? {});
+  const save = serializeCouchGuest(w, seat, {});
+  w.removeSeat('forge');
+  return JSON.parse(JSON.stringify(save)) as CharacterSave;
+}
+
+// ======================================================== L: THE IDENTITY ==
+{
+  const a = makeAccount(), b = makeAccount();
+  check('L identity: an account mints a 128-bit hex id', isAccountId(a.accountId), a.accountId);
+  check('L identity: two accounts never share one', a.accountId !== b.accountId);
+  check('L identity: the id survives serialize and load',
+    deserializeAccount(JSON.parse(JSON.stringify(serializeAccount(a))))!.accountId === a.accountId);
+  const old = serializeAccount(a);
+  delete old.accountId;
+  const healed = deserializeAccount(old)!.accountId;
+  check('L identity: a save that predates the id mints one at load', isAccountId(healed) && healed !== a.accountId);
+  const mangled = deserializeAccount({ ...serializeAccount(a), accountId: 'p0' })!.accountId;
+  check('L identity: a malformed saved id is re-minted, never trusted', isAccountId(mangled));
+  const stream = Math.random;
+  let draws = 0;
+  Math.random = (): number => { draws++; return stream(); };
+  makeAccount(); deserializeAccount(old);
+  Math.random = stream;
+  check('L identity: minting draws nothing from the seeded stream (THE STREAM LAW)', draws === 0, `${draws} draws`);
+}
+const acctLone = makeAccount();
+const watcher = new WsTransport();
+const watcherRows = rowsOf(watcher);
+await watcher.connect(vurl, { name: 'Watcher', classId: 'rogue' });
+const lone = new WsTransport();
+const lw = await lone.connect(vurl, { name: 'Lone', classId: 'warrior', accountId: acctLone.accountId });
+await waitFor(() => vh.world.seats.length === 3 && watcher.peers().length === 3, vh, 60);
+check('L join: the join carries the id to the host', vh.vessels.accountOf(lw.self) === acctLone.accountId);
+check('L join: no roster row on the wire carries it',
+  [...watcher.peers(), ...lone.peers()].every(p => p.accountId === undefined) && watcher.peers().some(p => p.id === lw.self));
+{
+  const forger = new WsTransport();
+  const fw = await forger.connect(vurl, { name: 'Forger', classId: 'warrior', accountId: 'p1' });
+  await waitFor(() => !!seatOf(fw.self), vh, 60);
+  check('L join: a malformed id keys nothing', !!seatOf(fw.self) && vh.vessels.accountOf(fw.self) === undefined);
+  forger.leave();
+  await waitFor(() => !seatOf(fw.self), vh, 60);
+}
+
+// ========================================================== M: THE VESSEL ==
+const acctA = makeAccount();
+const V = forgeVessel({ classId: 'warrior', level: 12, name: 'Aldric', charId: 'c-probe-aldric', bag: 6,
+  worn: ['helmet', 'chest', 'gloves', 'boots'], essences: { coarse: 40, glimmering: 10 } });
+// Its own run config and run counters (the pass-through must keep them its own).
+V.expedition = { ...V.expedition!, seed: 0x1234 };
+V.ledger = { probe_counter: 7 };
+const vBag = uids(V.items ?? []), vWorn = uids(Object.values(V.equipped ?? {}));
+check('M forge: a level-12 warrior with a bag and a doll, no world half',
+  V.level === 12 && (V.items ?? []).length === 6 && Object.keys(V.equipped ?? {}).length === 4 && V.world === undefined,
+  `${(V.items ?? []).length} bag, ${Object.keys(V.equipped ?? {}).length} worn, ${JSON.stringify(V).length} bytes`);
+{
+  const j = judgeVessel({ ...V, world: { zones: [] } });
+  check('M judge: the world half never travels', 'save' in j && !('world' in j.save));
+  const deep = structuredClone(V);
+  (deep.items![0] as { baseRoll: number }).baseRoll = Infinity;
+  const hostile: [string, unknown][] = [
+    ['class', { ...V, classId: 'nobody' }], ['level', { ...V, level: VESSEL_CFG.maxLevel + 1 }],
+    ['skills', { ...V, knownSkills: 'nope' }], ['bag', { ...V, items: [{ uid: -3 }] }],
+    ['charId', { ...V, charId: '' }], ['schema', { ...V, schemaVersion: -1 }],
+    ['infinity', deep], ['not an object', 'vessel'],
+  ];
+  const leaks = hostile.filter(([, raw]) => !('refused' in judgeVessel(raw))).map(([why]) => why);
+  check('M judge: hostile shapes are refused before anything grafts', leaks.length === 0, leaks.join(', '));
+}
+const cv = new WsTransport();
+const cvRows = rowsOf(cv);
+const linkA = new ShardVesselLink(cv, acctA, V, () => null);
+const cw = await cv.connect(vurl, { name: V.name!, classId: 'rogue', accountId: acctA.accountId }, V);
+await waitFor(() => !!seatOf(cw.self), vh, 60);
+{
+  const s = seatOf(cw.self)!, hero = vh.world.seatHero(s);
+  check('M vessel: the uploaded class wins over the lobby card', s.meta.classDef.id === 'warrior');
+  check('M vessel: the shard seats it at its level, named, with its own bag and doll',
+    hero.level === 12 && s.meta.name === 'Aldric' && uids(s.meta.items) === vBag
+    && uids(Object.values(s.meta.equipped).flatMap(i => (i ? [i] : []))) === vWorn, `level ${hero.level}, ${s.meta.items.length} bag`);
+  check('M vessel: its wallet and life-contract ride along',
+    s.meta.essences.coarse === 40 && s.meta.essences.glimmering === 10 && s.meta.modeId === 'mortal' && s.meta.charId === V.charId);
+  check('M vessel: the desk keys it by its account', vh.vessels.vesselOf(cw.self)?.accountId === acctA.accountId);
+  check('M vessel: the grafted hero stands whole', Number.isFinite(hero.maxLife()) && hero.life === hero.maxLife() && !hero.downed);
+}
+{
+  const bad = new WsTransport();
+  const bw = await bad.connect(vurl, { name: 'Broken', classId: 'rogue', accountId: makeAccount().accountId },
+    { ...V, charId: 'c-broken', knownSkills: 'nope' } as unknown as CharacterSave);
+  const dup = new WsTransport();
+  const dw = await dup.connect(vurl, { name: 'Twin', classId: 'warrior', accountId: acctA.accountId }, V);
+  await waitFor(() => !!seatOf(bw.self) && !!seatOf(dw.self), vh, 60);
+  const sb = seatOf(bw.self)!, sd = seatOf(dw.self)!;
+  check('M fallback: a vessel that fails the judgment joins as the fresh card hero',
+    sb.meta.classDef.id === 'rogue' && vh.world.seatHero(sb).level === 1 && sb.meta.items.length === 0 && !vh.vessels.vesselOf(bw.self));
+  check('M fallback: a vessel already walking the world is never seated twice',
+    !vh.vessels.vesselOf(dw.self) && vh.world.seatHero(sd).level === 1);
+  bad.leave(); dup.leave();
+  await waitFor(() => !seatOf(bw.self) && !seatOf(dw.self), vh, 60);
+}
+{
+  const beat = Math.ceil(SHARD_CFG.persistSec * SHARD_CFG.tickHz) + 30;
+  let ticks = 0;
+  while (linkA.mirrors < 1 && ticks < beat) { vh.tick(DT); await yieldIO(); ticks++; }
+  const slot = loadCharacter();
+  check('M mirror: the heroSave arrives on the persistence beat', linkA.mirrors >= 1, `${ticks} ticks (beat ${beat})`);
+  check('M mirror: it lands in the run slot, no world half, the same hero',
+    !!slot && slot.world === undefined && slot.charId === V.charId && slot.level === 12 && uids(slot.items ?? []) === vBag);
+  check('M mirror: it went to that seat alone', cvRows.some(m => m.t === 'heroSave') && !watcherRows.some(m => m.t === 'heroSave'));
+  check("M mirror: the pass-through stays the vessel's own, never the shard's",
+    slot?.ledger?.probe_counter === 7 && Object.keys(slot?.ledger ?? {}).length === 1 && slot?.expedition?.seed === 0x1234);
+  // THE GUARD: once another run owns the slot, a late mirror never lands.
+  const parked = new WsTransport();
+  const guarded = new ShardVesselLink(parked, acctA, V, () => null, { mayWrite: () => false });
+  const before = JSON.stringify(loadCharacter());
+  (parked as unknown as { dispatch(m: unknown): void }).dispatch({ t: 'session', msg: { t: 'heroSave', save: { ...slot, level: 99 } } });
+  check('M mirror: a late mirror never lands once another run owns the slot',
+    guarded.mirrors === 0 && JSON.stringify(loadCharacter()) === before);
+}
+{
+  const before = linkA.mirrors;
+  cv.leave(); // THE FAREWELL: ask for the last mirror, close when it lands
+  const gone = await waitFor(() => !seatOf(cw.self), vh, 120);
+  check('M farewell: the last mirror lands before the socket closes', gone && linkA.mirrors === before + 1,
+    `${linkA.mirrors - before} mirror(s) at the farewell`);
+}
+const V2 = await readTravelingVessel();
+check('M round trip: the mirror reads back as the next traveling vessel',
+  !!V2 && V2.charId === V.charId && V2.world === undefined && V2.level === 12 && uids(V2.items ?? []) === vBag);
+const cv2 = new WsTransport();
+const cv2Rows = rowsOf(cv2);
+const cv2Order: string[] = []; // session kinds and zone messages, in arrival order
+cv2.onSession(m => cv2Order.push(m.t));
+cv2.onZone(() => cv2Order.push('zone'));
+const link2 = new ShardVesselLink(cv2, acctA, V2, () => null);
+const c2 = await cv2.connect(vurl, { name: V2!.name!, classId: 'warrior', accountId: acctA.accountId }, V2!);
+await waitFor(() => !!seatOf(c2.self), vh, 60);
+check('M round trip: the shard seats the mirror as the same hero',
+  !!vh.vessels.vesselOf(c2.self) && vh.world.seatHero(seatOf(c2.self)!).level === 12 && uids(seatOf(c2.self)!.meta.items) === vBag);
+
+// ================================================== N: THE DEATH COVENANT ==
+// The body falls by the plaza, far from the bedside every fresh hero wakes at.
+const wp = vh.world.waypointPos ?? vh.keeper.actor.pos;
+const deathSpot = vh.world.findFreeSpot(vec(wp.x + 180, wp.y + 160), 16);
+{
+  const s = seatOf(c2.self)!, hero = vh.world.seatHero(s);
+  hero.pos.x = deathSpot.x; hero.pos.y = deathSpot.y;
+  await runTicks(vh, 5);
+  vh.world.kill(hero);
+  await runTicks(vh, 30);
+  check("N covenant: while another player stands to kneel, the mortal down stays co-op's (no fall, no mercy)",
+    hero.downed && !!seatOf(c2.self) && vh.vessels.falls === 0 && vh.corpses.forAccount(acctA.accountId).length === 0);
+}
+watcher.leave(); lone.leave();
+await waitFor(() => vh.vessels.falls === 1, vh, 120);
+{
+  const iC = cv2Rows.findIndex(m => m.t === 'corpse'), iE = cv2Rows.findIndex(m => m.t === 'runEnd');
+  check('N covenant: alone, the mortal vessel falls: `corpse` then `runEnd` reach its client', iC >= 0 && iE > iC, `corpse@${iC} runEnd@${iE}`);
+  const bodies = vh.corpses.forAccount(acctA.accountId);
+  const b = bodies[0];
+  check('N covenant: the body is recorded where it fell, holding the worn gear',
+    bodies.length === 1 && dist(b.pos, deathSpot) < 1 && b.zoneId === vh.world.zone.id
+    && b.loot.items.length === 4 && uids(b.loot.items.flatMap(it => (it.kind === 'gear' ? [it.item] : []))) === vWorn,
+    b ? `${b.zoneId} @ ${b.pos.x.toFixed(0)},${b.pos.y.toFixed(0)}, ${b.loot.items.length} pieces` : 'none');
+  check('N covenant: the seat is gone; the body stands instead', !seatOf(c2.self) && !vh.vessels.vesselOf(c2.self));
+  const row = cv2Rows[iC];
+  check('N covenant: the reckoning ships with the note (60 worth carried, minted at the mortal rate)',
+    row?.t === 'corpse' && row.reckoning.carried === 60 && row.reckoning.mult === 1 && row.reckoning.minted === 60
+    && row.note.pieces === 4 && row.note.id === b?.id && row.note.zoneName === vh.world.zone.name,
+    row?.t === 'corpse' ? `minted ${row.reckoning.minted}, renown ${row.reckoning.renown}` : '');
+  check('N covenant: the client runs its own mortal reckoning (credits, chronicle, death tally, its run counters)',
+    acctA.credits === 60 && acctA.runRecords.length === 1 && acctA.ledger[LEDGER_ACCOUNT_DEATHS] === 1
+    && acctA.ledger.probe_counter === 7, `credits ${acctA.credits}`);
+  check('N covenant: the run slot is wiped (permadeath)', loadCharacter() === null);
+  const staged = link2.takeDeath(cv2, null);
+  check('N covenant: the death screen is staged once, naming the ground',
+    !!staged && staged.reck.minted === 60 && staged.reck.zoneName === vh.world.zone.name && link2.takeDeath(cv2, null) === null);
+  const disk = onDisk();
+  check('N covenant: the records file holds the body and the tombstone',
+    disk.corpses.length === 1 && disk.corpses[0].id === b?.id && disk.fallen.some(f => f.charId === V.charId && f.accountId === acctA.accountId));
+}
+{
+  const acctI = makeAccount();
+  const VI = forgeVessel({ classId: 'rogue', level: 9, name: 'Vow', charId: 'c-probe-vow', modeId: 'immortal', bag: 0, worn: ['helmet'] });
+  const ci = new WsTransport();
+  const ciRows = rowsOf(ci);
+  const iw = await ci.connect(vurl, { name: 'Vow', classId: 'rogue', accountId: acctI.accountId }, VI);
+  await waitFor(() => !!seatOf(iw.self), vh, 60);
+  const hero = vh.world.seatHero(seatOf(iw.self)!);
+  check('N immortal: an Immortal vessel grafts under its own contract', seatOf(iw.self)!.meta.modeId === 'immortal' && !!vh.vessels.vesselOf(iw.self));
+  vh.world.kill(hero);
+  await runTicks(vh, 2);
+  check('N immortal: its death is a DOWN (its stage survives death: no fall, no body)',
+    hero.downed && !!seatOf(iw.self) && !ciRows.some(m => m.t === 'corpse' || m.t === 'runEnd') && vh.corpses.forAccount(acctI.accountId).length === 0);
+  await runTicks(vh, Math.ceil(SHARD_CFG.keeper.reviveSec * SHARD_CFG.tickHz * 1.1) + 2);
+  check('N immortal: THE MERCY stands it back up', !hero.downed && !hero.dead && hero.life > 0);
+  ci.leave();
+  await waitFor(() => !seatOf(iw.self), vh, 60);
+}
+{
+  const cf = new WsTransport();
+  const fw = await cf.connect(vurl, { name: 'Fresh', classId: 'warrior', accountId: makeAccount().accountId });
+  await waitFor(() => !!seatOf(fw.self), vh, 60);
+  const hero = vh.world.seatHero(seatOf(fw.self)!);
+  vh.world.kill(hero);
+  await runTicks(vh, 2);
+  check('N fresh: a fresh hero (no vessel) is downed, never fallen', hero.downed && !!seatOf(fw.self) && vh.vessels.falls === 1);
+  await runTicks(vh, Math.ceil(SHARD_CFG.keeper.reviveSec * SHARD_CFG.tickHz * 1.1) + 2);
+  check('N fresh: THE MERCY stands it back up, as M0 shipped', !hero.downed && hero.life > 0);
+  cf.leave();
+  await waitFor(() => !seatOf(fw.self), vh, 60);
+}
+{
+  const ct = new WsTransport();
+  const ctOrder: string[] = [];
+  ct.onSession(m => ctOrder.push(m.t));
+  const tw = await ct.connect(vurl, { name: V2!.name!, classId: 'warrior', accountId: acctA.accountId }, V2!);
+  await waitFor(() => ctOrder.includes('runEnd'), vh, 60);
+  check('N tombstone: a fallen vessel never walks in again: its re-upload takes no seat and hears its word',
+    !seatOf(tw.self) && !vh.vessels.vesselOf(tw.self) && ctOrder.indexOf('corpse') >= 0
+    && ctOrder.indexOf('runEnd') > ctOrder.indexOf('corpse'), ctOrder.join(' → '));
+  ct.leave();
+  await runTicks(vh, 5);
+}
+{
+  // THE LATE WORD: a mortal vessel that leaves while DOWN has fallen, and its
+  // client hears the word at its next upload of that vessel.
+  const acctW = makeAccount();
+  const W = forgeVessel({ classId: 'warrior', level: 7, name: 'Wren', charId: 'c-probe-wren', bag: 0, worn: ['boots'], essences: { coarse: 9 } });
+  const kneeler = new WsTransport();
+  const kw = await kneeler.connect(vurl, { name: 'Kneeler', classId: 'rogue' });
+  const cwr = new WsTransport();
+  const linkW = new ShardVesselLink(cwr, acctW, W, () => null);
+  const ww = await cwr.connect(vurl, { name: 'Wren', classId: 'warrior', accountId: acctW.accountId }, W);
+  await waitFor(() => !!seatOf(kw.self) && !!seatOf(ww.self), vh, 60);
+  const heroW = vh.world.seatHero(seatOf(ww.self)!);
+  const spotW = vh.world.findFreeSpot(vec(wp.x - 200, wp.y + 160), 16);
+  heroW.pos.x = spotW.x; heroW.pos.y = spotW.y;
+  vh.world.kill(heroW);
+  await runTicks(vh, 10);
+  check('N late word: beside a standing ally the mortal vessel lies down, unfallen', heroW.downed && vh.vessels.falls === 1);
+  cwr.leave(); // the farewell's mirror lands, then the socket closes on a downed vessel
+  await waitFor(() => !seatOf(ww.self) && vh.vessels.falls === 2, vh, 120);
+  const fallenW = onDisk().fallen.find(f => f.charId === W.charId);
+  check('N late word: leaving while down IS the fall (body, tombstone, the owed word)',
+    vh.vessels.falls === 2 && vh.corpses.forAccount(acctW.accountId).length === 1 && fallenW?.word?.reckoning.minted === 9);
+  const stale = await readTravelingVessel();
+  check('N late word: the client that never heard still holds the vessel', stale?.charId === W.charId && linkW.mirrors >= 1);
+  const cwr2 = new WsTransport();
+  const order: string[] = [];
+  cwr2.onSession(m => order.push(m.t));
+  cwr2.onZone(() => order.push('zone'));
+  const linkW2 = new ShardVesselLink(cwr2, acctW, stale, () => null);
+  const ww2 = await cwr2.connect(vurl, { name: 'Wren', classId: 'warrior', accountId: acctW.accountId }, stale!);
+  await waitFor(() => order.includes('runEnd'), vh, 60);
+  check('N late word: its re-upload joins no seat and hears `corpse` then `runEnd`',
+    !seatOf(ww2.self) && order.indexOf('corpse') >= 0 && order.indexOf('runEnd') > order.indexOf('corpse'), order.join(' → '));
+  check('N late word: the client runs its reckoning and wipes its slot',
+    acctW.credits === 9 && loadCharacter() === null && !!linkW2.takeDeath(cwr2, null));
+  cwr2.sendSession({ t: 'rejoin', classId: 'rogue' });
+  await waitFor(() => !!seatOf(ww2.self) && order.includes('newRun'), vh, 60);
+  await runTicks(vh, 2);
+  check('N late word: its class pick rejoins as a fresh hero, the terrain after its newRun',
+    vh.world.seatHero(seatOf(ww2.self)!).level === 1 && order.lastIndexOf('zone') > order.indexOf('newRun'), order.join(' → '));
+  kneeler.leave(); cwr2.leave();
+  await waitFor(() => !seatOf(kw.self) && !seatOf(ww2.self), vh, 60);
+}
+
+// ================================================== O: THE CORPSE RETURNS ==
+{
+  const body = vh.corpses.forAccount(acctA.accountId)[0];
+  const B = new ShardHost({ seed: VSEED, saveDir: vdir, open: true, log: quiet });
+  const bb = B.corpses.forAccount(acctA.accountId);
+  check('O persist: a second boot remembers the body and the tombstone',
+    bb.length === 1 && bb[0].id === body?.id && dist(bb[0].pos, deathSpot) < 1 && B.corpses.hasFallen(acctA.accountId, V.charId!));
+  await B.stop();
+}
+// The fallen player comes back on the same connection: the class pick's rejoin.
+cv2.sendSession({ t: 'rejoin', classId: 'warrior' });
+await waitFor(() => cv2Rows.some(m => m.t === 'newRun') && !!seatOf(c2.self), vh, 60);
+await runTicks(vh, 3);
+const claimant = seatOf(c2.self)!;
+const standing = vh.corpses.standing(c2.self);
+check('O return: the rejoin seats a fresh hero keyed by the same account',
+  !!claimant && vh.world.seatHero(claimant).level === 1 && !vh.vessels.vesselOf(c2.self) && vh.vessels.accountOf(c2.self) === acctA.accountId);
+check('O return: the terrain follows its newRun (the shell that applies it stands up on newRun)',
+  cv2Order.lastIndexOf('zone') > cv2Order.lastIndexOf('newRun'), cv2Order.slice(-4).join(' → '));
+check('O return: its body stands where it fell, far from the bedside it woke at',
+  standing.length === 1 && dist(standing[0].pos, deathSpot) < 24
+  && dist(standing[0].pos, vh.world.seatHero(claimant).pos) > transitRadius('corpse_reclaim', 110),
+  standing[0] ? `${dist(standing[0].pos, vh.world.seatHero(claimant).pos).toFixed(0)} px from the claimant` : 'none');
+const lastBodies = [...cv2Rows].reverse().find(m => m.t === 'corpses');
+check('O return: its client is told where (its own corpses row)',
+  lastBodies?.t === 'corpses' && lastBodies.bodies.length === 1 && lastBodies.bodies[0].id === standing[0]?.id);
+{
+  const co = new WsTransport();
+  const coRows = rowsOf(co);
+  const ow = await co.connect(vurl, { name: 'Other', classId: 'rogue', accountId: makeAccount().accountId });
+  await waitFor(() => !!seatOf(ow.self), vh, 60);
+  await runTicks(vh, 3);
+  const other = vh.world.seatHero(seatOf(ow.self)!);
+  other.pos.x = standing[0].pos.x; other.pos.y = standing[0].pos.y;
+  await runTicks(vh, Math.ceil(transitDwell('corpse_reclaim') * SHARD_CFG.tickHz * 2));
+  check('O return: another account sees no body and cannot reclaim it',
+    vh.corpses.standing(ow.self).length === 0 && coRows.some(m => m.t === 'corpses')
+    && coRows.every(m => m.t !== 'corpses' || m.bodies.length === 0) && vh.corpses.forAccount(acctA.accountId).length === 1);
+  co.leave();
+  await waitFor(() => !seatOf(ow.self), vh, 60);
+}
+{
+  const deeds = acctA.ledger[LEDGER_CORPSES_RECLAIMED] ?? 0;
+  const hero = vh.world.seatHero(claimant);
+  hero.pos.x = standing[0].pos.x; hero.pos.y = standing[0].pos.y;
+  const clock = Math.ceil(transitDwell('corpse_reclaim') * SHARD_CFG.tickHz);
+  const half = await waitFor(() => vh.corpses.reclaims === 1, vh, Math.floor(clock / 2));
+  check('O reclaim: the dwell is the corpse run\'s own clock (not yet at half)', !half && vh.corpses.standing(c2.self)[0]?.dwell > 0);
+  const got = await waitFor(() => vh.corpses.reclaims === 1, vh, clock + 10);
+  check('O reclaim: the owner reclaims its body by the dwell', got && vh.corpses.forAccount(acctA.accountId).length === 0);
+  const bag = new Set(claimant.meta.items.map(i => i.uid));
+  check('O reclaim: the worn gear comes home into its bag, the exact pieces',
+    (JSON.parse(vWorn) as number[]).every(uid => bag.has(uid)), `${claimant.meta.items.length} in the bag`);
+  const disk = onDisk();
+  check('O reclaim: the record clears on disk; the tombstone stays',
+    !disk.corpses.some(c => c.accountId === acctA.accountId) && disk.fallen.some(f => f.accountId === acctA.accountId));
+  await runTicks(vh, 3);
+  check('O reclaim: the deed rides home on the next row; no body stands',
+    acctA.ledger[LEDGER_CORPSES_RECLAIMED] === deeds + 1 && vh.corpses.standing(c2.self).length === 0);
+}
+{
+  const Wm = new ShardHost({ seed: VSEED, saveDir: vdir, open: true, worldmass: true, log: quiet });
+  check('O persist: an ephemeral wilds shard still keeps the records (the tombstone survives the world half)',
+    Wm.savePath === null && Wm.corpses.path === shardRecordsPath(vdir, VSEED) && Wm.corpses.hasFallen(acctA.accountId, V.charId!));
+  await Wm.stop();
+}
+cv2.leave();
+await waitFor(() => vh.world.seats.length === 1, vh, 60);
+await vh.stop();
+rmSync(vdir, { recursive: true, force: true });
 restoreRandom();
 
+// Let in-flight socket closes settle before the process ends: Node on Windows
+// asserts inside libuv when process.exit lands mid-close (a red exit code on
+// an all-green rig — the probe gate reads the code).
+const EXIT_SETTLE_MS = 600;
+await new Promise(r => setTimeout(r, EXIT_SETTLE_MS));
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');
 process.exit(failed ? 1 : 0);
