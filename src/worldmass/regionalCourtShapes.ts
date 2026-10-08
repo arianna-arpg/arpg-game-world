@@ -1,11 +1,13 @@
 import { freezeData, massRandom } from './random';
 
-export const regionalCourtFamilies = ['circle', 'ellipse', 'beveled_hall', 'kite', 'scalloped', 'cleft', 'polygon', 'cross'] as const;
+export const regionalCourtFamilies = ['circle', 'ellipse', 'beveled_hall', 'kite', 'scalloped', 'cleft', 'polygon', 'cross',
+  'fan', 'hammerhead', 'fork', 'terrace'] as const;
+const sculptedRegionalCourtFamilies = ['fan', 'hammerhead', 'fork', 'terrace'] as const;
 export type RegionalCourtFamily = typeof regionalCourtFamilies[number];
 /** Saved shape vocabulary and bounded proportions. The graph owns connectivity;
  * these independent rules own each court's outline inside its original radius. */
 export interface RegionalCourtMorphology {
-  source: string; version: 1;
+  source: string; version: 1 | 2;
   families: readonly { family: RegionalCourtFamily; weight: number }[];
   aspect: readonly [number, number]; depth: readonly [number, number];
   lobes: readonly [number, number]; facets: readonly [number, number];
@@ -24,13 +26,21 @@ export function defaultRegionalCourtMorphology(): RegionalCourtMorphology {
       { family: 'polygon', weight: 3 }, { family: 'cross', weight: 2 }],
     aspect: [.68, .96], depth: [.16, .36], lobes: [3, 7], facets: [4, 9] });
 }
+/** The second vocabulary is explicit saved data. Historical factory weights,
+ * namespace and profiles stay unchanged; new worlds opt into these additions. */
+export function sculptedRegionalCourtMorphology(): RegionalCourtMorphology {
+  const historical = defaultRegionalCourtMorphology();
+  return freezeData<RegionalCourtMorphology>({ ...historical, source: 'worldmass/regional-court-morphology-v2', version: 2,
+    families: [...historical.families, ...sculptedRegionalCourtFamilies.map(family => ({ family, weight: 3 }))] });
+}
 /** Admission checks saved bounds, not a live default or mutable family table. */
 export function validateRegionalCourtMorphology(value: RegionalCourtMorphology): void {
   const range = (v: readonly number[], lo: number, hi: number, integer = false): boolean =>
     Array.isArray(v) && v.length === 2 && v.every(n => Number.isFinite(n) && n >= lo && n <= hi && (!integer || Number.isSafeInteger(n))) && v[0] <= v[1];
-  if (!value || value.version !== 1 || typeof value.source !== 'string' || !value.source || value.source.length > 256
+  if (!value || ![1, 2].includes(value.version) || typeof value.source !== 'string' || !value.source || value.source.length > 256
     || !Array.isArray(value.families) || !value.families.length || value.families.length > regionalCourtFamilies.length
     || value.families.some((entry: { family: RegionalCourtFamily; weight: number }) => !entry || !regionalCourtFamilies.includes(entry.family)
+      || value.version === 1 && sculptedRegionalCourtFamilies.some(family => family === entry.family)
       || !Number.isFinite(entry.weight) || entry.weight <= 0 || entry.weight > 100)
     || new Set(value.families.map((entry: { family: RegionalCourtFamily }) => entry.family)).size !== value.families.length
     || !range(value.aspect, .6, 1) || !range(value.depth, .08, .4)
@@ -65,6 +75,46 @@ export function regionalCourtProfile(policy: RegionalCourtMorphology, seed: numb
     vertices = [{ x: neck, y: -1 }, { x: neck, y: -neck }, { x: 1, y: -neck }, { x: 1, y: neck },
       { x: neck, y: neck }, { x: neck, y: 1 }, { x: -neck, y: 1 }, { x: -neck, y: neck },
       { x: -1, y: neck }, { x: -1, y: -neck }, { x: -neck, y: -neck }, { x: -neck, y: -1 }]
+      .map(p => ({ x: p.x, y: p.y * aspect }));
+  } else if (family === 'fan') {
+    // A broad faceted head opens from a narrow rear court. The arc spans only
+    // the forward side, distinguishing a fan from another full radial rosette.
+    const opening = rng.range(1.04, 1.34), slices = rng.int(4, 7), neck = rng.range(.4, .55), back = rng.range(.55, .78);
+    vertices = [{ x: -back, y: -neck }, ...Array.from({ length: slices + 1 }, (_, i) => {
+      const a = -opening + 2 * opening * i / slices, r = i === 0 || i === slices ? rng.range(.9, 1) : 1;
+      return { x: Math.cos(a) * r, y: Math.sin(a) * r };
+    }), { x: -back, y: neck }, { x: -back - .08, y: 0 }].map(p => ({ x: p.x, y: p.y * aspect }));
+  } else if (family === 'hammerhead') {
+    // An open crossbar with a single deep stem: the broad head and two
+    // recessed shoulders are not produced by the old four-armed cross.
+    const top = rng.range(.67, .91), shoulder = rng.range(.32, .46), neck = rng.range(.4, .55), stem = rng.range(.87, 1);
+    vertices = [{ x: -1, y: -top }, { x: 1, y: -top }, { x: 1, y: shoulder },
+      { x: neck, y: shoulder }, { x: neck, y: stem }, { x: -neck, y: stem },
+      { x: -neck, y: shoulder }, { x: -1, y: shoulder }].map(p => ({ x: p.x, y: p.y * aspect }));
+  } else if (family === 'fork') {
+    // Two broad forward tines and an unequal rear stem share the protected
+    // center. The forward notch is dry-core bounded, never a disconnected tip.
+    const spread = rng.range(.63, .95), half = rng.range(.18, .25), notch = rng.range(.42, .54);
+    const rays = [
+      { a: -Math.PI, r: rng.range(.86, 1) }, { a: -2.55, r: rng.range(.62, .76) },
+      { a: -1.75, r: rng.range(.45, .56) }, { a: -spread - half, r: rng.range(.85, .94) },
+      { a: -spread, r: 1 }, { a: -spread + half, r: rng.range(.86, .96) }, { a: 0, r: notch },
+      { a: spread - half, r: rng.range(.86, .96) }, { a: spread, r: rng.range(.91, 1) },
+      { a: spread + half, r: rng.range(.85, .94) }, { a: 1.75, r: rng.range(.45, .56) },
+      { a: 2.55, r: rng.range(.62, .76) },
+    ];
+    vertices = rays.map(p => ({ x: Math.cos(p.a) * p.r, y: Math.sin(p.a) * p.r * aspect }));
+  } else if (family === 'terrace') {
+    // Each quadrant rises through different broad steps. Monotone polar
+    // order makes every ledge visible from the center without undercut pockets.
+    const left = rng.range(.63, .76), right = rng.range(.56, .72), top = rng.range(.78, .91), bottom = rng.range(.76, .94),
+      crown = rng.range(.19, .31), upper = rng.range(.39, .53), lower = rng.range(.27, .4), foot = rng.range(.28, .41);
+    vertices = [{ x: -1, y: -upper }, { x: -left, y: -upper }, { x: -left, y: -top },
+      { x: -crown, y: -top }, { x: -crown, y: -1 }, { x: crown, y: -1 },
+      { x: crown, y: -top }, { x: right, y: -top }, { x: right, y: -upper }, { x: 1, y: -upper },
+      { x: 1, y: lower }, { x: right, y: lower }, { x: right, y: .64 },
+      { x: foot, y: .64 }, { x: foot, y: bottom }, { x: -foot, y: bottom },
+      { x: -foot, y: .58 }, { x: -left, y: .58 }, { x: -left, y: lower }, { x: -1, y: lower }]
       .map(p => ({ x: p.x, y: p.y * aspect }));
   }
   if (vertices) {

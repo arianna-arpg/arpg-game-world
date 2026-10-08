@@ -1,3 +1,4 @@
+import { validateRegionalTerrainWeave } from './regionalWeave';
 import { validateRegionalCourtMorphology } from './regionalCourtShapes';
 import { generateRegionalTerrain, type RegionalTerrainGrammar } from './regionalTerrainGrammar';
 import { regionalTerrainFootprint, regionalTerrainAt, regionalTerrainCircle, regionalTerrainBox } from './regionalTerrainFootprint';
@@ -35,6 +36,7 @@ export function validateRegionalTerrainGrammar(spec:MassSpec):void {
     ||new Set(p.motifs.map(m=>m.shape)).size!==p.motifs.length
     ||p.motifs.some(m=>!spec.landforms!.shapes.some(s=>s.id===m.shape)||!Number.isFinite(m.weight)||m.weight<=0||m.weight>100))throw Error('Invalid regional terrain grammar');
   if(Object.hasOwn(p,'morphology'))validateRegionalCourtMorphology(p.morphology!);
+  if(Object.hasOwn(p,'weave'))validateRegionalTerrainWeave(p.weave!);
 }
 export function validateRegionalLandforms(spec:MassSpec):void {
   const owner=spec.landforms;

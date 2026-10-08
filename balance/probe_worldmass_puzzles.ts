@@ -100,7 +100,7 @@ try{
  const oldWorld=makeSimWorld('warrior',840);new WorldMassRuntime(42,'old-puzzle',legacy).attach(oldWorld);
  assert.equal(oldWorld.massRuntime!.snapshot(oldWorld).schema,3);
  assert.equal(resume(oldWorld).massRuntime!.puzzles.population,0);
- const saved=m.snapshot(w);assert.equal(saved.schema,15); // RegionalLayersSchema on fresh expeditions
+ const saved=m.snapshot(w);assert.equal(saved.schema,16); // RegionalWeaveSchema on fresh expeditions
  assert.throws(()=>new WorldMassRuntime(42,'bad',saved.config,{...saved,schema:3}),/checkpoint/);
  const unknown=structuredClone(saved);unknown.puzzles![0].id='foreign';
  assert.throws(()=>new WorldMassRuntime(42,'bad',unknown.config,unknown).attach(makeSimWorld('warrior',845),unknown),/Unknown worldmass puzzle/);

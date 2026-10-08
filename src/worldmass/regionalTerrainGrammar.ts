@@ -1,8 +1,11 @@
+import { defaultRegionalTerrainWeave, validateRegionalTerrainWeave, regionalWeaveNodes, regionalWeaveTopology, type RegionalTerrainWeave } from './regionalWeave';
+import { regionalWovenPath } from './regionalPathWeave';
+import { regionalFeatherTerrain } from './regionalTransitions';
 import { Rng } from '../core/rng';
 import { regionalMotifSupport, regionalMotifRows, regionalMotifFits, reserveRegionalMotif } from './regionalMotifSupport';
 import type { MassLandformShape } from './landforms';
 import { freezeData } from './random';
-import { defaultRegionalCourtMorphology, regionalCourtProfile, regionalCourtRadius, validateRegionalCourtMorphology, type RegionalCourtMorphology, type RegionalCourtProfile } from './regionalCourtShapes';
+import { defaultRegionalCourtMorphology, sculptedRegionalCourtMorphology, regionalCourtProfile, regionalCourtRadius, validateRegionalCourtMorphology, type RegionalCourtMorphology, type RegionalCourtProfile } from './regionalCourtShapes';
 
 /** Saved bounded construction rules. Runtime construction consumes these rules
  * and captured motif cells, never a live native builder or scenery registry. */
@@ -14,10 +17,11 @@ export interface RegionalTerrainGrammar {
   motifs: readonly { shape: string; weight: number }[];
   maxChildren: number;
   morphology?: RegionalCourtMorphology;
+  weave?: RegionalTerrainWeave;
 }
 type Point = { x: number; y: number };
 type Node = Point & { radius: number; court?: RegionalCourtProfile };
-type Edge = { a: number; b: number; points: Point[] };
+type Edge = { a: number; b: number; points: readonly Point[]; style?: import('./regionalPathWeave').RegionalPathStyle };
 type Port = Point & { dx: number; dy: number };
 type Child = { shape: string; x: number; y: number; size: number };
 const CELL = 30, directions = [[-1, 0], [1, 0], [0, -1], [0, 1]] as const;
@@ -33,6 +37,10 @@ export function defaultRegionalTerrainGrammar(): RegionalTerrainGrammar {
  * deliberately stays unchanged for explicit old policies and regression tools. */
 export function layeredRegionalTerrainGrammar(): RegionalTerrainGrammar {
   return freezeData({ ...defaultRegionalTerrainGrammar(), morphology: defaultRegionalCourtMorphology() });
+}
+/** RegionalWeave is saved separately so omitted historical rules stay exact. */
+export function wovenRegionalTerrainGrammar(): RegionalTerrainGrammar {
+  return freezeData({ ...layeredRegionalTerrainGrammar(), morphology: sculptedRegionalCourtMorphology(), weave: defaultRegionalTerrainWeave() });
 }
 function connected(rows: readonly string[]): boolean {
   const n = rows.length, seen = new Uint8Array(n * n), queue = new Int32Array(n * n);
@@ -89,6 +97,11 @@ function attemptGrammar(grammar: RegionalTerrainGrammar, pinned: readonly MassLa
       Math.min(x, y, n - 1 - x, n - 1 - y) - 5);
     return { x, y, radius: rng.range(Math.min(gap * .34, cap * .82), cap) };
   });
+  if (grammar.weave) {
+    const regionalWeaveCourts = regionalWeaveNodes(grammar.weave, nodes, n, gap, seed, attempt);
+    if (regionalWeaveCourts.some(node => node.radius < 4)) return null;
+    nodes.splice(0, nodes.length, ...regionalWeaveCourts);
+  }
   if (grammar.morphology) nodes.forEach((node, i) => { node.court = regionalCourtProfile(grammar.morphology!, seed, attempt, i); });
   const pairs: [number, number][] = tree.map(([a, b]) => [index.get(a)!, index.get(b)!]);
   const extra: [number, number][] = [];
@@ -97,9 +110,10 @@ function attemptGrammar(grammar: RegionalTerrainGrammar, pinned: readonly MassLa
   // A saved minimum describes realized connectivity, not discarded attempts.
   if (extra.length < grammar.extraLinks[0]) return null;
   pairs.push(...shuffle(extra, rng).slice(0, rng.int(...grammar.extraLinks)));
-  const edges: Edge[] = pairs.map(([a, b]) => {
+  const edges: Edge[] = pairs.map(([a, b], regionalWeaveEdge) => {
     const start = nodes[a], end = nodes[b], horizontal = chosen[a] % columns !== chosen[b] % columns;
     const bend = rng.range(-.075, .075) * gap;
+    if (grammar.weave) return { a, b, ...regionalWovenPath(grammar.weave.paths, seed, attempt, regionalWeaveEdge, start, end, gap) };
     return { a, b, points: [start, ...[.32, .68].map(t => ({
       x: start.x + (end.x - start.x) * t + (horizontal ? 0 : bend),
       y: start.y + (end.y - start.y) * t + (horizontal ? bend : 0),
@@ -132,10 +146,21 @@ function attemptGrammar(grammar: RegionalTerrainGrammar, pinned: readonly MassLa
     const radius = width / (2 * CELL), bound = radius + shoulder;
     const minX = Math.min(...points.map(p => p.x)) - bound, maxX = Math.max(...points.map(p => p.x)) + bound;
     const minY = Math.min(...points.map(p => p.y)) - bound, maxY = Math.max(...points.map(p => p.y)) + bound;
+    // RegionalWeave may contain dozens of segments. Expanded segment bounds
+    // skip only distances that cannot affect this capsule's floor or shoulder;
+    // omitted weave deliberately retains the historical raster calculation.
+    const regionalWeaveSegments = grammar.weave ? points.slice(1).map((p, i) => ({
+      a: points[i], b: p, minX: Math.min(points[i].x, p.x) - bound,
+      maxX: Math.max(points[i].x, p.x) + bound, minY: Math.min(points[i].y, p.y) - bound,
+      maxY: Math.max(points[i].y, p.y) + bound,
+    })) : undefined;
     paint(minX, minY, maxX, maxY, (x, y) => {
       if (port && ((x - port.x) * port.dx + (y - port.y) * port.dy > 0)) return 0;
       let d = Infinity;
-      for (let i = 1; i < points.length; i++) d = Math.min(d, squaredDistance({ x, y }, points[i - 1], points[i]));
+      if (regionalWeaveSegments) {
+        for (const segment of regionalWeaveSegments) if (x >= segment.minX && x <= segment.maxX && y >= segment.minY && y <= segment.maxY)
+          d = Math.min(d, squaredDistance({ x, y }, segment.a, segment.b));
+      } else for (let i = 1; i < points.length; i++) d = Math.min(d, squaredDistance({ x, y }, points[i - 1], points[i]));
       return d <= radius * radius ? 1 : d <= bound * bound ? material : 0;
     });
   };
@@ -147,6 +172,11 @@ function attemptGrammar(grammar: RegionalTerrainGrammar, pinned: readonly MassLa
     const node = nodes.reduce((best, candidate) => candidate.x * dx + candidate.y * dy > best.x * dx + best.y * dy ? candidate : best);
     const port = { x: dx < 0 ? 2 : dx > 0 ? n - 3 : node.x, y: dy < 0 ? 2 : dy > 0 ? n - 3 : node.y, dx, dy };
     paintLink([node, port], 90, 3, rng.chance(wetChance) ? 3 : 2, port); ports.push(port);
+  }
+  if (grammar.weave) {
+    const regionalWeaveRows = Array.from({ length: n }, (_, y) => Array.from(cells.subarray(y * n, (y + 1) * n), c => '.gbw'[c]).join(''));
+    const regionalTransitions = regionalFeatherTerrain(regionalWeaveRows, ports, grammar.weave.transitions, seed, attempt);
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) cells[y * n + x] = '.gbw'.indexOf(regionalTransitions[y][x]);
   }
   // A closed route can enclose a region of otherwise untouched noise ground.
   // Do not leave an inaccessible transparent pocket available for native sites
@@ -179,6 +209,7 @@ function attemptGrammar(grammar: RegionalTerrainGrammar, pinned: readonly MassLa
   const foundationRows = Array.from({ length: n }, (_, y) => Array.from(cells.subarray(y * n, (y + 1) * n), c => '.gbw'[c]).join(''));
   if (!connected(foundationRows) || ports.some(p => !dry(foundationRows[p.y][p.x])
     || [-1, 0, 1].some(side => foundationRows[p.y + p.dy + p.dx * side]?.[p.x + p.dx - p.dy * side] !== '.'))) return null;
+  if (grammar.weave && !regionalWeaveTopology(foundationRows, nodes, edges)) return null;
   const navigation: Point[] = ports.map(p => ({ x: p.x - p.dx * 2, y: p.y - p.dy * 2 }));
   navigation.push(...nodes.slice(0, 8).map(p => ({ x: p.x, y: p.y })));
   const output = foundationRows.map(row => row.split('')), components: Child[] = [], childSeed = rng.int(0, 0xffffffff);
@@ -252,6 +283,9 @@ export function generateRegionalTerrain(grammar: RegionalTerrainGrammar, pinnedS
     || grammar.maxChildren < 0 || grammar.maxChildren > 8) return null;
   if (Object.hasOwn(grammar, 'morphology')) {
     try { validateRegionalCourtMorphology(grammar.morphology!); } catch { return null; }
+  }
+  if (Object.hasOwn(grammar, 'weave')) {
+    try { validateRegionalTerrainWeave(grammar.weave!); } catch { return null; }
   }
   for (let attempt = 0; attempt < 3; attempt++) {
     const shape = attemptGrammar(grammar, pinnedSmallShapes, seed, attempt);

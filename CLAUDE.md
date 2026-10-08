@@ -1,3 +1,16 @@
+RegionalWeave adds saved winding links, independently varied court positions,
+fan/hammerhead/fork/terrace courts, and connected irregular outer shoulders.
+Woven policies require schema16; higher independent feature schemas retain
+precedence. Preserve exact schema14/15 omission, complete native children,
+protected-site holes and real exterior contacts. Admission checks actual raster
+adjacency, not only centerlines. Historical policy factories remain unchanged.
+Verify regionalweave (body routes, true detours, extreme bounds, nested native
+content and Continue), historical regionallayers/terrainvariation/regionalextents,
+adjacent terrain/worker probes, all types, genqa, sim and regional-weave-ui.cjs
+using its isolated build/storage. See docs/worldgen/seamless-landforms.md.
+Natural shoulders are geometric transitions; biome-render blending, native zone
+ownership and cold generation scheduling remain separate integration work.
+
 RegionalLayers (schema 15) adds saved noncircular court morphology and bounded
 post-terrain native discoveries. Keep exact schema-14 omission and circle-only
 geometry. Noncircular parents use regionalMotifSupport to reserve complete native

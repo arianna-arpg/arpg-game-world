@@ -14,7 +14,14 @@ import { massLandformPolicy } from '../src/worldmass/landformSources';
 import { regionalLandformPolicy } from '../src/worldmass/regionalLandformSources';
 import { defaultRegionalTerrainGrammar, layeredRegionalTerrainGrammar, generateRegionalTerrain } from '../src/worldmass/regionalTerrainGrammar';
 import { generateRegionalDiscoveries, type RegionalDiscoverySpec } from '../src/worldmass/regionalDiscoveries';
-import { regionalCourtFamilies } from '../src/worldmass/regionalCourtShapes';
+// RegionalWeave keeps this course pinned to the schema15 vocabulary and policy.
+const regionalCourtFamilies = layeredRegionalTerrainGrammar().morphology!.families.map(f => f.family);
+function regionalWeaveHistorical() {
+  const config = JSON.parse(JSON.stringify(massAdventure())) as ReturnType<typeof massAdventure>;
+  config.terrain.landforms!.regional!.composition = layeredRegionalTerrainGrammar();
+  Reflect.deleteProperty(config.terrain, 'nativeRegional');
+  return config;
+}
 import { canonical, massDigest } from '../src/worldmass/random';
 
 void makeSimWorld;
@@ -247,7 +254,7 @@ test('all court families retain body-clear paths at the saved proportion bounds'
 });
 
 test('malformed saved morphology refuses construction before terrain publication',()=>{
-  const edits:((p:any)=>void)[]=[p=>p.morphology=null,p=>p.morphology.source='',p=>p.morphology.version=2,
+  const edits:((p:any)=>void)[]=[p=>p.morphology=null,p=>p.morphology.source='',p=>p.morphology.version=3, // RegionalWeave accepts v2; v3 stays unsupported.
     p=>p.morphology.families=[],p=>p.morphology.families=[{family:'triangle-fan',weight:1}],
     p=>p.morphology.families[0].weight=0,p=>p.morphology.families[0].weight=NaN,
     p=>p.morphology.families.push({...p.morphology.families[0]}),p=>p.morphology.aspect=[.59,1],
@@ -359,7 +366,7 @@ test('malformed discovery policies refuse before publication',()=>{
 
 const realRun='regional-layers-ui',realExamples=new Map<string,MassPlace>();
 test('real default noise country hosts all native discovery classes inside final layered terrain',()=>{
-  const config=reserveMassOpening(42,realRun,massAdventure()),g=new MassGenerator(makeMassRun(42,realRun,config.terrain),config.terrain),
+  const config=reserveMassOpening(42,realRun,regionalWeaveHistorical()),g=new MassGenerator(makeMassRun(42,realRun,config.terrain),config.terrain),
     contentKinds=new Set<string>(),contentIds=new Set<string>(),families=new Set<string>(),receipts=new Set<string>(),times:number[]=[];
   let generated=0,discoveries=0,motifs=0,nativeChildren=0;
   const candidates=Array.from({length:225},(_,i)=>[i%15-7,Math.floor(i/15)-7]);candidates.push([9,-5]);
@@ -396,7 +403,7 @@ test('real default noise country hosts all native discovery classes inside final
 test('terrain-owned native cache, shrine, fields and puzzles use real owners, physical stands and durable Continue',()=>{
   const restore=seedGlobalRandom(828142);
   try{
-    const world=makeSimWorld('warrior',828142),mass=new WorldMassRuntime(42,realRun);mass.attach(world);
+    const world=makeSimWorld('warrior',828142),mass=new WorldMassRuntime(42,realRun,regionalWeaveHistorical());mass.attach(world);
     const hooks=world as unknown as {updateChests(dt:number):void;updateShrines():void};
     let chestSource:string|undefined,shrineSource:string|undefined,shrineDef:string|undefined;
     const examined:string[]=[];
@@ -456,7 +463,7 @@ test('a native cache can nest inside a complete pools motif inside a shaped regi
   const shape=generateRegionalTerrain(layeredRegionalTerrainGrammar(),small.shapes,3)!;assert.ok(shape);assert.ok(pinnedChildren(shape)>0);
   const plan:MassLandformPlan={...socketPlan(),id:'regional-layers-motif-3',shape,origin:at(0,0),
     bounds:{minX:0,minY:0,maxX:shape.rows.length*30,maxY:shape.rows.length*30}};
-  const choice=massAdventure().terrain.regionalDiscoveries!.choices.find(c=>c.content==='regional-discovery-wayfarer-cache')!;assert.ok(choice);
+  const choice=regionalWeaveHistorical().terrain.regionalDiscoveries!.choices.find(c=>c.content==='regional-discovery-wayfarer-cache')!;assert.ok(choice);
   const policy:RegionalDiscoverySpec={...socketSpec(),source:'motif-proof',count:[1,1],choices:[choice]};
   let found:ReturnType<typeof generateRegionalDiscoveries>[number]|undefined,roll=0;
   for(roll=1;roll<=64&&!found;roll++)found=generateRegionalDiscoveries(plan,policy,roll,960).find(p=>p.regionalSocket.layer==='motif');

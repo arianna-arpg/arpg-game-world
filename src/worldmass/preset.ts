@@ -1,4 +1,4 @@
-import { layeredRegionalTerrainGrammar } from './regionalTerrainGrammar';
+import { wovenRegionalTerrainGrammar } from './regionalTerrainGrammar';
 import { regionalDiscoveryContent } from './regionalDiscoverySources';
 import { regionalLandformPolicy } from './regionalLandformSources';
 import { WATER_SURFACE } from '../data/waterSurface';
@@ -116,7 +116,7 @@ export function massAdventure(): MassAdventure {
         biome: TILESETS[f.id].biome ?? f.id })),
       { id: 'fallback', source: 'tilesets/downs', priority: 0, when: [], region: 'ground', color: '#31391c', biome: 'downs' },
     ],
-    landforms: { ...massLandformPolicy(), regional: { ...regionalLandformPolicy(), composition: layeredRegionalTerrainGrammar() } },
+    landforms: { ...massLandformPolicy(), regional: { ...regionalLandformPolicy(), composition: wovenRegionalTerrainGrammar() } },
     patches: { source: 'worldmass/native-terrain-patches-v1', version: 1, spacing: 960, jitter: .12, bypass: 60,
       recipes: [
         { id: 'wetland-pockets', when: [], onSurfaces: ['marsh'], chance: .9, choices: [

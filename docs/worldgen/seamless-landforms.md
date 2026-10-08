@@ -256,3 +256,76 @@ The broader validation passed 35 targeted probes, all three type checks, 25 smok
 simulation episodes and built-client native interactions plus cold Continue.
 Generation QA reported 0 failures and four previously known geometry warnings
 across 869 cases and three seeds.
+
+## RegionalWeave: winding routes and connected landscape shoulders
+
+The saved `composition.weave` policy requires checkpoint schema 16; independent
+newer feature policies retain their higher schema. Schema14 and schema 15 policies
+continue to reproduce their original source bytes. The original factories stay
+unchanged, while `wovenRegionalTerrainGrammar()` opts new worlds into the second
+court vocabulary and separate path, court-placement and transition streams.
+
+Four new court families—fan, hammerhead, fork and terrace—join the existing eight.
+Their seeded proportions and orientations vary independently. Modest court drift
+and occasional smaller courts expose more connecting terrain while retaining
+broad courts for complete native motifs. Every court stays within pairwise radius
+caps and leaves room for exterior shoulders. The source graph still chooses its
+connected tree and optional cycles; the new contours do not replace that topology.
+
+Each graph edge chooses a direct, meandering, switchback, elbow or sweeping route.
+Steering uses exact shared endpoints, bounded lateral displacement and monotone
+longitudinal progress. Raster admission independently reconstructs room adjacency
+and rejects unintended intersections, including intersections with entry throats.
+A 32-source player-radius 15 proof measured actual shortest dry routes outside all
+court envelopes: meanders had a median route/chord ratio of 1.144, switchbacks 1.163,
+and the longest sampled meander required 1,315 units against a 568-unit gap. Gentler
+sweeps and elbows remain intentionally different experiences. Water keeps its
+native traversal rules, so these measurements concern dry routes, not universal
+hard-wall mazes.
+
+Connected outer shoulders grow through a coherent field over source coordinates.
+They inherit nearby wall/water material, vary in width, taper before finite source
+bounds, and preserve original cells and complete entry approaches. Enclosed
+transparent pockets are resolved before protected sites and complete child terrain
+are composed. This introduces irregular physical outlines without rectangular
+fills or isolated collision specks. It does not add alpha-blended biome rendering
+or change the protected native sites' own authored shapes.
+
+The permanent `worldmass_regionalweave` course checks 128 normalized unique source
+layouts and outlines, all 12 court families, 19 complete native children, 930 exposed
+links, actual player-body routes, malformed policies, signed coordinates, cache
+reconstruction and exact Continue. A 32-case extreme-policy course admitted 20
+safe sources and refused 12 within the bounded attempt budget. A 24-seed transition
+course preserves every original cell while adding 62,464 connected shoulder cells.
+A 128-location climate-country survey found 10 woven formations, 18 discoveries,
+four geographic recipes and all five path styles, while protecting 12,789 site
+cells. That survey contained no nested child motifs; nesting remains sparse and
+is tested separately with a directed real-world witness. Seed 42, run
+regional-weave-proof, candidate (5,-7) retains a complete stepping-pools motif
+and a native ossuary cache inside it. The actual runtime publishes the cache
+at geographic level 24 with a clear interaction stand.
+
+A 192-source review found 31 complete native children versus 73 with the earlier
+layered policy: exposing longer winding routes trades some broad interior area
+for traversal variety. Complete-child rules are never relaxed to improve a count.
+Expanded segment bounds avoid irrelevant distance checks during route painting;
+all 192 source hashes stayed exact while measured total construction time fell
+about 27%. Cold country planning still runs synchronously; the finite survey's
+p95 after that optimization was about 170 ms and its maximum 199 ms under
+concurrent validation.
+
+Built-client acceptance uses `balance/regional-weave-ui.cjs`, the storage scope
+`preview:seamless-regional-weave-qa`, `HOLLOW_WAKE_WORLDMASS=1`, and an isolated
+build at `.claude/regional-weave.local.work/dist`. It clones the current descriptor
+and omits any separate nativeRegional policy to isolate schema 16. Five candidate
+checks found ten court families and all five path styles. Six route views, native
+walking, a level 22 cache, exact cold Continue and spent-owner revisits passed.
+Reports and the contact sheet are in `balance/reports/regional-weave-*`.
+These are controlled arrival and interaction courses, not a full combat campaign.
+
+RegionalWeave acceptance also passes 21 targeted terrain, content and worker
+probes (including the historical layer course and the new 12-course weave proof),
+all three type checks, 25 smoke simulation episodes and the rebuilt isolated
+client course. Generation QA reports 0 failures and the same four known warnings
+across 869 cases and three seeds. A separate proposed-commit copy verifies the
+schema 16 phase independently of concurrent nativeRegional integration.

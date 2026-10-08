@@ -10,7 +10,7 @@ import { patchBoxIntersects, type MassPatchBox } from './terrainPatches';
 export interface RegionalTerrainTrace {
   source:string;seed:number;childSeed:number;
   nodes:readonly {x:number;y:number;radius:number;court?:import('./regionalCourtShapes').RegionalCourtProfile}[];
-  edges:readonly {a:number;b:number;points:readonly {x:number;y:number}[]}[];
+  edges:readonly {a:number;b:number;points:readonly {x:number;y:number}[];style?:import('./regionalPathWeave').RegionalPathStyle}[];
 }
 export interface MassLandformShape {
   grammar?: RegionalTerrainTrace;
