@@ -23,12 +23,17 @@
 //   P  THE WILDS ON THE WIRE: a render shell lays the same land from the seed,
 //      takes the life from the wire, keeps its walk, streams pages, and the
 //      keeper shadows the focus seat
+//   Q  THE WILDS SAVE (server/wildsSave.ts): a --worldmass shard writes its
+//      own file and a second host resumes it in the mass lane's order — the
+//      clock, the runtime, every saved native, the keeper at the hearth, the
+//      seed on the welcome; a pocket save wakes at the hearth with the pocket
+//      pinned, and a save that will not stand gives way to a fresh wilds
 // ---------------------------------------------------------------------------
 
-import { mkdtempSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'; // + Q's reads (wildsSave)
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ShardHost, SHARD_CFG } from '../server/shardHost';
+import { ShardHost, SHARD_CFG, type ShardSave } from '../server/shardHost'; // + the wrapper's shape (Q, wildsSave)
 import { sanitizeInput } from '../server/shardTransport';
 import { WsTransport } from '../src/net/ws';
 import { wildsShellActive, wildsShellAttach, wildsShellStream, wildsShellZone } from '../src/net/wildsClient';
@@ -344,6 +349,161 @@ await host.stop();
   c.leave();
   await waitFor(() => w.seats.length === 1, wilds, 60);
   await wilds.stop();
+}
+
+// ====================================================== Q: THE WILDS SAVE ==
+// A --worldmass shard persists like a classic one, to its own file, and a
+// saved one stands back up in the mass lane's own resume order before it steps
+// a frame (server/wildsSave.ts resumeWilds): the clock to the saved second, the
+// runtime finished and live, every native the checkpoint carried, the keeper at
+// the hearth whatever spot it was saved at, the seed on the welcome. A save
+// taken inside a native pocket (probe_worldmass_sideareas' own enterSidezone
+// path, at the hearth's cellar hatch) wakes at the hearth with the pocket still
+// pinned to its mouth; a save that will not stand gives way to a fresh wilds.
+{
+  type Mouth = { pos: { x: number; y: number }; kind: string; seed: number };
+  type Pocketable = { caveEntrances: Mouth[]; enterSidezone(cm: Mouth): void };
+  const pocketable = (w: World): Pocketable => w as unknown as Pocketable;
+  const QSEED = 0x0ddba11;
+  const dir = mkdtempSync(join(tmpdir(), 'hw-wilds-'));
+  const quiet = (): void => { /* quiet */ };
+  const readSave = (path: string): ShardSave => JSON.parse(readFileSync(path, 'utf-8')) as ShardSave;
+  const tickSafely = async (h: ShardHost, n: number): Promise<number> => {
+    let threw = 0;
+    for (let i = 0; i < n; i++) { try { h.tick(DT); } catch { threw++; } await yieldIO(); }
+    return threw;
+  };
+  try {
+    // ---- the first life: a fresh wilds, a walker, the write
+    let t0 = performance.now();
+    const a = new ShardHost({ seed: QSEED, saveDir: dir, open: true, worldmass: true, log: quiet });
+    await a.ready();
+    const bootMs = performance.now() - t0;
+    check('Q wilds save: the wilds are persistent, to their own file beside the classic one',
+      a.savePath === join(dir, `shard_${QSEED.toString(16).padStart(8, '0')}${SHARD_CFG.wildsSaveSuffix}.json`) && !!a.world.massRuntime,
+      `fresh boot ${bootMs.toFixed(0)} ms`);
+    await runTicks(a, 180);
+    const portQ = await a.listen(0, '127.0.0.1');
+    const cq = new WsTransport();
+    await cq.connect(`ws://127.0.0.1:${portQ}`, { name: 'Wayfarer', classId: 'warrior' });
+    await waitFor(() => a.world.seats.length === 2, a, 50);
+    const walker = a.world.seats.find(s => s.id === 'p1')!;
+    // The party is set down on open country east of the hearth (the engine's
+    // own landPartyAt: the Waking House's latched door walls a bedside walk in),
+    // then the joiner walks east over the wire and THE SHADOW drags the stream.
+    const st = a.world.massRuntime!.settlement!;
+    a.world.landPartyAt({ x: st.zone.size.w + st.spec.apron + st.spec.blend + 400, y: st.zone.size.h / 2 });
+    const d0 = a.world.doodads.length, x0 = walker.actor.pos.x;
+    for (let i = 0; i < 600 && walker.actor.pos.x < x0 + 300; i++) {
+      cq.sendInput('p1', { dx: 1, dy: 0, aim: { x: walker.actor.pos.x + 100, y: walker.actor.pos.y }, held: [], edge: [], seq: i + 1 });
+      await runTicks(a, 1);
+    }
+    check('Q wilds save: a joiner walks 300 px east over the wire and the wilds grow around it',
+      walker.actor.pos.x >= x0 + 300 && a.world.doodads.length > d0,
+      `Δx ${(walker.actor.pos.x - x0).toFixed(0)}, doodads ${d0}→${a.world.doodads.length}, population ${a.world.massRuntime!.population}`);
+    cq.leave();
+    await waitFor(() => a.world.seats.length === 1, a, 60);
+    t0 = performance.now();
+    a.persist();
+    const persistMs = performance.now() - t0;
+    const written = readSave(a.savePath!);
+    check('Q wilds save: persist() writes the mass half atomically under the shard wrapper',
+      !existsSync(a.savePath! + '.tmp') && written.schemaVersion === SHARD_CFG.saveSchema && written.seed === QSEED
+      && written.world.worldmass?.state.run.seed === QSEED && written.world.worldmass.enemies.length > 0,
+      `${(statSync(a.savePath!).size / 1e6).toFixed(2)} MB in ${persistMs.toFixed(0)} ms, ${written.world.worldmass?.enemies.length} natives`);
+    await a.stop(); // stop() writes the same world again (no frame between)
+    const saved = readSave(a.savePath!);
+
+    // ---- the second life: THE RESUME LAW, then the world as it was
+    t0 = performance.now();
+    const b = new ShardHost({ seed: QSEED, saveDir: dir, open: true, worldmass: true, log: quiet });
+    const ctorMs = performance.now() - t0;
+    const pending = b.world.massRuntime?.resumePending === true;
+    const heldTicks = b.ticks, heldTime = b.world.time, heldAt = statSync(b.savePath!).mtimeMs;
+    b.tick(DT); b.persist();
+    const held = b.ticks === heldTicks && b.world.time === heldTime && statSync(b.savePath!).mtimeMs === heldAt;
+    await b.ready();
+    const resumeMs = performance.now() - t0;
+    check('Q wilds resume: THE RESUME LAW — until ready() the runtime stands restore-only, no frame steps, no write lands',
+      pending && held, `constructor ${ctorMs.toFixed(0)} ms, ready ${resumeMs.toFixed(0)} ms`);
+    const w = b.world, mr = w.massRuntime;
+    check('Q wilds resume: the clock comes back to the saved second', Math.abs(w.time - saved.world.time) < 1e-6,
+      `t ${w.time.toFixed(4)} vs ${saved.world.time.toFixed(4)}`);
+    check('Q wilds resume: the mass runtime stands finished and live on the surface',
+      !!mr && !mr.resumePending && w.zone.id === MASS_ZONE && w.walk === mr.walk && w.arena.boundless === true && mr.generator.run.seed === QSEED);
+    const savedNatives = saved.world.worldmass!.enemies;
+    const back = new Map((mr?.snapshot(w).enemies ?? []).map(e => [e.id, e]));
+    const same = savedNatives.filter(e => {
+      const r = back.get(e.id);
+      return !!r && r.monster === e.monster && r.level === e.level && Math.abs(r.life - e.life) < 1e-9;
+    }).length;
+    check('Q wilds resume: every native the checkpoint carried stands again — same body, same wounds',
+      savedNatives.length > 0 && same === savedNatives.length, `${same}/${savedNatives.length} natives, population ${mr?.population}`);
+    const k = b.keeper.actor.pos, spot = saved.world.worldmass!.player, hearth = mr?.settlement;
+    check('Q wilds resume: the keeper wakes at the hearth, never at its saved spot',
+      !!hearth && hearth.contains(k.x, k.y) && Math.hypot(k.x - hearth.spawn.x, k.y - hearth.spawn.y) < 1 && !hearth.contains(spot.x, spot.y),
+      `keeper (${k.x.toFixed(0)}, ${k.y.toFixed(0)}), saved at (${spot.x.toFixed(0)}, ${spot.y.toFixed(0)})`);
+    const portB = await b.listen(0, '127.0.0.1');
+    const cb = new WsTransport();
+    const helloB = await cb.connect(`ws://127.0.0.1:${portB}`, { name: 'Returner', classId: 'rogue' });
+    check('Q wilds resume: a joiner\'s welcome carries the same seed and the surface', helloB.seed === QSEED && helloB.worldmass === true && helloB.self === 'p1');
+    await waitFor(() => w.seats.length === 2, b, 50);
+    const fb = b.faults, tb = b.ticks;
+    const threwB = await tickSafely(b, 120);
+    check('Q wilds resume: 120 frames tick on the resumed wilds without a fault',
+      threwB === 0 && b.faults === fb && b.ticks === tb + 120 && w.seats.length === 2, `actors ${w.actors.length}`);
+    cb.leave();
+    await waitFor(() => w.seats.length === 1, b, 60);
+
+    // ---- THE POCKET: a save taken inside a native pocket
+    const hatch = pocketable(w).caveEntrances.find(m => m.kind === 'cellar_hatch');
+    let cave = '';
+    if (hatch && w.massRuntime) {
+      w.landPartyAt(hatch.pos);
+      w.massRuntime.update(w, true);
+      pocketable(w).enterSidezone(hatch);
+      cave = w.zone.id;
+    }
+    const fp = b.faults;
+    const threwP = await tickSafely(b, 30);
+    let wrote = true;
+    try { b.persist(); } catch { wrote = false; }
+    const pocketSave = readSave(b.savePath!);
+    check('Q wilds pocket: inside a native pocket the world ticks and writes the surface it left behind',
+      !!hatch && cave.startsWith('cave_mass_') && w.inCave && w.massRuntime === null && threwP === 0 && b.faults === fp && wrote
+      && pocketSave.world.worldmass?.state.run.seed === QSEED && pocketSave.world.massSideareas?.active?.zone === cave);
+    await b.stop();
+    const c = new ShardHost({ seed: QSEED, saveDir: dir, open: true, worldmass: true, log: quiet });
+    await c.ready();
+    const cw = c.world, cmr = cw.massRuntime, ck = c.keeper.actor.pos;
+    check('Q wilds pocket: the resume wakes the keeper at the hearth on the surface, the pocket still pinned',
+      !!cmr && !cmr.resumePending && cw.zone.id === MASS_ZONE && !cw.inCave && !!cw.caveMap[cave] && !!cmr.settlement?.contains(ck.x, ck.y));
+    const again = pocketable(cw).caveEntrances.find(m => m.kind === 'cellar_hatch');
+    if (again && cmr) { cw.landPartyAt(again.pos); cmr.update(cw, true); pocketable(cw).enterSidezone(again); }
+    check('Q wilds pocket: the same mouth re-enters the same pocket', !!again && cw.zone.id === cave);
+    await c.stop();
+
+    // ---- THE REFUSED SAVE: a checkpoint the runtime rejects (a tampered config
+    // hash — the world half adopts, the mass half refuses) gives way to a fresh
+    // keeper world and a fresh wilds, one log line, the refused file set aside.
+    const tampered = readSave(c.savePath!);
+    tampered.world.worldmass!.configHash = 'tampered';
+    writeFileSync(c.savePath!, JSON.stringify(tampered));
+    const lines: string[] = [];
+    const d = new ShardHost({ seed: QSEED, saveDir: dir, open: true, worldmass: true, log: l => lines.push(l) });
+    await d.ready();
+    const aside = readdirSync(dir).filter(f => f.includes('.refused-'));
+    const dmr = d.world.massRuntime, dk = d.keeper.actor.pos, fd = d.faults;
+    const threwD = await tickSafely(d, 30);
+    check('Q wilds refused: a save that will not stand gives way to a fresh wilds — one log line, the file set aside',
+      lines.length === 1 && /would not stand/.test(lines[0]) && aside.length === 1 && !existsSync(d.savePath!)
+      && !!dmr && !dmr.resumePending && d.world.zone.id === MASS_ZONE && d.world.time < saved.world.time
+      && !!dmr.settlement?.contains(dk.x, dk.y) && threwD === 0 && d.faults === fd,
+      lines.join(' / '));
+    await d.stop();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 restoreRandom();
 
