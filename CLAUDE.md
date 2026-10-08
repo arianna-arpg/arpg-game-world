@@ -1,3 +1,13 @@
+NativeSceneRuntimeRegistry shares all 36 original ordered event rows and live
+activation with classic World. NativeAreaSceneRuntimeRegistry binds the same
+local birth, geometry and Titan owners, carried controller state and descent
+timer to one campaign. Construction does not reset a zone or its wounds; only
+the original whole-area birth sequence invokes reset. Keep cave/noLive/special
+eligibility, original order and partial effects unchanged. Full ongoing update,
+reward, source issuance, whole-owner paging and native hierarchy/map activation
+remain required. Verify nativesceneruntimeregistry, nativesceneruntimebirth,
+native regressions, all types, generation, sim and both client Continue courses.
+
 NativeSceneRuntimeBirth shares all 26 native runtime event births and their 17
 helpers with classic World. NativeAreaSceneRuntimeBirth binds real local geometry,
 population, generation and theater owners to live campaign events and original

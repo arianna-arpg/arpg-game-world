@@ -586,6 +586,7 @@ import { descentPlaceDescentDelver, descentMintDelverStock, descentEnterDescentZ
 import { harborHoldStateFor, harborBootQuay, harborBootHarborhold, harborResealDoor, harborRefreshHoldDress, harborHoldDressSpotOk, harborRefreshHoldServices, harborArmPortMercs, harborLandPartyAt, type NativeSceneHarborHost } from './nativeSceneHarbor';
 
 import { nativeTheaterContextNow, nativeTheaterConcurrencyNow, nativeTheaterRunBeat, nativeTheaterPourRoom, nativeTheaterSpawn, nativeSpawnEventActor, nativeClampNear, nativeAnyAliveWithTag, nativeZoneEntryPos, type NativeSceneTheaterHost } from './nativeSceneTheater';
+import {buildNativeSceneRuntimes,materializeNativeLiveZoneEvents,type NativeSceneRuntimeRegistryHost} from './nativeSceneRuntimeRegistry';
 import * as nativeRuntimeBirth from './nativeSceneRuntimeBirth';
 import {nativeFellDoodad,nativeRebuildClientTerrain,type NativeSceneTerrainHost} from './nativeSceneTerrain';
 import {enforceNativeArrivalGrace,nativeUberDefeated,nativeNearestZoneOf,type NativeSceneArrivalHost} from './nativeSceneArrival';
@@ -6393,306 +6394,7 @@ export class World {
    *             re-invoked each frame (live=true) so an overlay that BINDS or
    *             SPREADS to the standing zone materializes the moment it lands
    *             (each runtime's own guards make the re-invoke idempotent). */
-  private buildZoneRuntimes(): { id: string; reset?: () => void; enter?: (def: ZoneDef, live: boolean) => void; noLive?: boolean; ownedGround?: boolean; inCaves?: boolean }[] {
-    return [
-      {
-        // ASCENT: an eligible open-sky zone may vent a sky geyser (rolled
-        // per zone, gated + ignition-scaled through the overlay). On-entry
-        // only — a geyser is discovered, never erupts under your feet.
-        id: 'ascent', noLive: true,
-        enter: (def) => this.placeAscentGeyser(def),
-      },
-      {
-        // Fresh zone visit → no host materialized yet. If a host has ALREADY
-        // reached this zone (you walked into an invasion in progress), its
-        // warband stands at the entry it marched in by. On-entry only —
-        // live arrivals are driven by the update loop's arrivals drain.
-        id: 'warbands', noLive: true,
-        reset: () => { this.materializedHosts.clear(); this.warbandMarches.length = 0; },
-        enter: (def) => {
-          const host = this.sim.invasion.hosts.find(h => h.arrived && h.targetZoneId === def.id);
-          if (host) this.spawnWarband(host);
-        },
-      },
-      {
-        // You walked into (or a live eruption seized) a Demon Invasion's
-        // epicenter — the Balor holds court. Resolved against the instance
-        // governing THIS zone's dimension; a live eruption gets the
-        // meteor-storm warning entrance (the `live` flag).
-        id: 'demon_invasion',
-        reset: () => { this.materializedEpicenters.clear(); this.demonPortals.length = 0; },
-        enter: (def, live) => {
-          const inv = this.sim.demonFieldFor(def.dimension)?.invasionOn(def.id);
-          if (inv?.isEpicenter && (!live || !this.materializedEpicenters.has(inv.id))) this.spawnEpicenter(inv, live);
-        },
-      },
-      {
-        // A Crusade's field holds this ground — raise its works (camp /
-        // fortress / city) and post its garrison, scaled to its local control.
-        id: 'crusade',
-        reset: () => { this.materializedCrusades.clear(); this.crusadePortals.length = 0; },
-        enter: (def, live) => {
-          const cru = this.sim.crusadeField?.crusadeOn(def.id);
-          if (cru && (!live || !this.materializedCrusades.has(def.id))) this.materializeCrusade(cru);
-        },
-      },
-      {
-        // THE WAR BELOW: a HOT front fields the attacker's MARSHAL (the armies
-        // themselves arrive through the owner/rival spawn injection); deep in
-        // a lord's SANCTUM the lord itself MANIFESTS — in whatever zone the
-        // player actually walked into (thrones are anchors, never zones).
-        // Live re-invokes cover a front drifting onto the standing ground.
-        id: 'underworld_war',
-        reset: () => this.materializedHellWar.clear(),
-        enter: (def) => {
-          const hw = this.sim.hellWarField;
-          if (!hw || def.dimension !== hw.dimension) return;
-          if (hw.manifestHere(def.id)) this.spawnHellCourt(def);
-          else if (hw.frontStage(def.id)) this.spawnHellMarshal(def);
-        },
-      },
-      {
-        // THE DEADWAKE pours in via the per-frame updateDeadwakeStream (a
-        // relentless stream while a tide covers this zone) — reset only.
-        id: 'deadwake',
-        reset: () => { this.materializedDeadwakes.clear(); this.deadwakeStreamTimer = 0; this.necropolisPortals.length = 0; },
-      },
-      {
-        // THE WRAITHSAIL alongside walks her court ashore via the per-frame
-        // updateWraithsailDock (once per layover, never a stream) — reset only.
-        id: 'wraithsail',
-        reset: () => { this.materializedDocks.clear(); },
-      },
-      {
-        // The herd pours via updateMigrationStream — reset only.
-        id: 'migration',
-        reset: () => { this.materializedMigrations.clear(); this.migrationStreamTimer = 0; },
-      },
-      {
-        // Titans project their durable journey into local terrain. The live
-        // update owns the cadence; entry only primes the warning pass.
-        id: 'titans', noLive: true, reset: () => this.titans.reset(), enter: () => this.titans.update(0.25),
-      },
-      {
-        // WORLD BOSSES: a settled serpent head / manifest apparition /
-        // enthroned lair fields its fight — including one that manifests on
-        // the standing zone live. Coil walls + the passing body are driven
-        // per-frame by updateWorldBosses (they grow/move with time).
-        // ownedGround: the minted arenas are SPECIAL zones — this row is
-        // their owner and must fire there (fightAt only ever matches zones
-        // this overlay bound, so foreign special stages stay clean).
-        id: 'worldboss', ownedGround: true,
-        reset: () => {
-          this.materializedWorldBoss.clear();
-          this.wbWalls.clear();
-          this.wbPassing = null; this.wbPassingKey = ''; this.wbPassingGoal = null;
-          this.wbBoss = null; this.wbBossKey = '';
-        },
-        enter: (def) => this.materializeWorldBossFight(def),
-      },
-      {
-        // Haunts re-stand on re-entry (anchor / walking Wailing One at their
-        // overlay-remembered wounds) via the per-frame updateHauntStream —
-        // mid-play spawns are never zone-memory captured, so without this
-        // reset a revisited haunt stood empty and unbreakable.
-        id: 'haunting',
-        reset: () => { this.materializedHaunts.clear(); this.hauntStreamTimer = 0; },
-      },
-      {
-        // The Straying's scene is zone-local body refs — a zone change drops
-        // them (the overlay keeps the head ledger; re-entry re-stages from it).
-        id: 'straying',
-        reset: () => { this.materializedStrayings.clear(); this.strayScene = null; },
-      },
-      {
-        // The Drove's scene is zone-local body refs — a zone change drops
-        // them (the overlay keeps the head ledger AND the pen's seat;
-        // re-entry re-stages the wreck exactly where it fell).
-        id: 'drove',
-        reset: () => { this.materializedDroves.clear(); this.droveScene = null; this.droveDressChecked = null; },
-      },
-      {
-        // The Wisplight's scene is zone-local body refs — a zone change drops
-        // them (the overlay keeps the slot ledger; re-entry re-stages from it,
-        // adopting a remembered ridden host by its ride mark).
-        id: 'wisplight',
-        reset: () => { this.materializedWisplights.clear(); this.wispScene = null; },
-      },
-      {
-        // Long Night grounds re-stand on re-entry (the parked coach — and a
-        // seated Countess — at their overlay-remembered wounds) via the
-        // per-frame updateLongNight; the haunting row's exact contract.
-        id: 'long_night',
-        reset: () => { this.materializedLongNights.clear(); this.longNightStreamTimer = 0; },
-      },
-      {
-        // Extraction: the seam itself re-rolls with the zone (encounter
-        // fabric), but standing DISPERSAL ORDERS are zone-local state.
-        id: 'extraction',
-        reset: () => { this.extractionDepartures.length = 0; },
-      },
-      {
-        // Harborhold: the hold STATE rides the def (persisted); the LIVE
-        // defense is zone-local and transient by design — a resume or a
-        // walk-away folds the fight back to 'besieged' (the transience law).
-        id: 'harborhold',
-        reset: () => { this.holdDefense = null; this.holdDwellRequested = false; },
-      },
-      {
-        // Borough: the settlement re-rolls with the zone (encounter fabric),
-        // but the refugees' walk and the arming-panel ask are zone-local.
-        id: 'borough',
-        reset: () => {
-          this.boroughRefugees.length = 0;
-          this.boroughArmRequested = false;
-          this.boroughArmFolkId = -1;
-        },
-      },
-      {
-        // The band pours via updateBrigandRaid — reset only.
-        id: 'brigands',
-        reset: () => { this.materializedBrigands.clear(); this.brigandLingerLeft = 0; this.brigandsDrifting = false; },
-      },
-      {
-        // CONTAGION: a corrupted zone fields its plague (+ Patient Zero at the
-        // source) — and one that SPREAD onto the standing zone fields it live.
-        id: 'contagion',
-        reset: () => { this.materializedContagion.clear(); },
-        enter: (def) => this.materializeContagion(def),
-      },
-      {
-        // DEEPWINTER: a frost-converted zone wakes CONVERTED — snow held at
-        // the frozen floor, whiteout banks, court packs (+ the Winter King
-        // at the glacial heart). Dressing re-applies every entry; the muster
-        // is once per visit.
-        id: 'deepwinter',
-        reset: () => { this.materializedDeepwinter.clear(); },
-        enter: (def) => this.materializeDeepwinter(def),
-      },
-      {
-        id: 'verminfall',
-        reset: () => { this.materializedInfestation.clear(); },
-        enter: (def) => this.materializeInfestation(def),
-      },
-      {
-        // THE SWARMING: a brood-claimed zone fields its standing hive
-        // throats (the visible clock); a wake zone fields its royal-jelly
-        // caches. The airborne stream itself pours via updateSwarmStream.
-        id: 'swarming',
-        reset: () => {
-          this.materializedBroods.clear();
-          this.materializedSwarmWake.clear();
-          this.swarmStreamTimer = 0;
-        },
-        enter: (def) => { this.materializeBrood(def); this.materializeSwarmWake(def); },
-      },
-      {
-        id: 'longcandle',
-        reset: () => { this.materializedCandle.clear(); },
-        enter: (def) => this.materializeCandle(def),
-      },
-      {
-        id: 'starfall',
-        reset: () => { this.materializedStarfall.clear(); },
-        enter: (def) => this.materializeStarfall(def),
-      },
-      {
-        // MYCELIA: a spore-laced zone fields its fungal horde (+ the
-        // Heartbloom at the core); a bloom that spread here fields it live.
-        id: 'mycelia',
-        reset: () => { this.materializedMycelia.clear(); },
-        enter: (def) => this.materializeMycelia(def),
-      },
-      {
-        // HOLDFAST: raise the toll-gate + its wardens around a sealed bonus
-        // exit (rolled at the zone's first load; raised live if not yet built).
-        id: 'holdfast',
-        reset: () => { this.materializedHoldfasts.clear(); this.holdfastSite = null; this.holdfastDwellKey = ''; },
-        enter: (def) => this.placeHoldfast(def),
-      },
-      {
-        // THE UNSEALING: a Sepulcher Sands pocket stages its rolled role —
-        // the Regent's sealed door behind its talisman braziers, or a
-        // canopic seal-bearer's court — and the tomb site LIVE-SYNCS its
-        // flares, door state, and the Regent's wake every frame. POCKET-
-        // NATIVE (inCaves): the whole mechanic lives in side-zones, the
-        // one sanctioned exception to the caves-are-invisible doctrine.
-        id: 'unsealing', inCaves: true,
-        reset: () => { this.materializedUnsealing.clear(); this.unsealingSite = null; },
-        enter: (def, live) => this.materializeUnsealing(def, live),
-      },
-      {
-        // THE HUNT: place a footprint (while the beast is untracked) or spawn
-        // the beast itself where it stands (health preserved) — including a
-        // locate/relocate that resolves onto the standing zone.
-        id: 'hunt',
-        reset: () => {
-          this.huntFootprint = null; this.huntFootprintDwell = 0;
-          this.huntBeast = null; this.materializedHunts.clear();
-        },
-        enter: (def) => this.placeHuntContent(def),
-      },
-      {
-        // FRACTURES: the volatile fracture object if one sits (or diverted)
-        // here, and — on entry only — a PENDING capstone rift's portal.
-        id: 'fractures',
-        reset: () => { this.fractureRun = null; this.materializedFractures.clear(); this.fractureRifts.length = 0; },
-        enter: (def, live) => {
-          if (!live || !this.fractureRun) this.placeFractureContent(def);
-          if (!live) this.placeFractureRiftContent(def);
-        },
-      },
-      {
-        // CONCLAVE: raise the Occult ritual site (pentagram + cultists) —
-        // including one that opened on the standing zone.
-        id: 'conclave',
-        reset: () => { this.ritualSite = null; this.materializedRituals.clear(); },
-        enter: (def) => { if (!this.ritualSite) this.placeRitualSite(def); },
-      },
-      {
-        // AMALGAMATION: the Bonewright (+ graves / risen boss) and any
-        // rare-undead miniboss — including a build that migrated here.
-        id: 'amalgamation',
-        reset: () => {
-          this.amalgamSite = null; this.materializedAmalgam.clear();
-          this.materializedAmalgamMobs.clear(); this.amalgamNecroDwell = 0; this.amalgamPickDwell = [];
-        },
-        enter: (def) => {
-          if (!this.amalgamSite) this.placeAmalgamation(def);
-          this.placeAmalgamMiniboss(def);
-        },
-      },
-      {
-        // DESCENT: the Delver site + dwell/stream timers reset per zone
-        // (re-rolled on cave re-entry); the Delver itself is CAVE content
-        // (the loadZone else-branch). descentRun is NOT reset here —
-        // descend()/resurfaceFromDescent() own it.
-        id: 'descent',
-        reset: () => { this.descentSite = null; this.descentShaftDwell = 0; this.descentSpawnTimer = 0; },
-      },
-      {
-        // INCURSION: the Eldritch Observer, if this is an epicenter zone —
-        // including a reach that bound the standing zone.
-        id: 'incursion',
-        reset: () => { this.materializedObservers.clear(); this.eventAnchors.length = 0; },
-        enter: (def) => this.materializeObserver(def),
-      },
-      {
-        // VENDETTA: a standing writ may spring its hunter squad on the entered
-        // (or stood-in) zone — the ambush the reprisal promised. The roll is
-        // one-shot per zone visit (materializedWrits).
-        id: 'vendetta',
-        reset: () => { this.materializedWrits.clear(); },
-        enter: (def) => this.springVendettaAmbush(def),
-      },
-      {
-        // The Caravanner waiting at a minted caravan destination (the
-        // round-trip home) — on-entry only.
-        id: 'caravan_return', noLive: true,
-        enter: (def) => this.placeCaravanReturn(def),
-      },
-    ];
-  }
+  private buildZoneRuntimes(): { id: string; reset?: () => void; enter?: (def: ZoneDef, live: boolean) => void; noLive?: boolean; ownedGround?: boolean; inCaves?: boolean }[] {return buildNativeSceneRuntimes(this.nativeRuntimeRegistryHost());}
 
   /** VENDETTA: drain the discovery flag, then roll ONE ambush for this zone
    *  visit. A hit spawns the squad at the zone's far edge — already hunting
@@ -6738,26 +6440,7 @@ export class World {
    *  materializedCrusades), so calling them every frame is safe — they fire exactly
    *  once, the moment the event lands. A live demon eruption gets a meteor-storm
    *  warning entrance (the `live` flag). */
-  private materializeLiveZoneEvents(): void {
-    if (this.inCave) {
-      // Pocket ground: ONLY pocket-native rows (inCaves) re-fire — the
-      // Unsealing's tomb site live-syncs its flares/door/wake down here.
-      for (const r of this.zoneRuntimes) {
-        if (r.inCaves && !r.noLive) r.enter?.(this.zone, true);
-      }
-      return;
-    }
-    // Every zone runtime's enter() re-fires with live=true (unless it opted
-    // out via noLive) — each is idempotent by its own guards, so an overlay
-    // that binds/spreads onto the standing zone materializes the moment it
-    // lands, exactly once. A special arena hosts no FOREIGN overlay events
-    // (only ownedGround rows — the arena's own minter — may fire there).
-    for (const r of this.zoneRuntimes) {
-      if (r.noLive) continue;
-      if (this.zone.special && !r.ownedGround) continue;
-      r.enter?.(this.zone, true);
-    }
-  }
+  private materializeLiveZoneEvents(): void {return materializeNativeLiveZoneEvents(this.nativeRuntimeRegistryHost());}
 
   /** Materialize an arrived invasion host as a real warband: a coherent pack of
    *  its faction (champion-led) at the zone's entry FACING the host's origin —
@@ -58559,6 +58242,117 @@ export class World {
     if (!this.sailing) markBodyWalk(a, a.pos.x - sx, a.pos.y - sy, this.time);
   }
 
+  declare private nativeRuntimeRegistryView?:NativeSceneRuntimeRegistryHost;
+  private nativeRuntimeRegistryHost():NativeSceneRuntimeRegistryHost {
+    if(this.nativeRuntimeRegistryView)return this.nativeRuntimeRegistryView;
+    const world=this,host:NativeSceneRuntimeRegistryHost=Object.freeze({
+get placeAscentGeyser(){const fn=world.placeAscentGeyser;return(...args:Parameters<NativeSceneRuntimeRegistryHost['placeAscentGeyser']>)=>fn.apply(world,args);},
+get materializedHosts(){return world.materializedHosts;},
+get warbandMarches(){return world.warbandMarches;},
+get sim(){return world.sim;},
+get spawnWarband(){const fn=world.spawnWarband;return(...args:Parameters<NativeSceneRuntimeRegistryHost['spawnWarband']>)=>fn.apply(world,args);},
+get materializedEpicenters(){return world.materializedEpicenters;},
+get demonPortals(){return world.demonPortals;},
+get spawnEpicenter(){const fn=world.spawnEpicenter;return(...args:Parameters<NativeSceneRuntimeRegistryHost['spawnEpicenter']>)=>fn.apply(world,args);},
+get materializedCrusades(){return world.materializedCrusades;},
+get crusadePortals(){return world.crusadePortals;},
+get materializeCrusade(){const fn=world.materializeCrusade;return(...args:Parameters<NativeSceneRuntimeRegistryHost['materializeCrusade']>)=>fn.apply(world,args);},
+get materializedHellWar(){return world.materializedHellWar;},
+get spawnHellCourt(){const fn=world.spawnHellCourt;return(...args:Parameters<NativeSceneRuntimeRegistryHost['spawnHellCourt']>)=>fn.apply(world,args);},
+get spawnHellMarshal(){const fn=world.spawnHellMarshal;return(...args:Parameters<NativeSceneRuntimeRegistryHost['spawnHellMarshal']>)=>fn.apply(world,args);},
+get materializedDeadwakes(){return world.materializedDeadwakes;},
+get deadwakeStreamTimer(){return world.deadwakeStreamTimer;},set deadwakeStreamTimer(value){world.deadwakeStreamTimer=value;},
+get necropolisPortals(){return world.necropolisPortals;},
+get materializedDocks(){return world.materializedDocks;},
+get materializedMigrations(){return world.materializedMigrations;},
+get migrationStreamTimer(){return world.migrationStreamTimer;},set migrationStreamTimer(value){world.migrationStreamTimer=value;},
+get titans(){return world.titans;},
+get materializedWorldBoss(){return world.materializedWorldBoss;},
+get wbWalls(){return world.wbWalls;},
+get wbPassing(){return world.wbPassing;},set wbPassing(value){world.wbPassing=value;},
+get wbPassingKey(){return world.wbPassingKey;},set wbPassingKey(value){world.wbPassingKey=value;},
+get wbPassingGoal(){return world.wbPassingGoal;},set wbPassingGoal(value){world.wbPassingGoal=value;},
+get wbBoss(){return world.wbBoss;},set wbBoss(value){world.wbBoss=value;},
+get wbBossKey(){return world.wbBossKey;},set wbBossKey(value){world.wbBossKey=value;},
+get materializeWorldBossFight(){const fn=world.materializeWorldBossFight;return(...args:Parameters<NativeSceneRuntimeRegistryHost['materializeWorldBossFight']>)=>fn.apply(world,args);},
+get materializedHaunts(){return world.materializedHaunts;},
+get hauntStreamTimer(){return world.hauntStreamTimer;},set hauntStreamTimer(value){world.hauntStreamTimer=value;},
+get materializedStrayings(){return world.materializedStrayings;},
+get strayScene(){return world.strayScene;},set strayScene(value){world.strayScene=value;},
+get materializedDroves(){return world.materializedDroves;},
+get droveScene(){return world.droveScene;},set droveScene(value){world.droveScene=value;},
+get droveDressChecked(){return world.droveDressChecked;},set droveDressChecked(value){world.droveDressChecked=value;},
+get materializedWisplights(){return world.materializedWisplights;},
+get wispScene(){return world.wispScene;},set wispScene(value){world.wispScene=value;},
+get materializedLongNights(){return world.materializedLongNights;},
+get longNightStreamTimer(){return world.longNightStreamTimer;},set longNightStreamTimer(value){world.longNightStreamTimer=value;},
+get extractionDepartures(){return world.extractionDepartures;},
+get holdDefense(){return world.holdDefense;},set holdDefense(value){world.holdDefense=value;},
+get holdDwellRequested(){return world.holdDwellRequested;},set holdDwellRequested(value){world.holdDwellRequested=value;},
+get boroughRefugees(){return world.boroughRefugees;},
+get boroughArmRequested(){return world.boroughArmRequested;},set boroughArmRequested(value){world.boroughArmRequested=value;},
+get boroughArmFolkId(){return world.boroughArmFolkId;},set boroughArmFolkId(value){world.boroughArmFolkId=value;},
+get materializedBrigands(){return world.materializedBrigands;},
+get brigandLingerLeft(){return world.brigandLingerLeft;},set brigandLingerLeft(value){world.brigandLingerLeft=value;},
+get brigandsDrifting(){return world.brigandsDrifting;},set brigandsDrifting(value){world.brigandsDrifting=value;},
+get materializedContagion(){return world.materializedContagion;},
+get materializeContagion(){const fn=world.materializeContagion;return(...args:Parameters<NativeSceneRuntimeRegistryHost['materializeContagion']>)=>fn.apply(world,args);},
+get materializedDeepwinter(){return world.materializedDeepwinter;},
+get materializeDeepwinter(){const fn=world.materializeDeepwinter;return(...args:Parameters<NativeSceneRuntimeRegistryHost['materializeDeepwinter']>)=>fn.apply(world,args);},
+get materializedInfestation(){return world.materializedInfestation;},
+get materializeInfestation(){const fn=world.materializeInfestation;return(...args:Parameters<NativeSceneRuntimeRegistryHost['materializeInfestation']>)=>fn.apply(world,args);},
+get materializedBroods(){return world.materializedBroods;},
+get materializedSwarmWake(){return world.materializedSwarmWake;},
+get swarmStreamTimer(){return world.swarmStreamTimer;},set swarmStreamTimer(value){world.swarmStreamTimer=value;},
+get materializeBrood(){const fn=world.materializeBrood;return(...args:Parameters<NativeSceneRuntimeRegistryHost['materializeBrood']>)=>fn.apply(world,args);},
+get materializeSwarmWake(){const fn=world.materializeSwarmWake;return(...args:Parameters<NativeSceneRuntimeRegistryHost['materializeSwarmWake']>)=>fn.apply(world,args);},
+get materializedCandle(){return world.materializedCandle;},
+get materializeCandle(){const fn=world.materializeCandle;return(...args:Parameters<NativeSceneRuntimeRegistryHost['materializeCandle']>)=>fn.apply(world,args);},
+get materializedStarfall(){return world.materializedStarfall;},
+get materializeStarfall(){const fn=world.materializeStarfall;return(...args:Parameters<NativeSceneRuntimeRegistryHost['materializeStarfall']>)=>fn.apply(world,args);},
+get materializedMycelia(){return world.materializedMycelia;},
+get materializeMycelia(){const fn=world.materializeMycelia;return(...args:Parameters<NativeSceneRuntimeRegistryHost['materializeMycelia']>)=>fn.apply(world,args);},
+get materializedHoldfasts(){return world.materializedHoldfasts;},
+get holdfastSite(){return world.holdfastSite;},set holdfastSite(value){world.holdfastSite=value;},
+get holdfastDwellKey(){return world.holdfastDwellKey;},set holdfastDwellKey(value){world.holdfastDwellKey=value;},
+get placeHoldfast(){const fn=world.placeHoldfast;return(...args:Parameters<NativeSceneRuntimeRegistryHost['placeHoldfast']>)=>fn.apply(world,args);},
+get materializedUnsealing(){return world.materializedUnsealing;},
+get unsealingSite(){return world.unsealingSite;},set unsealingSite(value){world.unsealingSite=value;},
+get materializeUnsealing(){const fn=world.materializeUnsealing;return(...args:Parameters<NativeSceneRuntimeRegistryHost['materializeUnsealing']>)=>fn.apply(world,args);},
+get huntFootprint(){return world.huntFootprint;},set huntFootprint(value){world.huntFootprint=value;},
+get huntFootprintDwell(){return world.huntFootprintDwell;},set huntFootprintDwell(value){world.huntFootprintDwell=value;},
+get huntBeast(){return world.huntBeast;},set huntBeast(value){world.huntBeast=value;},
+get materializedHunts(){return world.materializedHunts;},
+get placeHuntContent(){const fn=world.placeHuntContent;return(...args:Parameters<NativeSceneRuntimeRegistryHost['placeHuntContent']>)=>fn.apply(world,args);},
+get fractureRun(){return world.fractureRun;},set fractureRun(value){world.fractureRun=value;},
+get materializedFractures(){return world.materializedFractures;},
+get fractureRifts(){return world.fractureRifts;},
+get placeFractureContent(){const fn=world.placeFractureContent;return(...args:Parameters<NativeSceneRuntimeRegistryHost['placeFractureContent']>)=>fn.apply(world,args);},
+get placeFractureRiftContent(){const fn=world.placeFractureRiftContent;return(...args:Parameters<NativeSceneRuntimeRegistryHost['placeFractureRiftContent']>)=>fn.apply(world,args);},
+get ritualSite(){return world.ritualSite;},set ritualSite(value){world.ritualSite=value;},
+get materializedRituals(){return world.materializedRituals;},
+get placeRitualSite(){const fn=world.placeRitualSite;return(...args:Parameters<NativeSceneRuntimeRegistryHost['placeRitualSite']>)=>fn.apply(world,args);},
+get amalgamSite(){return world.amalgamSite;},set amalgamSite(value){world.amalgamSite=value;},
+get materializedAmalgam(){return world.materializedAmalgam;},
+get materializedAmalgamMobs(){return world.materializedAmalgamMobs;},
+get amalgamNecroDwell(){return world.amalgamNecroDwell;},set amalgamNecroDwell(value){world.amalgamNecroDwell=value;},
+get amalgamPickDwell(){return world.amalgamPickDwell;},set amalgamPickDwell(value){world.amalgamPickDwell=value;},
+get placeAmalgamation(){const fn=world.placeAmalgamation;return(...args:Parameters<NativeSceneRuntimeRegistryHost['placeAmalgamation']>)=>fn.apply(world,args);},
+get placeAmalgamMiniboss(){const fn=world.placeAmalgamMiniboss;return(...args:Parameters<NativeSceneRuntimeRegistryHost['placeAmalgamMiniboss']>)=>fn.apply(world,args);},
+get descentSite(){return world.descentSite;},set descentSite(value){world.descentSite=value;},
+get descentShaftDwell(){return world.descentShaftDwell;},set descentShaftDwell(value){world.descentShaftDwell=value;},
+get descentSpawnTimer(){return world.descentSpawnTimer;},set descentSpawnTimer(value){world.descentSpawnTimer=value;},
+get materializedObservers(){return world.materializedObservers;},
+get eventAnchors(){return world.eventAnchors;},
+get materializeObserver(){const fn=world.materializeObserver;return(...args:Parameters<NativeSceneRuntimeRegistryHost['materializeObserver']>)=>fn.apply(world,args);},
+get materializedWrits(){return world.materializedWrits;},
+get springVendettaAmbush(){const fn=world.springVendettaAmbush;return(...args:Parameters<NativeSceneRuntimeRegistryHost['springVendettaAmbush']>)=>fn.apply(world,args);},
+get placeCaravanReturn(){const fn=world.placeCaravanReturn;return(...args:Parameters<NativeSceneRuntimeRegistryHost['placeCaravanReturn']>)=>fn.apply(world,args);},
+get inCave(){return world.inCave;},
+get zoneRuntimes(){return world.zoneRuntimes;},
+get zone(){return world.zone;},
+    });Object.defineProperty(this,'nativeRuntimeRegistryView',{value:host,enumerable:false,writable:true,configurable:true});return host;
+  }
   declare private nativeRuntimeBirthView?:nativeRuntimeBirth.NativeSceneRuntimeBirthHost;
   private nativeRuntimeBirthHost():nativeRuntimeBirth.NativeSceneRuntimeBirthHost {
     if(this.nativeRuntimeBirthView)return this.nativeRuntimeBirthView;

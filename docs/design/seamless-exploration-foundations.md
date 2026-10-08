@@ -2592,3 +2592,39 @@ fixed-size MassHierarchy cells remain an earlier experimental policy; they are
 not a substitute for native biome territory and actual native zone membership.
 The native identity/extent binding, scoped event projection and map transition
 still need implementation and validation; this checkpoint does not claim them.
+
+
+## Native ordered runtime registry
+
+NativeSceneRuntimeRegistry preserves all 36 native runtime rows in their
+original order and the exact live activation dispatcher. Cave-native, entry-only
+and special-arena ownership rules remain the original ones; reset stays at its
+original point in NativeAreaBirth. Classic World and the local scene execute the
+same functions. The two bodies match local main 651d7e05; 2,375 other World
+members and all 391 prior emitted imports remain unchanged.
+
+NativeAreaSceneRuntimeRegistry binds 26 genuine event births, the real Titan
+controller, six geometry collections, 32 existing birth-state roots, the shared
+descent timer and 35 additional carried controller fields. It checks scene,
+geometry, population, simulation and ledger identities. No constructor clears
+these roots. A second binding retains existing sets, wounds and controller refs;
+chunk residency changes must reuse that zone's owners instead of running a new
+zone birth. New-state factories are only for a genuinely new owner.
+
+The shared full-layout fixture preserves the preceding birth oracle and adds
+ordered entry/live scenarios for ordinary land, special arenas, cave pockets,
+repeated activation and reached partial failures. The source oracle independently
+pins both original bodies, while the eligibility matrix checks dispatch and
+failure order. This completes the registry binding, not full ongoing controller
+updates, combat/reward execution, authenticated source issuance, whole-area
+paging or native biome-region/zone/chunk mapping and map zoom.
+
+Registry validation: all three type configurations, 64/64 native probes without
+retries, six related event/controller probes, 2,607 generation cases with zero
+failures, 25 smoke episodes, the build and both isolated client Continue courses
+passed. Generation reported four known spacing warnings and one metropolis
+timing warning. The complete cold registry oracle compares 34 courses and
+38,573,081 serialized bytes per lane: 101 real factory bodies and 16 reached
+partial effects. A full 495-probe sweep was not repeated after this registry
+change; the preceding 494-probe result and geometry-oracle correction are
+reported above.

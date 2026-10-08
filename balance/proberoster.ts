@@ -63,6 +63,7 @@ export type ProbeRow =
 export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_nativestructureaccess.ts', status: 'green', tier: 'fast', why: 'Whole resolved native plans within actual bounds/backing, exact fixture and anchor identity, bounded draw-free relocation, complete generation tapes and real movement' },
   { probe: 'probe_nativesceneruntimebirth.ts', status: 'green', tier: 'fast', why: 'NativeSceneRuntimeBirth exact main event/site births, actual local geometry/population and campaign state, full cold original/current/local comparisons and partial effects' },
+  { probe: 'probe_nativesceneruntimeregistry.ts', status: 'green', tier: 'fast', why: 'NativeSceneRuntimeRegistry complete 36-row native order, carried local state and controllers, real-area original/classic/local dispatch and partial effects' },
   { probe: 'probe_nativescenetitans.ts', status: 'green', tier: 'fast', why: 'Complete native Titan controller over local geometry/population, retained wounds, terrain scars and hazards, exact cleanup and native partial failures' },
   { probe: 'probe_nativescenearrival.ts', status: 'green', tier: 'fast', why: 'Original arrival safety and campaign lookups over full native geometry, live local census, native fallback paths and exact partial failures' },
   { probe: 'probe_nativescenecoast.ts', status: 'green', tier: 'fast', why: 'Complete native coast, island and sea-port birth, shared campaign graphs, real chart hooks, retained discoveries and exact partial effects' },
