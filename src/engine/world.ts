@@ -2066,6 +2066,13 @@ export interface Seat {
    *  way charDeaths rides the local save) — seeded at join, appended by a
    *  party wipe, written back by the guest persist. */
   couchDeaths?: DeathRecord[];
+  /** THE KEEPER SEAT (keeperSeat — docs/design/shard-world.md §3.2): set on
+   *  a HOSTED world's parked p0 — the body the world-level reads address
+   *  when no player stands near. Exempt from party scale and XP, absent from
+   *  the wire, never a reviver by reach; its `reviveSec` is THE MERCY: a
+   *  downed seat with no standing ally rises after that many seconds.
+   *  Absent everywhere else; its absence IS the solo invariant. */
+  keeper?: { reviveSec: number };
   /** World time of this seat's last deliberate action — its private dwell clock. */
   lastActedAt: number;
   /** THE SHIMMY LAW's clock: world seconds of this seat's last WILLED step
@@ -5555,7 +5562,7 @@ export class World {
     const ease = Math.min(1, Math.max(0, this.player.sheet.get('mercEase')));
     const mercWeight = MERC_CFG.partyScaleWeight * (1 - ease);
     return Math.max(1, this.seats.reduce((n, s) =>
-      n + (s.actor.dead ? 0 : s.merc ? mercWeight : 1), 0));
+      n + (s.actor.dead || s.keeper ? 0 : s.merc ? mercWeight : 1), 0)); // keeperSeat: the warden is no party
   }
 
   /** Set (or clear) the co-op party-size scaling source on one hostile enemy. */
@@ -5666,6 +5673,16 @@ export class World {
       if (!seat.actor.downed) { if (seat.reviveDwellBy.size) seat.reviveDwellBy.clear(); continue; }
       for (const ally of this.seats) {
         if (ally === seat || ally.actor.dead || ally.actor.downed) continue;
+        if (ally.keeper) {
+          // keeperSeat — THE MERCY: the warden revives by CLOCK, never by
+          // reach, and only once no other seat stands to kneel.
+          const anyOther = this.seats.some(o => o !== seat && !o.keeper && !o.actor.dead && !o.actor.downed);
+          if (anyOther) { seat.reviveDwellBy.delete(ally.id); continue; }
+          const t = (seat.reviveDwellBy.get(ally.id) ?? 0) + dt;
+          seat.reviveDwellBy.set(ally.id, t);
+          if (t >= ally.keeper.reviveSec) { this.reviveSeat(seat); break; }
+          continue;
+        }
         // THE REVIVE RINGS: reach, discipline and clock are the 'revive'
         // transit row's (data/transit.ts) — the same row reviveTargetsView
         // draws the ring from, so drawn == dwelt by construction.
@@ -22976,7 +22993,7 @@ export class World {
       if (seat.actor.dead) continue;
       // A hired blade never earns its own levels — its power is NORMALIZED to
       // the patron (MERC_CFG.scale), re-synced on the patron's level-ups.
-      if (seat.merc) continue;
+      if (seat.merc || seat.keeper) continue; // keeperSeat: the warden never levels
       this.grantSeatXp(seat, amount);
     }
   }

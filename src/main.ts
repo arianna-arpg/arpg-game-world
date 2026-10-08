@@ -52,6 +52,7 @@ import type { NetTransport, StateSnapshot, PeerInfo, SessionMsg, ZoneMsg } from 
 import { serializeSnapshot, applySnapshot, serializeZone, applyZone } from './net/snapshot';
 import { RemoteInput } from './net/remote';
 import { WebRtcTransport } from './net/webrtc';
+import { WsTransport, WS_TRANSPORT_CFG } from './net/ws';
 import { openCoopLobby } from './ui/lobby';
 import { CLASSES, type ClassDef } from './data/classes';
 import { SKILLS as CLIP_SKILLS } from './data/skills';
@@ -2559,6 +2560,21 @@ function openLobby(): void {
         return { answer, connected };
       } catch (e) { resetToLocal(); throw e; }     // a bad paste must revert net to LocalTransport
     },
+    // THE SHARD (docs/design/shard-world.md M0): a hosted world is a host
+    // that never leaves — the joiner's road is the WebRTC join's, with the
+    // socket where the copy-paste dance was (WsTransport, same grammar).
+    connect: async (url, classId) => {
+      const ws = new WsTransport();
+      const cls = CLASSES.find(c => c.id === classId) ?? CLASSES[0];
+      try {
+        net = ws;
+        subscribeToHost();
+        wireSession();                             // run-lifecycle channel (newRun/hostLeft)
+        const { self, seed } = await ws.connect(url, { name: 'Joiner', classId, cosmeticLoadout: account.cosmetics.loadout });
+        startAsClient(cls, self, seed);
+      } catch (e) { resetToLocal(); throw e; }     // an unreachable server must revert net to LocalTransport
+    },
+    connectDefault: WS_TRANSPORT_CFG.defaultUrl,
     onClose: () => { /* host keeps playing; a non-started joiner just closes */ },
   });
 }

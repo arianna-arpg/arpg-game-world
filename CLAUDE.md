@@ -3481,6 +3481,16 @@ we verify changes.
   SPEECH GRAMMAR (`engine/speechGrammar.ts` — see the town paragraph
   above; docs `docs/engine/speech-grammar.md`).
   Tunables in `render/vis/visConfig.ts`; docs in `docs/render/README.md`.
+- THE SHARD (`docs/design/shard-world.md` — the hosted world's charter;
+  `docs/engine/shard.md` — the M0 contract): `npm run shard` stands the real
+  engine up headless in Node (`server/shardHost.ts`, the co-op host frame
+  verbatim) behind a dependency-free WebSocket (`src/net/wsframe.ts` +
+  `server/shardTransport.ts`); a client joins from the Co-op lobby's "Join a
+  Server" through `src/net/ws.ts` (`WsTransport`, the WebRTC grammar over a
+  socket). THE KEEPER SEAT (`Seat.keeper`) is the parked p0 the world-level
+  reads address — exempt from party scale / XP / the wire, THE MERCY for a
+  lone downed seat. M0 keeps co-op's semantics (party travel, fresh heroes,
+  the shard account's gate); M1-M6 are carded. Verify `probe_shard.ts`.
 - `src/ui/`, `src/net/`, `src/meta/` — DOM panels, co-op transport, and the
   account / save / permadeath meta-layer. THE FOLIO (`ui/folio.ts` — docs
   `docs/ui/folio.md`, probe `balance/probe_folio.ts`): dwell dialogs that

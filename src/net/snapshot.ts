@@ -903,14 +903,14 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
   WATCH_V_OF = (a) => (a.watch ? watchValueOf(a, a.watch, world.time) : 0);
 
   const seats: Record<string, SeatW> = {};
-  for (const s of world.seats) seats[s.id] = seatW(s, world);
+  for (const s of world.seats) if (!s.keeper) seats[s.id] = seatW(s, world); // keeperSeat: the warden is no party member
 
   // META: ship a seat's build only when it CHANGED (level/pickup/mutation marked
   // it dirty). The host clears world.metaDirty after the broadcast (main.ts).
   let seatMeta: Record<string, SeatMetaW> | undefined;
   if (world.metaDirty.size) {
     seatMeta = {};
-    for (const s of world.seats) if (world.metaDirty.has(s.id)) seatMeta[s.id] = serializeSeatMeta(s);
+    for (const s of world.seats) if (!s.keeper && world.metaDirty.has(s.id)) seatMeta[s.id] = serializeSeatMeta(s); // keeperSeat
   }
 
   return {
@@ -939,7 +939,8 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
       const b = containerBoard(c);
       return b ? [[c.id, packContainerBoard(b)] as const] : [];
     })),
-    actors: world.actors.filter(a => !a.dead || a.isPlayerKind()).map(a => ({ ...actorToW(a, world), cosmeticKind: a.cosmeticKind, cosmeticLoadout: cosmeticLoadoutFor(world, a) })),
+    actors: world.actors.filter(a => (!a.dead || a.isPlayerKind()) && !world.seatOf(a)?.keeper) // keeperSeat: unseen, unshipped
+      .map(a => ({ ...actorToW(a, world), cosmeticKind: a.cosmeticKind, cosmeticLoadout: cosmeticLoadoutFor(world, a) })),
     projectiles: world.projectiles.map(p => ({ reflectedCue: p.parryDamage ? true : undefined, orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined, p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age, cosmeticMotif: p.cosmeticMotif, cosmeticProjectile: p.cosmeticProjectile })),
     tethers: world.tethers.map(t => ({
       ax: Math.round(t.ax), ay: Math.round(t.ay), bx: Math.round(t.bx), by: Math.round(t.by),

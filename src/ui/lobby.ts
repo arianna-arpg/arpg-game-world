@@ -22,6 +22,12 @@ export interface LobbyCallbacks {
   /** Join with the host's invite blob as the chosen class. Resolves with OUR
    *  response blob (paste back to host) + a `connected` promise. */
   join: (offer: string, classId: string) => Promise<{ answer: string; connected: Promise<void> }>;
+  /** THE SHARD (docs/design/shard-world.md): connect to a hosted world at a
+   *  ws:// address as the chosen class (a WsTransport client). Absent = the
+   *  row is not offered. Resolves once the shard seated us. */
+  connect?: (url: string, classId: string) => Promise<void>;
+  /** The address the server box offers first (WS_TRANSPORT_CFG.defaultUrl). */
+  connectDefault?: string;
   onClose: () => void;
 }
 
@@ -92,9 +98,12 @@ export function openCoopLobby(cb: LobbyCallbacks): void {
   const actions = h('div'); css(actions, { marginBottom: '8px' });
   const hostBtn = btn('Host a Game');
   const joinBtn = btn('Join a Game');
+  const serverBtn = cb.connect ? btn('Join a Server') : null;
   const cancelBtn = btn('Close'); css(cancelBtn, { color: '#c8a0a0' });
   cancelBtn.addEventListener('click', close);
-  actions.append(hostBtn, joinBtn, cancelBtn);
+  actions.append(hostBtn, joinBtn);
+  if (serverBtn) actions.append(serverBtn);
+  actions.append(cancelBtn);
 
   const stage = h('div'); css(stage, { marginTop: '10px' });
   const status = h('div'); css(status, { marginTop: '8px', minHeight: '16px', color: '#7ec850', fontSize: '12px' });
@@ -129,6 +138,29 @@ export function openCoopLobby(cb: LobbyCallbacks): void {
       stage.append(conn);
       say('You’re hosting and playing — share the invite above.');
     } catch (e) { say('Host failed: ' + String(e), false); hostBtn.disabled = joinBtn.disabled = false; classLocked = false; refreshers.forEach(r => r()); }
+  });
+
+  // --- SERVER flow (THE SHARD — a WsTransport client) ----------------------
+  serverBtn?.addEventListener('click', () => {
+    stage.innerHTML = ''; say('');
+    hostBtn.disabled = joinBtn.disabled = true; if (serverBtn) serverBtn.disabled = true; lockClasses();
+    stage.append(h('p', 'Server address (ws://host:port):'));
+    const url = document.createElement('input');
+    url.type = 'text'; url.value = cb.connectDefault ?? 'ws://localhost:8787';
+    css(url, { width: '100%', marginTop: '6px', background: '#0e0c14', color: '#b8e0b8', border: '1px solid #3a3450', borderRadius: '5px', padding: '6px', font: '12px monospace', boxSizing: 'border-box' });
+    stage.append(url);
+    const go = btn('Connect'); css(go, { marginTop: '8px' });
+    stage.append(go);
+    go.addEventListener('click', async () => {
+      const target = url.value.trim();
+      if (!target) { say('Enter the server address first.', false); return; }
+      go.disabled = true; say('Connecting…');
+      try {
+        await cb.connect!(target, selectedClassId);
+        say('Connected! Entering the hosted world…');
+        setTimeout(() => overlay.remove(), 800);
+      } catch (e) { say('Connection failed: ' + String(e), false); go.disabled = false; }
+    });
   });
 
   // --- JOIN flow -----------------------------------------------------------
