@@ -2243,3 +2243,73 @@ scaled bounds and Save/Continue. The World audit preserves 2,341 existing member
 and all 382 prior runtime import positions, changing exactly fourteen complete
 native operations and adding four hidden adapter members. These tests certify
 the scoped integration, not complete seamless admission or corrected siting.
+
+
+## NativeAreaSceneHarbor and NativeAreaSceneDescent
+
+NativeAreaSceneHarbor shares nine complete native operations with classic World:
+hold lookup, harbor/quay birth, remembered-gate resealing, complete hold dressing
+and services, port mercenary sheets, and whole-party landing. Besieged, opened
+and fallen states still follow the genuine persisted hold. The paired quay keeps
+its real counters, stock and recruiters; gate/causeway/dock relocation uses the
+same mutable structures, grid, exits and doodads as every other scene service.
+
+The harbor owner shares the actual local scene, geometry, population and
+settlement. Its mercenary outpost aliases the settlement owner used by field
+sites and recruiters. Standing chandler shelves, vendor beats and missing-hold
+warning memory belong to the carried run; entering another area must not replace
+or clear them. Landings preserve downed seats, living owned minions, excluded
+stationary constructs, native scatter, story-specific placement, trails and
+movement tethers. No partial party or rebuilt mercenary offer cache is used.
+
+The harbor oracle preserves 114 cold archived/current-World/local comparisons:
+66 actual native bodies, 2,195 ordered draws and nineteen reached failures. Four
+complete source991 harbor/quay layouts are genuine bounded macro discoveries;
+two complete freeport compositions are explicitly labelled mechanism fixtures,
+not natural occurrence evidence. The base 72-case complete output remains
+unchanged. An independent 42-case supplement verifies direct landing defaults,
+clamp bypass, missing/actual higher-story views, mid-party errors and deferred
+merc-sheet callbacks after replacing real scene and campaign state. Twenty-two
+actual World callable/cache controls include genuine false/positive dormancy
+pins. Existing harbortown door/apron warnings remain access follow-up work.
+
+NativeAreaSceneDescent shares three complete native operations: cave Delver
+placement, the shaft's once-minted stock and descent entry. Every original cave,
+objective, package, level, dimension, depth and special-ground gate remains.
+Native stock uses the real settlement's gem/support policy and the original item
+allocator. Re-entry projects the same retained shelf after purchases; it never
+rerolls sold cargo. The shaft site is the actual geometry field, while the run
+and shelf map remain shared campaign state. Entry preserves the same run object,
+return platform, survival map and native light refill, including partial errors.
+
+Thirty-seven cold archived/current-World/local comparisons preserve twelve
+real bodies, 904 draws, twelve reached errors and the exact 950,951-byte complete
+result, including item identities and allocator continuation. Fixtures use an
+actual generated rootways cave and the real native descend transition into a
+boundless descent area. The explicit entrance seeds 4242 and 4243 retain both
+the native chance miss and the positive candidate. This is bounded mechanism
+selection with an enabled level39 campaign, not a claim of natural mouth
+frequency. Separate labelled shaft-stock keys exercise a real support outcome
+without altering installed chance or item sources. Eleven actual World callback
+controls, live run/site/shelf aliases, three native setters and dormancy checks
+pass. Root independently verifies every original operation body against Git.
+
+NativeAreaSceneHarbor and NativeAreaSceneDescent supply the exact birth positions
+in NativeAreaBirth, preserving remembered-door precedence, stock publication,
+body allocation, item IDs, random continuation and native partial failures.
+Later siege/depth/light/spawn controllers, transactions and rewards, coastal
+source issuance, complete birth composition, runtime dispatch and whole-owner
+paging remain required. These owners do not activate seamless areas or claim
+complete physical access to every authored structure. Ordinary mire remains
+localized with neutral bypasses.
+
+NativeAreaSceneHarbor and NativeAreaSceneDescent checkpoint validation: all three
+type checks and all 488 fast probes pass without retries (881.7 seconds). Nine slow
+and three excluded probes were not run. Generation passes 2,607 cases with zero
+failures, four retained spacing warnings and one concurrent metropolis timing
+warning; the quiet 13-case/three-seed metropolis repeat has no warnings. All 25
+simulation episodes pass. The built client passes native cave entry, same-hero
+Continue, exact return, native structure frames and conversation/save courses.
+The World audit retains 2,347 unrelated members and all 384 prior runtime module
+positions; twelve exact delegates and four hidden adapter members are the only
+member changes. This validates the scoped integration, not full area activation.

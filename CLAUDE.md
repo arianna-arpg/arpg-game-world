@@ -1,3 +1,13 @@
+NativeAreaSceneHarbor shares complete harbor/quay birth, doors, dressing,
+services, retained counter stock and whole-party landings with classic World.
+NativeAreaSceneDescent shares native cave Delvers, once-minted shelves and
+abyss entry over the same local geometry/population and settlement campaign.
+Preserve run-long stock/manifest/site aliases, original gate and partial-failure
+order, and live callbacks. Siege/depth/light updates, purchases/rewards, complete
+coastal source issuance and whole-owner paging remain required for activation.
+Verify nativesceneharbor/nativescenedescent, all types, generation, simulation
+and built client entry/Continue/return before whole-scene assembly.
+
 NativeAreaSceneHistory preserves native sagas, nemeses, grudges and player
 corpses with genuine shared campaign state and separate local corpse arrays.
 NativeAreaSceneEncounterBirth shares every native event placement, extraction

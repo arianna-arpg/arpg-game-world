@@ -51,7 +51,7 @@ import { COSMETIC_CFG } from '../data/cosmetics';
 // ---------------------------------------------------------------------------
 
 import { DeedTracker, type DeedEvent } from './deeds';
-import { ensureMovementTether, landMovementTether, updateMovementTethers, refreshMovementTether, savedMovementTether, restoreMovementTether, type MovementTetherState } from './movementTether';
+import { ensureMovementTether, updateMovementTethers, refreshMovementTether, savedMovementTether, restoreMovementTether, type MovementTetherState } from './movementTether';
 import { CompanionBonds } from './companionBonds';
 import { Assaults, assaultNode } from './assault';
 import { Challenges } from './challenges';
@@ -149,15 +149,7 @@ import { reliquaryPower } from '../meta/reliquary';
 import { RELIQUARY_CFG } from '../data/reliquary';
 import { syncTrainingYard } from './trainingYard';
 import { nextItemUid, compileItemMods, itemLevelReq, rebuildItem, rollItem, forgeItem, describeItem, itemGridSize } from './itemgen';
-import {
-  ABILITY_ESSENCE_CFG, ABILITY_ESSENCES, abilityEssenceOfTier,
-  ESSENCES, ESSENCE_IDS, ESSENCE_SPILL_CFG, essenceUnitsForValue, FONT_CFG,
-  LEDGER_ESSENCE_TOUCHED,
-  rollSpillPacket, skillLevelAbilityCost, spendWalletMortalValue, spillBudget,
-  supportLevelAbilityCost,
-  VENDOR_ESSENCE_PRICE, VENDOR_ITEM_CFG, VENDOR_MEMORY_PRICE, VENDOR_SUPPORT_PRICE, walletBreakdown, walletMortalValue,
-  type AbilityCost, type EssenceCost, type EssenceId, type EssenceSpillSpec,
-} from '../data/essences';
+import { ABILITY_ESSENCE_CFG, ABILITY_ESSENCES, abilityEssenceOfTier, ESSENCES, ESSENCE_IDS, ESSENCE_SPILL_CFG, essenceUnitsForValue, FONT_CFG, LEDGER_ESSENCE_TOUCHED, rollSpillPacket, skillLevelAbilityCost, spendWalletMortalValue, spillBudget, supportLevelAbilityCost, VENDOR_ESSENCE_PRICE, VENDOR_MEMORY_PRICE, VENDOR_SUPPORT_PRICE, walletBreakdown, walletMortalValue, type AbilityCost, type EssenceCost, type EssenceId, type EssenceSpillSpec } from '../data/essences';
 import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, baseComplexityOf, slotsForCategory, socketCap, type ItemCategory, type ItemInstance, type ItemRarity, type RoughMemoryUnit } from './items';
 import { DROP_CFG, GEM_DROP_CFG, resolveLootTable, rollVestigeId, gemFloorFor, type GemFloor } from './loot';
 import { epitaphFor, VESTIGES } from '../data/vestiges';
@@ -294,7 +286,7 @@ import {
   rollRerolledAffix, salvageItemYield, salvageSkillYield, salvageSupportYield,
   sellItemYield, sellMemoryYield, sellSkillYield, sellSupportYield, studySalvage, vendorItemPrice,
 } from './crafting';
-import { DESCENT_AFFIX_FAMILIES, ITEM_AFFIXES } from '../data/itemaffixes';
+import { ITEM_AFFIXES } from '../data/itemaffixes';
 import { caravanBand, CARAVAN_BANDS, caravanBandLabel } from '../data/caravan';
 import { TILESETS, CAVE_FACE_IDS, pickTilesetForBiome } from '../data/tilesets';
 import { QUEST_GIVER_IDS, ZONE_QUEST_GIVER_IDS, QUESTS } from '../quests/defs';
@@ -416,10 +408,10 @@ import {
   HARBORHOLD_CFG, HOLD_COMPOSITIONS, holdActiveServices, holdClassFor, holdClassOf,
   holdRestoreCost, mintHoldState, sanitizeHoldState, type HarborholdState, type HoldClassDef,
 } from '../data/harborholds';
-import { holdGateApron, holdGateDoor, holdSeatPos, holdStructureIn, rollHoldDressPieces } from '../world/harborholds';
+import { holdGateApron, holdGateDoor, holdStructureIn } from '../world/harborholds';
 import { dimensionDef, dimensionBiomeAt, dimensionBiomeDepth, dimensionIds, dimensionsEnteredBy, isRoadlessGateHub, GATE_FANOUT } from '../world/dimensions';
 import { radianceOf, radianceCondHeld, type RadianceCond } from '../world/radiance';
-import { delverMulAt } from '../world/strata';
+import '../world/strata';
 import { COURSE_FIELD_SALT, courseBiomeAt, courseMintHints, strewnInstancesNear, type CourseInstance, type CourseMintHints, type CourseSpec } from '../world/courses';
 import type { DisplacementPolicy, CollisionResult, RecoveryPolicy, DamageSpec } from '../world/regions';
 import { registerGenPin } from './genPins';
@@ -588,6 +580,10 @@ import { openNativeHollow, revealNativeAnnex, furnishNativeAnnex, activateNative
 import { siteZoneMatchesSiteFilter, sitePlaceVocationSites, siteSpawnVocationSite, sitePlaceMercOutpost, siteBuildMercOffers, type NativeSceneSiteHost } from './nativeSceneSites';
 import { historyModeStageDef, historyCorpseRecords, historyNemesisActive, historyWatchedSagas, historySagaDirty, historyManifestNemeses, historySpawnNemesisActor, historyApplyGrudgeEffects, historySpawnPlayerCorpses, type NativeSceneHistoryHost } from './nativeSceneHistory';
 import { encounterBirthPlaceEncounters, encounterBirthEventDensityFor, encounterBirthMaterializeExtractionNode, encounterBirthMaterializeBorough, encounterBirthRollExtractTemper, type NativeSceneEncounterBirthHost } from './nativeSceneEncounterBirth';
+
+import { descentPlaceDescentDelver, descentMintDelverStock, descentEnterDescentZone, type NativeSceneDescentHost } from './nativeSceneDescent';
+
+import { harborHoldStateFor, harborBootQuay, harborBootHarborhold, harborResealDoor, harborRefreshHoldDress, harborHoldDressSpotOk, harborRefreshHoldServices, harborArmPortMercs, harborLandPartyAt, type NativeSceneHarborHost } from './nativeSceneHarbor';
 
 export type { Doodad } from './levelgen';
 
@@ -10338,44 +10334,7 @@ export class World {
      *  one — only the cave climb-out and the far span crossing land ON a
      *  story-seated mouth, and they pass its recorded story here. */
     tier?: number;
-  }): void {
-    const spread = opts?.spread ?? PARTY_LAND_CFG.spread;
-    const band = opts?.band ?? PARTY_LAND_CFG.band;
-    const clamp = opts?.clamp ?? true;
-    const put = (a: Actor, to: Vec2): void => {
-      // THE STORY-AWARE LANDING (the aloft coda's recorded shape): an aloft
-      // landing must clamp through ITS OWN story's walk view — the tier-0
-      // clampPos would drag a summit seat to the nearest ground cell (195px
-      // onto the ramp foot, measured). Ground landings keep the classic
-      // clamp byte-identical; on-floor targets move in neither form.
-      const story = opts?.tier ?? 0;
-      const view = story >= 1 ? this.tierViews?.[story] : null;
-      a.pos = view
-        ? (view.isWalkable(to.x, to.y) ? vec(to.x, to.y) : view.snapToWalkable(to))
-        : (clamp ? this.clampPos(to, a.radius) : to);
-      // THE TRAIL breaks on any party landing (zone arrival, teleport,
-      // corpse-run): scent follows walked ground only — you didn't walk
-      // here, so nothing leads here (engine/watch.ts).
-      a.trail = undefined;
-      a.trailIdx = 0;
-      // The story re-seat (arrivalStory): stale layer indices never survive
-      // a landing — the ground under the party is the story the caller says.
-      a.tier = opts?.tier ?? 0;
-      landMovementTether(a);
-      a.onTierLink = false;
-      a.aiTierGoal = undefined;
-    };
-    const p = this.player;
-    put(p, vec(at.x, at.y));
-    const seatActors = new Set<Actor>(this.seats.map(s => s.actor));
-    for (const a of this.actors) {
-      if (a === p) continue;
-      const rides = seatActors.has(a)
-        || (!!a.owner && seatActors.has(a.owner) && !a.dead && !a.construct);
-      if (!rides) continue;
-      put(a, vec(at.x + rand(-spread, spread), at.y + rand(band[0], band[1])));
-    }
-  }
+  }): void { return harborLandPartyAt(this.nativeSceneHarborHost(),at,opts); }
 
   /** Shove freshly-generated hostiles off a pocket's entry ring
    *  (POCKET_CFG.arrivalGrace): outward along their own bearing when the
@@ -10737,6 +10696,94 @@ export class World {
       get dealTemplateOffers(){const method=world.dealTemplateOffers;return (...args:Parameters<NativeSceneSiteHost['dealTemplateOffers']>)=>method.apply(world,args);},
     };
     Object.defineProperty(this,'nativeSceneSiteView',{value:host,writable:true,configurable:true,enumerable:false});
+    return host;
+  }
+
+  private nativeSceneDescentView?:NativeSceneDescentHost;
+  private nativeSceneDescentHost():NativeSceneDescentHost{
+    if(this.nativeSceneDescentView)return this.nativeSceneDescentView;
+    const world=this;
+    const host:NativeSceneDescentHost={
+      get sim(){return world.sim;},
+      get inCave(){return world.inCave;},
+      get player(){return world.player;},
+      get clampPos(){const method=world.clampPos;return(...args:Parameters<NativeSceneDescentHost['clampPos']>)=>method.apply(world,args);},
+      get farPoint(){const method=world.farPoint;return(...args:Parameters<NativeSceneDescentHost['farPoint']>)=>method.apply(world,args);},
+      get createMonster(){const method=world.createMonster;return(...args:Parameters<NativeSceneDescentHost['createMonster']>)=>method.apply(world,args);},
+      get actors(){return world.actors;},
+      get clearTransitSpot(){const method=world.clearTransitSpot;return(...args:Parameters<NativeSceneDescentHost['clearTransitSpot']>)=>method.apply(world,args);},
+      get doodads(){return world.doodads;},
+      get descentSite(){return world.descentSite;}, set descentSite(value){world.descentSite=value;},
+      get descentStock(){return world.descentStock;}, set descentStock(value){world.descentStock=value;},
+      get descentStocks(){return world.descentStocks;},
+      get mintDelverStock(){const method=world.mintDelverStock;return(...args:Parameters<NativeSceneDescentHost['mintDelverStock']>)=>method.apply(world,args);},
+      get ledger(){return world.ledger;},
+      get text(){const method=world.text;return(...args:Parameters<NativeSceneDescentHost['text']>)=>method.apply(world,args);},
+      get manifest(){return world.manifest;},
+      get account(){return world.account;},
+      get vendorGemLevel(){const method=world.vendorGemLevel;return(...args:Parameters<NativeSceneDescentHost['vendorGemLevel']>)=>method.apply(world,args);},
+      get vendorGemsOpen(){const method=world.vendorGemsOpen;return(...args:Parameters<NativeSceneDescentHost['vendorGemsOpen']>)=>method.apply(world,args);},
+      get rollSupportDropGated(){const method=world.rollSupportDropGated;return(...args:Parameters<NativeSceneDescentHost['rollSupportDropGated']>)=>method.apply(world,args);},
+      get rollSkillGem(){const method=world.rollSkillGem;return(...args:Parameters<NativeSceneDescentHost['rollSkillGem']>)=>method.apply(world,args);},
+      get descentRun(){return world.descentRun;},
+      get zone(){return world.zone;},
+      get descentSpawnTimer(){return world.descentSpawnTimer;}, set descentSpawnTimer(value){world.descentSpawnTimer=value;},
+      get notice(){const method=world.notice;return(...args:Parameters<NativeSceneDescentHost['notice']>)=>method.apply(world,args);},
+    };
+    Object.defineProperty(this,'nativeSceneDescentView',{value:host,writable:true,configurable:true,enumerable:false});
+    return host;
+  }
+
+  private nativeSceneHarborView?:NativeSceneHarborHost;
+  private nativeSceneHarborHost():NativeSceneHarborHost{
+    if(this.nativeSceneHarborView)return this.nativeSceneHarborView;
+    const world=this;
+    const host:NativeSceneHarborHost={
+      get zoneMap(){return world.zoneMap;},
+      get holdStateFor(){const method=world.holdStateFor;return(...args:Parameters<NativeSceneHarborHost['holdStateFor']>)=>method.apply(world,args);},
+      get refreshHoldServices(){const method=world.refreshHoldServices;return(...args:Parameters<NativeSceneHarborHost['refreshHoldServices']>)=>method.apply(world,args);},
+      get text(){const method=world.text;return(...args:Parameters<NativeSceneHarborHost['text']>)=>method.apply(world,args);},
+      get player(){return world.player;},
+      get structures(){return world.structures;},
+      get holdMissingWarned(){return world.holdMissingWarned;},
+      get setDoorState(){const method=world.setDoorState;return(...args:Parameters<NativeSceneHarborHost['setDoorState']>)=>method.apply(world,args);},
+      get resealDoor(){const method=world.resealDoor;return(...args:Parameters<NativeSceneHarborHost['resealDoor']>)=>method.apply(world,args);},
+      get doodads(){return world.doodads;},
+      get findFreeSpot(){const method=world.findFreeSpot;return(...args:Parameters<NativeSceneHarborHost['findFreeSpot']>)=>method.apply(world,args);},
+      get markDoodadsChanged(){const method=world.markDoodadsChanged;return(...args:Parameters<NativeSceneHarborHost['markDoodadsChanged']>)=>method.apply(world,args);},
+      get exits(){return world.exits;},
+      get entryFrom(){return world.entryFrom;},
+      get landPartyAt(){const method=world.landPartyAt;return(...args:Parameters<NativeSceneHarborHost['landPartyAt']>)=>method.apply(world,args);},
+      get clampPos(){const method=world.clampPos;return(...args:Parameters<NativeSceneHarborHost['clampPos']>)=>method.apply(world,args);},
+      get refreshHoldDress(){const method=world.refreshHoldDress;return(...args:Parameters<NativeSceneHarborHost['refreshHoldDress']>)=>method.apply(world,args);},
+      get notice(){const method=world.notice;return(...args:Parameters<NativeSceneHarborHost['notice']>)=>method.apply(world,args);},
+      get nativeGridAt(){const method=world.nativeGridAt;return(...args:Parameters<NativeSceneHarborHost['nativeGridAt']>)=>method.apply(world,args);},
+      get zone(){return world.zone;},
+      get evaporating(){return world.evaporating;},
+      get holdDressSpotOk(){const method=world.holdDressSpotOk;return(...args:Parameters<NativeSceneHarborHost['holdDressSpotOk']>)=>method.apply(world,args);},
+      get grounds(){return world.grounds;}, set grounds(value){world.grounds=value;},
+      get actors(){return world.actors;},
+      get weightedPick(){const method=world.weightedPick;return(...args:Parameters<NativeSceneHarborHost['weightedPick']>)=>method.apply(world,args);},
+      get createMonster(){const method=world.createMonster;return(...args:Parameters<NativeSceneHarborHost['createMonster']>)=>method.apply(world,args);},
+      get arena(){return world.arena;},
+      get armPortMercs(){const method=world.armPortMercs;return(...args:Parameters<NativeSceneHarborHost['armPortMercs']>)=>method.apply(world,args);},
+      get mercOutpost(){return world.mercOutpost;}, set mercOutpost(value){world.mercOutpost=value;},
+      get restockOrdinal(){const method=world.restockOrdinal;return(...args:Parameters<NativeSceneHarborHost['restockOrdinal']>)=>method.apply(world,args);},
+      get vendorArmedBeat(){return world.vendorArmedBeat;},
+      get chandlerStock(){return world.chandlerStock;}, set chandlerStock(value){world.chandlerStock=value;},
+      get armVendorStock(){const method=world.armVendorStock;return(...args:Parameters<NativeSceneHarborHost['armVendorStock']>)=>method.apply(world,args);},
+      get syncHoldIdx(){const method=world.syncHoldIdx;return(...args:Parameters<NativeSceneHarborHost['syncHoldIdx']>)=>method.apply(world,args);},
+      get zoneHasVendorCounter(){return world.zoneHasVendorCounter;}, set zoneHasVendorCounter(value){world.zoneHasVendorCounter=value;},
+      get vendorRestockAt(){return world.vendorRestockAt;}, set vendorRestockAt(value){world.vendorRestockAt=value;},
+      get restockSeconds(){const method=world.restockSeconds;return(...args:Parameters<NativeSceneHarborHost['restockSeconds']>)=>method.apply(world,args);},
+      get mercSheetFor(){const method=world.mercSheetFor;return(...args:Parameters<NativeSceneHarborHost['mercSheetFor']>)=>method.apply(world,args);},
+      get manifest(){return world.manifest;},
+      get dealTemplateOffers(){const method=world.dealTemplateOffers;return(...args:Parameters<NativeSceneHarborHost['dealTemplateOffers']>)=>method.apply(world,args);},
+      get tierViews(){return world.tierViews;},
+      get seats(){return world.seats;},
+      get partyLand(){return PARTY_LAND_CFG;},
+    };
+    Object.defineProperty(this,'nativeSceneHarborView',{value:host,writable:true,configurable:true,enumerable:false});
     return host;
   }
 
@@ -14693,52 +14740,7 @@ export class World {
     return true;
   }
 
-  private placeDescentDelver(def: ZoneDef): void {
-    const df = this.sim.descentField;
-    if (!df || !this.inCave || def.id.startsWith('cave_descent_')) return;
-    // Delvers haunt COMBAT caves. A safe pocket (the town cellar) and a waves
-    // arena (The Pit) are sealed rooms — no shaft-keeper mints a mineshaft
-    // through their floors (the same objective gate every ambient system uses).
-    if (def.objective.kind === 'safe' || def.objective.kind === 'waves') return;
-    // OWNED / SPECIAL ground: an event's realm arena (the crusade throne, a
-    // demon rift, the necropolis) is a stage, not a cave system — no shaft
-    // through the colosseum sand (the eventOwned contract, underground).
-    if (def.eventOwned || def.special) return;
-    // NO WAY ON (ZoneDef.noDeeper — pit-dropped hollows): a pocket that
-    // promised no further doors refuses the shaft-keeper's too.
-    if (def.noDeeper) return;
-    // Delvers dig DOWN toward the world's own underworld: ground that HANGS
-    // (ZoneDef.below — a sky shelf over the land) and ground outside the
-    // surface dimension entirely never hosts a shaft. Both are one-field
-    // classifiers, so any future floating or realm pocket exempts itself by
-    // being what it is (no delver allowlist to maintain).
-    if (def.below || (def.dimension ?? 'surface') !== 'surface') return;
-    if (!df.delverAllowed(this.player.level)) return;
-    const roll = new Rng(((def.seed ?? 0) ^ 0xde17e2) >>> 0); // stable per mouth
-    // The draw stays seeded per mouth; the THRESHOLD folds in the package's
-    // live ignition lever (pressure × frequency.rate) AND the stratum's
-    // delver weighting (world/strata.ts — the shaft-keepers haunt the Depths
-    // more than the near-dark), so the Vault weight, the rate crank, and the
-    // world's vertical ladder all reach the abyss like any ignition roll.
-    if (!roll.chance(df.delverChanceNow() * delverMulAt(def.caveDepth ?? 0))) return;
-    const center = this.clampPos(this.farPoint(360, true), 30);
-    const delver = this.createMonster(FIXTURE_IDS.descent_delver, Math.max(1, def.level), 'enemy');
-    delver.tag = 'descent_delver';
-    delver.pos = this.clampPos(vec(center.x, center.y), delver.radius);
-    this.actors.push(delver);
-    const ang = roll.range(0, Math.PI * 2);
-    const platform = this.clearTransitSpot(
-      this.clampPos(vec(center.x + Math.cos(ang) * 92, center.y + Math.sin(ang) * 92), 24));
-    this.doodads.push({ pos: vec(platform.x, platform.y), radius: 30, kind: 'descent_platform' });
-    this.descentSite = { delverId: delver.id, platform: vec(platform.x, platform.y) };
-    // THE LOCKED SHELF: minted ONCE per shaft per run (seeded per cave) and
-    // re-PROJECTED on every re-entry — purchases stay spliced, the roll never
-    // repeats, so there is no refresh to scum. The counter itself stays
-    // sealed until the dive resolves (THE PROVING LAW — delverShopOpen).
-    this.descentStock = this.descentStocks.get(def.id) ?? this.mintDelverStock(def);
-    bumpLedger(this.ledger, 'delvers_seen'); // DISCOVERY — surfaces the Vault unlock
-    this.text(vec(center.x, center.y - 30), 'A Delver lingers by a gaping shaft…', '#7fe0d8', 15);
-  }
+  private placeDescentDelver(def: ZoneDef): void { return descentPlaceDescentDelver(this.nativeSceneDescentHost(),def); }
 
   /** Mint one Delver's shelf (THE LOCKED SHELF): Brandt's own grammar —
    *  rolled gear + skill/support gems, essence-priced through the standard
@@ -14749,56 +14751,7 @@ export class World {
    *  REGISTER's chance at base + perDepth × its OWN rung — the deeper the
    *  lock, the likelier the abyss's reserved words: deterministic farming,
    *  priced in danger. */
-  private mintDelverStock(def: ZoneDef): VendorEntry[] {
-    const st = this.sim.descentField?.surge().stock;
-    const out: VendorEntry[] = [];
-    if (!st) return out;
-    const seed = (this.manifest.seed ^ hashStr(`delvershelf:${def.id}`)) >>> 0;
-    withSeededRandom(seed, () => {
-      const rollRung = (): number => {
-        let total = 0;
-        for (const r of st.depthRungs) total += Math.max(0, r.weight);
-        if (total <= 0) return 0;
-        let roll = Math.random() * total;
-        for (const r of st.depthRungs) {
-          roll -= Math.max(0, r.weight);
-          if (roll <= 0) return r.depth;
-        }
-        return st.depthRungs[st.depthRungs.length - 1].depth;
-      };
-      // Gems mirror Brandt's shelf gates — normalize means the SAME rules
-      // (true gems stock once THE MEMORY COUNTER opens them, supports once
-      // that's unlocked; skill-items M3), the depth locks merely layer on
-      // top. Minted-once law: a rung bought mid-run reaches the NEXT shaft.
-      const sellSupports = featureEnabled(this.account, FEATURE.BRANDT_SELL_SUPPORTS);
-      const lvl = this.vendorGemLevel();
-      const gemCount = this.vendorGemsOpen() ? st.gems : 0;
-      for (let i = 0; i < gemCount; i++) {
-        const depth = rollRung();
-        let e: VendorEntry;
-        const sd = sellSupports && Math.random() < VENDOR_CFG.supportShare
-          ? this.rollSupportDropGated(undefined, lvl) : undefined;
-        if (sd) e = { kind: 'support', gem: mintSupportInstance(sd, 1) };
-        else e = { kind: 'skill', inst: this.rollSkillGem(undefined, lvl) };
-        if (depth > 0) e.depthReq = depth;
-        out.push(e);
-      }
-      for (let i = 0; i < st.gear; i++) {
-        const depth = rollRung();
-        const ilvl = Math.max(1, this.player.level + randInt(-VENDOR_ITEM_CFG.ilvlJitter, VENDOR_ITEM_CFG.ilvlJitter));
-        const withFamily = Math.random() < st.affixChanceBase + st.affixChancePerDepth * depth
-          ? DESCENT_AFFIX_FAMILIES[Math.floor(Math.random() * DESCENT_AFFIX_FAMILIES.length)]
-          : undefined;
-        const item = rollItem({ ilvl, rarityWeights: VENDOR_ITEM_CFG.rarityWeights, withFamily });
-        if (!item) continue;
-        const e: VendorEntry = { kind: 'item', item };
-        if (depth > 0) e.depthReq = depth;
-        out.push(e);
-      }
-    });
-    this.descentStocks.set(def.id, out);
-    return out;
-  }
+  private mintDelverStock(def: ZoneDef): VendorEntry[] { return descentMintDelverStock(this.nativeSceneDescentHost(),def); }
 
   /** Dwell the platform to descend: mint/reuse the boundless abyss cave, save the
    *  Delver-cave's caveReturn (so resurface restores the way to the surface), and load
@@ -14827,18 +14780,7 @@ export class World {
 
   /** Arriving in the abyss (called from loadZone's cave branch): set the depth origin
    *  at the shaft, raise the climb-out shaft doodad, and light the lamp full. */
-  private enterDescentZone(): void {
-    const run = this.descentRun, df = this.sim.descentField;
-    if (!run || !df) return;
-    run.origin = vec(this.player.pos.x, this.player.pos.y);
-    run.depth = 0; run.haul = {}; run.haulBank = 0;
-    run.baseLevel = this.zone.level; // THE PRESSURE LADDER's anchor
-    this.doodads.push({ pos: vec(run.origin.x, run.origin.y), radius: 30, kind: 'descent_platform' });
-    if (!this.player.survival) this.player.survival = new Map();
-    this.player.survival.set('light', df.surge().lightMax);
-    this.descentSpawnTimer = 0;
-    this.notice('You descend into the dark…', '#7fe0d8', 16, 'world');
-  }
+  private enterDescentZone(): void { return descentEnterDescentZone(this.nativeSceneDescentHost()); }
 
   /** Leave the abyss: bank Echoes (full on a voluntary climb, ×keptOnDeath when the
    *  dark/death takes you), revive the party, restore the surface return, and land on
@@ -24812,11 +24754,7 @@ export class World {
   /** The hold STATE governing a zone: its own (`harborhold` — hold anchors
    *  and legacy single-zone towns) or its anchor's (`holdAnchor` — the port
    *  half of a harbor pair reads the mainland's ledger). Null off-fabric. */
-  private holdStateFor(def: ZoneDef): HarborholdState | null {
-    if (def.harborhold) return def.harborhold;
-    if (def.holdAnchor) return this.zoneMap[def.holdAnchor]?.harborhold ?? null;
-    return null;
-  }
+  private holdStateFor(def: ZoneDef): HarborholdState | null { return harborHoldStateFor(this.nativeSceneHarborHost(),def); }
 
   /** THE QUAY BOOT (the harbor pair's port half): seat the hold services at
    *  the quay village off the ANCHOR's state + prosperity ladder, and say
@@ -24824,259 +24762,32 @@ export class World {
    *  the recipe's (the dock-location law) and NEVER bricks — a sail-in at a
    *  besieged or burned hold still lands, trades nothing, and may walk the
    *  causeway inland to fight for the counters. */
-  private bootQuay(def: ZoneDef): void {
-    const hold = this.holdStateFor(def);
-    if (!hold) return;
-    this.refreshHoldServices(def);
-    if (hold.state === 'besieged') {
-      this.text(vec(this.player.pos.x, this.player.pos.y - 106),
-        `${def.name} waits under a besieged hold — break the siege at the gate to open its counters`, '#e8a050', 14);
-    } else if (hold.state === 'fallen') {
-      this.text(vec(this.player.pos.x, this.player.pos.y - 106),
-        `the hold above ${def.name} lies burned — its counters stand shut`, '#e8a050', 14);
-    }
-  }
+  private bootQuay(def: ZoneDef): void { return harborBootQuay(this.nativeSceneHarborHost(),def); }
 
-  private bootHarborhold(def: ZoneDef): void {
-    const hold = def.harborhold;
-    if (!hold) return;
-    const cls = holdClassOf(hold);
-    const ps = holdStructureIn(this.structures, cls.structure);
-    if (!ps) {
-      // The zone couldn't seat its town (a tight arena) — degrade to the
-      // pre-fabric bare quay on this ground; dock and cast-off still work.
-      if (!this.holdMissingWarned.has(def.id)) {
-        this.holdMissingWarned.add(def.id);
-        console.warn(`[harborhold] ${def.id} seated no '${cls.structure}' — bare-quay degrade`);
-      }
-      return;
-    }
-    const gate = holdGateDoor(ps);
-    if (gate) {
-      if (hold.state === 'open') this.setDoorState(gate.door.id, 'open', { silent: true });
-      else this.resealDoor(gate.door.id);
-      // THE MUSTER HORN — the hold's one interaction post, on the gate apron.
-      const at = holdGateApron(gate, 64);
-      this.doodads.push({ pos: this.findFreeSpot(vec(at.x, at.y), 14), radius: 14, kind: 'muster_horn' });
-      this.markDoodadsChanged();
-    }
-    // THE GATEWORK IS THE GATE (the harbor pair): the causeway portal to
-    // the paired PORT repositions INSIDE the walls, onto the plan's own
-    // court seat (HARBORHOLD_CFG.quay.gateSeat) — the holdfast doesn't
-    // guard a road to a door somewhere else, it CONTAINS the door: break
-    // the siege, walk through the fort, board the quay (the city-gate
-    // read). Live-exit move only — the def keeps its side/at, so the map
-    // road and genqa's rim-portal invariants are untouched; a bare-quay
-    // degrade never reaches here (no `ps`) and keeps the rim portal, the
-    // 'harborhold' lock still gating it.
-    if (def.holdPort) {
-      const qSeat = holdSeatPos(ps, HARBORHOLD_CFG.quay.gateSeat);
-      const gateIdx = def.exits.findIndex(e => e.to === def.holdPort);
-      const live = gateIdx >= 0 ? this.exits.find(e => e.defIndex === gateIdx) : undefined;
-      if (qSeat && live) {
-        live.pos = vec(qSeat.x, qSeat.y);
-        // ARRIVALS FROM THE QUAY land where the walk says they should: at
-        // the court portal while the hold stands OPEN; SKIRTED to the gate
-        // apron outside the walls while it doesn't (the strand path around
-        // the fort) — a sea arrival is never sealed inside a hostile ring,
-        // and the muster horn stands right there.
-        if (this.entryFrom === def.holdPort) {
-          const at = hold.state === 'open' || !gate
-            ? vec(qSeat.x, qSeat.y + 40)
-            : holdGateApron(gate, 150);
-          // THE PARTY-LANDING LAW: the whole party files onto the quay.
-          this.landPartyAt(vec(at.x, at.y), { spread: 40, band: [20, 60] });
-          if (hold.state !== 'open') {
-            this.text(vec(at.x, at.y - 44),
-              'the garrison bars the causeway behind you — sound the horn to break the siege', '#e8a050', 13);
-          }
-        }
-      }
-    }
-    // THE QUAY BELT: the dock's fixed oceanward formula and the town's
-    // findSpot seat are independent rolls — on the rare layout where the
-    // dock lands INSIDE the walls, walk it out past the gate apron (an
-    // arrival must never wake behind a sealed gate).
-    const dock = this.doodads.find(d => d.kind === 'dock');
-    if (dock && dock.pos.x > ps.rect.x && dock.pos.x < ps.rect.x + ps.rect.w
-      && dock.pos.y > ps.rect.y && dock.pos.y < ps.rect.y + ps.rect.h) {
-      const out = gate ? holdGateApron(gate, 140)
-        : { x: ps.rect.x + ps.rect.w / 2, y: ps.rect.y + ps.rect.h + 120 };
-      dock.pos = this.clampPos(vec(out.x, out.y), dock.radius);
-      this.markDoodadsChanged();
-    }
-    this.refreshHoldDress(def);
-    this.refreshHoldServices(def);
-    // The discovery beat: the first meeting with a besieged harbor says so.
-    if (hold.state === 'besieged' && !hold.defenses && !hold.falls) {
-      this.notice(`${def.name} stands besieged — sound the horn at the gate to break it`, '#e8a050', 15, 'war');
-    }
-  }
+  private bootHarborhold(def: ZoneDef): void { return harborBootHarborhold(this.nativeSceneHarborHost(),def); }
 
   /** The inverse of setDoorState('open') — the harborhold's RE-SEAL (a hold
    *  that fell while you were away shuts its gate again). Broken doors stay
    *  broken (splinters don't unsplinter); the grid repaints to rampart and
    *  every cache self-heals off the doodad rev. */
-  private resealDoor(id: string): void {
-    const d = this.doodads.find(x => x.door?.id === id);
-    if (!d?.door || d.door.broken || !d.door.open) return;
-    d.door.open = false;
-    const nativeSettlementGrid = this.nativeGridAt(d.pos);
-    if (nativeSettlementGrid && d.door.cells) {
-      const c = d.door.cells;
-      nativeSettlementGrid.fillRegion(c.x, c.y, c.x + c.w - 0.01, c.y + c.h - 0.01, 'rampart');
-    }
-    this.markDoodadsChanged();
-  }
+  private resealDoor(id: string): void { return harborResealDoor(this.nativeSceneHarborHost(),id); }
 
   /** Reconcile the hold's STATE DRESSING — the wreckage fires of a fallen
    *  hold, the siege camp of a besieged one. Idempotent (presence derived
    *  from the holdDress tag), deterministic (zone seed ^ dressSalt ^ state),
    *  and diegetic on change: old dress dissolves via evap, never blinks. */
-  private refreshHoldDress(def: ZoneDef): void {
-    if (this.zone.id !== def.id) return;
-    const hold = def.harborhold;
-    if (!hold) return;
-    for (const d of this.doodads) {
-      if (d.holdDress && !d.evap) { d.evap = { t: 0.2, rate: 40 }; this.evaporating.push(d); }
-    }
-    const rows = hold.state === 'fallen' ? HARBORHOLD_CFG.ruinDress
-      : hold.state === 'besieged' ? HARBORHOLD_CFG.siegeDress : null;
-    if (!rows) { this.markDoodadsChanged(); return; }
-    const cls = holdClassOf(hold);
-    const ps = holdStructureIn(this.structures, cls.structure);
-    if (!ps) return;
-    const gate = holdGateDoor(ps);
-    const rng = new Rng(((def.seed ?? 0) ^ HARBORHOLD_CFG.dressSalt
-      ^ (hold.state === 'fallen' ? 0x5 : 0x9)) >>> 0);
-    const horn = this.doodads.find(x => x.kind === 'muster_horn');
-    const pieces = rollHoldDressPieces(rng, rows, ps,
-      gate ? { pos: gate.pos, normal: gate.normal } : null,
-      (x, y, r) => this.holdDressSpotOk(x, y, r, ps, horn));
-    for (const p of pieces) {
-      const nd: Doodad = { pos: vec(p.x, p.y), radius: p.r, kind: p.kind, holdDress: true };
-      const rEff = doodadRuleOf(nd.kind).effect;
-      if (rEff) nd.effect = { ...rEff, cd: rand(0, rEff.interval) };
-      this.doodads.push(nd);
-    }
-    this.grounds = this.doodads.filter(d => GROUND_KINDS.includes(d.kind));
-    this.markDoodadsChanged();
-    // THE CAMP WATCH (the sentry fabric): dormant besiegers planted at the
-    // camp while besieged — texture that wakes (a wound rouses the camp;
-    // the muster drafts it into wave 1). Retired quietly on any other state.
-    const standing = this.actors.filter(a => a.tag === 'hold_camp' && !a.dead);
-    if (hold.state !== 'besieged') {
-      for (const a of standing) a.dead = true;
-    } else if (gate && standing.length < cls.siege.campWatch) {
-      const crng = new Rng(((def.seed ?? 0) ^ HARBORHOLD_CFG.dressSalt ^ 0xca38) >>> 0);
-      const lvl = Math.max(1, def.level + cls.siege.levelBonus);
-      const at0 = holdGateApron(gate, 120);
-      for (let i = standing.length; i < cls.siege.campWatch; i++) {
-        const type = this.weightedPick(cls.siege.table, lvl);
-        const m = this.createMonster(type, lvl, 'enemy');
-        const s = (i - (cls.siege.campWatch - 1) / 2) * 52;
-        const at = vec(
-          at0.x - gate.normal.y * s + crng.range(-14, 14),
-          at0.y + gate.normal.x * s + crng.range(-14, 14));
-        m.pos = this.clampPos(at, m.radius);
-        m.tag = 'hold_camp';
-        m.eventKey = `harborhold:${def.id}`;
-        m.postSpec = { hold: true };
-        m.aiPost = vec(m.pos.x, m.pos.y);
-        m.aiPostFacing = Math.atan2(gate.pos.y - m.pos.y, gate.pos.x - m.pos.x); // it watches the gate it besieges
-        m.facing = m.aiPostFacing;
-        this.actors.push(m);
-      }
-    }
-  }
+  private refreshHoldDress(def: ZoneDef): void { return harborRefreshHoldDress(this.nativeSceneHarborHost(),def); }
 
   /** Dress placement truth: inside the arena, never under a roof, never on
    *  a portal apron, the dock, or the muster horn. */
-  private holdDressSpotOk(x: number, y: number, r: number, ps: PlacedStructure, horn?: Doodad): boolean {
-    if (x < r || y < r || x > this.arena.w - r || y > this.arena.h - r) return false;
-    for (const roof of ps.roofs) {
-      if (x > roof.x - r && x < roof.x + roof.w + r && y > roof.y - r && y < roof.y + roof.h + r) return false;
-    }
-    for (const e of this.exits) if (dist(vec(x, y), e.pos) < 140 + r) return false;
-    const dock = this.doodads.find(d => d.kind === 'dock');
-    if (dock && dist(vec(x, y), dock.pos) < 90 + r) return false;
-    if (horn && dist(vec(x, y), horn.pos) < 46 + r) return false;
-    return true;
-  }
+  private holdDressSpotOk(x: number, y: number, r: number, ps: PlacedStructure, horn?: Doodad): boolean { return harborHoldDressSpotOk(this.nativeSceneHarborHost(),x,y,r,ps,horn); }
 
   /** Reconcile the town's SERVICE presence with state + prosperity: keeper
    *  folk at their plan anchors while open (the rows gate by rung), the
    *  harbor board INSIDE the walls (the knowledge network is the town's
    *  reward), the merc captain arming the PORT market. Live transitions (a
    *  defense won mid-session) call this directly — no reload needed. */
-  private refreshHoldServices(def: ZoneDef): void {
-    if (this.zone.id !== def.id) return;
-    // THE PAIR SPLIT: an anchor with a paired port keeps NO counters — the
-    // walls hold the war; the services live at the quay (the port zone's
-    // own boot re-seats them off this anchor's state). Legacy single-zone
-    // towns (no pair fields) keep every counter inside the walls as ever.
-    if (def.harborhold && def.holdPort) return;
-    const hold = this.holdStateFor(def);
-    if (!hold) return;
-    const cls = holdClassOf(hold);
-    const ps = holdStructureIn(this.structures,
-      def.holdAnchor ? HARBORHOLD_CFG.quay.structure : cls.structure);
-    if (!ps) return;
-    const open = hold.state === 'open';
-    const wants = new Set((open ? holdActiveServices(cls, hold.prosperity) : []).map(s => s.id));
-    for (const s of cls.services) {
-      if (!s.npc) continue;
-      const seat = holdSeatPos(ps, s.seat);
-      if (!seat) continue;
-      const tag = `hold_svc:${s.id}`;
-      const standing = this.actors.find(a => !a.dead && a.tag === tag);
-      if (wants.has(s.id) && !standing) {
-        const n = this.createMonster(s.npc, 1, 'player');
-        n.pos = this.clampPos(vec(seat.x, seat.y), n.radius);
-        n.tag = tag;
-        this.actors.push(n);
-        if (s.id === 'mercs') this.armPortMercs(n);
-      } else if (!wants.has(s.id) && standing) {
-        standing.dead = true; // the per-frame sweep retires the body quietly
-        if (s.id === 'mercs' && this.mercOutpost?.port) this.mercOutpost = null;
-      }
-    }
-    // SERVICE DOODADS, generically: every row carrying a doodad plants at
-    // its plaza anchor while active and lifts when the rung (or the town)
-    // closes — the harbor board (its outside-the-dock default plant is
-    // suppressed for hold zones in loadZone), the bounty board, and any
-    // future row with a `doodad` field, one loop for all of them.
-    for (const s of cls.services) {
-      if (!s.doodad) continue;
-      const standing = this.doodads.find(d => d.kind === s.doodad);
-      if (wants.has(s.id) && !standing) {
-        const seat = holdSeatPos(ps, s.seat);
-        if (seat) {
-          this.doodads.push({ pos: this.clampPos(vec(seat.x, seat.y), 16), radius: 16, kind: s.doodad });
-          this.markDoodadsChanged();
-        }
-      } else if (standing && !wants.has(s.id)) {
-        this.doodads.splice(this.doodads.indexOf(standing), 1);
-        this.markDoodadsChanged();
-      }
-    }
-    // THE CHANDLER'S COUNTER: its OWN stock on the shared beat lattice
-    // (VendorDef row 'chandler' + the buyChandler intent — a real second
-    // counter, not Brandt's shadow). The standing-shelf law verbatim:
-    // same beat keeps the projection, a turned beat re-arms; standing
-    // down no longer sheds the array (the beat owns its truth).
-    if (wants.has('chandler')) {
-      const beat = this.restockOrdinal();
-      if (this.vendorArmedBeat['chandler'] !== beat) {
-        this.chandlerStock = this.armVendorStock('chandler');
-        this.vendorArmedBeat['chandler'] = beat;
-      } else {
-        this.syncHoldIdx('chandler', this.chandlerStock);
-      }
-      this.zoneHasVendorCounter = true;
-      this.vendorRestockAt = (beat + 1) * this.restockSeconds();
-    }
-  }
+  private refreshHoldServices(def: ZoneDef): void { return harborRefreshHoldServices(this.nativeSceneHarborHost(),def); }
 
   /** The PORT merc market: TEMPLATE-ONLY offers (the lower tier that
    *  survives the normalization contract), dealt ONCE per world at the
@@ -25084,17 +24795,7 @@ export class World {
    *  window is dead) — veterans and RETIREMENT stay a wilds-outpost
    *  exclusive. Reuses the whole outpost pipeline: one state, one panel,
    *  one hire path. */
-  private armPortMercs(captain: Actor): void {
-    const hold = this.holdStateFor(this.zone);
-    if (!hold) return;
-    const cls = holdClassOf(hold);
-    if (cls.mercOffers[1] <= 0) return;
-    const offers = this.mercSheetFor(this.zone.id, () => {
-      const rng = new Rng((this.manifest.seed ^ hashStr(`portmercs:${this.zone.id}`)) >>> 0);
-      return this.dealTemplateOffers(rng, rng.int(cls.mercOffers[0], cls.mercOffers[1]));
-    });
-    this.mercOutpost = { captain, offers, port: true };
-  }
+  private armPortMercs(captain: Actor): void { return harborArmPortMercs(this.nativeSceneHarborHost(),captain); }
 
   /** THE RECRUITER'S TABLE (FEATURE.MERC_RECRUITER): the Vault's officer at
    *  Lastlight's east quarter — the port market's exact policy (template
