@@ -1,3 +1,12 @@
+NativeAreaSceneArrival shares exact native arrival safety, defeated-boss and
+nearest-zone birth lookups with classic World. Bind the original arrival policy,
+real local geometry/census and live campaign records. Preserve protected bodies,
+cramped-entry fallbacks, selected callbacks, native tie order and partial effects.
+The cached World adapter must remain nonenumerable before and after first use.
+This does not complete the ordered runtime registry, full scene birth, immutable
+source session or area paging. Verify nativescenearrival, native generation,
+all types, simulation and built-client entry/Continue/return.
+
 NativeAreaSceneCoast shares native coastline, all island types and full sea-port
 network birth with classic World. It uses the same geometry/census and live
 campaign graphs, allocator, voyage and knowledge. Preserve chart/order/partial

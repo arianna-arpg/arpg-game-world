@@ -586,6 +586,7 @@ import { descentPlaceDescentDelver, descentMintDelverStock, descentEnterDescentZ
 import { harborHoldStateFor, harborBootQuay, harborBootHarborhold, harborResealDoor, harborRefreshHoldDress, harborHoldDressSpotOk, harborRefreshHoldServices, harborArmPortMercs, harborLandPartyAt, type NativeSceneHarborHost } from './nativeSceneHarbor';
 
 import { nativeTheaterContextNow, nativeTheaterConcurrencyNow, nativeTheaterRunBeat, nativeTheaterPourRoom, nativeTheaterSpawn, nativeSpawnEventActor, nativeClampNear, nativeAnyAliveWithTag, nativeZoneEntryPos, type NativeSceneTheaterHost } from './nativeSceneTheater';
+import {enforceNativeArrivalGrace,nativeUberDefeated,nativeNearestZoneOf,type NativeSceneArrivalHost} from './nativeSceneArrival';
 import {coastSeaFromNode,coastNodeFromSea,coastStreamCoast,coastMintIslandZone,coastEnsureSeaPorts,coastRefreshExitLabels,coastEventLevel,coastNotarizeRoad,coastLinkBackTo,coastRoadIsWet,coastLandRoute,coastPlaceExit,coastIsIllegalCrossDim,coastWarnCrossDim,coastDimensionBiomeFor,coastLiveCourses,coastCourseAnchor,coastFieldExitPos,coastBoundaryGateFor,coastMeldFor,type NativeSceneCoastHost,type NativeSceneCoastSources} from './nativeSceneCoast';
 
 export type { Doodad } from './levelgen';
@@ -10084,35 +10085,7 @@ export class World {
    *  seats absolutely (camps, garrisons, POI-anchored bodies). Skips what
    *  cannot chase or must not move: passives/breakables, NPC roles,
    *  habitat/landmark-confined bodies, the untargetable. */
-  private enforceArrivalGrace(): void {
-    // SOVEREIGNTY: seat — arrival seating (findFreeSpot carries the story) (the derived census, probe_tiers RIG T).
-    const grace = POCKET_CFG.arrivalGrace;
-    for (const a of this.actors) {
-      if (a.team !== 'enemy' || a.dead || a.confine || a.untargetable) continue;
-      const md = a.defId ? MONSTERS[a.defId] : undefined;
-      if (md?.passive || md?.npcRole) continue;
-      const d = dist(a.pos, this.zoneEntry);
-      if (d >= grace) continue;
-      const ang = d > 1
-        ? Math.atan2(a.pos.y - this.zoneEntry.y, a.pos.x - this.zoneEntry.x)
-        : rand(0, Math.PI * 2);
-      const out = vec(this.zoneEntry.x + Math.cos(ang) * (grace + 40),
-        this.zoneEntry.y + Math.sin(ang) * (grace + 40));
-      let to = this.clampPos(this.findFreeSpot(out, a.radius) ?? out, a.radius);
-      if (dist(to, this.zoneEntry) < grace) {
-        const far = this.farthestStand(a.radius, this.structures.length > 0);
-        if (far) {
-          const jittered = this.clampPos(vec(far.x + rand(-60, 60), far.y + rand(-60, 60)), a.radius);
-          // Scatter must not undo the safe stand we just found. In a narrow
-          // carve clamping the jitter can pull a body back onto the portal.
-          to = dist(jittered, this.zoneEntry) >= grace
-            && (!this.structures.length || !this.walk?.reachable
-              || this.walk.reachable(this.zoneEntry, jittered)) ? jittered : far;
-        }
-      }
-      a.pos = vec(to.x, to.y);
-    }
-  }
+  private enforceArrivalGrace(): void { return enforceNativeArrivalGrace(this.nativeSceneArrivalHost(),POCKET_CFG); }
 
   /** Place a TERRAIN-BOUND body (MonsterDef.habitat) onto a matching doodad:
    *  a random point inside the disc, hard-confined to it forever after.
@@ -48966,15 +48939,7 @@ export class World {
    *  Nether tie's resolver (DimensionDef.over): both webs share one
    *  coordinate space, so this IS "the ground directly beneath you" at zone
    *  granularity. Special/boss stages refuse sky arrivals. */
-  private nearestZoneOf(dimId: string, at: { x: number; y: number }, excludeId?: string): string | null {
-    let best: string | null = null, bd = Infinity;
-    for (const z of Object.values(this.zoneMap)) {
-      if ((z.dimension ?? 'surface') !== dimId || z.special || z.id === excludeId) continue;
-      const d = (z.map.x - at.x) ** 2 + (z.map.y - at.y) ** 2;
-      if (d < bd) { bd = d; best = z.id; }
-    }
-    return best;
-  }
+  private nearestZoneOf(dimId: string, at: { x: number; y: number }, excludeId?: string): string | null { return nativeNearestZoneOf(this.nativeSceneArrivalHost(),dimId,at,excludeId); }
 
   /** The zone this one HANGS OVER, resolved per loadZone (DimensionDef.over
    *  + this zone's own coordinate): what falls drop into and what the
@@ -58309,13 +58274,7 @@ export class World {
    *  wipe — forever dead on this account); `world` scope rides the persistent
    *  completedObjectives set (once per run/save). No uber field ⇒ always false ⇒ a
    *  normal REPEATABLE boss (the Unmade's mode). The reusable seam for future ubers. */
-  private uberDefeated(o: ObjectiveSpec, zoneId: string): boolean {
-    if (o.kind !== 'boss' || !o.uber) return false;
-    if (o.uber.scope === 'account') {
-      return (this.account.ledger[o.uber.key ?? `uber:${o.id}`] ?? 0) >= 1;
-    }
-    return this.completedObjectives.has(zoneId);
-  }
+  private uberDefeated(o: ObjectiveSpec, zoneId: string): boolean { return nativeUberDefeated(this.nativeSceneArrivalHost(),o,zoneId); }
 
   private completeObjective(label: string): void {
     if (this.objectiveDone) return;
@@ -59891,6 +59850,21 @@ export class World {
     if (!this.sailing) markBodyWalk(a, a.pos.x - sx, a.pos.y - sy, this.time);
   }
 
+  declare private nativeSceneArrivalView?:NativeSceneArrivalHost;
+  private nativeSceneArrivalHost():NativeSceneArrivalHost {
+    if(this.nativeSceneArrivalView)return this.nativeSceneArrivalView;
+    const world=this;
+    const host:NativeSceneArrivalHost=Object.freeze({
+      get actors(){return world.actors;},get zoneEntry(){return world.zoneEntry;},
+      get structures(){return world.structures;},get walk(){return world.walk;},
+      get account(){return world.account;},get completedObjectives(){return world.completedObjectives;},get zoneMap(){return world.zoneMap;},
+      get clampPos(){const fn=world.clampPos;return(...args:Parameters<NativeSceneArrivalHost['clampPos']>)=>fn.apply(world,args);},
+      get findFreeSpot(){const fn=world.findFreeSpot;return(...args:Parameters<NativeSceneArrivalHost['findFreeSpot']>)=>fn.apply(world,args);},
+      get farthestStand(){const fn=world.farthestStand;return(...args:Parameters<NativeSceneArrivalHost['farthestStand']>)=>fn.apply(world,args);},
+    });
+    Object.defineProperty(this,'nativeSceneArrivalView',{value:host,enumerable:false,writable:true,configurable:true});
+    return host;
+  }
   private nativeSceneCoastView?:NativeSceneCoastHost;
   private nativeSceneCoastHost():NativeSceneCoastHost {
     if(this.nativeSceneCoastView)return this.nativeSceneCoastView;

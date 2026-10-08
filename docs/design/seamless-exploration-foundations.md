@@ -2473,3 +2473,29 @@ The NativeAreaSceneCoast checkpoint passes all three type configurations,
 Generation QA passes 2,607 cases with the four recorded spacing warnings and one
 concurrent-load timing warning. The preceding structure checkpoint's isolated
 130-case metropolis replay had no timing warning; this is not an FPS benchmark.
+
+## Native arrival integration
+
+NativeAreaSceneArrival now supplies the three remaining small area-birth helpers:
+arrival safety, account/run defeated-boss lookup and nearest eligible zone. Its
+geometry and actor census must be the same local objects; campaign records remain
+live across replacement. Classic World delegates to the same original operations
+and original arrival policy. Passive, confined, dead, untargetable and service
+bodies retain their native exemptions, including cramped-entry fallback ordering
+and the original first-in-order distance tie. No new encounter or terrain policy
+is introduced by this extraction.
+
+The retained original-method oracle compares three full native layouts (two
+archived and fresh Lastlight), 12 original/classic/local triples with 120 actual
+factory bodies, six reached partial failures and six explicit cramped-entry
+controls. It also checks replaced census/campaign roots, exact source bodies,
+selected callback receivers, constructor refusals and invisible adapter caches.
+The complete ordered runtime registry, genuine source-session issuer, full scene
+execution and persistent two-area return/Continue still precede activation.
+
+Arrival validation: all three type configurations, 492/492 fast probes without
+retries, 2,607 generation cases with no failures, 25 smoke simulation episodes,
+the production preview build and both native-generation and conversation
+Save/Continue client courses passed. Generation retained the four known spacing
+warnings and one concurrent metropolis timing warning. Nine slow and three
+excluded probes were not run. Full seamless-area activation remains separate.
