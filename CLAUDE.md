@@ -3492,9 +3492,17 @@ we verify changes.
   (`src/net/wildsClient.ts`: the inert restore-only runtime, streaming,
   the mass-walk law, the pocket law; THE SHADOW + THE DRESS BEAT on the
   shard). THE KEEPER SEAT (`Seat.keeper`) is the parked p0 the world-level
-  reads address — exempt from party scale / XP / the wire, THE MERCY for a
-  lone downed seat. M0 keeps co-op's semantics (party travel, fresh heroes,
-  the shard account's gate); M1-M6 are carded. Verify `probe_shard.ts`.
+  reads address — THE WARDEN IS NO BODY and STANDS every tick (no hands, no
+  shoulder, invulnerable, its level the players'), THE SEALED ROADS, THE
+  NEAR LAW (`COOP_SCALING.shareRadius`), THE MERCY for a lone downed seat.
+  THE VESSEL (card 6: `server/vessel.ts`, `server/corpses.ts`,
+  `meta/shardVessel.ts`): a client's run-slot hero travels on its join and
+  mirrors home; a mortal vessel's fall leaves its corpse on the shard keyed
+  by `Account.accountId` and ends the run on the client; its next hero
+  reclaims it. The wilds persist (`server/wildsSave.ts`, THE RESUME LAW).
+  The wire wears THE INBOX LAWS, THE DOOR CAPS, THE ACTION BUDGET, THE
+  BREAKER and a status page on a plain GET. The shard account's gate (M2)
+  and per-seat travel (M1) are still carded. Verify `probe_shard.ts`.
 - `src/ui/`, `src/net/`, `src/meta/` — DOM panels, co-op transport, and the
   account / save / permadeath meta-layer. THE FOLIO (`ui/folio.ts` — docs
   `docs/ui/folio.md`, probe `balance/probe_folio.ts`): dwell dialogs that

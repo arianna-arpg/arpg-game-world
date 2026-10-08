@@ -41,7 +41,7 @@ import { CLASSES, type ClassDef } from '../src/data/classes';
 import { rollSeed } from '../src/core/rng';
 import { serializeSnapshot, serializeZone } from '../src/net/snapshot';
 import type { PeerInfo, SessionMsg } from '../src/net/transport';
-import type { MetaAction } from '../src/net/intent';
+import type { MetaAction, PlayerInput } from '../src/net/intent';
 import { sanitizeCosmeticLoadout } from '../src/meta/cosmetics';
 import { WORLD_SCHEMA_VERSION, type WorldStateSave } from '../src/meta/worldstate';
 import { ShardTransport, type ShardJoin } from './shardTransport';
@@ -73,6 +73,10 @@ export const SHARD_CFG = {
    *  the wire and the beats keep running, the pump reports it (onBroken), a
    *  supervisor restarts it, and the last good save stands untouched. */
   faultBreakerTicks: 600,
+  /** THE HEARTH WAKE: a joiner stands up at the hearth (never beside the
+   *  shadowed keeper, wherever that is) and is untargetable until its first
+   *  willed input or spawnGraceSec, whichever comes first. */
+  spawnGraceSec: 20,
   /** THE FOCUS: the keeper shadows the standing seat that acted most recently;
    *  the current focus keeps it unless another seat has been newer by this many seconds. */
   focusSwapSec: 3,
@@ -191,6 +195,10 @@ export class ShardHost {
   /** Called once when THE BREAKER trips (the CLI exits non-zero for a supervisor). */
   onBroken: (() => void) | null = null;
   private focusId: string | null = null;
+  /** THE HEARTH: where the keeper first stood (the bedside, the hearth's spawn) — every joiner wakes here. */
+  private hearth: { x: number; y: number; tier: number } = { x: 0, y: 0, tier: 0 };
+  /** THE SPAWN GRACE: seat id → world time the grace ends. */
+  private readonly graces = new Map<string, number>();
   private readonly bootAt = Date.now();
   private readonly tickMs: number[] = [];
   private tickMsAt = 0;
@@ -240,6 +248,7 @@ export class ShardHost {
       if (this.savePath && existsSync(this.savePath)) this.restore();
       else this.world.scrubStaleObjectives();
     }
+    this.hearth = { x: this.keeper.actor.pos.x, y: this.keeper.actor.pos.y, tier: this.keeper.actor.tier };
     this.net = new ShardTransport();
     this.net.worldmass = this.worldmass;
     this.net.features = [...this.account.features];
@@ -253,7 +262,7 @@ export class ShardHost {
     this.corpses = new ShardCorpses(this.world, toSeat, shardRecordsPath(recordsDir, this.seed), this.seed, this.log);
     this.vessels = new VesselDesk(this.world, toSeat, this.corpses, { beatSec: SHARD_CFG.persistSec, log: this.log });
     this.net.onPeerJoin((p, join) => this.onJoin(p, join));
-    this.net.onPeerLeave(id => { this.vessels.leave(id); this.world.removeSeat(id); });
+    this.net.onPeerLeave(id => { this.vessels.leave(id); this.graces.delete(id); this.world.removeSeat(id); });
     this.net.onSession((m, from) => this.onSession(m, from));
   }
 
@@ -333,6 +342,13 @@ export class ShardHost {
     const vessel = this.vessels.vesselOf(peer.id);
     seat.actor.cosmeticLoadout = sanitizeCosmeticLoadout(peer.cosmeticLoadout);
     if (!vessel) seat.actor.name = peer.name || seat.actor.name;
+    // THE HEARTH WAKE + THE SPAWN GRACE: up at the hearth, unseen by foes until
+    // the first willed input (or the grace runs out).
+    const hearth = this.hearthSeat(), r = seat.actor.radius;
+    const at = this.world.clampPos(this.world.findFreeSpot({ x: hearth.x, y: hearth.y }, r + 2) ?? { x: hearth.x, y: hearth.y }, r);
+    seat.actor.pos.x = at.x; seat.actor.pos.y = at.y; seat.actor.tier = hearth.tier;
+    seat.actor.untargetable = true;
+    this.graces.set(seat.id, this.world.time + SHARD_CFG.spawnGraceSec);
     // The joiner needs the standing terrain NOW, not at the next zone change.
     this.net.sendZoneTo(peer.id, serializeZone(this.world));
     this.lastSentZone = this.world.zone.id;
@@ -437,7 +453,9 @@ export class ShardHost {
         const intent = seat.input.poll(seat.actor, w, dt); // RemoteInput polls null — its intent arrives via the wire
         if (intent) this.net.sendInput(seat.id, intent);
       }
-      w.applyInputs(this.net.drainInputs(), dt);
+      const inputs = this.net.drainInputs();
+      this.endGraces(inputs);
+      w.applyInputs(inputs, dt);
       this.drainMetaActions();
       if (!w.gameOver) for (const a of w.actors) updateAI(a, w, dt);
       w.update(dt);
@@ -497,6 +515,27 @@ export class ShardHost {
     k.pos.x = focus.actor.pos.x;
     k.pos.y = focus.actor.pos.y + SHARD_CFG.keeper.shadowOffset;
     k.tier = focus.actor.tier;
+  }
+
+  /** THE HEARTH SEAT: the wilds' native settlement keeps its own bedside
+   *  (MassSettlement.spawn — the same spot on a fresh or a resumed surface);
+   *  a classic world's is where the keeper first stood. */
+  hearthSeat(): { x: number; y: number; tier: number } {
+    const s = this.world.massRuntime?.settlement?.spawn;
+    return s ? { x: s.x, y: s.y, tier: this.hearth.tier } : this.hearth;
+  }
+
+  /** THE SPAWN GRACE ends at the first willed input or at its clock. */
+  private endGraces(inputs: Map<string, PlayerInput>): void {
+    if (!this.graces.size) return;
+    for (const [id, until] of this.graces) {
+      const inp = inputs.get(id);
+      const willed = !!inp && (inp.dx !== 0 || inp.dy !== 0 || inp.held.some(Boolean) || inp.edge.some(Boolean) || (inp.metaEdge?.some(Boolean) ?? false));
+      if (!willed && this.world.time < until) continue;
+      this.graces.delete(id);
+      const seat = this.world.seats.find(s => s.id === id);
+      if (seat && !seat.keeper) seat.actor.untargetable = false;
+    }
   }
 
   /** THE FOCUS: the standing seat that acted most recently, with hysteresis —

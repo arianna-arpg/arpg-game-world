@@ -52,7 +52,7 @@ import { ShardHost, SHARD_CFG, newestSavedSeed, type ShardSave } from '../server
 import { mergeInputs, sanitizeInput } from '../server/shardTransport';
 import { judgeVessel, VESSEL_CFG } from '../server/vessel';
 import { shardRecordsPath, type ShardRecordsSave } from '../server/corpses';
-import { WsTransport } from '../src/net/ws';
+import { WsTransport, normalizeShardUrl } from '../src/net/ws';
 import { wildsShellActive, wildsShellAttach, wildsShellStream, wildsShellZone } from '../src/net/wildsClient';
 import { applySnapshot, serializeSnapshot, serializeZone } from '../src/net/snapshot';
 import { World } from '../src/engine/world';
@@ -170,6 +170,10 @@ function maskedFrame(opcode: number, payload: Uint8Array, fin = true): Uint8Arra
     JSON.stringify(sanitizeInput({ dx: 7, dy: -2, aim: { x: 1, y: 2 }, held: [true, 'no', 1], edge: [], seq: 3.7 })) === JSON.stringify({ dx: 1, dy: -1, aim: { x: 1, y: 2 }, held: [true, false, false], edge: [], seq: 3 }));
   check('A sanitize: a missing or NaN aim is refused', sanitizeInput({ dx: 0, dy: 0, held: [], edge: [] }) === null && sanitizeInput({ dx: 0, dy: 0, aim: { x: NaN, y: 0 }, held: [], edge: [] }) === null);
   check('A sanitize: non-objects are refused', sanitizeInput(null) === null && sanitizeInput('x') === null);
+  check('A address: a codespace https, a bare host, a trailing slash and an http all normalize',
+    normalizeShardUrl(' https://name-8787.app.github.dev/ ') === 'wss://name-8787.app.github.dev'
+    && normalizeShardUrl('myhost') === 'ws://myhost:8787' && normalizeShardUrl('http://10.0.0.5:9000') === 'ws://10.0.0.5:9000'
+    && normalizeShardUrl('ws://localhost:8787') === 'ws://localhost:8787');
   const i1: PlayerInput = { dx: 0, dy: 0, aim: { x: 0, y: 0 }, held: [true], edge: [true, false], metaEdge: [false, true], seq: 1 };
   const i2: PlayerInput = { dx: 1, dy: 0, aim: { x: 5, y: 5 }, held: [false], edge: [false, false], seq: 2 };
   const m12 = mergeInputs(i1, i2);
@@ -209,6 +213,12 @@ check('C join: the peer roster holds the keeper and us', client.peers().length =
 await waitFor(() => host.world.seats.length === 2, null, 50);
 const p1 = host.world.seats.find(s => s.id === 'p1')!;
 check('C join: the host seated the joiner as the chosen class beside the keeper', !!p1 && p1.meta.classDef.id === 'rogue' && host.net.connectionCount() === 1);
+{
+  const h = host.hearthSeat();
+  check('C wake: the joiner wakes at the hearth, untargetable under THE SPAWN GRACE',
+    !!p1 && Math.hypot(p1.actor.pos.x - h.x, p1.actor.pos.y - h.y) < 120 && p1.actor.tier === h.tier && p1.actor.untargetable,
+    p1 ? `joiner (${p1.actor.pos.x.toFixed(0)}, ${p1.actor.pos.y.toFixed(0)}) hearth (${h.x.toFixed(0)}, ${h.y.toFixed(0)})` : 'no seat');
+}
 await waitFor(() => got.zone !== null, host, 30);
 check('C join: the zone message lands first and names the hearth', got.zone !== null && got.zone.zoneId === 'lastlight' && events[0] === 'zone');
 const snapsBefore = snaps;
@@ -239,6 +249,7 @@ check('C wire: snapshots ride the wire rate (exactly 20 per 60 ticks)', snaps - 
     await runTicks(host, 1);
   }
   check('D hand: inputs over the wire walk the seated hero east', hero.pos.x > x0 + 20, `Δx=${(hero.pos.x - x0).toFixed(1)}`);
+  check('D grace: the first willed input ends THE SPAWN GRACE', !hero.untargetable);
   check('D hand: the host acks the input sequence', (got.snap?.seats['p1']?.seq ?? 0) >= 40, `seq ${got.snap?.seats['p1']?.seq}`);
   check('D hand: the keeper never moved', host.keeper.actor.pos.x === kx0 && host.keeper.actor.pos.y === ky0);
 }

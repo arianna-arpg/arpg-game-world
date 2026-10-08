@@ -620,9 +620,9 @@ character walks back for it), 7 the first cut, 8 A, 9 as built, 10 as set,
 19. **Getting the client to players** — A: friends run the branch checkout.
     B: a Pages preview of this branch pinned to the shard's commit (https,
     so wss) and version-gated. C: a packaged build channel. Rec: B.
-20. **The joiner's wake** — A: beside the focus (today). B: at the hearth,
-    protected until the first input. Rec: B (queued behind the vessel
-    merge).
+20. **The joiner's wake** — BUILT as B: every joiner wakes at the hearth
+    (never beside the shadowed keeper) and is unseen by foes until its first
+    willed input or `spawnGraceSec` (THE HEARTH WAKE + THE SPAWN GRACE).
 21. **The probe's tier** — the shard rig now boots four wilds (about 90 s):
     keep it on the fast lane, or split the wilds-save section into a slow
     rig. Rec: split.

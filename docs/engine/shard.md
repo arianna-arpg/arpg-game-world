@@ -56,6 +56,7 @@ gate). The regression rig is `balance/probe_shard.ts` (`npm run probe -- shard`)
 | THE WILDS SAVE | `server/wildsSave.ts` | a `--worldmass` shard's persistence: the classic `ShardSave` write already carries the mass half; `readWildsSave` reads the wilds' own file, `resumeWilds` stands it back up in the mass lane's resume order with the keeper waking at the hearth, and THE RESUME LAW holds every socket, tick and write until `ShardHost.ready()` resolves. |
 | THE KEEPER SEAT | `Seat.keeper` (world.ts) | the parked p0: exempt from `partyScaleCount`, `grantXp`, absent from `serializeSnapshot`'s seats/actors/meta rows; in `updateDownedSeats` it is THE MERCY — a downed seat with no other standing seat rises after `keeper.reviveSec`, by clock, never by reach. THE WARDEN IS NO BODY: its hands take nothing (`pickupSeat`), it has no shoulder (`separateActors`), it is invulnerable (lava and water under THE SHADOW), THE WARDEN STANDS every tick in both lanes (flags re-worn, downed/dead cleared, its level mirroring the highest standing player's — the world's "character level" for event gates, vendor shelves and bounty work), a keeper world never concludes a wipe, and on a shard any seat may carry a quest item, take a giver's contract, claim a quest or exploration reward and swap gems against its OWN combat clock (the `localSeat` gates read the keeper). THE SEALED ROADS: the shard stamps the keeper's act clock every tick, so it is never idle and no station, mouth or portal ever fires off its standing — roads that would move the whole party stay shut until per-seat travel exists (card B). Absent on every non-shard world: the solo invariant. |
 | THE NEAR LAW | `COOP_SCALING.shareRadius` (data/coop.ts), set by the shard to `SHARD_CFG.nearRadius` | a kill's XP pays only the seats within the radius of its place (`grantXp(amount, at)` from `kill`; zone and quest rewards stay world-wide), an enemy's party scale counts the seats near IT (`partyScaleCount(at)`), and the mercy counts an ally only within reach. 0 (the default every other lane keeps) is the old world-wide party, byte-identical. |
+| THE HEARTH WAKE / THE SPAWN GRACE | `ShardHost.onJoin` / `hearthSeat` / `endGraces` | every joiner stands up on a free spot at THE HEARTH SEAT — the wilds' native settlement keeps its own bedside (`MassSettlement.spawn`, the same spot on a fresh or a resumed surface), a classic world's is where the keeper first stood — never beside the shadowed keeper, wherever THE FOCUS has walked it. The joiner is untargetable until its first WILLED input (a direction, a held or edged slot, a meta press) or `SHARD_CFG.spawnGraceSec`, whichever comes first; the grace is per seat, ends with the seat, and the keeper never wears one. |
 
 ## M0 semantics (honest, inherited from co-op)
 
@@ -178,12 +179,17 @@ rides the wire).
 
 `SHARD_CFG` (server/shardHost.ts): `tickHz` 60, `stateHz` 20,
 `metaHeartbeatSec` 1.5, `persistSec` 20, `maxCatchUpTicks` 5,
-`keeper { classId, name, reviveSec 8, shadowOffset 0 }`, `nearRadius` 1600, `dressSec` 4, `saveDir`,
+`keeper { classId, name, reviveSec 8, shadowOffset 0 }`, `nearRadius` 1600, `dressSec` 4, `spawnGraceSec` 20, `saveDir`,
 `wildsSaveSuffix` `'_wilds'` (THE WILDS SAVE's own file, `wildsSave`), `faultLogSec` 5, `telemetryTicks` 600;
 `WILDS_CLIENT_CFG.surveyEveryFrames` 30 (src/net/wildsClient.ts). `SHARD_WIRE_CFG`
 (server/shardTransport.ts): `maxClientMessage` 256 KB, `sendBufferCap` 96 KB,
 `pingSec` 15, `reapSec` 45, `maxSlots` 16. `WS_TRANSPORT_CFG.defaultUrl`
-(src/net/ws.ts) is the lobby box's first offer; `farewellMs` 1500 is how long
+(src/net/ws.ts) is the lobby box's first offer (the box remembers the last
+address that seated you, `localStorage` key `hw_shard_url`), `defaultPort` 8787
+the port a bare host name is given, `connectTimeoutMs` 10 s how long a connect
+waits for a welcome before it fails as silence; `normalizeShardUrl` turns the
+`https://` address a codespace shows into `wss://`, `http://` into `ws://` and a
+bare host into `ws://host:8787`; `farewellMs` 1500 is how long
 a leaving vessel holds its socket for the last mirror. `WIRE_CFG.memoryAccessBeat`
 (src/net/snapshot.ts) is the account-view beat.
 

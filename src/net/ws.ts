@@ -35,10 +35,28 @@ export type WireMsg =
 export const WS_TRANSPORT_CFG = {
   /** Default address the lobby's "Join a Server" box offers. */
   defaultUrl: 'ws://localhost:8787',
+  /** The port a bare host name is given. */
+  defaultPort: 8787,
+  /** A connect that has heard no welcome by then fails (a private port, a
+   *  wrong address, a sleeping codespace all answer with silence). */
+  connectTimeoutMs: 10_000,
   /** THE FAREWELL: how long a leaving vessel holds its socket open for the
    *  shard's last mirror (`heroSave`) before it closes anyway (ms). */
   farewellMs: 1500,
 };
+
+/** THE ADDRESS, as a player types it: a Codespaces `https://…` becomes
+ *  `wss://…`, `http://` becomes `ws://`, a bare host gets `ws://` and the
+ *  default port, and whitespace is forgiven. */
+export function normalizeShardUrl(raw: string): string {
+  let s = raw.trim();
+  if (/^https:\/\//i.test(s)) s = 'wss://' + s.slice(8);
+  else if (/^http:\/\//i.test(s)) s = 'ws://' + s.slice(7);
+  else if (!/^wss?:\/\//i.test(s)) s = 'ws://' + s;
+  s = s.replace(/\/+$/, '');
+  if (/^ws:\/\/[^/:]+$/i.test(s)) s += ':' + WS_TRANSPORT_CFG.defaultPort;
+  return s;
+}
 
 export class WsTransport implements NetTransport {
   self: PlayerId = 'p0';
@@ -75,10 +93,12 @@ export class WsTransport implements NetTransport {
   connect(url: string, info: Omit<PeerInfo, 'id' | 'isHost'>, vessel?: import('../meta/character').CharacterSave): Promise<{ self: PlayerId; seed: number; worldmass: boolean; features: string[] }> {
     return new Promise((resolve, reject) => {
       let ws: WebSocket;
-      try { ws = new WebSocket(url); } catch (e) { reject(e instanceof Error ? e : new Error(String(e))); return; }
+      try { ws = new WebSocket(normalizeShardUrl(url)); } catch (e) { reject(e instanceof Error ? e : new Error(String(e))); return; }
       this.ws = ws;
       let settled = false;
       const fail = (why: string): void => { if (settled) return; settled = true; reject(new Error(why)); };
+      const timer = setTimeout(() => { if (!settled) { fail('no answer from the server'); try { ws.close(); } catch { /* already closed */ } } }, WS_TRANSPORT_CFG.connectTimeoutMs);
+      const settle = (): void => { clearTimeout(timer); };
       ws.onopen = (): void => {
         ws.send(JSON.stringify({ t: 'join', classId: info.classId, name: info.name, cosmeticLoadout: info.cosmeticLoadout,
           ...(info.accountId ? { accountId: info.accountId } : {}), ...(vessel ? { vessel } : {}) } satisfies WireMsg));
@@ -90,6 +110,7 @@ export class WsTransport implements NetTransport {
           this.self = m.self; this.peerList = m.peers; this.welcomed = true;
           if (!settled) {
             settled = true;
+            settle();
             // THE SHARD'S TOWN FEATURES: the account features that size the hearth
             // (townTier) — a wilds shell builds its World with these so the seed
             // lays the SAME settlement the server laid (strings only, sanitized).

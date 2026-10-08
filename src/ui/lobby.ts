@@ -147,9 +147,13 @@ export function openCoopLobby(cb: LobbyCallbacks): void {
   serverBtn?.addEventListener('click', () => {
     stage.innerHTML = ''; say('');
     hostBtn.disabled = joinBtn.disabled = true; if (serverBtn) serverBtn.disabled = true; lockClasses();
-    stage.append(h('p', 'Server address (ws://host:port):'));
+    stage.append(h('p', 'Server address (ws://host:port, or the https:// address a codespace shows):'));
     const url = document.createElement('input');
-    url.type = 'text'; url.value = cb.connectDefault ?? 'ws://localhost:8787';
+    url.type = 'text';
+    // THE REMEMBERED ADDRESS: the last server that seated us, else the default.
+    let remembered: string | null = null;
+    try { remembered = window.localStorage.getItem('hw_shard_url'); } catch { /* storage may refuse */ }
+    url.value = remembered || (cb.connectDefault ?? 'ws://localhost:8787');
     css(url, { width: '100%', marginTop: '6px', background: '#0e0c14', color: '#b8e0b8', border: '1px solid #3a3450', borderRadius: '5px', padding: '6px', font: '12px monospace', boxSizing: 'border-box' });
     stage.append(url);
     if (cb.serverHero) {
@@ -157,6 +161,9 @@ export function openCoopLobby(cb: LobbyCallbacks): void {
       stage.append(traveler);
       void cb.serverHero(selectedClassId).then(line => { traveler.textContent = line; }, () => { /* the line stays empty */ });
     }
+    const keep = h('div', 'A hosted world keeps running without you. The hero that travels comes home when you leave, and a mortal fall leaves its body where it fell for your next hero to find.');
+    css(keep, { marginTop: '6px', color: '#7a7390', fontSize: '11px', lineHeight: '1.4' });
+    stage.append(keep);
     const go = btn('Connect'); css(go, { marginTop: '8px' });
     stage.append(go);
     go.addEventListener('click', async () => {
@@ -165,6 +172,7 @@ export function openCoopLobby(cb: LobbyCallbacks): void {
       go.disabled = true; say('Connecting…');
       try {
         await cb.connect!(target, selectedClassId);
+        try { window.localStorage.setItem('hw_shard_url', target); } catch { /* storage may refuse */ }
         say('Connected! Entering the hosted world…');
         setTimeout(() => overlay.remove(), 800);
       } catch (e) { say('Connection failed: ' + String(e), false); go.disabled = false; }
