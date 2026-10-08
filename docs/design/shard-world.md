@@ -623,7 +623,8 @@ covenant watcher), `server/corpses.ts` (the records file, the standing bodies,
 the reclaim), `src/net/vesselWire.ts` (the rows and their sanitizers),
 `src/meta/shardVessel.ts` (the client's link: the mirror's slot write, the
 reckoning at home, the drawn bodies). Seams: `Account.accountId`, minted from
-webcrypto at creation or load; `saveVesselMirror` and `throngRowsOf` in
+webcrypto by a profile's first load and never by `makeAccount` (sims and
+probes stay byte-identical); `saveVesselMirror` and `throngRowsOf` in
 `meta/character.ts` (the local save's throng fold lifted out, byte-identical);
 four `SessionMsg` kinds (`heroSave`, `corpse`, `corpses`, `leaving`);
 `PeerInfo.accountId`; the join's `accountId`/`vessel`; THE FAREWELL in
@@ -640,9 +641,11 @@ shard's `rejoin` now sends `newRun` before the re-seat's zone message (M0's
 order reached the client before its shell and zone subscription stood up, so
 a rejoined hero had no terrain — the covenant's own road back to the body).
 
-Probe receipts (`npx tsx balance/probe_shard.ts`: 114 checks, ALL PASS, exit
-0). L: the id mints, survives a load, heals a legacy save, never draws the
-seeded stream, and rides the join to the host alone. M: a 6.7 KB level-12
+Probe receipts (`npx tsx balance/probe_shard.ts`: 115 checks, ALL PASS, exit
+0). L: a made account carries no id; a profile's first boot mints one and
+every later load keeps it; a legacy cached save is minted and written home; a
+malformed id is dropped; minting never draws the seeded stream; the id rides
+the join to the host alone. M: a 6.7 KB level-12
 warrior seats at its level with its bag and doll over the lobby card; eight
 hostile shapes and a twin upload fall back fresh; the mirror lands on the
 persistence beat (1195 ticks) in the run slot with no world half and the

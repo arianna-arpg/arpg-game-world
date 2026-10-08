@@ -57,8 +57,11 @@ import { autoPlace } from '../src/engine/inventory';
 import type { ItemCategory } from '../src/engine/items';
 import type { Seat } from '../src/engine/world';
 import {
-  deserializeAccount, isAccountId, LEDGER_ACCOUNT_DEATHS, LEDGER_CORPSES_RECLAIMED, makeAccount, serializeAccount,
+  deserializeAccount, ensureAccountId, isAccountId, LEDGER_ACCOUNT_DEATHS, LEDGER_CORPSES_RECLAIMED, makeAccount,
+  serializeAccount, type Account,
 } from '../src/meta/account';
+import { loadAccount, loadAccountAsync } from '../src/meta/persistence';
+import { storageKey } from '../src/buildProfile';
 import { loadCharacter, serializeCouchGuest, type CharacterSave } from '../src/meta/character';
 import { readTravelingVessel, ShardVesselLink } from '../src/meta/shardVessel';
 
@@ -341,26 +344,43 @@ function forgeVessel(o: { classId: string; level: number; name: string; charId: 
 }
 
 // ======================================================== L: THE IDENTITY ==
+/** A client's account as the browser's loaders leave it: minted. */
+const claimedAccount = (): Account => { const a = makeAccount(); ensureAccountId(a); return a; };
 {
-  const a = makeAccount(), b = makeAccount();
-  check('L identity: an account mints a 128-bit hex id', isAccountId(a.accountId), a.accountId);
-  check('L identity: two accounts never share one', a.accountId !== b.accountId);
-  check('L identity: the id survives serialize and load',
-    deserializeAccount(JSON.parse(JSON.stringify(serializeAccount(a))))!.accountId === a.accountId);
-  const old = serializeAccount(a);
-  delete old.accountId;
-  const healed = deserializeAccount(old)!.accountId;
-  check('L identity: a save that predates the id mints one at load', isAccountId(healed) && healed !== a.accountId);
-  const mangled = deserializeAccount({ ...serializeAccount(a), accountId: 'p0' })!.accountId;
-  check('L identity: a malformed saved id is re-minted, never trusted', isAccountId(mangled));
+  const bare = makeAccount();
+  check('L identity: a made account carries no id until a load mints one (sims stay byte-identical)',
+    bare.accountId === '' && !('accountId' in serializeAccount(bare)) && deserializeAccount(serializeAccount(bare))!.accountId === '');
+  const a = claimedAccount(), b = claimedAccount();
+  check('L identity: the mint is a 128-bit hex id, never shared', isAccountId(a.accountId) && a.accountId !== b.accountId, a.accountId);
+  check('L identity: a minted id survives serialize and load, and is never minted twice',
+    deserializeAccount(JSON.parse(JSON.stringify(serializeAccount(a))))!.accountId === a.accountId && !ensureAccountId(a));
+  const mangled = deserializeAccount({ ...serializeAccount(a), accountId: 'p0' })!;
+  check('L identity: a malformed saved id is dropped, never trusted; the load mints afresh',
+    mangled.accountId === '' && ensureAccountId(mangled) && isAccountId(mangled.accountId));
+  // THE LOAD PATH, as a browser boots: the synchronous load mints in memory,
+  // the disk-first load adopts that id, writes it home, and keeps it after.
+  const ACCOUNT_CACHE_KEY = storageKey('arpg_account_v1');
+  window.localStorage.removeItem(ACCOUNT_CACHE_KEY);
   const stream = Math.random;
   let draws = 0;
   Math.random = (): number => { draws++; return stream(); };
-  makeAccount(); deserializeAccount(old);
+  const boot = loadAccount();
+  const hydrated = await loadAccountAsync();
+  const again = await loadAccountAsync();
+  const legacy = serializeAccount(again);
+  delete legacy.accountId;
+  window.localStorage.setItem(ACCOUNT_CACHE_KEY, JSON.stringify(legacy));
+  const healed = await loadAccountAsync();
   Math.random = stream;
+  const cachedId = (JSON.parse(window.localStorage.getItem(ACCOUNT_CACHE_KEY) ?? '{}') as { accountId?: string }).accountId;
+  check('L load: a profile\'s first boot mints one id and every later load keeps it',
+    isAccountId(boot.accountId) && hydrated.accountId === boot.accountId && again.accountId === boot.accountId, boot.accountId);
+  check('L load: a cached save that predates the id is minted at its load and written home',
+    isAccountId(healed.accountId) && cachedId === healed.accountId);
   check('L identity: minting draws nothing from the seeded stream (THE STREAM LAW)', draws === 0, `${draws} draws`);
+  window.localStorage.removeItem(ACCOUNT_CACHE_KEY);
 }
-const acctLone = makeAccount();
+const acctLone = claimedAccount();
 const watcher = new WsTransport();
 const watcherRows = rowsOf(watcher);
 await watcher.connect(vurl, { name: 'Watcher', classId: 'rogue' });
@@ -380,7 +400,7 @@ check('L join: no roster row on the wire carries it',
 }
 
 // ========================================================== M: THE VESSEL ==
-const acctA = makeAccount();
+const acctA = claimedAccount();
 const V = forgeVessel({ classId: 'warrior', level: 12, name: 'Aldric', charId: 'c-probe-aldric', bag: 6,
   worn: ['helmet', 'chest', 'gloves', 'boots'], essences: { coarse: 40, glimmering: 10 } });
 // Its own run config and run counters (the pass-through must keep them its own).
@@ -422,7 +442,7 @@ await waitFor(() => !!seatOf(cw.self), vh, 60);
 }
 {
   const bad = new WsTransport();
-  const bw = await bad.connect(vurl, { name: 'Broken', classId: 'rogue', accountId: makeAccount().accountId },
+  const bw = await bad.connect(vurl, { name: 'Broken', classId: 'rogue', accountId: claimedAccount().accountId },
     { ...V, charId: 'c-broken', knownSkills: 'nope' } as unknown as CharacterSave);
   const dup = new WsTransport();
   const dw = await dup.connect(vurl, { name: 'Twin', classId: 'warrior', accountId: acctA.accountId }, V);
@@ -517,7 +537,7 @@ await waitFor(() => vh.vessels.falls === 1, vh, 120);
     disk.corpses.length === 1 && disk.corpses[0].id === b?.id && disk.fallen.some(f => f.charId === V.charId && f.accountId === acctA.accountId));
 }
 {
-  const acctI = makeAccount();
+  const acctI = claimedAccount();
   const VI = forgeVessel({ classId: 'rogue', level: 9, name: 'Vow', charId: 'c-probe-vow', modeId: 'immortal', bag: 0, worn: ['helmet'] });
   const ci = new WsTransport();
   const ciRows = rowsOf(ci);
@@ -536,7 +556,7 @@ await waitFor(() => vh.vessels.falls === 1, vh, 120);
 }
 {
   const cf = new WsTransport();
-  const fw = await cf.connect(vurl, { name: 'Fresh', classId: 'warrior', accountId: makeAccount().accountId });
+  const fw = await cf.connect(vurl, { name: 'Fresh', classId: 'warrior', accountId: claimedAccount().accountId });
   await waitFor(() => !!seatOf(fw.self), vh, 60);
   const hero = vh.world.seatHero(seatOf(fw.self)!);
   vh.world.kill(hero);
@@ -562,7 +582,7 @@ await waitFor(() => vh.vessels.falls === 1, vh, 120);
 {
   // THE LATE WORD: a mortal vessel that leaves while DOWN has fallen, and its
   // client hears the word at its next upload of that vessel.
-  const acctW = makeAccount();
+  const acctW = claimedAccount();
   const W = forgeVessel({ classId: 'warrior', level: 7, name: 'Wren', charId: 'c-probe-wren', bag: 0, worn: ['boots'], essences: { coarse: 9 } });
   const kneeler = new WsTransport();
   const kw = await kneeler.connect(vurl, { name: 'Kneeler', classId: 'rogue' });
@@ -632,7 +652,7 @@ check('O return: its client is told where (its own corpses row)',
 {
   const co = new WsTransport();
   const coRows = rowsOf(co);
-  const ow = await co.connect(vurl, { name: 'Other', classId: 'rogue', accountId: makeAccount().accountId });
+  const ow = await co.connect(vurl, { name: 'Other', classId: 'rogue', accountId: claimedAccount().accountId });
   await waitFor(() => !!seatOf(ow.self), vh, 60);
   await runTicks(vh, 3);
   const other = vh.world.seatHero(seatOf(ow.self)!);

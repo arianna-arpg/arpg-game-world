@@ -430,8 +430,10 @@ export interface PackagePref {
 /** Runtime account (Sets for O(1) membership). Survives death + World recreation. */
 export interface Account {
   /** THE IDENTITY (accountId — docs/engine/shard.md "The vessel and the
-   *  corpse"): a stable random 128-bit id, minted once and saved here. Its
-   *  one use is keying this player's OWN records on a hosted world. */
+   *  corpse"): a stable random 128-bit id, minted ONCE by a profile's first
+   *  load (ensureAccountId) and saved here; '' until then (makeAccount never
+   *  mints, so every sim and probe account stays byte-identical). Its one use
+   *  is keying this player's OWN records on a hosted world. */
   accountId: string;
   reliquary: AccountReliquary;
   cosmetics: CosmeticState;
@@ -558,12 +560,15 @@ export interface AccountSave {
 }
 
 // --- THE IDENTITY (accountId — docs/engine/shard.md "The vessel and the corpse")
-// A stable random 128-bit id, minted ONCE (makeAccount, or at load for a save
-// that predates it) and saved on the account. Its one use is keying this
-// player's OWN records on a hosted world (THE SHARD's corpses and fallen
-// vessels); a shard never trusts it for anything else. Drawn from
-// crypto.getRandomValues, never Math.random: the seeded sim stream (THE STREAM
-// LAW) must not move because an account was made.
+// A stable random 128-bit id, minted ONCE by a profile's first load
+// (ensureAccountId, called by the persistence loaders; a save that predates
+// it mints at its next load) and saved on the account. makeAccount and
+// deserializeAccount never mint: a sim's or probe's account stays exactly the
+// bytes it was (THE SOLO INVARIANT), and serializeAccount omits an empty id.
+// Its one use is keying this player's OWN records on a hosted world (THE
+// SHARD's corpses and fallen vessels); a shard never trusts it for anything
+// else. Drawn from crypto.getRandomValues, never Math.random: the seeded sim
+// stream (THE STREAM LAW) never moves for it.
 export const ACCOUNT_ID_PATTERN = /^[0-9a-f]{32}$/;
 let accountIdSpread = 0;
 /** Mint a fresh accountId (32 lowercase hex chars, 128 random bits). */
@@ -586,10 +591,19 @@ export function mintAccountId(): string {
 }
 /** A well-formed accountId (a shard's join refuses anything else). */
 export const isAccountId = (v: unknown): v is string => typeof v === 'string' && ACCOUNT_ID_PATTERN.test(v);
+/** Mint this account's id if it has none: THE IDENTITY's one door (the
+ *  persistence loaders call it, so a profile's first load mints and every
+ *  later load keeps). `prefer` = an id already cached for this profile (the
+ *  synchronous boot load's), adopted when well-formed. True = it minted. */
+export function ensureAccountId(a: Account, prefer?: unknown): boolean {
+  if (isAccountId(a.accountId)) return false;
+  a.accountId = isAccountId(prefer) ? prefer : mintAccountId();
+  return true;
+}
 
 export function makeAccount(): Account {
   return {
-    accountId: mintAccountId(),
+    accountId: '', // THE IDENTITY: minted at the first load (ensureAccountId), never here
     reliquary: emptyReliquary(),
     cosmetics: emptyCosmetics(),
     credits: 0, lifetimeCredits: 0, level: 0,
@@ -623,7 +637,7 @@ export function makeAccount(): Account {
 
 export function serializeAccount(a: Account): AccountSave {
   return {
-    accountId: a.accountId,
+    ...(a.accountId ? { accountId: a.accountId } : {}), // THE IDENTITY: an unminted account writes no field
     reliquary: structuredClone(a.reliquary),
     cosmetics: sanitizeCosmetics(a.cosmetics),
     schemaVersion: SCHEMA_VERSION,
@@ -670,9 +684,9 @@ export function deserializeAccount(s: AccountSave): Account | null {
     ledger[LEDGER_ACCOUNT_DEATHS] = s.deaths!.length;
   }
   return {
-    // THE IDENTITY: kept when well-formed; a save predating it (or a mangled
-    // one) mints a fresh id here, and the loader writes it home at once.
-    accountId: isAccountId(s.accountId) ? s.accountId : mintAccountId(),
+    // THE IDENTITY: kept when well-formed; a save that predates it (or holds a
+    // mangled one) loads unminted, and the loader that read it mints.
+    accountId: isAccountId(s.accountId) ? s.accountId : '',
     reliquary: restoreReliquary(s.reliquary),
     credits: s.credits ?? 0,
     cosmetics: sanitizeCosmetics(s.cosmetics),
