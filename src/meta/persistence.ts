@@ -146,7 +146,10 @@ export async function loadAccountAsync(): Promise<Account> {
   const fresh = acc ?? makeAccount();
   const body = JSON.stringify(serializeAccount(fresh));
   try { window.localStorage.setItem(KEY, body); } catch { /* ignore */ }
-  if (disk !== null && (accountReset || runReset)) diskPut(ACCOUNT_SLOT, body);
+  // THE IDENTITY (accountId): an id minted at THIS load (a disk save that
+  // predates it) goes home at once, else every boot would mint another.
+  const accountIdMinted = !!acc && data?.accountId !== acc.accountId;
+  if (disk !== null && (accountReset || runReset || accountIdMinted)) diskPut(ACCOUNT_SLOT, body);
   return fresh;
 }
 
