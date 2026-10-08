@@ -1,3 +1,4 @@
+import {nativeFellDoodad,nativeRebuildClientTerrain} from '../engine/nativeSceneTerrain';
 import { refreshMovementTether } from '../engine/movementTether';
 import { nativeFloorElevAt, nativeRayElev, nativeShotElev, nativeLineOfSight, nativeSightClipD, nativeLineOfFire, nativeClipShot, type NativeSightSources } from '../engine/nativeSight';
 import { castRay, LOS_CFG } from '../engine/los';
@@ -109,6 +110,8 @@ export class NativeAreaSceneGeometry implements native.NativeSceneGeometryHost, 
   flashes:World['flashes'] = [];
   contactHazards:World['contactHazards'] = [];
   eventAnchors:World['eventAnchors'] = [];
+ fellDoodad(...args:Parameters<World['fellDoodad']>){return nativeFellDoodad(this,...args);}
+ rebuildClientTerrain(){return nativeRebuildClientTerrain(this);}
  nativeSettlementGrid(){return this.walk instanceof GridWalkField?this.walk:null;}
  nativeGridAt(_pos:Vec2){return this.nativeSettlementGrid();}
  text(...args:Parameters<World['text']>){return this.campaign.text(...args);}

@@ -586,6 +586,7 @@ import { descentPlaceDescentDelver, descentMintDelverStock, descentEnterDescentZ
 import { harborHoldStateFor, harborBootQuay, harborBootHarborhold, harborResealDoor, harborRefreshHoldDress, harborHoldDressSpotOk, harborRefreshHoldServices, harborArmPortMercs, harborLandPartyAt, type NativeSceneHarborHost } from './nativeSceneHarbor';
 
 import { nativeTheaterContextNow, nativeTheaterConcurrencyNow, nativeTheaterRunBeat, nativeTheaterPourRoom, nativeTheaterSpawn, nativeSpawnEventActor, nativeClampNear, nativeAnyAliveWithTag, nativeZoneEntryPos, type NativeSceneTheaterHost } from './nativeSceneTheater';
+import {nativeFellDoodad,nativeRebuildClientTerrain,type NativeSceneTerrainHost} from './nativeSceneTerrain';
 import {enforceNativeArrivalGrace,nativeUberDefeated,nativeNearestZoneOf,type NativeSceneArrivalHost} from './nativeSceneArrival';
 import {coastSeaFromNode,coastNodeFromSea,coastStreamCoast,coastMintIslandZone,coastEnsureSeaPorts,coastRefreshExitLabels,coastEventLevel,coastNotarizeRoad,coastLinkBackTo,coastRoadIsWet,coastLandRoute,coastPlaceExit,coastIsIllegalCrossDim,coastWarnCrossDim,coastDimensionBiomeFor,coastLiveCourses,coastCourseAnchor,coastFieldExitPos,coastBoundaryGateFor,coastMeldFor,type NativeSceneCoastHost,type NativeSceneCoastSources} from './nativeSceneCoast';
 
@@ -39135,21 +39136,7 @@ export class World {
    *  calamity — uses this same door so the regrowth guarantee holds). Marks
    *  the piece down (the blocking trio + drawn shadow read it at their own
    *  seams), stamps the regrow clock, bumps the piece's families. */
-  fellDoodad(d: Doodad, cause?: string, spec?: RampageSpec | null): boolean {
-    if (!fellableDoodad(d)) return false;
-    const now = this.time;
-    d.felled = { at: now, wake: now + RAMPAGE_CFG.delaySec + fellJitter(d), ...(cause ? { k: cause } : {}) };
-    this.regrowing.push(d);
-    this.markDoodadsChanged(d);
-    if (!spec?.quiet) {
-      this.flashes.push({
-        pos: vec(d.pos.x, d.pos.y), radius: Math.min(52, d.radius + 14),
-        color: RAMPAGE_CFG.fxColor, life: 0.35, maxLife: 0.35,
-      });
-      this.shake = Math.max(this.shake, RAMPAGE_CFG.shake);
-    }
-    return true;
-  }
+  fellDoodad(d: Doodad, cause?: string, spec?: RampageSpec | null): boolean { return nativeFellDoodad(this.nativeSceneTerrainHost(),d,cause,spec); }
 
   /** Rejoin native regrowth after a spatial owner restores a scenery checkpoint.
    * The caller translates the saved clock; no new felling delay is rolled. */
@@ -59428,10 +59415,7 @@ export class World {
    *  collision/ground lists from the replicated doodads. Without this a co-op
    *  client's PREDICTED movement (clampPos) blocks a bridged chasm the host walks
    *  across (rubber-band). Host/SP populate these in loadZone and never call this. */
-  rebuildClientTerrain(): void {
-    this.bridges = this.doodads.filter(d => doodadRuleOf(d.kind).spans);
-    this.grounds = this.doodads.filter(d => GROUND_KINDS.includes(d.kind));
-  }
+  rebuildClientTerrain(): void { return nativeRebuildClientTerrain(this.nativeSceneTerrainHost()); }
 
   /** The HUD's one-line description of what this zone wants from you. */
   objectiveText(): string {
@@ -59850,6 +59834,21 @@ export class World {
     if (!this.sailing) markBodyWalk(a, a.pos.x - sx, a.pos.y - sy, this.time);
   }
 
+  declare private nativeSceneTerrainView?:NativeSceneTerrainHost;
+  private nativeSceneTerrainHost():NativeSceneTerrainHost {
+    if(this.nativeSceneTerrainView)return this.nativeSceneTerrainView;
+    const world=this;
+    const host:NativeSceneTerrainHost=Object.freeze({
+      get time(){return world.time;},get regrowing(){return world.regrowing;},get flashes(){return world.flashes;},
+      get shake(){return world.shake;},set shake(value){world.shake=value;},
+      get doodads(){return world.doodads;},
+      get bridges(){return world.bridges;},set bridges(value){world.bridges=value;},
+      get grounds(){return world.grounds;},set grounds(value){world.grounds=value;},
+      get markDoodadsChanged(){const fn=world.markDoodadsChanged;return(...args:Parameters<NativeSceneTerrainHost['markDoodadsChanged']>)=>fn.apply(world,args);},
+    });
+    Object.defineProperty(this,'nativeSceneTerrainView',{value:host,enumerable:false,writable:true,configurable:true});
+    return host;
+  }
   declare private nativeSceneArrivalView?:NativeSceneArrivalHost;
   private nativeSceneArrivalHost():NativeSceneArrivalHost {
     if(this.nativeSceneArrivalView)return this.nativeSceneArrivalView;

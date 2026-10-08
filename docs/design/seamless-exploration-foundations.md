@@ -2499,3 +2499,33 @@ the production preview build and both native-generation and conversation
 Save/Continue client courses passed. Generation retained the four known spacing
 warnings and one concurrent metropolis timing warning. Nine slow and three
 excluded probes were not run. Full seamless-area activation remains separate.
+
+## Native Titan area ownership
+
+NativeAreaSceneTitans instantiates the complete original TitanRuntime against an
+area's actual geometry, native population factory and carried campaign journey.
+The installed controller's executable is unchanged; its explicit host covers
+terrain warnings, solid travelling bodies, native fire/ice/storm hazards, safe
+crossing admission, scenery felling, wounds and engagement, departure of the
+whole anatomy, repeated network scenes and cleanup. NativeSceneTerrain shares
+the original scenery-felling and ground/bridge rebuild operations with World.
+
+The complete retained oracle covers all three native Titan definitions on two
+whole native layouts, 42 original/classic/local triples, 78 real factory bodies,
+12 reached partial failures and exact leave/reenter wound persistence. It compares
+all 96,498,471 bytes of ordered complete records through a streaming digest; it
+does not trim geometry or actor state for that comparison. Campaign events in
+these controls are explicit fixtures, not a claim about natural event frequency.
+
+This makes the controller locally ownable. Full ordered area dispatch, native
+hazard damage and rewards in that dispatch, source-session issuance, whole-owner
+paging and the playable two-area Save/Continue course remain required.
+
+Titan validation: all three type configurations, 62/62 native regressions without
+retries, eleven related terrain/persistence/boss probes, 2,607 generation cases
+with no failures, 25 smoke episodes, the build and both client Save/Continue
+courses passed. Generation reports four known spacing and three timing warnings;
+the isolated stalkwood rerun is clear, while metropolis retains a timing warning.
+These changes do not occur in GenQA's executable import graph. The preceding
+arrival checkpoint passed all 492 fast probes; a new full 493-probe run was not
+performed after the Titan integration.

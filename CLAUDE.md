@@ -1,3 +1,13 @@
+NativeAreaSceneTitans owns the complete native TitanRuntime over the actual local
+geometry/population and live campaign journey. NativeSceneTerrain shares original
+felling/regrowth registration and ground/bridge publication with classic World.
+Keep warning/occupancy, safe crossing, retained wounds, attributed hazards,
+whole-anatomy departures, network scenes and native partial effects unchanged.
+The World terrain view stays hidden before first use. Full registry dispatch,
+contact damage/rewards, source issuance and whole-owner paging still precede
+seamless activation. Verify nativescenetitans, titans/rampage/terrain/persistence,
+all types, generation, simulation and built-client entry/Continue/return.
+
 NativeAreaSceneArrival shares exact native arrival safety, defeated-boss and
 nearest-zone birth lookups with classic World. Bind the original arrival policy,
 real local geometry/census and live campaign records. Preserve protected bodies,

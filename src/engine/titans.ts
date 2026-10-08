@@ -7,6 +7,9 @@ import { blocksMovement, hitSurfaceOf, doodadRuleOf, type Doodad } from './level
 import { shapeBoundR } from './shapes';
 import type { World } from './world';
 
+/** Complete installed terrain/controller contract, including retained wounds and network scenes. */
+export type NativeTitanHost = Pick<World, 'sim' | 'zone' | 'exits' | 'arena' | 'time' | 'player' | 'pathField' | 'walk' | 'doodads' | 'createMonster' | 'actors' | 'clampPos' | 'markDoodadsChanged' | 'ledger' | 'text' | 'fellDoodad' | 'collectContactHazards' | 'rebuildClientTerrain'>;
+
 export interface TitanScenePiece { key: string; kind: string; x: number; y: number; r: number; rot: number }
 interface Piece { d: Doodad; born: number }
 
@@ -49,7 +52,7 @@ export class TitanRuntime {
   private scarGround?: GridWalkField;
   private anchors: Vec2[] = [];
   private crossings = new Set<string>();
-  constructor(private world: World) {}
+  constructor(private world: NativeTitanHost) {}
   field(): TitanField | undefined { return this.world.sim?.overlayFor<TitanField>('titans') ?? undefined; }
   owns(d: Doodad): boolean { return this.owned.has(d); }
   reset(): void {
