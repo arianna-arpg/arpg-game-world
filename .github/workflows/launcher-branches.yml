@@ -1,0 +1,170 @@
+name: launcher-branches
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to build (blank builds all current experimental branches)'
+        type: string
+        default: ''
+  schedule:
+    - cron: '23 8 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.branches.outputs.matrix }}
+      count: ${{ steps.branches.outputs.count }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - id: branches
+        uses: actions/github-script@v7
+        env:
+          REQUESTED_BRANCH: ${{ inputs.branch }}
+        with:
+          script: |
+            const builds = require('./launcher/branches.cjs');
+            const { owner, repo } = context.repo;
+            const all = await github.paginate(github.rest.repos.listBranches, { owner, repo, per_page: 100 });
+            const wanted = context.eventName === 'workflow_run'
+              ? context.payload.workflow_run.head_branch : process.env.REQUESTED_BRANCH;
+            if (wanted && !all.some(b => b.name === wanted)) throw new Error('The requested branch no longer exists.');
+            const main = require('./launcher.config.json').repo.branch || 'main';
+            let assets = [];
+            try {
+              const {data: release} = await github.rest.repos.getReleaseByTag({owner, repo, tag: builds.RELEASE_TAG});
+              assets = await github.paginate(github.rest.repos.listReleaseAssets, {owner, repo, release_id: release.id, per_page: 100});
+            } catch (e) { if (e.status !== 404) throw e; }
+            const rows = all.filter(b => b.name !== main && (!wanted || b.name === wanted))
+              .filter(b => !assets.some(a => a.name === builds.assetName(b.name, b.commit.sha) && a.state === 'uploaded' && a.digest))
+              .map(b => ({branch: b.name, commit: b.commit.sha, id: builds.key(b.name)}));
+            if (rows.length > 256) throw new Error('More than 256 builds pending; dispatch smaller batches.');
+            core.setOutput('matrix', JSON.stringify({include: rows}));
+            core.setOutput('count', rows.length);
+
+  build:
+    needs: plan
+    if: needs.plan.outputs.count != '0'
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    concurrency:
+      group: launcher-branch-${{ matrix.id }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      BUILD_BRANCH: ${{ matrix.branch }}
+      BUILD_COMMIT: ${{ matrix.commit }}
+      BUILD_SOURCE: ${{ github.workspace }}/source
+      BUILD_OUTPUT: ${{ github.workspace }}/bundle
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: tooling
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.commit }}
+          path: source
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+        working-directory: tooling
+      - run: npm ci
+        working-directory: source
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - name: Apply the existing preview build profile
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import builds from './tooling/launcher/branches.cjs';
+          const profiles = JSON.parse(fs.readFileSync('tooling/scripts/browser-previews.json', 'utf8'));
+          const profile = profiles.find(row => row.ref === process.env.BUILD_BRANCH);
+          fs.appendFileSync(process.env.GITHUB_ENV,
+            'HOLLOW_WAKE_STORAGE_SCOPE=desktop:' + builds.key(process.env.BUILD_BRANCH) + '\n'
+            + 'HOLLOW_WAKE_WORLDMASS=' + (profile?.worldmass ? '1' : '0') + '\n');
+          JS
+      - run: npm run check
+        working-directory: source
+      - run: npm run probe
+        working-directory: source
+      - name: Build the branch game
+        run: node node_modules/vite/bin/vite.js build --base=./
+        working-directory: source
+      - name: Package verified game files
+        run: node tooling/scripts/build-launcher-branch.mjs
+      - name: Boot the bundle and verify isolated saves
+        run: |
+          export BRANCH_SMOKE_BUNDLE="$(find "$BUILD_OUTPUT" -maxdepth 1 -name '*.json.gz' -print -quit)"
+          xvfb-run -a tooling/node_modules/.bin/electron tooling/scripts/smoke-launcher-branch.cjs --no-sandbox --disable-gpu
+      - uses: actions/upload-artifact@v4
+        with:
+          name: launcher-${{ matrix.id }}
+          path: bundle/*.json.gz
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    needs: [plan, build]
+    if: ${{ !cancelled() && needs.plan.outputs.count != '0' && needs.plan.result == 'success' }}
+    permissions:
+      contents: write
+      actions: read
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: available
+        uses: actions/github-script@v7
+        env:
+          ARTIFACT_NAME: launcher-${{ matrix.id }}
+        with:
+          script: |
+            const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+              ...context.repo, run_id: context.runId, per_page: 100 });
+            core.setOutput('ready', artifacts.some(a => a.name === process.env.ARTIFACT_NAME && !a.expired));
+      - uses: actions/download-artifact@v4
+        if: steps.available.outputs.ready == 'true'
+        with:
+          name: launcher-${{ matrix.id }}
+          path: bundle
+      - name: Publish the successful branch build
+        if: steps.available.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TOOLING_COMMIT: ${{ github.workflow_sha }}
+          BUILD_BRANCH: ${{ matrix.branch }}
+          BUILD_COMMIT: ${{ matrix.commit }}
+        run: node scripts/publish-launcher-branch.mjs
+

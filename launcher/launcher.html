@@ -18,7 +18,7 @@
     * { box-sizing: border-box; }
     html, body {
       margin: 0; padding: 0; width: 100%; height: 100%;
-      background: #0a0a0e; overflow: hidden;
+      background: #0a0a0e; overflow: auto;
       font-family: 'Segoe UI', Verdana, sans-serif;
       color: var(--text); user-select: none;
       display: flex; flex-direction: column;
@@ -49,6 +49,10 @@
     #changes li code { color: var(--text-dim); font-size: 11px; margin-right: 7px; }
     /* THE RELEASE CHANNEL: one quiet row under the update box, shown only
        where updates come from GitHub Releases (a packaged install). */
+    #branch-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+    #branch { min-width: 0; flex: 1; color: var(--gold); background: #1b1b2a; border: 1px solid var(--panel-border); border-radius: 4px; padding: 7px; }
+    #branch-refresh { color: var(--text); background: #1b1b2a; border: 1px solid var(--panel-border); border-radius: 4px; padding: 7px; cursor: pointer; }
+    #branch-note { color: var(--text-dim); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
     #channel-row { display: flex; align-items: center; gap: 9px; font-size: 12px; color: var(--text-dim); padding: 0 2px; flex: 0 0 auto; }
     #channel-row label { color: var(--text); flex: 0 0 auto; }
     #channel-row select {
@@ -111,6 +115,8 @@
       <h1 id="title">ARPG</h1>
     </div>
     <div id="build-line">Reading build info…</div>
+    <div id="branch-row"><label for="branch">Game branch</label><select id="branch"><option value="main">main (default)</option></select><button id="branch-refresh" title="Refresh branches from GitHub">Refresh</button></div>
+    <div id="branch-note" role="status">Main is the default. Other branches keep separate saves.</div>
     <div id="update-area">
       <div id="update-status">Update check pending…</div>
       <ul id="changes"></ul>
@@ -130,8 +136,8 @@
       </div>
       <div class="minor">
         <button id="reset" class="danger"
-          title="Factory reset: erase the account, every character and roster slot, settings, and all cached game data. A confirm dialog follows.">
-          Erase all saved data…</button>
+          title="Erase this branch’s account, characters, settings, and browser save mirrors. Other branches keep their progress. A confirm dialog follows.">
+          Erase this branch’s saved data…</button>
       </div>
     </div>
     <div id="devbox" class="player">
@@ -159,14 +165,14 @@
   <script>
     const $ = (id) => document.getElementById(id);
     const logEl = $('log');
-    const buttons = ['play', 'update-btn', 'check', 'rebuild', 'reset', 'quit', 'channel'].map($);
+    const buttons = ['play', 'update-btn', 'check', 'rebuild', 'reset', 'quit', 'channel', 'branch', 'branch-refresh'].map($);
 
     function appendLog(line) {
       logEl.textContent += line + '\n';
       logEl.scrollTop = logEl.scrollHeight;
       if (/FAILED/.test(line)) logEl.classList.add('reveal'); // player mode still shows an error
     }
-    function setBusy(b) { buttons.forEach(el => { el.disabled = b; }); }
+    function setBusy(b) { buttons.forEach(el => { el.disabled = b; }); document.querySelectorAll('#devbox input').forEach(el => { el.disabled = b; }); }
 
     // THE DEVELOPER BOX — the stored toggles (s.dev) drive the checkboxes,
     // the master folds the page between its two faces, and rows that cannot
@@ -219,16 +225,50 @@
       await doCheck(); // the old channel's answer no longer stands
     });
 
+    function renderBranches(s) {
+      const sel = $('branch');
+      sel.replaceChildren();
+      for (const row of s.branches || [{ name: 'main' }]) {
+        const option = document.createElement('option');
+        option.value = row.name;
+        option.textContent = row.name + (row.name === s.mainBranch ? ' (default)' : '');
+        sel.appendChild(option);
+      }
+      sel.value = s.selectedBranch || s.mainBranch || 'main';
+      $('branch-note').textContent = s.branchNote || '';
+      const experiment = s.selectedBranch !== s.mainBranch;
+      $('play').textContent = experiment && !s.branchBuild ? '↓  DOWNLOAD & PLAY' : '▶  PLAY';
+      $('row-liveSource').classList.toggle('hidden', !!s.packaged || experiment);
+      $('channel-row').classList.toggle('hidden', experiment || s.updateMode !== 'release');
+      $('rebuild').classList.toggle('hidden', !!s.packaged || experiment);
+      if (experiment) {
+        $('update-btn').textContent = '↓  Update Branch & Play';
+        $('hint').textContent = 'Separate game files and saves. If GitHub cannot be reached, Play returns to local Main.';
+      }
+    }
+    $('branch').addEventListener('change', async e => {
+      setBusy(true);
+      try {
+        const r = await window.launcher.selectBranch(e.target.value);
+        if (!r.ok) appendLog('BRANCH FAILED: ' + r.error);
+        await refresh();
+        renderCheck(await window.launcher.check());
+      } catch (e) { appendLog('BRANCH FAILED: ' + String(e)); }
+      finally { setBusy(false); }
+    });
+    $('branch-refresh').addEventListener('click', () => doCheck());
+
     function renderStatus(s) {
       lastStatus = s;
       renderDev(s);
       renderChannel(s);
       $('title').textContent = s.title;
       document.title = s.title + ' — Launcher';
-      $('build-line').innerHTML =
-        `v${s.version} · <b>${s.branch || 'release'}</b> @ <b>${s.hash || '?'}</b>` +
-        (s.subject ? ` — “${s.subject}”` : '') +
-        (s.dirty ? ' <span class="dirty">(modified locally)</span>' : '');
+      const experiment = s.selectedBranch !== s.mainBranch;
+      const version = experiment ? s.branchBuild?.version : s.version;
+      const hash = experiment ? s.branchBuild?.commit?.slice(0, 8) : s.hash;
+      $('build-line').textContent = 'v' + (version || '—') + ' · ' + (s.selectedBranch || s.branch || 'main')
+        + ' @ ' + (hash || 'not downloaded') + (!experiment && s.dirty ? ' (modified locally)' : '');
       // PACKAGED install (no repo, no toolchain): the rebuild button is
       // meaningless, and Update means "download from GitHub Releases and
       // install it in place" (directInstall=false keeps the old open-the-
@@ -240,7 +280,7 @@
           ? 'Playing is fully offline. Updates download from GitHub Releases and install themselves.'
           : 'Playing is fully offline. Updates come from GitHub Releases.';
       }
-      if (s.updateMode === 'none') $('check').classList.add('hidden');
+      renderBranches(s);
     }
 
     function renderCheck(r) {
@@ -249,7 +289,7 @@
       $('update-btn').classList.add('hidden');
       if (!r.ok) {
         st.className = 'bad';
-        st.textContent = r.hint || 'Could not reach GitHub — playing the installed version is fine.';
+        st.textContent = r.hint || r.error || 'Could not reach GitHub. Local Main is still available.';
         return;
       }
       if (r.mode === 'none') {
@@ -285,13 +325,15 @@
     async function refresh() { renderStatus(await window.launcher.status()); }
     async function doCheck() {
       setBusy(true);
-      try { renderCheck(await window.launcher.check()); } finally { setBusy(false); }
+      try { await window.launcher.branches(); await refresh(); renderCheck(await window.launcher.check()); }
+      catch (e) { appendLog('CHECK FAILED: ' + String(e)); } finally { setBusy(false); }
     }
     async function doPlay() {
       setBusy(true);
       try {
         const r = await window.launcher.play();
         if (!r.ok) { appendLog('PLAY FAILED: ' + (r.error || 'unknown error')); }
+        await refresh();
       } finally { setBusy(false); }
     }
 
@@ -352,7 +394,7 @@
       const s = await window.launcher.status();
       renderStatus(s);
       if (s.checkOnLaunch) await doCheck();
-      else $('update-status').textContent = 'Automatic update checks are off (launcher.config.json).';
+      else { await window.launcher.branches(); await refresh(); $('update-status').textContent = 'Automatic update checks are off.'; }
     })();
   </script>
 </body>

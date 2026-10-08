@@ -2624,6 +2624,10 @@ we verify changes.
   line is retired; anchors `MENU_ANCHORS` (`bar` seats off the renderer's
   published `hudClusterRects` — drawn == seated), THE DOCK opt-in, movable
   by its grip under THE LAYOUT; glyphs are `ui/icons.ts` rows.
+- Dynamic desktop branches: `launcher/branches.cjs` and the `launcher-branches`
+  workflow provide live GitHub selection, verified cached games, per-branch saves,
+  and local Main fallback. Contract: `docs/engine/launcher-branches.md`; verify
+  `npm run test:launcher`, `smoke:launcher`, `smoke:update`, `smoke`, and `check`.
 - `launcher/` — the Electron desktop shell (plain CJS, type-checked via
   `tsconfig.launcher.json`): `main.cjs` (windows, git update flow + the
   packaged DIRECT UPDATE (GitHub-Releases download → silent install →
