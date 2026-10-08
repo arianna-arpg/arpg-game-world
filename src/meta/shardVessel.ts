@@ -110,6 +110,9 @@ export class ShardVesselLink {
     this.current = vessel;
     net.farewell = !!vessel; // THE FAREWELL: a traveling hero asks for its last mirror at leave
     net.onSession(m => this.onSession(m));
+    // THE IDENTITY goes to disk before the shard keys a single record by it
+    // (a compatible boot mints it into the cache only; this is its first use).
+    saveAccount(account);
   }
 
   /** The hero this link speaks for (null: none, or it fell). */

@@ -157,14 +157,16 @@ export async function loadAccountAsync(): Promise<Account> {
   else if (runReset && (data?.roster?.length ?? 0) > 0) noteSaveReset('run');
   const fresh = acc ?? makeAccount();
   // THE IDENTITY (accountId): a profile's first load mints it, keeping the id
-  // its cache or the synchronous boot load already holds; minted here, it
-  // goes home at once (else every boot would mint another).
+  // its cache or the synchronous boot load already holds. The cache carries
+  // it from this line on (every later boot adopts it); the disk takes it with
+  // the account's next ordinary write, since a compatible boot never writes
+  // the disk (a shard connection saves the account before any record keys by it).
   let cachedId: unknown;
   try { cachedId = (JSON.parse(window.localStorage.getItem(KEY) ?? 'null') as AccountSave | null)?.accountId; } catch { /* none */ }
-  const accountIdMinted = ensureAccountId(fresh, isAccountId(cachedId) ? cachedId : bootAccountId);
+  ensureAccountId(fresh, isAccountId(cachedId) ? cachedId : bootAccountId);
   const body = JSON.stringify(serializeAccount(fresh));
   try { window.localStorage.setItem(KEY, body); } catch { /* ignore */ }
-  if (disk !== null && (accountReset || runReset || accountIdMinted)) diskPut(ACCOUNT_SLOT, body);
+  if (disk !== null && (accountReset || runReset)) diskPut(ACCOUNT_SLOT, body);
   return fresh;
 }
 

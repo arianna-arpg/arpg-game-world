@@ -641,11 +641,12 @@ shard's `rejoin` now sends `newRun` before the re-seat's zone message (M0's
 order reached the client before its shell and zone subscription stood up, so
 a rejoined hero had no terrain — the covenant's own road back to the body).
 
-Probe receipts (`npx tsx balance/probe_shard.ts`: 115 checks, ALL PASS, exit
+Probe receipts (`npx tsx balance/probe_shard.ts`: 116 checks, ALL PASS, exit
 0). L: a made account carries no id; a profile's first boot mints one and
-every later load keeps it; a legacy cached save is minted and written home; a
+every later load keeps it; a legacy cached save is minted and cached; a
 malformed id is dropped; minting never draws the seeded stream; the id rides
-the join to the host alone. M: a 6.7 KB level-12
+the join to the host alone. M: `ShardVesselLink` saves the account before the
+shard keys a record by its id; a 6.7 KB level-12
 warrior seats at its level with its bag and doll over the lobby card; eight
 hostile shapes and a twin upload fall back fresh; the mirror lands on the
 persistence beat (1195 ticks) in the run slot with no world half and the

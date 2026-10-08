@@ -375,7 +375,7 @@ const claimedAccount = (): Account => { const a = makeAccount(); ensureAccountId
   const cachedId = (JSON.parse(window.localStorage.getItem(ACCOUNT_CACHE_KEY) ?? '{}') as { accountId?: string }).accountId;
   check('L load: a profile\'s first boot mints one id and every later load keeps it',
     isAccountId(boot.accountId) && hydrated.accountId === boot.accountId && again.accountId === boot.accountId, boot.accountId);
-  check('L load: a cached save that predates the id is minted at its load and written home',
+  check('L load: a cached save that predates the id is minted at its load and cached at once',
     isAccountId(healed.accountId) && cachedId === healed.accountId);
   check('L identity: minting draws nothing from the seeded stream (THE STREAM LAW)', draws === 0, `${draws} draws`);
   window.localStorage.removeItem(ACCOUNT_CACHE_KEY);
@@ -426,7 +426,10 @@ check('M forge: a level-12 warrior with a bag and a doll, no world half',
 }
 const cv = new WsTransport();
 const cvRows = rowsOf(cv);
+window.localStorage.removeItem(storageKey('arpg_account_v1'));
 const linkA = new ShardVesselLink(cv, acctA, V, () => null);
+check('M vessel: the link saves the account before the shard keys a record by its id',
+  (JSON.parse(window.localStorage.getItem(storageKey('arpg_account_v1')) ?? '{}') as { accountId?: string }).accountId === acctA.accountId);
 const cw = await cv.connect(vurl, { name: V.name!, classId: 'rogue', accountId: acctA.accountId }, V);
 await waitFor(() => !!seatOf(cw.self), vh, 60);
 {
