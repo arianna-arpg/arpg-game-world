@@ -37,11 +37,12 @@ if not exist "node_modules" (
 )
 
 echo.
-echo  Standing the world up - keep this window open while others play.
-echo  Every option after the launcher name is passed through, e.g.
-echo    "Host Shard.bat" --port 8787 --open --seed 0x1234
+echo  Standing the Unbroken Wilds up - keep this window open while others play.
+echo  A restart with no --seed brings the newest saved world back. Every option
+echo  after the launcher name is passed through, e.g.
+echo    "Host Shard.bat" --port 8787 --seed 0x1234
 echo.
-call npm.cmd run shard -- --open %*
+call npm.cmd run shard -- --open --worldmass %*
 if errorlevel 1 (
     echo.
     echo  The shard stopped with an error - see the messages above.

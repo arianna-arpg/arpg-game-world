@@ -31,7 +31,13 @@ disabled" refusal of `npm.ps1`; in a PowerShell window the same fix is
 | `--save-dir <p>` | where shard saves land |
 
 A player joins from the start menu's **Co-op (Beta)** → class card → **Join a
-Server** → `ws://<machine>:<port>` → Connect. The render shell, prediction,
+Server** → `ws://<machine>:<port>` → Connect. A plain GET on the same port
+(a browser tab on `http://<machine>:<port>/`) answers THE STATUS PAGE: the
+world's kind and seed, the zone, the clock, uptime, the seated players, tick
+time p50/p95, dropped ticks, faults and where it saves. Both launchers
+(`Host Shard.bat`, the codespace's `start-shard.sh`) stand the Unbroken Wilds
+with the open account by default; a restart with no `--seed` brings the
+newest saved world of that kind back. The render shell, prediction,
 the meta intents and the run-lifecycle channel are the co-op lane's,
 unchanged. Type-checks ride `npm run check` (`tsconfig.shard.json` covers
 `server/` with node types; `src/net/` stays browser-safe under the main

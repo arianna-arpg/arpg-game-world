@@ -4,9 +4,10 @@
 # Idempotent: a shard already running keeps running. The world is written to
 # saves/ on the codespace disk every SHARD_CFG.persistSec and on a clean stop.
 # Flags ride SHARD_ARGS (set a Codespaces secret or export it in the terminal);
-# the default stands a classic world with the open account on port 8787.
+# the default stands the Unbroken Wilds with the open account on port 8787;
+# a restart with no --seed brings the newest saved world back.
 set -u
-ARGS="${SHARD_ARGS:---port 8787 --open}"
+ARGS="${SHARD_ARGS:---port 8787 --open --worldmass}"
 if pgrep -f 'server/shard.ts' >/dev/null 2>&1; then
   echo "[shard] already running"
   exit 0

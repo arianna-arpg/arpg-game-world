@@ -1,9 +1,8 @@
 {
   // THE HOSTED SHARD ON CODESPACES (docs/design/shard-world.md card 11):
   // a codespace on this branch is a ready shard host — Node 22, the tree
-  // installed, port 8787 forwarded. Start the world from its terminal with
-  //   npm run shard -- --port 8787 --open --worldmass
-  // then make the port PUBLIC (Ports panel, or `gh codespace ports visibility
+  // installed, port 8787 forwarded, the Unbroken Wilds standing up on every
+  // start (start-shard.sh). Then make the port PUBLIC (Ports panel, or `gh codespace ports visibility
   // 8787:public -c <name>`) and hand players the forwarded wss:// address.
   // The same file is the seed of a future container image (card 11's VPS).
   "name": "Hollow Wake shard",
