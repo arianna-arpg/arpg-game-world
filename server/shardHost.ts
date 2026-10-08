@@ -38,13 +38,14 @@ import { World, type Seat } from '../src/engine/world';
 import { updateAI } from '../src/engine/ai';
 import { CLASSES, type ClassDef } from '../src/data/classes';
 import { rollSeed } from '../src/core/rng';
-import { RemoteInput } from '../src/net/remote';
 import { serializeSnapshot, serializeZone } from '../src/net/snapshot';
 import type { PeerInfo, SessionMsg } from '../src/net/transport';
 import type { MetaAction } from '../src/net/intent';
 import { sanitizeCosmeticLoadout } from '../src/meta/cosmetics';
 import { WORLD_SCHEMA_VERSION, type WorldStateSave } from '../src/meta/worldstate';
-import { ShardTransport } from './shardTransport';
+import { ShardTransport, type ShardJoin } from './shardTransport';
+import { VesselDesk } from './vessel';
+import { ShardCorpses, shardRecordsPath } from './corpses';
 
 export const SHARD_CFG = {
   /** The fixed engine step (the sim harness's cadence; the live host's cap is 0.05). */
@@ -118,6 +119,11 @@ export class ShardHost {
   readonly world: World;
   readonly net: ShardTransport;
   readonly savePath: string | null;
+  /** THE VESSEL desk + THE CORPSE records (docs/engine/shard.md "The vessel
+   *  and the corpse"): uploaded heroes, their mirrors, THE DEATH COVENANT,
+   *  and the bodies a fall leaves behind, keyed by account. */
+  readonly vessels: VesselDesk;
+  readonly corpses: ShardCorpses;
   /** True when the hosted world is the seamless foundation's continuous surface. */
   readonly worldmass: boolean;
   readonly log: (line: string) => void;
@@ -169,8 +175,15 @@ export class ShardHost {
     this.net = new ShardTransport();
     this.net.worldmass = this.worldmass;
     this.net.setSeedSource(() => this.world.manifest.seed);
-    this.net.onPeerJoin(p => this.onJoin(p));
-    this.net.onPeerLeave(id => this.world.removeSeat(id));
+    // THE VESSEL + THE CORPSE records: the records file lives beside the world
+    // save but never with it, so an ephemeral or worldmass world still
+    // remembers its dead (absent only when the shard writes nothing at all).
+    const toSeat = (msg: SessionMsg, to: string): void => this.net.sendSession(msg, to);
+    const recordsDir = opts.saveDir === null ? null : opts.saveDir ?? SHARD_CFG.saveDir;
+    this.corpses = new ShardCorpses(this.world, toSeat, shardRecordsPath(recordsDir, this.seed), this.seed, this.log);
+    this.vessels = new VesselDesk(this.world, toSeat, this.corpses, { beatSec: SHARD_CFG.persistSec, log: this.log });
+    this.net.onPeerJoin((p, join) => this.onJoin(p, join));
+    this.net.onPeerLeave(id => { this.vessels.leave(id); this.world.removeSeat(id); });
     this.net.onSession((m, from) => this.onSession(m, from));
   }
 
@@ -185,15 +198,19 @@ export class ShardHost {
   listen(port: number, host = '0.0.0.0'): Promise<number> { return this.net.listen(port, host); }
 
   // ---- the session desk -----------------------------------------------------
-  private onJoin(peer: PeerInfo): void {
+  private onJoin(peer: PeerInfo, join?: ShardJoin): void {
     if (this.world.seats.some(s => s.id === peer.id)) return;
-    const seat = this.world.addSeat(peer.id, this.classById(peer.classId), new RemoteInput(peer.id));
+    // THE VESSEL: an uploaded hero grafts when the judgment allows; else the
+    // fresh hero of the chosen class (M0's join, unchanged).
+    const seat = this.vessels.seat(peer, join?.vessel);
+    if (!seat) return; // THE LATE WORD: a fallen vessel's client hears its death; its class pick rejoins
+    const vessel = this.vessels.vesselOf(peer.id);
     seat.actor.cosmeticLoadout = sanitizeCosmeticLoadout(peer.cosmeticLoadout);
-    seat.actor.name = peer.name || seat.actor.name;
+    if (!vessel) seat.actor.name = peer.name || seat.actor.name;
     // The joiner needs the standing terrain NOW, not at the next zone change.
     this.net.sendZoneTo(peer.id, serializeZone(this.world));
     this.lastSentZone = this.world.zone.id;
-    this.log(`[shard] ${peer.id} joined as ${peer.classId} (${this.net.connectionCount()} connected)`);
+    this.log(`[shard] ${peer.id} joined as ${seat.meta.classDef.id}${vessel ? ` (the vessel ${seat.meta.name}, level ${this.world.seatHero(seat).level})` : ''} (${this.net.connectionCount()} connected)`);
   }
 
   private onSession(msg: SessionMsg, from: string): void {
@@ -210,8 +227,14 @@ export class ShardHost {
       // seat is somehow gone (the co-op lane's reseatPeer, minus the new run).
       if (this.world.seats.some(s => s.id === from)) return;
       const peer = this.net.peers().find(p => p.id === from);
-      this.onJoin({ id: from, name: peer?.name ?? 'Joiner', classId: msg.classId, isHost: false, cosmeticLoadout: peer?.cosmeticLoadout });
+      // newRun FIRST: the client's render shell (and its zone subscription)
+      // stands up on it, so the zone message the re-seat sends must follow it.
       this.net.sendSession({ t: 'newRun', seat: from, seed: this.world.manifest.seed }, from);
+      // The account the connection named at its join rides the rejoin (THE
+      // CORPSE RETURNS: a fallen vessel's player wakes beside its own dead).
+      this.onJoin({ id: from, name: peer?.name ?? 'Joiner', classId: msg.classId, isHost: false, cosmeticLoadout: peer?.cosmeticLoadout, accountId: this.vessels.accountOf(from) });
+    } else if (msg.t === 'leaving') {
+      this.vessels.requestMirror(from); // THE FAREWELL: the vessel's last mirror before its socket closes
     }
   }
 
@@ -242,6 +265,8 @@ export class ShardHost {
     if (!w.gameOver) for (const a of w.actors) updateAI(a, w, dt);
     w.update(dt);
     this.ticks++;
+    this.vessels.tick(dt); // THE VESSEL: THE DEATH COVENANT (before THE MERCY could answer) + the mirror beat
+    this.corpses.tick(dt); // THE CORPSE RETURNS: each seat's own standing bodies + the reclaim dwell
 
     if (this.net.connectionCount() > 0) {
       if (w.zone.id !== this.lastSentZone) {
@@ -296,6 +321,7 @@ export class ShardHost {
   async stop(): Promise<void> {
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
     if (this.savePath) this.persist();
+    this.vessels.mirrorAll(); // THE MIRROR: every vessel home before the wire closes
     await this.net.close();
   }
 
