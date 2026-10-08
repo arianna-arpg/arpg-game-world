@@ -74,7 +74,7 @@ try{
   SKILL_INPUT_CFG.movement=movement;
   const w=makeSimWorld('warrior',902),p=w.player;w.actors=[p];
   // Keep the historical rooted reference: this probe measures intent order.
-  p.skills[0]=makeSkillInstance(mobileCleave?SKILLS.cleave:{...SKILLS.cleave,castMove:0,castAim:'press'});
+  p.skills[0]=makeSkillInstance(mobileCleave?{...SKILLS.cleave,castMove:.35,castAim:'live'}:SKILLS.cleave);
   const origin={...p.pos},casts:{id:string;frame:number}[]=[];
   let previous:unknown,committed:unknown,firstMove=-1;
   for(let frame=0;frame<150;frame++){
@@ -95,7 +95,7 @@ try{
  assert.equal(retreat.firstMove,blocked.firstMove,'both obey the same original native movement lock');
  assert.ok(retreat.dx>150,'the player actually walks after the committed cast');
  const mobile=walking('recent-walk',Infinity,Infinity,true);
- assert.equal(mobile.firstMove,5,'authored mobile Cleave walks during the same committed swing');
+ assert.equal(mobile.firstMove,5,'explicit mobile fixture walks during the same committed swing');
  assert.equal(mobile.casts.length,1,'a fresh walk still suppresses its older repeat');
  const resumed=walking('recent-walk',100);
  assert.ok(resumed.casts.some(c=>c.frame>=100),'ending movement resumes the still-held primary');

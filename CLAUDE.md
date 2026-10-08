@@ -1,3 +1,10 @@
+Marsh and Thicket Stalkers opt into lurkMeleeRange: finish an ambush and
+trade attacks until the prey escapes commitRange. Thicket reserves Closing Fang
+for targets beyond 130 units; player use and other species stay authored.
+Cleave has no free movement or live aim. Review remaining gameplay deviations
+in docs/design/seamless-gameplay-review.md. Verify stalkercommitment, castaim,
+skillinputorder, worldmass_doorplans, Cleave, tactical AI, sim smoke and genqa.
+
 MassLandforms embeds 21 captured native district shapes in new seamless
 expeditions. Shared adventure/exploration district bodies feed both localeGen
 and the immutable landform source policy. Preserve complete admission, opening
@@ -489,9 +496,10 @@ afflictioncues, combatfocus and presentation-preferences-ui with real Options.
 
 Optional SkillDef.castAim lets an ordinary windup follow its actor's live aim.
 updateCastAim never selects a target or changes commitment; locked targets,
-planting and converted modes retain their rules. Cleave opts in alongside
-existing castMove mobility. Verify castaim, melee/casting/AI probes, sim smoke
-and cast-aim-ui.cjs against the prior fixed client and native continuation.
+planting and converted modes retain their rules. Cleave uses the native planted,
+press-time aim default; castMobility still requires investment. Verify castaim,
+melee/casting/AI probes, sim smoke and cast-aim-ui.cjs for current native
+commitment, Stalker close combat, original door widths and continuation.
 
 drawHudText gives native status, objective and compass lines a configurable
 VIS_CFG.hudText outline. It preserves authored fill, font, alignment and layout;
@@ -649,12 +657,13 @@ Schema seven prevents silently losing this trigger policy. Verify worldmass,
 native puzzles, sim smoke and puzzle-rewards-ui.cjs for native solve, ownership,
 shared budgets, pending/fitted Continue and actual prior-client refusal.
 
-New expedition settlement.structurePlans pins native building plan variants.
+Saved settlement.structurePlans still pins native building plan variants; new
+expeditions use the original inn and waking-house door widths.
 Variants retain native identity, services, legend and footprint; the existing
 compiler owns doors, roofs and collision. Schema six refuses older clients;
 legacy saves retain their original plans. Verify worldmass_doorplans, worldmass,
-doorpress, generation QA and broad-doorways-ui.cjs for off-centre approaches,
-exact current Continue, old geometry and actual prior-client refusal.
+doorpress, generation QA and cast-aim-ui.cjs for centered native entry and
+continuation. The door-plan probe retains explicit historical broad-plan fixtures.
 
 New expedition descriptors opt into settlement.quests.acceptance = 'journal'.
 questOfferChoices reuses native live eligibility; questAccept dispatch rechecks
