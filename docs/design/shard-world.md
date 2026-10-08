@@ -585,6 +585,44 @@ HUD's local site name reads a private runtime map the shell never fills.
     seat leaves, the keeper's sweep cadence, seats per shard and per unit,
     the persistence beat, the mirror's rollback window.
 
+**Ruled 2026-10-08 (her second message):** 1 and 2 (the seamless
+foundation), 3 A, 4 A, 5 A with the credit law, 6 A with her corpse
+covenant (the server remembers the death spot; the client's run ends; a new
+character walks back for it), 7 the first cut, 8 A, 9 as built, 10 as set,
+11 Codespaces then a VPS, 12 A (done: origin/main is reconciled), 13 A
+(done: the wilds are on the wire).
+
+**New cards from the first design critique (2026-10-08) — open:**
+
+14. **Death until the vessel lands** — A: THE MERCY as is. B: a mercy a
+    distant player never withholds (THE NEAR LAW now does this), a visible
+    tell on the downed body, and a return to the hearth after N seconds.
+    C: the ruled covenant now. Rec: B now, C with the vessel (in flight).
+15. **Roads that move the whole party** (caravan, town portal, caves,
+    classic portals) until per-seat travel exists — A: move everyone.
+    B: move only when every connected player gathers, shown as a muster
+    ring. C: seal them on shards (TODAY: sealed by THE SEALED ROADS).
+    Rec: C while shards are friends-only; B is the first per-seat step.
+16. **Disconnects** — A: the hero vanishes at once (today; a disconnect is a
+    free escape from death). B: the hero lies dormant N seconds and a
+    reconnect token reclaims it. C: the server holds the hero until the
+    next login. Rec: B now, C with THE VESSEL.
+17. **Identity and talk** — A: a name entered once, overhead names on
+    heroes, world-anchored pings (a visible cue, SHOW DON'T TELL). B: text
+    chat as well. Rec: A; chat is yours.
+18. **World-freezing powers on a shard** (Time Stop, any world-wide hold)
+    — A: freeze the whole World. B: scope them to a radius. C: exempt
+    other players. Rec: B.
+19. **Getting the client to players** — A: friends run the branch checkout.
+    B: a Pages preview of this branch pinned to the shard's commit (https,
+    so wss) and version-gated. C: a packaged build channel. Rec: B.
+20. **The joiner's wake** — A: beside the focus (today). B: at the hearth,
+    protected until the first input. Rec: B (queued behind the vessel
+    merge).
+21. **The probe's tier** — the shard rig now boots four wilds (about 90 s):
+    keep it on the fast lane, or split the wilds-save section into a slow
+    rig. Rec: split.
+
 ---
 
 ## §8 M0 receipts (2026-10-07, this pass)
