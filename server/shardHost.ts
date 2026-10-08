@@ -46,6 +46,7 @@ import type { MetaAction } from '../src/net/intent';
 import { sanitizeCosmeticLoadout } from '../src/meta/cosmetics';
 import { WORLD_SCHEMA_VERSION, type WorldStateSave } from '../src/meta/worldstate';
 import { ShardTransport } from './shardTransport';
+import { readWildsSave, resumeWilds, setAsideWildsSave } from './wildsSave';
 
 export const SHARD_CFG = {
   /** The fixed engine step (the sim harness's cadence; the live host's cap is 0.05). */
@@ -83,6 +84,10 @@ export const SHARD_CFG = {
   saveSchema: 1,
   /** Where shard saves land by default (gitignored beside the game's). */
   saveDir: 'saves',
+  /** THE WILDS SAVE (server/wildsSave.ts): a --worldmass shard writes its own
+   *  file, `shard_<seed><wildsSaveSuffix>.json`, beside the classic one — the
+   *  two lanes never adopt, or overwrite, each other's world. */
+  wildsSaveSuffix: '_wilds',
 };
 
 export interface ShardOptions {
@@ -98,8 +103,9 @@ export interface ShardOptions {
   saveDir?: string | null;
   /** THE UNBROKEN WILDS: start the seamless foundation's worldmass runtime
    *  (World.startWorldMass) under the keeper — the hosted world is the one
-   *  continuous surface. Its persistence is the mass lane's own save shape,
-   *  not WorldStateSave, so a wilds shard runs EPHEMERAL until M2 adopts it. */
+   *  continuous surface. It persists like a classic shard, to its own file,
+   *  and a saved one stands back up in the mass lane's resume order before
+   *  the shard answers a socket (THE WILDS SAVE, server/wildsSave.ts). */
   worldmass?: boolean;
   /** Log sink (default console). */
   log?: (line: string) => void;
@@ -113,11 +119,11 @@ export interface ShardSave {
 }
 
 /** The seed of the newest `shard_<seed>.json` in a save dir, or undefined. */
-export function newestSavedSeed(dir: string): number | undefined {
+export function newestSavedSeed(dir: string, wilds = false): number | undefined {
   try {
     let best: { seed: number; mtime: number } | null = null;
     for (const name of readdirSync(dir)) {
-      const m = /^shard_([0-9a-f]{8})\.json$/.exec(name);
+      const m = (wilds ? /^shard_([0-9a-f]{8})_wilds\.json$/ : /^shard_([0-9a-f]{8})\.json$/).exec(name); // each kind finds its own file
       if (!m) continue;
       const mtime = statSync(join(dir, name)).mtimeMs;
       if (!best || mtime > best.mtime) best = { seed: parseInt(m[1], 16) >>> 0, mtime };
@@ -148,7 +154,10 @@ export function openAccount(account: Account): void {
 export class ShardHost {
   readonly seed: number;
   readonly account: Account;
-  readonly world: World;
+  /** The hosted World. Replaced at most once, before any socket opens: a saved
+   *  wilds that will not stand gives way to a fresh keeper world (THE WILDS
+   *  SAVE, server/wildsSave.ts). */
+  world: World;
   readonly net: ShardTransport;
   readonly savePath: string | null;
   /** True when the hosted world is the seamless foundation's continuous surface. */
@@ -176,6 +185,11 @@ export class ShardHost {
   private timer: NodeJS.Timeout | null = null;
   private lastWall = 0;
   private accum = 0;
+  private readonly keeperClass: ClassDef;
+  /** THE RESUME LAW (server/wildsSave.ts): true while a saved wilds stands back
+   *  up — no tick steps, no persist writes and no socket opens until ready(). */
+  private wildsResuming = false;
+  private resuming: Promise<void> = Promise.resolve();
 
   constructor(opts: ShardOptions = {}) {
     bootShardEngine();
@@ -183,32 +197,24 @@ export class ShardHost {
     // THE HOSTED SEED: given, else the NEWEST world in the save dir (a restart
     // with no flag brings the same world back), else a fresh roll.
     const saveDir = opts.saveDir === null ? null : (opts.saveDir ?? SHARD_CFG.saveDir);
-    this.seed = (opts.seed ?? (saveDir ? newestSavedSeed(saveDir) : undefined) ?? rollSeed()) >>> 0;
+    this.seed = (opts.seed ?? (saveDir ? newestSavedSeed(saveDir, !!opts.worldmass) : undefined) ?? rollSeed()) >>> 0;
     this.account = makeAccount();
     if (opts.open) openAccount(this.account);
-    const manifest = buildManifest(this.account, this.seed);
-    this.world = new World(this.account, Object.freeze(manifest));
-    // A hosted world never freezes for one hand (the pause/harvest holds are solo policy).
-    this.world.timeflow.allowHold = () => false;
-    const cls = this.classById(opts.keeperClass ?? SHARD_CFG.keeper.classId);
-    this.world.createPlayer(cls, { name: SHARD_CFG.keeper.name, startingCompanions: false, startingFlasks: false });
-    const keeper = this.world.localSeat;
-    keeper.keeper = { reviveSec: SHARD_CFG.keeper.reviveSec };
-    keeper.actor.untargetable = true;
-    keeper.actor.passive = true;
-    keeper.actor.invulnerable = true; // the warden stands in lava and water unharmed (THE SHADOW walks it anywhere)
+    this.keeperClass = this.classById(opts.keeperClass ?? SHARD_CFG.keeper.classId);
+    this.world = this.standKeeperWorld();
     COOP_SCALING.shareRadius = SHARD_CFG.nearRadius; // THE NEAR LAW, the shard's own
     this.worldmass = !!opts.worldmass;
+    this.savePath = opts.saveDir === null ? null
+      : join(opts.saveDir ?? SHARD_CFG.saveDir, `shard_${this.seed.toString(16).padStart(8, '0')}${this.worldmass ? SHARD_CFG.wildsSaveSuffix : ''}.json`);
     if (this.worldmass) {
       // THE WILDS: the classic hearth boot above stands the keeper; the mass
       // runtime then re-seats the world as the one boundless surface (main.ts's
-      // own order: createPlayer, then startWorldMass). No classic save applies.
-      this.savePath = null;
-      this.world.startWorldMass(this.seed);
-      this.log(`[shard] the Unbroken Wilds stand (seed 0x${this.seed.toString(16)}) — ephemeral until the mass lane's save is adopted`);
+      // own order: createPlayer, then startWorldMass) — or THE WILDS SAVE stands
+      // a saved surface back up in the mass lane's own resume order (wildsSave).
+      const saved = this.savePath ? readWildsSave(this.savePath, SHARD_CFG.saveSchema, this.seed) : null;
+      if (saved && 'ws' in saved) this.resuming = this.resumeWildsSave(saved.ws);
+      else this.standFreshWilds(saved?.refused);
     } else {
-      this.savePath = opts.saveDir === null ? null
-        : join(opts.saveDir ?? SHARD_CFG.saveDir, `shard_${this.seed.toString(16).padStart(8, '0')}.json`);
       if (this.savePath && existsSync(this.savePath)) this.restore();
       else this.world.scrubStaleObjectives();
     }
@@ -226,11 +232,67 @@ export class ShardHost {
     return CLASSES.find(c => c.id === id) ?? CLASSES[0];
   }
 
+  /** The keeper's world: a real expedition manifest, one World, and THE KEEPER
+   *  SEAT parked at the hearth's bedside. The boot's first half, and the fresh
+   *  world a saved wilds that will not stand gives way to (wildsSave). */
+  private standKeeperWorld(): World {
+    const world = new World(this.account, Object.freeze(buildManifest(this.account, this.seed)));
+    // A hosted world never freezes for one hand (the pause/harvest holds are solo policy).
+    world.timeflow.allowHold = () => false;
+    world.createPlayer(this.keeperClass, { name: SHARD_CFG.keeper.name, startingCompanions: false, startingFlasks: false });
+    const keeper = world.localSeat;
+    keeper.keeper = { reviveSec: SHARD_CFG.keeper.reviveSec };
+    keeper.actor.untargetable = true;
+    keeper.actor.passive = true;
+    keeper.actor.invulnerable = true; // the warden stands in lava and water unharmed (THE SHADOW walks it anywhere)
+    return world;
+  }
+
+  /** A fresh Unbroken Wilds under the keeper: no save, or one refused (the
+   *  refused file is set aside first — THE WILDS SAVE's one log line). */
+  private standFreshWilds(refused?: string): void {
+    const aside = refused && this.savePath ? setAsideWildsSave(this.savePath) : null;
+    this.world.startWorldMass(this.seed);
+    this.log(`[shard] the Unbroken Wilds stand (seed 0x${this.seed.toString(16)}) — a fresh surface`
+      + (refused ? `: the saved wilds would not stand (${refused})${aside ? `; set aside as ${aside}` : ''}` : ''));
+  }
+
+  /** THE WILDS SAVE (server/wildsSave.ts): the mass lane's resume order on the
+   *  keeper's world. resumeWilds runs steps 1-4 inside the constructor and
+   *  resolves after the neighborhood + finish; a world that will not stand is
+   *  discarded for a fresh keeper world and a fresh wilds. */
+  private async resumeWildsSave(ws: WorldStateSave): Promise<void> {
+    this.wildsResuming = true;
+    const t0 = performance.now();
+    try {
+      const r = await resumeWilds(this.world, ws, this.keeper);
+      this.log(`[shard] resumed the Unbroken Wilds 0x${this.seed.toString(16)} (t=${Math.round(this.world.time)}s, ${r.natives} natives, `
+        + `${r.pockets} pockets${r.wasInPocket ? ', the keeper back from a pocket' : ''}) in ${Math.round(performance.now() - t0)} ms`);
+    } catch (e) {
+      this.world.massRuntime?.dispose();
+      this.world = this.standKeeperWorld();
+      this.standFreshWilds(e instanceof Error ? e.message : String(e));
+    } finally {
+      this.wildsResuming = false;
+    }
+  }
+
   /** The keeper's seat (p0). */
   get keeper(): Seat { return this.world.localSeat; }
 
-  /** Open the socket; resolves the bound port (0 = any free port). */
-  listen(port: number, host = '0.0.0.0'): Promise<number> { return this.net.listen(port, host); }
+  /** THE RESUME LAW (server/wildsSave.ts): resolves once the hosted world
+   *  stands — at once for a classic or a fresh shard, after the mass lane's
+   *  neighborhood + finish for a saved wilds. A saved wilds that will not stand
+   *  resolves as a fresh one; it rejects only when even a fresh wilds cannot
+   *  stand (a fresh boot's own failure). Await it before the first tick. */
+  ready(): Promise<void> { return this.resuming; }
+
+  /** Open the socket; resolves the bound port (0 = any free port). THE RESUME
+   *  LAW: a saved wilds answers no socket until it stood back up (wildsSave). */
+  async listen(port: number, host = '0.0.0.0'): Promise<number> {
+    await this.ready();
+    return this.net.listen(port, host);
+  }
 
   // ---- the session desk -----------------------------------------------------
   private onJoin(peer: PeerInfo): void {
@@ -280,6 +342,7 @@ export class ShardHost {
   // ---- the host frame -------------------------------------------------------
   /** One engine step: the host frame verbatim, then the wire, then the beats. */
   tick(dt: number): void {
+    if (this.wildsResuming) return; // THE RESUME LAW: no frame meets a half-stood world (wildsSave)
     const w = this.world;
     if (this.worldmass) this.shadowFocus();
     else this.keeper.lastActedAt = w.time; // THE SEALED ROADS hold on classic ground too
@@ -418,9 +481,10 @@ export class ShardHost {
   }
 
   // ---- persistence ----------------------------------------------------------
-  /** Write the world half (WorldStateSave) under the shard's own wrapper. */
+  /** Write the world half (WorldStateSave) under the shard's own wrapper — on
+   *  the wilds the mass half rides it (`worldmass` + `massSideareas`, wildsSave). */
   persist(): void {
-    if (!this.savePath) return;
+    if (!this.savePath || this.wildsResuming) return; // THE RESUME LAW: never write a half-stood world over its own save
     const save: ShardSave = { schemaVersion: SHARD_CFG.saveSchema, seed: this.seed, savedAt: Date.now(), world: this.world.serializeWorldState() };
     try {
       mkdirSync(dirname(this.savePath), { recursive: true });
@@ -440,6 +504,7 @@ export class ShardHost {
     try { save = JSON.parse(readFileSync(this.savePath!, 'utf-8')) as ShardSave; } catch { save = null; }
     const ws = save?.world;
     if (!save || save.schemaVersion !== SHARD_CFG.saveSchema || !ws || ws.schemaVersion !== WORLD_SCHEMA_VERSION
+      || ws.worldmass // a wilds world half is THE WILDS SAVE's (wildsSave), never a classic world's
       || !this.world.adoptWorldState(ws)) {
       this.world.scrubStaleObjectives();
       this.log(`[shard] no usable save at ${this.savePath} — a fresh world`);

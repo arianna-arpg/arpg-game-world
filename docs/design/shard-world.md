@@ -465,12 +465,17 @@ one focus is the sim-unit gap M1 closes, and players far from the focus meet
 cold ground) and THE DRESS BEAT (the zone message is the one-shot carrier of
 doodads and the wilds GROW them as the focus walks — ecology, sites, native
 scenery — so a changed doodad roster re-ships the zone message, at most once
-per `dressSec`). Still open on the wilds: the mass lane's own save shape
-(`MassAdventureSave`) is not yet the shard's persistence (a wilds shard runs
-ephemeral; the vessel and corpse records persist beside it), native-feature
-grid edits the server makes do not reach the shell's walk (a wall the server
-blocks is open to prediction until the ack lands), and the HUD's local site
-name reads a private runtime map the shell never fills.
+per `dressSec`). Persistence is no longer open (THE WILDS SAVE, the same day;
+`server/wildsSave.ts`, §8): a wilds shard writes its own
+`shard_<seed>_wilds.json` on the classic beat, because `serializeWorldState`
+already embeds the mass half (`MassAdventureSave` live or from a pocket, plus
+the pockets the surface minted), and `resumeWilds` stands it back up in the
+mass lane's own Continue order with the keeper waking at the hearth, before
+the shard answers a socket or steps a frame (THE RESUME LAW, `ready()`); the
+vessel and corpse records persist beside it. Still open on the wilds:
+native-feature grid edits the server makes do not reach the shell's walk (a
+wall the server blocks is open to prediction until the ack lands), and the
+HUD's local site name reads a private runtime map the shell never fills.
 
 ---
 
@@ -651,3 +656,50 @@ answered real ground. Probe section K pins it: the runtime stands, three
 seconds tick faultless, the welcome says `worldmass: true`, a joiner rides
 the surface snapshot beside the natives. The shell does not render the
 wilds yet (§3.12, THE WILDS ON THE WIRE).
+
+**THE WILDS SAVE, the same day (branch `shard-wildsave`):** a `--worldmass`
+shard is persistent. The write needed nothing new: `serializeWorldState()`
+already embeds the mass half, from a live runtime or from the surface a
+pocket left behind, so `ShardHost` keeps its save path on the wilds (its own
+`shard_<seed>_wilds.json`, `SHARD_CFG.wildsSaveSuffix`) and the classic beat
+writes it atomically. The read is new: `server/wildsSave.ts` `readWildsSave`
+(the wrapper, the world schema, the mass checkpoint, the seed thread) and
+`resumeWilds`, the mass lane's Continue order with the keeper as the player
+(`adoptWorldState` → `startWorldMass(…, { restoreOnly: true })` →
+`restoreMassSideareas` without the active pocket → `resumeSpawn('town')`, the
+runtime's own hearth wake → `await prepareResumeNeighborhood` →
+`finishResume`). Construction went two-phase: `ShardHost.ready()` resolves
+after the resume, `listen` awaits it, and `tick`/`persist` refuse before it
+(THE RESUME LAW; the CLI awaits `ready()` before `listen` and `start`). A save
+that will not stand gives way to a fresh keeper world and a fresh wilds with
+one log line, the refused file set aside beside it. The shard files took small
+seams only: the keeper-world boot factored into `standKeeperWorld` for the
+fallback, the `world` field writable for that one swap, and the classic
+restore refusing a world half that carries `worldmass`.
+
+The probe's section Q (`npx tsx balance/probe_shard.ts`, 14 new checks, ALL
+PASS with A-P unchanged): a fresh wilds on its own file; 180 frames, then a
+joiner set down east of the hearth walks 300 px over the wire (doodads
+949→1128, population 17); `persist()` writes 3.92 MB in ~0.19-0.25 s with 8
+natives and no `.tmp` left; THE RESUME LAW (until `ready()` the runtime stands
+restore-only, a tick steps nothing and a persist writes nothing); the clock
+back to the saved second (4.5500 vs 4.5500); the runtime finished and live
+on the surface; 8/8 saved natives standing with the same body and wounds; the
+keeper at the settlement's spawn (225, 226), saved ~3,400 px east of it; the
+welcome carrying the same seed; 120 frames without a fault. The pocket: the
+hearth's own cellar hatch entered through the engine's `enterSidezone` (the
+sideareas probe's path), 30 frames and a write inside it (the surface it left
+behind plus the active pocket), the resume waking the keeper at the hearth
+with the pocket pinned, and the same hatch re-entering the same pocket. The
+refusal: a tampered config hash (the world half adopts, the mass half
+refuses) gives way to a fresh wilds with one log line and the file set aside.
+
+**Measured** (this machine, partly under load from co-sessions): a fresh
+wilds boots in 2.9-5.9 s; a resume stands up in 3.0-4.5 s (the constructor's
+synchronous steps ~0.9-1.1 s, the first live update the rest); a persist costs
+~0.19-0.27 s per write (3.9 MB: 2.2 MB of terrain edits, the hearth's
+foundation and the frontier trails, and 1.3 MB of pinned adventure config), a
+stall the bounded pump drops rather than replays once per `persistSec`. The
+rig ran 21 s before section Q and 69-90 s with it on this machine (four wilds
+boots and resumes plus ~550 frames; the spread is co-session load), so its
+`fast` roster tier deserves a look.
