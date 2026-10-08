@@ -1,3 +1,5 @@
+import { WATER_SURFACE, ordinaryWater } from '../data/waterSurface';
+import { paintWaterSurface } from '../render/vis/waterSurface';
 import { cellKey, localOffset, neighborCell, type MassCell } from './address';
 import { massHash } from './random';
 import type { WorldMassRuntime } from './runtime';
@@ -109,6 +111,17 @@ export class MassPainter {
     while (this.baked.size > mass.stream.config.maxPages) this.baked.delete(this.baked.keys().next().value!);
     this.prepare(mass, visible, {left, top, right, bottom}, {x:x+w/2,y:y+h/2}, !finishedVisible);
   }
+  /** Live motion never invalidates or rebakes the geographic floor. */
+  drawWater(ctx: CanvasRenderingContext2D, mass: WorldMassRuntime, x: number, y: number, w: number, h: number, time: number): void {
+    const cs = mass.walk.cellSize, wet = new Path2D(); let any = false;
+    for (let gy = Math.floor(y / cs); gy <= Math.floor((y + h) / cs); gy++)
+      for (let gx = Math.floor(x / cs); gx <= Math.floor((x + w) / cs); gx++) {
+        if (!ordinaryWater(mass.walk.regionAt((gx + .5) * cs, (gy + .5) * cs))) continue;
+        wet.rect(gx * cs, gy * cs, cs, cs); any = true;
+      }
+    if (!any) return;
+    ctx.save(); ctx.clip(wet); paintWaterSurface(ctx, {x, y, w, h}, time); ctx.restore();
+  }
   private prepare(mass: WorldMassRuntime, visible: ReadonlySet<string>,
     bounds: {left:number;top:number;right:number;bottom:number}, center: {x:number;y:number}, advance: boolean): void {
     const cfg=this.preparation, span=mass.config.terrain.addressSpan, cap=mass.stream.config.maxPages;
@@ -192,7 +205,9 @@ export class MassPainter {
       const t = x >= 0 && y >= 0 && x < cols && y < cols ? page?.samples[y * cols + x] : undefined;
       const sample = t ?? mass.stream.sample({ ...cell, x: x * cs, y: y * cs });
       const lift = 1 + Math.max(-.14, Math.min(.14, (sample.fields.elevation ?? 0) * .13));
-      const rgb = ground.color(sample, { ...cell, x: (x + .5) * cs, y: (y + .5) * cs }).map(v => v * lift);
+      const rgb = ordinaryWater(sample.region)
+        ? [1, 3, 5].map(i => parseInt(WATER_SURFACE.deep.slice(i, i + 2), 16))
+        : ground.color(sample, { ...cell, x: (x + .5) * cs, y: (y + .5) * cs }).map(v => v * lift);
       colors.push(rgb);
     } yield; }
     const step = 4, small = document.createElement('canvas'); small.width = span / step; small.height = span / step;

@@ -4056,7 +4056,8 @@ export class World {
   }
   sanctuaryRetreat(a: Actor): Vec2 | undefined {
     return this.massRuntime?.settlement?.sanctuary.retreat(a,
-      a.aiTargetId === undefined ? undefined : this.actorById(a.aiTargetId) ?? undefined);
+      a.aiTargetId === undefined ? undefined : this.actorById(a.aiTargetId) ?? undefined,
+      guard => this.lineOfSight(a.pos, guard.pos, a.tier, guard.tier));
   }
   /** THE TIER FABRIC (engine/tiers.ts): one stateless walk view per elevated
    *  STORY over the SAME grid (index k = tier k; [0] unused; null in
@@ -41932,7 +41933,8 @@ export class World {
     // Kill CREDIT: xp, kill count and loot only flow when the player's
     // side did the deed. Two warring factions thinning each other out pay
     // the watcher nothing — pick off the survivors instead.
-    const credit = !killer || killer.team === 'player';
+    const settlementGuard = !!killer && !!MONSTERS[killer.defId ?? '']?.settlementGuard && !killer.owner;
+    const credit = !killer || killer.team === 'player' && !settlementGuard;
     // THE SPEECH GRAMMAR's '{monster}' (engine/speechGrammar.ts): a credited
     // kill of a page-worthy kind is what the town's folk gossip about.
     if (credit && actor.team === 'enemy' && actor.defId && !actor.noBounty && bestiaryEligible(MONSTERS[actor.defId])) this.noteSlain(actor.defId);

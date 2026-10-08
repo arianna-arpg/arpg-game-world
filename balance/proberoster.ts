@@ -183,6 +183,8 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_worldmass_quests.ts', status: 'green', tier: 'fast', why: 'native giver to physical garrison to return reward; exact partial/pending/paid Continue, source ownership, no hidden exploration, legacy and ordinary isolation' },
   { probe: 'probe_worldmass_work.ts', status: 'green', tier: 'fast', why: 'new frontier work cannot target inaccessible graph zones; old records and earned native rewards remain intact' },
   { probe: 'probe_worldmass_haven.ts', status: 'green', tier: 'fast', why: 'continuous native Lastlight, spatial services, plan doors, interiors, town growth snapshots and resume' },
+  { probe: 'probe_settlementdefenses.ts', status: 'green', tier: 'fast', why: 'physical town fence and road gates, native guard combat, reward ownership, leash and Continue' },
+  { probe: 'probe_watersurface.ts', status: 'green', tier: 'fast', why: 'shared water palette and deterministic bounded live surface motion' },
   { probe: 'probe_worldmass_sanctuary.ts', status: 'green', tier: 'fast', why: 'continuous town service safety, symmetric hits, physical retreat, owned proxies, open policy and Continue' },
   { probe: 'probe_worldmass_clearance.ts', status: 'green', tier: 'fast', why: 'native landmark completion XP, garrison eligibility, one-time receipt, partial admission and legacy worlds' },
   { probe: 'probe_worldmass_cacheopening.ts', status: 'green', tier: 'fast', why: 'native chest dwell under pressure, faster earned quiet opening, partial-progress Continue and legacy/malformed policy refusal' },

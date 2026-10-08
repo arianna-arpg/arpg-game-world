@@ -1,3 +1,4 @@
+import { SETTLEMENT_DEFENSE_STRUCTURES } from './settlementDefenses';
 // ---------------------------------------------------------------------------
 // STRUCTURE BLUEPRINTS — buildings as data.
 //
@@ -370,6 +371,7 @@ const CIVITAS_LEGEND: Record<string, CellSpec> = {
 };
 
 export const STRUCTURES: Record<string, StructureDef> = {
+  ...SETTLEMENT_DEFENSE_STRUCTURES,
 
   // A one-room cottage — a PLAN now: boarded floor, a dwell-open door, a
   // hearth-warm interior that reveals as you step beneath the roof.

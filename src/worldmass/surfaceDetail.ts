@@ -13,8 +13,6 @@ export interface MassSurfaceDetail {
 export const MASS_SURFACE_VIEW: {enabled:boolean;regions:Record<string,MassSurfaceDetail>} = {
   enabled:true,
   regions:{
-    water:{kind:'ripples',spacing:180,chance:.84,extent:112,bands:3,amplitude:5,
-      dark:'rgba(8,29,39,.24)',light:'rgba(158,205,210,.22)',width:.9},
     ice:{kind:'fractures',spacing:148,chance:.84,extent:94,
       dark:'rgba(32,64,77,.18)',light:'rgba(218,241,244,.32)',width:.85},
     swamp:{kind:'pools',spacing:112,chance:.80,extent:35,

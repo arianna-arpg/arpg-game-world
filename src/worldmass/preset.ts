@@ -1,3 +1,5 @@
+import { WATER_SURFACE } from '../data/waterSurface';
+import { LASTLIGHT_DEFENSES } from '../data/settlementDefenses';
 import { MASS_SNOW_DEFAULT } from './snow';
 import { MASS_WEATHER_DEFAULT } from './weather';
 import { MASS_HIERARCHY_DEFAULT } from './hierarchy';
@@ -90,7 +92,7 @@ export function massAdventure(): MassAdventure {
       { id: 'danger', base: 0, layers: [{ id: 'country', period: 7000, amplitude: 1 }] },
     ],
     surfaces: [
-      { id: 'lake', source: 'regions/water', priority: 100, when: [{ field: 'elevation', max: -.25 }], region: 'water', color: '#223c45', biome: 'downs' },
+      { id: 'lake', source: 'regions/water', priority: 100, when: [{ field: 'elevation', max: -.25 }], region: 'water', color: WATER_SURFACE.deep, biome: 'downs' },
       { id: 'shore', source: 'regions/sand', priority: 90, when: [{ field: 'elevation', max: -.16 }], region: 'sand', color: '#595340', biome: 'downs' },
       { id: 'outcrop', source: 'regions/wall', priority: 80, when: [{ field: 'rock', min: .65 }, { field: 'elevation', min: .2 }], region: 'wall', color: '#56594f', biome: 'highland' },
       {id:'frozen-ground',source:'regions/ice',priority:25,
@@ -222,6 +224,7 @@ export function massAdventure(): MassAdventure {
       ] },
     ] },
     settlement: { zone: 'lastlight', source: 'zones/lastlight', apron: 192, blend: 144,
+      defenses: { ...LASTLIGHT_DEFENSES },
       structurePlans: {
         waking_house: nativeStructurePlan('waking_house', 'structures/waking-house/broad-entry-v1', {5:'##DD###'}),
         inn: nativeStructurePlan('inn', 'structures/inn/broad-entry-v1', {7:'####W#DD#W####'}),

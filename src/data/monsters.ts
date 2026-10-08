@@ -1,3 +1,4 @@
+import { SETTLEMENT_GUARDS } from './settlementDefenses';
 import { HIVECALL_MONSTERS } from './hivecall';
 import type { SpeechAttention } from './speechAttention';
 ﻿// ---------------------------------------------------------------------------
@@ -626,6 +627,8 @@ export interface MonsterDef {
    *  standing sentry; hold:false = a body that merely orbits home). Spawners
    *  may stamp site-exact posts on top (Actor.aiPost — the holdfast crew). */
   post?: PostSpec | true;
+  /** Independent sanctuary defender; its kills pay no player bounty. */
+  settlementGuard?: boolean;
   /** How worth guarding this monster is to protector brains (higher = posted
    *  first). Omitted: commanders rank 2, casters 1, everyone else 0. */
   wardPriority?: number;
@@ -2188,6 +2191,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   ...WORLDBOSS_ENCOUNTER_MONSTERS,
   ...TITAN_MONSTERS,
   ...TETHERED_MONSTERS,
+  ...SETTLEMENT_GUARDS,
   ...TETHER_KEEPERS,
   ...ENCOUNTER_ADVENTURERS,
 

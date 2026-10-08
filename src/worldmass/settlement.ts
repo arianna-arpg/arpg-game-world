@@ -1,3 +1,5 @@
+import { raiseSettlementDefenses, validateSettlementDefenses, type SettlementGate } from './settlementDefenses';
+import type { SettlementDefensesSpec } from '../data/settlementDefenses';
 import type { World } from '../engine/world';
 import type { Actor } from '../engine/actor';
 import type { Doodad, PlacedStructure } from '../engine/levelgen';
@@ -15,6 +17,7 @@ import { MassSanctuary } from './sanctuary';
 import { validateDoorPress, type DoorPressSpec } from '../engine/doorPress';
 
 export interface MassSettlementSpec {
+  defenses?: SettlementDefensesSpec;
   /** Native plan variants are pinned with the expedition's finite settlement. */
   structurePlans?: import('../engine/structurePlans').StructurePlanOverrides;
   /** New-run search for existing terrain; Continue always keeps the saved origin. */
@@ -55,6 +58,8 @@ export class MassSettlement {
   private pieces: { live: Doodad; base: string }[];
   private bodies: { id: string; live: Actor }[];
   private residents = new WeakSet<Actor>();
+  readonly defenders: Actor[] = [];
+  readonly defenseGates: SettlementGate[] = [];
   readonly sanctuary = new MassSanctuary(this);
   isResident(a: Actor): boolean { return this.residents.has(a); }
   constructor(readonly spec: MassSettlementSpec, world: World, seed: number, saved?: MassSettlementSave) {
@@ -62,6 +67,7 @@ export class MassSettlement {
       || !spec.cartography.source || typeof spec.cartography.publicSigns !== 'boolean'))
       throw new Error('Invalid settlement cartography');
     if (spec.doorPress !== undefined) validateDoorPress(spec.doorPress);
+    if (spec.defenses !== undefined) validateSettlementDefenses(spec.defenses);
     if (spec.sanctuary !== undefined && typeof spec.sanctuary !== 'boolean') throw new Error('Invalid settlement sanctuary policy');
     if (spec.zone !== START_ZONE || !spec.source || !Number.isFinite(spec.apron) || spec.apron < 96 || spec.apron > 1024
       || !Number.isFinite(spec.blend) || spec.blend < 24 || spec.blend > 512)
@@ -81,6 +87,10 @@ export class MassSettlement {
     this.baseRegions = Array.from(this.grid.kind, (_, i) => this.cellRegion(i));
     this.spawn = { ...world.player.pos };
     this.tier = world.townTierIndex();
+    if (spec.defenses) {
+      const defenses = raiseSettlementDefenses(world, this, spec.defenses);
+      this.defenders.push(...defenses.guards); this.defenseGates.push(...defenses.gates);
+    }
     if (spec.doorPress) for (const d of world.doodads)
       if (d.door && (d.door.mode === 'dwell' || d.door.mode === 'both')) d.door.press = { ...spec.doorPress };
     this.pieces = world.doodads.map(live => ({ live, base: canonical(pieceState(live)) }));

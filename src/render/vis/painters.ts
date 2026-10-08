@@ -1,3 +1,4 @@
+import { paintWaterSurface } from './waterSurface';
 // ---------------------------------------------------------------------------
 // DOODAD PAINTERS — the parametric painter library. Every doodad kind maps
 // (in src/data/doodadVisuals.ts) to one of these painters plus params; the
@@ -499,6 +500,8 @@ export interface LiquidParams {
   tufts?: { color: ColorSpec; flower?: ColorSpec };
   /** Drifting surface highlight arcs (deep water's living sheen). */
   sheen?: { color: ColorSpec };
+  /** Shared geographic waves, clipped to the merged ordinary-water body. */
+  waterMotion?: boolean;
   /** Sliding diagonal glass bands (ice). */
   glassSheen?: { color: ColorSpec };
   /** Slow-orbiting molten glow blobs under the crust (lava). */
@@ -654,6 +657,26 @@ export function paintLiquidStatics(env: PaintEnv, group: readonly Doodad[],
 /** Deep-water sheen: two bright arcs drifting across each pool — one home
  *  for the plain group pass and the illusion lane's per-disc draw. */
 function paintLiquidSheen(env: PaintEnv, group: readonly Doodad[], p: LiquidParams): void {
+  if (p.waterMotion && group.length) {
+    const { ctx } = env;
+    let x = Infinity, y = Infinity, right = -Infinity, bottom = -Infinity;
+    for (const d of group) {
+      x = Math.min(x, d.pos.x - d.radius); y = Math.min(y, d.pos.y - d.radius);
+      right = Math.max(right, d.pos.x + d.radius); bottom = Math.max(bottom, d.pos.y + d.radius);
+    }
+    ctx.save(); blobPath(ctx, group, 0); ctx.clip();
+    const town = env.world.massRuntime?.settlement;
+    // The native floor feathers at its edge; its waves must fade with it,
+    // rather than leaving bright strokes on the dry geographic underlay.
+    const waterOpacity = town ? (px: number, py: number): number => {
+      if (!town.reserves(px, py, 0)) return 1;
+      const {w, h} = town.zone.size, fade = town.spec.blend;
+      return Math.max(0, Math.min(1, px / fade, (w - px) / fade))
+        * Math.max(0, Math.min(1, py / fade, (h - py) / fade));
+    } : undefined;
+    paintWaterSurface(ctx, {x, y, w: right - x, h: bottom - y}, env.time, waterOpacity);
+    ctx.restore(); return;
+  }
   if (!p.sheen) return;
   const { ctx, theme, time } = env;
   const col = resolveColor(p.sheen.color, theme);

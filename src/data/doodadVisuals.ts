@@ -1,3 +1,4 @@
+import { WATER_SURFACE } from './waterSurface';
 // ---------------------------------------------------------------------------
 // DOODAD VISUALS — every doodad kind's look, as data. Each entry names a
 // painter from the render library (render/vis/painters.ts) plus its params;
@@ -22,10 +23,11 @@ import { TITAN_DOODAD_VISUALS } from './titans';
 // row: the pad pass is coastline-derived and lush-biome-gated, so a desert
 // pool grows none either way — the fake stays faithful where it matters.)
 const WATER_LOOK = {
-  rim: { color: '#9ab8cc', alpha: 0.5, grow: 4 },
-  core: { color: 'theme:water|#1d4264', alpha: 0.85 },
+  rim: { color: WATER_SURFACE.rim, alpha: 0.5, grow: 4 },
+  core: { color: WATER_SURFACE.deep, alpha: 0.95 },
   fords: { lighten: 0.3, alpha: 0.55 },
-  sheen: { color: '#d8f0fa' },
+  sheen: { color: WATER_SURFACE.highlight },
+  waterMotion: true,
 };
 
 export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
@@ -53,9 +55,8 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // --- Liquid + ground overlays (merged blob silhouettes) -----------------
   // WATER — one hue family, depth told by tone: fords DERIVE from the deep
   // color and meld in as soft gradients (no second water, no cut line). The
-  // surface is STILL until disturbed — rings come only from moving bodies
-  // (renderer motion-FX wakes) — with just the slow sheen drifting over the
-  // deep. Lily pads grow on true coastline, in randomized clumps.
+  // surface carries gentle shared ripples; larger rings come from moving
+  // bodies (renderer motion-FX wakes). Lily pads follow the true coastline.
   water: {
     painter: 'liquid', order: 10,
     params: {

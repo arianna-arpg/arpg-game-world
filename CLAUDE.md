@@ -1,3 +1,11 @@
+Shared ordinary-water palettes and live, world-anchored ripples use
+`data/waterSurface.ts` and `render/vis/waterSurface.ts`. New seamless expeditions
+snapshot timber Lastlight defenses, road-aligned gates and mortal native guards;
+ownerless guard kills grant no player rewards. Native rampart/gatehouse blueprints
+are reusable separately. See `docs/design/water-and-town-watch.md`; verify
+settlementdefenses, watersurface, worldmass_sanctuary, douse, all types, genqa,
+sim smoke and the hidden water-watch-ui client after an isolated build.
+
 NativeSceneRuntimeRegistry shares all 36 original ordered event rows and live
 activation with classic World. NativeAreaSceneRuntimeRegistry binds the same
 local birth, geometry and Titan owners, carried controller state and descent
