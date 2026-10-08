@@ -586,6 +586,7 @@ import { descentPlaceDescentDelver, descentMintDelverStock, descentEnterDescentZ
 import { harborHoldStateFor, harborBootQuay, harborBootHarborhold, harborResealDoor, harborRefreshHoldDress, harborHoldDressSpotOk, harborRefreshHoldServices, harborArmPortMercs, harborLandPartyAt, type NativeSceneHarborHost } from './nativeSceneHarbor';
 
 import { nativeTheaterContextNow, nativeTheaterConcurrencyNow, nativeTheaterRunBeat, nativeTheaterPourRoom, nativeTheaterSpawn, nativeSpawnEventActor, nativeClampNear, nativeAnyAliveWithTag, nativeZoneEntryPos, type NativeSceneTheaterHost } from './nativeSceneTheater';
+import * as nativeRuntimeBirth from './nativeSceneRuntimeBirth';
 import {nativeFellDoodad,nativeRebuildClientTerrain,type NativeSceneTerrainHost} from './nativeSceneTerrain';
 import {enforceNativeArrivalGrace,nativeUberDefeated,nativeNearestZoneOf,type NativeSceneArrivalHost} from './nativeSceneArrival';
 import {coastSeaFromNode,coastNodeFromSea,coastStreamCoast,coastMintIslandZone,coastEnsureSeaPorts,coastRefreshExitLabels,coastEventLevel,coastNotarizeRoad,coastLinkBackTo,coastRoadIsWet,coastLandRoute,coastPlaceExit,coastIsIllegalCrossDim,coastWarnCrossDim,coastDimensionBiomeFor,coastLiveCourses,coastCourseAnchor,coastFieldExitPos,coastBoundaryGateFor,coastMeldFor,type NativeSceneCoastHost,type NativeSceneCoastSources} from './nativeSceneCoast';
@@ -6697,52 +6698,12 @@ export class World {
    *  visit. A hit spawns the squad at the zone's far edge — already hunting
    *  (no dormancy: they came for YOU) — with the WARRANT-HOLDER promoted from
    *  its ranks, carrying the writ id its kill row settles. */
-  private springVendettaAmbush(def: ZoneDef): void {
-    const vf = this.sim.vendettaField;
-    if (!vf) return;
-    // One-shot discovery: the first writ POSTED this run (bulletin already
-    // announced it) surfaces the Vault card.
-    if (vf.consumeSeen()) bumpLedger(this.ledger, 'writs_seen');
-    if (this.materializedWrits.has(def.id)) return;
-    const spec = vf.wantsAmbush(def);
-    if (!spec) return;
-    this.materializedWrits.add(def.id);
-    const level = Math.max(1, def.level + spec.levelBonus);
-    const at = this.clampPos(this.farPoint(430, true), 24);
-    let warrant: Actor | null = null;
-    for (let i = 0; i < spec.size; i++) {
-      const h = this.spawnEventActor(spec.roster, level, 'enemy', spec.faction, 'vendetta_hunter');
-      h.pos = this.clampNear(at, 70);
-      h.eventKey = spec.writId;
-      h.aiAwakened = true; // hunters arrive HUNTING — no dormancy gate
-      if (!warrant || h.maxLife() > warrant.maxLife()) warrant = h;
-    }
-    if (warrant) {
-      warrant.tag = 'vendetta_warrant';
-      warrant.level = Math.max(warrant.level, level + spec.warrant.levelBonus);
-      this.promoteRarity(warrant, spec.warrant.promote);
-      warrant.xpValue = Math.max(warrant.xpValue, spec.warrant.xpFloor);
-    }
-    this.notice(`${spec.tierLabel} — hunters spring the ambush!`, spec.color, 16, 'events');
-  }
+  private springVendettaAmbush(def: ZoneDef): void { return nativeRuntimeBirth.birthSpringVendettaAmbush(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),def); }
 
   /** The Hunt's per-zone work: drop a footprint to read (while the beast is
    *  unrevealed) OR materialize the beast if it currently stands in this zone
    *  (re-spawned at its PRESERVED health + phase — the cross-zone remembrance). */
-  private placeHuntContent(def: ZoneDef): void {
-    const hf = this.sim.huntField;
-    if (!hf) return;
-    const info = hf.beastIn(def.id);
-    if (info) { this.spawnHuntBeast(info); return; }
-    // The trail leads here and no live track is placed yet — drop one. Guarding on the
-    // live object (not a persistent per-zone set) means a player who enters, leaves
-    // WITHOUT reading it, and returns finds the track again (no soft-lock); it also
-    // makes the per-frame materialize call idempotent within a visit.
-    if (!this.huntFootprint && hf.wantsTrack(def.id)) {
-      const at = this.clampPos(this.farPoint(420), 18);
-      this.huntFootprint = { pos: vec(at.x, at.y) };
-    }
-  }
+  private placeHuntContent(def: ZoneDef): void { return nativeRuntimeBirth.birthPlaceHuntContent(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),def); }
 
   /** Pick an adjacent zone for the Hunt trail/beast to move to — from the CURRENT
    *  zone's exits, accepting any charted neighbour and generating an uncharted '?'
@@ -6769,27 +6730,7 @@ export class World {
 
   /** Materialize the hunted beast at its current zone: restore its life fraction
    *  + flee-phase so the chase carries over, tag it for the kill/flee hooks. */
-  private spawnHuntBeast(info: { id: string; beastDefId: string; faction: string; color: string; lifeFrac: number; phaseIdx: number }): void {
-    if (this.materializedHunts.has(info.id)) return;
-    this.materializedHunts.add(info.id);
-    if (!MONSTERS[info.beastDefId]) return;
-    const lvl = Math.max(1, this.zone.level + 2);
-    const beast = this.createMonster(info.beastDefId, lvl, 'enemy');
-    beast.faction = info.faction;
-    if (this.sim.packageActive('warbands', this.player.level)) this.promoteRarity(beast, 'crowned');
-    beast.tag = 'hunt_beast';
-    beast.aiPhaseIdx = info.phaseIdx;   // flee phases already passed → won't re-flee
-    beast.aiFleeing = false;
-    beast.pos = this.clampPos(this.farPoint(540, true), beast.radius);
-    beast.fillResources();
-    beast.life = Math.max(1, beast.maxLife() * clamp(info.lifeFrac, 0.02, 1)); // PRESERVED health
-    this.actors.push(beast);
-    this.huntBeast = beast;
-    bumpLedger(this.ledger, 'hunt_seen');
-    this.flashes.push({ pos: vec(beast.pos.x, beast.pos.y), radius: 150, color: info.color, life: 0.8, maxLife: 0.8 });
-    this.text(vec(beast.pos.x, beast.pos.y - 60),
-      `${beast.name} — the hunt is on!`, info.color, 18);
-  }
+  private spawnHuntBeast(info: { id: string; beastDefId: string; faction: string; color: string; lifeFrac: number; phaseIdx: number }): void { return nativeRuntimeBirth.birthSpawnHuntBeast(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),info); }
 
   /** Fire content that ATTACHES to the zone the player is already standing in (an
    *  overlay bound/spread to it THIS tick, not on entry). Re-runs the loadZone-tail
@@ -6822,73 +6763,13 @@ export class World {
    *  its faction (champion-led) at the zone's entry FACING the host's origin —
    *  the warband marching in. Once per host per zone visit; skips a host whose
    *  faction already RULES the zone (it spawns natively there). */
-  private spawnWarband(host: InvasionHost): void {
-    if (this.materializedHosts.has(host)) return;
-    this.materializedHosts.add(host);
-    if (this.sim.faction.conquerorOf(this.zone.id) === host.faction) return; // already theirs
-    const roster = FACTIONS[host.faction];
-    if (!roster?.table?.length) return;
-    let at = this.warbandEntryPoint(host);
-    // Don't materialize ON the player: when they walked in by the same exit the
-    // host marched from, the entry == their arrival portal. Shove the cluster
-    // inward (away from the player) so there's a reaction window — a march in,
-    // not a point-blank ambush. (Mirrors spawnPacks' "found, not delivered".)
-    const STANDOFF = 220;
-    if (dist(at, this.player.pos) < STANDOFF) {
-      let dx = at.x - this.player.pos.x, dy = at.y - this.player.pos.y;
-      if (Math.hypot(dx, dy) < 1) { dx = this.arena.w / 2 - at.x; dy = this.arena.h / 2 - at.y; }
-      const len = Math.hypot(dx, dy) || 1;
-      at = this.clampPos(vec(at.x + (dx / len) * STANDOFF, at.y + (dy / len) * STANDOFF), 16);
-    }
-    const lvl = Math.max(1, this.zone.level);
-    // Gate the Crowned leader on the package governing THIS host's faction
-    // (demon hosts → demon_invasion, mortal/beast → warbands), not a hardcoded id.
-    const crowned = this.sim.factionInvasionActive(host.faction, this.player.level);
-    const n = randInt(6, 9);
-    const pack: Actor[] = [];
-    let leader: Actor | null = null;
-    for (let k = 0; k < n; k++) {
-      const m = this.createMonster(this.weightedPick(roster.table, lvl), lvl, 'enemy');
-      // Invasion hosts have a leader/retinue; magicPack rolls belong to ambient cohorts.
-      if (k === 0) { const r = rollRarity(crowned, false); if (r !== 'normal') this.promoteRarity(m, r, { distinctName: true }); leader = m; }
-      m.pos = this.clampPos(vec(at.x + rand(-70, 70), at.y + rand(-70, 70)), m.radius);
-      this.actors.push(m);
-      pack.push(m);
-    }
-    // Give the warband a TASK: the champion marches the pack toward a destination
-    // exit (continuing the faction's campaign across the zone), the rest heel to
-    // it. With no foe in sight they migrate; sight the player and they fall through
-    // to their brain and fight. Reuses the patrol-route AI (camp-to-camp marchers).
-    if (leader) {
-      const goal = this.warbandDestination(host, at);
-      leader.patrolRoute = [vec(at.x, at.y), goal];
-      leader.patrolIdx = 1; // head for the destination first, not back to the entry
-      for (const m of pack) if (m !== leader) m.patrolFollow = leader.id;
-      this.warbandMarches.push({ leader, members: pack, goal });
-    }
-    this.flashes.push({ pos: vec(at.x, at.y), radius: 90, color: '#e85050', life: 0.6, maxLife: 0.6 });
-    this.text(vec(at.x, at.y - 44),
-      `${roster.name ?? host.faction} warband marches in from the ${this.compassFrom(at)}!`, '#e85050', 16);
-  }
+  private spawnWarband(host: InvasionHost): void { return nativeRuntimeBirth.birthSpawnWarband(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),host); }
 
   /** A destination the materialized warband marches toward — a goal they want to
    *  complete: an exit OTHER than the one they came in by (pressing their campaign
    *  onward across the zone), or — if this is the only way out — the far side of
    *  the arena. Gives the pack visible purpose instead of milling at the entry. */
-  private warbandDestination(host: InvasionHost, entry: Vec2): Vec2 {
-    const onward = this.exits.filter(e => e.to !== host.fromZoneId);
-    if (onward.length) {
-      const e = onward[randInt(0, onward.length - 1)];
-      return vec(e.pos.x, e.pos.y);
-    }
-    // Dead-end zone (only the entry exit): march to the far side, away from entry.
-    const cx = this.arena.w / 2, cy = this.arena.h / 2;
-    let dx = cx - entry.x, dy = cy - entry.y;
-    if (Math.hypot(dx, dy) < 1) { dx = 0; dy = 1; }
-    const len = Math.hypot(dx, dy) || 1;
-    const reach = Math.min(this.arena.w, this.arena.h) / 2 - 80;
-    return this.clampPos(vec(cx + (dx / len) * reach, cy + (dy / len) * reach), 16);
-  }
+  private warbandDestination(host: InvasionHost, entry: Vec2): Vec2 { return nativeRuntimeBirth.birthWarbandDestination(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),host,entry); }
 
   /** Tick the marching warbands. A pack whose champion reaches the destination
    *  unopposed "marches on" — it leaves the zone (ignore an invasion and it
@@ -6912,31 +6793,14 @@ export class World {
   /** Where an arriving warband appears: the transition point back toward its
    *  origin zone (the side it marched in from), or — if this zone has no exit to
    *  that origin — a point on the arena edge in the origin's map direction. */
-  private warbandEntryPoint(host: InvasionHost): Vec2 {
-    const exit = this.exits.find(e => e.to === host.fromZoneId);
-    if (exit) return vec(exit.pos.x, exit.pos.y);
-    const from = this.zoneMap[host.fromZoneId];
-    const cx = this.arena.w / 2, cy = this.arena.h / 2;
-    if (from) {
-      let dx = from.map.x - this.zone.map.x, dy = from.map.y - this.zone.map.y;
-      const len = Math.hypot(dx, dy) || 1;
-      const reach = Math.min(this.arena.w, this.arena.h) / 2 - 80;
-      return this.clampPos(vec(cx + (dx / len) * reach, cy + (dy / len) * reach), 16);
-    }
-    return this.clampPos(vec(cx, 90), 16);
-  }
+  private warbandEntryPoint(host: InvasionHost): Vec2 { return nativeRuntimeBirth.birthWarbandEntryPoint(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),host); }
 
   /** Compass label for the direction of `to` as seen from `from` (screen N = top) —
    *  the shared bearing every "…from the north!" announce derives from. */
-  private bearingOf(from: Vec2, to: Vec2): string {
-    const dx = to.x - from.x, dy = to.y - from.y;
-    return Math.abs(dy) >= Math.abs(dx) ? (dy < 0 ? 'north' : 'south') : (dx < 0 ? 'west' : 'east');
-  }
+  private bearingOf(from: Vec2, to: Vec2): string { return nativeRuntimeBirth.birthBearingOf(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),from,to); }
 
   /** Compass label for a point relative to the arena centre (screen N = top). */
-  private compassFrom(at: Vec2): string {
-    return this.bearingOf(vec(this.arena.w / 2, this.arena.h / 2), at);
-  }
+  private compassFrom(at: Vec2): string { return nativeRuntimeBirth.birthCompassFrom(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),at); }
 
   // ------------------------------------------------------- in-zone encounters
   //
@@ -12948,40 +12812,7 @@ export class World {
 
   /** Materialize the dormant fracture object if one sits in this zone (once per
    *  zone visit — guarded by materializedFractures). */
-  private placeFractureContent(def: ZoneDef): void {
-    const ff = this.sim.fractureField;
-    if (!ff || this.inCave) return;
-    const info = ff.fractureIn(def.id);
-    if (!info) return;
-    const key = `${info.id}@${def.id}`;
-    if (this.materializedFractures.has(key)) return;
-    this.materializedFractures.add(key);
-    this.fractureRng = new Rng((packageSeed(this.manifest.seed, 'fractures') ^ hashStr(`${info.id}:${def.id}`)) >>> 0);
-    const surge = ff.surge();
-    let at = this.clampPos(this.farPoint(440, true), 18);
-    if (this.walk && !this.walk.isWalkable(at.x, at.y)) at = this.walk.snapToWalkable(at); // start on the mesh in walled zones
-    this.fractureRun = {
-      id: info.id, faction: info.faction, color: info.color, variant: info.variant,
-      phase: 'dormant', longerTimer: info.longerTimer, span: info.span,
-      origin: vec(at.x, at.y), head: vec(at.x, at.y), endpoint: vec(at.x, at.y), crack: [],
-      timer: 0, maxTimer: 0, trickle: 0,
-      chasm: null, chasmDoodad: null, chasmSpawn: 0, chasmSpawned: new Set(),
-      chasmClear: 0, chasmsSealed: 0,
-      chasmsTarget: this.fractureRng.int(surge.chasmsPerZone[0], surge.chasmsPerZone[1]),
-      stuck: 0, grace: 0,
-    };
-    // A DIVERTED fracture arrives ALREADY LIVE (the map marker raced you here) —
-    // but under its ARRIVAL GRACE: the collapse clock holds until you first close
-    // in (or the grace runs out), so surfacing across a zone you haven't crossed
-    // yet is findable, not a silent fail. The ORIGIN fracture sits dormant,
-    // waiting to be run over.
-    if (info.longerTimer) {
-      this.beginFissure(this.fractureRun, 'The fracture surfaces here — run it down!');
-      // The surface announce above draws at the fissure (likely off-screen);
-      // tell the PLAYER where to run, in their own field of view.
-      this.notice(`Fracture · ${this.bearingOf(this.player.pos, at)}`, info.color, 15, 'events');
-    }
-  }
+  private placeFractureContent(def: ZoneDef): void { return nativeRuntimeBirth.birthPlaceFractureContent(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),def); }
 
   /** Run over the volatile object → the fissure erupts (no dwell — it's twitchy). */
   private triggerFracture(): void {
@@ -12994,26 +12825,7 @@ export class World {
   /** Begin a crawling-fissure leg: head at the origin, a fresh endpoint, the timer
    *  armed (base, or the longer diverted timer). Shared by the run-over trigger
    *  and a diverted arrival (which lands already live, no second run-over). */
-  private beginFissure(run: FractureRun, announce: string): void {
-    const ff = this.sim.fractureField;
-    if (!ff) return;
-    const surge = ff.surge();
-    run.phase = 'fissure';
-    run.head = vec(run.origin.x, run.origin.y);
-    run.crack = [vec(run.origin.x, run.origin.y)];
-    run.endpoint = this.fracturePoint(run.origin);
-    run.maxTimer = run.longerTimer ? surge.divertTimer : surge.baseTimer;
-    run.timer = run.maxTimer;
-    run.trickle = 0;
-    run.stuck = 0;
-    // Only a DIVERTED surface gets the arrival grace — a run-over trigger starts
-    // with the player standing on the fissure, so its clock is fair immediately.
-    run.grace = run.longerTimer ? surge.divertGrace : 0;
-    run.chasmsSealed = 0;
-    ff.touch();
-    this.flashes.push({ pos: vec(run.origin.x, run.origin.y), radius: 90, color: run.color, life: 0.6, maxLife: 0.6 });
-    this.text(vec(run.origin.x, run.origin.y - 30), announce, run.color, 16);
-  }
+  private beginFissure(run: FractureRun, announce: string): void { return nativeRuntimeBirth.birthBeginFissure(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),run,announce); }
 
   /** Per-frame Fracture runtime: crawl the fissure (proximity-gated, timer paused
    *  while chasing), spew the chasm (timer ticking), seal + split + divert. */
@@ -13202,17 +13014,7 @@ export class World {
 
   /** Materialize the pending rift's portal in this zone — on open AND on every
    *  re-entry (until its boss is slain). Idempotent (guarded by the rift list). */
-  private placeFractureRiftContent(def: ZoneDef): void {
-    const ff = this.sim.fractureField;
-    if (!ff || this.inCave) return;
-    const info = ff.riftIn(def.id);
-    if (!info || this.fractureRifts.some(r => r.id === info.id)) return;
-    const p = this.clampPos(vec(info.pos.x, info.pos.y), 30);
-    this.fractureRifts.push({
-      id: info.id, pos: vec(p.x, p.y), faction: info.faction, color: info.color,
-      variant: info.variant, level: info.level, cap: info.cap,
-    });
-  }
+  private placeFractureRiftContent(def: ZoneDef): void { return nativeRuntimeBirth.birthPlaceFractureRiftContent(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),def); }
 
   /** Step into the rift: mint the off-graph boss CHAMBER (like a demon realm),
    *  themed by the variant's tileset + packed with its faction's honour-guard,
@@ -13304,16 +13106,7 @@ export class World {
   }
 
   /** A point ~across the zone from `from` — the fissure's next erratic endpoint. */
-  private fracturePoint(from: Vec2): Vec2 {
-    const reach = Math.min(this.arena.w, this.arena.h);
-    const ang = this.fractureRng.range(0, Math.PI * 2);
-    const d = this.fractureRng.range(reach * 0.32, reach * 0.48);
-    let pt = this.clampPos(vec(from.x + Math.cos(ang) * d, from.y + Math.sin(ang) * d), 24);
-    // In a WALK-GRID zone, snap the endpoint ONTO the mesh so the fissure isn't sent
-    // chasing a point inside a wall (the stuck-guard is the backstop if it still can't).
-    if (this.walk && !this.walk.isWalkable(pt.x, pt.y)) pt = this.walk.snapToWalkable(pt);
-    return pt;
-  }
+  private fracturePoint(from: Vec2): Vec2 { return nativeRuntimeBirth.birthFracturePoint(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),from); }
 
   /** The live fracture run in this zone (for the renderer), or null. */
   fractureView(): FractureRun | null { return this.fractureRun; }
@@ -13504,36 +13297,7 @@ export class World {
    *  visit — guarded by materializedRituals, mirroring placeFractureContent). The
    *  cultists are placed OUTSIDE the zoneGenTagging window, so they're not zone-
    *  memory captured: walk away and they're gone (the cultists migrate on). */
-  private placeRitualSite(def: ZoneDef): void {
-    const cf = this.sim.conclaveField;
-    if (!cf || this.inCave) return;
-    const info = cf.ritualIn(def.id);
-    if (!info) return;
-    const key = `${info.id}@${def.id}`;
-    if (this.materializedRituals.has(key)) return;
-    this.materializedRituals.add(key);
-    const cfg = cf.surge().ritual;
-    const rng = new Rng((packageSeed(this.manifest.seed, 'conclave') ^ hashStr(`${info.id}:${def.id}`)) >>> 0);
-    // Place the pentagram away from the player, kept fully inside the arena.
-    const center = this.clampPos(this.farPoint(cfg.farFrom, true), cfg.pentagramRadius + 26);
-    // A walkable ritual circle the cultists ring (a slight seeded tilt for variety;
-    // the renderer otherwise points it up).
-    const dood: Doodad = { pos: vec(center.x, center.y), radius: cfg.pentagramRadius, kind: 'ritual_pentagram', rot: rng.range(-0.15, 0.15) };
-    this.doodads.push(dood);
-    const cultistIds: number[] = [];
-    const n = Math.max(1, cfg.cultistCount);
-    for (let i = 0; i < n; i++) {
-      const ang = -Math.PI / 2 + (dood.rot ?? 0) + (i / n) * Math.PI * 2; // matches the drawn star's tilt
-      const c = this.createMonster(cfg.cultistId, Math.max(1, def.level), 'enemy');
-      c.tag = 'ritual_cultist'; // drives dormancy (ai.ts), rouse (resolveHit), eruption (kill)
-      c.pos = this.clampPos(vec(center.x + Math.cos(ang) * cfg.pentagramRadius, center.y + Math.sin(ang) * cfg.pentagramRadius), c.radius);
-      this.actors.push(c);
-      cultistIds.push(c.id);
-    }
-    this.ritualSite = { id: info.id, zoneId: def.id, center: vec(center.x, center.y), cultistIds, subdued: false };
-    bumpLedger(this.ledger, 'rituals_seen'); // DISCOVERY — surfaces the Vault unlock
-    this.text(vec(center.x, center.y - cfg.pentagramRadius - 14), 'An Occult ritual is underway…', '#a86ad8', 15);
-  }
+  private placeRitualSite(def: ZoneDef): void { return nativeRuntimeBirth.birthPlaceRitualSite(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),def); }
 
   /** Resolve the rite once every cultist has fallen: pay the subdue reward, clear
    *  it from the overlay (so it won't re-materialize), and bump the ledger. */
@@ -13616,110 +13380,7 @@ export class World {
    *  materialized here: the sealed timber bar across the mouth (spliced on
    *  unlock) and the wardens, tagged with the guardian's neutralTag so
    *  dormancy / rouse / dwell-pay / slaughter all resolve. */
-  private placeHoldfast(def: ZoneDef): void {
-    const hf = this.sim.holdfastField;
-    if (!hf || this.inCave) return;
-    const info = hf.infoFor(def.id);
-    // A FAILED slaughter (resolved 'failed', still locked) is TERMINAL — never re-muster
-    // payable wardens on re-entry (that would let the player re-pay or re-roll the gamble).
-    if (!info || !info.locked || info.resolved === 'failed' || !info.exitAppended) return;
-    if (this.materializedHoldfasts.has(def.id)) return;
-    this.materializedHoldfasts.add(def.id);
-    const gdef = hf.def(info.defId);
-    // Resolve the portal by the LOCK ID, not a stored array index — eagerChartNeighbors
-    // can drop frontiers + rebuild zone.exits after the append, shifting positions (so a
-    // persisted index goes stale → gate never raised / stamped on the wrong exit).
-    const portal = this.exits.find(e => this.zone.exits[e.defIndex]?.lock === info.lockId);
-    if (!gdef || !portal) return;
-    if (!info.seenBumped) { info.seenBumped = true; bumpLedger(this.ledger, 'holdfast_seen'); } // DISCOVERY (once) — surfaces the Vault unlock
-    const lvl = Math.max(1, def.level);
-    // The gate's geometry — the SAME numbers the terrain carve used
-    // (gateThroatAt), so the bar seats flush in the mouth's lane and the
-    // wardens stand where the road meets the throat.
-    const throat = gateThroatAt(this.arena, portal.pos, boundaryGateOf(gdef.gate));
-    const inward = throat.inward, tx = throat.tangent.x, ty = throat.tangent.y;
-    // THE BAR: sealed timber across the throat's inner opening while the toll
-    // stands — the one piece that must vanish on unlock, so it alone (plus the
-    // wardens) is runtime. Palisade-post 'wall' doodads by default; a def may
-    // name its own barKind, or '' for an unbarred (purely warded) mouth.
-    const gateDoodads: Doodad[] = [];
-    const barKind = gdef.barKind ?? 'wall';
-    if (barKind) {
-      const barR = 13;
-      for (let s = -(throat.mouthWidth / 2) + barR * 0.6; s <= throat.mouthWidth / 2 - barR * 0.6; s += barR * 1.5) {
-        const d: Doodad = { pos: vec(throat.inner.x + tx * s, throat.inner.y + ty * s), radius: barR, kind: barKind };
-        this.doodads.push(d);
-        gateDoodads.push(d);
-      }
-    }
-    // THE WARDENS: housed at the throat's inner opening — the toll stand on
-    // the road where travelers arrive. The keeper (the dwell-target you pay)
-    // holds the lane's own axis; the guards flank the mouth. NEUTRAL until roused.
-    const standC = this.clampPos(vec(
-      throat.inner.x + inward.x * 64, throat.inner.y + inward.y * 64), 30);
-    const g = gdef.guardian;
-    // THE POST (GuardianSpec.post): wardens are bodies ON DUTY — each keeps
-    // the exact stand it was housed at, so storm-drift, a stray shove, or a
-    // rouse-and-retreat all end with the crew RE-FORMED at the gate (and the
-    // parley re-opened) instead of scattered across the zone. `false` = a
-    // drifter crew; a PostSpec tunes slack/pace per guardian def.
-    const postSpec = g.post === false ? undefined
-      : (g.post === undefined || g.post === true ? {} : g.post);
-    // Eyes on the road: the stand watches the way travelers arrive (inward
-    // off the gate throat, where the toll's customers come walking).
-    const watchFacing = Math.atan2(inward.y, inward.x);
-    const stampPost = (w: Actor): void => {
-      if (!postSpec) return;
-      w.postSpec = postSpec;
-      w.aiPost = vec(w.pos.x, w.pos.y);
-      w.aiPostFacing = watchFacing;
-      w.facing = watchFacing;
-    };
-    const banditIds: number[] = [];
-    const keeper = this.createMonster(g.keeperId, lvl, 'enemy');
-    keeper.tag = g.neutralTag;
-    // The guardian FACTION claims its crew (over the monster def's own), so a
-    // gate's bodies answer to the GATE and not to whatever stock they were
-    // minted from — a fiend crew of Legion bodies must never inherit the
-    // Legion's wars. How much that stamp buys differs per guardian:
-    //   - 'durance_toll' IS relation-less, and the stamp is load-bearing —
-    //     the tithe-gate's crew has no diplomacy, so a zone's warring natives
-    //     can never pick a fight with it while it sleeps.
-    //   - 'roadwarden_toll' (2026-08-01, the bandit ruling's third act) is
-    //     relation-less like the durance gate, and the stamp is equally
-    //     load-bearing: the surface camp sleeps OUTSIDE the war ledger, so
-    //     even an awake armed neutral (the croft warden) never reads it as
-    //     a target. The crew swaps to its TRUE COLORS ('bandit', with all
-    //     its shipped wars — 'freehold|bandit' and 'compact|bandit' both
-    //     KEPT, see THE BANDIT RULING in data/monsters.ts) on the rouse:
-    //     GuardianSpec.rousedFactionId → ai.ts registerDormantColors,
-    //     reconciled at updateAI's dormancy fork. Full story in the
-    //     holdfast header (packages/defs/holdfast.ts).
-    //     Note dormancy is NOT a targeting shield: acquireTarget filters
-    //     dead/untargetable/downed/passive/invisible, never dormant — the
-    //     relation-less calm faction is what closes that door.
-    keeper.faction = g.factionId;
-    keeper.pos = this.clampPos(vec(standC.x + tx * rand(-20, 20) + inward.x * rand(0, 24),
-      standC.y + ty * rand(-20, 20) + inward.y * rand(0, 24)), keeper.radius);
-    stampPost(keeper);
-    this.actors.push(keeper); banditIds.push(keeper.id);
-    const pool = g.rosterIds?.length ? g.rosterIds : [g.keeperId];
-    const guards = randInt(g.count[0], g.count[1]);
-    for (let i = 0; i < guards; i++) {
-      const c = this.createMonster(pool[i % pool.length], lvl, 'enemy');
-      c.tag = g.neutralTag;
-      c.faction = g.factionId;
-      const flank = i % 2 === 0 ? 1 : -1;
-      c.pos = this.clampPos(vec(
-        standC.x + tx * flank * (throat.mouthWidth / 2 + rand(10, 62)) + inward.x * rand(-16, 44),
-        standC.y + ty * flank * (throat.mouthWidth / 2 + rand(10, 62)) + inward.y * rand(-16, 44)), c.radius);
-      stampPost(c);
-      this.actors.push(c); banditIds.push(c.id);
-    }
-    this.holdfastSite = { zoneId: def.id, lockId: info.lockId, defId: gdef.id, keeperId: keeper.id, banditIds, gateDoodads };
-    this.flashes.push({ pos: vec(standC.x, standC.y), radius: 120, color: gdef.marker?.color ?? '#c8a04a', life: 0.7, maxLife: 0.7 });
-    this.text(vec(standC.x, standC.y - 54), `${gdef.name}`, gdef.marker?.color ?? '#c8a04a', 16);
-  }
+  private placeHoldfast(def: ZoneDef): void { return nativeRuntimeBirth.birthPlaceHoldfast(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),def); }
 
   /** Per-frame: if every warden of an UNPAID holdfast has fallen, resolve the slaughter
    *  — a low chance the gate bursts open (the gamble), else it's sealed for the run. */
@@ -13932,143 +13593,10 @@ export class World {
    *  door or a seal-bearer holds court (deep end = the blend's bone country,
    *  since the base field ramps away from the way home). Coarse grid scan,
    *  best-effort: a cramped grid still yields the best spot it has. */
-  private findUnsealingSpot(r: number): Vec2 {
-    const step = 60, m = r + 14;
-    let best: Vec2 | null = null, bd = -1;
-    for (let y = m; y <= this.arena.h - m; y += step) {
-      for (let x = m; x <= this.arena.w - m; x += step) {
-        if (this.walk && !this.walk.isWalkable(x, y)) continue;
-        let clear = true;
-        for (const d of this.doodads) {
-          if (!blocksMovement(d)) continue;
-          if (dist(vec(x, y), d.pos) < d.radius + m) { clear = false; break; }
-        }
-        if (!clear) continue;
-        const de = dist(vec(x, y), this.zoneEntry);
-        if (de > bd) { bd = de; best = vec(x, y); }
-      }
-    }
-    return best ?? this.clampPos(vec(this.arena.w / 2, this.arena.h / 2), r);
-  }
+  private findUnsealingSpot(r: number): Vec2 { return nativeRuntimeBirth.birthFindUnsealingSpot(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),r); }
 
   /** Stage + live-sync the Unsealing content in a Sepulcher Sands pocket. */
-  private materializeUnsealing(def: ZoneDef, _live: boolean): void {
-    const uf = this.sim.unsealingField;
-    if (!uf || def.biome !== 'sepulcher' || def.caveDepth == null) return;
-    const role = uf.roleFor(def.seed ?? 0);
-    if (role.kind === 'none') return;
-    const cfg = uf.surge();
-    const lvl = Math.max(1, def.level);
-    if (!this.materializedUnsealing.has(def.id)) {
-      this.materializedUnsealing.add(def.id);
-      if (role.kind === 'tomb') {
-        // FOUND: latch the overworld marker on the pocket's host zone (the
-        // sole exit home — pockets are off-graph, the parent carries the pin).
-        const parent = def.exits[0]?.to;
-        if (parent && uf.foundTomb(parent, def.id)) {
-          bumpLedger(this.ledger, 'unsealing_tomb_found');
-          this.notice('You have found the REGENT\'S TOMB — the map remembers it', cfg.gold, 17, 'world');
-        }
-        // The door at the deep end, its talisman arc facing the way in.
-        const at = this.findUnsealingSpot(cfg.door.radius + cfg.door.brazierRing);
-        const toEntry = Math.atan2(this.zoneEntry.y - at.y, this.zoneEntry.x - at.x);
-        const opened = uf.allFlared();
-        const door: Doodad = {
-          pos: at, radius: cfg.door.radius,
-          kind: opened ? 'regent_door_open' : 'regent_door', rot: toEntry,
-        };
-        this.doodads.push(door);
-        const braziers: (Doodad | null)[] = [];
-        for (let i = 0; i < cfg.wards.length; i++) {
-          const spread = (i - (cfg.wards.length - 1) / 2) * 0.55;
-          const a = toEntry + spread;
-          const b: Doodad = {
-            pos: this.clampPos(vec(
-              at.x + Math.cos(a) * cfg.door.brazierRing,
-              at.y + Math.sin(a) * cfg.door.brazierRing), cfg.door.brazierRadius),
-            radius: cfg.door.brazierRadius,
-            kind: uf.flared(cfg.wards[i].id) ? 'regent_brazier_lit' : 'regent_brazier',
-          };
-          this.doodads.push(b);
-          braziers.push(b);
-        }
-        // The threshold watch: wardens posted at the door until the Regent
-        // has no further need of them.
-        if (!uf.regentSlain()) {
-          const n = randInt(cfg.door.guards[0], cfg.door.guards[1]);
-          for (let i = 0; i < n; i++) {
-            const flank = i % 2 === 0 ? 1 : -1;
-            const g = this.createMonster(cfg.door.guardId, lvl, 'enemy');
-            g.pos = this.clampPos(vec(
-              at.x + Math.cos(toEntry + flank * 1.5) * (cfg.door.radius + 46),
-              at.y + Math.sin(toEntry + flank * 1.5) * (cfg.door.radius + 46)), g.radius);
-            g.postSpec = {};
-            g.aiPost = vec(g.pos.x, g.pos.y);
-            g.aiPostFacing = toEntry; g.facing = toEntry;
-            this.actors.push(g);
-          }
-        }
-        this.unsealingSite = { zoneId: def.id, doorPos: at, door, braziers, opened, woken: false };
-      } else {
-        // A CANOPIC HOST: the rolled ward — or, once that talisman burns, the
-        // next unflared one (progress converges; all lit = an emptied vault).
-        const wardId = uf.nextWard(role.ward);
-        if (wardId) {
-          const ward = cfg.wards.find(w => w.id === wardId);
-          if (ward) {
-            const at = this.findUnsealingSpot(30);
-            const m = this.createMonster(ward.monsterId, lvl, 'enemy');
-            m.pos = this.clampPos(vec(at.x, at.y), m.radius);
-            m.tag = 'canopic_seal';
-            m.eventKey = wardId; // the kill row resolves the WARD from this
-            this.promoteRarity(m, cfg.canopic.rarity, { distinctName: false });
-            this.actors.push(m);
-            const guards = randInt(cfg.canopic.guards[0], cfg.canopic.guards[1]);
-            for (let i = 0; i < guards; i++) {
-              const g = this.createMonster(cfg.canopic.guardId, lvl, 'enemy');
-              g.pos = this.clampPos(vec(at.x + rand(-70, 70), at.y + rand(-70, 70)), g.radius);
-              this.actors.push(g);
-            }
-            this.notice(`${m.name} · ${ward.label}`, cfg.gold, 15, 'events');
-          }
-        }
-      }
-    }
-    // LIVE SYNC (tomb sites only, cheap): braziers mirror the ledger, the
-    // door swaps once on the last flare, the Regent wakes on approach.
-    const site = this.unsealingSite;
-    if (!site || site.zoneId !== def.id) return;
-    for (let i = 0; i < site.braziers.length; i++) {
-      const b = site.braziers[i];
-      if (!b || !uf.flared(cfg.wards[i].id) || b.kind === 'regent_brazier_lit') continue;
-      b.kind = 'regent_brazier_lit';
-      this.flashes.push({ pos: vec(b.pos.x, b.pos.y), radius: 60, color: cfg.gold, life: 0.6, maxLife: 0.6 });
-      this.markDoodadsChanged();
-    }
-    if (!site.opened && uf.allFlared()) {
-      site.opened = true;
-      site.door.kind = 'regent_door_open';
-      this.markDoodadsChanged();
-      this.flashes.push({ pos: vec(site.doorPos.x, site.doorPos.y), radius: 160, color: cfg.gold, life: 0.9, maxLife: 0.9 });
-      this.text(vec(site.doorPos.x, site.doorPos.y - 60),
-        'The last talisman burns — the Regent\'s door stands OPEN', cfg.gold, 17);
-    }
-    if (site.opened && !site.woken && !uf.regentSlain()
-      && dist(this.player.pos, site.doorPos) <= cfg.door.wakeRadius) {
-      site.woken = true;
-      const r = this.createMonster(cfg.regent.monsterId, lvl, 'enemy');
-      const toEntry = Math.atan2(this.zoneEntry.y - site.doorPos.y, this.zoneEntry.x - site.doorPos.x);
-      r.pos = this.clampPos(vec(
-        site.doorPos.x + Math.cos(toEntry) * (cfg.door.radius + r.radius + 12),
-        site.doorPos.y + Math.sin(toEntry) * (cfg.door.radius + r.radius + 12)), r.radius);
-      r.tag = 'sand_regent';
-      this.promoteRarity(r, cfg.regent.rarity, { distinctName: false });
-      this.actors.push(r);
-      this.flashes.push({ pos: vec(r.pos.x, r.pos.y), radius: 200, color: cfg.gold, life: 1, maxLife: 1 });
-      this.text(vec(site.doorPos.x, site.doorPos.y - 70),
-        'THE SAND REGENT WAKES — at full strength, as promised', '#ffd890', 18);
-    }
-  }
+  private materializeUnsealing(def: ZoneDef, _live: boolean): void { return nativeRuntimeBirth.birthMaterializeUnsealing(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),def,_live); }
 
   // --- AMALGAMATION: the in-zone Bonewright runtime --------------------------
   //
@@ -14083,102 +13611,18 @@ export class World {
    *  Once per visit (guarded by materializedAmalgam). The NPC + graves are placed
    *  OUTSIDE the zoneGenTagging window → not zone-memory captured → gone on leave,
    *  re-built from overlay state on return. */
-  private placeAmalgamation(def: ZoneDef): void {
-    const af = this.sim.amalgamationField;
-    if (!af || this.inCave) return;
-    const info = af.activeIn(def.id);
-    if (!info) return;
-    const key = `${info.id}@${def.id}`;
-    if (this.materializedAmalgam.has(key)) return;
-    this.materializedAmalgam.add(key);
-    const cfg = af.surge();
-    const rng = new Rng((packageSeed(this.manifest.seed, 'amalgamation') ^ hashStr(`${info.id}:${def.id}`)) >>> 0);
-    const center = this.clampPos(this.farPoint(cfg.farFrom, true), cfg.ringRadius + 30);
-    // The Bonewright — neutral, inert, UNTARGETABLE (flags come from its def).
-    const necro = this.createMonster(cfg.necromancerId, Math.max(1, def.level), 'enemy');
-    necro.tag = 'amalgam_necromancer';
-    necro.pos = this.clampPos(vec(center.x, center.y), necro.radius);
-    this.actors.push(necro);
-    // A ring of graves — one per part to gather; the ones already grafted are CRACKED
-    // open (a viscera pool), the visual countdown to the Amalgamation's rising.
-    const tilt = rng.range(-0.3, 0.3);
-    for (let i = 0; i < info.partsNeeded; i++) {
-      const ang = -Math.PI / 2 + tilt + (i / Math.max(1, info.partsNeeded)) * Math.PI * 2;
-      const gp = this.clampPos(vec(center.x + Math.cos(ang) * AMALGAM_GRAVE_RING, center.y + Math.sin(ang) * AMALGAM_GRAVE_RING), 16);
-      this.doodads.push({ pos: gp, radius: 14, kind: i < info.stage ? 'gore' : 'tombstone', rot: rng.range(-0.3, 0.3) });
-    }
-    this.amalgamSite = { id: info.id, zoneId: def.id, center: vec(center.x, center.y), necroId: necro.id, bossId: null };
-    bumpLedger(this.ledger, 'necromancers_seen'); // DISCOVERY — surfaces the Vault unlock
-    this.text(vec(center.x, center.y - cfg.ringRadius - 14), 'The Bonewright', '#9ad0b0', 15);
-    if (info.quest === 'boss') this.riseAmalgamation();
-  }
+  private placeAmalgamation(def: ZoneDef): void { return nativeRuntimeBirth.birthPlaceAmalgamation(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),def); }
 
   /** Spawn the rare-undead miniboss if this zone is the current hunt target. Once
    *  per visit (guarded). A champion-tier fight; despawns on leave (re-rolls full on
    *  return, like a ritual cultist — its slaying, not its HP, is what's remembered). */
-  private placeAmalgamMiniboss(def: ZoneDef): void {
-    const af = this.sim.amalgamationField;
-    if (!af || this.inCave) return;
-    const mb = af.minibossIn(def.id);
-    if (!mb || !MONSTERS[mb.defId]) return;
-    const key = `${mb.id}@${def.id}`;
-    if (this.materializedAmalgamMobs.has(key)) return;
-    this.materializedAmalgamMobs.add(key);
-    const cfg = af.surge();
-    const m = this.createMonster(mb.defId, Math.max(1, def.level + cfg.minibossLevelBonus), 'enemy');
-    m.faction = 'amalgam';
-    m.tag = 'amalgam_miniboss';
-    this.promoteRarity(m, 'champion');
-    m.pos = this.clampPos(this.farPoint(420, true), m.radius);
-    this.actors.push(m);
-    this.flashes.push({ pos: vec(m.pos.x, m.pos.y), radius: 130, color: '#e8e0c8', life: 0.8, maxLife: 0.8 });
-    this.text(vec(m.pos.x, m.pos.y - 50), `${m.name}`, '#e8e0c8', 16);
-  }
+  private placeAmalgamMiniboss(def: ZoneDef): void { return nativeRuntimeBirth.birthPlaceAmalgamMiniboss(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),def); }
 
   /** ASSEMBLE + raise the Amalgamation from the chosen parts: their stat mods (one
    *  composed source), granted skills/supports (riding the normal cast pipeline), a
    *  name woven from their epithets, Crowned, at the Bonewright's ring. Idempotent
    *  (skips if the boss already stands); health preserved across leaves. */
-  private riseAmalgamation(): void {
-    const site = this.amalgamSite;
-    const af = this.sim.amalgamationField;
-    if (!site || !af) return;
-    if (site.bossId != null && this.actorById(site.bossId)) return; // already risen this visit
-    const info = af.activeIn(site.zoneId);
-    if (!info || info.quest !== 'boss') return;
-    const cfg = af.surge();
-    const boss = this.createMonster(cfg.bossBaseId, Math.max(1, this.zone.level + 1), 'enemy');
-    // Graft the chosen parts: stat mods (one source), skills + supports, a name.
-    const partMods: Modifier[] = [];
-    const skillLevel = 1 + Math.floor((boss.level - 1) / 4);
-    const supLevel = 1 + Math.floor((boss.level - 1) / 5);
-    const epithets: string[] = [];
-    for (const pid of info.chosenParts) {
-      const part = af.partById(pid);
-      if (!part) continue;
-      partMods.push(...part.mods);
-      if (part.epithet) epithets.push(part.epithet);
-      if (part.grantSkill && SKILLS[part.grantSkill]) boss.skills.push(makeSkillInstance(SKILLS[part.grantSkill], skillLevel));
-      if (part.grantSupport && SUPPORTS[part.grantSupport]) {
-        const target = boss.skills[0];
-        if (target) {
-          const slot = target.sockets.findIndex(x => x === null);
-          if (slot >= 0) target.sockets[slot] = { def: SUPPORTS[part.grantSupport], level: supLevel };
-        }
-      }
-    }
-    if (partMods.length) boss.sheet.setSource('amalgam', partMods);
-    if (epithets.length) boss.name = `Amalgamation of ${epithets.join(' & ')}`;
-    boss.faction = 'amalgam';
-    boss.tag = 'amalgam_boss';
-    this.promoteRarity(boss, 'crowned'); // re-fills resources after mods land
-    boss.pos = this.clampPos(vec(site.center.x, site.center.y - 44), boss.radius);
-    boss.life = Math.max(1, boss.maxLife() * clamp(info.bossLifeFrac, 0.02, 1)); // preserved health
-    this.actors.push(boss);
-    site.bossId = boss.id;
-    this.flashes.push({ pos: vec(boss.pos.x, boss.pos.y), radius: 180, color: '#9ad0b0', life: 0.9, maxLife: 0.9 });
-    this.text(vec(boss.pos.x, boss.pos.y - 64), `${boss.name} rises!`, '#9ad0b0', 20);
-  }
+  private riseAmalgamation(): void { return nativeRuntimeBirth.birthRiseAmalgamation(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources()); }
 
   /** Per-part dwell-spot positions ringing the Bonewright (one per offered part). */
   private amalgamPickSpots(center: Vec2, offered: string[]): { pos: Vec2; partId: string }[] {
@@ -14364,54 +13808,14 @@ export class World {
    *  through the overlay; the mouth joins the shared sidezone dwell loop with
    *  a POSITION-FREE pocket seed (the spring may resurface elsewhere on a
    *  revisit, but it always opens onto the SAME shelf). */
-  private placeAscentGeyser(def: ZoneDef): void {
-    const af = this.sim.ascentField;
-    if (!af || this.inCave || def.caveDepth != null) return;
-    if ((def.dimension ?? 'surface') !== 'surface') return; // geysers vent from the world's own ground
-    if (def.special || def.eventOwned) return;
-    if (def.objective.kind === 'safe' || def.objective.kind === 'waves') return;
-    if (def.theme.ambientDark != null) return; // open sky only — a roofed geyser goes nowhere
-    const surge = af.surge();
-    if (surge.geyserBiomes.length && !surge.geyserBiomes.includes(def.biome ?? '')) return;
-    if (!af.geyserAllowed(this.player.level)) return;
-    const roll = new Rng(((def.seed ?? 0) ^ 0xa5ce47) >>> 0); // stable per zone
-    if (!roll.chance(af.geyserChanceNow())) return;
-    // The spring: a seeded pick well clear of the door + the transit spots.
-    let at: Vec2 | null = null;
-    for (let tries = 0; tries < 24 && !at; tries++) {
-      const p = this.clampPos(vec(
-        roll.range(140, Math.max(160, this.arena.w - 140)),
-        roll.range(140, Math.max(160, this.arena.h - 140))), 34);
-      if (dist(p, this.zoneEntry) < 420) continue; // not at the door
-      at = this.clearTransitSpot(p);
-    }
-    if (!at) return;
-    this.ventGeyser(at, hashStr(`${def.id}:sky_geyser`));
-    bumpLedger(this.ledger, 'geysers_seen'); // DISCOVERY — surfaces the Vault unlock
-  }
+  private placeAscentGeyser(def: ZoneDef): void { return nativeRuntimeBirth.birthPlaceAscentGeyser(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),def); }
 
   /** Stand a sky geyser up at a spot: the mouth doodad, the warm spring
    *  dressing, and the sidezone entrance (the shared dwell loop owns the
    *  ride from here). `pocketSeed` keys the shelf — POSITION-FREE for the
    *  organic roll (one geyser per zone → one shelf per zone, however the
    *  spring wanders between visits). */
-  private ventGeyser(at: Vec2, pocketSeed: number): void {
-    this.doodads.push({ pos: vec(at.x, at.y), radius: 30, kind: 'sky_geyser' });
-    // The spring's pool: warm water lapping the terrace (ground overlay —
-    // wading, wake rings, the works ride the ordinary region machinery).
-    for (let i = 0; i < 3; i++) {
-      const a = rand(0, Math.PI * 2);
-      const pool = { pos: vec(at.x + Math.cos(a) * 26, at.y + Math.sin(a) * 26), radius: rand(22, 32), kind: 'water' as const };
-      this.doodads.push(pool);
-      this.grounds.push(pool);
-    }
-    this.caveEntrances.push({
-      pos: this.clampPos(vec(at.x, at.y), 28),
-      seed: pocketSeed,
-      kind: 'sky_geyser',
-    });
-    this.text(vec(at.x, at.y - 36), 'A geyser roars toward the sky…', '#9fd8ff', 15);
-  }
+  private ventGeyser(at: Vec2, pocketSeed: number): void { return nativeRuntimeBirth.birthVentGeyser(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),at,pocketSeed); }
 
   /** DEV: force a sky geyser to vent beside the player (Events tab) — the
    *  Ascent's mouth without the lottery. Same shelf as the zone's organic
@@ -15887,24 +15291,7 @@ export class World {
   /** Materialize the epicenter's OBSERVER when the player enters its (revealed) zone —
    *  the boss whose death collapses the incursion. Once per visit. Only for the
    *  HybridCleanseObserver termination (an AmbientCapped blight has no end-boss). */
-  private materializeObserver(def: ZoneDef): void {
-    const inc = this.sim.incursionField;
-    if (!inc || this.inCave || this.materializedObservers.has(def.id)) return;
-    const info = inc.epicenterInfo(def.id);
-    if (!info) return;
-    const term = info.archetype.termination;
-    if (term.policy !== 'hybridCleanseObserver' || !term.observer || !MONSTERS[term.observer]) return;
-    this.materializedObservers.add(def.id);
-    const obs = this.createMonster(term.observer, Math.max(1, def.level + 2), 'enemy');
-    obs.faction = info.archetype.factions[0];
-    this.promoteRarity(obs, 'crowned');
-    obs.tag = 'eldritch_observer';
-    obs.xpValue = Math.max(obs.xpValue, 160);
-    obs.pos = this.clampPos(this.farPoint(440, true), obs.radius);
-    this.actors.push(obs);
-    this.flashes.push({ pos: vec(obs.pos.x, obs.pos.y), radius: 150, color: '#7fce6a', life: 0.8, maxLife: 0.8 });
-    this.text(vec(obs.pos.x, obs.pos.y - 50), 'The Observer turns its gaze upon you.', '#7fce6a', 18);
-  }
+  private materializeObserver(def: ZoneDef): void { return nativeRuntimeBirth.birthMaterializeObserver(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),def); }
 
   // --- ZONE MEMORY: "crossing a zone boundary never punishes you" -------------
   //
@@ -17230,98 +16617,14 @@ export class World {
    *  honor-guard, strength-scaled by the current stage. Killing the Balor REPELS
    *  the invasion (the kill hook calls resolveInvasion + pays a stage-scaled
    *  bounty), so entering late = a deadlier fight but a fatter reward. */
-  private spawnEpicenter(info: InvasionInfo, live = false): void {
-    if (this.materializedEpicenters.has(info.id)) return;
-    this.materializedEpicenters.add(info.id);
-    // The strike's RESOLVED faction: an attributed strike fields its sending
-    // LORD'S host (the War Below's banner made flesh); legacy keeps the Legion.
-    const facId = info.faction;
-    const roster = FACTIONS[facId];
-    if (!roster?.table?.length) return;
-    const lvl = Math.max(1, this.zone.level + info.strengthBonus);
-    // When the invasion attaches to the zone you're STANDING in, the Balor lands
-    // CLOSER (so the eruption-in-fire reads as happening to you, not across the
-    // map) — but past a standoff so it's a warning, not a point-blank ambush.
-    const at = this.clampPos(live ? this.farPoint(280, true) : this.farPoint(360, true), 28);
-    // DIMENSION-CORRECT field (the surface-only shortcut spawned the surface
-    // champion at a hell epicenter — every sibling read already went through
-    // demonFieldFor; this was the straggler). An attributed strike is led by
-    // its lord's MARSHAL (the lord never leaves its throne); the Balor remains
-    // the unattributed default.
-    const champId = info.champion
-      ?? this.sim.demonFieldFor(this.zone.dimension)?.surge()?.portal?.champion?.monsterId ?? 'balor_warlord';
-    const balor = this.createMonster(champId, lvl + 2, 'enemy');
-    balor.faction = facId;
-    if (this.sim.factionInvasionActive(facId, this.player.level)) this.promoteRarity(balor, 'crowned');
-    balor.tag = 'balor_epicenter';
-    balor.pos = this.clampPos(vec(at.x, at.y), balor.radius);
-    this.actors.push(balor);
-    const pool = roster.table.filter(e => e.id !== champId);
-    const n = randInt(5, 8);
-    for (let k = 0; k < n; k++) {
-      const m = this.createMonster(this.weightedPick(pool.length ? pool : roster.table, lvl), lvl, 'enemy');
-      m.faction = facId;
-      m.pos = this.clampPos(vec(at.x + rand(-90, 90), at.y + rand(-90, 90)), m.radius);
-      this.actors.push(m);
-    }
-    bumpLedger(this.ledger, 'demon_invasion_seen'); // DISCOVERY — surfaces the Vault tiers
-    this.flashes.push({ pos: vec(at.x, at.y), radius: 130, color: info.color, life: 0.7, maxLife: 0.7 });
-    // An attributed strike is announced under its LORD'S name — the tie-in the
-    // War Below exists for: the surface reads WHO reached up, not just what.
-    const lord = info.lordId ? lordDef(info.lordId) : undefined;
-    const champName = lord ? `${lord.short}'s marshal` : 'the Balor';
-    if (live) {
-      // A STORM OF FIRE heralds the descent — a burst of (cosmetic) meteor flashes
-      // around the champion as it lands, the alert/warning the player gets when an
-      // invasion erupts ON the zone they're already in. (The real, damaging Demon
-      // Storm then rains via updateDemonStorm, since this zone is now an epicenter.)
-      for (let i = 0; i < 7; i++) {
-        const mp = vec(at.x + rand(-120, 120), at.y + rand(-120, 120));
-        this.flashes.push({ pos: mp, radius: 34 + rand(0, 30), color: info.color, life: 0.45 + rand(0, 0.5), maxLife: 1 });
-      }
-      this.notice(`${info.type.label} ERUPTS — ${champName} descends in a storm of fire!`, info.color, 19, 'events');
-    } else {
-      this.text(vec(at.x, at.y - 50),
-        lord ? `${info.type.label} — ${lord.short}, ${lord.epithet}, sends his marshal!`
-          : `${info.type.label} — the Balor holds court!`, info.color, 18);
-    }
-  }
+  private spawnEpicenter(info: InvasionInfo, live = false): void { return nativeRuntimeBirth.birthSpawnEpicenter(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),info,live); }
 
   /** THE WAR BELOW's front officer: the pressing lord's MARSHAL takes the
    *  field at a HOT front, honor-guarded, wearing its lord on eventKey —
    *  felling it collapses the local push (the hell_marshal kill row). The
    *  armies themselves arrive through the ordinary owner/rival injection;
    *  this is just the officer. One spring per zone visit. */
-  private spawnHellMarshal(def: ZoneDef): void {
-    const key = `front_${def.id}`;
-    if (this.materializedHellWar.has(key)) return;
-    const front = this.sim.hellWarField?.frontStage(def.id);
-    if (!front) return;
-    this.materializedHellWar.add(key);
-    const lord = front.attacker;
-    const roster = FACTIONS[lord.faction];
-    if (!MONSTERS[lord.marshal] || !roster?.table?.length) return;
-    const lvl = Math.max(1, def.level + 1);
-    const at = this.clampPos(this.farPoint(420, true), 24);
-    const marshal = this.createMonster(lord.marshal, lvl + 2, 'enemy');
-    marshal.faction = lord.faction;
-    marshal.tag = 'hell_marshal';
-    marshal.eventKey = `hellwar:${lord.id}`;
-    marshal.xpValue = Math.max(marshal.xpValue, 120); // a marshal's bounty — the
-    // top bar stays with the LORDS (authored bosses; World.bossBarInfo): a
-    // field commander wears the champion ring, not the marquee.
-    this.promoteRarity(marshal, 'champion');
-    marshal.pos = this.clampPos(vec(at.x, at.y), marshal.radius);
-    this.actors.push(marshal);
-    const n = randInt(3, 5);
-    for (let k = 0; k < n; k++) {
-      const m = this.createMonster(this.weightedPick(roster.table, lvl), lvl, 'enemy');
-      m.faction = lord.faction;
-      m.pos = this.clampPos(vec(at.x + rand(-90, 90), at.y + rand(-90, 90)), m.radius);
-      this.actors.push(m);
-    }
-    this.text(vec(at.x, at.y - 40), `${lord.short}'s marshal drives the front!`, lord.color, 15);
-  }
+  private spawnHellMarshal(def: ZoneDef): void { return nativeRuntimeBirth.birthSpawnHellMarshal(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),def); }
 
   /** THE LORD MANIFESTS: deep sanctum ground fields the lord itself —
    *  Crowned, at full strength, over a court drawn from its own host (the
@@ -17329,33 +16632,7 @@ export class World {
    *  The throne is wherever the lord stands, and it stands where YOU walked
    *  in. Casting it down collapses the lord's power everywhere — and the
    *  lord REGATHERS: no throne changes hands, nothing here can be ended. */
-  private spawnHellCourt(def: ZoneDef): void {
-    const key = `seat_${def.id}`;
-    if (this.materializedHellWar.has(key)) return;
-    const lord = this.sim.hellWarField?.manifestHere(def.id);
-    if (!lord) return;
-    this.materializedHellWar.add(key);
-    const roster = FACTIONS[lord.faction];
-    if (!MONSTERS[lord.lord] || !roster?.table?.length) return;
-    const lvl = Math.max(1, def.level + 2);
-    const at = this.clampPos(this.farPoint(520, true), 30);
-    const body = this.createMonster(lord.lord, lvl + 2, 'enemy');
-    body.faction = lord.faction;
-    body.tag = 'hell_lord';
-    body.eventKey = `hellwar:${lord.id}`;
-    this.promoteRarity(body, 'crowned');
-    body.pos = this.clampPos(vec(at.x, at.y), body.radius);
-    this.actors.push(body);
-    const n = randInt(6, 9);
-    for (let k = 0; k < n; k++) {
-      const m = this.createMonster(this.weightedPick(roster.table, lvl), lvl, 'enemy');
-      m.faction = lord.faction;
-      m.pos = this.clampPos(vec(at.x + rand(-110, 110), at.y + rand(-110, 110)), m.radius);
-      this.actors.push(m);
-    }
-    this.text(vec(at.x, at.y - 48),
-      `${lord.name} MANIFESTS — this ground is ${lord.throne.name} now. ${lord.creed}`, lord.color, 17);
-  }
+  private spawnHellCourt(def: ZoneDef): void { return nativeRuntimeBirth.birthSpawnHellCourt(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),def); }
 
   /** Once an invasion festers past its portal threshold, a rift to the demons'
    *  home realm tears open at the epicenter — the "let it grow for a bigger
@@ -17662,39 +16939,7 @@ export class World {
    *  the converted faction-city. Each posts a garrison of the crusading faction;
    *  the camp/fortress commander is TAGGED so its death liberates the zone. One
    *  muster per zone visit. (The sanctum gate is opened per-frame elsewhere.) */
-  private materializeCrusade(info: CrusadeInfo): void {
-    if (this.materializedCrusades.has(this.zone.id)) return;
-    this.materializedCrusades.add(this.zone.id);
-    const roster = FACTIONS[info.faction];
-    if (!roster?.table?.length) return;
-    bumpLedger(this.ledger, 'crusade_seen'); // DISCOVERY — surfaces the Vault tuning
-    const lvl = Math.max(1, this.zone.level);
-    // THE WORKS are real structures now — injected at zone GENERATION as
-    // fixtures (crusadeFixtureSpecs → generateLayout extraFixtures), so plan
-    // walls carve the walk grid, gates are true doors, tower slots man, and
-    // nothing ever stamps over a portal. This muster fields only the LIVING:
-    // the garrison + its tier-promoted, tagged commander, at the works.
-    const center = this.crusadeWorksAt ?? this.clampPos(this.farPoint(420, true), 24);
-    // The garrison: a crusade pack with a tier-promoted, tagged commander. The
-    // converted city's defenders are untagged — you reach the Leader through the
-    // sanctum gate, not by clearing the streets. ENTRENCHMENT scales the head
-    // count (CrusadeInfo.entrenchMul — age buys ranks): a war found late
-    // fields a deeper yard than one caught kindling.
-    const n = Math.max(1, Math.round(randInt(info.garrison[0], info.garrison[1]) * info.entrenchMul));
-    for (let k = 0; k < n; k++) {
-      const m = this.createMonster(this.weightedPick(roster.table, lvl), lvl, 'enemy');
-      m.faction = info.faction;
-      m.pos = this.clampPos(vec(center.x + rand(-100, 100), center.y + rand(-100, 100)), m.radius);
-      if (k === 0 && info.leaderRarity !== 'none') {
-        this.promoteRarity(m, info.leaderRarity === 'crowned' ? 'crowned' : 'champion');
-        if (info.leaderTag) { m.tag = info.leaderTag; m.xpValue = Math.max(m.xpValue, 90); }
-      }
-      this.actors.push(m);
-    }
-    this.flashes.push({ pos: vec(center.x, center.y), radius: 110, color: info.color, life: 0.6, maxLife: 0.6 });
-    const fname = (roster.name ?? info.faction).replace(/^the /, '');
-    this.notice(`${fname} — ${info.label} crusade ground!`, info.color, 16, 'war');
-  }
+  private materializeCrusade(info: CrusadeInfo): void { return nativeRuntimeBirth.birthMaterializeCrusade(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),info); }
 
   /** THE CRUSADE WORKS AS FIXTURES: compute this held zone's tier structures
    *  for the layout mint — the main works far from the entry and clear of
@@ -17721,55 +16966,7 @@ export class World {
    *  packs are tagged 'contagion' so they read as ambient infection — never the zone's
    *  objective (countedEnemies excludes the tag), like a passing herd. The boss is
    *  tagged 'patient_zero' so its death (the only cure) is caught in the kill handler. */
-  private materializeContagion(def: ZoneDef): void {
-    const cf = this.sim.contagionField;
-    if (!cf) return;
-    const info = cf.contagionOn(def.id);
-    if (!info) return;
-    if (this.materializedContagion.has(def.id)) return;
-    this.materializedContagion.add(def.id);
-    // DISCOVERY — being caught in an infected zone surfaces the Vault tuning (one-shot
-    // per outbreak), exactly like the Deadwake / Migration "you've been caught" bump.
-    if (cf.markDiscovered(def.id)) bumpLedger(this.ledger, 'contagion_seen');
-    // THE KIN-BORNE SEAM (Movement II): a VISIT births one more carrier here —
-    // the bodies infected on this ground spread onward on their own after
-    // infection (capped by the surge; a curing outbreak births none).
-    cf.seedCarrierAt(def.id);
-    const cfg = cf.surge();
-    const strain = strainOf(info.strain);
-    const lvl = Math.max(1, def.level);
-    const roster = FACTIONS[cfg.faction];
-    // The diseased: pack COUNT scales with intensity (denser nearer the source).
-    // Every fielded body wears the outbreak's STRAIN — the Plaguebound court IS
-    // the infection (the SYMPTOMS re-flavor: mycelia's packs are an attackable
-    // network, the plague's are the sickness worn on bodies).
-    if (roster?.table?.length) {
-      const packs = Math.max(1, Math.round(
-        cfg.packCount[0] + (cfg.packCount[1] - cfg.packCount[0]) * clamp(info.intensity, 0, 1)));
-      for (let pk = 0; pk < packs; pk++) {
-        const at = this.farPoint(460);
-        const type = this.weightedPick(roster.table, lvl);
-        const n = randInt(cfg.packSize[0], cfg.packSize[1]);
-        for (let k = 0; k < n; k++) {
-          const m = this.createMonster(type, lvl, 'enemy');
-          m.faction = cfg.faction;
-          m.tag = 'contagion';
-          m.pos = this.clampPos(vec(at.x + rand(-80, 80), at.y + rand(-80, 80)), m.radius);
-          this.actors.push(m);
-          if (strain && !info.curing) this.infectActorWith(m, strain);
-        }
-      }
-    }
-    // PATIENT ZERO stands here — the ROAMING seat resolves to this zone (one
-    // zone at a time; Movement III): a tagged, named boss whose fall CUTS the
-    // source wherever it is caught.
-    const pz = cf.patientZeroIn(def.id);
-    if (pz && MONSTERS[pz.bossDefId]) {
-      this.spawnPatientZero(pz);
-    } else if (roster?.table?.length) {
-      this.notice(strain?.arrive ?? 'The air here is thick with rot…', cfg.color, 15, 'events');
-    }
-  }
+  private materializeContagion(def: ZoneDef): void { return nativeRuntimeBirth.birthMaterializeContagion(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),def); }
 
   /** Raise the zero's BODY at its seat — ONE door for the enter-time muster
    *  (materializeContagion) and the sweep's mid-visit WALK-IN: tagged
@@ -17779,25 +16976,7 @@ export class World {
    *  the door itself, not its callers: the zone-enter muster is DEFERRED to
    *  the first update in some boots, landing in the same frame as the
    *  sweep's walk-in — whichever knocks first wins, the other refuses. */
-  private spawnPatientZero(pz: { bossDefId: string; promote: 'none' | 'champion' | 'crowned'; name?: string }): void {
-    const cfg = this.sim.contagionField?.surge();
-    if (!cfg) return;
-    if (this.actors.some(x => !x.dead && x.tag === 'patient_zero')) return;
-    const boss = this.createMonster(pz.bossDefId, Math.max(1, this.zone.level), 'enemy');
-    boss.faction = cfg.faction;
-    boss.tag = 'patient_zero';
-    if (pz.promote !== 'none') {
-      this.promoteRarity(boss, pz.promote === 'crowned' ? 'crowned' : 'champion',
-        pz.name ? { distinctName: pz.name } : undefined);
-    } else if (pz.name) {
-      boss.name = pz.name;
-    }
-    boss.pos = this.clampPos(this.farPoint(520, true), boss.radius);
-    this.actors.push(boss);
-    this.flashes.push({ pos: vec(boss.pos.x, boss.pos.y), radius: 150, color: cfg.color, life: 0.8, maxLife: 0.8 });
-    this.text(vec(boss.pos.x, boss.pos.y - 60),
-      `${boss.name} festers here — cut out the source!`, cfg.color, 18);
-  }
+  private spawnPatientZero(pz: { bossDefId: string; promote: 'none' | 'champion' | 'crowned'; name?: string }): void { return nativeRuntimeBirth.birthSpawnPatientZero(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),pz); }
 
   /** THE INFECTION SWEEP (Movement II — the plague as a population-process
    *  living on KIN): while the standing zone is infected and the source
@@ -17876,29 +17055,7 @@ export class World {
    *  hidden by the fan default). The prior spec lands in the ledger FIRST,
    *  so the revert is byte-exact by construction. Re-taking a taken body
    *  just refreshes the mark (the status system's re-apply law). */
-  private infectActorWith(a: Actor, strain: StrainDef): void {
-    const cfg = this.sim.contagionField?.surge();
-    if (!cfg || !STATUS_DEFS[strain.statusId]) return;
-    if (!this.contagionLeans.has(a.id)) {
-      this.contagionLeans.set(a.id, { watch: a.watch });
-      a.watch = {
-        ...(a.watch ?? {}),
-        riseSec: (a.watch?.riseSec ?? WATCH_CFG.riseSec) * cfg.infection.dullMul,
-      };
-    }
-    a.applyStatus(strain.statusId, 0, 1, 'the contagion');
-    // THE MUTANT'S GROWTH (Movement III): a strain that declares a graft
-    // SPROUTS it on the taken body — once per infection (the leans entry is
-    // the latch, so a killed tentacle STAYS killed; the cure's revert clears
-    // the entry and a later outbreak grows fresh). Rides the ONE graft verb:
-    // host death kills the growth, the growth's death frees the host — the
-    // composite fabric's standing asymmetry, inherited whole.
-    const lean = this.contagionLeans.get(a.id);
-    if (strain.graft && lean && !lean.grafted) {
-      lean.grafted = true;
-      this.graftPart(a, strain.graft, { key: CONTAGION_GRAFT_KEY, flash: true });
-    }
-  }
+  private infectActorWith(a: Actor, strain: StrainDef): void { return nativeRuntimeBirth.birthInfectActorWith(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),a,strain); }
 
   // ------------------------------------------------------- deepwinter materialize
   //
@@ -17943,38 +17100,7 @@ export class World {
    *  the hook every frame under a standing front, the wire at the 20 Hz beat).
    *  Returns whether anything actually converted — the client apply rebuilds
    *  its predicted-collision lists only on a true swap. */
-  freezeStandingWater(): boolean {
-    const ice = liquidOf(DEEPWINTER_FROZEN_LIQUID).doodad;
-    if (!ice) return false;
-    if (this.dwIceArr === this.doodads && this.dwIceLen === this.doodads.length
-      && this.dwIceRev === this.doodadsRev) return false;
-    const thaws = new Set<string>(DEEPWINTER_THAWED_LIQUIDS
-      .map(id => liquidOf(id).doodad)
-      .filter((k): k is DoodadKind => !!k));
-    thaws.delete(ice); // never swap ice for ice (a row aliased to the frozen kind)
-    const iced: Doodad[] = [];
-    for (const d of this.doodads) if (thaws.has(d.kind)) iced.push(d);
-    // Bump ONLY when something actually changed, and only the FAMILIES the
-    // swap touched (neither kind blocks a foot, so the nav grid never
-    // re-rasterizes for it) — a re-entry onto already-frozen ground finds
-    // nothing and stays perfectly silent. TWICE, though, and deliberately:
-    // family bits are read off d.kind, so the kind we VACATE must be told
-    // before the swap and the kind we ARRIVE AT after it. (Water and ice sit
-    // in exactly the same families today, so the pair is a formality — but
-    // the swap must not quietly depend on that staying true.)
-    if (iced.length) {
-      this.markDoodadsChanged(iced);
-      for (const d of iced) {
-        d.kind = ice;
-        delete d.shallow; // "water only: a ford" — a frozen ford is just ice
-      }
-      this.markDoodadsChanged(iced);
-    }
-    this.dwIceArr = this.doodads;
-    this.dwIceLen = this.doodads.length;
-    this.dwIceRev = this.doodadsRev; // AFTER the bump — our own change is settled
-    return iced.length > 0;
-  }
+  freezeStandingWater(): boolean { return nativeRuntimeBirth.birthFreezeStandingWater(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources()); }
 
   /** Does a Deepwinter front hold the zone underfoot? THE MID-VISIT WIRE's
    *  serialize read (the snapshot's `dwf` bit — see freezeStandingWater).
@@ -17987,93 +17113,7 @@ export class World {
    *  over), the dressing (snow/whiteout), the court packs (tag 'deepwinter' —
    *  ambient, never the zone's objective), and the KING (tag 'winter_king' —
    *  the kill row that breaks the winter). */
-  private materializeDeepwinter(def: ZoneDef): void {
-    const df = this.sim.deepwinterField;
-    if (!df) return;
-    const info = df.frostOn(def.id);
-    if (!info) return;
-    const cfg = df.surge();
-    // THE ENTRY FREEZE (idempotent, per entry — and live): a whiteout standing
-    // over open, flowing water is the one contradiction the MINT-TIME freeze
-    // cannot reach. layoutRecipes' `freezeAt` only shapes ground minted AFTER
-    // the front arrived; this hook converts zones that were charted long
-    // before it. The swap itself (and its whole story — registry resolution,
-    // scope, transience, the scan memo) is freezeStandingWater: ONE
-    // implementation, shared with the co-op wire's client apply.
-    this.freezeStandingWater();
-    // CONVERSION DRESSING (idempotent, per entry): the ground wakes deep in
-    // snow and HOLDS it (the runtime floor), and the whiteout walks the zone.
-    this.snowCover = Math.max(this.snowCover, cfg.snow.cover);
-    this.snowFloor = Math.max(this.snowFloor, cfg.snow.floor);
-    const fog = this.fogEnsure();
-    const bankDef = FOG_BANKS[cfg.whiteout.kind];
-    if (fog && bankDef) {
-      const have = fog.banks.filter(b => b.def.id === cfg.whiteout.kind).length;
-      const want = randInt(cfg.whiteout.banks[0], cfg.whiteout.banks[1]);
-      for (let i = have; i < want; i++) {
-        const b = fog.spawnBank(bankDef);
-        b.age = rand(0, b.life * 0.6); // staggered — the white never breathes in unison
-      }
-    }
-    // THE MUSTER — once per zone visit.
-    if (this.materializedDeepwinter.has(def.id)) return;
-    this.materializedDeepwinter.add(def.id);
-    // DISCOVERY — walking held ground surfaces the Vault tuning (one-shot per
-    // front), exactly like the Contagion "you've stumbled in" bump.
-    if (df.markDiscovered(def.id)) bumpLedger(this.ledger, 'deepwinter_seen');
-    const lvl = Math.max(1, def.level);
-    const roster = FACTIONS[cfg.faction];
-    // The court: pack COUNT scales with intensity (thicker near the heart);
-    // the thaw fields HALF (a retreating army leaves rearguards, not hosts).
-    if (roster?.table?.length) {
-      let packs = Math.max(1, Math.round(
-        cfg.packCount[0] + (cfg.packCount[1] - cfg.packCount[0]) * clamp(info.intensity, 0, 1)));
-      if (info.thawing) packs = Math.max(1, Math.round(packs / 2));
-      for (let pk = 0; pk < packs; pk++) {
-        const at = this.farPoint(460);
-        const type = this.weightedPick(roster.table, lvl);
-        const n = randInt(cfg.packSize[0], cfg.packSize[1]);
-        for (let k = 0; k < n; k++) {
-          const m = this.createMonster(type, lvl, 'enemy');
-          m.faction = cfg.faction;
-          m.tag = 'deepwinter';
-          m.pos = this.clampPos(vec(at.x + rand(-80, 80), at.y + rand(-80, 80)), m.radius);
-          this.actors.push(m);
-        }
-      }
-    }
-    // THE WINTER KING holds the glacial heart — a tagged (Crowned) boss whose
-    // fall breaks the winter and starts the thaw. He crowns himself AT THE
-    // WHEEL: the grafted arena's rotor lane (the smallest track wearing his
-    // ownerTag) marks the dais, so the King rises among his own blades —
-    // spared by their faction grammar, anchored by his ice habitat. Hearts
-    // from older saves (plain frozen_lake, no lanes) keep the far-point rise.
-    const king = df.kingIn(def.id);
-    if (king && MONSTERS[king.bossDefId]) {
-      const boss = this.createMonster(king.bossDefId, lvl, 'enemy');
-      boss.faction = cfg.faction;
-      boss.tag = 'winter_king';
-      if (king.promote !== 'none') this.promoteRarity(boss, king.promote === 'crowned' ? 'crowned' : 'champion');
-      let daisAt: Vec2 | null = null;
-      let daisArea = Infinity;
-      for (const tr of this.tracks) {
-        if (tr.spec.ownerTag !== 'winter_king') continue;
-        const area = (tr.bound.x1 - tr.bound.x0) * (tr.bound.y1 - tr.bound.y0);
-        if (area < daisArea) {
-          daisArea = area;
-          daisAt = vec((tr.bound.x0 + tr.bound.x1) / 2, (tr.bound.y0 + tr.bound.y1) / 2);
-        }
-      }
-      boss.pos = this.clampPos(daisAt ?? this.farPoint(520, true), boss.radius);
-      this.actors.push(boss);
-      this.flashes.push({ pos: vec(boss.pos.x, boss.pos.y), radius: 150, color: cfg.color, life: 0.8, maxLife: 0.8 });
-      this.text(vec(boss.pos.x, boss.pos.y - 60),
-        `${boss.name} holds his court here — break the winter!`, cfg.color, 18);
-    } else if (roster?.table?.length) {
-      this.notice(info.thawing ? 'The frost here is in retreat — the court covers its withdrawal…'
-          : 'The winter holds this land — the air itself bites…', cfg.color, 15, 'events');
-    }
-  }
+  private materializeDeepwinter(def: ZoneDef): void { return nativeRuntimeBirth.birthMaterializeDeepwinter(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),def); }
 
   // ------------------------------------------------------- verminfall materialize
   //
@@ -18089,58 +17129,7 @@ export class World {
    *  Verminfall kill row keeps the ledger), vermin packs (tag 'vermin', ambient),
    *  and the KING (tag 'rat_king_manifest') when every nest is broken but the
    *  ground unclaimed. One muster per zone visit (guarded by materializedInfestation). */
-  private materializeInfestation(def: ZoneDef): void {
-    const vf = this.sim.verminfallField;
-    if (!vf) return;
-    const info = vf.infestOn(def.id);
-    if (!info) return;
-    if (this.materializedInfestation.has(def.id)) return;
-    this.materializedInfestation.add(def.id);
-    // DISCOVERY — walking a claimed zone surfaces the Vault tuning (one-shot per
-    // infestation), exactly like the Contagion "you've stumbled in" bump.
-    if (vf.markDiscovered(def.id)) bumpLedger(this.ledger, 'infestation_seen');
-    const cfg = vf.surge();
-    const lvl = Math.max(1, def.level);
-    // THE NESTS: exactly the standing count — a broken warren stays broken.
-    for (let i = 0; i < info.nestsRemaining; i++) {
-      const nest = this.createMonster(FIXTURE_IDS.warren_nest, lvl, 'enemy');
-      nest.faction = cfg.faction;
-      nest.tag = 'warren_nest';
-      nest.pos = this.clampPos(this.farPoint(430), nest.radius);
-      this.actors.push(nest);
-    }
-    // THE TIDE: pack count lerps with how much of the warren still stands.
-    const roster = FACTIONS[cfg.faction];
-    if (roster?.table?.length) {
-      const seethe = info.nestsTotal > 0 ? info.nestsRemaining / info.nestsTotal : 0;
-      const packs = Math.max(1, Math.round(
-        cfg.packCount[0] + (cfg.packCount[1] - cfg.packCount[0]) * seethe));
-      for (let pk = 0; pk < packs; pk++) {
-        const at = this.farPoint(460);
-        const type = this.weightedPick(roster.table, lvl);
-        const n = randInt(cfg.packSize[0], cfg.packSize[1]);
-        for (let k = 0; k < n; k++) {
-          const m = this.createMonster(type, lvl, 'enemy');
-          m.faction = cfg.faction;
-          m.tag = 'vermin';
-          m.pos = this.clampPos(vec(at.x + rand(-80, 80), at.y + rand(-80, 80)), m.radius);
-          this.actors.push(m);
-        }
-      }
-    }
-    // THE KING, if he was left walking (all nests broken, the ground unclaimed).
-    if (info.kingArmed && MONSTERS[cfg.kingDefId]) {
-      const king = this.createMonster(cfg.kingDefId, Math.max(1, lvl + cfg.kingLevelBonus), 'enemy');
-      king.faction = cfg.faction;
-      king.tag = 'rat_king_manifest';
-      king.pos = this.clampPos(this.farPoint(520, true), king.radius);
-      this.actors.push(king);
-      this.text(vec(king.pos.x, king.pos.y - 60),
-        `${king.name} still walks the broken warren!`, cfg.color, 18);
-    } else if (info.nestsRemaining > 0) {
-      this.notice('The ground here is riddled with warrens…', cfg.color, 15, 'events');
-    }
-  }
+  private materializeInfestation(def: ZoneDef): void { return nativeRuntimeBirth.birthMaterializeInfestation(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),def); }
 
   // ------------------------------------------------------- long-candle materialize
   //
@@ -18153,52 +17142,7 @@ export class World {
   /** Field the courts on a claimed ground. Shrines tag 'candle_shrine' (the
    *  snuff kill row); packs tag 'wax_vigil' / 'umbral_parliament' (ambient —
    *  a passing court never gates a zone). One muster per visit. */
-  private materializeCandle(def: ZoneDef): void {
-    const lc = this.sim.longCandleField;
-    if (!lc) return;
-    const info = lc.candleOn(def.id);
-    if (!info) return;
-    if (this.materializedCandle.has(def.id)) return;
-    this.materializedCandle.add(def.id);
-    const cfg = lc.surge();
-    const lvl = Math.max(1, def.level);
-    const muster = (facId: string, tag: string): void => {
-      const roster = FACTIONS[facId];
-      if (!roster?.table?.length) return;
-      const packs = randInt(cfg.packCount[0], cfg.packCount[1]);
-      for (let pk = 0; pk < packs; pk++) {
-        const at = this.farPoint(460);
-        const type = this.weightedPick(roster.table, lvl);
-        const n = randInt(cfg.packSize[0], cfg.packSize[1]);
-        for (let k = 0; k < n; k++) {
-          const m = this.createMonster(type, lvl, 'enemy');
-          m.faction = facId;
-          m.tag = tag;
-          m.pos = this.clampPos(vec(at.x + rand(-80, 80), at.y + rand(-80, 80)), m.radius);
-          this.actors.push(m);
-        }
-      }
-    };
-    if (info.vigil) {
-      bumpLedger(this.ledger, 'vigil_seen'); // the WAX side only — a convene-only claim never stamps it
-      const n = randInt(cfg.shrines[0], cfg.shrines[1]);
-      for (let i = 0; i < n; i++) {
-        const shrine = this.createMonster(FIXTURE_IDS.candle_shrine, lvl, 'enemy');
-        shrine.faction = cfg.waxFaction;
-        shrine.tag = 'candle_shrine';
-        shrine.pos = this.clampPos(this.farPoint(430), shrine.radius);
-        this.actors.push(shrine);
-      }
-      muster(cfg.waxFaction, 'wax_vigil');
-    }
-    if (info.convene) muster(cfg.umbralFaction, 'umbral_parliament');
-    const line = info.vigil && info.convene
-      ? 'Wax and shadow war over this ground — the candles say whose night it is.'
-      : info.vigil
-        ? 'The Wax Court processes here — candle-shrines hold the dark open.'
-        : 'The Parliament convenes — the dark here is a chamber in session.';
-    this.notice(line, info.vigil ? cfg.waxColor : cfg.umbralColor, 15, 'events');
-  }
+  private materializeCandle(def: ZoneDef): void { return nativeRuntimeBirth.birthMaterializeCandle(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),def); }
 
   // ------------------------------------------------------- starfall materialize
   //
@@ -18211,41 +17155,7 @@ export class World {
   /** Field the Court under an active starfall front. Packs tag 'starfall'
    *  (ambient — the sky owes no objective); the heart tags 'fallen_star'
    *  (the core kill row pays its bounty). One muster per zone visit. */
-  private materializeStarfall(def: ZoneDef): void {
-    if (skyOf(def) === 'sheltered') return; // no meteors indoors
-    const front = this.sim.weather.sample(def);
-    if (front?.kind !== 'starfall') return;
-    if (this.materializedStarfall.has(def.id)) return;
-    this.materializedStarfall.add(def.id);
-    bumpLedger(this.ledger, 'starfall_seen');
-    const cfg = STARFALL_CFG;
-    const lvl = Math.max(1, def.level);
-    const roster = FACTIONS[cfg.faction];
-    if (roster?.table?.length) {
-      const packs = randInt(cfg.packCount[0], cfg.packCount[1]);
-      for (let pk = 0; pk < packs; pk++) {
-        const at = this.farPoint(460);
-        const type = this.weightedPick(roster.table, lvl);
-        const n = randInt(cfg.packSize[0], cfg.packSize[1]);
-        for (let k = 0; k < n; k++) {
-          const m = this.createMonster(type, lvl, 'enemy');
-          m.faction = cfg.faction;
-          m.tag = 'starfall';
-          m.pos = this.clampPos(vec(at.x + rand(-80, 80), at.y + rand(-80, 80)), m.radius);
-          this.actors.push(m);
-        }
-      }
-    }
-    // THE HEART: sometimes an impact STOOD — an anchored lattice worth breaking.
-    if (chance(cfg.heartChance) && MONSTERS[cfg.heartDefId]) {
-      const heart = this.createMonster(cfg.heartDefId, lvl, 'enemy');
-      heart.faction = cfg.faction;
-      heart.tag = 'fallen_star';
-      heart.pos = this.clampPos(this.farPoint(500, true), heart.radius);
-      this.actors.push(heart);
-    }
-    this.notice('The sky is coming down in crystal — and something grew where it landed…', cfg.color, 15, 'events');
-  }
+  private materializeStarfall(def: ZoneDef): void { return nativeRuntimeBirth.birthMaterializeStarfall(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),def); }
 
   /** The composed EVENT-density multiplier for a zone: the per-zone (encounterDensity)
    *  + per-biome (eventDensityMul) levers × the live MYCELIA spore SUPPRESSION (1 = clear,
@@ -18268,60 +17178,7 @@ export class World {
    *  the exit toward the core, plus the Heartbloom at the core. One muster per visit (guarded
    *  by materializedMycelia). Packs tag 'mycelia' (ambient — countedEnemies-excluded; their
    *  death CULLS the bloom); the Heartbloom tags 'mycelia_heart' (its fall collapses it). */
-  private materializeMycelia(def: ZoneDef): void {
-    const mf = this.sim.myceliaField;
-    if (!mf) return;
-    const info = mf.sporeOn(def.id);
-    if (!info) return;
-    if (this.materializedMycelia.has(def.id)) return;
-    this.materializedMycelia.add(def.id);
-    if ((this.ledger.mycelia_seen ?? 0) === 0) bumpLedger(this.ledger, 'mycelia_seen'); // DISCOVERY (once)
-    const cfg = mf.surge();
-    const lvl = Math.max(1, def.level);
-    const roster = FACTIONS[cfg.faction];
-    // Pour the horde FROM the exit facing the core (the bloom creeping in from that road);
-    // a core zone (or a dead-end) pours from a far point instead.
-    const coreId = mf.activeBloom()?.coreZoneId;
-    let from = this.farPoint(440);
-    if (coreId && coreId !== def.id) {
-      const ex = this.exits.find(e => e.to === coreId);
-      if (ex) from = vec(ex.pos.x, ex.pos.y);
-    }
-    if (roster?.table?.length) {
-      const packs = Math.max(1, Math.round(1 + 3 * clamp(info.density, 0, 1))); // 1..4 by density
-      for (let pk = 0; pk < packs; pk++) {
-        const at = this.clampPos(vec(from.x + rand(-110, 110), from.y + rand(-110, 110)), 24);
-        const type = this.weightedPick(roster.table, lvl);
-        const n = randInt(2, 4);
-        for (let k = 0; k < n; k++) {
-          const m = this.createMonster(type, lvl, 'enemy');
-          m.faction = cfg.faction;
-          m.tag = 'mycelia';
-          m.pos = this.clampPos(vec(at.x + rand(-50, 50), at.y + rand(-50, 50)), m.radius);
-          this.actors.push(m);
-        }
-      }
-    }
-    // THE HEARTBLOOM holds the core (toggleable) — felling it FORCES the bloom's collapse.
-    const hb = mf.heartbloomIn(def.id);
-    if (hb && MONSTERS[hb.defId]) {
-      const boss = this.createMonster(hb.defId, lvl, 'enemy');
-      boss.faction = cfg.faction;
-      boss.tag = 'mycelia_heart';
-      if (hb.promote !== 'none') {
-        // THE EARNED CROWN: below the spec's promoteAt the bloom stands champion instead.
-        const crowned = hb.promote === 'crowned' && (hb.promoteAt == null || lvl >= hb.promoteAt);
-        this.promoteRarity(boss, crowned ? 'crowned' : 'champion');
-      }
-      boss.pos = this.clampPos(this.farPoint(520, true), boss.radius);
-      this.actors.push(boss);
-      this.flashes.push({ pos: vec(boss.pos.x, boss.pos.y), radius: 150, color: cfg.color, life: 0.8, maxLife: 0.8 });
-      this.text(vec(boss.pos.x, boss.pos.y - 60),
-        `${boss.name} pulses at the bloom's heart — strike it to collapse the spread!`, cfg.color, 18);
-    } else if (roster?.table?.length) {
-      this.notice('Spores choke the air — the Bloom has taken this ground…', cfg.color, 15, 'events');
-    }
-  }
+  private materializeMycelia(def: ZoneDef): void { return nativeRuntimeBirth.birthMaterializeMycelia(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),def); }
 
   /** Feed the Mycelia bloom per-zone event activity (it can't reach the sim) — bounded to
    *  the bloom's interest zones (core + neighbours + home + neighbours). Called before the
@@ -20041,49 +18898,11 @@ export class World {
 
   /** Field the standing hive throats in a brood-claimed zone. Exactly
    *  `standing` bodies — a stamped throat stays stamped across visits. */
-  private materializeBrood(def: ZoneDef): void {
-    const sf = this.sim.swarmingField;
-    if (!sf) return;
-    const info = sf.broodOn(def.id);
-    if (!info || this.materializedBroods.has(def.id)) return;
-    this.materializedBroods.add(def.id);
-    // DISCOVERY — walking a brood ground surfaces the Vault tuning (one-shot
-    // per ground), exactly like the herd's first catch.
-    if (sf.markBroodSeen(def.id)) bumpLedger(this.ledger, 'swarming_seen');
-    const cfg = sf.surge();
-    if (!MONSTERS[cfg.hiveNodeId]) return;
-    const lvl = Math.max(1, def.level);
-    for (let i = 0; i < info.standing; i++) {
-      const node = this.createMonster(cfg.hiveNodeId, lvl, 'enemy');
-      node.faction = cfg.faction;
-      node.tag = 'swarm_brood_node';
-      node.pos = this.clampPos(this.farPoint(420), node.radius);
-      this.actors.push(node);
-    }
-    if (info.standing > 0) {
-      this.notice(`The sand hums — ${info.standing} hive throat${info.standing === 1 ? '' : 's'} stand here (${info.tally}/${info.threshold} and the swarm wings)`, info.color, 15, 'events');
-    }
-  }
+  private materializeBrood(def: ZoneDef): void { return nativeRuntimeBirth.birthMaterializeBrood(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),def); }
 
   /** Field the royal-jelly caches where the wing passed. Exactly the claim's
    *  standing count — a broken cache stays broken across visits. */
-  private materializeSwarmWake(def: ZoneDef): void {
-    const sf = this.sim.swarmingField;
-    if (!sf) return;
-    const n = sf.cachesIn(def.id);
-    if (n <= 0 || this.materializedSwarmWake.has(def.id)) return;
-    this.materializedSwarmWake.add(def.id);
-    const cfg = sf.surge();
-    if (!MONSTERS[cfg.cacheId]) return;
-    const lvl = Math.max(1, def.level);
-    for (let i = 0; i < n; i++) {
-      const cache = this.createMonster(cfg.cacheId, lvl, 'enemy');
-      cache.tag = 'royal_cache';
-      cache.pos = this.clampPos(this.farPoint(380), cache.radius);
-      this.actors.push(cache);
-    }
-    this.notice('Amber glistens in the swarm\'s wake…', '#f0c060', 14, 'events');
-  }
+  private materializeSwarmWake(def: ZoneDef): void { return nativeRuntimeBirth.birthMaterializeSwarmWake(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),def); }
 
   /** Pour the wing through a covered zone: a HOSTILE directional stream —
    *  in from the side the swarm flows from (bandFlow, the shared bander),
@@ -20453,46 +19272,7 @@ export class World {
   /** On-entry materializer (zone-runtime row): stand the zone's sovereign up
    *  from overlay state — wounds preserved, escort at its feet, the throne
    *  beneath the enthroned. Idempotent per instance per visit. */
-  private materializeWorldBossFight(def: ZoneDef): void {
-    const f = this.sim.worldBossFieldFor(def.dimension);
-    if (!f) return;
-    const fight = f.fightAt(def.id);
-    if (!fight || this.materializedWorldBoss.has(fight.instanceId) || this.wbBoss) return;
-    const at = this.clearTransitSpot(this.clampPos(this.farPoint(340), 80), 110);
-    // The LAIR's throne rises first — the habitat ground the sovereign binds to
-    // (the per-frame confine sweep welds the body to the nearest matching dais).
-    if (fight.archetype === 'lair' && fight.def.lair) {
-      this.doodads.push({ pos: vec(at.x, at.y), radius: fight.def.lair.radius ?? 130, kind: fight.def.lair.structureKind });
-    }
-    // Ground minted FOR the fight (a venue-'arena' coil, a lair) already
-    // carries the level bonus in its ZoneDef; a fight standing on ORDINARY
-    // world ground — an apparition, or a settled serpent under THE SETTLED
-    // GROUND venue — takes it here.
-    const lvl = Math.max(1, def.level + (!def.special ? (fight.def.levelBonus ?? 0) : 0));
-    const m = this.createMonster(fight.def.monster, lvl, 'enemy');
-    m.pos = vec(at.x, at.y);
-    m.tag = 'worldboss_boss';
-    m.eventKey = fight.instanceId;
-    this.actors.push(m);
-    if (fight.bossLifeFrac < 1) m.life = Math.max(1, m.maxLife() * fight.bossLifeFrac);
-    const esc = fight.def.escort;
-    if (esc && esc.table.length) {
-      const n = randInt(esc.count[0], esc.count[1]);
-      for (let k = 0; k < n; k++) {
-        const g = this.createMonster(this.weightedPick(esc.table, lvl), lvl, 'enemy');
-        g.pos = this.clampPos(vec(at.x + rand(-150, 150), at.y + rand(-150, 150)), g.radius);
-        this.actors.push(g);
-      }
-    }
-    if (fight.archetype === 'apparition') {
-      this.flashes.push({ pos: vec(at.x, at.y), radius: 200, color: fight.def.color, life: 0.9, maxLife: 0.9 });
-      this.text(vec(at.x, at.y - 70), `${fight.def.name} has RISEN!`, fight.def.color, 18);
-    }
-    this.wbBoss = m;
-    this.wbBossKey = fight.instanceId;
-    this.materializedWorldBoss.add(fight.instanceId);
-    bumpLedger(this.ledger, 'worldboss_seen');
-  }
+  private materializeWorldBossFight(def: ZoneDef): void { return nativeRuntimeBirth.birthMaterializeWorldBossFight(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),def); }
 
   // ----------------------------------------------------- necropolis (the uber)
   //
@@ -21847,9 +20627,7 @@ export class World {
   /** Does this live actor's def declare the given open NPC role? Behavior
    *  sites scan roles (MonsterDef.npcRole), never literal def ids — any body,
    *  a package's included, can staff any counter. */
-  private hasNpcRole(a: Actor, role: string): boolean {
-    return !a.dead && !!a.defId && MONSTERS[a.defId]?.npcRole === role;
-  }
+  private hasNpcRole(a: Actor, role: string): boolean { return nativeRuntimeBirth.birthHasNpcRole(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),a,role); }
 
   /** Is the seat's hero at the vendor's counter? */
   nearSmith(seat: Seat = this.localSeat): boolean {
@@ -25476,14 +24254,7 @@ export class World {
   /** Spawn the Caravanner that waits at a minted destination (the round-trip return
    *  point). Idempotent; placed OUTSIDE the Zone-Memory window so it always re-appears
    *  and untargetable so the band's foes ignore it. */
-  private placeCaravanReturn(def: ZoneDef): void {
-    if (!def.id.startsWith('caravan_band_')) return;
-    if (this.actors.some(a => this.hasNpcRole(a, 'caravanner'))) return;
-    const c = this.createMonster(FIXTURE_IDS.townsfolk_caravanner, 1, 'player');
-    c.untargetable = true; // the band's monsters ignore the escort
-    c.pos = this.clampPos(vec(this.player.pos.x + 54, this.player.pos.y + 28), c.radius);
-    this.actors.push(c);
-  }
+  private placeCaravanReturn(def: ZoneDef): void { return nativeRuntimeBirth.birthPlaceCaravanReturn(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),def); }
 
   // ----------------------------------------------------- mercenary outpost ---
   //
@@ -31370,9 +30141,7 @@ export class World {
 
   /** Resolve an actor by id (patrol followers heel to a leader id; events
    *  re-resolve their actors each frame rather than holding stale refs). */
-  actorById(id: number): Actor | undefined {
-    return this.actors.find(a => a.id === id);
-  }
+  actorById(id: number): Actor | undefined { return nativeRuntimeBirth.birthActorById(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),id); }
 
   // ------------------------------------------------------------ skill use ---
 
@@ -49978,44 +48747,7 @@ export class World {
    *  REFUSALS: a dead host; a host that is ITSELF a part (a break would
    *  orphan the grandchildren — the composite law stays two-deep by
    *  construction); an unknown part def. */
-  graftPart(host: Actor, pd: MonsterPartDef, opts?: { key?: string; flash?: boolean }): Actor | null {
-    if (host.dead || host.partLink || !MONSTERS[pd.monster]) return null;
-    const part = this.createMonster(pd.monster, host.level, host.team);
-    part.faction = host.faction;
-    part.anchored = true;          // rigid: never shoved off the frame
-    part.xpValue = 0;              // the HOST pays any bounty
-    part.fromZoneGen = false;      // never snapshotted apart from it
-    part.partLink = { root: host, def: pd };
-    clearPartScar(host, pd);
-    part.graftKey = opts?.key;
-    if (pd.lifeFrac) {
-      // Aim the FINAL pool at frac × host max: set the base, measure what
-      // the level curve turns it into, and rescale — so a part is exactly
-      // its share of the beast at any spawn level.
-      const target = Math.max(1, Math.round(host.maxLife() * pd.lifeFrac));
-      part.sheet.setBase('life', target);
-      const got = part.maxLife();
-      if (got > 1 && Math.abs(got - target) > 1) {
-        part.sheet.setBase('life', Math.max(1, target * (target / got)));
-      }
-      part.fillResources();
-    }
-    // Seat it in the host's facing frame NOW (updateParts re-holds it every
-    // tick) — a runtime graft must never flash into the world at a stranger's
-    // coordinates for one frame.
-    const c = Math.cos(host.facing), s = Math.sin(host.facing);
-    part.pos.x = host.pos.x + (pd.dx * c - pd.dy * s) * host.radius;
-    part.pos.y = host.pos.y + (pd.dx * s + pd.dy * c) * host.radius;
-    (host.partActors ??= []).push(part);
-    this.actors.push(part);
-    if (opts?.flash) {
-      this.flashes.push({
-        pos: vec(part.pos.x, part.pos.y), radius: part.radius * 1.6,
-        color: part.color, life: 0.35, maxLife: 0.35,
-      });
-    }
-    return part;
-  }
+  graftPart(host: Actor, pd: MonsterPartDef, opts?: { key?: string; flash?: boolean }): Actor | null { return nativeRuntimeBirth.birthGraftPart(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources(),host,pd,opts); }
 
   /** THE QUIET UNGRAFT — every `key`-marked graft on the host is REMOVED
    *  without dying: no break effects, no SUNDERED, no bounty (the root-death
@@ -52116,14 +50848,7 @@ export class World {
    *  privilege. The twin of creepEnsure: same salted stream discipline (banks
    *  spawned here roll the field's own rng, never the layout's), same
    *  boundless refusal as buildZoneFog (no stable bounds to roam). */
-  fogEnsure(): FogField | null {
-    if (this.fog) return this.fog;
-    if (this.arena.boundless) return null;
-    this.fog = new FogField(
-      new Rng((this.currentZoneSeed ^ FOG_CFG.salt) >>> 0),
-      this.arena.w, this.arena.h);
-    return this.fog;
-  }
+  fogEnsure(): FogField | null { return nativeRuntimeBirth.birthFogEnsure(this.nativeRuntimeBirthHost(),this.nativeRuntimeBirthSources()); }
 
   /** Tick the fog field: drift/coil/dissipate + dress occupants. A 'fog'
    *  WEATHER front over this zone breeds sky-born banks and thickens the
@@ -59834,6 +58559,145 @@ export class World {
     if (!this.sailing) markBodyWalk(a, a.pos.x - sx, a.pos.y - sy, this.time);
   }
 
+  declare private nativeRuntimeBirthView?:nativeRuntimeBirth.NativeSceneRuntimeBirthHost;
+  private nativeRuntimeBirthHost():nativeRuntimeBirth.NativeSceneRuntimeBirthHost {
+    if(this.nativeRuntimeBirthView)return this.nativeRuntimeBirthView;
+    const world=this;
+    const host:nativeRuntimeBirth.NativeSceneRuntimeBirthHost=Object.freeze({
+      get sim(){return world.sim;},
+      get inCave(){return world.inCave;},
+      get player(){return world.player;},
+      get clampPos(){const fn=world.clampPos;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['clampPos']>)=>fn.apply(world,args);},
+      get arena(){return world.arena;},
+      get zoneEntry(){return world.zoneEntry;},
+      get clearTransitSpot(){const fn=world.clearTransitSpot;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['clearTransitSpot']>)=>fn.apply(world,args);},
+      get ventGeyser(){const fn=world.ventGeyser;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['ventGeyser']>)=>fn.apply(world,args);},
+      get ledger(){return world.ledger;},
+      get materializedHosts(){return world.materializedHosts;},
+      get zone(){return world.zone;},
+      get warbandEntryPoint(){const fn=world.warbandEntryPoint;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['warbandEntryPoint']>)=>fn.apply(world,args);},
+      get createMonster(){const fn=world.createMonster;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['createMonster']>)=>fn.apply(world,args);},
+      get weightedPick(){const fn=world.weightedPick;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['weightedPick']>)=>fn.apply(world,args);},
+      get promoteRarity(){const fn=world.promoteRarity;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['promoteRarity']>)=>fn.apply(world,args);},
+      get actors(){return world.actors;},
+      get warbandDestination(){const fn=world.warbandDestination;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['warbandDestination']>)=>fn.apply(world,args);},
+      get warbandMarches(){return world.warbandMarches;},
+      get flashes(){return world.flashes;},
+      get text(){const fn=world.text;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['text']>)=>fn.apply(world,args);},
+      get compassFrom(){const fn=world.compassFrom;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['compassFrom']>)=>fn.apply(world,args);},
+      get materializedEpicenters(){return world.materializedEpicenters;},
+      get farPoint(){const fn=world.farPoint;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['farPoint']>)=>fn.apply(world,args);},
+      get notice(){const fn=world.notice;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['notice']>)=>fn.apply(world,args);},
+      get materializedCrusades(){return world.materializedCrusades;},
+      get crusadeWorksAt(){return world.crusadeWorksAt;},
+      get materializedHellWar(){return world.materializedHellWar;},
+      get materializedWorldBoss(){return world.materializedWorldBoss;},
+      get wbBoss(){return world.wbBoss;},set wbBoss(value){world.wbBoss=value;},
+      get doodads(){return world.doodads;},
+      get wbBossKey(){return world.wbBossKey;},set wbBossKey(value){world.wbBossKey=value;},
+      get materializedContagion(){return world.materializedContagion;},
+      get infectActorWith(){const fn=world.infectActorWith;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['infectActorWith']>)=>fn.apply(world,args);},
+      get spawnPatientZero(){const fn=world.spawnPatientZero;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['spawnPatientZero']>)=>fn.apply(world,args);},
+      get freezeStandingWater(){const fn=world.freezeStandingWater;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['freezeStandingWater']>)=>fn.apply(world,args);},
+      get snowCover(){return world.snowCover;},set snowCover(value){world.snowCover=value;},
+      get snowFloor(){return world.snowFloor;},set snowFloor(value){world.snowFloor=value;},
+      get fogEnsure(){const fn=world.fogEnsure;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['fogEnsure']>)=>fn.apply(world,args);},
+      get materializedDeepwinter(){return world.materializedDeepwinter;},
+      get tracks(){return world.tracks;},
+      get materializedInfestation(){return world.materializedInfestation;},
+      get materializedBroods(){return world.materializedBroods;},
+      get materializedSwarmWake(){return world.materializedSwarmWake;},
+      get materializedCandle(){return world.materializedCandle;},
+      get materializedStarfall(){return world.materializedStarfall;},
+      get materializedMycelia(){return world.materializedMycelia;},
+      get exits(){return world.exits;},
+      get materializedHoldfasts(){return world.materializedHoldfasts;},
+      get holdfastSite(){return world.holdfastSite;},set holdfastSite(value){world.holdfastSite=value;},
+      get materializedUnsealing(){return world.materializedUnsealing;},
+      get findUnsealingSpot(){const fn=world.findUnsealingSpot;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['findUnsealingSpot']>)=>fn.apply(world,args);},
+      get unsealingSite(){return world.unsealingSite;},set unsealingSite(value){world.unsealingSite=value;},
+      get markDoodadsChanged(){const fn=world.markDoodadsChanged;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['markDoodadsChanged']>)=>fn.apply(world,args);},
+      get spawnHuntBeast(){const fn=world.spawnHuntBeast;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['spawnHuntBeast']>)=>fn.apply(world,args);},
+      get huntFootprint(){return world.huntFootprint;},set huntFootprint(value){world.huntFootprint=value;},
+      get materializedFractures(){return world.materializedFractures;},
+      get fractureRng(){return world.fractureRng;},set fractureRng(value){world.fractureRng=value;},
+      get manifest(){return world.manifest;},
+      get walk(){return world.walk;},
+      get fractureRun(){return world.fractureRun;},set fractureRun(value){world.fractureRun=value;},
+      get beginFissure(){const fn=world.beginFissure;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['beginFissure']>)=>fn.apply(world,args);},
+      get bearingOf(){const fn=world.bearingOf;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['bearingOf']>)=>fn.apply(world,args);},
+      get fractureRifts(){return world.fractureRifts;},
+      get materializedRituals(){return world.materializedRituals;},
+      get ritualSite(){return world.ritualSite;},set ritualSite(value){world.ritualSite=value;},
+      get materializedAmalgam(){return world.materializedAmalgam;},
+      get amalgamSite(){return world.amalgamSite;},set amalgamSite(value){world.amalgamSite=value;},
+      get riseAmalgamation(){const fn=world.riseAmalgamation;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['riseAmalgamation']>)=>fn.apply(world,args);},
+      get materializedAmalgamMobs(){return world.materializedAmalgamMobs;},
+      get materializedObservers(){return world.materializedObservers;},
+      get materializedWrits(){return world.materializedWrits;},
+      get spawnEventActor(){const fn=world.spawnEventActor;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['spawnEventActor']>)=>fn.apply(world,args);},
+      get clampNear(){const fn=world.clampNear;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['clampNear']>)=>fn.apply(world,args);},
+      get hasNpcRole(){const fn=world.hasNpcRole;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['hasNpcRole']>)=>fn.apply(world,args);},
+      get grounds(){return world.grounds;},
+      get caveEntrances(){return world.caveEntrances;},
+      get zoneMap(){return world.zoneMap;},
+      get contagionLeans(){return world.contagionLeans;},
+      get graftPart(){const fn=world.graftPart;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['graftPart']>)=>fn.apply(world,args);},
+      get dwIceArr(){return world.dwIceArr;},set dwIceArr(value){world.dwIceArr=value;},
+      get dwIceLen(){return world.dwIceLen;},set dwIceLen(value){world.dwIceLen=value;},
+      get dwIceRev(){return world.dwIceRev;},set dwIceRev(value){world.dwIceRev=value;},
+      get doodadsRev(){return world.doodadsRev;},
+      get fog(){return world.fog;},set fog(value){world.fog=value;},
+      get currentZoneSeed(){return world.currentZoneSeed;},
+      get materializedHunts(){return world.materializedHunts;},
+      get huntBeast(){return world.huntBeast;},set huntBeast(value){world.huntBeast=value;},
+      get fracturePoint(){const fn=world.fracturePoint;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['fracturePoint']>)=>fn.apply(world,args);},
+      get actorById(){const fn=world.actorById;return(...args:Parameters<nativeRuntimeBirth.NativeSceneRuntimeBirthHost['actorById']>)=>fn.apply(world,args);},
+    });
+    Object.defineProperty(this,'nativeRuntimeBirthView',{value:host,enumerable:false,writable:true,configurable:true});return host;
+  }
+  declare private nativeRuntimeBirthSourceView?:nativeRuntimeBirth.NativeSceneRuntimeBirthSources;
+  private nativeRuntimeBirthSources():nativeRuntimeBirth.NativeSceneRuntimeBirthSources {
+    if(this.nativeRuntimeBirthSourceView)return this.nativeRuntimeBirthSourceView;
+    const sources:nativeRuntimeBirth.NativeSceneRuntimeBirthSources=Object.freeze({
+      get bumpLedger():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['bumpLedger']{return bumpLedger;},
+      get vec():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['vec']{return vec;},
+      get MONSTERS():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['MONSTERS']{return MONSTERS;},
+      get clamp():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['clamp']{return clamp;},
+      get FACTIONS():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['FACTIONS']{return FACTIONS;},
+      get dist():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['dist']{return dist;},
+      get randInt():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['randInt']{return randInt;},
+      get rollRarity():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['rollRarity']{return rollRarity;},
+      get rand():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['rand']{return rand;},
+      get Rng():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['Rng']{return Rng;},
+      get packageSeed():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['packageSeed']{return packageSeed;},
+      get hashStr():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['hashStr']{return hashStr;},
+      get gateThroatAt():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['gateThroatAt']{return gateThroatAt;},
+      get boundaryGateOf():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['boundaryGateOf']{return boundaryGateOf;},
+      get blocksMovement():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['blocksMovement']{return blocksMovement;},
+      get AMALGAM_GRAVE_RING():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['AMALGAM_GRAVE_RING']{return AMALGAM_GRAVE_RING;},
+      get SKILLS():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['SKILLS']{return SKILLS;},
+      get makeSkillInstance():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['makeSkillInstance']{return makeSkillInstance;},
+      get SUPPORTS():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['SUPPORTS']{return SUPPORTS;},
+      get lordDef():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['lordDef']{return lordDef;},
+      get strainOf():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['strainOf']{return strainOf;},
+      get STATUS_DEFS():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['STATUS_DEFS']{return STATUS_DEFS;},
+      get WATCH_CFG():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['WATCH_CFG']{return WATCH_CFG;},
+      get CONTAGION_GRAFT_KEY():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['CONTAGION_GRAFT_KEY']{return CONTAGION_GRAFT_KEY;},
+      get liquidOf():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['liquidOf']{return liquidOf;},
+      get DEEPWINTER_FROZEN_LIQUID():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['DEEPWINTER_FROZEN_LIQUID']{return DEEPWINTER_FROZEN_LIQUID;},
+      get DEEPWINTER_THAWED_LIQUIDS():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['DEEPWINTER_THAWED_LIQUIDS']{return DEEPWINTER_THAWED_LIQUIDS;},
+      get FOG_BANKS():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['FOG_BANKS']{return FOG_BANKS;},
+      get FIXTURE_IDS():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['FIXTURE_IDS']{return FIXTURE_IDS;},
+      get skyOf():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['skyOf']{return skyOf;},
+      get STARFALL_CFG():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['STARFALL_CFG']{return STARFALL_CFG;},
+      get chance():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['chance']{return chance;},
+      get clearPartScar():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['clearPartScar']{return clearPartScar;},
+      get FogField():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['FogField']{return FogField;},
+      get FOG_CFG():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['FOG_CFG']{return FOG_CFG;},
+    });
+    Object.defineProperty(this,'nativeRuntimeBirthSourceView',{value:sources,enumerable:false,writable:true,configurable:true});return sources;
+  }
   declare private nativeSceneTerrainView?:NativeSceneTerrainHost;
   private nativeSceneTerrainHost():NativeSceneTerrainHost {
     if(this.nativeSceneTerrainView)return this.nativeSceneTerrainView;

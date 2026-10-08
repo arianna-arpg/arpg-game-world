@@ -2529,3 +2529,66 @@ the isolated stalkwood rerun is clear, while metropolis retains a timing warning
 These changes do not occur in GenQA's executable import graph. The preceding
 arrival checkpoint passed all 492 fast probes; a new full 493-probe run was not
 performed after the Titan integration.
+
+
+## Native runtime event births
+
+NativeAreaSceneRuntimeBirth supplies the complete 26 native event-placement
+entry points and their 17 transitive helpers. The original 43 bodies and default
+arguments match local main 651d7e05. Classic World uses those same operations;
+2,330 other World members and the original emitted import order are unchanged.
+The local binding shares geometry, census, population, generation anchors and
+theater services, plus live campaign simulation, ledger, manifest and graph.
+Private source policies remain the actual World lexical values behind lazy,
+nonenumerable adapters. Each area's materialization state and fracture cursor
+must be carried across lifecycle transitions, not reconstructed from defaults.
+
+Coverage includes warbands, invasions, crusades, underworld courts/fronts,
+world bosses, contagion, deepwinter, infestations, broods and swarm wakes,
+candle courts, starfall, mycelia, holdfasts, tomb seals, hunts, fractures/rifts,
+rituals, amalgamations, observers, vendettas, caravan returns and sky geysers.
+The cold original/classic/local oracle retains two complete native layouts and
+compares 116 courses, including positive bodies, repeat placement, actual campaign
+restores, native source predicates, partial factory and terrain failures, callback
+selection and hidden cache behavior. Eligible-source mechanism fixtures are
+explicit controls, not measurements of natural biome or event frequency.
+
+This completes these birth owners, not the full ordered registry dispatcher,
+ongoing controllers/rewards, immutable source-session issuance, whole-owner
+paging or full seamless area admission. A playable multi-zone return and cold
+Continue course is still required before claiming native content parity.
+
+Runtime birth validation: all three type configurations, all 2,607 generation
+cases (four known spacing warnings), 25 smoke episodes and both built-client
+entry/Continue/return courses passed. The complete 116-course oracle matches
+128,259,339 serialized bytes per lane, with 352 actual bodies, 2,446 draws and
+58 reached partial failures. The no-retry fast sweep passed 493/494 probes;
+its geometry oracle still borrowed actorById from current World in its archived
+control. Pinning that transitive helper to the same original revision and
+rebinding the instrumented current cache restored all six geometry comparisons,
+partial-failure courses and callback checks. The focused rerun passed; the entire
+494-probe sweep was not repeated after that test-only correction.
+
+## Native hierarchy direction
+
+The intended nesting is world mass -> biome regions -> native zones -> streamed chunks.
+A region is a native geographic biome territory; a zone is an actual native
+ZoneDef and its persistent ID, objectives, event memberships, neighbors and map
+knowledge. Chunks partition that zone's physical content for streaming and
+rendering. Loading, unloading or subdividing a chunk cannot change a zone's
+identity, reroll its event, reset its objective or grant a second reward.
+
+Region events may span several zones. World weather fronts move through physical
+space and affect each region, zone and chunk they cover; their ownership and
+clock do not transfer whenever the player crosses a chunk boundary. Biome blends,
+watercourses, roads and mountain passes must cross chunk seams continuously.
+Surface and side-area owners retain their native dimension and parent links.
+
+The revealed terrain map is the local view of those chunks. Zooming outward
+should resolve to zone footprints and the native event/quest markers, then biome
+regions in the same world. It must read the same saved source identities and
+knowledge without revealing unexplored terrain merely by zooming. Existing
+fixed-size MassHierarchy cells remain an earlier experimental policy; they are
+not a substitute for native biome territory and actual native zone membership.
+The native identity/extent binding, scoped event projection and map transition
+still need implementation and validation; this checkpoint does not claim them.

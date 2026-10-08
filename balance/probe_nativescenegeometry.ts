@@ -61,6 +61,11 @@ const fixtures: any[] = payload.fixtures, archive = payload.geometry, adoption =
 function lexical(source: string): any { const module = { exports: {} }; const js = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText; new Function('require', 'module', 'exports', js)((id: string) => { assert.ok(Object.hasOwn(sourceModules, id), 'unbound archived source ' + id); return sourceModules[id]; }, module, module.exports); return module.exports; }
 const { ArchivedGeometry } = lexical(payload.referenceSource);
 const { originalNativeAreaLayout } = lexical(payload.adoptionSource);
+// The archived geometry calls this transitive helper on its donor. Keep its
+// 81b96a31 body independent of later World adapters (also identical at main).
+const originalActorById = function(this: { actors: Actor[] }, id: number): Actor | undefined {
+    return this.actors.find(a => a.id === id);
+};
 function evidence(name: string, value: unknown): void {
     const dir = process.env.SCENE_REVIEW_OUTPUT;
     if (dir) {
@@ -118,6 +123,7 @@ function course(which: 'old' | 'local' | 'world', fixture: any, failAt?: string)
             owner.ledger = campaign.ledger;
             owner.seasSeen = campaign.seasSeen;
             owner.texts = texts;
+            if (which === 'old') owner.actorById = originalActorById;
             if (which === 'old')
                 for (const name of methods) {
                     const f = Object.getOwnPropertyDescriptor(ArchivedGeometry.prototype, name)?.value;
@@ -140,6 +146,9 @@ function course(which: 'old' | 'local' | 'world', fixture: any, failAt?: string)
         if (which === 'world') {
             delete owner.nativeSceneGeometryView;
             delete owner.nativeAreaLayoutView;
+            // Rebind the current helper to the query-observing proxy, like the
+            // geometry/layout views above; a donor cache predates instrumentation.
+            delete owner.nativeRuntimeBirthView;
         }
         if (which === 'local' && process.env.SCENE_REVIEW_MUTANT === 'door-grid')
             owner.nativeGridAt = () => null;

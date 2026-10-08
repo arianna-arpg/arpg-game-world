@@ -1,3 +1,20 @@
+NativeSceneRuntimeBirth shares all 26 native runtime event births and their 17
+helpers with classic World. NativeAreaSceneRuntimeBirth binds real local geometry,
+population, generation and theater owners to live campaign events and original
+source providers. Preserve native filters, complete bodies, private policies,
+materialization latches, wounds, door spacing, random cursors and partial effects.
+This is birth ownership, not full runtime registry/update/reward dispatch or area
+paging. Verify nativesceneruntimebirth, native regressions, relevant event probes,
+all types, generation, simulation and built-client entry/Continue/return.
+
+Native hierarchy direction: world mass -> biome regions -> native zones -> streamed chunks.
+Regions retain native geographic biome identity; zones retain actual native IDs,
+objectives, events and map knowledge. Chunks own streaming, not replacement zones.
+World weather crosses every affected region/zone/chunk through its footprint.
+Map zoom must progress from revealed local terrain to native zone/event/region
+views over the same saved identities. Existing square MassHierarchy cells are an
+older experimental ownership policy, not completion of this native hierarchy.
+
 NativeAreaSceneTitans owns the complete native TitanRuntime over the actual local
 geometry/population and live campaign journey. NativeSceneTerrain shares original
 felling/regrowth registration and ground/bridge publication with classic World.
