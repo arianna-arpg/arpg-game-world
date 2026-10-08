@@ -1,3 +1,16 @@
+NativeRegional (schema 17) captures complete supported main locale programs
+through the shared native builder. New sources retain original district/link/
+river geometry, exact dressing, pinned rules, coverage and geographic levels.
+Whole-source finite admission protects openings/sites and radius-15 native routes;
+ordinary habitats retain their actual bodies/rewards. Cave/urn-owner variants
+remain excluded whole. Keep nativeRegional before schema16, post-terrain place
+queries out of admission, exact scenery orientation, signed addresses and saved
+source omission. Verify worldmass_nativeregional, affected historical fixtures,
+worker/body/Continue probes, all types, genqa, sim and native-regional-ui.cjs after
+an isolated .claude/native-regional.local.work build. This does not complete native
+zone/region/map parity; see docs/worldgen/native-regional.md for provenance,
+sparse observed admission, coverage, worker and synchronous-planning limits.
+
 RegionalWeave adds saved winding links, independently varied court positions,
 fan/hammerhead/fork/terrace courts, and connected irregular outer shoulders.
 Woven policies require schema16; higher independent feature schemas retain

@@ -71,13 +71,15 @@ type RegionalTerrainSchema = 14;
 type RegionalWeaveSchema = 16;
 const regionalWeaveSchema = (config:MassAdventure):boolean => !!config.terrain.landforms?.regional?.composition?.weave || config.terrain.landforms?.regional?.composition?.morphology?.version === 2;
 type RegionalLayersSchema = 15;
+type NativeRegionalSchema = 17;
+const nativeRegionalSchema = (config:MassAdventure):boolean => !!config.terrain.nativeRegional;
 const regionalLayersSchema = (config:MassAdventure):boolean => !!(config.terrain.landforms?.regional?.composition?.morphology || config.terrain.regionalDiscoveries);
 const regionalTerrainSchema = (config:MassAdventure):boolean => !!config.terrain.landforms?.regional?.composition;
 const regionalLandformSchema = (config:MassAdventure):boolean => !!config.terrain.landforms?.regional;
 const landformCompositionSchema = (config:MassAdventure):boolean => !!config.terrain.landforms
   && (config.terrain.places.some(p=>p.landformHabitat) || !!config.ecology?.landformDressing);
 export interface MassAdventureSave {
-  schema: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | LandformCompositionSchema | RegionalLandformSchema | RegionalTerrainSchema | RegionalLayersSchema | RegionalWeaveSchema; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
+  schema: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | LandformCompositionSchema | RegionalLandformSchema | RegionalTerrainSchema | RegionalLayersSchema | RegionalWeaveSchema | NativeRegionalSchema; config: MassAdventure; configHash: string; state: MassStateSave; origin: MassCell;
   player: { x: number; y: number; tier?: number }; enemies: MassEnemySave[]; contents: ZoneContents;
   rewards?: MassRewardSave[];
   fields?: MassFieldSave[];
@@ -282,6 +284,13 @@ export class WorldMassRuntime {
       if (range) for (let level = range.minLevel; level <= range.maxLevel; level++)
         if (!c.levels.some(r => r.level === level)) throw new Error('Missing worldmass native level roster');
     }
+    for (const nativeRegional of config.terrain.nativeRegional?.sources ?? []) {
+      const content=config.content.find(c=>c.id==='nativeRegional/'+nativeRegional.id),g=nativeRegional.geometry;
+      if(!content?.site||content.count||content.site.source!=='nativeRegional/'+nativeRegional.hash
+        ||canonical(content.site.doodads)!==canonical(nativeRegional.doodads.map(d=>({...d,pos:{x:d.pos.x-g.width/2,y:d.pos.y-g.height/2}}))))
+        throw Error('Unresolved nativeRegional scenery ownership');
+      validateMassSite(content.site,Math.hypot(g.width,g.height)/2+30);
+    }
     for (const p of regionalDiscoveries) {
       const site=config.content.find(c=>c.id===p.content)?.site;
       if(!site)throw Error('Unresolved regional discovery site');
@@ -307,7 +316,8 @@ export class WorldMassRuntime {
       // five preserves deliberate quest acceptance, six pins native plan variants,
       // seven owns reward triggers, eight reserves destination population, nine owns country bounties; older descriptors keep
       // their original version and never gain new encounters on Continue.
-      if ((save.schema !== 1 && save.schema !== 2 && save.schema !== 3 && save.schema !== 4 && save.schema !== 5 && save.schema !== 6 && save.schema !== 7 && save.schema !== 8 && save.schema !== 9 && save.schema !== 10 && save.schema !== 11 && save.schema !== 12 && save.schema !== 13 && save.schema !== 14 && save.schema !== 15 && save.schema !== 16) // RegionalWeaveSchema
+      if ((save.schema !== 1 && save.schema !== 2 && save.schema !== 3 && save.schema !== 4 && save.schema !== 5 && save.schema !== 6 && save.schema !== 7 && save.schema !== 8 && save.schema !== 9 && save.schema !== 10 && save.schema !== 11 && save.schema !== 12 && save.schema !== 13 && save.schema !== 14 && save.schema !== 15 && save.schema !== 16 && save.schema !== 17) // nativeRegionalSchema
+        || save.schema < 17 && nativeRegionalSchema(config)
         || save.schema < 16 && regionalWeaveSchema(config)
         || save.schema < 15 && regionalLayersSchema(config)
         || save.schema < 14 && regionalTerrainSchema(config)
@@ -402,7 +412,7 @@ export class WorldMassRuntime {
     if(this.config.nativeCountry){
       const spec=this.config.nativeCountry;
       this.nativeCountry=new MassNativeCountry(this.generator,spec,(center,radius)=>{
-        if(this.generator.patches?.reserves(center,radius) || this.generator.landforms?.reserves(center,radius))return true;
+        if(this.generator.nativeRegional?.reserves(center,radius) || this.generator.patches?.reserves(center,radius) || this.generator.landforms?.reserves(center,radius))return true;
         if(!this.inLocalFrame(center))return false;
         const q=localOffset(center,{...this.origin,x:0,y:0},this.config.terrain.addressSpan);
         return !!this.settlement?.reserves(q.x,q.y,radius) || !!this.journey?.reserves(q,radius)
@@ -613,6 +623,9 @@ export class WorldMassRuntime {
   placesInCell(cell: MassCell): readonly MassPlace[] {
     const planned = this.journey?.inCell(cell) ?? [];
     const country = this.generator.regionalPlacesInCell(cell).filter(p => {
+      // nativeRegional is admitted before these smaller owners and reserves its
+      // complete source. Its broad scenery circle is not a native-feature query.
+      if(p.nativeRegional)return true;
       const q = localOffset(p.center, { ...this.origin, x: 0, y: 0 }, this.config.terrain.addressSpan);
       return !this.journey?.reserves(q, p.radius) && !this.roadside?.reserves(q, p.radius)
         && !this.nativeFeatures?.intersects(p.center,p.radius);
@@ -798,7 +811,7 @@ export class WorldMassRuntime {
         || Math.hypot(q.x - world.player.pos.x, q.y - world.player.pos.y) > this.config.populationRadius) continue;
       const content = this.config.content.find(c => c.id === p.content)!;
       const landformHabitat = this.config.terrain.places.find(r=>r.id===p.recipe)?.landformHabitat
-        && !!this.generator.landforms?.reserves(p.center,p.radius);
+        && (!!this.generator.nativeRegional?.reserves(p.center,p.radius) || !!this.generator.landforms?.reserves(p.center,p.radius));
       if([...this.paged.keys()].some(id=>{try{return (JSON.parse(id) as unknown[])[0]===p.id;}catch{return false;}}))continue;
       // Reserve every required field before spawning its garrison or reward.
       if(!this.fields.canAdmit(p,content.site?.altars??[])
@@ -1070,7 +1083,7 @@ export class WorldMassRuntime {
         ...(a.encounterGroup ? {encounterGroup:a.encounterGroup,name:a.name} : {}),
         ...(this.births.of(a) ? {birth:this.births.of(a)} : {}) });
     }
-    return JSON.parse(JSON.stringify({ schema: regionalWeaveSchema(this.config) ? 16 : regionalLayersSchema(this.config) ? 15 : regionalTerrainSchema(this.config) ? 14 : regionalLandformSchema(this.config) ? 13 : landformCompositionSchema(this.config) ? 12 : this.config.geography ? 11 : this.config.dormancy || this.config.shrineResidency || this.config.puzzleResidency || this.config.nativeCountry ? 10 : this.config.bounties !== undefined ? 9 : this.config.journey?.reservePopulation !== undefined ? 8 : this.config.rewards?.earnFrom !== undefined ? 7 : this.config.settlement?.structurePlans !== undefined ? 6 : this.config.settlement?.quests?.acceptance === 'journal' ? 5 : this.config.content.some(c=>c.site?.puzzles?.length) ? 4 : this.config.journey?.roadside ? 3 : this.config.content.some(c => c.site?.shrines?.length) ? 2 : 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
+    return JSON.parse(JSON.stringify({ schema: nativeRegionalSchema(this.config) ? 17 : regionalWeaveSchema(this.config) ? 16 : regionalLayersSchema(this.config) ? 15 : regionalTerrainSchema(this.config) ? 14 : regionalLandformSchema(this.config) ? 13 : landformCompositionSchema(this.config) ? 12 : this.config.geography ? 11 : this.config.dormancy || this.config.shrineResidency || this.config.puzzleResidency || this.config.nativeCountry ? 10 : this.config.bounties !== undefined ? 9 : this.config.journey?.reservePopulation !== undefined ? 8 : this.config.rewards?.earnFrom !== undefined ? 7 : this.config.settlement?.structurePlans !== undefined ? 6 : this.config.settlement?.quests?.acceptance === 'journal' ? 5 : this.config.content.some(c=>c.site?.puzzles?.length) ? 4 : this.config.journey?.roadside ? 3 : this.config.content.some(c => c.site?.shrines?.length) ? 2 : 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
       ...(this.config.rewards ? { rewards: this.legacyRewards.snapshot() } : {}),
       ...(this.fields.snapshot().length ? { fields: this.fields.snapshot() } : {}),
       ...(this.shrines.snapshot().length ? { shrines: this.shrines.snapshot() } : {}),

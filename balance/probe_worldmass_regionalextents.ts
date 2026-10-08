@@ -216,7 +216,7 @@ test('protected site circles stay untouched while admitted collars preserve the 
 test('historical default country admits diverse multi-screen owners without overwriting protected site circles',()=>{
   const stats:unknown[]=[],families=new Set<string>(),recipes=new Set<string>();let total=0,large=0,nested=0,protectedCount=0;
   for(const seed of [42,713,991]){
-    const terrainVariationLegacyPolicy=copy(massAdventure());delete terrainVariationLegacyPolicy.terrain.landforms!.regional!.composition;delete terrainVariationLegacyPolicy.terrain.regionalDiscoveries;
+    const terrainVariationLegacyPolicy=copy(massAdventure());delete terrainVariationLegacyPolicy.terrain.landforms!.regional!.composition;delete terrainVariationLegacyPolicy.terrain.regionalDiscoveries;delete terrainVariationLegacyPolicy.terrain.nativeRegional;
     const config=reserveMassOpening(seed,'regional-extent-proof',terrainVariationLegacyPolicy),g=gen(config.terrain,seed),coldMs:number[]=[];
     for(let y=-5;y<5;y++)for(let x=-5;x<5;x++){
       const started=performance.now(),p=g.landforms!.regionalLandforms!.at(at(x*9600+4800,y*9600+4800));

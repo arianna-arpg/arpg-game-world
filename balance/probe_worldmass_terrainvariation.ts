@@ -278,7 +278,7 @@ test('real seeded country admits varied grammar, complete children and protected
   let generated=0,remembered=0,nested=0,protectedSites=0,protectedIntersections=0,unowned=0;
   const summary:unknown[]=[];
   for(const seed of [42,713,991]){
-    const regionalLayersHistorical=copy(massAdventure());delete regionalLayersHistorical.terrain.regionalDiscoveries;
+    const regionalLayersHistorical=copy(massAdventure());delete regionalLayersHistorical.terrain.regionalDiscoveries;delete regionalLayersHistorical.terrain.nativeRegional;
     regionalLayersHistorical.terrain.landforms!.regional!.composition=copy(defaultRegionalTerrainGrammar());
     const config=reserveMassOpening(seed,'terrain-variation-proof',regionalLayersHistorical),g=gen(config.terrain,seed),times:number[]=[];
     const cells=Array.from({length:64},(_,i)=>[i%8-4,Math.floor(i/8)-4]);

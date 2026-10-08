@@ -1,3 +1,4 @@
+import { nativeRegionalSources } from './nativeRegionalSources';
 import { wovenRegionalTerrainGrammar } from './regionalTerrainGrammar';
 import { regionalDiscoveryContent } from './regionalDiscoverySources';
 import { regionalLandformPolicy } from './regionalLandformSources';
@@ -83,8 +84,10 @@ export function massAdventure(): MassAdventure {
       { distance: 26800, level: 18 }, { distance: 40000, level: 24 }],
     variation: { field: 'danger', levels: 2, start: 1600, span: 4000 },
   };
+  const nativeRegional = nativeRegionalSources(progression.minLevel, progression.maxLevel);
   const regionalDiscoveries = regionalDiscoveryContent(progression.minLevel, progression.maxLevel);
   const terrain: MassSpec = {
+    nativeRegional: nativeRegional.policy,
     regionalDiscoveries: regionalDiscoveries.policy,
     id: 'hollow-wake-country', version: 8, addressSpan: 960, terrainCell: 30,
     fields: [
@@ -156,7 +159,7 @@ export function massAdventure(): MassAdventure {
     shrineResidency: { source: 'worldmass/shrine-residency', retainRadius: 2048, maxResident: 32 },
     puzzleResidency: { source: 'worldmass/puzzle-residency', retainRadius: 2048, maxResident: 16 },
     dormancy: { source: 'worldmass/native-dormancy-v1', wakeRadius: 1600, sleepRadius: 2400, quietSeconds: 12 },
-    content: [...regionalDiscoveries.content, ...activities.map(a=>({id:a.id,source:a.site.source,level:1,count:0,table:[{id:'plains_wolf',weight:1}],site:a.site})), ...[...regional, ...fields].map(field=>{
+    content: [...nativeRegional.content, ...regionalDiscoveries.content, ...activities.map(a=>({id:a.id,source:a.site.source,level:1,count:0,table:[{id:'plains_wolf',weight:1}],site:a.site})), ...[...regional, ...fields].map(field=>{
       const levels=populations(field.roster==='undead'?FACTIONS.undead.table:TILESETS[field.roster].packs.table)
         .map(row=>reserveMassGuardians(row,field.count));
       return {...levels[0],id:field.id,source:field.site.source,count:field.count,levels,site:field.site};

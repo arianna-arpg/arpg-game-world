@@ -84,7 +84,7 @@ export function validateMassSite(site: MassSiteSpec, radius: number): void {
 }
 /** Namespaced quarter turns vary approaches without changing a site's identity. */
 export function siteOffset(place: MassPlace, x: number, y: number): { x: number; y: number; angle: number } {
-  const turns = massHash(place.id + '/orientation') % 4;
+  const turns = place.nativeRegional ? 0 : massHash(place.id + '/orientation') % 4;
   for (let i = 0; i < turns; i++) [x, y] = [-y, x];
   return { x, y, angle: turns * Math.PI / 2 };
 }

@@ -11,7 +11,7 @@ const SOURCE = 'worldmass/opening-foundations-v1';
  * Saved runs consume the resulting rectangle verbatim, including after native
  * town sizes/tuning change. All future workers receive it in the terrain spec. */
 export function reserveMassOpening(seed: number, runId: string, input: MassAdventure): MassAdventure {
-  if ((!input.terrain.patches && !input.terrain.landforms) || !input.settlement) return input;
+  if ((!input.terrain.patches && !input.terrain.landforms && !input.terrain.nativeRegional) || !input.settlement) return input;
   const config = JSON.parse(canonical(input)) as MassAdventure, town = config.settlement!;
   const w = Math.max(...TOWN_TIERS.map(t => t.w)), h = Math.max(...TOWN_TIERS.map(t => t.h));
   const padding = town.apron + town.blend + 120;
@@ -58,5 +58,9 @@ export function reserveMassOpening(seed: number, runId: string, input: MassAdven
     ...(landformOpening.exclusions ?? []).filter(e=>e.source!==SOURCE),
     { source:SOURCE, origin:{...cell,x:0,y:0}, bounds },
   ] };
+  const nativeRegionalOpening=config.terrain.nativeRegional;
+  if(nativeRegionalOpening)config.terrain.nativeRegional={...nativeRegionalOpening,exclusions:[
+    ...(nativeRegionalOpening.exclusions??[]).filter(e=>e.source!==SOURCE),{source:SOURCE,origin:{...cell,x:0,y:0},bounds},
+  ]};
   return config;
 }

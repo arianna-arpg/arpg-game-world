@@ -62,7 +62,7 @@ const seedRestore = seedGlobalRandom(82449);
 const holds = (w: World, kind: 'rifts' | 'unearth') => (w as unknown as { rifts: HoldFixture[]; digs: HoldFixture[] })[kind === 'rifts' ? 'rifts' : 'digs'];
 try {
   // This controller fixture owns a flat field/surface vocabulary.
-  const base = massAdventure(), terrain = { ...base.terrain }; delete terrain.patches;delete terrain.landforms;delete terrain.regionalDiscoveries;
+  const base = massAdventure(), terrain = { ...base.terrain }; delete terrain.patches;delete terrain.landforms;delete terrain.regionalDiscoveries;delete terrain.nativeRegional;
   const config: MassAdventure = { terrain: { ...terrain, fields: [], places: [],
     surfaces: [{ id: 'flat', priority: 1, when: [], region: 'ground', color: '#314232', biome: 'downs' }] }, theme: base.theme,
     content: [], startRadius: 0, populationRadius: 600, maxPopulation: 20, pageRadius: 1, samplesPerTick: 256 };

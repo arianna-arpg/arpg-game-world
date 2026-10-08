@@ -40,6 +40,7 @@ export interface MassPatchPolicy {
   }[];
 }
 export interface MassSpec {
+  nativeRegional?: import('./nativeRegional').NativeRegionalPolicy;
   /** New explicit source-owned substrate; omission preserves legacy noise. */
   nativeSubstrate?: import('./nativeSubstrate').NativeSubstrate;
   id: string; version: number;
@@ -69,6 +70,8 @@ export interface MassTerrain {
   fields: Readonly<Record<string, number>>; source: MassProvenance;
 }
 export interface MassPlace {
+  /** Exact nativeRegional scenery orientation, pinned to the saved terrain. */
+  nativeRegional?: string;
   regionalSocket?: import('./regionalDiscoveries').RegionalDiscoverySocket;
   id: string; recipe: string; content: string; center: MassAddress; radius: number; source: MassProvenance;
 }
@@ -81,6 +84,7 @@ export interface MassPage {
  * Worker admission and the live runtime must see the same catalogue. */
 export function massTerrainRegions(spec: MassSpec): string[] {
   return [...new Set([...spec.surfaces.map(s => s.region),
+    ...(spec.nativeRegional?.sources.flatMap(s=>s.geometry.materials) ?? []),
     ...spec.places.flatMap(p => p.surface ? [p.surface.region] : []),
     ...(spec.landforms ? ['ground','water','locale_bridge',...spec.landforms.recipes.map(r=>r.barrier.region), ...(spec.landforms.regional?.recipes.map(r=>r.barrier.region)??[]) /* regionalLandforms */] : []),
     ...(spec.patches?.recipes.flatMap(r => r.choices.map(c => c.region)) ?? [])])];

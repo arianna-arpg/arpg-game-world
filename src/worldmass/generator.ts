@@ -1,3 +1,4 @@
+import { MassNativeRegional, validateNativeRegional } from './nativeRegional';
 import { MassRegionalDiscoveries, validateRegionalDiscoveries } from './regionalDiscoveries';
 import { MassLandforms, validateMassLandforms } from './landforms';
 import { MassNativeSubstrate, validateNativeSubstrate } from './nativeSubstrate';
@@ -57,6 +58,7 @@ export function validateMassSpec(spec: MassSpec, nativeSeed?: number): void {
   validateMassPatches(spec);
   validateMassLandforms(spec);
   validateRegionalDiscoveries(spec);
+  validateNativeRegional(spec);
   if (spec.places.length > 64) throw new Error('Regional planner exceeds 64 place families');
   for (const a of spec.places) for (const b of spec.places) {
     if (Math.ceil((a.radius + b.radius) / b.period) + 2 > 8) throw new Error('Place overlap query exceeds bounded neighborhood');
@@ -80,6 +82,7 @@ export class MassGenerator {
   readonly run: Readonly<MassRun>;
   readonly patches: MassTerrainPatches | null;
   readonly landforms: MassLandforms | null;
+  readonly nativeRegional: MassNativeRegional | null;
   readonly regionalDiscoveries: MassRegionalDiscoveries | null;
   readonly nativeSubstrate: MassNativeSubstrate | null;
   private readonly surfaces: MassSpec['surfaces'];
@@ -96,6 +99,8 @@ export class MassGenerator {
     this.surfaces = [...this.spec.surfaces].sort((a, b) => b.priority - a.priority || compare(a.id, b.id));
     for (const f of this.spec.fields) for (const l of f.layers)
       this.salts.set(l, streamSeed(run.seed, [spec.id, spec.version, f.id, l.id]));
+    this.nativeRegional = this.spec.nativeRegional ? new MassNativeRegional(this.spec,this.run,at=>this.baseTerrainAt(at),
+      (origin,box)=>this.regionalLandformSites(origin,box,true)) : null;
     this.landforms = Object.hasOwn(this.spec,'landforms') ? new MassLandforms(this.spec,this.run,
       at=>this.baseTerrainAt(at),(origin,box)=>this.patchSitesClear(origin,box,true), // landformHabitat owners compose with terrain
       this.nativeSubstrate ? (origin,size)=>this.nativeSubstrate!.supportsPatchCell(origin,size) : undefined,
@@ -109,7 +114,7 @@ export class MassGenerator {
   }
   /** Content consumers include nested owners; terrain admission uses placesInCell alone. */
   regionalPlacesInCell(cell: MassCell): readonly MassPlace[] {
-    const ordinary=this.placesInCell(cell);
+    const ordinary=[...this.placesInCell(cell),...(this.nativeRegional?.inCell(cell)??[])];
     return this.regionalDiscoveries ? Object.freeze([...ordinary,...this.regionalDiscoveries.inCell(cell)].sort((a,b)=>compare(a.id,b.id))) : ordinary;
   }
   private noise(at: MassAddress, period: number, salt: number): number {
@@ -130,10 +135,14 @@ export class MassGenerator {
   }
   terrainAt(at: MassAddress): MassTerrain {
     const base = this.baseTerrainAt(at);
+    const nativeRegionalTerrain = this.nativeRegional?.sample(at,base);
+    if(nativeRegionalTerrain)return nativeRegionalTerrain;
     const landformTerrain = this.landforms?.sample(at,base) ?? base;
     return this.patches?.sample(at, landformTerrain) ?? landformTerrain;
   }
   private patchSitesClear(origin: MassAddress, box: MassPatchBox, landformHabitats = false): boolean {
+    if(this.nativeRegional?.reserves(moveAddress(origin,{x:(box.minX+box.maxX)/2,y:(box.minY+box.maxY)/2},this.spec.addressSpan),
+      Math.hypot(box.maxX-box.minX,box.maxY-box.minY)/2))return false;
     const span = this.spec.addressSpan;
     const lo = moveAddress(origin, { x: box.minX, y: box.minY }, span);
     const hi = moveAddress(origin, { x: box.maxX, y: box.maxY }, span);
@@ -148,12 +157,12 @@ export class MassGenerator {
   }
   /** Enumerate protected geographic sites once per large footprint, independent
    * of streamed pages. Ordinary habitat packs remain terrain-compatible. */
-  private regionalLandformSites(origin:MassAddress,box:MassPatchBox):import('./regionalLandformComposition').RegionalLandformSite[]|null {
+  private regionalLandformSites(origin:MassAddress,box:MassPatchBox,nativeRegionalAdmission=false):import('./regionalLandformComposition').RegionalLandformSite[]|null {
     const span=this.spec.addressSpan,result:import('./regionalLandformComposition').RegionalLandformSite[]=[];
     let budget=0;
     for(const recipe of this.spec.places) {
       if(recipe.landformHabitat)continue;
-      const pad=recipe.radius+this.spec.landforms!.regional!.siteApron;
+      const pad=recipe.radius+(nativeRegionalAdmission?this.spec.nativeRegional!.clearance:this.spec.landforms!.regional!.siteApron);
       const lo=latticeAt(moveAddress(origin,{x:box.minX-pad,y:box.minY-pad},span),span,recipe.period);
       const hi=latticeAt(moveAddress(origin,{x:box.maxX+pad,y:box.maxY+pad},span),span,recipe.period);
       const count=(hi.gx-lo.gx+1n)*(hi.gy-lo.gy+1n);
@@ -167,6 +176,7 @@ export class MassGenerator {
         }
       }
     }
+    if(!nativeRegionalAdmission)result.push(...(this.nativeRegional?.reservations(origin,box)??[]));
     return result;
   }
   /** Original policy, deliberately patch-free to keep candidate proofs acyclic. */
