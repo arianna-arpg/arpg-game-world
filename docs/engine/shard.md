@@ -12,12 +12,20 @@ seam the WebRTC lane uses.**
 npm run shard -- --port 8787 --open
 ```
 
+Or double-click **`Host Shard.bat`** (the Play Game.bat idiom: checks Node,
+installs once, passes every argument through, opens the account). It calls
+`npm.cmd` directly, which sidesteps PowerShell's "running scripts is
+disabled" refusal of `npm.ps1`; in a PowerShell window the same fix is
+`npm.cmd run shard`, or once per machine
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+
 | flag | meaning |
 |---|---|
 | `--port <n>` | listen port (default 8787; `0` = any free port, printed) |
 | `--host <addr>` | bind address (default `0.0.0.0`) |
 | `--seed <n>` | THE HOSTED SEED, hex with `0x` or decimal (default: a fresh roll) |
 | `--class <id>` | the keeper's class (cosmetic; it never fights) |
+| `--worldmass` | THE UNBROKEN WILDS: host the seamless foundation's continuous surface (M0.5 — the shell does not yet render it; see the charter §3.12) |
 | `--open` | THE OPEN ACCOUNT: every class, station feature and memory unlocked on the shard account (play-test servers) |
 | `--ephemeral` | never write the world; default writes `saves/shard_<seed>.json` every `SHARD_CFG.persistSec` and on Ctrl-C |
 | `--save-dir <p>` | where shard saves land |

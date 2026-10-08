@@ -1,11 +1,17 @@
 # THE SHARD — the hosted world charter v1 (one seed on a server, many accounts inside it)
 
-**Status: DELIBERATION + BRANCH + M0 (2026-10-07).** The branch is
-`shard-world` (worktree `D:/Games/Claude/arpg-shard`), cut from
-`origin/main` @ `bc8a0e0a`, the pushed line the live seamless branch also
-merges from. Everything from M1 on is a PROPOSAL carded for her word in §7;
-M0 is the one fork-neutral foundation every option needs and is built on this
-branch (receipts in §8 once they exist). Survey receipts are against
+**Status: DELIBERATION + BRANCH + M0 + M0.5 (2026-10-07).** The branch is
+`shard-world` (worktree `D:/Games/Claude/arpg-shard`). HER RULING, the same
+day: the MMO lane builds ON THE SEAMLESS FOUNDATION — "an almost
+Minecraft/World of Warcraft/Path of Exile/Rimworld monster of a conglomeration
+that grants a player infinite build options inside of an account
+metaprogression that they can then play alongside other players in an
+infinitely expanding world" — so the branch was rebased onto
+`origin/codex/seamless-world-foundation` (@ `67d9c290`, the pushed tip; the
+live tip moves every half hour and the branch follows that lane's own
+pushes). Card 2 is RULED (§7). Everything from M1 on is a PROPOSAL carded
+for her word in §7; M0 is the fork-neutral foundation every option needs and
+M0.5 proves the foundation's own surface hosts (receipts in §8). Survey receipts are against
 `origin/main` @ `bc8a0e0a` and local `main` @ `651d7e05` (the two have
 diverged, see §6.4); anchors name files + symbols, line numbers drift. Every
 number is unblessed (her standing word).
@@ -410,15 +416,35 @@ pointer the shard installs); `LocalTransport` play never constructs it, the
 WebRTC lane never constructs it, and the probe census refuses an un-gated
 seam. Co-op stays co-op; the shard is a third lane beside it.
 
-### 3.12 THE UNBROKEN WILDS (M6, card 2)
-The seamless lane ships a single-World surface. Under the shard it is one
-SIM UNIT whose zone is the whole surface (vertical scale only) with every
-pocket (cave, side area, dimension) its own unit — the pockets already enter
-through classic `loadZone`, so hand-offs land there unchanged. Horizontal
-scale on the surface needs a REGION PARTITION (page-block units with a
-hand-off band and ghost bodies near the seam) — the "region subscriptions"
-that branch already names as its step 6. The `SimUnit` seam (§3.3) is the
-one place it plugs; nothing in M0-M5 assumes a zone is a portal-bound box.
+### 3.12 THE UNBROKEN WILDS (M0.5 built; the partition is M6)
+The seamless lane's surface is one continuous World. The shard HOSTS IT
+TODAY: `npm run shard -- --worldmass` stands the keeper at the hearth and
+then starts the mass runtime under it (`World.startWorldMass`, main.ts's own
+order), the runtime's workers fall back headless by its own design
+(`typeof Worker === 'undefined'`), and the measured boot is ~3 s with the
+surface ticking at ~10 ms a tick with 38 natives alive and no faults (§8).
+Under the shard it is one SIM UNIT whose zone is the whole surface (vertical
+scale only) with every pocket (cave, side area, dimension) its own unit —
+the pockets still enter through classic `loadZone`, so hand-offs land there
+unchanged. Horizontal scale on the surface needs a REGION PARTITION
+(page-block units with a hand-off band and ghost bodies near the seam) —
+the "region subscriptions" that lane already names as its step 6; the
+`SimUnit` seam (§3.3) is the one place it plugs.
+
+THE LAND IS THE SEED'S, THE LIFE IS THE SERVER'S. On the wilds the terrain
+(pages, native features, roads) is a pure function of the seed, so a client
+may mint the ground it stands on LOCALLY from the welcome's seed — the
+exception to §3.4 that the wilds earn — while every body, drop and state
+rides the snapshot. What the wire lacks today (the welcome now says
+`worldmass: true`): the render shell does not yet start its own mass
+runtime, the zone message ships `walk: null` (a `MassWalk` is not a packed
+grid, so the client's prediction has no ground to clamp on), and the mass
+lane's own save shape (`MassAdventureSave`) is not yet the shard's
+persistence (a wilds shard runs ephemeral). THE WILDS ON THE WIRE is the
+next pass: the shell starts `startWorldMass(seed)` on the welcome, the zone
+message carries the mass identity instead of a walk grid, positions stay in
+the shared local frame (the lane's own no-rebase invariant), and the shard
+adopts the mass save under its wrapper.
 
 ---
 
@@ -427,6 +453,7 @@ one place it plugs; nothing in M0-M5 assumes a zone is a portal-bound box.
 | M | Name | Builds | Engine seams (tokens) | Gate |
 |---|---|---|---|---|
 | **M0** | **THE HEADLESS HOST** (this pass) | `src/server/shardHost.ts` (boot, frame, persistence beat), `shardTransport.ts` (host role over WS), `src/net/wsframe.ts` (RFC 6455 server codec, zero deps), `src/net/ws.ts` (client `WsTransport`), `scripts/shard.ts` (`npm run shard -- --port --seed`), lobby row "Join a server" | `keeperSeat` (5 one-line gates) | `balance/probe_shard.ts` (in-process shard + a Node `WebSocket` client: welcome, zone, snapshot, input moves the hero, action applies, leave despawns, keeper exempt) |
+| **M0.5** | **THE UNBROKEN WILDS, HOSTED** (this pass) | `--worldmass` on the shard (`ShardHost.worldmass`, `startWorldMass` under the keeper, the welcome's `worldmass` flag), `Host Shard.bat` | none | probe_shard K (the runtime stands, ticks faultless, a joiner rides the surface snapshot) |
 | M1 | THE SIM UNITS | unit registry, wake/sleep, `detachSeat`/`attachSeat`, per-unit snapshots, the keeper's world sweep, multi-presence `simView`, the chart on the wire | `shardWorld` (sweep gate, alias adoption, hand-off) | probe: two seats in two zones at once; byte-identical solo |
 | M2 | THE SEAT'S GATE | account claims, `accountOf(seat)`, the 243-read classification, account deltas, hero upload/mirror, `shard.json` | `shardWorld` (the resolver) | probe: two claims, two gates, deltas land home |
 | M3 | THE OWNED TENANT | `ownership` on package rows, per-account overlay instances, per-seat omens/map, materialize-on-owner-entry, credit law | `shardWorld` (sim instancing, runtime scoping) | probe: A's hunt invisible to B until A arrives; then shared |
@@ -457,9 +484,12 @@ one place it plugs; nothing in M0-M5 assumes a zone is a portal-bound box.
 
 ## §6 The non-contamination protocol (how this lands beside everything else)
 
-1. **Base and branch.** `shard-world` is cut from `origin/main` @ `bc8a0e0a`,
-   the pushed line. Rebase onto `origin/main` at every landing; never onto
-   local `main` (see 6.4).
+1. **Base and branch.** `shard-world` sits on
+   `origin/codex/seamless-world-foundation` (her ruling; first cut from
+   `origin/main` @ `bc8a0e0a`, rebased the same day with zero conflicts).
+   Rebase onto that lane's PUSHED tip at every landing — never its local tip
+   (its unpushed commits are not this branch's to carry) and never local
+   `main` (see 6.4).
 2. **New files first.** All shard code is new files (`src/server/**`,
    `src/net/ws.ts`, `src/net/wsframe.ts`, `scripts/shard.ts`,
    `balance/probe_shard.ts`, this charter, `docs/engine/shard.md`). Shared
@@ -491,10 +521,11 @@ one place it plugs; nothing in M0-M5 assumes a zone is a portal-bound box.
 
 1. **The base** — `origin/main` (chosen, §6.1). Confirm, and rule the local
    `main` divergence.
-2. **The world model to build on** — zones first on main's discrete world
-   (recommended: the unit is free, M0-M5 are model-agnostic, the seam is
-   named) vs. wait for the worldmass lane and build on one surface. The
-   recommendation keeps both lanes moving without a hand-off until M6.
+2. **The world model to build on** — RULED 2026-10-07: the seamless
+   foundation (`codex/seamless-world-foundation`) is the base; the
+   discrete-zone unit remains the SIM UNIT's shape for the pockets, and the
+   surface's partition is M6. Open beneath it: THE WILDS ON THE WIRE (§3.12)
+   is the next pass.
 3. **The hearth** — shard-grown layout + per-seat use (recommended) vs. an
    instanced Lastlight per account (contradicts "share a Lastlight") vs. the
    founding host's town. Residents and the campfire ride the same ruling.
@@ -568,3 +599,15 @@ frames — the standing harness gotcha, not a shard fault.
 **Measured** (§1's table stands): ~1 ms per 60 Hz tick for a small wild
 zone; 44-52 KB per snapshot of which 43.7 KB is the `memoryAccess` row
 (chip filed on main); the shard's wire is otherwise ~1-19 KB per tick.
+
+**M0.5, the same day, on the seamless foundation** (branch rebased onto
+`origin/codex/seamless-world-foundation` @ `67d9c290` with zero conflicts;
+all three type-check lanes and the 50-check rig green on the new base):
+`startWorldMass` under the keeper stood the Unbroken Wilds in 2.9 s;
+600 ticks ran in 5.8 s (9.7 ms a tick) with 38 natives alive and no faults;
+the zone message weighed 69 KB (813 doodads, 13 structures, `walk: null`),
+the snapshot 18 KB with 48 actors; `clampPos` 400 px east of the keeper
+answered real ground. Probe section K pins it: the runtime stands, three
+seconds tick faultless, the welcome says `worldmass: true`, a joiner rides
+the surface snapshot beside the natives. The shell does not render the
+wilds yet (§3.12, THE WILDS ON THE WIRE).

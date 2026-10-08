@@ -3487,7 +3487,9 @@ we verify changes.
   verbatim) behind a dependency-free WebSocket (`src/net/wsframe.ts` +
   `server/shardTransport.ts`); a client joins from the Co-op lobby's "Join a
   Server" through `src/net/ws.ts` (`WsTransport`, the WebRTC grammar over a
-  socket). THE KEEPER SEAT (`Seat.keeper`) is the parked p0 the world-level
+  socket); `Host Shard.bat` is the double-click; `--worldmass` hosts THE
+  UNBROKEN WILDS headless (the shell does not render it yet — "THE WILDS ON
+  THE WIRE" is the next pass). THE KEEPER SEAT (`Seat.keeper`) is the parked p0 the world-level
   reads address — exempt from party scale / XP / the wire, THE MERCY for a
   lone downed seat. M0 keeps co-op's semantics (party travel, fresh heroes,
   the shard account's gate); M1-M6 are carded. Verify `probe_shard.ts`.

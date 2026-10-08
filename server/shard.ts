@@ -7,6 +7,8 @@
 //   --host <addr>    bind address (default 0.0.0.0 — every interface)
 //   --seed <n>       the manifest seed (hex with 0x, else decimal; default a fresh roll)
 //   --class <id>     the keeper's class (default warrior)
+//   --worldmass      THE UNBROKEN WILDS: host the seamless foundation's continuous
+//                    surface (ephemeral until its save shape is adopted)
 //   --open           THE OPEN ACCOUNT: every class / station / memory unlocked
 //   --ephemeral      never write the world (default: saves/shard_<seed>.json every 20 s)
 //   --save-dir <p>   where shard saves land (default saves/)
@@ -44,10 +46,11 @@ async function main(): Promise<void> {
     seed: num(args.seed),
     keeperClass: typeof args.class === 'string' ? args.class : undefined,
     open: args.open === true,
+    worldmass: args.worldmass === true,
     saveDir: args.ephemeral === true ? null : (typeof args['save-dir'] === 'string' ? args['save-dir'] : undefined),
   });
   const bound = await shard.listen(port, host);
-  console.log(`[shard] world 0x${shard.seed.toString(16).padStart(8, '0')} — listening on ws://${host === '0.0.0.0' ? 'localhost' : host}:${bound}`
+  console.log(`[shard] ${shard.worldmass ? 'the Unbroken Wilds' : 'world'} 0x${shard.seed.toString(16).padStart(8, '0')} — listening on ws://${host === '0.0.0.0' ? 'localhost' : host}:${bound}`
     + (shard.savePath ? ` — saving to ${shard.savePath}` : ' — ephemeral'));
   shard.start();
   const bye = async (): Promise<void> => {

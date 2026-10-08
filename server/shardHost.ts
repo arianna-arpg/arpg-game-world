@@ -77,6 +77,11 @@ export interface ShardOptions {
   open?: boolean;
   /** Save directory, or null for an ephemeral world (never written). */
   saveDir?: string | null;
+  /** THE UNBROKEN WILDS: start the seamless foundation's worldmass runtime
+   *  (World.startWorldMass) under the keeper — the hosted world is the one
+   *  continuous surface. Its persistence is the mass lane's own save shape,
+   *  not WorldStateSave, so a wilds shard runs EPHEMERAL until M2 adopts it. */
+  worldmass?: boolean;
   /** Log sink (default console). */
   log?: (line: string) => void;
 }
@@ -113,6 +118,8 @@ export class ShardHost {
   readonly world: World;
   readonly net: ShardTransport;
   readonly savePath: string | null;
+  /** True when the hosted world is the seamless foundation's continuous surface. */
+  readonly worldmass: boolean;
   readonly log: (line: string) => void;
   /** Ticks stepped since boot (the probe's clock). */
   ticks = 0;
@@ -145,11 +152,22 @@ export class ShardHost {
     keeper.keeper = { reviveSec: SHARD_CFG.keeper.reviveSec };
     keeper.actor.untargetable = true;
     keeper.actor.passive = true;
-    this.savePath = opts.saveDir === null ? null
-      : join(opts.saveDir ?? SHARD_CFG.saveDir, `shard_${this.seed.toString(16).padStart(8, '0')}.json`);
-    if (this.savePath && existsSync(this.savePath)) this.restore();
-    else this.world.scrubStaleObjectives();
+    this.worldmass = !!opts.worldmass;
+    if (this.worldmass) {
+      // THE WILDS: the classic hearth boot above stands the keeper; the mass
+      // runtime then re-seats the world as the one boundless surface (main.ts's
+      // own order: createPlayer, then startWorldMass). No classic save applies.
+      this.savePath = null;
+      this.world.startWorldMass(this.seed);
+      this.log(`[shard] the Unbroken Wilds stand (seed 0x${this.seed.toString(16)}) — ephemeral until the mass lane's save is adopted`);
+    } else {
+      this.savePath = opts.saveDir === null ? null
+        : join(opts.saveDir ?? SHARD_CFG.saveDir, `shard_${this.seed.toString(16).padStart(8, '0')}.json`);
+      if (this.savePath && existsSync(this.savePath)) this.restore();
+      else this.world.scrubStaleObjectives();
+    }
     this.net = new ShardTransport();
+    this.net.worldmass = this.worldmass;
     this.net.setSeedSource(() => this.world.manifest.seed);
     this.net.onPeerJoin(p => this.onJoin(p));
     this.net.onPeerLeave(id => this.world.removeSeat(id));

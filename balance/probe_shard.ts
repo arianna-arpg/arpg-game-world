@@ -19,6 +19,7 @@
 //   H  THE MERCY: a lone downed seat rises after reviveSec
 //   I  the leave: a dropped socket despawns its seat
 //   J  persistence: the world half writes and a second host resumes it
+//   K  THE UNBROKEN WILDS: the seamless foundation's surface hosts headless
 // ---------------------------------------------------------------------------
 
 import { mkdtempSync, existsSync, rmSync } from 'node:fs';
@@ -251,6 +252,29 @@ await host.stop();
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+}
+// ====================================================== K: THE WILDS ==
+{
+  const wilds = new ShardHost({ seed: 0x0ddba11, saveDir: null, open: true, worldmass: true, log: () => { /* quiet */ } });
+  const w = wilds.world;
+  check('K wilds: the mass runtime stands under the keeper', wilds.worldmass && !!w.massRuntime && w.zone.id === 'worldmass_expedition' && wilds.savePath === null);
+  const f0 = wilds.faults;
+  for (let i = 0; i < 180; i++) wilds.tick(DT);
+  check('K wilds: three seconds of the surface tick without a fault', wilds.faults === f0 && w.time > 2.9, `actors ${w.actors.length}`);
+  const port2 = await wilds.listen(0, '127.0.0.1');
+  const c = new WsTransport();
+  const hello = await c.connect(`ws://127.0.0.1:${port2}`, { name: 'Wanderer', classId: 'warrior' });
+  check('K wilds: the welcome names the continuous surface', hello.worldmass === true && hello.seed === 0x0ddba11);
+  await waitFor(() => w.seats.length === 2, wilds, 50);
+  let got2: StateSnapshot | null = null;
+  const off = c.onState(s => { got2 = s; });
+  await waitFor(() => got2 !== null, wilds, 30);
+  off();
+  const snap2 = got2 as StateSnapshot | null;
+  check('K wilds: a joiner rides the surface snapshot beside the natives', !!snap2 && !!snap2.seats['p1'] && snap2.actors.length > 2);
+  c.leave();
+  await waitFor(() => w.seats.length === 1, wilds, 60);
+  await wilds.stop();
 }
 restoreRandom();
 
