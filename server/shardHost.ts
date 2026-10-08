@@ -35,6 +35,7 @@ import { FEATURE, makeAccount, type Account } from '../src/meta/account';
 import { POWER_PROGRESSION, odysseyMilestoneKey } from '../src/data/powerProgression';
 import { SKILLS } from '../src/data/skills';
 import { World, type Seat } from '../src/engine/world';
+import { COOP_SCALING } from '../src/data/coop';
 import { updateAI } from '../src/engine/ai';
 import { CLASSES, type ClassDef } from '../src/data/classes';
 import { rollSeed } from '../src/core/rng';
@@ -69,7 +70,11 @@ export const SHARD_CFG = {
    *  the surface the keeper's body shadows the FOCUS SEAT (the first standing
    *  player) this many px behind it, every tick. One focus, one keeper: the
    *  sim-unit gap M1 closes; players far from the focus meet cold ground. */
-  keeper: { classId: 'warrior', name: 'The Keeper', reviveSec: 8, shadowOffset: 48 },
+  keeper: { classId: 'warrior', name: 'The Keeper', reviveSec: 8, shadowOffset: 0 },
+  /** THE NEAR LAW (data/coop.ts shareRadius): seats within this many px of
+   *  a kill share its XP, count as party for an enemy's scale and may kneel
+   *  for the mercy. A continent apart is no party. */
+  nearRadius: 1600,
   /** The shard save's own schema (wraps WorldStateSave's). */
   saveSchema: 1,
   /** Where shard saves land by default (gitignored beside the game's). */
@@ -164,6 +169,8 @@ export class ShardHost {
     keeper.keeper = { reviveSec: SHARD_CFG.keeper.reviveSec };
     keeper.actor.untargetable = true;
     keeper.actor.passive = true;
+    keeper.actor.invulnerable = true; // the warden stands in lava and water unharmed (THE SHADOW walks it anywhere)
+    COOP_SCALING.shareRadius = SHARD_CFG.nearRadius; // THE NEAR LAW, the shard's own
     this.worldmass = !!opts.worldmass;
     if (this.worldmass) {
       // THE WILDS: the classic hearth boot above stands the keeper; the mass
@@ -248,6 +255,7 @@ export class ShardHost {
   tick(dt: number): void {
     const w = this.world;
     if (this.worldmass) this.shadowFocus();
+    else this.keeper.lastActedAt = w.time; // THE SEALED ROADS hold on classic ground too
     for (const seat of w.seats) {
       const intent = seat.input.poll(seat.actor, w, dt); // RemoteInput polls null — its intent arrives via the wire
       if (intent) this.net.sendInput(seat.id, intent);
@@ -293,9 +301,16 @@ export class ShardHost {
    *  SHARD_CFG.keeper.shadowOffset). The first standing non-keeper seat is
    *  the focus; with none connected the keeper stays where it last stood. */
   private shadowFocus(): void {
-    const focus = this.world.seats.find(s => !s.keeper && !s.actor.dead);
-    if (!focus) return;
+    const w = this.world;
+    // THE SEALED ROADS: the warden never dwells — a dwell reads an IDLE seat,
+    // and a seat that acted this very frame is never idle — so no station,
+    // mouth or portal fires off the shadow's standing (card B: roads that
+    // move the whole party stay shut until per-seat travel exists).
+    this.keeper.lastActedAt = w.time;
     const k = this.keeper.actor;
+    if (k.downed) { k.downed = false; k.life = Math.max(k.life, k.maxLife()); } // the belt: a warden is never kept down
+    const focus = w.seats.find(s => !s.keeper && !s.actor.dead);
+    if (!focus) return;
     k.pos.x = focus.actor.pos.x;
     k.pos.y = focus.actor.pos.y + SHARD_CFG.keeper.shadowOffset;
     k.tier = focus.actor.tier;

@@ -174,7 +174,7 @@ import { presenceMul, presenceTable } from './presence';
 import { killRuleMatches, killRules, type KillCtx, type KillRule } from './killHandlers';
 import { updateScene, sceneInterceptFall, sceneNoteCast, type SceneRuntime } from './scenes';
 import { CLASSES, classOpeningSkills, classSkillStat, PROGRESSION, type ClassDef } from '../data/classes';
-import { coopScale } from '../data/coop';
+import { COOP_SCALING, coopScale } from '../data/coop';
 import type { CouchSeatTag } from '../data/couch';
 import { SUPPORT_LIST, SUPPORTS } from '../data/supports';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateOpen } from '../data/passives';
@@ -5558,16 +5558,17 @@ export class World {
    *  (1 − the patron's mercEase stat) — the Harborwarden's Fair Company node
    *  buys the weight down to the TRUE SOLO CURVE with the blades beside you.
    *  The one place hirelings touch difficulty, and every term is a dial. */
-  private partyScaleCount(): number {
+  private partyScaleCount(at?: Vec2): number {
     const ease = Math.min(1, Math.max(0, this.player.sheet.get('mercEase')));
     const mercWeight = MERC_CFG.partyScaleWeight * (1 - ease);
+    const near = at && COOP_SCALING.shareRadius > 0 ? COOP_SCALING.shareRadius : 0; // THE NEAR LAW (keeperSeat lane)
     return Math.max(1, this.seats.reduce((n, s) =>
-      n + (s.actor.dead || s.keeper ? 0 : s.merc ? mercWeight : 1), 0)); // keeperSeat: the warden is no party
+      n + (s.actor.dead || s.keeper || (near > 0 && dist(at!, s.actor.pos) > near) ? 0 : s.merc ? mercWeight : 1), 0)); // keeperSeat: the warden is no party
   }
 
   /** Set (or clear) the co-op party-size scaling source on one hostile enemy. */
   private applyPartyScale(a: Actor): void {
-    const s = coopScale(this.partyScaleCount());
+    const s = coopScale(this.partyScaleCount(a.pos));
     if (s.life > 0 || s.damage > 0) {
       a.sheet.setSource('partyScale', [mod('life', 'more', s.life), mod('damage', 'more', s.damage)]);
     } else {
@@ -5676,7 +5677,8 @@ export class World {
         if (ally.keeper) {
           // keeperSeat — THE MERCY: the warden revives by CLOCK, never by
           // reach, and only once no other seat stands to kneel.
-          const anyOther = this.seats.some(o => o !== seat && !o.keeper && !o.actor.dead && !o.actor.downed);
+          const anyOther = this.seats.some(o => o !== seat && !o.keeper && !o.actor.dead && !o.actor.downed
+            && (COOP_SCALING.shareRadius <= 0 || dist(o.actor.pos, seat.actor.pos) <= COOP_SCALING.shareRadius)); // THE NEAR LAW
           if (anyOther) { seat.reviveDwellBy.delete(ally.id); continue; }
           const t = (seat.reviveDwellBy.get(ally.id) ?? 0) + dt;
           seat.reviveDwellBy.set(ally.id, t);
@@ -22988,9 +22990,12 @@ export class World {
   /** Award experience. CO-OP: shared among every LIVING player seat (the chosen
    *  policy — keeps the party levelling together, no kill-stealing). Single-player
    *  is just the one local seat, byte-identical to before. */
-  grantXp(amount: number): void {
+  grantXp(amount: number, at?: Vec2): void {
     for (const seat of this.seats) {
       if (seat.actor.dead) continue;
+      // THE NEAR LAW (keeperSeat lane, data/coop.ts shareRadius): a kill with a
+      // place pays only the seats within reach of it; radius 0 = everyone.
+      if (at && COOP_SCALING.shareRadius > 0 && dist(at, this.seatHero(seat).pos) > COOP_SCALING.shareRadius) continue;
       // A hired blade never earns its own levels — its power is NORMALIZED to
       // the patron (MERC_CFG.scale), re-synced on the patron's level-ups.
       if (seat.merc || seat.keeper) continue; // keeperSeat: the warden never levels
@@ -47149,7 +47154,7 @@ export class World {
           // elite spill, no orbs. The summoner is the prize; endlessly farming
           // its spawn is a closed door.
           if (!actor.noBounty) {
-            this.grantXp(actor.xpValue);
+            this.grantXp(actor.xpValue, actor.pos); // THE NEAR LAW: the kill's own place (keeperSeat lane)
             if (actor.xpValue > 0) this.text(actor.pos, `+${actor.xpValue} xp`, '#b8a0e0', 11, 'xp');
             this.rollDrops(actor);
             // Elites spill extra gems on top of the base roll (bias rides along).
@@ -48407,7 +48412,7 @@ export class World {
     if (drop.item.kind !== 'gear') return;
     const item = drop.item.item;
     if (this.isBankedRelicEcho(item)) { this.drops.splice(bestIdx, 1); return; }
-    if (item.questId && seat !== this.localSeat) return;
+    if (item.questId && seat !== this.localSeat && !this.localSeat.keeper) return; // keeperSeat: on a shard any hand may carry a quest
     // THE STONE (M2): a lying pouch (a full bag left it) still merges free.
     if (item.mem && this.tryMergeMemoryItem(seat, item)) {
       this.drops.splice(bestIdx, 1);
@@ -58501,6 +58506,7 @@ export class World {
     let best: Seat | undefined; let bestD = Infinity;
     for (const s of this.seats) {
       if (s.actor.dead || s.actor.downed) continue;
+      if (s.keeper) continue;                      // keeperSeat: the warden's hands take nothing
       if (exclude && s.id === exclude) continue;   // dropper can't reclaim yet
       if (s.actor.tier !== story) continue;        // THE SAME-STORY LAW: its own story's hands only
       const d = dist(at, s.actor.pos);
@@ -58743,7 +58749,7 @@ export class World {
         if (!this.gearVacuum) continue;
         const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.gear, exclude, drop.tier);
         if (!seat) continue;
-        if (drop.item.item.questId && seat !== this.localSeat) continue;
+        if (drop.item.item.questId && seat !== this.localSeat && !this.localSeat.keeper) continue; // keeperSeat
         if (!autoPlace(seat.meta.items, drop.item.item)) {
           this.failNote(seat.actor, 'bagfull', 'inventory full');
           continue;
@@ -62155,6 +62161,7 @@ export class World {
       for (const b of cand) {
         if (b.gridSeq <= a.gridSeq) continue; // each pair once, sweep order
         if (b.dead || b.downed || flat(b) || b.leap) continue;
+        if (this.seatByActor.get(b)?.keeper || this.seatByActor.get(a)?.keeper) continue; // keeperSeat: the warden has no shoulder
         // THE SOVEREIGNTY GATE (engine/tiers.ts sameStory): bodies on
         // different stories share a screen, never a shoulder — the lodger
         // strolling above the common room walks through nobody beneath the

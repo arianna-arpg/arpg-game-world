@@ -282,7 +282,15 @@ dwell, from the all-down terminator and from every account-feeding seat
 (token `keeperSeat`) read at those five gates; nothing else notices. It is
 NOT a stopgap to be refactored away wholesale: it is what the world-level
 reads address when no player is near (the forechart halo grows around the
-hearth; `charLevel` mirrors the highest connected seat each tick). M1 retires
+hearth; `charLevel` mirrors the highest connected seat each tick). THE
+WARDEN IS NO BODY (after the first critique): its hands take nothing, it has
+no shoulder, it is invulnerable, it is never kept down, and THE SEALED ROADS
+keep it from ever dwelling (a seat that acted this frame is never idle) so no
+mouth, portal or station fires off its standing — roads that would move the
+whole party stay shut until per-seat travel exists. THE NEAR LAW
+(`COOP_SCALING.shareRadius`, the shard's `nearRadius`) scopes a kill's XP,
+an enemy's party scale and the mercy to the seats within reach: a continent
+apart is no party (card 8, ruled). M1 retires
 individual `this.player` reads only where a per-seat read is the honest one
 (dwells, travel, warband standoff), never by removing the seat.
 
