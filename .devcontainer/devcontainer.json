@@ -10,6 +10,8 @@
   "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
   "hostRequirements": { "cpus": 2, "memory": "8gb" },
   "postCreateCommand": "npm install",
+  // Every (re)start stands the shard up in the background (idempotent); flags ride the SHARD_ARGS secret.
+  "postStartCommand": "bash .devcontainer/start-shard.sh",
   "forwardPorts": [8787],
   "portsAttributes": {
     "8787": { "label": "Hollow Wake shard (wss)", "onAutoForward": "silent", "protocol": "https" }

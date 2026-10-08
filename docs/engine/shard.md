@@ -60,9 +60,11 @@ gate). The regression rig is `balance/probe_shard.ts` (`npm run probe -- shard`)
 - A player death with no other player standing is a DOWN, and the keeper's
   mercy stands it up where it fell after `SHARD_CFG.keeper.reviveSec`; the
   world never ends. The death covenant on a shard is card 6.
-- The wire is the co-op snapshot as-is (full state, JSON, 20 Hz, no interest
-  management); the `memoryAccess` row's 43 KB per tick is a known bloat with
-  a chip filed on main.
+- The wire is the co-op snapshot (full state, JSON, 20 Hz, no interest
+  management) under THE WIRE DISCIPLINE's first row: the account-derived
+  `memoryAccess` view rides every `WIRE_CFG.memoryAccessBeat`-th snapshot
+  (30, i.e. 1.5 s) instead of all of them, and a client keeps the last row it
+  saw — a quiet snapshot fell from 45 KB to 1.6 KB.
 
 ## Dials
 
@@ -71,4 +73,18 @@ gate). The regression rig is `balance/probe_shard.ts` (`npm run probe -- shard`)
 `keeper { classId, name, reviveSec 8 }`, `saveDir`. `SHARD_WIRE_CFG`
 (server/shardTransport.ts): `maxClientMessage` 256 KB, `sendBufferCap` 1 MB,
 `pingSec` 15, `reapSec` 45, `maxSlots` 16. `WS_TRANSPORT_CFG.defaultUrl`
-(src/net/ws.ts) is the lobby box's first offer.
+(src/net/ws.ts) is the lobby box's first offer. `WIRE_CFG.memoryAccessBeat`
+(src/net/snapshot.ts) is the account-view beat.
+
+## Hosting on Codespaces
+
+`.devcontainer/devcontainer.json` makes a codespace on this branch a ready
+host: Node 22, `npm install` on create, port 8787 forwarded under an https
+label (so the forwarded address is `wss://`), and `start-shard.sh` standing
+the shard up in the background at every (re)start — idempotent, flags from a
+`SHARD_ARGS` Codespaces secret (default `--port 8787 --open`), log in
+`shard.log`, the world saved to the codespace's `saves/`. After the first
+start, set the port PUBLIC once (Ports panel, or
+`gh codespace ports visibility 8787:public -c <name>`) and hand players the
+address shown there. The codespace idles out after its timeout; starting it
+again brings the same world back.

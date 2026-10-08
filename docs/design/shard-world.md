@@ -116,10 +116,11 @@ peers (`fanOut`, drops a peer whose buffer passes 1 MB).
 | crossroads, 4 seats, fresh | 12 | 1.85 ms | 52.3 KB | 16.7 KB |
 | crossroads, 4 seats, settled | 12 | 1.05 ms | 52.3 KB | 16.7 KB |
 
-Of those 44-52 KB, **43.7 KB is `memoryAccess`** (the host account's
+Of those 44-52 KB, **43.7 KB was `memoryAccess`** (the host account's
 `memoryAccessView`, re-sent every tick); actors + seats + vendor are ~1 KB.
-The wire is cheap once that row ships once (chip filed for main; the shard's
-wire discipline in §3.9 makes it structural). A small zone sim costs about one
+THE WIRE DISCIPLINE's first row landed the same day: the view rides every
+30th snapshot and a client keeps the last one, so a quiet snapshot is 1.6 KB
+(a chip for main's own lane stands beside it). A small zone sim costs about one
 millisecond a tick: a core comfortably runs a dozen quiet units at 60 Hz.
 
 **The three layers inside one World.** `World` is at once (a) THE ZONE SIM —

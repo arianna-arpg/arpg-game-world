@@ -80,6 +80,18 @@ import { watchRungOf, watchValueOf } from '../engine/watch';
 
 export type Vec2W = [number, number];
 
+/** THE WIRE DISCIPLINE (docs/design/shard-world.md §3.9): account-derived
+ *  views ship on a BEAT, not every tick. The memoryAccess row is ~44 KB and
+ *  changes only when the keeper's memory unlocks do, yet it rode all 20
+ *  snapshots a second (the whole rest of a quiet snapshot is ~1 KB). It now
+ *  rides every `memoryAccessBeat`-th snapshot — the meta-delta lesson kept:
+ *  a dropped frame self-heals on the next beat, and a client keeps the last
+ *  row it saw (applySnapshot only overwrites when the row is present). */
+export const WIRE_CFG = {
+  /** Snapshots between memoryAccess rows (30 at 20 Hz = 1.5 s, the META_HEARTBEAT's own cadence). */
+  memoryAccessBeat: 30,
+};
+
 /** One renderer-visible actor on the wire. Short keys keep the JSON small. */
 export interface ActorW {
   bodyActionPose?: import('../engine/bodyAction').BodyActionPose;
@@ -931,7 +943,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     seats, seatMeta,
     vendor: world.vendorStock.map(e => vendorEntryW(e, world)), vendorRestockAt: world.vendorRestockAt,
     vendorCap: world.vendorLockCap(),
-    memoryAccess: memoryAccessView(world.account),
+    memoryAccess: tick % WIRE_CFG.memoryAccessBeat === 1 ? memoryAccessView(world.account) : undefined, // THE WIRE DISCIPLINE
     vendorTradeOpen: world.vendorTradeRefusal() === null,
     vendorGemsOpen: world.vendorGemsOpen(),
     bagBoard: bagBoard(),
@@ -1592,7 +1604,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     world.vendorHolds['brandt'] = { locks, watchedSec: 0 };
     world.vendorRestockAt = snap.vendorRestockAt;
     world.netVendorCap = snap.vendorCap;
-    world.netMemoryAccess = snap.memoryAccess;
+    if (snap.memoryAccess !== undefined) world.netMemoryAccess = snap.memoryAccess; // THE WIRE DISCIPLINE: absent = unchanged
     world.netVendorTradeOpen = snap.vendorTradeOpen;
     world.netVendorGemsOpen = snap.vendorGemsOpen;
     world.netBagBoard = snap.bagBoard;
