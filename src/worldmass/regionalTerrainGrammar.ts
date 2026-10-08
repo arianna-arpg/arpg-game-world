@@ -1,6 +1,8 @@
 import { Rng } from '../core/rng';
+import { regionalMotifSupport, regionalMotifRows, regionalMotifFits, reserveRegionalMotif } from './regionalMotifSupport';
 import type { MassLandformShape } from './landforms';
 import { freezeData } from './random';
+import { defaultRegionalCourtMorphology, regionalCourtProfile, regionalCourtRadius, validateRegionalCourtMorphology, type RegionalCourtMorphology, type RegionalCourtProfile } from './regionalCourtShapes';
 
 /** Saved bounded construction rules. Runtime construction consumes these rules
  * and captured motif cells, never a live native builder or scenery registry. */
@@ -11,9 +13,10 @@ export interface RegionalTerrainGrammar {
   waterChance: readonly [number, number];
   motifs: readonly { shape: string; weight: number }[];
   maxChildren: number;
+  morphology?: RegionalCourtMorphology;
 }
 type Point = { x: number; y: number };
-type Node = Point & { radius: number };
+type Node = Point & { radius: number; court?: RegionalCourtProfile };
 type Edge = { a: number; b: number; points: Point[] };
 type Port = Point & { dx: number; dy: number };
 type Child = { shape: string; x: number; y: number; size: number };
@@ -25,6 +28,11 @@ export function defaultRegionalTerrainGrammar(): RegionalTerrainGrammar {
     extent: [3300, 6600], nodes: [4, 10], extraLinks: [0, 3], corridor: [90, 150],
     waterChance: [.15, .75], motifs: [{ shape: 'stepping_pools/0', weight: 4 },
       { shape: 'grove_ring/0', weight: 2 }], maxChildren: 3 });
+}
+/** Opt-in morphology uses its own saved namespace; the historical factory
+ * deliberately stays unchanged for explicit old policies and regression tools. */
+export function layeredRegionalTerrainGrammar(): RegionalTerrainGrammar {
+  return freezeData({ ...defaultRegionalTerrainGrammar(), morphology: defaultRegionalCourtMorphology() });
 }
 function connected(rows: readonly string[]): boolean {
   const n = rows.length, seen = new Uint8Array(n * n), queue = new Int32Array(n * n);
@@ -81,6 +89,7 @@ function attemptGrammar(grammar: RegionalTerrainGrammar, pinned: readonly MassLa
       Math.min(x, y, n - 1 - x, n - 1 - y) - 5);
     return { x, y, radius: rng.range(Math.min(gap * .34, cap * .82), cap) };
   });
+  if (grammar.morphology) nodes.forEach((node, i) => { node.court = regionalCourtProfile(grammar.morphology!, seed, attempt, i); });
   const pairs: [number, number][] = tree.map(([a, b]) => [index.get(a)!, index.get(b)!]);
   const extra: [number, number][] = [];
   for (let a = 0; a < count; a++) for (let b = a + 1; b < count; b++)
@@ -114,8 +123,9 @@ function attemptGrammar(grammar: RegionalTerrainGrammar, pinned: readonly MassLa
     const bound = node.radius + shoulder + wave;
     paint(node.x - bound, node.y - bound, node.x + bound, node.y + bound, (x, y) => {
       const angle = Math.atan2(y - node.y, x - node.x), d = Math.hypot(x - node.x, y - node.y);
-      if (d <= node.radius) return 1;
-      return d <= node.radius + shoulder + wave * Math.sin(lobes * angle + phase) ? material : 0;
+      const courtRadius = node.court ? node.radius * regionalCourtRadius(node.court, angle) : node.radius;
+      if (d <= courtRadius) return 1;
+      return d <= courtRadius + shoulder + wave * Math.sin(lobes * angle + phase) ? material : 0;
     });
   }
   const paintLink = (points: readonly Point[], width: number, shoulder: number, material: number, port?: Port): void => {
@@ -173,23 +183,28 @@ function attemptGrammar(grammar: RegionalTerrainGrammar, pinned: readonly MassLa
   navigation.push(...nodes.slice(0, 8).map(p => ({ x: p.x, y: p.y })));
   const output = foundationRows.map(row => row.split('')), components: Child[] = [], childSeed = rng.int(0, 0xffffffff);
   const childRng = new Rng(childSeed), childCount = childRng.int(0, grammar.maxChildren), available = shuffle([...nodes], childRng);
+  const regionalMotifAware = nodes.some(node => node.court && node.court.family !== 'circle');
+  const regionalMotifReservations = regionalMotifAware ? new Uint8Array(n * n) : undefined;
   for (let i = 0; i < childCount; i++) {
     if (!grammar.motifs.length) break;
     const motif = childRng.weighted(grammar.motifs), child = pinned.find(s => s.id === motif.shape);
     if (!child) return null;
     const m = child.rows.length;
+    const regionalMotifShape = regionalMotifAware ? regionalMotifSupport(child) : undefined;
+    const regionalMotifFloor = regionalMotifAware ? regionalMotifRows(output, undefined, regionalMotifReservations) : undefined;
     // Up to eight local seats per finite chamber. A complete rectangular dry
-    // host and margin are necessary; narrow links never become motif hosts.
+    // host remains historical; regionalMotifSupport follows occupied cells and
+    // a 120-unit dry feather in noncircular courts. Narrow links cannot host it.
     let seat: Point | undefined;
     for (const room of available) {
       if (seat) break;
-      if (room.radius < (m + 2) / Math.SQRT2) continue;
+      if (room.radius < (regionalMotifShape?.radius ?? (m + 2) / Math.SQRT2)) continue;
       for (let trial = 0; trial < 8 && !seat; trial++) {
         const x = Math.round(room.x - (m - 1) / 2) + (trial ? childRng.int(-3, 3) : 0);
         const y = Math.round(room.y - (m - 1) / 2) + (trial ? childRng.int(-3, 3) : 0);
         if (x < 1 || y < 1 || x + m >= n || y + m >= n) continue;
-        let clear = true;
-        for (let yy = y - 1; yy <= y + m && clear; yy++) for (let xx = x - 1; xx <= x + m; xx++)
+        let clear = regionalMotifFloor ? regionalMotifFits(regionalMotifFloor, regionalMotifShape!, x, y) : true;
+        if (!regionalMotifFloor) for (let yy = y - 1; yy <= y + m && clear; yy++) for (let xx = x - 1; xx <= x + m; xx++)
           if (output[yy][xx] !== 'g') { clear = false; break; }
         if (!clear) continue;
         seat = { x, y };
@@ -198,6 +213,7 @@ function attemptGrammar(grammar: RegionalTerrainGrammar, pinned: readonly MassLa
     if (!seat) continue;
     for (let y = 0; y < m; y++) for (let x = 0; x < m; x++) if (child.rows[y][x] !== '.') output[seat.y + y][seat.x + x] = child.rows[y][x];
     components.push({ shape: child.id, ...seat, size: m });
+    if (regionalMotifReservations) reserveRegionalMotif(regionalMotifReservations, n, regionalMotifShape!, seat.x, seat.y);
   }
   const realized = output.map(row => row.join(''));
   if (!connected(realized)) return null;
@@ -234,6 +250,9 @@ export function generateRegionalTerrain(grammar: RegionalTerrainGrammar, pinnedS
     || grammar.extent[0] < 2160 || grammar.extent[1] > 6960 || grammar.extent[0] > grammar.extent[1]
     || grammar.nodes[0] < 4 || grammar.nodes[1] > 10 || grammar.nodes[0] > grammar.nodes[1]
     || grammar.maxChildren < 0 || grammar.maxChildren > 8) return null;
+  if (Object.hasOwn(grammar, 'morphology')) {
+    try { validateRegionalCourtMorphology(grammar.morphology!); } catch { return null; }
+  }
   for (let attempt = 0; attempt < 3; attempt++) {
     const shape = attemptGrammar(grammar, pinnedSmallShapes, seed, attempt);
     if (shape) return shape;

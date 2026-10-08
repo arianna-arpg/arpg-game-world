@@ -358,7 +358,7 @@ test('fresh native opening footprints fit a saved exclusion and cold Continue ne
   assert.ok(fixed>100);assert.ok(rejected>0,'fixture needs real opening/patch conflict witnesses');assert.ok(unaffected>0);
   // An already saved descriptor lacking reservations is consumed literally.
   // This characterizes compatibility; it is not a safe new-world policy.
-  const legacy=copy(massAdventure());delete legacy.terrain.patches;delete legacy.terrain.landforms;
+  const legacy=copy(massAdventure());delete legacy.terrain.patches;delete legacy.terrain.landforms;delete legacy.terrain.regionalDiscoveries;
   const oldWorld=makeSimWorld('warrior',719),old=new WorldMassRuntime(42,'opening-old',legacy);old.attach(oldWorld);
   const saved=old.snapshot(oldWorld),again=makeSimWorld('warrior',720),resumed=new WorldMassRuntime(42,'opening-old',saved.config,saved);resumed.attach(again,saved);
   assert.equal(canonical(resumed.config),canonical(saved.config));assert.equal(resumed.generator.patches,null);

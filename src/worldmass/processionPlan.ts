@@ -130,7 +130,7 @@ function* environmentSteps(input: Readonly<ProcessionPlanInput>, stats: Processi
   if ((BigInt(hi.cx) - BigInt(lo.cx) + 1n) * (BigInt(hi.cy) - BigInt(lo.cy) + 1n) > BigInt(p.maxPlacePages)) throw new RouteBudget('procession-place-page-budget');
   for (let y = BigInt(lo.cy); y <= BigInt(hi.cy); y++) for (let x = BigInt(lo.cx); x <= BigInt(hi.cx); x++) {
     yield; stats.placePages++;
-    for (const place of gen.placesInCell({ dimension: center.dimension, cx: x.toString(), cy: y.toString() })) {
+    for (const place of gen.regionalPlacesInCell({ dimension: center.dimension, cx: x.toString(), cy: y.toString() })) {
       places.set(place.id, { ...localOffset(place.center, center, span, 4096), radius: place.radius });
       if (places.size > p.maxPlaces) throw new RouteBudget('procession-place-budget');
     }

@@ -43,7 +43,7 @@ const restore=seedGlobalRandom(1649);
 try{
  const cfg=JSON.parse(canonical(config));
  delete cfg.settlement;delete cfg.journey;delete cfg.ecology;delete cfg.progression;
- delete cfg.terrain.patches;delete cfg.terrain.landforms;
+ delete cfg.terrain.patches;delete cfg.terrain.landforms;delete cfg.terrain.regionalDiscoveries;
  cfg.terrain.places=[];cfg.terrain.surfaces =[{id:'plain',source:'test/plain',priority:0,when:[],region:'ground',color:'#445522',biome:'downs'}];
  cfg.content=[];cfg.maxPopulation=0;
  const w=makeSimWorld('warrior',12),m=new WorldMassRuntime(42,'survey-native',cfg);

@@ -9,7 +9,7 @@ import { patchBoxIntersects, type MassPatchBox } from './terrainPatches';
  * trace, never a replacement for native zone/event ownership. */
 export interface RegionalTerrainTrace {
   source:string;seed:number;childSeed:number;
-  nodes:readonly {x:number;y:number;radius:number}[];
+  nodes:readonly {x:number;y:number;radius:number;court?:import('./regionalCourtShapes').RegionalCourtProfile}[];
   edges:readonly {a:number;b:number;points:readonly {x:number;y:number}[]}[];
 }
 export interface MassLandformShape {

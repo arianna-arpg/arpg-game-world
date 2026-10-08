@@ -187,3 +187,72 @@ playthrough. Cold planning is still synchronous; frame scheduling remains work.
 The source chat's 27 locale programs, 135 layout variants, 30 regional graph forms, bounty-gated passages and their native objective/turn-in ownership still need integration through real zone owners. The shared builders here are preparation for those programs, not inhabited towns or complete crypt adventures.
 
 Keep the hierarchy target: world mass → geographic biome regions → actual native zones → streamed chunks. The candidate lattice above must never become a substitute hierarchy. Native zone/event map zoom, world weather footprints, full native area activation and population/controller persistence remain on that existing integration path. Older saved worlds need an explicit migration policy before acquiring new terrain in unvisited country.
+
+## RegionalLayers: irregular courts and nested native discoveries
+
+Fresh expeditions use schema 15 when saved court morphology or regional
+discoveries are present. Schema-14 descriptors keep their exact circular courts,
+random cursors, terrain bytes and owners. Explicit circle-only morphology also
+retains historical graph, shoulder and child placement. Older clients refuse the
+new schema rather than silently regenerating different geography.
+
+The saved court vocabulary includes circles, ellipses, beveled halls, kites,
+scalloped courts, clefts, irregular polygons and crosses. Angle, aspect, depth,
+lobe count and polygon vertices vary per court using an independent stream.
+All contours retain a connected central floor inside the original court bounds;
+the graph still owns multi-screen connectivity. The original native formation
+catalogue remains a separate generation choice.
+
+For noncircular compositions, complete native motifs reserve their actual
+occupied cells and a 120-unit dry feather. Transparent source-image corners no
+longer demand blank square courts. Original floor, protected-site composition,
+sibling feather separation, final connectivity and route-distance checks still
+apply; no child is clipped or reduced. Historical and all-circle sources retain
+their original rectangular admission. In the same 192-source sample this raised
+complete nested motifs from 12 to 73 while preserving every native cell.
+
+The optional terrain.regionalDiscoveries policy runs after protected sites and
+complete nested terrain are composed. It chooses up to four courts, independently
+rolls content and positions, and admits only complete sites on final ground floor
+with at least a 90-unit dry bypass. It never carves terrain to force admission.
+Sibling footprints retain their saved separation, and a content choice appears
+at most once per formation. Stable owners include formation and court ancestry;
+a site wholly within a child motif's envelope also records that motif.
+
+The default vocabulary contains eight asymmetric cache arrangements, all five
+native shrines, four native altar fields and three native puzzle activities.
+It reuses existing registered scenery and complete native interaction rules.
+Rewards and puzzle/field levels follow the saved geographic progression.
+Bounties, discovery cues, scenery exclusion, native persistence and worker
+objective/procession reservations consume the same combined place query.
+Ordinary terrain admission deliberately uses the earlier ordinary-place query
+to avoid a terrain/content dependency cycle. The discovery cache holds at most
+64 formations; no result depends on residency or query order.
+
+This is terrain and content composition within the seamless landmass, not a
+replacement for native biome regions, zones or their event/map ownership. The
+remaining native hierarchy integration described above is still required.
+Cache chests use the existing resident chest persistence; this pass does not
+add whole-world chest paging. Finite variety surveys cannot guarantee unlimited
+non-repetition, and synchronous cold terrain planning remains a performance
+limitation.
+
+Verification adds `worldmass_regionallayers` and the isolated
+`balance/regional-layers-ui.cjs` course. Build with
+`HOLLOW_WAKE_STORAGE_SCOPE=preview:seamless-regional-layers-qa`,
+`HOLLOW_WAKE_WORLDMASS=1`, and
+`npx vite build --outDir .claude/regional-layers.local.work/dist`.
+The client course opens a real cache, consumes a native shrine, hits and solves
+a native puzzle, and checks partial/solved cold Continue and spent-owner revisits.
+
+RegionalLayers acceptance: 192 normalized source layouts were distinct; 256
+historical sources and 64 circle-only sources remained exact. Holding terrain
+fixed while varying 32 discovery rolls produced 96 different positions. A finite
+226-location default-world survey yielded 19 generated formations, 33 discoveries
+from 14 payloads, all six native activity categories, all eight court families,
+five complete child motifs and one discovery inside a child. Every final dry
+player stand and route terminal was checked after protected-site composition.
+The broader validation passed 35 targeted probes, all three type checks, 25 smoke
+simulation episodes and built-client native interactions plus cold Continue.
+Generation QA reported 0 failures and four previously known geometry warnings
+across 869 cases and three seeds.

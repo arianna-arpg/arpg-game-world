@@ -100,7 +100,7 @@ export function compileGeographicPlan(input:Readonly<GeographicPlanInput>,genera
   const lo=moveAddress(owner.center,{x:-halfSpan-150,y:-halfSpan-150},span),hi=moveAddress(owner.center,{x:halfSpan+150,y:halfSpan+150},span);
   if((BigInt(hi.cx)-BigInt(lo.cx)+1n)*(BigInt(hi.cy)-BigInt(lo.cy)+1n)>64n)return end(null);
   for(let y=BigInt(lo.cy);y<=BigInt(hi.cy);y++)for(let x=BigInt(lo.cx);x<=BigInt(hi.cx);x++)
-    for(const place of gen.placesInCell({dimension:owner.dimension,cx:x.toString(),cy:y.toString()}))bodies.set(place.id,{...localOffset(place.center,owner.center,span,64),radius:place.radius});
+    for(const place of gen.regionalPlacesInCell({dimension:owner.dimension,cx:x.toString(),cy:y.toString()}))bodies.set(place.id,{...localOffset(place.center,owner.center,span,64),radius:place.radius});
   if(bodies.size>4096)return end(null);metrics.placeMs=performance.now()-started;
   const standStarted=performance.now(),reserved=geographicReservations(input,[...bodies.values()],halfSpan);
   for(let attempt=0;attempt<96&&positions.length<count;attempt++){
@@ -158,7 +158,7 @@ export function* validateGeographicPreparationSteps(input:Readonly<GeographicPla
   const bodies=new Map<string,GeographicBody>(),lo=moveAddress(center,{x:-halfSpan-150,y:-halfSpan-150},span),hi=moveAddress(center,{x:halfSpan+150,y:halfSpan+150},span);
   if((BigInt(hi.cx)-BigInt(lo.cx)+1n)*(BigInt(hi.cy)-BigInt(lo.cy)+1n)>64n)throw Error('Prepared geographic place extent exceeds budget');
   for(let y=BigInt(lo.cy);y<=BigInt(hi.cy);y++)for(let x=BigInt(lo.cx);x<=BigInt(hi.cx);x++){
-    for(const place of gen.placesInCell({dimension:center.dimension,cx:x.toString(),cy:y.toString()}))bodies.set(place.id,{...localOffset(place.center,center,span,64),radius:place.radius});
+    for(const place of gen.regionalPlacesInCell({dimension:center.dimension,cx:x.toString(),cy:y.toString()}))bodies.set(place.id,{...localOffset(place.center,center,span,64),radius:place.radius});
     if(bodies.size>4096)throw Error('Prepared geographic place count exceeds budget');yield;
   }
   const reserved=geographicReservations(input,[...bodies.values()],halfSpan),targets=plan.access.targets.map(t=>({...localOffset(t.at,center,span,16),radius:t.radius}));

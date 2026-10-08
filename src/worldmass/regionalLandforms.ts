@@ -1,3 +1,4 @@
+import { validateRegionalCourtMorphology } from './regionalCourtShapes';
 import { generateRegionalTerrain, type RegionalTerrainGrammar } from './regionalTerrainGrammar';
 import { regionalTerrainFootprint, regionalTerrainAt, regionalTerrainCircle, regionalTerrainBox } from './regionalTerrainFootprint';
 import { fitRegionalChildren } from './regionalLandformSources';
@@ -33,6 +34,7 @@ export function validateRegionalTerrainGrammar(spec:MassSpec):void {
     ||!Array.isArray(p.motifs)||p.motifs.length<1||p.motifs.length>32
     ||new Set(p.motifs.map(m=>m.shape)).size!==p.motifs.length
     ||p.motifs.some(m=>!spec.landforms!.shapes.some(s=>s.id===m.shape)||!Number.isFinite(m.weight)||m.weight<=0||m.weight>100))throw Error('Invalid regional terrain grammar');
+  if(Object.hasOwn(p,'morphology'))validateRegionalCourtMorphology(p.morphology!);
 }
 export function validateRegionalLandforms(spec:MassSpec):void {
   const owner=spec.landforms;
@@ -182,6 +184,10 @@ export class MassRegionalLandforms {
     this.counters.accepted++;
     return freezeData({id:canonical([this.run.runId,p.source,p.version,key]),origin,recipe,shape,turn:0,mirror:false,bounds,regionalExtent:true,
       ...(regionalGrammar?{regionalTerrainFootprint:regionalTerrainFootprint(oriented,shape)}:{})});
+  }
+  /** Lattice-level post-terrain content lookup also covers off-center formations. */
+  regionalDiscoveryFormation(dimension:string,gx:bigint,gy:bigint):Readonly<MassLandformPlan>|null {
+    return this.candidate(dimension,gx,gy);
   }
   /** Inspect the formation envelope, including transparent site/exterior holes. */
   formationAt(at:MassAddress):Readonly<MassLandformPlan>|null {

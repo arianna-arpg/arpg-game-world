@@ -1,3 +1,18 @@
+RegionalLayers (schema 15) adds saved noncircular court morphology and bounded
+post-terrain native discoveries. Keep exact schema-14 omission and circle-only
+geometry. Noncircular parents use regionalMotifSupport to reserve complete native
+cells plus a 120-unit dry feather while letting transparent corners inherit parent
+terrain. A whole discovery plus a 90-unit dry bypass must fit final floor after
+protected-site/child composition; never carve for content. Native cache, shrine,
+altar and puzzle owners retain their rules, geographic levels, discovery and
+Continue. Gameplay/worker reservations use regionalPlacesInCell; terrain proofs
+must keep ordinary placesInCell to avoid recursion. Verify regionallayers,
+historical terrainvariation/regionalextents, adjacent terrain/site/worker probes,
+all types, genqa, sim and regional-layers-ui.cjs after an isolated build. See
+docs/worldgen/seamless-landforms.md. This does not complete native-zone/hierarchy
+parity or whole-world chest paging.
+
+
 RegionalTerrainComposition (schema 14) adds saved seeded chamber/link terrain
 rules alongside familiar native formations. New worlds vary extent, connected
 trees/cycles, bends, shoulders and complete nested motifs; topology is dry-route

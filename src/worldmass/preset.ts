@@ -1,4 +1,5 @@
-import { defaultRegionalTerrainGrammar } from './regionalTerrainGrammar';
+import { layeredRegionalTerrainGrammar } from './regionalTerrainGrammar';
+import { regionalDiscoveryContent } from './regionalDiscoverySources';
 import { regionalLandformPolicy } from './regionalLandformSources';
 import { WATER_SURFACE } from '../data/waterSurface';
 import { LASTLIGHT_DEFENSES } from '../data/settlementDefenses';
@@ -75,7 +76,16 @@ export interface MassAdventure {
  * packages can supply another descriptor without replacing engine rules. */
 export function massAdventure(): MassAdventure {
   const families = MASS_BIOME_FAMILIES, fields = countryFieldSites(), regional = regionalCountrySites(), activities = countryActivitySites();
+  const progression: MassProgressionSpec = {
+    source: 'worldmass/expedition-progression', minLevel: 1, maxLevel: 24,
+    stops: [{ distance: 0, level: 1 }, { distance: 1600, level: 1 },
+      { distance: 5800, level: 4 }, { distance: 13200, level: 9 },
+      { distance: 26800, level: 18 }, { distance: 40000, level: 24 }],
+    variation: { field: 'danger', levels: 2, start: 1600, span: 4000 },
+  };
+  const regionalDiscoveries = regionalDiscoveryContent(progression.minLevel, progression.maxLevel);
   const terrain: MassSpec = {
+    regionalDiscoveries: regionalDiscoveries.policy,
     id: 'hollow-wake-country', version: 8, addressSpan: 960, terrainCell: 30,
     fields: [
       { id: 'elevation', base: .15, layers: [
@@ -106,7 +116,7 @@ export function massAdventure(): MassAdventure {
         biome: TILESETS[f.id].biome ?? f.id })),
       { id: 'fallback', source: 'tilesets/downs', priority: 0, when: [], region: 'ground', color: '#31391c', biome: 'downs' },
     ],
-    landforms: { ...massLandformPolicy(), regional: { ...regionalLandformPolicy(), composition: defaultRegionalTerrainGrammar() } },
+    landforms: { ...massLandformPolicy(), regional: { ...regionalLandformPolicy(), composition: layeredRegionalTerrainGrammar() } },
     patches: { source: 'worldmass/native-terrain-patches-v1', version: 1, spacing: 960, jitter: .12, bypass: 60,
       recipes: [
         { id: 'wetland-pockets', when: [], onSurfaces: ['marsh'], chance: .9, choices: [
@@ -129,13 +139,6 @@ export function massAdventure(): MassAdventure {
         surface: { region: 'ground', color: '#42433a' } },
     ],
   };
-  const progression: MassProgressionSpec = {
-    source: 'worldmass/expedition-progression', minLevel: 1, maxLevel: 24,
-    stops: [{ distance: 0, level: 1 }, { distance: 1600, level: 1 },
-      { distance: 5800, level: 4 }, { distance: 13200, level: 9 },
-      { distance: 26800, level: 18 }, { distance: 40000, level: 24 }],
-    variation: { field: 'danger', levels: 2, start: 1600, span: 4000 },
-  };
   const populations = (table: Parameters<typeof presenceTable>[0]): MassPopulation[] =>
     Array.from({ length: progression.maxLevel }, (_, i) => openingPopulation(i + 1,
       presenceTable(table, i + 1, id => MONSTERS[id]?.presence)
@@ -153,7 +156,7 @@ export function massAdventure(): MassAdventure {
     shrineResidency: { source: 'worldmass/shrine-residency', retainRadius: 2048, maxResident: 32 },
     puzzleResidency: { source: 'worldmass/puzzle-residency', retainRadius: 2048, maxResident: 16 },
     dormancy: { source: 'worldmass/native-dormancy-v1', wakeRadius: 1600, sleepRadius: 2400, quietSeconds: 12 },
-    content: [...activities.map(a=>({id:a.id,source:a.site.source,level:1,count:0,table:[{id:'plains_wolf',weight:1}],site:a.site})), ...[...regional, ...fields].map(field=>{
+    content: [...regionalDiscoveries.content, ...activities.map(a=>({id:a.id,source:a.site.source,level:1,count:0,table:[{id:'plains_wolf',weight:1}],site:a.site})), ...[...regional, ...fields].map(field=>{
       const levels=populations(field.roster==='undead'?FACTIONS.undead.table:TILESETS[field.roster].packs.table)
         .map(row=>reserveMassGuardians(row,field.count));
       return {...levels[0],id:field.id,source:field.site.source,count:field.count,levels,site:field.site};

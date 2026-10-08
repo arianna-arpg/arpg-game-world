@@ -20,7 +20,7 @@ function fixture(kind: 'wayside-camp' | 'pillaged-ruin'): MassAdventure {
   delete config.nativeCountry;delete config.geography; // legacy 24-unit grid fixture owns its complete terrain
   config.terrain.addressSpan = 768; config.terrain.terrainCell = 24;
   const row = config.content.find(c => c.id === kind)!;
-  delete config.terrain.patches;delete config.terrain.landforms;
+  delete config.terrain.patches;delete config.terrain.landforms;delete config.terrain.regionalDiscoveries;
   config.terrain.fields = [];
   config.terrain.surfaces = [{ id: 'land', priority: 0, when: [], region: 'ground', color: '#445522', biome: 'downs' }];
   config.terrain.places = [{ id: kind, version: 1, content: kind, period: 1536, radius: 300, jitter: 0,

@@ -89,7 +89,7 @@ export class MassRegions {
     const center = moveAddress(origin, { x: span / 2, y: span / 2 }, cellSpan);
     const terrain = this.generator.terrainAt(center), places = new Map<string, MassPlace>();
     for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
-      for (const p of this.generator.placesInCell(neighborCell(origin, x, y))) {
+      for (const p of this.generator.regionalPlacesInCell(neighborCell(origin, x, y))) {
         if (p.center.dimension !== dimension || floorDiv(cellInteger(p.center.cx), BigInt(n)).toString() !== rx
           || floorDiv(cellInteger(p.center.cy), BigInt(n)).toString() !== ry) continue;
         places.set(p.id, p);

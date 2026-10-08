@@ -20,7 +20,7 @@ try {
  const cfg:MassAdventure=structuredClone(massAdventure());
  assert.equal(cfg.rewards,undefined,'new expeditions have no support-choice policy');
  delete cfg.progression;delete cfg.journey;delete cfg.ecology;delete cfg.settlement;
- delete cfg.terrain.patches;delete cfg.terrain.landforms;
+ delete cfg.terrain.patches;delete cfg.terrain.landforms;delete cfg.terrain.regionalDiscoveries;
  cfg.terrain.fields=[];
  cfg.terrain.surfaces=[{id:'land',priority:0,when:[],region:'ground',color:'#445522',biome:'downs'}];
  cfg.terrain.places=[{id:'camp',version:1,content:'wayside-camp',period:1920,radius:180,jitter:0,chance:1,when:[],priority:1}];

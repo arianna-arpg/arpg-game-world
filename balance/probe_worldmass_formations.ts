@@ -39,7 +39,7 @@ function config():MassAdventure{
   delete c.settlement;delete c.journey;delete c.ecology;delete c.progression;
  delete c.nativeCountry;delete c.geography; // this fixture supplies all its terrain/content; native country is tested separately
   c.startRadius=0;c.maxPopulation=4;c.populationRadius=1000;
-  delete c.terrain.patches;delete c.terrain.landforms;
+  delete c.terrain.patches;delete c.terrain.landforms;delete c.terrain.regionalDiscoveries;
   c.terrain.fields =[];c.terrain.surfaces=[{id:'flat',priority:0,when:[],region:'ground',color:'#445544',biome:'tundra'}];
   c.terrain.places=[{id:'formation',version:1,content:'formation',period:1200,chance:1,radius:240,jitter:0,priority:1,when:[]}];
   c.content=[{id:'formation',source:'native/goblin',level:4,count:2,table:[{id:'plains_wolf',weight:1}],encounters:spec,

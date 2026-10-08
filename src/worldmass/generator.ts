@@ -1,3 +1,4 @@
+import { MassRegionalDiscoveries, validateRegionalDiscoveries } from './regionalDiscoveries';
 import { MassLandforms, validateMassLandforms } from './landforms';
 import { MassNativeSubstrate, validateNativeSubstrate } from './nativeSubstrate';
 import { address, cellKey, floorDiv, latticeAt, localOffset, moveAddress, validSpan, type MassAddress, type MassCell } from './address';
@@ -55,6 +56,7 @@ export function validateMassSpec(spec: MassSpec, nativeSeed?: number): void {
   }
   validateMassPatches(spec);
   validateMassLandforms(spec);
+  validateRegionalDiscoveries(spec);
   if (spec.places.length > 64) throw new Error('Regional planner exceeds 64 place families');
   for (const a of spec.places) for (const b of spec.places) {
     if (Math.ceil((a.radius + b.radius) / b.period) + 2 > 8) throw new Error('Place overlap query exceeds bounded neighborhood');
@@ -78,6 +80,7 @@ export class MassGenerator {
   readonly run: Readonly<MassRun>;
   readonly patches: MassTerrainPatches | null;
   readonly landforms: MassLandforms | null;
+  readonly regionalDiscoveries: MassRegionalDiscoveries | null;
   readonly nativeSubstrate: MassNativeSubstrate | null;
   private readonly surfaces: MassSpec['surfaces'];
   private readonly salts = new Map<MassSpec['fields'][number]['layers'][number], number>();
@@ -97,11 +100,17 @@ export class MassGenerator {
       at=>this.baseTerrainAt(at),(origin,box)=>this.patchSitesClear(origin,box,true), // landformHabitat owners compose with terrain
       this.nativeSubstrate ? (origin,size)=>this.nativeSubstrate!.supportsPatchCell(origin,size) : undefined,
       (origin,box)=>this.regionalLandformSites(origin,box)) : null;
+    this.regionalDiscoveries = this.spec.regionalDiscoveries ? new MassRegionalDiscoveries(this) : null;
     this.patches = Object.hasOwn(this.spec, 'patches') && this.spec.patches ? new MassTerrainPatches(this.spec, this.run,
       at => this.baseTerrainAt(at), (origin, box) => this.patchSitesClear(origin, box)
         && !this.landforms?.reserves(moveAddress(origin,{x:(box.minX+box.maxX)/2,y:(box.minY+box.maxY)/2},this.spec.addressSpan),
           Math.hypot(box.maxX-box.minX,box.maxY-box.minY)/2),
       this.nativeSubstrate ? (origin, size) => this.nativeSubstrate!.supportsPatchCell(origin, size) : undefined) : null;
+  }
+  /** Content consumers include nested owners; terrain admission uses placesInCell alone. */
+  regionalPlacesInCell(cell: MassCell): readonly MassPlace[] {
+    const ordinary=this.placesInCell(cell);
+    return this.regionalDiscoveries ? Object.freeze([...ordinary,...this.regionalDiscoveries.inCell(cell)].sort((a,b)=>compare(a.id,b.id))) : ordinary;
   }
   private noise(at: MassAddress, period: number, salt: number): number {
     return massNoise(at, this.spec.addressSpan, period, salt);

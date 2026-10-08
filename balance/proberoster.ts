@@ -118,6 +118,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_fieldchoice.ts', status: 'green', tier: 'fast', why: 'Archived native field read/callback parity, floor claims, exact memo limits and independent instance isolation' },
   { probe: 'probe_pourshape.ts', status: 'green', tier: 'fast', why: 'Archived native pour mask and RNG parity; shared lobes preserve guard/depth/paint wrappers' },
   { probe: 'probe_worldmass_regionalexpansion.ts', status: 'green', tier: 'fast', why: 'Bounded local site detours, full protected circles, exterior contacts and unchanged historical composition' },
+  { probe: 'probe_worldmass_regionallayers.ts', status: 'green', tier: 'slow', why: 'Noncircular regional courts, independent nested discoveries, exact historical geometry, physical clearance and native Continue' },
   { probe: 'probe_worldmass_terrainvariation.ts', status: 'green', tier: 'fast', why: 'Seeded regional topology, scale-normalized variety, compositional ownership, native sites, signed streaming and schema-14 Continue' },
   { probe: 'probe_worldmass_regionalextents.ts', status: 'green', tier: 'fast', why: 'Multi-screen native terrain, source-pinned nested pools, protected sites, route continuity, signed streaming and schema-13 Continue' },
   { probe: 'probe_worldmass_landformhabitats.ts', status: 'green', tier: 'fast', why: 'Native packs inside regional terrain, body-clear seating, atomic formations, casualty Continue, protected sites and real-country density' },

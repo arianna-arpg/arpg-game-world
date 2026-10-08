@@ -54,6 +54,8 @@ export interface MassSpec {
   patches?: MassPatchPolicy;
   /** Saved regional navigation shapes; omitted in historical runs. */
   landforms?: import('./landforms').MassLandformPolicy;
+  /** Optional post-terrain native sites; omission preserves historical owners. */
+  regionalDiscoveries?: import('./regionalDiscoveries').RegionalDiscoverySpec;
 }
 export interface MassRun {
   schema: 1; seed: number; runId: string;
@@ -67,6 +69,7 @@ export interface MassTerrain {
   fields: Readonly<Record<string, number>>; source: MassProvenance;
 }
 export interface MassPlace {
+  regionalSocket?: import('./regionalDiscoveries').RegionalDiscoverySocket;
   id: string; recipe: string; content: string; center: MassAddress; radius: number; source: MassProvenance;
 }
 export interface MassTerrainPatch { address: MassAddress; region: string; color: string; cause: string }
