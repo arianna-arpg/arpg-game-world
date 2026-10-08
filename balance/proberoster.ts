@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_nativestructureaccess.ts', status: 'green', tier: 'fast', why: 'Whole resolved native plans within actual bounds/backing, exact fixture and anchor identity, bounded draw-free relocation, complete generation tapes and real movement' },
   { probe: 'probe_nativescenetheater.ts', status: 'green', tier: 'fast', why: 'Complete native ambient-activity births, all installed kinds, real pilgrims, retained live run hosts, exact defaults and partial effects' },
   { probe: 'probe_nativesceneharbor.ts', status: 'green', tier: 'fast', why: 'Complete native harbor/quay services, carried shelves, gate and dressing state, whole-party landings and original partial births' },
   { probe: 'probe_nativescenedescent.ts', status: 'green', tier: 'fast', why: 'Complete native cave Delvers, once-minted stock and boundless entry, same settlement campaign and original allocation/publication effects' },

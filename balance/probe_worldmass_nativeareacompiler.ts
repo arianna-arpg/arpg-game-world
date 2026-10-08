@@ -83,6 +83,9 @@ const archiveJson=gunzipSync(Buffer.from('H4sIAAAAAAAACr2a667jOHKAX6XB/qsxxItu/j
 assert.equal(createHash('sha256').update(archiveJson).digest('hex'),'7a63567eaf7c75ed9fb91fd4207f658ce9ba5b070bccda646d2f1462fa58d0a0');
 const fullLoads=JSON.parse(archiveJson) as {seed:number;target:MapCoord;zone:ZoneDef;arena:Bounds;entry:Vec2;exits:Vec2[];outputHash:string;sidechannelsHash:string;structures:string[];doodads:number}[];
 const jsonHash=(v:unknown)=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
+// Preserve the original archive. Whole-plan approach validation moves this
+// watchtower 30px; the complete optional hollow and original prop count remain.
+const structureAccessCorrection={id:'gen_810204',originalHash:'86b8ae21c9f4540439399f43f262b986fff7c79cf9bd5a141e7f1e4e9e8a8493',outputHash:'b8afd9251dd1fd329ae3857712589d47f0654a4a9f450e4b14f414a50ed13e0c',doodads:246};
 for(const f of fullLoads){
   const world=withSeededRandom(f.seed,()=>makeSimWorld('warrior',f.seed));world.sim.bindGeographyPolicies();
   const source=captureNativeGeographySource(f.seed),zone=clone(f.zone);
@@ -99,8 +102,10 @@ for(const f of fullLoads){
   const boundary={schema:1 as const,policy:'explicit-native-boundary-context-v1' as const,sourceIdentity:'archived-40af53d2-load/'+zone.id,exitBoundaries:clone(zone.exitBoundaries),exitRoads:clone(zone.exitRoads),exitMelds:clone(zone.exitMelds)};
   const input:NativeAreaCompileInput={id:context.resolvedOwnerId,geography:clone(geography.spec),context:clone(context),mintedZone:zone,entry:clone(f.entry),exits,boundary,seams:[{exitIndex:0,port:{owner:context.resolvedOwnerId,neighbor:'outside-owner-pending',side:exits[0].definition.side,point:clone(exits[0].physicalPoint),approach:clone(exits[0].generationPoint)}}]};
   const compiled=withSeededRandom(zone.seed!,()=>compileNativeArea(input,lease));
-  assert.equal(jsonHash({layout:compiled.geometry.layout,grid:compiled.geometry.walk.kind==='grid'?compiled.geometry.walk.packed:null}),f.outputHash,'complete original native load output '+zone.id);
-  assert.equal(jsonHash(compiled.sidechannels),f.sidechannelsHash);assert.deepEqual(compiled.geometry.layout.structures?.map(v=>v.id),f.structures);assert.equal(compiled.geometry.layout.doodads.length,f.doodads);
+  const correction=zone.id===structureAccessCorrection.id?structureAccessCorrection:undefined;
+  if(correction){assert.equal(f.outputHash,correction.originalHash,'retained pre-correction archive');assert.equal(f.doodads,246);const tower=compiled.geometry.layout.structures?.find(st=>st.id==='watchtower#3');assert(tower);assert.deepEqual(tower.rect,{x:1260,y:900,w:150,h:150});assert.equal(compiled.geometry.layout.hollows?.length,1,'native optional hollow retained after exact grid clearance');}
+  assert.equal(jsonHash({layout:compiled.geometry.layout,grid:compiled.geometry.walk.kind==='grid'?compiled.geometry.walk.packed:null}),correction?.outputHash??f.outputHash,'complete native load output with explicit structure correction '+zone.id);
+  assert.equal(jsonHash(compiled.sidechannels),f.sidechannelsHash);assert.deepEqual(compiled.geometry.layout.structures?.map(v=>v.id),f.structures);assert.equal(compiled.geometry.layout.doodads.length,correction?.doodads??f.doodads);
   const original=clone(zone),rng=new Rng(zone.seed!);
   const direct=withSeededRandom(zone.seed!,()=>captureNativeGeneration(original,()=>generateLayout(original,clone(f.arena),rng,clone(f.entry),clone(f.exits),[])));
   equal(compiled.geometry,captureNativeAreaGeometry({sourceIdentity:compiled.geometry.sourceIdentity,bounds:f.arena,layout:direct.value}));
@@ -109,7 +114,7 @@ for(const f of fullLoads){
   assert.ok(direct.value.walk instanceof GridWalkField);assert.notDeepEqual(compiled.exits[0].generationPoint,compiled.exits[0].physicalPoint);equal(compiled.exits[0].physicalPoint,compiled.seams[0].port.point);
   const bytes=serializeNativeArea(compiled);equal(restoreNativeArea(bytes,{certificate,geography:input.geography}),compiled);
   descriptors.push(compiled);inputs.push(input);
-  console.log('PASS archived full native load',JSON.stringify({id:zone.id,face:zone.tileset,doodads:f.doodads,structures:f.structures,orderedExits:exits.length,distinctGenerationAndPhysicalPorts:true}));
+  console.log('PASS archived full native load',JSON.stringify({id:zone.id,face:zone.tileset,doodads:compiled.geometry.layout.doodads.length,originalDoodads:f.doodads,structureAccessCorrected:!!correction,structures:f.structures,orderedExits:exits.length,distinctGenerationAndPhysicalPorts:true}));
 }
 
 const base=inputs[0],saved=descriptors[0];

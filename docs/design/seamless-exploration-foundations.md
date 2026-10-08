@@ -2362,3 +2362,72 @@ and four retained spacing warnings; all 25 simulation episodes and the built
 native entry/Continue/return and conversation courses pass. The World audit
 retains 2,354 unrelated members and all 386 prior runtime module positions,
 with nine exact delegates and two hidden adapter members.
+
+## Whole resolved structure placement
+
+Native plan placement now checks the entire resolved footprint and radius-15
+door approaches against native rectangular/elliptical bounds and actual finite
+walk-grid backing. A boundless arena has no invented outer rim, but its stamped
+plan must still fit the backing it actually owns. Invalid placement moves the
+same resolved plan on a distance/y/x ordered lattice, without selecting another
+blueprint or drawing more random values. Search stops after 65,536 examined
+seats and refuses explicitly if no whole placement is admitted. Reservations,
+retained collision shapes, door topology, hazards and native severance checks
+remain part of admission. The search bound is not a frame-time guarantee.
+
+Opening prior doors for this topology check uses a detached grid. Live doors,
+geometry and random state stay untouched until placement. Original valid
+explicit fixtures retain their carve-first behavior; pre-stamp walkability is
+not substituted for the building's authored carving. fixturePlacements records
+the actual structure id, rectangle, requested position, center and occurrence
+index. Duplicate references remain distinct authored occurrences. The field is
+absent when there are no receipts. A relocated main held-settlement structure
+updates crusadeWorksAt to its real center; every unrelated preparation read,
+write and random operation retains the archived original behavior.
+
+The durable regression retains 20 complete native preparation courses and five
+full natural generation boundaries, 25 complete random-draw tape hashes, three
+transported main anchors and ten absent-receipt controls. Twelve complete scenes
+prove 2,134 bidirectional swept legs and 13,610 real World.moveActor calls at
+fixed 1/60 with the ordinary radius-15 hero and all scenery retained. Only real
+native doors are opened. Bounds, ellipse, cropped/wider backing, duplicate
+occurrences, ordered search and work exhaustion have explicit controls. Exact
+axial swept-grid clearance preserves cell-width entrances in all four door
+directions; a real blocking cell still refuses the selected seat. Extra
+random consumption, empty receipt publication and stale anchors each fail
+independent negative checks. This is movement evidence, not full AI/update or
+browser performance certification.
+
+The fixed, unfiltered natural corpus covers 128 ordinary targets plus 15
+available campaign-held cases across four seeds, 33 faces, 22 biomes and 15
+layouts. No generation throws; all structure counts/kinds remain. Eight complete
+layouts change under the new placement. Optional later features still obey their
+original spatial predicates: one moved bastion causes an optional blood_mere
+to exhaust its original 18 attempts. An archived downs watchtower also moves
+30 pixels, retaining all 246 props and its optional hollow. The original archive
+is retained beside an explicit corrected
+whole-output hash. All direct compiler/sidechannel/continuation comparisons
+remain. Independent real movement succeeds for that watchtower both before
+and after relocation; its movement is a conservative approach-rule consequence,
+not evidence that the original tower was inaccessible.
+
+Known original explicit-site failures remain visible: some held buildings carve
+onto disconnected ground; later longhouses or market rows can overlap earlier
+approaches or remove a previously emitted doorway. They require resolved
+post-carve connectivity and protection of complete prior structures/approaches.
+The exploratory correction for those cases is not part of this checkpoint.
+
+A first broad run exposed an overconservative sampled grid clearance that
+exhausted placement in a native bounty destination. The corrected exact sweep
+preserves tangent passage without enlarging the player radius. The actual bounty
+course again loads, spawns its marks, resolves the deed and pays at the board.
+The same correction retains the archived optional hollow; the three unchanged
+sight/local-area/ambient fixture counts require no weakened assertions.
+Ordinary mire remains localized, with neutral routes around its patches.
+
+The final fixturePlacements checkpoint passes all 490 fast regression probes
+without retries, all three type-check configurations, 25 simulation episodes,
+and both built-client entry/Continue/return and conversation courses. The wider
+generation sweep passes 8,690 cases. Its 28 spacing warnings reproduce on the
+same 23 original-generator cases; the concurrent metropolis timing warning
+is checked separately in an isolated 130-case metropolis replay.

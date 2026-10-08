@@ -105,5 +105,7 @@ export function generateNativeAreaLayout(host:NativeLayoutGenerationHost,def:Zon
     const crusadeWorks = host.crusadeFixtureSpecs(def, entry);
     host.crusadeWorksAt = crusadeWorks ? vec(crusadeWorks.center.x, crusadeWorks.center.y) : null;
     const layout = generateLayout(def, host.arena, rng, entry, host.exits.map(e => e.pos), crusadeWorks?.fixtures);
+    const main=layout.fixturePlacements?.find(f=>f.fixtureIndex===(def.fixtures?.length??0));
+    if(crusadeWorks&&main?.reseated)host.crusadeWorksAt=vec(main.center.x,main.center.y);
     return {memory,layoutSeed,rng,layout};
 }

@@ -1,3 +1,14 @@
+Native resolved structure plans now retain their selected blueprint while
+whole footprints and radius-15 door approaches respect native bounds and actual
+finite grid backing. Exact swept-grid clearance preserves body-width tangent
+entrances in all four door directions. Draw-free bounded reseating records fixturePlacements by
+authored occurrence; moved main crusade works transport their gameplay anchor.
+Preserve explicit carve-first semantics, original selection draws, complete
+structures and original optional-placement consequences. This is not universal
+post-stamp access: disconnected explicit sites and later door/footprint overlap
+remain separate work. Verify nativestructureaccess, nativelayoutgeneration,
+nativeareacompiler, all types, generation, simulation and client Continue.
+
 NativeAreaSceneTheater shares complete native ambient-activity birth and helpers
 with classic World, using the same geometry/population/environment/ecology and
 live campaign clock. NativeTheaterHost keeps the complete installed controller

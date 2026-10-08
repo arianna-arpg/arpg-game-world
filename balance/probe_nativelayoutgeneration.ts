@@ -21,7 +21,7 @@ import {STRUCTURES} from '../src/data/structures';
 import {captureNativeGeographySource} from '../src/world/captureGeography';import {createNativeGeographyReader} from '../src/world/geographySource';
 import {MassNativeGeography,makeMassNativeGeographySpec} from '../src/worldmass/nativeGeography';import {address} from '../src/worldmass/address';
 import {placeZoneAt} from '../src/engine/worldgen';
-import {serializeNativeAreaData} from '../src/worldmass/nativeAreaGeometry';
+import {serializeNativeAreaData,restoreNativeAreaData} from '../src/worldmass/nativeAreaGeometry';
 import {NativeAreaSceneGeneration} from '../src/worldmass/nativeAreaSceneGeneration';
 function naturalWorld(index:number){
   const account=makeAccount(),manifest=buildManifest(account,991),w:any=new World(account,Object.freeze(manifest));
@@ -43,7 +43,7 @@ const methods=Object.fromEntries(archive.methods.map((m:any)=>[m.name,compile('r
 const original=compile('return function(def,entry,zoneId){'+archive.body+'return {memory,layoutSeed,rng,layout};}');
 installHeadlessShims();registerAllPackageFactions();validateContent();
 function graph(root:unknown):unknown {const seen=new Map<object,number>();function visit(v:any):any{if(typeof v==='function')return {fn:String(v)};if(!v||typeof v!=='object')return v;if(seen.has(v))return {ref:seen.get(v)};const id=seen.size;seen.set(v,id);if(ArrayBuffer.isView(v))return {id,type:v.constructor.name,values:Array.from(v as any)};if(v instanceof Map)return {id,type:'Map',entries:[...v].map(([k,x])=>[visit(k),visit(x)])};if(v instanceof Set)return{id,type:'Set',values:[...v].map(visit)};return{id,type:v.constructor?.name??'null',fields:Object.keys(v).map(k=>[k,visit(v[k])])};}return visit(root);}
-const receipts:any[]=[];let totalDoodads=0,totalStructures=0,totalDraws=0;
+const receipts:any[]=[];let totalDoodads=0,totalStructures=0,totalDraws=0,anchorTransports=0;
 for(let index=0;index<2;index++)withSeededRandom(991,()=>{
  const {w,z}=naturalWorld(index);w.loadZone(z.id);
  const actual={sim:w.sim,arena:w.arena,exits:w.exits,player:w.player,actors:w.actors};
@@ -74,10 +74,18 @@ for(let index=0;index<2;index++)withSeededRandom(991,()=>{
      assert.equal(out.memory,mode==='remembered'?memory:null,'native memory identity');
      assert.equal(values.currentZoneSeed,out.layoutSeed);assert.equal(values.charBorn,mode==='remembered'?21:101);
      assert.equal(values.charRegrowAcc,0);assert.equal(values.farPointDraws,0);
-     return {layout:graph(out.layout),seed:out.layoutSeed,cursor:out.rng.snapshot(),values:serializeNativeAreaData({currentZoneSeed:values.currentZoneSeed,charBorn:values.charBorn,charRegrowAcc:values.charRegrowAcc,farPointDraws:values.farPointDraws,crusadeWorksAt:values.crusadeWorksAt}),tape,draws,ambient:stream.snapshot(),doodads:out.layout.doodads.length,structures:out.layout.structures?.length??0};
+     // The original preparation keeps its requested anchor. Only the reviewed
+     // terminal transport differs; every other result and tape entry stays exact.
+     const receipt=held?out.layout.fixturePlacements?.find((f:any)=>f.fixtureIndex===(def.fixtures?.length??0)):undefined;
+     let anchorCorrection:{requested:{x:number;y:number};center:{x:number;y:number}}|null=null;
+     if(receipt?.reseated){const placed=out.layout.structures?.find((st:any)=>st.id===receipt.structureId);assert(placed);assert.deepEqual(receipt.rect,placed.rect);assert.deepEqual(receipt.center,{x:placed.rect.x+placed.rect.w/2,y:placed.rect.y+placed.rect.h/2});anchorCorrection={requested:{...receipt.requested},center:{...receipt.center}};}
+     return {anchorCorrection,layout:graph(out.layout),seed:out.layoutSeed,cursor:out.rng.snapshot(),values:serializeNativeAreaData({currentZoneSeed:values.currentZoneSeed,charBorn:values.charBorn,charRegrowAcc:values.charRegrowAcc,farPointDraws:values.farPointDraws,crusadeWorksAt:values.crusadeWorksAt}),tape,draws,ambient:stream.snapshot(),doodads:out.layout.doodads.length,structures:out.layout.structures?.length??0};
     }finally{Math.random=prior;for(const undo of restore.reverse())undo();}
    };
-   const before=run('archive'),after=run('local'),world=run('world');assert.deepEqual(after,before,index+'/'+held+'/'+mode+' local');assert.deepEqual(world,before,index+'/'+held+'/'+mode+' World');
+   const before=run('archive'),after=run('local'),world=run('world');
+   const expected={...before,tape:[...before.tape]};
+   if(before.anchorCorrection){const values=restoreNativeAreaData<any>(before.values);assert.deepEqual(values.crusadeWorksAt,before.anchorCorrection.requested,'original requested works anchor');expected.values=serializeNativeAreaData({...values,crusadeWorksAt:before.anchorCorrection.center});expected.tape.push(['set','crusadeWorksAt']);anchorTransports++;}
+   assert.deepEqual(after,expected,index+'/'+held+'/'+mode+' local');assert.deepEqual(world,expected,index+'/'+held+'/'+mode+' World');
    assert(before.doodads>0);if(held)assert(before.structures>0,'native works passed into physical layout');
    totalDoodads+=before.doodads;totalStructures+=before.structures;totalDraws+=before.draws;
    receipts.push({index,held,mode,doodads:before.doodads,structures:before.structures,draws:before.draws});
@@ -85,6 +93,7 @@ for(let index=0;index<2;index++)withSeededRandom(991,()=>{
  }
 });
 
+assert.equal(anchorTransports,3,'exact reviewed relocated main fixtures');
 console.log('PASS',receipts.length,'complete native layout triples',totalDoodads,'doodads',totalStructures,'structures',totalDraws,'ambient draws');
 
 // Independently authored archived source/read/held-city controls.
@@ -94,7 +103,11 @@ const print=(s:string)=>ts.createPrinter({removeComments:true}).printFile(ts.cre
 for(const [name,original]of [['nativeZoneMemoryFresh','zoneMemoryFresh'],['nativeCrusadeFixtureSpecs','crusadeFixtureSpecs']]){
  const fn=functions[name];assert.equal(print(fn.body!.getText(sf).slice(1,-1).replace(/\bhost\./g,'this.')),print(archive.methods.find((m:any)=>m.name===original)!.body.slice(1,-1)));
 }
-const coreBody=functions.generateNativeAreaLayout.body!.getText(sf).slice(1,-1).replace(/\bhost\./g,'this.').replace(/\s*return \{memory,layoutSeed,rng,layout\};\s*$/,'');assert.equal(print(coreBody),print(archive.body));
+const statements=functions.generateNativeAreaLayout.body!.statements;
+const transport=statements.slice(-3,-1).map(n=>n.getText(sf)).join('\n');
+assert.equal(print(transport),print('const main=layout.fixturePlacements?.find(f=>f.fixtureIndex===(def.fixtures?.length??0));\nif(crusadeWorks&&main?.reseated)host.crusadeWorksAt=vec(main.center.x,main.center.y);'),'only reviewed complete receipt transport added');
+const coreBody=statements.slice(0,-3).map(n=>n.getText(sf)).join('\n').replace(/\bhost\./g,'this.');assert.equal(print(coreBody),print(archive.body));
+assert.equal(print(statements.at(-1)!.getText(sf)),print('return {memory,layoutSeed,rng,layout};'));
 const compile=(args:string[],code:string,bindings:string[],values:unknown[])=>Function(...bindings,'"use strict";'+ts.transpileModule('return function('+args.join(',')+'){'+code+'}',{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText)(...values);
 const method=(name:string)=>compile(['def','entry'],archive.methods.find((m:any)=>m.name===name)!.body.slice(1,-1),['ZONE_MEMORY_CFG','STRUCTURES','Rng','vec','clamp','dist'],[ZONE_MEMORY_CFG,STRUCTURES,Rng,vec,clamp,dist]);
 const fixtureOriginal=method('crusadeFixtureSpecs');let fixtures=0,cityRows=0;
