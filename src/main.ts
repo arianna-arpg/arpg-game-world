@@ -45,6 +45,7 @@ import { RENDER_SCALE_CFG, nextNotch } from './render/renderScale';
 import { UI } from './ui/panels';
 import { errorOverlayShown, showErrorOverlay, type CrashEntry } from './ui/errorOverlay';
 import { LocalTransport } from './net/local';
+import { makeAccount } from './meta/account'; // the wilds shell's fresh account (startAsClient)
 import { ScriptedInput, LocalCoopInput } from './net/scripted';
 import type { PlayerInput, MetaAction } from './net/intent';
 import { wireSeed } from './net/transport';
@@ -2603,18 +2604,22 @@ function startAsClient(classDef: ClassDef, selfSeat: string, hostSeed: number, w
   // A WILDS shell builds its World with the SHARD's town features: the mass
   // runtime lays the hearth from townTier(account), and the seed alone cannot
   // pin that — the welcome's feature list can (wildsClient.ts).
-  const shellAccount = wilds ? { ...account, features: new Set(wilds.features) } : account;
+  // A WILDS shell's account is a FRESH one wearing the shard's features alone
+  // — the client's own ledger must not lay its rescues (an Oracle, a
+  // Reliquary) into a hearth the shard never grew.
+  const shellAccount = wilds ? { ...makeAccount(), features: new Set(wilds.features) } : account;
   world = adoptWorld(new World(shellAccount, Object.freeze(buildManifest(account, wireSeed(hostSeed, rollSeed())))));
-  world.createPlayer(classDef, { startingCompanions: false, startingFlasks: false });   // a local shell (getters/camera/HUD) — not the authority
+  // META mutations on a client are INTENTS: ship them to the host (which owns every
+  // mutation) instead of applying to the throwaway render shell. requestMeta routes
+  // through this; the host applies it to our seat and replicates the result back.
+  // Installed BEFORE the player stands: every save path in the engine gates on it.
+  world.clientActionHook = (action) => net.sendSession({ t: 'action', action });
   world.clientSeatId = selfSeat;
+  world.createPlayer(classDef, { startingCompanions: false, startingFlasks: false });   // a local shell (getters/camera/HUD) — not the authority
   if (wilds) {
     clientWilds = { seed: world.manifest.seed };
     wildsShellAttach(world, clientWilds.seed); // inert: the land from the seed, the life from the wire
   }
-  // META mutations on a client are INTENTS: ship them to the host (which owns every
-  // mutation) instead of applying to the throwaway render shell. requestMeta routes
-  // through this; the host applies it to our seat and replicates the result back.
-  world.clientActionHook = (action) => net.sendSession({ t: 'action', action });
   // Reset movement-prediction state so our input seq realigns with the host's fresh
   // per-seat ack (a new run = a fresh World on the host = an empty lastInputSeq).
   inputSeq = 0; predictHistory.length = 0; predZoneId = '';

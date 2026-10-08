@@ -40,7 +40,33 @@ export const SHARD_WIRE_CFG = {
   reapSec: 45,
   /** Bar-slot ceiling an input may address (held/edge/metaEdge arrays). */
   maxSlots: 16,
+  /** THE DOOR CAPS: sockets the listener accepts at all, seats the shard
+   *  seats, sockets one address may hold, and how long an unjoined socket
+   *  may sit before the reaper closes it. */
+  maxConnections: 64,
+  maxSeats: 16,
+  maxPerIp: 8,
+  joinDeadlineSec: 10,
+  /** A socket whose unread queue passes this (one-shot rows pile up on a
+   *  client that stopped reading) is dropped; one congested past the
+   *  snapshot cap for `congestedReapSec` is dropped too. */
+  oneShotCeiling: 4 * 1024 * 1024,
+  congestedReapSec: 30,
+  /** Name and class-id ceilings on the join row (replayed in every welcome). */
+  maxNameChars: 24,
+  maxClassIdChars: 48,
 };
+
+/** A player name as the wire may carry it: printable, trimmed, capped. */
+export function cleanName(raw: unknown, fallback = 'Joiner'): string {
+  if (typeof raw !== 'string') return fallback;
+  const s = raw.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, SHARD_WIRE_CFG.maxNameChars);
+  return s || fallback;
+}
+/** A class id as the wire may carry it: the catalog's own grammar, capped. */
+export function cleanId(raw: unknown): string {
+  return typeof raw === 'string' ? raw.replace(/[^a-z0-9_-]/gi, '').slice(0, SHARD_WIRE_CFG.maxClassIdChars) : '';
+}
 
 interface Conn {
   sock: Duplex;
@@ -48,6 +74,9 @@ interface Conn {
   asm: WsMessageAssembler;
   lastSeen: number;
   closed: boolean;
+  ip: string;
+  openedAt: number;
+  congestedSince: number;
 }
 
 /** Client → PlayerInput, shape-checked: a hostile or buggy peer can never
@@ -140,9 +169,13 @@ export class ShardTransport implements NetTransport {
         res.end(`hollow wake shard — connect with a WebSocket client (${req.url ?? '/'})`);
       });
       server.on('upgrade', (req, sock, head) => this.accept(req, sock, head));
-      server.on('error', reject);
+      server.once('error', reject);
+      server.maxConnections = SHARD_WIRE_CFG.maxConnections;
       server.listen(port, host, () => {
         server.off('error', reject);
+        // A permanent ear: an accept error (EMFILE under a flood) is logged,
+        // never an uncaught exception that ends the process.
+        server.on('error', e => { this.faults++; console.warn('[shard] listener error:', e instanceof Error ? e.message : String(e)); });
         this.server = server;
         const addr = server.address() as AddressInfo | null;
         this.keepalive = setInterval(() => this.sweep(), SHARD_WIRE_CFG.pingSec * 1000);
@@ -169,6 +202,20 @@ export class ShardTransport implements NetTransport {
       sock.destroy();
       return;
     }
+    // THE DOOR CAPS: the listener's count, then one address's share.
+    const ip = String((sock as Duplex & { remoteAddress?: string }).remoteAddress ?? '');
+    if (this.conns.size >= SHARD_WIRE_CFG.maxConnections) {
+      sock.write('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n');
+      sock.destroy();
+      return;
+    }
+    let fromIp = 0;
+    for (const c of this.conns) if (c.ip === ip) fromIp++;
+    if (fromIp >= SHARD_WIRE_CFG.maxPerIp) {
+      sock.write('HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\n\r\n');
+      sock.destroy();
+      return;
+    }
     const accept = createHash('sha1').update(key + WS_GUID).digest('base64');
     sock.write([
       'HTTP/1.1 101 Switching Protocols',
@@ -177,7 +224,7 @@ export class ShardTransport implements NetTransport {
       `Sec-WebSocket-Accept: ${accept}`,
       '', '',
     ].join('\r\n'));
-    const conn: Conn = { sock, seat: null, asm: new WsMessageAssembler(SHARD_WIRE_CFG.maxClientMessage, true), lastSeen: this.now(), closed: false };
+    const conn: Conn = { sock, seat: null, asm: new WsMessageAssembler(SHARD_WIRE_CFG.maxClientMessage, true), lastSeen: this.now(), closed: false, ip, openedAt: this.now(), congestedSince: 0 };
     this.conns.add(conn);
     (sock as Duplex & { setNoDelay?: (on: boolean) => void }).setNoDelay?.(true);
     sock.on('data', (chunk: Buffer) => this.onData(conn, chunk));
@@ -210,13 +257,14 @@ export class ShardTransport implements NetTransport {
   private dispatch(conn: Conn, m: WireMsg): void {
     if (!m || typeof m !== 'object') return;
     if (m.t === 'join' && !conn.seat) {
+      if (this.bySeat.size >= SHARD_WIRE_CFG.maxSeats) { this.drop(conn, 1013, 'shard full'); return; }
       const seatId: PlayerId = 'p' + (this.nextSeat++);
       conn.seat = seatId;
       this.bySeat.set(seatId, conn);
       const peer: PeerInfo = {
         id: seatId, isHost: false,
-        name: typeof m.name === 'string' ? m.name.slice(0, 32) : 'Joiner',
-        classId: typeof m.classId === 'string' ? m.classId : '',
+        name: cleanName(m.name),
+        classId: cleanId(m.classId),
         cosmeticLoadout: sanitizeCosmeticLoadout(m.cosmeticLoadout),
       };
       this.peerList.push(peer);
@@ -264,6 +312,15 @@ export class ShardTransport implements NetTransport {
     const now = this.now();
     for (const c of [...this.conns]) {
       if (now - c.lastSeen > SHARD_WIRE_CFG.reapSec) { this.drop(c, 1001, 'keepalive timeout'); continue; }
+      if (!c.seat && now - c.openedAt > SHARD_WIRE_CFG.joinDeadlineSec) { this.drop(c, 1008, 'no join'); continue; }
+      const queued = c.sock.writableLength;
+      if (queued > SHARD_WIRE_CFG.oneShotCeiling) { this.drop(c, 1008, 'not reading'); continue; }
+      if (queued >= SHARD_WIRE_CFG.sendBufferCap) {
+        if (!c.congestedSince) c.congestedSince = now;
+        else if (now - c.congestedSince > SHARD_WIRE_CFG.congestedReapSec) { this.drop(c, 1001, 'congested'); continue; }
+      } else {
+        c.congestedSince = 0;
+      }
       this.write(c, encodePing());
     }
   }

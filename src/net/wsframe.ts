@@ -16,6 +16,15 @@
 /** The RFC's handshake GUID: accept = base64(sha1(key + WS_GUID)). */
 export const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
+/** THE INBOX LAWS: a message may span at most `maxFragments` frames, and
+ *  every fragment is charged at least `fragmentMinCost` bytes against the
+ *  message cap — an endless stream of empty continuations used to grow the
+ *  fragment list without bound (2 GB of heap off 64 MB of wire). */
+export const WS_FRAME_CFG = {
+  maxFragments: 64,
+  fragmentMinCost: 1024,
+};
+
 export const WS_OP = {
   continuation: 0x0, text: 0x1, binary: 0x2, close: 0x8, ping: 0x9, pong: 0xa,
 } as const;
@@ -138,25 +147,40 @@ export function decodeFrames(buf: Uint8Array, maxPayload: number, expectMasked =
  *  stitches fragmented messages, and hands up whole WsMessages. On a protocol
  *  error it reports once and refuses further input (the caller closes). */
 export class WsMessageAssembler {
-  private rest = new Uint8Array(0);
+  /** THE GROWABLE INBOX: bytes not yet parsed live here, appended in
+   *  amortized-linear time and compacted only when frames are consumed —
+   *  a frame trickled in 64-byte chunks used to cost a copy of the whole
+   *  inbox per chunk (half a second of the tick thread per 256 KB frame). */
+  private buf = new Uint8Array(0);
+  private len = 0;
   private fragOp = -1;
   private frag: Uint8Array[] = [];
-  private fragLen = 0;
+  private fragBytes = 0;
+  private fragCost = 0;
   error: { code: number; reason: string } | null = null;
 
   constructor(private readonly maxMessage = 8 * 1024 * 1024, private readonly expectMasked = true) {}
 
+  /** Bytes buffered and unparsed (a connection's own memory ledger). */
+  get buffered(): number { return this.len; }
+
   push(chunk: Uint8Array): WsMessage[] {
     if (this.error) return [];
-    let buf: Uint8Array;
-    if (this.rest.length) {
-      buf = new Uint8Array(this.rest.length + chunk.length);
-      buf.set(this.rest); buf.set(chunk, this.rest.length);
-    } else {
-      buf = chunk;
+    if (this.len + chunk.length > this.buf.length) {
+      let cap = Math.max(1024, this.buf.length * 2);
+      while (cap < this.len + chunk.length) cap *= 2;
+      const grown = new Uint8Array(cap);
+      grown.set(this.buf.subarray(0, this.len));
+      this.buf = grown;
     }
-    const { frames, rest, error } = decodeFrames(buf, this.maxMessage, this.expectMasked);
-    this.rest = rest.length ? new Uint8Array(rest) : new Uint8Array(0);
+    this.buf.set(chunk, this.len);
+    this.len += chunk.length;
+    const { frames, rest, error } = decodeFrames(this.buf.subarray(0, this.len), this.maxMessage, this.expectMasked);
+    if (rest.length !== this.len) {
+      if (rest.length) this.buf.copyWithin(0, this.len - rest.length, this.len);
+      this.len = rest.length;
+      if (this.len === 0 && this.buf.length > 256 * 1024) this.buf = new Uint8Array(0); // a drained giant inbox lets its memory go
+    }
     const out: WsMessage[] = [];
     for (const f of frames) {
       if (f.opcode === WS_OP.ping) { out.push({ kind: 'ping', data: f.payload }); continue; }
@@ -174,12 +198,14 @@ export class WsMessageAssembler {
         this.fragOp = f.opcode;
       }
       this.frag.push(f.payload);
-      this.fragLen += f.payload.length;
-      if (this.fragLen > this.maxMessage) { this.fail(1009, 'message too large'); break; }
+      this.fragBytes += f.payload.length;
+      this.fragCost += Math.max(f.payload.length, WS_FRAME_CFG.fragmentMinCost);
+      if (this.fragCost > this.maxMessage) { this.fail(1009, 'message too large'); break; }
+      if (this.frag.length > WS_FRAME_CFG.maxFragments) { this.fail(1008, 'too many fragments'); break; }
       if (!f.fin) continue;
-      const whole = this.frag.length === 1 ? this.frag[0] : concat(this.frag, this.fragLen);
+      const whole = this.frag.length === 1 ? this.frag[0] : concat(this.frag, this.fragBytes);
       const op = this.fragOp;
-      this.fragOp = -1; this.frag = []; this.fragLen = 0;
+      this.fragOp = -1; this.frag = []; this.fragBytes = 0; this.fragCost = 0;
       out.push(op === WS_OP.text ? { kind: 'text', text: decoder.decode(whole) } : { kind: 'binary', data: whole });
     }
     if (error && !this.error) this.error = error;

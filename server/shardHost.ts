@@ -21,7 +21,7 @@
 // ---------------------------------------------------------------------------
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { installHeadlessShims } from '../src/sim/shims';
 // The sim arena's import list IS the boot registration set main.ts performs
 // (stamps, landmarks, layouts, kits …) — importing the module runs it; its
@@ -66,6 +66,15 @@ export const SHARD_CFG = {
   maxCatchUpTicks: 5,
   /** Engine faults print one stack per this many seconds; the rest are counted. */
   faultLogSec: 5,
+  /** Meta intents a seat may land per tick; the rest of a burst is dropped. */
+  actionsPerSeatPerTick: 16,
+  /** THE BREAKER: this many consecutive faulting ticks mark the shard broken —
+   *  the wire and the beats keep running, the pump reports it (onBroken), a
+   *  supervisor restarts it, and the last good save stands untouched. */
+  faultBreakerTicks: 600,
+  /** THE FOCUS: the keeper shadows the standing seat that acted most recently;
+   *  the current focus keeps it unless another seat has been newer by this many seconds. */
+  focusSwapSec: 3,
   /** Tick-time ring for the status page's p50/p95 (ticks). */
   telemetryTicks: 600,
   /** THE KEEPER SEAT. reviveSec = THE MERCY: seconds a downed seat waits with
@@ -169,6 +178,13 @@ export class ShardHost {
   faults = 0;
   /** Ticks the pump DROPPED to bound a stall (the world ran slow for everyone). */
   droppedTicks = 0;
+  /** Consecutive ticks whose simulate phase threw (THE BREAKER's count). */
+  consecutiveFaults = 0;
+  /** THE BREAKER tripped: the simulate phase has faulted faultBreakerTicks ticks running. */
+  broken = false;
+  /** Called once when THE BREAKER trips (the CLI exits non-zero for a supervisor). */
+  onBroken: (() => void) | null = null;
+  private focusId: string | null = null;
   private readonly bootAt = Date.now();
   private readonly tickMs: number[] = [];
   private tickMsAt = 0;
@@ -330,13 +346,57 @@ export class ShardHost {
    *  (main.ts drainMetaActions, verbatim). */
   private drainMetaActions(): void {
     if (!this.pendingActions.length) return;
+    const landed = new Map<string, number>();
     for (const { seat: seatId, action } of this.pendingActions) {
       const seat = this.world.seats.find(s => s.id === seatId);
       if (!seat) continue;
+      // THE ACTION BUDGET: a seat lands at most actionsPerSeatPerTick intents a
+      // tick; a flood past it is dropped, never queued (a 20,000-row burst used
+      // to apply whole in one tick).
+      const n = (landed.get(seatId) ?? 0) + 1;
+      landed.set(seatId, n);
+      if (n > SHARD_CFG.actionsPerSeatPerTick) continue;
+      if (!action || typeof action !== 'object' || typeof (action as { t?: unknown }).t !== 'string') continue;
+      // THE SEALED ROADS: intents that move the WHOLE party stay shut on a
+      // keeper world until per-seat travel exists (card 15).
+      if (action.t === 'caravanTo' || action.t === 'townPortal') continue;
       try { this.world.applyAction(seat, action); }
-      catch (e) { this.faults++; this.log(`[shard] dropped malformed meta action from ${seatId}: ${String(e)}`); }
+      catch (e) { this.noteFault(`meta action from ${seatId}`, e); }
     }
     this.pendingActions.length = 0;
+  }
+
+  /** One fault ledger for every lane: counted always, printed at most once
+   *  per faultLogSec (a fault every tick would otherwise fill the disk). */
+  private noteFault(where: string, e: unknown): void {
+    this.faults++;
+    this.faultsSinceLog++;
+    const now = Date.now();
+    if (now - this.lastFaultLogAt >= SHARD_CFG.faultLogSec * 1000) {
+      this.lastFaultLogAt = now;
+      this.log(`[shard] fault in ${where} at tick ${this.ticks} (${this.faultsSinceLog} since the last line): ${e instanceof Error ? e.stack ?? e.message : String(e)}`);
+      this.faultsSinceLog = 0;
+    }
+  }
+
+  /** THE WARDEN STANDS, every tick, both lanes: the engine may strip the
+   *  keeper's flags (a traversal's landing clears invulnerable/untargetable),
+   *  a stray blow may down or kill it, and its level is the world's own
+   *  "character level" in forty-one reads (event gates, vendor shelves, bounty
+   *  work, sidezone mints) — so it wears the flags again, stands up, and
+   *  mirrors the highest standing player's level. It also acted this very
+   *  frame, so THE SEALED ROADS hold (a dwell reads an idle seat). */
+  private wardenStand(): void {
+    const w = this.world;
+    const keeper = this.keeper;
+    const k = keeper.actor;
+    k.invulnerable = true; k.untargetable = true; k.passive = true;
+    if (k.downed || k.dead) { k.downed = false; k.dead = false; }
+    if (k.life <= 0) k.life = k.maxLife();
+    keeper.lastActedAt = w.time;
+    let level = 0;
+    for (const s of w.seats) if (!s.keeper && !s.actor.dead) level = Math.max(level, s.actor.level);
+    if (level > 0 && k.level !== level) { k.level = level; w.recalcSeat(keeper); }
   }
 
   // ---- the host frame -------------------------------------------------------
@@ -344,16 +404,30 @@ export class ShardHost {
   tick(dt: number): void {
     if (this.wildsResuming) return; // THE RESUME LAW: no frame meets a half-stood world (wildsSave)
     const w = this.world;
-    if (this.worldmass) this.shadowFocus();
-    else this.keeper.lastActedAt = w.time; // THE SEALED ROADS hold on classic ground too
-    for (const seat of w.seats) {
-      const intent = seat.input.poll(seat.actor, w, dt); // RemoteInput polls null — its intent arrives via the wire
-      if (intent) this.net.sendInput(seat.id, intent);
+    // THE GUARDED PHASES: a throw in the simulate phase never skips the wire
+    // or the beats (clients used to freeze and saves to stop), and THE
+    // BREAKER counts the run of faulting ticks.
+    try {
+      this.wardenStand();
+      if (this.worldmass) this.shadowFocus();
+      for (const seat of w.seats) {
+        const intent = seat.input.poll(seat.actor, w, dt); // RemoteInput polls null — its intent arrives via the wire
+        if (intent) this.net.sendInput(seat.id, intent);
+      }
+      w.applyInputs(this.net.drainInputs(), dt);
+      this.drainMetaActions();
+      if (!w.gameOver) for (const a of w.actors) updateAI(a, w, dt);
+      w.update(dt);
+      this.consecutiveFaults = 0;
+    } catch (e) {
+      this.noteFault('the simulate phase', e);
+      this.consecutiveFaults++;
+      if (!this.broken && this.consecutiveFaults >= SHARD_CFG.faultBreakerTicks) {
+        this.broken = true;
+        this.log(`[shard] THE BREAKER: ${this.consecutiveFaults} faulting ticks running — the world is held; a supervisor should restart it`);
+        this.onBroken?.();
+      }
     }
-    w.applyInputs(this.net.drainInputs(), dt);
-    this.drainMetaActions();
-    if (!w.gameOver) for (const a of w.actors) updateAI(a, w, dt);
-    w.update(dt);
     this.ticks++;
 
     if (this.net.connectionCount() > 0) {
@@ -392,23 +466,30 @@ export class ShardHost {
    *  SHARD_CFG.keeper.shadowOffset). The first standing non-keeper seat is
    *  the focus; with none connected the keeper stays where it last stood. */
   private shadowFocus(): void {
-    const w = this.world;
-    // THE SEALED ROADS: the warden never dwells — a dwell reads an IDLE seat,
-    // and a seat that acted this very frame is never idle — so no station,
-    // mouth or portal fires off the shadow's standing (card B: roads that
-    // move the whole party stay shut until per-seat travel exists).
-    this.keeper.lastActedAt = w.time;
-    const k = this.keeper.actor;
-    if (k.downed) { k.downed = false; k.life = Math.max(k.life, k.maxLife()); } // the belt: a warden is never kept down
-    const focus = w.seats.find(s => !s.keeper && !s.actor.dead);
+    const focus = this.focusSeat();
     if (!focus) return;
+    const k = this.keeper.actor;
     k.pos.x = focus.actor.pos.x;
     k.pos.y = focus.actor.pos.y + SHARD_CFG.keeper.shadowOffset;
     k.tier = focus.actor.tier;
   }
 
-  /** The focus seat THE SHADOW follows (null = none connected). */
-  focusSeat(): Seat | null { return this.world.seats.find(s => !s.keeper && !s.actor.dead) ?? null; }
+  /** THE FOCUS: the standing seat that acted most recently, with hysteresis —
+   *  the current focus keeps it unless another standing seat has been newer
+   *  by focusSwapSec (an idle or downed first joiner no longer pins the
+   *  world's life to itself; a jump across the map costs a cold tick, so it
+   *  is never flapped). Null = none connected. */
+  focusSeat(): Seat | null {
+    const standing = this.world.seats.filter(s => !s.keeper && !s.actor.dead && !s.actor.downed);
+    if (!standing.length) { this.focusId = null; return null; }
+    const score = (s: Seat): number => Math.max(s.lastActedAt, s.lastMovedAt);
+    let best = standing[0];
+    for (const s of standing) if (score(s) > score(best)) best = s;
+    const current = standing.find(s => s.id === this.focusId);
+    if (current && score(best) - score(current) < SHARD_CFG.focusSwapSec) return current;
+    this.focusId = best.id;
+    return best;
+  }
 
   /** Start the wall-clock pump (fixed steps, bounded catch-up). */
   start(): void {
@@ -469,14 +550,15 @@ export class ShardHost {
       droppedTicks: this.droppedTicks,
       faults: this.faults + this.net.faults,
       actors: w.actors.length,
-      saving: this.savePath ?? 'ephemeral',
+      saving: this.savePath ? basename(this.savePath) : 'ephemeral',
+      broken: this.broken,
     };
   }
 
   /** Stop the pump, write the world, close the wire. */
-  async stop(): Promise<void> {
+  async stop(opts: { persist?: boolean } = {}): Promise<void> {
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
-    if (this.savePath) this.persist();
+    if (this.savePath && opts.persist !== false) this.persist();
     await this.net.close();
   }
 
@@ -484,9 +566,9 @@ export class ShardHost {
   /** Write the world half (WorldStateSave) under the shard's own wrapper — on
    *  the wilds the mass half rides it (`worldmass` + `massSideareas`, wildsSave). */
   persist(): void {
-    if (!this.savePath || this.wildsResuming) return; // THE RESUME LAW: never write a half-stood world over its own save
-    const save: ShardSave = { schemaVersion: SHARD_CFG.saveSchema, seed: this.seed, savedAt: Date.now(), world: this.world.serializeWorldState() };
+    if (!this.savePath || this.wildsResuming || this.broken) return; // THE RESUME LAW; and a broken world never overwrites its last good save
     try {
+      const save: ShardSave = { schemaVersion: SHARD_CFG.saveSchema, seed: this.seed, savedAt: Date.now(), world: this.world.serializeWorldState() };
       mkdirSync(dirname(this.savePath), { recursive: true });
       const tmp = this.savePath + '.tmp';
       writeFileSync(tmp, JSON.stringify(save));
@@ -507,7 +589,11 @@ export class ShardHost {
       || ws.worldmass // a wilds world half is THE WILDS SAVE's (wildsSave), never a classic world's
       || !this.world.adoptWorldState(ws)) {
       this.world.scrubStaleObjectives();
-      this.log(`[shard] no usable save at ${this.savePath} — a fresh world`);
+      // THE REFUSED SAVE IS KEPT: set aside under its own name, never
+      // overwritten by the fresh world's first beat (a build bump used to wipe
+      // every classic shard twenty seconds after it restarted).
+      const aside = setAsideWildsSave(this.savePath!);
+      this.log(`[shard] no usable save at ${this.savePath} — a fresh world${aside ? `; the old file set aside as ${basename(aside)}` : ''}`);
       return;
     }
     this.world.reconcileSoulrivers();

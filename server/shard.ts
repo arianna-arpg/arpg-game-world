@@ -57,18 +57,26 @@ async function main(): Promise<void> {
   console.log(`[shard] ${shard.worldmass ? 'the Unbroken Wilds' : 'world'} 0x${shard.seed.toString(16).padStart(8, '0')} — listening on ws://${host === '0.0.0.0' ? 'localhost' : host}:${bound}`
     + (shard.savePath ? ` — saving to ${shard.savePath}` : ' — ephemeral'));
   shard.start();
-  const bye = async (): Promise<void> => {
-    console.log('[shard] closing — writing the world');
-    await shard.stop();
-    process.exit(0);
+  // THE ONE ENDING: a latch (every signal and throw funnels here once), a
+  // hard timer (a hung close never keeps the process alive), and an exit
+  // code a supervisor can read — 0 for a clean close, 2 for a broken world.
+  let closing = false;
+  const bye = async (code = 0, persist = true): Promise<void> => {
+    if (closing) return;
+    closing = true;
+    console.log(code ? '[shard] closing after a fault — the last good save stands' : '[shard] closing — writing the world');
+    setTimeout(() => process.exit(code || 3), 8000).unref();
+    try { await shard.stop({ persist }); } catch (e) { console.error('[shard] close fault:', e); code ||= 3; }
+    process.exit(code);
   };
+  shard.onBroken = () => { void bye(2, false); };
   // Every ending writes the world: Ctrl-C, a closed console (SIGHUP on
   // Windows), Ctrl-Break, a service stop, and a throw nothing caught.
   for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK'] as const) {
     try { process.on(sig, () => { void bye(); }); } catch { /* a platform without the signal */ }
   }
-  process.on('uncaughtException', (e) => { console.error('[shard] uncaught:', e); void bye(); });
-  process.on('unhandledRejection', (e) => { console.error('[shard] unhandled rejection:', e); void bye(); });
+  process.on('uncaughtException', (e) => { console.error('[shard] uncaught:', e); void bye(2); });
+  process.on('unhandledRejection', (e) => { console.error('[shard] unhandled rejection:', e); void bye(2); });
   console.log(`[shard] status page: http://${host === '0.0.0.0' ? 'localhost' : host}:${bound}/`);
 }
 

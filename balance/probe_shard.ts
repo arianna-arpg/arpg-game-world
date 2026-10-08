@@ -45,7 +45,8 @@ import { makeAccount } from '../src/meta/account';
 import { CLASSES } from '../src/data/classes';
 import { cellKey } from '../src/worldmass/address';
 import { MASS_ZONE } from '../src/worldmass/preset';
-import { WS_OP, WsMessageAssembler, decodeFrames, encodeClose, encodeFrame, encodeText } from '../src/net/wsframe';
+import { WS_FRAME_CFG, WS_OP, WsMessageAssembler, decodeFrames, encodeClose, encodeFrame, encodeText } from '../src/net/wsframe';
+import { SHARD_WIRE_CFG } from '../server/shardTransport';
 import type { StateSnapshot, ZoneMsg } from '../src/net/snapshot';
 import { seedGlobalRandom } from '../src/sim/rng';
 import type { PlayerInput } from '../src/net/intent';
@@ -119,6 +120,20 @@ function maskedFrame(opcode: number, payload: Uint8Array, fin = true): Uint8Arra
   const bad = new WsMessageAssembler(1 << 20, true);
   bad.push(maskedFrame(WS_OP.continuation, enc.encode('x')));
   check('A codec: a continuation with no start fails the assembler', bad.error?.code === 1002);
+  // THE INBOX LAWS: an endless stream of empty continuations fails before maxFragments frames.
+  const flood = new WsMessageAssembler(8 * 1024 * 1024, true);
+  flood.push(maskedFrame(WS_OP.text, new Uint8Array(0), false));
+  let frames = 1;
+  while (!flood.error && frames < 10_000) { flood.push(maskedFrame(WS_OP.continuation, new Uint8Array(0), false)); frames++; }
+  check('A codec: an endless empty-fragment stream fails the assembler before maxFragments frames', !!flood.error && frames <= WS_FRAME_CFG.maxFragments + 1, `failed at ${frames} with ${flood.error?.code}`);
+  // THE GROWABLE INBOX: a 256 KB frame fed in 64-byte chunks assembles in linear time.
+  const bigFrame = maskedFrame(WS_OP.text, new Uint8Array(256 * 1024));
+  const inbox = new WsMessageAssembler(1 << 20, true);
+  const t0 = performance.now();
+  let gotBig = 0;
+  for (let i = 0; i < bigFrame.length; i += 64) for (const m of inbox.push(bigFrame.subarray(i, Math.min(i + 64, bigFrame.length)))) if (m.kind === 'text') gotBig++;
+  const assembleMs = performance.now() - t0;
+  check('A codec: a 256 KB frame fed in 64-byte chunks assembles in linear time', gotBig === 1 && assembleMs < 500 && inbox.buffered === 0, `${assembleMs.toFixed(0)} ms`);
   // The input sanitizer — the wire's first line of defence.
   check('A sanitize: a shaped input survives with clamped axes',
     JSON.stringify(sanitizeInput({ dx: 7, dy: -2, aim: { x: 1, y: 2 }, held: [true, 'no', 1], edge: [], seq: 3.7 })) === JSON.stringify({ dx: 1, dy: -1, aim: { x: 1, y: 2 }, held: [true, false, false], edge: [], seq: 3 }));
@@ -220,6 +235,29 @@ check('C wire: snapshots ride the wire rate (exactly 20 per 60 ticks)', snaps - 
   check('E hostile: malformed inputs and actions never fault the loop', host.faults === faults0 && host.ticks > 0);
   check('E hostile: non-JSON closes the raw socket and despawns p2', await waitFor(() => !host.world.seats.some(s => s.id === 'p2'), host, 60));
   check('E hostile: the honest client still rides the wire', await waitFor(() => { const n = snaps; return n > 0; }, host, 5) && client.peers().length === 2);
+  // THE DOOR CAPS: a join past maxSeats is refused with 1013 and spawns no seat.
+  const prevMax = SHARD_WIRE_CFG.maxSeats;
+  SHARD_WIRE_CFG.maxSeats = 1; // p1 already holds the one seat
+  const overflow = new WsTransport();
+  let refused = false;
+  try { await overflow.connect(url, { name: 'Overflow', classId: 'warrior' }); } catch { refused = true; }
+  await runTicks(host, 10);
+  check('E hostile: the join past maxSeats is refused and spawns no seat', refused && host.world.seats.length === 2);
+  SHARD_WIRE_CFG.maxSeats = prevMax;
+  // THE ACTION BUDGET: a burst of junk and null actions never faults the loop and lands at most the budget.
+  const burstFaults = host.faults;
+  const raw2 = new WebSocket(url);
+  await new Promise<void>((res, rej) => { raw2.onopen = () => res(); raw2.onerror = () => rej(new Error('raw2 open failed')); });
+  raw2.send(JSON.stringify({ t: 'join', classId: 'warrior', name: 'Burst' }));
+  await waitFor(() => host.world.seats.length === 3, host, 50);
+  for (let i = 0; i < 500; i++) raw2.send(JSON.stringify({ t: 'session', msg: { t: 'action', action: i % 2 ? null : { t: 'sortBag', mode: 'kind' } } }));
+  await yieldIO(); await yieldIO();
+  const t1 = performance.now();
+  host.tick(DT);
+  const burstMs = performance.now() - t1;
+  check('E hostile: a 500-action burst lands at most the budget, faults nothing and costs under a frame', host.faults === burstFaults && burstMs < 50, `${burstMs.toFixed(1)} ms`);
+  raw2.close();
+  await waitFor(() => host.world.seats.length === 2, host, 60);
 }
 
 // ========================================================== F: the party ==
@@ -237,13 +275,21 @@ check('C wire: snapshots ride the wire rate (exactly 20 per 60 ticks)', snaps - 
 
 // ================================================================ G: XP ==
 {
-  const kxp = host.keeper.meta.xp, klvl = host.keeper.actor.level;
+  const kxp = host.keeper.meta.xp;
   const pxp = p1.meta.xp, plvl = p1.actor.level;
   host.world.grantXp(50);
   // A level-1 seat may level off the grant (xp rolls over) — either face counts as banked.
   const banked = p1.actor.level > plvl || p1.meta.xp >= pxp + 50;
-  check('G xp: the joiner banks the grant, the keeper banks nothing', banked && host.keeper.meta.xp === kxp && host.keeper.actor.level === klvl,
-    `joiner xp ${pxp}→${p1.meta.xp} lvl ${plvl}→${p1.actor.level}; keeper xp ${kxp}→${host.keeper.meta.xp} lvl ${klvl}→${host.keeper.actor.level}`);
+  // THE WARDEN STANDS: the keeper's level mirrors the highest standing player's (the world's own "character level").
+  const lvl0 = p1.actor.level;
+  p1.actor.level = 30;
+  await runTicks(host, 2);
+  check('G level: the keeper mirrors the highest standing player\'s level', host.keeper.actor.level === 30, `keeper ${host.keeper.actor.level}`);
+  p1.actor.level = lvl0;
+  await runTicks(host, 2);
+  // (the keeper's LEVEL follows the players by THE WARDEN STANDS; its own XP never moves)
+  check('G xp: the joiner banks the grant, the keeper banks nothing', banked && host.keeper.meta.xp === kxp,
+    `joiner xp ${pxp}→${p1.meta.xp} lvl ${plvl}→${p1.actor.level}; keeper xp ${kxp}→${host.keeper.meta.xp}`);
 }
 
 // ============================================================ H: THE MERCY ==
@@ -255,6 +301,15 @@ check('C wire: snapshots ride the wire rate (exactly 20 per 60 ticks)', snaps - 
   check('H mercy: before reviveSec the seat still lies downed', hero.downed);
   await runTicks(host, Math.ceil(SHARD_CFG.keeper.reviveSec * SHARD_CFG.tickHz * 0.5) + 2);
   check('H mercy: after reviveSec the keeper stands the seat up', !hero.downed && !hero.dead && hero.life > 0, `life ${hero.life.toFixed(0)}`);
+}
+
+// =========================================================== H2: THE WARDEN ==
+{
+  const k = host.keeper.actor;
+  k.invulnerable = false; k.untargetable = false; // a traversal's landing strips these
+  host.world.kill(k);
+  await runTicks(host, 2);
+  check('H warden: a stripped, killed keeper stands again next tick and the world never ends', !k.dead && !k.downed && k.invulnerable && k.untargetable && k.passive && !host.world.gameOver && k.life > 0);
 }
 
 // ============================================================= I: the leave ==
@@ -283,6 +338,26 @@ await host.stop();
     check('J persist: the newest save names the seed a flagless restart reuses', newestSavedSeed(dir, false) === 0x0badf00d);
     const flagless = new ShardHost({ saveDir: dir, open: false, log: () => { /* quiet */ } });
     check('J persist: a shard started with no seed brings the newest world back', flagless.seed === 0x0badf00d && Math.abs(flagless.world.time - timeA) < 1e-6);
+    // THE REFUSED SAVE IS KEPT: a classic save that will not stand is set aside, never overwritten.
+    const bumped = JSON.parse(readFileSync(a.savePath!, 'utf-8')) as ShardSave;
+    bumped.schemaVersion = 999;
+    writeFileSync(a.savePath!, JSON.stringify(bumped));
+    const refusedHost = new ShardHost({ seed: 0x0badf00d, saveDir: dir, open: false, log: () => { /* quiet */ } });
+    refusedHost.persist();
+    const aside = readdirSync(dir).filter(n => n.includes('.refused-'));
+    check('J persist: a classic save that will not stand is set aside, never overwritten', aside.length === 1 && refusedHost.world.time < 1 && existsSync(a.savePath!), `aside ${aside.join(',')}`);
+    // THE BREAKER: a fault every tick still ships the wire and trips the breaker after faultBreakerTicks.
+    const prevBreaker = SHARD_CFG.faultBreakerTicks;
+    SHARD_CFG.faultBreakerTicks = 20;
+    const wobbly = new ShardHost({ seed: 0x0b0b0b0b, saveDir: null, open: false, log: () => { /* quiet */ } });
+    let tripped = 0;
+    wobbly.onBroken = () => { tripped++; };
+    const realUpdate = wobbly.world.update.bind(wobbly.world);
+    wobbly.world.update = () => { throw new Error('probe: a fault every tick'); };
+    for (let i = 0; i < 25; i++) wobbly.tick(DT);
+    wobbly.world.update = realUpdate;
+    check('F breaker: a fault every tick still counts ticks and trips the breaker once after faultBreakerTicks', wobbly.ticks === 25 && wobbly.broken && tripped === 1 && wobbly.faults >= 25, `ticks ${wobbly.ticks} faults ${wobbly.faults}`);
+    SHARD_CFG.faultBreakerTicks = prevBreaker;
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

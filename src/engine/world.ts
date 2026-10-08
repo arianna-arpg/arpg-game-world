@@ -5836,6 +5836,7 @@ export class World {
    *  falling covenant fells the vessel (run over, no wipe), a
    *  death-surviving mode stage respawns, and permadeath ends the run. */
   private concludeWipe(): void {
+    if (this.localSeat.keeper) return; // keeperSeat: a hosted world never ends — its warden stands again next tick
     for (const seat of this.seats) this.loseBagRelicsOnDeath(seat);
     if (this.descentRun) { this.resurfaceFromDescent('died'); return; }
     // The world remembers the fall BEFORE the mode decides what it costs —
@@ -23386,7 +23387,9 @@ export class World {
   swapReadiness(seat: Seat, kind: 'unlearn' | 'socket' | 'unsocket', skillId?: string): import('./swapReadiness').SwapReadiness {
     const cfg = SWAP_DISCIPLINE_CFG;
     if (cfg.sanctuaryWaives && this.isSafeAt(seat.actor.pos)) return { reason: null };
-    const remaining = cfg.calmSec - (this.time - this.lastCombatAt);
+    // keeperSeat: on a hosted world the blood that counts is the seat's own (World.lastCombatAt is every player's fight at once).
+    const lastCombat = this.localSeat.keeper ? this.seatHero(seat).lastCombatAt : this.lastCombatAt;
+    const remaining = cfg.calmSec - (this.time - lastCombat);
     if (remaining > 0) return { reason: 'the blood is still hot', remaining };
     if (this.pressingFoeNear(seat.actor.pos, seat.actor.tier)) return { reason: 'foes press too near' };
     if (kind === 'unlearn' && skillId) {
@@ -28950,7 +28953,7 @@ export class World {
   /** Host-owned journey, live giver reach and all native gates are rechecked
    * at dispatch. A stale, foreign or repeated journal action is inert. */
   acceptQuestOffer(questId: string, seat: Seat = this.localSeat): boolean {
-    if (seat !== this.localSeat || !this.questOfferChoices().some(q => q.questId === questId)) return false;
+    if ((seat !== this.localSeat && !this.localSeat.keeper) || !this.questOfferChoices().some(q => q.questId === questId)) return false; // keeperSeat: on a shard any seat may take a contract
     this.acceptQuest(QUESTS[questId]);
     return this.activeQuests.some(q => q.questId === questId);
   }
@@ -29537,7 +29540,7 @@ export class World {
   explorationRewardReceipts() { return this.massRuntime?.rewards.receipts() ?? []; }
 
   claimExplorationReward(source: string, choiceId: string, seat: Seat = this.localSeat): boolean {
-    if (seat !== this.localSeat || this.clientActionHook || seat.actor.dead || seat.actor.downed
+    if ((seat !== this.localSeat && !this.localSeat.keeper) || this.clientActionHook || seat.actor.dead || seat.actor.downed // keeperSeat: the acting seat's own reward
       || this.panelSealed('inventory') || !this.massRuntime) return false;
     const result = this.massRuntime.rewards.claim(this, source, choiceId);
     if (result === 'full') this.failNote(seat.actor, 'explorationReward', 'Make room in your pack, then choose your gem again.');
@@ -29590,7 +29593,7 @@ export class World {
 
   claimQuestReward(questId: string, choiceId: string, seat: Seat = this.localSeat): boolean {
     // Authored quests belong to the host's journey; a guest cannot claim its pay.
-    if (seat !== this.localSeat || this.clientActionHook || this.player.dead || this.player.downed) return false;
+    if ((seat !== this.localSeat && !this.localSeat.keeper) || this.clientActionHook || seat.actor.dead || seat.actor.downed) return false; // keeperSeat: the acting seat's own body
     const aq = this.pendingTurnIns().find(e => e.questId === questId);
     const q = aq && this.questDefOf(aq.questId);
     if (!aq || !q || !questRewardChoices(this.account, q).some(c => c.id === choiceId)) return false;
@@ -29620,7 +29623,7 @@ export class World {
   }
 
   claimQuestImbue(questId: string, uid: number, affixId: string, seat: Seat = this.localSeat): boolean {
-    if (seat !== this.localSeat || this.clientActionHook || seat.actor.dead || seat.actor.downed) return false;
+    if ((seat !== this.localSeat && !this.localSeat.keeper) || this.clientActionHook || seat.actor.dead || seat.actor.downed) return false; // keeperSeat
     const reward = this.questImbues.find(r => r.questId === questId), q = QUESTS[questId];
     const giver = q && this.giverPresent(q.turnIn?.giver ?? q.giver);
     if (!reward || !q || !giver) return false;
