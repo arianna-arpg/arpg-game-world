@@ -38,6 +38,10 @@ export interface PeerInfo {
   name: string;
   classId: string;
   isHost: boolean;
+  /** THE IDENTITY (accountId, THE SHARD): the joiner's account id, carried on
+   *  its `join` and seen by the HOST alone (never re-broadcast in a roster).
+   *  It only ever keys this player's own records. */
+  accountId?: string;
 }
 
 /** Session-control (run LIFECYCLE) messages — distinct from the per-tick state.
@@ -57,7 +61,20 @@ export type SessionMsg =
   | { t: 'cosmetics'; loadout: import('../engine/cosmetics').CosmeticLoadout }
   | { t: 'newRun'; seat: PlayerId; seed: number }
   | { t: 'hostLeft' }
-  | { t: 'action'; action: MetaAction };
+  | { t: 'action'; action: MetaAction }
+  // THE VESSEL + THE DEATH COVENANT (THE SHARD: docs/engine/shard.md "The
+  // vessel and the corpse"; the rows are typed and sanitized in vesselWire.ts):
+  //   heroSave (shard→a seat): the vessel's mirror, a CharacterSave with NO
+  //            world half, on the persistence beat and at the farewell.
+  //   corpse   (shard→a seat): a MORTAL vessel fell: where its body lies and
+  //            the reckoning the shard appraised (`runEnd` follows).
+  //   corpses  (shard→a seat): the seat's OWN standing bodies in its zone,
+  //            plus the reclaims it completed since the last row.
+  //   leaving  (seat→shard):  the farewell: mirror me before my socket closes.
+  | { t: 'heroSave'; save: import('../meta/character').CharacterSave }
+  | { t: 'corpse'; note: import('./vesselWire').ShardCorpseNote; reckoning: import('./vesselWire').ShardReckoning }
+  | { t: 'corpses'; zoneId: string; bodies: import('./vesselWire').ShardBodyRow[]; reclaimed?: number }
+  | { t: 'leaving' };
 
 /** THE SEED THREAD — a client's World must be minted from the HOST's run seed,
  *  never one of its own. `manifest.seed` drives the shared map (the starter web
