@@ -170,3 +170,48 @@ export function couchConfineRect(
   const m = spec.confineMarginWu;
   return { x: cam.x + m, y: cam.y + m, w: Math.max(1, vw - 2 * m), h: Math.max(1, vh - 2 * m) };
 }
+
+// ---------------------------------------------------------------------------
+// THE SMOOTH SHELL's follow (docs/engine/shard.md "The pieces"; net/shell.ts):
+// a hosted world's render shell draws its own hero where the shell predicts
+// it, and a correction the shell could not glide out (THE SOFT CORRECTION
+// snaps one at its offsetSnapPx) would jolt the whole screen under a hard
+// lock. The shell's camera chases its focus on a CRITICALLY DAMPED spring
+// instead. A dial, never a mode: omega 0 is the hard lock, and solo play and
+// every host never wear the spring at all (the renderer's cameraFollow is set
+// on a client shell alone), so their frame is the pre-shard frame byte for byte.
+// ---------------------------------------------------------------------------
+
+export const CAMERA_FOLLOW_CFG = {
+  /** Spring stiffness (rad/s), critically damped: a walking hero leads the frame's centre by
+   *  about 2v/omega (17 px at 250 px/s), a correction settles in about 4/omega s. 0 = the hard lock. */
+  omega: 30,
+  /** A jump at least this far (a zone change, a blink across a room) re-seats the spring at once. */
+  snapPx: 480,
+  /** The longest step the spring takes in one frame (s): a hitch never flings it. */
+  maxDt: 0.1,
+};
+
+/** One spring's state: where the frame's focus is drawn, its velocity, and its last clock. */
+export interface CameraFollow { x: number; y: number; vx: number; vy: number; seated: boolean; atMs: number }
+export function newCameraFollow(): CameraFollow { return { x: 0, y: 0, vx: 0, vy: 0, seated: false, atMs: 0 }; }
+
+/** One critically damped step toward `target` (the exact closed form: stable for any step).
+ *  Returns the focus to draw. omega 0, a first call, or a jump past snapPx: the target itself. */
+export function springFollow(
+  s: CameraFollow, target: { x: number; y: number }, nowMs: number,
+  cfg: { omega: number; snapPx: number; maxDt: number } = CAMERA_FOLLOW_CFG,
+): { x: number; y: number } {
+  const dt = Math.max(0, Math.min(cfg.maxDt, (nowMs - s.atMs) / 1000));
+  s.atMs = nowMs;
+  if (cfg.omega <= 0 || !s.seated || Math.hypot(target.x - s.x, target.y - s.y) >= cfg.snapPx) {
+    s.x = target.x; s.y = target.y; s.vx = 0; s.vy = 0; s.seated = true;
+    return { x: s.x, y: s.y };
+  }
+  const w = cfg.omega, e = Math.exp(-w * dt);
+  const ox = s.x - target.x, oy = s.y - target.y;
+  const tx = (s.vx + w * ox) * dt, ty = (s.vy + w * oy) * dt;
+  s.vx = (s.vx - w * tx) * e; s.vy = (s.vy - w * ty) * e;
+  s.x = target.x + (ox + tx) * e; s.y = target.y + (oy + ty) * e;
+  return { x: s.x, y: s.y };
+}

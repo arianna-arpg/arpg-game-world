@@ -21,4 +21,6 @@ export function shardBuildStamp(): string {
 /** The words a refused join hears (shown on the lobby, or where the refused hero lands). */
 export const SHARD_REFUSAL = {
   build: 'this world runs another build',
+  /** THE RETURN (THE SMOOTH SHELL): a join that wanted its seat back found none to take. */
+  resume: 'the world holds no seat to return to',
 };

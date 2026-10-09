@@ -275,6 +275,16 @@ export class VesselDesk {
   accountOf(seatId: string): string | undefined { return this.accounts.get(seatId); }
   /** The vessel record standing on a seat, if one traveled. */
   vesselOf(seatId: string): Readonly<VesselSeat> | undefined { return this.vessels.get(seatId); }
+  /** THE IDENTITY's reclaim (THE SMOOTH SHELL): the DORMANT seat this account's character
+   *  `charId` stands on, if any (a player come back without its token takes it, never the
+   *  twin refusal); null for a live seat, another account's, or none. */
+  dormantSeatOf(accountId: string, charId: string, isDormant: (seatId: string) => boolean): string | null {
+    if (!accountId || !charId) return null;
+    for (const v of this.vessels.values()) {
+      if (v.accountId === accountId && v.charId === charId && isDormant(v.seatId)) return v.seatId;
+    }
+    return null;
+  }
 
   /** THE JOIN: seat the peer as its uploaded vessel when the judgment allows;
    *  a join with no vessel is the fresh hero of its chosen class (M0's join).
