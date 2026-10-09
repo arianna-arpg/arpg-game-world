@@ -300,6 +300,9 @@ export class ShardHost {
     // THE PARTY (server/party.ts, card 23): the explicit social unit; the keeper is never seated in one.
     this.parties = new PartyDesk(id => this.world.seats.some(s => s.id === id && !s.keeper));
     this.world.partyMates = id => this.parties.membersOf(id); // keeperSeat lane: THE KILLER'S DUE pays the party
+    // THE COUNTERS AND THE JOURNAL: a seat's own remembered bodies ride its journal row's pins (the corpse on the chart).
+    this.world.seatCorpseMarks = seat => this.corpses.forAccount(this.vessels.accountOf(seat.id))
+      .map(c => ({ zoneId: c.zoneId, ...(c.map ? { map: { ...c.map } } : {}), name: c.name, classId: c.classId, level: c.level }));
     this.vessels = new VesselDesk(this.world, toSeat, this.corpses, {
       beatSec: SHARD_CFG.persistSec, log: this.log,
       party: id => this.parties.membersOf(id), // THE GROUP LAW
@@ -435,6 +438,7 @@ export class ShardHost {
     if (!seat) return; // (never: a seat with no body is released at once, so it cannot be resumed)
     this.world.lastInputSeq.delete(id); // the new shell counts its inputs from zero
     this.world.markMetaDirty(seat);
+    this.world.journalDirty.add(id); // THE COUNTERS AND THE JOURNAL: the new shell hears its journal on its first snapshot
     this.corpses.wake(id);
     this.net.sendZoneTo(id, serializeZone(this.world));
     this.lastSentZone = this.world.zone.id;

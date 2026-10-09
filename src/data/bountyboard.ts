@@ -340,6 +340,14 @@ export interface BountyPosting {
   failed?: boolean;
   face?: 'omen' | 'lift';
   acceptAt?: number;
+  /** THE BOARD PER SEAT (docs/engine/shard.md, THE COUNTERS AND THE JOURNAL):
+   *  on a hosted world the seat that took the hand (one hand per seat per
+   *  board; only it turns the writ in or forfeits it), and the hero's own
+   *  character id when it travels as a vessel, so a returning hero takes its
+   *  hand back. A holder gone from the world leaves the hand unheld (anyone's).
+   *  Absent everywhere else. */
+  holder?: string;
+  holderChar?: string;
   cull?: { count: number; claimed: number };
   /** THE POSTING PIN (her adjustment): a pinned OFFER rides every re-deal
    *  until accepted, released, or struck by the world (persisted — the

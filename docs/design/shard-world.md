@@ -886,24 +886,25 @@ d6019949 + card 17 A. Their verdicts and where each finding lands.
 |---|---|---|
 | 1 | One living focus (tier 1). | THE MANY SHADOWS |
 | 2 | Loot is first-come for everyone; card 23 said per player. | THE OWNED SPOILS (card 27) |
-| 3 | Quests are dead on a shard (seven breaks: offers, wire, linger, rewards to the keeper, cargo from the keeper's bag, XP to all, world-wide state). | THE COUNTERS AND THE JOURNAL (card 24 first) |
-| 4 | Stations never answer a linger (keeper-only dwell; station anchors not shipped). | THE COUNTERS AND THE JOURNAL |
+| 3 | Quests are dead on a shard (seven breaks: offers, wire, linger, rewards to the keeper, cargo from the keeper's bag, XP to all, world-wide state). | THE COUNTERS AND THE JOURNAL (card 24 first): BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters): quest state stays the world's, every act and reward the acting seat's; card 24 still open |
+| 4 | Stations never answer a linger (keeper-only dwell; station anchors not shipped). | THE COUNTERS AND THE JOURNAL: BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters) |
 | 5 | Every road off the surface is sealed with no word. | M1; an interim cue |
 | 6 | Held casts drop after ~2 s. | W3 |
 | 7 | Chests, shrines, diamonds, fractures, waypoints answer only the keeper. | W3 |
-| 8 | The bounty board is dead on a shard. | THE COUNTERS AND THE JOURNAL |
+| 8 | The bounty board is dead on a shard. | THE COUNTERS AND THE JOURNAL: BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters) |
 | 9 | A new account never gets flasks on a shard. | W3 |
 | 10 | Nothing earned reaches the home account; the shard account is in memory only. | M2 THE SEAT'S GATE |
 | 11 | The group hold has no distance; the mercy waits on strangers. | W3 (card 28 for the bleed-out) |
 | 12 | Events have no owner and gather on the keeper. | M3 |
-| 13 | Harvest is closed to remote seats. | THE COUNTERS AND THE JOURNAL |
+| 13 | Harvest is closed to remote seats. | THE COUNTERS AND THE JOURNAL: BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters) |
 | 14 | Mercenaries cannot be hired. | M2 |
-| 16 | Event, objective and quest XP pays everyone. | THE COUNTERS AND THE JOURNAL |
+| 16 | Event, objective and quest XP pays everyone. | THE COUNTERS AND THE JOURNAL: BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters) |
 | 17 | Leaving mid-fight is a full heal and a free trip home. | W3 (card 26) |
 | 18 | Refusal words are silent for every player. | W3 |
 | 19 | The world runs at the highest player's level. | M3 (card 29) |
 | 20 | Immortals cannot die on a shard. | card 30 |
 | 23, 24, 26, 27, 29, 30 | Reckoning counts the server; no build stamp; the horn from anywhere; UI buttons that bypass requests; notices and banners to everyone. | W3 |
+| 25 | The client map shows no quest pins or corpse marker. | THE COUNTERS AND THE JOURNAL: BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters) |
 
 The three waves W1, W2 and W3 run in parallel on worktrees off the card
 17 A commit, each with its own probe; Passes B and C follow on the merged

@@ -30,6 +30,7 @@ import { dist } from '../core/math';
 import { COOP_SCALING } from '../data/coop';
 import type { World } from '../engine/world';
 import { ownEntryView, type NoticeW, type StateSnapshot } from './snapshot';
+import { applyCounterRows } from './journalWire';
 
 declare module './snapshot' {
   interface NoticeW {
@@ -113,6 +114,7 @@ export function seatAudienceFrame(body: string, v: SeatAudienceSplit, seatId: st
 /** The client's half (after applySnapshot): the own row's note and surge. */
 const notedAt = new WeakMap<World, { at: number; x: number; y: number }>();
 export function applyOwnSeatRows(world: World, snap: StateSnapshot): void {
+  applyCounterRows(world, snap); // THE COUNTERS AND THE JOURNAL: the own journal and rite rows (net/journalWire.ts)
   const own = snap.seats[world.clientSeatId];
   world.lowLifeHitFlash = own?.lh ?? 0;
   const fn = own?.fn;

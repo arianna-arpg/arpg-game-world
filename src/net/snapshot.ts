@@ -80,6 +80,7 @@ import { fellProgress } from '../engine/rampage';
 import { watchRungOf, watchValueOf } from '../engine/watch';
 import { gaugeFloor, gaugeFrac, gaugeLocked, gaugeReady } from '../engine/gauge'; // THE WIRE'S EYES: the bar's gauge rows
 import { COOP_SCALING } from '../data/coop'; // THE WIRE'S EYES: the zone rows' reach (THE NEAR LAW's radius)
+import { applyCounterZone, counterZoneOf, harvestRowOf, journalRowOf, type HarvestW, type JournalW } from './journalWire'; // THE COUNTERS AND THE JOURNAL
 
 export type Vec2W = [number, number];
 
@@ -385,6 +386,13 @@ export interface SeatW {
   /** THE ACTING SEAT, THE OWN ENTRY: seconds left on the seat's hit-while-low surge (its
    *  client's own low-life glow reads it). */
   lh?: number;
+  /** THE COUNTERS AND THE JOURNAL, THE OWN ENTRY (net/journalWire.ts): the seat's journal
+   *  row (its quests, offers, rewards, pins and boards) on a change and on the beat; absent =
+   *  unchanged. Hosted worlds alone. */
+  jn?: JournalW;
+  /** THE COUNTERS AND THE JOURNAL, THE OWN ENTRY: the seat's harvest view while it stands
+   *  near a node or works a rite; absent = none. Hosted worlds alone. */
+  hv?: HarvestW;
   /** Movement-PREDICTION fields: `seq` = the last input the host applied for this
    *  seat (the client replays its unacked inputs forward from `pos`); `rooted` =
    *  the host has this hero movement-locked (so the client stops predicting forward);
@@ -1027,6 +1035,17 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
 
   const seats: Record<string, SeatW> = {};
   for (const s of world.seats) if (!s.keeper) seats[s.id] = seatW(s, world); // keeperSeat: the warden is no party member
+  // THE COUNTERS AND THE JOURNAL (net/journalWire.ts): each seat's journal and rite rows, THE OWN
+  // ENTRY's, on a hosted world alone (each absent in its common case); a rite holds the hands.
+  if (world.localSeat.keeper) for (const s of world.seats) {
+    const row = seats[s.id];
+    if (!row) continue;
+    const jn = journalRowOf(world, s, tick);
+    if (jn) row.jn = jn;
+    const hv = harvestRowOf(world, s);
+    if (hv) row.hv = hv;
+    if (world.harvestHolds(s)) row.rooted = true;
+  }
 
   // META: ship a seat's build only when it CHANGED (level/pickup/mutation marked
   // it dirty). The host clears world.metaDirty after the broadcast (main.ts).
@@ -1310,7 +1329,7 @@ function ownGaugesOf(a: Actor): Pick<SeatW, 'gg'> {
  *  seat's). A shard ships each socket its own seat's and never another's
  *  (ShardTransport.sendState through ownEntryJson); a broadcast lane (co-op) carries every
  *  seat's and each client reads its own. Naming a key here puts that SeatW row under the law. */
-export const SEAT_OWN_ROWS: readonly (keyof SeatW)[] = ['cd', 'gg', 'fn', 'lh']; // + THE ACTING SEAT's note and surge
+export const SEAT_OWN_ROWS: readonly (keyof SeatW)[] = ['cd', 'gg', 'fn', 'lh', 'jn', 'hv']; // + THE ACTING SEAT's note and surge, THE COUNTERS AND THE JOURNAL's journal and rite
 
 /** THE ACTING SEAT (World.seatHudWire): the seat's refusal note while it is fresh. */
 function ownNoteOf(s: Seat, world: World): { fn?: { text: string; at: number } } {
@@ -2299,6 +2318,12 @@ export interface ZoneMsg {
    *  the client renders tells/rakes and replays sprung mirrors; all
    *  authority (sweeps, springs, credit) stays host-side. */
   trapworks?: TrapworkSpec[];
+  /** THE CLIENT'S COUNTERS (net/journalWire.ts, hosted worlds alone): the station pieces'
+   *  anchors by spot (`a` the structure id, `t` its story), the Sacrificial Fonts, and
+   *  the station features the host owns (THE KEEPER'S GATE for the client's lingers). */
+  anchors?: { p: Vec2W; a: string; t?: number }[];
+  fonts?: { p: Vec2W; t?: number }[];
+  counters?: string[];
 }
 
 export function serializeZone(world: World): ZoneMsg {
@@ -2333,6 +2358,7 @@ export function serializeZone(world: World): ZoneMsg {
     annexSpecs: world.zoneAnnexSpecs.length ? world.zoneAnnexSpecs : undefined,
     tracks: world.tracks.length ? world.tracks.map(t => t.spec) : undefined,
     trapworks: world.trapworks.length ? world.trapworks.map(t => t.spec) : undefined,
+    ...counterZoneOf(world), // THE CLIENT'S COUNTERS: anchors, Fonts and the owned counters (hosted worlds alone)
   };
 }
 
@@ -2400,4 +2426,7 @@ export function applyZone(world: World, msg: ZoneMsg): void {
   // TRAPWORK MECHANISMS: adopt the host's specs (tells already ride the
   // doodad list above); states converge via StateSnapshot.trapState.
   world.setNetTrapworks(msg.trapworks ?? []);
+  // THE CLIENT'S COUNTERS: the station anchors, the Fonts and the host's counters (a hosted
+  // world's message alone carries them).
+  applyCounterZone(world, msg);
 }

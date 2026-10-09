@@ -48,7 +48,7 @@ export function settleMassClearance(world: World, state: MassState, found: MassS
   if(!progress || progress.remaining)return false;
   if(!state.claim('site-cleared',found.id))return false;
   const xp=objectiveRewardXp(level,spec);
-  world.grantXp(xp);
+  world.grantXp(xp,world.massSitePlace(found)); // XP BY PLACE (THE COUNTERS AND THE JOURNAL, docs/engine/shard.md): the players near the cleared site
   world.notice(content.site!.name+' · '+MASS_CLEARANCE_VIEW.complete+' · +'+xp+' experience','#d8c08a',15,'civic');
   return true;
 }

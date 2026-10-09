@@ -2362,8 +2362,28 @@ function clientApplyAndRender(dt: number): void {
   world.updateCaravan(dt);
   pollCaravanMenu();
   pollCaravanReturn();
+  pollClientCounters(dt); // THE CLIENT'S COUNTERS: the bench, the board, the Font, the Tracker, the Oracle, the counters
   feedRendererAim();
   renderer.render(world);
+}
+
+/** THE CLIENT'S COUNTERS (docs/engine/shard.md, THE COUNTERS AND THE JOURNAL): a hosted world's
+ *  render shell lingers at its own stations the way it lingers at the Caravanner, and opens the
+ *  same panels the host's own loop opens; every act inside them is a host-judged request. A
+ *  reward waiting in its journal row opens the journal, as the host's dwell asks. */
+function pollClientCounters(dt: number): void {
+  world.updateClientCounters(dt);
+  if (ui.escapeMenuOpen) return;
+  if (world.salvageDwellRequested) { world.salvageDwellRequested = false; if (!ui.salvageOpen) ui.showSalvage(world.salvageDwellSeatId); }
+  if (world.fontDwellRequested) { world.fontDwellRequested = false; if (!ui.fontOpen) ui.showFont(world.fontDwellSeatId); }
+  if (world.bountyDwellRequested) { world.bountyDwellRequested = false; if (!ui.bountiesOpen) ui.showBounties(world.bountyDwellSeatId, world.bountyDwellBoardId); }
+  if (world.oracleDwellRequested) { world.oracleDwellRequested = false; if (!ui.oracleOpen) ui.showOracle(world.oracleDwellSeatId); }
+  if (world.trackerDwellRequested) { world.trackerDwellRequested = false; if (!ui.bestiaryOpen) ui.showBestiary(world.trackerDwellSeatId); }
+  if (world.vendorDwellRequested) { world.vendorDwellRequested = false; if (!ui.vendorOpen) ui.showVendor(world.vendorDwellSeatId); }
+  if (world.questRewardRequested) {
+    world.questRewardRequested = false;
+    if (DIALOGUE_CFG.presentation !== 'dialogue' || !conversationHasRewards(world)) ui.showQuestReward();
+  }
 }
 
 /** CLIENT: position the OWN hero by PREDICTION instead of snapshot interpolation —
