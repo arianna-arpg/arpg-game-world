@@ -1512,6 +1512,15 @@ interface FloatingText {
   yieldToCombat?: boolean;
   /** Exact native gear identity; clients may collapse its duplicate ground announcement. */
   dropUid?: number;
+  /** THE WIRE'S EYES: a damage or heal number's credited seat (World.seatText /
+   *  creditFloat), stamped on a hosted world alone; the client's floatOwners dial reads it. */
+  seat?: string;
+}
+
+/** THE WIRE'S EYES: fold one DoT tick's credited seat into its window's (undefined = no tick
+ *  yet; a seat id = every tick so far was that seat's; null = mixed or unauthored). */
+function foldDotSeat(window: string | null | undefined, tick: string | null): string | null {
+  return window === undefined || window === tick ? tick : null;
 }
 
 /** THE DISSOLUTION GRAMMAR's live break record (World.dissolves — the flash
@@ -34828,7 +34837,7 @@ export class World {
             e.hitFlash = 0.1;
             e.hitFlashType = dominantTypeOf(tick);
             stampSegFlash(e, touch.seg);
-            this.accumulateDotText(e, taken, TETHER_TICK);
+            this.accumulateDotText(e, taken, TETHER_TICK, t.owner); // THE WIRE'S EYES: the band's owner
             if (e.life <= 0 && !e.dead) this.kill(e, false, t.owner);
           }
         }
@@ -35774,7 +35783,7 @@ export class World {
           if (ally.dead || ally.team !== caster.team) continue;
           if (dist(minion.pos, ally.pos) > 90) continue;
           const got = ally.healBy(mend);
-          if (got > 0.5) this.text(ally.pos, '+' + Math.round(got), '#8ae0a8', 10);
+          if (got > 0.5) this.seatText(caster, ally.pos, '+' + Math.round(got), '#8ae0a8', 10); // THE WIRE'S EYES: the healer's seat
         }
         this.flashes.push({
           pos: vec(minion.pos.x, minion.pos.y), radius: 90,
@@ -38356,7 +38365,7 @@ export class World {
       if (oh > 0) this.grantAbsorb(target, Math.min(target.maxLife() * 0.5, spill * oh), 6);
     }
     if (!quiet && landed >= 1) {
-      this.text(target.pos, '+' + Math.round(landed), '#6fc06f', 12);
+      this.seatText(caster, target.pos, '+' + Math.round(landed), '#6fc06f', 12); // THE WIRE'S EYES: the healer's seat
     }
     // HEALER AGGRO: anyone locked onto the healed victim books threat against
     // the mender (their brain's TargetSpec.threat.heal weighs it) — keeping a
@@ -39188,7 +39197,7 @@ export class World {
             if (ally.dead || ally.team !== caster.team || ally === caster) continue;
             if (dist(caster.pos, ally.pos) > DEFENSE_CFG.sustain.vampiricRadius) continue;
             const got = ally.healBy(heal);
-            if (got > 0.5) this.text(ally.pos, '+' + Math.round(got), '#8ae0a8', 10);
+            if (got > 0.5) this.seatText(caster, ally.pos, '+' + Math.round(got), '#8ae0a8', 10); // THE WIRE'S EYES: the healer's seat
           }
         }
         // LIFE BOND (the Chloromancer shape): the caster's damage feeds the
@@ -39203,7 +39212,7 @@ export class World {
             if (share > 0) {
               const got = bonded.healBy(dealt * share * (def.bondFeed ?? 1)
                 * caster.sheet.get('healPower', skillContextTags(def), extra));
-              if (got > 0.5) this.text(bonded.pos, '+' + Math.round(got), '#7ee0b8', 11);
+              if (got > 0.5) this.seatText(caster, bonded.pos, '+' + Math.round(got), '#7ee0b8', 11); // THE WIRE'S EYES: the healer's seat
             }
           }
         }
@@ -39373,6 +39382,7 @@ export class World {
       }
       this.text(target.pos, Math.round(dealt).toString(),
         result.crit ? '#ffd24a' : '#ffffff', result.crit ? 18 : 13, 'dmg');
+      this.creditFloat(caster); // THE WIRE'S EYES: the number's owner is the striker's credited seat
       // CULLED: the executing threshold fired inside applyHit.
       if (result.culled) {
         this.showCombatOutcome(target, 'culled', evidence);
@@ -41523,7 +41533,7 @@ export class World {
         if (a.team === b.owner.team) {
           if (b.fx.healAllies) {
             const healed = a.healBy(b.fx.healAllies.base + b.fx.healAllies.perLevel * lvl);
-            if (healed > 0.5) this.text(a.pos, '+' + Math.round(healed), '#8ae0a8', 11);
+            if (healed > 0.5) this.seatText(b.owner, a.pos, '+' + Math.round(healed), '#8ae0a8', 11); // THE WIRE'S EYES: the healer's seat
           }
         } else if (b.fx.damage) {
           const landed = mitigateTyped(a, {
@@ -42141,7 +42151,7 @@ export class World {
       for (const m of this.actors) {
         if (m.dead || m === actor || m.owner !== actor.owner || m.construct) continue;
         const got = m.healBy(amount);
-        if (got > 0.5) this.text(m.pos, '+' + Math.round(got), '#8ae0a8', 10);
+        if (got > 0.5) this.seatText(actor.owner, m.pos, '+' + Math.round(got), '#8ae0a8', 10); // THE WIRE'S EYES: the healer's seat
       }
       this.flashes.push({
         pos: vec(actor.pos.x, actor.pos.y), radius: 70,
@@ -45019,7 +45029,7 @@ export class World {
           raw += amt;
           this.applyDeedDot(a, amt, ty as DamageType | 'untyped');
         }
-        if (raw > 0) this.accumulateDotText(a, raw, dt);
+        if (raw > 0) this.accumulateDotText(a, raw, dt, 'afflictions'); // THE WIRE'S EYES: the wounds' authors
         // A DoT emptied the shield — the esBreak proc seam fires here too.
         if (a.esBroke) {
           a.esBroke = false;
@@ -48422,7 +48432,7 @@ export class World {
             if (e.invulnerable) amount = 0;
             if (amount > 0) {
               e.life -= amount;
-              this.accumulateDotText(e, amount, dt);
+              this.accumulateDotText(e, amount, dt, bearer); // THE WIRE'S EYES: the aura's bearer
               if (aura.spec.siphonFraction) {
                 bearer.healBy(amount * aura.spec.siphonFraction);
               }
@@ -48452,7 +48462,7 @@ export class World {
                   : a.sheet.get('lifeRegen');
                 const landed = a.healBy(base * heal.amount);
                 if (landed > 0) {
-                  this.text(a.pos, '+' + Math.round(landed), '#6fc06f', 12);
+                  this.seatText(bearer, a.pos, '+' + Math.round(landed), '#6fc06f', 12); // THE WIRE'S EYES: the healer's seat
                 }
               }
             }
@@ -53320,15 +53330,38 @@ export class World {
     }
   }
 
-  private dotAccum = new Map<number, { amount: number; timer: number }>();
-  private accumulateDotText(a: Actor, dot: number, dt: number): void {
+  private dotAccum = new Map<number, { amount: number; timer: number; seat?: string | null; afflicted?: boolean }>();
+  /** `by` = THE WIRE'S EYES: the tick's author (a band's owner, an aura's bearer, a vent, a
+   *  flight's caster), 'afflictions' = the victim's own damaging statuses, read once at the
+   *  mint; absent = unauthored (environmental ground). One seat's ticks name the window's
+   *  number; a mix names none. Hosted worlds only (creditFloat's law). */
+  private accumulateDotText(a: Actor, dot: number, dt: number, by?: Actor | 'afflictions'): void {
     let acc = this.dotAccum.get(a.id);
     if (!acc) { acc = { amount: 0, timer: 0 }; this.dotAccum.set(a.id, acc); }
     acc.amount += dot; acc.timer += dt;
+    if (this.partyRows !== null) { // keeperSeat: owners ride a hosted world's wire alone
+      if (by === 'afflictions') acc.afflicted = true;
+      else acc.seat = foldDotSeat(acc.seat, by ? this.seatOfRoot(by)?.id ?? null : null);
+    }
     if (acc.timer >= 0.5 && acc.amount >= 1) {
       this.text(a.pos, Math.round(acc.amount).toString(), '#d88a50', 11, 'dmg');
-      acc.amount = 0; acc.timer = 0;
+      if (acc.afflicted) acc.seat = foldDotSeat(acc.seat, this.afflictionSeat(a));
+      if (acc.seat) this.creditFloat(null, acc.seat);
+      acc.amount = 0; acc.timer = 0; acc.seat = undefined; acc.afflicted = undefined;
     }
+  }
+
+  /** THE WIRE'S EYES: the one seat whose bodies authored every damaging affliction `a` wears
+   *  (Actor statuses' casterId through the owner chain), else null (mixed or unauthored). */
+  private afflictionSeat(a: Actor): string | null {
+    let seat: string | null | undefined;
+    for (const s of a.statuses) {
+      if (!(s.dps > 0)) continue;
+      const by = s.casterId !== undefined ? this.actorById(s.casterId) : undefined;
+      seat = foldDotSeat(seat, this.seatOfRoot(by)?.id ?? null);
+      if (seat === null) return null;
+    }
+    return seat ?? null;
   }
 
   /** Where a returning projectile is headed. */
@@ -53413,7 +53446,7 @@ export class World {
           const taken = mitigateTyped(e, { [pl.damageType]: drain });
           if (taken > 0) {
             e.life -= taken;
-            this.accumulateDotText(e, taken, TETHER_TICK);
+            this.accumulateDotText(e, taken, TETHER_TICK, a); // THE WIRE'S EYES: the venting body
             if (e.life <= 0 && !e.dead) this.kill(e, false, a);
           }
         }
@@ -54395,7 +54428,7 @@ export class World {
               e.life -= taken;
               e.hitFlash = 0.1;
               e.hitFlashType = dominantTypeOf(tick);
-              this.accumulateDotText(e, taken, PROJ_AURA_TICK);
+              this.accumulateDotText(e, taken, PROJ_AURA_TICK, p.caster); // THE WIRE'S EYES: the flight's caster
               if (e.life <= 0 && !e.dead) this.kill(e, false, p.caster);
             }
           }
@@ -55349,7 +55382,7 @@ export class World {
               if (ally.dead || ally.team !== z.caster.team || ally.tier !== (z.tier ?? z.caster.tier)) continue; // (the field's story)
               if (!this.zoneHas(z, ally.pos, ally.radius)) continue;
               const got = ally.healBy(z.healTick * hp);
-              if (got > 0.5) this.text(ally.pos, '+' + Math.round(got), '#8ae0a8', 10);
+              if (got > 0.5) this.seatText(z.caster, ally.pos, '+' + Math.round(got), '#8ae0a8', 10); // THE WIRE'S EYES: the healer's seat
             }
           } else {
           if (z.struck && instanceDelivery(z.inst).type === 'melee') {
@@ -58214,6 +58247,24 @@ export class World {
       life, maxLife: life, size, kind, ...(yieldToCombat ? { yieldToCombat: true } : {}),
       ...(dropUid === undefined ? {} : { dropUid }),
     });
+  }
+
+  /** THE WIRE'S EYES (docs/engine/shard.md): a combat number (a damage or heal float) minted
+   *  with its CREDITED seat, the striker's or healer's owner-chain root (THE KILLER'S DUE's
+   *  read), so a hosted client draws every number, its party's or its own
+   *  (Settings.floatOwners). Off a hosted world it is `text` exactly: no owner rides. */
+  seatText(by: Actor | null | undefined, at: Vec2, text: string, color: string, size = 13, kind?: string): void {
+    this.text(at, text, color, size, kind);
+    this.creditFloat(by);
+  }
+
+  /** THE WIRE'S EYES: stamp the float just minted with `by`'s credited seat (seatText's
+   *  second half, for a mint site that keeps its own `text` call). Hosted worlds only
+   *  (the shard publishes partyRows); the keeper is no one's credit. */
+  creditFloat(by: Actor | null | undefined, seatId?: string | null): void {
+    if (this.partyRows === null || !this.texts.length) return; // keeperSeat: the solo invariant (no owner off a hosted world)
+    const seat = seatId !== undefined ? seatId : this.seatOfRoot(by)?.id;
+    if (seat && !this.seats.find(s => s.id === seat)?.keeper) this.texts[this.texts.length - 1].seat = seat;
   }
 
   /** Move an actor with stat-driven speed, statuses included. */

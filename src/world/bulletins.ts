@@ -223,6 +223,23 @@ export const FLOAT_CFG = {
   dropNameSec: 3,
 } as const;
 
+/** THE FLOAT'S OWNER (THE WIRE'S EYES, docs/engine/shard.md): whose combat numbers a client
+ *  on a HOSTED world draws: every number ('all', the shipped default and every other lane's
+ *  only behaviour), its party's ('party'), or its own ('mine'). A float with no owner (a cry,
+ *  a pickup, a number nobody's seat struck) always draws. Settings.floatOwners dials it. */
+export const FLOAT_OWNER_MODES = ['all', 'party', 'mine'] as const;
+export type FloatOwnerMode = typeof FLOAT_OWNER_MODES[number];
+export const FLOAT_OWNER_CFG: { mode: FloatOwnerMode } = { mode: 'all' };
+
+/** Does a viewer draw a float owned by `owner` under `mode`? `sameParty` is the world's
+ *  seat-id party read (World.sameSeatParty: the desk on the host, the rows on a client). */
+export function floatOwnerShown(mode: FloatOwnerMode | undefined, viewer: string, owner: string | undefined,
+  sameParty: (a: string, b: string) => boolean): boolean {
+  if (!owner) return true;
+  const m = mode ?? FLOAT_OWNER_CFG.mode;
+  return m === 'all' || owner === viewer || (m === 'party' && sameParty(viewer, owner));
+}
+
 // The debut kinds — every row is a mint site that already tags its text.
 registerFloatKind({
   id: 'dmg', label: 'Damage Numbers',
