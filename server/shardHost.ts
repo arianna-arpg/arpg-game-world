@@ -357,7 +357,7 @@ export class ShardHost {
     this.corpses = new ShardCorpses(this.units, toSeat, shardRecordsPath(recordsDir, this.seed), this.seed, this.log);
     // THE PARTY (server/party.ts, card 23): the explicit social unit; the keeper is never seated in one.
     this.parties = new PartyDesk(id => !!this.units.seatOf(id));
-    this.publishInto(this.world, this.units.keeper); // HOST class: the link, the party, the timeflow policies
+    this.publishInto(this.world, this.units.keeper); // HOST class: the link, the party, the corpse marks, the timeflow policies
     this.vessels = new VesselDesk(this.units, toSeat, this.corpses, {
       beatSec: SHARD_CFG.persistSec, log: this.log,
       party: id => this.parties.membersOf(id), // THE GROUP LAW
@@ -503,6 +503,7 @@ export class ShardHost {
     w.lastInputSeq.delete(id); // the new shell counts its inputs from zero
     resetActionEcho(seat); // THE ECHO LAW: and its actions too
     w.markMetaDirty(seat);
+    w.journalDirty.add(id); // THE COUNTERS AND THE JOURNAL: the new shell hears its journal on its first snapshot
     this.corpses.wake(id);
     this.net.sendZoneTo(id, serializeZone(w));
     u.lastSentZone = w.zone.id;
@@ -619,11 +620,15 @@ export class ShardHost {
   }
 
   /** HOST class (shard M1): the host's fields published into a World it runs, at
-   *  boot and at every wake: the timeflow policies, the party, and the link. */
+   *  boot, at every wake and when a refused wilds save replaces the keeper's
+   *  World: the timeflow policies, the party, the corpse marks, and the link. */
   private publishInto(w: World, u: SimUnit): void {
     w.timeflow.allowHold = () => false; // a hosted world never freezes for one hand
     w.timeflow.chronoScope = { radius: SHARD_CFG.chronoRadius }; // keeperSeat: THE SCOPED FREEZE
     w.partyMates = id => this.parties.membersOf(id); // keeperSeat lane: THE KILLER'S DUE pays the party
+    // THE COUNTERS AND THE JOURNAL: a seat's own remembered bodies ride its journal row's pins (the corpse on the chart).
+    w.seatCorpseMarks = seat => this.corpses.forAccount(this.vessels.accountOf(seat.id))
+      .map(c => ({ zoneId: c.zoneId, ...(c.map ? { map: { ...c.map } } : {}), name: c.name, classId: c.classId, level: c.level }));
     if (this.partyRevSeen >= 0) { w.partyRows = this.parties.rows(); w.partyRev++; }
     w.shardWorld = {
       role: u.role, key: u.key,

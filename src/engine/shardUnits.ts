@@ -181,6 +181,7 @@ export const SHARD_UNIT_FIELDS: Readonly<Record<string, UnitFieldRow>> = {
   shardWorld: { cls: 'host', note: 'the link and THE PRIMARY GATE' },
   partyMates: { cls: 'host' }, partyRows: { cls: 'host' }, partyRev: { cls: 'host' },
   timeflow: { cls: 'host', note: 'each World\'s own; the host sets allowHold and chronoScope' },
+  seatCorpseMarks: { cls: 'host', note: 'THE CORPSE ON THE CHART: a seat\'s own remembered bodies for its journal row' },
   // ---- SEAT: moved or dropped by THE HAND-OFF (the seat-keyed reason)
   lastInputSeq: S('move-seat-id', 'the ack continues'), spentPresses: S('move-seat-id', 'a press a gate spent never fires in B'),
   seatKillTally: S('move-seat', 'the fall\'s reckoning'), townPortalArrival: S('move-seat-id'),
@@ -197,6 +198,8 @@ export const SHARD_UNIT_FIELDS: Readonly<Record<string, UnitFieldRow>> = {
   harvestDwell: S('drop-seat-id'), harvestOffer: S('drop-seat-id'),
   seatHud: S('drop-seat'), seatNoteAt: S('drop-seat'), speechFocus: S('drop-seat'),
   dotAccum: S('drop-actor-id'), comboCursors: S('drop-actor'),
+  journalDirty: S('drop-seat-id', 'THE JOURNAL ROW: marked again in B, so the arrival hears its new zone at once'),
+  questGiverDwells: S('drop-seat', 'a giver linger never crosses Worlds'),
   // ---- UNIT: dies with its unit (a row only where a detector looks)
   openedHollows: U('zone-local'), annexOpen: U('zone-local'), lures: U('zone-local'), theaterPour: U('zone-local'),
   holdMissingWarned: U('zone-local'), crossDimWarned: U('zone-local'), brittleWarnAt: U('zone-local'),
@@ -217,9 +220,10 @@ export const SHARD_UNIT_FIELDS: Readonly<Record<string, UnitFieldRow>> = {
   materializedObservers: U('per-visit'), materializedDocks: U('per-visit'), materializedWrits: U('per-visit'),
   soulriverLaneMemo: U('memo'), grantedPocketCache: U('memo'), pathProfiles: U('memo'),
   terrainDrainScratch: U('memo'), liteKindIdxMap: U('memo'),
+  approachPass: U('memo', 'one journal pass\'s board approaches, dropped at its end'),
   stashedCompanions: U('warden-only', 'the local resume\'s stash'), kills: U('warden-only', 'the objective latch\'s delta'),
   combatDeeds: U('warden-only', 'the local hero\'s deed tracker'),
-  netContainerBoards: U('shell'),
+  netContainerBoards: U('shell'), netStationAnchors: U('shell', 'THE CLIENT\'S COUNTERS: the shell\'s station pieces'),
 };
 
 /** Fields THE PIN copies both ways (alias + counter), in table order. */
@@ -567,6 +571,7 @@ export function attachSeat(w: World, packet: SeatPacket, landing: RoadLanding): 
   }
   // 6. The roster hears it; the near law re-reads where every body stands.
   w.markMetaDirty(seat);
+  w.journalDirty.add(seat.id); // THE JOURNAL ROW: the arrival hears its new zone's boards and pins at once
   w.events.emit('party/join', { actor: seat.actor, seat: seat.id });
   w.settleNearScale(true);
 }

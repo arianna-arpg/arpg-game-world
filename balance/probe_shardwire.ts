@@ -40,6 +40,7 @@ import type { Actor } from '../src/engine/actor';
 import { makeAccount } from '../src/meta/account';
 import { buildManifest } from '../src/packages/manifest';
 import { floatOwnerShown } from '../src/world/bulletins';
+import { JOURNAL_WIRE_CFG } from '../src/net/journalWire'; // THE COUNTERS AND THE JOURNAL: the journal row's own beat
 import {
   applySnapshot, applyZone, ownEntryJson, tickNetClocks, WIRE_CFG, SEAT_OWN_ROWS,
   type StateSnapshot, type ZoneMsg,
@@ -128,7 +129,10 @@ let quietBytes = 0, beatBytes = 0;
   await runTicks(host, 3 * (WIRE_CFG.vendorBeat * 2 + 4));
   const quiet = since(A, n0);
   const strays = quiet.flatMap(s => Object.keys(s).filter(k => !PRE_TOP.has(k)));
-  const seatStrays = quiet.flatMap(s => Object.values(s.seats).flatMap(e => Object.keys(e).filter(k => !PRE_SEAT.has(k))));
+  // THE COUNTERS AND THE JOURNAL: a held journal (the world's own quests) rides its beat in a quiet
+  // stretch, as the shelf and the account view ride theirs; on no other snapshot.
+  const seatStrays = quiet.flatMap(s => Object.values(s.seats).flatMap(e => Object.keys(e)
+    .filter(k => !PRE_SEAT.has(k) && !(k === 'jn' && s.tick % JOURNAL_WIRE_CFG.beat === 1))));
   check('F shape: a quiet snapshot is the pre-pass shape (no zones row, no new seat rows)',
     quiet.length >= WIRE_CFG.vendorBeat * 2 && strays.length === 0 && seatStrays.length === 0 && quiet.every(s => s.zones === undefined),
     `${quiet.length} snapshots; strays ${JSON.stringify([...new Set([...strays, ...seatStrays])])}`);

@@ -14,7 +14,9 @@
 //   C  two seats in two zones at once through the registry's direct road: the keeper
 //      never moves, each client hears only its own unit, the zone message lands before
 //      the first snapshot of the new zone, a frontier minted in a unit lands in the
-//      keeper's chart, two units minting in one tick never collide;
+//      keeper's chart, two units minting in one tick never collide; a woken unit wears
+//      the host's hooks (the party, THE CORPSE ON THE CHART's marks) and a hand-off marks
+//      the arrival's journal in its new unit, where its first beat judges it;
 //   D  THE HAND-OFF keeps identity: the same objects and ids for the hero, a minion, a
 //      second-hop minion, a companion and a throng body (lite rows re-spawned), a
 //      construct culled in the source, the party desk, the ack, the kill tally; the
@@ -371,7 +373,17 @@ let u: SimUnit;
   check('C wake: the unit stands its own parked warden as p0 (keeper-tagged, carrying the link)',
     !!landed?.world.localSeat.keeper && landed.world.localSeat.actor.invulnerable && landed.world.shardWorld?.role === 'unit'
     && k.shardWorld?.role === 'keeper' && landed.world.zoneMap === k.zoneMap && landed.world.sim === k.sim);
+  // THE COUNTERS AND THE JOURNAL across units: the host's hooks stand on every World it runs, and the
+  // arrival's journal is marked in its new unit (never the source), so its new zone rides its first beat there.
+  const bSeat = landed?.world.seats.find(s => s.id === B.id);
+  check('C hooks: a woken unit wears the host\'s party and corpse-marks hooks, as the keeper does',
+    !!landed && typeof landed.world.partyMates === 'function' && typeof landed.world.seatCorpseMarks === 'function'
+    && typeof k.seatCorpseMarks === 'function' && !!bSeat && Array.isArray(landed.world.seatCorpseMarks(bSeat)));
+  check('C journal: the hand-off marks the arrival\'s journal in its new unit, never in the source',
+    !!landed && landed.world.journalDirty.has(B.id) && !k.journalDirty.has(B.id));
   await runTicks(300);
+  check('C journal: the arrival\'s journal was judged in its own unit on its first beat there',
+    !u.world.journalDirty.has(B.id) && !k.journalDirty.has(B.id));
   check('C tick: the keeper never moved and both units stepped on THE ONE CLOCK',
     host.keeper.actor.pos.x === kx && host.keeper.actor.pos.y === ky && k.zone.id === hearth
     && Math.abs(u.world.time - k.time) < 1e-9 && k.time - t0 >= 300 / SHARD_CFG.tickHz - 1e-6, `keeper t ${k.time.toFixed(3)}, unit t ${u.world.time.toFixed(3)}`);
