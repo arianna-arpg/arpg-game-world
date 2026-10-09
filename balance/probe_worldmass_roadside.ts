@@ -36,7 +36,7 @@ try{
  const before={monster:a.defId,life:a.life,pos:{...a.pos},anchor:{...a.aiAnchor!}};
  const hero=w.player;w.landPartyAt({x:q.x+7500,y:q.y+7500});m.update(w,true);w.landPartyAt(q);m.update(w,true);
  assert.equal(w.player,hero);assert.equal(natives.get(id),a);assert.equal(a.life,before.life);
- const save=m.snapshot(w);assert.equal(save.schema,13); // RegionalLandformSchema on fresh expeditions
+ const save=m.snapshot(w);assert.equal(save.schema,18); // NativeRegionalSeatingSchema on fresh expeditions
  const rw=makeSimWorld('warrior',43),rm=new WorldMassRuntime(42,'road-save',save.config,save);rm.attach(rw,save);
  assert.deepEqual(rm.roadside!.places,m.roadside!.places);
  const ra=(rm as unknown as {natives:Map<string,typeof w.player>}).natives.get(id)!;

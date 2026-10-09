@@ -16,11 +16,32 @@ function flood(cells:readonly string[],n:number,start:number):Int32Array {
 /** A finite, source-local composition. Protected circles remain transparent;
  * their owned exterior collars and spurs join the original dry route. No live
  * site, chunk, discovery or terrain mutation participates in this decision. */
-export function composeRegionalSites(shape:MassLandformShape,sites:readonly RegionalLandformSite[],cell:number,apron:number,maxAlteredFraction:number,rejected?:(reason:string)=>void):MassLandformShape|null {
+export function composeRegionalSites(shape:MassLandformShape,sites:readonly RegionalLandformSite[],cell:number,apron:number,maxAlteredFraction:number,rejected?:(reason:string)=>void,regionalTerrainExpansion=false):MassLandformShape|null {
   const refuse=(reason:string)=>{rejected?.(reason);return null;};
   const n=shape.rows.length,original=shape.rows.join('').split(''),cells=[...original];
   let anchors=shape.navigation??[];
   if(anchors.length<4||sites.length>32)return refuse('budget');
+  // Grammar silhouettes may grow a LOCAL dry collar around a site that cuts an
+  // arm. Every supplied protected circle remains forbidden, including circles
+  // belonging to otherwise unrelated sites. Omission retains historical rows.
+  const regionalTerrainExpansionProtected=regionalTerrainExpansion?new Uint8Array(n*n):null;
+  const regionalTerrainExpansionContacts=regionalTerrainExpansion?new Uint8Array(n*n):null;
+  const regionalTerrainExpansionSites=new Set<RegionalLandformSite>();
+  if(regionalTerrainExpansion) {
+    for(const port of shape.ports??[])for(const side of [-1,0,1]) {
+      const x=port.x+port.dx-port.dy*side,y=port.y+port.dy+port.dx*side;
+      if(x>=0&&y>=0&&x<n&&y<n)regionalTerrainExpansionContacts![y*n+x]=1;
+    }
+    for(const site of sites) {
+      for(let y=Math.max(0,Math.floor((site.y-site.radius-apron)/cell));y<Math.min(n,Math.ceil((site.y+site.radius+apron)/cell));y++)
+        for(let x=Math.max(0,Math.floor((site.x-site.radius-apron)/cell));x<Math.min(n,Math.ceil((site.x+site.radius+apron)/cell));x++) {
+          const k=y*n+x,dx=Math.max(x*cell-site.x,0,site.x-(x+1)*cell),dy=Math.max(y*cell-site.y,0,site.y-(y+1)*cell),d=dx*dx+dy*dy;
+          if(d<=site.radius**2)regionalTerrainExpansionProtected![k]=1;
+          if(original[k]!=='.'&&d<=(site.radius+apron)**2)regionalTerrainExpansionSites.add(site);
+        }
+    }
+    for(let k=0;k<cells.length;k++)if(regionalTerrainExpansionProtected![k])cells[k]='.';
+  }
   for(const site of sites) {
     // Children are complete motifs. A site cannot silently erase part of one.
     for(const child of shape.components??[]) {
@@ -30,10 +51,13 @@ export function composeRegionalSites(shape:MassLandformShape,sites:readonly Regi
     }
     for(let y=Math.max(0,Math.floor((site.y-site.radius-apron)/cell));y<Math.min(n,Math.ceil((site.y+site.radius+apron)/cell));y++)
       for(let x=Math.max(0,Math.floor((site.x-site.radius-apron)/cell));x<Math.min(n,Math.ceil((site.x+site.radius+apron)/cell));x++) {
-        const k=y*n+x;if(original[k]==='.')continue;
+        const k=y*n+x;
+        if(regionalTerrainExpansion&&regionalTerrainExpansionProtected![k])continue;
+        if(original[k]==='.'&&!(regionalTerrainExpansion&&regionalTerrainExpansionSites.has(site)
+          &&x>0&&y>0&&x<n-1&&y<n-1&&!regionalTerrainExpansionContacts![k]))continue;
         const dx=Math.max(x*cell-site.x,0,site.x-(x+1)*cell),dy=Math.max(y*cell-site.y,0,site.y-(y+1)*cell);
         if(dx*dx+dy*dy<=site.radius**2)cells[k]='.';
-        else if(dx*dx+dy*dy<=(site.radius+apron)**2 && cells[k]!=='.')cells[k]='g';
+        else if(dx*dx+dy*dy<=(site.radius+apron)**2 && (cells[k]!=='.'||regionalTerrainExpansion))cells[k]='g';
       }
   }
   // Terminals are proof samples, not gameplay sites. If a protected site
@@ -93,6 +117,17 @@ export function composeRegionalSites(shape:MassLandformShape,sites:readonly Regi
   let obstacles=0,altered=0;
   for(let k=0;k<cells.length;k++)if(original[k]==='b'||original[k]==='w'){obstacles++;if(cells[k]!==original[k])altered++;}
   if(altered>obstacles*maxAlteredFraction)return refuse('altered');
+  if(regionalTerrainExpansion) {
+    // Newly owned exterior ground has a separate finite area budget. Neither
+    // obstacle retention nor route-distance limits can substitute for this cap.
+    let regionalTerrainExpansionArea=0;
+    for(let k=0;k<cells.length;k++) {
+      if(original[k]==='.'&&cells[k]!=='.')regionalTerrainExpansionArea++;
+      if(regionalTerrainExpansionProtected![k]&&cells[k]!=='.')return refuse('expansion-protection');
+      if(regionalTerrainExpansionContacts![k]&&cells[k]!=='.')return refuse('expansion-contact');
+    }
+    if(regionalTerrainExpansionArea>Math.floor(maxAlteredFraction*n*n))return refuse('expansion-area');
+  }
   if(!regionalRouteProof(original,cells,n,anchors,cell,rejected))return null;
   return {...shape,navigation:anchors,rows:Array.from({length:n},(_,y)=>cells.slice(y*n,(y+1)*n).join(''))};
 }

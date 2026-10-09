@@ -5,7 +5,7 @@ import type { ZoneDef } from '../src/data/zones';
 import { regionKind } from '../src/world/regions';
 import { address, localOffset, moveAddress, type MassAddress } from '../src/worldmass/address';
 import { makeMassRun, MassGenerator } from '../src/worldmass/generator';
-import type { MassSpec } from '../src/worldmass/contracts';
+import { massTerrainRegions, type MassSpec } from '../src/worldmass/contracts';
 import { MASS_HIERARCHY_DEFAULT, MassHierarchy } from '../src/worldmass/hierarchy';
 import { nativeGeographicSelectionReceipt } from '../src/worldmass/geographicObjectiveChoice';
 import { nativeMassProcessionSources, resolveMassProcessionContext } from '../src/worldmass/processionSources';
@@ -29,7 +29,7 @@ function inputFor(spec?: MassSpec, at?: MassAddress): ProcessionPlanInput {
     const ts = TILESETS[source.tileset!];
     const zone: ZoneDef = { id: owner.id, name: ts.nameFirst[0] + ' ' + ts.nameSecond[0], level: 3, size: { w: owner.span, h: owner.span },
       objective: { kind: 'procession' }, theme: clone(ts.theme), biome: ts.biome, tileset: ts.id, exits: [], map: { x: 0, y: 0 }, layout: clone(ts.layout), packs: clone(ts.packs) };
-    const regions: ProcessionPlanInput['regions'] = Object.fromEntries([...new Set(['ground', 'water', 'wall', 'lava', 'chasm', 'bog', 'swamp', ...terrain.surfaces.map(s => s.region), ...terrain.places.flatMap(p => p.surface ? [p.surface.region] : [])])]
+    const regions: ProcessionPlanInput['regions'] = Object.fromEntries([...new Set(['ground', 'water', 'wall', 'lava', 'chasm', 'bog', 'swamp', ...massTerrainRegions(terrain)])]
       .map(id => { const r = regionKind(id); return [id, { walkable: !!r?.walkable, dry: !!r?.walkable && !r.standStatusDeep && !['water', 'lava', 'chasm', 'bog', 'swamp'].includes(id), standStatusDeep: !!r?.standStatusDeep }]; }));
     return { compiler: PROCESSION_PLAN_COMPILER, policy: PROCESSION_ROUTE_POLICY, run, terrain, owner,
       context: resolveMassProcessionContext(zone, source, zone.level), selection, selectionReceipt, regions, patches: [], reservations: { revision: 'fixture-0', circles: [], boxes: [], capsules: [] } };

@@ -101,8 +101,231 @@ renders six positions along one connected multi-screen route, and exercises
 native occupants, decoration and durable Continue. These are route-position
 views; they do not constitute a full automated combat playthrough.
 
+## Seeded regional composition
+
+RegionalTerrainComposition is the schema-14 continuation of this foundation.
+New expeditions save an optional `landforms.regional.composition` policy. At each
+eligible seat, the default gives seeded construction an 85% choice and keeps
+familiar native formations as the other option. Actual admission proportions
+can differ because both branches still have physical/site checks.
+
+The saved rules construct 4–10 connected courts with a random growth tree and
+0–3 additional links. Extent varies from 3,300–6,600 units; 90–150-unit dry paths
+keep their physical width across scales. Different chamber sizes, bent links,
+water/solid shoulders and irregular boundaries alter the realized ground.
+The source retains its graph as a diagnostic trace, never as replacement native
+zone ownership. Dry preferred routes are connected; native water remains a
+traversable alternative with its usual swimming/path costs. Four real exterior
+contacts remain, without a universal dry ring that would erase the route choices.
+Only owned sample cells contribute to the generated branch's bounded inland
+selection rule; a lake in an unowned gap does not veto a neighboring arm.
+Fully enclosed transparent source pockets become lake or solid interiors so
+unreachable noise-ground content cannot appear inside them.
+
+Complete pinned native pools and groves can occupy broad courts. Source and
+post-site fitting both preserve every motif cell and its dry margin. Seeded
+spatial ranking removes the old preference for the formation center. Required
+children still cause whole-candidate refusal if no valid court survives. These
+large nested motifs remain uncommon; the smaller ordinary terrain repertoire
+also composes through the exterior gaps.
+
+Exact reservation uses the union of original source cells and final painted
+cells, plus a 120-unit margin. Protected site holes therefore remain reserved,
+but unrelated exterior gaps between arms can hold complete small formations and
+ordinary content. Painted-cell lookup agrees with collision/streaming; inspection
+of the full envelope is a separate planning operation. Circle and rectangle
+reservation both include exact boundary tangencies.
+
+Generated formations opt into bounded local outline growth around a site that
+intersects their original footprint or apron. Every supplied protected circle
+is masked before any growth. Dry collars may expand into original transparency,
+then existing bounded repair and route comparisons determine whether the result
+is valid. Added area has its own cap of 12% of the source square; the existing
+12% obstacle-change cap still applies separately. Unrelated sites cause no
+isolated collar, frame/contact cells remain transparent, and circles are never
+painted over. Familiar/historical sources keep their prior composition rules.
+
+Construction consumes a separate deterministic stream and saved versioned rules;
+chunk order, cache eviction and player discovery do not affect it. Schema 14
+prevents older clients from interpreting these rules incorrectly. Descriptors
+without composition retain exact historical cells, placements, terrain and schema
+13 Continue behavior. Future algorithm changes must preserve this version or
+explicitly introduce another version; a saved seed alone is not a migration.
+
+The terrainvariation probe compares 256 source seeds after normalizing rotation,
+reflection and scale, reconstructs actual dry raster adjacency, and independently
+checks radius-15 connectivity for every source. It also verifies real protected
+sites, nested native sources, released exterior pockets, signed coordinates,
+cache eviction, streamed/cold equivalence, configuration validation and Continue.
+The fixed 192-cell default-country square plus one targeted regression location
+across seeds 42/713/991 admits 19 generated formations and 2 familiar formations,
+with 12 graph signatures across 5 geographic recipes. All 63 actual original
+source/site intersections remain protected. Both retained native children share
+the targeted formation at seed 42, candidate (-7,-3); the broad square contained
+none, so nesting remains sparse. A flat-country layering course finds 133 sample
+hits on complete small formations inside large envelopes, not 133 distinct
+formations. Cold survey p95 was approximately 178–199 ms under concurrent
+verification, with maxima around 225 ms; planning is still synchronous.
+
+The regionalexpansion probe tests local detours, protection/order independence,
+contact/budget refusal and an exact pre-change historical digest. Infeasible
+minimum loop counts refuse instead of silently simplifying the requested graph. A 32-bit source
+seed and a finite corpus do not guarantee infinite non-repetition.
+
+Built-client acceptance uses `balance/terrain-variation-ui.cjs` after building
+with `HOLLOW_WAKE_STORAGE_SCOPE=preview:seamless-terrain-variation-qa`,
+`HOLLOW_WAKE_WORLDMASS=1`, and
+`npx vite build --outDir .claude/terrain-variation.local.work/dist`.
+It finds actual admitted graph variations, a nested motif and a familiar source,
+checks native inhabitants/dressing, renders six streamed route positions, and
+compares exact terrain after a cold durable Continue. Reports live under
+`balance/reports/terrain-variation-*`. Route views are not an automated combat
+playthrough. Cold planning is still synchronous; frame scheduling remains work.
+
 ## Remaining integration
 
 The source chat's 27 locale programs, 135 layout variants, 30 regional graph forms, bounty-gated passages and their native objective/turn-in ownership still need integration through real zone owners. The shared builders here are preparation for those programs, not inhabited towns or complete crypt adventures.
 
 Keep the hierarchy target: world mass → geographic biome regions → actual native zones → streamed chunks. The candidate lattice above must never become a substitute hierarchy. Native zone/event map zoom, world weather footprints, full native area activation and population/controller persistence remain on that existing integration path. Older saved worlds need an explicit migration policy before acquiring new terrain in unvisited country.
+
+## RegionalLayers: irregular courts and nested native discoveries
+
+Fresh expeditions use schema 15 when saved court morphology or regional
+discoveries are present. Schema-14 descriptors keep their exact circular courts,
+random cursors, terrain bytes and owners. Explicit circle-only morphology also
+retains historical graph, shoulder and child placement. Older clients refuse the
+new schema rather than silently regenerating different geography.
+
+The saved court vocabulary includes circles, ellipses, beveled halls, kites,
+scalloped courts, clefts, irregular polygons and crosses. Angle, aspect, depth,
+lobe count and polygon vertices vary per court using an independent stream.
+All contours retain a connected central floor inside the original court bounds;
+the graph still owns multi-screen connectivity. The original native formation
+catalogue remains a separate generation choice.
+
+For noncircular compositions, complete native motifs reserve their actual
+occupied cells and a 120-unit dry feather. Transparent source-image corners no
+longer demand blank square courts. Original floor, protected-site composition,
+sibling feather separation, final connectivity and route-distance checks still
+apply; no child is clipped or reduced. Historical and all-circle sources retain
+their original rectangular admission. In the same 192-source sample this raised
+complete nested motifs from 12 to 73 while preserving every native cell.
+
+The optional terrain.regionalDiscoveries policy runs after protected sites and
+complete nested terrain are composed. It chooses up to four courts, independently
+rolls content and positions, and admits only complete sites on final ground floor
+with at least a 90-unit dry bypass. It never carves terrain to force admission.
+Sibling footprints retain their saved separation, and a content choice appears
+at most once per formation. Stable owners include formation and court ancestry;
+a site wholly within a child motif's envelope also records that motif.
+
+The default vocabulary contains eight asymmetric cache arrangements, all five
+native shrines, four native altar fields and three native puzzle activities.
+It reuses existing registered scenery and complete native interaction rules.
+Rewards and puzzle/field levels follow the saved geographic progression.
+Bounties, discovery cues, scenery exclusion, native persistence and worker
+objective/procession reservations consume the same combined place query.
+Ordinary terrain admission deliberately uses the earlier ordinary-place query
+to avoid a terrain/content dependency cycle. The discovery cache holds at most
+64 formations; no result depends on residency or query order.
+
+This is terrain and content composition within the seamless landmass, not a
+replacement for native biome regions, zones or their event/map ownership. The
+remaining native hierarchy integration described above is still required.
+Cache chests use the existing resident chest persistence; this pass does not
+add whole-world chest paging. Finite variety surveys cannot guarantee unlimited
+non-repetition, and synchronous cold terrain planning remains a performance
+limitation.
+
+Verification adds `worldmass_regionallayers` and the isolated
+`balance/regional-layers-ui.cjs` course. Build with
+`HOLLOW_WAKE_STORAGE_SCOPE=preview:seamless-regional-layers-qa`,
+`HOLLOW_WAKE_WORLDMASS=1`, and
+`npx vite build --outDir .claude/regional-layers.local.work/dist`.
+The client course opens a real cache, consumes a native shrine, hits and solves
+a native puzzle, and checks partial/solved cold Continue and spent-owner revisits.
+
+RegionalLayers acceptance: 192 normalized source layouts were distinct; 256
+historical sources and 64 circle-only sources remained exact. Holding terrain
+fixed while varying 32 discovery rolls produced 96 different positions. A finite
+226-location default-world survey yielded 19 generated formations, 33 discoveries
+from 14 payloads, all six native activity categories, all eight court families,
+five complete child motifs and one discovery inside a child. Every final dry
+player stand and route terminal was checked after protected-site composition.
+The broader validation passed 35 targeted probes, all three type checks, 25 smoke
+simulation episodes and built-client native interactions plus cold Continue.
+Generation QA reported 0 failures and four previously known geometry warnings
+across 869 cases and three seeds.
+
+## RegionalWeave: winding routes and connected landscape shoulders
+
+The saved `composition.weave` policy requires checkpoint schema 16; independent
+newer feature policies retain their higher schema. Schema14 and schema 15 policies
+continue to reproduce their original source bytes. The original factories stay
+unchanged, while `wovenRegionalTerrainGrammar()` opts new worlds into the second
+court vocabulary and separate path, court-placement and transition streams.
+
+Four new court families—fan, hammerhead, fork and terrace—join the existing eight.
+Their seeded proportions and orientations vary independently. Modest court drift
+and occasional smaller courts expose more connecting terrain while retaining
+broad courts for complete native motifs. Every court stays within pairwise radius
+caps and leaves room for exterior shoulders. The source graph still chooses its
+connected tree and optional cycles; the new contours do not replace that topology.
+
+Each graph edge chooses a direct, meandering, switchback, elbow or sweeping route.
+Steering uses exact shared endpoints, bounded lateral displacement and monotone
+longitudinal progress. Raster admission independently reconstructs room adjacency
+and rejects unintended intersections, including intersections with entry throats.
+A 32-source player-radius 15 proof measured actual shortest dry routes outside all
+court envelopes: meanders had a median route/chord ratio of 1.144, switchbacks 1.163,
+and the longest sampled meander required 1,315 units against a 568-unit gap. Gentler
+sweeps and elbows remain intentionally different experiences. Water keeps its
+native traversal rules, so these measurements concern dry routes, not universal
+hard-wall mazes.
+
+Connected outer shoulders grow through a coherent field over source coordinates.
+They inherit nearby wall/water material, vary in width, taper before finite source
+bounds, and preserve original cells and complete entry approaches. Enclosed
+transparent pockets are resolved before protected sites and complete child terrain
+are composed. This introduces irregular physical outlines without rectangular
+fills or isolated collision specks. It does not add alpha-blended biome rendering
+or change the protected native sites' own authored shapes.
+
+The permanent `worldmass_regionalweave` course checks 128 normalized unique source
+layouts and outlines, all 12 court families, 19 complete native children, 930 exposed
+links, actual player-body routes, malformed policies, signed coordinates, cache
+reconstruction and exact Continue. A 32-case extreme-policy course admitted 20
+safe sources and refused 12 within the bounded attempt budget. A 24-seed transition
+course preserves every original cell while adding 62,464 connected shoulder cells.
+A 128-location climate-country survey found 10 woven formations, 18 discoveries,
+four geographic recipes and all five path styles, while protecting 12,789 site
+cells. That survey contained no nested child motifs; nesting remains sparse and
+is tested separately with a directed real-world witness. Seed 42, run
+regional-weave-proof, candidate (5,-7) retains a complete stepping-pools motif
+and a native ossuary cache inside it. The actual runtime publishes the cache
+at geographic level 24 with a clear interaction stand.
+
+A 192-source review found 31 complete native children versus 73 with the earlier
+layered policy: exposing longer winding routes trades some broad interior area
+for traversal variety. Complete-child rules are never relaxed to improve a count.
+Expanded segment bounds avoid irrelevant distance checks during route painting;
+all 192 source hashes stayed exact while measured total construction time fell
+about 27%. Cold country planning still runs synchronously; the finite survey's
+p95 after that optimization was about 170 ms and its maximum 199 ms under
+concurrent validation.
+
+Built-client acceptance uses `balance/regional-weave-ui.cjs`, the storage scope
+`preview:seamless-regional-weave-qa`, `HOLLOW_WAKE_WORLDMASS=1`, and an isolated
+build at `.claude/regional-weave.local.work/dist`. It clones the current descriptor
+and omits any separate nativeRegional policy to isolate schema 16. Five candidate
+checks found ten court families and all five path styles. Six route views, native
+walking, a level 22 cache, exact cold Continue and spent-owner revisits passed.
+Reports and the contact sheet are in `balance/reports/regional-weave-*`.
+These are controlled arrival and interaction courses, not a full combat campaign.
+
+RegionalWeave acceptance also passes 21 targeted terrain, content and worker
+probes (including the historical layer course and the new 12-course weave proof),
+all three type checks, 25 smoke simulation episodes and the rebuilt isolated
+client course. Generation QA reports 0 failures and the same four known warnings
+across 869 cases and three seeds. A separate proposed-commit copy verifies the
+schema 16 phase independently of concurrent nativeRegional integration.

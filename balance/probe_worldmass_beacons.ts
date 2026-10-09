@@ -74,7 +74,7 @@ console.log('PASS exact native beacon/circuit resolver, source frequency, schedu
 const restore = seedGlobalRandom(41376);
 try {
   // This controller fixture owns a flat field/surface vocabulary.
-  const base = massAdventure(), terrain = { ...base.terrain }; delete terrain.patches;delete terrain.landforms;
+  const base = massAdventure(), terrain = { ...base.terrain }; delete terrain.patches;delete terrain.landforms;delete terrain.regionalDiscoveries;delete terrain.nativeRegional;
   const config: MassAdventure = { terrain: { ...terrain, fields: [], places: [],
     surfaces: [{ id: 'beacon-flat', priority: 1, when: [], region: 'ground', color: '#314232', biome: 'downs' }] }, theme: base.theme,
     content: [], startRadius: 0, populationRadius: 600, maxPopulation: 20, pageRadius: 1, samplesPerTick: 256 };

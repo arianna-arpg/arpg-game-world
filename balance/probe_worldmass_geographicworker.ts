@@ -13,7 +13,7 @@ const undo=seedGlobalRandom(901743);
 try{
  // Preserve the pre-patch terrain descriptor for this historical regression.
  // The exact old plan/hash remains the oracle; fresh sources are exercised separately.
- const config=structuredClone(massAdventure());delete config.terrain.patches;delete config.terrain.landforms;config.terrain.version=7;
+ const config=structuredClone(massAdventure());delete config.terrain.patches;delete config.terrain.landforms;delete config.terrain.regionalDiscoveries;delete config.terrain.nativeRegional;config.terrain.version=7;
  config.terrain.surfaces=config.terrain.surfaces.map(s=>s.id==='marsh'?{...s,region:'mud'}:s);
  config.terrain.surfaces=[...config.terrain.surfaces.slice(0,4),{id:'wetland-pools',source:'regions/swamp',priority:25,
   when:[{field:'temperature',min:-.35},{field:'moisture',min:.35},{field:'elevation',max:.22},{field:'rock',max:-.18}],

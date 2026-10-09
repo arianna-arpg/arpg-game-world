@@ -157,7 +157,7 @@ test('opening reservation is pinned alongside ordinary mire protection',()=>{
 });
 test('default seamless country actually admits regional terrain beyond the protected opening',()=>{
   const s=copy(massAdventure().terrain),found=new Set<string>(),recipes=new Set<string>(); // regionalExtent legacy survey copy
-  delete s.landforms!.regional; // regionalExtent has a separate default-world survey
+  delete s.landforms!.regional;delete s.regionalDiscoveries;delete s.nativeRegional; // regionalExtent has a separate default-world survey
   for (const seed of [42,713,991]) { const g=gen(s,seed);
   for(let y=-10;y<10;y++)for(let x=-10;x<10;x++) {
     const p=g.landforms!.at(at(x*2880+1440,y*2880+1440));if(p){found.add(seed+'/'+p.id);recipes.add(p.recipe.id);}

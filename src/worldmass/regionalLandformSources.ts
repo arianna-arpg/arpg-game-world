@@ -1,11 +1,12 @@
 import { Rng } from '../core/rng';
+import { regionalMotifSupport, regionalMotifRows, regionalMotifFits, reserveRegionalMotif } from './regionalMotifSupport';
 import { ADVENTURE_DISTRICTS } from '../engine/adventureDistricts';
 import { EXPLORATION_DISTRICTS } from '../engine/explorationDistricts';
 import { GridWalkField } from '../world/gridWalk';
 import { captureLandformShape } from './landformSources';
 import type { MassLandformShape } from './landforms';
 import type { MassRegionalLandformPolicy } from './regionalLandforms';
-import { freezeData } from './random';
+import { freezeData, massHash } from './random';
 
 type Point = { x: number; y: number };
 type Port = Point & { dx: number; dy: number };
@@ -38,21 +39,24 @@ function connected(rows: readonly (readonly string[])[]): boolean {
   return queue.length > 0 && queue.length === count;
 }
 
-/** Admit the COMPLETE small native source plus a cell of untouched dry floor.
- * Narrow parent paths cannot fit this rectangle. Transparent child cells inherit
- * their parent; no corridor is carved to force a child into the composition. */
+/** Historical placement needs the full source rectangle and one dry cell.
+ * regionalMotifSupport instead follows complete native cells and their 120-unit
+ * dry feather in noncircular compositions. Transparent corners inherit their
+ * parent; neither branch carves a corridor to force a child into place. */
 function placeChild(rows: string[][], child: MassLandformShape, components: RegionalShape['components'],
-  foundation?: readonly string[], navigation: readonly Point[] = []): boolean {
+  foundation?: readonly string[], navigation: readonly Point[] = [], regionalTerrainSeed?: number, regionalMotifReservations?: Uint8Array): boolean {
   const n = rows.length, m = child.rows.length, stride = n + 1, occupied = new Int32Array(stride * stride);
-  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) occupied[(y + 1) * stride + x + 1]
+  const regionalMotifShape = regionalMotifReservations ? regionalMotifSupport(child) : undefined;
+  const regionalMotifFloor = regionalMotifReservations ? regionalMotifRows(rows, foundation, regionalMotifReservations) : undefined;
+  if (!regionalMotifFloor) for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) occupied[(y + 1) * stride + x + 1]
     = (rows[y][x] === 'g' && (!foundation || foundation[y][x] === 'g') ? 0 : 1)
       + occupied[y * stride + x + 1] + occupied[(y + 1) * stride + x] - occupied[y * stride + x];
   const sum = (x: number, y: number, size: number) => occupied[(y + size) * stride + x + size]
     - occupied[y * stride + x + size] - occupied[(y + size) * stride + x] + occupied[y * stride + x];
   let seat: Point | undefined, score = Infinity;
   for (let y = 1; y + m < n; y++) for (let x = 1; x + m < n; x++) {
-    if (sum(x - 1, y - 1, m + 2)) continue;
-    if (components.some(c => x < c.x + c.size + 2 && x + m + 2 > c.x && y < c.y + c.size + 2 && y + m + 2 > c.y)) continue;
+    if (regionalMotifFloor ? !regionalMotifFits(regionalMotifFloor, regionalMotifShape!, x, y) : sum(x - 1, y - 1, m + 2)) continue;
+    if (!regionalMotifFloor && components.some(c => x < c.x + c.size + 2 && x + m + 2 > c.x && y < c.y + c.size + 2 && y + m + 2 > c.y)) continue;
     // Existing safe terminals survive any situational relocation. The planner
     // additionally compares final route distances after all children are seated.
     if (navigation.some(a => {
@@ -60,9 +64,10 @@ function placeChild(rows: string[][], child: MassLandformShape, components: Regi
         if (xx >= 0 && yy >= 0 && xx < m && yy < m && child.rows[yy][xx] !== '.' && !dry(child.rows[yy][xx])) return true;
       return false;
     })) continue;
-    // Central discoveries precede further broad rooms. Stable cell ordering
-    // resolves ties, so source capture does not depend on runtime residency.
-    const d = (x + m / 2 - n / 2) ** 2 + (y + m / 2 - n / 2) ** 2;
+    // Historical sources favor the center. regionalTerrainSeed ranks eligible
+    // cells independently, allowing discoveries throughout generated courts.
+    const d = regionalTerrainSeed===undefined ? (x + m / 2 - n / 2) ** 2 + (y + m / 2 - n / 2) ** 2
+      : massHash(x+','+y+','+components.length,regionalTerrainSeed);
     if (d < score) { seat = { x, y }; score = d; }
   }
   if (!seat) return false;
@@ -70,6 +75,7 @@ function placeChild(rows: string[][], child: MassLandformShape, components: Regi
     const c = child.rows[y][x]; if (c !== '.') rows[seat.y + y][seat.x + x] = c;
   }
   components.push({ shape: child.id, ...seat, size: m });
+  if (regionalMotifReservations) reserveRegionalMotif(regionalMotifReservations, n, regionalMotifShape!, seat.x, seat.y);
   return true;
 }
 function composePools(rows: string[][], child: MassLandformShape, max: number): RegionalShape['components'] {
@@ -89,9 +95,11 @@ export function fitRegionalChildren(shape: MassLandformShape, rows: readonly str
   if (rows.length !== n || rows.some(row => row.length !== n)) return null;
   if (shape.components?.length && (!foundation || foundation.length !== n || foundation.some(row => row.length !== n))) return null;
   const cells = rows.map(row => row.split('')), components: RegionalShape['components'] = [];
+  const regionalMotifAware = shape.grammar?.nodes.some(node => node.court && node.court.family !== 'circle');
+  const regionalMotifReservations = regionalMotifAware ? new Uint8Array(n * n) : undefined;
   for (const component of shape.components ?? []) {
     const child = children.find(s => s.id === component.shape);
-    if (!child || child.rows.length !== component.size || !placeChild(cells, child, components, foundation, shape.navigation)) return null;
+    if (!child || child.rows.length !== component.size || !placeChild(cells, child, components, foundation, shape.navigation, shape.grammar?.childSeed, regionalMotifReservations)) return null;
   }
   if (!connected(cells)) return null;
   return { ...shape, rows: cells.map(row => row.join('')), components };

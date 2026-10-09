@@ -1,3 +1,65 @@
+NativeRegionalSeating (schema 18) preserves all original complete-locale
+placements and tries at most eight source-fit fallback seats only after the
+original sixteen fail. Keep exact historical omission, snapped whole-source
+containment, final-center biomes, protected sites and unchanged native owners.
+Verify nativeseating, historical nativeregional, the worldmass suite, all types,
+genqa and the native-seating-ui.cjs course after an isolated build. See
+docs/worldgen/native-regional-seating.md for multi-seed coverage, read budgets
+and remaining woodland, native-owner and synchronous-planning limits.
+
+NativeRegional (schema 17) captures complete supported main locale programs
+through the shared native builder. New sources retain original district/link/
+river geometry, exact dressing, pinned rules, coverage and geographic levels.
+Whole-source finite admission protects openings/sites and radius-15 native routes;
+ordinary habitats retain their actual bodies/rewards. Cave/urn-owner variants
+remain excluded whole. Keep nativeRegional before schema16, post-terrain place
+queries out of admission, exact scenery orientation, signed addresses and saved
+source omission. Verify worldmass_nativeregional, affected historical fixtures,
+worker/body/Continue probes, all types, genqa, sim and native-regional-ui.cjs after
+an isolated .claude/native-regional.local.work build. This does not complete native
+zone/region/map parity; see docs/worldgen/native-regional.md for provenance,
+sparse observed admission, coverage, worker and synchronous-planning limits.
+
+RegionalWeave adds saved winding links, independently varied court positions,
+fan/hammerhead/fork/terrace courts, and connected irregular outer shoulders.
+Woven policies require schema16; higher independent feature schemas retain
+precedence. Preserve exact schema14/15 omission, complete native children,
+protected-site holes and real exterior contacts. Admission checks actual raster
+adjacency, not only centerlines. Historical policy factories remain unchanged.
+Verify regionalweave (body routes, true detours, extreme bounds, nested native
+content and Continue), historical regionallayers/terrainvariation/regionalextents,
+adjacent terrain/worker probes, all types, genqa, sim and regional-weave-ui.cjs
+using its isolated build/storage. See docs/worldgen/seamless-landforms.md.
+Natural shoulders are geometric transitions; biome-render blending, native zone
+ownership and cold generation scheduling remain separate integration work.
+
+RegionalLayers (schema 15) adds saved noncircular court morphology and bounded
+post-terrain native discoveries. Keep exact schema-14 omission and circle-only
+geometry. Noncircular parents use regionalMotifSupport to reserve complete native
+cells plus a 120-unit dry feather while letting transparent corners inherit parent
+terrain. A whole discovery plus a 90-unit dry bypass must fit final floor after
+protected-site/child composition; never carve for content. Native cache, shrine,
+altar and puzzle owners retain their rules, geographic levels, discovery and
+Continue. Gameplay/worker reservations use regionalPlacesInCell; terrain proofs
+must keep ordinary placesInCell to avoid recursion. Verify regionallayers,
+historical terrainvariation/regionalextents, adjacent terrain/site/worker probes,
+all types, genqa, sim and regional-layers-ui.cjs after an isolated build. See
+docs/worldgen/seamless-landforms.md. This does not complete native-zone/hierarchy
+parity or whole-world chest paging.
+
+
+RegionalTerrainComposition (schema 14) adds saved seeded chamber/link terrain
+rules alongside familiar native formations. New worlds vary extent, connected
+trees/cycles, bends, shoulders and complete nested motifs; topology is dry-route
+topology, since native water remains traversable. Exact original-plus-expanded
+ownership frees exterior gaps for small terrain while retaining site holes and
+120-unit route/port protection. Grammar-only local site collars may widen the
+outline with an independent area cap; preserve all circles, obstacle/route caps
+and historical omission. Verify terrainvariation, regionalexpansion, historical
+regionalextents, landform suite, adjacent site/Continue probes, types, genqa, sim
+and terrain-variation-ui.cjs. See docs/worldgen/seamless-landforms.md. Finite
+uniqueness evidence is not unlimited non-repetition or full native-zone parity.
+
 Regional extent composition (regionalExtentSchema 13) adds saved 3,300/6,000/
 6,600-unit native terrain alongside historical small districts. Captured parent
 foundations accept whole protected-site holes, dry collars and bounded spurs;

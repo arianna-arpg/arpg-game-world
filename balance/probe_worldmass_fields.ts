@@ -15,6 +15,8 @@ import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 const finiteAdventure=()=>{
  const config=JSON.parse(canonical(massAdventure()));
  delete config.fieldResidency;
+ // This finite-owner course has no repeated post-terrain discoveries.
+ delete config.terrain.regionalDiscoveries;
  // Preserve the legacy field-only fixture; native puzzle fixtures have their own residency.
  for(const c of config.content)if(c.site?.puzzles){delete c.site.puzzles;c.count=3;}
  const repeated=new Set(config.content.filter((c:any)=>c.site?.altars?.length).map((c:any)=>c.id));

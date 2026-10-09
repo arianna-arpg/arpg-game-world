@@ -29,6 +29,8 @@ const undo=seedGlobalRandom(513713),full=massAdventure();
 const cfg:MassAdventure={terrain:{...full.terrain,places:[]},theme:full.theme,content:[],startRadius:256,
  populationRadius:1300,maxPopulation:96,pageRadius:1,samplesPerTick:1,
  nativeBirthSource:'native-resume-runtime-proof',dormancy:{source:'resume-proof',wakeRadius:1600,sleepRadius:3200,quietSeconds:12}};
+// The transport fixture deliberately has no generated content owners.
+delete cfg.terrain.nativeRegional;delete cfg.terrain.regionalDiscoveries;
 const source=makeSimWorld('warrior',513713),original=new WorldMassRuntime(513713,'resume-proof',cfg);original.attach(source);source.time=100;
 for(let i=0;i<6;i++){
  const id='resume-body/'+i,a=inspect(original).births.create(source,id,'gnoll_prowler',3);

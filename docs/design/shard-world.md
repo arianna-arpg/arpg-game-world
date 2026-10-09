@@ -742,6 +742,29 @@ the base taken and what moved.
 |---|---|---|---|
 | 2026-10-07 | `67d9c290` (pushed tip) | 0 | the lane's first base (a rebase, before the branch was pushed) |
 | 2026-10-08 | `ae5b686f` (31 LOCAL commits of the codex worktree, unpushed at the time) | 3, all in `world.ts` | the party scale moved into `engine/nativeScenePopulation.ts` and THE NEAR LAW moved with it (`scenePartyScaleCount(host, at)`); the experimental exploration rewards were retired upstream, so the keeper-gated `claimExplorationReward` went with them; the coop import kept `COOP_SCALING` for the mercy and XP reads. Of the 17 `keeperSeat` seams, 15 stand in `world.ts` as they were, the two party-scale lines moved with the scale into the scene module, and the retired reward claim's gate went with its method. The merge audit (an Opus critic, 2026-10-08) found THE LAND DIGEST gap (the preset's terrain version moved under the seed — fixed: refused saves are legacy, the welcome proves the land) and THE NEAR LAW AT THE MINT (pre-existing: the mint-time scale read a placeholder — fixed: settled where the body stands); it noted that `mercEase` is read off the keeper's sheet on a shard (a seat's own Fair Company never lightens its hired blades — OWED) and that the shell mints the settlement watch at attach before the first snapshot replaces it (harmless). Nine other probes red after the merge are red on the codex tip itself (its in-flight work), left to that lane. |
+| 2026-10-09 | `6948a362` (7 more LOCAL commits: regional courts, winding terrain, complete native locales, fixture ownership) | 0 | a clean auto-merge; a dry run (`git merge-tree`) of shard-world INTO the foundation tip is clean too. THE INTEGRATION POLICY (her question 2026-10-09) is §7c. |
+
+## §7c The integration policy (her question 2026-10-09)
+
+The shard lane is a FEATURE BRANCH OF THE FOUNDATION, never a fork. Two
+beats keep it so:
+
+- **Downstream, daily:** the foundation's tip merges INTO `shard-world`
+  (a merge, never a rebase; probe-gated; one row in the ledger above).
+- **Upstream, at every green milestone:** `shard-world` lands INTO
+  `codex/seamless-world-foundation`. The lane is additive (its own files
+  under `server/`, a handful of `keeperSeat` seams in the engine, its
+  rigs on the roster), so landing it early costs the foundation nothing
+  and buys two things: the shard's rigs join the foundation's gate, and
+  that lane's refactors carry the seams instead of breaking them
+  silently (both drifts the merge audit caught were exactly that).
+
+The foundation session performs the landing at a clean point of its own
+tree (its worktree is dirty most hours; nothing here forces its ref).
+Until then `shard-world` stays a merge away, and the dry run above is the
+receipt that the landing is clean today. Neither lane waits for the
+other to be "near completion": the foundation reaches content parity
+with main on its own clock, and the shard keeps riding it.
 
 ## §8 M0 receipts (2026-10-07, this pass)
 

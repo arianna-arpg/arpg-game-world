@@ -7,12 +7,7 @@ import './explorationLocales';
 import './complexLocales';
 import './landmarkComplexes';
 import { registerLocaleProgram, type LocaleDistrict } from '../world/locales';
-import { registerRegion, regionKind } from '../world/regions';
-
-registerRegion({ ...regionKind('water')!, id: 'locale_river', label: 'the river',
-  visual: { fill: '#285b72', alpha: 0.88 } });
-registerRegion({ id: 'locale_bridge', label: 'the crossing', walkable: true, blocks: false,
-  laid: 'built', pathCost: 1, visual: { fill: '#9c8969', alpha: 0.95 } });
+import './localeMaterials'; // NativeRegional workers share these exact native rules.
 
 const river = { width: [110, 170] as [number, number], bend: [-0.08, 0.08] as [number, number],
   region: 'locale_river', crossing: 'locale_bridge' };
