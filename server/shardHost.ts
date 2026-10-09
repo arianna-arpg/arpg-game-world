@@ -20,7 +20,7 @@
 // milestones that lift those are the charter's M1-M3.
 // ---------------------------------------------------------------------------
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, statSync, writeSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { installHeadlessShims } from '../src/sim/shims';
 // The sim arena's import list IS the boot registration set main.ts performs
@@ -374,7 +374,8 @@ export class ShardHost {
     if (!seat) return; // THE LATE WORD: a fallen vessel's client hears its death; its class pick rejoins
     const vessel = this.vessels.vesselOf(peer.id);
     seat.actor.cosmeticLoadout = sanitizeCosmeticLoadout(peer.cosmeticLoadout);
-    if (!vessel) seat.actor.name = peer.name || seat.actor.name;
+    // THE NAME (card 17 A): the body wears the name entered once — the vessel's own, else the join's.
+    seat.actor.name = (vessel ? seat.meta.name : peer.name) || seat.actor.name;
     // THE HEARTH WAKE + THE SPAWN GRACE: up at the hearth, unseen by foes until
     // the first willed input (or the grace runs out).
     const hearth = this.hearthSeat(), r = seat.actor.radius;
@@ -757,8 +758,13 @@ export class ShardHost {
     try {
       const save: ShardSave = { schemaVersion: SHARD_CFG.saveSchema, seed: this.seed, savedAt: Date.now(), world: this.world.serializeWorldState() };
       mkdirSync(dirname(this.savePath), { recursive: true });
+      // THE DURABLE WRITE: the whole file lands in a sibling, is FSYNCED, then renamed
+      // over the last good save — a process kill never leaves a half-written save, and
+      // a machine loss after the rename never leaves a zero-filled one (2026-10-09: a
+      // 4.8 MB file of NULs met the reader's refusal and cost the wilds their state).
       const tmp = this.savePath + '.tmp';
-      writeFileSync(tmp, JSON.stringify(save));
+      const fd = openSync(tmp, 'w');
+      try { writeSync(fd, JSON.stringify(save)); fsyncSync(fd); } finally { closeSync(fd); }
       renameSync(tmp, this.savePath);
     } catch (e) {
       this.log(`[shard] persist failed: ${String(e)}`);

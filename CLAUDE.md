@@ -3888,7 +3888,7 @@ we verify changes.
   BREAKER and a status page on a plain GET. The shard account's gate (M2)
   and per-seat travel (M1) are still carded. Verify `probe_shard.ts` (fast),
   `probe_shardimmortal.ts` (the roster vessel's road, fast) and
-  `probe_shardslow.ts` (the wilds save and the vessel, `--slow`).
+  `probe_shardslow.ts` (the wilds save and the vessel, `--slow`). THE IDENTITY CUES (card 17 A): overhead names on every other hero and the `g` ping that marks the ground for your party live in `data/identityCues.ts` + `engine/pings.ts` (one standing mark per seat, host-judged for cadence and reach); verify `probe_shardidentity.ts`.
 - `src/ui/`, `src/net/`, `src/meta/` — DOM panels, co-op transport, and the
   account / save / permadeath meta-layer. THE FOLIO (`ui/folio.ts` — docs
   `docs/ui/folio.md`, probe `balance/probe_folio.ts`): dwell dialogs that

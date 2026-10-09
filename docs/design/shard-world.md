@@ -643,7 +643,13 @@ character walks back for it), 7 the first cut, 8 A, 9 as built, 10 as set,
 17. **Identity and talk** — A: a name entered once, overhead names on
     heroes, world-anchored pings (a visible cue, SHOW DON'T TELL). B: text
     chat as well. Rec: A; chat is yours. **RULED A now, B as a later pass
-    (2026-10-08): text chat is important, not paramount.**
+    (2026-10-08): text chat is important, not paramount.** **BUILT A
+    (2026-10-09):** THE IDENTITY CUES — the name entered once rides the
+    body and the wire, every other hero wears it overhead (gold for a mate,
+    ether for a neighbour), and `g` marks the ground for your party: rings,
+    a beacon, an edge chevron off-screen, host-judged for cadence and reach
+    (`data/identityCues.ts`, `engine/pings.ts`, docs/engine/shard.md;
+    `balance/probe_shardidentity.ts`). Text chat (B) stays the later pass.
 18. **World-freezing powers on a shard** (Time Stop, any world-wide hold)
     — A: freeze the whole World. B: scope them to a radius. C: exempt
     other players. Rec: B. **RULED B WITH C (2026-10-08):** a world-freezing
