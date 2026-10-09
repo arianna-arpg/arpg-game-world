@@ -47047,13 +47047,16 @@ export class World {
     if (font) put(font.pos, this.fontGate.frac(SALVAGE_CFG.stationDwell), 'station:font');
     const board = this.bountyBoardsHere().find(b => anySeat(s => this.nearBountyBoard(s, b.id)));
     if (board) put(board.pos, this.bountyGate.frac(BOUNTY_BOARD_CFG.dwell.sec), 'station:bounty');
-    // The sea's furniture: the dock, the harbor board, the muster horn.
-    const dock = this.portDock();
+    // The sea's furniture: the dock, the harbor board, the muster horn. THE
+    // SEALED WORDS (shard M1 W2): a hosted world's shell draws no ring at the
+    // dock or the harbor board, sealed roads there (its seat hears their word).
+    const sealedShell = !!this.netCounters;
+    const dock = sealedShell ? null : this.portDock();
     if (dock && dist(this.player.pos, dock.pos) <= 110
       && this.dwellReachable(this.player.pos, dock.pos, DWELL_CFG.reach, this.storyPair(this.player, dock))) {
       put(dock.pos, this.sailGate.frac(CARAVAN_DWELL), 'station:dock');
     }
-    if (this.nearHarborBoard()) put(this.doodads.find(d => d.kind === 'harbor_board')?.pos, this.harborGate.frac(CARAVAN_DWELL), 'station:harbor_board');
+    if (!sealedShell && this.nearHarborBoard()) put(this.doodads.find(d => d.kind === 'harbor_board')?.pos, this.harborGate.frac(CARAVAN_DWELL), 'station:harbor_board');
     if (this.nearMusterHorn()) put(this.doodads.find(d => d.kind === 'muster_horn')?.pos, this.holdGate.frac(HARBORHOLD_CFG.muster.dwellSec), 'station:muster_horn');
     // Bodies: the counters (each VendorDef names its keeper's role), the
     // caravanner, the innkeeper, the quartermaster, the Bonewright, the

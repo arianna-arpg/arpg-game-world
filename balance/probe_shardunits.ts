@@ -923,6 +923,17 @@ const notesHeard = (cl: Client, from: number, text: string): number =>
   applyOwnSeatRows(shellW, { seats: { me: row } } as unknown as StateSnapshot);
   check('F ring: a shell draws the road ring its own row carries (World.netRoadDwell into dwellRingsView), and none once it is gone',
     !!drawn && drawn.pos.x === 140 && drawn.pos.y === 220 && drawn.frac === 0.5 && !shellW.dwellRingsView().some(r => r.kind === 'zone_exit'));
+  // THE SEALED WORDS on the shell: a hosted world's shell draws no linger ring at the dock.
+  const port0 = shellW.zone.port;
+  shellW.zone.port = true;
+  const dockD = { pos: vec(shellW.player.pos.x, shellW.player.pos.y), radius: 16, kind: 'dock' } as unknown as Doodad;
+  shellW.doodads.push(dockD);
+  const coopRing = shellW.dwellTargetsView().some(r => r.kind === 'station:dock');
+  shellW.netCounters = new Set();
+  const hostedRing = shellW.dwellTargetsView().some(r => r.kind === 'station:dock');
+  shellW.netCounters = undefined; shellW.zone.port = port0; shellW.doodads = shellW.doodads.filter(d => d !== dockD);
+  check('F ring: a hosted world\'s shell draws no linger ring at a sealed road (the dock), where a co-op shell still does',
+    coopRing && !hostedRing);
   for (const cl of [F1, F2]) cl.c.leave();
   await waitFor(() => !seatOf(F1.id) && !seatOf(F2.id), 60);
 }

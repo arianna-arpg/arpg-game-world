@@ -601,7 +601,9 @@ export class ShardHost {
    *  "character level" in forty-one reads (event gates, vendor shelves, bounty
    *  work, sidezone mints) — so it wears the flags again, stands up, and
    *  mirrors the highest standing player's level. It also acted this very
-   *  frame, so THE SEALED ROADS hold (a dwell reads an idle seat). */
+   *  frame, so the solo road block (which reads only its World's own player)
+   *  never carries a warden anywhere; every seat's roads are THE SHARD
+   *  SCANNER's (THE ROADS PER PLAYER, engine/shardRoads.ts). */
   private wardenStand(u: SimUnit): void {
     const w = u.world;
     const keeper = w.localSeat;
