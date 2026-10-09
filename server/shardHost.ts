@@ -81,6 +81,12 @@ export const SHARD_CFG = {
    *  shadowed keeper, wherever that is) and is untargetable until its first
    *  willed input or spawnGraceSec, whichever comes first. */
   spawnGraceSec: 20,
+  /** THE DORMANT SEAT (card 16 B): a socket that closes without its client's
+   *  word (`session leaving`) leaves its hero standing in the world, input-less
+   *  and fully targetable, this many world seconds before the leave path runs;
+   *  a join carrying THE RECONNECT TOKEN takes the seat back meanwhile. Never a
+   *  free escape: a hero that dies dormant dies by the ordinary law. */
+  dormantSec: 30,
   /** THE FOCUS: the keeper shadows the standing seat that acted most recently;
    *  the current focus keeps it unless another seat has been newer by this many seconds. */
   focusSwapSec: 3,
@@ -203,6 +209,8 @@ export class ShardHost {
   private hearth: { x: number; y: number; tier: number } = { x: 0, y: 0, tier: 0 };
   /** THE SPAWN GRACE: seat id → world time the grace ends. */
   private readonly graces = new Map<string, number>();
+  /** THE DORMANT SEAT: seat id → world time its dormancy ends (the leave path runs then). */
+  private readonly dormancy = new Map<string, number>();
   private readonly bootAt = Date.now();
   private readonly tickMs: number[] = [];
   private tickMsAt = 0;
@@ -254,6 +262,7 @@ export class ShardHost {
     }
     this.hearth = { x: this.keeper.actor.pos.x, y: this.keeper.actor.pos.y, tier: this.keeper.actor.tier };
     this.net = new ShardTransport();
+    this.net.log = this.log;
     this.net.worldmass = this.worldmass;
     this.net.features = [...this.account.features];
     this.net.land = this.world.massRuntime ? massDigest(this.world.massRuntime.config) : null; // THE LAND DIGEST (wildsSave.shellLandDigest)
@@ -268,9 +277,12 @@ export class ShardHost {
     this.vessels = new VesselDesk(this.world, toSeat, this.corpses, { beatSec: SHARD_CFG.persistSec, log: this.log });
     this.net.onPeerJoin((p, join) => this.onJoin(p, join));
     this.net.onPeerLeave(id => {
+      this.dormancy.delete(id); // THE DORMANT SEAT: the word, a clock run out or a closing shard ends any dormancy
       this.vessels.leave(id); this.graces.delete(id); this.world.removeSeat(id);
       this.world.settleNearScale(true); // keeperSeat: THE NEAR LAW re-read where every body stands after the leave (and clamped for the save)
     });
+    this.net.onPeerDormant(id => this.onDormant(id)); // THE DORMANT SEAT: a lost socket's hero stays, on a clock
+    this.net.onPeerResume(id => this.onResume(id)); // THE RECONNECT TOKEN: the clock stops, the seat's world re-ships
     this.net.onSession((m, from) => this.onSession(m, from));
   }
 
@@ -363,6 +375,50 @@ export class ShardHost {
     this.net.sendZoneTo(peer.id, serializeZone(this.world));
     this.lastSentZone = this.world.zone.id;
     this.log(`[shard] ${peer.id} joined as ${seat.meta.classDef.id}${vessel ? ` (the vessel ${seat.meta.name}, level ${this.world.seatHero(seat).level})` : ''} (${this.net.connectionCount()} connected)`);
+  }
+
+  /** THE DORMANT SEAT (card 16 B): a socket was lost without its client's
+   *  word. The hero stays in the world, standing, input-less and fully
+   *  targetable, for dormantSec (dying meanwhile is the ordinary death: the
+   *  covenant or the mercy), its vessel and corpse records kept. THE UNTRIED
+   *  SEAT (still under THE SPAWN GRACE: unseen by foes, it never willed a
+   *  step) has nothing to escape and leaves at once, and a seat with no body
+   *  left (a fall took it) has nothing to wake. */
+  private onDormant(id: string): void {
+    const seat = this.world.seats.find(s => s.id === id && !s.keeper);
+    if (!seat || this.graces.has(id)) { this.net.release(id); return; }
+    this.dormancy.set(id, this.world.time + SHARD_CFG.dormantSec);
+    this.corpses.sleep(id); // a body with no hand reclaims nothing
+    this.log(`[shard] ${id} lost its connection; its hero lies dormant ${SHARD_CFG.dormantSec}s (${this.net.connectionCount()} connected)`);
+  }
+
+  /** THE RECONNECT TOKEN: a dormant seat's player is back on a new
+   *  connection. The clock stops, and the fresh shell gets what a joiner gets:
+   *  the terrain now, the seat's whole meta on the next snapshot, its own
+   *  bodies' rows, and an input ack counted from zero again. */
+  private onResume(id: string): void {
+    this.dormancy.delete(id);
+    const seat = this.world.seats.find(s => s.id === id);
+    if (!seat) return; // (never: a seat with no body is released at once, so it cannot be resumed)
+    this.world.lastInputSeq.delete(id); // the new shell counts its inputs from zero
+    this.world.markMetaDirty(seat);
+    this.corpses.wake(id);
+    this.net.sendZoneTo(id, serializeZone(this.world));
+    this.lastSentZone = this.world.zone.id;
+    this.log(`[shard] ${id} resumed its dormant hero (${this.net.connectionCount()} connected)`);
+  }
+
+  /** THE DORMANT SEAT's clock: a seat whose dormancy ran out, or whose body a
+   *  fall already took (THE DEATH COVENANT reads a dormant vessel as any), is
+   *  released: the peers hear `pleave`, then the leave path runs. */
+  private sweepDormancy(): void {
+    if (!this.dormancy.size) return;
+    const w = this.world;
+    for (const [id, until] of [...this.dormancy]) {
+      if (w.time < until && w.seats.some(s => s.id === id)) continue;
+      this.dormancy.delete(id);
+      this.net.release(id);
+    }
   }
 
   private onSession(msg: SessionMsg, from: string): void {
@@ -483,6 +539,7 @@ export class ShardHost {
     this.ticks++;
     this.vessels.tick(dt); // THE VESSEL: THE DEATH COVENANT (before THE MERCY could answer) + the mirror beat
     this.corpses.tick(dt); // THE CORPSE RETURNS: each seat's own standing bodies + the reclaim dwell
+    this.sweepDormancy(); // THE DORMANT SEAT: a clock run out (or a fall that took the body) ends the seat
 
     if (this.net.connectionCount() > 0) {
       this.dressTimer -= dt;
@@ -618,7 +675,11 @@ export class ShardHost {
       zone: w.zone.id,
       clock: +w.time.toFixed(1),
       uptimeSec: Math.round((Date.now() - this.bootAt) / 1000),
-      seats: w.seats.filter(s => !s.keeper).map(s => ({ id: s.id, name: s.actor.name, level: s.actor.level, alive: !s.actor.dead && !s.actor.downed })),
+      seats: w.seats.filter(s => !s.keeper).map(s => {
+        const until = this.dormancy.get(s.id); // THE DORMANT SEAT on the page: marked, with its seconds left
+        return { id: s.id, name: s.actor.name, level: s.actor.level, alive: !s.actor.dead && !s.actor.downed,
+          ...(until !== undefined ? { dormant: true, dormantLeftSec: +Math.max(0, until - w.time).toFixed(1) } : {}) };
+      }),
       connections: this.net.connectionCount(),
       ticks: this.ticks,
       tickMsP50: q(0.5), tickMsP95: q(0.95),

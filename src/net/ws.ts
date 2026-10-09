@@ -23,8 +23,14 @@ export type WireMsg =
       /** THE IDENTITY + THE VESSEL (docs/engine/shard.md "The vessel and the
        *  corpse"): the account's id, and the hero that travels (a
        *  CharacterSave with NO world half; absent = a fresh hero). */
-      accountId?: string; vessel?: import('../meta/character').CharacterSave }
-  | { t: 'welcome'; self: PlayerId; peers: PeerInfo[]; seed: number; worldmass?: boolean; features?: string[]; land?: string }
+      accountId?: string; vessel?: import('../meta/character').CharacterSave;
+      /** THE RECONNECT TOKEN (card 16 B, docs/engine/shard.md "The pieces"):
+       *  a dropped session's seat and the token its welcome carried; a match
+       *  on a DORMANT seat re-binds this connection to it. */
+      resume?: ShardResume }
+  | { t: 'welcome'; self: PlayerId; peers: PeerInfo[]; seed: number; worldmass?: boolean; features?: string[]; land?: string;
+      /** THE RECONNECT TOKEN the shard minted for this seat at this join (a resume mints a fresh one). */
+      resume?: { token: string } }
   | { t: 'input'; seat: PlayerId; input: PlayerInput }
   | { t: 'snap'; snap: StateSnapshot }
   | { t: 'zone'; zone: ZoneMsg }
@@ -47,6 +53,11 @@ export const WS_TRANSPORT_CFG = {
   /** THE FAREWELL: how long a leaving vessel holds its socket open for the
    *  shard's last mirror (`heroSave`) before it closes anyway (ms). */
   farewellMs: 1500,
+  /** THE RECONNECT TOKEN: how long after a session was lost the lobby's
+   *  Connect still offers the shard its seat and token (ms). The shard holds
+   *  a dropped seat dormant for SHARD_CFG.dormantSec; past either clock the
+   *  connect is a fresh join. */
+  resumeWindowMs: 30_000,
 };
 
 /** THE ADDRESS, as a player types it: a Codespaces `https://…` becomes
@@ -75,6 +86,27 @@ export function defaultShardUrl(): string {
   return WS_TRANSPORT_CFG.defaultUrl;
 }
 
+/** THE RECONNECT TOKEN (card 16 B): a dropped session's seat and its token. */
+export interface ShardResume { seat: PlayerId; token: string }
+
+/** THE REMEMBERED SESSION: the last session a shard's welcome seated: its
+ *  address (normalized), our seat, the token minted for it, and when it was
+ *  last known whole (the welcome, then the moment its host was lost). It
+ *  outlives its transport on purpose (the lobby's next Connect builds a new
+ *  one); a deliberate leave() forgets it. Page memory only: a reload joins
+ *  fresh. */
+export interface ShardSession { url: string; self: PlayerId; token: string; at: number }
+let lastSession: ShardSession | null = null;
+
+/** The resume the lobby's Connect sends: the remembered seat and token when
+ *  that session was on this address and was lost under resumeWindowMs ago;
+ *  else null (a fresh join). */
+export function shardResumeFor(url: string, now = Date.now()): ShardResume | null {
+  const s = lastSession;
+  if (!s || s.url !== normalizeShardUrl(url) || now - s.at >= WS_TRANSPORT_CFG.resumeWindowMs) return null;
+  return { seat: s.self, token: s.token };
+}
+
 export class WsTransport implements NetTransport {
   self: PlayerId = 'p0';
   readonly isHost = false;
@@ -93,6 +125,8 @@ export class WsTransport implements NetTransport {
   /** Latched: one disappearance arrives as several events; a teardown WE
    *  chose (leave) never reports a lost host. */
   private hostGone = false;
+  /** THE REMEMBERED SESSION this transport's welcome minted (lastSession while it is the newest). */
+  private session: ShardSession | null = null;
 
   peers(): PeerInfo[] { return this.peerList; }
 
@@ -106,8 +140,10 @@ export class WsTransport implements NetTransport {
   }
 
   /** Open the socket and wait for the shard's welcome. Resolves with our seat
-   *  id AND the shard's run seed (the lobby builds the render shell from it). */
-  connect(url: string, info: Omit<PeerInfo, 'id' | 'isHost'>, vessel?: import('../meta/character').CharacterSave): Promise<{ self: PlayerId; seed: number; worldmass: boolean; features: string[]; land?: string }> {
+   *  id AND the shard's run seed (the lobby builds the render shell from it).
+   *  `resume` (THE RECONNECT TOKEN) asks for a dormant seat back; `resumed`
+   *  says the shard re-bound it (else the welcome seated us fresh). */
+  connect(url: string, info: Omit<PeerInfo, 'id' | 'isHost'>, vessel?: import('../meta/character').CharacterSave, resume?: ShardResume): Promise<{ self: PlayerId; seed: number; worldmass: boolean; features: string[]; land?: string; resumed: boolean }> {
     return new Promise((resolve, reject) => {
       let ws: WebSocket;
       try { ws = new WebSocket(normalizeShardUrl(url)); } catch (e) { reject(e instanceof Error ? e : new Error(String(e))); return; }
@@ -118,13 +154,18 @@ export class WsTransport implements NetTransport {
       const settle = (): void => { clearTimeout(timer); };
       ws.onopen = (): void => {
         ws.send(JSON.stringify({ t: 'join', classId: info.classId, name: info.name, cosmeticLoadout: info.cosmeticLoadout,
-          ...(info.accountId ? { accountId: info.accountId } : {}), ...(vessel ? { vessel } : {}) } satisfies WireMsg));
+          ...(info.accountId ? { accountId: info.accountId } : {}), ...(vessel ? { vessel } : {}),
+          ...(resume ? { resume: { seat: resume.seat, token: resume.token } } : {}) } satisfies WireMsg)); // THE RECONNECT TOKEN
       };
       ws.onmessage = (ev): void => {
         let m: WireMsg;
         try { m = JSON.parse(String(ev.data)) as WireMsg; } catch { return; }
         if (m.t === 'welcome') {
           this.self = m.self; this.peerList = m.peers; this.welcomed = true;
+          // THE REMEMBERED SESSION: this seat and its token outlive a lost host
+          // (a deliberate leave forgets them); a welcome with no token is no session to resume.
+          const token = typeof m.resume?.token === 'string' ? m.resume.token : '';
+          this.session = lastSession = token ? { url: normalizeShardUrl(url), self: m.self, token, at: Date.now() } : null;
           if (!settled) {
             settled = true;
             settle();
@@ -132,7 +173,8 @@ export class WsTransport implements NetTransport {
             // (townTier) — a wilds shell builds its World with these so the seed
             // lays the SAME settlement the server laid (strings only, sanitized).
             const features = Array.isArray(m.features) ? m.features.filter((f): f is string => typeof f === 'string').slice(0, 256) : [];
-            resolve({ self: m.self, seed: m.seed, worldmass: m.worldmass === true, features, land: typeof m.land === 'string' ? m.land : undefined });
+            resolve({ self: m.self, seed: m.seed, worldmass: m.worldmass === true, features, land: typeof m.land === 'string' ? m.land : undefined,
+              resumed: !!resume && m.self === resume.seat }); // THE RECONNECT TOKEN: the dormant seat came back
           }
           return;
         }
@@ -171,15 +213,22 @@ export class WsTransport implements NetTransport {
 
   /** THE FAREWELL (a traveling vessel's clean leave — docs/engine/shard.md
    *  "The vessel and the corpse"): armed by the vessel link when a hero
-   *  traveled, leave() first asks the shard for its last mirror (`session
-   *  leaving`) and holds the socket open until that `heroSave` lands or
+   *  traveled, leave() holds the socket open after its `session leaving`
+   *  (the shard's cue for the last mirror) until that `heroSave` lands or
    *  WS_TRANSPORT_CFG.farewellMs passes. The session subscribers still
-   *  standing receive it as any message. Disarmed: the instant close. */
+   *  standing receive it as any message. Disarmed: the word, then the
+   *  instant close. */
   farewell = false;
   private farewellClose: (() => void) | null = null;
 
   leave(): void {
+    // THE DELIBERATE LEAVE (card 16 B): a live session we end ourselves says
+    // so (`session leaving`), so the shard ends the seat at once instead of
+    // holding it dormant, and forgets its token; a session already lost keeps
+    // the token for the lobby's resume.
+    const deliberate = this.welcomed && !this.hostGone;
     this.hostGone = true; // our own teardown — never a lost host
+    if (deliberate && this.session && lastSession === this.session) lastSession = null;
     const ws = this.ws;
     this.ws = null;
     if (!ws) return;
@@ -189,12 +238,14 @@ export class WsTransport implements NetTransport {
       if (timer !== null) clearTimeout(timer);
       try { ws.close(1000, 'leave'); } catch { /* already closed */ }
     };
-    if (this.farewell && this.welcomed && ws.readyState === WebSocket.OPEN) {
+    if (deliberate && ws.readyState === WebSocket.OPEN) {
       try { ws.send(JSON.stringify({ t: 'session', msg: { t: 'leaving' } } satisfies WireMsg)); } catch { close(); return; }
-      this.farewellClose = close;
-      timer = setTimeout(close, WS_TRANSPORT_CFG.farewellMs);
-      (timer as { unref?: () => void }).unref?.(); // a Node rig never waits on a farewell
-      return;
+      if (this.farewell) {
+        this.farewellClose = close;
+        timer = setTimeout(close, WS_TRANSPORT_CFG.farewellMs);
+        (timer as { unref?: () => void }).unref?.(); // a Node rig never waits on a farewell
+        return;
+      }
     }
     close();
   }
@@ -222,6 +273,7 @@ export class WsTransport implements NetTransport {
   private signalHostLost(): void {
     if (this.hostGone || !this.welcomed) return;
     this.hostGone = true;
+    if (this.session) this.session.at = Date.now(); // THE REMEMBERED SESSION: the resume window opens at the loss
     this.hostLostCbs.forEach(cb => cb());
   }
 }

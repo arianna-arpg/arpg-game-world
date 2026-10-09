@@ -70,7 +70,9 @@ export type SessionMsg =
   //            the reckoning the shard appraised (`runEnd` follows).
   //   corpses  (shard→a seat): the seat's OWN standing bodies in its zone,
   //            plus the reclaims it completed since the last row.
-  //   leaving  (seat→shard):  the farewell: mirror me before my socket closes.
+  //   leaving  (seat→shard):  the farewell: mirror me before my socket closes;
+  //            and THE DELIBERATE LEAVE: that close ends my seat at once,
+  //            never dormant (card 16 B: a close without it leaves the hero).
   | { t: 'heroSave'; save: import('../meta/character').CharacterSave }
   | { t: 'corpse'; note: import('./vesselWire').ShardCorpseNote; reckoning: import('./vesselWire').ShardReckoning }
   | { t: 'corpses'; zoneId: string; bodies: import('./vesselWire').ShardBodyRow[]; reclaimed?: number }

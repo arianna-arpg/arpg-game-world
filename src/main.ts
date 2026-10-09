@@ -53,7 +53,7 @@ import type { NetTransport, StateSnapshot, PeerInfo, SessionMsg, ZoneMsg } from 
 import { serializeSnapshot, applySnapshot, serializeZone, applyZone } from './net/snapshot';
 import { RemoteInput } from './net/remote';
 import { WebRtcTransport } from './net/webrtc';
-import { WsTransport, defaultShardUrl } from './net/ws';
+import { WsTransport, defaultShardUrl, shardResumeFor } from './net/ws';
 import { wildsShellActive, wildsShellAttach, wildsShellDetach, wildsShellStream, wildsShellZone } from './net/wildsClient';
 import { readTravelingVessel, ShardVesselLink, travelNote } from './meta/shardVessel';
 import { openCoopLobby } from './ui/lobby';
@@ -2625,23 +2625,29 @@ let lastShardUrl: string | null = null;
  *  (never a second trip into Mu). */
 async function connectToShard(url: string, classId: string, fromWake = false): Promise<'connected' | 'mu'> {
   const vessel = await readTravelingVessel();
-  if (!vessel) {
+  // THE RECONNECT TOKEN (card 16 B — THE DORMANT SEAT): a session lost on this address
+  // inside the window asks for its dormant seat back first; the hero that stood there is
+  // the one to reclaim, vessel or not, so no Mu detour precedes a resume.
+  const resume = shardResumeFor(url) ?? undefined;
+  if (!vessel && !resume) {
     if (fromWake) throw new Error('this hero cannot travel to a server (an Immortal vessel travels in a later pass)');
     pendingServer = { url };
     beginPressed();
     return 'mu';
   }
   const ws = new WsTransport();
-  const cls = CLASSES.find(c => c.id === (vessel.classId ?? classId)) ?? CLASSES[0];
+  const cls = CLASSES.find(c => c.id === (vessel?.classId ?? classId)) ?? CLASSES[0];
   try {
     net = ws;
     subscribeToHost();
     wireSession();                             // run-lifecycle channel (newRun/hostLeft)
     shardVessel = new ShardVesselLink(ws, account, vessel, () => (net === ws ? world : null),
       { runWiped: () => ui.setContinueSave(null), mayWrite: () => net === ws || !running });
-    const { self, seed, worldmass, features, land } = await ws.connect(url, { name: vessel.name ?? 'Joiner', classId: cls.id,
-      cosmeticLoadout: account.cosmetics.loadout, accountId: account.accountId }, vessel);
-    startAsClient(cls, self, seed, worldmass ? { features, land } : undefined);
+    const { self, seed, worldmass, features, land, resumed } = await ws.connect(url, { name: vessel?.name ?? 'Joiner', classId: cls.id,
+      cosmeticLoadout: account.cosmetics.loadout, accountId: account.accountId }, vessel ?? undefined, resume);
+    // A resumed seat is the hero that stood there: its class is its roster row's, never this card's.
+    const seated = resumed ? CLASSES.find(c => c.id === ws.peers().find(p => p.id === self)?.classId) ?? cls : cls;
+    startAsClient(seated, self, seed, worldmass ? { features, land } : undefined);
     lastShardUrl = url;
     return 'connected';
   } catch (e) { resetToLocal(); throw e; }     // an unreachable server must revert net to LocalTransport
