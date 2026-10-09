@@ -61,6 +61,31 @@ test('site collision and finite enumeration refusal are distinct and both preser
  }
 });
 
+test('biome-only selection matches material reads through site surfaces and skips all full reads for refused seats',()=>{
+ const spec=flat();spec.fields=[{id:'wet',base:0,layers:[{id:'country',period:8200,amplitude:1}]}];
+ spec.surfaces=[{id:'forest',priority:2,when:[{field:'wet',min:0}],region:'ground',biome:'forest',color:'#224422'},...spec.surfaces];
+ spec.places=[{id:'paint',version:1,content:'paint',period:1800,chance:1,radius:800,jitter:0,priority:1,when:[],surface:{region:'water',color:'#334455'}}];
+ const g=new MassGenerator(makeMassRun(713,'biome-read-proof',spec),spec);
+ const view=g as unknown as {baseTerrainAt(at:ReturnType<typeof address>):ReturnType<MassGenerator['terrainAt']>;nativeRegionalBiomeAt(at:ReturnType<typeof address>):string};
+ let painted=0;const biomes=new Set<string>();
+ for(const cx of ['-9007199254740999','-3','0','9007199254740999'])for(const cy of ['-2','3'])for(const x of [15,495,945]){
+  const at=address('surface',cx,cy,x,495,960),full=view.baseTerrainAt(at);if(full.region==='water')painted++;
+  biomes.add(full.biome);assert.equal(view.nativeRegionalBiomeAt(at),full.biome);
+ }
+ assert.ok(painted>0&&biomes.size===2,'actual painted sites and both geographic surfaces were exercised');
+ for(const seating of [undefined,NATIVE_REGIONAL_SEATING]){
+  const policy=copy(spec);if(seating)policy.nativeRegional!.seating=seating;else delete policy.nativeRegional!.seating;
+  const run=makeMassRun(713,'biome-read-proof',policy),blocked=()=>[{id:'protected',x:2000,y:1800,radius:10000}];
+  const full=new MassNativeRegional(policy,run,at=>view.baseTerrainAt(at),blocked);
+  const fast=new MassNativeRegional(policy,run,at=>view.baseTerrainAt(at),blocked,at=>view.nativeRegionalBiomeAt(at));
+  for(const [x,y] of [[-3n,4n],[9007199254740999n,-9007199254741009n]]){
+   assert.equal(full.candidate('surface',x,y),null);assert.equal(fast.candidate('surface',x,y),null);
+  }
+  assert.equal(full.counters.reads,full.counters.tried);assert.equal(fast.counters.reads,0);
+  const {reads:_full,...fullCounts}=full.counters,{reads:_fast,...fastCounts}=fast.counters;assert.deepEqual(fastCounts,fullCounts);
+ }
+});
+
 test('signed source-fit plans reproduce after eviction, streaming and cold worker compilation',()=>{
  for(const span of [30,960])for(const biome of ['downs','forest','highland','marsh']){
   const spec=flat(biome,span),run=makeMassRun(911,'seating-far',spec),a=new MassGenerator(run,spec),b=new MassGenerator(run,copy(spec));
@@ -95,6 +120,9 @@ test('every source can use fallback without replacing its complete source or cro
 let survey:ReturnType<typeof compareNativeSeating>;
 test('repeatable three-seed natural survey reports gains, missing families, widths and exact historical identities',()=>{
  survey=compareNativeSeating();mkdirSync('balance/reports',{recursive:true});writeFileSync('balance/reports/native-seating-survey.json',JSON.stringify(survey,null,2));
+ // Golden complete-plan identities captured before the biome-read optimization.
+ assert.deepEqual(survey.map(r=>({historical:r.historical.accepted.map(p=>p.hash),sourceFit:r.sourceFit.accepted.map(p=>p.hash)})),[{"historical":["ab053ae48c830b06","2d3b50b8566d8b45","b03f57d7a5cfce4e"],"sourceFit":["0cea795f970bbd19","ab053ae48c830b06","e825db36d1c939c6","2d3b50b8566d8b45","b03f57d7a5cfce4e"]},{"historical":["b8454bc9fc0bcb27","0633bb9e472bf5a6","827a7b26b2321a38","ef5b6133c86e6911","5cac5dd88bd619c8","308cdc63f690aa7c","2f2845b999203b78","a11f5efa72cf1f9a","0deab20a924b46e4"],"sourceFit":["cb1129496b4f8390","b8454bc9fc0bcb27","0633bb9e472bf5a6","827a7b26b2321a38","ef5b6133c86e6911","5cac5dd88bd619c8","308cdc63f690aa7c","2f2845b999203b78","9bc4f807a497c6ca","a11f5efa72cf1f9a","03047d82a88470ed","0deab20a924b46e4"]},{"historical":["cac05874709733cb","970c40632d5b8684","85c218876d92f9f2","cae27e659dac6504","cf0e5107f53efc2b","8341790aa4950e13","7fd5a724e7d9f2a6","9f06cec06f165481"],"sourceFit":["cac05874709733cb","58cb14e488198dad","970c40632d5b8684","85c218876d92f9f2","cae27e659dac6504","cf0e5107f53efc2b","8341790aa4950e13","7fd5a724e7d9f2a6","9f06cec06f165481"]}]);
+ for(const row of survey)for(const mode of [row.historical,row.sourceFit])assert.equal(mode.counters.biomeReads,mode.counters.tried);
  assert.deepEqual(survey.map(r=>r.historical.accepted.length),[3,9,8]);assert.deepEqual(survey.map(r=>r.sourceFit.accepted.length),[5,12,9]);
  assert.deepEqual(survey[0].historical.accepted.map(p=>p.hash),['ab053ae48c830b06','2d3b50b8566d8b45','b03f57d7a5cfce4e']);
  for(const row of survey){assert.ok(row.sourceFit.accepted.length>row.historical.accepted.length);assert.ok(row.sourceFit.counters.tried<=256*24);assert.equal(row.sourceFit.counters.siteBudget,0);}
@@ -113,8 +141,22 @@ test('real cold workers reproduce fallback-only natural regions and retained ori
  }
 });
 
+const woodland={seed:713,accepted:[{x:-1,y:23,hash:'363b9080e5f39cc6'}]};
+test('natural woodland admits one complete Sacred Groves source only after historical seats fail',()=>{
+ const spec=massAdventure().terrain,old=copy(spec);delete old.nativeRegional!.seating;
+ const before=new MassGenerator(makeMassRun(713,'nativeRegional-runtime',old),old);
+ assert.equal(before.nativeRegional!.candidate('surface',-1n,23n),null);
+ const g=new MassGenerator(makeMassRun(713,'nativeRegional-runtime',spec),spec),p=g.nativeRegional!.candidate('surface',-1n,23n)!;
+ assert.ok(p);assert.equal(massDigest(p),woodland.accepted[0].hash);assert.equal(p.recipe,'nativeRegional-woodland');
+ assert.equal(p.source.program,'sacred_groves');assert.equal(p.source.variant,'three_approaches');assert.equal(p.source.geometry.width,3600);
+ assert.equal(g.nativeRegional!.counters.tried,19);assert.equal(g.nativeRegional!.counters.fallbackAccepted,1);
+ const child=spawnSync(process.execPath,['--import','tsx','--input-type=module','--eval',
+  "import{readFileSync}from'node:fs';import{MassGenerator}from'./src/worldmass/generator.ts';import{massDigest}from'./src/worldmass/random.ts';const{spec,run}=JSON.parse(readFileSync(0,'utf8'));const g=new MassGenerator(run,spec);console.log(massDigest(g.nativeRegional.candidate('surface',-1n,23n)));"
+ ],{input:canonical({spec,run:g.run}),encoding:'utf8',timeout:60000});assert.equal(child.status,0,child.stderr);assert.equal(child.stdout.trim(),woodland.accepted[0].hash);
+});
+
 test('all surveyed native regions preserve exact cells and whole protected site clearances',()=>{
- for(const row of survey){const spec=massAdventure().terrain,g=new MassGenerator(makeMassRun(row.sourceFit.seed,'nativeRegional-runtime',spec),spec);
+ for(const row of [...survey,{sourceFit:woodland}]){const spec=massAdventure().terrain,g=new MassGenerator(makeMassRun(row.sourceFit.seed,'nativeRegional-runtime',spec),spec);
   for(const found of row.sourceFit.accepted){const p=g.nativeRegional!.candidate('surface',BigInt(found.x),BigInt(found.y))!,shape=p.source.geometry;
    assert.equal(massDigest(p),found.hash);
    const lo=moveAddress(p.origin,{x:-120,y:-120},960),hi=moveAddress(p.origin,{x:shape.width+120,y:shape.height+120},960),seen=new Set<string>();

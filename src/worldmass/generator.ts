@@ -100,7 +100,7 @@ export class MassGenerator {
     for (const f of this.spec.fields) for (const l of f.layers)
       this.salts.set(l, streamSeed(run.seed, [spec.id, spec.version, f.id, l.id]));
     this.nativeRegional = this.spec.nativeRegional ? new MassNativeRegional(this.spec,this.run,at=>this.baseTerrainAt(at),
-      (origin,box)=>this.regionalLandformSites(origin,box,true)) : null;
+      (origin,box)=>this.regionalLandformSites(origin,box,true),at=>this.nativeRegionalBiomeAt(at)) : null;
     this.landforms = Object.hasOwn(this.spec,'landforms') ? new MassLandforms(this.spec,this.run,
       at=>this.baseTerrainAt(at),(origin,box)=>this.patchSitesClear(origin,box,true), // landformHabitat owners compose with terrain
       this.nativeSubstrate ? (origin,size)=>this.nativeSubstrate!.supportsPatchCell(origin,size) : undefined,
@@ -178,6 +178,13 @@ export class MassGenerator {
     }
     if(!nativeRegionalAdmission)result.push(...(this.nativeRegional?.reservations(origin,box)??[]));
     return result;
+  }
+  /** Place surfaces change material/color, never the geographic biome. Native
+   * locale selection needs only that biome; defer expensive place-page reads
+   * until the complete source passes its protected-site admission. */
+  private nativeRegionalBiomeAt(at:MassAddress):string {
+    const fields=this.fieldsAt(at);
+    return this.surfaces.find(row=>matchesMassRanges(row.when,fields))!.biome;
   }
   /** Original policy, deliberately patch-free to keep candidate proofs acyclic. */
   private baseTerrainAt(at: MassAddress): MassTerrain {

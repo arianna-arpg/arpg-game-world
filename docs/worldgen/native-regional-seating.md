@@ -41,7 +41,10 @@ Cave-mouth and burial-urn variants still require their complete native owners.
 The optional policy has kind `source-fit`, version 1, and integer
 `fallbackSeats` from one through eight. Unknown fields and versions refuse
 loading. The shipped original 16 attempts plus eight fallback attempts give a
-24-attempt ceiling, with at most 38 substrate reads each (912 total). Site
+24-attempt ceiling. Each attempt reads one geographic biome and at most 37
+full substrate samples (25 water samples plus 12 approach samples). The
+production generator defers material/site-page reads until protected-site
+admission; a standalone reader may obtain the biome from a full sample. Site
 enumeration retains its existing finite bounds. The derived cache still holds
 32 results. There is no new persistent placement cache.
 
@@ -53,7 +56,8 @@ option from their fixtures. Fresh-expedition schema assertions now expect 18.
 
 Diagnostic counters distinguish physical site overlap, site-query budget
 refusal, biome/envelope mismatch, water, approaches, reads, fallback attempts
-and fallback admissions. No diagnostic captions or instructions enter the game.
+and fallback admissions. `biomeReads` counts geographic selection; `reads`
+counts full substrate samples. No diagnostic captions or instructions enter the game.
 
 ## Reproducible survey
 
@@ -77,17 +81,41 @@ linked-court reed islands and a waterside ward. Every added source in this
 sample is 3,600 units wide.
 
 This is finite coverage evidence, not complete parity or unlimited novelty.
-Neither search admits a woodland source in this survey. The 49 supported
-sources all pass controlled flat-biome admission, including explicit fallback
+Neither search admits a woodland source in this survey. Instrumenting the
+source-fit attempts found 188, 154 and 175 woodland attempts respectively;
+all 517 were rejected by complete-source protected-site overlap, before water
+or approach checks. This does not justify clipping native geometry or clearing
+existing sites. The 49 supported sources all pass controlled flat-biome
+admission, including explicit fallback
 courses for each source; this does not establish natural woodland coverage.
 The envelope lottery weights entries by their presence in the saved catalogue.
 A geographic recipe lacking the selected envelope spends that attempt rather
 than substituting a different envelope; this survey recorded zero such refusals.
 Site-query budget refusals were also zero.
 
-The additional search increases substrate reads in this survey from 27,407 to
-40,405. Cold planning remains synchronous and can take longer. Existing worker
-input-size limits remain unresolved; this change does not make the full modern
+A separate bounded search checked 1,024 further lattices for seed 42 and 496
+for seed 713 (x from -16 through 15, y starting at 8, row-major). The first
+woodland found was seed 713, lattice (-1,23): Sacred Groves, `three_approaches`,
+3,600 units wide. All 16 historical attempts fail there; fallback attempt three
+admits the complete source. Its full plan hash is `363b9080e5f39cc6` for run ID
+`nativeRegional-runtime`. The regression pins this actual country location,
+checks every material cell and nearby protected site, and reproduces it in a
+cold worker. This establishes one natural woodland example; the original
+three-seed survey still has zero and no frequency guarantee is implied.
+
+Before biome-only selection, the additional search increased full substrate
+reads in this survey from 27,407 to 40,405. Geographic biome selection now reads
+the same ordered surface rules directly: ordinary place surfaces only change
+material and color. This removes 8,576 unnecessary full reads from the fallback
+survey (40,405 to 31,829), retaining all 26 plan hashes, original random draws,
+source content and refusal decisions. No save-schema change is needed.
+
+A paired local 256-cell run per seed measured planning at 6.86/6.34/6.61 seconds
+with full selection reads and 4.41/4.13/4.32 seconds with biome-only reads. These
+are one local sample, about 35% less planning time; they exclude catalogue
+construction and generator validation and are not a frame-time guarantee.
+Cold planning remains synchronous. Existing worker input-size limits remain
+unresolved; this change does not make the full modern
 terrain descriptor fit the warm queues. Background preparation and incremental
 source transfer remain separate generation work.
 
@@ -110,16 +138,35 @@ its movement, complete scenery, native body and cold browser Continue checks:
     npx vite build --outDir .claude/native-seating.local.work/dist
     npx electron balance/native-seating-ui.cjs
 
+Run `npx electron balance/native-woodland-ui.cjs` against that same build to
+visit the seed-713 grove at two native district terminals, check exact scenery
+and body clearance, and exercise durable cold Continue. Reports and views use
+`balance/reports/native-woodland-*`.
+
 Run the probe first to supply the survey. The course visits the two newly
 admitted seed-42 waterlands and the retained 4,800-unit shattered ward. Reports,
 contact sheet and six live route views use `balance/reports/native-seating-*`.
 Controlled arrivals and short movement samples are visual acceptance evidence,
 not an unassisted exploration or combat playthrough.
 
-Observed acceptance for this change: all nine dedicated seating checks pass;
+Observed acceptance for the original fallback change: all nine dedicated
+seating checks pass;
 both schema-17 and schema-18 rendered courses pass six movement/body-clear
 views and durable cold Continue. The new course loads 44 native scenery items
 in the reed islands and 50 each in the waterside and shattered wards. Native
 habitat bodies are present in all three visited regions. Game, launcher and
 simulation type checks pass; generation QA reports zero failures and four
 existing warnings; simulation smoke completes all 25 episodes.
+
+The cold-read follow-up adds direct equivalence coverage across ordinary
+site-painted surfaces, both geographic biomes, negative and far addresses, and
+refused whole sources. Golden hashes pin every historical and source-fit plan
+in all three natural surveys, in addition to worker/eviction/Continue checks.
+
+The expanded course passes all 11 checks. The woodland client preserves all
+34 native scenery items, finds 15 and 11 nearby native bodies at its two tested
+terminals, and preserves one scenery change through schema-18 cold Continue.
+The current and historical client courses also pass after the optimization.
+All three type checks pass in a clean placement-only validation copy.
+Generation QA remains at zero failures/four known warnings, and all 25
+simulation smoke episodes complete.

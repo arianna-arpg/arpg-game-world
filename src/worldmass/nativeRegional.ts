@@ -70,11 +70,16 @@ export function validateNativeRegional(spec:MassSpec):void {
  * content never move/clip around protected sites. A failed seat is refused whole. */
 export class MassNativeRegional {
   private cache=new Map<string,NativeRegionalPlan|null>();
-  readonly counters={tried:0,accepted:0,opening:0,sites:0,siteBudget:0,biome:0,water:0,ports:0,reads:0,fallbackTried:0,fallbackAccepted:0};
+  readonly counters={tried:0,accepted:0,opening:0,sites:0,siteBudget:0,biome:0,water:0,ports:0,reads:0,biomeReads:0,fallbackTried:0,fallbackAccepted:0};
   constructor(readonly spec:MassSpec,readonly run:MassRun,
     private read:(at:MassAddress)=>MassTerrain,
-    private sites:(origin:MassAddress,box:MassPatchBox)=>readonly RegionalLandformSite[]|null) {}
+    private sites:(origin:MassAddress,box:MassPatchBox)=>readonly RegionalLandformSite[]|null,
+    private readBiome?:(at:MassAddress)=>string) {}
   private substrateAt(at:MassAddress):MassTerrain {this.counters.reads++;return this.read(at);}
+  private biomeAt(at:MassAddress):string {
+    this.counters.biomeReads++;
+    return this.readBiome ? this.readBiome(at) : this.substrateAt(at).biome;
+  }
   get policy():NativeRegionalPolicy{return this.spec.nativeRegional!;}
   candidate(dimension:string,gx:bigint,gy:bigint):NativeRegionalPlan|null {
     const key=canonical([dimension,gx.toString(),gy.toString()]);
@@ -95,7 +100,7 @@ export class MassNativeRegional {
         const fit=nativeRegionalSeat(shape,p.spacing,p.clearance,this.run.seed,key,seat-p.seats,p.seating.fallbackSeats);
         origin=address(dimension,cx,cy,x+fit.x-shape.width/2,y+fit.y-shape.height/2,span);
         origin.x=Math.floor(origin.x/30)*30;origin.y=Math.floor(origin.y/30)*30;
-        const biome=this.substrateAt(moveAddress(origin,{x:shape.width/2,y:shape.height/2},span)).biome;
+        const biome=this.biomeAt(moveAddress(origin,{x:shape.width/2,y:shape.height/2},span));
         const match=p.recipes.find(r=>r.biomes.includes(biome));
         const choices=match?.sources.map(id=>p.sources.find(s=>s.id===id)!)
           .filter(s=>s.geometry.width===shape.width&&s.geometry.height===shape.height)??[];
@@ -104,7 +109,7 @@ export class MassNativeRegional {
       } else {
         // Preserve schema-17 random draws and source locations exactly.
         const center=address(dimension,cx,cy,x+p.spacing*(.5+rng.range(-.5,.5)*p.jitter),y+p.spacing*(.5+rng.range(-.5,.5)*p.jitter),span);
-        const base=this.substrateAt(center),match=p.recipes.find(r=>r.biomes.includes(base.biome));if(!match)continue;
+        const biome=this.biomeAt(center),match=p.recipes.find(r=>r.biomes.includes(biome));if(!match)continue;
         recipe=match;const sourceId=rng.pick(recipe.sources);source=p.sources.find(s=>s.id===sourceId)!;
         origin=moveAddress(center,{x:-source.geometry.width/2,y:-source.geometry.height/2},span);
         origin.x=Math.floor(origin.x/30)*30;origin.y=Math.floor(origin.y/30)*30;

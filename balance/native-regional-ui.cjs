@@ -2,11 +2,12 @@
 // native movement samples; these screenshots are not a full combat playthrough.
 const {app,BrowserWindow}=require('electron');
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
-const nativeSeating=process.env.HOLLOW_WAKE_NATIVE_SEATING==='1',prefix=nativeSeating?'native-seating':'native-regional';
+const nativeWoodland=process.env.HOLLOW_WAKE_NATIVE_WOODLAND==='1',seed=nativeWoodland?713:42;
+const nativeSeating=nativeWoodland||process.env.HOLLOW_WAKE_NATIVE_SEATING==='1',prefix=nativeWoodland?'native-woodland':nativeSeating?'native-seating':'native-regional';
 const reports=path.join(__dirname,'reports');fs.mkdirSync(reports,{recursive:true});
 app.setPath('userData',path.join(reports,prefix+'-profile-'+process.pid));app.disableHardwareAcceleration();
 app.whenReady().then(async()=>{
- const root=path.resolve(__dirname,process.env.HOLLOW_WAKE_NATIVE_REGIONAL_DIST??('../.claude/'+prefix+'.local.work/dist')),report={errors:[],method:'Default seed42 naturally admitted complete native locales; controlled arrivals, native movement, body clearance, scenery mutation, durable cold Continue.'};
+ const root=path.resolve(__dirname,process.env.HOLLOW_WAKE_NATIVE_REGIONAL_DIST??('../.claude/'+prefix+'.local.work/dist')),report={errors:[],method:'Default seed'+seed+' naturally admitted complete native locales; controlled arrivals, native movement, body clearance, scenery mutation, durable cold Continue.'};
  const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://localhost').pathname,file=path.resolve(root,'.'+(name==='/'?'/index.html':name));
   if(!file.startsWith(root+path.sep)||!fs.existsSync(file)){res.writeHead(404);res.end();return;}
   res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html');fs.createReadStream(file).pipe(res);
@@ -42,22 +43,24 @@ app.whenReady().then(async()=>{
  };
  try{
   let coordinates=[[5,-8],[2,-4],[-1,-1]];
-  if(nativeSeating){
+  if(nativeWoodland)coordinates=[[-1,23]];
+  else if(nativeSeating){
    const survey=JSON.parse(fs.readFileSync(path.join(reports,'native-seating-survey.json'),'utf8')).find(r=>r.sourceFit.seed===42);
    const added=survey.sourceFit.accepted.filter(p=>!survey.historical.accepted.some(h=>h.x===p.x&&h.y===p.y));
    const large=survey.sourceFit.accepted.find(p=>p.width===4800);assert.ok(large,'original large region retained');
    assert.equal(added.length,2,'two additional natural waterland sources');coordinates=[...added,large].map(p=>[p.x,p.y]);
   }
-  await boot();report.search=await run((coordinates,historical)=>{
-   __game.devStartRun('warrior');__game.ui.hideAll();const w=__game.world();w.startWorldMass(42);
+  await boot();report.search=await run((coordinates,historical,seed)=>{
+   __game.devStartRun('warrior');__game.ui.hideAll();const w=__game.world();w.startWorldMass(seed);
    if(historical){const previous=w.massRuntime,config=JSON.parse(JSON.stringify(previous.config));delete config.terrain.nativeRegional.seating;
-    const legacy=new previous.constructor(42,'expedition:42',config);previous.dispose();w.massRuntime=null;legacy.attach(w);}
+    const legacy=new previous.constructor(seed,'expedition:'+seed,config);previous.dispose();w.massRuntime=null;legacy.attach(w);}
    w.player.invulnerable=true;__game.step(1);
    document.querySelectorAll('button').forEach(b=>{if(b.textContent.trim()==='Walk on')b.click();});__game.ui.hideAll();
    const m=w.massRuntime,plans=coordinates.map(([x,y])=>m.generator.nativeRegional.candidate('surface',BigInt(x),BigInt(y))).filter(Boolean);
-   if(plans.length<2)throw Error('Natural regions missing');
+   if(plans.length!==coordinates.length)throw Error('Natural regions missing');
+   if(seed===713&&(plans[0].recipe!=='nativeRegional-woodland'||plans[0].source.program!=='sacred_groves'))throw Error('Natural woodland source missing');
    return {plans,coverage:m.config.terrain.nativeRegional.coverage.length,supported:m.config.terrain.nativeRegional.sources.length};
-  },coordinates,!nativeSeating);save();await run(helpers,report.search.plans);
+  },coordinates,!nativeSeating,seed);save();await run(helpers,report.search.plans);
   const sheet=await run(()=>{
    const plans=window.__nrPlans,canvas=document.createElement('canvas');canvas.width=plans.length*440;canvas.height=490;const c=canvas.getContext('2d');c.fillStyle='#172019';c.fillRect(0,0,canvas.width,canvas.height);
    plans.forEach((p,i)=>{const g=p.source.geometry,unit=390/(g.width/30),ox=i*440+20,oy=62;c.fillStyle='#ede6cf';c.font='15px sans-serif';c.fillText(p.source.program,ox,24);c.font='12px sans-serif';c.fillText(p.source.variant+' / '+g.width+' × '+g.height,ox,44);
@@ -87,6 +90,6 @@ app.whenReady().then(async()=>{
   await run(helpers,report.search.plans);const after=await run(()=>window.__nrState());assert.deepEqual(after,before,'complete native terrain and scenery changes survive cold Continue');
   report.continue={schema:after.schema,regions:after.geometry.map(p=>({id:p.id,hash:p.hash})),changes:after.changes.length,image:await shot('continued')};
   assert.ok(report.routes.some(r=>r.arrival.bodies>0));assert.deepEqual(report.errors,[]);save();
-  console.log('PASS native regional default admission, six native movement/body-clear views, complete scenery and cold durable Continue');clearTimeout(timer);win.destroy();server.close();app.exit(0);
+  console.log('PASS native regional default admission, '+report.routes.length+' native movement/body-clear views, complete scenery and cold durable Continue');clearTimeout(timer);win.destroy();server.close();app.exit(0);
  }catch(error){report.failure=String(error.stack||error);try{report.failureImage=await shot('failure');}catch{}save();console.error(error);clearTimeout(timer);app.exit(1);}
 });
