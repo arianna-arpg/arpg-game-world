@@ -6,7 +6,9 @@
 //      or co-op World ever carries a shard link, World.atZone is the conditional it
 //      replaces, and THE ROAD-WALK DIGEST (a seeded solo hero through an exit, a cave
 //      mouth, the climb-out and a town portal round trip) equals the constant W1
-//      committed before any road was lifted (W2 must reproduce it);
+//      committed before any road was lifted (W2 must reproduce it), and THE CO-OP
+//      HOST'S ROAD WALK (the same roads with a second seat carried along, then a
+//      sealed door's word) equals the constant W2 committed before THE LIFT;
 //   A  THE DERIVED CENSUS (static): World's fields parsed from source, three detectors
 //      (shape, THE SAVE LAW, THE SWEEP LAW one call deep from THE PRIMARY GATE), every
 //      hit carries a SHARD_UNIT_FIELDS row, a saved field is never per-unit, a unit row
@@ -152,12 +154,102 @@ function roadWalk(): { digest: string; hash: string; legs: Record<string, boolea
     COOP_SCALING.shareRadius = radius0; FORECHART_CFG.beatBudgetMs = budget0;
   }
 }
+// THE CO-OP HOST'S ROAD WALK, committed by W2 at shard-m1-roads BEFORE THE LIFT (plan 7.1 B):
+// the same roads walked by a co-op host with a second, idle seat carried along (the M0 law:
+// the whole party travels), digesting both bodies' stands and every word the walk floated.
+// THE LIFT (the road scans as named methods the shard scanner shares) must print it unchanged.
+const COOP_WALK_HASH = 'c56fd872';
+const COOP_WALK_SEED = 0x40adca8;
+function coopRoadWalk(): { digest: string; hash: string; legs: Record<string, boolean> } {
+  const budget0 = FORECHART_CFG.beatBudgetMs;
+  FORECHART_CFG.beatBudgetMs = Infinity; // the pinned governor (the co-op radius stays the data's own)
+  const restore = seedGlobalRandom(COOP_WALK_SEED);
+  const seeded = Math.random;
+  let draws = 0;
+  Math.random = () => { draws++; return seeded(); };
+  try {
+    resetActorIdCounter();
+    const account = makeAccount();
+    const manifest = buildManifest(account, COOP_WALK_SEED);
+    for (const p of manifest.packages) p.enabled = false; // a QUIET expedition: the roads alone
+    const w = new World(account, Object.freeze(manifest));
+    w.createPlayer(CLASSES.find(c => c.id === 'warrior')!, { name: 'Walker', startingCompanions: false, startingFlasks: false });
+    const guest = w.addSeat('p1', CLASSES.find(c => c.id === 'tamer')!, new NullInput(), { startingCompanions: false, startingFlasks: false });
+    const said: string[] = [];
+    const text0 = w.text.bind(w);
+    w.text = ((pos: Parameters<World['text']>[0], msg: string, ...rest: unknown[]) => { said.push(msg); return (text0 as (...a: unknown[]) => unknown)(pos, msg, ...rest); }) as World['text'];
+    const hops: string[] = [w.zone.id];
+    const hero = (): Actor => w.player;
+    hero().invulnerable = true; guest.actor.invulnerable = true;
+    const idle = (): void => { w.localSeat.lastActedAt = -1e3; w.localSeat.lastMovedAt = -1e3; hero().push = null; hero().casting = null; };
+    const step = (secs: number, done?: () => boolean): boolean => {
+      for (let t = 0; t < secs; t += 1 / 60) {
+        w.update(1 / 60);
+        if (hops[hops.length - 1] !== w.zone.id) hops.push(w.zone.id);
+        if (done?.()) return true;
+      }
+      return !!done?.();
+    };
+    const stand = (x: number, y: number): void => { const at = w.clampPos(vec(x, y), hero().radius); hero().pos.x = at.x; hero().pos.y = at.y; idle(); };
+    const out = w.exits.find(e => e.to !== '?')!;
+    stand(out.pos.x, out.pos.y);
+    const hearth = w.zone.id;
+    const exited = step(10, () => w.zone.id !== hearth);
+    const field = w.zone.id;
+    stand(w.arena.w / 2, w.arena.h / 2);
+    const mouthAt = vec(hero().pos.x, hero().pos.y);
+    (priv(w).caveEntrances as { pos: { x: number; y: number }; seed: number; kind: string }[])
+      .push({ pos: vec(mouthAt.x, mouthAt.y), seed: 0x5eed2, kind: 'cave_entrance' });
+    idle();
+    const descended = step(10, () => w.inCave);
+    const home = w.caveReturn?.zoneId;
+    const back = w.exits.find(e => e.to === home);
+    if (back) stand(back.pos.x, back.pos.y);
+    const climbed = !!back && step(10, () => w.zone.id === field && !w.inCave);
+    stand(mouthAt.x + 260, mouthAt.y + 60);
+    step(0.3);
+    const cast = w.castTownPortal();
+    step(2.5);
+    const view = w.townPortalViews()[0];
+    if (view) stand(view.pos.x, view.pos.y);
+    const toTown = !!view && step(10, () => w.zone.id === START_ZONE);
+    stand(hero().pos.x + 160, hero().pos.y);
+    step(0.3);
+    const ret = w.townPortalViews()[0];
+    if (ret) stand(ret.pos.x, ret.pos.y);
+    const returned = !!ret && step(10, () => w.zone.id === field);
+    step(1);
+    // THE SEALED DOOR: a sealing objective shuts every road but the way in, and the lock floats its word.
+    const obj0 = w.zone.objective;
+    w.zone.objective = { ...obj0, seal: true };
+    const shut = w.exits.find(e => e.to !== '?' && e.to !== w.entryFrom && w.isExitLocked(e));
+    if (shut) { stand(shut.pos.x, shut.pos.y); step(1); }
+    w.zone.objective = obj0;
+    const held = !!shut && w.zone.id === field;
+    const p = hero().pos, g = guest.actor.pos;
+    let sh = 0x811c9dc5;
+    for (const s of said) for (let i = 0; i < s.length; i++) { sh ^= s.charCodeAt(i); sh = Math.imul(sh, 0x01000193) >>> 0; }
+    const digest = [hops.join('>'), `${Math.round(p.x)},${Math.round(p.y)}`, `guest ${Math.round(g.x)},${Math.round(g.y)}`,
+      `actors ${w.actors.length}`, `draws ${draws}`, `t ${w.time.toFixed(2)}`, `said ${said.length}:${sh.toString(16)}`].join(' | ');
+    let h = 0x811c9dc5;
+    for (let i = 0; i < digest.length; i++) { h ^= digest.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return { digest, hash: h.toString(16).padStart(8, '0'), legs: { exited, descended, climbed, cast, toTown, returned, held } };
+  } finally {
+    Math.random = seeded; restore();
+    FORECHART_CFG.beatBudgetMs = budget0;
+  }
+}
 {
   const walk = roadWalk();
   check('B road walk: the solo hero takes an exit, a cave mouth, the climb-out and a town portal there and back',
     Object.values(walk.legs).every(Boolean), JSON.stringify(walk.legs));
   check('B road walk: THE ROAD-WALK DIGEST is the constant W1 committed before any road was lifted',
     walk.hash === ROAD_WALK_HASH, `${walk.hash} ← ${walk.digest}`);
+  const coopWalk = coopRoadWalk();
+  check('B co-op walk: the co-op host takes the same roads with a second seat carried along',
+    Object.values(coopWalk.legs).every(Boolean), JSON.stringify(coopWalk.legs));
+  check('B co-op walk: THE CO-OP HOST\'S ROAD-WALK DIGEST is the constant W2 committed before THE LIFT',
+    coopWalk.hash === COOP_WALK_HASH, `${coopWalk.hash} ← ${coopWalk.digest}`);
   const sim = makeSimWorld('warrior', 0x51a0);
   const coop = new World(makeAccount(), Object.freeze(buildManifest(makeAccount(), 0x51a1)));
   coop.createPlayer(CLASSES[0], { startingCompanions: false, startingFlasks: false });
