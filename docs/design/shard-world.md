@@ -546,6 +546,39 @@ HUD's local site name reads a private runtime map the shell never fills.
    the seamless lane owes the shard one adapter (its runtime as a unit). Every
    other fabric reaches the shard through the transport seam it already
    reaches co-op through.
+6. **THE ASKS (2026-10-09) — three seams the shard needs from the seamless
+   lane's own files, each with its measurement.** The shard never edits
+   `src/worldmass/**` (6.3); these are requests for that lane, carried by her.
+   - **THE MANY SHADOWS** (`src/worldmass/runtime.ts` `update`, lines ~720–816):
+     the runtime's page requests, places, site discovery, survey, native
+     wanted cells, scenery cells and births all key on ONE position,
+     `world.player.pos` (the keeper on the focus seat). Ask: `update(world, foci)`
+     with one focus per standing player cluster — the union of page cells
+     without pruning the other clusters' places, discovery and survey per
+     focus, births per focus under the one `maxPopulation` budget shared by
+     cluster. Evidence (the soak, six bots 3,500 px apart): the living
+     radius around a player away from the focus is 0; a keeper that visits
+     clusters in turn (THE ROVING SHADOW, shipped off) lifts the mean to 6.7
+     to 8.1 foes but re-keys the runtime on every hop at 135 to 170 ms and
+     drops 43 to 68 percent of ticks, so the seam must live inside the
+     runtime, not on the keeper's feet.
+   - **THE LOADERS OFF THE TICK.** The wilds' background loading expects Web
+     Workers; Node has no `Worker`, so on a shard it runs inside the tick: the
+     soak traced 10 of the 12 slowest ticks (100 to 490 ms) to
+     `massRuntime.update`, and the codespace drops a quarter of its ticks on
+     two cores with no player connected. Ask: a `worker_threads`-backed
+     loader (the same message contract behind a Node adapter), or a loader
+     that yields in slices the host can budget per tick.
+   - **THE LAND ONCE.** `serializeWorldState()` takes 150 to 200 ms on the wilds
+     and the shard calls it every `persistSec`; of the 6.5 MB it builds, 3.9 MB
+     is `worldmass.config`, THE LAND, a pure function of the seed that never
+     changes after boot (the land digest proves it), and 2.2 MB the state.
+     Ask: a save option (or shape) that omits the config and re-derives it
+     from the seed at read time, so the shard serializes the state alone.
+   The per-observer cost stands beside these: with ONE focus, six bots spread
+   3,500 px already breach the tick gate (p95 47 ms, 8 percent dropped,
+   against 13 ms clustered), because dormancy and native paging scale with
+   how far apart the observers stand; THE MANY SHADOWS must budget that too.
 
 ---
 
