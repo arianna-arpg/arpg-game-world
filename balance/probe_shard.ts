@@ -317,6 +317,14 @@ check('C wire: snapshots ride the wire rate (exactly 20 per 60 ticks)', snaps - 
       p2.actor.pos.x = p1.actor.pos.x + 40; p2.actor.pos.y = p1.actor.pos.y + 40;
       w.settleNearScale(true);
       check('F near law: the seats near the body decide its scale, re-read on a join', beside.maxLife() > far.maxLife(), `${beside.maxLife().toFixed(1)} vs ${far.maxLife().toFixed(1)}`);
+      // THE KILLER'S DUE (her ruling: the single-player XP law until parties): the killing seat alone is paid.
+      const x1 = p1.meta.xp, l1 = p1.actor.level, x2 = p2.meta.xp, l2 = p2.actor.level;
+      w.grantXp(5, p1.actor.pos, p1);
+      check('F killer\'s due: a kill with a known killer pays that seat alone, however near the other stands',
+        (p1.meta.xp > x1 || p1.actor.level > l1) && p2.meta.xp === x2 && p2.actor.level === l2, `p1 ${x1}→${p1.meta.xp}, p2 ${x2}→${p2.meta.xp}`);
+      const y2 = p2.meta.xp, m2 = p2.actor.level;
+      w.grantXp(5, p1.actor.pos);
+      check('F killer\'s due: an unowned kill still pays by reach', p2.meta.xp > y2 || p2.actor.level > m2);
     } finally {
       COOP_SCALING.shareRadius = radius; p2.actor.pos.x = p2x; p2.actor.pos.y = p2y;
       w.actors = w.actors.filter(a => !mints.includes(a));
@@ -345,11 +353,53 @@ check('C wire: snapshots ride the wire rate (exactly 20 per 60 ticks)', snaps - 
     `joiner xp ${pxp}→${p1.meta.xp} lvl ${plvl}→${p1.actor.level}; keeper xp ${kxp}→${host.keeper.meta.xp}`);
 }
 
-// ============================================================ H: THE MERCY ==
+// ===================================================== R: THE SCOPED FREEZE ==
+// Card 18 B with C (her ruling 2026-10-08): on a shard a time stop is a bubble around
+// its caster that never bends the caster's own team, whatever the spec asked.
 {
+  const w = host.world, tf = w.timeflow;
+  const other = new WsTransport();
+  await other.connect(url, { name: 'Other', classId: 'warrior' });
+  await waitFor(() => w.seats.length === 3, host, 50);
+  const o = w.seats.find(s => !s.keeper && s !== p1)!;
+  const mints: Actor[] = [];
+  const mint = (x: number, y: number): Actor => { const m = w.createMonster('zombie', 2, 'enemy'); m.pos.x = x; m.pos.y = y; if (!w.actors.includes(m)) w.actors.push(m); mints.push(m); return m; };
+  const near = mint(p1.actor.pos.x + 200, p1.actor.pos.y), far = mint(p1.actor.pos.x + SHARD_CFG.chronoRadius + 300, p1.actor.pos.y);
+  o.actor.pos.x = p1.actor.pos.x + 120; o.actor.pos.y = p1.actor.pos.y;
+  check('R freeze: the shard scopes every chrono cast', !!tf.chronoScope && tf.chronoScope.radius === SHARD_CFG.chronoRadius);
+  w.castChrono(p1.actor, { scale: 0, duration: 3, world: true }, 'chrono:probe', 3, 'probe stop');
+  check('R freeze: a world-scoped stop is a bubble on a shard — the World keeps flowing', tf.worldScale() === 1);
+  check('R freeze: an enemy inside the bubble stops, one beyond it keeps its clock', tf.actorScale(near) === 0 && tf.actorScale(far) === 1,
+    `near ${tf.actorScale(near)} far ${tf.actorScale(far)}`);
+  check('R freeze: the caster and the other player ride exempt (card 18 C)', tf.actorScale(p1.actor) === 1 && tf.actorScale(o.actor) === 1);
+  tf.release('chrono:probe');
+  check('R freeze: released, the bubble is gone', tf.actorScale(near) === 1);
+  w.actors = w.actors.filter(a => !mints.includes(a));
+  other.leave();
+  await waitFor(() => w.seats.length === 2, host, 60);
+}
+
+// ============================================= H: THE COVENANT + THE MERCY ==
+// Card 14 C (her ruling 2026-10-08): every lethal down is the death, as in single
+// player — a fresh hero's down ends it the same tick; THE MERCY is the Immortal's alone.
+{
+  const mortal = new WsTransport();
+  const mw = await mortal.connect(url, { name: 'Mortal', classId: 'warrior' });
+  await waitFor(() => host.world.seats.length === 3, host, 50);
+  const ms = host.world.seats.find(s => s.id === mw.self)!, mh = ms.actor;
+  const heard: string[] = []; mortal.onSession(m => { heard.push(m.t); });
+  host.world.kill(mh);
+  await runTicks(host, 3);
+  check('H covenant: a fresh hero\'s lethal down ends it the same tick — runEnd, the seat gone, the world never wipes',
+    !host.world.seats.some(s => s.id === mw.self) && heard.includes('runEnd') && host.vessels.freshFalls >= 1 && !host.world.gameOver, `heard ${heard.join(',') || '(nothing)'}`);
+  mortal.leave();
+  await waitFor(() => host.world.seats.length === 2, host, 60);
+  // THE MERCY for the Immortal: a contract that survives death keeps the keeper's clock.
   const hero = p1.actor;
+  p1.meta.modeId = 'immortal';
   host.world.kill(hero);
-  check('H mercy: a lone player beside the keeper is DOWNED, never a wipe', hero.downed && !hero.dead && !host.world.gameOver);
+  await runTicks(host, 2);
+  check('H mercy: an Immortal beside the keeper is DOWNED, never a wipe', hero.downed && !hero.dead && !host.world.gameOver);
   await runTicks(host, Math.ceil(SHARD_CFG.keeper.reviveSec * SHARD_CFG.tickHz * 0.6));
   check('H mercy: before reviveSec the seat still lies downed', hero.downed);
   await runTicks(host, Math.ceil(SHARD_CFG.keeper.reviveSec * SHARD_CFG.tickHz * 0.5) + 2);

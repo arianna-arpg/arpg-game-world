@@ -64,6 +64,9 @@ wilds boots; `npm run probe -- --slow` or `npm run probe -- shardslow`).
 | THE NEAR LAW | `COOP_SCALING.shareRadius` (data/coop.ts), set by the shard to `SHARD_CFG.nearRadius` | a kill's XP pays only the seats within the radius of its place (`grantXp(amount, at)` from `kill`; zone and quest rewards stay world-wide), an enemy's party scale counts the seats near IT (`partyScaleCount(at)` → `scenePartyScaleCount(host, at)` in `engine/nativeScenePopulation.ts`, where the seamless lane keeps the scale), and the mercy counts an ally only within reach. 0 (the default every other lane keeps) is the old world-wide party, byte-identical. |
 | THE HEARTH WAKE / THE SPAWN GRACE | `ShardHost.onJoin` / `hearthSeat` / `endGraces` | every joiner stands up on a free spot at THE HEARTH SEAT — the wilds' native settlement keeps its own bedside (`MassSettlement.spawn`, the same spot on a fresh or a resumed surface), a classic world's is where the keeper first stood — never beside the shadowed keeper, wherever THE FOCUS has walked it. The joiner is untargetable until its first WILLED input (a direction, a held or edged slot, a meta press) or `SHARD_CFG.spawnGraceSec`, whichever comes first; the grace is per seat, ends with the seat, and the keeper never wears one. |
 | THE LAND DIGEST | `wildsSave.shellLandDigest` / `ShardTransport.land` / `wildsShellAttach(world, seed, land)` | the land is the seed's AND the preset's: a shell lays `startWorldMass`'s reservation over the build's preset, whose digest is the mass runtime's own `configHash`. The wilds save reader refuses (and the boot sets aside) a save whose digest differs — her ruling 2026-10-08: old saves are legacy, never migrated — and the welcome carries the digest the shard runs, so a client built on another preset refuses the join loudly instead of predicting against walls the server does not have. |
+| THE KILLER'S DUE | `World.grantXp(amount, at, to)` / `seatOfRoot` | her ruling 2026-10-08 (the gameplay is single player's, never co-op's, until THE PARTY): with a radius set and the killing seat known (the credited killer's owner chain — a minion's kill is its keeper's), a kill pays that seat alone; an unowned kill still pays by reach. A party will widen "that seat" to its party. |
+| THE SCOPED FREEZE | `Timeflow.chronoScope` / `ActorTimeFilter.within` / `World.castChrono` | card 18 B with C: on a shard every chrono cast bends a radius (`SHARD_CFG.chronoRadius`) around its caster and never the caster's own team — one player's stop never bends another player, a world-scoped spec becomes a bubble, an enemy's stop freezes the players inside its reach. Off a shard the spec's own scope stands. |
+| THE LOGIN THROUGH MU | `main.ts connectToShard` | card 22: a join with a traveling vessel travels it; without one, Mu opens as in single player (the tutorial first, locally, for a virgin account) and the bedside wake travels the vessel it just saved; a fall reads its reckoning and drifts back into Mu bound for the same server. The lobby's connect answers 'connected' or 'mu'. |
 | THE NEAR LAW AT THE MINT | `World.settleNearScale` | `createMonster` scales a body at its (0, 0) placeholder before its caller seats it, so with a radius set the scale is queued and settled where the body actually stands after each tick's update, and settled for every living enemy at a join (`addSeat` seats the newcomer beside the shadowed keeper before the hearth wake moves it) and at a leave. The life-fraction law is `rescaleEnemies`', which the engine keeps with its rounding (the seamless lane's brittles probe pins and replays it); the shard's settle clamps so no rounded life tops a fractional maximum, and a wilds save resumes "the same wounds" to the number. Off a shard the radius is 0 and the queue never fills. |
 
 ## M0 semantics (honest, inherited from co-op)
@@ -187,7 +190,7 @@ rides the wire).
 
 `SHARD_CFG` (server/shardHost.ts): `tickHz` 60, `stateHz` 20,
 `metaHeartbeatSec` 1.5, `persistSec` 20, `maxCatchUpTicks` 5,
-`keeper { classId, name, reviveSec 8, shadowOffset 0 }`, `nearRadius` 1600, `dressSec` 4, `spawnGraceSec` 20, `saveDir`,
+`keeper { classId, name, reviveSec 8, shadowOffset 0 }`, `nearRadius` 1600, `dressSec` 4, `spawnGraceSec` 20, `chronoRadius` 900, `saveDir`,
 `wildsSaveSuffix` `'_wilds'` (THE WILDS SAVE's own file, `wildsSave`), `faultLogSec` 5, `telemetryTicks` 600;
 `WILDS_CLIENT_CFG.surveyEveryFrames` 30 (src/net/wildsClient.ts). `SHARD_WIRE_CFG`
 (server/shardTransport.ts): `maxClientMessage` 256 KB, `sendBufferCap` 96 KB,
@@ -247,10 +250,13 @@ that served it.
    (`gh codespace list` shows the name). The script tries this itself once the
    shard answers; visibility can revert on a restart, so check it each time.
    Nothing in `devcontainer.json` can set it.
-5. Open `https://<name>-8787.app.github.dev/` in a private browser window:
-   the game's start menu (or, with no served client, the status JSON). A
-   GitHub sign-in page means the port is private; any other page means the
-   WebSocket will fail too.
+5. Open `https://<name>-8787.app.github.dev/` in a private browser window.
+   A browser meets GitHub's one-time "Codespaces Access Port" page first —
+   press Continue once (it sets a cookie; the game's own sockets ride it) —
+   then the game's start menu (or, with no served client, the status JSON).
+   A GitHub sign-in page means the port is private; any other page means
+   the WebSocket will fail too. `curl` and the game's sockets never see the
+   interstitial.
 6. Players open the same link: Co-op (Beta) → Join a Server → Connect (the
    address is already their own page's), or paste the https address into a
    client built from this branch — THE LAND DIGEST refuses a build that lays
@@ -261,7 +267,9 @@ that served it.
 8. Stop it after a session (`gh codespace stop -c <name>`). Back up before the
    30-day deletion of a stopped codespace:
    `gh codespace cp -e -r -c <name> 'remote:/workspaces/arpg-game-world/saves' ./shard-saves/`.
-9. To update: `git pull && npm ci && npm run build:web`, then
+9. Look inside: `gh codespace ssh -c <name> -- 'tail -20 shard.log'` (the
+   sshd feature); `gh codespace logs -c <name>` shows the creation log.
+10. To update: `git pull && npm ci && npm run build:web`, then
    `pkill -f server/shard.ts` (a clean exit stops the supervisor) and
    `bash .devcontainer/start-shard.sh`; served clients update with it.
 
@@ -271,8 +279,11 @@ the zone, every seated player's name and level) — fine among friends.
 THE VESSEL: `VESSEL_CFG` (server/vessel.ts): `maxBytes` 240 KB (under the
 wire's 256 KB frame cap), `maxLevel` 999, `maxDepth` 24, `maxNodes` 60000,
 `maxString` 4096, `maxName` 64, `maxCharId` 64, `maxBar` 32, `maxItemUid`
-2^31-1, `covenantAt` `'mercy'` (or `'down'`: every down of a mortal vessel is
-its death), `farewellEverySec` 2. The mirror rides `SHARD_CFG.persistSec`. `SHARD_CORPSE_CFG`
+2^31-1, `covenantAt` `'down'` (her ruling 2026-10-08, card 14 C: every lethal
+down of a mortal vessel is its death, as in single player; `'mercy'` is the old
+law — a mortal fell only when no other player stood to kneel), `freshHeroDies`
+true (THE FRESH HERO'S END: a vessel-less seat's down ends it too — `runEnd`, the
+seat gone, nothing to reclaim), `farewellEverySec` 2. The mirror rides `SHARD_CFG.persistSec`. `SHARD_CORPSE_CFG`
 (server/corpses.ts): `perAccount` = `MAX_DEATH_RECORDS` (3, the account
 ring's size), `fallenPerAccount` 64, `schema` 1, `reclaimRadius` 110 /
 `reclaimDwell` 1.0 (fallbacks behind the `'corpse_reclaim'` transit row),

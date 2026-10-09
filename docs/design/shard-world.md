@@ -608,8 +608,9 @@ character walks back for it), 7 the first cut, 8 A, 9 as built, 10 as set,
     unless Immortal; a new character on the same server finds and loots it.
     So every lethal down is the death, as in single player (the covenant
     reads 'down', never 'mercy'); the mercy remains the Immortal's and the
-    keeper's. BUILD: `VESSEL_CFG.covenantAt = 'down'`; fresh heroes die
-    too once THE LOGIN THROUGH MU (card 22) makes every joiner a vessel.
+    keeper's. **BUILT:** `VESSEL_CFG.covenantAt = 'down'` and THE FRESH
+    HERO'S END (`freshHeroDies`); the slow rig's N section pins the fall at
+    once, the fresh end, the Immortal's mercy and the tombstone's word.
 15. **Roads that move the whole party** (caravan, town portal, caves,
     classic portals) until per-seat travel exists — A: move everyone.
     B: move only when every connected player gathers, shown as a muster
@@ -630,7 +631,9 @@ character walks back for it), 7 the first cut, 8 A, 9 as built, 10 as set,
 18. **World-freezing powers on a shard** (Time Stop, any world-wide hold)
     — A: freeze the whole World. B: scope them to a radius. C: exempt
     other players. Rec: B. **RULED B WITH C (2026-10-08):** a world-freezing
-    power on a shard bends a radius and never bends another player.
+    power on a shard bends a radius and never bends another player. **BUILT:**
+    THE SCOPED FREEZE (`Timeflow.chronoScope`, `ActorTimeFilter.within`,
+    `SHARD_CFG.chronoRadius`); the fast rig's R section pins it.
 19. **Getting the client to players** — A: friends run the branch checkout.
     B: a Pages preview of this branch pinned to the shard's commit (https,
     so wss) and version-gated. C: a packaged build channel. Rec: B.
@@ -662,10 +665,13 @@ in Mu first.**
     party alone (card 23). Mu may grow into the hub that sends a chosen
     class to Lastlight on the server, but the easiest faithful path wins:
     the lobby's Join a Server pins the address, Mu plays locally, the pick
-    connects. BUILD NEXT: a server-bound Mu (the address pinned through the
-    pick), the fresh-hero lane retired (every joiner a vessel), the death
-    covenant on 'down', the dormant reconnect (card 16), the scoped freeze
-    (card 18), the probe split (card 21).
+    connects. **BUILT:** `connectToShard` (main.ts) — a vessel travels, else
+    Mu picks one (the tutorial first for a virgin account) and the bedside
+    wake travels it; a fall drifts back into Mu bound for the same server;
+    the lobby's connect answers 'connected' or 'mu'. Immortal vessels (roster
+    saves) cannot travel yet — a later pass. THE KILLER'S DUE rides with it:
+    on a shard a kill pays the killing seat alone until THE PARTY widens it.
+    Cards 14, 18 and 21 are built; card 16 is in flight.
 
 23. **THE PARTY** (for her word; her ask 2026-10-08 — "players that are
     PARTIED TOGETHER are effectively a unit, our equivalent of co-op; two

@@ -25,7 +25,7 @@ export interface LobbyCallbacks {
   /** THE SHARD (docs/design/shard-world.md): connect to a hosted world at a
    *  ws:// address as the chosen class (a WsTransport client). Absent = the
    *  row is not offered. Resolves once the shard seated us. */
-  connect?: (url: string, classId: string) => Promise<void>;
+  connect?: (url: string, classId: string) => Promise<'connected' | 'mu'>; // 'mu' = THE LOGIN THROUGH MU took the screen
   /** The address the server box offers first (WS_TRANSPORT_CFG.defaultUrl). */
   connectDefault?: string;
   /** THE VESSEL: one line naming which hero will travel to the server (the
@@ -171,8 +171,9 @@ export function openCoopLobby(cb: LobbyCallbacks): void {
       if (!target) { say('Enter the server address first.', false); return; }
       go.disabled = true; say('Connecting…');
       try {
-        await cb.connect!(target, selectedClassId);
+        const answer = await cb.connect!(target, selectedClassId); // 'connected', or 'mu' (THE LOGIN THROUGH MU)
         try { window.localStorage.setItem('hw_shard_url', target); } catch { /* storage may refuse */ }
+        if (answer === 'mu') { overlay.remove(); return; } // THE LOGIN THROUGH MU: the hub takes the screen; the pick travels
         say('Connected! Entering the hosted world…');
         setTimeout(() => overlay.remove(), 800);
       } catch (e) { say('Connection failed: ' + String(e), false); go.disabled = false; }

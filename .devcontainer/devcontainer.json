@@ -10,7 +10,11 @@
   "image": "mcr.microsoft.com/devcontainers/javascript-node:22-bookworm",
   "hostRequirements": { "cpus": 2, "memory": "8gb" },
   // gh inside the codespace: start-shard.sh publishes the port once the shard answers.
-  "features": { "ghcr.io/devcontainers/features/github-cli:1": {} },
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    // an SSH server, so `gh codespace ssh -c <name> -- tail shard.log` works from a laptop.
+    "ghcr.io/devcontainers/features/sshd:1": {}
+  },
   "postCreateCommand": "npm ci && npm run build:web",
   "postStartCommand": "bash .devcontainer/start-shard.sh",
   "postAttachCommand": "bash .devcontainer/start-shard.sh",

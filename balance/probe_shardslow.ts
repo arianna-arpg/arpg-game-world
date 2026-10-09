@@ -476,14 +476,15 @@ const deathSpot = vh.world.findFreeSpot(vec(wp.x + 180, wp.y + 160), 16);
   await runTicks(vh, 5);
   vh.world.kill(hero);
   await runTicks(vh, 30);
-  check("N covenant: while another player stands to kneel, the mortal down stays co-op's (no fall, no mercy)",
-    hero.downed && !!seatOf(c2.self) && vh.vessels.falls === 0 && vh.corpses.forAccount(acctA.accountId).length === 0);
+  // Card 14 C (her ruling 2026-10-08): the down IS the death, however many stand to kneel.
+  check('N covenant: a mortal vessel\'s lethal down falls it at once, even while another player stands to kneel (card 14 C)',
+    !seatOf(c2.self) && vh.vessels.falls === 1 && vh.corpses.forAccount(acctA.accountId).length === 1);
 }
 watcher.leave(); lone.leave();
 await waitFor(() => vh.vessels.falls === 1, vh, 120);
 {
   const iC = cv2Rows.findIndex(m => m.t === 'corpse'), iE = cv2Rows.findIndex(m => m.t === 'runEnd');
-  check('N covenant: alone, the mortal vessel falls: `corpse` then `runEnd` reach its client', iC >= 0 && iE > iC, `corpse@${iC} runEnd@${iE}`);
+  check('N covenant: the mortal vessel falls: `corpse` then `runEnd` reach its client', iC >= 0 && iE > iC, `corpse@${iC} runEnd@${iE}`);
   const bodies = vh.corpses.forAccount(acctA.accountId);
   const b = bodies[0];
   check('N covenant: the body is recorded where it fell, holding the worn gear',
@@ -526,17 +527,22 @@ await waitFor(() => vh.vessels.falls === 1, vh, 120);
   await waitFor(() => !seatOf(iw.self), vh, 60);
 }
 {
+  // THE FRESH HERO'S END (card 14 C): a vessel-less hero's lethal down ends it the same
+  // way — runEnd, the seat gone — with no body to reclaim and no mercy clock.
   const cf = new WsTransport();
-  const fw = await cf.connect(vurl, { name: 'Fresh', classId: 'warrior', accountId: claimedAccount().accountId });
+  const cfRows = rowsOf(cf);
+  const acctF = claimedAccount();
+  const fw = await cf.connect(vurl, { name: 'Fresh', classId: 'warrior', accountId: acctF.accountId });
   await waitFor(() => !!seatOf(fw.self), vh, 60);
   const hero = vh.world.seatHero(seatOf(fw.self)!);
+  const fallsBefore = vh.vessels.falls;
   vh.world.kill(hero);
-  await runTicks(vh, 2);
-  check('N fresh: a fresh hero (no vessel) is downed, never fallen', hero.downed && !!seatOf(fw.self) && vh.vessels.falls === 1);
-  await runTicks(vh, Math.ceil(SHARD_CFG.keeper.reviveSec * SHARD_CFG.tickHz * 1.1) + 2);
-  check('N fresh: THE MERCY stands it back up, as M0 shipped', !hero.downed && hero.life > 0);
+  await waitFor(() => !seatOf(fw.self), vh, 10);
+  check('N fresh: a fresh hero\'s lethal down ends it the same tick — runEnd, the seat gone, no body (card 14 C)',
+    !seatOf(fw.self) && cfRows.some(m => m.t === 'runEnd') && !cfRows.some(m => m.t === 'corpse') && vh.vessels.freshFalls === 1
+    && vh.vessels.falls === fallsBefore && vh.corpses.forAccount(acctF.accountId).length === 0, cfRows.map(m => m.t).join(' → ') || '(nothing heard)');
   cf.leave();
-  await waitFor(() => !seatOf(fw.self), vh, 60);
+  await runTicks(vh, 3);
 }
 {
   const ct = new WsTransport();
@@ -551,44 +557,45 @@ await waitFor(() => vh.vessels.falls === 1, vh, 120);
   await runTicks(vh, 5);
 }
 {
-  // THE LATE WORD: a mortal vessel that leaves while DOWN has fallen, and its
-  // client hears the word at its next upload of that vessel.
+  // THE TOMBSTONE'S WORD: under card 14 C the fall is immediate, so a client that missed it
+  // (a socket dropped at the wrong moment — the window THE DORMANT SEAT opens, card 16) hears
+  // the owed word at its next upload of that vessel: `corpse`, then `runEnd`, then its class
+  // pick rejoins as a fresh hero. The first client here books nothing (no link) — the stale
+  // copy's upload is the one that hears and reckons, exactly once.
   const acctW = claimedAccount();
   const W = forgeVessel({ classId: 'warrior', level: 7, name: 'Wren', charId: 'c-probe-wren', bag: 0, worn: ['boots'], essences: { coarse: 9 } });
   const kneeler = new WsTransport();
   const kw = await kneeler.connect(vurl, { name: 'Kneeler', classId: 'rogue' });
   const cwr = new WsTransport();
-  const linkW = new ShardVesselLink(cwr, acctW, W, () => null);
   const ww = await cwr.connect(vurl, { name: 'Wren', classId: 'warrior', accountId: acctW.accountId }, W);
   await waitFor(() => !!seatOf(kw.self) && !!seatOf(ww.self), vh, 60);
   const heroW = vh.world.seatHero(seatOf(ww.self)!);
   const spotW = vh.world.findFreeSpot(vec(wp.x - 200, wp.y + 160), 16);
   heroW.pos.x = spotW.x; heroW.pos.y = spotW.y;
+  const fallsW = vh.vessels.falls;
   vh.world.kill(heroW);
-  await runTicks(vh, 10);
-  check('N late word: beside a standing ally the mortal vessel lies down, unfallen', heroW.downed && vh.vessels.falls === 1);
-  cwr.leave(); // the farewell's mirror lands, then the socket closes on a downed vessel
-  await waitFor(() => !seatOf(ww.self) && vh.vessels.falls === 2, vh, 120);
+  await waitFor(() => vh.vessels.falls === fallsW + 1, vh, 60);
+  check('N tombstone\'s word: beside a standing ally the mortal vessel still falls at once (card 14 C)',
+    !seatOf(ww.self) && vh.vessels.falls === fallsW + 1 && vh.corpses.forAccount(acctW.accountId).length === 1);
   const fallenW = onDisk().fallen.find(f => f.charId === W.charId);
-  check('N late word: leaving while down IS the fall (body, tombstone, the owed word)',
-    vh.vessels.falls === 2 && vh.corpses.forAccount(acctW.accountId).length === 1 && fallenW?.word?.reckoning.minted === 9);
-  const stale = await readTravelingVessel();
-  check('N late word: the client that never heard still holds the vessel', stale?.charId === W.charId && linkW.mirrors >= 1);
+  check('N tombstone\'s word: the tombstone carries the owed word', fallenW?.word?.reckoning.minted === 9, fallenW ? JSON.stringify(fallenW.word?.reckoning.minted) : 'no tombstone');
+  cwr.leave();
+  await runTicks(vh, 5);
   const cwr2 = new WsTransport();
   const order: string[] = [];
   cwr2.onSession(m => order.push(m.t));
   cwr2.onZone(() => order.push('zone'));
-  const linkW2 = new ShardVesselLink(cwr2, acctW, stale, () => null);
-  const ww2 = await cwr2.connect(vurl, { name: 'Wren', classId: 'warrior', accountId: acctW.accountId }, stale!);
+  const linkW2 = new ShardVesselLink(cwr2, acctW, W, () => null);
+  const ww2 = await cwr2.connect(vurl, { name: 'Wren', classId: 'warrior', accountId: acctW.accountId }, W);
   await waitFor(() => order.includes('runEnd'), vh, 60);
-  check('N late word: its re-upload joins no seat and hears `corpse` then `runEnd`',
+  check('N tombstone\'s word: its re-upload joins no seat and hears `corpse` then `runEnd`',
     !seatOf(ww2.self) && order.indexOf('corpse') >= 0 && order.indexOf('runEnd') > order.indexOf('corpse'), order.join(' → '));
-  check('N late word: the client runs its reckoning and wipes its slot',
-    acctW.credits === 9 && loadCharacter() === null && !!linkW2.takeDeath(cwr2, null));
+  check('N tombstone\'s word: the client runs its reckoning once and wipes its slot',
+    acctW.credits === 9 && loadCharacter() === null && !!linkW2.takeDeath(cwr2, null), `credits ${acctW.credits}`);
   cwr2.sendSession({ t: 'rejoin', classId: 'rogue' });
   await waitFor(() => !!seatOf(ww2.self) && order.includes('newRun'), vh, 60);
   await runTicks(vh, 2);
-  check('N late word: its class pick rejoins as a fresh hero, the terrain after its newRun',
+  check('N tombstone\'s word: its class pick rejoins as a fresh hero, the terrain after its newRun',
     vh.world.seatHero(seatOf(ww2.self)!).level === 1 && order.lastIndexOf('zone') > order.indexOf('newRun'), order.join(' → '));
   kneeler.leave(); cwr2.leave();
   await waitFor(() => !seatOf(kw.self) && !seatOf(ww2.self), vh, 60);

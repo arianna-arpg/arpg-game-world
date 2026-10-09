@@ -69,7 +69,12 @@ export const VESSEL_CFG = {
    *  one only the keeper's mercy would answer (no other player stands to
    *  kneel, THE MERCY's own read): co-op's revive law stays whole while one
    *  does. 'down' = every down of a mortal vessel is its death. */
-  covenantAt: 'mercy' as 'mercy' | 'down',
+  covenantAt: 'down' as 'mercy' | 'down', // her ruling 2026-10-08 (card 14 C): every lethal down is the death, as in single player
+  /** THE FRESH HERO'S END (card 14 C): a seat with no vessel (an old build's join, a
+   *  refused upload) that falls ends the same way — `runEnd` to its client and the
+   *  seat gone — with no body to reclaim (it carried nothing of its own). Immortal
+   *  contracts keep THE MERCY either way. */
+  freshHeroDies: true,
   /** THE FAREWELL's throttle: a seat's requested mirror (`session leaving`)
    *  is honored at most once per this many world seconds. */
   farewellEverySec: 2,
@@ -211,6 +216,8 @@ export class VesselDesk {
   private beat: number;
   /** Mortal vessels the covenant has taken since boot (the probe's read). */
   falls = 0;
+  /** Fresh (vessel-less) heroes whose down ended them since boot (THE FRESH HERO'S END). */
+  freshFalls = 0;
 
   constructor(
     private readonly world: World,
@@ -391,6 +398,14 @@ export class VesselDesk {
       const seat = w.seats.find(s => s.id === rec.seatId);
       if (seat && this.covenantDue(seat)) this.fall(seat, rec);
     }
+    // THE FRESH HERO'S END (card 14 C): a vessel-less seat whose stage ends on death
+    // ends here too — no mercy clock ever stands a mortal back up on a shard.
+    if (VESSEL_CFG.freshHeroDies) {
+      for (const seat of [...w.seats]) {
+        if (seat.keeper || this.vessels.has(seat.id) || !this.downed(seat) || !this.endsTheRun(seat)) continue;
+        this.freshFall(seat);
+      }
+    }
     this.beat -= dt;
     if (this.beat <= 0) {
       this.beat = this.opts.beatSec;
@@ -414,6 +429,18 @@ export class VesselDesk {
   /** The stage's own policy: does a death from it END the run? */
   private endsTheRun(seat: Seat): boolean {
     return stageOf(seat.meta.modeId, seat.meta.modeStage).onDeath === 'end';
+  }
+
+  /** THE FRESH HERO'S END: the client hears `runEnd` (its run was never a save), the
+   *  seat leaves the world; nothing is recorded — a fresh hero owns no body worth a walk. */
+  private freshFall(seat: Seat): void {
+    const w = this.world;
+    this.send({ t: 'runEnd' }, seat.id);
+    this.opts.log(`[shard] ${seat.id}'s fresh hero ${seat.meta.name} fell in ${w.zone.name}: the run ends, nothing to reclaim`);
+    this.freshFalls++;
+    this.corpses.leave(seat.id);
+    this.accounts.delete(seat.id);
+    w.removeSeat(seat.id);
   }
 
   /** THE DEATH COVENANT, whole, in one frame. `heard` = the client is still

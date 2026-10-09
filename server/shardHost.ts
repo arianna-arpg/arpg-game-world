@@ -74,6 +74,9 @@ export const SHARD_CFG = {
    *  the wire and the beats keep running, the pump reports it (onBroken), a
    *  supervisor restarts it, and the last good save stands untouched. */
   faultBreakerTicks: 600,
+  /** THE SCOPED FREEZE (card 18 B with C): a time stop on a shard bends this radius
+   *  around its caster and never the caster's own team. */
+  chronoRadius: 900,
   /** THE HEARTH WAKE: a joiner stands up at the hearth (never beside the
    *  shadowed keeper, wherever that is) and is untargetable until its first
    *  willed input or spawnGraceSec, whichever comes first. */
@@ -282,6 +285,7 @@ export class ShardHost {
     const world = new World(this.account, Object.freeze(buildManifest(this.account, this.seed)));
     // A hosted world never freezes for one hand (the pause/harvest holds are solo policy).
     world.timeflow.allowHold = () => false;
+    world.timeflow.chronoScope = { radius: SHARD_CFG.chronoRadius }; // keeperSeat: THE SCOPED FREEZE
     world.createPlayer(this.keeperClass, { name: SHARD_CFG.keeper.name, startingCompanions: false, startingFlasks: false });
     const keeper = world.localSeat;
     keeper.keeper = { reviveSec: SHARD_CFG.keeper.reviveSec };

@@ -554,6 +554,15 @@ function startGame(
   // mid-scene autosave resumes at the ordinary wake.
   if (prologueDue) sceneBegin(world, 'prologue');
   running = true;
+  // THE LOGIN THROUGH MU (card 22): a server-bound wake travels at once — the vessel
+  // just saved at the bedside is the one the shard seats, and this run stays its home.
+  if (pendingServer && !prologueDue) {
+    const { url } = pendingServer; pendingServer = null;
+    void (async () => {
+      try { await flushCharacterSaves(); await connectToShard(url, classDef.id, true); }
+      catch (e) { toStartMenu(`Could not reach ${url}: ${e instanceof Error ? e.message : String(e)}`); }
+    })();
+  }
 }
 
 /** Class-select adapter: the picker hands back (class, sworn mode, name);
@@ -2497,6 +2506,16 @@ function onClientRunEnd(): void {
   running = false;          // stop rendering the dead run
   unsubscribeFromHost();    // drop the dead run's snapshot/zone subs + stale interp state
   pendingRejoinClass = null;
+  // THE LOGIN THROUGH MU (card 22): on a hosted world a fallen player reads the
+  // reckoning, then drifts back into Mu bound for the same server — the next vessel
+  // is a walk, and its wake travels. (Card 14 C: the fall is the run's end.)
+  if (net instanceof WsTransport) {
+    const url = lastShardUrl;
+    const toMu = (): void => { resetToLocal(); pendingServer = url ? { url } : null; startMu(); };
+    const fell = shardVessel?.takeDeath(net, world);
+    if (fell) ui.showDeath(fell.reck, toMu); else toMu();
+    return;
+  }
   ui.resetClassRoster();    // deal a fresh class hand for the rejoin pick
   const pickNextHero = (): void => ui.showClassSelect(cls => {
     pendingRejoinClass = cls;
@@ -2576,24 +2595,8 @@ function openLobby(): void {
     // THE SHARD (docs/design/shard-world.md M0): a hosted world is a host
     // that never leaves — the joiner's road is the WebRTC join's, with the
     // socket where the copy-paste dance was (WsTransport, same grammar).
-    connect: async (url, classId) => {
-      const ws = new WsTransport();
-      // THE VESSEL (docs/engine/shard.md "The vessel and the corpse"): the run
-      // slot's hero travels when there is one (its class over the lobby card),
-      // keyed home by this account's id; else the card's fresh hero, as ever.
-      const vessel = await readTravelingVessel();
-      const cls = CLASSES.find(c => c.id === (vessel?.classId ?? classId)) ?? CLASSES[0];
-      try {
-        net = ws;
-        subscribeToHost();
-        wireSession();                             // run-lifecycle channel (newRun/hostLeft)
-        shardVessel = new ShardVesselLink(ws, account, vessel, () => (net === ws ? world : null),
-          { runWiped: () => ui.setContinueSave(null), mayWrite: () => net === ws || !running });
-        const { self, seed, worldmass, features, land } = await ws.connect(url, { name: vessel?.name ?? 'Joiner', classId: cls.id,
-          cosmeticLoadout: account.cosmetics.loadout, accountId: account.accountId }, vessel ?? undefined);
-        startAsClient(cls, self, seed, worldmass ? { features, land } : undefined);
-      } catch (e) { resetToLocal(); throw e; }     // an unreachable server must revert net to LocalTransport
-    },
+    // THE LOGIN THROUGH MU (card 22): the vessel travels, or Mu picks one first (connectToShard).
+    connect: (url, classId) => connectToShard(url, classId),
     connectDefault: defaultShardUrl(), // THE SERVED CLIENT: a codespace's page offers the shard that served it (WS_TRANSPORT_CFG.defaultUrl elsewhere)
     serverHero: async (classId) => travelNote(await readTravelingVessel(), classId),
     onClose: () => { /* host keeps playing; a non-started joiner just closes */ },
@@ -2607,6 +2610,42 @@ function openLobby(): void {
  *  a hosted Unbroken Wilds — the zone handler and the frame loop route
  *  through the wilds shell instead of the classic client lanes. */
 let clientWilds: { seed: number; land?: string } | null = null; // THE LAND DIGEST rides from the welcome to the attach
+/** THE LOGIN THROUGH MU (docs/design/shard-world.md card 22, her ruling 2026-10-08): the
+ *  server a vessel-less join was bound for — Mu picks the vessel and the bedside wake
+ *  travels it (connectToShard). The start menu cancels it; a fall re-arms it. */
+let pendingServer: { url: string } | null = null;
+/** The last shard this client was seated on: a fall drifts back into Mu bound for it. */
+let lastShardUrl: string | null = null;
+
+/** THE SHARD's door (card 22 — THE LOGIN THROUGH MU): the run slot's hero travels when
+ *  there is one (THE VESSEL: its class over the lobby card, keyed home by this account's
+ *  id); with none, Mu picks a vessel first and the bedside wake comes back through here
+ *  to travel it ('mu'). The tutorial stays LOCAL: a virgin account walks it before Mu,
+ *  still bound for the same server. From the wake, a hero that cannot travel is an error
+ *  (never a second trip into Mu). */
+async function connectToShard(url: string, classId: string, fromWake = false): Promise<'connected' | 'mu'> {
+  const vessel = await readTravelingVessel();
+  if (!vessel) {
+    if (fromWake) throw new Error('this hero cannot travel to a server (an Immortal vessel travels in a later pass)');
+    pendingServer = { url };
+    beginPressed();
+    return 'mu';
+  }
+  const ws = new WsTransport();
+  const cls = CLASSES.find(c => c.id === (vessel.classId ?? classId)) ?? CLASSES[0];
+  try {
+    net = ws;
+    subscribeToHost();
+    wireSession();                             // run-lifecycle channel (newRun/hostLeft)
+    shardVessel = new ShardVesselLink(ws, account, vessel, () => (net === ws ? world : null),
+      { runWiped: () => ui.setContinueSave(null), mayWrite: () => net === ws || !running });
+    const { self, seed, worldmass, features, land } = await ws.connect(url, { name: vessel.name ?? 'Joiner', classId: cls.id,
+      cosmeticLoadout: account.cosmetics.loadout, accountId: account.accountId }, vessel);
+    startAsClient(cls, self, seed, worldmass ? { features, land } : undefined);
+    lastShardUrl = url;
+    return 'connected';
+  } catch (e) { resetToLocal(); throw e; }     // an unreachable server must revert net to LocalTransport
+}
 
 function startAsClient(classDef: ClassDef, selfSeat: string, hostSeed: number, wilds?: { features: string[]; land?: string }): void { // wilds.land = THE LAND DIGEST
   couchReset(); // a render shell hosts no couch — the pads are free again
@@ -2668,6 +2707,7 @@ function resetToLocal(): void {
  *  under the player must say so — an unexplained menu reads as a crash). */
 function toStartMenu(notice?: string): void {
   cancelCharacterResume();
+  pendingServer = null; // THE LOGIN THROUGH MU: the menu cancels a server-bound wake
   // A HOST SAYS GOODBYE FIRST — and says it HERE rather than in leaveCoop, so
   // that every road to the menu carries it (the Leave button, "Save & Main
   // Menu", any future exit), never just the one that remembered. The ordering is

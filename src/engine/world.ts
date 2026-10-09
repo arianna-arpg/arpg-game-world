@@ -19555,11 +19555,22 @@ export class World {
   /** Award experience. CO-OP: shared among every LIVING player seat (the chosen
    *  policy — keeps the party levelling together, no kill-stealing). Single-player
    *  is just the one local seat, byte-identical to before. */
-  grantXp(amount: number, at?: Vec2): void {
+  /** keeperSeat lane — THE KILLER'S DUE: the seat that owns a body (through its owner
+   *  chain: a minion's kill is its keeper's), or undefined for an unowned or absent one. */
+  seatOfRoot(a: Actor | null | undefined): Seat | undefined {
+    let root = a ?? null;
+    while (root?.owner) root = root.owner;
+    return root ? this.seatByActor.get(root) : undefined;
+  }
+
+  grantXp(amount: number, at?: Vec2, to?: Seat): void {
     for (const seat of this.seats) {
       if (seat.actor.dead) continue;
       // THE NEAR LAW (keeperSeat lane, data/coop.ts shareRadius): a kill with a
-      // place pays only the seats within reach of it; radius 0 = everyone.
+      // place pays only the seats within reach of it; radius 0 = everyone. THE
+      // KILLER'S DUE (her ruling 2026-10-08: the single-player law until parties):
+      // with a radius set and a killing seat known, only that seat is paid.
+      if (at && COOP_SCALING.shareRadius > 0 && to && seat !== to) continue; // keeperSeat: the killer's due
       if (at && COOP_SCALING.shareRadius > 0 && dist(at, this.seatHero(seat).pos) > COOP_SCALING.shareRadius) continue; // SOVEREIGNTY: census — pay is apportioned by reach, never a touch (keeperSeat lane)
       // A hired blade never earns its own levels — its power is NORMALIZED to
       // the patron (MERC_CFG.scale), re-synced on the patron's level-ups.
@@ -30776,7 +30787,13 @@ export class World {
    *  `world: true` bends the WHOLE sim instead (cinematic territory). */
   castChrono(caster: Actor, spec: ChronoSpec, id: string, duration: number, label?: string): void {
     let actors: ActorTimeFilter | undefined;
-    if (!spec.world) {
+    // keeperSeat lane — THE SCOPED FREEZE (card 18 B with C): on a hosted world a time
+    // stop is a bubble around its caster that never bends the caster's own team, whatever
+    // the spec asked (a world-scoped spec included); off a shard the spec's own law.
+    const scope = this.timeflow.chronoScope;
+    if (scope) {
+      actors = { exceptTeam: caster.team, within: { x: caster.pos.x, y: caster.pos.y, r: scope.radius } };
+    } else if (!spec.world) {
       const ex = spec.exempt ?? 'pack';
       actors = ex === 'caster' ? { exceptIds: [caster.id] }
         : ex === 'pack' ? { exceptIds: [caster.id], exceptOwnedBy: [caster.id] }
@@ -42184,7 +42201,7 @@ export class World {
           // elite spill, no orbs. The summoner is the prize; endlessly farming
           // its spawn is a closed door.
           if (!actor.noBounty) {
-            this.grantXp(actor.xpValue, actor.pos); // THE NEAR LAW: the kill's own place (keeperSeat lane)
+            this.grantXp(actor.xpValue, actor.pos, this.seatOfRoot(killer)); // THE NEAR LAW + THE KILLER'S DUE (keeperSeat lane)
             if (actor.xpValue > 0) this.text(actor.pos, `+${actor.xpValue} xp`, '#b8a0e0', 11, 'xp');
             this.rollDrops(actor);
             // Elites spill extra gems on top of the base roll (bias rides along).
