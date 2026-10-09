@@ -39,8 +39,9 @@
 //      LAW keeps a second arriver's own door; a cave mouth wakes a pocket and the
 //      climb-out lands at the mouth under the seat's own exit grace; the town portal
 //      carries a seat home and back down to its slept pocket; the caravan carries it
-//      home; the road ring (SeatW.rd) rides only the dwelling seat's row, and a shell
-//      draws it;
+//      home and the waypoint intent to the attuned stone; the road ring (SeatW.rd)
+//      rides only the dwelling seat's row, a shell draws it, and a hosted shell draws
+//      no linger ring at a sealed road;
 //   H  A SEALED ROAD'S WORD (W2): the dock, the harbor board's passage, the Delver's
 //      shaft and an unbuilt realm gate answer an idle seat once per approach on its own
 //      row, build no ring and move nobody; another seat hears nothing;

@@ -133,7 +133,7 @@ units. Plan: `docs/design/shard-m1-plan.md` section 4.
 | town portal, out | open (the intent re-opened) | the seat's own spot is the origin; the keeper, beside its waypoint or THE HEARTH SEAT; on the Unbroken Wilds the return passage stands on the surface the seat landed on (the hearth's id never names it, so a solo wilds portal's return passage stays hidden: the seamless lane's) |
 | town portal, back | open | the source's unit at the portal's spot, down the saved descent; an awake source answers the faded check with its live seed |
 | caravan | open (the intent re-opened) | the route minted in the source; band 0 lands in the keeper |
-| waypoint | open (the new `waypoint` intent) | the seat judged (the attuned set, its hunters); lands at the far stone, a fresh wake clearing its bubble; reachable once the chart rides the wire |
+| waypoint | open (the new `waypoint` intent) | the seat judged (the attuned set, its hunters); lands at the far stone, a fresh wake clearing its bubble; a client's map offers it once the chart rides the wire (its own chart today) |
 | ward seal, holdfast toll | open | not travel: per-seat dwells acting in the same unit |
 | realm gates (demon rift, crusade sanctum, necropolis, fracture rift, court door, dimension arch, breach) | sealed until W4: "this gate does not open on this world yet" | `RealmGateRow.road` is the slot W4 fills per gate (the prep in the source, the ticket's first wake in the realm) |
 | the dock (casting off) | sealed: "the quay is still at this world's edge" | none |
