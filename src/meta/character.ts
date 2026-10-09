@@ -719,8 +719,12 @@ export function savedCharacterPatronId(): string | undefined {
     return isCurrentCharacterSave(data)&&typeof data?.charId==='string'&&data.charId.length>0?data.charId:undefined;
   } catch { return undefined; }
 }
-export function loadCharacter(): CharacterSave | null {
-  const data = cachedCharacter(CHAR_SLOT);
+/** The synchronous cache read of one slot (the shared run slot unless named),
+ *  never written: the menu's instant Continue label, and THE TRAVELING
+ *  VESSEL's fallback for a roster slot too (meta/shardVessel.ts: the bedside
+ *  wake's own write may not have reached the disk when its hero travels). */
+export function loadCharacter(slot = CHAR_SLOT): CharacterSave | null {
+  const data = cachedCharacter(slot);
   return isCurrentCharacterSave(data) ? data : null;
 }
 
@@ -1145,8 +1149,10 @@ export function serializeCouchGuest(
  *  the ground). Written the way a couch guest's vessel is, routed like the
  *  character's own saves: a run-mode vessel takes the shared Continue slot
  *  (its next solo Continue wakes it on fresh ground), a roster vessel its own
- *  slot by charId (a lost card writes nothing). Returns the slot written, -1
- *  when refused (a world half, a stale schema, the stand-down latch). */
+ *  slot by charId (a lost card writes nothing) with its card refreshed as
+ *  syncRosterEntry refreshes it, never touching the shared Continue (THE
+ *  IMMORTAL TRAVELS — balance/probe_shardimmortal.ts). Returns the slot
+ *  written, -1 when refused (a world half, a stale schema, the stand-down latch). */
 export function saveVesselMirror(account: Account, save: CharacterSave, durable = false): number {
   if (saveRefused('shard vessel')) return -1;
   if (!isCurrentCharacterSave(save) || save.world !== undefined) return -1;

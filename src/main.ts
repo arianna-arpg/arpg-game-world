@@ -559,7 +559,7 @@ function startGame(
   if (pendingServer && !prologueDue) {
     const { url } = pendingServer; pendingServer = null;
     void (async () => {
-      try { await flushCharacterSaves(); await connectToShard(url, classDef.id, true); }
+      try { await flushCharacterSaves(); await connectToShard(url, classDef.id, { charId }); } // THE WAKE'S WORD: this charId, mortal or roster
       catch (e) { toStartMenu(`Could not reach ${url}: ${e instanceof Error ? e.message : String(e)}`); }
     })();
   }
@@ -2598,7 +2598,7 @@ function openLobby(): void {
     // THE LOGIN THROUGH MU (card 22): the vessel travels, or Mu picks one first (connectToShard).
     connect: (url, classId) => connectToShard(url, classId),
     connectDefault: defaultShardUrl(), // THE SERVED CLIENT: a codespace's page offers the shard that served it (WS_TRANSPORT_CFG.defaultUrl elsewhere)
-    serverHero: async (classId) => travelNote(await readTravelingVessel(), classId),
+    serverHero: async (classId) => travelNote(await readTravelingVessel(account), classId), // the account names THE LONE VESSEL
     onClose: () => { /* host keeps playing; a non-started joiner just closes */ },
   });
 }
@@ -2617,16 +2617,18 @@ let pendingServer: { url: string } | null = null;
 /** The last shard this client was seated on: a fall drifts back into Mu bound for it. */
 let lastShardUrl: string | null = null;
 
-/** THE SHARD's door (card 22 — THE LOGIN THROUGH MU): the run slot's hero travels when
- *  there is one (THE VESSEL: its class over the lobby card, keyed home by this account's
- *  id); with none, Mu picks a vessel first and the bedside wake comes back through here
- *  to travel it ('mu'). The tutorial stays LOCAL: a virgin account walks it before Mu,
- *  still bound for the same server. From the wake, a hero that cannot travel is an error
- *  (never a second trip into Mu). */
-async function connectToShard(url: string, classId: string, fromWake = false): Promise<'connected' | 'mu'> {
-  const vessel = await readTravelingVessel();
+/** THE SHARD's door (card 22 — THE LOGIN THROUGH MU): the traveling hero goes when there
+ *  is one (THE VESSEL: the run slot's hero, else THE LONE VESSEL — the one standing roster
+ *  card; its class over the lobby card, keyed home by this account's id); with none, Mu
+ *  picks a vessel first and the bedside wake comes back through here to travel it ('mu'),
+ *  NAMING it (`wake.charId` — THE WAKE'S WORD: that hero travels, a mortal from the run
+ *  slot or an Immortal from its roster card's slot). The tutorial stays LOCAL: a virgin
+ *  account walks it before Mu, still bound for the same server. From the wake, a hero
+ *  that cannot travel is an error (never a second trip into Mu). */
+async function connectToShard(url: string, classId: string, wake?: { charId: string }): Promise<'connected' | 'mu'> {
+  const vessel = await readTravelingVessel(account, wake?.charId); // THE IMMORTAL TRAVELS: the wake names its hero
   if (!vessel) {
-    if (fromWake) throw new Error('this hero cannot travel to a server (an Immortal vessel travels in a later pass)');
+    if (wake) throw new Error('this hero cannot travel to a server (its saved vessel could not be read)');
     pendingServer = { url };
     beginPressed();
     return 'mu';
