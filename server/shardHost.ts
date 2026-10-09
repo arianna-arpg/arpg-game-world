@@ -635,6 +635,7 @@ export class ShardHost {
   /** THE HAND-OFF landed (server/simUnits.ts): THE SPAWN GRACE at the arrival, and
    *  the seat's new terrain at once (the client's standing zone lane). */
   private onArrive(seat: Seat, to: SimUnit, from: SimUnit, woke: boolean): void {
+    if (woke) to.dressTimer = SHARD_CFG.dressSec; // THE DRESS BEAT: a fresh unit's zone just shipped, as at any zone change
     if (!seat.keeper) {
       seat.actor.untargetable = true;
       this.graces.set(seat.id, Math.max(this.graces.get(seat.id) ?? 0, this.world.time + UNIT_CFG.arrivalGraceSec));

@@ -496,7 +496,8 @@ export function detachSeat(w: World, seatId: string): SeatPacket | { refused: st
     pool.free(i);
   }
   // 7. Out of the World: never removeSeat (it culls the whole court).
-  w.seats.splice(w.seats.indexOf(seat), 1);
+  const at0 = w.seats.indexOf(seat);
+  if (at0 >= 0) w.seats.splice(at0, 1);
   w.actors = w.actors.filter(a => !gone.has(a));
   host.indexSeats();
   if (fields(w).actingSeat === seat) fields(w).actingSeat = null;

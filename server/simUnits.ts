@@ -343,7 +343,8 @@ export class UnitRegistry implements SeatWorlds {
    *  broken World by hand (the hero alone), and walks into the keeper. */
   private rescue(u: SimUnit, seat: Seat, at: { x: number; y: number; tier: number }): void {
     const w = u.world, hero = w.seatHero(seat);
-    w.seats.splice(w.seats.indexOf(seat), 1);
+    const at0 = w.seats.indexOf(seat);
+    if (at0 >= 0) w.seats.splice(at0, 1);
     w.actors = w.actors.filter(a => a !== hero && a !== seat.actor);
     if (seat.home) { seat.actor = hero; seat.home = undefined; }
     const packet: SeatPacket = { seat, hero, carry: [hero] as Actor[], from: w.zone.id, rows: [], bonds: [], grants: [], clocks: [], buffSources: [], traceRests: [], lite: [] };
